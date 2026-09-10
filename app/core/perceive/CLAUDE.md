@@ -18,6 +18,7 @@ jemand Dreiecke zählt.
 ```
 features.py   ──> „hier ist eine Bohrung, eine Tasche, eine Fase"
 helix.py      ──> „hier ist ein Gewinde" — und darum sind die anderen weg
+slots.py      ──> „diese zwei Bögen sind ein Langloch" — dieselbe Bauart
 relations.py  ──> „diese zwei gehören zusammen" — und was daraus folgt
 matching.py   ──> derselbe Name auch nach der nächsten Operation
 digest.py     ──> der Steckbrief: was der Agent zu sehen bekommt
@@ -39,6 +40,14 @@ Kerns zu hängen hieße, es weiter wachsen zu lassen.
 **Die Richtung ist einseitig:** `relations.py` liest `features.py`, nie
 umgekehrt — samt dessen Schwellen (`SINK_AXIS_LIMIT`, `SINK_FIT_LIMIT`). Zwei
 Achsenprüfungen mit zwei Zahlen wären zwei Antworten auf dieselbe Frage.
+
+Deshalb wohnt auch die **Bedingung** dort und nicht nur die Zahl:
+`features.sits_at_the_mouth_of(bore, wider)` beantwortet „gehört diese
+Aufweitung zu dieser Bohrung", und zwei Aufrufer fragen sie aus
+entgegengesetzten Richtungen — `relations.widening_at_the_mouth` sucht von der
+Bohrung aus die Senkung, `features._shapes_on_a_freeform` fragt umgekehrt, ob
+eine Rundform an einer Bohrung hängt und damit keine Erfindung ist. `axis_of`
+und `centre_of` sind aus demselben Grund mitgewandert.
 
 `cavity_chain_at` verbindet koaxiale Bohrungs- und Kegelflächen über
 vollständig gemeinsame geschlossene Randringe des aktuellen Netzes. Eine
@@ -134,8 +143,9 @@ unberührt; das Budget gilt nur der Karte.
 
 | Datei | Rolle |
 |---|---|
-| `features.py` | Merkmalserkennung (§21.1) — **2 200 Zeilen**, das größte Modul des Kerns |
+| `features.py` | Merkmalserkennung (§21.1) — **rund 3 700 Zeilen**, das größte Modul in `perceive/`. Darin auch `detect_voids`: Hohlräume ohne Weg nach außen, belegt über vier Tore |
 | `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener |
+| `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen |
 | `maps.py` | Analysekarten (§18.4) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
@@ -169,6 +179,18 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   auf und prüft den Abbruch zwischen ihnen. Ihre Schwellen und die Reihenfolge
   der Kanten bleiben dabei dieselben.
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
+- **Ein Hohlraum ohne Weg nach außen ist keine Bohrung.** `detect_voids` findet
+  geschlossene Innenschalen über vier Tore — dichtes Netz, einheitlicher
+  Umlaufsinn, mehr als eine Komponente, und die Schale liegt im Material der
+  **festen** Komponenten (`_shells_inside_the_material`, eine Abfrage für alle
+  Kandidaten). `_voids_instead_of_phantom_bores` nimmt danach die Merkmale weg,
+  deren Flächen mehrheitlich darauf liegen. An einem offenen Netz wird nichts
+  behauptet: Dort ist eine solche Schale genauso gut eine Lücke, und Raten
+  verbietet Regel 21.
+  **Anfassen lässt er sich trotzdem** — `void` steht in `geom.MOVABLE_KINDS`,
+  und Versetzen wie Entfernen sind gemessen. Was fehlt, ist nicht die
+  Erreichbarkeit, sondern das Maß; die Regel dazu steht in
+  `.claude/rules/schichtanalyse.md`.
 - **Dreieckszahl macht aus einem Mantelstreifen keine Ebene.** Schmale oder
   längs unterteilte Facetten mit belegter Rundungsnaht dürfen den Planarfilter
   nur verlassen, wenn ihre zusammenhängende Gesamtfläche einen guten Kegel-
@@ -256,6 +278,16 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht
   einmal als `_too_small_to_make`, damit die nächste Art sie nicht wieder
   übersieht; beim Torus entscheidet das kleinere von Ring und Röhre.
+- **Und ein Langloch ist ebenso wenig eine Grundform wie eine Wendel.**
+  `slots.py` setzt es aus zwei Zylinderausschnitten zusammen, die die
+  Einpassung als Verrundungen ausweist — an einem Netz sind sie genau das:
+  Bögen von 180 Grad. Was ein Loch daraus macht, ist die **Topologie**: Beide
+  hängen über einen Mantel zusammen, der quer zur Achse steht, und alles darin
+  ist entweder einer der zwei Bögen oder eine ebene Flanke im Abstand eines
+  Radius von der Mittellinie. Läuft der Mantel über etwas anderes, bleiben es
+  zwei Verrundungen. Die Gegenprobe, die das trägt, ist eine rechteckige Tasche
+  mit vier verrundeten Ecken: gleiche Radien, parallele Achsen, verbundener
+  Mantel — und kein Langloch, weil er zu den anderen beiden Ecken weiterläuft.
 - **Die direkte Merkmalbearbeitung teilt ihre Kettenauskunft.** Ein bereits
   ermittelter `cavity`-Umfang kann an `actions_for()` und `bore_advice()`
   weitergereicht werden. Ein leeres Tupel ist dabei eine geprüfte fehlende

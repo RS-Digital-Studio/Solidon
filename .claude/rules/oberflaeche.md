@@ -41,7 +41,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-852 Parameter der 108 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+861 Parameter der 109 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -791,7 +791,7 @@ steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Achtundzwanzig von hundertacht
+wann eine Operation die falsche Wahl ist. Achtundzwanzig von hundertneun
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)
@@ -897,6 +897,35 @@ Nachweis einer Gruppe.
 Handlung trägt der Haken sie in Tooltip, Statuszeile und zugänglicher
 Beschreibung; er ist das Feld, über das sie entscheidet. Ohne das verlöre ein
 Screenreader sie an jeder Handlung außer der ersten.
+
+### Ein zusammengelegter Grund spricht für alle, unter denen er steht
+
+`_folded` macht aus fünf gleich begründeten Absagen **eine** Zeile:
+„Verschieben, Ändern, Drehen, Verdoppeln und Entfernen — <Satz>". Der Satz
+steht damit unter fünf Titeln und darf keinen einzelnen davon aufgreifen.
+
+Eine Durchsicht aller zehn Merkmalsarten am 10.09.2026 (Robert: „auch alle
+anderen mal gründlich kontrollieren") fand vier Stellen, an denen er es tat:
+
+| Art | stand unter fünf Titeln | begründete |
+|---|---|---|
+| `face` | „lässt sich nicht einzeln **versetzen**" | eine von fünf |
+| `torus` | „lässt sich nicht direkt **ändern**" | eine von fünf |
+| `fillet` | „**Versetzt** man sie allein …" | auch das Verdoppeln |
+| `thread` | „gibt es noch keine Handlung" | gar nichts (Regel 17) |
+
+Die gute Form verneint die **Voraussetzung** statt der Handlung: „trägt kein
+Maß, an dem sich Lage oder Größe ändern ließen" gilt für jede Zeile, die daran
+ansetzen wollte, und nennt danach den Weg, der bleibt.
+
+**Maschinell ist das nicht zu prüfen, und der Versuch ist gemessen
+gescheitert:** Ein Wächter, der den Titel im Satz sucht, schlug auf „ändern" in
+„kein Maß, das sich ändern ließe" an — drei Fehlalarme auf drei Prüflinge, weil
+„ändern" im Deutschen beides ist. Er ist deshalb nicht eingecheckt; was bleibt,
+ist der scharfe Teil derselben Durchsicht
+(`test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing`): Keine
+erkennbare Art fällt auf `_UNKNOWN_KIND` zurück. Der Rest ist Lesen, und dieser
+Absatz sagt, worauf.
 
 ## Wie die Karten ihre Höhe teilen
 
@@ -1032,7 +1061,7 @@ Register. Ist der einfache Buchstabe belegt, kommt Umschalt dazu (*Vereinigen*
 Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist auch das belegt, **bleibt die
 Operation ohne Kürzel**. *Skalieren* ist der Fall: S gehört dem Speichern,
 Umschalt+S dem Speichern unter, und ein erfundener Buchstabe wäre schlechter als
-keiner. Vierzehn der hundertvier Operationen führen eines; wer eine fünfzehnte Taste
+keiner. Vierzehn der hundertneun Operationen führen eines; wer eine fünfzehnte Taste
 vergibt, prüft vorher am **gebauten Fenster** gegen die dreiundvierzig, die
 nicht aus dem Register kommen — Ansichten, Werkzeugzeile, Dateibefehle,
 Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus

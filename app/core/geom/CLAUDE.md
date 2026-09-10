@@ -187,6 +187,18 @@ verstifteten Hälften, §22.3) ·
 Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 `orient.py`
 
+**Ein Langloch ist eine Bohrung mit zwei Bogenmittelpunkten.** Der Umriss
+entsteht einmal (`prepare.slot_profile`) und wird von beiden Kernen aufgezogen
+— vom Netz-Kern über `sketch_solid.extrude_profile`, vom exakten über
+`brep.profiles.extrude`, wo die Enden echte Zylinderflächen bleiben.
+`slot_travel` rechnet die Gesamtlänge des Dialogs in die Mittellinie um und
+lehnt dabei die Aufweitung ab; `slot_ends` nennt die beiden Endpunkte, an
+denen jede Prüfung fragen muss, die für eine runde Bohrung an der Mitte fragt.
+Der Weg dorthin hat zwei Eingänge: `drill_hole` setzt eines (`slotted`,
+`slot_length`, `slot_angle`), `slot_hole` zieht eine **erkannte** Bohrung
+nachträglich auseinander (`prepare.slot_bore`, exakt `brep.edit.slot_bore`).
+Die Regel dazu steht in `.claude/rules/operationen.md`.
+
 Die geometrische Vorauswahl projiziert dieselben Normalenrichtungen in
 begrenzten Gruppen auf Z. Vollständige Netzkopien entstehen erst für die
 Platzierungsprüfung; eine begrenzte Bestenliste prüft sie in der vollständigen

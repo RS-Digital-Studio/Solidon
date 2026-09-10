@@ -303,6 +303,59 @@ Regel 7 im Gewand einer Fertigungszugabe. Sie untergrub die Kalibrierung
 je Seite. **Dass etwas nicht klemmt, ist die Aufgabe des Gleitspiels aus dem
 Profil**; dafür ist es da, und dafür wird es gemessen.
 
+## Ein Langloch trägt keine Aufweitung, und seine Länge ist nicht sein Weg
+
+Zwei Entscheidungen zum Langloch, beide vom 10.09.2026, beide leicht in die
+falsche Richtung zu drehen.
+
+**Kein Langloch mit Senkung** (Entscheidung Robert). Eine Senkung über einem
+Langloch wäre entweder rund — dann säße ein Schraubenkopf nur in dessen Mitte
+versenkt — oder selbst ein Langloch, und dann bliebe offen, welche der beiden
+Längen der Kunde meint. Solange die Frage nicht gestellt ist, wird sie nicht
+geraten (Regel 21). Der Dialog graut die drei Aufweitungsfelder aus
+(`depends_on=("slotted", (False,))`), `prepare_ops.bore_shape` legt sie für
+Chat und Kommandozeile beiseite, und `prepare.slot_travel` weist sie ab, wenn
+sie doch zusammen ankommen. Drei Ebenen für eine Entscheidung: Der Dialog ist
+kein Vertrag, und der Kern ist keine Oberfläche.
+
+**Und ein gesetzter Haken ohne Länge ist eine Absage, keine runde Bohrung.**
+`slot_travel` liest die Null als „rund" — richtig für einen direkten Aufruf,
+falsch für den Haken: Wer *Langloch* anhakt und die Länge stehen lässt, bekäme
+ein rundes Loch und ein Häkchen, das das Gegenteil behauptet. Gefunden wurde
+das am gebauten Dialog und nicht im Code; die Vorgabe der Länge steht deshalb
+auf dem Doppelten des vorgegebenen Durchmessers, damit der erste Klick
+durchgeht. **Ein Feld, das mit einer Absage begrüßt, ist keine Vorgabe.**
+
+**Die Materialtoleranz weitet ein Langloch überall, auch an den Enden.**
+Gerechnet wird deshalb `Mittellinie = Länge − nominaler Durchmesser`, und
+die Zugabe liegt auf dem Radius. Wer stattdessen die *Gesamtlänge* festhielte,
+nähme dem Kunden bei jedem Druck ein Stück Verschiebeweg ab — und der
+Verschiebeweg ist der Grund, aus dem es Langlöcher gibt.
+
+**Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
+Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief
+im Material, während ein Ende schon über die Kante ragt; wer nur sie fragt,
+schweigt zu einer aufgerissenen Flanke. Gemeldet wird trotzdem höchstens
+einmal — zwei gleichlautende Sätze über dasselbe Loch sagen nichts Zweites.
+
+**Der Winkel zählt gegen den Rahmen, den er bekommt — und die zwei Wege
+bekommen verschiedene.** `drill_hole` baut ihn aus der Normalen der
+angeklickten **Fläche**, `slot_hole` aus der Achse des erkannten Merkmals, und
+die normiert die Erkennung auf „größte Komponente positiv". `frame_of` spiegelt
+seine erste Achse mit der Normalen; gemessen an derselben Platte ergeben
+45 Grad von oben gebohrt 45 Grad, von unten gebohrt 135, an der erkannten
+Bohrung beide Male 45. **Das bleibt so**: Eine erkannte Bohrung hat zwei
+Mündungen, und welche gemeint ist, hat niemand gesagt (Regel 21). Wer eine
+Zahl von einem Weg auf den anderen überträgt, überträgt sie nicht.
+
+**Und die Zugabe, die einen Werkzeugkörper vom gemessenen Maß fernhält, steht
+einmal** — `prepare.FEATURE_OVERLAP`. Sie stand am 10.09.2026 zweimal da, mit
+demselben Wert und dem Vermerk „dieselbe Zahl, derselbe Grund"; genau diese
+Form hat `BOOLEAN_OVERLAP` schon einmal gekostet. Ihr Grund ist außerdem nicht
+mehr die Koplanarität — die rechnet `manifold3d` robust, gemessen 27.08.2026 —,
+sondern der **Tangentialkontakt**: Ein Langlochkörper ohne Zugabe legte sich
+entlang zweier Linien an die alte Bohrungswand.
+
 ## Szene: Platzierung, Kennungen, Cache, Projektdatei
 
 Bis zum 06.09.2026 standen diese Regeln in der Karte `app/core/scene/CLAUDE.md`;

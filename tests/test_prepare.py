@@ -1869,7 +1869,7 @@ def test_moving_a_feature_is_registered_completely() -> None:
     """Registerkonsistenz: Was der Katalog verspricht, steht auch da."""
     spec = REGISTRY.get("move_feature")
 
-    assert set(spec.applies_to) == {"hole", "pin", "cone", "sphere"}
+    assert {"hole", "pin", "cone", "sphere"} <= set(spec.applies_to)
     assert spec.touches_features, "die Kennung reist mit"
     assert spec.requires_seed, "der Weg geht über die Boolesche Rückfallkette"
     felder = {entry.name: entry for entry in spec.params.spec()}
@@ -1999,7 +1999,7 @@ def test_removing_a_feature_is_registered_completely() -> None:
     """Dieselbe Reichweite wie das Versetzen — es ist dieselbe Maschine."""
     spec = REGISTRY.get("remove_feature")
 
-    assert set(spec.applies_to) == {"hole", "pin", "cone", "sphere"}
+    assert {"hole", "pin", "cone", "sphere"} <= set(spec.applies_to)
     assert spec.touches_features
     assert spec.requires_seed, "auch das Füllen geht über die Rückfallkette"
     fields = {entry.name: entry for entry in spec.params.spec()}
@@ -2201,10 +2201,17 @@ def test_a_dome_can_be_moved_without_losing_material(profile: Profile) -> None:
 
 
 def test_the_movable_kinds_now_include_the_dome() -> None:
-    """Vier Arten statt zwei — und die Sätze für die übrigen bleiben."""
+    """Was sich versetzen lässt — und die Sätze für die übrigen bleiben.
+
+    **Nicht mehr als geschlossene Menge.** Bis zum 10.09.2026 stand hier
+    ``== {"hole", "pin", "cone", "sphere"}``, und damit sicherte der Test auch
+    zu, was **nicht** darin steht — beim Einschluss (``void``) wurde er rot für
+    eine Erweiterung, die richtig war. Was hier zählt, ist die Zusage: Diese
+    vier gehen, und die drei darunter gehen aus je eigenem Grund nicht.
+    """
     spec = REGISTRY.get("move_feature")
 
-    assert set(spec.applies_to) == {"hole", "pin", "cone", "sphere"}
+    assert {"hole", "pin", "cone", "sphere"} <= set(spec.applies_to)
     assert "fillet" not in spec.applies_to, "eine Verrundung folgt ihrer Kante"
     assert "edge_loop" not in spec.applies_to, "ein Netzfehler ist kein Körper"
     assert "face" not in spec.applies_to, "dafür gibt es push_face"
@@ -2681,15 +2688,48 @@ def test_a_cavity_inside_the_body_moves_without_losing_material(profile: Profile
     void = trimesh.creation.icosphere(radius=8.0, subdivisions=3)
     body = MeshData.of(trimesh.boolean.difference([block, void]))
     entry = SceneObject(id="obj_1", name="Block", mesh=body, features=detect(body))
-    cavity = next(name for name, found in entry.features.items() if found.kind == "sphere")
+    # **Seit dem 10.09.2026 heißt er ``void`` und nicht mehr ``sphere``.** Eine
+    # geschlossene Innenschale ist ein Hohlraum ohne Weg nach außen, und die
+    # Erkennung benennt sie als solchen (``features.detect_voids``) — die Kugel
+    # war die Form seiner Fläche, nicht die Sache. Was dieser Test misst, hat
+    # sich dadurch nicht geändert: Er versetzt ihn und wiegt nach.
+    cavity = next(name for name, found in entry.features.items() if found.kind == "void")
 
     result = _run_op("move_feature", entry, profile, at_feature=cavity, x=10.0, y=0.0, z=0.0)
     moved = result.outputs[0].mesh
 
     assert moved.raw.is_watertight
     assert moved.raw.volume == pytest.approx(body.raw.volume, abs=1e-3), "aufgefüllt wie abgetragen"
-    again = next(found for found in detect(moved).values() if found.kind == "sphere")
+    again = next(found for found in detect(moved).values() if found.kind == "void")
     assert again.params["centre"][0] == pytest.approx(10.0, abs=0.05), again.params["centre"]
+
+
+def test_an_air_pocket_is_filled_with_material_when_it_is_removed(profile: Profile) -> None:
+    """Was der Satz im Merkmalpanel zusagt, gemessen.
+
+    ``actions.NOT_APPLICABLE["void"]`` sagt dem Kunden: „„Merkmal entfernen"
+    füllt ihn mit Material auf." Bis zum 10.09.2026 stand die Zusage in drei
+    Docstrings und einer Regeldatei — belegt war sie mit dem Test darüber, und
+    der **versetzt** nur (Durchsicht, Fund 6). Eine Zusage, die niemand fährt,
+    ist eine Behauptung.
+
+    Gemessen am Würfel 40 mm mit einer Kugelhöhle r = 8: 61 873,797 mm³ vorher,
+    64 000,000 mm³ danach — genau der Würfel, wasserdicht, ein Stück.
+    """
+    block = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    void = trimesh.creation.icosphere(radius=8.0, subdivisions=3)
+    body = MeshData.of(trimesh.boolean.difference([block, void]))
+    entry = SceneObject(id="obj_1", name="Block", mesh=body, features=detect(body))
+    cavity = next(name for name, found in entry.features.items() if found.kind == "void")
+
+    result = _run_op("remove_feature", entry, profile, at_feature=cavity)
+    filled = result.outputs[0].mesh
+
+    assert filled.raw.is_watertight
+    assert filled.raw.volume == pytest.approx(40.0**3, abs=1e-3), "der volle Würfel"
+    assert not [f for f in detect(filled).values() if f.kind == "void"], (
+        "und kein Einschluss mehr da"
+    )
 
 
 def test_a_moved_bore_leaves_no_plug_standing_proud(profile: Profile) -> None:
@@ -3561,3 +3601,444 @@ def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
     )
     assert koerper.raw.is_watertight
     assert koerper.raw.body_count == 1
+
+
+# --- Langlöcher (§25) -------------------------------------------------------------
+#
+# Ein Langloch ist eine Bohrung, die auseinandergezogen wurde: derselbe
+# Durchmesser, dieselbe Tiefe, nur zwei Bogenmittelpunkte statt einem. Gemessen
+# wird deshalb gegen die analytische Fläche — Rechteck plus Kreis mal Tiefe —
+# und nicht gegen ein selbst erzeugtes Ergebnis.
+
+
+def _slot_volume(diameter: float, length: float, depth: float) -> float:
+    """Was ein Langloch dieser Maße wegnimmt: Rechteck plus voller Kreis."""
+    radius = diameter / 2.0
+    return ((length - diameter) * diameter + math.pi * radius**2) * depth
+
+
+def test_a_slot_takes_out_the_shape_it_promises(profile: Profile) -> None:
+    body = cube()
+
+    result = drill(
+        body,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=5.0,
+        profile=profile,
+        compensate=False,
+        slot_length=14.0,
+    )
+
+    assert result.mesh.is_watertight
+    assert result.mesh.raw.body_count == 1
+    # Zwei Prozent, weil die Bögen für das Netz abgetastet werden — der exakte
+    # Kern trifft die Zahl unten auf die vierte Stelle.
+    assert body.volume - result.mesh.volume == pytest.approx(
+        _slot_volume(5.0, 14.0, 20.0), rel=0.02
+    )
+
+
+def test_a_slot_points_where_its_angle_says(profile: Profile) -> None:
+    """Null folgt der x-Achse des Flächenrahmens, 90 Grad der y-Achse.
+
+    Gemessen an den Ausmaßen des Lochs und nicht an einem Winkel im Code: Der
+    Rahmen kommt aus ``sketch.planes.frame_of``, und ob seine erste Achse
+    wirklich dorthin zeigt, wo der Kunde die Vorschau gesehen hat, sagt nur
+    das Ergebnis.
+    """
+    body = cube()
+    values = {
+        "axis": "z",
+        "diameter": 5.0,
+        "profile": profile,
+        "compensate": False,
+        "slot_length": 16.0,
+    }
+
+    laengs = drill(body, position=(0.0, 0.0, 10.0), slot_angle=0.0, **values)
+    quer = drill(body, position=(0.0, 0.0, 10.0), slot_angle=90.0, **values)
+
+    # Das Loch ist Luft: Wo es liegt, sagt kein Hüllquader, sondern das
+    # Material, das an der Stelle fehlt. Gefragt wird mit einem Prüfwürfel von
+    # 2 mm Kante — bei 16 mm Länge und Ø 5 liegt er an der einen Stelle
+    # vollständig im Loch und an der anderen vollständig im Material.
+    from app.core.geom.boolean import shared_volume
+
+    def belegt(mesh: MeshData, x: float, y: float) -> float:
+        probe = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+        probe.apply_translation((x, y, 0.0))
+        return shared_volume(mesh.raw, probe)
+
+    assert belegt(laengs.mesh, 6.0, 0.0) == pytest.approx(0.0, abs=EPS_GEOM), (
+        "längs ist bei x = 6 kein Material mehr"
+    )
+    assert belegt(laengs.mesh, 0.0, 6.0) == pytest.approx(8.0, rel=0.01), (
+        "und quer daneben steht die volle Wand"
+    )
+    assert belegt(quer.mesh, 6.0, 0.0) == pytest.approx(8.0, rel=0.01), "gedreht umgekehrt"
+    assert belegt(quer.mesh, 0.0, 6.0) == pytest.approx(0.0, abs=EPS_GEOM)
+
+
+def test_the_material_tolerance_widens_a_slot_and_keeps_its_travel(profile: Profile) -> None:
+    """Der Verschiebeweg ist der Grund, aus dem es Langlöcher gibt.
+
+    Wächst das Loch um die Materialtoleranz, soll es überall weiter werden —
+    hielte man stattdessen die Gesamtlänge fest, nähme jeder Druck dem Kunden
+    ein Stück des Weges ab, den er ausgerechnet hat.
+    """
+    body = cube()
+    schmal = drill(
+        body,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=5.0,
+        profile=profile,
+        compensate=False,
+        slot_length=15.0,
+    )
+    weit = drill(
+        body,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=5.0,
+        profile=profile,
+        compensate=True,
+        slot_length=15.0,
+    )
+
+    zugabe = bore_diameter(5.0, profile, True) - 5.0
+    assert zugabe > EPS_GEOM, "das Materialprofil gibt überhaupt eine Toleranz her"
+    schmal_lang = float(np.ptp(schmal.mesh.raw.vertices[:, 0]))
+    weit_lang = float(np.ptp(weit.mesh.raw.vertices[:, 0]))
+    assert weit_lang == pytest.approx(schmal_lang, abs=EPS_GEOM), (
+        "der Würfel ist derselbe — gemessen wird am Loch, nicht an ihm"
+    )
+    assert weit.mesh.volume < schmal.mesh.volume, "das weitere Loch nimmt mehr weg"
+    assert body.volume - weit.mesh.volume == pytest.approx(
+        _slot_volume(5.0 + zugabe, 15.0 + zugabe, 20.0), rel=0.02
+    )
+
+
+def test_a_slot_and_a_widening_do_not_go_together(profile: Profile) -> None:
+    """Regel 21 an einer Stelle, an der zwei Antworten möglich wären.
+
+    Eine Senkung über einem Langloch wäre entweder rund oder selbst ein
+    Langloch. Welche der beiden Längen dann gemeint ist, hat niemand gesagt —
+    also wird es nicht geraten.
+    """
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as fehler:
+        drill(
+            cube(),
+            position=(0.0, 0.0, 10.0),
+            axis="z",
+            diameter=5.0,
+            profile=profile,
+            slot_length=14.0,
+            widening_diameter=9.0,
+            widening_depth=2.0,
+        )
+
+    assert fehler.value.field == "slot_length"
+    assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"
+
+
+@pytest.mark.parametrize("length", [0.2, 5.0, 5.0 + EPS_GEOM / 2.0])
+def test_a_slot_no_longer_than_its_diameter_is_refused(length: float, profile: Profile) -> None:
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as fehler:
+        drill(
+            cube(),
+            position=(0.0, 0.0, 10.0),
+            axis="z",
+            diameter=5.0,
+            profile=profile,
+            compensate=False,
+            slot_length=length,
+        )
+
+    assert fehler.value.field == "slot_length"
+
+
+def test_a_slot_that_hangs_over_the_edge_says_so_although_its_centre_does_not(
+    profile: Profile,
+) -> None:
+    """Die Mitte steckt tief im Material, ein Ende steht über.
+
+    Wer nur die Mitte fragt — wie es die runde Bohrung tut —, hört von diesem
+    Fall nichts, und der Kunde bekommt eine aufgerissene Flanke ohne ein Wort
+    dazu.
+    """
+    body = cube()
+    rand = float(body.bounds.maximum[0])
+
+    mittig = drill(
+        body,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=5.0,
+        profile=profile,
+        compensate=False,
+        slot_length=2.0 * rand + 6.0,
+    )
+    rund = drill(
+        body, position=(0.0, 0.0, 10.0), axis="z", diameter=5.0, profile=profile, compensate=False
+    )
+
+    assert "bore.over_the_edge" in {finding.code for finding in mittig.findings}
+    assert "bore.over_the_edge" not in {finding.code for finding in rund.findings}, (
+        "dieselbe Mitte, rund gebohrt, bleibt still — es ist wirklich die Länge"
+    )
+
+
+def test_only_one_word_about_a_slot_that_hangs_over_both_ends(profile: Profile) -> None:
+    """Zwei gleichlautende Sätze über dasselbe Loch sagen nichts Zweites."""
+    body = cube()
+    rand = float(body.bounds.maximum[0])
+
+    result = drill(
+        body,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=5.0,
+        profile=profile,
+        compensate=False,
+        slot_length=2.0 * rand + 20.0,
+    )
+
+    gesagt = [finding for finding in result.findings if finding.code == "bore.over_the_edge"]
+    assert len(gesagt) == 1
+
+
+def test_the_slot_switch_puts_the_widening_aside() -> None:
+    """Was der Dialog ausgraut, übergeht die Operation — auch über Chat und CLI.
+
+    ``depends_on`` graut die drei Aufweitungsfelder aus, sobald der Haken
+    steht. Über Chat und Kommandozeile gibt es keinen Dialog; dort kämen beide
+    Werte an, und der Kern müsste die Frage beantworten, die
+    :func:`bore_shape` gerade beiseitelegt.
+    """
+    from app.core.geom.prepare_ops import DrillParams, bore_shape
+
+    langloch = bore_shape(
+        DrillParams(
+            diameter=5.0, slotted=True, slot_length=14.0, widening_diameter=9.0, widening_depth=2.0
+        )
+    )
+    rund = bore_shape(
+        DrillParams(
+            diameter=5.0,
+            slotted=False,
+            slot_length=14.0,
+            widening_diameter=9.0,
+            widening_depth=2.0,
+        )
+    )
+
+    assert (langloch.slot_length, langloch.widening_diameter) == (14.0, 0.0)
+    assert (rund.slot_length, rund.widening_diameter) == (0.0, 9.0)
+
+
+@pytest.mark.parametrize("length", [0.0, 5.0])
+def test_the_slot_switch_without_a_length_is_refused(length: float) -> None:
+    """Ein Haken, der nichts bewirkt, ist schlimmer als kein Haken.
+
+    Gefunden am gebauten Dialog: Der Haken *Langloch* schaltet die zwei Felder
+    frei, und wer ihn setzt und die Länge stehen lässt, bekam eine **runde**
+    Bohrung — `slot_travel` liest die Null als „rund", und für einen direkten
+    Aufruf ist das richtig. Hier ist es eine stille Wahl (Regel 21): Das
+    Häkchen behauptet ein Langloch, das Ergebnis ist keines.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare_ops import DrillParams, bore_shape
+
+    with pytest.raises(ValidationError) as fehler:
+        bore_shape(DrillParams(diameter=5.0, slotted=True, slot_length=length))
+
+    assert fehler.value.field == "slot_length"
+    assert fehler.value.suggestions
+
+
+def test_the_slot_length_starts_at_a_value_that_works() -> None:
+    """Die Vorgabe muss zur Vorgabe daneben passen — sonst ist sie eine Absage."""
+    from app.core.geom.prepare_ops import DrillParams, bore_shape
+
+    vorgabe = DrillParams(slotted=True)
+
+    assert bore_shape(vorgabe).slot_length > vorgabe.diameter
+
+
+def test_a_detected_bore_becomes_a_slot(document: Document, profile: Profile) -> None:
+    """Der Kundenweg: STL laden, Bohrung anklicken, Länge eintragen.
+
+    Der Test geht durch Stapel, Neuerkennung und Zuordnung — eine grüne
+    Geometriefunktion allein bewiese nicht, dass der Verlauf danach rechnet.
+    """
+    project, history = loaded(document, "plate_holes.stl")
+    vorher = evaluate(document, profile, sources=ProjectSources(project))
+    davor = vorher.scene.objects["obj_1"]
+    loch = davor.features["hole_1"]
+    mass = float(loch.params["diameter"])
+
+    history.apply(
+        _("Bohrung zum Langloch"),
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"at_feature": loch.id, "slot_length": 3.0 * mass},
+            )
+        ],
+    )
+    danach = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert danach.complete
+    nachher = danach.scene.objects["obj_1"]
+    assert nachher.mesh.is_watertight
+    assert nachher.mesh.volume == pytest.approx(
+        davor.mesh.volume
+        - _slot_volume(mass, 3.0 * mass, float(loch.params["depth"]))
+        + math.pi * (mass / 2.0) ** 2 * float(loch.params["depth"]),
+        rel=0.05,
+    )
+    assert not [entry for entry in danach.scene.report.findings if entry.severity == "error"]
+    # **Und es steht dabei, was aus der Bohrung geworden ist.** Sie heißt nicht
+    # mehr ``hole_1``, sondern trägt eine eigene Art — wer auf sie verwiesen
+    # hat, findet dort etwas anderes. Ein Schritt, der eine Kennung still
+    # umhängt, wäre der schlechtere Weg (Regel 17). Dass das Langloch danach
+    # als Merkmal **dasteht**, prüft ``tests/test_slots.py``; hier zählt der
+    # Satz an den Kunden.
+    assert "slot_hole.feature_renamed" in {finding.code for finding in danach.scene.report.findings}
+    assert "hole_1" not in nachher.features
+    assert [entry for entry in nachher.features.values() if entry.kind == "slot"], (
+        "und die Bohrung ist nicht verschwunden, sondern ein Langloch geworden"
+    )
+
+
+def test_making_a_slot_needs_a_hole(profile: Profile) -> None:
+    """Ein Langloch aus einer Fläche gibt es nicht — und der Satz sagt warum.
+
+    **Der Satz gehört mit in die Prüfung**, und genau deshalb steht er hier:
+    Bis zum 10.09.2026 antwortete ``_chosen_bore`` allen Aufrufern mit „Zum
+    Ändern des **Durchmessers** muss eine Bohrung gewählt sein" — an einer
+    Operation, die den Durchmesser ausdrücklich nicht ändert. Ein Test, der nur
+    das Feld prüft, lässt so etwas durch.
+    """
+    import dataclasses
+
+    from app.core.errors import ValidationError
+
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+    entry = dataclasses.replace(entry, features=detect(as_mesh_data(entry.mesh)))
+    flaeche = next(name for name, found in entry.features.items() if found.kind == "face")
+
+    with pytest.raises(ValidationError) as fehler:
+        _run_op("slot_hole", entry, profile, at_feature=flaeche, slot_length=20.0)
+
+    assert fehler.value.field == "at_feature"
+    assert fehler.value.constraint == "not_a_hole"
+    assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"
+    # **Derselbe Satz, den das Panel in die ausgegraute Zeile schreibt.** Er
+    # kommt aus ``perceive.actions`` und nicht aus einer zweiten Formulierung
+    # im Kern — zwei Auskünfte über dieselbe Sache wären eine zu viel
+    # (`.claude/rules/operationen.md`).
+    from app.core.perceive.actions import reason_against
+
+    assert str(fehler.value.detail) == str(reason_against("slot_hole", "face"))
+    assert "Durchmesser" not in str(fehler.value.detail), (
+        "und er spricht nicht vom Durchmesser — den ändert diese Operation nicht"
+    )
+
+
+def test_both_cores_cut_the_same_slot(profile: Profile) -> None:
+    """Beide Kerne, ein Maß — und sie werden gegeneinander gemessen.
+
+    Weicht der eine vom anderen ab, ist das ein Befund und kein „beide haben
+    recht" (`app/core/brep/CLAUDE.md`). Der Netz-Kern tastet die Bögen ab und
+    bleibt darum knapp darunter; der exakte behält echte Zylinderflächen und
+    trifft die analytische Zahl.
+
+    **Derselbe Schnitt in beiden**, und das ist der Punkt: Der Test hieß bis
+    zum 10.09.2026 „der exakte Kern schneidet dasselbe Langloch" und maß nur
+    ihn — gegen eine Formel, nicht gegen den Zwilling. Der Netz-Kern stand
+    daneben in einem anderen Test, an einem anderen Körper, mit einer anderen
+    Länge.
+    """
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.ops import _slotted_bore
+    from app.core.geom.prepare_ops import DrillParams
+    from app.core.registry.params import validate
+
+    values = {
+        "diameter": 5.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 5.0,
+        "axis": "z",
+        "slotted": True,
+        "slot_length": 20.0,
+        "slot_angle": 45.0,
+        "compensate": False,
+    }
+    exact = edit.box(60.0, 40.0, 10.0)
+    solid, _normal = _slotted_bore(exact, validate(DrillParams, values), profile)
+
+    body = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    meshed = drill(
+        body,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=5.0,
+        profile=profile,
+        compensate=False,
+        slot_length=20.0,
+        slot_angle=45.0,
+    )
+
+    wanted = _slot_volume(5.0, 20.0, 10.0)
+    assert solid.is_closed
+    assert meshed.mesh.is_watertight
+    assert exact.volume - solid.volume == pytest.approx(wanted, rel=1e-6)
+    # Ein Prozent zwischen den Kernen: mehr wäre ein Befund, weniger kann der
+    # Netz-Kern nicht — er tastet die zwei Bögen mit endlich vielen Sehnen ab.
+    assert body.volume - meshed.mesh.volume == pytest.approx(wanted, rel=0.01)
+
+
+def test_the_exact_core_cuts_a_slot_through_the_operation(profile: Profile) -> None:
+    """Der Weg des Kunden durch den exakten Kern, nicht die Funktion darunter.
+
+    **Der Zweig hatte keinen Test**, der ihn betreten hätte: Geprüft wurde
+    ``_slotted_bore`` direkt importiert, und ob ``slot_hole`` an einem
+    ``kind="brep"``-Objekt überhaupt dort landet, stand nirgends. Das ist die
+    Testart *Anschluss* — „nicht der Cache kann es, sondern die Anwendung tut
+    es".
+    """
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    exact = edit.box(40.0, 40.0, 10.0)
+    drilled = edit.bore(exact, position=(0.0, 0.0, 5.0), axis="z", diameter=6.0, depth=0.0)
+    entry = SceneObject(
+        id="obj_1", name="Klotz", mesh=drilled, kind="brep", features=features_of(drilled)
+    )
+    bore = next(name for name, found in entry.features.items() if found.kind == "hole")
+
+    result = _run_op("slot_hole", entry, profile, at_feature=bore, slot_length=18.0)
+
+    out = result.outputs[0]
+    assert out.kind == "brep", "der exakte Körper bleibt exakt"
+    assert out.mesh.is_closed
+    assert drilled.volume - out.mesh.volume == pytest.approx(
+        _slot_volume(6.0, 18.0, 10.0) - math.pi * 3.0**2 * 10.0, rel=0.02
+    )
+    assert "slot_hole.feature_renamed" in {finding.code for finding in result.findings}
