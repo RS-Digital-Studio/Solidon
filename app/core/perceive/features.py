@@ -3610,24 +3610,46 @@ def detect_voids(mesh: MeshData) -> list[Feature]:
     # übrigen Hohlraumschalen, und ein Einschluss mit einem Nachbarn fiel durch.
     inside = _shells_inside_the_material(body, components, hollow)
 
-    found: list[Feature] = []
+    measured: list[tuple[Vec3, float, Any]] = []
     for number, verdict in zip(hollow, inside, strict=True):
         if not verdict:
             continue
         faces = components[number]
         corners = body.vertices[body.faces[faces]].reshape(-1, 3)
         lower, upper = corners.min(axis=0), corners.max(axis=0)
-        identifier = FeatureId(f"void_{len(found) + 1}")
+        middle = (lower + upper) / 2.0
+        centre: Vec3 = (float(middle[0]), float(middle[1]), float(middle[2]))
+        measured.append((centre, float(-volumes[number]), faces))
+
+    # **Nach der Mitte nummeriert und nicht nach dem Flächenindex.** Dieselbe
+    # Zeile wie bei Zylindern, Kegeln, Kugeln, Tori und Verrundungen, und aus
+    # demselben Grund (§21.2): Die Nummer eines Merkmals ist eine
+    # Provenienz-ID, und die darf nicht an der Reihenfolge der Flecken hängen.
+    # Hier hing sie daran — `face_components` liefert die Komponenten nach
+    # Flächenindex, und der folgt der Reihenfolge, in der ein Exporter die
+    # Dreiecke geschrieben hat. Gemessen an zweimal derselben Geometrie, nur
+    # anders zusammengesetzt: einmal `void_1` = 28,19 mm³ links und `void_2` =
+    # 112,78 mm³ rechts, einmal umgekehrt. Dieselbe Datei aus einem anderen
+    # Werkzeug, dieselben Hohlräume, vertauschte Namen — und eine Op, die an
+    # `void_2` hängt, sitzt danach am anderen.
+    measured.sort(
+        key=lambda entry: (round(entry[0][0], 3), round(entry[0][1], 3), round(entry[0][2], 3))
+    )
+
+    found: list[Feature] = []
+    for number, (centre, volume, faces) in enumerate(measured, start=1):
+        corners = body.vertices[body.faces[faces]].reshape(-1, 3)
+        lower, upper = corners.min(axis=0), corners.max(axis=0)
         found.append(
             Feature(
-                id=identifier,
+                id=FeatureId(f"void_{number}"),
                 kind="void",
                 provenance="detected",
                 params={
                     # Der Betrag, weil die Zahl den Hohlraum beschreibt und
                     # nicht die Umlaufrichtung seiner Dreiecke.
-                    "volume": round(-volumes[number], 4),
-                    "centre": tuple(float(value) for value in (lower + upper) / 2.0),
+                    "volume": round(volume, 4),
+                    "centre": centre,
                     "size": tuple(float(value) for value in upper - lower),
                 },
                 face_indices=tuple(int(index) for index in faces),

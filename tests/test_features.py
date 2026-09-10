@@ -3167,6 +3167,47 @@ def test_an_open_mesh_keeps_its_bores_because_a_sign_says_nothing_there() -> Non
     )
 
 
+def test_two_air_pockets_keep_their_names_however_the_file_was_written() -> None:
+    """§21.2: Die Nummer eines Einschlusses hängt an seinem Ort, nicht an der Datei.
+
+    **Der Fall, den keine einzelne Datei zeigt.** Die Nummern kamen aus
+    ``face_components``, und die Reihenfolge dort folgt dem Flächenindex — also
+    dem, in welcher Reihenfolge ein Exporter die Dreiecke geschrieben hat.
+    Dieselbe Geometrie aus einem anderen Werkzeug bekam damit vertauschte
+    Namen, und eine Op, die an ``void_2`` hängt, saß danach am anderen.
+
+    Geprüft wird deshalb an **zwei** Netzen mit denselben zwei Hohlräumen, die
+    sich nur in der Anhängereihenfolge unterscheiden. Ohne die Sortierung nach
+    der Mitte tauschen die Volumina zwischen den beiden Läufen die Plätze.
+    """
+    block = trimesh.creation.box(extents=(60.0, 40.0, 20.0))
+    klein = trimesh.creation.cylinder(radius=1.0, height=9.0, sections=48)
+    klein.invert()
+    klein.apply_translation((-15.0, 0.0, 0.0))
+    gross = trimesh.creation.cylinder(radius=2.0, height=9.0, sections=48)
+    gross.invert()
+    gross.apply_translation((15.0, 0.0, 0.0))
+
+    namen: list[list[tuple[str, float]]] = []
+    for reihenfolge in ([block, klein, gross], [block, gross, klein]):
+        forget_cache()
+        found = detect(MeshData.of(trimesh.util.concatenate(reihenfolge)))
+        voids = sorted(
+            (feature for feature in found.values() if feature.kind == "void"),
+            key=lambda feature: feature.id,
+        )
+        assert len(voids) == 2, (
+            f"die Vorbedingung: zwei Einschlüsse, gefunden {[f.id for f in voids]}"
+        )
+        namen.append([(str(f.id), round(float(f.params["volume"]), 1)) for f in voids])
+
+    assert namen[0] == namen[1], (
+        f"die Kennungen hängen an der Reihenfolge der Dreiecke: {namen[0]} gegen {namen[1]}"
+    )
+    # Und die Sortierung ist die nach der Mitte: der linke Hohlraum zuerst.
+    assert namen[0][0][1] < namen[0][1][1], "void_1 sitzt bei x = -15 und ist der kleinere"
+
+
 def test_a_lopsided_winding_is_not_an_air_pocket() -> None:
     """Ein Vorzeichen ist nur dort eine Auskunft, wo die Normalen zeigen.
 
