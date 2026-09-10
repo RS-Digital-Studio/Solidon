@@ -29,7 +29,7 @@ import itertools
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 import numpy as np
 
@@ -39,7 +39,7 @@ from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
-from app.core.types import Vec3
+from app.core.types import Feature, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG
 from app.i18n import _
 
@@ -428,6 +428,10 @@ MIN_ARC_STEPS = 4
 #: der Kunde wiederfinden soll.
 EDGE_OVERSHOOT = 0.01
 
+#: Wie weit die Normale einer Nachbarfläche aus der Senkrechten zur
+#: Rundungsachse kippen darf und noch als deren Nachbar gilt.
+UPRIGHT_TO_AXIS = 0.1
+
 
 def rounding_tool(entry: MeshEdge, radius: float, rounded: bool = True) -> MeshData:
     """Der Körper, der aus einer Kante eine Rundung oder eine Fase macht.
@@ -474,7 +478,14 @@ def rounding_tool(entry: MeshEdge, radius: float, rounded: bool = True) -> MeshD
     pieces: list[MeshData] = []
     for index, (first, second) in enumerate(entry.normals):
         wedge = _wedge(
-            points[index], points[index + 1], first, second, radius, entry.convex, rounded
+            points[index],
+            points[index + 1],
+            first,
+            second,
+            radius,
+            entry.convex,
+            rounded,
+            subtracted=entry.convex,
         )
         if wedge is not None:
             pieces.append(wedge)
@@ -505,8 +516,14 @@ def _wedge(
     radius: float,
     convex: bool,
     rounded: bool,
+    subtracted: bool,
 ) -> MeshData | None:
-    """Ein Stück des Werkzeugs — das Prisma über einem Querschnitt."""
+    """Ein Stück des Werkzeugs — das Prisma über einem Querschnitt.
+
+    ``convex`` sagt, auf welcher Seite der Kante der Zwickel liegt;
+    ``subtracted``, ob er vom Körper abgezogen wird. Beim Verrunden ist das
+    dasselbe, beim Wegnehmen einer Rundung nicht.
+    """
     along = end - start
     reach = float(np.linalg.norm(along))
     if reach <= EPS_GEOM:
@@ -561,12 +578,18 @@ def _wedge(
         (float(np.dot(point - start, towards_one)), float(np.dot(point - start, across)))
         for point in profile
     ]
-    # **Den Überstand bekommt nur, was abgezogen wird.** An einer Außenkante
-    # hält er die Schnittflächen von den Körperflächen fern; an einer
-    # Innenkante klebt er, was über das Kantenende hinausragt, außen an den
+    # **Den Überstand bekommt nur, was abgezogen wird.** Bei einer Differenz
+    # hält er die Schnittflächen von den Körperflächen fern; bei einer
+    # Vereinigung klebt er, was über das Kantenende hinausragt, außen an den
     # Körper. Gemessen an einer durchgehenden Nut: 0,02 mm³ zu viel, als
     # 0,01 mm dünner Grat auf beiden Stirnflächen der Platte.
-    overshoot = EDGE_OVERSHOOT if convex else 0.0
+    #
+    # **Und die Frage ist die Boolesche Richtung, nicht die Kante.** Beim
+    # Verrunden fällt beides zusammen — außen wird abgezogen, innen vereinigt —,
+    # und deshalb stand hier zuerst ``convex``. Beim *Wegnehmen* einer Rundung
+    # kehrt sich das um: außen wird vereinigt. Mit der alten Bedingung stand
+    # der Quader danach 20,02 mm hoch und trug 24000,36 mm³ statt 24000,0.
+    overshoot = EDGE_OVERSHOOT if subtracted else 0.0
     return _prism(flat, start, towards_one, across, along, reach, overshoot)
 
 
@@ -738,3 +761,320 @@ def _worked_edges(
         solver=solver if solver is not None else runs[0].solver,
         findings=[finding for run in runs for finding in run.findings],
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SharpCorner:
+    """Die Kante, die unter einer erkannten Rundung liegt.
+
+    ``reach`` ist, wie weit die Rundung auf jeder der beiden Flächen greift —
+    gemessen an ihren eigenen Knoten und nicht aus dem Radius gerechnet.
+    """
+
+    start: np.ndarray
+    end: np.ndarray
+    first: Vec3
+    second: Vec3
+    reach: float
+    convex: bool
+
+
+def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
+    """Rechnet aus einer erkannten Rundung die Kante zurück, die sie ersetzt hat.
+
+    **Über den Schnitt der beiden Nachbarebenen und nicht über den Radius.**
+    Der erkannte Radius stammt aus einem Sehnenzug und ist deshalb ein wenig
+    zu klein — gemessen 2,9772 an einer Rundung, die mit 3,0 gebaut wurde. Die
+    daraus gerechnete Kante läge 0,023 mm neben der wirklichen, und der
+    Füllkörper ließe an der Ecke eine Fehlstelle. Die zwei Ebenen daneben sind
+    exakt: Ihre Schnittgerade **ist** die Kante.
+    """
+    triangles = [int(index) for index in feature.face_indices]
+    if not triangles:
+        raise GeometryError(
+            detail=_(
+                "Zu dieser Rundung sind die Flächen nicht bekannt. Lesen Sie das "
+                "Modell neu ein und wählen Sie sie erneut."
+            ),
+        )
+    axis = np.asarray(feature.params["axis"], dtype=float)
+    axis = axis / float(np.linalg.norm(axis))
+    normals, neighbours = _around(mesh, triangles, axis)
+    if len(normals) < THROUGH:
+        raise GeometryError(
+            detail=_(
+                "Diese Rundung grenzt nicht an zwei ebene Flächen — sie lässt sich "
+                "nicht auf eine Kante zurückführen. Verrunden Sie stattdessen neu."
+            ),
+        )
+    first, second = normals[0], normals[1]
+    line, point = _plane_cut(first, neighbours[0], second, neighbours[1])
+
+    if float(np.dot(axis, line)) < 0.0:
+        line = -line
+    centre = np.asarray(feature.params["centre"], dtype=float)
+    # **Ohne Überstand.** Der Füllkörper wird vereinigt, und was über das Ende
+    # der Kante hinausragt, klebt außen am Körper an statt zu helfen — gemessen
+    # 24000,72 mm³ statt 24000,0 und ein Quader, der 20,04 mm hoch war. Derselbe
+    # Fall wie bei der Kehle in :func:`_wedge`, nur eine Handlung weiter.
+    half = float(feature.params.get("length", 0.0)) / 2.0
+    middle = point + line * float(np.dot(centre - point, line))
+
+    corners = np.asarray(mesh.raw.faces, dtype=np.int64)[triangles]
+    points = np.asarray(mesh.raw.vertices, dtype=float)[np.unique(corners)]
+    # Wie weit die Rundung auf den Flächen greift: der weiteste ihrer eigenen
+    # Knoten, quer zur Kante gemessen. Ein Füllkörper, der genauso weit reicht,
+    # deckt den Bogen sicher ab und liegt mit seinen Flanken trotzdem in den
+    # Nachbarebenen — dort ist ohnehin Material (§39, „überall breiter").
+    across = points - middle
+    reach = float(np.max(np.linalg.norm(across - np.outer(across @ line, line), axis=1)))
+    return SharpCorner(
+        start=middle - line * half,
+        end=middle + line * half,
+        first=tuple(float(value) for value in first),  # type: ignore[arg-type]
+        second=tuple(float(value) for value in second),  # type: ignore[arg-type]
+        reach=reach,
+        # **Die Hohlraumfrage steht in ``types.is_a_cavity``**, nicht hier: Eine
+        # Kehle ist ein Hohlraum, ein Wulst Materie, und wer das zweimal
+        # beantwortet, bekommt zwei Antworten.
+        convex=not is_a_cavity(feature),
+    )
+
+
+def _around(
+    mesh: MeshData, triangles: list[int], axis: np.ndarray
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Die Normalen der angrenzenden Flächen und je ein Punkt darauf.
+
+    **Nur die quer zur Achse.** Eine Rundung an einer senkrechten Kante grenzt
+    auch an Deckel und Boden, und die beiden sind einander entgegengesetzt:
+    Der erste Anlauf nahm sie als das gesuchte Paar und bekam „diese Flächen
+    sind parallel" zurück. Gesucht sind die Flächen, zwischen denen die
+    Rundung *liegt*, und die stehen senkrecht auf ihrer Achse.
+    """
+    own = set(triangles)
+    raw = mesh.raw
+    face_normals = np.asarray(raw.face_normals, dtype=float)
+    centres = np.asarray(raw.triangles_center, dtype=float)
+    normals: list[np.ndarray] = []
+    places: list[np.ndarray] = []
+    for a, b in np.asarray(raw.face_adjacency, dtype=np.int64).tolist():
+        outside = b if a in own and b not in own else a if b in own and a not in own else None
+        if outside is None:
+            continue
+        normal = face_normals[outside]
+        if abs(float(np.dot(normal, axis))) > UPRIGHT_TO_AXIS:
+            continue
+        if any(float(np.dot(normal, seen)) > 1.0 - EPS_GEOM for seen in normals):
+            continue
+        normals.append(normal)
+        places.append(centres[outside])
+    return normals, places
+
+
+def _plane_cut(
+    first: np.ndarray, on_first: np.ndarray, second: np.ndarray, on_second: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Schnittgerade zweier Ebenen: Richtung und ein Punkt darauf."""
+    line = np.cross(first, second)
+    length = float(np.linalg.norm(line))
+    if length <= EPS_GEOM:
+        raise GeometryError(
+            detail=_(
+                "Die beiden Flächen neben dieser Rundung sind parallel — dazwischen "
+                "liegt keine Kante."
+            ),
+        )
+    line = line / length
+    # Der Punkt auf beiden Ebenen, der der Bauart nach am stabilsten ist:
+    # gelöst wird das 3x3-System aus den zwei Ebenen und der Schnittgeraden.
+    matrix = np.vstack([first, second, line])
+    right = np.array(
+        [float(np.dot(first, on_first)), float(np.dot(second, on_second)), 0.0], dtype=float
+    )
+    return line, np.linalg.solve(matrix, right)
+
+
+def unround(mesh: MeshData, feature: Feature) -> BooleanOutcome:
+    """Nimmt eine erkannte Rundung weg und stellt die scharfe Kante her.
+
+    Der Füllkörper ist der **Zwickel ohne Bogen** — das Dreieck zwischen der
+    Kante und den beiden Berührlinien. Er deckt den Bogen vollständig ab, und
+    seine Flanken liegen in den Nachbarebenen, wo ohnehin Material ist. Einen
+    Körper zu bauen, der die Rundungsfläche nachzeichnet, wäre der Fehler, den
+    `.claude/rules/operationen.md` unter „Ein Füllkörper hat die Form des
+    Werkzeugs" beschreibt: Er endete **auf** der Fläche, und übrig blieben zwei
+    Flächen nebeneinander statt einer.
+
+    An einer Hohlkehle (``recess``) geht es umgekehrt: Dort hat die Rundung
+    Material hinzugefügt, und der Zwickel wird abgezogen.
+    """
+    corner = sharp_corner(mesh, feature)
+    filler = _wedge(
+        corner.start,
+        corner.end,
+        corner.first,
+        corner.second,
+        corner.reach,
+        corner.convex,
+        rounded=False,
+        # Umgekehrt zum Verrunden: An einer Außenkante wird hier **vereinigt**.
+        subtracted=not corner.convex,
+    )
+    if filler is None:
+        raise GeometryError(
+            detail=_(
+                "Diese Rundung lässt sich nicht auf eine Kante zurückführen — "
+                "verrunden Sie stattdessen neu."
+            ),
+        )
+    kind: BooleanKind = "union" if corner.convex else "difference"
+    outcome = boolean(kind, [mesh, filler], quality="fine")
+    return BooleanOutcome(mesh=outcome.mesh, solver=outcome.solver, findings=list(outcome.findings))
+
+
+def reround(mesh: MeshData, feature: Feature, radius: float) -> BooleanOutcome:
+    """Ändert den Radius einer erkannten Rundung — wegnehmen, neu verrunden.
+
+    **Zwei Schritte und nicht einer**, weil es zwischen ihnen etwas gibt, das
+    beide brauchen: die scharfe Kante. Eine Rundung direkt zu vergrößern hieße,
+    den Bogen zu verschieben und die Berührlinien mitzuziehen — dieselbe
+    Rechnung, nur ohne den Zwischenstand, an dem man sie prüfen kann.
+
+    Die Kante wird über ihren **Schlüssel** wiedergefunden und nicht über einen
+    Index: Zwischen Auffüllen und Neuverrunden ist das Netz ein anderes, und
+    jede Nummer darin zeigt danach woandershin (§21.2).
+    """
+    if radius <= EPS_GEOM:
+        raise ValidationError(
+            "diameter",
+            _("Ohne Radius entsteht keine Rundung. Dieser Wert muss größer als null sein."),
+            value=radius,
+        )
+    corner = sharp_corner(mesh, feature)
+    taken = unround(mesh, feature)
+    sharp = MeshData(taken.mesh.raw)
+    key = edge_key(_placed(corner))
+    again = round_edges(sharp, radius, "named", [key])
+    return BooleanOutcome(
+        mesh=again.mesh,
+        solver=deepest([taken.solver, again.solver]) or again.solver,
+        findings=[*taken.findings, *again.findings],
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Placed:
+    middle: Vec3
+    direction: Vec3
+
+
+def _placed(corner: SharpCorner) -> _Placed:
+    """Die wiederhergestellte Kante, so beschrieben, wie ``edge_key`` sie liest."""
+    middle = (corner.start + corner.end) / 2.0
+    along = corner.end - corner.start
+    along = along / float(np.linalg.norm(along))
+    return _Placed(
+        middle=(float(middle[0]), float(middle[1]), float(middle[2])),
+        direction=(float(along[0]), float(along[1]), float(along[2])),
+    )
+
+
+def bead_edges(
+    mesh: MeshData,
+    radius: float,
+    choice: EdgeChoice = "all",
+    keys: Sequence[str] = (),
+) -> BooleanOutcome:
+    """Legt einen Wulst auf die gewählten Kanten — eine runde Leiste.
+
+    Die Gegenrichtung zum Verrunden: Dort geht an einer Außenkante Material
+    weg, hier kommt welches dazu. Gebaut wird ein **Rundstab** auf der Kante —
+    ein Zylinder, dessen Achse auf ihr liegt; was davon im Material steckt,
+    verschwindet in der Vereinigung.
+
+    **An einer Innenkante liegt derselbe Stab im Eck** — eine Kehlnaht, wie
+    sie beim Schweißen entsteht. Gemessen an einer Nut mit R = 1,5: 104,45 mm³
+    kommen dazu, also der Viertelkreis (analytisch 106,03; der Rest ist die
+    Facettierung).
+
+    **Das ist nicht die glatte Hohlkehle**, und der Unterschied ist keine
+    Feinheit: Die Hohlkehle nimmt dem Innenwinkel seine Kante, indem sie den
+    Zwickel füllt — 28,97 mm³ an derselben Nut —, und dafür gibt es
+    :func:`round_edges` an einer konkaven Kante. Der erste Entwurf dieser
+    Funktion versprach im Docstring die Hohlkehle und lieferte die Naht; die
+    Zahl daneben hat es gesagt (Robert, 10.09.2026: „Hohlkehlen, Wulst und
+    Verrundung müssen noch bearbeitbar sein bzw auch anlegbar sein").
+    """
+    if radius <= EPS_GEOM:
+        raise ValidationError(
+            "radius",
+            _("Ohne Radius entsteht kein Wulst. Dieser Wert muss größer als null sein."),
+            value=radius,
+        )
+    chosen = wanted(edges_of(mesh), choice, keys)
+    # **Jedes Stück einzeln in die Kette.** Zusammengelegt (``concatenate``)
+    # überlappen sich die Zylinder eines Zugs an ihren Knicken, und ein Körper
+    # mit doppelt belegtem Raum hat kein wohldefiniertes Volumen: Am
+    # unterteilten Quader kamen 24250 mm³ heraus statt 24186. Die Vereinigung
+    # löst die Überlappung, dafür ist sie da.
+    tools: list[MeshData] = []
+    for entry in chosen:
+        tools.extend(_rod_along(entry, radius))
+    return boolean("union", [mesh, *tools], quality="fine")
+
+
+def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
+    """Der Rundstab entlang eines Kantenzugs — Zylinder je Stück, Kugel je Knick.
+
+    Die Kugeln sind kein Zierat: An einem Knick des Zugs stoßen zwei Zylinder
+    unter einem Winkel aneinander und lassen außen einen Keil frei. Eine Kugel
+    im Knoten füllt ihn, und zwar für jeden Winkel dieselbe.
+    """
+    import trimesh
+
+    points = np.asarray(entry.points, dtype=float)
+    parts: list[Any] = []
+    for first, second in itertools.pairwise(points):
+        along = second - first
+        reach = float(np.linalg.norm(along))
+        if reach <= EPS_GEOM:
+            continue
+        rod = trimesh.creation.cylinder(radius=radius, height=reach, sections=_ring_steps(radius))
+        rod.apply_transform(_towards(along / reach, (first + second) / 2.0))
+        parts.append(rod)
+    for point in points[1:-1] if len(points) > THROUGH else []:
+        ball = trimesh.creation.icosphere(subdivisions=1, radius=radius)
+        ball.apply_translation(point)
+        parts.append(ball)
+    if not parts:
+        raise GeometryError(
+            detail=_(
+                "Diese Kante ist zu kurz für einen Wulst. Wählen Sie eine andere "
+                "oder einen kleineren Radius."
+            ),
+        )
+    return [MeshData(part) for part in parts]
+
+
+def _ring_steps(radius: float) -> int:
+    """Wie viele Segmente ein voller Kreis dieses Radius bekommt.
+
+    Dieselbe Rechnung wie beim Rundungsbogen, nur über den ganzen Umlauf:
+    ``_arc_steps`` hält ``MAX_FACET_SAG`` und ``MAX_FACET_ANGLE`` ein, und ein
+    Wulst darf nicht kantiger sein als die Verrundung daneben.
+    """
+    return _arc_steps(radius, 2.0 * math.pi)
+
+
+def _towards(along: np.ndarray, middle: np.ndarray) -> np.ndarray:
+    """Der Rahmen, der einen Zylinder von +Z auf die Kantenrichtung dreht."""
+    frame = np.eye(4)
+    helper = np.array([0.0, 0.0, 1.0]) if abs(float(along[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
+    across = np.cross(helper, along)
+    across = across / float(np.linalg.norm(across))
+    frame[:3, 0] = across
+    frame[:3, 1] = np.cross(along, across)
+    frame[:3, 2] = along
+    frame[:3, 3] = middle
+    return frame

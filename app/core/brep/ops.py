@@ -58,7 +58,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
+from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
 
 
@@ -293,41 +293,6 @@ def shell_exact(ctx: OpContext) -> OpResult:
     if thin is not None:
         findings.append(thin)
     return OpResult(outputs=[_replaced(source, solid)], findings=findings)
-
-
-@op_params
-class DraftParams(BaseParams):
-    angle: float = param(
-        title=_("Winkel"),
-        default=2.0,
-        unit=DEGREE_UNIT,
-        minimum=0.1,
-        maximum=30.0,
-        doc=_(
-            "Um wie viel Grad die senkrechten Flächen angestellt werden. Die "
-            "Standfläche behält ihr Maß, nach oben wird der Körper schmaler."
-        ),
-    )
-
-
-@register_op(
-    name="draft_faces",
-    requires_kind="brep",
-    title=_("Formschräge anstellen"),
-    category="shaping",
-    params=DraftParams,
-    consumes=1,
-    produces=1,
-    doc=_(
-        "Stellt alle senkrechten, einzeln bearbeitbaren Flächen um einen Winkel "
-        "an — zum Entformen, oder damit ein Stapelbehälter sich stapeln lässt."
-    ),
-)
-def draft_faces(ctx: OpContext) -> OpResult:
-    params = cast(DraftParams, ctx.params)
-    source, body = brep_input(ctx)
-    solid = profiles.draft_vertical(body, params.angle)
-    return OpResult(outputs=[_replaced(source, solid)])
 
 
 @op_params
@@ -768,7 +733,6 @@ __all__ = [
     "brep_to_mesh",
     "create_brep_box",
     "create_brep_cylinder",
-    "draft_faces",
     "drill_brep_hole",
     "load_step",
     "shell_exact",

@@ -73,7 +73,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
-| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Kante anklickbar, Verrunden und Fase greifen am Netz — offen bleiben Zeiger und Rechtsklick an der Kante, Fläche versetzen und Formschräge am Netz, Rundung ändern, Wulst und Kehle sowie fünf zugesagte Kundenwege |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
 | [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
 | [RM-153 — Ein Langloch versetzen, drehen und verdoppeln](#rm-153) | Geometrie, Erkennung und Druckvorbereitung | Ziehen geht seit dem 10.09.2026; die vier übrigen Handlungen brauchen den Werkzeugkörper aus `slot_bore` statt eines Zylinders |
@@ -864,12 +864,47 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `tests/test_mesh_edges.py`, neun Mutationen gegengeprüft. Der Eintrag „Verrundungen auf
   Mesh-Kanten vor dem B-Rep-Kern" ist damit aus `AGENTS.md` verschwunden.
 
-  **Offen aus derselben Liste bleibt der Rest der Kantenarbeit:** Fläche versetzen und
-  Formschräge am Netz (beide gemessen machbar, `push_face` dabei gleich auf die *gewählte*
-  Fläche umstellen statt auf eine Richtung — Roberts Einwand vom 10.09.2026), die erkannte
-  Rundung ändern und wegnehmen, sowie Wulst und Kehle anlegen. Danach wird der Haken
-  „Flächen und Kanten später bearbeiten" auf seinen verbliebenen Zweck zurückgeschnitten:
-  den STEP-Export.
+  **Und am selben Tag der Rest der Liste** (Auftrag Robert: „dann los alles abarbeiten
+  nichts offen lassen"):
+
+  * **Fläche versetzen und Formschräge am Netz** — `geom/faces.py`, beide über dasselbe
+    Prisma: Boden und Deckel sind die Dreiecke der Fläche, der Mantel steht auf ihren
+    Randkanten, und ein Versatz **je Knoten** macht daraus das gerade Prisma des Versetzens
+    oder den Keil der Formschräge. Gemessen: Versetzen exakt in beide Richtungen, Formschräge
+    22561,879 gegen analytisch 22561,879 und die Standfläche unverändert. Zwei Fehler steckten
+    im Keil, beide sahen nach „geht halt nicht" aus — negatives Volumen durch die gekippte
+    Umlaufrichtung und Dreiecke ohne Fläche an der neutralen Kante; die Kette fiel bis auf die
+    Voxelstufe durch und brauchte 4,8 s für ein Ergebnis, das 0,13 % daneben lag. Sauber sind
+    es 6 ms in der ersten Stufe.
+  * **`push_face` nimmt die gewählte Fläche** statt einer Richtung (Roberts Einwand vom
+    10.09.2026). An einer Treppe wanderten vorher alle Stufen zugleich: 24000,0 statt 21000,0.
+    Der exakte Kern hat dafür `profiles._nearest_face` bekommen — die Richtung bleibt der
+    Vorfilter, die Stelle entscheidet; beide Kerne kommen jetzt auf 21000,0.
+  * **Die erkannte Rundung ändern und wegnehmen** — `remove_feature` und `resize_feature`
+    nehmen `fillet` an. Am Netz rechnet `edges.sharp_corner` die Kante über den **Schnitt der
+    zwei Nachbarebenen** zurück (nicht über den Radius: der stammt aus einem Sehnenzug und ist
+    mit 2,9772 zu klein), am exakten Körper streicht `BRepAlgoAPI_Defeaturing` die Fläche in
+    18 ms. Beide stellen den Quader exakt wieder her — 24000,00000.
+  * **Wulst anlegen** — `bead_edges`, die Gegenrichtung zu Verrunden und Fase: ein Rundstab
+    auf der Kante, je Stück ein Zylinder und je Knick eine Kugel. **Die Kehlnaht im
+    Innenwinkel ist dabei nicht die glatte Hohlkehle**; die macht *Verrunden* an einer
+    konkaven Kante, und der Unterschied ist der Faktor zwischen 104,45 mm³ und 28,97. Der
+    erste Docstring versprach die Hohlkehle und lieferte die Naht — die Zahl daneben hat es
+    gesagt.
+  * **Der Haken „Flächen und Kanten später bearbeiten" ist zurückgeschnitten.** Er zählte
+    „Fasen, Verrundungen, Formschrägen, versetzte Flächen" als Dinge auf, die es ohne ihn
+    nicht gäbe; seit die vier auch am Netz rechnen, war das eine Drohung, die nicht mehr
+    stimmt. Übrig bleibt, was wirklich an ihm hängt: die runde Kurve statt des Sehnenzugs,
+    das exakte Aushöhlen und STEP.
+
+  Dabei sind fünf Befunde aufgefallen, die niemand gesucht hat: Die Hohlraumfrage wurde in
+  `geom` ein zweites Mal beantwortet statt über `types.is_a_cavity` gestellt; `FLAT_ENOUGH`
+  stand für zwei verschiedene Werte; das neue Modul zog `trimesh`, `scipy` und `networkx` in
+  den Registerstart; die Website nannte 109 Operationen; und `PROMPT_TOOL_COUNT` stand seit
+  einer fremden Operation auf 119 statt 120. Alle fünf behoben — die Tokenzahl daneben bleibt
+  die Messung von 119 Werkzeugen und ist als solche benannt, denn eine hochgerechnete Messung
+  ist keine.
+
 
   Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
   Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische

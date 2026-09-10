@@ -1888,7 +1888,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     params=MoveFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=list(MOVABLE_KINDS),
+    applies_to=[*MOVABLE_KINDS, "fillet"],
     touches_features=True,
     deterministic=False,
     doc=_(
@@ -2350,7 +2350,8 @@ class RemoveFeatureParams(BaseParams):
     touches_features=True,
     deterministic=False,
     doc=_(
-        "Entfernt ein erkanntes Merkmal: Bohrung, Zapfen, Senkung, Verjüngung, Kuppel oder Pfanne."
+        "Entfernt ein erkanntes Merkmal: Bohrung, Zapfen, Senkung, Verjüngung, "
+        "Kuppel, Pfanne oder Rundung."
     ),
 )
 def remove_feature(ctx: OpContext) -> OpResult:
@@ -2370,6 +2371,8 @@ def remove_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(RemoveFeatureParams, ctx.params)
     source = ctx.inputs[0]
+    if _is_a_fillet(source, params.at_feature):
+        return _drop_the_fillet(ctx, source, params.at_feature)
     feature = _movable_feature(source, params.at_feature, "remove_feature")
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
@@ -2711,12 +2714,12 @@ class ResizeFeatureParams(BaseParams):
     # den exakten Kern und einer Materialkompensation, die für ein Loch gilt und
     # für einen Zapfen andersherum liefe. Die beiden überschneiden sich deshalb
     # nicht, und ``perceive.actions`` legt sie zu **einer** Zeile zusammen.
-    applies_to=["pin", "cone", "sphere"],
+    applies_to=["pin", "cone", "sphere", "fillet"],
     touches_features=True,
     deterministic=False,
     doc=_(
         "Ändert den Durchmesser eines erkannten Merkmals: Zapfen, Senkung, "
-        "Verjüngung, Kuppel oder Pfanne."
+        "Verjüngung, Kuppel, Pfanne — oder den Radius einer Rundung."
     ),
 )
 def resize_feature(ctx: OpContext) -> OpResult:
@@ -2735,6 +2738,8 @@ def resize_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(ResizeFeatureParams, ctx.params)
     source = ctx.inputs[0]
+    if _is_a_fillet(source, params.at_feature):
+        return _reshape_the_fillet(ctx, source, params.at_feature, params.diameter / 2.0)
     feature = _movable_feature(source, params.at_feature, "resize_feature")
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
@@ -5243,3 +5248,79 @@ def check_join_path_op(ctx: OpContext) -> OpResult:
     # Wie „Überschneidungen prüfen": Die Körper gehen unberührt hindurch, die
     # Befunde sind das Ergebnis.
     return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))
+
+
+def _is_a_fillet(source: SceneObject, name: str) -> bool:
+    """Ob der Merkmalsverweis auf eine erkannte Rundung zeigt."""
+    feature = source.features.get(name)
+    return feature is not None and feature.kind == "fillet"
+
+def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult:
+    """Eine erkannte Rundung wegnehmen — die scharfe Kante kommt zurück.
+
+    **Eine Weiche und kein Sonderfall im Motor.** Der Weg darunter füllt
+    Hohlräume und trägt Zapfen ab; eine Rundung ist keins von beidem, sondern
+    ein Zwickel an einer Kante. Was sie braucht, steht neben dem Verrunden
+    selbst — dieselbe Rechnung, andere Richtung.
+
+    Und wieder zwei Kerne: Der exakte nimmt die Rundungsfläche als Ding
+    (``BRepAlgoAPI_Defeaturing``), das Netz legt den Zwickel dazu.
+    """
+    if source.kind == "brep":
+        return _exact_fillet(ctx, source, name, None)
+    from app.core.geom.edges import unround
+
+    outcome = unround(as_mesh_data(source.mesh), source.features[name])
+    return _after_the_fillet(source, name, outcome)
+
+def _reshape_the_fillet(
+    ctx: OpContext,
+    source: SceneObject,
+    name: str,
+    radius: float,
+) -> OpResult:
+    """Den Radius einer erkannten Rundung ändern."""
+    if source.kind == "brep":
+        return _exact_fillet(ctx, source, name, radius)
+    from app.core.geom.edges import reround
+
+    outcome = reround(as_mesh_data(source.mesh), source.features[name], radius)
+    return _after_the_fillet(source, name, outcome)
+
+def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:
+    """Wegnehmen oder Ändern am exakten Körper — träge geholt (§36).
+
+    **Warum nicht einfach der Netz-Weg auch hier**: Er bekäme die Tessellation
+    und gäbe ein Netz zurück, das sich weiter ``brep`` nennt. Der Kunde
+    verlöre die bearbeitbaren Flächen still, mitten in einer Handlung, die
+    davon gar nicht spricht.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.ops import brep_input
+
+    exact, body = brep_input(ctx)
+    feature = source.features[name]
+    measured = [float(value) for value in feature.params["centre"]]
+    spot: Vec3 = (measured[0], measured[1], measured[2])
+    was = float(feature.params.get("radius", 0.0))
+    solid = (
+        edit.unround(body, spot, was) if radius is None else edit.reround(body, spot, was, radius)
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(exact, mesh=solid, kind="brep", features=features_of(solid))]
+    )
+
+def _after_the_fillet(source: SceneObject, name: str, outcome: Any) -> OpResult:
+    """Das Ergebnis, und die Kennung geht mit.
+
+    Dieselbe Zusage wie bei jedem anderen Merkmal: Ein Verweis, der stehen
+    bleibt, obwohl die Geometrie fort ist, wird später als Passungsfehler
+    gemeldet — und dann sucht der Kunde an einem Teil, das in Ordnung ist.
+    """
+    kept = {key: value for key, value in source.features.items() if key != name}
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=kept)],
+        solver=outcome.solver,
+        findings=[dataclasses.replace(entry, object_id=source.id) for entry in outcome.findings],
+    )

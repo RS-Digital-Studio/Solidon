@@ -150,11 +150,21 @@ _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
     # Der Satz zählt die Folgen auf, ohne vom Nutzer den Namen des Rechenkerns
     # zu verlangen. Die Entscheidung fällt hier; deshalb stehen Nutzen **und**
     # das, was dafür im Dialog entfällt, genau hier.
+    #
+    # **Zurückgeschnitten am 10.09.2026.** Er zählte „Fasen, Verrundungen,
+    # Formschrägen, versetzte Flächen" als Dinge auf, die es ohne ihn nicht
+    # gäbe — seit diese vier auch am Netz rechnen (``geom.edge_ops``,
+    # ``geom.face_ops``), war das eine Drohung, die nicht mehr stimmt. Ein
+    # Haken, der mehr verspricht, als er hält, schickt den Kunden in eine
+    # Entscheidung, die er gar nicht treffen muss. Übrig bleibt, was wirklich
+    # an ihm hängt: die runde Kurve statt des Sehnenzugs, das exakte Aushöhlen
+    # und STEP.
     _(
-        "Aktivieren, wenn du später Fasen, Verrundungen, Formschrägen, versetzte "
-        "Flächen, Aushöhlungen oder Taschen brauchst oder als STEP exportieren "
-        "willst. Einstellungen für das Dreiecksmodell, etwa Bezugspunkt oder "
-        "Segmentzahl, entfallen dann."
+        "Aktivieren für Rundungen als echte Kurven statt als Folge gerader "
+        "Stücke, für das exakte Aushöhlen und für den STEP-Export. Fasen, "
+        "Verrundungen, Formschrägen und versetzte Flächen gehen auch ohne — "
+        "am Dreiecksmodell. Einstellungen dafür, etwa Bezugspunkt oder "
+        "Segmentzahl, entfallen mit dem Haken."
     ),
 )
 
@@ -186,11 +196,11 @@ _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
 _HOLLOW_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
     _EXACT_TOGGLE[0],
     _(
-        "Behält einzeln bearbeitbare Flächen und Kanten, damit Fasen, "
-        "Verrundungen, Formschrägen und der STEP-Export danach möglich bleiben. "
-        "Dafür entfallen „Oben öffnen“ und Entlüftungen; hier wird nur die "
-        "Wandstärke eingestellt. Die Option ist gesperrt, wenn der gewählte "
-        "Körper bereits nur noch aus festen Dreiecken besteht."
+        "Höhlt exakt aus und behält einzeln bearbeitbare Flächen — für Rundungen "
+        "als echte Kurven und für den STEP-Export. Dafür entfallen „Oben öffnen“ "
+        "und Entlüftungen; hier wird nur die Wandstärke eingestellt. Die Option "
+        "ist gesperrt, wenn der gewählte Körper bereits nur noch aus festen "
+        "Dreiecken besteht."
     ),
 )
 

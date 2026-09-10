@@ -643,6 +643,12 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
 EDGE_OPERATIONS: Final[tuple[tuple[str, str], ...]] = (
     ("fillet_edges", "radius"),
     ("chamfer_edges", "distance"),
+    # Die Gegenrichtung der beiden: Material kommt dazu, statt wegzugehen.
+    # Sie steht hier, weil ``tests/test_registry_consistency.py`` jede
+    # Operation mit einem ``edges``-Parameter an einer angeklickten Kante
+    # verlangt — eine Handlung, die man dort nicht findet, gibt es für den
+    # Kunden nicht.
+    ("bead_edges", "radius"),
 )
 
 

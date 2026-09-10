@@ -20,7 +20,6 @@ from typing import Any, cast
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.brep.ops import brep_input
 from app.core.errors import CORRECT_INPUT, Action, GeometryError, ValidationError
 from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -1167,65 +1166,3 @@ def _loft_between_drawings(
     ]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)], findings=findings)
-
-
-# --- Fläche versetzen (Konzept P15 §7 Etappe 6, D10) ----------------------------
-
-
-@op_params
-class PushFaceParams(BaseParams):
-    distance: float = param(
-        title=_("Weg"),
-        default=2.0,
-        unit="mm",
-        doc=_(
-            "Wie weit die Fläche wandert. Positiv nach außen, negativ hinein — "
-            "dasselbe Werkzeug für beides."
-        ),
-    )
-    nx: float = param(
-        title=_("Richtung X"),
-        default=0.0,
-        doc=_(
-            "Welche Flächen bewegt werden: die, deren Normale hierhin zeigt. Eine "
-            "angeklickte Fläche trägt die Richtung selbst ein."
-        ),
-    )
-    ny: float = param(
-        title=_("Richtung Y"),
-        default=0.0,
-        doc=_("Zweite Achse der Richtung — siehe Richtung X."),
-    )
-    nz: float = param(
-        title=_("Richtung Z"),
-        default=1.0,
-        doc=_("Dritte Achse der Richtung. Vorgabe ist nach oben."),
-    )
-
-
-@register_op(
-    name="push_face",
-    requires_kind="brep",
-    title=_("Fläche versetzen"),
-    category="shaping",
-    params=PushFaceParams,
-    consumes=1,
-    produces=1,
-    applies_to=("face",),
-    doc=_(
-        "Greift eine Fläche und verschiebt sie entlang ihrer Normalen; die "
-        "Nachbarwände wachsen mit. Der Weg, eine Wand zu ändern, ohne die "
-        "Operation zu suchen, die sie erzeugt hat — bei einem importierten STEP "
-        "gibt es keine."
-    ),
-)
-def push_face(ctx: OpContext) -> OpResult:
-    """Press/Pull auf dem exakten Kern."""
-    params = cast(PushFaceParams, ctx.params)
-    source, solid = brep_input(ctx)
-    moved = profiles.push_faces(solid, (params.nx, params.ny, params.nz), params.distance)
-    # ``features_of`` wie bei jeder anderen B-Rep-Op: Mit ``features={}``
-    # hatte der Körper nach „Fläche versetzen" keine anklickbaren Flächen
-    # mehr — „Auf dieser Fläche zeichnen", die exakte Bohrung und jede
-    # Passung liefen ins Leere (Gesamtreview D-5).
-    return OpResult(outputs=[dataclasses.replace(source, mesh=moved, features=features_of(moved))])

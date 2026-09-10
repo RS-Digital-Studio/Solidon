@@ -532,18 +532,24 @@ def test_a_mesh_body_is_turned_away_with_a_sentence(profile: Profile) -> None:
     Der erklärende Satz stand im Detail und erreichte den Prüfbericht nicht;
     wer danach suchte, suchte bei den Zahlen.
 
-    **Gefragt wird die Formschräge und nicht mehr die Verrundung.** Bis zum
-    10.09.2026 stand hier ``fillet_edges``; die nimmt seitdem beide Kerne
-    (``geom.edge_ops``), und ein Netz ist dort kein Fehler mehr, sondern der
-    andere Rechenweg. Die Zusage über den **Satz** gilt unverändert — sie
-    hängt an ``brep_input`` und nicht an einer bestimmten Operation.
+    **Gefragt wird die Umwandlung — die dritte Umstellung dieser Art an einem
+    Tag.** Erst stand hier ``sketch_pocket``, bis die Tasche am 30.08.2026 auch
+    in Netze schneiden lernte; dann ``fillet_edges``, dann ``draft_faces``, bis
+    beide am 10.09.2026 dasselbe lernten.
+
+    ``brep_to_mesh`` ist die einzige der drei verbliebenen, die es nie anders
+    geben kann: „ein exakter Körper wird ein Netz" braucht einen exakten
+    Körper, und daran ändert kein Ausbau des Mesh-Kerns etwas. Die zwei
+    anderen (``drill_brep_hole``, ``shell_exact``) sind versteckte Zwillinge
+    ohne eigenen Menüeintrag. Die Zusage über den **Satz** gilt unverändert —
+    sie hängt an ``brep_input`` und nicht an einer bestimmten Operation.
     """
     entry = SceneObject(
         id="obj_1", name="Netz", mesh=MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     )
 
     with pytest.raises(NeedsSolidError) as problem:
-        run("draft_faces", entry, profile, angle=3.0)
+        run("brep_to_mesh", entry, profile, deflection=0.05)
 
     error = problem.value
     assert "bearbeitbare Flächen und Kanten" in str(error.title)

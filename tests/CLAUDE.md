@@ -114,6 +114,8 @@ bestimmte meint, nennt sie. Meldet es
 | Stehen Codex-Agenten, Skills, Referenzen und Aufrufregeln auf dem Stand ihrer Claude-Quelle — auch im frischen Klon? | `test_agent_mirror.py`; prüft Generator, Drift und Quellenfehler sowie die erzeugten TOML-Dateien mit `tomllib` |
 | Zeichnet der Renderer, was der Vertrag verspricht — Bildpunkte, Picks, Kamera, Griffe? | `test_render_contract.py`, `test_render_gizmo.py` und `test_render_gfx_regressions.py` am pygfx-Renderer ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py` der Aufbau über `factory.py`; `test_render_shapes.py` und `test_navigator.py` ganz ohne Renderer |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` — fcntl-Puffergrenze über den Quelltext, die Nutzerverzeichnisse für darwin, win32 und linux |
+| Nehmen Verrunden, Fase, Wulst und das Zurücknehmen einer Rundung beide Kerne an? | `test_mesh_edges.py` — dreißig Zusicherungen, jede gegen eine analytische Zahl; die Gegenproben haben dabei zweimal den Testkörper verworfen und nicht den Fix |
+| Und Fläche versetzen und Formschräge? | `test_mesh_faces.py` — die Treppe ist dort der kleinste Körper, an dem „eine Fläche" von „alle einer Richtung" zu unterscheiden ist |
 | Findet `tools/twin_scan.py` die Zwillinge, für die es gebaut wurde? | `test_twin_scan.py` — gepflanzte Fälle, und ein leerer Baum ist ein Fehler statt eines Ergebnisses |
 | Überleben zwei Sitzungen, die gleichzeitig in `MEMORY.md` schreiben? | `test_memory_index.py` — zwei echte Prozesse; ohne Sperre gingen gemessen 17 bis 20 von 40 Einträgen verloren |
 

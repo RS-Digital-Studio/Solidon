@@ -28,17 +28,21 @@ from app.core.geom.boolean import boolean
 from app.core.geom.edges import (
     MIN_ARC_STEPS,
     _arc_steps,
+    bead_edges,
     bevel_edges,
     edge_key,
     edges_of,
+    reround,
     round_edges,
+    unround,
 )
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.knowledge import profiles
+from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, OpResult, Profile, Scene, SceneObject
+from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
@@ -620,3 +624,282 @@ def test_a_shell_without_thickness_goes_and_a_small_part_stays() -> None:
     assert dropped == 1
     assert cleaned.raw.body_count == 2, "die Krume bleibt — sie hat ein Volumen"
     assert cleaned.raw.volume == pytest.approx(1000.125, abs=1e-6)
+
+
+# --- Eine erkannte Rundung ändern und wegnehmen -------------------------------
+
+
+def rounded_block(radius: float = FILLET) -> MeshData:
+    """Ein Quader mit vier verrundeten senkrechten Kanten."""
+    return round_edges(block(), radius, "vertical").mesh
+
+
+def fillets_of(mesh: MeshData) -> list[Feature]:
+    return [entry for entry in detect(mesh).values() if entry.kind == "fillet"]
+
+
+def test_taking_a_fillet_away_gives_the_sharp_block_back_exactly() -> None:
+    """Die Probe aufs Ganze: verrunden, zurücknehmen, und der Quader ist wieder da.
+
+    **Die Kante wird über den Schnitt der zwei Nachbarebenen zurückgerechnet
+    und nicht über den Radius.** Der erkannte Radius stammt aus einem
+    Sehnenzug — gemessen 2,9772 an einer Rundung, die mit 3,0 gebaut wurde —,
+    und die daraus gerechnete Kante läge 0,023 mm neben der wirklichen.
+
+    **Und der Füllkörper bekommt keinen Überstand.** Er wird *vereinigt*; was
+    über das Kantenende hinausragt, klebt außen an. Mit dem Überstand, den
+    eine Differenz braucht, stand der Quader danach 20,04 mm hoch und trug
+    24000,72 mm³. Die Bedingung dafür hängt seitdem an der Booleschen
+    Richtung und nicht mehr an ``convex``.
+    """
+    body = rounded_block()
+    assert body.raw.volume < WIDTH * DEPTH * HEIGHT, "sonst wurde gar nicht verrundet"
+
+    for _ in range(len(fillets_of(body)) + 1):
+        found = fillets_of(body)
+        if not found:
+            break
+        body = MeshData(unround(body, found[0]).mesh.raw)
+
+    assert not fillets_of(body), "am Ende ist keine Rundung mehr da"
+    assert body.raw.volume == pytest.approx(WIDTH * DEPTH * HEIGHT, abs=1e-4)
+    assert body.raw.is_watertight and body.raw.body_count == 1
+    assert body.raw.bounds[1][2] == pytest.approx(HEIGHT / 2.0, abs=1e-4), "und kein Grat oben"
+
+
+def test_changing_a_radius_is_taking_away_and_rounding_again() -> None:
+    """Größer und kleiner, beide Male auf die vierte Stelle.
+
+    Gerechnet gegen die Vieleckfläche der jeweiligen Auflösung: Der neue
+    Radius bekommt seine eigene Stückzahl, und drei Ecken behalten die alte.
+    """
+    body = rounded_block()
+    chosen = fillets_of(body)[0]
+
+    for wanted in (5.0, 1.0):
+        changed = reround(body, chosen, wanted).mesh.raw
+        expected = (
+            WIDTH * DEPTH * HEIGHT
+            - 3.0 * cross_section(FILLET) * HEIGHT
+            - cross_section(wanted) * HEIGHT
+        )
+
+        assert changed.volume == pytest.approx(expected, abs=1e-3), f"R{wanted}"
+        assert changed.is_watertight and changed.body_count == 1
+
+
+def test_a_fillet_next_to_parallel_faces_is_a_sentence() -> None:
+    """Wo keine zwei Ebenen zusammenstoßen, gibt es keine Kante darunter.
+
+    Eine Rundung an einer Zylinderkante hätte diese Lage; der Satz nennt sie,
+    statt einen Körper zu liefern, den niemand bestellt hat (Regel 17).
+    """
+    body = rounded_block()
+    chosen = fillets_of(body)[0]
+    misplaced = Feature(
+        id=chosen.id,
+        kind="fillet",
+        provenance=chosen.provenance,
+        params={**chosen.params, "axis": (1.0, 0.0, 0.0)},
+        face_indices=chosen.face_indices,
+    )
+
+    with pytest.raises(GeometryError) as problem:
+        unround(body, misplaced)
+
+    assert problem.value.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
+
+
+def test_both_kernels_take_the_same_fillet_away() -> None:
+    """Beide Kerne stellen denselben Quader wieder her.
+
+    Der exakte nimmt die Rundungsfläche als **Ding**
+    (``BRepAlgoAPI_Defeaturing``) und trifft die analytische Zahl; das Netz
+    legt den Zwickel dazu und trifft sie ebenso — hier bleibt kein Sehnenzug
+    übrig, denn der Füllkörper hat gar keinen Bogen.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    exact = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "vertical")
+    for spot in ((-17.0, -12.0, 0.0), (-17.0, 12.0, 0.0), (17.0, -12.0, 0.0), (17.0, 12.0, 0.0)):
+        exact = brep.unround(exact, spot, FILLET)
+
+    assert exact.volume == pytest.approx(WIDTH * DEPTH * HEIGHT, abs=1e-6)
+
+
+def test_the_exact_kernel_changes_a_radius_without_becoming_a_mesh() -> None:
+    """Und am exakten Körper bleibt die neue Rundung eine Kurve.
+
+    **Das ist der Grund für den eigenen Zweig.** Der Netz-Weg bekäme dort die
+    Tessellation und gäbe ein Netz zurück, das sich weiter ``brep`` nennt —
+    der Kunde verlöre seine bearbeitbaren Flächen still, mitten in einer
+    Handlung, die davon gar nicht spricht.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    exact = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "vertical")
+    changed = brep.reround(exact, (-17.0, -12.0, 0.0), FILLET, 5.0)
+
+    round_corner = FILLET**2 - math.pi * FILLET**2 / 4.0
+    wide_corner = 5.0**2 - math.pi * 5.0**2 / 4.0
+    assert changed.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 3.0 * round_corner * HEIGHT - wide_corner * HEIGHT, abs=1e-6
+    )
+
+
+# --- Wulst und Kehlnaht -------------------------------------------------------
+
+
+def test_a_bead_lays_a_round_rod_on_the_edge() -> None:
+    """Die Gegenrichtung: Material kommt dazu, statt wegzugehen.
+
+    Was außerhalb des Körpers vom Stab übrig bleibt, ist an einer
+    rechtwinkligen Außenkante ein Dreiviertelkreis. Die Zahl ist die
+    facettierte davon — ein Vieleck aus ``_ring_steps``, das
+    :data:`MAX_FACET_SAG` einhält.
+    """
+    body = block()
+    edge = next(entry for entry in edges_of(body) if entry.upright)
+    radius = 2.0
+
+    outcome = bead_edges(body, radius, "named", [edge_key(edge)])
+    beaded = outcome.mesh.raw
+
+    assert beaded.is_watertight and beaded.body_count == 1
+    assert beaded.volume > body.raw.volume, "ein Wulst legt Material auf"
+    round_rod = 3.0 / 4.0 * math.pi * radius**2 * HEIGHT
+    assert beaded.volume == pytest.approx(WIDTH * DEPTH * HEIGHT + round_rod, rel=0.002)
+    assert beaded.bounds[0][0] == pytest.approx(-WIDTH / 2.0 - radius, abs=0.03), (
+        "und steht um den Radius über — das ist der caveat der Operation"
+    )
+
+
+def test_a_bead_in_an_inner_corner_is_a_weld_and_not_a_smooth_cove() -> None:
+    """Der Unterschied, den der erste Entwurf im Docstring falsch versprach.
+
+    An einer Innenkante legt der Wulst den Rundstab ins Eck — eine Kehlnaht.
+    Die **glatte Hohlkehle** nimmt dem Winkel dagegen seine Kante und füllt
+    nur den Zwickel; dafür gibt es *Verrunden* an derselben Kante. Gemessen an
+    einer Nut mit R = 1,5: 104,45 mm³ gegen 28,97 — der Faktor zwischen den
+    beiden ist kein Rundungsfehler, sondern die andere Form.
+    """
+    grooved = grooved_plate()
+    inner = [entry for entry in edges_of(grooved) if not entry.convex]
+    keys = [edge_key(entry) for entry in inner]
+    radius = 1.5
+    before = grooved.raw.volume
+
+    weld = bead_edges(grooved, radius, "named", keys).mesh.raw
+    cove = round_edges(grooved, radius, "named", keys).mesh.raw
+
+    quarter = math.pi * radius**2 / 4.0 * DEPTH * 2.0
+    assert weld.volume - before == pytest.approx(quarter, rel=0.02), "der Viertelkreis je Kante"
+    assert cove.volume - before == pytest.approx(2.0 * cross_section(radius) * DEPTH, abs=1e-3), (
+        "die Hohlkehle füllt nur den Zwickel"
+    )
+    assert weld.volume > cove.volume * 1.001, "und die beiden sind nicht dieselbe Handlung"
+
+
+def test_a_bead_along_a_bent_chain_has_no_gaps_at_the_bends() -> None:
+    """Wo ein Zug knickt, lassen zwei Zylinder außen einen Keil frei.
+
+    **Ein unterteilter Quader zeigt das nicht** — dort sind die Stücke einer
+    Kante kollinear, sie stoßen stumpf aneinander, und die Mutation „Kugeln
+    weg" lief grün durch. Der Fall braucht einen **gebogenen** Zug: Die
+    Oberkante eines schon verrundeten Quaders läuft um die vier Rundungen und
+    knickt dabei siebenundzwanzigmal um je fünfzehn Grad.
+
+    Gemessen gegen den analytischen Wulst — Dreiviertelkreis mal Länge des
+    Zugs. Ohne die Kugeln fehlen 28,95 mm³, also 2,3 %.
+    """
+    body = rounded_block()
+    chain = next(entry for entry in edges_of(body) if entry.middle[2] > 0.0)
+    assert len(chain.points) > 20, "sonst prüft der Test keinen gebogenen Zug"
+    radius = 2.0
+    before = body.raw.volume
+
+    beaded = bead_edges(body, radius, "named", [edge_key(chain)]).mesh.raw
+
+    assert beaded.is_watertight and beaded.body_count == 1
+    rod = 0.75 * math.pi * radius**2 * chain.length
+    assert beaded.volume - before == pytest.approx(rod, rel=0.01), (
+        "an den Knicken darf kein Material fehlen"
+    )
+
+
+def test_taking_one_radius_away_leaves_the_other_alone() -> None:
+    """Zwei Radien am selben Körper — und nur der gemeinte verschwindet.
+
+    **Am Körper mit einem einzigen Radius war das nicht zu prüfen.** Die
+    Mutation „nimm irgendeine Zylinderfläche" lief dort grün durch, weil alle
+    vier Flächen denselben Radius hatten und die nächstgelegene ohnehin die
+    richtige war. Erst zwei verschiedene Radien trennen die Auswahl von der
+    Nähe.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    solid = brep.box(WIDTH, DEPTH, HEIGHT)
+    upright = [entry for entry in brep.edges_of(solid) if entry.upright]
+    left = [brep.edge_key(entry) for entry in upright if entry.middle[0] < 0.0]
+    right = [brep.edge_key(entry) for entry in upright if entry.middle[0] > 0.0]
+    assert len(left) == len(right) == 2, "vier senkrechte Kanten, zwei je Seite"
+
+    mixed = brep.fillet(brep.fillet(solid, 3.0, "named", left), 5.0, "named", right)
+    corner = lambda radius: radius**2 - math.pi * radius**2 / 4.0  # noqa: E731
+    assert mixed.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 2.0 * corner(3.0) * HEIGHT - 2.0 * corner(5.0) * HEIGHT, abs=1e-6
+    ), "sonst steht der Prüfling schon falsch"
+
+    without_small = brep.unround(mixed, (-17.0, -12.0, 0.0), 3.0)
+    assert without_small.volume == pytest.approx(mixed.volume + corner(3.0) * HEIGHT, abs=1e-6), (
+        "genau eine kleine Rundung ist weg — nicht die große daneben"
+    )
+
+    # **Und die Gegenprobe, die den Radiusfilter überhaupt erst prüft:** An
+    # derselben Stelle nach einer R5 gefragt, muss die **weiter entfernte**
+    # große genommen werden. Ohne den Filter gewänne die nähere R3, und der
+    # Kunde bekäme eine Rundung weg, die er nicht gemeint hat.
+    wrong_size = brep.unround(mixed, (-17.0, -12.0, 0.0), 5.0)
+    assert wrong_size.volume == pytest.approx(mixed.volume + corner(5.0) * HEIGHT, abs=1e-6), (
+        "der Radius entscheidet mit, nicht die Nähe allein"
+    )
+
+
+def test_the_nearest_axis_decides_and_not_its_parametric_origin() -> None:
+    """Welche Rundung gemeint ist, entscheidet der Abstand zur **Achse**.
+
+    ``gp_Cylinder.Location()`` ist irgendein Punkt auf der Achse, den die
+    Parametrisierung gewählt hat — an einer oberen Rundung liegt er am
+    **Rand** der Kante: (-17, -15, 17) bei einer Achse, die in y läuft. Der
+    Schwerpunkt, den das Merkmal nennt, liegt dagegen in der Mitte.
+
+    Gemessen an einem oben verrundeten Quader: Vom Merkmalsort (-18,97 | 0 |
+    18,85) ist die richtige Achse 2,70 mm entfernt, ihr Ursprung aber 15,2 —
+    weiter als der Ursprung der **falschen** Rundung daneben mit 12,2. Wer den
+    Ursprung misst, nimmt die falsche weg, und der Kunde sieht eine Kante
+    verschwinden, die er nicht angeklickt hat.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    from app.core.brep.features import features_of
+
+    solid = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "top")
+    before = [entry for entry in features_of(solid).values() if entry.kind == "fillet"]
+    assert len(before) == 4, "vier obere Rundungen"
+    chosen = min(before, key=lambda entry: entry.params["centre"][0])
+    spot = tuple(float(value) for value in chosen.params["centre"])
+
+    without = brep.unround(solid, spot, FILLET)
+    after = [entry for entry in features_of(without).values() if entry.kind == "fillet"]
+
+    assert len(after) == 3, "genau eine ist weg"
+    assert all(entry.params["centre"][0] > spot[0] + 1.0 for entry in after), (
+        "und zwar die an der gewählten Stelle — nicht eine der drei anderen"
+    )

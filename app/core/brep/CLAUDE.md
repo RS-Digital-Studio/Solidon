@@ -99,6 +99,47 @@ auf der Achse — also im Material. Eine Strecke kommt mit zwei Punkten zurück,
 ein Kreis mit so vielen, wie die Abweichung verlangt. Die Ansicht projiziert
 sie und misst im Bild (`ui/render/edges.nearest_polyline`).
 
+## Ein Loch lässt sich hier auch wieder schließen (10.09.2026)
+
+`fill_bore` ist das Gegenstück zum Bohren, `cut_bore` das zum Merkmal statt zur
+Fläche: eine freie Achse, die **Mitte** als Bezug — dieselben zwei Zahlen, die
+`resize_bore` liest. Beide bauen ihren Zylinder über `_centred_bore`; der
+Unterschied ist ein `gain` auf den Radius, und der ist keine Feinheit: Beim
+Füllen ist er nötig, weil der gemessene Durchmesser von einem Vieleck stammt
+und dessen Flanken innerhalb des Umkreises liegen, beim Schneiden wäre er ein
+Maßfehler. In der Länge bleiben beide exakt — die Mündungen liegen in ebenen
+Flächen, die OpenCASCADE ohne Sehnenfehler tesselliert, und eine Zugabe dort
+ließe beim Füllen einen Zapfen stehen, den am exakten Körper nichts wieder
+abschneidet.
+
+Damit ist die letzte Absage gefallen, die den exakten Kern vom Netz-Kern
+trennte: Bis dahin lehnten `slot_hole` und `resize_hole` das Versetzen eines
+Lochs mit einem Satz ab. Gemessen an einer exakten Platte 60 × 40 × 10, Bohrung
+Ø 8 von (−20 | −10) nach (0 | 0): geschlossen, Volumen davor und danach
+23497,345 — dieselbe Zahl. Das Langloch daneben nimmt 1467,57 mm³ weg, den
+analytischen Wert auf fünf Stellen.
+
+## Eine Rundung wegnehmen heißt, ihre Fläche zu streichen
+
+`unround` gibt `BRepAlgoAPI_Defeaturing` die Rundungsfläche, und der Kern
+verlängert die Nachbarn selbst. Gemessen an einem Quader mit vier Rundungen zu
+R = 3: 23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·20
+— dieselbe Zahl auf vier Stellen, in 18 ms. `reround` ist das plus einer neuen
+Verrundung an der zurückgekommenen Kante.
+
+**Gesucht wird die Fläche über Radius und Lage**, und die Lage über den Abstand
+zur **Achse**. `gp_Cylinder.Location()` ist irgendein Punkt darauf, den die
+Parametrisierung gewählt hat: An einer oberen Rundung liegt er am Rand der
+Kante, fünfzehn Millimeter neben dem Schwerpunkt, den das Merkmal nennt — und
+dann gewinnt der Ursprung einer *anderen* Rundung. Der Radius filtert davor
+grob (`FILLET_RADIUS_SLACK`), weil der Netz-Kern ihn an einem Sehnenzug misst
+und deshalb ein wenig zu klein herauskommt.
+
+**Und `push_faces` nimmt einen Ort entgegen.** Ohne ihn bewegte es jede Fläche,
+deren Normale in die gegebene Richtung zeigt — an einer Treppe alle Stufen
+(24000,0 statt 21000,0, Befund Robert 10.09.2026). Die Richtung bleibt der
+Vorfilter, die Stelle entscheidet.
+
 ## Eine Bahn ist kein Bogen
 
 `sweep_path` (RM-147 E3) führt einen Querschnitt entlang einer gezeichneten

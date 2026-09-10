@@ -1851,7 +1851,15 @@ PROMPT_TOKENS: Final = 28281
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen — am 08.09.2026 hat er genau das geleistet und dabei eine
 #: Fortschreibung widerlegt, die vier Tage lang plausibel aussah.
-PROMPT_TOOL_COUNT: Final = 119
+#:
+#: **Und genau das ist am 10.09.2026 wieder eingetreten.** Die Zahl stand auf
+#: 119, das Register hatte 120 — eine Operation war ohne neue Messung
+#: dazugekommen. Mit *Wulst anlegen* sind es jetzt 121. Die **Tokenzahl
+#: darüber ist damit die von 119 Werkzeugen**: Sie wird hier nicht
+#: fortgeschrieben, denn eine hochgerechnete Messung ist keine. Was sie wert
+#: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
+#: Untergrenze und als solche benannt.
+PROMPT_TOOL_COUNT: Final = 121
 
 
 @dataclass(frozen=True, slots=True)

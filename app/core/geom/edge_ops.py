@@ -30,7 +30,13 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from app.core.geom.edges import EDGE_CHOICES, EdgeChoice, bevel_edges, round_edges
+from app.core.geom.edges import (
+    EDGE_CHOICES,
+    EdgeChoice,
+    bead_edges,
+    bevel_edges,
+    round_edges,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, Profile, SceneObject
@@ -168,6 +174,80 @@ def chamfer_edges(ctx: OpContext) -> OpResult:
     )
 
 
+@op_params
+class BeadParams(BaseParams):
+    radius: float = param(
+        title=_("Radius"),
+        default=1.5,
+        unit="mm",
+        minimum=0.01,
+        maximum=100.0,
+        doc=_("Wie dick die Leiste wird — der Radius des Rundstabs, der auf der Kante liegt."),
+    )
+    edges: str = param(
+        title=_("Kanten"),
+        default="vertical",
+        choices=EDGE_CHOICES,
+        doc=_CHOICE_DOC,
+    )
+    edge_keys: str = param(
+        title=_("Einzelne Kanten"),
+        default="",
+        kind="edges",
+        placement="advanced",
+        doc=_KEYS_DOC,
+        depends_on=("edges", ("named",)),
+    )
+
+
+@register_op(
+    name="bead_edges",
+    title=_("Wulst anlegen"),
+    category="shaping",
+    params=BeadParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Legt eine runde Leiste auf die gewählten Kanten — außen als Wulst, in "
+        "einem Innenwinkel als Kehlnaht. Die glatte Hohlkehle macht dagegen "
+        "*Verrunden* an derselben Kante."
+    ),
+    caveat=_(
+        "Ein Wulst steht über den Körper hinaus und ändert damit sein Außenmaß. "
+        "Wo es auf das Maß ankommt, gehört er nach innen oder gar nicht hin."
+    ),
+)
+def bead_edges_op(ctx: OpContext) -> OpResult:
+    """Die Gegenrichtung zu Verrunden und Fase: Material kommt dazu.
+
+    **Nur am Netz**, und das ist keine Lücke, sondern die Sache: Ein Wulst ist
+    aufgelegtes Material und keine Änderung der Topologie — der exakte Kern
+    hätte dafür denselben Weg über die Boolesche Vereinigung, und was dabei
+    herauskäme, wäre ein Körper mit einer Fläche mehr und keinem Gewinn. Ein
+    exakter Körper geht deshalb über die Tessellation und kommt als Netz
+    zurück; der ``caveat`` der Operation sagt es.
+    """
+    params = cast(BeadParams, ctx.params)
+    source = ctx.inputs[0]
+    body = as_mesh_data(source.mesh)
+    outcome = bead_edges(
+        body,
+        params.radius,
+        cast(EdgeChoice, params.edges),
+        _chosen_edges(params.edges, params.edge_keys),
+    )
+    empty = _too_small_to_see(body, outcome.mesh, ctx.profile, rounded=True)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=outcome.mesh, kind="mesh", features={})],
+        solver=outcome.solver,
+        findings=[
+            dataclasses.replace(entry, object_id=source.id)
+            for entry in [*outcome.findings, empty]
+            if entry is not None
+        ],
+    )
+
+
 def _worked(
     ctx: OpContext,
     size: float,
@@ -228,7 +308,14 @@ def _on_a_solid(
     )
 
 
-__all__ = ["ChamferParams", "FilletParams", "chamfer_edges", "fillet_edges"]
+__all__ = [
+    "BeadParams",
+    "ChamferParams",
+    "FilletParams",
+    "bead_edges_op",
+    "chamfer_edges",
+    "fillet_edges",
+]
 
 
 def _too_small_to_see(

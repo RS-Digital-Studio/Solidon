@@ -41,7 +41,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-861 Parameter der 109 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+873 Parameter der 110 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -791,7 +791,7 @@ steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Neunundzwanzig von hundertneun
+wann eine Operation die falsche Wahl ist. Einunddreißig von hundertzehn
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)

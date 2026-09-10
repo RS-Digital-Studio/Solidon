@@ -39,6 +39,11 @@ _log = get_logger(__name__)
 #: und gilt für beide Kerne. Hier bleibt der Name, unter dem das Register und
 #: die Operationen sie ansprechen; zwei Aufzählungen hießen, dass ein Kern
 #: eines Tages eine sechste Art kennt und der andere nicht.
+#: Wie weit ein gemessener Rundungsradius vom gesuchten abweichen darf.
+#: Der Netz-Kern misst ihn an einem Sehnenzug und kommt deshalb ein wenig zu
+#: klein heraus — 2,9772 an einer Rundung, die mit 3,0 gebaut wurde.
+FILLET_RADIUS_SLACK = 0.05
+
 EdgeChoice = SharedEdgeChoice
 EDGE_CHOICES: tuple[EdgeChoice, ...] = SHARED_EDGE_CHOICES
 
@@ -709,6 +714,85 @@ def resize_bore(
     return boolean("union", [solid, ring])
 
 
+def fill_bore(
+    solid: Solid,
+    *,
+    position: Vec3,
+    direction: Vec3,
+    diameter: float,
+    depth: float,
+) -> Solid:
+    """Schließt eine erkannte Bohrung wieder — das Gegenstück zum Bohren.
+
+    Ohne diesen Weg konnte am exakten Körper kein Merkmal die Stelle wechseln:
+    Die alte Bohrung wäre stehen geblieben und die neue daneben entstanden.
+    Der Netz-Kern löst das seit dem 03.09.2026 mit
+    ``prepare_ops._closed_at``; hier ist die exakte Hälfte davon, damit
+    zwischen den beiden Kernen kein Unterschied bleibt (Robert, 10.09.2026:
+    „zwischen den beiden soll es keinen unterschied geben bei garnichts").
+
+    **Der Füllkörper ist breiter als der Hohlraum und genauso lang.** Radial
+    greift er um ``EPS_GEOM`` ins volle Material — dieselbe Bauart, mit der
+    :func:`resize_bore` seinen Ring aufsetzt —, denn ``diameter`` ist am
+    tessellierten Netz gemessen und ein Vieleck liegt innerhalb seines
+    Umkreises. Axial bleibt er exakt: Die Mündungen liegen in ebenen Flächen,
+    und die tesselliert OpenCASCADE ohne Sehnenfehler; eine Zugabe dort ließe
+    einen Zapfen stehen, den beim exakten Körper nichts wieder abschneidet.
+    """
+    return boolean("union", [solid, _centred_bore(position, direction, diameter, depth, EPS_GEOM)])
+
+
+def cut_bore(
+    solid: Solid,
+    *,
+    position: Vec3,
+    direction: Vec3,
+    diameter: float,
+    depth: float,
+) -> Solid:
+    """Schneidet eine Bohrung an einer freien Achse, gemessen von ihrer Mitte.
+
+    :func:`bore` nimmt eine der drei Hauptachsen und die **Mündung**; das ist
+    die Sicht dessen, der eine Fläche anklickt. Hier ist die Sicht eines
+    erkannten Merkmals: eine freie Achse, und die Mitte als Bezug — dieselben
+    zwei Zahlen, die :func:`fill_bore` und :func:`resize_bore` lesen. Gebraucht
+    wird das beim Versetzen: An der neuen Stelle gibt es noch keine Bohrung,
+    also lässt sich dort auch keine ändern.
+    """
+    return boolean("difference", [solid, _centred_bore(position, direction, diameter, depth, 0.0)])
+
+
+def _centred_bore(
+    position: Vec3, direction: Vec3, diameter: float, depth: float, gain: float
+) -> Solid:
+    """Der Zylinder einer erkannten Bohrung: Mitte auf ``position``, Achse frei.
+
+    ``gain`` weitet den Radius. Beim Füllen ist er nötig — ``diameter`` ist am
+    tessellierten Netz gemessen, und ein Vieleck liegt innerhalb seines
+    Umkreises —, beim Schneiden wäre er ein Maßfehler. In der Länge bleibt der
+    Körper in beiden Fällen exakt: Die Mündungen liegen in ebenen Flächen, die
+    OpenCASCADE ohne Sehnenfehler tesselliert, und eine Zugabe dort ließe beim
+    Füllen einen Zapfen stehen, den am exakten Körper nichts wieder abschneidet.
+    """
+    require()
+    if depth <= EPS_GEOM:
+        raise ValueError("a detected bore must have a positive depth")
+    span = math.sqrt(sum(float(value) ** 2 for value in direction))
+    if span <= EPS_GEOM:
+        raise ValueError("a bore direction must not be zero")
+    unit: Vec3 = (
+        float(direction[0]) / span,
+        float(direction[1]) / span,
+        float(direction[2]) / span,
+    )
+    start: Vec3 = (
+        float(position[0]) - unit[0] * depth / 2.0,
+        float(position[1]) - unit[1] * depth / 2.0,
+        float(position[2]) - unit[2] * depth / 2.0,
+    )
+    return _oriented_cylinder(start, unit, diameter / 2.0 + gain, depth)
+
+
 def _oriented_cylinder(origin: Vec3, direction: Vec3, radius: float, height: float) -> Solid:
     """Ein exakter Zylinder an freier Achse, gemeinsam für die Ringrechnung."""
     require()
@@ -755,3 +839,110 @@ def moved(solid: Solid, offset: Vec3) -> Solid:
     # anschließend die eigene Geometrie; hier noch einmal tief zu kopieren
     # wäre dieselbe Kopie zweimal.
     return solid.replacing(BRepBuilderAPI_Transform(solid.shape, transform, False).Shape())
+
+
+def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
+    """Nimmt eine Verrundung weg und stellt die scharfe Kante her (§30).
+
+    Über ``BRepAlgoAPI_Defeaturing`` und nicht über einen Füllkörper: Der
+    Kern kennt die Rundungsfläche als Ding und weiß, welche Nachbarn sie
+    verlängern muss. Gemessen an einem Quader mit vier Rundungen zu R = 3:
+    23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·20 —
+    dieselbe Zahl auf vier Stellen, in 18 ms.
+
+    Gesucht wird die Fläche über ihre **Lage** und ihren Radius, nicht ueber
+    einen Index: Ein Index in die Topologie verschiebt sich, sobald davor etwas
+    anderes passiert (§21.2, derselbe Grund wie bei :func:`edge_key`).
+    """
+    require()
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing
+
+    face = _cylinder_at(solid, centre, radius)
+    if face is None:
+        raise GeometryError(
+            detail=_(
+                "An dieser Stelle findet der Kern keine Rundung mehr — ein Schritt "
+                "davor hat den Körper verändert. Wählen Sie sie neu."
+            ),
+            values={"radius_mm": round(radius, 3)},
+        )
+    builder = BRepAlgoAPI_Defeaturing()
+    builder.SetShape(solid.shape)
+    builder.AddFaceToRemove(face)
+    builder.Build()
+    if not builder.IsDone():
+        raise GeometryError(
+            detail=_(
+                "Diese Rundung lässt sich nicht wegnehmen — die Nachbarflächen "
+                "treffen sich danach nicht. Nehmen Sie sie zusammen mit den "
+                "angrenzenden weg, oder verrunden Sie stattdessen neu."
+            ),
+        )
+    return Solid(builder.Shape())
+
+
+def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
+    """Die Zylinderfläche dieses Radius an dieser Stelle — oder ``None``."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    best: Any | None = None
+    closest = math.inf
+    explorer = TopExp_Explorer(solid.shape, TopAbs_FACE)
+    while explorer.More():
+        face = TopoDS.Face(explorer.Current())
+        surface = BRepAdaptor_Surface(face)
+        explorer.Next()
+        if surface.GetType() != GeomAbs_Cylinder:
+            continue
+        cylinder = surface.Cylinder()
+        if abs(cylinder.Radius() - radius) > FILLET_RADIUS_SLACK * max(radius, 1.0):
+            continue
+        away = _off_the_axis(cylinder, centre)
+        if away < closest:
+            best, closest = face, away
+    return best
+
+
+def _off_the_axis(cylinder: Any, centre: Vec3) -> float:
+    """Wie weit der Punkt von der **Achse** liegt — nicht von ihrem Ursprung.
+
+    ``gp_Cylinder.Location()`` ist irgendein Punkt auf der Achse, den die
+    Parametrisierung gewählt hat; bei einer langen Rundung liegt er weit von
+    der Stelle entfernt, die der Kunde meint. Gemessen wird deshalb der
+    Abstand zur Geraden, und der ist von der Parametrisierung unabhängig.
+    """
+    spot = cylinder.Location()
+    direction = cylinder.Axis().Direction()
+    origin = (spot.X(), spot.Y(), spot.Z())
+    along = (direction.X(), direction.Y(), direction.Z())
+    towards = [centre[index] - origin[index] for index in range(3)]
+    reach = sum(towards[index] * along[index] for index in range(3))
+    return math.dist(centre, [origin[index] + reach * along[index] for index in range(3)])
+
+
+def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
+    """Ändert den Radius einer Verrundung — wegnehmen, neu verrunden.
+
+    Dieselbe Zweiteilung wie am Netz (``geom.edges.reround``), und aus
+    demselben Grund: Dazwischen liegt die scharfe Kante, und die ist der
+    Zustand, an dem beide Hälften prüfbar sind.
+
+    Die Kante wird über ihre **Lage** wiedergefunden: die nächste an der
+    Achse der alten Rundung. Ein Index in die Topologie wäre nach dem
+    Defeaturing ein anderer.
+    """
+    sharp = unround(solid, centre, radius)
+    described = edges_of(sharp)
+    if not described:
+        raise GeometryError(
+            detail=_(
+                "Nach dem Wegnehmen der Rundung ist an dieser Stelle keine Kante "
+                "übrig, die sich verrunden ließe."
+            ),
+        )
+    nearest = min(described, key=lambda entry: math.dist(entry.middle, centre))
+    return fillet(sharp, wanted, "named", [edge_key(nearest)])

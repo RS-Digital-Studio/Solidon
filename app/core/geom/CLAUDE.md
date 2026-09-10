@@ -204,6 +204,19 @@ Der Weg dorthin hat zwei Eingänge: `drill_hole` setzt eines (`slotted`,
 nachträglich auseinander (`prepare.slot_bore`, exakt `brep.edit.slot_bore`).
 Die Regel dazu steht in `.claude/rules/operationen.md`.
 
+**`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
+drei Nullen heißen „lass es, wo es ist"). Wer versetzt, schließt zuerst die
+alte Stelle — am Netz über `_closed_at`, am exakten Körper über
+`brep.edit.fill_bore` — und schneidet an der neuen. **Geschnitten und nicht
+geändert**: `resize_bore` verglich dort die zwei Durchmesser, fand sie gleich
+und gab den Körper unverändert zurück; gemessen am 10.09.2026 blieb das Loch
+bei (−20 | −10) und der Befund sagte „Die Bohrung hat bereits diesen
+Durchmesser". Zwei Dinge hängen daran und sind beide gemessen: Die Tiefe wird
+**vor** dem Verschließen abgelesen (`feature.face_indices` zeigen danach auf
+fremde Dreiecke), und die Zuordnung sucht das Merkmal an seiner **neuen** Mitte
+— mit der alten meldete der Netz-Weg es als verloren und der exakte warf einen
+Programmfehler.
+
 Die geometrische Vorauswahl projiziert dieselben Normalenrichtungen in
 begrenzten Gruppen auf Z. Vollständige Netzkopien entstehen erst für die
 Platzierungsprüfung; eine begrenzte Bestenliste prüft sie in der vollständigen
@@ -267,7 +280,22 @@ vierte hängt an keinem Parameter".
 
 **Kanten**
 
-`edge_ops.py` — *Verrunden* und *Fase anbringen* im Register, **kernübergreifend**:
+`faces.py` — die **Flächen** eines Netzes bearbeiten, Gegenstück zu `edges.py`:
+*Fläche versetzen* und die *Formschräge*. Über der gewählten Fläche entsteht ein
+Prisma ihres eigenen Umrisses — Boden und Deckel sind ihre Dreiecke, der Mantel
+steht auf den Kanten, die nur zu einem von ihnen gehören. Ein Polygon wird dabei
+nie gebildet; das trifft auch einen Umriss mit Loch. `_prism_from` nimmt einen
+**Versatz je Knoten**: fest ergibt das gerade Prisma des Versetzens, mit der
+Höhe wachsend den Keil der Formschräge.
+
+`face_ops.py` — *Fläche versetzen* und *Formschräge anstellen* im Register,
+kernübergreifend wie `edge_ops.py`. **Und `push_face` hat dabei seinen
+Parameter gewechselt**: Es nahm eine Richtung und bewegte jede Fläche, die
+dorthin zeigte — an einer Treppe alle Stufen zugleich (24000,0 statt 21000,0).
+Gemeint ist die gewählte Fläche, und die benennt jetzt ein Merkmalsverweis; die
+Richtungsfelder tragen nur noch gespeicherte Schritte (§16).
+
+`edge_ops.py` — *Verrunden*, *Fase anbringen* und *Wulst anlegen* im Register, **kernübergreifend**:
 Der Rumpf fragt `SceneObject.kind` und wählt danach den Rechenweg — `edit.fillet`
 am exakten Körper, `edges.round_edges` am Netz. Sie standen bis zum 10.09.2026
 in `brep/ops.py` mit `requires_kind="brep"`; wer ein STL einlas, fand sie
@@ -292,6 +320,25 @@ den zwei Flächen und dem Bogen, stückweise über den Zug gezogen. Wie fein der
 Bogen wird, sagt `_arc_steps` — aus `units.MAX_FACET_SAG` und
 `MAX_FACET_ANGLE`, denselben zwei Grenzen, mit denen OpenCASCADE tesselliert.
 Eine feste Stückzahl wäre bei R = 30 zu grob und bei R = 0,5 Verschwendung.
+
+**Den Überstand an den Enden bekommt, was abgezogen wird — nicht, was außen
+liegt.** Beim Verrunden fällt beides zusammen (außen abziehen, innen
+vereinigen), beim Wegnehmen einer Rundung nicht: Dort wird außen *vereinigt*,
+und ein Überstand klebt an, statt zu helfen.
+
+`unround` und `reround` gehen den Weg zurück: `sharp_corner` rechnet aus einer
+erkannten Rundung die Kante, die sie ersetzt hat — über den **Schnitt der zwei
+Nachbarebenen** und nicht über den Radius, denn der stammt aus einem Sehnenzug
+und ist ein wenig zu klein (2,9772 an einer Rundung von 3,0). Der Füllkörper
+ist der Zwickel **ohne** Bogen; er deckt die Rundung ab, und seine Flanken
+liegen in den Nachbarebenen, wo ohnehin Material ist.
+
+`bead_edges` legt einen **Wulst** auf: ein Rundstab auf der Kante, je Stück ein
+Zylinder und je Knick eine Kugel. Die Stücke gehen einzeln in die Kette —
+zusammengelegt überlappen sie sich, und ein Körper mit doppelt belegtem Raum
+hat kein Volumen (24250 statt 24186). **Die Kehlnaht im Innenwinkel ist nicht
+die glatte Hohlkehle**: Die macht `round_edges` an einer konkaven Kante, und
+der Unterschied ist der Faktor zwischen 104,45 mm³ und 28,97.
 
 **Messen und Schneiden**
 

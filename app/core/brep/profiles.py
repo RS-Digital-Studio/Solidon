@@ -1014,8 +1014,13 @@ def _finished(builder: Any, sentence: Any, base: Solid | None = None) -> Solid:
     return base.replacing(shape) if base is not None else Solid(shape)
 
 
-def push_faces(solid: Solid, direction: tuple[float, float, float], distance: float) -> Solid:
-    """Versetzt die Flächen, die in eine Richtung zeigen, entlang ihrer Normalen.
+def push_faces(
+    solid: Solid,
+    direction: tuple[float, float, float],
+    distance: float,
+    centre: tuple[float, float, float] | None = None,
+) -> Solid:
+    """Versetzt eine Fläche — oder alle einer Richtung — entlang ihrer Normalen.
 
     Das ist Press/Pull: eine Wand greifen und verschieben, ohne den Rest neu zu
     zeichnen. Über jeder gewählten Fläche entsteht ein Prisma ihres eigenen
@@ -1047,6 +1052,8 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
             value=direction,
             constraint="no_face",
         )
+    if centre is not None:
+        wanted = _nearest_face(working, wanted, centre)
 
     shape = working.shape
     for face, normal in wanted:
@@ -1074,6 +1081,31 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
             )
         )
     return outcome
+
+
+def _nearest_face(
+    solid: Solid,
+    candidates: list[tuple[Any, tuple[float, float, float]]],
+    centre: tuple[float, float, float],
+) -> list[tuple[Any, tuple[float, float, float]]]:
+    """Von den passend gerichteten Flächen die **eine** an dieser Stelle.
+
+    **Warum es das gibt** (Befund Robert, 10.09.2026): Ohne diese Auswahl
+    bewegte *Fläche versetzen* jede Fläche, deren Normale in die Richtung
+    zeigte. An einer Treppe wanderten damit alle Stufen zugleich — gemessen
+    24000,0 mm³ statt 21000,0 —, und der Kunde hatte eine einzelne
+    angeklickt. Die Richtung bleibt der Vorfilter, die Stelle entscheidet.
+
+    Gesucht wird über den Flächenschwerpunkt und nicht über eine Kennung: Ein
+    nativer Handle gehört dem Lauf, der ihn erzeugt hat, und ein Index in die
+    Topologie verschiebt sich beim nächsten Schritt — derselbe Grund, aus dem
+    eine Kante über ihre Lage benannt wird (:func:`edit.edge_key`).
+    """
+    places = {id(face): spot for face, _n, spot in _planar_faces(solid)}
+    reachable = [(face, normal) for face, normal in candidates if id(face) in places]
+    if not reachable:
+        return candidates[:1]
+    return [min(reachable, key=lambda entry: math.dist(places[id(entry[0])], centre))]
 
 
 def _facing(

@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.perceive import actions, features
-from app.core.perceive.actions import actions_for
+from app.core.perceive.actions import EDGE_OPERATIONS, actions_for
 from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
 from app.core.units import LengthUnit
@@ -245,12 +245,22 @@ def test_the_panel_offers_what_the_core_says_and_nothing_else(qt_app: QApplicati
     # Panel selbst fragt; beide Seiten der Gleichung wären damit aus einer
     # Quelle gekommen, und der Test blieb grün, als der Knopf im Review
     # versuchsweise ganz verschwand (Gegenprobe gefahren, 10.09.2026).
+    # **Zwei Sorten Weg ins Bild, und der Unterschied ist Absicht.** Wo der
+    # Hauptknopf selbst hineinführt (``LEADS_INTO_THE_VIEW`` — *Bohrung ändern*
+    # und *Zum Langloch ziehen*), steht kein zweiter daneben; wo er sofort tut,
+    # was in seinen Feldern steht, bietet *Im Bild einstellen …* den anderen Weg
+    # an.
+    from app.ui.panels import LEADS_INTO_THE_VIEW
+
     expected: list[str] = []
     ins_bild = 0
     for action in actions_for(feature):
         if action.op is None:
             continue
         expected.append(str(action.title))
+        if str(action.op) in LEADS_INTO_THE_VIEW:
+            ins_bild += 1
+            continue
         if REGISTRY.has(str(action.op)) and placement.supports_surface_placement(
             REGISTRY.get(str(action.op))
         ):
@@ -327,8 +337,13 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert spin.isVisibleTo(panel), "der gemessene Durchmesser steht nicht sichtbar im Panel"
     assert spin.value_mm() == pytest.approx(measured), "das Panel klemmt den Messwert"
 
+    # **Beide Wege zählen.** *Bohrung ändern* führt seit dem 10.09.2026 ins
+    # Bild statt sofort auszuführen (``LEADS_INTO_THE_VIEW``); was der Knopf
+    # dabei weiterreicht, ist dieselbe Wertetabelle — und genau die prüft
+    # dieser Test.
     emitted: list[tuple[str, dict[str, object]]] = []
     panel.operationRequested.connect(lambda op, params: emitted.append((op, params)))
+    panel.inViewRequested.connect(lambda op, params: emitted.append((op, params)))
     next(
         button for button in row.findChildren(QPushButton) if button.text() == str(action.title)
     ).click()
@@ -1302,7 +1317,7 @@ def test_the_live_preview_of_a_part_changes_its_step(qt_app: QApplication) -> No
 
 
 def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplication) -> None:
-    """Eine angeklickte Kante bietet Verrunden und Fasen an — mit einem Feld.
+    """Eine angeklickte Kante bietet Verrunden, Fasen und den Wulst an.
 
     Die zwei Werte, die der Kunde **nicht** eingibt, reisen als ``fixed``
     mit: Die Auswahl ``named`` hat er mit dem Klick beantwortet, und der
@@ -1329,10 +1344,14 @@ def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplica
     panel.show_edge(schluessel, "Waagerecht · 30,00 mm · x -20,00, y 0,00")
 
     knoepfe = {b.text(): b for b in panel.findChildren(QPushButton)}
-    assert set(knoepfe) == {
-        str(REGISTRY.get("fillet_edges").title),
-        str(REGISTRY.get("chamfer_edges").title),
-    }, "an einer Kante gibt es genau diese zwei Handlungen"
+    # **Die Menge kommt aus dem Register und steht nicht hier als Liste.**
+    # Am 10.09.2026 kam *Wulst anlegen* als dritte Handlung dazu, und ein Test
+    # mit zwei aufgezählten Titeln wäre daran rot geworden, ohne dass etwas
+    # kaputt war — er hätte die Gewohnheit geprüft und nicht die Zusage
+    # (`.claude/rules/tests.md`, „Prüft dieser Test eine Zusage?").
+    assert set(knoepfe) == {str(REGISTRY.get(name).title) for name, _feld in EDGE_OPERATIONS}, (
+        "an einer Kante steht genau, was EDGE_OPERATIONS nennt"
+    )
 
     for beschriftung in panel.findChildren(QLabel):
         assert schluessel not in beschriftung.text(), "der Schlüssel ist keine Beschriftung"
