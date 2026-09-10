@@ -748,6 +748,7 @@
   "Den gewählten Punkt über genaue Koordinaten verschieben.": "Move the selected point using exact coordinates.",
   "Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz.": "Take back the last step — including a chat proposal, all of it.",
   "Den zweiten Punkt bitte auf demselben Teil anklicken.": "Please click the second point on the same part.",
+  "Der Abschnitt wird geschlossen …": "The section is being closed …",
   "Der Abstand der Stütze zum Teil ist kleiner als eine Schicht — sie verschweißt und lässt sich nicht mehr abnehmen.": "The gap between support and part is smaller than one layer — it welds on and cannot be removed any more.",
   "Der Abstand ist null — ein Versatz um nichts legt eine Linie auf die andere.": "The distance is zero — offsetting by nothing puts one line on the other.",
   "Der Abstand zwischen den Teilkörpern ist nicht messbar. Die Geometrie reparieren und erneut prüfen.": "The distance between the separate bodies cannot be measured. Repair the geometry and check again.",
