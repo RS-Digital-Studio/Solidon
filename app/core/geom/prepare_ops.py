@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Any, Final, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
 from app.core.deferred import trimesh
 from app.core.errors import (
@@ -87,6 +88,7 @@ from app.core.types import (
     ProgressFn,
     Quality,
     SceneObject,
+    SolverInfo,
     Vec3,
     is_a_cavity,
 )
@@ -427,6 +429,8 @@ def _feature_solid(
     centre: Vec3,
     scale: float = 1.0,
     axis: Vec3 | None = None,
+    *,
+    oversize: float = FEATURE_OVERLAP,
 ) -> MeshData:
     """Der Körper, den dieses Merkmal einnimmt — an ``centre`` gesetzt.
 
@@ -436,11 +440,16 @@ def _feature_solid(
     Ändern **eine** Maschine sind und nicht drei: Zwischen den zwei Booleschen
     steht jeweils nur ein anderer Wert.
 
-    Der Körper wird um :data:`FEATURE_OVERLAP` größer gebaut als gemessen,
-    damit keine Boolesche auf zusammenfallende Flächen trifft (§39) — beim
-    Ausfüllen wie beim Abtragen.
+    Der Körper wird um ``oversize`` größer gebaut als gemessen, damit keine
+    Boolesche auf zusammenfallende Flächen trifft (§39) — beim Ausfüllen wie
+    beim Abtragen. Die Vorgabe ist :data:`FEATURE_OVERLAP`; **null** baut ihn
+    exakt, und das braucht genau ein Aufrufer: ein Werkzeug, das eine Bohrung
+    wiederherstellt, muss so weit sein wie sie war, sonst steht danach ein
+    zweites, um die Zugabe weiteres Loch im Baum (:func:`_measured_section`).
+    Die **Länge** bekommt ihre Zugabe in jedem Fall — ein Werkzeug, das genau
+    an der Außenfläche endet, schneidet dort nicht durch.
     """
-    diameter = float(feature.params.get("diameter", 0.0)) * scale + FEATURE_OVERLAP
+    diameter = float(feature.params.get("diameter", 0.0)) * scale + oversize
     if diameter <= EPS_GEOM:
         raise ValidationError(
             field="at_feature",
@@ -678,7 +687,254 @@ def _paired_cavity_body(mesh: MeshData, *features: Feature) -> MeshData | None:
     )
 
 
-def _section_fill(
+def _inner_sections(chain: Sequence[Feature], feature: Feature) -> tuple[Feature, ...]:
+    """Die Abschnitte, die **hinter** diesem liegen — sie brauchen einen Durchgang.
+
+    Die Kette kommt geordnet von der engsten Bohrung her (``_ordered_cavity``);
+    was davor steht, liegt tiefer im Material und erreicht die Außenwelt nur
+    durch den gewählten Abschnitt hindurch. Für den innersten Abschnitt selbst
+    ist die Menge leer — dann gilt der bekannte Weg über den Werkzeugkörper.
+    """
+    position = next((index for index, entry in enumerate(chain) if entry.id == feature.id), 0)
+    return tuple(chain[:position])
+
+
+def _outward_axis(chain: Sequence[Feature], feature: Feature) -> NDArray[np.float64]:
+    """Die Achse dieses Abschnitts, gerichtet **weg** von dem, was hinter ihm liegt.
+
+    Die gemessene Achse ist vorzeichenfrei — eine Senkung unter ihrer Bohrung
+    gibt es genauso wie darüber. Wo die Außenwelt ist, sagt der Nachbar.
+    """
+    axis = np.asarray(_feature_direction(feature), dtype=np.float64)
+    inner = _inner_sections(chain, feature)
+    if not inner:
+        return axis
+    outward = np.asarray(feature.params["centre"], dtype=np.float64) - np.asarray(
+        inner[-1].params["centre"], dtype=np.float64
+    )
+    return -axis if float(outward @ axis) < 0.0 else axis
+
+
+def _polygon_gain(feature: Feature) -> float:
+    """Was ein Vieleck an seinen Flanken verliert — als Zugabe auf den Durchmesser.
+
+    ``trimesh.creation.cylinder`` baut ein **eingeschriebenes** Vieleck: Sein
+    Umkreis ist der angegebene Durchmesser, sein Innenkreis ist um
+    ``cos(π/sections)`` kleiner. Wer aus einem gemessenen Maß ein Werkzeug baut,
+    das dieses Maß wiederherstellen soll, rechnet den Unterschied dazu — sonst
+    schrumpft die Bohrung bei jedem Zyklus.
+    """
+    diameter = float(feature.params.get("diameter", 0.0))
+    return diameter * (1.0 / math.cos(math.pi / FEATURE_SECTIONS) - 1.0)
+
+
+def _measured_section(chain: Sequence[Feature], feature: Feature) -> MeshData | None:
+    """Der Abschnitt aus seinen **Kennzahlen**, wo seine Flächen keinen Körper hergeben.
+
+    **Der Fall, für den es das braucht** (Robert, 10.09.2026): An einer
+    eingelesenen Halterung ließ sich weder die Senkung noch die ganze Bohrung
+    entfernen — beide Wege bauen den Hohlraum aus seinen Flächen, und dieser
+    Ausschnitt gibt keinen geschlossenen Körper her. Gemessen an
+    ``weg1-halterung-anpassen``: Ringe sauber und flach, aber nach dem
+    Verschweißen hängen vier Kanten an je vier Dreiecken, und der Deckelbau
+    endet nicht wasserdicht. Das ist eine Eigenschaft des Netzes und nicht der
+    Sache — die Erkennung hatte den Hohlraum längst vollständig vermessen:
+    Zylinder Ø 5,193 von z 0 bis 5,420, Kegelstumpf darauf bis Ø 10,360 bei
+    89,877°.
+
+    Die Kennzahlen beschreiben beides genau, also wird es daraus gebaut. Die
+    Höhe des Stumpfes folgt aus den zwei Durchmessern und dem Winkel; der
+    kleine ist der des Nachbarn weiter innen, und ohne einen solchen läuft der
+    Kegel in seine Spitze.
+
+    **Der Querschnitt bleibt exakt.** Dieser Körper schneidet wieder aus, was
+    nach dem Füllen bleiben soll, und muss deshalb genau so weit sein wie das
+    Merkmal, das er wiederherstellt: Ein Zylinder mit der üblichen Zugabe ließ
+    ein zweites, um 0,02 mm weiteres Loch über der Bohrung stehen, und der
+    Objektbaum zeigte danach zwei Bohrungen (Robert, 10.09.2026). Die **Länge**
+    bekommt ihre Zugabe weiterhin — sonst bleibt an der Außenfläche eine Haut.
+    Gefüllt wird nicht hiermit, sondern mit :func:`_chain_plug`.
+
+    ``None`` heißt: Diese Art oder diese Maße geben keinen Körper her.
+    """
+    centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
+    if feature.kind != "cone":
+        # **Der Innenkreis muss stimmen, nicht der Umkreis.** Ein Zylinder mit
+        # ``FEATURE_SECTIONS`` Seiten ist ein eingeschriebenes Vieleck: Aus dem
+        # gemessenen Durchmesser gebaut ist er an seinen Flanken um
+        # eins minus cos(pi/48) enger, und die Erkennung misst danach 7,9696 statt
+        # 7,9848 — die Bohrung verlöre bei jedem solchen Zyklus 0,017 mm. Die
+        # übrigen Aufrufer merken davon nichts, weil ihre Zugabe (§39) zufällig
+        # dieselbe Größenordnung hat und den Verlust überdeckt.
+        return _feature_solid(feature, centre, oversize=_polygon_gain(feature))
+
+    wide = float(feature.params.get("diameter", 0.0))
+    angle = float(feature.params.get("angle", 0.0))
+    inner = _inner_sections(chain, feature)
+    narrow = float(inner[-1].params.get("diameter", 0.0)) if inner else 0.0
+    if wide <= narrow + EPS_GEOM or angle <= EPS_GEOM or angle >= 180.0:
+        return None
+    height = (wide - narrow) / 2.0 / math.tan(math.radians(angle / 2.0))
+    if height <= EPS_GEOM:
+        return None
+
+    # Der Umriss in der Halbebene, von der Achse aus: Boden, kleiner Rand,
+    # großer Rand, zurück zur Achse. ``revolve`` dreht ihn um die lokale
+    # Z-Achse, und die zeigt nach dem Ausrichten nach außen — der Stumpf liegt
+    # also unter der Mündung im Material.
+    outline = [
+        [0.0, -height - FEATURE_OVERLAP],
+        [narrow / 2.0, -height - FEATURE_OVERLAP],
+        [wide / 2.0, FEATURE_OVERLAP],
+        [0.0, FEATURE_OVERLAP],
+    ]
+    body = trimesh.creation.revolve(outline, sections=FEATURE_SECTIONS)
+    body.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            [0.0, 0.0, 1.0], _outward_axis(chain, feature)
+        )
+    )
+    body.apply_translation(np.asarray(centre, dtype=float))
+    return MeshData.of(body) if body.is_watertight and body.volume > EPS_GEOM else None
+
+
+def _chain_plug(
+    mesh: MeshData,
+    chain: Sequence[Feature],
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData | None:
+    """Ein Stopfen über die **ganze** Kette — derselbe Weg, den der Absagetext nennt.
+
+    „Verschließen Sie beides in einem Zug: ein Stopfen mit dem Durchmesser der
+    Senkung über die volle Wandstärke" steht seit dem 04.09.2026 in
+    :data:`_NO_OWN_BODY`, und ``test_the_way_out_of_a_countersink_is_the_one_
+    the_message_names`` misst ihn: 24 000,000 mm³, wasserdicht, kein Merkmal
+    übrig. Was der Kunde von Hand tun sollte, tut die Operation jetzt selbst.
+
+    **Warum ein Zylinder und nicht die Form des Hohlraums.** Ein Füllkörper,
+    der die Kegelwand nachbildet, endet auf ihr — und die Vereinigung lässt
+    zwei kegelige Flächen nebeneinander stehen, statt eine Fläche zu machen.
+    Gemessen an der Halterung: zwei erkannte Senkungen (Ø 10,34 und Ø 10,36)
+    und eine Oberseite, der ihr Trichterstück weiterhin fehlte. Ein Zylinder
+    ist überall breiter als der Hohlraum, seine Mantelfläche liegt im vollen
+    Material, und übrig bleibt genau eine ebene Fläche — dieselbe Bauart wie
+    beim Stopfen einer Bohrung (:func:`_closed_at`).
+
+    Die Maße kommen aus den **Flächen** der Kette: ihre Ausdehnung entlang der
+    Achse ist die Tiefe, ihr größter Abstand von der Achse der Radius. Gebaut
+    wird er mit Zugabe an den Enden und danach an
+    :func:`~app.core.geom.prepare.shell` gekappt — sonst stünde die Zugabe als
+    Beule auf der Fläche.
+
+    **Gekappt wird an der Hülle und nicht an einem eigenen Zylinder**, und das
+    ist gemessen und nicht gewählt: Beide Wege enden in derselben Ebene, aber
+    der Schnitt an der Hülle erzeugt Deckel, die mit der Außenfläche
+    verschmelzen — der an einem zweiten Zylinder nicht. An der Halterung stand
+    danach oben **und** unten ein Kreisring von 63,6 mm² als eigene Fläche
+    neben der Platte (3836,60 statt 3900,19 mm²).
+
+    Dass die Hülle an einem U-Profil zu großzügig ist (:func:`_between_the_mouths`
+    nennt den gemessenen Fall), trägt hier nicht: Ein Netz mit sauberen
+    Hohlraumflächen kommt gar nicht bis zum Stopfen — es wird aus seinen Flächen
+    gefüllt. ``test_no_plug_stands_proud_into_a_hollow`` hält diesen Weg fest.
+    """
+    from app.core.perceive.relations import cavity_surface_indices
+
+    indices = np.unique(np.asarray(cavity_surface_indices(mesh, chain), dtype=np.int64))
+    if not indices.size:
+        return None
+    raw = mesh.raw
+    points = np.asarray(raw.vertices, dtype=float)[np.unique(np.asarray(raw.faces)[indices])]
+    outer = chain[-1]
+    axis = np.asarray(_feature_direction(outer), dtype=float)
+    centre = np.asarray([float(value) for value in outer.params["centre"]], dtype=float)
+    along = (points - centre) @ axis
+    reach = float(along.max() - along.min())
+    across = points - centre - np.outer(along, axis)
+    radius = float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP
+    if reach <= EPS_GEOM or radius <= EPS_GEOM:
+        return None
+
+    plug = trimesh.creation.cylinder(
+        radius=radius, height=reach + 2.0 * FEATURE_OVERLAP, sections=FEATURE_SECTIONS
+    )
+    plug.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            np.array([0.0, 0.0, 1.0]), axis
+        )
+    )
+    plug.apply_translation(centre + axis * float(along.min() + along.max()) / 2.0)
+    return boolean(
+        "intersection",
+        [MeshData.of(plug), shell(mesh)],
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+    ).mesh
+
+
+def _cavity_plug(
+    mesh: MeshData,
+    sections: Sequence[Feature],
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData | None:
+    """Der Körper, der diesen Hohlraum **füllt** — aus seinen Flächen oder als Stopfen.
+
+    Die Flächen zuerst: Ein daraus geschlossener Körper trifft die Facettierung
+    des Netzes und füllt bitgenau, was ausgeschnitten wurde. Ein eingelesenes
+    Netz gibt ihn aber nicht immer her — an der Halterung aus
+    ``weg1-halterung-anpassen`` sind die Randringe sauber und flach, und
+    trotzdem hängen nach dem Verschweißen vier Kanten an je vier Dreiecken; der
+    Deckelbau endet nicht wasserdicht, und **beide** Wege des Entfernens sagten
+    ab (Robert, 10.09.2026). Dann kommt der Stopfen (:func:`_chain_plug`).
+    """
+    from app.core.perceive.relations import cavity_surface_indices
+
+    built = _body_from_faces(mesh, cavity_surface_indices(mesh, sections), allowed_rings=(1, 2))
+    if built is not None:
+        return built
+    return _chain_plug(mesh, sections, quality=quality, seed=seed, cancelled=cancelled)
+
+
+def _cavity_tool(
+    mesh: MeshData,
+    chain: Sequence[Feature],
+    sections: Sequence[Feature],
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData | None:
+    """Der Körper, der diese Abschnitte wieder **ausschneidet** — exakt in ihren Maßen.
+
+    Dasselbe Paar wie beim Füllen, nur mit der anderen Aufgabe: erst die
+    Flächen, sonst die Kennzahlen (:func:`_measured_section`). Und ohne Zugabe
+    im Querschnitt — was hier entsteht, soll genau das Merkmal sein, das nach
+    dem Füllen wieder dastehen muss.
+    """
+    from app.core.perceive.relations import cavity_surface_indices
+
+    built = _body_from_faces(mesh, cavity_surface_indices(mesh, sections), allowed_rings=(1, 2))
+    if built is not None:
+        return built
+    bodies: list[MeshData] = []
+    for entry in sections:
+        part = _measured_section(chain, entry)
+        if part is None:
+            return None
+        bodies.append(part)
+    if len(bodies) == 1:
+        return bodies[0]
+    return boolean("union", bodies, quality=quality, seed=seed, cancelled=cancelled).mesh
+
+
+def _section_closed(
     mesh: MeshData,
     chain: Sequence[Feature],
     feature: Feature,
@@ -687,80 +943,91 @@ def _section_fill(
     seed: int | None,
     cancelled: CancelToken | None,
 ) -> BooleanOutcome | None:
-    """Der Füllkörper **eines** Abschnitts — der Rest des Hohlraums bleibt offen.
+    """**Einen** Abschnitt eines Hohlraums schließen — der Rest bleibt offen.
 
     **Robert am 10.09.2026:** „wenn ich bei einer Bohrung mit senkung nur die
     senkung entfernen will geht das nicht, also es soll dann nur die senkung
     weg, die Bohrung aber bleiben." Gefragt hat der Kern das längst
-    (:func:`_asked_about_sections`), und für den Abschnitt allein gab es bis
-    dahin keinen Weg: Sein Körper ist baubar — die Kegelfläche hat zwei
-    Randringe und wird mit zwei Deckeln ein Kegelstumpf —, aber dieser Stumpf
-    füllt auf seiner Höhe **auch den Bohrungsschlauch**. Gemessen an einer
-    Platte 60 x 40 x 10 mit Bohrung Ø 8 und Senkung Ø 16: 27,8 mm³ zu viel von
-    24 000, also ein Tausendstel im Volumen — und eine Bohrung, die oben zu ist.
+    (:func:`_asked_about_sections`); für den Abschnitt allein gab es bis dahin
+    keinen Weg, sondern die Absage :data:`_NO_OWN_BODY`.
 
-    Deshalb zwei Schritte: der Abschnitt als Körper, und davon abgezogen der
-    **Durchgang** der Abschnitte, die weiter innen liegen. Die Kette kommt
-    geordnet von der engsten Bohrung her (``_ordered_cavity``); alles vor dem
-    gewählten Abschnitt liegt hinter ihm und verlöre sonst seinen Weg nach
+    **Zuerst zu, dann wieder auf** — und diese Reihenfolge ist nicht Geschmack,
+    sondern gemessen. Der Abschnitt hat einen eigenen Körper: Die Kegelfläche
+    hat zwei Randringe und wird mit zwei Deckeln ein Kegelstumpf. Der füllt auf
+    seiner Höhe aber **auch den Bohrungsschlauch** (an einer Platte 60 x 40 x 10
+    mit Bohrung Ø 8 und Senkung Ø 16 sind das 27,8 mm³ von 24 000, ein
+    Tausendstel im Volumen — und eine Bohrung, die oben zu ist). Ihn vorher zu
+    erleichtern und das Ergebnis dann anzufügen, ergibt einen Füllkörper mit
+    einer Innenwand, die auf der Bohrungswand liegt; die Vereinigung fiel damit
+    bis auf die Voxelstufe zurück und ließ rund einen Millimeter Material im
+    Schlauch stehen. Erst den Trichter schließen und danach den Durchgang aus
+    dem vollen Material schneiden hält beide Schritte auf ``direct`` — gemessen
+    bitgenau der Zustand vor dem Senken.
+
+    Der Durchgang gilt den Abschnitten, die **weiter innen** liegen: Die Kette
+    kommt geordnet von der engsten Bohrung her (``_ordered_cavity``), alles vor
+    dem gewählten Abschnitt liegt hinter ihm und verlöre sonst seinen Weg nach
     außen — bei einem Sackloch mit Senkung wäre das ein eingeschlossener
-    Hohlraum, den kein Drucker füllen kann.
-
-    Der Durchgang entsteht aus dem Hohlraumkörper der inneren Abschnitte,
-    entlang der Achse zur Mündung hin fortgesetzt: Ein Zylinder bleibt dabei
-    ein Zylinder, und der Querschnitt an der Trennfläche stimmt mit dem
-    überein, was darunter liegt. Fortgesetzt wird in so vielen Schritten, wie
-    die eigene Länge des Durchgangs verlangt — sonst bliebe zwischen zwei
-    Kopien eine Scheibe Material stehen.
+    Hohlraum, den kein Drucker füllen kann. Sein Körper wird entlang der Achse
+    zur Mündung hin fortgesetzt; ein Zylinder bleibt dabei ein Zylinder, und
+    der Querschnitt stimmt mit dem überein, was darunter liegt. Fortgesetzt
+    wird in so vielen Schritten, wie seine eigene Länge verlangt — sonst bliebe
+    zwischen zwei Kopien eine Scheibe Material stehen.
 
     ``None`` heißt: Dieser Abschnitt gibt keinen eigenen Körper her; dann gilt
     :data:`_NO_OWN_BODY` wie bisher.
     """
-    from app.core.perceive.relations import cavity_surface_indices
-
-    own = _body_from_faces(mesh, cavity_surface_indices(mesh, (feature,)), allowed_rings=(1, 2))
-    if own is None:
+    filled = _cavity_plug(mesh, chain, quality=quality, seed=seed, cancelled=cancelled)
+    if filled is None:
         return None
+    keep = tuple(entry for entry in chain if entry.id != feature.id)
+    tools: list[MeshData] = []
+    for entry in keep:
+        tool = _cavity_tool(mesh, chain, (entry,), quality=quality, seed=seed, cancelled=cancelled)
+        if tool is None:
+            return None
+        tools.append(tool)
 
-    position = next((index for index, entry in enumerate(chain) if entry.id == feature.id), 0)
-    inner = tuple(chain[:position])
-    if not inner:
-        return BooleanOutcome(mesh=own, solver=deepest(()))
+    shut = boolean("union", [mesh, filled], quality=quality, seed=seed, cancelled=cancelled)
+    body = shut.mesh
+    findings = list(shut.findings)
+    stages: list[SolverInfo | None] = [shut.solver]
 
-    passage = _body_from_faces(mesh, cavity_surface_indices(mesh, inner), allowed_rings=(1, 2))
-    if passage is None:
-        return None
-
-    # **Weg von den inneren Abschnitten**, gleich wie die gemessene Achse
-    # zeigt: Sie ist vorzeichenfrei gespeichert, und ein Kegel unter seiner
-    # Bohrung gibt es genauso wie darüber.
-    axis = np.asarray(_feature_direction(feature), dtype=float)
-    outward = np.asarray(feature.params["centre"], dtype=float) - np.asarray(
-        inner[-1].params["centre"], dtype=float
-    )
-    if float(outward @ axis) < 0.0:
-        axis = -axis
-
-    reach = float(np.ptp(np.asarray(own.raw.vertices) @ axis)) + FEATURE_OVERLAP
-    span = float(np.ptp(np.asarray(passage.raw.vertices) @ axis))
-    steps = max(1, math.ceil(reach / span)) if span > EPS_GEOM else 1
-    fill = own
-    findings: list[Finding] = []
-    solver = deepest(())
-    for step in range(1, steps + 1):
-        moved = passage.raw.copy()
-        moved.apply_translation(axis * (reach * step / steps))
-        cut = boolean(
-            "difference",
-            [fill, MeshData.of(moved)],
-            quality=quality,
-            seed=seed,
-            cancelled=cancelled,
-        )
-        fill = cut.mesh
-        findings.extend(cut.findings)
-        solver = cut.solver
-    return BooleanOutcome(mesh=fill, solver=solver, findings=findings)
+    # **Was bleibt, wird frisch geschnitten** — an seiner Stelle, und für die
+    # Abschnitte weiter innen zusätzlich durch den gefüllten hindurch, sonst
+    # verlören sie ihren Weg nach außen (bei einem Sackloch mit Senkung wäre
+    # das ein eingeschlossener Hohlraum, den kein Drucker füllen kann).
+    #
+    # Dass der ganze Hohlraum zuerst zugeht, ist der Punkt: Ein Füllkörper, der
+    # nur den einen Abschnitt schließt, endet auf der Wand des Nachbarn, und
+    # die Vereinigung lässt dort zwei Flächen nebeneinander stehen — im Baum
+    # standen danach zwei Bohrungen und zwei Senkungen, und der Oberseite
+    # fehlte das Stück, das der Trichter aus ihr geschnitten hatte (Robert,
+    # 10.09.2026). Aus vollem Material geschnitten ist die Bohrung **eine**
+    # Fläche, wie an jeder anderen Stelle auch.
+    axis = _outward_axis(chain, feature)
+    reach = float(np.ptp(np.asarray(filled.raw.vertices) @ axis)) + FEATURE_OVERLAP
+    inner = _inner_sections(chain, feature)
+    for entry, tool in zip(keep, tools, strict=True):
+        span = float(np.ptp(np.asarray(tool.raw.vertices) @ axis))
+        steps = 0
+        if any(entry.id == section.id for section in inner):
+            steps = max(1, math.ceil(reach / span)) if span > EPS_GEOM else 1
+        for step in range(steps + 1):
+            moved = tool.raw.copy()
+            if step:
+                moved.apply_translation(axis * (reach * step / steps))
+            cut = boolean(
+                "difference",
+                [body, MeshData.of(moved)],
+                quality=quality,
+                seed=seed,
+                cancelled=cancelled,
+            )
+            body = cut.mesh
+            findings.extend(cut.findings)
+            stages.append(cut.solver)
+    return BooleanOutcome(mesh=body, solver=deepest(stages) or shut.solver, findings=findings)
 
 
 def _feature_direction(feature: Feature, axis: Vec3 | None = None) -> Vec3:
@@ -1966,7 +2233,12 @@ def remove_feature(ctx: OpContext) -> OpResult:
 
     if together and chain is not None:
         ctx.progress(0.2, str(_("Der ganze Hohlraum wird geschlossen …")))
-        filled = _paired_cavity_body(body, *chain)
+        # Erst der gemeinsame Körper aus den Flächen; wo das Netz ihn nicht
+        # hergibt, dieselben Abschnitte aus ihren Kennzahlen (Robert,
+        # 10.09.2026 — an der eingelesenen Halterung ging beides nicht).
+        filled = _cavity_plug(
+            body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        )
         if filled is None:
             raise ValidationError(
                 field="at_feature",
@@ -1982,6 +2254,29 @@ def remove_feature(ctx: OpContext) -> OpResult:
             cancelled=ctx.cancelled,
         )
         gone = tuple(section.id for section in chain)
+    elif chain is not None and _inner_sections(chain, feature):
+        # **Nur dieser Abschnitt — und der Rest des Hohlraums bleibt offen.**
+        # Der eigene Körper des Abschnitts füllte sonst auch den Schlauch
+        # darunter zu, und die Bohrung ginge nicht mehr durch (Robert,
+        # 10.09.2026). :func:`_section_closed` schneidet ihn danach wieder frei.
+        ctx.progress(0.2, str(_("Der Abschnitt wird geschlossen …")))
+        section = _section_closed(
+            body,
+            chain,
+            feature,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        if section is None:
+            raise ValidationError(
+                field="at_feature",
+                detail=_NO_OWN_BODY,
+                values={"feature": feature.id},
+                constraint="not_movable",
+            )
+        closed = section
+        gone = (feature.id,)
     else:
         # **Steht der Hohlraum allein, ist sein zweiter Randring sein Boden.** Nach
         # dem Verschließen der Bohrung darunter ist die Senkung ein Kegelstumpf mit

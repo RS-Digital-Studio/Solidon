@@ -2369,6 +2369,184 @@ def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Prof
     )
 
 
+def test_only_the_countersink_goes_and_the_bore_stays_open(profile: Profile) -> None:
+    """Nur die Senkung weg — und die Bohrung bleibt, samt Durchgang.
+
+    **Robert am 10.09.2026:** „wenn ich bei einer Bohrung mit senkung nur die
+    senkung entfernen will geht das nicht, also es soll dann nur die senkung
+    weg, die Bohrung aber bleiben." Gefragt hatte der Kern längst („Nur das
+    gewählte Merkmal"), der Weg dahinter sagte ab: Die Kegelfläche allein hat
+    zwei Randringe, ihr Hohlraum gehört ihr nicht allein.
+
+    Gemessen wird gegen den Zustand **vor** dem Senken — dieselbe Platte,
+    dieselbe Bohrung, kein Trichter. Das ist eine unabhängige Referenz und
+    keine Zahl aus dem Prüfling.
+
+    **Die zweite Zusicherung ist die eigentliche.** Der Kegelstumpf als
+    Füllkörper ist schnell gebaut und sieht im Volumen fast richtig aus — er
+    setzt dabei aber den Bohrungsschlauch auf seiner Höhe zu (gemessen 27,8 von
+    24 000 mm³, also ein Tausendstel). Wer nur das Volumen prüft, lässt eine
+    Bohrung durchgehen, die nicht mehr durchgeht.
+    """
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        plate, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    cone = next(name for name, found in entry.features.items() if found.kind == "cone")
+
+    result = _run_op("remove_feature", entry, profile, at_feature=cone, sections="single")
+    after = result.outputs[0]
+
+    assert after.mesh.raw.is_watertight, "ein Loch im Netz ist kein Ergebnis"
+    assert after.mesh.raw.body_count == 1
+    assert after.mesh.volume == pytest.approx(bored.volume, abs=0.5), (
+        "übrig bleibt die Platte mit ihrer Bohrung — der Trichter ist gefüllt"
+    )
+
+    kinds = sorted(
+        found.kind for found in after.features.values() if found.kind in ("hole", "cone")
+    )
+    assert kinds == ["hole"], f"die Bohrung bleibt gebucht, die Senkung nicht: {kinds}"
+    seen = sorted(
+        found.kind for found in detect(after.mesh).values() if found.kind in ("hole", "cone")
+    )
+    assert seen == ["hole"], f"und dasselbe sagt die Erkennung am Netz: {seen}"
+    assert _top_face_area(after.mesh) == pytest.approx(
+        _top_face_area(as_mesh_data(bored)), abs=0.5
+    ), "die Oberseite bekommt ihr Trichterstück zurück, statt es als eigene Fläche zu behalten"
+
+    # ``allow_empty``, weil genau das die erwartete Antwort ist: Ein leerer
+    # Schnitt sieht für die Rückfallkette sonst wie ein misslungener aus, und
+    # sie liefert nach drei Stufen ein gevoxeltes Etwas — 40 mm³ Material, wo
+    # keines ist. Derselbe Griff wie in ``_material_in_the_channel``.
+    column = trimesh.creation.cylinder(radius=3.9, height=20.0)
+    column.apply_translation((0.0, 0.0, 5.0))
+    inside = boolean(
+        "intersection", [after.mesh, MeshData.of(column)], quality="fine", seed=7, allow_empty=True
+    ).mesh
+    left = 0.0 if len(inside.raw.faces) == 0 else float(inside.volume)
+    assert left < 0.5, (
+        f"im Schlauch der Bohrung steht Material: {left:.3f} mm³ — "
+        "dann ist sie oben zugesetzt und geht nicht mehr durch"
+    )
+
+
+def _countersunk_plate(profile: Profile) -> tuple[SceneObject, MeshData, str, str]:
+    """Platte, Bohrung, Senkung — und der Zustand vor dem Senken als Referenz."""
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        plate, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    cone = next(name for name, found in entry.features.items() if found.kind == "cone")
+    hole = next(name for name, found in entry.features.items() if found.kind == "hole")
+    return entry, bored, cone, hole
+
+
+def _top_face_area(mesh: MeshData) -> float:
+    """Die Fläche der Oberseite — die Probe darauf, dass eine Fläche eine bleibt."""
+    return max(
+        (
+            float(found.params.get("area", 0.0))
+            for found in detect(mesh).values()
+            if found.kind == "face" and float(found.params["centre"][2]) > 4.0
+        ),
+        default=0.0,
+    )
+
+
+@pytest.mark.parametrize("sections", ["single", "chain"])
+def test_a_cavity_without_a_body_is_closed_from_its_dimensions(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, sections: str
+) -> None:
+    """Wo das Netz keinen Hohlraumkörper hergibt, gelten die Kennzahlen.
+
+    **Robert am 10.09.2026 an einer eingelesenen Halterung:** „geht immer noch
+    nicht, egal was man hier auswählt". Der Fall davor lief über die *Flächen*
+    des Hohlraums, und die tragen an einem importierten Netz nicht immer:
+    Gemessen an ``weg1-halterung-anpassen`` sind die Randringe sauber und flach
+    (48 Knoten zu 48 Kanten, Unebenheit 6·10⁻⁶ mm), aber nach dem Verschweißen
+    hängen vier Kanten an je vier Dreiecken — der Deckelbau endet nicht
+    wasserdicht, und **beide** Richtungen sagten ab.
+
+    Die Lage wird hier gestellt, und zwar an genau der Stelle, an der sie
+    entsteht: ``_body_from_faces`` antwortet mit ``None``. Ein Netz mit dieser
+    Naht in den Korpus zu legen prüfte die Naht; geprüft werden soll der
+    **Rückfall**, und der hängt an dieser einen Antwort.
+
+    Gemessen wird gegen den Zustand vor dem Senken — und bei „nur die Senkung"
+    zusätzlich, dass die Oberseite ihr Trichterstück zurückbekommt. Diese
+    Zusicherung ist der Grund, aus dem der Füllkörper ein **Stopfen** ist und
+    nicht die Form des Hohlraums: Ein Körper, der die Kegelwand nachbildet,
+    endet auf ihr, und im Baum stehen danach zwei Senkungen neben einer
+    Oberseite, der ihr Stück weiterhin fehlt.
+    """
+    from app.core.geom import prepare_ops
+
+    entry, bored, cone, _hole = _countersunk_plate(profile)
+    before = _top_face_area(as_mesh_data(bored))
+    assert before > 0.0, "ohne Oberseite prüft der Vergleich nichts"
+
+    monkeypatch.setattr(prepare_ops, "_body_from_faces", lambda *_a, **_k: None)
+    after = _run_op("remove_feature", entry, profile, at_feature=cone, sections=sections).outputs[0]
+
+    assert after.mesh.raw.is_watertight and after.mesh.raw.body_count == 1
+    kinds = sorted(found.kind for found in detect(after.mesh).values() if found.kind != "face")
+    if sections == "chain":
+        assert not kinds, f"der ganze Hohlraum geht weg: {kinds}"
+        assert after.mesh.volume == pytest.approx(60.0 * 40.0 * 10.0, abs=1.0), (
+            "und die Platte ist wieder voll"
+        )
+        return
+
+    assert kinds == ["hole"], f"die Bohrung bleibt, die Senkung nicht: {kinds}"
+    # **Und sie ist so weit wie vorher.** Der Durchgang wird neu geschnitten;
+    # mit der üblichen Werkzeugzugabe wäre er 0,02 mm weiter als die Bohrung
+    # darunter, und im Objektbaum stünden zwei Bohrungen übereinander (Robert,
+    # 10.09.2026). Die Zahl der Merkmale allein fängt das nicht — an dieser
+    # Platte fasst die Erkennung beide zu einer zusammen und meldet nur ein
+    # anderes Maß.
+    weite = [
+        float(found.params["diameter"])
+        for found in detect(after.mesh).values()
+        if found.kind == "hole"
+    ]
+    vorher = [
+        float(found.params["diameter"])
+        for found in detect(as_mesh_data(bored)).values()
+        if found.kind == "hole"
+    ]
+    assert weite == pytest.approx(vorher, abs=0.004), (
+        f"die Bohrung hat ihr Maß verloren: {weite} gegen {vorher}"
+    )
+    # **2,5 mm³ von 23 500 sind Facettierung und keine Geometrie.** Der Durchgang
+    # wird neu geschnitten, und sein Zylinder ist wie jeder ein eingeschriebenes
+    # 48-Eck — gegenüber dem der ursprünglichen Bohrung um seine halbe Teilung
+    # verdreht. Gemessen 1,9 mm³, also acht Hundertstel Promille; was zählt,
+    # steht in den zwei Zusicherungen darunter.
+    assert after.mesh.volume == pytest.approx(bored.volume, abs=2.5), (
+        "übrig bleibt die Platte mit ihrer Bohrung"
+    )
+    assert _top_face_area(after.mesh) == pytest.approx(before, abs=1.0), (
+        "die Oberseite bekommt ihr Trichterstück zurück, statt es als eigene Fläche zu behalten"
+    )
+
+    column = trimesh.creation.cylinder(radius=3.9, height=20.0)
+    column.apply_translation((0.0, 0.0, 5.0))
+    inside = boolean(
+        "intersection", [after.mesh, MeshData.of(column)], quality="fine", seed=7, allow_empty=True
+    ).mesh
+    left = 0.0 if len(inside.raw.faces) == 0 else float(inside.volume)
+    assert left < 0.5, f"im Schlauch der Bohrung steht Material: {left:.3f} mm³"
+
+
 def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> None:
     """Der Vorschlag öffnet den Schritt an einem Feld — das muss es geben.
 
