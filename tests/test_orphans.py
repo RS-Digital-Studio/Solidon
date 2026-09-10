@@ -377,9 +377,17 @@ def test_a_feature_nobody_refers_to_is_not_a_warning() -> None:
 
 def test_kind_of_knows_every_feature_kind() -> None:
     """Die handgepflegte Liste kannte cone/sphere/torus/fillet nicht und
-    führte das tote slot — für einen verschwundenen Kegel wurden Flächen und
+    führte ein totes slot — für einen verschwundenen Kegel wurden Flächen und
     Bohrungen als „plausible Nachfolger" angeboten (Fund des Gesamtreviews
     vom 25.08.2026). Die Liste kommt jetzt aus ``FeatureKind``.
+
+    **Und genau deshalb steht hier keine zweite Liste.** Die Schleife fragt
+    jede Art, die es gibt; wächst ``FeatureKind``, wächst die Prüfung mit.
+    Hier stand daneben ``_kind_of("slot_1") is None`` — als ``slot`` am
+    10.09.2026 eine echte Art wurde, schrieb diese Zeile den alten Stand fest
+    und wurde rot, während die Schleife dieselbe Kennung bereits richtig
+    prüfte. Ein Präfix, das **nie** eine Art wird, sagt dasselbe, ohne zu
+    altern.
     """
     from typing import get_args
 
@@ -389,7 +397,7 @@ def test_kind_of_knows_every_feature_kind() -> None:
     for kind in get_args(FeatureKind):
         assert _kind_of(f"{kind}_3") == kind, f"{kind} muss sein eigenes Präfix erkennen"
     assert _kind_of("edge_loop_1") == "edge_loop", "der längste Treffer gewinnt"
-    assert _kind_of("slot_1") is None, "slot war nie eine Merkmalsart"
+    assert _kind_of("widget_1") is None, "ein unbekanntes Präfix bleibt ohne Art"
 
 
 # --- Skizzenebenen (Fund 16 des Update-Reviews, 26.08.2026) ----------------------
