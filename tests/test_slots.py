@@ -730,7 +730,16 @@ def test_the_geometry_paths_never_load_rtree() -> None:
         "assert plan.count >= 1, plan.count\n"
         "drawing = Path('app/examples/weg2-halter-konstruieren.svg').read_bytes()\n"
         "outline = extrude(drawing, '.svg', height=3.0)\n"
-        "assert outline.contours == 197, outline.contours\n"
+        # **Nicht die exakte Zahl.** Sie sichert hier zu, dass der Weg
+        # gefahren wurde und etwas Substanzielles herauskam — die Zusage
+        # dieses Tests ist ``rtree`` und nicht die Konturenzahl. Die
+        # Zeichnung ist ein **erzeugtes** Artefakt: Ein frischer Lauf von
+        # ``tools/make_examples.py`` teilt ein Viereck der Projektion
+        # entlang der anderen Diagonale und kommt auf 193 statt 197 —
+        # dieselbe Geometrie, vier Konturen weniger, zweimal gemessen und
+        # reproduzierbar. Eine festgenagelte Zahl macht den Wächter dort
+        # rot, wo niemand etwas kaputt gemacht hat.
+        "assert outline.contours > 100, outline.contours\n"
         "if _rtree_index is None:\n"
         "    assert 'rtree' not in sys.modules, 'rtree wurde geladen'\n"
         "print('ohne rtree')\n"
