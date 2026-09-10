@@ -1,249 +1,231 @@
 {
-  "version": "0.3.5",
+  "version": "0.4.0",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.3.5.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.5.exe",
-      "size": 167073228,
-      "sha256": "105426a3a1711c1afbe913a87e3c4a88d906409d471cc1d637a8644ad574e28b"
+      "file": "Solidon3D-Setup-0.4.0.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.0.exe",
+      "size": 167669422,
+      "sha256": "c2ed79299a9d78f04fdad04fc2eceb22cfcebc72eb4c93f99aaa6c49ed49b249"
     },
     "linux": {
-      "file": "Solidon3D-0.3.5-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.5-x86_64.flatpak",
-      "size": 199139936,
-      "sha256": "3aec7461e1a426411fdd1b7fbb735157e54ffea9ad02987f6b2830e2e031acbd"
+      "file": "Solidon3D-0.4.0-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.0-x86_64.flatpak",
+      "size": 199688000,
+      "sha256": "8f0752f85f5b9ed1717be918a4529c78115f36c15b2febc71a77969cf04315ab"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.3.5-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.5-macos-arm64.pkg",
-      "size": 209691564,
-      "sha256": "2e01a7cf39d3d446df4f5c04ebc92ecc7277984b0989f3905f8a28e22d7d163b"
+      "file": "Solidon3D-0.4.0-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.0-macos-arm64.pkg",
+      "size": 210308656,
+      "sha256": "e4ac7b502cba809a0b096b3c46435763c998b7dd94b4eb96dc49402e6d840fc5"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.3.5-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.5-macos-x86_64.pkg",
-      "size": 230790510,
-      "sha256": "af8e5d2c278ca20ad42efb983118d35db38cecbbf2978507ab985459dac1be57"
+      "file": "Solidon3D-0.4.0-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.0-macos-x86_64.pkg",
+      "size": 231410424,
+      "sha256": "69e635a4095069e6310da886bd64032c5a2b14fc6e81cde4ab7fb373f494b2d7"
     }
   },
   "changes": {
     "de": [
-      "Die 3D-Ansicht zeichnet mit einer neuen Grafikschicht. Sie spricht die Grafikkarte über Direct3D 12, Vulkan oder Metal an und bleibt auch bei mehreren Millionen Dreiecken flüssig.",
-      "Vertiefungen und Kanten treten plastischer hervor: Die Ansicht dunkelt Ecken ab, zieht Tiefenlinien und trifft beim Anklicken den Punkt, auf den Sie zeigen.",
-      "Körperkanten stehen als feines Drahtgitter über der Fläche, und Beschriftungen bleiben ruhig stehen, statt beim Drehen zu zittern.",
-      "Merkmalsnamen überlagern sich nicht mehr, und ihre Marken bleiben auch im Schnitt sichtbar.",
-      "Prüfbericht und Chat schließen rechts mit ihrem eigenen Rand ab. Die Handlungen zur Auswahl stehen darunter in einer eigenen Karte, und zwischen beiden ist das Modell zu sehen.",
-      "Welche Handlungen vorn stehen, richtet sich nach der Auswahl: bei mehreren Körpern Vereinigen, Abziehen und Schnittmenge, bei einem einzelnen Bohrung setzen, Aushöhlen und Teilen.",
-      "An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.",
-      "Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern.",
-      "Vereinigen, Abziehen und Schneiden nehmen alle gewählten Körper auf einmal, nicht nur genau zwei.",
-      "Verrunden bricht die Anwendung nicht mehr ab, wenn der Radius größer ist als die Wand, die er verrunden soll.",
-      "Ein Körper aus dem exakten Kern bleibt exakt, wenn Sie ihn nur verschieben oder drehen. Verrunden und Fasen bleiben danach möglich.",
-      "Das Bohrwerkzeug ragt nur noch an der Mündung über den Körper hinaus und lehnt Durchmesser ab, die das Teil um ein Vielfaches übersteigen.",
-      "Ein eingelesener Scan trägt keine erfundenen Kuppeln und Pfannen mehr; bisher entstanden sie zu Hunderten aus glatt gerundeten Flächen.",
-      "Mehrere Gewinde auf einer Platte werden einzeln benannt, nicht als ein Merkmal zusammengefasst.",
-      "Kugel, Torus und Kegel weisen ihre Krümmung aus, Zylindermitten stimmen mit den Endringen, und Gewindegänge folgen der Achse.",
-      "Das Merkmalsfeld bietet Passungen nur an, wenn ein zweiter Körper gewählt ist, und kennt jede Gruppe des Kerns.",
-      "Die Ausrichtungssuche urteilt zweistufig: zweihundert Lagen aus den Flächennormalen, davon neun in der Schichtanalyse.",
-      "Ihr Fortschrittsbalken läuft bis zum Ende, auch wenn nichts zu schneiden war.",
-      "Der Slicer bekommt die Welt des Druckers und nicht die von Solidon, und ein eigenes Profil behält seine Herstellerbasis.",
-      "Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand.",
-      "Eine 3MF mit vielen Verdopplungsebenen wird abgelehnt, bevor aus 432 Byte tausend Körper werden.",
-      "Eine kleine Projektdatei fordert keine Gigabyte Speicher mehr an.",
-      "Eine GLB-Datei in Millimetern kommt in Millimetern an und nicht als Meter.",
-      "Ein gescheitertes Speichern nimmt die letzte Sicherung nicht mehr mit, und Abbrechen bricht den Import wirklich ab.",
-      "Ein Zusatzwerkzeug mit falschem Feldtyp reißt den Zug des Agenten nicht mehr ab.",
-      "Der Agent nennt zu Skizzenvarianten nur Menüwege, die es gibt.",
-      "Bei der Bildgenerierung kommen die Gewichte ganz oder gar nicht an, und ein einzelner Wert im Strukturfeld löst keine unbestellte Erzeugung aus.",
-      "Ein lokales Modell wird auch dann gemessen, wenn es über HTTPS auf einem eigenen Port antwortet.",
-      "Als Mindestversion gilt macOS 13, gleich in Paket, Installer und auf der Website.",
-      "Dreizehn Bibliotheken stehen auf ihren neuesten stabilen Fassungen, und der exakte Kern spricht OpenCASCADE 8.",
-      "Ein Paket ohne Vertrauensanker im System bringt seinen eigenen Satz mit, gleich auf welcher Plattform.",
-      "Handbuch und Bedienbelege zeigen die überarbeitete Oberfläche in allen sechs Sprachen.",
-      "Die Zeichnungen des Handbuchs halten den Textkontrast auch in ihren Nebenbemerkungen.",
-      "Das Handbuchfenster lädt nur seine eigenen Abbildungen und keine fremden Bilder."
+      "Gegenstücke wie Passstift und Bohrung setzen Sie in einem Schritt auf beide Teile. Die gemeinsamen Maße geben Sie einmal ein, und eine Rücknahme nimmt das Paar zurück.",
+      "Zwischen zwei Umrissen aufspannen nimmt zwei eigene Zeichnungen: rund unten, eckig oben. So entsteht der Adapter von einem Rohr auf einen Kanal.",
+      "Entlang einer Bahn führen folgt einer gezeichneten Bahn mit mehreren Ecken und Bögen statt nur einem gleichmäßigen Bogen. An scharfen Ecken schneidet Solidon auf Gehrung.",
+      "Verrunden und Fasen greifen jetzt auch an einer einzelnen Kante. Sie wählen sie in einer Liste, die jede Kante mit ihrer Lage und ihrer Länge nennt.",
+      "Beim Setzen einer Bohrung zeigt die Vorschau den Umriss der Mündung statt eines halbdurchsichtigen Zylinders. Die Stelle, auf die es ankommt, bleibt frei.",
+      "Die Vorschau folgt der Maus flüssig: Die Flächensuche unter dem Zeiger rechnet nicht mehr bei jeder Bewegung von vorn.",
+      "Die Maßfelder weichen der Stelle aus, an der die Bohrung entsteht, statt über ihr zu stehen.",
+      "Wer eine Operation wählt, die im Modell platziert wird, platziert sofort; der Knopf davor entfällt.",
+      "An einer angeklickten Bohrung stehen nur noch die Handlungen, die dort etwas bewirken — vorher standen dort auch Text aufbringen und Filament zuweisen.",
+      "Jede Handlung an einem Merkmal steht einmal statt zweimal, und ein Bausteindach über einer einzigen Zeile entfällt.",
+      "An einer vorhandenen Senkung ist *Senken* wieder erreichbar.",
+      "Im Objektbaum bündeln sich gleichartige Merkmale nur noch, wenn auch ihr Maß gleich ist. Zehn Hohlkehlen mit verschiedenen Radien stehen wieder einzeln da.",
+      "Ihre eigenen Bausteine öffnen Sie aus dem Katalog wieder zum Bearbeiten, auch wenn das Projekt, aus dem sie stammen, nicht mehr da ist.",
+      "Die Toleranzleiter übernimmt das gemessene Maß der Bohrung, an der Sie sie öffnen, statt einer festen Vorgabe von 6 mm.",
+      "Schnapphaken und Klemmzungen rechnen mit Material und Federweg statt mit einer Faustregel. Solidon meldet einen Arm, der beim ersten Einrasten bricht.",
+      "Die drei Kalibrierkörper entstehen ohne Hilfskörper, und die Toleranzleiter wird als zwei nummerierte Leisten gedruckt, die ineinandergesteckt werden.",
+      "Ihr Filamentbestand hat einen eigenen Ort: eine Kachel auf der Startseite und ein Regal statt einer Liste, mit dem Füllstand als Wicklung auf der gezeichneten Spule.",
+      "Zwei Spulen mit demselben Namen bleiben auseinandergehalten. Jede führt ihren eigenen Rest, und die angebrochene ist die interessante.",
+      "Beim Slicen und beim Übergeben fragt Solidon, ob es den Verbrauch abbuchen soll. Nach dem Slicen ist es die gemessene Menge aus der Druckdatei, sonst eine Schätzung.",
+      "Jede Buchung ist rücknehmbar, jede Spule führt ihren Verlauf, und ohne Rückfrage bucht nur, wer das ausdrücklich einstellt.",
+      "Solidon findet den Bestand von Cura: Drucker, Prozessprofile und Filamente, die vorher unsichtbar blieben.",
+      "Von PrusaSlicer übernimmt Solidon die eingelegten Filamente und den zuletzt eingestellten Drucker.",
+      "Kennt Ihr Slicer den eingestellten Drucker gar nicht, sagt Solidon das — statt Sie in eine Liste zu schicken, in der nichts steht.",
+      "Die Qualitätsstufe zu wechseln dauert Sekunden statt einer knappen Minute, und das Fenster bleibt dabei bedienbar.",
+      "Der Mauszeiger von Solidon steht im ganzen Fenster und in jedem Dialog, nicht mehr nur in der 3D-Ansicht.",
+      "Ein Wechsel der Variante im Operationsdialog beendet die Anwendung nicht mehr.",
+      "Ein offener Operationsdialog übersteht keinen Projektwechsel mehr unbemerkt.",
+      "Lange Hinweise werden nicht mehr abgeschnitten, während daneben Platz frei bleibt.",
+      "Unter *Neuerungen* stehen die letzten drei Versionen. Der vollständige Verlauf aller Fassungen steht auf solidon3d.de und bleibt dort nachlesbar.",
+      "Die Bilder auf solidon3d.de zeigen das Modell in ganzer Breite statt als Streifen zwischen den Panelen.",
+      "Handbuch und Website nennen jede Operation, die es gibt, samt der neuen Merkmalseditoren."
     ],
     "en": [
-      "The 3D view now draws with a new graphics layer. It addresses the graphics card through Direct3D 12, Vulkan or Metal and stays fluid even at several million triangles.",
-      "Recesses and edges stand out more clearly: the view darkens corners, draws depth lines and hits the point you are pointing at.",
-      "Body edges sit as a fine wireframe above the surface, and labels hold still instead of jittering while you orbit.",
-      "Feature names no longer overlap, and their markers stay visible inside a section as well.",
-      "Report and chat now close with their own edge on the right. The actions for the selection sit below them in a card of their own, with the model visible between the two.",
-      "Which actions come first depends on the selection: with several bodies Unite, Subtract and Intersection, with a single one Drill a bore, Hollow out and Split.",
-      "On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.",
-      "A selected body shows its filaments right there and lets you change them.",
-      "Unite, Subtract and Cut now take every selected body at once instead of exactly two.",
-      "Fillet no longer takes the application down when the radius is larger than the wall it is meant to round.",
-      "A body from the exact kernel stays exact when you only move or rotate it. Fillet and chamfer remain available afterwards.",
-      "The drilling tool now protrudes only at the mouth of the bore and rejects diameters that exceed the part many times over.",
-      "An imported scan no longer carries invented domes and sockets; until now they arose in their hundreds from smoothly rounded surfaces.",
-      "Several threads on one plate are named individually instead of being merged into a single feature.",
-      "Sphere, torus and cone report their curvature, cylinder centres match their end rings, and thread turns follow the axis.",
-      "The feature panel offers fits only when a second body is selected, and it knows every group the core uses.",
-      "The orientation search now judges in two stages: two hundred poses from the surface normals, nine of them in the layer analysis.",
-      "Its progress bar runs to the end even when there was nothing to cut.",
-      "The slicer receives the world of the printer instead of the one from Solidon, and a custom profile keeps its vendor base.",
-      "Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory.",
-      "A 3MF with many levels of duplication is rejected before 432 bytes turn into a thousand bodies.",
-      "A small project file no longer asks for gigabytes of memory.",
-      "A GLB file in millimetres arrives in millimetres and not as metres.",
-      "A failed save no longer takes the last backup with it, and cancelling really does cancel the import.",
-      "An extra tool with a wrongly typed field no longer tears down the whole run of the agent.",
-      "For sketch variants the agent now names only menu paths that exist.",
-      "In image generation the weights arrive whole or not at all, and a single value in the structure field no longer triggers an unordered generation.",
-      "A local model is measured even when it answers over HTTPS on a port of its own.",
-      "The minimum version is now macOS 13, alike in package, installer and on the website.",
-      "Thirteen libraries are on their latest stable releases, and the exact kernel speaks OpenCASCADE 8.",
-      "A package without a trust anchor in the system brings its own set along, on every platform.",
-      "Manual and screenshots show the reworked interface in all six languages.",
-      "The drawings in the manual keep the text contrast in their side notes as well.",
-      "The manual window loads only its own figures and no external images."
+      "Counterparts such as a dowel pin and its hole go onto both parts in a single step. You enter the shared dimensions once, and one undo takes the pair back.",
+      "Lofting between two outlines now takes two separate sketches: round at the bottom, square at the top. That is how you build an adapter from a pipe to a duct.",
+      "Sweeping along a path now follows a drawn path with several corners and arcs instead of a single even arc. At sharp corners Solidon mitres the joint.",
+      "Fillets and chamfers now work on a single edge as well. You pick it from a list that names every edge with its position and its length.",
+      "When you place a hole, the preview shows the outline of its mouth instead of a half-transparent cylinder. The spot that matters stays clear.",
+      "The preview follows the mouse smoothly: the face search under the pointer no longer starts over on every movement.",
+      "The dimension fields move out of the way of the spot where the hole appears, instead of standing on top of it.",
+      "Choosing an operation that is placed in the model starts placing right away; the button in front of it is gone.",
+      "A hole you click on now only offers the actions that do something there — labels and filament assignment used to sit there too.",
+      "Every action on a feature appears once instead of twice, and a block heading above a single row is gone.",
+      "On an existing countersink, *Countersink* can be reached again.",
+      "In the object tree, features of the same kind are only bundled when their size matches too. Ten fillets with different radii are listed separately again.",
+      "Your own building blocks can be opened from the catalogue for editing again, even when the project they came from is gone.",
+      "The tolerance ladder picks up the measured size of the hole you open it on, instead of a fixed default of 6 mm.",
+      "Snap hooks and clamping tongues now calculate with material and spring travel instead of a rule of thumb. Solidon reports an arm that breaks the first time it snaps in.",
+      "The three calibration bodies come without a helper body, and the tolerance ladder prints as two numbered strips that plug into each other.",
+      "Your filament stock has a place of its own: a tile on the start page and a shelf instead of a list, with the fill level drawn as winding on the spool.",
+      "Two spools with the same name are kept apart. Each carries its own remainder, and the opened one is the interesting one.",
+      "When slicing and when handing over, Solidon asks whether it should book the consumption. After slicing that is the measured amount from the print file, otherwise an estimate.",
+      "Every booking can be taken back, every spool carries its history, and only those who explicitly set it up book without being asked.",
+      "Solidon finds what Cura has: printers, process profiles and filaments that stayed invisible before.",
+      "From PrusaSlicer, Solidon picks up the loaded filaments and the printer you last set.",
+      "If your slicer does not know the printer at all, Solidon says so — instead of sending you to a list with nothing in it.",
+      "Switching the quality level takes seconds instead of the better part of a minute, and the window stays usable while it does.",
+      "The Solidon mouse pointer is now used across the whole window and in every dialog, not just in the 3D view.",
+      "Switching the variant in an operation dialog no longer ends the application.",
+      "An open operation dialog no longer survives a change of project unnoticed.",
+      "Long notes are no longer cut off while space next to them stays free.",
+      "Under *What is new* you find the last three versions. The full history of every release is on solidon3d.de and stays available there.",
+      "The images on solidon3d.de show the model at full width instead of a strip between the panels.",
+      "Manual and website name every operation there is, including the new feature editors."
     ],
     "es": [
-      "La vista 3D dibuja con una nueva capa gráfica. Se dirige a la tarjeta gráfica mediante Direct3D 12, Vulkan o Metal y sigue fluida incluso con varios millones de triángulos.",
-      "Los rebajes y las aristas destacan más: la vista oscurece los rincones, traza líneas de profundidad y acierta el punto al que apunta.",
-      "Las aristas de los cuerpos se muestran como una fina malla sobre la superficie, y los rótulos se mantienen quietos en lugar de temblar al girar.",
-      "Los nombres de las características ya no se superponen y sus marcas siguen visibles también en la sección.",
-      "El informe de comprobación y el chat cierran a la derecha con su propio borde. Las acciones para la selección quedan debajo en una tarjeta propia, y entre ambas se ve el modelo.",
-      "Qué acciones aparecen delante depende de la selección: con varios cuerpos Unir, Sustraer e Intersección; con uno solo Hacer un taladro, Vaciar y Separar.",
-      "En un taladro seleccionado aparecen Avellanar y Cerrar un taladro; en una cara, Hacer un taladro, Cortar una cavidad y Desplazar cara.",
-      "Un cuerpo seleccionado muestra allí mismo sus filamentos y permite cambiarlos.",
-      "Unir, Sustraer y Cortar toman todos los cuerpos seleccionados a la vez, no exactamente dos.",
-      "Redondear ya no tumba la aplicación cuando el radio es mayor que la pared que debe redondear.",
-      "Un cuerpo del núcleo exacto sigue siendo exacto si solo lo mueve o lo gira. Redondear y aplicar chaflanes siguen siendo posibles después.",
-      "La herramienta de taladrado sobresale solo en la boca del agujero y rechaza diámetros que superan la pieza muchas veces.",
-      "Un escaneo importado ya no trae cúpulas ni casquillos inventados; hasta ahora surgían por centenares de superficies redondeadas suavemente.",
-      "Varias roscas en una placa se nombran por separado en lugar de reunirse en una sola característica.",
-      "Esfera, toro y cono declaran su curvatura, los centros de cilindro coinciden con sus anillos finales y los pasos de rosca siguen el eje.",
-      "El panel de características ofrece ajustes solo cuando hay un segundo cuerpo seleccionado y conoce cada grupo del núcleo.",
-      "La búsqueda de orientación juzga en dos etapas: doscientas posiciones a partir de las normales, nueve de ellas en el análisis por capas.",
-      "Su barra de progreso llega hasta el final aunque no hubiera nada que cortar.",
-      "El programa de laminado recibe el mundo de la impresora y no el de Solidon, y un perfil propio conserva su base del fabricante.",
-      "Los perfiles de laminado propios van delante del perfil del fabricante con el mismo nombre, y un AppImage encuentra su inventario.",
-      "Un 3MF con muchos niveles de duplicación se rechaza antes de que 432 bytes se conviertan en mil cuerpos.",
-      "Un archivo de proyecto pequeño ya no reclama gigabytes de memoria.",
-      "Un archivo GLB en milímetros llega en milímetros y no como metros.",
-      "Un guardado fallido ya no se lleva la última copia de seguridad, y cancelar cancela de verdad la importación.",
-      "Una herramienta adicional con un campo mal tipado ya no interrumpe toda la serie del agente.",
-      "Para las variantes de boceto el agente indica solo rutas de menú que existen.",
-      "En la generación de imágenes los pesos llegan completos o no llegan, y un solo valor en el campo de estructura ya no provoca una generación no pedida.",
-      "Un modelo local se mide también cuando responde por HTTPS en un puerto propio.",
-      "La versión mínima es ahora macOS 13, igual en paquete, instalador y sitio web.",
-      "Trece bibliotecas están en sus versiones estables más recientes, y el núcleo exacto habla OpenCASCADE 8.",
-      "Un paquete sin ancla de confianza en el sistema trae su propio juego, en cualquier plataforma.",
-      "El manual y las capturas muestran la interfaz renovada en los seis idiomas.",
-      "Los dibujos del manual mantienen el contraste del texto también en sus notas al margen.",
-      "La ventana del manual carga solo sus propias figuras y ninguna imagen externa."
+      "Las contrapiezas, como un pasador y su taladro, se colocan en las dos piezas en un solo paso. Las medidas comunes se indican una vez y una sola deshacer retira la pareja.",
+      "Unir dos contornos admite ahora dos dibujos propios: redondo abajo, angular arriba. Así se construye el adaptador de un tubo a un canal.",
+      "Barrer a lo largo de una trayectoria sigue un recorrido dibujado con varias esquinas y arcos, y no solo un arco uniforme. En las esquinas vivas Solidon corta a inglete.",
+      "El redondeo y el chaflán funcionan también en una sola arista. La elige en una lista que indica cada arista con su posición y su longitud.",
+      "Al colocar un taladro, la vista previa muestra el contorno de la boca en lugar de un cilindro semitransparente. El punto que importa queda despejado.",
+      "La vista previa sigue al ratón con fluidez: la búsqueda de la cara bajo el puntero ya no se rehace en cada movimiento.",
+      "Los campos de medida se apartan del punto donde nace el taladro, en lugar de quedar encima.",
+      "Quien elige una operación que se coloca en el modelo empieza a colocar de inmediato; el botón previo desaparece.",
+      "Un taladro seleccionado ofrece solo las acciones que hacen algo allí; antes aparecían también rotular y asignar filamento.",
+      "Cada acción sobre una característica aparece una vez y no dos, y desaparece el encabezado de bloque sobre una única fila.",
+      "En un avellanado existente vuelve a estar disponible *Avellanar*.",
+      "En el árbol de objetos, las características del mismo tipo solo se agrupan si coincide también su medida. Diez redondeos con radios distintos vuelven a aparecer por separado.",
+      "Sus propios bloques se abren de nuevo desde el catálogo para editarlos, aunque el proyecto del que salieron ya no exista.",
+      "La escalera de tolerancias adopta la medida real del taladro sobre el que la abre, en lugar de un valor fijo de 6 mm.",
+      "Los ganchos y las lengüetas elásticas calculan con el material y el recorrido del muelle, no con una regla aproximada. Solidon avisa del brazo que rompe al primer encaje.",
+      "Los tres cuerpos de calibración nacen sin cuerpo auxiliar, y la escalera de tolerancias se imprime como dos listones numerados que se encajan entre sí.",
+      "Su existencia de filamento tiene sitio propio: un mosaico en la página de inicio y una estantería en lugar de una lista, con el nivel dibujado como bobinado en el carrete.",
+      "Dos bobinas con el mismo nombre se distinguen. Cada una lleva su propio resto, y la empezada es la interesante.",
+      "Al laminar y al entregar, Solidon pregunta si debe descontar el consumo. Tras laminar es la cantidad medida en el archivo de impresión; si no, una estimación.",
+      "Cada apunte se puede deshacer, cada bobina lleva su historial y solo descuenta sin preguntar quien lo configura expresamente.",
+      "Solidon encuentra lo que tiene Cura: impresoras, perfiles de proceso y filamentos que antes quedaban invisibles.",
+      "De PrusaSlicer, Solidon adopta los filamentos cargados y la impresora configurada por última vez.",
+      "Si su laminador no conoce siquiera la impresora, Solidon lo dice, en lugar de enviarle a una lista en la que no hay nada.",
+      "Cambiar el nivel de calidad tarda segundos y no casi un minuto, y la ventana sigue utilizable mientras tanto.",
+      "El puntero de ratón de Solidon se usa en toda la ventana y en cada diálogo, no solo en la vista 3D.",
+      "Cambiar la variante en un diálogo de operación ya no cierra la aplicación.",
+      "Un diálogo de operación abierto ya no sobrevive sin más a un cambio de proyecto.",
+      "Los avisos largos ya no se cortan mientras queda sitio libre al lado.",
+      "En *Novedades* figuran las tres últimas versiones. El historial completo de todas las versiones está en solidon3d.de y sigue disponible allí.",
+      "Las imágenes de solidon3d.de muestran el modelo a todo lo ancho, no como una franja entre los paneles.",
+      "El manual y el sitio web nombran todas las operaciones que existen, incluidos los nuevos editores de características."
     ],
     "fr": [
-      "La vue 3D dessine avec une nouvelle couche graphique. Elle adresse la carte graphique via Direct3D 12, Vulkan ou Metal et reste fluide même à plusieurs millions de triangles.",
-      "Les creux et les arêtes ressortent davantage : la vue assombrit les coins, trace des lignes de profondeur et atteint le point que vous désignez.",
-      "Les arêtes des corps forment un fin maillage au-dessus de la surface, et les étiquettes restent immobiles au lieu de trembler pendant la rotation.",
-      "Les noms des caractéristiques ne se chevauchent plus, et leurs marques restent visibles même dans la coupe.",
-      "Le rapport de contrôle et le chat se terminent à droite par leur propre bord. Les actions pour la sélection se trouvent en dessous dans une carte distincte, et le modèle apparaît entre les deux.",
-      "Les actions mises en avant dépendent de la sélection : avec plusieurs corps Réunir, Soustraire et Intersection, avec un seul Percer un trou, Évidement et Séparer.",
-      "Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.",
-      "Un corps sélectionné affiche ses filaments sur place et permet de les changer.",
-      "Réunir, Soustraire et Couper prennent tous les corps sélectionnés à la fois, et non exactement deux.",
-      "Le congé n'emporte plus l'application quand le rayon dépasse la paroi qu'il doit arrondir.",
-      "Un corps du noyau exact reste exact si vous ne faites que le déplacer ou le tourner. Congés et chanfreins restent possibles ensuite.",
-      "L'outil de perçage ne dépasse plus qu'à l'entrée du trou et refuse les diamètres qui dépassent la pièce de plusieurs fois.",
-      "Un scan importé ne porte plus de dômes ni de cupules inventés ; jusqu'ici ils naissaient par centaines de surfaces arrondies en douceur.",
-      "Plusieurs filetages sur une plaque sont nommés séparément au lieu d'être réunis en une seule caractéristique.",
-      "Sphère, tore et cône déclarent leur courbure, les centres de cylindre correspondent à leurs anneaux d'extrémité, et les pas de filetage suivent l'axe.",
-      "Le panneau des caractéristiques ne propose des ajustements que lorsqu'un second corps est sélectionné, et il connaît chaque groupe du noyau.",
-      "La recherche d'orientation juge en deux étapes : deux cents poses issues des normales, dont neuf dans l'analyse par couches.",
-      "Sa barre de progression va jusqu'au bout, même quand il n'y avait rien à couper.",
-      "Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.",
-      "Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock.",
-      "Un 3MF comportant de nombreux niveaux de duplication est refusé avant que 432 octets ne deviennent mille corps.",
-      "Un petit fichier de projet ne réclame plus des gigaoctets de mémoire.",
-      "Un fichier GLB en millimètres arrive en millimètres et non en mètres.",
-      "Un enregistrement raté n'emporte plus la dernière sauvegarde, et annuler annule vraiment l'import.",
-      "Un outil supplémentaire dont un champ est mal typé n'interrompt plus toute la série de l'agent.",
-      "Pour les variantes d'esquisse, l'agent ne nomme que des chemins de menu qui existent.",
-      "À la génération d'images, les poids arrivent entiers ou pas du tout, et une seule valeur dans le champ de structure ne déclenche plus de génération non demandée.",
-      "Un modèle local est mesuré même lorsqu'il répond en HTTPS sur un port qui lui est propre.",
-      "La version minimale est désormais macOS 13, à l'identique dans le paquet, l'installateur et sur le site.",
-      "Treize bibliothèques sont dans leurs dernières versions stables, et le noyau exact parle OpenCASCADE 8.",
-      "Un paquet sans ancre de confiance dans le système apporte son propre jeu, sur toutes les plateformes.",
-      "Le manuel et les captures montrent l'interface remaniée dans les six langues.",
-      "Les dessins du manuel conservent le contraste du texte jusque dans leurs remarques annexes.",
-      "La fenêtre du manuel ne charge que ses propres figures et aucune image étrangère."
+      "Les contreparties, comme un goujon et son perçage, se posent sur les deux pièces en une seule étape. Les cotes communes se saisissent une fois et une seule annulation retire la paire.",
+      "Le lissage entre deux contours accepte désormais deux dessins distincts : rond en bas, anguleux en haut. C'est ainsi que naît l'adaptateur d'un tube vers une goulotte.",
+      "Le balayage le long d'un chemin suit un tracé dessiné à plusieurs coins et arcs, et non plus un seul arc régulier. Aux angles vifs, Solidon coupe en onglet.",
+      "Le congé et le chanfrein s'appliquent aussi à une seule arête. Vous la choisissez dans une liste qui donne chaque arête avec sa position et sa longueur.",
+      "Lors de la pose d'un perçage, l'aperçu montre le contour de l'entrée au lieu d'un cylindre semi-transparent. L'endroit qui compte reste dégagé.",
+      "L'aperçu suit la souris avec fluidité : la recherche de la face sous le pointeur ne recommence plus à chaque mouvement.",
+      "Les champs de cote s'écartent de l'endroit où naît le perçage, au lieu de se poser dessus.",
+      "Choisir une opération qui se place dans le modèle lance le placement aussitôt ; le bouton d'avant disparaît.",
+      "Un perçage sur lequel vous cliquez ne propose plus que les actions qui y font quelque chose ; le texte et l'affectation de filament s'y trouvaient aussi.",
+      "Chaque action sur une caractéristique apparaît une fois et non deux, et l'en-tête de bloc au-dessus d'une seule ligne disparaît.",
+      "Sur un fraisage existant, *Fraiser* est de nouveau accessible.",
+      "Dans l'arbre des objets, les caractéristiques de même nature ne sont regroupées que si leur cote concorde aussi. Dix congés de rayons différents figurent de nouveau séparément.",
+      "Vos propres blocs s'ouvrent de nouveau depuis le catalogue pour être modifiés, même si le projet dont ils viennent n'existe plus.",
+      "L'échelle de tolérances reprend la cote mesurée du perçage sur lequel vous l'ouvrez, au lieu d'une valeur fixe de 6 mm.",
+      "Les crochets et les languettes élastiques calculent avec la matière et la course du ressort, non avec une règle empirique. Solidon signale un bras qui casse au premier encliquetage.",
+      "Les trois corps d'étalonnage naissent sans corps auxiliaire, et l'échelle de tolérances s'imprime en deux réglettes numérotées qui s'emboîtent.",
+      "Votre stock de filament a sa propre place : une tuile sur la page d'accueil et une étagère au lieu d'une liste, avec le niveau dessiné comme un enroulement sur la bobine.",
+      "Deux bobines de même nom restent distinctes. Chacune porte son propre reste, et c'est celle qui est entamée qui compte.",
+      "Au tranchage et à la remise, Solidon demande s'il doit décompter la consommation. Après le tranchage, c'est la quantité mesurée dans le fichier d'impression, sinon une estimation.",
+      "Chaque écriture est annulable, chaque bobine tient son historique, et seul celui qui le règle expressément décompte sans qu'on lui demande.",
+      "Solidon trouve ce que possède Cura : imprimantes, profils de processus et filaments qui restaient invisibles.",
+      "De PrusaSlicer, Solidon reprend les filaments chargés et la dernière imprimante réglée.",
+      "Si votre trancheur ne connaît pas du tout l'imprimante, Solidon le dit, au lieu de vous envoyer vers une liste où il n'y a rien.",
+      "Changer de niveau de qualité prend des secondes et non près d'une minute, et la fenêtre reste utilisable pendant ce temps.",
+      "Le pointeur de souris de Solidon vaut pour toute la fenêtre et pour chaque boîte de dialogue, et non plus seulement pour la vue 3D.",
+      "Changer de variante dans une boîte de dialogue d'opération ne quitte plus l'application.",
+      "Une boîte de dialogue d'opération ouverte ne survit plus sans bruit à un changement de projet.",
+      "Les notes longues ne sont plus coupées alors que la place reste libre à côté.",
+      "Sous *Nouveautés* figurent les trois dernières versions. L'historique complet de toutes les versions se trouve sur solidon3d.de et y reste consultable.",
+      "Les images de solidon3d.de montrent le modèle sur toute la largeur, et non comme une bande entre les panneaux.",
+      "Le manuel et le site web nomment toutes les opérations existantes, y compris les nouveaux éditeurs de caractéristiques."
     ],
     "it": [
-      "La vista 3D disegna con un nuovo livello grafico. Si rivolge alla scheda grafica tramite Direct3D 12, Vulkan o Metal e resta fluida anche con diversi milioni di triangoli.",
-      "Incavi e spigoli risaltano di più: la vista scurisce gli angoli, traccia linee di profondità e coglie il punto che stai indicando.",
-      "Gli spigoli dei corpi stanno come reticolo fine sopra la superficie, e le etichette restano ferme invece di tremare durante la rotazione.",
-      "I nomi delle caratteristiche non si sovrappongono più e i loro segni restano visibili anche nella sezione.",
-      "Il rapporto di verifica e la chat si chiudono a destra con un bordo proprio. Le azioni per la selezione stanno sotto in una scheda propria e tra le due si vede il modello.",
-      "Quali azioni stiano davanti dipende dalla selezione: con più corpi Unisci, Sottrai e Intersezione, con uno solo Pratica un foro, Svuota e Dividere.",
-      "Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.",
-      "Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli.",
-      "Unisci, Sottrai e Taglia prendono tutti i corpi selezionati in una volta, non esattamente due.",
-      "Raccorda non porta più giù l'applicazione quando il raggio supera la parete che deve arrotondare.",
-      "Un corpo del nucleo esatto resta esatto se lo si sposta o lo si ruota soltanto. Raccordi e smussi restano possibili in seguito.",
-      "L'utensile di foratura sporge solo alla bocca del foro e rifiuta diametri che superano il pezzo di parecchie volte.",
-      "Una scansione importata non porta più cupole e coppe inventate; finora nascevano a centinaia da superfici arrotondate in modo uniforme.",
-      "Più filetti su una piastra vengono nominati singolarmente invece di essere riuniti in una sola caratteristica.",
-      "Sfera, toro e cono dichiarano la loro curvatura, i centri dei cilindri coincidono con gli anelli terminali e i passi di filetto seguono l'asse.",
-      "Il pannello delle caratteristiche propone accoppiamenti solo quando è selezionato un secondo corpo e conosce ogni gruppo del nucleo.",
-      "La ricerca dell'orientamento giudica in due fasi: duecento posizioni dalle normali, nove delle quali nell'analisi a strati.",
-      "La sua barra di avanzamento arriva alla fine anche quando non c'era nulla da tagliare.",
-      "Lo slicer riceve il mondo della stampante e non quello di Solidon, e un profilo proprio mantiene la sua base del produttore.",
-      "I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte.",
-      "Un 3MF con molti livelli di duplicazione viene rifiutato prima che da 432 byte nascano mille corpi.",
-      "Un piccolo file di progetto non richiede più gigabyte di memoria.",
-      "Un file GLB in millimetri arriva in millimetri e non come metri.",
-      "Un salvataggio fallito non porta più via l'ultima copia di sicurezza, e annullare annulla davvero l'importazione.",
-      "Uno strumento aggiuntivo con un campo di tipo errato non interrompe più l'intera serie dell'agente.",
-      "Per le varianti di schizzo l'agente indica solo percorsi di menu che esistono.",
-      "Nella generazione di immagini i pesi arrivano interi o non arrivano, e un singolo valore nel campo della struttura non avvia più una generazione non richiesta.",
-      "Un modello locale viene misurato anche quando risponde via HTTPS su una porta propria.",
-      "La versione minima è ora macOS 13, uguale nel pacchetto, nell'installer e sul sito.",
-      "Tredici librerie sono alle loro ultime versioni stabili, e il nucleo esatto parla OpenCASCADE 8.",
-      "Un pacchetto senza ancora di fiducia nel sistema porta con sé il proprio insieme, su qualunque piattaforma.",
-      "Manuale e schermate mostrano l'interfaccia rielaborata in tutte e sei le lingue.",
-      "I disegni del manuale mantengono il contrasto del testo anche nelle loro note a margine.",
-      "La finestra del manuale carica solo le proprie figure e nessuna immagine estranea."
+      "Le controparti, come una spina e il suo foro, si posano su entrambi i pezzi in un solo passo. Le misure comuni si indicano una volta e un solo annulla ritira la coppia.",
+      "Il loft fra due contorni accetta ora due disegni distinti: tondo sotto, squadrato sopra. Nasce così l'adattatore da un tubo a un canale.",
+      "Lo sweep lungo un percorso segue un tracciato disegnato con più spigoli e archi, non più un solo arco uniforme. Sugli spigoli vivi Solidon taglia a quartabuono.",
+      "Il raccordo e lo smusso agiscono anche su un singolo spigolo. Lo scegliete in un elenco che indica ogni spigolo con la sua posizione e la sua lunghezza.",
+      "Quando posate un foro, l'anteprima mostra il contorno dell'imbocco invece di un cilindro semitrasparente. Il punto che conta resta libero.",
+      "L'anteprima segue il mouse in modo fluido: la ricerca della faccia sotto il puntatore non riparte più a ogni movimento.",
+      "I campi delle misure si scostano dal punto in cui nasce il foro, invece di restarci sopra.",
+      "Chi sceglie un'operazione che si posiziona nel modello inizia subito a posizionare; il pulsante precedente sparisce.",
+      "Un foro su cui fate clic offre solo le azioni che lì servono a qualcosa; prima comparivano anche la scritta e l'assegnazione del filamento.",
+      "Ogni azione su una caratteristica compare una volta e non due, e sparisce l'intestazione di blocco sopra una sola riga.",
+      "Su una svasatura esistente *Svasare* è di nuovo raggiungibile.",
+      "Nell'albero degli oggetti le caratteristiche dello stesso tipo vengono raggruppate solo se coincide anche la misura. Dieci raccordi di raggio diverso compaiono di nuovo singolarmente.",
+      "I vostri blocchi si aprono di nuovo dal catalogo per essere modificati, anche se il progetto da cui provengono non c'è più.",
+      "La scala di tolleranze adotta la misura rilevata del foro su cui la aprite, invece di un valore fisso di 6 mm.",
+      "Ganci e linguette elastiche calcolano con il materiale e la corsa della molla, non con una regola pratica. Solidon segnala un braccio che si rompe al primo scatto.",
+      "I tre corpi di taratura nascono senza corpo ausiliario, e la scala di tolleranze si stampa come due listelli numerati che si innestano fra loro.",
+      "La vostra scorta di filamento ha un posto suo: una tessera nella pagina iniziale e uno scaffale invece di un elenco, con il livello disegnato come avvolgimento sulla bobina.",
+      "Due bobine con lo stesso nome restano distinte. Ognuna porta il proprio residuo, e quella iniziata è quella che interessa.",
+      "Al taglio e alla consegna Solidon chiede se deve scaricare il consumo. Dopo il taglio è la quantità rilevata nel file di stampa, altrimenti una stima.",
+      "Ogni movimento è annullabile, ogni bobina tiene la sua cronologia, e scarica senza chiedere soltanto chi lo imposta espressamente.",
+      "Solidon trova quello che ha Cura: stampanti, profili di processo e filamenti che prima restavano invisibili.",
+      "Da PrusaSlicer Solidon riprende i filamenti caricati e l'ultima stampante impostata.",
+      "Se il vostro slicer non conosce affatto la stampante, Solidon lo dice, invece di mandarvi a un elenco in cui non c'è nulla.",
+      "Cambiare livello di qualità richiede secondi e non quasi un minuto, e la finestra resta utilizzabile nel frattempo.",
+      "Il puntatore del mouse di Solidon vale per l'intera finestra e per ogni finestra di dialogo, non più solo per la vista 3D.",
+      "Cambiare variante in una finestra di operazione non chiude più l'applicazione.",
+      "Una finestra di operazione aperta non sopravvive più in silenzio a un cambio di progetto.",
+      "Le note lunghe non vengono più tagliate mentre accanto resta spazio libero.",
+      "In *Novità* compaiono le ultime tre versioni. La cronologia completa di tutte le versioni sta su solidon3d.de e resta consultabile lì.",
+      "Le immagini di solidon3d.de mostrano il modello per tutta la larghezza, non come una striscia fra i pannelli.",
+      "Manuale e sito web nominano ogni operazione esistente, compresi i nuovi editor delle caratteristiche."
     ],
     "pt": [
-      "A vista 3D desenha com uma nova camada gráfica. Dirige-se à placa gráfica através de Direct3D 12, Vulkan ou Metal e mantém-se fluida mesmo com vários milhões de triângulos.",
-      "Reentrâncias e arestas destacam-se mais: a vista escurece os cantos, traça linhas de profundidade e acerta o ponto para onde aponta.",
-      "As arestas dos corpos ficam como uma malha fina sobre a superfície, e as legendas mantêm-se quietas em vez de tremer ao rodar.",
-      "Os nomes das características já não se sobrepõem e as suas marcas continuam visíveis também no corte.",
-      "O relatório de verificação e o chat fecham à direita com a sua própria borda. As ações para a seleção ficam abaixo num cartão próprio, e entre os dois vê-se o modelo.",
-      "Quais ações ficam à frente depende da seleção: com vários corpos Unir, Subtrair e Interseção; com um só Abrir furo, Esvaziar e Separar.",
-      "Num furo selecionado aparecem Escarear e Fechar furo; numa face, Abrir furo, Cortar bolsa e Deslocar a face.",
-      "Um corpo selecionado mostra ali os seus filamentos e permite alterá-los.",
-      "Unir, Subtrair e Cortar levam todos os corpos selecionados de uma vez, e não exatamente dois.",
-      "Arredondar já não derruba a aplicação quando o raio é maior do que a parede que deve arredondar.",
-      "Um corpo do núcleo exato continua exato se apenas o mover ou rodar. Arredondar e chanfrar continuam possíveis depois.",
-      "A ferramenta de furação só sobressai à entrada do furo e recusa diâmetros que excedem a peça em várias vezes.",
-      "Uma digitalização importada já não traz cúpulas nem taças inventadas; até agora surgiam às centenas de superfícies arredondadas suavemente.",
-      "Várias roscas numa placa são nomeadas separadamente em vez de serem reunidas numa única característica.",
-      "Esfera, toro e cone declaram a sua curvatura, os centros dos cilindros coincidem com os anéis das extremidades e os passos de rosca seguem o eixo.",
-      "O painel de características só oferece ajustes quando há um segundo corpo selecionado e conhece cada grupo do núcleo.",
-      "A busca de orientação julga em duas etapas: duzentas posições a partir das normais, nove delas na análise por camadas.",
-      "A sua barra de progresso vai até ao fim, mesmo quando não havia nada a cortar.",
-      "O laminador recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.",
-      "Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário.",
-      "Um 3MF com muitos níveis de duplicação é recusado antes que 432 bytes se tornem mil corpos.",
-      "Um ficheiro de projeto pequeno já não pede gigabytes de memória.",
-      "Um ficheiro GLB em milímetros chega em milímetros e não como metros.",
-      "Uma gravação falhada já não leva consigo a última cópia de segurança, e cancelar cancela realmente a importação.",
-      "Uma ferramenta adicional com um campo de tipo errado já não interrompe toda a série do agente.",
-      "Para as variantes de esboço o agente indica apenas caminhos de menu que existem.",
-      "Na geração de imagens os pesos chegam inteiros ou não chegam, e um único valor no campo de estrutura já não desencadeia uma geração não pedida.",
-      "Um modelo local é medido também quando responde por HTTPS numa porta própria.",
-      "A versão mínima é agora macOS 13, igual no pacote, no instalador e no site.",
-      "Treze bibliotecas estão nas suas versões estáveis mais recentes, e o núcleo exato fala OpenCASCADE 8.",
-      "Um pacote sem âncora de confiança no sistema traz o seu próprio conjunto, em qualquer plataforma.",
-      "O manual e as capturas mostram a interface renovada nas seis línguas.",
-      "Os desenhos do manual mantêm o contraste do texto também nas suas notas laterais.",
-      "A janela do manual carrega apenas as suas próprias figuras e nenhuma imagem alheia."
+      "As contrapeças, como um pino e o seu furo, assentam nas duas peças num único passo. As medidas comuns indicam-se uma vez e um só desfazer retira o par.",
+      "Unir dois contornos aceita agora dois desenhos próprios: redondo em baixo, angular em cima. É assim que nasce o adaptador de um tubo para uma calha.",
+      "Varrer ao longo de um percurso segue um traçado desenhado com vários cantos e arcos, e não apenas um arco uniforme. Nos cantos vivos, o Solidon corta em meia-esquadria.",
+      "A concordância e o chanfro atuam também numa única aresta. Escolhe-a numa lista que indica cada aresta com a sua posição e o seu comprimento.",
+      "Ao colocar um furo, a pré-visualização mostra o contorno da boca em vez de um cilindro semitransparente. O ponto que interessa fica desimpedido.",
+      "A pré-visualização acompanha o rato com fluidez: a procura da face sob o ponteiro já não recomeça a cada movimento.",
+      "Os campos de medida afastam-se do ponto onde nasce o furo, em vez de ficarem por cima dele.",
+      "Quem escolhe uma operação que se coloca no modelo começa logo a colocar; o botão anterior desaparece.",
+      "Um furo em que clica passa a oferecer apenas as ações que ali fazem alguma coisa; antes apareciam também o letreiro e a atribuição de filamento.",
+      "Cada ação sobre uma característica aparece uma vez e não duas, e desaparece o cabeçalho de bloco por cima de uma única linha.",
+      "Num escareado existente, *Escarear* volta a estar acessível.",
+      "Na árvore de objetos, as características do mesmo tipo só se agrupam se a medida também coincidir. Dez concordâncias de raios diferentes voltam a figurar em separado.",
+      "Os seus próprios blocos abrem-se de novo a partir do catálogo para serem editados, mesmo que o projeto de onde vieram já não exista.",
+      "A escala de tolerâncias adota a medida real do furo em que a abre, em vez de um valor fixo de 6 mm.",
+      "Os ganchos e as linguetas elásticas calculam com o material e o curso da mola, e não com uma regra prática. O Solidon assinala um braço que parte ao primeiro encaixe.",
+      "Os três corpos de calibração nascem sem corpo auxiliar, e a escala de tolerâncias imprime-se como duas réguas numeradas que encaixam uma na outra.",
+      "O seu stock de filamento tem lugar próprio: um mosaico na página inicial e uma estante em vez de uma lista, com o nível desenhado como enrolamento no carrinho.",
+      "Duas bobinas com o mesmo nome mantêm-se distintas. Cada uma leva o seu próprio resto, e a começada é a que interessa.",
+      "Ao fatiar e ao entregar, o Solidon pergunta se deve descontar o consumo. Depois de fatiar é a quantidade medida no ficheiro de impressão, caso contrário uma estimativa.",
+      "Cada lançamento é reversível, cada bobina leva o seu histórico, e só desconta sem perguntar quem o configura expressamente.",
+      "O Solidon encontra o que o Cura tem: impressoras, perfis de processo e filamentos que antes ficavam invisíveis.",
+      "Do PrusaSlicer, o Solidon retoma os filamentos carregados e a impressora definida por último.",
+      "Se o seu fatiador não conhece sequer a impressora, o Solidon di-lo, em vez de o mandar para uma lista onde não está nada.",
+      "Mudar o nível de qualidade demora segundos e não quase um minuto, e a janela mantém-se utilizável entretanto.",
+      "O ponteiro do rato do Solidon vale para toda a janela e para cada caixa de diálogo, e não apenas para a vista 3D.",
+      "Mudar de variante numa caixa de diálogo de operação já não encerra a aplicação.",
+      "Uma caixa de diálogo de operação aberta já não sobrevive em silêncio a uma mudança de projeto.",
+      "As notas longas já não são cortadas enquanto ao lado sobra espaço livre.",
+      "Em *Novidades* constam as três últimas versões. O histórico completo de todas as versões está em solidon3d.de e continua lá disponível.",
+      "As imagens de solidon3d.de mostram o modelo a toda a largura, e não como uma faixa entre os painéis.",
+      "O manual e o site nomeiam todas as operações que existem, incluindo os novos editores de características."
     ]
   },
   "notes_by_language": {
@@ -257,491 +239,473 @@
   "groups": {
     "de": [
       {
-        "title": "Ansicht",
-        "points": [
-          "Die 3D-Ansicht zeichnet mit einer neuen Grafikschicht. Sie spricht die Grafikkarte über Direct3D 12, Vulkan oder Metal an und bleibt auch bei mehreren Millionen Dreiecken flüssig.",
-          "Vertiefungen und Kanten treten plastischer hervor: Die Ansicht dunkelt Ecken ab, zieht Tiefenlinien und trifft beim Anklicken den Punkt, auf den Sie zeigen.",
-          "Körperkanten stehen als feines Drahtgitter über der Fläche, und Beschriftungen bleiben ruhig stehen, statt beim Drehen zu zittern.",
-          "Merkmalsnamen überlagern sich nicht mehr, und ihre Marken bleiben auch im Schnitt sichtbar."
-        ]
-      },
-      {
-        "title": "Handlungen zur Auswahl",
-        "points": [
-          "Prüfbericht und Chat schließen rechts mit ihrem eigenen Rand ab. Die Handlungen zur Auswahl stehen darunter in einer eigenen Karte, und zwischen beiden ist das Modell zu sehen.",
-          "Welche Handlungen vorn stehen, richtet sich nach der Auswahl: bei mehreren Körpern Vereinigen, Abziehen und Schnittmenge, bei einem einzelnen Bohrung setzen, Aushöhlen und Teilen.",
-          "An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.",
-          "Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern."
-        ]
-      },
-      {
         "title": "Konstruieren und Ändern",
         "points": [
-          "Vereinigen, Abziehen und Schneiden nehmen alle gewählten Körper auf einmal, nicht nur genau zwei.",
-          "Verrunden bricht die Anwendung nicht mehr ab, wenn der Radius größer ist als die Wand, die er verrunden soll.",
-          "Ein Körper aus dem exakten Kern bleibt exakt, wenn Sie ihn nur verschieben oder drehen. Verrunden und Fasen bleiben danach möglich.",
-          "Das Bohrwerkzeug ragt nur noch an der Mündung über den Körper hinaus und lehnt Durchmesser ab, die das Teil um ein Vielfaches übersteigen."
+          "Gegenstücke wie Passstift und Bohrung setzen Sie in einem Schritt auf beide Teile. Die gemeinsamen Maße geben Sie einmal ein, und eine Rücknahme nimmt das Paar zurück.",
+          "Zwischen zwei Umrissen aufspannen nimmt zwei eigene Zeichnungen: rund unten, eckig oben. So entsteht der Adapter von einem Rohr auf einen Kanal.",
+          "Entlang einer Bahn führen folgt einer gezeichneten Bahn mit mehreren Ecken und Bögen statt nur einem gleichmäßigen Bogen. An scharfen Ecken schneidet Solidon auf Gehrung.",
+          "Verrunden und Fasen greifen jetzt auch an einer einzelnen Kante. Sie wählen sie in einer Liste, die jede Kante mit ihrer Lage und ihrer Länge nennt."
         ]
       },
       {
-        "title": "Merkmale",
+        "title": "Bohren und Platzieren",
         "points": [
-          "Ein eingelesener Scan trägt keine erfundenen Kuppeln und Pfannen mehr; bisher entstanden sie zu Hunderten aus glatt gerundeten Flächen.",
-          "Mehrere Gewinde auf einer Platte werden einzeln benannt, nicht als ein Merkmal zusammengefasst.",
-          "Kugel, Torus und Kegel weisen ihre Krümmung aus, Zylindermitten stimmen mit den Endringen, und Gewindegänge folgen der Achse.",
-          "Das Merkmalsfeld bietet Passungen nur an, wenn ein zweiter Körper gewählt ist, und kennt jede Gruppe des Kerns."
+          "Beim Setzen einer Bohrung zeigt die Vorschau den Umriss der Mündung statt eines halbdurchsichtigen Zylinders. Die Stelle, auf die es ankommt, bleibt frei.",
+          "Die Vorschau folgt der Maus flüssig: Die Flächensuche unter dem Zeiger rechnet nicht mehr bei jeder Bewegung von vorn.",
+          "Die Maßfelder weichen der Stelle aus, an der die Bohrung entsteht, statt über ihr zu stehen.",
+          "Wer eine Operation wählt, die im Modell platziert wird, platziert sofort; der Knopf davor entfällt."
+        ]
+      },
+      {
+        "title": "Merkmale und Auswahl",
+        "points": [
+          "An einer angeklickten Bohrung stehen nur noch die Handlungen, die dort etwas bewirken — vorher standen dort auch Text aufbringen und Filament zuweisen.",
+          "Jede Handlung an einem Merkmal steht einmal statt zweimal, und ein Bausteindach über einer einzigen Zeile entfällt.",
+          "An einer vorhandenen Senkung ist *Senken* wieder erreichbar.",
+          "Im Objektbaum bündeln sich gleichartige Merkmale nur noch, wenn auch ihr Maß gleich ist. Zehn Hohlkehlen mit verschiedenen Radien stehen wieder einzeln da."
+        ]
+      },
+      {
+        "title": "Bausteine und Passungen",
+        "points": [
+          "Ihre eigenen Bausteine öffnen Sie aus dem Katalog wieder zum Bearbeiten, auch wenn das Projekt, aus dem sie stammen, nicht mehr da ist.",
+          "Die Toleranzleiter übernimmt das gemessene Maß der Bohrung, an der Sie sie öffnen, statt einer festen Vorgabe von 6 mm.",
+          "Schnapphaken und Klemmzungen rechnen mit Material und Federweg statt mit einer Faustregel. Solidon meldet einen Arm, der beim ersten Einrasten bricht.",
+          "Die drei Kalibrierkörper entstehen ohne Hilfskörper, und die Toleranzleiter wird als zwei nummerierte Leisten gedruckt, die ineinandergesteckt werden."
+        ]
+      },
+      {
+        "title": "Filamente und Lager",
+        "points": [
+          "Ihr Filamentbestand hat einen eigenen Ort: eine Kachel auf der Startseite und ein Regal statt einer Liste, mit dem Füllstand als Wicklung auf der gezeichneten Spule.",
+          "Zwei Spulen mit demselben Namen bleiben auseinandergehalten. Jede führt ihren eigenen Rest, und die angebrochene ist die interessante.",
+          "Beim Slicen und beim Übergeben fragt Solidon, ob es den Verbrauch abbuchen soll. Nach dem Slicen ist es die gemessene Menge aus der Druckdatei, sonst eine Schätzung.",
+          "Jede Buchung ist rücknehmbar, jede Spule führt ihren Verlauf, und ohne Rückfrage bucht nur, wer das ausdrücklich einstellt."
         ]
       },
       {
         "title": "Drucken und Vorbereiten",
         "points": [
-          "Die Ausrichtungssuche urteilt zweistufig: zweihundert Lagen aus den Flächennormalen, davon neun in der Schichtanalyse.",
-          "Ihr Fortschrittsbalken läuft bis zum Ende, auch wenn nichts zu schneiden war.",
-          "Der Slicer bekommt die Welt des Druckers und nicht die von Solidon, und ein eigenes Profil behält seine Herstellerbasis.",
-          "Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand."
+          "Solidon findet den Bestand von Cura: Drucker, Prozessprofile und Filamente, die vorher unsichtbar blieben.",
+          "Von PrusaSlicer übernimmt Solidon die eingelegten Filamente und den zuletzt eingestellten Drucker.",
+          "Kennt Ihr Slicer den eingestellten Drucker gar nicht, sagt Solidon das — statt Sie in eine Liste zu schicken, in der nichts steht.",
+          "Die Qualitätsstufe zu wechseln dauert Sekunden statt einer knappen Minute, und das Fenster bleibt dabei bedienbar."
         ]
       },
       {
-        "title": "Dateien und Projekte",
+        "title": "Ansicht und Bedienung",
         "points": [
-          "Eine 3MF mit vielen Verdopplungsebenen wird abgelehnt, bevor aus 432 Byte tausend Körper werden.",
-          "Eine kleine Projektdatei fordert keine Gigabyte Speicher mehr an.",
-          "Eine GLB-Datei in Millimetern kommt in Millimetern an und nicht als Meter.",
-          "Ein gescheitertes Speichern nimmt die letzte Sicherung nicht mehr mit, und Abbrechen bricht den Import wirklich ab."
-        ]
-      },
-      {
-        "title": "Chat und KI",
-        "points": [
-          "Ein Zusatzwerkzeug mit falschem Feldtyp reißt den Zug des Agenten nicht mehr ab.",
-          "Der Agent nennt zu Skizzenvarianten nur Menüwege, die es gibt.",
-          "Bei der Bildgenerierung kommen die Gewichte ganz oder gar nicht an, und ein einzelner Wert im Strukturfeld löst keine unbestellte Erzeugung aus.",
-          "Ein lokales Modell wird auch dann gemessen, wenn es über HTTPS auf einem eigenen Port antwortet."
+          "Der Mauszeiger von Solidon steht im ganzen Fenster und in jedem Dialog, nicht mehr nur in der 3D-Ansicht.",
+          "Ein Wechsel der Variante im Operationsdialog beendet die Anwendung nicht mehr.",
+          "Ein offener Operationsdialog übersteht keinen Projektwechsel mehr unbemerkt.",
+          "Lange Hinweise werden nicht mehr abgeschnitten, während daneben Platz frei bleibt."
         ]
       },
       {
         "title": "Update, Installation und System",
         "points": [
-          "Als Mindestversion gilt macOS 13, gleich in Paket, Installer und auf der Website.",
-          "Dreizehn Bibliotheken stehen auf ihren neuesten stabilen Fassungen, und der exakte Kern spricht OpenCASCADE 8.",
-          "Ein Paket ohne Vertrauensanker im System bringt seinen eigenen Satz mit, gleich auf welcher Plattform."
+          "Unter *Neuerungen* stehen die letzten drei Versionen. Der vollständige Verlauf aller Fassungen steht auf solidon3d.de und bleibt dort nachlesbar."
         ]
       },
       {
         "title": "Handbuch und Website",
         "points": [
-          "Handbuch und Bedienbelege zeigen die überarbeitete Oberfläche in allen sechs Sprachen.",
-          "Die Zeichnungen des Handbuchs halten den Textkontrast auch in ihren Nebenbemerkungen.",
-          "Das Handbuchfenster lädt nur seine eigenen Abbildungen und keine fremden Bilder."
+          "Die Bilder auf solidon3d.de zeigen das Modell in ganzer Breite statt als Streifen zwischen den Panelen.",
+          "Handbuch und Website nennen jede Operation, die es gibt, samt der neuen Merkmalseditoren."
         ]
       }
     ],
     "en": [
       {
-        "title": "View",
-        "points": [
-          "The 3D view now draws with a new graphics layer. It addresses the graphics card through Direct3D 12, Vulkan or Metal and stays fluid even at several million triangles.",
-          "Recesses and edges stand out more clearly: the view darkens corners, draws depth lines and hits the point you are pointing at.",
-          "Body edges sit as a fine wireframe above the surface, and labels hold still instead of jittering while you orbit.",
-          "Feature names no longer overlap, and their markers stay visible inside a section as well."
-        ]
-      },
-      {
-        "title": "Actions for the selection",
-        "points": [
-          "Report and chat now close with their own edge on the right. The actions for the selection sit below them in a card of their own, with the model visible between the two.",
-          "Which actions come first depends on the selection: with several bodies Unite, Subtract and Intersection, with a single one Drill a bore, Hollow out and Split.",
-          "On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.",
-          "A selected body shows its filaments right there and lets you change them."
-        ]
-      },
-      {
         "title": "Building and editing",
         "points": [
-          "Unite, Subtract and Cut now take every selected body at once instead of exactly two.",
-          "Fillet no longer takes the application down when the radius is larger than the wall it is meant to round.",
-          "A body from the exact kernel stays exact when you only move or rotate it. Fillet and chamfer remain available afterwards.",
-          "The drilling tool now protrudes only at the mouth of the bore and rejects diameters that exceed the part many times over."
+          "Counterparts such as a dowel pin and its hole go onto both parts in a single step. You enter the shared dimensions once, and one undo takes the pair back.",
+          "Lofting between two outlines now takes two separate sketches: round at the bottom, square at the top. That is how you build an adapter from a pipe to a duct.",
+          "Sweeping along a path now follows a drawn path with several corners and arcs instead of a single even arc. At sharp corners Solidon mitres the joint.",
+          "Fillets and chamfers now work on a single edge as well. You pick it from a list that names every edge with its position and its length."
         ]
       },
       {
-        "title": "Features",
+        "title": "Drilling and placing",
         "points": [
-          "An imported scan no longer carries invented domes and sockets; until now they arose in their hundreds from smoothly rounded surfaces.",
-          "Several threads on one plate are named individually instead of being merged into a single feature.",
-          "Sphere, torus and cone report their curvature, cylinder centres match their end rings, and thread turns follow the axis.",
-          "The feature panel offers fits only when a second body is selected, and it knows every group the core uses."
+          "When you place a hole, the preview shows the outline of its mouth instead of a half-transparent cylinder. The spot that matters stays clear.",
+          "The preview follows the mouse smoothly: the face search under the pointer no longer starts over on every movement.",
+          "The dimension fields move out of the way of the spot where the hole appears, instead of standing on top of it.",
+          "Choosing an operation that is placed in the model starts placing right away; the button in front of it is gone."
+        ]
+      },
+      {
+        "title": "Features and selection",
+        "points": [
+          "A hole you click on now only offers the actions that do something there — labels and filament assignment used to sit there too.",
+          "Every action on a feature appears once instead of twice, and a block heading above a single row is gone.",
+          "On an existing countersink, *Countersink* can be reached again.",
+          "In the object tree, features of the same kind are only bundled when their size matches too. Ten fillets with different radii are listed separately again."
+        ]
+      },
+      {
+        "title": "Building blocks and fits",
+        "points": [
+          "Your own building blocks can be opened from the catalogue for editing again, even when the project they came from is gone.",
+          "The tolerance ladder picks up the measured size of the hole you open it on, instead of a fixed default of 6 mm.",
+          "Snap hooks and clamping tongues now calculate with material and spring travel instead of a rule of thumb. Solidon reports an arm that breaks the first time it snaps in.",
+          "The three calibration bodies come without a helper body, and the tolerance ladder prints as two numbered strips that plug into each other."
+        ]
+      },
+      {
+        "title": "Filaments and stock",
+        "points": [
+          "Your filament stock has a place of its own: a tile on the start page and a shelf instead of a list, with the fill level drawn as winding on the spool.",
+          "Two spools with the same name are kept apart. Each carries its own remainder, and the opened one is the interesting one.",
+          "When slicing and when handing over, Solidon asks whether it should book the consumption. After slicing that is the measured amount from the print file, otherwise an estimate.",
+          "Every booking can be taken back, every spool carries its history, and only those who explicitly set it up book without being asked."
         ]
       },
       {
         "title": "Printing and preparing",
         "points": [
-          "The orientation search now judges in two stages: two hundred poses from the surface normals, nine of them in the layer analysis.",
-          "Its progress bar runs to the end even when there was nothing to cut.",
-          "The slicer receives the world of the printer instead of the one from Solidon, and a custom profile keeps its vendor base.",
-          "Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory."
+          "Solidon finds what Cura has: printers, process profiles and filaments that stayed invisible before.",
+          "From PrusaSlicer, Solidon picks up the loaded filaments and the printer you last set.",
+          "If your slicer does not know the printer at all, Solidon says so — instead of sending you to a list with nothing in it.",
+          "Switching the quality level takes seconds instead of the better part of a minute, and the window stays usable while it does."
         ]
       },
       {
-        "title": "Files and projects",
+        "title": "View and operation",
         "points": [
-          "A 3MF with many levels of duplication is rejected before 432 bytes turn into a thousand bodies.",
-          "A small project file no longer asks for gigabytes of memory.",
-          "A GLB file in millimetres arrives in millimetres and not as metres.",
-          "A failed save no longer takes the last backup with it, and cancelling really does cancel the import."
-        ]
-      },
-      {
-        "title": "Chat and AI",
-        "points": [
-          "An extra tool with a wrongly typed field no longer tears down the whole run of the agent.",
-          "For sketch variants the agent now names only menu paths that exist.",
-          "In image generation the weights arrive whole or not at all, and a single value in the structure field no longer triggers an unordered generation.",
-          "A local model is measured even when it answers over HTTPS on a port of its own."
+          "The Solidon mouse pointer is now used across the whole window and in every dialog, not just in the 3D view.",
+          "Switching the variant in an operation dialog no longer ends the application.",
+          "An open operation dialog no longer survives a change of project unnoticed.",
+          "Long notes are no longer cut off while space next to them stays free."
         ]
       },
       {
         "title": "Update, installation and system",
         "points": [
-          "The minimum version is now macOS 13, alike in package, installer and on the website.",
-          "Thirteen libraries are on their latest stable releases, and the exact kernel speaks OpenCASCADE 8.",
-          "A package without a trust anchor in the system brings its own set along, on every platform."
+          "Under *What is new* you find the last three versions. The full history of every release is on solidon3d.de and stays available there."
         ]
       },
       {
         "title": "Manual and website",
         "points": [
-          "Manual and screenshots show the reworked interface in all six languages.",
-          "The drawings in the manual keep the text contrast in their side notes as well.",
-          "The manual window loads only its own figures and no external images."
+          "The images on solidon3d.de show the model at full width instead of a strip between the panels.",
+          "Manual and website name every operation there is, including the new feature editors."
         ]
       }
     ],
     "es": [
       {
-        "title": "Vista",
-        "points": [
-          "La vista 3D dibuja con una nueva capa gráfica. Se dirige a la tarjeta gráfica mediante Direct3D 12, Vulkan o Metal y sigue fluida incluso con varios millones de triángulos.",
-          "Los rebajes y las aristas destacan más: la vista oscurece los rincones, traza líneas de profundidad y acierta el punto al que apunta.",
-          "Las aristas de los cuerpos se muestran como una fina malla sobre la superficie, y los rótulos se mantienen quietos en lugar de temblar al girar.",
-          "Los nombres de las características ya no se superponen y sus marcas siguen visibles también en la sección."
-        ]
-      },
-      {
-        "title": "Acciones para la selección",
-        "points": [
-          "El informe de comprobación y el chat cierran a la derecha con su propio borde. Las acciones para la selección quedan debajo en una tarjeta propia, y entre ambas se ve el modelo.",
-          "Qué acciones aparecen delante depende de la selección: con varios cuerpos Unir, Sustraer e Intersección; con uno solo Hacer un taladro, Vaciar y Separar.",
-          "En un taladro seleccionado aparecen Avellanar y Cerrar un taladro; en una cara, Hacer un taladro, Cortar una cavidad y Desplazar cara.",
-          "Un cuerpo seleccionado muestra allí mismo sus filamentos y permite cambiarlos."
-        ]
-      },
-      {
         "title": "Construir y modificar",
         "points": [
-          "Unir, Sustraer y Cortar toman todos los cuerpos seleccionados a la vez, no exactamente dos.",
-          "Redondear ya no tumba la aplicación cuando el radio es mayor que la pared que debe redondear.",
-          "Un cuerpo del núcleo exacto sigue siendo exacto si solo lo mueve o lo gira. Redondear y aplicar chaflanes siguen siendo posibles después.",
-          "La herramienta de taladrado sobresale solo en la boca del agujero y rechaza diámetros que superan la pieza muchas veces."
+          "Las contrapiezas, como un pasador y su taladro, se colocan en las dos piezas en un solo paso. Las medidas comunes se indican una vez y una sola deshacer retira la pareja.",
+          "Unir dos contornos admite ahora dos dibujos propios: redondo abajo, angular arriba. Así se construye el adaptador de un tubo a un canal.",
+          "Barrer a lo largo de una trayectoria sigue un recorrido dibujado con varias esquinas y arcos, y no solo un arco uniforme. En las esquinas vivas Solidon corta a inglete.",
+          "El redondeo y el chaflán funcionan también en una sola arista. La elige en una lista que indica cada arista con su posición y su longitud."
         ]
       },
       {
-        "title": "Características",
+        "title": "Taladrar y colocar",
         "points": [
-          "Un escaneo importado ya no trae cúpulas ni casquillos inventados; hasta ahora surgían por centenares de superficies redondeadas suavemente.",
-          "Varias roscas en una placa se nombran por separado en lugar de reunirse en una sola característica.",
-          "Esfera, toro y cono declaran su curvatura, los centros de cilindro coinciden con sus anillos finales y los pasos de rosca siguen el eje.",
-          "El panel de características ofrece ajustes solo cuando hay un segundo cuerpo seleccionado y conoce cada grupo del núcleo."
+          "Al colocar un taladro, la vista previa muestra el contorno de la boca en lugar de un cilindro semitransparente. El punto que importa queda despejado.",
+          "La vista previa sigue al ratón con fluidez: la búsqueda de la cara bajo el puntero ya no se rehace en cada movimiento.",
+          "Los campos de medida se apartan del punto donde nace el taladro, en lugar de quedar encima.",
+          "Quien elige una operación que se coloca en el modelo empieza a colocar de inmediato; el botón previo desaparece."
+        ]
+      },
+      {
+        "title": "Características y selección",
+        "points": [
+          "Un taladro seleccionado ofrece solo las acciones que hacen algo allí; antes aparecían también rotular y asignar filamento.",
+          "Cada acción sobre una característica aparece una vez y no dos, y desaparece el encabezado de bloque sobre una única fila.",
+          "En un avellanado existente vuelve a estar disponible *Avellanar*.",
+          "En el árbol de objetos, las características del mismo tipo solo se agrupan si coincide también su medida. Diez redondeos con radios distintos vuelven a aparecer por separado."
+        ]
+      },
+      {
+        "title": "Bloques y ajustes",
+        "points": [
+          "Sus propios bloques se abren de nuevo desde el catálogo para editarlos, aunque el proyecto del que salieron ya no exista.",
+          "La escalera de tolerancias adopta la medida real del taladro sobre el que la abre, en lugar de un valor fijo de 6 mm.",
+          "Los ganchos y las lengüetas elásticas calculan con el material y el recorrido del muelle, no con una regla aproximada. Solidon avisa del brazo que rompe al primer encaje.",
+          "Los tres cuerpos de calibración nacen sin cuerpo auxiliar, y la escalera de tolerancias se imprime como dos listones numerados que se encajan entre sí."
+        ]
+      },
+      {
+        "title": "Filamentos y almacén",
+        "points": [
+          "Su existencia de filamento tiene sitio propio: un mosaico en la página de inicio y una estantería en lugar de una lista, con el nivel dibujado como bobinado en el carrete.",
+          "Dos bobinas con el mismo nombre se distinguen. Cada una lleva su propio resto, y la empezada es la interesante.",
+          "Al laminar y al entregar, Solidon pregunta si debe descontar el consumo. Tras laminar es la cantidad medida en el archivo de impresión; si no, una estimación.",
+          "Cada apunte se puede deshacer, cada bobina lleva su historial y solo descuenta sin preguntar quien lo configura expresamente."
         ]
       },
       {
         "title": "Imprimir y preparar",
         "points": [
-          "La búsqueda de orientación juzga en dos etapas: doscientas posiciones a partir de las normales, nueve de ellas en el análisis por capas.",
-          "Su barra de progreso llega hasta el final aunque no hubiera nada que cortar.",
-          "El programa de laminado recibe el mundo de la impresora y no el de Solidon, y un perfil propio conserva su base del fabricante.",
-          "Los perfiles de laminado propios van delante del perfil del fabricante con el mismo nombre, y un AppImage encuentra su inventario."
+          "Solidon encuentra lo que tiene Cura: impresoras, perfiles de proceso y filamentos que antes quedaban invisibles.",
+          "De PrusaSlicer, Solidon adopta los filamentos cargados y la impresora configurada por última vez.",
+          "Si su laminador no conoce siquiera la impresora, Solidon lo dice, en lugar de enviarle a una lista en la que no hay nada.",
+          "Cambiar el nivel de calidad tarda segundos y no casi un minuto, y la ventana sigue utilizable mientras tanto."
         ]
       },
       {
-        "title": "Archivos y proyectos",
+        "title": "Vista y manejo",
         "points": [
-          "Un 3MF con muchos niveles de duplicación se rechaza antes de que 432 bytes se conviertan en mil cuerpos.",
-          "Un archivo de proyecto pequeño ya no reclama gigabytes de memoria.",
-          "Un archivo GLB en milímetros llega en milímetros y no como metros.",
-          "Un guardado fallido ya no se lleva la última copia de seguridad, y cancelar cancela de verdad la importación."
-        ]
-      },
-      {
-        "title": "Chat e IA",
-        "points": [
-          "Una herramienta adicional con un campo mal tipado ya no interrumpe toda la serie del agente.",
-          "Para las variantes de boceto el agente indica solo rutas de menú que existen.",
-          "En la generación de imágenes los pesos llegan completos o no llegan, y un solo valor en el campo de estructura ya no provoca una generación no pedida.",
-          "Un modelo local se mide también cuando responde por HTTPS en un puerto propio."
+          "El puntero de ratón de Solidon se usa en toda la ventana y en cada diálogo, no solo en la vista 3D.",
+          "Cambiar la variante en un diálogo de operación ya no cierra la aplicación.",
+          "Un diálogo de operación abierto ya no sobrevive sin más a un cambio de proyecto.",
+          "Los avisos largos ya no se cortan mientras queda sitio libre al lado."
         ]
       },
       {
         "title": "Actualización, instalación y sistema",
         "points": [
-          "La versión mínima es ahora macOS 13, igual en paquete, instalador y sitio web.",
-          "Trece bibliotecas están en sus versiones estables más recientes, y el núcleo exacto habla OpenCASCADE 8.",
-          "Un paquete sin ancla de confianza en el sistema trae su propio juego, en cualquier plataforma."
+          "En *Novedades* figuran las tres últimas versiones. El historial completo de todas las versiones está en solidon3d.de y sigue disponible allí."
         ]
       },
       {
         "title": "Manual y sitio web",
         "points": [
-          "El manual y las capturas muestran la interfaz renovada en los seis idiomas.",
-          "Los dibujos del manual mantienen el contraste del texto también en sus notas al margen.",
-          "La ventana del manual carga solo sus propias figuras y ninguna imagen externa."
+          "Las imágenes de solidon3d.de muestran el modelo a todo lo ancho, no como una franja entre los paneles.",
+          "El manual y el sitio web nombran todas las operaciones que existen, incluidos los nuevos editores de características."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Vue",
-        "points": [
-          "La vue 3D dessine avec une nouvelle couche graphique. Elle adresse la carte graphique via Direct3D 12, Vulkan ou Metal et reste fluide même à plusieurs millions de triangles.",
-          "Les creux et les arêtes ressortent davantage : la vue assombrit les coins, trace des lignes de profondeur et atteint le point que vous désignez.",
-          "Les arêtes des corps forment un fin maillage au-dessus de la surface, et les étiquettes restent immobiles au lieu de trembler pendant la rotation.",
-          "Les noms des caractéristiques ne se chevauchent plus, et leurs marques restent visibles même dans la coupe."
-        ]
-      },
-      {
-        "title": "Actions pour la sélection",
-        "points": [
-          "Le rapport de contrôle et le chat se terminent à droite par leur propre bord. Les actions pour la sélection se trouvent en dessous dans une carte distincte, et le modèle apparaît entre les deux.",
-          "Les actions mises en avant dépendent de la sélection : avec plusieurs corps Réunir, Soustraire et Intersection, avec un seul Percer un trou, Évidement et Séparer.",
-          "Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.",
-          "Un corps sélectionné affiche ses filaments sur place et permet de les changer."
-        ]
-      },
-      {
         "title": "Construire et modifier",
         "points": [
-          "Réunir, Soustraire et Couper prennent tous les corps sélectionnés à la fois, et non exactement deux.",
-          "Le congé n'emporte plus l'application quand le rayon dépasse la paroi qu'il doit arrondir.",
-          "Un corps du noyau exact reste exact si vous ne faites que le déplacer ou le tourner. Congés et chanfreins restent possibles ensuite.",
-          "L'outil de perçage ne dépasse plus qu'à l'entrée du trou et refuse les diamètres qui dépassent la pièce de plusieurs fois."
+          "Les contreparties, comme un goujon et son perçage, se posent sur les deux pièces en une seule étape. Les cotes communes se saisissent une fois et une seule annulation retire la paire.",
+          "Le lissage entre deux contours accepte désormais deux dessins distincts : rond en bas, anguleux en haut. C'est ainsi que naît l'adaptateur d'un tube vers une goulotte.",
+          "Le balayage le long d'un chemin suit un tracé dessiné à plusieurs coins et arcs, et non plus un seul arc régulier. Aux angles vifs, Solidon coupe en onglet.",
+          "Le congé et le chanfrein s'appliquent aussi à une seule arête. Vous la choisissez dans une liste qui donne chaque arête avec sa position et sa longueur."
         ]
       },
       {
-        "title": "Caractéristiques",
+        "title": "Percer et placer",
         "points": [
-          "Un scan importé ne porte plus de dômes ni de cupules inventés ; jusqu'ici ils naissaient par centaines de surfaces arrondies en douceur.",
-          "Plusieurs filetages sur une plaque sont nommés séparément au lieu d'être réunis en une seule caractéristique.",
-          "Sphère, tore et cône déclarent leur courbure, les centres de cylindre correspondent à leurs anneaux d'extrémité, et les pas de filetage suivent l'axe.",
-          "Le panneau des caractéristiques ne propose des ajustements que lorsqu'un second corps est sélectionné, et il connaît chaque groupe du noyau."
+          "Lors de la pose d'un perçage, l'aperçu montre le contour de l'entrée au lieu d'un cylindre semi-transparent. L'endroit qui compte reste dégagé.",
+          "L'aperçu suit la souris avec fluidité : la recherche de la face sous le pointeur ne recommence plus à chaque mouvement.",
+          "Les champs de cote s'écartent de l'endroit où naît le perçage, au lieu de se poser dessus.",
+          "Choisir une opération qui se place dans le modèle lance le placement aussitôt ; le bouton d'avant disparaît."
+        ]
+      },
+      {
+        "title": "Caractéristiques et sélection",
+        "points": [
+          "Un perçage sur lequel vous cliquez ne propose plus que les actions qui y font quelque chose ; le texte et l'affectation de filament s'y trouvaient aussi.",
+          "Chaque action sur une caractéristique apparaît une fois et non deux, et l'en-tête de bloc au-dessus d'une seule ligne disparaît.",
+          "Sur un fraisage existant, *Fraiser* est de nouveau accessible.",
+          "Dans l'arbre des objets, les caractéristiques de même nature ne sont regroupées que si leur cote concorde aussi. Dix congés de rayons différents figurent de nouveau séparément."
+        ]
+      },
+      {
+        "title": "Blocs et ajustements",
+        "points": [
+          "Vos propres blocs s'ouvrent de nouveau depuis le catalogue pour être modifiés, même si le projet dont ils viennent n'existe plus.",
+          "L'échelle de tolérances reprend la cote mesurée du perçage sur lequel vous l'ouvrez, au lieu d'une valeur fixe de 6 mm.",
+          "Les crochets et les languettes élastiques calculent avec la matière et la course du ressort, non avec une règle empirique. Solidon signale un bras qui casse au premier encliquetage.",
+          "Les trois corps d'étalonnage naissent sans corps auxiliaire, et l'échelle de tolérances s'imprime en deux réglettes numérotées qui s'emboîtent."
+        ]
+      },
+      {
+        "title": "Filaments et stock",
+        "points": [
+          "Votre stock de filament a sa propre place : une tuile sur la page d'accueil et une étagère au lieu d'une liste, avec le niveau dessiné comme un enroulement sur la bobine.",
+          "Deux bobines de même nom restent distinctes. Chacune porte son propre reste, et c'est celle qui est entamée qui compte.",
+          "Au tranchage et à la remise, Solidon demande s'il doit décompter la consommation. Après le tranchage, c'est la quantité mesurée dans le fichier d'impression, sinon une estimation.",
+          "Chaque écriture est annulable, chaque bobine tient son historique, et seul celui qui le règle expressément décompte sans qu'on lui demande."
         ]
       },
       {
         "title": "Impression et préparation",
         "points": [
-          "La recherche d'orientation juge en deux étapes : deux cents poses issues des normales, dont neuf dans l'analyse par couches.",
-          "Sa barre de progression va jusqu'au bout, même quand il n'y avait rien à couper.",
-          "Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.",
-          "Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock."
+          "Solidon trouve ce que possède Cura : imprimantes, profils de processus et filaments qui restaient invisibles.",
+          "De PrusaSlicer, Solidon reprend les filaments chargés et la dernière imprimante réglée.",
+          "Si votre trancheur ne connaît pas du tout l'imprimante, Solidon le dit, au lieu de vous envoyer vers une liste où il n'y a rien.",
+          "Changer de niveau de qualité prend des secondes et non près d'une minute, et la fenêtre reste utilisable pendant ce temps."
         ]
       },
       {
-        "title": "Fichiers et projets",
+        "title": "Vue et utilisation",
         "points": [
-          "Un 3MF comportant de nombreux niveaux de duplication est refusé avant que 432 octets ne deviennent mille corps.",
-          "Un petit fichier de projet ne réclame plus des gigaoctets de mémoire.",
-          "Un fichier GLB en millimètres arrive en millimètres et non en mètres.",
-          "Un enregistrement raté n'emporte plus la dernière sauvegarde, et annuler annule vraiment l'import."
-        ]
-      },
-      {
-        "title": "Chat et IA",
-        "points": [
-          "Un outil supplémentaire dont un champ est mal typé n'interrompt plus toute la série de l'agent.",
-          "Pour les variantes d'esquisse, l'agent ne nomme que des chemins de menu qui existent.",
-          "À la génération d'images, les poids arrivent entiers ou pas du tout, et une seule valeur dans le champ de structure ne déclenche plus de génération non demandée.",
-          "Un modèle local est mesuré même lorsqu'il répond en HTTPS sur un port qui lui est propre."
+          "Le pointeur de souris de Solidon vaut pour toute la fenêtre et pour chaque boîte de dialogue, et non plus seulement pour la vue 3D.",
+          "Changer de variante dans une boîte de dialogue d'opération ne quitte plus l'application.",
+          "Une boîte de dialogue d'opération ouverte ne survit plus sans bruit à un changement de projet.",
+          "Les notes longues ne sont plus coupées alors que la place reste libre à côté."
         ]
       },
       {
         "title": "Mise à jour, installation et système",
         "points": [
-          "La version minimale est désormais macOS 13, à l'identique dans le paquet, l'installateur et sur le site.",
-          "Treize bibliothèques sont dans leurs dernières versions stables, et le noyau exact parle OpenCASCADE 8.",
-          "Un paquet sans ancre de confiance dans le système apporte son propre jeu, sur toutes les plateformes."
+          "Sous *Nouveautés* figurent les trois dernières versions. L'historique complet de toutes les versions se trouve sur solidon3d.de et y reste consultable."
         ]
       },
       {
         "title": "Manuel et site web",
         "points": [
-          "Le manuel et les captures montrent l'interface remaniée dans les six langues.",
-          "Les dessins du manuel conservent le contraste du texte jusque dans leurs remarques annexes.",
-          "La fenêtre du manuel ne charge que ses propres figures et aucune image étrangère."
+          "Les images de solidon3d.de montrent le modèle sur toute la largeur, et non comme une bande entre les panneaux.",
+          "Le manuel et le site web nomment toutes les opérations existantes, y compris les nouveaux éditeurs de caractéristiques."
         ]
       }
     ],
     "it": [
       {
-        "title": "Vista",
-        "points": [
-          "La vista 3D disegna con un nuovo livello grafico. Si rivolge alla scheda grafica tramite Direct3D 12, Vulkan o Metal e resta fluida anche con diversi milioni di triangoli.",
-          "Incavi e spigoli risaltano di più: la vista scurisce gli angoli, traccia linee di profondità e coglie il punto che stai indicando.",
-          "Gli spigoli dei corpi stanno come reticolo fine sopra la superficie, e le etichette restano ferme invece di tremare durante la rotazione.",
-          "I nomi delle caratteristiche non si sovrappongono più e i loro segni restano visibili anche nella sezione."
-        ]
-      },
-      {
-        "title": "Azioni per la selezione",
-        "points": [
-          "Il rapporto di verifica e la chat si chiudono a destra con un bordo proprio. Le azioni per la selezione stanno sotto in una scheda propria e tra le due si vede il modello.",
-          "Quali azioni stiano davanti dipende dalla selezione: con più corpi Unisci, Sottrai e Intersezione, con uno solo Pratica un foro, Svuota e Dividere.",
-          "Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.",
-          "Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli."
-        ]
-      },
-      {
         "title": "Costruire e modificare",
         "points": [
-          "Unisci, Sottrai e Taglia prendono tutti i corpi selezionati in una volta, non esattamente due.",
-          "Raccorda non porta più giù l'applicazione quando il raggio supera la parete che deve arrotondare.",
-          "Un corpo del nucleo esatto resta esatto se lo si sposta o lo si ruota soltanto. Raccordi e smussi restano possibili in seguito.",
-          "L'utensile di foratura sporge solo alla bocca del foro e rifiuta diametri che superano il pezzo di parecchie volte."
+          "Le controparti, come una spina e il suo foro, si posano su entrambi i pezzi in un solo passo. Le misure comuni si indicano una volta e un solo annulla ritira la coppia.",
+          "Il loft fra due contorni accetta ora due disegni distinti: tondo sotto, squadrato sopra. Nasce così l'adattatore da un tubo a un canale.",
+          "Lo sweep lungo un percorso segue un tracciato disegnato con più spigoli e archi, non più un solo arco uniforme. Sugli spigoli vivi Solidon taglia a quartabuono.",
+          "Il raccordo e lo smusso agiscono anche su un singolo spigolo. Lo scegliete in un elenco che indica ogni spigolo con la sua posizione e la sua lunghezza."
         ]
       },
       {
-        "title": "Caratteristiche",
+        "title": "Forare e posizionare",
         "points": [
-          "Una scansione importata non porta più cupole e coppe inventate; finora nascevano a centinaia da superfici arrotondate in modo uniforme.",
-          "Più filetti su una piastra vengono nominati singolarmente invece di essere riuniti in una sola caratteristica.",
-          "Sfera, toro e cono dichiarano la loro curvatura, i centri dei cilindri coincidono con gli anelli terminali e i passi di filetto seguono l'asse.",
-          "Il pannello delle caratteristiche propone accoppiamenti solo quando è selezionato un secondo corpo e conosce ogni gruppo del nucleo."
+          "Quando posate un foro, l'anteprima mostra il contorno dell'imbocco invece di un cilindro semitrasparente. Il punto che conta resta libero.",
+          "L'anteprima segue il mouse in modo fluido: la ricerca della faccia sotto il puntatore non riparte più a ogni movimento.",
+          "I campi delle misure si scostano dal punto in cui nasce il foro, invece di restarci sopra.",
+          "Chi sceglie un'operazione che si posiziona nel modello inizia subito a posizionare; il pulsante precedente sparisce."
+        ]
+      },
+      {
+        "title": "Caratteristiche e selezione",
+        "points": [
+          "Un foro su cui fate clic offre solo le azioni che lì servono a qualcosa; prima comparivano anche la scritta e l'assegnazione del filamento.",
+          "Ogni azione su una caratteristica compare una volta e non due, e sparisce l'intestazione di blocco sopra una sola riga.",
+          "Su una svasatura esistente *Svasare* è di nuovo raggiungibile.",
+          "Nell'albero degli oggetti le caratteristiche dello stesso tipo vengono raggruppate solo se coincide anche la misura. Dieci raccordi di raggio diverso compaiono di nuovo singolarmente."
+        ]
+      },
+      {
+        "title": "Blocchi e accoppiamenti",
+        "points": [
+          "I vostri blocchi si aprono di nuovo dal catalogo per essere modificati, anche se il progetto da cui provengono non c'è più.",
+          "La scala di tolleranze adotta la misura rilevata del foro su cui la aprite, invece di un valore fisso di 6 mm.",
+          "Ganci e linguette elastiche calcolano con il materiale e la corsa della molla, non con una regola pratica. Solidon segnala un braccio che si rompe al primo scatto.",
+          "I tre corpi di taratura nascono senza corpo ausiliario, e la scala di tolleranze si stampa come due listelli numerati che si innestano fra loro."
+        ]
+      },
+      {
+        "title": "Filamenti e magazzino",
+        "points": [
+          "La vostra scorta di filamento ha un posto suo: una tessera nella pagina iniziale e uno scaffale invece di un elenco, con il livello disegnato come avvolgimento sulla bobina.",
+          "Due bobine con lo stesso nome restano distinte. Ognuna porta il proprio residuo, e quella iniziata è quella che interessa.",
+          "Al taglio e alla consegna Solidon chiede se deve scaricare il consumo. Dopo il taglio è la quantità rilevata nel file di stampa, altrimenti una stima.",
+          "Ogni movimento è annullabile, ogni bobina tiene la sua cronologia, e scarica senza chiedere soltanto chi lo imposta espressamente."
         ]
       },
       {
         "title": "Stampa e preparazione",
         "points": [
-          "La ricerca dell'orientamento giudica in due fasi: duecento posizioni dalle normali, nove delle quali nell'analisi a strati.",
-          "La sua barra di avanzamento arriva alla fine anche quando non c'era nulla da tagliare.",
-          "Lo slicer riceve il mondo della stampante e non quello di Solidon, e un profilo proprio mantiene la sua base del produttore.",
-          "I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte."
+          "Solidon trova quello che ha Cura: stampanti, profili di processo e filamenti che prima restavano invisibili.",
+          "Da PrusaSlicer Solidon riprende i filamenti caricati e l'ultima stampante impostata.",
+          "Se il vostro slicer non conosce affatto la stampante, Solidon lo dice, invece di mandarvi a un elenco in cui non c'è nulla.",
+          "Cambiare livello di qualità richiede secondi e non quasi un minuto, e la finestra resta utilizzabile nel frattempo."
         ]
       },
       {
-        "title": "File e progetti",
+        "title": "Vista e utilizzo",
         "points": [
-          "Un 3MF con molti livelli di duplicazione viene rifiutato prima che da 432 byte nascano mille corpi.",
-          "Un piccolo file di progetto non richiede più gigabyte di memoria.",
-          "Un file GLB in millimetri arriva in millimetri e non come metri.",
-          "Un salvataggio fallito non porta più via l'ultima copia di sicurezza, e annullare annulla davvero l'importazione."
-        ]
-      },
-      {
-        "title": "Chat e IA",
-        "points": [
-          "Uno strumento aggiuntivo con un campo di tipo errato non interrompe più l'intera serie dell'agente.",
-          "Per le varianti di schizzo l'agente indica solo percorsi di menu che esistono.",
-          "Nella generazione di immagini i pesi arrivano interi o non arrivano, e un singolo valore nel campo della struttura non avvia più una generazione non richiesta.",
-          "Un modello locale viene misurato anche quando risponde via HTTPS su una porta propria."
+          "Il puntatore del mouse di Solidon vale per l'intera finestra e per ogni finestra di dialogo, non più solo per la vista 3D.",
+          "Cambiare variante in una finestra di operazione non chiude più l'applicazione.",
+          "Una finestra di operazione aperta non sopravvive più in silenzio a un cambio di progetto.",
+          "Le note lunghe non vengono più tagliate mentre accanto resta spazio libero."
         ]
       },
       {
         "title": "Aggiornamento, installazione e sistema",
         "points": [
-          "La versione minima è ora macOS 13, uguale nel pacchetto, nell'installer e sul sito.",
-          "Tredici librerie sono alle loro ultime versioni stabili, e il nucleo esatto parla OpenCASCADE 8.",
-          "Un pacchetto senza ancora di fiducia nel sistema porta con sé il proprio insieme, su qualunque piattaforma."
+          "In *Novità* compaiono le ultime tre versioni. La cronologia completa di tutte le versioni sta su solidon3d.de e resta consultabile lì."
         ]
       },
       {
         "title": "Manuale e sito web",
         "points": [
-          "Manuale e schermate mostrano l'interfaccia rielaborata in tutte e sei le lingue.",
-          "I disegni del manuale mantengono il contrasto del testo anche nelle loro note a margine.",
-          "La finestra del manuale carica solo le proprie figure e nessuna immagine estranea."
+          "Le immagini di solidon3d.de mostrano il modello per tutta la larghezza, non come una striscia fra i pannelli.",
+          "Manuale e sito web nominano ogni operazione esistente, compresi i nuovi editor delle caratteristiche."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Vista",
-        "points": [
-          "A vista 3D desenha com uma nova camada gráfica. Dirige-se à placa gráfica através de Direct3D 12, Vulkan ou Metal e mantém-se fluida mesmo com vários milhões de triângulos.",
-          "Reentrâncias e arestas destacam-se mais: a vista escurece os cantos, traça linhas de profundidade e acerta o ponto para onde aponta.",
-          "As arestas dos corpos ficam como uma malha fina sobre a superfície, e as legendas mantêm-se quietas em vez de tremer ao rodar.",
-          "Os nomes das características já não se sobrepõem e as suas marcas continuam visíveis também no corte."
-        ]
-      },
-      {
-        "title": "Ações para a seleção",
-        "points": [
-          "O relatório de verificação e o chat fecham à direita com a sua própria borda. As ações para a seleção ficam abaixo num cartão próprio, e entre os dois vê-se o modelo.",
-          "Quais ações ficam à frente depende da seleção: com vários corpos Unir, Subtrair e Interseção; com um só Abrir furo, Esvaziar e Separar.",
-          "Num furo selecionado aparecem Escarear e Fechar furo; numa face, Abrir furo, Cortar bolsa e Deslocar a face.",
-          "Um corpo selecionado mostra ali os seus filamentos e permite alterá-los."
-        ]
-      },
-      {
         "title": "Construir e alterar",
         "points": [
-          "Unir, Subtrair e Cortar levam todos os corpos selecionados de uma vez, e não exatamente dois.",
-          "Arredondar já não derruba a aplicação quando o raio é maior do que a parede que deve arredondar.",
-          "Um corpo do núcleo exato continua exato se apenas o mover ou rodar. Arredondar e chanfrar continuam possíveis depois.",
-          "A ferramenta de furação só sobressai à entrada do furo e recusa diâmetros que excedem a peça em várias vezes."
+          "As contrapeças, como um pino e o seu furo, assentam nas duas peças num único passo. As medidas comuns indicam-se uma vez e um só desfazer retira o par.",
+          "Unir dois contornos aceita agora dois desenhos próprios: redondo em baixo, angular em cima. É assim que nasce o adaptador de um tubo para uma calha.",
+          "Varrer ao longo de um percurso segue um traçado desenhado com vários cantos e arcos, e não apenas um arco uniforme. Nos cantos vivos, o Solidon corta em meia-esquadria.",
+          "A concordância e o chanfro atuam também numa única aresta. Escolhe-a numa lista que indica cada aresta com a sua posição e o seu comprimento."
         ]
       },
       {
-        "title": "Características",
+        "title": "Furar e colocar",
         "points": [
-          "Uma digitalização importada já não traz cúpulas nem taças inventadas; até agora surgiam às centenas de superfícies arredondadas suavemente.",
-          "Várias roscas numa placa são nomeadas separadamente em vez de serem reunidas numa única característica.",
-          "Esfera, toro e cone declaram a sua curvatura, os centros dos cilindros coincidem com os anéis das extremidades e os passos de rosca seguem o eixo.",
-          "O painel de características só oferece ajustes quando há um segundo corpo selecionado e conhece cada grupo do núcleo."
+          "Ao colocar um furo, a pré-visualização mostra o contorno da boca em vez de um cilindro semitransparente. O ponto que interessa fica desimpedido.",
+          "A pré-visualização acompanha o rato com fluidez: a procura da face sob o ponteiro já não recomeça a cada movimento.",
+          "Os campos de medida afastam-se do ponto onde nasce o furo, em vez de ficarem por cima dele.",
+          "Quem escolhe uma operação que se coloca no modelo começa logo a colocar; o botão anterior desaparece."
+        ]
+      },
+      {
+        "title": "Características e seleção",
+        "points": [
+          "Um furo em que clica passa a oferecer apenas as ações que ali fazem alguma coisa; antes apareciam também o letreiro e a atribuição de filamento.",
+          "Cada ação sobre uma característica aparece uma vez e não duas, e desaparece o cabeçalho de bloco por cima de uma única linha.",
+          "Num escareado existente, *Escarear* volta a estar acessível.",
+          "Na árvore de objetos, as características do mesmo tipo só se agrupam se a medida também coincidir. Dez concordâncias de raios diferentes voltam a figurar em separado."
+        ]
+      },
+      {
+        "title": "Blocos e ajustes",
+        "points": [
+          "Os seus próprios blocos abrem-se de novo a partir do catálogo para serem editados, mesmo que o projeto de onde vieram já não exista.",
+          "A escala de tolerâncias adota a medida real do furo em que a abre, em vez de um valor fixo de 6 mm.",
+          "Os ganchos e as linguetas elásticas calculam com o material e o curso da mola, e não com uma regra prática. O Solidon assinala um braço que parte ao primeiro encaixe.",
+          "Os três corpos de calibração nascem sem corpo auxiliar, e a escala de tolerâncias imprime-se como duas réguas numeradas que encaixam uma na outra."
+        ]
+      },
+      {
+        "title": "Filamentos e armazém",
+        "points": [
+          "O seu stock de filamento tem lugar próprio: um mosaico na página inicial e uma estante em vez de uma lista, com o nível desenhado como enrolamento no carrinho.",
+          "Duas bobinas com o mesmo nome mantêm-se distintas. Cada uma leva o seu próprio resto, e a começada é a que interessa.",
+          "Ao fatiar e ao entregar, o Solidon pergunta se deve descontar o consumo. Depois de fatiar é a quantidade medida no ficheiro de impressão, caso contrário uma estimativa.",
+          "Cada lançamento é reversível, cada bobina leva o seu histórico, e só desconta sem perguntar quem o configura expressamente."
         ]
       },
       {
         "title": "Impressão e preparação",
         "points": [
-          "A busca de orientação julga em duas etapas: duzentas posições a partir das normais, nove delas na análise por camadas.",
-          "A sua barra de progresso vai até ao fim, mesmo quando não havia nada a cortar.",
-          "O laminador recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.",
-          "Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário."
+          "O Solidon encontra o que o Cura tem: impressoras, perfis de processo e filamentos que antes ficavam invisíveis.",
+          "Do PrusaSlicer, o Solidon retoma os filamentos carregados e a impressora definida por último.",
+          "Se o seu fatiador não conhece sequer a impressora, o Solidon di-lo, em vez de o mandar para uma lista onde não está nada.",
+          "Mudar o nível de qualidade demora segundos e não quase um minuto, e a janela mantém-se utilizável entretanto."
         ]
       },
       {
-        "title": "Ficheiros e projetos",
+        "title": "Vista e utilização",
         "points": [
-          "Um 3MF com muitos níveis de duplicação é recusado antes que 432 bytes se tornem mil corpos.",
-          "Um ficheiro de projeto pequeno já não pede gigabytes de memória.",
-          "Um ficheiro GLB em milímetros chega em milímetros e não como metros.",
-          "Uma gravação falhada já não leva consigo a última cópia de segurança, e cancelar cancela realmente a importação."
-        ]
-      },
-      {
-        "title": "Chat e IA",
-        "points": [
-          "Uma ferramenta adicional com um campo de tipo errado já não interrompe toda a série do agente.",
-          "Para as variantes de esboço o agente indica apenas caminhos de menu que existem.",
-          "Na geração de imagens os pesos chegam inteiros ou não chegam, e um único valor no campo de estrutura já não desencadeia uma geração não pedida.",
-          "Um modelo local é medido também quando responde por HTTPS numa porta própria."
+          "O ponteiro do rato do Solidon vale para toda a janela e para cada caixa de diálogo, e não apenas para a vista 3D.",
+          "Mudar de variante numa caixa de diálogo de operação já não encerra a aplicação.",
+          "Uma caixa de diálogo de operação aberta já não sobrevive em silêncio a uma mudança de projeto.",
+          "As notas longas já não são cortadas enquanto ao lado sobra espaço livre."
         ]
       },
       {
         "title": "Atualização, instalação e sistema",
         "points": [
-          "A versão mínima é agora macOS 13, igual no pacote, no instalador e no site.",
-          "Treze bibliotecas estão nas suas versões estáveis mais recentes, e o núcleo exato fala OpenCASCADE 8.",
-          "Um pacote sem âncora de confiança no sistema traz o seu próprio conjunto, em qualquer plataforma."
+          "Em *Novidades* constam as três últimas versões. O histórico completo de todas as versões está em solidon3d.de e continua lá disponível."
         ]
       },
       {
         "title": "Manual e site",
         "points": [
-          "O manual e as capturas mostram a interface renovada nas seis línguas.",
-          "Os desenhos do manual mantêm o contraste do texto também nas suas notas laterais.",
-          "A janela do manual carrega apenas as suas próprias figuras e nenhuma imagem alheia."
+          "As imagens de solidon3d.de mostram o modelo a toda a largura, e não como uma faixa entre os painéis.",
+          "O manual e o site nomeiam todas as operações que existem, incluindo os novos editores de características."
         ]
       }
     ]
   },
-  "changes_total": 86,
-  "signature": "b797462214f4f2b6d1d74d913f4b58e4f9bd44beea89b6ae77d37434255d8e7a0956fb8e718c3c395550f274c44c3e4abbe7d378d52b70856309c947bd7f8708"
+  "changes_total": 62,
+  "signature": "a7c8e7a82c307309883470f5732ce4063da534c41fe351f7af2a9faffe36e1e073e2d6ee8c0a79162e6167a801e47680b4a4b88b2de02ab798a475a273d19103"
 }
