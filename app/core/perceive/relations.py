@@ -8,8 +8,8 @@ Bohrung ist keine zweite Bohrung; ein Zapfen um eine Bohrung ist ein Rohr mit
 einer Wand. Wer eines von beiden ändert, ändert das andere mit — und genau das
 sagte ihm bisher niemand.
 
-**Warum ein eigenes Modul.** ``features.py`` ist mit 2200 Zeilen das größte
-Modul des Kerns, und die Nachbarschaften werden nicht bei einer bleiben:
+**Warum ein eigenes Modul.** ``features.py`` ist mit rund 3700 Zeilen das größte
+in ``perceive/``, und die Nachbarschaften werden nicht bei einer bleiben:
 Senkung über Bohrung, Rohr, Bohrungsraster, Bohrung durch zwei Wände. Vier
 davon dort einzuhängen hieße, eine Datei weiter wachsen zu lassen, die schon
 heute niemand am Stück liest. Die Erkennung einzelner Merkmale und die Frage,
@@ -36,7 +36,15 @@ from app.core.deferred import cKDTree, trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.actions import ACTION_ORDER, feature_value_source
-from app.core.perceive.features import EPS_ANGLE, SINK_AXIS_LIMIT, SINK_FIT_LIMIT, _one_body
+from app.core.perceive.features import (
+    EPS_ANGLE,
+    SINK_AXIS_LIMIT,
+    SINK_FIT_LIMIT,
+    _one_body,
+    axis_of,
+    centre_of,
+    sits_at_the_mouth_of,
+)
 from app.core.registry import REGISTRY
 from app.core.types import Feature, FeatureId, is_a_cavity
 from app.core.units import EPS_DISPLAY, EPS_GEOM
@@ -156,27 +164,6 @@ class FeatureActionGroup:
     members: tuple[FeatureGroupMember, ...] = ()
     evidence: tuple[FeatureGroupEvidence, ...] = ()
     uncertain: tuple[FeatureGroupUncertainty, ...] = ()
-
-
-def axis_of(feature: Feature) -> Any | None:
-    """Die Achse eines Merkmals als Einheitsvektor, oder nichts."""
-    raw = feature.params.get("axis")
-    if raw is None:
-        return None
-    axis = np.asarray(raw, dtype=float)
-    length = float(np.linalg.norm(axis))
-    if axis.shape != (3,) or length <= EPS_GEOM:
-        return None
-    return axis / length
-
-
-def centre_of(feature: Feature) -> Any | None:
-    """Die Mitte eines Merkmals, oder nichts."""
-    raw = feature.params.get("centre")
-    if raw is None:
-        return None
-    centre = np.asarray(raw, dtype=float)
-    return centre if centre.shape == (3,) else None
 
 
 def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve | None:
@@ -312,27 +299,13 @@ def widening_at_the_mouth(
     fehlt: „Bis Solidon die Nachbarschaft kennt, ist die Absage die richtige
     Antwort." Das hier ist die Nachbarschaft.
 
-    **Vier Bedingungen, und keine davon ist geraten** — die Schwellen sind
-    dieselben, mit denen die Erkennung schon heute entscheidet, ob zwei
-    Flächen zu einer Bohrung gehören (:data:`SINK_AXIS_LIMIT`,
-    :data:`SINK_FIT_LIMIT`):
-
-    * dieselbe Achsrichtung,
-    * die Mitten auf **einer** Linie und nicht bloß parallel — zwei Bohrungen
-      nebeneinander haben dieselbe Richtung und sind trotzdem zwei,
-    * die Mitte des Nachbarn liegt auf der Strecke der Bohrung (mit derselben
-      Toleranz an beiden Enden), denn eine Senkung sitzt an einer ihrer
-      Mündungen und nicht drei Zentimeter daneben,
-    * er ist **weiter** — eine Senkung, die enger wäre als ihre Bohrung, gibt
-      es nicht; ohne diese Bedingung fände eine durchgehende Bohrung ihre
-      eigene Fortsetzung in der nächsten Wand,
-    * und er ist ebenfalls ein **Hohlraum**. Das war der eine Fehlgriff der
-      ersten Fassung, und zwar an Roberts eigenem Halter: Die Bohrung Ø 34
-      steckt im Zapfen Ø 40,80, beide auf derselben Achse, und die Mitte des
-      Zapfens liegt in ihrer Strecke. Ein Zapfen ist aber Materie und keine
-      Aufweitung einer Öffnung — er umgibt die Bohrung, er mündet nicht in
-      sie. Gefragt wird über :func:`is_a_cavity`: ``hole``
-      immer, ``pin`` nie, und bei Kegel und Kugel entscheidet ``recess``.
+    **Die Bedingungen stehen bei den Schwellen**, nach denen sie fragen:
+    :func:`app.core.perceive.features.sits_at_the_mouth_of` prüft Achse, Lage,
+    Weite und Hohlraumeigenschaft eines Paares. Hier bleibt, was diese
+    Funktion allein ausmacht — die **Suche** unter allen Merkmalen und die
+    Wahl der weitesten passenden. Seit dem 10.09.2026 fragt der
+    Freiformfilter dieselbe Bedingung aus der Gegenrichtung; zwei Fassungen
+    davon wären zwei Antworten auf dieselbe Frage.
 
     Gemessen an ``broomholdervcd_d35mm.stl`` (Robert, 04.09.2026):
     ``hole_1`` Ø 5,44 mit Mitte (-49,60 | 31,28 | 0) und ``cone_1`` Ø 8,16 mit
@@ -349,37 +322,13 @@ def widening_at_the_mouth(
         if chain is None or len(chain) != 2 or chain[0].id != feature.id:
             return None
         return chain[1]
-    axis = axis_of(feature)
-    centre = centre_of(feature)
-    diameter = float(feature.params.get("diameter") or 0.0)
-    depth = float(feature.params.get("depth") or 0.0)
-    if axis is None or centre is None or diameter <= EPS_GEOM:
-        return None
-    if not is_a_cavity(feature):
-        return None
-
-    radius = diameter / 2.0
-    across_limit = radius * SINK_FIT_LIMIT
     found: Feature | None = None
-    widest = diameter
+    widest = float(feature.params.get("diameter") or 0.0)
     for candidate in features.values():
         if candidate.id == feature.id:
             continue
-        other_axis = axis_of(candidate)
-        other_centre = centre_of(candidate)
         other_diameter = float(candidate.params.get("diameter") or 0.0)
-        if other_axis is None or other_centre is None or other_diameter <= widest:
-            continue
-        if not is_a_cavity(candidate):
-            continue
-        if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
-            continue
-        offset = other_centre - centre
-        along = float(offset @ axis)
-        across = offset - along * axis
-        if float(np.linalg.norm(across)) > across_limit:
-            continue
-        if not -across_limit <= abs(along) <= depth + across_limit:
+        if other_diameter <= widest or not sits_at_the_mouth_of(feature, candidate):
             continue
         found = candidate
         widest = other_diameter

@@ -15,9 +15,11 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive import features as features_module
+from app.core.perceive.actions import actions_for
 from app.core.perceive.features import (
     _FEATURE_CACHE,
     CACHE_LIMIT,
@@ -42,7 +44,7 @@ from app.core.perceive.features import (
     is_a_freeform,
 )
 from app.core.perceive.relations import widening_at_the_mouth
-from app.core.types import Feature, Profile
+from app.core.types import Feature, FeatureId, Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1994,6 +1996,7 @@ def test_the_operation_refuses_exactly_what_the_panel_greys_out() -> None:
     Chat zu sehen bekommt, wird von keinem Bildschirmfoto widerlegt.
     """
     from app.core.bootstrap import load_operations
+    from app.core.perceive import actions
     from app.core.perceive.actions import ACTION_ORDER, actions_for, reason_against
     from app.core.registry import FEATURE_KINDS
     from app.core.types import Feature
@@ -2014,6 +2017,16 @@ def test_the_operation_refuses_exactly_what_the_panel_greys_out() -> None:
                 else:
                     assert against is not None, f"{kind}/{op}: das Panel bietet es nicht an"
                     assert str(against), f"{kind}/{op}: der Grund ist leer"
+                    # **Nicht leer ist zu wenig.** Der Auffangsatz
+                    # ``_UNKNOWN_KIND`` ist nicht leer und sagt trotzdem nichts
+                    # („Für diese Art von Merkmal gibt es noch keine
+                    # Handlung"). Genau daran ist ``thread`` bis zum 10.09.2026
+                    # vorbeigelaufen: fünf Zeilen, fünfmal derselbe
+                    # Nichtsatz, und dieser Test blieb grün. Regel 17 verlangt
+                    # einen Handlungsvorschlag, keinen belegten Platz.
+                    assert against is not actions._UNKNOWN_KIND, (
+                        f"{kind}/{op}: der Auffangsatz ist kein Grund (Regel 17)"
+                    )
 
 
 def test_a_torus_is_told_it_belongs_to_what_it_encircles() -> None:
@@ -2960,3 +2973,263 @@ def test_a_constructed_part_with_one_round_feature_is_left_alone() -> None:
         found = detect(mesh)
         assert freeform_dropped(mesh) == 0, name
         assert any(f.kind in ("sphere", "torus") for f in found.values()), name
+
+
+def _blob_with_a_countersunk_bore() -> MeshData:
+    """Der Scan-Körper mit einer gesenkten Bohrung durch seine Standfläche.
+
+    Von der ebenen Unterseite bei z = −12 nach oben: Ø 5 durchgehend, darüber
+    die 90-Grad-Senkung auf Ø 10. Beides gebohrt, nicht behauptet — die
+    Erkennung soll es an der Geometrie finden.
+    """
+    blob = _scan_like_blob().raw
+    bore = trimesh.creation.cylinder(radius=2.5, height=30.0, sections=64)
+    bore.apply_translation((0.0, 0.0, -3.0))
+    sink = trimesh.creation.cone(radius=5.0, height=5.0, sections=64)
+    sink.apply_translation((0.0, 0.0, -12.0))
+    return MeshData.of(trimesh.boolean.difference([blob, bore, sink]))
+
+
+def test_a_freeform_keeps_the_countersink_that_hangs_on_a_bore() -> None:
+    """Der Preis, den ``_shapes_on_a_freeform`` bis zum 10.09.2026 offen trug.
+
+    Sein Docstring nannte ihn selbst — „auf einer Figur mit einer echten
+    Senkung geht die Senkung mit […] gemessen ist er noch an keinem Modell" —
+    und an dem Tag kam das Modell: Roberts ``garden-hose-holder.3mf``, ein
+    konstruierter Halter, dessen geschwungener Bogen ihn mit einem
+    Rundformanteil von 0,701 gegen die Schwelle 0,700 zur Freiform machte. Mit
+    den 51 erfundenen Kegeln fielen seine vier echten 90-Grad-Senkungen, und
+    ohne sie fand ``cavity_chain_at`` an keiner der vier Schraubstellen mehr
+    die Kette Bohrung-Senkung-Bohrung.
+
+    Hier steht derselbe Fall als Körper aus dem Test: eine Freiform, die
+    weiterhin ihre erfundenen Rundformen verliert, und **eine** echte Senkung,
+    die bleibt, weil sie an einer Bohrung hängt.
+    """
+    mesh = _blob_with_a_countersunk_bore()
+    forget_cache()
+
+    found = detect(mesh)
+
+    assert freeform_dropped(mesh) >= FREEFORM_ROUND_COUNT, (
+        "der Körper ist weiter eine Freiform und verliert seine erfundenen Rundformen"
+    )
+    bores = [f for f in found.values() if f.kind == "hole"]
+    sinks = [f for f in found.values() if f.kind == "cone"]
+    assert len(bores) == 1, f"eine Bohrung, gefunden: {[f.id for f in bores]}"
+    assert len(sinks) == 1, f"eine Senkung, gefunden: {[f.id for f in sinks]}"
+    assert sinks[0].params["diameter"] == pytest.approx(10.0, abs=0.05)
+    assert not [f for f in found.values() if f.kind in ("sphere", "torus", "fillet")], (
+        "gerettet wird nur, was an einer Bohrung hängt — nichts sonst"
+    )
+    assert widening_at_the_mouth(bores[0], found) is sinks[0], (
+        "und die Nachbarschaft steht: die Senkung sitzt an der Mündung dieser Bohrung"
+    )
+
+
+def test_only_a_shape_at_the_mouth_of_a_bore_survives_the_freeform_rule() -> None:
+    """Die Bedingung selbst, ohne Geometrie — und ihre Gegenprobe.
+
+    ``sits_at_the_mouth_of`` ist die eine Antwort auf „gehört diese Aufweitung
+    zu dieser Bohrung"; :func:`widening_at_the_mouth` fragt sie von der Bohrung
+    aus, der Freiformfilter aus der Gegenrichtung. Was sie nicht belegt, geht
+    weiter weg — sonst rettete der Filter am Kundenmodell nicht vier von 55
+    Kegeln, sondern alle 55.
+    """
+    bore = Feature(
+        id=FeatureId("hole_1"),
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 5.0, "depth": 8.0, "axis": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 4.0)},
+    )
+    sink = Feature(
+        id=FeatureId("cone_1"),
+        kind="cone",
+        provenance="detected",
+        params={
+            "diameter": 10.0,
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (0.0, 0.0, 0.0),
+            "recess": True,
+        },
+    )
+    elsewhere = dataclasses.replace(
+        sink, id=FeatureId("cone_2"), params={**sink.params, "centre": (40.0, 0.0, 0.0)}
+    )
+    narrower = dataclasses.replace(
+        sink, id=FeatureId("cone_3"), params={**sink.params, "diameter": 3.0}
+    )
+    a_bump = dataclasses.replace(
+        sink, id=FeatureId("cone_4"), params={**sink.params, "recess": False}
+    )
+
+    assert features_module.sits_at_the_mouth_of(bore, sink)
+    assert not features_module.sits_at_the_mouth_of(bore, elsewhere), "vierzig Millimeter daneben"
+    assert not features_module.sits_at_the_mouth_of(bore, narrower), "enger als ihre Bohrung"
+    assert not features_module.sits_at_the_mouth_of(bore, a_bump), "eine Kuppe ist Materie"
+
+    kept, dropped = features_module._shapes_on_a_freeform(
+        {
+            **_listed({"sphere": 20, "torus": 10}),
+            bore.id: bore,
+            sink.id: sink,
+            elsewhere.id: elsewhere,
+        }
+    )
+    assert set(kept) == {bore.id, sink.id}, "die Senkung an der Bohrung bleibt, die daneben geht"
+    assert dropped == 31
+
+
+def _block_with_a_trapped_pocket() -> MeshData:
+    """Ein Quader mit einem Zylinder darin, der nirgendwo herauskommt.
+
+    Genau die Bauart, die Robert am 10.09.2026 in ``garden-hose-holder.3mf``
+    fand: der Negativkörper als eigene Schale im Netz, nie boolesch abgezogen.
+    Nachgestellt, indem der Zylinder **umgedreht** an den Quader gehängt wird —
+    seine Normalen zeigen dann ins Material, und genau das macht ihn zum
+    Hohlraum statt zum zweiten Körper.
+    """
+    block = trimesh.creation.box(extents=(40.0, 40.0, 20.0))
+    pocket = trimesh.creation.cylinder(radius=1.0, height=9.0, sections=48)
+    pocket.invert()
+    return MeshData.of(trimesh.util.concatenate([block, pocket]))
+
+
+def test_a_cavity_with_no_way_out_is_a_void_and_not_a_bore() -> None:
+    """Acht Bohrungen, die man weder sehen noch bohren kann (Robert, 10.09.2026).
+
+    ``garden-hose-holder.3mf`` trug acht eigene geschlossene Schalen mit
+    negativem Volumen, je Ø 2 auf 9 mm. Nach ``_one_body`` liegen ihre nach
+    innen zeigenden Mäntel im selben Netz, und für ``detect_holes`` sah das aus
+    wie eine Bohrung — dieselben Normalen, derselbe Kreis, nur ohne Öffnung.
+    Der Objektbaum zeigte sie als ``hole`` mit ``through=False``.
+
+    Hier steht der Fall als Körper aus dem Test. Gemessen wird beides: dass ein
+    Einschluss als solcher herauskommt, **und** dass an seiner Stelle keine
+    Bohrung mehr steht.
+    """
+    mesh = _block_with_a_trapped_pocket()
+    forget_cache()
+
+    found = detect(mesh)
+
+    voids = [feature for feature in found.values() if feature.kind == "void"]
+    assert len(voids) == 1, f"ein Einschluss, gefunden: {[f.id for f in found.values()]}"
+    # π · 1² · 9 = 28,27 mm³ — dieselbe Zahl, die am Kundenmodell achtmal stand.
+    assert voids[0].params["volume"] == pytest.approx(28.27, abs=0.2)
+    assert not [feature for feature in found.values() if feature.kind == "hole"], (
+        "an der Stelle eines Einschlusses steht keine Bohrung mehr"
+    )
+    assert any(feature.kind == "face" for feature in found.values()), (
+        "die sechs Flächen des Quaders bleiben — der Einschluss nimmt nur seine eigenen"
+    )
+
+    # **Und er ist keine Sackgasse.** Der erste Entwurf sperrte hier alles mit
+    # der Begründung, an einen eingeschlossenen Hohlraum komme kein Werkzeug
+    # heran — dabei versetzt ``test_a_cavity_inside_the_body_moves_without_
+    # losing_material`` seit dem 03.09.2026 genau so einen. Was fehlt, ist das
+    # Maß und nicht der Zugang.
+    load_operations()
+    offered = {action.op for action in actions_for(voids[0]) if action.op}
+    assert offered == {"move_feature", "remove_feature"}, (
+        f"Versetzen und Entfernen gehen an einem Einschluss, gefunden: {sorted(offered)}"
+    )
+    refused = [action for action in actions_for(voids[0]) if not action.op]
+    assert all(str(action.reason) for action in refused), (
+        "und jede Absage nennt ihren Grund (Regel 17)"
+    )
+
+
+def test_an_open_mesh_keeps_its_bores_because_a_sign_says_nothing_there() -> None:
+    """Die Grenze der Auskunft, und sie hält an, statt zu raten (Regel 21).
+
+    Das Vorzeichen eines eingeschlossenen Volumens trägt nur an einem dichten
+    Netz. Ist das Netz offen, ist eine Schale mit negativem Volumen genauso gut
+    eine Lücke wie ein Einschluss — und aus einer Lücke einen Einschluss zu
+    machen wäre geraten. Solche Modelle behalten, was sie hatten.
+    """
+    mesh = _block_with_a_trapped_pocket()
+    body = mesh.raw.copy()
+    # Ein Dreieck weg, und das Netz ist offen — sonst ändert sich nichts.
+    body.update_faces(np.arange(len(body.faces)) != 0)
+    forget_cache()
+
+    assert not body.is_watertight, "die Vorbedingung des Tests"
+    assert features_module.detect_voids(MeshData.of(body)) == [], (
+        "an einem offenen Netz wird kein Einschluss behauptet"
+    )
+    # **Und der Satz „behalten, was sie hatten" gehört in ein assert.** Ohne
+    # diese zwei Zeilen misst der Test nur die leere Liste; dass die Bohrung
+    # danach noch dasteht, stünde allein im Docstring.
+    kept = detect(MeshData.of(body))
+    assert any(feature.kind == "hole" for feature in kept.values()), (
+        f"die Bohrung bleibt, wie sie war: {sorted({f.kind for f in kept.values()})}"
+    )
+
+
+def test_a_lopsided_winding_is_not_an_air_pocket() -> None:
+    """Ein Vorzeichen ist nur dort eine Auskunft, wo die Normalen zeigen.
+
+    Drei Fälle, die die erste Fassung alle drei zum „Lufteinschluss" machte —
+    und mit ihnen verschwanden die Flächen, auf denen sie lagen, aus dem
+    Objektbaum. Gefunden bei der Durchsicht am 10.09.2026; keiner davon ist
+    theoretisch: *Normalen vereinheitlichen* ist beim Einlesen ein abwählbarer
+    Schalter, und ``trimesh`` dreht bei einem **zweiten** invertierten Körper
+    ohnehin nichts (``fix_inversion`` sieht nur das Gesamtvolumen).
+
+    Der teuerste ist der zweite: Dort ist der Fremdkörper echt, liegt sechzig
+    Millimeter neben dem Teil — und stand als „Lufteinschluss im Material" da,
+    während seine sechs Flächen gelöscht waren.
+    """
+    block = trimesh.creation.box(extents=(40.0, 40.0, 20.0))
+
+    neighbour = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    neighbour.invert()
+    neighbour.apply_translation((60.0, 0.0, 0.0))
+    apart = MeshData.of(trimesh.util.concatenate([block, neighbour]))
+
+    inside_out = block.copy()
+    inside_out.invert()
+
+    # **Der dritte Fall muss am Umlaufsinn scheitern und an nichts sonst** —
+    # sonst prüft er ein anderes Tor als sein Name sagt. Gemessen bei der
+    # Durchsicht am 10.09.2026: Ein *einteiliger* Quader mit gedrehten
+    # Dreiecken fällt schon an ``len(components) < 2``, und werden die
+    # Dreiecke des **Quaders** gedreht, wird er selbst negativ — dann gibt es
+    # keine feste Umgebung, und die Einschlussprobe fängt ihn. In beiden
+    # Fassungen blieb der Test grün, nachdem ``is_winding_consistent`` aus
+    # ``detect_voids`` entfernt war.
+    #
+    # Gedreht werden deshalb Dreiecke der **Schale**: Der Quader bleibt fest
+    # (Volumen +32 000), die Tasche bleibt negativ (-25,3 statt -28,3, und
+    # schon diese Zahl ist falsch), und die Einschlussprobe sagt „innen". Übrig
+    # bleibt genau ein Tor.
+    pocket = trimesh.creation.cylinder(radius=1.0, height=9.0, sections=48)
+    pocket.invert()
+    two_parts = trimesh.util.concatenate([block, pocket])
+    faces = two_parts.faces.copy()
+    first_of_the_shell = len(block.faces)
+    faces[first_of_the_shell : first_of_the_shell + 10] = faces[
+        first_of_the_shell : first_of_the_shell + 10
+    ][:, ::-1]
+    mixed = trimesh.Trimesh(vertices=two_parts.vertices, faces=faces, process=False)
+    assert not mixed.is_winding_consistent, "die Vorbedingung des dritten Falls"
+    parts = features_module.face_components(mixed)
+    volumes = [features_module._enclosed_volume(mixed, part) for part in parts]
+    assert len(parts) == 2 and max(volumes) > 0.0, (
+        "er muss an Komponentenzahl und fester Umgebung vorbeikommen, sonst misst "
+        f"er die statt des Umlaufsinns: {[round(v, 1) for v in volumes]}"
+    )
+
+    for name, body in (
+        ("ein getrennter umgestülpter Nachbarkörper", apart),
+        ("ein vollständig umgestülptes Teil", MeshData.of(inside_out)),
+        ("ein Teil mit uneinheitlichem Umlaufsinn", MeshData.of(mixed)),
+    ):
+        forget_cache()
+        assert features_module.detect_voids(body) == [], name
+        found = detect(body)
+        assert any(feature.kind == "face" for feature in found.values()), (
+            f"{name}: seine Flächen bleiben im Objektbaum"
+        )
+        assert not [feature for feature in found.values() if feature.kind == "void"], name

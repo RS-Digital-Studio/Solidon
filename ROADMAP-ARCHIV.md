@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-10 | [Drei Befunde an einem Kundenmodell (10.09.2026)](#drei-befunde-an-einem-kundenmodell-10092026) |
 | 2026-09-09 | [RM-027 entfällt mit dem privaten Index (09.09.2026)](#rm-027-entfällt-mit-dem-privaten-index-09092026) |
 | 2026-09-08 | [Filamentlager — Review und vollständiger Anschluss (08.09.2026)](#filamentlager--review-und-vollständiger-anschluss-08092026) |
 | 2026-09-08 | [Bauplan v12 — vollständiger Abgleich (08.09.2026)](#bauplan-v12--vollständiger-abgleich-08092026) |
@@ -26532,3 +26533,88 @@ Indexstand nicht mehr, gegen den der Punkt schützen wollte.
 Was von der Sache bleibt, steht im `liefern`-Skill und braucht keine eigene
 Aufgabe: gegen **HEAD** vergleichen statt gegen den Index, genaue Pfade statt
 `git add .`, und den `--stat` vor dem Commit gegen die Erwartung halten.
+
+## Drei Befunde an einem Kundenmodell (10.09.2026)
+
+Robert lud `garden-hose-holder.3mf` und meldete drei Dinge: Senkungen werden
+nicht erkannt, es stehen Bohrungen im Objektbaum, die im Inneren des Materials
+liegen, und Löcher aus Bohrung, Senkung und Bohrung erkennt Solidon nicht.
+
+**Der dritte war eine Folge des ersten.** `cavity_chain_at` findet die Kette an
+allen vier Schraubstellen, sobald der Kegel in der Merkmalsliste steht.
+
+**Der erste war der Freiformfilter, und er lag um ein Tausendstel daneben.** Der
+geschwungene Bogen des Halters trägt 194 nicht veröffentlichte Kugel- und
+Ringkandidaten; damit steht das Teil bei einem Rundformanteil von **0,701 gegen
+die Schwelle 0,700**, und mit den 51 erfundenen Kegeln fielen auch seine vier
+echten 90-Grad-Senkungen (Ø 11, halber Winkel 44,998°, Rückstand 7·10⁻⁵). Der
+Docstring von `_shapes_on_a_freeform` hatte genau diesen Preis benannt — „auf
+einer Figur mit einer echten Senkung geht die Senkung mit […] gemessen ist er
+noch an keinem Modell". An diesem Tag war er gemessen.
+
+Nicht die Schwelle wurde nachgezogen: Ein Zehntel Prozent an einer Zahl, die
+siebzehn Modelle trennt, träfe den nächsten Grenzfall genauso. Stattdessen
+bleibt, was sich belegen lässt — `features.sits_at_the_mouth_of`, dieselbe
+Bedingung, die `relations.widening_at_the_mouth` aus der Gegenrichtung stellt.
+Gemessen 4 von 55 Kegeln gerettet, an jeder Figur des Korpus null.
+
+**Der zweite waren acht Negativkörper**, je Ø 2 auf 9 mm, über manifold3d zu
+100 Prozent innerhalb des Hauptkörpers — nie boolesch abgezogen, und für
+`detect_holes` sahen ihre nach innen zeigenden Mäntel aus wie Bohrungen. Sie
+haben seitdem eine eigene Merkmalsart `void` (Entscheidung Robert, gegen „nur
+Befund" und „nur wegfiltern").
+
+### Zwei eigene Annahmen, beide widerlegt
+
+**„An einen eingeschlossenen Hohlraum kommt kein Werkzeug heran."** Falsch:
+`test_a_cavity_inside_the_body_moves_without_losing_material` versetzt seit dem
+03.09.2026 eine Kugelhöhle in einem Würfel, und an Roberts Bauart nachgemessen
+bleibt das Volumen des Ganzen auf **0,000000 mm³** genau gleich. `void` steht
+deshalb in `MOVABLE_KINDS`. Was fehlt, ist das Maß und nicht der Zugang.
+
+**„Dicht und negatives Volumen heißt Einschluss."** Ebenfalls falsch, gefunden
+im Review. Drei Fälle liefen durch und kosteten dabei echte Merkmale:
+
+| Fall | dicht | Umlaufsinn | vorher | nachher |
+|---|---|---|---|---|
+| getrennter umgestülpter Nachbarkörper, 60 mm daneben | ja | ja | 1 void, **6 Flächen gelöscht** | 0 voids, 12 Flächen |
+| Teil vollständig umgestülpt | ja | ja | 1 void, alle Flächen weg | 0 voids, 6 Flächen |
+| 10 von 12 Dreiecken gedreht | ja | **nein** | 1 void, alle Flächen weg | 0 voids, 6 Flächen |
+
+Keiner davon ist theoretisch: *Normalen vereinheitlichen* ist beim Einlesen ein
+abwählbarer Schalter, und `trimesh.fix_inversion` dreht nur das ganze Netz bei
+negativem Gesamtvolumen — ein **zweiter** invertierter Körper bleibt liegen,
+auch nach der vollen Reparaturkette. `detect_voids` verlangt seitdem
+zusätzlich `is_winding_consistent`, mindestens zwei Komponenten und die
+Einschlussprobe über `mesh.on_surface`, die der Docstring als Messung schon
+nannte und der Code nicht stellte.
+
+### Die Durchsicht daneben
+
+Auf Roberts Bitte („auch alle anderen mal gründlich kontrollieren") gingen alle
+zehn Merkmalsarten durch das Merkmalpanel. Vier Absagen trugen einen Satz, der
+nicht für die Zeilen galt, unter denen er stand:
+
+| Art | stand unter fünf Titeln | begründete |
+|---|---|---|
+| `thread` | „gibt es noch keine Handlung" | gar nichts (Regel 17) |
+| `face` | „lässt sich nicht einzeln **versetzen**" | eine von fünf |
+| `torus` | „lässt sich nicht direkt **ändern**" | eine von fünf |
+| `fillet` | „**Versetzt** man sie allein …" | auch das Verdoppeln |
+
+Der Gewindesatz zeigte in seiner ersten Fassung auf *Bohrung verschließen* —
+eine Operation, die `thread` nicht annimmt und den Kunden mit demselben Satz
+zurückschickt. Er nennt jetzt den Weg, den es gibt: dieselbe Operation **ohne**
+gewähltes Merkmal, mit Lage und Durchmesser von Hand.
+
+Ein Wächter dafür ist verworfen worden: Wer den Titel im Satz sucht, schlägt
+auf „ändern" in „kein Maß, das sich ändern ließe" an — drei Fehlalarme auf drei
+Prüflinge. Geblieben ist der scharfe Teil (`_UNKNOWN_KIND` erreicht keine
+erkennbare Art mehr, in zwei Tests); der Rest steht als Lesehilfe in
+`.claude/rules/oberflaeche.md`.
+
+### Was noch offen ist
+
+`perceive.freeform` sagt weiterhin „Dieses Modell ist eine Freiform, etwa ein
+Scan" — an einem konstruierten Halter eine Aussage über die Herkunft, die
+niemand geprüft hat. Der Punkt steht als RM-151 im Register.

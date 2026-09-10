@@ -398,3 +398,91 @@ dazu:
   Dazwischen liegt die Lücke, und sie ist schmal. Die Merkmals*zahl* und der
   Rand der Flecken (Knick oder Ebene) trennen nicht; beides ist gemessen und
   steht am Modul.
+
+### Was an einer Bohrung hängt, bleibt (10.09.2026)
+
+Die Lücke oben ist schmal, und am 10.09.2026 ist ein Modell hineingefallen:
+Roberts `garden-hose-holder.3mf` ist ein konstruierter Halter, dessen
+geschwungener Bogen 194 nicht veröffentlichte Kugel- und Ringkandidaten trägt.
+Rundformanteil **0,701 gegen die Schwelle 0,700** — ein Tausendstel —, und mit
+den 51 erfundenen Kegeln fielen auch seine vier echten 90-Grad-Senkungen.
+
+**Nicht die Schwelle wurde nachgezogen, sondern die Frage geschärft.** Ein
+Zehntel Prozent an einer Zahl zu drehen, die siebzehn Modelle trennt, träfe den
+nächsten Grenzfall mit demselben Fehler. Stattdessen bleibt, was sich
+**belegen** lässt: eine Rundform, die an der Mündung einer Bohrung sitzt, die
+selbst bleibt (`features.sits_at_the_mouth_of`). Eine Freiform hat dort keine
+Bohrung, an der eine Erfindung hängen könnte.
+
+**Zwei Messungen, und sie sagen Verschiedenes.** Der *Filter* rettet am Halter
+genau 4 von 55 Kegeln und an jeder Figur des Korpus null. Die *Bedingung*
+trifft daneben an `plate_countersunk.stl`, `plate_countersunk_blind.stl` und
+`plate_chamfer_and_taper.stl` je die echte Senkung und nicht die Verjüngung —
+diese drei sind aber **keine Freiformen** (`freeform_dropped` ist dort null)
+und laufen durch den Filter gar nicht. Wer den ersten Satz mit dem zweiten
+belegt, belegt ihn mit Modellen, die die Stelle nie erreichen.
+
+**Wer die Bedingung anfasst, misst beide Reihen nach** — der Preis einer zu
+weiten Fassung sind 55 Kegel statt vier.
+
+Und die Folge, die den Anlass erst sichtbar machte: Ohne die Senkung findet
+`relations.cavity_chain_at` die Kette Bohrung-Senkung-Bohrung nicht mehr. Ein
+weggefiltertes Merkmal nimmt die Nachbarschaften mit, die es trägt.
+
+## Ein Hohlraum ohne Weg nach außen ist keine Bohrung (10.09.2026)
+
+Dasselbe Modell trug acht eigene geschlossene Schalen mit **negativem**
+Volumen, je Ø 2 auf 9 mm — Negativkörper, die ein CAD oder Slicer mitschrieb
+und nie boolesch abzog, gemessen zu 100 Prozent innerhalb des Hauptkörpers.
+Nach `_one_body` liegen ihre nach innen zeigenden Mäntel im selben Netz, und
+für `detect_holes` sah das aus wie eine Bohrung: dieselben Normalen, derselbe
+Kreis, nur ohne Öffnung. Der Objektbaum zeigte acht Bohrungen, die man weder
+sehen noch bohren kann (Robert: „Bohrungen, die im Inneren des Materials sind,
+was nicht sein kann").
+
+`detect_voids` gibt sie als eigene Merkmalsart `void` aus, und
+`_voids_instead_of_phantom_bores` nimmt weg, was mehrheitlich auf ihrer Schale
+liegt. Vier Sätze dazu:
+
+* **Vier Tore, drei topologische und eine geometrische Probe.** Das Netz ist
+  dicht, sein Umlaufsinn einheitlich, es hat mehr als eine Komponente — und
+  die Schale liegt im Material der **festen** Komponenten. An einem offenen
+  Netz sagt ein Vorzeichen nichts; dort wird nicht geraten (Regel 21), und die
+  Bohrungen bleiben, wie sie waren. Über den ganzen Korpus trifft das null
+  Mal, auch nicht an `two_components.stl` oder `broken_selfint.stl`.
+
+  **Das vierte Tor fragt gegen das Material, nicht gegen „alles andere".** Der
+  erste Anlauf nahm je Kandidat alle übrigen Komponenten als Umgebung, die
+  anderen Hohlraumschalen eingeschlossen — und damit fiel jeder Einschluss
+  durch, der einen Nachbarn hatte: Der nächste Ort lag auf **dessen** Mantel,
+  und dort steht die Normale quer zum Versatz. Gemessen an zwei Taschen Ø 2 in
+  einem Quader: bei 2,5 und 5,0 mm Achsabstand null von zwei, bei 8,0 mm
+  beide. Zurück waren genau die Phantombohrungen, wegen derer die Sache
+  angefangen hat. Am Kundenmodell fiel es nicht auf — dort liegen die acht
+  weit genug auseinander, und das ist Glück und keine Zusicherung.
+* **Benannt, nicht verschwiegen** (Regel 17). Ein Einschluss ist im Zweifel
+  ein Defekt: Beim Drucken bleibt Luft darin. Ihn stillschweigend wegzufiltern
+  machte den Objektbaum richtig und den Kunden ahnungslos (Entscheidung
+  Robert, 10.09.2026 — gegen die Alternativen „nur Befund" und „nur
+  wegfiltern"). **Er steht im Objektbaum und nicht im Prüfbericht**: Es gibt
+  keinen `perceive.void`, weil die Merkmalsart selbst die Auskunft ist —
+  „Lufteinschluss 3 · 28 mm³". Wer beides will, baut den Befund in derselben
+  Bauart wie `perceive.freeform` (`scene/evaluate.py`); heute ist es einer,
+  und dieser Satz sagt welcher.
+* **Und er ist nicht gesperrt.** Der erste Entwurf sperrte alles mit der
+  Begründung, an einen eingeschlossenen Hohlraum komme kein Werkzeug heran —
+  und das war messbar falsch: `test_a_cavity_inside_the_body_moves_without_
+  losing_material` versetzt seit dem 03.09.2026 eine Kugelhöhle in einem
+  Würfel, und an Roberts Bauart nachgemessen bleibt das Volumen des Ganzen auf
+  **0,000000 mm³** genau gleich. `void` steht deshalb in `MOVABLE_KINDS`.
+
+  Was fehlt, ist nicht die Erreichbarkeit, sondern das **Maß**: Ein Einschluss
+  ist, was ein Negativkörper hinterlassen hat, und seine Form steht allein in
+  seinen Flächen — Größe und Drehung haben nichts, woran sie ansetzen könnten.
+  **Verdoppeln fehlt aus einem anderen Grund**, und der ist keine Geometrie:
+  Eine zweite Luftblase im Material legt niemand an (Robert, 10.09.2026).
+  Deshalb `DUPLICABLE_KINDS` neben `MOVABLE_KINDS` — zwei Fragen, zwei Listen.
+* **Und er ist nicht immer ein Fehler.** Die Aussparung für einen eingegossenen
+  Magneten und ein vergessener Negativkörper sind topologisch dieselbe Sache.
+  Welche von beiden vorliegt, weiß nur der Kunde; Solidon benennt, was da ist,
+  und urteilt nicht.
