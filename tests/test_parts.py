@@ -5156,3 +5156,75 @@ def test_the_same_part_three_times_keeps_three_named_features() -> None:
         if feature.kind in ("hole", "pin", "cone", "sphere", "torus", "fillet")
     )
     assert not invented, invented
+
+
+def test_a_part_offers_its_own_actions_not_those_of_a_face() -> None:
+    """Ein Schlüsselloch bietet Maße, Lage und Entfernen — an seinem Schritt.
+
+    Gemessen an einem Quader mit ``insert_keyhole``: Der Baustein bringt zwölf
+    Merkmale mit — zwei Bohrungen, **zehn Verrundungen** und die Fläche, auf
+    der er sitzt. Die Verrundungen tragen für sich keine einzige Handlung
+    (``REGISTRY.for_feature("fillet")`` ist leer), und an der Fläche standen
+    die Handlungen einer Fläche: Bohren, Tasche, Fläche ziehen. Wer eine
+    Schlitzkante anklickte, hat aber das Schlüsselloch gemeint (Befund Robert,
+    10.09.2026: „hier sollten wir aber alles für das Schlüsselloch sehen").
+
+    **Die Werte kommen aus dem Schritt, nicht aus dem Merkmal.** Das ist der
+    Unterschied zu ``actions_for``, und er ist nicht kosmetisch: Ein Baustein
+    rechnet aus ``size="M4"`` zwei Durchmesser — aus den gemessenen
+    Durchmessern käme keine Schraubengröße zurück, und ein Zurückschreiben
+    verlöre bei jedem Zug ein Stück.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import part_actions
+
+    load_operations()
+    spec = REGISTRY.get("insert_keyhole")
+    step = SimpleNamespace(id=2, op="insert_keyhole", params={"size": "M5", "drop": 9.0})
+
+    actions = part_actions(step, spec)
+    assert [str(action.title) for action in actions] == [
+        "Maße ändern",
+        "Baustein verschieben",
+        "Baustein entfernen",
+    ], "Robert: „größe ändern, löschen und verschieben sollte es geben"
+
+    measures, moving, removing = actions
+    assert all(action.step == 2 for action in actions), "alle drei gelten dem Schritt"
+
+    # Die Maße sind die des Bausteins, und die Lage steht nicht dabei.
+    named = {field.name: field.value for field in measures.fields}
+    assert named["size"] == "M5", "der eingegebene Wert, nicht die Vorgabe M4"
+    assert named["drop"] == 9.0
+    assert not {"x", "y", "z", "nx", "at_feature"} & set(named), (
+        "die Lage gehört in ihre eigene Handlung, der Ansatzpunkt in keine"
+    )
+
+    # Was im Schritt nicht steht, kommt aus der Vorgabe des Schemas — sonst
+    # stünde ein leeres Feld da, und ein Zug darauf setzte es auf null.
+    assert named["depth"] == next(
+        entry.default for entry in spec.params.spec() if entry.name == "depth"
+    )
+
+    assert {field.name for field in moving.fields} == {"x", "y", "z"}
+    assert not removing.fields, "Entfernen fragt nichts"
+    assert removing.op is None, "es startet keine Operation, es nimmt den Schritt"
+
+
+def test_only_a_part_step_answers_for_its_features() -> None:
+    """Was kein Baustein ist, behält seine eigenen Handlungen.
+
+    Die Gegenprobe zur Zeile darüber, und sie ist der Grund, warum die Frage
+    an der **Kategorie** hängt und nicht am Namen: ``drill_hole`` erzeugt auch
+    eine Bohrung mit Provenienz, ist aber kein Baustein — dort ist
+    ``resize_hole`` am Merkmal die richtige Antwort und nicht ein Schritt mit
+    Schraubengröße.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    assert REGISTRY.get("insert_keyhole").category == "parts"
+    assert REGISTRY.get("drill_hole").category != "parts"
+    assert REGISTRY.get("create_box").category != "parts"

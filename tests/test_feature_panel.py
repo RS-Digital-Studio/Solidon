@@ -1057,3 +1057,80 @@ def test_the_fit_hint_needs_a_second_body(qt_app: QApplication) -> None:
     several = FeaturePanel()
     several.show_feature(identifier, feature)
     assert len(hints(several)) == 1
+
+
+def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> None:
+    """Das Panel zeigt den Baustein und ändert **seinen Schritt**, nicht mehr.
+
+    Der ganze Weg an einem Stück: die drei Handlungen aus dem Kern, ihre
+    Felder mit den Werten des Schritts, und was der Knopf meldet. Geprüft wird
+    das Signal und nicht die Sitzung — welcher Schritt mit welchen Werten
+    gemeint ist, entscheidet sich hier; dass ``change_params`` daraus eine
+    Transaktion macht, ist die Zusage des Verlaufs und hat dort ihre Tests.
+
+    **``stepChangeRequested`` und nicht ``operationRequested``** ist der Kern
+    der Sache: Über den zweiten stünde nach jeder Maßkorrektur ein weiteres
+    Schlüsselloch im Verlauf, an derselben Stelle über dem alten.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.ui.panels import FeaturePanel
+
+    load_operations()
+    spec = REGISTRY.get("insert_keyhole")
+    step = SimpleNamespace(id=7, op="insert_keyhole", params={"size": "M5", "drop": 9.0, "x": 4.0})
+
+    panel = FeaturePanel()
+    changed: list[tuple[int, dict]] = []
+    removed: list[int] = []
+    panel.stepChangeRequested.connect(lambda op_id, params: changed.append((op_id, params)))
+    panel.stepRemoveRequested.connect(removed.append)
+    try:
+        panel.show_part(step, spec)
+
+        buttons = panel.findChildren(QPushButton)
+        titles = [button.text() for button in buttons]
+        assert titles == ["Maße ändern", "Baustein verschieben", "Baustein entfernen"], titles
+
+        # **Der zweite Knopf schreibt nur die Lage.** Wer beim Verschieben die
+        # Maße mitschickte, setzte die Schraubengröße auf ihre Vorgabe zurück.
+        buttons[1].click()
+        assert len(changed) == 1, "ein Zug, eine Meldung"
+        op_id, params = changed[0]
+        assert op_id == 7, "der Schritt, der den Baustein gesetzt hat"
+        assert set(params) == {"x", "y", "z"}, params
+        assert params["x"] == pytest.approx(4.0), "der Wert aus dem Schritt steht im Feld"
+
+        # Und Entfernen fragt nichts und nennt nur den Schritt.
+        buttons[2].click()
+        assert removed == [7]
+        assert len(changed) == 1, "Entfernen ist keine Wertänderung"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_part_step_keeps_the_values_it_was_not_asked_about(qt_app: QApplication) -> None:
+    """Verschieben lässt die Maße stehen — geprüft am Fenster, nicht am Panel.
+
+    Das Panel meldet je Handlung ihren Ausschnitt; erst das Fenster legt ihn
+    über die Werte, die im Schritt stehen. Ohne diesen Schritt verlöre ein Zug
+    an der Lage die Schraubengröße, und das fiele erst beim nächsten Öffnen
+    auf.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    schritt = SimpleNamespace(id=3, op="insert_keyhole", params={"size": "M5", "drop": 9.0})
+    geschrieben: list[tuple[int, dict]] = []
+
+    fenster = SimpleNamespace(
+        session=SimpleNamespace(
+            project=SimpleNamespace(document=SimpleNamespace(ops=[schritt])),
+            change_params=lambda op_id, params: geschrieben.append((op_id, params)),
+        )
+    )
+    MainWindow._change_part_step(fenster, 3, {"x": 12.0})
+
+    assert geschrieben == [(3, {"size": "M5", "drop": 9.0, "x": 12.0})], geschrieben

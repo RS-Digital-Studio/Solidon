@@ -4555,6 +4555,20 @@ class FeaturePanel(QWidget):
     #: ein Empfänger, der beim falschen Signal ausführt, schreibt einen Schritt
     #: in den Verlauf, den niemand ausgelöst hat.
     valuesChanged = Signal(str, dict)
+
+    stepChangeRequested = Signal(int, dict)
+    """Neue Werte für einen Schritt des Verlaufs — die Kennung und die Werte.
+
+    **Nicht `operationRequested`**, und der Unterschied ist der ganze Punkt:
+    Ein Baustein, den man an seinen Maßen ändert, ist derselbe Schritt mit
+    anderen Zahlen und kein zweiter daneben. Über `operationRequested` stünde
+    nach jeder Korrektur ein weiteres Schlüsselloch im Verlauf, an derselben
+    Stelle über dem alten."""
+
+    stepRemoveRequested = Signal(int)
+    """Diesen Schritt aus dem Verlauf nehmen — der Weg, einen Baustein
+    loszuwerden. Seine Merkmale einzeln zu entfernen ließe die übrigen
+    stehen; ein Schlüsselloch ohne seinen Schlitz ist ein Loch."""
     fitRequested = Signal(str, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -4762,6 +4776,38 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, catalog)
             self._built.append(catalog)
 
+    def show_part(self, operation: Any, spec: Any, *, title: str = "") -> None:
+        """Was sich an diesem **Baustein** ändern lässt — an seinem Schritt.
+
+        Ein Schlüsselloch besteht aus zwölf Merkmalen: zwei Bohrungen, zehn
+        Verrundungen und der Fläche, auf der es sitzt. Wer eines davon
+        anklickt, hat das Schlüsselloch gemeint; die Verrundung trägt für sich
+        gar keine Handlung, und an der Fläche standen die Handlungen einer
+        Fläche (Befund Robert, 10.09.2026).
+
+        Die Werte kommen aus dem Schritt und gehen dorthin zurück
+        (:func:`~app.core.perceive.actions.part_actions`) — gemessene Maße
+        ließen sich nicht verlustfrei zurückschreiben: Aus zwei Durchmessern
+        käme keine Schraubengröße zurück.
+        """
+        from app.core.perceive.actions import part_actions
+
+        self.clear()
+        self._feature_id = None
+        self._empty.setVisible(False)
+
+        heading = QLabel(title or str(spec.title), self)
+        heading.setWordWrap(True)
+        fit_wrapped(heading)
+        set_level(heading, "section")
+        self._rows.insertWidget(self._rows.count() - 1, heading)
+        self._built.append(heading)
+
+        for action in part_actions(operation, spec):
+            row = self._build_action(action)
+            self._rows.insertWidget(self._rows.count() - 1, row)
+            self._built.append(row)
+
     def show_pair(self, first_id: str, first: Feature, second_id: str, second: Feature) -> None:
         """Wie weit zwei gewählte Merkmale auseinanderstehen.
 
@@ -4916,7 +4962,8 @@ class FeaturePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, TIGHT)
         layout.setSpacing(TIGHT)
 
-        if action.op is None:
+        step = getattr(action, "step", None)
+        if action.op is None and step is None:
             # Titel und Grund in **einer** umbrechenden Zeile: Der Grund ist
             # ein Satz, und ein Satz gehört nicht in eine Formularspalte.
             name = QLabel(f"{action.title} — {action.reason}", box)
@@ -5052,6 +5099,15 @@ class FeaturePanel(QWidget):
         entries = tuple(action.fields)
 
         def run(_checked: bool = False) -> None:
+            # **Ein Baustein ändert seinen Schritt, er legt keinen zweiten an.**
+            # Ohne diese Weiche stünde nach jeder Maßkorrektur ein weiteres
+            # Schlüsselloch im Verlauf, an derselben Stelle über dem alten.
+            if step is not None:
+                if action.op is None:
+                    self.stepRemoveRequested.emit(step)
+                else:
+                    self.stepChangeRequested.emit(step, self._values(entries, widgets))
+                return
             self._emit(op_name, entries, widgets, every)
 
         button.clicked.connect(run)

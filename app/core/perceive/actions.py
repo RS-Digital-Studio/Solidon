@@ -184,6 +184,13 @@ class FeatureAction:
     reason: TranslatableText | str = ""
     note: TranslatableText | str = ""
     fields: tuple[ActionField, ...] = field(default_factory=tuple)
+    step: int | None = None
+    """Die Schrittkennung, wenn die Handlung einem **Baustein** gilt.
+
+    Dann startet die Oberfläche keine neue Operation, sondern ändert den
+    Schritt, der das Merkmal erzeugt hat (:func:`part_actions`). Bei allen
+    anderen Handlungen bleibt es ``None``, und ``op`` sagt, was zu starten
+    ist."""
 
 
 def _kind_of(spec: Any) -> str:
@@ -386,3 +393,99 @@ def _spec_or_none(name: str) -> Any:
         return REGISTRY.get(name)
     except Exception:
         return None
+
+
+def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
+    """Die Handlungen eines Bausteins — an seinem Schritt, nicht an einer Fläche.
+
+    Ein Schlüsselloch besteht aus zwölf Merkmalen: zwei Bohrungen, zehn
+    Verrundungen und der Fläche, auf der es sitzt. Wer eine davon anklickt,
+    hat **das Schlüsselloch** gemeint und nicht die Kante des Schlitzes; die
+    Verrundung trägt für sich gar keine Handlung, und die Fläche bot die
+    Handlungen einer Fläche an (Befund Robert, 10.09.2026: „bei einem
+    Schlüsselloch-Aufhängung-Baustein haben wir rechts noch die Auswahl wie
+    für eine Fläche, hier sollten wir aber alles für das Schlüsselloch
+    sehen").
+
+    **Und die Handlungen gelten dem Schritt, nicht dem einzelnen Merkmal.**
+    ``resize_feature`` auf die runde Tasche gesetzt bohrte sie auf und ließe
+    den Schlitz stehen — aus einem Schlüsselloch würde ein Loch mit einem
+    Fortsatz. Was seine Größe wirklich ändert, ist die Schraubengröße im
+    Schritt, und die ändert beide Hälften zusammen.
+
+    Drei Handlungen, in dieser Reihenfolge (Robert: „größe ändern, löschen und
+    verschieben sollte es geben"):
+
+    * **Maße** — die Felder, die der Baustein vorn führt, ohne seine Lage.
+      Welche das sind, entscheidet der Bausteinautor über ``placement``; eine
+      zweite Liste hier wüsste es beim nächsten Baustein nicht.
+    * **Verschieben** — ``x``, ``y``, ``z`` aus derselben Quelle.
+    * **Entfernen** — ohne Felder; sie nimmt den Schritt aus dem Verlauf.
+
+    Die Werte kommen aus dem **Schritt** und nicht aus dem Merkmal. Das ist
+    der Unterschied zu :func:`actions_for`: Dort steht, was gemessen wurde,
+    hier steht, was eingegeben war — und nur das lässt sich ohne Verlust
+    zurückschreiben. Ein Baustein rechnet aus ``size="M4"`` zwei Durchmesser;
+    aus den gemessenen Durchmessern käme keine Schraubengröße zurück.
+    """
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+
+    lage = frozenset(PART_PLACEMENT_PARAMS)
+    schema = {entry.name: entry for entry in spec.params.spec()}
+    values = dict(getattr(operation, "params", {}) or {})
+
+    def taken(names: tuple[str, ...]) -> tuple[ActionField, ...]:
+        fields: list[ActionField] = []
+        for name in names:
+            entry = schema.get(name)
+            if entry is None:
+                continue
+            value = values.get(name, entry.default)
+            fields.append(
+                ActionField(
+                    name=name,
+                    label=entry.title,
+                    unit=entry.unit,
+                    value=value,
+                    kind=_kind_of(entry),
+                    minimum=entry.minimum,
+                    maximum=entry.maximum,
+                    choices=tuple((choice, choice) for choice in (entry.choices or ())),
+                )
+            )
+        return tuple(fields)
+
+    measures = tuple(
+        name for name, entry in schema.items() if entry.placement == "front" and name not in lage
+    )
+    placement = tuple(name for name in ("x", "y", "z") if name in schema)
+
+    actions: list[FeatureAction] = []
+    if measures:
+        actions.append(
+            FeatureAction(
+                title=_("Maße ändern"),
+                op=spec.name,
+                step=operation.id,
+                note=_("Ändert den Schritt, der diesen Baustein gesetzt hat."),
+                fields=taken(measures),
+            )
+        )
+    if placement:
+        actions.append(
+            FeatureAction(
+                title=_("Baustein verschieben"),
+                op=spec.name,
+                step=operation.id,
+                fields=taken(placement),
+            )
+        )
+    actions.append(
+        FeatureAction(
+            title=_("Baustein entfernen"),
+            op=None,
+            step=operation.id,
+            note=_("Nimmt den Schritt aus dem Verlauf. Strg+Z holt ihn zurück."),
+        )
+    )
+    return actions

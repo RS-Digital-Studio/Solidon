@@ -266,6 +266,29 @@ gemessen:
   seitdem eine eigene Zeile in `QUICK_FEATURES`. Wer eine Handlung aus der
   Karte nimmt, zählt je Merkmalsart nach, was übrig bleibt.
 
+**Ein Merkmal aus einem Baustein meint den Baustein.** Die Regel darüber
+schneidet aus, was schon als Feld dasteht; diese sagt, wofür die Felder
+gelten. Ein Schlüsselloch bringt zwölf Merkmale mit, zehn davon
+Verrundungen, und `fillet` trägt im Register keine einzige Operation — wer
+eine Schlitzkante anklickte, sah die Handlungen der Fläche darunter
+(Robert, 10.09.2026: „hier sollten wir aber alles für das Schlüsselloch
+sehen"). Gefragt wird über `Feature.created_by` und die **Kategorie**
+`parts`, nicht über den Namen der Operation: `drill_hole` erzeugt ebenfalls
+eine Bohrung mit Provenienz und ist kein Baustein.
+
+Drei Handlungen, und sie gelten dem **Schritt**: Maße ändern, verschieben,
+entfernen. Ein `resize_feature` auf die runde Tasche bohrte sie auf und
+ließe den Schlitz stehen; was die Größe wirklich ändert, ist die
+Schraubengröße im Schritt, und die ändert beide Hälften zusammen. Die Werte
+kommen aus dem Schritt und nicht aus der Messung — aus zwei gemessenen
+Durchmessern käme keine Schraubengröße zurück, und jedes Zurückschreiben
+verlöre ein Stück.
+
+**Und jede Handlung schickt nur ihren eigenen Ausschnitt.** Das Fenster
+legt ihn über die Werte, die im Schritt stehen (`_change_part_step`); wer
+beim Verschieben den Rest mit Vorgaben überschriebe, setzte die
+Schraubengröße zurück, und das fiele erst beim nächsten Öffnen auf.
+
 **Und eine Beschriftung, die nicht in ihre Spalte passt, bricht um.** Zwei
 Fehler steckten in demselben Bild („Bohru…ndern", Robert, 09.09.2026): Die
 Zweierspalte maß die **Summe** beider Wunschbreiten, teilt den Platz aber

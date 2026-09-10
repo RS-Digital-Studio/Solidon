@@ -1793,6 +1793,12 @@ class MainWindow(QMainWindow):
         # Derselbe Katalog wie aus dem Objektbaum — ein zweiter Weg dorthin,
         # kein zweiter Katalog.
         self.feature_panel.catalogRequested.connect(self.action_catalog)
+        # **Ein Baustein ändert seinen Schritt.** Nicht `launch_operation`:
+        # Das legte bei jeder Maßkorrektur ein zweites Schlüsselloch über das
+        # alte. Beide Wege gehen durch die Sitzung und damit durch eine
+        # Transaktion — ein Strg+Z nimmt sie zurück (§15.4, Regel 19).
+        self.feature_panel.stepChangeRequested.connect(self._change_part_step)
+        self.feature_panel.stepRemoveRequested.connect(self._remove_part_step)
 
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
@@ -10670,6 +10676,15 @@ class MainWindow(QMainWindow):
         if feature is None:
             self.feature_panel.clear()
             return
+        # **Was aus einem Baustein kam, meint den Baustein.** Ein Schlüsselloch
+        # bringt zwölf Merkmale mit — zwei Bohrungen, zehn Verrundungen und die
+        # Fläche darunter —, und wer eine Schlitzkante anklickt, hat nicht die
+        # Kante gemeint (Befund Robert, 10.09.2026).
+        part = self.part_step_of(feature)
+        if part is not None:
+            self.feature_panel.show_part(*part)
+            self.feature_dock.reveal()
+            return
         self.feature_panel.show_feature(
             feature_id,
             feature,
@@ -10678,6 +10693,79 @@ class MainWindow(QMainWindow):
             alone=result is not None and len(result.scene.objects) == 1,
         )
         self.feature_dock.reveal()
+
+    def _common_part_step(self, chosen: Sequence[Any]) -> tuple[Any, Any] | None:
+        """Der Bausteinschritt, zu dem **alle** gewählten Merkmale gehören.
+
+        Eines genügt nicht: Wer eine Bohrung des Schlüssellochs und eine
+        fremde daneben markiert, meint zwei Dinge und keinen Baustein. Erst
+        wenn die ganze Auswahl aus einem Schritt stammt, ist der Schritt die
+        Antwort — und genau das trifft auf sein Dach im Baum zu, das seine
+        zwölf Kinder mitwählt.
+        """
+        result = self.session.last_result
+        if not chosen or result is None:
+            return None
+        steps: set[Any] = set()
+        first: Feature | None = None
+        for object_id, feature_id in chosen:
+            entry = result.scene.objects.get(object_id)
+            feature = entry.features.get(feature_id) if entry is not None else None
+            if feature is None:
+                return None
+            steps.add(getattr(feature, "created_by", None))
+            first = first or feature
+        if len(steps) != 1 or first is None:
+            return None
+        return self.part_step_of(first)
+
+    def _change_part_step(self, step: int, params: dict[str, Any]) -> None:
+        """Neue Werte in den Schritt schreiben, der diesen Baustein gesetzt hat.
+
+        Nur die genannten Werte: Das Panel zeigt je Handlung einen Ausschnitt —
+        die Maße oder die Lage —, und wer den Rest mit Vorgaben überschriebe,
+        setzte beim Verschieben die Schraubengröße zurück.
+        """
+        document = self.session.project.document
+        operation = next((entry for entry in document.ops if entry.id == step), None)
+        if operation is None:
+            return
+        self.session.change_params(step, {**operation.params, **params})
+
+    def _remove_part_step(self, step: int) -> None:
+        """Den Bausteinschritt aus dem Verlauf nehmen.
+
+        Ohne Nachfrage: Ein Verlaufsschritt ist rücknehmbar, und Regel 19
+        verbietet den Bestätigungsdialog davor. Die Ausnahme dort gilt dem
+        Löschen **im Verlauf**, wo abhängige Schritte mitgehen können — hier
+        ist es ein Knopf an dem Ding, das man gerade ansieht.
+        """
+        self.session.remove_operations([step])
+
+    def part_step_of(self, feature: Feature) -> tuple[Any, Any] | None:
+        """Der Bausteinschritt, aus dem dieses Merkmal stammt — sonst nichts.
+
+        Gefragt wird über die Provenienz (``Feature.created_by``) und die
+        Kategorie des Registereintrags, nicht über den Namen der Operation:
+        ``parts`` ist die Auskunft, die auch der nächste Baustein mitbringt,
+        während eine Namensliste hier bei jedem neuen still schwiege.
+
+        Ein **erkanntes** Merkmal trägt keine Provenienz und kommt hier nie an;
+        das ist richtig, denn zu ihm gibt es keinen Schritt, den man ändern
+        könnte.
+        """
+        step = getattr(feature, "created_by", None)
+        if step is None:
+            return None
+        document = self.session.project.document
+        operation = next((entry for entry in document.ops if entry.id == step), None)
+        if operation is None:
+            return None
+        try:
+            spec = REGISTRY.get(operation.op)
+        except AppError, KeyError:
+            return None
+        return (operation, spec) if spec.category == "parts" else None
 
     def _one_cavity(self, entry: Any, first: Feature, second: Feature) -> bool:
         """Ob diese zwei Merkmale derselbe Hohlraum sind — Bohrung und Senkung.
@@ -10708,6 +10796,17 @@ class MainWindow(QMainWindow):
             bodies = self.object_tree.selected_objects()
             if len(bodies) > 1:
                 self.viewport.select(bodies[0], more=bodies[1:])
+        # **Ein Bausteindach im Baum ist ein Baustein, keine Merkmalsmenge.**
+        # „Schlüsselloch-Aufhängung" wählt seine zwölf Kinder mit
+        # (``selected_features``), und zwölf Merkmale sind für die Passung zwei
+        # zu viel: Dort stand „Wählen Sie genau zwei aus", wo der Kunde gerade
+        # ein Ding angeklickt hat (Befund Robert, 10.09.2026: „auch wenn ich
+        # die Schlüsselloch-Aufhängung im Baum wähle, also Viewport und Baum").
+        part = self._common_part_step(chosen)
+        if part is not None:
+            self.feature_panel.show_part(*part)
+            self.feature_dock.reveal()
+            return
         if len(chosen) != 2:
             if len(chosen) > 2:
                 self.feature_panel.show_note(
