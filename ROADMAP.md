@@ -33,7 +33,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Zertifikatszugänge und Signatur-/Notarisierungsbelege je Kundenpaket |
+| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac-Signatur scheitert an `APPLE_SIGN_IDENTITY` („no identity found", 10.09.2026); Identität aus dem Schlüsselbund lesen, dann 0.4.0 vollständig bauen |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
@@ -260,6 +260,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Signatur-/Notarisierungsbelege. Abnahme: veröffentlichungsfähiger Installer mit überprüfter
   Signatur und Zeitstempel beziehungsweise Gatekeeper-/Notarisierungsnachweis für beide
   Mac-Architekturen; den Fremdrechnerweg mit RM-011 abstimmen.
+
+  **Gemessen am 10.09.2026 beim Bau von 0.4.0** (Lauf 34456150383, Tag `v0.4.0`): Der Weg
+  steht vollständig — `MACOS_SIGNING_MODE` auf `notarized`, alle acht Apple-Geheimnisse
+  gesetzt, und die Kette aus `codesign`, `notarytool`, `stapler` und `productsign` ist im
+  Workflow angelegt, mit `spctl --assess` und `pkgutil --check-signature` als Abnahme.
+  Gescheitert ist er trotzdem, auf beiden Architekturen, an derselben Stelle:
+
+      1 identity imported.
+      2 certificates imported.
+      ***: no identity found
+
+  Das Zertifikat kommt also in den Schlüsselbund; gesucht wird es unter dem Namen aus
+  `APPLE_SIGN_IDENTITY`, und **dieser Name findet sich dort nicht**. Das Geheimnis führt
+  den Zertifikatsnamen ein zweites Mal, und die zweite Fassung weicht ab. Alles danach —
+  Notarisierung, `.pkg`, Installersignatur, Mac-Releaseakte — wurde übersprungen; Windows
+  (159 MB) und Linux (459 MB) sind fertig gebaut und liegen als Artefakte des Laufs.
+
+  **Der Vorschlag, und er macht das Geheimnis überflüssig:** Den Fingerabdruck aus dem
+  Schlüsselbund lesen, den der Schritt gerade selbst angelegt hat — dort liegt genau eine
+  Identität (`security find-identity -v -p codesigning "$keychain"`, erste Spalte). Beim
+  Installer **ohne** `-p codesigning`, weil eine Developer-ID-Installer-Identität unter
+  diesem Filter nicht auftaucht. Der Vertrauensraum bleibt unangetastet: derselbe feste
+  Schritt, kein Checkout, kein Python.
+
+  **Entscheidung Robert, 10.09.2026: nicht mehr für 0.4.0.** Die Reparatur kommt mit der
+  nächsten Fassung, und bis dahin wartet die Veröffentlichung vollständig — ein
+  Download-Kasten mit drei von fünf Dateien verspräche Mac-Kunden ein Paket, das es nicht
+  gibt. `website/version.json` steht deshalb weiter auf 0.3.5, und die öffentliche
+  Changelog-Seite zeigt 0.4.0 nicht (`make_changelog.released_only`).
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
 
