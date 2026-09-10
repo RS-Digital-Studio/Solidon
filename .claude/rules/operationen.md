@@ -336,11 +336,17 @@ falsche Richtung zu drehen.
 Langloch wäre entweder rund — dann säße ein Schraubenkopf nur in dessen Mitte
 versenkt — oder selbst ein Langloch, und dann bliebe offen, welche der beiden
 Längen der Kunde meint. Solange die Frage nicht gestellt ist, wird sie nicht
-geraten (Regel 21). Der Dialog graut die drei Aufweitungsfelder aus
-(`depends_on=("slotted", (False,))`), `prepare_ops.bore_shape` legt sie für
-Chat und Kommandozeile beiseite, und `prepare.slot_travel` weist sie ab, wenn
-sie doch zusammen ankommen. Drei Ebenen für eine Entscheidung: Der Dialog ist
-kein Vertrag, und der Kern ist keine Oberfläche.
+geraten (Regel 21). Der Dialog graut alle drei Aufweitungsfelder aus
+(`depends_on=("slotted", (False,))`), `prepare_ops.bore_shape` nullt für Chat
+und Kommandozeile die beiden **Maße**, und `prepare.slot_travel` weist sie ab,
+wenn sie doch zusammen ankommen. Drei Ebenen für eine Entscheidung: Der Dialog
+ist kein Vertrag, und der Kern ist keine Oberfläche.
+
+**Zwei von drei, und das dritte mit Absicht:** `transition_angle` beschreibt
+den Übergang *zwischen* Bohrung und Aufweitung, und ohne eine Aufweitung liest
+ihn `drill_outline` gar nicht. Ihn mitzunullen hieße, einen Wert
+zurückzusetzen, den der Kunde beim nächsten Runden wiederhaben will — die
+Begründung steht am Feld selbst.
 
 **Und ein gesetzter Haken ohne Länge ist eine Absage, keine runde Bohrung.**
 `slot_travel` liest die Null als „rund" — richtig für einen direkten Aufruf,
@@ -380,6 +386,39 @@ mehr die Koplanarität — die rechnet `manifold3d` robust, gemessen 27.08.2026 
 sondern der **Tangentialkontakt**: Ein Langlochkörper ohne Zugabe legte sich
 entlang zweier Linien an die alte Bohrungswand.
 
+## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
+
+`slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; drei Nullen
+heißen „lass es, wo es ist"). Wer versetzt, schließt zuerst die alte Stelle —
+am Netz über `prepare_ops._closed_at`, am exakten Körper über
+`brep.edit.fill_bore` — und schneidet an der neuen. Bis dahin lehnte der exakte
+Kern das mit einem Satz ab; die Absage ist gefallen, weil ihr Grund gefallen
+ist (Robert: „zwischen den beiden soll es keinen unterschied geben bei
+garnichts").
+
+Vier Dinge daran, alle gemessen:
+
+* **An der neuen Stelle wird gebohrt, nicht geändert.** Dort ist volles
+  Material; `resize_bore` verglich stattdessen die zwei Durchmesser, fand sie
+  gleich und gab den Körper unverändert zurück — das Loch blieb, wo es war, und
+  der Befund sagte „Die Bohrung hat bereits diesen Durchmesser".
+* **Die Tiefe wird vor dem Verschließen abgelesen.** `feature.face_indices`
+  zeigen danach auf fremde Dreiecke; dass der Fallback an der Prüfplatte
+  denselben Wert trägt, macht die Reihenfolge nicht richtig.
+* **Die Zuordnung sucht das Merkmal an seiner neuen Mitte.** Mit der alten
+  meldete der Netz-Weg es als verloren und der exakte warf einen Programmfehler.
+* **Beim Versetzen sagt das Volumen nichts.** Eine Bohrung, die ihre Stelle
+  wechselt und ihr Maß behält, lässt genau so viel Material stehen wie vorher;
+  `without_effect` las das als „hat nichts hinzugefügt". Dass etwas geschehen
+  ist, steht anders fest: `moved_hole` ist erst wahr, wenn die Mitte wirklich
+  wandert.
+
+**Und die Vieleckzugabe gehört dazu**, denn das Maß ist ein gemessenes: Ein
+eingeschriebenes 48-Eck ist schmaler als sein Umkreis, und ohne die Zugabe
+schrumpfte die Bohrung bei jedem Versetzen (gemessen: 7,9848 vorher, 7,9696
+danach; mit Zugabe 7,9867). Am exakten Körper entfällt sie — dort ist der
+Zylinder ein Zylinder.
+
 ## Szene: Platzierung, Kennungen, Cache, Projektdatei
 
 Bis zum 06.09.2026 standen diese Regeln in der Karte `app/core/scene/CLAUDE.md`;
@@ -394,6 +433,11 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Kreisfacetten liefern keine scheinbaren linearen Maße. Auf gekrümmten
   Flächen bleiben Punkt und Normale nutzbar, aber keine ebenen Abstände.
   Mittelpunkt-Offsets zeigen von der Bohrungsmitte zum Ziel entlang U/V.
+- **Und die eigene Mitte ist kein Bezug.** `seat_of` nimmt das Merkmal selbst
+  aus den Mittenbezügen der Fläche: Der Abstand eines Lochs zu seiner eigenen
+  Mitte ist null, und zwar immer — im Bild standen dafür zwei Zahlenfelder, die
+  keine Frage beantworteten. Was bleibt, sind die Mitten der **anderen**
+  Löcher.
 - **Wo etwas schon sitzt, wird nicht neu gezielt.** `prepare_surface()`
   beantwortet „wohin darf ich setzen" und verlangt einen Klick auf Material;
   `seat_of()` beantwortet „wo sitzt das, was schon da ist" — die ebene Fläche,

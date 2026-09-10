@@ -3910,8 +3910,10 @@ def test_a_detected_bore_becomes_a_slot(document: Document, profile: Profile) ->
     # mehr ``hole_1``, sondern trägt eine eigene Art — wer auf sie verwiesen
     # hat, findet dort etwas anderes. Ein Schritt, der eine Kennung still
     # umhängt, wäre der schlechtere Weg (Regel 17). Dass das Langloch danach
-    # als Merkmal **dasteht**, prüft ``tests/test_slots.py``; hier zählt der
-    # Satz an den Kunden.
+    # als Merkmal **dasteht**, prüft ``tests/test_slot_features.py``; hier
+    # zählt der Satz an den Kunden. (**Nicht ``test_slots.py``** — die gibt es
+    # auch, und sie prüft die Material-Slots aus §20. Im Deutschen heißt
+    # beides „Slot", und genau hier ist die Verwechslung passiert.)
     assert "slot_hole.feature_renamed" in {finding.code for finding in danach.scene.report.findings}
     assert "hole_1" not in nachher.features
     assert [entry for entry in nachher.features.values() if entry.kind == "slot"], (

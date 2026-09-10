@@ -325,6 +325,8 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Objekt | `SceneObject` | ein Körper in der Szene |
 | Baustein | `Part` | parametrisches Fertigteil aus der Bibliothek |
 | Feature | `Feature` | erkannte Bohrung, Fläche, Kante |
+| Langloch | `slot` | zwei Halbzylinder mit ebenen Flanken, ein Merkmal (§21.1) |
+| Lufteinschluss | `void` | geschlossener Hohlraum ohne Weg nach außen (§21.1) |
 | Provenienz | `provenance` | Herkunft eines Features oder einer Op |
 | Steckbrief | `digest` | Textbeschreibung der Szene für den Agenten |
 | Prüfbericht | `report` | Befunde aus Eingangsstufe, Ops und Prüfungen |
@@ -337,6 +339,14 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 
 Diese Zuordnung ist verbindlich. Ein neuer Begriff kommt zuerst in diese
 Tabelle, dann in den Code.
+
+**Ein Wort steht darin zweimal, und das ist eine Falle:** `slot` ist das
+Langloch **und** der Materialslot aus §20 (`MaterialSlot` — welches Filament
+auf welchem Platz). Im Deutschen heißt beides „Slot", im Code trennt sie der
+Typ, und die Dateinamen sind einander so ähnlich, dass es schon
+danebengegangen ist: `tests/test_slots.py` prüft die Filamente,
+`tests/test_slot_features.py` die Langlöcher. Wer eine Zusage über „Slots"
+liest, sieht nach, welche gemeint sind.
 
 ---
 
@@ -592,9 +602,9 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
 Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
 
 - `FeatureKind`: `hole`, `face`, `edge_loop`, `pin`, `cone`, `sphere`,
-  `torus`, `thread`, `fillet`. `provenance` unterscheidet `detected` und
-  `generated`; `recognised=False` erhält eine Kennung auch dann, wenn ihr
-  Merkmal derzeit nicht sicher erkannt wird (§21.3).
+  `torus`, `thread`, `fillet`, `void`, `slot`. `provenance` unterscheidet
+  `detected` und `generated`; `recognised=False` erhält eine Kennung auch dann,
+  wenn ihr Merkmal derzeit nicht sicher erkannt wird (§21.3).
 - `ObjectKind`: `mesh` oder `brep`; `Quality`: `draft` oder `fine`.
   `MetricSource`: `internal` oder `gcode` — nie vermischen (§22.5).
 - `SketchElementKind`: `point`, `line`, `arc`, `circle`, `spline`.
@@ -1340,6 +1350,30 @@ Zusammenhangskomponenten. Gewinde werden über nachgewiesene Helices erkannt:
 Achse, Steigung, Durchmesser, Länge sowie Innen- oder Außengewinde. Zusammengehörige
 Gewindegänge werden nicht zusätzlich als einzelne Bohrungen, Kegel oder Tori
 angeboten.
+
+**Langlöcher** (`slot`) entstehen aus zwei Zylinderausschnitten, die die
+Einpassung für sich genommen als Verrundungen liest — an einem Netz sind sie
+genau das: Bögen von 180 Grad. Was ein Loch daraus macht, ist die Topologie:
+Beide hängen über einen Mantel quer zur Achse zusammen, und alles darin ist
+entweder einer der zwei Bögen oder eine ebene Flanke im Abstand eines Radius
+von der Mittellinie. Läuft der Mantel über etwas anderes, bleiben es zwei
+Verrundungen — die Gegenprobe dazu ist eine rechteckige Tasche mit vier
+verrundeten Ecken. Gemeldet werden Breite, Gesamtlänge, Verschiebeweg, Achse,
+Richtung und Tiefe. Dieselbe Bauart wie beim Gewinde, und aus demselben Grund:
+Was aus mehreren Einpassungen zusammenwächst, wird am Netz gemessen und
+verschluckt die Formen, aus denen es besteht.
+
+**Lufteinschlüsse** (`void`) sind geschlossene Innenschalen ohne Weg nach
+außen — was ein Negativkörper hinterlässt, den ein fremdes Werkzeug mitschrieb
+und nie abzog. Vier Tore: das Netz ist dicht, sein Umlaufsinn einheitlich, es
+hat mehr als eine Komponente, und die Schale liegt im Material der festen
+Komponenten. An einem offenen Netz sagt ein Vorzeichen nichts; dort wird nicht
+geraten (Regel 21). Gemeldet werden Volumen, Mitte und Ausdehnung. Ohne diese
+Unterscheidung stand ein solcher Hohlraum als **Bohrung** im Objektbaum: gleiche
+Normalen, gleicher Kreis, nur ohne Öffnung. Ob ein Einschluss ein Fehler ist,
+entscheidet Solidon nicht — die Aussparung für einen eingegossenen Magneten und
+ein vergessener Rest sind topologisch dieselbe Sache; benannt wird er trotzdem,
+weil beim Drucken Luft darin bleibt.
 
 **Ein Fleck endet an einer Kante, nicht am Zusammenhang.** Das klingt nach einer
 Feinheit und war der Grund, weshalb eine **gesenkte Bohrung überhaupt nicht in
