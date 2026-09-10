@@ -227,12 +227,13 @@ def edge_key(entry: EdgeInfo) -> str:
     dieser Drucker arbeitet (§11) — feiner hieße, dass ein Kern mit anderer
     Toleranz denselben Punkt anders schreibt.
     """
-    direction = entry.direction
-    lead = next((value for value in direction if abs(value) > 1e-6), 1.0)
-    sign = -1.0 if lead < 0.0 else 1.0
-    return "e:{:.2f},{:.2f},{:.2f}:{:.3f},{:.3f},{:.3f}".format(
-        *entry.middle, *(value * sign for value in direction)
-    )
+    # **Die Formatierung steht einmal**, in ``geom.edges``: Sie gilt für
+    # beide Kerne, und dieselbe Kante muss aus beiden denselben Schlüssel
+    # bekommen. Zwei Fassungen liefen daran schon auseinander — an der
+    # negativen Null, die sich als ``-0.000`` schreibt.
+    from app.core.geom.edges import edge_key as shared
+
+    return shared(entry)
 
 
 def named_edges(solid: Solid, keys: Sequence[str]) -> list[EdgeInfo]:

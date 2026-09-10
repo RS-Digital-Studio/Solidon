@@ -260,6 +260,18 @@ verschoben hat — der gedrehte wiche einem Nachbarn aus, der längst woanders
 steht. Die Regel dazu steht in `.claude/rules/operationen.md` unter „Und die
 vierte hängt an keinem Parameter".
 
+**Kanten**
+
+`edges.py` — die Kanten eines Netzes als **Züge**, mit denselben Schlüsseln,
+die der exakte Kern vergibt. Eine Bauteilkante besteht in einem feinen Netz
+aus vielen Dreieckskanten; wer sie einzeln ausgäbe, zeigte vierzig Kanten, wo
+der Kunde eine sieht. `edge_key` steht hier und wird von `brep.edit`
+mitbenutzt: Dieselbe Kante bekommt aus beiden Kernen denselben Schlüssel,
+sonst müsste alles darüber — Anklicken, Beschriftung, der Parameter
+`edge_keys` — die zwei Rechenwege auseinanderhalten. `MeshEdge.convex` sagt
+zusätzlich, ob Material weggeht oder dazukommt; am exakten Körper weiß das
+die Topologie selbst.
+
 **Messen und Schneiden**
 
 `measure.py` (§18.3 — Abstand, Wandstärke, Winkel, und der **Fang**: `visible_edges` und `corner_points` sagen, was im Bild überhaupt eine Kante oder eine Ecke ist, `snap` zieht den Klick darauf) · `section.py` (Ebene durch einen Körper, §18.2) ·
