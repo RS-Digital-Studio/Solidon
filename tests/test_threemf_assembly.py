@@ -813,3 +813,57 @@ def test_empty_repeated_components_are_bounded_during_import(
         assert refused.value.constraint == "too_many_components"
         assert refused.value.values["components"] == 2 * (threemf_reader.MAX_DEPTH + 1) + 1
         assert refused.value.suggestions
+
+
+def test_every_part_keeps_its_own_geometry_in_a_long_assembly() -> None:
+    """Neunzehn Teile, und jedes trägt seine eigenen Dreiecke (§29).
+
+    **Der Fall, an dem der strömende Schreiber zuerst gescheitert ist.** Die
+    Geometrie entsteht seit dem 10.09.2026 als Text und kommt über eine Marke
+    ins fertige XML — ein ``ET.SubElement`` je Ecke und je Dreieck legte für
+    eine Kundenbaugruppe von 500 000 Dreiecken rund 750 000 Objekte an, und
+    vier von fünf Läufen brachen nativ ab.
+
+    Die erste Marke hieß ``SOLIDON-MESH-2``, und das ist der Anfang von
+    ``SOLIDON-MESH-20``: Bei einer Baugruppe mit mehr als acht Teilen fand sie
+    sich mehrfach im Dokument. Gefangen hat das die Zählung in ``_fill_in``;
+    ohne sie wäre die Geometrie des ersten Teils mitten in die Marke des
+    zwanzigsten geraten.
+
+    **Neunzehn Teile, und die Zahl ist gerechnet, nicht geschätzt.** Die
+    Nummern beginnen bei zwei, also braucht der erste Präfixkonflikt die
+    Nummer 20 — und die gehört dem neunzehnten Teil. Der erste Anlauf nahm
+    zwölf, weil „zehn" nach der ersten zweistelligen Zahl aussieht; bei zwölf
+    Teilen laufen die Nummern von 2 bis 13, und keine ist der Anfang einer
+    anderen. Die Gegenprobe hat es gezeigt: mit der alten Marke ohne Klammern
+    blieb der Test grün.
+
+    Geprüft wird die **Sache** und nicht die Bauart: Jedes Objekt trägt so
+    viele Dreiecke und Ecken wie sein Körper, keine Marke bleibt im Dokument
+    stehen, und die Nummern sind die des Build.
+    """
+    bodies = [trimesh.creation.box(extents=(1.0 + n, 2.0, 3.0)) for n in range(19)]
+    parts = [
+        threemf.AssemblyPart(mesh=MeshData.of(body), name=f"teil_{n + 1}")
+        for n, body in enumerate(bodies)
+    ]
+
+    payload = threemf.write_assembly(parts)
+
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        document = container.read(threemf.MODEL_PATH).decode("utf-8")
+
+    assert "SOLIDON-MESH" not in document, "eine Marke ist im ausgelieferten Dokument geblieben"
+
+    root = ET.fromstring(document)
+    objects = root.findall(f".//{{{CORE}}}resources/{{{CORE}}}object")
+    assert len(objects) == len(bodies), "jedes Teil bekommt ein eigenes Objekt"
+
+    for body, node in zip(bodies, objects, strict=True):
+        triangles = node.findall(f".//{{{CORE}}}triangle")
+        vertices = node.findall(f".//{{{CORE}}}vertex")
+        assert len(triangles) == len(body.faces), f"{node.get('id')}: Dreiecke"
+        assert len(vertices) == len(body.vertices), f"{node.get('id')}: Ecken"
+
+    built = [item.get("objectid") for item in root.findall(f".//{{{CORE}}}build/{{{CORE}}}item")]
+    assert built == [node.get("id") for node in objects]

@@ -28,6 +28,7 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
+from typing import Final
 from xml.etree import ElementTree as ET
 
 from app.branding import APP_NAME, APP_VERSION
@@ -426,13 +427,29 @@ def _slots_for(mesh: MeshData, slots: Sequence[MaterialSlot] | None) -> list[Mat
     ]
 
 
+#: Der Platz, an dem die Geometrie eines Körpers ins fertige XML kommt.
+#: Ein Zähler dahinter, weil eine Baugruppe mehrere trägt; die Zeichen sind
+#: bewusst harmlos, damit ``ElementTree`` sie unverändert durchreicht.
+#:
+#: **Die Klammern am Ende sind nicht Zierat.** Ohne sie hieß die Marke
+#: ``SOLIDON-MESH-2``, und das ist der Anfang von ``SOLIDON-MESH-20`` bis
+#: ``-26``: Bei einer Baugruppe mit 25 Teilen fand sich die erste Marke
+#: achtmal im Dokument, und die Prüfung in :func:`_fill_in` hielt an. Sie hat
+#: den Fehler gefangen, weil sie zählt statt zu ersetzen — eine Ersetzung ohne
+#: Zählung hätte die Geometrie des ersten Teils mitten in die Marke des
+#: zwanzigsten geschrieben.
+_GEOMETRY_MARK: Final = "[SOLIDON-MESH-{number}]"
+
+
 def _write_geometry(
     parent: ET.Element,
     mesh: MeshData,
     group_id: str,
     order: dict[int, int],
     native: bool = False,
-) -> None:
+    *,
+    number: int = 0,
+) -> tuple[str, bytes]:
     """Ecken und Dreiecke eines Körpers, mit ihrer Materialzuordnung.
 
     Eine Stelle für beide Wege: eine Baugruppe schreibt dieselben Dreiecke wie
@@ -444,38 +461,72 @@ def _write_geometry(
     Stellen rundeten gröber, als zwei Punkte auseinanderliegen dürfen, um
     verschiedene zu sein. Was die Stelle kostet, ist gemessen: an einer Kugel
     mit 5 120 Dreiecken sechs Prozent mehr XML, gepackt weniger.
-    """
-    geometry = ET.SubElement(parent, "mesh")
-    vertices = ET.SubElement(geometry, "vertices")
-    for point in mesh.raw.vertices:
-        ET.SubElement(
-            vertices,
-            "vertex",
-            {"x": f"{point[0]:.6f}", "y": f"{point[1]:.6f}", "z": f"{point[2]:.6f}"},
-        )
 
-    triangles = ET.SubElement(geometry, "triangles")
+    **Die Geometrie entsteht als Text und nicht als Baum**, und das ist der
+    Grund für die Rückgabe: Zurück kommen die Marke, die im Baum steht, und
+    die Bytes, die an ihre Stelle gehören. Ein ``ET.SubElement`` je Ecke und je
+    Dreieck legte für eine Kundenbaugruppe von 500 000 Dreiecken rund 750 000
+    Objekte an, jedes mit eigenem Attributverzeichnis — und ``ET.tostring``
+    läuft am Ende noch einmal über alle. Gemessen am 10.09.2026 an 25 Teilen
+    mit zusammen gut 500 000 Dreiecken: **vier von fünf Läufen brachen ab**,
+    einer davon mit Speicherzugriffsfehler, die übrigen mit
+    ``SystemError: error return without exception set`` aus CPythons
+    ElementTree. Der Fehler ist älter als diese Fassung — am Stand 0.3.5
+    gemessen drei von fünf.
+
+    Der Baum trägt jetzt je Körper **ein** Element mit der Marke als Text; die
+    Zeichenkette daneben wächst linear und ohne Objektaufwand. Nach dem Umbau
+    waren es zwei rote Läufe von vierundzwanzig statt vier von fünf; was übrig
+    bleibt, ist dieselbe native Speicherfamilie, die dieses Projekt an
+    mehreren Stellen hat.
+
+    **Was herauskommt, ist Zeichen für Zeichen dasselbe wie vorher.** Gemessen
+    am 10.09.2026 gegen drei vor dem Umbau geschriebene Dateien — ein Körper,
+    ein bemalter Körper, eine Baugruppe, mit ``&`` und ``<`` in den Namen —,
+    alle drei byte-identisch. Im Tor steht dafür
+    ``test_every_part_keeps_its_own_geometry_in_a_long_assembly``: Es zählt je
+    Objekt Dreiecke und Ecken und verlangt, dass keine Marke im ausgelieferten
+    Dokument stehen bleibt.
+    """
+    mark = _GEOMETRY_MARK.format(number=number)
+    geometry = ET.SubElement(parent, "mesh")
+    geometry.text = mark
+
+    lines: list[str] = ["<vertices>"]
+    for point in mesh.raw.vertices:
+        lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
+    lines.append("</vertices><triangles>")
+
     assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
     for face, slot in zip(mesh.raw.faces, assignment, strict=True):
-        ET.SubElement(
-            triangles,
-            "triangle",
-            {
-                "v1": str(int(face[0])),
-                "v2": str(int(face[1])),
-                "v3": str(int(face[2])),
-                "pid": group_id,
-                "p1": str(order.get(int(slot), 0)),
-                **(
-                    {
-                        "paint_color": _paint_code(order[int(slot)]),
-                        "slic3rpe:mmu_segmentation": _paint_code(order[int(slot)]),
-                    }
-                    if native
-                    else {}
-                ),
-            },
+        position = order.get(int(slot), 0)
+        painted = (
+            f' paint_color="{_paint_code(order[int(slot)])}"'
+            f' slic3rpe:mmu_segmentation="{_paint_code(order[int(slot)])}"'
+            if native
+            else ""
         )
+        lines.append(
+            f'<triangle v1="{int(face[0])}" v2="{int(face[1])}" v3="{int(face[2])}"'
+            f' pid="{group_id}" p1="{position}"{painted} />'
+        )
+    lines.append("</triangles>")
+    return mark, "".join(lines).encode("utf-8")
+
+
+def _fill_in(document: bytes, blocks: Sequence[tuple[str, bytes]]) -> bytes:
+    """Setzt jede Geometrie an die Stelle ihrer Marke.
+
+    Die Marke steht als Text in einem leeren ``<mesh>``-Element, also genau
+    zwischen ``<mesh>`` und ``</mesh>`` — ersetzt wird sie deshalb wörtlich.
+    Fehlte eine, bliebe sie als Text in der Datei stehen; deshalb wird gezählt.
+    """
+    for mark, geometry in blocks:
+        marker = mark.encode("ascii")
+        if document.count(marker) != 1:
+            raise RuntimeError(f"Die Marke {mark} steht {document.count(marker)}-mal im Dokument.")
+        document = document.replace(marker, geometry, 1)
+    return document
 
 
 def _assembly_xml(
@@ -534,6 +585,7 @@ def _assembly_xml(
     positions = {slot_identity(entry): entry.index for entry in materials}
 
     build = ET.SubElement(root, "build")
+    blocks: list[tuple[str, bytes]] = []
     for number, part in enumerate(parts, start=2):
         order = {slot.index: positions.get(slot_identity(slot), 0) for slot in assembly_slots(part)}
         body = ET.SubElement(
@@ -547,14 +599,26 @@ def _assembly_xml(
                 **({"name": part.name} if part.name else {}),
             },
         )
-        _write_geometry(body, part.mesh, group_id, order, bool(part.slots or part.mesh.slots))
+        blocks.append(
+            _write_geometry(
+                body,
+                part.mesh,
+                group_id,
+                order,
+                bool(part.slots or part.mesh.slots),
+                number=number,
+            )
+        )
         item = {"objectid": str(number)}
         placement = _placement(bed, part.plate, stride)
         if placement is not None:
             item["transform"] = placement
         ET.SubElement(build, "item", item)
 
-    return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(ET.tostring(root, encoding="utf-8"))
+    document = b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
+        ET.tostring(root, encoding="utf-8")
+    )
+    return _fill_in(document, blocks)
 
 
 def _placement(bed: tuple[float, float] | None, plate: int, stride: float) -> str | None:
@@ -630,12 +694,15 @@ def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
         "object",
         {"id": "2", "type": "model", "pid": group_id, "pindex": "0"},
     )
-    _write_geometry(body, mesh, group_id, order)
+    block = _write_geometry(body, mesh, group_id, order, number=2)
 
     build = ET.SubElement(root, "build")
     ET.SubElement(build, "item", {"objectid": "2"})
 
-    return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(ET.tostring(root, encoding="utf-8"))
+    document = b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
+        ET.tostring(root, encoding="utf-8")
+    )
+    return _fill_in(document, [block])
 
 
 def _colour(slot: MaterialSlot) -> str:
