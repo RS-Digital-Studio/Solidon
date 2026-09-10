@@ -3957,7 +3957,31 @@ class MainWindow(QMainWindow):
         nichts gehen, gleich was der Kunde täte. Steht ein Körper da, ist das
         Menü einen Klick entfernt — und dann ist die graue Zeile die Auskunft,
         die ihn hinführt.
+
+        **Solange eine ganzseitige Ansicht vorn liegt, hält diese Funktion
+        still**, und das ist keine Feinheit: Auf dem Startbildschirm
+        entscheidet ``_show_start_screen`` über die Leiste, und zwar schärfer —
+        was eine offene Szene voraussetzt, steht dort gar nicht erst herum.
+        Diese Funktion blendet aber nicht nur aus, sie blendet auch **wieder
+        ein**, sobald ein einziger Eintrag geht. Der erste ``_update_actions``
+        nach dem Wechsel holte damit *Bearbeiten*, *Erzeugen*, *Bausteine* und
+        *Ansicht* zurück — vier Menüs, die der Startbildschirm gerade
+        beiseitegestellt hatte. Der Test dazu sah es nicht: Er maß das frisch
+        gebaute Fenster, und ``action_new`` ruft kein ``_update_actions``; in
+        der laufenden Anwendung tut das jedes Signal.
+
+        **Gefragt wird deshalb nach dem Arbeitsbereich und nicht nach dem
+        Startbildschirm.** Der Stapel hat eine dritte Seite — das Lager —, und
+        der Startbildschirm trägt einen Knopf dorthin. Wer von dort aus *Hilfe
+        → Freischalten* wählt, löst ein ``_update_actions`` über einer Seite
+        aus, der die Leiste ebenso wenig gehört; die vier Menüs stehen beim
+        Zurückkommen wieder da. Und das heilt nicht von selbst: Auf dem
+        Startbildschirm rechnet niemand die Leiste neu, das tut allein
+        ``_show_start_screen``.
         """
+        if self.stack.currentWidget() is not self.overlay:
+            return
+
         result = self.session.last_result
         if result is not None and result.scene.objects:
             # Ein Körper liegt da: alles bleibt stehen, auch das Gesperrte.
@@ -5149,7 +5173,7 @@ class MainWindow(QMainWindow):
             view = InventoryView(self)
             self._inventory_view = view
             self.stack.addWidget(view)
-            view.backRequested.connect(lambda: self.stack.setCurrentWidget(self._inventory_return))
+            view.backRequested.connect(self._leave_inventory)
             view.catalogueChanged.connect(self._refresh_inventory)
             view.bookingModeChanged.connect(self._set_inventory_booking_mode)
             view.lowStockThresholdChanged.connect(self._set_inventory_threshold)
@@ -5160,6 +5184,22 @@ class MainWindow(QMainWindow):
         view.set_low_stock_threshold(self.settings.inventory_low_stock_percent)
         view.refresh()
         self.stack.setCurrentWidget(view)
+
+    def _leave_inventory(self) -> None:
+        """Zurück aus dem Lager — und die Leiste einmal nachrechnen.
+
+        Solange das Lager vorn liegt, hält ``_hide_dead_menus`` still: Die
+        Seite gehört ihr nicht. Was sich in der Zwischenzeit an der Auswahl
+        oder an der Szene geändert hat, steht deshalb erst wieder in der
+        Leiste, wenn hier jemand rechnet.
+
+        Als Methode und nicht als Lambda, denn der Absender ist ein Kind
+        dieses Fensters: Ein Lambda, das ``self`` fängt, schließt über die
+        C++-Grenze einen Ring, den der Speicherbereiniger nicht mehr aufbricht
+        (``wartezeit.md``).
+        """
+        self.stack.setCurrentWidget(self._inventory_return)
+        self._update_actions()
 
     def _set_inventory_booking_mode(self, mode: str) -> None:
         self.settings.inventory_booking_mode = mode

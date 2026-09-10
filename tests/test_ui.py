@@ -874,6 +874,14 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
     voraus — als Leiste voller ausgegrauter Einträge waren sie Kulisse, keine
     Auskunft. Datei und Hilfe bleiben: Öffnen, Beenden, Handbuch und
     Freischalten sind genau dort sinnvoll.
+
+    **Und sie bleiben es auch nach ``_update_actions``.** Der erste Bau maß nur
+    das frisch aufgebaute Fenster, und ``action_new`` ruft kein
+    ``_update_actions`` — in der laufenden Anwendung tut das jedes Signal.
+    ``_hide_dead_menus`` blendet dabei nicht nur aus, es blendet auch wieder
+    ein, sobald ein Eintrag geht: Bearbeiten, Erzeugen, Bausteine und Ansicht
+    standen so nach dem ersten Klick wieder in der Leiste, ohne dass ein
+    Projekt offen war.
     """
 
     def shown() -> list[str]:
@@ -887,6 +895,8 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
     for menu in window._workspace_menus:
         assert not menu.menuAction().isVisible(), menu.title()
     assert len(shown()) == 2, shown()
+    window._update_actions()
+    assert len(shown()) == 2, shown()
 
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
@@ -896,6 +906,24 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
     window.session._dirty = False
     window.action_new()
     assert len(shown()) == 2, "zurück auf dem Startbildschirm gilt wieder die kurze Leiste"
+    window._update_actions()
+    assert len(shown()) == 2, "und auch, wenn danach ein Signal die Aktionen auffrischt"
+
+    # Und über die dritte Seite des Stapels ebenso: Vom Startbildschirm führt
+    # ein Knopf ins Lager, und dort frischt jeder Weg über das Hilfemenü die
+    # Aktionen auf. Auch dort gehört die Leiste nicht `_hide_dead_menus` —
+    # sonst stehen die vier Menüs beim Zurückkommen wieder da, und auf dem
+    # Startbildschirm rechnet sie niemand mehr nach.
+    from app.ui.filament_inventory import InventoryView
+
+    window.start_screen.inventory_button.click()
+    assert window.stack.currentWidget() is window._inventory_view
+    window._update_actions()
+    inventory = window._inventory_view
+    assert isinstance(inventory, InventoryView)
+    inventory.back_button.click()
+    assert window.stack.currentWidget() is window.start_screen
+    assert len(shown()) == 2, "der Umweg über das Lager bringt keine Menüs mit zurück"
 
 
 def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
