@@ -147,3 +147,28 @@ tools/.window-bench-profile/
 # Sperr- und Zwischendateien gehören niemandem sonst.
 /.claude/memory/.*.lock
 /.claude/memory/.memory-index-*
+
+# Was ein Release-Lauf an Protokollen hinterlässt. Die Sondenordner daneben
+# sind eingecheckt und bleiben es — sie tragen ein README und ein Skript, das
+# jemand wieder fahren kann. Ein Protokoll von sechs Megabyte trägt das nicht;
+# es ist Verlauf, und Verlauf steht in ROADMAP-ARCHIV.md und der Git-History
+# (Gesamtdurchsicht 11.09.2026: 76 Dateien, 6,0 MB, davon zwei Logs mit 2,6
+# und 3,2 MB, ungedeckt vor einem `git add -A`).
+/.claude/.state/release-*/
+
+# Was beim Konstruieren im Wurzelverzeichnis liegen bleibt. Druckprojekte
+# gehören nach `3D Drucker/` mit seinem eigenen Repository, Exporte nirgendwo
+# hin — und ein `git add -A` nimmt sie sonst mit.
+#
+# **Nur die Wurzel**, deshalb der führende Schrägstrich: Der Korpus unter
+# `tests/data/meshes/` besteht aus genau diesen Endungen und bleibt.
+/*.p3d
+/*.stl
+/*.3mf
+/*.obj
+/*.step
+/*.png
+# `mushroom.stl` liegt seit dem 25.08.2026 getrackt in der Wurzel und wird von
+# keiner Datei genannt. Sie hier zu verdecken hieße, sie zu vergessen; ob sie
+# bleibt, entscheidet jemand, der weiß, wofür sie da war.
+!/mushroom.stl

@@ -442,7 +442,7 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     # ohne dass ein Test etwas sagte.
     #
     # ``mypy`` hält diese Zeile inzwischen für unerreichbar, und für alles, was
-    # ``FeatureKind`` zulässt, hat es recht: Die neun Arten sind oben
+    # ``FeatureKind`` zulässt, hat es recht: Die elf Arten sind oben
     # vollständig behandelt, und `tests/test_digest_and_fits.py` hält das fest.
     # Stehen bleibt sie trotzdem, weil der Typ nichts garantiert, was aus einer
     # **Projektdatei** kommt: `_feature_from_data` liest `kind` aus JSON, und

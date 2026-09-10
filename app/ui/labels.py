@@ -1667,7 +1667,7 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     # die im Inneren des Materials sind, was nicht sein kann").
     if feature.kind == "void":
         return f"{tr('Lufteinschluss')} {feature_id.rsplit('_', 1)[-1]}"
-    # Seit alle zehn Arten einen Namen haben, hält mypy diese Zeile für
+    # Seit alle elf Arten einen Namen haben, hält mypy diese Zeile für
     # unerreichbar — und hat für den deklarierten Typ recht. Sie bleibt
     # trotzdem: ``kind`` kommt aus einer Projektdatei, und eine ältere
     # oder neuere Fassung kann eine Art tragen, die dieser Bestand nicht
@@ -1743,7 +1743,7 @@ def feature_measure(feature: Feature) -> str:
     # will, ist, wie viel Luft im Teil steckt.
     if feature.kind == "void":
         return volume(float(params.get("volume", 0.0)))
-    # Wie bei ``feature_name`` oben: Seit alle zehn Arten ein Maß haben,
+    # Wie bei ``feature_name`` oben: Seit alle elf Arten ein Maß haben,
     # hält mypy diese Zeile für unerreichbar — und **das ist die
     # Bestätigung, dass die Verzweigung vollständig ist**. Sie bleibt
     # trotzdem, weil ``kind`` aus einer Projektdatei kommt und eine

@@ -358,7 +358,7 @@ def is_a_cavity(feature: Feature) -> bool:
 #: doppelte Stärke der dünnsten Stelle, und Wandstärke ist druckkritisch.
 #:
 #: Wer ``sleeve_at`` beibringt, ein Langloch zu messen, trägt ``slot`` hier ein
-#: — bis dahin ist das Schweigen die richtigere Antwort (ROADMAP RM-151).
+#: — bis dahin ist das Schweigen die richtigere Antwort (ROADMAP RM-152).
 
 
 #: Wie viele Filamente die Operationen benennen lassen (§20).
