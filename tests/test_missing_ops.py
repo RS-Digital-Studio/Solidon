@@ -1164,3 +1164,58 @@ def test_the_operation_actually_asks(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "mesh.not_simplified" in {f.code for f in result.findings}, (
         f"die Operation fragt nicht danach: {sorted(f.code for f in result.findings)}"
     )
+
+
+def test_a_bold_style_carries_thicker_strokes_at_the_same_height() -> None:
+    """Was der Schnitt für den Druck bedeutet, in Zahlen.
+
+    Bis zum 10.09.2026 bot die Beschriftung drei Schriften an — die drei
+    Familien, die matplotlib mitbringt. Die **Schnitte** dazu lagen längst im
+    selben Paket, vier Dateien je Familie, und niemand kam an sie heran.
+
+    Für den Druck ist das keine Geschmacksfrage: ``MIN_SIZE`` steht bei drei
+    Millimetern, weil dünne Striche unter einer Düsenbreite verschmieren. Ein
+    fetter Schnitt trägt bei **gleicher Höhe** dickere Striche und bleibt
+    lesbar, wo der normale schon zerfällt — gemessen an „ABC 123" auf 10 mm:
+    88,59 mm² normal gegen 149,72 fett, also 69 Prozent mehr Material.
+    """
+    from app.core.geom.label_ops import FONT_STYLES, FONTS
+
+    for font in FONTS:
+        areas = {
+            style: sum(shape.area for shape in outlines("ABC 123", 10.0, font, style))
+            for style in FONT_STYLES
+        }
+        assert areas["bold"] > areas["regular"] * 1.2, (
+            f"{font}: fett trägt spürbar mehr Material — {areas}"
+        )
+        # Kursiv ist geneigt und nicht dicker; die Fläche bleibt in derselben
+        # Größenordnung. Ohne diese Zeile wäre der Test auch mit vier gleichen
+        # Schnitten grün.
+        assert math.isclose(areas["italic"], areas["regular"], rel_tol=0.05), (
+            f"{font}: kursiv neigt, es verdickt nicht — {areas}"
+        )
+
+
+def test_a_font_that_is_not_there_says_so_instead_of_quietly_becoming_another() -> None:
+    """matplotlib fällt still auf DejaVu Sans zurück — Solidon nicht mehr.
+
+    Gemessen am 10.09.2026: ``FontProperties(family="Arial")`` findet auf
+    Windows Arial und auf Mac und Linux nichts; ``findfont`` liefert trotzdem
+    ein Ergebnis, nämlich ``DejaVuSans.ttf``, und schreibt eine Zeile auf die
+    Fehlerausgabe, die kein Kunde sieht. Ein Projekt sähe damit auf zwei
+    Rechnern verschieden aus, ohne dass irgendwo etwas stünde — genau das, wovor
+    der Kommentar an ``FONTS`` seit je warnt.
+
+    Solange nur mitgelieferte Familien zur Wahl stehen, kann es nicht
+    eintreten. Der Riegel gilt der nächsten mitgelieferten Schrift, die es aus
+    einem Paketfehler nicht ins Paket schafft (Regel 21).
+    """
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as fehler:
+        outlines("A", 10.0, "Eine Schrift, die es nicht gibt")
+
+    assert fehler.value.field == "font"
+    assert "Eine Schrift, die es nicht gibt" in str(fehler.value.detail)
+    assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"

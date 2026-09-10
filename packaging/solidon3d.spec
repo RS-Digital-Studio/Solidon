@@ -65,6 +65,12 @@ datas = [
     (str(ROOT / "app" / "core" / "knowledge" / "data"), "app/core/knowledge/data"),
     (str(ROOT / "app" / "core" / "knowledge" / "parts" / "LICENSE"), "app/core/knowledge/parts"),
     (str(ROOT / "app" / "core" / "backends" / "data"), "app/core/backends/data"),
+    # Die mitgelieferten Beschriftungsschriften (Liberation, SIL OFL). Ohne sie
+    # steht die Familie im Dialog zur Wahl und ist beim Kunden nicht da —
+    # matplotlib fiele dann auf DejaVu zurück, und ein Projekt sähe hier anders
+    # aus als beim Bauen. `label_ops.font_properties` fängt genau das ab und
+    # sagt es, statt es zu tun; damit es nicht dazu kommt, reist der Ordner mit.
+    (str(ROOT / "app" / "core" / "geom" / "data"), "app/core/geom/data"),
     (str(ROOT / "app" / "i18n" / "locales"), "app/i18n/locales"),
     (str(ROOT / "app" / "examples"), "app/examples"),
     # Das Fenster rastert sein Symbol zur Laufzeit aus der SVG-Quelle.

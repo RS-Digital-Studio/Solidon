@@ -18,6 +18,7 @@ Umriss ist ein Umriss, ob ihn eine Schrift gezeichnet hat oder Inkscape.
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path, PurePath
 from typing import Any, Final, Literal, cast
 
 import numpy as np
@@ -63,7 +64,99 @@ LABEL_BURIED_SHARE: Final = 0.5
 #: Beschriftung sieht also auf jedem Rechner gleich aus — eine Systemschrift,
 #: die es auf einem Rechner gibt und auf dem nächsten nicht, ist ein Projekt,
 #: das sich unterschiedlich öffnet.
-FONTS: tuple[str, ...] = ("DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono")
+FONTS: tuple[str, ...] = (
+    "DejaVu Sans",
+    "DejaVu Serif",
+    "DejaVu Sans Mono",
+    "Liberation Sans",
+    "Liberation Serif",
+    "Liberation Mono",
+)
+
+#: Wo die mitgelieferten Schriften liegen, die matplotlib nicht selbst kennt.
+#:
+#: **Liberation, und zwar aus einem Grund, der nichts mit Geschmack zu tun
+#: hat:** Die drei Familien sind metrisch kompatibel zu Arial, Times New Roman
+#: und Courier New — dieselben Zeichenbreiten, dieselbe Zeilenlänge. Wer eine
+#: Beschriftung „in Arial" erwartet, bekommt sie, ohne dass eine Schrift ins
+#: Paket muss, die niemand weitergeben darf.
+#:
+#: Zwölf Dateien und 4,2 MB, weil jede Familie ihre vier Schnitte mitbringt.
+#: Drei Regular allein wären billiger und wären eine Falle: Der Schnitt stünde
+#: dann bei DejaVu zur Wahl und bei Liberation nicht, ohne dass es jemand
+#: sähe — matplotlib fällt still zurück (:func:`font_properties`).
+#:
+#: SIL Open Font License 1.1, Lizenztext unter
+#: ``knowledge/data/third_party_licenses/``.
+BUNDLED_FONTS: Final[Path] = Path(__file__).parent / "data" / "fonts"
+
+#: Welche mitgelieferte Schriftsippe unter welchem Lizenztext steht.
+#:
+#: **Eine Tabelle und kein Namensraten.** Der erste Anlauf las die Sippe aus
+#: dem Dateinamen — ``LiberationMono-Bold.ttf`` vor dem ersten Bindestrich
+#: ergibt ``LiberationMono``, und danach suchte der Wächter einen Lizenztext,
+#: den es unter diesem Namen nicht gibt. Die Zuordnung ist eine Aussage, keine
+#: Zeichenkettenoperation: Wer eine Schrift dazulegt, trägt sie hier ein, und
+#: ``tests/test_licences.py`` verlangt beides — den Eintrag und die Datei.
+BUNDLED_FONT_LICENCES: Final[dict[str, str]] = {
+    "Liberation": "Liberation-2.1.5-OFL-1.1.txt",
+}
+
+_registered = False
+
+
+def _register_bundled_fonts() -> None:
+    """Die mitgelieferten Schriften einmal je Prozess bei matplotlib anmelden.
+
+    Ohne das findet ``findfont`` sie nicht: Es sucht in den Systemordnern und
+    im eigenen Datenverzeichnis, und ein Ordner in der Anwendung ist beides
+    nicht. ``addfont`` trägt eine Datei in den laufenden Fontmanager ein, ohne
+    seinen Zwischenspeicher auf der Platte anzufassen.
+
+    **Einmal je Prozess**, denn ``addfont`` liest jede Datei und legt sie in
+    die Liste — zwölf Dateien bei jedem Aufruf von :func:`outlines` wären zwölf
+    Dateizugriffe je Buchstabengruppe.
+    """
+    global _registered
+    if _registered:
+        return
+    from matplotlib import font_manager
+
+    for entry in sorted(BUNDLED_FONTS.glob("*.ttf")):
+        font_manager.fontManager.addfont(str(entry))
+    _registered = True
+
+
+#: Die Schnitte, die jede dieser Familien mitbringt — und die bis zum
+#: 10.09.2026 niemand anbieten konnte.
+#:
+#: Sie liegen längst im Paket: matplotlib führt zu jeder Familie vier Dateien
+#: (regular, bold, oblique, bold-oblique), und ``FONTS`` nannte nur die erste.
+#: Aus drei Einträgen werden damit zwölf, ohne ein Byte mehr.
+#:
+#: **Fett ist dabei kein Geschmack, sondern eine Drucksache.** Die
+#: Untergrenze von :data:`MIN_SIZE` steht bei drei Millimetern, weil dünne
+#: Striche unter einer Düsenbreite verschmieren; ein fetter Schnitt hält
+#: dieselbe Höhe mit dickeren Strichen aus und bleibt lesbar, wo der normale
+#: schon zerfällt.
+#:
+#: Als **zweiter Parameter** und nicht als zwölf Einträge in einer Liste: Der
+#: Kunde wählt eine Schrift und danach, wie sie aussehen soll — zwei kurze
+#: Listen statt einer langen, und mit jeder weiteren Familie wächst nur die
+#: erste. Der Schlüssel ist englisch, weil er in der Projektdatei steht.
+FONT_STYLES: Final[tuple[str, ...]] = ("regular", "bold", "italic", "bold_italic")
+
+#: Was ein Schnitt für ``FontProperties`` bedeutet: Gewicht und Neigung.
+_STYLE_PROPERTIES: Final[dict[str, tuple[str, str]]] = {
+    "regular": ("normal", "normal"),
+    "bold": ("bold", "normal"),
+    # ``oblique`` und nicht ``italic``: DejaVu führt geneigte Schnitte, keine
+    # echten kursiven. Wer hier ``italic`` verlangt, bekommt von matplotlib
+    # den geneigten — aber über einen Rückfall, und ein Rückfall, der zufällig
+    # das Richtige trifft, ist keine Zusage.
+    "italic": ("normal", "oblique"),
+    "bold_italic": ("bold", "oblique"),
+}
 
 #: Erklärungen, die beide Beschriftungs-Operationen teilen.
 _WHERE = _("Wo die Schrift sitzt. Eine angeklickte Fläche trägt Ort und Richtung selbst ein.")
@@ -75,19 +168,66 @@ _FACING = _(
 _FACING_MORE = _("Weitere Achse der Richtung — siehe Normale X.")
 _SIZE = _("Höhe der Großbuchstaben. Unter drei Millimetern verliert der Druck die Form.")
 _FONT = _("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
+_STYLE = _(
+    "Fett trägt bei kleinen Buchstaben dickere Striche und bleibt lesbar, wo der "
+    "normale Schnitt schon verschmiert."
+)
 
 #: Darunter sind die Buchstaben dünner als eine Düse und drucken als Schmierer.
 MIN_SIZE = 3.0
 
 
-def outlines(text: str, size: float, font: str = FONTS[0]) -> list[Any]:
+def font_properties(font: str, style: str = FONT_STYLES[0]) -> Any:
+    """Familie und Schnitt als ``FontProperties`` — und die Zusage, dass es sie gibt.
+
+    **matplotlib fällt still zurück.** Wer eine Schrift verlangt, die auf dem
+    Rechner fehlt, bekommt keine Ausnahme, sondern DejaVu Sans und eine Zeile
+    auf der Fehlerausgabe. Gemessen am 10.09.2026: ``family="Liberation Sans"``
+    löst auf einem Rechner ohne Liberation nach ``DejaVuSans.ttf`` auf, und
+    ``family="Arial"`` findet auf Windows Arial und sonst nirgends — genau das
+    Projekt, „das sich unterschiedlich öffnet", vor dem der Kommentar an
+    :data:`FONTS` warnt.
+
+    Solange nur mitgelieferte Familien zur Wahl stehen, kann das nicht
+    eintreten. Es bleibt trotzdem eine Zusage, die niemand einlöste — und eine
+    mitgelieferte Schrift, die es aus einem Paketfehler nicht ins Paket
+    schafft, fiele lautlos auf DejaVu zurück (Regel 21).
+    """
+    from matplotlib.font_manager import FontProperties, findfont
+
+    _register_bundled_fonts()
+    weight, slant = _STYLE_PROPERTIES.get(style, _STYLE_PROPERTIES[FONT_STYLES[0]])
+    # ``slant`` stammt aus :data:`_STYLE_PROPERTIES` und ist dort immer einer
+    # der drei Werte, die matplotlib kennt; der Parameter selbst kommt als
+    # ``str`` aus dem Schema, und diese Kenntnis hat mypy nicht.
+    prop = FontProperties(
+        family=font, weight=weight, style=cast(Literal["normal", "italic", "oblique"], slant)
+    )
+    found = PurePath(findfont(prop)).name
+    if font.split()[0].lower() not in found.lower():
+        raise ValidationError(
+            field="font",
+            detail=_(
+                "Die Schrift „{font}“ ist auf diesem Rechner nicht zu finden. "
+                "Wählen Sie eine der mitgelieferten — dann sieht das Projekt "
+                "überall gleich aus.",
+                font=font,
+            ),
+            value=font,
+            constraint="missing_font",
+        )
+    return prop
+
+
+def outlines(
+    text: str, size: float, font: str = FONTS[0], style: str = FONT_STYLES[0]
+) -> list[Any]:
     """Die Buchstaben als Polygone, in Millimetern, auf dem Ursprung sitzend."""
-    from matplotlib.font_manager import FontProperties
     from matplotlib.textpath import TextPath
     from shapely.geometry import Polygon as ShapelyPolygon
     from shapely.ops import unary_union
 
-    path = TextPath((0.0, 0.0), text, size=size, prop=FontProperties(family=font))
+    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
     rings = [np.asarray(entry, dtype=float) for entry in path.to_polygons()]
     rings = [entry for entry in rings if len(entry) >= 4]
     if not rings:
@@ -123,6 +263,7 @@ def local_text_body(
     font: str,
     depth: float,
     *,
+    style: str = FONT_STYLES[0],
     mode: Literal["raised", "engraved", "body"] = "body",
     angle: float = 0.0,
 ) -> MeshData:
@@ -131,7 +272,7 @@ def local_text_body(
         raise ValidationError(
             field="text", detail=_("Ohne Text gibt es nichts aufzubringen."), constraint="empty"
         )
-    shapes = outlines(text, size, font)
+    shapes = outlines(text, size, font, style)
     height = depth + (BOOLEAN_OVERLAP if mode != "body" else 0.0)
     body = label_solid(shapes, height) if shapes else None
     if body is None:
@@ -250,6 +391,13 @@ class LabelParams(BaseParams):
         choices=FONTS,
         placement="advanced",
         doc=_("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht."),
+    )
+    style: str = param(
+        title=_("Schnitt"),
+        default=FONT_STYLES[0],
+        choices=FONT_STYLES,
+        placement="advanced",
+        doc=_STYLE,
     )
     x: float = param(
         title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
@@ -386,7 +534,9 @@ def label_text(ctx: OpContext) -> OpResult:
     # Fläche, nur die Überlappung reicht hinein. Graviert: die Tiefe reicht
     # hinein, nur die Überlappung steht über — sonst nimmt der Schnitt die
     # Überlappung weg und lässt die Buchstaben als Kratzer zurück.
-    body = local_text_body(params.text, params.size, params.font, params.depth, mode=mode)
+    body = local_text_body(
+        params.text, params.size, params.font, params.depth, style=params.style, mode=mode
+    )
 
     placed = place(
         body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
@@ -469,6 +619,13 @@ class LabelBodyParams(BaseParams):
         placement="advanced",
         doc=_FONT,
     )
+    style: str = param(
+        title=_("Schnitt"),
+        default=FONT_STYLES[0],
+        choices=FONT_STYLES,
+        placement="advanced",
+        doc=_STYLE,
+    )
     x: float = param(
         title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
     )
@@ -524,7 +681,14 @@ def create_label(ctx: OpContext) -> OpResult:
             constraint="empty",
         )
 
-    body = local_text_body(params.text, params.size, params.font, params.depth, angle=params.angle)
+    body = local_text_body(
+        params.text,
+        params.size,
+        params.font,
+        params.depth,
+        style=params.style,
+        angle=params.angle,
+    )
     placed = place(body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz))
     return OpResult(
         outputs=[SceneObject(id="", name=params.name or params.text.strip()[:20], mesh=placed)]

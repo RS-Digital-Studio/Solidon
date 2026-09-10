@@ -596,7 +596,16 @@ def test_the_manual_finds_a_place_for_a_new_language(monkeypatch: pytest.MonkeyP
 #: Auswahlwerte, die ihr eigener Name sind: Normteilgrößen (M4), Maße (6x3),
 #: Einheiten, Achsen, Schriftnamen und der eine Eigenname unter den
 #: Gitterstrukturen. Sie heißen in jeder Sprache gleich.
-SELF_NAMING = re.compile(r"^(M\d+(\.\d+)?|\d+x\d+|mm|cm|in|m|x|y|z|DejaVu .*|gyroid)$")
+#:
+#: **Schriftnamen sind Marken und keine Wörter.** „Liberation Sans" heißt auf
+#: Französisch nicht „Libération Sans" — der Name steht so in der
+#: Schriftdatei, und wer ihn übersetzte, machte aus einer Auswahl eine
+#: Behauptung über eine Schrift, die es nicht gibt. Die **Schnitte** daneben
+#: (Normal, Fett, Kursiv) sind das Gegenteil: gewöhnliche Wörter, die jede
+#: Sprache selbst hat, und die stehen deshalb in ``_CHOICE_NAMES``.
+SELF_NAMING = re.compile(
+    r"^(M\d+(\.\d+)?|\d+x\d+|mm|cm|in|m|x|y|z|DejaVu .*|Liberation .*|gyroid)$"
+)
 
 
 def self_naming_sizes() -> frozenset[str]:

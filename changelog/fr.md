@@ -31,6 +31,7 @@ dans `website/version.json`.
 
 - Un fraisage au-dessus d'un perçage est conservé même sur une pièce aux surfaces rondes et galbées. Auparavant il disparaissait, avec lui le déplacement commun des deux.
 - Une cavité entièrement dans la matière, sans issue, figure dans l'arborescence comme poche d'air, avec son volume. Auparavant, elle y figurait comme un perçage qui n'existait pas.
+- Les inscriptions proposent désormais six polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale.
 
 ## 0.4.0
 

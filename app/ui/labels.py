@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Collection, Mapping, Sequence
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Final, Literal
 
 from PySide6.QtCore import QDate, QDateTime, QLocale, QObject, QSize, Qt, Signal
@@ -731,6 +731,13 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "face": _("Auf eine Fläche"),
     "raised": _("Erhaben"),
     "engraved": _("Vertieft"),
+    # Die Schnitte einer Beschriftungsschrift. Der Schlüssel ist englisch, weil
+    # er in der Projektdatei steht; der Name hier ist es nicht, denn „bold" ist
+    # kein Wort, das eine deutsche Oberfläche stehen lässt.
+    "regular": _("Normal"),
+    "bold": _("Fett"),
+    "italic": _("Kursiv"),
+    "bold_italic": _("Fett kursiv"),
     "flat": _("Flach"),
     "cylinder": _("Umlaufend"),
     "all": _("Alle"),
@@ -888,6 +895,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "face": _("Wirkt nur auf der gewählten Fläche statt auf dem ganzen Körper."),
     "raised": _("Steht aus der Fläche hervor — gut lesbar, auch ohne Farbwechsel."),
     "engraved": _("In die Fläche vertieft — bündig und unempfindlich."),
+    "regular": _("Der übliche Schnitt — schlank, für Höhen ab etwa fünf Millimetern."),
+    "bold": _("Dickere Striche bei gleicher Höhe — die Wahl für kleine Buchstaben."),
+    "italic": _("Geneigt, für Hervorhebungen."),
+    "bold_italic": _("Geneigt und mit dickeren Strichen."),
     "flat": _("Wird flach aufgelegt, ohne sich der Form zu biegen."),
     "cylinder": _("Läuft einmal rund um den Körper."),
     "all": _("Alle zusammen — ohne Auswahl einer einzelnen."),
@@ -1782,6 +1793,29 @@ def local_timestamp(value: str) -> str:
     if not instant.isValid():
         return value
     return QLocale(get_language()).toString(instant.toLocalTime(), QLocale.FormatType.ShortFormat)
+
+
+def local_moment(value: datetime) -> str:
+    """Datum und Uhrzeit eines Zeitpunkts in der Anzeigesprache.
+
+    Schwester zu :func:`local_timestamp`, die aus einem gespeicherten
+    ISO-Text kommt; diese hier nimmt, was ``datetime.fromtimestamp`` einer
+    Dateizeit liefert. Ohne sie stand im Wiederherstellungsdialog ein festes
+    ``%d.%m.%Y %H:%M`` — deutsche Reihenfolge in jeder Sprache, während die
+    relativen Angaben daneben („vor einer Stunde") längst mitwanderten.
+
+    **Das Jahr bleibt vierstellig.** ``ShortFormat`` kürzt es je nach Sprache
+    auf zwei Ziffern — „05.03.26" —, und das war vorher nicht so; eine
+    Sicherung aus einem anderen Jahrzehnt ließe sich dann schlechter einordnen
+    als zuvor. Geändert wird deshalb nur diese eine Stelle im Muster:
+    Reihenfolge, Trenner und Uhrzeitform bleiben Sache der Sprache. Dieselbe
+    Bauart wie in :func:`calendar_date`, die den Wochentag herausnimmt.
+    """
+    locale = QLocale(get_language())
+    pattern = locale.dateTimeFormat(QLocale.FormatType.ShortFormat)
+    if "yyyy" not in pattern:
+        pattern = pattern.replace("yy", "yyyy")
+    return locale.toString(QDateTime.fromSecsSinceEpoch(int(value.timestamp())), pattern)
 
 
 def calendar_date(value: date | None) -> str:

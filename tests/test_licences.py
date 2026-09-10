@@ -293,3 +293,63 @@ def test_the_notice_file_travels_where_the_fallback_looks_for_it() -> None:
     assert licences._notice_file(frozen=True, executable=executable) == (
         executable.parent / "THIRD-PARTY-NOTICES.md"
     )
+
+
+def test_every_bundled_font_carries_its_licence() -> None:
+    """Was mitreist, ohne ein Paket zu sein, braucht seine eigene Akte (Regel 22).
+
+    Die Prüfungen darüber lesen `pyproject.toml` und die installierten
+    Verteilungen — von zwölf TTF-Dateien in `app/core/geom/data/fonts/` wissen
+    sie nichts. Sie werden trotzdem ausgeliefert, und für den Kunden ist eine
+    mitgelieferte Schrift dasselbe wie eine mitgelieferte Bibliothek.
+
+    Dieselbe Lücke hat bei den ComfyUI-Abläufen schon einmal zugeschlagen: Ein
+    Ablauf nannte einen GPL-Knoten, und keine Lizenzprüfung sah es
+    (`.claude/rules/kern.md`). Hier ist die Zusage schärfer zu haben — es sind
+    Dateien im Baum, und die lassen sich zählen.
+    """
+    from app.core.geom.label_ops import BUNDLED_FONTS, FONTS
+
+    fonts = sorted(BUNDLED_FONTS.glob("*.ttf"))
+    assert fonts, f"keine mitgelieferte Schrift gefunden — {BUNDLED_FONTS}"
+
+    from app.core.geom.label_ops import BUNDLED_FONT_LICENCES
+
+    licences_dir = Path(__file__).parent.parent / "app" / "core" / "knowledge" / "data"
+    # **Jede Datei gehört zu einem Eintrag, und jeder Eintrag zu einer Datei.**
+    # Beide Richtungen, denn eine Tabelle, die eine Schrift nicht kennt, ist
+    # genauso stumm wie ein Eintrag, dem die Schrift fehlt.
+    for entry in fonts:
+        clan = next((name for name in BUNDLED_FONT_LICENCES if entry.name.startswith(name)), None)
+        assert clan is not None, (
+            f"{entry.name} liegt bei, steht aber in keiner Lizenzzuordnung — "
+            f"bekannt sind {sorted(BUNDLED_FONT_LICENCES)}"
+        )
+    for clan, text in BUNDLED_FONT_LICENCES.items():
+        assert any(entry.name.startswith(clan) for entry in fonts), (
+            f"{clan} steht in der Zuordnung, es liegt aber keine Datei davon bei"
+        )
+        assert (licences_dir / "third_party_licenses" / text).is_file(), (
+            f"{clan}: der Lizenztext {text} fehlt"
+        )
+
+    # **Und die Freigabeliste kennt die Lizenz.** Ein Lizenztext, der
+    # danebenliegt, ohne dass die Liste ihn zulässt, ist eine Akte ohne
+    # Entscheidung.
+    allowed = (licences_dir / "licences.toml").read_text(encoding="utf-8")
+    assert '"OFL-1.1"' in allowed, "die SIL Open Font License steht nicht in der Freigabeliste"
+
+    # **Was zur Wahl steht, muss auch da sein.** Eine Familie in ``FONTS``,
+    # deren Dateien fehlen, fiele beim Kunden nicht auf, sondern auf DejaVu
+    # zurück — matplotlib meldet das nur auf der Fehlerausgabe.
+    #
+    # Verglichen wird der volle Familienname ohne Leerzeichen gegen den
+    # Dateinamen vor dem Bindestrich: „Liberation Sans" gegen
+    # „LiberationSans-Regular.ttf". DejaVu bringt matplotlib selbst mit und
+    # liegt deshalb nicht in unserem Ordner.
+    bundled = {entry.stem.split("-")[0].lower() for entry in fonts}
+    for family in FONTS:
+        flat = family.replace(" ", "").lower()
+        assert flat in bundled or flat.startswith("dejavu"), (
+            f"{family} steht zur Wahl, liegt aber nicht bei — {sorted(bundled)}"
+        )

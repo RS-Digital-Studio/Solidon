@@ -281,7 +281,23 @@ die Topologie selbst.
 
 `mesh_ops.py` (Arbeit am Netz selbst) · `colour_ops.py` · `paint.py` (Flächen
 in ein Filament färben) · `texture.py` (von einer Textur zu druckbaren Slots)
-· `label_ops.py` (Text und Logos auf einer Fläche)
+· `label_ops.py` (Text und Logos auf einer Fläche; die Schriften dazu liegen
+in `data/fonts/`)
+
+**Eine Beschriftung sieht überall gleich aus, oder sie ist keine.** Ein Projekt
+wandert zwischen Rechnern, und eine Systemschrift, die es hier gibt und dort
+nicht, macht daraus zwei verschiedene Teile. Angeboten wird deshalb nur, was
+mitreist: DejaVu bringt matplotlib mit, Liberation liegt als zwölf TTF-Dateien
+in `data/fonts/` (SIL OFL, Lizenztext unter `knowledge/data/third_party_licenses/`,
+Zuordnung in `BUNDLED_FONT_LICENCES`). Sechs Familien mal vier Schnitte —
+`FONT_STYLES` holt die Schnitte über `weight` und `style` aus denselben
+Dateien, die ohnehin im Paket liegen.
+
+**Und matplotlib fällt still zurück.** Wer eine Schrift verlangt, die fehlt,
+bekommt keine Ausnahme, sondern DejaVu Sans und eine Zeile auf der
+Fehlerausgabe. `font_properties` prüft deshalb nach, was `findfont`
+zurückgegeben hat, und sagt es (Regel 21) — die zweite Hürde hinter der Spec,
+die den Ordner mitnimmt.
 
 ## Was eine Operation hier einhalten muss
 

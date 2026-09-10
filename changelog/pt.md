@@ -30,6 +30,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Um escareado sobre um furo passa a manter-se também numa peça com superfícies redondas e curvas — antes perdia-se aí, e o furo e o seu escareado já não podiam ser deslocados em conjunto.
 - Uma cavidade inteiramente dentro do material, sem saída, aparece na árvore de objetos como bolsa de ar, com o seu volume. Antes aparecia como um furo que não existia.
+- As inscrições oferecem agora seis tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura.
 
 ## 0.4.0
 

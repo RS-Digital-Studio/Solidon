@@ -11,6 +11,12 @@
 # ausschließlich als extern installierte Programme aufgerufen, nie
 # mitgeliefert.
 #
+# **Und was mitreist, ohne ein Paket zu sein, ebenfalls.** Die Liberation-
+# Schriften liegen als zwölf TTF-Dateien in `app/core/geom/data/fonts/` und
+# werden mit ausgeliefert; `pip` weiß nichts von ihnen. Ihr Lizenztext steht
+# unter `third_party_licenses/Liberation-2.1.5-OFL-1.1.txt`, und
+# `test_every_bundled_font_carries_its_licence` hält beides zusammen.
+#
 # **Was extern läuft, steht trotzdem hier.** Die Prüfung unten sieht nur, was
 # in der eigenen Laufzeit installiert ist — ein Programm, das Solidon bloß
 # aufruft, kommt darin nicht vor und wäre damit die einzige Abhängigkeit ohne
@@ -57,6 +63,13 @@
 # ``known``.
 allowed = [
   "MIT",
+  # SIL Open Font License — die mitgelieferten Liberation-Schriften
+  # (`geom/data/fonts/`, zwölf Dateien, 4,2 MB). Sie sind kein Python-Paket
+  # und tauchen in der Prüfung unten deshalb nicht auf; was sie hält, ist
+  # `tests/test_licences.py::test_every_bundled_font_carries_its_licence` —
+  # dieselbe Überlegung wie bei den ComfyUI-Abläufen, deren Lizenzfrage auch
+  # nicht in `pyproject.toml` steht (`.claude/rules/kern.md`).
+  "OFL-1.1",
   "MIT-CMU",
   "0BSD",
   "BSD-2-Clause",

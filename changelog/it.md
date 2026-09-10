@@ -30,6 +30,7 @@ scrive in `website/version.json`.
 
 - Una svasatura sopra un foro viene mantenuta anche su un pezzo con superfici tonde e sinuose: prima andava persa, e foro e svasatura non potevano più essere spostati insieme.
 - Una cavità interamente nel materiale, senza via d'uscita, compare nell'albero degli oggetti come sacca d'aria, con il suo volume. Prima compariva come un foro inesistente.
+- Le scritte offrono ora sei caratteri invece di tre, più grassetto e corsivo. Il grassetto porta tratti più spessi a parità di altezza.
 
 ## 0.4.0
 

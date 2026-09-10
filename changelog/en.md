@@ -30,6 +30,7 @@ it into `website/version.json`.
 
 - A countersink above a hole is now kept even on a part with round, sweeping surfaces — previously it was dropped there, and the hole and its countersink could no longer be moved together.
 - A cavity entirely inside the material, with no way out, appears in the object tree as an air pocket — with its volume. Previously it appeared as a hole that was not there.
+- Labels now offer six fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.
 
 ## 0.4.0
 

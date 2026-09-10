@@ -55,6 +55,7 @@ Nutzen da und sonst nichts.
 
 - Eine Senkung über einer Bohrung bleibt auch an einem Teil erhalten, das runde, geschwungene Flächen hat — vorher fiel sie dort weg, und Bohrung und Senkung ließen sich nicht mehr gemeinsam versetzen.
 - Ein Hohlraum ganz im Material, ohne Verbindung nach außen, steht als Lufteinschluss im Objektbaum — mit seinem Volumen. Vorher stand dort eine Bohrung, die es nicht gab.
+- Beschriftungen haben jetzt sechs Schriften statt drei — dazu Fett und Kursiv. Fett trägt bei gleicher Höhe dickere Striche und bleibt lesbar, wo der normale Schnitt verschmiert.
 
 ## 0.4.0
 
