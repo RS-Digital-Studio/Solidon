@@ -191,6 +191,17 @@ unter diesen Rand würde einen Ringsims erzeugen und die Hohlraumkette trennen.
 
 `placement_fields(schema)` ordnet alle Ortsfelder dem gespeicherten Namen zu.
 
+`depth_field(operation, schema, values)` daneben beantwortet, **welches Feld
+die Eindringtiefe ist** — die Flächenplatzierung geht danach nach dem Klick in
+ihre Tiefenstufe (§18.5). Der Name allein trägt das nicht: Zwölf Operationen
+führen ein Längenfeld `depth`, und bei dreien geht es nach außen — die Nase
+von `insert_latch` steht vor, Beschriftung und Textur sind erhaben oder
+eingelassen. Gefragt wird deshalb nach der **Richtung**, aus derselben Quelle
+wie die Boolesche Operation und die Vorschaufarbe (`cuts`,
+`cuts_by_parameter`, also `ParamSpec.subtractive_on`). Wer eine Operation mit
+einem `depth` baut, das aufträgt, deklariert das dort — sonst zieht die Maus
+an einem Wert, der nichts abträgt.
+
 Jedes erzeugte Schema besitzt eigene Dataclass-Felder. Eine weitergereichte
 `Field`-Instanz würde beim nächsten Klassenaufbau ihren Namen ändern und
 damit frühere, insbesondere private Rezeptschemas beschädigen.

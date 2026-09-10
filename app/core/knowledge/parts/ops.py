@@ -308,6 +308,52 @@ def normal_fields(params: type[BaseParams]) -> tuple[str, str, str]:
     return names[0], names[1], names[2]
 
 
+def depth_field(
+    operation: str, params: type[BaseParams], values: BaseParams | None = None
+) -> str | None:
+    """Das Feld, das angibt, wie tief ein platziertes Werkzeug ins Material geht.
+
+    Es beantwortet die Frage, ob ein Ort allein die Platzierung schon fertig
+    macht: Eine Bohrung hat eine Tiefe und ist mit dem Klick erst zur Hälfte
+    gesetzt, ein Lochwand-Einhänger hat keine und ist fertig. Die
+    Oberflächenplatzierung liest das, um nach dem Klick in die Tiefenstufe zu
+    gehen (Robert, 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
+    seitenansicht sehen und dann die tiefe runterziehen").
+
+    **Der Name allein trägt die Auskunft nicht.** Zwölf Operationen führen ein
+    Längenfeld ``depth``, und bei dreien geht es nach *außen*: die Nase von
+    ``insert_latch`` steht vor, Beschriftung und Textur sind erhaben oder
+    eingelassen, je nach ``mode``. Ein Zug nach unten hätte dort einen Wert
+    vergrößert, der nichts abträgt — genau die Verwechslung, vor der
+    ``placement_fields`` warnt, nur eine Ebene tiefer. Gefragt wird deshalb
+    zusätzlich nach der **Richtung**, und zwar aus derselben Quelle, aus der
+    auch die Boolesche Operation und die Vorschaufarbe sie lesen
+    (:func:`cuts`, :func:`cuts_by_parameter`).
+
+    Ohne Werte zählt ein Umschalter als abtragend — er **kann** es sein, und
+    die Tiefenstufe ist ein Angebot und keine Sperre; sobald der Dialog Werte
+    hat, entscheidet der gewählte Wert.
+    """
+    for entry in params.spec():
+        if entry.name == "depth" and entry.unit == "mm":
+            break
+    else:
+        return None
+    part = part_of(operation)
+    if part is not None:
+        return "depth" if cuts(part, values) else None
+    declared = cuts_by_parameter(params)
+    if declared is None:
+        # Keine Richtungsangabe und kein Baustein: eine Operation, die ein
+        # ``depth`` führt und nirgends sagt, dass sie aufträgt, trägt ab —
+        # ``drill_hole``, ``plug_hole``, ``sketch_pocket``.
+        return "depth"
+    name, wanted = declared
+    if values is None:
+        return "depth"
+    return "depth" if getattr(values, name, None) in wanted else None
+
+
 def _camel(name: str) -> str:
     return "".join(word.capitalize() for word in name.split("_"))
 

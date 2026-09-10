@@ -409,6 +409,11 @@ class TextureParams(BaseParams):
         title=_("Art"),
         default="raised",
         choices=("raised", "engraved"),
+        # **Er sagt die Richtung, und die braucht mehr als die Boolesche
+        # Operation.** Die Tiefenstufe der Flächenplatzierung fragt hier,
+        # ob ein Zug nach unten überhaupt etwas abträgt; bei ``raised``
+        # vergrößerte sie sonst einen Wert, der nach außen geht.
+        subtractive_on=("engraved",),
         doc=_(
             "Erhaben legt das Muster auf die Fläche, vertieft schneidet es hinein. "
             "Ein vertieftes Rändel greift sich anders als ein erhabenes — welches "

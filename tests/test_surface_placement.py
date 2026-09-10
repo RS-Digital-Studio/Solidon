@@ -1034,3 +1034,39 @@ def test_the_welded_adjacency_is_built_once_per_mesh_and_not_once_per_click():
     raw.vertices[0][0] += 1.0
     danach = placement._welded_adjacency(raw, np.asarray(raw.vertices, dtype=np.float64))
     assert danach is not erste, "die alte Nachbarschaft ueberlebte eine Netzaenderung"
+
+
+def test_a_depth_that_goes_outwards_gets_no_depth_stage():
+    """Zwölf Operationen führen ein ``depth`` — bei dreien geht es nach außen.
+
+    Die Tiefenstufe der Flächenplatzierung zieht die Maus nach unten ins
+    Material. Wer den Namen des Feldes für die Auskunft hält, zieht damit auch
+    an der vorstehenden Nase von ``insert_latch`` und an einer erhabenen
+    Beschriftung — Werte, die nichts abtragen. Gefragt wird deshalb nach der
+    Richtung, aus derselben Quelle wie die Boolesche Operation und die
+    Vorschaufarbe.
+    """
+    from app.core.knowledge.parts.ops import depth_field
+
+    load_operations()
+
+    for name in ("drill_hole", "plug_hole", "sketch_pocket", "insert_screw_hole"):
+        spec = REGISTRY.get(name)
+        assert depth_field(name, spec.params) == "depth", f"{name} bohrt ins Material"
+
+    # Die Nase steht vor: kein Zug nach unten.
+    latch = REGISTRY.get("insert_latch")
+    assert depth_field("insert_latch", latch.params) is None
+
+    # Und wo ein Umschalter die Richtung führt, entscheidet sein Wert.
+    for name, values in (
+        ("label_text", {"text": "A"}),
+        ("apply_texture", {}),
+    ):
+        spec = REGISTRY.get(name)
+        raised = spec.params(**values, mode="raised")
+        engraved = spec.params(**values, mode="engraved")
+        assert depth_field(name, spec.params, raised) is None, f"{name} erhaben trägt nichts ab"
+        assert depth_field(name, spec.params, engraved) == "depth", f"{name} vertieft schon"
+        # Ohne Werte bleibt es ein Angebot: Der Umschalter *kann* abtragen.
+        assert depth_field(name, spec.params) == "depth"

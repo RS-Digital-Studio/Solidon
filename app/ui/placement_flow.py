@@ -23,17 +23,27 @@ from PySide6.QtGui import (
     QPolygonF,
     QRegion,
 )
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QWidget,
+)
 from shiboken6 import isValid
 
 from app.core import expressions
 from app.core.errors import AppError, ValidationError
-from app.core.geom.mesh import as_mesh_data
-from app.core.knowledge.parts.ops import normal_fields, placement_fields
+from app.core.geom.mesh import as_mesh_data, ray_hit_distances
+from app.core.geom.transform import snap_to_marks
+from app.core.knowledge.parts.ops import depth_field, normal_fields, placement_fields
 from app.core.knowledge.profiles import for_object
+from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.scene import placement
 from app.core.types import Feature, SceneObject, Vec3
+from app.core.units import EPS_GEOM
 from app.i18n import tr
 from app.ui.labels import LengthSpin, feature_name, length
 from app.ui.leash import stop_watching_the_dying
@@ -41,6 +51,21 @@ from app.ui.op_dialog import OperationDialog
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
+
+#: Wie nah der Zeiger einer Marke kommen muss, damit sie ihn hält — in
+#: Bildpunkten, wie jede Fangweite der Oberfläche (siehe ansicht.md,
+#: "Die Fangweite gehört in Bildpunkte").
+SNAP_PIXELS = 12.0
+
+#: Die flachste Tiefe, auf die der Zug fallen darf. **Nicht null**, denn dort
+#: kippt die Bedeutung: ``depth = 0`` heißt „durch das ganze Teil" (siehe das
+#: Schema von ``drill_hole``). Wer nach oben zieht, um flacher zu werden, führe
+#: sonst am Ende des Wegs geradewegs hindurch. Ein Zehntelmillimeter ist unter
+#: jeder Schichthöhe und damit ohne eigene Wirkung; die Null bleibt über das
+#: Maßfeld erreichbar, wo sie ausgeschrieben dasteht.
+LEAST_DEPTH_MM = 0.1
+
+_log = get_logger(__name__)
 
 
 def starts_by_itself(spec: OperationSpec) -> bool:
@@ -263,8 +288,32 @@ class PlacementFlow(QObject):
         self._frozen = False
         self._distance_valid = True
         self._commit_pending = False
-        self._confirm_waiting = False
         self._updating = False
+        #: Ob die Tiefenstufe läuft — Stufe 2 der Platzierung. Der Klick legt
+        #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
+        #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
+        #: seitenansicht sehen und dann die tiefe runterziehen").
+        self._deepening = False
+        #: Ob die Tiefe angehalten ist. Der Klick in der Tiefenstufe friert sie
+        #: ein, damit die Maus sie nicht weiter verstellt, während man zum Knopf
+        #: fährt oder die Zahl nachbessert.
+        self._depth_set = False
+        #: Der Bildpunkt, an dem das Ziehen begann, und der Wert dazu. Gemessen
+        #: wird die Strecke von dort, nicht von Bild zu Bild: Eine Summe aus
+        #: Schritten driftet, sobald ein Ereignis ausfällt.
+        #: Wie viele Millimeter ein Bildpunkt Zug bedeutet. Wird beim Beginn
+        #: aus dem Maßstab der Ansicht gesetzt, damit der Zug am kleinen wie am
+        #: großen Teil dasselbe Gefühl hat.
+        self._depth_per_pixel = 0.1
+        #: Wo die linke Taste in der Tiefenstufe gedrückt wurde — die Strecke
+        #: bis zum Loslassen entscheidet, ob es ein Klick war oder ein Zug an
+        #: der Kamera.
+        self._pressed_at: tuple[int, int] | None = None
+        #: Die Darstellungsart vor der Tiefenstufe — geliehen, nicht gesetzt.
+        self._display_before: str | None = None
+        #: Und die Kamerastellung davor, aus demselben Grund: Der Schwenk quer
+        #: zur Werkzeugachse gehört der Stufe, nicht dem Kunden.
+        self._camera_before: tuple[Any, Any, Any, float | None] | None = None
         self._canvas = _Dimensions(self.viewport)
         self._bar = QFrame(self.viewport)
         self._bar.setObjectName("surface_placement_bar")
@@ -296,6 +345,26 @@ class PlacementFlow(QObject):
             field.installEventFilter(self)
             field.valueChangedMm.connect(self._distance_changed)
             field.hide()
+        #: Die Tiefe als Zahl — dasselbe Feld wie die Kantenabstände, damit
+        #: Ausdruck und Einheitenumschaltung mitkommen. Sie steht in Stufe 3 an
+        #: der Stelle der Kantenmaße: Die zeigen die Fläche, auf der gesetzt
+        #: wurde, und die ist dort entschieden (Robert, 09.09.2026: „die maße
+        #: fehlen auch bzw zeigen noch die von der Fläche wo wir die Bohrung
+        #: gesetzt haben").
+        self._depth_measure = LengthSpin(self.viewport)
+        self._depth_measure.setObjectName("placement_depth")
+        self._depth_measure.setAccessibleName(tr("Tiefe der Bohrung"))
+        self._depth_measure.setToolTip(tr("Tiefe eintippen oder mit der Maus ziehen."))
+        self._depth_measure.installEventFilter(self)
+        self._depth_measure.valueChangedMm.connect(self._depth_typed)
+        self._depth_measure.hide()
+        #: Was an Wand stehen bleibt — das Gegenstück zur Tiefe. Eine Zahl und
+        #: kein Feld: Sie folgt aus Tiefe und Materialstärke und ist nichts,
+        #: was man eintippt.
+        self._rest = QLabel(self.viewport)
+        self._rest.setObjectName("placement_rest")
+        self._rest.setAutoFillBackground(True)
+        self._rest.hide()
         self._centre = QLabel(self.viewport)
         self._centre.setAutoFillBackground(True)
         self._centre.hide()
@@ -390,10 +459,19 @@ class PlacementFlow(QObject):
         self._frozen = False
         self._distance_valid = True
         self._commit_pending = False
-        self._confirm_waiting = False
         self._surface = None
         self._serial += 1
-        self.dialog.hide()
+        # **Und der Knopf sagt wieder, was er tut.** Zurückgesetzt wurde sein
+        # Text nur beim Verlassen der Tiefenstufe; wer sie über Escape verließ
+        # und neu begann, las „Weiter zur Tiefe" über einer Fläche, auf der
+        # noch nichts steht.
+        self._accept.setText(tr("Weiter zur Tiefe") if self.deepens() else tr("Übernehmen"))
+        # **Der Dialog bleibt stehen** (Robert, 09.09.2026: „wenn ich auf
+        # bohrung setzen klicke sollte der dialog übrigens da bleiben"). Er
+        # trug bis dahin die Maße, die man beim Platzieren braucht, und
+        # verschwand genau dann, wenn man sie sehen wollte; wer den
+        # Durchmesser nachbessern wollte, musste Escape drücken, tippen und
+        # neu zielen.
         self.window._clear_preview()
         self.viewport.set_placement_pointer(self.pointer)
         self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
@@ -443,7 +521,7 @@ class PlacementFlow(QObject):
         self._serial += 1
         self._pending = None
         self._commit_pending = False
-        self._confirm_waiting = False
+        self._leave_depth()
         self._timer.stop()
         self.viewport.set_placement_pointer(None)
         for widget in self._widgets():
@@ -456,6 +534,32 @@ class PlacementFlow(QObject):
             self.viewport.show_scene(self.session.last_result)
         self._result = None
         self.viewport._draw()
+
+    def _leave_depth(self) -> None:
+        """Die Tiefenstufe verlassen und die geliehene Ansicht zurückgeben.
+
+        Die Darstellungsart ist eine Einstellung des Nutzers (`ansicht.md`,
+        „Was die Ansicht sich merkt"); durchscheinend war sie hier geliehen,
+        und wer leiht, gibt zurück — auch beim Abbruch über Escape.
+        """
+        if not self._deepening:
+            return
+        self._deepening = False
+        self._depth_set = False
+        if self._display_before is not None:
+            self.viewport.set_display_mode(self._display_before)
+        self._display_before = None
+        # **Und die Kamera genauso.** Sie war ebenso geliehen — der Schwenk
+        # quer zur Achse gehört der Stufe, nicht dem Kunden. Der Docstring
+        # versprach das von Anfang an („auch beim Abbruch über Escape"), und
+        # zurückgestellt wurde nur die Darstellungsart: Nach Escape blieb die
+        # Ansicht im Seitenschwenk stehen.
+        if self._camera_before is not None and self.viewport.renderer is not None:
+            position, focus, up, scale = self._camera_before
+            self.viewport.set_camera_pose(position, focus, up, scale)
+            self.viewport.settle_camera()
+        self._camera_before = None
+        self._accept.setText(tr("Position übernehmen"))
 
     def _remove_tools(self) -> None:
         """Schnitt und Anbau gehören demselben vorübergehenden Werkzeug."""
@@ -482,7 +586,15 @@ class PlacementFlow(QObject):
             widget.deleteLater()
 
     def _widgets(self) -> tuple[QWidget, ...]:
-        return self._bar, self._canvas, self._centre, *self._measures, *self._centre_measures
+        return (
+            self._bar,
+            self._canvas,
+            self._centre,
+            self._depth_measure,
+            self._rest,
+            *self._measures,
+            *self._centre_measures,
+        )
 
     def pointer(self, event: PointerEvent) -> bool:
         """Linksklick gehört der Platzierung, alle Kameragesten bleiben frei."""
@@ -490,12 +602,77 @@ class PlacementFlow(QObject):
             return False
         if event.kind == "leave":
             return True
+        confirm = event.kind == "release" and event.button == "left"
+        # **In der Tiefenstufe zieht die Maus, sie zielt nicht mehr.** Die
+        # Stelle steht seit dem ersten Klick; was jetzt zählt, ist die Strecke
+        # nach unten, und der nächste Klick bestätigt.
+        #
+        # **Und diese Frage steht vor allen anderen.** Darüber stand die Zeile
+        # aus Stufe 1, die jeden Linksklick für die Platzierung nahm — sie
+        # schluckte den Beginn jedes Kamerazugs, bevor die Tiefenstufe
+        # überhaupt gefragt wurde. Gemessen am Protokoll: ``press left`` bei
+        # 1933,731 und ``release left`` bei 864,809, über tausend Bildpunkte
+        # Zug, und die Kamera stand still (Robert, 09.09.2026: „verschieben
+        # geht immer noch nicht").
+        if self._deepening:
+            if self._depth_set:
+                # **Steht die Tiefe, gehört die Maus wieder ganz der Ansicht.**
+                # Auch der Linksklick: Er hat seine Aufgabe erfüllt, und im
+                # ``solidon``-Schema schiebt er die Kamera. Ihn weiter
+                # abzufangen nahm dem Navigator den Beginn des Zugs, und
+                # Schieben ging nicht mehr (Robert, 09.09.2026: „schieben kann
+                # ich die kamera nicht nach dem setzen der tiefe"). Bestätigt
+                # wird am Knopf.
+                return False
+            if event.kind == "move" and not event.buttons:
+                self._deepen_to(event.x, event.y)
+                return True
+            if confirm:
+                # **Ein Zug ist kein Klick.** Im ``solidon``-Schema schiebt die
+                # linke Taste die Kamera; wer in dieser Stufe schiebt, hat die
+                # Tiefe nicht gemeint — und sie stand danach still fest, weil
+                # jedes Loslassen als Bestätigung zählte. Gemessen wird wie
+                # überall an der Zugschwelle des Systems (`ansicht.md`, „Ein
+                # Klick ist ein Klick, auch mit Zittern").
+                if not self._barely_moved(event):
+                    return False
+                # **Der Klick hält die Tiefe an, er setzt sie nicht.** Sonst
+                # entscheidet dieselbe Geste zweimal — einmal die Stelle, einmal
+                # das ganze Loch —, und wer nach dem Ziehen die Zahl nachbessern
+                # will, hat schon gebohrt. Bestätigt wird über den Knopf
+                # (Robert, 09.09.2026: „am ende über den dialog zu bestätigen").
+                self._depth_set = True
+                self._note.setText(
+                    tr("Tiefe steht · Übernehmen: ausführen · Maßfeld: Zahl ändern · Esc: zurück")
+                )
+                self.redraw()
+                return True
+            # **Alles andere gehört der Kamera** (Robert, 09.09.2026: „hier
+            # sollte ich dann auch wieder drehen und allen können"). Der erste
+            # Anlauf schluckte jede Geste, die keine Tiefe war — Drehen, Zoomen
+            # und Kippen waren in der Stufe tot, in der man sie am ehesten
+            # braucht: Wer eine Tiefe beurteilt, dreht das Teil dazu. Nur der
+            # Druck der linken Taste bleibt hier, weil sein Loslassen übernimmt.
+            if event.kind == "press" and event.button == "left":
+                self._pressed_at = (event.x, event.y)
+                return True
+            return False
+        # In den Stufen davor gehört der Linksklick der Platzierung — sein
+        # Loslassen setzt die Stelle beziehungsweise übernimmt sie.
         if event.kind == "press" and event.button == "left":
             return True
-        confirm = event.kind == "release" and event.button == "left"
         if confirm or (event.kind == "move" and not event.buttons):
             if self._commit_pending:
-                return True
+                # **Die Sperre gilt dem laufenden Klick, nicht dem Modus.** Sie
+                # verhindert, dass ein zweiter Klick zwischen dem ersten und
+                # seiner Ausführung eine zweite Bohrung setzt — und blieb
+                # stehen, sobald der gemerkte Klick nicht zum Setzen führte.
+                # Danach lief jeder weitere Klick hier hinein und kam nie bei
+                # der Fläche an: der Platzierungsmodus war stumm (Befund
+                # Robert, 09.09.2026: „einmal hat es geklappt von 20 klicks").
+                if self._still_committing():
+                    return True
+                self._commit_pending = False
             if self._frozen and not confirm:
                 return True
             if self._frozen and confirm:
@@ -507,6 +684,38 @@ class PlacementFlow(QObject):
             self._timer.start()
             return True
         return event.buttons == frozenset({"left"})
+
+    def _barely_moved(self, event: PointerEvent) -> bool:
+        """War das ein Klick oder das Ende eines Zugs?
+
+        Dieselbe Frage wie im Navigator (`ansicht.md`, „Ein Klick ist ein
+        Klick, auch mit Zittern"), und dieselbe Antwort: die Zugschwelle des
+        Systems. Ohne gemerkten Druck — etwa wenn die Stufe zwischen Druck und
+        Loslassen begann — gilt es als Klick, denn ein verschlucktes Loslassen
+        wäre der schlechtere Fehler.
+        """
+        if self._pressed_at is None:
+            return True
+        away = max(abs(event.x - self._pressed_at[0]), abs(event.y - self._pressed_at[1]))
+        self._pressed_at = None
+        schwelle = float(QApplication.startDragDistance()) * self.viewport._device_ratio()
+        return bool(away <= schwelle)
+
+    def _still_committing(self) -> bool:
+        """Steht wirklich noch ein Klick aus, der gesetzt werden will?
+
+        Drei Zustände, und jeder einzelne bedeutet „gleich passiert es": Die
+        Stelle ist gemerkt und wartet auf den Timer, die Flächensuche läuft,
+        oder der Werkzeugbau läuft. Steht keiner davon, ist der gemerkte Klick
+        verfallen — und dann darf er den nächsten nicht aussperren.
+
+        Ein vierter stand hier: ein Merker, der den zu frühen Klick vormerkte,
+        damit der fertige Werkzeugbau ihn nachholt. Den Weg gibt es seit dem
+        dreistufigen Ablauf nicht mehr — er läuft über ``_pending`` und den
+        Timer —, und ein Zustand, der nie eintritt, macht aus einer Aufzählung
+        eine Behauptung.
+        """
+        return bool(self._pending is not None or self._surface_busy or self._tool_busy)
 
     def _next_surface(self) -> None:
         if self._surface_busy or self._pending is None or not self.active:
@@ -584,8 +793,7 @@ class PlacementFlow(QObject):
                     )
                     self.redraw()
                     if confirm:
-                        self._confirm_waiting = True
-                        self.accept()
+                        self._settle()
             self._next_surface()
 
         def failed(detail: str) -> None:
@@ -600,7 +808,6 @@ class PlacementFlow(QObject):
     def _invalid(self, message: str) -> None:
         self._surface = None
         self._commit_pending = False
-        self._confirm_waiting = False
         self._note.setText(message)
         self._accept.setEnabled(False)
         self.redraw()
@@ -784,8 +991,6 @@ class PlacementFlow(QObject):
                             )
                         )
                 self.redraw()
-                if self._confirm_waiting:
-                    self.accept()
             if self._tool_again and self.active:
                 self._request_tool()
 
@@ -843,6 +1048,61 @@ class PlacementFlow(QObject):
         self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
 
+    def _settle(self) -> None:
+        """Der Klick legt die Stelle fest — und danach stehen die Maße offen.
+
+        **Drei Stufen statt zweier** (Robert, 09.09.2026: „beim klick sollte
+        man die maße dann einstellen die man sieht, dann in die seitenansicht
+        erst nachdem man das bestätigt hat und die tiefe einstellen"). Der
+        Klick war bis dahin die ganze Platzierung: Er nahm die Stelle **und**
+        schloss ab, mit allen Vorgaben, die daran hingen — bei einer Bohrung
+        also mit ``depth = 0``, was durch das ganze Teil heißt.
+
+        Jetzt hält er an. Die Abstände zu den Kanten stehen als Zahlenfelder da
+        und lassen sich eintippen; erst das Übernehmen führt weiter — zur
+        Tiefe, wo es eine gibt, und sonst zum Ergebnis.
+        """
+        self._frozen = True
+        self._commit_pending = False
+        self._pending = None
+        self._serial += 1
+        self._accept.setText(tr("Weiter zur Tiefe") if self.deepens() else tr("Übernehmen"))
+        self._note.setText(
+            tr("Maße einstellen · Übernehmen: weiter zur Tiefe · Esc: zurück")
+            if self.deepens()
+            else tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten.")
+        )
+        self.redraw()
+
+    def deepens(self) -> bool:
+        """Ob nach dem Klick noch eine Tiefe einzustellen ist.
+
+        Zwei Bedingungen, und beide sind nötig. **Das Werkzeug muss auf etwas
+        sitzen**: Ein Quader trägt ein Feld namens ``depth``, und das ist seine
+        Bauteiltiefe und keine Eindringtiefe — genau die Verwechslung, vor der
+        ``placement_fields`` warnt. **Und es muss eine Tiefe führen**: Ein
+        Lochwand-Einhänger hat keine und ist mit dem Ort fertig.
+        """
+        spec = self.spec_of()
+        return starts_by_itself(spec) and self._depth_name() is not None
+
+    def _depth_name(self) -> str | None:
+        """Das Feld der Eindringtiefe — oder ``None``, wo es keine gibt.
+
+        Vier Stellen stellen dieselbe Frage; gestellt wird sie einmal, mit den
+        **Werten des Dialogs**. Die zählen: Ob eine Beschriftung erhaben oder
+        eingelassen ist, entscheidet ihr ``mode``, und nur im zweiten Fall geht
+        der Zug nach unten ins Material.
+        """
+        spec = self.spec_of()
+        try:
+            values = spec.params(**self.dialog.values())
+        except TypeError, ValueError, ValidationError:
+            # Ein halb ausgefüllter Dialog ist der Normalfall, solange jemand
+            # tippt — dann entscheidet die Vorgabe, nicht ein Fehler.
+            values = None
+        return depth_field(spec.name, spec.params, values)
+
     def accept(self) -> None:
         if (
             not self.active
@@ -854,10 +1114,388 @@ class PlacementFlow(QObject):
             or not self._accept.isEnabled()
         ):
             return
+        # **Der Klick legt die Stelle fest, nicht das ganze Loch.** Wer eine
+        # Bohrung setzt, hat danach noch eine Tiefe einzustellen; bis zum
+        # 09.09.2026 wurde sie mit der Vorgabe gesetzt — bei ``depth = 0``
+        # heißt das durch das ganze Teil, ohne dass jemand gefragt hätte
+        # (Robert: „oder ich bohr komplett durch ohne die tiefenbearbeitung").
+        if self.deepens() and not self._deepening:
+            self._begin_depth()
+            return
         if not self._set_values():
             return
         self._stop()
         self.dialog.accept()
+
+    # --- Stufe 2: die Tiefe ----------------------------------------------------
+
+    def _begin_depth(self) -> None:
+        """Die Stelle steht; jetzt zieht die Maus die Tiefe.
+
+        **Was die zweite Stufe zeigt, kann die erste nicht.** Der Umriss auf
+        der Fläche sagt, *wo* das Loch hinkommt, und über die Tiefe schweigt
+        er; deshalb tritt hier der Werkzeugkörper wieder vor, und das Modell
+        wird durchscheinend, damit man ihn darin sieht (Robert, 09.09.2026:
+        „wenn wir klicken wollen wir die bohrung von der seitenansicht sehen
+        und dann die tiefe runterziehen").
+
+        Der gemerkte Klick ist damit verbraucht: ``_commit_pending`` fällt,
+        sonst wäre der bestätigende Klick der Stufe ausgesperrt.
+        """
+        self._deepening = True
+        self._depth_set = False
+        self._commit_pending = False
+        self._pending = None
+        self._frozen = True
+        self._show_the_body_from_the_side()
+        # **Der Maßstab wird nach dem Schwenk gemessen, nicht davor.** Die
+        # Ansicht rechnet perspektivisch, der Maßstab hängt also am Abstand zur
+        # Kamera — und ``_look_along_the_surface`` stellt sie gerade erst auf
+        # ihren neuen Abstand. Davor gemessen war der Faktor von der ersten
+        # Bewegung an falsch.
+        self._depth_per_pixel = self._millimetres_per_pixel()
+        # **Und die Stufe beginnt mit einer Tiefe.** Stand im Feld die Null,
+        # hieße „übernehmen, ohne zu ziehen" wieder: durch das ganze Teil, und
+        # genau das sollte diese Stufe abschaffen (Robert, 09.09.2026: „die
+        # bohrung ist aber sofort komplett durch"). Vorbelegt wird mit dem
+        # Material unter der Mündung — dieselbe Wirkung wie bisher, aber als
+        # Zahl, die dasteht und die man hochziehen kann.
+        if self._depth_now(self._depth_name()) <= EPS_GEOM:
+            self._set_depth(max(LEAST_DEPTH_MM, self._material_below()))
+        self._note.setText(
+            tr("Maus bewegen: Tiefe · Klick: übernehmen · Maßfeld: Zahl eingeben · Esc: zurück")
+        )
+        # Nicht „Bohrung": Acht Operationen erreichen diese Stufe, darunter
+        # eine eingelassene Beschriftung und eine Tasche. Das Wort benennt,
+        # worum es hier geht, und das ist die Tiefe.
+        self._accept.setText(tr("Tiefe übernehmen"))
+        self.redraw()
+
+    def _millimetres_per_pixel(self) -> float:
+        """Wie viele Millimeter ein Bildpunkt Zug bedeutet.
+
+        Aus dem Maßstab der Ansicht, damit der Zug am kleinen wie am großen
+        Teil dasselbe Gefühl hat: Ein fester Faktor zöge bei einem Teil von
+        zehn Millimetern durch das ganze Stück, während er an einem von
+        dreihundert kaum etwas täte. Findet die Ansicht keinen Maßstab, bleibt
+        ein Zehntelmillimeter je Punkt — die Zahl steht daneben und lässt sich
+        eintippen.
+        """
+        if self._surface is None or self.viewport.renderer is None:
+            return 0.1
+        # **`_pixels_per_mm_at` und nicht `pixels_per_mm`.** Die zweite nimmt
+        # einen ``PlaneFrame`` und ist die des Skizzeneditors; mit einem Punkt
+        # gefüttert wirft sie. Der erste Anlauf fing das mit ``except
+        # Exception`` ab und fiel auf einen Zehntelmillimeter je Bildpunkt
+        # zurück — an einem 20-mm-Teil bei zwölf Punkten je Millimeter das
+        # Hundertfache dessen, was der Zeiger anzeigt (Robert, 09.09.2026:
+        # „bei weiter zur tiefe passt wohl die mausposition zur darstellung
+        # noch nicht ganz"). Ein stiller Rückfall verschluckt genau solche
+        # Fehler; gefragt wird deshalb ohne ihn.
+        scale = self.viewport._pixels_per_mm_at(tuple(self._surface.point))
+        if scale is None or scale <= 1e-9:
+            return 0.1
+        return 1.0 / float(scale)
+
+    def _show_the_body_from_the_side(self) -> None:
+        """Modell durchscheinend, Werkzeug sichtbar — der Blick in das Loch.
+
+        Zurückgestellt wird beides in :meth:`_stop`; die Darstellungsart ist
+        eine Einstellung des Nutzers (`ansicht.md`, „Was die Ansicht sich
+        merkt"), und eine geliehene Ansicht gibt man zurück.
+        """
+        # Direkt gefragt, nicht über ``getattr`` mit stillem Rückfall: Fehlte
+        # der Setzer, bliebe die Ansicht wortlos für immer durchscheinend.
+        self._display_before = self.viewport.display_mode
+        self.viewport.set_display_mode("transparent")
+        for item in (self._tool, self._addition):
+            if item is not None:
+                item.set_visible(True)
+        self._look_along_the_surface()
+
+    def _look_along_the_surface(self) -> None:
+        """Die Kamera quer zur Werkzeugachse — der Blick von der Seite.
+
+        Robert, 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
+        seitenansicht sehen und dann die tiefe runterziehen". Von vorn auf die
+        Mündung gesehen ist eine Tiefe nicht zu beurteilen; quer dazu ist sie
+        die Länge, die man zieht.
+
+        Gedreht wird **um die Stelle**, und Abstand wie Bildausschnitt bleiben:
+        Wer auf ein Detail gezoomt hat, will es weiter sehen — dieselbe Zusage
+        wie bei den Kameravorgaben (`ansicht.md`, „Eine Kameravorgabe dreht um
+        den Blickpunkt, sie passt nicht ein").
+        """
+        if self._surface is None or self.viewport.renderer is None:
+            return
+        axis = np.asarray(self._surface.frame.normal, dtype=np.float64)
+        length_of = float(np.linalg.norm(axis))
+        if length_of < 1e-9:
+            return
+        axis = axis / length_of
+        spot = np.asarray(self.viewport.view_point_of(self._surface.point, self._object_id))
+        # **Vier Werte, nicht drei.** ``camera_pose`` gibt zusätzlich den
+        # Parallelmaßstab zurück, und der wird unverändert weitergereicht —
+        # sonst springt in orthografischer Projektion der Bildausschnitt.
+        found = self.viewport.camera_pose()
+        if self._camera_before is None:
+            self._camera_before = found
+        position = np.asarray(found[0], dtype=np.float64)
+        focus = np.asarray(found[1], dtype=np.float64)
+        scale = found[3]
+        away = float(np.linalg.norm(position - focus))
+        if away < 1e-9:
+            return
+        # **Die Blickrichtung steht senkrecht auf der Achse und waagerecht in
+        # der Welt.** Von der bisherigen Sicht bleibt nur, *von welcher Seite*
+        # man schaut — der Anteil entlang der Achse fällt weg, und damit die
+        # Schräge von oben. Der erste Anlauf zog nur die Achse ab und ließ die
+        # Kamera dort, wo sie war; im Bild war das eine leicht gekippte
+        # Draufsicht und keine Seitenansicht (Robert, 09.09.2026:
+        # „seitenansicht ist das auch nicht ganz").
+        sideways = position - focus
+        sideways = sideways - axis * float(sideways @ axis)
+        if float(np.linalg.norm(sideways)) < 1e-6:
+            # Der Blick steht genau auf der Achse: irgendeine Querrichtung tut es.
+            helper = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+            sideways = np.cross(axis, helper)
+        # Und waagerecht: Steht die Achse aufrecht, liegt die Kamera auf
+        # Augenhöhe der Mündung — sonst bliebe die Schräge, aus der man die
+        # Tiefe nicht ablesen kann.
+        upright = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        if abs(float(axis @ upright)) > 0.9:
+            sideways[2] = 0.0
+            if float(np.linalg.norm(sideways)) < 1e-6:
+                sideways = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+        sideways = sideways / float(np.linalg.norm(sideways)) * away
+        at = spot + sideways
+        self.viewport.set_camera_pose(
+            (float(at[0]), float(at[1]), float(at[2])),
+            (float(spot[0]), float(spot[1]), float(spot[2])),
+            (float(axis[0]), float(axis[1]), float(axis[2])),
+            scale,
+        )
+        self.viewport.settle_camera()
+
+    def _deepen_to(self, x: int, y: int) -> None:
+        """Die Tiefe aus der Zeigerstrecke — gemessen vom Beginn, nicht summiert.
+
+        Eine Summe aus Einzelschritten driftet, sobald ein Ereignis ausfällt;
+        die Strecke vom Startpunkt kann das nicht. Nach unten heißt tiefer, wie
+        Robert es beschrieben hat („die tiefe runterziehen").
+        """
+        # **Nicht am Werkzeugkörper hängen.** Jede gesetzte Tiefe stößt einen
+        # Neubau der Vorschau an, und der setzt ``_tool_context`` für seine
+        # Dauer auf ``None``: Mit ihm in dieser Bedingung fiel jede zweite
+        # Bewegung aus, die Zahl blieb stehen und der Zug ruckelte. Gerechnet
+        # wird aus der Fläche und der Kamera — der Werkzeugkörper ist das Bild
+        # dazu und keine Voraussetzung.
+        if self._surface is None:
+            return
+        name = self._depth_name()
+        if name is None:
+            return
+        renderer = self.viewport.renderer
+        if renderer is None:
+            return
+        # **Die Spitze liegt unter dem Zeiger, nicht irgendwo.** Der erste
+        # Anlauf zählte die Strecke seit dem Beginn des Zugs zusammen; wo der
+        # Zeiger stand, hatte damit nichts mit der Tiefe zu tun, und man zog am
+        # unteren Rand, während die Bohrung kaum begonnen hatte (Robert,
+        # 09.09.2026: „ich hab den mauszeiger kurz über den unteren panel aber
+        # eigentlich müsste ich viel weiter oben sein"). Gemessen wird deshalb
+        # **absolut**: der Abstand des Zeigers von der Mündung, im Bild,
+        # entlang der Bohrachse.
+        mouth = renderer.world_to_display(
+            tuple(self.viewport.view_point_of(self._surface.point, self._object_id))
+        )
+        along = self._axis_on_screen()
+        if along is None:
+            return
+        # **Der Maßstab wird je Bewegung neu gemessen, nicht einmal beim
+        # Betreten.** Zoomen bleibt in dieser Stufe frei (`app/ui/CLAUDE.md`,
+        # „Drehen, Zoomen und Kippen bleiben frei"), und die Ansicht rechnet
+        # perspektivisch: Nach einem Zoom um den Faktor k wäre eine eingefrorene
+        # Zahl um k daneben, und die Spitze läge nicht mehr unter dem Zeiger.
+        # Die Bildrichtung der Achse (``_axis_on_screen``) wird aus demselben
+        # Grund schon immer hier gerechnet; der Maßstab war die Hälfte, die
+        # stehen geblieben ist.
+        self._depth_per_pixel = self._millimetres_per_pixel()
+        # Die Strecke vom Mündungspunkt zum Zeiger, auf die Bildrichtung der
+        # Achse projiziert: So weit ist die Spitze unter dem Zeiger.
+        #
+        # **Alles hier zählt in Gerätepixeln, und zwar durchgehend.**
+        # ``PointerEvent.x/y`` kommen bereits so (der Renderer multipliziert
+        # beim Erzeugen), ``world_to_display`` liefert sie ebenso, und
+        # ``_pixels_per_mm_at`` misst darin. Der erste Anlauf rechnete das
+        # Verhältnis an dieser Zeile noch einmal hinein und danach wieder
+        # heraus — bei einem Bildschirm ohne Skalierung fällt das nie auf, bei
+        # 125 Prozent bleibt ein Versatz, der von der Bildlage der Bohrung
+        # abhängt (`ansicht.md`, „Wer die Umrechnung an einer Zeichenstelle
+        # wiederholt, rechnet doppelt").
+        reach = (x - float(mouth[0])) * along[0] + (y - float(mouth[1])) * along[1]
+        # **Nicht bis auf null.** Bei ``depth = 0`` bohrt die Operation durch
+        # das ganze Teil (`prepare_ops.py`, „Null bohrt durch das ganze Teil") —
+        # wer den Zeiger nach oben zieht, um die Bohrung *flacher* zu machen,
+        # bekäme am Ende des Wegs das Gegenteil. Der Zug hält deshalb bei einem
+        # zehntel Millimeter an; wer wirklich durch will, zieht nach unten oder
+        # tippt die Null ins Feld.
+        wanted = max(LEAST_DEPTH_MM, reach * self._depth_per_pixel)
+        # **Kurzes Einrasten an den Stellen, die etwas bedeuten** (Robert,
+        # 09.09.2026). Die Zone steht in logischen Bildpunkten wie jede
+        # Fangweite der Oberfläche und wird über das Geräteverhältnis in
+        # Millimeter gebracht — dieselbe Rechnung wie in
+        # ``Viewport._snap_radius_at``.
+        zone = SNAP_PIXELS * self.viewport._device_ratio() * self._depth_per_pixel
+        self._set_depth(snap_to_marks(wanted, self._depth_marks(), zone))
+
+    def _depth_marks(self) -> tuple[float, ...]:
+        """Die Tiefen, die etwas bedeuten: Mitte und Rückseite des Materials.
+
+        Mehr nicht — eine lange Liste machte aus dem freien Zug eine Auswahl,
+        und genau das soll das kurze Einrasten nicht sein. Was der Kunde selbst
+        eintippt, geht ohnehin nicht durch den Magneten (:meth:`_depth_typed`).
+        """
+        below = self._material_below()
+        if below <= EPS_GEOM:
+            return ()
+        return (below / 2.0, below)
+
+    def _axis_on_screen(self) -> tuple[float, float] | None:
+        """Die Bohrachse als Einheitsrichtung im Bild — von der Mündung ins Material.
+
+        Sie sagt, welche Zeigerbewegung „tiefer" bedeutet. Nach dem Schwenk in
+        die Seitenansicht steht sie senkrecht, aber die Kamera darf danach
+        weitergedreht werden; gerechnet wird deshalb aus der Projektion und
+        nicht aus der Annahme.
+        """
+        renderer = self.viewport.renderer
+        if renderer is None or self._surface is None:
+            return None
+        axis = np.asarray(self._surface.frame.normal, dtype=np.float64)
+        span = float(np.linalg.norm(axis))
+        if span < 1e-9:
+            return None
+        axis = axis / span
+        point = np.asarray(self._surface.point, dtype=np.float64)
+        # Ins Material hinein ist die Gegenrichtung der Flächennormalen.
+        mouth = renderer.world_to_display(
+            tuple(self.viewport.view_point_of(tuple(point), self._object_id))
+        )
+        inside = renderer.world_to_display(
+            tuple(self.viewport.view_point_of(tuple(point - axis), self._object_id))
+        )
+        step = np.array([inside[0] - mouth[0], inside[1] - mouth[1]], dtype=np.float64)
+        length_of = float(np.linalg.norm(step))
+        if length_of < 1e-6:
+            return None
+        step = step / length_of
+        return float(step[0]), float(step[1])
+
+    def _depth_typed(self, millimetres: float) -> None:
+        """Eine eingetippte Tiefe zählt wie eine gezogene — und hält den Zug an.
+
+        **Wer eine Zahl eingibt, hat entschieden**, und der Zeiger hat danach
+        nichts mehr zu sagen. Der Zug misst absolut von der Mündung: Ohne diese
+        Sperre überschriebe die nächste Bewegung über der Renderfläche den
+        getippten Wert vollständig — und der Weg zum Knopf führt genau darüber
+        (Robert, 09.09.2026: „wenn ich die tiefe setz, komm ich nicht in das
+        bearbeitenfeld von der maßeinheit"). ``_depth_set`` ist dieselbe Sperre,
+        die auch der bestätigende Klick setzt; von hier führt derselbe Weg
+        weiter — Ansicht frei, Knopf übernimmt.
+        """
+        if self._updating or not self._deepening:
+            return
+        self._set_depth(max(0.0, millimetres))
+        self._depth_set = True
+
+    def _depth_now(self, name: str | None) -> float:
+        """Die eingestellte Tiefe in Millimetern — auch wenn dort ein Ausdruck steht.
+
+        ``OperationDialog.values`` gibt zurück, was im Feld steht: eine Zahl
+        **oder** einen Parameterausdruck (`=@wand`). Ein ``float()`` darauf
+        wirft, und weil ``redraw`` aus einem Qt-Slot läuft, riss die Ausnahme
+        die ganze Tiefenstufe mit — noch bevor die erste Mausbewegung kam. Der
+        Ausdruck wird deshalb aufgelöst, mit denselben Projektparametern, die
+        auch ``_request_tool`` benutzt.
+
+        Was sich nicht auflösen lässt, gilt als null: Die Tiefenstufe ist eine
+        Anzeige, und ein unvollständiger Ausdruck ist ein Fall für den Dialog,
+        nicht für einen Absturz (Regel 17).
+        """
+        if name is None:
+            return 0.0
+        found = self.dialog.values().get(name, 0.0)
+        if expressions.is_expression(found):
+            parameters = expressions.resolve(dict(self.session.project.document.parameters))
+            try:
+                found = expressions.resolve_params({name: found}, parameters).get(name, 0.0)
+            except AppError:
+                return 0.0
+        try:
+            return float(found or 0.0)
+        except TypeError, ValueError:
+            return 0.0
+
+    def _material_below(self) -> float:
+        """Wie viel Material unter der Mündung liegt, entlang der Werkzeugachse.
+
+        Das Bezugsmaß der Tiefenstufe: Wer bohrt, will wissen, wie viel Wand
+        stehen bleibt und wo die Mitte liegt (Robert, 09.09.2026: „bei der
+        tiefe fehlen die maße, außenkannten, innenkannten, mitte von
+        irgendwas").
+
+        **Gemessen wird mit einem Strahl, nicht am Hüllquader.** Der fernste
+        Punkt des Körpers in Bohrrichtung ist bei einem massiven Klotz die
+        richtige Antwort und bei einem hohlen die falsche — und hohl ist im
+        Druck der Normalfall. In die zwei Millimeter starke Decke einer Box
+        gebohrt stand „Wand: 18,0 mm" im Bild, die Mitte-Marke lag in der Luft,
+        und das Einrasten hielt an beiden falschen Werten. Der Strahl nimmt den
+        **ersten Austritt**, also die Wand, die der Bohrer wirklich vor sich
+        hat; dieselbe Rechnung, mit der die Stifte ihre Materialtiefe suchen
+        (``geom.pins``).
+
+        Findet der Strahl nichts — die Fläche zeigt nach außen, dahinter ist
+        Luft —, bleibt der Hüllquader als Rückfall: Ein Maß von null verböte
+        jede Tiefe, und die Marken verschwänden ganz.
+        """
+        result = self._result
+        entry = result.scene.objects.get(self._object_id) if result is not None else None
+        if entry is None or self._surface is None:
+            return 0.0
+        along = np.asarray(self._surface.frame.normal, dtype=np.float64)
+        span = float(np.linalg.norm(along))
+        if span < 1e-9:
+            return 0.0
+        along = along / span
+        mesh = as_mesh_data(entry.mesh)
+        origin = np.asarray(self._surface.point, dtype=np.float64)
+        distances = ray_hit_distances(
+            np.asarray(mesh.raw.triangles, dtype=np.float64), origin, -along
+        )
+        # Der Mündungspunkt liegt auf der Fläche selbst; ein Treffer im Abstand
+        # null ist sie und nicht die Gegenwand.
+        ahead = distances[distances > EPS_GEOM]
+        if len(ahead):
+            return float(ahead.min())
+        points = np.asarray(mesh.raw.vertices, dtype=np.float64)
+        if not points.size:
+            return 0.0
+        mouth = float(origin @ along)
+        return max(0.0, mouth - float((points @ along).min()))
+
+    def _set_depth(self, millimetres: float) -> None:
+        """Trägt die Tiefe in den Dialog und zeichnet das Werkzeug neu."""
+        name = self._depth_name()
+        if name is None or self._updating:
+            return
+        self._updating = True
+        try:
+            self.dialog.take_placement({name: millimetres})
+        finally:
+            self._updating = False
+        self._request_tool()
+        self.redraw()
 
     def _scene_changed(self, _result: Any) -> None:
         # Eine fremde Operation oder Undo entwertet die alte Oberfläche.
@@ -905,6 +1543,10 @@ class PlacementFlow(QObject):
             ):
                 self.back()
                 return True
+            if event.type() == QEvent.Type.FocusIn and watched is self._depth_measure:
+                # Dieselbe Zusage wie bei den Kantenmaßen darunter, nur für die
+                # Tiefe: Wer in das Feld klickt, will tippen und nicht ziehen.
+                self._depth_set = True
             if event.type() == QEvent.Type.FocusIn and watched in (
                 *self._measures,
                 *self._centre_measures,
@@ -912,7 +1554,6 @@ class PlacementFlow(QObject):
                 self._frozen = True
                 self._pending = None
                 self._commit_pending = False
-                self._confirm_waiting = False
                 self._serial += 1
             if event.type() == QEvent.Type.Resize and (
                 watched is self.viewport
@@ -949,7 +1590,17 @@ class PlacementFlow(QObject):
                 room.setBottom(min(room.bottom(), obstacle.top() - NORMAL - 1))
         self._bar.setMaximumWidth(max(room.width(), 1))
         self._bar.adjustSize()
-        self._bar.move(room.topLeft())
+        # **Unten mittig, über der Werkzeugzeile** (Robert, 09.09.2026: „das
+        # fenster weiter zur tiefe am besten unten mittig über das panel mit
+        # schnitt, messen usw setzen"). Oben links lag sie im Weg des Modells
+        # und weit weg von dem Ort, an dem beim Platzieren ohnehin jeder
+        # hinsieht: der Zeile mit Schnitt, Messen und Bewegen. ``room`` hat die
+        # verdeckten Zonen schon abgezogen, die untere Kante ist damit die
+        # Oberkante dieser Zeile.
+        self._bar.move(
+            room.left() + max(0, (room.width() - self._bar.width()) // 2),
+            max(room.top(), room.bottom() - self._bar.height()),
+        )
         self._bar.raise_()
         surface = self._surface
         renderer = self.viewport.renderer
@@ -971,11 +1622,15 @@ class PlacementFlow(QObject):
         self._canvas.lines = []
         self._canvas.leaders = []
         self._canvas.outline = []
+        # **Jede Stufe zeigt ihr eigenes Maß.** Die Kantenabstände gehören der
+        # Fläche, auf der gesetzt wird — in der Tiefenstufe ist die entschieden,
+        # und dort steht die Tiefe an ihrer Stelle.
         for index, field in enumerate(self._measures):
-            field.setVisible(valid and index < len(surface.edges))
+            field.setVisible(valid and not self._deepening and index < len(surface.edges))
         self._centre.hide()
         for field in self._centre_measures:
-            field.setVisible(valid and bool(self._centre_id))
+            field.setVisible(valid and not self._deepening and bool(self._centre_id))
+        self._depth_measure.setVisible(valid and self._deepening)
         # **Wo ein Umriss die Stelle zeigt, tritt der Körper zurück.** Der
         # halbtransparente Zylinder steht auch außerhalb des Materials, und
         # beim Drehen der Ansicht war schwer zu sehen, wo das Loch hinkommt
@@ -983,8 +1638,15 @@ class PlacementFlow(QObject):
         # Geometrie, an der das Setzen hängt —, gezeigt nur, wo er die
         # einzige Auskunft ist: bei einem Werkzeug ohne Mündung in der Fläche,
         # und für die Tiefe, die man allein an ihm sieht.
-        has_outline = self._tool_context is not None and bool(
-            placement.mouth_outline(self._tool_context)
+        # **In der Tiefenstufe kehrt sich das um.** Dort ist der Körper die
+        # einzige Auskunft, die es gibt — der Umriss sagt nichts über die
+        # Tiefe, und wer sie zieht, muss sehen, wie weit der Zylinder reicht
+        # (Robert, 09.09.2026: „bei weiter zur tiefe sehe ich den zylinder für
+        # die bohrung nicht").
+        has_outline = (
+            not self._deepening
+            and self._tool_context is not None
+            and bool(placement.mouth_outline(self._tool_context))
         )
         for item in (self._tool, self._addition):
             if item is not None:
@@ -1034,11 +1696,62 @@ class PlacementFlow(QObject):
         pending: list[tuple[QWidget, QPointF, tuple[QPointF, QPointF]]] = []
 
         def place(widget: QWidget, start: QPointF, end: QPointF) -> None:
+            # **In der Tiefenstufe steht kein Kantenmaß mehr.** Die Schleife
+            # unten ruft für jedes gesammelte Feld ``show()`` — eine
+            # Sichtbarkeit, die vorher gesetzt wurde, hebt sie damit wieder
+            # auf. Wer ein Feld ausblenden will, sammelt es nicht ein (Befund
+            # aus Roberts Bild, 09.09.2026: die Abstände der Fläche standen
+            # noch da, während unten schon „Maus bewegen: Tiefe" stand).
+            if self._deepening and widget is not self._depth_measure:
+                return
             widget.setMaximumWidth(max(room.width(), 1))
             if isinstance(widget, QLabel):
                 widget.setWordWrap(True)
             widget.adjustSize()
             pending.append((widget, (start + end) / 2, (start, end)))
+
+        if self._deepening and valid:
+            # **Die Bezugsmaße der Tiefe** (Robert, 09.09.2026: „bei der tiefe
+            # fehlen die maße, außenkannten, innenkannten, mitte von
+            # irgendwas"). Von der Mündung zur Spitze steht die Tiefe, von der
+            # Spitze zur Rückseite die Wand, die stehen bleibt; die Mitte ist
+            # eine eigene Marke, weil an ihr eingerastet wird.
+            name = self._depth_name()
+            depth = self._depth_now(name)
+            below = self._material_below()
+            axis = np.asarray(surface.frame.normal, dtype=np.float64)
+            span = float(np.linalg.norm(axis))
+            if span > EPS_GEOM:
+                axis = axis / span
+                mouth = screen(surface.point)
+                tip = screen(tuple(point - axis * depth))
+                self._canvas.lines.append((mouth, tip))
+                # **An seiner Maßlinie, wie jedes Kantenmaß.** Über der Leiste
+                # allein stand es als Fremdkörper da: Dieselbe Rolle, dieselbe
+                # Gestalt (Robert, 09.09.2026: „das maßfeld ist immer noch
+                # nicht so wie wenn ich die bohrung auf der oberfläche setze").
+                # ``QSignalBlocker`` und nicht zwei Aufrufe: Wirft
+                # ``set_value_mm`` dazwischen, bliebe das Feld für immer
+                # stumm — es nähme danach keine Eingabe mehr an, ohne dass
+                # etwas danach aussieht.
+                with QSignalBlocker(self._depth_measure):
+                    self._depth_measure.set_value_mm(depth)
+                place(self._depth_measure, mouth, tip)
+                if below > depth + EPS_GEOM:
+                    self._canvas.lines.append((tip, screen(tuple(point - axis * below))))
+                    self._rest.setText(
+                        tr("Wand: {value}").replace("{value}", length(below - depth))
+                    )
+                    self._rest.adjustSize()
+                    self._rest.move(round(tip.x()) + ROOMY, round(tip.y()))
+                    self._rest.show()
+                    self._rest.raise_()
+                else:
+                    self._rest.hide()
+                middle = screen(tuple(point - axis * (below / 2.0)))
+                self._canvas.leaders.append((middle, middle))
+        else:
+            self._rest.hide()
 
         for index, edge in enumerate(surface.edges[:2]):
             foot = point - np.asarray(edge.inward, dtype=np.float64) * edge.distance
@@ -1075,11 +1788,16 @@ class PlacementFlow(QObject):
                 )
             )
             place(self._centre, screen(centre.point), screen(centre.point))
+        # Der Platz für die Maßfelder ist der Raum **über** der Leiste, seit
+        # sie unten mittig steht. Vorher lag sie oben und der Raum darunter;
+        # wer nur die Leiste verschiebt und diese Rechnung stehen lässt, drückt
+        # jedem Feld den Boden weg — die Zahlen rutschten aus dem Bild.
+        bar = self._bar.geometry()
         bounds = QRect(
             room.left(),
-            self._bar.geometry().bottom() + NORMAL,
+            room.top(),
             max(room.width(), 1),
-            max(room.bottom() - self._bar.geometry().bottom() - NORMAL + 1, 1),
+            max(bar.top() - NORMAL - room.top(), 1),
         )
         # **Der Setzpunkt ist das erste Hindernis, noch vor jedem Feld.** Jedes
         # Maßfeld will in die Mitte seiner eigenen Maßlinie, und die Linien
@@ -1194,8 +1912,14 @@ class PlacementFlow(QObject):
             if direction.y():
                 ratios.append(rect.height() / (2 * abs(direction.y())))
             self._canvas.leaders.append((middle + direction * min(ratios), anchor))
-        self._canvas.refresh(tuple(widget.geometry() for widget in (self._bar, *positions)))
+        # **Die Felder der Tiefenstufe gehören in beide Listen.** Aus der Maske
+        # genommen, damit die Maßfläche nicht über ihnen liegt, und **nach** der
+        # Leiste gehoben, damit sie erreichbar bleiben: Sie steht unten mittig,
+        # und das Tiefenfeld sitzt darüber (Robert, 09.09.2026: „wenn ich die
+        # tiefe setz, komm ich nicht in das bearbeitenfeld von der maßeinheit").
+        shown = [widget for widget in (self._depth_measure, self._rest) if widget.isVisible()]
+        self._canvas.refresh(tuple(widget.geometry() for widget in (self._bar, *positions, *shown)))
         self._bar.raise_()
-        for widget in (*self._measures, *self._centre_measures, self._centre):
+        for widget in (*self._measures, *self._centre_measures, self._centre, *shown):
             widget.raise_()
         self.viewport._draw()

@@ -8,9 +8,12 @@ from typing import Any
 
 import numpy as np
 import pytest
+import trimesh
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
+from app.core.geom.mesh import MeshData
+from app.core.knowledge.parts.ops import depth_field
 from app.core.registry import REGISTRY
 from app.core.scene.history import OperationDraft
 from app.core.scene.project import load, save
@@ -34,6 +37,8 @@ class _Item:
 
 class _Renderer:
     widget = None
+    #: Wird beim Aufbau gesetzt — die Projektion liest darüber den Zoom.
+    viewport: Any = None
 
     def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
         return _Item()
@@ -42,7 +47,20 @@ class _Renderer:
         pass
 
     def world_to_display(self, point: Any) -> tuple[float, float, float]:
-        return 320 + point[0] * 10, 240 - point[1] * 10, 0.5
+        """Eine Projektion, in der auch **z** ankommt.
+
+        Vorher fiel die Höhe weg. Für die Tiefenstufe heißt das: Mündung und
+        ein Millimeter darunter landen auf demselben Bildpunkt,
+        ``_axis_on_screen`` findet keine Richtung und gibt ``None`` zurück —
+        die ganze Tiefenrechnung lief nie, und kein Test hat es gemerkt.
+        Zehn Bildpunkte je Millimeter, in y auch für z: eine Seitenansicht.
+        """
+        scale = _Viewport.SCALE * self.viewport.zoom()
+        return (
+            320 + point[0] * scale,
+            240 - point[1] * scale - point[2] * scale,
+            0.5,
+        )
 
 
 class _Viewport(QWidget):
@@ -53,6 +71,8 @@ class _Viewport(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.renderer = _Renderer()
+        # Die Projektion braucht den Zoom, und der steht an der Kamera.
+        self.renderer.viewport = self
         self._object_colour = "#aaaaaa"
         self.hit: Any = None
         self.result: Any = None
@@ -60,6 +80,14 @@ class _Viewport(QWidget):
         #: Ob am Vorschaukörper ein Griff hängen soll. Der echte Viewport baut
         #: ihn an einem Aktor des Renderers; hier zählt nur die Entscheidung.
         self.preview_gizmo = False
+        #: Kamerastellung und Darstellungsart — die Tiefenstufe fasst beide an.
+        self.pose: tuple[Any, Any, Any, float | None] = (
+            (0.0, -100.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+            None,
+        )
+        self.display = "solid"
         self.resize(900, 600)
 
     def set_preview_gizmo(self, active: bool) -> None:
@@ -83,6 +111,75 @@ class _Viewport(QWidget):
 
     def view_point_of(self, point: Any, _object_id: str) -> Any:
         return point
+
+    def camera_pose(self) -> tuple[Any, Any, Any, float | None]:
+        """Standort, Blickpunkt, Oben und der Parallelmaßstab — vier Werte.
+
+        Die Tiefenstufe schwenkt quer zur Werkzeugachse und braucht dafür die
+        heutige Stellung. Vier und nicht drei, wie der echte Viewport: Wer die
+        Attrappe kürzer hält als den Vertrag, prüft einen Aufruf, den es so
+        nicht gibt.
+        """
+        return self.pose
+
+    def set_camera_pose(
+        self, position: Any, focal_point: Any, view_up: Any, parallel_scale: float | None = None
+    ) -> None:
+        self.pose = (position, focal_point, view_up, parallel_scale)
+
+    def settle_camera(self) -> None:
+        pass
+
+    #: Bildpunkte je Millimeter — dieselbe Zahl, mit der ``world_to_display``
+    #: projiziert. Zwei verschiedene Maßstäbe in einer Attrappe ergäben eine
+    #: Tiefe, die niemand herleiten kann, und einen Test, dessen Sollwert aus
+    #: dem Prüfling stammt.
+    #:
+    #: **Und ausdrücklich nicht zehn.** Die Tiefenstufe fällt ohne Maßstab auf
+    #: einen Zehntelmillimeter je Bildpunkt zurück, und bei zehn Bildpunkten je
+    #: Millimeter ist der Rückfall vom Ergebnis der Rechnung nicht zu
+    #: unterscheiden: Die Gegenprobe blieb damit grün, als die Rechnung durch
+    #: genau diesen Rückfall ersetzt wurde. Acht macht beide Wege sichtbar.
+    SCALE = 8.0
+
+    #: Der Abstand, bei dem ``SCALE`` gilt. Die echte Ansicht rechnet
+    #: perspektivisch (``settings.projection`` steht auf ``perspective``), der
+    #: Maßstab hängt dort also am Kameraabstand — und genau das muss die
+    #: Attrappe können, sonst ist ein eingefrorener Maßstab von einem je
+    #: Bewegung gemessenen nicht zu unterscheiden.
+    REFERENCE_DISTANCE = 100.0
+
+    def zoom(self) -> float:
+        """Wie stark das Bild gerade vergrößert ist — eins am Bezugsabstand."""
+        position = np.asarray(self.pose[0], dtype=np.float64)
+        focus = np.asarray(self.pose[1], dtype=np.float64)
+        away = float(np.linalg.norm(position - focus))
+        if away < 1e-9:
+            return 1.0
+        return self.REFERENCE_DISTANCE / away
+
+    def _pixels_per_mm_at(self, _point: Any) -> float | None:
+        """Der Maßstab an einer Stelle — mit dem Abstand der Kamera.
+
+        Die Tiefenstufe rechnet daraus, wie weit ein Bildpunkt Zug die Bohrung
+        wachsen lässt. Was er **nicht** sein darf, ist ``None`` an einer Stelle,
+        an der der echte Viewport eine Zahl liefert — sonst prüft der Test den
+        Rückfall statt der Rechnung.
+        """
+        return self.SCALE * self.zoom()
+
+    def set_display_mode(self, mode: str) -> None:
+        self.display = mode
+
+    @property
+    def display_mode(self) -> str:
+        """Eine **Property**, wie im Viewport (``viewport.py``).
+
+        Als Methode gab die Attrappe eine gebundene Methode zurück, und die
+        Platzierung merkte sie sich als Darstellungsart, um sie am Ende
+        zurückzustellen — geprüft war damit nichts von beidem.
+        """
+        return self.display
 
     def _device_ratio(self) -> float:
         return 1.0
@@ -191,6 +288,24 @@ def _point(controller: PlacementFlow, session: Session, *, confirm: bool = False
     assert session.wait_for_idle(30_000)
 
 
+def _place(controller: PlacementFlow, session: Session) -> None:
+    """Beide Stufen: der Klick legt die Stelle fest, der zweite bestätigt.
+
+    Seit dem 09.09.2026 setzt ein Klick nicht mehr sofort — er geht in die
+    Tiefenstufe, wo die Maus die Tiefe zieht (Robert: „wenn wir klicken wollen
+    wir die bohrung von der seitenansicht sehen und dann die tiefe
+    runterziehen"). Wer das Ergebnis prüfen will, geht beide.
+    """
+    _point(controller, session, confirm=True)
+    # Nach dem Klick stehen die Maße offen; erst das Übernehmen führt weiter —
+    # zur Tiefe, wo es eine gibt, und von dort zum Ergebnis.
+    for _ in range(2):
+        if not controller.active:
+            break
+        controller.accept()
+        assert session.wait_for_idle(30_000)
+
+
 def test_the_placement_worker_returns_in_the_qt_thread(qt_app: QApplication) -> None:
     session = Session()
     threads: list[Any] = []
@@ -210,12 +325,349 @@ def test_the_placement_worker_returns_in_the_qt_thread(qt_app: QApplication) -> 
         session.release()
 
 
+def test_a_click_that_did_not_land_does_not_lock_the_next_one(flow: Any) -> None:
+    """Ein verlorener Klick mauert den Platzierungsmodus nicht zu.
+
+    **Der Befund** (Robert, 09.09.2026: „einmal hat es geklappt von 20 klicks").
+    ``_commit_pending`` sperrt weitere Klicks, damit ein Doppelklick nicht zwei
+    Bohrungen setzt — und blieb stehen, wenn der gemerkte Klick nicht zum Setzen
+    führte. Danach war der Modus stumm: Jeder Klick lief in
+
+        if self._commit_pending:
+            return True
+
+    und kam nie bei der Fläche an. Das erklärt die Quote — nicht ein Klick von
+    zwanzig trifft ein Zeitfenster, sondern der erste verliert sich und alle
+    weiteren sind ausgesperrt.
+    """
+    controller, session, _viewport, _dialog = flow
+    before = len(session.project.document.transactions)
+    controller.start()
+    assert session.wait_for_idle(30_000)
+
+    # Genau der Zustand nach einem Klick, der nicht zum Setzen führte: Die
+    # Sperre steht, und der gemerkte Klick ist längst verfallen.
+    controller._commit_pending = True
+    controller._pending = None
+
+    _place(controller, session)
+
+    assert len(session.project.document.transactions) == before + 1, (
+        "der Klick kam nicht bei der Fläche an — der Modus war zugemauert"
+    )
+
+
+def test_a_click_before_the_tool_is_ready_still_places_the_hole(flow: Any) -> None:
+    """Wer klickt, sobald der Kreis dasteht, setzt die Bohrung — nicht erst
+    danach.
+
+    **Der Befund** (Robert, 09.09.2026: „wenn ich bei der Bohrung den Kreis hab
+    und ihn setzen will, passiert nichts"). Jeder bestehende Test wartet vor
+    dem Klick mit ``wait_for_idle``, bis der Werkzeugbau durch ist; ein Mensch
+    tut das nicht. Der Kreis hängt am vorbereiteten Werkzeug, das Setzen hing
+    zusätzlich am **gezeichneten** Körper — dazwischen liegt eine
+    Ereignisrunde, und in ihr klickt man.
+
+    Kommt der Klick zu früh, merkt ihn ``_pending`` vor, und der Timer holt ihn
+    nach, sobald Fläche und Werkzeug stehen. Was den Weg zumauerte, war
+    ``_commit_pending``:
+    Es sperrt jeden weiteren Klick, damit ein Doppelklick nicht zwei Bohrungen
+    setzt — und blieb stehen, wenn das nachgeholte ``accept`` an einer seiner
+    sechs Bedingungen ausstieg. Danach war der Platzierungsmodus stumm, und
+    genau das beschreibt „passiert nichts".
+    """
+    controller, session, _viewport, _dialog = flow
+    before = len(session.project.document.transactions)
+    controller.start()
+
+    # Kein wait_for_idle: der Werkzeugbau läuft noch, wenn der Klick kommt.
+    assert controller.pointer(PointerEvent("release", 320, 240, button="left"))
+    controller._timer.stop()
+    controller._next_surface()
+    assert session.wait_for_idle(30_000)
+    for _ in range(2):
+        if not controller.active:
+            break
+        controller.accept()
+        assert session.wait_for_idle(30_000)
+
+    assert len(session.project.document.transactions) == before + 1, (
+        "der Klick hat keine Bohrung gesetzt"
+    )
+    assert not controller.active, "und die Platzierung ist danach beendet"
+
+
+def test_placing_a_hole_goes_through_three_stages(flow: Any) -> None:
+    """Stelle, Maße, Tiefe — und jede Stufe endet mit einer eigenen Geste.
+
+    Der Ablauf, den Robert am 09.09.2026 gestellt hat: „beim klick sollte man
+    die maße dann einstellen die man sieht, dann in die seitenansicht erst
+    nachdem man das bestätigt hat und die tiefe einstellen", und am Ende „über
+    den dialog zu bestätigen".
+
+    Bis dahin war es **eine** Geste: Der Klick nahm die Stelle und schloss ab,
+    mit jeder Vorgabe, die daran hing — bei einer Bohrung also ``depth = 0``,
+    was durch das ganze Teil heißt („oder ich bohr komplett durch ohne die
+    tiefenbearbeitung").
+    """
+    controller, session, _viewport, _dialog = flow
+    viewport = _viewport
+    before = len(session.project.document.transactions)
+    controller.start()
+    assert session.wait_for_idle(30_000)
+
+    # Stufe 1 → 2: der Klick legt die Stelle fest und schließt **nicht** ab.
+    _point(controller, session, confirm=True)
+    assert controller.active, "der Klick hat schon gebohrt"
+    assert controller._frozen, "die Stelle steht"
+    assert not controller._deepening, "die Tiefe kommt erst nach dem Übernehmen"
+    assert len(session.project.document.transactions) == before
+
+    # Stufe 2 → 3: Übernehmen führt in die Tiefe, nicht ins Ergebnis.
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+    assert controller.active and controller._deepening, "Stufe 3 ist die Tiefe"
+    assert len(session.project.document.transactions) == before
+
+    # In Stufe 3 zieht die Maus die Tiefe — und zwar bis zum Zeiger.
+    name = depth_field("drill_hole", REGISTRY.get("drill_hole").params)
+    assert name is not None
+    assert controller.pointer(PointerEvent("move", 320, 300))
+    assert not controller._depth_set
+    gezogen = float(controller.dialog.values()[name])
+    assert gezogen > 0.0, "die Bewegung hat die Tiefe nicht verstellt"
+
+    # **Die Spitze liegt unter dem Zeiger.** Die Erwartung kommt aus derselben
+    # Projektion, die auch das Bild macht — nicht aus einer Handrechnung, die
+    # bei der ersten Änderung an der Attrappe still falsch wird.
+    mouth = viewport.renderer.world_to_display(controller._surface.point)
+    erwartet = (300 - mouth[1]) / _Viewport.SCALE
+    assert gezogen == pytest.approx(erwartet, abs=0.2), (
+        f"die Spitze folgt dem Zeiger nicht — {gezogen} statt {erwartet}"
+    )
+
+    # … und der Klick hält sie an, statt zu bohren.
+    assert controller.pointer(PointerEvent("release", 320, 300, button="left"))
+    assert controller._depth_set, "der Klick hält die Tiefe an"
+    assert len(session.project.document.transactions) == before
+
+    # Danach gehört die Maus wieder ganz der Ansicht — auch der Linksklick,
+    # der im ``solidon``-Schema die Kamera schiebt.
+    assert not controller.pointer(PointerEvent("press", 320, 300, button="left"))
+    assert not controller.pointer(PointerEvent("move", 400, 300, buttons=frozenset({"left"})))
+
+    # Und erst der Knopf bohrt.
+    # **Gewartet, weil der Knopf so lange gesperrt ist.** Der Klick auf die
+    # Tiefe schreibt einen neuen Wert, und der stößt die Werkzeugvorschau neu
+    # an; bis sie steht, ist ``_tool_context`` leer und ``_accept`` grau. Wer
+    # hier ohne das Warten ``accept()`` ruft, ruft an der Oberfläche vorbei
+    # eine Methode, die der Kunde gar nicht auslösen könnte — und bekommt
+    # einen roten Test für ein Verhalten, das richtig ist.
+    assert session.wait_for_idle(30_000)
+    assert controller._accept.isEnabled(), "der Knopf muss den letzten Schritt anbieten"
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+    assert not controller.active
+    assert len(session.project.document.transactions) == before + 1
+
+
+def test_the_depth_stage_never_starts_at_the_value_that_means_through(flow: Any) -> None:
+    """Null heißt „durch das ganze Teil" — dort darf die Stufe nicht beginnen.
+
+    Das Schema von ``drill_hole`` gibt ``depth`` mit 0 vor und schreibt dazu
+    „Null bohrt durch das ganze Teil". Wer die Tiefenstufe betrat und ohne zu
+    ziehen übernahm, bohrte damit weiterhin durch — genau das, was diese Stufe
+    abschaffen sollte (Robert, 09.09.2026: „die bohrung ist aber sofort
+    komplett durch"). Und wer den Zeiger nach *oben* zieht, um flacher zu
+    werden, landete am Ende des Wegs bei derselben Null.
+    """
+    controller, session, _viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session, confirm=True)
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+    assert controller._deepening
+
+    name = depth_field("drill_hole", REGISTRY.get("drill_hole").params)
+    assert name is not None
+    anfang = float(controller.dialog.values()[name])
+    assert anfang > 0.0, "die Stufe beginnt mit einer Tiefe, nicht mit dem Durchbohren"
+
+    # Weit über die Mündung hinaus nach oben gezogen: auch dort bleibt eine
+    # Tiefe stehen, die eine ist.
+    assert controller.pointer(PointerEvent("move", 320, 0))
+    hochgezogen = float(controller.dialog.values()[name])
+    assert hochgezogen > 0.0, f"der Zug fiel auf {hochgezogen} — das bohrt durch"
+
+
+def test_a_typed_depth_is_not_overwritten_by_the_next_mouse_move(flow: Any) -> None:
+    """Wer die Zahl tippt, hat entschieden — der Zeiger sagt danach nichts mehr.
+
+    Der Zug misst absolut von der Mündung; ohne Sperre überschriebe ihn die
+    nächste Bewegung über der Renderfläche vollständig. Der Weg zum Knopf führt
+    genau darüber (Robert, 09.09.2026: „wenn ich die tiefe setz, komm ich nicht
+    in das bearbeitenfeld von der maßeinheit").
+    """
+    controller, session, _viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session, confirm=True)
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+
+    name = depth_field("drill_hole", REGISTRY.get("drill_hole").params)
+    assert name is not None
+    controller._depth_typed(4.25)
+    assert float(controller.dialog.values()[name]) == pytest.approx(4.25)
+
+    # Die Maus wandert weiter — über die Renderfläche zum Knopf.
+    assert not controller.pointer(PointerEvent("move", 400, 380))
+    assert float(controller.dialog.values()[name]) == pytest.approx(4.25), (
+        "die getippte Tiefe hat die nächste Mausbewegung nicht überlebt"
+    )
+
+
+def test_the_depth_follows_the_pointer_after_a_zoom(flow: Any) -> None:
+    """Zoomen bleibt in der Tiefenstufe frei — der Maßstab muss mitgehen.
+
+    Die Ansicht rechnet perspektivisch, der Maßstab hängt also am Abstand der
+    Kamera. Einmal beim Betreten gemessen und dann eingefroren, wäre die Tiefe
+    nach einem Zoom um den Faktor k um k daneben, und die Spitze läge nicht
+    mehr unter dem Zeiger (Robert, 09.09.2026: „bei weiter zur tiefe passt wohl
+    die mausposition zur darstellung noch nicht ganz").
+    """
+    controller, session, viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session, confirm=True)
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+
+    name = depth_field("drill_hole", REGISTRY.get("drill_hole").params)
+    assert name is not None
+
+    def gezogen_bei(y: int) -> float:
+        assert controller.pointer(PointerEvent("move", 320, y))
+        return float(controller.dialog.values()[name])
+
+    def erwartet_bei(y: int) -> float:
+        mouth = viewport.renderer.world_to_display(controller._surface.point)
+        return (y - float(mouth[1])) / (_Viewport.SCALE * viewport.zoom())
+
+    nah = gezogen_bei(300)
+    assert nah == pytest.approx(erwartet_bei(300), abs=0.2)
+
+    # Die Kamera fährt auf den halben Abstand — alles wird doppelt so groß.
+    position, focus, up, scale = viewport.camera_pose()
+    mitte = tuple(float(focus[i]) + (float(position[i]) - float(focus[i])) / 2.0 for i in range(3))
+    viewport.set_camera_pose(mitte, focus, up, scale)
+    assert viewport.zoom() == pytest.approx(2.0)
+
+    fern = gezogen_bei(300)
+    assert fern == pytest.approx(erwartet_bei(300), abs=0.2), (
+        f"nach dem Zoom zieht die Tiefe {fern} statt {erwartet_bei(300)}"
+    )
+    assert fern != pytest.approx(nah, abs=0.2), "der Zoom hat den Maßstab nicht verändert"
+
+
+def test_the_wall_below_is_measured_through_the_hollow(flow: Any) -> None:
+    """Bei einem hohlen Teil zählt die Wand, nicht die Ausdehnung des Körpers.
+
+    Hohl ist im Druck der Normalfall. Am Hüllquader gemessen stand in der
+    zwei Millimeter starken Decke einer Box „Wand: 18,0 mm" im Bild, die
+    Mitte-Marke lag im Hohlraum, und das Einrasten hielt an beiden falschen
+    Werten. Gemessen wird deshalb mit einem Strahl bis zum ersten Austritt —
+    dieselbe Rechnung, mit der die Stifte ihre Materialtiefe suchen.
+    """
+    controller, _session, _viewport, _dialog = flow
+
+    # Eine Box mit Hohlraum: außen 20 mm, innen 16 mm, also 2 mm Decke.
+    aussen = trimesh.creation.box((20.0, 20.0, 20.0))
+    innen = trimesh.creation.box((16.0, 16.0, 16.0))
+    innen.invert()
+    hohl = MeshData.of(trimesh.util.concatenate([aussen, innen]))
+
+    controller._object_id = "obj_1"
+    controller._result = SimpleNamespace(
+        scene=SimpleNamespace(objects={"obj_1": SimpleNamespace(mesh=hohl)})
+    )
+    controller._surface = SimpleNamespace(
+        point=(0.0, 0.0, 10.0), frame=SimpleNamespace(normal=(0.0, 0.0, 1.0))
+    )
+
+    unten = controller._material_below()
+    assert unten == pytest.approx(2.0, abs=1e-6), (
+        f"gemessen wurde {unten} — das ist der Hüllquader und nicht die Wand"
+    )
+
+    # Und die Marken hängen daran: die Rückseite der Wand und ihre Mitte.
+    assert controller._depth_marks() == pytest.approx((1.0, 2.0))
+
+
+def test_dragging_the_camera_does_not_settle_the_depth(flow: Any) -> None:
+    """Wer in der Tiefenstufe die Ansicht schiebt, hat die Tiefe nicht gemeint.
+
+    Im ``solidon``-Schema schiebt die linke Taste die Kamera, und die Stufe
+    lässt sie ausdrücklich durch. Zählte jedes Loslassen als Bestätigung, stand
+    die Tiefe nach einem Schiebeversuch still fest — die Geste tat nichts und
+    beendete nebenbei das Einstellen. Unterschieden wird an der Zugschwelle des
+    Systems, wie überall in der Ansicht.
+    """
+    controller, session, _viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session, confirm=True)
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+    assert controller._deepening
+
+    # Ein Zug über die halbe Ansicht: Druck, Bewegung, Loslassen weit entfernt.
+    assert controller.pointer(PointerEvent("press", 320, 300, button="left"))
+    assert not controller.pointer(PointerEvent("move", 500, 300, buttons=frozenset({"left"})))
+    assert not controller.pointer(PointerEvent("release", 500, 300, button="left"))
+    assert not controller._depth_set, "ein Schiebeversuch hat die Tiefe festgesetzt"
+
+    # Ein echter Klick an derselben Stelle hält sie dagegen an.
+    assert controller.pointer(PointerEvent("press", 320, 300, button="left"))
+    assert controller.pointer(PointerEvent("release", 320, 301, button="left"))
+    assert controller._depth_set, "der Klick hält die Tiefe an"
+
+
+def test_the_depth_stage_gives_back_the_view_it_borrowed(flow: Any) -> None:
+    """Darstellungsart und Kamera gehören dem Kunden, nicht der Stufe.
+
+    Die Tiefenstufe macht das Modell durchscheinend und schwenkt quer zur
+    Bohrachse, damit man in das Loch sieht. Beides ist geliehen (`ansicht.md`,
+    „Was die Ansicht sich merkt"): Wer die Stufe über Escape verlässt, findet
+    seine Ansicht vor, wie er sie hatte — sonst bleibt das Modell für immer
+    durchscheinend und die Kamera in einem Schwenk, den niemand gewählt hat.
+    """
+    controller, session, viewport, _dialog = flow
+    viewport.set_display_mode("solid")
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    vorher = viewport.camera_pose()
+
+    _point(controller, session, confirm=True)
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+    assert controller._deepening
+
+    assert viewport.display_mode == "transparent", "in das Loch sieht man nur durchscheinend"
+    assert viewport.camera_pose() != vorher, "die Stufe schwenkt quer zur Achse"
+
+    controller._leave_depth()
+    assert viewport.display_mode == "solid", "die Darstellungsart kam nicht zurück"
+    assert viewport.camera_pose() == vorher, "die Kamera blieb im Seitenschwenk stehen"
+
+
 def test_click_places_one_real_hole_and_undo_removes_it(flow: Any, tmp_path: Path) -> None:
     controller, session, _viewport, dialog = flow
     before = len(session.project.document.transactions)
     controller.start()
     assert session.wait_for_idle(30_000)
-    _point(controller, session, confirm=True)
+    _place(controller, session)
     assert not controller.active
     assert len(session.project.document.transactions) == before + 1
     assert session.last_result.complete

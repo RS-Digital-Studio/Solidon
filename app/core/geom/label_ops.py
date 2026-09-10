@@ -222,6 +222,11 @@ class LabelParams(BaseParams):
         title=_("Art"),
         default="raised",
         choices=("raised", "engraved"),
+        # **Er sagt die Richtung, und die braucht mehr als die Boolesche
+        # Operation.** Die Tiefenstufe der Flächenplatzierung fragt hier,
+        # ob ein Zug nach unten überhaupt etwas abträgt; bei ``raised``
+        # vergrößerte sie sonst einen Wert, der nach außen geht.
+        subtractive_on=("engraved",),
         doc=_("Erhaben druckt sich besser, vertieft bleibt beim Schleifen erhalten."),
     )
     slot: int = param(

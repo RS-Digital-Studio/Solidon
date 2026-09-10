@@ -215,7 +215,18 @@ zu den Kanten als Zahlenfelder, eintippbar. Erst das Übernehmen führt in die
 Wer eine Tiefe hat, sagt `deepens()`: Das Werkzeug sitzt auf etwas
 (`consumes != 0`) **und** führt ein Längenfeld dafür (`parts.ops.depth_field`).
 Beides ist nötig — ein Quader trägt ein Feld namens `depth`, und das ist seine
-Bauteiltiefe, nicht die Eindringtiefe.
+Bauteiltiefe, nicht die Eindringtiefe. **Und der Name allein entscheidet
+nicht:** `depth_field` fragt zusätzlich die Abtragsrichtung, sonst zöge die
+Stufe an der vorstehenden Nase von `insert_latch` oder an einer erhabenen
+Beschriftung. Die Regel dazu steht in `app/core/knowledge/parts/CLAUDE.md`.
+
+**Die Stufe beginnt mit einer Tiefe, nicht mit der Null.** Bei `depth = 0`
+bohrt die Operation durch das ganze Teil; wer die Stufe betrat und ohne zu
+ziehen übernahm, bekam genau das, was sie abschaffen soll. Vorbelegt wird mit
+dem Material unter der Mündung, und der Zug fällt nicht unter
+`LEAST_DEPTH_MM` — sonst führte ein Zug nach *oben*, der flacher machen soll,
+am Ende des Wegs hindurch. Die Null bleibt über das Maßfeld erreichbar, wo sie
+ausgeschrieben dasteht.
 
 In der Tiefenstufe kehrt sich um, was Stufe 1 zeigt: Der Werkzeugkörper tritt
 **vor** (der Umriss sagt nichts über die Tiefe), das Modell wird durchscheinend
@@ -227,6 +238,21 @@ Spitze liegt unter dem Zeiger, gerechnet aus der Bildrichtung der Achse und dem
 Maßstab an der Stelle (`_pixels_per_mm_at`) — und rastet über
 `transform.snap_to_marks` kurz an Mitte und Rückseite ein. Was die Platzierung
 dort **nicht** nimmt, gehört der Kamera: Drehen, Zoomen und Kippen bleiben frei.
+
+**Beide Größen werden je Bewegung neu geholt, nicht einmal beim Betreten.**
+Die Bildrichtung der Achse war es von Anfang an; der Maßstab nicht, und die
+Ansicht rechnet perspektivisch — nach einem Zoom um k war die Tiefe um k
+daneben. Ebenso zählt, gegen welches Material gemessen wird: `_material_below`
+schießt einen Strahl und nimmt den **ersten Austritt**, nicht den fernsten
+Punkt des Hüllquaders. In der 2 mm starken Decke einer Box stand sonst
+„Wand: 18,0 mm" im Bild, und das Einrasten hielt an Marken im Hohlraum.
+
+**Eine getippte Zahl hält, und ein Zug an der Kamera setzt nichts fest.**
+Beides sind Sperren über dasselbe Feld (`_depth_set`): Wer die Zahl eingibt,
+hat entschieden — der Zug misst absolut und überschriebe sie sonst bei der
+nächsten Bewegung, und der Weg zum Knopf führt über die Renderfläche. Und wer
+die linke Taste zum Schieben drückt, meint nicht die Tiefe; unterschieden wird
+an der Zugschwelle des Systems (`_barely_moved`), wie überall in der Ansicht.
 
 **Drei Fallen, alle drei einmal zugeschnappt:** Ein Feld, dessen Sichtbarkeit
 gesetzt wird, aber weiter eingesammelt wird, zeigt die Platzierungsschleife
@@ -528,6 +554,34 @@ Bohren, Aushöhlen und Teilen, an einem gewählten Merkmal die seiner Art —
 das Merkmal hat Vorrang vor der Menge. Die Knöpfe dieser Lagen entstehen
 einmal (`all_quick_names`) und werden nur ein- und ausgehängt; was oben
 stehen kann, steht nicht auch in der Suchliste darunter.
+
+**Was aus einem Baustein kam, meint den Baustein.** Ein Schlüsselloch
+bringt zwölf Merkmale mit — zwei Bohrungen, **zehn Verrundungen** und die
+Fläche, auf der es sitzt. Die Verrundungen tragen für sich keine einzige
+Handlung (`REGISTRY.for_feature("fillet")` ist leer), und an der Fläche
+standen die Handlungen einer Fläche: Bohren, Tasche, Fläche ziehen. Wer
+eine Schlitzkante anklickt, hat aber das Schlüsselloch gemeint (Befund
+Robert, 10.09.2026). `MainWindow.part_step_of` fragt deshalb die
+Provenienz und die Kategorie des Schritts — `parts`, nicht eine Namensliste,
+die beim nächsten Baustein schwiege —, und `FeaturePanel.show_part` zeigt
+statt der Merkmalszeilen die drei Handlungen des Bausteins: Maße ändern,
+verschieben, entfernen (`perceive.actions.part_actions`).
+
+**Und sie gelten dem Schritt, nicht dem einzelnen Merkmal.**
+`resize_feature` auf die runde Tasche gesetzt bohrte sie auf und ließe den
+Schlitz stehen. Was die Größe wirklich ändert, ist die Schraubengröße im
+Schritt. Die Werte kommen von dort und gehen dorthin zurück
+(`stepChangeRequested`, `stepRemoveRequested`) — **nicht** über
+`operationRequested`, das bei jeder Korrektur ein zweites Schlüsselloch
+über das alte legte. Aus gemessenen Maßen ließe sich ohnehin nichts
+zurückschreiben: Aus zwei Durchmessern käme keine Schraubengröße zurück.
+
+**Im Baum gilt dasselbe.** Das Bausteindach wählt seine zwölf Kinder mit
+(`selected_features`), und zwölf Merkmale sind für eine Passung zehn zu
+viel: Dort stand „Wählen Sie genau zwei aus", wo jemand gerade ein Ding
+angeklickt hatte. `_common_part_step` fragt, ob die **ganze** Auswahl aus
+einem Schritt stammt — eine Bohrung des Schlüssellochs und eine fremde
+daneben sind zwei Dinge und kein Baustein.
 
 **Und was das Merkmalsfenster darüber schon als Feld zeigt, steht hier gar
 nicht.** `_shown_as_fields()` liest `perceive.actions.ACTION_ORDER` — dieselbe
