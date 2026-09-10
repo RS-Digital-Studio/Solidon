@@ -27,6 +27,22 @@ kosteten Zeit:
   einen Docstring —, macht ihn wertlos: `inspect.getsource` las danach falsche
   Zeilen, und sieben Ops fielen bei `test_non_deterministic_operations_use_a_seed`
   durch, die isoliert alle grün sind. Erst fertig werden, dann fahren.
+- **Und sie committet deine Zeilen mit.** Am selben Tag gingen meine
+  ROADMAP-Ergänzung, meine acht Katalogeinträge und zwei umgestellte Tests in
+  `test_ui.py` im Commit der **anderen** Sitzung hinaus — sie hat die Dateien
+  gestaged, in denen auch meine Arbeit stand. Kein Schaden, aber die eigene
+  Commit-Nachricht beschreibt danach etwas, das woanders steht.
+- **Eine geteilte Datei sauber committen geht so:** die HEAD-Fassung holen, die
+  **eigenen** Ersetzungen darauf anwenden, `git hash-object -w --path <datei>
+  --stdin` und `git update-index --cacheinfo 100644,<sha>,<datei>`. Der
+  Arbeitsbaum bleibt unberührt, im Index steht nur die eigene Zeile.
+- **Die Falle daran ist HEAD selbst.** Bewegt er sich zwischen dem Bauen des
+  Blobs und dem Commit — und das tut er, wenn die andere Sitzung gerade
+  committet —, dann **nimmt der Blob ihre frische Arbeit zurück**: Er ist gegen
+  den alten Stand gebaut. Gerettet hat mich nur die `index.lock`, an der mein
+  `update-index` scheiterte. Also: `git rev-parse HEAD` unmittelbar vor dem
+  Bauen und noch einmal vor dem Commit; sind sie ungleich, `git reset` und alles
+  neu gegen den neuen HEAD.
 
 **Warum:** Das Mehrsitzungs-Setup mit Schloss und eigenem Worktree ist am
 09.09.2026 ausgebaut ([[mehrsitzungs-setup-ist-ausgebaut]]) — es gibt also
