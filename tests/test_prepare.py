@@ -3919,6 +3919,49 @@ def test_a_detected_bore_becomes_a_slot(document: Document, profile: Profile) ->
     )
 
 
+def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
+    """Eine kürzere Länge wird abgelehnt, statt stillschweigend nichts zu tun.
+
+    **Der Fall lief zwei Tage lang durch, und er sah dabei wie Erfolg aus.**
+    Die einzige Längenprüfung verglich gegen den *Durchmesser*; an einem
+    bestehenden Langloch ließ sie jede Zahl darüber zu, auch eine kleinere als
+    seine Länge. Gemessen an 20,016 mm mit der Eingabe 12: Der Werkzeugkörper
+    liegt bis auf den Toleranzrand vollständig im vorhandenen Hohlraum,
+    abgetragen werden 1,14 mm³ — das Vielfache der Schwelle, unterhalb derer
+    ``without_effect`` „hat nichts bewirkt" sagt, also schwieg auch die.
+
+    Für den Kunden hieß das: Zahl eintragen, OK drücken, ein Schritt im
+    Verlauf, und am Teil ändert sich nichts. Kein Wort dazu.
+    """
+    import dataclasses
+
+    from app.core.errors import ValidationError
+
+    bored = drill(
+        plate(), position=(0.0, 0.0, 5.0), axis="z", diameter=5.0, depth=10.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=bored, features=detect(bored))
+    bore = next(name for name, found in entry.features.items() if found.kind == "hole")
+
+    stretched = _run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
+    pulled = stretched.outputs[0]
+    with_slot = dataclasses.replace(pulled, features=detect(as_mesh_data(pulled.mesh)))
+    slot = next(name for name, found in with_slot.features.items() if found.kind == "slot")
+    length = float(with_slot.features[slot].params["length"])
+    assert length == pytest.approx(20.0, abs=0.1), "die Vorbedingung: ein Langloch von 20 mm"
+
+    with pytest.raises(ValidationError) as fehler:
+        _run_op("slot_hole", with_slot, profile, at_feature=slot, slot_length=12.0)
+
+    assert fehler.value.field == "slot_length"
+    assert fehler.value.constraint == "slot_growth"
+    assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"
+    # Die genau gleiche Länge ist ebenfalls nichts — sie schnitte nur den
+    # Toleranzrand nach und stünde als Schritt im Verlauf.
+    with pytest.raises(ValidationError):
+        _run_op("slot_hole", with_slot, profile, at_feature=slot, slot_length=length)
+
+
 def test_making_a_slot_needs_a_hole(profile: Profile) -> None:
     """Ein Langloch aus einer Fläche gibt es nicht — und der Satz sagt warum.
 
@@ -4042,3 +4085,13 @@ def test_the_exact_core_cuts_a_slot_through_the_operation(profile: Profile) -> N
         _slot_volume(6.0, 18.0, 10.0) - math.pi * 3.0**2 * 10.0, rel=0.02
     )
     assert "slot_hole.feature_renamed" in {finding.code for finding in result.findings}
+    # **Und der Objektbaum steht danach noch da.** Hier wurde ``carried``
+    # zurückgegeben — die Merkmale mit ``provenance == "generated"`` —, und am
+    # exakten Kern vergibt ``features_of`` ausschließlich ``"detected"``: Aus
+    # acht Merkmalen wurden null, der Baum war leer, und keine Fase und keine
+    # Verrundung hatte danach noch etwas zum Ansetzen. Der Test daneben maß
+    # Volumen und Befund und sah davon nichts.
+    assert out.features, "nach dem Zug steht kein Merkmal mehr im Baum"
+    assert len(out.features) >= len(entry.features) - 1, (
+        f"der Zug hat den Objektbaum geleert: {len(entry.features)} -> {len(out.features)}"
+    )

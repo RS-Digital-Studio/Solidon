@@ -646,6 +646,29 @@ SLOT_TOO_SHORT: Final = _(
     "Ein Langloch muss länger sein als sein Durchmesser — sonst ist es eine runde Bohrung."
 )
 
+#: Wenn jemand ein vorhandenes Langloch **kürzer** einträgt.
+#:
+#: Der Satz oben deckt den ersten Zug, dieser den zweiten — und der Fall ist
+#: der unauffälligere von beiden. Gemessen an einem Langloch von 20,016 mm,
+#: auf das jemand 12 einträgt: Abgetragen werden 1,14 mm³, nämlich der
+#: Toleranzrand ringsum, und das ist ein Vielfaches der Schwelle, unterhalb
+#: derer :func:`without_effect` „hat nichts bewirkt" sagt. Also schwieg sie.
+#: Im Verlauf stand ein Schritt, am Teil hatte sich nichts geändert, und die
+#: eingetragene Zahl war spurlos verschwunden.
+#:
+#: Warum es nicht geht, gehört in den Satz: Die Operation schneidet, und
+#: Material kommt nicht zurück.
+#:
+#: **Ohne geschweifte Klammern**, und das ist keine Stilfrage: Ein
+#: ``{platzhalter}`` in ``AppError.detail`` bleibt dem Kunden wörtlich stehen —
+#: ``dialogs.show_details`` zeigt den Satz, wie er ist, und hängt die ``values``
+#: als eigene Zeilen darunter. Die beiden Längen stehen deshalb dort.
+SLOT_NOT_SHORTER: Final = _(
+    "Dieses Langloch ist bereits länger als die eingetragene Länge. Eine Operation schneidet "
+    "nur weg — Material kommt nicht zurück. Tragen Sie eine größere Länge ein, oder nehmen "
+    "Sie über Strg+Z den Schritt zurück, mit dem das Langloch entstanden ist."
+)
+
 
 def slot_travel(*, diameter: float, length: float, widening_diameter: float = 0.0) -> float:
     """Wie lang die Mittellinie eines Langlochs ist — null heißt: rund bohren.

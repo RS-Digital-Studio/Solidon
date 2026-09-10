@@ -297,6 +297,9 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "slot_proportion",
         "hole_fits",
         "cavity_too_small",
+        # Und eines, das gegen das **gemessene** Maß des gewählten Merkmals
+        # verstößt: Ein Langloch lässt sich nur länger ziehen.
+        "slot_growth",
     }
 )
 

@@ -53,6 +53,7 @@ from app.core.geom.prepare import (
     BORE_SECTIONS,
     FEATURE_OVERLAP,
     MAX_PLATES,
+    SLOT_NOT_SHORTER,
     SLOT_TOO_SHORT,
     Arrangement,
     BoreAnchor,
@@ -857,7 +858,15 @@ def _polygon_gain(feature: Feature) -> float:
     das dieses Maß wiederherstellen soll, rechnet den Unterschied dazu — sonst
     schrumpft die Bohrung bei jedem Zyklus.
     """
-    diameter = float(feature.params.get("diameter", 0.0))
+    return _polygon_gain_for(float(feature.params.get("diameter", 0.0)))
+
+
+def _polygon_gain_for(diameter: float) -> float:
+    """Dieselbe Zugabe für ein Maß, das an keinem Merkmal steht.
+
+    Beim Versetzen darf der Kunde die Bohrung gleichzeitig ändern; dann gilt
+    der Verlust für den **neuen** Durchmesser und nicht für den gemessenen.
+    """
     return diameter * (1.0 / math.cos(math.pi / FEATURE_SECTIONS) - 1.0)
 
 
@@ -1888,7 +1897,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     params=MoveFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=[*MOVABLE_KINDS, "fillet"],
+    applies_to=list(MOVABLE_KINDS),
     touches_features=True,
     deterministic=False,
     doc=_(
@@ -2346,7 +2355,7 @@ class RemoveFeatureParams(BaseParams):
     params=RemoveFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=list(MOVABLE_KINDS),
+    applies_to=[*MOVABLE_KINDS, "fillet"],
     touches_features=True,
     deterministic=False,
     doc=_(
@@ -2835,6 +2844,33 @@ class ResizeHoleParams(BaseParams):
             "die Bohrung trägt sie ein."
         ),
     )
+    x: float = param(
+        title=_("X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige."),
+    )
+    y: float = param(
+        title=_("Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige."),
+    )
+    z: float = param(
+        title=_("Z"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige."),
+    )
     compensate: bool = param(
         title=_("Materialtoleranz berücksichtigen"),
         default=False,
@@ -2873,12 +2909,36 @@ def resize_hole(ctx: OpContext) -> OpResult:
     params = cast(ResizeHoleParams, ctx.params)
     source = ctx.inputs[0]
     feature = _chosen_bore(source, params.at_feature)
-    centre = _bore_vector(feature, "centre")
+    # **Auch das Ändern führt eine Stelle** (Robert, 10.09.2026: „auch beim
+    # ändern einer bohrung"). Damit bekommt *Bohrung ändern* dieselbe
+    # Flächenplatzierung wie *Bohrung setzen*: Die Maße zu Kanten und Mitten
+    # stehen in der Szene und lassen sich dort ändern. Drei Nullen heißen „lass
+    # sie, wo sie ist" — dieselbe Lesart wie bei *Zum Langloch ziehen*, und aus
+    # demselben Grund: Über Chat und Kommandozeile nennt niemand eine Stelle.
+    measured_centre = _bore_vector(feature, "centre")
+    placed: Vec3 = (params.x, params.y, params.z)
+    named_a_place = not all(is_zero(value) for value in placed)
+    centre = placed if named_a_place else measured_centre
+    # **Versetzt ist erst, wer wirklich woanders landet.** Wer die heutige
+    # Mitte noch einmal einträgt, nennt eine Stelle und wechselt keine; das
+    # Loch dafür zu schließen und neu zu bohren wäre Arbeit ohne Wirkung.
+    moved_hole = named_a_place and not all(
+        is_close(a, b) for a, b in zip(centre, measured_centre, strict=True)
+    )
     axis = _bore_vector(feature, "axis")
     previous = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
     _reject_oversized("diameter", params.diameter, source.mesh)
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    # **Gesucht wird danach, wo das Merkmal jetzt sitzt.** Beide Kerne ordnen
+    # die neue Geometrie über Maß *und* Lage wieder ihrem Namen zu; mit der
+    # alten Mitte findet keiner von beiden das versetzte Loch — der Netz-Weg
+    # meldete es als verloren, der exakte warf einen Programmfehler.
+    looked_for = (
+        dataclasses.replace(feature, params={**feature.params, "centre": centre})
+        if moved_hole
+        else feature
+    )
 
     if source.kind == "brep":
         from app.core.brep import edit
@@ -2890,16 +2950,38 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 detail="a scene object marked as brep does not carry a Solid",
                 values={"object": source.id},
             )
-        if is_close(cut, previous):
+        if is_close(cut, previous) and not moved_hole:
             return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
-        solid = edit.resize_bore(
-            source.mesh,
-            position=centre,
-            direction=axis,
-            previous_diameter=previous,
-            diameter=cut,
-            depth=depth,
-        )
+        # **Wer versetzt, schließt die alte Stelle** — dieselbe Paarung wie am
+        # Netz (`_closed_at` weiter unten), nur exakt gerechnet. Bis zum
+        # 10.09.2026 stand hier eine Absage; der Kern konnte kein Loch füllen.
+        #
+        # **Und an der neuen Stelle wird gebohrt, nicht geändert.** Dort ist
+        # nichts, was ein neues Maß bekommen könnte; `resize_bore` ließe ein
+        # unverändertes Maß ohnehin liegen und gäbe den gefüllten Körper zurück.
+        if moved_hole:
+            solid = edit.cut_bore(
+                edit.fill_bore(
+                    source.mesh,
+                    position=measured_centre,
+                    direction=axis,
+                    diameter=previous,
+                    depth=depth,
+                ),
+                position=centre,
+                direction=axis,
+                diameter=cut,
+                depth=depth,
+            )
+        else:
+            solid = edit.resize_bore(
+                source.mesh,
+                position=centre,
+                direction=axis,
+                previous_diameter=previous,
+                diameter=cut,
+                depth=depth,
+            )
         if solid.volume <= EPS_GEOM or solid.face_count == 0:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
@@ -2921,17 +3003,23 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         findings: list[Finding] = []
-        change: BooleanKind = "difference" if cut > previous else "union"
-        nothing = without_effect(source.mesh, solid, change, ctx.profile)
-        if nothing is not None:
-            findings.append(nothing)
+        if not moved_hole:
+            # **Beim Versetzen sagt das Volumen nichts.** Eine Bohrung, die
+            # ihre Stelle wechselt und ihr Maß behält, lässt genau so viel
+            # Material stehen wie vorher — `without_effect` las das als „hat
+            # nichts hinzugefügt". Dass hier etwas geschehen ist, steht schon
+            # fest: `moved_hole` ist erst wahr, wenn die Mitte wirklich wandert.
+            change: BooleanKind = "difference" if cut > previous else "union"
+            nothing = without_effect(source.mesh, solid, change, ctx.profile)
+            if nothing is not None:
+                findings.append(nothing)
         findings.extend(over_the_edge_along(source.mesh, centre, axis, cut))
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
         findings.extend(_widening_findings(source, feature, params.diameter))
         exact_features = _preserved_exact_features(
             source.features,
             features_of(solid),
-            feature,
+            looked_for,
             cut,
             solid,
         )
@@ -2948,23 +3036,77 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
+    # **Die Tiefe wird am Original gemessen, nicht am gestopften Körper.**
+    # `_mesh_bore_depth` liest die Dreiecke, die `feature.face_indices`
+    # benennt, und die gelten für das Netz, in dem das Merkmal erkannt wurde.
+    # Nach einer Booleschen Operation zeigen sie irgendwohin — an der Platte
+    # von 60 x 40 x 10 fällt das nicht auf (gemessen 10.09.2026: 10,0 vor und
+    # 10,0 nach dem Verschließen, am Sackloch 6,0 und 6,0), weil der Fallback
+    # denselben Wert trägt. Auffallen muss es aber auch nicht: Die Frage ist
+    # an dieser Stelle beantwortbar, und danach ist sie es nicht mehr.
     exact_depth = _mesh_bore_depth(body, feature, axis, depth)
-    result = resize_bore(
-        body,
-        position=centre,
-        direction=axis,
-        previous_diameter=previous,
-        diameter=params.diameter,
-        depth=exact_depth,
-        through=bool(feature.params.get("through", False)),
-        profile=ctx.profile,
-        compensate=params.compensate,
-        quality=ctx.quality,
-        seed=ctx.seed,
-    )
+    closed_first: list[Finding] = []
+    if moved_hole:
+        # Dieselbe Paarung wie beim Versetzen: alte Stelle zu, neue auf. Ohne
+        # sie bliebe die Bohrung stehen und die geänderte entstünde daneben.
+        closing = _closed_at(
+            body,
+            feature,
+            measured_centre,
+            True,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        body = closing.mesh
+        closed_first = list(closing.findings)
+    through = bool(feature.params.get("through", False))
+    if moved_hole:
+        # **An der neuen Stelle wird gebohrt, nicht geändert.** Die alte ist
+        # eben zugegangen; dort, wo die Bohrung hinsoll, ist volles Material.
+        # `resize_bore` verglich stattdessen die zwei Durchmesser, fand sie
+        # gleich und gab den Körper unverändert zurück — gemessen am
+        # 10.09.2026: Loch weiterhin bei (-20 | -10), Volumen unverändert,
+        # dazu der Satz „Die Bohrung hat bereits diesen Durchmesser".
+        #
+        # **Und die Vieleckzugabe gehört dazu**, denn das Maß hier ist ein
+        # gemessenes: Ein eingeschriebenes 48-Eck ist schmaler als sein
+        # Umkreis, und ohne die Zugabe schrumpfte die Bohrung bei jedem
+        # Versetzen (gemessen 10.09.2026: 7,9848 vorher, 7,9696 danach).
+        # ``compensate`` steht dabei auf ``False`` — die Materialtoleranz ist
+        # in ``cut`` schon drin, ein zweites Mal wäre sie zweimal drauf.
+        result = drill(
+            body,
+            position=centre,
+            axis="z",
+            normal=axis,
+            diameter=cut + _polygon_gain_for(cut),
+            depth=0.0 if through else exact_depth,
+            anchor="centre",
+            profile=ctx.profile,
+            compensate=False,
+            quality=ctx.quality,
+            seed=ctx.seed,
+        )
+    else:
+        result = resize_bore(
+            body,
+            position=centre,
+            direction=axis,
+            previous_diameter=previous,
+            diameter=params.diameter,
+            depth=exact_depth,
+            through=through,
+            profile=ctx.profile,
+            compensate=params.compensate,
+            quality=ctx.quality,
+            seed=ctx.seed,
+        )
     if result.solver is None:
         return OpResult(outputs=[source], findings=result.findings)
-    resized_feature = _recognised_resized_feature(result.mesh, feature, result.diameter)
+    resized_feature = _recognised_resized_feature(
+        result.mesh, looked_for, cut if moved_hole else result.diameter
+    )
     carried = {
         name: entry
         for name, entry in source.features.items()
@@ -2976,7 +3118,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     features = (
         {**carried, feature.id: resized_feature} if resized_feature is not None else dict(carried)
     )
-    findings = list(result.findings)
+    findings = [*closed_first, *result.findings]
     findings.extend(_widening_findings(source, feature, params.diameter))
     if resized_feature is None:
         findings.append(_bore_no_longer_a_feature(feature, result.diameter))
@@ -3041,6 +3183,33 @@ class SlotHoleParams(BaseParams):
             "Die erkannte Bohrung, die zum Langloch wird. Ein Klick auf die Bohrung trägt sie ein."
         ),
     )
+    x: float = param(
+        title=_("X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die Mitte des Langlochs. Beim Anklicken steht hier die heutige der Bohrung."),
+    )
+    y: float = param(
+        title=_("Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die Mitte des Langlochs. Beim Anklicken steht hier die heutige der Bohrung."),
+    )
+    z: float = param(
+        title=_("Z"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die Mitte des Langlochs. Beim Anklicken steht hier die heutige der Bohrung."),
+    )
 
 
 #: Die Arten, aus denen ein Langloch werden kann.
@@ -3102,7 +3271,20 @@ def slot_hole(ctx: OpContext) -> OpResult:
     params = cast(SlotHoleParams, ctx.params)
     source = ctx.inputs[0]
     feature = _chosen_bore(source, params.at_feature, op="slot_hole")
-    centre = _bore_vector(feature, "centre")
+    # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,
+    # 10.09.2026: „einfach wie wenn ich eine bohrung setze"). Damit ist *Zum
+    # Langloch ziehen* dieselbe Bedienung wie *Bohrung setzen*: Die
+    # Flächenplatzierung schreibt die Maße zu den Kanten in x, y und z, und wer
+    # eines davon ändert, verschiebt das Loch.
+    #
+    # **Drei Nullen heißen „lass es, wo es ist".** Das Panel und die
+    # Platzierung belegen die Felder mit der gemessenen Mitte; über Chat und
+    # Kommandozeile sagt sie niemand, und dort wäre der Ursprung die falsche
+    # Antwort — ein Langloch wanderte in die Ecke des Bauraums, weil niemand
+    # eine Stelle genannt hat. Der Ursprung als *gewollte* Zielmitte ist der
+    # seltenere Fall, und für ihn steht ein Tausendstel daneben.
+    placed: Vec3 = (params.x, params.y, params.z)
+    centre = _bore_vector(feature, "centre") if all(is_zero(value) for value in placed) else placed
     axis = _bore_vector(feature, "axis")
     diameter = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
@@ -3115,6 +3297,25 @@ def slot_hole(ctx: OpContext) -> OpResult:
             value=params.slot_length,
             values={"diameter": format_length(diameter)},
         )
+    # **Und an einem Langloch wird gegen seine Länge gefragt, nicht gegen die
+    # Breite.** Die Prüfung darüber deckt den ersten Zug; sie lässt am zweiten
+    # jede Zahl durch, die größer als der Durchmesser ist — auch eine kleinere
+    # als die vorhandene Länge. Gemessen an 20,016 mm mit der Eingabe 12:
+    # abgetragen 1,14 mm³ (der Toleranzrand), kein Befund, das Langloch danach
+    # unverändert. Ein Schritt im Verlauf, der nichts tut und nichts sagt.
+    if feature.kind == "slot":
+        current = _bore_number(feature, "length")
+        if params.slot_length <= current + EPS_GEOM:
+            raise ValidationError(
+                field="slot_length",
+                constraint="slot_growth",
+                detail=SLOT_NOT_SHORTER,
+                value=params.slot_length,
+                values={
+                    "current": format_length(current),
+                    "given": format_length(params.slot_length),
+                },
+            )
     _reject_oversized("slot_length", params.slot_length, source.mesh, kind="length")
     # Wo das Langloch schon eines ist, liegt seine Richtung fest — sie wird zur
     # Vorgabe, damit ein Zug an der Länge es nicht quer stellt. Ein
@@ -3150,8 +3351,16 @@ def slot_hole(ctx: OpContext) -> OpResult:
     if crossing is not None:
         said.append(crossing)
 
+    # **Wer versetzt, schließt die alte Stelle** — sonst steht die Bohrung noch
+    # da und daneben ein Langloch (gemessen 10.09.2026: `hole_1` und `slot_1`
+    # im selben Körper). Dieselbe Paarung wie bei *Merkmal verschieben*: an der
+    # alten Stelle das Gegenteil des Merkmals, an der neuen das Merkmal selbst.
+    measured = _bore_vector(feature, "centre")
+    moved = not all(is_close(a, b) for a, b in zip(centre, measured, strict=True))
+
     if source.kind == "brep":
         from app.core.brep import edit
+        from app.core.brep.features import features_of
         from app.core.brep.kernel import Solid
 
         if not isinstance(source.mesh, Solid):
@@ -3159,8 +3368,22 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 detail="a scene object marked as brep does not carry a Solid",
                 values={"object": source.id},
             )
+        started = source.mesh
+        if moved:
+            # Bis zum 10.09.2026 stand hier eine Absage: „Am exakten Körper
+            # lässt sich ein Loch noch nicht versetzen." Sie hatte einen
+            # Grund — der Kern konnte kein Loch füllen —, und der ist mit
+            # `edit.fill_bore` weg. Zwischen den beiden Kernen soll kein
+            # Unterschied bleiben (Robert, 10.09.2026).
+            started = edit.fill_bore(
+                started,
+                position=measured,
+                direction=axis,
+                diameter=diameter,
+                depth=depth,
+            )
         solid = edit.slot_bore(
-            source.mesh,
+            started,
             position=centre,
             direction=axis,
             diameter=diameter,
@@ -3186,18 +3409,49 @@ def slot_hole(ctx: OpContext) -> OpResult:
         if nothing is not None:
             findings.append(nothing)
         findings.extend(_widening_findings(source, feature, diameter))
+        # **Neu erkannt und nicht mitgetragen.** Hier stand ``dict(carried)``,
+        # und das war am exakten Kern immer leer: ``carried`` behält, was
+        # ``provenance == "generated"`` trägt, und ``brep.features.features_of``
+        # vergibt ausschließlich ``"detected"``. Gemessen an einem Quader mit
+        # einer Bohrung — acht Merkmale, davon behalten: null. Nach *Zum
+        # Langloch ziehen* stand der Objektbaum eines eingelesenen STEP-Körpers
+        # leer da: keine Fläche, keine Kante, nichts mehr zum Anklicken, und
+        # damit auch keine Fase und keine Verrundung mehr.
+        #
+        # Eine Rückzuordnung wie in ``resize_hole`` gibt es hier nicht zu
+        # retten — aus der Bohrung wird eine andere Art, und ``matching``
+        # sucht nach Art. Also derselbe Weg wie bei jeder anderen Ausgabe des
+        # exakten Kerns (``geom/ops.py``, ``brep/ops.py``): frisch erkennen.
         return OpResult(
-            outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=dict(carried))],
+            outputs=[
+                dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))
+            ],
             findings=findings,
         )
 
     body = as_mesh_data(source.mesh)
+    # Am Original gemessen, nicht am gestopften Körper — die Begründung steht
+    # bei derselben Zeile in `resize_hole`.
+    exact_depth = _mesh_bore_depth(body, feature, axis, depth)
+    filled: list[Finding] = []
+    if moved:
+        closing = _closed_at(
+            body,
+            feature,
+            measured,
+            True,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        body = closing.mesh
+        filled = list(closing.findings)
     result = slot_bore(
         body,
         position=centre,
         direction=axis,
         diameter=diameter,
-        depth=_mesh_bore_depth(body, feature, axis, depth),
+        depth=exact_depth,
         through=through,
         length=params.slot_length,
         angle_deg=angle,
@@ -3208,7 +3462,12 @@ def slot_hole(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features=dict(carried))],
         solver=result.solver,
-        findings=[*said, *result.findings, *_widening_findings(source, feature, diameter)],
+        findings=[
+            *said,
+            *filled,
+            *result.findings,
+            *_widening_findings(source, feature, diameter),
+        ],
     )
 
 
@@ -5255,6 +5514,7 @@ def _is_a_fillet(source: SceneObject, name: str) -> bool:
     feature = source.features.get(name)
     return feature is not None and feature.kind == "fillet"
 
+
 def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult:
     """Eine erkannte Rundung wegnehmen — die scharfe Kante kommt zurück.
 
@@ -5273,6 +5533,7 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
     outcome = unround(as_mesh_data(source.mesh), source.features[name])
     return _after_the_fillet(source, name, outcome)
 
+
 def _reshape_the_fillet(
     ctx: OpContext,
     source: SceneObject,
@@ -5286,6 +5547,7 @@ def _reshape_the_fillet(
 
     outcome = reround(as_mesh_data(source.mesh), source.features[name], radius)
     return _after_the_fillet(source, name, outcome)
+
 
 def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float | None) -> OpResult:
     """Wegnehmen oder Ändern am exakten Körper — träge geholt (§36).
@@ -5310,6 +5572,7 @@ def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float 
     return OpResult(
         outputs=[dataclasses.replace(exact, mesh=solid, kind="brep", features=features_of(solid))]
     )
+
 
 def _after_the_fillet(source: SceneObject, name: str, outcome: Any) -> OpResult:
     """Das Ergebnis, und die Kennung geht mit.
