@@ -186,7 +186,7 @@ Notarisierung anlegen.
 ### In der CI einschalten
 
 Die Variable `MACOS_SIGNING_MODE` auf `notarized` setzen (`signed` signiert nur,
-ohne Apples Prüfung, das reicht für Gatekeeper nicht). Dazu die acht
+ohne Apples Prüfung, das reicht für Gatekeeper nicht). Dazu die sechs
 Geheimnisse, die `build.yml` erwartet:
 
 | Geheimnis | Inhalt |
@@ -194,8 +194,6 @@ Geheimnisse, die `build.yml` erwartet:
 | `APPLE_CERTIFICATE` | die `.p12` des Application-Zertifikats, base64-kodiert |
 | `APPLE_INSTALLER_CERTIFICATE` | die `.p12` des Installer-Zertifikats, base64-kodiert |
 | `APPLE_CERTIFICATE_PASSWORD` | das Passwort beider Dateien |
-| `APPLE_SIGN_IDENTITY` | `Developer ID Application: Robert Schneider (TEAMID)` |
-| `APPLE_INSTALLER_IDENTITY` | `Developer ID Installer: Robert Schneider (TEAMID)` |
 | `APPLE_NOTARY_ID` | die Apple-ID (E-Mail) |
 | `APPLE_NOTARY_PASSWORD` | das app-spezifische Passwort |
 | `APPLE_TEAM_ID` | die Team-ID |

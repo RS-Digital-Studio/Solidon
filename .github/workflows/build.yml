@@ -903,7 +903,6 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
         run: |
           set -euo pipefail
           keychain="$RUNNER_TEMP/solidon-app.keychain-db"
@@ -920,7 +919,43 @@ jobs:
           security unlock-keychain -p "$password" "$keychain"
           security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
-          codesign --force --deep --options runtime --timestamp --keychain "$keychain" --sign "$APPLE_SIGN_IDENTITY" "$ARTIFACT_APP"
+          # Signiert wird mit dem Fingerabdruck aus dem Schlüsselbund, den
+          # dieser Schritt gerade selbst angelegt hat — nicht mit einem
+          # Zertifikatsnamen aus einem Geheimnis. Am 10.09.2026 ist der Bau von
+          # 0.4.0 auf beiden Architekturen genau daran gescheitert: Das
+          # Zertifikat kam sauber herein („1 identity imported"), gesucht wurde
+          # es unter dem Namen aus einem zweiten Geheimnis, und dieser Name
+          # stand so nicht im Schlüsselbund („no identity found"). Ein Name, den
+          # zwei Stellen unabhängig voneinander führen, geht irgendwann
+          # auseinander; der Fingerabdruck steht nur an einer Stelle.
+          # Gelesen wird Fingerabdruck **und** Name aus derselben Zeile. Der Name
+          # ist nicht Zierat: Mit dem Geheimnis ist auch die Typprüfung
+          # weggefallen, die vorher nebenbei mitlief — „Developer ID
+          # Application: …" stand darin, und ein anderes Zertifikat wurde
+          # schlicht nicht gefunden. Ohne diese Zeile signierte ein
+          # versehentlich eingespieltes „Apple Development"-Zertifikat still
+          # mit, und nichts danach fängt es: `codesign --verify` prüft die
+          # Integrität der Signatur, nicht ihre Autorität, und `spctl` läuft
+          # nur im Modus `notarized`.
+          lines=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-Fa-f]\{40\}[[:space:]].*\)$/\1/p')
+          found=$(printf '%s\n' "$lines" | grep -c . || true)
+          if [ "$found" -ne 1 ]; then
+            echo "Im eigenen Schlüsselbund liegt nicht genau eine Signieridentität, sondern $found."
+            echo "Erwartet wird das eine Developer-ID-Application-Zertifikat aus APPLE_CERTIFICATE."
+            echo "Bei 0: Zertifikat oder Passwort prüfen — oder das Zertifikat ist abgelaufen"
+            echo "beziehungsweise seine Kette kam unvollständig an; -v sortiert beides aus."
+            echo "Bei mehr als 1: APPLE_CERTIFICATE enthält mehr als ein Zertifikat mit privatem Schlüssel."
+            security find-identity "$keychain" || true
+            exit 1
+          fi
+          line=$(printf '%s\n' "$lines" | head -n 1)
+          identity=${line%% *}
+          name=${line#* }
+          case "$name" in
+            '"Developer ID Application:'*) ;;
+            *) echo "Im Schlüsselbund liegt $name — erwartet wird ein Developer-ID-Application-Zertifikat."; exit 1 ;;
+          esac
+          codesign --force --deep --options runtime --timestamp --keychain "$keychain" --sign "$identity" "$ARTIFACT_APP"
           codesign --verify --deep --strict --verbose=2 "$ARTIFACT_APP"
 
       - name: Signierte App bei Apple notarisieren
@@ -1099,7 +1134,6 @@ jobs:
         env:
           APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
         run: |
           set -euo pipefail
           keychain="$RUNNER_TEMP/solidon-installer.keychain-db"
@@ -1117,7 +1151,35 @@ jobs:
           security unlock-keychain -p "$password" "$keychain"
           security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/productsign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
-          productsign --sign "$APPLE_INSTALLER_IDENTITY" --keychain "$keychain" "$ARTIFACT_PACKAGE" "$signed"
+          # Wie bei der App der Fingerabdruck aus dem eigenen Schlüsselbund,
+          # aber **ohne** `-p codesigning`: Eine Developer-ID-Installer-Identität
+          # taucht unter dieser Richtlinie nicht auf, sie signiert Pakete und
+          # keinen Code. Der Schlüsselbund gehört allein diesem Schritt, also
+          # liegt darin genau das eine importierte Zertifikat.
+          lines=$(security find-identity -v "$keychain" | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-Fa-f]\{40\}[[:space:]].*\)$/\1/p')
+          found=$(printf '%s\n' "$lines" | grep -c . || true)
+          if [ "$found" -ne 1 ]; then
+            echo "Im eigenen Schlüsselbund liegt nicht genau eine Installeridentität, sondern $found."
+            echo "Erwartet wird das eine Developer-ID-Installer-Zertifikat aus APPLE_INSTALLER_CERTIFICATE."
+            echo "Bei 0: Zertifikat oder Passwort prüfen — oder das Zertifikat ist abgelaufen"
+            echo "beziehungsweise seine Kette kam unvollständig an; -v sortiert beides aus."
+            echo "Bei mehr als 1: APPLE_INSTALLER_CERTIFICATE enthält mehr als ein Zertifikat mit privatem Schlüssel."
+            security find-identity "$keychain" || true
+            exit 1
+          fi
+          line=$(printf '%s\n' "$lines" | head -n 1)
+          name=${line#* }
+          case "$name" in
+            '"Developer ID Installer:'*) ;;
+            *) echo "Im Schlüsselbund liegt $name — erwartet wird ein Developer-ID-Installer-Zertifikat."; exit 1 ;;
+          esac
+          # **Hier der Name und nicht der Fingerabdruck.** Für `codesign` ist der
+          # 40-stellige Hash dokumentiert zulässig; für `productsign` sichert das
+          # Handbuch dasselbe nicht in gleicher Weise zu, und ein Mac zum
+          # Nachmessen steht hier nicht. Die Doppelquelle kommt dadurch nicht
+          # zurück: Beides stammt aus derselben Zeile desselben Schlüsselbunds.
+          quoted=${name#\"}
+          productsign --sign "${quoted%\"}" --keychain "$keychain" "$ARTIFACT_PACKAGE" "$signed"
           pkgutil --check-signature "$signed"
           mv "$signed" "$ARTIFACT_PACKAGE"
       - name: Installer bei Apple notarisieren
