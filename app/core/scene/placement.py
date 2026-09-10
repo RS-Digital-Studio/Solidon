@@ -875,6 +875,97 @@ def prepare_surface(
     return PreparedSurface(frame, planar, indices, tuple(references), tuple(centres), area)
 
 
+def seat_of(
+    mesh: MeshData, feature: Feature, features: Mapping[str, Feature]
+) -> tuple[PreparedSurface, Vec3] | None:
+    """Die Fläche, auf der ein **erkanntes** Merkmal sitzt — und seine Mündung.
+
+    :func:`prepare_surface` beantwortet „wohin darf ich setzen" und braucht
+    dafür einen Klick auf Material. Diese Funktion beantwortet die Frage
+    danach: „**wo** sitzt das, was schon da ist" — für die Maßlinien am
+    gewählten Merkmal (Robert, 10.09.2026: „maße zu außenkanten oder
+    mittelpunkt wie bohrung anlegen").
+
+    Zwei Dinge unterscheiden sie von ihrer Schwester, und beide sind der
+    Grund, warum es sie gibt:
+
+    * **Die Fläche wird gesucht, nicht angeklickt.** Genommen wird die ebene
+      Fläche, deren Normale auf der Achse des Merkmals liegt und deren Ebene
+      seine Mündung enthält. Bei einem durchgehenden Loch gibt es zwei davon —
+      die Achse zeigt auf eine, und das ist die Wahl, die das Merkmal selbst
+      trägt (Regel 21: nicht raten, sondern die gespeicherte Richtung lesen).
+    * **Die Öffnung wird gefüllt.** Die Mitte einer Bohrung liegt in der
+      Aussparung, die sie in ihre Trägerfläche geschnitten hat; ``at_point``
+      lehnt sie deshalb als „außerhalb der Fläche" ab. Gemessen an einer Platte
+      60 x 40 mit einer Bohrung bei (10, 5): mit den inneren Ringen eine
+      Absage, ohne sie 15,0 mm zur oberen und 20,0 mm zur rechten Kante. Für
+      die Frage nach den **Außenmaßen** ist das Loch ohnehin ohne Belang.
+
+    ``None`` heißt: Zu diesem Merkmal gibt es keine solche Fläche — eine
+    Verrundung an einer Kante hat keine, und ein Merkmal ohne Achse oder Tiefe
+    ebenso wenig. Der Aufrufer zeigt dann keine Maße statt falscher.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from app.core.sketch.planes import to_plane
+
+    axis = feature.params.get("axis")
+    depth = feature.params.get("depth")
+    centre = feature.params.get("centre")
+    if axis is None or centre is None or not isinstance(depth, int | float):
+        return None
+    direction = np.asarray(axis, dtype=float)
+    length = float(np.linalg.norm(direction))
+    if length <= EPS_GEOM:
+        return None
+    direction = direction / length
+    mouth = _vec(np.asarray(centre, dtype=float) + direction * (float(depth) / 2.0))
+    for entry in features.values():
+        if entry.kind != "face" or not entry.face_indices:
+            continue
+        normal = entry.params.get("normal")
+        seat = entry.params.get("centre")
+        if normal is None or seat is None:
+            continue
+        flat = np.asarray(normal, dtype=float)
+        if abs(float(flat @ direction)) < _SEAT_PARALLEL:
+            continue
+        if abs(float((np.asarray(mouth) - np.asarray(seat, dtype=float)) @ flat)) > EPS_GEOM:
+            continue
+        try:
+            prepared = prepare_surface(mesh, entry.face_indices[0], features)
+        except ValidationError:
+            return None
+        area = prepared.area
+        if not isinstance(area, Polygon) or not area.interiors:
+            return prepared, mouth
+        # **Und die Kanten der eigenen Öffnung zählen nicht mit.** Ein Langloch
+        # hat zwei gerade Flanken, und die sind vom Merkmal aus die nächsten
+        # Bezugskanten überhaupt: Gemessen an einer Platte 60 x 40 mit einem
+        # Langloch Ø 6 auf 20 kamen minus 3,00 und minus 3,30 zurück, also seine eigene
+        # halbe Breite. Gefragt ist der Abstand zum **Rand des Teils**; was in
+        # einer Aussparung liegt, ist keine Antwort darauf.
+        outer = Polygon(area.exterior)
+        border = outer.exterior
+        edges = tuple(
+            edge
+            for edge in prepared.edges
+            if border.distance(Point(to_plane(prepared.frame, edge.start))) <= EPS_GEOM
+            and border.distance(Point(to_plane(prepared.frame, edge.end))) <= EPS_GEOM
+        )
+        return replace(prepared, area=outer, edges=edges), mouth
+    return None
+
+
+#: Wie genau die Normale einer Fläche auf der Achse eines Merkmals liegen muss,
+#: damit sie seine Trägerfläche sein kann.
+#:
+#: Der Kosinus von rund 2,6 Grad. Eine gemessene Normale kommt aus dem Netz und
+#: trifft die Achse nicht auf die Stelle; strenger wäre eine Grenze gegen die
+#: Tesselierung, weiter nähme eine schräge Nachbarfläche die Rolle ein.
+_SEAT_PARALLEL: Final = 0.999
+
+
 def _vec2(values: Any) -> Point2:
     return (float(values[0]), float(values[1]))
 

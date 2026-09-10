@@ -309,13 +309,40 @@ def test_a_slot_offers_the_one_operation_that_fits_it() -> None:
     Gemessen am Weg: An einem erkannten Langloch standen fünf ausgegraute
     Zeilen und **null** Knöpfe — die Operation gab es im Register längst, die
     Oberfläche bot sie nur nicht an.
+
+    **Seit dem 10.09.2026 steht sie eine Karte höher**, als Zeile mit Feldern
+    im Merkmalsfenster (``perceive.actions.ACTION_ORDER``): Der Knopf allein
+    ließ den Kunden die Maße sehen und keines davon ändern (Robert: „langloch
+    merkmale hat noch in der auswahl keine einstellungen"). Was dort als Feld
+    steht, bekommt in der Auswahlkarte darunter **keinen zweiten Knopf** —
+    dieselbe Regel, an der schon *Bohrung ändern* hängt. Der Test prüft
+    deshalb beide Seiten: dass die Zeile mit ihren zwei Maßen dasteht, und dass
+    die Karte darunter schweigt.
     """
+    from app.core.perceive.actions import actions_for
     from app.ui.selection_operations import quick_names
 
     load_operations()
+    slot = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 5.0,
+            "length": 20.0,
+            "travel": 15.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+            "centre": (0.0, 0.0, 0.0),
+            "depth": 10.0,
+            "through": True,
+        },
+    )
 
     assert "slot_hole" in {spec.name for spec in REGISTRY.for_feature("slot")}
-    assert quick_names(1, "slot") == ("slot_hole",)
+    zeile = next(action for action in actions_for(slot) if action.op == "slot_hole")
+    assert {field.name for field in zeile.fields} == {"slot_length", "slot_angle"}
+    assert quick_names(1, "slot") == (), "was als Feld dasteht, wird kein zweiter Knopf"
 
 
 def test_a_slot_says_why_the_generic_actions_do_not_fit() -> None:
@@ -463,3 +490,29 @@ def test_a_slot_is_not_called_a_sleeve() -> None:
     slot = next(entry for entry in found.values() if entry.kind == "slot")
 
     assert sleeve_at(slot, found) is None
+
+
+def test_the_slot_defaults_make_a_slot_and_not_an_error(profile: Profile) -> None:
+    """Ein Feld, das mit einer Absage begrüßt, ist keine Vorgabe (Regel 17).
+
+    Die Vorgabe der Länge stand auf 5,0 — dem Durchmesser einer gewöhnlichen
+    Bohrung —, und ein Langloch muss länger sein als seiner. Wer den Dialog
+    öffnete und übernahm, legte damit einen Schritt an, der bei **jeder**
+    Auswertung anhält, auch bei jedem späteren Öffnen des Projekts (gefahren
+    am 10.09.2026 an Roberts `weg1-halterung-anpassen.p3d`, Protokoll:
+    „evaluation stopped at op 5").
+
+    Gefahren wird hier der Weg ohne Merkmalsvorbelegung — Kommandozeile, Chat,
+    Palette: nur ``at_feature``, alles andere aus dem Schema.
+    """
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate(), features={})
+    gebohrt = run_op(
+        "drill_hole", entry, profile, x=0.0, y=0.0, z=5.0, axis="z", diameter=5.0, depth=0.0
+    )
+    bore = next(name for name, f in gebohrt.features.items() if f.kind == "hole")
+
+    longer = run_op("slot_hole", gebohrt, profile, at_feature=bore)
+
+    assert any(feature.kind == "slot" for feature in longer.features.values()), (
+        "aus der Vorgabe entsteht ein Langloch und keine Absage"
+    )

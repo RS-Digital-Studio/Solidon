@@ -1070,3 +1070,88 @@ def test_a_depth_that_goes_outwards_gets_no_depth_stage():
         assert depth_field(name, spec.params, engraved) == "depth", f"{name} vertieft schon"
         # Ohne Werte bleibt es ein Angebot: Der Umschalter *kann* abtragen.
         assert depth_field(name, spec.params) == "depth"
+
+
+def _plate_with(**values):
+    """Platte 60 x 40 x 10 mit einem Loch bei (10, 5) — rund oder lang."""
+    from app.core.geom.prepare import drill
+    from app.core.knowledge import profiles
+    from app.core.perceive.features import detect
+
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    mesh = drill(
+        plate,
+        profile=profile,
+        position=(10.0, 5.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        compensate=False,
+        **values,
+    ).mesh
+    return mesh, detect(mesh)
+
+
+@pytest.mark.parametrize(
+    ("beschreibung", "werte"),
+    [("rund", {}), ("lang", {"slot_length": 20.0, "slot_angle": 30.0})],
+)
+def test_a_feature_that_is_already_there_knows_its_distances(beschreibung, werte):
+    """Wo ein Merkmal sitzt, misst sich am Rand des Teils (Robert, 10.09.2026).
+
+    ``prepare_surface`` beantwortet „wohin darf ich setzen" und verlangt einen
+    Klick auf Material; die Mitte eines bestehenden Lochs liegt in dessen
+    eigener Aussparung, und ``at_point`` lehnt sie ab. ``seat_of`` füllt sie —
+    für die Frage nach den **Außenmaßen** ist das Loch ohne Belang.
+
+    Gemessen an einer Platte 60 x 40 mit dem Loch bei (10, 5): 15 mm zur oberen
+    und 20 mm zur rechten Kante, für das runde wie für das lange.
+    """
+    mesh, found = _plate_with(**werte)
+    feature = next(entry for entry in found.values() if entry.kind in ("hole", "slot"))
+
+    seat = placement.seat_of(mesh, feature, found)
+
+    assert seat is not None, f"{beschreibung}: die Trägerfläche wurde nicht gefunden"
+    prepared, mouth = seat
+    assert mouth == pytest.approx((10.0, 5.0, 5.0)), "die Mündung liegt auf der Oberseite"
+    spot = placement.at_point(prepared, mouth)
+    assert sorted(edge.distance for edge in spot.edges) == pytest.approx([15.0, 20.0])
+
+
+def test_the_flanks_of_a_slot_are_not_its_distance_to_the_edge():
+    """Die eigene Öffnung ist keine Bezugskante — die Gegenprobe zur Füllung.
+
+    Ein Langloch hat zwei **gerade** Flanken, und vom Merkmal aus sind sie die
+    nächsten Kanten überhaupt: Ohne die Filterung kamen minus 3,00 und minus
+    3,30 zurück, also seine eigene halbe Breite. Eine runde Bohrung zeigt den
+    Fall nicht — ihr Rand ist ein Kreis und trägt keine geraden Bezugskanten.
+    """
+    mesh, found = _plate_with(slot_length=20.0, slot_angle=30.0)
+    slot = next(entry for entry in found.values() if entry.kind == "slot")
+
+    prepared, mouth = placement.seat_of(mesh, slot, found)
+
+    assert all(edge.distance > 0.0 for edge in placement.at_point(prepared, mouth).edges), (
+        "keine Kante der eigenen Aussparung"
+    )
+    assert not prepared.area.interiors, "die Öffnung ist gefüllt"
+
+
+def test_a_feature_without_an_axis_gets_no_distances():
+    """Wo keine Trägerfläche ist, wird keine erfunden (Regel 21).
+
+    Eine Verrundung hängt an ihrer Kante und mündet nirgends; ohne Achse und
+    Tiefe gibt es keine Ebene, gegen die sich messen ließe. Die ehrliche
+    Antwort ist ``None`` — der Aufrufer zeigt dann keine Maße statt falscher.
+    """
+    mesh, found = _plate_with()
+    ohne_achse = Feature(
+        id="fillet_1",
+        kind="fillet",
+        provenance="detected",
+        params={"radius": 2.0, "centre": (10.0, 5.0, 5.0)},
+    )
+
+    assert placement.seat_of(mesh, ohne_achse, found) is None

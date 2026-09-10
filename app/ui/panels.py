@@ -4507,6 +4507,22 @@ def _group_reason_texts() -> dict[str, str]:
     }
 
 
+def _places_on_a_surface(op: str) -> bool:
+    """Ob diese Operation ihre Stelle auf einer Fläche einstellen lässt.
+
+    Der Kern beantwortet es (``placement.supports_surface_placement``), und die
+    Oberfläche fragt nur — dieselbe Bauart wie bei den Handlungen selbst, die
+    aus ``applies_to`` kommen. Eine unbekannte Operation trägt keinen Weg;
+    ``False`` ist dort die ehrliche Antwort und kein Fehler.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene import placement
+
+    if not REGISTRY.has(op):
+        return False
+    return bool(placement.supports_surface_placement(REGISTRY.get(op)))
+
+
 def _feature_group_note(group: FeatureActionGroup) -> str:
     """Die Belege und Grenzen der Kern-Gruppe als lesbare Auskunft.
 
@@ -4561,6 +4577,14 @@ class FeaturePanel(QWidget):
     #: Sechs Bohrungen auf Ø 5 zu bringen heißt sonst sechsmal derselbe Weg.
     #: Ein Undo nimmt sie zusammen zurück, weil es eine Handlung war (Regel 16).
     operationRequestedForEach = Signal(str, dict, list)
+    #: Dieselbe Handlung, aber **im Bild eingestellt** — Registername und die
+    #: Werte, die schon feststehen (die Merkmalskennung darunter).
+    #:
+    #: Getrennt von :attr:`operationRequested`, weil es etwas anderes tut: Das
+    #: eine führt aus, das andere öffnet die Flächenplatzierung mit ihren
+    #: Maßlinien und Zahlenfeldern. Ein Empfänger, der beides gleich behandelt,
+    #: legt beim Zeigen schon einen Schritt an.
+    inViewRequested = Signal(str, dict)
     #: Der Katalog, aus der Fläche heraus. An einer Fläche gilt keine der vier
     #: Merkmalshandlungen — dafür setzen dort fünfundzwanzig Bausteine an, und
     #: der Weg dorthin lag hinter Rechtsklick und Untermenü.
@@ -5014,6 +5038,16 @@ class FeaturePanel(QWidget):
                 note or tr("Speichert die Prüfbeziehung. Rückgängig entfernt sie wieder.")
             )
 
+    def _ask_for_the_view(
+        self,
+        op: str,
+        fields: Sequence[Any],
+        widgets: Mapping[str, QWidget],
+        fixed: Sequence[tuple[str, Any]],
+    ) -> None:
+        """Meldet, dass diese Handlung im Bild eingestellt werden soll."""
+        self.inViewRequested.emit(op, self._values(fields, widgets, fixed))
+
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
 
@@ -5188,6 +5222,37 @@ class FeaturePanel(QWidget):
 
         button.clicked.connect(run)
         layout.addWidget(button)
+
+        # **Und derselbe Weg im Bild, wo es ihn gibt** (Robert, 10.09.2026:
+        # „maße zu außenkanten oder mittelpunkt wie bohrung anlegen aber nicht
+        # und ich kann keinen wert eingeben"). Die Felder hier tragen den
+        # gemessenen Wert und ändern ihn auf Klick; was sie nicht zeigen, ist
+        # **wovon** gemessen wird. Beim Setzen einer Bohrung steht genau das
+        # im Bild: Maßlinien zu den Kanten der Fläche, jede mit ihrem eigenen
+        # Zahlenfeld. Diese Platzierung gibt es für dieselbe Operation schon —
+        # `move_feature` trägt `supports_surface_placement` —, sie war nur von
+        # hier aus nicht erreichbar.
+        #
+        # Gefragt wird der **Kern** und keine Namensliste: Was eine Fläche
+        # trägt, steht in `placement.supports_surface_placement`, und eine
+        # zweite Aufzählung daneben wüsste beim nächsten Zuwachs die Hälfte.
+        # Ein Baustein-Schritt bekommt ihn nicht — dort ändert man Maße, nicht
+        # eine Stelle.
+        if step is None and action.op is not None and _places_on_a_surface(op_name):
+            in_view = QPushButton(tr("Im Bild einstellen …"), box)
+            in_view.setStatusTip(
+                tr("Zeigt die Maße zu den Kanten im Bild — eintippen oder ziehen.")
+            )
+            in_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            # ``weak_slot`` und kein Lambda: Der Knopf ist ein **Kind** dieses
+            # Panels, und ein Lambda, das ``self`` fängt, schließt darüber einen
+            # Ring, den Pythons Sammler nicht bricht (`.claude/rules/wartezeit.md`,
+            # gemessen 10 von 10 Überlebenden). Die Werte kommen aus einer
+            # Schleife über die Handlungen — genau der Fall, für den es das gibt.
+            in_view.clicked.connect(
+                weak_slot(self, FeaturePanel._ask_for_the_view, op_name, entries, widgets, fixed)
+            )
+            layout.addWidget(in_view)
         return box
 
     def _watch(

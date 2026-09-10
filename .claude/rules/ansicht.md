@@ -786,6 +786,73 @@ brauchte es einen eigenen Beobachter am `MouseMoveEvent` (`_magnetise_turn`),
 und den gibt es nicht mehr (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Geprüft
 in `tests/test_transform_ui.py::test_the_magnet_corrects_the_turn_while_it_runs`.
 
+## Der Langlochgriff zieht die Form, nicht die Lage (10.09.2026)
+
+Der Bewegungsgriff schiebt und dreht, der Würfel skaliert den Körper — und aus
+einer Bohrung wird damit nie ein Langloch. Der Weg dorthin war ein Dialog mit
+zwei Zahlen, und Robert hat ihn am gefahrenen Weg abgelehnt: „das langloch soll
+auch über den viewport einstellbar/erstellbar/änderbar von bohrung zu langloch
+sein". `app/ui/slot_handle.py` ist die Antwort — zwei Knöpfe an den Enden des
+Lochs, gezogen wird in der Ebene seiner Mündung.
+
+Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
+
+* **Der Winkel kommt aus einer Quelle.** Gezählt wird gegen die x-Achse von
+  `sketch.planes.frame_of` — dieselbe, gegen die `prepare.slot_profile`
+  schneidet und `prepare_ops.slot_angle_of` ein erkanntes Langloch nachmisst.
+  Eine eigene Achse in der Ansicht wäre ein Loch, das um einen Winkel neben dem
+  Umriss liegt, den der Kunde beim Ziehen gesehen hat — und kein Test über
+  Zahlen allein sähe es. `tests/test_slot_handle.py` schneidet deshalb wirklich
+  und misst die Richtung am erkannten Ergebnis nach.
+* **Der Umriss im Bild ist der Umriss des Schnitts.** `slot_outline` baut ihn
+  aus `slot_profile` und tastet dessen Bögen über `profile.arc_through` ab. Eine
+  zweite Konstruktion daneben liefe beim nächsten Zuwachs auseinander.
+* **Das Loch wächst um seine Mitte.** Sie ist der eine Wert, den `slot_hole`
+  **nicht** mitbekommt — die Operation liest ihn aus dem Merkmal. Ein Zug, der
+  sie verschöbe, verspräche etwas, das der Schnitt nicht einlöst; deshalb
+  spiegelt der gegenüberliegende Knopf den gegriffenen.
+* **Kürzer als der Durchmesser lässt er sich nicht ziehen** (`SHORTEST_SHARE`).
+  Der Kern lehnt das ab (`prepare.SLOT_TOO_SHORT`), und eine Geste, die in einer
+  Absage endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und
+  nicht ein Zug, der unterwegs seine Bedeutung wechselt.
+
+Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem `applies_to` von
+*Zum Langloch ziehen*) — eine Aufzählung in der Ansicht wüsste beim nächsten
+Zuwachs die Hälfte. Und er steht in der Vorfahrt von `_on_pointer`, wie jeder
+Griff: `tests/test_viewport_decisions.py` liest sie im Quelltext gegen die
+Griff-Felder und kennt seit diesem Griff keine Namensliste mehr, sondern die
+Bauart (`Gizmo` oder `…Handle`).
+
+### Ein Zug an einer Form endet in einer Leiste, nicht im Verlauf
+
+Bei einer **Bewegung** ist die Stelle, an der man loslässt, die Aussage — dort
+wird der Zug sofort ein Schritt. Bei einer **Form** nicht: Länge und Richtung
+sind zwei Zahlen, und wer sie auf den Millimeter meint, trifft sie mit der Maus
+nicht. Ein Schritt, der beim Loslassen entsteht, wird dann zu einer Kette aus
+Korrekturen statt einer Handlung.
+
+`slot_bar.py` ist die dritte Stufe zwischen Zug und Operation: Der Umriss
+bleibt stehen, seine zwei Maße stehen als Felder unten mittig über der
+Werkzeugzeile — derselbe Ort wie die Leiste der Flächenplatzierung, denn zwei
+Leisten, die dasselbe tun, gehören an dieselbe Stelle —, und erst *Übernehmen*
+meldet `slotDragged`. Eingabetaste übernimmt, Escape verwirft (`_drag_kind`
+bleibt dafür auf `"slot"`).
+
+**`SlotBar.active` ist der Zustand, nicht `isVisible()`.** Qt beantwortet die
+Sichtbarkeit falsch, solange nichts gezeigt wurde — offscreen also immer. Wer
+eine Bedingung daran hängt, prüft die Testumgebung statt der Sache.
+
+### Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug (10.09.2026)
+
+Der Schalter des Werkzeugs *Bewegen* gilt dem **ganzen Körper**: Dort trägt der
+Griff einen Skalierwürfel, und der ändert auf einen Zug die Maße des Teils — er
+gehört an ein Werkzeug, das man ausdrücklich öffnet. Ein angeklicktes Merkmal
+ist dagegen selbst die Ansage (Robert, 10.09.2026: „über den viewport sehen wir
+weder maße noch etwas zum verschieben, verlängern, drehen usw" — gewählt war
+eine Bohrung, das Merkmalsfenster zeigte sechs Felder, und im Bild stand
+nichts). §2.6 verspricht, dass am Merkmal alles direkt steht; der Würfel bleibt
+dabei weg, und die Bedingung dafür ist dieselbe wie eh und je.
+
 ## Was die Ansicht sich merkt (03.09.2026)
 
 **Darstellung (massiv, mit Kanten, Drahtgitter, transparent), Schattierung

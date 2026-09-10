@@ -2986,7 +2986,20 @@ def resize_hole(ctx: OpContext) -> OpResult:
 class SlotHoleParams(BaseParams):
     slot_length: float = param(
         title=_("Länge des Langlochs"),
-        default=5.0,
+        # **Nicht fünf, und der Grund ist ein gefahrener Weg** (Robert,
+        # 10.09.2026): Fünf Millimeter sind der Durchmesser einer gewöhnlichen
+        # Bohrung, und ein Langloch muss länger sein als seiner. Wer den Dialog
+        # öffnete und übernahm, legte damit einen Schritt an, der bei **jeder**
+        # Auswertung anhält — auch bei jedem späteren Öffnen des Projekts.
+        # Zwanzig Millimeter gehen an jeder Bohrung durch, die kleiner ist als
+        # M20; darüber sagt es die Absage, und im Bild sagt es der Griff, bevor
+        # jemand loslässt (``app.ui.slot_handle``).
+        #
+        # Die **richtige** Vorgabe ist der gemessene Durchmesser mal zwei, und
+        # die steht am angeklickten Merkmal (``perceive.actions._SHIFTED_BY``).
+        # Sie gilt dort, wo eine Bohrung gewählt ist; hier steht die Zahl für
+        # den Weg ohne Merkmal — Kommandozeile, Chat, Palette.
+        default=20.0,
         unit="mm",
         minimum=0.2,
         placement="front",
@@ -3105,7 +3118,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Langloch keine Aussage, sondern seine eigene Richtung).
     angle = params.slot_angle
     if feature.kind == "slot" and abs(angle) <= EPS_GEOM:
-        angle = _slot_angle_of(feature, axis)
+        angle = slot_angle_of(feature, axis)
     # Die Merkmale, die bleiben — ohne das, aus dem gerade ein Langloch wird.
     carried = {
         name: entry
@@ -3299,7 +3312,7 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
 #: zerfällt bei 0,75 Grad in zwei Verrundungen, bei einem Grad in vier.
 #:
 #: Wo genau es kippt, hängt von Länge und Breite ab — und deshalb steht die
-#: Zahl hier gerade **nicht** dafür. Sie deckt, was :func:`_slot_angle_of` an
+#: Zahl hier gerade **nicht** dafür. Sie deckt, was :func:`slot_angle_of` an
 #: Rundung erzeugt, und sonst nichts; alles darüber ist eine Richtungsänderung
 #: und wird gesagt.
 SLOT_ACROSS_LIMIT: Final = 0.5
@@ -3323,7 +3336,7 @@ def _slot_across_a_slot(
     """
     if feature.kind != "slot":
         return None
-    standing = _slot_angle_of(feature, axis)
+    standing = slot_angle_of(feature, axis)
     turned = abs((angle - standing + 180.0) % 360.0 - 180.0)
     # Auch 180 Grad sind dieselbe Richtung: Ein Langloch hat keine Vorder- und
     # keine Rückseite.
@@ -3344,15 +3357,22 @@ def _slot_across_a_slot(
     )
 
 
-def _slot_angle_of(feature: Feature, axis: tuple[float, float, float]) -> float:
+def slot_angle_of(feature: Feature, axis: tuple[float, float, float]) -> float:
     """Der Winkel, unter dem ein erkanntes Langloch schon liegt.
 
     Die Umkehrung von :func:`app.core.geom.prepare.slot_profile` — gemessen
     gegen dieselbe x-Achse desselben Rahmens, damit ein unverändert
-    übernommener Wert dieselbe Lage ergibt. Ohne Richtung im Merkmal bleibt es
-    bei null: Ein Langloch ohne Richtung gibt es nicht, aber eine Projektdatei
-    aus einer älteren Fassung könnte eines tragen, und ein Fehler wäre dort die
-    falsche Antwort auf eine Frage nach der Vorbelegung.
+    übernommener Wert dieselbe Lage ergibt.
+
+    **Öffentlich, weil die Ansicht dieselbe Frage stellt.** Der Langlochgriff
+    (``app.ui.slot_handle``) belegt seine Knöpfe mit der Richtung, in der das
+    Loch schon liegt, und schickt beim Loslassen eine neue zurück; rechnete er
+    sie selbst, hinge der Griff um einen Winkel neben dem Schnitt.
+
+    Ohne Richtung im Merkmal bleibt es bei null: Ein Langloch ohne Richtung
+    gibt es nicht, aber eine Projektdatei aus einer älteren Fassung könnte
+    eines tragen, und ein Fehler wäre dort die falsche Antwort auf eine Frage
+    nach der Vorbelegung.
     """
     from app.core.sketch.planes import frame_of
 

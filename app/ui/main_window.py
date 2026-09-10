@@ -1768,6 +1768,7 @@ class MainWindow(QMainWindow):
         # über einem Modell, das daneben keinen Platz hatte.
         self.feature_panel = FeaturePanel(self)
         self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
+        self.feature_panel.inViewRequested.connect(self._place_from_feature_panel)
         self.feature_panel.fitRequested.connect(
             self._add_fit_from_panel, Qt.ConnectionType.QueuedConnection
         )
@@ -1863,6 +1864,7 @@ class MainWindow(QMainWindow):
         # einen Schritt und rechnet nichts nach (§18.11).
         self.viewport.featureMoved.connect(self._on_feature_moved)
         self.viewport.featureTurned.connect(self._on_feature_turned)
+        self.viewport.slotDragged.connect(self._on_slot_dragged)
         # Was der Griff bewegen wird, sagt die Ansicht — wo der Satz steht,
         # entscheidet das Fenster, wie bei ``measurementStatus``.
         self.viewport.gizmoStatus.connect(self.announce)
@@ -9183,6 +9185,19 @@ class MainWindow(QMainWindow):
         Winkel, also dem, der während des Zugs am Zeiger stand."""
         self._feature_step("rotate_feature", feature_id, {"axis": axis, "angle": float(angle)})
 
+    def _on_slot_dragged(self, feature_id: str, length: float, angle: float) -> None:
+        """Ein Zug an den Knöpfen hat ein Loch in die Länge gezogen (§21.1).
+
+        Länge und Richtung kommen fertig aus der Ansicht — sie hält das
+        Merkmal und hat den Zug auf dessen Mündungsebene gerechnet. Mitte,
+        Achse und Durchmesser stehen nicht dabei: *Zum Langloch ziehen* liest
+        sie aus dem Merkmal, und zwei Quellen für dieselbe Bohrung wären eine
+        zu viel.
+        """
+        self._feature_step(
+            "slot_hole", feature_id, {"slot_length": float(length), "slot_angle": float(angle)}
+        )
+
     def _feature_step(self, op: str, feature_id: str, params: dict[str, Any]) -> None:
         """Ein Zug, eine Transaktion — dieselbe Zusage wie am Körpergriff.
 
@@ -10793,7 +10808,40 @@ class MainWindow(QMainWindow):
             mesh=as_mesh_data(entry.mesh),
             alone=result is not None and len(result.scene.objects) == 1,
         )
+        self._prepare_slot_seat(entry, feature)
         self.feature_dock.reveal()
+
+    def _prepare_slot_seat(self, entry: Any, feature: Any) -> None:
+        """Rechnet die Trägerfläche des gewählten Lochs — im Arbeiter (§2.8).
+
+        Sie trägt die Maße, die beim Ziehen im Bild stehen: Abstände der beiden
+        Enden zu den Kanten der Fläche. ``prepare_surface`` legt dafür eine
+        GEOS-Fläche über alle Dreiecke der Trägerfläche, und das kostet bei
+        einem großen Netz zu viel für den Qt-Thread — die Ansicht bekommt nur
+        das Ergebnis (``Viewport.set_slot_seat``).
+
+        **Nur, wo es einen Zug gibt.** Für ein Merkmal ohne Langlochgriff wird
+        nichts gerechnet und nichts gezeigt; ein verspätetes Ergebnis für eine
+        alte Auswahl fällt an derselben Frage.
+        """
+        from app.core.scene import placement
+
+        if feature is None or feature.kind not in self.viewport.slot_kinds():
+            self.viewport.set_slot_seat(None)
+            return
+        wanted = str(feature.id)
+        mesh = as_mesh_data(entry.mesh)
+        features = dict(entry.features)
+
+        def compute() -> Any:
+            return placement.seat_of(mesh, feature, features)
+
+        def done(value: Any) -> None:
+            chosen = self.viewport.slot_handle_feature()
+            if chosen is not None and chosen.id == wanted:
+                self.viewport.set_slot_seat(value)
+
+        self.session.placement_async(compute, done, lambda _detail: done(None))
 
     def _common_part_step(self, chosen: Sequence[Any]) -> tuple[Any, Any] | None:
         """Der Bausteinschritt, zu dem **alle** gewählten Merkmale gehören.
@@ -11194,6 +11242,29 @@ class MainWindow(QMainWindow):
         self._drop_feature_preview()
         draft = OperationDraft(op=op, inputs=(object_id,), params=params)
         self.session.apply(REGISTRY.get(op).title, [draft])
+
+    def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
+        """Dieselbe Handlung, aber im Bild eingestellt (§18.5).
+
+        Der Knopf daneben führt aus, dieser **zeigt**: Er öffnet den Dialog der
+        Operation mit den Werten, die schon feststehen, und die Platzierung
+        startet von dort aus selbst (``placement_flow.starts_by_itself``). Im
+        Bild stehen dann die Maßlinien zu den Kanten der Fläche, jede mit ihrem
+        eigenen Zahlenfeld — dieselbe Bedienung wie beim Setzen einer Bohrung,
+        an einem Merkmal, das es schon gibt.
+
+        **Kein zweiter Weg zur Ausführung.** Was hier entsteht, ist ein Dialog;
+        der Schritt im Verlauf kommt erst, wenn jemand *Position übernehmen*
+        drückt. Die Vorschau des Merkmalfensters wird vorher abgeräumt — zwei
+        Vorschauen über demselben Teil sind eine zu viel.
+        """
+        if not REGISTRY.has(op):
+            return
+        if self.object_tree.selected() is None:
+            self.announce(_needs_objects(0))
+            return
+        self._drop_feature_preview()
+        self.run_operation(REGISTRY.get(op), params)
 
     def close_measuring(self) -> None:
         """Das Messwerkzeug schließen: Modus aus, Maße weg.

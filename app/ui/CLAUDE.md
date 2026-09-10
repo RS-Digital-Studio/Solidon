@@ -205,6 +205,63 @@ liest sie im Quelltext gegen die Griff-Felder des Aufbaus. Der Griff wird nach j
 Neuzeichnen der Vorschau frisch angehängt; er rechnet gegen die Matrix seines
 Ziels beim Anhängen, und die Vorschau kommt bei jeder Wertänderung neu.
 
+**Ein Loch hat eine Länge, und die ist eine Geste.** `slot_handle.py` hängt
+zwei Knöpfe an ein gewähltes Loch (`hole` oder `slot` — welche Arten, sagt
+`slot_feature_kinds()` aus dem `applies_to` von *Zum Langloch ziehen*), gezogen
+wird in der Ebene seiner Mündung. Der Zug gibt beides zugleich: die **Länge**
+aus dem Abstand zur Mitte, die **Richtung** aus dem Winkel dazu — gegen
+dieselbe Rahmenachse gezählt, gegen die `prepare.slot_profile` schneidet und
+`prepare_ops.slot_angle_of` misst. Der Umriss im Bild kommt aus derselben
+Funktion wie der Schnitt; beim Loslassen meldet `slotDragged` Kennung, Länge
+und Winkel, und `MainWindow._on_slot_dragged` macht daraus **einen** Schritt.
+
+Er sitzt genau dort, wo der Skalierwürfel nicht sitzt: Der gilt dem ganzen
+Körper, ein Merkmal hat keine Größe, die er ändern könnte — ein Loch aber hat
+eine. Die Form trägt die Bedeutung (Regel 18): Pfeil schiebt, Ring dreht,
+Würfel skaliert, **Knopf zieht in die Länge**; das `L` daneben ist dieselbe
+Schreibweise wie das `S` am Würfel.
+
+**Und er hängt an einer eigenen Artenmenge.** `slot_handle_feature()` fragt
+`slot_hole`, `gizmo_feature()` fragt `move_feature` — ein Langloch trägt heute
+die eine Fähigkeit und die andere nicht, und über einen Kamm geschoren
+verlöre es beide. An einem Langloch steht deshalb der Knopf **ohne**
+Bewegungsgriff; drei Pfeile, die keine Operation einlöst, wären schlimmer als
+keine.
+
+**Der Zug endet in einer Leiste, nicht im Verlauf** (`slot_bar.py`, Robert
+10.09.2026): Wohin etwas gehört, sagt die Stelle, an der man loslässt; wie
+**lang** es ist, sagt eine Zahl, und zwanzig Millimeter trifft niemand mit der
+Maus. Nach dem Loslassen bleibt der Umriss stehen, Länge und Richtung stehen
+als Felder unten mittig über der Werkzeugzeile — derselbe Ort wie bei der
+Flächenplatzierung —, und erst *Übernehmen* macht daraus die Operation. Die
+Eingabetaste ist der kurze Weg zu diesem Knopf, Escape verwirft. `SlotBar.active`
+ist dabei der Zustand und nicht `isVisible()`: Qt beantwortet Sichtbarkeit
+falsch, solange nichts gezeigt wurde, und ein Test würde die Testumgebung
+prüfen statt der Sache.
+
+**Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug.** Der Schalter
+gehört dem Werkzeug *Bewegen* und gilt dem ganzen Körper — dort trägt der
+Griff den Skalierwürfel, und der ändert auf einen Zug die Maße des Teils.
+Am Merkmal ist der Klick selbst die Ansage (Robert, 10.09.2026: „über den
+viewport sehen wir weder maße noch etwas zum verschieben, verlängern, drehen
+usw"); der Würfel bleibt dabei weg.
+
+**Und der Weg zu den Maßen wie beim Setzen steht im Merkmalsfenster.**
+*Im Bild einstellen …* neben einer Handlung öffnet deren Dialog, und die
+Flächenplatzierung startet von dort selbst (`placement_flow.starts_by_itself`)
+— mit Maßlinien zu den Kanten und einem Zahlenfeld je Maß.
+
+**Sie beginnt dabei dort, wo das Merkmal schon sitzt** (`_begin_at_feature`,
+10.09.2026). Bis dahin fing jede Platzierung bei „Auf eine Oberfläche zeigen"
+an — richtig für ein Werkzeug, das noch nirgends sitzt, falsch für eine
+Bohrung, die schon da ist: Ihre Stelle steht fest, offen sind die **Maße**.
+Die Fläche ohne Klick liefert `placement.seat_of`; der Rest ist derselbe Weg
+wie nach einem Treffer und endet gleich in Stufe zwei. Wo es keine Trägerfläche
+gibt, bleibt es beim Zeigen — kein Fehler, ein Rückfall. Welche Handlungen
+das anbieten, sagt der Kern (`placement.supports_surface_placement`), nicht
+eine Liste in der Oberfläche; `FeaturePanel.inViewRequested` ist getrennt von
+`operationRequested`, weil das eine zeigt und das andere schreibt.
+
 **Platzieren geht in drei Stufen** (Robert, 09.09.2026). Zeigen und klicken
 legt die **Stelle** fest (`_settle`) — der Klick schließt nicht mehr ab, denn
 er nähme jede Vorgabe mit, die daran hängt, und bei einer Bohrung heißt
@@ -383,7 +440,9 @@ Zone; einmal aus dem Register aufgebaut, bei Auswahlwechseln nur
 nachgeführt) ·
 `tool_strip.py` · `analysis_bar.py` · `section_bar.py` · `split_bar.py` ·
 `transform_bar.py` · `explode_bar.py` · `sculpt_bar.py` · `pose_bar.py` ·
-`scale_widget.py` · `facts.py` (was das Teil kostet, während man daran baut)
+`scale_widget.py` (der Würfel am Körper) · `slot_handle.py` (die zwei Knöpfe am
+Loch) · `slot_bar.py` (ihre Bestätigung: Länge, Richtung, Übernehmen) ·
+`facts.py` (was das Teil kostet, während man daran baut)
 
 Die Legende in `analysis_bar.py` verteilt bei vielen benannten Kartenstufen
 ihre Beispiele über den gesamten Farbbereich und nennt die Zahl ausgelassener

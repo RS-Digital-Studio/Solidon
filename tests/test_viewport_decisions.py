@@ -5167,6 +5167,43 @@ def test_the_handle_sits_on_every_feature_that_can_be_moved(qt_app: QApplication
     assert viewport.gizmo_target() is not None, "die Fläche behält ihren Press/Pull-Weg"
 
 
+def test_a_chosen_feature_gets_its_grip_without_opening_a_tool(qt_app: QApplication) -> None:
+    """Wer eine Bohrung anklickt, sieht den Griff — ohne erst ein Werkzeug zu öffnen.
+
+    Befund Robert, 10.09.2026, am gefahrenen Weg: „über den viewport sehen wir
+    weder maße noch etwas zum verschieben, verlängern, drehen usw." Gewählt
+    war eine Bohrung, das Merkmalsfenster zeigte sechs Felder — und im Bild
+    stand nichts. Der Schalter hing allein am Werkzeug *Bewegen*.
+
+    Die Grenze bleibt: Am **ganzen Körper** trägt der Griff einen
+    Skalierwürfel, und der ändert auf einen Zug die Maße des Teils; dort
+    entscheidet weiter das Werkzeug. Ein angeklicktes Merkmal ist dagegen
+    selbst die Ansage.
+    """
+    from app.core import bootstrap
+    from app.ui.viewport import Viewport
+
+    bootstrap.load_operations()
+    viewport = Viewport()
+    try:
+        viewport.renderer = RecordingRenderer(size=(800, 600))
+        viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+        viewport.select("obj_1")
+        viewport.set_gizmo(False)
+
+        assert viewport._gizmo is None, "am ganzen Koerper entscheidet das Werkzeug"
+
+        viewport.select_feature("hole_1")
+        assert viewport._gizmo is not None, "an der gewaehlten Bohrung steht er trotzdem"
+        assert viewport._scale_handle is None, "und ohne Wuerfel — ein Merkmal hat keine Groesse"
+
+        viewport.select_feature(None)
+        assert viewport._gizmo is None, "ohne Merkmal und ohne Werkzeug ist das Bild wieder frei"
+    finally:
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
 def test_the_movable_kinds_come_from_the_register(qt_app: QApplication) -> None:
     """Die Artenliste steht im Register, nicht in der Ansicht.
 
@@ -6594,8 +6631,13 @@ def test_every_grip_the_viewport_holds_stands_in_the_right_of_way() -> None:
     from app.ui import viewport as modul
 
     quelle = pathlib.Path(modul.__file__).read_text(encoding="utf-8")
-    griffe = set(re.findall(r"self\.(_[a-z_]+): *(?:Gizmo|ScaleHandle) *\| *None", quelle))
-    assert len(griffe) >= 3, f"ohne gefundene Griffe prüft der Test nichts: {griffe}"
+    # **Die Suche kennt keine Namensliste, sondern die Bauart.** Mit
+    # ``Gizmo|ScaleHandle`` fand sie genau die Griffe, die es beim Schreiben
+    # gab — der vierte (``SlotHandle``, 10.09.2026) wäre durchgefallen, und die
+    # Lehre hätte nur ihre eigene Gestalt geschützt. Ein Griff heißt hier
+    # ``Gizmo`` oder endet auf ``Handle``; danach wird gesucht.
+    griffe = set(re.findall(r"self\.(_[a-z_]+): *(?:Gizmo|[A-Z][A-Za-z]*Handle) *\| *None", quelle))
+    assert len(griffe) >= 4, f"ohne gefundene Griffe prüft der Test nichts: {griffe}"
 
     block = re.search(r"\n    def _on_pointer\(.*?\n    def ", quelle, re.DOTALL)
     assert block is not None, "_on_pointer ist nicht mehr auffindbar"

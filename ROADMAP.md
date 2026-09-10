@@ -46,13 +46,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Hohlkugel-Zielreihe samt echter Warnung auf Apple Silicon messen |
-| [RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen](#rm-117) | Plattformen, Pakete und Grafik | Seitenlinks samt AppImage werden geprüft; offen bleiben Prüfsumme statt Länge und der Abruf gegen den Server für 0.4.0 |
+| [RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen](#rm-117) | Plattformen, Pakete und Grafik | Die stille Lücke ist zu; offen bleiben die Prüfsummen-Entscheidung und der Abruf gegen den Server für 0.4.0 |
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
 | [RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen](#rm-023) | Geometrie, Erkennung und Druckvorbereitung | Verweisfilter nach einem Wechsel der Objektkennung prüfen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Prüfkörper steht; Abnahme über `evaluate` selbst und ein Rundlauf für `matches` fehlen |
-| [RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären](#rm-039) | Geometrie, Erkennung und Druckvorbereitung | Offenes Eingangsnetz im Schnittbefund erklären und Reparatur anbieten |
+| [RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären](#rm-039) | Geometrie, Erkennung und Druckvorbereitung | Der Befund erklärt es jetzt; offen ist der Knopf im Prüfbericht (`FINDING_ACTIONS`) |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
 | [RM-045 — Drei Laufzeitkosten des Geometriereviews messen](#rm-045) | Geometrie, Erkennung und Druckvorbereitung | Aushöhlen, Formkopien und Innenraumketten getrennt vermessen |
@@ -73,9 +73,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
-| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Alle acht gebaut, die Kante im Bild anklickbar — offen bleiben Zeiger und Rechtsklick an ihr sowie fünf zugesagte Kundenwege |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Kante anklickbar, Verrunden und Fase greifen am Netz — offen bleiben Zeiger und Rechtsklick an der Kante, Fläche versetzen und Formschräge am Netz, Rundung ändern, Wulst und Kehle sowie fünf zugesagte Kundenwege |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
 | [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
+| [RM-153 — Ein Langloch versetzen, drehen und verdoppeln](#rm-153) | Geometrie, Erkennung und Druckvorbereitung | Ziehen geht seit dem 10.09.2026; die vier übrigen Handlungen brauchen den Werkzeugkörper aus `slot_bore` statt eines Zylinders |
+| [RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden](#rm-154) | Geometrie, Erkennung und Druckvorbereitung | Eine 0 im Richtungsfeld stellt ein Langloch nicht gerade; der optionale Zahlenparameter fehlt im ganzen Register |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -83,7 +85,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-088 — Verständlichkeit für Laien im Regelwerk verankern](#rm-088) | Bedienung und Darstellung | Verständlichkeitsregel und begründete Ausnahmen entscheiden |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
 | [RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen](#rm-101) | Bedienung und Darstellung | Verdacht am Code widerlegt; das gesehene fremde Fenster bleibt unerklärt |
-| [RM-102 — Datum im Wiederherstellungsdialog an die App-Sprache binden](#rm-102) | Bedienung und Darstellung | Sicherungsdatum an die gewählte App-Sprache binden |
 | [RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen](#rm-108) | Bedienung und Darstellung | Schlüsseldialog während laufender Abfrage ohne Wartefrist schließen |
 | [RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen](#rm-119) | Bedienung und Darstellung | Schnittebene auf versetzten Platten und in Explosionsdarstellung prüfen |
 | [RM-124 — Zusätzlichen Render durch show_build_volume messen](#rm-124) | Bedienung und Darstellung | Bauraum-Aufwand messen; unnötigen Aufbau bei unverändertem Zustand vermeiden |
@@ -103,14 +104,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
-| [RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen](#rm-043) | Tests und Entwicklungswerkzeuge | Kopfzeilenfrist an die acht übrigen HTTP-Leser anschließen (nachgezählt 10.09.2026) |
 | [RM-098 — Restliche Regelwerk-Nachträge abgleichen](#rm-098) | Tests und Entwicklungswerkzeuge | Wächter für `paths:` und Regelnummern, `auslieferung.md`, und die vierfache Suite-Anleitung |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
-| [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Windows-Testenkel ohne sichtbares Terminal bei gleicher Prozessprüfung starten |
+| [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Flagge gesetzt; offen ist die Sichtprüfung unter Windows Terminal |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-106 — Plattformunterschiede der Projektdateien dem richtigen Ursprung zuordnen](#rm-106) | Tests und Entwicklungswerkzeuge | Archiv- und Inhaltshashes nach gleichem Erzeugerlauf vergleichen |
 | [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Besitz und ACL einer tatsächlich nutzereigenen Runner-Datei belegen |
-| [RM-122 — Paralleles Einfügen in gemeinsame Dokumente absichern](#rm-122) | Tests und Entwicklungswerkzeuge | Atomare Indexergänzung unter Sperre mit konkurrierenden Schreibern absichern |
 | [RM-134 — Zusammenführung duplizierter Testhilfen entscheiden](#rm-134) | Tests und Entwicklungswerkzeuge | Umfang der Zusammenführung belegter Testhilfen entscheiden |
 | [RM-137 — Sitzungsende im tatsächlichen Editorbetrieb abnehmen](#rm-137) | Tests und Entwicklungswerkzeuge | Echtes SessionEnd und Freigabe des Sitzungsgebiets nach Neustart beobachten |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
@@ -305,7 +304,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   irgendwann auseinander; der Fingerabdruck steht nur an einer Stelle. Geprüft wurden das
   Ausgabeformat von `security find-identity` gegen vier Lagen (eine, keine, zwei Identitäten,
   Installer allein) und das Verhalten unter `set -euo pipefail` — beide Fehlfälle brechen
-  **mit** ihrer Meldung ab, nicht davor.
+  **mit** ihrer Meldung ab, nicht davor. Der Fingerabdruck wird dabei in Groß- **und**
+  Kleinschreibung gelesen: Die erste Fassung verlangte `[0-9A-F]`, und ein klein
+  geschriebener Wert hätte zu „0 Identitäten" geführt — an einer Stelle, die es hier nicht zu
+  messen gibt, weil kein Mac danebensteht.
+
+  **Was damit nicht gesagt ist:** Alles hinter dem Signieren — Notarisierung, `stapler`,
+  `spctl`, `productsign`, `pkgutil` — ist bis heute **nie gelaufen**; 0.4.0 ist vorher
+  abgebrochen. Der bekannte Fehler kann nicht wiederkommen, neue können auftauchen. Ein
+  Probelauf mit `MACOS_SIGNING_MODE=signed` fährt nur die Signierung und lässt die
+  Notarisierung aus — die kleinere Stufe, um die Kette einmal ohne Apples Gegenstelle zu
+  sehen.
 
   **Was offen bleibt, ist nicht Code:** `MACOS_SIGNING_MODE` steht als Repository-Variable auf
   `unsigned` und gehört vor dem Bau von 0.4.1 zurück auf `notarized`. Sie steht in keinem
@@ -432,13 +441,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   AppImage-Link, der im Update-Manifest bewusst fehlt — dieselbe Quelle sperrt schon vor dem
   Upload. Der Satz „insbesondere AppImage" ist damit eingelöst.
 
-  Zwei Reste bleiben. **Erstens prüft der Abruf `Content-Length` und keine Prüfsumme** — eine
-  vollständig übertragene, aber falsche Datei fiele nicht auf; die SHA-256 steht nur für die
-  vier Pakete aus dem Manifest. **Zweitens hängt die Längenprüfung an der lokalen Datei**
-  (`expected = local.stat().st_size if local.is_file() else sizes.get(name, 0)`): Für das
-  AppImage steht in `version.json` nichts, und wer die Datei unter `dl/` nicht liegen hat,
-  prüft nur noch „antwortet mit 200". Dazu der Lauf selbst — `--nachpruefen` ist Handarbeit
-  und für 0.4.0 noch nicht gefahren.
+  **Die stille Lücke ist seit dem 10.09.2026 zu.** Sie war die schlimmere der beiden Reste:
+  `expected = local.stat().st_size if local.is_file() else sizes.get(name, 0)` wurde null,
+  wenn **beide** Quellen schwiegen — und genau das ist der AppImage-Fall, denn es steht mit
+  Absicht nicht im Update-Manifest. Der Vergleich `if expected and length != expected` fiel
+  dann in seinen Sonst-Zweig und schrieb **„ok"** für eine Datei, von der er nur wusste, dass
+  der Server irgendetwas geantwortet hat. Ein abgebrochener Upload hätte dort als Erfolg
+  dagestanden — bei dem einen Paket ohne Prüfsumme im Manifest.
+
+  Bemerkenswert daran: Der Kommentar über der Stelle hat diese Falle beschrieben („eine
+  beliebig kurze 200-Antwort ist sonst ein ‚ok'"), und geschlossen war sie nur für den einen
+  der beiden Fälle. Jetzt sagt der Lauf `OHNE MASS`, nennt den Weg (Datei unter `website/dl/`
+  ablegen) und endet mit 1 — getrennt von „nicht in Ordnung", weil das eine andere Aussage
+  ist: Die Datei liegt vielleicht vollständig oben, nur weiß dieser Lauf es nicht. Nachweis:
+  `tests/test_toolchain.py::test_a_promised_package_without_a_size_is_not_reported_as_fine`;
+  Gegenprobe gefahren, mit dem alten Zweig meldet eine 17-Byte-Antwort Erfolg (`assert 0 == 1`).
+
+  **Zwei Reste bleiben.** Der Abruf prüft `Content-Length` und **keine Prüfsumme** — eine
+  vollständig übertragene, aber falsche Datei fiele nicht auf. Das ist keine Fleißarbeit,
+  sondern eine Entscheidung: Die SHA-256 über HTTP zu prüfen heißt, rund ein Gigabyte je Lauf
+  herunterzuladen. Und der Lauf selbst — `--nachpruefen` ist Handarbeit und für 0.4.0 noch
+  nicht gefahren.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#030-ist-draußen-03092026).
 
@@ -500,11 +523,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-039"></a>
 
-- [ ] **RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären.** `split_at_plane`
-  meldet weiterhin nur, dass die Schnittflächen nicht geschlossen werden konnten. Bei offenen
-  Eingangsnetzen den Zusammenhang benennen und eine passende Reparaturhandlung anbieten. Abnahme:
-  offenes Netz erzeugt den verständlichen Befund mit Rückweg, ein sauber geschlossenes Netz bleibt
-  unverändert.
+- [~] **RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären.** **Der Befund
+  nennt seit dem 10.09.2026 die Ursache**: „Die Schnittflächen bleiben offen: Das Modell hat
+  schon vor dem Schnitt ein Loch. Reparieren Sie es und teilen Sie danach erneut."
+
+  Der alte Satz — „Die Schnittflächen konnten nicht geschlossen werden" — war nicht falsch,
+  aber er zeigte in die falsche Richtung: Er klang nach einem Fehler des Schnitts, also suchte
+  man am Schnitt. Der Schnitt kann nichts dafür. `SectionResult.capped` ist genau
+  `is_watertight` der **Eingabe** (`section._apply` liest sie und reicht sie durch), das
+  Modell war also schon vorher offen — und ein offenes Netz lässt sich nicht ehrlich deckeln.
+  Nachweis: `tests/test_autosplit.py::test_the_open_cut_says_why_and_what_to_do` prüft die
+  Aussage und nicht den Wortlaut; Gegenprobe gefahren, mit dem alten Satz ist er rot. Die fünf
+  Kataloge sind nachgezogen — der Meldungstext **ist** der Schlüssel, und ohne sie fielen
+  `en`, `es`, `fr`, `it` und `pt` auf Deutsch zurück.
+
+  **Offen bleibt der Knopf.** `split.uncapped` steht nicht in `FINDING_ACTIONS`
+  (`app/ui/panels.py`), also führt der Befund im Prüfbericht zu keiner Handlung; die
+  Geschwister `split.no_plane` und `split.cut_failed` haben dort welche.
+  `REPAIR_AND_RETRY` gibt es bereits. Nicht gemacht, weil an `panels.py` am selben Tag eine
+  zweite Sitzung arbeitete und eine Zeile in einer fremden offenen Datei verloren geht.
+  Abnahme dann: offenes Netz erzeugt den verständlichen Befund **mit** anklickbarem Rückweg,
+  ein sauber geschlossenes Netz bleibt unverändert.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-linux-kunde-und-was-sein-protokoll-trug-06092026).
 
@@ -807,6 +846,31 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   benennt. Ebenso offen: der **Rechtsklick** auf eine Kante — das Kontextmenü meint dort
   weiter das Merkmal darunter.
 
+  **Und seit dem 10.09.2026 greifen Verrunden und Fase auch am Netz.** Das ist der zweite
+  Teil derselben Entscheidung Roberts — „alles soll immer bearbeitbar sein, egal ob
+  importiert Format egal und beim selbst zeichnen". Beide Operationen sind nach
+  `geom/edge_ops.py` gezogen, haben ihr `requires_kind="brep"` verloren und wählen den
+  Rechenweg nach `SceneObject.kind`; die Kantenauswahl darüber kennt den Unterschied
+  ohnehin nicht, weil Schlüssel (`edge_key`) und Gruppen (`choose`, `wanted`) für beide
+  Kerne einmal in `geom/edges.py` stehen.
+
+  Gemessen an einem Quader mit vier Verrundungen zu R = 3: 23845,487 mm³ exakt gegen
+  23839,049 am Netz — 0,027 %, und der Unterschied steckt vollständig in den
+  Kreisabschnitten unter den Sehnen. Bei der **Fase** gibt es gar keinen (23840,0000 gegen
+  23840,0000): Eine Fase ist eine Ebene, und eine Ebene hat ein Netz exakt. Wie fein der
+  Bogen wird, hängt am Radius statt an einer festen Stückzahl — `units.MAX_FACET_SAG` und
+  `MAX_FACET_ANGLE`, dieselben zwei Grenzen, mit denen OpenCASCADE tesselliert; die Zahl
+  stand vorher zweimal im Haus und steht jetzt einmal. Achtzehn Zusicherungen in
+  `tests/test_mesh_edges.py`, neun Mutationen gegengeprüft. Der Eintrag „Verrundungen auf
+  Mesh-Kanten vor dem B-Rep-Kern" ist damit aus `AGENTS.md` verschwunden.
+
+  **Offen aus derselben Liste bleibt der Rest der Kantenarbeit:** Fläche versetzen und
+  Formschräge am Netz (beide gemessen machbar, `push_face` dabei gleich auf die *gewählte*
+  Fläche umstellen statt auf eine Richtung — Roberts Einwand vom 10.09.2026), die erkannte
+  Rundung ändern und wegnehmen, sowie Wulst und Kehle anlegen. Danach wird der Haken
+  „Flächen und Kanten später bearbeiten" auf seinen verbliebenen Zweck zurückgeschnitten:
+  den STEP-Export.
+
   Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
   Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische
   Kennzeichnung der Varianten, RM-138, RM-087 und RM-127/RM-140.
@@ -885,6 +949,39 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ein Langloch die **dünnste** Wand oder zwei Werte mit ihren Orten, ein Testfall an einem Zapfen
   mit Langloch, und `slot` steht danach in `is_a_cavity`.
 
+<a id="rm-153"></a>
+
+- [ ] **RM-153 — Ein Langloch versetzen, drehen und verdoppeln.** Seit dem 10.09.2026 trägt ein
+  erkanntes Langloch im Merkmalsfenster eine Zeile mit seinen zwei Maßen und im Bild zwei Knöpfe,
+  an denen sich Länge und Richtung ziehen lassen. Was ihm fehlt, sind die vier übrigen Handlungen:
+  `move_feature`, `rotate_feature`, `duplicate_feature` und `remove_feature` führen `slot` nicht in
+  `applies_to`, und der Grund steht als Satz im Panel — ihr Werkzeugkörper entsteht aus **einem**
+  Durchmesser (`_feature_solid`), und ein Zylinder träfe die Flanken eines Langlochs nicht. Der
+  Kunde sieht damit fünf ausgegraute Zeilen neben einer, die geht (Robert, 10.09.2026: „das gleiche
+  wäre zum bearbeiten dann von langlöchern und anderen operationen/merkmalen usw gut"). Was es
+  braucht, ist derselbe Werkzeugkörper, den `slot_bore` schon baut — aus Mitte, Achse, Durchmesser,
+  Länge und Richtung —, dazu die Frage, was *Verdoppeln* an einem Langloch versetzt (die Kopie
+  braucht dieselbe Richtung, nicht nur dieselbe Mitte). Abnahme: Ein Langloch lässt sich im Bild
+  versetzen und drehen, das Volumen des Ganzen bleibt dabei gleich, und die vier Zeilen im Panel
+  tragen ihre Werte statt eines Grundes. **Und dann fällt auch der Griff zusammen:**
+  `viewport.slot_handle_feature` gibt es getrennt von `gizmo_feature`, weil die zwei Mengen heute
+  auseinanderliegen — mit dieser Arbeit dürfen sie es wieder gemeinsam tun.
+
+<a id="rm-154"></a>
+
+- [ ] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** `slot_hole` liest eine 0 im
+  Richtungsfeld als „nicht gesagt" und nimmt an einem bestehenden Langloch dessen heutige Richtung
+  — richtig, damit ein Zug an der Länge es nicht quer stellt. Wer es aber **geradestellen** will,
+  tippt genau diese 0, und sie kommt nicht an: gemessen am geschnittenen Winkel (10.09.2026) blieb
+  ein 45-Grad-Langloch bei 45,00000000000002 Grad, während 1 Grad sauber durchging. Über die
+  Oberfläche ist der Fall heute nicht erreichbar — die Ansicht schickt immer einen Winkel, und das
+  Merkmalsfenster belegt mit dem gemessenen vor —, über Dialog, Chat und Kommandozeile schon.
+  Die saubere Lösung wäre `slot_angle: float | None`; **einen optionalen Zahlenparameter gibt es im
+  ganzen Register bisher nicht** (gezählt: null Treffer für `| None = param`), sie führt also ein
+  Konzept ein, das Validierung, `json_schema`, Dialog, Projektdatei und Agentenwerkzeug zugleich
+  betrifft. Abnahme: Entweder das Konzept mit Robert entscheiden und überall einlösen, oder eine
+  begründete zweite Antwort für diesen einen Fall — beides nicht nebenbei.
+
 ## Bedienung und Darstellung
 
 <a id="rm-070"></a>
@@ -959,10 +1056,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-102"></a>
 
-- [ ] **RM-102 — Datum im Wiederherstellungsdialog an die App-Sprache binden.** Das Datum älterer
-  Sicherungen im Wiederherstellungsdialog mit der aktuellen Anwendungssprache formatieren. Abnahme:
-  deutsche und englische Anzeige folgt der gewählten Sprache, relative Zeitangaben und Zeitzone
-  bleiben korrekt.
+- [x] **RM-102 — Datum im Wiederherstellungsdialog an die App-Sprache binden.** Erledigt am
+  10.09.2026. `MainWindow._when` gab den Rückfall über 24 Stunden als festes
+  `%d.%m.%Y %H:%M` aus — deutsche Reihenfolge in jedem Fenster, direkt neben den relativen
+  Angaben („vor einer Stunde"), die seit je über `tr()` mitwanderten. `labels.local_moment`
+  ist die Schwester zu `local_timestamp` für einen `datetime` und bindet das Datum an
+  `get_language()`.
+
+  **Ein Detail, das der Test gefunden hat und nicht das Lesen:** `ShortFormat` kürzt das Jahr
+  je nach Sprache auf zwei Ziffern — „05.03.26". Der Kunde hätte die Sprachbindung bekommen
+  und dafür zwei Ziffern verloren, ausgerechnet bei einer Sicherung, deren Alter die ganze
+  Entscheidung trägt. Geändert wird deshalb nur `yy` → `yyyy` im Muster; Reihenfolge, Trenner
+  und Uhrzeitform bleiben Sache der Sprache — dieselbe Bauart wie in `calendar_date`, die den
+  Wochentag herausnimmt.
+
+  Nachweis: `tests/test_ui.py::test_the_age_of_a_backup_follows_the_application_language` prüft
+  die **Sprachbindung** und keinen Wortlaut — zwei Sprachen müssen zwei Schreibweisen ergeben;
+  ein Vergleich gegen eine erwartete Zeichenkette prüfte nur, was QLocale in dieser Qt-Fassung
+  gerade tut. Gegenprobe gefahren: mit dem festen Muster schreiben beide Sprachen
+  „05.03.2026 14:30", und der Test sagt genau das.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#architektur-durchsicht-02092026).
 
@@ -1168,23 +1280,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-043"></a>
 
-- [ ] **RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen.** Den vorhandenen
-  `DeadlineResponse` auch an die übrigen Aufrufwege anschließen. Abnahme: langsam eintreffende
-  Statuszeile und Kopfzeilen können die Gesamtfrist auf keinem dieser Wege immer wieder verlängern.
+- [x] **RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen.** Erledigt am
+  10.09.2026. **Es waren zehn Stellen, nicht vier** — gezählt am Syntaxbaum, nicht geschätzt:
+  drei im Sprachbackend (`post_json`, `_get_json`, `pull_model`), eine im Mesh-Backend, dazu
+  Support, Update, Aktivierung und die drei Werkzeuge `check_activation`, `licence_admin` und
+  `upload_website`.
 
-  **Nachgezählt am 10.09.2026: Es sind acht, nicht vier.** `DeadlineResponse` ist eine lokale
-  Klasse in `http.open_public_url` und dort einmal angeschlossen; der einzige Nutzer ist
-  `ingest/fetch._open_download`. Ohne die Frist arbeiten vier Backend-Wege
-  (`backends/llm.py` in `post_json`, `_get_json`, `pull_model`; `backends/mesh.fetch`) — das
-  sind die „vier" des alten Textes — und vier weitere, die er nicht mitzählte:
-  `support.py`, `updates._open_update` (der Weg zur signierten `version.json`),
-  `licence_service._open_service` (Aktivierung) und die Werkzeuge `upload_website.py`,
-  `check_activation.py`, `licence_admin.py`. Alle gehen über
-  `OpenerDirector.open(request, timeout=…)`, und dieses `timeout` gilt je Leseoperation, nicht
-  der Gesamtdauer: Ein Gegenüber, das alle `timeout-ε` Sekunden ein Byte der Kopfzeilen
-  schickt, verlängert unbegrenzt. Der Weg dahin führt über einen `urllib`-Handler mit
-  gesetzter `response_class`; der Aufwand liegt nicht im Kern, sondern in den rund vierzehn
-  Testattrappen, die `opener_for` mit einem Positionsargument ersetzen.
+  **Was gefehlt hat, in einem Satz:** `timeout` an `OpenerDirector.open()` ist ein Zeitlimit
+  **je Leseoperation**, keine Gesamtdauer. Gemessen an einer nachgestellten Gegenstelle, die
+  ihre Kopfzeilen byteweise mit 20 ms Pause schickt: Statuszeile und Kopfzeilen brauchten eine
+  volle Sekunde, das Zeitlimit stand auf **fünfzig Millisekunden**, und die Antwort kam mit
+  200 zurück. Kein einzelner Lesevorgang hatte das Limit verletzt.
+
+  `http.apply_header_deadline(opener, deadline)` hängt die Antwortklasse mit Frist in die
+  Handler eines fertigen Öffners. **Angesetzt wird am Öffner und nicht an dem, der ihn baut**:
+  Ein `deadline`-Argument an `discover.opener_for` hätte vierzehn Testattrappen gerissen, die
+  ihn mit genau einem Positionsargument ersetzen; ein Objekt ohne `handlers` bleibt hier
+  unangetastet. Der Öffner muss dem einzelnen Aufruf gehören — die Frist steckt in der
+  erzeugten Klasse, also trüge ein geteilter nach dem ersten Aufruf für immer dessen Frist.
+  Deshalb bauen `support`, `updates`, `licence_service` und die drei Werkzeuge ihren Öffner
+  jetzt je Aufruf.
+
+  **Ein Fehler auf dem Weg, und er gehört zum Nachweis:** Der erste Anlauf ersetzte
+  `support._SUPPORT_OPENER` durch einen lokal gebauten Öffner — und riss damit den Testzugang,
+  den eine Attrappe an dieser Konstante hatte. Der Aufruf ging danach an das **echte**
+  example.org und kam mit 405 zurück; ein zweiter Test wurde durch die offen gebliebene
+  Verbindung mit umgerissen. Was der Kern gewinnt, kann eine Attrappe verlieren: Wer einen
+  geteilten Öffner auflöst, sieht nach, wer ihn patcht.
+
+  Nachweis: `tests/test_http_security.py::test_an_opener_puts_its_headers_under_the_same_deadline`
+  fährt beide Fälle — mit Frist ein `ResponseDeadlineError` unter 0,30 s, ohne Frist die
+  gelungene Antwort nach über einer Sekunde. Dazu der Wächter
+  `tests/test_hard_rules.py::test_every_network_call_puts_its_headers_under_a_deadline`: Er
+  verlangt je Funktion mit einem `…open(request, timeout=…)` ein `apply_header_deadline`
+  daneben und zählt zuerst, wie viele Netzaufrufe er überhaupt findet — ein Verbotstest über
+  eine leere Menge wäre immer grün. **Gemessene Gegenprobe:** derselbe Lauf über `HEAD` nennt
+  zehn Stellen, über den Arbeitsbaum keine.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
 
@@ -1233,10 +1364,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-100"></a>
 
-- [ ] **RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden.** Den losgelösten
-  Windows-Testenkel unter Windows Terminal ohne sichtbares Fehlerfenster ausführen und den echten
-  Startweg gegenprüfen. Abnahme: Prozessbaum wird zuverlässig geschlossen, kein neues
-  Terminalfenster erscheint und die Anwendung verhält sich ebenso.
+- [~] **RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden.** **Die Flagge ist
+  gesetzt** (10.09.2026). `tests/test_process.py` holt die Startflaggen jetzt aus dem
+  Produktivweg — `process.process_group_options(detached=True, no_window=True)` — statt
+  `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS` ein zweites Mal hinzuschreiben. Damit kommt
+  `CREATE_NO_WINDOW` mit, das die Anwendung bei jedem losgelösten Prozess ohnehin setzt und
+  das im Test fehlte; gemessen: `0x208` vorher, `0x8000208` jetzt, die Prozessgruppen-Flaggen
+  unverändert. Eine Testfassung, die dieselben Flaggen selbst zusammensetzt, kann vom echten
+  Startweg abweichen — diese kann es nicht mehr.
+
+  **Offen bleibt die Sichtprüfung**, und die kann kein Test leisten: Ob unter Windows Terminal
+  als Standardhost wirklich kein Fenster mehr aufgeht, sieht nur jemand, der zusieht. Der Test
+  war die ganze Zeit grün — das Fenster war ein Nebeneffekt der Konsolenzuweisung und nicht
+  der Prozessgruppe, die er prüft. Abnahme: Prozessbaum wird zuverlässig geschlossen, kein
+  neues Terminalfenster erscheint und die Anwendung verhält sich ebenso.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
@@ -1309,11 +1450,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-122"></a>
 
-- [ ] **RM-122 — Paralleles Einfügen in gemeinsame Dokumente absichern.** Ein kleines Werkzeug für
-  atomare Einzelzeilenänderungen am gemeinsamen Projekt-Memory-Index bauen: Sperre, erneutes Lesen
-  unter Sperre und Kontrolle unveränderter übriger Zeilen. Abnahme: zwei konkurrierende Ergänzungen
-  bleiben beide erhalten und test_directory_docs erkennt weiterhin fehlende/beidseitig verwaiste
-  Verweise.
+- [x] **RM-122 — Paralleles Einfügen in gemeinsame Dokumente absichern.** Erledigt am
+  10.09.2026: `tools/memory_index.py` fügt genau eine Zeile in `MEMORY.md` ein — unter einer
+  Sperrdatei daneben, mit dem Lesen **unter** der Sperre und einem Nachzählen vor dem
+  Schreiben. Geschrieben wird über eine Datei daneben und `Path.replace`, also hinterlässt
+  ein Abbruch den alten Index und keinen halben.
+
+  Alle drei Teile haben ihren eigenen Grund, und der dritte ist der, den man weglassen würde:
+  Die **Sperre** schützt vor der anderen Sitzung, das **Lesen unter ihr** vor dem Stand, der
+  zwischen Lesen und Sperren veraltet, und das **Nachzählen** vor einem Fehler dieses
+  Werkzeugs selbst — ein Muster, das zu viel trifft, ein Abschnitt, den es zweimal gibt.
+  Abgewiesen wird außerdem eine Zeile ohne `[Titel](datei.md)`: Sie stünde im Index und wäre
+  für `test_directory_docs` trotzdem kein Zeiger, und der meldete die Notiz dann als
+  unverzeichnet.
+
+  **Gemessene Gegenprobe**, mit zwei echten Prozessen und je zwanzig Einfügungen: Gegen eine
+  ungeschützte Fassung — lesen, kurz warten, schreiben — gingen in drei Läufen **20, 17 und 20
+  von 40** Einträgen verloren. Über das Werkzeug fehlte in denselben drei Läufen keiner.
+  Nachweis: `tests/test_memory_index.py`, sechs Fälle; `tests/test_directory_docs.py` bleibt
+  unverändert grün.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-geteilte-datei-ohne-werkzeug-03092026).
 

@@ -96,7 +96,7 @@ Eingangsanzahl aus dem Register, bevor Geometrie gerechnet wird.
 |---|---|
 | `fits.py` | Passungen zwischen Merkmalen (§14) — Verletzungen werden erkannt, nicht stillschweigend gerechnet |
 | `orphans.py` | Merkmalsverweise, die ihr Merkmal verloren haben (§21.3). Statt zu raten: `question_for()` und `candidates_of()` |
-| `placement.py` | Dialogvorbelegung und genaue Oberflächenplatzierung am Originalnetz (§18.5) |
+| `placement.py` | Dialogvorbelegung und genaue Oberflächenplatzierung am Originalnetz (§18.5). `seat_of` beantwortet die Frage daneben: **wo sitzt, was schon da ist** — die Trägerfläche eines erkannten Merkmals samt seiner Mündung, für die Maßlinien am gewählten Merkmal |
 
 **Operationen dieses Gebiets**
 

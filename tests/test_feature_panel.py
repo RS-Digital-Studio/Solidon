@@ -227,13 +227,37 @@ def test_the_panel_offers_what_the_core_says_and_nothing_else(qt_app: QApplicati
     Verglichen wird gegen die Auskunft selbst und nicht gegen eine Liste im
     Test: Sobald der Kern eine Handlung dazubekommt, wächst das Panel mit, und
     dieser Test bleibt richtig.
+
+    **Zwei Knöpfe je Handlung, wo sie im Bild einzustellen ist** (10.09.2026):
+    Der erste führt aus, der zweite öffnet die Flächenplatzierung mit ihren
+    Maßlinien. Welche das sind, sagt wieder der Kern
+    (``placement.supports_surface_placement``) und keine Liste hier.
     """
+    from app.core.scene import placement
+    from app.i18n import tr
+
     identifier, feature = a_hole()
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
 
-    expected = [str(action.title) for action in actions_for(feature) if action.op is not None]
+    # **Die Erwartung kommt aus dem Kern, nicht aus dem Prüfling.** Sie stand
+    # zuerst auf ``panels._places_on_a_surface`` — derselben Funktion, die das
+    # Panel selbst fragt; beide Seiten der Gleichung wären damit aus einer
+    # Quelle gekommen, und der Test blieb grün, als der Knopf im Review
+    # versuchsweise ganz verschwand (Gegenprobe gefahren, 10.09.2026).
+    expected: list[str] = []
+    ins_bild = 0
+    for action in actions_for(feature):
+        if action.op is None:
+            continue
+        expected.append(str(action.title))
+        if REGISTRY.has(str(action.op)) and placement.supports_surface_placement(
+            REGISTRY.get(str(action.op))
+        ):
+            expected.append(str(tr("Im Bild einstellen …")))
+            ins_bild += 1
     assert expected, "ohne Handlungen prüft dieser Test nichts"
+    assert ins_bild, "an einer Bohrung gibt es mindestens einen Weg ins Bild"
     assert buttons(panel) == expected
 
 

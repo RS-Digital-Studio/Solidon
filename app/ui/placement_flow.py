@@ -480,6 +480,7 @@ class PlacementFlow(QObject):
         self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         if self._change_op is None:
             self._request_tool()
+            self._begin_at_feature()
         else:
             epoch = self._epoch
             self._note.setText(tr("Die Oberfläche vor diesem Schritt wird vorbereitet …"))
@@ -804,6 +805,59 @@ class PlacementFlow(QObject):
                 )
 
         self.session.placement_async(compute, done, failed)
+
+    def _begin_at_feature(self) -> None:
+        """Beginnt dort, wo das gewählte Merkmal schon sitzt — ohne Klick (§18.5).
+
+        **Wer ein bestehendes Merkmal bewegt, hat die Stelle nicht zu suchen.**
+        Die Platzierung fing bis zum 10.09.2026 immer bei „Auf eine Oberfläche
+        zeigen" an — richtig für ein Werkzeug, das noch nirgends sitzt, falsch
+        für eine Bohrung, die schon da ist: Ihre Maße stehen fest, und der
+        Kunde will sie sehen und ändern, nicht neu zielen (Robert, 10.09.2026:
+        „die maße beim langloch ziehen und verschieben sind immer noch nicht da
+        zu anderen merkmalen kanten mitten wie beim bohrung setzen").
+
+        Was dafür fehlte, war die Fläche ohne Klick — ``placement.seat_of``
+        liefert sie samt Mündung. Der Rest ist derselbe Weg wie nach einem
+        Treffer (:meth:`_next_surface`), und er endet gleich in Stufe zwei: Die
+        Stelle steht ja, offen sind die **Maße**.
+
+        Wo es kein solches Merkmal gibt — jede Operation, die etwas Neues setzt
+        —, geschieht hier nichts, und es bleibt beim Zeigen.
+        """
+        entry, feature = self._source_feature()
+        if entry is None or feature is None or self._surface is not None:
+            return
+        stamp = self._serial
+        object_id = entry.id
+
+        def compute() -> Any:
+            mesh = as_mesh_data(entry.mesh)
+            seat = placement.seat_of(mesh, feature, entry.features)
+            if seat is None:
+                return None
+            prepared, mouth = seat
+            return prepared, placement.at_point(prepared, mouth)
+
+        def done(value: Any) -> None:
+            if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
+                return
+            if value is None:
+                # **Kein Fehler, sondern ein Rückfall auf den gewohnten Weg.**
+                # Eine Verrundung hat keine Trägerfläche, und ein Merkmal auf
+                # einer gekrümmten Fläche gibt keine ebenen Maße her; dort
+                # bleibt es beim Zeigen, statt eine Absage zu melden.
+                return
+            self._prepared, self._surface = value
+            self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
+            self._prepared_mesh = entry.mesh
+            self._patch_faces = frozenset(self._surface.face_indices)
+            self._object_id = object_id
+            self._distance_valid = True
+            self._set_values()
+            self._settle()
+
+        self.session.placement_async(compute, done, lambda _detail: None)
 
     def _invalid(self, message: str) -> None:
         self._surface = None

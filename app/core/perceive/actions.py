@@ -62,6 +62,19 @@ if TYPE_CHECKING:
 ACTION_ORDER: Final[tuple[tuple[str, ...], ...]] = (
     ("move_feature",),
     ("resize_feature", "resize_hole"),
+    # **Die Länge steht neben der Größe, nicht hinter dem Entfernen** (Robert,
+    # 10.09.2026: „langloch merkmale hat noch in der auswahl keine
+    # einstellungen"). Ein erkanntes Langloch trug bis dahin fünf ausgegraute
+    # Zeilen und **kein einziges Feld**: Versetzen, Ändern, Drehen, Verdoppeln
+    # und Entfernen gelten dort alle nicht, und die eine Operation, die gilt,
+    # stand nur als Knopf im Auswahlfenster. Wer es anklickte, sah seine Maße
+    # und konnte keines davon ändern.
+    #
+    # Als Zeile mit Feldern trägt sie beides: Länge und Richtung stehen mit
+    # ihren **gemessenen** Werten da (:func:`_value_of`), und der Knopf darunter
+    # führt sie aus. An einer runden Bohrung ist dieselbe Zeile der Weg zum
+    # Langloch — dort steht in der Länge das Doppelte ihres Durchmessers.
+    ("slot_hole",),
     ("rotate_feature",),
     ("duplicate_feature",),
     ("remove_feature",),
@@ -89,6 +102,25 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("fillet", "remove_feature"): _(
         "Eine Verrundung wegzunehmen heißt, die Kante wieder scharf zu machen — "
         "sinnvoll und noch nicht gebaut."
+    ),
+    # **Drei Arten, die *Zum Langloch ziehen* nicht annimmt** — und jede aus
+    # ihrem eigenen Grund. Ohne diese drei Sätze stand die Zeile seit dem
+    # 10.09.2026 an Zapfen, Senkung und Kugel mit dem Auffangsatz „Für diese
+    # Art von Merkmal gibt es noch keine Handlung", also mit einem Ende ohne
+    # Weg nach vorn (Regel 17). Ein Satz je Art und nicht einer für alle drei:
+    # Der Zapfen ist Material, die Senkung hängt an ihrer Bohrung, und die
+    # Kugel hat gar keine Richtung.
+    ("pin", "slot_hole"): _(
+        "Gezogen wird ein Loch, und ein Zapfen ist Material. Was ihn länglich "
+        "macht, ist seine eigene Form — über „Merkmal ändern“ oder als neuer "
+        "Körper."
+    ),
+    ("cone", "slot_hole"): _(
+        "Eine Senkung sitzt auf ihrer Bohrung, und ein Langloch verträgt keine "
+        "Aufweitung. Ziehen Sie die Bohrung ohne sie, oder lassen Sie sie rund."
+    ),
+    ("sphere", "slot_hole"): _(
+        "Eine Kugelfläche hat keine Achse, entlang der ein Loch länger würde."
     ),
 }
 
@@ -288,8 +320,41 @@ _SHIFTED_BY: Final[dict[tuple[str, str], str]] = {
 }
 
 
+def _slot_value(spec: Any, feature: Feature) -> float | None:
+    """Länge und Richtung eines **erkannten** Langlochs — sonst ``None``.
+
+    Die allgemeine Zuordnung in :data:`_FROM_FEATURE` gilt je Feld und kennt
+    die Merkmalsart nicht; an einer runden Bohrung ist das richtig (dort gibt
+    es keine Länge, und genommen wird der doppelte Durchmesser). An einem
+    Langloch, das schon eines ist, wäre es eine **stille Änderung**: Das Feld
+    stünde auf zwei Durchmessern, und wer übernimmt, ohne hinzusehen, verkürzt
+    ein 40er Loch auf 10 — die Zusage lautet aber, dass jedes Feld seinen
+    heutigen gemessenen Wert trägt.
+
+    Der Winkel kommt aus derselben Funktion, die die Operation als Vorgabe
+    liest (``prepare_ops.slot_angle_of``); zwei Rechnungen für dieselbe
+    Richtung liefen auseinander, und der Unterschied wäre ein verdrehtes Loch.
+    """
+    if feature.kind != "slot":
+        return None
+    if spec.name == "slot_length":
+        measured = feature.params.get("length")
+        return float(measured) if measured is not None else None
+    if spec.name == "slot_angle":
+        from app.core.geom.prepare_ops import slot_angle_of
+
+        axis = feature.params.get("axis")
+        if axis is None:
+            return None
+        return slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2])))
+    return None
+
+
 def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
     """Der heutige Wert dieses Parameters am Merkmal — sonst seine Vorgabe."""
+    slotted = _slot_value(spec, feature)
+    if slotted is not None:
+        return slotted
     reads = _FROM_FEATURE.get(spec.name)
     if reads is None:
         return spec.default  # type: ignore[no-any-return]

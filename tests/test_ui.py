@@ -2492,6 +2492,77 @@ def test_a_turn_on_a_feature_keeps_the_settled_angle(window: MainWindow) -> None
     assert float(letzter.params["angle"]) == pytest.approx(45.0), "unverändert weitergereicht"
 
 
+def test_a_drag_on_the_slot_knobs_becomes_one_slot_step(window: MainWindow) -> None:
+    """Die dritte Naht derselben Bauart: aus dem Zug wird *Zum Langloch ziehen*.
+
+    Länge und Richtung kommen fertig aus der Ansicht — sie hat den Zug auf der
+    Mündungsebene der Bohrung gerechnet und kennt deren Rahmen. Das Fenster
+    rechnet nichts nach; es macht daraus **einen** Schritt, und ein Undo nimmt
+    ihn ganz zurück (§15.5).
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+
+    window.viewport.slotDragged.emit(hole, 18.0, 30.0)
+    window.session.wait_for_idle()
+
+    assert [step.op for step in window.session.project.document.ops] == ["load", "slot_hole"]
+    letzter = window.session.project.document.ops[-1]
+    assert letzter.params["at_feature"] == hole
+    assert float(letzter.params["slot_length"]) == pytest.approx(18.0)
+    assert float(letzter.params["slot_angle"]) == pytest.approx(30.0)
+
+
+def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: MainWindow) -> None:
+    """*Im Bild einstellen …* zeigt — es legt keinen Schritt an (10.09.2026).
+
+    Der Knopf daneben führt aus, dieser öffnet den Dialog der Operation; von
+    dort startet die Flächenplatzierung mit ihren Maßlinien selbst. Wer beide
+    Signale gleich behandelte, schriebe schon beim Zeigen in den Verlauf —
+    deshalb sind es zwei (``operationRequested`` und ``inViewRequested``).
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    centre = entry.features[hole].params["centre"]
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+
+    window.feature_panel.inViewRequested.emit(
+        "move_feature",
+        {
+            "at_feature": hole,
+            "x": float(centre[0]),
+            "y": float(centre[1]),
+            "z": float(centre[2]),
+        },
+    )
+    QApplication.processEvents()
+
+    dialoge = window.findChildren(OperationDialog)
+    try:
+        assert dialoge, "der Dialog der Operation steht offen"
+        assert [step.op for step in window.session.project.document.ops] == ["load"], (
+            "gezeigt, nicht getan — im Verlauf steht nichts Neues"
+        )
+        assert dialoge[-1].values().get("at_feature") == hole, "und er weiß, welches Merkmal"
+    finally:
+        for dialog in dialoge:
+            dialog.reject()
+        QApplication.processEvents()
+
+
 def test_the_gizmo_sentence_reaches_the_status_line(window: MainWindow) -> None:
     """Was der Griff bewegen wird, sagt die Ansicht — und der Kunde liest es.
 
@@ -4564,6 +4635,9 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     # Merkmalsfenster darüber als Feld mit ihrem gemessenen Wert und bekommt
     # hier keinen zweiten Knopf. Eine Erwartung aus derselben Tabelle ginge mit
     # jeder künftigen Änderung mit und prüfte nichts mehr.
+    # `slot_hole` steht seit dem 10.09.2026 **nicht** dabei: Es ist eine Zeile
+    # mit Feldern im Merkmalsfenster darüber (`ACTION_ORDER`) und bekommt hier
+    # deshalb keinen zweiten Knopf — dieselbe Regel wie bei *Bohrung ändern*.
     an_der_bohrung = {"countersink_hole", "plug_hole"}
     assert vorn() == an_der_bohrung, "die Bohrung bringt ihre eigenen mit"
     assert all(panel._buttons[name].isEnabled() for name in an_der_bohrung), (
@@ -12166,12 +12240,12 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     In dem Fall hilft kein Haken. Die Auswertung weiß, welcher Schritt es war
     (``evaluate.exact_became_mesh``), und der Satz nennt ihn.
 
-    **Gemessen wird das an ``fillet_edges`` und nicht mehr an ``sketch_pocket``.**
-    Die Tasche stand hier als Beispiel für ein gesperrtes Werkzeug, bis sie am
-    30.08.2026 auch in Netze schneiden lernte — sie ist keins mehr. Die Zusage
-    selbst ist davon unberührt und gilt weiter für die sieben Operationen, die
-    den exakten Kern wirklich brauchen; Verrunden ist eine davon und hängt an
-    keiner Flächenauswahl.
+    **Gemessen wird das an ``draft_faces``** — und das ist schon die zweite
+    Umstellung dieser Art. Erst stand hier ``sketch_pocket``, bis die Tasche am
+    30.08.2026 auch in Netze schneiden lernte; dann ``fillet_edges``, bis
+    Verrunden am 10.09.2026 dasselbe lernte. Die Zusage selbst ist davon
+    unberührt und gilt weiter für die Operationen, die den exakten Kern
+    wirklich brauchen — die Formschräge ist eine davon.
     """
     window.session.start_new()
     window.session.apply(
@@ -12186,7 +12260,7 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
 
     window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
     window._update_actions()
-    hint = window._op_actions["fillet_edges"].toolTip()
+    hint = window._op_actions["draft_faces"].toolTip()
 
     assert str(REGISTRY.get("drill_hole").title) in hint, hint
     assert "Nimm die Schritte ab dort zurück" in hint, "der Satz nennt eine Handlung, die es gibt"
@@ -13039,12 +13113,18 @@ def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> No
     """Der Weg **zurück** aus dem exakten Kern hat dieselbe Sackgasse wie der
     Weg hin — nur sperrt ihn niemand, und das ist richtig.
 
-    Gemessen von d1 am laufenden System: exakter Quader, darüber eine
-    Verrundung, dann den Haken abgewählt — die Auswertung hält bei der
-    Verrundung an, weil sie einen exakten Körper braucht. Der Satz des Kerns
-    ist gut und kommt **nach** dem Klick (Regel 19). ``_lock_twin_toggle``
-    fragt nur, ob der Zwilling auf der *Auswahl* kann, nicht ob darüber
-    liegende Schritte die Exaktheit brauchen.
+    Gemessen von d1 am laufenden System: exakter Quader, darüber ein Schritt
+    des exakten Kerns, dann den Haken abgewählt — die Auswertung hält dort an,
+    weil sie einen exakten Körper braucht. Der Satz des Kerns ist gut und kommt
+    **nach** dem Klick (Regel 19). ``_lock_twin_toggle`` fragt nur, ob der
+    Zwilling auf der *Auswahl* kann, nicht ob darüber liegende Schritte die
+    Exaktheit brauchen.
+
+    **Der Schritt darüber war bis zum 10.09.2026 eine Verrundung.** Die
+    rechnet seitdem an beiden Kernen, und damit kostet das Zurückschalten dort
+    gar nichts mehr — es kommt eine Rundung aus Sehnen statt einer Kurve, und
+    kein Anhalten. Geprüft wird deshalb an der Formschräge, die den exakten
+    Kern weiterhin braucht.
 
     Gesperrt wird trotzdem nicht: Zurückschalten ist eine legitime Absicht,
     und ein Haken, den man nicht abwählen darf, wäre die schlechtere
@@ -13059,8 +13139,8 @@ def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> No
     history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
     box_step = document.ops[-1].id
     history.apply(
-        "Verrunden",
-        [OperationDraft(op="fillet_edges", inputs=("obj_1",), params={"radius": 2.0})],
+        "Formschräge",
+        [OperationDraft(op="draft_faces", inputs=("obj_1",), params={"angle": 3.0})],
     )
 
     hint = window._twin_toggle_hint("Grundsatz.", box_step, exact_now=True)

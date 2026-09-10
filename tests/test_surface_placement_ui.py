@@ -1175,3 +1175,65 @@ def test_only_a_creator_grips_its_own_preview() -> None:
     # Die Gegenprobe: Was in die Platzierung geht, bekommt keinen.
     for name in ("drill_hole", "insert_screw_hole", "move_feature"):
         assert not _grips_its_preview(REGISTRY.get(name))
+
+
+def test_moving_a_feature_starts_where_it_already_sits(qt_app: QApplication) -> None:
+    """Wer ein bestehendes Merkmal bewegt, sieht seine Maße — ohne zu zielen.
+
+    Die Platzierung fing bis zum 10.09.2026 immer bei „Auf eine Oberfläche
+    zeigen" an. Für ein Werkzeug, das noch nirgends sitzt, ist das richtig; für
+    eine Bohrung, die schon da ist, war es der Grund, warum die Maße fehlten
+    (Robert, 10.09.2026: „die maße beim langloch ziehen und verschieben sind
+    immer noch nicht da zu anderen merkmalen kanten mitten wie beim bohrung
+    setzen").
+
+    Gefahren wird der Weg des Kunden bis zur Naht: Dialog von *Merkmal
+    verschieben* mit der Kennung der Bohrung, ``start()`` — und **kein**
+    Zeigerereignis. Danach steht die Fläche, ihre Kantenmaße stehen, und die
+    Stufe ist die zweite: Die Stelle ist entschieden, offen sind die Maße.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    session = Session()
+    viewport = _Viewport()
+    dialog: OperationDialog | None = None
+    controller: PlacementFlow | None = None
+    try:
+        session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
+        assert session.wait_for_idle(30_000)
+        result = session.last_result
+        assert result is not None and result.complete
+        viewport.show_scene(result)
+        session.sceneChanged.connect(viewport.show_scene)
+        object_id, entry = next(iter(result.scene.objects.items()))
+        hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+
+        spec = REGISTRY.get("move_feature")
+        dialog = OperationDialog(spec, {object_id: "Platte"}, values={"at_feature": hole})
+        window = SimpleNamespace(
+            viewport=viewport, session=session, _clear_preview=session.cancel_preview
+        )
+        controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        qt_app.processEvents()
+
+        surface = controller._surface
+        assert surface is not None, "die Fläche steht, ohne dass jemand geklickt hat"
+        assert controller._frozen, "und die Stelle auch — offen sind die Maße"
+        mitte = entry.features[hole].params["centre"]
+        assert surface.point[0] == pytest.approx(mitte[0], abs=1e-6)
+        assert surface.point[1] == pytest.approx(mitte[1], abs=1e-6)
+        assert surface.edges, "zu den Kanten der Fläche steht ein Maß"
+        assert all(edge.distance > 0.0 for edge in surface.edges), (
+            "gemessen wird zum Rand des Teils, nicht in die eigene Öffnung"
+        )
+    finally:
+        if controller is not None:
+            controller.dispose()
+        session.release(30_000)
+        if dialog is not None:
+            dialog.close()
+        viewport.close()
+        qt_app.processEvents()

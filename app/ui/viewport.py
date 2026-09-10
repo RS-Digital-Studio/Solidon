@@ -127,6 +127,8 @@ from app.ui.render.edges import feature_edges
 from app.ui.render.gizmo import ARROW_SHARE, Gizmo
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
+from app.ui.slot_bar import SlotBar
+from app.ui.slot_handle import SHORTEST_SHARE, SlotHandle, plane_axes
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
 
@@ -682,6 +684,13 @@ def gizmo_sentence(feature: Feature | None) -> str:
         return tr("Der Griff bewegt das ganze Teil.")
     if feature.kind == "face":
         return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
+    if feature.kind in slot_feature_kinds():
+        # Zwei Griffe an einem Merkmal, und beide sind zu sehen — der Satz
+        # nennt deshalb beide. Ohne die zweite Hälfte sind die Knöpfe daneben
+        # eine Form, deren Bedeutung man ausprobieren muss.
+        return tr(
+            "Der Griff bewegt das gewählte Merkmal; an den Knöpfen wird es zum Langloch gezogen."
+        )
     return tr("Der Griff bewegt das gewählte Merkmal, nicht das ganze Teil.")
 
 
@@ -1430,7 +1439,7 @@ CANDIDATE_COLOUR = ROLES["info"]
 #: Der Unterschied trägt die Auskunft „diese Zeile im Dialog gehört zu diesem
 #: Loch" — zusammen mit der Kennung, die an jedem Kandidaten steht. Farbe
 #: allein täte es nicht (Regel 18), und beide sind ohnehin dieselbe.
-CANDIDATE_OPACITY = 0.45
+CANDIDATE_OPACITY = 0.60
 EMPHASIS_OPACITY = 0.95
 
 #: Bei welchen Winkeln der Drehgriff kurz einrastet, und wie nah man dafür
@@ -1459,7 +1468,7 @@ PROTECTED_COLOUR = ROLES["protected"]
 #: Wie durchscheinend eine gesperrte Sichtfläche liegt. Deutlich genug, um
 #: sie zu sehen, blass genug, dass die Form darunter erkennbar bleibt — sie
 #: ist eine Notiz am Werkstück und nicht die Hauptsache.
-PROTECTED_OPACITY = 0.32
+PROTECTED_OPACITY = 0.46
 
 #: Abstand der Schraffurstriche, als Anteil der Szenengröße. Bei einem
 #: 200-mm-Teil sind das fünf Millimeter: nah genug, dass eine kleine Fläche
@@ -1496,13 +1505,23 @@ FEATURE_PATCH_LIFT = 0.0015
 #: die Merkmalsfarbe und bleibt durchscheinend; die Auswahl selbst ist
 #: deckend bernsteinfarben. Der Merkmalszeiger ist die zweite Kodierung nach
 #: Regel 18.
-HOVERED_FEATURE_OPACITY = 0.5
+#:
+#: **Am 10.09.2026 angehoben** (Robert: „die Vorschauen bei allem kann man auch
+#: ruhig kräftiger machen, sieht man überall kaum"). Betroffen sind alle
+#: durchscheinenden Auskünfte über dem Körper — diese hier, die zwei am Loch
+#: darunter, der Kandidat (:data:`CANDIDATE_OPACITY`), die geschützte Fläche
+#: (:data:`PROTECTED_OPACITY`) und die zwei Körper der Differenzvorschau
+#: (``_add_body``). Die **Verhältnisse** bleiben, wo sie waren: Auswahl
+#: kräftiger als Zeiger, betont kräftiger als Kandidat, hinzugefügt kräftiger
+#: als entfernt. Angehoben ist die Grundhelligkeit, nicht die Ordnung — was
+#: die Kommentare daneben begründen, gilt unverändert.
+HOVERED_FEATURE_OPACITY = 0.62
 
 #: Eine deckende Innenwand wirkt aus schrägem Blick wie ein Deckel über der
 #: Bohrung. Auswahl bleibt kräftiger als Hover, beide lassen aber den Blick
 #: durch die Öffnung frei.
-SELECTED_HOLE_OPACITY = 0.38
-HOVERED_HOLE_OPACITY = 0.24
+SELECTED_HOLE_OPACITY = 0.55
+HOVERED_HOLE_OPACITY = 0.38
 
 #: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
 #: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
@@ -2430,6 +2449,30 @@ def movable_feature_kinds() -> frozenset[str]:
         if REGISTRY.has(name):
             kinds.update(REGISTRY.get(name).applies_to or ())
     return frozenset(kinds)
+
+
+#: Die Operation hinter dem Langlochgriff.
+#:
+#: Eine einzige, und das ist keine Verkürzung: *Zum Langloch ziehen* macht aus
+#: einem runden Loch ein langes und aus einem langen ein längeres — der Zug
+#: kennt keinen zweiten Fall.
+SLOT_HANDLE_OP: Final = "slot_hole"
+
+
+def slot_feature_kinds() -> frozenset[str]:
+    """An welchen Merkmalsarten der Langlochgriff sitzt — gefragt, nicht aufgezählt.
+
+    Dieselbe Bauart wie :func:`movable_feature_kinds` und aus demselben Grund:
+    Was ``slot_hole`` annimmt, steht in seinem ``applies_to``
+    (``prepare_ops.SLOT_FROM``), und eine Aufzählung hier wüsste beim nächsten
+    Zuwachs die Hälfte. Fehlt die Operation, ist die Menge leer und es
+    erscheint kein Griff — ohne Operation gäbe es nichts zu ziehen.
+    """
+    from app.core.registry import REGISTRY
+
+    if not REGISTRY.has(SLOT_HANDLE_OP):
+        return frozenset()
+    return frozenset(REGISTRY.get(SLOT_HANDLE_OP).applies_to or ())
 
 
 #: Wie weit hinter der Pfeilspitze die Achsenbeschriftung steht, als Anteil der
@@ -3380,6 +3423,14 @@ class Viewport(QWidget):
     45°-Magneten. Das Fenster könnte ihn nicht nachrechnen, ohne beides zu
     kennen — und ein Wert, der eine andere Drehung verspricht als die, die
     kommt, ist genau der Fehler, den der Zeiger heute Vormittag hatte."""
+    slotDragged = Signal(str, float, float)
+    """Ein Zug am Langlochgriff — Kennung, Länge und Richtung in Grad (§21.1).
+
+    Zwei Zahlen und keine Matrix: Was hier gezogen wird, ist die **Form** eines
+    Lochs und nicht seine Lage — ``slot_hole`` liest Mitte, Achse und
+    Durchmesser aus dem Merkmal selbst und nimmt genau diese beiden entgegen.
+    Der Winkel zählt gegen dieselbe Rahmenachse wie der geschnittene Umriss
+    (:func:`app.ui.slot_handle.dragged_slot`)."""
     sketchMenuAt = Signal(object, int, int)
     """Ein Rechtsklick im Skizzenmodus — trägt den Ebenenpunkt in Millimetern
     und die Fensterstelle für das Menü. Ohne diese Naht lief der Rechtsklick
@@ -3815,6 +3866,28 @@ class Viewport(QWidget):
         self._scale_handle: ScaleHandle | None = None
         """Der Würfel zum Skalieren (§18.11) — nur am Objekt-Gizmo. Eine
         Fläche kennt nur vor und zurück, sie hat keine Größe zu ändern."""
+        self._slot_seat: Any = None
+        """Die vorbereitete Trägerfläche des gewählten Lochs — für seine Maße.
+
+        Gerechnet wird sie im Arbeiter (`MainWindow._prepare_slot_seat`):
+        ``prepare_surface`` legt eine GEOS-Fläche über alle Dreiecke der
+        Fläche, und das gehört bei einem großen Netz nicht in den Qt-Thread
+        (§2.8). Hier steht nur das Ergebnis."""
+        self._slot_measure_actors: list[Any] = []
+        """Linien und Zahlen der Maße am Zug — sie gehören dem Zug, nicht der
+        Szene, und gehen mit ihm."""
+        self._slot_target = ""
+        """Das Loch, das der laufende Zug meint — gemerkt beim Loslassen.
+
+        Nicht beim Übernehmen erfragt: Zwischen Zug und Knopf kann die Auswahl
+        gewechselt haben, und die Leiste gehört dem Zug."""
+        self._slot_handle: SlotHandle | None = None
+        """Die zwei Knöpfe, die ein Loch in die Länge ziehen (§21.1).
+
+        Der Gegenpart des Würfels eine Ebene tiefer: Am ganzen Körper ändert
+        der Würfel die Größe, an einer Bohrung tut es niemand — sie wächst
+        über ihren Durchmesser und ihre Länge. Der Griff steht deshalb genau
+        dort, wo der Würfel nicht steht."""
         self._drag_kind: str | None = None
         """Was gerade gezogen wird — ``move``, ``turn``, ``face``, ``scale``
         oder ``pull``, ``None`` heißt kein Zug. Entscheidet, was eine getippte
@@ -4089,6 +4162,12 @@ class Viewport(QWidget):
         self.drag_bar = DragValueBar(self)
         """Die Zahl zum Zug (§18.11): lesen beim Ziehen, tippen statt zielen."""
         self.drag_bar.value.installEventFilter(self)
+        self.slot_bar = SlotBar(self)
+        """Die Bestätigung eines Langlochzugs — Länge und Richtung zum
+        Nachbessern, danach *Übernehmen* (§21.1)."""
+        self.slot_bar.valuesChanged.connect(self._on_slot_bar_changed)
+        self.slot_bar.accepted.connect(self._on_slot_bar_accepted)
+        self.slot_bar.cancelled.connect(self._on_slot_bar_cancelled)
         self.plane_picker = SketchPlanePicker(self)
         """Die drei greifbaren Grundebenen beim freien Einstieg."""
         self.sketch_selection = SketchSelectionBadge(self)
@@ -4315,7 +4394,7 @@ class Viewport(QWidget):
             self._note_pointer(event.x, event.y)
         elif event.kind == "leave":
             self._forget_pointer()
-        for handle in (self._preview_gizmo, self._gizmo, self._scale_handle):
+        for handle in (self._preview_gizmo, self._gizmo, self._scale_handle, self._slot_handle):
             if handle is not None and handle.handle(event):
                 self._queue_feature_label_layout()
                 return
@@ -6473,6 +6552,7 @@ class Viewport(QWidget):
         self.banner.set_theme(theme)
         self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
+        self.slot_bar.set_theme(theme)
         self.plane_picker.set_theme(theme)
         self.sketch_selection.set_theme(theme)
         self.sketch_action.set_theme(theme)
@@ -9769,10 +9849,10 @@ class Viewport(QWidget):
                 else np.zeros(3)
             )
             self._add_body(
-                entry.added, colours.added.colour, f"added:{entry.object_id}", 0.85, shift
+                entry.added, colours.added.colour, f"added:{entry.object_id}", 0.95, shift
             )
             self._add_body(
-                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.45, shift
+                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.65, shift
             )
         self.set_preview_gizmo(self._preview_gizmo_wanted)
 
@@ -9987,6 +10067,35 @@ class Viewport(QWidget):
             return feature if feature.params.get("normal") is not None else None
         return feature if feature.kind in movable_feature_kinds() else None
 
+    def slot_kinds(self) -> frozenset[str]:
+        """Welche Merkmalsarten den Langlochgriff tragen — für das Fenster.
+
+        Es rechnet die Trägerfläche nur dort, wo es einen Zug gibt, und fragt
+        dafür dieselbe Menge, aus der der Griff selbst entsteht.
+        """
+        return slot_feature_kinds()
+
+    def slot_handle_feature(self) -> Feature | None:
+        """Das gewählte Loch, an dem die Langlochknöpfe sitzen — sonst ``None``.
+
+        **Eine eigene Frage neben :meth:`gizmo_feature`**, und das ist der
+        ganze Punkt: Jene beantwortet „lässt sich das versetzen"
+        (``move_feature``), diese „lässt sich das in die Länge ziehen"
+        (``slot_hole``). Heute liegen die Mengen auseinander — ein Langloch
+        trägt die zweite Fähigkeit und die erste nicht —, und wer sie über
+        einen Kamm schert, nimmt ihm beide.
+
+        Gebraucht werden Mitte, Achse und Durchmesser: Ohne sie hätte der Griff
+        keinen Ort und der Zug kein Maß.
+        """
+        if self._selected_feature is None:
+            return None
+        feature = self._features_of_selection().get(self._selected_feature)
+        if feature is None or feature.kind not in slot_feature_kinds():
+            return None
+        needed = ("centre", "axis", "diameter")
+        return feature if all(feature.params.get(name) is not None for name in needed) else None
+
     def set_gizmo(self, active: bool) -> None:
         """Den Bewegungsgriff an die Auswahl hängen oder abnehmen (§18.11).
 
@@ -10002,38 +10111,61 @@ class Viewport(QWidget):
         der Griff des zuletzt gewählten Körpers samt Skalierwürfel, der die
         Maße eines fremden Teils ändert. Ihn beim Einschalten der Vorschau
         einmal abzunehmen genügt deshalb nicht; gefragt wird bei jedem Aufbau.
+
+        **Ein gewähltes Merkmal bekommt ihn ohne Werkzeug** (Robert,
+        10.09.2026: „über den viewport sehen wir weder maße noch etwas zum
+        verschieben, verlängern, drehen usw"). Der Schalter gehört dem Werkzeug
+        *Bewegen* und gilt dem **ganzen Körper** — dort trägt der Griff einen
+        Skalierwürfel, und der ändert auf einen Zug die Maße des Teils; er
+        gehört an ein Werkzeug, das man ausdrücklich öffnet. Ein angeklicktes
+        Merkmal ist dagegen selbst die Ansage: Wer eine Bohrung wählt, will
+        etwas mit ihr tun, und §2.6 verspricht, dass am Merkmal alles direkt
+        steht. Der Würfel bleibt dabei weg — die Bedingung dafür ist dieselbe
+        wie eh und je (``chosen is None``).
         """
         self._gizmo_wanted = active
         if self.renderer is None:
             self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
-        if not active or self._selected is None or self._preview_gizmo_wanted:
-            self.gizmoStatus.emit("")
-            return
         # **Wo er sitzt und was er tut, sind zwei Fragen.** ``gizmo_feature``
         # beantwortet die erste (jedes versetzbare Merkmal), ``gizmo_target``
         # die zweite (nur eine Fläche kennt Press/Pull entlang ihrer Normalen).
         chosen = self.gizmo_feature()
+        # **Und der Langlochgriff hat seine eigene dritte.** Er hängt an
+        # ``slot_hole`` und nicht an ``move_feature``; ein Langloch lässt sich
+        # heute ziehen, aber nicht versetzen, und ohne diese Trennung stünde
+        # daran gar kein Griff (Befund Robert, 10.09.2026: „bei langloch fehlt
+        # dann auch noch das im viewport"). Wer beide Mengen über einen Kamm
+        # schert, macht die eine Fähigkeit von der anderen abhängig.
+        slotted = self.slot_handle_feature()
+        marked = chosen if chosen is not None else slotted
+        if (not active and marked is None) or self._selected is None or self._preview_gizmo_wanted:
+            self.gizmoStatus.emit("")
+            return
         actor = (
-            self._face_handle(chosen) if chosen is not None else self._actors.get(self._selected)
+            self._face_handle(marked) if marked is not None else self._actors.get(self._selected)
         )
         if actor is None:
             self.gizmoStatus.emit("")
             return
-        self.gizmoStatus.emit(gizmo_sentence(chosen))
+        self.gizmoStatus.emit(gizmo_sentence(marked))
         scale = self._gizmo_scale_for(
-            actor, self._face_seat[0] if chosen is not None and self._face_seat else None
+            actor, self._face_seat[0] if marked is not None and self._face_seat else None
         )
-        self._gizmo = Gizmo(
-            self.renderer,
-            actor,
-            scale=scale,
-            line_radius=GIZMO_LINE_RADIUS,
-            release_callback=self._on_gizmo_released,
-            interact_callback=self._on_gizmo_interacted,
-        )
-        if chosen is None:
+        if chosen is not None or marked is None:
+            # **Kein Bewegungsgriff, wo nichts zu bewegen ist.** An einem
+            # Langloch gäbe er drei Pfeile, die keine Operation einlösen kann —
+            # ein Griff, der nichts auslöst, ist schlimmer als keiner.
+            self._gizmo = Gizmo(
+                self.renderer,
+                actor,
+                scale=scale,
+                line_radius=GIZMO_LINE_RADIUS,
+                release_callback=self._on_gizmo_released,
+                interact_callback=self._on_gizmo_interacted,
+            )
+        if marked is None:
             # Das dritte Drittel von §18.11: Der Griff verschiebt und dreht,
             # der Würfel skaliert. **Nur am ganzen Objekt** — ein Merkmal hat
             # keine Größe, die dieser Würfel ändern könnte: Eine Fläche kennt
@@ -10049,7 +10181,205 @@ class Viewport(QWidget):
                 release_callback=self._on_scale_released,
                 interact_callback=self._on_scale_interacted,
             )
+        elif slotted is not None:
+            # **Der Gegenpart des Würfels eine Ebene tiefer** (§21.1). Am
+            # Merkmal skaliert nichts — aber ein Loch hat eine Länge, und die
+            # ist im Bild eine Geste und keine Zahl. Was der Zug meint, steht
+            # in :mod:`app.ui.slot_handle`; hier steht nur, wo er sitzt.
+            self._attach_slot_handle(slotted)
         self._label_gizmo(actor)
+
+    #: Wie weit die Maßlinie vom Merkmal und von der Kante wegbleibt, im Maß
+    #: ihrer eigenen Länge.
+    #:
+    #: **Damit man das Modell sieht, auf das sie zeigt** (Robert, 10.09.2026:
+    #: „hier wäre auch noch ein pfeil auf die linie mit ein bisschen abstand
+    #: gut"). Eine Linie, die am Loch beginnt und an der Kante endet, klebt an
+    #: beidem; die Lücke lässt Rand und Öffnung frei, und die Pfeilspitze sagt,
+    #: wohin sie zeigt. Ein Zehntel je Seite, nach oben gedeckelt: an einem
+    #: langen Maß wären zehn Prozent ein Zentimeter Leere.
+    SLOT_MEASURE_GAP = 0.1
+    SLOT_MEASURE_GAP_MAX = 2.0
+
+    def set_slot_seat(self, seat: Any) -> None:
+        """Trägerfläche und Mündung des gewählten Lochs — oder ``None``.
+
+        Das Fenster rechnet beides im Arbeiter (``placement.seat_of``) und
+        reicht das Paar herein; hier wird nur gezeichnet. Ohne Fläche gibt es
+        keine Maße, und das ist die ehrliche Antwort: An einer Verrundung oder
+        auf einer gekrümmten Fläche gibt es keine ebenen Kantenabstände.
+
+        **Die Mündung gehört dazu und ist nicht die Mitte.** Ein durchgehendes
+        Loch hat seine Mitte auf halber Tiefe — gemessen an einer 10 mm dicken
+        Platte fünf Millimeter **unter** der Fläche, und ``at_point`` lehnt
+        einen Punkt außerhalb seiner Ebene ab. Die Enden werden deshalb von der
+        Mündung aus abgetragen.
+        """
+        self._slot_seat = seat
+        self._draw_slot_measures()
+
+    def _drop_slot_measures(self) -> None:
+        """Nimmt Linien und Zahlen des Zugs aus dem Bild."""
+        if self.renderer is not None:
+            for actor in self._slot_measure_actors:
+                self.renderer.remove(actor)
+        self._slot_measure_actors.clear()
+
+    def _draw_slot_measures(self) -> None:
+        """Von beiden Enden des Lochs zur nächsten Kante — mit Zahl und Pfeil.
+
+        **Dieselben Maße wie beim Setzen einer Bohrung**, an einem Loch, das
+        schon da ist (Robert, 10.09.2026: „die maße beim langloch ziehen und
+        verschieben sind immer noch nicht da zu anderen merkmalen kanten
+        mitten wie beim bohrung setzen"). Gerechnet wird in Szenenkoordinaten
+        — dort liegt die Fläche —, gezeichnet in den Koordinaten des Bildes;
+        bei mehreren Platten sind das nicht dieselben (§25).
+
+        Beide Enden, nicht die Mitte: Ein Langloch wächst nach zwei Seiten, und
+        die Frage beim Ziehen lautet, ob es noch aufs Teil passt.
+        """
+        import numpy as np
+
+        from app.core.errors import ValidationError
+        from app.core.scene import placement
+
+        self._drop_slot_measures()
+        feature = self.slot_handle_feature()
+        if (
+            self.renderer is None
+            or self._slot_seat is None
+            or self._slot_handle is None
+            or feature is None
+            or self._selected is None
+        ):
+            return
+        prepared, mouth = self._slot_seat
+        centre = np.asarray(mouth, dtype=float)
+        axis = feature.params["axis"]
+        x_axis, y_axis = plane_axes(axis)
+        turn = math.radians(self._slot_handle.angle)
+        along = math.cos(turn) * x_axis + math.sin(turn) * y_axis
+        reach = self._slot_handle.length / 2.0
+        for index, side in enumerate((1.0, -1.0)):
+            end = centre + along * (reach * side)
+            try:
+                spot = placement.at_point(prepared, tuple(end))
+            except ValidationError, ValueError, ArithmeticError:
+                continue
+            for number, edge in enumerate(spot.edges):
+                foot = end - np.asarray(edge.inward, dtype=float) * edge.distance
+                gap = min(abs(edge.distance) * self.SLOT_MEASURE_GAP, self.SLOT_MEASURE_GAP_MAX)
+                direction = foot - end
+                span = float(np.linalg.norm(direction))
+                if span <= EPS_GEOM:
+                    continue
+                direction = direction / span
+                start = self.view_point_of(tuple(end + direction * gap), self._selected)
+                stop = self.view_point_of(tuple(foot - direction * gap), self._selected)
+                self._slot_measure_actors.append(
+                    self.renderer.add_lines(
+                        np.array([start, stop], dtype=float),
+                        name=f"slot_measure:{index}:{number}",
+                        colour=MEASURE_COLOUR,
+                        width=2.0,
+                        keep_in_front=True,
+                    )
+                )
+                self._slot_measure_actors.extend(self._measure_arrow(start, stop))
+                middle = (np.asarray(start, dtype=float) + np.asarray(stop, dtype=float)) / 2.0
+                self._slot_measure_actors.append(
+                    self.renderer.add_labels(
+                        np.array([middle], dtype=float),
+                        [length(abs(float(edge.distance)))],
+                        name=f"slot_measure_label:{index}:{number}",
+                        style=LabelStyle(
+                            text_colour=MEASURE_COLOUR,
+                            font_size=12,
+                            always_visible=True,
+                            show_points=False,
+                        ),
+                    )
+                )
+
+    def _measure_arrow(self, start: Vec3, stop: Vec3) -> list[Any]:
+        """Die Spitze am Ende einer Maßlinie — zwei Striche, keine Textur.
+
+        Sie sagt, **wohin** die Linie zeigt; ohne sie ist eine Strecke zwischen
+        zwei Lücken eine Linie ohne Richtung. Gezeichnet als Geometrie, damit
+        sie beim Drehen mitwandert (Regel 18: Form neben Farbe).
+        """
+        import numpy as np
+
+        if self.renderer is None:
+            return []
+        head = np.asarray(stop, dtype=float)
+        back = np.asarray(start, dtype=float) - head
+        span = float(np.linalg.norm(back))
+        if span <= EPS_GEOM:
+            return []
+        back = back / span
+        # Quer zur Linie, in der Ebene der Fläche: irgendeine Achse, die nicht
+        # auf ihr liegt, gekreuzt mit ihr.
+        aside = np.cross(back, np.array([0.0, 0.0, 1.0]))
+        if float(np.linalg.norm(aside)) <= EPS_GEOM:
+            aside = np.cross(back, np.array([0.0, 1.0, 0.0]))
+        aside = aside / float(np.linalg.norm(aside))
+        size = min(span * 0.25, 1.5)
+        wings = np.array(
+            [
+                head,
+                head + back * size + aside * size * 0.4,
+                head,
+                head + back * size - aside * size * 0.4,
+            ],
+            dtype=float,
+        )
+        return [
+            self.renderer.add_lines(
+                wings,
+                name=f"slot_measure_arrow:{len(self._slot_measure_actors)}",
+                colour=MEASURE_COLOUR,
+                width=2.0,
+                keep_in_front=True,
+                connected=False,
+            )
+        ]
+
+    def _attach_slot_handle(self, feature: Feature) -> None:
+        """Hängt die zwei Knöpfe an ein gewähltes Loch (§21.1).
+
+        Die Stelle kommt aus :attr:`_face_seat` und nicht noch einmal aus dem
+        Merkmal: Dort steht die Mitte bereits **so, wie sie gezeichnet wird** —
+        bei mehreren Platten liegt sie eine Bettbreite neben ihrer
+        Szenenkoordinate (§25), und ein zweiter Weg dorthin liefe beim nächsten
+        Zuwachs auseinander.
+        """
+        from app.core.geom.prepare_ops import slot_angle_of
+
+        if self.renderer is None or not self._face_seat:
+            return
+        centre, _normal, radius = self._face_seat
+        axis = feature.params.get("axis")
+        diameter = feature.params.get("diameter")
+        if axis is None or diameter is None:
+            return
+        length = feature.params.get("length") or float(diameter)
+        self._slot_handle = SlotHandle(
+            self.renderer,
+            centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+            axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+            diameter=float(diameter),
+            length=float(length),
+            angle=slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2]))),
+            # Der Knopf misst sich am Loch und nicht am Teil — und nie unter
+            # dem Mindestmaß der Marke daneben, sonst hat eine Ø-1-Bohrung
+            # einen Griff, den niemand trifft.
+            knob_size=2.0 * radius,
+            colour=MEASURE_COLOUR,
+            release_callback=self._on_slot_released,
+            interact_callback=self._on_slot_interacted,
+        )
+        self._draw_slot_measures()
 
     def _gizmo_scale_for(self, actor: Any, centre: Any = None) -> float:
         """Der Massstab des Griffs — gross genug, um ihn zu treffen.
@@ -10206,6 +10536,19 @@ class Viewport(QWidget):
         if self._scale_handle is not None:
             self._scale_handle.remove()
             self._scale_handle = None
+        if self._slot_handle is not None:
+            self._slot_handle.remove()
+            self._slot_handle = None
+            self._drop_slot_measures()
+            # **Und die Leiste geht mit dem Griff.** Sie stand bis hierher nur
+            # in `_end_drag`, also am Ende eines Zugs — ein **Auswahlwechsel**
+            # räumte den Griff ab und ließ sie stehen. Gemessen an einer Platte
+            # mit `slot_1` und `hole_2`: Leiste weiter aktiv mit (40,0 | 15°),
+            # Griff inzwischen an `hole_2`, und *Übernehmen* meldete
+            # `('hole_2', 40.0, 15.0)` — ein 40-mm-Langloch in einem Loch, das
+            # niemand gezogen hat. Hier steht sie richtig: Diese Stelle deckt
+            # `select`, `select_feature`, den Szenenaufbau und die Vorschau.
+            self.slot_bar.dismiss()
         self._drop_gizmo_labels()
         self._drop_face_handle()
         # **Und alles, was zum Zug gehört.** Bogen, Geisterring und der
@@ -10265,7 +10608,16 @@ class Viewport(QWidget):
             else float(actor.length()) * GIZMO_SCALE * ARROW_SHARE
         )
         centre = gizmo.origin if gizmo is not None else actor.centre()
-        marks = gizmo_labels(centre, length, self.gizmo_face_label())
+        # **Buchstaben nur, wo auch Pfeile stehen** (Befund 10.09.2026). Seit
+        # ``set_gizmo`` den Bewegungsgriff an einem Langloch weglässt — es gibt
+        # dort nichts zu verschieben —, standen X, Y und Z trotzdem im Bild:
+        # gemessen ``['X', 'Y', 'Z', 'L', 'L']`` an einem Langloch ohne einen
+        # einzigen Pfeil. Der Buchstabe **ist** die zweite Kodierung des Pfeils
+        # (Regel 18); ohne ihn verspricht er drei Richtungen, die keine
+        # Operation einlöst.
+        marks = (
+            gizmo_labels(centre, length, self.gizmo_face_label()) if self._gizmo is not None else []
+        )
         if self._scale_handle is not None:
             # Das S hinter dem Würfel, im selben Abstand wie X, Y und Z
             # hinter ihren Spitzen — ein Griffsatz, eine Schreibweise.
@@ -10279,6 +10631,22 @@ class Viewport(QWidget):
                     ),
                     "S",
                 )
+            )
+        if self._slot_handle is not None:
+            # Und das L an den Knöpfen — dieselbe Schreibweise, dieselbe
+            # Frage: Ein Griff, dessen Bedeutung man ausprobieren muss, ist
+            # keine Auskunft. Beide Knöpfe tragen es; welchen man greift,
+            # ändert nichts am Ergebnis.
+            marks.extend(
+                (
+                    (
+                        centre[0] + (seat[0] - centre[0]) * GIZMO_LABEL_GAP,
+                        centre[1] + (seat[1] - centre[1]) * GIZMO_LABEL_GAP,
+                        centre[2] + (seat[2] - centre[2]) * GIZMO_LABEL_GAP,
+                    ),
+                    "L",
+                )
+                for seat in self._slot_handle.knob_seats
             )
         base = np.asarray([point for point, _text in marks], dtype=float)
         texts = [text for _point, text in marks]
@@ -10508,6 +10876,71 @@ class Viewport(QWidget):
         if self._angle_step > EPS_GEOM:
             return snap_to_step(angle, self._angle_step)
         return snap_near(angle, TURN_MAGNET_STEP, TURN_MAGNET_ZONE)
+
+    def _on_slot_interacted(self, length: float, angle: float) -> None:
+        """Der Zwischenstand am Langlochgriff — die Länge neben dem Zeiger.
+
+        **Die Länge und nicht der Winkel**, obwohl der Zug beides trägt: In der
+        Leiste steht eine Zahl, und getippt wird die, die man meint. Wer die
+        Richtung genau treffen will, tippt sie im Dialog; wer sie im Bild
+        zieht, sieht sie im Umriss unter dem Zeiger.
+        """
+        self._drag_kind = "slot"
+        self.drag_bar.follow_length(str(tr("Länge")), length)
+        self._draw_slot_measures()
+        self._queue_feature_label_layout()
+
+    def _on_slot_released(self, length: float, angle: float) -> None:
+        """Ein Zug am Langlochgriff endet in der Leiste, nicht im Verlauf.
+
+        **Der Unterschied zu jedem anderen Zug**, und er ist Absicht (Robert,
+        10.09.2026: „nach dem ziehen nochmal die eingabe bei den maßen und dann
+        bestätigen"): Wohin etwas gehört, sagt die Stelle, an der man loslässt;
+        wie **lang** es ist, sagt eine Zahl. Zwanzig Millimeter trifft niemand
+        mit der Maus, und ein Schritt, der sofort im Verlauf steht, wird zu
+        einer Kette aus Korrekturen statt einer Handlung.
+
+        Der Umriss bleibt deshalb stehen, seine zwei Maße stehen in der Leiste,
+        und erst *Übernehmen* macht daraus eine Operation. Bis dahin ist nichts
+        geschehen (Regel 2).
+        """
+        chosen = self.slot_handle_feature()
+        if chosen is None or self._slot_handle is None:
+            self._end_drag()
+            return
+        # **Die Kennung wird hier gemerkt und später nicht neu gefragt.** Was
+        # der Zug meint, steht in diesem Moment fest; wer beim Übernehmen noch
+        # einmal fragt, bekommt die Antwort von *dann* — und das war an einer
+        # inzwischen gewechselten Auswahl ein fremdes Loch.
+        self._slot_target = chosen.id
+        self.drag_bar.dismiss()
+        # ``_drag_kind`` bleibt auf ``"slot"``: Daran hängen Escape (verwirft)
+        # und die Eingabetaste (übernimmt) — der Zug ist noch nicht vorbei, er
+        # wartet nur auf eine Zahl.
+        diameter = float(chosen.params.get("diameter") or 0.0)
+        self.slot_bar.begin(float(length), float(angle), shortest_mm=diameter * SHORTEST_SHARE)
+
+    def _on_slot_bar_changed(self, length: float, angle: float) -> None:
+        """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell."""
+        if self._slot_handle is not None:
+            self._slot_handle.set_values(float(length), float(angle))
+            self._draw_slot_measures()
+
+    def _on_slot_bar_accepted(self, length: float, angle: float) -> None:
+        """Übernommen: jetzt wird aus dem Zug genau eine Operation (§15.5).
+
+        Gemeldet wird an das Merkmal, das **gezogen** wurde, nicht an das
+        gerade gewählte — die zwei sind nicht dasselbe, sobald jemand die
+        Auswahl wechselt, während die Leiste steht.
+        """
+        target = self._slot_target
+        if target:
+            self.slotDragged.emit(target, float(length), float(angle))
+        self._end_drag()
+
+    def _on_slot_bar_cancelled(self) -> None:
+        """Abgebrochen: Umriss weg, Griff zurück auf den Stand des Merkmals."""
+        self._end_drag()
 
     def _on_scale_interacted(self, factor: float) -> None:
         """Der Zwischenstand am Skalierwürfel — die Zahl zum Zug (§18.11)."""
@@ -10890,6 +11323,11 @@ class Viewport(QWidget):
         self._drop_preview()
         self._reset_shadow_offset()
         self.drag_bar.dismiss()
+        # **Und die Leiste des Langlochzugs mit.** Sie steht zwischen Zug und
+        # Operation; was den Zug beendet — Übernehmen, Abbrechen, ein Undo, eine
+        # neue Auswahl —, beendet auch sie. Der frisch gebaute Griff darunter
+        # nimmt den Umriss mit (:meth:`SlotHandle.remove`).
+        self.slot_bar.dismiss()
         self.set_gizmo(self._gizmo_wanted)
 
     def _apply_typed(self) -> None:
@@ -10899,6 +11337,12 @@ class Viewport(QWidget):
         sich nichts anfangen lässt, bleibt markiert im Feld stehen — angewandt
         wird dann nichts.
         """
+        # **Ein gezogenes Langloch wartet in seiner eigenen Leiste.** Dort
+        # stehen zwei Zahlen und ein Knopf; die Eingabetaste ist der kurze Weg
+        # zu diesem Knopf und nicht ein zweiter Wert daneben.
+        if self._drag_kind == "slot" and self.slot_bar.active:
+            self._on_slot_bar_accepted(*self.slot_bar.values())
+            return
         value = self.drag_bar.typed_value()
         kind = self._drag_kind
         unusable = (kind == "scale" and value is not None and value <= 0.0) or (
@@ -10923,6 +11367,15 @@ class Viewport(QWidget):
                 steps = TransformSteps(offset=(offset[0], offset[1], offset[2]))
                 if not self._emit_feature_drag(steps):
                     self.transformDragged.emit(steps)
+        elif kind == "slot" and self._slot_handle is not None:
+            # **Die getippte Länge geht denselben Weg wie der Knopf.** Sie
+            # meldete früher unmittelbar — und fragte dafür ``gizmo_feature``,
+            # das an einem Langloch ``None`` liefert: Die Eingabe verschwand
+            # (gemessen 10.09.2026). Beides ist hier behoben, indem gar nichts
+            # Eigenes mehr passiert: Die Leiste hält den Zug, sie kennt ihr
+            # Merkmal, und ``_on_slot_bar_accepted`` ist die eine Stelle, an
+            # der daraus eine Operation wird.
+            self._on_slot_bar_accepted(float(value), self._slot_handle.angle)
         elif kind == "scale" and abs(value - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(value))
         elif kind == "pull":
