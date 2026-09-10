@@ -31,6 +31,30 @@ EPS_MATCH_RELATIVE: Final[float] = 0.005
 #: vergleichbar bleiben.
 EPS_MATCH_MINIMUM: Final[float] = EPS_DISPLAY
 
+# --- Wie fein eine Krümmung zu Facetten wird -------------------------------------
+
+#: Wie weit eine ebene Facette von der Rundung abweichen darf, die sie ersetzt.
+#:
+#: Keine Toleranz im Sinne von §11.2 — es wird nichts daran gemessen —, sondern
+#: eine Auflösung: fein genug, dass eine Verrundung auf dem Bildschirm und im
+#: Druck rund aussieht, grob genug, dass eine STEP-Baugruppe nicht als Million
+#: Dreiecke ankommt (§31).
+#:
+#: **Sie steht hier, weil beide Rechenkerne sie brauchen.** OpenCASCADE
+#: tesselliert damit (`brep.kernel.DEFLECTION`), und am Netz entscheidet sie,
+#: aus wie vielen Sehnen ein Verrundungsbogen besteht. Zwei Zahlen mit
+#: demselben Wert wären zwei Stellen, an denen die Kerne auseinanderlaufen —
+#: und genau davor steht die Zusage, dass beide dieselbe Kante gleich nennen.
+MAX_FACET_SAG: Final[float] = 0.05
+
+#: Und die zweite Grenze daneben, im Bogenmaß: Wie weit eine Facette drehen
+#: darf, auch wenn sie die Abweichung darüber einhält.
+#:
+#: Ohne sie bekäme ein kleiner Radius zu wenige Stücke — bei R = 1 mm reichten
+#: drei Sehnen auf einen Viertelkreis, um die Abweichung zu halten, und das
+#: sieht man.
+MAX_FACET_ANGLE: Final[float] = 0.3
+
 # --- Einheiten -------------------------------------------------------------------
 
 LengthUnit = Literal["mm", "cm", "m", "in"]

@@ -531,13 +531,19 @@ def test_a_mesh_body_is_turned_away_with_a_sentence(profile: Profile) -> None:
     außerhalb des zulässigen Bereichs" — für einen Radius, der einwandfrei war.
     Der erklärende Satz stand im Detail und erreichte den Prüfbericht nicht;
     wer danach suchte, suchte bei den Zahlen.
+
+    **Gefragt wird die Formschräge und nicht mehr die Verrundung.** Bis zum
+    10.09.2026 stand hier ``fillet_edges``; die nimmt seitdem beide Kerne
+    (``geom.edge_ops``), und ein Netz ist dort kein Fehler mehr, sondern der
+    andere Rechenweg. Die Zusage über den **Satz** gilt unverändert — sie
+    hängt an ``brep_input`` und nicht an einer bestimmten Operation.
     """
     entry = SceneObject(
         id="obj_1", name="Netz", mesh=MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     )
 
     with pytest.raises(NeedsSolidError) as problem:
-        run("fillet_edges", entry, profile, radius=1.0, edges="all")
+        run("draft_faces", entry, profile, angle=3.0)
 
     error = problem.value
     assert "bearbeitbare Flächen und Kanten" in str(error.title)

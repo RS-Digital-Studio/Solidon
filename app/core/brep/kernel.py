@@ -26,18 +26,20 @@ from app.core.errors import CANCEL, INSTALL_MISSING, AppError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import BoundingBox
-from app.core.units import is_close
+from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Wie weit die Tessellation von der echten Oberfläche abweichen darf, in mm.
-#: Fein genug, dass eine Verrundung auf dem Bildschirm rund aussieht, grob
-#: genug, dass eine STEP-Baugruppe nicht als Million Dreiecke ankommt (§31).
-DEFLECTION = 0.05
+#: Wie weit die Tessellation von der echten Oberfläche abweichen darf, in mm —
+#: der Name, unter dem OpenCASCADE danach fragt. Die Zahl steht in
+#: :data:`app.core.units.MAX_FACET_SAG`, weil der Mesh-Kern dieselbe braucht:
+#: Er baut seine Rundungen aus Sehnen, und die sollen so fein sein wie die
+#: Flächen, die von hier kommen.
+DEFLECTION = MAX_FACET_SAG
 
-#: Winkelabweichung im Bogenmaß, aus demselben Grund.
-ANGULAR_DEFLECTION = 0.3
+#: Winkelabweichung im Bogenmaß, aus demselben Grund und aus derselben Quelle.
+ANGULAR_DEFLECTION = MAX_FACET_ANGLE
 
 #: Zu welcher exakten Fläche jedes Dreieck der Anzeigetessellation gehört.
 #: Das Attribut bleibt am ``trimesh``-Körper, bis ``features_of`` daraus die

@@ -1004,7 +1004,15 @@ def test_every_operation_of_the_history_can_be_opened(window: MainWindow) -> Non
 # Menüeintrag, und ``_op_actions[…]`` fände ihn nicht. Ausgegraut wird an
 # seiner Stelle der **Haken** im Dialog des Partners, geprüft in
 # ``test_ui.py`` über ``_lock_twin_toggle`` — dieselbe Auskunft, andere Stelle.
-BREP_ONLY = ("fillet_edges", "chamfer_edges", "draft_faces", "brep_to_mesh")
+# **Und ``fillet_edges``/``chamfer_edges`` stehen seit dem 10.09.2026 nicht
+# mehr hier**, aus demselben Grund wie ``sketch_pocket`` weiter unten: Sie
+# rechnen jetzt an beiden Kernen (``geom.edge_ops``), und ein Netz ist keine
+# Absage mehr, sondern der andere Rechenweg. Was am Netz anders ist, sagt ihr
+# ``caveat`` statt einer Ausgrauung.
+BREP_ONLY = ("draft_faces", "brep_to_mesh")
+
+#: Was an beiden Kernen läuft und deshalb **nie** ausgegraut sein darf.
+BOTH_KERNELS = ("fillet_edges", "chamfer_edges")
 
 
 def test_the_exact_operations_are_greyed_out_on_a_mesh(window: MainWindow) -> None:
@@ -1025,13 +1033,37 @@ def test_the_exact_operations_are_greyed_out_on_a_mesh(window: MainWindow) -> No
 
 def test_the_greyed_out_entry_says_why(window: MainWindow) -> None:
     """Ausgrauen allein ist die halbe Antwort — der Nutzer sucht den Grund
-    sonst bei sich."""
+    sonst bei sich.
+
+    **Gefragt wird die Formschräge und nicht mehr die Verrundung**: Die nimmt
+    seit dem 10.09.2026 beide Körperarten an und ist an einem Netz gar nicht
+    mehr ausgegraut. Die Zusage über den Satz hängt an ``kind_requirement``
+    und nicht an einer bestimmten Operation.
+    """
     select(window)
     window._update_actions()
 
-    hint = window._op_actions["fillet_edges"].toolTip()
+    hint = window._op_actions["draft_faces"].toolTip()
     assert "Flächen und Kanten" in hint
     assert "später bearbeiten" in hint
+
+
+def test_rounding_and_chamfering_stay_available_on_a_mesh(window: MainWindow) -> None:
+    """Die Gegenprobe zur Ausgrauung — und der Punkt der ganzen Übung.
+
+    Wer ein STL einliest, soll *Verrunden* anklicken können (Entscheidung
+    Robert, 10.09.2026). Ohne diesen Test bliebe nur die Aussage, dass die
+    **anderen** ausgegraut sind, und ein versehentlich wieder eingetragenes
+    ``requires_kind`` fiele niemandem auf: Die Menge oben würde ja weiter
+    stimmen.
+    """
+    select(window)
+    window._update_actions()
+
+    for name in BOTH_KERNELS:
+        action = window._op_actions[name]
+        assert action.isEnabled(), name
+        assert "Netz" in action.toolTip(), f"{name}: der Satz nennt den anderen Rechenweg"
 
 
 def test_the_same_operations_are_available_on_an_exact_body(window: MainWindow) -> None:
@@ -1052,6 +1084,11 @@ def test_the_register_says_which_operations_need_an_exact_body() -> None:
     """Die Auskunft steht im Register, nicht in einer Liste in der Oberfläche
     — sonst fehlt die nächste Operation des exakten Kerns darin.
 
+    **Zwei Umzüge stehen darin.** ``fillet_edges`` und ``chamfer_edges``
+    verlangten bis zum 10.09.2026 einen exakten Körper; seit sie in
+    ``geom.edge_ops`` beide Kerne bedienen, steht ihr Netz-Weg im ``doc``-Satz
+    und der Unterschied im ``caveat``.
+
     **``sketch_pocket`` stand hier und steht jetzt in der anderen Liste.** Bis
     zum 30.08.2026 verlangte die Tasche einen exakten Körper und lehnte jedes
     eingelesene Netz ab — also den häufigsten aller Fälle. Seit
@@ -1063,9 +1100,9 @@ def test_the_register_says_which_operations_need_an_exact_body() -> None:
     Stelle, an der die Zugehörigkeit einer Operation zum exakten Kern
     festgeschrieben wird.
     """
-    for name in (*BREP_ONLY, "push_face"):
+    for name in (*BREP_ONLY, "push_face", "shell_exact"):
         assert REGISTRY.get(name).requires_kind == "brep", name
-    for name in ("drill_hole", "hollow_object", "repair", "sketch_pocket"):
+    for name in ("drill_hole", "hollow_object", "repair", "sketch_pocket", *BOTH_KERNELS):
         assert not REGISTRY.get(name).requires_kind, name
 
 

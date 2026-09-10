@@ -301,10 +301,19 @@ Dialoge.
 ## Was NICHT gebaut wird
 
 Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage von Projekten,
-Plugin-System, Telemetrie, Verzweigungen im Op-Stack, Verrundungen auf
-Mesh-Kanten vor dem B-Rep-Kern, Bearbeitung im gehosteten Backend,
-Betriebsarten-Umschaltung in der Oberfläche, **eigener G-Code-Slicer**
-(Schichtanalyse ja, G-Code nein — §22).
+Plugin-System, Telemetrie, Verzweigungen im Op-Stack, Bearbeitung im
+gehosteten Backend, Betriebsarten-Umschaltung in der Oberfläche, **eigener
+G-Code-Slicer** (Schichtanalyse ja, G-Code nein — §22).
+
+**Gestrichen am 10.09.2026: „Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern".**
+Der Vorbehalt war eine Reihenfolge und kein Verbot — erst der exakte Kern, dann
+das Netz —, und er ist eingelöst: Der exakte Kern steht, und seit Roberts
+Entscheidung an diesem Tag („alles soll immer bearbeitbar sein, egal ob
+importiert Format egal und beim selbst zeichnen") nehmen *Verrunden* und *Fase*
+beide Körperarten an (`geom/edge_ops.py`). Der Unterschied bleibt und wird
+benannt statt versteckt: Am Netz ist der Bogen ein Sehnenzug, dessen Abweichung
+`units.MAX_FACET_SAG` einhält — dieselbe Grenze, mit der der exakte Kern
+tesselliert.
 
 Wenn eine Aufgabe eines dieser Dinge zu verlangen scheint, ist die Aufgabe
 falsch verstanden — nachfragen statt bauen.

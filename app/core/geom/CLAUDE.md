@@ -129,7 +129,12 @@ verwendet denselben Kern und unterscheidet Kontakt von dünnem Schnittvolumen.
 `mesh.py` (die Mesh-Hülle um den Geometriekern, §9; `read_mesh` liest nur, was
 trimesh zu einem Körper macht — kein 3MF, kein Dateiformatwissen darüber
 hinaus, das liegt in `ingest/`) · `boolean.py` (die Kette
-oben) · `repair.py` (Netze reparieren) · `attributes.py` (Materialslots durch
+oben) · `repair.py` (Netze reparieren — und dort zwei Nachbarn, die man leicht
+verwechselt: `remove_small_components` misst die **Fläche** gegen die größte
+Komponente und wirft lose Fragmente, `remove_hollow_shells` misst das
+**Volumen** gegen null und wirft Flächenpaare ohne Dicke; ein Bauteil von
+einem halben Millimeter hat ein Volumen, eine Haut von hundert
+Quadratmillimetern keines) · `attributes.py` (Materialslots durch
 eine Operation hindurch behalten, §20) · `enclosure.py` (Konturverschachtelung
 ohne `rtree`)
 
@@ -262,15 +267,31 @@ vierte hängt an keinem Parameter".
 
 **Kanten**
 
+`edge_ops.py` — *Verrunden* und *Fase anbringen* im Register, **kernübergreifend**:
+Der Rumpf fragt `SceneObject.kind` und wählt danach den Rechenweg — `edit.fillet`
+am exakten Körper, `edges.round_edges` am Netz. Sie standen bis zum 10.09.2026
+in `brep/ops.py` mit `requires_kind="brep"`; wer ein STL einlas, fand sie
+ausgegraut (Entscheidung Robert: „alles soll immer bearbeitbar sein"). Kein
+Zwillingspaar (`MENU_TWINS`) — dort wählt der **Kunde**, hier der Körper, und
+für ein Netz gibt es den exakten Weg gar nicht (§30).
+
 `edges.py` — die Kanten eines Netzes als **Züge**, mit denselben Schlüsseln,
 die der exakte Kern vergibt. Eine Bauteilkante besteht in einem feinen Netz
 aus vielen Dreieckskanten; wer sie einzeln ausgäbe, zeigte vierzig Kanten, wo
 der Kunde eine sieht. `edge_key` steht hier und wird von `brep.edit`
 mitbenutzt: Dieselbe Kante bekommt aus beiden Kernen denselben Schlüssel,
 sonst müsste alles darüber — Anklicken, Beschriftung, der Parameter
-`edge_keys` — die zwei Rechenwege auseinanderhalten. `MeshEdge.convex` sagt
-zusätzlich, ob Material weggeht oder dazukommt; am exakten Körper weiß das
-die Topologie selbst.
+`edge_keys` — die zwei Rechenwege auseinanderhalten. **Die Auswahl selbst
+steht hier ebenfalls**: `choose` und `wanted` beantworten „alle senkrechten"
+für beide Kerne, `brep.edit` ruft sie. `MeshEdge.convex` sagt zusätzlich, ob
+Material weggeht oder dazukommt; am exakten Körper weiß das die Topologie
+selbst — und daran hängt beim Verrunden, ob abgezogen oder vereinigt wird.
+
+`rounding_tool` baut den Werkzeugkörper: im Querschnitt der Zwickel zwischen
+den zwei Flächen und dem Bogen, stückweise über den Zug gezogen. Wie fein der
+Bogen wird, sagt `_arc_steps` — aus `units.MAX_FACET_SAG` und
+`MAX_FACET_ANGLE`, denselben zwei Grenzen, mit denen OpenCASCADE tesselliert.
+Eine feste Stückzahl wäre bei R = 30 zu grob und bei R = 0,5 Verschwendung.
 
 **Messen und Schneiden**
 
@@ -341,8 +362,11 @@ die den Ordner mitnimmt.
 - **Keine Zahlenkonstante für Toleranzen** — `auto:<material>` verweist ins
   Materialprofil (Regel 7).
 - **Nie eine Eingabe verändern.** `OpResult.outputs` sind neue Objekte.
-- **Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern** werden ausdrücklich
-  nicht gebaut. Dafür ist `brep/` da.
+- **Der Sehnenzug wird benannt, nicht versteckt.** Eine Verrundung am Netz
+  ist ein Vieleck; wie fein, entscheidet `units.MAX_FACET_SAG` — dieselbe
+  Zahl, mit der der exakte Kern tesselliert. Wer eine echte Kurve braucht,
+  arbeitet an einem `brep`-Körper weiter, und der `caveat` der Operation sagt
+  das auch.
 
 ## Innenraum und verlustfreie Netze
 

@@ -16,12 +16,30 @@ Zwei Zusagen tragen das Ganze, und beide stehen hier:
 
 from __future__ import annotations
 
+import math
+from typing import Any
+
 import pytest
 import trimesh
 
+from app.core.bootstrap import load_operations
+from app.core.errors import GeometryError
 from app.core.geom.boolean import boolean
-from app.core.geom.edges import edge_key, edges_of
+from app.core.geom.edges import (
+    MIN_ARC_STEPS,
+    _arc_steps,
+    bevel_edges,
+    edge_key,
+    edges_of,
+    round_edges,
+)
 from app.core.geom.mesh import MeshData
+from app.core.geom.repair import remove_hollow_shells
+from app.core.knowledge import profiles
+from app.core.registry import REGISTRY
+from app.core.scene.cancel import NeverCancelled
+from app.core.types import OpContext, OpResult, Profile, Scene, SceneObject
+from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 RADIUS = 10.0
@@ -138,3 +156,467 @@ def test_a_groove_tells_its_inner_edges_from_its_outer_ones() -> None:
     assert len(inner) == 2, "eine durchgehende Nut hat zwei Bodenkanten"
     assert all(round(entry.length, 3) == DEPTH for entry in inner)
     assert len(found) - len(inner) > 10, "und ringsum bleiben die Außenkanten"
+
+
+# --- Verrunden am Netz --------------------------------------------------------
+
+PLATE = 10.0
+FILLET = 3.0
+GROOVE = 1.5
+BEVEL = 2.0
+WEDGE_HEIGHT = 12.0
+
+#: Der Zwickel an einer rechtwinkligen Kante, **rund** gerechnet: die
+#: Lehrbuchzahl ``R² - ¼πR²``. Was gebaut wird, ist geringfügig mehr — siehe
+#: :func:`cross_section`.
+ROUND_CROSS_SECTION = FILLET**2 - math.pi * FILLET**2 / 4.0
+
+
+def grooved_plate() -> MeshData:
+    """Eine Platte mit durchgehender Nut — zwei Innenkanten, ringsum Außenkanten."""
+    plate = MeshData(trimesh.creation.box(extents=(WIDTH, DEPTH, PLATE)))
+    cutter = trimesh.creation.box(extents=(10.0, DEPTH + 10.0, 4.0))
+    cutter.apply_translation((0.0, 0.0, PLATE / 2.0))
+    return boolean("difference", [plate, MeshData(cutter)], quality="fine").mesh
+
+
+def cross_section(radius: float = FILLET, inner: float = math.pi / 2.0) -> float:
+    """Der Querschnitt des Werkzeugs — als **Vieleck**, nicht als Kreis.
+
+    ``t·R`` ist das Viereck zwischen Kante, den beiden Berührpunkten und dem
+    Mittelpunkt (``t = R/tan(θ/2)``); davon geht der Bogenfächer ab. Der Bogen
+    ist ein Sehnenzug, also ist der Fächer ein Vieleck aus ``n`` Dreiecken zu
+    ``½R²·sin(φ)`` — und nicht der Kreissektor der Lehrbuchformel.
+
+    **Wer gegen die Lehrbuchzahl prüft, prüft nicht das, was gebaut wurde.**
+    Bei R = 3 sind das 4,2 % Unterschied, und die stecken nicht in einem
+    Fehler, sondern in der Auflösung des Bogens.
+    """
+    span = math.pi - inner
+    steps = _arc_steps(radius, span)
+    tangent = radius / math.tan(inner / 2.0)
+    return tangent * radius - steps * 0.5 * radius**2 * math.sin(span / steps)
+
+
+def test_a_rounded_outer_edge_takes_exactly_the_wedge_away() -> None:
+    """Was weggeht, ist der Zwickel zwischen den zwei Flächen und dem Bogen.
+
+    **Die Stückzahl steht hier als Zahl**, und das ist Absicht:
+    :func:`cross_section` fragt sonst dieselbe Funktion wie der Prüfling, und
+    ein zu grober Bogen verschöbe Soll und Ist gemeinsam. Sechs Sehnen auf
+    einen Viertelkreis sind es bei R = 3 — nachgerechnet aus der Winkelgrenze
+    (``⌈(π/2) / 0,3⌉``), nicht abgelesen.
+    """
+    assert _arc_steps(FILLET, math.pi / 2.0) == 6, "sonst misst der Test eine andere Auflösung"
+    edge = next(entry for entry in edges_of(block()) if entry.upright)
+
+    outcome = round_edges(block(), FILLET, "named", [edge_key(edge)])
+    body = outcome.mesh.raw
+
+    assert body.is_watertight, "eine Verrundung darf den Körper nicht öffnen"
+    assert body.body_count == 1
+    assert body.volume == pytest.approx(WIDTH * DEPTH * HEIGHT - cross_section() * HEIGHT, abs=1e-3)
+    assert outcome.solver.strategy == "direct", "eine Verrundung braucht keine Rückfallstufe"
+
+
+def test_a_rounded_inner_edge_adds_material_without_growing_the_body() -> None:
+    """Die Kehle füllt den Hohlraum — und ragt dabei nirgends hinaus.
+
+    **Zwei Fehler stecken in diesem einen Test.** Der erste: Ohne die
+    Fallunterscheidung im Zwickel lag das Werkzeug unter dem Nutboden im
+    vollen Material, und die Vereinigung legte 0,02 mm³ dazu statt 30 — eine
+    Kehle, die nichts tut. Der zweite: Mit dem Überstand, den eine Differenz
+    braucht, klebte sie 0,01 mm dicke Grate auf beide Stirnflächen der
+    Platte. Beide Male blieb der Körper wasserdicht und sah richtig aus.
+    """
+    grooved = grooved_plate()
+    inner = [entry for entry in edges_of(grooved) if not entry.convex]
+    assert len(inner) == 2, "sonst prüft der Test keine Innenkante"
+    before = grooved.raw.volume
+
+    outcome = round_edges(grooved, GROOVE, "named", [edge_key(entry) for entry in inner])
+    body = outcome.mesh.raw
+
+    assert body.is_watertight
+    assert body.volume == pytest.approx(before + 2.0 * cross_section(GROOVE) * DEPTH, abs=1e-3)
+    assert body.bounds.tolist() == grooved.raw.bounds.tolist(), "die Kehle liegt innen"
+
+
+def test_the_same_edge_of_a_finer_mesh_gives_the_same_body() -> None:
+    """Die Verkettung trägt bis in die Rechnung.
+
+    Im feinen Netz besteht die Kante aus vier Stücken mit vier Normalenpaaren,
+    und der Werkzeugkörper entsteht stückweise. Käme dabei etwas anderes
+    heraus als am groben Netz, hinge das Ergebnis an der Vernetzung — und ein
+    Kunde, der sein Modell feiner einliest, bekäme eine andere Verrundung.
+    """
+    coarse = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+    fine = MeshData(coarse.subdivide().subdivide())
+    edge = next(entry for entry in edges_of(fine) if entry.upright)
+    assert len(edge.normals) == 4, "sonst prüft der Test keine Verkettung"
+
+    outcome = round_edges(fine, FILLET, "named", [edge_key(edge)])
+
+    assert outcome.mesh.raw.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - cross_section() * HEIGHT, abs=1e-3
+    )
+
+
+def test_no_chord_strays_further_from_the_arc_than_a_facet_may() -> None:
+    """Die Feinheit hängt am Radius, nicht an einer festen Zahl.
+
+    Geprüft wird die Zusage selbst: Der Abstand einer Sehne zur Rundung
+    (``R·(1 - cos(φ/2))``) bleibt unter :data:`MAX_FACET_SAG`, bei jedem
+    Radius. Eine feste Stückzahl hielte sie nur in einem Bereich — bei
+    R = 30 mm ließen sechzehn Stücke 0,036 mm stehen, bei R = 0,5 mm rechnete
+    sie sechzehnmal für sechs Tausendstel.
+
+    **Und beide Grenzen kommen vor.** Am Viertelkreis entscheidet bis R = 8
+    der Winkel und darüber die Abweichung; ``MIN_ARC_STEPS`` greift an keinem
+    von beiden — eine 135-Grad-Kante hat einen Bogen von 45 Grad, und dort
+    kämen sonst drei Sehnen heraus. Ein Test ohne die stumpfen Winkel ließe
+    diese Untergrenze ungeprüft.
+    """
+    seen = set()
+    for radius in (0.02, 0.2, 0.5, 1.0, 3.0, 8.0, 30.0, 100.0):
+        for span in (math.pi / 2.0, math.pi / 4.0, 2.0 * math.pi / 3.0):
+            steps = _arc_steps(radius, span)
+            turn = span / steps
+            seen.add(steps == MIN_ARC_STEPS)
+
+            assert steps >= MIN_ARC_STEPS, "unter vier Sehnen ist ein Bogen eine Ecke"
+            assert turn <= MAX_FACET_ANGLE + 1e-9, f"R={radius} dreht zu weit je Stück"
+            if radius > MAX_FACET_SAG and steps > MIN_ARC_STEPS:
+                assert radius * (1.0 - math.cos(turn / 2.0)) <= MAX_FACET_SAG + 1e-9, (
+                    f"R={radius} weicht zu weit von der Rundung ab"
+                )
+    assert seen == {True, False}, "die Untergrenze kam in keinem oder in jedem Fall zum Tragen"
+
+
+def test_both_kernels_round_the_same_edges_to_the_same_body() -> None:
+    """Dieselbe Handlung, zwei Kerne — und der Unterschied ist der Sehnenzug.
+
+    Der exakte Kern trifft das analytische Volumen; das Netz liegt darunter,
+    weil seine Sehnen innerhalb der Rundung liegen und deshalb etwas mehr
+    wegnehmen. Wie viel, ist keine Frage des Zufalls: Es sind genau die
+    Kreisabschnitte unter den Sehnen, und die Schranke dafür ist
+    :data:`MAX_FACET_SAG`.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    exact = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "vertical")
+    raw = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+    raw.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+    outcome = round_edges(MeshData(raw), FILLET, "vertical")
+
+    assert exact.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 4.0 * ROUND_CROSS_SECTION * HEIGHT, abs=1e-3
+    ), "der exakte Kern rundet rund"
+    assert outcome.mesh.raw.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 4.0 * cross_section() * HEIGHT, abs=1e-3
+    )
+    lost = (exact.volume - outcome.mesh.raw.volume) / exact.volume
+    assert 0.0 < lost < 0.001, f"der Sehnenzug nimmt {100 * lost:.4f} % zu viel"
+
+
+def test_a_chamfer_on_a_mesh_is_not_an_approximation_at_all() -> None:
+    """Die Fase ist der Fall, in dem die zwei Kerne dasselbe rechnen.
+
+    Eine Rundung muss ein Netz durch Sehnen annähern; eine Fase ist eine
+    **Ebene**, und eine Ebene hat ein Netz exakt. Gemessen an vier senkrechten
+    Kanten: derselbe Körper auf die letzte Stelle, nicht „nah dran".
+
+    Das ist die Zahl, an der man merkt, wofür der exakte Kern noch da ist —
+    und wofür nicht.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    exact = brep.chamfer(brep.box(WIDTH, DEPTH, HEIGHT), BEVEL, "vertical")
+    outcome = bevel_edges(block(), BEVEL, "vertical")
+
+    expected = WIDTH * DEPTH * HEIGHT - 4.0 * 0.5 * BEVEL**2 * HEIGHT
+    assert exact.volume == pytest.approx(expected, abs=1e-6)
+    assert outcome.mesh.raw.volume == pytest.approx(expected, abs=1e-6)
+    assert outcome.mesh.raw.is_watertight
+
+
+def test_a_chamfer_and_a_fillet_take_different_amounts_away() -> None:
+    """Der Schalter im Werkzeugbau tut wirklich etwas.
+
+    Beide Handlungen teilen sich bis auf zwei Zeilen denselben Weg, und genau
+    deshalb gehört hier eine Zusicherung hin: Ein ``rounded``, das
+    versehentlich immer wahr wäre, machte aus jeder Fase eine Verrundung, und
+    kein Test würde rot — die Körper sehen beide plausibel aus.
+
+    Bei gleichem Maß nimmt die Fase **mehr** weg als die Rundung: Sie
+    schneidet die Ecke gerade ab, wo die Rundung sie stehen lässt.
+    """
+    edge = next(entry for entry in edges_of(block()) if entry.upright)
+    keys = [edge_key(edge)]
+
+    rounded = round_edges(block(), BEVEL, "named", keys).mesh.raw.volume
+    bevelled = bevel_edges(block(), BEVEL, "named", keys).mesh.raw.volume
+
+    assert bevelled == pytest.approx(WIDTH * DEPTH * HEIGHT - 0.5 * BEVEL**2 * HEIGHT, abs=1e-6)
+    assert rounded == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - cross_section(BEVEL) * HEIGHT, abs=1e-3
+    )
+    assert bevelled < rounded, "die Fase schneidet die Ecke ab, die Rundung lässt sie stehen"
+
+
+def wedge_block() -> MeshData:
+    """Ein Prisma über einem gleichseitigen Dreieck — drei Kanten zu 60 Grad.
+
+    **Der Quader taugt für diese Frage nicht.** An einem rechten Winkel ist
+    ``R/tan(θ/2)`` gleich ``R``, und damit sind Fase und Rundung dort an ihrer
+    Tangentenlänge nicht zu unterscheiden: Eine Verwechslung der beiden
+    Formeln blieb am Quader unsichtbar (gemessen — die Mutation lief grün
+    durch). Erst ein spitzer Winkel trennt sie: ``R/tan(30°)`` ist das
+    1,73-Fache von ``R``.
+    """
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    side = 20.0
+    triangle = ShapelyPolygon([(0.0, 0.0), (side, 0.0), (side / 2.0, side * math.sqrt(3) / 2.0)])
+    return MeshData(trimesh.creation.extrude_polygon(triangle, height=WEDGE_HEIGHT))
+
+
+def test_a_sharp_corner_tells_the_two_formulas_apart() -> None:
+    """Fase und Rundung an einer 60-Grad-Kante — jede mit ihrer eigenen Zahl.
+
+    Die Fase nimmt jeder Fläche ``d`` weg, ihr Querschnitt ist deshalb
+    ``½d²·sin(θ)`` und hängt am Winkel. Die Rundung setzt ihre Berührpunkte
+    ``R/tan(θ/2)`` von der Kante entfernt, hier also 1,73·R statt R. Beides
+    fällt am rechten Winkel zusammen und hier auseinander.
+    """
+    keil = wedge_block()
+    inner_angle = math.pi / 3.0
+    edge = next(entry for entry in edges_of(keil) if entry.upright)
+    keys = [edge_key(edge)]
+    before = keil.raw.volume
+
+    bevelled = bevel_edges(keil, BEVEL, "named", keys).mesh.raw
+    rounded = round_edges(keil, BEVEL, "named", keys).mesh.raw
+
+    assert bevelled.volume == pytest.approx(
+        before - 0.5 * BEVEL**2 * math.sin(inner_angle) * WEDGE_HEIGHT, abs=1e-6
+    )
+    assert rounded.volume == pytest.approx(
+        before - cross_section(BEVEL, inner_angle) * WEDGE_HEIGHT, abs=1e-3
+    )
+    assert bevelled.is_watertight and rounded.is_watertight
+    assert rounded.volume < bevelled.volume, (
+        "am spitzen Winkel nimmt die Rundung mehr weg als die Fase — anders als am rechten"
+    )
+
+
+# --- Als Operation, wie der Kunde sie fährt -----------------------------------
+
+
+def run(op: str, entry: SceneObject, profile: Profile | None = None, **params: Any) -> OpResult:
+    """Eine Operation so fahren, wie die Auswertung sie fährt."""
+    load_operations()
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def imported(mesh: MeshData | None = None) -> SceneObject:
+    """Ein Körper, wie er aus einer STL-Datei kommt: ein Netz, kein ``kind``."""
+    return SceneObject(id="obj_1", name="Import", mesh=mesh if mesh is not None else block())
+
+
+def test_the_menu_entry_works_on_an_imported_mesh() -> None:
+    """Der Punkt der ganzen Übung — Robert, 10.09.2026.
+
+    Bis dahin trug ``fillet_edges`` ein ``requires_kind="brep"``: Wer ein STL
+    einlas, fand *Verrunden* ausgegraut. Jetzt läuft dieselbe Menüzeile, und
+    der Körper bleibt ein Netz — der Rechenweg wechselt, nicht die Handlung.
+    """
+    result = run("fillet_edges", imported(), radius=FILLET, edges="vertical")
+    body = result.outputs[0]
+
+    assert body.kind == "mesh", "aus einem Netz wird kein exakter Körper (§30)"
+    assert body.mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 4.0 * cross_section() * HEIGHT, abs=1e-3
+    )
+    assert result.solver is not None, "welche Rückfallstufe gerechnet hat, gehört in den Bericht"
+    assert result.solver.strategy == "direct"
+    assert not result.findings
+
+
+def test_the_same_entry_still_takes_an_exact_body() -> None:
+    """Und der exakte Weg bleibt der exakte Weg.
+
+    Dieselbe Operation, derselbe Parameter, ein Körper der Art ``brep`` — und
+    das Ergebnis ist die runde Rundung, nicht der Sehnenzug. Ohne diesen Test
+    könnte die Verzweigung stillschweigend immer am Netz rechnen, und das
+    Ergebnis sähe richtig aus.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    entry = SceneObject(id="obj_1", name="Block", mesh=brep.box(WIDTH, DEPTH, HEIGHT), kind="brep")
+
+    result = run("fillet_edges", entry, radius=FILLET, edges="vertical")
+    body = result.outputs[0]
+
+    assert body.kind == "brep", "ein exakter Körper bleibt exakt"
+    assert body.mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 4.0 * ROUND_CROSS_SECTION * HEIGHT, abs=1e-3
+    )
+
+
+def test_a_fillet_too_small_to_print_says_so() -> None:
+    """Ein Schritt im Verlauf und ein unverändertes Teil — dazwischen ein Satz.
+
+    Ein Radius von 0,01 mm trägt an einer 20 mm langen Kante 0,002 mm³ ab:
+    mehr als ``EPS_GEOM`` und weniger, als je eine Düse legt. Ohne den Befund
+    sähe der Kunde einen Schritt, der nichts getan hat, und suchte den Fehler
+    an der falschen Stelle (Regel 17, §2.7).
+
+    ``boolean.without_effect`` beantwortet dieselbe Frage mit dem falschen
+    Satz — „das Werkzeug liegt neben dem Körper" —, deshalb steht hier ein
+    eigener Code.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+
+    result = run("fillet_edges", imported(), profile, radius=0.01, edges="vertical")
+
+    codes = [entry.code for entry in result.findings]
+    assert codes == ["edges.without_effect"], codes
+    said = str(result.findings[0].message)
+    assert "Radius" in said, "der Satz nennt den Wert, an dem es liegt"
+    assert "Werkzeug" not in said, "und nicht den Satz für eine Tasche, die danebenliegt"
+
+
+def test_a_chamfer_too_small_to_print_says_it_about_the_width() -> None:
+    """Und die Fase sagt es über ihre Breite, nicht über einen Radius.
+
+    Zwei Sätze für zwei Handlungen: Eine Fase hat keinen Radius, und wer
+    einen sucht, findet im Dialog keinen.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+
+    result = run("chamfer_edges", imported(), profile, distance=0.01, edges="vertical")
+
+    said = str(result.findings[0].message)
+    assert "Breite" in said and "Radius" not in said, said
+
+
+def test_a_key_that_names_no_edge_is_a_sentence_not_a_silent_pass() -> None:
+    """Eine Kante, die ein Schritt davor weggenommen hat (Regel 17).
+
+    Der Schlüssel bleibt in der Projektdatei stehen, die Kante nicht. Was
+    dann kommt, ist eine Auskunft mit Weg nach vorn — kein leerer Körper und
+    kein Programmfehler.
+    """
+    with pytest.raises(GeometryError) as problem:
+        run(
+            "fillet_edges",
+            imported(),
+            radius=FILLET,
+            edges="named",
+            edge_keys="e:99.00,99.00,99.00:1.000,0.000,0.000",
+        )
+
+    assert problem.value.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
+    assert "nicht mehr" in str(problem.value.detail)
+
+
+def test_a_group_choice_ignores_an_older_single_pick_on_a_mesh() -> None:
+    """Der Umschalter entscheidet, nicht ein Wert, der noch dasteht (E4).
+
+    Dieselbe Zusage wie am exakten Kern (``test_brep.py``) — und sie muss hier
+    eigens stehen: Der Leser der Kantenliste ist mit den Operationen nach
+    ``geom.edge_ops`` umgezogen, und ein Umzug ist die Gelegenheit, bei der
+    eine Bedingung still verlorengeht.
+    """
+    edge = edge_key(next(entry for entry in edges_of(block()) if entry.upright))
+
+    group = run("fillet_edges", imported(), radius=FILLET, edges="vertical", edge_keys=edge)
+    single = run("fillet_edges", imported(), radius=FILLET, edges="named", edge_keys=edge)
+
+    assert group.outputs[0].mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 4.0 * cross_section() * HEIGHT, abs=1e-3
+    ), "die Gruppe nimmt alle vier — der stehengebliebene Wert zählt nicht"
+    assert single.outputs[0].mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - cross_section() * HEIGHT, abs=1e-3
+    )
+
+
+def test_rounding_twice_leaves_one_body_and_not_three() -> None:
+    """Der zweite Zug läuft über die Facetten des ersten — und darf nichts zurücklassen.
+
+    Wer die senkrechten Kanten einer Platte verrundet und danach die Oberkante,
+    schickt das Werkzeug über eine schon facettierte Fläche. Dort bleiben
+    Flächenpaare **ohne Dicke** stehen: gemessen zwei Häute zu vier Dreiecken
+    an zwei diagonal gegenüberliegenden Ecken, 0,9485 mm² Fläche, Volumen null.
+
+    **Das sah in jeder anderen Hinsicht richtig aus** — der Körper war
+    wasserdicht und trug sein exaktes Volumen. Nur ``body_count`` sagte drei,
+    und das meldet der Prüfbericht dem Kunden als zerfallenen Körper. Weder
+    `remove_degenerate_faces` (die Dreiecke sind nicht entartet) noch
+    `remove_small_components` (die Fläche ist nicht klein) fassen den Fall;
+    was ihn fasst, ist `remove_hollow_shells` — es misst das Volumen.
+    """
+    first = round_edges(block(), FILLET, "vertical").mesh
+    assert first.raw.body_count == 1, "sonst prüft der zweite Zug schon etwas Kaputtes"
+
+    second = round_edges(first, 1.0, "top")
+    third = round_edges(second.mesh, 1.0, "bottom")
+
+    for name, outcome in (("oben", second), ("unten", third)):
+        body = outcome.mesh.raw
+        assert body.body_count == 1, f"{name}: {body.body_count} Teile statt einem"
+        assert body.is_watertight, name
+    assert third.mesh.raw.volume < second.mesh.raw.volume < first.raw.volume
+
+
+def test_a_shell_without_thickness_goes_and_a_small_part_stays() -> None:
+    """Was die Bereinigung wirft, und was sie stehen lässt.
+
+    Die Grenze ist das **Volumen** und nicht die Größe, und der Datensatz ist
+    eigens so gebaut, dass die Fläche die *falsche* Antwort gäbe: Die Haut ist
+    mit 100 mm² die größere von beiden, das echte Bauteil daneben misst
+    1,5 mm². Wer nach Fläche entscheidet — mit einer Schranke wie mit einem
+    Anteil an der größten Komponente, so wie `remove_small_components` — wirft
+    das Bauteil und behält die Haut.
+
+    **Der erste Anlauf hatte genau diesen Fehler im Testkörper**: eine Haut von
+    0,95 mm² neben einem Würfel von 6 mm², und damit gaben beide Kriterien
+    dasselbe Ergebnis. Die Mutation „miss die Fläche" lief grün durch.
+    """
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    crumb = trimesh.creation.box(extents=(0.5, 0.5, 0.5))
+    crumb.apply_translation((20.0, 0.0, 0.0))
+    skin = trimesh.Trimesh(
+        vertices=[[0.0, 0.0, 30.0], [10.0, 0.0, 30.0], [0.0, 10.0, 30.0]],
+        faces=[[0, 1, 2], [0, 2, 1]],
+        process=False,
+    )
+    together = MeshData(trimesh.util.concatenate([body, crumb, skin]))
+    assert together.raw.body_count == 3, "sonst prüft der Test die falsche Ausgangslage"
+    assert float(skin.area) > float(crumb.area), "sonst entscheidet die Fläche genauso"
+
+    cleaned, dropped = remove_hollow_shells(together)
+
+    assert dropped == 1
+    assert cleaned.raw.body_count == 2, "die Krume bleibt — sie hat ein Volumen"
+    assert cleaned.raw.volume == pytest.approx(1000.125, abs=1e-6)

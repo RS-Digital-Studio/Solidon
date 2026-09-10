@@ -61,34 +61,6 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
 from app.i18n import _
 
-_CHOICES = edit.EDGE_CHOICES
-
-#: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
-_CHOICE_DOC = _(
-    "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte."
-)
-
-
-def _chosen_edges(choice: str, value: str) -> tuple[str, ...]:
-    """Die einzeln gewählten Kanten aus dem gespeicherten Wert (E4).
-
-    Ein Text mit Leerzeichen dazwischen, wie ihn ``kind=\"edges\"`` ablegt.
-    Der Editor im Dialog setzt ihn zusammen; hier steht der eine Weg zurück,
-    damit Verrundung und Fase ihn nicht zweimal verschieden lesen.
-
-    **Und ``choice`` entscheidet, nicht der Inhalt.** Der Dialog graut das Feld
-    aus, wenn eine Gruppe gewählt ist — er **löscht** es aber nicht, und das ist
-    richtig (§2.6: eine Zeile, die verschwindet, sucht man). Ohne diese Frage
-    gewann damit eine alte Einzelwahl über den Umschalter: Wer eine Kante
-    ankreuzte, danach auf *senkrechte* zurückging und anwendete, bekam weiter
-    seine eine — der Dialog sagte das eine, gerechnet wurde das andere.
-    Gemessen an einem Quader: 23961 mm³ auf beiden Wegen, wo die Gruppe 23845
-    hätte ergeben müssen.
-    """
-    if choice != "named":
-        return ()
-    return tuple(part for part in value.split() if part)
-
 
 @op_params
 class BrepBoxParams(PositionedPrimitiveParams):
@@ -251,113 +223,6 @@ def load_step(ctx: OpContext) -> OpResult:
             )
         ],
     )
-
-
-@op_params
-class FilletParams(BaseParams):
-    radius: float = param(
-        title=_("Radius"),
-        default=2.0,
-        unit="mm",
-        minimum=0.01,
-        maximum=100.0,
-        doc=_(
-            "Radius der Verrundung. Größer als das dünnste angrenzende Material "
-            "geht nicht — dann hat der Kern keinen Platz mehr."
-        ),
-    )
-    edges: str = param(
-        title=_("Kanten"),
-        default="vertical",
-        choices=_CHOICES,
-        doc=_CHOICE_DOC,
-    )
-    edge_keys: str = param(
-        title=_("Einzelne Kanten"),
-        default="",
-        kind="edges",
-        placement="advanced",
-        doc=_(
-            "Die einzeln gewählten Kanten. Sie hängen an ihrer Lage am Körper, "
-            "nicht an ihrer Nummer — ein Schritt davor darf etwas anderes "
-            "ändern, ohne dass die Verrundung wandert."
-        ),
-        depends_on=("edges", ("named",)),
-    )
-
-
-@register_op(
-    name="fillet_edges",
-    requires_kind="brep",
-    title=_("Verrunden"),
-    category="shaping",
-    params=FilletParams,
-    consumes=1,
-    produces=1,
-    doc=_("Verrundet eine bearbeitbare Kante als echte Kurve statt als Folge gerader Abschnitte."),
-)
-def fillet_edges(ctx: OpContext) -> OpResult:
-    params = cast(FilletParams, ctx.params)
-    source, body = brep_input(ctx)
-    solid = edit.fillet(
-        body,
-        params.radius,
-        cast(edit.EdgeChoice, params.edges),
-        _chosen_edges(params.edges, params.edge_keys),
-    )
-    return OpResult(outputs=[_replaced(source, solid)])
-
-
-@op_params
-class ChamferParams(BaseParams):
-    distance: float = param(
-        title=_("Breite"),
-        default=1.0,
-        unit="mm",
-        minimum=0.01,
-        maximum=100.0,
-        doc=_("Wie weit die Fase die Kante zurücknimmt, auf jeder der beiden Flächen."),
-    )
-    edges: str = param(
-        title=_("Kanten"),
-        default="vertical",
-        choices=_CHOICES,
-        doc=_CHOICE_DOC,
-    )
-    edge_keys: str = param(
-        title=_("Einzelne Kanten"),
-        default="",
-        kind="edges",
-        placement="advanced",
-        doc=_(
-            "Die einzeln gewählten Kanten. Sie hängen an ihrer Lage am Körper, "
-            "nicht an ihrer Nummer — ein Schritt davor darf etwas anderes "
-            "ändern, ohne dass die Verrundung wandert."
-        ),
-        depends_on=("edges", ("named",)),
-    )
-
-
-@register_op(
-    name="chamfer_edges",
-    requires_kind="brep",
-    title=_("Fase anbringen"),
-    category="shaping",
-    params=ChamferParams,
-    consumes=1,
-    produces=1,
-    doc=_("Schrägt bearbeitbare Kanten unter 45 Grad ab."),
-)
-def chamfer_edges(ctx: OpContext) -> OpResult:
-    params = cast(ChamferParams, ctx.params)
-    source, body = brep_input(ctx)
-    solid = edit.chamfer(
-        body,
-        params.distance,
-        cast(edit.EdgeChoice, params.edges),
-        _chosen_edges(params.edges, params.edge_keys),
-    )
-    return OpResult(outputs=[_replaced(source, solid)])
 
 
 @op_params
@@ -901,12 +766,10 @@ def _replaced(source: SceneObject, solid: Solid) -> SceneObject:
 
 __all__ = [
     "brep_to_mesh",
-    "chamfer_edges",
     "create_brep_box",
     "create_brep_cylinder",
     "draft_faces",
     "drill_brep_hole",
-    "fillet_edges",
     "load_step",
     "shell_exact",
     "thread_exact",

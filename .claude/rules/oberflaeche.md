@@ -791,7 +791,7 @@ steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Achtundzwanzig von hundertneun
+wann eine Operation die falsche Wahl ist. Neunundzwanzig von hundertneun
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)

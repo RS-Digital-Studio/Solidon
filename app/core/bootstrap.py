@@ -32,6 +32,10 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.lattice",
     "app.core.geom.texture_ops",
     "app.core.geom.lid",
+    # Verrunden und Fasen stehen hier und nicht beim zweiten Kern: Sie
+    # bedienen beide Rechenwege und wählen nach dem Körper, den sie bekommen
+    # (Entscheidung Robert, 10.09.2026 — „alles soll immer bearbeitbar sein").
+    "app.core.geom.edge_ops",
     # §30: der zweite Kern deklariert seine Operationen wie jedes andere Modul.
     # Ohne OpenCASCADE verweigern sie den Lauf, aber im Menü stehen sie immer —
     # ein Eintrag, der sagt, warum er ausgegraut ist, schlägt einen, den es

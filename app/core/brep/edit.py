@@ -23,6 +23,11 @@ from typing import Any, Literal, cast
 
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, require
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
+from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
+from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
+from app.core.geom.edges import choose as choose_by_place
+from app.core.geom.edges import named_edges as edges_named
+from app.core.geom.edges import wanted as edges_wanted
 from app.core.log import get_logger
 from app.core.types import PlaneFrame, Point2, Transform, Vec3
 from app.core.units import EPS_GEOM, is_close
@@ -30,20 +35,12 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-EdgeChoice = Literal["all", "vertical", "horizontal", "top", "bottom", "named"]
-
-#: Welche Kanten eine Auswahl meint. „Senkrecht" ist, was jemand mit „runde
-#: die Ecken dieser Box" meint: die vier Stehenden, nicht die Plattenkanten.
-#: ``named`` ist die sechste und die einzige, die nicht nach der Lage geht:
-#: einzelne Kanten, jede über ihren eigenen Schlüssel (:func:`edge_key`, E4).
-EDGE_CHOICES: tuple[EdgeChoice, ...] = (
-    "all",
-    "vertical",
-    "horizontal",
-    "top",
-    "bottom",
-    "named",
-)
+#: Welche Kanten eine Auswahl meint — **die Tabelle steht in ``geom.edges``**
+#: und gilt für beide Kerne. Hier bleibt der Name, unter dem das Register und
+#: die Operationen sie ansprechen; zwei Aufzählungen hießen, dass ein Kern
+#: eines Tages eine sechste Art kennt und der andere nicht.
+EdgeChoice = SharedEdgeChoice
+EDGE_CHOICES: tuple[EdgeChoice, ...] = SHARED_EDGE_CHOICES
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,67 +241,24 @@ def named_edges(solid: Solid, keys: Sequence[str]) -> list[EdgeInfo]:
     ein Schritt davor sie weggenommen hat, und dann ist das eine Auskunft an
     den Kunden und kein Programmfehler (Regel 17).
     """
-    described = {edge_key(entry): entry for entry in edges_of(solid)}
-    return [described[key] for key in keys if key in described]
+    return edges_named(edges_of(solid), keys)
+
+
+def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
+    """Die Kanten, die eine benannte Auswahl meint."""
+    return choose_by_place(edges_of(solid), choice)
 
 
 def _wanted(solid: Solid, choice: EdgeChoice, keys: Sequence[str]) -> list[EdgeInfo]:
     """Die Kanten, die dieser Aufruf behandelt — genannte vor Gruppe (E4).
 
-    Eine leere Auswahl ist an beiden Wegen ein Satz und kein leerer Körper,
-    aber sie hat **verschiedene Gründe**: Bei einer Gruppe gibt es die Sorte
-    Kante nicht, bei genannten sind sie verschwunden — ein Schritt davor hat
-    sie weggenommen. Wer denselben Satz für beides schriebe, schickte den
-    Kunden in die falsche Richtung (Regel 17).
+    **Die Auswahl selbst steht in ``geom.edges``**, aus demselben Grund wie
+    :func:`edge_key`: Sie fragt nur nach ``upright``, ``flat`` und der Mitte,
+    und beide Kerne beantworten das gleich. Zwei Fassungen hießen, dass
+    „alle senkrechten Kanten" hier bald etwas anderes bedeutet als am Netz —
+    bei derselben Menüzeile und demselben Parameter.
     """
-    if choice == "named" and not keys:
-        raise GeometryError(
-            detail=_("Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus."),
-            values={"choice": choice},
-        )
-    if keys:
-        chosen = named_edges(solid, keys)
-        if not chosen:
-            raise GeometryError(
-                detail=_(
-                    "Die gewählten Kanten gibt es an diesem Körper nicht mehr — "
-                    "ein Schritt davor hat sie verändert. Wählen Sie sie neu."
-                ),
-                values={"edges": len(keys)},
-            )
-        return chosen
-    chosen = choose(solid, choice)
-    if not chosen:
-        raise GeometryError(
-            detail=_("Zu dieser Auswahl gehört keine Kante."),
-            values={"choice": choice},
-        )
-    return chosen
-
-
-def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
-    """Die Kanten, die eine benannte Auswahl meint."""
-    described = edges_of(solid)
-    # ``named`` geht nicht nach der Lage, sondern nach Schlüsseln — die kennt
-    # nur ``_wanted``. Hier wäre jede Antwort eine falsche.
-    if choice == "named":
-        return []
-    if choice == "all":
-        return described
-    if choice == "vertical":
-        return [entry for entry in described if entry.upright]
-    if choice == "horizontal":
-        return [entry for entry in described if entry.flat]
-
-    heights = [entry.middle[2] for entry in described]
-    if not heights:
-        return []
-    wanted = max(heights) if choice == "top" else min(heights)
-    return [
-        entry
-        for entry in described
-        if entry.flat and abs(entry.middle[2] - wanted) <= EPS_GEOM * 1000
-    ]
+    return edges_wanted(edges_of(solid), choice, keys)
 
 
 def fillet(

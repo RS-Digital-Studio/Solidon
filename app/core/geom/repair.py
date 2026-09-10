@@ -298,6 +298,52 @@ def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
     return filled, open_edge_count(filled) < before
 
 
+def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
+    """Wirft Komponenten ohne **Dicke** — Flächenpaare, die nichts umschließen.
+
+    Nicht dasselbe wie :func:`remove_small_components`, und der Unterschied
+    ist die Messgröße: Dort entscheidet die **Fläche** gegen die größte
+    Komponente, hier das **Volumen** gegen null. Eine Haut aus vier Dreiecken
+    kann fast einen Quadratmillimeter Fläche haben und umschließt trotzdem
+    nichts; ein legitimes kleines Bauteil hat immer ein Volumen.
+
+    **Der Fall, für den es das gibt:** Ein Verrundungswerkzeug liegt mit
+    beiden Flanken genau in den Körperflächen — das ist keine Zugabe, die man
+    weglassen könnte, sondern die Form der Sache. Läuft es dabei über eine
+    schon verrundete, also facettierte Fläche, bleiben an einzelnen Ecken
+    Flächenpaare ohne Dicke stehen. Gemessen an einer zweimal verrundeten
+    Platte: zwei Häute zu vier Dreiecken, 0,9485 mm² Fläche, Volumen null, an
+    zwei diagonal gegenüberliegenden Ecken. Der Körper war danach wasserdicht
+    und trug sein richtiges Volumen — ``body_count`` sagte trotzdem drei, und
+    genau das meldet der Prüfbericht dem Kunden als zerfallenen Körper.
+
+    Gerechnet wird das Volumen je Komponente über den Divergenzsatz und nicht
+    über ein Teilnetz: Das kostet einen Durchgang statt einer Kopie je Teil,
+    und die Materialslots (§20) bleiben dabei an ihren Dreiecken.
+    """
+    pieces = face_components(mesh.raw)
+    if len(pieces) <= 1:
+        return mesh, 0
+    corners = mesh.raw.vertices[mesh.raw.faces]
+    signed = np.einsum("ij,ij->i", np.cross(corners[:, 0], corners[:, 1]), corners[:, 2]) / 6.0
+    keep = [piece for piece in pieces if abs(float(signed[piece].sum())) > EPS_GEOM]
+    if len(keep) == len(pieces) or not keep:
+        return mesh, 0
+
+    body = mesh.raw.copy()
+    mask = np.zeros(len(body.faces), dtype=bool)
+    for piece in keep:
+        mask[piece] = True
+    body.update_faces(mask)
+    body.remove_unreferenced_vertices()
+    slots = (
+        tuple(slot for slot, kept in zip(mesh.slots, mask, strict=True) if kept)
+        if mesh.slots
+        else ()
+    )
+    return MeshData.of(body, slots=slots), len(pieces) - len(keep)
+
+
 def remove_small_components(
     mesh: MeshData, share: float = SMALL_COMPONENT_SHARE
 ) -> tuple[MeshData, int]:

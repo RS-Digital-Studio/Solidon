@@ -165,7 +165,7 @@ Anwendung gegen die installierte Bindung.
 |---|---|
 | `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable` |
 | `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier |
-| `ops.py` | Die B-Rep-Operationen im Register (§25, §10) |
+| `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py` |
 | `edit.py` | Einen Körper formen |
 | `features.py` | Merkmale aus der Topologie (§30, §21) |
 | `step.py` | STEP hinein und hinaus |
@@ -174,5 +174,9 @@ Anwendung gegen die installierte Bindung.
 
 - **Kein zweiter Wahrheitsbegriff.** Weicht B-Rep vom Mesh-Kern ab, ist das
   ein Befund, kein „beide haben recht".
-- Verrundungen auf Mesh-Kanten bleiben ungebaut, solange dieser Kern der Ort
-  dafür ist.
+- **Verrunden und Fasen wohnen nicht mehr hier** (10.09.2026). Die zwei
+  Operationen stehen in `geom/edge_ops.py` und nehmen beide Körperarten an;
+  was dieser Kern beisteuert, ist `edit.fillet`/`edit.chamfer` — die exakte
+  Hälfte, gerufen über eine Verzweigung nach `SceneObject.kind`. Der Grund
+  für den Umzug ist die Karte selbst: Eine Operation, die auch Netze rechnet,
+  ist keine B-Rep-Operation.

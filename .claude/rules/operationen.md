@@ -36,6 +36,30 @@ dem ausgefüllten Dialog abzulehnen (Regel 19). Der gute Satz im Kern bleibt —
 er ist die zweite Hürde, nicht die erste. Eine Aufzählung in der Oberfläche
 wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
 
+**Aber die Frage davor lautet, ob es die Beschränkung überhaupt braucht.**
+`requires_kind="brep"` ist richtig, wo ein Netz die Sache nicht hergibt — eine
+Formschräge auf einer benannten Fläche, ein Schalenkörper, STEP. Es ist
+falsch, wo nur der *Rechenweg* verschieden ist: *Verrunden* und *Fase* trugen
+es bis zum 10.09.2026 und waren an jedem eingelesenen STL ausgegraut, obwohl
+das Netz beide Handlungen hergibt (Entscheidung Robert: „alles soll immer
+bearbeitbar sein, egal ob importiert Format egal und beim selbst zeichnen").
+Sie stehen jetzt in `geom/edge_ops.py`, fragen `SceneObject.kind` im Rumpf und
+wählen danach den Kern.
+
+**Das ist kein Zwillingspaar** (`MENU_TWINS`, `registry/registry.py`), und der
+Unterschied ist keine Feinheit: Bei einem Zwilling wählt der **Kunde** über
+einen Haken im Dialog, was entstehen soll. Hier wählt der **Körper**, und dem
+Kunden bliebe gar nichts zu wählen — ein Netz lässt sich nicht exakt verrunden
+(§30, der Rückweg zur Topologie existiert nicht), und ein exakter Körper hat
+keinen Grund für den gröberen Weg. Ein Haken dafür wäre eine Frage ohne
+Antwortmöglichkeit.
+
+**Was der Kunde stattdessen erfährt, steht im `caveat`.** Am Netz ist der
+Bogen ein Sehnenzug; die Grenze dafür (`units.MAX_FACET_SAG`) ist dieselbe,
+mit der der exakte Kern tesselliert, und der Satz sagt, wann man den anderen
+Weg braucht. Ein Unterschied, den man benennt, ist eine Eigenschaft; einer,
+den man verschweigt, ist ein Fehlerbericht.
+
 **Und die zweite Hürde muss es wirklich geben.** `applies_to` war bis zum
 03.09.2026 eine Zusage, die nur Menü und Merkmalspanel eingelöst haben; die
 Auswertung selbst hat nie gefragt. Über Chat oder Kommandozeile lief damit
@@ -370,6 +394,18 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Kreisfacetten liefern keine scheinbaren linearen Maße. Auf gekrümmten
   Flächen bleiben Punkt und Normale nutzbar, aber keine ebenen Abstände.
   Mittelpunkt-Offsets zeigen von der Bohrungsmitte zum Ziel entlang U/V.
+- **Wo etwas schon sitzt, wird nicht neu gezielt.** `prepare_surface()`
+  beantwortet „wohin darf ich setzen" und verlangt einen Klick auf Material;
+  `seat_of()` beantwortet „wo sitzt das, was schon da ist" — die ebene Fläche,
+  deren Normale auf der Achse des Merkmals liegt und deren Ebene seine Mündung
+  enthält. Zwei Dinge unterscheiden sie, und beide sind gemessen: Die Mitte
+  eines Lochs liegt in **seiner eigenen Aussparung**, `at_point` lehnt sie
+  sonst als „außerhalb der Fläche" ab; und die geraden Flanken eines Langlochs
+  sind vom Merkmal aus die nächsten Bezugskanten überhaupt — an einer Platte
+  60 x 40 kamen ohne Filterung minus 3,00 und minus 3,30 zurück statt 15 und
+  20. Gefragt ist der Abstand zum **Rand des Teils**; was in einer Aussparung
+  liegt, ist keine Antwort darauf. Wo es keine solche Fläche gibt, kommt
+  `None` — eine Verrundung mündet nirgends, und geraten wird nichts (Regel 21).
 - **Ein Sichtstrahl wird am Originalnetz geprüft.** `original_surface_hit()`
   ersetzt unbekannte LOD-Zellen durch Originaldreiecke und berücksichtigt alle
   Schnittebenen. Ihre positive Seite entfällt; künstliche Kappen sind kein
