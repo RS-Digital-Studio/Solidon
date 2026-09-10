@@ -7632,7 +7632,13 @@ class Viewport(QWidget):
         # **Erst das Merkmal räumen, dann die Kante setzen.** Andersherum
         # entstünde ein Ring: :meth:`select_feature` lässt seinerseits die
         # Kante fallen und nähme die gerade gewählte gleich wieder mit.
-        if chosen is not None and self._selected_feature is not None:
+        #
+        # Gefragt wird ``highlighted_feature_refs`` und nicht
+        # ``_selected_feature``: Eine **Mehrfachauswahl** setzt das einzelne
+        # Feld auf ``None`` und füllt nur die Paare (:meth:`select_features`).
+        # Über das einzelne Feld gefragt blieben zwei Merkmalsflächen und die
+        # Kante gleichzeitig hervorgehoben — zwei Antworten auf eine Frage.
+        if chosen is not None and self.highlighted_feature_refs():
             self.select_feature(None)
         self._selected_edge = chosen
         self._redraw_edge_patch()
@@ -8090,6 +8096,7 @@ class Viewport(QWidget):
             id(self._feature_patch),
             tuple((owner, id(patch)) for owner, patch in self._feature_patches.items()),
             id(self._hover_patch),
+            id(self._edge_patch),
         )
         if state == self._feature_preview_state:
             return edges_changed
@@ -8115,6 +8122,13 @@ class Viewport(QWidget):
         if self._feature_patch is not None and self._selected not in self._feature_patches:
             patches.append((self._feature_patch, self._selected))
         patches.append((self._hover_patch, self._hovered_object))
+        # **Die gewählte Kante geht mit.** Ein Zug am Körper ist mit ihr
+        # erlaubt (``can_drag_body_at`` fragt nur den Körper), und ohne diese
+        # Zeile blieb ihre Linie am alten Ort stehen, während Merkmalsfläche
+        # und Hover-Fläche wanderten — eine Marke, die nicht dort liegt,
+        # wohin sie zeigt.
+        if self._edge_patch is not None and self._selected_edge is not None:
+            patches.append((self._edge_patch, self._selected_edge[0]))
         for patch, patch_owner in patches:
             if patch is not None and patch_owner is not None:
                 matrix, position = transforms.get(patch_owner, (np.eye(4), (0.0, 0.0, 0.0)))
@@ -9472,16 +9486,18 @@ class Viewport(QWidget):
         Ohne getroffenen Punkt kommen alle in Frage: Der Aufrufer weiß dann
         nichts über die Tiefe, und eine erfundene Grenze wäre schlechter als
         keine (Regel 21).
+
+        ``entry.mesh`` ist hier immer ein ``Solid`` — ``prepared`` ist sonst
+        leer (:meth:`_prepared_edges`), und dann kommt niemand hierher. Ein
+        ``except`` um die Diagonale stand hier und war toter Code, der im
+        Ernstfall einen echten Fehler verschluckt hätte.
         """
         if behind is None:
             return list(range(len(prepared)))
 
         import numpy as np
 
-        try:
-            reach = float(entry.mesh.bounds.diagonal) * EDGE_REACH_WORLD_SHARE
-        except Exception:  # pragma: no cover — hängt am Körper
-            return list(range(len(prepared)))
+        reach = float(entry.mesh.bounds.diagonal) * EDGE_REACH_WORLD_SHARE
         target = np.asarray(behind, dtype=float)
         near: list[int] = []
         for index, (_key, points) in enumerate(prepared):
@@ -9586,7 +9602,13 @@ class Viewport(QWidget):
         """
         if add or self._direct_picking:
             return False
-        object_id = self._object_at(point)
+        # **``_object_at_view`` und nicht ``_object_at``**: ``point`` kommt aus
+        # dem Bild und trägt den Versatz der Ansicht (§18.8, §25). Gegen die
+        # Szenengrenzen gehalten fällt die Kantenauswahl damit still aus,
+        # sobald etwas auseinandergezogen ist oder auf Platte 2 liegt —
+        # gemessen an einem Quader mit `set_explosion(0.5)`: anderthalb
+        # Millimeter Versatz genügten, und der Klick wählte den Körper.
+        object_id = self._object_at_view(point)
         if object_id is None or not self._goes_deeper(object_id, direct=False, add=add):
             return False
         key = self._edge_at(x, y, object_id, behind=point)

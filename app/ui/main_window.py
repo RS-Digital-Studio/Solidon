@@ -10492,6 +10492,15 @@ class MainWindow(QMainWindow):
         # **Der Baum ist der Eigentümer der Auswahl** (§18.5): Bliebe seine
         # Merkmalszeile markiert, widerspräche eine Ansicht der anderen.
         #
+        # **Geräumt wird über ``select_object``, nicht über ``select_features``.**
+        # Das zweite leert bei leerer Liste die ganze Baumauswahl und wählt
+        # nichts wieder — auch die Körperzeile nicht. Der Weg zurück setzte
+        # damit ``_selected`` auf ``None``, und daran hing alles: Die beiden
+        # Kantenhandlungen fanden keinen Körper mehr (``_apply_from_feature_
+        # panel`` holt ihn aus dem Baum) und taten nichts, die Auswahltiefe
+        # stand auf 0, und Escape nahm nichts zurück — genau die leuchtende
+        # Linie in der leeren Ansicht, die hier abgestellt werden sollte.
+        #
         # **Und die Kante wird danach neu gesetzt, nicht vorher.** Der Weg
         # durch den Baum meldet „kein Merkmal" zurück, und
         # ``_on_feature_selected(None)`` lässt die Kante fallen — sie wäre
@@ -10499,7 +10508,7 @@ class MainWindow(QMainWindow):
         # vorher, ob überhaupt etwas zu räumen ist: Im Normalfall steht dort
         # nichts, und dann kostet die Kantenwahl keinen Umweg.
         if self.object_tree.selected_features():
-            self.object_tree.select_features([])
+            self.object_tree.select_object(object_id)
             self.viewport.select_edge(object_id, key)
         self._feature_shown = None
         # Die Statuszeile nennt die Kante, denn im Bild trägt sie nur Farbe
@@ -12606,6 +12615,15 @@ class MainWindow(QMainWindow):
             shown in entry.features for entry in result.scene.objects.values()
         ):
             self.feature_panel.clear()
+        # **Für eine gezeigte Kante braucht es hier nichts.** Die Frage stellt
+        # sich anders — eine Kante trägt keine Merkmalskennung, die Prüfung
+        # darüber griffe bei ihr nie —, aber sie ist schon beantwortet: Der
+        # Baum wird mit jeder Auswertung neu aufgebaut und meldet dabei „kein
+        # Merkmal", und ``_on_feature_selected(None)`` leert das Fenster.
+        # Gemessen an einer Verrundung, die ihre eigene Kante wegnimmt. Eine
+        # zweite Prüfung daneben wäre eine Zeile, deren Entfernen nichts rot
+        # macht; die Zusage hält stattdessen ein Test
+        # (``test_a_clicked_edge_reaches_the_selection_window``).
         # Eingepasst wird im Viewport (``_fit_once_for``), nicht hier: dort ist
         # die neue Szene schon gesetzt. Von hier aus lief es mit den Maßen der
         # *vorigen* — beim ersten Projekt also mit gar keinen, und dann passte

@@ -370,12 +370,15 @@ beim ersten Anlauf offen und kamen aus dem Review, keines aus der Suite:
   dieselbe Rangfolge wie beim Zeiger. Dasselbe gilt für Umschalt und Strg: Wer
   dazunimmt, meint den Körper; eine Kante wird einzeln gewählt.
 
-**Ein Vorfilter misst gegen die Strecke, nicht gegen die Stützpunkte** — und
-das ist derselbe Satz, der drei Absätze weiter oben schon steht. Der erste
-Anlauf des Weltfilters warf trotzdem zwölf von zwölf Kanten weg: Eine gerade
-Kante hat genau zwei Punkte, und bei dreißig Millimetern Länge liegt ihre
-Mitte fünfzehn davon entfernt. **Eine Regel, die man selbst aufgeschrieben
-hat, schützt nicht davor, sie zwei Funktionen weiter zu brechen.**
+**Ein Vorfilter misst gegen den Hüllquader der Kante, nicht gegen ihre
+Stützpunkte.** Der erste Anlauf tat das zweite und warf zwölf von zwölf
+Kanten weg: Eine gerade Kante hat genau zwei Punkte, und bei dreißig
+Millimetern Länge liegt ihre Mitte fünfzehn davon entfernt — derselbe Satz,
+der drei Absätze weiter oben für den Bildraum schon steht. **Eine Regel, die
+man selbst aufgeschrieben hat, schützt nicht davor, sie zwei Funktionen
+weiter zu brechen.** Der Quader ist großzügiger als die Kante, und das ist
+hier richtig: Ein Vorfilter darf zu viel durchlassen, nie zu wenig — genauer
+trennt der Bildabstand danach.
 
 **Was daran offen ist:** der Zeiger. Er fragt heute nur nach dem Merkmal
 (`_would_pick_feature`), nicht nach der Kante — über einer Kante verspricht er

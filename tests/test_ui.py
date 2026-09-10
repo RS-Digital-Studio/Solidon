@@ -14399,7 +14399,9 @@ def test_the_object_tree_offers_the_filament_where_the_body_stands(
     assert asked == [], "ein Klick auf den Namen wählt aus und weist nichts zu"
 
 
-def test_a_clicked_edge_reaches_the_selection_window(window: MainWindow) -> None:
+def test_a_clicked_edge_reaches_the_selection_window(
+    window: MainWindow, qt_app: QApplication
+) -> None:
     """Der Klick auf eine Kante endet im Auswahlfenster, nicht im Signal.
 
     Der Anschluss ist die Zusage: ``Viewport.edgePicked`` gibt es, das Panel
@@ -14432,12 +14434,75 @@ def test_a_clicked_edge_reaches_the_selection_window(window: MainWindow) -> None
     # Betrieb ist das immer so; ohne diese Zeile prüfte der Test eine Lage,
     # die es nicht gibt — und bekäme „diese Kante gibt es nicht mehr".
     window.viewport.show_scene(ergebnis)
+    # Und der Baum ebenso — er ist der Eigentümer der Auswahl (§18.5), und
+    # ohne die Szene darin wählt `select_object` nichts.
+    window.object_tree.show_scene(ergebnis, window.session.project.document)
     kante = next(info for info in brep_edit.edges_of(solid) if info.upright)
     schluessel = brep_edit.edge_key(kante)
 
+    # Der Körper ist gewählt, wenn eine Kante drankommt — sie ist die zweite
+    # Stufe, und die erste ist er (§18.5).
+    window.object_tree.select_object("block")
+    qt_app.processEvents()
+
+    # Beides, wie ``_edge_click`` es tut: erst hervorheben, dann melden.
+    window.viewport.select_edge("block", schluessel)
     window.viewport.edgePicked.emit("block", schluessel)
 
     knoepfe = [b.text() for b in window.feature_panel.findChildren(QPushButton)]
     assert str(REGISTRY.get("fillet_edges").title) in knoepfe, (
         "die angeklickte Kante bietet ihre Handlungen an"
     )
+
+    # **Und der Körper bleibt gewählt.** Daran hängt alles, was die Kante
+    # anbietet: ``_apply_from_feature_panel`` holt ihren Körper aus dem Baum,
+    # und ``selection_depth`` entscheidet, was Escape tut.
+    assert window.object_tree.selected() == "block"
+    assert window.viewport.selection_depth() == 2
+
+    # **Derselbe Weg, nachdem vorher ein Merkmal gewählt war.** Das ist der
+    # gewöhnliche Fall — Körper wählen, Bohrung anklicken, dann eine Kante —
+    # und er nimmt im Fenster einen eigenen Zweig: Die Merkmalszeile im Baum
+    # muss weichen, ohne die Körperzeile mitzunehmen. Der erste Anlauf räumte
+    # über ``select_features([])`` und leerte damit die ganze Auswahl: Die
+    # beiden Kantenhandlungen fanden keinen Körper mehr und taten nichts,
+    # die Tiefe stand auf 0, und Escape nahm nichts zurück.
+    window.object_tree.select_feature("block", "face_1")
+    qt_app.processEvents()
+    assert window.object_tree.selected_features(), "sonst fährt der Test den Zweig nicht"
+
+    window.viewport.select_edge("block", schluessel)
+    window.viewport.edgePicked.emit("block", schluessel)
+    qt_app.processEvents()
+
+    assert window.object_tree.selected() == "block", "die Körperzeile bleibt"
+    assert window.viewport._selected == "block"
+    assert window.viewport.selection_depth() == 2, "sonst ist Escape tot"
+    assert not window.object_tree.selected_features(), "die Merkmalszeile weicht"
+
+    # **Und das Fenster überlebt die Kante nicht.** Eine Kante trägt keine
+    # Merkmalskennung; die Prüfung, die ein verschwundenes Merkmal räumt,
+    # griff bei ihr nie. Nach einer Auswertung, die sie wegnimmt, stünden
+    # sonst zwei Knöpfe auf einen Schlüssel, den es nicht mehr gibt — und der
+    # nächste Klick endete in einer Absage für etwas, das eben noch dastand.
+    verrundet = brep_edit.fillet(solid, 2.0, "vertical")
+    danach = EvaluationResult(
+        scene=Scene(
+            objects={
+                "block": SceneObject(
+                    id="block",
+                    name="Block",
+                    mesh=verrundet,
+                    kind="brep",
+                    features=features_of(verrundet),
+                )
+            }
+        )
+    )
+    window.session.last_result = danach
+    window.viewport.show_scene(danach)
+    window._show_scene(danach)
+    qt_app.processEvents()
+    assert window.viewport.highlighted_edge() is None, "die Ansicht lässt die Kante fallen"
+    uebrig = [b for b in window.feature_panel.findChildren(QPushButton) if b.text() in knoepfe]
+    assert not uebrig, "und das Fenster überlebt sie nicht"

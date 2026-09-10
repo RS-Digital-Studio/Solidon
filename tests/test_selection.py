@@ -1935,6 +1935,55 @@ def test_a_click_beside_an_edge_chooses_the_edge_and_not_the_face(qt_app: QAppli
     view._on_left_click(375, 300)
     assert view.highlighted_edge() is None, "fünfzehn Bildpunkte daneben ist die Fläche"
 
+    # **Und die Kante auf der Rückseite gewinnt nicht.** Die Tiefe allein
+    # entscheidet das nicht: Sie greift erst bei praktisch gleichem
+    # Bildabstand, und eine verdeckte Kante, die zwei Bildpunkte näher liegt,
+    # gewänne — sichtbar als bernsteinfarbene Linie mitten auf einer Fläche,
+    # denn die Hervorhebung wird vor dem Material gezeichnet. Was sie
+    # ausschließt, ist der Weltabstand zum getroffenen Punkt
+    # (`EDGE_REACH_WORLD_SHARE`); ohne ihn ist dieser Fall grün.
+    #
+    # Der Klick liegt auf der **Rückseite** des Quaders (x = +20) und im Bild
+    # dort, wo die vordere Wand projiziert — der Pick nennt also den fernen
+    # Punkt, und die nahe Kante darf trotzdem nicht gewählt werden.
+    hinten = (20.0, 0.0, 20.0)
+    view.select_edge(None, None)
+    renderer.picks[(361, 300)] = Pick(hinten, view._actors["block"], 0)
+    view._on_left_click(361, 300)
+    assert view.highlighted_edge() is None, (
+        "was dreißig Millimeter hinter dem Treffer liegt, ist nicht gemeint"
+    )
+
+    # **Und in der Explosionsansicht trifft er weiter.** Der Klickpunkt kommt
+    # aus dem Bild und trägt deren Versatz (§18.8, §25); gegen die
+    # Szenengrenzen gehalten fiel die Kantenauswahl dort still aus — der
+    # Klick wählte den Körper, und niemand erfuhr warum. Anderthalb
+    # Millimeter genügten.
+    # Ein zweiter Körper, sonst gibt es nichts auseinanderzuziehen und der
+    # Versatz bliebe null — dann prüfte der Fall nichts.
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    zweiter = SceneObject(
+        id="other", name="Zweiter", mesh=MeshData(trimesh.creation.box(extents=(8.0, 8.0, 8.0)))
+    )
+    view.show_scene(
+        EvaluationResult(
+            scene=Scene(objects={"block": view._result.scene.objects["block"], "other": zweiter})
+        )
+    )
+    view._selected = "block"
+    renderer.picks[(360, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    view.select_edge(None, None)
+    view.set_explosion(0.5)
+    versetzt = view.view_point_of(an_der_kante, "block")
+    assert versetzt != an_der_kante, "ohne Versatz prüft der Fall nichts"
+    renderer.picks[(360, 300)] = Pick(versetzt, view._actors["block"], 0)
+    view._on_left_click(360, 300)
+    assert view.highlighted_edge() == ("block", oben), "auseinandergezogen trifft der Klick auch"
+    view.set_explosion(0.0)
+
 
 @pytest.mark.skipif(
     not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
@@ -1978,11 +2027,21 @@ def test_a_chosen_edge_gives_way_to_every_other_selection(qt_app: QApplication) 
 
     gewaehlt()
     view.select_features(["face_1"])
+    assert view.highlighted_feature_refs(), "ohne getroffenes Merkmal prüft der Fall nichts"
     assert view.highlighted_edge() is None, "zwei hervorgehobene Stellen wären zwei Antworten"
 
     gewaehlt()
     view.select_feature_refs([("block", "face_1")])
     assert view.highlighted_edge() is None
+
+    # **Und die Gegenrichtung bei einer Mehrfachauswahl.** Sie setzt das
+    # einzelne Merkmalsfeld auf ``None`` und füllt nur die Paare; über jenes
+    # Feld gefragt blieben zwei Merkmalsflächen und die Kante gleichzeitig
+    # hervorgehoben.
+    view.select_features(["face_1", "face_2"])
+    assert len(view.highlighted_feature_refs()) == 2, "sonst prüft der Fall nichts"
+    view.select_edge("block", schluessel)
+    assert view.highlighted_feature_refs() == (), "die Kante räumt auch mehrere Merkmale"
 
 
 @pytest.mark.skipif(
@@ -2021,6 +2080,10 @@ def test_a_clicked_edge_never_eats_a_measuring_or_adding_click(qt_app: QApplicat
     view.set_measure_mode("distance")
     view._on_left_click(360, 300)
     assert view.highlighted_edge() is None, "beim Messen wählt ein Klick keine Kante"
+    # **Und er kommt beim Messwerkzeug an.** Ohne diese Hälfte wäre auch ein
+    # Rückbau grün, der `_on_picked` gar nicht mehr erreicht — der Klick wäre
+    # dann weder Kante noch Messpunkt, sondern nichts.
+    assert saetze, "der Messklick meldet sich — kein stiller Ausgang (§2.7)"
     view.set_measure_mode("off")
 
     # Dazunehmen: der Klick gehört dem Körper.
