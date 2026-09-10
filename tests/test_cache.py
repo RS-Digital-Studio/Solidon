@@ -1093,6 +1093,59 @@ def test_the_key_reads_the_up_to_target_and_the_sketch_plane() -> None:
     assert base["#up_to"] == moved["#up_to"], "und die zwei Träger bleiben getrennte Einträge"
 
 
+def test_the_key_reads_the_bodies_that_were_not_chosen() -> None:
+    """Die vierte Lesart hängt an keinem Parameter — ``orient_for_print``.
+
+    Sie dreht die gewählten Körper und ordnet sie danach an, ohne einen in
+    einen **nicht gewählten** zu legen; den liest sie aus ``ctx.scene``. Kein
+    Parameter benennt ihn, also fand ihn keiner der drei Zweige darüber, und
+    ``operation_hash`` deckt nur die Eingänge: Verschiebt jemand den fremden
+    Körper, blieb der Schlüssel derselbe und das alte Ergebnis galt weiter —
+    der gedrehte wich einem Nachbarn aus, der längst woanders stand.
+
+    Deklariert wird das am Register (``reads_other_bodies``), nicht an einem
+    Feld: Gelesen wird die Szene als Ganzes.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+
+    spec = REGISTRY.get("orient_for_print")
+    assert spec.reads_other_bodies, "die Operation muss ihre Lesart deklarieren"
+
+    values = {"thorough": False}
+    before = _with_nested_context(
+        spec.params,
+        values,
+        {},
+        None,
+        None,
+        {"obj_1": "a1", "obj_2": "b1"},
+        reads_other_bodies=True,
+    )
+    after = _with_nested_context(
+        spec.params,
+        values,
+        {},
+        None,
+        None,
+        {"obj_1": "a1", "obj_2": "b2"},
+        reads_other_bodies=True,
+    )
+    assert "#scene" in before, "die Szene gehört in den Kontext"
+    assert before["#scene"] != after["#scene"], (
+        "wandert ein nicht gewählter Körper, muss der Schlüssel kippen"
+    )
+
+    # Und ohne die Deklaration bleibt der Schlüssel, wie er war: Eine
+    # Operation, die nur ihre Eingänge liest, soll nicht bei jeder fremden
+    # Änderung neu rechnen.
+    quiet = _with_nested_context(spec.params, values, {}, None, None, {"obj_1": "a1"})
+    assert "#scene" not in quiet, "wer die Szene nicht liest, hängt nicht an ihr"
+
+
 def test_an_exact_sketch_plane_hashes_only_its_named_body() -> None:
     """Eine gleichnamige Fläche eines anderen Körpers ist keine Abhängigkeit.
 

@@ -202,6 +202,32 @@ Verbinderreserve gegen dieselbe Kontur. `oversize` liefert nur dimensionale
 Eine Zwischenhälfte ohne passende Lage hat unbekannten Stützbedarf (`inf`),
 kann aber weitere Schnitte benötigen. Andere Geometriefehler bleiben Fehler.
 
+**Gepackt wird in der Ecke, gelegt wird in der Mitte.** `arrange_on_bed` sucht
+jede Lage weiter an der hintersten, dann linkesten freien Stelle (§29) — das
+Verfahren bleibt mitsamt seiner Abnahme. Erst danach schiebt `_into_the_middle`
+jede Platte als Ganzes in die Mitte der freigegebenen Fläche, wie es jeder
+Slicer daneben tut (`best_object_pos` steht dort auf `0.5x0.5`). Verschoben
+wird je Achse nur, was hineinpasst, und nur wenn die Zielfläche wirklich frei
+ist — die Prüfung gegen Sperrzonen läge sonst hinter der Verschiebung.
+`occupied` nennt Körper, die liegen bleiben und ihren Platz belegen; eine
+Platte mit solchen wird nicht zentriert.
+
+**`orient_for_print` legt hin, was es umgeworfen hat.** Ein gedrehter Körper
+braucht mehr Fläche als ein stehender und lief sonst in seinen Nachbarn
+(Befund Robert, 09.09.2026). Der Parameter `arrange` ruft dieselbe Anordnung
+mit denselben Werten für Abstand und Platten; die nicht gewählten Körper der
+Szene bleiben liegen und gehen als `occupied` mit. Was der Abstand enthalten
+muss — Plattenhaftung und Stützrand —, rechnet `export.writer.clearance_margin`,
+und vorbelegt wird er in der Oberfläche (`MainWindow._spacing_for`), weil
+Druckeinstellungen nicht zur Auswertung gehören.
+
+**Und weil sie an ihren Eingängen vorbei liest, sagt sie es dem Schlüssel.**
+Der Registereintrag trägt `reads_other_bodies=True`; ohne das behielte ein
+Ergebnis seine Gültigkeit, nachdem jemand einen nicht gewählten Körper
+verschoben hat — der gedrehte wiche einem Nachbarn aus, der längst woanders
+steht. Die Regel dazu steht in `.claude/rules/operationen.md` unter „Und die
+vierte hängt an keinem Parameter".
+
 **Messen und Schneiden**
 
 `measure.py` (§18.3 — Abstand, Wandstärke, Winkel, und der **Fang**: `visible_edges` und `corner_points` sagen, was im Bild überhaupt eine Kante oder eine Ecke ist, `snap` zieht den Klick darauf) · `section.py` (Ebene durch einen Körper, §18.2) ·

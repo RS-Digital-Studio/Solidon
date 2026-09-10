@@ -396,6 +396,23 @@ class OperationSpec:
     und dieselbe Auskunft braucht auch der Agent (§10, Leitprinzip 3)."""
     whole_scene: bool = False
     """Arbeitet auf allen Objekten zugleich — siehe :attr:`takes_whole_scene`."""
+    reads_other_bodies: bool = False
+    """Liest an den eigenen Eingängen vorbei die übrigen Körper der Szene.
+
+    ``orient_for_print`` tut das: Es dreht die gewählten Körper und muss sie
+    danach neu anordnen, ohne dabei in einen nicht gewählten zu legen — der
+    steht in ``ctx.scene``, und lesen darf es ihn (Regel 3). **Der
+    Cache-Schlüssel weiß davon nichts**, denn ``operation_hash`` deckt die
+    Hashes der *Eingänge*, und ein fremder Körper ist keiner: Verschiebt
+    jemand ihn, bleibt der Schlüssel derselbe und das alte Ergebnis gilt
+    weiter — der gedrehte Körper weicht einem Nachbarn aus, der längst
+    woanders steht.
+
+    Wer die Eigenschaft setzt, bekommt die Hashes **aller** Objekte in den
+    Schlüssel gemischt (``evaluate._with_nested_context``). Dieselbe Pflicht
+    wie bei den drei benannten Lesarten daneben, nur ohne Parameter, an dem
+    sie hinge — hier wird nicht ein bestimmter Träger gelesen, sondern die
+    Szene als Ganzes."""
     produces_from: str | None = None
     """Der Parameter, der bei veränderlicher Anzahl sagt, wie viele Objekte
     herauskommen.
@@ -628,6 +645,7 @@ def register_op(
     applies_to: Iterable[str] = (),
     requires_kind: str = "",
     whole_scene: bool = False,
+    reads_other_bodies: bool = False,
     produces_from: str | None = None,
     keeps_inputs: int = 0,
     touches_features: bool = False,
@@ -658,6 +676,7 @@ def register_op(
                 applies_to=tuple(applies_to),
                 requires_kind=requires_kind,
                 whole_scene=whole_scene,
+                reads_other_bodies=reads_other_bodies,
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
                 touches_features=touches_features,

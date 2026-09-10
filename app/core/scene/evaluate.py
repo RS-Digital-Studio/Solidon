@@ -370,7 +370,15 @@ def evaluate(
             # nachschlug, was fehlen konnte.
             key = operation_hash(
                 operation,
-                _with_nested_context(spec.params, resolved, values, sources, objects, hashes),
+                _with_nested_context(
+                    spec.params,
+                    resolved,
+                    values,
+                    sources,
+                    objects,
+                    hashes,
+                    reads_other_bodies=spec.reads_other_bodies,
+                ),
                 [hashes[entry] for entry in operation.inputs],
                 profile,
                 quality,
@@ -1698,6 +1706,7 @@ def _with_nested_context(
     sources: SourceAccess | None = None,
     objects: Mapping[ObjectId, SceneObject] | None = None,
     hashes: Mapping[ObjectId, str] | None = None,
+    reads_other_bodies: bool = False,
 ) -> Mapping[str, Any]:
     """Der Parametersatz für den Cache-Schlüssel, ergänzt um das, was ein
     Parameter von außen liest.
@@ -1727,8 +1736,21 @@ def _with_nested_context(
     ``face_top`` blieb bei z = 10. Und der Plattencache lebt länger als die
     Sitzung, der falsche Eintrag überlebte das Schließen. Aufgenommen werden
     die Hashes **aller** Träger des Merkmals: Zwei Körper können denselben
-    Merkmalsnamen tragen, und der Schlüssel muss jede Lesart decken."""
+    Merkmalsnamen tragen, und der Schlüssel muss jede Lesart decken.
+
+    **Die vierte Lesart hängt an keinem Parameter.** ``orient_for_print``
+    liest die *übrigen* Körper der Szene, um den gedrehten nicht in einen
+    nicht gewählten zu legen — es gibt keinen Parameter, der sie benennt, also
+    auch keinen Zweig oben, der sie fände. Sie ist am Register deklariert
+    (``reads_other_bodies``), und der Schlüssel bekommt die Hashes **aller**
+    Objekte: Die Eingänge stehen ohnehin darin, doppelt schadet nicht, und
+    „alle außer den Eingängen" wüsste hier niemand — die Eingangsliste steht
+    an der Operation, nicht am Parametersatz."""
     context: dict[str, Any] = {}
+    if reads_other_bodies and hashes is not None:
+        # Sortiert, weil ein Schlüssel aus einer Wörterbuchreihenfolge kein
+        # Schlüssel ist: Zwei gleiche Szenen müssen denselben ergeben.
+        context["#scene"] = tuple(sorted(hashes.items()))
     for spec in params_class.spec():
         if spec.kind in SOURCE_KINDS and sources is not None:
             source_id = resolved.get(spec.name)

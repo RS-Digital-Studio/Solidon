@@ -258,6 +258,77 @@ def test_a_deep_part_does_not_waste_the_strip_beside_it(profile: Profile) -> Non
     )
 
 
+def test_what_is_packed_ends_up_in_the_middle_of_the_bed(profile: Profile) -> None:
+    """Gepackt wird in der Ecke, gelegt wird in der Mitte (Robert, 09.09.2026).
+
+    Jeder Slicer, den Robert danebenstehen hat — ElegooSlicer, Orca, Bambu
+    Studio, PrusaSlicer —, legt seine Teile mittig aufs Bett. Solidon packte
+    sie nach hinten links, weil die Packregel dort ihre Ecke hat; auf einem
+    256er Bett standen zwei Türme damit bei x −123 und y 123, also in der
+    Ecke, während drei Viertel der Fläche leer blieben.
+
+    Das Packverfahren selbst bleibt, wie es ist — es ist an denselben
+    Referenzteilen abgenommen (§29) und liefert dieselbe Plattenzahl. Nur die
+    fertige Packung wandert als Ganzes in die Mitte, und deshalb ändert sich
+    weder die Reihenfolge noch der Abstand noch die Kollisionsfreiheit.
+    """
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=())
+    )
+
+    result = arrange_on_bed(many(2, size=40.0), profile, spacing=5.0, plates=1)
+
+    left = min(mesh.bounds.minimum[0] for mesh in result.meshes)
+    right = max(mesh.bounds.maximum[0] for mesh in result.meshes)
+    front = min(mesh.bounds.minimum[1] for mesh in result.meshes)
+    back = max(mesh.bounds.maximum[1] for mesh in result.meshes)
+    assert abs(left + right) < 1e-6, f"x is off centre: {left} .. {right}"
+    assert abs(front + back) < 1e-6, f"y is off centre: {front} .. {back}"
+    assert not check_collisions(result.meshes), "and still nothing touches"
+
+
+def test_every_plate_finds_its_own_middle(profile: Profile) -> None:
+    """Zentriert wird je Platte, nicht über den ganzen Auftrag.
+
+    Zwei Platten sind zwei Drucke; eine gemeinsame Mitte über beide wäre die
+    Mitte von nichts. Die zweite Platte trägt hier ein einziges Teil, und das
+    steht auf ihr genauso mittig wie die volle erste.
+    """
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=())
+    )
+
+    result = arrange_on_bed(many(5), profile, spacing=5.0, plates=4)
+
+    assert result.plate_count >= 2, "der Fall braucht mehr als eine Platte"
+    for plate in range(result.plate_count):
+        on_plate = [
+            mesh for mesh, at in zip(result.meshes, result.plates, strict=True) if at == plate
+        ]
+        left = min(mesh.bounds.minimum[0] for mesh in on_plate)
+        right = max(mesh.bounds.maximum[0] for mesh in on_plate)
+        assert abs(left + right) < 1e-6, f"plate {plate} is off centre: {left} .. {right}"
+
+
+def test_a_blocked_middle_keeps_the_packing_where_it_fits(profile: Profile) -> None:
+    """Wo die Mitte gesperrt ist, bleibt die Packung in der Ecke.
+
+    Die Verschiebung umgeht die Prüfung, mit der ``place`` jede einzelne Lage
+    gegen die freigegebene Fläche hält — ein Drucker mit Sperrzone bekäme sonst
+    Teile mitten hinein geschoben. Hier liegt die Sperrzone genau dort, wo die
+    Packung landen würde; sie bleibt deshalb, wo sie gepackt wurde.
+    """
+    middle = (((-60.0, -60.0), (60.0, -60.0), (60.0, 60.0), (-60.0, 60.0)),)
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=middle)
+    )
+
+    result = arrange_on_bed(many(2, size=40.0), profile, spacing=5.0, plates=1)
+
+    assert not check_build_volume(result.meshes, profile), "nichts liegt in der Sperrzone"
+    assert not check_collisions(result.meshes)
+
+
 # --- Als Operation ---------------------------------------------------------------
 
 

@@ -678,6 +678,91 @@ def _paired_cavity_body(mesh: MeshData, *features: Feature) -> MeshData | None:
     )
 
 
+def _section_fill(
+    mesh: MeshData,
+    chain: Sequence[Feature],
+    feature: Feature,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> BooleanOutcome | None:
+    """Der Füllkörper **eines** Abschnitts — der Rest des Hohlraums bleibt offen.
+
+    **Robert am 10.09.2026:** „wenn ich bei einer Bohrung mit senkung nur die
+    senkung entfernen will geht das nicht, also es soll dann nur die senkung
+    weg, die Bohrung aber bleiben." Gefragt hat der Kern das längst
+    (:func:`_asked_about_sections`), und für den Abschnitt allein gab es bis
+    dahin keinen Weg: Sein Körper ist baubar — die Kegelfläche hat zwei
+    Randringe und wird mit zwei Deckeln ein Kegelstumpf —, aber dieser Stumpf
+    füllt auf seiner Höhe **auch den Bohrungsschlauch**. Gemessen an einer
+    Platte 60 x 40 x 10 mit Bohrung Ø 8 und Senkung Ø 16: 27,8 mm³ zu viel von
+    24 000, also ein Tausendstel im Volumen — und eine Bohrung, die oben zu ist.
+
+    Deshalb zwei Schritte: der Abschnitt als Körper, und davon abgezogen der
+    **Durchgang** der Abschnitte, die weiter innen liegen. Die Kette kommt
+    geordnet von der engsten Bohrung her (``_ordered_cavity``); alles vor dem
+    gewählten Abschnitt liegt hinter ihm und verlöre sonst seinen Weg nach
+    außen — bei einem Sackloch mit Senkung wäre das ein eingeschlossener
+    Hohlraum, den kein Drucker füllen kann.
+
+    Der Durchgang entsteht aus dem Hohlraumkörper der inneren Abschnitte,
+    entlang der Achse zur Mündung hin fortgesetzt: Ein Zylinder bleibt dabei
+    ein Zylinder, und der Querschnitt an der Trennfläche stimmt mit dem
+    überein, was darunter liegt. Fortgesetzt wird in so vielen Schritten, wie
+    die eigene Länge des Durchgangs verlangt — sonst bliebe zwischen zwei
+    Kopien eine Scheibe Material stehen.
+
+    ``None`` heißt: Dieser Abschnitt gibt keinen eigenen Körper her; dann gilt
+    :data:`_NO_OWN_BODY` wie bisher.
+    """
+    from app.core.perceive.relations import cavity_surface_indices
+
+    own = _body_from_faces(mesh, cavity_surface_indices(mesh, (feature,)), allowed_rings=(1, 2))
+    if own is None:
+        return None
+
+    position = next((index for index, entry in enumerate(chain) if entry.id == feature.id), 0)
+    inner = tuple(chain[:position])
+    if not inner:
+        return BooleanOutcome(mesh=own, solver=deepest(()))
+
+    passage = _body_from_faces(mesh, cavity_surface_indices(mesh, inner), allowed_rings=(1, 2))
+    if passage is None:
+        return None
+
+    # **Weg von den inneren Abschnitten**, gleich wie die gemessene Achse
+    # zeigt: Sie ist vorzeichenfrei gespeichert, und ein Kegel unter seiner
+    # Bohrung gibt es genauso wie darüber.
+    axis = np.asarray(_feature_direction(feature), dtype=float)
+    outward = np.asarray(feature.params["centre"], dtype=float) - np.asarray(
+        inner[-1].params["centre"], dtype=float
+    )
+    if float(outward @ axis) < 0.0:
+        axis = -axis
+
+    reach = float(np.ptp(np.asarray(own.raw.vertices) @ axis)) + FEATURE_OVERLAP
+    span = float(np.ptp(np.asarray(passage.raw.vertices) @ axis))
+    steps = max(1, math.ceil(reach / span)) if span > EPS_GEOM else 1
+    fill = own
+    findings: list[Finding] = []
+    solver = deepest(())
+    for step in range(1, steps + 1):
+        moved = passage.raw.copy()
+        moved.apply_translation(axis * (reach * step / steps))
+        cut = boolean(
+            "difference",
+            [fill, MeshData.of(moved)],
+            quality=quality,
+            seed=seed,
+            cancelled=cancelled,
+        )
+        fill = cut.mesh
+        findings.extend(cut.findings)
+        solver = cut.solver
+    return BooleanOutcome(mesh=fill, solver=solver, findings=findings)
+
+
 def _feature_direction(feature: Feature, axis: Vec3 | None = None) -> Vec3:
     """Die Richtung dieses Merkmals als Einheitsvektor.
 
@@ -3822,6 +3907,33 @@ class OrientParams(BaseParams):
         ),
         depends_on=("thorough", (True,)),
     )
+    arrange: bool = param(
+        title=_("Danach auf dem Bett anordnen"),
+        default=True,
+        doc=_(
+            "Ein hingelegter Körper braucht mehr Fläche als ein stehender. "
+            "Aus heißt: jeder bleibt, wo er stand — auch wenn er dann im Nachbarn steckt."
+        ),
+    )
+    spacing: float = param(
+        title=_("Abstand"),
+        default=5.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=100.0,
+        placement="advanced",
+        doc=_("Luft zwischen den Teilen beim Anordnen."),
+        depends_on=("arrange", (True,)),
+    )
+    plates: int = param(
+        title=_("Druckplatten"),
+        default=MAX_PLATES,
+        minimum=1,
+        maximum=MAX_PLATES,
+        placement="advanced",
+        doc=_("Passt nicht alles auf eine Platte, wandert der Rest auf die nächste."),
+        depends_on=("arrange", (True,)),
+    )
 
 
 @register_op(
@@ -3836,6 +3948,11 @@ class OrientParams(BaseParams):
     consumes=VARIABLE,
     minimum_inputs=1,
     produces=VARIABLE,
+    # **Sie liest die nicht gewählten Körper mit.** Nach dem Drehen ordnet sie
+    # an, und die übrigen belegen dabei ihren Platz; ohne diese Zeile bliebe
+    # ein Ergebnis im Cache gültig, nachdem jemand einen von ihnen verschoben
+    # hat — der gedrehte wiche einem Nachbarn aus, der längst woanders steht.
+    reads_other_bodies=True,
     deterministic=True,
     doc=_(
         "Sucht für jeden gewählten Körper die Lage mit dem geringsten "
@@ -3880,6 +3997,16 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         outputs.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, matrix)))
         last_matrix = matrix
 
+    if params.arrange:
+        outputs, moved_after = _laid_out_after_turning(ctx, params, outputs, findings)
+        # **Und dann ist die gemeldete Bewegung die Drehung *und* der Weg zum
+        # neuen Platz.** Sie ist die Auskunft für Vorschau und Gizmo, und die
+        # muss den Eingang genau auf den Ausgang legen: erst gedreht, dann
+        # verschoben. Der Versatz allein zeigte den Körper ungedreht am neuen
+        # Ort, die Drehung allein gedreht am alten — beides war er nie.
+        if moved_after is not None and last_matrix is not None:
+            last_matrix = moved_after @ last_matrix
+
     # **Die Bewegung wird nur bei einem einzigen Körper gemeldet.** Sie ist die
     # Auskunft für Vorschau und Gizmo, und die kennt genau eine Matrix; bei
     # mehreren hat jeder Körper seine eigene, und eine davon zu nennen wäre
@@ -3889,6 +4016,75 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         findings=findings,
         transform=as_transform(last_matrix) if len(outputs) == 1 else None,
     )
+
+
+def _laid_out_after_turning(
+    ctx: OpContext,
+    params: OrientParams,
+    turned: list[SceneObject],
+    findings: list[Finding],
+) -> tuple[list[SceneObject], Any]:
+    """Legt hin, was das Drehen umgeworfen hat — und lässt den Rest liegen.
+
+    **Der Anlass** (Robert, 09.09.2026: „bei druckoptimal ausrichten, werden
+    verschiedene modelle überlagert ohne abstand"). Ein Körper, der sich
+    hinlegt, braucht mehr Fläche als vorher; gemessen an zwei Türmen
+    20 x 20 x 90 mit 15 mm Luft standen sie hinterher 55 mm ineinander. Die
+    Drehung allein ist damit kein brauchbares Ergebnis.
+
+    Angeordnet wird über dieselbe Funktion, die *Auf dem Bett anordnen*
+    benutzt, mit denselben Werten für Abstand und Plattenzahl — was nicht mehr
+    passt, wandert auf die nächste Platte, und wo keine übrig ist, neben das
+    Bett samt Befund (Roberts Ansage: „neues druckbett oder neben dem bett
+    anordnen je nachdem wie viele druckplatten ausgewählt waren").
+
+    **Die nicht gewählten Körper bleiben liegen und belegen ihren Platz.** Die
+    Operation dreht so viele, wie gewählt sind; die übrigen liest sie aus
+    ``ctx.scene``, und lesen darf sie (Regel 3).
+    """
+    chosen = {entry.id for entry in turned}
+    standing = [
+        (as_mesh_data(other.mesh), other.plate)
+        for key, other in ctx.scene.objects.items()
+        if key not in chosen
+    ]
+    arrangement = arrange_on_bed(
+        [as_mesh_data(entry.mesh) for entry in turned],
+        ctx.profile,
+        params.spacing,
+        params.plates,
+        object_ids=[entry.id for entry in turned],
+        occupied=standing,
+    )
+    findings.extend(arrangement.findings)
+    for plate in range(arrangement.plate_count):
+        together = [
+            (mesh, entry)
+            for mesh, entry, at in zip(arrangement.meshes, turned, arrangement.plates, strict=True)
+            if at == plate
+        ]
+        findings.extend(
+            named_for(
+                check_collisions([mesh for mesh, _entry in together]),
+                [entry for _mesh, entry in together],
+            )
+        )
+
+    laid: list[SceneObject] = []
+    shift = None
+    for entry, mesh, plate in zip(turned, arrangement.meshes, arrangement.plates, strict=True):
+        # Der Versatz statt des Netzes — dieselbe Begründung wie bei
+        # ``arrange_bed``: Ein exakter Körper käme sonst als Netz zurück.
+        step = translation(
+            (
+                mesh.bounds.minimum[0] - entry.mesh.bounds.minimum[0],
+                mesh.bounds.minimum[1] - entry.mesh.bounds.minimum[1],
+                mesh.bounds.minimum[2] - entry.mesh.bounds.minimum[2],
+            )
+        )
+        laid.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, step), plate=plate))
+        shift = step
+    return laid, shift
 
 
 @op_params

@@ -5,6 +5,7 @@ P2).
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -22,7 +23,8 @@ from app.core.geom.transform import apply, rotation, translation
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
-from app.core.scene.project import ProjectSources, new_project
+from app.core.scene.cache import ResultCache
+from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Document, Profile, Source
 from app.i18n import _
 
@@ -275,6 +277,171 @@ def test_every_chosen_body_gets_its_own_orientation(document: Document, profile:
     for kennung in ("obj_1", zweiter):
         hoehe = result.scene.objects[kennung].mesh.bounds.size[2]
         assert hoehe < 20.0, f"{kennung} steht noch hochkant ({hoehe:.1f} mm)"
+
+
+def _towers(document: Document) -> tuple[Project, list[str]]:
+    """Zwei stehende Türme mit 15 mm Luft — die beim Hinlegen ineinanderlaufen."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    history = History(document)
+    for offset in ((0.0, 0.0), (35.0, 0.0)):
+        history.apply(
+            _("Turm"),
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={
+                        "width": 20.0,
+                        "depth": 20.0,
+                        "height": 90.0,
+                        "x": offset[0],
+                        "y": offset[1],
+                    },
+                )
+            ],
+        )
+    return project, ["obj_1", "obj_2"]
+
+
+def test_orienting_does_not_leave_the_bodies_inside_each_other(
+    document: Document, profile: Profile
+) -> None:
+    """Ausrichten dreht — und legt danach hin, was es umgeworfen hat.
+
+    **Der Befund** (Robert, 09.09.2026: „bei druckoptimal ausrichten, werden
+    verschiedene modelle überlagert ohne abstand"): Die Operation dreht jeden
+    Körper um seine eigene Mitte und lässt ihn dort stehen. Beim Hinlegen
+    wächst die Grundfläche, und der Nachbar steht im Weg. Gemessen an zwei
+    Türmen 20 x 20 x 90 mit 15 mm Luft: hinterher x -45..45 gegen x -10..80,
+    also 55 mm Durchdringung — und kein Wort im Bericht.
+
+    Das Anordnen macht die Operation nicht zu einer zweiten *Auf dem Bett
+    anordnen*: Sie ordnet genau die Körper an, die sie gedreht hat, und die
+    übrigen der Szene bleiben liegen und belegen ihren Platz.
+    """
+    project, bodies = _towers(document)
+    History(document).apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=tuple(bodies), params={"thorough": False})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    boxes = [result.scene.objects[name].mesh.bounds for name in bodies]
+    for first in range(len(boxes)):
+        for second in range(first + 1, len(boxes)):
+            one, other = boxes[first], boxes[second]
+            apart = (
+                one.maximum[0] <= other.minimum[0] + 1e-6
+                or other.maximum[0] <= one.minimum[0] + 1e-6
+                or one.maximum[1] <= other.minimum[1] + 1e-6
+                or other.maximum[1] <= one.minimum[1] + 1e-6
+            )
+            assert apart, f"{bodies[first]} und {bodies[second]} stecken ineinander"
+
+
+def test_a_body_that_was_not_chosen_keeps_its_place(document: Document, profile: Profile) -> None:
+    """Wer nicht gewählt ist, wird nicht bewegt — und sein Platz bleibt belegt.
+
+    Die Operation nimmt so viele Körper, wie gewählt sind. Ordnete sie danach
+    an, als wäre die Szene leer, legte sie einen gedrehten Körper genau dorthin,
+    wo ein nicht gewählter schon steht. Der liest sich aus ``ctx.scene``, und
+    lesen darf sie ihn (Regel 3).
+    """
+    project, bodies = _towers(document)
+    standing = bodies[1]
+
+    History(document).apply(
+        _("Nur den ersten ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=(bodies[0],), params={"thorough": False})],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    kept = result.scene.objects[standing].mesh.bounds
+    assert abs(kept.minimum[0] - 25.0) < 1e-6, f"der zweite ist gewandert: {kept.minimum[0]}"
+    moved = result.scene.objects[bodies[0]].mesh.bounds
+    apart = (
+        moved.maximum[0] <= kept.minimum[0] + 1e-6
+        or kept.maximum[0] <= moved.minimum[0] + 1e-6
+        or moved.maximum[1] <= kept.minimum[1] + 1e-6
+        or kept.maximum[1] <= moved.minimum[1] + 1e-6
+    )
+    assert apart, "der gedrehte Körper liegt im nicht gewählten"
+
+
+def test_moving_an_unchosen_body_makes_the_arrangement_run_again(profile: Profile) -> None:
+    """Der Cache darf die fremde Lage nicht überleben.
+
+    Der Test darüber sichert zu, dass die Operation dem nicht gewählten Körper
+    ausweicht. Sie liest ihn aber an ihren Eingängen vorbei, und
+    ``operation_hash`` deckt nur die Eingänge: Verschiebt jemand den fremden
+    Körper, blieb der Schlüssel derselbe — und der gedrehte wich einem
+    Nachbarn aus, der längst woanders stand.
+
+    **Gefahren wird das über die Auswertung mit echtem Cache**, nicht über den
+    Schlüssel allein: Dass er kippen *kann*, prüft ``test_cache.py``; hier
+    steht, dass die Anwendung ihn auch kippen lässt.
+    """
+
+    def orientiert(second_at: tuple[float, float]) -> Any:
+        """Ein frisches Dokument: erster Turm gleich, zweiter an ``second_at``."""
+        document = Document(format_version=1, app_version="0.0.1")
+        project = new_project("centauri-carbon-2", "petg")
+        project.document = document
+        history = History(document)
+        for offset in ((0.0, 0.0), second_at):
+            history.apply(
+                _("Turm"),
+                [
+                    OperationDraft(
+                        op="create_box",
+                        params={
+                            "width": 20.0,
+                            "depth": 20.0,
+                            "height": 90.0,
+                            "x": offset[0],
+                            "y": offset[1],
+                        },
+                    )
+                ],
+            )
+        history.apply(
+            _("Nur den ersten ausrichten"),
+            [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={"thorough": False})],
+        )
+        return evaluate(document, profile, sources=ProjectSources(project), cache=cache)
+
+    # **Zwei Szenen, ein Cache** — und der erste Turm ist in beiden derselbe.
+    # Damit ist sein Eingangshash gleich, und ein Schlüssel, der nur die
+    # Eingänge kennt, kann die zwei Läufe nicht auseinanderhalten. Ein Schritt,
+    # der den zweiten Turm *nachträglich* verschiebt, prüfte das nicht: Dort
+    # stünde er zur Zeit des Ausrichtens noch an der alten Stelle, und der
+    # Cache-Treffer wäre richtig.
+    cache = ResultCache()
+    first = orientiert((35.0, 0.0))
+    assert first.complete
+    landed = first.scene.objects["obj_1"].mesh.bounds
+
+    # Der zweite Turm steht diesmal genau dort, wo der gedrehte gerade gelandet
+    # ist. Bleibt das alte Ergebnis gültig, stecken sie ineinander.
+    centre = (
+        float(landed.minimum[0] + landed.maximum[0]) / 2.0,
+        float(landed.minimum[1] + landed.maximum[1]) / 2.0,
+    )
+    second = orientiert(centre)
+    assert second.complete
+
+    moved_now = second.scene.objects["obj_1"].mesh.bounds
+    kept_now = second.scene.objects["obj_2"].mesh.bounds
+    apart = (
+        moved_now.maximum[0] <= kept_now.minimum[0] + 1e-6
+        or kept_now.maximum[0] <= moved_now.minimum[0] + 1e-6
+        or moved_now.maximum[1] <= kept_now.minimum[1] + 1e-6
+        or kept_now.maximum[1] <= moved_now.minimum[1] + 1e-6
+    )
+    assert apart, "das Ergebnis kam aus dem Cache und kennt die neue Lage nicht"
 
 
 @pytest.mark.parametrize("per_batch", [1, 3, 50])

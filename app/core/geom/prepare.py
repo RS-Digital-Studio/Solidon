@@ -1259,6 +1259,81 @@ def _beyond_the_edge(
     return _Slot(first[0], first[1], size[0], size[1])
 
 
+def _fits_after_shift(mesh: MeshData, shift: tuple[float, float], allowed: Any) -> bool:
+    """Liegt dieser Körper auch verschoben noch auf der freigegebenen Fläche?
+
+    Dieselben zwei Stufen wie in ``place``: erst das Rechteck, und nur wenn das
+    nicht genügt, die tatsächliche Projektion. Ein Ring um eine Sperrzone
+    scheitert am Rechteck und besteht an seiner Kontur.
+    """
+    low, high = mesh.bounds.minimum, mesh.bounds.maximum
+    rectangle = box(low[0] + shift[0], low[1] + shift[1], high[0] + shift[0], high[1] + shift[1])
+    if allowed.covers(rectangle):
+        return True
+    moved = shift_polygon(footprint(mesh), xoff=shift[0], yoff=shift[1])
+    return bool(allowed.covers(moved))
+
+
+def _into_the_middle(
+    arranged: list[MeshData], assigned: list[int], area: Any, allowed: Any
+) -> list[MeshData]:
+    """Schiebt jede Platte als Ganzes in die Mitte der freigegebenen Fläche.
+
+    **Gepackt wird in der Ecke, gelegt wird in der Mitte** (Robert,
+    09.09.2026: „startpunkt mitte zum ausrichten gut, orientiere dich an den
+    verschiedenen slicern"). Jeder Slicer daneben — ElegooSlicer, Orca, Bambu
+    Studio, PrusaSlicer — legt seine Teile mittig; Solidon legte sie nach
+    hinten links, weil dort die Packregel aus §29 ihre Ecke hat. Auf einem
+    256er Bett standen zwei Türme damit bei x -123 und y 123, während drei
+    Viertel der Fläche leer blieben.
+
+    Das **Verfahren** bleibt unangetastet, und das ist der Grund für diese
+    Bauart: §29 verlangt bei einer Änderung des Packverfahrens eine neue
+    Abnahme an denselben Referenzteilen — Plattenzahl, Kollisionsfreiheit,
+    Mindestabstände, Reproduzierbarkeit. Eine gemeinsame Verschiebung ändert
+    keines davon, denn sie bewegt alle Körper einer Platte um denselben Betrag.
+
+    Zwei Grenzen, beide notwendig:
+
+    * **Je Achse nur, was hineinpasst.** Ist eine Platte breiter als die
+      Fläche, bliebe von der Mitte aus auf beiden Seiten etwas draußen statt
+      auf einer; die Befunde aus :func:`check_build_volume` wären damit andere,
+      ohne dass jemand etwas gewonnen hätte.
+    * **Und nur, wenn die Mitte wirklich frei ist.** ``place`` prüft jede
+      einzelne Lage gegen die freigegebene Fläche; eine nachträgliche
+      Verschiebung geht an dieser Prüfung vorbei. Ein Drucker mit einer
+      Sperrzone in der Mitte bekäme sonst Teile hineingeschoben — dort bleibt
+      die Platte, wo sie gepackt wurde.
+    """
+    left_edge, front_edge, right_edge, back_edge = area.bounds
+    middle = ((left_edge + right_edge) / 2.0, (front_edge + back_edge) / 2.0)
+    span = (right_edge - left_edge, back_edge - front_edge)
+    moved = list(arranged)
+    for plate in sorted(set(assigned)):
+        members = [index for index, at in enumerate(assigned) if at == plate]
+        low = np.min([arranged[index].bounds.minimum[:2] for index in members], axis=0)
+        high = np.max([arranged[index].bounds.maximum[:2] for index in members], axis=0)
+        along = [
+            middle[axis] - (float(low[axis]) + float(high[axis])) / 2.0
+            if float(high[axis]) - float(low[axis]) <= span[axis] + _TOUCH
+            else 0.0
+            for axis in (0, 1)
+        ]
+        shift = (along[0], along[1])
+        if abs(shift[0]) < _TOUCH and abs(shift[1]) < _TOUCH:
+            continue
+        whole = box(low[0] + shift[0], low[1] + shift[1], high[0] + shift[0], high[1] + shift[1])
+        if not allowed.covers(whole) and not all(
+            _fits_after_shift(arranged[index], shift, allowed) for index in members
+        ):
+            continue
+        for index in members:
+            body = arranged[index].raw.copy()
+            body.apply_transform(translation((shift[0], shift[1], 0.0)))
+            moved[index] = arranged[index].replacing(body)
+    return moved
+
+
 def arrange_on_bed(
     meshes: list[MeshData],
     profile: Profile,
@@ -1267,6 +1342,7 @@ def arrange_on_bed(
     object_ids: Sequence[ObjectId] | None = None,
     *,
     margin: float | None = None,
+    occupied: Sequence[tuple[MeshData, int]] = (),
 ) -> Arrangement:
     """Legt jeden Körper an die hinterste, dann linkeste freie Stelle (§29).
 
@@ -1298,6 +1374,14 @@ def arrange_on_bed(
     Teil, das still aus einer Anordnung fällt, ist ein Teil, das nie gedruckt
     wird.
 
+    ``occupied`` nennt Körper, die **liegen bleiben** — mit der Platte, auf der
+    sie liegen. Ihr Platz ist belegt, und um sie herum wird angeordnet. Das
+    braucht, wer nur einen Teil der Szene anordnet: *Druckoptimal ausrichten*
+    dreht so viele Körper, wie gewählt sind, und legte sie sonst genau dorthin,
+    wo ein nicht gewählter schon steht (Befund Robert, 09.09.2026). Eine Platte
+    mit solchen Körpern wird **nicht** zentriert — die Mitte gehört der ganzen
+    Platte, und die kennt nur, wer sie ganz anordnet.
+
     Der Aufwand wächst mit dem Quadrat der Teilezahl; für die Größenordnung, um
     die es geht — Dutzende Körper auf einer Platte — bleibt das weit unter dem
     Budget für eine Anordnung (§31).
@@ -1316,8 +1400,17 @@ def arrange_on_bed(
     )
     corner = (left_edge, back_edge)
 
+    # Was liegen bleibt, belegt seinen Platz — je Platte, denn zwei Teile an
+    # derselben Stelle auf verschiedenen Platten treffen sich nie.
+    held: dict[int, list[_Slot]] = {}
+    for mesh, at in occupied:
+        low, high = mesh.bounds.minimum, mesh.bounds.maximum
+        held.setdefault(at, []).append(
+            _Slot(float(low[0]), float(high[1]), float(high[0] - low[0]), float(high[1] - low[1]))
+        )
+
     plate = 0
-    taken: list[_Slot] = []
+    taken: list[_Slot] = list(held.get(0, ()))
 
     def place(mesh: MeshData) -> _Slot | None:
         """Die hinterste, dann linkeste Stelle, an die dieser Körper passt."""
@@ -1372,7 +1465,7 @@ def arrange_on_bed(
         # stattdessen, was wirklich hilft: teilen, verkleinern, anderes Profil.
         if spot is None and taken and plate + 1 < plates:
             plate += 1
-            taken = []
+            taken = list(held.get(plate, ()))
             spot = place(mesh)
         if spot is None:
             spot = _beyond_the_edge(taken, size, corner, spacing)
@@ -1388,6 +1481,13 @@ def arrange_on_bed(
         arranged.append(mesh.replacing(body))
         assigned.append(plate)
         taken.append(spot)
+
+    # Gepackt ist in der Ecke, gelegt wird in der Mitte — und geprüft wird
+    # danach, damit Bauraumbefunde die Lage nennen, die der Kunde sieht. Wo
+    # fremde Körper liegen bleiben, gehört die Mitte ihnen mit; dort wird die
+    # gepackte Lage nicht mehr verschoben.
+    if not occupied:
+        arranged = _into_the_middle(arranged, assigned, area, allowed)
 
     findings.extend(check_build_volume(arranged, profile, assigned, object_ids, margin=edge_margin))
     if plate + 1 >= plates and _overfull(arranged, assigned, profile, edge_margin):

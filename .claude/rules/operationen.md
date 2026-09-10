@@ -98,8 +98,19 @@ Ziel von `align_to_feature` (`kind="feature"`), die `up_to`-Fläche
 Merkmals in den Schlüssel — alle, weil zwei Körper denselben Merkmalsnamen
 tragen können. Ohne das behielt ein ausgerichteter Körper mit Cache die alte
 Lage und eine `up_to`-Extrusion die alte Höhe, über das Schließen hinaus.
+**Und die vierte hängt an keinem Parameter.** `orient_for_print` liest die
+*übrigen* Körper der Szene — es dreht die gewählten und ordnet sie danach an,
+ohne einen in einen nicht gewählten zu legen. Kein Feld benennt sie, also
+findet sie keiner der drei Zweige oben. Sie ist am **Register** deklariert
+(`OperationSpec.reads_other_bodies`), und `_with_nested_context` mischt dann
+die Hashes **aller** Objekte unter `#scene` in den Schlüssel. Ohne das wich
+ein gedrehter Körper einem Nachbarn aus, der längst woanders stand — mit
+Cache-Treffer, über das Schließen hinaus.
+
 Wer eine neue Lesart aus `ctx.scene` baut, trägt sie hier ein — dieselbe
-Pflicht wie bei `NESTED_REFERENCES` darüber.
+Pflicht wie bei `NESTED_REFERENCES` darüber. Und die Frage davor lautet, ob
+ein *Parameter* das Gelesene benennt: Wenn ja, gehört sie zu den drei oben;
+wenn nein, ist sie eine Eigenschaft der Operation und gehört ins Register.
 
 **Der Agent bekommt den Parameter nicht zu sehen.** Skizzen entstehen über
 benannte Grundformen und Maße, nie über rohe Punktlisten (§26, Leitprinzip 5).

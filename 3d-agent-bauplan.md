@@ -1990,11 +1990,25 @@ Projektparametern ist das ein Aufruf, keine Sonderfunktion.
 
 **Umfang**: einzelnes Objekt, aktuelle Auswahl oder ganze Szene.
 
-**Plattenbelegung.** Jeder Körper kommt an die hinterste, dann linkeste freie
-Stelle, an die er passt. Reihenfolge und Ergebnis sind deterministisch. Der
-Mindestabstand gilt zwischen den Körpern; notwendige Plattenhaftungen werden
-zusätzlich berücksichtigt. Der Bauraum und die Zahl verfügbarer Platten sind
-Grenzen der Anordnung.
+**Plattenbelegung.** Gesucht wird für jeden Körper die hinterste, dann
+linkeste freie Stelle, an die er passt; Reihenfolge und Ergebnis sind
+deterministisch. **Steht die Belegung, wandert die Platte als Ganzes in die
+Mitte** — der Verband bleibt, wie er gepackt wurde, und liegt mittig statt in
+der hinteren linken Ecke (Entscheidung Robert, 09.09.2026: „startpunkt mitte
+zum ausrichten gut, orientiere dich an den verschiedenen slicern"; die
+Maschinenprofile von ElegooSlicer, Orca und Bambu Studio führen dafür
+`best_object_pos = 0.5x0.5`). Die Suchreihenfolge ist damit unverändert das,
+was die Anordnung bestimmt; die Verschiebung danach ändert keine relative
+Lage.
+
+**Belegte Plätze verschieben nichts.** Ordnet eine Operation nur einen Teil
+der Szene an — *Druckoptimal ausrichten* tut das für die gewählten Körper —,
+dann stehen die übrigen schon irgendwo, und eine Verschiebung des Verbands
+liefe in sie hinein. Dort bleibt es bei der gefundenen Stelle.
+
+Der Mindestabstand gilt zwischen den Körpern; notwendige Plattenhaftungen
+werden zusätzlich berücksichtigt. Der Bauraum und die Zahl verfügbarer Platten
+sind Grenzen der Anordnung.
 
 Nicht untergebrachte Körper bleiben im Ergebnis mit einem Befund erhalten;
 sie werden nie stillschweigend weggelassen. Eine Änderung des Packverfahrens
