@@ -9031,15 +9031,17 @@ def test_the_sketch_field_knows_as_much_as_the_sketch_mode(window: MainWindow) -
 def test_the_exact_toggle_is_visible_without_unfolding(window: MainWindow) -> None:
     """Der Umschalter der Rechenkerne stand unter „Weitere Einstellungen".
 
-    Dort findet ihn niemand, der nicht schon weiß, dass es ihn gibt — und an
-    ihm hängen sieben Werkzeuge: Fase, Verrundung, Formschräge, Fläche
-    versetzen, exaktes Aushöhlen, Tasche schneiden und die Umwandlung ins
-    Netz. Wer den Quader ohne ihn anlegt, findet sie später alle grau, und
-    zurück führt kein Weg (``kind_requirement`` sagt genau das).
+    Dort findet ihn niemand, der nicht schon weiß, dass es ihn gibt. §2.4
+    stellt hinten hin, was Toleranz, Auflösung oder Rückfallverhalten ist —
+    eine Entscheidung darüber, was mit dem Ergebnis später geht, ist keins
+    davon.
 
-    §2.4 stellt hinten hin, was Toleranz, Auflösung oder Rückfallverhalten
-    ist. Eine Entscheidung darüber, was mit dem Ergebnis später überhaupt geht,
-    ist keins davon.
+    **Was an ihm hängt, ist am 10.09.2026 kleiner geworden.** Er nannte sieben
+    Werkzeuge, die es ohne ihn nicht gäbe; Fase, Verrundung, Formschräge und
+    Fläche versetzen rechnen seitdem auch am Netz. Übrig bleibt, was wirklich
+    an ihm hängt: die runde Kurve statt des Sehnenzugs, das exakte Aushöhlen
+    und STEP. Geprüft wird deshalb, dass der Satz **eine Folge** nennt und
+    nicht mehr eine Liste von Verboten.
     """
     from PySide6.QtWidgets import QCheckBox
 
@@ -9054,8 +9056,10 @@ def test_the_exact_toggle_is_visible_without_unfolding(window: MainWindow) -> No
         advanced = getattr(dialog, "advanced", None)
         if advanced is not None:
             assert not advanced.isChecked(), "gemessen wird mit zugeklapptem Bereich"
-        # Und er sagt, was er entscheidet: die Werkzeuge beim Namen.
-        assert "Tasche" in exact.toolTip(), exact.toolTip()
+        # Und er sagt, was er entscheidet — beim Namen und nicht als Drohung.
+        said = exact.toolTip()
+        assert "STEP" in said, said
+        assert "Kurven" in said, said
     finally:
         dialog.reject()
 
@@ -9313,10 +9317,23 @@ def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
     und niemand hörte zu: der Griff ließ sich ziehen, das Modell blieb, wie es
     war. Ein Test, der nur den Sender prüft, hätte das nicht gefunden — dieser
     prüft, was im Dokument ankommt.
+
+    **Und seit dem 10.09.2026 kommt dort die Fläche an, nicht ihre Normale.**
+    Der Schritt trug ``nx/ny/nz``, und die Operation bewegte damit jede Fläche,
+    die dorthin zeigt — an einer Treppe beide Stufen zugleich, während der
+    Kunde eine einzelne angefasst hatte.
     """
     window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
     window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
-    window.viewport.faceDragged.emit((0.0, 0.0, 1.0), 3.0)
+    window.session.wait_for_idle(60_000)
+    body = next(iter(window.session.last_result.scene.objects.values()))
+    top = next(
+        entry
+        for entry in body.features.values()
+        if entry.kind == "face" and entry.params["normal"][2] > 0.9
+    )
+
+    window.viewport.faceDragged.emit(top.id, 3.0)
     window.session.wait_for_idle(60_000)
 
     assert [entry.op for entry in window.session.project.document.ops] == [
@@ -9325,7 +9342,8 @@ def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
     ]
     moved = window.session.project.document.ops[-1]
     assert moved.params["distance"] == pytest.approx(3.0)
-    assert moved.params["nz"] == pytest.approx(1.0)
+    assert moved.params["face"] == top.id, "der Schritt nennt die Fläche, die gezogen wurde"
+    assert "nz" not in moved.params or moved.params["nz"] == pytest.approx(1.0)
 
 
 def test_a_late_worker_does_not_switch_off_its_successor(session: Session) -> None:
@@ -12240,12 +12258,12 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     In dem Fall hilft kein Haken. Die Auswertung weiß, welcher Schritt es war
     (``evaluate.exact_became_mesh``), und der Satz nennt ihn.
 
-    **Gemessen wird das an ``draft_faces``** — und das ist schon die zweite
-    Umstellung dieser Art. Erst stand hier ``sketch_pocket``, bis die Tasche am
-    30.08.2026 auch in Netze schneiden lernte; dann ``fillet_edges``, bis
-    Verrunden am 10.09.2026 dasselbe lernte. Die Zusage selbst ist davon
-    unberührt und gilt weiter für die Operationen, die den exakten Kern
-    wirklich brauchen — die Formschräge ist eine davon.
+    **Gemessen wird das an ``brep_to_mesh``** — die dritte Umstellung dieser
+    Art an einem Tag. Erst stand hier ``sketch_pocket``, bis die Tasche am
+    30.08.2026 auch in Netze schneiden lernte; dann ``fillet_edges``, dann
+    ``draft_faces``, bis beide am 10.09.2026 dasselbe lernten. Die Umwandlung
+    ist die einzige, die es nie anders geben kann: „ein exakter Körper wird
+    ein Netz" braucht einen exakten Körper.
     """
     window.session.start_new()
     window.session.apply(
@@ -12260,7 +12278,7 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
 
     window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
     window._update_actions()
-    hint = window._op_actions["draft_faces"].toolTip()
+    hint = window._op_actions["brep_to_mesh"].toolTip()
 
     assert str(REGISTRY.get("drill_hole").title) in hint, hint
     assert "Nimm die Schritte ab dort zurück" in hint, "der Satz nennt eine Handlung, die es gibt"
@@ -13120,11 +13138,11 @@ def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> No
     Zwilling auf der *Auswahl* kann, nicht ob darüber liegende Schritte die
     Exaktheit brauchen.
 
-    **Der Schritt darüber war bis zum 10.09.2026 eine Verrundung.** Die
-    rechnet seitdem an beiden Kernen, und damit kostet das Zurückschalten dort
-    gar nichts mehr — es kommt eine Rundung aus Sehnen statt einer Kurve, und
-    kein Anhalten. Geprüft wird deshalb an der Formschräge, die den exakten
-    Kern weiterhin braucht.
+    **Der Schritt darüber war bis zum 10.09.2026 eine Verrundung, danach eine
+    Formschräge.** Beide rechnen seitdem an beiden Kernen, und damit kostet das
+    Zurückschalten dort gar nichts mehr — es kommt eine Rundung aus Sehnen
+    statt einer Kurve, und kein Anhalten. Geprüft wird deshalb am exakten
+    Aushöhlen, das den zweiten Kern weiterhin braucht.
 
     Gesperrt wird trotzdem nicht: Zurückschalten ist eine legitime Absicht,
     und ein Haken, den man nicht abwählen darf, wäre die schlechtere
@@ -13139,8 +13157,8 @@ def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> No
     history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
     box_step = document.ops[-1].id
     history.apply(
-        "Formschräge",
-        [OperationDraft(op="draft_faces", inputs=("obj_1",), params={"angle": 3.0})],
+        "Aushöhlen",
+        [OperationDraft(op="shell_exact", inputs=("obj_1",), params={"wall": 2.0})],
     )
 
     hint = window._twin_toggle_hint("Grundsatz.", box_step, exact_now=True)

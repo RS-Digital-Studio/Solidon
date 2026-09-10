@@ -3458,8 +3458,16 @@ class Viewport(QWidget):
     „fehlgeschlagen": Er sagt nicht einmal, dass etwas nicht ging (Regel 17).
     Der Satz kommt vom Fenster, das die Frage auch beantwortet
     (:meth:`set_sketch_pull`)."""
-    faceDragged = Signal(object, float)
-    """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
+    faceDragged = Signal(str, float)
+    """Ein Zug an einer Fläche — **welche** und wie weit entlang ihrer Normalen.
+
+    **Die Kennung und nicht die Normale** (10.09.2026): Sie stand hier, und das
+    Fenster reichte sie als ``nx/ny/nz`` an die Operation weiter — die bewegte
+    damit *jede* Fläche, die dorthin zeigt. An einer Treppe wanderten beide
+    Stufen zugleich, während der Kunde eine einzelne angefasst hatte. Der
+    Viewport weiß längst, welche es ist (:meth:`gizmo_target`); er hat es nur
+    nicht gesagt.
+    """
     scaleDragged = Signal(float)
     """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
     macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
@@ -3895,6 +3903,10 @@ class Viewport(QWidget):
         self._drag_axis: Axis | None = None
         """Die Achse des laufenden Zugs, sobald sie sich gezeigt hat."""
         self._drag_normal: Vec3 | None = None
+        #: Welche Fläche am Griff hängt — was ``faceDragged`` sendet.
+        self._drag_face: FeatureId | None = None
+        #: Ob unter dem Zeiger eine bearbeitbare Kante liegt (§18.5).
+        self._hover_edge = False
         """Die Flächennormale, wenn der Zug an einer Fläche hängt."""
         # Kein Einrasten, solange die Leiste nichts anderes sagt — die
         # Begründung steht bei ``DEFAULT_GRID_STEP`` in ``transform_bar``.
@@ -6952,7 +6964,9 @@ class Viewport(QWidget):
             return "sculpt"
         if self._measure_mode != "off":
             return "measure"
-        return "feature" if self._hover_feature else "select"
+        # Eine Kante ist die zweite Stufe wie ein Merkmal (§18.5) — derselbe
+        # Handgriff, dasselbe Bild.
+        return "feature" if (self._hover_feature or self._hover_edge) else "select"
 
     def _means_a_feature(self) -> bool:
         """Ob ein Klick jetzt **auswählt**, statt eine Stelle zu setzen.
@@ -6975,6 +6989,7 @@ class Viewport(QWidget):
             # und die Suche danach wäre die teuerste Stelle im Zug.
             self._hover_timer.stop()
             self._set_hover_target(None, None)
+            self._set_hover_edge(False)
         self._update_cursor()
 
     def _set_hover_target(self, object_id: ObjectId | None, feature_id: FeatureId | None) -> None:
@@ -7041,7 +7056,36 @@ class Viewport(QWidget):
         feature_id: FeatureId | None = None
         if point is not None:
             object_id, feature_id = self._click_target(self._from_view(point))
+        # **Und die Kante zuerst, weil der Klick es auch so hält.** Über einer
+        # Kante zeigte der Zeiger bis zum 10.09.2026 die Merkmalsform des
+        # Körpers darunter — die Vorrangigkeit steht in ``_on_pick_requested``
+        # (erst ``_edge_click``, dann ``_on_picked``), und ein Zeiger, der eine
+        # andere Reihenfolge behauptet als die Behandlung, verspricht etwas,
+        # das nicht eintritt (`.claude/rules/ansicht.md`).
+        self._set_hover_edge(point is not None and self._edge_under(x, y, point))
         self._set_hover_target(object_id, feature_id)
+
+    def _edge_under(self, x: int, y: int, point: Vec3) -> bool:
+        """Ob ein Klick hier eine Kante wählen würde — dieselbe Rechnung.
+
+        Wörtlich die Bedingungen aus :meth:`_edge_click`, nur ohne die
+        Auswahl: Stufe, Körper unter dem Zeiger, Kante im Bild. Zwei
+        Fassungen dieser Frage liefen auseinander, und dann zeigte der Zeiger
+        eine Kante an, die der Klick nicht nimmt.
+        """
+        if not self._means_a_feature():
+            return False
+        object_id = self._object_at_view(self._from_view(point))
+        if object_id is None or not self._goes_deeper(object_id, direct=False, add=False):
+            return False
+        return self._edge_at(x, y, object_id, behind=self._from_view(point)) is not None
+
+    def _set_hover_edge(self, found: bool) -> None:
+        """Merkt, ob eine Kante unter dem Zeiger liegt, und zieht den Zeiger nach."""
+        if found == self._hover_edge:
+            return
+        self._hover_edge = found
+        self._update_cursor()
 
     def _note_pointer(self, x: int, y: int) -> None:
         """Wo der Zeiger steht — in Gerätepixeln, gezählt wie Qt (oben links).
@@ -10735,6 +10779,7 @@ class Viewport(QWidget):
             normal = face.params["normal"]
             self._drag_kind = "face"
             self._drag_normal = (float(normal[0]), float(normal[1]), float(normal[2]))
+            self._drag_face = face.id
             self.drag_bar.follow_length(tr("Fläche"), along_normal(steps.offset, self._drag_normal))
         elif steps.turns and steps.axis is not None:
             # **Gezeigt wird, was angewandt wird — der gerastete Wert.** Hier
@@ -11224,7 +11269,7 @@ class Viewport(QWidget):
                 along_normal(steps.offset, (normal[0], normal[1], normal[2])), self._grid_step
             )
             if abs(distance) > EPS_DISPLAY:
-                self.faceDragged.emit(normal, distance)
+                self.faceDragged.emit(face.id, distance)
             self._end_drag()
             return
         snapped = TransformSteps(
@@ -11317,6 +11362,7 @@ class Viewport(QWidget):
         self._drag_kind = None
         self._drag_axis = None
         self._drag_normal = None
+        self._drag_face = None
         # Der Ring gehört dem Zug; was danach gilt, zeigt die Auswertung.
         self._drop_ghost()
         self._drop_turn_arc()
@@ -11351,9 +11397,9 @@ class Viewport(QWidget):
         if value is None or kind is None or unusable:
             self.drag_bar.value.selectAll()
             return
-        if kind == "face" and self._drag_normal is not None:
+        if kind == "face" and self._drag_face is not None:
             if abs(value) > EPS_DISPLAY:
-                self.faceDragged.emit(self._drag_normal, float(value))
+                self.faceDragged.emit(self._drag_face, float(value))
         elif kind == "turn" and self._drag_axis is not None:
             if abs(value) > EPS_DISPLAY:
                 steps = TransformSteps(axis=self._drag_axis, angle=float(value))
@@ -12716,7 +12762,15 @@ class Viewport(QWidget):
         # Hier fehlte es: Auf Platte 2 fragte der Rechtsklick eine Bettbreite
         # daneben nach dem Körper, fand dort meistens keinen und hob die
         # Auswahl auf, statt das Menü zu ihr zu zeigen.
-        self._select_at(self._from_view(point), direct=True)
+        #
+        # **Und die Kante zuerst, wie beim Linksklick.** Ein Rechtsklick auf
+        # eine Kante wählte bis zum 10.09.2026 das Merkmal darunter, und das
+        # Menü bot die Handlungen dieses Merkmals an — an einer Stelle, an der
+        # der Linksklick längst die Kante nimmt. Zwei Tasten, dieselbe Stelle,
+        # zwei verschiedene Antworten: Das ist die Sorte Unterschied, die
+        # niemand als Absicht liest.
+        if not self._edge_click(x, y, self._from_view(point)):
+            self._select_at(self._from_view(point), direct=True)
         self.contextMenuAt.emit(x, y)
 
     def _select_at(self, point: Vec3, *, direct: bool = False, add: bool = False) -> bool:

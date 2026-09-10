@@ -1762,10 +1762,19 @@ Drucken und werden abgewiesen, nicht gerechnet.
 
 **Varianten** — dieselbe Op-Kette mit durchvariiertem Parameter (§28.3)
 
-**Fasen und Verrundungen benötigen exakte B-Rep-Kanten (§30).** Ein importiertes
-Mesh erhält durch den zweiten Kern keine exakte Flächentopologie. Die
-Flächenrückgewinnung aus Netzen ist eine gesonderte Entscheidung und keine
-Eigenschaft des STEP-Exports.
+**Fasen und Verrundungen greifen an beiden Kernen** (Entscheidung Robert,
+10.09.2026: „alles soll immer bearbeitbar sein, egal ob importiert Format egal
+und beim selbst zeichnen"). Ein importiertes Mesh erhält durch den zweiten Kern
+weiterhin keine exakte Flächentopologie; die Flächenrückgewinnung aus Netzen
+bleibt eine gesonderte Entscheidung und keine Eigenschaft des STEP-Exports.
+
+Was der exakte Kern beisteuert, ist deshalb nicht mehr die **Möglichkeit**,
+sondern die **Genauigkeit**: Dort ist eine Verrundung eine Kurve, am Netz ein
+Sehnenzug, dessen Abweichung `units.MAX_FACET_SAG` einhält — dieselbe Grenze,
+mit der der Kern tesselliert. Bei einer **Fase** gibt es gar keinen
+Unterschied; sie ist eine Ebene, und eine Ebene hat ein Netz exakt. Dasselbe
+gilt für *Fläche versetzen*, *Formschräge anstellen* und das Ändern oder
+Wegnehmen einer erkannten Rundung (`geom/edge_ops.py`, `geom/face_ops.py`).
 
 ---
 
@@ -2998,10 +3007,11 @@ mitreisen; daraus entsteht kein Weg zur Ausführung fremden Quelltexts.
 - Rückfallstufe „voxel" rettet die Operation, kostet aber Genauigkeit
 - Reproduzierbarkeit gilt nur bei gleichen Bibliotheksversionen
 - Farbquantisierung aus Texturen bleibt gröber als das Rendering
-- Verrundungen und Fasen an exakten Kanten benötigen einen B-Rep-Körper.
-  Erkannte Merkmale eines Meshes machen es nicht automatisch zu einer
-  bearbeitbaren B-Rep-Konstruktion; eine Flächenrückgewinnung ist ein eigener
-  möglicher Ausbau (§30).
+- Verrundungen und Fasen an **exakten** Kanten benötigen einen B-Rep-Körper.
+  Am Netz entstehen sie seit dem 10.09.2026 ebenfalls, aber als Sehnenzug
+  innerhalb von `units.MAX_FACET_SAG`; erkannte Merkmale eines Meshes machen es
+  dadurch nicht zu einer bearbeitbaren B-Rep-Konstruktion, und eine
+  Flächenrückgewinnung bleibt ein eigener möglicher Ausbau (§30).
 - Baugruppen mit echten Funktionstoleranzen bleiben Handarbeit; der Agent
   liefert den Entwurf, nicht das Endergebnis
 - Die Zielwerte in §31 gelten mit dem übersetzten Schichtkern; ohne ihn ist die

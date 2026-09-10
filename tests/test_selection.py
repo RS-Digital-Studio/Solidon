@@ -2100,3 +2100,80 @@ def test_a_clicked_edge_never_eats_a_measuring_or_adding_click(qt_app: QApplicat
     view._on_left_click(360, 300, add=True)
     assert view.highlighted_edge() is None, "Umschalt meint den Körper, nicht die Kante"
     assert dazu and dazu[-1][1] is True, "und der Baum erfährt vom Dazunehmen"
+
+
+def test_the_pointer_over_an_edge_promises_what_the_click_does(qt_app: QApplication) -> None:
+    """Der Zeiger stellt dieselbe Frage wie der Klick — auch an einer Kante.
+
+    Bis zum 10.09.2026 fragte er nur nach dem **Merkmal**: Über einer Kante
+    stand die Merkmalsform, weil die Fläche darunter eine ist, und der Klick
+    nahm dann die Kante. Zwei Antworten auf dieselbe Stelle, und die eine sagt
+    die andere nicht vorher — genau die Lücke, die `.claude/rules/ansicht.md`
+    an dieser Stelle benennt.
+
+    Geprüft wird die **Rolle**, nicht das Bild: Offscreen gibt es keinen
+    Zeiger, den man ansehen koennte, und ``_resting_role`` ist die Stelle, an
+    der die Rangfolge steht.
+    """
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    _solid, _oben = _exact_block(view)
+    an_der_kante = (-20.0, 0.0, 20.0)
+    auf_der_flaeche = (0.0, 0.0, 20.0)
+    renderer.picks[(360, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    renderer.picks[(400, 300)] = Pick(auf_der_flaeche, view._actors["block"], 0)
+    view._selected = "block"
+
+    # **Die Attrappe hat kein Widget**, und ``_update_cursor`` setzt den Zeiger
+    # an genau dieses. Geprüft wird hier die Rolle und nicht das Bild — welchen
+    # Zeiger Qt daraus macht, steht in ``cursors.cursor`` und hat seinen
+    # eigenen Test.
+    view._update_cursor = lambda: None  # type: ignore[method-assign]
+
+    view._hover_at = (360, 300)
+    view._look_under_pointer()
+    assert view._hover_edge is True, "über der Kante liegt eine Kante"
+    assert view._resting_role() == "feature", "und der Zeiger sagt: hier wählt ein Klick"
+
+    # **Die Kante allein muss reichen.** Am Quader ist jede Fläche auch ein
+    # Merkmal, und damit stünde die Rolle ohnehin auf „feature" — der Test
+    # prüfte dann die Fläche und nicht die Kante. Ohne das Merkmal daneben
+    # zeigt sich, ob die Kante wirklich zählt.
+    view._hover_feature = False
+    assert view._resting_role() == "feature", "eine Kante ist die zweite Stufe wie ein Merkmal"
+
+    view._hover_at = (400, 300)
+    view._look_under_pointer()
+    assert view._hover_edge is False, "auf der nackten Fläche keine"
+
+    # **Die Gegenprobe zur Stufe.** Ohne gewählten Körper meint der Klick
+    # den Körper und nicht die Kante — der Zeiger muss dasselbe sagen.
+    view._selected = None
+    view.select_edge(None, None)
+    view._hover_at = (360, 300)
+    view._look_under_pointer()
+    assert view._hover_edge is False, "die erste Stufe meint den Körper"
+
+
+def test_a_right_click_on_an_edge_means_the_edge(qt_app: QApplication) -> None:
+    """Rechts und links meinen an derselben Stelle dasselbe.
+
+    Der Rechtsklick waehlte bis zum 10.09.2026 das Merkmal unter der Kante und
+    zeigte dessen Menü — während der Linksklick daneben laengst die Kante
+    nimmt. Zwei Tasten, eine Stelle, zwei Antworten.
+    """
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    _solid, oben = _exact_block(view)
+    an_der_kante = (-20.0, 0.0, 20.0)
+    renderer.picks[(360, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    view._selected = "block"
+    gemeldet: list[tuple[int, int]] = []
+    view.contextMenuAt.connect(lambda x, y: gemeldet.append((x, y)))
+
+    view._on_right_click(360, 300)
+
+    assert view.highlighted_edge() == ("block", oben), "der Rechtsklick nimmt die Kante"
+    assert gemeldet == [(360, 300)], "und das Menü geht trotzdem auf"

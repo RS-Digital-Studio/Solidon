@@ -9216,7 +9216,7 @@ class MainWindow(QMainWindow):
         )
         self.session.apply(REGISTRY.get(op).title, [draft])
 
-    def _on_face_dragged(self, normal: Any, distance: float) -> None:
+    def _on_face_dragged(self, feature_id: str, distance: float) -> None:
         """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
 
         Der Viewport hat das Signal seit dem Gizmo an der Fläche gesendet, und
@@ -9227,6 +9227,12 @@ class MainWindow(QMainWindow):
         Ein Zug, eine Transaktion — dieselbe Zusage wie beim Verschieben des
         ganzen Körpers, nur dass hier die Fläche wandert und die Nachbarwände
         mitwachsen.
+
+        **Gesendet wird die Fläche und nicht mehr ihre Normale** (10.09.2026).
+        Der Schritt trug ``nx/ny/nz``, und die Operation bewegte damit jede
+        Fläche, die dorthin zeigt: An einer Treppe wanderten beide Stufen
+        zugleich, 24000,0 mm³ statt 21000,0, während der Kunde eine einzelne
+        angefasst hatte. Der Viewport wusste die ganze Zeit, welche es ist.
         """
         selected = self.object_tree.selected()
         if selected is None:
@@ -9237,12 +9243,7 @@ class MainWindow(QMainWindow):
                 OperationDraft(
                     op="push_face",
                     inputs=(selected,),
-                    params={
-                        "nx": float(normal[0]),
-                        "ny": float(normal[1]),
-                        "nz": float(normal[2]),
-                        "distance": float(distance),
-                    },
+                    params={"face": feature_id, "distance": float(distance)},
                 )
             ],
         )
@@ -10641,10 +10642,50 @@ class MainWindow(QMainWindow):
         Umrechnung (``_from_view_point``) passiert hier, weil hier beide
         Seiten bekannt sind.
         """
-        menu = self.object_tree.context_menu()
+        menu = self._edge_menu() or self.object_tree.context_menu()
         if menu is None:
             return
         menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
+
+    def _edge_menu(self) -> QMenu | None:
+        """Das Menü zur gewählten **Kante** — oder ``None``, wenn keine da ist.
+
+        **Warum es das gibt** (10.09.2026): Ein Rechtsklick auf eine Kante bot
+        die Handlungen des Merkmals darunter an, während der Linksklick an
+        derselben Stelle längst die Kante nimmt. Zwei Tasten, dieselbe Stelle,
+        zwei verschiedene Antworten — das liest niemand als Absicht.
+
+        Die Einträge kommen aus derselben Auskunft des Kerns wie die Knöpfe im
+        Merkmalspanel (:func:`~app.core.perceive.actions.edge_actions`): Welche
+        Operation an einer Kante ansetzt, ist eine Aussage über Geometrie und
+        keine über die Oberfläche. Zwei Listen liefen auseinander, und dann
+        stünde im Menü eine Handlung, die das Panel nicht kennt.
+        """
+        from app.core.perceive.actions import edge_actions
+
+        chosen = self.viewport.highlighted_edge()
+        if chosen is None:
+            return None
+        _object_id, key = chosen
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+        for action in edge_actions(key):
+            if action.op is None:
+                continue
+            entry = menu.addAction(str(action.title))
+            entry.setToolTip(str(REGISTRY.get(action.op).doc))
+            # **Der Dialog und nicht die Ausführung.** Das Panel daneben hat
+            # das Feld für den Radius schon im Bild; ein Menüeintrag hat keins,
+            # und eine Verrundung mit stillschweigender Vorgabe wäre ein
+            # Schritt, den niemand bestellt hat. ``given`` belegt vor, was der
+            # Klick schon beantwortet hat — die Auswahl ``named`` und den
+            # Schlüssel der Kante.
+            entry.triggered.connect(
+                lambda _checked=False, op=action.op, fixed=action.fixed: self.run_operation(
+                    REGISTRY.get(op), dict(fixed)
+                )
+            )
+        return menu if not menu.isEmpty() else None
 
     def _on_sketch_menu(self, point: object, x: int, y: int) -> None:
         """Das Kontextmenü der Zeichnung, am Zeiger (§30.1, P4).
