@@ -851,14 +851,19 @@ def _feature_tip(feature_id: str, feature: Feature, document: Document | None) -
 _STEP_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
-def _part_step(created_by: int | None, document: Document | None) -> tuple[str, int] | None:
-    """Titel und Nummer des Schrittes, wenn er einen **Baustein** eingesetzt hat.
+def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any, Any] | None:
+    """Der Schritt und sein Registereintrag, wenn er einen **Baustein** setzte.
 
-    Sonst ``None``. Gruppiert wird nur nach Bausteinen, und das hat einen
-    Grund: Ein Baustein ist eine Sache mit einem Namen, die der Kunde als
-    Ganzes eingesetzt hat — „Lochwand-Einhänger", nicht „drei Flächen und zwei
-    Verrundungen". Eine Bohrung dagegen *ist* ein Merkmal; ein Knoten mit genau
-    einem Kind darunter wäre eine Ebene, die nichts ordnet.
+    Sonst ``None``. Gefragt wird über die Kategorie ``parts`` und nicht über
+    den Namen der Operation: ``drill_hole`` erzeugt ebenfalls Merkmale mit
+    Provenienz und ist kein Baustein, und ein Namensmuster wie ``insert_*``
+    schwiege beim nächsten der siebenundzwanzig.
+
+    **Zwei Stellen fragen das, und sie fragen es hier.** Der Objektbaum
+    gruppiert danach (:func:`_part_group`), und das Fenster entscheidet danach,
+    ob rechts die Handlungen des Bausteins oder die des Merkmals stehen. Zwei
+    Rechnungen für dieselbe Frage laufen beim nächsten Nachbessern
+    auseinander — diese hier stand zweimal, bis es jemand nachgezählt hat.
     """
     if created_by is None or document is None:
         return None
@@ -869,8 +874,21 @@ def _part_step(created_by: int | None, document: Document | None) -> tuple[str, 
             spec = REGISTRY.get(entry.op)
         except AppError:
             return None
-        return (str(spec.title), created_by) if spec.category == "parts" else None
+        return (entry, spec) if spec.category == "parts" else None
     return None
+
+
+def _part_group(created_by: int | None, document: Document | None) -> tuple[str, int] | None:
+    """Titel und Nummer für das Dach im Objektbaum.
+
+    Gruppiert wird nur nach Bausteinen, und das hat einen Grund: Ein Baustein
+    ist eine Sache mit einem Namen, die der Kunde als Ganzes eingesetzt hat —
+    „Lochwand-Einhänger", nicht „drei Flächen und zwei Verrundungen". Eine
+    Bohrung dagegen *ist* ein Merkmal; ein Knoten mit genau einem Kind darunter
+    wäre eine Ebene, die nichts ordnet.
+    """
+    found = part_step_of(created_by, document)
+    return (str(found[1].title), int(found[0].id)) if found is not None else None
 
 
 def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | None:
@@ -1327,7 +1345,7 @@ class ObjectTree(QWidget):
             # zusammenfasst oder verdeckt.
             alike: dict[tuple[str, str], int] = {}
             for other_id, other in entry.features.items():
-                if _part_step(other.created_by, document) is None:
+                if _part_group(other.created_by, document) is None:
                     schluessel = (feature_name(other_id, other), feature_measure(other))
                     alike[schluessel] = alike.get(schluessel, 0) + 1
             by_kind: dict[tuple[str, str], QTreeWidgetItem] = {}
@@ -1385,7 +1403,7 @@ class ObjectTree(QWidget):
                     waiting.append((under[feature_id], child))
                     continue
 
-                part = _part_step(feature.created_by, document)
+                part = _part_group(feature.created_by, document)
                 if part is None:
                     label = (child.text(0), child.text(1))
                     if alike[label] < BUNDLE_FROM:
@@ -4626,6 +4644,7 @@ class FeaturePanel(QWidget):
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None
+        self._part_operation: int | None = None
         self._groups = {}
         self._said_notes.clear()
         self._fit_button = None
@@ -4794,6 +4813,12 @@ class FeaturePanel(QWidget):
 
         self.clear()
         self._feature_id = None
+        # **Woran die Live-Vorschau erkennt, dass sie einen Schritt meint.**
+        # Ohne ihn baute sie aus denselben Werten einen *neuen* Baustein und
+        # zeigte beim Drehen an der Schraubengröße ein zweites Schlüsselloch
+        # an der Vorgabelage — der Fehler, den der Knopf daneben schon
+        # vermeidet (``stepChangeRequested``).
+        self._part_operation = int(operation.id)
         self._empty.setVisible(False)
 
         heading = QLabel(title or str(spec.title), self)
@@ -4807,6 +4832,17 @@ class FeaturePanel(QWidget):
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
+
+    def shown_part_step(self) -> int | None:
+        """Der Schritt, dessen Baustein gerade dasteht — sonst ``None``.
+
+        Die Live-Vorschau fragt danach: Bei einem Baustein wird der vorhandene
+        Schritt mit neuen Werten gerechnet (``change_op``), sonst ein Entwurf
+        neben der Szene. Beides aus denselben Werten zu bauen zeigte ein
+        zweites Schlüsselloch an der Vorgabelage, während man an der
+        Schraubengröße drehte.
+        """
+        return self._part_operation
 
     def show_pair(self, first_id: str, first: Feature, second_id: str, second: Feature) -> None:
         """Wie weit zwei gewählte Merkmale auseinanderstehen.

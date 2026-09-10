@@ -1232,3 +1232,45 @@ def test_only_a_part_step_answers_for_the_feature_that_came_from_it() -> None:
         "zwei Schritte sind zwei Dinge und kein Baustein"
     )
     assert MainWindow._common_part_step(window, []) is None
+
+
+def test_the_live_preview_of_a_part_changes_its_step(qt_app: QApplication) -> None:
+    """Beim Tippen wird der Schritt gerechnet, nicht ein zweiter Baustein daneben.
+
+    Der Knopf machte diesen Unterschied schon (``stepChangeRequested``), die
+    **Vorschau** ging noch den alten Weg: Sie baute aus denselben Werten einen
+    Entwurf, und dem fehlen Ort und Ansatzpunkt. Beim Drehen an der
+    Schraubengröße erschien damit ein zweites Schlüsselloch an der
+    Vorgabelage, während das echte unverändert danebenstand.
+
+    Beide Richtungen, denn eine allein wäre auch dann grün, wenn die Weiche
+    immer dasselbe täte.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    gerufen: list[dict[str, Any]] = []
+    panel = SimpleNamespace(shown_part_step=lambda: 5)
+    fenster = SimpleNamespace(
+        _feature_pending=("insert_keyhole", {"size": "M5"}),
+        feature_panel=panel,
+        _show_preview=object(),
+        object_tree=SimpleNamespace(selected=lambda: "obj_1"),
+        session=SimpleNamespace(
+            preview_async=lambda then, drafts=None, **rest: gerufen.append(
+                {"drafts": drafts, **rest}
+            )
+        ),
+    )
+
+    MainWindow._preview_feature_change(fenster)
+    assert gerufen == [{"drafts": None, "change_op": 5, "change_values": {"size": "M5"}}], gerufen
+
+    # Und ohne Baustein bleibt es beim Entwurf neben der Szene.
+    gerufen.clear()
+    panel.shown_part_step = lambda: None
+    fenster._feature_pending = ("resize_hole", {"diameter": 6.0})
+    MainWindow._preview_feature_change(fenster)
+    assert len(gerufen) == 1 and gerufen[0]["drafts"] is not None, gerufen
+    assert "change_op" not in gerufen[0]

@@ -265,6 +265,7 @@ from app.ui.panels import (
     collapsible,
     describe_selection,
     open_section,
+    part_step_of,
 )
 from app.ui.pose_bar import PoseBar
 from app.ui.print_disclosure import ensure_print_disclosure
@@ -10745,27 +10746,17 @@ class MainWindow(QMainWindow):
     def part_step_of(self, feature: Feature) -> tuple[Any, Any] | None:
         """Der Bausteinschritt, aus dem dieses Merkmal stammt — sonst nichts.
 
-        Gefragt wird über die Provenienz (``Feature.created_by``) und die
-        Kategorie des Registereintrags, nicht über den Namen der Operation:
-        ``parts`` ist die Auskunft, die auch der nächste Baustein mitbringt,
-        während eine Namensliste hier bei jedem neuen still schwiege.
+        **Dieselbe Rechnung wie im Objektbaum**, und sie steht bei ihm:
+        ``panels.part_step_of`` fragt Provenienz und Kategorie. Hier stand sie
+        ein zweites Mal, Zeile für Zeile gleich — zwei Antworten auf eine Frage
+        laufen beim nächsten Nachbessern auseinander, und dann wären die
+        Gruppierung im Baum und die Handlungen rechts verschiedener Meinung
+        darüber, was ein Baustein ist.
 
-        Ein **erkanntes** Merkmal trägt keine Provenienz und kommt hier nie an;
-        das ist richtig, denn zu ihm gibt es keinen Schritt, den man ändern
-        könnte.
+        Ein **erkanntes** Merkmal trägt keine Provenienz und kommt nie durch;
+        das ist richtig, denn zu ihm gibt es keinen Schritt zum Ändern.
         """
-        step = getattr(feature, "created_by", None)
-        if step is None:
-            return None
-        document = self.session.project.document
-        operation = next((entry for entry in document.ops if entry.id == step), None)
-        if operation is None:
-            return None
-        try:
-            spec = REGISTRY.get(operation.op)
-        except AppError, KeyError:
-            return None
-        return (operation, spec) if spec.category == "parts" else None
+        return part_step_of(getattr(feature, "created_by", None), self.session.project.document)
 
     def _one_cavity(self, entry: Any, first: Feature, second: Feature) -> bool:
         """Ob diese zwei Merkmale derselbe Hohlraum sind — Bohrung und Senkung.
@@ -11071,6 +11062,16 @@ class MainWindow(QMainWindow):
         if merkposten is None:
             return
         op, params = merkposten
+        # **Ein Baustein wird vorgeschaut, wie er geändert wird.** Aus denselben
+        # Werten einen Draft zu bauen legte einen *zweiten* daneben: Beim Drehen
+        # an der Schraubengröße erschien ein weiteres Schlüsselloch an der
+        # Vorgabelage, weil dem Draft Ort und Ansatzpunkt fehlen. Denselben
+        # Unterschied macht der Knopf schon (``stepChangeRequested``); die
+        # Vorschau ging noch den alten Weg.
+        step = self.feature_panel.shown_part_step()
+        if step is not None:
+            self.session.preview_async(self._show_preview, change_op=step, change_values=params)
+            return
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op):
             return
