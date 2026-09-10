@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
 import numpy as np
 from shapely import get_coordinates
@@ -52,6 +52,7 @@ from app.core.types import (
     Finding,
     Mesh,
     ObjectId,
+    PlaneFrame,
     Profile,
     Quality,
     Severity,
@@ -60,6 +61,9 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length, format_volume, is_close
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
+    from app.core.sketch.profile import Profile as SketchProfile
 
 #: Segmente, aus denen ein Bohrzylinder gebaut wird. Fein genug, dass das
 #: gedruckte Loch rund ist, grob genug, um die Dreieckszahl nicht zu sprengen.
@@ -391,6 +395,144 @@ def resize_bore(
     )
 
 
+#: Wieviel größer der Körper gebaut wird, der ein gemessenes Merkmal ausfüllt,
+#: abträgt oder auseinanderzieht — am **Durchmesser**, wie jedes Maß im Haus.
+#:
+#: **Die Zahl stand bis zum 10.09.2026 zweimal da**, hier und als
+#: ``SLOT_OVERLAP`` daneben, beide 0,02 und beide mit dem Vermerk „dieselbe
+#: Zahl, derselbe Grund". Genau diese Form hat ``BOOLEAN_OVERLAP`` schon
+#: einmal gekostet (siehe dort): Zwei Stellen, die gleich bleiben *müssen*,
+#: bleiben es nicht.
+#:
+#: **Und der Grund ist nicht der, der lange dabeistand.** Koplanare Flächen
+#: rechnet ``manifold3d`` robust — neun Lagen mit 0,05, 0,01 und 0,0 liefen
+#: alle über Stufe 1 (gemessen 27.08.2026, ``boolean.BOOLEAN_OVERLAP``). Was
+#: die Zugabe hier wirklich verhindert, ist ein **Tangentialkontakt**: Der
+#: Langlochkörper legte sich sonst entlang zweier Linien an die alte
+#: Bohrungswand, und die zwei Bögen säßen exakt darauf. Beim Ausfüllen eines
+#: Merkmals ist es dieselbe Lage, nur andersherum.
+#:
+#: Nebenbei deckt sie das Vieleck, zu dem ein Umriss abgetastet wird: bei Ø 5
+#: sind das 2,4 Mikrometer am Radius gegen 10 Mikrometer Zugabe am Radius —
+#: der Vergleich gilt für beide dieselbe Größe, und das ist nicht
+#: selbstverständlich (``.claude/rules/operationen.md``, „Toleranzen sind
+#: Durchmessermaße").
+FEATURE_OVERLAP: Final = 0.02
+
+
+def slot_bore(
+    mesh: MeshData,
+    *,
+    position: Vec3,
+    direction: Vec3,
+    diameter: float,
+    depth: float,
+    through: bool,
+    length: float,
+    angle_deg: float,
+    profile: Profile,
+    quality: Quality = "fine",
+    seed: int | None = None,
+) -> BoreResult:
+    """Zieht eine erkannte Bohrung zu einem Langloch auseinander.
+
+    Ein Schritt und eine Boolesche: Der Langlochkörper deckt die vorhandene
+    Bohrung mit ab, also ist alles, was übrig bleibt, das seitlich neu
+    abgetragene Material. ``position``, ``direction``, ``diameter`` und
+    ``depth`` kommen aus dem erkannten Merkmal und werden nicht verändert —
+    eingetragen hat der Kunde nur Länge und Richtung.
+
+    **Die Materialtoleranz bleibt hier draußen.** ``diameter`` ist ein
+    *gemessenes* Maß und kein Nenndurchmesser; sie ein zweites Mal
+    aufzuschlagen machte aus einer Formänderung eine Maßänderung. Dieselbe
+    Entscheidung wie bei :func:`resize_bore`.
+    """
+    from app.core.geom.sketch_solid import extrude_profile
+    from app.core.sketch.planes import frame_of
+
+    travel = slot_travel(diameter=diameter, length=length)
+    if travel <= EPS_GEOM:
+        raise ValidationError(
+            field="slot_length",
+            constraint="slot_proportion",
+            detail=SLOT_TOO_SHORT,
+            value=length,
+        )
+    vector = np.asarray(direction, dtype=float)
+    span = float(np.linalg.norm(vector))
+    if span <= EPS_GEOM:
+        raise ValueError("a bore direction must not be zero")
+    if depth <= EPS_GEOM:
+        raise ValueError("a detected bore must have a positive depth")
+    unit = vector / span
+    axis: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
+    frame = frame_of(axis, position)
+    # **Derselbe Rahmenbau wie beim Bohren, und trotzdem nicht immer dieselbe
+    # Zahl.** ``frame_of`` spiegelt seine erste Achse, wenn die Normale kippt
+    # (das Kreuzprodukt aus Z und ihr) — und ``drill`` bekommt die Normale der
+    # **Fläche**, die Erkennung dagegen eine Achse, deren größte Komponente sie
+    # auf positiv normiert. Gemessen an derselben Platte mit 45 Grad: von oben
+    # gebohrt 45 Grad, von unten gebohrt 135; an der erkannten Bohrung beide
+    # Male 45. Der Winkel zählt hier also gegen den Rahmen der **gemessenen**
+    # Achse und ist damit seitenunabhängig — was richtig ist, denn eine
+    # erkannte Bohrung hat zwei Mündungen, und welche gemeint ist, hat niemand
+    # gesagt (Regel 21).
+    to_world = np.eye(4)
+    to_world[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    to_world[:3, 3] = np.asarray(position, dtype=float)
+    to_local = np.linalg.inv(to_world)
+    local_body = mesh.raw.copy()
+    local_body.apply_transform(to_local)
+
+    # Nur ein durchgehendes Loch darf über beide Mündungen hinausragen. Bei
+    # einer Blindbohrung bliebe der Boden sonst nicht, wo er gemessen wurde —
+    # dieselbe Abwägung wie in :func:`resize_bore`.
+    height = depth + (BOOLEAN_OVERLAP * 2.0 if through else 0.0)
+    tool = extrude_profile(
+        slot_profile(
+            radius=(diameter + FEATURE_OVERLAP) / 2.0,
+            travel=travel,
+            angle_deg=angle_deg,
+        ),
+        height,
+        PlaneFrame(
+            origin=(0.0, 0.0, -height / 2.0),
+            x_axis=(1.0, 0.0, 0.0),
+            y_axis=(0.0, 1.0, 0.0),
+            normal=(0.0, 0.0, 1.0),
+        ),
+    )
+    outcome = boolean(
+        "difference",
+        [mesh.replacing(local_body), MeshData.of(tool)],
+        quality=quality,
+        seed=seed,
+    )
+    world_body = outcome.mesh.raw.copy()
+    world_body.apply_transform(to_world)
+    slotted = outcome.mesh.replacing(world_body)
+    findings = list(outcome.findings)
+    nothing = without_effect(mesh, slotted, "difference", profile)
+    if nothing is not None:
+        findings.append(nothing)
+    findings.extend(
+        _edge_findings(
+            mesh,
+            position=position,
+            frame=frame,
+            diameter=diameter,
+            travel=travel,
+            angle_deg=angle_deg,
+        )
+    )
+    return BoreResult(
+        mesh=slotted,
+        solver=outcome.solver,
+        diameter=diameter,
+        findings=findings,
+    )
+
+
 def drill_outline(
     *,
     diameter: float,
@@ -480,6 +622,169 @@ def drill_outline(
     ]
 
 
+#: Ein Langloch trägt keine Aufweitung — die Absage, die beide Kerne teilen.
+#:
+#: Eine Senkung über einem Langloch wäre entweder rund, dann säße ein
+#: Schraubenkopf nur in der Mitte versenkt, oder selbst ein Langloch, und dann
+#: bliebe offen, welche der beiden Längen gemeint ist. Solange die Frage nicht
+#: gestellt ist, wird sie nicht geraten (Regel 21).
+SLOT_AND_WIDENING: Final = _(
+    "Ein Langloch und eine Aufweitung gehen nicht zusammen. Setzen Sie die "
+    "Aufweitung auf null, oder lassen Sie die Bohrung rund."
+)
+
+#: Was ein Langloch von einer runden Bohrung unterscheidet — und die Grenze,
+#: unterhalb derer es keines ist.
+#:
+#: **Nicht derselbe Satz wie bei der Skizzen-Grundform**, obwohl es hier lange
+#: so dastand: :func:`app.core.sketch.shapes.slot` sagt „länger als breit —
+#: sonst ist es ein Kreis". Dort zeichnet jemand einen Umriss, hier bohrt
+#: jemand ein Loch, und die Wörter, die er dabei benutzt, sind andere. Gleich
+#: ist der **Bau** des Satzes, und das genügt: erst die Bedingung, dann was
+#: sonst daraus wird.
+SLOT_TOO_SHORT: Final = _(
+    "Ein Langloch muss länger sein als sein Durchmesser — sonst ist es eine runde Bohrung."
+)
+
+
+def slot_travel(*, diameter: float, length: float, widening_diameter: float = 0.0) -> float:
+    """Wie lang die Mittellinie eines Langlochs ist — null heißt: rund bohren.
+
+    ``length`` ist die Gesamtlänge über alles, wie sie im Dialog steht;
+    zurück kommt der Weg zwischen den beiden Bogenmittelpunkten. Das ist
+    genau der Weg, den eine Schraube im fertigen Loch zurücklegen kann.
+
+    **Gerechnet wird gegen den nominalen Durchmesser, nicht gegen den
+    geschnittenen.** Die Materialtoleranz weitet das Loch überall, also auch an
+    beiden Enden; hielte man stattdessen die Gesamtlänge fest, nähme jeder
+    Druck dem Kunden ein Stück des Verschiebewegs ab, den er ausgerechnet hat.
+
+    Hier steht auch der Ausschluss, den beide Kerne einhalten
+    (:data:`SLOT_AND_WIDENING`) — er gehört an eine Stelle und nicht in zwei.
+    """
+    if not math.isfinite(length) or length <= EPS_GEOM:
+        return 0.0
+    if widening_diameter > EPS_GEOM:
+        raise ValidationError(
+            field="slot_length",
+            constraint="conflict",
+            detail=SLOT_AND_WIDENING,
+        )
+    if length <= diameter + EPS_GEOM:
+        raise ValidationError(
+            field="slot_length",
+            constraint="slot_proportion",
+            detail=SLOT_TOO_SHORT,
+            value=length,
+        )
+    return length - diameter
+
+
+def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> SketchProfile:
+    """Der Umriss eines Langlochs: zwei Halbkreise über einer Mittellinie.
+
+    ``radius`` ist der halbe **geschnittene** Durchmesser — die Materialtoleranz
+    hat der Aufrufer bereits aufgeschlagen. ``travel`` ist die Mittellinie aus
+    :func:`slot_travel`; die Gesamtlänge des Umrisses ist ``travel + 2 * radius``.
+
+    ``angle_deg`` dreht die Mittellinie gegen die x-Achse des Rahmens, auf dem
+    der Umriss später aufgezogen wird. Beide Kerne ziehen ihn auf denselben
+    Rahmen — der Winkel bedeutet damit in beiden dasselbe, und das ist der
+    Grund, warum es diese eine Funktion gibt statt zweier Konstruktionen.
+
+    Zurück kommt ein Skizzenumriss und kein Netz: Der Netz-Kern zieht ihn über
+    :func:`app.core.geom.sketch_solid.extrude_profile` auf, der exakte über
+    :func:`app.core.brep.profiles.extrude`, und dort bleiben die Enden echte
+    Zylinderflächen statt abgetasteter Sehnen.
+    """
+    from app.core.sketch.profile import Profile as SketchOutline
+    from app.core.sketch.profile import ProfileSegment
+
+    if not math.isfinite(radius) or radius <= EPS_GEOM:
+        raise ValidationError(
+            field="diameter",
+            constraint="positive",
+            detail=_("Ein Langloch braucht einen positiven Durchmesser."),
+        )
+    if not math.isfinite(travel) or travel <= EPS_GEOM:
+        raise ValidationError(
+            field="slot_length",
+            constraint="slot_proportion",
+            detail=SLOT_TOO_SHORT,
+        )
+    half = travel / 2.0
+    turn = math.radians(angle_deg)
+    cosine, sine = math.cos(turn), math.sin(turn)
+
+    def turned(x: float, y: float) -> tuple[float, float]:
+        return (x * cosine - y * sine, x * sine + y * cosine)
+
+    lower_left = turned(-half, -radius)
+    lower_right = turned(half, -radius)
+    right_apex = turned(half + radius, 0.0)
+    upper_right = turned(half, radius)
+    upper_left = turned(-half, radius)
+    left_apex = turned(-half - radius, 0.0)
+    # Gegen den Uhrzeigersinn, damit die Fläche positiv orientiert ist: untere
+    # Flanke, rechter Bogen, obere Flanke, linker Bogen. Der Scheitel ist der
+    # Punkt **auf** der Kurve, den ``ProfileSegment`` für einen Bogen verlangt.
+    return SketchOutline(
+        segments=(
+            ProfileSegment("line", lower_left, lower_right),
+            ProfileSegment("arc", lower_right, upper_right, via=right_apex),
+            ProfileSegment("line", upper_right, upper_left),
+            ProfileSegment("arc", upper_left, lower_left, via=left_apex),
+        )
+    )
+
+
+def _edge_findings(
+    mesh: MeshData,
+    *,
+    position: Vec3,
+    frame: PlaneFrame,
+    diameter: float,
+    travel: float,
+    angle_deg: float,
+) -> list[Finding]:
+    """Die Kantenwarnung für eine runde Bohrung — und für beide Enden eines Langlochs.
+
+    Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem an
+    einem Ende auf; wer nur die Mitte fragt, hört davon nichts. Gemeldet wird
+    höchstens einmal: Zwei gleichlautende Sätze über dasselbe Loch sagen nichts
+    Zweites und sind der Lärm, nach dem niemand mehr in den Bericht sieht.
+    """
+    if travel <= EPS_GEOM:
+        return over_the_edge_along(mesh, position, frame.normal, diameter, body=mesh)
+    for end in slot_ends(position, frame, travel, angle_deg):
+        found = over_the_edge_along(mesh, end, frame.normal, diameter, body=mesh)
+        if found:
+            return found
+    return []
+
+
+def slot_ends(
+    position: Vec3, frame: PlaneFrame, travel: float, angle_deg: float
+) -> tuple[Vec3, Vec3]:
+    """Die beiden Bogenmittelpunkte eines Langlochs im Raum.
+
+    Jede Prüfung, die für eine runde Bohrung an ihrer Mitte fragt, muss beim
+    Langloch an beiden Enden fragen: Dort liegt es am weitesten außen, und dort
+    reißt eine Flanke auf, während die Mitte noch tief im Material steckt.
+    """
+    turn = math.radians(angle_deg)
+    along = np.asarray(frame.x_axis, dtype=float) * math.cos(turn) + np.asarray(
+        frame.y_axis, dtype=float
+    ) * math.sin(turn)
+    centre = np.asarray(position, dtype=float)
+    first = centre - along * (travel / 2.0)
+    second = centre + along * (travel / 2.0)
+    return (
+        (float(first[0]), float(first[1]), float(first[2])),
+        (float(second[0]), float(second[1]), float(second[2])),
+    )
+
+
 def drill_tool(
     *,
     diameter: float,
@@ -490,8 +795,14 @@ def drill_tool(
     widening_depth: float = 0.0,
     transition_angle: float = 90.0,
     mouth_overlap: float = 0.0,
+    slot_length: float = 0.0,
+    slot_angle: float = 0.0,
 ) -> MeshData:
-    """Vernetzt das gemeinsame analytische Bohrungsprofil für Vorschau und Mesh-Kern."""
+    """Vernetzt das gemeinsame analytische Bohrungsprofil für Vorschau und Mesh-Kern.
+
+    ``slot_length`` über null macht daraus ein Langloch: derselbe Radius,
+    dieselbe Tiefe, nur auseinandergezogen entlang :func:`slot_travel`.
+    """
     outline = drill_outline(
         diameter=diameter,
         depth=depth,
@@ -502,6 +813,24 @@ def drill_tool(
         transition_angle=transition_angle,
         mouth_overlap=mouth_overlap,
     )
+    travel = slot_travel(diameter=diameter, length=slot_length, widening_diameter=widening_diameter)
+    if travel > EPS_GEOM:
+        from app.core.geom.sketch_solid import extrude_profile
+
+        # Der Umriss liegt an der Mündung und wird nach unten aufgezogen —
+        # genau die Spanne, die ``drill_outline`` beschreibt: von
+        # ``mouth_overlap`` bis ``-depth``.
+        body = extrude_profile(
+            slot_profile(radius=outline[1][0], travel=travel, angle_deg=slot_angle),
+            -(depth + mouth_overlap),
+            PlaneFrame(
+                origin=(0.0, 0.0, mouth_overlap),
+                x_axis=(1.0, 0.0, 0.0),
+                y_axis=(0.0, 1.0, 0.0),
+                normal=(0.0, 0.0, 1.0),
+            ),
+        )
+        return MeshData.of(body)
     if widening_diameter > EPS_GEOM:
         return MeshData.of(trimesh.creation.revolve(outline, sections=BORE_SECTIONS))
     radius = outline[1][0]
@@ -559,6 +888,8 @@ def drill(
     compensate: bool = True,
     quality: Quality = "fine",
     seed: int | None = None,
+    slot_length: float = 0.0,
+    slot_angle: float = 0.0,
 ) -> BoreResult:
     """Schneidet eine Bohrung mit optionaler Aufweitung. Tiefe null bohrt ganz durch.
 
@@ -571,8 +902,24 @@ def drill(
     Eine gerade durchgehende Bohrung reicht von jeder Position aus in beide
     Richtungen hinaus. Ihre Aufweitung beginnt dagegen an der Mündung; auf
     einer abgestuften Fläche verschiebt der höchste Nachbar diesen Bezug nicht.
+
+    ``slot_length`` über null zieht die Bohrung zu einem Langloch auseinander.
+    Ein Langloch geht **immer** über den Rahmen, auch bei einer achsparallelen
+    Achse: ``slot_angle`` zählt gegen die x-Achse aus
+    :func:`app.core.sketch.planes.frame_of`, und der achsparallele Zweig
+    weiter unten kennt diesen Rahmen nicht — derselbe Winkel bedeutete dort
+    eine andere Richtung.
+
+    **Der Rahmen hängt an der Normalen, also an der Seite, von der aus gebohrt
+    wird.** Gemessen an derselben Platte: 45 Grad von oben ergeben 45 Grad,
+    45 Grad von unten ergeben 135 — ``frame_of`` spiegelt seine erste Achse mit
+    der Normalen. Für den Kunden ist das die richtige Antwort, weil er die
+    Fläche anklickt und die Vorschau sieht; wer die Zahl von hier zu
+    :func:`slot_bore` überträgt, bekommt an einer von unten gebohrten Bohrung
+    die gespiegelte Lage (der Kommentar dort sagt, warum das so bleibt).
     """
     cut_diameter = bore_diameter(diameter, profile, compensate)
+    travel = slot_travel(diameter=diameter, length=slot_length, widening_diameter=widening_diameter)
     through = depth <= EPS_GEOM
     direction = np.asarray(normal, dtype=np.float64)
     if not np.isfinite(direction).all():
@@ -580,7 +927,7 @@ def drill(
             field="nx", detail=_("Wählen Sie eine endliche Richtung für die Bohrung.")
         )
     length = float(np.linalg.norm(direction))
-    if length <= EPS_GEOM and widening_diameter > EPS_GEOM:
+    if length <= EPS_GEOM and (widening_diameter > EPS_GEOM or travel > EPS_GEOM):
         direction[AXIS_INDEX[axis]] = -_into_the_material(mesh, axis, position)
         length = 1.0
     if length > EPS_GEOM:
@@ -617,6 +964,8 @@ def drill(
             widening_diameter=widening_diameter,
             widening_depth=widening_depth,
             transition_angle=transition_angle,
+            slot_length=slot_length,
+            slot_angle=slot_angle,
         )
         cylinder = tool.raw.copy()
         cylinder.apply_translation((0.0, 0.0, mouth))
@@ -633,7 +982,16 @@ def drill(
         nothing = without_effect(mesh, result, "difference", profile)
         if nothing is not None:
             findings.append(nothing)
-        findings.extend(over_the_edge_along(mesh, position, frame.normal, cut_diameter, body=mesh))
+        findings.extend(
+            _edge_findings(
+                mesh,
+                position=position,
+                frame=frame,
+                diameter=cut_diameter,
+                travel=travel,
+                angle_deg=slot_angle,
+            )
+        )
         findings.extend(compensation_findings(diameter, cut_diameter, compensate))
         return BoreResult(result, outcome.solver, cut_diameter, findings)
     height = _through_length(mesh, axis) * 2.0 if through else depth

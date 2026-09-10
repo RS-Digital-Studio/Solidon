@@ -39,8 +39,11 @@ from app.core.geom.prepare import (
     drill_outline,
     over_the_edge,
     over_the_edge_along,
+    slot_ends,
+    slot_profile,
+    slot_travel,
 )
-from app.core.geom.prepare_ops import DrillParams
+from app.core.geom.prepare_ops import DrillParams, bore_shape
 from app.core.geom.primitive_ops import PositionedPrimitiveParams, placement_transform
 from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -50,6 +53,7 @@ from app.core.types import (
     Finding,
     OpContext,
     OpResult,
+    PlaneFrame,
     Profile,
     SceneObject,
     Vec3,
@@ -619,7 +623,10 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     normal = (params.nx, params.ny, params.nz)
     if not all(math.isfinite(value) for value in normal):
         raise ValidationError("nx", _("Wählen Sie eine endliche Richtung für die Bohrung."))
-    if math.hypot(*normal) > EPS_GEOM or abs(params.widening_diameter) > EPS_GEOM:
+    shape = bore_shape(params)
+    if shape.slot_length > EPS_GEOM:
+        solid, normal = _slotted_bore(body, params, profile)
+    elif math.hypot(*normal) > EPS_GEOM or abs(shape.widening_diameter) > EPS_GEOM:
         solid, normal = _profiled_bore(body, params, profile)
     else:
         solid = edit.bore(
@@ -665,7 +672,24 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # Ergebnis — nicht weil der Kern ihn nicht könnte, sondern weil die
     # Signatur ein ``MeshData`` verlangte. Sie fragt jetzt nach dem, was sie
     # wirklich braucht, und ``Solid`` trägt seinen Hüllquader.
-    if math.hypot(*normal) > EPS_GEOM:
+    if shape.slot_length > EPS_GEOM:
+        # Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem
+        # an einem Ende auf — gefragt wird deshalb an beiden Bogenmittelpunkten
+        # und gemeldet höchstens einmal, wie im Netz-Zwilling.
+        from app.core.sketch.planes import frame_of
+
+        travel = slot_travel(diameter=params.diameter, length=shape.slot_length)
+        for end in slot_ends(
+            (params.x, params.y, params.z),
+            frame_of(normal, (params.x, params.y, params.z)),
+            travel,
+            shape.slot_angle,
+        ):
+            found = over_the_edge_along(body, end, normal, cut)
+            if found:
+                findings.extend(found)
+                break
+    elif math.hypot(*normal) > EPS_GEOM:
         findings.extend(over_the_edge_along(body, (params.x, params.y, params.z), normal, cut))
     else:
         findings.extend(
@@ -680,8 +704,15 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     return OpResult(outputs=[_replaced(source, solid)], findings=findings)
 
 
-def _profiled_bore(body: Solid, params: DrillParams, profile: Profile) -> tuple[Solid, Vec3]:
-    """Legt das gemeinsame Profil mit seiner Mündung auf die gewählte Fläche."""
+def _bore_span(
+    body: Solid, params: DrillParams, widening_diameter: float
+) -> tuple[PlaneFrame, float, float]:
+    """Rahmen, Werkzeuglänge und Mündungslage einer exakten Bohrung.
+
+    Geteilt zwischen dem Rotationskörper und dem Langloch, weil beide dieselbe
+    Frage haben: Wohin zeigt die Bohrung, wie lang muss das Werkzeug sein, und
+    wo liegt seine Mündung. Nur der Körper dazwischen ist ein anderer.
+    """
     from itertools import product
 
     from app.core.sketch.planes import frame_of
@@ -701,26 +732,64 @@ def _profiled_bore(body: Solid, params: DrillParams, profile: Profile) -> tuple[
             sum((point[i] - position[i]) * frame.normal[i] for i in range(3)) for point in corners
         ]
         low, high = min(projected), max(projected)
-        if params.widening_diameter > EPS_GEOM and params.anchor == "mouth":
+        if widening_diameter > EPS_GEOM and params.anchor == "mouth":
             height, mouth = -low, 0.0
         else:
             height, mouth = high - low, high
     else:
         height = params.depth
         mouth = height / 2.0 if params.anchor == "centre" else 0.0
+    return frame, height, mouth
+
+
+def _profiled_bore(body: Solid, params: DrillParams, profile: Profile) -> tuple[Solid, Vec3]:
+    """Legt das gemeinsame Profil mit seiner Mündung auf die gewählte Fläche."""
+    position = (params.x, params.y, params.z)
+    shape = bore_shape(params)
+    frame, height, mouth = _bore_span(body, params, shape.widening_diameter)
     outline = drill_outline(
         diameter=params.diameter,
         depth=height,
         profile=profile,
         compensate=params.compensate,
-        widening_diameter=params.widening_diameter,
-        widening_depth=params.widening_depth,
+        widening_diameter=shape.widening_diameter,
+        widening_depth=shape.widening_depth,
         transition_angle=params.transition_angle,
     )
     frame = dataclasses.replace(
         frame, origin=cast(Vec3, tuple(position[i] + mouth * frame.normal[i] for i in range(3)))
     )
     return edit.bore_profile(body, outline, frame), frame.normal
+
+
+def _slotted_bore(body: Solid, params: DrillParams, profile: Profile) -> tuple[Solid, Vec3]:
+    """Das Langloch des exakten Kerns — derselbe Umriss, als Prisma statt als Netz.
+
+    **Aufgezogen wird vom Boden zur Mündung**, nicht umgekehrt: ``extrude``
+    verlangt eine positive Höhe, und ein Rahmen mit umgekehrter Normale wäre
+    linkshändig — der Winkel des Langlochs drehte darin in die andere Richtung
+    als im Netz-Kern. Dieselbe Ebene und dieselbe Höhe, nur ein anderer
+    Ursprung, und beide Kerne meinen mit ``slot_angle`` dasselbe.
+    """
+    from app.core.brep.profiles import extrude
+
+    position = (params.x, params.y, params.z)
+    shape = bore_shape(params)
+    frame, height, mouth = _bore_span(body, params, 0.0)
+    travel = slot_travel(diameter=params.diameter, length=shape.slot_length)
+    radius = bore_diameter(params.diameter, profile, params.compensate) / 2.0
+    floor = dataclasses.replace(
+        frame,
+        origin=cast(
+            Vec3, tuple(position[i] + (mouth - height) * frame.normal[i] for i in range(3))
+        ),
+    )
+    tool = extrude(
+        slot_profile(radius=radius, travel=travel, angle_deg=shape.slot_angle),
+        height,
+        frame=floor,
+    )
+    return edit.boolean("difference", [body, tool]), frame.normal
 
 
 @op_params

@@ -51,7 +51,9 @@ from app.core.geom.pins import (
 )
 from app.core.geom.prepare import (
     BORE_SECTIONS,
+    FEATURE_OVERLAP,
     MAX_PLATES,
+    SLOT_TOO_SHORT,
     Arrangement,
     BoreAnchor,
     arrange_on_bed,
@@ -68,6 +70,7 @@ from app.core.geom.prepare import (
     plug,
     resize_bore,
     shell,
+    slot_bore,
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
@@ -278,12 +281,59 @@ class DrillParams(BaseParams):
         placement="advanced",
         doc=_("Null bohrt durch das ganze Teil."),
     )
+    slotted: bool = param(
+        title=_("Langloch"),
+        default=False,
+        placement="front",
+        doc=_(
+            "Zieht die Bohrung zu einem Langloch auseinander — für Schrauben, "
+            "die sich nach dem Festziehen noch ausrichten lassen sollen."
+        ),
+    )
+    slot_length: float = param(
+        title=_("Länge des Langlochs"),
+        # Das Doppelte des vorgegebenen Durchmessers: Wer den Haken setzt und
+        # sonst nichts anfasst, bekommt ein gültiges Langloch und keine Absage.
+        # Eine Null stünde hier als Vorgabe, die beim ersten Klick abgelehnt
+        # wird — und ein Feld, das mit einer Absage begrüßt, ist keine.
+        default=10.0,
+        minimum=0.0,
+        unit="mm",
+        placement="front",
+        depends_on=("slotted", (True,)),
+        doc=_(
+            "Gesamtlänge über beide runden Enden. Der Weg, den eine Schraube "
+            "darin hat, ist diese Länge minus dem Durchmesser."
+        ),
+    )
+    slot_angle: float = param(
+        title=_("Richtung des Langlochs"),
+        default=0.0,
+        minimum=-180.0,
+        maximum=180.0,
+        unit=DEGREE_UNIT,
+        placement="front",
+        depends_on=("slotted", (True,)),
+        doc=_("Dreht das Langloch in der angeklickten Fläche. Die Vorschau zeigt die Lage mit."),
+    )
     widening_diameter: float = param(
         title=_("Durchmesser der Aufweitung"),
         default=0.0,
         minimum=0.0,
         unit="mm",
         placement="advanced",
+        # Die drei Aufweitungsfelder hängen am **abgewählten** Langloch, und
+        # zwar aus einem Grund, der im Kern noch einmal steht
+        # (:data:`prepare.SLOT_AND_WIDENING`): Eine Senkung über einem
+        # Langloch wäre entweder rund oder selbst ein Langloch, und welche
+        # der beiden Längen dann gemeint ist, hat noch niemand gesagt.
+        #
+        # **Weitergegeben werden zwei von ihnen** (:func:`bore_shape`), und das
+        # ist kein Versehen: ``transition_angle`` beschreibt den Übergang
+        # *zwischen* Bohrung und Aufweitung, und ohne eine Aufweitung liest ihn
+        # ``drill_outline`` gar nicht. Ihn mitzunullen hieße, einen Wert
+        # zurückzusetzen, den der Kunde beim nächsten Runden wiederhaben will.
+        depends_on=("slotted", (False,)),
         doc=_(
             "Null lässt die Bohrung gerade. Ein größerer Durchmesser "
             "schafft Platz über ihrer Mündung."
@@ -295,6 +345,7 @@ class DrillParams(BaseParams):
         minimum=0.0,
         unit="mm",
         placement="advanced",
+        depends_on=("slotted", (False,)),
         doc=_("Tiefe des breiteren geraden Abschnitts, gemessen ab der angeklickten Fläche."),
     )
     transition_angle: float = param(
@@ -304,6 +355,7 @@ class DrillParams(BaseParams):
         maximum=180.0,
         unit=DEGREE_UNIT,
         placement="advanced",
+        depends_on=("slotted", (False,)),
         doc=_(
             "Voller Winkel zwischen Bohrung und Aufweitung. 180 Grad erzeugt eine flache Schulter."
         ),
@@ -326,6 +378,57 @@ class DrillParams(BaseParams):
     )
 
 
+#: Der Haken steht, die Länge nicht — und der Satz nennt beide Auswege.
+#:
+#: Er sagt ausdrücklich auch den zweiten: Wer den Haken versehentlich gesetzt
+#: hat, soll ihn herausnehmen können, ohne den Fehler zweimal zu lesen. Der
+#: allgemeine Satz aus dem Kern (:data:`prepare.SLOT_TOO_SHORT`) kennt keinen
+#: Haken — er gilt auch dort, wo es keinen gibt.
+SLOT_NEEDS_A_LENGTH: Final = _(
+    "Ein Langloch braucht eine Länge über seinem Durchmesser. Tragen Sie eine "
+    "ein, oder nehmen Sie den Haken heraus, wenn die Bohrung rund bleiben soll."
+)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class BoreShape:
+    """Was aus den Feldern des Bohrdialogs wirklich geschnitten wird."""
+
+    slot_length: float
+    slot_angle: float
+    widening_diameter: float
+    widening_depth: float
+
+
+def bore_shape(params: DrillParams) -> BoreShape:
+    """Die Felder, die der Haken *Langloch* gegeneinander abschaltet.
+
+    ``depends_on`` graut sie im Dialog aus, und ein abhängiges Feld wird von
+    der Operation übergangen (:attr:`app.core.types.ParamSpec.depends_on`).
+    Hier steht, was das für die Bohrung heißt — an einer Stelle, weil beide
+    Kerne dieses Schema teilen und weil Chat und Kommandozeile den Dialog gar
+    nicht erst sehen: Über sie kämen Langloch und Aufweitung sonst zusammen an,
+    und der Kern müsste eine Frage beantworten, die niemand gestellt hat.
+
+    **Und ein gesetzter Haken ohne Länge ist eine Absage, keine runde Bohrung.**
+    ``slot_travel`` liest die Null als „rund" — das ist der richtige Vertrag für
+    einen direkten Aufruf, aber nicht für diesen Haken: Wer *Langloch* anhakt
+    und die Länge stehen lässt, bekäme ein rundes Loch und ein Häkchen, das das
+    Gegenteil behauptet. Das ist genau die stille Wahl, die Regel 21 ausschließt.
+    """
+    if params.slotted:
+        if params.slot_length <= params.diameter + EPS_GEOM:
+            raise ValidationError(
+                field="slot_length",
+                constraint="slot_proportion",
+                detail=SLOT_NEEDS_A_LENGTH,
+                value=params.slot_length,
+                values={"diameter": format_length(params.diameter)},
+            )
+        return BoreShape(params.slot_length, params.slot_angle, 0.0, 0.0)
+    return BoreShape(0.0, 0.0, params.widening_diameter, params.widening_depth)
+
+
 @register_op(
     name="drill_hole",
     title=_("Bohrung setzen"),
@@ -337,11 +440,14 @@ class DrillParams(BaseParams):
     touches_features=True,
     deterministic=False,
     shortcut="Ctrl+B",
-    doc=_("Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert."),
+    doc=_(
+        "Bohrt ein rundes Loch oder ein Langloch — auf Wunsch um die Materialtoleranz vergrößert."
+    ),
 )
 def drill_hole(ctx: OpContext) -> OpResult:
     params = cast(DrillParams, ctx.params)
     source = ctx.inputs[0]
+    shape = bore_shape(params)
     result = drill(
         as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
@@ -349,14 +455,16 @@ def drill_hole(ctx: OpContext) -> OpResult:
         normal=(params.nx, params.ny, params.nz),
         diameter=params.diameter,
         depth=params.depth,
-        widening_diameter=params.widening_diameter,
-        widening_depth=params.widening_depth,
+        widening_diameter=shape.widening_diameter,
+        widening_depth=shape.widening_depth,
         transition_angle=params.transition_angle,
         anchor=cast(BoreAnchor, params.anchor),
         profile=for_object(ctx.profile, source),
         compensate=params.compensate,
         quality=ctx.quality,
         seed=ctx.seed,
+        slot_length=shape.slot_length,
+        slot_angle=shape.slot_angle,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh)],
@@ -404,7 +512,30 @@ def drill_hole(ctx: OpContext) -> OpResult:
 #: Randring liegt auf der Grundfläche — gedeckelt ergibt er den Körper, der
 #: wirklich das Merkmal ist. Bis dahin sagt die Operation, warum sie es nicht
 #: tut, statt es falsch zu tun (Regel 21).
-MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere")
+#: ``void`` steht hier aus demselben Grund wie ``sphere``, und der Beleg lag
+#: schon vor der Art: ``test_a_cavity_inside_the_body_moves_without_losing_material``
+#: versetzt seit dem 03.09.2026 eine Kugelhöhle in einem Würfel, und das
+#: Volumen des Ganzen bleibt dabei auf die Stelle genau gleich. Ein
+#: eingeschlossener Hohlraum ist für :func:`_feature_body` der **einfachste**
+#: Fall — seine Fläche hat gar keinen Randring, sie ist bereits der Körper.
+#:
+#: **Und er ist nicht immer ein Defekt.** Eine Aussparung für einen
+#: eingegossenen Magneten und ein vergessener Negativkörper sind topologisch
+#: dieselbe Sache; welche von beiden vorliegt, weiß nur der Kunde. Ihn zu
+#: benennen ist Auskunft, ihn zu sperren wäre ein Urteil (Entscheidung Robert,
+#: 10.09.2026).
+MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void")
+
+#: Was sich zu **verdoppeln** lohnt — dasselbe ohne den Einschluss.
+#:
+#: Geometrisch ginge es: Der Merkmalskörper eines Hohlraums ist gebaut und
+#: abgezogen wie jeder andere. Es will nur niemand. Eine zweite Luftblase im
+#: Material ist keine Konstruktion, sondern ein zweiter Fehler — und wo ein
+#: eingeschlossener Hohlraum Absicht ist (die Aussparung für einen
+#: eingegossenen Magneten), legt man die zweite über den Baustein an, mit
+#: Maßen, und nicht als Kopie einer gemessenen Fläche (Robert, 10.09.2026:
+#: „verdoppeln ist aber bei Hohlräumen sinnlos").
+DUPLICABLE_KINDS: Final = ("hole", "pin", "cone", "sphere")
 
 #: Die Arten, deren Kennzahlen den Körper genau beschreiben.
 #:
@@ -419,9 +550,11 @@ PARAMETRIC_KINDS: Final = ("hole", "pin")
 #: Boolesche zuverlässig bricht (§39).
 FEATURE_SECTIONS: Final = BORE_SECTIONS
 
-#: Wieviel größer der Körper gebaut wird, der ein Merkmal ausfüllt oder
-#: abträgt. Aus demselben Grund wie beim Stopfen: Fläche auf Fläche bricht.
-FEATURE_OVERLAP: Final = 0.02
+# Wieviel größer der Körper gebaut wird, der ein Merkmal ausfüllt oder abträgt,
+# steht in :data:`app.core.geom.prepare.FEATURE_OVERLAP` und wird hier nur
+# gelesen. Die Zahl stand am 10.09.2026 an zwei Stellen mit demselben Wert und
+# derselben Begründung — einmal hier, einmal als ``SLOT_OVERLAP`` daneben; die
+# zweite ist gefallen.
 
 
 def _feature_solid(
@@ -1415,7 +1548,15 @@ def _feature_mount(
             key=lambda entry: entry[1],
         )[2]
     if feature.kind not in PARAMETRIC_KINDS:
-        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+        # **Ein Einschluss scheitert hier aus einem anderen Grund**, und
+        # :data:`_NO_OWN_BODY` benennt ihn falsch: „Dieses Merkmal geht in ein
+        # anderes über — eine Senkung über einer Bohrung etwa". Ein Hohlraum
+        # ohne Weg nach außen geht in gar nichts über; er hat nur keine
+        # Mündung, an der die Platzierung ihn im Bild aufsetzen könnte. Der
+        # Weg bleibt trotzdem offen — über die Zahlen im Dialog (gemessen
+        # 10.09.2026: Volumen auf 0,000000 mm³ genau erhalten).
+        detail = _NO_MOUTH_TO_GRIP if feature.kind == "void" else _NO_OWN_BODY
+        raise ValidationError(field="at_feature", detail=detail, constraint="not_movable")
     # Parametrische Altmerkmale können ohne Dreieckszuordnung vorliegen. Die
     # Materialseite ihrer beiden Enden entscheidet auch bei einem Zapfen an
     # der Unterseite. Eine freie Form bekommt diesen Ersatz nie.
@@ -1727,6 +1868,18 @@ _NO_OWN_BODY: Final = _(
     "und der vollen Wandstärke — danach setzen Sie es an der neuen Stelle neu."
 )
 
+#: Und warum ein **Einschluss** dieselbe Stelle trifft, aber aus anderem Grund.
+#:
+#: Die Platzierung setzt ein Werkzeug auf einer Mündung auf; ein Hohlraum ohne
+#: Weg nach außen hat keine. Das ist keine Absage an die Handlung — sie geht
+#: über die Zahlen im Dialog, gemessen am 10.09.2026 mit einer Volumendifferenz
+#: von 0,000000 mm³ —, sondern nur an den Weg über den Klick ins Bild.
+_NO_MOUTH_TO_GRIP: Final = _(
+    "Dieser Hohlraum liegt ganz im Material und hat keine Mündung, an der er "
+    "sich im Bild anfassen ließe. Tragen Sie die neue Stelle als Zahlen in den "
+    "Dialog ein — versetzt wird er dabei vollständig."
+)
+
 
 @register_op(
     name="move_feature",
@@ -1997,7 +2150,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     reversible=True,
     consumes=1,
     produces=1,
-    applies_to=list(MOVABLE_KINDS),
+    # **Nicht** :data:`MOVABLE_KINDS` — der Einschluss fehlt hier mit Absicht,
+    # und die Begründung steht an :data:`DUPLICABLE_KINDS`.
+    applies_to=list(DUPLICABLE_KINDS),
     deterministic=False,
     doc=_(
         "Legt ein erkanntes Merkmal ein zweites Mal an: Bohrung, Zapfen, Senkung, "
@@ -2492,17 +2647,32 @@ def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:
 OVERSIZE_FACTOR = 4.0
 
 
-def _reject_oversized(field: str, diameter: float, mesh: Mesh) -> None:
-    """Lehnt einen Durchmesser ab, der ein Vielfaches des ganzen Körpers misst."""
+def _reject_oversized(field: str, diameter: float, mesh: Mesh, *, kind: str = "diameter") -> None:
+    """Lehnt ein Maß ab, das ein Vielfaches des ganzen Körpers misst.
+
+    ``kind`` sagt, **was** der Kunde eingetippt hat. Der Satz nannte immer
+    einen Durchmesser; seit ein Langloch seine Länge durch dieselbe Schranke
+    schickt, wäre das die falsche Auskunft über die richtige Zahl — wer 2000
+    statt 20 tippt, soll lesen, welches seiner Felder gemeint ist (Regel 17).
+    """
     limit = OVERSIZE_FACTOR * max(float(mesh.bounds.diagonal), 1.0)
     if diameter > limit:
         raise ValidationError(
             field,
-            _(
-                "Ein Durchmesser von {given} übersteigt den Körper um ein Vielfaches. "
-                "Wählen Sie höchstens {limit}.",
-                given=format_length(diameter),
-                limit=format_length(limit),
+            (
+                _(
+                    "Ein Durchmesser von {given} übersteigt den Körper um ein Vielfaches. "
+                    "Wählen Sie höchstens {limit}.",
+                    given=format_length(diameter),
+                    limit=format_length(limit),
+                )
+                if kind == "diameter"
+                else _(
+                    "Eine Länge von {given} übersteigt den Körper um ein Vielfaches. "
+                    "Wählen Sie höchstens {limit}.",
+                    given=format_length(diameter),
+                    limit=format_length(limit),
+                )
             ),
             value=diameter,
             constraint="maximum",
@@ -2812,6 +2982,218 @@ def resize_hole(ctx: OpContext) -> OpResult:
     )
 
 
+@op_params
+class SlotHoleParams(BaseParams):
+    slot_length: float = param(
+        title=_("Länge des Langlochs"),
+        default=5.0,
+        unit="mm",
+        minimum=0.2,
+        placement="front",
+        # Die Bedingung steht im Satz, nicht nur in der Absage: Über Chat und
+        # Kommandozeile gibt es kein Anklicken und keine Vorbelegung, und wer
+        # den Durchmesser der Bohrung nicht mitdenkt, bekommt eine Absage
+        # statt eines Langlochs.
+        doc=_(
+            "Gesamtlänge über beide runden Enden — größer als der Durchmesser "
+            "der Bohrung. Beim Anklicken steht hier sein Doppeltes: ein "
+            "Langloch, in dem sich eine Schraube um einen Durchmesser "
+            "verschieben lässt."
+        ),
+    )
+    slot_angle: float = param(
+        title=_("Richtung des Langlochs"),
+        default=0.0,
+        minimum=-180.0,
+        maximum=180.0,
+        unit=DEGREE_UNIT,
+        placement="front",
+        doc=_("Dreht das Langloch um die Achse der Bohrung. Die Bohrung bleibt seine Mitte."),
+    )
+    at_feature: str = param(
+        title=_("Bohrung"),
+        default="",
+        kind="feature",
+        required=True,
+        # Vorn, aus demselben Grund wie bei *Bohrung ändern*: Ein Pflichtfeld
+        # ohne „— keines —" steht vorausgewählt auf der ersten Bohrung, und
+        # zugeklappt wäre das eine stille Wahl (Regel 21).
+        placement="front",
+        doc=_(
+            "Die erkannte Bohrung, die zum Langloch wird. Ein Klick auf die Bohrung trägt sie ein."
+        ),
+    )
+
+
+#: Die Arten, aus denen ein Langloch werden kann.
+#:
+#: Ein **Langloch** steht dabei, und das ist keine Verlegenheit: Die Operation
+#: zieht ein rundes Loch auseinander, und eines, das schon lang ist, noch
+#: weiter. Ohne diesen Eintrag wäre ein erkanntes Langloch eine Sackgasse —
+#: ein Merkmal, an dem der Klick in einem Menü aus *Ausblenden* endet (§2.6).
+SLOT_FROM: Final[tuple[str, ...]] = ("hole", "slot")
+
+#: Was aus der Bohrung geworden ist — und unter welchem Namen sie weiterlebt.
+#:
+#: **Der Satz hat sich mit der Erkennung geändert.** Solange sie nur Zylinder
+#: kannte, zerfiel ein Langloch ihr in zwei Verrundungen, und hier stand, das
+#: Merkmal sei fort. Seit :mod:`app.core.perceive.slots` es zusammensetzt, ist
+#: es da — nur unter einem anderen Namen und einer anderen Art. Das ist eine
+#: gute Nachricht und trotzdem eine Auskunft: Wer auf ``hole_1`` verwiesen hat,
+#: findet dort jetzt ``slot_1``.
+SLOT_FEATURE_RENAMED: Final = _(
+    "Aus der Bohrung ist ein Langloch geworden. Im Objektbaum steht sie ab "
+    "jetzt als Langloch; ein früherer Schritt, der auf die Bohrung verwiesen "
+    "hat, fragt beim nächsten Öffnen nach."
+)
+
+
+@register_op(
+    name="slot_hole",
+    # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
+    # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
+    # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
+    # „Bohrung zum Langloch" an etwas, das keine Bohrung mehr ist. „Ziehen"
+    # trifft beides: aus einem runden Loch ein langes, aus einem langen ein
+    # längeres.
+    title=_("Zum Langloch ziehen"),
+    category="holes",
+    params=SlotHoleParams,
+    consumes=1,
+    produces=1,
+    applies_to=list(SLOT_FROM),
+    touches_features=True,
+    deterministic=False,
+    doc=_(
+        "Zieht eine erkannte Bohrung zu einem Langloch auseinander. Der "
+        "Durchmesser bleibt, wie er gemessen wurde — eingetragen werden nur "
+        "Länge und Richtung."
+    ),
+)
+def slot_hole(ctx: OpContext) -> OpResult:
+    """Dieselbe Formänderung für Netze und für exakte Körper.
+
+    Der Durchmesser bleibt, wie er gemessen wurde; eingetragen werden Länge und
+    Richtung.
+
+    **Ein bestehendes Langloch geht denselben Weg.** Seine Mitte, seine Achse
+    und seine Breite stehen im Merkmal wie bei einer Bohrung; was dazukommt,
+    ist die Richtung, in der es schon liegt — und die wird zur Vorgabe, damit
+    ein Zug an der Länge es nicht quer stellt.
+    """
+    params = cast(SlotHoleParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _chosen_bore(source, params.at_feature, op="slot_hole")
+    centre = _bore_vector(feature, "centre")
+    axis = _bore_vector(feature, "axis")
+    diameter = _bore_number(feature, "diameter")
+    depth = _bore_number(feature, "depth")
+    through = bool(feature.params.get("through", False))
+    if params.slot_length <= diameter + EPS_GEOM:
+        raise ValidationError(
+            field="slot_length",
+            constraint="slot_proportion",
+            detail=SLOT_TOO_SHORT,
+            value=params.slot_length,
+            values={"diameter": format_length(diameter)},
+        )
+    _reject_oversized("slot_length", params.slot_length, source.mesh, kind="length")
+    # Wo das Langloch schon eines ist, liegt seine Richtung fest — sie wird zur
+    # Vorgabe, damit ein Zug an der Länge es nicht quer stellt. Ein
+    # ausdrücklich eingetragener Winkel gewinnt trotzdem: Wer ihn setzt, meint
+    # ihn (die Vorgabe des Feldes ist null, und null ist am bestehenden
+    # Langloch keine Aussage, sondern seine eigene Richtung).
+    angle = params.slot_angle
+    if feature.kind == "slot" and abs(angle) <= EPS_GEOM:
+        angle = _slot_angle_of(feature, axis)
+    # Die Merkmale, die bleiben — ohne das, aus dem gerade ein Langloch wird.
+    carried = {
+        name: entry
+        for name, entry in source.features.items()
+        if entry.provenance == "generated" and name != feature.id
+    }
+    # **Nur beim ersten Zug.** Aus einem Langloch wird kein Langloch — es wird
+    # länger, und dabei behält es Art und Kennung. Der Satz stünde dort über
+    # einer Umbenennung, die nicht stattfindet.
+    said: list[Finding] = []
+    if feature.kind == "hole":
+        said.append(
+            Finding(
+                code="slot_hole.feature_renamed",
+                severity="info",
+                message=SLOT_FEATURE_RENAMED,
+                feature_ids=(feature.id,),
+                # ``_mm`` statt einer fertigen Zeichenkette: Die Oberfläche
+                # schreibt die Einheit selbst und schaltet auf Zoll um (§19.3).
+                values={"feature": feature.id, "length_mm": params.slot_length},
+            )
+        )
+    crossing = _slot_across_a_slot(feature, axis, angle)
+    if crossing is not None:
+        said.append(crossing)
+
+    if source.kind == "brep":
+        from app.core.brep import edit
+        from app.core.brep.kernel import Solid
+
+        if not isinstance(source.mesh, Solid):
+            raise InternalError(
+                detail="a scene object marked as brep does not carry a Solid",
+                values={"object": source.id},
+            )
+        solid = edit.slot_bore(
+            source.mesh,
+            position=centre,
+            direction=axis,
+            diameter=diameter,
+            depth=depth,
+            length=params.slot_length,
+            angle_deg=angle,
+            overlap=FEATURE_OVERLAP,
+        )
+        if solid.volume <= EPS_GEOM or solid.face_count == 0:
+            raise GeometryError(
+                title=NOTHING_LEFT_TITLE,
+                detail=NOTHING_LEFT_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        if not solid.is_closed:
+            raise GeometryError(
+                title=OPEN_BODY_TITLE,
+                detail=OPEN_BODY_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        findings: list[Finding] = list(said)
+        nothing = without_effect(source.mesh, solid, "difference", ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
+        findings.extend(_widening_findings(source, feature, diameter))
+        return OpResult(
+            outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=dict(carried))],
+            findings=findings,
+        )
+
+    body = as_mesh_data(source.mesh)
+    result = slot_bore(
+        body,
+        position=centre,
+        direction=axis,
+        diameter=diameter,
+        depth=_mesh_bore_depth(body, feature, axis, depth),
+        through=through,
+        length=params.slot_length,
+        angle_deg=angle,
+        profile=ctx.profile,
+        quality=ctx.quality,
+        seed=ctx.seed,
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=result.mesh, features=dict(carried))],
+        solver=result.solver,
+        findings=[*said, *result.findings, *_widening_findings(source, feature, diameter)],
+    )
+
+
 def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -> list[Finding]:
     """Sagt es, wenn über der geänderten Bohrung eine Senkung sitzt.
 
@@ -2907,8 +3289,106 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
     ]
 
 
-def _chosen_bore(source: SceneObject, name: str) -> Feature:
-    """Die angeklickte Bohrung oder eine Korrekturmöglichkeit statt Raten."""
+#: Ab welchem Unterschied ein Zug nicht mehr in Richtung des bestehenden
+#: Langlochs geht.
+#:
+#: **Ein halbes Grad, und die Zahl ist gemessen.** Hier standen erst fünf Grad
+#: mit der Begründung, darunter setze die Erkennung beide Züge wieder zu einem
+#: Langloch zusammen. Das war geraten und falsch: An einem Langloch Ø 6 auf
+#: 20 mm, auf 28 mm nachgezogen, bleibt es bis 0,5 Grad **ein** Merkmal und
+#: zerfällt bei 0,75 Grad in zwei Verrundungen, bei einem Grad in vier.
+#:
+#: Wo genau es kippt, hängt von Länge und Breite ab — und deshalb steht die
+#: Zahl hier gerade **nicht** dafür. Sie deckt, was :func:`_slot_angle_of` an
+#: Rundung erzeugt, und sonst nichts; alles darüber ist eine Richtungsänderung
+#: und wird gesagt.
+SLOT_ACROSS_LIMIT: Final = 0.5
+
+
+def _slot_across_a_slot(
+    feature: Feature, axis: tuple[float, float, float], angle: float
+) -> Finding | None:
+    """Sagt es, wenn der Zug nicht in Richtung des vorhandenen Langlochs geht.
+
+    **Gefunden am gefahrenen Weg und nicht im Code** (10.09.2026): Ein
+    bestehendes Langloch mit 90 Grad noch einmal gezogen ergab ein Kreuz, im
+    Objektbaum standen danach vier Hohlkehlen, und gesagt hatte es niemand. Das
+    Ergebnis ist richtig gerechnet — nur wollte es kaum jemand, und wer es
+    wollte, hört den Satz einmal und überliest ihn.
+
+    Der Satz spricht deshalb nicht vom Kreuz: Bei einem Grad Unterschied
+    entsteht keines, und trotzdem ist die Öffnung danach keine gerade mehr
+    (gemessen, siehe :data:`SLOT_ACROSS_LIMIT`). Er nennt den Winkel und den
+    Weg zurück, und beides stimmt bei einem Grad wie bei neunzig.
+    """
+    if feature.kind != "slot":
+        return None
+    standing = _slot_angle_of(feature, axis)
+    turned = abs((angle - standing + 180.0) % 360.0 - 180.0)
+    # Auch 180 Grad sind dieselbe Richtung: Ein Langloch hat keine Vorder- und
+    # keine Rückseite.
+    if min(turned, abs(180.0 - turned)) <= SLOT_ACROSS_LIMIT:
+        return None
+    return Finding(
+        code="slot_hole.crosses",
+        severity="warning",
+        message=_(
+            "Das neue Langloch steht {angle:.1f} Grad gegen das vorhandene. "
+            "Beide zusammen sind keine gerade Öffnung mehr; wollten Sie es nur "
+            "verlängern, lassen Sie die Richtung auf null.",
+            angle=turned,
+        ),
+        feature_ids=(feature.id,),
+        values={"feature": feature.id, "angle_deg": turned},
+        suggestions=(CORRECT_INPUT,),
+    )
+
+
+def _slot_angle_of(feature: Feature, axis: tuple[float, float, float]) -> float:
+    """Der Winkel, unter dem ein erkanntes Langloch schon liegt.
+
+    Die Umkehrung von :func:`app.core.geom.prepare.slot_profile` — gemessen
+    gegen dieselbe x-Achse desselben Rahmens, damit ein unverändert
+    übernommener Wert dieselbe Lage ergibt. Ohne Richtung im Merkmal bleibt es
+    bei null: Ein Langloch ohne Richtung gibt es nicht, aber eine Projektdatei
+    aus einer älteren Fassung könnte eines tragen, und ein Fehler wäre dort die
+    falsche Antwort auf eine Frage nach der Vorbelegung.
+    """
+    from app.core.sketch.planes import frame_of
+
+    along = feature.params.get("direction")
+    if not isinstance(along, tuple | list) or len(along) != 3:
+        return 0.0
+    frame = frame_of(axis, (0.0, 0.0, 0.0))
+    direction = np.asarray(along, dtype=float)
+    length = float(np.linalg.norm(direction))
+    if length <= EPS_GEOM:
+        return 0.0
+    direction = direction / length
+    return math.degrees(
+        math.atan2(
+            float(direction @ np.asarray(frame.y_axis, dtype=float)),
+            float(direction @ np.asarray(frame.x_axis, dtype=float)),
+        )
+    )
+
+
+def _chosen_bore(source: SceneObject, name: str, *, op: str = "") -> Feature:
+    """Die angeklickte Bohrung oder eine Korrekturmöglichkeit statt Raten.
+
+    **Gefragt wird der Registereintrag der aufrufenden Operation**, nicht eine
+    Liste hier im Modul — dasselbe wie bei :func:`_movable_feature` und aus
+    demselben Grund: *Bohrung ändern* nimmt nur eine Bohrung, *Zum Langloch
+    ziehen* auch ein Langloch, und wo diese Menge steht, ist ``applies_to``.
+    Eine zweite Aufzählung daneben wüsste beim nächsten Zuwachs die Hälfte, und
+    der Satz für den Kunden käme aus einer zweiten Quelle
+    (``.claude/rules/operationen.md``, „Und die zweite Hürde muss es wirklich
+    geben").
+
+    Ohne ``op`` bleibt es beim engeren Fall — der Bohrung. Das ist kein
+    Rückfall aus Bequemlichkeit: Es gibt Aufrufer, die kein Merkmal aus einem
+    Register heraus wählen, und für sie ist die Bohrung die richtige Antwort.
+    """
     feature = source.features.get(name)
     if feature is None:
         raise ValidationError(
@@ -2917,6 +3397,19 @@ def _chosen_bore(source: SceneObject, name: str) -> Feature:
             value=name,
             constraint="unknown_feature",
             values={"known": ", ".join(sorted(source.features))},
+        )
+    if op:
+        from app.core.perceive.actions import reason_against
+
+        against = reason_against(op, feature.kind)
+        if against is None:
+            return feature
+        raise ValidationError(
+            field="at_feature",
+            detail=against,
+            value=name,
+            constraint="not_a_hole",
+            values={"kind": feature.kind, "op": op},
         )
     if feature.kind != "hole":
         raise ValidationError(

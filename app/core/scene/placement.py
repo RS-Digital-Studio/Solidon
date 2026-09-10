@@ -1168,6 +1168,7 @@ def _creation_tool(
         return part_tool(part, entered_values, profile)
     if spec.name == "drill_hole":
         from app.core.geom.prepare import drill_tool
+        from app.core.geom.prepare_ops import bore_shape
 
         values: Any = validate(spec.params, entered_values)
         # Die Hülldiagonale reicht in jeder freien Richtung durch den Zielkörper.
@@ -1177,14 +1178,20 @@ def _creation_tool(
             if source is not None
             else float(np.linalg.norm(profile.printer.build_volume))
         )
+        # Dieselbe Abwägung wie in der Operation: Was der Haken *Langloch*
+        # abschaltet, darf auch die Vorschau nicht zeigen — sonst steht dort
+        # eine Senkung, die der fertige Schnitt nicht hat.
+        shape = bore_shape(values)
         return drill_tool(
             diameter=float(values.diameter),
             depth=depth,
             profile=profile,
             compensate=bool(values.compensate),
-            widening_diameter=float(values.widening_diameter),
-            widening_depth=float(values.widening_depth),
+            widening_diameter=shape.widening_diameter,
+            widening_depth=shape.widening_depth,
             transition_angle=float(values.transition_angle),
+            slot_length=shape.slot_length,
+            slot_angle=shape.slot_angle,
         )
     if spec.name in {"label_text", "create_label"}:
         from app.core.geom.label_ops import local_text_body
