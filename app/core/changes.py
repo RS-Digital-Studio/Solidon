@@ -15,6 +15,12 @@ Seit dem reist der Ordner im Paket mit, und dieselbe Leseroutine bedient beide
 Seiten: die Anwendung unter *Hilfe → Neuerungen* und das Bauwerkzeug beim
 Veröffentlichen. Zwei Umsetzungen wären der Weg zu einem Verlauf, der sich
 unterscheidet, je nachdem wer ihn liest.
+
+**Eine Leseroutine, zwei Längen.** Seit dem 09.09.2026 zeigt die Anwendung die
+letzten drei Fassungen (:func:`recent`, :data:`SHOWN_IN_APP`) und verweist für
+die übrigen auf die Website; das Bauwerkzeug liest weiter alles
+(:func:`history`). Das ist kein zweiter Verlauf, sondern derselbe in einem
+Ausschnitt — die Begründung steht bei :func:`recent`.
 """
 
 from __future__ import annotations

@@ -74,9 +74,9 @@ def test_the_newest_version_comes_first() -> None:
     seit je.
     """
     entries = changes.history("de")
-    zahlen = [tuple(int(teil) for teil in entry.version.split(".")) for entry in entries]
+    numbers = [tuple(int(part) for part in entry.version.split(".")) for entry in entries]
 
-    assert zahlen == sorted(zahlen, reverse=True), "the file is read top down"
+    assert numbers == sorted(numbers, reverse=True), "the file is read top down"
     assert APP_VERSION in {entry.version for entry in changes.recent("de")}, (
         "the running version belongs among the ones the application shows"
     )
@@ -85,6 +85,8 @@ def test_the_newest_version_comes_first() -> None:
 # --- das Fenster ----------------------------------------------------------------------
 
 pytest.importorskip("PySide6")
+
+from PySide6.QtCore import Qt  # noqa: E402
 
 from app.ui.changes_dialog import ChangesDialog, history_html  # noqa: E402
 
@@ -174,14 +176,40 @@ def test_the_dialog_says_where_the_older_versions_are(qt_app: object) -> None:
     """Was der Dialog weglässt, nennt er — sonst sähe es aus wie alles.
 
     Der Verweis führt auf die Seite **dieser** Sprache: Wer auf Italienisch
-    arbeitet, landet nicht auf der deutschen. Und er steht nur da, wenn
-    wirklich etwas fehlt.
+    arbeitet, landet nicht auf der deutschen. Und er ist mit der Tastatur
+    erreichbar; ohne das Flag wäre er für einen Bildschirmleser stumm, und er
+    ist seit der Kürzung der einzige Weg zu den übrigen Fassungen.
     """
     dialog = ChangesDialog()
 
-    assert dialog.older.isVisibleTo(dialog) == (len(changes.history()) > len(changes.recent()))
     assert website_page_url("changelog.html", get_language()) in dialog.older.text()
-    assert str(len(changes.recent())) in dialog.older.text()
+    assert str(changes.SHOWN_IN_APP) in dialog.older.text()
+    assert dialog.older.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByKeyboard, (
+        "the only way to the rest of the history must not need a mouse"
+    )
+
+
+def test_a_short_history_gets_no_notice_about_missing_versions(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Paket mit drei Fassungen lässt nichts weg — dann steht da nichts.
+
+    **Der Randfall wird gestellt und nicht ausgerechnet.** Hier stand
+    ``isVisibleTo(...) == (len(history()) > len(recent()))``, und das war
+    wörtlich der Ausdruck, den der Dialog selbst rechnet: Beide Seiten hätten
+    sich zusammen geändert, und die Zusicherung konnte nie rot werden. Denselben
+    Satz sagt der Test darunter über die Mehrzahl.
+    """
+    whole = changes.history("de")
+    assert len(whole) > changes.SHOWN_IN_APP, "the tree would not exercise the cut"
+
+    monkeypatch.setattr(changes, "history", lambda *_: whole[: changes.SHOWN_IN_APP])
+    short = ChangesDialog()
+    assert not short.older.isVisibleTo(short)
+
+    monkeypatch.setattr(changes, "history", lambda *_: whole)
+    plenty = ChangesDialog()
+    assert plenty.older.isVisibleTo(plenty)
 
 
 def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
@@ -198,7 +226,7 @@ def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
     # Ein Sollwert, den der Prüfling liefert, prüft nichts. Der Bestand hatte
     # „Thema" fest eingetragen und war grün, solange die letzte gezeigte
     # Fassung zufällig genau eine Gruppe trug.
-    themen = "Thema" if len(entries[last].groups) == 1 else "Themen"
+    topics = "Thema" if len(entries[last].groups) == 1 else "Themen"
     assert dialog.summary.text() == (
-        f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} {themen}"
+        f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} {topics}"
     )

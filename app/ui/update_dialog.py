@@ -17,6 +17,7 @@ gespeichert werden muss, weiß das Hauptfenster; es hört auf
 
 from __future__ import annotations
 
+import html
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl, Signal
@@ -178,6 +179,15 @@ class UpdateDialog(QDialog):
         self.more = QLabel(self)
         self.more.setWordWrap(True)
         self.more.setTextFormat(Qt.TextFormat.RichText)
+        # Derselbe Mangel wie im Änderungsfenster und aus demselben Grund
+        # behoben: Ein QLabel-Verweis ohne ``LinksAccessibleByKeyboard`` ist nur
+        # mit der Maus erreichbar und für einen Bildschirmleser stumm. Er ist
+        # hier der einzige Weg zu den Punkten, die der Auszug weglässt.
+        self.more.setTextInteractionFlags(
+            Qt.TextInteractionFlag.LinksAccessibleByMouse
+            | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+            | Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         self.more.setOpenExternalLinks(True)
         omitted = release.omitted()
         if omitted:
@@ -186,8 +196,8 @@ class UpdateDialog(QDialog):
                     shown=len(points), total=release.changes_total
                 )
                 + ' <a href="'
-                + website_page_url("changelog.html", get_language())
-                + f'">{tr("Vollständige Liste auf der Website")}</a>'
+                + html.escape(website_page_url("changelog.html", get_language()), quote=True)
+                + f'">{html.escape(tr("Vollständige Liste auf der Website"))}</a>'
             )
         self.more.setVisible(bool(omitted))
 

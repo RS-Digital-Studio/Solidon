@@ -155,13 +155,27 @@ class ChangesDialog(QDialog):
         self.older = QLabel(self)
         self.older.setWordWrap(True)
         self.older.setTextFormat(Qt.TextFormat.RichText)
+        # **Auch mit der Tastatur erreichbar.** Ohne
+        # ``LinksAccessibleByKeyboard`` ist ein QLabel-Verweis nur mit der Maus
+        # zu haben und für einen Bildschirmleser stumm — der Skizzeneditor hat
+        # denselben Satz aufgeschrieben. Hier wiegt es schwerer als dort: Seit
+        # der Dialog nur noch drei Fassungen zeigt, ist dieser Verweis der
+        # einzige Weg zu den übrigen.
+        self.older.setTextInteractionFlags(
+            Qt.TextInteractionFlag.LinksAccessibleByMouse
+            | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+            | Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         self.older.setOpenExternalLinks(True)
         set_level(self.older, "caption")
+        # ``html.escape`` auf dem Linktext, obwohl er aus dem eigenen Katalog
+        # kommt: Dieselbe Zurückhaltung wie bei jedem Punkt darunter, und eine
+        # Übersetzung mit einem ``&`` darin bräche sonst die Auszeichnung.
         self.older.setText(
             tr("Gezeigt sind die letzten {count} Versionen.").format(count=len(self.entries))
             + ' <a href="'
-            + website_page_url("changelog.html", get_language())
-            + f'">{tr("Vollständiger Verlauf auf der Website")}</a>'
+            + html.escape(website_page_url("changelog.html", get_language()), quote=True)
+            + f'">{html.escape(tr("Vollständiger Verlauf auf der Website"))}</a>'
         )
         # Sichtbar nur, wenn wirklich etwas fehlt: In einem Paket mit drei
         # Fassungen oder weniger wäre der Satz eine Auskunft über nichts.
