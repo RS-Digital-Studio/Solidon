@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QMenuBar, QWidget
 
 from app.ui import cursors
 from app.ui.theme import THEMES
@@ -419,6 +419,71 @@ def test_the_panels_get_the_same_pointer_as_the_view(qt_app: QApplication) -> No
     assert child.cursor().pixmap().cacheKey() == window.cursor().pixmap().cacheKey()
 
 
+def test_a_window_built_after_the_theme_still_gets_the_pointer(qt_app: QApplication) -> None:
+    """Nicht „die Funktion kann es", sondern „die Anwendung tut es".
+
+    **Der Befund** (Robert, 09.09.2026: „nur noch im viewport ist unser
+    mauszeiger richtig, in den anderen panels und in der menüleiste oben ist es
+    der standart windows mauszeiger"). ``apply_theme`` verteilt den Zeiger an
+    ``topLevelWidgets()`` — an die Fenster, die es in diesem Moment gibt. In
+    ``app.py`` steht es vor dem Bau des Hauptfensters, und das bekam ihn
+    deshalb nie; im Viewport stimmte er, weil der ihn selbst setzt.
+
+    Die beiden Tests darüber riefen ``apply_default_cursor`` von Hand und
+    blieben grün, während der Kunde den Systempfeil sah — geprüft war die
+    Funktion und nicht ihr Anschluss.
+
+    **Und dieser hier ruft ``install`` ebenfalls selbst.** Er zeigt damit, dass
+    ein *nach* dem Thema gebautes Fenster den Zeiger bekommt — nicht, dass die
+    Anwendung den Wächter aufhängt. Das prüft
+    :func:`test_every_start_path_hangs_up_the_pointer_watcher` daneben, an den
+    zwei Startwegen selbst.
+    """
+    from app.ui import cursors
+
+    watcher = cursors.install(qt_app)
+    try:
+        window = QWidget()
+        menu = QMenuBar(window)
+        window.show()
+        qt_app.processEvents()
+
+        assert not window.cursor().pixmap().isNull(), "das Fenster trägt den Zeiger"
+        assert menu.cursor().pixmap().cacheKey() == window.cursor().pixmap().cacheKey()
+
+        # Und ein Dialog, der später aufgeht, ebenfalls: Qt vererbt den Zeiger
+        # nicht über die Fenstergrenze, auch nicht an ein Kind mit Elternteil.
+        dialog = QDialog(window)
+        dialog.show()
+        qt_app.processEvents()
+        assert not dialog.cursor().pixmap().isNull(), "auch der Dialog"
+
+        dialog.close()
+        window.close()
+    finally:
+        qt_app.removeEventFilter(watcher)
+        watcher.setParent(None)
+        watcher.deleteLater()
+
+
+def test_the_watcher_is_installed_only_once(qt_app: QApplication) -> None:
+    """``app.py`` setzt das Erscheinungsbild zweimal — der Wächter bleibt einer.
+
+    Ein zweiter läge im Strom jedes Ereignisses und täte dasselbe; die Suite
+    zählt in einer Fensterdatei Millionen Filteraufrufe.
+    """
+    from app.ui import cursors
+
+    first = cursors.install(qt_app)
+    try:
+        assert cursors.install(qt_app) is first
+        assert len(qt_app.findChildren(cursors.CursorWatcher)) == 1
+    finally:
+        qt_app.removeEventFilter(first)
+        first.setParent(None)
+        first.deleteLater()
+
+
 def test_a_text_field_keeps_its_own_pointer(qt_app: QApplication) -> None:
     """Der Textbalken ist eine Auskunft, keine Zierde. Widgets, die ihren
     Zeiger selbst setzen, dürfen von der Vererbung nicht überfahren werden."""
@@ -497,3 +562,50 @@ def test_every_set_role_exists_and_every_drawn_role_is_set() -> None:
         f"gezeichnete Rollen ohne Setzstelle: {never_set} — entweder anschließen "
         "oder ausbauen, ein Zeiger ins Leere ist beides nicht"
     )
+
+
+def test_every_start_path_hangs_up_the_pointer_watcher() -> None:
+    """Der Wächter hängt an **jedem** Startweg, nicht an einem.
+
+    Der Test darüber baut ihn selbst auf und sagt damit nichts darüber, ob die
+    Anwendung es tut: Löscht man beide Aufrufe in ``app.py``, bleibt er grün —
+    und der Kunde sieht wieder den Systempfeil, also genau den Befund, den er
+    verhindern soll (AGENTS.md, Testart „Anschluss": nicht „der Cache kann es",
+    sondern „die Anwendung tut es").
+
+    Gelesen wird der Quelltext und nicht die gebaute Anwendung: ``main`` startet
+    eine Ereignisschleife, und ``build_application`` baut das ganze Hauptfenster
+    — beides in einem Test, der eine einzige Zeile zusichert, wäre eine Minute
+    für eine Auskunft, die im Text steht. Denselben Weg geht
+    ``test_hard_rules`` für seine Zusagen über Plattformen, auf denen es nicht
+    läuft.
+    """
+    import ast
+    from pathlib import Path
+
+    quelle = Path(__file__).resolve().parents[1] / "app" / "ui" / "app.py"
+    baum = ast.parse(quelle.read_text(encoding="utf-8"))
+
+    def haengt_auf(knoten: ast.AST) -> bool:
+        """Steht in dieser Funktion ein ``cursors.install(...)``?"""
+        for stelle in ast.walk(knoten):
+            if (
+                isinstance(stelle, ast.Call)
+                and isinstance(stelle.func, ast.Attribute)
+                and stelle.func.attr == "install"
+                and isinstance(stelle.func.value, ast.Name)
+                and stelle.func.value.id == "cursors"
+            ):
+                return True
+        return False
+
+    wege = {
+        knoten.name: haengt_auf(knoten)
+        for knoten in ast.walk(baum)
+        if isinstance(knoten, ast.FunctionDef) and knoten.name in {"build_application", "main"}
+    }
+    assert set(wege) == {"build_application", "main"}, (
+        f"die Startwege heißen anders als gedacht: {sorted(wege)}"
+    )
+    ohne = sorted(name for name, gefunden in wege.items() if not gefunden)
+    assert not ohne, f"ohne Zeiger-Wächter: {ohne}"

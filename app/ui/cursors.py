@@ -45,7 +45,7 @@ import sys
 from importlib import import_module
 from typing import Final
 
-from PySide6.QtCore import QByteArray, QPoint, QSize, Qt
+from PySide6.QtCore import QByteArray, QEvent, QObject, QPoint, QSize, Qt
 from PySide6.QtGui import QCursor, QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
@@ -209,6 +209,54 @@ def apply_default_cursor(window: QWidget) -> None:
     stand der Pfeil des Systems: dieselbe Anwendung mit zwei Handschriften.
     """
     window.setCursor(cursor("select", window))
+
+
+class CursorWatcher(QObject):
+    """Gibt jedem Fenster den Zeiger, sobald es zum ersten Mal erscheint.
+
+    **Warum nicht der Durchgang in** :func:`app.ui.theme.apply_theme` **allein.**
+    Er erreicht ``topLevelWidgets()`` — also die Fenster, die es in diesem
+    Moment gibt. Beim Start gibt es keines: ``app.py`` setzt das Thema, und
+    erst danach entsteht das Hauptfenster. Gemessen am 09.09.2026 trug es
+    hinterher den System-Pfeil, ebenso Menüleiste und Panels; richtig war der
+    Zeiger allein im Viewport, weil der ihn selbst setzt (Befund Robert: „nur
+    noch im viewport ist unser mauszeiger richtig").
+
+    **Und ein Dialog erbt ihn nicht**, auch nicht mit Elternfenster: Qt vererbt
+    den Zeiger an Kind-Widgets innerhalb eines Fensters, nie über die
+    Fenstergrenze. Jedes Fenster braucht seinen eigenen, und deshalb steht hier
+    ein Wächter am Ereignisstrom statt eines Aufrufs in jedem Konstruktor —
+    dieselbe Bauart wie :class:`app.ui.window_chrome.ChromeWatcher`, und aus
+    demselben Grund: Ein Fenster, das jemand später dazubaut, wird sonst
+    vergessen.
+
+    Wer seinen Zeiger selbst gesetzt hat, behält ihn (``WA_SetCursor``).
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt-Name
+        if (
+            event.type() == QEvent.Type.Show
+            and isinstance(watched, QWidget)
+            and watched.isWindow()
+            and not watched.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        ):
+            apply_default_cursor(watched)
+        return False
+
+
+def install(application: QApplication) -> CursorWatcher:
+    """Hängt den Wächter in den Ereignisstrom der Anwendung — genau einmal.
+
+    ``app.py`` setzt das Erscheinungsbild an zwei Stellen: einmal früh für
+    Ladebildschirm und Abschiedsdialog, einmal in ``build_application``. Ein
+    zweiter Wächter läge dann im Strom jedes Ereignisses und täte dasselbe;
+    gefunden wird der vorhandene über seinen Namen.
+    """
+    for existing in application.findChildren(CursorWatcher):
+        return existing
+    watcher = CursorWatcher(application)
+    application.installEventFilter(watcher)
+    return watcher
 
 
 def known() -> tuple[str, ...]:

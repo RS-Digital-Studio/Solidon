@@ -31,7 +31,7 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
-from app.ui import window_chrome
+from app.ui import cursors, window_chrome
 from app.ui.icons import application_icon
 from app.ui.qt_platform import prefer_x11_for_the_viewport
 from app.ui.settings import UiSettings, load_settings
@@ -221,6 +221,13 @@ def build_application(
     # hängt an der Anwendung und hört auf ``Show`` und Palettenwechsel — jeder
     # Dialog kommt damit von selbst mit, ohne dass ihn jemand einträgt.
     window_chrome.install(application)
+    # **Und der Mauszeiger genauso.** ``apply_theme`` verteilt ihn an die
+    # Fenster, die es *jetzt* gibt — und das Hauptfenster entsteht erst
+    # darunter. Es trug damit den System-Pfeil, ebenso Menüleiste und Panels;
+    # richtig war er allein im Viewport, weil der ihn selbst setzt (Befund
+    # Robert, 09.09.2026). Derselbe Wächter wie eine Zeile darüber, aus
+    # demselben Grund: Ein Dialog erbt den Zeiger nicht über die Fenstergrenze.
+    cursors.install(application)
 
     report(tr("Das Fenster wird aufgebaut …"), 0.72)
     session = Session()
@@ -387,6 +394,9 @@ def main(argv: list[str] | None = None) -> int:
     # hängt an der Anwendung und hört auf ``Show`` und Palettenwechsel — jeder
     # Dialog kommt damit von selbst mit, ohne dass ihn jemand einträgt.
     window_chrome.install(application)
+    # Und der Mauszeiger genauso — hier schon, damit auch Ladebildschirm und
+    # Abschiedsdialog ihn tragen. install hängt nur einen Wächter an.
+    cursors.install(application)
     state = activation.state()
     if state.over:
         # Auch dieser Import ist schwer (``app.core.scene`` über
