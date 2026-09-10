@@ -286,11 +286,41 @@ def _entry(entry: changes.Entry, selected: str, published: str, copy: Copy) -> s
     )
 
 
+def _as_numbers(version: str) -> tuple[int, ...]:
+    """Eine Versionsnummer zum Vergleichen. ``0.10.0`` liegt über ``0.9.0``."""
+    return tuple(int(part) for part in version.split(".") if part.isdigit())
+
+
+def released_only(entries: tuple[changes.Entry, ...], published: str) -> tuple[changes.Entry, ...]:
+    """Was es zum Herunterladen gibt — und keine Fassung darüber.
+
+    **Der Abschnitt einer Fassung entsteht vor ihrer Versionsnummer**
+    (Entscheidung Robert, 09.09.2026): Der Quellbaum trägt dann schon den der
+    nächsten, während ``version.json`` noch die veröffentlichte nennt. Auf der
+    öffentlichen Seite stand sie damit ganz oben im Auswahlfeld, ohne ein Wort
+    dazu — und ohne JavaScript als sichtbare Karte über allen anderen, weil das
+    ``<noscript>`` daneben jede versteckte Karte wieder aufklappt. Gemessen am
+    10.09.2026 an ``website/changelog.html``: erste Auswahlzeile 0.4.0, während
+    der Download-Kasten 0.3.5 anbot.
+
+    Wer die Seite las, bekam zweiundsechzig Punkte einer Fassung angekündigt,
+    die niemand laden konnte — und jeder davon durfte bis zur Veröffentlichung
+    noch fallen. Eine Verkaufsseite verspricht nichts, was es nicht gibt
+    (Entscheidung Robert, 10.09.2026).
+
+    **Der Weg zurück ist derselbe Lauf.** Sobald ``version.json`` die neue
+    Fassung nennt, nimmt der nächste Durchgang sie mit; erzwungen wird das vom
+    Fehler darunter und von ``tests/test_changelog_website.py``.
+    """
+    grenze = _as_numbers(published)
+    return tuple(entry for entry in entries if _as_numbers(entry.version) <= grenze)
+
+
 def render_page(language: str) -> str:
     """Eine vollständige Sprachfassung als statisches HTML."""
     copy = copy_for(language)
-    entries = changes.history(language)
     published = published_version()
+    entries = released_only(changes.history(language), published)
     if not any(entry.version == published for entry in entries):
         raise RuntimeError(
             f"Die veröffentlichte Version {published} fehlt im Änderungsverlauf. "

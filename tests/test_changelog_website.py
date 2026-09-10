@@ -8,11 +8,17 @@ import sys
 
 import pytest
 
-from app.branding import APP_VERSION
 from app.core import changes
 from app.i18n.catalog import available_languages
 from tools import make_changelog
-from tools.make_changelog import page_path, path_for, published_version, render_page, version_id
+from tools.make_changelog import (
+    page_path,
+    path_for,
+    published_version,
+    released_only,
+    render_page,
+    version_id,
+)
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
@@ -24,29 +30,42 @@ def test_every_language_has_a_generated_page(language: str) -> None:
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
-def test_the_picker_offers_every_bundled_version(language: str) -> None:
+def test_the_picker_offers_every_published_version(language: str) -> None:
+    """Jede veröffentlichte Fassung — und keine, die es noch nicht gibt."""
     text = path_for(language).read_text(encoding="utf-8")
     offered = tuple(re.findall(r'<option value="([^"]+)"', text))
-    expected = tuple(entry.version for entry in changes.history(language))
+    public = published_version()
+    expected = tuple(entry.version for entry in released_only(changes.history(language), public))
 
     assert offered == expected
-    public = published_version()
+    assert expected, "an empty picker would make the assertion above meaningless"
     assert re.search(rf'<option value="{re.escape(public)}" selected>', text)
-    if public != APP_VERSION:
-        assert f'<option value="{APP_VERSION}">{APP_VERSION}</option>' in text
 
 
-def test_the_development_version_is_not_labelled_as_published(
+def test_a_version_that_cannot_be_downloaded_stays_off_the_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """0.3.0 kann im Verlauf stehen, während öffentlich noch 0.2.2 gilt."""
+    """Was es nicht zu laden gibt, kündigt die Verkaufsseite nicht an.
+
+    **Hier stand das Gegenteil**, und es war so lange harmlos, wie ein
+    Abschnitt mit seiner Versionsnummer entstand. Seit dem 09.09.2026 entsteht
+    er vorher: Am 10.09. führte die öffentliche Seite 0.4.0 mit
+    zweiundsechzig Punkten, während der Download-Kasten 0.3.5 anbot — im
+    Auswahlfeld ganz oben und ohne Skript als sichtbare Karte darüber, weil das
+    ``<noscript>`` jede versteckte Karte wieder aufklappt.
+
+    Der Kunde bekam damit eine Fassung samt Funktionen angekündigt, die er
+    nicht laden konnte und von der jeder Punkt noch fallen durfte
+    (Entscheidung Robert, 10.09.2026).
+    """
     monkeypatch.setattr(make_changelog, "published_version", lambda: "0.2.2")
 
     text = render_page("de")
 
     assert '<option value="0.2.2" selected>0.2.2 — diese Version</option>' in text
-    assert '<option value="0.3.0">0.3.0</option>' in text
-    assert 'data-version="0.2.2"' in text and 'data-version="0.3.0"' in text
+    assert '<option value="0.3.0">' not in text
+    assert 'data-version="0.2.2"' in text and 'data-version="0.3.0"' not in text
+    assert '<option value="0.2.1">' in text, "older versions stay — only newer ones go"
 
 
 def test_a_missing_public_version_stops_with_the_next_action(
@@ -63,7 +82,7 @@ def test_a_missing_public_version_stops_with_the_next_action(
 def test_every_customer_point_reaches_the_page(language: str) -> None:
     text = html.unescape(path_for(language).read_text(encoding="utf-8"))
 
-    for entry in changes.history(language):
+    for entry in released_only(changes.history(language), published_version()):
         assert f'id="{version_id(entry.version)}"' in text
         for group in entry.groups:
             if group.title:
@@ -77,7 +96,9 @@ def test_the_page_works_as_a_full_history_without_script() -> None:
 
     assert "<noscript>" in text
     assert ".release-card[hidden]{display:block!important}" in text
-    assert text.count("data-changelog-entry") == len(changes.history("de"))
+    assert text.count("data-changelog-entry") == len(
+        released_only(changes.history("de"), published_version())
+    )
 
 
 def test_an_additional_language_needs_no_generator_code(
@@ -98,7 +119,7 @@ def test_an_additional_language_needs_no_generator_code(
 def test_each_release_starts_with_a_plain_language_summary() -> None:
     text = path_for("de").read_text(encoding="utf-8")
 
-    for entry in changes.history("de"):
+    for entry in released_only(changes.history("de"), published_version()):
         changes_word = "Neuerung" if len(entry.points) == 1 else "Neuerungen"
         topics_word = "Thema" if len(entry.groups) == 1 else "Themen"
         summary = f"{len(entry.points)} {changes_word} · {len(entry.groups)} {topics_word}"
