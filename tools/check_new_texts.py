@@ -9,13 +9,15 @@ Text des Commits längst vollständig.
 
 Gefragt wird deshalb: **Steht einer der fehlenden Texte in diesem Commit?**
 
-**Und gefragt wird der Diff gegen die Kataloge, nicht die pytest-Ausgabe.**
+**Und gefragt wird der Quelltext gegen die Kataloge, nicht die pytest-Ausgabe.**
 Der Hook warnt selbst vor dieser Falle: Ein Muster über die Ausgabe scheiterte
 schon einmal an der Kodierung, weil die Locale der Hook-Shell eine andere ist
 als die der Testausgabe — und ein Muster, das an der Kodierung scheitert,
-meldet dasselbe wie eines, das nichts findet. Der Diff kommt über
-``git diff --cached`` als UTF-8 herein, die Kataloge als JSON; beide Seiten
-sind eindeutig.
+meldet dasselbe wie eines, das nichts findet. Gelesen wird deshalb die Datei
+selbst, in beiden Fassungen: ``git show :datei`` gegen ``git show HEAD:datei``,
+je durch ``ast``. Die Kataloge kommen als JSON daneben; beide Seiten sind
+eindeutig, und keine hängt an einer Zeilenform. Warum nicht der Diff, steht
+bei :func:`added_texts`.
 
 Aufruf (der Hook tut es, sonst niemand)::
 
@@ -30,53 +32,101 @@ from __future__ import annotations
 
 import ast
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: Ein ``tr("…")`` oder ``_("…")`` mit einfachem Text — mehrzeilige und über
-#: ``+`` zusammengesetzte werden absichtlich nicht erfasst: Was hier
-#: durchrutscht, kostet einen zu wenig angehaltenen Commit; was falsch
-#: erfasst würde, hielte jemanden ohne Grund auf.
-CALL = re.compile(r'(?:\btr|\b_)\(\s*"((?:[^"\\]|\\.)*)"')
+#: Die Namen, unter denen ein Oberflächentext im Quelltext steht.
+CALLS = frozenset({"tr", "_"})
 
 
-def added_texts() -> list[str]:
-    """Die Texte, die dieser Commit neu anlegt."""
-    diff = subprocess.run(
-        ["git", "diff", "--cached", "-U0", "--", "app/*.py", "tools/*.py"],
+def _changed_files() -> list[str]:
+    """Die Python-Dateien unter ``app/`` und ``tools/``, die dieser Commit mitnimmt."""
+    listing = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.py"],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
         cwd=str(ROOT),
     ).stdout
-    found: list[str] = []
-    for line in diff.splitlines():
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-        found.extend(CALL.findall(line))
-    return [_literal(text) for text in found]
+    return [
+        name
+        for name in listing.splitlines()
+        if name.startswith(("app/", "tools/")) and name.endswith(".py")
+    ]
 
 
-def _literal(text: str) -> str:
-    """Der Text, wie Python ihn liest — Escape-Folgen aufgelöst, Umlaute heil.
+def _texts_in(revision: str, path: str) -> set[str]:
+    """Jeder Oberflächentext einer Fassung dieser Datei.
 
-    Hier stand ``text.encode().decode("unicode_escape")``, und das las die
-    UTF-8-Bytes als einzelne Codepunkte: Ein Text mit Umlaut **und**
-    Zeilenumbruch wurde zu „WÃ¤hlen …", und seine vorhandene Übersetzung galt
-    als fehlend (Gesamtreview 05.09.2026, R18).
+    ``revision`` ist, was ``git show`` versteht — ``""`` für den gestagten
+    Stand (``:datei``), ``HEAD`` für den letzten Commit. Fehlt die Datei dort,
+    ist die Antwort leer: Eine neue Datei hat keinen Vorzustand.
     """
-    if "\\" not in text:
-        return text
+    source = subprocess.run(
+        ["git", "show", f"{revision}:{path}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(ROOT),
+    )
+    if source.returncode != 0:
+        return set()
     try:
-        value = ast.literal_eval(f'"{text}"')
-    except SyntaxError, ValueError:
-        return text
-    return value if isinstance(value, str) else text
+        tree = ast.parse(source.stdout)
+    except SyntaxError:
+        return set()
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        name = node.func.id if isinstance(node.func, ast.Name) else None
+        if name not in CALLS:
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            found.add(first.value)
+    return found
+
+
+def added_texts() -> list[str]:
+    """Die Texte, die dieser Commit neu anlegt — Menge nachher ohne Menge vorher.
+
+    **Warum der Umweg über zwei Fassungen und nicht über den Diff.** Hier stand
+    ein Regex, der die ``+``-Zeilen **zeilenweise** absuchte, mit dem Vermerk,
+    mehrzeilige Texte würden absichtlich nicht erfasst — durchrutschen sei
+    billiger als jemanden ohne Grund aufhalten. Die Abwägung stimmte, die
+    Rechnung nicht: Am 10.09.2026 formulierte ein Commit drei Absagen in
+    ``perceive/actions.py`` um, alle drei über vier Zeilen implizit
+    zusammengesetzt. Der Wächter fand in 1068 Diff-Zeilen **einen** Text — den
+    einzigen einzeiligen —, ließ den Commit durch, und die Übersetzungsprüfung
+    stand danach für jeden rot, der das Tor fuhr. Blind war er ausgerechnet für
+    die langen, erklärenden Sätze, also für die wertvollsten.
+
+    Ein Regex über mehrere Zeilen hätte den Handel nur verschoben: Ändert
+    jemand die **letzte** Zeile eines langen Literals, liegt im Diff ein
+    Bruchstück, und ein Bruchstück steht in keinem Katalog — der Wächter hielte
+    an, ohne dass etwas fehlt. Genau davor warnte der alte Vermerk zu Recht.
+
+    Deshalb wird nicht der Diff gelesen, sondern zweimal die Datei: ``ast``
+    löst implizite Zusammensetzung von sich aus auf und liefert den Text, wie
+    Python ihn liest — Escape-Folgen und Umlaute inbegriffen. Damit erledigt
+    sich zugleich die Falle aus dem Gesamtreview vom 05.09.2026 (R18), wo ein
+    Text mit Umlaut **und** Zeilenumbruch über ``unicode_escape`` zu
+    „WÃ¤hlen …" wurde und seine vorhandene Übersetzung als fehlend galt.
+    Was in der gestagten Fassung steht und in der von ``HEAD`` nicht, hat
+    dieser Commit angelegt — ob neu geschrieben oder umformuliert, denn beides
+    ist ein neuer Katalogschlüssel. Alles andere lag schon vorher da und
+    gehört jemand anderem.
+    """
+    found: set[str] = set()
+    for path in _changed_files():
+        found |= _texts_in("", path) - _texts_in("HEAD", path)
+    return sorted(found)
 
 
 def missing(texts: list[str]) -> dict[str, list[str]]:

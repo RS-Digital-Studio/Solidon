@@ -158,6 +158,25 @@ def test_the_download_store_takes_the_new_bytes_even_at_the_same_size(
 # --- check_new_texts -------------------------------------------------------------
 
 
+def _guard_with(monkeypatch: pytest.MonkeyPatch, *, before: str, after: str) -> list[str]:
+    """Den Wächter über zwei erfundene Fassungen einer Datei laufen lassen.
+
+    Attrappiert wird genau das, was er von git will: die Liste der gestagten
+    Dateien und je Fassung ihr Quelltext.
+    """
+    from types import SimpleNamespace
+
+    from tools import check_new_texts
+
+    def fake_run(args: list[str], **_kwargs: object) -> SimpleNamespace:
+        if args[1] == "diff":
+            return SimpleNamespace(stdout="app/ui/panels.py\n", returncode=0)
+        return SimpleNamespace(stdout=before if args[2].startswith("HEAD") else after, returncode=0)
+
+    monkeypatch.setattr(check_new_texts.subprocess, "run", fake_run)
+    return check_new_texts.added_texts()
+
+
 def test_the_commit_guard_reads_escapes_like_python_and_keeps_the_umlauts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -165,16 +184,45 @@ def test_the_commit_guard_reads_escapes_like_python_and_keeps_the_umlauts(
     Umlauts als einzelne Codepunkte, sobald daneben eine Escape-Folge stand —
     aus „Wählen" wurde „WÃ¤hlen", und die vorhandene Übersetzung galt als
     fehlend. Der Wächter hielt damit korrekt übersetzte Commits an."""
-    from types import SimpleNamespace
-
-    from tools import check_new_texts
-
-    diff = '+    tr("Wählen Sie eine Datei.\\nErneut versuchen.")\n+    _("Gerade")\n'
-    monkeypatch.setattr(
-        check_new_texts.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(stdout=diff)
+    neu = _guard_with(
+        monkeypatch,
+        before="x = 1\n",
+        after='tr("Wählen Sie eine Datei.\\nErneut versuchen.")\n_("Gerade")\n',
     )
 
-    assert check_new_texts.added_texts() == ["Wählen Sie eine Datei.\nErneut versuchen.", "Gerade"]
+    assert neu == ["Gerade", "Wählen Sie eine Datei.\nErneut versuchen."]
+
+
+def test_the_commit_guard_sees_a_text_that_runs_over_several_lines(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Fall vom 10.09.2026 — und der teuerste, den dieser Wächter kennt.
+
+    Ein Commit formulierte drei Absagen um, jede über vier Zeilen implizit
+    zusammengesetzt. Der Wächter las die ``+``-Zeilen **einzeln**, fand in 1068
+    Zeilen genau einen Text (den einzigen einzeiligen) und ließ den Commit
+    durch; die Übersetzungsprüfung stand danach für jeden rot, der das Tor
+    fuhr. Blind war er ausgerechnet für die langen, erklärenden Sätze.
+
+    Der zweite Text hier ist die Gegenprobe zur naheliegenden Reparatur: Wer
+    stattdessen den Diff über mehrere Zeilen absucht, findet bei einer
+    geänderten Schlusszeile ein **Bruchstück** — und ein Bruchstück steht in
+    keinem Katalog, also hielte er an, ohne dass etwas fehlt. Gelesen wird
+    deshalb die Datei und nicht der Diff.
+    """
+    lang = (
+        "tr(\n"
+        '    "Ein Gewinde ist eine Wendelfläche und trägt kein "\n'
+        '    "einzelnes Maß, das sich ändern ließe."\n'
+        ")\n"
+    )
+    unveraendert = '_("Diesen Schritt ändern")\n'
+
+    neu = _guard_with(monkeypatch, before=unveraendert, after=unveraendert + lang)
+
+    assert neu == [
+        "Ein Gewinde ist eine Wendelfläche und trägt kein einzelnes Maß, das sich ändern ließe."
+    ], "der zusammengesetzte Text zählt als einer, und der unveränderte gehört nicht dazu"
 
 
 # --- hold_back_version -------------------------------------------------------------
