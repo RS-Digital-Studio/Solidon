@@ -297,6 +297,11 @@ _NOT_A_RANGE = frozenset(
         "not_finite",
         # Art und Belegung einer Auswahl sind keine Zahlenspanne.
         "feature_kind", "empty_feature", "slots_full",
+        # Schrift und Schnitt einer Beschriftung: eine Familie, die dieser
+        # Rechner nicht hat, und ein Schnitt, den es in dieser Familie nicht
+        # gibt. Beides sind Einträge in zwei kurzen Listen — es gibt kein Feld,
+        # in dem eine Zahl zu klein wäre.
+        "missing_font", "missing_style",
         # Fremde Materialcodierung beziehungsweise fehlender Messkontext.
         "unsupported_material_semantics", "calibration_process",
         # Die Ausgabe überschreitet eine Formatkapazität; kein Zahlenfeld
