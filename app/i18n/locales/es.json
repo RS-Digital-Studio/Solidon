@@ -1298,7 +1298,7 @@
   "Die Schichtanalyse läuft …": "El análisis de capas está en marcha …",
   "Die Schichthöhe muss größer als null sein.": "La altura de capa debe ser mayor que cero.",
   "Die Schnittfläche ist für Passstifte zu klein — geklebt hält sie trotzdem.": "La cara de corte es demasiado pequeña para pasadores — pegada aguanta igualmente.",
-  "Die Schnittflächen konnten nicht geschlossen werden.": "Las caras de corte no se pudieron cerrar.",
+  "Die Schnittflächen bleiben offen: Das Modell ist schon vor dem Schnitt nicht geschlossen. Reparieren Sie es und teilen Sie danach erneut.": "Las caras de corte quedan abiertas: el modelo ya no estaba cerrado antes del corte. Repárelo y vuelva a dividir.",
   "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich nicht. Lage und Maße prüfen, damit sie sich treffen.": "La intersección está vacía: los cuerpos seleccionados no se solapan. Compruebe su posición y dimensiones para que coincidan.",
   "Die Schnurstärke ist für diesen Außendurchmesser zu groß — sie muss kleiner als dessen Hälfte sein.": "El diámetro de la sección es demasiado grande para este diámetro exterior: debe ser menor que su mitad.",
   "Die Schraube gehört an das erste Teil, die Mutter an das zweite. Größe und Spiel müssen dieselben sein, sonst greift kein Gewinde; die Steigung kommt für beide aus der Normteiltabelle.": "El tornillo va en la primera pieza y la tuerca en la segunda. El tamaño y la holgura tienen que ser los mismos, si no ninguna rosca agarra; el paso lo toman ambos de la tabla de piezas normalizadas.",

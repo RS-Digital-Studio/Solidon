@@ -14506,3 +14506,40 @@ def test_a_clicked_edge_reaches_the_selection_window(
     assert window.viewport.highlighted_edge() is None, "die Ansicht lässt die Kante fallen"
     uebrig = [b for b in window.feature_panel.findChildren(QPushButton) if b.text() in knoepfe]
     assert not uebrig, "und das Fenster überlebt sie nicht"
+
+
+def test_the_age_of_a_backup_follows_the_application_language(tmp_path: Path) -> None:
+    """Das Datum einer alten Sicherung wandert mit der Sprache.
+
+    Die relativen Angaben im Wiederherstellungsdialog — „vor einer Stunde" —
+    gingen seit je über ``tr()``. Der Rückfall darüber hinaus nicht: Dort stand
+    ein festes ``%d.%m.%Y %H:%M``, also deutsche Reihenfolge in einem
+    spanischen Fenster, direkt neben Angaben, die längst übersetzt waren.
+
+    Geprüft wird die **Sprachbindung** und nicht ein Wortlaut: Zwei Sprachen
+    müssen zwei verschiedene Schreibweisen ergeben. Ein Vergleich gegen eine
+    erwartete Zeichenkette prüfte dagegen nur, was ``QLocale`` in dieser
+    Qt-Fassung gerade tut.
+    """
+    import os
+    from datetime import datetime
+
+    from app.i18n import get_language, set_language
+
+    alt = tmp_path / "sicherung.p3d"
+    alt.write_bytes(b"x")
+    os.utime(alt, (0, datetime(2026, 3, 5, 14, 30).timestamp()))
+
+    vorher = get_language()
+    try:
+        set_language("de")
+        deutsch = MainWindow._when(alt)
+        set_language("en")
+        englisch = MainWindow._when(alt)
+    finally:
+        set_language(vorher)
+
+    assert "2026" in deutsch and "2026" in englisch, f"kein Datum: {deutsch!r} / {englisch!r}"
+    assert deutsch != englisch, (
+        f"beide Sprachen schreiben {deutsch!r} — das Datum hängt nicht an der Sprache"
+    )

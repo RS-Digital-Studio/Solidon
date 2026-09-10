@@ -1298,7 +1298,7 @@
   "Die Schichtanalyse läuft …": "L'analyse des couches est en cours …",
   "Die Schichthöhe muss größer als null sein.": "La hauteur de couche doit être supérieure à zéro.",
   "Die Schnittfläche ist für Passstifte zu klein — geklebt hält sie trotzdem.": "La face de coupe est trop petite pour des goupilles — collée, elle tient tout de même.",
-  "Die Schnittflächen konnten nicht geschlossen werden.": "Les faces de coupe n'ont pas pu être fermées.",
+  "Die Schnittflächen bleiben offen: Das Modell ist schon vor dem Schnitt nicht geschlossen. Reparieren Sie es und teilen Sie danach erneut.": "Les faces de coupe restent ouvertes : le modèle n'était déjà pas fermé avant la coupe. Réparez-le, puis divisez à nouveau.",
   "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich nicht. Lage und Maße prüfen, damit sie sich treffen.": "L’intersection est vide : les corps sélectionnés ne se chevauchent pas. Vérifiez leur position et leurs dimensions afin qu’ils se rencontrent.",
   "Die Schnurstärke ist für diesen Außendurchmesser zu groß — sie muss kleiner als dessen Hälfte sein.": "Le diamètre de la section est trop grand pour ce diamètre extérieur : il doit être inférieur à sa moitié.",
   "Die Schraube gehört an das erste Teil, die Mutter an das zweite. Größe und Spiel müssen dieselben sein, sonst greift kein Gewinde; die Steigung kommt für beide aus der Normteiltabelle.": "La vis appartient à la première pièce, l’écrou à la seconde. La taille et le jeu doivent être identiques, sinon aucun filetage ne prend ; le pas vient pour les deux de la table des pièces normalisées.",

@@ -1430,7 +1430,18 @@ def _axis_alignment(axis: Axis) -> np.ndarray:
 
 
 def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshData, list[Finding]]:
-    """Schneidet einen Körper in zwei, beide Hälften geschlossen (§18.2, §25)."""
+    """Schneidet einen Körper in zwei, beide Hälften geschlossen (§18.2, §25).
+
+    **Der Befund nennt die Ursache, nicht nur das Ergebnis.** „Die
+    Schnittflächen konnten nicht geschlossen werden" stand hier bis zum
+    10.09.2026 allein da, und ein Kunde konnte daraus nichts machen: Es klang
+    nach einem Fehler des Schnitts, und gesucht wurde folglich am Schnitt. Der
+    Schnitt kann aber gar nichts dafür — ``SectionResult.capped`` ist genau
+    ``is_watertight`` der **Eingabe** (siehe ``section._apply``), also war das
+    Modell schon vorher offen. Ein offenes Netz lässt sich nicht ehrlich
+    deckeln; der Schnitt zeigt es trotzdem und sagt jetzt, woran es liegt und
+    was zu tun ist (Regel 17).
+    """
     first = cut(mesh, plane)
     second = cut(mesh, plane.flipped())
     findings: list[Finding] = []
@@ -1439,7 +1450,10 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
             Finding(
                 code="split.uncapped",
                 severity="warning",
-                message=_("Die Schnittflächen konnten nicht geschlossen werden."),
+                message=_(
+                    "Die Schnittflächen bleiben offen: Das Modell ist schon vor dem "
+                    "Schnitt nicht geschlossen. Reparieren Sie es und teilen Sie danach erneut."
+                ),
             )
         )
     return first.mesh, second.mesh, findings

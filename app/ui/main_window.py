@@ -241,6 +241,7 @@ from app.ui.labels import (
     feature_requirement,
     kind_requirement,
     length,
+    local_moment,
     localised,
     set_circle_measure,
     spoiled_the_exact_body,
@@ -14401,7 +14402,7 @@ class MainWindow(QMainWindow):
         hours = minutes // 60
         if hours < 24:
             return tr("vor einer Stunde") if hours == 1 else tr("vor {n} Stunden").format(n=hours)
-        return written.strftime("%d.%m.%Y %H:%M")
+        return local_moment(written)
 
     def _ask_recovery(
         self, candidate: Path, saved: Path | None, question: str, decline: str

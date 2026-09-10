@@ -1298,7 +1298,7 @@
   "Die Schichtanalyse läuft …": "Analisi degli strati in corso …",
   "Die Schichthöhe muss größer als null sein.": "L'altezza dello strato deve essere maggiore di zero.",
   "Die Schnittfläche ist für Passstifte zu klein — geklebt hält sie trotzdem.": "La faccia di taglio è troppo piccola per le spine — incollata tiene lo stesso.",
-  "Die Schnittflächen konnten nicht geschlossen werden.": "Non è stato possibile chiudere le facce di taglio.",
+  "Die Schnittflächen bleiben offen: Das Modell ist schon vor dem Schnitt nicht geschlossen. Reparieren Sie es und teilen Sie danach erneut.": "Le facce di taglio restano aperte: il modello non era già chiuso prima del taglio. Ripararlo e dividere di nuovo.",
   "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich nicht. Lage und Maße prüfen, damit sie sich treffen.": "L’intersezione è vuota: i corpi selezionati non si sovrappongono. Controlla posizione e dimensioni affinché si incontrino.",
   "Die Schnurstärke ist für diesen Außendurchmesser zu groß — sie muss kleiner als dessen Hälfte sein.": "Il diametro della sezione è troppo grande per questo diametro esterno: deve essere inferiore alla sua metà.",
   "Die Schraube gehört an das erste Teil, die Mutter an das zweite. Größe und Spiel müssen dieselben sein, sonst greift kein Gewinde; die Steigung kommt für beide aus der Normteiltabelle.": "La vite appartiene al primo pezzo, il dado al secondo. Misura e gioco devono essere gli stessi, altrimenti nessun filetto fa presa; il passo viene per entrambi dalla tabella dei componenti normalizzati.",

@@ -28,6 +28,7 @@ from app.core.scene.project import Project, ProjectSources, load, new_project, s
 from app.core.slice.orientation import best_face_candidate
 from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import Finding, OpContext, Profile, Scene, SceneObject, Source
+from app.i18n import source_text
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1991,6 +1992,35 @@ def test_a_closed_body_is_split_without_that_warning(profile: Profile) -> None:
 
     assert outcome.divided
     assert "split.uncapped" not in [finding.code for finding in outcome.findings]
+
+
+def test_the_open_cut_says_why_and_what_to_do(profile: Profile) -> None:
+    """Der Befund nennt die Ursache und den Rückweg, nicht nur das Ergebnis.
+
+    „Die Schnittflächen konnten nicht geschlossen werden" stand bis zum
+    10.09.2026 allein da, und ein Kunde konnte daraus nichts machen: Der Satz
+    klang nach einem Fehler des Schnitts, also suchte man am Schnitt. Der
+    Schnitt kann aber nichts dafür — ``SectionResult.capped`` ist genau
+    ``is_watertight`` der **Eingabe** (``section._apply``), das Modell war
+    also schon vorher offen.
+
+    Geprüft wird die Aussage und nicht der Wortlaut: dass der Zustand **vor**
+    dem Schnitt benannt wird und dass ein Weg nach vorn dasteht (Regel 17).
+
+    **Und der Satz sagt „nicht geschlossen", nicht „Loch".** ``is_watertight``
+    heißt in trimesh „jede Kante hat genau zwei Flächen" — ein Würfel mit einer
+    doppelt geführten Fläche ist nicht wasserdicht und hat trotzdem kein Loch
+    (gemessen 10.09.2026). Bei fremden STL-Dateien ist das Alltag; der Kunde
+    suchte dann ein Loch, das es nicht gibt. Aufgefallen im Review, nicht beim
+    Schreiben.
+    """
+    outcome = autosplit.split_to_fit(open_body(), profile, pins=0)
+
+    offen = [finding for finding in outcome.findings if finding.code == "split.uncapped"]
+    assert offen, "der Befund fehlt ganz"
+    satz = source_text(offen[0].message)
+    assert "vor dem" in satz and "nicht geschlossen" in satz, f"die Ursache fehlt: {satz}"
+    assert "Reparieren" in satz, f"der Rückweg fehlt: {satz}"
 
 
 def test_new_fit_pairs_never_take_a_name_that_is_already_in_use(loaded, profile: Profile) -> None:
