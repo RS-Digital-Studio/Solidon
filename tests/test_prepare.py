@@ -3863,6 +3863,70 @@ def test_the_slot_switch_puts_the_widening_aside() -> None:
     assert (rund.slot_length, rund.widening_diameter) == (0.0, 9.0)
 
 
+def test_the_slot_switch_reaches_the_geometry_through_the_operation(profile: Profile) -> None:
+    """Testart *Anschluss*: nicht „`bore_shape` kann es", sondern „die Op tut es".
+
+    **Der Haken war an drei Stellen geprüft und an keiner gefahren.** Alle
+    bisherigen Fälle rufen `bore_shape` oder `DrillParams` unmittelbar; die
+    Verdrahtung dahinter — `shape.slot_length` und `shape.slot_angle` in den
+    Aufruf von `drill` — hat nie jemand betreten. Ein vertauschtes Argument
+    (`params.slot_angle` statt `shape.slot_angle`) wäre in allen drei grün
+    geblieben, und der Kunde hätte ein Loch bekommen, das quer steht.
+
+    Gemessen wird deshalb am Ergebnis der **Operation**: Volumen gegen die
+    analytische Formel, und die Richtung an einem Prüfwürfel, den nur ein
+    Langloch in der eingegebenen Lage füllt.
+    """
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+
+    def gebohrt(angle: float) -> SceneObject:
+        return _run_op(
+            "drill_hole",
+            entry,
+            profile,
+            x=0.0,
+            y=0.0,
+            z=5.0,
+            axis="z",
+            diameter=5.0,
+            depth=10.0,
+            slotted=True,
+            slot_length=20.0,
+            slot_angle=angle,
+        ).outputs[0]
+
+    result = gebohrt(90.0)
+
+    out = result
+    assert out.mesh.is_watertight
+    gemessen = next(
+        found for found in detect(as_mesh_data(out.mesh)).values() if found.kind == "slot"
+    )
+    assert float(gemessen.params["length"]) == pytest.approx(20.0, abs=0.3), (
+        "die eingetragene Länge kommt an der Geometrie an"
+    )
+    # 90 Grad heißt: die Mittellinie läuft quer zu der Richtung, in die sie bei
+    # null liefe. Welche Achse das im Weltraum ist, entscheidet der Rahmen der
+    # angeklickten Fläche — geprüft wird deshalb die Richtung gegen sich selbst
+    # bei null Grad, nicht gegen eine geratene Achse.
+    ohne_winkel = next(
+        found for found in detect(as_mesh_data(gebohrt(0.0).mesh)).values() if found.kind == "slot"
+    )
+    quer = float(
+        abs(
+            sum(
+                a * b
+                for a, b in zip(
+                    gemessen.params["direction"], ohne_winkel.params["direction"], strict=True
+                )
+            )
+        )
+    )
+    assert quer < 0.05, (
+        f"90 Grad stellt das Langloch quer; gemessen liegt es fast parallel ({quer:.3f})"
+    )
+
+
 @pytest.mark.parametrize("length", [0.0, 5.0])
 def test_the_slot_switch_without_a_length_is_refused(length: float) -> None:
     """Ein Haken, der nichts bewirkt, ist schlimmer als kein Haken.
