@@ -1,8 +1,11 @@
 # ROADMAP — Arbeitsliste
 
 Abgleich vom **08.09.2026** gegen Bauplan §40, Quelltext, Tests, Paketmetadaten
-und Git-Verlauf. Der lokale Veröffentlichungsstand ist **0.3.5**
-(`website/version.json`). Die früheren Durchsichten und Messreihen stehen im
+und Git-Verlauf, **nachgeführt am 10.09.2026** — jeder offene Punkt einmal am
+heutigen Code nachgemessen; was dabei erledigt, überholt oder falsch
+beschrieben war, steht am Punkt. Der lokale Veröffentlichungsstand ist
+**0.4.0** (`website/version.json`, seit dem 10.09.2026; die Mac-Pakete gingen
+unsigniert hinaus, siehe RM-001). Die früheren Durchsichten und Messreihen stehen im
 [Archiv](ROADMAP-ARCHIV.md); dessen
 [Abgleichstabelle](ROADMAP-ARCHIV.md#abgleich-der-gesamten-roadmap-mit-dem-bestand-08092026)
 erklärt für jeden vorher offenen Punkt, ob er bleibt, erledigt, überholt oder
@@ -33,22 +36,22 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac-Signatur scheitert an `APPLE_SIGN_IDENTITY` („no identity found", 10.09.2026); Identität aus dem Schlüsselbund lesen, dann 0.4.0 vollständig bauen |
+| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Die Identität kommt jetzt aus dem Schlüsselbund; offen bleiben `MACOS_SIGNING_MODE` zurück auf `notarized` und ein Bau, der es belegt |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
-| [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der tatsächlichen Linux-/Mac-Kundenpakete abnehmen |
-| [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Flatpak-Lauf und tatsächlich verwendeten Inno-Compiler am Kundenpaket belegen |
+| [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
+| [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Flatpak-Lauf belegen; die CI baut mit Inno Setup 6 und protokolliert die Fassung nicht |
 | [RM-065 — TLS und Update-Prüfung auf einem Kunden-Mac bestätigen](#rm-065) | Plattformen, Pakete und Grafik | Aktualisierungsprüfung aus dem aktuellen Mac-Paket erfolgreich ausführen |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Hohlkugel-Zielreihe samt echter Warnung auf Apple Silicon messen |
-| [RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen](#rm-117) | Plattformen, Pakete und Grafik | Alle öffentlichen Paketlinks in die Byte-/Prüfsummenprüfung aufnehmen |
+| [RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen](#rm-117) | Plattformen, Pakete und Grafik | Seitenlinks samt AppImage werden geprüft; offen bleiben Prüfsumme statt Länge und der Abruf gegen den Server für 0.4.0 |
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
 | [RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen](#rm-023) | Geometrie, Erkennung und Druckvorbereitung | Verweisfilter nach einem Wechsel der Objektkennung prüfen |
-| [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Echten mehrdeutigen Nachfolger über Auswertung und Wiederöffnen abnehmen |
+| [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Prüfkörper steht; Abnahme über `evaluate` selbst und ein Rundlauf für `matches` fehlen |
 | [RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären](#rm-039) | Geometrie, Erkennung und Druckvorbereitung | Offenes Eingangsnetz im Schnittbefund erklären und Reparatur anbieten |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
@@ -57,29 +60,29 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
-| [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Übrige Trennplanung, geschützte Sichtflächen und Schaustück abschließen |
+| [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Geschützte Flächen an die Ebenensuche hängen und im Dokument speichern; schräge Ebenen, Symmetrie, Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
-| [RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben](#rm-097) | Geometrie, Erkennung und Druckvorbereitung | Verbleibende Kernbefunde jeweils am Kunden- und Fehlerfall schließen |
+| [RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben](#rm-097) | Geometrie, Erkennung und Druckvorbereitung | Sechs kleine Stellen: Lesefehlertext, zwei Namen ohne Zähler, ein doppeltes `_fell_apart`, zwei feste Zahlen, ein Menütext |
 | [RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen](#rm-109) | Geometrie, Erkennung und Druckvorbereitung | Mindestbreitenprüfung mit gleichem Befund gezielt beschleunigen |
 | [RM-127 — Wandstärke nach Änderungen am fertigen Modell prüfen](#rm-127) | Geometrie, Erkennung und Druckvorbereitung | Dünne Wände am Endzustand in beiden Änderungsreihenfolgen prüfen |
-| [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Nutzbaren Bearbeitungsumfang reiner erkannter Flächen entscheiden |
+| [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Entscheiden, ob eine Verrundung ohne jede Operation in der Merkmalsliste stehen soll |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Organische und mechanische 200.000-Dreiecke-Fälle gegen eine Sekunde messen |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
-| [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen deterministisch erzeugen und Finalisten gegen vollständige Suche prüfen |
+| [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Alle acht gebaut, die Kante im Bild anklickbar — offen bleiben Zeiger und Rechtsklick an ihr sowie fünf zugesagte Kundenwege |
-| [RM-148 — Zahlenparameter gegen NaN und Unendlich sichern](#rm-148) | Geometrie, Erkennung und Druckvorbereitung | Endlichkeitsprüfung zentral in `registry.params._coerce` mit Regressionstest |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
+| [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
 | [RM-088 — Verständlichkeit für Laien im Regelwerk verankern](#rm-088) | Bedienung und Darstellung | Verständlichkeitsregel und begründete Ausnahmen entscheiden |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
-| [RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen](#rm-101) | Bedienung und Darstellung | Vermuteten elternlosen Knopf am heutigen Fenster reproduzieren |
+| [RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen](#rm-101) | Bedienung und Darstellung | Verdacht am Code widerlegt; das gesehene fremde Fenster bleibt unerklärt |
 | [RM-102 — Datum im Wiederherstellungsdialog an die App-Sprache binden](#rm-102) | Bedienung und Darstellung | Sicherungsdatum an die gewählte App-Sprache binden |
 | [RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen](#rm-108) | Bedienung und Darstellung | Schlüsseldialog während laufender Abfrage ohne Wartefrist schließen |
 | [RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen](#rm-119) | Bedienung und Darstellung | Schnittebene auf versetzten Platten und in Explosionsdarstellung prüfen |
@@ -94,19 +97,18 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Suite mit festgehaltenem aktuellem Modell und vergleichbarer Referenz messen |
-| [RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen](#rm-054) | KI und Generatoren | Prompt-Tokenzahl mit aktuellem Schema und festgehaltenem Modell nachmessen |
+| [RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen](#rm-054) | KI und Generatoren | Zahlen stehen auf 119/28.281; neu messen, sobald die nächste Operation dazukommt |
 | [RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen](#rm-069) | KI und Generatoren | Vergleichbare Suitequoten vor und nach der Schema-Verdichtung nachweisen |
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warm-/Kaltstart, Antwortqualität und Schemakürzungen gemeinsam messen |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
-| [RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen](#rm-043) | Tests und Entwicklungswerkzeuge | Kopfzeilenfrist an die vier übrigen HTTP-Leser anschließen |
-| [RM-098 — Restliche Regelwerk-Nachträge abgleichen](#rm-098) | Tests und Entwicklungswerkzeuge | Offene Regelbehauptungen mit tatsächlichen Prüfungen abgleichen |
-| [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Konzeptindex und historische Verweise ohne Wissensverlust ordnen |
+| [RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen](#rm-043) | Tests und Entwicklungswerkzeuge | Kopfzeilenfrist an die acht übrigen HTTP-Leser anschließen (nachgezählt 10.09.2026) |
+| [RM-098 — Restliche Regelwerk-Nachträge abgleichen](#rm-098) | Tests und Entwicklungswerkzeuge | Wächter für `paths:` und Regelnummern, `auslieferung.md`, und die vierfache Suite-Anleitung |
+| [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Windows-Testenkel ohne sichtbares Terminal bei gleicher Prozessprüfung starten |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-106 — Plattformunterschiede der Projektdateien dem richtigen Ursprung zuordnen](#rm-106) | Tests und Entwicklungswerkzeuge | Archiv- und Inhaltshashes nach gleichem Erzeugerlauf vergleichen |
-| [RM-110 — Doppelten Leser offener Dateihandles zusammenführen](#rm-110) | Tests und Entwicklungswerkzeuge | Gemeinsamen Handle-zu-Pfad-Leser mit allen Sicherheitsgegenproben extrahieren |
 | [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Besitz und ACL einer tatsächlich nutzereigenen Runner-Datei belegen |
 | [RM-122 — Paralleles Einfügen in gemeinsame Dokumente absichern](#rm-122) | Tests und Entwicklungswerkzeuge | Atomare Indexergänzung unter Sperre mit konkurrierenden Schreibern absichern |
 | [RM-134 — Zusammenführung duplizierter Testhilfen entscheiden](#rm-134) | Tests und Entwicklungswerkzeuge | Umfang der Zusammenführung belegter Testhilfen entscheiden |
@@ -119,7 +121,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
-| [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Roten Vorwarnlauf und den Fehlalarm des Website-Abgleichs je einer Ursache zuordnen |
+| [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Der Website-Fehlalarm ist behoben; offen bleibt der rote Vorwarnlauf gegen die neuesten Abhängigkeiten |
 | [RM-091 — CRA-Meldebereitschaft vor dem 11.09.2026 herstellen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf vor dem 11.09.2026 belegen |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
@@ -293,9 +295,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   nennen die fehlende Notarisierung samt dem Weg über *Datenschutz & Sicherheit* →
   *Trotzdem öffnen*.
 
-  **Vor dem Bau von 0.4.1 gehört die Variable zurück auf `notarized`** — zusammen mit der
-  Reparatur oben. Sie steht in keinem Repository-Text, nur in den Einstellungen; wer sie
-  vergisst, liefert eine zweite unsignierte Fassung aus, ohne dass ein Lauf rot wird.
+  **Die Reparatur steht seit dem 10.09.2026 im Workflow.** Beide Signierschritte lesen den
+  Fingerabdruck aus dem Schlüsselbund, den sie selbst angelegt haben
+  (`security find-identity`, beim Installer ohne `-p codesigning`, weil eine
+  Developer-ID-Installer-Identität unter dieser Richtlinie nicht auftaucht). Liegt dort nicht
+  genau eine Identität, hält der Schritt an und sagt, was zu prüfen ist, statt zu raten
+  (Regel 21). Die beiden Geheimnisse `APPLE_SIGN_IDENTITY` und `APPLE_INSTALLER_IDENTITY`
+  werden nicht mehr gelesen — ein Name, den zwei Stellen unabhängig voneinander führen, geht
+  irgendwann auseinander; der Fingerabdruck steht nur an einer Stelle. Geprüft wurden das
+  Ausgabeformat von `security find-identity` gegen vier Lagen (eine, keine, zwei Identitäten,
+  Installer allein) und das Verhalten unter `set -euo pipefail` — beide Fehlfälle brechen
+  **mit** ihrer Meldung ab, nicht davor.
+
+  **Was offen bleibt, ist nicht Code:** `MACOS_SIGNING_MODE` steht als Repository-Variable auf
+  `unsigned` und gehört vor dem Bau von 0.4.1 zurück auf `notarized`. Sie steht in keinem
+  Repository-Text, nur in den Einstellungen; wer sie vergisst, liefert eine zweite unsignierte
+  Fassung aus, ohne dass ein Lauf rot wird. Erst ein Bau mit `notarized` belegt, dass die
+  Reparatur trägt.
+
+  **Nebenbefund, gehört zu RM-084:** Die FAQ begründet die fehlende Notarisierung an zwei
+  Stellen mit „sobald das Apple-Konto steht" (`website/index.html`). Das Konto und alle acht
+  Geheimnisse stehen längst; blockiert hat allein der Identitätsname.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
 
@@ -335,9 +355,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-051"></a>
 
-- [ ] **RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen.** Die 0.3.5-Pakete
-  und expliziten wgpu-Bibliotheken sind gebaut; die alte Behauptung, seit 0.3.4 sei kein Mac-Bau
-  gelaufen, ist überholt. Offen sind der tatsächliche Grafik-/Eingabeweg samt Vulkan beziehungsweise
+- [ ] **RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen.** Gebaut und
+  veröffentlicht ist inzwischen **0.4.0** für alle vier Ziele (Stand 10.09.2026); die
+  0.3.5-Dateien sind vom Server geräumt. Die expliziten wgpu-Bibliotheken stecken weiter in der
+  Paket-Spec. Offen sind der tatsächliche Grafik-/Eingabeweg samt Vulkan beziehungsweise
   Metal und die Unix-Fenstergruppe: Die CI führt sie aktuell nur auf Windows aus, weil Linux und
   macOS konkrete Befunde zeigen. Abnahme je Plattform: sichtbares Modell, Auswahl/Navigation,
   Schließen, dokumentierte Treiber-/Paketumgebung und erfolgreiche vollständige Fenstergruppe ohne
@@ -347,11 +368,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-055"></a>
 
-- [ ] **RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen.** Flatpak 0.3.5 ist
-  gegen die eingetragene Laufzeit 26.08 gebaut und veröffentlicht; offen bleibt der reale Linux-Lauf
-  mit Grafik, Qt, Dateizugriff und Offline-Start. Für Inno Setup 7 die tatsächlich benutzte
-  Compilerfassung am Bauprotokoll belegen und Installieren, Aktualisieren sowie Deinstallieren auf
-  einem fremden Windows prüfen. Abnahme mit Paket-/Compilerfassung und Feldprotokoll.
+- [ ] **RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen.** Veröffentlicht ist
+  inzwischen das **0.4.0**-Flatpak, Laufzeit unverändert 26.08; offen bleibt der reale
+  Linux-Lauf mit Grafik, Qt, Dateizugriff und Offline-Start.
+
+  **Zur Compilerfassung, nachgemessen am 10.09.2026:** Die CI sucht ISCC auf dem PATH und
+  nimmt 7 vor 6 — der Kommentar daneben hält fest, dass das Runner-Image heute **6** trägt.
+  Gebaut wird also mit Inno Setup 6, und die Fassung wird **nirgends protokolliert**: kein
+  Versionsaufruf vor dem Bau, kein Eintrag in der Releaseakte. Der Punkt sagte „für Inno Setup
+  7" und meinte damit eine Fassung, die dort gar nicht läuft. Ein `ISCC`-Versionsaufruf vor dem
+  Bau wäre der Beleg, der fehlt. Dazu Installieren, Aktualisieren und Deinstallieren auf einem
+  fremden Windows. Abnahme mit Paket-/Compilerfassung und Feldprotokoll.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-der-gesamtreview-liegen-ließ-05092026).
 
@@ -399,10 +426,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-117"></a>
 
-- [ ] **RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen.** Die
-  Veröffentlichungsprüfung um direkt auf den Sprachseiten versprochene Downloads erweitern,
-  insbesondere AppImage. Abnahme: jedes verlinkte aktuelle Paket wird nach Upload auf vollständige
-  Bytes/Prüfsumme geprüft, auch ohne Eintrag im Update-Manifest.
+- [~] **RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen.**
+  **Der Hauptteil ist gebaut** (nachgemessen 10.09.2026): `verify_downloads()` liest neben
+  `version.json` auch jede `*/index.html` und die Startseite und erfasst darüber den
+  AppImage-Link, der im Update-Manifest bewusst fehlt — dieselbe Quelle sperrt schon vor dem
+  Upload. Der Satz „insbesondere AppImage" ist damit eingelöst.
+
+  Zwei Reste bleiben. **Erstens prüft der Abruf `Content-Length` und keine Prüfsumme** — eine
+  vollständig übertragene, aber falsche Datei fiele nicht auf; die SHA-256 steht nur für die
+  vier Pakete aus dem Manifest. **Zweitens hängt die Längenprüfung an der lokalen Datei**
+  (`expected = local.stat().st_size if local.is_file() else sizes.get(name, 0)`): Für das
+  AppImage steht in `version.json` nichts, und wer die Datei unter `dl/` nicht liegen hat,
+  prüft nur noch „antwortet mit 200". Dazu der Lauf selbst — `--nachpruefen` ist Handarbeit
+  und für 0.4.0 noch nicht gefahren.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#030-ist-draußen-03092026).
 
@@ -449,8 +485,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-024"></a>
 
 - [ ] **RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen.**
-  `Operation.matches` und Speichern/Wiederöffnen sind gebaut. Noch fehlt ein geometrisch echter
-  Fall, in dem ein altes Merkmal zwei gleichwertige Nachfolger bekommt. Abnahme über `evaluate`:
+  `Operation.matches` und Speichern/Wiederöffnen sind gebaut. **Auch der geometrisch echte Fall
+  steht** (nachgemessen 10.09.2026): `tests/test_evaluation.py` führt eine Platte mit zwei nah
+  beieinander liegenden Bohrungen über die echte Erkennung — einmal gefragt, aufgeschrieben,
+  beim zweiten Lauf still. Was fehlt, ist zweierlei: Die Abnahme läuft dort über
+  `_with_features` und nicht über `evaluate` selbst, dessen Tests die Mehrdeutigkeit noch per
+  Monkeypatch erzwingen; und für `Operation.matches` gibt es keinen Speichern-/Wiederöffnen-
+  Rundlauf, obwohl das Feld serialisiert wird. Abnahme über `evaluate`:
   jede nötige Entscheidung einmal, erneute Auswertung und Wiederöffnen ohne dieselbe Rückfrage;
   Abbruch liefert einen Befund. Die historische 99→7→0-Reihe nur mit dem damaligen 52-Teile-Projekt
   vergleichen.
@@ -539,11 +580,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-080"></a>
 
-- [ ] **RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen.** Die verbleibende
-  Trennen-Serie abschließen: schräge automatische Ebenen, Symmetrie, globale Schnittfolgen sowie die
-  vollständige Bedienung und Speicherung geschützter Sichtflächen; anschließend das Schaustück
-  ergänzen. Abnahme je Teil: Korpus, Determinismus, Abbruch und nachvollziehbarer Kundenweg. Bereits
-  gebaute Stützbewertung und automatische Verbinder nicht erneut beauftragen.
+- [~] **RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen.** **Geschützte
+  Sichtflächen sind halb gebaut** (nachgemessen 10.09.2026): Der Kern kennt `protect` samt
+  Auswertung, und der Viewport kann sie markieren und anzeigen. Was fehlt, sind die zwei Enden
+  dazwischen — **kein Aufrufer reicht die geschützten Flächen an die Schnittebenensuche
+  weiter**, und die Markierung ist ausdrücklich sitzungsgebunden: Sie steht in keinem Feld des
+  Dokuments und übersteht kein Speichern. Ein Kunde, der Flächen schützt und die Datei
+  schließt, hat seine Arbeit verloren.
+
+  Unverändert offen: schräge automatische Ebenen (die Suche bleibt achsparallel), Symmetrie,
+  globale Schnittfolgen und das Schaustück. Abnahme je Teil: Korpus, Determinismus, Abbruch und
+  nachvollziehbarer Kundenweg. Bereits gebaute Stützbewertung und automatische Verbinder nicht
+  erneut beauftragen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#sinnvolles-trennen--die-serie-31082026).
 
@@ -568,11 +616,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-097"></a>
 
-- [ ] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** Die verbleibenden Kern- und
-  Übergabetexte aus dem Review einzeln schließen: aussagekräftiger Lesefehler bei verknüpften
-  Quellen, unterscheidbare Deckel-/Prüfstücknamen, gemeinsame Zerfallsprüfung, profilgebundene
-  Geometrie-/Schichtschwellen, einmalige Ermittlung von support_on_model und konsistente Bezeichnung
-  des Druck-/Slicer-Wegs. Abnahme je Änderung am betroffenen Kunden- und Fehlerfall.
+- [~] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** **Die Restliste ist
+  kürzer als sie dasteht** (nachgemessen 10.09.2026). Erledigt sind: der aussagekräftige
+  Lesefehler bei verknüpften Quellen (leere und ungültige Prüfsumme werden abgewiesen, eine
+  fehlende Verknüpfung hat ihren eigenen Satz), die einmalige Ermittlung von
+  `support_on_model` (ein Aufrufer je Analyse), die profilgebundene Schichtschwelle
+  `WIDTH_INTERESTING` und der Namensparameter am Deckel.
+
+  **Offen bleiben sechs kleine Stellen**: der übrige `OSError` beim Öffnen heißt weiterhin
+  „sie ist beschädigt", obwohl er auch etwas anderes sein kann; „Prüfstück" und „Drehdeckel"
+  tragen keinen Zähler und sind damit im Baum nicht unterscheidbar; `_fell_apart` steht doppelt
+  (`label_ops.py` und `texture_ops.py`, die Doppelung ist im Code selbst vermerkt);
+  `NOISE_VOLUME` und `BRIDGE_FROM` stehen als feste Zahlen statt am Profil (Regel 7); und der
+  Menüeintrag heißt weiter „Druckeinstellungen …", während der Weg dahinter der Slicer-Weg ist.
+  Abnahme je Änderung am betroffenen Kunden- und Fehlerfall.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
@@ -596,10 +653,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-128"></a>
 
-- [ ] **RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden.** Für erkannte reine Flächen den
-  nutzbaren Bearbeitungsumfang festlegen und die Merkmalsliste daran ausrichten. Abnahme:
-  Besenhalter und Schiffsmodelle zeigen unmittelbar verständliche, erreichbare Handlungen oder
-  begründete Anzeigegrenzen; den separat geführten Verrundungsradius nicht doppelt planen.
+- [~] **RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden.** **Für die reine Fläche steht
+  die begründete Anzeigegrenze** (nachgemessen 10.09.2026), samt der Faltung gleichlautender
+  Absagen — am Besenhalter gemessen, statt fünfmal denselben Satz zu wiederholen —, und seit
+  dem 10.09.2026 bietet ein Bausteinmerkmal seine eigenen Handlungen statt derer der Fläche
+  darunter.
+
+  **Offen bleiben zwei Dinge**: `fillet` trägt bis heute keine einzige Operation — kein
+  Registereintrag nennt es in `applies_to` —, und die Merkmalsliste ist daran nicht
+  ausgerichtet: Die Erkennung listet `face`, `fillet` und `edge_loop` unverändert. Ob eine
+  erkannte Verrundung ohne Operation überhaupt in der Liste stehen soll, ist die Entscheidung,
+  die der Punkt verlangt. Dazu die Abnahme an den Schiffsmodellen, für die es keinen Testfall
+  gibt. Den separat geführten Verrundungsradius nicht doppelt planen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
 
@@ -635,10 +700,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-139"></a>
 
-- [ ] **RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten.** Die Auswahl aus Hüllflächennormalen nach Bauplan §28.2 ist noch nicht eingelöst:
-  `geom/orient.py` und `slice/orientation.py` verwenden Flächen, Achsen und Zufallsrichtungen.
-  Hüllnormalen nach Fläche mit Achsen und großen Modellflächen deterministisch verbinden.
-  Abnahme: gleiche Eingaben ergeben gleiche Kandidaten und Lage; Vorfilter und Finalisten werden
+- [~] **RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten.**
+  **Der Satz „ist noch nicht eingelöst" stimmt seit einiger Zeit nicht mehr** (nachgemessen
+  10.09.2026): `geom/orient.candidates()` baut die konvexe Hülle über sortierte Punkte, ordnet
+  ihre Flächen nach Größe und nimmt die Normalen daraus; `slice/orientation.py` ruft sie als
+  `face_candidates` und mischt sie mit der Ausgangsrichtung. `sample_directions` mit
+  Zufallsgenerator gibt es noch als Funktion, sie steht aber nicht mehr im Kandidatenweg —
+  `seed` ist dort ausdrücklich nur noch Kompatibilität.
+
+  Offen bleibt damit **nur die Abnahme**, und die verlangt eine Messung: gleiche Eingaben ergeben gleiche Kandidaten und Lage; Vorfilter und Finalisten werden
   an mechanischen und organischen Körpern gegen die vollständige Kandidatenliste geprüft.
   Standfläche, Schwerpunkt und Haftung bleiben berücksichtigt; 200 betrachtete Kandidaten
   erfüllen das 20-Sekunden- und Abbruchziel. RM-078 misst einen anderen, konkreten Ladefall.
@@ -743,15 +813,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-148"></a>
 
-- [ ] **RM-148 — Zahlenparameter gegen NaN und Unendlich sichern.** `registry.params._coerce`
-  prüft einen Fließkommawert heute nur gegen seine Grenzen, und ein Grenzvergleich mit NaN ist
-  immer falsch — der Wert läuft durch. Die Druckeinstellungen haben ihren eigenen Riegel
-  bekommen (08.09.2026: „NaN, Unendlich und numerischer Überlauf gelangen weder in
-  Einstellungen noch als rohe Konvertierungsfehler zum Nutzer"), die allgemeine
-  Parameterannahme nicht. Die Korrektur war im Codex-Fenster vorbereitet und ist mit dessen
-  Limit liegengeblieben. Abnahme: eine zentrale Endlichkeitsprüfung über `NUMBER_KINDS`, ein
-  Regressionstest mit `nan`, `inf` und `-inf` je Zahlenart, und die Ablehnung trägt einen
-  Handlungsvorschlag (Regel 17).
+- [x] **RM-148 — Zahlenparameter gegen NaN und Unendlich sichern.** **Erledigt, und zwar schon
+  am 09.09.2026** — der Punkt stand einen Tag zu lange offen. Commit `5a2802ac` („Ein
+  Grenzvergleich mit NaN sagt zweimal Nein, und der Wert läuft durch") fasst genau die zwei
+  Dateien an, die die Abnahme verlangt.
+
+  `math.isfinite` steht in `registry/params.py:314` — im `NUMBER_KINDS`-Zweig, **vor** der
+  Ganzzahlfrage, weil `float("nan").is_integer()` sonst „hier wird eine ganze Zahl erwartet"
+  ergäbe: wahr und irreführend. `NUMBER_KINDS` deckt `float`, `int` und `filament`; die
+  Ablehnung trägt `constraint="not_finite"` und den Satz „Der Wert ist keine endliche Zahl.
+  Tragen Sie eine Zahl ein." (Regel 17). Der Regressionstest steht in
+  `tests/test_params.py:118` über `nan`, `inf` und `-inf`, dazu die Gegenprobe
+  `test_the_bounds_alone_would_let_a_nan_through` — ohne sie wäre der Test auch dann grün,
+  wenn die Grenzen den Fall fingen — und `int(inf)` als eigener Überlauffall.
+
+  Nachgemessen am 10.09.2026 am Code und am Testlauf.
 
 <a id="rm-150"></a>
 
@@ -765,7 +841,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Mittellinienweg, Achse, Richtung, Tiefe und Durchgang; Objektbaum, Steckbrief und
   Merkmalspanel lesen sie, und `slot_hole` gilt jetzt auch an ihr (Titel dafür auf *Zum Langloch
   ziehen* geändert — „Bohrung zum Langloch" stimmte an einem Langloch nicht mehr).
-  Nachweis: `tests/test_slots.py`, 17 Fälle, davon zwölf ohne die Erkennung rot. Die tragende
+  Nachweis: `tests/test_slot_features.py`, 17 Fälle, davon zwölf ohne die Erkennung rot.
+  **Nicht `test_slots.py`** — die gibt es auch, und sie behandelt etwas völlig anderes:
+  Material-Slots nach §20/§29. Im Deutschen heißt beides „Slot"; die neue Datei sagt das in
+  ihrem eigenen Kopf, damit niemand die falsche fährt. Die tragende
   Gegenprobe ist eine Tasche mit vier verrundeten Ecken — gleiche Radien, parallele Achsen,
   verbundener Mantel und trotzdem kein Langloch. Ein eingelesenes Modell wird an einer Nut aus
   Quader und zwei Zylindern geprüft, nicht am eigenen Erzeuger.
@@ -777,8 +856,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   geschwungenen Bogen, dessen 194 nicht veröffentlichte Kugel- und Ringkandidaten ihn auf einen
   Rundformanteil von 0,701 gegen die Schwelle 0,700 bringen — ein Tausendstel. Die Entscheidung,
   seine 252 erfundenen Rundformen wegzulassen, ist **richtig** und bleibt; falsch ist der Satz
-  daneben. `perceive.freeform` schreibt „Dieses Modell ist eine Freiform, etwa ein Scan", und das
-  liest ein Kunde als Aussage über sein Teil, nicht über eine Zählung. Der Fund selbst
+  daneben: „Dieses Modell ist eine Freiform, etwa ein Scan" — und das liest ein Kunde als
+  Aussage über sein Teil, nicht über eine Zählung. **Der Satz steht in
+  `scene/evaluate.py` und nicht in `perceive`**, als Befund `perceive.freeform` mit der Zahl in
+  `values["dropped"]`; die Schwelle daneben ist `perceive/features.FREEFORM_ROUND_SHARE`, und
+  sie darf laut ihrem eigenen Kommentar ausdrücklich nicht nachgezogen werden. Wer den Satz
+  ändert, ändert damit den **Katalogschlüssel** — die deutsche Quelle ist der Text selbst, und
+  ohne die fünf Übersetzungen fielen `en`, `es`, `fr`, `it` und `pt` auf Deutsch zurück. Der Fund selbst
   (vier verlorene Senkungen) ist am selben Tag behoben — `features.sits_at_the_mouth_of` rettet,
   was an einer Bohrung hängt —, der Text nicht.
   Abnahme: Der Befund sagt, was gemessen wurde und was daraus folgt, ohne dem Modell eine Herkunft
@@ -786,6 +870,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   daneben ein zweiter Zustand gebraucht wird — „überwiegend rund" gegen „Freiform" —, oder ob ein
   Satz für beide Fälle reicht. Ein zweiter Zustand kostet eine Schwelle mehr, und die Lücke
   zwischen Nozzle-Box (59 Prozent) und Retro-Maus (77 Prozent) ist schmal.
+
+<a id="rm-152"></a>
+
+- [ ] **RM-152 — Die Wandstärke um ein Langloch messen.** `relations.sleeve_at` beantwortet „wie
+  dick ist die Wand um dieses Loch" und rechnet dafür den halben Unterschied zweier Durchmesser.
+  Das gilt, wo die Wand rundum gleich ist — an einem Langloch nicht: Gemessen an einem Zapfen Ø 20
+  mit einem Langloch Ø 8 auf 14 mm sind es an den Flanken 6 mm und an den Enden **3 mm**, und die
+  Auskunft nennte die doppelte Stärke der dünnsten Stelle. Wandstärke ist druckkritisch, also
+  schweigt sie heute: `types.is_a_cavity` führt `slot` deshalb nicht, und der Grund steht dort.
+  Der Preis ist, dass der Steckbrief dem Agenten an einem Langloch keine Wand nennt und dass
+  Rundformen an einer Langlochmündung im Freiformfilter nicht gerettet werden (beides gemessen
+  folgenlos, solange kein Modell mit Langloch als Freiform gilt). Abnahme: `sleeve_at` liefert für
+  ein Langloch die **dünnste** Wand oder zwei Werte mit ihren Orten, ein Testfall an einem Zapfen
+  mit Langloch, und `slot` steht danach in `is_a_cavity`.
 
 ## Bedienung und Darstellung
 
@@ -847,8 +945,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-101"></a>
 
-- [ ] **RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen.** Den vermuteten elternlosen
-  Handlungsknopf beim Modellladen am aktuellen Fenster reproduzieren und seine Herkunft bestimmen.
+- [ ] **RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen.** **Der Verdacht ist am
+  Code widerlegt** (10.09.2026): Der Befundknopf entsteht in `ui/panels.py` mit Elternwidget und
+  wird erst danach ins Layout gehängt — und zwar seit dem 27.08.2026, also schon vor der
+  Messung, die den Verdacht auslöste. Ein Suchlauf über elternlos konstruierte Knöpfe in
+  `app/ui/` fand keinen im Ladeweg. Damit ist die vermutete Ursache erledigt; was der Punkt
+  noch trägt, ist die **Beobachtung** selbst — es hat jemand ein fremdes Fenster gesehen, und
+  woher es kam, ist offen. Am aktuellen Fenster reproduzieren, bevor weiter gesucht wird.
   Abnahme: kein fremdes Top-Level-Fenster, Hauptfenster behält Fokus und der Befundknopf
   funktioniert nach Einhängen ins Layout. Den alten Verdacht nicht als bestätigte Ursache behandeln.
 
@@ -997,8 +1100,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-054"></a>
 
-- [ ] **RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen.** `PROMPT_TOOL_COUNT`
-  ist inzwischen 114; `PROMPT_TOKENS` trägt weiter 22.856 aus der Messung vom 03.09.2026. Mit
+- [ ] **RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen.** **Die beiden
+  Zahlen im Punkt sind überholt** (nachgemessen 10.09.2026): `PROMPT_TOOL_COUNT` steht auf 119
+  und `PROMPT_TOKENS` auf 28.281, beide seit `e71cd2ca` (09.09.2026) und gegen qwen3:14b
+  gemessen. Die 114 und die 22.856 vom 03.09.2026 sind zwei Messungen alt. Was den Punkt offen
+  hält, ist der nächste Zuwachs: Jede neue registrierte Operation verschiebt die Werkzeugzahl,
+  und `tests/test_agent.py` hält die Konstante dagegen — der Wächter erzwingt die Neumessung,
+  sobald eine dazukommt. Mit
   `tools/measure_local_model.py` gegen das dafür festgehaltene lokale Modell `prompt_eval_count`
   erfassen und Zahlen samt Modell/Schema/Datum nachziehen. Abnahme: die angezeigte Wartezeit und
   Budgetrechnung beruhen auf derselben gemessenen Nutzlast.
@@ -1061,8 +1169,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-043"></a>
 
 - [ ] **RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen.** Den vorhandenen
-  `DeadlineResponse` auch an die übrigen vier Aufrufwege anschließen. Abnahme: langsam eintreffende
+  `DeadlineResponse` auch an die übrigen Aufrufwege anschließen. Abnahme: langsam eintreffende
   Statuszeile und Kopfzeilen können die Gesamtfrist auf keinem dieser Wege immer wieder verlängern.
+
+  **Nachgezählt am 10.09.2026: Es sind acht, nicht vier.** `DeadlineResponse` ist eine lokale
+  Klasse in `http.open_public_url` und dort einmal angeschlossen; der einzige Nutzer ist
+  `ingest/fetch._open_download`. Ohne die Frist arbeiten vier Backend-Wege
+  (`backends/llm.py` in `post_json`, `_get_json`, `pull_model`; `backends/mesh.fetch`) — das
+  sind die „vier" des alten Textes — und vier weitere, die er nicht mitzählte:
+  `support.py`, `updates._open_update` (der Weg zur signierten `version.json`),
+  `licence_service._open_service` (Aktivierung) und die Werkzeuge `upload_website.py`,
+  `check_activation.py`, `licence_admin.py`. Alle gehen über
+  `OpenerDirector.open(request, timeout=…)`, und dieses `timeout` gilt je Leseoperation, nicht
+  der Gesamtdauer: Ein Gegenüber, das alle `timeout-ε` Sekunden ein Byte der Kopfzeilen
+  schickt, verlängert unbegrenzt. Der Weg dahin führt über einen `urllib`-Handler mit
+  gesetzter `response_class`; der Aufwand liegt nicht im Kern, sondern in den rund vierzehn
+  Testattrappen, die `opener_for` mit einem Positionsargument ersetzen.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
 
@@ -1070,20 +1194,40 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 - [ ] **RM-098 — Restliche Regelwerk-Nachträge abgleichen.** Die noch offenen Regelwerk-Nachträge
   gezielt entscheiden beziehungsweise prüfen: testbare Reichweite harter Regeln, Abgrenzung von
-  Arbeitsverfahren und Fallgeschichte, passende Regeln für Auslieferungsdateien sowie gültige
-  Regelnummern und paths-Muster. Auch den Geltungsbereich der pauschalen 0,01-mm-Überlappung in
-  `rules.toml` gegen konkrete Boolesche Fälle prüfen; eine inhaltliche Änderung braucht Version
-  und vergleichbare Modell-Suiteläufe nach Bauplan §39. Abnahme: jede Prüfbehauptung hat einen passenden
-  Wächter; keine doppelte Suite-Anleitung. Die zweistufige Testfahrweise ist bereits umgesetzt.
+  Arbeitsverfahren und Fallgeschichte sowie passende Regeln für Auslieferungsdateien. Auch den
+  Geltungsbereich der pauschalen 0,01-mm-Überlappung in `rules.toml` gegen konkrete Boolesche
+  Fälle prüfen; eine inhaltliche Änderung braucht Version und vergleichbare Modell-Suiteläufe
+  nach Bauplan §39. Abnahme: jede Prüfbehauptung hat einen passenden Wächter; keine doppelte
+  Suite-Anleitung. Die zweistufige Testfahrweise ist bereits umgesetzt.
+
+  **Zwei Teile sind erledigt und fallen aus dem Auftrag** (nachgeprüft 10.09.2026): Alle 13
+  Dateien in `.claude/rules/` tragen ein `paths:`-Frontmatter, und **jedes** der 36 darin
+  genannten Ziele existiert; die verwendeten Regelnummern sind 1, 2, 3, 7, 11–19, 21 und 22 —
+  alle gibt es in `AGENTS.md`, keine zeigt ins Leere.
+
+  **Was daran offen bleibt, ist ein Wächter für genau diesen Zustand**: Es gibt heute keinen
+  Test über die `paths:`-Frontmatter und keinen über die Regelnummern; `test_agent_mirror.py`
+  prüft nur `.claude/agents/`. Ein Zustand ohne Wächter ist ein Zustand auf Zeit. Dazu die
+  fehlende `auslieferung.md` für `tools/` und `packaging/` und die vierfach stehende
+  Suite-Anleitung (`AGENTS.md`, `CLAUDE.md`, `.claude/rules/tests.md`, `tests/CLAUDE.md`) —
+  von vier Fassungen desselben Satzes veraltet immer eine.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
 <a id="rm-099"></a>
 
-- [ ] **RM-099 — Konzeptbestand und veraltete Verweise ordnen.** Die überholten Konzepte und
-  Sitzungsentwürfe geordnet archivieren und den Konzeptindex auf heutige Entscheidungen ausrichten.
-  Abnahme: alle Verweise gültig, historische Begründungen erhalten, Weg-3-Lizenzentscheidung
-  auffindbar und Roadmap-Verweise über stabile Anker; keine ungeprüfte feste Zahl zu archivieren.
+- [~] **RM-099 — Konzeptbestand und veraltete Verweise ordnen.** **Die Hälfte der Abnahme ist
+  erreicht** (nachgezählt 10.09.2026): `konzepte/README.md` führt 45 Verweise, und **keiner**
+  geht ins Leere; der Mengenvergleich gegen `konzepte/*.md` ergibt in beide Richtungen keine
+  Differenz — kein Dokument fehlt in der Tabelle, kein Eintrag ohne Datei. Auch der einzige
+  Konzeptverweis aus `ROADMAP.md` löst auf. „Alle Verweise gültig" ist damit eingelöst und
+  gehört nicht mehr beauftragt.
+
+  Offen bleibt das **Umräumen**: Als überholt gekennzeichnet sind genau zwei Konzepte; einen
+  Ordner `konzepte/archiv/` gibt es nicht, eine eigene Notiz zur Weg-3-Lizenzentscheidung auch
+  nicht (sie steht nur als Fließtext in sechs Konzepten), und die beiden Bedienkonzepte unter
+  `.claude/` sind unarchiviert. Wie viel davon Robert archiviert haben will, ist eine
+  Entscheidung und keine Fleißarbeit — historische Begründungen bleiben in jedem Fall erhalten.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
@@ -1104,6 +1248,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Befunde und Laufzeit vor/nach dem Umbau sowie die vier Hauptwege; alte Zeilenzahlen nicht als
   aktuellen Befund weiterführen.
 
+  **Gemessen am 10.09.2026**, damit die Größenordnung nicht aus einer alten Notiz kommt:
+  `evaluate` hat 597 Zeilen, `_with_features` 596 — beide sind seit den Archivständen (521/580
+  und 472/520) weiter gewachsen. Das begründet die Aufteilung nicht von selbst, es sagt nur,
+  dass der Punkt nicht kleiner wird, während er wartet.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#architektur-durchsicht-02092026).
 
 <a id="rm-106"></a>
@@ -1118,10 +1267,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-110"></a>
 
-- [ ] **RM-110 — Doppelten Leser offener Dateihandles zusammenführen.** Den identischen
-  plattformspezifischen Handle-zu-Pfad-Weg zusammenführen. Abnahme: verknüpfte Quellen und
-  Update-Deskriptoren halten dieselben Sicherheitsgrenzen auf Windows, Linux und macOS; F_GETPATH
-  und die bisherigen Gegenproben bleiben erhalten.
+- [x] **RM-110 — Doppelten Leser offener Dateihandles zusammenführen.** Erledigt am
+  10.09.2026. Die Frage steht jetzt einmal, in `app.core.paths.opened_path`;
+  `scene/project._opened_file_path` und `updates._descriptor_path` sind dünne Hüllen darüber
+  und tragen nur noch ihren Fehlervertrag — die eine wirft, die andere gibt `None`.
+
+  **Die beiden Kopien waren nicht gleich, und das war der Grund, es zu tun.** Unter Windows
+  nennt `GetFinalPathNameByHandleW` beim zweiten Aufruf entweder die geschriebene Länge oder,
+  wenn der Puffer nicht reicht, die benötigte. Wächst der Pfad zwischen den beiden Aufrufen —
+  ein umbenannter Ordner darüber genügt —, kommt der zweite Fall. `project` prüfte
+  `written >= len(buffer)` und hielt an; `updates` prüfte nur gegen Null und rechnete mit
+  einer **abgeschnittenen** Zeichenkette weiter, als Antwort auf eine Sicherheitsfrage. Die
+  strengere Prüfung gilt jetzt für beide, ebenso die zwei POSIX-Kandidaten
+  (`/proc/self/fd` **und** `/dev/fd`), die vorher nur `project` kannte.
+
+  Gegen die Rückkehr des Zwillings steht
+  `tests/test_hard_rules.py::test_the_path_behind_an_open_handle_is_asked_in_exactly_one_place`:
+  Er zählt am Syntaxbaum die Dateien, die das System nach dem Pfad eines offenen Handles
+  fragen, und verlangt genau eine. **Gemessene Gegenprobe:** derselbe Lauf über `HEAD` nennt
+  zwei (`scene/project.py`, `updates.py`), über den Arbeitsbaum eine (`paths.py`). Die erste
+  Fassung des Wächters suchte den API-Namen als Text und meldete `updates.py` weiterhin — sie
+  hatte den Docstring gelesen, der dort seit der Zusammenführung erklärt, was die Datei
+  **nicht** mehr tut.
+
+  `F_GETPATH` mit genau 1024 Byte und der Wächter `test_no_fcntl_call_hands_over_more_than_python_takes`
+  bleiben unverändert gültig; er greift jetzt an der gemeinsamen Stelle. Nachweis: 647 Tests
+  aus `test_hard_rules`, `test_project`, `test_updates`, `test_ingest` und
+  `test_scene_findings` grün, ruff, `ruff format --check` und mypy für `win32`, `linux` und
+  `darwin` grün.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
@@ -1275,14 +1448,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Fensterhöhe. Abnahme: Ursache benannt und entweder behoben oder die Grenze in
   `pyproject.toml` mit Begründung eingetragen.
 
-  **Der Website-Abgleich meldet sechs Dateien, die nicht abweichen.** `upload_website.py
-  --fehlend` führt nach jedem Lauf dieselben sechs `index.html` erneut als „fehlen oder weichen
-  ab", auch unmittelbar nach ihrem eigenen erfolgreichen Upload. Gegengemessen: Die Startseite
-  vom Server ist **byte-identisch** mit der lokalen (63 639 Bytes, gleicher Inhalt, nennt
-  0.4.0). Der Vergleich läuft über die Größe aus `mlsd`; die anderen 501 Dateien sind danach
-  ruhig. Ein Abgleich, der etwas als offen meldet, das erledigt ist, kostet beim nächsten
-  Release die Aufmerksamkeit, die einem echten Rest gehört. Abnahme: Ursache benannt, danach
-  meldet ein zweiter Lauf null.
+  **Der Website-Abgleich meldete sechs Dateien, die nicht abweichen — behoben am 10.09.2026.**
+  Die Ursache lag nicht im Vergleich, sondern in der **Adresse**: `website/.htaccess`
+  beantwortet jede Anfrage nach `…/index.html` mit einer 301 auf `…/`, und der Prüfabruf lehnt
+  Weiterleitungen grundsätzlich ab (`RejectRedirects`). Von dort kam ein `HTTPError` zurück,
+  und `differs` liest den — richtigerweise, fail-closed — als „weicht ab". Betroffen war genau
+  das, was eine solche Regel hat: die sechs `index.html`; die anderen 501 Dateien laufen unter
+  ihrer eigenen Adresse und waren deshalb ruhig.
+
+  `public_url` gibt für eine Startseite jetzt die Verzeichnisadresse zurück — sie verspricht
+  die **ausgelieferte** Adresse, und für `index.html` hat sie eine genannt, die der Server so
+  nicht ausliefert. Der eigene Docstring hatte den Fall dabei benannt („zwischen dem
+  FTP-Verzeichnis und dem, was beim Kunden ankommt, stehen `.htaccess`, Umschreibungen und
+  alles andere, was der Server tut") — richtig gedacht und an der eigenen Startseite
+  übersehen. Nachweis:
+  `tests/test_website.py::test_the_checked_address_of_a_start_page_is_the_one_the_server_answers`
+  liest die Umschreibungsregel aus `.htaccess` und prüft, dass die erzeugte Adresse sie nicht
+  auslöst — damit können die beiden Seiten nicht unabhängig voneinander altern. Gegenprobe
+  gefahren: ohne den Fix ist der Test rot.
+
+  **Offen bleibt der Abgleich gegen den Server**: dass ein zweiter `--fehlend`-Lauf jetzt null
+  meldet, ist am Code belegt und nicht am Netz — das gehört an den nächsten Upload.
 
 <a id="rm-091"></a>
 
