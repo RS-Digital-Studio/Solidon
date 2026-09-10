@@ -118,7 +118,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
-| [RM-073 — Aufbewahrung alter Downloadpakete entscheiden](#rm-073) | Veröffentlichung, Betrieb und Vertrieb | Aufbewahrung entscheiden; öffentliche Manifeste vor einer Bereinigung abgleichen |
+| [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Roten Vorwarnlauf und den Fehlalarm des Website-Abgleichs je einer Ursache zuordnen |
 | [RM-091 — CRA-Meldebereitschaft vor dem 11.09.2026 herstellen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf vor dem 11.09.2026 belegen |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
@@ -1193,13 +1193,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-073"></a>
 
-- [ ] **RM-073 — Aufbewahrung alter Downloadpakete entscheiden.** Robert legt fest, welche Fassungen
-  öffentlich erhalten bleiben. Vor einer freigegebenen Bereinigung lokalen und Serverbestand gegen
-  sämtliche noch ausgelieferten Manifeste vergleichen. Abnahme: vereinbarter Bestand,
-  funktionierende aktuelle Downloads und kein gelöschtes Paket, auf das noch ein veröffentlichtes
-  Manifest verweist.
+- [x] **RM-073 — Aufbewahrung alter Downloadpakete entscheiden.** **Entschieden am 10.09.2026
+  (Robert): Die abgelöste Fassung wird geräumt, sobald die neue oben liegt.** Beim Release von
+  0.4.0 so gefahren — `upload_website.py --alte-pakete` nennt zuerst, was keine angebotene Fassung
+  mehr bedient (die fünf 0.3.5-Dateien), und löscht erst mit `--wirklich`; die Bedingung dafür ist
+  eine `version.json` **vom Server**, die bereits die neue Fassung nennt.
+
+  Ein gelöschtes Paket bricht dabei keinen verschickten Link: `dl/veraltet.php` leitet einen alten
+  Namen auf die aktuelle Fassung **derselben Plattform** um (seit 03.09.2026). Gemessen nach dem
+  Räumen — `dl/Solidon3D-Setup-0.3.5.exe` antwortet mit 200 und liefert 167 669 422 Bytes, also die
+  0.4.0-Datei. **Der Statuscode ist hier die falsche Frage**; wer prüfen will, ob ein Paket wirklich
+  weg ist, vergleicht die Länge.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-download-ordner-sammelt-jede-je-gebaute-fassung-30082026).
+
+<a id="rm-149"></a>
+
+- [ ] **RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen.** Beide am 10.09.2026
+  gemessen, keiner blockiert eine Auslieferung.
+
+  **Der Vorwarnlauf ist rot.** „Neueste Versionen" fährt ohne `constraints.txt` gegen die
+  jeweils neuesten Abhängigkeiten und scheitert an genau einem Test:
+  `test_chat_ui.py::test_a_short_chat_scrolls_its_content_without_covering_the_input[320-576-True]`.
+  Ausgeliefert wird mit gepinnten Versionen, und die Suite ist dort dreimal grün — dafür gibt
+  es den Lauf: Eine neuere Fassung ändert das Scrollverhalten des Chats bei kleiner
+  Fensterhöhe. Abnahme: Ursache benannt und entweder behoben oder die Grenze in
+  `pyproject.toml` mit Begründung eingetragen.
+
+  **Der Website-Abgleich meldet sechs Dateien, die nicht abweichen.** `upload_website.py
+  --fehlend` führt nach jedem Lauf dieselben sechs `index.html` erneut als „fehlen oder weichen
+  ab", auch unmittelbar nach ihrem eigenen erfolgreichen Upload. Gegengemessen: Die Startseite
+  vom Server ist **byte-identisch** mit der lokalen (63 639 Bytes, gleicher Inhalt, nennt
+  0.4.0). Der Vergleich läuft über die Größe aus `mlsd`; die anderen 501 Dateien sind danach
+  ruhig. Ein Abgleich, der etwas als offen meldet, das erledigt ist, kostet beim nächsten
+  Release die Aufmerksamkeit, die einem echten Rest gehört. Abnahme: Ursache benannt, danach
+  meldet ein zweiter Lauf null.
 
 <a id="rm-091"></a>
 
