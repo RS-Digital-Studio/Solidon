@@ -4035,8 +4035,10 @@ class MainWindow(QMainWindow):
         der Kern wirft, nur kommt er hier vor dem Klick statt nach dem Dialog.
 
         **Er galt lange nur für die Bauart.** Die Funktion stieg sofort aus,
-        wenn ``requires_kind`` leer war — und das haben sieben von 84
-        Operationen. Auf der leeren Szene sind 69 von 82 Einträgen gesperrt,
+        wenn ``requires_kind`` leer war — und das hatten damals sieben von 84
+        Operationen, heute fünf von 109: *Verrunden* und *Fase* rechnen seit
+        dem 10.09.2026 an beiden Kernen und tragen keines mehr. Auf der leeren
+        Szene sind 69 von 82 Einträgen gesperrt,
         und bei allen 69 stand als Hinweis ihr Beschreibungssatz: was sie täte,
         wenn sie könnte. Die Werkzeugzeile daneben sagte es im selben Augenblick
         richtig („Dafür braucht es einen Körper in der Szene."), weil
