@@ -95,6 +95,7 @@ it into `website/version.json`.
 - An open operation dialog no longer survives a change of project unnoticed.
 - Long notes are no longer cut off while space next to them stays free.
 - From the command line, *Assign filament* could not be called; now it can.
+- The first click and the first turn no longer stutter: what the view has to prepare for them now happens at start-up.
 
 ### Update, installation and system
 

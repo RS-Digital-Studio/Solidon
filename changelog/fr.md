@@ -96,6 +96,7 @@ dans `website/version.json`.
 - Une boîte de dialogue d'opération ouverte ne survit plus sans bruit à un changement de projet.
 - Les notes longues ne sont plus coupées alors que la place reste libre à côté.
 - Depuis la ligne de commande, *Affecter un filament* ne pouvait pas être appelé ; c'est possible maintenant.
+- Le premier clic et la première rotation ne saccadent plus : ce que la vue doit préparer pour eux se fait désormais au démarrage.
 
 ### Mise à jour, installation et système
 

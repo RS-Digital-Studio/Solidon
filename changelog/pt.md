@@ -95,6 +95,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma caixa de diálogo de operação aberta já não sobrevive em silêncio a uma mudança de projeto.
 - As notas longas já não são cortadas enquanto ao lado sobra espaço livre.
 - A partir da linha de comandos não era possível chamar *Atribuir filamento*; agora é.
+- O primeiro clique e a primeira rotação já não engasgam: o que a vista tem de preparar para eles acontece agora no arranque.
 
 ### Atualização, instalação e sistema
 

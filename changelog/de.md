@@ -111,6 +111,7 @@ Nutzen da und sonst nichts.
 - Angeordnet wird in der Mitte des Betts, wie in den Slicern daneben, statt in der hinteren linken Ecke.
 - Druckoptimal ausrichten legt die gedrehten Teile danach neu hin. Ein Körper, der sich hinlegt, braucht mehr Fläche und steckte vorher im Nachbarn.
 - Wer nur einen Teil der Szene anordnet, überfährt die anderen nicht mehr: Was liegen bleibt, behält seinen Platz.
+- Druckoptimal ausrichten nimmt jetzt alle Körper der Szene, nicht nur die markierten. So wandert das ganze Bett anschließend in die Mitte, statt dass ein gedrehtes Teil einem stehengebliebenen in die Ecke ausweicht.
 
 ### Ansicht und Bedienung
 
@@ -119,6 +120,7 @@ Nutzen da und sonst nichts.
 - Ein offener Operationsdialog übersteht keinen Projektwechsel mehr unbemerkt.
 - Lange Hinweise werden nicht mehr abgeschnitten, während daneben Platz frei bleibt.
 - Über die Kommandozeile ließ sich *Filament zuweisen* nicht aufrufen; jetzt schon.
+- Der erste Klick und die erste Drehung ruckeln nicht mehr: Was die Ansicht dafür vorbereiten muss, geschieht jetzt beim Start.
 
 ### Update, Installation und System
 

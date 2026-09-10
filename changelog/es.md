@@ -96,6 +96,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un diálogo de operación abierto ya no sobrevive sin más a un cambio de proyecto.
 - Los avisos largos ya no se cortan mientras queda sitio libre al lado.
 - Desde la línea de órdenes no se podía llamar a *Asignar filamento*; ahora sí.
+- El primer clic y el primer giro ya no se atascan: lo que la vista debe preparar para ellos ocurre ahora al arrancar.
 
 ### Actualización, instalación y sistema
 

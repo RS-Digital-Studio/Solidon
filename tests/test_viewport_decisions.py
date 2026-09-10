@@ -6655,3 +6655,44 @@ def test_a_grabbable_preview_takes_the_grip_off_the_selection(qt_app: QApplicati
 
     viewport.set_preview_gizmo(False)
     assert zurueck == [True], "mit der Vorschau kommt der Griff der Auswahl zurück"
+
+
+def test_the_picker_is_warmed_up_before_the_first_gesture(qt_app: QApplication) -> None:
+    """Der erste Pick kostet eine halbe Sekunde — und nicht die erste Geste.
+
+    **Gemessen am echten Fenster** (10.09.2026, Filamenthalter, 2812 Dreiecke):
+    ``pick_surface`` braucht beim ersten Aufruf rund 500 ms für den Aufbau des
+    wgpu-Renderdurchgangs, danach zwei bis vier Millisekunden. Bezahlt hat das
+    jede Geste, die als erste pickt — ein Klick oder der Drehbeginn, der die
+    Bildmitte fragt. Vorgezogen in den Leerlauf des Programmstarts sind es
+    46 ms statt 511 (Robert, 09.09.2026: „ein bisschen performanceprobleme
+    beim bewegen haben wir auch noch").
+
+    Geprüft wird hier der **Anschluss**, nicht die Zeit: Offscreen gibt es
+    keinen echten Renderer, und ein Doppel ist immer schnell. Dass es einmal
+    läuft und nur einmal, ist die Zusage.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+
+    assert not renderer.pick_calls, "vor dem Aufbau wird nicht gepickt"
+
+    # **Über den Szenenaufbau, nicht über die Methode.** Wer sie hier selbst
+    # ruft, prüft, dass sie funktioniert — nicht, dass die Ansicht sie ruft;
+    # die Zeile in ``_apply_scene`` wäre dann still zu entfernen.
+    viewport.show_scene(None)
+    qt_app.processEvents()
+    assert len(renderer.pick_calls) == 1, "der Szenenaufbau wärmt den Picker nicht auf"
+
+    # In der Bildmitte, wie der Drehpunkt sie fragt.
+    x, y, _among, _tolerance = renderer.pick_calls[0]
+    width, height = renderer.view_size()
+    assert (x, y) == (width / 2.0, height / 2.0)
+
+    # Und nur einmal: Ein zweiter Szenenaufbau kostet nichts mehr.
+    viewport.show_scene(None)
+    qt_app.processEvents()
+    assert len(renderer.pick_calls) == 1, "das Aufwärmen lief ein zweites Mal"

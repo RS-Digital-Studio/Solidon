@@ -95,6 +95,7 @@ scrive in `website/version.json`.
 - Una finestra di operazione aperta non sopravvive più in silenzio a un cambio di progetto.
 - Le note lunghe non vengono più tagliate mentre accanto resta spazio libero.
 - Dalla riga di comando non era possibile richiamare *Assegnare filamento*; ora sì.
+- Il primo clic e la prima rotazione non scattano più: ciò che la vista deve preparare per essi avviene ora all'avvio.
 
 ### Aggiornamento, installazione e sistema
 

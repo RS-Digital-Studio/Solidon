@@ -3785,6 +3785,11 @@ class Viewport(QWidget):
         self._angle_step = 0.0
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
+        #: Ob die Pick-Pipeline schon aufgebaut ist. Der erste ``pick_surface``
+        #: kostet eine halbe Sekunde, jeder weitere zwei bis vier Millisekunden;
+        #: :meth:`_warm_the_picker` zieht ihn deshalb in den Leerlauf des
+        #: Programmstarts vor — der leere Szenenaufbau genügt dafür.
+        self._picker_warm = False
         self._occlusion_applied = False
         self._depth_order_for: tuple[tuple[float, ...], tuple[str, ...], int] | None = None
         """Für welche Kameralage und welche Körper zuletzt nach Tiefe geordnet
@@ -5153,6 +5158,12 @@ class Viewport(QWidget):
             self.measurements.clear()
         if self.renderer is None:
             return
+        # **Hier und nicht am Ende dieser Methode.** Ein Pick auf der *leeren*
+        # Szene baut die Pipeline genauso auf — gemessen 420 ms auf dem leeren
+        # Bett, danach 4,4 ms nach dem Öffnen eines Modells. Damit fällt die
+        # Wartezeit in den Moment, in dem der Kunde die Startfläche ansieht
+        # oder eine Datei aussucht, statt in seine erste Geste am Modell.
+        self._warm_the_picker()
         for actor in self._actors.values():
             self.renderer.remove(actor)
         self._actors.clear()
@@ -5325,6 +5336,70 @@ class Viewport(QWidget):
         if restore_finding:
             self._draw_finding_mark()
         self._render_now()
+
+    def _warm_the_picker(self) -> None:
+        """Den ersten Pick vorziehen, damit die erste Geste ihn nicht bezahlt.
+
+        **Gemessen** (10.09.2026, echtes Fenster, Filamenthalter mit 2812
+        Dreiecken): Der erste ``pick_surface`` nach dem Öffnen kostet rund eine
+        halbe Sekunde, jeder weitere zwei bis vier Millisekunden. wgpu baut dabei
+        seinen eigenen Renderdurchgang für die Kennungen auf; die Zahl hängt
+        deshalb kaum am Modell.
+
+        Bezahlt hat das bisher die **erste Geste** — und zwar jede, die pickt:
+        Wer zuerst klickt, wartet dort; wer zuerst dreht, wartet beim
+        Drehpunkt (``_aim_rotation`` fragt die Bildmitte). Beides fühlt sich
+        an, als hänge das Programm, und danach läuft alles flüssig (Robert,
+        09.09.2026: „ein bisschen performanceprobleme beim bewegen haben wir
+        auch noch").
+
+        Der Timer legt es in den **nächsten Leerlauf**, und der Aufruf steht am
+        Anfang von :meth:`_apply_scene`, vor dessen frühen Rückkehrpunkten: Ein
+        Pick auf der leeren Szene baut dieselbe Pipeline auf (gemessen 420 ms
+        leer, danach 4,4 ms am geöffneten Modell), und der leere Aufbau kommt
+        beim Start. Die Wartezeit fällt damit in den Moment, in dem der Kunde
+        die Startfläche ansieht — nicht in seine erste Geste. Einmal je
+        Renderer; die Pipeline bleibt danach stehen, auch über Szenenwechsel
+        hinweg.
+        """
+        if self._picker_warm or self.renderer is None:
+            return
+        self._picker_warm = True
+        # **Mit Kontext, wie 1800 Zeilen weiter oben begründet.** Der statische
+        # ``QTimer.singleShot(msec, slot)`` hält bis zum Ablauf eine Referenz
+        # auf dieses Widget; die Kontextform von Qt 6 hängt den Timer an ``self``
+        # und lässt ihn mit ihm sterben. ``weak_slot`` löst nur die
+        # Python-Referenz — stirbt der C++-Viewport, während der Wrapper noch
+        # lebt, führe der Slot sonst ``view_size()`` auf einer gelöschten
+        # Zeichenfläche aus.
+        QTimer.singleShot(0, self, weak_slot(self, Viewport._warm_the_picker_now))
+
+    def _warm_the_picker_now(self) -> None:
+        """Der Pick selbst — ein Blick in die Bildmitte, dessen Ergebnis niemand braucht.
+
+        Er wählt nichts aus und ändert nichts; ``pick_surface`` liest nur.
+
+        **Und er darf nichts kosten, wenn er scheitert.** Ein Fehlschlag hier
+        löst nichts ein — die Wartezeit fiele dann bei der ersten Geste an wie
+        zuvor —, aber ohne Fang stünde ein roher Stapelabzug im Protokoll und
+        damit im Fehlerbericht, ausgelöst von einer reinen Beschleunigung. Qt
+        bricht bei einer Ausnahme in einem Slot nicht ab; sichtbar wäre allein
+        der Abzug.
+        """
+        renderer = self.renderer
+        if renderer is None:
+            return
+        try:
+            width, height = renderer.view_size()
+            if min(width, height) <= 0:
+                # Noch kein Bild — beim nächsten Szenenaufbau erneut versuchen.
+                self._picker_warm = False
+                return
+            renderer.pick_surface(width / 2.0, height / 2.0)
+        except RuntimeError:
+            # Die Zeichenfläche ist unter dem Timer weggestorben. Nichts zu
+            # retten und nichts zu melden: Die Ansicht existiert nicht mehr.
+            self._picker_warm = False
 
     def _aim_rotation(self) -> None:
         """Der Drehpunkt bekommt beim Drehbeginn die Tiefe dessen, was man ansieht (§2.9).

@@ -1210,6 +1210,39 @@ Einstellungsdialog (sonst wäre es gebaut, geprüft und unerreichbar); die sechs
 Flugtasten decken drei Achsen in beide Richtungen ohne Dopplung; und der Flug
 nimmt den Blickpunkt mit, wo der Zoom ihn stehen lässt.
 
+## Der erste Pick kostet eine halbe Sekunde — und niemand soll ihn bezahlen
+
+Gemessen am echten Fenster (10.09.2026, Filamenthalter mit 2812 Dreiecken):
+`pick_surface` braucht beim **ersten** Aufruf rund 500 ms, jeder weitere zwei
+bis vier. wgpu baut dabei seinen eigenen Renderdurchgang für die Kennungen
+auf; die Zahl hängt deshalb kaum am Modell — auf der **leeren** Szene sind es
+dieselben 420 ms.
+
+Bezahlt hat das bisher die erste Geste, die pickt, und das ist fast jede: ein
+Klick über `_world_at`, oder der Drehbeginn, weil `_aim_rotation` die
+Bildmitte fragt. Für den Kunden sah es aus, als hänge das Programm einmal —
+danach lief alles flüssig (Robert, 09.09.2026: „ein bisschen
+performanceprobleme beim bewegen haben wir auch noch").
+
+`_warm_the_picker` zieht den Pick deshalb vor, und zwar an zwei Bedingungen:
+
+* **Über einen Timer**, nicht im Aufruf selbst. Sonst verschöbe sich die halbe
+  Sekunde nur an eine andere Stelle desselben Ereignisses.
+* **Am Anfang von `_apply_scene`**, vor dessen frühen Rückkehrpunkten — nicht
+  am Ende. Der leere Aufbau kommt beim Programmstart, und dort ist die
+  Wartezeit umsonst: Der Kunde sieht die Startfläche oder sucht eine Datei.
+  Am Ende der Methode liefe es erst mit dem ersten Modell, also mitten im
+  Öffnen.
+
+Einmal je Renderer (`_picker_warm`); die Pipeline bleibt danach stehen, auch
+über Szenenwechsel hinweg. Gemessen nach dem Umbau: die erste Geste kostet 46
+statt 511 ms.
+
+**Geprüft wird der Anschluss, nicht die Zeit** — offscreen gibt es keinen
+echten Renderer, und ein Doppel ist immer schnell
+(`tests/test_viewport_decisions.py::test_the_picker_is_warmed_up_before_the_first_gesture`).
+Die Zahlen stehen im Prüfstand, nicht in der Suite.
+
 ## Der Drehpunkt ist, was in der Bildmitte steht (04.09.2026)
 
 Robert: „beim rotieren der ansicht wollen wir uns um den mittelpunkt des
