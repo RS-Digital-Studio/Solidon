@@ -39,23 +39,28 @@ if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
 
 #: Wie parallel zwei Achsen sein müssen, um dieselbe zu sein.
 #:
+#: **Öffentlich, weil der exakte Kern dieselbe Frage stellt**
+#: (:mod:`app.core.brep.features`) — dieselben drei Toleranzen, an einer
+#: Stelle hergeleitet und dort importiert; ``tests/test_shared_constants.py``
+#: hält das ein.
+#:
 #: Ein halbes Grad, und die Zahl beschreibt das **Netz** und keine Fertigung:
 #: Die zwei Halbzylinder eines Langlochs sind aus demselben Werkzeug
 #: geschnitten, ihre Achsen also exakt parallel; was übrig bleibt, ist die
 #: Einpassung an einem tesselierten Bogen. Gemessen liegt sie bei 1e-9.
-_PARALLEL: float = math.cos(math.radians(0.5))
+PARALLEL_AXES: float = math.cos(math.radians(0.5))
 
 #: Wie gleich zwei Radien sein müssen, bezogen auf den größeren.
 #:
 #: Ein Prozent. Dieselbe Begründung wie oben — die Einpassung eines
 #: 180-Grad-Bogens trifft den Radius auf ein Zehntausendstel genau; ein Prozent
 #: lässt Raum für ein grobes Netz und trennt trotzdem Ø 5 von Ø 5,1.
-_SAME_RADIUS: float = 0.01
+SAME_RADIUS: float = 0.01
 
 #: Wie weit die Normale eines Dreiecks von der Achse wegzeigen muss, damit es
 #: zum **Mantel** gehört. Ein Grad: Deckel und Boden stehen senkrecht darauf
 #: und fallen damit heraus, eine leicht schief tesselierte Flanke nicht.
-_ACROSS: float = math.cos(math.radians(89.0))
+ACROSS_THE_AXIS: float = math.cos(math.radians(89.0))
 
 #: Wieviel eine Flanke von der Ebene abweichen darf, die sie sein soll —
 #: als Anteil des Radius. Zwei Prozent decken die Sehne, zu der ein Netz den
@@ -286,14 +291,14 @@ def _slot_from(
     index_b, fit_b, patch_b = second
 
     radius = (float(fit_a.radius) + float(fit_b.radius)) / 2.0
-    if abs(float(fit_a.radius) - float(fit_b.radius)) > _SAME_RADIUS * max(
+    if abs(float(fit_a.radius) - float(fit_b.radius)) > SAME_RADIUS * max(
         float(fit_a.radius), float(fit_b.radius)
     ):
         return None
 
     axis_a = _unit(fit_a.axis)
     axis_b = _unit(fit_b.axis)
-    if axis_a is None or axis_b is None or abs(float(axis_a @ axis_b)) < _PARALLEL:
+    if axis_a is None or axis_b is None or abs(float(axis_a @ axis_b)) < PARALLEL_AXES:
         return None
     # Die gemeinsame Achse, aus beiden gemittelt: Das Vorzeichen der zweiten
     # richtet sich nach der ersten, sonst hebt eine gegenläufig eingepasste
@@ -497,7 +502,7 @@ def _shells_for(
     """Quermaske und Mantelstücke einer Achse — je Achse einmal gerechnet.
 
     **Der teuerste Posten der Langlochsuche stand hier, und er war es zweimal
-    umsonst.** ``np.abs(normals @ axis) <= _ACROSS`` lief in
+    umsonst.** ``np.abs(normals @ axis) <= ACROSS_THE_AXIS`` lief in
     :func:`_connected_shell` je **Paar** über das ganze Netz, dazu eine
     Vollkopie als ``allowed``. Beides hängt nur an der Achse, und die teilen
     sich alle Bögen eines Langlochs: An einer Platte mit sechzehn verrundeten
@@ -533,7 +538,7 @@ def _shells_for(
     gemessenen Kippung von einem halben bis fünfundvierzig Grad. Das ist keine
     Glückszahl: Die Einpassungen zweier Bögen desselben Werkzeugs unterscheiden
     sich nur im Rechenrauschen, und das liegt bei 1e-9 (die Zahl steht an
-    :data:`_PARALLEL`). Gegen die Schwelle :data:`_ACROSS` — der Kosinus von
+    :data:`PARALLEL_AXES`). Gegen die Schwelle :data:`ACROSS_THE_AXIS` — der Kosinus von
     89 Grad, rund 0,0175 — ist eine Achsenabweichung von 1e-9 sechs
     Größenordnungen zu klein, um eine Fläche über die Grenze zu heben.
 
@@ -547,7 +552,7 @@ def _shells_for(
     key = np.round(np.ascontiguousarray(axis, dtype=float), 9).tobytes()
     ready = cache.get(key)
     if ready is None:
-        across = (np.abs(normals @ axis) <= _ACROSS).tolist()
+        across = (np.abs(normals @ axis) <= ACROSS_THE_AXIS).tolist()
         ready = (across, _shell_labels(across, graph), {})
         cache[key] = ready
     return ready

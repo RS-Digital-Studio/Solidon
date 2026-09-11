@@ -24,12 +24,13 @@ zusammen, nachdem jede Fläche für sich beschrieben ist.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from app.core.brep.kernel import Solid
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, FeatureKind, Vec3
-from app.core.units import EPS_GEOM, match_tolerance
+from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance
 
 _log = get_logger(__name__)
 
@@ -50,18 +51,14 @@ FULL_TURN = 0.9
 #: rundum verrundeten Quaders: 3 Nachbarn, 3 Verrundungen.
 CORNER_NEIGHBOURS = 2
 
-#: Wie parallel zwei Bogenachsen sein müssen, um dieselbe zu sein.
-#:
-#: Ein halbes Grad — dieselbe Zahl und dieselbe Begründung wie auf der
-#: Netzseite (:data:`app.core.perceive.slots._PARALLEL`), nur dass der exakte
-#: Kern sie mit noch mehr Abstand einhält: Die beiden Enden eines Langlochs
-#: sind aus einem Umriss aufgezogen, ihre Achsen also rechnerisch dieselbe.
-_PARALLEL = 0.9999619230641713  # cos(0,5°)
-
-#: Wie weit die Normale einer Fläche von der Bohrachse wegzeigen muss, damit
-#: sie zum **Mantel** gehört. Ein Grad: Deckel und Boden stehen senkrecht
-#: darauf und fallen heraus, eine Flanke steht längs und bleibt.
-_ACROSS = 0.01745240643728351  # cos(89°)
+# Die drei Toleranzen des Langlochs kommen von der Netzseite und stehen nur
+# dort: Wie parallel zwei Bogenachsen sein müssen, wie gleich zwei Radien und
+# ab welchem Winkel eine Fläche zum Mantel gehört. Dieselbe Frage, dieselbe
+# Zahl, eine Stelle — und der exakte Kern hält sie mit mehr Abstand ein, weil
+# seine Bögen aus einem Umriss aufgezogen sind und nicht eingepasst. **Nicht**
+# ``match_tolerance`` für die Radien: Die ist ein halbes Prozent der
+# Modelldiagonale und hielte an einer Platte von 108 mm Ø 6 und Ø 7 für
+# dasselbe Loch.
 
 
 def features_of(solid: Solid) -> dict[FeatureId, Feature]:
@@ -145,9 +142,10 @@ def _slots_instead_of_half_bores(
       gleichem Radius und paralleler Achse, beide ins Loch gewölbt
       (``recess``),
     * die sich **genau zwei** ebene Nachbarflächen teilen — die Flanken —,
-    * und diese beiden Ebenen grenzen ihrerseits an **beide** Bögen.
+    * und diese beiden Ebenen grenzen ihrerseits an **beide** Bögen, stehen
+      parallel zur Achse und je einen Radius neben ihr.
 
-    Die letzte Bedingung ist die, auf die es ankommt. Zwei gleich große
+    Die dritte Bedingung ist die, auf die es ankommt. Zwei gleich große
     Verrundungen mit paralleler Achse gibt es an jeder verrundeten Kante eines
     Quaders, und eine Tasche mit vier verrundeten Ecken hat sie gleich viermal.
     Was ein Langloch daraus macht, ist der geschlossene Mantel: Zwei
@@ -157,46 +155,96 @@ def _slots_instead_of_half_bores(
     seine Normale zeigt entlang der Achse, er liegt gar nicht im Mantel.
     Dieselbe Entscheidung und dieselbe Begründung wie bei
     :data:`app.core.perceive.slots.SWALLOWED_BY_A_SLOT`.
-    """
-    import math
 
+    **Gerechnet wird nur um die Bögen herum.** Die Nachbarschaft wird für die
+    Bögen und ihre Nachbarn gebaut, nicht für jede Fläche des Körpers — ein
+    STEP-Körper mit zweitausend Flächen hat davon meist keine zwei.
+    """
     from OCP.BRepAdaptor import BRepAdaptor_Surface
-    from OCP.GeomAbs import GeomAbs_Cylinder
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane
     from OCP.TopoDS import TopoDS
 
-    faces = list(solid.faces())
+    # Träge, wie jeder Import von ``brep`` nach ``perceive``
+    # (``tests/test_core_package_direction.py``): Die Karte erlaubt die
+    # Richtung nur im Funktionskörper.
+    from app.core.perceive.slots import ACROSS_THE_AXIS
+
+    faces = solid.faces()
     if len(faces) < 4:
         return found
 
+    # Einmal je Fläche und nicht einmal je Paar: Ein Adaptor kostet, und an
+    # hundert Bögen fragt die Paarung unten jede Fläche viele Male.
+    adaptors: dict[int, Any] = {}
+
     def surface_of(index: int) -> Any:
-        return BRepAdaptor_Surface(TopoDS.Face(faces[index]))
+        adaptor = adaptors.get(index)
+        if adaptor is None:
+            adaptor = adaptors[index] = BRepAdaptor_Surface(TopoDS.Face(faces[index]))
+        return adaptor
 
     # Die Bögen: zylindrisch, angeschnitten, ins Loch gewölbt.
     arcs: list[int] = []
-    for index in named:
+    for index, identifier in named.items():
+        feature = found.get(identifier)
+        if feature is None or feature.kind != "fillet" or not feature.params.get("recess"):
+            continue
         surface = surface_of(index)
         if surface.GetType() != GeomAbs_Cylinder:
             continue
         turn = abs(surface.LastUParameter() - surface.FirstUParameter())
-        if turn >= FULL_TURN * 2.0 * math.pi:
-            continue
-        feature = found.get(named[index])
-        if feature is None or not feature.params.get("recess", False):
-            continue
-        arcs.append(index)
+        if turn < FULL_TURN * 2.0 * math.pi:
+            arcs.append(index)
     if len(arcs) < 2:
         return found
 
-    around = {index: _neighbouring_faces(faces, neighbours, index) for index in set(named)}
+    # Die Nummer einer Fläche in ``faces`` — über dieselbe Karte, aus der
+    # ``Solid.faces`` die Liste gebaut hat, in O(1) statt über einen
+    # ``IsSame``-Vergleich mit jeder Fläche des Körpers.
+    numbered = ShapeMap()
+    for face in faces:
+        numbered.Add(face)
+
+    def neighbours_of(index: int) -> set[int]:
+        return _neighbouring_faces(faces[index], neighbours, numbered)
+
+    # Von den Nachbarn eines Bogens interessiert nur, was eine Flanke sein
+    # kann: eine Ebene längs zur Achse. Deckel und Boden einer Platte grenzen
+    # an **jedes** Loch darin und tragen entsprechend viele Kanten — ihre
+    # Nachbarschaft zu bauen kostete an einer Platte mit 150 Löchern 85 ms je
+    # Fläche (gemessen 11.09.2026), und gebraucht wird sie nie.
+    around: dict[int, set[int]] = {}
+    for index in arcs:
+        around[index] = neighbours_of(index)
+        axis = surface_of(index).Cylinder().Axis().Direction()
+        for other in around[index]:
+            if other in around:
+                continue
+            surface = surface_of(other)
+            if surface.GetType() != GeomAbs_Plane:
+                continue
+            if abs(surface.Plane().Axis().Direction().Dot(axis)) >= ACROSS_THE_AXIS:
+                continue
+            around[other] = neighbours_of(other)
+
+    # **Gepaart wird über die Nachbarschaft, nicht über alle Bögen.** Der
+    # zweite Bogen eines Langlochs grenzt an dieselbe Flanke wie der erste —
+    # er steht also zwei Schritte entfernt in der Nachbarschaft. Hundert Bögen
+    # sind so hundert kleine Fragen und nicht fünftausend Paare (gemessen
+    # 11.09.2026 an 306 Flächen: 1,6 s über alle Paare, 0,1 s so).
     used: set[int] = set()
     slots = 0
-    for position, first in enumerate(arcs):
+    for first in arcs:
         if first in used:
             continue
-        for second in arcs[position + 1 :]:
-            if second in used:
+        two_steps_away: set[int] = set()
+        for neighbour in around.get(first, ()):
+            two_steps_away |= around.get(neighbour, set())
+        for second in arcs:
+            if second == first or second in used or second not in two_steps_away:
                 continue
-            flanks = _flanks_of_a_slot(around, first, second, surface_of, tolerance)
+            flanks = _flanks_of_a_slot(around, first, second, surface_of)
             if flanks is None:
                 continue
             slots += 1
@@ -207,6 +255,7 @@ def _slots_instead_of_half_bores(
                 neighbours,
                 reach,
                 tolerance,
+                faces=faces,
                 arcs=(first, second),
                 flanks=flanks,
                 number=slots,
@@ -217,12 +266,11 @@ def _slots_instead_of_half_bores(
     return found
 
 
-def _neighbouring_faces(faces: list[Any], neighbours: Any, index: int) -> set[int]:
-    """Die Nummern der Flächen, die an ``faces[index]`` grenzen."""
+def _neighbouring_faces(face: Any, neighbours: Any, numbered: Any) -> set[int]:
+    """Die Nummern der Flächen, die an ``face`` grenzen — über ``numbered``."""
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
 
-    face = faces[index]
     touching: set[int] = set()
     walk = TopExp_Explorer(face, TopAbs_EDGE)
     while walk.More():
@@ -231,10 +279,9 @@ def _neighbouring_faces(faces: list[Any], neighbours: Any, index: int) -> set[in
         for other in neighbours.FindFromKey(edge):
             if other.IsSame(face):
                 continue
-            for number, candidate in enumerate(faces):
-                if candidate.IsSame(other):
-                    touching.add(number)
-                    break
+            number = numbered.FindIndex(other)
+            if number > 0:
+                touching.add(number - 1)
     return touching
 
 
@@ -243,33 +290,47 @@ def _flanks_of_a_slot(
     first: int,
     second: int,
     surface_of: Any,
-    tolerance: float,
 ) -> tuple[int, int] | None:
     """Die zwei Wände zwischen zwei Bögen — oder ``None``, wenn es keine sind."""
     from OCP.GeomAbs import GeomAbs_Plane
 
+    from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, SAME_RADIUS
+
     one, other = surface_of(first).Cylinder(), surface_of(second).Cylinder()
-    if abs(one.Radius() - other.Radius()) > tolerance:
+    radius = max(float(one.Radius()), float(other.Radius()))
+    if abs(one.Radius() - other.Radius()) > radius * SAME_RADIUS:
         return None
     axis, second_axis = one.Axis().Direction(), other.Axis().Direction()
-    if abs(axis.Dot(second_axis)) < _PARALLEL:
+    if abs(axis.Dot(second_axis)) < PARALLEL_AXES:
         return None
     # Zwei Mäntel auf **derselben** Achse sind eine Bohrung in zwei Stücken und
     # kein Langloch: Ohne Weg zwischen den Bogenmitten gibt es keine Flanken.
-    span = _travel_between(one, other)
-    if span <= tolerance:
+    # ``EPS_DISPLAY``, nicht ``match_tolerance``: Ein halbes Prozent der
+    # Modelldiagonale wären an einer Platte 0,5 mm — und ein Langloch mit
+    # 0,4 mm Weg ist eines, auch wenn niemand es so konstruiert.
+    across = _across_between(one, other)
+    span = math.sqrt(sum(value * value for value in across))
+    if span <= EPS_DISPLAY:
         return None
 
     shared = around.get(first, set()) & around.get(second, set())
-    flanks = [
-        index
-        for index in shared
-        if surface_of(index).GetType() == GeomAbs_Plane
+    flanks: list[int] = []
+    for index in shared:
+        surface = surface_of(index)
+        if surface.GetType() != GeomAbs_Plane:
+            continue
+        plane = surface.Plane()
+        normal = plane.Axis().Direction()
         # Eine Flanke steht **längs** zur Achse; Deckel und Boden stehen quer
         # und sind deshalb keine. Ohne diese Zeile zählte ein durchgehendes
         # Langloch vier gemeinsame Nachbarn statt zwei.
-        and abs(surface_of(index).Plane().Axis().Direction().Dot(axis)) < _ACROSS
-    ]
+        if abs(normal.Dot(axis)) >= ACROSS_THE_AXIS:
+            continue
+        # **Und je einen Radius neben der Achse**, sonst ist die Ebene keine
+        # Tangente, sondern eine Sekante — und der Bogen kein halber.
+        if abs(_plane_distance(plane, one.Axis().Location()) - radius) > radius * SAME_RADIUS:
+            continue
+        flanks.append(index)
     if len(flanks) != 2:
         return None
     # **Und der Mantel ist geschlossen.** Beide Wände grenzen an beide Bögen —
@@ -277,27 +338,45 @@ def _flanks_of_a_slot(
     for flank in flanks:
         if not {first, second} <= around.get(flank, set()):
             return None
-    # Die zwei Wände stehen sich gegenüber, im Abstand eines Durchmessers.
+    # Die zwei Wände stehen sich gegenüber.
     normals = [surface_of(flank).Plane().Axis().Direction() for flank in flanks]
-    if abs(normals[0].Dot(normals[1])) < _PARALLEL:
+    if abs(normals[0].Dot(normals[1])) < PARALLEL_AXES:
         return None
     return (flanks[0], flanks[1])
 
 
-def _travel_between(one: Any, other: Any) -> float:
-    """Der Abstand der beiden Bogenachsen, quer zur Bohrrichtung."""
-    import math
+def _across_between(one: Any, other: Any) -> tuple[float, float, float]:
+    """Der Vektor von der ersten Bogenachse zur zweiten, quer zur Bohrrichtung.
 
+    **Quer, und nicht einfach von Ursprung zu Ursprung.** Wo eine Zylinderfläche
+    ihren Parameterursprung hat, entscheidet der Erzeuger; an einem aus einem
+    Umriss aufgezogenen Langloch liegen beide auf einer Höhe, an einem
+    eingelesenen STEP-Körper nicht unbedingt. Der Anteil entlang der Achse
+    gehört deshalb nicht zum Weg.
+    """
     first = one.Axis().Location()
     second = other.Axis().Location()
     axis = one.Axis().Direction()
     offset = (second.X() - first.X(), second.Y() - first.Y(), second.Z() - first.Z())
     along = offset[0] * axis.X() + offset[1] * axis.Y() + offset[2] * axis.Z()
-    across = tuple(
-        value - along * component
-        for value, component in zip(offset, (axis.X(), axis.Y(), axis.Z()), strict=True)
+    return (
+        offset[0] - along * axis.X(),
+        offset[1] - along * axis.Y(),
+        offset[2] - along * axis.Z(),
     )
-    return math.sqrt(sum(value * value for value in across))
+
+
+def _plane_distance(plane: Any, point: Any) -> float:
+    """Der Abstand eines Punkts von einer Ebene, ohne Vorzeichen."""
+    origin = plane.Location()
+    normal = plane.Axis().Direction()
+    return float(
+        abs(
+            (point.X() - origin.X()) * normal.X()
+            + (point.Y() - origin.Y()) * normal.Y()
+            + (point.Z() - origin.Z()) * normal.Z()
+        )
+    )
 
 
 def _one_slot(
@@ -308,6 +387,7 @@ def _one_slot(
     reach: float,
     tolerance: float,
     *,
+    faces: list[Any],
     arcs: tuple[int, int],
     flanks: tuple[int, int],
     number: int,
@@ -317,30 +397,35 @@ def _one_slot(
     first, second = arcs
     one, other = surface_of(first).Cylinder(), surface_of(second).Cylinder()
     radius = (float(one.Radius()) + float(other.Radius())) / 2.0
-    travel = _travel_between(one, other)
+    across = _across_between(one, other)
+    travel = math.sqrt(sum(value * value for value in across))
 
     surface = surface_of(first)
     first_v, last_v = float(surface.FirstVParameter()), float(surface.LastVParameter())
     depth = abs(last_v - first_v)
+    # Die Mitte liegt auf halbem Weg zwischen den Achsen, auf halber Tiefe des
+    # **ersten** Bogens — der zweite hat denselben Mantel, aber vielleicht
+    # einen anderen Parameterursprung (siehe :func:`_across_between`).
     first_centre = _axis_point(one, (first_v + last_v) / 2.0)
-    second_centre = _axis_point(other, (first_v + last_v) / 2.0)
-    centre: Vec3 = tuple((a + b) / 2.0 for a, b in zip(first_centre, second_centre, strict=True))  # type: ignore[assignment]
-    direction: Vec3 = (
-        tuple((b - a) / travel for a, b in zip(first_centre, second_centre, strict=True))  # type: ignore[assignment]
-        if travel > EPS_GEOM
-        else (1.0, 0.0, 0.0)
+    centre: Vec3 = (
+        first_centre[0] + across[0] / 2.0,
+        first_centre[1] + across[1] / 2.0,
+        first_centre[2] + across[2] / 2.0,
     )
+    direction: Vec3 = (across[0] / travel, across[1] / travel, across[2] / travel)
     axis = one.Axis().Direction()
 
     through = not _axis_covered(
-        neighbours, solid.faces()[first], one, first_v - reach, last_v + reach, tolerance
+        neighbours, faces[first], one, first_v - reach, last_v + reach, tolerance
     )
 
     identifier = f"slot_{number}"
     indices: list[int] = []
     for index in (first, second, *flanks):
         indices.extend(solid.triangles_of_face(index))
-        found.pop(named[index], None)
+        name = named.get(index)
+        if name is not None:
+            found.pop(name, None)
     found[identifier] = Feature(
         id=identifier,
         kind="slot",
@@ -603,8 +688,6 @@ def _rounded_neighbours(neighbours: Any, face: Any) -> int:
     anstößt; ``TopoDS_Shape`` hat keine Gleichheit, die ein ``set`` versteht,
     darum der ``IsSame``-Vergleich gegen das schon Gesehene.
     """
-    import math
-
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_Cylinder
     from OCP.TopAbs import TopAbs_EDGE
