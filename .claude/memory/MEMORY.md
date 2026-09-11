@@ -53,7 +53,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) · [Gesetzt ≠ gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) · [Suite ohne Stylesheet](suite-faehrt-ohne-stylesheet.md) — isVisible, Tooltips, Farben nur am Fenster.
 - [Signal am falschen Slot](signal-passt-an-den-falschen-slot.md) · [Warnungsmarke ist Zustand](warnungsmarke-ist-semantischer-zustand.md) · [Zweite Stelle setzt dieselbe Sichtbarkeit](zweite-stelle-setzt-dieselbe-sichtbarkeit.md) — Stelligkeit; Aktoren überleben keinen Szenenaufbau; wer wieder einblendet, überschreibt jeden, der ausgeblendet hat.
 - [Kalenderdatum](kalenderdatum-folgt-appsprache.md) · [Sprachwechsel](sprachwechsel-zwei-schritte.md) · [Katalogschlüssel](katalog-schluessel-sind-woerter.md) · [Marke im span](marke-im-span-zerteilt.md) — Sprache und Kataloge.
-- [Startfläche](startflaeche-braucht-breite-und-skalierung.md) · [Oberfläche von Hand](oberflaeche-von-hand-fahren.md) · [Klickweg](pruefstand-geht-den-weg-der-oberflaeche.md) — echte Plattform, Klickweg, Skalierung.
+- [Startfläche](startflaeche-braucht-breite-und-skalierung.md) · [Oberfläche von Hand](oberflaeche-von-hand-fahren.md) · [Klickweg](pruefstand-geht-den-weg-der-oberflaeche.md) · [Sonde baut wie die Anwendung](sonde-baut-das-fenster-wie-die-anwendung.md) — echte Plattform, Klickweg, Skalierung; Startweg über build_application, sonst misst man ein anderes Fenster.
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) · [Fehlertexte nur Titel](fehlertexte-nur-titel.md) · [Session.apply meldet](session-apply-meldet-statt-zu-werfen.md) — Titel, detail, Signal statt try.
 - [Ops am Stück](ops-reihendurchlauf-kundensicht.md) · [Register zählen](register-zaehlen-load-operations.md) · [Rezept ist der Fund](rezept-ist-der-fund-op-ist-die-ursache.md) — load_operations(); Prüfung in der Op.
 - [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — Klickketten bis zum Ende.
@@ -61,6 +61,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 
 ## Messen und Prüfen
 
+- [Nachricht ist ein Satzende](nachricht-ist-ein-satzende.md) — beginnt sie mitten im Satz, liefert die Transkriptsuche den Anfang; erst dann messen.
 - [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) · [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) · [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) · [Am Eingang drehen](am-eingang-drehen.md) — jede Messung antwortet auf ihre eigene Frage.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) · [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) · [Benannte Falle](benannte-falle-schuetzt-nicht.md) · [Geprüft fühlt sich wie vollständig an](geprueft-fuehlt-sich-wie-vollstaendig-an.md) — ansehen, mutieren; Notiz gekannt, Fehler gemacht; die geprüfte Hälfte deckt die andere.
 - [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) · [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) · [Zwei Schwellen](zwei-schwellen-eine-frage.md) · [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md) — Grenzen.

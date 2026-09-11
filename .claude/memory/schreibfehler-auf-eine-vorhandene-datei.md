@@ -97,3 +97,12 @@ except OSError as fehler:
 Nach einem Abbruch war die Datei sofort exklusiv öffenbar — der Halter war also
 der eigene Lauf. Dieselbe Probe zwischen den beiden Lesern hätte beide auf
 einmal gezeigt, statt den zweiten auf die nächste Sprache zu verschieben.
+
+**Nachtrag 12.09.2026 — der Riss kommt auch direkt nach `git add`.** Wer eine
+Datei für einen Teil-Commit umschreibt, `git add` ruft und sie dann
+zurückschreibt, trifft beim Zurückschreiben regelmäßig `OSError 22`: `git add`
+hat die Datei gerade angefasst, und der Indizierer hält sie. Ohne Wiederholung
+bleibt dann der **gestagte** Stand im Arbeitsbaum — fünf Katalogeinträge
+waren weg, ohne Fehler im Diff, nur `git status` sagte `M ` statt `MM`. Das
+Zurückschreiben bekommt dieselbe Wiederholung wie jedes andere Schreiben, und
+danach wird der Inhalt gegen das Original **verglichen**, nicht angenommen.
