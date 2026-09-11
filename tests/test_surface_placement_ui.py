@@ -80,6 +80,9 @@ class _Viewport(QWidget):
         #: Ob am Vorschaukörper ein Griff hängen soll. Der echte Viewport baut
         #: ihn an einem Aktor des Renderers; hier zählt nur die Entscheidung.
         self.preview_gizmo = False
+        #: Ursprung und Reichweite des Bewegungsgriffs, oder ``None``. Ein Test,
+        #: der ihn setzt, prüft, dass die Maßfelder seinen Platz frei lassen.
+        self.handle: tuple[tuple[float, float, float], float] | None = None
         #: Kamerastellung und Darstellungsart — die Tiefenstufe fasst beide an.
         self.pose: tuple[Any, Any, Any, float | None] = (
             (0.0, -100.0, 0.0),
@@ -92,6 +95,14 @@ class _Viewport(QWidget):
 
     def set_preview_gizmo(self, active: bool) -> None:
         self.preview_gizmo = bool(active)
+
+    def gizmo_reach(self) -> tuple[tuple[float, float, float], float] | None:
+        """Wo der Bewegungsgriff sitzt — hier keiner, sofern der Test keinen setzt.
+
+        Der echte Viewport hängt ihn an ein gewähltes Merkmal; die Platzierung
+        hält seinen Platz frei, damit Pfeile und Ringe bedienbar bleiben.
+        """
+        return self.handle
 
     def set_placement_pointer(self, handler: Any) -> None:
         self.pointer = handler
@@ -1177,6 +1188,80 @@ def test_only_a_creator_grips_its_own_preview() -> None:
         assert not _grips_its_preview(REGISTRY.get(name))
 
 
+@pytest.mark.parametrize(
+    ("operation", "werte"),
+    [("slot_hole", {"slot_length": 20.0}), ("resize_hole", {"diameter": 8.0})],
+)
+def test_editing_a_hole_opens_the_same_placement_as_drilling(
+    qt_app: QApplication, operation: str, werte: dict[str, float]
+) -> None:
+    """Bearbeiten zeigt die Maße in der Szene — wie *Bohrung setzen*.
+
+    „einfach wie wenn ich eine bohrung setze … gleiche logik" (Robert,
+    10.09.2026). Bis dahin führte der Knopf im Merkmalsfenster die Operation
+    sofort aus: ein Schritt im Verlauf, und im Bild kein einziges Maß.
+
+    Gefahren wird der Weg des Kunden: Dialog von *Zum Langloch ziehen* mit der
+    Kennung der Bohrung, ``start()`` — und **kein** Zeigerereignis. Danach steht
+    die Fläche, ihre Kantenmaße stehen, und die Maßfelder sind da.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    session = Session()
+    viewport = _Viewport()
+    dialog: OperationDialog | None = None
+    controller: PlacementFlow | None = None
+    try:
+        session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
+        assert session.wait_for_idle(30_000)
+        result = session.last_result
+        assert result is not None and result.complete
+        viewport.show_scene(result)
+        session.sceneChanged.connect(viewport.show_scene)
+        object_id, entry = next(iter(result.scene.objects.items()))
+        hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+        mitte = entry.features[hole].params["centre"]
+
+        spec = REGISTRY.get(operation)
+        dialog = OperationDialog(
+            spec,
+            {object_id: "Platte"},
+            values={
+                "at_feature": hole,
+                "x": float(mitte[0]),
+                "y": float(mitte[1]),
+                "z": float(mitte[2]),
+                **werte,
+            },
+        )
+        window = SimpleNamespace(
+            viewport=viewport, session=session, _clear_preview=session.cancel_preview
+        )
+        controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        qt_app.processEvents()
+
+        assert controller.active, "die Platzierung läuft"
+        surface = controller._surface
+        assert surface is not None, "die Fläche steht, ohne dass jemand geklickt hat"
+        assert controller._frozen, "und die Stelle auch — offen sind die Maße"
+        assert surface.edges, "zu den Kanten der Fläche steht ein Maß"
+        assert all(edge.distance > 0.0 for edge in surface.edges), (
+            "gemessen wird zum Rand des Teils, nicht in die eigene Öffnung"
+        )
+        assert surface.point[0] == pytest.approx(mitte[0], abs=1e-6)
+    finally:
+        if controller is not None:
+            controller.dispose()
+        session.release(30_000)
+        if dialog is not None:
+            dialog.close()
+        viewport.close()
+        qt_app.processEvents()
+
+
 def test_moving_a_feature_starts_where_it_already_sits(qt_app: QApplication) -> None:
     """Wer ein bestehendes Merkmal bewegt, sieht seine Maße — ohne zu zielen.
 
@@ -1237,3 +1322,176 @@ def test_moving_a_feature_starts_where_it_already_sits(qt_app: QApplication) -> 
             dialog.close()
         viewport.close()
         qt_app.processEvents()
+
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def _window_with_a_renderer():
+    """Ein Hauptfenster, dessen Ansicht eine Renderer-Attrappe trägt.
+
+    `MainWindow._measure_in_the_view` steigt an `viewport.renderer is None`
+    aus, und offscreen ist das **immer** wahr — der ganze Selbststart wäre in
+    der Suite unerreichbar (Fund des Reviews, 11.09.2026). Die Attrappe stellt
+    die Betriebslage her, statt sie wegzuräumen (`.claude/rules/tests.md`).
+    """
+    from render_fakes import RecordingRenderer
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    return window
+
+
+def _a_selected_hole(window):
+    """Öffnet die Platte, wählt ihre erste Bohrung und wartet die Fläche ab."""
+    from PySide6.QtWidgets import QApplication
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    return object_id, hole
+
+
+def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
+    """Ein angeklicktes Loch zeigt seine Maße — und lässt sich übernehmen.
+
+    Der Knopf gibt nur frei, wenn ein **Werkzeugkörper** steht
+    (`PlacementFlow.redraw`), und `placement.prepare_tool` kannte die zwei
+    Operationen nicht: Der Dialog ging auf, die Maßlinien standen, die Leiste
+    sagte „Übernehmen oder mit Esc die Werte bearbeiten" — und *Übernehmen* war
+    grau (Fund des Reviews, 11.09.2026). Ein Text, der etwas verspricht, das
+    die Oberfläche nicht einlöst, ist schlimmer als kein Text.
+
+    Geprüft wird deshalb bis zum Ende: Fläche, Werkzeug **und** der Knopf.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "resize_hole", (
+            "ein angeklicktes Loch bringt seine Maße von selbst ins Bild"
+        )
+        flow = dialog.placement_flow
+        assert flow.active and flow._surface is not None, "die Trägerfläche steht"
+        assert flow._tool_context is not None, "und ihr Werkzeugkörper auch"
+        assert flow._accept.isEnabled(), "sonst verspricht die Leiste etwas, das nicht geht"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_the_measures_start_once_per_chosen_feature(qt_app: QApplication) -> None:
+    """Der Dialog kommt einmal je Auswahl — nicht nach jedem Neuaufbau.
+
+    Das Panel füllt sich auch nach der eigenen Operation wieder, weil die
+    Auswahl stehen bleibt; ohne Merker ging der Dialog nach jedem Übernehmen
+    sofort neu auf (Robert, 10.09.2026: „bei dem bohrung ändern kommt der
+    dialog auch immer wieder").
+
+    **Und die Gegenprobe steht dabei:** Eine Geste im Bild löscht den Merker,
+    denn danach will man sehen, wo das Merkmal jetzt sitzt.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    window = _window_with_a_renderer()
+    try:
+        _, hole = _a_selected_hole(window)
+        assert window._measured_for == hole, "der Merker steht am gewählten Merkmal"
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        # Das Fenster leert seine Buchhaltung erst, wenn Qt das
+        # ``finished``-Signal zustellt — gewartet wird auf die Sache, nicht auf
+        # eine Zahl von Durchläufen.
+        for _ in range(50):
+            if window._op_dialog is None:
+                break
+            QApplication.processEvents()
+        assert window._op_dialog is None, "der erste Dialog ist wirklich zu"
+        assert window._measured_for == hole, "der Merker überlebt das Zumachen"
+
+        # **Dasselbe Merkmal noch einmal — und es bleibt bei nichts.** Gefragt
+        # wird die Buchhaltung des Fensters: `isHidden()` beantwortet
+        # Sichtbarkeit offscreen falsch, und ein abgewiesener Dialog lebt bis zu
+        # seinem `deleteLater` im Widgetbaum weiter (`.claude/rules/ansicht.md`,
+        # „Qt lügt vor dem Anzeigen").
+        result = window.session.evaluate_now()
+        _object_id, entry = next(iter(result.scene.objects.items()))
+        window._measure_in_the_view(entry.features[hole])
+        QApplication.processEvents()
+        assert window._op_dialog is None, "derselbe Aufbau bringt keinen zweiten Dialog"
+
+        # Und nach einer Geste im Bild steht er wieder zur Verfügung — der
+        # Merker fällt in `_feature_step`, also bei jedem Zug am Griff.
+        window._measured_for = ""
+        window._measure_in_the_view(entry.features[hole])
+        QApplication.processEvents()
+        assert window._op_dialog is not None, "nach einer Geste im Bild stehen die Maße wieder da"
+        assert window._op_dialog.spec.name == "resize_hole"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
+    """Steht ein Dialog offen, gehört der Klick ihm — nicht dem Selbststart.
+
+    §18.5 sagt zu: Ein Klick auf ein Merkmal ist dann eine **Eingabe**.
+    `run_operation` verwirft aber jeden offenen Operationsdialog, und der
+    Selbststart lief darüber — der Dialog, den der Kunde gerade beantworten
+    wollte, war weg, samt seiner getippten Werte (Fund des Reviews,
+    11.09.2026).
+    """
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import OperationDialog
+
+    window = _window_with_a_renderer()
+    try:
+        window.open_path(MESHES / "plate_holes.stl")
+        window.session.wait_for_idle()
+        result = window.session.evaluate_now()
+        object_id, entry = next(iter(result.scene.objects.items()))
+        hole = next(
+            identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+        )
+        window.object_tree.select_object(object_id)
+        QApplication.processEvents()
+
+        # Ein fremder Dialog, der auf ein Merkmal wartet.
+        window.run_operation(REGISTRY.get("countersink_hole"))
+        QApplication.processEvents()
+        assert window._op_dialog is not None, "der Dialog steht"
+        assert window._op_dialog.spec.name == "countersink_hole"
+
+        window.object_tree.select_feature(object_id, hole)
+        window.session.wait_for_idle()
+        for _ in range(40):
+            QApplication.processEvents()
+
+        danach = window._op_dialog
+        assert danach is not None and danach.spec.name == "countersink_hole", (
+            f"der offene Dialog überlebt den Klick nicht: {danach}"
+        )
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()

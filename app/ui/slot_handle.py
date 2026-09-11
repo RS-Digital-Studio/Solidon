@@ -256,8 +256,21 @@ class SlotHandle:
         self.pressing = False
 
         self._knobs: list[Item] = []
+        self._built_seats: list[Vec3] = []
+        """Wo die zwei Zylinder **gebaut** wurden.
+
+        Der Bezug jedes Versatzes, und er gehört der Geometrie und nicht dem
+        Zug: ``Item.set_position`` verschiebt gegen das, was einmal in den
+        Puffer geschrieben wurde. Gerechnet wurde er bis zum 10.09.2026 gegen
+        ``_start_length``/``_start_angle`` — den Stand beim **Drücken**. Beim
+        ersten Zug ist das dasselbe, beim zweiten nicht mehr: Der Bezug wandert
+        mit, der Puffer bleibt, und die Knöpfe laufen aus dem Umriss heraus, die
+        beiden in entgegengesetzte Richtungen (Robert: „wenn ich das langloch
+        ziehe driften die ziehpunkte für das langloch ab … sie bewegen sich
+        entgegengesetzt")."""
         for index in range(2):
             seat = self._knob_seat(index, self.length, self.angle)
+            self._built_seats.append(seat)
             vertices, faces = shapes.cylinder(
                 seat,
                 tuple(self._axis),
@@ -440,8 +453,7 @@ class SlotHandle:
         """Knöpfe an ihre neue Stelle, Umriss auf die neue Form."""
         for index, item in enumerate(self._knobs):
             seat = np.asarray(self._knob_seat(index, self.length, self.angle), dtype=float)
-            start = np.asarray(self._knob_seat(index, self._start_length, self._start_angle))
-            offset = seat - start
+            offset = seat - np.asarray(self._built_seats[index], dtype=float)
             item.set_position((float(offset[0]), float(offset[1]), float(offset[2])))
         points = slot_outline(self._centre, self._axis, self._diameter, self.length, self.angle)
         if len(points) < 2:

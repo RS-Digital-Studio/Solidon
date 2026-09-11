@@ -200,6 +200,17 @@ class Gizmo:
         return self._arrow_length
 
     @property
+    def reach(self) -> float:
+        """Wie weit der Griff um seinen Ursprung greift — Pfeil oder Ring, was weiter ist.
+
+        Wer etwas über die Ansicht legt, muss wissen, wo der Griff liegt: Ein
+        Qt-Widget darüber nimmt die Zeigerereignisse an, und der Griff ist dann
+        sichtbar und tot (Robert, 10.09.2026: „ich kann die pfeile und das
+        drehen nicht mehr bedienen"). Der Ring ist der weitere von beiden.
+        """
+        return max(self._arrow_length, self._ring_radius)
+
+    @property
     def axes(self) -> np.ndarray:
         return self._axes.copy()
 

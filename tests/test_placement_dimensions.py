@@ -237,6 +237,58 @@ def test_dimension_fields_do_not_overlap_at_zoomed_view_edges(
         viewport.close()
 
 
+def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplication) -> None:
+    """Pfeile und Ringe bleiben greifbar — kein Feld liegt über dem Griff.
+
+    Ein Qt-Widget über der Renderfläche nimmt die Zeigerereignisse an, und die
+    Vorfahrt in ``Viewport._on_pointer`` kommt gar nicht erst zum Zug: Der Griff
+    ist dann sichtbar und tot. Gemeldet an einer angeklickten Bohrung, deren
+    Maße genau dort standen, wo der Griff hängt (Robert, 10.09.2026: „ich kann
+    die pfeile und das drehen nicht mehr bedienen").
+
+    Die Gegenprobe dazu ist der zweite Teil: Ohne gemeldeten Griff darf dieselbe
+    Fläche belegt werden — sonst prüft der Test eine Anordnung und keine Regel.
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 6.0, "bottom")
+    try:
+        # Mitten ins Bild, sonst klemmt der Rand die Felder ohnehin weg und die
+        # Gegenprobe unten misst die Bildgrenze statt der Regel.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 6.0,
+            300 + (point[1] - 10) * 6.0,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        widgets = [*flow._measures, *flow._centre_measures, flow._centre]
+        frei = [widget.geometry() for widget in widgets]
+
+        viewport.handle = ((10.0, 10.0, 0.0), 30.0)
+        flow.redraw()
+        qt_app.processEvents()
+        mitte = viewport.renderer.world_to_display((10.0, 10.0, 0.0))
+        rand = viewport.renderer.world_to_display((40.0, 10.0, 0.0))
+        weite = round(math.hypot(rand[0] - mitte[0], rand[1] - mitte[1]))
+        griff = QRect(
+            round(mitte[0]) - weite, round(mitte[1]) - weite, 2 * weite + 1, 2 * weite + 1
+        )
+        for widget in widgets:
+            assert not widget.geometry().intersects(griff), (
+                widget.objectName(),
+                widget.geometry(),
+                griff,
+            )
+
+        assert any(rechteck.intersects(griff) for rechteck in frei), (
+            "ohne gemeldeten Griff lagen die Felder gar nicht dort — der Test misst nichts"
+        )
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
 def test_a_stale_tool_context_hides_the_ghost_and_disables_accept(qt_app: QApplication) -> None:
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     try:

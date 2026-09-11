@@ -165,10 +165,11 @@ class _Dimensions(QWidget):
         stroker = QPainterPathStroker()
         stroker.setWidth(6.0)  # Vier Pixel Unterlage und beidseitig ein Pixel Kantenglättung.
         ink = ink.united(stroker.createStroke(strokes))
-        for _start, end in self.leaders:
-            marker = QPainterPath()
-            marker.addEllipse(end, 4.0, 4.0)
-            ink = ink.united(marker)
+        for start, end in self.leaders:
+            for point in (start, end):
+                marker = QPainterPath()
+                marker.addEllipse(point, 5.0, 5.0)
+                ink = ink.united(marker)
         if len(self.outline) >= 3:
             ring = QPainterPath()
             ring.addPolygon(QPolygonF(self.outline))
@@ -215,15 +216,24 @@ class _Dimensions(QWidget):
             painter.setPen(QPen(self.outline_colour, 2.0))
             painter.drawPolygon(ring)
         for start, end in self.leaders:
-            # Zuordnungslinien haben keine Maßpfeile. Die Endmarke verbindet
-            # ein verschobenes Feld eindeutig mit seiner wirklichen Maßlinie.
-            painter.setPen(QPen(backdrop, 3.0))
+            # Zuordnungslinien haben keine Maßpfeile. **Eine Marke an jedem
+            # Ende**, gefüllt und beide gleich groß: Der Strich verbindet dann
+            # sichtbar zwei Punkte, statt irgendwo am Feld anzusetzen. Bis zum
+            # 10.09.2026 war er ein Punktstrich von einem Bildpunkt mit einer
+            # hohlen Marke — im Fenster kaum zu finden, und bei fünf Feldern
+            # nebeneinander gehörte jede Zahl zu jeder Linie (Robert:
+            # „es war bisschen undeutlich welcher wert zu welcher linie
+            # gehört"). Gestrichelt statt gepunktet aus demselben Grund; sie
+            # bleibt damit von einer Maßlinie unterscheidbar, die durchgezogen
+            # ist und Pfeile trägt (Regel 18 — nicht die Farbe trennt sie).
+            painter.setPen(QPen(backdrop, 4.0))
             painter.drawLine(start, end)
-            painter.setPen(QPen(colour, 1.0, Qt.PenStyle.DotLine))
+            painter.setPen(QPen(colour, 1.5, Qt.PenStyle.DashLine))
             painter.drawLine(start, end)
-            painter.setPen(QPen(colour, 1.0))
-            painter.setBrush(backdrop)
-            painter.drawEllipse(end, 3.0, 3.0)
+            painter.setPen(QPen(backdrop, 1.5))
+            painter.setBrush(colour)
+            for point in (start, end):
+                painter.drawEllipse(point, 3.5, 3.5)
         for start, end in self.lines:
             # Eine helle/dunkle Unterlage hält dieselbe Linie auf dem Modell
             # und auf dem Hintergrund lesbar, ohne Farbe als einzige Kodierung.
@@ -293,6 +303,19 @@ class PlacementFlow(QObject):
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
         #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
         #: seitenansicht sehen und dann die tiefe runterziehen").
+        self._seated_at_feature = False
+        """Ob die Stelle einem vorhandenen Merkmal gehört.
+
+        **Dann zielt der Zeiger nicht.** Wer ein Loch anklickt, will seine Maße
+        sehen und ändern; die Stelle steht schon, und eine Mausbewegung darüber
+        verschob sie samt aller Maßlinien unter der Hand (Robert, 11.09.2026:
+        „die maße im viewport gehen beim bearbeiten von dem loch jetzt von dem
+        mauszeiger aus, wir wollen aber bei der bohrung das mittelloch").
+
+        Der Merker beginnt beim Rechnen der Trägerfläche und fällt erst bei
+        einem **Klick** — der ist die ausdrückliche Ansage, das Loch woanders
+        hinzusetzen. Beim Setzen einer neuen Bohrung wird er nie gesetzt, dort
+        ändert sich nichts."""
         self._deepening = False
         #: Ob die Tiefe angehalten ist. Der Klick in der Tiefenstufe friert sie
         #: ein, damit die Maus sie nicht weiter verstellt, während man zum Knopf
@@ -601,6 +624,27 @@ class PlacementFlow(QObject):
         """Linksklick gehört der Platzierung, alle Kameragesten bleiben frei."""
         if not self.active:
             return False
+        if self._seated_at_feature:
+            if event.kind == "move" and not event.buttons:
+                # **Die Stelle steht am Merkmal, nicht am Zeiger** — aber nur
+                # die freie Bewegung gehört dieser Zusage. Ein Zug mit
+                # gedrückter Taste ist eine Kamerageste, und die bleibt frei
+                # (Regel dieser Datei: „Was die Platzierung nicht nimmt,
+                # gehört der Kamera"). Ohne die Tastenfrage waren Drehen und
+                # Schieben mit rechter und mittlerer Taste tot, solange eine
+                # Bohrung gewählt war.
+                return True
+            if event.kind == "release" and event.button == "left":
+                # **Ein Klick ist die ausdrückliche Ansage, woanders
+                # hinzuwollen.** Danach zielt wieder der Zeiger, wie beim
+                # Setzen einer neuen Bohrung — und die Geste ist damit
+                # verbraucht: Ohne das ``return`` fiele sie in die
+                # ``confirm``-Kette weiter unten und **übernähme** die
+                # Platzierung, statt sie neu auszurichten. Der eingefrorene
+                # Zustand geht mit, sonst bliebe die alte Stelle stehen.
+                self._seated_at_feature = False
+                self._frozen = False
+                return True
         if event.kind == "leave":
             return True
         confirm = event.kind == "release" and event.button == "left"
@@ -830,6 +874,15 @@ class PlacementFlow(QObject):
             return
         stamp = self._serial
         object_id = entry.id
+        # **Hier zielt der Zeiger nicht, und zwar von jetzt an.** Zwei Gründe,
+        # und der zweite ist der dauerhafte: Bis die Fläche gerechnet ist,
+        # verwirft jede Mausbewegung sie mit „Auf eine sichtbare Oberfläche
+        # zeigen" wieder (gefunden am laufenden Fenster, 10.09.2026: Dialog
+        # offen, Leiste „zeigen", kein Maß im Bild). Und danach gehört die
+        # Stelle dem Merkmal — sie steht schon, offen sind die **Maße**. Wer
+        # sie doch woanders hinsetzen will, klickt; siehe
+        # :attr:`_seated_at_feature`.
+        self._seated_at_feature = True
 
         def compute() -> Any:
             mesh = as_mesh_data(entry.mesh)
@@ -846,7 +899,9 @@ class PlacementFlow(QObject):
                 # **Kein Fehler, sondern ein Rückfall auf den gewohnten Weg.**
                 # Eine Verrundung hat keine Trägerfläche, und ein Merkmal auf
                 # einer gekrümmten Fläche gibt keine ebenen Maße her; dort
-                # bleibt es beim Zeigen, statt eine Absage zu melden.
+                # bleibt es beim Zeigen, statt eine Absage zu melden — und dann
+                # zielt wieder der Zeiger.
+                self._seated_at_feature = False
                 return
             self._prepared, self._surface = value
             self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
@@ -857,7 +912,13 @@ class PlacementFlow(QObject):
             self._set_values()
             self._settle()
 
-        self.session.placement_async(compute, done, lambda _detail: None)
+        def failed(_detail: str) -> None:
+            # **Ohne Trägerfläche zielt wieder der Zeiger.** Eine Verrundung
+            # hat keine, und dort ist das Zeigen der Rückfall, nicht ein
+            # Fehler.
+            self._seated_at_feature = False
+
+        self.session.placement_async(compute, done, failed)
 
     def _invalid(self, message: str) -> None:
         self._surface = None
@@ -896,7 +957,16 @@ class PlacementFlow(QObject):
             for object_id, entry in result.scene.objects.items()
             if object_id in self.inputs_of()
         ]
-        if self.spec_of().name not in {"move_feature", "duplicate_feature"}:
+        # **Und *Zum Langloch ziehen* gehört dazu** (10.09.2026): Es sitzt auf
+        # einem Loch, das es schon gibt, führt dessen Mitte in x, y, z und
+        # bekommt damit dieselbe Platzierung wie *Bohrung setzen* — mit
+        # Maßfeldern zu Kanten und Mitten, und einer Änderung, die wirkt.
+        if self.spec_of().name not in {
+            "move_feature",
+            "duplicate_feature",
+            "slot_hole",
+            "resize_hole",
+        }:
             chosen = result.scene.objects.get(self._object_id)
             return chosen or (candidates[0] if len(candidates) == 1 else None), None
         feature_id = self.dialog.values().get("at_feature")
@@ -1868,11 +1938,22 @@ class PlacementFlow(QObject):
         # deshalb aus der **projizierten** Ausdehnung des Werkzeugs; ohne
         # vorbereitetes Werkzeug bleibt es beim Mindestabstand.
         spot = screen(surface.point)
-        reach = SPACE
+        # **Und der Mindestabstand ist eine Zeilenhöhe, keine vier Bildpunkte.**
+        # Bei einem Merkmal, das schon sitzt, fallen alle Bezugspunkte auf seine
+        # Mitte: Die Abstände zur eigenen Stelle sind null, und die drei Felder
+        # standen als Stapel auf dem Loch (Robert, 10.09.2026: „dass die maße …
+        # ein bisschen entfernt stehen ähnlich wie die angaben mit dem
+        # volumen"). Gemessen wird in Zeilenhöhen und nicht in Pixeln, damit der
+        # Abstand bei jeder Anzeigeskalierung und Schriftgröße gleich aussieht.
+        room_around = max(SPACE, self._centre.sizeHint().height() * 2)
+        reach = room_around
         if self._tool_context is not None:
             half = float(np.max(self._tool_context.mesh.bounds.size[:2])) / 2.0
             edge = screen(tuple(point + np.asarray(surface.frame.x_axis) * half))
-            reach = max(SPACE, round(math.hypot(edge.x() - spot.x(), edge.y() - spot.y())))
+            reach = max(
+                room_around,
+                round(math.hypot(edge.x() - spot.x(), edge.y() - spot.y())) + ROOMY,
+            )
         # Geklemmt, bevor daraus ein ``QRect`` wird: Eine Projektion aus einer
         # sehr nahen Kamera liefert Werte jenseits von int32, und die Ausnahme
         # führe aus einem Qt-Slot heraus.
@@ -1883,6 +1964,28 @@ class PlacementFlow(QObject):
             1,
         ).adjusted(-reach, -reach, reach, reach)
         occupied: list[QRect] = [blocked]
+        # **Der Bewegungsgriff bleibt frei.** Er hängt am selben Merkmal und
+        # greift weiter als das Werkzeug; ein Feld darüber nimmt die
+        # Zeigerereignisse an, und dann sind Pfeile und Ringe sichtbar und tot
+        # (Robert, 10.09.2026). Als eigenes Rechteck und nicht als größeres
+        # ``reach``, weil der Griff an der Mitte der Bohrung sitzt und der
+        # Setzpunkt an ihrer Mündung.
+        handle = self.viewport.gizmo_reach()
+        if handle is not None:
+            origin, span = handle
+            middle = screen(origin)
+            rim = screen(tuple(np.asarray(origin) + np.asarray(surface.frame.x_axis) * span))
+            around = max(
+                SPACE, round(math.hypot(rim.x() - middle.x(), rim.y() - middle.y())) + ROOMY
+            )
+            occupied.append(
+                QRect(
+                    max(bounds.left() - around, min(round(middle.x()), bounds.right() + around)),
+                    max(bounds.top() - around, min(round(middle.y()), bounds.bottom() + around)),
+                    1,
+                    1,
+                ).adjusted(-around, -around, around, around)
+            )
         positions: dict[QWidget, QRect] = {}
         for widget, wanted, _line in sorted(pending, key=lambda entry: -entry[0].width()):
             width, height = widget.width(), widget.height()

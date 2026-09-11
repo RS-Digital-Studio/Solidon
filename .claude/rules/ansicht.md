@@ -838,9 +838,67 @@ Leisten, die dasselbe tun, gehören an dieselbe Stelle —, und erst *Übernehme
 meldet `slotDragged`. Eingabetaste übernimmt, Escape verwirft (`_drag_kind`
 bleibt dafür auf `"slot"`).
 
+**Der Versatz eines Knopfes zählt gegen die gebaute Geometrie.**
+`Item.set_position` verschiebt gegen das, was einmal in den Puffer geschrieben
+wurde; gerechnet wurde er aus dem Stand beim **Drücken**. Beim ersten Zug ist
+das dasselbe, ab dem zweiten wandert der Bezug mit, während der Puffer bleibt
+— die Knöpfe laufen aus dem Umriss heraus, und weil ihr `reach` das Vorzeichen
+tauscht, in entgegengesetzte Richtungen. `SlotHandle._built_seats` hält, wo sie
+gebaut wurden.
+
 **`SlotBar.active` ist der Zustand, nicht `isVisible()`.** Qt beantwortet die
 Sichtbarkeit falsch, solange nichts gezeigt wurde — offscreen also immer. Wer
 eine Bedingung daran hängt, prüft die Testumgebung statt der Sache.
+
+### Ein Griff steht vor allem, was über der Ansicht liegt (11.09.2026)
+
+`Viewport._on_pointer` hat eine feste Vorfahrt, und sie ist am 11.09.2026 um
+eine Stufe gewachsen: **Griffe, dann eine laufende Platzierung, dann der
+Zeiger, zuletzt die Kamera.** Die Platzierung stand davor und nahm jede
+Mausbewegung als Zielversuch — ein Griff sah danach kein `move` mehr, seine
+Hover-Auswahl blieb leer, und sein `press` fiel an `self._selected is None`
+durch. Pfeile, Ringe und die zwei Knöpfe am Loch waren sichtbar und tot,
+sobald eine Bohrung gewählt war und die Platzierung von selbst begann.
+
+Verschluckt wird dabei nichts: Ein Griff nimmt ein `move` nur, wenn er
+gedrückt gehalten wird, und ein `press` nur über einem getroffenen Pfeil.
+
+**Und die zweite Ebene ist Qt selbst.** Was als Widget über der Renderfläche
+liegt, bekommt die Zeigerereignisse vor jedem `PointerEvent` — die Vorfahrt
+oben kommt dann gar nicht zum Zug. Wer etwas darüberlegt, fragt
+`Viewport.gizmo_reach()` und hält den Platz frei; `PlacementFlow` tut das für
+seine Maßfelder.
+
+### Ein Zug an einer Form schreibt erst, wenn er übernommen wird
+
+Der Langlochgriff und die Flächenplatzierung meinen dasselbe Loch und etwas
+Verschiedenes damit: der eine ein Langloch, die andere eine runde Bohrung.
+Nebeneinander offen nahm der eine zurück, was der andere gerade getan hatte.
+
+**Gemeldet wird deshalb das Übernehmen und nicht das Ziehen**
+(`Viewport.slotStarted`). Solange die Leiste offen ist, ist nichts geschehen
+(Regel 2) — und die Maße der Platzierung sollen währenddessen im Bild stehen.
+Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
+
+### Wo etwas schon sitzt, zielt der Zeiger nicht
+
+`PlacementFlow._seated_at_feature`: Beginnt die Platzierung an einem
+vorhandenen Merkmal, gehört die Stelle ihm. Eine Mausbewegung darüber verschob
+sie samt aller Maßlinien unter der Hand, und die Abstände liefen vom Zeiger
+statt von der Bohrungsmitte. Ein **Klick** ist die ausdrückliche Ansage, das
+Loch woanders hinzusetzen; danach zielt wieder der Zeiger. Beim Setzen einer
+neuen Bohrung wird der Merker nie gesetzt.
+
+**Geschluckt wird nur die freie Bewegung.** Ohne die Frage nach
+`event.buttons` nahm die Zusage auch jeden Kamerazug mit — Drehen und Schieben
+mit rechter und mittlerer Taste waren tot, solange eine Bohrung gewählt war.
+Was die Platzierung nicht braucht, gehört der Kamera; das ist dieselbe Regel,
+die für die linke Taste seit je gilt.
+
+**Und der Klick, der neu zielt, ist verbraucht.** Er hebt zusätzlich den
+eingefrorenen Zustand auf und kehrt sofort zurück. Ohne das fiele er in die
+`confirm`-Kette und **übernähme** die Platzierung, statt sie neu auszurichten —
+auch der Klick daneben, der nach §18.5 die Auswahl aufheben soll.
 
 ### Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug (10.09.2026)
 

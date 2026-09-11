@@ -716,69 +716,44 @@ def test_the_knobs_leave_the_hole_they_sit_on_clickable(qt_app: object) -> None:
         handle.remove()
 
 
-def test_the_drag_shows_the_distances_to_the_edges(qt_app: object) -> None:
-    """Beim Ziehen stehen die Maße im Bild — von beiden Enden zur Kante.
+def test_the_knobs_stay_on_the_outline_across_two_drags() -> None:
+    """Der Versatz eines Knopfes zählt gegen die gebaute Geometrie, nicht gegen den Zug.
 
-    „die maße beim langloch ziehen und verschieben sind immer noch nicht da zu
-    anderen merkmalen kanten mitten wie beim bohrung setzen" (Robert,
-    10.09.2026). Gerechnet wird die Fläche im Fenster (``seat_of``), gezeichnet
-    hier: je Ende eine Linie zur nächsten Kante, mit Zahl und Pfeilspitze.
+    ``Item.set_position`` verschiebt gegen das, was einmal in den Puffer
+    geschrieben wurde. Gerechnet wurde der Bezug bis zum 10.09.2026 aus
+    ``_start_length``/``_start_angle`` — und die setzt der **zweite** Druck neu.
+    Beim ersten Zug ist das dasselbe, danach nicht mehr: Der Bezug wandert mit,
+    der Puffer bleibt, und die Knöpfe laufen aus dem Umriss heraus — die
+    beiden in entgegengesetzte Richtungen, weil ihr ``reach`` das Vorzeichen
+    tauscht (Robert: „wenn ich das langloch ziehe driften die ziehpunkte für
+    das langloch ab … sie bewegen sich entgegengesetzt").
 
-    Gemessen wird an einer Platte 60 x 40 mit einem Langloch bei (0, 0): Die
-    Zahlen sind die Abstände seiner Enden, nicht die seiner Mitte.
+    **Zwei Züge, und der zweite ist die Messung.** Der erste hält beide Wege
+    zusammen und blieb auch mit dem Fehler grün; ein Test, der nur ihn fährt,
+    misst nichts. Gemessen wird die Stelle **im Bild** — gebauter Sitz plus
+    Versatz — gegen das, was der Griff selbst als Sitz nennt.
     """
-    import trimesh
+    renderer = RecordingRenderer(size=(800, 600))
+    handle = a_handle(renderer, [])
+    gebaut = [np.asarray(seat, dtype=float) for seat in handle._built_seats]
 
-    from app.core.geom.prepare import drill
-    from app.core.knowledge import profiles
-    from app.core.scene import EvaluationResult, placement
-    from app.ui.viewport import Viewport
+    def zieh(bis: float) -> None:
+        seat = renderer.world_to_display(handle.knob_seats[0])
+        renderer.item_picks[(round(seat[0]), round(seat[1]))] = handle.knobs[0]
+        handle.handle(PointerEvent("move", int(seat[0]), int(seat[1])))
+        handle.handle(PointerEvent("press", int(seat[0]), int(seat[1]), button="left"))
+        ziel = renderer.world_to_display((bis, 0.0, 5.0))
+        handle.handle(PointerEvent("move", int(ziel[0]), int(ziel[1])))
+        handle.handle(PointerEvent("release", int(ziel[0]), int(ziel[1]), button="left"))
 
-    load_operations()
-    profile = profiles.make_profile("centauri-carbon-2", "petg")
-    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
-    mesh = drill(
-        plate,
-        profile=profile,
-        position=(0.0, 0.0, 5.0),
-        axis="z",
-        diameter=6.0,
-        compensate=False,
-        slot_length=20.0,
-    ).mesh
-    found = detect(mesh)
-    slot = next(entry for entry in found.values() if entry.kind == "slot")
-    result = EvaluationResult(
-        scene=Scene(
-            objects={"obj_1": SceneObject(id="obj_1", name="Platte", mesh=mesh, features=found)}
-        )
-    )
-
-    viewport = Viewport()
     try:
-        renderer = RecordingRenderer(size=(800, 600))
-        viewport.renderer = renderer
-        viewport.show_scene(result)
-        viewport.select("obj_1")
-        viewport.select_feature(slot.id)
-        viewport.set_gizmo(False)
-        assert viewport._slot_handle is not None
-
-        seat = placement.seat_of(mesh, slot, found)
-        assert seat is not None, "ohne Trägerfläche prüft der Test nichts"
-        viewport.set_slot_seat(seat)
-
-        namen = renderer.names()
-        assert any(name.startswith("slot_measure:") for name in namen), "die Maßlinien stehen"
-        assert any(name.startswith("slot_measure_arrow:") for name in namen), (
-            "und eine Pfeilspitze sagt, wohin sie zeigen"
-        )
-        zahlen = [text for texts in renderer.labelled for text in texts if "mm" in text]
-        assert zahlen, f"und ihre Zahlen: {renderer.labelled}"
-
-        # Und sie gehen mit dem Zug: ohne Griff keine Maße.
-        viewport.select_feature(None)
-        assert not viewport._slot_measure_actors
+        for nummer, bis in enumerate((12.0, 25.0), start=1):
+            zieh(bis)
+            for index, item in enumerate(handle.knobs):
+                im_bild = gebaut[index] + np.asarray(item.position(), dtype=float)
+                soll = np.asarray(handle.knob_seats[index], dtype=float)
+                assert np.allclose(im_bild, soll, atol=1e-9), (
+                    f"Zug {nummer}, Knopf {index}: im Bild {im_bild}, gemeint {soll}"
+                )
     finally:
-        viewport.renderer = None
-        viewport.deleteLater()
+        handle.remove()

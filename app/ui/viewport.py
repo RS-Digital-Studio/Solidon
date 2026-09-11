@@ -128,7 +128,7 @@ from app.ui.render.gizmo import ARROW_SHARE, Gizmo
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_bar import SlotBar
-from app.ui.slot_handle import SHORTEST_SHARE, SlotHandle, plane_axes
+from app.ui.slot_handle import SHORTEST_SHARE, SlotHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
 
@@ -3431,6 +3431,20 @@ class Viewport(QWidget):
     Durchmesser aus dem Merkmal selbst und nimmt genau diese beiden entgegen.
     Der Winkel zählt gegen dieselbe Rahmenachse wie der geschnittene Umriss
     (:func:`app.ui.slot_handle.dragged_slot`)."""
+    slotStarted = Signal()
+    """Der Zug am Langlochgriff ist **übernommen** — das Loch wird länger.
+
+    **Zwei Wege dürfen nicht auf dasselbe Loch schreiben.** An einem gewählten
+    Merkmal beginnt die Flächenplatzierung von selbst, und deren Dialog
+    schneidet eine **runde** Bohrung — wer danach dort übernahm, bekam sein
+    Langloch zurückverwandelt (Robert, 10.09.2026: „wenn ich oben im dialog
+    bohrung ändern klicke wird daraus wieder das normale loch").
+
+    **Gesendet wird beim Übernehmen und nicht beim Ziehen**, und das ist die
+    Korrektur vom selben Tag: Zuerst stand es am Anfang des Zugs und schloss
+    damit die Maße weg, die währenddessen im Bild stehen sollen („ne maße sind
+    nicht wieder da"). Solange die Leiste offen ist, ist noch nichts geschehen
+    (Regel 2) — die zwei Wege stören einander erst, wenn einer schreibt."""
     sketchMenuAt = Signal(object, int, int)
     """Ein Rechtsklick im Skizzenmodus — trägt den Ebenenpunkt in Millimetern
     und die Fensterstelle für das Menü. Ohne diese Naht lief der Rechtsklick
@@ -3874,16 +3888,6 @@ class Viewport(QWidget):
         self._scale_handle: ScaleHandle | None = None
         """Der Würfel zum Skalieren (§18.11) — nur am Objekt-Gizmo. Eine
         Fläche kennt nur vor und zurück, sie hat keine Größe zu ändern."""
-        self._slot_seat: Any = None
-        """Die vorbereitete Trägerfläche des gewählten Lochs — für seine Maße.
-
-        Gerechnet wird sie im Arbeiter (`MainWindow._prepare_slot_seat`):
-        ``prepare_surface`` legt eine GEOS-Fläche über alle Dreiecke der
-        Fläche, und das gehört bei einem großen Netz nicht in den Qt-Thread
-        (§2.8). Hier steht nur das Ergebnis."""
-        self._slot_measure_actors: list[Any] = []
-        """Linien und Zahlen der Maße am Zug — sie gehören dem Zug, nicht der
-        Szene, und gehen mit ihm."""
         self._slot_target = ""
         """Das Loch, das der laufende Zug meint — gemerkt beim Loslassen.
 
@@ -4383,33 +4387,44 @@ class Viewport(QWidget):
     def _on_pointer(self, event: PointerEvent) -> None:
         """Jede Zeigergeste des Renderers, in fester Vorfahrt.
 
-        Zuerst der Zeiger selbst (Hover, Skizzenvorschau), dann die Griffe —
-        Vorschaugriff, Bewegungsgriff und Skalierwürfel sagen mit ``True``,
-        dass die Geste ihnen gehört —, zuletzt die Kameraführung. Was ein
-        Griff nimmt, dreht keine Kamera; das ist die ganze Vorfahrt, und sie
-        steht an einer Stelle statt in drei Beobachtern am Interactor wie bis
-        zum 05.09.2026.
+        Zuerst die Griffe — Vorschaugriff, Bewegungsgriff, Skalierwürfel und
+        Langlochgriff sagen mit ``True``, dass die Geste ihnen gehört —, dann
+        eine laufende Platzierung, dann der Zeiger selbst (Hover,
+        Skizzenvorschau), zuletzt die Kameraführung. Was ein Griff nimmt, dreht
+        keine Kamera; das ist die ganze Vorfahrt, und sie steht an einer Stelle
+        statt in drei Beobachtern am Interactor wie bis zum 05.09.2026.
 
         Unter den Griffen ist die Reihenfolge ohne Wirkung — sie schließen
         einander aus, weil :meth:`set_preview_gizmo` den Griff der Auswahl
         abnimmt, solange eine Vorschau greifbar ist. Was zählt, ist, dass alle
-        drei **vor** der Kamera stehen.
+        vier **vor** der Kamera stehen.
+
+        **Und vor der Platzierung**, seit dem 10.09.2026. Sie stand davor und
+        nahm jede Mausbewegung als Zielversuch an; ein Griff sieht danach kein
+        ``move`` mehr, seine Hover-Auswahl bleibt leer, und ``press`` fällt an
+        ``self._selected is None`` durch — Pfeile, Ringe und die zwei Knöpfe
+        am Loch waren sichtbar und tot, sobald eine Bohrung gewählt war und die
+        Platzierung von selbst begann (Robert: „das verschieben und drehen über
+        den viewport gizmo klappt noch nicht es passiert garnichts", „das
+        verschieben von dem L und R auch nicht"). Sie verschluckt dabei nichts:
+        Ein Griff nimmt ein ``move`` nur, wenn er wirklich gedrückt gehalten
+        wird, und ein ``press`` nur über einem getroffenen Pfeil.
 
         Wer hier einen Griff vergisst, baut ihn sichtbar und tot: Er steht im
         Bild, nimmt aber nichts an, und jede Geste fällt durch zur Kamera.
         Genau das tat der Vorschaugriff bis zum 09.09.2026 (Befund Robert:
         „wenn ich verschieben will verschiebe ich nur die Scene").
         """
+        for handle in (self._preview_gizmo, self._gizmo, self._scale_handle, self._slot_handle):
+            if handle is not None and handle.handle(event):
+                self._queue_feature_label_layout()
+                return
         if self._placement_pointer is not None and self._placement_pointer(event):
             return
         if event.kind == "move":
             self._note_pointer(event.x, event.y)
         elif event.kind == "leave":
             self._forget_pointer()
-        for handle in (self._preview_gizmo, self._gizmo, self._scale_handle, self._slot_handle):
-            if handle is not None and handle.handle(event):
-                self._queue_feature_label_layout()
-                return
         if self._navigator is not None:
             self._navigator.handle(event)
         if event.kind in ("move", "wheel"):
@@ -10056,6 +10071,25 @@ class Viewport(QWidget):
         self._grid_step = grid_step
         self._angle_step = angle_step
 
+    def gizmo_reach(self) -> tuple[Vec3, float] | None:
+        """Wo der Bewegungsgriff sitzt und wie weit er greift — sonst ``None``.
+
+        **Wer etwas über die Ansicht legt, hält den Griff frei.** Ein Qt-Widget
+        über der Renderfläche nimmt die Zeigerereignisse an, und die Vorfahrt
+        in :meth:`_on_pointer` kommt gar nicht mehr zum Zug: Der Griff ist dann
+        sichtbar und tot. Gemeldet wurde das an den Maßfeldern der
+        Flächenplatzierung, die bei einem Merkmal genau dort stehen, wo der
+        Griff hängt (Robert, 10.09.2026: „ich kann die pfeile und das drehen
+        nicht mehr bedienen").
+
+        Als eigene Auskunft und nicht als Blick in den Renderer — offscreen
+        gibt es keinen, und ein Test, der sich dort überspringt, prüft nie
+        etwas.
+        """
+        if self._gizmo is None:
+            return None
+        return self._gizmo.origin, self._gizmo.reach
+
     def gizmo_target(self) -> Feature | None:
         """Die Fläche, an der der Gizmo hängt — oder ``None`` für das Objekt.
 
@@ -10110,14 +10144,6 @@ class Viewport(QWidget):
         if feature.kind == "face":
             return feature if feature.params.get("normal") is not None else None
         return feature if feature.kind in movable_feature_kinds() else None
-
-    def slot_kinds(self) -> frozenset[str]:
-        """Welche Merkmalsarten den Langlochgriff tragen — für das Fenster.
-
-        Es rechnet die Trägerfläche nur dort, wo es einen Zug gibt, und fragt
-        dafür dieselbe Menge, aus der der Griff selbst entsteht.
-        """
-        return slot_feature_kinds()
 
     def slot_handle_feature(self) -> Feature | None:
         """Das gewählte Loch, an dem die Langlochknöpfe sitzen — sonst ``None``.
@@ -10233,162 +10259,6 @@ class Viewport(QWidget):
             self._attach_slot_handle(slotted)
         self._label_gizmo(actor)
 
-    #: Wie weit die Maßlinie vom Merkmal und von der Kante wegbleibt, im Maß
-    #: ihrer eigenen Länge.
-    #:
-    #: **Damit man das Modell sieht, auf das sie zeigt** (Robert, 10.09.2026:
-    #: „hier wäre auch noch ein pfeil auf die linie mit ein bisschen abstand
-    #: gut"). Eine Linie, die am Loch beginnt und an der Kante endet, klebt an
-    #: beidem; die Lücke lässt Rand und Öffnung frei, und die Pfeilspitze sagt,
-    #: wohin sie zeigt. Ein Zehntel je Seite, nach oben gedeckelt: an einem
-    #: langen Maß wären zehn Prozent ein Zentimeter Leere.
-    SLOT_MEASURE_GAP = 0.1
-    SLOT_MEASURE_GAP_MAX = 2.0
-
-    def set_slot_seat(self, seat: Any) -> None:
-        """Trägerfläche und Mündung des gewählten Lochs — oder ``None``.
-
-        Das Fenster rechnet beides im Arbeiter (``placement.seat_of``) und
-        reicht das Paar herein; hier wird nur gezeichnet. Ohne Fläche gibt es
-        keine Maße, und das ist die ehrliche Antwort: An einer Verrundung oder
-        auf einer gekrümmten Fläche gibt es keine ebenen Kantenabstände.
-
-        **Die Mündung gehört dazu und ist nicht die Mitte.** Ein durchgehendes
-        Loch hat seine Mitte auf halber Tiefe — gemessen an einer 10 mm dicken
-        Platte fünf Millimeter **unter** der Fläche, und ``at_point`` lehnt
-        einen Punkt außerhalb seiner Ebene ab. Die Enden werden deshalb von der
-        Mündung aus abgetragen.
-        """
-        self._slot_seat = seat
-        self._draw_slot_measures()
-
-    def _drop_slot_measures(self) -> None:
-        """Nimmt Linien und Zahlen des Zugs aus dem Bild."""
-        if self.renderer is not None:
-            for actor in self._slot_measure_actors:
-                self.renderer.remove(actor)
-        self._slot_measure_actors.clear()
-
-    def _draw_slot_measures(self) -> None:
-        """Von beiden Enden des Lochs zur nächsten Kante — mit Zahl und Pfeil.
-
-        **Dieselben Maße wie beim Setzen einer Bohrung**, an einem Loch, das
-        schon da ist (Robert, 10.09.2026: „die maße beim langloch ziehen und
-        verschieben sind immer noch nicht da zu anderen merkmalen kanten
-        mitten wie beim bohrung setzen"). Gerechnet wird in Szenenkoordinaten
-        — dort liegt die Fläche —, gezeichnet in den Koordinaten des Bildes;
-        bei mehreren Platten sind das nicht dieselben (§25).
-
-        Beide Enden, nicht die Mitte: Ein Langloch wächst nach zwei Seiten, und
-        die Frage beim Ziehen lautet, ob es noch aufs Teil passt.
-        """
-        import numpy as np
-
-        from app.core.errors import ValidationError
-        from app.core.scene import placement
-
-        self._drop_slot_measures()
-        feature = self.slot_handle_feature()
-        if (
-            self.renderer is None
-            or self._slot_seat is None
-            or self._slot_handle is None
-            or feature is None
-            or self._selected is None
-        ):
-            return
-        prepared, mouth = self._slot_seat
-        centre = np.asarray(mouth, dtype=float)
-        axis = feature.params["axis"]
-        x_axis, y_axis = plane_axes(axis)
-        turn = math.radians(self._slot_handle.angle)
-        along = math.cos(turn) * x_axis + math.sin(turn) * y_axis
-        reach = self._slot_handle.length / 2.0
-        for index, side in enumerate((1.0, -1.0)):
-            end = centre + along * (reach * side)
-            try:
-                spot = placement.at_point(prepared, tuple(end))
-            except ValidationError, ValueError, ArithmeticError:
-                continue
-            for number, edge in enumerate(spot.edges):
-                foot = end - np.asarray(edge.inward, dtype=float) * edge.distance
-                gap = min(abs(edge.distance) * self.SLOT_MEASURE_GAP, self.SLOT_MEASURE_GAP_MAX)
-                direction = foot - end
-                span = float(np.linalg.norm(direction))
-                if span <= EPS_GEOM:
-                    continue
-                direction = direction / span
-                start = self.view_point_of(tuple(end + direction * gap), self._selected)
-                stop = self.view_point_of(tuple(foot - direction * gap), self._selected)
-                self._slot_measure_actors.append(
-                    self.renderer.add_lines(
-                        np.array([start, stop], dtype=float),
-                        name=f"slot_measure:{index}:{number}",
-                        colour=MEASURE_COLOUR,
-                        width=2.0,
-                        keep_in_front=True,
-                    )
-                )
-                self._slot_measure_actors.extend(self._measure_arrow(start, stop))
-                middle = (np.asarray(start, dtype=float) + np.asarray(stop, dtype=float)) / 2.0
-                self._slot_measure_actors.append(
-                    self.renderer.add_labels(
-                        np.array([middle], dtype=float),
-                        [length(abs(float(edge.distance)))],
-                        name=f"slot_measure_label:{index}:{number}",
-                        style=LabelStyle(
-                            text_colour=MEASURE_COLOUR,
-                            font_size=12,
-                            always_visible=True,
-                            show_points=False,
-                        ),
-                    )
-                )
-
-    def _measure_arrow(self, start: Vec3, stop: Vec3) -> list[Any]:
-        """Die Spitze am Ende einer Maßlinie — zwei Striche, keine Textur.
-
-        Sie sagt, **wohin** die Linie zeigt; ohne sie ist eine Strecke zwischen
-        zwei Lücken eine Linie ohne Richtung. Gezeichnet als Geometrie, damit
-        sie beim Drehen mitwandert (Regel 18: Form neben Farbe).
-        """
-        import numpy as np
-
-        if self.renderer is None:
-            return []
-        head = np.asarray(stop, dtype=float)
-        back = np.asarray(start, dtype=float) - head
-        span = float(np.linalg.norm(back))
-        if span <= EPS_GEOM:
-            return []
-        back = back / span
-        # Quer zur Linie, in der Ebene der Fläche: irgendeine Achse, die nicht
-        # auf ihr liegt, gekreuzt mit ihr.
-        aside = np.cross(back, np.array([0.0, 0.0, 1.0]))
-        if float(np.linalg.norm(aside)) <= EPS_GEOM:
-            aside = np.cross(back, np.array([0.0, 1.0, 0.0]))
-        aside = aside / float(np.linalg.norm(aside))
-        size = min(span * 0.25, 1.5)
-        wings = np.array(
-            [
-                head,
-                head + back * size + aside * size * 0.4,
-                head,
-                head + back * size - aside * size * 0.4,
-            ],
-            dtype=float,
-        )
-        return [
-            self.renderer.add_lines(
-                wings,
-                name=f"slot_measure_arrow:{len(self._slot_measure_actors)}",
-                colour=MEASURE_COLOUR,
-                width=2.0,
-                keep_in_front=True,
-                connected=False,
-            )
-        ]
-
     def _attach_slot_handle(self, feature: Feature) -> None:
         """Hängt die zwei Knöpfe an ein gewähltes Loch (§21.1).
 
@@ -10423,7 +10293,6 @@ class Viewport(QWidget):
             release_callback=self._on_slot_released,
             interact_callback=self._on_slot_interacted,
         )
-        self._draw_slot_measures()
 
     def _gizmo_scale_for(self, actor: Any, centre: Any = None) -> float:
         """Der Massstab des Griffs — gross genug, um ihn zu treffen.
@@ -10583,7 +10452,6 @@ class Viewport(QWidget):
         if self._slot_handle is not None:
             self._slot_handle.remove()
             self._slot_handle = None
-            self._drop_slot_measures()
             # **Und die Leiste geht mit dem Griff.** Sie stand bis hierher nur
             # in `_end_drag`, also am Ende eines Zugs — ein **Auswahlwechsel**
             # räumte den Griff ab und ließ sie stehen. Gemessen an einer Platte
@@ -10932,7 +10800,6 @@ class Viewport(QWidget):
         """
         self._drag_kind = "slot"
         self.drag_bar.follow_length(str(tr("Länge")), length)
-        self._draw_slot_measures()
         self._queue_feature_label_layout()
 
     def _on_slot_released(self, length: float, angle: float) -> None:
@@ -10969,7 +10836,6 @@ class Viewport(QWidget):
         """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell."""
         if self._slot_handle is not None:
             self._slot_handle.set_values(float(length), float(angle))
-            self._draw_slot_measures()
 
     def _on_slot_bar_accepted(self, length: float, angle: float) -> None:
         """Übernommen: jetzt wird aus dem Zug genau eine Operation (§15.5).
@@ -10980,6 +10846,10 @@ class Viewport(QWidget):
         """
         target = self._slot_target
         if target:
+            # **Erst jetzt geht der andere Weg zu** — siehe :data:`slotStarted`.
+            # Bis hierher war nichts geschehen, und die Maße der Platzierung
+            # standen im Bild, wo sie hingehören.
+            self.slotStarted.emit()
             self.slotDragged.emit(target, float(length), float(angle))
         self._end_drag()
 

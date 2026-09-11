@@ -6615,6 +6615,51 @@ def test_the_grip_on_a_preview_is_asked_before_the_camera(qt_app: QApplication) 
     assert kamera.gefragt == 1, "ein Griff, der ablehnt, gibt die Geste weiter"
 
 
+def test_a_grip_is_asked_before_a_running_placement(qt_app: QApplication) -> None:
+    """Eine laufende Platzierung nimmt dem Griff die Geste nicht weg.
+
+    Seit dem 10.09.2026 beginnt die Flächenplatzierung an einem gewählten
+    Merkmal von selbst, damit die Maße im Bild stehen. Sie stand dabei **vor**
+    den Griffen und nahm jede Mausbewegung als Zielversuch: Der Bewegungsgriff
+    sah kein ``move`` mehr, seine Hover-Auswahl blieb leer, und sein ``press``
+    fiel an ``self._selected is None`` durch — Pfeile, Ringe und die zwei
+    Knöpfe am Loch waren sichtbar und tot (Robert: „das verschieben und drehen
+    über den viewport gizmo klappt noch nicht es passiert garnichts", „das
+    verschieben von dem L und R auch nicht").
+
+    Verschluckt wird dabei nichts: Ein Griff nimmt ein ``move`` nur, wenn er
+    gedrückt gehalten wird — der zweite Teil prüft genau das, sonst wäre die
+    Umordnung eine neue Sperre statt einer Behebung.
+    """
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    class _Griff:
+        def __init__(self, nimmt: bool) -> None:
+            self.nimmt = nimmt
+            self.gefragt = 0
+
+        def handle(self, event: object) -> bool:
+            self.gefragt += 1
+            return self.nimmt
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer(size=(800, 600))
+    gezielt: list[object] = []
+    viewport.set_placement_pointer(lambda event: bool(gezielt.append(event)) or True)
+
+    griff = _Griff(nimmt=True)
+    viewport._gizmo = griff  # type: ignore[assignment]
+    viewport._on_pointer(PointerEvent("press", 120, 100, button="left"))
+    assert griff.gefragt == 1, "der Griff wird vor der Platzierung gefragt"
+    assert gezielt == [], "was der Griff nimmt, zielt nicht"
+
+    griff.nimmt = False
+    viewport._on_pointer(PointerEvent("move", 130, 110))
+    assert griff.gefragt == 2
+    assert len(gezielt) == 1, "eine Bewegung ohne gegriffenen Pfeil gehört dem Zielen"
+
+
 def test_every_grip_the_viewport_holds_stands_in_the_right_of_way() -> None:
     """Jeder Griff, den der Viewport führt, wird in ``_on_pointer`` gefragt.
 

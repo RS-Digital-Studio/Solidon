@@ -20,6 +20,7 @@ from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Final, cast
 from uuid import uuid4
 
@@ -1865,6 +1866,7 @@ class MainWindow(QMainWindow):
         self.viewport.featureMoved.connect(self._on_feature_moved)
         self.viewport.featureTurned.connect(self._on_feature_turned)
         self.viewport.slotDragged.connect(self._on_slot_dragged)
+        self.viewport.slotStarted.connect(self._close_the_other_way)
         # Was der Griff bewegen wird, sagt die Ansicht — wo der Satz steht,
         # entscheidet das Fenster, wie bei ``measurementStatus``.
         self.viewport.gizmoStatus.connect(self.announce)
@@ -9154,6 +9156,13 @@ class MainWindow(QMainWindow):
         self._bodies_shown: tuple[str, ...] = ()
         """Und dasselbe für die Körperauswahl — sie öffnet das Fenster ebenso,
         seit es die Handlungen trägt."""
+        self._measured_for = ""
+        """Für welches Merkmal die Platzierung zuletzt von selbst begonnen hat.
+
+        Nicht dasselbe wie :attr:`_feature_shown`: Das Panel füllt sich auch
+        nach einer eigenen Operation neu, weil die Auswahl stehen bleibt, und
+        eine zweite Platzierung über derselben Stelle wäre dann der Dialog, den
+        der Kunde gerade übernommen hat (:meth:`_measure_in_the_view`)."""
         # Wer das Fenster zumacht, während eine Vorschau darauf wartet, hätte
         # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
@@ -9211,6 +9220,13 @@ class MainWindow(QMainWindow):
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op):
             return
+        # **Nach einer Geste im Bild stehen die Maße wieder da.** Der Merker
+        # verhindert, dass die Platzierung nach ihrer *eigenen* Übernahme neu
+        # anspringt; ein Zug am Griff ist etwas anderes, und danach will man
+        # sehen, wo das Merkmal jetzt sitzt (Robert, 10.09.2026: „wenn ich
+        # jetzt etwas im viewport verschiebe und zum langloch mach fehlen die
+        # maße").
+        self._measured_for = ""
         draft = OperationDraft(
             op=op, inputs=(selected,), params={"at_feature": feature_id, **params}
         )
@@ -10805,6 +10821,13 @@ class MainWindow(QMainWindow):
         # Menüfreigabe erst beim nächsten Körperklick nachgeführt.
         self._update_actions()
         if feature_id is None:
+            # **Der Merker bleibt stehen.** Er wird ohnehin überschrieben,
+            # sobald ein anderes Merkmal kommt — ihn hier zu löschen hieße,
+            # dass jede Auswertung ihn zurücksetzt: Der Szenenaufbau hebt die
+            # Auswahl kurz auf und stellt sie danach wieder her, und damit ging
+            # der Dialog nach jedem gerechneten Schritt neu auf (gemessen
+            # 11.09.2026 an genau diesem Weg). Wer eine Geste im Bild macht,
+            # bekommt ihn über `_feature_step` gelöscht.
             self.feature_panel.clear()
             return
         result = self.session.last_result
@@ -10851,40 +10874,111 @@ class MainWindow(QMainWindow):
             mesh=as_mesh_data(entry.mesh),
             alone=result is not None and len(result.scene.objects) == 1,
         )
-        self._prepare_slot_seat(entry, feature)
         self.feature_dock.reveal()
+        self._measure_in_the_view(feature)
 
-    def _prepare_slot_seat(self, entry: Any, feature: Any) -> None:
-        """Rechnet die Trägerfläche des gewählten Lochs — im Arbeiter (§2.8).
+    #: Welche Operation die Maße eines gewählten Lochs in die Szene bringt.
+    #:
+    #: **Eine Bohrung ändert man am Durchmesser, ein Langloch an seiner Länge**
+    #: — beide sitzen auf einer Fläche und führen ihre Mitte, beide bekommen
+    #: deshalb die Platzierung mit ihren Maßfeldern.
+    MEASURED_IN_THE_VIEW: Final[Mapping[str, str]] = MappingProxyType(
+        {"hole": "resize_hole", "slot": "slot_hole"}
+    )
 
-        Sie trägt die Maße, die beim Ziehen im Bild stehen: Abstände der beiden
-        Enden zu den Kanten der Fläche. ``prepare_surface`` legt dafür eine
-        GEOS-Fläche über alle Dreiecke der Trägerfläche, und das kostet bei
-        einem großen Netz zu viel für den Qt-Thread — die Ansicht bekommt nur
-        das Ergebnis (``Viewport.set_slot_seat``).
+    def _a_dialog_is_open(self) -> bool:
+        """Ob gerade ein Operationsdialog steht — als Frage, nicht als Feld.
 
-        **Nur, wo es einen Zug gibt.** Für ein Merkmal ohne Langlochgriff wird
-        nichts gerechnet und nichts gezeigt; ein verspätetes Ergebnis für eine
-        alte Auswahl fällt an derselben Frage.
+        Zwei Stellen fragen danach, und beide sollen dieselbe Antwort
+        bekommen; als Feldvergleich verengt eine Typprüfung sie außerdem auf
+        „danach immer ``None``", und die zweite Frage wäre damit tot.
         """
-        from app.core.scene import placement
+        return self._op_dialog is not None
 
-        if feature is None or feature.kind not in self.viewport.slot_kinds():
-            self.viewport.set_slot_seat(None)
+    def _measured_in_the_view_discards_nothing(self) -> bool:
+        """Ob der Selbststart laufen darf, ohne jemanden zu fragen (Regel 19).
+
+        `run_operation` fragt bei zurückgenommenen Schritten nach, ob sie
+        verworfen werden dürfen. Das ist richtig für eine Handlung, die jemand
+        verlangt hat — und falsch für eine, die aus einer Auswahl entsteht:
+        Zweimal Strg+Z und ein Klick auf eine Bohrung brachten einen modalen
+        Kasten, den niemand bestellt hatte (Fund des Reviews, 11.09.2026).
+
+        Die Platzierung schreibt nichts; sie zeigt Maße. Erst ihr *Übernehmen*
+        legt einen Schritt an, und **dort** steht die Frage richtig.
+        """
+        return not self.session.history.discardable
+
+    def _close_the_other_way(self) -> None:
+        """Ein Zug am Langlochgriff schließt die Platzierung an derselben Stelle.
+
+        Die beiden meinen dasselbe Loch und etwas Verschiedenes damit: Der Zug
+        macht ein Langloch, der Dialog eine runde Bohrung. Nebeneinander offen
+        nimmt der eine zurück, was der andere gerade getan hat — und der Kunde
+        sieht nur, dass sein Langloch wieder rund ist (Robert, 10.09.2026).
+
+        Die **jüngere** Geste gewinnt, wie überall in der Ansicht: Wer zieht,
+        hat gerade entschieden. Der Merker geht mit, damit die Platzierung an
+        derselben Auswahl nicht sofort wieder anspringt.
+        """
+        self._measured_for = ""
+        for open_dialog in self.findChildren(OperationDialog):
+            if open_dialog.spec.name in set(self.MEASURED_IN_THE_VIEW.values()):
+                open_dialog.reject()
+
+    def _measure_in_the_view(self, feature: Any) -> None:
+        """Die Maße zum gewählten Loch stehen sofort in der Szene (§18.5).
+
+        **Ohne Umweg über einen Knopf** (Robert, 10.09.2026, nach einem
+        Dutzend Anläufen: „ich will immer noch die maße in der szene
+        einstellen … am langloch gibt es die maße garnicht"). Wer ein Loch
+        anklickt, will damit etwas tun; die Abstände zu den Kanten sind die
+        Auskunft, die er dafür braucht, und sie stehen dort, wo er hinsieht.
+
+        Escape beendet die Platzierung und lässt die Auswahl stehen — sie ist
+        ein Angebot und keine Sperre.
+        """
+        from app.core.perceive.actions import actions_for
+
+        name = self.MEASURED_IN_THE_VIEW.get(str(feature.kind))
+        if name is None or not REGISTRY.has(name) or self.viewport.renderer is None:
             return
-        wanted = str(feature.id)
-        mesh = as_mesh_data(entry.mesh)
-        features = dict(entry.features)
-
-        def compute() -> Any:
-            return placement.seat_of(mesh, feature, features)
-
-        def done(value: Any) -> None:
-            chosen = self.viewport.slot_handle_feature()
-            if chosen is not None and chosen.id == wanted:
-                self.viewport.set_slot_seat(value)
-
-        self.session.placement_async(compute, done, lambda _detail: done(None))
+        # **Einmal je gewähltem Merkmal, nicht bei jedem Neuaufbau.** Das Panel
+        # füllt sich auch nach der eigenen Operation wieder — die Auswahl steht
+        # ja noch —, und damit ging der Dialog nach jedem Übernehmen sofort neu
+        # auf (Robert, 10.09.2026: „bei dem bohrung ändern kommt der dialog
+        # auch immer wieder"). Wer übernommen hat, will das Ergebnis sehen.
+        if feature.id == self._measured_for:
+            return
+        # **Ein Angebot tritt zurück, es verdrängt nicht.** Steht ein Dialog
+        # offen, gehört der Klick ihm: `_on_feature_picked` reicht das Merkmal
+        # gleich dahinter an `take_feature` weiter, und §18.5 sagt zu, dass ein
+        # Klick dann eine *Eingabe* ist und keine Auswahl. Ohne diese Zeile
+        # verwarf der Selbststart über `run_operation` genau den Dialog, den
+        # der Kunde gerade beantworten wollte — samt seiner getippten Werte —
+        # und `take_feature` traf danach das falsche Fenster (Fund des
+        # Reviews, 11.09.2026).
+        #
+        # Gefragt wird `self._op_dialog` und nicht `findChildren`: Das Fenster
+        # führt den offenen Dialog dort ohnehin, und ein zweiter Weg über den
+        # Widgetbaum erwischt auch einen, dessen `deleteLater` noch aussteht.
+        if self._a_dialog_is_open():
+            return
+        if not self._measured_in_the_view_discards_nothing():
+            return
+        spec = REGISTRY.get(name)
+        row = next((entry for entry in actions_for(feature) if entry.op == name), None)
+        if row is None:
+            return
+        values: dict[str, Any] = {field.name: field.value for field in row.fields}
+        values["at_feature"] = feature.id
+        # **Der Merker steht erst, wenn der Dialog wirklich offen ist.**
+        # `run_operation` kann vorher aussteigen — bei zurückgenommenen
+        # Schritten fragt es nach, ob sie verworfen werden dürfen —, und wer
+        # dort „Abbrechen" drückt, bekäme für dieses Merkmal nie wieder Maße.
+        self.run_operation(spec, values)
+        if self._a_dialog_is_open():
+            self._measured_for = str(feature.id)
 
     def _common_part_step(self, chosen: Sequence[Any]) -> tuple[Any, Any] | None:
         """Der Bausteinschritt, zu dem **alle** gewählten Merkmale gehören.
