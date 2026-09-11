@@ -70,6 +70,9 @@ class _Viewport(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        from app.ui.slot_bar import SlotBar
+
+        self.slot_bar = SlotBar(self)
         self.renderer = _Renderer()
         # Die Projektion braucht den Zoom, und der steht an der Kamera.
         self.renderer.viewport = self
@@ -334,6 +337,28 @@ def test_the_placement_worker_returns_in_the_qt_thread(qt_app: QApplication) -> 
         assert threads[1] == qt_app.thread()
     finally:
         session.release()
+
+
+def test_slot_preview_temporarily_hides_the_other_placement_controls(
+    flow: Any, qt_app: QApplication
+) -> None:
+    """Während der Langlochvorschau gibt es nur deren einen Übernehmen-Weg."""
+    controller, session, viewport, dialog = flow
+    viewport.show()
+    controller.start()
+    _point(controller, session)
+    qt_app.processEvents()
+    assert not controller._bar.isHidden()
+    before = len(session.project.document.ops)
+    viewport.slot_bar.begin(20.0, 0.0, shortest_mm=6.0)
+    qt_app.processEvents()
+    assert all(widget.isHidden() for widget in controller._widgets())
+    assert not controller.pointer(PointerEvent("release", 320, 240, button="left"))
+    assert controller.active
+    viewport.slot_bar.dismiss()
+    qt_app.processEvents()
+    assert not controller._bar.isHidden()
+    assert controller.active and len(session.project.document.ops) == before
 
 
 def test_a_click_that_did_not_land_does_not_lock_the_next_one(flow: Any) -> None:
@@ -1607,3 +1632,41 @@ def test_the_measures_come_back_after_a_gesture_in_the_view(qt_app: QApplication
             open_dialog.reject()
         QApplication.processEvents()
         window.release()
+
+
+def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
+    """Ob platziert werden darf, weiß der Fluss — nicht ein Knopf im Dialog.
+
+    Die Frage stand bis zum 11.09.2026 als `surface_button.isEnabled()` im
+    Dialog, und drei Stellen lasen sie von dort: der Selbststart, `start()`
+    und `refresh_available` selbst. Ein Widget als Zustandsspeicher hält nur,
+    solange es das Widget gibt — und der Knopf soll fallen (Robert,
+    11.09.2026: „im dialog das im modell platzieren brauchen wir auch nicht").
+
+    Geprüft wird die Umkehrung der alten Lage: Wer den Knopf von außen
+    umschaltet, ändert die Antwort **nicht**; wer die Lage ändert, schon.
+    """
+    controller, _session, viewport, dialog = flow
+    try:
+        assert controller.can_place(), "mit Renderer und gerechneter Szene geht es"
+
+        # Der Knopf ist Anzeige: an ihm zu drehen ändert die Antwort nicht.
+        dialog.surface_button.setEnabled(False)
+        assert controller.can_place(), "der Knopf trägt die Antwort nicht mehr"
+        dialog.surface_button.setVisible(False)
+        assert controller.can_place()
+
+        # Die Lage dagegen trägt sie. Ohne Renderer ist nichts da, worauf man
+        # zeigen könnte — dieselbe Bedingung wie eh und je, nur an ihrem Ort.
+        renderer, viewport.renderer = viewport.renderer, None
+        try:
+            assert not controller.can_place(), "ohne Ansicht gibt es keine Fläche"
+        finally:
+            viewport.renderer = renderer
+        assert controller.can_place(), "und mit ihr wieder"
+
+        # Und die Anzeige folgt der Antwort, sobald jemand fragt.
+        controller.refresh_available()
+        assert dialog.surface_button.isEnabled(), "der Knopf zeigt, was der Fluss sagt"
+    finally:
+        controller.dispose()

@@ -267,6 +267,12 @@ class PlacementFlow(QObject):
         self.spec_of = spec_of
         self.inputs_of = inputs_of
         self._change_op = change_op
+        self._supported = False
+        """Ob diese Operation ihre Stelle auf einer Fläche einstellen lässt.
+
+        Die fachliche Hälfte von :meth:`can_place`; ``refresh_available``
+        holt sie aus dem Kern. Getrennt geführt, weil sie sich nur mit der
+        Operation ändert, die andere Hälfte dagegen mit jeder Auswertung."""
         self._result: Any = None
         self._showing_input = False
         self._epoch = 0
@@ -410,6 +416,7 @@ class PlacementFlow(QObject):
         dialog.valuesChanged.connect(self._values_changed)
         dialog.finished.connect(self.dispose)
         self.viewport.installEventFilter(self)
+        self.viewport.slot_bar.installEventFilter(self)
         render_widget = getattr(self.viewport.renderer, "widget", None)
         if render_widget is not None:
             render_widget.installEventFilter(self)
@@ -431,11 +438,7 @@ class PlacementFlow(QObject):
         # gewählt, und wer den Durchmesser nachbessert, will kein Fadenkreuz.
         # Und nicht sofort, sondern eine Runde später: Der Dialog ist hier
         # noch nicht gezeigt, und ``start`` versteckt ihn.
-        if (
-            starts_by_itself(self.spec_of())
-            and self._change_op is None
-            and self.dialog.surface_button.isEnabled()
-        ):
+        if starts_by_itself(self.spec_of()) and self._change_op is None and self.can_place():
             QTimer.singleShot(0, self._start_if_still_possible)
 
     @property
@@ -443,19 +446,35 @@ class PlacementFlow(QObject):
         """Der Körper, auf dem die zuletzt übernommenen Zahlen liegen."""
         return self._object_id
 
-    def refresh_available(self) -> None:
-        """Nur fachlich platzierbare Operationen bieten den Einstieg an."""
-        supported = placement.supports_surface_placement(self.spec_of())
-        self.dialog.surface_button.setVisible(supported)
+    def can_place(self) -> bool:
+        """Ob hier und jetzt platziert werden darf.
+
+        **Die Frage gehört dem Fluss, nicht einem Knopf.** Sie stand bis zum
+        11.09.2026 als ``surface_button.isEnabled()`` im Dialog, und drei
+        Stellen lasen sie von dort. Ein Widget als Zustandsspeicher hält nur,
+        solange es das Widget gibt — und der Knopf fällt (§2.5 des Konzepts).
+        Er zeigt seither an, was hier steht, statt es zu sein.
+
+        Zwei Hälften, und beide sind nötig: Die Operation muss ihre Stelle
+        überhaupt auf einer Fläche einstellen lassen (**fachlich**), und es
+        muss etwas da sein, worauf man zeigt (**jetzt**) — ein gerechnetes
+        Ergebnis mit Körpern, oder ein Schritt, den jemand ändert.
+        """
         result = self.session.last_result
-        available = (
-            self.viewport.renderer is not None
+        return bool(
+            self._supported
+            and self.viewport.renderer is not None
             and self.session.result_current
             and result is not None
             and (self._change_op is not None or (result.complete and bool(result.scene.objects)))
         )
-        self.dialog.surface_button.setEnabled(supported and available)
-        if self.active and not supported:
+
+    def refresh_available(self) -> None:
+        """Nur fachlich platzierbare Operationen bieten den Einstieg an."""
+        self._supported = placement.supports_surface_placement(self.spec_of())
+        self.dialog.surface_button.setVisible(self._supported)
+        self.dialog.surface_button.setEnabled(self.can_place())
+        if self.active and not self._supported:
             self.back()
 
     def _start_if_still_possible(self) -> None:
@@ -474,7 +493,7 @@ class PlacementFlow(QObject):
 
     def start(self) -> None:
         self.refresh_available()
-        if self._disposed or not self.dialog.surface_button.isEnabled():
+        if self._disposed or not self.can_place():
             return
         self.active = True
         self._epoch += 1
@@ -622,7 +641,7 @@ class PlacementFlow(QObject):
 
     def pointer(self, event: PointerEvent) -> bool:
         """Linksklick gehört der Platzierung, alle Kameragesten bleiben frei."""
-        if not self.active:
+        if not self.active or self.viewport.slot_bar.active:
             return False
         if self._seated_at_feature:
             if event.kind == "move" and not event.buttons:
@@ -1668,6 +1687,14 @@ class PlacementFlow(QObject):
         if stop_watching_the_dying(self, watched, event):
             return False
         if self.active:
+            if watched is self.viewport.slot_bar and event.type() in (
+                QEvent.Type.Show,
+                QEvent.Type.Hide,
+            ):
+                self.redraw()
+                return False
+            if self.viewport.slot_bar.active:
+                return False
             if watched in self._overlay_zones and event.type() in (
                 QEvent.Type.Move,
                 QEvent.Type.Resize,
@@ -1710,6 +1737,18 @@ class PlacementFlow(QObject):
     def redraw(self) -> None:
         if not self.active or self._disposed:
             return
+        # Die Langlochvorschau hat ihren eigenen Übernehmen-Weg. Die
+        # Platzierungsabsicht bleibt beim Abbruch erhalten, bedient sich
+        # währenddessen aber weder über ein zweites Feld noch über den Zeiger.
+        if self.viewport.slot_bar.active:
+            for widget in self._widgets():
+                widget.hide()
+            for item in (self._tool, self._addition):
+                if item is not None:
+                    item.set_visible(False)
+            self.viewport._draw()
+            return
+        self._bar.show()
         area = self.viewport.rect()
         self._canvas.setGeometry(area)
         room = area.adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY)
