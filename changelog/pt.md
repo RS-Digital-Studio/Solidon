@@ -47,6 +47,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - As ações para um corpo ou característica selecionados estão à direita, em grupos que se fecham, com pesquisa. Os menus Objeto, Modificar e Preparar desapareceram; os atalhos continuam.
 - O clique direito num corpo ou numa face mostra apenas o que só existe aí: o passo por trás, o esboço na face, o ocultar. O botão «Blocos» está em cor de destaque.
+- Se a cadeia para num passo, as ações ficam bloqueadas e dizem porquê; tentar mostra logo as saídas do relatório. Antes, o passo ficava em silêncio atrás da paragem, nunca calculado.
 
 ### Mesa de impressão e entrega
 

@@ -3772,6 +3772,12 @@ class MainWindow(QMainWindow):
         # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
         # Kern; das hier ist die Freundlichkeit davor.
         locked = not activation.state().unlocked
+        # **Und solange die Kette hält, kommt kein neuer Schritt dazu** (§15.3):
+        # Er stünde hinter dem angehaltenen und würde nie gerechnet. Der Grund
+        # steht an jedem Eintrag, und die Handlungen des Halts stehen im
+        # Prüfbericht — `_reason_locked` trägt ihn für die Operationen, die
+        # Zeilen hier darunter für die Wege, die keine Operation sind.
+        halted = self._halt_reason()
         # Ein offener Editor sammelt gerade Gesten für genau eine Operation.
         # Einen älteren Schritt darunter zu löschen würde seinen Vorschauzustand
         # entwerten; außerdem trägt der Skizzeneditor selbst Entf. Deshalb gilt
@@ -3865,7 +3871,9 @@ class MainWindow(QMainWindow):
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
-        self.auto_split_action.setEnabled(chosen >= 1 and not locked and not gesturing)
+        self.auto_split_action.setEnabled(
+            chosen >= 1 and not locked and not gesturing and halted is None
+        )
         self.variants_action.setEnabled(objects > 0 and not locked and not gesturing)
         self.export_action.setEnabled(objects > 0 and not locked and self._export_worker is None)
 
@@ -3885,21 +3893,27 @@ class MainWindow(QMainWindow):
         )
         self._say_why(
             self.auto_split_action,
-            gesture_note if gesturing else tr("Dafür muss ein Körper ausgewählt sein."),
+            gesture_note if gesturing else halted or tr("Dafür muss ein Körper ausgewählt sein."),
         )
         self._say_why(self.variants_action, gesture_note if gesturing else needs_body)
         self._say_why(
             self.export_action,
             tr("Es wird gerade exportiert.") if self._export_worker is not None else needs_body,
         )
-        self.import_action.setEnabled(not locked)
-        self.generate_action.setEnabled(not locked)
-        self._toolbar_import.setEnabled(not locked)
-        self._toolbar_sketch.setEnabled(not locked)
+        # Einfügen, Erzeugen und Zeichnen legen Schritte an — hinter einem
+        # Halt landeten sie im Nichts; der Grund steht am Knopf (`_say_why`).
+        for action in (
+            self.import_action,
+            self.generate_action,
+            self._toolbar_import,
+            self._toolbar_sketch,
+        ):
+            action.setEnabled(not locked and halted is None)
+            self._say_why(action, halted or "")
         # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
         # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
         # wo der Knopf sie vorher sagen kann (§2.6).
-        ready = chosen >= 1 and not locked and not gesturing
+        ready = chosen >= 1 and not locked and not gesturing and halted is None
         self._toolbar_sculpt.setEnabled(ready)
         self._toolbar_armature.setEnabled(ready)
         for action in (
@@ -3915,7 +3929,7 @@ class MainWindow(QMainWindow):
         ):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
-            self._pick_hint(action, ready, locked)
+            self._pick_hint(action, ready, locked, missing=halted or "")
         # Derselbe Registervertrag wie Menü und Palette, ohne eine dritte
         # Freigabelogik. Das Panel hält seine Knöpfe über Auswahlwechsel hinweg
         # und ändert hier nur Zustand und Hinweise.
@@ -3946,7 +3960,7 @@ class MainWindow(QMainWindow):
         # beiseite, statt vier Zeilen zu füllen, die nichts tun — sichtbar
         # bleibt er auf der Körperstufe und an jeder gewählten Fläche.
         self.quick_filament.setVisible(not chosen_features or bool(chosen_faces))
-        self.quick_filament.setEnabled(not locked and not gesturing)
+        self.quick_filament.setEnabled(not locked and not gesturing and halted is None)
         self._hide_dead_menus()
 
     def _hide_dead_menus(self) -> None:
@@ -4109,8 +4123,12 @@ class MainWindow(QMainWindow):
         """Warum diese Operation gerade nicht geht — oder ``None``, wenn sie geht.
 
         Die Reihenfolge ist die, in der ein Nutzer sie beheben würde: erst
-        etwas in die Szene, dann etwas auswählen, dann die richtige Bauart.
+        den Halt lösen, dann etwas in die Szene, dann etwas auswählen, dann
+        die richtige Bauart.
         """
+        halted = self._halt_reason()
+        if halted is not None:
+            return halted
         if spec.takes_whole_scene:
             if objects <= 0:
                 return str(_NEEDS_BODY)
@@ -4137,6 +4155,30 @@ class MainWindow(QMainWindow):
         # Bohrung benennt, ist auf einem Körper ohne Bohrung eine Sackgasse —
         # der Dialog öffnete mit leerer Pflicht-Auswahl (Regel 19).
         return feature_requirement(spec, self._feature_kinds_of_selection())
+
+    def _halt_reason(self) -> str | None:
+        """Warum gerade kein neuer Schritt geht: Die Kette hält an (§15.3).
+
+        **Roberts Fall** (11.09.2026: „da geht nichts mehr wenn ich die
+        operation ausführe"): Nach einem Schriftwechsel hielt die Kette an der
+        Zerlegung an, und jede Operation danach — noch einmal zerlegen, noch
+        einmal ausrichten — ging durch ihren Dialog und stand dann als Schritt
+        hinter dem angehaltenen: nie gerechnet, im Bild nichts. Die Sitzung
+        nimmt seither keinen Schritt hinter einen Halt (``Session.halt_in_the_
+        way``); das hier ist die Freundlichkeit davor, wie bei der Lizenzsperre
+        — der Grund steht am Eintrag, bevor jemand klickt (§2.6), und er nennt
+        den Schritt und den Ort, an dem es weitergeht.
+        """
+        halted = self.session.halted_step()
+        if halted is None:
+            return None
+        number, title = halted
+        return tr(
+            "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
+            "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
+            number=number,
+            step=title,
+        )
 
     def _feature_kinds_of_selection(self) -> frozenset[str]:
         """Die Arten der erkannten Merkmale am gewählten Körper.
@@ -10588,9 +10630,16 @@ class MainWindow(QMainWindow):
 
         chosen = self.split_bar.values()
         pins = int(chosen["pins"])
-        applied = self.session.split_along(
-            self._split_target, self._split_plane, pins=pins, shape=str(chosen["shape"])
-        )
+        try:
+            applied = self.session.split_along(
+                self._split_target, self._split_plane, pins=pins, shape=str(chosen["shape"])
+            )
+        except AppError as error:
+            # Hinter einem Halt schreibt die Sitzung keinen Schritt und sagt
+            # es mit den Handlungen des Halts (Regel 17) — hier ankommen muss
+            # das als Dialog, nicht als Zeile auf stderr.
+            show_error(error, self)
+            return
         self.report.add_findings(applied.findings)
         self._queue_split_reveal(applied.object_ids)
         self._clear_split_line()

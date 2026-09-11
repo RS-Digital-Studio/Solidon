@@ -16,6 +16,34 @@ vor rücknehmbaren Handlungen**, kein „Möchten Sie wirklich", keine Sackgasse
 (Regel 19). Die ausdrücklich gewünschte Ausnahme ist das Löschen im Verlauf:
 Die Nachfrage nennt mitbetroffene Schritte und den Rückweg über Strg+Z.
 
+**Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
+Schritt an, zeigt das Bild den letzten vollständig gerechneten Zustand — und
+was hinter dem Halt steht, wird nicht gerechnet. Ein neuer Schritt landete
+dort trotzdem: durch den Dialog, in den Verlauf, nie ins Bild (Robert,
+11.09.2026, nach einem Schriftwechsel: „da geht nichts mehr wenn ich die
+operation ausführe"). Zwei Stellen halten das, und beide sind nötig:
+
+* **Die Sitzung nimmt ihn nicht an** (`Session.halt_in_the_way`, gefragt in
+  `apply` mit Entwürfen, `split_async`, `auto_split`, `split_along`,
+  `create_lid`, `add_generated` und `accept_proposal`). Die Absage trägt die
+  Handlungen des Halts selbst — dieselben Knöpfe wie im Prüfbericht, mit
+  Schrittkennung, Werten und Körper, damit `error_handlers` sie ausführen
+  kann (Regel 17). Eine Änderung **ohne** Schritt (Parameter, Passung,
+  Drucker) geht weiter, denn die kann den Halt lösen; ebenso Rückgängig,
+  *Schritt löschen* und die Wege des Verlaufs (`change_params`,
+  `repair_and_retry`, `split_and_retry`, `recount_and_retry`).
+* **Die Oberfläche sagt es vorher** (`_halt_reason`, die erste Frage in
+  `_reason_locked`): Aktion, Palette, Karte und Zwillingshaken tragen den
+  Grund mit Schrittnummer und Titel, dazu Automatisch teilen, Einfügen,
+  Erzeugen, Zeichnen, Formen, Skelett und der Filamentwähler — dieselbe
+  Bauart wie die Lizenzsperre und die Gestensperre daneben. Die Werkzeugzeile
+  bleibt frei: Messen, Analyse und Schichten lesen nur.
+
+Gemessen: Vorher standen nach dem Halt drei Schritte im Verlauf und einer im
+Bild; nachher keiner, und der erste Knopf der Absage („Stückzahl anpassen und
+erneut versuchen") löst den Halt — `test_a_halted_chain_takes_no_new_step_
+and_names_the_way_on`.
+
 ## Texte
 
 Keine feste Zeichenkette in der Oberfläche — alles über `tr()`, deutsche

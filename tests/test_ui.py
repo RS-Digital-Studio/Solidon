@@ -3137,6 +3137,111 @@ def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
     assert back.stopped_at == halted.stopped_at, "nach dem Undo steht die Absage wieder da"
 
 
+def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hinter einen Halt kommt kein Schritt — und wer einen versucht, bekommt
+    den Ausweg statt einer Zeile im Verlauf.
+
+    **Roberts Fall** (11.09.2026: „da geht nichts mehr wenn ich die operation
+    ausführe"): Schriftzug, in Einzelteile zerlegt, dann die Schrift gewechselt
+    — Comfortaa hat elf lose Teile, DejaVu Sans zehn, und die Zerlegung hält
+    an. Jede Operation danach ging durch ihren Dialog und stand dann als
+    Schritt 4, 5, 6 hinter dem angehaltenen zweiten: nie gerechnet, im Bild
+    nichts, im Verlauf eine Zeile mehr (§15.3: gerechnet wird bis zum Halt).
+
+    Drei Zusagen, in der Reihenfolge, in der der Kunde sie trifft: Vor dem
+    Klick ist jede Operation gesperrt und sagt warum — Aktion, Palette und
+    Karte aus derselben Quelle (``_reason_locked``); Rückgängig und *Schritt
+    löschen* bleiben frei, denn beides löst den Halt. Kommt trotzdem ein
+    Schritt an (Kürzel, Fernsteuerung, Agent), schreibt die Sitzung ihn nicht
+    und meldet die Handlungen des Halts selbst, mit Schrittkennung und Werten.
+    Und die erste davon führt hinaus: ein Klick, zehn Teile, alles wieder frei.
+    """
+    from app.core.errors import RECOUNT_AND_RETRY
+
+    document = window.session.project.document
+    window.session.apply(
+        "Schriftzug",
+        [
+            OperationDraft(
+                op="create_label",
+                inputs=(),
+                params={"text": "Solidon3D", "size": 200.0, "font": "Comfortaa"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    window.session.apply(
+        "Zerlegen",
+        [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 11})],
+    )
+    window.session.wait_for_idle()
+    assert window.session.evaluate_now().stopped_at is None, "elf Teile, elf verlangt — kein Halt"
+
+    window.session.change_params(1, {"text": "Solidon3D", "size": 200.0, "font": "DejaVu Sans"})
+    window.session.wait_for_idle()
+    halted = window.session.evaluate_now()
+    window._on_scene(halted)
+    split_step = document.ops[1].id
+    assert halted.stopped_at == split_step, "der Schriftwechsel hält die Zerlegung an"
+
+    # 1. Gesperrt, mit Grund — an jedem Eintrag derselbe Satz aus einer Quelle.
+    window.object_tree._restore(["obj_1"], None)
+    window._update_actions()
+    action = window._op_actions["split_bodies"]
+    reason = action.toolTip()
+    assert not action.isEnabled()
+    assert f"Schritt {split_step}" in reason and "Prüfbericht" in reason, reason
+    assert window._palette_availability("create_box") == (False, reason), (
+        "auch eine Operation ohne Eingang legte ihren Schritt hinter den Halt"
+    )
+    card = window.selection_operations._buttons["split_bodies"]
+    assert not card.isEnabled() and card.toolTip() == reason
+    for name, entry in (
+        ("auto_split", window.auto_split_action),
+        ("import", window.import_action),
+        ("sketch", window._toolbar_sketch),
+    ):
+        assert not entry.isEnabled() and reason in entry.toolTip(), name
+    assert window.undo_action.isEnabled(), "Rückgängig löst den Halt — es bleibt frei"
+    assert window.history_panel.remove_action.isEnabled(), "Schritt löschen ebenso"
+
+    # 2. Ein Schritt trotzdem: nicht geschrieben, und die Absage trägt den Ausweg
+    # — als Dialog beim Kunden, nicht als Zeile auf stderr.
+    refusals: list[errors.AppError] = []
+    monkeypatch.setattr(
+        main_window_module, "show_error", lambda error, *args, **kwargs: refusals.append(error)
+    )
+    steps_before = len(document.ops)
+    accepted = window.session.apply(
+        "Zerlegen",
+        [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 2})],
+    )
+    assert not accepted and len(document.ops) == steps_before, "kein Schritt hinter dem Halt"
+    window.session.split_async("obj_1", lambda _applied: None)
+    assert not window.session.split_running, "auch der Ablauf legt keinen Schritt an"
+    assert len(refusals) == 2
+    refusal = refusals[0]
+    assert refusal.op_id == split_step and refusal.values["found"] == "10"
+    assert [entry.id for entry in refusal.suggestions] == [
+        RECOUNT_AND_RETRY.id,
+        "correct_input",
+        "cancel",
+    ], "die Absage bietet an, was der Prüfbericht am Halt anbietet"
+    assert "Schritt" in str(refusal.detail) and "weniger Teile" in str(refusal.detail)
+
+    # 3. Der erste Knopf führt hinaus, und danach ist alles wieder frei.
+    window.error_handlers()[RECOUNT_AND_RETRY.id](refusal)
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    assert result.stopped_at is None and len(result.scene.objects) == 10
+    assert window._palette_availability("create_box") == (True, "")
+    assert window.import_action.isEnabled() and window._toolbar_sketch.isEnabled()
+    assert reason not in window._toolbar_sketch.toolTip(), "der eigene Satz kommt zurück"
+
+
 def test_the_small_parts_button_removes_them_and_not_merely_runs(window: MainWindow) -> None:
     """Der Knopf zu „sehr kleine Einzelteile" entfernt sie wirklich.
 

@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-11 | [Hinter einen Halt kam jeder neue Schritt (11.09.2026)](#hinter-einen-halt-kam-jeder-neue-schritt-11092026) |
 | 2026-09-11 | [Ein Ort für die Handlungen an einer Auswahl (11.09.2026)](#ein-ort-für-die-handlungen-an-einer-auswahl-11092026) |
 | 2026-09-10 | [Drei Befunde an einem Kundenmodell (10.09.2026)](#drei-befunde-an-einem-kundenmodell-10092026) |
 | 2026-09-09 | [RM-027 entfällt mit dem privaten Index (09.09.2026)](#rm-027-entfällt-mit-dem-privaten-index-09092026) |
@@ -26696,3 +26697,37 @@ Nicht nachgestellt: Auf seinem Bildschirm überlappte der Plattenwähler „Alle
 Platten" den Druckernamen in der Kopfzeile. Offscreen bei sechs Breiten
 zwischen 1400 und 2600 Pixeln liegen die Zellen sauber nebeneinander; der
 Fall braucht sein Fenster.
+
+## Hinter einen Halt kam jeder neue Schritt (11.09.2026)
+
+Robert, am Schriftzug: „selbst wenn wäre eine warnung bei in einzelteile
+zerlegen gut, aber da geht nichts mehr wenn ich die operation ausführe". Die
+Warnung war da (`split_bodies.surplus`); der zweite Satz war ein Fehler in der
+Auswertung, und er ist allgemeiner als die Zerlegung.
+
+Nachgestellt am Fenster: Schriftzug in Comfortaa (elf lose Teile), in elf
+zerlegt, ausgerichtet, dann die Schrift auf DejaVu Sans gewechselt (zehn
+Teile). Die Kette hält an Schritt 2 — richtig, mit dem Befund und seinen
+drei Knöpfen. Danach *In Einzelteile zerlegen* über den Klickweg: Dialog geht
+auf, Übernehmen geht durch, im Bild nichts; im Verlauf steht Schritt 4.
+*Druckoptimal ausrichten*: dasselbe, Schritt 5. Beide hinter dem Halt, beide
+nie gerechnet — §15.3 sagt genau das, und niemand hatte gefragt, was ein
+**neuer** Schritt in dieser Lage tut.
+
+Zwei Stellen halten es seither. Die Sitzung nimmt hinter einem Halt keinen
+Schritt an (`Session.halt_in_the_way`, an sieben Schreibwegen); die Absage
+trägt die Handlungen des Halts selbst, mit Schrittkennung, Werten und Körper,
+damit die Knöpfe des Fehlerdialogs sie ausführen. Und die Oberfläche sagt es
+vorher: `_halt_reason` ist die erste Frage in `_reason_locked`, damit Aktion,
+Palette, Karte und Zwillingshaken denselben Satz tragen — dazu Automatisch
+teilen, Einfügen, Erzeugen, Zeichnen, Formen, Skelett und der Filamentwähler.
+Rückgängig, *Schritt löschen* und die Wege des Verlaufs bleiben frei, denn
+sie lösen den Halt; eine Änderung ohne Schritt (Parameter, Passung, Drucker)
+ebenso.
+
+Gemessen an derselben Sonde: vorher nach dem Halt drei Schritte im Verlauf
+und einer im Bild; nachher keiner, jede Operation grau mit „Die Kette hält an
+Schritt 2 (In Einzelteile zerlegen) an — …", und der erste Knopf der Absage
+(„Stückzahl anpassen und erneut versuchen") löst den Halt: zehn Teile, alles
+wieder frei, die eigenen Hinweistexte zurück. Der Test dazu:
+`test_a_halted_chain_takes_no_new_step_and_names_the_way_on`.

@@ -107,6 +107,12 @@ bevor es jemand wusste:
   das Ergebnis noch **nicht**. Und es wirft nicht: Fehler kommen über das
   Signal `failed`. Ein `try` um den Aufruf läuft ins Leere — nach dem
   Ergebnis fragen, nicht nach dem Grund.
+- **Und hinter einen Halt nimmt es keinen Schritt an.** Solange
+  `last_result.stopped_at` steht, schreibt `apply` mit Entwürfen nichts und
+  meldet über `failed` die Absage aus `halt_in_the_way` — mit den Handlungen
+  des Halts; `halted_step()` nennt Kennung und Titel des Schritts. Ein Test,
+  der nach einem Halt weiterbauen will, löst ihn erst (Undo, `change_params`,
+  `recount_and_retry`). Die Regel steht in `oberflaeche.md`.
 - **`Scene.objects` ist ein Wörterbuch.** Darüber zu iterieren gibt die
   Kennungen. Die Folgemeldung `'str' object has no attribute 'mesh'` sieht
   aus wie ein leerer Import und ist keiner.

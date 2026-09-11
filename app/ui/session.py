@@ -32,8 +32,10 @@ from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
+    CANCEL,
     CANCEL_SPLIT,
     RETRY,
+    SHOW_HISTORY,
     AppError,
     InternalError,
     OperationCancelled,
@@ -51,6 +53,7 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
+from app.core.registry import REGISTRY
 from app.core.scene import (
     CancelSignal,
     EvaluationResult,
@@ -920,8 +923,15 @@ class Session(QObject):
         eine empfindet, obwohl sie aus mehreren Zügen besteht. Ob es dazu
         kommt, entscheidet die ``History``: Nur gleichartige Züge auf
         denselben Eingängen mit demselben Anker verschmelzen.
+
+        **Solange die Kette hält, nimmt sie keinen neuen Schritt an** — eine
+        Änderung ohne Schritt (Parameter, Passung, Drucker) aber sehr wohl,
+        denn die kann den Halt lösen. Warum, steht an :meth:`halt_in_the_way`.
         """
         try:
+            refusal = self.halt_in_the_way() if drafts else None
+            if refusal is not None:
+                raise refusal
             self.history.apply(
                 title, drafts, origin or Origin(by="user"), bundle=bundle, changes=changes
             )
@@ -932,6 +942,84 @@ class Session(QObject):
             return False
         self._changed()
         return True
+
+    def halted_step(self) -> tuple[int, TranslatableText | str] | None:
+        """Der Schritt, an dem die letzte Auswertung hält — Kennung und Titel.
+
+        ``None``, solange die Kette durchläuft. Fenster und Sitzung fragen
+        hier, bevor sie einen neuen Schritt anbieten oder annehmen (§15.3):
+        Das Bild zeigt den letzten vollständig gerechneten Zustand, und was
+        hinter dem angehaltenen Schritt steht, wird nicht gerechnet.
+        """
+        result = self.last_result
+        if result is None or result.stopped_at is None:
+            return None
+        step = next(
+            (entry for entry in self.project.document.ops if entry.id == result.stopped_at),
+            None,
+        )
+        title: TranslatableText | str = (
+            REGISTRY.get(step.op).title
+            if step is not None and REGISTRY.has(step.op)
+            else str(result.stopped_at)
+        )
+        return result.stopped_at, title
+
+    def halt_in_the_way(self) -> UserError | None:
+        """Die Absage für einen neuen Schritt, solange die Kette hält — mit dem
+        Ausweg des Halts als Handlungen.
+
+        **Roberts Fall** (11.09.2026: „da geht nichts mehr wenn ich die
+        operation ausführe"): Nach einem Schriftwechsel hielt die Kette an der
+        Zerlegung an — elf Teile verlangt, zehn da. Jede Operation, die er
+        danach ausführte, noch einmal zerlegen, noch einmal ausrichten, ging
+        ohne Widerspruch durch ihren Dialog und stand danach als Schritt 4 und
+        5 **hinter** dem angehaltenen zweiten: nie gerechnet, im Bild nichts,
+        im Verlauf eine Zeile mehr. Ein Schritt hinter dem Halt ist ein
+        Schritt, den es nicht gibt (§15.3) — also sagt die Sitzung das, statt
+        ihn zu schreiben.
+
+        **Und sie sagt, wie es weitergeht** (Regel 17): Die Absage trägt die
+        Handlungen des Halts selbst — dieselben Knöpfe, die der Prüfbericht an
+        seiner Zeile zeigt —, dazu Schrittkennung, Werte und Körper, damit sie
+        hier genauso tragen wie dort (``MainWindow.error_handlers``). Der
+        Körper wird aufgelöst wie in ``panels.as_error``: aus dem Befund, sonst
+        der einzige Eingang des Schritts.
+        """
+        halted = self.halted_step()
+        if halted is None:
+            return None
+        op_id, title = halted
+        result = self.last_result
+        assert result is not None
+        halt = next(
+            (
+                finding
+                for finding in result.scene.report.findings
+                if finding.severity == "error" and finding.op_id == op_id
+            ),
+            None,
+        )
+        step = next((entry for entry in self.project.document.ops if entry.id == op_id), None)
+        object_id = halt.object_id if halt is not None else None
+        if object_id is None and step is not None and len(step.inputs) == 1:
+            object_id = step.inputs[0]
+        return UserError(
+            _("Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet."),
+            _(
+                "Angehalten ist Schritt {number} ({step}): {reason}",
+                number=op_id,
+                step=title,
+                reason=halt.message,
+            )
+            if halt is not None
+            else _("Angehalten ist Schritt {number} ({step}).", number=op_id, step=title),
+            suggestions=(halt.suggestions if halt is not None else (SHOW_HISTORY, CANCEL))
+            or (CANCEL,),
+            values={**(dict(halt.values) if halt is not None else {}), "op": op_id},
+            object_id=object_id,
+            op_id=op_id,
+        )
 
     def repair_and_retry(self, stopped_at: int) -> bool:
         """Setzt Reparatur und erneuten Versuch als einen Zug vor den Fehler.
@@ -1696,8 +1784,12 @@ class Session(QObject):
         """Weg 3: einen erzeugten Körper einbetten, laden, reparieren (§2.2).
 
         Die zwei Transaktionen entstehen im Kern; was hier passiert, ist das
-        Neuzeichnen danach — genau wie bei einem Import.
+        Neuzeichnen danach — genau wie bei einem Import. Und wie dort kommt
+        hinter einen Halt kein Schritt (:meth:`halt_in_the_way`).
         """
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
         generation = generate_into(self.project, result)
         self._changed()
         return generation.object_id
@@ -1713,6 +1805,9 @@ class Session(QObject):
         """
         if not self.wait_for_idle():
             raise _evaluation_busy_error()
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
         if entry is None:
@@ -1749,6 +1844,9 @@ class Session(QObject):
         entstehen. Ohne ihn entstünden Paare, die auf Merkmale zeigen, die es
         nicht gibt.
         """
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
         object_profile = profiles.for_object(self.profile, entry)
@@ -1779,6 +1877,9 @@ class Session(QObject):
         Slicer die genaue Außenwand, die gebremste Beschleunigung und das
         Bügeln — die drei Werte, die über eine Passung entscheiden.
         """
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
         applied = apply_lid(self.project.document, object_id, params, self.profile, op=op)
         self._changed()
         return applied
@@ -1930,6 +2031,10 @@ class Session(QObject):
             return
         if not self.wait_for_idle():
             self.failed.emit(_evaluation_busy_error())
+            return
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            self.failed.emit(refusal)
             return
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
@@ -2319,7 +2424,16 @@ class Session(QObject):
 
         Gibt die Transaktion zurück — die automatische Übernahme (§26.5)
         zeigt ihre Kennung in der Übernommen-Leiste.
+
+        Hinter einen Halt kommt auch ein Vorschlag nicht
+        (:meth:`halt_in_the_way`): Seine Schritte stünden hinter dem
+        angehaltenen und würden nie gerechnet — der Kunde hätte übernommen
+        und nichts bekommen.
         """
+        if preview.proposal.drafts:
+            refusal = self.halt_in_the_way()
+            if refusal is not None:
+                raise refusal
         transaction = agent_apply.accept(preview.proposal, self.history)
         self._accepted[preview.proposal.request] = transaction.id if transaction else None
         self._changed()

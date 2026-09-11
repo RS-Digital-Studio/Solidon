@@ -4581,6 +4581,7 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
         assert panel is not None
         window.object_tree.selected_objects = lambda: ("body",)
         window.session.last_result = SimpleNamespace(
+            stopped_at=None,
             scene=Scene(
                 objects={
                     "body": SceneObject(
@@ -4590,7 +4591,7 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
                         kind="brep",
                     )
                 }
-            )
+            ),
         )
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
@@ -4633,7 +4634,9 @@ def test_selecting_a_body_updates_the_visible_cut_button_immediately(
             mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
             kind="brep",
         )
-        window.session.last_result = SimpleNamespace(scene=Scene(objects={"body": body}))
+        window.session.last_result = SimpleNamespace(
+            stopped_at=None, scene=Scene(objects={"body": body})
+        )
         window.object_tree.selected_objects = lambda: ("body",)
 
         window._on_selection("body")
@@ -4753,6 +4756,7 @@ def test_a_rejected_inward_pull_clears_its_preview(
             # Ein echtes Teil, aber fünfhundert Millimeter weiter — die Suche
             # unter der Zeichnung findet es nicht, und genau das soll sie.
             window.session.last_result = SimpleNamespace(
+                stopped_at=None,
                 scene=Scene(
                     objects={
                         "body": SimpleNamespace(
@@ -4764,7 +4768,7 @@ def test_a_rejected_inward_pull_clears_its_preview(
                             ),
                         )
                     }
-                )
+                ),
             )
             panel = window._sketch_panel
             assert panel is not None
@@ -4968,6 +4972,7 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
         panel.choose_plane("plane:xz")
         window.object_tree.selected_objects = lambda: ("body",)
         window.session.last_result = SimpleNamespace(
+            stopped_at=None,
             scene=Scene(
                 objects={
                     "body": SceneObject(
@@ -4977,7 +4982,7 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
                         kind="brep",
                     )
                 }
-            )
+            ),
         )
 
         window._apply_sketch_pull(-8.5)
@@ -5561,6 +5566,7 @@ def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> No
         # Gestellt wird **nach** dem Öffnen: Der Aufbau des Modus liest die
         # echte Szene, und eine Attrappe ohne ``features`` bricht ihn ab.
         window.session.last_result = SimpleNamespace(
+            stopped_at=None,
             scene=Scene(
                 objects={
                     "body": SimpleNamespace(
@@ -5570,7 +5576,7 @@ def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> No
                         ),
                     )
                 }
-            )
+            ),
         )
         # Ein Umriss mitten über dem Körper — dort, wo ein Kunde ihn zöge.
         panel.canvas.add_element("line", ((2.0, 2.0), (8.0, 2.0)))
