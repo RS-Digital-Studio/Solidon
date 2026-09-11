@@ -1735,3 +1735,43 @@ def test_the_flow_runs_on_a_host_without_a_window(qt_app: QApplication) -> None:
         session.release(30_000)
         viewport.close()
         qt_app.processEvents()
+
+
+def test_the_placement_at_a_feature_carries_no_bar_of_its_own(qt_app: QApplication) -> None:
+    """Am gewählten Merkmal gibt es ein Übernehmen, nicht zwei.
+
+    Die Leiste unten trug Hinweis, „Werte bearbeiten" und „Position
+    übernehmen" — alle drei stehen am Merkmal rechts, samt eigenem
+    Übernehmen (Robert, 11.09.2026: „auch 2 mal übernehmen einmal unten und
+    einmal rechts … die untere leiste uns sparen und nur die rechte
+    verwenden").
+
+    Geprüft wird beides: dass die Leiste wegbleibt **und** dass der Knopf
+    rechts die Platzierung wirklich abschließt. Ohne die zweite Hälfte wäre
+    die erste eine Sackgasse.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active, "die Maße stehen im Bild"
+        assert not flow._bar.isVisibleTo(window.viewport), "und zwar ohne Leiste darunter"
+        assert flow.dialog.values_stand_elsewhere, "weil sie rechts stehen"
+
+        vorher = [step.op for step in window.session.project.document.ops]
+        window.feature_panel._apply.click()
+        window.session.wait_for_idle()
+        for _ in range(60):
+            QApplication.processEvents()
+        nachher = [step.op for step in window.session.project.document.ops]
+        assert nachher == [*vorher, "resize_hole"], (
+            f"der Knopf rechts schließt die Platzierung ab: {nachher}"
+        )
+    finally:
+        window.end_quiet_placement()
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()

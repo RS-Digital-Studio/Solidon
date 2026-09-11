@@ -11305,13 +11305,35 @@ class MainWindow(QMainWindow):
         ändert nichts, es nennt eine registrierte Operation und ihre Werte
         (Regel 2). Der Körper kommt aus der Auswahl — welches Merkmal gemeint
         ist, steht schon in ``at_feature``.
+
+        **Läuft eine Platzierung, schließt dieser Knopf sie ab.** Sie hat seit
+        dem 11.09.2026 keine eigene Leiste mehr, und damit kein eigenes
+        Übernehmen (Robert: „auch 2 mal übernehmen einmal unten und einmal
+        rechts … nur die rechte verwenden"). Die Werte kommen dann aus ihr und
+        nicht aus den Feldern: Im Bild hat jemand eine Stelle eingestellt, und
+        die Felder rechts kennen sie nicht.
+        """
+        flow = self._quiet_placement
+        if flow is not None and flow.active and flow.spec_of().name == op:
+            flow.accept()
+            return
+        self._apply_placed_feature(op, params)
+
+    def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> None:
+        """Der Schritt selbst — von der Handlung rechts oder aus der Platzierung.
+
+        **Eine Stelle für beide Wege**, und sie ist der Rückruf, den ein
+        `QuietHost` beim Übernehmen zieht. Getrennt von
+        :meth:`_apply_from_feature_panel`, weil jene Methode erst fragt, ob
+        eine Platzierung läuft — käme der Rückruf dort an, riefe er sich
+        selbst.
         """
         object_id = self.object_tree.selected()
         if object_id is None:
             self.announce(_needs_objects(0))
             return
         self._drop_feature_preview()
-        draft = OperationDraft(op=op, inputs=(object_id,), params=params)
+        draft = OperationDraft(op=op, inputs=(object_id,), params=dict(params))
         self.session.apply(REGISTRY.get(op).title, [draft])
 
     def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
@@ -11349,7 +11371,11 @@ class MainWindow(QMainWindow):
         self._drop_feature_preview()
         self.end_quiet_placement()
         spec = REGISTRY.get(op)
-        host = QuietHost(params, lambda values: self._apply_from_feature_panel(op, dict(values)))
+        host = QuietHost(
+            params,
+            lambda values: self._apply_placed_feature(op, values),
+            known=[field.name for field in spec.params.spec()],
+        )
         flow = PlacementFlow(host, self, lambda: spec, lambda: (object_id,))
         self._quiet_host = host
         self._quiet_placement = flow

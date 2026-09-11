@@ -1253,6 +1253,13 @@ class OperationDialog(QDialog):
     surfaceRequested = Signal()
     """Die Werte bleiben im Dialog, die Position wird auf dem Modell gewählt."""
 
+    values_stand_elsewhere = False
+    """Sie stehen hier — deshalb trägt die Platzierung ihre eigene Leiste.
+
+    Der Gegenpart ist `placement_flow.QuietHost`: Am gewählten Merkmal stehen
+    die Werte rechts im Merkmalfenster, und die Leiste unten wäre die zweite
+    Stelle mit demselben Übernehmen."""
+
     spoolChosen = Signal(object)
     """Eine örtliche Spulenwahl reist separat, niemals als Operationsparameter."""
 

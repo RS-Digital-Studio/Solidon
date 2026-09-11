@@ -8,7 +8,7 @@ bleibt der einzige Weg ins Dokument.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Protocol, cast, runtime_checkable
 
 import numpy as np
@@ -105,6 +105,17 @@ class PlacementHost(Protocol):
     valuesChanged: Any
     finished: Any
 
+    values_stand_elsewhere: bool
+    """Ob die Werte dieses Trägers schon woanders zu sehen sind.
+
+    Entscheidet über die **Leiste** unten im Bild: Sie trägt Hinweis, „Werte
+    bearbeiten" und „Position übernehmen" — alles drei Dinge, die am
+    gewählten Merkmal rechts im Merkmalfenster stehen, samt einem eigenen
+    Übernehmen (Robert, 11.09.2026: „auch 2 mal übernehmen einmal unten und
+    einmal rechts … die untere leiste uns sparen und nur die rechte
+    verwenden"). Beim Dialog ist sie die einzige Bedienstelle im Bild und
+    bleibt."""
+
     def values(self) -> Mapping[str, Any]: ...
 
     def take_placement(self, values: Mapping[str, Any]) -> None: ...
@@ -137,15 +148,31 @@ class QuietHost(QObject):
     valuesChanged = Signal()
     finished = Signal(int)
 
+    values_stand_elsewhere = True
+    """Sie stehen im Merkmalfenster — deshalb gibt es ihn überhaupt."""
+
     def __init__(
         self,
         values: Mapping[str, Any],
         accepted: Callable[[Mapping[str, Any]], None],
         parent: QObject | None = None,
+        *,
+        known: Iterable[str] | None = None,
     ) -> None:
         super().__init__(parent)
         self._values = dict(values)
         self._accepted = accepted
+        self._known = frozenset(known) if known is not None else None
+        """Welche Namen die Operation kennt — oder ``None`` für alle.
+
+        **Der Dialog filterte das zufällig mit.** ``take_placement`` setzt dort
+        nur Editoren, und für einen Namen ohne Feld gibt es keinen; was die
+        Platzierung darüber hinaus zurückgab, fiel still weg. Ein Träger, der
+        alles annimmt, reicht es weiter — und die Operation lehnt mit „Diesen
+        Parameter gibt es bei dieser Operation nicht" ab, gemessen am
+        11.09.2026 an ``resize_hole`` und den Normalenfeldern ``nx``/``ny``/
+        ``nz`` (die Absage landete offscreen in einem modalen Dialog, und der
+        Lauf stand)."""
 
     def values(self) -> Mapping[str, Any]:
         return dict(self._values)
@@ -154,9 +181,14 @@ class QuietHost(QObject):
         """Ort und Maße zurück in den Träger — und die Runde ist gemeldet.
 
         Dieselbe Zusage wie beim Dialog: Wer schreibt, löst ``valuesChanged``
-        aus; daran hängen Vorschau und Maßlinien.
+        aus; daran hängen Vorschau und Maßlinien. **Und dieselbe Grenze:**
+        Was die Operation nicht kennt, kommt nicht herein (:attr:`_known`).
         """
-        self._values.update(values)
+        self._values.update(
+            values
+            if self._known is None
+            else {name: value for name, value in values.items() if name in self._known}
+        )
         self.valuesChanged.emit()
 
     def accept(self) -> None:
@@ -648,7 +680,7 @@ class PlacementFlow(QObject):
         self.window._clear_preview()
         self.viewport.set_placement_pointer(self.pointer)
         self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
-        self._bar.show()
+        self._show_bar()
         self._accept.setEnabled(False)
         self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         if self._change_op is None:
@@ -758,6 +790,15 @@ class PlacementFlow(QObject):
         self._disposed = True
         for widget in self._widgets():
             widget.deleteLater()
+
+    def _show_bar(self) -> None:
+        """Die Leiste unten zeigen — außer der Träger trägt seine Werte schon.
+
+        **Eine Stelle für zwei Aufrufe**, damit die Frage nicht an einem von
+        beiden vergessen wird: Was hier hängt, ist nicht die Sichtbarkeit
+        eines Widgets, sondern ob es im Bild eine zweite Bedienstelle gibt.
+        """
+        self._bar.setVisible(not self.dialog.values_stand_elsewhere)
 
     def _widgets(self) -> tuple[QWidget, ...]:
         return (
@@ -1884,7 +1925,7 @@ class PlacementFlow(QObject):
                     item.set_visible(False)
             self.viewport._draw()
             return
-        self._bar.show()
+        self._show_bar()
         area = self.viewport.rect()
         self._canvas.setGeometry(area)
         room = area.adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY)

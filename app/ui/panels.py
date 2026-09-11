@@ -4784,6 +4784,8 @@ class FeaturePanel(QWidget):
 
         Gehört dem Merkmal und nicht der scharfen Handlung; siehe
         :meth:`_settle_in_view`."""
+        self._in_view_key: str | None = None
+        """Zu welcher Handlung er gehört — sie wird beim Klick scharf."""
         self._said_notes: set[str] = set()
         """Welche Gruppenbegründungen in diesem Panel schon stehen.
 
@@ -4840,6 +4842,7 @@ class FeaturePanel(QWidget):
         self._apply.setVisible(False)
         self._in_view.setVisible(False)
         self._into_view = None
+        self._in_view_key = None
         self._armed_title.hide()
         self._every.setVisible(False)
         self._every.setChecked(False)
@@ -5576,9 +5579,20 @@ class FeaturePanel(QWidget):
             entry.run()
 
     def _show_armed_in_view(self) -> None:
-        """Bringt die Maße dieses Merkmals in die Szene, statt auszuführen."""
-        if self._into_view is not None:
-            self._into_view()
+        """Bringt die Maße dieses Merkmals in die Szene, statt auszuführen.
+
+        **Und macht dabei ihre Handlung scharf.** Der Knopf darunter führt
+        aus, was zuletzt angefasst wurde; nach einem Klick hier steht im Bild
+        aber sichtbar eine Platzierung, und die gehört einer bestimmten
+        Handlung. Ohne das Umschalten übernähme der Knopf daneben eine andere
+        — gemessen an einer Bohrung: *Merkmal verschieben* stand scharf,
+        während im Bild die Maße von *Bohrung ändern* lagen.
+        """
+        if self._into_view is None:
+            return
+        if self._in_view_key is not None:
+            self._arm(self._in_view_key)
+        self._into_view()
 
     def _settle_in_view(self) -> None:
         """Entscheidet, ob dieses Merkmal den Weg ins Bild anbietet.
@@ -5594,17 +5608,20 @@ class FeaturePanel(QWidget):
         Angeboten wird er, sobald **eine** Handlung dieses Merkmals dorthin
         führt; welche, sagt :data:`LEADS_INTO_THE_VIEW`.
         """
-        self._into_view = next(
-            (entry.in_view for entry in self._runs.values() if entry.in_view is not None), None
+        found = next(
+            ((key, entry) for key, entry in self._runs.items() if entry.in_view is not None),
+            None,
         )
+        self._in_view_key = found[0] if found is not None else None
+        self._into_view = found[1].in_view if found is not None else None
         self._in_view.setVisible(self._into_view is not None)
         if self._into_view is None:
             return
-        zusage = str(tr("Maßlinien zu Kanten und Mitten in der Szene — dort einstellen."))
-        self._in_view.setStatusTip(zusage)
-        self._in_view.setToolTip(zusage)
+        promise = str(tr("Maßlinien zu Kanten und Mitten in der Szene — dort einstellen."))
+        self._in_view.setStatusTip(promise)
+        self._in_view.setToolTip(promise)
         self._in_view.setAccessibleName(str(tr("Im Bild einstellen")))
-        self._in_view.setAccessibleDescription(zusage)
+        self._in_view.setAccessibleDescription(promise)
 
     def _every_for(self, op: str) -> QCheckBox | None:
         """Der Haken unten — aber nur, wenn diese Handlung eine Gruppe hat.
