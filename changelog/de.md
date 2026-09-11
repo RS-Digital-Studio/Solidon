@@ -74,6 +74,7 @@ Nutzen da und sonst nichts.
 - Der Rechtsklick auf Körper oder Fläche zeigt nur noch, was es dort allein gibt: den Schritt dahinter, die Skizze auf der Fläche, das Ausblenden. Der Knopf „Bausteine“ steht in Akzentfarbe.
 - Hält die Kette an einem Schritt an, sind die Handlungen gesperrt und nennen den Grund; ein Versuch zeigt gleich die Auswege des Prüfberichts. Vorher landete der Schritt still dahinter, nie gerechnet.
 - Der Plattenwähler in der Kopfzeile steht neben dem Druckernamen, nicht mehr darüber — auch wenn die Platten erst mit dem geöffneten Projekt dazukommen.
+- Der Prüfbericht fasst gleiche Meldungen zu einer Zeile zusammen, die Zahl steht in Klammern davor. Ein Klick darauf wählt alle betroffenen Teile; eine Handlung fragt, für welche sie gelten soll.
 
 ### Druckbett und Übergabe
 

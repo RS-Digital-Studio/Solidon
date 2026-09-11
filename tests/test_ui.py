@@ -5305,7 +5305,11 @@ LAGE_HANDLUNGEN = [
     ids=lambda value: value if isinstance(value, str) else "",
 )
 def test_every_placement_button_really_moves_the_bodies(
-    window: MainWindow, offset: tuple[float, float, float], code: str, action: errors.Action
+    window: MainWindow,
+    offset: tuple[float, float, float],
+    code: str,
+    action: errors.Action,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Die dritte Hälfte von Regel 17: der Handler muss auch *wirken*.
 
@@ -5329,9 +5333,19 @@ def test_every_placement_button_really_moves_the_bodies(
     kaputt war: Sie hängen an denselben zwei Handlern, und ein
     Registername steht darin als Zeichenkette (siehe den Wächter darunter).
     Wer eine der Operationen auflöst, bricht hier zwei Knöpfe auf einmal.
+
+    **Seit dem 11.09.2026 klagen die zwei Würfel in einer Zeile** — der
+    Bericht bündelt gleiche Meldungen über Körper hinweg, und der Knopf an
+    einer Sammelzeile fragt, für welche Körper er gelten soll. Der Dialog
+    antwortet hier mit allen; geprüft bleibt, dass die Handlung wirkt.
     """
     from PySide6.QtWidgets import QPushButton
 
+    from app.ui import panels
+
+    monkeypatch.setattr(
+        panels.BodyChoiceDialog, "ask", lambda parent, title, ids, names: tuple(ids)
+    )
     _with_two_objects(window)
     window.session.apply(
         "Verschieben",
@@ -5378,7 +5392,10 @@ def test_every_placement_button_really_moves_the_bodies(
     for row in range(window.report.list.count()):
         item = window.report.list.item(row)
         finding = item.data(Qt.ItemDataRole.UserRole)
-        if finding.code == code and finding.object_id == "obj_1":
+        # Die Zeile, die für obj_1 steht — allein oder als Sammelzeile mit
+        # obj_2 (``_BODIES_ROLE``), je nachdem, ob beide klagen.
+        bodies = item.data(panels._BODIES_ROLE) or (finding.object_id,)
+        if finding.code == code and "obj_1" in bodies:
             window.report.list.setCurrentRow(row)
             break
     QApplication.processEvents()
@@ -10352,8 +10369,20 @@ def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
 
     window._compare_totals(measured)
 
-    codes = _report_codes(window)
-    assert codes.count("gcode.deviation") == 2, "Material und Zeit, beide"
+    # Zwei Befunde mit demselben Satz sind seit dem 11.09.2026 **eine** Zeile
+    # „(2) …" (Robert: „gleiche Meldungen zusammenfassen"); was jeder für
+    # sich sagt — Material, Zeit, die Zahlen —, steht im Tooltip.
+    from app.ui.panels import _BUNDLE_ROLE
+
+    listing = window.report.list
+    rows = [
+        listing.item(row)
+        for row in range(listing.count())
+        if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "gcode.deviation"
+    ]
+    assert len(rows) == 1 and rows[0].data(_BUNDLE_ROLE) == 2, "Material und Zeit, beide"
+    assert rows[0].text().startswith("(2) ")
+    assert "Material" in rows[0].toolTip() and "Zeit" in rows[0].toolTip(), rows[0].toolTip()
 
 
 def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
@@ -14444,9 +14473,11 @@ def test_one_line_stands_for_many_bodies_and_asks_which(window: MainWindow) -> N
     Gemessen an ``Wizard+Tower+Staunton+Elegoo.3mf`` (03.09.2026): 15 Befunde,
     davon zwölf aus zwei Kennungen über dieselben sechs Körper. Sechsmal
     derselbe Satz mit anderem Namen dahinter — was der Kunde liest, ist eine
-    Wand. Gebündelt wird jetzt über die Körpergrenze (``ACROSS_BODIES``), und
-    die Zeile führt die Körper mit, damit die Handlung fragen kann, für welche
-    sie gelten soll (Entscheidung Robert).
+    Wand. Gebündelt wird über die Körpergrenze — erst für zwei Kennungen
+    (``ACROSS_BODIES``), seit dem 11.09.2026 für jede (Robert: „gleiche
+    Meldungen zusammenfassen und anzahl dann davor in Klammer anzeigen") —,
+    und die Zeile führt die Körper mit, damit die Handlung fragen kann, für
+    welche sie gelten soll (Entscheidung Robert).
     """
     report = window.report
     report.show_result(None)
@@ -14469,7 +14500,7 @@ def test_one_line_stands_for_many_bodies_and_asks_which(window: MainWindow) -> N
     assert len(zeilen) == 1, f"sechs Befunde, eine Zeile — gezählt: {len(zeilen)}"
     zeile = zeilen[0]
     assert zeile is not None
-    assert "6 ×" in zeile.text(), zeile.text()
+    assert zeile.text().startswith("(6) "), zeile.text()
     assert "obj_1" not in zeile.text(), (
         "eine Zeile für sechs Körper nennt keinen einzelnen — sonst verschweigt sie fünf"
     )

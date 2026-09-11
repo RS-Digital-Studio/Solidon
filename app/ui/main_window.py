@@ -2202,6 +2202,7 @@ class MainWindow(QMainWindow):
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
+        self.report.bundleActivated.connect(self._on_bundle_activated)
         self.report.actionOnBodies.connect(self._run_on_chosen_bodies)
         self.report.slicerRequested.connect(self.action_print_settings)
         self.chat = ChatPanel(self)
@@ -10130,6 +10131,27 @@ class MainWindow(QMainWindow):
         if spec is None or not wanted:
             return
         self.run_operation(spec, on_bodies=wanted)
+
+    def _on_bundle_activated(self, finding: Finding, bodies: object) -> None:
+        """Eine Sammelzeile über mehrere Körper anklicken: alle wählen, den
+        Schritt zeigen.
+
+        Der Klickvertrag der Bündelung (``panels.REPORT_BUNDLE_FROM``): Eine
+        Zeile, die neun Körper vertritt, zeigt beim Klick nicht den ersten
+        zufälligen, sondern alle neun — im Objektbaum markiert, im Bild
+        hervorgehoben. Wo die Zeile einen Schritt nennt, zeigt der Verlauf ihn,
+        wie bei jeder anderen Zeile auch. Einen Ort gibt es nicht: Neun
+        Buchstaben haben neun.
+        """
+        if finding.op_id is not None and self.history_panel.point_at(int(finding.op_id)):
+            open_section(self.history_panel)
+        if not isinstance(bodies, (tuple, list)):
+            return
+        result = self.session.last_result
+        living = result.scene.objects if result is not None else {}
+        chosen = [str(entry) for entry in bodies if str(entry) in living]
+        if chosen:
+            self.object_tree.select_objects(chosen)
 
     def _on_finding_activated(self, finding: Finding) -> None:
         """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem

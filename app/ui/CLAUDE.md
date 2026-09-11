@@ -873,15 +873,26 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
   Transaktion repariert wurden, und sperrt sich beim ersten Klick bis zum neuen
   Ergebnis. Berichtshandlungen stehen vollbreit untereinander, damit auch
   längere Übersetzungen in der schmalen Karte vollständig bleiben.
-- **Gebündelte Befunde behalten nur gemeinsame Klickziele.** Gleiche Kennung,
-  Schwere, Meldung, Herkunft, Körper, Schritt und Handlungen bilden eine
-  gezählte Zeile; andere Handlungen trennen das Bündel. Ort, Merkmalsziele und
-  Werte trennen allgemeine Befunde ebenfalls. Nur verlorene
-  Formdetails werden trotz verschiedener alter Kennungen ab zwei Einträgen
-  gebündelt; ihre internen Kennungen stehen ausschließlich in Tooltip und
-  zugänglicher Beschreibung. Körper und Schritt stehen sichtbar an der Zeile.
-  Der Klick zeigt beide, aber keine Merkmalskarte einer Stelle, die nicht mehr
-  existiert. Der Kerntext bleibt kanalneutral; nur das Panel nennt den Klick.
+- **Gleiche Meldungen werden eine gezählte Zeile, die Zahl davor in
+  Klammern** (Robert, 11.09.2026; `REPORT_BUNDLE_FROM = 2`). Gleiche Kennung,
+  Schwere, Meldung, Herkunft, Schritt und Handlungen bilden das Bündel —
+  Körper, Ort, Merkmale und Werte **nicht mehr**: „(9) Ausrichtung über die
+  Schichtanalyse gesucht." statt neun Zeilen. Was die Mitglieder unterscheidet,
+  trägt die Zeile anders: die Körper als Liste (`_BODIES_ROLE`), Name und
+  Werte je Mitglied im Tooltip, ein gemeinsamer Körper sichtbar an der Zeile.
+  **Der Klickvertrag bleibt**: Eine Zeile über mehrere Körper wählt beim Klick
+  alle (`bundleActivated` → `_on_bundle_activated` → `ObjectTree.select_objects`),
+  nie den ersten zufälligen; ihre Handlung fragt, für welche Körper sie
+  gelten soll (`BodyChoiceDialog`) — und geht dann einen von drei Wegen
+  (`_run_action_for`): eine **Operation** wird ein Schritt je Körper in einer
+  Transaktion (`actionOnBodies`), eine Handlung **an einem Körper**
+  (`_PER_BODY_ACTIONS`) läuft je Körper mit dessen eigenem Befund
+  (`_MEMBERS_ROLE`, nie mit dem des ersten), alles andere läuft einmal. Sie
+  trägt keinen Ort und keine Merkmale, wo die Mitglieder verschiedene haben;
+  ohne Körper (die Gegenprobe aus dem G-Code für Material und Zeit) heißen
+  ihre Mitglieder im Tooltip *Einträge*, nicht *Objekte*. Der Kerntext bleibt
+  kanalneutral — Agent, CLI und Datei lesen jeden Befund einzeln; nur das
+  Panel zählt.
 - **Und der Objektbaum bündelt nach derselben Regel wie der Prüfbericht.**
   Erkannte Merkmale mit gleichem Namen **und gleichem Maß** stehen ab
   `BUNDLE_FROM` unter einem zugeklappten Dach („Hohlkehle (17) · R13,98 mm").

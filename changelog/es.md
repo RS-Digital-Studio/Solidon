@@ -50,6 +50,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El clic derecho sobre un cuerpo o una cara muestra solo lo que existe únicamente allí: el paso detrás, el boceto sobre la cara, ocultar. El botón «Bloques» está en color de acento.
 - Si la cadena se detiene en un paso, las acciones quedan bloqueadas y dicen por qué; intentarlo muestra las salidas del informe. Antes, el paso quedaba en silencio detrás, sin calcularse nunca.
 - El selector de placas de la cabecera está junto al nombre de la impresora, ya no encima — también cuando las placas llegan recién con el proyecto abierto.
+- El informe agrupa los mensajes iguales en una línea, con el número entre paréntesis delante. Un clic selecciona todas las piezas afectadas; una acción pregunta a cuáles aplicarse.
 
 ### Cama de impresión y entrega
 

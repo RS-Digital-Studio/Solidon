@@ -26,12 +26,12 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from io import StringIO
 from itertools import pairwise
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from app.core.errors import CHECK_SLICER_PROFILE, ValidationError
 from app.core.log import get_logger
 from app.core.types import BoundingBox, CancelToken, Finding, MetricSource
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
@@ -1349,6 +1349,18 @@ class CrossCheck:
         return abs(self.deviation) <= DEVIATION_LIMIT
 
 
+#: Wie die drei Größen der Gegenprobe heißen, wenn sie jemand liest. Im
+#: Tooltip des Prüfberichts stand „Was: material" und „Was: time" — der
+#: Schlüssel, mit dem der Code rechnet, in einem deutschen Fenster; und seit
+#: gleiche Sätze zu einer Zeile werden, ist der Tooltip die einzige Stelle,
+#: die Material von Zeit trennt.
+QUANTITY_TITLES: Final[dict[str, TranslatableText]] = {
+    "support": _("Stützen"),
+    "material": _("Material"),
+    "time": _("Zeit"),
+}
+
+
 def compare(estimated: float, measured: float, what: str = "support") -> CrossCheck:
     """Prüft eine Größe gegen. Ein großer Unterschied ist ein Befund, keine
     Korrektur.
@@ -1359,6 +1371,8 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
     Arbeit braucht.
     """
     check = CrossCheck(what=what, estimated=estimated, measured=measured)
+    # Im Befund steht die lesbare Größe; ``check.what`` bleibt der Schlüssel.
+    named: TranslatableText | str = QUANTITY_TITLES.get(what, what)
     if measured <= 0.0:
         # Eine Null ist keine Messung, und `deviation` gäbe für sie glatt
         # null zurück — die größtmögliche Abweichung sähe aus wie die
@@ -1375,7 +1389,7 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
                 code="gcode.no_measurement",
                 severity="info",
                 message=_("Die Druckdatei nennt für diese Größe keinen Messwert."),
-                values={"what": what, "estimated": round(estimated, 2)},
+                values={"what": named, "estimated": round(estimated, 2)},
                 source="internal",
             )
         )
@@ -1387,7 +1401,7 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
                 severity="warning",
                 message=_("Die Gegenprobe aus dem G-Code weicht deutlich von der Schätzung ab."),
                 values={
-                    "what": what,
+                    "what": named,
                     "estimated": round(estimated, 2),
                     "measured": round(measured, 2),
                     "deviation": f"{check.deviation:+.0%}",

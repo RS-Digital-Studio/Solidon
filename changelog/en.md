@@ -49,6 +49,7 @@ it into `website/version.json`.
 - A right-click on a body or face shows only what exists there alone: the step behind it, the sketch on the face, hiding. The “Parts” button stands in accent colour.
 - When the chain stops at a step, the actions are locked and say why; trying anyway shows the report's ways out right away. Before, the step landed silently behind the halt, never computed.
 - The plate selector in the header sits beside the printer name instead of on top of it — even when the plates only arrive with the opened project.
+- The report folds identical messages into one line, with the count in brackets in front. Clicking it selects every affected part; an action asks which of them it should apply to.
 
 ### Print bed and handover
 

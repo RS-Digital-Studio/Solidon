@@ -49,6 +49,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O clique direito num corpo ou numa face mostra apenas o que só existe aí: o passo por trás, o esboço na face, o ocultar. O botão «Blocos» está em cor de destaque.
 - Se a cadeia para num passo, as ações ficam bloqueadas e dizem porquê; tentar mostra logo as saídas do relatório. Antes, o passo ficava em silêncio atrás da paragem, nunca calculado.
 - O seletor de mesas no cabeçalho fica ao lado do nome da impressora, já não por cima — mesmo quando as mesas só chegam com o projeto aberto.
+- O relatório agrupa mensagens iguais numa linha, com o número entre parênteses à frente. Um clique seleciona todas as peças afetadas; uma ação pergunta a quais se aplica.
 
 ### Mesa de impressão e entrega
 

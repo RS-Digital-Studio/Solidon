@@ -49,6 +49,7 @@ scrive in `website/version.json`.
 - Il clic destro su un corpo o una faccia mostra solo ciò che esiste soltanto lì: il passo dietro, lo schizzo sulla faccia, il nascondere. Il pulsante «Blocchi» è in colore d'accento.
 - Se la catena si arresta a un passo, le azioni sono bloccate e ne dicono il motivo; chi ci prova vede subito le vie d'uscita del rapporto. Prima il passo finiva in silenzio dietro, mai calcolato.
 - Il selettore dei piatti nell'intestazione sta accanto al nome della stampante, non più sopra — anche quando i piatti arrivano solo con il progetto aperto.
+- Il rapporto raggruppa i messaggi uguali in una riga, con il numero tra parentesi davanti. Un clic seleziona tutte le parti interessate; un'azione chiede a quali applicarsi.
 
 ### Piano di stampa e consegna
 

@@ -1064,6 +1064,15 @@ einzigen Weg, den die Karte anbietet.
   **Bettkoordinaten**, ihre Körper liegen also rechts neben dem Bett. Was
   hilft, ist *Auf dem Bett anordnen*, nicht *Modell teilen*.
   (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
+- **Gleiche Meldungen sind eine Zeile, die Zahl davor in Klammern** (Robert,
+  11.09.2026: „gleiche Meldungen zusammenfassen und anzahl dann davor in
+  Klammer anzeigen"). Der Prüfbericht bündelt ab zwei nach Satz, Kennung,
+  Schwere, Schritt und Handlungen — nicht mehr nach Körper, Ort oder Wert.
+  Was dabei nicht verloren gehen darf, ist der Klick: Die Sammelzeile trägt
+  alle ihre Körper und wählt sie beim Klick **alle**; ihre Handlung fragt,
+  für welche sie gelten soll; Ort und Merkmale trägt sie nur, wenn alle
+  Mitglieder dieselben haben. Die Karte in `app/ui/CLAUDE.md` nennt die
+  Stellen.
 - **Und sie stehen sichtbar da, nicht im Rechtsklick.** Unter der Befundliste
   liegt eine Knopfzeile mit den Handlungen des gewählten Befunds (leer, solange
   es keine gibt). Gefragt wird über `actions_for(finding)` — dieselbe Quelle,

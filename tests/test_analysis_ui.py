@@ -1579,9 +1579,16 @@ def test_a_heavier_finding_replaces_the_lighter_same_one(qt_app: QApplication) -
         panel.deleteLater()
 
 
-def test_the_same_message_about_another_body_stays_its_own_line(qt_app: QApplication) -> None:
-    """Zwei Körper stehen aus verschiedenen Gründen hinaus — zwei Zeilen."""
-    from app.ui.panels import ReportPanel
+def test_the_same_message_about_another_body_becomes_one_counted_line(
+    qt_app: QApplication,
+) -> None:
+    """Zwei Körper stehen hinaus — eine Zeile „(2) …", beide Namen im Tooltip.
+
+    Bis zum 11.09.2026 waren es zwei Zeilen („Zwei Körper stehen aus
+    verschiedenen Gründen hinaus"); seit Roberts Ansage zählt der Satz, und
+    die Zeile trägt beide Körper für den Klick.
+    """
+    from app.ui.panels import _BODIES_ROLE, ReportPanel
 
     first = Finding(
         code="arrange.out_of_build_volume",
@@ -1595,7 +1602,11 @@ def test_the_same_message_about_another_body_stays_its_own_line(qt_app: QApplica
     try:
         panel.add_findings([first, second])
 
-        assert panel.list.count() == 2
+        assert panel.list.count() == 1
+        item = panel.list.item(0)
+        assert item.text() == "(2) Ein Objekt steht über den Bauraum hinaus."
+        assert item.data(_BODIES_ROLE) == ("obj_1", "obj_2")
+        assert "obj_1" in item.toolTip() and "obj_2" in item.toolTip()
     finally:
         panel.deleteLater()
 
@@ -3476,14 +3487,17 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
         )
 
         texts = [panel.list.item(row).text() for row in range(panel.list.count())]
-        assert len(texts) == 6, f"eine Sammelzeile statt 118, der Rest bleibt: {texts!r}"
+        # Seit dem 11.09.2026 bündelt der Bericht jede gleiche Meldung ab zwei:
+        # die drei geschlossenen Lücken sind eine Zeile „(3) …".
+        assert len(texts) == 4, f"eine Sammelzeile statt 118, der Rest bleibt: {texts!r}"
+        assert "(3) Eine Lücke wurde geschlossen" in texts, texts
 
-        bundle = [text for text in texts if "118 Formdetails" in text]
+        bundle = [text for text in texts if "(118) Formdetails" in text]
         assert bundle == [
-            "118 Formdetails sind nach diesem Schritt nicht mehr automatisch "
+            "(118) Formdetails sind nach diesem Schritt nicht mehr automatisch "
             "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
             "Bearbeitung bleibt erhalten. — Griff"
-        ], "Zahl, nächster Klick und verständlicher Körpername stehen sichtbar an der Zeile"
+        ], "Zahl davor, nächster Klick und verständlicher Körpername stehen sichtbar an der Zeile"
 
         row = texts.index(bundle[0])
         tooltip = panel.list.item(row).toolTip()
@@ -3549,7 +3563,7 @@ def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> N
         )
         texts = [panel.list.item(row).text() for row in range(panel.list.count())]
         assert len(texts) == 2, f"die Sammelzeile übersteht den Nachschub: {texts!r}"
-        assert any(text.startswith("118 Formdetails") for text in texts)
+        assert any(text.startswith("(118) Formdetails") for text in texts)
         assert f"119 × {tr('Hinweis')}" in panel.summary.text(), panel.summary.text()
 
         # Der Nachschub-Weg dedupliziert identische Kernbefunde. Vier
@@ -3648,6 +3662,93 @@ def test_a_bundle_never_crosses_the_body_or_step_its_click_will_show(
         panel.deleteLater()
 
 
+def test_a_bundle_over_many_bodies_selects_all_of_them_on_click(
+    qt_app: QApplication,
+) -> None:
+    """Neun gleiche Sätze sind eine Zeile „(9) …", und ihr Klick wählt alle neun.
+
+    **Roberts Bericht** (11.09.2026: „beim prüfbericht auch gleiche Meldungen
+    zusammenfassen und anzahl dann davor in Klammer anzeigen"): ein Schriftzug,
+    zerlegt und ausgerichtet, und der Bericht führte je Buchstabe „Ausrichtung
+    über die Schichtanalyse gesucht." — neun Zeilen mit demselben Satz. Bis
+    dahin trennte der Körper die Gruppen, damit ein Klick auf eine Sammelzeile
+    nie den ersten zufälligen Körper zeigt. Der Vertrag bleibt, die Antwort ist
+    eine andere: Die Zeile trägt alle Körper, und der Klick wählt sie **alle**.
+
+    Ende zu Ende am Fenster: Schriftzug, zerlegen, ausrichten; dann die Zeile
+    lesen, ihren Tooltip, und den Klick am Objektbaum messen.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.core.scene import OperationDraft
+    from app.ui.panels import _BODIES_ROLE
+
+    # Ein eigenes Fenster: Die Fixture öffnet eine Platte als ``obj_1``, und
+    # die Zerlegung darunter meint den Schriftzug.
+    window = MainWindow(Session(), UiSettings())
+    window.session.apply(
+        "Schriftzug",
+        [
+            OperationDraft(
+                op="create_label",
+                inputs=(),
+                params={"text": "Solidon3D", "size": 60.0, "font": "DejaVu Sans"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    window.session.apply(
+        "Zerlegen",
+        [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 10})],
+    )
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    assert result.stopped_at is None and len(result.scene.objects) == 10
+
+    # Der Befund der gründlichen Suche, je Buchstabe einer — hier über den
+    # Nachschub statt über zehn Schichtanalysen, denn geprüft wird die Zeile.
+    window.report.add_findings(
+        [
+            Finding(
+                code="orient.searched",
+                severity="info",
+                message="Ausrichtung über die Schichtanalyse gesucht.",
+                object_id=body,
+                values={"candidates": 26, "support": round(0.1 * index, 2)},
+            )
+            for index, body in enumerate(result.scene.objects)
+        ]
+    )
+
+    report = window.report
+    rows = [report.list.item(row) for row in range(report.list.count())]
+    bundles = [item for item in rows if item.text().startswith("(10) ")]
+    assert len(bundles) == 1, [item.text() for item in rows]
+    (bundle,) = bundles
+    assert bundle.text() == "(10) Ausrichtung über die Schichtanalyse gesucht.", (
+        "die Zahl davor in Klammern, der Satz einmal, kein einzelner Körpername"
+    )
+    bodies = bundle.data(_BODIES_ROLE)
+    assert bodies is not None and len(bodies) == 10, "die Zeile kennt alle ihre Körper"
+    assert "Solidon3D 1" in bundle.toolTip() and "Solidon3D 10" in bundle.toolTip(), (
+        "und der Tooltip nennt sie beim Namen"
+    )
+    assert not any(
+        item.text() == "Ausrichtung über die Schichtanalyse gesucht." for item in rows
+    ), "keine der zehn Einzelzeilen bleibt daneben stehen"
+
+    QTest.mouseClick(
+        report.list.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=report.list.visualItemRect(bundle).center(),
+    )
+    assert set(window.object_tree.selected_objects()) == set(bodies), (
+        "der Klick wählt alle Körper der Zeile, nicht den ersten zufälligen"
+    )
+    window.wait_for_workers()
+
+
 def test_a_bundle_never_discards_different_actions(qt_app: QApplication) -> None:
     """Wortgleiche Fehler mit verschiedenen Auswegen bleiben getrennt.
 
@@ -3688,8 +3789,17 @@ def test_a_bundle_never_discards_different_actions(qt_app: QApplication) -> None
         panel.deleteLater()
 
 
-def test_a_generic_bundle_never_discards_different_places(qt_app: QApplication) -> None:
-    """Ortsgebundene Warnungen bleiben je Ort und Merkmal anklickbar."""
+def test_a_bundle_over_different_places_claims_no_single_place(qt_app: QApplication) -> None:
+    """Vier gleiche Warnungen an vier Stellen sind eine gezählte Zeile — ohne
+    erfundenen Sammelort.
+
+    Bis zum 11.09.2026 trennten Ort und Merkmal die Gruppen; seit Roberts
+    Ansage („gleiche Meldungen zusammenfassen") zählt der Satz. Was die Zeile
+    dafür **nicht** tun darf: mit dem ersten der vier Orte oder Merkmale
+    dastehen — ein Klick flöge dann zu einer zufälligen Stelle. Sie trägt
+    keinen Ort und keine Merkmale; der Körper bleibt, denn er ist allen
+    gemeinsam.
+    """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
     from app.ui.panels import ReportPanel
@@ -3710,17 +3820,24 @@ def test_a_generic_bundle_never_discards_different_places(qt_app: QApplication) 
     try:
         panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
 
-        assert panel.list.count() == 4, "vier echte Stellen dürfen nicht zu keinem Ort werden"
-        for row, expected in enumerate(findings):
-            shown: Finding = panel.list.item(row).data(Qt.ItemDataRole.UserRole)
-            assert shown.location == expected.location
-            assert shown.feature_ids == expected.feature_ids
+        assert panel.list.count() == 1, "vier gleiche Sätze sind eine Zeile"
+        item = panel.list.item(0)
+        assert item.text().startswith("(4) Diese Stelle braucht Aufmerksamkeit.")
+        shown: Finding = item.data(Qt.ItemDataRole.UserRole)
+        assert shown.location is None, "der erste von vier Orten wäre ein erfundener Sammelort"
+        assert shown.feature_ids == ()
+        assert shown.object_id == "obj_1", "der gemeinsame Körper bleibt das Klickziel"
     finally:
         panel.deleteLater()
 
 
-def test_a_generic_bundle_never_discards_different_values(qt_app: QApplication) -> None:
-    """Messwerte trennen Gruppen; ein gemeinsamer Wert bleibt im Detail."""
+def test_a_bundle_keeps_every_members_value_in_its_tooltip(qt_app: QApplication) -> None:
+    """Vier Messungen werden eine Zeile; die Zahlen stehen je Mitglied im Tooltip.
+
+    Die Zeile trägt die Zahl und den Satz, nicht den Wert des ersten
+    zufälligen Mitglieds — vier Wände von 0,4 bis 0,7 mm sind vier Zahlen,
+    und keine davon darf als *die* Wandstärke der Zeile dastehen.
+    """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
     from app.ui.panels import ReportPanel
@@ -3744,34 +3861,21 @@ def test_a_generic_bundle_never_discards_different_values(qt_app: QApplication) 
 
     panel = ReportPanel()
     try:
-        separate = shown((0.4, 0.5, 0.6, 0.7))
-        assert len(separate) == 4, "vier verschiedene Messungen sind vier Aussagen"
-        assert [entry.values["wall_mm"] for entry in separate] == [0.4, 0.5, 0.6, 0.7]
-
-        typed = shown(
-            (
-                1.0,
-                "1.0",
-                TranslatableText("Gleicher sichtbarer Text", "erster Kontext"),
-                TranslatableText("Gleicher sichtbarer Text", "zweiter Kontext"),
-            )
-        )
-        assert len(typed) == 4, (
-            "Typ und Übersetzungskontext gehören zur Rohidentität; "
-            "die aktuelle Anzeige darf keine Werte verschlucken"
-        )
-
-        bundled = shown((0.6, 0.6, 0.6, 0.6))
-        assert len(bundled) == 1, "wirklich identische Messungen dürfen eine Zeile werden"
-        assert bundled[0].values["wall_mm"] == 0.6, "der gemeinsame Messwert bleibt im Detail"
+        bundled = shown((0.4, 0.5, 0.6, 0.7))
+        assert len(bundled) == 1, "vier gleiche Sätze sind eine Zeile"
+        assert "wall_mm" not in bundled[0].values, "kein zufälliger Wert an der Sammelzeile"
+        assert bundled[0].values["count"] == 4
+        tooltip = panel.list.item(0).toolTip()
+        for value in ("0,4", "0,5", "0,6", "0,7"):
+            assert value in tooltip, f"{value} fehlt im Tooltip: {tooltip!r}"
     finally:
         panel.deleteLater()
 
 
-def test_identical_findings_below_the_threshold_keep_their_own_lines(
+def test_identical_findings_bundle_from_two_and_never_across_severity(
     qt_app: QApplication,
 ) -> None:
-    """Drei gleiche Zeilen sind lesbar, erst ab vier wird gebündelt.
+    """Zwei gleiche Meldungen sind schon eine gezählte Zeile (Robert, 11.09.2026).
 
     Und gleicher Wortlaut mit anderem Schweregrad gehört nie ins selbe
     Bündel — eine Warnung, die in 118 Hinweisen aufgeht, wäre verschluckt.
@@ -3811,14 +3915,14 @@ def test_identical_findings_below_the_threshold_keep_their_own_lines(
 
     panel = ReportPanel()
     try:
-        assert len(shown(echo(3))) == 3, "unter der Schwelle bleibt jede Zeile stehen"
-        assert len(shown(echo(4))) == 1, "ab vier wird gebündelt"
+        assert shown(echo(1)) == ["Eine Lücke wurde geschlossen"], "eine Zeile trägt keine Zahl"
+        assert shown(echo(2)) == ["(2) Eine Lücke wurde geschlossen"], "ab zwei wird gezählt"
         assert len(shown(echo(4) + echo(1, "warning"))) == 2, (
             "gleicher Wortlaut, anderer Schweregrad — zwei Zeilen"
         )
         assert shown(orphans(1))[0].startswith("Ein Formdetail ist")
-        assert shown(orphans(2))[0].startswith("2 Formdetails sind")
-        assert shown(orphans(4))[0].startswith("4 Formdetails sind")
+        assert shown(orphans(2))[0].startswith("(2) Formdetails sind")
+        assert shown(orphans(4))[0].startswith("(4) Formdetails sind")
     finally:
         panel.deleteLater()
 
@@ -4141,9 +4245,16 @@ def test_an_empty_report_offers_nothing_to_filter(qt_app: QApplication) -> None:
         assert not panel.list.isHidden(), "ein Befund gehört gezeigt"
         assert panel.search.isHidden(), f"ein Filter für {FILTER_FROM - 1} Befund"
 
-        second = dataclasses.replace(finding, object_id="obj_2", values={"object": "Deckel"})
+        # Ein anderer Satz — derselbe würde seit dem 11.09.2026 mit dem
+        # ersten zu einer gezählten Zeile, und die Filter gelten Zeilen.
+        second = Finding(
+            code="arrange.collision",
+            severity="warning",
+            message="Zwei Objekte überschneiden sich.",
+            values={"a": "Halter", "b": "Deckel"},
+        )
         panel.add_findings([second])
-        assert not panel.search.isHidden(), "ab zwei Befunden gibt es etwas zu filtern"
+        assert not panel.search.isHidden(), "ab zwei Zeilen gibt es etwas zu filtern"
         assert not panel.severity.isHidden()
 
         # Und ein Filter, der wieder verschwindet, nimmt seine Wirkung mit:

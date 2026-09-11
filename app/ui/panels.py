@@ -209,30 +209,49 @@ SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 #: die etwas sagten, gingen darin unter, allen voran das richtige
 #: ``arrange.below_bed``. Jede Einzelzeile stimmt; die **Menge** begräbt.
 #: Gebündelt wird deshalb in der Anzeige, nicht im Kern: Agent, CLI und
-#: Tests lesen weiterhin jeden Befund einzeln. Bis drei bleibt es bei
-#: Einzelzeilen — dort trägt „welches Objekt" mehr als eine Zahl.
+#: Tests lesen weiterhin jeden Befund einzeln. Die Zahl gilt dem Objektbaum
+#: (gleichartige Merkmale unter einem Dach); der Prüfbericht bündelt ab
+#: :data:`REPORT_BUNDLE_FROM`.
 BUNDLE_FROM = 4
 
-#: Befunde, die je Körper **einmal** entstehen und für jeden dasselbe sagen.
+#: Ab wie vielen gleichen Meldungen der Prüfbericht eine gezählte Zeile
+#: zeigt: ab **zwei** (Robert, 11.09.2026: „beim prüfbericht auch gleiche
+#: Meldungen zusammenfassen und anzahl dann davor in Klammer anzeigen").
 #:
-#: Sonst gehört der Körper zum Klickvertrag: Eine Sammelzeile darf nicht auf
-#: das erste zufällige Mitglied zeigen, also trennt er die Gruppen. Diese hier
-#: sind die Ausnahme, und sie ist gemessen: An
-#: ``Wizard+Tower+Staunton+Elegoo.3mf`` standen 15 Befunde, davon **zwölf** aus
-#: diesen beiden Kennungen über dieselben sechs Körper — sechsmal derselbe
-#: Satz, nur mit anderem Namen dahinter. Bei ``chufang.3mf`` waren es zwölf von
-#: achtzehn. Was der Kunde daraus liest, ist eine Wand.
-#:
-#: Statt des Körpers trägt die Zeile ihre Zahl und die Liste der betroffenen
-#: Körper (:data:`_BODIES_ROLE`); die Handlung fragt beim Klick, für welche
-#: davon sie gelten soll (Entscheidung Robert, 03.09.2026). Damit verliert die
-#: Bündelung nichts — sie gibt die Wahl zurück, die vorher sechs Zeilen waren.
-ACROSS_BODIES: Final[frozenset[str]] = frozenset({"perceive.too_large", "ingest.very_large"})
+#: Bis zum 11.09.2026 trennte der Körper die Gruppen — außer bei zwei
+#: kuratierten Kennungen (``perceive.too_large``, ``ingest.very_large``), bei
+#: denen die Zeile die Körper als Liste trug und die Handlung beim Klick
+#: fragte, für welche sie gelten soll (Entscheidung Robert, 03.09.2026).
+#: Gemessen an seinem Schriftzug: neunmal „Ausrichtung über die
+#: Schichtanalyse gesucht." und sechsmal „Zwei Teile stehen so dicht …", je
+#: Buchstabe eine Zeile, und der eine Befund, der etwas Eigenes sagte, stand
+#: dazwischen. Der Klickvertrag bleibt: Eine Sammelzeile zeigt beim Klick
+#: **alle** ihre Körper (:data:`_BODIES_ROLE`, ``bundleActivated``), nie den
+#: ersten zufälligen, und ihre Handlung fragt, für welche davon sie gelten
+#: soll. Damit verliert die Bündelung nichts — sie gibt die Wahl zurück, die
+#: vorher neun Zeilen waren.
+REPORT_BUNDLE_FROM = 2
 
 #: Die Körper, die eine Sammelzeile vertritt — Grundlage der Auswahl beim
 #: Klick. Eigene Rolle und nicht aus dem Befund gelesen: Der trägt nur seinen
 #: eigenen, und die Zeile steht für alle.
 _BODIES_ROLE = int(Qt.ItemDataRole.UserRole) + 5
+
+#: Die Mitglieder einer Sammelzeile, je Körper eines — Grundlage einer
+#: Handlung, die je Körper läuft (:data:`_PER_BODY_ACTIONS`): Sie bekommt
+#: den Befund **dieses** Körpers und nicht den des ersten.
+_MEMBERS_ROLE = int(Qt.ItemDataRole.UserRole) + 6
+
+#: Handlungen, die einem Körper gelten und für jeden gewählten einzeln laufen,
+#: wenn die Sammelzeile mehrere trägt. Alles andere — was einen Schritt meint
+#: (``NEEDS_OP``, die Wiederholungen nach einem Halt), die ganze Szene
+#: (*Auf dem Bett anordnen*) oder gar keinen Körper (Bericht, Einstellungen)
+#: — läuft einmal. Eine Handlung, die als Operation im Register steht, geht
+#: den dritten Weg: ein Schritt je Körper in **einer** Transaktion
+#: (``actionOnBodies``).
+_PER_BODY_ACTIONS: Final[frozenset[str]] = frozenset(
+    {"place_on_bed", "scale_to_fit", "split_model", "remove_small_parts"}
+)
 
 #: Trägt an einer Sammelzeile, wie viele Befunde sie bündelt. Eine eigene
 #: Rolle und nicht ``values["count"]``: Den Schlüssel führen auch Befunde des
@@ -249,47 +268,30 @@ _TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 
 
 def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
-    """Wortgleiche Befunde ab :data:`BUNDLE_FROM` zu einer Zeile je Wortlaut.
+    """Gleiche Meldungen ab :data:`REPORT_BUNDLE_FROM` zu einer Zeile je Wortlaut.
 
-    Gruppiert wird über Kennung, Grad, Wortlaut, Herkunft, Körper, Schritt und
-    angebotene Handlungen — nicht pauschal über die Werte, denn genau die (das
-    jeweilige Merkmal) machen die 118 Zeilen verschieden. Bei allen anderen
-    Befunden trennen zusätzlich Ort, Merkmalsziele und Werte die Gruppen; nur
-    verlorene Formdetails sind nachweislich ortlose Mengenbefunde. Körper, Schritt und
-    Auswege gehören zum Klickvertrag: Eine kurze Zeile darf nie auf das erste
-    zufällige Mitglied oder die aktuelle Auswahl zeigen und nie ihre Handlung
-    verlieren. Die Reihenfolge der Erstvorkommen bleibt erhalten; kleine
-    Gruppen kommen als Einzelzeilen zurück (leere Mitgliederliste).
+    Gruppiert wird über Kennung, Grad, Wortlaut, Herkunft, Schritt und die
+    angebotenen Handlungen. **Nicht** über Körper, Ort, Merkmale und Werte:
+    Genau die machen aus neun gleichen Sätzen neun Zeilen, und die Zeile soll
+    den Satz einmal sagen und zählen (Robert, 11.09.2026). Was die Mitglieder
+    unterscheidet, trägt die Zeile anders — die Körper als Liste für den
+    Klick (:data:`_BODIES_ROLE`), Namen und Werte je Mitglied im Tooltip.
+    Schritt und Auswege bleiben im Schlüssel, denn sie gehören zum
+    Klickvertrag: Eine Sammelzeile darf nie zu einem zufälligen Schritt
+    springen und nie ihre Handlung verlieren. Die Reihenfolge der
+    Erstvorkommen bleibt erhalten; einzelne Befunde kommen als Einzelzeilen
+    zurück (leere Mitgliederliste).
     """
     groups: dict[tuple[Any, ...], list[Finding]] = {}
     order: list[tuple[Any, ...]] = []
     for finding in findings:
-        # Zwei Klassen von Mengenbefunden, aus zwei verschiedenen Gründen: Ein
-        # verlorenes Formdetail hat keinen Ort, ein „zu fein vernetzt" hat für
-        # jeden Körper denselben Satz. Beim zweiten fällt der Körper aus dem
-        # Schlüssel — die Zeile führt ihn dann als Liste und nicht als Namen.
-        across = finding.code in ACROSS_BODIES
         key = (
             finding.code,
             finding.severity,
             str(finding.message),
             finding.source,
-            None if across else finding.object_id,
             finding.op_id,
             tuple((action.id, str(action.label), action.primary) for action in finding.suggestions),
-            # Nur verlorene Formdetails sind nachweislich ortlose
-            # Mengenbefunde. Jede andere Warnung behält Ort und Merkmale im
-            # Schlüssel; sonst würde aus vier anklickbaren Stellen eine Zeile
-            # ohne jedes räumliche Ziel.
-            None if finding.code == "perceive.orphaned" or across else finding.location,
-            () if finding.code == "perceive.orphaned" or across else finding.feature_ids,
-            (
-                ()
-                if finding.code == "perceive.orphaned" or across
-                else tuple(
-                    (name, type(value), value) for name, value in sorted(finding.values.items())
-                )
-            ),
         )
         if key not in groups:
             groups[key] = []
@@ -298,12 +300,7 @@ def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
     result: list[tuple[Finding, list[Finding]]] = []
     for wording in order:
         members = groups[wording]
-        # Zwei verlorene Formdetails sind schon zwei wortgleiche technische
-        # Zeilen ohne zusätzliche Kundenaussage. Andere Befunde bleiben bis
-        # drei einzeln: dort unterscheiden Körper oder Wert den Fall häufig
-        # noch sinnvoll.
-        threshold = 2 if members[0].code == "perceive.orphaned" else BUNDLE_FROM
-        if len(members) >= threshold:
+        if len(members) >= REPORT_BUNDLE_FROM:
             result.append((members[0], members))
         else:
             result.extend((one, []) for one in members)
@@ -1793,6 +1790,20 @@ class ObjectTree(QWidget):
         if object_id is not None:
             self._restore((object_id,), None)
 
+    def select_objects(self, object_ids: Sequence[ObjectId]) -> None:
+        """Mehrere Körper auf einmal wählen — die Sammelzeile des Prüfberichts.
+
+        Eine Zeile „(9) Ausrichtung über die Schichtanalyse gesucht." meint
+        neun Körper; ihr Klick zeigt alle neun, nie den ersten zufälligen.
+        Derselbe Weg wie ``add`` in :meth:`select_object`, nur in einem Zug.
+        """
+        self.tree.clearSelection()
+        wanted = tuple(dict.fromkeys(object_ids))
+        if wanted:
+            self._restore(wanted, None)
+        else:
+            self._on_selection()
+
     def select_feature(self, object_id: ObjectId, feature_id: str) -> None:
         """Folgt einem Klick im Viewport — die zwei Ansichten zeigen eine
         Auswahl (§18.5).
@@ -3065,7 +3076,7 @@ FILTER_FROM = 2
 class BodyChoiceDialog(QDialog):
     """Für welche Körper soll die Handlung einer Sammelzeile gelten?
 
-    Sechs Zeilen „zu fein vernetzt" wurden zu einer (:data:`ACROSS_BODIES`) —
+    Sechs Zeilen „zu fein vernetzt" wurden zu einer (:data:`REPORT_BUNDLE_FROM`) —
     was dabei verlorenginge, ist die Wahl, welchen Körper man behandelt. Der
     Dialog gibt sie zurück, und zwar als Wahl und nicht als Frage: Alle sind
     angehakt, wer alle meint, drückt einmal (Entscheidung Robert, 03.09.2026).
@@ -3165,6 +3176,8 @@ class ReportPanel(QWidget):
     """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
     findingActivated = Signal(object)
+    bundleActivated = Signal(object, object)
+    """Eine Sammelzeile über mehrere Körper wurde angeklickt: Befund und Kennungen."""
 
     actionOnBodies = Signal(str, object)
     """Eine Handlung einer Sammelzeile, samt der Körper, für die sie gelten soll.
@@ -3403,7 +3416,19 @@ class ReportPanel(QWidget):
         # einzigen Körper wäre der Dialog eine Bestätigung vor einer
         # rücknehmbaren Handlung, und die verbietet Regel 19.
         bodies: tuple[str, ...] = item.data(_BODIES_ROLE) or ()
-        if finding is not None and len(bodies) > 1:
+        handler = handlers_of(self).get(action_id)
+        # Drei Wege für eine Sammelzeile, und der Unterschied ist, was die
+        # Handlung meint. Eine **Operation** (der Name steht im Register) wird
+        # ein Schritt je gewähltem Körper in einer Transaktion. Eine Handlung,
+        # die **einem Körper** gilt (``_PER_BODY_ACTIONS``), läuft je gewähltem
+        # Körper mit dessen eigenem Befund — nie mit dem des ersten. Alles
+        # andere meint einen Schritt oder die ganze Szene und läuft einmal;
+        # dafür gibt es nichts zu wählen.
+        if (
+            finding is not None
+            and len(bodies) > 1
+            and (REGISTRY.has(action_id) or action_id in _PER_BODY_ACTIONS)
+        ):
             action = next(
                 (
                     entry
@@ -3420,10 +3445,16 @@ class ReportPanel(QWidget):
             chosen = BodyChoiceDialog.ask(
                 self, str(action.label) if action else "", bodies, self._names
             )
-            if chosen:
+            if not chosen:
+                return
+            if REGISTRY.has(action_id):
                 self.actionOnBodies.emit(action_id, chosen)
+                return
+            members: dict[str, Finding] = item.data(_MEMBERS_ROLE) or {}
+            if handler is not None:
+                for body in chosen:
+                    handler(as_error(members.get(body, finding), self._document))
             return
-        handler = handlers_of(self).get(action_id)
         if finding is not None and handler is not None:
             if action_id == REPAIR_AND_RETRY.id:
                 # Noch vor dem synchronen Umbau des Verlaufs sperren. Das
@@ -3694,40 +3725,42 @@ class ReportPanel(QWidget):
         weiter als eine Zeile zählt.
         """
         if members:
-            names = ", ".join(
-                str(one.values.get("feature", one.object_id or "?")) for one in members[:15]
-            )
+            names = ", ".join(self._member_label(one) for one in members[:15])
             if len(members) > 15:
                 names += f" … (+{len(members) - 15})"
-            # Die Zeile trägt Zahl und Satz — die Liste der Betroffenen wäre
-            # dort die nächste Flut und gehört in den Tooltip. Waisen bekommen
-            # einen eigenen Satz ohne CAD-Begriffe: „Merkmal" und
-            # „Nachfolger" erklären einem Einsteiger weder den Zustand noch,
-            # dass seine Bearbeitung erhalten blieb.
-            message = (
+            # **Die Zahl steht davor, in Klammern** (Robert, 11.09.2026:
+            # „anzahl dann davor in Klammer anzeigen"), der Satz einmal — die
+            # Liste der Betroffenen wäre in der Zeile die nächste Flut und
+            # gehört in den Tooltip. Waisen bekommen einen eigenen Satz ohne
+            # CAD-Begriffe: „Merkmal" und „Nachfolger" erklären einem
+            # Einsteiger weder den Zustand noch, dass seine Bearbeitung
+            # erhalten blieb.
+            sentence = (
                 tr(
-                    "{count} Formdetails sind nach diesem Schritt nicht mehr automatisch "
+                    "Formdetails sind nach diesem Schritt nicht mehr automatisch "
                     "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
                     "Bearbeitung bleibt erhalten."
-                ).format(count=len(members))
+                )
                 if finding.code == "perceive.orphaned"
-                else f"{len(members)} × {finding.message}"
+                else str(finding.message)
             )
-            # Gleiche Zahl und gleicher Satz genügen nicht: Zwei Körper oder
-            # Schritte wären in der Liste optisch dieselbe Handlung, obwohl
-            # ihre Klicks an verschiedene Ziele führen. Der Name stammt aus
-            # derselben Auswertung wie der Objektbaum; „Schritt" ist die
-            # Sprache des sichtbaren Verlaufs und keine interne Op-Kennung.
+            message = f"({len(members)}) {sentence}"
+            # Gleicher Satz genügt nicht: Zwei Schritte wären in der Liste
+            # optisch dieselbe Handlung, obwohl ihre Klicks an verschiedene
+            # Ziele führen. „Schritt" ist die Sprache des sichtbaren Verlaufs
+            # und keine interne Op-Kennung.
             context: list[str] = []
-            # **Eine Zeile für sechs Körper nennt keinen einzelnen.** Der
+            # **Eine Zeile für neun Körper nennt keinen einzelnen.** Der
             # Befund trägt den des ersten Mitglieds, und ihn anzuschreiben
-            # hieße, fünf andere zu verschweigen. Die Namen stehen im Tooltip,
-            # die Kennungen in :data:`_BODIES_ROLE` — daraus baut der Klick
-            # seine Auswahl.
-            across = finding.code in ACROSS_BODIES
-            if finding.object_id is not None and not across:
-                identifier = str(finding.object_id)
-                context.append(self._names.get(identifier, identifier))
+            # hieße, acht andere zu verschweigen. Gilt die Zeile einem
+            # einzigen Körper, steht sein Name da wie an jeder Einzelzeile;
+            # sonst stehen die Namen im Tooltip und die Kennungen in
+            # :data:`_BODIES_ROLE` — daraus baut der Klick seine Auswahl.
+            bodies = tuple(
+                dict.fromkeys(str(one.object_id) for one in members if one.object_id is not None)
+            )
+            if len(bodies) == 1:
+                context.append(self._names.get(bodies[0], bodies[0]))
             if finding.op_id is not None:
                 step = f"{tr('Schritt')} {finding.op_id}"
                 if self._document is not None:
@@ -3746,10 +3779,15 @@ class ReportPanel(QWidget):
                 message = f"{message} — {' · '.join(context)}"
             item = QListWidgetItem(message)
             item.setData(_BUNDLE_ROLE, len(members))
-            if across:
-                bodies = tuple(str(one.object_id) for one in members if one.object_id is not None)
-                if bodies:
-                    item.setData(_BODIES_ROLE, bodies)
+            if len(bodies) > 1:
+                item.setData(_BODIES_ROLE, bodies)
+                # Je Körper sein erster Befund: Was eine Handlung je Körper
+                # braucht, steht in dessen Werten, nicht in denen des ersten.
+                by_body: dict[str, Finding] = {}
+                for one in members:
+                    if one.object_id is not None:
+                        by_body.setdefault(str(one.object_id), one)
+                item.setData(_MEMBERS_ROLE, by_body)
 
             # Nur Navigation mitnehmen, die für **jedes** Mitglied gilt.
             # ``_bundled`` hält Körper, Schritt und Herkunft bereits im
@@ -3763,18 +3801,26 @@ class ReportPanel(QWidget):
             feature_ids = members[0].feature_ids
             if any(one.feature_ids != feature_ids for one in members[1:]):
                 feature_ids = ()
-            values: Mapping[str, float | str | TranslatableText] = (
-                {"count": len(members), "feature": names}
+            # **Die Werte der Zeile sind die Zahl und die Liste der
+            # Betroffenen**, nicht die Werte des ersten Mitglieds: Bei neun
+            # Buchstaben mit je eigenem Übermaß wäre das der Wert eines
+            # zufälligen. Was jedes Mitglied für sich sagt, steht im Tooltip
+            # (:meth:`_member_label`).
+            # Ohne Körper — die Gegenprobe aus dem G-Code für Material und
+            # Zeit — sind die Mitglieder keine „Objekte", sondern Einträge.
+            listed = (
+                "feature"
                 if finding.code == "perceive.orphaned"
-                else members[0].values
+                else ("objects" if bodies else "entries")
             )
+            values: Mapping[str, float | str | TranslatableText] = {
+                "count": len(members),
+                listed: names,
+            }
             finding = dataclasses.replace(
                 finding,
                 message=message,
                 feature_ids=feature_ids,
-                # Allgemeine Gruppen tragen nur identische Werte und behalten
-                # diese vollständig. Nur Waisen ersetzen ihre verschiedenen
-                # alten Kennungen durch die gezählte Diagnoseliste.
                 values=values,
                 location=location,
                 # Verschiedene Vorschläge trennen schon den Gruppenschlüssel:
@@ -3937,7 +3983,33 @@ class ReportPanel(QWidget):
 
     def _on_activated(self, item: QListWidgetItem) -> None:
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+        bodies: tuple[str, ...] = item.data(_BODIES_ROLE) or ()
+        if len(bodies) > 1:
+            # Eine Sammelzeile über mehrere Körper zeigt beim Klick alle —
+            # nie den ersten zufälligen (der Klickvertrag der Bündelung).
+            self.bundleActivated.emit(finding, bodies)
+            return
         self.findingActivated.emit(finding)
+
+    def _member_label(self, finding: Finding) -> str:
+        """Was ein Mitglied einer Sammelzeile im Tooltip von den anderen unterscheidet.
+
+        Der Körper mit Namen, dahinter seine eigenen Werte — die Zeile sagt
+        den Satz einmal, hier steht, für wen er gilt und mit welchen Zahlen.
+        Waisen nennen ihr Merkmal, wie eh und je.
+        """
+        if finding.code == "perceive.orphaned":
+            return str(finding.values.get("feature", finding.object_id or "?"))
+        parts: list[str] = []
+        if finding.object_id is not None:
+            identifier = str(finding.object_id)
+            parts.append(self._names.get(identifier, identifier))
+        parts.extend(
+            value_line(key, value)
+            for key, value in finding.values.items()
+            if key not in ("count", "object", "objects", "entries", "name")
+        )
+        return " · ".join(parts) if parts else "?"
 
     def _on_menu(self, position: QPoint) -> None:
         """Was gegen diesen Befund hilft — als anklickbare Handlung (§2.7).
