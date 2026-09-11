@@ -8,6 +8,37 @@ erledigt und gehört ins Register von `ROADMAP.md`, sobald die Datei frei ist �
 sie lag während der ganzen Nacht mit ungestagten Änderungen einer zweiten
 Sitzung im Baum, und offene Arbeit steht im Register und nirgends sonst.
 
+## Der zweite Torlauf, und was er sagt
+
+Gefahren 11.09.2026, 02:48, gegen den reparierten Stand
+(`suite-getrennt.sh`, Ausgabe in eine Datei, Code unmittelbar danach gelesen):
+**Exit 1, fünf Läufe mit Fehler.** Jeder ist zugeordnet, keiner ist
+unerklärt:
+
+| Rot | Ursache | Wem es gehört |
+|---|---|---|
+| `test_analysis_ui` (1) | Menüfaltung kippt bei neun Handlungen | **mir** — Punkt unten, Produktentscheidung offen |
+| `test_feature_label_layout` (1) | Layout baut Geometrie neu auf | zweite Sitzung (`viewport.py`, schreibt noch) |
+| `test_manual` (12) | Handbuch noch nicht erzeugt | Erzeugerlauf, gehört ans Release |
+| `test_wording` (6) | dieselbe Ursache | Erzeugerlauf |
+| `test_value_labels` (1) | `distance_mm` ohne Beschriftung | zweite Sitzung, **von mir behoben** |
+
+`test_translations` war in Torlauf 1 rot und ist es nicht mehr.
+
+**Ein dritter Torlauf steht aus, und er wäre jetzt wertlos.** Die zweite
+Sitzung schreibt weiter: `prepare_ops.py` 05:54, `prepare.py` 05:51,
+`test_slot_features.py` 05:51, `test_slot_handle.py` 05:49, `viewport.py`
+05:46. Wer während eines Tors in den Baum schreibt, macht seinen Lauf zu
+einer Aussage über keinen Stand. Der Lauf gehört in den Augenblick, in dem
+der Baum still ist.
+
+**Der Erzeugerlauf (`make_manual.py`) gehört in denselben Augenblick.** Er
+bäckt die Oberflächentexte ins Handbuch, und die sind gerade im Fluss; ein
+Lauf jetzt erzeugte sechs Sprachen auf einem halben Stand. `AGENTS.md` sagt
+dasselbe von der anderen Seite: „Bilder und Handbuch nur beim Release".
+Die 18 roten Fälle sind damit kein Rückschritt, sondern der bekannte Zustand
+zwischen zwei Erzeugerläufen.
+
 ## Blockiert durch fremde Arbeit im selben Baum
 
 Beide Befunde sind gemessen und beide kundenwirksam. `app/ui/panels.py` und
@@ -25,9 +56,52 @@ dastehen. `tests/test_analysis_ui.py::test_a_feature_menu_names_the_operations_o
 ist deshalb rot, und das ist **kein veralteter Wächter**, sondern der Test, der
 genau diese Zusage hält („was die Bohrung selbst angeht, steht direkt da").
 
-Ansatz: `KEEP_VISIBLE`/`groups_to_keep` in `app/ui/panels.py` muss „Ändern"
-wirklich halten und stattdessen „Bausteine" mit der Katalogzeile zusammenlegen
-— oder `slot_hole` bekommt eine eigene Kategorie.
+**Nachgemessen am 11.09.2026, 06:20 — die Ursache ist der Kippunkt, und er
+liegt bei genau neun.** `groups_to_keep` liefert korrekt `{'Ändern'}`, der
+Schutz ist also gesetzt; `folded_groups` faltet die Gruppe trotzdem. Gemessen
+über `folded_groups({'Ändern': n, 'Bausteine': 5, 'Vorbereiten': 1}, fixed=2,
+keep={'Ändern'})`:
+
+| Handlungen an der Bohrung | gefaltet | Zeilen |
+|---|---|---|
+| 7 | Bausteine | 11 |
+| 8 | Bausteine | 12 |
+| **9** | **Ändern** | 9 |
+| 10 | Ändern | 9 |
+
+Bis acht genügt „Bausteine" allein, um unter die Grenze zu kommen, und der
+Schutz greift. Ab neun genügt sie nicht mehr (spart 4, gebraucht werden 5),
+und damit steht in `surfaces.py:265` nur noch „Ändern" in `enough` — der
+`keep`-Rang hat dort nichts mehr zu wählen. **Die neunte Handlung ist *Zum
+Langloch ziehen*, also meine.**
+
+**Der Ansatz, der hier stand, reicht nicht**, und das ist der Grund, warum
+der Punkt offen bleibt statt behoben zu sein: „Ändern" hart zu halten ergibt
+2 feste + 9 Handlungen + 1 Katalogzeile + 1 *Prüfstück erzeugen* = **13
+Zeilen**. Die Grenze von zwölf steht im Bauplan (§2.6, Oberflächengrenzen)
+und wird von zwei weiteren Tests gehalten
+(`test_interface_limits.py:427`, `test_analysis_ui.py:1343`). Ein Fix, der
+den einen Test grün macht, macht die zwei anderen rot.
+
+An einer Bohrung stehen 17 Dinge zur Wahl und 12 Zeilen zur Verfügung. Die
+Frage ist deshalb nicht, wie gefaltet wird, sondern **welche eine Zeile
+entfällt** — und das ist eine Produktentscheidung, wie es die drei
+Nachbarentscheidungen im selben Code auch waren (`KEEP_VISIBLE`,
+`ALWAYS_DIRECT`, Katalog statt Untermenü, alle mit „Entscheidung Robert"
+vermerkt). Drei Wege, mit ihren Kosten:
+
+1. **`prepare` („Prüfstück erzeugen") nicht mehr am Merkmal anbieten.**
+   Billigste Zeile — aber ein Passungsprüfstück an einer Bohrung ist genau
+   der Maker-Kernnutzen.
+2. ***Zum Langloch ziehen* aus dem Merkmalsmenü nehmen.** Der Weg bliebe
+   über *Bohrung ändern* (der Haken „Langloch" ist Teil von `DrillParams`)
+   und über den Viewport-Griff, an dem die zweite Sitzung gerade baut
+   (`app/ui/slot_handle.py`). Kostet die direkte Geste.
+3. **Die Grenze an dieser Stelle auf 13 heben.** Ändert eine Bauplanzusage
+   und trifft jedes Menü — nicht ohne Ansage.
+
+`MENU_TWINS` ist **kein** Weg: Die Tabelle ist in `registry.py:177`
+ausdrücklich den zwei Rechenkernen vorbehalten.
 
 ### Der gezeichnete Vorschau-Umriss eines Langlochs ist 22 Prozent zu schmal
 
@@ -101,9 +175,25 @@ erste ist erreichbar: `_bore_vector` prüft nur auf „Dreiertupel aus Zahlen",
 ### `DrillParams.slot_length` hat keine Obergrenze
 
 `prepare_ops.py:293-308`: `minimum=0.0`, kein `maximum`, und `drill_hole` ruft
-`_reject_oversized` nicht. Der Zwilling `slot_hole` tut beides. `diameter=5`,
-`slot_length=100000` auf einem 20-mm-Würfel schneidet das Teil in zwei Stücke,
-ohne dass jemand etwas sagt.
+`_reject_oversized` nicht. Der Zwilling `slot_hole` tut beides.
+
+**Nachgemessen am 11.09.2026 — die zweite Hälfte des Befunds stimmt nicht.**
+`diameter=5` auf einem 20-mm-Würfel:
+
+| `slot_length` | Volumen | Teile | Befunde |
+|---|---|---|---|
+| 15,0 | 6535,80 mm³ | 1 | `bore.compensated` |
+| 100,0 | 5920,00 mm³ | **2** | `bore.over_the_edge`, `bore.compensated` |
+| 100000,0 | 5920,00 mm³ | **2** | `bore.over_the_edge`, `bore.compensated` |
+
+Der Würfel zerfällt tatsächlich in zwei Teile — aber **nicht stillschweigend**:
+`bore.over_the_edge` steht dabei. Was bleibt, ist zweierlei, und beides ist
+kleiner als gemeldet:
+
+* Das fehlende `maximum` (100 km werden angenommen) und der ungenutzte
+  `_reject_oversized` — eine Ungleichheit zum Zwilling `slot_hole`.
+* Der Befundtext spricht von einer **Kante**, während der Körper in zwei
+  Teile zerfällt. Das ist die schlechtere Auskunft, nicht die fehlende.
 
 ## Tests, die fehlen
 
@@ -139,6 +229,42 @@ Bild erneut." und „Zu diesem Merkmal sind Durchmesser und Tiefe nicht
 bekannt." Die Datei liegt ungestaged im Baum; der Text gehört der zweiten
 Sitzung, und `tests/test_translations.py` ist bis dahin rot. Der reparierte
 `pre-commit`-Wächter (`e1a63f82`) fängt sie bei ihrem Commit.
+
+**Stand 11.09.2026, 06:00: erledigt.** Beide Texte stehen in allen fünf
+Katalogen, `test_translations` ist grün über alle 200 Fälle.
+
+## Wertschlüssel ohne Beschriftung
+
+`tests/test_value_labels.py::test_every_value_key_has_a_label` fand zwei
+Schlüssel, die dem Kunden als roher Bezeichner im Tooltip erschienen wären:
+
+* **`distance_mm` in `app/core/geom/faces.py:94`** — aus Commit `2b915e1b`
+  der zweiten Sitzung, seit dem Abend committet und liegengeblieben.
+  **Behoben:** `"distance": _("Abstand")` in `app/ui/labels.py`. Kein neuer
+  Katalogeintrag nötig — „Abstand" steht in allen fünf Katalogen und
+  übersetzt durchweg richtig. „Weg" wäre die nähere Übersetzung des
+  Befundtextes gewesen und im Italienischen zu „Percorso" geworden, also zu
+  *Pfad*.
+* **`shortest` in `app/core/geom/prepare.py:753`** — vier Minuten alt beim
+  Fund (`shortest_slot`, mtime 05:51), also die laufende Baustelle der
+  zweiten Sitzung. **Nicht angefasst**: Die Beschriftung bräuchte einen neuen
+  Text in fünf Katalogen, und zwei Sitzungen, die gleichzeitig in dieselben
+  Katalogdateien schreiben, überschreiben einander still. Vorschlag, wenn
+  die Datei frei ist: „Mindestlänge" (in keinem Katalog vorhanden, also fünf
+  neue Einträge).
+
+## Ein deutscher Bezeichner im B-Rep-Langloch
+
+`app/core/brep/features.py:326` trägt `ende = _axis_point(...)`, direkt neben
+`near_end` — offenbar sollte es `far_end` heißen.
+`test_language_rules::test_identifiers_are_english` ist deshalb rot.
+
+Gefunden hat es der `pre-commit`-Hook bei meinem Commit um 06:39, und er hat
+richtig entschieden: Keine Datei *meines* Commits war genannt, also lief er
+durch. Die Datei ist ungestaget und war 37 Minuten alt (mtime 06:05) — die
+zweite Sitzung baut dort gerade `_slot_from`. **Nicht angefasst**: Ein Edit in
+einer Datei, die gerade geschrieben wird, geht in die eine oder andere
+Richtung verloren. Ihr eigener `pre-commit`-Lauf hält sie damit auf.
 
 ## Aus der Nachkontrolle: was in den Commits steckt, das nicht hineingehört
 
