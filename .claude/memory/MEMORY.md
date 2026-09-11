@@ -21,7 +21,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Beheben statt notieren](beheben-statt-notieren.md) · [Durchsicht je Version](durchsicht-je-version.md) · [Härtung trifft Altes](haertung-trifft-alten-zustand.md) — Fund → Messung → Fix → Test; „offen" am Code nachmessen.
 - [Befund aus dem laufenden Fenster altert](befund-aus-dem-laufenden-fenster-altert.md) — sein Fenster trägt den Stand seines Starts; den Fall erst am HEAD nachstellen, dann bauen.
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen.
-- [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — Merge, kein Rebase; bump_version.py.
+- [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — jeder Commit geht hinaus, außer er sagt es; Merge, kein Rebase; bump_version.py.
 - [Changelog vor dem Versionssprung](changelog-vor-dem-versionssprung.md) — Abschnitt zuerst, auch für unfertige Arbeit; die Version hebt erst der Bau.
 - [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung entscheidet](weitergabe-die-handlung-entscheidet.md) — was frei ist, wird gemacht; nachgefragt wird nach der Grenze der Handlung, nicht nach dem Absender.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) — anhängen nur, wenn es für sich steht; zwölf Tag-Läufe, keine Ursache zweimal.
@@ -84,12 +84,14 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Rückbau kann scheitern](rueckbau-kann-scheitern.md) · [Schutz verliert Geschwister](schutz-verliert-ein-geschwister.md) · [Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) · [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — nach dem Fix.
 - [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) · [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) · [Schreibfehler auf Datei](schreibfehler-auf-eine-vorhandene-datei.md) · [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) · [Hintergrundlauf stirbt mit der Sitzung](hintergrundlauf-stirbt-mit-der-sitzung.md) — je Lauf ein Ordner; OSError 22/13; Blätter zuerst; lange Läufe abkoppeln.
+- [Suite abgekoppelt starten](suite-abgekoppelt-per-pwsh-start-process.md) — pwsh -File über Start-Process, Git-Bash mit vollem Pfad; nacktes `bash` in pwsh ist WSL und schreibt nichts.
 - [Zweite Sitzung im selben Baum](zweite-sitzung-im-selben-baum.md) — vor Kill und Torlauf prüfen, wem was gehört; wer während eines Tors schreibt, macht es wertlos.
 
 ## Shell und Git
 
 - [Deutscher Text nicht durch die Shell](deutscher-text-geht-nicht-durch-die-shell.md) — Write-Datei, `-F`; `!r`; newline beidseits.
 - [Kette mit ; läuft nach dem Kill weiter](kette-mit-semikolon-laeuft-nach-dem-kill-weiter.md) · [Agent-Edits schreiben CRLF](agent-edits-schreiben-crlf.md) — erst den Wrapper beenden, `&&` statt `;`; nach jedem Prosa-Durchgang `git diff --stat` auf CRLF-Warnungen lesen, AST-Vergleich sagt „nur Prosa“.
+- [Checkout-Reflex löscht eigene Arbeit](checkout-reflex-loescht-eigene-arbeit.md) — nie `git checkout -- pfad` als „Aufräumen“ nach einem Skript; vorwärts berichtigen, Skripte idempotent.
 - [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — Exit 128 ohne Autor; link_memory.py hängt das Gedächtnis ins Repository.
 - [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) — `git diff HEAD --numstat` vor dem Commit; jede Zahl in der zweiten Spalte ist ein überschriebener Eintrag.
 - [Heredoc frisst den Backslash](heredoc-frisst-den-backslash.md) — ein `\n` darin wird zum echten Umbruch; Skript als Datei ablegen.
