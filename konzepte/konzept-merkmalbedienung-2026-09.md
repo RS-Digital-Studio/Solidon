@@ -145,18 +145,48 @@ Jedes endet mit grünem Tor und einem Commit.
 
 | Nr. | Inhalt | Umfang | Stand |
 |---|---|---|---|
-| P1 | Die Maße überleben die eigene Operation (§1.3, zweiter Befund) — Sofortnutzen ohne Umbau | S | offen |
-| P2 | `PlacementFlow` ohne Dialog tragbar machen, Dialog bleibt vorerst (additiv) | L | offen |
+| P1 | Die Maße überleben die eigene Operation (§1.3, zweiter Befund) | S | **fertig** (`5a18c950`) |
+| P2a | `can_place()` trägt die Bedingung, nicht mehr der Knopf | S | **fertig** (`c2522e99`) |
+| P5 | `surface_button` entfernen — **vorgezogen**, siehe Notiz unten | S | **fertig** (`afc15641`) |
+| P2b | `PlacementFlow` ohne Dialog tragbar machen (additiv) | L | offen |
 | P3 | Knopf rechts im Merkmalfenster, Selbststart aus — **das Umschalt-Paket** | L | offen |
 | P4 | Untere Leisten abbauen: `_bar` am Merkmal, `SlotBar` | L | offen |
-| P5 | `surface_button` entfernen, `can_place()` an seine Stelle | S | offen |
 | P6 | Toter Alt-Pfad raus, Doku und Regeln nachziehen | S | offen |
 
-**Leitplanke:** P2 baut additiv, der Dialogweg bleibt bis P3 funktionsfähig.
-P3 ist der Schnitt. Vor P3 ist nichts sichtbar anders.
+**Leitplanke:** P2b baut additiv, der Dialogweg bleibt bis P3 funktionsfähig.
+P3 ist der Schnitt. Außer dem gefallenen Knopf ist vor P3 nichts anders.
 
 **Rückfalloption für P3:** Der Selbststart bleibt als Schalter, bis Robert den
 neuen Weg einmal gefahren ist.
+
+## §5 Übergabe zwischen den Schritten
+
+**P5 wurde vor P2b gezogen**, und zwar aus der Sache heraus: Der Träger
+braucht ein Protokoll, und solange der Knopf darin vorkäme, trüge das
+Protokoll ein Widget, das gleich fällt. Ohne ihn ist es sauber.
+
+**Was der Knopf hinterlässt, ist eine Lücke und sie ist benannt:** Wer die
+Platzierung mit Escape verlässt, kommt heute nur über eine neue Auswahl
+zurück. `surfaceRequested` ist der Weg von außen hinein und lebt; es sendet
+nur niemand mehr. P3 hängt den Knopf im Merkmalfenster daran.
+
+**Der Vertrag, den P2b abbilden muss** — erhoben am 11.09.2026 über alle
+`self.dialog.`-Zugriffe in `placement_flow.py`:
+
+| Was | Wofür |
+|---|---|
+| `values()` | die eingetippten Werte lesen (sieben Stellen) |
+| `take_placement(values)` | Ort und Maße zurückschreiben (drei Stellen) |
+| `accept()` | die Operation ausführen |
+| `show()`, `raise_()`, `activateWindow()`, `isVisible()` | der Rückweg aus der Platzierung (`back`) |
+| `surfaceRequested`, `valuesChanged`, `finished` | die drei Signale |
+| Qt-Elternteil | `super().__init__(dialog)` |
+
+**Und eine Warnung an den nächsten Schritt:** Am 11.09.2026 arbeitete eine
+zweite Sitzung im selben Baum an derselben Ecke (`panels.py`,
+`main_window.py`, `perceive/slots.py`, die Kataloge). Die vier Commits oben
+sind deshalb **hunkweise** gestaget worden, nicht dateiweise. Wer P3 angeht,
+prüft zuerst, wem was gehört.
 
 ## §4 Verifikation
 
