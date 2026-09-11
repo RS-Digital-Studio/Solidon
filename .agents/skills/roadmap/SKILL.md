@@ -63,6 +63,10 @@ abschließt, schlägt einen, der eine neue anfängt.
 
 ## Fortschreiben
 
+Eine reine Status- oder Empfehlungsfrage verändert die Dateien nicht.
+Die folgenden Schritte gelten beim beauftragten Fortschreiben oder als
+Dokumentation einer tatsächlich erledigten Arbeitseinheit.
+
 Wird ein Punkt erledigt, gehört er in der Roadmap nachgezogen — und ein neuer
 Fund gehört dort ergänzt, mit dem, was er gekostet hat. **Beides an zwei
 Stellen**: am Punkt selbst und im Register oben. Vergisst du die zweite, wird

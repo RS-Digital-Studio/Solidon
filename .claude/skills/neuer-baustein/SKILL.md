@@ -2,8 +2,8 @@
 name: neuer-baustein
 description: >
   Führt durch das Anlegen eines Bausteins in der Bibliothek: register_part gegen
-  manifold3d, benannte Features, to_scad, Vorschaubild, Test über den gesamten
-  Parameterbereich und Normteilmaße aus der Tabelle.
+  manifold3d, benannte Features, to_scad, Vorschaubild, deklarationsbasierte
+  Bereichsprüfung und Normteilmaße aus der Tabelle.
 argument-hint: "[welcher Baustein]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
@@ -18,14 +18,18 @@ stimmt es oder es existiert nicht.
 
 - Register unter `app/core/knowledge/parts/` durchsehen: gibt es ihn schon,
   oder deckt ein vorhandener den Fall mit einem Parameter mehr ab?
-- Maße in `standards.py` beziehungsweise `data/*.toml` nachschlagen. Fehlt ein
+- Maße in `app/core/knowledge/standards.py` beziehungsweise
+  `app/core/knowledge/data/standards.toml` nachschlagen. Fehlt ein
   Normteil dort, wird **zuerst die Tabelle ergänzt** — mit Quelle im Kommentar.
 - Zwei bestehende Bausteine lesen (`fasteners.py`, `mechanics.py`,
   `mounting.py`, `structure.py`).
 
 ## Die acht Schritte
 
-1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
+1. Aktuelle Signatur von `register_part` in
+   `app/core/knowledge/parts/registry.py` lesen: Name, Titel, Gruppe,
+   Parameterschema, Features und Dokumentation; Körperzahl,
+   Wand- und Feature-Anforderungen sowie zulässige Kombinationen deklarieren.
 2. Geometrie gegen **`manifold3d`** — nicht OpenSCAD
 3. Benannte Features zurückgeben: die Provenienz-IDs, an denen Ops und
    Passungen ansetzen
@@ -34,27 +38,31 @@ stimmt es oder es existiert nicht.
    profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an
    den Grenzen, Features korrekt benannt. An den Rändern bricht Geometrie,
    nicht in der Mitte. Der Lauf über *alle* Bausteine ist am 03.09.2026
-   gefallen, weil er eine halbe Stunde je Torlauf kostete
-   (`.claude/rules/bausteine.md`); für den einen, den du gerade baust,
-   dauert er eine Minute. **Der Testlauf unten prüft ihn nicht.**
+   gefallen (`.claude/rules/bausteine.md`). Laufzeit und Abdeckung für den
+   konkreten Baustein messen; gültige, ausgeschlossene, abgebrochene und
+   fehlerhafte Fälle im `RangeReport` auseinanderhalten. Eine endliche
+   Grenzprüfung beweist nicht jeden Wert eines kontinuierlichen Bereichs.
+   **Der Testlauf unten führt diesen Bereichslauf nicht aus.**
 6. Normteilmaße aus der Tabelle, nie hart im Baustein
-7. Vorschaubild rendern lassen
+7. Vorschaubild über den vorhandenen Weg in
+   `app/core/knowledge/parts/preview.py` rendern lassen; `preview` ist kein
+   Argument der aktuellen `register_part`-Signatur.
 8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen,
    Änderungsverlauf ergänzen (was, wann, warum, Auswirkung auf die Maße)
 
 ## Spiel und Passung
 
-Spiel gehört ins Materialprofil, nicht in den Baustein. Ein Paar (Gewinde,
-Stift und Bohrung, Schnappverbindung) wird nicht daran geprüft, dass beide
-Teile für sich sauber sind, sondern daran, dass die **Differenz** über die
-volle Länge Luft lässt.
+Spiel wird als Parameter aus dem Materialprofil abgeleitet, nicht als feste
+Zugabe versteckt. Ein Paar in Einbaulage prüfen: Schnittvolumen und
+Mindestabstand für Spielpassungen, beabsichtigte Überdeckung für Press- oder
+Schnappverbindungen sowie den Montageweg. Zwei einzeln gültige Körper und
+eine Boolesche Differenz allein belegen keine passende Verbindung.
 
 ## Abschluss
 
-```
-.venv\Scripts\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q
-```
-
-dann `/pruefen`. Melden: Name, Parameter, Features, was der Bereichstest
-abdeckt, ob `parts_version` steigen musste, und ob der Katalogeintrag mit
+`/pruefen` mit den betroffenen Dateien, insbesondere `tests/test_parts.py`
+und `tests/test_parts_catalog.py`, ausführen. Das vollständige Tor ist vor
+einem Commit nötig, kein zweiter Lauf nach jedem Schritt. Melden: Name,
+Parameter, Features, tatsächlicher Bereichslauf mit Profil und Ergebnis,
+seine Abdeckung, ob `parts_version` steigen musste, und ob der Katalogeintrag mit
 Vorschaubild vorhanden ist.

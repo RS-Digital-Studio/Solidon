@@ -1,95 +1,73 @@
-# Konstruktionsrichtwerte für FDM
+# Konstruktionshinweise für FDM
 
-Für 0,4-mm-Düse auf dem Elegoo Centauri Carbon 2. **Alles hier sind
-Richtwerte**, keine Normmaße: sie hängen von Material, Temperatur, Schichthöhe
-und Geometrie ab. Wo es auf eine Passung ankommt, ersetzt ein Prüfstück jede
-Tabelle.
+Diese Hinweise sind Entwurfshilfen, keine zugesicherten Druckeigenschaften.
+Gerät, Düse, Linienbreite, Schichthöhe, Material und Lastfall zuerst aus der
+aktuellen Konfiguration bestimmen. Konkrete Richtwerte als Startwerte für
+ein Prüfstück kennzeichnen, nicht als Normmaß oder pauschale Materialkonstante.
 
-## Wandstärken
+## Wand und Orientierung
 
-Eine Wand wird aus ganzen Extrusionsbahnen gebaut. Krumme Wandstärken lässt der
-Slicer entweder auffüllen oder er lässt eine Lücke — beides ist schwächer als
-eine Wand, die aufgeht.
+Wandstärke mit der im Slicer tatsächlich erzeugten Bahnplanung abgleichen.
+Variable Linienbreiten und Lückenfüllung machen die Regel „nur ganze Vielfache
+des Düsendurchmessers“ unzureichend. Dünne Stellen in der Schichtvorschau prüfen;
+Wandstärke und Perimeterzahl passend zu Belastung und Geometrie wählen.
 
-| Zweck | Richtwert |
-|---|---|
-| dünnste sinnvolle Wand | ~0,8 mm (2 Bahnen) |
-| tragende Wand | 1,6–2,4 mm (4–6 Bahnen) |
-| wasserdichte Wand | mindestens 4 Perimeter, dazu 5 Boden-/Deckschichten |
-| Rippen und Gussets | 2 Bahnen, dafür hoch statt dick |
+Überhänge, Brücken, sichtbare Flächen und Festigkeitsrichtung zusammen abwägen.
+Eine Winkelgrenze allein garantiert keine stützfreie Oberfläche. Bei waagerechten
+Bohrungen können Nacharbeit, andere Orientierung oder eine geeignete Kontur helfen;
+dabei Funktionsmaße und Montagebedingungen erhalten. Den Slicer extern verwenden,
+seine Prognose von einem tatsächlichen Probedruck unterscheiden.
 
-Unter etwa 1 mm bleibt jede Struktur fragil — das gilt auch für das, was
-Solidon selbst erzeugt.
+## Spiel eindeutig definieren
 
-## Überhänge und Brücken
+Für einen runden Stift gilt: Durchmesserspiel = Bohrungsdurchmesser minus
+Stiftdurchmesser. Radiales Spiel ist bei konzentrischer Lage die Hälfte davon.
+Das Spiel nicht noch einmal beiden Partnern vollständig zuschlagen.
 
-- Bis etwa **45°** gegen die Senkrechte druckt sich ein Überhang ohne Stütze.
-- Darüber: Fase oder Verrundung ist fast immer billiger als Stützmaterial —
-  eine 45°-Fase unter einer Bohrung macht sie stützfrei druckbar.
-- Waagerechte Brücken über kurze Weiten gehen; die Unterseite wird rauh.
-- Ein Loch, das waagerecht gebohrt ist, wird oben leicht oval. Wo das stört:
-  als Tropfenform oder Sechseck konstruieren.
+- Spielpassung: gewünschte Beweglichkeit und zulässiges Wackeln festlegen,
+  dann mit dem konkreten Profil ein Paar als Prüfstück drucken.
+- Presspassung: beabsichtigte Überdeckung und zulässige Verformung festlegen;
+  ein positives Sollspiel allein beschreibt keine Presspassung.
+- Schnappverbindung: Montageweg, Federweg, Rückhalt und wiederholte Betätigung
+  prüfen. Ein kollisionsfreier Endzustand sagt nichts über die Montage.
+- Gewinde: Steigung, Profil und Flankenspiel als Paar über den Eingriffsweg
+  prüfen. Eine Boolesche Differenz allein misst keinen umlaufenden Spalt.
 
-## Passungen
+Schwindung und Maßfehler am tatsächlichen Material und Profil messen. Keine
+pauschale Rangfolge „Material A braucht immer mehr Spiel als Material B“.
+Elefantenfuß an Passflächen durch eine geeignete Fase oder gemessene
+Slicerkompensation berücksichtigen; dieselbe Korrektur nicht doppelt anwenden.
 
-Spiel je Fügepartner, **auf den Durchmesser bezogen**:
+## Verbindung und Festigkeit
 
-| Art | Richtwert Spiel |
-|---|---|
-| beweglich, leichtgängig (Scharnierstift) | 0,3–0,5 mm |
-| beweglich, geführt | 0,2–0,3 mm |
-| Steckpassung von Hand fügbar | 0,15–0,25 mm |
-| Presspassung, dauerhaft | 0,0–0,1 mm |
+Normmaße aus der vorhandenen Tabelle, Einpressbuchsen aus der Maßzeichnung des
+konkreten Herstellers übernehmen. Werkzeugzugang, Randabstand, Schraubenlänge,
+Montagereihenfolge und mögliche Spaltkräfte mitprüfen.
 
-PETG und ASA schrumpfen stärker als PLA — dort eher an das obere Ende gehen.
-TPU verzeiht Spiel kaum, es klemmt.
-
-**Elefantenfuß**: die erste Schicht wird breiter gedrückt. Bei Passungen an der
-Unterseite eine Fase von 0,4–0,6 mm vorsehen oder im Slicer kompensieren.
-
-## Schrauben und Muttern
-
-- **Durchgangsloch**: Nenndurchmesser + 0,4–0,6 mm (M3 → ~3,4 mm, M4 → ~4,4 mm)
-- **Gewinde direkt ins Material** (selbstschneidend): etwa Kerndurchmesser,
-  hält für wenige Montagen — nichts, was oft auf- und zugeht
-- **Heat-Set-Einpressbuchse**: die bessere Lösung für alles, was mehrfach
-  geöffnet wird. Lochdurchmesser nach Herstellerangabe der Buchse, mit
-  Einführfase
-- **Mutternfalle**: Schlüsselweite + 0,2–0,3 mm, Tiefe = Mutterhöhe + 0,2 mm.
-  Von der Seite eingeschoben braucht sie einen Anschlag, von unten eine
-  Abdeckung
-- Kopfsenkung nach Kopfform; über einer Senkung braucht es keine Stütze, wenn
-  der Winkel unter 45° bleibt
-
-## Gewinde am Bauteil
-
-Gedruckte Gewinde brauchen Flankenspiel — beide Teile für sich sauber zu
-konstruieren reicht nicht. Steigung nicht zu fein wählen (unter etwa 1,5 mm
-wird es bei 0,2 mm Schichthöhe unsauber), lieber ein grobes Trapez- oder
-Rundgewinde. Immer als Paar prüfen: die Differenz aus Außen- und Innengewinde
-muss über die volle Länge Luft lassen.
-
-## Festigkeit
-
-Die Schichtebene ist die Schwachstelle. Ein Teil bricht dort, wo Zug quer zu
-den Schichten steht — nicht dort, wo es am dünnsten ist.
-
-- Belastungsrichtung in die Schichtebene legen, nicht quer dazu
-- Kerben und scharfe Innenecken vermeiden: verrunden, wo Kraft fließt
-- Gyroid-Infill 20–30 % trägt in alle Richtungen gleich
-- Mehr Perimeter bringen mehr als mehr Infill
+FDM-Teile können richtungsabhängig versagen. Lastpfad, Kerben, Schichthaftung,
+Temperatur und Kriechen sind wichtiger als eine isolierte Infill-Prozentzahl.
+Perimeter und Infill erfüllen unterschiedliche Aufgaben; Gyroid macht das
+fertige Teil nicht automatisch in allen Richtungen gleich fest. Eine zulässige
+Last erfordert einen passenden Nachweis am konkreten Teil und Druckprozess.
 
 ## Dichtheit
 
-- 4 Perimeter, 5 Boden-/Deckschichten, keine Nähte über die Dichtfläche legen
-- Dichtung über eine **TPU-Einlage in einer umlaufenden Nut**, verschraubt —
-  nicht geklebt
-- PEI-Flüssigkleber ist Betthaftung, kein Bauteilkleber
-- Einteilig gedruckte Behälter bleiben ohne Nachbehandlung selten dicht
+Topologische Wasserdichtheit des Meshs und Flüssigkeitsdichtheit des Drucks
+sind verschiedene Eigenschaften. Perimeter, Schichthöhe, Fluss, Nähte und
+Temperatur am konkreten Behälter abstimmen. Eine bestimmte Zahl von Bahnen
+oder Deckschichten garantiert keine Dichtheit.
 
-## Toleranzen, die man nicht wegkonstruiert
+Bei einer Dichtung Materialverträglichkeit, Anpressung, Nut und Medium prüfen;
+TPU ist eine mögliche Lösung, kein universeller Ersatz für eine passende
+Dichtung. Für die beabsichtigte Temperatur, Dauer und gegebenenfalls den Druck
+einen Versuch definieren. Eine Dichtheitsprobe belegt keine Eignung für
+Lebensmittel oder andere zusätzliche Anforderungen.
 
-Warping bei ASA und PETG zieht lange, flache Teile an den Ecken hoch. Große
-Bodenflächen brauchen Anbindung; ein Teil, das 200 mm lang ist, ist nach dem
-Abkühlen nicht exakt 200 mm lang. Wo ein Maß auf ±0,1 mm ankommt, gehört ein
-Prüfstück gedruckt und gemessen, bevor das Teil entsteht.
+## Weiterführende Primärquellen
+
+Am 11.09.2026 als allgemeine Herstellerhinweise geprüft; Aussagen auf das
+konkrete Gerät und Material übertragen, nicht als Elegoo-Profil ausgeben:
+
+- [Prusa: Modellieren für den 3D-Druck](https://help.prusa3d.com/article/modeling-with-3d-printing-in-mind_164135)
+- [Prusa: Infill und Perimeter](https://help.prusa3d.com/article/infill_42)
+- [Prusa: Flüssigkeitsdichte Drucke](https://help.prusa3d.com/article/watertight-prints_112324)

@@ -301,6 +301,16 @@ verweist auf `.venv`, damit Druckprojekte und Prüfartefakte nicht mitindiziert
 werden. Die verbindliche Typprüfung im Tor bleibt mypy. C#-Sprachhilfe und
 Unity-Server sind für Solidon projektlokal abgeschaltet.
 
+**Bibliotheksdoku für Claude und Codex:** `context7` ist projektbezogen
+eingerichtet (Entscheidung Robert, 11.09.2026): bei Claude über das Plugin,
+bei Codex über `[mcp_servers.context7]` in `.codex/config.toml`. Beide nutzen
+den gehosteten MCP-Server von Upstash, ohne lokalen Prozess und ohne
+erforderlichen Schlüssel. Bibliotheks- und Versionsabdeckung bei der Anfrage
+prüfen. Anfragen auf Bibliotheksnamen und fachliche Fragen beschränken,
+keinen Projektcode oder Zugangsdaten übertragen. Die Konfiguration allein
+belegt keine Verbindung in einer bereits laufenden Sitzung; dort die
+verfügbaren Werkzeuge prüfen und gegebenenfalls den MCP-Server neu laden.
+
 Bei einer Einrichtungsprüfung den tatsächlich laufenden Editor bestimmen:
 Claude Desktop kann eine andere gebündelte Claude-Code-Version verwenden als
 der Befehl `claude` im `PATH`. Dessen `auth status` prüft den aufgerufenen
@@ -326,15 +336,16 @@ inzwischen selbst; wer den Stand sucht, sucht die Tabelle mit der Spalte
 Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
 raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
 
-- **Selbstständig committen**, in logischen Einheiten, mit `Co-Authored-By`.
+- **Auf ausdrücklichen Auftrag committen**, in logischen Einheiten, mit `Co-Authored-By`.
   `/liefern` führt das aus — Tor laufen lassen, in Einheiten aufteilen,
   deutsche Meldungen. Der Skill ruft sich nicht selbst auf
   (`disable-model-invocation`), er wird angesagt.
-- **Jeder Commit geht sofort hinaus.** `.githooks/post-commit` pusht ihn, weil
+- **Der Push-Hook läuft nach dem Commit.** `.githooks/post-commit` pusht, weil
   auf drei Maschinen gearbeitet wird und ein liegengebliebener Commit auf den
   anderen zweien nicht existiert. Der Hook holt und rebasiert **nicht** — ist
   die Gegenstelle weiter, scheitert er und sagt, was zu tun ist.
-  `SOLIDON_KEIN_PUSH=1` schaltet ihn für einen Lauf ab.
+  `SOLIDON_KEIN_PUSH=1` schaltet ihn für einen Lauf ab; bei einem reinen
+  Commitauftrag ohne Push-Freigabe wird diese Variable pro Prozess gesetzt.
 - **Vor jedem Commit an `app/` oder `tools/` laufen die zwei
   Sprachprüfungen.** `.githooks/pre-commit` fährt `test_language_rules` und
   `test_translations` — rund zehn Sekunden — und bricht ab, wenn eine Datei

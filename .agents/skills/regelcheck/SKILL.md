@@ -17,7 +17,9 @@ Test erst später fände — oder was er gar nicht sieht.
 ## Umfang
 
 Ohne Argument: `git diff` und `git diff --cached`, dazu unversionierte Dateien.
-Mit Argument: die genannte Datei oder das genannte Modul vollständig.
+Mit Argument: die genannte Datei oder das genannte Modul vollständig. Eine
+Prüfanfrage liefert Befunde; Änderungen nur im Rahmen eines Reparaturauftrags.
+Zuständige `CLAUDE.md`-Karten und passende `.claude/rules/` mitlesen.
 
 ## Durchgang
 
@@ -29,28 +31,34 @@ du stillschweigend — behaupte nicht, sie geprüft zu haben.
 Schreiben auf `ctx.scene`? Op ohne Registereintrag, Schema, Test, Texte?
 Signatur abweichend von Bauplan §9?
 
-**Zahlen (6–9)** — Rundung im Kern? `==` auf Fließkomma? Toleranz als
-Zahlenkonstante statt `auto:<material>`? Streuzahl statt Projektparameter?
+**Zahlen (6–9)** — Rundung im Kern? `==` auf Fließkomma? Fertigungstoleranz
+am Materialprofil vorbei? Numerische Grenzwerte außerhalb ihrer zuständigen
+zentralen Quelle? Streuzahl statt Projektparameter?
 Zufall ohne `ctx.seed` oder ohne `deterministic=False`?
 
-**Sicherheit (10–15)** — `eval`? Operation, die ein fremdes Programm startet
-(→ `foreign.SCRIPTED_OPS`)? Absoluter Pfad in einer Projektdatei? Eigener
-Baustein, der mitreisen könnte? Kennzahlen aus Schichtanalyse und G-Code
-vermischt? Abhängigkeit unter GPL?
+**Sicherheit (10–15)** — `eval` oder Ausführung fremden Quelltexts?
+`foreign.SCRIPTED_OPS` ist nach dem OpenSCAD-Ausbau leer; ein neuer
+Ausführungspfad benötigt eine eigene Prüfung. Erlaubte externe Programme
+wie Slicer sind davon zu unterscheiden. Absoluter Pfad oder ausführbarer
+Bausteincode in einer Projektdatei? Rezepte aus registrierten Ops dürfen
+gemäß Regel 13 mitreisen. Kennzahlen aus Schichtanalyse und G-Code vermischt?
+Abhängigkeit außerhalb der Lizenzfreigabe?
 
 **Bedienung (16–20)** — Agentenvorschlag mit mehr als einer Transaktion?
 Ausnahme ohne Handlungsvorschlag? Bedeutung allein über Farbe?
-Bestätigungsdialog vor einer rücknehmbaren Handlung? Feste Zeichenkette statt
+Bestätigungsdialog vor einer rücknehmbaren Handlung außerhalb der ausdrücklich
+erlaubten Nachfrage beim Löschen von Verlaufsschritten? Feste Zeichenkette statt
 `tr()`?
 
 **Haltung (21–22)** — Wurde geraten, wo `ctx.ask` hingehört? Neue Abhängigkeit
 ohne Eintrag in der Lizenzliste?
 
 Dazu, ohne Regelnummer, aber genauso ein Fund: deutscher Bezeichner in
-`app/`, fehlende Übersetzung, fehlender Test zu neuem Verhalten.
+`app/` oder `tools/`, fehlende Übersetzung, fehlender erforderlicher Nachweis.
 
 ## Ergebnis
 
 Je Verstoß: Regelnummer, Datei:Zeile, was dagegen verstößt, der Fix. Am Ende
-ein Satz, ob die Änderung regelkonform ist. Kein Verstoß ist ein gültiges
-Ergebnis — dann sag es kurz und ohne Füllwerk.
+ein Satz über den geprüften Umfang und verbleibende Grenzen. „Keine Verstöße
+im geprüften Umfang gefunden“ ist ein gültiges Ergebnis, aber keine Zusage
+über ungeprüfte Pfade. Tests und tatsächliche Ausführung getrennt ausweisen.

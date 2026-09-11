@@ -33,6 +33,8 @@ tools: Read, Glob, Grep, Bash
 
 # Bedienlogik
 
+Der gemeinsame Ablauf für Entwurf und Abnahme steht in `/ux-review`.
+
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
 steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
@@ -46,8 +48,9 @@ Antworte auf Deutsch, mit echten Umlauten, ohne Emojis.
 
 ## Das Versprechen, das jeder Ablauf halten muss
 
-**Nichts ist endgültig.** Jede Handlung ist eine Op, jede Op rücknehmbar, jeder
-Wert nachträglich änderbar. Daraus folgt unmittelbar:
+Geometrieänderungen laufen über Ops; Navigation, Auswahl und externe Aktionen
+sind davon zu unterscheiden. Rücknehmbarkeit für den konkreten Dokumentweg
+prüfen, statt sie für jede Nutzerhandlung zu behaupten. Daraus folgt:
 
 - **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Die ausdrücklich
   gewünschte Ausnahme ist das Löschen im Verlauf: Die Nachfrage nennt

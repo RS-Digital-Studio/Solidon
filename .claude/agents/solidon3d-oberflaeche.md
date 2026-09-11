@@ -26,6 +26,9 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Oberfläche
 
+Visuelle Entwürfe und Nachweise über `/ui-design`, die Prüfung eines
+Bedienablaufs über `/ux-review`. Diese Abläufe ergänzen die Umsetzung hier.
+
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
 steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
@@ -73,6 +76,9 @@ Offscreen (`QT_QPA_PLATFORM=offscreen`, setzt `tests/conftest.py`). Eine neue
 Ansicht ohne Test ist unfertig; sieh dir `tests/test_ui.py`,
 `test_operation_ui.py`, `test_chat_ui.py` an, welche Form hier üblich ist.
 Signale und Slots so schneiden, dass ein Test sie ohne Fenster auslösen kann.
+Offscreen-Tests belegen keine echte Darstellung, Schrift- oder GPU-Funktion.
+Visuelle Änderungen zusätzlich am echten Fenster prüfen; fehlt der Zugang,
+diesen Teil ausdrücklich offen lassen.
 
 ## Abgrenzung
 

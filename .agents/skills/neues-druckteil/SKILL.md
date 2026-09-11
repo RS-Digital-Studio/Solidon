@@ -23,13 +23,19 @@ das ganze Teil.
 Frag nach, was du nicht wissen kannst: Spaltmaße, Blechdicken, Rohrdurchmesser,
 Gewindegrößen, Anflugrichtungen. Raten ist hier teurer als jede Rückfrage.
 
-Prüfe zugleich: passt das Teil in **256 × 256 × 256 mm**? Wenn nicht, ist die
-Antwort Teilung mit Verstiftung oder Verschraubung, nicht Verkleinerung.
+Prüfe das aktuell verwendete Gerät und Profil einschließlich Bauraum,
+Düse, Material und verfügbarer Bauhöhe; benutze vorhandene Angaben, bevor
+du erneut fragst. `app/core/knowledge/data/printers.toml` ist ein Einstieg,
+die tatsächliche Konfiguration entscheidet. Passt das Teil nicht, eine
+geeignete Orientierung oder Teilung vorschlagen; Funktionsmaße nicht kürzen.
 
 ## 2. Konstruieren
 
-Ordner unter `3D Drucker/NN_Name/`, Skript in Python mit
-`trimesh`/`manifold3d`. OpenSCAD ist auf dieser Maschine nicht installiert.
+Den beauftragten Druckteilordner zuerst lokalisieren; `3D Drucker/` ist nicht
+in jedem Klon vorhanden. Einen fehlenden Bestand nicht als leeren Bestand
+behandeln. Neue Dateinamen englisch, nach vorhandener Nummerierung, etwa
+`NN_part-name/`. Parametrisches Skript in Python mit `trimesh`/`manifold3d`;
+passende vorhandene Umgebung prüfen, keine Installation voraussetzen.
 
 Aufbau nach dem Vorbild bestehender Skripte: benannte Maßkonstanten oben mit
 Einheit und Quelle im Kommentar, `PART`-Schalter für Varianten und Prüfstücke,
@@ -43,29 +49,31 @@ Gewinde, Verschraubungen.
 
 Vor dem Export, und das Ergebnis wird gezeigt, nicht behauptet:
 
-- `is_watertight` — wasserdicht
+- `is_watertight` — topologisch geschlossen, kein Nachweis für Flüssigkeitsdichtheit
 - Anzahl Komponenten (eine, wenn es eine sein soll)
 - Volumen und Bounding Box plausibel, passt auf die Platte
 - keine Selbstdurchdringung, Normalen einheitlich
-- dünnste Stelle über der Mindestwandstärke
+- dünnste Stelle über der Mindestwandstärke; Messverfahren und bei
+  Stichproben deren Grenzen nennen. Nicht gemessene Eigenschaften offen lassen.
 
 ## 4. Dokumentieren
 
-`NN_Name/Name_Bauteil-Spezifikation.md`:
+`NN_part-name/part-specification.md` (deutscher Inhalt):
 
 - Zweck und Einbausituation
 - Maßtabelle **mit Quelle je Maß** und den offenen Messungen
-- Materialwahl mit Begründung (Bestand: ASA, PETG Pro, PETG-CF, PETG
-  transluzent, TPU 95A, PLA)
+- Materialwahl mit Begründung aus dem aktuell bestätigten Bestand
 - Druckhinweise: Orientierung, Stützen ja/nein, Perimeter, Schichthöhe,
   Besonderheiten
 - Was noch zu prüfen ist, bevor das ganze Teil gedruckt wird
 
-Iterationen kommen in `Versuch N/`, der aktuelle Stand in den Projekt-Root.
-Zum Schluss `3D Drucker/CLAUDE.md` um den Projekteintrag ergänzen.
+Neue Iterationsordner heißen etwa `iteration-02/`; bestehende Ablagekonventionen
+nicht rückwirkend umbenennen. Den tatsächlich vorhandenen Projektindex
+ergänzen, ohne eine nicht vorhandene `CLAUDE.md` vorauszusetzen.
 
 ## Haltung
 
-Betrifft das Teil Sicherheit — Last, Tor, Schloss, Wasser, Strom —, sag das
-ausdrücklich, und die vorhandene Sicherung bleibt dran. Ein Druckteil ist eine
-Hilfe, kein Sicherheitselement.
+Bei tragenden oder sicherheitsrelevanten Teilen Lastfall, Umgebung und
+Versagensfolge klären. Geometrieprüfungen ersetzen keinen Belastungsversuch;
+eine Schutzwirkung oder zulässige Last ohne passenden Nachweis nicht zusagen.
+Ein erfolgreich berechnetes Modell ist noch kein erfolgreich erprobter Druck.

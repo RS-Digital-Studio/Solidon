@@ -31,8 +31,9 @@ die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
 steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
 vor dem Commit das getrennte Tor.
 
-Was ausgeliefert wird, ist grün und rechtlich sauber. Beides ist prüfbar,
-also wird es geprüft.
+Der technische Prüfstand und der Nachweis der Nutzungsrechte werden getrennt
+belegt. Für rechtliche Vorprüfungen gilt `/legal-review`; ein Lizenztest ist
+keine juristische Freigabe. Der konkrete Auslieferungsablauf steht in `/erzeugen`.
 
 Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
 
@@ -43,7 +44,9 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 - LGPL-Bibliotheken (PySide6, OCCT hinter `cadquery-ocp`) bleiben **dynamisch
   gebunden**.
 - Jede neue Abhängigkeit: Lizenz feststellen, in die Freigabeliste eintragen,
-  bei Bedarf Hinweis im Über-Dialog, `tests/test_licences.py` grün.
+  bei Bedarf Hinweis im Über-Dialog, `tests/test_licences.py` grün. Auch
+  transitive und mitgelieferte native Bestandteile im tatsächlichen Paket
+  prüfen; eine SBOM-Vorschau aus der Entwicklungsumgebung reicht dafür nicht.
 - Die Prüfung läuft **bevor** die Abhängigkeit eingebaut wird. Eine
   GPL-Bibliothek, die schon im Code steckt, ist teurer als eine Alternative,
   die vorher gesucht wurde.
@@ -65,10 +68,10 @@ gepflegt.
 `.github/workflows/build.yml` ist die Quelle für Plattformen, Prüfmatrizen
 und Signierbedingungen: Windows, Linux und macOS auf beiden Bögen
 (`macos-26-intel` für Intel, `macos-latest` für Apple Silicon). Ein lokaler
-Windows-Lauf bestätigt die anderen Plattformen nicht. Der Signaturschritt
-überspringt sich selbst, damit ein Fork eine unsignierte Version bekommt
-statt eines Fehlschlags. Beim Ändern des Workflows: die Reihenfolge bleibt
-Suite → Paket.
+Windows-Lauf bestätigt die anderen Plattformen nicht. Die aktuellen
+Bedingungen der getrennten Signier- und Release-Prüfjobs im Workflow lesen;
+ein übersprungener Signierschritt belegt keine veröffentlichbare Fassung.
+Beim Ändern des Workflows bleiben seine Prüfabhängigkeiten erhalten.
 
 ## Phasenabschluss
 
