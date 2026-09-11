@@ -1495,3 +1495,115 @@ def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
             dialog.reject()
         QApplication.processEvents()
         window.release()
+
+
+def test_a_drag_beside_the_handle_keeps_the_measures_at_the_feature(
+    qt_app: QApplication,
+) -> None:
+    """Ein Zug im Bild schickt die Platzierung nicht zurück ans Zielen.
+
+    Wer eine Bohrung wählt, bekommt ihre Maße von selbst — die Platzierung
+    sitzt dabei **am Merkmal** und zielt nicht. Ein Klick daneben ist die
+    ausdrückliche Ansage, woanders hinzuwollen; ein **Zug** ist das nicht.
+
+    Bis zum 11.09.2026 zählte jedes Loslassen der linken Taste als diese
+    Ansage. Wer am Bewegungsgriff ansetzte und den Pfeil verfehlte, zog damit
+    die Platzierung vom Merkmal weg: Die Bohrungsvorschau klebte danach am
+    Zeiger, als setze man eine neue (Robert: „beim verschieben über Gizmo
+    kommen wir in die ansicht vom bohrung setzen statt dass wir es über das
+    gizmo verschieben").
+
+    Gemessen wird an der Zugschwelle des Systems — dieselbe Unterscheidung,
+    die `test_dragging_the_camera_does_not_settle_the_depth` eine Stufe später
+    prüft. Der Klick daneben bleibt dabei erhalten, sonst wäre die Behebung
+    eine neue Sperre.
+    """
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.render.api import PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "resize_hole"
+        flow = dialog.placement_flow
+        assert flow._seated_at_feature, "die Maße stehen am gewählten Merkmal"
+
+        # Ein Zug über das halbe Bild, der keinen Griff trifft: Druck,
+        # Bewegung, Loslassen weit entfernt.
+        for event in (
+            PointerEvent("press", 200, 200, button="left"),
+            PointerEvent("move", 320, 260, buttons=frozenset({"left"})),
+            PointerEvent("release", 440, 320, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+        QApplication.processEvents()
+        assert flow._seated_at_feature, "ein Zug hat die Maße vom Merkmal weg ins Zielen geschickt"
+        assert flow._frozen, "und die festgelegte Stelle gleich mit"
+
+        # Ein echter Klick daneben richtet sie dagegen weiterhin neu aus.
+        for event in (
+            PointerEvent("press", 200, 200, button="left"),
+            PointerEvent("release", 201, 200, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+        QApplication.processEvents()
+        assert not flow._seated_at_feature, "der Klick daneben zielt wieder"
+    finally:
+        for open_dialog in window.findChildren(OperationDialog):
+            open_dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_the_measures_come_back_after_a_gesture_in_the_view(qt_app: QApplication) -> None:
+    """Nach einem Zug am Griff stehen die Maße wieder in der Szene.
+
+    Jede Operation beendet die laufende Platzierung (`_scene_changed` ruft
+    `back()`), und ihr Dialog bleibt stehen — mit den Zahlen von vorher. Der
+    Merker allein reichte deshalb nicht: Er erlaubt den Neustart, und der
+    prüft als Erstes, ob ein Dialog offen steht — und fand genau diesen toten.
+
+    Gemessen am 11.09.2026, bevor der Dialog mitging: nach *Merkmal
+    verschieben* `flow.active = False`, Maßlinien verborgen, Dialog sichtbar
+    mit X 25,00 gegen 29,90 im Merkmalfenster (Robert: „wenn ich das langloch
+    zieh, fehlen die Maße zu den kanten usw die wir bei bohrungen sehen";
+    „werte im dialog und in der rechten merkmalleiste doppelt").
+    """
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.render.api import PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        erster = window._op_dialog
+        assert erster is not None and erster.placement_flow.active, "die Maße stehen"
+
+        # Ein Zug am Pfeil des Bewegungsgriffs: eine Merkmalsoperation entsteht.
+        gizmo = window.viewport._gizmo
+        assert gizmo is not None, "ohne Griff prüft der Test nichts"
+        window.viewport.renderer.item_picks[(400, 300)] = gizmo.items[0]
+        window.viewport.renderer.item_picks[(460, 300)] = gizmo.items[0]
+        for event in (
+            PointerEvent("move", 400, 300),
+            PointerEvent("press", 400, 300, button="left"),
+            PointerEvent("move", 460, 300, buttons=frozenset({"left"})),
+            PointerEvent("release", 460, 300, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+        window.session.wait_for_idle()
+        for _ in range(80):
+            QApplication.processEvents()
+
+        assert [o.op for o in window.session.history.operations][-1] == "move_feature", (
+            "ohne die Operation prüft der Rest nichts"
+        )
+        danach = window._op_dialog
+        assert danach is not None, "nach der Geste stehen die Maße wieder da"
+        assert danach is not erster, "und zwar in einer frischen Platzierung"
+        assert danach.placement_flow.active, "sonst zeigt der Dialog nur alte Zahlen"
+    finally:
+        for open_dialog in window.findChildren(OperationDialog):
+            open_dialog.reject()
+        QApplication.processEvents()
+        window.release()

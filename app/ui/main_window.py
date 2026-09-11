@@ -9226,7 +9226,18 @@ class MainWindow(QMainWindow):
         # sehen, wo das Merkmal jetzt sitzt (Robert, 10.09.2026: „wenn ich
         # jetzt etwas im viewport verschiebe und zum langloch mach fehlen die
         # maße").
-        self._measured_for = ""
+        #
+        # **Und der abgelaufene Maßdialog geht mit.** Den Merker zu löschen
+        # genügte nicht: Jede Operation beendet die laufende Platzierung
+        # (`PlacementFlow._scene_changed` ruft `back()`), und ihr Dialog bleibt
+        # stehen — mit den Zahlen von vorher. Der Selbststart sah dann genau
+        # diesen toten Dialog und trat zurück, also blieb es bei einer Ansicht
+        # ohne Maße und veralteten Werten daneben. Gemessen am 11.09.2026:
+        # nach *Merkmal verschieben* `flow.active = False`, Maßlinien
+        # verborgen, Dialog sichtbar mit X 25,00 gegen 29,90 im Merkmalfenster
+        # (Robert: „wenn ich das langloch zieh, fehlen die Maße zu den kanten",
+        # „werte im dialog und in der rechten merkmalleiste doppelt").
+        self._drop_stale_measures()
         draft = OperationDraft(
             op=op, inputs=(selected,), params={"at_feature": feature_id, **params}
         )
@@ -10920,6 +10931,22 @@ class MainWindow(QMainWindow):
         Die **jüngere** Geste gewinnt, wie überall in der Ansicht: Wer zieht,
         hat gerade entschieden. Der Merker geht mit, damit die Platzierung an
         derselben Auswahl nicht sofort wieder anspringt.
+        """
+        self._drop_stale_measures()
+
+    def _drop_stale_measures(self) -> None:
+        """Die Maßanzeige des gewählten Merkmals räumen — Dialog **und** Merker.
+
+        Zwei Gesten brauchen das, und beide aus demselben Grund: Was hier
+        steht, gilt für einen Stand, den es gleich nicht mehr gibt. Der Zug am
+        Langlochgriff meint dasselbe Loch anders (:meth:`_close_the_other_way`);
+        ein Zug am Bewegungsgriff versetzt es (:meth:`_feature_step`).
+
+        **Der Merker allein genügt nicht.** Er erlaubt den Neustart, und der
+        prüft als Erstes, ob ein Dialog offen steht — und findet genau den, den
+        die eigene Operation gerade entwertet hat. Beides gehört deshalb
+        zusammen, sonst bleibt eine Ansicht ohne Maße stehen, neben Zahlen von
+        vorher.
         """
         self._measured_for = ""
         for open_dialog in self.findChildren(OperationDialog):

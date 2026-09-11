@@ -634,7 +634,25 @@ class PlacementFlow(QObject):
                 # Schieben mit rechter und mittlerer Taste tot, solange eine
                 # Bohrung gewählt war.
                 return True
+            if event.kind == "press" and event.button == "left":
+                # Gemerkt, damit das Loslassen darunter Klick und Zug
+                # auseinanderhalten kann; genommen wird die Geste wie bisher,
+                # weil ihr Loslassen die Stelle neu ausrichtet.
+                self._pressed_at = (event.x, event.y)
+                return True
             if event.kind == "release" and event.button == "left":
+                # **Ein Zug ist kein Klick** — dieselbe Unterscheidung wie in
+                # der Tiefenstufe weiter unten, und aus demselben Grund. Wer
+                # am Bewegungsgriff ansetzt und den Pfeil verfehlt, zieht über
+                # das Bild; zählte dieses Loslassen als Ansage, sprang die
+                # Platzierung dabei vom gewählten Merkmal weg in ihr Zielen —
+                # die Bohrungsvorschau klebte danach am Zeiger, als setze man
+                # eine neue (Robert, 11.09.2026: „beim verschieben über Gizmo
+                # kommen wir in die ansicht vom bohrung setzen"). Gemessen
+                # wird an der Zugschwelle des Systems, wie überall in der
+                # Ansicht.
+                if not self._barely_moved(event):
+                    return True
                 # **Ein Klick ist die ausdrückliche Ansage, woanders
                 # hinzuwollen.** Danach zielt wieder der Zeiger, wie beim
                 # Setzen einer neuen Bohrung — und die Geste ist damit
