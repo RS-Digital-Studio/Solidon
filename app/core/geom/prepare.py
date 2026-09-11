@@ -643,8 +643,43 @@ SLOT_AND_WIDENING: Final = _(
 #: ist der **Bau** des Satzes, und das genügt: erst die Bedingung, dann was
 #: sonst daraus wird.
 SLOT_TOO_SHORT: Final = _(
-    "Ein Langloch muss länger sein als sein Durchmesser — sonst ist es eine runde Bohrung."
+    "Ein Langloch muss deutlich länger sein als sein Durchmesser — sonst ist es eine runde "
+    "Bohrung. Tragen Sie mindestens die Länge ein, die darunter steht."
 )
+
+#: Der kleinste Weg zwischen den Bogenmitten, im Maß des Durchmessers.
+#:
+#: **Zehn Prozent, und das ist das Doppelte einer Messung** (11.09.2026,
+#: Raster über Ø 2 bis Ø 40 in beiden Qualitätsstufen). Gemessen wurde, wo die
+#: Merkmalserkennung kippt, und sie kippt in zwei Stufen: Unterhalb von rund
+#: **fünf Prozent** des Durchmessers hält sie den Mantel für einen Zylinder und
+#: nennt das Ergebnis eine **Bohrung**; in einem schmalen Streifen darüber
+#: passt weder ein Zylinder noch ein Bogenpaar, und dann steht **gar kein**
+#: Merkmal mehr da — kein Eintrag im Objektbaum, keine Maße im Bild, nichts zum
+#: Anklicken (Robert, 11.09.2026: „es gibt noch Fälle, wo das Langloch keine
+#: Maße im Viewport hat, nicht wählbar ist, im Objektbaum verschwindet").
+#:
+#: Die Grenze skaliert mit dem Durchmesser, weil die Tesselierung es tut: Ø 5
+#: kippt bei 0,25 mm, Ø 12 bei 0,55, Ø 20 bei 1,0, Ø 40 bei 1,8 — in jedem Fall
+#: rund fünf Prozent, und in der groben Qualitätsstufe dieselben Zahlen. Das
+#: Doppelte davon hält Abstand, auch wenn die Materialtoleranz den
+#: geschnittenen Durchmesser noch etwas hebt; das Dreifache nähme einem
+#: Langloch Ø 40 sechs Millimeter Verschiebeweg ab, ohne dafür etwas zu geben.
+#:
+#: **Und darum steht die Zahl hier und nicht in der Oberfläche.** Bis zum
+#: 11.09.2026 hatte der Griff im Bild seine eigene (``1.05``) und der Kern
+#: seine (``Durchmesser + ε``) — der Griff rastete also genau dort, wo die
+#: Erkennung kippt. Eine Grenze an zwei Stellen, und die Geste endete im toten
+#: Streifen.
+SLOT_SHORTEST_SHARE: Final = 1.10
+
+#: Wie weit der Weg in absoluten Millimetern mindestens reichen muss.
+#:
+#: Bei kleinen Durchmessern ist der Anteil oben nicht die bindende Grenze: Ø 2
+#: kippt gemessen zwischen 0,15 und 0,20 mm, und zehn Prozent davon wären 0,2 —
+#: die Grenze selbst. Drei Zehntel halten denselben Abstand wie oben, ohne dass
+#: die Zahl vom Durchmesser abhinge.
+SLOT_SHORTEST_TRAVEL: Final = 0.3
 
 #: Wenn jemand ein vorhandenes Langloch **kürzer** einträgt.
 #:
@@ -670,6 +705,21 @@ SLOT_NOT_SHORTER: Final = _(
 )
 
 
+def shortest_slot(diameter: float) -> float:
+    """Die kürzeste Gesamtlänge, bei der ein Langloch noch eines ist.
+
+    Die Antwort auf :data:`SLOT_SHORTEST_SHARE` und
+    :data:`SLOT_SHORTEST_TRAVEL` in einer Zahl — gerechnet gegen den
+    **gemessenen** Durchmesser, denn gegen ihn misst auch die Erkennung.
+
+    Beide Kerne fragen hier, und die Oberfläche fragt ebenfalls: Der Griff im
+    Bild (``app.ui.slot_handle``) rastet an dieser Länge, damit eine Geste
+    nicht in einer Absage endet — und nicht in dem Streifen, in dem das
+    Merkmal ganz verschwindet.
+    """
+    return diameter + max(SLOT_SHORTEST_TRAVEL, diameter * (SLOT_SHORTEST_SHARE - 1.0))
+
+
 def slot_travel(*, diameter: float, length: float, widening_diameter: float = 0.0) -> float:
     """Wie lang die Mittellinie eines Langlochs ist — null heißt: rund bohren.
 
@@ -693,12 +743,14 @@ def slot_travel(*, diameter: float, length: float, widening_diameter: float = 0.
             constraint="conflict",
             detail=SLOT_AND_WIDENING,
         )
-    if length <= diameter + EPS_GEOM:
+    shortest = shortest_slot(diameter)
+    if length < shortest - EPS_GEOM:
         raise ValidationError(
             field="slot_length",
             constraint="slot_proportion",
             detail=SLOT_TOO_SHORT,
             value=length,
+            values={"shortest": format_length(shortest)},
         )
     return length - diameter
 

@@ -386,6 +386,59 @@ mehr die Koplanarität — die rechnet `manifold3d` robust, gemessen 27.08.2026 
 sondern der **Tangentialkontakt**: Ein Langlochkörper ohne Zugabe legte sich
 entlang zweier Linien an die alte Bohrungswand.
 
+## Die kürzeste Länge eines Langlochs ist gemessen, nicht gesetzt (11.09.2026)
+
+`prepare.shortest_slot(diameter)` beantwortet, ab wann ein Langloch eines ist —
+und diese eine Funktion fragen alle: die Prüfung in `slot_travel`, die Prüfung
+in `slot_hole`, der Haken im Bohrdialog und der Griff im Bild
+(`ui.slot_handle`, `ui.viewport`).
+
+**Vorher waren es zwei Grenzen.** Der Kern verlangte „länger als der
+Durchmesser", der Griff rastete bei `1.05` mal Durchmesser, und dazwischen lag
+ein Streifen, in dem die Merkmalserkennung das Ergebnis nicht mehr hält: Bis
+rund **fünf Prozent** Weg passt ein Zylinder auf den Mantel, und das Merkmal
+heißt danach **Bohrung**; knapp darüber passt weder Zylinder noch Bogenpaar,
+und dann steht **gar kein** Merkmal mehr da — kein Eintrag im Objektbaum, keine
+Maße im Bild, nichts zum Anklicken (Robert: „es gibt noch Fälle, wo das
+Langloch keine Maße im Viewport hat, nicht wählbar ist, im Objektbaum
+verschwindet").
+
+Die Zahl kommt aus einem Raster über Ø 2 bis Ø 40 in beiden Qualitätsstufen:
+Ø 5 kippt bei 0,25 mm Weg, Ø 12 bei 0,55, Ø 20 bei 1,0, Ø 40 bei 1,8 — überall
+rund fünf Prozent des Durchmessers. Gewählt ist das **Doppelte**, mit drei
+Zehntel Millimetern als Untergrenze für kleine Löcher. Nicht das Dreifache:
+Das nähme einem Langloch Ø 40 sechs Millimeter Verschiebeweg ab, und der
+Verschiebeweg ist der Grund, aus dem es Langlöcher gibt.
+
+**Gefragt wird gegen den gemessenen Durchmesser**, nicht gegen den
+eingetragenen. Gegen ihn misst auch die Erkennung, und die Materialtoleranz
+liegt dazwischen.
+
+## Ein Langloch ist an beiden Kernen ein Merkmal (11.09.2026)
+
+Am Netz setzt `perceive.slots` zwei Halbzylinder und ihre Flanken zusammen; am
+exakten Körper tut es seit heute `brep.features._slots_instead_of_half_bores`.
+Vorher beschrieb der exakte Kern jede Topologiefläche für sich, und ein
+Langloch hat vier: Im Objektbaum standen `fillet_1` und `fillet_2`, wo eine
+Öffnung ist, und die Handlungen eines Langlochs standen an keiner von beiden
+(Robert: „auf einem langloch 2 werden und nicht mehr wählbar").
+
+Gefragt wird topologisch, nicht an einer Kennzahl: zwei zylindrische Flächen
+unter einer vollen Umdrehung, gleicher Radius, parallele Achse, beide ins Loch
+gewölbt (`recess`), die sich **genau zwei** ebene Nachbarn teilen — und diese
+zwei Ebenen grenzen ihrerseits an **beide** Bögen. Die letzte Bedingung ist
+die, auf die es ankommt: Eine Tasche mit vier verrundeten Ecken hat dieselben
+Paare, aber zwei benachbarte Ecken teilen **eine** Wand, nicht zwei. Die
+Flanken gehen im Langloch auf, der Boden eines Sacklangloch nicht — seine
+Normale zeigt entlang der Achse, er liegt gar nicht im Mantel.
+
+**Und wenn nach einem Zug keines mehr dasteht, wird es gesagt** (Regel 17,
+`slot_hole.feature_lost`, an beiden Kernen). Zwei Wege führen dahin, beide
+gemessen und beide gültige Geometrie: über den Rand des Körpers hinaus wird
+das Langloch ein offener Schlitz, quer über sich selbst ein Kreuz. Der Schnitt
+stimmt, das Teil ist brauchbar — nur der Bezug ist fort, und wer darauf
+verweist, findet nichts mehr. Der Satz nennt den Rückweg über Strg+Z.
+
 ## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
 
 `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; drei Nullen

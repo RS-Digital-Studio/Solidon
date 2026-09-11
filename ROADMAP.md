@@ -78,6 +78,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
 | [RM-153 — Ein Langloch versetzen, drehen und verdoppeln](#rm-153) | Geometrie, Erkennung und Druckvorbereitung | Ziehen geht seit dem 10.09.2026; die vier übrigen Handlungen brauchen den Werkzeugkörper aus `slot_bore` statt eines Zylinders |
 | [RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden](#rm-154) | Geometrie, Erkennung und Druckvorbereitung | Eine 0 im Richtungsfeld stellt ein Langloch nicht gerade; der optionale Zahlenparameter fehlt im ganzen Register |
+| [RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz](#rm-155) | Geometrie, Erkennung und Druckvorbereitung | Unter fünf Prozent Weg hält die Netz-Einpassung den Mantel nicht; eigene Operationen kommen nicht mehr dorthin, ein eingelesenes STL schon |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -948,6 +949,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   verbundener Mantel und trotzdem kein Langloch. Ein eingelesenes Modell wird an einer Nut aus
   Quader und zwei Zylindern geprüft, nicht am eigenen Erzeuger.
 
+  **Der exakte Kern ist am 11.09.2026 nachgezogen.** Er beschreibt jede Topologiefläche für
+  sich, und ein Langloch hat vier: Im Objektbaum standen `fillet_1` und `fillet_2`, wo eine
+  Öffnung ist, und die Handlungen eines Langlochs standen an keiner von beiden (Robert: „auf
+  einem langloch 2 werden und nicht mehr wählbar"). `brep.features._slots_instead_of_half_bores`
+  fragt dieselbe Sache an der Topologie: zwei angeschnittene Zylinderflächen, gleicher Radius,
+  parallele Achse, beide ins Loch gewölbt, mit **genau zwei** gemeinsamen ebenen Nachbarn, die
+  ihrerseits an **beide** Bögen grenzen. Nachweis: sieben Fälle in `tests/test_brep.py`, davon
+  sieben ohne den Nachschritt rot; die Gegenproben — verrundete Tasche, rundum verrundeter
+  Quader — bleiben in beiden Läufen grün.
+
 <a id="rm-151"></a>
 
 - [ ] **RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan.** Aufgefallen am
@@ -1030,6 +1041,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   lässt es sich in jede Stelle versetzen außer in den **Ursprung**, und an einer mittig
   gelegten Platte ist (0 | 0 | z) kein Randfall, sondern die Mitte des Teils. Abnahme dafür:
   ein Loch in die Teilemitte schieben, und der Schritt trägt die drei Nullen als Absicht.
+
+<a id="rm-155"></a>
+
+- [ ] **RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz.** Gemessen am
+  11.09.2026 über Ø 2 bis Ø 40 in beiden Qualitätsstufen: Liegt der Weg zwischen den
+  Bogenmitten unter rund **fünf Prozent** des Durchmessers, passt die Einpassung einen
+  Zylinder auf den Mantel und das Merkmal heißt **Bohrung**; in einem schmalen Streifen
+  darüber passt weder Zylinder noch Bogenpaar, und dann steht **gar kein** Merkmal da —
+  Ø 12 mit der Länge 12,5 ergab null Merkmale, Ø 20 mit 20,5 ebenso. Für die eigenen
+  Operationen ist der Streifen seit demselben Tag unerreichbar (`prepare.shortest_slot`
+  verlangt das Doppelte des gemessenen Abstands, und der Griff im Bild rastet dort). Ein
+  **eingelesenes** Modell kommt trotzdem dorthin: Wer ein STL mit einem so knappen Langloch
+  öffnet, findet an dieser Stelle nichts zum Anklicken. Der Fall ist selten — ein Langloch
+  mit einem halben Millimeter Weg hat keine Funktion —, aber er ist echt, und er ist der
+  einzige Rest des Fehlerbildes vom 11.09.2026. Was es bräuchte, ist ein Auffangweg in der
+  Einpassung: ein geschlossener gekrümmter Fleck, dessen Querschnitt ein Stadion ist, statt
+  des Umwegs über zwei eingepasste Verrundungen. Abnahme: Eine Platte mit einem Langloch
+  Ø 12 auf 12,5 mm öffnet, und im Objektbaum steht ein Langloch.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

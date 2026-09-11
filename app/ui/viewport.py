@@ -50,6 +50,7 @@ from app.core.geom.mesh import (
     ray_span_in_hull,
 )
 from app.core.geom.mesh_ops import decimate
+from app.core.geom.prepare import shortest_slot
 from app.core.geom.section import SectionPlane, cut, plane_patch
 from app.core.geom.transform import (
     Axis,
@@ -128,7 +129,7 @@ from app.ui.render.gizmo import ARROW_SHARE, Gizmo
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_bar import SlotBar
-from app.ui.slot_handle import SHORTEST_SHARE, SlotHandle
+from app.ui.slot_handle import SlotHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
 
@@ -10830,7 +10831,7 @@ class Viewport(QWidget):
         # und die Eingabetaste (übernimmt) — der Zug ist noch nicht vorbei, er
         # wartet nur auf eine Zahl.
         diameter = float(chosen.params.get("diameter") or 0.0)
-        self.slot_bar.begin(float(length), float(angle), shortest_mm=diameter * SHORTEST_SHARE)
+        self.slot_bar.begin(float(length), float(angle), shortest_mm=shortest_slot(diameter))
 
     def _on_slot_bar_changed(self, length: float, angle: float) -> None:
         """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell."""

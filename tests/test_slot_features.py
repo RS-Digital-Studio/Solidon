@@ -22,9 +22,10 @@ import trimesh
 from shapely.geometry import Polygon
 
 from app.core.bootstrap import load_operations
+from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.prepare import drill
+from app.core.geom.prepare import drill, shortest_slot
 from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
@@ -569,3 +570,142 @@ def test_a_slot_moves_and_closes_the_place_it_came_from(profile: Profile) -> Non
     geblieben = run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
     stehend = next(feature for feature in geblieben.features.values() if feature.kind == "slot")
     assert stehend.params["centre"] == pytest.approx((10.0, 5.0, 0.0), abs=0.05)
+
+
+@pytest.mark.parametrize("diameter", [2.0, 5.0, 12.0, 20.0, 40.0])
+def test_a_length_the_recognition_cannot_hold_is_refused(diameter: float, profile: Profile) -> None:
+    """Was hinterher kein Merkmal mehr wäre, wird vorher abgelehnt (Regel 17).
+
+    **Der Anlass ist gemessen** (11.09.2026, Ø 2 bis Ø 40 in beiden
+    Qualitätsstufen). Direkt über der alten Grenze — „länger als der
+    Durchmesser" — liegt ein Streifen, in dem die Erkennung das Ergebnis nicht
+    mehr als Langloch liest: erst als **Bohrung**, weil ein Zylinder auf den
+    Mantel noch passt, und darüber als **gar nichts**, weil weder Zylinder noch
+    Bogenpaar greifen. Ø 12 mit der Länge 12,5 ergab null Merkmale: kein
+    Eintrag im Objektbaum, keine Maße im Bild, nichts zum Anklicken (Robert:
+    „es gibt noch Fälle, wo das Langloch keine Maße im Viewport hat, nicht
+    wählbar ist, im Objektbaum verschwindet").
+
+    Der Griff im Bild rastet an :func:`prepare.shortest_slot`; über den Dialog,
+    den Chat und die Kommandozeile kommt aber jede Zahl herein. Also fragt die
+    Operation, und zwar gegen den **gemessenen** Durchmesser — gegen ihn misst
+    auch die Erkennung.
+    """
+    entry = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 12.0))),
+        features={},
+    )
+    drilled = run_op(
+        "drill_hole", entry, profile, x=0.0, y=0.0, z=6.0, axis="z", diameter=diameter, depth=0.0
+    )
+    bore = next(feature for feature in drilled.features.values() if feature.kind == "hole")
+    measured = float(bore.params["diameter"])
+    shortest = shortest_slot(measured)
+
+    # Eine Länge aus dem Streifen: über dem Durchmesser, unter der Grenze.
+    with pytest.raises(ValidationError) as refused:
+        run_op(
+            "slot_hole",
+            drilled,
+            profile,
+            at_feature=bore.id,
+            slot_length=(measured + shortest) / 2.0,
+        )
+    assert refused.value.field == "slot_length"
+    assert "shortest" in refused.value.values, (
+        "die Absage nennt die Länge, die geht — sonst ist sie keine Handlungsanweisung"
+    )
+
+    # Und die Grenze selbst trägt: dort steht hinterher ein Langloch.
+    pulled = run_op("slot_hole", drilled, profile, at_feature=bore.id, slot_length=shortest)
+    arten = [feature.kind for feature in pulled.features.values()]
+    assert arten.count("slot") == 1, f"Ø {diameter}: gefunden {arten}"
+
+
+@pytest.mark.parametrize(
+    ("kind", "values"),
+    [
+        ("über den Rand", {"slot_length": 20.0, "x": 38.0, "y": 0.0, "z": 5.0}),
+        ("quer über sich selbst", {"slot_length": 26.0, "slot_angle": 90.0}),
+    ],
+)
+def test_a_slot_that_is_no_longer_one_says_so(
+    kind: str, values: dict[str, float], profile: Profile
+) -> None:
+    """Ein Merkmal, das verschwindet, verschwindet nicht schweigend (Regel 17).
+
+    Zwei Wege führen dahin, und beide sind gemessen (11.09.2026): Wer über den
+    Rand des Körpers zieht, bekommt einen offenen Schlitz und danach eine bis
+    drei Verrundungen; wer quer über das eigene Langloch zieht, ein Kreuz und
+    vier. Beides ist gültige Geometrie — der Schnitt stimmt, das Teil ist
+    brauchbar —, und beides ist kein Langloch mehr. Im Objektbaum standen
+    danach Verrundungen, die Auswahl zeigte ins Leere, und gesagt wurde nichts
+    (Robert: „auf einem langloch 2 werden und nicht mehr wählbar").
+
+    Der Befund sagt beides und nennt den Rückweg über Strg+Z.
+    """
+    mesh = drill(
+        plate(),
+        profile=profile,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    started = (
+        run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
+        if "sich selbst" in kind
+        else entry
+    )
+    chosen = (
+        next(name for name, feature in started.features.items() if feature.kind == "slot")
+        if started is not entry
+        else bore
+    )
+
+    pulled = run_op("slot_hole", started, profile, at_feature=chosen, **values)
+
+    codes = [entry.code for entry in run_op.findings]  # type: ignore[attr-defined]
+    assert "slot_hole.feature_lost" in codes, f"{kind}: gesagt wird es, gefunden: {codes}"
+    lost = next(
+        entry
+        for entry in run_op.findings  # type: ignore[attr-defined]
+        if entry.code == "slot_hole.feature_lost"
+    )
+    assert lost.severity == "warning"
+    assert not any(feature.kind == "slot" for feature in pulled.features.values()), (
+        f"{kind}: und ein Langloch ist wirklich keines mehr"
+    )
+
+
+def test_the_same_word_comes_from_the_exact_kernel(profile: Profile) -> None:
+    """„Zwischen den beiden soll es keinen unterschied geben" (Robert, 10.09.2026).
+
+    Der exakte Zweig erkennt seine Merkmale über die Topologie
+    (``brep.features.features_of``) und lief deshalb an der Prüfung des
+    Netz-Zweigs vorbei: dieselbe Geste, dasselbe Ergebnis, kein Wort dazu.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    solid = edit.cut_bore(
+        edit.box(90.0, 60.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+    )
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+    )
+    bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+
+    run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0, x=38.0, y=0.0, z=5.0)
+
+    codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
+    assert "slot_hole.feature_lost" in codes, codes

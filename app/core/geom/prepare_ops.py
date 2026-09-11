@@ -71,6 +71,7 @@ from app.core.geom.prepare import (
     plug,
     resize_bore,
     shell,
+    shortest_slot,
     slot_bore,
     split_at_plane,
 )
@@ -385,9 +386,30 @@ class DrillParams(BaseParams):
 #: hat, soll ihn herausnehmen können, ohne den Fehler zweimal zu lesen. Der
 #: allgemeine Satz aus dem Kern (:data:`prepare.SLOT_TOO_SHORT`) kennt keinen
 #: Haken — er gilt auch dort, wo es keinen gibt.
+#:
+#: **„Deutlich über" und nicht „über"**, seit die Grenze eine gemessene ist
+#: (:func:`prepare.shortest_slot`): Ein Langloch knapp über seinem Durchmesser
+#: erkennt niemand mehr als eines. Die Zahl selbst steht in ``values`` und
+#: darunter im Dialog — ein Platzhalter im Satz bliebe dem Kunden wörtlich
+#: stehen (siehe :data:`prepare.SLOT_NOT_SHORTER`).
 SLOT_NEEDS_A_LENGTH: Final = _(
-    "Ein Langloch braucht eine Länge über seinem Durchmesser. Tragen Sie eine "
-    "ein, oder nehmen Sie den Haken heraus, wenn die Bohrung rund bleiben soll."
+    "Ein Langloch braucht eine Länge deutlich über seinem Durchmesser. Tragen Sie "
+    "mindestens die Länge ein, die darunter steht, oder nehmen Sie den Haken heraus, "
+    "wenn die Bohrung rund bleiben soll."
+)
+
+#: Nach dem Zug steht kein Langloch mehr da — und das ist keine Ausnahme.
+#:
+#: Beide Fälle sind gemessen (11.09.2026) und beide sind gültige Geometrie:
+#: über den Rand des Körpers hinaus wird aus dem Langloch ein offener Schlitz,
+#: quer über sich selbst ein Kreuz. Was fehlt, ist der **Bezug** — im
+#: Objektbaum stehen danach Verrundungen, und die Handlungen eines Langlochs
+#: stehen an keiner von ihnen.
+SLOT_FEATURE_LOST: Final = _(
+    "Nach dem Zug ist an dieser Stelle kein Langloch mehr zu erkennen — der Schnitt "
+    "reicht über den Rand des Körpers oder über ein zweites Loch hinweg. Die Geometrie "
+    "stimmt; spätere Schritte, die auf dieses Langloch verweisen, verlieren ihren Bezug. "
+    "Mit Strg+Z kommen Sie zum vorherigen Stand zurück."
 )
 
 
@@ -418,13 +440,17 @@ def bore_shape(params: DrillParams) -> BoreShape:
     Gegenteil behauptet. Das ist genau die stille Wahl, die Regel 21 ausschließt.
     """
     if params.slotted:
-        if params.slot_length <= params.diameter + EPS_GEOM:
+        shortest = shortest_slot(params.diameter)
+        if params.slot_length < shortest - EPS_GEOM:
             raise ValidationError(
                 field="slot_length",
                 constraint="slot_proportion",
                 detail=SLOT_NEEDS_A_LENGTH,
                 value=params.slot_length,
-                values={"diameter": format_length(params.diameter)},
+                values={
+                    "diameter": format_length(params.diameter),
+                    "shortest": format_length(shortest),
+                },
             )
         return BoreShape(params.slot_length, params.slot_angle, 0.0, 0.0)
     return BoreShape(0.0, 0.0, params.widening_diameter, params.widening_depth)
@@ -3347,13 +3373,20 @@ def slot_hole(ctx: OpContext) -> OpResult:
     diameter = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
     through = bool(feature.params.get("through", False))
-    if params.slot_length <= diameter + EPS_GEOM:
+    # **Gefragt wird gegen den gemessenen Durchmesser**, denn gegen ihn misst
+    # auch die Erkennung — und sie ist es, die entscheidet, ob nachher ein
+    # Langloch im Objektbaum steht (:func:`prepare.shortest_slot`).
+    shortest = shortest_slot(diameter)
+    if params.slot_length < shortest - EPS_GEOM:
         raise ValidationError(
             field="slot_length",
             constraint="slot_proportion",
             detail=SLOT_TOO_SHORT,
             value=params.slot_length,
-            values={"diameter": format_length(diameter)},
+            values={
+                "diameter": format_length(diameter),
+                "shortest": format_length(shortest),
+            },
         )
     # **Und an einem Langloch wird gegen seine Länge gefragt, nicht gegen die
     # Breite.** Die Prüfung darüber deckt den ersten Zug; sie lässt am zweiten
@@ -3476,6 +3509,15 @@ def slot_hole(ctx: OpContext) -> OpResult:
         if nothing is not None:
             findings.append(nothing)
         findings.extend(_widening_findings(source, feature, diameter))
+        exact_features = features_of(solid)
+        # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
+        # beiden soll es keinen unterschied geben bei garnichts"). Wer über den
+        # Rand des Körpers zieht, bekommt einen offenen Schlitz; wer quer über
+        # das eigene Langloch zieht, ein Kreuz. Beides ist gültige Geometrie,
+        # und beides ist kein Langloch mehr — im Objektbaum stehen danach
+        # Verrundungen, und die Handlungen eines Langlochs stehen an keiner.
+        if not any(entry.kind == "slot" for entry in exact_features.values()):
+            findings.append(_slot_no_longer_a_feature(feature, params.slot_length))
         # **Neu erkannt und nicht mitgetragen.** Hier stand ``dict(carried)``,
         # und das war am exakten Kern immer leer: ``carried`` behält, was
         # ``provenance == "generated"`` trägt, und ``brep.features.features_of``
@@ -3490,9 +3532,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         # sucht nach Art. Also derselbe Weg wie bei jeder anderen Ausgabe des
         # exakten Kerns (``geom/ops.py``, ``brep/ops.py``): frisch erkennen.
         return OpResult(
-            outputs=[
-                dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))
-            ],
+            outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=exact_features)],
             findings=findings,
         )
 
@@ -3526,15 +3566,39 @@ def slot_hole(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
     )
+    # **Gesucht wird das Langloch, das gerade entstanden ist** — für zwei
+    # verschiedene Antworten. Findet es sich nicht, sagt es der Befund unten
+    # (Regel 17), statt dass das Merkmal still verschwindet.
+    #
+    # Findet es sich, behält es seinen Namen — aber nur, wenn es schon eines
+    # war. Beim **ersten** Zug wird ``hole_1`` zu ``slot_1``, und das ist
+    # zugesagt: ``SLOT_FEATURE_RENAMED`` sagt es dem Kunden ausdrücklich. Beim
+    # **zweiten** wird ein Langloch länger und behält Art und Kennung; hier
+    # stand ``dict(carried)`` und sonst nichts, und wie es danach hieß,
+    # entschied die Zählung der Erkennung. Solange genau ein Langloch im Körper
+    # steht, fällt das nicht auf — sobald es mehrere sind, wandert die Auswahl
+    # des Kunden auf ein fremdes Loch. Dieselbe Zuordnung wie in
+    # ``resize_hole``, nur gegen ein Langloch statt gegen eine Bohrung.
+    pulled_feature = _recognised_slot(
+        result.mesh, feature, centre=centre, diameter=diameter, length=params.slot_length
+    )
+    features = (
+        {**carried, feature.id: pulled_feature}
+        if pulled_feature is not None and feature.kind == "slot"
+        else dict(carried)
+    )
+    findings = [
+        *said,
+        *filled,
+        *result.findings,
+        *_widening_findings(source, feature, diameter),
+    ]
+    if pulled_feature is None:
+        findings.append(_slot_no_longer_a_feature(feature, params.slot_length))
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=result.mesh, features=dict(carried))],
+        outputs=[dataclasses.replace(source, mesh=result.mesh, features=features)],
         solver=result.solver,
-        findings=[
-            *said,
-            *filled,
-            *result.findings,
-            *_widening_findings(source, feature, diameter),
-        ],
+        findings=findings,
     )
 
 
@@ -3895,6 +3959,68 @@ def _recognised_resized_feature(
         id=feature.id,
         provenance="generated",
         created_by=None,
+    )
+
+
+def _recognised_slot(
+    mesh: MeshData, feature: Feature, *, centre: Vec3, diameter: float, length: float
+) -> Feature | None:
+    """Sucht das eben gezogene Langloch und hängt den bestehenden Namen daran.
+
+    Das Geschwister von :func:`_recognised_resized_feature`, und aus demselben
+    Grund: Die allgemeine Zuordnung vergleicht Art und Maß, und *Zum Langloch
+    ziehen* ändert beides mit Absicht. Gesucht wird deshalb nach dem, was die
+    Operation gerade gemacht hat — Art ``slot``, an der genannten Stelle, mit
+    der eingetragenen Länge.
+
+    **Und ``None`` ist eine Antwort, kein Fehler.** Ein Langloch, das über den
+    Rand des Körpers hinausgezogen wird, ist hinterher ein offener Schlitz;
+    eines, das quer über sich selbst gezogen wird, ein Kreuz. Beides ist
+    gültige Geometrie und beides ist kein Langloch mehr — gemessen am
+    11.09.2026: über den Rand bleiben ein bis drei Verrundungen stehen, über
+    sich selbst vier. Der Aufrufer behält den Körper und sagt, dass das Merkmal
+    fort ist (Regel 17).
+    """
+    from app.core.perceive.features import detect
+    from app.core.perceive.matching import match
+
+    detected = detect(mesh)
+    expected = dataclasses.replace(
+        feature,
+        kind="slot",
+        params={**feature.params, "centre": centre, "diameter": diameter, "length": length},
+    )
+    matched = match(
+        {feature.id: expected},
+        detected,
+        mesh.bounds.centre,
+        mesh.bounds.diagonal,
+    )
+    found_id = matched.mapping.get(feature.id)
+    if found_id is None:
+        return None
+    return dataclasses.replace(
+        detected[found_id], id=feature.id, provenance="generated", created_by=None
+    )
+
+
+def _slot_no_longer_a_feature(feature: Feature, length: float) -> Finding:
+    """Der Zug ist gefahren, aber ein Langloch steht danach nicht mehr da.
+
+    Der Satz sagt beides — die Geometrie ist geschnitten, der Bezug ist fort —
+    und nennt den Rückweg. Die zwei Fälle dahinter sind gemessen: Wer über den
+    Rand des Körpers hinauszieht, bekommt einen offenen Schlitz; wer quer über
+    das eigene Langloch zieht, ein Kreuz. Beides ist gewollt machbar, aber
+    keines von beiden ist noch ein Langloch, und wer es weiter anklicken will,
+    findet nichts (Robert, 11.09.2026: „auf einem langloch 2 werden und nicht
+    mehr wählbar").
+    """
+    return Finding(
+        code="slot_hole.feature_lost",
+        severity="warning",
+        message=SLOT_FEATURE_LOST,
+        feature_ids=(feature.id,),
+        values={"feature": feature.id, "length": format_length(length)},
     )
 
 

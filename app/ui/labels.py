@@ -1205,6 +1205,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "settings": _("Einstellungen"),
     "share": _("Anteil"),
     "shortcut": _("Kürzel"),
+    "shortest": _("Mindestlänge"),
     "shared": _("Überschneidung"),
     "shown": _("Sichtbar"),
     "size": _("Größe"),

@@ -33,19 +33,20 @@ from collections.abc import Callable
 
 import numpy as np
 
+from app.core.geom.prepare import shortest_slot
 from app.core.units import EPS_GEOM
 from app.ui.render import shapes
 from app.ui.render.api import Colour, Item, PointerEvent, Renderer, SurfaceStyle, Vec3
 from app.ui.render.gizmo import HIGHLIGHT, ray_plane_hit
 
-#: Wie kurz ein Zug das Loch machen darf, im Maß seines Durchmessers.
-#:
-#: Der Kern verlangt ein Langloch, das länger ist als sein Durchmesser
-#: (``prepare.SLOT_TOO_SHORT``) — darunter ist es eine runde Bohrung. Der Griff
-#: lässt deshalb gar nicht erst kürzer ziehen: Eine Geste, die in einer Absage
-#: endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und nicht
-#: ein Zug, der unterwegs seine Bedeutung wechselt.
-SHORTEST_SHARE = 1.05
+# **Wie kurz ein Zug das Loch machen darf, steht im Kern.**
+#
+# Hier stand bis zum 11.09.2026 eine eigene Zahl (``1.05``), und der Kern hatte
+# seine (``Durchmesser + ε``). Zwei Grenzen für eine Frage, und die des Griffs
+# lag genau dort, wo die Merkmalserkennung kippt: Wer bis zum Anschlag zurückzog,
+# bekam im Objektbaum eine **Bohrung** statt seines Langlochs — oder gar nichts,
+# und damit nichts mehr zum Anklicken. Die Begründung der Zahl steht bei
+# :data:`app.core.geom.prepare.SLOT_SHORTEST_SHARE`; der Griff fragt.
 
 #: Wie fein der Umriss abgetastet wird — beide Bögen zusammen.
 #:
@@ -91,7 +92,6 @@ __all__ = [
     "KNOB_HEIGHT_SHARE",
     "KNOB_RADIUS_SHARE",
     "OUTLINE_SEGMENTS",
-    "SHORTEST_SHARE",
     "WIDEST_KNOB_SHARE",
     "SlotHandle",
     "dragged_slot",
@@ -144,7 +144,7 @@ def dragged_slot(
     along = float(offset @ y_axis)
     reach = math.hypot(across, along)
     turned = math.degrees(math.atan2(along, across)) if reach > EPS_GEOM else float(angle)
-    return max(2.0 * reach, diameter * SHORTEST_SHARE), _normalised_angle(turned)
+    return max(2.0 * reach, shortest_slot(diameter)), _normalised_angle(turned)
 
 
 def _normalised_angle(angle: float) -> float:
@@ -243,7 +243,7 @@ class SlotHandle:
         self._axis = np.asarray(axis, dtype=float)
         self._diameter = float(diameter)
         self._colour = colour
-        self.length = max(float(length), self._diameter * SHORTEST_SHARE)
+        self.length = max(float(length), shortest_slot(self._diameter))
         self.angle = _normalised_angle(angle)
         self._start_length = self.length
         self._start_angle = self.angle
@@ -389,7 +389,7 @@ class SlotHandle:
         (das Feld nimmt nichts unter dem Durchmesser an) — geklemmt wird
         trotzdem, denn ein Aufrufer ohne Feld gäbe es sonst frei.
         """
-        self.length = max(float(length), self._diameter * SHORTEST_SHARE)
+        self.length = max(float(length), shortest_slot(self._diameter))
         self.angle = _normalised_angle(angle)
         self._redraw()
 

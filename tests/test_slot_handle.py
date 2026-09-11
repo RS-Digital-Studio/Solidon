@@ -24,13 +24,13 @@ from render_fakes import RecordingRenderer
 
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.prepare import drill, slot_profile, slot_travel
+from app.core.geom.prepare import drill, shortest_slot, slot_profile, slot_travel
 from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.sketch.planes import frame_of
 from app.core.types import Feature, OpContext, Profile, Scene, SceneObject
 from app.ui.render.api import PointerEvent
-from app.ui.slot_handle import SHORTEST_SHARE, SlotHandle, dragged_slot, slot_outline
+from app.ui.slot_handle import SlotHandle, dragged_slot, slot_outline
 
 #: Der Durchmesser, mit dem hier gebohrt wird — groß genug, dass die Erkennung
 #: das Langloch danach sicher wiederfindet.
@@ -164,9 +164,17 @@ def test_a_drag_into_the_middle_still_asks_for_something_the_operation_takes(
 ) -> None:
     """Eine Geste, die in einer Absage endet, ist keine Bedienung.
 
-    ``slot_hole`` lehnt jede Länge ab, die nicht größer ist als der
-    Durchmesser (``prepare.SLOT_TOO_SHORT``). Der Griff lässt deshalb gar nicht
-    erst kürzer ziehen — auch nicht, wenn der Zeiger auf der Mitte steht.
+    ``slot_hole`` lehnt jede Länge unter :func:`prepare.shortest_slot` ab
+    (``prepare.SLOT_TOO_SHORT``). Der Griff lässt deshalb gar nicht erst kürzer
+    ziehen — auch nicht, wenn der Zeiger auf der Mitte steht.
+
+    **Und der Anschlag wird bis zum Ende geprüft.** Hier stand bis zum
+    11.09.2026 nur, dass die Operation die Länge *annimmt*, und das war die
+    halbe Zusicherung: Der Griff rastete bei ``1.05`` mal Durchmesser, die
+    Operation nahm das an, und die Merkmalserkennung machte daraus eine
+    **Bohrung** — bei größeren Durchmessern gar nichts mehr. Der Kunde zog bis
+    zum Anschlag und hatte danach nichts mehr zum Anklicken. Was zählt, ist
+    also nicht die Annahme, sondern das Merkmal, das danach dasteht.
     """
     entry = a_drilled_plate(profile)
     bore = the_bore(entry)
@@ -177,9 +185,40 @@ def test_a_drag_into_the_middle_still_asks_for_something_the_operation_takes(
     # Netz, und das ist nicht auf die Stelle genau der Wert, mit dem gebohrt
     # wurde. Der Griff rechnet mit dem, was am Merkmal steht — wie die
     # Operation auch.
-    assert length == pytest.approx(float(bore.params["diameter"]) * SHORTEST_SHARE)
-    # Und die Gegenprobe am Kern: Er nimmt diese Länge an.
-    run_op("slot_hole", entry, profile, at_feature=bore.id, slot_length=length, slot_angle=0.0)
+    assert length == pytest.approx(shortest_slot(float(bore.params["diameter"])))
+    gezogen = run_op(
+        "slot_hole", entry, profile, at_feature=bore.id, slot_length=length, slot_angle=0.0
+    )
+    arten = [feature.kind for feature in gezogen.features.values()]
+    assert arten.count("slot") == 1, f"am Anschlag steht ein Langloch da, gefunden: {arten}"
+
+
+@pytest.mark.parametrize("diameter", [2.0, 5.0, 12.0, 20.0, 40.0])
+def test_the_shortest_slot_is_one_over_the_whole_range(diameter: float, profile: Profile) -> None:
+    """Der Anschlag trägt über den ganzen Durchmesserbereich — nicht nur bei Ø 6.
+
+    Die Grenze, an der die Erkennung kippt, wächst mit dem Durchmesser: Ø 5
+    kippt bei 0,25 mm Weg, Ø 20 bei 1,0, Ø 40 bei 1,8 (gemessen 11.09.2026).
+    Ein Anteil, der nur bei kleinen Löchern reicht, ist deshalb kein Anschlag,
+    sondern ein Zufall — und genau so einer stand hier: ``1.05`` traf bei Ø 20
+    die Kippgrenze auf den Punkt.
+    """
+    plate = trimesh.creation.box(extents=(160.0, 120.0, 12.0))
+    entry = SceneObject(id="obj_1", name="Platte", mesh=MeshData.of(plate), features={})
+    drilled = run_op(
+        "drill_hole", entry, profile, x=0.0, y=0.0, z=6.0, axis="z", diameter=diameter, depth=0.0
+    )
+    bore = next(feature for feature in drilled.features.values() if feature.kind == "hole")
+
+    length, _turned = pulled_to(bore, 0.0, 0.0)
+    pulled = run_op(
+        "slot_hole", drilled, profile, at_feature=bore.id, slot_length=length, slot_angle=0.0
+    )
+
+    arten = [feature.kind for feature in pulled.features.values()]
+    assert arten.count("slot") == 1, (
+        f"Ø {diameter}: am Anschlag steht ein Langloch da, gefunden: {arten}"
+    )
 
 
 @pytest.mark.parametrize("angle", [-179.0, -90.0, 0.0, 90.0, 179.0, 200.0, -200.0])

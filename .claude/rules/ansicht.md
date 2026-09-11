@@ -811,10 +811,17 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   **nicht** mitbekommt — die Operation liest ihn aus dem Merkmal. Ein Zug, der
   sie verschöbe, verspräche etwas, das der Schnitt nicht einlöst; deshalb
   spiegelt der gegenüberliegende Knopf den gegriffenen.
-* **Kürzer als der Durchmesser lässt er sich nicht ziehen** (`SHORTEST_SHARE`).
-  Der Kern lehnt das ab (`prepare.SLOT_TOO_SHORT`), und eine Geste, die in einer
-  Absage endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und
-  nicht ein Zug, der unterwegs seine Bedeutung wechselt.
+* **Kürzer als `prepare.shortest_slot` lässt er sich nicht ziehen.** Der Kern
+  lehnt das ab (`prepare.SLOT_TOO_SHORT`), und eine Geste, die in einer Absage
+  endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und nicht
+  ein Zug, der unterwegs seine Bedeutung wechselt.
+
+  **Die Zahl steht im Kern, nicht hier.** Bis zum 11.09.2026 führte der Griff
+  eine eigene (`SHORTEST_SHARE = 1.05`) — und rastete damit genau dort, wo die
+  Merkmalserkennung kippt: Wer bis zum Anschlag zurückzog, hatte danach im
+  Objektbaum eine Bohrung statt seines Langlochs oder gar nichts mehr. Warum
+  die Grenze da liegt, wo sie liegt, steht in
+  `.claude/rules/operationen.md`; der Griff und die Leiste fragen.
 
 Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem `applies_to` von
 *Zum Langloch ziehen*) — eine Aufzählung in der Ansicht wüsste beim nächsten

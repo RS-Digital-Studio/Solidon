@@ -127,9 +127,11 @@ class SlotBar(QFrame):
     def begin(self, length_mm: float, angle: float, *, shortest_mm: float) -> None:
         """Zeigt die Leiste mit den Werten, die der Zug hinterlassen hat.
 
-        ``shortest_mm`` ist die kürzeste Länge, die dieses Loch tragen kann —
-        sein Durchmesser mal einem Hauch. Das Feld nimmt darunter nichts an;
-        eine Zahl, die in einer Absage endet, ist keine Eingabe (Regel 17).
+        ``shortest_mm`` ist die kürzeste Länge, die dieses Loch tragen kann; sie
+        kommt aus :func:`app.core.geom.prepare.shortest_slot` und ist gemessen —
+        darunter erkennt niemand mehr ein Langloch, auch die Merkmalserkennung
+        nicht. Das Feld nimmt weniger nicht an; eine Zahl, die in einer Absage
+        endet, ist keine Eingabe (Regel 17).
         """
         self._quiet = True
         try:
