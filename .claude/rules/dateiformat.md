@@ -110,6 +110,19 @@ Druckdatei geschrieben", ohne dass irgendwo stand, warum. Cura bekommt ein STL
 mit allen Teilen der Platte; Namen und Materialslots liest es ohnehin nicht,
 und die Einstellungen kommen bei ihm über die Kommandozeile.
 
+**Mehrere Platten: eine Datei, wo der Slicer Platten kennt**
+(`knows_plates`). Die Orca-Familie speichert ihre Projekte mit je einem
+`plate`-Block und den Teilen plattenweise nebeneinander (`PLATE_STRIDE`,
+nachgemessen an `BowlingGame.3mf`), und genau diese Datei schreibt
+`write_assembly` ohne `plate`. *Im Slicer öffnen* gibt ihr deshalb alle
+gewählten Platten in einer Datei — ein Fenster, nicht vier: Vier Starts des
+ElegooSlicers auf einmal stritten um dieselbe Filamentbibliothek, bis einer
+mit „remove_all: Zugriff verweigert" abbrach (Robert, 11.09.2026).
+PrusaSlicer und Cura kennen eine Platte je Datei und bekommen weiter je
+eine; der Konsolenlauf (*Slicen*) rechnet ohnehin je Platte eine
+Druckdatei. Solidons Anordnung reist dabei nur mit, wenn sie auf **jeder**
+gewählten Platte hält (`arrangement_holds`).
+
 **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`). Solidon
 rechnet um den Ursprung, der Drucker misst von der Ecke — und der Slicer
 bekommt die Welt des Druckers: die Teile um den halben Bauraum verschoben

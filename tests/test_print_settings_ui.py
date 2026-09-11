@@ -1245,6 +1245,83 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     assert handed == [True, False]
 
 
+@pytest.mark.parametrize(
+    ("program", "files"),
+    [
+        pytest.param("elegoo-slicer.exe", 1, id="Orca-Familie: eine Datei"),
+        pytest.param("prusa-slicer.exe", 2, id="PrusaSlicer: je eine"),
+    ],
+)
+def test_several_plates_open_as_one_project_where_the_slicer_knows_plates(
+    monkeypatch: pytest.MonkeyPatch,
+    dialog: PrintSettingsDialog,
+    tmp_path: Path,
+    program: str,
+    files: int,
+) -> None:
+    """Vier Platten sind für die Orca-Familie eine Projektdatei — und ein Fenster.
+
+    **Der Anlass** (Robert, 11.09.2026: „jede platte öffnet ein weiteres
+    Slicerfenster, statt alle platten in einem zum öffnen"): Je Platte eine
+    Datei hieß je Platte ein Fenster, und vier Starts des ElegooSlicers auf
+    einmal stritten um dieselbe Filamentbibliothek, bis einer mit „remove_all:
+    Zugriff verweigert" abbrach. Der Slicer speichert seine Projekte selbst
+    mit mehreren Platten, und dieselbe Datei schreibt *Exportieren* längst
+    (``write_assembly`` ohne ``plate``).
+
+    PrusaSlicer kennt eine Platte je Datei und bekommt weiter je eine.
+    """
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    written = tmp_path / "projekt.3mf"
+    written.write_bytes(b"x")
+    first = _cube_object()
+    second = replace(_cube_object(), id="obj_2", plate=1)
+    scene = types_module.SimpleNamespace(objects={"obj_1": first, "obj_2": second})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0, 1])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+
+    projects: list[tuple[int, ...]] = []
+    plates: list[int] = []
+
+    def _project(job: object) -> object:
+        projects.append(job.plates)
+        return module.ProjectRun(
+            model=written, slots_by_plate={0: (MaterialSlot(0, ""),), 1: (MaterialSlot(0, ""),)}
+        )
+
+    def _plate(job: object, plate: int) -> object:
+        plates.append(plate)
+        return module.PlateRun(plate=plate, model=written, slots=(MaterialSlot(0, ""),))
+
+    monkeypatch.setattr(module, "_prepare_plates", _project)
+    monkeypatch.setattr(module, "_prepare_plate", _plate)
+    opened: list[Path] = []
+    monkeypatch.setattr(
+        module.handover, "open_in_slicer", lambda model, setup: opened.append(model)
+    )
+
+    dialog._open_in_slicer()
+    assert dialog._worker is not None
+    assert dialog._worker.wait(5_000)
+    QApplication.processEvents()
+
+    assert len(opened) == files, f"{len(opened)} Fenster für zwei Platten"
+    if files == 1:
+        assert projects == [(0, 1)], "beide Platten in einer Projektdatei"
+        assert not plates, "und keine Datei je Platte daneben"
+        assert "in einer Datei" in dialog.state.text(), dialog.state.text()
+    else:
+        assert plates == [0, 1] and not projects
+        assert "je eine Datei" in dialog.state.text(), dialog.state.text()
+
+
 def test_plate_files_are_prepared_outside_the_qt_thread(
     dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

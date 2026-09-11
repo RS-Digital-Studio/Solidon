@@ -1266,7 +1266,7 @@ def test_every_flavour_answers_every_property() -> None:
     nicht unbemerkt umdreht, und sie ist die Liste, die jemand ausfüllen muss,
     der eine vierte Familie einführt.
 
-    Der Bestand ist ausdrücklich **kein** Muster: Fünf der neun Zeilen
+    Der Bestand ist ausdrücklich **kein** Muster: Sechs der elf Zeilen
     trennen die Orca-Familie von den anderen beiden, eine gilt für alle, eine stellt Cura allein
     (``has_key_definitions``), und wer daraus „Orca kann alles" liest, hat die
     Ursache verwechselt. Sie kann es, weil sie ihre
@@ -1296,6 +1296,9 @@ def test_every_flavour_answers_every_property() -> None:
         # es gibt, denn CuraEngine schreibt seine wirksame Konfiguration nicht
         # in den G-Code — Prusa und Orca tun es und prüfen sich damit selbst.
         "has_key_definitions": {"prusa": False, "orca": False, "cura": True},
+        # Mehrere Platten in einer Projektdatei — die Orca-Familie speichert
+        # ihre Projekte so; PrusaSlicer und Cura kennen eine Platte je Datei.
+        "knows_plates": {"prusa": False, "orca": True, "cura": False},
     }
     flavours = set(get_args(SlicerFlavour))
     assert len(flavours) >= 3, f"zu wenige Familien gefunden: {flavours}"

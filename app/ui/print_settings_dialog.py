@@ -63,7 +63,7 @@ from PySide6.QtWidgets import (
 from app.core import activation, discover, tools
 from app.core.errors import AppError, FileWriteError, InternalError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
-from app.core.export.slicer_keys import SlicerFlavour, takes_a_machine_profile
+from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
@@ -1569,19 +1569,75 @@ def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceCompar
     return SliceComparison(grams=grams, seconds=seconds)
 
 
-def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
-    """Eine Platte schreiben, ohne irgendein Qt-Objekt anzufassen."""
-    objects = list(job.objects)
-    on_plate = [entry for entry in objects if entry.plate == plate]
+@dataclass(frozen=True, slots=True)
+class ProjectRun:
+    """Alle gewählten Platten in einer Projektdatei — für einen Slicer, der
+    Platten kennt (``slicer_keys.knows_plates``)."""
+
+    model: Path
+    slots_by_plate: Mapping[int, tuple[MaterialSlot, ...]]
+    findings: tuple[Finding, ...] = ()
+
+
+def _slots_with_profiles(
+    job: _PlateJob, objects: Sequence[SceneObject]
+) -> tuple[tuple[MaterialSlot, ...], tuple[str, ...]]:
+    """Die Materialslots dieser Körper in lokaler Nummerierung, und je Slot
+    das im Dialog gewählte Filamentprofil (``""`` für keines)."""
     slots = threemf.merge_slots(
         [
             threemf.AssemblyPart(
                 mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
             )
-            for entry in on_plate
+            for entry in objects
         ]
     )
-    chosen = tuple(job.slot_profiles.get(threemf.slot_identity(slot), "") for slot in slots)
+    return tuple(slots), tuple(
+        job.slot_profiles.get(threemf.slot_identity(slot), "") for slot in slots
+    )
+
+
+def _prepare_plates(job: _PlateJob) -> ProjectRun:
+    """Alle gewählten Platten in eine Projektdatei schreiben, ohne Qt.
+
+    Dieselbe Datei, die *Exportieren* für mehrere Platten schreibt
+    (``write_assembly`` ohne ``plate``): Plattenblöcke und Versatz kommen
+    aus ``threemf``, die Extruderbelegung gilt über alle Platten. Solidons
+    Anordnung geht nur mit, wenn sie auf **jeder** Platte eine ist — sonst
+    ordnet der Slicer, wie bei einer einzelnen Platte auch.
+    """
+    chosen_objects = [entry for entry in job.objects if entry.plate in job.plates]
+    _slots, chosen = _slots_with_profiles(job, chosen_objects)
+    keep = all(
+        arrangement_holds(
+            [as_mesh_data(entry.mesh) for entry in chosen_objects if entry.plate == plate],
+            job.profile,
+        )
+        for plate in job.plates
+    )
+    written, findings = write_assembly(
+        chosen_objects,
+        job.folder,
+        project_name=job.name,
+        profile=job.profile,
+        settings=replace(job.settings, slot_profiles=chosen) if job.with_settings else None,
+        flavour=job.setup.flavour,
+        place_on_bed=keep,
+        setup=job.setup,
+    )
+    by_plate: dict[int, tuple[MaterialSlot, ...]] = {}
+    for plate in job.plates:
+        on_plate = [entry for entry in chosen_objects if entry.plate == plate]
+        local_slots, local_chosen = _slots_with_profiles(job, on_plate)
+        by_plate[plate] = handover.with_slot_profiles(local_slots, local_chosen)
+    return ProjectRun(model=written, slots_by_plate=by_plate, findings=tuple(findings))
+
+
+def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
+    """Eine Platte schreiben, ohne irgendein Qt-Objekt anzufassen."""
+    objects = list(job.objects)
+    on_plate = [entry for entry in objects if entry.plate == plate]
+    slots, chosen = _slots_with_profiles(job, on_plate)
     # Ein CLI-Lauf ist ein eigener Auftrag: Datei und geladene Filamentprofile
     # müssen dieselbe lokale Nummerierung tragen. Die projektweite Profilwahl
     # wird vor dem Schreiben über ihre vollständige Materialidentität aufgelöst.
@@ -1993,9 +2049,14 @@ class _PrepareAndSliceWorker(_SliceWorker):
 
 
 class _OpenInSlicerWorker(Worker):
-    """Baugruppen schreiben und ihre Fenster öffnen, ohne Qt aufzuhalten."""
+    """Baugruppen schreiben und ihre Fenster öffnen, ohne Qt aufzuhalten.
 
-    done = Signal(object, int)
+    ``done`` nennt die Befunde, die Zahl der übergebenen Platten und die Zahl
+    der Dateien: Für die Orca-Familie ist die zweite bei mehreren Platten
+    eins (:meth:`_open_as_one_project`), sonst sind beide gleich.
+    """
+
+    done = Signal(object, int, int)
     usageReady = Signal(object)
     failed = Signal(object)
 
@@ -2013,6 +2074,9 @@ class _OpenInSlicerWorker(Worker):
         return self.cancelled.is_cancelled
 
     def work(self) -> None:
+        if knows_plates(self._job.setup.flavour) and len(self._job.plates) > 1:
+            self._open_as_one_project()
+            return
         findings: list[Finding] = []
         opened = 0
         for plate in self._job.plates:
@@ -2037,7 +2101,35 @@ class _OpenInSlicerWorker(Worker):
             opened += 1
             for request in usage:
                 self.usageReady.emit(request)
-        self.done.emit(findings, opened)
+        self.done.emit(findings, opened, opened)
+
+    def _open_as_one_project(self) -> None:
+        """Alle gewählten Platten in einer Datei, ein Fenster (``knows_plates``).
+
+        Ein Slicer, der Platten kennt, bekommt sie so, wie er sie selbst
+        speichert: eine Projektdatei mit je einem Plattenblock. Vier Fenster
+        für vier Platten waren nicht nur unhandlich — vier Starts auf einmal
+        stritten um dieselbe Filamentbibliothek, und der ElegooSlicer brach
+        beim vierten ab (Robert, 11.09.2026).
+        """
+        try:
+            run = _prepare_plates(self._job)
+            usage = prepare_usage(
+                [entry for entry in self._job.objects if entry.plate in self._job.plates],
+                self._job.settings,
+                self._job.profile,
+                self._job.name,
+                slots_by_plate=run.slots_by_plate,
+            )
+            if self._was_cancelled():
+                return
+            handover.open_in_slicer(run.model, self._job.setup)
+        except AppError as problem:
+            self.failed.emit(problem)
+            return
+        for request in usage:
+            self.usageReady.emit(request)
+        self.done.emit(list(run.findings), len(self._job.plates), 1)
 
 
 class _GcodeSaveWorker(Worker):
@@ -5390,21 +5482,28 @@ class PrintSettingsDialog(QDialog):
             )
         return _prepare_plate(job, plate)
 
-    def _opened_in_slicer(self, executable: Path, findings: Sequence[Finding], count: int) -> None:
-        """Den asynchronen Öffnen-Weg quittieren und seine Befunde zeigen."""
+    def _opened_in_slicer(
+        self, executable: Path, findings: Sequence[Finding], count: int, files: int
+    ) -> None:
+        """Den asynchronen Öffnen-Weg quittieren und seine Befunde zeigen.
+
+        ``count`` Platten in ``files`` Dateien: eine Datei für alle, wo der
+        Slicer Platten kennt, sonst je eine — der Satz sagt, welches von
+        beiden, denn der Kunde sieht danach ein Fenster oder vier.
+        """
         if self._settling:
             return
         if findings:
             self.reported.emit(list(findings))
         self._state_shows_reason = False
+        if count == 1:
+            line = tr("An {slicer} übergeben — das Fenster gehört jetzt Ihnen.")
+        elif files == 1:
+            line = tr("An {slicer} übergeben — {count} Platten in einer Datei.")
+        else:
+            line = tr("An {slicer} übergeben — {count} Platten, je eine Datei.")
         self.state.setText(
-            tr("An {slicer} übergeben — das Fenster gehört jetzt Ihnen.").replace(
-                "{slicer}", _slicer_title(executable)
-            )
-            if count == 1
-            else tr("An {slicer} übergeben — {count} Platten, je eine Datei.")
-            .replace("{slicer}", _slicer_title(executable))
-            .replace("{count}", str(count))
+            line.replace("{slicer}", _slicer_title(executable)).replace("{count}", str(count))
         )
 
     def _handover_crashed(self, detail: str) -> None:

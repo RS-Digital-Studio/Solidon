@@ -78,14 +78,27 @@ def test_export_offers_only_successful_3mf(qt_app, tmp_path, monkeypatch, succes
 @pytest.mark.parametrize("mode", ["open", "slice"])
 @pytest.mark.parametrize("failure", ["none", "cancel", "second"])
 def test_plate_outputs_offer_only_completed_plates(qt_app, tmp_path, monkeypatch, mode, failure):
+    """Je Platte eine Datei — und Bedarf nur für die Platten, die fertig wurden.
+
+    Der Öffnen-Weg **je Platte** gehört seit dem 11.09.2026 PrusaSlicer: Die
+    Orca-Familie bekommt alle Platten in einer Projektdatei
+    (``slicer_keys.knows_plates``), und dort gibt es keine zweite Datei, die
+    scheitern könnte — siehe ``test_one_project_offers_the_usage_for_all_plates_or_none``.
+    Der Konsolenlauf rechnet weiter je Platte, auch für Orca.
+    """
     profile = profiles.make_profile()
     objects = (body("first", 0), body("second", 1))
+    program, flavour = (
+        (tmp_path / "prusa-slicer.exe", "prusa")
+        if mode == "open"
+        else (tmp_path / "orca-slicer.exe", "orca")
+    )
     job = printing._PlateJob(
         objects,
         (0, 1),
         tmp_path,
         "Projekt",
-        handover.SlicerSetup(tmp_path / "orca-slicer.exe", "orca"),
+        handover.SlicerSetup(program, flavour),
         print_settings.resolve(profile),
         profile,
         {},
@@ -121,6 +134,58 @@ def test_plate_outputs_offer_only_completed_plates(qt_app, tmp_path, monkeypatch
     assert [one.plate for one in offered] == {"none": [0, 1], "cancel": [], "second": [0]}[failure]
     if mode == "slice" and offered:
         assert offered[0].lines[0].grams == pytest.approx(42.0)
+
+
+@pytest.mark.parametrize("opens", [True, False], ids=["Fenster kommt", "Fenster kommt nicht"])
+def test_one_project_offers_the_usage_for_all_plates_or_none(qt_app, tmp_path, monkeypatch, opens):
+    """Alle Platten in einer Datei: der Bedarf kommt für alle — oder für keine.
+
+    Die Orca-Familie öffnet seit dem 11.09.2026 ein Fenster für alle gewählten
+    Platten (Robert: „jede platte öffnet ein weiteres Slicerfenster, statt
+    alle platten in einem"). Fertig werden die Platten damit zusammen: Kommt
+    das Fenster, ist jede Platte übergeben; kommt es nicht, keine — und ein
+    Buchungsangebot für eine Platte, die niemand bekommen hat, wäre falsch.
+    """
+    profile = profiles.make_profile()
+    objects = (body("first", 0), body("second", 1))
+    job = printing._PlateJob(
+        objects,
+        (0, 1),
+        tmp_path,
+        "Projekt",
+        handover.SlicerSetup(tmp_path / "orca-slicer.exe", "orca"),
+        print_settings.resolve(profile),
+        profile,
+        {},
+    )
+    per_plate = []
+    monkeypatch.setattr(
+        printing, "_prepare_plate", lambda _job, plate: per_plate.append(plate) or None
+    )
+    monkeypatch.setattr(
+        printing,
+        "_prepare_plates",
+        lambda _job: printing.ProjectRun(
+            tmp_path / "Projekt.3mf",
+            {plate: tuple(objects[plate].material_slots) for plate in (0, 1)},
+        ),
+    )
+
+    def output(path, *_args, **_kwargs):
+        if not opens:
+            raise FileWriteError(str(path), detail="locked")
+
+    monkeypatch.setattr(handover, "open_in_slicer", output)
+    worker = printing._OpenInSlicerWorker(job)
+    offered = []
+    failed = []
+    worker.usageReady.connect(offered.append)
+    worker.failed.connect(failed.append)
+    worker.work()
+
+    assert not per_plate, "keine Datei je Platte daneben"
+    assert [one.plate for one in offered] == ([0, 1] if opens else [])
+    assert bool(failed) is not opens
 
 
 def test_stock_warning_has_no_stock_side_effect(qt_app, inventory):

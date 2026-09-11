@@ -994,6 +994,24 @@ def reads_assembly_file(flavour: SlicerFlavour) -> bool:
     return flavour != "cura"
 
 
+def knows_plates(flavour: SlicerFlavour) -> bool:
+    """Trägt eine Projektdatei dieser Familie mehrere Druckplatten?
+
+    Die Orca-Familie: je Platte ein ``plate``-Block in ``model_settings.config``
+    und die Teile plattenweise nebeneinander (``threemf.PLATE_STRIDE``) — so
+    schreibt sie ihre eigenen Projekte, und so liest sie eine von Solidon.
+    PrusaSlicer und Cura kennen eine Platte je Datei: Für sie bleibt es bei
+    einer Datei je Platte.
+
+    **Der Anlass** (Robert, 11.09.2026: „jede platte öffnet ein weiteres
+    Slicerfenster, statt alle platten in einem zum öffnen"): Vier Platten
+    hießen vier Dateien und vier Fenster des ElegooSlicers — und die vier
+    Starts auf einmal rissen sich um dieselbe Filamentbibliothek, bis einer
+    mit „remove_all: Zugriff verweigert" abbrach.
+    """
+    return flavour == "orca"
+
+
 def has_key_definitions(flavour: SlicerFlavour) -> bool:
     """Liegt neben dem Programm eine Datei, die jeden gültigen Schlüssel nennt?
 
