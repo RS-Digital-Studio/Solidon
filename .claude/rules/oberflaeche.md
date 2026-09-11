@@ -606,6 +606,23 @@ Gewählt ist die erste, weil ihr Preis den seltensten Fall trifft: Die beiden
 Baustein-Operationen ohne Kachel stehen im Menü *Bausteine* der Menüleiste.
 **Das ist eine Bedienentscheidung und keine Bugfrage** — sie liegt Robert vor,
 und wer sie ändert, ändert eine der vier Zusagen mit.
+
+**An der Bohrung stellte sich dieselbe Rechnung ein zweites Mal, mit *Zum
+Langloch ziehen* als neunter Handlung.** Bis acht genügt „Bausteine" allein,
+um unter zwölf zu kommen, und `KEEP_VISIBLE` hält „Ändern"; ab neun genügt
+sie nicht mehr, und der Schutz hat nichts mehr zu wählen — gefaltet wurde
+„Ändern", also alle neun auf einmal, während die fünf Bausteine direkt
+standen. Der Schutz ist ein Rang unter denen, die allein genügen, kein
+Verbot; wer ihn zum Verbot macht, bekommt dreizehn Zeilen und zwei andere
+rote Tests. Gewählt (Robert, 11.09.2026): **Die Zeile geht, die einen Griff
+im Bild hat** — `HANDLE_INSTEAD` in `panels.py` nimmt sie an der Bohrung aus
+dem Menü, nicht aus `applies_to`. Menüleiste, Palette, Chat, Kommandozeile
+und der Griff selbst lesen weiter `applies_to`. Am Langloch bleibt sie, weil
+sie dort die einzige ist. Der Anschluss ist geprüft: Wo die Tabelle eine
+Zeile weglässt, muss der Griff tatsächlich sitzen
+(`test_a_row_handed_to_a_handle_has_that_handle`), und gezählt wird am
+gebauten Menü auf jeder Ebene, nicht über `operations_for_feature` — siehe
+die Testfalle unten.
 * **Ein Wächter ist so scharf wie seine weiteste Ausnahme.** Der Test, der
   „jede Operation ist im Menü auffindbar" zusichert, nahm die *Kategorie* aus
   — und blieb deshalb grün, während zwei Operationen nirgends standen. Wer

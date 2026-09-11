@@ -17,7 +17,7 @@ unerklärt:
 
 | Rot | Ursache | Wem es gehört |
 |---|---|---|
-| `test_analysis_ui` (1) | Menüfaltung kippt bei neun Handlungen | **mir** — Punkt unten, Produktentscheidung offen |
+| `test_analysis_ui` (1) | Menüfaltung kippt bei neun Handlungen | **mir** — entschieden und behoben, siehe unten |
 | `test_feature_label_layout` (1) | Layout baut Geometrie neu auf | zweite Sitzung (`viewport.py`, schreibt noch) |
 | `test_manual` (12) | Handbuch noch nicht erzeugt | Erzeugerlauf, gehört ans Release |
 | `test_wording` (6) | dieselbe Ursache | Erzeugerlauf |
@@ -102,6 +102,18 @@ vermerkt). Drei Wege, mit ihren Kosten:
 
 `MENU_TWINS` ist **kein** Weg: Die Tabelle ist in `registry.py:177`
 ausdrücklich den zwei Rechenkernen vorbehalten.
+
+**Entschieden und behoben (Robert, 11.09.2026, 06:45): Weg 2.** Eine
+Korrektur zur Begründung oben: `resize_hole` („Bohrung ändern") kennt keinen
+Haken „Langloch" — der sitzt an `drill_hole`, also am *Setzen*. Was bleibt,
+sind Griff, Menüleiste und Befehlspalette; die Entscheidung trägt das.
+`HANDLE_INSTEAD` in `app/ui/panels.py` nimmt die Zeile an der Bohrung aus
+dem Menü, `applies_to` bleibt. Am gebauten Menü: zwölf Zeilen, acht
+Handlungen direkt, der Katalog als eine Zeile, *Prüfstück erzeugen* da. Am
+Langloch bleibt die Operation die einzige Zeile. Drei neue Tests, Mutation
+mit leerer Tabelle macht drei rot. Was der Changelog-Satz zum Langloch
+später nennt, ist der **Griff**, nicht das Menü — das gehört dem, der das
+Langloch abschließt.
 
 ### Der gezeichnete Vorschau-Umriss eines Langlochs ist 22 Prozent zu schmal
 

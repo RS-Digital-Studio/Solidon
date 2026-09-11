@@ -190,6 +190,46 @@ KEEP_VISIBLE: Final = ("colour", "holes")
 ALWAYS_DIRECT: Final = ("translate_object", "rotate_object", "scale_object")
 
 
+#: Operationen, die am Kontextmenü **dieser** Merkmalsarten keine Zeile haben,
+#: weil ein Griff im Bild sie dort anbietet — Operation → Merkmalsarten.
+#:
+#: *Zum Langloch ziehen* an der Bohrung: Der Langlochgriff
+#: (``viewport.SLOT_HANDLE_OP``) sitzt an jeder Art, die ``slot_hole``
+#: annimmt, und ein Zug daran **ist** die Handlung — direkter als eine Zeile,
+#: die denselben Dialog öffnet. Die Zeile kostete außerdem die Grenze: Mit ihr
+#: trug die Bohrung neun Handlungen, und ab neun genügt „Bausteine" allein
+#: nicht mehr, um unter zwölf Zeilen zu kommen — ``folded_groups`` faltete dann
+#: „Ändern", also alle neun auf einmal. Gemessen am 11.09.2026 mit fünf
+#: Bausteinen und zwei festen Zeilen: bis acht Handlungen zwölf Zeilen und
+#: „Bausteine" gefaltet, ab neun neun Zeilen und „Ändern" gefaltet. Dass
+#: ``KEEP_VISIBLE`` „Ändern" schützt, half nicht: Der Schutz wählt unter den
+#: Gruppen, die allein genügen, und ab neun war das nur noch diese eine.
+#: Welche Zeile geht, hat Robert entschieden (11.09.2026): nicht *Prüfstück
+#: erzeugen*, nicht die Grenze — die Zeile, die einen Griff hat.
+#:
+#: **Am Langloch bleibt sie.** Dort ist sie die einzige Operation, und ein Menü
+#: aus *Ausblenden* wäre die Sackgasse, vor der ``prepare_ops.SLOT_FROM``
+#: warnt. Und was hier steht, verschwindet nur aus diesem Menü: Menüleiste,
+#: Befehlspalette, Chat und Kommandozeile lesen ``applies_to``, und das bleibt.
+#: Der Griff liest es auch — ``tests/test_interface_limits.py`` prüft, dass er
+#: an jeder Art sitzt, die hier steht, denn ohne ihn wäre die Zeile kein
+#: Umweg, sondern der einzige Weg.
+HANDLE_INSTEAD: Final[dict[str, frozenset[str]]] = {
+    "slot_hole": frozenset({"hole"}),
+}
+
+
+def shown_at_feature(kind: str, entries: Sequence[Any]) -> tuple[Any, ...]:
+    """Was von den Operationen einer Merkmalsart eine Zeile im Menü bekommt.
+
+    Die Rohmenge liefert ``REGISTRY.for_feature``; hier fällt weg, was
+    :data:`HANDLE_INSTEAD` an dieser Art dem Griff überlässt. Eine Funktion und
+    kein Ausdruck im Aufbau, weil ``tests/test_interface_limits.py`` die
+    Zeilen ohne Fenster nachrechnet und dabei dieselbe Menge braucht.
+    """
+    return tuple(spec for spec in entries if kind not in HANDLE_INSTEAD.get(str(spec.name), ()))
+
+
 def groups_to_keep(entries: Sequence[Any]) -> set[str]:
     """Die Gruppentitel, die sichtbar bleiben sollen (:data:`KEEP_VISIBLE`)."""
     return {
@@ -1917,8 +1957,10 @@ class ObjectTree(QWidget):
         steht seit dem 07.09.2026 einmal, im Kern bei der Tabelle, über die
         sie eine Aussage macht (:func:`~app.core.registry.shown_of_twins`) —
         vorher dreimal in zwei Fassungen, zwei davon in dieser Datei.
+
+        **Und ohne die Zeilen, die ein Griff ersetzt** (:data:`HANDLE_INSTEAD`).
         """
-        return shown_of_twins(REGISTRY.for_feature(kind))
+        return shown_at_feature(kind, shown_of_twins(REGISTRY.for_feature(kind)))
 
     def _feature_kind(self) -> str | None:
         """Die Art des gewählten Merkmals — ``hole``, ``face``, ``edge``.

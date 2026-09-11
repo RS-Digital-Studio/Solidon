@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt, QThread
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMenu
 
 from app.core.perceive import maps
 from app.core.types import Action, Finding
@@ -1074,6 +1074,43 @@ def test_a_feature_menu_names_the_operations_of_its_kind(window: MainWindow) -> 
     assert expected, "an einer Bohrung gibt es etwas zu tun"
     assert expected - catalogue <= direct, "was die Bohrung selbst angeht, steht direkt da"
     assert "Baustein einsetzen …" in direct, "und die Bausteine über den Katalog"
+    menu.deleteLater()
+
+
+def test_the_slot_row_is_gone_from_the_hole_menu_on_every_level(window: MainWindow) -> None:
+    """*Zum Langloch ziehen* hat an der Bohrung keine Zeile — der Griff hat sie.
+
+    Die Bohrung trug neun Handlungen, und ab neun genügt „Bausteine" allein
+    nicht mehr, um unter zwölf Zeilen zu kommen: ``folded_groups`` faltete
+    dann „Ändern", und alle neun lagen einen Klick tiefer, während die fünf
+    Bausteine direkt dastanden. Welche Zeile geht, hat Robert entschieden
+    (11.09.2026): die mit dem Griff im Bild (``HANDLE_INSTEAD``).
+
+    **Gezählt am gebauten Menü, auf jeder Ebene** — und nicht über
+    ``operations_for_feature``, obwohl der Filter dort sitzt. Der Test darüber
+    nimmt diese Methode als Sollmenge, und ein Filter darin lässt Erwartung
+    und Menü gemeinsam schrumpfen: Er bliebe grün, ob die Zeile fehlt oder
+    nicht. Hier steht deshalb die Zeile selbst, direkt und in jedem Untermenü.
+    Dass die Operation am Langloch bleibt, wo sie die einzige ist, prüft
+    ``tests/test_interface_limits.py`` ohne Fenster.
+    """
+    window.object_tree.select_feature("obj_1", "hole_2")
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+
+    def texts(of: QMenu) -> list[str]:
+        found: list[str] = []
+        for action in of.actions():
+            found.append(action.text().replace("&", ""))
+            if action.menu() is not None:
+                found.extend(texts(action.menu()))
+        return found
+
+    every_level = texts(menu)
+    assert "Zum Langloch ziehen" not in every_level, "the handle replaces the row, on every level"
+    assert "Bohrung ändern" in every_level, "the other hole operations are still there"
+    rows = [action for action in menu.actions() if not action.isSeparator()]
+    assert len(rows) <= 12, [action.text() for action in rows]
     menu.deleteLater()
 
 

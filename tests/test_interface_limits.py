@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -359,6 +360,22 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
 FIXED_CONTEXT_ROWS = 3
 
 
+def _offered_at(kind: str) -> tuple[Any, ...]:
+    """Die Operationen, die am Kontextmenü dieser Art eine Zeile bekommen.
+
+    **Dieselbe Menge wie im Fenster**, nicht die Rohmenge aus ``applies_to``:
+    ``shown_at_feature`` lässt weg, was ein Griff im Bild ersetzt
+    (``HANDLE_INSTEAD``). Mit der Rohmenge rechnete diese Datei eine Menülage
+    nach, die es im Fenster nicht gibt — an der Bohrung neun Handlungen statt
+    acht, und damit „Ändern" gefaltet statt „Bausteine".
+    """
+    from app.ui.panels import shown_at_feature
+
+    return shown_at_feature(
+        kind, [spec for spec in REGISTRY.all() if kind in (spec.applies_to or ())]
+    )
+
+
 def context_rows(kind: str) -> tuple[int, list[str]]:
     """Wie viele Zeilen das Kontextmenü eines Merkmals zeigt, und was es faltet.
 
@@ -374,7 +391,7 @@ def context_rows(kind: str) -> tuple[int, list[str]]:
     from app.ui.panels import groups_to_keep
 
     sizes: dict[str, int] = {}
-    offered = [spec for spec in REGISTRY.all() if kind in (spec.applies_to or ())]
+    offered = _offered_at(kind)
     for spec in offered:
         title = group_title(str(spec.category))
         sizes[title] = sizes.get(title, 0) + 1
@@ -499,11 +516,53 @@ def _group_size(kind: str, title: str) -> int:
     """Wie viele Operationen dieses Merkmals in dieser Gruppe liegen."""
     from app.core.registry.surfaces import group_title
 
-    return sum(
-        1
-        for spec in REGISTRY.all()
-        if kind in (spec.applies_to or ()) and group_title(str(spec.category)) == title
-    )
+    return sum(1 for spec in _offered_at(kind) if group_title(str(spec.category)) == title)
+
+
+def test_a_row_handed_to_a_handle_has_that_handle() -> None:
+    """Wo das Menü eine Zeile dem Griff überlässt, muss der Griff dort sitzen.
+
+    ``HANDLE_INSTEAD`` nimmt *Zum Langloch ziehen* aus dem Menü der Bohrung,
+    weil der Langlochgriff sie dort anbietet. Der Griff liest seine Arten aus
+    ``applies_to`` der Operation, das Menü aus der Tabelle — zwei Stellen, die
+    auseinanderlaufen können: Wer ``SLOT_FROM`` um die Bohrung kürzt, nimmt
+    dem Griff die Art, und die Tabelle ließe die Zeile trotzdem weg. Dann wäre
+    sie kein Umweg mehr, sondern der einzige Weg — und der wäre zu.
+
+    Geprüft an dem, was der Griff **tatsächlich** anbietet, nicht an der
+    Konstante daneben. Wer eine zweite Operation einträgt, trägt hier ihren
+    Griff nach — sonst sagt der Test, dass er keinen kennt.
+    """
+    from app.ui.panels import HANDLE_INSTEAD
+    from app.ui.viewport import slot_feature_kinds
+
+    handles = {"slot_hole": slot_feature_kinds}
+    for name, kinds in HANDLE_INSTEAD.items():
+        assert name in handles, f"{name}: which handle replaces its row? Name it here."
+        offered = handles[name]()
+        assert kinds <= offered, (
+            f"{name}: the menu drops the row at {sorted(kinds - offered)}, "
+            f"but the handle only sits at {sorted(offered)}"
+        )
+        spec = REGISTRY.get(name)
+        assert kinds <= set(spec.applies_to or ()), (
+            f"{name}: the table names {sorted(kinds)}, but applies_to is "
+            f"{sorted(spec.applies_to or ())} — a row that was never there cannot be dropped"
+        )
+
+
+def test_the_slot_keeps_its_only_operation_in_the_menu() -> None:
+    """Am Langloch bleibt *Zum Langloch ziehen* eine Zeile — es ist die einzige.
+
+    ``HANDLE_INSTEAD`` nimmt sie an der **Bohrung** heraus, wo acht andere
+    Handlungen stehen. Am Langloch stünde ohne sie nur *Ausblenden*: genau
+    die Sackgasse, vor der ``SLOT_FROM`` warnt (§2.6). Der Griff sitzt auch
+    dort, aber ein Griff ersetzt eine Zeile unter vielen, nicht die einzige.
+    """
+    names = {str(spec.name) for spec in _offered_at("slot")}
+    assert "slot_hole" in names, "the slot's only operation vanished from its menu"
+    at_hole = {str(spec.name) for spec in _offered_at("hole")}
+    assert "slot_hole" not in at_hole, "at the hole the row belongs to the handle"
 
 
 def test_no_submenu_holds_a_single_entry() -> None:
