@@ -25,7 +25,7 @@ from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.prepare import drill, shortest_slot
+from app.core.geom.prepare import drill, shortest_slot, slot_profile
 from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
@@ -799,3 +799,142 @@ def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profil
 
     codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
     assert "slot_hole.feature_lost" in codes, codes
+
+
+# --- RM-155: der Mantel aus einem Stück ------------------------------------------------
+
+
+def a_foreign_slot(diameter: float, travel: float) -> MeshData:
+    """Ein Langloch, wie es ein eingelesenes Netz hat — ohne Solidon-Operation.
+
+    ``drill`` lässt seit dem 11.09.2026 kein so knappes Langloch mehr zu
+    (:func:`app.core.geom.prepare.shortest_slot`); wer den Streifen darunter
+    prüfen will, muss schneiden wie ein fremdes Programm: Quader minus
+    aufgezogenes Stadion.
+    """
+    from app.core.geom.sketch_solid import extrude_profile
+    from app.core.types import PlaneFrame
+
+    plate_body = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 12.0)))
+    outline = slot_profile(radius=diameter / 2.0, travel=travel, angle_deg=0.0)
+    frame = PlaneFrame(
+        origin=(0.0, 0.0, -10.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    )
+    tool = extrude_profile(outline, 20.0, frame)
+    return boolean("difference", [plate_body, MeshData.of(tool)]).mesh
+
+
+@pytest.mark.parametrize(
+    ("diameter", "travel"),
+    [(12.0, 0.5), (20.0, 0.5), (40.0, 0.8), (40.0, 1.0), (5.0, 0.3)],
+)
+def test_a_barely_pulled_slot_in_a_foreign_mesh_is_still_one(
+    diameter: float, travel: float
+) -> None:
+    """RM-155: Zwischen „ein Zylinder passt" und „zwei Bögen" stand nichts.
+
+    Gemessen am 11.09.2026 über Ø 2 bis Ø 40: Unter rund fünf Prozent Weg
+    hält die Einpassung den Mantel für einen Zylinder; knapp darüber passt
+    weder Zylinder noch Bogenpaar, weil die Flanken für die Krümmungstrennung
+    zu schmal sind — Ø 12 auf 12,5 mm ergab **kein** Merkmal, Ø 20 auf 20,5
+    ebenso, Ø 40 auf 40,8. Kein Eintrag im Objektbaum, nichts zum Anklicken.
+    Solidon schneidet seit demselben Tag nicht mehr so knapp; ein eingelesenes
+    Netz kommt trotzdem dorthin.
+
+    :func:`perceive.features.fit_stadium` misst den ganzen Fleck: ein Prisma
+    über einem Stadion. Die Abnahme aus dem Register ist der erste Fall; die
+    vier großen fallen ohne den Auffangweg (Gegenprobe 11.09.2026). Ø 5 auf
+    0,3 geht weiter über die zwei Bögen und steht hier dafür, dass der alte
+    Weg bleibt.
+    """
+    mesh = a_foreign_slot(diameter, travel)
+
+    slot = only_slot(mesh)
+
+    assert float(slot.params["diameter"]) == pytest.approx(diameter, abs=0.05)
+    assert float(slot.params["length"]) == pytest.approx(diameter + travel, abs=0.05)
+    assert float(slot.params["travel"]) == pytest.approx(travel, abs=0.05)
+    assert slot.params["through"], "die Platte ist 12 mm dick, das Werkzeug 20"
+    assert len(slot.face_indices) >= 6, "und der ganze Mantel ist anklickbar"
+
+
+def test_the_stadium_fit_lies_on_the_cut_contour() -> None:
+    """Die Ecken eines geschnittenen Langlochs liegen auf dem Stadion — auf ein Promille.
+
+    Das ist die Begründung für die strenge Toleranz: Was ein Langloch ist,
+    hat hier einen Rückstand von einem Promille (gemessen 0,0011 an Ø 12 auf
+    12,5 mm; der Rest ist die Richtung aus zwei Scheiteln, die nicht auf die
+    Stelle genau am Scheitel des Bogens abgetastet sind) — und was zwei
+    Prozent daneben liegt, ist etwas anderes.
+    """
+    from app.core.perceive.features import (
+        _connected_patches,
+        _large_facet_faces,
+        _one_body,
+        fit_stadium,
+    )
+
+    body = _one_body(a_foreign_slot(12.0, 0.5)).raw
+    planar = _large_facet_faces(body)
+    curved = [index for index in range(len(body.faces)) if index not in planar]
+    mantle = max(_connected_patches(body, curved), key=len)
+
+    fit = fit_stadium(body, mantle)
+
+    assert fit is not None and fit.good and fit.inward
+    assert fit.residual < 0.002
+    assert fit.radius == pytest.approx(6.0, abs=0.01)
+    assert fit.travel == pytest.approx(0.5, abs=0.02)
+    # Die Platte ist um den Ursprung gebaut; halbe Tiefe ist z = 0.
+    assert fit.centre == pytest.approx((0.0, 0.0, 0.0), abs=0.05)
+    assert fit.depth == pytest.approx(12.0, abs=0.05)
+
+
+@pytest.mark.parametrize("corners", [6, 8])
+def test_a_coarse_polygon_prism_is_not_a_stadium(corners: int) -> None:
+    """Ein Sechs- oder Achteck ist weder Zylinder noch Stadion — und bleibt es.
+
+    Genau davor warnt §41: Ein Verfahren, das Grundformen sucht, findet auch
+    welche, die niemand gemeint hat. Ein Achteck hat eine Richtung, in der es
+    länger ist als quer — um 8 Prozent —, und läge auf einem Stadion mit
+    diesem Weg trotzdem 4 Prozent daneben. Die Toleranz hält es draußen.
+    """
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    tool = trimesh.creation.cylinder(radius=5.0, height=20.0, sections=corners)
+    mesh = boolean("difference", [block, MeshData.of(tool)]).mesh
+
+    kinds = [feature.kind for feature in detect(mesh).values()]
+
+    assert "slot" not in kinds, kinds
+
+
+def test_a_stretched_hexagon_is_not_a_stadium() -> None:
+    """Ein gestrecktes Sechseck hat Weg und Breite — und keine Bögen."""
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    hexagon = Polygon([(-8, -4), (0, -6), (8, -4), (8, 4), (0, 6), (-8, 4)])
+    tool = trimesh.creation.extrude_polygon(hexagon, height=20.0)
+    tool.apply_translation((0.0, 0.0, -10.0))
+    mesh = boolean("difference", [block, MeshData.of(tool)]).mesh
+
+    kinds = [feature.kind for feature in detect(mesh).values()]
+
+    assert "slot" not in kinds, kinds
+
+
+def test_a_small_pocket_with_rounded_corners_is_still_not_a_slot() -> None:
+    """Die Tasche aus der Gegenprobe oben, nur so klein, dass ihre Wände im Mantel liegen.
+
+    Bei 40 x 24 sind die Wände große Facetten und die vier Ecken vier Flecken;
+    bei 12 x 8 mit r = 3 ist der ganze Mantel **ein** Fleck — genau der, an
+    dem der Stadion-Fit gefragt würde. Ihre geraden Kurzseiten liegen neben
+    dem Bogen, den ein Stadion dort verlangt, und das sieht der Rückstand.
+    """
+    mesh = pocket_with_rounded_corners(12.0, 8.0, 3.0)
+
+    kinds = [feature.kind for feature in detect(mesh).values()]
+
+    assert "slot" not in kinds, kinds
+    assert kinds.count("fillet") == 4, kinds

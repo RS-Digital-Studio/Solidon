@@ -19,6 +19,15 @@ Verrundungen mit paralleler Achse gibt es an jeder verrundeten Kante eines
 Quaders; was ein Langloch daraus macht, ist der geschlossene Mantel dazwischen.
 Läuft er über etwas anderes als die zwei Flanken, ist es keines — und dann
 bleiben die Verrundungen, was sie waren.
+
+**Und ein zweiter Einstieg, für den Mantel aus einem Stück** (RM-155): Ein
+knapp aufgezogenes Langloch — der Weg unter rund fünf Prozent des
+Durchmessers — zerfällt der Einpassung nicht in zwei Bögen, weil seine
+Flanken für die Krümmungstrennung zu schmal sind, und ein Zylinder passt auch
+nicht mehr. Dann kommt der ganze Fleck als Stadion
+(:class:`app.core.perceive.features.StadiumFit`), und hier wird daraus
+dasselbe Merkmal. Solidon schneidet seit dem 11.09.2026 nicht mehr so knapp;
+ein eingelesenes Netz kommt trotzdem dorthin.
 """
 
 from __future__ import annotations
@@ -127,6 +136,7 @@ def slots_instead_of_half_bores(
     found: Mapping[FeatureId, Feature],
     fillets: Sequence[tuple[Any, list[int]]],
     *,
+    stadiums: Sequence[tuple[Any, list[int]]] = (),
     check_cancelled: Callable[[], None] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Ersetzt die Bögen eines Langlochs durch das Langloch.
@@ -141,10 +151,18 @@ def slots_instead_of_half_bores(
     was zwischen ihnen einmal ein Fleck mehr oder weniger ist, verschöbe jede
     Zuordnung über den Index. Über die Flächen gefragt, gibt es diesen Fall
     nicht.
+
+    ``stadiums`` sind die Mäntel aus einem Stück
+    (:class:`app.core.perceive.features.StadiumFit`) — dieselbe Merkmalsart,
+    ein anderer Weg dorthin; siehe den Kopf dieser Datei.
     """
     slots = find_slots(mesh, fillets, check_cancelled=check_cancelled)
+    slots.extend(slots_from_stadiums(mesh, stadiums))
     if not slots:
         return dict(found)
+    # Nach Position sortiert, damit die Nummer nicht daran hängt, über welchen
+    # der zwei Wege ein Langloch gekommen ist (§21.2).
+    slots.sort(key=lambda slot: tuple(round(value, 3) for value in slot.centre))
 
     covered: set[int] = set()
     for slot in slots:
@@ -177,6 +195,40 @@ def slots_instead_of_half_bores(
             face_indices=slot.face_indices,
         )
     return kept
+
+
+def slots_from_stadiums(mesh: MeshData, stadiums: Sequence[tuple[Any, list[int]]]) -> list[Slot]:
+    """Aus jedem eingepassten Stadion das Langloch, das es ist.
+
+    Die Einpassung hat Achse, Mittellinie, Radius, Weg und Tiefe schon gemessen
+    (:func:`app.core.perceive.features.fit_stadium`); was hier dazukommt, ist
+    die Frage nach dem Durchgang — dieselbe wie beim Bogenpaar
+    (:func:`_reaches_through`) — und die Form, die der Objektbaum liest.
+    ``swallowed`` bleibt leer: Es gibt keine Bögen, die darin aufgehen; die
+    Flächen sind der Fleck selbst.
+    """
+    body = mesh.raw
+    found: list[Slot] = []
+    for fit, patch in stadiums:
+        centre = np.asarray(fit.centre, dtype=float)
+        axis = np.asarray(fit.axis, dtype=float)
+        direction = np.asarray(fit.direction, dtype=float)
+        found.append(
+            Slot(
+                centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+                axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+                direction=(float(direction[0]), float(direction[1]), float(direction[2])),
+                diameter=float(fit.radius) * 2.0,
+                travel=float(fit.travel),
+                depth=float(fit.depth),
+                through=_reaches_through(
+                    body, centre, axis, direction, float(fit.travel), float(fit.depth)
+                ),
+                face_indices=tuple(sorted(int(face) for face in patch)),
+                swallowed=(),
+            )
+        )
+    return found
 
 
 def find_slots(

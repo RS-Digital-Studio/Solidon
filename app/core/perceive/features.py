@@ -31,7 +31,7 @@ from app.core.geom.mesh import MeshData, face_components, fully_stitched, on_sur
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
-from app.core.perceive.slots import slots_instead_of_half_bores
+from app.core.perceive.slots import ACROSS_THE_AXIS, slots_instead_of_half_bores
 from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 
@@ -268,6 +268,44 @@ class SphereFit:
 
 
 @dataclass(frozen=True, slots=True)
+class StadiumFit:
+    """Ein Langloch, als **ein** Mantel eingepasst — nicht aus zwei Bögen.
+
+    Der Auffangweg für RM-155: Zwischen „ein Zylinder passt noch" und „zwei
+    Bögen lassen sich trennen" liegt ein Streifen, in dem ein knapp
+    aufgezogenes Langloch weder das eine noch das andere ist. Gemessen am
+    11.09.2026 über Ø 2 bis Ø 40: unterhalb von rund fünf Prozent Weg passt
+    ein Zylinder, knapp darüber passt nichts — Ø 12 auf 12,5 mm ergab **kein**
+    Merkmal, Ø 20 auf 20,5 ebenso. Solidon schneidet seit demselben Tag nicht
+    mehr so knapp (:func:`app.core.geom.prepare.shortest_slot`); ein
+    eingelesenes Netz kommt trotzdem dorthin.
+
+    Gefragt wird deshalb am ganzen Fleck: Liegen alle Normalen quer zu einer
+    Achse (ein Prisma), und liegen die Ecken in der Projektion auf einem
+    Stadion — zwei Halbkreise über einer Strecke —, ist es ein Langloch.
+    """
+
+    axis: Vec3
+    centre: Vec3
+    """Die Mitte, auf halber Länge und halber Tiefe."""
+    direction: Vec3
+    """Die Richtung der Mittellinie, senkrecht zur Achse."""
+    radius: float
+    travel: float
+    """Der Weg zwischen den beiden Bogenmittelpunkten."""
+    depth: float
+    residual: float
+    """Mittlere Abweichung von der Stadionkontur, bezogen auf den Radius."""
+    inward: bool
+
+    @property
+    def good(self) -> bool:
+        return (
+            self.residual <= STADIUM_TOLERANCE and self.radius > EPS_GEOM and self.travel > EPS_GEOM
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TorusFit:
     """Ein eingepasster Torus: Achse, Mittelpunkt, Ring- und Röhrenradius."""
 
@@ -343,6 +381,26 @@ CONE_NORMAL_OUTLIER_SHARE = 0.05
 #: Antwort, die Reihenfolge in :func:`_fitted` die andere — Kugel und Torus
 #: werden erst gefragt, wenn Zylinder und Kegel abgelehnt haben.
 ROUND_TOLERANCE = 0.02
+
+#: Wie gut die Ecken eines Flecks auf einem Stadion liegen müssen, damit er
+#: ein Langloch ist — mittlere Abweichung, bezogen auf den Radius.
+#:
+#: Dieselbe Zahl wie :data:`ROUND_TOLERANCE`, und aus demselben Grund
+#: **streng**: Ein Verfahren, das Grundformen sucht, findet auch welche, die
+#: niemand gemeint hat (§41). Die Ecken eines geschnittenen Langlochs liegen
+#: auf der Kontur — gemessen 0,0011 an Ø 12 auf 12,5 mm —, und ein
+#: eingelesenes Netz liegt dort ebenso, solange es aus einer Konstruktion
+#: stammt. Was zwei Prozent daneben liegt, ist etwas anderes: die vier Ecken
+#: einer verrundeten Tasche etwa, deren gerade Kurzseiten neben dem Bogen
+#: liegen, den das Stadion dort verlangt.
+STADIUM_TOLERANCE = 0.02
+
+#: In wie vielen Richtungen über einen halben Kreis die Ausdehnung eines
+#: Flecks gemessen wird, um die Mittellinie eines Stadions grob zu finden —
+#: ein Grad. Fein wird sie danach aus den zwei Scheiteln, die in dieser
+#: Richtung außen liegen; die Zahl bestimmt nur, dass die richtigen zwei
+#: gefunden werden.
+STADIUM_SWEEP = 180
 
 #: Höchster Winkelfehler zwischen der Flächennormale und der Normalen des
 #: eingepassten Torus nach Abzug der Facettenauflösung, in Grad.
@@ -840,6 +898,12 @@ def detect(
             mesh,
             found,
             worth_naming,
+            stadiums=[
+                entry
+                for entry in fitted.stadiums
+                if not _too_small_to_make(entry[0].radius * 2.0)
+                and not _a_sliver(mesh.raw, entry[1])
+            ],
             check_cancelled=check_cancelled,
         )
         if check_cancelled is not None:
@@ -1144,6 +1208,7 @@ Tori = list[tuple["TorusFit", list[int]]]
 
 #: Zylinderausschnitte, die keine ganzen Zylinder sind — Verrundungen.
 Fillets = list[tuple["CylinderFit", list[int]]]
+Stadiums = list[tuple["StadiumFit", list[int]]]
 
 
 class Fitted(NamedTuple):
@@ -1160,6 +1225,9 @@ class Fitted(NamedTuple):
     tori: Tori
     fillets: Fillets
     helices: list[Helix]
+    stadiums: Stadiums
+    """Mäntel, deren Querschnitt ein Stadion ist — Langlöcher aus einem Stück
+    (:class:`StadiumFit`)."""
 
 
 def _cylinders(mesh: MeshData) -> Cylinders:
@@ -1185,7 +1253,7 @@ def _fitted(
         check_cancelled()
     body = mesh.raw
     if not len(body.faces):
-        return Fitted([], [], [], [], [], [])
+        return Fitted([], [], [], [], [], [], [])
 
     # **Der Cache bleibt stehen, solange hier gemessen wird — und das ist
     # dreiviertel der Erkennungszeit.**
@@ -1225,12 +1293,13 @@ def _fitted(
             check_cancelled()
         curved = [index for index in range(len(body.faces)) if index not in planar]
         if not curved:
-            return Fitted([], [], [], [], [], [])
+            return Fitted([], [], [], [], [], [], [])
 
         found: Cylinders = []
         cones: Cones = []
         spheres: Spheres = []
         tori: Tori = []
+        stadiums: Stadiums = []
 
         def classify(patch: list[int]) -> bool:
             """Die erste Form, die auf diesen Fleck passt — oder keine."""
@@ -1323,9 +1392,21 @@ def _fitted(
             if check_cancelled is not None:
                 check_cancelled()
             pieces = curvature_splits[patch_index]
-            if len(pieces) > 1:
-                for piece in pieces:
-                    classify(piece)
+            # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
+            # Liste ist Absicht, kein ``any`` mit Kurzschluss.
+            classified = [classify(piece) for piece in pieces] if len(pieces) > 1 else []
+            if any(classified):
+                continue
+            # **Dritte Runde, für den Mantel eines knapp aufgezogenen
+            # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß ist,
+            # und keine zwei Bögen, weil die Flanken für die Krümmungstrennung
+            # zu schmal sind. Als Ganzes ist er trotzdem eine Form — ein
+            # Prisma über einem Stadion —, und die wird hier eingepasst. Nach
+            # dem Split und nicht davor: Was zwei Bögen ergibt, setzt
+            # :mod:`app.core.perceive.slots` zusammen wie bisher.
+            stadium = fit_stadium(body, patch)
+            if stadium is not None and stadium.good and stadium.inward:
+                stadiums.append((stadium, patch))
 
         if check_cancelled is not None:
             check_cancelled()
@@ -1388,7 +1469,7 @@ def _fitted(
                     round(entry[0].centre[2], 3),
                 )
             )
-        return Fitted(found, cones, spheres, tori, fillets, helices)
+        return Fitted(found, cones, spheres, tori, fillets, helices, stadiums)
 
 
 def detect_holes(
@@ -2326,6 +2407,125 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
         residual=residual,
         inward=inward,
         spread=spread,
+    )
+
+
+def fit_stadium(body: trimesh.Trimesh, patch: list[int]) -> StadiumFit | None:
+    """Ein Stadion durch einen Fleck: zwei Halbkreise über einer Strecke.
+
+    Dieselbe Bauart wie :func:`fit_cylinder` — die Achse ist der Eigenvektor
+    der Normalen mit dem kleinsten Eigenwert, gemessen wird in der Projektion
+    senkrecht dazu —, nur dass nicht ein Kreis eingepasst wird, sondern die
+    Kontur eines Langlochs. Drei Schritte, keine Iteration (§11.3):
+
+    **Das Prisma.** Jede Normale des Flecks muss quer zur Achse stehen — ein
+    Deckel, eine Fase, eine Kalotte im Fleck sind keine Wand des Lochs, und
+    mit ihnen ist es kein Stadion. Dieselbe Maske wie in
+    :mod:`app.core.perceive.slots` (``ACROSS_THE_AXIS``).
+
+    **Die Mittellinie.** In der Projektion liegen die Ecken auf einem Stadion,
+    und das ist in genau einer Richtung länger als quer dazu: die Hauptachse
+    der Punktwolke. Ihre Ausdehnung quer ist der Durchmesser, längs die
+    Gesamtlänge; die Differenz ist der Weg zwischen den Bogenmitten.
+
+    **Der Rückstand** vergleicht jede Ecke mit der Kontur: über der Strecke
+    mit dem Abstand zur Mittellinie, an den Enden mit dem Abstand zum
+    näheren Bogenmittelpunkt. Ein Kreis bekommt hier einen Weg von null und
+    ist keines; ein Sechseck oder eine verrundete Tasche liegen an den Enden
+    neben dem Bogen und fallen über den Rückstand heraus.
+
+    Gerechnet wird an den **Ecken**, nicht an den Dreiecksschwerpunkten wie
+    beim Zylinder: Der Schwerpunkt einer Bogenfacette liegt um die Sehnenhöhe
+    innerhalb der Kontur, die Ecke liegt darauf — und bei einem Weg von einer
+    Sehnenbreite ist das der Unterschied zwischen Form und Rauschen.
+    """
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    _values, vectors = np.linalg.eigh(normals.T @ normals)
+    axis = vectors[:, 0]
+    axis = axis / float(np.linalg.norm(axis))
+    magnitudes = np.abs(axis)
+    leading = int(np.flatnonzero(magnitudes >= float(magnitudes.max()) - EPS_GEOM)[0])
+    if axis[leading] < 0.0:
+        axis = -axis
+    if float(np.abs(normals @ axis).max()) >= ACROSS_THE_AXIS:
+        return None
+
+    corners = np.asarray(body.triangles[patch], dtype=float).reshape(-1, 3)
+    basis_u, basis_v = _plane_basis(axis)
+    flat = np.column_stack([corners @ basis_u, corners @ basis_v])
+    mean = flat.mean(axis=0)
+    centred = flat - mean
+    # **Die Mittellinie ist die Richtung der größten Ausdehnung — und nicht
+    # die Hauptachse der Punktwolke.** Ein Stadion mit zwei Prozent Weg ist
+    # fast ein Kreis; seine Kovarianz ist fast isotrop, und wo die Ecken
+    # dichter liegen (auf den Bögen) und wo nicht (auf den zwei Flanken),
+    # entscheidet dann über den Eigenvektor. Gemessen an Ø 40 mit 0,8 mm Weg:
+    # Die Hauptachse zeigte quer, der Weg kam negativ heraus, das Loch war
+    # keines. Die Ausdehnung dagegen ist in genau einer Richtung um den Weg
+    # größer — grob über einen halben Kreis gesucht, dann exakt aus den zwei
+    # Scheiteln, die dort ganz außen liegen.
+    angles = np.linspace(0.0, np.pi, STADIUM_SWEEP, endpoint=False)
+    sweep = np.column_stack([np.cos(angles), np.sin(angles)])
+    projected = centred @ sweep.T
+    widest = int(np.argmax(projected.max(axis=0) - projected.min(axis=0)))
+    apex_a = centred[int(np.argmax(projected[:, widest]))]
+    apex_b = centred[int(np.argmin(projected[:, widest]))]
+    chord = apex_a - apex_b
+    if float(np.linalg.norm(chord)) <= EPS_GEOM:
+        return None
+    along_2d = chord / float(np.linalg.norm(chord))
+    across_2d = np.array([-along_2d[1], along_2d[0]])
+    along = centred @ along_2d
+    across = centred @ across_2d
+    radius = float(across.max() - across.min()) / 2.0
+    half_length = float(along.max() - along.min()) / 2.0
+    if radius <= EPS_GEOM:
+        return None
+    travel = 2.0 * (half_length - radius)
+    if travel <= EPS_GEOM:
+        return None
+    middle_2d = (
+        float(along.max() + along.min()) / 2.0,
+        float(across.max() + across.min()) / 2.0,
+    )
+    along = along - middle_2d[0]
+    across = across - middle_2d[1]
+
+    over_the_line = np.abs(along) <= travel / 2.0
+    to_the_arc = np.hypot(np.abs(along) - travel / 2.0, across)
+    distance = np.where(over_the_line, np.abs(np.abs(across) - radius), np.abs(to_the_arc - radius))
+    residual = float(np.mean(distance) / radius)
+
+    depth_along = corners @ axis
+    depth = float(depth_along.max() - depth_along.min())
+    centre_flat = mean + middle_2d[0] * along_2d + middle_2d[1] * across_2d
+    centre = (
+        basis_u * centre_flat[0]
+        + basis_v * centre_flat[1]
+        + axis * float(depth_along.max() + depth_along.min()) / 2.0
+    )
+    direction = basis_u * along_2d[0] + basis_v * along_2d[1]
+
+    # Nach innen gewölbt, wie beim Zylinder: Die Normalen zeigen zur
+    # Mittellinie hin — gemessen am nächsten Punkt der Strecke, nicht an der
+    # Mitte, sonst zeigte an einem langen Loch die halbe Wand daran vorbei.
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+    relative = centres - centre
+    span = np.clip(relative @ direction, -travel / 2.0, travel / 2.0)
+    nearest = centre + np.outer(span, direction)
+    towards = nearest - centres
+    towards = towards - np.outer(towards @ axis, axis)
+    inward = bool(np.mean(np.einsum("ij,ij->i", normals, towards)) > 0)
+
+    return StadiumFit(
+        axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+        direction=(float(direction[0]), float(direction[1]), float(direction[2])),
+        radius=radius,
+        travel=travel,
+        depth=depth,
+        residual=residual,
+        inward=inward,
     )
 
 

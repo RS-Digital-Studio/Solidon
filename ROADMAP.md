@@ -78,7 +78,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
 | [RM-153 — Ein Langloch versetzen, drehen und verdoppeln](#rm-153) | Geometrie, Erkennung und Druckvorbereitung | Ziehen geht seit dem 10.09.2026; die vier übrigen Handlungen brauchen den Werkzeugkörper aus `slot_bore` statt eines Zylinders |
 | [RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden](#rm-154) | Geometrie, Erkennung und Druckvorbereitung | Eine 0 im Richtungsfeld stellt ein Langloch nicht gerade; der optionale Zahlenparameter fehlt im ganzen Register |
-| [RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz](#rm-155) | Geometrie, Erkennung und Druckvorbereitung | Unter fünf Prozent Weg hält die Netz-Einpassung den Mantel nicht; eigene Operationen kommen nicht mehr dorthin, ein eingelesenes STL schon |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -1044,7 +1043,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-155"></a>
 
-- [ ] **RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz.** Gemessen am
+- [x] **RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz.** Gemessen am
   11.09.2026 über Ø 2 bis Ø 40 in beiden Qualitätsstufen: Liegt der Weg zwischen den
   Bogenmitten unter rund **fünf Prozent** des Durchmessers, passt die Einpassung einen
   Zylinder auf den Mantel und das Merkmal heißt **Bohrung**; in einem schmalen Streifen
@@ -1059,6 +1058,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Einpassung: ein geschlossener gekrümmter Fleck, dessen Querschnitt ein Stadion ist, statt
   des Umwegs über zwei eingepasste Verrundungen. Abnahme: Eine Platte mit einem Langloch
   Ø 12 auf 12,5 mm öffnet, und im Objektbaum steht ein Langloch.
+
+  **Am 11.09.2026 gebaut**, genau so: `perceive.features.fit_stadium` passt einen
+  unklassifizierten Fleck als Prisma über einem Stadion ein — nach Zylinder und
+  Krümmungssplit, als dritte Runde —, und `slots.slots_from_stadiums` macht daraus dasselbe
+  Merkmal wie aus zwei Bögen. Gemessen über Ø 5 bis Ø 40: Der Streifen ist zu, ab dem Weg, an
+  dem der Zylinder nicht mehr passt, steht ein Langloch; darunter bleibt es eine Bohrung, und
+  das ist auf ein bis zwei Prozent des Durchmessers auch eine. Die Mittellinie kommt aus der
+  Richtung der größten Ausdehnung — die Hauptachse der Punktwolke zeigte bei Ø 40 mit 0,8 mm
+  Weg quer. Gegenproben: Sechs- und Achteck-Prisma, gestrecktes Sechseck, Tasche 12 × 8 mit
+  r = 3 — keines wird ein Langloch; an fünf Korpus- und Kundenmodellen kein verändertes
+  Merkmal, zehn bis zwanzig Prozent mehr Erkennungszeit. Nachweis: fünf Fälle in
+  `tests/test_slot_features.py`, vier davon ohne den Auffangweg rot.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

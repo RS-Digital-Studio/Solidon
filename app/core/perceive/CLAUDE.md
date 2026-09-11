@@ -291,6 +291,23 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   **Der exakte Kern beantwortet dieselbe Frage an der Topologie**
   (`brep.features._slots_instead_of_half_bores`); dass beide Kerne dasselbe
   Merkmal melden, ist eine Zusage und kein Zufall.
+- **Und ein zweiter Weg zum selben Merkmal, für den Mantel aus einem Stück**
+  (RM-155, `fit_stadium` / `slots.slots_from_stadiums`). Zwischen „ein
+  Zylinder passt noch" (Weg unter rund fünf Prozent des Durchmessers) und
+  „zwei Bögen lassen sich trennen" lag ein Streifen, in dem ein knapp
+  aufgezogenes Langloch **gar kein** Merkmal ergab — Ø 12 auf 12,5 mm, Ø 20
+  auf 20,5, Ø 40 auf 40,8. Solidon schneidet seit dem 11.09.2026 nicht mehr so
+  knapp (`prepare.shortest_slot`); ein eingelesenes Netz kommt trotzdem
+  dorthin. `_fitted` fragt deshalb als **dritte Runde** — nach Zylinder und
+  nach dem Krümmungssplit, und nur wenn beides nichts ergab — den ganzen Fleck:
+  ein Prisma (alle Normalen quer zu einer Achse), dessen Ecken in der
+  Projektion auf einem Stadion liegen. Die Mittellinie kommt aus der Richtung
+  der größten Ausdehnung, nicht aus der Hauptachse der Punktwolke — die zeigte
+  bei zwei Prozent Weg quer. Der Rückstand ist streng (`STADIUM_TOLERANCE`,
+  zwei Prozent wie bei Kugel und Torus): Ein Sechs- oder Achteck, ein
+  gestrecktes Sechseck und eine Tasche 12 × 8 mit r = 3 bleiben draußen; eine
+  Tasche, deren Eckradius die halbe Breite auf drei Prozent trifft, ist eines
+  — auf zwei Prozent ist sie die Form.
 - **Die direkte Merkmalbearbeitung teilt ihre Kettenauskunft.** Ein bereits
   ermittelter `cavity`-Umfang kann an `actions_for()` und `bore_advice()`
   weitergereicht werden. Ein leeres Tupel ist dabei eine geprüfte fehlende
