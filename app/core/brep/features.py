@@ -11,6 +11,15 @@ sie nicht tut, ist Gewissheit erfinden: eine zylindrische Fläche wird nur als
 Loch gemeldet, wenn sie eine volle Umdrehung macht und ins Material zeigt —
 eine gerundete Außenecke ist auch ein Zylinder, und sie eine Bohrung zu nennen
 setzte eine Schraube durch die Wand.
+
+**Eine Ausnahme von „eine Fläche, ein Merkmal" gibt es**, und es ist dieselbe
+wie auf der Netzseite (:mod:`app.core.perceive.slots`): Ein Langloch besteht
+aus vier Flächen und ist ein Merkmal. Wer sie einzeln benennt, bekommt zwei
+Verrundungen und zwei Wände, und die Handlungen an einem Langloch stehen an
+keiner von ihnen — gemessen am 11.09.2026 an einer exakten Platte: `fillet_1`
+und `fillet_2`, wo eine Öffnung ist (Robert: „auf einem langloch 2 werden und
+nicht mehr wählbar"). :func:`_slots_instead_of_half_bores` setzt sie wieder
+zusammen, nachdem jede Fläche für sich beschrieben ist.
 """
 
 from __future__ import annotations
@@ -41,6 +50,19 @@ FULL_TURN = 0.9
 #: rundum verrundeten Quaders: 3 Nachbarn, 3 Verrundungen.
 CORNER_NEIGHBOURS = 2
 
+#: Wie parallel zwei Bogenachsen sein müssen, um dieselbe zu sein.
+#:
+#: Ein halbes Grad — dieselbe Zahl und dieselbe Begründung wie auf der
+#: Netzseite (:data:`app.core.perceive.slots._PARALLEL`), nur dass der exakte
+#: Kern sie mit noch mehr Abstand einhält: Die beiden Enden eines Langlochs
+#: sind aus einem Umriss aufgezogen, ihre Achsen also rechnerisch dieselbe.
+_PARALLEL = 0.9999619230641713  # cos(0,5°)
+
+#: Wie weit die Normale einer Fläche von der Bohrachse wegzeigen muss, damit
+#: sie zum **Mantel** gehört. Ein Grad: Deckel und Boden stehen senkrecht
+#: darauf und fallen heraus, eine Flanke steht längs und bleibt.
+_ACROSS = 0.01745240643728351  # cos(89°)
+
 
 def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     """Löcher und ebene Flächen, aus der Topologie abgelesen statt
@@ -70,6 +92,9 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     reach = solid.bounds.diagonal
     tolerance = match_tolerance(reach)
 
+    # Welches Merkmal auf welcher Topologiefläche sitzt — der Nachschritt unten
+    # braucht den Weg zurück, und ihn hier mitzuschreiben kostet nichts.
+    named: dict[int, FeatureId] = {}
     for index, face in enumerate(solid.faces()):
         described = _describe(face, index, inside, neighbours, reach, tolerance)
         if described is None:
@@ -77,6 +102,7 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
         kind, params = described
         counts[kind] = counts.get(kind, 0) + 1
         identifier = f"{kind}_{counts[kind]}"
+        named[index] = identifier
         found[identifier] = Feature(
             id=identifier,
             kind=kind,
@@ -88,12 +114,248 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
             face_indices=solid.triangles_of_face(index),
         )
 
+    found = _slots_instead_of_half_bores(solid, found, named, neighbours, reach, tolerance)
+
     _log.info(
         "read %d hole(s), %d pin(s), %d fillet(s) and %d face(s) off a B-Rep body",
         counts["hole"],
         counts["pin"],
         counts["fillet"],
         counts["face"],
+    )
+    return found
+
+
+def _slots_instead_of_half_bores(
+    solid: Solid,
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    neighbours: Any,
+    reach: float,
+    tolerance: float,
+) -> dict[FeatureId, Feature]:
+    """Setzt zwei Halbzylinder und ihre zwei Flanken zu einem Langloch zusammen.
+
+    **Dieselbe Aussage wie auf der Netzseite, nur billiger zu haben.** Dort
+    muss :mod:`app.core.perceive.slots` am Netz messen, welche Dreiecke zum
+    Mantel gehören und ob er zwischen den Bögen geschlossen ist; hier steht es
+    in der Topologie. Ein Langloch ist danach genau das:
+
+    * zwei zylindrische Flächen, jede weniger als eine volle Umdrehung, mit
+      gleichem Radius und paralleler Achse, beide ins Loch gewölbt
+      (``recess``),
+    * die sich **genau zwei** ebene Nachbarflächen teilen — die Flanken —,
+    * und diese beiden Ebenen grenzen ihrerseits an **beide** Bögen.
+
+    Die letzte Bedingung ist die, auf die es ankommt. Zwei gleich große
+    Verrundungen mit paralleler Achse gibt es an jeder verrundeten Kante eines
+    Quaders, und eine Tasche mit vier verrundeten Ecken hat sie gleich viermal.
+    Was ein Langloch daraus macht, ist der geschlossene Mantel: Zwei
+    benachbarte Ecken einer Tasche teilen **eine** Wand, nicht zwei.
+
+    Die Flanken gehen im Langloch auf, der **Boden** eines Sacklangloch nicht —
+    seine Normale zeigt entlang der Achse, er liegt gar nicht im Mantel.
+    Dieselbe Entscheidung und dieselbe Begründung wie bei
+    :data:`app.core.perceive.slots.SWALLOWED_BY_A_SLOT`.
+    """
+    import math
+
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder
+    from OCP.TopoDS import TopoDS
+
+    faces = list(solid.faces())
+    if len(faces) < 4:
+        return found
+
+    def surface_of(index: int) -> Any:
+        return BRepAdaptor_Surface(TopoDS.Face(faces[index]))
+
+    # Die Bögen: zylindrisch, angeschnitten, ins Loch gewölbt.
+    arcs: list[int] = []
+    for index in named:
+        surface = surface_of(index)
+        if surface.GetType() != GeomAbs_Cylinder:
+            continue
+        turn = abs(surface.LastUParameter() - surface.FirstUParameter())
+        if turn >= FULL_TURN * 2.0 * math.pi:
+            continue
+        feature = found.get(named[index])
+        if feature is None or not feature.params.get("recess", False):
+            continue
+        arcs.append(index)
+    if len(arcs) < 2:
+        return found
+
+    around = {index: _neighbouring_faces(faces, neighbours, index) for index in set(named)}
+    used: set[int] = set()
+    slots = 0
+    for position, first in enumerate(arcs):
+        if first in used:
+            continue
+        for second in arcs[position + 1 :]:
+            if second in used:
+                continue
+            flanks = _flanks_of_a_slot(around, first, second, surface_of, tolerance)
+            if flanks is None:
+                continue
+            slots += 1
+            found = _one_slot(
+                solid,
+                found,
+                named,
+                neighbours,
+                reach,
+                tolerance,
+                arcs=(first, second),
+                flanks=flanks,
+                number=slots,
+                surface_of=surface_of,
+            )
+            used.update({first, second, *flanks})
+            break
+    return found
+
+
+def _neighbouring_faces(faces: list[Any], neighbours: Any, index: int) -> set[int]:
+    """Die Nummern der Flächen, die an ``faces[index]`` grenzen."""
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+
+    face = faces[index]
+    touching: set[int] = set()
+    walk = TopExp_Explorer(face, TopAbs_EDGE)
+    while walk.More():
+        edge = walk.Current()
+        walk.Next()
+        for other in neighbours.FindFromKey(edge):
+            if other.IsSame(face):
+                continue
+            for number, candidate in enumerate(faces):
+                if candidate.IsSame(other):
+                    touching.add(number)
+                    break
+    return touching
+
+
+def _flanks_of_a_slot(
+    around: dict[int, set[int]],
+    first: int,
+    second: int,
+    surface_of: Any,
+    tolerance: float,
+) -> tuple[int, int] | None:
+    """Die zwei Wände zwischen zwei Bögen — oder ``None``, wenn es keine sind."""
+    from OCP.GeomAbs import GeomAbs_Plane
+
+    one, other = surface_of(first).Cylinder(), surface_of(second).Cylinder()
+    if abs(one.Radius() - other.Radius()) > tolerance:
+        return None
+    axis, second_axis = one.Axis().Direction(), other.Axis().Direction()
+    if abs(axis.Dot(second_axis)) < _PARALLEL:
+        return None
+    # Zwei Mäntel auf **derselben** Achse sind eine Bohrung in zwei Stücken und
+    # kein Langloch: Ohne Weg zwischen den Bogenmitten gibt es keine Flanken.
+    span = _travel_between(one, other)
+    if span <= tolerance:
+        return None
+
+    shared = around.get(first, set()) & around.get(second, set())
+    flanks = [
+        index
+        for index in shared
+        if surface_of(index).GetType() == GeomAbs_Plane
+        # Eine Flanke steht **längs** zur Achse; Deckel und Boden stehen quer
+        # und sind deshalb keine. Ohne diese Zeile zählte ein durchgehendes
+        # Langloch vier gemeinsame Nachbarn statt zwei.
+        and abs(surface_of(index).Plane().Axis().Direction().Dot(axis)) < _ACROSS
+    ]
+    if len(flanks) != 2:
+        return None
+    # **Und der Mantel ist geschlossen.** Beide Wände grenzen an beide Bögen —
+    # zwei benachbarte Ecken einer verrundeten Tasche teilen nur eine Wand.
+    for flank in flanks:
+        if not {first, second} <= around.get(flank, set()):
+            return None
+    # Die zwei Wände stehen sich gegenüber, im Abstand eines Durchmessers.
+    normals = [surface_of(flank).Plane().Axis().Direction() for flank in flanks]
+    if abs(normals[0].Dot(normals[1])) < _PARALLEL:
+        return None
+    return (flanks[0], flanks[1])
+
+
+def _travel_between(one: Any, other: Any) -> float:
+    """Der Abstand der beiden Bogenachsen, quer zur Bohrrichtung."""
+    import math
+
+    first = one.Axis().Location()
+    second = other.Axis().Location()
+    axis = one.Axis().Direction()
+    offset = (second.X() - first.X(), second.Y() - first.Y(), second.Z() - first.Z())
+    along = offset[0] * axis.X() + offset[1] * axis.Y() + offset[2] * axis.Z()
+    across = tuple(
+        value - along * component
+        for value, component in zip(offset, (axis.X(), axis.Y(), axis.Z()), strict=True)
+    )
+    return math.sqrt(sum(value * value for value in across))
+
+
+def _one_slot(
+    solid: Solid,
+    found: dict[FeatureId, Feature],
+    named: dict[int, FeatureId],
+    neighbours: Any,
+    reach: float,
+    tolerance: float,
+    *,
+    arcs: tuple[int, int],
+    flanks: tuple[int, int],
+    number: int,
+    surface_of: Any,
+) -> dict[FeatureId, Feature]:
+    """Baut das Langloch und nimmt die vier Flächen aus der Liste."""
+    first, second = arcs
+    one, other = surface_of(first).Cylinder(), surface_of(second).Cylinder()
+    radius = (float(one.Radius()) + float(other.Radius())) / 2.0
+    travel = _travel_between(one, other)
+
+    surface = surface_of(first)
+    first_v, last_v = float(surface.FirstVParameter()), float(surface.LastVParameter())
+    depth = abs(last_v - first_v)
+    first_centre = _axis_point(one, (first_v + last_v) / 2.0)
+    second_centre = _axis_point(other, (first_v + last_v) / 2.0)
+    centre: Vec3 = tuple((a + b) / 2.0 for a, b in zip(first_centre, second_centre, strict=True))  # type: ignore[assignment]
+    direction: Vec3 = (
+        tuple((b - a) / travel for a, b in zip(first_centre, second_centre, strict=True))  # type: ignore[assignment]
+        if travel > EPS_GEOM
+        else (1.0, 0.0, 0.0)
+    )
+    axis = one.Axis().Direction()
+
+    through = not _axis_covered(
+        neighbours, solid.faces()[first], one, first_v - reach, last_v + reach, tolerance
+    )
+
+    identifier = f"slot_{number}"
+    indices: list[int] = []
+    for index in (first, second, *flanks):
+        indices.extend(solid.triangles_of_face(index))
+        found.pop(named[index], None)
+    found[identifier] = Feature(
+        id=identifier,
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": round(radius * 2.0, 4),
+            "length": round(travel + radius * 2.0, 4),
+            "travel": round(travel, 4),
+            "axis": (axis.X(), axis.Y(), axis.Z()),
+            "direction": direction,
+            "centre": centre,
+            "depth": round(depth, 4),
+            "through": through,
+        },
+        face_indices=tuple(indices),
     )
     return found
 

@@ -39,6 +39,16 @@ Die exakte Bohrung verwendet das Material des Zielkörpers über einen trägen
 `edit.bore_profile` rotiert es analytisch. Mesh und B-Rep teilen damit Maße
 und Mündungsbezug, ohne exakte Kreise zu tessellieren.
 
+**Ein Langloch ist vier Flächen und ein Merkmal.** `features._slots_instead_of_half_bores`
+setzt sie nach dem Beschreiben wieder zusammen — die einzige Ausnahme von „eine
+Fläche, ein Merkmal" in dieser Datei, und dieselbe Aussage wie
+`perceive.slots` am Netz. Erkannt wird topologisch: zwei angeschnittene
+Zylinderflächen mit gleichem Radius und paralleler Achse, beide ins Loch
+gewölbt, die sich **genau zwei** ebene Nachbarn teilen — und diese zwei Ebenen
+grenzen an **beide** Bögen. Damit ist eine Tasche mit verrundeten Ecken keines:
+Zwei benachbarte Ecken teilen eine Wand, nicht zwei. Die Toleranzen und die
+Abgrenzung stehen in `.claude/rules/operationen.md`.
+
 **Ein Langloch wird nicht rotiert, sondern aufgezogen.** Der Umriss aus
 `geom.prepare.slot_profile` wird über `profiles.extrude` zum Prisma, und zwar
 **vom Boden zur Mündung**: `extrude` verlangt eine positive Höhe, und ein

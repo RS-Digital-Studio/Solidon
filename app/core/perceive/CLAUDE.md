@@ -288,6 +288,9 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   zwei Verrundungen. Die Gegenprobe, die das trägt, ist eine rechteckige Tasche
   mit vier verrundeten Ecken: gleiche Radien, parallele Achsen, verbundener
   Mantel — und kein Langloch, weil er zu den anderen beiden Ecken weiterläuft.
+  **Der exakte Kern beantwortet dieselbe Frage an der Topologie**
+  (`brep.features._slots_instead_of_half_bores`); dass beide Kerne dasselbe
+  Merkmal melden, ist eine Zusage und kein Zufall.
 - **Die direkte Merkmalbearbeitung teilt ihre Kettenauskunft.** Ein bereits
   ermittelter `cavity`-Umfang kann an `actions_for()` und `bore_advice()`
   weitergereicht werden. Ein leeres Tupel ist dabei eine geprüfte fehlende

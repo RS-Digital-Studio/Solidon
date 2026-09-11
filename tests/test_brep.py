@@ -1804,3 +1804,142 @@ def test_the_thread_feature_moves_with_the_bolt(profile: Profile) -> None:
     liegend = gelegt.outputs[0].features["thread_1"]
     assert liegend.params["axis"] == pytest.approx((1.0, 0.0, 0.0), abs=1e-6)
     assert liegend.params["centre"] == pytest.approx((6.0, 0.0, 0.0), abs=1e-6)
+
+
+# --- Ein Langloch ist auch exakt ein Merkmal ------------------------------------
+
+
+def a_slotted_block(length: float = 20.0, angle: float = 0.0, depth: float = 10.0) -> Solid:
+    """Eine exakte Platte 90 x 60 x 10 mit einem Langloch Ø 6."""
+    return edit.slot_bore(
+        edit.box(90.0, 60.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=depth,
+        length=length,
+        angle_deg=angle,
+        overlap=0.1,
+    )
+
+
+def kinds_of(solid: Solid) -> dict[str, int]:
+    counted: dict[str, int] = {}
+    for feature in features_of(solid).values():
+        counted[feature.kind] = counted.get(feature.kind, 0) + 1
+    return counted
+
+
+def test_an_exact_slot_is_one_feature_and_not_two_fillets() -> None:
+    """Der Anlass, und er ist derselbe wie am Netz — nur zwei Wochen später.
+
+    :mod:`app.core.perceive.slots` setzt seit dem 10.09.2026 zwei Halbzylinder
+    zu einem Langloch zusammen. Der exakte Kern tat es nicht: Er beschreibt
+    jede Topologiefläche für sich, und ein Langloch hat vier. Im Objektbaum
+    standen ``fillet_1`` und ``fillet_2``, wo eine Öffnung ist, dazu zwei
+    Wände — und die Handlungen eines Langlochs standen an keiner von ihnen
+    (Robert, 11.09.2026: „auf einem langloch 2 werden und nicht mehr
+    wählbar").
+
+    **Gemessen wird bis zum Maß**, nicht nur bis zur Art: Ein Merkmal, das
+    „Langloch" heißt und die falsche Länge trägt, ist im Dialog dasselbe
+    Ärgernis wie gar keines.
+    """
+    solid = a_slotted_block()
+
+    found = features_of(solid)
+    slots = [feature for feature in found.values() if feature.kind == "slot"]
+
+    assert len(slots) == 1, f"genau ein Langloch, gefunden: {kinds_of(solid)}"
+    slot = slots[0]
+    assert float(slot.params["length"]) == pytest.approx(20.1, abs=0.05)
+    assert float(slot.params["diameter"]) == pytest.approx(6.1, abs=0.05)
+    assert slot.params["centre"] == pytest.approx((0.0, 0.0, 5.0), abs=0.01)
+    assert slot.params["through"], "das Loch geht durch die Platte"
+    assert "fillet" not in kinds_of(solid), "die zwei Bögen gehen im Langloch auf"
+    assert len(slot.face_indices) > 0, "und es ist im Bild anklickbar"
+
+
+@pytest.mark.parametrize("angle", [0.0, 35.0, 90.0, -60.0])
+def test_an_exact_slot_knows_which_way_it_lies(angle: float) -> None:
+    """Die Richtung kommt aus der Topologie und nicht aus einer Einpassung."""
+    solid = a_slotted_block(length=26.0, angle=angle)
+
+    slot = next(feature for feature in features_of(solid).values() if feature.kind == "slot")
+
+    direction = slot.params["direction"]
+    measured = math.degrees(math.atan2(direction[1], direction[0]))
+    # Ein Langloch hat keine Vorzugsrichtung: 35 Grad und 215 sind dieselbe Lage.
+    assert min(abs(measured - angle), abs(abs(measured - angle) - 180.0)) < 0.5
+
+
+def test_a_blind_exact_slot_says_it_does_not_go_through() -> None:
+    """Ein Sacklangloch behält seinen Boden als eigene Fläche.
+
+    Dieselbe Entscheidung wie am Netz: Die zwei Flanken gehen im Langloch auf,
+    der Boden nicht — seine Normale zeigt entlang der Achse, er liegt gar
+    nicht im Mantel.
+    """
+    solid = a_slotted_block(depth=4.0)
+
+    found = features_of(solid)
+    slot = next(feature for feature in found.values() if feature.kind == "slot")
+
+    assert not slot.params["through"], "die Platte ist 10 mm dick, das Loch 4"
+    assert float(slot.params["depth"]) == pytest.approx(4.0, abs=0.2)
+
+
+def test_two_exact_slots_stay_two() -> None:
+    """Zwei Langlöcher nebeneinander werden nicht zu einem — und nicht zu vier."""
+    solid = edit.box(90.0, 60.0, 10.0)
+    for x in (-20.0, 20.0):
+        solid = edit.slot_bore(
+            solid,
+            position=(x, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=10.0,
+            length=16.0,
+            angle_deg=0.0,
+            overlap=0.1,
+        )
+
+    assert kinds_of(solid).get("slot") == 2, kinds_of(solid)
+
+
+def test_rounded_corners_of_a_pocket_are_not_an_exact_slot() -> None:
+    """Die härteste Gegenprobe: vier Innenverrundungen, über Wände verbunden.
+
+    Zwei gleich große Verrundungen mit paralleler Achse gibt es an jeder
+    verrundeten Ecke; was ein Langloch daraus macht, ist der geschlossene
+    Mantel. Zwei benachbarte Ecken einer Tasche teilen **eine** Wand, nicht
+    zwei — und daran scheidet es sich.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.gp import gp_Trsf, gp_Vec
+
+    tool = edit.fillet(edit.box(40.0, 24.0, 8.0), 6.0, "vertical")
+    lift = gp_Trsf()
+    lift.SetTranslation(gp_Vec(0.0, 0.0, 16.0))
+    raised = tool.replacing(BRepBuilderAPI_Transform(tool.shape, lift, True).Shape())
+    pocket = edit.boolean("difference", [edit.box(90.0, 60.0, 20.0), raised])
+
+    counted = kinds_of(pocket)
+
+    assert "slot" not in counted, f"eine Tasche ist kein Langloch: {counted}"
+    assert counted.get("fillet") == 4, f"ihre vier Ecken bleiben Verrundungen: {counted}"
+
+
+def test_a_rounded_box_keeps_its_fillets() -> None:
+    """Und ein rundum verrundeter Quader behält seine zwanzig Verrundungen.
+
+    Die Achsen der zwölf Kantenverrundungen sind paarweise parallel und gleich
+    groß — genau die Bedingung, die ein Langloch auch erfüllt. Was sie trennt,
+    ist ``recess``: Bei einer Kantenverrundung liegt die Achse **im** Material.
+    """
+    rounded = edit.fillet(edit.box(40.0, 30.0, 20.0), 4.0, "all")
+
+    counted = kinds_of(rounded)
+
+    assert "slot" not in counted, f"kein Langloch an einem Quader: {counted}"
+    assert counted.get("fillet") == 20, counted
