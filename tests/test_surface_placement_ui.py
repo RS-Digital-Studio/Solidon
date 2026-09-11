@@ -343,7 +343,7 @@ def test_slot_preview_temporarily_hides_the_other_placement_controls(
     flow: Any, qt_app: QApplication
 ) -> None:
     """Während der Langlochvorschau gibt es nur deren einen Übernehmen-Weg."""
-    controller, session, viewport, dialog = flow
+    controller, session, viewport, _dialog = flow
     viewport.show()
     controller.start()
     _point(controller, session)
@@ -786,7 +786,7 @@ def test_surface_position_replaces_an_old_coordinate_expression(flow: Any) -> No
 
 
 def test_undo_cannot_restart_placement_on_the_previous_result(flow: Any) -> None:
-    controller, session, _viewport, dialog = flow
+    controller, session, _viewport, _dialog = flow
     controller.start()
     _point(controller, session)
     old = session.last_result
@@ -796,9 +796,9 @@ def test_undo_cannot_restart_placement_on_the_previous_result(flow: Any) -> None
     assert not session.result_current
     controller.start()
     assert not controller.active
-    assert not dialog.surface_button.isEnabled()
+    assert not controller.can_place()
     assert session.wait_for_idle(30_000)
-    assert not dialog.surface_button.isEnabled()
+    assert not controller.can_place()
 
 
 def test_edit_uses_the_input_before_later_transforms(flow: Any) -> None:
@@ -831,7 +831,7 @@ def test_edit_uses_the_input_before_later_transforms(flow: Any) -> None:
 
 def test_an_invalid_historical_step_can_be_placed_again(flow: Any) -> None:
     """Die fertige Auswertung darf fehlerhaft sein, ihr gesunder Eingang bleibt bearbeitbar."""
-    controller, session, viewport, dialog = flow
+    controller, session, viewport, _dialog = flow
     object_id = controller.inputs_of()[0]
     assert session.apply(
         "Bohrung",
@@ -848,7 +848,7 @@ def test_an_invalid_historical_step_can_be_placed_again(flow: Any) -> None:
     controller._change_op = session.project.document.ops[-1].id
     controller.start()
     assert session.wait_for_idle(30_000)
-    assert controller.active and dialog.surface_button.isEnabled()
+    assert controller.active and controller.can_place()
     assert controller._result.complete
     assert viewport.result is controller._result
     _point(controller, session)
@@ -998,9 +998,6 @@ def test_centre_dimensions_keep_the_selected_hole_reference(flow: Any) -> None:
 
 def _keyboard_placement(flow: Any, qt_app: QApplication) -> Any:
     """Echte Qt-Felder an der Lochplatte öffnen; nur die Raumprojektion ist kontrolliert."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtTest import QTest
-
     controller, session, viewport, dialog = flow
     session.start_new()
     assert session.wait_for_idle(10_000)
@@ -1012,7 +1009,7 @@ def _keyboard_placement(flow: Any, qt_app: QApplication) -> Any:
     viewport.show()
     dialog.show()
     qt_app.processEvents()
-    QTest.mouseClick(dialog.surface_button, Qt.MouseButton.LeftButton)
+    dialog.surfaceRequested.emit()
     _point(controller, session)
     viewport.activateWindow()
     qt_app.processEvents()
@@ -1104,7 +1101,7 @@ def test_tab_reaches_both_dimension_groups_and_returns_to_editable_values(
     assert {name: dialog.values()[name] for name in placed} == placed
     assert len(session.project.document.ops) == before
 
-    QTest.mouseClick(dialog.surface_button, Qt.MouseButton.LeftButton)
+    dialog.surfaceRequested.emit()
     _point(controller, session)
     assert controller.active and controller._accept.isEnabled()
     assert dialog.values()["diameter"] == pytest.approx(5.5)
@@ -1650,11 +1647,8 @@ def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
     try:
         assert controller.can_place(), "mit Renderer und gerechneter Szene geht es"
 
-        # Der Knopf ist Anzeige: an ihm zu drehen ändert die Antwort nicht.
-        dialog.surface_button.setEnabled(False)
-        assert controller.can_place(), "der Knopf trägt die Antwort nicht mehr"
-        dialog.surface_button.setVisible(False)
-        assert controller.can_place()
+        # Den Knopf gibt es nicht mehr; was er trug, steht hier.
+        assert not hasattr(dialog, "surface_button"), "der Knopf ist gefallen"
 
         # Die Lage dagegen trägt sie. Ohne Renderer ist nichts da, worauf man
         # zeigen könnte — dieselbe Bedingung wie eh und je, nur an ihrem Ort.
@@ -1665,8 +1659,9 @@ def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
             viewport.renderer = renderer
         assert controller.can_place(), "und mit ihr wieder"
 
-        # Und die Anzeige folgt der Antwort, sobald jemand fragt.
+        # Und `refresh_available` bleibt die Stelle, an der die fachliche
+        # Hälfte nachgezogen wird — ohne ein Widget dazwischen.
         controller.refresh_available()
-        assert dialog.surface_button.isEnabled(), "der Knopf zeigt, was der Fluss sagt"
+        assert controller.can_place()
     finally:
         controller.dispose()

@@ -1552,14 +1552,6 @@ class OperationDialog(QDialog):
             field.pendingChanged.connect(self._follow_source_pending)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        self.surface_button = QPushButton(tr("Im Modell platzieren"), self)
-        self.surface_button.setObjectName("place_on_surface")
-        self.surface_button.setToolTip(
-            tr("Auf eine Oberfläche zeigen und die Position mit sichtbaren Abständen festlegen.")
-        )
-        self.surface_button.clicked.connect(self.surfaceRequested)
-        self.surface_button.hide()
-        layout.addWidget(self.surface_button)
         layout.addWidget(buttons)
 
         self._couple_dependent_fields()

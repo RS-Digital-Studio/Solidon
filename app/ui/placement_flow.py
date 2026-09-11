@@ -72,9 +72,10 @@ def starts_by_itself(spec: OperationSpec) -> bool:
     """Ob dieser Dialog von selbst in die Platzierung geht.
 
     **Wer eine Fläche braucht, bekommt sie sofort** — ein Baustein, eine
-    Beschriftung, eine Bohrung sitzen auf etwas, und der zweite Klick auf
-    „Im Modell platzieren" bot nur an, was die Operation ohnehin verlangt
-    (Robert, 09.09.2026: „man soll keinen extra Button klicken müssen").
+    Beschriftung, eine Bohrung sitzen auf etwas, und ein zweiter Klick bot nur
+    an, was die Operation ohnehin verlangt (Robert, 09.09.2026: „man soll
+    keinen extra Button klicken müssen"). Der Knopf, der das tat, ist am
+    11.09.2026 gefallen.
 
     **Ein Erzeuger braucht keine.** Quader, Zylinder, Kegel, Kugel und Ring
     entstehen aus ihren eigenen Maßen an ihren eigenen Koordinaten; die
@@ -431,8 +432,13 @@ class PlacementFlow(QObject):
         # dorthin war ein zweiter Klick auf „Im Modell platzieren" — ein Knopf,
         # der genau das anbietet, was die Operation ohnehin verlangt (Befund
         # Robert, 09.09.2026: „man soll keinen extra Button klicken müssen").
-        # Der Dialog bleibt der andere Weg: Esc bringt ihn zurück, und der
-        # Knopf steht weiter da, für den Rückweg aus dem Rückweg.
+        #
+        # **Und seit dem 11.09.2026 ist der Knopf ganz weg** (Robert: „im
+        # dialog das im modell platzieren brauchen wir auch nicht"). Escape
+        # bringt den Dialog weiterhin zurück; der Rückweg von dort in die
+        # Platzierung führt über ``surfaceRequested``, und wer ihn sendet,
+        # entscheidet die Oberfläche — heute niemand mehr, nach §2.4 des
+        # Konzepts ein Knopf im Merkmalfenster.
         #
         # **Nicht beim Ändern eines Schritts.** Dort ist die Stelle längst
         # gewählt, und wer den Durchmesser nachbessert, will kein Fadenkreuz.
@@ -472,8 +478,6 @@ class PlacementFlow(QObject):
     def refresh_available(self) -> None:
         """Nur fachlich platzierbare Operationen bieten den Einstieg an."""
         self._supported = placement.supports_surface_placement(self.spec_of())
-        self.dialog.surface_button.setVisible(self._supported)
-        self.dialog.surface_button.setEnabled(self.can_place())
         if self.active and not self._supported:
             self.back()
 
