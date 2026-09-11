@@ -52,6 +52,9 @@ im Material, reißt dort nichts auf. Innen und außen trennt `mesh.on_surface`
 Parität trägt nicht).
 
 Merkmalswerkzeuge verwenden die gemessene Tiefe unabhängig vom Durchmesser.
+`_tool_for` erhält bei Bohrungen den tatsächlichen Sehnenzug ihrer Wandflächen.
+Füllkörper umschließen die äußersten Wandknoten auch bei fremder Tessellation;
+an offenen Langlöchern begrenzt die Mündungsebene den Füllkörper (§21.1).
 Nach einem Versatz entscheidet die Zielgeometrie über den Durchgang, auch bei
 rein seitlicher Bewegung. Verlorener Durchgang erzeugt einen Befund und
 korrigiert das Merkmal. Entfernte Kennungen bleiben in

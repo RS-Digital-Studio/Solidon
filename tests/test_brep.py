@@ -1943,3 +1943,85 @@ def test_a_rounded_box_keeps_its_fillets() -> None:
 
     assert "slot" not in counted, f"kein Langloch an einem Quader: {counted}"
     assert counted.get("fillet") == 20, counted
+
+
+# --- Die Achse trägt an beiden Kernen dasselbe Vorzeichen ------------------------
+
+
+def test_an_exact_bore_from_below_carries_the_same_axis_as_the_mesh() -> None:
+    """Das Vorzeichen der Achse entscheidet ``units.positive_axis``, nicht der Erzeuger.
+
+    Der exakte Kern gab die Achse so zurück, wie OpenCASCADE die Fläche gebaut
+    hatte: eine Bohrung von unten trug minus Z. Am Netz normiert
+    ``fit_cylinder`` seit je auf „erste größte Komponente positiv" — und gegen
+    den Rahmen dieser Achse zählt der Winkel eines Langlochs. Gemessen
+    11.09.2026: 45 Grad an derselben Bohrung ergaben am Netz 45 und am exakten
+    Körper 135 (Fund des Reviews).
+    """
+    from_below = edit.cut_bore(
+        edit.box(90.0, 60.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, -1.0),
+        diameter=6.0,
+        depth=10.0,
+    )
+
+    hole = next(feature for feature in features_of(from_below).values() if feature.kind == "hole")
+
+    assert hole.params["axis"] == pytest.approx((0.0, 0.0, 1.0), abs=1e-9)
+
+
+def test_an_exact_slot_keeps_the_axis_of_its_bore() -> None:
+    """Nach *Zum Langloch ziehen* stand die Achse auf minus Z — und das Feld
+    *Richtung* zeigte minus 45, wo 45 eingetragen war. Wer dieselbe 45 noch
+    einmal eintrug, bekam ein Kreuz (gemessen 11.09.2026, Fund des Reviews).
+    """
+    slot = next(
+        feature
+        for feature in features_of(a_slotted_block(angle=45.0)).values()
+        if feature.kind == "slot"
+    )
+
+    assert slot.params["axis"] == pytest.approx((0.0, 0.0, 1.0), abs=1e-9)
+    # Und die Richtung folgt derselben Regel — die erste größte Komponente
+    # ist positiv, gleich in welcher Reihenfolge die zwei Bögen gefunden wurden.
+    direction = slot.params["direction"]
+    assert direction[0] > 0.0, direction
+    assert math.degrees(math.atan2(direction[1], direction[0])) == pytest.approx(45.0, abs=0.5)
+
+
+def test_the_exact_drill_makes_a_slot_through_the_operation(profile: Profile) -> None:
+    """Der Zweig ``slotted=True`` von ``drill_brep_hole`` — über das Register gefahren.
+
+    Bis zum 11.09.2026 war er nur über den direkten Import von ``_slotted_bore``
+    belegt; die Operation selbst und ihre Kantenschleife lief kein Test
+    (Übergabe der Durchsicht vom 11.09.2026).
+    """
+    body = run("create_brep_box", None, profile, width=90.0, depth=60.0, height=10.0).outputs[0]
+    low, high = body.mesh.bounds.minimum, body.mesh.bounds.maximum
+    middle = ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0)
+
+    result = run(
+        "drill_brep_hole",
+        body,
+        profile,
+        diameter=6.0,
+        x=middle[0],
+        y=middle[1],
+        z=float(high[2]),
+        axis="z",
+        anchor="mouth",
+        depth=0.0,
+        compensate=False,
+        slotted=True,
+        slot_length=20.0,
+        slot_angle=30.0,
+    )
+
+    slots = [feature for feature in result.outputs[0].features.values() if feature.kind == "slot"]
+    assert len(slots) == 1, kinds_of(result.outputs[0].mesh)
+    assert float(slots[0].params["length"]) == pytest.approx(20.0, abs=0.05)
+    direction = slots[0].params["direction"]
+    measured = math.degrees(math.atan2(direction[1], direction[0])) % 180.0
+    assert measured == pytest.approx(30.0, abs=0.5)
+    assert "bore.over_the_edge" not in {finding.code for finding in result.findings}

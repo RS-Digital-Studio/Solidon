@@ -670,6 +670,13 @@ def test_a_slot_that_is_no_longer_one_says_so(
     pulled = run_op("slot_hole", started, profile, at_feature=chosen, **values)
 
     codes = [entry.code for entry in run_op.findings]  # type: ignore[attr-defined]
+    if kind == "über den Rand":
+        assert "slot_hole.feature_lost" not in codes
+        assert any(
+            feature.kind == "slot" and feature.params.get("open")
+            for feature in pulled.features.values()
+        )
+        return
     assert "slot_hole.feature_lost" in codes, f"{kind}: gesagt wird es, gefunden: {codes}"
     lost = next(
         entry
@@ -708,7 +715,8 @@ def test_the_same_word_comes_from_the_exact_kernel(profile: Profile) -> None:
     run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0, x=38.0, y=0.0, z=5.0)
 
     codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
-    assert "slot_hole.feature_lost" in codes, codes
+    assert "slot_hole.feature_lost" not in codes, codes
+    assert "bore.over_the_edge" in codes
 
 
 def _two_slots_side_by_side(profile: Profile) -> tuple[SceneObject, str, str]:
@@ -938,3 +946,240 @@ def test_a_small_pocket_with_rounded_corners_is_still_not_a_slot() -> None:
 
     assert "slot" not in kinds, kinds
     assert kinds.count("fillet") == 4, kinds
+
+
+# --- Beide Kerne, derselbe Winkel, dieselbe Breite ---------------------------------
+
+
+def _direction_angle(feature: Feature) -> float:
+    """Die Richtung eines Langlochs als Winkel gegen X, ohne Vorder- und Rückseite."""
+    along = feature.params["direction"]
+    return math.degrees(math.atan2(along[1], along[0])) % 180.0
+
+
+def _exact_plate_with_a_bore(direction: tuple[float, float, float], at: float = 0.0) -> SceneObject:
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    solid = edit.cut_bore(
+        edit.box(90.0, 60.0, 10.0),
+        position=(at, 0.0, 5.0),
+        direction=direction,
+        diameter=6.0,
+        depth=10.0,
+    )
+    return SceneObject(
+        id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+    )
+
+
+def _mesh_plate_with_a_bore(
+    profile: Profile, normal: tuple[float, float, float], at: float = 0.0
+) -> SceneObject:
+    mesh = drill(
+        MeshData.of(trimesh.creation.box(extents=(90.0, 60.0, 10.0))),
+        position=(at, 0.0, 5.0),
+        axis="z",
+        normal=normal,
+        diameter=6.0,
+        depth=0.0,
+        anchor="centre",
+        profile=profile,
+        compensate=False,
+    ).mesh
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def test_both_kernels_pull_the_same_angle_from_a_bore_drilled_from_below(profile: Profile) -> None:
+    """„Zwischen den beiden soll es keinen Unterschied geben" — auch im Vorzeichen.
+
+    Gemessen 11.09.2026: Eine Bohrung von unten trug am Netz die Achse plus Z
+    und am exakten Körper minus Z. ``frame_of`` spiegelt seine erste Achse mit
+    der Normalen, also lag derselbe Winkel 45 an den zwei Kernen gespiegelt —
+    45 Grad am Netz, 135 am exakten Körper (Fund des Reviews).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+
+    on_the_mesh = _mesh_plate_with_a_bore(profile, (0.0, 0.0, -1.0))
+    exact = _exact_plate_with_a_bore((0.0, 0.0, -1.0))
+    angles: dict[str, float] = {}
+    for entry in (on_the_mesh, exact):
+        bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+        pulled = run_op(
+            "slot_hole", entry, profile, at_feature=bore, slot_length=20.0, slot_angle=45.0
+        )
+        angles[entry.kind] = _direction_angle(only_slot(as_mesh_data(pulled.mesh)))
+
+    assert angles["mesh"] == pytest.approx(45.0, abs=0.5), angles
+    assert angles["brep"] == pytest.approx(45.0, abs=0.5), angles
+
+
+def test_pulling_twice_with_the_same_angle_lengthens_on_both_kernels(profile: Profile) -> None:
+    """Wer nach dem ersten Zug im Feld *Richtung* liest, was er eingetragen hat,
+    und es noch einmal einträgt, bekommt ein längeres Langloch — kein Kreuz.
+
+    Am exakten Körper kippte die Achse des Langlochs nach dem ersten Zug auf
+    minus Z; das Feld zeigte minus 45, und die zweite 45 schnitt quer
+    (gemessen 11.09.2026: ``slot_hole.crosses``, danach vier Verrundungen und
+    kein Langloch mehr — Fund des Reviews).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep.features import features_of
+    from app.core.geom.prepare_ops import slot_angle_of
+
+    for entry in (
+        _mesh_plate_with_a_bore(profile, (0.0, 0.0, 1.0)),
+        _exact_plate_with_a_bore((0.0, 0.0, 1.0)),
+    ):
+        bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+        first = run_op(
+            "slot_hole", entry, profile, at_feature=bore, slot_length=20.0, slot_angle=45.0
+        )
+        # ``run_op`` erkennt am Netz neu; am exakten Körper liest das Merkmal die Topologie.
+        found = (
+            features_of(first.mesh) if entry.kind == "brep" else detect(as_mesh_data(first.mesh))
+        )
+        slot = next(feature for feature in found.values() if feature.kind == "slot")
+        shown = slot_angle_of(slot, tuple(float(value) for value in slot.params["axis"]))
+        assert shown == pytest.approx(45.0, abs=0.5), f"{entry.kind}: das Feld zeigt {shown}"
+
+        again = dataclasses.replace(first, features=found)
+        second = run_op(
+            "slot_hole", again, profile, at_feature=slot.id, slot_length=26.0, slot_angle=45.0
+        )
+
+        codes = [finding.code for finding in run_op.findings]  # type: ignore[attr-defined]
+        assert "slot_hole.crosses" not in codes, f"{entry.kind}: {codes}"
+        longer = only_slot(as_mesh_data(second.mesh))
+        assert float(longer.params["length"]) == pytest.approx(26.0, abs=0.1), entry.kind
+
+
+def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
+    """An beiden Enden wird gefragt — an beiden Kernen.
+
+    Eine Bohrung neun Millimeter vor der Kante, auf 20 gezogen, meldete am Netz
+    ``bore.over_the_edge`` und am exakten Körper nichts (gemessen 11.09.2026,
+    Fund des Reviews). Der Netz-Zwilling steht als Gegenprobe daneben.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+
+    codes: dict[str, set[str]] = {}
+    for entry in (
+        _mesh_plate_with_a_bore(profile, (0.0, 0.0, 1.0), at=36.0),
+        _exact_plate_with_a_bore((0.0, 0.0, 1.0), at=36.0),
+    ):
+        bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+        run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
+        codes[entry.kind] = {finding.code for finding in run_op.findings}  # type: ignore[attr-defined]
+
+    assert "bore.over_the_edge" in codes["mesh"], codes
+    assert "bore.over_the_edge" in codes["brep"], codes
+
+
+def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
+    """Die Zugabe gilt dem ersten Zug — danach bleibt die Breite.
+
+    Gemessen 11.09.2026 am Netz, Bohrung Ø 5 mit Materialtoleranz (5,1901):
+    nach drei Zügen mit Zugabe 5,2057, 5,2213, 5,2371 — ein Sechzehntel
+    Millimeter je Zug, ein Viertel der Materialtoleranz nach dreien. Ohne
+    Zugabe am zweiten und dritten Zug bleibt die Änderung unter dem
+    Messrauschen der Bogeneinpassung (Fund des Reviews).
+    """
+    mesh = drill(
+        MeshData.of(trimesh.creation.box(extents=(80.0, 40.0, 10.0))),
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=5.0,
+        depth=0.0,
+        anchor="centre",
+        profile=profile,
+        compensate=True,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    chosen = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    widths: list[float] = []
+    for length in (20.0, 24.0, 28.0):
+        entry = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=length)
+        slot = next(feature for feature in entry.features.values() if feature.kind == "slot")
+        widths.append(float(slot.params["diameter"]))
+        chosen = slot.id
+
+    assert abs(widths[1] - widths[0]) < 0.006, widths
+    assert abs(widths[2] - widths[0]) < 0.01, widths
+
+
+def test_pulling_an_exact_slot_again_keeps_its_width_exactly(profile: Profile) -> None:
+    """Am exakten Körper ist die Zugabe kein Messrauschen, sondern genau 0,02 je Zug."""
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep.features import features_of
+
+    entry = _exact_plate_with_a_bore((0.0, 0.0, 1.0))
+    chosen = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    widths: list[float] = []
+    for length in (20.0, 24.0, 28.0):
+        result = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=length)
+        found = features_of(result.mesh)
+        slot = next(feature for feature in found.values() if feature.kind == "slot")
+        widths.append(float(slot.params["diameter"]))
+        entry = dataclasses.replace(result, features=found)
+        chosen = slot.id
+
+    assert widths[1] == pytest.approx(widths[0], abs=1e-3), widths
+    assert widths[2] == pytest.approx(widths[0], abs=1e-3), widths
+
+
+def test_a_slot_length_beyond_the_body_is_refused_when_drilling_too(profile: Profile) -> None:
+    """Dieselbe Schranke wie bei *Zum Langloch ziehen* — ``slot_length`` hat im
+    Schema keine Obergrenze, und *Bohrung setzen* nahm hunderttausend
+    Millimeter an (Übergabe der Durchsicht vom 11.09.2026).
+    """
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate(), features={})
+
+    with pytest.raises(ValidationError) as refused:
+        run_op(
+            "drill_hole",
+            entry,
+            profile,
+            x=0.0,
+            y=0.0,
+            z=5.0,
+            axis="z",
+            diameter=5.0,
+            depth=0.0,
+            slotted=True,
+            slot_length=100000.0,
+        )
+
+    assert refused.value.field == "slot_length"
+    assert refused.value.constraint == "maximum"
+
+
+@pytest.mark.parametrize(
+    ("angle", "says_so"),
+    [(0.4, False), (1.0, True), (179.0, True), (180.4, False), (90.0, True)],
+)
+def test_the_crossing_warning_starts_at_half_a_degree(angle: float, says_so: bool) -> None:
+    """``SLOT_ACROSS_LIMIT`` ist als gemessen dokumentiert (0,5 Grad) und wurde
+    bis zum 11.09.2026 nur bei 90 Grad gefahren.
+    """
+    from app.core.geom.prepare_ops import _slot_across_a_slot
+
+    slot = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 6.0,
+            "length": 20.0,
+            "travel": 14.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+            "centre": (0.0, 0.0, 0.0),
+            "depth": 10.0,
+            "through": True,
+        },
+    )
+
+    finding = _slot_across_a_slot(slot, (0.0, 0.0, 1.0), angle)
+
+    assert (finding is not None) is says_so, (angle, finding)

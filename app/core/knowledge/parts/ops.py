@@ -684,8 +684,10 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     Wiederholung mit einem Durchgang.
     """
     targets = _chosen_features(ctx.params)
-    if len(targets) < 2:
+    if not targets:
         return _insert_at(ctx, spec)
+    if len(targets) == 1:
+        return _insert_at(dataclasses.replace(ctx, params=_aimed_at(ctx.params, targets[0])), spec)
 
     source = ctx.inputs[0]
     findings: list[Finding] = []

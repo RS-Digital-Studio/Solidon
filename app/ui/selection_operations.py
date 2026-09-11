@@ -494,6 +494,9 @@ class SelectionOperationsPanel(QWidget):
         title = str(button.property("operationTitle") or button.text())
         words = title.split()
         metrics = button.fontMetrics()
+        # Das Wunschmaß muss denselben ungebrochenen Titel messen wie die
+        # Schriftbreite; sonst wechselt der Umbruch beim nächsten Aufruf.
+        button.setText(title)
         chrome = button.sizeHint().width() - metrics.horizontalAdvance(title.replace(chr(10), " "))
         space = room - chrome
         if len(words) < 2 or space <= 0 or metrics.horizontalAdvance(title) <= space:
@@ -548,6 +551,7 @@ class SelectionOperationsPanel(QWidget):
         *,
         feature_kind: str = "",
         label: str = "",
+        part_selected: bool = False,
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
 
@@ -569,8 +573,10 @@ class SelectionOperationsPanel(QWidget):
         eine zweite Rechnung dafür wäre eine zweite Wahrheit. Fehlt er, bleibt
         es bei der Menge.
         """
-        self.setVisible(selected > 0)
-        if selected <= 0:
+        # Die Bausteinfelder darüber bedienen den erzeugenden Schritt. Seine
+        # Einzelmerkmale sind hier kein Ziel für allgemeine Flächenoperationen.
+        self.setVisible(selected > 0 and not part_selected)
+        if selected <= 0 or part_selected:
             return
         # **Bausteine setzt man auf eine Fläche, nicht in ein Loch** (Robert,
         # 10.09.2026: „ganz unten wenn wir runterscrollen noch bauteile, das

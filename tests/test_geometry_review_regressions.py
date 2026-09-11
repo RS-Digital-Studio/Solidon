@@ -31,6 +31,381 @@ def review_run(profile):
     return execute
 
 
+@pytest.fixture
+def bore_review_body():
+    """Dieselbe analytische Platte als exakter Körper oder als importierbares Netz."""
+    pytest.importorskip("OCP")
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    def make(solid, kind):
+        mesh = solid if kind == "brep" else as_mesh_data(solid)
+        features = features_of(solid) if kind == "brep" else detect(mesh)
+        return SceneObject(id="obj_1", name="Prüfplatte", mesh=mesh, kind=kind, features=features)
+
+    return make
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+@pytest.mark.parametrize("round_cut", [True, False])
+@pytest.mark.parametrize("depth", [4.0, 10.0])
+@pytest.mark.parametrize("turned", [False, True])
+def test_open_round_cut_and_open_slot_are_detected_slots(
+    kind, round_cut, depth, turned, bore_review_body
+):
+    """Beide Randöffnungen bleiben ohne gespeicherte Herkunft bearbeitbare Langlöcher."""
+    from app.core.brep import edit
+
+    body = edit.box(40.0, 30.0, 10.0)
+    if round_cut:
+        body = edit.cut_bore(
+            body,
+            position=(19.0, 0.0, 10.0 - depth / 2.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=depth,
+        )
+    else:
+        body = edit.slot_bore(
+            body,
+            position=(17.0, 0.0, 10.0 - depth / 2.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=depth,
+            length=18.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    if turned:
+        body = edit.transformed(body, rotation("x", 37.0) @ rotation("z", 23.0))
+    entry = bore_review_body(body, kind)
+    slots = [feature for feature in entry.features.values() if feature.kind == "slot"]
+    assert len(slots) == 1
+    assert slots[0].params["open"] is True
+    assert slots[0].params["diameter"] == pytest.approx(6.0, abs=0.01)
+    assert slots[0].params["depth"] == pytest.approx(depth, abs=0.01)
+    assert slots[0].params["through"] == (depth == 10.0)
+    assert slots[0].face_indices
+    assert slots[0].recognised
+
+
+@pytest.mark.parametrize("diameter", [16.0, 50.0])
+def test_filling_foreign_bore_removes_its_entire_wall(diameter, review_run):
+    """Ein anders tesselliertes Loch lässt nach dem Füllen keine Wandreste zurück."""
+    from app.core.geom.boolean import boolean
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    plate = MeshData.of(trimesh.creation.box(extents=(100.0, 100.0, 10.0)))
+    cutter = trimesh.creation.cylinder(radius=diameter / 2.0, height=12.0, sections=96)
+    cutter.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 96.0, (0, 0, 1)))
+    body = boolean("difference", [plate, MeshData.of(cutter)]).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=detect(body))
+    hole = next(f for f in entry.features.values() if f.kind == "hole")
+    out = review_run("remove_feature", entry, at_feature=hole.id).outputs[0]
+    assert out.mesh.volume == pytest.approx(100000.0, abs=0.01)
+    assert not any(f.kind in {"hole", "pin", "fillet", "slot"} for f in detect(out.mesh).values())
+
+
+@pytest.mark.parametrize("diameter,depth", [(8.0, 6.0), (12.0, 6.0), (12.0, 8.0)])
+def test_blind_countersunk_bore_has_one_unambiguous_chain(profile, review_run, diameter, depth):
+    """Der Sacklochboden ist keine zweite Verbindung zwischen Bohrung und Senkung."""
+    from app.core.geom.prepare import countersink, drill
+    from app.core.perceive.features import detect
+    from app.core.perceive.relations import cavity_chain_state_at
+    from app.core.types import SceneObject
+
+    plate = MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    body = drill(
+        plate,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        depth=depth,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    body = countersink(
+        body, position=(0.0, 0.0, 5.0), axis="z", diameter=diameter, profile=profile
+    ).mesh
+    features = detect(body)
+    cone = next(f for f in features.values() if f.kind == "cone")
+    chain, _ = cavity_chain_state_at(cone, features, body)
+    assert chain is not None
+    assert {f.kind for f in chain} == {"hole", "cone"}
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+    out = review_run("remove_feature", entry, at_feature=cone.id, sections="single").outputs[0]
+    bores = [f for f in detect(out.mesh).values() if f.kind == "hole"]
+    assert len(bores) == 1
+    assert not bores[0].params["through"]
+    assert bores[0].params["depth"] == pytest.approx(depth, abs=0.01)
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+@pytest.mark.parametrize("round_cut", [True, False])
+def test_open_slot_can_be_pulled_and_moved_without_an_outside_plug(
+    kind,
+    round_cut,
+    bore_review_body,
+    review_run,
+):
+    """Nachziehen und Versetzen verwenden für beide Randöffnungen denselben Weg."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import slot_angle_of
+    from app.core.perceive.features import detect
+
+    body = edit.box(60.0, 40.0, 10.0)
+    args = {
+        "position": (29.0, 0.0, 5.0),
+        "direction": (0.0, 0.0, 1.0),
+        "diameter": 6.0,
+        "depth": 10.0,
+    }
+    body = (
+        edit.cut_bore(body, **args)
+        if round_cut
+        else edit.slot_bore(body, **args, length=18.0, angle_deg=0.0, overlap=0.0)
+    )
+    entry = bore_review_body(body, kind)
+    slot = next(f for f in entry.features.values() if f.kind == "slot")
+    result = review_run(
+        "slot_hole",
+        entry,
+        at_feature=slot.id,
+        slot_length=slot.params["length"] + 4.0,
+        slot_angle=slot_angle_of(slot, slot.params["axis"]),
+    )
+    assert not any(f.code.endswith("feature_lost") for f in result.findings)
+    entry = result.outputs[0]
+    slot = next(f for f in entry.features.values() if f.kind == "slot")
+    result = review_run(
+        "slot_hole",
+        entry,
+        at_feature=slot.id,
+        slot_length=slot.params["length"] + 4.0,
+        slot_angle=slot_angle_of(slot, slot.params["axis"]),
+        x=-10.0,
+        z=5.0,
+    )
+    out = result.outputs[0]
+    assert out.mesh.bounds.size == pytest.approx((60.0, 40.0, 10.0), abs=0.01)
+    detected = features_of(out.mesh) if kind == "brep" else detect(as_mesh_data(out.mesh))
+    assert len([f for f in detected.values() if f.kind == "slot"]) == 1
+    assert not any(f.params.get("open") for f in detected.values())
+    assert not any(f.code.endswith("feature_lost") for f in result.findings)
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_open_bore_survives_project_round_trip_and_undo(kind, quality, profile, tmp_path):
+    """Die Randöffnung bleibt nach Laden und Rücknahme ein echtes bearbeitbares Merkmal."""
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import load, new_project, save
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Platte und Bohrung",
+        [
+            OperationDraft(
+                op="create_brep_box" if kind == "brep" else "create_box",
+                params={"width": 40.0, "depth": 30.0, "height": 10.0},
+            ),
+            OperationDraft(
+                op="drill_brep_hole" if kind == "brep" else "drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "compensate": False, "x": 15.0, "z": 10.0},
+            ),
+        ],
+    )
+    result = evaluate(project.document, profile, quality=quality)
+    assert result.complete
+    bore = next(f for f in result.scene.objects["obj_1"].features.values() if f.kind == "hole")
+    history.apply(
+        "Zum Rand öffnen",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={
+                    "at_feature": bore.id,
+                    "diameter": 8.0,
+                    "compensate": False,
+                    "x": 19.0,
+                    "z": 5.0,
+                },
+            )
+        ],
+    )
+    reopened = load(save(project, tmp_path / "randloch.p3d"))
+    result = evaluate(reopened.document, profile, quality=quality)
+    assert result.complete
+    slot = next(f for f in result.scene.objects["obj_1"].features.values() if f.kind == "slot")
+    assert slot.recognised and slot.face_indices and slot.params["open"]
+    history = History(reopened.document)
+    history.undo()
+    result = evaluate(reopened.document, profile, quality=quality)
+    assert result.complete
+    assert any(f.kind == "hole" for f in result.scene.objects["obj_1"].features.values())
+    history.redo()
+    history.apply(
+        "Öffnung schließen",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}),
+            OperationDraft(op="union_objects", inputs=("obj_1", "obj_2")),
+        ],
+    )
+    result = evaluate(reopened.document, profile, quality=quality)
+    assert result.complete
+    assert not any(f.params.get("open") for f in result.scene.objects["obj_1"].features.values())
+
+
+def test_exact_bore_on_curved_surface_uses_the_real_flank(bore_review_body, review_run):
+    """Die vom Ansichtsnetz gelieferte Normale löst am exakten Zylinder keine Fehlwarnung aus."""
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.placement import original_surface_hit
+
+    solid = edit.cylinder(15.0, 40.0)
+    mesh = as_mesh_data(solid)
+    hit = original_surface_hit(mesh, (60.0, 0.0, 20.0), (-1.0, 0.0, 0.0))
+    assert hit is not None
+    index, point = hit
+    normal = mesh.raw.face_normals[index]
+    result = review_run(
+        "drill_brep_hole",
+        bore_review_body(solid, "brep"),
+        diameter=3.0,
+        compensate=False,
+        x=point[0],
+        y=point[1],
+        z=point[2],
+        nx=normal[0],
+        ny=normal[1],
+        nz=normal[2],
+    )
+    assert not any(f.code == "bore.over_the_edge" for f in result.findings)
+    assert result.outputs[0].mesh.volume < solid.volume - 1.0
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+def test_moving_existing_slot_fills_its_whole_old_outline(kind, bore_review_body, review_run):
+    """An der alten Stelle bleibt weder ein Loch noch ein herausragender Stopfen."""
+    from app.core.brep import edit
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import as_mesh_data
+
+    solid = edit.slot_bore(
+        edit.box(100.0, 80.0, 10.0),
+        position=(-20.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=20.0,
+        angle_deg=35.0,
+        overlap=0.0,
+    )
+    entry = bore_review_body(solid, kind)
+    feature = next(f for f in entry.features.values() if f.kind == "slot")
+    result = review_run(
+        "slot_hole",
+        entry,
+        at_feature=feature.id,
+        slot_length=22.0,
+        slot_angle=35.0,
+        x=20.0,
+        y=0.0,
+        z=5.0,
+    )
+    out = result.outputs[0]
+    window = edit.moved(edit.box(30.0, 30.0, 10.0), (-20.0, 0.0, 0.0))
+    if kind == "brep":
+        filled = edit.boolean("intersection", [out.mesh, window]).volume
+    else:
+        filled = boolean("intersection", [as_mesh_data(out.mesh), as_mesh_data(window)]).mesh.volume
+    assert filled == pytest.approx(30.0 * 30.0 * 10.0, abs=0.01)
+    assert out.mesh.bounds.size == pytest.approx((100.0, 80.0, 10.0), abs=0.01)
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+@pytest.mark.parametrize("operation", ["resize_hole", "slot_hole"])
+@pytest.mark.parametrize("through", [True, False])
+def test_moving_bore_to_thicker_material_keeps_depth_intent(
+    kind,
+    operation,
+    through,
+    bore_review_body,
+    review_run,
+):
+    """Durchgang bleibt durchgehend; ein Sackloch behält seine Tiefe und Kennung."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+
+    solid = edit.boolean(
+        "union",
+        [edit.box(100.0, 80.0, 10.0), edit.moved(edit.box(30.0, 80.0, 20.0), (30.0, 0.0, 0.0))],
+    )
+    depth = 10.0 if through else 6.0
+    solid = edit.cut_bore(
+        solid,
+        position=(-20.0, 0.0, 10.0 - depth / 2.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=depth,
+    )
+    entry = bore_review_body(solid, kind)
+    feature = next(f for f in entry.features.values() if f.kind == "hole")
+    params = (
+        {"diameter": 6.0, "compensate": False}
+        if operation == "resize_hole"
+        else {"slot_length": 20.0}
+    )
+    result = review_run(
+        operation, entry, at_feature=feature.id, x=30.0, y=0.0, z=20.0 - depth / 2.0, **params
+    )
+    out = result.outputs[0]
+    detected = features_of(out.mesh) if kind == "brep" else detect(as_mesh_data(out.mesh))
+    wanted = "hole" if operation == "resize_hole" else "slot"
+    bore = next(f for f in detected.values() if f.kind == wanted)
+    assert bore.params["through"] is through
+    assert bore.params["depth"] == pytest.approx(20.0 if through else 6.0, abs=0.01)
+    assert not any(f.code.endswith("feature_lost") for f in result.findings)
+    if operation == "resize_hole":
+        assert feature.id in out.features
+        assert out.features[feature.id].params["centre"] == pytest.approx(
+            bore.params["centre"], abs=0.01
+        )
+
+
+@pytest.mark.parametrize("kind", ["brep", "mesh"])
+def test_slot_zero_and_half_turn_cut_the_same_geometry(kind, bore_review_body, review_run):
+    """Null ist ein ausdrücklich gewählter Winkel und kein Ersatz für die alte Richtung."""
+    from app.core.brep import edit
+
+    solid = edit.slot_bore(
+        edit.box(100.0, 80.0, 10.0),
+        position=(-20.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=20.0,
+        angle_deg=45.0,
+        overlap=0.0,
+    )
+    entry = bore_review_body(solid, kind)
+    feature = next(f for f in entry.features.values() if f.kind == "slot")
+    zero = review_run("slot_hole", entry, at_feature=feature.id, slot_length=22.0, slot_angle=0.0)
+    half = review_run("slot_hole", entry, at_feature=feature.id, slot_length=22.0, slot_angle=180.0)
+    assert zero.outputs[0].mesh.volume == pytest.approx(half.outputs[0].mesh.volume, abs=0.01)
+
+
 @pytest.mark.parametrize(
     "params,expected",
     [
@@ -682,3 +1057,65 @@ def test_cavity_follows_transforms_cache_budget_and_object_identity(tmp_path) ->
     old.pop("format_version")
     metadata.write_text(json.dumps(old), encoding="utf-8")
     assert disk.get("cavity") is None
+
+
+@pytest.mark.parametrize("sections", [48, 96])
+@pytest.mark.parametrize("remove_all", [False, True])
+def test_large_foreign_countersink_preserves_the_unselected_section(
+    sections, remove_all, review_run
+):
+    """Ein weiter Kegel bleibt maßhaltig; beim vollständigen Entfernen bleibt nichts."""
+    from app.core.geom.boolean import boolean
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    plate = MeshData.of(trimesh.creation.box(extents=(100.0, 100.0, 30.0)))
+    widening = trimesh.creation.revolve([[0, -2], [8, -2], [25, 15], [0, 15]], sections=sections)
+    bore = trimesh.creation.cylinder(radius=8, height=32, sections=sections)
+    body = boolean("difference", [plate, MeshData.of(widening), MeshData.of(bore)]).mesh
+    entry = SceneObject(id="obj_1", name="Prüfplatte", mesh=body, features=detect(body))
+    hole = next(f for f in entry.features.values() if f.kind == "hole")
+    out = review_run(
+        "remove_feature", entry, at_feature=hole.id, sections="chain" if remove_all else "single"
+    ).outputs[0]
+    expected = 300000.0 if remove_all else 300000.0 - widening.volume
+    assert out.mesh.volume == pytest.approx(expected, abs=0.02)
+    found = detect(out.mesh)
+    assert not any(f.kind in {"hole", "pin"} for f in found.values())
+    assert sum(f.kind == "cone" for f in found.values()) == (0 if remove_all else 1)
+
+
+def test_open_slot_metadata_follows_a_rigid_body_transform(bore_review_body):
+    """Die freie Mündung bleibt nach Drehen und Verschieben am tatsächlichen Rand."""
+    from app.core.brep import edit
+    from app.core.perceive.matching import moved_features
+
+    body = edit.cut_bore(
+        edit.box(40.0, 30.0, 10.0),
+        position=(19.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+    )
+    entry = bore_review_body(body, "mesh")
+    feature = next(f for f in entry.features.values() if f.kind == "slot")
+    moved = moved_features(
+        {feature.id: feature}, translation((4.0, 3.0, 2.0)) @ rotation("z", 90.0)
+    )[feature.id]
+    assert moved.params["arc_centre"] == pytest.approx((4.0, 22.0, 7.0), abs=0.01)
+    assert moved.params["mouth_centre"] == pytest.approx((4.0, 23.0, 7.0), abs=0.01)
+    assert moved.params["opening_normal"] == pytest.approx((0.0, 1.0, 0.0), abs=0.01)
+    assert moved.params["direction"] == pytest.approx((0.0, 1.0, 0.0), abs=0.01)
+
+
+def test_unexpected_cavity_answer_does_not_silently_remove_one_section() -> None:
+    """Eine fremde Rückfrageantwort entscheidet nicht still über den Hohlraum."""
+    from types import SimpleNamespace
+
+    import pytest
+
+    from app.core.errors import InternalError
+    from app.core.geom.prepare_ops import _asked_about_sections
+
+    with pytest.raises(InternalError):
+        _asked_about_sections(SimpleNamespace(ask=lambda *_: "unexpected"), [])

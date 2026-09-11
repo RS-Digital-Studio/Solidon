@@ -33,7 +33,7 @@ from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
 from app.core.perceive.slots import ACROSS_THE_AXIS, slots_instead_of_half_bores
 from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
-from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
+from app.core.units import EPS_GEOM, positive_axis, weld_digits, weld_tolerance
 
 _log = get_logger(__name__)
 
@@ -2369,15 +2369,12 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
     _values, vectors = np.linalg.eigh(normals.T @ normals)
     axis = vectors[:, 0]
     axis = axis / float(np.linalg.norm(axis))
-    # Ein Eigenvektor und sein Gegenvektor beschreiben dieselbe Achse. Der
-    # Erstbezug ist die erste größte Betragskomponente, positiv; nahezu
-    # gleiche Komponenten entscheiden nicht über Rundungsreste. Nach einer
-    # Bewegung richtet die Zuordnung diese Messachse am mitgedrehten
-    # Vorgänger aus, damit der Erstbezug keine Mündung zurückdreht.
-    magnitudes = np.abs(axis)
-    leading = int(np.flatnonzero(magnitudes >= float(magnitudes.max()) - EPS_GEOM)[0])
-    if axis[leading] < 0.0:
-        axis = -axis
+    # Ein Eigenvektor und sein Gegenvektor beschreiben dieselbe Achse. Welches
+    # Vorzeichen gilt, entscheidet ``units.positive_axis`` — für beide Kerne
+    # dieselbe Wahl, sonst liegt derselbe Langlochwinkel an ihnen gespiegelt.
+    # Nach einer Bewegung richtet die Zuordnung diese Messachse am
+    # mitgedrehten Vorgänger aus, damit der Erstbezug keine Mündung zurückdreht.
+    axis = np.asarray(positive_axis((float(axis[0]), float(axis[1]), float(axis[2]))), dtype=float)
 
     # In die Ebene senkrecht zur Achse projizieren und dort einen Kreis einpassen.
     basis_u, basis_v = _plane_basis(axis)

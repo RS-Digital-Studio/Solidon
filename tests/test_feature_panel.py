@@ -273,6 +273,42 @@ def test_every_field_of_a_handling_says_what_it_is(qt_app: QApplication) -> None
     assert len(set(namen)) == len(namen), f"zwei Felder heißen gleich: {namen}"
 
 
+def test_fieldless_remove_action_has_a_visible_working_button(qt_app: QApplication) -> None:
+    """Die gebaute Oberfläche macht die feldlose Handlung tatsächlich erreichbar."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    seen = []
+    panel.operationRequested.connect(lambda *args: seen.append(args))
+    panel.show_feature(identifier, feature)
+    buttons = [
+        button
+        for button in panel.findChildren(QPushButton)
+        if button.isVisibleTo(panel) and button.text() == "Merkmal entfernen"
+    ]
+    assert len(buttons) == 1
+    buttons[0].click()
+    assert seen and seen[0][0] == "remove_feature"
+
+
+def test_focusing_a_field_names_the_action_above_apply(qt_app: QApplication) -> None:
+    """Ein Fokuswechsel wählt die Handlung, ohne eine Maßänderung zu verlangen."""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    editor = next(
+        widget
+        for widget in panel.findChildren(LengthSpin)
+        if widget.property("handlingKey") != panel._armed
+    )
+    qt_app.sendEvent(editor, QFocusEvent(QEvent.Type.FocusIn))
+    assert panel._armed == editor.property("handlingKey")
+    assert panel._armed_title.isVisibleTo(panel)
+    assert panel._armed_title.text() == panel._apply.accessibleName()
+
+
 def test_the_panel_offers_what_the_core_says_and_nothing_else(qt_app: QApplication) -> None:
     """Die Zeilen kommen aus ``actions_for`` — eine Stelle, nicht zwei.
 
@@ -1206,6 +1242,28 @@ def test_a_part_step_keeps_the_values_it_was_not_asked_about(qt_app: QApplicatio
     MainWindow._change_part_step(fenster, 3, {"x": 12.0})
 
     assert geschrieben == [(3, {"size": "M5", "drop": 9.0, "x": 12.0})], geschrieben
+
+
+def test_removing_a_part_uses_the_history_dependency_confirmation(qt_app: QApplication) -> None:
+    """Auch vom Bausteinknopf aus wird die Folgeauskunft des Verlaufs benutzt."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    called = []
+    said = []
+    document = SimpleNamespace(ops=[SimpleNamespace(id=12)])
+    window = SimpleNamespace(
+        remove_history_operations=lambda ids: called.append(ids),
+        session=SimpleNamespace(project=SimpleNamespace(document=document)),
+        statusBar=lambda: SimpleNamespace(showMessage=lambda text: said.append(text)),
+    )
+    MainWindow._remove_part_step(window, 12)
+    assert called == [[12]]
+    document.ops = []
+    MainWindow._remove_part_step(window, 12)
+    assert called == [[12]]
+    assert said and "nicht mehr vorhanden" in said[0]
 
 
 def test_only_a_part_step_answers_for_the_feature_that_came_from_it() -> None:

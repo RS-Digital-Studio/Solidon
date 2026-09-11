@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QWidget
 
 from app.core.units import DEGREE_UNIT
 from app.i18n import tr
@@ -69,12 +69,12 @@ class SlotBar(QFrame):
         super().__init__(parent)
         self.setObjectName("slotBar")
 
-        layout = QHBoxLayout(self)
+        layout = QGridLayout(self)
         layout.setContentsMargins(ROOMY, TIGHT, ROOMY, TIGHT)
         layout.setSpacing(NORMAL)
 
         self.title = QLabel(tr("Langloch"), self)
-        layout.addWidget(self.title)
+        layout.addWidget(self.title, 0, 0)
 
         self.length = LengthSpin(self)
         self.length.setObjectName("slotBarLength")
@@ -82,8 +82,8 @@ class SlotBar(QFrame):
         self.length.setAccessibleName(tr("Länge des Langlochs"))
         length_label = QLabel(tr("Länge"), self)
         length_label.setBuddy(self.length)
-        layout.addWidget(length_label)
-        layout.addWidget(self.length)
+        layout.addWidget(length_label, 0, 1)
+        layout.addWidget(self.length, 0, 2)
 
         self.angle = NumberSpin(self)
         self.angle.setObjectName("slotBarAngle")
@@ -93,17 +93,26 @@ class SlotBar(QFrame):
         self.angle.setAccessibleName(tr("Richtung des Langlochs"))
         angle_label = QLabel(tr("Richtung"), self)
         angle_label.setBuddy(self.angle)
-        layout.addWidget(angle_label)
-        layout.addWidget(self.angle)
+        layout.addWidget(angle_label, 0, 3)
+        layout.addWidget(self.angle, 0, 4)
 
         self.cancel = QPushButton(tr("Abbrechen"), self)
         self.cancel.clicked.connect(self._on_cancel)
-        layout.addWidget(self.cancel)
+        layout.addWidget(self.cancel, 0, 5)
 
         self.apply = QPushButton(tr("Übernehmen"), self)
         make_primary(self.apply)
         self.apply.clicked.connect(self._on_apply)
-        layout.addWidget(self.apply)
+        layout.addWidget(self.apply, 0, 6)
+        self._items: tuple[QWidget, ...] = (
+            self.title,
+            length_label,
+            self.length,
+            angle_label,
+            self.angle,
+            self.cancel,
+            self.apply,
+        )
 
         self.active = False
         """Ob die Leiste gerade einen Zug hält.
@@ -171,6 +180,20 @@ class SlotBar(QFrame):
         if parent is None:
             return
         area = parent.rect().adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY)
+        layout = self.layout()
+        assert isinstance(layout, QGridLayout)
+        wide = sum(widget.sizeHint().width() for widget in self._items) + 6 * NORMAL + 2 * ROOMY
+        for widget in self._items:
+            layout.removeWidget(widget)
+        if wide <= area.width():
+            for column, widget in enumerate(self._items):
+                layout.addWidget(widget, 0, column)
+        else:
+            layout.addWidget(self.title, 0, 0, 1, 2)
+            for index, widget in enumerate(self._items[1:]):
+                layout.addWidget(widget, 1 + index // 2, index % 2)
+        self.setMaximumWidth(max(0, area.width()))
+        self.adjustSize()
         self.move(
             area.left() + max(0, (area.width() - self.width()) // 2),
             max(area.top(), area.bottom() - self.height() - TOOLS_ROOM),

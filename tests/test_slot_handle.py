@@ -37,6 +37,23 @@ from app.ui.slot_handle import SlotHandle, dragged_slot, slot_outline
 BORE = 6.0
 
 
+def test_slot_bar_keeps_apply_inside_a_narrow_view(qt_app) -> None:
+    """Alle Felder und Übernehmen bleiben in einer schmalen Ansicht erreichbar."""
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.slot_bar import SlotBar
+
+    parent = QWidget()
+    parent.resize(360, 600)
+    bar = SlotBar(parent)
+    parent.show()
+    bar.begin(20.0, 15.0, shortest_mm=7.0)
+    qt_app.processEvents()
+    assert parent.rect().contains(bar.geometry())
+    assert bar.rect().contains(bar.apply.geometry())
+    parent.close()
+
+
 def a_drilled_plate(profile: Profile) -> SceneObject:
     """Eine Platte 60 x 40 x 10 mit einer durchgehenden Bohrung in der Mitte."""
     plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
@@ -289,6 +306,46 @@ def a_handle(renderer: RecordingRenderer, taken: list[tuple[float, float]]) -> S
     )
 
 
+def test_one_pixel_of_pointer_jitter_does_not_start_a_slot_drag() -> None:
+    """Ein Antippen mit Mauszittern eröffnet keine Langlochbearbeitung."""
+    renderer = RecordingRenderer(size=(800, 600))
+    taken: list[tuple[float, float]] = []
+    handle = a_handle(renderer, taken)
+    seat = renderer.world_to_display(handle.knob_seats[0])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[0]
+    handle.handle(PointerEvent("move", x, y))
+    handle.handle(PointerEvent("press", x, y, button="left"))
+    handle.handle(PointerEvent("move", x + 1, y))
+    handle.handle(PointerEvent("release", x + 1, y, button="left"))
+    assert not taken
+    assert "slot-handle:outline" not in renderer.names()
+
+
+def test_dragging_back_clears_the_preview_and_reports_cancellation() -> None:
+    """Zurückziehen auf den Druckpunkt lässt keinen Umriss oder Auftrag stehen."""
+    renderer = RecordingRenderer(size=(800, 600))
+    taken = []
+    cancelled = []
+    handle = a_handle(renderer, taken)
+    handle._cancel = lambda: cancelled.append(True)
+    original = (handle.length, handle.angle)
+    seat = renderer.world_to_display(handle.knob_seats[0])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[0]
+    handle.handle(PointerEvent("move", x, y))
+    handle.handle(PointerEvent("press", x, y, button="left"))
+    handle.handle(PointerEvent("move", x + 40, y + 20))
+    outline = handle._outline
+    handle.handle(PointerEvent("move", x, y))
+    handle.handle(PointerEvent("release", x, y, button="left"))
+    assert cancelled == [True]
+    assert not taken
+    assert (handle.length, handle.angle) == original
+    assert outline is not None and outline in renderer.removed
+    assert handle._outline is None
+
+
 def test_the_knobs_report_the_drag_when_they_are_let_go() -> None:
     """Greifen, ziehen, loslassen — und die Ansicht bekommt Länge und Richtung.
 
@@ -497,6 +554,46 @@ def test_a_slot_carries_the_knobs_even_though_it_cannot_be_moved(qt_app: object)
         viewport.deleteLater()
 
 
+def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) -> None:
+    """Rastung, Beschriftung und freier Raum gehören zum aktuellen Griffstand."""
+    from app.ui.viewport import GIZMO_LABEL_GAP, Viewport
+
+    load_operations()
+    viewport = Viewport()
+    try:
+        renderer = RecordingRenderer(size=(800, 600))
+        viewport.renderer = renderer
+        a_slot_in_the_view(viewport)
+        handle = viewport._slot_handle
+        assert handle is not None
+        viewport._angle_step = 45.0
+        seat = renderer.world_to_display(handle.knob_seats[0])
+        x, y = round(seat[0]), round(seat[1])
+        renderer.item_picks[(x, y)] = handle.knobs[0]
+        handle.handle(PointerEvent("move", x, y))
+        handle.handle(PointerEvent("press", x, y, button="left"))
+        point = renderer.world_to_display((40.0, 39.0, 5.0))
+        handle.handle(PointerEvent("move", round(point[0]), round(point[1])))
+        assert handle.angle == pytest.approx(45.0)
+        clearance = viewport.gizmo_reach()
+        assert clearance is not None
+        centre, radius = clearance
+        for seat in handle.knob_seats:
+            assert math.dist(centre, seat) < radius
+        expected = [
+            np.asarray(centre) + (np.asarray(seat) - centre) * GIZMO_LABEL_GAP
+            for seat in handle.knob_seats
+        ]
+        np.testing.assert_allclose(viewport._gizmo_label_base, expected)
+        handle.handle(PointerEvent("move", x, y))
+        handle.handle(PointerEvent("release", x, y, button="left"))
+        assert viewport._drag_kind is None
+        assert not viewport.drag_bar.isVisible()
+    finally:
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
 def test_a_drag_waits_in_its_bar_instead_of_writing_a_step(qt_app: object) -> None:
     """Der Zug endet in der Leiste — die Operation entsteht erst beim Übernehmen.
 
@@ -668,6 +765,9 @@ def test_the_bar_goes_when_the_selection_does(qt_app: object) -> None:
         viewport.select_feature("hole_2")
 
         assert not viewport.slot_bar.active, "die Leiste geht mit ihrem Griff"
+        assert not viewport._slot_target
+        assert viewport._drag_kind != "slot"
+        viewport._on_slot_bar_accepted(40.0, 15.0)
         assert not gemeldet, "und schreibt nichts an ein fremdes Loch"
     finally:
         viewport.renderer = None

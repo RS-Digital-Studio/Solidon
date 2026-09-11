@@ -27,6 +27,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.geom.boolean import (
+    BOOLEAN_OVERLAP,
     NOTHING_LEFT_DETAIL,
     NOTHING_LEFT_TITLE,
     BooleanKind,
@@ -73,6 +74,8 @@ from app.core.geom.prepare import (
     shell,
     shortest_slot,
     slot_bore,
+    slot_ends,
+    slot_travel,
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
@@ -400,11 +403,8 @@ SLOT_NEEDS_A_LENGTH: Final = _(
 
 #: Nach dem Zug steht kein Langloch mehr da — und das ist keine Ausnahme.
 #:
-#: Beide Fälle sind gemessen (11.09.2026) und beide sind gültige Geometrie:
-#: über den Rand des Körpers hinaus wird aus dem Langloch ein offener Schlitz,
-#: quer über sich selbst ein Kreuz. Was fehlt, ist der **Bezug** — im
-#: Objektbaum stehen danach Verrundungen, und die Handlungen eines Langlochs
-#: stehen an keiner von ihnen.
+#: Ein Schnitt quer über sich selbst kann ein Kreuz erzeugen. Eine eindeutige
+#: Randöffnung bleibt dagegen als offenes Langloch erhalten.
 #: Wie genau die gemessene Länge eines Langlochs die eingetragene treffen muss,
 #: damit es das gezogene ist — ein Prozent. Das Netz tastet die Bögen ab und
 #: liegt damit ein Zehntelprozent daneben (20,0147 mm für 20); der exakte
@@ -413,9 +413,9 @@ SLOT_NEEDS_A_LENGTH: Final = _(
 _SAME_LENGTH: Final = 0.01
 
 SLOT_FEATURE_LOST: Final = _(
-    "Nach dem Zug ist an dieser Stelle kein Langloch mehr zu erkennen — der Schnitt "
-    "reicht über den Rand des Körpers oder über ein zweites Loch hinweg. Die Geometrie "
-    "stimmt; spätere Schritte, die auf dieses Langloch verweisen, verlieren ihren Bezug. "
+    "Nach dem Zug lässt sich der verbleibende Ausschnitt an dieser Stelle nicht mehr "
+    "eindeutig als Langloch erkennen. Spätere Schritte, die auf dieses Langloch "
+    "verweisen, verlieren ihren Bezug. "
     "Mit Strg+Z kommen Sie zum vorherigen Stand zurück."
 )
 
@@ -430,7 +430,7 @@ class BoreShape:
     widening_depth: float
 
 
-def bore_shape(params: DrillParams) -> BoreShape:
+def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     """Die Felder, die der Haken *Langloch* gegeneinander abschaltet.
 
     ``depends_on`` graut sie im Dialog aus, und ein abhängiges Feld wird von
@@ -445,6 +445,13 @@ def bore_shape(params: DrillParams) -> BoreShape:
     einen direkten Aufruf, aber nicht für diesen Haken: Wer *Langloch* anhakt
     und die Länge stehen lässt, bekäme ein rundes Loch und ein Häkchen, das das
     Gegenteil behauptet. Das ist genau die stille Wahl, die Regel 21 ausschließt.
+
+    ``within`` ist der Körper, in den gebohrt wird. Mit ihm läuft die Länge
+    durch dieselbe Schranke wie bei *Zum Langloch ziehen*
+    (:func:`_reject_oversized`): ``slot_length`` trägt im Schema keine
+    Obergrenze, und ohne diese Zeile nahm *Bohrung setzen* hunderttausend
+    Millimeter an, wo der Zwilling sie ablehnt (Fund des Reviews,
+    11.09.2026). Die Vorschau ruft ohne Körper — sie zeichnet, was da ist.
     """
     if params.slotted:
         shortest = shortest_slot(params.diameter)
@@ -459,6 +466,8 @@ def bore_shape(params: DrillParams) -> BoreShape:
                     "shortest": format_length(shortest),
                 },
             )
+        if within is not None:
+            _reject_oversized("slot_length", params.slot_length, within, kind="length")
         return BoreShape(params.slot_length, params.slot_angle, 0.0, 0.0)
     return BoreShape(0.0, 0.0, params.widening_diameter, params.widening_depth)
 
@@ -481,7 +490,7 @@ def bore_shape(params: DrillParams) -> BoreShape:
 def drill_hole(ctx: OpContext) -> OpResult:
     params = cast(DrillParams, ctx.params)
     source = ctx.inputs[0]
-    shape = bore_shape(params)
+    shape = bore_shape(params, within=source.mesh)
     result = drill(
         as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
@@ -674,11 +683,11 @@ def _feature_solid(
         # Zylinder träfe seine geraden Flanken nicht. Aufgezogen wird in der
         # **lokalen** Ebene; die Drehung in die Achse macht der gemeinsame
         # Schluss unten, wie bei Zylinder und Kegel auch.
-        from app.core.geom.prepare import slot_profile, slot_travel
+        from app.core.geom.prepare import slot_profile
         from app.core.geom.sketch_solid import extrude_profile
 
         measured = float(feature.params.get("diameter", 0.0)) * scale
-        travel = slot_travel(diameter=measured, length=float(feature.params.get("length", 0.0)))
+        travel = max(0.0, float(feature.params.get("length", 0.0)) - measured)
         if travel <= EPS_GEOM:
             body = trimesh.creation.cylinder(
                 radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
@@ -1079,7 +1088,9 @@ def _chain_plug(
     along = (points - centre) @ axis
     reach = float(along.max() - along.min())
     across = points - centre - np.outer(along, axis)
-    radius = float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP
+    radius = (float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP) / math.cos(
+        math.pi / FEATURE_SECTIONS
+    )
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return None
 
@@ -1403,7 +1414,9 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
     # in der Länge. Der Radius kommt aus der Ausdehnung der Fläche quer zur
     # Achse, damit auch eine Senkung hineinpasst, die weiter ist als ihr Loch.
     across = points - measured - np.outer(along, direction)
-    radius = float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP * 2.0
+    radius = (float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP * 2.0) / math.cos(
+        math.pi / FEATURE_SECTIONS
+    )
 
     cut = trimesh.creation.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
     cut.apply_transform(
@@ -1456,6 +1469,23 @@ def _closed_at(
     Luft.
     """
     tool = _tool_for(mesh, feature, centre, alone=alone)
+    if cavity and feature.kind == "hole":
+        # Der Innenkreis des Stopfens muss alle ursprünglichen Eckpunkte
+        # einschließen, auch wenn deren Tessellierung eine andere Teilung hat.
+        radius = _bore_number(feature, "diameter") / 2.0
+        if feature.face_indices:
+            points = np.asarray(mesh.raw.triangles)[list(feature.face_indices)].reshape(-1, 3)
+            axis = np.asarray(_bore_vector(feature, "axis"))
+            axis /= np.linalg.norm(axis)
+            relative = points - centre
+            radius = max(
+                radius,
+                float(np.linalg.norm(relative - np.outer(relative @ axis, axis), axis=1).max()),
+            )
+        diameter = 2.0 * radius / math.cos(math.pi / FEATURE_SECTIONS)
+        tool = _feature_solid(
+            feature, centre, oversize=diameter - _bore_number(feature, "diameter") + FEATURE_OVERLAP
+        )
     if cavity:
         # **Erst an den Mündungen, sonst an der Hülle.** Die Merkmalsfläche
         # kennt die Tiefe des Hohlraums genau; die konvexe Hülle kennt nur den
@@ -1465,6 +1495,24 @@ def _closed_at(
         tool = boolean(
             "intersection", [tool, limit], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
+        if feature.params.get("open"):
+            # Die axiale Begrenzung kennt den seitlichen Außenrand nicht.
+            mouth = np.asarray(_bore_vector(feature, "mouth_centre"))
+            outward = np.asarray(_bore_vector(feature, "opening_normal"))
+            reach = mesh.bounds.diagonal * 2.0
+            envelope = trimesh.creation.box(extents=(reach * 2.0, reach * 2.0, reach))
+            envelope.apply_translation((0.0, 0.0, -reach / 2.0))
+            envelope.apply_transform(
+                trimesh.geometry.align_vectors([0.0, 0.0, 1.0], outward)  # type: ignore[no-untyped-call]
+            )
+            envelope.apply_translation(mouth)
+            tool = boolean(
+                "intersection",
+                [tool, MeshData.of(envelope)],
+                quality=quality,
+                seed=seed,
+                cancelled=cancelled,
+            ).mesh
     return boolean(
         "union" if cavity else "difference",
         [mesh, tool],
@@ -1485,22 +1533,28 @@ def _tool_for(
 ) -> MeshData:
     """Der Werkzeugkörper dieses Merkmals, an ``centre`` gesetzt.
 
-    Zwei Wege, und welcher gilt, entscheidet die Merkmalsart: Wo die
-    Kennzahlen den Körper genau beschreiben (Bohrung, Zapfen), baut
-    :func:`_feature_solid` ihn daraus — das trägt auch für eine durchgehende
-    Bohrung, deren Ausschnitt **zwei** Randringe hat und die ein Deckel aus
-    einem Fächer deshalb nicht schließt. Sonst kommt er aus den Flächen des
-    Merkmals (:func:`_feature_body`) und wird verschoben, gedreht und
-    skaliert wie er ist.
+    Bei einer Bohrung wird der tatsächliche Wandmantel an seinen beiden
+    Randringen geschlossen. Sonst baut :func:`_feature_solid` parametrische
+    Merkmale aus ihren Kennzahlen; übrige Formen kommen aus
+    :func:`_feature_body`. Der Körper wird anschließend verschoben, gedreht
+    und skaliert.
 
     Baut sich der Körper nicht sicher, endet der Aufruf mit einem Satz, der
     den **heutigen** Grund nennt und nicht den von gestern — siehe
     :data:`_NO_OWN_BODY`.
     """
-    if feature.kind in PARAMETRIC_KINDS:
+    # Beim Versetzen zählt der vorhandene Sehnenzug, nicht der Radius durch
+    # die Dreiecksmitten. Sonst schrumpft eine fremd tessellierte Bohrung.
+    built = (
+        _body_from_faces(mesh, feature.face_indices, allowed_rings=(2,))
+        if feature.kind == "hole"
+        else None
+    )
+    if built is None and feature.kind in PARAMETRIC_KINDS:
         return _feature_solid(feature, centre, scale=scale, axis=axis)
 
-    built = _feature_body(mesh, feature, alone=alone)
+    if built is None:
+        built = _feature_body(mesh, feature, alone=alone)
     if built is None:
         raise ValidationError(
             field="at_feature",
@@ -2405,6 +2459,8 @@ def _asked_about_sections(ctx: OpContext, chain: Sequence[Feature]) -> str:
     ).format(count=len(chain))
     choices = [str(_("Den ganzen Hohlraum entfernen")), str(_("Nur das gewählte Merkmal"))]
     answer = ctx.ask(question, choices)
+    if answer not in choices:
+        raise InternalError(detail="the cavity section question returned an unknown choice")
     return SECTIONS_TOGETHER if answer == choices[0] else SECTIONS_ALONE
 
 
@@ -2531,7 +2587,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
         # **Steht der Hohlraum allein, ist sein zweiter Randring sein Boden.** Nach
         # dem Verschließen der Bohrung darunter ist die Senkung ein Kegelstumpf mit
         # Material unter sich; die Ringzahl allein sagt das nicht (:func:`_stands_alone`).
-        allein = _stands_alone(body, feature, source.features)
+        stands_alone = _stands_alone(body, feature, source.features)
         ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
         closed = _closed_at(
             body,
@@ -2541,7 +2597,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
-            alone=allein,
+            alone=stands_alone,
         )
         gone = (feature.id,)
 
@@ -2663,7 +2719,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
 
     turned_axis = _turned(feature, params.axis, params.angle)
     cavity = is_a_cavity(feature)
-    allein = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
+    stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         as_mesh_data(source.mesh),
@@ -2673,14 +2729,16 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
-        alone=allein,
+        alone=stands_alone,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
         [
             closed.mesh,
-            _tool_for(as_mesh_data(source.mesh), feature, centre, axis=turned_axis, alone=allein),
+            _tool_for(
+                as_mesh_data(source.mesh), feature, centre, axis=turned_axis, alone=stands_alone
+            ),
         ],
         quality=ctx.quality,
         seed=ctx.seed,
@@ -2853,7 +2911,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
     cavity = is_a_cavity(feature)
-    allein = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
+    stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         as_mesh_data(source.mesh),
@@ -2863,14 +2921,14 @@ def resize_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
-        alone=allein,
+        alone=stands_alone,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
         [
             closed.mesh,
-            _tool_for(as_mesh_data(source.mesh), feature, centre, scale=scale, alone=allein),
+            _tool_for(as_mesh_data(source.mesh), feature, centre, scale=scale, alone=stands_alone),
         ],
         quality=ctx.quality,
         seed=ctx.seed,
@@ -3012,6 +3070,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     previous = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
     _reject_oversized("diameter", params.diameter, source.mesh)
+    through = bool(feature.params.get("through", False))
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
     # **Gesucht wird danach, wo das Merkmal jetzt sitzt.** Beide Kerne ordnen
     # die neue Geometrie über Maß *und* Lage wieder ihrem Namen zu; mit der
@@ -3054,7 +3113,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 position=centre,
                 direction=axis,
                 diameter=cut,
-                depth=depth,
+                depth=_through_bore_depth(source.mesh, centre, axis) if through else depth,
             )
         else:
             solid = edit.resize_bore(
@@ -3096,16 +3155,20 @@ def resize_hole(ctx: OpContext) -> OpResult:
             nothing = without_effect(source.mesh, solid, change, ctx.profile)
             if nothing is not None:
                 findings.append(nothing)
-        findings.extend(over_the_edge_along(source.mesh, centre, axis, cut))
+        findings.extend(
+            over_the_edge_along(source.mesh, centre, axis, cut, body=as_mesh_data(source.mesh))
+        )
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
         findings.extend(_widening_findings(source, feature, params.diameter))
-        exact_features = _preserved_exact_features(
+        exact_features, recognised = _preserved_exact_features(
             source.features,
             features_of(solid),
             looked_for,
             cut,
             solid,
         )
+        if not recognised:
+            findings.append(_bore_no_longer_a_feature(feature, cut))
         return OpResult(
             outputs=[
                 dataclasses.replace(
@@ -3143,7 +3206,6 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
         body = closing.mesh
         closed_first = list(closing.findings)
-    through = bool(feature.params.get("through", False))
     if moved_hole:
         # **An der neuen Stelle wird gebohrt, nicht geändert.** Die alte ist
         # eben zugegangen; dort, wo die Bohrung hinsoll, ist volles Material.
@@ -3424,14 +3486,9 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 },
             )
     _reject_oversized("slot_length", params.slot_length, source.mesh, kind="length")
-    # Wo das Langloch schon eines ist, liegt seine Richtung fest — sie wird zur
-    # Vorgabe, damit ein Zug an der Länge es nicht quer stellt. Ein
-    # ausdrücklich eingetragener Winkel gewinnt trotzdem: Wer ihn setzt, meint
-    # ihn (die Vorgabe des Feldes ist null, und null ist am bestehenden
-    # Langloch keine Aussage, sondern seine eigene Richtung).
+    # Die Vorbelegung am Merkmal liefert dessen Richtung. Jeder übergebene
+    # Winkel gilt unverändert, auch null; sonst widerspricht der Schnitt dem Griff.
     angle = params.slot_angle
-    if feature.kind == "slot" and abs(angle) <= EPS_GEOM:
-        angle = slot_angle_of(feature, axis)
     # Die Merkmale, die bleiben — ohne das, aus dem gerade ein Langloch wird.
     carried = {
         name: entry
@@ -3464,6 +3521,17 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # alten Stelle das Gegenteil des Merkmals, an der neuen das Merkmal selbst.
     measured = _bore_vector(feature, "centre")
     moved = not all(is_close(a, b) for a, b in zip(centre, measured, strict=True))
+    # **Die Zugabe gilt dem ersten Zug.** Sie hält den Langlochkörper von der
+    # runden Bohrungswand fern, an die er sich sonst entlang zweier Linien
+    # legte (:data:`prepare.FEATURE_OVERLAP`). An einem Langloch, das schon
+    # eines ist, gibt es diese Wand nicht mehr — die Flanken des Werkzeugs
+    # liegen auf den Flanken des Lochs, und das rechnen beide Kerne robust.
+    # Mit der Zugabe wurde das Loch dagegen bei **jedem** Zug breiter:
+    # gemessen 11.09.2026 am Netz 5,2057 → 5,2213 → 5,2371 an einer Bohrung
+    # von 5,1901, am exakten Körper je Zug genau die Zugabe (Fund des
+    # Reviews). Wer ein Langloch dreimal nachzieht, soll dieselbe Schraube
+    # hindurchbekommen wie nach dem ersten Mal.
+    overlap = FEATURE_OVERLAP if feature.kind == "hole" else 0.0
 
     if source.kind == "brep":
         from app.core.brep import edit
@@ -3488,16 +3556,24 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 direction=axis,
                 diameter=diameter,
                 depth=depth,
+                length=_bore_number(feature, "length") if feature.kind == "slot" else 0.0,
+                angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
+                opening=(
+                    _bore_vector(feature, "mouth_centre"),
+                    _bore_vector(feature, "opening_normal"),
+                )
+                if feature.params.get("open")
+                else None,
             )
         solid = edit.slot_bore(
             started,
             position=centre,
             direction=axis,
             diameter=diameter,
-            depth=depth,
+            depth=_through_bore_depth(started, centre, axis) if through else depth,
             length=params.slot_length,
             angle_deg=angle,
-            overlap=FEATURE_OVERLAP,
+            overlap=overlap,
         )
         if solid.volume <= EPS_GEOM or solid.face_count == 0:
             raise GeometryError(
@@ -3516,13 +3592,28 @@ def slot_hole(ctx: OpContext) -> OpResult:
         if nothing is not None:
             findings.append(nothing)
         findings.extend(_widening_findings(source, feature, diameter))
+        # **Und die Kantenfrage, an beiden Enden** — wie der Netz-Zwilling
+        # (``prepare._edge_findings``) und wie ``drill_brep_hole`` mit
+        # Langloch. Bis zum 11.09.2026 stellte dieser Zweig sie als einziger
+        # nicht: Eine Bohrung Ø 6, neun Millimeter vor der Kante, auf 20
+        # gezogen, meldete am Netz ``bore.over_the_edge`` und am exakten
+        # Körper nichts (Fund des Reviews). Ohne Netz bleibt es beim
+        # Hüllquader, und der ist dort zu streng und nie zu milde.
+        from app.core.sketch.planes import frame_of
+
+        travel = slot_travel(diameter=diameter, length=params.slot_length)
+        for end in slot_ends(centre, frame_of(axis, centre), travel, angle):
+            open_flank = over_the_edge_along(
+                source.mesh, end, axis, diameter, body=as_mesh_data(source.mesh)
+            )
+            if open_flank:
+                findings.extend(open_flank)
+                break
         exact_features = features_of(solid)
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den
-        # Rand des Körpers zieht, bekommt einen offenen Schlitz; wer quer über
-        # das eigene Langloch zieht, ein Kreuz. Beides ist gültige Geometrie,
-        # und beides ist kein Langloch mehr — im Objektbaum stehen danach
-        # Verrundungen, und die Handlungen eines Langlochs stehen an keiner.
+        # Rand zieht, behält eine erkennbare Randöffnung als Langloch. Ein
+        # Kreuz über dem eigenen Schnitt kann dagegen seinen Bezug verlieren.
         #
         # **Gesucht wird das eine, nicht irgendeines.** Hier stand ``any(kind
         # == "slot")``, und das schwieg, sobald ein zweites Langloch im Körper
@@ -3535,6 +3626,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             length=params.slot_length,
             diagonal=solid.bounds.diagonal,
             body_centre=solid.bounds.centre,
+            angle=angle,
         )
         if pulled_exact is None:
             findings.append(_slot_no_longer_a_feature(feature, params.slot_length))
@@ -3578,13 +3670,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
         position=centre,
         direction=axis,
         diameter=diameter,
-        depth=exact_depth,
+        depth=_through_bore_depth(body, centre, axis) if through else exact_depth,
         through=through,
         length=params.slot_length,
         angle_deg=angle,
         profile=ctx.profile,
         quality=ctx.quality,
         seed=ctx.seed,
+        overlap=overlap,
     )
     # **Gesucht wird das Langloch, das gerade entstanden ist** — für zwei
     # verschiedene Antworten. Findet es sich nicht, sagt es der Befund unten
@@ -3609,6 +3702,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         length=params.slot_length,
         diagonal=result.mesh.bounds.diagonal,
         body_centre=result.mesh.bounds.centre,
+        angle=angle,
     )
     features = (
         {**carried, feature.id: pulled_feature}
@@ -3944,6 +4038,60 @@ def _expected_bore(feature: Feature, diameter: float) -> Feature:
     )
 
 
+def _through_bore_depth(body: Mesh, centre: Vec3, axis: Vec3) -> float:
+    """Ein symmetrischer Schneidkörper, der die gesamte Zielhülle durchdringt."""
+    unit = np.asarray(axis, dtype=float)
+    unit /= np.linalg.norm(unit)
+    bounds = body.bounds
+    offset = abs(float((np.asarray(bounds.centre) - centre) @ unit))
+    half_span = float(np.asarray(bounds.size) @ np.abs(unit)) / 2.0
+    return 2.0 * (offset + half_span + BOOLEAN_OVERLAP)
+
+
+def _bore_match_id(
+    detected: Mapping[str, Feature],
+    expected: Feature,
+    body_centre: Vec3,
+    diagonal: float,
+) -> str | None:
+    """Vergleicht Durchgänge entlang ihrer Achse, Sacklöcher an ihrer Mitte."""
+    from app.core.perceive.matching import match
+
+    opened = [
+        name
+        for name, candidate in detected.items()
+        if candidate.params.get("open")
+        and _sits_at(candidate, expected, diagonal)
+        and abs(_bore_number(candidate, "diameter") - _bore_number(expected, "diameter"))
+        <= max(FEATURE_OVERLAP, _bore_number(expected, "diameter") * _SAME_LENGTH)
+    ]
+    if len(opened) == 1:
+        return opened[0]
+    candidates: dict[str, Feature] = {}
+    for name, candidate in detected.items():
+        if candidate.kind != expected.kind or not _sits_at(candidate, expected, diagonal):
+            continue
+        # Eine dickere Zielwand verschiebt die Mitte entlang derselben Achse.
+        # Nur für belegte Durchgänge ist diese Koordinate frei; Nachbarlöcher
+        # und voneinander getrennte Sacklöcher bleiben unterscheidbar.
+        if expected.params.get("through") and candidate.params.get("through"):
+            axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
+            axis /= np.linalg.norm(axis)
+            centre = np.asarray(_bore_vector(candidate, "centre"), dtype=float)
+            offset = float((centre - _bore_vector(expected, "centre")) @ axis)
+            candidate = dataclasses.replace(
+                candidate,
+                params={
+                    **candidate.params,
+                    "centre": tuple(float(v) for v in centre - offset * axis),
+                },
+            )
+        candidates[name] = candidate
+    return match({expected.id: expected}, candidates, body_centre, diagonal).mapping.get(
+        expected.id
+    )
+
+
 def _recognised_resized_feature(
     mesh: MeshData, feature: Feature, diameter: float
 ) -> Feature | None:
@@ -3969,22 +4117,15 @@ def _recognised_resized_feature(
     das ist die Wahrheit über die Lage und nicht über das Programm.
     """
     from app.core.perceive.features import detect
-    from app.core.perceive.matching import match
 
     detected = detect(mesh)
     expected = _expected_bore(feature, diameter)
-    matched = match(
-        {feature.id: expected},
-        detected,
-        mesh.bounds.centre,
-        mesh.bounds.diagonal,
-    )
-    found_id = matched.mapping.get(feature.id)
+    found_id = _bore_match_id(detected, expected, mesh.bounds.centre, mesh.bounds.diagonal)
     if found_id is None:
         return None
     # **Und die Zuordnung wird nachgeprüft** — derselbe Fund wie an
     # ``_recognised_slot``, nur zwei Wochen älter: Wer eine Bohrung über den
-    # Rand versetzt, hat danach einen offenen Halbkreis und keine Bohrung.
+    # Rand versetzt, hat danach einen offenen Ausschnitt statt einer Bohrung.
     # ``match`` traf dann die Nachbarbohrung acht Millimeter daneben, die trug
     # von da an die Kennung der versetzten, und ``resize_hole.feature_lost``
     # blieb aus (gemessen 11.09.2026 an zwei Ø-4-Bohrungen bei y = 46 und 54,
@@ -4012,9 +4153,30 @@ def _sits_at(candidate: Feature, expected: Feature, diagonal: float) -> bool:
     from app.core.units import match_tolerance
 
     tolerance = match_tolerance(diagonal)
-    found_centre = _bore_vector(candidate, "centre")
-    wanted_centre = _bore_vector(expected, "centre")
-    return all(abs(a - b) <= tolerance for a, b in zip(found_centre, wanted_centre, strict=True))
+    if candidate.params.get("open"):
+        axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
+        axis /= np.linalg.norm(axis)
+        arc = np.asarray(_bore_vector(candidate, "arc_centre"))
+        middle = np.asarray(_bore_vector(expected, "centre"))
+        travel = (
+            max(0.0, float(expected.params.get("length", 0.0)) - _bore_number(expected, "diameter"))
+            if expected.kind == "slot"
+            else 0.0
+        )
+        direction = np.asarray(expected.params.get("direction", (1.0, 0.0, 0.0)))
+        for sign in (-1.0, 1.0):
+            offset = arc - (middle + sign * travel / 2.0 * direction)
+            if expected.params.get("through") and candidate.params.get("through"):
+                offset -= float(offset @ axis) * axis
+            if np.linalg.norm(offset) <= tolerance:
+                return True
+        return False
+    offset = np.asarray(_bore_vector(candidate, "centre")) - _bore_vector(expected, "centre")
+    if expected.params.get("through") and candidate.params.get("through"):
+        axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
+        axis /= np.linalg.norm(axis)
+        offset -= float(offset @ axis) * axis
+    return bool(np.all(np.abs(offset) <= tolerance))
 
 
 def _recognised_slot(
@@ -4026,6 +4188,7 @@ def _recognised_slot(
     length: float,
     diagonal: float,
     body_centre: Vec3,
+    angle: float,
 ) -> Feature | None:
     """Sucht das eben gezogene Langloch und hängt den bestehenden Namen daran.
 
@@ -4048,30 +4211,39 @@ def _recognised_slot(
     :func:`brep.features.features_of` —, damit beide Kerne dieselbe Frage
     stellen.
 
-    **Und ``None`` ist eine Antwort, kein Fehler.** Ein Langloch, das über den
-    Rand des Körpers hinausgezogen wird, ist hinterher ein offener Schlitz;
-    eines, das quer über sich selbst gezogen wird, ein Kreuz. Beides ist
-    gültige Geometrie und beides ist kein Langloch mehr — gemessen am
-    11.09.2026: über den Rand bleiben ein bis drei Verrundungen stehen, über
-    sich selbst vier. Der Aufrufer behält den Körper und sagt, dass das Merkmal
-    fort ist (Regel 17).
+    ``None`` heißt, dass der Schnitt keine eindeutige Langlochform mehr hat,
+    etwa nach dem Kreuzen mit sich selbst. Ein zum Rand offener Ausschnitt
+    bleibt dagegen anhand seines verbliebenen Innenbogens zuordenbar.
     """
-    from app.core.perceive.matching import match
+    from app.core.sketch.planes import frame_of
 
+    frame = frame_of(_bore_vector(feature, "axis"), centre)
+    direction = tuple(
+        math.cos(math.radians(angle)) * frame.x_axis[i]
+        + math.sin(math.radians(angle)) * frame.y_axis[i]
+        for i in range(3)
+    )
     expected = dataclasses.replace(
         feature,
         kind="slot",
-        params={**feature.params, "centre": centre, "diameter": diameter, "length": length},
+        params={
+            **feature.params,
+            "centre": centre,
+            "diameter": diameter,
+            "length": length,
+            "direction": direction,
+        },
     )
-    matched = match({feature.id: expected}, dict(detected), body_centre, diagonal)
-    found_id = matched.mapping.get(feature.id)
+    found_id = _bore_match_id(detected, expected, body_centre, diagonal)
     if found_id is None:
         return None
     candidate = detected[found_id]
     if candidate.kind != "slot" or not _sits_at(candidate, expected, diagonal):
         return None
     found_length = _bore_number(candidate, "length")
-    if abs(found_length - length) > max(EPS_DISPLAY, length * _SAME_LENGTH):
+    if not candidate.params.get("open") and abs(found_length - length) > max(
+        EPS_DISPLAY, length * _SAME_LENGTH
+    ):
         return None
     return dataclasses.replace(candidate, id=feature.id, provenance="generated", created_by=None)
 
@@ -4080,12 +4252,8 @@ def _slot_no_longer_a_feature(feature: Feature, length: float) -> Finding:
     """Der Zug ist gefahren, aber ein Langloch steht danach nicht mehr da.
 
     Der Satz sagt beides — die Geometrie ist geschnitten, der Bezug ist fort —
-    und nennt den Rückweg. Die zwei Fälle dahinter sind gemessen: Wer über den
-    Rand des Körpers hinauszieht, bekommt einen offenen Schlitz; wer quer über
-    das eigene Langloch zieht, ein Kreuz. Beides ist gewollt machbar, aber
-    keines von beiden ist noch ein Langloch, und wer es weiter anklicken will,
-    findet nichts (Robert, 11.09.2026: „auf einem langloch 2 werden und nicht
-    mehr wählbar").
+    und nennt den Rückweg. Eine gekreuzte Aussparung ist weiterhin gültige
+    Geometrie, trägt aber nicht unbedingt einen eindeutigen Langlochbezug.
     """
     return Finding(
         code="slot_hole.feature_lost",
@@ -4122,33 +4290,20 @@ def _preserved_exact_features(
     feature: Feature,
     diameter: float,
     solid: Mesh,
-) -> dict[str, Feature]:
+) -> tuple[dict[str, Feature], bool]:
     """Ordnet die exakte Topologie neu zu, mit dem gewählten Maß als Absicht."""
     from app.core.perceive.matching import apply_mapping, match
 
-    expected = {**previous, feature.id: _expected_bore(feature, diameter)}
     bounds = solid.bounds
+    wanted = _expected_bore(feature, diameter)
+    found_id = _bore_match_id(detected, wanted, bounds.centre, bounds.diagonal)
+    expected = {name: entry for name, entry in previous.items() if name != feature.id}
+    if found_id is not None:
+        expected[feature.id] = dataclasses.replace(detected[found_id], id=feature.id)
     matched = match(expected, detected, bounds.centre, bounds.diagonal)
-    if feature.id not in matched.mapping:
-        # **Englisch und ohne Rat an den Kunden**, anders als der Mesh-Weg
-        # darüber. Hier ist die Absage berechtigt: Der exakte Kern führt
-        # Flächen und Kanten und keine Dreiecke, und eine zylindrische Fläche
-        # bleibt auffindbar, gleich wie klein sie wird. Gemessen an einem
-        # exakten Quader mit Bohrung — 8,0 mm auf 0,2 mm verkleinert, das
-        # Merkmal steht danach unverändert da, wo der Mesh-Weg seines verliert.
-        # Tritt der Fall hier doch ein, ist etwas geschehen, das nicht
-        # vorgesehen war, und dann gehört er in den Fehlerbericht.
-        #
-        # Der Satz stand übersetzt hier, und das war der Fehler: Von 26
-        # ``InternalError`` im Programm trugen 25 englischen Detailtext und
-        # genau dieser einen deutschen. Wer einen Programmfehler übersetzt,
-        # hat einen Bedienfall als Programmfehler geschrieben — der Zwilling
-        # im Mesh-Weg war genau das (Hinweis 3d-druck-a0).
-        raise InternalError(
-            detail="the resized exact bore could not be matched back to its feature",
-            values={"feature": feature.id, "diameter": format_length(diameter)},
-        )
-    return apply_mapping(detected, matched)
+    if found_id is None:
+        matched.orphaned = (*matched.orphaned, feature.id)
+    return apply_mapping(detected, matched, previous=previous), found_id is not None
 
 
 def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> None:

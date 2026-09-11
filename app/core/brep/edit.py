@@ -631,6 +631,27 @@ def slot_bore(
     Bohrungswand von der neuen fern (§39) und kommt vom Aufrufer, damit beide
     Kerne dieselbe Zahl verwenden.
     """
+    tool = _slot_tool(position, direction, diameter, depth, length, angle_deg, overlap)
+    result = boolean("difference", [solid, tool])
+    # Beim Nachziehen liegen die alten und neuen Flanken in derselben Ebene.
+    # Ihre künstlichen Teilungsnähte gehören nicht zum Langlochmantel.
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+
+    joined = ShapeUpgrade_UnifySameDomain(result.shape, True, True, False)
+    joined.Build()
+    return result.replacing(joined.Shape())
+
+
+def _slot_tool(
+    position: Vec3,
+    direction: Vec3,
+    diameter: float,
+    depth: float,
+    length: float,
+    angle_deg: float,
+    overlap: float,
+) -> Solid:
+    """Der vollständige Langlochumriss zum Schneiden und zum Wiederauffüllen."""
     from app.core.brep.profiles import extrude
     from app.core.geom.prepare import slot_profile, slot_travel
     from app.core.sketch.planes import frame_of
@@ -653,7 +674,7 @@ def slot_bore(
             tuple(float(position[i]) - frame.normal[i] * depth / 2.0 for i in range(3)),
         ),
     )
-    tool = extrude(
+    return extrude(
         slot_profile(
             radius=(diameter + overlap) / 2.0,
             travel=slot_travel(diameter=diameter, length=length),
@@ -662,7 +683,6 @@ def slot_bore(
         depth,
         frame=floor,
     )
-    return boolean("difference", [solid, tool])
 
 
 def resize_bore(
@@ -721,6 +741,9 @@ def fill_bore(
     direction: Vec3,
     diameter: float,
     depth: float,
+    length: float = 0.0,
+    angle_deg: float = 0.0,
+    opening: tuple[Vec3, Vec3] | None = None,
 ) -> Solid:
     """Schließt eine erkannte Bohrung wieder — das Gegenstück zum Bohren.
 
@@ -739,7 +762,28 @@ def fill_bore(
     und die tesselliert OpenCASCADE ohne Sehnenfehler; eine Zugabe dort ließe
     einen Zapfen stehen, den beim exakten Körper nichts wieder abschneidet.
     """
-    return boolean("union", [solid, _centred_bore(position, direction, diameter, depth, EPS_GEOM)])
+    if length > diameter + EPS_GEOM:
+        tool = _slot_tool(position, direction, diameter, depth, length, angle_deg, 2.0 * EPS_GEOM)
+    else:
+        tool = _centred_bore(position, direction, diameter, depth, EPS_GEOM)
+    if opening is not None:
+        # Der Stopfen endet an der tatsächlichen Außenebene. Sonst wächst
+        # beim Versetzen einer Randöffnung Material außerhalb des Bauteils.
+        from app.core.sketch.planes import frame_of
+
+        mouth, outward = opening
+        frame = frame_of((-outward[0], -outward[1], -outward[2]), mouth)
+        reach = solid.bounds.diagonal * 2.0
+        matrix = cast(
+            Transform,
+            (
+                *((frame.x_axis[i], frame.y_axis[i], frame.normal[i], mouth[i]) for i in range(3)),
+                (0.0, 0.0, 0.0, 1.0),
+            ),
+        )
+        envelope = transformed(box(reach * 2.0, reach * 2.0, reach), matrix)
+        tool = boolean("intersection", [tool, envelope])
+    return boolean("union", [solid, tool])
 
 
 def cut_bore(

@@ -41,7 +41,7 @@ import numpy as np
 
 from app.core.geom.mesh import MeshData
 from app.core.types import Feature, FeatureId, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
     from app.core.perceive.features import CylinderFit
@@ -158,8 +158,6 @@ def slots_instead_of_half_bores(
     """
     slots = find_slots(mesh, fillets, check_cancelled=check_cancelled)
     slots.extend(slots_from_stadiums(mesh, stadiums))
-    if not slots:
-        return dict(found)
     # Nach Position sortiert, damit die Nummer nicht daran hängt, über welchen
     # der zwei Wege ein Langloch gekommen ist (§21.2).
     slots.sort(key=lambda slot: tuple(round(value, 3) for value in slot.centre))
@@ -194,6 +192,145 @@ def slots_instead_of_half_bores(
             },
             face_indices=slot.face_indices,
         )
+    return open_slots_instead_of_fillets(mesh, kept, fillets, check_cancelled=check_cancelled)
+
+
+def open_slots_instead_of_fillets(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    fillets: Sequence[tuple[Any, list[int]]],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Erkennt angeschnittene Rundbohrungen und Langlöcher an einem ebenen Außenrand.
+
+    Die Rundwand darf über tangentiale Flanken weiterlaufen. Ihre beiden
+    offenen Ränder müssen an derselben Außenebene enden; eine verrundete
+    Taschenecke erfüllt diesen Vertrag nicht. Die Länge beschreibt den
+    kleinsten vollständigen Werkzeugumriss bis zur Mündung, nicht einen
+    geratenen zweiten Bogen außerhalb des Körpers.
+    """
+    body = mesh.raw
+    normals = np.asarray(body.face_normals)
+    triangles = np.asarray(body.triangles)
+    adjacency = np.asarray(body.face_adjacency)
+    edges = np.asarray(body.face_adjacency_edges)
+    vertices = np.asarray(body.vertices)
+    tolerance = weld_tolerance(mesh.bounds.diagonal)
+    kept = dict(found)
+    covered = {face for f in kept.values() if f.kind == "slot" for face in f.face_indices}
+    for fit, patch in fillets:
+        if check_cancelled is not None:
+            check_cancelled()
+        if not fit.inward or not patch or covered.intersection(patch):
+            continue
+        axis = np.asarray(positive_axis(fit.axis))
+        centre = np.asarray(fit.centre)
+        # Der Vorfit misst Facettenschwerpunkte. Für Flankentangenz und das
+        # Werkzeugmaß zählt der Kreis durch die tatsächlichen Eckpunkte.
+        arc_points = vertices[np.unique(np.asarray(body.faces)[patch])] - centre
+        radial = arc_points - np.outer(arc_points @ axis, axis)
+        u = radial[0] / np.linalg.norm(radial[0])
+        v = np.cross(axis, u)
+        flat = np.column_stack((radial @ u, radial @ v))
+        solved, _, rank, _ = np.linalg.lstsq(
+            np.column_stack((2.0 * flat, np.ones(len(flat)))),
+            np.sum(flat * flat, axis=1),
+            rcond=None,
+        )
+        if rank != 3:
+            continue
+        radius = math.sqrt(max(0.0, float(solved[2] + solved[:2] @ solved[:2])))
+        centre = centre + solved[0] * u + solved[1] * v
+        if radius <= tolerance:
+            continue
+        # Nur ebene, zur Rundwand tangentiale Nachbarn erweitern den Mantel.
+        distances = np.einsum("ijk,ik->ij", triangles - centre, normals)
+        tangent = (np.abs(normals @ axis) <= ACROSS_THE_AXIS) & (
+            np.max(np.abs(distances + radius), axis=1) <= tolerance
+        )
+        relative = triangles - centre
+        radial_points = relative - np.outer((relative @ axis).ravel(), axis).reshape(relative.shape)
+        on_arc = (
+            np.max(np.abs(np.linalg.norm(radial_points, axis=2) - radius), axis=1) <= tolerance
+        ) & (np.einsum("ij,ij->i", radial_points.mean(axis=1), normals) < 0.0)
+        chosen = np.zeros(len(normals), dtype=bool)
+        chosen[patch] = True
+        while True:
+            rim = chosen[adjacency[:, 0]] != chosen[adjacency[:, 1]]
+            neighbours = adjacency[rim].reshape(-1)
+            added = neighbours[(tangent[neighbours] | on_arc[neighbours]) & ~chosen[neighbours]]
+            if not len(added):
+                break
+            chosen[added] = True
+        rim = chosen[adjacency[:, 0]] != chosen[adjacency[:, 1]]
+        vectors = vertices[edges[:, 1]] - vertices[edges[:, 0]]
+        lengths = np.linalg.norm(vectors, axis=1)
+        axial = np.abs(vectors @ axis) >= PARALLEL_AXES * lengths
+        boundary = np.flatnonzero(rim & axial & (lengths > tolerance))
+        if len(boundary) < 2:
+            continue
+        neighbours = adjacency[boundary]
+        outside = np.where(chosen[neighbours[:, 0]], neighbours[:, 1], neighbours[:, 0])
+        normal = normals[outside[0]]
+        points = vertices[edges[boundary]].reshape(-1, 3)
+        if np.any(normals[outside] @ normal < PARALLEL_AXES) or np.ptp(points @ normal) > tolerance:
+            continue
+        # Genau zwei verschiedene Randlinien, auch bei längs unterteilten Wänden.
+        projected = points - np.outer(points @ axis, axis)
+        unique = np.unique(np.round(projected / tolerance).astype(np.int64), axis=0)
+        if len(unique) != 2:
+            continue
+        corners = triangles[chosen].reshape(-1, 3)
+        low, high = float(np.min(corners @ axis)), float(np.max(corners @ axis))
+        depth = high - low
+        centre = centre + ((low + high) / 2.0 - float(centre @ axis)) * axis
+        mouth = points.mean(axis=0)
+        mouth += (float(centre @ axis) - float(mouth @ axis)) * axis
+        # Zwei Flanken eines Kreuzlochs liegen ebenfalls in einer Ebene.
+        # Hinter ihrer vermeintlichen Mündung liegt aber wieder Material.
+        reach = mesh.bounds.diagonal * 2.0
+        if not _reaches_through(body, mouth + normal * reach / 2.0, normal, axis, 0.0, reach):
+            continue
+        flank_faces = np.flatnonzero(chosen & ~on_arc)
+        travel = float(np.linalg.norm(mouth - centre)) if len(flank_faces) else 0.0
+        direction = (mouth - centre) / travel if travel > tolerance else normal
+        middle = centre + direction * travel / 2.0
+        indices = tuple(int(face) for face in np.flatnonzero(chosen))
+        number = 1
+        while f"slot_{number}" in kept:
+            number += 1
+        name = f"slot_{number}"
+        kept = {
+            key: feature
+            for key, feature in kept.items()
+            if not (
+                feature.kind in SWALLOWED_BY_A_SLOT
+                and feature.face_indices
+                and set(indices).issuperset(feature.face_indices)
+            )
+        }
+        kept[name] = Feature(
+            id=name,
+            kind="slot",
+            provenance="detected",
+            face_indices=indices,
+            params={
+                "diameter": radius * 2.0,
+                "length": radius * 2.0 + travel,
+                "travel": travel,
+                "axis": tuple(float(v) for v in axis),
+                "direction": tuple(float(v) for v in direction),
+                "centre": tuple(float(v) for v in middle),
+                "depth": depth,
+                "through": _reaches_through(body, centre, axis, direction, 0.0, depth),
+                "open": True,
+                "arc_centre": tuple(float(v) for v in centre),
+                "mouth_centre": tuple(float(v) for v in mouth),
+                "opening_normal": tuple(float(v) for v in normal),
+            },
+        )
+        covered.update(indices)
     return kept
 
 

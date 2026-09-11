@@ -19,6 +19,58 @@ def _top(mesh):
     return int(np.argmax(np.asarray(mesh.raw.face_normals)[:, 2]))
 
 
+@pytest.mark.parametrize("slotted", [False, True])
+def test_blind_feature_from_below_finds_its_actual_mouth(slotted):
+    """Die kanonisch positive Achse verlegt die Mündung nicht auf den Sacklochboden."""
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import detect
+
+    body = edit.box(40.0, 30.0, 10.0)
+    values = {
+        "position": (0.0, 0.0, 2.0),
+        "direction": (0.0, 0.0, -1.0),
+        "diameter": 6.0,
+        "depth": 4.0,
+    }
+    body = (
+        edit.slot_bore(body, **values, length=16.0, angle_deg=0.0, overlap=0.0)
+        if slotted
+        else edit.cut_bore(body, **values)
+    )
+    mesh = as_mesh_data(body)
+    found = detect(mesh)
+    feature = next(f for f in found.values() if f.kind == ("slot" if slotted else "hole"))
+    seat = placement.seat_of(mesh, feature, found)
+    assert seat is not None
+    prepared, mouth = seat
+    assert mouth[2] == pytest.approx(0.0, abs=0.01)
+    assert sorted(
+        edge.distance for edge in placement.at_point(prepared, mouth).edges
+    ) == pytest.approx([15.0, 20.0])
+
+
+def test_slot_mouth_preview_keeps_its_full_width_and_length(profile):
+    """Die Mündung eines langen Langlochs behält beide Enden und die volle Breite."""
+    from app.core.units import MAX_FACET_SAG
+
+    load_operations()
+    tool = placement.prepare_tool(
+        REGISTRY.get("drill_hole"),
+        {
+            "diameter": 5.0,
+            "slotted": True,
+            "slot_length": 20.0,
+            "slot_angle": 0.0,
+            "compensate": False,
+        },
+        profile,
+    )
+    outline = np.asarray(placement.mouth_outline(tool))
+    assert outline.shape[0] >= 4
+    assert np.ptp(outline, axis=0) == pytest.approx([20.0, 5.0], abs=2.0 * MAX_FACET_SAG)
+
+
 def test_two_real_edges_replace_the_triangulation_diagonal():
     """Eine Deckfläche hat vier Randkanten; die innere Diagonale taugt nicht als Bezug."""
     mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))

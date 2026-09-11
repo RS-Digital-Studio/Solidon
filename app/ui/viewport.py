@@ -686,6 +686,8 @@ def gizmo_sentence(feature: Feature | None) -> str:
     if feature.kind == "face":
         return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
     if feature.kind in slot_feature_kinds():
+        if feature.kind not in movable_feature_kinds():
+            return tr("An den Knöpfen ändern Sie Länge und Richtung des Langlochs.")
         # Zwei Griffe an einem Merkmal, und beide sind zu sehen — der Satz
         # nennt deshalb beide. Ohne die zweite Hälfte sind die Knöpfe daneben
         # eine Form, deren Bedeutung man ausprobieren muss.
@@ -10088,8 +10090,12 @@ class Viewport(QWidget):
         etwas.
         """
         if self._gizmo is None:
-            return None
-        return self._gizmo.origin, self._gizmo.reach
+            return self._slot_handle.clearance if self._slot_handle is not None else None
+        reach = self._gizmo.reach
+        if self._slot_handle is not None:
+            centre, radius = self._slot_handle.clearance
+            reach = max(reach, math.dist(self._gizmo.origin, centre) + radius)
+        return self._gizmo.origin, reach
 
     def gizmo_target(self) -> Feature | None:
         """Die Fläche, an der der Gizmo hängt — oder ``None`` für das Objekt.
@@ -10293,6 +10299,8 @@ class Viewport(QWidget):
             colour=MEASURE_COLOUR,
             release_callback=self._on_slot_released,
             interact_callback=self._on_slot_interacted,
+            cancel_callback=self._on_slot_interaction_cancelled,
+            settle_angle=self._settled_angle,
         )
 
     def _gizmo_scale_for(self, actor: Any, centre: Any = None) -> float:
@@ -10444,6 +10452,11 @@ class Viewport(QWidget):
         Ruhe — eine leere Szene nimmt den Griff weg, aber nicht die
         Entscheidung, dass einer gewünscht ist.
         """
+        self._slot_target = ""
+        self.slot_bar.dismiss()
+        if self._drag_kind == "slot":
+            self._drag_kind = None
+            self.drag_bar.dismiss()
         if self._gizmo is not None:
             self._gizmo.remove()
             self._gizmo = None
@@ -10801,6 +10814,31 @@ class Viewport(QWidget):
         """
         self._drag_kind = "slot"
         self.drag_bar.follow_length(str(tr("Länge")), length)
+        self._update_slot_labels()
+        self._queue_feature_label_layout()
+
+    def _update_slot_labels(self) -> None:
+        """Die beiden L folgen den aktuellen Knöpfen auch während der Vorschau."""
+        if (
+            self._slot_handle is None
+            or self._gizmo_label_base is None
+            or self._gizmo_labels is None
+        ):
+            return
+        centre, _radius = self._slot_handle.clearance
+        indices = [index for index, text in enumerate(self._gizmo_label_texts) if text == "L"]
+        for index, seat in zip(indices, self._slot_handle.knob_seats, strict=True):
+            self._gizmo_label_base[index] = [
+                origin + (point - origin) * GIZMO_LABEL_GAP
+                for origin, point in zip(centre, seat, strict=True)
+            ]
+        self._gizmo_labels.update_labels(self._gizmo_label_base, self._gizmo_label_texts)
+
+    def _on_slot_interaction_cancelled(self) -> None:
+        """Ein Zug zurück zum Ausgangspunkt räumt seine flüchtige Maßleiste ab."""
+        self._drag_kind = None
+        self.drag_bar.dismiss()
+        self._update_slot_labels()
         self._queue_feature_label_layout()
 
     def _on_slot_released(self, length: float, angle: float) -> None:
@@ -10837,6 +10875,7 @@ class Viewport(QWidget):
         """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell."""
         if self._slot_handle is not None:
             self._slot_handle.set_values(float(length), float(angle))
+            self._update_slot_labels()
 
     def _on_slot_bar_accepted(self, length: float, angle: float) -> None:
         """Übernommen: jetzt wird aus dem Zug genau eine Operation (§15.5).

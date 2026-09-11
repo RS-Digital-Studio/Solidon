@@ -1258,6 +1258,15 @@ def _with_features(
             say(str(_("Merkmale zuordnen")))
         seen = match(declared, detected, mesh.bounds.centre, mesh.bounds.diagonal)
         blind = set(seen.orphaned)
+        # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
+        # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
+        # eines Bausteins werden. Der Vorgänger läuft unten durch die normale
+        # Verlustmeldung und verschwindet aus der Auswahl.
+        declared = {
+            name: feature
+            for name, feature in declared.items()
+            if not (name in blind and feature.params.get("open"))
+        }
         # **Der Name bleibt, die aktuelle Oberfläche geht mit.** Ein Baustein
         # kennt Ort und Maß seiner Bohrung, aber nicht die Dreiecksnummern des
         # Netzes, das erst aus seiner Geometrie entsteht. Die Erkennung kennt

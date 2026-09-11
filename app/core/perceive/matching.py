@@ -495,12 +495,12 @@ def moved_features(
     moved: dict[FeatureId, Feature] = {}
     for identifier, feature in features.items():
         params = dict(feature.params)
-        for key in ("centre", "position"):
+        for key in ("centre", "position", "arc_centre", "mouth_centre"):
             if key in params:
                 point = np.asarray(params[key], dtype=float)
                 carried = matrix @ np.array([*point, 1.0])
                 params[key] = (float(carried[0]), float(carried[1]), float(carried[2]))
-        for key in ("axis", "normal"):
+        for key in ("axis", "normal", "direction", "opening_normal"):
             if key in params:
                 direction = turn @ np.asarray(params[key], dtype=float)
                 length = float(np.linalg.norm(direction))

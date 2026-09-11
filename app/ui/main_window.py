@@ -3897,6 +3897,7 @@ class MainWindow(QMainWindow):
             # Verschließen und nicht das Vereinigen zweier Körper.
             feature_kind=self.selected_feature_kind() or "",
             label=self.selection_label(),
+            part_selected=self._common_part_step(self.object_tree.selected_features()) is not None,
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
@@ -11046,14 +11047,11 @@ class MainWindow(QMainWindow):
         self.session.change_params(step, {**operation.params, **params})
 
     def _remove_part_step(self, step: int) -> None:
-        """Den Bausteinschritt aus dem Verlauf nehmen.
-
-        Ohne Nachfrage: Ein Verlaufsschritt ist rücknehmbar, und Regel 19
-        verbietet den Bestätigungsdialog davor. Die Ausnahme dort gilt dem
-        Löschen **im Verlauf**, wo abhängige Schritte mitgehen können — hier
-        ist es ein Knopf an dem Ding, das man gerade ansieht.
-        """
-        self.session.remove_operations([step])
+        """Den Bausteinschritt mit derselben Folgeauskunft wie im Verlauf löschen."""
+        if not any(operation.id == step for operation in self.session.project.document.ops):
+            self.statusBar().showMessage(tr("Das gewählte Merkmal ist nicht mehr vorhanden."))
+            return
+        self.remove_history_operations([step])
 
     def part_step_of(self, feature: Feature) -> tuple[Any, Any] | None:
         """Der Bausteinschritt, aus dem dieses Merkmal stammt — sonst nichts.

@@ -49,6 +49,12 @@ grenzen an **beide** Bögen. Damit ist eine Tasche mit verrundeten Ecken keines:
 Zwei benachbarte Ecken teilen eine Wand, nicht zwei. Die Toleranzen und die
 Abgrenzung stehen in `.claude/rules/operationen.md`.
 
+Offene Randbohrungen und Langlöcher ergänzt `features_of` über dieselbe
+Wandprüfung wie der Mesh-Kern (§21.1). `edit.slot_bore` vereinigt nach dem
+Schnitt koplanare Flanken, damit Nachziehen ohne neue Breitenzugabe das
+Merkmal erhält. `edit.fill_bore` schließt den ganzen Langlochumriss und
+begrenzt bei einer Randöffnung den Füllkörper an ihrer Außenwand.
+
 **Ein Langloch wird nicht rotiert, sondern aufgezogen.** Der Umriss aus
 `geom.prepare.slot_profile` wird über `profiles.extrude` zum Prisma, und zwar
 **vom Boden zur Mündung**: `extrude` verlangt eine positive Höhe, und ein

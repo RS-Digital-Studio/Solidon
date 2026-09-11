@@ -30,9 +30,25 @@ from typing import Any
 from app.core.brep.kernel import Solid
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, FeatureKind, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance
+from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance, positive_axis
 
 _log = get_logger(__name__)
+
+
+def _oriented(direction: Any) -> Vec3:
+    """Die Achse einer Fläche mit dem Vorzeichen, das auch das Netz vergibt.
+
+    OpenCASCADE gibt die Richtung so zurück, wie die Fläche gebaut wurde: Eine
+    Bohrung von unten trägt minus Z, und das Langloch aus *Zum Langloch
+    ziehen* die Gegenrichtung seiner Bohrung — gemessen 11.09.2026, mit einem
+    Feld *Richtung*, das nach einem Zug mit 45 Grad minus 45 zeigte, und
+    einem zweiten Zug mit derselben 45, der ein Kreuz schnitt. Der Winkel
+    eines Langlochs zählt gegen den Rahmen dieser Achse; welches Vorzeichen
+    sie trägt, entscheidet deshalb :func:`app.core.units.positive_axis` für
+    beide Kerne gleich.
+    """
+    return positive_axis((direction.X(), direction.Y(), direction.Z()))
+
 
 #: Wie viel einer vollen Umdrehung eine zylindrische Fläche abdecken muss, um
 #: als Bohrung zu zählen. Darunter ist sie eine Verrundung oder eine gerundete
@@ -112,6 +128,23 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
         )
 
     found = _slots_instead_of_half_bores(solid, found, named, neighbours, reach, tolerance)
+
+    # Der offene Mantel hat an beiden Kernen denselben Randvertrag. Die
+    # Dreiecksnummern der Tessellierung sind bereits die Merkmalsnummern.
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.features import fit_cylinder
+    from app.core.perceive.slots import open_slots_instead_of_fillets
+
+    mesh = as_mesh_data(solid)
+    fillets = []
+    for feature in found.values():
+        if feature.kind == "fillet" and feature.params.get("recess"):
+            patch = list(feature.face_indices)
+            fit = fit_cylinder(mesh.raw, patch)
+            if fit is not None:
+                fillets.append((fit, patch))
+    if fillets:
+        found = open_slots_instead_of_fillets(mesh, found, fillets)
 
     _log.info(
         "read %d hole(s), %d pin(s), %d fillet(s) and %d face(s) off a B-Rep body",
@@ -412,7 +445,11 @@ def _one_slot(
         first_centre[1] + across[1] / 2.0,
         first_centre[2] + across[2] / 2.0,
     )
-    direction: Vec3 = (across[0] / travel, across[1] / travel, across[2] / travel)
+    # Auch die Richtung bekommt ihr Vorzeichen von ``positive_axis``: Ein
+    # Langloch hat keine Vorder- und keine Rückseite, aber das Feld
+    # *Richtung* zeigt eine Zahl, und die soll an beiden Kernen dieselbe sein
+    # — nicht die, die von der Reihenfolge der zwei Bögen abhängt.
+    direction = positive_axis((across[0] / travel, across[1] / travel, across[2] / travel))
     axis = one.Axis().Direction()
 
     through = not _axis_covered(
@@ -434,7 +471,7 @@ def _one_slot(
             "diameter": round(radius * 2.0, 4),
             "length": round(travel + radius * 2.0, 4),
             "travel": round(travel, 4),
-            "axis": (axis.X(), axis.Y(), axis.Z()),
+            "axis": _oriented(axis),
             "direction": direction,
             "centre": centre,
             "depth": round(depth, 4),
@@ -511,7 +548,7 @@ def _describe(
                 "radius": round(radius, 4),
                 "diameter": round(radius * 2.0, 4),
                 "centre": middle,
-                "axis": (axis.X(), axis.Y(), axis.Z()),
+                "axis": _oriented(axis),
                 "length": round(depth, 4),
                 "recess": not _axis_in_material(inside, cylinder, centre),
             }
@@ -536,7 +573,7 @@ def _describe(
             # losen Ring oder eine hauchdünne alte Lippe erzeugen.
             "diameter": radius * 2.0,
             "centre": _axis_point(cylinder, (first_v + last_v) / 2.0),
-            "axis": (axis.X(), axis.Y(), axis.Z()),
+            "axis": _oriented(axis),
             "depth": depth,
         }
         if hollow:

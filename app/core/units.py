@@ -12,6 +12,7 @@ gibt es :func:`is_close`, :func:`is_zero`, :func:`is_greater` und
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Final, Literal
 
 from app.i18n import TranslatableText, _
@@ -342,3 +343,36 @@ def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = Tr
     if text.startswith("-") and float(text) == 0.0:
         text = text[1:]
     return f"{text} {unit}" if with_unit else text
+
+
+def positive_axis(axis: Sequence[float]) -> tuple[float, float, float]:
+    """Eine gemessene Achse mit festem Vorzeichen: erste größte Betragskomponente positiv.
+
+    Eine Achse hat von sich aus keines — ein Eigenvektor und sein Gegenvektor
+    beschreiben dieselbe Gerade, und die Zylinderfläche eines exakten Körpers
+    trägt das Vorzeichen, das ihr Erzeuger ihr gab. Für alles, was daran
+    hängt, muss es **eines** sein: ``sketch.planes.frame_of`` spiegelt seine
+    erste Achse mit der Normalen, und gegen diesen Rahmen zählen der Winkel
+    eines Langlochs (``prepare.slot_profile``, ``prepare_ops.slot_angle_of``)
+    und der Griff im Bild.
+
+    **Beide Kerne rufen hier** — ``perceive.features.fit_cylinder`` am Netz,
+    ``brep.features`` am exakten Körper —, und der Anlass ist gemessen
+    (11.09.2026): Der exakte Kern gab die Achse so zurück, wie die Fläche sie
+    trug. Nach *Zum Langloch ziehen* mit 45 Grad stand sie auf **minus** Z,
+    das Feld *Richtung* zeigte minus 45, und wer dieselbe 45 noch einmal
+    eintrug, bekam ein Kreuz statt eines längeren Langlochs. Eine Bohrung von
+    unten trug am Netz plus Z und am exakten Körper minus Z — derselbe Winkel
+    lag an den zwei Kernen gespiegelt.
+
+    Nahezu gleiche Komponenten entscheiden nicht über Rundungsreste: Gewählt
+    wird die **erste**, die das Maximum bis auf :data:`EPS_GEOM` erreicht.
+    Eine negative Null kommt nicht zurück — sie schriebe sich als ``-0.000``
+    und trennte zwei Schlüssel, die dieselbe Achse meinen.
+    """
+    values = (float(axis[0]), float(axis[1]), float(axis[2]))
+    largest = max(abs(value) for value in values)
+    leading = next(index for index, value in enumerate(values) if abs(value) >= largest - EPS_GEOM)
+    if values[leading] < 0.0:
+        return (-values[0] + 0.0, -values[1] + 0.0, -values[2] + 0.0)
+    return values

@@ -5,6 +5,11 @@ Was gerade offen ist und wie daraus Geometrie wird (§12–§16).
 Regeln: `.claude/rules/operationen.md`, für die Projektdatei zusätzlich
 `.claude/rules/dateiformat.md`.
 
+`placement.seat_of` prüft beide Mündungen einer erkannten Bohrung. Bei
+Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der
+Sacklochboden ist deshalb keine Trägerfläche. `mouth_outline` gewinnt den
+Werkzeugumriss aus der konvexen Hülle der Mündungspunkte (§21.1).
+
 Spulenbindungen in `PrintSettings` speichern die vollständige Druckfilament-
 Identität und eine lokale Kennung, niemals Pfade. `slot_profiles` bleibt eine
 Folge von Slicer-Profilnamen. Die Migration ergänzt leere Bindungen; sie rät

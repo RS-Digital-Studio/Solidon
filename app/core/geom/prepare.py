@@ -433,6 +433,7 @@ def slot_bore(
     profile: Profile,
     quality: Quality = "fine",
     seed: int | None = None,
+    overlap: float = FEATURE_OVERLAP,
 ) -> BoreResult:
     """Zieht eine erkannte Bohrung zu einem Langloch auseinander.
 
@@ -446,6 +447,16 @@ def slot_bore(
     *gemessenes* Maß und kein Nenndurchmesser; sie ein zweites Mal
     aufzuschlagen machte aus einer Formänderung eine Maßänderung. Dieselbe
     Entscheidung wie bei :func:`resize_bore`.
+
+    ``overlap`` ist die Zugabe auf den Durchmesser, die den Werkzeugkörper von
+    der alten Bohrungswand fernhält (:data:`FEATURE_OVERLAP`). Der Aufrufer
+    entscheidet, ob es sie braucht: An einer **runden** Bohrung legte sich der
+    Körper ohne sie entlang zweier Linien an die Wand; an einem Langloch, das
+    schon eines ist, gibt es diese Wand nicht mehr — dort liegen nur die
+    Flanken aufeinander, und die rechnet ``manifold3d`` robust (gemessen
+    11.09.2026, Stufe ``direct`` über drei Züge). Mit der Zugabe wuchs die
+    Breite dagegen bei **jedem** Zug: 5,2057, 5,2213, 5,2371 an einem Loch,
+    das 5,1901 gemessen war.
     """
     from app.core.geom.sketch_solid import extrude_profile
     from app.core.sketch.planes import frame_of
@@ -494,7 +505,7 @@ def slot_bore(
     height = depth + (BOOLEAN_OVERLAP * 2.0 if through else 0.0)
     tool = extrude_profile(
         slot_profile(
-            radius=(diameter + FEATURE_OVERLAP) / 2.0,
+            radius=(diameter + overlap) / 2.0,
             travel=travel,
             angle_deg=angle_deg,
         ),

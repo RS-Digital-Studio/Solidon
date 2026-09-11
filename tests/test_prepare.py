@@ -1652,13 +1652,13 @@ def test_a_bore_that_stays_recognisable_keeps_its_name(
 
 
 def test_a_bore_moved_over_the_edge_does_not_borrow_its_neighbour(profile: Profile) -> None:
-    """Verschwindet die versetzte Bohrung, bekommt keine andere ihren Namen.
+    """Die Randöffnung behält ihren Namen und übernimmt keine Nachbarbohrung.
 
     ``match`` nimmt ein Merkmal an, solange Lage und Durchmesser unter seiner
     Schwelle liegen — acht Prozent der Modelldiagonale, an 160 x 120 x 10
     sechzehn Millimeter. Zwei Ø-4-Bohrungen acht Millimeter auseinander, die
-    obere über den Rand versetzt: Sie wird ein offener Halbkreis und keine
-    Bohrung mehr. Ohne Nachprüfung traf die Zuordnung die **untere**, die trug
+    obere über den Rand versetzt: Sie wird ein offenes Langloch. Ohne
+    Nachprüfung traf die Zuordnung früher die **untere**, die trug
     von da an die Kennung der versetzten, und ``resize_hole.feature_lost``
     blieb aus — gemessen am 11.09.2026, als Zwilling desselben Fundes an
     ``slot_hole``. Zwei Fehler aus einem Treffer, der keiner ist.
@@ -1694,11 +1694,15 @@ def test_a_bore_moved_over_the_edge_does_not_borrow_its_neighbour(profile: Profi
     )
 
     codes = [finding.code for finding in result.findings]
-    assert "resize_hole.feature_lost" in codes, codes
-    # Die untere Bohrung bekommt nicht die Kennung der oberen.
+    assert "resize_hole.feature_lost" not in codes, codes
+    # Die angeschnittene Bohrung bleibt als offenes Langloch erhalten.
     carried = result.outputs[0].features
-    assert upper not in carried, f"{upper} trägt die Mitte eines fremden Lochs: {carried}"
-    del lower
+    assert carried[upper].kind == "slot"
+    assert carried[upper].params["open"]
+    assert carried[upper].params["arc_centre"][1] == pytest.approx(59.5, abs=0.01)
+    remaining = [found for found in detect(result.outputs[0].mesh).values() if found.kind == "hole"]
+    assert len(remaining) == 1
+    assert remaining[0].params["centre"][1] == pytest.approx(bores[lower].params["centre"][1])
 
 
 def test_scaling_below_what_the_printer_leaves_says_so(
@@ -2826,6 +2830,10 @@ def test_a_moved_bore_leaves_no_plug_standing_proud(profile: Profile) -> None:
         f"nichts steht über: {moved.raw.bounds.tolist()}"
     )
     assert moved.raw.volume == pytest.approx(bored.raw.volume, rel=1e-6)
+    remaining = [feature for feature in detect(moved).values() if feature.kind == "hole"]
+    assert len(remaining) == 1
+    assert remaining[0].params["centre"][0] == pytest.approx(15.0, abs=0.01)
+    assert not [feature for feature in detect(moved).values() if feature.kind == "pin"]
 
 
 def test_a_through_bore_moved_along_its_axis_says_it_no_longer_goes_through(

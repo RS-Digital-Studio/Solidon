@@ -58,7 +58,8 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 
 #: Die Kompatibilität umfasst Geometrie und erzeugte Merkmalsauskunft, darunter
 #: exakte Blindböden, Gewinde und eindeutige Innen-/Außenrollen für Passungen.
-CACHE_FORMAT_VERSION: Final = 3
+#: Stand 4 ergänzt offene Langlöcher und korrigierte Füll-/Schneidkörper.
+CACHE_FORMAT_VERSION: Final = 4
 
 
 @dataclass(frozen=True, slots=True)

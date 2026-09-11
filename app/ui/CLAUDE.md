@@ -246,6 +246,19 @@ ist dabei der Zustand und nicht `isVisible()`: Qt beantwortet Sichtbarkeit
 falsch, solange nichts gezeigt wurde, und ein Test würde die Testumgebung
 prüfen statt der Sache.
 
+Die Leiste bricht in schmalen Ansichten in vier Zeilen um. Erst ein Zug über
+die gemeinsame Klickschwelle beginnt eine Vorschau; Zurückziehen auf den
+Druckpunkt räumt sie wieder ab. Der Richtungsfang entspricht dem Drehring.
+Die Merkmalsfelder schalten schon beim Fokussieren ihre Handlung scharf;
+deren Titel steht über *Übernehmen*. Feldlose Handlungen haben einen eigenen
+Knopf. Bei Bausteinauswahl bleiben die Handlungen am erzeugenden Schritt;
+sein Entfernen nutzt die Folgeauskunft des Verlaufs (§19).
+
+Solange die Langlochleiste aktiv ist, blendet `PlacementFlow` seine
+Platzierungsfelder und Vorschau aus und nimmt keine Platzierungsklicks an.
+Abbrechen stellt die bisherige Platzierungsabsicht wieder dar; Übernehmen
+verwendet weiterhin den einen Langlochschritt.
+
 **Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug.** Der Schalter
 gehört dem Werkzeug *Bewegen* und gilt dem ganzen Körper — dort trägt der
 Griff den Skalierwürfel, und der ändert auf einen Zug die Maße des Teils.

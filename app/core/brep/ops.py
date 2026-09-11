@@ -33,6 +33,7 @@ from app.core.errors import (
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
+from app.core.geom.mesh import as_mesh_data
 from app.core.geom.prepare import (
     bore_diameter,
     compensation_findings,
@@ -453,7 +454,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     normal = (params.nx, params.ny, params.nz)
     if not all(math.isfinite(value) for value in normal):
         raise ValidationError("nx", _("Wählen Sie eine endliche Richtung für die Bohrung."))
-    shape = bore_shape(params)
+    shape = bore_shape(params, within=body)
     if shape.slot_length > EPS_GEOM:
         solid, normal = _slotted_bore(body, params, profile)
     elif math.hypot(*normal) > EPS_GEOM or abs(shape.widening_diameter) > EPS_GEOM:
@@ -515,12 +516,16 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
             travel,
             shape.slot_angle,
         ):
-            found = over_the_edge_along(body, end, normal, cut)
+            found = over_the_edge_along(body, end, normal, cut, body=as_mesh_data(body))
             if found:
                 findings.extend(found)
                 break
     elif math.hypot(*normal) > EPS_GEOM:
-        findings.extend(over_the_edge_along(body, (params.x, params.y, params.z), normal, cut))
+        findings.extend(
+            over_the_edge_along(
+                body, (params.x, params.y, params.z), normal, cut, body=as_mesh_data(body)
+            )
+        )
     else:
         findings.extend(
             over_the_edge(
@@ -528,6 +533,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 (params.x, params.y, params.z),
                 cast(Axis, params.axis),
                 cut,
+                body=as_mesh_data(body),
             )
         )
     findings.extend(compensation_findings(params.diameter, cut, params.compensate))

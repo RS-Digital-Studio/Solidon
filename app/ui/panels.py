@@ -16,8 +16,10 @@ from typing import Any, Final, cast
 
 from PySide6.QtCore import (
     QByteArray,
+    QEvent,
     QItemSelectionModel,
     QModelIndex,
+    QObject,
     QPoint,
     QRectF,
     QSignalBlocker,
@@ -4739,6 +4741,10 @@ class FeaturePanel(QWidget):
         self._every = QCheckBox("", self)
         self._every.setVisible(False)
         self._rows.addWidget(self._every)
+        self._armed_title = QLabel("", self)
+        self._armed_title.setWordWrap(True)
+        self._armed_title.hide()
+        self._rows.addWidget(self._armed_title)
         # **Der Knopf heißt „Übernehmen"** (Robert, 10.09.2026: „als text
         # brauchen wir auch nur übernehmen"). Welche Handlung er meint, steht
         # über ihm — die Überschrift, deren Felder gerade angefasst wurden —
@@ -4752,6 +4758,7 @@ class FeaturePanel(QWidget):
         self._rows.addStretch(1)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
+        self._part_operation: int | None = None
         self._groups: dict[str, FeatureActionGroup] = {}
         self._said_notes: set[str] = set()
         """Welche Gruppenbegründungen in diesem Panel schon stehen.
@@ -4797,7 +4804,7 @@ class FeaturePanel(QWidget):
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None
-        self._part_operation: int | None = None
+        self._part_operation = None
         self._groups = {}
         self._said_notes.clear()
         self._fit_button = None
@@ -4807,6 +4814,7 @@ class FeaturePanel(QWidget):
         self._explanations.clear()
         self._dots.clear()
         self._apply.setVisible(False)
+        self._armed_title.hide()
         self._every.setVisible(False)
         self._every.setChecked(False)
         self._empty.setVisible(True)
@@ -5387,6 +5395,11 @@ class FeaturePanel(QWidget):
             op=op_name,
             members=members,
         )
+        if not entries:
+            button = QPushButton(str(action.title), box)
+            button.setToolTip(_explained(action))
+            button.clicked.connect(run)
+            layout.addWidget(button)
         if self._armed is None:
             self._arm(key)
 
@@ -5465,7 +5478,7 @@ class FeaturePanel(QWidget):
         nicht ganz oben"). Ihn am Ende umzuhängen ist billiger als jede
         Einfügestelle um eins zu verschieben und dabei eine zu vergessen.
         """
-        for widget in (self._every, self._apply):
+        for widget in (self._armed_title, self._every, self._apply):
             self._rows.removeWidget(widget)
             self._rows.insertWidget(self._rows.count() - 1, widget)
 
@@ -5497,6 +5510,8 @@ class FeaturePanel(QWidget):
         if entry is None:
             return
         self._armed = key
+        self._armed_title.setText(entry.title)
+        self._armed_title.show()
         # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
         # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
         # nicht, was übernommen wird (§19.1).
@@ -5561,6 +5576,9 @@ class FeaturePanel(QWidget):
             self._arm(key)
             self.valuesChanged.emit(op, self._values(fields, widgets, fixed))
 
+        for target in (editor, *editor.findChildren(QLineEdit)):
+            target.setProperty("handlingKey", key)
+            target.installEventFilter(self)
         if isinstance(editor, LengthSpin):
             editor.valueChangedMm.connect(report)
         elif isinstance(editor, QCheckBox):
@@ -5569,6 +5587,18 @@ class FeaturePanel(QWidget):
             editor.currentIndexChanged.connect(report)
         elif isinstance(editor, QDoubleSpinBox):
             editor.valueChanged.connect(report)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Schnittstelle
+        """Schon der Fokus benennt die Handlung, ohne ihren Wert zu ändern."""
+        from app.ui.leash import stop_watching_the_dying
+
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if event.type() == QEvent.Type.FocusIn:
+            key = watched.property("handlingKey")
+            if isinstance(key, str):
+                self._arm(key)
+        return super().eventFilter(watched, event)
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
         """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""

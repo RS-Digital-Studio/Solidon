@@ -131,6 +131,7 @@ def test_camera_resize_and_cards_refresh_layout_without_rebuilding_geometry(
 ) -> None:
     view, renderer = dense_view()
     view.select_feature("hole_80")
+    built_meshes = len(renderer.meshes)
     original = renderer.world_to_display
     projected = []
 
@@ -153,7 +154,7 @@ def test_camera_resize_and_cards_refresh_layout_without_rebuilding_geometry(
     for left, top, right, bottom in boxes_of(view, renderer):
         assert left >= 160 and right <= 660
         assert top >= 0 and bottom <= 420
-    assert not renderer.meshes
+    assert len(renderer.meshes) == built_meshes
     assert not renderer.pick_calls
 
 

@@ -339,6 +339,10 @@ def _slot_value(spec: Any, feature: Feature) -> float | None:
         return None
     if spec.name == "slot_length":
         measured = feature.params.get("length")
+        if measured is not None and feature.params.get("open"):
+            from app.core.geom.prepare import shortest_slot
+
+            return max(float(measured), shortest_slot(float(feature.params["diameter"])))
         return float(measured) if measured is not None else None
     if spec.name == "slot_angle":
         from app.core.geom.prepare_ops import slot_angle_of

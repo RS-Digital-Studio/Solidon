@@ -36,7 +36,7 @@ from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.types import Feature, PlaneFrame, Point2, Profile, SceneObject, Vec3, vec3_or_none
-from app.core.units import EPS_GEOM, format_length, round_display
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, format_length, round_display
 from app.i18n import TranslatableText, tr
 
 if TYPE_CHECKING:
@@ -578,14 +578,6 @@ def _placement_error() -> ValidationError:
 _ADJACENCY_KEY: Final = "solidon_patch_adjacency"
 
 
-#: Wie viele Ecken der Umriss der Mündung höchstens bekommt.
-#:
-#: Ein Kreis aus 32 Sehnen ist bei jeder Bildgröße rund; mehr Punkte kosten
-#: Zeichenzeit und ändern nichts am Bild. Ein Sechskant hat sechs und bleibt
-#: unangetastet — begrenzt wird nur nach oben.
-MOUTH_POINTS: Final = 32
-
-
 def mouth_outline(tool: PlacementTool) -> tuple[Point2, ...]:
     """Der Umriss, mit dem dieses Werkzeug die Oberfläche trifft — lokal, in U/V.
 
@@ -607,36 +599,35 @@ def mouth_outline(tool: PlacementTool) -> tuple[Point2, ...]:
     weiten; das ist die bewusste Grenze einer Anzeige, die nichts rechnen
     soll, was der Kunde nicht sieht.
 
+    **Und die Hülle wird wirklich gebaut.** Bis zum 11.09.2026 stand hier eine
+    Abtastung in 32 Winkelsektoren um den Schwerpunkt, je Sektor der äußerste
+    Punkt. Am Kreis stimmt das; an einem Langloch fallen fast alle Punkte in
+    wenige Sektoren, und der äußerste je Sektor ist nicht der Rand — gemessen
+    an Ø 5 auf 20: der Werkzeugkörper 19,995 x 5,000 in der Mündungsebene, der
+    gezeichnete Umriss 19,995 x **3,890** mit abgeschnittenen Enden, also
+    22 Prozent zu schmal (Fund des Reviews). Und genau diesen Umriss sieht der
+    Kunde — die Ansicht blendet den Werkzeugkörper aus, sobald einer da ist.
+
+    Vereinfacht wird die Hülle um :data:`~app.core.units.MAX_FACET_SAG` —
+    dieselbe Abweichung, mit der der Kern seine Bögen tesselliert. Was im Bild
+    rund gezeichnet wird, bekommt hier weder mehr noch weniger Ecken; eine
+    feste Punktzahl wäre am kleinen Kreis zu viel und am großen zu wenig.
+
     Leer, wenn keine Mündungsebene erkennbar ist — dann bleibt es beim Körper.
     """
+    from shapely.geometry import MultiPoint
+
     points = np.asarray(tool.mesh.raw.vertices, dtype=np.float64)
     if not len(points):
         return ()
     at_mouth = points[np.abs(points[:, 2]) <= EPS_GEOM]
     if len(at_mouth) < 3:
         return ()
-    flat = at_mouth[:, :2]
-    middle = flat.mean(axis=0)
-    spread = flat - middle
-    # Nach dem Winkel sortiert ergibt die Randpunktmenge einen geschlossenen
-    # Zug; die inneren Punkte der Mündungsscheibe fallen dabei nicht heraus,
-    # deshalb bleibt nur der äußerste je Richtung.
-    angles = np.arctan2(spread[:, 1], spread[:, 0])
-    radii = np.hypot(spread[:, 0], spread[:, 1])
-    if float(radii.max()) <= EPS_GEOM:
+    hull = MultiPoint(at_mouth[:, :2]).convex_hull
+    if hull.geom_type != "Polygon":
         return ()
-    order = np.argsort(angles)
-    angles, radii, flat = angles[order], radii[order], flat[order]
-    kept: list[Point2] = []
-    step = 2.0 * np.pi / MOUTH_POINTS
-    for slot in range(MOUTH_POINTS):
-        low = -np.pi + slot * step
-        inside = (angles >= low) & (angles < low + step)
-        if not inside.any():
-            continue
-        pick = int(np.argmax(np.where(inside, radii, -1.0)))
-        kept.append((float(flat[pick, 0]), float(flat[pick, 1])))
-    return tuple(kept) if len(kept) >= 3 else ()
+    ring = list(hull.simplify(MAX_FACET_SAG, preserve_topology=True).exterior.coords)[:-1]
+    return tuple((float(x), float(y)) for x, y in ring) if len(ring) >= 3 else ()
 
 
 def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
@@ -891,9 +882,15 @@ def seat_of(
 
     * **Die Fläche wird gesucht, nicht angeklickt.** Genommen wird die ebene
       Fläche, deren Normale auf der Achse des Merkmals liegt und deren Ebene
-      seine Mündung enthält. Bei einem durchgehenden Loch gibt es zwei davon —
-      die Achse zeigt auf eine, und das ist die Wahl, die das Merkmal selbst
-      trägt (Regel 21: nicht raten, sondern die gespeicherte Richtung lesen).
+      eine seiner Mündungen enthält — **beide Enden werden gefragt.** Die
+      gemessene Achse trägt kein Vorzeichen (``units.positive_axis`` normiert
+      sie an beiden Kernen), also sagt sie nicht, an welchem Ende die
+      Öffnung liegt: Ein Sackloch von unten gebohrt zeigte mit ihr vom Boden
+      weg ins Material, dort lag keine Fläche, und im Bild stand kein Maß
+      (gemessen 11.09.2026, Platte 60 x 40 x 10, Sackloch Ø 6, 4 mm tief,
+      Fund des Reviews). Bei einem durchgehenden Loch tragen beide Enden eine
+      Fläche; genommen wird die, auf die die Achse zeigt — dieselbe Wahl wie
+      bisher.
     * **Die Öffnung wird gefüllt.** Die Mitte einer Bohrung liegt in der
       Aussparung, die sie in ihre Trägerfläche geschnitten hat; ``at_point``
       lehnt sie deshalb als „außerhalb der Fläche" ab. Gemessen an einer Platte
@@ -905,10 +902,6 @@ def seat_of(
     Verrundung an einer Kante hat keine, und ein Merkmal ohne Achse oder Tiefe
     ebenso wenig. Der Aufrufer zeigt dann keine Maße statt falscher.
     """
-    from shapely.geometry import Point, Polygon
-
-    from app.core.sketch.planes import to_plane
-
     axis = feature.params.get("axis")
     depth = feature.params.get("depth")
     centre = feature.params.get("centre")
@@ -919,7 +912,30 @@ def seat_of(
     if length <= EPS_GEOM:
         return None
     direction = direction / length
-    mouth = _vec(np.asarray(centre, dtype=float) + direction * (float(depth) / 2.0))
+    middle = np.asarray(centre, dtype=float)
+    half = direction * (float(depth) / 2.0)
+    for mouth, outward in ((_vec(middle + half), direction), (_vec(middle - half), -direction)):
+        seated = _seat_at(mesh, feature, features, mouth, outward)
+        if seated is not None:
+            return seated
+    return None
+
+
+def _seat_at(
+    mesh: MeshData,
+    feature: Feature,
+    features: Mapping[str, Feature],
+    mouth: Vec3,
+    direction: Any,
+) -> tuple[PreparedSurface, Vec3] | None:
+    """Die ebene Fläche, deren Ebene diese Mündung enthält — mit gefüllter Öffnung.
+
+    Der Rumpf von :func:`seat_of`, je Mündungskandidat einmal gerufen.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from app.core.sketch.planes import to_plane
+
     for entry in features.values():
         if entry.kind != "face" or not entry.face_indices:
             continue
@@ -928,7 +944,10 @@ def seat_of(
         if normal is None or seat is None:
             continue
         flat = np.asarray(normal, dtype=float)
-        if abs(float(flat @ direction)) < _SEAT_PARALLEL:
+        aligned = float(flat @ direction)
+        # Der Sacklochboden liegt ebenfalls auf einer Endebene, zeigt aber
+        # zum Hohlraum zurück. Nur die äußere Mündung zeigt von der Mitte weg.
+        if (aligned if feature.kind in ("hole", "slot") else abs(aligned)) < _SEAT_PARALLEL:
             continue
         if abs(float((np.asarray(mouth) - np.asarray(seat, dtype=float)) @ flat)) > EPS_GEOM:
             continue
@@ -1358,7 +1377,6 @@ def _creation_tool(
         )
     if spec.name in {"slot_hole", "resize_hole"}:
         from app.core.geom.prepare import bore_diameter, drill_tool, slot_travel
-        from app.core.geom.prepare_ops import slot_angle_of
 
         # **Ein Loch, das schon da ist, hat seine Maße am Merkmal.** Die zwei
         # Operationen tragen nur, was sich ändern soll — die Länge, den
@@ -1389,10 +1407,7 @@ def _creation_tool(
         else:
             cut = measured
             length = float(values.slot_length)
-            axis = feature.params.get("axis") or (0.0, 0.0, 1.0)
-            angle = float(values.slot_angle) or slot_angle_of(
-                feature, (float(axis[0]), float(axis[1]), float(axis[2]))
-            )
+            angle = float(values.slot_angle)
             # Eine Länge unter dem Durchmesser ist kein Langloch; der Kern
             # lehnt sie ab, und die Vorschau soll nicht zeigen, was danach
             # nicht kommt.

@@ -5,6 +5,12 @@ Analysekarten und der Steckbrief (§21, §18.4, §23).
 
 Die Regeln stehen in `.claude/rules/schichtanalyse.md`.
 
+`slots.open_slots_instead_of_fillets` erkennt auch am Rand angeschnittene
+Bohrungen und Langlöcher mit einer ebenen freien Mündung (§21.1). Die
+vorhandenen Bogen- und Flankenflächen bilden ein `slot` mit `open`,
+`arc_centre`, `mouth_centre` und `opening_normal`. `matching.moved_features`
+transformiert diese Punkte und Richtungen zusammen mit der Merkmalsachse.
+
 Wandkarten beginnen bei null und deckeln ausschließlich die obere
 Farbgrenze. So behalten Karte und Legende dieselbe geordnete Skala, auch
 wenn jede gemessene Wand bereits dicker als der Deckel ist (§18.4).

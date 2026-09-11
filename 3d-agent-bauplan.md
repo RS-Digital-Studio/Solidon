@@ -1363,6 +1363,18 @@ Richtung, Mitte, Tiefe und ob es durchgeht. Dieselbe Bauart wie beim Gewinde, un
 Was aus mehreren Einpassungen zusammenwächst, wird am Netz gemessen und
 verschluckt die Formen, aus denen es besteht.
 
+**Zum Rand offene Ausschnitte bleiben Langlöcher** (Entscheidung Robert,
+11.09.2026). Das gilt sowohl für eine angeschnittene runde Bohrung als auch
+für ein geöffnetes Langloch mit parallelen Seitenwänden. Beide werden über
+dieselbe Langlochhandlung geändert. Die Erkennung weist die vorhandenen
+Wandflächen aus; sie erfindet keine zweite Rundung außerhalb des Körpers.
+Ein freier Bogen, seine gegebenenfalls vorhandenen tangentialen Flanken und
+eine nach außen offene Mündung bestimmen den Ausschnitt. An einer ebenen
+Außenwand trägt das Merkmal zusätzlich Bogenmitte, Mündungsmitte und
+Öffnungsnormale. Beim Versetzen wird nur innerhalb des bisherigen Körpers
+gefüllt. Solange der Ausschnitt eindeutig wiedererkannt wird, bleibt seine
+Kennung erhalten; eine gekreuzte Aussparung muss dagegen kein Langloch sein.
+
 **Lufteinschlüsse** (`void`) sind geschlossene Innenschalen ohne Weg nach
 außen — was ein Negativkörper hinterlässt, den ein fremdes Werkzeug mitschrieb
 und nie abzog. Vier Tore: das Netz ist dicht, sein Umlaufsinn einheitlich, es

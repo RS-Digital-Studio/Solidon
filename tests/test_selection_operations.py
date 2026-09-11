@@ -35,6 +35,16 @@ def _availability(selected: int):
     return answer
 
 
+def test_part_selection_leaves_its_actions_to_the_part_fields(qt_app: QApplication) -> None:
+    """Am Baustein stehen keine Flächenhandlungen seiner Einzelmerkmale."""
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1), feature_kind="face", part_selected=True)
+    assert panel.isHidden()
+    panel.set_context(1, _availability(1), feature_kind="face")
+    assert not panel.isHidden()
+
+
 def test_the_panel_is_the_registry_without_the_parts_catalogue(qt_app: QApplication) -> None:
     """Die Oberfläche pflegt keine zweite Operationsliste.
 
@@ -449,6 +459,9 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     panel.resize(laengstes + beiwerk + 4 * NORMAL, 600)
     qt_app.processEvents()
     gebrochen = knopf.text()
+    for _ in range(4):
+        panel._wrap_labels()
+        assert knopf.text() == gebrochen
     assert "\n" in gebrochen, f"hier muss umgebrochen werden: {gebrochen!r}"
     assert gebrochen.replace("\n", " ") == titel, f"der Titel bleibt vollständig: {gebrochen!r}"
     for zeile in gebrochen.split("\n"):

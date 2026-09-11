@@ -367,6 +367,10 @@ Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief
 im Material, während ein Ende schon über die Kante ragt; wer nur sie fragt,
 schweigt zu einer aufgerissenen Flanke. Gemeldet wird trotzdem höchstens
 einmal — zwei gleichlautende Sätze über dasselbe Loch sagen nichts Zweites.
+**An beiden Kernen:** Der exakte Zweig von `slot_hole` stellte die Frage bis
+zum 11.09.2026 als einziger nicht — eine Bohrung neun Millimeter vor der
+Kante, auf 20 gezogen, meldete am Netz `bore.over_the_edge` und am exakten
+Körper nichts (Fund des Reviews).
 
 **Der Winkel zählt gegen den Rahmen, den er bekommt — und die zwei Wege
 bekommen verschiedene.** `drill_hole` baut ihn aus der Normalen der
@@ -378,6 +382,20 @@ Bohrung beide Male 45. **Das bleibt so**: Eine erkannte Bohrung hat zwei
 Mündungen, und welche gemeint ist, hat niemand gesagt (Regel 21). Wer eine
 Zahl von einem Weg auf den anderen überträgt, überträgt sie nicht.
 
+**Und „die Erkennung" heißt beide Kerne** (11.09.2026). Bis dahin normierte
+nur `fit_cylinder` am Netz; der exakte Kern gab die Achse so zurück, wie
+OpenCASCADE die Fläche gebaut hatte — eine Bohrung von unten trug dort minus
+Z, und ein Langloch nach *Zum Langloch ziehen* die Gegenrichtung seiner
+Bohrung. Gemessen: 45 Grad an derselben Bohrung von unten ergaben am Netz 45
+und am exakten Körper 135; und nach einem Zug mit 45 zeigte das Feld
+*Richtung* am exakten Körper minus 45, ein zweiter Zug mit derselben 45
+schnitt ein Kreuz. `units.positive_axis` trifft die Wahl jetzt einmal, für
+die Achse **und** für die Richtung eines Langlochs, an beiden Kernen (Fund
+des Reviews). Was daran hängt, darf das Vorzeichen deshalb **nicht** als
+Auskunft lesen: `placement.seat_of` fragt beide Mündungen, denn die Achse
+sagt nicht, an welchem Ende die Öffnung liegt — ein Sackloch von unten hatte
+mit ihr keine Trägerfläche und kein Maß im Bild.
+
 **Und die Zugabe, die einen Werkzeugkörper vom gemessenen Maß fernhält, steht
 einmal** — `prepare.FEATURE_OVERLAP`. Sie stand am 10.09.2026 zweimal da, mit
 demselben Wert und dem Vermerk „dieselbe Zahl, derselbe Grund"; genau diese
@@ -385,6 +403,15 @@ Form hat `BOOLEAN_OVERLAP` schon einmal gekostet. Ihr Grund ist außerdem nicht
 mehr die Koplanarität — die rechnet `manifold3d` robust, gemessen 27.08.2026 —,
 sondern der **Tangentialkontakt**: Ein Langlochkörper ohne Zugabe legte sich
 entlang zweier Linien an die alte Bohrungswand.
+
+**Und sie gilt dem ersten Zug** (11.09.2026). An einem Langloch, das schon
+eines ist, gibt es diese Wand nicht mehr — die Flanken des Werkzeugs liegen
+auf den Flanken des Lochs, und das rechnen beide Kerne auf Stufe 1. Mit der
+Zugabe wurde das Loch bei **jedem** Zug breiter: am Netz 5,2057, 5,2213,
+5,2371 an einer Bohrung von 5,1901, am exakten Körper je Zug genau die
+Zugabe. `slot_hole` gibt sie deshalb nur an einer runden Bohrung mit
+(`overlap` an beiden `slot_bore`); ein Langloch, das dreimal nachgezogen
+wird, nimmt dieselbe Schraube wie nach dem ersten Mal (Fund des Reviews).
 
 ## Die kürzeste Länge eines Langlochs ist gemessen, nicht gesetzt (11.09.2026)
 
@@ -432,12 +459,16 @@ Paare, aber zwei benachbarte Ecken teilen **eine** Wand, nicht zwei. Die
 Flanken gehen im Langloch auf, der Boden eines Sacklangloch nicht — seine
 Normale zeigt entlang der Achse, er liegt gar nicht im Mantel.
 
-**Und wenn nach einem Zug keines mehr dasteht, wird es gesagt** (Regel 17,
-`slot_hole.feature_lost`, an beiden Kernen). Zwei Wege führen dahin, beide
-gemessen und beide gültige Geometrie: über den Rand des Körpers hinaus wird
-das Langloch ein offener Schlitz, quer über sich selbst ein Kreuz. Der Schnitt
-stimmt, das Teil ist brauchbar — nur der Bezug ist fort, und wer darauf
-verweist, findet nichts mehr. Der Satz nennt den Rückweg über Strg+Z.
+**Offene Ausschnitte bleiben Langlöcher** (Entscheidung Robert, 11.09.2026).
+Eine angeschnittene Rundbohrung und ein Langloch mit offenen parallelen
+Flanken werden beide als `slot` erkannt und über dieselbe Handlung geändert.
+Der gemeinsame Netzprüfer beider Kerne verlangt einen Innenbogen, tangentiale
+Flanken soweit vorhanden und eine freie ebene Mündung; vorhandenes Material
+hinter dieser Mündung verhindert einen falschen Treffer an einer Kreuztasche.
+Der Füllkörper endet an der Außenwand, damit beim Versetzen kein Pfropfen
+außerhalb des Teils stehen bleibt. Eine gekreuzte Aussparung kann ihre
+Langlochform verlieren; dann meldet `slot_hole.feature_lost` den verlorenen
+Bezug und den Rückweg über Strg+Z.
 
 **Gesucht wird das eine Loch, und die Zuordnung wird nachgeprüft**
 (`prepare_ops._sits_at`, für `slot_hole` und `resize_hole` gleichermaßen).
@@ -449,7 +480,10 @@ die die Stelle selbst genannt hat: Stand das gezogene Loch nicht mehr da,
 traf die Zuordnung das Nachbarloch, das trug von da an die fremde Kennung,
 und der Befund blieb aus (Fund des Reviews, 11.09.2026, an beiden
 Operationen gemessen). Genommen wird deshalb nur, was auf `match_tolerance`
-an der genannten Mitte liegt — und beim Langloch die eingetragene Länge trägt.
+an der genannten Mitte liegt — und beim geschlossenen Langloch die eingetragene
+Länge trägt. Bei einer Randöffnung wird der verbliebene Bogen gegen die Enden
+des gewünschten Schnitts geprüft. Bei durchgehenden Bohrungen darf die Mitte
+entlang der Achse wandern, wenn die Zielwand eine andere Stärke besitzt.
 Am exakten Kern gilt dieselbe Suche gegen `features_of`; ein `any(kind ==
 "slot")` schwieg, sobald ein zweites Langloch im Körper stand.
 
@@ -499,6 +533,14 @@ Zylinder zu drehen. Ohne den Eintrag fiel `_tool_for` auf `_feature_body`,
 bekam aus dem Flächenausschnitt keinen geschlossenen Körper und endete in der
 Absage über Senkungen: Wer ein **vorhandenes** Langloch versetzen wollte, las
 einen Satz über einen Fall, den es dort nicht gibt.
+
+**Null Grad ist eine Richtung.** `slot_hole` übernimmt `slot_angle` auch bei
+null; die Oberfläche belegt das Feld mit der gemessenen Richtung vor. Beim
+Versetzen eines vorhandenen Langlochs wird dessen ganzer Umriss gefüllt.
+Durchgehende Bohrungen erhalten im Änderungsweg eine Schneidtiefe über den
+gesamten Zielkörper. Beim allgemeinen Versetzen und Duplizieren einer
+Mesh-Bohrung entsteht das Werkzeug aus ihren tatsächlichen Wandflächen,
+damit ein fremder Sehnenzug weder schrumpft noch beim Füllen zurückbleibt.
 
 ## Szene: Platzierung, Kennungen, Cache, Projektdatei
 

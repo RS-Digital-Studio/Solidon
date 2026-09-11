@@ -34,10 +34,11 @@ from collections.abc import Callable
 import numpy as np
 
 from app.core.geom.prepare import shortest_slot
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_close
 from app.ui.render import shapes
 from app.ui.render.api import Colour, Item, PointerEvent, Renderer, SurfaceStyle, Vec3
 from app.ui.render.gizmo import HIGHLIGHT, ray_plane_hit
+from app.ui.render.navigator import CLICK_SLACK
 
 # **Wie kurz ein Zug das Loch machen darf, steht im Kern.**
 #
@@ -154,7 +155,7 @@ def _normalised_angle(angle: float) -> float:
     hinaus, und die Operation lehnte ihn ab, statt das Loch zu drehen.
     """
     turned = (float(angle) + 180.0) % 360.0 - 180.0
-    return 180.0 if turned == -180.0 else turned
+    return 180.0 if is_close(turned, -180.0) else turned
 
 
 def slot_outline(
@@ -235,10 +236,17 @@ class SlotHandle:
         colour: Colour,
         release_callback: Callable[[float, float], None],
         interact_callback: Callable[[float, float], None] | None = None,
+        cancel_callback: Callable[[], None] | None = None,
+        settle_angle: Callable[[float], float] | None = None,
     ) -> None:
         self._renderer = renderer
         self._release = release_callback
         self._interact = interact_callback
+        self._cancel = cancel_callback
+        self._settle_angle = settle_angle
+        self._press_point = (0, 0)
+        self._dragged = False
+        self._had_outline = False
         self._centre = np.asarray(centre, dtype=float)
         self._axis = np.asarray(axis, dtype=float)
         self._diameter = float(diameter)
@@ -321,6 +329,12 @@ class SlotHandle:
         """
         return tuple(self._knob_seat(index, self.length, self.angle) for index in (0, 1))
 
+    @property
+    def clearance(self) -> tuple[Vec3, float]:
+        """Mitte und Reichweite der Knöpfe, die Maßfelder frei halten müssen."""
+        centre: Vec3 = (float(self._centre[0]), float(self._centre[1]), float(self._centre[2]))
+        return centre, self.length / 2.0 + self._knob_size * KNOB_RADIUS_SHARE
+
     def remove(self) -> None:
         for item in self._knobs:
             self._renderer.remove(item)
@@ -357,6 +371,9 @@ class SlotHandle:
             self.pressing = True
             self._start_length = self.length
             self._start_angle = self.angle
+            self._press_point = (event.x, event.y)
+            self._dragged = False
+            self._had_outline = self._outline is not None
             return True
         if event.kind == "release" and event.button == "left" and self.pressing:
             self.pressing = False
@@ -373,7 +390,21 @@ class SlotHandle:
             # Mindestlänge, die niemand meint, und die Leiste ginge über einer
             # Zahl auf, die aus dem Nichts kommt. Gemessen an einer Ø-6-Bohrung:
             # (6,30 | 0°) nach einem Klick ohne Bewegung.
-            if self.length == self._start_length and self.angle == self._start_angle:
+            if not self._dragged:
+                return True
+            if math.hypot(
+                event.x - self._press_point[0], event.y - self._press_point[1]
+            ) <= CLICK_SLACK or (
+                is_close(self.length, self._start_length)
+                and is_close(self.angle, self._start_angle)
+            ):
+                self.length, self.angle = self._start_length, self._start_angle
+                self._redraw()
+                if not self._had_outline:
+                    self._drop_outline()
+                    self._renderer.render()
+                if self._cancel is not None:
+                    self._cancel()
                 return True
             self._release(self.length, self.angle)
             return True
@@ -429,6 +460,11 @@ class SlotHandle:
         Steht die Kamera genau in der Ebene, gibt es keinen Schnittpunkt, und
         dann bleibt alles, wie es war.
         """
+        if not self._dragged and (
+            math.hypot(event.x - self._press_point[0], event.y - self._press_point[1])
+            <= CLICK_SLACK
+        ):
+            return
         ray = self._ray(event)
         if ray is None:
             return
@@ -444,6 +480,9 @@ class SlotHandle:
         # mitbekommt (``slot_hole`` liest sie aus dem Merkmal).
         if self._held == 1:
             angle = _normalised_angle(angle + 180.0)
+        if self._settle_angle is not None:
+            angle = _normalised_angle(self._settle_angle(angle))
+        self._dragged = True
         self.length, self.angle = length, angle
         self._redraw()
         if self._interact is not None:

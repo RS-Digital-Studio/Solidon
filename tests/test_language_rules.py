@@ -140,6 +140,7 @@ GERMAN_WORDS = frozenset(
 #: Wort gesucht — drei Einträge sind aus genau diesem Grund umgezogen (siehe
 #: dort).
 GERMAN_STEMS = (
+    "allein",
     "aenderung",
     "befehl",
     "begriff",

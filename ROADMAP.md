@@ -1000,8 +1000,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   erkanntes Langloch im Merkmalsfenster eine Zeile mit seinen zwei Maßen und im Bild zwei Knöpfe,
   an denen sich Länge und Richtung ziehen lassen. Was ihm fehlt, sind die vier übrigen Handlungen:
   `move_feature`, `rotate_feature`, `duplicate_feature` und `remove_feature` führen `slot` nicht in
-  `applies_to`, und der Grund steht als Satz im Panel — ihr Werkzeugkörper entsteht aus **einem**
-  Durchmesser (`_feature_solid`), und ein Zylinder träfe die Flanken eines Langlochs nicht. Der
+  `applies_to`. Der frühere Grund im Werkzeugkörper ist im Review vom 11.09.2026 behoben:
+  `_feature_solid` bildet jetzt den vollständigen Langlochumriss ab. Die Freigabe und
+  Abnahme der vier allgemeinen Merkmalshandlungen stehen weiterhin aus. Der
   Kunde sieht damit fünf ausgegraute Zeilen neben einer, die geht (Robert, 10.09.2026: „das gleiche
   wäre zum bearbeiten dann von langlöchern und anderen operationen/merkmalen usw gut"). Was es
   braucht, ist derselbe Werkzeugkörper, den `slot_bore` schon baut — aus Mitte, Achse, Durchmesser,
@@ -1022,18 +1023,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-154"></a>
 
-- [ ] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** `slot_hole` liest eine 0 im
-  Richtungsfeld als „nicht gesagt" und nimmt an einem bestehenden Langloch dessen heutige Richtung
-  — richtig, damit ein Zug an der Länge es nicht quer stellt. Wer es aber **geradestellen** will,
-  tippt genau diese 0, und sie kommt nicht an: gemessen am geschnittenen Winkel (10.09.2026) blieb
-  ein 45-Grad-Langloch bei 45,00000000000002 Grad, während 1 Grad sauber durchging. Über die
-  Oberfläche ist der Fall heute nicht erreichbar — die Ansicht schickt immer einen Winkel, und das
-  Merkmalsfenster belegt mit dem gemessenen vor —, über Dialog, Chat und Kommandozeile schon.
-  Die saubere Lösung wäre `slot_angle: float | None`; **einen optionalen Zahlenparameter gibt es im
-  ganzen Register bisher nicht** (gezählt: null Treffer für `| None = param`), sie führt also ein
-  Konzept ein, das Validierung, `json_schema`, Dialog, Projektdatei und Agentenwerkzeug zugleich
-  betrifft. Abnahme: Entweder das Konzept mit Robert entscheiden und überall einlösen, oder eine
-  begründete zweite Antwort für diesen einen Fall — beides nicht nebenbei.
+- [ ] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** Der Winkelfall ist am
+  11.09.2026 behoben: `slot_angle=0` bedeutet null Grad, an Mesh und B-Rep. Oberfläche und
+  Vorschau belegen die vorhandene Richtung vor; der Kern ersetzt keinen ausdrücklich
+  gesetzten Winkel mehr durch die bisherige Richtung. Gegenproben schneiden ein versetztes
+  45-Grad-Langloch auf null Grad und messen die Ergebnisrichtung an beiden Kernen.
 
   **Und seit dem 11.09.2026 hängen sechs weitere Felder derselben Bauart daran.** `slot_hole`
   und `resize_hole` lesen drei Nullen in `x/y/z` als „lass das Loch, wo es ist“ — damit

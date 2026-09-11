@@ -13,6 +13,31 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 
 
+def test_one_target_in_plural_field_uses_the_same_placement_as_singular(profile):
+    """Eine Liste mit einem Ziel darf dessen Flächenbezug nicht verlieren."""
+    results = []
+    for target in ({"at_feature": "face_top"}, {"at_features": ("face_top",)}):
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply(
+            "Bohrung",
+            [
+                OperationDraft(op="create_box", params={"width": 30, "depth": 30, "height": 12}),
+                OperationDraft(
+                    op="insert_screw_hole",
+                    inputs=("obj_1",),
+                    params={"size": "M4", "depth": 6, **target},
+                ),
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        results.append(result.scene.objects["obj_1"])
+    assert results[0].mesh.volume == pytest.approx(results[1].mesh.volume)
+    assert results[0].features["screw_hole_bore_1"].params["centre"] == pytest.approx(
+        results[1].features["screw_hole_bore_1"].params["centre"]
+    )
+
+
 @pytest.mark.parametrize("countersink,head_room", [(True, 0), (True, 3), (False, 0), (False, 3)])
 def test_screw_hole_names_its_real_countersink_and_head_zone(countersink, head_room):
     spec = PARTS.get("screw_hole")

@@ -584,7 +584,7 @@ QToolButton#infoDot {{
     font-weight: 600;
 }}
 QToolButton#infoDot:hover {{ color: {text}; border-color: {text}; background: {hover}; }}
-QToolButton#infoDot:focus {{ color: {text}; border-color: {highlight}; }}
+QToolButton#infoDot:focus {{ color: {text}; border: 2px dashed {highlight}; }}
 QPushButton:pressed {{ background: {line}; }}
 QPushButton:default {{
     background: {highlight};
