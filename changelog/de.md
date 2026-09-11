@@ -80,6 +80,7 @@ Nutzen da und sonst nichts.
 - „Im Slicer öffnen“ gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte.
 - Der Prüfbericht nennt bei Zerlegung, Beschriftung und Textur die Zahl im Satz, wo vorher ein Platzhalter in Klammern stand.
 - Ein Schriftzug, dem Sie ein Filament zugewiesen haben, behält es beim Zerlegen in Buchstaben. Vorher kam er im Slicer auf einem zweiten, grauen Filament an, das zugewiesene lag daneben.
+- Mit mehreren Platten liegen die Teile im Slicer jetzt dort, wo er seine Platten hat: im Raster, wie er es selbst anlegt. Vorher standen die Buchstaben der dritten und vierten Platte neben allem.
 
 ## 0.4.0
 

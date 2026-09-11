@@ -430,9 +430,9 @@ def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Prof
     Bettursprung an, und am modularen Besteckkorb überlagerten sich zwei
     Platten um neunundzwanzig Millimeter.
 
-    Der Abstand ist gemessen und nicht gewählt — siehe ``PLATE_STRIDE``. Hier
+    Der Abstand ist gemessen und nicht gewählt — siehe ``PLATE_GAP``. Hier
     steht die Gegenprobe: Zwei gleiche Teile auf zwei Platten liegen um genau
-    eine Bettbreite plus ein Achtel auseinander.
+    eine Bettbreite plus ein Fünftel auseinander.
     """
     erste = scene_object("obj_1", "Vorne")
     zweite = scene_object("obj_2", "Naechste")
@@ -454,7 +454,60 @@ def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Prof
     model = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
     offsets = [float(entry.split()[9]) for entry in re.findall(r'transform="([^"]+)"', model)]
     width = profile.printer.build_volume[0]
-    assert offsets == [pytest.approx(width * threemf.PLATE_STRIDE)]
+    assert offsets == [pytest.approx(width * (1.0 + threemf.PLATE_GAP))]
+
+
+def test_plates_go_into_the_grid_of_the_slicer(tmp_path: Path, profile: Profile) -> None:
+    """Vier Platten sind beim Slicer ein Quadrat, fünf brauchen drei Spalten.
+
+    **Roberts Bild aus dem ElegooSlicer** (11.09.2026: „so ganz passt die
+    ausrichtung an den platten von den druckern bei den slicern nicht"): Die
+    Buchstaben der Platten 3 und 4 lagen rechts neben allem, Platte 03 und 04
+    standen leer **unter** 01 und 02. Solidon reihte die Platten auf, der
+    Slicer legt sie ins Raster — ``ceil(sqrt(n))`` Spalten, die Zeilen nach
+    unten, ein Fünftel Luft (``PartPlate.cpp``; gemessen am installierten
+    Slicer, siehe ``PLATE_GAP``).
+
+    Gemessen wird an der Matrix in der Datei: Platte 3 von 4 steht bei
+    (0, −Tiefe·1,2), Platte 4 rechts daneben; bei fünf Platten liegt die
+    dritte noch in der ersten Zeile.
+    """
+    width, depth, _height = profile.printer.build_volume
+    pitch = 1.0 + threemf.PLATE_GAP
+
+    def offsets_of(count: int) -> list[tuple[float, float]]:
+        objects = []
+        for plate in range(count):
+            entry = scene_object(f"obj_{plate + 1}", f"Teil {plate + 1}")
+            entry.plate = plate
+            objects.append(entry)
+        written, _findings = write_assembly(
+            objects, tmp_path, project_name=f"raster{count}", profile=profile
+        )
+        model = zipfile.ZipFile(BytesIO(written.read_bytes())).read(threemf.MODEL_PATH)
+        found = {}
+        for item in re.findall(
+            r"<item objectid=\"(\d+)\"(?: transform=\"([^\"]+)\")?", model.decode()
+        ):
+            values = item[1].split() if item[1] else ["0"] * 12
+            found[int(item[0]) - 2] = (float(values[9]), float(values[10]))
+        return [found[index] for index in range(count)]
+
+    four = offsets_of(4)
+    assert four[0] == (0.0, 0.0)
+    assert four[1] == pytest.approx((width * pitch, 0.0)), "die zweite rechts daneben"
+    assert four[2] == pytest.approx((0.0, -depth * pitch)), "die dritte darunter, nicht rechts"
+    assert four[3] == pytest.approx((width * pitch, -depth * pitch))
+
+    five = offsets_of(5)
+    assert five[2] == pytest.approx((2 * width * pitch, 0.0)), "fünf Platten: drei Spalten"
+    assert five[3] == pytest.approx((0.0, -depth * pitch))
+
+    # Und die Plattenblöcke zählen durch, wie der Slicer zählt.
+    beilage = zipfile.ZipFile(BytesIO((tmp_path / "raster5.3mf").read_bytes())).read(
+        threemf.SETTINGS_PATH
+    )
+    assert re.findall(r'plater_id" value="(\d+)"', beilage.decode()) == ["1", "2", "3", "4", "5"]
 
 
 def test_an_empty_plate_says_so(tmp_path: Path, profile: Profile) -> None:

@@ -1050,10 +1050,11 @@ def write_assembly(
                 configured_slots,
                 setup,
             ),
-            # Nur wo es mehrere Platten gibt. Ein Versatz auf einer einzelnen
-            # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
-            # Matrix, die nichts sagt.
-            stride=width * threemf.PLATE_STRIDE if len({p.plate for p in parts}) > 1 else 0.0,
+            # Das Bettmaß, an dem die Platten ins Raster rücken — nur wo es
+            # mehrere gibt. Ein Versatz auf einer einzelnen wäre eine
+            # Verschiebung ohne Grund, und die Datei trüge eine Matrix, die
+            # nichts sagt.
+            layout=(width, depth) if len({p.plate for p in parts}) > 1 else None,
         ),
     )
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)

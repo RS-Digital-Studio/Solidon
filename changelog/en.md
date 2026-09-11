@@ -55,6 +55,7 @@ it into `website/version.json`.
 - “Open in slicer” hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate.
 - For splitting, lettering and texture the report states the number in the sentence, where a placeholder in braces stood before.
 - Lettering you assigned a filament to keeps it when split into letters. Before, it arrived in the slicer on a second, grey filament, with the assigned one sitting unused beside it.
+- With several plates, the parts now land where the slicer keeps its plates: in the grid it lays out itself. Before, the letters of the third and fourth plate stood beside everything.
 
 ## 0.4.0
 

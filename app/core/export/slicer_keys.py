@@ -998,7 +998,7 @@ def knows_plates(flavour: SlicerFlavour) -> bool:
     """Trägt eine Projektdatei dieser Familie mehrere Druckplatten?
 
     Die Orca-Familie: je Platte ein ``plate``-Block in ``model_settings.config``
-    und die Teile plattenweise nebeneinander (``threemf.PLATE_STRIDE``) — so
+    und die Teile plattenweise im Raster (``threemf.plate_origin``) — so
     schreibt sie ihre eigenen Projekte, und so liest sie eine von Solidon.
     PrusaSlicer und Cura kennen eine Platte je Datei: Für sie bleibt es bei
     einer Datei je Platte.

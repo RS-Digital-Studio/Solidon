@@ -56,6 +56,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - «Abrir en el slicer» entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa.
 - En separación, rotulación y textura el informe indica la cifra en la frase, donde antes había un marcador entre llaves.
 - Un letrero al que asignó un filamento lo conserva al separarlo en letras. Antes llegaba al slicer en un segundo filamento gris, y el asignado quedaba al lado sin usar.
+- Con varias placas, las piezas llegan ahora al slicer donde él tiene sus placas: en la cuadrícula que él mismo dispone. Antes, las letras de la tercera y cuarta placa quedaban fuera de todo.
 
 ## 0.4.0
 

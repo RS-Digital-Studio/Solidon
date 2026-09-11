@@ -28,6 +28,7 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
+from math import ceil, sqrt
 from typing import Final
 from xml.etree import ElementTree as ET
 
@@ -236,7 +237,7 @@ def write_assembly(
     name: str = "",
     bed: tuple[float, float] | None = None,
     project_settings: Mapping[str, object] | None = None,
-    stride: float = 0.0,
+    layout: tuple[float, float] | None = None,
     prusa_config: Mapping[str, str] | None = None,
     across: Sequence[AssemblyPart] | None = None,
 ) -> bytes:
@@ -262,6 +263,11 @@ def write_assembly(
     Punkte. Die Geometrie bleibt damit die, die im Dokument steht — dieselbe
     Datei taugt weiter als Modell und nicht nur als Druckauftrag.
 
+    ``layout`` ist dasselbe Bettmaß für die zweite Verschiebung: Liegen die
+    Teile auf mehreren Platten, rückt jede Platte an ihren Platz im Raster
+    der Orca-Familie (:func:`plate_origin`) — auch ohne ``bed``, denn sonst
+    stünde die zweite Platte auf der ersten.
+
     ``project_settings`` sind die Druckeinstellungen der Platte, wie die
     Orca-Familie sie in einer Projektdatei führt (:data:`PROJECT_SETTINGS_PATH`).
     Ohne sie öffnet der Slicer die Datei mit dem Profil, das gerade eingestellt
@@ -278,7 +284,7 @@ def write_assembly(
         raise ValueError("an assembly needs at least one part")
 
     materials = merge_slots(parts, across=across)
-    model = _assembly_xml(parts, materials, name, bed, stride)
+    model = _assembly_xml(parts, materials, name, bed, layout)
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
@@ -370,14 +376,19 @@ def _settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlo
     # Slicer eine einzige, auf der alles nebeneinander steht — die Teile
     # lägen weit außerhalb des Betts, und er ordnete notgedrungen neu an.
     #
-    # Aufbau aus einer echten Slicer-Datei gelesen (siehe :data:`PLATE_STRIDE`):
-    # je Platte ein ``plate``-Block mit ``plater_id`` von eins an und je Teil
-    # ein ``model_instance``, das auf die Objektnummer zeigt. Die
-    # Vorschaubilder, die der Slicer daneben führt, entstehen bei ihm — was
-    # hier fehlt, rechnet er beim Öffnen nach.
-    for plate in sorted({part.plate for part in parts}):
+    # Aufbau aus einer echten Slicer-Datei gelesen: je Platte ein
+    # ``plate``-Block mit ``plater_id`` von eins an und je Teil ein
+    # ``model_instance``, das auf die Objektnummer zeigt. Die Vorschaubilder,
+    # die der Slicer daneben führt, entstehen bei ihm — was hier fehlt,
+    # rechnet er beim Öffnen nach.
+    #
+    # **Gezählt wird durch, nicht nach Solidons Nummer.** Der Slicer legt seine
+    # Platten in der Reihenfolge der Blöcke ins Raster (:func:`plate_origin`),
+    # und die Matrix der Teile rechnet mit demselben Rang — eine Lücke in den
+    # Nummern (Platte 1 und 3 gewählt) darf die beiden nicht auseinanderbringen.
+    for rank, plate in enumerate(sorted({part.plate for part in parts})):
         block = ET.SubElement(config, "plate")
-        ET.SubElement(block, "metadata", {"key": "plater_id", "value": str(plate + 1)})
+        ET.SubElement(block, "metadata", {"key": "plater_id", "value": str(rank + 1)})
         ET.SubElement(block, "metadata", {"key": "plater_name", "value": ""})
         ET.SubElement(block, "metadata", {"key": "locked", "value": "false"})
         for number, part in enumerate(parts, start=2):
@@ -534,11 +545,12 @@ def _assembly_xml(
     materials: list[MaterialSlot],
     name: str,
     bed: tuple[float, float] | None = None,
-    stride: float = 0.0,
+    layout: tuple[float, float] | None = None,
 ) -> bytes:
     """Das Modell-XML einer Baugruppe: ein ``object`` je Teil, ein ``item`` je
     Teil im Build.
     """
+    plates = sorted({part.plate for part in parts})
     root = ET.Element(
         "model",
         {
@@ -610,7 +622,12 @@ def _assembly_xml(
             )
         )
         item = {"objectid": str(number)}
-        placement = _placement(bed, part.plate, stride)
+        placement = _placement(
+            bed,
+            plate_origin(plates.index(part.plate), len(plates), layout)
+            if layout is not None and len(plates) > 1
+            else (0.0, 0.0),
+        )
         if placement is not None:
             item["transform"] = placement
         ET.SubElement(build, "item", item)
@@ -621,7 +638,7 @@ def _assembly_xml(
     return _fill_in(document, blocks)
 
 
-def _placement(bed: tuple[float, float] | None, plate: int, stride: float) -> str | None:
+def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> str | None:
     """Die Platzierungsmatrix des Standards: neun Werte Drehung, drei
     Verschiebung. ``None``, wenn nichts zu verschieben ist.
 
@@ -634,29 +651,54 @@ def _placement(bed: tuple[float, float] | None, plate: int, stride: float) -> st
     gelesen wird, ist gemessen: mit ihr und ``--arrange 0`` stehen die Teile im
     G-Code auf ein Zehntel dort, wo das Dokument sie hat.
 
-    ``stride`` verschiebt auf die eigene Druckplatte. Die Orca-Familie legt
-    ihre Platten in **einem** Koordinatenraum nebeneinander; welche Platte
-    gemeint ist, steht in der Beilage, aber wo das Teil liegt, steht hier. Das
-    gilt **immer**, wenn es mehr als eine Platte gibt — auch beim Export ohne
-    Bettkoordinaten. Sonst stünde die zweite Platte auf der ersten.
+    ``origin`` verschiebt auf die eigene Druckplatte (:func:`plate_origin`).
+    Die Orca-Familie legt ihre Platten in **einem** Koordinatenraum
+    nebeneinander; welche Platte gemeint ist, steht in der Beilage, aber wo
+    das Teil liegt, steht hier. Das gilt **immer**, wenn es mehr als eine
+    Platte gibt — auch beim Export ohne Bettkoordinaten. Sonst stünde die
+    zweite Platte auf der ersten.
     """
-    across = (bed[0] / 2.0 if bed else 0.0) + plate * stride
-    along = bed[1] / 2.0 if bed else 0.0
+    across = (bed[0] / 2.0 if bed else 0.0) + origin[0]
+    along = (bed[1] / 2.0 if bed else 0.0) + origin[1]
     if not across and not along:
         return None
     return f"1 0 0 0 1 0 0 0 1 {across:g} {along:g} 0"
 
 
-#: Wie weit die nächste Druckplatte nach rechts rückt, als Vielfaches der
-#: Bettbreite.
+#: Wie viel Luft die Orca-Familie zwischen zwei Platten lässt, als Anteil von
+#: Breite und Tiefe des Betts — ``LOGICAL_PART_PLATE_GAP = 1. / 5.`` in
+#: ``PartPlate.cpp``, gleichlautend in OrcaSlicer (seit 1.9), Bambu Studio
+#: und ElegooSlicer (1.5.3.4, die installierte Fassung).
 #:
-#: **Nachgemessen, nicht angenommen.** In ``BowlingGame.3mf`` — vom
-#: ElegooSlicer für denselben Drucker geschrieben, Bett 256 auf 256 — steht das
-#: Objekt der ersten Platte bei x = 127,82 und das der zweiten bei x = 416,14.
-#: Die Differenz von 288,3 mm ist 256 plus ein Achtel davon, und plattenlokal
-#: stehen beide an derselben Stelle. Ein geratener Abstand legte die Teile
-#: neben ihre Platte, und angesehen hätte man es der Datei nicht.
-PLATE_STRIDE = 1.125
+#: **Hier stand ein Achtel, und es war eine Fehllesung.** In
+#: ``BowlingGame.3mf`` lag das Objekt der ersten Platte bei x = 127,82 und
+#: das der zweiten bei 416,14; die Differenz von 288,3 mm las sich als 256
+#: plus ein Achtel — unter der Annahme, beide stünden plattenlokal an
+#: derselben Stelle. Sie standen es nicht. Mit vier Platten fiel es auf: Die
+#: Buchstaben der dritten und vierten lagen im ElegooSlicer rechts neben
+#: allem, denn der legt Platten nicht in eine Reihe (Robert, 11.09.2026: „so
+#: ganz passt die ausrichtung an den platten … nicht"). Gemessen am
+#: installierten Slicer per ``--arrange 1 --export-3mf`` mit fünf
+#: bettfüllenden Klötzen und Solidons Maschinenprofil (256 mm): Plattenmitten
+#: bei x = 128, 435,2 und 742,4, in der zweiten Zeile bei y = -179,2 — ein
+#: Schritt von 307,2, also ein Fünftel, und drei Spalten für fünf Platten.
+PLATE_GAP = 1.0 / 5.0
+
+
+def plate_origin(rank: int, count: int, bed: tuple[float, float]) -> tuple[float, float]:
+    """Wo die Orca-Familie Platte ``rank`` von ``count`` hinlegt (§20).
+
+    Ihr ``PartPlateList`` rechnet ``cols = ceil(sqrt(count))`` Spalten
+    (``compute_colum_count``) und legt Platte *i* in Spalte ``i % cols`` und
+    Zeile ``i // cols``; Spalten gehen nach rechts, Zeilen nach **unten** —
+    ``compute_shape_position``: ``pos.y = -row * plate_stride_y()``. Vier
+    Platten sind ein Zweierquadrat, fünf brauchen drei Spalten. ``count`` ist
+    die Zahl der Platten **in der Datei**, denn daraus rechnet der Slicer
+    seine Spalten.
+    """
+    columns = max(1, ceil(sqrt(count)))
+    row, column = divmod(rank, columns)
+    return column * bed[0] * (1.0 + PLATE_GAP), -row * bed[1] * (1.0 + PLATE_GAP)
 
 
 def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:

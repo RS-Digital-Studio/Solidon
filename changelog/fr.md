@@ -56,6 +56,7 @@ dans `website/version.json`.
 - « Ouvrir dans le slicer » transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau.
 - Pour la séparation, le lettrage et la texture, le rapport donne le nombre dans la phrase, là où un espace réservé entre accolades figurait avant.
 - Un lettrage auquel vous avez attribué un filament le garde quand il est séparé en lettres. Avant, il arrivait dans le slicer sur un second filament gris, celui attribué restant inutilisé à côté.
+- Avec plusieurs plateaux, les pièces arrivent dans le slicer là où il place ses plateaux : dans la grille qu'il dispose lui-même. Avant, les lettres du troisième et du quatrième restaient à côté.
 
 ## 0.4.0
 

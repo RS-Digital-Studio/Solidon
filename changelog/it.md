@@ -55,6 +55,7 @@ scrive in `website/version.json`.
 - «Apri nello slicer» consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano.
 - Per separazione, scritta e texture il rapporto indica il numero nella frase, dove prima c'era un segnaposto tra parentesi graffe.
 - Una scritta a cui avete assegnato un filamento lo conserva quando viene separata in lettere. Prima arrivava nello slicer su un secondo filamento grigio, con quello assegnato accanto inutilizzato.
+- Con più piatti, le parti arrivano ora nello slicer dove lui tiene i suoi piatti: nella griglia che dispone da sé. Prima le lettere del terzo e del quarto piatto stavano accanto a tutto.
 
 ## 0.4.0
 

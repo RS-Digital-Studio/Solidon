@@ -112,9 +112,17 @@ und die Einstellungen kommen bei ihm über die Kommandozeile.
 
 **Mehrere Platten: eine Datei, wo der Slicer Platten kennt**
 (`knows_plates`). Die Orca-Familie speichert ihre Projekte mit je einem
-`plate`-Block und den Teilen plattenweise nebeneinander (`PLATE_STRIDE`,
-nachgemessen an `BowlingGame.3mf`), und genau diese Datei schreibt
-`write_assembly` ohne `plate`. *Im Slicer öffnen* gibt ihr deshalb alle
+`plate`-Block und den Teilen plattenweise **im Raster** — `ceil(sqrt(n))`
+Spalten, die Zeilen nach unten, ein Fünftel Bett Luft (`plate_origin`,
+`PLATE_GAP`; aus `PartPlate.cpp` gelesen und am installierten ElegooSlicer
+gemessen: fünf Platten auf 256 mm liegen bei x = 128, 435,2, 742,4 und in
+der zweiten Zeile bei y = −179,2). Bis zum 11.09.2026 stand hier „eine Reihe,
+ein Achtel", nachgemessen an `BowlingGame.3mf` — die Messung nahm an, zwei
+Objekte stünden plattenlokal an derselben Stelle, und bei vier Platten lagen
+die Buchstaben der dritten und vierten im Slicer neben allem. Genau diese
+Datei schreibt `write_assembly` ohne `plate`; die Blöcke zählen durch (Rang,
+nicht Solidons Plattennummer), denn aus ihrer Zahl rechnet der Slicer die
+Spalten. *Im Slicer öffnen* gibt ihr deshalb alle
 gewählten Platten in einer Datei — ein Fenster, nicht vier: Vier Starts des
 ElegooSlicers auf einmal stritten um dieselbe Filamentbibliothek, bis einer
 mit „remove_all: Zugriff verweigert" abbrach (Robert, 11.09.2026).
