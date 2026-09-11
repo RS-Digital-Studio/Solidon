@@ -1,7 +1,9 @@
 # Gesamtdurchsicht 11.09.2026 — was offen bleibt
 
-Neun Durchsichten über alle Bereiche, danach eine Nacht Arbeit. Zehn Commits
-sind draußen (`d9c48907` bis `cf776b51`). Was hier steht, ist **nicht**
+Neun Durchsichten über alle Bereiche, danach eine Nacht Arbeit, danach eine
+Nachkontrolle über die eigenen Commits. Dreizehn Commits sind draußen
+(`d9c48907` bis `cb876947`) — die letzten drei behoben, was die Nachkontrolle
+an der Arbeit der Nacht selbst gefunden hat. Was hier steht, ist **nicht**
 erledigt und gehört ins Register von `ROADMAP.md`, sobald die Datei frei ist —
 sie lag während der ganzen Nacht mit ungestagten Änderungen einer zweiten
 Sitzung im Baum, und offene Arbeit steht im Register und nirgends sonst.
@@ -56,17 +58,28 @@ mit einer Bohrung nahe der Kante bekommt bei Länge 40 eine offene Flanke und
 keinen Befund. `.claude/rules/operationen.md` sagt zu, dass an einem Langloch
 an **beiden Enden** gefragt wird.
 
-### Das Langloch wird 0,02 mm größer als gemessen, und das summiert sich
+### Die Breite eines Langlochs wächst bei jedem Zug um 0,016 mm
 
 `prepare.py:493` baut das Werkzeug mit `radius=(diameter + FEATURE_OVERLAP)/2`,
 gibt aber `diameter=diameter` im `BoreResult` zurück. Die geraden Flanken sind
-exakte Geraden bei ±(d+0,02)/2; `perceive/slots.py:267` liest daraus
-**d + 0,02**, und `length = travel + diameter` macht daraus L + 0,02. Der
-nächste Zug bekommt 5,02 als Eingang und legt wieder 0,02 drauf. Gemessen am
-Test `tests/test_slot_features.py:272`: Ausgangslangloch Ø 5,000 / 20,0 mm,
-`slot_length=28` → Breite 5,02, Länge 28,02; die Zusicherung deckt es mit
-`abs=0.05` zu. Der zweite Eingang zur selben Form (`drill_tool`,
-`prepare.py:820`) legt die Zugabe **nicht** auf — zwei Wege, zwei Maße.
+exakte Geraden bei ±(d+0,02)/2, und `perceive/slots.py` liest daraus **d + 0,02**.
+
+**Gemessen über drei Züge** (Platte 80 × 40 × 10, Bohrung Ø 5 mit
+Materialtoleranz, dann dreimal gezogen):
+
+| Zug | eingegeben | gemessene Länge | gemessene Breite |
+|---|---|---|---|
+| 1 | 20,00 | 20,0156 | 5,2057 |
+| 2 | 24,00 | 24,0158 | 5,2215 |
+| 3 | 28,00 | 28,0156 | 5,2371 |
+
+Die **Länge** summiert sich nicht auf — die Abweichung bleibt bei +0,016 mm,
+weil `slot_travel` gegen den nominalen Durchmesser rechnet. Die **Breite**
+wächst je Zug um 0,0157 mm: nach drei Zügen 0,047 mm über dem gemessenen Maß,
+ein Viertel der Materialtoleranz. Der zweite Eingang zur selben Form
+(`drill_tool`, `prepare.py:820`) legt die Zugabe **nicht** auf — zwei Wege,
+zwei Maße. Der Test `tests/test_slot_features.py:272` deckt es mit `abs=0.05`
+zu.
 
 ### `_widening_findings` spricht bei `slot_hole` von einer Durchmesseränderung, die es nicht gab
 
@@ -127,6 +140,28 @@ bekannt." Die Datei liegt ungestaged im Baum; der Text gehört der zweiten
 Sitzung, und `tests/test_translations.py` ist bis dahin rot. Der reparierte
 `pre-commit`-Wächter (`e1a63f82`) fängt sie bei ihrem Commit.
 
+## Aus der Nachkontrolle: was in den Commits steckt, das nicht hineingehört
+
+`7354f62d` heißt „Zwei Funde an derselben Operation" und nennt als Beifang zwei
+Katalogzeilen. Tatsächlich sind es **301 eingefügte Zeilen** in
+`prepare_ops.py`, davon zwei Hunks zu den genannten Funden. Mitgekommen ist
+ungestagte Arbeit der zweiten Sitzung: `x/y/z` als Vorderseitenfelder für
+`ResizeHoleParams` und `SlotHoleParams`, `moved_hole`/`moved` samt
+`edit.fill_bore` und `_closed_at`, `_polygon_gain_for`, und der Tausch
+`applies_to` — `fillet` wandert von `move_feature` zu `remove_feature`, also
+eine Änderung daran, was das Menü anbietet. `8aeae333` bringt zusätzlich den
+Regelabschnitt „Ein Loch versetzt man an beiden Kernen gleich" zu eben dieser
+Arbeit.
+
+Nichts davon wird rückabgewickelt (kein Revert). Was bleibt, ist die Lehre:
+**`git add <datei>` nimmt die ganze Datei, auch die fremden Zeilen darin.** Im
+geteilten Baum gehört `git diff --cached --stat` vor jeden Commit — und gelesen
+wird er gegen die eigene Absicht, nicht gegen das Gefühl.
+
+Die zweite Sitzung hat auf dieser Arbeit inzwischen weitergebaut
+(`compensation_findings` beim Versetzen, `slot` in `PARAMETRIC_KINDS`), beides
+mit dem Vermerk „Fund des Reviews, 11.09.2026".
+
 ## Nachgeprüft und **nicht** zu ändern
 
 - **`types.is_a_cavity` führt `slot` bewusst nicht.** Zwei Durchsichten haben
@@ -141,7 +176,8 @@ Sitzung, und `tests/test_translations.py` ist bis dahin rot. Der reparierte
   vier.
 - **`slot_hole` hat sehr wohl eine Vorgabe für die Länge** (20,0). Gemeldet war
   „begrüßt mit einer Absage bei Ø 6,6"; am Stand vom 11.09.2026 trifft das
-  nicht zu.
+  nicht zu. **Eine Absage gab es trotzdem**, und zwar durch die Prüfung, die in
+  derselben Nacht dazukam — behoben in `cb876947`.
 
 ## `mushroom.stl`
 
