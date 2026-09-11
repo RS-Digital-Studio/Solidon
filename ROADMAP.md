@@ -1002,6 +1002,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `viewport.slot_handle_feature` gibt es getrennt von `gizmo_feature`, weil die zwei Mengen heute
   auseinanderliegen — mit dieser Arbeit dürfen sie es wieder gemeinsam tun.
 
+  **Das Versetzen selbst ist seit dem 11.09.2026 draußen**, und zwar über einen anderen Weg als
+  hier beschrieben: `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`) und
+  schließen dabei die alte — am Netz über `_closed_at`, am exakten Körper über
+  `brep.edit.fill_bore`. Beide Kerne können es damit gleich gut. Was offen bleibt, sind die
+  **vier Handlungen** oben: `move_feature`, `rotate_feature`, `duplicate_feature` und
+  `remove_feature` führen `slot` weiterhin nicht in `applies_to`, und ihr Werkzeugkörper ist
+  weiter ein Zylinder.
+
 <a id="rm-154"></a>
 
 - [ ] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** `slot_hole` liest eine 0 im
@@ -1017,8 +1025,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   betrifft. Abnahme: Entweder das Konzept mit Robert entscheiden und überall einlösen, oder eine
   begründete zweite Antwort für diesen einen Fall — beides nicht nebenbei.
 
-## Bedienung und Darstellung
+  **Und seit dem 11.09.2026 hängen sechs weitere Felder derselben Bauart daran.** `slot_hole`
+  und `resize_hole` lesen drei Nullen in `x/y/z` als „lass das Loch, wo es ist“ — damit
+  lässt es sich in jede Stelle versetzen außer in den **Ursprung**, und an einer mittig
+  gelegten Platte ist (0 | 0 | z) kein Randfall, sondern die Mitte des Teils. Abnahme dafür:
+  ein Loch in die Teilemitte schieben, und der Schritt trägt die drei Nullen als Absicht.
 
+## Bedienung und Darstellung
 <a id="rm-070"></a>
 
 - [~] **RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen.** HID-Anbindung und

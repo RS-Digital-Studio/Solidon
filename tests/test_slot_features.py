@@ -341,7 +341,21 @@ def test_a_slot_offers_the_one_operation_that_fits_it() -> None:
 
     assert "slot_hole" in {spec.name for spec in REGISTRY.for_feature("slot")}
     zeile = next(action for action in actions_for(slot) if action.op == "slot_hole")
-    assert {field.name for field in zeile.fields} == {"slot_length", "slot_angle"}
+    # Länge, Richtung — **und die Stelle**: Seit dem 10.09.2026 führt
+    # ``slot_hole`` seine Mitte selbst, damit es dieselbe Flächenplatzierung
+    # bekommt wie *Bohrung setzen* (Robert: „einfach wie wenn ich eine bohrung
+    # setze"). Die drei Felder tragen den gemessenen Ort.
+    assert {field.name for field in zeile.fields} == {
+        "slot_length",
+        "slot_angle",
+        "x",
+        "y",
+        "z",
+    }
+    werte = {field.name: field.value for field in zeile.fields}
+    assert (werte["x"], werte["y"], werte["z"]) == pytest.approx((0.0, 0.0, 0.0)), (
+        "die Stelle steht auf der gemessenen Mitte, nicht auf dem Ursprung von irgendwo"
+    )
     assert quick_names(1, "slot") == (), "was als Feld dasteht, wird kein zweiter Knopf"
 
 
@@ -516,3 +530,42 @@ def test_the_slot_defaults_make_a_slot_and_not_an_error(profile: Profile) -> Non
     assert any(feature.kind == "slot" for feature in longer.features.values()), (
         "aus der Vorgabe entsteht ein Langloch und keine Absage"
     )
+
+
+def test_a_slot_moves_and_closes_the_place_it_came_from(profile: Profile) -> None:
+    """Wer versetzt, schließt die alte Stelle — sonst stehen zwei Löcher da.
+
+    *Zum Langloch ziehen* führt seit dem 10.09.2026 seine eigene Mitte, damit es
+    dieselbe Flächenplatzierung bekommt wie *Bohrung setzen* (Robert: „einfach
+    wie wenn ich eine bohrung setze"). Gemessen ohne das Schließen: `hole_1`
+    und `slot_1` im selben Körper, die alte Bohrung unverändert offen.
+
+    Drei Nullen heißen dabei „lass es, wo es ist" — der Weg über Chat und
+    Kommandozeile nennt keine Stelle, und der Ursprung wäre dort die falsche
+    Antwort.
+    """
+    mesh = drill(
+        plate(),
+        profile=profile,
+        position=(10.0, 5.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+
+    versetzt = run_op(
+        "slot_hole", entry, profile, at_feature=bore, slot_length=20.0, x=-10.0, y=-8.0, z=0.0
+    )
+
+    arten = [feature.kind for feature in versetzt.features.values()]
+    assert arten.count("slot") == 1, "genau ein Langloch"
+    assert "hole" not in arten, "und die alte Bohrung ist zu"
+    slot = next(feature for feature in versetzt.features.values() if feature.kind == "slot")
+    assert slot.params["centre"] == pytest.approx((-10.0, -8.0, 0.0), abs=0.05)
+
+    # Und ohne Stelle bleibt es, wo es war.
+    geblieben = run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
+    stehend = next(feature for feature in geblieben.features.values() if feature.kind == "slot")
+    assert stehend.params["centre"] == pytest.approx((10.0, 5.0, 0.0), abs=0.05)

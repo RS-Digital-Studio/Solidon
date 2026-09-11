@@ -543,7 +543,15 @@ DUPLICABLE_KINDS: Final = ("hole", "pin", "cone", "sphere")
 #: Für sie baut :func:`_feature_solid` ihn daraus, und das ist auch der
 #: einzige Weg, der eine **durchgehende** Bohrung trägt: Ihr Flächenausschnitt
 #: hat zwei Randringe, und ein Deckel aus einem Fächer schließt nur einen.
-PARAMETRIC_KINDS: Final = ("hole", "pin")
+#:
+#: **Das Langloch gehört seit dem 11.09.2026 dazu.** Es ist aus Mitte, Achse,
+#: Durchmesser, Tiefe, Länge und Richtung vollständig beschrieben — genau wie
+#: eine Bohrung, nur mit zwei Bogenmittelpunkten statt einem. Ohne den Eintrag
+#: fiel `_tool_for` auf `_feature_body`, bekam aus dem Flächenausschnitt keinen
+#: geschlossenen Körper und endete in der Absage über Senkungen: Wer ein
+#: vorhandenes Langloch versetzen wollte, las einen Satz über einen Fall, den es
+#: dort nicht gibt (Fund des Reviews, 11.09.2026).
+PARAMETRIC_KINDS: Final = ("hole", "pin", "slot")
 
 #: Wie viele Seiten ein gebauter Zylinder oder Kegel bekommt. Dieselbe Zahl wie
 #: beim Bohren — ein Stopfen mit anderer Auflösung träfe die Bohrungswand in
@@ -556,6 +564,17 @@ FEATURE_SECTIONS: Final = BORE_SECTIONS
 # gelesen. Die Zahl stand am 10.09.2026 an zwei Stellen mit demselben Wert und
 # derselben Begründung — einmal hier, einmal als ``SLOT_OVERLAP`` daneben; die
 # zweite ist gefallen.
+
+
+def _slot_angle_in_frame(feature: Feature, direction: Any) -> float:
+    """Die Richtung eines erkannten Langlochs, gezählt gegen seinen Rahmen.
+
+    Dieselbe Frage, die :func:`slot_angle_of` beantwortet — hier mit der Achse,
+    die der Aufrufer gerade verwendet, denn beim Drehen ist sie eine andere als
+    die gemessene.
+    """
+    axis = (float(direction[0]), float(direction[1]), float(direction[2]))
+    return slot_angle_of(feature, axis)
 
 
 def _feature_solid(
@@ -615,6 +634,37 @@ def _feature_solid(
         # ``cone`` steht mit der Spitze oben auf z=0; für einen Hohlraum zeigt
         # sie ins Material, also entlang der Achse.
         body.apply_translation((0.0, 0.0, -height / 2.0))
+    elif feature.kind == "slot":
+        # **Ein Langloch ist eine Bohrung mit zwei Bogenmittelpunkten.** Der
+        # Umriss kommt aus derselben Funktion, die auch schneidet
+        # (`prepare.slot_profile`), und wird aufgezogen statt rotiert — ein
+        # Zylinder träfe seine geraden Flanken nicht. Aufgezogen wird in der
+        # **lokalen** Ebene; die Drehung in die Achse macht der gemeinsame
+        # Schluss unten, wie bei Zylinder und Kegel auch.
+        from app.core.geom.prepare import slot_profile, slot_travel
+        from app.core.geom.sketch_solid import extrude_profile
+
+        measured = float(feature.params.get("diameter", 0.0)) * scale
+        travel = slot_travel(diameter=measured, length=float(feature.params.get("length", 0.0)))
+        if travel <= EPS_GEOM:
+            body = trimesh.creation.cylinder(
+                radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
+            )
+        else:
+            body = extrude_profile(
+                slot_profile(
+                    radius=diameter / 2.0,
+                    travel=travel,
+                    angle_deg=_slot_angle_in_frame(feature, direction),
+                ),
+                height,
+                PlaneFrame(
+                    origin=(0.0, 0.0, -height / 2.0),
+                    x_axis=(1.0, 0.0, 0.0),
+                    y_axis=(0.0, 1.0, 0.0),
+                    normal=(0.0, 0.0, 1.0),
+                ),
+            )
     else:
         body = trimesh.creation.cylinder(
             radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
@@ -3104,6 +3154,14 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
     if result.solver is None:
         return OpResult(outputs=[source], findings=result.findings)
+    # **Und die Toleranz wird auch beim Versetzen gemeldet.** `drill` erzeugt
+    # den Befund nur bei `compensate=True`, und der Aufruf oben setzt `False`,
+    # weil `cut` sie schon trägt — ohne diese Zeile verschwände die Auskunft
+    # „Die Bohrung wurde um die Materialtoleranz vergrößert" still, sobald das
+    # Loch die Stelle wechselt (Fund des Reviews, 11.09.2026).
+    moved_findings = (
+        compensation_findings(params.diameter, cut, params.compensate) if moved_hole else []
+    )
     resized_feature = _recognised_resized_feature(
         result.mesh, looked_for, cut if moved_hole else result.diameter
     )
@@ -3118,7 +3176,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     features = (
         {**carried, feature.id: resized_feature} if resized_feature is not None else dict(carried)
     )
-    findings = [*closed_first, *result.findings]
+    findings = [*closed_first, *result.findings, *moved_findings]
     findings.extend(_widening_findings(source, feature, params.diameter))
     if resized_feature is None:
         findings.append(_bore_no_longer_a_feature(feature, result.diameter))

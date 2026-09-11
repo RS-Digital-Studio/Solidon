@@ -953,8 +953,20 @@ def seat_of(
             if border.distance(Point(to_plane(prepared.frame, edge.start))) <= EPS_GEOM
             and border.distance(Point(to_plane(prepared.frame, edge.end))) <= EPS_GEOM
         )
-        return replace(prepared, area=outer, edges=edges), mouth
+        return replace(prepared, area=outer, edges=edges, centres=_others(prepared, feature)), mouth
     return None
+
+
+def _others(prepared: PreparedSurface, feature: Feature) -> tuple[tuple[str, Vec3], ...]:
+    """Die Mittenbezüge der Fläche ohne den des Merkmals selbst.
+
+    Der Abstand eines Lochs zu seiner eigenen Mitte ist null, und zwar immer.
+    Er stand als zwei Zahlenfelder im Bild und beantwortete keine Frage
+    (Robert, 10.09.2026: „die 2 mit mitte 0 brauchen wir hier nicht oder was
+    sollen sie zeigen"). Was bleibt, sind die Mitten der **anderen** Löcher —
+    genau das, was man beim Versetzen wissen will.
+    """
+    return tuple(entry for entry in prepared.centres if entry[0] != feature.id)
 
 
 #: Wie genau die Normale einer Fläche auf der Achse eines Merkmals liegen muss,
@@ -1100,7 +1112,22 @@ def supports_surface_placement(spec: OperationSpec) -> bool:
 
     return (
         spec.name
-        in {"drill_hole", "label_text", "create_label", "move_feature", "duplicate_feature"}
+        in {
+            "drill_hole",
+            "label_text",
+            "create_label",
+            "move_feature",
+            "duplicate_feature",
+            # **Ein Langloch wird gesetzt wie eine Bohrung** (Robert,
+            # 10.09.2026: „einfach wie wenn ich eine bohrung setze"). Es sitzt
+            # auf einer Fläche, es hat eine Mitte, und seine Maße zu den Kanten
+            # sind dieselbe Frage — also bekommt es dieselbe Bedienung, statt
+            # einer zweiten daneben.
+            "slot_hole",
+            # Und dasselbe beim Ändern: Wer den Durchmesser einer Bohrung
+            # bewegt, will dabei sehen, wo sie sitzt.
+            "resize_hole",
+        }
         or spec.name in _SURFACE_PRIMITIVES
         or part_of(spec.name) is not None
     )
@@ -1125,7 +1152,40 @@ def surface_values(
             ),
         )
     target = placement.point
-    if spec.name in {"move_feature", "duplicate_feature"}:
+    if spec.name in {"slot_hole", "resize_hole"} and feature is not None:
+        # **Die Mündung ist nicht die Mitte.** Ein durchgehendes Loch hat seine
+        # Mitte auf halber Tiefe; die Fläche, auf die gezeigt wird, liegt
+        # darüber. ``slot_hole`` führt die **Mitte**, also wird hier
+        # umgerechnet — dieselbe Rechnung wie ``anchor="mouth"`` bei
+        # *Bohrung setzen*, nur an einem Loch, das es schon gibt.
+        depth = feature.params.get("depth")
+        axis = feature.params.get("axis")
+        if not isinstance(depth, int | float) or axis is None:
+            # **Ohne Tiefe oder Achse gibt es keine Mitte** (Regel 21). Bis zum
+            # 11.09.2026 blieb `target` dann die **Mündung** und wanderte als
+            # Mitte weiter — das Loch saß um die halbe Tiefe daneben, ohne
+            # Befund und ohne Absage. `seat_of` beantwortet dieselbe Frage seit
+            # je mit `None`; hier steht sie jetzt genauso.
+            raise _reject(
+                "at_feature",
+                tr("Zu diesem Merkmal sind Tiefe und Achse nicht bekannt."),
+            )
+        along = np.asarray(axis, dtype=float)
+        span = float(np.linalg.norm(along))
+        if span <= EPS_GEOM:
+            raise _reject(
+                "at_feature",
+                tr("Zu diesem Merkmal ist keine Achse bekannt."),
+            )
+        # **Die Mündung liegt auf der Seite, auf die die Achse zeigt** — und
+        # nach einem freien Klick muss das nicht mehr gelten: Wer die
+        # Gegenfläche trifft, bekäme das Loch um die volle Tiefe versetzt.
+        # Das Vorzeichen kommt deshalb aus der Fläche, auf der gerade gezielt
+        # wird, nicht aus der Achse allein.
+        facing = float(np.asarray(placement.frame.normal, dtype=float) @ (along / span))
+        towards = 1.0 if facing >= 0.0 else -1.0
+        target = _vec(np.asarray(target) - along / span * towards * (float(depth) / 2.0))
+    elif spec.name in {"move_feature", "duplicate_feature"}:
         if feature is None or source is None:
             raise _reject(
                 "feature", tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört.")
@@ -1234,6 +1294,18 @@ def prepare_tool(
     return PlacementTool(_creation_tool(spec, entered_values, profile, source=source))
 
 
+def _feature_named(source: SceneObject | None, name: str) -> Feature | None:
+    """Das erkannte Merkmal dieses Körpers — oder ``None``.
+
+    Die Vorschau eines vorhandenen Lochs liest seine Maße von dort; ohne
+    Körper oder ohne Kennung gibt es nichts zu lesen, und geraten wird nichts
+    (Regel 21).
+    """
+    if source is None or not name:
+        return None
+    return source.features.get(name)
+
+
 def _creation_tool(
     spec: OperationSpec,
     entered_values: Mapping[str, Any],
@@ -1283,6 +1355,58 @@ def _creation_tool(
             transition_angle=float(values.transition_angle),
             slot_length=shape.slot_length,
             slot_angle=shape.slot_angle,
+        )
+    if spec.name in {"slot_hole", "resize_hole"}:
+        from app.core.geom.prepare import bore_diameter, drill_tool, slot_travel
+        from app.core.geom.prepare_ops import slot_angle_of
+
+        # **Ein Loch, das schon da ist, hat seine Maße am Merkmal.** Die zwei
+        # Operationen tragen nur, was sich ändern soll — die Länge, den
+        # Durchmesser —, und lesen Mitte, Achse und Tiefe aus dem erkannten
+        # Merkmal. Die Vorschau braucht denselben Körper, und ohne ihn blieb
+        # *Übernehmen* grau: `PlacementFlow` gibt den Knopf nur frei, wenn ein
+        # Werkzeug steht (Fund des Reviews, 11.09.2026).
+        values = validate(spec.params, entered_values)
+        feature = _feature_named(source, str(getattr(values, "at_feature", "") or ""))
+        if feature is None:
+            raise _reject(
+                "at_feature",
+                tr("Zu dieser Kennung gibt es kein Merkmal. Wählen Sie es im Bild erneut."),
+            )
+        measured = float(feature.params.get("diameter") or 0.0)
+        depth = float(feature.params.get("depth") or 0.0)
+        if measured <= 0.0 or depth <= 0.0:
+            raise _reject(
+                "at_feature",
+                tr("Zu diesem Merkmal sind Durchmesser und Tiefe nicht bekannt."),
+            )
+        if spec.name == "resize_hole":
+            cut = bore_diameter(
+                float(values.diameter), profile, bool(getattr(values, "compensate", False))
+            )
+            length = 0.0
+            angle = 0.0
+        else:
+            cut = measured
+            length = float(values.slot_length)
+            axis = feature.params.get("axis") or (0.0, 0.0, 1.0)
+            angle = float(values.slot_angle) or slot_angle_of(
+                feature, (float(axis[0]), float(axis[1]), float(axis[2]))
+            )
+            # Eine Länge unter dem Durchmesser ist kein Langloch; der Kern
+            # lehnt sie ab, und die Vorschau soll nicht zeigen, was danach
+            # nicht kommt.
+            if slot_travel(diameter=cut, length=length) <= 0.0:
+                length = 0.0
+        return drill_tool(
+            diameter=cut,
+            depth=depth,
+            profile=profile,
+            # **Schon gerechnet.** ``bore_diameter`` oben hat die Toleranz
+            # aufgeschlagen, wo sie gilt; ein zweites Mal wäre sie zweimal drauf.
+            compensate=False,
+            slot_length=length,
+            slot_angle=angle,
         )
     if spec.name in {"label_text", "create_label"}:
         from app.core.geom.label_ops import local_text_body

@@ -419,6 +419,20 @@ schrumpfte die Bohrung bei jedem Versetzen (gemessen: 7,9848 vorher, 7,9696
 danach; mit Zugabe 7,9867). Am exakten Körper entfällt sie — dort ist der
 Zylinder ein Zylinder.
 
+**Der versetzte Weg trifft das Sollmaß damit genauer als der stehende**, und
+das ist kein Fehler, sondern die Zugabe: An einer Ø-6-Bohrung, auf 8,0 mit
+Materialtoleranz geändert, kommen stehend 8,1844 und versetzt 8,2020 heraus.
+Der Toleranzbefund (`bore.compensated`) wird dabei **eigens** angehängt —
+`drill` erzeugt ihn nur bei `compensate=True`, und der versetzte Aufruf setzt
+`False`, weil `cut` sie schon trägt.
+
+**Ein Langloch ist parametrisch.** Es steht seit dem 11.09.2026 in
+`PARAMETRIC_KINDS`, und `_feature_solid` zieht seinen Umriss auf statt einen
+Zylinder zu drehen. Ohne den Eintrag fiel `_tool_for` auf `_feature_body`,
+bekam aus dem Flächenausschnitt keinen geschlossenen Körper und endete in der
+Absage über Senkungen: Wer ein **vorhandenes** Langloch versetzen wollte, las
+einen Satz über einen Fall, den es dort nicht gibt.
+
 ## Szene: Platzierung, Kennungen, Cache, Projektdatei
 
 Bis zum 06.09.2026 standen diese Regeln in der Karte `app/core/scene/CLAUDE.md`;
@@ -433,6 +447,13 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Kreisfacetten liefern keine scheinbaren linearen Maße. Auf gekrümmten
   Flächen bleiben Punkt und Normale nutzbar, aber keine ebenen Abstände.
   Mittelpunkt-Offsets zeigen von der Bohrungsmitte zum Ziel entlang U/V.
+- **Ohne Tiefe und Achse gibt es keine Mitte.** `surface_values` rechnet die
+  Mündung eines Lochs auf seine Mitte um; fehlte eines von beiden, blieb der
+  Wert die **Mündung** und wanderte als Mitte weiter — das Loch saß um die
+  halbe Tiefe daneben, ohne Befund und ohne Absage. `seat_of` beantwortet
+  dieselbe Frage seit je mit `None` (Regel 21). Und das Vorzeichen kommt aus
+  der **Fläche**, auf der gezielt wird, nicht aus der Achse allein: Nach einem
+  freien Klick kann das die Gegenseite sein.
 - **Und die eigene Mitte ist kein Bezug.** `seat_of` nimmt das Merkmal selbst
   aus den Mittenbezügen der Fläche: Der Abstand eines Lochs zu seiner eigenen
   Mitte ist null, und zwar immer — im Bild standen dafür zwei Zahlenfelder, die
