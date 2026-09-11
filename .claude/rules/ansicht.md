@@ -811,6 +811,17 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   **nicht** mitbekommt — die Operation liest ihn aus dem Merkmal. Ein Zug, der
   sie verschöbe, verspräche etwas, das der Schnitt nicht einlöst; deshalb
   spiegelt der gegenüberliegende Knopf den gegriffenen.
+* **Er kommt mit *Im Bild einstellen*, nicht mit der Auswahl** — wie der
+  Bewegungsgriff an Bohrung und Langloch (Entscheidung Robert, 11.09.2026:
+  „noch bevor ich auf im Bild einstellen anklicke ist das Gizmo schon da").
+  Die Ansage ist der Zeiger der Platzierung (`set_placement_pointer`); mit ihm
+  baut `set_gizmo` die Griffe, ohne ihn zeigt die Auswahl nur, was gewählt
+  ist. Welche Arten das betrifft, sagt `placed_feature_kinds()` — dieselbe
+  Quelle wie der Knopf rechts (`panels.LEADS_INTO_THE_VIEW`). An allen anderen
+  Merkmalen bleibt die Auswahl die Ansage.
+* **Und am Langloch stehen beide Griffe** — die Knöpfe für Länge und Richtung
+  und die Pfeile und Ringe des Bewegungsgriffs, seit es sich versetzen und
+  drehen lässt (RM-153). Der Ring um die Bohrachse dreht die Mittellinie.
 * **Kürzer als `prepare.shortest_slot` lässt er sich nicht ziehen.** Der Kern
   lehnt das ab (`prepare.SLOT_TOO_SHORT`), und eine Geste, die in einer Absage
   endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und nicht

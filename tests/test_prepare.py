@@ -2123,7 +2123,8 @@ def test_turning_a_feature_is_registered_completely() -> None:
     """
     spec = REGISTRY.get("rotate_feature")
 
-    assert set(spec.applies_to) == {"hole", "pin", "cone"}
+    # Das Langloch seit RM-153 (11.09.2026): Es dreht seine Mittellinie mit.
+    assert set(spec.applies_to) == {"hole", "pin", "cone", "slot"}
     assert "sphere" not in spec.applies_to, "eine Kugel hat keine Lage"
     assert spec.touches_features
     fields = {entry.name: entry for entry in spec.params.spec()}

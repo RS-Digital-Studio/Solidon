@@ -202,11 +202,23 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
     depth = float(feature.params.get("depth") or 0.0)
     if axis is None or centre is None or diameter <= EPS_GEOM or depth <= EPS_GEOM:
         return None
+    # **Ein Langloch hat keine gleichmäßige Wand — also nennt niemand eine.**
+    # Die Rechnung darunter ist der halbe Unterschied zweier Durchmesser, und
+    # an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm ergäbe sie 6 mm,
+    # wo die dünnste Stelle 3 mm misst. Bis zum 11.09.2026 hielt
+    # ``is_a_cavity`` das Langloch deshalb aus allem heraus; seit es dort ein
+    # Hohlraum ist (RM-153, sonst ließe es sich weder versetzen noch
+    # entfernen), steht die Ausnahme hier, wo sie hingehört — und RM-152 nennt,
+    # was an ihre Stelle träte: eine Wand, an der dünnsten Stelle gemessen.
+    if feature.kind == "slot":
+        return None
 
     inside = is_a_cavity(feature)
     best: Sleeve | None = None
     for candidate in features.values():
-        if candidate.id == feature.id or is_a_cavity(candidate) == inside:
+        if candidate.id == feature.id or candidate.kind == "slot":
+            continue
+        if is_a_cavity(candidate) == inside:
             continue
         other_axis = axis_of(candidate)
         other_centre = centre_of(candidate)

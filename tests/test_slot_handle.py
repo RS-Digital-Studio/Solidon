@@ -452,8 +452,15 @@ def test_the_knobs_appear_at_a_hole_and_nowhere_else(qt_app: object) -> None:
 
         viewport.select_feature("hole_1")
         viewport.set_gizmo(True)
-        assert viewport._slot_handle is not None, "an der Bohrung stehen die Knöpfe"
+        assert viewport._slot_handle is None, (
+            "die Auswahl allein zeigt nur, was gewählt ist (Robert, 11.09.2026)"
+        )
+        viewport.set_placement_pointer(lambda event: False)
+        assert viewport._slot_handle is not None, "mit *Im Bild einstellen* stehen die Knöpfe"
         assert viewport._scale_handle is None, "und kein Würfel — ein Merkmal hat keine Größe"
+        viewport.set_placement_pointer(None)
+        assert viewport._slot_handle is None, "und sie gehen mit der Platzierung"
+        viewport.set_placement_pointer(lambda event: False)
 
         viewport.select_feature("fillet_1")
         viewport.set_gizmo(True)
@@ -473,7 +480,12 @@ def test_the_knobs_appear_at_a_hole_and_nowhere_else(qt_app: object) -> None:
 
 
 def a_slot_in_the_view(viewport: object) -> None:
-    """Baut eine Szene mit einem erkannten Langloch und wählt es."""
+    """Baut eine Szene mit einem erkannten Langloch, wählt es — und stellt es im Bild ein.
+
+    Seit dem 11.09.2026 kommen die Griffe an Bohrung und Langloch mit der
+    Platzierung (*Im Bild einstellen*), nicht mit der Auswahl; der Zeiger der
+    Platzierung ist im Viewport die Ansage dafür (``set_placement_pointer``).
+    """
     import trimesh
 
     from app.core.scene import EvaluationResult
@@ -506,23 +518,22 @@ def a_slot_in_the_view(viewport: object) -> None:
     viewport.show_scene(result)  # type: ignore[attr-defined]
     viewport.select("obj_1")  # type: ignore[attr-defined]
     viewport.select_feature("slot_1")  # type: ignore[attr-defined]
+    viewport.set_placement_pointer(lambda event: False)  # type: ignore[attr-defined]
 
 
-def test_a_slot_carries_the_knobs_even_though_it_cannot_be_moved(qt_app: object) -> None:
-    """Zwei Fähigkeiten, zwei Fragen — und die eine hängt nicht an der anderen.
+def test_a_slot_carries_the_knobs_and_the_grip(qt_app: object) -> None:
+    """Zwei Fähigkeiten, zwei Griffe — und seit RM-153 beide am Langloch.
 
-    Ein Langloch steht in keinem ``applies_to`` von *Merkmal verschieben*; ohne
-    die eigene Menge des Langlochgriffs stünde daran gar nichts (Befund Robert,
-    10.09.2026: „bei langloch fehlt dann auch noch das im viewport"). Der
-    Bewegungsgriff bleibt trotzdem weg — drei Pfeile, die keine Operation
-    einlösen kann, wären schlimmer als keine.
+    Bis zum 11.09.2026 stand hier das Gegenteil: Ein Langloch war in keinem
+    ``applies_to`` von *Merkmal verschieben*, und der Bewegungsgriff blieb weg,
+    weil drei Pfeile, die keine Operation einlöst, schlimmer wären als keine.
+    Jetzt löst sie eine ein (Robert: „beim langloch bearbeiten fehlt das gizmo
+    noch wenn wir auf im Bild einstellen klicken").
     """
     from app.ui.viewport import Viewport, movable_feature_kinds
 
     load_operations()
-    assert "slot" not in movable_feature_kinds(), (
-        "solange ein Langloch versetzbar wird, prüft dieser Test die falsche Lage"
-    )
+    assert "slot" in movable_feature_kinds(), "ein Langloch lässt sich versetzen (RM-153)"
 
     viewport = Viewport()
     try:
@@ -531,7 +542,8 @@ def test_a_slot_carries_the_knobs_even_though_it_cannot_be_moved(qt_app: object)
         viewport.set_gizmo(False)
 
         assert viewport._slot_handle is not None, "am Langloch stehen die Knöpfe"
-        assert viewport._gizmo is None, "und kein Bewegungsgriff, der nichts auslösen kann"
+        assert viewport._gizmo is not None, "und der Bewegungsgriff, der es versetzt und dreht"
+        assert viewport._scale_handle is None, "ohne Würfel — ein Merkmal hat keine Größe"
     finally:
         viewport.renderer = None
         viewport.deleteLater()
@@ -567,7 +579,10 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
             np.asarray(centre) + (np.asarray(seat) - centre) * GIZMO_LABEL_GAP
             for seat in handle.knob_seats
         ]
-        np.testing.assert_allclose(viewport._gizmo_label_base, expected)
+        # Seit RM-153 stehen davor X, Y und Z des Bewegungsgriffs; die zwei L
+        # der Knöpfe sind die letzten beiden Marken.
+        assert viewport._gizmo_label_texts[-2:] == ["L", "L"]
+        np.testing.assert_allclose(viewport._gizmo_label_base[-2:], expected)
         handle.handle(PointerEvent("move", x, y))
         handle.handle(PointerEvent("release", x, y, button="left"))
         assert viewport._drag_kind is None
@@ -754,6 +769,7 @@ def test_the_bar_goes_when_the_selection_does(qt_app: object) -> None:
         viewport.show_scene(result)
         viewport.select("obj_1")
         viewport.select_feature("slot_1")
+        viewport.set_placement_pointer(lambda event: False)
         viewport.set_gizmo(False)
         assert viewport._slot_handle is not None
         viewport._slot_handle._release(40.0, 15.0)
@@ -771,13 +787,14 @@ def test_the_bar_goes_when_the_selection_does(qt_app: object) -> None:
         viewport.deleteLater()
 
 
-def test_a_slot_shows_no_letters_for_arrows_it_does_not_have(qt_app: object) -> None:
-    """Der Buchstabe ist die zweite Kodierung des Pfeils (Regel 18).
+def test_a_slot_shows_a_letter_for_every_arrow_and_every_knob(qt_app: object) -> None:
+    """Der Buchstabe ist die zweite Kodierung des Griffs (Regel 18).
 
-    Seit der Bewegungsgriff am Langloch wegbleibt — dort gibt es nichts zu
-    verschieben —, standen X, Y und Z trotzdem im Bild: gemessen
-    ``['X', 'Y', 'Z', 'L', 'L']`` ohne einen einzigen Pfeil. Drei Richtungen,
-    die keine Operation einlöst.
+    Bis zum 11.09.2026 hatte das Langloch keinen Bewegungsgriff, und dieser
+    Test hielt fest, dass dann auch kein X, Y, Z im Bild steht. Seit RM-153
+    hat es ihn — und damit gehören die drei Buchstaben dazu, neben den zwei L
+    der Knöpfe. Gezählt wird der letzte Satz, nicht die Summe: Jeder Aufbau
+    schreibt seine Beschriftung neu, und ``labelled`` sammelt über die Zeit.
     """
     from app.ui.viewport import Viewport
 
@@ -789,14 +806,12 @@ def test_a_slot_shows_no_letters_for_arrows_it_does_not_have(qt_app: object) -> 
         a_slot_in_the_view(viewport)
         viewport.set_gizmo(False)
 
-        # **Der letzte Satz zählt, nicht die Summe.** Jeder Aufbau des Griffs
-        # schreibt seine Beschriftung neu; ``labelled`` sammelt sie über die
-        # Zeit, und wer alle addiert, zählt frühere Bilder mit.
         geschrieben = [texts for texts in renderer.labelled if "X" in texts or "L" in texts][-1]
 
-        assert viewport._gizmo is None, "am Langloch steht kein Bewegungsgriff"
-        assert "X" not in geschrieben and "Y" not in geschrieben, geschrieben
+        assert viewport._gizmo is not None, "am Langloch steht der Bewegungsgriff"
+        assert {"X", "Y", "Z"} <= set(geschrieben), geschrieben
         assert geschrieben.count("L") == 2, "die zwei Knöpfe tragen ihr L"
+        assert "S" not in geschrieben, "kein Würfel, kein S"
     finally:
         viewport.renderer = None
         viewport.deleteLater()

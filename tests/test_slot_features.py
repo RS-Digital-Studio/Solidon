@@ -360,34 +360,75 @@ def test_a_slot_offers_the_one_operation_that_fits_it() -> None:
     assert quick_names(1, "slot") == (), "was als Feld dasteht, wird kein zweiter Knopf"
 
 
-def test_a_slot_says_why_the_generic_actions_do_not_fit() -> None:
-    """Was nicht gilt, steht trotzdem in der Liste — mit einem Grund (Regel 17)."""
+def test_a_slot_takes_the_four_generic_actions(profile: Profile) -> None:
+    """Versetzen, Drehen, Verdoppeln, Entfernen — am Langloch wie an der Bohrung.
+
+    Bis zum 11.09.2026 stand hier das Gegenteil: ``NOT_APPLICABLE`` führte das
+    Langloch mit dem Satz „die Handlungen hier rechnen mit einem Durchmesser
+    und träfen seine Flanken nicht". Der Satz war schon einen Tag lang nicht
+    mehr wahr — den Werkzeugkörper zog ``_feature_solid`` seit dem Morgen auf
+    wie beim Schneiden —, und was wirklich fehlte, war eine Antwort:
+    ``is_a_cavity`` kannte das Langloch nicht und hielt es für Materie.
+    *Merkmal verschieben* trug damit an der alten Stelle ab statt zu füllen
+    und setzte an der neuen an statt zu schneiden, das Volumen blieb gleich,
+    und das Merkmal wanderte im Baum an eine Stelle ohne Loch (RM-153).
+
+    Gemessen wird jede der vier am Ergebnis, nicht am Register.
+    """
     from app.core.perceive.actions import NOT_APPLICABLE, actions_for
 
-    load_operations()
-    slot = Feature(
-        id="slot_1",
-        kind="slot",
-        provenance="detected",
-        params={
-            "diameter": 5.0,
-            "length": 20.0,
-            "travel": 15.0,
-            "axis": (0.0, 0.0, 1.0),
-            "direction": (1.0, 0.0, 0.0),
-            "centre": (0.0, 0.0, 0.0),
-            "depth": 10.0,
-            "through": True,
-        },
+    assert "slot" not in NOT_APPLICABLE
+    for op in ("move_feature", "rotate_feature", "duplicate_feature", "remove_feature"):
+        assert "slot" in REGISTRY.get(op).applies_to, op
+
+    mesh = drill(
+        plate(),
+        profile=profile,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        compensate=False,
+        slot_length=20.0,
+        slot_angle=30.0,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    slot = next(feature for feature in entry.features.values() if feature.kind == "slot")
+    whole = plate().volume
+    assert {action.op for action in actions_for(slot)} >= {
+        "move_feature",
+        "rotate_feature",
+        "duplicate_feature",
+        "remove_feature",
+    }
+
+    # Die Mitte liegt auf halber Tiefe: z bleibt, x und y wandern.
+    depth_mid = float(slot.params["centre"][2])
+    moved = run_op("move_feature", entry, profile, at_feature=slot.id, x=15.0, y=8.0, z=depth_mid)
+    kinds = [feature for feature in moved.features.values() if feature.kind == "slot"]
+    assert len(kinds) == 1
+    assert kinds[0].params["centre"] == pytest.approx((15.0, 8.0, depth_mid), abs=0.05)
+    assert moved.mesh.volume == pytest.approx(entry.mesh.volume, rel=1e-3), (
+        "versetzt, nicht verdoppelt"
     )
 
-    assert "slot" in NOT_APPLICABLE
-    reasons = {str(action.reason) for action in actions_for(slot) if action.op is None}
-    assert reasons, "die generischen Zeilen stehen da"
-    assert all("Langloch" in reason for reason in reasons)
+    turned = run_op("rotate_feature", entry, profile, at_feature=slot.id, axis="z", angle=45.0)
+    kinds = [feature for feature in turned.features.values() if feature.kind == "slot"]
+    assert len(kinds) == 1, "gedreht steht ein Langloch da, kein Kreuz"
+    direction = kinds[0].params["direction"]
+    assert math.degrees(math.atan2(direction[1], direction[0])) % 180.0 == pytest.approx(
+        75.0, abs=0.5
+    )
+    assert turned.mesh.volume == pytest.approx(entry.mesh.volume, rel=1e-3)
 
+    doubled = run_op(
+        "duplicate_feature", entry, profile, at_feature=slot.id, x=15.0, y=-10.0, z=depth_mid
+    )
+    assert sum(1 for feature in doubled.features.values() if feature.kind == "slot") == 2
+    assert doubled.mesh.volume < entry.mesh.volume - 1000.0, "die Kopie ist ein zweites Loch"
 
-# --- Der Durchgang wird geschnitten, nicht abgetastet ------------------------------
+    removed = run_op("remove_feature", entry, profile, at_feature=slot.id)
+    assert not any(feature.kind == "slot" for feature in removed.features.values())
+    assert removed.mesh.volume == pytest.approx(whole, rel=1e-4), "die Platte ist wieder voll"
 
 
 def slot_in_a_plate(width: float, length: float) -> MeshData:
@@ -485,12 +526,13 @@ def test_the_digest_names_the_axis_where_it_really_is_one(
 def test_a_slot_is_not_called_a_sleeve() -> None:
     """Ein Langloch hat keine gleichmäßige Wand — also nennt niemand eine.
 
-    ``is_a_cavity`` führt ``slot`` bewusst nicht: Sein größter Leser
-    (``relations.sleeve_at``) rechnet den halben Unterschied zweier Durchmesser
+    ``relations.sleeve_at`` rechnet den halben Unterschied zweier Durchmesser
     und meldete damit an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm
-    **6 mm** Wand, wo die dünnste Stelle 3 mm misst. Die Begründung steht an
-    der Funktion; dieser Test hält fest, dass die Auskunft schweigt statt zu
-    raten.
+    **6 mm** Wand, wo die dünnste Stelle 3 mm misst. Bis zum 11.09.2026 hielt
+    ``is_a_cavity`` das Langloch deshalb aus allem heraus — und damit auch aus
+    Versetzen, Drehen und Entfernen. Seit es dort ein Hohlraum ist (RM-153),
+    schweigt ``sleeve_at`` selbst (RM-152 nennt, was an die Stelle träte);
+    dieser Test hält fest, dass die Auskunft schweigt statt zu raten.
     """
     from app.core.perceive.relations import sleeve_at
 

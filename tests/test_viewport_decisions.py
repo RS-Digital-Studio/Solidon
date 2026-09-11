@@ -5168,22 +5168,29 @@ def test_the_handle_sits_on_every_feature_that_can_be_moved(qt_app: QApplication
 
 
 def test_a_chosen_feature_gets_its_grip_without_opening_a_tool(qt_app: QApplication) -> None:
-    """Wer eine Bohrung anklickt, sieht den Griff — ohne erst ein Werkzeug zu öffnen.
+    """Wer eine Bohrung anklickt und *Im Bild einstellen* drückt, sieht den Griff.
 
     Befund Robert, 10.09.2026, am gefahrenen Weg: „über den viewport sehen wir
     weder maße noch etwas zum verschieben, verlängern, drehen usw." Gewählt
     war eine Bohrung, das Merkmalsfenster zeigte sechs Felder — und im Bild
     stand nichts. Der Schalter hing allein am Werkzeug *Bewegen*.
 
+    **Und seit dem 11.09.2026 kommt er mit der Platzierung, nicht mit der
+    Auswahl.** Rechts steht der Knopf *Im Bild einstellen*, und der ist die
+    Ansage (Robert: „noch bevor ich auf im Bild einstellen anklicke ist das
+    Gizmo schon da"). Die Auswahl allein zeigt, was gewählt ist; der Zeiger
+    der Platzierung bringt Maße und Griffe zusammen und nimmt sie zusammen.
+
     Die Grenze bleibt: Am **ganzen Körper** trägt der Griff einen
     Skalierwürfel, und der ändert auf einen Zug die Maße des Teils; dort
-    entscheidet weiter das Werkzeug. Ein angeklicktes Merkmal ist dagegen
-    selbst die Ansage.
+    entscheidet weiter das Werkzeug. Und an einer Verrundung, die keinen Knopf
+    ins Bild hat, bleibt es bei der Auswahl als Ansage.
     """
     from app.core import bootstrap
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import Viewport, placed_feature_kinds
 
     bootstrap.load_operations()
+    assert {"hole", "slot"} <= placed_feature_kinds(), "Bohrung und Langloch haben den Knopf"
     viewport = Viewport()
     try:
         viewport.renderer = RecordingRenderer(size=(800, 600))
@@ -5194,8 +5201,12 @@ def test_a_chosen_feature_gets_its_grip_without_opening_a_tool(qt_app: QApplicat
         assert viewport._gizmo is None, "am ganzen Koerper entscheidet das Werkzeug"
 
         viewport.select_feature("hole_1")
-        assert viewport._gizmo is not None, "an der gewaehlten Bohrung steht er trotzdem"
+        assert viewport._gizmo is None, "die Auswahl allein zeigt nur, was gewaehlt ist"
+        viewport.set_placement_pointer(lambda event: False)
+        assert viewport._gizmo is not None, "mit *Im Bild einstellen* steht er"
         assert viewport._scale_handle is None, "und ohne Wuerfel — ein Merkmal hat keine Groesse"
+        viewport.set_placement_pointer(None)
+        assert viewport._gizmo is None, "und geht mit der Platzierung"
 
         viewport.select_feature(None)
         assert viewport._gizmo is None, "ohne Merkmal und ohne Werkzeug ist das Bild wieder frei"
@@ -5431,6 +5442,7 @@ def test_the_handle_takes_the_size_of_what_is_selected(qt_app: QApplication) -> 
     viewport.renderer = RecordingRenderer(scale=20.0)
 
     viewport.select_feature("hole_1")
+    viewport.set_placement_pointer(lambda event: False)  # die Griffe kommen mit dem Bild
     viewport.set_gizmo(True)
 
     gizmo = viewport._gizmo
@@ -5945,6 +5957,7 @@ def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) ->
     viewport.show_scene(_scene_with_a_hole_and_a_fillet())
     viewport.select("obj_1")
     viewport.select_feature("hole_1")
+    viewport.set_placement_pointer(lambda event: False)  # die Griffe kommen mit dem Bild
     viewport.set_gizmo(True)
     assert viewport._gizmo is not None, "an der Bohrung hängt ein Griff"
     schatten = [RecordingItem("schatten", np.zeros((1, 3)), "#000000")]

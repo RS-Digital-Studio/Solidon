@@ -487,6 +487,24 @@ entlang der Achse wandern, wenn die Zielwand eine andere Stärke besitzt.
 Am exakten Kern gilt dieselbe Suche gegen `features_of`; ein `any(kind ==
 "slot")` schwieg, sobald ein zweites Langloch im Körper stand.
 
+## Ein Langloch ist ein Hohlraum, und die vier Handlungen gelten ihm (11.09.2026)
+
+`types.is_a_cavity` führt `slot` neben `hole` und `void`. Ohne den Eintrag hielt
+jede Operation das Langloch für Materie und kehrte Füllen und Schneiden um — an
+Luft und in vollem Material, sodass das Volumen gleich blieb und nichts es
+verriet (RM-153). Versetzen, Verdoppeln und Entfernen brauchten sonst nichts:
+Der Werkzeugkörper kommt aus `_feature_solid` und wird aufgezogen wie beim
+Schneiden. **Drehen** braucht die mitgedrehte Mittellinie
+(`_with_turned_direction`) — geschlossen wird mit der alten Richtung, gesetzt
+mit der neuen; wer beides mit der neuen tut, füllt neben dem Loch und
+schneidet ein Kreuz hinein.
+
+Was das Langloch **nicht** nimmt und warum, steht in
+`perceive.actions.NOT_APPLICABLE_HERE`: die Breite (RM-156). Und
+`relations.sleeve_at` schließt es selbst aus — seine Rechnung ist der halbe
+Unterschied zweier Durchmesser, und am Langloch träfe sie die dünnste Stelle
+nicht (RM-152).
+
 ## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
 
 `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; drei Nullen

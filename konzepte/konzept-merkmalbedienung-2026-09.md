@@ -140,6 +140,17 @@ Damit verschwindet auch `MEASURED_IN_THE_VIEW`, `_measured_for`,
 * Die Vorschau-Griffe und `previewDragged`.
 * Die Maßlinien und ihre Zahlenfelder — sie sind der Teil, der bleiben soll.
 
+**Nachtrag vom Abend des 11.09.2026 — die Griffe gehören zum Knopf.** Am
+gefahrenen Stand war das Gizmo an einer gewählten Bohrung schon da, bevor der
+Knopf gedrückt war, und am Langloch fehlte es auch danach (Robert: „noch bevor
+ich auf im Bild einstellen anklicke ist das Gizmo schon da" / „beim langloch
+bearbeiten fehlt das gizmo noch wenn wir auf im Bild einstellen klicken").
+Entschieden: An Bohrung und Langloch bringt *Im Bild einstellen* Maße **und**
+Griffe zusammen und nimmt sie zusammen; die Auswahl allein zeigt, was gewählt
+ist. Umgesetzt in `viewport.set_gizmo` über den Zeiger der Platzierung
+(`placed_feature_kinds()` liest dieselbe Quelle wie der Knopf). Das Langloch
+trägt dabei beide Griffe, seit es versetzbar ist (RM-153).
+
 ## §3 Die Pakete
 
 Jedes endet mit grünem Tor und einem Commit.

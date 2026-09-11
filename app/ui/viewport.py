@@ -2453,6 +2453,26 @@ def movable_feature_kinds() -> frozenset[str]:
     return frozenset(kinds)
 
 
+def placed_feature_kinds() -> frozenset[str]:
+    """An welchen Merkmalsarten die Griffe erst mit der Platzierung kommen.
+
+    Dieselbe Bauart wie :func:`movable_feature_kinds`, und dieselbe Quelle wie
+    der Knopf *Im Bild einstellen* im Merkmalfenster: die ``applies_to`` der
+    Handlungen aus ``panels.LEADS_INTO_THE_VIEW``. Wer dort eine Handlung
+    einträgt, bekommt an ihren Arten den Knopf — und nimmt ihnen damit die
+    Griffe bei der bloßen Auswahl. Eine zweite Liste hier wüsste beim nächsten
+    Zuwachs die Hälfte.
+    """
+    from app.core.registry import REGISTRY
+    from app.ui.panels import LEADS_INTO_THE_VIEW
+
+    kinds: set[str] = set()
+    for name in LEADS_INTO_THE_VIEW:
+        if REGISTRY.has(name):
+            kinds.update(REGISTRY.get(name).applies_to or ())
+    return frozenset(kinds)
+
+
 #: Die Operation hinter dem Langlochgriff.
 #:
 #: Eine einzige, und das ist keine Verkürzung: *Zum Langloch ziehen* macht aus
@@ -4434,8 +4454,17 @@ class Viewport(QWidget):
             self._queue_feature_label_layout()
 
     def set_placement_pointer(self, handler: Callable[[PointerEvent], bool] | None) -> None:
-        """Gibt einer laufenden Platzierung die linke Taste; die Kamera bleibt bedienbar."""
+        """Gibt einer laufenden Platzierung die linke Taste; die Kamera bleibt bedienbar.
+
+        **Und baut die Griffe neu**: An Bohrung und Langloch kommen sie mit der
+        Platzierung und gehen mit ihr (:meth:`set_gizmo`). Nur bei einem
+        Wechsel — wer denselben Zeiger zweimal setzt, bekommt keinen zweiten
+        Aufbau.
+        """
+        changed = (self._placement_pointer is None) != (handler is None)
         self._placement_pointer = handler
+        if changed:
+            self.set_gizmo(self._gizmo_wanted)
 
     def placement_hit(
         self, x: int, y: int
@@ -10198,6 +10227,15 @@ class Viewport(QWidget):
         etwas mit ihr tun, und §2.6 verspricht, dass am Merkmal alles direkt
         steht. Der Würfel bleibt dabei weg — die Bedingung dafür ist dieselbe
         wie eh und je (``chosen is None``).
+
+        **Bohrung und Langloch sind seit dem 11.09.2026 die Ausnahme davon** —
+        an ihnen steht rechts der Knopf *Im Bild einstellen*, und der ist die
+        Ansage: Er bringt die Maßlinien in die Szene, und mit ihnen die Griffe
+        (Robert: „noch bevor ich auf im Bild einstellen anklicke ist das Gizmo
+        schon da" / „beim langloch bearbeiten fehlt das gizmo noch wenn wir auf
+        im Bild einstellen klicken"). Solange dort keine Platzierung läuft,
+        zeigt die Auswahl nur, was gewählt ist. Welche Arten das sind, sagt
+        :func:`placed_feature_kinds` — dieselbe Quelle wie der Knopf.
         """
         self._gizmo_wanted = active
         if self.renderer is None:
@@ -10217,6 +10255,14 @@ class Viewport(QWidget):
         slotted = self.slot_handle_feature()
         marked = chosen if chosen is not None else slotted
         if (not active and marked is None) or self._selected is None or self._preview_gizmo_wanted:
+            self.gizmoStatus.emit("")
+            return
+        if (
+            marked is not None
+            and marked.kind in placed_feature_kinds()
+            and self._placement_pointer is None
+        ):
+            # Bohrung und Langloch: erst mit *Im Bild einstellen* (siehe oben).
             self.gizmoStatus.emit("")
             return
         actor = (

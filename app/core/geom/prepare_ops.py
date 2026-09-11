@@ -567,7 +567,15 @@ def drill_hole(ctx: OpContext) -> OpResult:
 #: dieselbe Sache; welche von beiden vorliegt, weiß nur der Kunde. Ihn zu
 #: benennen ist Auskunft, ihn zu sperren wäre ein Urteil (Entscheidung Robert,
 #: 10.09.2026).
-MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void")
+#:
+#: **Das Langloch seit dem 11.09.2026** (RM-153). Sein Werkzeugkörper kommt aus
+#: :func:`_feature_solid` wie der einer Bohrung — aufgezogen statt rotiert —,
+#: und was ihm bis dahin fehlte, war keine Geometrie, sondern eine Antwort:
+#: :func:`app.core.types.is_a_cavity` kannte es nicht und hielt es für
+#: Materie. Gemessen an beiden Kernen: versetzt nach (25|15) auf die Stelle,
+#: gedreht von 30 auf 75 Grad, verdoppelt, entfernt — das Volumen des Ganzen
+#: bleibt jeweils auf ein Zehntausendstel gleich.
+MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void", "slot")
 
 #: Was sich zu **verdoppeln** lohnt — dasselbe ohne den Einschluss.
 #:
@@ -578,7 +586,7 @@ MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "void")
 #: eingegossenen Magneten), legt man die zweite über den Baustein an, mit
 #: Maßen, und nicht als Kopie einer gemessenen Fläche (Robert, 10.09.2026:
 #: „verdoppeln ist aber bei Hohlräumen sinnlos").
-DUPLICABLE_KINDS: Final = ("hole", "pin", "cone", "sphere")
+DUPLICABLE_KINDS: Final = ("hole", "pin", "cone", "sphere", "slot")
 
 #: Die Arten, deren Kennzahlen den Körper genau beschreiben.
 #:
@@ -2677,7 +2685,8 @@ class RotateFeatureParams(BaseParams):
     # **Ohne die Kugel.** Sie hat keine Lage, die sich drehen ließe — gedreht
     # sähe sie aus wie vorher, und eine Handlung ohne Wirkung ist schlechter
     # als keine (Roberts „alles, was bei den jeweiligen sinnvoll ist").
-    applies_to=["hole", "pin", "cone"],
+    # Das Langloch dreht dabei seine Mittellinie mit (``_with_turned_direction``).
+    applies_to=["hole", "pin", "cone", "slot"],
     touches_features=True,
     deterministic=False,
     doc=_("Kippt ein erkanntes Merkmal um seine Mitte: Bohrung, Zapfen, Senkung oder Verjüngung."),
@@ -2718,6 +2727,15 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         )
 
     turned_axis = _turned(feature, params.axis, params.angle)
+    # **Ein Langloch hat neben der Achse eine Richtung, und die dreht mit.**
+    # Eine Bohrung um ihre eigene Achse zu drehen ändert nichts; ein Langloch
+    # dreht dabei seine Mittellinie. Gemessen am 11.09.2026 ohne diese Zeile:
+    # 45 Grad um Z an einem Langloch unter 30 Grad — das Werkzeug stand mit
+    # der alten Richtung wieder in der alten Öffnung, am Netz blieb eine
+    # Verrundung stehen, am exakten Körper geschah nichts. **Geschlossen wird
+    # mit der alten Richtung, gesetzt mit der neuen** — wer beides mit der
+    # neuen tut, füllt neben dem Loch und schneidet ein Kreuz hinein.
+    spun = _with_turned_direction(feature, params.axis, params.angle)
     cavity = is_a_cavity(feature)
     stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
@@ -2737,7 +2755,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         [
             closed.mesh,
             _tool_for(
-                as_mesh_data(source.mesh), feature, centre, axis=turned_axis, alone=stands_alone
+                as_mesh_data(source.mesh), spun, centre, axis=turned_axis, alone=stands_alone
             ),
         ],
         quality=ctx.quality,
@@ -2746,8 +2764,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     )
 
     moved = dataclasses.replace(
-        feature,
-        params={**feature.params, "axis": turned_axis},
+        spun,
+        params={**spun.params, "axis": turned_axis},
         provenance="generated",
     )
     # **Derselbe Befund wie beim Versetzen, und er fehlte hier.** Eine gekippte
@@ -2781,7 +2799,12 @@ def rotate_feature(ctx: OpContext) -> OpResult:
 
 def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:
     """Die Achse des Merkmals, um ``axis`` um ``angle`` Grad gedreht."""
-    direction = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    return _turned_vector(feature.params.get("axis", (0.0, 0.0, 1.0)), axis, angle)
+
+
+def _turned_vector(vector: Any, axis: Axis, angle: float) -> Vec3:
+    """Ein Richtungsvektor, um ``axis`` um ``angle`` Grad gedreht und normiert."""
+    direction = np.asarray(vector, dtype=float)
     matrix = trimesh.transformations.rotation_matrix(  # type: ignore[no-untyped-call]
         math.radians(angle), AXIS_NORMALS[axis]
     )
@@ -2789,6 +2812,20 @@ def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:
     length = float(np.linalg.norm(spun)) or 1.0
     spun = spun / length
     return (float(spun[0]), float(spun[1]), float(spun[2]))
+
+
+def _with_turned_direction(feature: Feature, axis: Axis, angle: float) -> Feature:
+    """Das Merkmal mit mitgedrehter Mittellinie — oder unverändert, wenn es keine hat.
+
+    Nur das Langloch trägt eine ``direction``; Bohrung, Zapfen und Kegel sind
+    um ihre Achse symmetrisch und brauchen keine.
+    """
+    direction = feature.params.get("direction")
+    if direction is None:
+        return feature
+    return dataclasses.replace(
+        feature, params={**feature.params, "direction": _turned_vector(direction, axis, angle)}
+    )
 
 
 #: Wie weit ein neuer Durchmesser über die Diagonale des Körpers hinausgehen

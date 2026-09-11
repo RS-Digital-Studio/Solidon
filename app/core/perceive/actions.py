@@ -122,6 +122,18 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("sphere", "slot_hole"): _(
         "Eine Kugelfläche hat keine Achse, entlang der ein Loch länger würde."
     ),
+    # **Ein „noch nicht", kein „nie".** Versetzen, Drehen, Verdoppeln und
+    # Entfernen nehmen das Langloch seit dem 11.09.2026 (RM-153); seine Breite
+    # ändert bis heute keine Operation — ``resize_hole`` nimmt nur die runde
+    # Bohrung, ``resize_feature`` nur Materie. Der Satz nennt, was geht.
+    ("slot", "resize_feature"): _(
+        "Die Breite eines Langlochs zu ändern ist sinnvoll und noch nicht gebaut. "
+        "Länge und Richtung ändern Sie über „Zum Langloch ziehen“."
+    ),
+    ("slot", "resize_hole"): _(
+        "Die Breite eines Langlochs zu ändern ist sinnvoll und noch nicht gebaut. "
+        "Länge und Richtung ändern Sie über „Zum Langloch ziehen“."
+    ),
 }
 
 #: Was statt der Handlung hilft, je Merkmalsart, für die keine gilt.
@@ -165,16 +177,11 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "ist. Für eine andere Lage bewegen Sie den ganzen Körper; für eine neue "
         "Rille oder einen Wulst nehmen Sie einen Ring als Werkzeug."
     ),
-    # **Kein „nie", sondern ein „woanders".** Die vier Handlungen hier bauen
-    # ihren Werkzeugkörper aus einem Durchmesser (``_feature_solid``); an einem
-    # Langloch käme dabei ein Zylinder heraus, und der träfe seine Flanken
-    # nicht. Was der Kunde daran wirklich ändern will — Länge und Richtung —,
-    # kann *Zum Langloch ziehen*, und darauf zeigt der Satz.
-    "slot": _(
-        "Ein Langloch hat zwei Maße und eine Richtung; die Handlungen hier "
-        "rechnen mit einem Durchmesser und träfen seine Flanken nicht. Länge "
-        "und Richtung ändern Sie über „Zum Langloch ziehen“."
-    ),
+    # **Das Langloch stand hier bis zum 11.09.2026** — „die Handlungen hier
+    # rechnen mit einem Durchmesser und träfen seine Flanken nicht". Sie tun es
+    # nicht mehr: Sein Werkzeugkörper wird aufgezogen wie beim Schneiden, und
+    # Versetzen, Drehen, Verdoppeln und Entfernen gelten ihm wie einer
+    # Bohrung (RM-153). Der Satz ist gefallen, nicht verschoben.
     # **Der Fallback stand hier bis zum 10.09.2026**, und er sagte nichts:
     # „Für diese Art von Merkmal gibt es noch keine Handlung." Ein Ende ohne
     # Weg nach vorn ist genau das, was Regel 17 verbietet — und einen Weg gibt

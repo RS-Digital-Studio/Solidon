@@ -1814,8 +1814,17 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
     window = _window_with_a_renderer()
     try:
         _a_selected_hole(window)
+        assert window.viewport._slot_handle is None, (
+            "die Auswahl allein zeigt nur, was gewählt ist (Robert, 11.09.2026)"
+        )
+        # **Im Bild einstellen** bringt Maße und Griffe zusammen.
+        # ``isHidden`` statt ``isVisible``: Das Fenster ist offscreen nie gezeigt.
+        assert not window.feature_panel._in_view.isHidden(), "der Knopf steht an einer Bohrung"
+        window.feature_panel._in_view.click()
+        for _ in range(20):
+            QApplication.processEvents()
         handle = window.viewport._slot_handle
-        assert handle is not None, "an einer Bohrung stehen die zwei Knöpfe"
+        assert handle is not None, "mit dem Knopf stehen die zwei Knöpfe"
 
         vorher = [step.op for step in window.session.project.document.ops]
         handle._release(12.0, 0.0)

@@ -76,7 +76,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
 | [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
-| [RM-153 — Ein Langloch versetzen, drehen und verdoppeln](#rm-153) | Geometrie, Erkennung und Druckvorbereitung | Ziehen geht seit dem 10.09.2026; die vier übrigen Handlungen brauchen den Werkzeugkörper aus `slot_bore` statt eines Zylinders |
+| [RM-156 — Die Breite eines Langlochs ändern](#rm-156) | Geometrie, Erkennung und Druckvorbereitung | `resize_hole` nimmt nur die runde Bohrung; am Langloch fehlt der Weg zu einer anderen Breite |
 | [RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden](#rm-154) | Geometrie, Erkennung und Druckvorbereitung | Eine 0 im Richtungsfeld stellt ein Langloch nicht gerade; der optionale Zahlenparameter fehlt im ganzen Register |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
@@ -996,7 +996,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-153"></a>
 
-- [ ] **RM-153 — Ein Langloch versetzen, drehen und verdoppeln.** Seit dem 10.09.2026 trägt ein
+- [x] **RM-153 — Ein Langloch versetzen, drehen und verdoppeln.** Seit dem 10.09.2026 trägt ein
   erkanntes Langloch im Merkmalsfenster eine Zeile mit seinen zwei Maßen und im Bild zwei Knöpfe,
   an denen sich Länge und Richtung ziehen lassen. Was ihm fehlt, sind die vier übrigen Handlungen:
   `move_feature`, `rotate_feature`, `duplicate_feature` und `remove_feature` führen `slot` nicht in
@@ -1020,6 +1020,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **vier Handlungen** oben: `move_feature`, `rotate_feature`, `duplicate_feature` und
   `remove_feature` führen `slot` weiterhin nicht in `applies_to`, und ihr Werkzeugkörper ist
   weiter ein Zylinder.
+
+  **Abgeschlossen am Abend des 11.09.2026 — und die Ursache war keine Geometrie.** Der
+  Werkzeugkörper stand seit dem Morgen (`PARAMETRIC_KINDS`); was fehlte, war eine Antwort:
+  `types.is_a_cavity` kannte das Langloch nicht und hielt es für Materie. *Merkmal verschieben*
+  trug damit an der alten Stelle ab statt zu füllen und setzte an der neuen an statt zu
+  schneiden — in Luft und in vollem Material, das Volumen blieb gleich, das Merkmal wanderte im
+  Baum an eine Stelle ohne Loch. Mit `slot` als Hohlraum gehen Versetzen, Verdoppeln und
+  Entfernen an beiden Kernen; *Drehen* brauchte dazu die mitgedrehte Mittellinie
+  (`_with_turned_direction`, geschlossen mit der alten, gesetzt mit der neuen — sonst ein
+  Kreuz). Die Absage in `NOT_APPLICABLE` ist gefallen, `sleeve_at` schützt sich seitdem selbst
+  (RM-152 bleibt). Nachweis: `test_a_slot_takes_the_four_generic_actions`, alle vier am
+  Ergebnis gemessen; ohne den Hohlraum-Eintrag rot. **Und der Griff ist damit gemeinsam**: Das
+  Langloch steht in `movable_feature_kinds()`, Pfeile und Ringe hängen daran wie an einer
+  Bohrung — beide seit demselben Abend erst mit *Im Bild einstellen* (Entscheidung Robert). Was
+  bleibt, ist die **Breite**: RM-156.
+
+<a id="rm-156"></a>
+
+- [ ] **RM-156 — Die Breite eines Langlochs ändern.** `resize_hole` nimmt nur die runde Bohrung
+  (`applies_to=["hole"]`), `resize_feature` nur Materie; am Langloch führt heute kein Weg zu einer
+  anderen Breite, und `NOT_APPLICABLE_HERE` sagt das an beiden Zeilen als „noch nicht gebaut".
+  Der Werkzeugkörper ist da (`_feature_solid` mit `scale`), die Rückzuordnung von `resize_hole`
+  (`_recognised_resized_feature`, `_expected_bore`) kennt aber nur den Durchmesser einer
+  Bohrung — am Langloch müsste sie Länge und Richtung mitführen, und am exakten Kern baut
+  `brep.edit.resize_bore` einen Zylinder. Abnahme: Ein Langloch Ø 6 auf 20 wird über das Feld
+  *Durchmesser* zu Ø 8 auf 22 (der Weg bleibt, die Enden wachsen), an beiden Kernen, mit
+  derselben Kennung.
 
 <a id="rm-154"></a>
 

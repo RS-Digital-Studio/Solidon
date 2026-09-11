@@ -338,8 +338,17 @@ def is_a_cavity(feature: Feature) -> bool:
     :class:`Feature`. In der Wahrnehmung kostete sie jeden Aufrufer aus
     ``geom`` einen trägen Import gegen die Paketrichtung — sieben waren es,
     und keiner davon brauchte mehr als diese vier Zeilen.
+
+    **Und ein Langloch ist ein Hohlraum wie eine Bohrung.** Es fehlte hier,
+    und die Folge war still: ``recess`` trägt es nicht, die Antwort war
+    „Materie", und *Merkmal verschieben* trug an der alten Stelle ab statt zu
+    füllen und setzte an der neuen an statt zu schneiden — beides an Luft
+    beziehungsweise in vollem Material, das Volumen blieb auf ein
+    Mikrogramm gleich, und das Merkmal wanderte im Baum an eine Stelle, an der
+    kein Loch war (gemessen 11.09.2026, Ø 6 auf 20 mm nach (25|15): Prüfzylinder
+    an der neuen Stelle voll, Langloch an der alten noch da).
     """
-    if feature.kind in ("hole", "void"):
+    if feature.kind in ("hole", "void", "slot"):
         return True
     if feature.kind == "pin":
         return False
