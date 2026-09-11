@@ -55,6 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un cuerpo de piezas sueltas —un rótulo, por ejemplo— no cabe entero en ninguna cama, el informe ofrece separarlo y orientarlo enseguida: un clic y las piezas quedan en las placas.
 - «Abrir en el slicer» entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa.
 - En separación, rotulación y textura el informe indica la cifra en la frase, donde antes había un marcador entre llaves.
+- Un letrero al que asignó un filamento lo conserva al separarlo en letras. Antes llegaba al slicer en un segundo filamento gris, y el asignado quedaba al lado sin usar.
 
 ## 0.4.0
 

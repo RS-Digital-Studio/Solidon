@@ -54,6 +54,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um corpo feito de peças soltas — um letreiro, por exemplo — não cabe inteiro em nenhuma mesa, o relatório propõe separá-lo e orientá-lo logo: um clique e as peças ficam nas mesas.
 - «Abrir no slicer» entrega ao ElegooSlicer, Orca e Bambu Studio todas as mesas num único ficheiro — uma janela em vez de uma por mesa.
 - Na separação, no letreiro e na textura o relatório indica o número na frase, onde antes estava um marcador entre chavetas.
+- Um letreiro ao qual atribuiu um filamento mantém-no ao ser separado em letras. Antes chegava ao slicer num segundo filamento cinzento, com o atribuído ao lado sem uso.
 
 ## 0.4.0
 

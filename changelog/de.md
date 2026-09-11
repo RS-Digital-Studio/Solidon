@@ -79,6 +79,7 @@ Nutzen da und sonst nichts.
 - Passt ein Körper aus losen Teilen — etwa ein Schriftzug — als Ganzes auf kein Bett, bietet der Prüfbericht an, ihn zu zerlegen und gleich auszurichten: ein Klick, und die Teile liegen auf den Platten.
 - „Im Slicer öffnen“ gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte.
 - Der Prüfbericht nennt bei Zerlegung, Beschriftung und Textur die Zahl im Satz, wo vorher ein Platzhalter in Klammern stand.
+- Ein Schriftzug, dem Sie ein Filament zugewiesen haben, behält es beim Zerlegen in Buchstaben. Vorher kam er im Slicer auf einem zweiten, grauen Filament an, das zugewiesene lag daneben.
 
 ## 0.4.0
 

@@ -54,6 +54,7 @@ scrive in `website/version.json`.
 - Se un corpo fatto di pezzi singoli — una scritta, per esempio — non entra intero in nessun piano, il rapporto propone di separarlo e orientarlo subito: un clic e i pezzi stanno sui piani.
 - «Apri nello slicer» consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano.
 - Per separazione, scritta e texture il rapporto indica il numero nella frase, dove prima c'era un segnaposto tra parentesi graffe.
+- Una scritta a cui avete assegnato un filamento lo conserva quando viene separata in lettere. Prima arrivava nello slicer su un secondo filamento grigio, con quello assegnato accanto inutilizzato.
 
 ## 0.4.0
 

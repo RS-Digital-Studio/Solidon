@@ -54,6 +54,7 @@ it into `website/version.json`.
 - If a body made of loose parts — lettering, say — fits no bed as a whole, the report offers to split it and orient it right away: one click, and the parts lie on the plates.
 - “Open in slicer” hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate.
 - For splitting, lettering and texture the report states the number in the sentence, where a placeholder in braces stood before.
+- Lettering you assigned a filament to keeps it when split into letters. Before, it arrived in the slicer on a second, grey filament, with the assigned one sitting unused beside it.
 
 ## 0.4.0
 

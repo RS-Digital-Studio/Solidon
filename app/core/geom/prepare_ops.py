@@ -41,7 +41,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ranked_orientations
 from app.core.geom.pins import (
@@ -4999,26 +4999,53 @@ def _gap_between(one: Any, other: Any) -> float:
     return float(np.linalg.norm(np.maximum(low - high, 0.0)))
 
 
-def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[tuple[Any, float]], int]:
-    """Die losen Teile eines Körpers samt Volumen, größte zuerst — und wie
-    viele Splitter dabei wegfielen.
+#: Ein loses Teil eines Körpers: sein Netz, sein Volumen und die Slots seiner
+#: Dreiecke — leer, wo der Körper keine trug.
+LoosePart = tuple[Any, float, tuple[int, ...]]
+
+
+def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], int]:
+    """Die losen Teile eines Körpers samt Volumen und Slots, größte zuerst —
+    und wie viele Splitter dabei wegfielen.
 
     Die eine Zählung für *In Einzelteile zerlegen* und für die Absage des
     Ausrichtens, die diese Zerlegung vorschlägt: Ohne ``keep_tiny`` fällt
     weg, was unter einem Prozent des größten Teils liegt, und eine Stückzahl,
     die die Splitter mitzählte, ließe die Zerlegung an ihrer eigenen Prüfung
     scheitern.
+
+    **Je Teil reisen die Slots seiner Dreiecke mit** (Robert, 11.09.2026:
+    „Filamente auch nicht"): Ein Schriftzug, dem *Filament zuweisen* Slot 7
+    gegeben hatte, kam nach der Zerlegung beim Slicer auf einem zweiten
+    Filament „Slot 0" an, das orangene daneben unbenutzt. ``Trimesh.split``
+    kennt Solidons Slot je Dreieck nicht, und ``MeshData.replacing`` lässt
+    eine Liste fallen, die nicht mehr zur Dreieckszahl passt — die Teile
+    hatten damit keine, und der Export ergänzte den neutralen Platzhalter.
+    Gezählt wird deshalb über :func:`face_components` — dieselbe Frage, die
+    der Prüfbericht mit „besteht aus N Teilen" beantwortet, also auch dieselbe
+    Zahl —, und aus den Dreiecksnummern jedes Teils kommt sein Stück der
+    Slotliste.
     """
-    parts = mesh.raw.split(only_watertight=False)
-    volumes = [abs(float(part.volume)) for part in parts]
-    largest = max(volumes, default=0.0) or 1.0
-    kept = [
-        (part, volume)
-        for part, volume in zip(parts, volumes, strict=True)
-        if keep_tiny or volume >= largest * 0.01
+    groups = face_components(mesh.raw)
+    # ``append=False`` gibt eine Liste, ein Netz je Gruppe — der Typ von
+    # ``submesh`` kennt beide Formen, der Aufruf hier nur die eine.
+    bodies = cast(
+        "list[Any]",
+        mesh.raw.submesh(groups, only_watertight=False, append=False) if groups else [],
+    )
+    painted = np.asarray(mesh.slots, dtype=np.int32) if mesh.slots else None
+    found: list[LoosePart] = [
+        (
+            body,
+            abs(float(body.volume)),
+            tuple(int(value) for value in painted[group]) if painted is not None else (),
+        )
+        for body, group in zip(bodies, groups, strict=True)
     ]
+    largest = max((volume for _body, volume, _slots in found), default=0.0) or 1.0
+    kept = [entry for entry in found if keep_tiny or entry[1] >= largest * 0.01]
     kept.sort(key=lambda entry: -entry[1])
-    return kept, len(parts) - len(kept)
+    return kept, len(found) - len(kept)
 
 
 @register_op(
@@ -5093,23 +5120,33 @@ def split_bodies(ctx: OpContext) -> OpResult:
     # sich ja nicht verändert"). Die Nähe ändert sich mit der Schrift nicht.
     surplus = found - params.count
     if surplus:
-        anchors = [[part] for part, _volume in kept[: params.count]]
-        volumes = [volume for _part, volume in kept[: params.count]]
-        for part, volume in kept[params.count :]:
-            nearest = min(range(len(anchors)), key=lambda i: _gap_between(part, anchors[i][0]))
-            anchors[nearest].append(part)
-            volumes[nearest] += volume
+        anchors = [[entry] for entry in kept[: params.count]]
+        for entry in kept[params.count :]:
+            nearest = min(
+                range(len(anchors)), key=lambda i: _gap_between(entry[0], anchors[i][0][0])
+            )
+            anchors[nearest].append(entry)
+        # ``concatenate`` hängt die Dreiecke in der Reihenfolge der Teile
+        # aneinander — die Slots in derselben Reihenfolge dazu.
         kept = [
-            (group[0] if len(group) == 1 else cast("Any", trimesh.util.concatenate(group)), volume)
-            for group, volume in zip(anchors, volumes, strict=True)
+            (
+                group[0][0]
+                if len(group) == 1
+                else cast("Any", trimesh.util.concatenate([entry[0] for entry in group])),
+                sum(entry[1] for entry in group),
+                tuple(value for entry in group for value in entry[2]),
+            )
+            for group in anchors
         ]
 
     outputs = []
-    for number, (part, _volume) in enumerate(kept, start=1):
+    for number, (part, _volume, slots) in enumerate(kept, start=1):
         outputs.append(
             dataclasses.replace(
                 source,
-                mesh=mesh.replacing(part),
+                # Nicht ``mesh.replacing(part)``: Das behielte die Slots nur
+                # bei gleicher Dreieckszahl, und die hat kein Teil.
+                mesh=MeshData.of(part, slots),
                 name=f"{source.name} {number}",
                 # Die Merkmale des Ausgangs zeigen auf dessen Dreiecke; nach
                 # der Trennung zählt jedes Teil eigene. Sie neu zu erkennen ist
@@ -5654,7 +5691,7 @@ def _the_way_out_of(
         ranked_orientations(
             mesh.replacing(part), limit=1, cancelled=ctx.cancelled, printer=ctx.profile.printer
         )
-        for part, _volume in kept
+        for part, _volume, _slots in kept
     )
     if not each_fits:
         refusal.object_id = entry.id

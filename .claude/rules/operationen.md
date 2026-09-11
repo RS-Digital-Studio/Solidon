@@ -656,6 +656,18 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Suffixes stehen die Teile dort, wo der Körper stand, in jedem Schritt,
   der die ganze Szene nimmt; jeder andere behält seine Kennung, denn die
   erste Kennung der Zerlegung ist die des Ausgangskörpers.
+- **Die Slots je Dreieck reisen nur mit, wenn die Operation sie mitnimmt.**
+  `MeshData.replacing` behält die Slotliste allein bei gleicher Dreieckszahl;
+  wer Teilnetze bildet, hat eine andere und bekommt **keine** — nicht eine
+  falsche, sondern gar keine, und der Export ergänzt dann stumm den
+  Platzhalter „Slot 0" (Robert, 11.09.2026: ein zerlegter Schriftzug kam im
+  Slicer auf einem zweiten Filament an). `Trimesh.split` und `submesh`
+  kennen Solidons Liste nicht; wer Dreiecke auswählt, nimmt ihre Nummern mit
+  und schneidet die Liste selbst (`prepare_ops._loose_parts`, über
+  `face_components` — dieselbe Zählung wie „besteht aus N Teilen" im
+  Prüfbericht). `test_split_bodies_keeps_the_filament_of_every_triangle`
+  misst es am Ort jedes Dreiecks, `test_a_lettering_split_into_letters_
+  keeps_its_one_filament` bis in die 3MF.
 - **Keine absoluten Pfade** in der Projektdatei (Regel 12), **kein
   ausführbarer Code** darin (Regel 13).
 - Format geändert? Dann alle fünf Schritte: Version, Migration,

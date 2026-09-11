@@ -601,6 +601,65 @@ def test_a_filament_keeps_its_extruder_across_the_plates_of_one_job() -> None:
     )
 
 
+def test_a_lettering_split_into_letters_keeps_its_one_filament(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Zerlegt ist ein Schriftzug auf Slot 7 im Slicer immer noch **ein** Filament.
+
+    **Roberts Bild aus dem ElegooSlicer** (11.09.2026: „Filamente auch
+    nicht"): zwei Filamente, „PLAOrange" und ein „Slot 0", und alle
+    Buchstaben auf dem zweiten — orange lag daneben, unbenutzt. Die Zerlegung
+    hatte die Slots je Dreieck verloren, die Teile trugen nur noch die
+    Beschreibung (``material_slots``), und der Export ergänzte für die nun
+    unbemalten Dreiecke den neutralen Platzhalter.
+
+    Hier steht die ganze Kette: bemalen, zerlegen, als Baugruppe schreiben —
+    und in der Datei ein Material, jedes Teil an Extruder 1.
+    """
+    from app.core.geom.attributes import with_slot
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    left = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right.apply_translation((50.0, 0.0, 0.0))
+    orange = MaterialSlot(index=7, name="PLAOrange", colour=(0.7, 0.4, 0.05), material_type="PLA")
+    lettering = SceneObject(
+        id="obj_1",
+        name="Schrift",
+        mesh=with_slot(MeshData.of(trimesh.util.concatenate([left, right])), 7),
+        material_slots=(orange,),
+    )
+    spec = REGISTRY.get("split_bodies")
+    pieces = spec.fn(
+        OpContext(
+            scene=Scene(objects={lettering.id: lettering}),
+            inputs=[lettering],
+            params=spec.params(count=2),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    ).outputs
+
+    written, _findings = write_assembly(
+        list(pieces), tmp_path, project_name="schrift", profile=profile
+    )
+    archive = zipfile.ZipFile(BytesIO(written.read_bytes()))
+    model = archive.read(threemf.MODEL_PATH).decode("utf-8")
+    assert re.findall(r'<base name="([^"]*)"', model) == ["PLAOrange"], (
+        "ein Filament — kein Platzhalter „Slot 0“ daneben"
+    )
+    settings = archive.read(threemf.SETTINGS_PATH).decode("utf-8")
+    assert re.findall(r'key="extruder" value="(\d+)"', settings) == ["1", "1"], (
+        "und beide Buchstaben liegen auf ihm"
+    )
+
+
 def test_the_exported_plates_of_one_job_agree_on_the_extruders(
     profile: Profile, tmp_path: Path
 ) -> None:

@@ -3373,6 +3373,59 @@ def test_split_bodies_makes_one_object_per_loose_part(profile: Profile) -> None:
         assert mesh.bounds.size[0] == pytest.approx(10.0)
 
 
+def test_split_bodies_keeps_the_filament_of_every_triangle(profile: Profile) -> None:
+    """Die Slots je Dreieck reisen mit jedem Teil — auch mit dem zusammengelegten.
+
+    **Roberts Fall** (11.09.2026: „Filamente auch nicht"): Ein Schriftzug mit
+    *Filament zuweisen* auf Slot 7, in Einzelteile zerlegt, kam beim Slicer
+    auf einem zweiten Filament „Slot 0" an — orange stand daneben, unbenutzt.
+    ``Trimesh.split`` kennt Solidons Slotliste nicht, und ``replacing`` ließ
+    sie fallen, sobald die Dreieckszahl nicht mehr passte; die Teile trugen
+    damit keine Slots, und der Export ergänzte den neutralen Platzhalter.
+
+    Drei Würfel: A auf Slot 7, B unbemalt (Slot 0), C neben A auf Slot 5.
+    Einzeln trägt jedes Teil genau die Slots seiner Dreiecke; mit Stückzahl
+    zwei geht C zu A, und im zusammengelegten Objekt sitzt jeder Slot noch
+    auf seinem Dreieck — gemessen am Ort, nicht an der Reihenfolge.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.attributes import counts
+    from app.core.geom.mesh import MeshData
+
+    cubes = []
+    slots: list[int] = []
+    for size, x, slot in ((10.0, 0.0, 7), (9.0, 200.0, 0), (8.0, 15.0, 5)):
+        cube = trimesh.creation.box(extents=(size, size, size))
+        cube.apply_translation((x, 0.0, 0.0))
+        cubes.append(cube)
+        slots += [slot] * len(cube.faces)
+    painted = MeshData.of(trimesh.util.concatenate(cubes), slots=tuple(slots))
+    entry = SceneObject(id="obj_1", name="Schrift", mesh=painted)
+
+    result = _run_op("split_bodies", entry, profile, count=3)
+    assert len(result.outputs) == 3
+    seen = {}
+    for piece in result.outputs:
+        mesh = as_mesh_data(piece.mesh)
+        assert len(mesh.slots) == mesh.triangle_count, "ein Slot je Dreieck, auch nach dem Schnitt"
+        (slot,) = counts(mesh)
+        seen[slot] = float(mesh.bounds.minimum[0])
+    assert seen == {7: pytest.approx(-5.0), 0: pytest.approx(195.5), 5: pytest.approx(11.0)}, (
+        f"jeder Würfel behält seinen Slot: {seen}"
+    )
+
+    merged = _run_op("split_bodies", entry, profile, count=2)
+    pair = next(
+        as_mesh_data(o.mesh) for o in merged.outputs if as_mesh_data(o.mesh).component_count == 2
+    )
+    assert counts(pair) == {7: 12, 5: 12}, "A und C zusammen, mit beiden Slots"
+    middles = pair.raw.triangles_center[:, 0]
+    by_place = np.where(middles < 10.0, 7, 5)
+    assert list(by_place) == list(pair.slots), "und jeder Slot sitzt auf seinem Dreieck"
+
+
 def test_split_bodies_says_so_when_there_is_nothing_to_split(profile: Profile) -> None:
     """Ein Körper aus einem Stück wird abgelehnt — mit dem Satz, warum.
 

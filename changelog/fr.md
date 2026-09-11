@@ -55,6 +55,7 @@ dans `website/version.json`.
 - Si un corps fait de pièces détachées — un lettrage, par exemple — ne tient entier sur aucun plateau, le rapport propose de le séparer et de l'orienter : un clic, et les pièces sont sur les plateaux.
 - « Ouvrir dans le slicer » transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau.
 - Pour la séparation, le lettrage et la texture, le rapport donne le nombre dans la phrase, là où un espace réservé entre accolades figurait avant.
+- Un lettrage auquel vous avez attribué un filament le garde quand il est séparé en lettres. Avant, il arrivait dans le slicer sur un second filament gris, celui attribué restant inutilisé à côté.
 
 ## 0.4.0
 
