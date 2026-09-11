@@ -3398,23 +3398,35 @@ def test_split_bodies_says_so_when_there_is_nothing_to_split(profile: Profile) -
     assert fehler.value.suggestions, "auch diese Absage trägt einen Vorschlag (Regel 17)"
 
 
-def test_split_bodies_keeps_the_surplus_together_and_says_how_many(profile: Profile) -> None:
-    """Vier Teile bei Stückzahl zwei: zwei Objekte, und der Befund nennt die vier.
+def test_split_bodies_joins_the_surplus_to_its_nearest_neighbour(profile: Profile) -> None:
+    """Mehr Teile als die Stückzahl: Jedes überzählige geht zu seinem Nachbarn.
 
     Robert ist am 08.09.2026 an der Auffangrinne-Platte darüber gestolpert —
     vier Segmente in einer STL, und die Operation lieferte vier Objekte, wo der
-    Stapel eines erwartete. Die Zahl steht jetzt vorher fest. Passt sie nicht,
-    bleiben die übrigen Teile beieinander statt zu verschwinden, und das wird
-    gesagt.
+    Stapel eines erwartete. Die Zahl steht seither vorher fest. Passt sie
+    nicht, blieb der Rest als *ein* Objekt beieinander, nach Volumen gewählt —
+    und am 11.09.2026 zeigte ein Schriftzug, was das heißt: neun Buchstaben,
+    zehn Teile, und nach einem Schriftwechsel waren die zwei kleinsten Teile
+    zwei, die einen halben Meter auseinanderlagen. Das Ausrichten fand für
+    das Paar keine Lage („die anzahl hat sich ja nicht verändert").
+
+    Jetzt zählt die Nähe: Die ``count`` größten stehen einzeln, jedes weitere
+    Teil geht zu dem, dessen Hüllquader ihm am nächsten liegt — der Punkt zu
+    seinem i. Gemessen an vier Würfeln, deren Größe die Reihenfolge und deren
+    Lage die Nachbarschaft bestimmt; die Warnung nennt die Zahlen und bietet
+    an, die Stückzahl auf die gemessene zu setzen.
     """
     import trimesh
 
+    from app.core.errors import RECOUNT_AND_RETRY
     from app.core.geom.mesh import MeshData
 
+    # A (groß, bei x=0) und B (zweitgrößt, bei x=200) bleiben einzeln; C liegt
+    # neben A, D neben B — nach Volumen sortiert kämen C und D zusammen.
     teile = []
-    for schritt in range(4):
-        wuerfel = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
-        wuerfel.apply_translation((schritt * 50.0, 0.0, 0.0))
+    for size, x in ((10.0, 0.0), (9.0, 200.0), (8.0, 15.0), (7.0, 215.0)):
+        wuerfel = trimesh.creation.box(extents=(size, size, size))
+        wuerfel.apply_translation((x, 0.0, 0.0))
         teile.append(wuerfel)
     vier = MeshData.of(trimesh.util.concatenate(teile))
     assert vier.component_count == 4, "die Vorbedingung selbst, nicht nur ihr Name"
@@ -3427,12 +3439,48 @@ def test_split_bodies_keeps_the_surplus_together_and_says_how_many(profile: Prof
 
     knapp = _run_op("split_bodies", entry, profile, count=2)
     assert len(knapp.outputs) == 2, "genau so viele, wie die Stückzahl sagt"
+    spans = sorted(
+        (
+            float(as_mesh_data(o.mesh).bounds.minimum[0]),
+            float(as_mesh_data(o.mesh).bounds.maximum[0]),
+        )
+        for o in knapp.outputs
+    )
+    assert spans[0][1] < 25.0 and spans[1][0] > 190.0, (
+        f"C gehört zu A und D zu B — nicht die zwei kleinsten zusammen: {spans}"
+    )
+    for ausgabe in knapp.outputs:
+        assert as_mesh_data(ausgabe.mesh).component_count == 2
     befunde = {finding.code: finding for finding in knapp.findings}
     assert "split_bodies.surplus" in befunde
-    assert befunde["split_bodies.surplus"].values["found"] == "4"
-    assert as_mesh_data(knapp.outputs[-1].mesh).component_count == 3, (
-        "die übrigen bleiben beieinander, statt zu verschwinden"
+    surplus = befunde["split_bodies.surplus"]
+    assert surplus.severity == "warning", "die Stückzahl passt nicht — das ist eine Warnung"
+    assert surplus.values["count"] == "2" and surplus.values["found"] == "4"
+    # **Der Satz trägt die Zahl, nicht den Platzhalter** (Bildschirmfoto Robert,
+    # 11.09.2026: „{count} weitere Teile blieben im letzten Objekt beieinander").
+    assert str(surplus.message).startswith("2 weitere Teile"), str(surplus.message)
+    assert RECOUNT_AND_RETRY in surplus.suggestions, "ein Klick setzt die Stückzahl auf vier"
+
+
+def test_split_bodies_with_too_few_parts_offers_the_measured_count(profile: Profile) -> None:
+    """Weniger Teile als die Stückzahl: der Halt nennt die Zahl, die passt."""
+    import trimesh
+
+    from app.core.errors import RECOUNT_AND_RETRY, ValidationError
+    from app.core.geom.mesh import MeshData
+
+    one = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    other = trimesh.creation.box(extents=(8.0, 8.0, 8.0))
+    other.apply_translation((40.0, 0.0, 0.0))
+    entry = SceneObject(
+        id="obj_1", name="Zwei", mesh=MeshData.of(trimesh.util.concatenate([one, other]))
     )
+
+    with pytest.raises(ValidationError) as fehler:
+        _run_op("split_bodies", entry, profile, count=3)
+
+    assert fehler.value.values["found"] == "2"
+    assert fehler.value.suggestions[0] is RECOUNT_AND_RETRY
 
 
 def _u_profile(

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.errors import ValidationError
+from app.core.errors import RECOUNT_AND_RETRY, SPLIT_AND_RETRY, ValidationError
 from app.core.registry import VARIABLE, Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
@@ -161,6 +161,34 @@ def registry() -> Registry:
     def copy_object(ctx: OpContext) -> OpResult:
         return OpResult(outputs=list(ctx.inputs))
 
+    @register_op(
+        name="split_bodies",
+        title=_("In Einzelteile zerlegen"),
+        category="prepare",
+        params=SeedParams,
+        consumes=1,
+        produces=VARIABLE,
+        produces_from="count",
+        doc=_("Testversion — wie die echte: die erste Kennung bleibt."),
+        registry=own,
+    )
+    def split_bodies(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=list(ctx.inputs))
+
+    @register_op(
+        name="orient_everything",
+        title=_("Alles ausrichten"),
+        category="transform",
+        params=SeedParams,
+        consumes=0,
+        whole_scene=True,
+        produces=VARIABLE,
+        doc=_("Testversion — nimmt die ganze Szene wie das Ausrichten."),
+        registry=own,
+    )
+    def orient_everything(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=list(ctx.inputs))
+
     return own
 
 
@@ -308,6 +336,118 @@ def test_repair_and_retry_repairs_each_live_input_once(history: History) -> None
     assert [entry.inputs for entry in new_ops[:2]] == [(first,), (second,)]
     assert new_ops[-1].inputs == (first, second)
     assert new_ops[-1].outputs == old_output
+
+
+def test_split_and_retry_puts_the_pieces_where_the_body_stood(history: History) -> None:
+    """Die Zerlegung kommt vor den angehaltenen Schritt, und der bekommt die Teile.
+
+    **Der Anlass** (Robert, 11.09.2026): Ein Schriftzug passt als Ganzes auf
+    kein Bett, seine Buchstaben passen alle. Das Ausrichten darf ihn nicht
+    selbst zerlegen (§15.2), also schlägt es die Zerlegung vor — und der
+    Verlauf setzt sie davor, wie die Reparatur bei ``repair_and_retry``.
+
+    Geprüft wird die Eingangsliste des neu gefassten Schritts: Wo der Körper
+    stand, stehen seine Teile, und die übrige Szene bleibt dabei. Ein Schritt,
+    der nicht die ganze Szene nimmt, behält seine Eingänge — die erste Kennung
+    der Zerlegung ist die des Ausgangskörpers. Alles in einer Transaktion, und
+    ein Undo stellt den alten Suffix wieder her.
+    """
+    lettering = create(history)
+    other = create(history)
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_everything", inputs=(lettering, other))],
+    )
+    failed_id = history.operations[-1].id
+    history.apply(
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=(lettering,))],
+    )
+    old_suffix = tuple(entry for entry in history.operations if entry.id >= failed_id)
+    before = history.operations
+
+    transaction = history.split_and_retry(failed_id, lettering, 3)
+
+    new_ops = tuple(entry for entry in history.operations if entry.id in transaction.ops)
+    assert [entry.op for entry in new_ops] == [
+        "split_bodies",
+        "orient_everything",
+        "rename_object",
+    ]
+    split, oriented, renamed = new_ops
+    assert split.inputs == (lettering,)
+    assert split.params == {"count": 3}
+    assert len(split.outputs) == 3 and split.outputs[0] == lettering
+    assert oriented.inputs == (*split.outputs, other), (
+        "wo der Körper stand, stehen seine Teile — und der Rest der Szene bleibt"
+    )
+    assert oriented.outputs == oriented.inputs, "die Ausgänge folgen den neuen Eingängen"
+    assert renamed.inputs == (lettering,), "ein Schritt auf einem Körper behält seine Kennung"
+    assert transaction.title == SPLIT_AND_RETRY.label
+    assert transaction.changes is not None
+    assert transaction.changes.before.edited_ops == {entry.id: entry for entry in old_suffix}
+    assert history.operations == (*(e for e in before if e not in old_suffix), *new_ops)
+
+    history.undo()
+    assert history.operations == before, "ein Undo nimmt den ganzen Zug zurück"
+
+
+def test_recount_and_retry_keeps_the_ids_and_gives_the_scene_the_new_pieces(
+    history: History,
+) -> None:
+    """Die Stückzahl einer Zerlegung auf die gemessene setzen — ein Zug, ein Undo.
+
+    ``change_params`` weist eine Zahl ab, die die Ausgänge ändert, solange ein
+    späterer Schritt sie benutzt (§15.2: „zurücknehmen und neu anwenden").
+    Der Vorschlag der Zerlegung tut genau das in einem Zug: Die vorhandenen
+    Kennungen bleiben, frische kommen dazu, und der Schritt, der die ganze
+    Szene nimmt, bekommt alle Teile.
+    """
+    body = create(history)
+    other = create(history)
+    history.apply(
+        _("Zerlegen"), [OperationDraft(op="split_bodies", inputs=(body,), params={"count": 2})]
+    )
+    split_id = history.operations[-1].id
+    old_pieces = history.operations[-1].outputs
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_everything", inputs=(*old_pieces, other))],
+    )
+    before = history.operations
+
+    transaction = history.recount_and_retry(split_id, 3)
+
+    new_ops = tuple(entry for entry in history.operations if entry.id in transaction.ops)
+    assert [entry.op for entry in new_ops] == ["split_bodies", "orient_everything"]
+    split, oriented = new_ops
+    assert split.params == {"count": 3}
+    assert split.outputs[:2] == old_pieces, "die vorhandenen Kennungen bleiben"
+    assert len(split.outputs) == 3 and split.outputs[2] not in before_ids(before)
+    assert oriented.inputs == (*split.outputs, other)
+    assert oriented.outputs == oriented.inputs
+    assert transaction.title == RECOUNT_AND_RETRY.label
+
+    history.undo()
+    assert history.operations == before
+
+
+def before_ids(operations: list[Operation]) -> set[str]:
+    return {name for entry in operations for name in entry.outputs}
+
+
+def test_split_and_retry_refuses_a_body_the_step_does_not_have(history: History) -> None:
+    """Ein Körper, der vor dem Schritt nicht lebt, lässt sich dort nicht zerlegen."""
+    body = create(history)
+    history.apply(_("Ausrichten"), [OperationDraft(op="orient_everything", inputs=(body,))])
+    failed_id = history.operations[-1].id
+    before = history.operations
+
+    with pytest.raises(ValidationError) as caught:
+        history.split_and_retry(failed_id, "obj_99", 2)
+
+    assert caught.value.values["missing"] == ["obj_99"]
+    assert history.operations == before, "eine Abweisung schreibt nichts"
 
 
 def test_repair_and_retry_survives_saving_with_undo_and_redo(

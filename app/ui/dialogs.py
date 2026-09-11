@@ -2400,7 +2400,10 @@ def show_expired_demo(state: activation.Activation) -> None:
 #:
 #: *Werte ansehen* steht aus demselben Grund daneben: Es zeigt die Parameter
 #: **eines** Schritts, und ohne seine Kennung gibt es nichts zu zeigen.
-NEEDS_OP: Final = frozenset({"correct_input", "show_step_values"})
+#:
+#: *Stückzahl anpassen* ebenso: Es ersetzt **diesen** Schritt durch einen mit
+#: der gemessenen Zahl (``MainWindow._recount_after_error``).
+NEEDS_OP: Final = frozenset({"correct_input", "show_step_values", "recount_and_retry"})
 
 
 class StepValuesDialog(QDialog):

@@ -78,7 +78,7 @@ def core_sources() -> list[Path]:
 
 @pytest.mark.parametrize("path", core_sources(), ids=lambda entry: entry.name)
 def test_no_error_text_carries_a_placeholder_nobody_fills(path: Path) -> None:
-    """Ein ``{platzhalter}`` in einem Fehlertext bleibt wörtlich stehen.
+    """Ein ``{platzhalter}`` in einem Fehler- oder Befundtext bleibt wörtlich stehen.
 
     Anderswo ist er richtig: die Oberfläche setzt ihre Texte mit ``.format``
     zusammen, und ``tr("{grams} g").format(...)`` ist der übliche Weg. Einen
@@ -119,6 +119,11 @@ def test_no_error_text_carries_a_placeholder_nobody_fills(path: Path) -> None:
             for part in value.args:
                 unfilled(part, own)
             return
+        if isinstance(value, ast.Lambda):
+            # ``fell_apart`` bekommt den Satz als Funktion der Teilezahl —
+            # gefüllt wird im Rumpf, und der ist ein eigener Aufruf.
+            unfilled(value.body, filled)
+            return
         for text in ast.walk(value):
             if not (isinstance(text, ast.Constant) and isinstance(text.value, str)):
                 continue
@@ -126,11 +131,16 @@ def test_no_error_text_carries_a_placeholder_nobody_fills(path: Path) -> None:
             if open_names:
                 offenders.append(f"{path.name}:{text.lineno} {sorted(open_names)}")
 
+    # **Und ``message`` — der Satz eines Befunds.** Auch den formatiert
+    # niemand nach: ``_line_for`` hängt die Werte hinter den Gedankenstrich.
+    # Bis zum 11.09.2026 sah der Wächter nur Fehlertexte, und im Prüfbericht
+    # stand „{count} weitere Teile blieben im letzten Objekt beieinander"
+    # (Bildschirmfoto Robert) — mit fünf Geschwistern in vier Modulen.
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         for keyword in node.keywords:
-            if keyword.arg in ("detail", "title"):
+            if keyword.arg in ("detail", "title", "message"):
                 unfilled(keyword.value, frozenset())
 
     assert not offenders, "Fehlertexte mit unersetztem Platzhalter:\n" + "\n".join(offenders)
@@ -356,7 +366,7 @@ _NOT_A_RANGE = frozenset(
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
         "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile",
         "no_repair_target", "no_section",
-        "no_shapes", "no_size", "no_sources", "no_split", "no_triangles",
+        "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
         "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright", "one_body",

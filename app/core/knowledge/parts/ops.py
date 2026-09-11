@@ -524,7 +524,7 @@ def _hanging_loose(
         after,
         applies=not subtractive or spec.host_add is not None,
         code="parts.hanging_loose",
-        message=_loose_advice(spec),
+        message=lambda _loose: _loose_advice(spec),
         values={"part": spec.name},
     )
 

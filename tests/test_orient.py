@@ -309,6 +309,140 @@ def _towers(document: Document) -> tuple[Project, list[str]]:
     return project, ["obj_1", "obj_2"]
 
 
+def _loaded(document: Document, mesh: trimesh.Trimesh) -> Project:
+    """Ein Projekt mit diesem Netz als einzigem, geladenem Körper ``obj_1``."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/koerper.stl", sha256=""
+    )
+    project.sources["src_1"] = mesh.export(file_type="stl")
+    History(document).apply(
+        _("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    return project
+
+
+def _islands(apart: float) -> trimesh.Trimesh:
+    """Ein Körper aus zwei losen Platten 80 x 80 x 4, ``apart`` mm auseinander.
+
+    Weit genug auseinander passt er in keiner Lage auf das Bett von 256 mm,
+    und jede Platte für sich passt in jeder — der Schriftzug im Kleinen.
+    """
+    near = trimesh.creation.box(extents=(80.0, 80.0, 4.0))
+    far = trimesh.creation.box(extents=(80.0, 80.0, 4.0))
+    far.apply_translation((apart, 0.0, 0.0))
+    return trimesh.util.concatenate([near, far])
+
+
+def test_a_body_of_loose_pieces_that_fits_nowhere_offers_its_pieces(
+    document: Document, profile: Profile
+) -> None:
+    """Passt der Körper als Ganzes nirgends hin, seine losen Teile aber schon,
+    sagt die Absage das — und die Zerlegung davor bringt die Kette durch.
+
+    **Der Anlass** (Robert, 11.09.2026: „das druckoptimal ausrichten klappt
+    nicht, es werden nicht mehr platten angelegt"): Ein Schriftzug
+    *Solidon3D* in 200 mm ist einen Meter breit; die Kette hielt mit „Keine
+    geprüfte Lage passt" an, und die Vorschläge hießen Teilen und anderer
+    Drucker. Seine elf Buchstaben passten alle. Die Operation darf sie nicht
+    selbst zerlegen (§15.2: ihre Ausgänge stehen fest, bevor gerechnet wird),
+    also nennt die Absage die Zerlegung als ersten Vorschlag, mit der
+    Stückzahl — und ``History.split_and_retry`` setzt sie vor den Schritt.
+
+    Gefahren bis zum Ende: Nach dem Zug ist die Kette vollständig, und beide
+    Teile liegen im Bett.
+    """
+    from app.core.errors import SPLIT_AND_RETRY, SPLIT_MODEL
+
+    project = _loaded(document, _islands(500.0))
+    history = History(document)
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={"thorough": False})],
+    )
+
+    halted = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert halted.stopped_at == history.operations[-1].id
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    assert refusal.code == "op.orient_for_print.NoFittingOrientationError"
+    assert [action.id for action in refusal.suggestions][:2] == [
+        SPLIT_AND_RETRY.id,
+        SPLIT_MODEL.id,
+    ], "die Zerlegung zuerst — Teilen bleibt als zweiter Weg"
+    assert refusal.values["count"] == "2"
+    assert refusal.object_id == "obj_1"
+
+    history.split_and_retry(halted.stopped_at, "obj_1", 2)
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert [entry.op for entry in history.operations] == [
+        "load",
+        "split_bodies",
+        "orient_for_print",
+    ]
+    assert len(result.scene.objects) == 2
+    half = profile.printer.build_volume[0] / 2.0
+    for name, entry in result.scene.objects.items():
+        box = entry.mesh.bounds
+        assert box.minimum[0] >= -half - 1e-6 and box.maximum[0] <= half + 1e-6, (
+            f"{name} liegt neben dem Bett: x {box.minimum[0]:.1f}..{box.maximum[0]:.1f}"
+        )
+
+
+def _a_plate_and_a_rod() -> trimesh.Trimesh:
+    """Zwei lose Teile, von denen das **kleinere** nirgends hinpasst.
+
+    Die Platte hat das größere Volumen und passt; der Stab von 500 mm ist
+    dünn und passt in keiner Lage. Absichtlich so herum: Wer nur das größte
+    Teil prüfte, hielte die Zerlegung für einen Ausweg.
+    """
+    plate = trimesh.creation.box(extents=(80.0, 80.0, 4.0))
+    rod = trimesh.creation.box(extents=(500.0, 3.0, 3.0))
+    rod.apply_translation((0.0, 200.0, 0.0))
+    return trimesh.util.concatenate([plate, rod])
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(trimesh.creation.box(extents=(500.0, 80.0, 4.0)), id="ein Stück"),
+        pytest.param(_a_plate_and_a_rod(), id="ein Teil passt selbst nicht"),
+    ],
+)
+def test_a_body_whose_pieces_would_not_help_keeps_the_plain_refusal(
+    document: Document, profile: Profile, body: trimesh.Trimesh
+) -> None:
+    """Hilft die Zerlegung nicht, heißt der Vorschlag weiter Teilen.
+
+    Die Gegenprobe zum Test darüber, zweimal: Eine Platte von 500 mm ist ein
+    Stück — der Knopf *zerlegen* führte zu einer Operation, die mit „besteht
+    aus einem Stück" abbräche. Und zwei lose Teile, von denen das kleinere
+    selbst nirgends hinpasst — dort hielte die Kette nach dem Klick am selben
+    Schritt noch einmal an. Beides wird nicht angeboten; vorgeschlagen wird
+    nur, was hält, und geprüft wird dafür jedes Teil.
+    """
+    from app.core.errors import SPLIT_AND_RETRY, SPLIT_MODEL
+
+    project = _loaded(document, body)
+    history = History(document)
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={"thorough": False})],
+    )
+
+    halted = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert halted.stopped_at == history.operations[-1].id
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    ids = [action.id for action in refusal.suggestions]
+    assert SPLIT_AND_RETRY.id not in ids, "ein Stück lässt sich nicht in Einzelteile zerlegen"
+    assert ids[0] == SPLIT_MODEL.id
+    assert refusal.object_id == "obj_1", "auch die schlichte Absage nennt ihren Körper"
+
+
 def test_orienting_does_not_leave_the_bodies_inside_each_other(
     document: Document, profile: Profile
 ) -> None:

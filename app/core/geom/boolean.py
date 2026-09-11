@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol
 
@@ -597,11 +597,17 @@ def fell_apart(
     *,
     applies: bool,
     code: str,
-    message: TranslatableText | str,
+    message: Callable[[int], TranslatableText | str],
     values: Mapping[str, str] | None = None,
 ) -> Finding | None:
     """Ist etwas neben dem Körper liegengeblieben, statt an ihm zu hängen?
     (Regel 17)
+
+    ``message`` bekommt die Zahl der losen Stücke und gibt den Satz zurück —
+    als Funktion, weil die Zahl erst hier entsteht und ein Befund nirgends
+    nachformatiert wird: Der Kunde las „in {loose} losen Stücken" mit
+    geschweiften Klammern. Wer sie im Satz nennen will, füllt sie im
+    Übersetzer (``_(…, loose=loose)``); wer nicht, nimmt sie nicht entgegen.
 
     **Die Teilezahl lügt nicht.** Sie ist binär statt toleranzbehaftet und
     fängt Fälle, die :func:`without_effect` bauartbedingt nicht sieht: Dort
@@ -630,7 +636,7 @@ def fell_apart(
         # ``Action``-Liste — das kann nur eine Ausnahme. Regel 17 verlangt
         # trotzdem einen Weg nach vorn, und :func:`without_effect` macht es
         # nebenan genauso: erst was ist, dann was hilft.
-        message=message,
+        message=message(loose),
         values={
             **(dict(values) if values else {}),
             "loose": str(loose),

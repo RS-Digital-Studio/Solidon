@@ -28,9 +28,12 @@ from app.core import activation, expressions
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     SHOW_STEP_VALUES,
+    SPLIT_AND_RETRY,
     AppError,
+    InternalError,
     UserError,
     ValidationError,
 )
@@ -491,19 +494,167 @@ class History:
             planned.append(repaired)
             living.difference_update(set(repaired.inputs) - set(repaired.outputs))
             living.update(repaired.outputs)
+        return self._retried_after(planned, suffix, living, REPAIR_AND_RETRY.label)
 
+    def split_and_retry(self, stopped_at: OpId, target: ObjectId, count: int) -> Transaction:
+        """Zerlegt einen Körper vor einem angehaltenen Schritt und plant neu.
+
+        Dasselbe Muster wie :meth:`repair_and_retry`, mit *In Einzelteile
+        zerlegen* statt der Reparatur: Der vollständige Suffix ab
+        ``stopped_at`` wird ersetzt, davor kommt ``split_bodies`` auf
+        ``target`` mit der Stückzahl ``count``, und alte wie neue Fassung
+        reisen in **einer** Transaktion (§15.5, Regel 16). Der Anlass ist das
+        Ausrichten, das einen Schriftzug als Ganzes auf kein Bett bekommt
+        und seine Zerlegung vorschlägt (``prepare_ops._the_way_out_of``).
+
+        **Wo der Körper stand, stehen danach seine Teile** — in jedem Schritt
+        des Suffixes, der die ganze Szene nimmt (``takes_whole_scene``): Das
+        Ausrichten und das Anordnen meinen das Bett, und das Bett trägt jetzt
+        die Teile. Ihre Ausgänge werden dafür neu vergeben, denn bei diesen
+        Operationen sind die Ausgänge die Eingänge. Jeder andere Schritt
+        behält seine Eingänge: Die erste Kennung der Zerlegung ist die des
+        Ausgangskörpers, und sie trägt danach dessen größtes Teil — genau
+        wie nach einer von Hand eingefügten Zerlegung.
+        """
+        activation.require(activation.CHANGE)
+        operations = self.operations
+        failed = self.operation(stopped_at)
+        failed_index = next(
+            index for index, entry in enumerate(operations) if entry.id == failed.id
+        )
+        prefix = operations[:failed_index]
+        suffix = operations[failed_index:]
+
+        living = _living_objects(prefix)
+        if target not in living:
+            raise ValidationError(
+                field="in",
+                detail=_(
+                    "Dieser Schritt verwendet kein vorhandenes Modell, das sich zerlegen ließe."
+                ),
+                constraint="no_split_target",
+                values={"op": stopped_at, "missing": [target]},
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+                op_id=stopped_at,
+            )
+
+        self._reseed()
+        split = self._plan(
+            OperationDraft(op="split_bodies", inputs=(target,), params={"count": count}),
+            living,
+        )
+        living.difference_update(set(split.inputs) - set(split.outputs))
+        living.update(split.outputs)
+
+        return self._retried_after(
+            [split],
+            suffix,
+            living,
+            SPLIT_AND_RETRY.label,
+            redraft=lambda entry: self._with_replaced(entry, {target}, split.outputs),
+        )
+
+    def recount_and_retry(self, op_id: OpId, count: int) -> Transaction:
+        """Setzt die Stückzahl eines Schritts auf die gemessene und plant neu.
+
+        **Der Ausweg, wenn die Stückzahl nicht zu den Teilen passt** — nach
+        einem Schriftwechsel, einem anderen Text, einer anderen Datei. §15.2
+        verbietet das stille Nachrücken: ``change_params`` weist eine Zahl ab,
+        die die Ausgänge ändert, solange ein späterer Schritt sie benutzt, und
+        sagt „zurücknehmen und neu anwenden". Hier ist es der Klick auf den
+        Vorschlag der Zerlegung selbst (``split_bodies``, Regel 17), und der
+        tut genau das in einem Zug: der Schritt mit der neuen Zahl, seine
+        Ausgänge erneuert, jeder spätere Schritt neu gefasst — die ganze Szene
+        nimmt, was jetzt da ist; alte wie neue Fassung in einer Transaktion.
+
+        **Die vorhandenen Kennungen bleiben.** Wächst die Zahl, kommen
+        frische dazu; schrumpft sie, fallen die letzten weg — ein Schritt, der
+        genau eine davon braucht, hält den Zug an (``_plan``: „nicht mehr da"),
+        und geschrieben ist dann nichts.
+        """
+        activation.require(activation.CHANGE)
+        entry = self.operation(op_id)
+        spec = self._spec_of(entry)
+        field_name = spec.produces_from
+        if not field_name:
+            raise InternalError(detail=f"{entry.op} has no piece count to change")
+        operations = self.operations
+        index = next(position for position, step in enumerate(operations) if step.id == entry.id)
+        prefix = operations[:index]
+        suffix = operations[index:]
+        living = _living_objects(prefix)
+
+        merged = {**entry.params, field_name: count}
+        self._check_params(spec.name, spec.params.spec(), merged)
+        self._reseed()
+        keep = min(count, len(entry.outputs))
+        outputs = (
+            *entry.outputs[:keep],
+            *(f"obj_{next(self._next_object)}" for _ in range(count - keep)),
+        )
+        gone = set(entry.outputs)
+
+        def redraft(step: Operation) -> OperationDraft | None:
+            if step.id == entry.id:
+                return OperationDraft(
+                    op=step.op, inputs=step.inputs, params=merged, outputs=outputs, seed=step.seed
+                )
+            return self._with_replaced(step, gone, outputs)
+
+        return self._retried_after([], suffix, living, RECOUNT_AND_RETRY.label, redraft=redraft)
+
+    def _with_replaced(
+        self, step: Operation, gone: set[ObjectId], pieces: tuple[ObjectId, ...]
+    ) -> OperationDraft | None:
+        """Ein Schritt, der die ganze Szene nimmt, bekommt statt ``gone`` die ``pieces``.
+
+        Nur für ``takes_whole_scene``: Ausrichten und Anordnen meinen das
+        Bett, und das Bett trägt jetzt die Teile. Die Ausgänge werden dabei
+        neu vergeben (``outputs=None``), denn bei diesen Operationen sind die
+        Ausgänge die Eingänge. Jeder andere Schritt behält, was er hat —
+        ``None`` heißt: unverändert klonen.
+        """
+        if not (gone & set(step.inputs)) or not self._registry.has(step.op):
+            return None
+        if not self._registry.get(step.op).takes_whole_scene:
+            return None
+        inputs = tuple(
+            dict.fromkeys(
+                piece for given in step.inputs for piece in (pieces if given in gone else (given,))
+            )
+        )
+        return OperationDraft(
+            op=step.op, inputs=inputs, params=step.params, outputs=None, seed=step.seed
+        )
+
+    def _retried_after(
+        self,
+        planned: list[Operation],
+        suffix: Sequence[Operation],
+        living: set[ObjectId],
+        title: TranslatableText | str,
+        redraft: Callable[[Operation], OperationDraft | None] = lambda entry: None,
+    ) -> Transaction:
+        """Den Suffix hinter ``planned`` neu fassen und alles als einen Zug schreiben.
+
+        Der gemeinsame Schluss von :meth:`repair_and_retry`,
+        :meth:`split_and_retry` und :meth:`recount_and_retry`: Jeder Schritt
+        des alten Suffixes bekommt eine neue Fassung mit denselben Werten,
+        demselben Startwert und denselben Ein- und Ausgängen — oder die, die
+        ``redraft`` für ihn nennt; Passungen, die an einem ersetzten Schritt
+        hingen, werden umgebunden, und alte wie neue Fassung stehen in
+        **einer** Transaktion.
+        """
         replaced_ids: dict[OpId, OpId] = {}
         for entry in suffix:
-            cloned = self._plan(
-                OperationDraft(
-                    op=entry.op,
-                    inputs=entry.inputs,
-                    params=entry.params,
-                    outputs=entry.outputs,
-                    seed=entry.seed,
-                ),
-                living,
+            draft = redraft(entry) or OperationDraft(
+                op=entry.op,
+                inputs=entry.inputs,
+                params=entry.params,
+                outputs=entry.outputs,
+                seed=entry.seed,
             )
+            cloned = self._plan(draft, living)
             cloned = dataclasses.replace(
                 cloned,
                 solver=None,
@@ -539,7 +690,7 @@ class History:
         self._forget_undone()
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=REPAIR_AND_RETRY.label,
+            title=title,
             ops=tuple(entry.id for entry in planned),
             changes=changes,
         )

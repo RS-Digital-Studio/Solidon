@@ -642,6 +642,20 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   exakten Kerns aus: Eine Netzreparatur würde ihre bearbeitbaren Flächen in
   feste Dreiecke umwandeln und den erneuten Versuch unbrauchbar machen.
 - **Objektzahländerung hält die Auswertung an** statt sie zu verschlucken.
+  Daraus folgt für eine Operation, die einen Körper gern zerlegen würde:
+  Sie darf nicht. Ihre Ausgänge stehen fest, bevor gerechnet wird
+  (`History._outputs_for`), und eine andere Zahl ist ein Halt. Der Weg ist
+  Regel 17 — die Absage nennt die Zerlegung als Vorschlag, und das Fenster
+  setzt sie **vor** den angehaltenen Schritt (`History.split_and_retry`,
+  Muster wie die Reparatur darüber): *Druckoptimal ausrichten* wirft für
+  einen Körper aus losen Teilen, der als Ganzes nirgends hinpasst,
+  `NoFittingOrientationError` mit `SPLIT_AND_RETRY` an erster Stelle und
+  der Stückzahl in `values["count"]`, gezählt wie `split_bodies` zählt —
+  und nur, wenn jedes Teil für sich in eine Lage passt; sonst hielte die
+  Kette nach dem Klick am selben Schritt noch einmal an. Beim Neuplanen des
+  Suffixes stehen die Teile dort, wo der Körper stand, in jedem Schritt,
+  der die ganze Szene nimmt; jeder andere behält seine Kennung, denn die
+  erste Kennung der Zerlegung ist die des Ausgangskörpers.
 - **Keine absoluten Pfade** in der Projektdatei (Regel 12), **kein
   ausführbarer Code** darin (Regel 13).
 - Format geändert? Dann alle fünf Schritte: Version, Migration,

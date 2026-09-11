@@ -610,11 +610,12 @@ def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
         after,
         applies=mode == "raised",
         code="label.fell_apart",
-        message=_(
+        message=lambda loose: _(
             "Die Schrift hängt nicht am Körper: Sie liegt in {loose} losen Stücken "
             "daneben und würde einzeln gedruckt. Meist steht sie neben der Fläche, "
             "auf die sie soll — klicken Sie die Fläche an, dann trägt sie Ort und "
-            "Richtung selbst ein."
+            "Richtung selbst ein.",
+            loose=loose,
         ),
     )
 
@@ -653,7 +654,9 @@ def _buried(letters: Any, before: Any, after: Any, mode: str) -> Finding | None:
             "Die Schrift steckt im Körper: Von {expected} Buchstaben stehen nur {shown} "
             "über der Fläche, der Rest liegt im Material und ist unsichtbar. Meist zeigt "
             "die Richtung in den Körper hinein oder der Punkt liegt in ihm — klicken Sie "
-            "die Fläche an, dann trägt sie Ort und Richtung selbst ein."
+            "die Fläche an, dann trägt sie Ort und Richtung selbst ein.",
+            expected=format_volume(expected),
+            shown=format_volume(shown),
         ),
         values={
             "expected": format_volume(expected),

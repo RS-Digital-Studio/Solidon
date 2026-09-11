@@ -386,7 +386,9 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                     "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein "
                     "Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt "
                     "deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein "
-                    "oder übergeben Sie an einen Slicer, der ihn kennt."
+                    "oder übergeben Sie an einen Slicer, der ihn kennt.",
+                    slicer=setup.name,
+                    printer=profile.printer.title,
                 ),
                 values={"slicer": setup.name, "printer": profile.printer.title},
                 suggestions=(CHOOSE_SLICER, EXPORT_ONLY),

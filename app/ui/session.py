@@ -948,6 +948,35 @@ class Session(QObject):
         self._changed()
         return True
 
+    def split_and_retry(self, stopped_at: int, target: str, count: int) -> bool:
+        """Setzt die Zerlegung und den erneuten Versuch als einen Zug vor den Fehler.
+
+        Das Gegenstück zu :meth:`repair_and_retry` für einen Körper aus losen
+        Teilen, der als Ganzes nirgends hinpasst; Reihenfolge und Undo gehören
+        auch hier dem Verlauf.
+        """
+        try:
+            self.history.split_and_retry(stopped_at, target, count)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._changed()
+        return True
+
+    def recount_and_retry(self, op_id: int, count: int) -> bool:
+        """Setzt die Stückzahl eines Schritts auf die gemessene und plant den Rest neu.
+
+        Das dritte Geschwister von :meth:`repair_and_retry`; Reihenfolge und
+        Undo gehören dem Verlauf.
+        """
+        try:
+            self.history.recount_and_retry(op_id, count)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._changed()
+        return True
+
     def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
         """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
 

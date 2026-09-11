@@ -20,8 +20,12 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    CHOOSE_PRINTER,
     CORRECT_INPUT,
+    RECOUNT_AND_RETRY,
     RESIZE_THE_WIDENING,
+    SPLIT_AND_RETRY,
+    SPLIT_MODEL,
     GeometryError,
     InternalError,
     ValidationError,
@@ -39,7 +43,7 @@ from app.core.geom.boolean import (
 from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.ops import as_transform
-from app.core.geom.orient import orient_for_print
+from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ranked_orientations
 from app.core.geom.pins import (
     PIN_COUNT,
     PIN_MAX,
@@ -4981,6 +4985,42 @@ class SplitBodiesParams(BaseParams):
     )
 
 
+def _gap_between(one: Any, other: Any) -> float:
+    """Der Abstand zweier Hüllquader — null, wo sie sich überlappen.
+
+    Für die Frage, welchem Teil ein überzähliges am nächsten liegt, genügt
+    das: Der Punkt über dem i steht seinem Strich näher als dem l daneben,
+    weil ihre Quader in x überlappen und nur die Lücke darüber zählt. Ein
+    Schwerpunktabstand sähe das anders — der Strich ist lang, sein
+    Schwerpunkt weit unten, und das l gewönne.
+    """
+    low = np.maximum(np.asarray(one.bounds[0]), np.asarray(other.bounds[0]))
+    high = np.minimum(np.asarray(one.bounds[1]), np.asarray(other.bounds[1]))
+    return float(np.linalg.norm(np.maximum(low - high, 0.0)))
+
+
+def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[tuple[Any, float]], int]:
+    """Die losen Teile eines Körpers samt Volumen, größte zuerst — und wie
+    viele Splitter dabei wegfielen.
+
+    Die eine Zählung für *In Einzelteile zerlegen* und für die Absage des
+    Ausrichtens, die diese Zerlegung vorschlägt: Ohne ``keep_tiny`` fällt
+    weg, was unter einem Prozent des größten Teils liegt, und eine Stückzahl,
+    die die Splitter mitzählte, ließe die Zerlegung an ihrer eigenen Prüfung
+    scheitern.
+    """
+    parts = mesh.raw.split(only_watertight=False)
+    volumes = [abs(float(part.volume)) for part in parts]
+    largest = max(volumes, default=0.0) or 1.0
+    kept = [
+        (part, volume)
+        for part, volume in zip(parts, volumes, strict=True)
+        if keep_tiny or volume >= largest * 0.01
+    ]
+    kept.sort(key=lambda entry: -entry[1])
+    return kept, len(parts) - len(kept)
+
+
 @register_op(
     name="split_bodies",
     title=_("In Einzelteile zerlegen"),
@@ -5012,28 +5052,19 @@ def split_bodies(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     params = cast(SplitBodiesParams, ctx.params)
     mesh = as_mesh_data(source.mesh)
-    parts = mesh.raw.split(only_watertight=False)
-
-    volumes = [abs(float(part.volume)) for part in parts]
-    largest = max(volumes, default=0.0) or 1.0
-    kept = [
-        (part, volume)
-        for part, volume in zip(parts, volumes, strict=True)
-        if params.keep_tiny or volume >= largest * 0.01
-    ]
-    dropped = len(parts) - len(kept)
-    kept.sort(key=lambda entry: -entry[1])
+    kept, dropped = _loose_parts(mesh, keep_tiny=params.keep_tiny)
 
     # **Genau so viele, wie die Stückzahl sagt.** Der Stapel vergibt die
     # Kennungen der Ausgänge, bevor gerechnet wird (§15.2); eine Operation, die
     # nachher eine andere Zahl liefert, hält die ganze Kette an. Ist zu wenig
     # da, wird das gesagt statt geraten — mit der Zahl, die passen würde.
-    if len(kept) < params.count:
+    found = len(kept)
+    if found < params.count:
         raise ValidationError(
             field="count",
             detail=(
                 _("Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.")
-                if len(kept) <= 1
+                if found <= 1
                 # **Ohne Platzhalter.** Ein Fehlertext wird nirgends
                 # nachformatiert — `show_details` zeigt ihn, wie er ist, und
                 # hängt `values` als eigene Zeilen darunter. Ein `{found}`
@@ -5041,19 +5072,37 @@ def split_bodies(ctx: OpContext) -> OpResult:
                 else _("Der Körper hat weniger Teile, als die Stückzahl verlangt.")
             ),
             constraint="too_many_parts",
-            values={"count": str(params.count), "found": str(len(kept))},
+            values={"count": str(params.count), "found": str(found)},
+            # Mit der gemessenen Zahl ist es ein Klick (``recount_and_retry``);
+            # aus einem Stück wird auch mit einer anderen Zahl nichts.
+            suggestions=(
+                (RECOUNT_AND_RETRY, CORRECT_INPUT, CANCEL)
+                if found >= 2
+                else (CORRECT_INPUT, CANCEL)
+            ),
         )
 
-    # Mehr Teile als verlangt: Die größten stehen einzeln, der Rest bleibt
-    # beieinander — genau der Zustand, aus dem sie kommen. Ein Befund nennt es,
-    # damit niemand die übrigen für verschwunden hält.
-    surplus = len(kept) - params.count
+    # **Mehr Teile als verlangt: Jedes überzählige schlägt sich dem nächsten
+    # zu.** Die ``count`` größten stehen einzeln, und was übrig ist, geht zu
+    # dem von ihnen, das ihm am nächsten liegt — der Punkt bleibt bei seinem
+    # i. Bis zum 11.09.2026 blieb der Rest als *ein* Objekt beieinander, nach
+    # Volumen gewählt: Bei einem Schriftzug mit neun Buchstaben und zehn
+    # Teilen war das Punkt und i-Strich, bis ein Schriftwechsel andere zwei
+    # zu den kleinsten machte — die lagen einen halben Meter auseinander, und
+    # das Ausrichten fand für das Paar keine Lage (Robert: „die anzahl hat
+    # sich ja nicht verändert"). Die Nähe ändert sich mit der Schrift nicht.
+    surplus = found - params.count
     if surplus:
-        head = kept[: params.count - 1]
-        rest = [part for part, _volume in kept[params.count - 1 :]]
-        merged = rest[0] if len(rest) == 1 else cast("Any", trimesh.util.concatenate(rest))
-        rest_volume = float(sum(volume for _part, volume in kept[params.count - 1 :]))
-        kept = [*head, (merged, rest_volume)]
+        anchors = [[part] for part, _volume in kept[: params.count]]
+        volumes = [volume for _part, volume in kept[: params.count]]
+        for part, volume in kept[params.count :]:
+            nearest = min(range(len(anchors)), key=lambda i: _gap_between(part, anchors[i][0]))
+            anchors[nearest].append(part)
+            volumes[nearest] += volume
+        kept = [
+            (group[0] if len(group) == 1 else cast("Any", trimesh.util.concatenate(group)), volume)
+            for group, volume in zip(anchors, volumes, strict=True)
+        ]
 
     outputs = []
     for number, (part, _volume) in enumerate(kept, start=1):
@@ -5075,10 +5124,20 @@ def split_bodies(ctx: OpContext) -> OpResult:
         findings.append(
             Finding(
                 code="split_bodies.surplus",
-                severity="info",
-                message=_("{count} weitere Teile blieben im letzten Objekt beieinander."),
-                values={"count": str(surplus + 1), "found": str(surplus + params.count)},
-                object_id=source.id,
+                # Eine Warnung, kein Hinweis (Robert, 11.09.2026: „eine warnung
+                # bei in einzelteile zerlegen" ): Die Stückzahl sagt etwas
+                # anderes als der Körper, und der Weg dahin ist ein Klick.
+                severity="warning",
+                # **Gefüllt vom Übersetzer** (``_(…, count=…)``): Einen Befund
+                # formatiert niemand nach, und der Kunde las „{count} weitere
+                # Teile" mit geschweiften Klammern (Bildschirmfoto Robert,
+                # 11.09.2026).
+                message=_(
+                    "{count} weitere Teile wurden dem jeweils nächsten Teil zugeschlagen.",
+                    count=surplus,
+                ),
+                values={"count": str(surplus), "found": str(found), "object": str(source.name)},
+                suggestions=(RECOUNT_AND_RETRY,),
             )
         )
     if dropped:
@@ -5086,9 +5145,11 @@ def split_bodies(ctx: OpContext) -> OpResult:
             Finding(
                 code="split_bodies.tiny",
                 severity="info",
-                message=_("{count} Splitter unter einem Prozent wurden verworfen."),
-                values={"count": str(dropped)},
-                object_id=source.id,
+                message=_("{count} Splitter unter einem Prozent wurden verworfen.", count=dropped),
+                # Die Splitter gehörten dem ganzen Körper, nicht seinem größten
+                # Teil: Der Name des Ausgangs steht in der Zeile, eine Kennung
+                # hat er nach der Zerlegung nicht mehr.
+                values={"count": str(dropped), "object": str(source.name)},
             )
         )
     return OpResult(outputs=outputs, findings=findings)
@@ -5504,33 +5565,38 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
     params = cast(OrientParams, ctx.params)
 
     outputs = []
-    findings = []
+    findings: list[Finding] = []
     last_matrix = None
     for number, entry in enumerate(ctx.inputs):
         mesh = as_mesh_data(entry.mesh)
-        if params.thorough:
-            found = search(
-                mesh,
-                count=params.candidates,
-                seed=ctx.seed,
-                profile=ctx.profile,
-                overhang_angle=analysis_limits(ctx.profile, entry)[1],
-                # Der Fortschritt gehört dem ganzen Auftrag, nicht dem
-                # einzelnen Körper: Bei vier Teilen liefe der Balken sonst
-                # viermal von vorn.
-                progress=_share_of(ctx.progress, number, len(ctx.inputs)),
-                cancelled=ctx.cancelled,
-            )
-            # **Gedreht wird der echte Körper, nicht das Urteil.** ``search``
-            # arbeitet auf Dreiecken; ein exakter Körper käme als Netz zurück,
-            # und danach ist kein Verrunden mehr möglich. Dieselbe Matrix legt
-            # ``moved_body`` exakt auf den Eingang.
-            matrix = found.transform
-            findings.extend(found.findings)
-        else:
-            result = orient_for_print(mesh, printer=ctx.profile.printer, cancelled=ctx.cancelled)
-            matrix = result.transform
-            findings.extend(result.findings)
+        try:
+            if params.thorough:
+                found = search(
+                    mesh,
+                    count=params.candidates,
+                    seed=ctx.seed,
+                    profile=ctx.profile,
+                    overhang_angle=analysis_limits(ctx.profile, entry)[1],
+                    # Der Fortschritt gehört dem ganzen Auftrag, nicht dem
+                    # einzelnen Körper: Bei vier Teilen liefe der Balken sonst
+                    # viermal von vorn.
+                    progress=_share_of(ctx.progress, number, len(ctx.inputs)),
+                    cancelled=ctx.cancelled,
+                )
+                # **Gedreht wird der echte Körper, nicht das Urteil.**
+                # ``search`` arbeitet auf Dreiecken; ein exakter Körper käme
+                # als Netz zurück, und danach ist kein Verrunden mehr möglich.
+                # Dieselbe Matrix legt ``moved_body`` exakt auf den Eingang.
+                matrix = found.transform
+                findings.extend(found.findings)
+            else:
+                result = orient_for_print(
+                    mesh, printer=ctx.profile.printer, cancelled=ctx.cancelled
+                )
+                matrix = result.transform
+                findings.extend(result.findings)
+        except NoFittingOrientationError as refusal:
+            raise _the_way_out_of(refusal, mesh, entry, ctx) from None
         outputs.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, matrix)))
         last_matrix = matrix
 
@@ -5552,6 +5618,55 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         outputs=outputs,
         findings=findings,
         transform=as_transform(last_matrix) if len(outputs) == 1 else None,
+    )
+
+
+def _the_way_out_of(
+    refusal: NoFittingOrientationError, mesh: MeshData, entry: SceneObject, ctx: OpContext
+) -> NoFittingOrientationError:
+    """Die Absage „passt in keinen Bauraum" mit dem Ausweg, den lose Teile haben.
+
+    **Der Anlass** (Robert, 11.09.2026: „das druckoptimal ausrichten klappt
+    nicht, es werden nicht mehr platten angelegt"): Ein Schriftzug *Solidon3D*
+    in 200 mm ist einen Meter breit und passt in keiner Lage auf das Bett —
+    seine elf losen Teile passen alle, und angeordnet lägen sie auf zwei
+    Platten. Die Operation darf sie nicht selbst zerlegen: Ihre Ausgänge
+    stehen fest, bevor gerechnet wird, und eine andere Zahl hält die Kette an
+    (§15.2). Also sagt sie, was ginge, und das Fenster tut es auf einen Klick
+    — *In Einzelteile zerlegen* vor diesen Schritt, danach derselbe Schritt
+    noch einmal (``History.split_and_retry``), wie bei *Reparieren und erneut
+    versuchen* (Regel 17).
+
+    **Vorgeschlagen wird nur, was hält.** Gezählt wird, wie ``split_bodies``
+    zählt — Splitter fallen weg, mehr als seine Stückzahl erlaubt gibt es
+    nicht —, und jedes Teil muss für sich in eine Lage passen; sonst hielte
+    die Kette nach dem Klick am selben Schritt noch einmal an. Ein Körper aus
+    einem Stück behält die Absage, wie sie war: Dort gibt es nichts zu
+    zerlegen, und der Vorschlag heißt Teilen.
+    """
+    limit = next(
+        int(spec.maximum or 0) for spec in SplitBodiesParams.spec() if spec.name == "count"
+    )
+    kept, _dropped = _loose_parts(mesh, keep_tiny=False)
+    # Ein einziges Teil ist der Körper selbst, und der hat gerade nicht
+    # gepasst — die Untergrenze erspart nur, ihn ein zweites Mal zu prüfen.
+    each_fits = 2 <= len(kept) <= limit and all(
+        ranked_orientations(
+            mesh.replacing(part), limit=1, cancelled=ctx.cancelled, printer=ctx.profile.printer
+        )
+        for part, _volume in kept
+    )
+    if not each_fits:
+        refusal.object_id = entry.id
+        return refusal
+    return NoFittingOrientationError(
+        detail=_(
+            "Der Körper passt als Ganzes in keiner Lage auf das Bett; "
+            "seine losen Teile passen einzeln."
+        ),
+        suggestions=(SPLIT_AND_RETRY, SPLIT_MODEL, CHOOSE_PRINTER, CANCEL),
+        values={"name": entry.name, "count": len(kept)},
+        object_id=entry.id,
     )
 
 

@@ -520,10 +520,11 @@ def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
         after,
         applies=mode == "raised",
         code="texture.fell_apart",
-        message=_(
+        message=lambda loose: _(
             "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken "
             "daneben und würde einzeln gedruckt. Meist ist der Durchmesser des "
-            "Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an."
+            "Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an.",
+            loose=loose,
         ),
     )
 

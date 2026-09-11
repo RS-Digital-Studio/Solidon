@@ -80,6 +80,21 @@ SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
 #: das, wofür der Kunde eine Datei mit mehr als Geometrie wollte.
 EXPORT_AS_MESH = Action("export_as_mesh", _("Als 3MF speichern"), primary=True)
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
+#: Für einen Körper aus losen Teilen, der als Ganzes nirgends hinpasst: die
+#: Zerlegung vor den angehaltenen Schritt, dann derselbe Schritt noch einmal
+#: — dasselbe Muster wie ``REPAIR_AND_RETRY``, mit *In Einzelteile zerlegen*
+#: statt der Reparatur (``History.split_and_retry``).
+SPLIT_AND_RETRY = Action(
+    "split_and_retry", _("In Einzelteile zerlegen und erneut versuchen"), primary=True
+)
+#: Für eine Zerlegung, deren Stückzahl nicht zu den Teilen passt: die Zahl auf
+#: die gemessene setzen, die Ausgänge danach neu vergeben und jeden späteren
+#: Schritt, der die ganze Szene nimmt, mit den Teilen neu planen
+#: (``History.recount_and_retry``) — ein Klick statt „Schritt zurücknehmen und
+#: neu anwenden".
+RECOUNT_AND_RETRY = Action(
+    "recount_and_retry", _("Stückzahl anpassen und erneut versuchen"), primary=True
+)
 SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
 PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)
 ARRANGE_ON_BED = Action("arrange_on_bed", _("Auf dem Bett anordnen"), primary=True)
