@@ -128,7 +128,6 @@ from app.ui.render.edges import feature_edges
 from app.ui.render.gizmo import ARROW_SHARE, Gizmo
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
-from app.ui.slot_bar import SlotBar
 from app.ui.slot_handle import SlotHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
@@ -3434,6 +3433,13 @@ class Viewport(QWidget):
     Durchmesser aus dem Merkmal selbst und nimmt genau diese beiden entgegen.
     Der Winkel zählt gegen dieselbe Rahmenachse wie der geschnittene Umriss
     (:func:`app.ui.slot_handle.dragged_slot`)."""
+    slotProposed = Signal(str, float, float)
+    """Ein Zug am Langlochgriff schlägt Länge und Richtung vor (§21.1).
+
+    Kennung, Länge in Millimetern, Winkel in Grad. **Ein Vorschlag und keine
+    Operation**: Er landet in den Feldern des Merkmalfensters, und erst deren
+    Übernehmen macht einen Schritt daraus (Regel 2)."""
+
     slotStarted = Signal()
     """Der Zug am Langlochgriff ist **übernommen** — das Loch wird länger.
 
@@ -4181,12 +4187,6 @@ class Viewport(QWidget):
         self.drag_bar = DragValueBar(self)
         """Die Zahl zum Zug (§18.11): lesen beim Ziehen, tippen statt zielen."""
         self.drag_bar.value.installEventFilter(self)
-        self.slot_bar = SlotBar(self)
-        """Die Bestätigung eines Langlochzugs — Länge und Richtung zum
-        Nachbessern, danach *Übernehmen* (§21.1)."""
-        self.slot_bar.valuesChanged.connect(self._on_slot_bar_changed)
-        self.slot_bar.accepted.connect(self._on_slot_bar_accepted)
-        self.slot_bar.cancelled.connect(self._on_slot_bar_cancelled)
         self.plane_picker = SketchPlanePicker(self)
         """Die drei greifbaren Grundebenen beim freien Einstieg."""
         self.sketch_selection = SketchSelectionBadge(self)
@@ -6582,7 +6582,6 @@ class Viewport(QWidget):
         self.banner.set_theme(theme)
         self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
-        self.slot_bar.set_theme(theme)
         self.plane_picker.set_theme(theme)
         self.sketch_selection.set_theme(theme)
         self.sketch_action.set_theme(theme)
@@ -10453,7 +10452,6 @@ class Viewport(QWidget):
         Entscheidung, dass einer gewünscht ist.
         """
         self._slot_target = ""
-        self.slot_bar.dismiss()
         if self._drag_kind == "slot":
             self._drag_kind = None
             self.drag_bar.dismiss()
@@ -10474,8 +10472,7 @@ class Viewport(QWidget):
             # `('hole_2', 40.0, 15.0)` — ein 40-mm-Langloch in einem Loch, das
             # niemand gezogen hat. Hier steht sie richtig: Diese Stelle deckt
             # `select`, `select_feature`, den Szenenaufbau und die Vorschau.
-            self.slot_bar.dismiss()
-        self._drop_gizmo_labels()
+            self._drop_gizmo_labels()
         self._drop_face_handle()
         # **Und alles, was zum Zug gehört.** Bogen, Geisterring und der
         # Schattenversatz hingen nur an `_end_drag`, also am Loslassen — aber
@@ -10869,20 +10866,52 @@ class Viewport(QWidget):
         # und die Eingabetaste (übernimmt) — der Zug ist noch nicht vorbei, er
         # wartet nur auf eine Zahl.
         diameter = float(chosen.params.get("diameter") or 0.0)
-        self.slot_bar.begin(float(length), float(angle), shortest_mm=shortest_slot(diameter))
+        # **Der Vorschlag geht nach rechts, nicht in eine eigene Leiste**
+        # (Robert, 11.09.2026: „die untere leiste uns sparen und nur die
+        # rechte verwenden mit dem was schon drin ist"). Dort stehen Länge und
+        # Richtung als Felder von *Zum Langloch ziehen*, und derselbe Knopf
+        # übernimmt, der auch jede getippte Zahl übernimmt. Die untere Leiste
+        # trug beides ein zweites Mal.
+        self.slotProposed.emit(chosen.id, max(float(length), shortest_slot(diameter)), float(angle))
 
-    def _on_slot_bar_changed(self, length: float, angle: float) -> None:
-        """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell."""
+    def reshape_slot(self, length: float, angle: float) -> None:
+        """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell.
+
+        **Von rechts statt von unten** (11.09.2026): Die Zahl kam aus der
+        Langlochleiste, die es nicht mehr gibt; jetzt kommt sie aus den
+        Feldern des Merkmalfensters. Was sie bewegt, ist dasselbe — ein
+        Umriss ist eine Auskunft und kein Dokumentzustand (Regel 2).
+        """
         if self._slot_handle is not None:
             self._slot_handle.set_values(float(length), float(angle))
             self._update_slot_labels()
 
-    def _on_slot_bar_accepted(self, length: float, angle: float) -> None:
+    def slot_drag_waits(self) -> bool:
+        """Ob ein gezogenes Langloch auf seine Bestätigung wartet.
+
+        **Der Zustand und nicht ein Widget:** Bis zum 11.09.2026 beantwortete
+        `slot_bar.active` dieselbe Frage; die Leiste ist gefallen, die Frage
+        bleibt. Was sie trägt, ist der Zug — Umriss im Bild, gemerktes
+        Merkmal, noch kein Schritt im Verlauf.
+
+        **Gefragt wird nach dem gemerkten Merkmal**, nicht nach
+        ``_drag_kind``: Jenes setzt erst die Zugbewegung, und ein Griff, den
+        jemand ohne Bewegung losgelassen hat, wartet genauso. ``_end_drag``
+        leert es — damit endet die Frage dort, wo der Zug endet.
+        """
+        return bool(self._slot_target)
+
+    def apply_slot_drag(self, length: float, angle: float) -> None:
         """Übernommen: jetzt wird aus dem Zug genau eine Operation (§15.5).
 
         Gemeldet wird an das Merkmal, das **gezogen** wurde, nicht an das
         gerade gewählte — die zwei sind nicht dasselbe, sobald jemand die
-        Auswahl wechselt, während die Leiste steht.
+        Auswahl wechselt, während der Umriss steht.
+
+        **Zwei Wege kommen hier an**, seit die Langlochleiste gefallen ist
+        (11.09.2026): die getippte Zahl an der Zugleiste und das Übernehmen im
+        Merkmalfenster. Beide meinen denselben Zug, und hier wird er einmal zu
+        einem Schritt.
         """
         target = self._slot_target
         if target:
@@ -10891,10 +10920,6 @@ class Viewport(QWidget):
             # standen im Bild, wo sie hingehören.
             self.slotStarted.emit()
             self.slotDragged.emit(target, float(length), float(angle))
-        self._end_drag()
-
-    def _on_slot_bar_cancelled(self) -> None:
-        """Abgebrochen: Umriss weg, Griff zurück auf den Stand des Merkmals."""
         self._end_drag()
 
     def _on_scale_interacted(self, factor: float) -> None:
@@ -11279,11 +11304,6 @@ class Viewport(QWidget):
         self._drop_preview()
         self._reset_shadow_offset()
         self.drag_bar.dismiss()
-        # **Und die Leiste des Langlochzugs mit.** Sie steht zwischen Zug und
-        # Operation; was den Zug beendet — Übernehmen, Abbrechen, ein Undo, eine
-        # neue Auswahl —, beendet auch sie. Der frisch gebaute Griff darunter
-        # nimmt den Umriss mit (:meth:`SlotHandle.remove`).
-        self.slot_bar.dismiss()
         self.set_gizmo(self._gizmo_wanted)
 
     def _apply_typed(self) -> None:
@@ -11293,12 +11313,6 @@ class Viewport(QWidget):
         sich nichts anfangen lässt, bleibt markiert im Feld stehen — angewandt
         wird dann nichts.
         """
-        # **Ein gezogenes Langloch wartet in seiner eigenen Leiste.** Dort
-        # stehen zwei Zahlen und ein Knopf; die Eingabetaste ist der kurze Weg
-        # zu diesem Knopf und nicht ein zweiter Wert daneben.
-        if self._drag_kind == "slot" and self.slot_bar.active:
-            self._on_slot_bar_accepted(*self.slot_bar.values())
-            return
         value = self.drag_bar.typed_value()
         kind = self._drag_kind
         unusable = (kind == "scale" and value is not None and value <= 0.0) or (
@@ -11329,9 +11343,9 @@ class Viewport(QWidget):
             # das an einem Langloch ``None`` liefert: Die Eingabe verschwand
             # (gemessen 10.09.2026). Beides ist hier behoben, indem gar nichts
             # Eigenes mehr passiert: Die Leiste hält den Zug, sie kennt ihr
-            # Merkmal, und ``_on_slot_bar_accepted`` ist die eine Stelle, an
+            # Merkmal, und ``apply_slot_drag`` ist die eine Stelle, an
             # der daraus eine Operation wird.
-            self._on_slot_bar_accepted(float(value), self._slot_handle.angle)
+            self.apply_slot_drag(float(value), self._slot_handle.angle)
         elif kind == "scale" and abs(value - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(value))
         elif kind == "pull":

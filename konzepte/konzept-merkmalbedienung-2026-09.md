@@ -1,6 +1,7 @@
 # Eine Stelle für das gewählte Merkmal
 
-> **Stand:** Entwurf, 11.09.2026 — noch nichts umgesetzt.
+> **Stand:** umgesetzt, 11.09.2026 — alle sieben Pakete sind gefahren.
+> Die manuelle Abnahme am laufenden Fenster (§4) steht aus.
 > **Anlass:** Robert am 11.09.2026, an einer gewählten Bohrung: „wenn ich das
 > langloch zieh, fehlen die Maße zu den kanten usw die wir bei bohrungen
 > sehen", „im dialog das im modell platzieren brauchen wir auch nicht",
@@ -150,8 +151,8 @@ Jedes endet mit grünem Tor und einem Commit.
 | P5 | `surface_button` entfernen — **vorgezogen**, siehe Notiz unten | S | **fertig** (`afc15641`) |
 | P2b | `PlacementFlow` ohne Dialog tragbar machen (additiv) | L | **fertig** (`341fdb35`) |
 | P3 | Knopf rechts im Merkmalfenster, Selbststart aus — **das Umschalt-Paket** | L | **fertig** |
-| P4 | Untere Leisten abbauen: `_bar` am Merkmal, `SlotBar` | L | offen |
-| P6 | Toter Alt-Pfad raus, Doku und Regeln nachziehen | S | offen |
+| P4 | Untere Leisten abbauen: `_bar` am Merkmal, `SlotBar` | L | **fertig** |
+| P6 | Toter Alt-Pfad raus, Doku und Regeln nachziehen | S | **fertig** |
 
 **Leitplanke:** P2b baut additiv, der Dialogweg bleibt bis P3 funktionsfähig.
 P3 ist der Schnitt. Außer dem gefallenen Knopf ist vor P3 nichts anders.
@@ -201,6 +202,29 @@ zweite Sitzung im selben Baum an derselben Ecke (`panels.py`,
 `main_window.py`, `perceive/slots.py`, die Kataloge). Die vier Commits oben
 sind deshalb **hunkweise** gestaget worden, nicht dateiweise. Wer P3 angeht,
 prüft zuerst, wem was gehört.
+
+## §3.1 Was P4 noch gekostet hat
+
+**Eine Testattrappe, die mehr konnte als die Sache.** `_Viewport` in
+`test_surface_placement_ui.py` baute sich eine echte `SlotBar` ein — nur damit
+`PlacementFlow` sie fragen konnte. Nach dem Ausbau der Leiste blieben dort 65
+Tests grün, während `placement_flow.py` an **fünf** Stellen auf
+`viewport.slot_bar` zugriff; der breite Lauf über `test_ui.py` brachte 27
+Fehler mit derselben Zeile. Die Attrappe beantwortet die Frage jetzt mit einem
+Wahrheitswert, und der Fluss fragt den Zustand (`slot_drag_waits`) statt ein
+Widget.
+
+Das ist die Regel aus `tests.md` in ihrer teuersten Gestalt: **Ein Test, der
+nur in einer Lage grün ist, die es im Betrieb nicht gibt, ist keine
+Zusicherung, sondern eine Tarnung** — und eine Attrappe mit einem Widget zu
+viel baut genau so eine Lage.
+
+**Und ein Hänger ohne Zeichen.** Der Klick auf *Übernehmen* stand offscreen
+still; `faulthandler.dump_traceback_later` nannte die Stelle:
+`session.apply` → `_on_error` → ein **modaler** Fehlerdialog, der auf einen
+Klick wartet, den es offscreen nie gibt. Die Meldung dahinter war „Diesen
+Parameter gibt es bei dieser Operation nicht" — derselbe zufällige Schutz des
+Dialogs wie bei `at_feature`, diesmal für `nx`/`ny`/`nz`.
 
 ## §4 Verifikation
 

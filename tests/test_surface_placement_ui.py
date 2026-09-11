@@ -70,13 +70,19 @@ class _Viewport(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        from app.ui.slot_bar import SlotBar
-
-        self.slot_bar = SlotBar(self)
         self.renderer = _Renderer()
         # Die Projektion braucht den Zoom, und der steht an der Kamera.
         self.renderer.viewport = self
         self._object_colour = "#aaaaaa"
+        self.waiting_slot = False
+        """Ob ein gezogenes Langloch auf seine Bestätigung wartet.
+
+        Die Attrappe trug bis zum 11.09.2026 eine echte `SlotBar`, nur damit
+        der Fluss `slot_bar.active` fragen konnte — und verdeckte damit, dass
+        er das überhaupt tat: Nach dem Ausbau der Leiste blieben die Tests
+        hier grün, während 27 andere an `'Viewport' object has no attribute
+        'slot_bar'` fielen. Eine Attrappe, die mehr kann als die Sache, prüft
+        ihre eigene Nachstellung."""
         self.hit: Any = None
         self.result: Any = None
         self.pointer: Any = None
@@ -200,6 +206,9 @@ class _Viewport(QWidget):
 
     def _draw(self) -> None:
         pass
+
+    def slot_drag_waits(self) -> bool:
+        return self.waiting_slot
 
 
 def test_mixed_part_preview_shows_and_removes_both_bodies(flow: Any, monkeypatch: Any) -> None:
@@ -342,7 +351,14 @@ def test_the_placement_worker_returns_in_the_qt_thread(qt_app: QApplication) -> 
 def test_slot_preview_temporarily_hides_the_other_placement_controls(
     flow: Any, qt_app: QApplication
 ) -> None:
-    """Während der Langlochvorschau gibt es nur deren einen Übernehmen-Weg."""
+    """Während der Langlochvorschau gibt es nur deren einen Übernehmen-Weg.
+
+    **Gefragt wird der Zustand, nicht ein Widget** (11.09.2026): Die
+    Langlochleiste ist gefallen, der Zug wartet trotzdem — mit Umriss im Bild
+    und gemerktem Merkmal (`Viewport.slot_drag_waits`). Solange er wartet,
+    tritt die Platzierung zurück: Zwei Wege zu demselben Loch sind einer zu
+    viel, und der jüngere hat entschieden.
+    """
     controller, session, viewport, _dialog = flow
     viewport.show()
     controller.start()
@@ -350,12 +366,14 @@ def test_slot_preview_temporarily_hides_the_other_placement_controls(
     qt_app.processEvents()
     assert not controller._bar.isHidden()
     before = len(session.project.document.ops)
-    viewport.slot_bar.begin(20.0, 0.0, shortest_mm=6.0)
+    viewport.waiting_slot = True
+    controller.redraw()
     qt_app.processEvents()
     assert all(widget.isHidden() for widget in controller._widgets())
     assert not controller.pointer(PointerEvent("release", 320, 240, button="left"))
     assert controller.active
-    viewport.slot_bar.dismiss()
+    viewport.waiting_slot = False
+    controller.redraw()
     qt_app.processEvents()
     assert not controller._bar.isHidden()
     assert controller.active and len(session.project.document.ops) == before
@@ -1769,6 +1787,53 @@ def test_the_placement_at_a_feature_carries_no_bar_of_its_own(qt_app: QApplicati
         assert nachher == [*vorher, "resize_hole"], (
             f"der Knopf rechts schließt die Platzierung ab: {nachher}"
         )
+    finally:
+        window.end_quiet_placement()
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> None:
+    """Der Zug am Langlochgriff schreibt nach rechts, nicht in eine Leiste.
+
+    Bis zum 11.09.2026 ging er in eine eigene Leiste unten mit Länge,
+    Richtung, Abbrechen und Übernehmen — dieselben zwei Zahlen, die rechts
+    unter *Zum Langloch ziehen* stehen, und ein zweites Übernehmen daneben
+    (Robert: „auch 2 mal übernehmen einmal unten und einmal rechts … die
+    untere leiste uns sparen und nur die rechte verwenden mit dem was schon
+    drin ist").
+
+    Geprüft wird die ganze Kette: Der Zug schlägt vor, die Felder nehmen an,
+    und **derselbe** Knopf rechts macht daraus einen Schritt. Ohne das letzte
+    Stück wäre der Zug eine Sackgasse.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_hole(window)
+        handle = window.viewport._slot_handle
+        assert handle is not None, "an einer Bohrung stehen die zwei Knöpfe"
+
+        vorher = [step.op for step in window.session.project.document.ops]
+        handle._release(12.0, 0.0)
+        QApplication.processEvents()
+
+        assert window.viewport.slot_drag_waits(), "der Zug wartet auf seine Bestätigung"
+        assert [step.op for step in window.session.project.document.ops] == vorher, (
+            "und schreibt bis dahin nichts"
+        )
+        armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
+        assert armed is not None and armed.op == "slot_hole", "die Handlung des Zugs steht scharf"
+
+        window.feature_panel._apply.click()
+        window.session.wait_for_idle()
+        for _ in range(60):
+            QApplication.processEvents()
+        nachher = [step.op for step in window.session.project.document.ops]
+        assert nachher == [*vorher, "slot_hole"], f"der Knopf rechts übernimmt: {nachher}"
     finally:
         window.end_quiet_placement()
         for dialog in window.findChildren(OperationDialog):

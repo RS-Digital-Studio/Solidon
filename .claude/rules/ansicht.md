@@ -838,12 +838,27 @@ sind zwei Zahlen, und wer sie auf den Millimeter meint, trifft sie mit der Maus
 nicht. Ein Schritt, der beim Loslassen entsteht, wird dann zu einer Kette aus
 Korrekturen statt einer Handlung.
 
-`slot_bar.py` ist die dritte Stufe zwischen Zug und Operation: Der Umriss
-bleibt stehen, seine zwei Maße stehen als Felder unten mittig über der
-Werkzeugzeile — derselbe Ort wie die Leiste der Flächenplatzierung, denn zwei
-Leisten, die dasselbe tun, gehören an dieselbe Stelle —, und erst *Übernehmen*
-meldet `slotDragged`. Eingabetaste übernimmt, Escape verwirft (`_drag_kind`
-bleibt dafür auf `"slot"`).
+Zwischen Zug und Operation steht deshalb eine dritte Stufe: Der Umriss bleibt
+stehen, `Viewport.slotProposed` schreibt seine zwei Maße in die Felder unter
+*Zum Langloch ziehen* im Merkmalfenster, und erst das Übernehmen dort meldet
+`slotDragged` (über `Viewport.apply_slot_drag`, die eine Stelle, an der aus
+dem Zug ein Schritt wird). Eingabetaste übernimmt, Escape verwirft
+(`_drag_kind` bleibt dafür auf `"slot"`).
+
+**Die Stufe hatte bis zum 11.09.2026 eine eigene Leiste** (`slot_bar.py`),
+unten mittig neben der Leiste der Flächenplatzierung. Das Argument dafür war,
+dass zwei Leisten, die dasselbe tun, an dieselbe Stelle gehören — und es war
+richtig, solange die Zahlen nirgends sonst standen. Seit sie im
+Merkmalfenster stehen, waren es zwei Bedienstellen über demselben Loch, mit
+zwei Übernehmen (Robert: „auch 2 mal übernehmen einmal unten und einmal
+rechts … die untere leiste uns sparen und nur die rechte verwenden mit dem
+was schon drin ist").
+
+**Was von ihr bleibt, ist eine Frage und kein Widget:**
+`Viewport.slot_drag_waits()` sagt, ob ein Zug auf seine Bestätigung wartet —
+gemessen am gemerkten Merkmal (`_slot_target`) und nicht an `_drag_kind`,
+denn jenes setzt erst die Zugbewegung, und ein ohne Bewegung losgelassener
+Griff wartet genauso.
 
 **Der Versatz eines Knopfes zählt gegen die gebaute Geometrie.**
 `Item.set_position` verschiebt gegen das, was einmal in den Puffer geschrieben

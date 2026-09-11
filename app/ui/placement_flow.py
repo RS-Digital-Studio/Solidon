@@ -576,7 +576,6 @@ class PlacementFlow(QObject):
         dialog.valuesChanged.connect(self._values_changed)
         dialog.finished.connect(self.dispose)
         self.viewport.installEventFilter(self)
-        self.viewport.slot_bar.installEventFilter(self)
         render_widget = getattr(self.viewport.renderer, "widget", None)
         if render_widget is not None:
             render_widget.installEventFilter(self)
@@ -813,7 +812,7 @@ class PlacementFlow(QObject):
 
     def pointer(self, event: PointerEvent) -> bool:
         """Linksklick gehört der Platzierung, alle Kameragesten bleiben frei."""
-        if not self.active or self.viewport.slot_bar.active:
+        if not self.active or self.viewport.slot_drag_waits():
             return False
         if self._seated_at_feature:
             if event.kind == "move" and not event.buttons:
@@ -1864,13 +1863,7 @@ class PlacementFlow(QObject):
         if stop_watching_the_dying(self, watched, event):
             return False
         if self.active:
-            if watched is self.viewport.slot_bar and event.type() in (
-                QEvent.Type.Show,
-                QEvent.Type.Hide,
-            ):
-                self.redraw()
-                return False
-            if self.viewport.slot_bar.active:
+            if self.viewport.slot_drag_waits():
                 return False
             if watched in self._overlay_zones and event.type() in (
                 QEvent.Type.Move,
@@ -1917,7 +1910,7 @@ class PlacementFlow(QObject):
         # Die Langlochvorschau hat ihren eigenen Übernehmen-Weg. Die
         # Platzierungsabsicht bleibt beim Abbruch erhalten, bedient sich
         # währenddessen aber weder über ein zweites Feld noch über den Zeiger.
-        if self.viewport.slot_bar.active:
+        if self.viewport.slot_drag_waits():
             for widget in self._widgets():
                 widget.hide()
             for item in (self._tool, self._addition):

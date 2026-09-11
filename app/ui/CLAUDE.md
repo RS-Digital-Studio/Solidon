@@ -235,29 +235,33 @@ verlöre es beide. An einem Langloch steht deshalb der Knopf **ohne**
 Bewegungsgriff; drei Pfeile, die keine Operation einlöst, wären schlimmer als
 keine.
 
-**Der Zug endet in einer Leiste, nicht im Verlauf** (`slot_bar.py`, Robert
-10.09.2026): Wohin etwas gehört, sagt die Stelle, an der man loslässt; wie
-**lang** es ist, sagt eine Zahl, und zwanzig Millimeter trifft niemand mit der
-Maus. Nach dem Loslassen bleibt der Umriss stehen, Länge und Richtung stehen
-als Felder unten mittig über der Werkzeugzeile — derselbe Ort wie bei der
-Flächenplatzierung —, und erst *Übernehmen* macht daraus die Operation. Die
-Eingabetaste ist der kurze Weg zu diesem Knopf, Escape verwirft. `SlotBar.active`
-ist dabei der Zustand und nicht `isVisible()`: Qt beantwortet Sichtbarkeit
-falsch, solange nichts gezeigt wurde, und ein Test würde die Testumgebung
-prüfen statt der Sache.
+**Der Zug endet im Merkmalfenster, nicht im Verlauf** (Robert, 10.09.2026):
+Wohin etwas gehört, sagt die Stelle, an der man loslässt; wie **lang** es ist,
+sagt eine Zahl, und zwanzig Millimeter trifft niemand mit der Maus. Nach dem
+Loslassen bleibt der Umriss stehen, und `Viewport.slotProposed` schreibt Länge
+und Richtung in die Felder unter *Zum Langloch ziehen*; erst das Übernehmen
+dort macht daraus die Operation. Die Eingabetaste an der Zugleiste ist der
+kurze Weg dorthin, Escape verwirft.
 
-Die Leiste bricht in schmalen Ansichten in vier Zeilen um. Erst ein Zug über
-die gemeinsame Klickschwelle beginnt eine Vorschau; Zurückziehen auf den
-Druckpunkt räumt sie wieder ab. Der Richtungsfang entspricht dem Drehring.
+**Eine eigene Leiste unten hatte er bis zum 11.09.2026** (`slot_bar.py`), mit
+denselben zwei Zahlen und einem zweiten Übernehmen — zwei Bedienstellen über
+demselben Loch (Robert: „auch 2 mal übernehmen einmal unten und einmal
+rechts"). Sie ist gefallen; was von ihr bleibt, ist die Frage
+`Viewport.slot_drag_waits()`: **der Zustand und nicht ein Widget** — Umriss im
+Bild, gemerktes Merkmal, noch kein Schritt.
+
+Erst ein Zug über die gemeinsame Klickschwelle beginnt eine Vorschau;
+Zurückziehen auf den Druckpunkt räumt sie wieder ab. Der Richtungsfang
+entspricht dem Drehring.
 Die Merkmalsfelder schalten schon beim Fokussieren ihre Handlung scharf;
 deren Titel steht über *Übernehmen*. Feldlose Handlungen haben einen eigenen
 Knopf. Bei Bausteinauswahl bleiben die Handlungen am erzeugenden Schritt;
 sein Entfernen nutzt die Folgeauskunft des Verlaufs (§19).
 
-Solange die Langlochleiste aktiv ist, blendet `PlacementFlow` seine
-Platzierungsfelder und Vorschau aus und nimmt keine Platzierungsklicks an.
-Abbrechen stellt die bisherige Platzierungsabsicht wieder dar; Übernehmen
-verwendet weiterhin den einen Langlochschritt.
+Solange ein Langlochzug wartet (`slot_drag_waits`), blendet `PlacementFlow`
+seine Platzierungsfelder und Vorschau aus und nimmt keine Platzierungsklicks
+an. Escape stellt die bisherige Platzierungsabsicht wieder dar; das
+Übernehmen verwendet weiterhin den einen Langlochschritt.
 
 **Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug.** Der Schalter
 gehört dem Werkzeug *Bewegen* und gilt dem ganzen Körper — dort trägt der
@@ -328,9 +332,9 @@ die „Übernehmen" sagt, und nichts davon geht.
 **Zwei Wege dürfen nicht auf dasselbe Loch schreiben.** Der Zug am
 Langlochgriff macht ein Langloch, der Dialog *Bohrung ändern* eine runde
 Bohrung; nebeneinander offen nahm der eine zurück, was der andere gerade getan
-hatte. `Viewport.slotStarted` meldet das Übernehmen der Langlochleiste, und
+hatte. `Viewport.slotStarted` meldet das Übernehmen des Langlochzugs, und
 das Fenster schließt daraufhin die Platzierung an derselben Stelle. **Beim
-Übernehmen und nicht beim Ziehen**: Solange die Leiste offen ist, ist nichts
+Übernehmen und nicht beim Ziehen**: Solange der Zug wartet, ist nichts
 geschehen (Regel 2) — und die Maße sollen währenddessen im Bild stehen.
 
 **Platzieren geht in drei Stufen** (Robert, 09.09.2026). Zeigen und klicken
@@ -512,7 +516,7 @@ nachgeführt) ·
 `tool_strip.py` · `analysis_bar.py` · `section_bar.py` · `split_bar.py` ·
 `transform_bar.py` · `explode_bar.py` · `sculpt_bar.py` · `pose_bar.py` ·
 `scale_widget.py` (der Würfel am Körper) · `slot_handle.py` (die zwei Knöpfe am
-Loch) · `slot_bar.py` (ihre Bestätigung: Länge, Richtung, Übernehmen) ·
+Loch — bestätigt wird im Merkmalfenster) ·
 `facts.py` (was das Teil kostet, während man daran baut)
 
 Die Legende in `analysis_bar.py` verteilt bei vielen benannten Kartenstufen

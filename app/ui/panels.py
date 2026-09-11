@@ -4577,6 +4577,13 @@ class _Handling:
     run: Callable[[], None]
     op: str
     members: int
+    take: Callable[[Mapping[str, Any]], None] | None = None
+    """Werte von außen in die Felder dieser Handlung schreiben.
+
+    Der Gegenweg zu :attr:`run`: Ein Zug im Bild schlägt Zahlen vor, und sie
+    gehören in die Felder, aus denen das Übernehmen liest — nicht in eine
+    eigene Leiste daneben (Robert, 11.09.2026: „die untere leiste uns sparen
+    und nur die rechte verwenden mit dem was schon drin ist")."""
     in_view: Callable[[], None] | None = None
     """Der Weg ins Bild — oder nichts, wo die Handlung keine Stelle hat.
 
@@ -5399,6 +5406,26 @@ class FeaturePanel(QWidget):
                 return
             self._emit(op_name, entries, widgets, self._every_for(op_name), fixed)
 
+        def take(proposed: Mapping[str, Any]) -> None:
+            """Vorgeschlagene Zahlen in die Felder dieser Handlung.
+
+            Ohne Meldung nach außen: Die Zahlen kommen aus dem Bild, und die
+            Vorschau dort zeigt sie bereits. Ein ``valuesChanged`` von hier
+            liefe zurück zu dem, der gerade gezogen hat.
+            """
+            for name, value in proposed.items():
+                editor = widgets.get(str(name))
+                if not isinstance(editor, QDoubleSpinBox):
+                    continue
+                with QSignalBlocker(editor):
+                    # **Eine Länge kommt in Millimetern herein** und wird über
+                    # `set_value_mm` gesetzt; wer `setValue` nähme, schriebe
+                    # den Kernwert in ein Feld, das in Zoll anzeigt (§19.3).
+                    if isinstance(editor, LengthSpin):
+                        editor.set_value_mm(float(value))
+                    else:
+                        editor.setValue(float(value))
+
         def in_view() -> None:
             """Dieselbe Handlung, aber im Bild eingestellt.
 
@@ -5423,6 +5450,7 @@ class FeaturePanel(QWidget):
             title=str(action.title),
             reason=str(action.reason) or str(action.title),
             run=run,
+            take=take,
             in_view=in_view if step is None and _leads_into_the_view(op_name) else None,
             op=op_name,
             members=members,
@@ -5571,6 +5599,28 @@ class FeaturePanel(QWidget):
             # eine Handlung mit Gruppe anfasst.
             self._every.setChecked(False)
         self._every.setVisible(applies_to_all)
+
+    def take_values(self, op: str, values: Mapping[str, Any]) -> bool:
+        """Vorgeschlagene Zahlen in die Felder dieser Handlung — und sie scharf.
+
+        Der Gegenweg zu :attr:`valuesChanged`: Ein Zug im Bild schlägt Länge
+        und Richtung vor, und sie gehören dorthin, wo das Übernehmen sie
+        liest. Bis zum 11.09.2026 ging der Zug in eine **eigene Leiste** unten
+        mit eigenen Feldern und eigenem Übernehmen — zwei Bedienstellen über
+        demselben Loch (Robert: „die untere leiste uns sparen und nur die
+        rechte verwenden mit dem was schon drin ist").
+
+        Der Rückgabewert sagt, ob die Handlung überhaupt angeboten wird: An
+        einem Merkmal ohne sie geschieht nichts, und der Aufrufer weiß es.
+        """
+        found = next(((key, entry) for key, entry in self._runs.items() if entry.op == op), None)
+        if found is None or found[1].take is None:
+            return False
+        key, entry = found
+        assert entry.take is not None
+        entry.take(values)
+        self._arm(key)
+        return True
 
     def _run_armed(self) -> None:
         """Führt aus, was der Knopf unten gerade meint."""

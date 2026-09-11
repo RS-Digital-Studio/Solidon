@@ -37,23 +37,6 @@ from app.ui.slot_handle import SlotHandle, dragged_slot, slot_outline
 BORE = 6.0
 
 
-def test_slot_bar_keeps_apply_inside_a_narrow_view(qt_app) -> None:
-    """Alle Felder und Übernehmen bleiben in einer schmalen Ansicht erreichbar."""
-    from PySide6.QtWidgets import QWidget
-
-    from app.ui.slot_bar import SlotBar
-
-    parent = QWidget()
-    parent.resize(360, 600)
-    bar = SlotBar(parent)
-    parent.show()
-    bar.begin(20.0, 15.0, shortest_mm=7.0)
-    qt_app.processEvents()
-    assert parent.rect().contains(bar.geometry())
-    assert bar.rect().contains(bar.apply.geometry())
-    parent.close()
-
-
 def a_drilled_plate(profile: Profile) -> SceneObject:
     """Eine Platte 60 x 40 x 10 mit einer durchgehenden Bohrung in der Mitte."""
     plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
@@ -616,26 +599,38 @@ def test_a_drag_waits_in_its_bar_instead_of_writing_a_step(qt_app: object) -> No
         handle = viewport._slot_handle
         assert handle is not None
 
+        vorgeschlagen: list[tuple[str, float, float]] = []
+        viewport.slotProposed.connect(
+            lambda name, length, angle: vorgeschlagen.append((name, length, angle))
+        )
+
         handle._release(28.0, 15.0)
 
         assert not gemeldet, "der Zug allein schreibt nichts"
-        assert viewport.slot_bar.active, "die Leiste steht"
-        assert viewport.slot_bar.values() == pytest.approx((28.0, 15.0))
+        # **Der Vorschlag geht nach rechts, nicht in eine eigene Leiste**
+        # (11.09.2026): Länge und Richtung stehen unter *Zum Langloch ziehen*
+        # im Merkmalfenster, und dort steht auch das eine Übernehmen.
+        assert len(vorgeschlagen) == 1, "der Zug schlägt seine Zahlen vor"
+        name, length, angle = vorgeschlagen[0]
+        assert name == "slot_1"
+        assert length == pytest.approx(28.0)
+        assert angle == pytest.approx(15.0)
+        assert viewport.slot_drag_waits(), "der Zug wartet auf seine Bestätigung"
 
-        # Nachgebessert: der Umriss folgt, das Modell nicht.
-        viewport.slot_bar.length.set_value_mm(32.0)
+        # Nachgebessert: der Umriss folgt der Zahl, das Modell nicht.
+        viewport.reshape_slot(32.0, 15.0)
         assert not gemeldet
         assert viewport._slot_handle is not None
         assert viewport._slot_handle.length == pytest.approx(32.0)
 
-        # Und erst der Knopf macht daraus eine Operation.
-        viewport.slot_bar.apply.click()
+        # Und erst das Übernehmen macht daraus eine Operation. Den Weg geht
+        # das Merkmalfenster; hier steht die Stelle, an der er ankommt.
+        viewport.apply_slot_drag(32.0, 15.0)
         assert len(gemeldet) == 1
         name, length, angle = gemeldet[0]
         assert name == "slot_1"
         assert length == pytest.approx(32.0)
         assert angle == pytest.approx(15.0)
-        assert not viewport.slot_bar.active, "die Leiste gehört dem Zug, nicht dem Dokument"
     finally:
         viewport.renderer = None
         viewport.deleteLater()
@@ -656,10 +651,12 @@ def test_a_cancelled_drag_leaves_nothing_behind(qt_app: object) -> None:
         assert viewport._slot_handle is not None
         viewport._slot_handle._release(30.0, 0.0)
 
-        viewport.slot_bar.cancel.click()
+        # Abgebrochen wird über Escape — die eigene Leiste dafür ist am
+        # 11.09.2026 gefallen, und der Weg ist derselbe wie bei jedem Zug.
+        viewport._end_drag()
 
         assert not gemeldet, "abgebrochen wird nichts angewandt"
-        assert not viewport.slot_bar.active
+        assert not viewport.slot_drag_waits()
     finally:
         viewport.renderer = None
         viewport.deleteLater()
@@ -760,14 +757,14 @@ def test_the_bar_goes_when_the_selection_does(qt_app: object) -> None:
         viewport.set_gizmo(False)
         assert viewport._slot_handle is not None
         viewport._slot_handle._release(40.0, 15.0)
-        assert viewport.slot_bar.active
+        assert viewport.slot_drag_waits()
 
         viewport.select_feature("hole_2")
 
-        assert not viewport.slot_bar.active, "die Leiste geht mit ihrem Griff"
+        assert not viewport.slot_drag_waits(), "der Zug geht mit seinem Griff"
         assert not viewport._slot_target
         assert viewport._drag_kind != "slot"
-        viewport._on_slot_bar_accepted(40.0, 15.0)
+        viewport.apply_slot_drag(40.0, 15.0)
         assert not gemeldet, "und schreibt nichts an ein fremdes Loch"
     finally:
         viewport.renderer = None

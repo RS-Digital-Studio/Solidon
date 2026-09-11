@@ -1866,6 +1866,7 @@ class MainWindow(QMainWindow):
         self.viewport.featureTurned.connect(self._on_feature_turned)
         self.viewport.slotDragged.connect(self._on_slot_dragged)
         self.viewport.slotStarted.connect(self._close_the_other_way)
+        self.viewport.slotProposed.connect(self._on_slot_proposed)
         # Was der Griff bewegen wird, sagt die Ansicht — wo der Satz steht,
         # entscheidet das Fenster, wie bei ``measurementStatus``.
         self.viewport.gizmoStatus.connect(self.announce)
@@ -9197,6 +9198,24 @@ class MainWindow(QMainWindow):
         Winkel, also dem, der während des Zugs am Zeiger stand."""
         self._feature_step("rotate_feature", feature_id, {"axis": axis, "angle": float(angle)})
 
+    def _on_slot_proposed(self, feature_id: str, length: float, angle: float) -> None:
+        """Ein Zug am Langlochgriff schlägt Länge und Richtung vor (§21.1).
+
+        **Er landet in den Feldern rechts**, nicht in einer eigenen Leiste:
+        Unter *Zum Langloch ziehen* stehen dieselben zwei Zahlen, und darunter
+        das eine Übernehmen (Robert, 11.09.2026: „auch 2 mal übernehmen einmal
+        unten und einmal rechts … die untere leiste uns sparen"). Der Umriss
+        im Bild bleibt stehen; erst das Übernehmen macht einen Schritt daraus
+        (Regel 2).
+
+        Wo das Merkmalfenster die Handlung nicht anbietet, bleibt es beim
+        Umriss — eine Zahl, die nirgends steht, wäre schlimmer als keine.
+        """
+        if not self.feature_panel.take_values(
+            "slot_hole", {"slot_length": float(length), "slot_angle": float(angle)}
+        ):
+            self.announce(tr("Die Länge des Langlochs steht im Merkmalfenster."))
+
     def _on_slot_dragged(self, feature_id: str, length: float, angle: float) -> None:
         """Ein Zug an den Knöpfen hat ein Loch in die Länge gezogen (§21.1).
 
@@ -11265,6 +11284,15 @@ class MainWindow(QMainWindow):
         verzögert: Wer 16 tippt, tippt zuerst 1, und eine Boolesche über das
         ganze Teil je Tastendruck macht das Feld unbenutzbar.
         """
+        # **Der Umriss im Bild folgt der Zahl im Feld** (§21.1). Beim
+        # Langlochzug stand er in einer eigenen Leiste und folgte deren
+        # Feldern; die ist gefallen, und die Felder stehen jetzt rechts.
+        # Sofort und nicht entprellt: Der Umriss ist eine Linie und keine
+        # Boolesche, und wer eine Zahl tippt, will sie sehen.
+        if op == "slot_hole":
+            self.viewport.reshape_slot(
+                float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
+            )
         self._feature_pending = (op, dict(params))
         self._feature_preview.start()
 
@@ -11316,6 +11344,17 @@ class MainWindow(QMainWindow):
         flow = self._quiet_placement
         if flow is not None and flow.active and flow.spec_of().name == op:
             flow.accept()
+            return
+        # **Und ein Zug am Langlochgriff endet hier ebenso.** Er wartet mit
+        # seinem Umriss im Bild auf eine Bestätigung; seit die Langlochleiste
+        # gefallen ist, ist dieser Knopf sie. Gemeldet wird an das Merkmal,
+        # das **gezogen** wurde — der Viewport hält es seit dem Loslassen fest
+        # (`apply_slot_drag`), und eine inzwischen gewechselte Auswahl meint
+        # ein anderes Loch.
+        if op == "slot_hole" and self.viewport.slot_drag_waits():
+            self.viewport.apply_slot_drag(
+                float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
+            )
             return
         self._apply_placed_feature(op, params)
 

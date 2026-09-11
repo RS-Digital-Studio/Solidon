@@ -380,7 +380,7 @@ class SlotHandle:
             self._held = None
             # **Der Umriss bleibt stehen.** Was der Zug hinterlässt, ist noch
             # keine Geometrie, sondern ein Vorschlag: Die Leiste daneben trägt
-            # seine zwei Maße zum Nachbessern (:mod:`app.ui.slot_bar`), und
+            # seine zwei Maße zum Nachbessern im Merkmalfenster, und
             # wer sie ohne Bild bediente, tippte gegen nichts. Abgeräumt wird
             # er mit dem Griff (:meth:`remove`) — also beim Übernehmen, beim
             # Abbrechen und bei jeder neuen Auswahl.
