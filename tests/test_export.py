@@ -430,7 +430,7 @@ def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Prof
     Bettursprung an, und am modularen Besteckkorb überlagerten sich zwei
     Platten um neunundzwanzig Millimeter.
 
-    Der Abstand ist gemessen und nicht gewählt — siehe ``PLATE_GAP``. Hier
+    Der Abstand ist gemessen und nicht gewählt — siehe ``SLICER_PLATE_GAP``. Hier
     steht die Gegenprobe: Zwei gleiche Teile auf zwei Platten liegen um genau
     eine Bettbreite plus ein Fünftel auseinander.
     """
@@ -454,7 +454,7 @@ def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Prof
     model = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
     offsets = [float(entry.split()[9]) for entry in re.findall(r'transform="([^"]+)"', model)]
     width = profile.printer.build_volume[0]
-    assert offsets == [pytest.approx(width * (1.0 + threemf.PLATE_GAP))]
+    assert offsets == [pytest.approx(width * (1.0 + threemf.SLICER_PLATE_GAP))]
 
 
 def test_plates_go_into_the_grid_of_the_slicer(tmp_path: Path, profile: Profile) -> None:
@@ -466,14 +466,14 @@ def test_plates_go_into_the_grid_of_the_slicer(tmp_path: Path, profile: Profile)
     standen leer **unter** 01 und 02. Solidon reihte die Platten auf, der
     Slicer legt sie ins Raster — ``ceil(sqrt(n))`` Spalten, die Zeilen nach
     unten, ein Fünftel Luft (``PartPlate.cpp``; gemessen am installierten
-    Slicer, siehe ``PLATE_GAP``).
+    Slicer, siehe ``SLICER_PLATE_GAP``).
 
     Gemessen wird an der Matrix in der Datei: Platte 3 von 4 steht bei
     (0, −Tiefe·1,2), Platte 4 rechts daneben; bei fünf Platten liegt die
     dritte noch in der ersten Zeile.
     """
     width, depth, _height = profile.printer.build_volume
-    pitch = 1.0 + threemf.PLATE_GAP
+    pitch = 1.0 + threemf.SLICER_PLATE_GAP
 
     def offsets_of(count: int) -> list[tuple[float, float]]:
         objects = []

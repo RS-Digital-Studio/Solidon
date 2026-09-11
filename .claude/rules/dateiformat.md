@@ -114,7 +114,7 @@ und die Einstellungen kommen bei ihm über die Kommandozeile.
 (`knows_plates`). Die Orca-Familie speichert ihre Projekte mit je einem
 `plate`-Block und den Teilen plattenweise **im Raster** — `ceil(sqrt(n))`
 Spalten, die Zeilen nach unten, ein Fünftel Bett Luft (`plate_origin`,
-`PLATE_GAP`; aus `PartPlate.cpp` gelesen und am installierten ElegooSlicer
+`SLICER_PLATE_GAP`; aus `PartPlate.cpp` gelesen und am installierten ElegooSlicer
 gemessen: fünf Platten auf 256 mm liegen bei x = 128, 435,2, 742,4 und in
 der zweiten Zeile bei y = −179,2). Bis zum 11.09.2026 stand hier „eine Reihe,
 ein Achtel", nachgemessen an `BowlingGame.3mf` — die Messung nahm an, zwei

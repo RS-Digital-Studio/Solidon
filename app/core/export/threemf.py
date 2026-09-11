@@ -666,7 +666,9 @@ def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> 
 
 
 #: Wie viel Luft die Orca-Familie zwischen zwei Platten lässt, als Anteil von
-#: Breite und Tiefe des Betts — ``LOGICAL_PART_PLATE_GAP = 1. / 5.`` in
+#: Breite und Tiefe des Betts (der Viewport hat sein eigenes ``PLATE_GAP`` in
+#: Millimetern; zwei Namen, weil es zwei Werte sind) —
+#: ``LOGICAL_PART_PLATE_GAP = 1. / 5.`` in
 #: ``PartPlate.cpp``, gleichlautend in OrcaSlicer (seit 1.9), Bambu Studio
 #: und ElegooSlicer (1.5.3.4, die installierte Fassung).
 #:
@@ -682,7 +684,7 @@ def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> 
 #: bettfüllenden Klötzen und Solidons Maschinenprofil (256 mm): Plattenmitten
 #: bei x = 128, 435,2 und 742,4, in der zweiten Zeile bei y = -179,2 — ein
 #: Schritt von 307,2, also ein Fünftel, und drei Spalten für fünf Platten.
-PLATE_GAP = 1.0 / 5.0
+SLICER_PLATE_GAP = 1.0 / 5.0
 
 
 def plate_origin(rank: int, count: int, bed: tuple[float, float]) -> tuple[float, float]:
@@ -698,7 +700,7 @@ def plate_origin(rank: int, count: int, bed: tuple[float, float]) -> tuple[float
     """
     columns = max(1, ceil(sqrt(count)))
     row, column = divmod(rank, columns)
-    return column * bed[0] * (1.0 + PLATE_GAP), -row * bed[1] * (1.0 + PLATE_GAP)
+    return column * bed[0] * (1.0 + SLICER_PLATE_GAP), -row * bed[1] * (1.0 + SLICER_PLATE_GAP)
 
 
 def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
