@@ -33,7 +33,7 @@ from app.core.perceive.relations import bore_and_widening_at
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
-from app.core.types import Document, Profile, SceneObject, Source, Vec3
+from app.core.types import Document, OpContext, Profile, Scene, SceneObject, Source, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -1649,6 +1649,56 @@ def test_a_bore_that_stays_recognisable_keeps_its_name(
     assert bores[0] in changed.features, "die vergrößerte Bohrung behält ihren Namen"
     codes = [entry.code for entry in result.scene.report.findings]
     assert "resize_hole.feature_lost" not in codes, codes
+
+
+def test_a_bore_moved_over_the_edge_does_not_borrow_its_neighbour(profile: Profile) -> None:
+    """Verschwindet die versetzte Bohrung, bekommt keine andere ihren Namen.
+
+    ``match`` nimmt ein Merkmal an, solange Lage und Durchmesser unter seiner
+    Schwelle liegen — acht Prozent der Modelldiagonale, an 160 x 120 x 10
+    sechzehn Millimeter. Zwei Ø-4-Bohrungen acht Millimeter auseinander, die
+    obere über den Rand versetzt: Sie wird ein offener Halbkreis und keine
+    Bohrung mehr. Ohne Nachprüfung traf die Zuordnung die **untere**, die trug
+    von da an die Kennung der versetzten, und ``resize_hole.feature_lost``
+    blieb aus — gemessen am 11.09.2026, als Zwilling desselben Fundes an
+    ``slot_hole``. Zwei Fehler aus einem Treffer, der keiner ist.
+    """
+    from app.core.perceive.features import detect
+    from app.core.scene.cancel import NeverCancelled
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 10.0)))
+    for y in (46.0, 54.0):
+        mesh = drill(
+            mesh, profile=profile, position=(0.0, y, 5.0), axis="z", diameter=4.0, compensate=False
+        ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bores = {name: feature for name, feature in entry.features.items() if feature.kind == "hole"}
+    upper = max(bores, key=lambda name: float(bores[name].params["centre"][1]))
+    lower = min(bores, key=lambda name: float(bores[name].params["centre"][1]))
+
+    spec = REGISTRY.get("resize_hole")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(
+                at_feature=upper, diameter=4.0, compensate=False, x=0.0, y=59.5, z=5.0
+            ),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, options: options[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    codes = [finding.code for finding in result.findings]
+    assert "resize_hole.feature_lost" in codes, codes
+    # Die untere Bohrung bekommt nicht die Kennung der oberen.
+    carried = result.outputs[0].features
+    assert upper not in carried, f"{upper} trägt die Mitte eines fremden Lochs: {carried}"
+    del lower
 
 
 def test_scaling_below_what_the_printer_leaves_says_so(

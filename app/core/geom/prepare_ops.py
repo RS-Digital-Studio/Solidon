@@ -405,6 +405,13 @@ SLOT_NEEDS_A_LENGTH: Final = _(
 #: quer über sich selbst ein Kreuz. Was fehlt, ist der **Bezug** — im
 #: Objektbaum stehen danach Verrundungen, und die Handlungen eines Langlochs
 #: stehen an keiner von ihnen.
+#: Wie genau die gemessene Länge eines Langlochs die eingetragene treffen muss,
+#: damit es das gezogene ist — ein Prozent. Das Netz tastet die Bögen ab und
+#: liegt damit ein Zehntelprozent daneben (20,0147 mm für 20); der exakte
+#: Kern trifft auf die vierte Stelle. Ein Prozent lässt beiden Raum und trennt
+#: trotzdem 20 von 26.
+_SAME_LENGTH: Final = 0.01
+
 SLOT_FEATURE_LOST: Final = _(
     "Nach dem Zug ist an dieser Stelle kein Langloch mehr zu erkennen — der Schnitt "
     "reicht über den Rand des Körpers oder über ein zweites Loch hinweg. Die Geometrie "
@@ -3516,7 +3523,20 @@ def slot_hole(ctx: OpContext) -> OpResult:
         # das eigene Langloch zieht, ein Kreuz. Beides ist gültige Geometrie,
         # und beides ist kein Langloch mehr — im Objektbaum stehen danach
         # Verrundungen, und die Handlungen eines Langlochs stehen an keiner.
-        if not any(entry.kind == "slot" for entry in exact_features.values()):
+        #
+        # **Gesucht wird das eine, nicht irgendeines.** Hier stand ``any(kind
+        # == "slot")``, und das schwieg, sobald ein zweites Langloch im Körper
+        # stand (Fund des Reviews, 11.09.2026).
+        pulled_exact = _recognised_slot(
+            exact_features,
+            feature,
+            centre=centre,
+            diameter=diameter,
+            length=params.slot_length,
+            diagonal=solid.bounds.diagonal,
+            body_centre=solid.bounds.centre,
+        )
+        if pulled_exact is None:
             findings.append(_slot_no_longer_a_feature(feature, params.slot_length))
         # **Neu erkannt und nicht mitgetragen.** Hier stand ``dict(carried)``,
         # und das war am exakten Kern immer leer: ``carried`` behält, was
@@ -3579,8 +3599,16 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # steht, fällt das nicht auf — sobald es mehrere sind, wandert die Auswahl
     # des Kunden auf ein fremdes Loch. Dieselbe Zuordnung wie in
     # ``resize_hole``, nur gegen ein Langloch statt gegen eine Bohrung.
+    from app.core.perceive.features import detect
+
     pulled_feature = _recognised_slot(
-        result.mesh, feature, centre=centre, diameter=diameter, length=params.slot_length
+        detect(result.mesh),
+        feature,
+        centre=centre,
+        diameter=diameter,
+        length=params.slot_length,
+        diagonal=result.mesh.bounds.diagonal,
+        body_centre=result.mesh.bounds.centre,
     )
     features = (
         {**carried, feature.id: pulled_feature}
@@ -3954,6 +3982,15 @@ def _recognised_resized_feature(
     found_id = matched.mapping.get(feature.id)
     if found_id is None:
         return None
+    # **Und die Zuordnung wird nachgeprüft** — derselbe Fund wie an
+    # ``_recognised_slot``, nur zwei Wochen älter: Wer eine Bohrung über den
+    # Rand versetzt, hat danach einen offenen Halbkreis und keine Bohrung.
+    # ``match`` traf dann die Nachbarbohrung acht Millimeter daneben, die trug
+    # von da an die Kennung der versetzten, und ``resize_hole.feature_lost``
+    # blieb aus (gemessen 11.09.2026 an zwei Ø-4-Bohrungen bei y = 46 und 54,
+    # die obere auf 59,5 versetzt: `hole_2` stand danach bei 46).
+    if not _sits_at(detected[found_id], expected, mesh.bounds.diagonal):
+        return None
     return dataclasses.replace(
         detected[found_id],
         id=feature.id,
@@ -3962,8 +3999,33 @@ def _recognised_resized_feature(
     )
 
 
+def _sits_at(candidate: Feature, expected: Feature, diagonal: float) -> bool:
+    """Liegt das gefundene Merkmal dort, wo die Operation es hingesetzt hat?
+
+    ``match`` nimmt ein Merkmal an, solange Lage und Durchmesser unter seiner
+    Schwelle liegen — acht Prozent der Modelldiagonale, an einer Platte von
+    200 mm also sechzehn Millimeter. Das ist die richtige Großzügigkeit für
+    eine Zuordnung über eine fremde Operation hinweg und die falsche für eine,
+    die die Stelle selbst genannt hat: Die gehört auf ``match_tolerance``
+    genau getroffen, sonst ist es ein anderes Loch.
+    """
+    from app.core.units import match_tolerance
+
+    tolerance = match_tolerance(diagonal)
+    found_centre = _bore_vector(candidate, "centre")
+    wanted_centre = _bore_vector(expected, "centre")
+    return all(abs(a - b) <= tolerance for a, b in zip(found_centre, wanted_centre, strict=True))
+
+
 def _recognised_slot(
-    mesh: MeshData, feature: Feature, *, centre: Vec3, diameter: float, length: float
+    detected: Mapping[str, Feature],
+    feature: Feature,
+    *,
+    centre: Vec3,
+    diameter: float,
+    length: float,
+    diagonal: float,
+    body_centre: Vec3,
 ) -> Feature | None:
     """Sucht das eben gezogene Langloch und hängt den bestehenden Namen daran.
 
@@ -3973,6 +4035,19 @@ def _recognised_slot(
     Operation gerade gemacht hat — Art ``slot``, an der genannten Stelle, mit
     der eingetragenen Länge.
 
+    **Und die Zuordnung wird nachgeprüft.** ``match`` nimmt ein Merkmal an,
+    solange Lage und Durchmesser unter seiner Schwelle liegen — acht Prozent
+    der Modelldiagonale, an einer Platte von 108 mm also 8,6 mm. Stünde das
+    gezogene Langloch nicht mehr da, träfe die Zuordnung ein zweites daneben:
+    Das fremde Loch bekäme die Kennung des gezogenen, und der Befund darunter
+    bliebe aus (Fund des Reviews, 11.09.2026). Genommen wird deshalb nur, was
+    an der genannten Mitte liegt und die eingetragene Länge trägt.
+
+    ``detected`` sind die erkannten Merkmale des Ergebnisses — am Netz aus
+    :func:`perceive.features.detect`, am exakten Körper aus
+    :func:`brep.features.features_of` —, damit beide Kerne dieselbe Frage
+    stellen.
+
     **Und ``None`` ist eine Antwort, kein Fehler.** Ein Langloch, das über den
     Rand des Körpers hinausgezogen wird, ist hinterher ein offener Schlitz;
     eines, das quer über sich selbst gezogen wird, ein Kreuz. Beides ist
@@ -3981,27 +4056,24 @@ def _recognised_slot(
     sich selbst vier. Der Aufrufer behält den Körper und sagt, dass das Merkmal
     fort ist (Regel 17).
     """
-    from app.core.perceive.features import detect
     from app.core.perceive.matching import match
 
-    detected = detect(mesh)
     expected = dataclasses.replace(
         feature,
         kind="slot",
         params={**feature.params, "centre": centre, "diameter": diameter, "length": length},
     )
-    matched = match(
-        {feature.id: expected},
-        detected,
-        mesh.bounds.centre,
-        mesh.bounds.diagonal,
-    )
+    matched = match({feature.id: expected}, dict(detected), body_centre, diagonal)
     found_id = matched.mapping.get(feature.id)
     if found_id is None:
         return None
-    return dataclasses.replace(
-        detected[found_id], id=feature.id, provenance="generated", created_by=None
-    )
+    candidate = detected[found_id]
+    if candidate.kind != "slot" or not _sits_at(candidate, expected, diagonal):
+        return None
+    found_length = _bore_number(candidate, "length")
+    if abs(found_length - length) > max(EPS_DISPLAY, length * _SAME_LENGTH):
+        return None
+    return dataclasses.replace(candidate, id=feature.id, provenance="generated", created_by=None)
 
 
 def _slot_no_longer_a_feature(feature: Feature, length: float) -> Finding:

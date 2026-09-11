@@ -439,6 +439,20 @@ das Langloch ein offener Schlitz, quer über sich selbst ein Kreuz. Der Schnitt
 stimmt, das Teil ist brauchbar — nur der Bezug ist fort, und wer darauf
 verweist, findet nichts mehr. Der Satz nennt den Rückweg über Strg+Z.
 
+**Gesucht wird das eine Loch, und die Zuordnung wird nachgeprüft**
+(`prepare_ops._sits_at`, für `slot_hole` und `resize_hole` gleichermaßen).
+`perceive.matching.match` nimmt ein Merkmal an, solange Lage und Durchmesser
+unter seiner Schwelle liegen — acht Prozent der Modelldiagonale, an einer
+Platte von 200 mm sechzehn Millimeter. Das ist die richtige Großzügigkeit für
+eine Zuordnung über eine fremde Operation hinweg und die falsche für eine,
+die die Stelle selbst genannt hat: Stand das gezogene Loch nicht mehr da,
+traf die Zuordnung das Nachbarloch, das trug von da an die fremde Kennung,
+und der Befund blieb aus (Fund des Reviews, 11.09.2026, an beiden
+Operationen gemessen). Genommen wird deshalb nur, was auf `match_tolerance`
+an der genannten Mitte liegt — und beim Langloch die eingetragene Länge trägt.
+Am exakten Kern gilt dieselbe Suche gegen `features_of`; ein `any(kind ==
+"slot")` schwieg, sobald ein zweites Langloch im Körper stand.
+
 ## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
 
 `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; drei Nullen

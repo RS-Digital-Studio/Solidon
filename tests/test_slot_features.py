@@ -709,3 +709,93 @@ def test_the_same_word_comes_from_the_exact_kernel(profile: Profile) -> None:
 
     codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
     assert "slot_hole.feature_lost" in codes, codes
+
+
+def _two_slots_side_by_side(profile: Profile) -> tuple[SceneObject, str, str]:
+    """Eine Platte mit zwei Langlöchern dicht nebeneinander — und ihren Kennungen.
+
+    **Groß genug, dass die Zuordnung sie verwechseln kann.** ``match`` nimmt
+    Lage bis acht Prozent der Modelldiagonale an; an 160 x 120 x 10 sind das
+    sechzehn Millimeter, und die zwei Löcher stehen zwölf auseinander.
+    """
+    mesh = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 10.0)))
+    for y in (-6.0, 6.0):
+        mesh = drill(
+            mesh,
+            profile=profile,
+            position=(0.0, y, 5.0),
+            axis="z",
+            diameter=4.0,
+            compensate=False,
+            slot_length=14.0,
+        ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    names = sorted(name for name, feature in entry.features.items() if feature.kind == "slot")
+    assert len(names) == 2, names
+    lower = min(names, key=lambda name: float(entry.features[name].params["centre"][1]))
+    upper = max(names, key=lambda name: float(entry.features[name].params["centre"][1]))
+    return entry, lower, upper
+
+
+def test_a_lost_slot_does_not_borrow_its_neighbour(profile: Profile) -> None:
+    """Verschwindet das gezogene Langloch, bekommt kein anderes seinen Namen.
+
+    ``match`` nimmt ein Merkmal an, solange Lage und Durchmesser unter seiner
+    Schwelle liegen — acht Prozent der Modelldiagonale, an dieser Platte
+    sechzehn Millimeter. Zwei Langlöcher zwölf Millimeter auseinander, das
+    obere quer über sich selbst gezogen: Es wird ein Kreuz und bleibt, wo es
+    war. Ohne Nachprüfung träfe die Zuordnung das **untere** (gemessen: Kosten
+    0,75 unter der Schwelle 1,0), das bekäme die Kennung des oberen, und der
+    Befund bliebe aus (Fund des Reviews, 11.09.2026). Zwei Fehler aus einem
+    Treffer, der keiner ist.
+    """
+    entry, lower, upper = _two_slots_side_by_side(profile)
+
+    # Sechzehn quer: von y = -2 bis 14, das untere Loch endet bei -4.
+    pulled = run_op(
+        "slot_hole", entry, profile, at_feature=upper, slot_length=16.0, slot_angle=90.0
+    )
+
+    codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
+    assert "slot_hole.feature_lost" in codes, codes
+    # Das untere Langloch heißt weiter, wie es hieß, und liegt, wo es lag.
+    remaining = [name for name, feature in pulled.features.items() if feature.kind == "slot"]
+    assert remaining == [lower], remaining
+    assert float(pulled.features[lower].params["centre"][1]) == pytest.approx(-6.0, abs=0.05)
+
+
+def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profile) -> None:
+    """Am exakten Körper steht ein zweites Langloch — und das gezogene ist fort.
+
+    Hier stand ``any(kind == "slot")``: Ein zweites Langloch im Körper, und die
+    Ansage blieb aus, obwohl aus dem gezogenen ein Kreuz geworden war (Fund des
+    Reviews, 11.09.2026).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    solid = edit.box(160.0, 120.0, 10.0)
+    for y in (-6.0, 6.0):
+        solid = edit.slot_bore(
+            solid,
+            position=(0.0, y, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=4.0,
+            depth=10.0,
+            length=14.0,
+            angle_deg=0.0,
+            overlap=0.1,
+        )
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+    )
+    upper = max(
+        (name for name, feature in entry.features.items() if feature.kind == "slot"),
+        key=lambda name: float(entry.features[name].params["centre"][1]),
+    )
+
+    run_op("slot_hole", entry, profile, at_feature=upper, slot_length=16.0, slot_angle=90.0)
+
+    codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
+    assert "slot_hole.feature_lost" in codes, codes

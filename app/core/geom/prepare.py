@@ -452,11 +452,15 @@ def slot_bore(
 
     travel = slot_travel(diameter=diameter, length=length)
     if travel <= EPS_GEOM:
+        # Nur eine Länge von null kommt hier an — ``slot_travel`` liest sie als
+        # „rund" und lehnt alles andere unter der Grenze selbst ab. Der Satz
+        # verspricht die Mindestlänge darunter; also steht sie auch hier.
         raise ValidationError(
             field="slot_length",
             constraint="slot_proportion",
             detail=SLOT_TOO_SHORT,
             value=length,
+            values={"shortest": format_length(shortest_slot(diameter))},
         )
     vector = np.asarray(direction, dtype=float)
     span = float(np.linalg.norm(vector))
@@ -786,6 +790,7 @@ def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> Ske
             field="slot_length",
             constraint="slot_proportion",
             detail=SLOT_TOO_SHORT,
+            values={"shortest": format_length(shortest_slot(radius * 2.0))},
         )
     half = travel / 2.0
     turn = math.radians(angle_deg)
