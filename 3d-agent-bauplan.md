@@ -1359,7 +1359,7 @@ entweder einer der zwei Bögen oder eine ebene Flanke im Abstand eines Radius
 von der Mittellinie. Läuft der Mantel über etwas anderes, bleiben es zwei
 Verrundungen — die Gegenprobe dazu ist eine rechteckige Tasche mit vier
 verrundeten Ecken. Gemeldet werden Breite, Gesamtlänge, Verschiebeweg, Achse,
-Richtung und Tiefe. Dieselbe Bauart wie beim Gewinde, und aus demselben Grund:
+Richtung, Mitte, Tiefe und ob es durchgeht. Dieselbe Bauart wie beim Gewinde, und aus demselben Grund:
 Was aus mehreren Einpassungen zusammenwächst, wird am Netz gemessen und
 verschluckt die Formen, aus denen es besteht.
 

@@ -801,9 +801,12 @@ def detect(
         # es ``detect`` einmal, und beide bekommen dasselbe.
         #
         # **Der Gewinn ist klein, und die Zahl gehört dazu:** an einer Platte
-        # mit 64 verrundeten Taschen 5,7 ms von 1375 — der zweite Aufruf in
-        # ``detect_fillets`` bleibt, arbeitet aber auf der bereits gesiebten
-        # Liste. Der Grund für die Änderung ist deshalb weniger die Zeit als
+        # mit 64 verrundeten Taschen **0,2 ms** von 1324 — der zweite Aufruf in
+        # ``detect_fillets`` bleibt und arbeitet auf der bereits gesiebten
+        # Liste, die dort nichts ausgesiebt hat (256 Bögen rein, 256 raus).
+        # Die 5,7 ms, die hier einmal standen, waren die Dauer **eines**
+        # Aufrufs und nicht die Ersparnis. Der Grund für die Änderung ist
+        # deshalb weniger die Zeit als
         # die Quelle: Zwei Stellen, die dieselbe Frage stellen, geben eines
         # Tages zwei Antworten.
         worth_naming = _fillets_worth_naming(mesh, fitted.fillets)
@@ -3622,7 +3625,7 @@ def detect_voids(mesh: MeshData) -> list[Feature]:
     # übrigen Hohlraumschalen, und ein Einschluss mit einem Nachbarn fiel durch.
     inside = _shells_inside_the_material(body, components, hollow)
 
-    measured: list[tuple[Vec3, float, Any]] = []
+    measured: list[tuple[Vec3, float, Vec3, Any]] = []
     for number, verdict in zip(hollow, inside, strict=True):
         if not verdict:
             continue
@@ -3631,7 +3634,8 @@ def detect_voids(mesh: MeshData) -> list[Feature]:
         lower, upper = corners.min(axis=0), corners.max(axis=0)
         middle = (lower + upper) / 2.0
         centre: Vec3 = (float(middle[0]), float(middle[1]), float(middle[2]))
-        measured.append((centre, float(-volumes[number]), faces))
+        size: Vec3 = tuple(float(value) for value in upper - lower)  # type: ignore[assignment]
+        measured.append((centre, float(-volumes[number]), size, faces))
 
     # **Nach der Mitte nummeriert und nicht nach dem Flächenindex.** Dieselbe
     # Zeile wie bei Zylindern, Kegeln, Kugeln, Tori und Verrundungen, und aus
@@ -3649,9 +3653,7 @@ def detect_voids(mesh: MeshData) -> list[Feature]:
     )
 
     found: list[Feature] = []
-    for number, (centre, volume, faces) in enumerate(measured, start=1):
-        corners = body.vertices[body.faces[faces]].reshape(-1, 3)
-        lower, upper = corners.min(axis=0), corners.max(axis=0)
+    for number, (centre, volume, size, faces) in enumerate(measured, start=1):
         found.append(
             Feature(
                 id=FeatureId(f"void_{number}"),
@@ -3662,7 +3664,7 @@ def detect_voids(mesh: MeshData) -> list[Feature]:
                     # nicht die Umlaufrichtung seiner Dreiecke.
                     "volume": round(volume, 4),
                     "centre": centre,
-                    "size": tuple(float(value) for value in upper - lower),
+                    "size": size,
                 },
                 face_indices=tuple(int(index) for index in faces),
             )

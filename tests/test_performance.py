@@ -594,12 +594,15 @@ def test_looking_for_slots_does_not_grow_with_the_whole_mesh() -> None:
     darin hingen einmal am ganzen Netz statt am Paar: die Quermaske, die je
     Paar über sämtliche Normalen lief, und der Tiefenlauf, der auch für zwei
     Bögen aus verschiedenen Taschen startete. Gemessen an dieser Platte mit 64
-    Taschen: 4,8 s vorher, 0,8 s nachher — bei 16 Taschen 200 ms gegen 58 ms.
+    Taschen: 3,45 s vorher, 0,79 s nachher — bei 16 Taschen 190 ms gegen 57 ms.
 
     **Die Zahl allein wäre die halbe Prüfung.** Beide Griffe verwerfen Paare
     früher, und ein Griff, der zu viel verwirft, ist schnell und falsch —
     deshalb steht die Gegenprobe daneben: In derselben Bauart liegt ein echtes
     Langloch, und es wird gefunden.
+
+    Der Zwilling darunter fährt denselben Körper **gekippt**, und der Grund
+    dafür ist teuer bezahlt.
     """
     from app.core.perceive.features import _fitted, _one_body
     from app.core.perceive.slots import find_slots
@@ -618,10 +621,53 @@ def test_looking_for_slots_does_not_grow_with_the_whole_mesh() -> None:
 
     assert found == [[]], "vier Ecken einer Tasche sind kein Langloch"
     # Zwischen die beiden gemessenen Stände gelegt, nicht neben den heutigen:
-    # 4,8 s vorher, 0,8 s nachher. Fünf Sekunden hätten den alten Stand auf
+    # 3,45 s vorher, 0,79 s nachher. Drei Sekunden hätten den alten Stand auf
     # dieser Maschine noch durchgelassen, eine Sekunde ließe einer langsameren
     # keinen Raum. Der 25-Prozent-Vergleich über ``measure`` greift daneben.
     assert taken < 2.5, "die Suche darf nicht wieder mit dem ganzen Netz wachsen"
+
+
+def test_a_tilted_body_is_not_the_expensive_case() -> None:
+    """Derselbe Körper, gekippt — und genau daran ist der erste Anlauf gescheitert.
+
+    **Der Speicher je Achse traf nur, solange der Körper achsparallel lag.**
+    Geschlüsselt war er mit den rohen Bytes der gemittelten Achse, und die
+    unterscheiden sich zwischen zwei Bogenpaaren im Rechenrauschen. Solange
+    das Teil gerade im Raum steht, fällt das nicht auf: eine Achse, ein
+    Eintrag. Ein halbes Grad Kippung genügte, und aus einem Eintrag wurden
+    1817 — der Speicher traf nie mehr, hielt aber je Eintrag zwei Listen über
+    alle Flächen. Gemessen an dieser Platte mit 16 Taschen: 190 ms und 0,7 MB
+    vorher, **1795 ms und 138 MB** mit dem Speicher. Der Griff, der den
+    achsparallelen Fall dreimal schneller machte, machte jeden anderen
+    zehnmal langsamer und zweihundertmal speicherhungriger.
+
+    Der bestehende Leistungstest konnte davon nichts sehen, weil
+    ``pocketed_plate`` gerade liegt. **Ein Prüfkörper in Normallage ist keine
+    Aussage über einen gekippten** — das ist der Satz, der hier steht, damit
+    der nächste Speicher mit einem Schlüssel gebaut wird, der rundet.
+    """
+    import trimesh
+
+    from app.core.perceive.features import _fitted, _one_body
+    from app.core.perceive.slots import find_slots
+
+    plate = pocketed_plate(16)
+    raw = plate.raw.copy()
+    raw.apply_transform(trimesh.transformations.rotation_matrix(0.5 * 3.14159 / 180.0, (1, 0, 0)))
+    mesh = _one_body(MeshData.of(raw))
+
+    fitted = _fitted(mesh)
+    inward = [entry for entry in fitted.fillets if getattr(entry[0], "inward", False)]
+    assert len(inward) >= 50, (
+        f"ohne viele Innenverrundungen misst dieser Test nichts (hier {len(inward)})"
+    )
+
+    taken = measure("find_slots_tilted", lambda: find_slots(mesh, fitted.fillets))
+
+    # Der gerade liegende Zwilling braucht hier 57 ms, der gekippte 62. Eine
+    # halbe Sekunde lässt beiden Luft und fängt die Rückkehr des rohen
+    # Schlüssels (1795 ms) um das Dreifache.
+    assert taken < 0.5, "ein gekippter Körper darf nicht teurer sein als ein gerader"
 
 
 def test_a_real_slot_survives_the_shortcuts_that_make_the_search_fast() -> None:

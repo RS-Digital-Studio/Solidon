@@ -45,7 +45,7 @@ CALLS = frozenset({"tr", "_"})
 def _changed_files() -> list[str]:
     """Die Python-Dateien unter ``app/`` und ``tools/``, die dieser Commit mitnimmt."""
     listing = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "*.py"],
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "--", "*.py"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -122,6 +122,13 @@ def added_texts() -> list[str]:
     dieser Commit angelegt — ob neu geschrieben oder umformuliert, denn beides
     ist ein neuer Katalogschlüssel. Alles andere lag schon vorher da und
     gehört jemand anderem.
+
+    **Umbenannte Dateien bleiben draußen** (``--diff-filter=ACM``, ohne ``R``).
+    Bei einer Umbenennung nennt ``--name-only`` den **neuen** Namen, und
+    ``git show HEAD:neuername`` scheitert — die Vorher-Menge wäre leer, und
+    damit gälte **jeder** Text der Datei als neu. Wer eine Datei verschiebt
+    und dabei einen alten unübersetzten Text mitnimmt, würde aufgehalten,
+    obwohl er nichts angelegt hat; genau dagegen gibt es diesen Wächter.
     """
     found: set[str] = set()
     for path in _changed_files():

@@ -62,6 +62,15 @@ _ACROSS: float = math.cos(math.radians(89.0))
 #: Übergang zwischen Bogen und Flanke abtastet.
 _FLANK_TOLERANCE: float = 0.02
 
+#: Was je Achse einmal gerechnet wird: die Quermaske, die Mantelstücke und
+#: der Speicher, welcher Bogen an welches Stück grenzt.
+#:
+#: **Die drei gehören zusammen und nicht nebeneinander.** Die Nummern in
+#: den Mantelstücken bedeuten für eine andere Achse etwas anderes; ein
+#: Bogenspeicher daneben gab einem Paar die Etiketten einer fremden Achse
+#: zurück und verlor dabei ein echtes Langloch.
+_Shells = tuple[list[bool], list[int], dict[int, frozenset[int]]]
+
 
 #: Welche Arten ein Langloch verschluckt, wenn eines gefunden wird.
 #:
@@ -221,10 +230,10 @@ def find_slots(
     # Maske, und die fragt der Lauf jetzt beim Betreten einer Fläche.
     graph = _neighbourhood(neighbours, len(normals))
 
-    # Die Quermaske hängt allein an der Achse und wird deshalb über alle Paare
-    # geteilt — der Grund steht bei :func:`_across_mask`.
-    masks: dict[bytes, tuple[list[bool], list[int]]] = {}
-    shells: dict[int, frozenset[int]] = {}
+    # Quermaske, Mantelstücke und Bogenspeicher hängen allein an der Achse und
+    # werden deshalb über alle Paare geteilt — der Grund steht bei
+    # :func:`_shells_for`.
+    masks: dict[bytes, _Shells] = {}
 
     found: list[Slot] = []
     taken: set[int] = set()
@@ -236,9 +245,7 @@ def find_slots(
         for second in range(first + 1, len(candidates)):
             if candidates[second][0] in taken:
                 continue
-            slot = _slot_from(
-                body, normals, graph, masks, shells, candidates[first], candidates[second]
-            )
+            slot = _slot_from(body, normals, graph, masks, candidates[first], candidates[second])
             if slot is not None:
                 found.append(slot)
                 taken.update(slot.swallowed)
@@ -266,15 +273,14 @@ def _slot_from(
     body: Any,
     normals: np.ndarray,
     graph: tuple[np.ndarray, np.ndarray],
-    masks: dict[bytes, tuple[list[bool], list[int]]],
-    shells: dict[int, frozenset[int]],
+    masks: dict[bytes, _Shells],
     first: tuple[int, CylinderFit, list[int]],
     second: tuple[int, CylinderFit, list[int]],
 ) -> Slot | None:
     """Ob diese zwei Zylinderausschnitte ein Langloch sind — und welches.
 
-    ``masks`` sammelt die Quermasken je Achse über alle Paare eines Laufs —
-    siehe :func:`_across_mask`.
+    ``masks`` sammelt je Achse, was nur an ihr hängt — siehe
+    :func:`_shells_for`.
     """
     index_a, fit_a, patch_a = first
     index_b, fit_b, patch_b = second
@@ -308,8 +314,8 @@ def _slot_from(
     direction = sideways / travel
     across = np.cross(axis, direction)
 
-    across_mask, labels = _shells_for(normals, axis, graph, masks)
-    if not _shares_a_shell(labels, graph, (index_a, patch_a), (index_b, patch_b), shells):
+    across_mask, labels, touched = _shells_for(normals, axis, graph, masks)
+    if not _shares_a_shell(labels, graph, (index_a, patch_a), (index_b, patch_b), touched):
         return None
 
     faces = _connected_shell(across_mask, graph, patch_a, patch_b)
@@ -422,11 +428,21 @@ def _shells_touched(
 
     **Auch das gehört dem Bogen und nicht dem Paar.** Der erste Anlauf der
     Vorprüfung rechnete es beidseitig je Paar aus und war damit wieder
-    quadratisch, nur billiger: An der Platte mit 64 Taschen liefen 65 280
+    quadratisch, nur billiger: An der Platte mit 64 Taschen wären es 65 280
     Durchgänge über die Nachbarschaft von Flecken, die sich zu 256
     unterschiedlichen zusammenfassen lassen. Der Bogen hat eine Nummer, die
     über den ganzen Lauf gilt (die Stelle in ``fillets``), und die ist der
     Schlüssel.
+
+    **Der Speicher gehört dabei der Achse und nicht dem Lauf**, und das ist
+    keine Feinheit: Die Nummern in ``labels`` kommen aus
+    :func:`_shell_labels` und bedeuten für eine andere Achse etwas anderes.
+    Ein Speicher über den ganzen Lauf gab einem Paar die Etiketten einer
+    fremden Achse zurück — gemessen an einem verjüngten Klotz (Wand 0,85 bis
+    1,0 Grad aus der Senkrechten) mit zwei Langlöchern, von denen das zweite
+    um 0,4 Grad kippt: zwei gefunden vorher, **eines** danach. Er liegt
+    deshalb in :func:`_shells_for` neben ``across`` und ``labels``, unter
+    demselben Schlüssel (Fund der Nachkontrolle, 11.09.2026).
     """
     ready = cache.get(index)
     if ready is None:
@@ -455,7 +471,7 @@ def _shares_a_shell(
     Taschen desselben Bauteils, zwischen denen es gar keinen gemeinsamen
     Mantel gibt. Gemessen an einer Platte mit 64 verrundeten Taschen (256
     Innenverrundungen, 32 640 Paare) waren das 32 640 Läufe, von denen 384
-    überhaupt eine Chance hatten.
+    überhaupt eine Chance hatten — gezählt.
 
     **Sie lehnt nur ab, was auch der Lauf abgelehnt hätte.** Erreicht er den
     zweiten Bogen, ist er über querstehende Flächen dorthin gekommen, und die
@@ -476,8 +492,8 @@ def _shells_for(
     normals: np.ndarray,
     axis: np.ndarray,
     graph: tuple[np.ndarray, np.ndarray],
-    cache: dict[bytes, tuple[list[bool], list[int]]],
-) -> tuple[list[bool], list[int]]:
+    cache: dict[bytes, _Shells],
+) -> _Shells:
     """Quermaske und Mantelstücke einer Achse — je Achse einmal gerechnet.
 
     **Der teuerste Posten der Langlochsuche stand hier, und er war es zweimal
@@ -486,10 +502,12 @@ def _shells_for(
     Vollkopie als ``allowed``. Beides hängt nur an der Achse, und die teilen
     sich alle Bögen eines Langlochs: An einer Platte mit sechzehn verrundeten
     Taschen (64 Innenverrundungen, 2016 Paare) wurde dieselbe Maske
-    zweitausendmal gebaut, und ``find_slots`` kostete 200 ms bei 4366
+    zweitausendmal gebaut, und ``find_slots`` kostete 190 ms bei 4366
     Dreiecken — ein Anteil, der mit dem **Netz** wächst, obwohl der Lauf davon
-    nur einen Bruchteil der Flächen anfasst. Bei den 200 000 Dreiecken aus §31
-    reißt das die Sekunde um ein Mehrfaches.
+    nur einen Bruchteil der Flächen anfasst. An einem Netz von der Größe aus
+    §31 mit ebenso vielen Bögen reißt das die Sekunde um ein Mehrfaches; der
+    Prüfkörper aus §31 selbst trägt keine Innenverrundungen und läuft hier gar
+    nicht durch.
 
     **Der naheliegende Griff daneben war der falsche**, und er ist gemessen
     worden: die Querprüfung je betretener Fläche zu rechnen statt vorher für
@@ -498,21 +516,39 @@ def _shells_for(
     tausende Zeilen. Die Rechnung bleibt also vektorisiert; gespart wird ihre
     **Wiederholung**.
 
-    Der Schlüssel sind die Achsenbytes und keine gerundete Fassung: Zwei
-    Achsen, die sich im letzten Bit unterscheiden, bekommen lieber zwei
-    Einträge, als dass eine Fläche dicht an der Schwelle die Maske des
-    Nachbarn erbt. ``tolist()`` einmal, weil der Lauf danach einzeln fragt und
-    eine Python-Liste dort schneller antwortet als ein numpy-Feld.
+    **Der Schlüssel ist die gerundete Achse, und die Rundung ist der ganze
+    Gewinn.** Hier standen die rohen Bytes, mit der Begründung, zwei Achsen im
+    letzten Bit sollten lieber zwei Einträge bekommen, als dass eine Fläche
+    dicht an der Schwelle die Maske des Nachbarn erbt. Das war für einen
+    **achsparallel** liegenden Körper richtig und für jeden anderen falsch:
+    Gemessen an derselben Platte mit 16 Taschen, um 0,5 Grad gekippt, kamen
+    **1817 verschiedene Achsen** auf 2016 Paare — der Speicher traf nie, und
+    weil er dabei je Eintrag zwei Listen über alle Flächen hielt, stieg der
+    Spitzenspeicher von 0,7 auf 138 MB und die Laufzeit von 190 auf 1795 ms.
+    Der vermeintliche Schutz hat also nichts geschützt und den Fall, für den
+    die Sache gebaut ist, zehnmal teurer gemacht (Fund der Nachkontrolle,
+    11.09.2026).
 
-    Die Mantelstücke aus :func:`_shell_labels` kommen im selben Zug, weil sie
-    an derselben Achse hängen und einen zweiten Durchgang über das Netz
-    kosteten.
+    Auf neun Stellen gerundet sind es **zwei** Achsen statt 1817 — bei jeder
+    gemessenen Kippung von einem halben bis fünfundvierzig Grad. Das ist keine
+    Glückszahl: Die Einpassungen zweier Bögen desselben Werkzeugs unterscheiden
+    sich nur im Rechenrauschen, und das liegt bei 1e-9 (die Zahl steht an
+    :data:`_PARALLEL`). Gegen die Schwelle :data:`_ACROSS` — der Kosinus von
+    89 Grad, rund 0,0175 — ist eine Achsenabweichung von 1e-9 sechs
+    Größenordnungen zu klein, um eine Fläche über die Grenze zu heben.
+
+    ``tolist()`` einmal, weil der Lauf danach einzeln fragt und eine
+    Python-Liste dort schneller antwortet als ein numpy-Feld. Die Mantelstücke
+    aus :func:`_shell_labels` kommen im selben Zug, weil sie an derselben Achse
+    hängen — und **der Bogenspeicher liegt daneben im selben Eintrag**: Seine
+    Nummern sind die aus ``labels``, und die bedeuten für eine andere Achse
+    etwas anderes.
     """
-    key = np.ascontiguousarray(axis, dtype=float).tobytes()
+    key = np.round(np.ascontiguousarray(axis, dtype=float), 9).tobytes()
     ready = cache.get(key)
     if ready is None:
         across = (np.abs(normals @ axis) <= _ACROSS).tolist()
-        ready = (across, _shell_labels(across, graph))
+        ready = (across, _shell_labels(across, graph), {})
         cache[key] = ready
     return ready
 

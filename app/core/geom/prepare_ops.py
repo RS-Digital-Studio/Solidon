@@ -3359,19 +3359,28 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Breite.** Die Prüfung darüber deckt den ersten Zug; sie lässt am zweiten
     # jede Zahl durch, die größer als der Durchmesser ist — auch eine kleinere
     # als die vorhandene Länge. Gemessen an 20,016 mm mit der Eingabe 12:
-    # abgetragen 1,14 mm³ (der Toleranzrand), kein Befund, das Langloch danach
+    # abgetragen 0,87 mm³ (der Toleranzrand), kein Befund, das Langloch danach
     # unverändert. Ein Schritt im Verlauf, der nichts tut und nichts sagt.
+    #
+    # **Echt kürzer, nicht „nicht länger".** Hier stand `<= current`, und das
+    # traf die eigene Vorbelegung: `perceive.actions._slot_value` setzt das Feld
+    # auf die **gemessene** Länge des Langlochs — ausdrücklich, damit kein Feld
+    # mit einer Absage begrüßt. Wer anklickte und OK drückte, las „Dieses
+    # Langloch ist bereits länger als die eingetragene Länge" und darunter
+    # zweimal dieselbe Zahl. Und reines **Drehen** war damit unerreichbar: Ein
+    # Winkel bei unveränderter Länge kam nie bis zur Geometrie (Fund der
+    # Nachkontrolle, 11.09.2026).
     if feature.kind == "slot":
         current = _bore_number(feature, "length")
-        if params.slot_length <= current + EPS_GEOM:
+        if params.slot_length < current - EPS_GEOM:
             raise ValidationError(
                 field="slot_length",
                 constraint="slot_growth",
                 detail=SLOT_NOT_SHORTER,
                 value=params.slot_length,
                 values={
-                    "current": format_length(current),
-                    "given": format_length(params.slot_length),
+                    "previous": format_length(current),
+                    "wanted": format_length(params.slot_length),
                 },
             )
     _reject_oversized("slot_length", params.slot_length, source.mesh, kind="length")

@@ -4053,10 +4053,24 @@ def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
     assert fehler.value.field == "slot_length"
     assert fehler.value.constraint == "slot_growth"
     assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"
-    # Die genau gleiche Länge ist ebenfalls nichts — sie schnitte nur den
-    # Toleranzrand nach und stünde als Schritt im Verlauf.
-    with pytest.raises(ValidationError):
-        _run_op("slot_hole", with_slot, profile, at_feature=slot, slot_length=length)
+
+    # **Die gleiche Länge geht durch, und das ist Absicht.** Hier stand das
+    # Gegenteil — `<= current` in der Operation, hier ein zweites
+    # `pytest.raises` —, und beides traf die eigene Vorbelegung:
+    # `perceive.actions._slot_value` setzt das Feld auf die **gemessene** Länge,
+    # ausdrücklich damit kein Feld mit einer Absage begrüßt. Wer anklickte und
+    # OK drückte, bekam eine Absage mit zweimal derselben Zahl darunter. Und
+    # ein reines Drehen — Winkel ändern, Länge lassen — kam damit nie bis zur
+    # Geometrie (Fund der Nachkontrolle, 11.09.2026).
+    gleich = _run_op("slot_hole", with_slot, profile, at_feature=slot, slot_length=length)
+    assert gleich.outputs, "die Vorbelegung des Panels muss durchgehen"
+    gedreht = _run_op(
+        "slot_hole", with_slot, profile, at_feature=slot, slot_length=length, slot_angle=90.0
+    )
+    assert gedreht.outputs, "und ein reines Drehen ebenfalls"
+    assert "slot_hole.crosses" in {finding.code for finding in gedreht.findings}, (
+        "der Querzug sagt sich an — dafür gibt es den Befund"
+    )
 
 
 def test_making_a_slot_needs_a_hole(profile: Profile) -> None:
