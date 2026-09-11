@@ -1068,6 +1068,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "dropped": _("Weggelassen"),
     "body_diameter": _("Breiteste Stelle des Körpers"),
     "diameter": _("Durchmesser"),
+    # ``geom.faces``: um wie viel eine Fläche versetzt werden sollte, als der
+    # Körper dabei verschwand. „Weg" hieße im Italienischen „Percorso" — Pfad.
+    "distance": _("Abstand"),
     "volume_change": _("Volumenänderung"),
     "widening": _("Senkung darüber"),
     "wrap_diameter": _("Durchmesser des Wickelzylinders"),
