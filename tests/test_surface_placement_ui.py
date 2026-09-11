@@ -67,10 +67,14 @@ class _Viewport(QWidget):
     cameraMoved = Signal()  # noqa: N815 — Qt-Schnittstelle
     sceneApplied = Signal()  # noqa: N815 — Qt-Schnittstelle
     previewDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
+    placementDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
 
     def __init__(self) -> None:
         super().__init__()
         self.renderer = _Renderer()
+        #: Woran der Griff der Platzierung gerade hängt — der echte Viewport
+        #: baut daran einen Bewegungsgriff; hier zählt nur die Entscheidung.
+        self.gripped: Any = None
         # Die Projektion braucht den Zoom, und der steht an der Kamera.
         self.renderer.viewport = self
         self._object_colour = "#aaaaaa"
@@ -104,6 +108,12 @@ class _Viewport(QWidget):
 
     def set_preview_gizmo(self, active: bool) -> None:
         self.preview_gizmo = bool(active)
+
+    def grip_placement(self, item: Any) -> None:
+        self.gripped = item
+
+    def scene_point_of(self, point: Any, object_id: str = "") -> Any:
+        return point
 
     def gizmo_reach(self) -> tuple[tuple[float, float, float], float] | None:
         """Wo der Bewegungsgriff sitzt — hier keiner, sofern der Test keinen setzt.
@@ -1540,26 +1550,24 @@ def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
         window.release()
 
 
-def test_a_drag_beside_the_handle_keeps_the_measures_at_the_feature(
+def test_neither_a_drag_nor_a_click_beside_the_grip_sends_the_measures_aiming(
     qt_app: QApplication,
 ) -> None:
-    """Ein Zug im Bild schickt die Platzierung nicht zurück ans Zielen.
+    """Am Merkmal zielt die Platzierung nie — weder nach einem Zug noch nach einem Klick.
 
-    Wer eine Bohrung wählt, bekommt ihre Maße von selbst — die Platzierung
-    sitzt dabei **am Merkmal** und zielt nicht. Ein Klick daneben ist die
-    ausdrückliche Ansage, woanders hinzuwollen; ein **Zug** ist das nicht.
+    Wer eine Bohrung wählt und *Im Bild einstellen* drückt, bekommt ihre Maße
+    — die Platzierung sitzt dabei **am Merkmal**. Bis zum 11.09.2026 zählte
+    jedes Loslassen der linken Taste als Ansage, woanders hinzuwollen, und
+    danach zielte der Zeiger: Die Bohrungsvorschau klebte an ihm, als setze
+    man eine neue. Am Vormittag fiel das für den **Zug** (Robert: „beim
+    verschieben über Gizmo kommen wir in die ansicht vom bohrung setzen");
+    der Klick daneben blieb als Ansage stehen — und am Abend war es der Klick,
+    der ihn dorthin brachte, ohne Weg heraus (Robert: „auf einmal war ich im
+    modus eine neue Bohrung zu setzen … er sollte an der stelle ja nichtmal
+    kommen").
 
-    Bis zum 11.09.2026 zählte jedes Loslassen der linken Taste als diese
-    Ansage. Wer am Bewegungsgriff ansetzte und den Pfeil verfehlte, zog damit
-    die Platzierung vom Merkmal weg: Die Bohrungsvorschau klebte danach am
-    Zeiger, als setze man eine neue (Robert: „beim verschieben über Gizmo
-    kommen wir in die ansicht vom bohrung setzen statt dass wir es über das
-    gizmo verschieben").
-
-    Gemessen wird an der Zugschwelle des Systems — dieselbe Unterscheidung,
-    die `test_dragging_the_camera_does_not_settle_the_depth` eine Stufe später
-    prüft. Der Klick daneben bleibt dabei erhalten, sonst wäre die Behebung
-    eine neue Sperre.
+    Wohin ein vorhandenes Loch soll, sagen der Griff und die Felder rechts.
+    Der Klick gehört der Auswahl, wie ohne Platzierung auch.
     """
     from app.ui.op_dialog import OperationDialog
     from app.ui.render.api import PointerEvent
@@ -1570,8 +1578,7 @@ def test_a_drag_beside_the_handle_keeps_the_measures_at_the_feature(
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._seated_at_feature, "die Maße stehen am gewählten Merkmal"
 
-        # Ein Zug über das halbe Bild, der keinen Griff trifft: Druck,
-        # Bewegung, Loslassen weit entfernt.
+        # Ein Zug über das halbe Bild, der keinen Griff trifft.
         for event in (
             PointerEvent("press", 200, 200, button="left"),
             PointerEvent("move", 320, 260, buttons=frozenset({"left"})),
@@ -1580,16 +1587,21 @@ def test_a_drag_beside_the_handle_keeps_the_measures_at_the_feature(
             window.viewport._on_pointer(event)
         QApplication.processEvents()
         assert flow._seated_at_feature, "ein Zug hat die Maße vom Merkmal weg ins Zielen geschickt"
-        assert flow._frozen, "und die festgelegte Stelle gleich mit"
 
-        # Ein echter Klick daneben richtet sie dagegen weiterhin neu aus.
+        # Und ein Klick daneben ebenso wenig.
         for event in (
             PointerEvent("press", 200, 200, button="left"),
             PointerEvent("release", 201, 200, button="left"),
         ):
             window.viewport._on_pointer(event)
         QApplication.processEvents()
-        assert not flow._seated_at_feature, "der Klick daneben zielt wieder"
+        assert flow._seated_at_feature, "der Klick daneben zielt nicht — es gibt kein Zielen"
+        assert not flow.pointer(PointerEvent("press", 200, 200, button="left")), (
+            "der Klick gehört der Auswahl, nicht der Platzierung"
+        )
+        assert flow.pointer(PointerEvent("move", 200, 200)), (
+            "nur die freie Bewegung bleibt bei ihr — keine Vorschau am Zeiger"
+        )
     finally:
         for open_dialog in window.findChildren(OperationDialog):
             open_dialog.reject()
@@ -1597,34 +1609,215 @@ def test_a_drag_beside_the_handle_keeps_the_measures_at_the_feature(
         window.release()
 
 
-def test_the_measures_come_back_after_a_gesture_in_the_view(qt_app: QApplication) -> None:
-    """Nach einem Zug am Griff stehen die Maße wieder in der Szene.
+def test_pulling_a_slot_and_moving_it_at_the_grip_is_one_step(qt_app: QApplication) -> None:
+    """Langloch ziehen, dann am Griff versetzen, dann übernehmen — ein Schritt für beides.
 
-    Jede Operation beendet die laufende Platzierung (`_scene_changed` ruft
-    `back()`), und ihr Dialog bleibt stehen — mit den Zahlen von vorher. Der
-    Merker allein reichte deshalb nicht: Er erlaubt den Neustart, und der
-    prüft als Erstes, ob ein Dialog offen steht — und fand genau diesen toten.
+    Bis zum Abend des 11.09.2026 warf der Zug am Bewegungsgriff das eben
+    gezogene Langloch weg: Jeder Neuaufbau des Griffs leerte den wartenden
+    Langlochzug, der Umriss sprang zurück (Robert: „das langloch ziehe und
+    dann das langloch nochmal über das gizmo verschieben will ist es wie
+    abbrechen"). Jetzt warten beide zusammen: Der Griff trägt die gezogene
+    Länge an der versetzten Stelle, die Felder von *Zum Langloch ziehen*
+    kennen Länge **und** Stelle, und ``slot_hole`` schneidet beides in einem
+    Schritt.
 
-    Gemessen am 11.09.2026, bevor der Dialog mitging: nach *Merkmal
-    verschieben* `flow.active = False`, Maßlinien verborgen, Dialog sichtbar
-    mit X 25,00 gegen 29,90 im Merkmalfenster (Robert: „wenn ich das langloch
-    zieh, fehlen die Maße zu den kanten usw die wir bei bohrungen sehen";
-    „werte im dialog und in der rechten merkmalleiste doppelt").
+    **Und danach ist das Langloch gewählt**, obwohl es seinen Namen gewechselt
+    hat (``hole_1`` → ``slot_1``): Es wird an der Stelle wiedergefunden, die
+    der Schritt genannt hat, und die Maße und Griffe stehen dort wieder.
+    """
+    from app.core.geom.transform import translation
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.render.api import PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        _, hole = _a_selected_hole(window)
+        erster = _measures_in_the_view(window)
+        assert erster is not None and erster.active
+        for _ in range(200):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+            if erster._tool_context is not None:
+                break
+        feature = window.viewport._features_of_selection()[hole]
+        centre = tuple(float(value) for value in feature.params["centre"])
+
+        # Erst am Langlochknopf ziehen …
+        handle = window.viewport._slot_handle
+        assert handle is not None
+        renderer = window.viewport.renderer
+        seat = renderer.world_to_display(handle.knob_seats[0])
+        x, y = round(seat[0]), round(seat[1])
+        renderer.item_picks[(x, y)] = handle.knobs[0]
+        for event in (
+            PointerEvent("move", x, y),
+            PointerEvent("press", x, y, button="left"),
+            PointerEvent("move", x + 12, y, buttons=frozenset({"left"})),
+            PointerEvent("release", x + 12, y, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+        QApplication.processEvents()
+        assert window.viewport.slot_drag_waits()
+        pulled = window.viewport._slot_handle
+        assert pulled is not None
+        length = pulled.length
+
+        mark = window.viewport._shape_actor
+        assert mark is not None
+        span = mark.points.max(axis=0) - mark.points.min(axis=0)
+        assert max(span[0], span[1]) == pytest.approx(length, abs=0.05), (
+            "nach dem Zug ist die Marke das Langloch, nicht mehr die Bohrung"
+        )
+
+        # … dann am Bewegungsgriff versetzen. Unterwegs gehen Umriss und
+        # Marke mit, danach stehen beide an der neuen Stelle.
+        window.viewport._on_gizmo_interacted(translation((6.0, 4.0, 0.0)))
+        assert pulled._outline is not None
+        assert np.allclose(pulled._outline.position(), (6.0, 4.0, 0.0)), "der Umriss geht mit"
+        window.viewport._on_gizmo_released(translation((6.0, 4.0, 0.0)))
+        QApplication.processEvents()
+        assert window.viewport.slot_drag_waits(), "der Langlochzug wartet weiter"
+        assert window.viewport.move_proposal_waits(), "und das Versetzen dazu"
+        again = window.viewport._slot_handle
+        assert again is not None and again.length == pytest.approx(length), (
+            "der neue Griff trägt die gezogene Länge"
+        )
+        assert again._outline is not None, "und seinen Umriss — nicht nur zwei Knöpfe um nichts"
+        seat = window.viewport._face_seat
+        assert seat is not None
+        assert np.allclose(again._outline.points.mean(axis=0)[:2], seat[0][:2], atol=0.1), (
+            "der Umriss steht um die versetzte Stelle"
+        )
+        moved = window.viewport._shape_actor
+        assert moved is not None and moved is not mark
+        span = moved.points.max(axis=0) - moved.points.min(axis=0)
+        assert max(span[0], span[1]) == pytest.approx(length, abs=0.05), (
+            "die Marke an der neuen Stelle ist das Langloch"
+        )
+        assert np.allclose(moved.points.mean(axis=0)[:2], seat[0][:2], atol=0.1)
+        armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
+        assert armed is not None and armed.op == "slot_hole", "*Zum Langloch ziehen* steht scharf"
+
+        vorher = [o.op for o in window.session.history.operations]
+        window.feature_panel._apply.click()
+        window.session.wait_for_idle()
+        for _ in range(120):
+            QApplication.processEvents()
+        assert [o.op for o in window.session.history.operations] == [*vorher, "slot_hole"], (
+            "ein Schritt für beides"
+        )
+        slots = {
+            name: entry
+            for name, entry in window.viewport._features_of_selection().items()
+            if entry.kind == "slot"
+        }
+        assert len(slots) == 1, slots
+        name, slot = next(iter(slots.items()))
+        assert float(slot.params["length"]) == pytest.approx(length, abs=0.1)
+        assert slot.params["centre"] == pytest.approx(
+            (centre[0] + 6.0, centre[1] + 4.0, centre[2]), abs=0.1
+        ), "an der versetzten Stelle"
+        assert window.object_tree.selected_feature() == name, "und danach gewählt"
+        danach = window._quiet_placement
+        assert danach is not None and danach.active, "mit den Maßen im Bild"
+        assert window.viewport._slot_handle is not None, "und den Griffen"
+    finally:
+        window.end_quiet_placement()
+        for open_dialog in window.findChildren(OperationDialog):
+            open_dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_escape_leaves_the_measures_and_discards_what_waits(qt_app: QApplication) -> None:
+    """Escape ist der Ausgang aus den Maßen — und verwirft, was noch kein Schritt ist.
+
+    Die stille Platzierung hat kein Fenster und kein Kreuz. Bis zum
+    11.09.2026 fing ihr Ereignisfilter Escape nur ab, solange kein Langlochzug
+    wartete; wartete einer, ließ sie die Taste durch, und die ging eine Stufe
+    Auswahl zurück — die Maße blieben stehen (Robert: „kann auch den modus
+    nicht mehr verlassen"). Jetzt gilt die Stufung des Fensters: erst das
+    Werkzeug, dann die Auswahl.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    window = _window_with_a_renderer()
+    try:
+        _, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        handle = window.viewport._slot_handle
+        assert handle is not None
+        handle._release(14.0, 0.0)
+        QApplication.processEvents()
+        assert window.viewport.slot_drag_waits(), "ein Langlochzug wartet"
+        vorher = [o.op for o in window.session.history.operations]
+
+        window._escape()
+        QApplication.processEvents()
+
+        assert not flow.active and window._quiet_placement is None, "die Maße sind weg"
+        assert not window.viewport.slot_drag_waits(), "und der wartende Zug mit ihnen"
+        assert window.viewport._slot_handle is None, "ohne Platzierung keine Griffe"
+        assert [o.op for o in window.session.history.operations] == vorher, (
+            "verworfen, nicht gerechnet"
+        )
+        assert window.object_tree.selected_feature() == hole, (
+            "die Auswahl bleibt — erst das Werkzeug"
+        )
+
+        window._escape()
+        QApplication.processEvents()
+        assert window.object_tree.selected_feature() is None, (
+            "das zweite Escape geht die Stufe zurück"
+        )
+    finally:
+        window.end_quiet_placement()
+        for open_dialog in window.findChildren(OperationDialog):
+            open_dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_drag_at_the_grip_proposes_and_the_button_right_takes_it(
+    qt_app: QApplication,
+) -> None:
+    """Ein Zug am Griff schlägt vor; erst das Übernehmen rechts macht den Schritt.
+
+    Bis zum Abend des 11.09.2026 war der Zug selbst der Schritt — und mit ihm
+    endete die Platzierung: Griff und Maße waren weg, bevor jemand
+    „Übernehmen" gelesen hatte (Robert: „nach dem verschieben verschwindet das
+    gizmo gleich ohne auf übernehmen zu klicken"). Jetzt gilt am
+    Bewegungsgriff, was am Langlochgriff schon galt: Der Zug landet in den
+    Feldern rechts (*Merkmal verschieben*), der Griff bleibt an der neuen
+    Stelle stehen, die Maßlinien zeigen sie — und der eine Knopf rechts
+    übernimmt (Regel 2).
+
+    **Und danach stehen die Maße wieder** (Konzept §4, Abnahme 1): Die
+    Operation beendet die Platzierung, das Merkmalfenster zeigt das Merkmal
+    an seiner neuen Stelle neu, und dort geht derselbe Weg wieder ins Bild.
     """
     from app.ui.op_dialog import OperationDialog
     from app.ui.render.api import PointerEvent
 
     window = _window_with_a_renderer()
     try:
-        _a_selected_hole(window)
+        _, hole = _a_selected_hole(window)
         erster = _measures_in_the_view(window)
         assert erster is not None and erster.active, "die Maße stehen"
+        for _ in range(200):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+            if erster._tool_context is not None:
+                break
+        feature = window.viewport._features_of_selection()[hole]
+        centre = tuple(float(value) for value in feature.params["centre"])
 
-        # Ein Zug am Pfeil des Bewegungsgriffs: eine Merkmalsoperation entsteht.
         gizmo = window.viewport._gizmo
         assert gizmo is not None, "ohne Griff prüft der Test nichts"
         window.viewport.renderer.item_picks[(400, 300)] = gizmo.items[0]
         window.viewport.renderer.item_picks[(460, 300)] = gizmo.items[0]
+        vorher = [o.op for o in window.session.history.operations]
         for event in (
             PointerEvent("move", 400, 300),
             PointerEvent("press", 400, 300, button="left"),
@@ -1636,18 +1829,43 @@ def test_the_measures_come_back_after_a_gesture_in_the_view(qt_app: QApplication
         for _ in range(80):
             QApplication.processEvents()
 
-        assert [o.op for o in window.session.history.operations][-1] == "move_feature", (
-            "ohne die Operation prüft der Rest nichts"
+        assert [o.op for o in window.session.history.operations] == vorher, (
+            "der Zug ist ein Vorschlag, kein Schritt"
         )
+        assert window.viewport.move_proposal_waits(), "und er wartet auf sein Übernehmen"
+        assert erster.active and window.viewport._gizmo is not None, (
+            "Platzierung und Griff bleiben stehen"
+        )
+        shift = window.viewport._grip_shift
+        assert shift != (0.0, 0.0, 0.0), "der Griff steht an der neuen Stelle"
+        armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
+        assert armed is not None and armed.op == "move_feature", (
+            "*Merkmal verschieben* steht scharf"
+        )
+        traeger = window._quiet_host.values()
+        assert (traeger["x"], traeger["y"]) == pytest.approx(
+            (centre[0] + shift[0], centre[1] + shift[1]), abs=0.05
+        ), "die Maßlinien zeigen die neue Stelle"
+
+        window.feature_panel._apply.click()
+        window.session.wait_for_idle()
+        for _ in range(120):
+            QApplication.processEvents()
+        assert [o.op for o in window.session.history.operations] == [*vorher, "move_feature"], (
+            "der Knopf rechts macht den Schritt"
+        )
+        moved = window.viewport._features_of_selection()[hole]
+        assert moved.params["centre"] == pytest.approx(
+            (centre[0] + shift[0], centre[1] + shift[1], centre[2]), abs=0.05
+        )
+        assert not window.viewport.move_proposal_waits(), "der Vorschlag ist eingelöst"
         danach = window._quiet_placement
-        assert danach is None, "die Geste räumt die alte Platzierung ab"
-        assert not erster.active, "sie zeigt keine Zahlen von vorher mehr"
-        # **Und der Weg zurück steht sofort offen** — der Knopf im
-        # Merkmalfenster, an demselben Merkmal, das jetzt woanders sitzt.
-        frisch = _measures_in_the_view(window)
-        assert frisch is not None and frisch.active, "die Maße kommen auf Knopfdruck wieder"
-        assert frisch is not erster, "und zwar in einer frischen Platzierung"
+        assert danach is not None and danach.active and danach is not erster, (
+            "und die Maße stehen danach wieder — in einer frischen Platzierung"
+        )
+        assert window.viewport._gizmo is not None, "mit dem Griff an der neuen Stelle"
     finally:
+        window.end_quiet_placement()
         for open_dialog in window.findChildren(OperationDialog):
             open_dialog.reject()
         QApplication.processEvents()
@@ -1847,5 +2065,435 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
         window.end_quiet_placement()
         for dialog in window.findChildren(OperationDialog):
             dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def _a_selected_plate(window, *, face_normal: tuple[float, float, float] | None = None):
+    """Öffnet die Platte und wählt sie — oder eine ihrer Flächen nach Normale."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    window.object_tree.select_object(object_id)
+    if face_normal is not None:
+        face = next(
+            identifier
+            for identifier, feature in entry.features.items()
+            if feature.kind == "face"
+            and all(
+                abs(float(a) - b) < 0.1
+                for a, b in zip(feature.params["normal"], face_normal, strict=True)
+            )
+        )
+        window.object_tree.select_feature(object_id, face)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    return object_id, entry
+
+
+def _a_part_placement(window, name: str):
+    """Öffnet den Dialog eines Bausteins und wartet, bis seine Platzierung sitzt."""
+    import time
+
+    window.run_operation(REGISTRY.get(name))
+    for _ in range(20):
+        QApplication.processEvents()
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.spec.name == name
+    flow = dialog.placement_flow
+    assert flow is not None and flow.active, "ein Baustein geht von selbst in die Platzierung"
+    for _ in range(300):
+        QApplication.processEvents()
+        window.session.wait_for_idle()
+        if flow._surface is not None and flow._tool is not None:
+            break
+        time.sleep(0.02)
+    for _ in range(20):
+        QApplication.processEvents()
+    return dialog, flow
+
+
+def test_a_part_sits_on_the_top_face_at_once_and_carries_a_grip(qt_app: QApplication) -> None:
+    """Ein Baustein an einem gewählten Körper steht sofort im Bild — mit Griff.
+
+    Bis zum 11.09.2026 zeigte die Platzierung ihn erst unter dem Zeiger über
+    einer Fläche; mit gewähltem Körper und der Maus daneben stand nichts im
+    Bild, und *Übernehmen* schrieb einen roten Schritt ohne Position (Robert:
+    „im viewport gab es weder vorschau, noch das gizmo dazu"). Jetzt sitzt er
+    auf der größten Fläche, die nach oben zeigt — der Oberseite —, die Felder
+    tragen die Stelle, und am Körper hängt der Bewegungsgriff.
+
+    **Gemessen über alle 24 einsetzbaren Bausteine** (Sonde, 11.09.2026):
+    jeder saß auf (0 | 0 | 8) mit Griff. Hier steht einer davon stellvertretend
+    — die Regel liegt im Fluss, nicht im Baustein.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _object_id, entry = _a_selected_plate(window)
+        top = float(entry.mesh.bounds.maximum[2])
+        dialog, flow = _a_part_placement(window, "insert_wall_mount")
+
+        assert flow._surface is not None, "die Stelle steht ohne Klick"
+        assert flow._surface.point[2] == pytest.approx(top, abs=0.01), "auf der Oberseite"
+        assert flow._frozen and flow._seated_by_default
+        values = dialog.values()
+        assert (values["x"], values["y"], values["z"]) == pytest.approx(
+            (0.0, 0.0, top), abs=0.05
+        ), "die Felder kennen die Stelle — Übernehmen schreibt keinen roten Schritt mehr"
+        assert flow._tool is not None and flow._tool.visible(), "der Körper steht im Bild"
+        assert window.viewport._placement_grip is not None, "und der Griff daran"
+        assert window.viewport._gizmo is None, "kein zweiter Griff der Auswahl darunter"
+        assert "Klick: umsetzen" in flow._note.text(), (
+            "der Satz sagt, was hier anders ist: Griff verschiebt, Klick setzt um"
+        )
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_part_sits_on_the_selected_face_and_the_selection_grip_comes_back(
+    qt_app: QApplication,
+) -> None:
+    """Ist eine Fläche gewählt, sitzt der Baustein auf ihr — nicht auf der Oberseite.
+
+    Und der Griff der Auswahl, der an der Fläche stand, geht, solange der
+    Griff am Baustein steht: Beide säßen an derselben Stelle. Nach Escape
+    kommt er zurück.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_plate(window, face_normal=(0.0, -1.0, 0.0))
+        window.viewport.set_gizmo(True)
+        QApplication.processEvents()
+        assert window.viewport._gizmo is not None, "an der gewählten Fläche steht der Griff"
+
+        _dialog, flow = _a_part_placement(window, "insert_foot")
+        assert flow._surface is not None
+        assert flow._surface.point[1] == pytest.approx(-25.0, abs=0.01), "auf der Vorderseite"
+        assert window.viewport._placement_grip is not None
+        assert window.viewport._gizmo is None, "der Griff der Auswahl weicht dem am Baustein"
+
+        flow.back()
+        QApplication.processEvents()
+        assert window.viewport._placement_grip is None, "Escape nimmt den Griff am Baustein"
+        assert window.viewport._gizmo is not None, "und der Griff der Auswahl steht wieder"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_the_part_grip_moves_the_place_and_a_click_replaces_before_it_applies(
+    qt_app: QApplication,
+) -> None:
+    """Der Zug am Griff setzt den Baustein um; ein Klick setzt um, statt zu übernehmen.
+
+    Der Griff liefert die Matrix des Körpers nach dem Zug; ihre Verschiebung
+    ist die neue Stelle, und Felder und Maßlinien folgen (``move_to``). Ein Zug
+    neben die Fläche lässt alles stehen. **Ein Klick bestätigt eine Stelle
+    nicht, die niemand gewählt hat**: Nach dem Sitz von selbst setzt er um —
+    erst der Klick danach übernimmt, wie nach jeder geklickten Platzierung.
+    """
+    import time
+
+    import numpy as np
+
+    from app.ui.render.api import Pick, PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, entry = _a_selected_plate(window)
+        top = float(entry.mesh.bounds.maximum[2])
+        dialog, flow = _a_part_placement(window, "insert_wall_mount")
+        grip = window.viewport._placement_grip
+        assert grip is not None
+
+        matrix = np.asarray(grip.target.matrix(), dtype=float).copy()
+        matrix[:3, 3] += (10.0, 5.0, 0.0)
+        window.viewport._on_placement_grip_released(matrix)
+        QApplication.processEvents()
+        assert flow._surface is not None
+        assert flow._surface.point[:2] == pytest.approx((10.0, 5.0), abs=0.05), "der Zug setzt um"
+        values = dialog.values()
+        assert (values["x"], values["y"]) == pytest.approx((10.0, 5.0), abs=0.05), (
+            "die Felder folgen"
+        )
+        assert window.viewport._placement_grip is not grip, "der Griff hängt frisch am neuen Ort"
+
+        matrix = np.asarray(window.viewport._placement_grip.target.matrix(), dtype=float).copy()
+        matrix[:3, 3] += (500.0, 0.0, 0.0)
+        window.viewport._on_placement_grip_released(matrix)
+        QApplication.processEvents()
+        assert flow._surface.point[:2] == pytest.approx((10.0, 5.0), abs=0.05), (
+            "neben der Fläche bleibt alles stehen"
+        )
+
+        # Ein Klick auf die Platte: setzt um, kein Schritt.
+        steps = len(window.session.history.operations)
+        renderer = window.viewport.renderer
+        hit = (-20.0, -10.0, top)
+        x, y, _depth = renderer.world_to_display(hit)
+        x, y = round(x), round(y)
+        cell = int(np.argmax(np.asarray(entry.mesh.raw.face_normals)[:, 2]))
+        renderer.picks[(x, y)] = Pick(hit, window.viewport._actors[object_id], cell)
+        for event in (
+            PointerEvent("move", x, y),
+            PointerEvent("press", x, y, button="left"),
+            PointerEvent("release", x, y, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+        for _ in range(200):
+            # Der Klick geht über den Zeitgeber des Flusses — der braucht Zeit.
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+            if flow._surface is not None and abs(flow._surface.point[0] + 20.0) < 0.5:
+                break
+            time.sleep(0.02)
+        assert flow._surface is not None
+        assert flow._surface.point[:2] == pytest.approx((-20.0, -10.0), abs=0.05), (
+            "der erste Klick setzt um"
+        )
+        assert len(window.session.history.operations) == steps, "und übernimmt nicht"
+        assert not flow._seated_by_default, "ab jetzt hat jemand geklickt"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def _a_pulled_slot(window):
+    """Bohrung gewählt, Maße im Bild, Langloch auf 18 gezogen — der wartende Zug."""
+    from app.ui.render.api import PointerEvent
+
+    _, hole = _a_selected_hole(window)
+    flow = _measures_in_the_view(window)
+    assert flow is not None and flow.active
+    for _ in range(200):
+        QApplication.processEvents()
+        window.session.wait_for_idle()
+        if flow._tool_context is not None:
+            break
+    handle = window.viewport._slot_handle
+    assert handle is not None
+    renderer = window.viewport.renderer
+    seat = renderer.world_to_display(handle.knob_seats[0])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[0]
+    for event in (
+        PointerEvent("move", x, y),
+        PointerEvent("press", x, y, button="left"),
+        PointerEvent("move", x + 12, y, buttons=frozenset({"left"})),
+        PointerEvent("release", x + 12, y, button="left"),
+    ):
+        window.viewport._on_pointer(event)
+    QApplication.processEvents()
+    assert window.viewport.slot_drag_waits()
+    return hole, flow
+
+
+def _span_of(item) -> tuple[float, float]:
+    import numpy as np
+
+    points = np.asarray(item.points, dtype=float)
+    extent = points.max(axis=0) - points.min(axis=0)
+    return float(extent[0]), float(extent[1])
+
+
+def test_the_ring_about_the_axis_turns_the_slot_and_its_mark(qt_app: QApplication) -> None:
+    """Der Ring um die Bohrachse dreht das Langloch — Marke und Griff drehen mit.
+
+    Bis zum 11.09.2026 drehte der Ring nur die Griffscheibe; Umriss, Knöpfe
+    und Marke blieben stehen, und das Loslassen schlug *Merkmal drehen* vor —
+    eine Kippung der Achse, die niemand gemeint hat (Robert: „bei gizmo vom
+    langloch dreht sich die vorschau vom langloch noch nicht"). Jetzt ist der
+    Ring um die Achse dasselbe wie ein Zug an den Knöpfen: Während des Zugs
+    folgen Griff und Marke, das Loslassen ist ein Vorschlag für *Zum Langloch
+    ziehen*, und die Felder rechts tragen die neue Richtung.
+    """
+    from app.core.geom.transform import rotation_about
+
+    window = _window_with_a_renderer()
+    try:
+        _hole, _flow = _a_pulled_slot(window)
+        handle = window.viewport._slot_handle
+        assert handle is not None and handle.angle == pytest.approx(0.0)
+        mark = window.viewport._shape_actor
+        assert mark is not None
+        along, across = _span_of(mark)
+        assert along == pytest.approx(handle.length, abs=0.05) and across < along
+
+        gizmo = window.viewport._gizmo
+        assert gizmo is not None
+        turn = rotation_about((0.0, 0.0, 1.0), gizmo.origin, 30.0)
+        window.viewport._on_gizmo_interacted(turn)
+        assert handle.angle == pytest.approx(30.0), "der Griff dreht mit dem Ring"
+        turned = window.viewport._shape_actor
+        assert turned is not None
+        x_now, y_now = _span_of(turned)
+        assert x_now < along - 1.0 and y_now > across + 1.0, "und die Marke dreht mit"
+
+        window.viewport._on_gizmo_released(turn)
+        QApplication.processEvents()
+        assert window.viewport.slot_drag_waits(), "der Langlochzug wartet weiter"
+        assert window.viewport._slot_waiting is not None
+        assert window.viewport._slot_waiting[1] == pytest.approx(30.0), "mit der neuen Richtung"
+        armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
+        assert armed is not None and armed.op == "slot_hole", (
+            "ein Vorschlag für Zum Langloch ziehen"
+        )
+        again = window.viewport._slot_handle
+        assert again is not None and again.angle == pytest.approx(30.0)
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_click_on_the_model_keeps_the_measures_and_a_click_beside_leaves(
+    qt_app: QApplication,
+) -> None:
+    """Solange der Klick auf dem Modell liegt, bleiben die Maße im Bild.
+
+    Wer am Griff ansetzt und den Pfeil verfehlt, trifft die Fläche daneben —
+    bis zum 11.09.2026 wählte das die Fläche und beendete die Platzierung samt
+    allem, was darin wartete (Robert: „wenn ich leicht daneben klicke bin ich
+    draußen, solange der klick auf dem modell ist sollte das nicht
+    passieren"). Der Klick ins Leere bleibt der Weg heraus — neben Escape und
+    *Abbrechen* —, und er verwirft, was wartete.
+    """
+    import numpy as np
+
+    from app.ui.render.api import Pick
+
+    window = _window_with_a_renderer()
+    try:
+        hole, flow = _a_pulled_slot(window)
+        renderer = window.viewport.renderer
+        object_id = window.object_tree.selected()
+        assert object_id is not None
+        entry = window.session.last_result.scene.objects[object_id]
+        feature = entry.features[hole]
+        centre = feature.params["centre"]
+        hit = (float(centre[0]) + 8.0, float(centre[1]) + 6.0, float(entry.mesh.bounds.maximum[2]))
+        x, y, _depth = renderer.world_to_display(hit)
+        x, y = round(x), round(y)
+        cell = int(np.argmax(np.asarray(entry.mesh.raw.face_normals)[:, 2]))
+        renderer.picks[(x, y)] = Pick(hit, window.viewport._actors[object_id], cell)
+
+        window.viewport._on_left_click(x, y)
+        QApplication.processEvents()
+        assert flow.active, "der Klick auf das Modell lässt die Maße stehen"
+        assert window.viewport._selected_feature == hole, "und die Auswahl"
+        assert window.viewport.slot_drag_waits(), "und den wartenden Zug"
+
+        window.viewport._on_left_click(5, 5)
+        QApplication.processEvents()
+        assert not flow.active, "der Klick ins Leere führt heraus"
+        assert not window.viewport.slot_drag_waits(), "und verwirft, was wartete"
+        assert window.viewport._selected_feature is None
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
+    """*Abbrechen* unter *Übernehmen*: da, solange die Maße im Bild stehen, und es verwirft.
+
+    Escape tut dasselbe, aber ein Knopf steht da, wo der Blick ist (Robert,
+    11.09.2026: „unter dem übernehmen rechts sollte auch noch abbrechen
+    stehen"). Ohne Maße im Bild steht er nicht — er verwürfe nichts.
+    """
+    window = _window_with_a_renderer()
+    try:
+        panel = window.feature_panel
+        _, _hole = _a_selected_hole(window)
+        assert not panel._cancel.isVisibleTo(panel), "ohne Maße im Bild kein Abbrechen"
+        hole, flow = _a_pulled_slot(window)
+        assert panel._cancel.isVisibleTo(panel), "mit Maßen im Bild steht er unter Übernehmen"
+        assert panel._apply.isVisibleTo(panel)
+        steps = len(window.session.history.operations)
+
+        panel._cancel.click()
+        QApplication.processEvents()
+        assert not flow.active, "die Maße im Bild sind zu"
+        assert not window.viewport.slot_drag_waits(), "der Zug ist verworfen"
+        assert len(window.session.history.operations) == steps, "und gerechnet ist nichts"
+        assert window.viewport._selected_feature == hole, "die Auswahl bleibt"
+        assert not panel._cancel.isVisibleTo(panel), "der Knopf geht mit den Maßen"
+        assert panel._in_view.isVisibleTo(panel), "der Weg zurück ins Bild steht"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
+    qt_app: QApplication,
+) -> None:
+    """Wer das gewählte Loch anfasst und zieht, zieht es zum Langloch — nicht den Körper.
+
+    Die Knöpfe kommen mit *Im Bild einstellen*; wer vorher am Loch zog, zog den
+    ganzen Körper — im ``solidon``-Schema führt die linke Taste das gewählte
+    Teil (Robert, 11.09.2026: „wenn ich jetzt eine bohrung an einer ecke zum
+    langloch ziehen will verschiebe ich immer den körper"). Jetzt baut der
+    Druck auf das Loch den Griff für diesen Zug, der Zug rechnet wie am Knopf,
+    und das Loslassen holt die Maße ins Bild — Knöpfe, Umriss, Griff und der
+    Vorschlag rechts stehen wie nach dem Knopf. Daneben bleibt es beim Körper.
+    """
+    import numpy as np
+
+    from app.ui.render.api import Pick, PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        assert window._quiet_placement is None, "ohne Knopf keine Platzierung"
+        assert window.viewport._slot_handle is None, "und keine Knöpfe"
+        entry = window.session.last_result.scene.objects[object_id]
+        feature = entry.features[hole]
+        centre = feature.params["centre"]
+        top = (float(centre[0]), float(centre[1]), float(entry.mesh.bounds.maximum[2]))
+        renderer = window.viewport.renderer
+        x, y, _depth = renderer.world_to_display(top)
+        x, y = round(x), round(y)
+        # Der Druck landet auf einem Dreieck der Bohrung — so findet
+        # ``_feature_at`` das Loch, nicht die Fläche daneben.
+        cell = int(feature.face_indices[0])
+        renderer.picks[(x, y)] = Pick(top, window.viewport._actors[object_id], cell)
+        steps = len(window.session.history.operations)
+
+        for event in (
+            PointerEvent("move", x, y),
+            PointerEvent("press", x, y, button="left"),
+            PointerEvent("move", x + 14, y + 4, buttons=frozenset({"left"})),
+            PointerEvent("release", x + 14, y + 4, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+            QApplication.processEvents()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+
+        assert len(window.session.history.operations) == steps, "kein Schritt — der Körper steht"
+        assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
+        handle = window.viewport._slot_handle
+        assert handle is not None and handle.length > feature.params["diameter"], "gezogen"
+        assert handle._outline is not None, "mit Umriss"
+        flow = window._quiet_placement
+        assert flow is not None and flow.active, "und die Maße sind im Bild — wie nach dem Knopf"
+        armed = window.feature_panel._runs.get(window.feature_panel._armed or "")
+        assert armed is not None and armed.op == "slot_hole", "rechts wartet der Vorschlag"
+        assert np.allclose(window.viewport._actors[object_id].matrix(), np.eye(4)), (
+            "der Körper ist nicht verschoben"
+        )
+    finally:
+        window.end_quiet_placement()
         QApplication.processEvents()
         window.release()

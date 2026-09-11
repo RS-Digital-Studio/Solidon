@@ -5983,11 +5983,17 @@ def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) ->
 
     # **Und das Loslassen** meldet die Merkmalsbewegung statt einer am Objekt.
     versetzt: list[str] = []
+    vorgeschlagen: list[str] = []
     am_teil: list[Any] = []
     viewport.featureMoved.connect(lambda fid, _ziel: versetzt.append(fid))
+    viewport.featureMoveProposed.connect(lambda fid, _ziel: vorgeschlagen.append(fid))
     viewport.transformDragged.connect(am_teil.append)
     viewport._on_gizmo_released(versatz)
-    assert versetzt == ["hole_1"], "das Loslassen hat das Merkmal nicht gemeldet"
+    # **Ein Vorschlag, kein Schritt** — die Platzierung läuft (der Griff kommt
+    # seit dem 11.09.2026 mit ihr), und alles im Bild wartet auf das
+    # Übernehmen rechts, wie am Langlochgriff.
+    assert vorgeschlagen == ["hole_1"], "das Loslassen hat das Merkmal nicht gemeldet"
+    assert not versetzt, "und keinen Schritt daraus gemacht"
     assert not am_teil, "und schon gar nicht das ganze Teil"
 
 

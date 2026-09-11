@@ -50,6 +50,8 @@ Nutzen da und sonst nichts.
 - Ragt ein Langloch an einem Ende über die Kante, sagt Solidon es — auch wenn seine Mitte tief im Material sitzt.
 - Ein Langloch steht im Objektbaum als Langloch, mit Breite und Länge — auch in einem Modell, das Sie geöffnet haben und das jemand anders gezeichnet hat.
 - Ein vorhandenes Langloch ziehen Sie nachträglich länger; seine Richtung bleibt dabei, wo sie war.
+- Eine gewählte Bohrung oder ein Langloch stellen Sie mit „Im Bild einstellen“ direkt im Bild ein: ein Griff zum Versetzen und Drehen, Knöpfe zum Ziehen, Maßlinien zu Kanten und Mitten.
+- Erst „Übernehmen“ rechts macht daraus einen Schritt, Escape verwirft. Ein gezogenes Langloch zeigt dabei seine Länge und behält seine Form, wenn Sie es am Griff versetzen.
 
 ### Erkennen
 
@@ -61,6 +63,21 @@ Nutzen da und sonst nichts.
 - Für eine Beschriftung stehen acht Schriften zur Wahl statt drei — dazu Fett und Kursiv. Fett trägt bei gleicher Höhe dickere Striche und bleibt lesbar, wo der normale Schnitt verschmiert.
 - Neben den geraden Schriften liegen jetzt eine runde und eine geschriebene bei — die beiden gibt es nur in einem Schnitt. Alle acht reisen mit dem Programm, ein Projekt sieht überall gleich aus.
 - Ist eine Schrift für Ihre Düse zu fein, sagt Solidon, ab welcher Höhe sie trägt — statt sie zu drucken und zulaufen zu lassen.
+
+### Bausteine und Passungen
+
+- Ein Baustein aus dem Katalog steht sofort im Bild: auf der gewählten Fläche oder oben auf dem Körper, mit Maßlinien und Griff. Ein Klick setzt ihn um, „Übernehmen“ fügt ihn ein.
+
+### Ansicht und Bedienung
+
+- Die Handlungen an einem gewählten Körper oder Merkmal stehen rechts an einem Ort, in Gruppen zum Zuklappen, mit Suchfeld. Die Menüs Objekt, Ändern und Vorbereiten sind dafür weg; Kürzel gelten weiter.
+- Der Rechtsklick auf Körper oder Fläche zeigt nur noch, was es dort allein gibt: den Schritt dahinter, die Skizze auf der Fläche, das Ausblenden. Der Knopf „Bausteine“ steht in Akzentfarbe.
+
+### Druckbett und Übergabe
+
+- Passt ein Körper aus losen Teilen — etwa ein Schriftzug — als Ganzes auf kein Bett, bietet der Prüfbericht an, ihn zu zerlegen und gleich auszurichten: ein Klick, und die Teile liegen auf den Platten.
+- „Im Slicer öffnen“ gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte.
+- Der Prüfbericht nennt bei Zerlegung, Beschriftung und Textur die Zahl im Satz, wo vorher ein Platzhalter in Klammern stand.
 
 ## 0.4.0
 

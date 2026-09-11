@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-11 | [Ein Ort für die Handlungen an einer Auswahl (11.09.2026)](#ein-ort-für-die-handlungen-an-einer-auswahl-11092026) |
 | 2026-09-10 | [Drei Befunde an einem Kundenmodell (10.09.2026)](#drei-befunde-an-einem-kundenmodell-10092026) |
 | 2026-09-09 | [RM-027 entfällt mit dem privaten Index (09.09.2026)](#rm-027-entfällt-mit-dem-privaten-index-09092026) |
 | 2026-09-08 | [Filamentlager — Review und vollständiger Anschluss (08.09.2026)](#filamentlager--review-und-vollständiger-anschluss-08092026) |
@@ -26618,3 +26619,80 @@ erkennbare Art mehr, in zwei Tests); der Rest steht als Lesehilfe in
 `perceive.freeform` sagt weiterhin „Dieses Modell ist eine Freiform, etwa ein
 Scan" — an einem konstruierten Halter eine Aussage über die Herkunft, die
 niemand geprüft hat. Der Punkt steht als RM-151 im Register.
+
+## Ein Ort für die Handlungen an einer Auswahl (11.09.2026)
+
+Robert setzte über *Bausteine* an einem gewählten Körper einen Wandhalter:
+kein Körper im Bild, kein Griff, und *Übernehmen* schrieb einen roten Schritt
+(„Es ist auch keine Position eingetragen"). Die Sonde über alle 27 Bausteine
+zeigte dasselbe Bild an allen 24 einsetzbaren — die Platzierung startete zwar
+von selbst, zeigte den Körper aber erst unter dem Zeiger über einer Fläche.
+Seit diesem Tag sitzt der Baustein sofort auf der gewählten oder der obersten
+Fläche, mit Griff (RM-157).
+
+Dazu die Aufräumentscheidung, drei Fragen an Robert, drei Antworten: Die Menüs
+*Objekt*, *Ändern* und *Vorbereiten* fallen — ihre Einträge stehen rechts in
+der Karte —, *Bausteine* wird ein Abschnitt von *Erzeugen*; das Kontextmenü
+behält nur Schritt, Skizze und Sichtbarkeit; der Chat sagt „Ort: Handlungen
+rechts (bei gewähltem Körper) → …".
+
+**Was damit Geschichte ist, und gemessen war:** Das Kontextmenü an einer
+Fläche hatte vier Zusagen zu erfüllen, die sich gegenseitig ausschlossen —
+§40 (jede Operation steht im Kontextmenü), §35 (höchstens zwölf Zeilen),
+Roberts Klick (ein Klick vom gewählten Teil zum Katalog) und §18.5 (am Merkmal
+steht alles direkt). Zusammen ergaben sie vierzehn Zeilen; drei Fassungen
+waren durchgemessen, jede brach genau eine (Katalog ersetzt die Gruppe: die
+Deckel fehlen; Deckel daneben: vierzehn Zeilen; Deckel mitfalten: die Bohrung
+eine Ebene tiefer). `folded_groups` faltete deshalb die hinterste Gruppe, die
+allein genügt, `KEEP_VISIBLE` schützte *Bohrungen* und *Färben*, und an der
+Bohrung nahm `HANDLE_INSTEAD` die neunte Zeile dem Griff zuliebe heraus. Mit
+dem Kontextmenü ohne Operationen ist die Rechnung gegenstandslos; was davon
+bleibt, ist `folded_categories` für die Leiste und `HANDLE_INSTEAD` für den
+Doppelklick im Baum.
+
+Und ein eigener Fehler auf dem Weg: Ein Katalogskript brach an einer
+Zusicherung ab, bevor es schrieb — und ein `git checkout -- app/i18n/locales/`
+„zum Aufräumen" warf drei frühere Katalogänderungen derselben Sitzung weg.
+Wiederhergestellt aus den Skripten. Die Hausregel „niemals reverten" gilt auch
+gegen den eigenen Reflex.
+
+**Am Abend desselben Tages, aus Roberts Fenster:** Ein Schriftzug *Solidon3D*
+in 200 mm Comfortaa — einen Meter breit, elf lose Buchstaben — hielt
+*Druckoptimal ausrichten* mit „Keine geprüfte Lage passt" an, und die zwei
+Knöpfe hießen Teilen und anderer Drucker. Die Operation darf ihn nicht selbst
+zerlegen: §15.2 legt die Ausgänge beim Planen fest, und ein erster Versuch,
+in der Op je Stück ein Objekt zu liefern, endete genau dort
+(`evaluate.object_count`). Der regelkonforme Weg ist Regel 17: Die Absage
+zählt die losen Teile wie `split_bodies`, prüft jedes für sich auf eine
+passende Lage und nennt „In Einzelteile zerlegen und erneut versuchen" als
+ersten Vorschlag; `History.split_and_retry` setzt die Zerlegung vor den
+angehaltenen Schritt und plant den Suffix mit den Teilen dort, wo der Körper
+stand — dasselbe Muster wie die Reparatur, beide über `_retried_after`.
+Gemessen: ein Klick, elf Buchstaben auf sechs Platten, ein Undo zurück.
+Roberts eigentliche Erwartung — ein Objekt, dessen lose Teile sich auf
+Platten verteilen — bräuchte eine Platte je losem Teil im Modell
+(`SceneObject.plate` ist eine je Objekt, dreizehn Dateien lesen sie so);
+vorgeschlagen, nicht beauftragt: Er hatte den Schriftzug längst selbst
+zerlegt, und mit neun Körpern ordnete das Ausrichten auf vier Platten.
+
+Sein Bildschirmfoto zeigte zwei weitere Fehler. Im Prüfbericht stand
+„{count} weitere Teile blieben im letzten Objekt beieinander" mit den
+geschweiften Klammern: Einen Befund formatiert niemand nach, und der Wächter
+in `test_errors.py` sah nur `detail` und `title`, nicht `message` — sechs
+Stellen in vier Modulen (Zerlegung, Beschriftung, Textur, Baustein,
+Slicer-Übergabe), alle jetzt über den Übersetzer gefüllt (`_(…, count=…)`),
+`fell_apart` nimmt den Satz als Funktion der Teilezahl. Und die Zeile nannte
+das erste Objekt, wo die übrigen Teile im letzten liegen: Die Kennung des
+Ausgangskörpers erbt das größte Teil, der Befund nennt jetzt den Namen des
+letzten und die Auswertung löst ihn auf. Dazu die Übergabe: „Im Slicer
+öffnen" schrieb je Platte eine Datei und öffnete je Datei ein Fenster — vier
+Starts des ElegooSlicers auf einmal rissen sich um die Filamentbibliothek,
+bis einer mit „remove_all: Zugriff verweigert" abbrach. Die Orca-Familie
+bekommt jetzt alle gewählten Platten in einer Projektdatei
+(`knows_plates`; dieselbe Datei, die der Export für mehrere Platten längst
+schreibt), PrusaSlicer und Cura weiter je eine.
+
+Nicht nachgestellt: Auf seinem Bildschirm überlappte der Plattenwähler „Alle
+Platten" den Druckernamen in der Kopfzeile. Offscreen bei sechs Breiten
+zwischen 1400 und 2600 Pixeln liegen die Zellen sauber nebeneinander; der
+Fall braucht sein Fenster.

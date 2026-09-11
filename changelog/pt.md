@@ -25,6 +25,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um rasgo ultrapassar a aresta numa das pontas, o Solidon avisa, mesmo quando o seu centro está bem dentro do material.
 - Um rasgo consta na árvore de objetos como rasgo, com a sua largura e o seu comprimento — também num modelo que abriu e que outra pessoa desenhou.
 - Um rasgo existente pode ser esticado depois, e a sua direção mantém-se onde estava.
+- Um furo ou um rasgo selecionado ajusta-se diretamente na vista com «Ajustar na vista»: uma pega para deslocar e rodar, botões para esticar, cotas a arestas e centros.
+- Só «Aplicar», à direita, faz disso um passo; Escape descarta. Um rasgo esticado mostra o seu comprimento e mantém a sua forma quando o desloca pela pega.
 
 ### Reconhecimento
 
@@ -36,6 +38,21 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma inscrição pode usar agora oito tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura e continua legível onde o estilo normal borra.
 - Ao lado dos tipos de letra direitos há agora um redondo e um manuscrito, ambos num só estilo. Os oito viajam com o programa, por isso um projeto fica igual em todo o lado.
 - Se um tipo de letra for demasiado fino para o seu bico, o Solidon diz a partir de que altura aguenta, em vez de o imprimir e deixar as letras empastarem.
+
+### Blocos e ajustes
+
+- Um bloco do catálogo aparece logo na vista: na face selecionada ou em cima do corpo, com cotas e pega. Um clique coloca-o noutro sítio, «Aplicar» insere-o.
+
+### Vista e utilização
+
+- As ações para um corpo ou característica selecionados estão à direita, em grupos que se fecham, com pesquisa. Os menus Objeto, Modificar e Preparar desapareceram; os atalhos continuam.
+- O clique direito num corpo ou numa face mostra apenas o que só existe aí: o passo por trás, o esboço na face, o ocultar. O botão «Blocos» está em cor de destaque.
+
+### Mesa de impressão e entrega
+
+- Se um corpo feito de peças soltas — um letreiro, por exemplo — não cabe inteiro em nenhuma mesa, o relatório propõe separá-lo e orientá-lo logo: um clique e as peças ficam nas mesas.
+- «Abrir no slicer» entrega ao ElegooSlicer, Orca e Bambu Studio todas as mesas num único ficheiro — uma janela em vez de uma por mesa.
+- Na separação, no letreiro e na textura o relatório indica o número na frase, onde antes estava um marcador entre chavetas.
 
 ## 0.4.0
 

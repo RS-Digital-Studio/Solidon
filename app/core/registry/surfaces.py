@@ -33,6 +33,7 @@ from app.core.registry.registry import (
     OperationSpec,
     Registry,
     group_title,
+    in_the_menu_bar,
     variant_members,
 )
 from app.core.types import ParamSpec
@@ -230,9 +231,11 @@ def folded_groups(
     genau **eine** Zeile, und die Rechnung nahm sie sich dort: Gemessen am
     gebauten Fenster stand „Filament auf eine Fläche" danach im Untermenü, unter einem
     Wort, unter dem niemand Farbe sucht. Entscheidung Robert: Die häufige
-    Geste bleibt oben, das Seltenere wandert. Wer die Gruppen bestimmt, ist
-    :func:`groups_to_keep` — über die **Kategorie** und nicht über den
-    Titel, denn der ist übersetzt.
+    Geste bleibt oben, das Seltenere wandert. Der Aufrufer nennt die Gruppen
+    über die **Kategorie** und nicht über den Titel, denn der ist übersetzt —
+    :func:`folded_categories` hält so *Bohrungen* in der Leiste; das
+    Kontextmenü, das hier einmal ``groups_to_keep`` beisteuerte, trägt seit dem
+    11.09.2026 keine Operationen mehr.
 
     **Und die einzige Gruppe wird nie gefaltet**, gleich wie lang sie ist.
     Bliebe sonst ein Menü, das aus einem einzigen Untermenü besteht: ein Klick
@@ -399,6 +402,15 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         # Ebenen wird — die Leiste faltet höchstens eine Ebene, tiefer *kann*
         # keiner sein.
         return _catalogue_path(spec)
+    if not in_the_menu_bar(spec.category):
+        # **Was einer Auswahl gilt, steht rechts im Fenster** — seit dem
+        # 11.09.2026 nicht mehr in der Leiste. Der Weg nennt den Ort und die
+        # Auswahl, die es braucht: Ohne gewählten Körper steht dort nichts,
+        # und ein Wegweiser, der das verschweigt, schickt zu einer leeren
+        # Karte. Die Gruppe steht nicht dabei: Rechts sind die Gruppen
+        # Abschnitte einer Liste mit Suchfeld, und der Titel ist es, was man
+        # dort sucht.
+        return f"{_panel_place(spec)} → {spec.title}"
     steps = [group_title(spec.category)]
 
     # **Je Kategorie gefragt, nicht je Gruppe.** ``group_is_flat`` beantwortet
@@ -423,6 +435,14 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
 
     steps.append(str(spec.title))
     return " → ".join(steps)
+
+
+def _panel_place(spec: OperationSpec) -> str:
+    """Der Ort einer Handlung rechts im Fenster, mit der Auswahl, die sie braucht."""
+    if spec.applies_to:
+        kinds = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to if kind)
+        return f"{_('Handlungen rechts')} ({_('bei gewähltem Merkmal')}: {kinds})"
+    return f"{_('Handlungen rechts')} ({_('bei gewähltem Körper')})"
 
 
 def catalogue_operations() -> frozenset[str]:

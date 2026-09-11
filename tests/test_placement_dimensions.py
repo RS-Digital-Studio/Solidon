@@ -289,6 +289,66 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
         viewport.close()
 
 
+def test_the_dimension_lines_leave_the_movement_handle_alone(qt_app: QApplication) -> None:
+    """Auch die Linien weichen dem Griff — nicht nur die Felder.
+
+    Die Maßlinien laufen alle in der Mitte des Merkmals zusammen, und dort
+    sitzen Pfeile und Ringe: vier Linien mit Unterlage über dem Griff, und er
+    war weder zu sehen noch zu treffen (Robert, 11.09.2026: „das verschieben
+    ist auch schwer durch die maßlinien zu treffen/sehen"). Die Maßfläche
+    zeichnet nur, was ihre Maske freigibt; innerhalb der Griffspanne gibt sie
+    nichts frei — außer dem Umriss des Lochs, der dorthin gehört.
+
+    Die Gegenprobe steht wieder daneben: Ohne gemeldeten Griff liegt die Tinte
+    an derselben Stelle.
+    """
+    from PySide6.QtCore import QPoint
+
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 6.0, "bottom")
+    try:
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 6.0,
+            300 + (point[1] - 10) * 6.0,
+            0.5,
+        )
+        flow.redraw()
+        qt_app.processEvents()
+        canvas = flow._canvas
+        mitte = viewport.renderer.world_to_display((10.0, 10.0, 0.0))
+
+        def in_der_mitte(point: QPointF) -> bool:
+            return math.hypot(point.x() - mitte[0], point.y() - mitte[1]) < 2.0
+
+        # Die Maßlinie, die in der Mitte endet — und je ein Punkt nahe und fern.
+        linie = next(
+            ((s, e) if in_der_mitte(e) else (e, s))
+            for s, e in canvas.lines
+            if in_der_mitte(s) or in_der_mitte(e)
+        )
+        aussen, innen = linie
+
+        def dazwischen(anteil: float) -> QPoint:
+            return QPoint(
+                round(innen.x() + (aussen.x() - innen.x()) * anteil),
+                round(innen.y() + (aussen.y() - innen.y()) * anteil),
+            )
+
+        nahe, fern = dazwischen(0.1), dazwischen(0.9)
+        assert canvas.mask().contains(nahe), "ohne Griff zeichnet die Fläche bis in die Mitte"
+
+        viewport.handle = ((10.0, 10.0, 0.0), 5.0)
+        flow.redraw()
+        qt_app.processEvents()
+        assert canvas.clearing is not None
+        assert not canvas.mask().contains(nahe), "mit Griff bleibt seine Spanne frei von Linien"
+        assert canvas.mask().contains(fern), "die Linie selbst bleibt — nur der Griff wird frei"
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
 def test_a_stale_tool_context_hides_the_ghost_and_disables_accept(qt_app: QApplication) -> None:
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     try:

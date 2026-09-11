@@ -127,6 +127,34 @@ def cylinder(
     return np.vstack(vertices), np.vstack(faces).astype(np.int64)
 
 
+def prism(ring: Vec, direction: Vec, height: float) -> Mesh:
+    """Ein Prisma über einem konvexen Ring, ``height`` weit in ``direction``.
+
+    Der Ring ist die Grundfläche, wie :func:`polygon` ihn nimmt — ohne den
+    wiederholten Schlusspunkt. Die Vorschau eines Langlochs braucht ihn:
+    Ein Zylinder deckt nur einen Kreis, und ein Loch, das länger ist als
+    breit, sähe darunter aus wie eine Bohrung.
+    """
+    axis, _first, _second = _frame(direction)
+    bottom = np.asarray(ring, dtype=float).reshape(-1, 3)
+    count = len(bottom)
+    if count < 3:
+        return bottom, np.zeros((0, 3), dtype=np.int64)
+    top = bottom + axis * height
+    index = np.arange(count)
+    next_index = np.roll(index, -1)
+    fan = np.arange(1, count - 1)
+    faces = [
+        np.column_stack([index, next_index, next_index + count]),
+        np.column_stack([index, next_index + count, index + count]),
+        # Die Deckel als Fächer um den ersten Punkt — unten gegen die
+        # Richtung, oben mit ihr, damit alle Normalen nach außen zeigen.
+        np.column_stack([np.zeros(count - 2, dtype=np.int64), fan + 1, fan]),
+        np.column_stack([np.full(count - 2, count), fan + count, fan + count + 1]),
+    ]
+    return np.vstack([bottom, top]), np.vstack(faces).astype(np.int64)
+
+
 def cone(
     base_centre: Vec,
     direction: Vec,

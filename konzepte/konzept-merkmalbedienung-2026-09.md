@@ -151,6 +151,38 @@ ist. Umgesetzt in `viewport.set_gizmo` über den Zeiger der Platzierung
 (`placed_feature_kinds()` liest dieselbe Quelle wie der Knopf). Das Langloch
 trägt dabei beide Griffe, seit es versetzbar ist (RM-153).
 
+**Zweiter Nachtrag, derselbe Abend — der Zug am Griff ist ein Vorschlag.**
+Am gefahrenen Stand war der Zug am Pfeil sofort ein Schritt, und mit ihm
+endete die Platzierung: Griff und Maße weg, bevor jemand „Übernehmen" gelesen
+hatte (Robert: „nach dem verschieben verschwindet das gizmo gleich ohne auf
+übernehmen zu klicken"). Jetzt gilt am Bewegungsgriff, was §2.3 für den
+Langlochgriff festlegt: Der Zug landet in den Feldern rechts, der Griff
+bleibt an der neuen Stelle, die Maßlinien folgen, der eine Knopf übernimmt.
+Und §4, Abnahme 1 ist damit eingelöst: Nach dem Übernehmen kommen Maße und
+Griffe am Merkmal wieder — auch nach *Merkmal verschieben*, das die zweite
+Sitzung dort noch als „räumt die Platzierung ab" festgehalten hatte. Die
+Maßlinien sparen die Griffspanne aus (Robert: „schwer durch die maßlinien zu
+treffen/sehen").
+
+**Dritter Nachtrag, derselbe Abend — die Bausteine.** Am gefahrenen Stand
+zeigte die Platzierung einen Baustein erst unter dem Zeiger über einer
+Fläche: mit gewähltem Körper und der Maus daneben stand nichts im Bild, kein
+Griff, und *Übernehmen* im Dialog schrieb einen roten Schritt ohne Position
+(Robert: „im viewport gab es weder vorschau, noch das gizmo dazu, kontrolliere
+mal alle Bausteine darauf" — gemessen an allen 24 einsetzbaren, jeder gleich).
+Jetzt sitzt der Baustein sofort auf der gewählten oder der obersten Fläche,
+mit Körper, Maßlinien, Feldern und einem Bewegungsgriff am Körper; ein Klick
+setzt ihn um, der zweite übernimmt. Dazu: Der Knopf *Bausteine* ist ein
+Hauptknopf, und die Gruppen der Handlungsliste sind einklappbare Abschnitte
+(Robert: „monoton und dadurch unübersichtlich").
+
+**Vierter Nachtrag, derselbe Abend.** Der Ring um die Bohrachse dreht das
+Langloch samt Marke und wird ein Vorschlag für *Zum Langloch ziehen*; ein
+Klick auf das Modell verlässt die Maße nicht mehr (nur Escape, *Abbrechen*
+rechts unter *Übernehmen* und der Klick ins Leere führen heraus). Der Knopf
+*Abbrechen* ist neu (Robert: „unter dem übernehmen rechts sollte auch noch
+abbrechen stehen").
+
 ## §3 Die Pakete
 
 Jedes endet mit grünem Tor und einem Commit.

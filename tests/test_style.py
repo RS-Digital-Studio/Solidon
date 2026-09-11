@@ -1551,3 +1551,41 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
     assert not [knopf for knopf in ohne if knopf.isDefault()], (
         f"{ohne[0].text()!r} trägt den Akzent, obwohl es der einzige Ausgang ist"
     )
+
+
+def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None:
+    """Ein Knopf, der verwirft, trägt das Fehlerrot der Palette als Fläche.
+
+    *Abbrechen* steht unter *Übernehmen*, gleich breit — ohne eigene Farbe
+    sähe er aus wie dessen Zwilling (Robert, 11.09.2026: „das abbrechen mit
+    rotem hintergrund"). Gemessen am gezeichneten Knopf, nicht am Stylesheet:
+    Ein Selektor, den Qt nicht liest, färbt nichts. Die Schrift darauf muss
+    lesbar bleiben (§19.3), und das Wort ist die zweite Kodierung (Regel 18).
+    """
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QPushButton, QWidget
+
+    from app.ui.palette import ROLES, contrast_ratio, readable_on
+    from app.ui.style import make_danger
+    from app.ui.theme import apply_theme
+
+    for theme in ("dark", "light"):
+        apply_theme(qt_app, theme)
+        qt_app.setStyleSheet(stylesheet(theme, 10))
+        holder = QWidget()
+        button = make_danger(QPushButton("Abbrechen", holder))
+        button.resize(160, 40)
+        holder.resize(200, 60)
+        holder.show()
+        qt_app.processEvents()
+        image = button.grab().toImage()
+        seen = image.pixelColor(image.width() // 4, image.height() // 2)
+        wanted = QColor(ROLES["error"])
+        assert (seen.red(), seen.green(), seen.blue()) == (
+            wanted.red(),
+            wanted.green(),
+            wanted.blue(),
+        ), f"{theme}: der Knopf ist {seen.name()}, nicht {wanted.name()}"
+        assert contrast_ratio(readable_on(ROLES["error"]), ROLES["error"]) >= 4.5
+        holder.deleteLater()
+    qt_app.setStyleSheet("")

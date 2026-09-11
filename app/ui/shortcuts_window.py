@@ -82,6 +82,12 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     Drei Quellen also: die Menüleiste, die angemeldeten Werkzeuge (``window.tools``
     kennt Titel und Taste) und :data:`WINDOW_KEYS`.
 
+    **Und die Handlungen rechts als vierte** (11.09.2026): Was einer Auswahl
+    gilt, steht nicht mehr in der Leiste, sondern in der Karte rechts; seine
+    Aktionen hängen am Fenster, damit Strg+B weiter bohrt und Entf weiter
+    löscht — und genau die standen sonst in keiner Übersicht mehr (fünfzehn
+    Tasten, gemessen am gebauten Fenster).
+
     **Sortiert wird nicht.** Hier stand ``sorted(found)``, und das ordnete nach
     Bytes: „Ändern" landete hinter allem anderen, weil „Ä" hinter „z" steht — die
     größte Gruppe ganz unten. Und innerhalb einer Gruppe stand Alphabet statt
@@ -100,6 +106,13 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
                 _collect(submenu, _plain(action.text()), found)
     if window is None:
         return found
+    operations = getattr(window, "_op_actions", None) or {}
+    for action in operations.values():
+        sequence = action.shortcut()
+        if sequence.isEmpty() or any(isinstance(o, QMenu) for o in action.associatedObjects()):
+            # Was in einem Menü steht, hat die Leiste schon geliefert.
+            continue
+        found.append((tr("Handlungen rechts"), _plain(action.text()), _native(sequence.toString())))
     strip = getattr(window, "tools", None)
     listed = strip.tools() if strip is not None and hasattr(strip, "tools") else {}
     for tool in listed.values():

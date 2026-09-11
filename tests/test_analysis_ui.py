@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt, QThread
-from PySide6.QtWidgets import QApplication, QMenu
+from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
 from app.core.types import Action, Finding
@@ -1029,88 +1029,58 @@ def test_the_view_and_the_tree_show_the_same_menu(window: MainWindow) -> None:
         for entry in menu.actions()
         for action in (entry.menu().actions() if entry.menu() else [entry])
     }
-    assert any(str(spec.title) in offered for spec in window.object_tree.operations_for_object())
+    assert offered, "Sichtbarkeit steht darin"
     menu.deleteLater()
 
 
-def test_a_feature_menu_names_the_operations_of_its_kind(window: MainWindow) -> None:
-    """Der Ort, den §18.5 „die wichtigste Einzelfunktion" nennt.
+def test_the_context_menu_carries_no_operations_any_more(window: MainWindow) -> None:
+    """Rechtsklick auf Körper oder Fläche: kein Operationsverzeichnis mehr.
 
-    Die Art des Merkmals wurde aus der zweiten Spalte des Baums gelesen, und
-    dort steht das Maß: „Ø3,22 mm" für eine Bohrung. An ``for_feature``
-    gereicht fand das nie eine Operation, und das Menü an einer angeklickten
-    Bohrung bestand aus Ausblenden und Alles andere ausblenden.
-
-    **Der Test verlangte lange, dass jede Operation direkt dasteht, und das war
-    eine Zusage, die die Oberfläche nie gegeben hat.** ``_add_operations``
-    faltet die größten Gruppen, sobald das Menü über zwölf Zeilen ginge — am
-    Flächenklick tut es das seit je, dort bündelt *Bausteine* fünfundzwanzig
-    Einträge zu einer Zeile. An der Bohrung waren es zehn Operationen und damit
-    knapp darunter; mit *Merkmal verschieben*, *drehen* und *entfernen* sind es
-    dreizehn, und dieselbe Regel greift auch hier: Die fünf Katalogeinträge
-    stehen in einem Untermenü, die acht Operationen der Bohrung selbst direkt.
-
-    Und wo die Bausteine gefaltet würden, tritt der **Katalog** an ihre Stelle
-    — eine Zeile *Baustein einsetzen …*, die Bilder statt Vokabeln zeigt. Das
-    ist Roberts Bedingung von damals („solange man einfach zum Katalog kommt,
-    wenn man das Teil gewählt hat"), und sie gilt jetzt an der Bohrung wie
-    längst an der Fläche.
-
-    Geprüft wird deshalb, was die Oberfläche wirklich verspricht: **was das
-    Merkmal selbst angeht, steht direkt da**, und die Bausteine sind einen
-    Klick entfernt. Ein Katalog ist etwas anderes als eine Handlung an dieser
-    Bohrung; ihn zu bündeln kostet einen Klick und gibt vier Zeilen an die
-    Handlungen zurück, um derentwillen der Kunde geklickt hat.
+    Bis zum 11.09.2026 stand dort dieselbe Liste wie rechts in der Karte der
+    Handlungen — gruppiert, gefaltet, mit dem Katalog an der Stelle der
+    Bausteine —, und zwei Orte für dieselbe Liste sind einer zu viel (Robert:
+    „ebenso dann beim rechtsklick im objektbaum"). Was bleibt, gibt es nur
+    hier: der Weg vom Ergebnis zurück zum Schritt, die Skizze auf der Fläche
+    und die Sichtbarkeit. Die Operationen stehen rechts — an derselben
+    Auswahl, mit Grund, wenn eine nicht geht.
     """
-    window.object_tree.select_feature("obj_1", "hole_2")
+    from app.core.registry import REGISTRY
+
+    titles = {str(spec.title) for spec in REGISTRY.all()}
+
+    def offered(menu) -> set[str]:
+        return {
+            action.text().replace("&", "")
+            for entry in menu.actions()
+            for action in (entry.menu().actions() if entry.menu() else [entry])
+            if not action.isSeparator()
+        }
+
+    select_plate(window)
     menu = window.object_tree.context_menu()
-
     assert menu is not None
-    direct = {action.text().replace("&", "") for action in menu.actions()}
-    offered = window.object_tree.operations_for_feature("hole")
-    expected = {str(spec.title) for spec in offered}
-    catalogue = {str(spec.title) for spec in offered if spec.category == "parts"}
-
-    assert expected, "an einer Bohrung gibt es etwas zu tun"
-    assert expected - catalogue <= direct, "was die Bohrung selbst angeht, steht direkt da"
-    assert "Baustein einsetzen …" in direct, "und die Bausteine über den Katalog"
+    body = offered(menu)
+    assert body, "Sichtbarkeit steht darin"
+    assert not (body & titles), f"am Körper stehen noch Operationen: {sorted(body & titles)}"
+    assert not any(entry.menu() is not None for entry in menu.actions()), "und kein Untermenü"
     menu.deleteLater()
+    assert set(window.selection_operations._buttons) & {"union_objects", "hollow_object"}, (
+        "die Operationen stehen rechts"
+    )
 
-
-def test_the_slot_row_is_gone_from_the_hole_menu_on_every_level(window: MainWindow) -> None:
-    """*Zum Langloch ziehen* hat an der Bohrung keine Zeile — der Griff hat sie.
-
-    Die Bohrung trug neun Handlungen, und ab neun genügt „Bausteine" allein
-    nicht mehr, um unter zwölf Zeilen zu kommen: ``folded_groups`` faltete
-    dann „Ändern", und alle neun lagen einen Klick tiefer, während die fünf
-    Bausteine direkt dastanden. Welche Zeile geht, hat Robert entschieden
-    (11.09.2026): die mit dem Griff im Bild (``HANDLE_INSTEAD``).
-
-    **Gezählt am gebauten Menü, auf jeder Ebene** — und nicht über
-    ``operations_for_feature``, obwohl der Filter dort sitzt. Der Test darüber
-    nimmt diese Methode als Sollmenge, und ein Filter darin lässt Erwartung
-    und Menü gemeinsam schrumpfen: Er bliebe grün, ob die Zeile fehlt oder
-    nicht. Hier steht deshalb die Zeile selbst, direkt und in jedem Untermenü.
-    Dass die Operation am Langloch bleibt, wo sie die einzige ist, prüft
-    ``tests/test_interface_limits.py`` ohne Fenster.
-    """
-    window.object_tree.select_feature("obj_1", "hole_2")
+    object_id = next(iter(window.session.last_result.scene.objects))
+    entry = window.session.last_result.scene.objects[object_id]
+    face = next(name for name, feature in entry.features.items() if feature.kind == "face")
+    window.object_tree.select_feature(object_id, face)
     menu = window.object_tree.context_menu()
     assert menu is not None
-
-    def texts(of: QMenu) -> list[str]:
-        found: list[str] = []
-        for action in of.actions():
-            found.append(action.text().replace("&", ""))
-            if action.menu() is not None:
-                found.extend(texts(action.menu()))
-        return found
-
-    every_level = texts(menu)
-    assert "Zum Langloch ziehen" not in every_level, "the handle replaces the row, on every level"
-    assert "Bohrung ändern" in every_level, "the other hole operations are still there"
-    rows = [action for action in menu.actions() if not action.isSeparator()]
-    assert len(rows) <= 12, [action.text() for action in rows]
+    at_face = offered(menu)
+    assert not (at_face & titles), (
+        f"an der Fläche stehen noch Operationen: {sorted(at_face & titles)}"
+    )
+    assert tr("Auf dieser Fläche zeichnen") in at_face, (
+        f"die Skizze auf der Fläche bleibt: {sorted(at_face)}"
+    )
     menu.deleteLater()
 
 
@@ -1160,41 +1130,6 @@ def test_no_menu_shows_the_same_line_twice(window: MainWindow) -> None:
         menu.deleteLater()
 
     assert seen > len(features), "keine Menüzeilen gezählt — dann prüft dieser Test nichts"
-
-
-def test_a_feature_without_operations_of_its_own_offers_the_body(window: MainWindow) -> None:
-    """Wer genauer gezeigt hat, bekommt nicht weniger.
-
-    Zu einer Merkmalsart ohne eigene Operationen bestand das Menü aus
-    *Ausblenden* und *Alles andere ausblenden* — weniger als ein Klick auf den
-    Körper daneben, und der Körper ist mitgewählt. ``thread`` ist heute so eine
-    Art: ein Gewinde entsteht als benanntes Merkmal eines Bausteins, und keine
-    Operation nennt es in ``applies_to``.
-
-    Dieselbe Überlegung, aus der ``applies_to`` in der Befehlspalette eine
-    Reihenfolge ist und keine Auswahl (§2.6).
-    """
-    from app.core.registry import REGISTRY
-
-    assert not REGISTRY.for_feature("thread"), (
-        "sobald eine Operation am Gewinde arbeitet, prüft dieser Test die "
-        "andere Hälfte der Regel — dann eine Art ohne Operationen einsetzen"
-    )
-
-    window.object_tree._feature_kind = lambda: "thread"  # type: ignore[method-assign]
-    select_plate(window)
-    menu = window.object_tree.context_menu()
-
-    assert menu is not None
-    rows = [action for action in menu.actions() if not action.isSeparator()]
-    assert len(rows) > 2, [action.text() for action in rows]
-    offered = {
-        action.text()
-        for entry in rows
-        for action in (entry.menu().actions() if entry.menu() else [entry])
-    }
-    assert any(str(spec.title) in offered for spec in window.object_tree.operations_for_object())
-    menu.deleteLater()
 
 
 def _insert_a_thread(window: MainWindow) -> str:
@@ -1360,25 +1295,6 @@ def test_a_detected_feature_has_no_step_to_offer(window: MainWindow) -> None:
     assert menu is not None
     rows = [action.text() for action in menu.actions()]
     assert tr("Diesen Schritt ändern") not in rows, rows
-    menu.deleteLater()
-
-
-def test_a_body_menu_stays_short_enough_to_read(window: MainWindow) -> None:
-    """Siebenundfünfzig Zeilen sind kein Menü, sondern ein Register.
-
-    Am ganzen Körper passt fast alles, was das Register kennt. Gruppiert wird
-    dann nach derselben Kategorie wie in der Menüleiste — flach bleibt es nur,
-    solange man es überblickt.
-    """
-    from app.ui.panels import MAX_MENU_ROWS
-
-    select_plate(window)
-    menu = window.object_tree.context_menu()
-
-    assert menu is not None
-    rows = [action for action in menu.actions() if not action.isSeparator()]
-    assert len(rows) <= MAX_MENU_ROWS, [action.text() for action in rows]
-    assert any(action.menu() is not None for action in rows), "gruppiert, nicht gekürzt"
     menu.deleteLater()
 
 
@@ -4094,101 +4010,6 @@ def test_the_angle_maps_write_the_degree_sign(window: MainWindow) -> None:
     labels = [label for label, _colour in window.analysis_bar.legend.entries]
     assert all("grad" not in label for label in labels)
     assert any(label.endswith("°") for label in labels)
-
-
-def test_the_context_menu_greys_out_what_this_body_cannot_do(window: MainWindow) -> None:
-    """Am Netz-Körper bot es die Operationen des exakten Kerns anklickbar an.
-
-    Wer dort *Verrunden* wählte, füllte einen Dialog aus und bekam danach eine
-    Absage — genau die Sackgasse, die Regel 19 ausschließt. Die Menüleiste
-    vermeidet sie seit je: Sie graut aus und schreibt den Grund in den Tooltip,
-    „statt sie anzubieten und nach dem ausgefüllten Dialog abzulehnen". Das
-    Kontextmenü kannte die Bauart nicht — es fragte niemanden.
-
-    Ausgegraut und nicht ausgeblendet, aus demselben Grund wie dort: Wer eine
-    Zeile vermisst, sucht sie.
-    """
-    select_plate(window)
-    menu = window.object_tree.context_menu()
-    assert menu is not None
-
-    actions = {
-        action.text(): action
-        for entry in menu.actions()
-        for action in (entry.menu().actions() if entry.menu() else [entry])
-    }
-    exact = [spec for spec in window.object_tree.operations_for_object() if spec.requires_kind]
-    assert exact, "ohne Operationen des exakten Kerns prüft dieser Test nichts"
-
-    kinds = window.object_tree.kinds_of_selection()
-    assert kinds == ["mesh"], f"die Platte ist ein Netz, gemeldet wurde {kinds}"
-
-    for spec in exact:
-        action = actions.get(str(spec.title))
-        assert action is not None, f"{spec.name} fehlt im Menü — ausgegraut, nicht verschwunden"
-        assert not action.isEnabled(), f"{spec.name} steht am Netz-Körper anklickbar da"
-        assert "bearbeitbare Flächen und Kanten" in action.toolTip(), (
-            f"{spec.name} sagt nicht, was ihm fehlt: {action.toolTip()!r}"
-        )
-
-    visible_labels = [
-        action.text()
-        for entry in menu.actions()
-        for action in (entry.menu().actions() if entry.menu() else [entry])
-        if not action.isSeparator()
-    ]
-    assert len(visible_labels) == len(set(visible_labels)), (
-        "zusammengelegte Rechenwege stehen als doppelte Handlung im Kontextmenü"
-    )
-
-    # Und was auf einem Netz kann, bleibt bedienbar — sonst wäre die Prüfung
-    # eine Sperre und keine Auskunft.
-    plain = [spec for spec in window.object_tree.operations_for_object() if not spec.requires_kind]
-    enabled = [str(spec.title) for spec in plain if actions.get(str(spec.title)) is not None]
-    assert any(actions[title].isEnabled() for title in enabled), "alles gesperrt wäre kein Menü"
-    menu.deleteLater()
-
-
-def test_the_context_menu_actually_shows_the_reason_it_wrote(window: MainWindow) -> None:
-    """Der Satz stand da und war unsichtbar.
-
-    ``QMenu`` zeigt Tooltips von Haus aus **nicht** — ``toolTipsVisible`` ist
-    falsch, bis jemand es setzt. Die Menüleiste tut das an ihren drei Stellen;
-    das Kontextmenü am Körper tat es nicht. Damit war die ganze Kette umsonst:
-    ``kind_requirement`` formuliert den Grund, ``_add_operation`` schreibt ihn
-    an die Handlung, und Qt wirft ihn weg, bevor ihn jemand liest.
-
-    Der bestehende Test daneben prüft den **Wert** von ``toolTip()``. Der war
-    immer richtig — er stand nur an einem Menü, das keine Tooltips anzeigt.
-    Eine Zusage über einen Text, ohne die Zusage, dass er erscheint, ist die
-    Hälfte einer Prüfung.
-
-    Auch für die Untermenüs: Am ganzen Körper sind es siebenundfünfzig
-    Operationen, die stehen dann gruppiert in eigenen ``QMenu`` — und ein
-    Untermenü erbt die Eigenschaft nicht.
-    """
-    select_plate(window)
-    menu = window.object_tree.context_menu()
-    assert menu is not None
-
-    assert menu.toolTipsVisible(), "das Kontextmenü zeigt keine Tooltips an"
-    for entry in menu.actions():
-        submenu = entry.menu()
-        if submenu is not None:
-            assert submenu.toolTipsVisible(), (
-                f"das Untermenü {entry.text()!r} zeigt keine Tooltips an"
-            )
-
-    # Gegenprobe: Ohne einen gesperrten Eintrag mit Grund prüfte der Test eine
-    # Eigenschaft, die niemanden interessiert.
-    locked = [
-        action
-        for entry in menu.actions()
-        for action in (entry.menu().actions() if entry.menu() else [entry])
-        if not action.isEnabled() and "bearbeitbare Flächen und Kanten" in action.toolTip()
-    ]
-    assert locked, "kein gesperrter Eintrag mit Grund — dann sagt der Test nichts"
-    menu.deleteLater()
 
 
 def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:

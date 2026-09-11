@@ -214,7 +214,7 @@ def operation_tools(
                 # sonst käme der Titel über die Hintertür „Menü: …"
                 # ungerahmt zurück.
                 menu = untrusted_recipe_text(foreign_source, menu_path(spec, source))
-                description = f"{description} {tr('Menü')}: {menu}."
+                description = f"{description} {tr('Ort')}: {menu}."
             schemas.append(
                 {
                     "name": schema["name"],
@@ -242,11 +242,14 @@ def operation_tools(
                 }
 
         parameters["properties"] = properties
-        # §2.6: der Chat ist auch ein Suchfeld. Der Menüort steht in der
+        # §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der
         # Beschreibung, damit das Modell bei einer Wie-Frage sagen kann, wo
         # die Funktion im Fenster liegt — es hat sonst keine Quelle dafür.
         # ``menu_path`` staffelt wie die Leiste; nur Gruppe und Titel zu
-        # nennen traf für 72 von 77 Ops den falschen Ort.
+        # nennen traf für 72 von 77 Ops den falschen Ort. **„Ort" und nicht
+        # mehr „Menü"** (11.09.2026): Was einer Auswahl gilt, steht rechts im
+        # Fenster und in keinem Menü — ein Vorwort „Menü:" vor „Handlungen
+        # rechts" schickte in die Leiste, wo nichts ist.
         description = str(schema["description"])
         if compact:
             # Auch die Parametertexte: sie sind mit gemessenen 45 KB der
@@ -272,7 +275,7 @@ def operation_tools(
             # Grenze gehört nicht dazu und bleibt stehen (siehe unten).
             description = _shortened(description, _caveat_tail(spec))
         else:
-            description = f"{description} {tr('Menü')}: {menu_path(spec, source)}."
+            description = f"{description} {tr('Ort')}: {menu_path(spec, source)}."
         schemas.append(
             {
                 "name": schema["name"],

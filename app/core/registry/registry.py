@@ -88,13 +88,60 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
 #: weil drei Stellen sie brauchen und eine der Kern ist: Menüleiste,
 #: Kontextmenü am Körper — und die Werkzeugbeschreibungen des Agenten, die
 #: den Menüort nennen, damit der Chat als Suchfeld taugt (§2.6).
+#:
+#: **Seit dem 11.09.2026 ist eine Gruppe nicht mehr zwingend ein Menü.** Die
+#: Handlungen an einer Auswahl stehen rechts im Fenster (Konzept „Ein Ort für
+#: die Auswahl"), und dieselben Einträge noch einmal in der Leiste waren die
+#: Liste zum Absuchen, die §2.6 nicht will (Robert: „da wir die operationen
+#: rechts im auswahlpanel haben brauchen wir es nicht auch noch zusätzlich
+#: oben in der menüleiste"). Welche Gruppen dort wohnen, sagt
+#: :data:`PANEL_CATEGORIES`; die Gruppe bleibt als **Einteilung** — Panel,
+#: Kontextmenü und der Wegweiser des Chats gliedern weiter nach ihr.
+#:
+#: Die Bausteine haben kein eigenes Menü mehr: Die Kacheln stehen im Katalog,
+#: und was von der Kategorie übrig war — zwei Operationen, die einen Deckel
+#: bauen —, gehört zum Erzeugen. Dort steht auch der Katalog selbst.
 MENU_GROUPS: Final[tuple[tuple[TranslatableText, tuple[str, ...]], ...]] = (
     (_("Objekt"), ("scene",)),
-    (_("Erzeugen"), ("primitive", "import", "sketch", "label")),
+    (_("Erzeugen"), ("primitive", "import", "sketch", "label", "parts")),
     (_("Ändern"), ("boolean", "transform", "shaping", "holes", "surface", "mesh", "repair")),
-    (_("Bausteine"), ("parts",)),
     (_("Vorbereiten"), ("prepare", "colour")),
 )
+
+#: Die Kategorien, deren Handlungen **rechts im Fenster** stehen und nicht in
+#: der Menüleiste: alles, was einer Auswahl gilt. Eine Gruppe aus
+#: :data:`MENU_GROUPS`, deren Kategorien alle hier stehen, bekommt kein Menü;
+#: ihre Aktionen bleiben am Fenster, damit Kürzel und Befehlspalette weiter
+#: greifen. Was hier **nicht** steht, braucht keine Auswahl — Grundkörper,
+#: Skizzen, Importe, Beschriftungen — oder ist ein Baustein und steht damit
+#: unter *Erzeugen*.
+PANEL_CATEGORIES: Final[frozenset[str]] = frozenset(
+    {
+        "scene",
+        "boolean",
+        "transform",
+        "shaping",
+        "holes",
+        "surface",
+        "mesh",
+        "repair",
+        "prepare",
+        "colour",
+    }
+)
+
+
+def in_the_menu_bar(category: str) -> bool:
+    """Ob die Gruppe dieser Kategorie ein Menü in der Leiste hat.
+
+    Eine Gruppe steht in der Leiste, solange **eine** ihrer Kategorien nicht
+    im Panel wohnt; eine Kategorie, die :data:`MENU_GROUPS` nicht kennt,
+    bekommt ihr eigenes Menü — sie soll auftauchen und nicht verschwinden.
+    """
+    for _title, categories in MENU_GROUPS:
+        if category in categories:
+            return any(name not in PANEL_CATEGORIES for name in categories)
+    return True
 
 
 def needed_inputs(spec: OperationSpec) -> int:

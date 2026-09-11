@@ -25,6 +25,8 @@ it into `website/version.json`.
 - If a slot hangs over the edge at one end, Solidon says so — even when its centre sits deep in the material.
 - A slot stands in the object tree as a slot, with its width and its length — also in a model you opened that somebody else drew.
 - An existing slot can be pulled longer afterwards, and its direction stays where it was.
+- A selected hole or slot is set right in the view with “Set in the view”: a handle to move and turn it, knobs to pull it, dimension lines to edges and centres.
+- Only “Apply” on the right makes a step of it; Escape discards. A pulled slot shows its length meanwhile and keeps its shape when you move it at the handle.
 
 ### Recognition
 
@@ -36,6 +38,21 @@ it into `website/version.json`.
 - A label can now use eight fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.
 - Beside the upright faces there is now a round one and a handwritten one — those two come in a single style. All eight travel with the program, so a project looks the same everywhere.
 - If a font is too fine for your nozzle, Solidon says from which height it carries — instead of printing it and letting the letters run together.
+
+### Building blocks and fits
+
+- A part from the catalogue appears in the view at once: on the selected face or on top of the body, with dimension lines and a handle. A click places it elsewhere, “Apply” inserts it.
+
+### View and operation
+
+- The actions for a selected body or feature live in one place on the right, in groups you can fold, with a search box. The Object, Modify and Prepare menus are gone for that; shortcuts still work.
+- A right-click on a body or face shows only what exists there alone: the step behind it, the sketch on the face, hiding. The “Parts” button stands in accent colour.
+
+### Print bed and handover
+
+- If a body made of loose parts — lettering, say — fits no bed as a whole, the report offers to split it and orient it right away: one click, and the parts lie on the plates.
+- “Open in slicer” hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate.
+- For splitting, lettering and texture the report states the number in the sentence, where a placeholder in braces stood before.
 
 ## 0.4.0
 

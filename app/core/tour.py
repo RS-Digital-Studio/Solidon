@@ -682,11 +682,11 @@ TOURS: Final[tuple[Tour, ...]] = (
             # sparen — wer ihrem Schlusssatz folgte, griff zu einer Funktion,
             # die seinen Fall gar nicht meint, und die beiden Wege, auf denen
             # er die Naht selbst legt, standen nirgends.
-            "Passt ein Teil nicht auf das Bett, sucht Vorbereiten → Automatisch "
+            "Passt ein Teil nicht auf das Bett, sucht Bearbeiten → Automatisch "
             "teilen die Trennebene selbst. Soll die Naht woanders liegen, legen "
-            "Sie sie mit Vorbereiten → Teilen an eine Ebene — oder ziehen sie mit "
-            "Vorbereiten → An gezeichneter Linie trennen dorthin, wo Sie sie haben "
-            "wollen."
+            "Sie sie mit *Teilen* aus den Handlungen rechts an eine Ebene — oder "
+            "ziehen sie mit *An gezeichneter Linie trennen* dorthin, wo Sie sie "
+            "haben wollen."
         ),
     ),
     Tour(
@@ -734,7 +734,7 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         closing=_(
             "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der "
-            "Öffnung anklicken, dann *Bausteine → Deckel erzeugen*."
+            "Öffnung anklicken, dann *Erzeugen → Bausteine → Deckel erzeugen*."
         ),
     ),
     # **Die einzige Tour, die mit einer Warnung anfängt.** Die anderen zeigen,

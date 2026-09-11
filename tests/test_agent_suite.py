@@ -602,11 +602,30 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     # seither dreistufig — richtig gerechnet, aber als Wächter taugte er nicht
     # mehr, weil beide Hälften des Paares dieselbe Tiefe hatten. Die Booleschen
     # sind zu dritt und wachsen nicht; sie bleiben direkt im Menü.
-    assert "Menü: Ändern → Vereinigen." in described["union_objects"]
-    assert "Menü: Ändern → Formgebung → Fase anbringen." in described["chamfer_edges"]
-    assert "Menü: Ändern → Merkmale → Bohrung setzen." in described["drill_hole"]
-    assert "Menü: Erzeugen → Quader anlegen." in described["create_box"]
-    assert "Menü: Objekt → Objekt umbenennen." in described["rename_object"]
+    #
+    # **Und seit dem 11.09.2026 steht das Paar nicht mehr in der Leiste.** Was
+    # einer Auswahl gilt, steht rechts in der Karte der Handlungen; der
+    # Wegweiser nennt den Ort und die Auswahl, die es braucht — ohne Gruppe,
+    # denn rechts sind die Gruppen Abschnitte einer Liste mit Suchfeld. Die
+    # Leiste behält *Erzeugen*, und dort gilt die alte Rechnung weiter: flach
+    # (Quader) gegen gefaltet (Deckel unter *Bausteine*). „Ort:" statt „Menü:",
+    # weil ein Ort auch die Karte rechts sein kann.
+    assert (
+        "Ort: Handlungen rechts (bei gewähltem Körper) → Vereinigen." in described["union_objects"]
+    )
+    assert (
+        "Ort: Handlungen rechts (bei gewähltem Körper) → Fase anbringen."
+        in described["chamfer_edges"]
+    )
+    assert (
+        "Ort: Handlungen rechts (bei gewähltem Merkmal: Fläche) → Bohrung setzen."
+        in described["drill_hole"]
+    )
+    assert "Ort: Erzeugen → Quader anlegen." in described["create_box"]
+    assert (
+        "Ort: Handlungen rechts (bei gewähltem Körper) → Objekt umbenennen."
+        in described["rename_object"]
+    )
 
     # **Ein Baustein der Bibliothek nennt den Katalog, und er nennt ihn als
     # das, was er ist.** Hier stand „Menü: Bausteine → Verbindungen →
@@ -618,7 +637,7 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     # *Verbindungen* sucht, findet keines. Ein Pfeil zwischen zwei Menüs heißt
     # „dann dort weiter"; zwischen Menü und Dialog heißt er nichts.
     assert (
-        "Menü: Datei → Bausteinkatalog …, dort unter Verbindungen: Schraubenloch mit Senkung."
+        "Ort: Datei → Bausteinkatalog …, dort unter Verbindungen: Schraubenloch mit Senkung."
         in described["insert_screw_hole"]
     )
     # **Und die Gegenprobe dazu: nicht jede Operation der Kategorie ``parts``
@@ -629,11 +648,11 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     # Einträge, kein *Deckel erzeugen* darunter) und wurden trotzdem in den
     # Katalog verwiesen. Beide Sätze zusammen sind der Wächter: Wer eine
     # Kachel hat, nennt den Katalog; wer keine hat, nennt sein Menü.
-    assert "Menü: Bausteine → Deckel erzeugen." in described["create_lid"]
+    assert "Ort: Erzeugen → Bausteine → Deckel erzeugen." in described["create_lid"]
 
     places = [
         match.group(1)
-        for match in (re.search(r"Menü: (.+?)\.?$", text) for text in described.values())
+        for match in (re.search(r"Ort: (.+?)\.?$", text) for text in described.values())
         if match
     ]
     assert len(places) >= 60, (

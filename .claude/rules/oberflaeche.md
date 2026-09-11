@@ -233,6 +233,17 @@ gescheitert ist:
   gewirkt. `quick_names` schneidet den Rückfall deshalb gegen
   `REGISTRY.for_feature(kind)`; für die sechs bekannten Arten ändert das
   nichts.
+* **Die Suchliste darunter ist in Gruppen gefaltet, jede ein Abschnitt zum
+  Zuklappen** (`panels.collapsible`, dieselbe Kopfzeile mit Linie wie die
+  linke Spalte) — die Gruppe ist `group_title(spec.category)`, also dieselbe
+  Einteilung wie im Menü. Graue Zwischenüberschriften über einer Wand
+  gleicher Knöpfe (Robert, 11.09.2026: „sieht alles ziemlich monoton und
+  dadurch unübersichtlich aus"). Ein Suchtreffer öffnet seine Gruppe, sonst
+  fände man, was man sucht, hinter einer zugeklappten Kopfzeile nicht.
+* **Der Knopf *Bausteine* unten ist ein Hauptknopf** (`make_primary`,
+  Akzentfarbe und halbfett — Regel 18) und steht an Körper und Fläche: Dort
+  ist ein Baustein möglich, und der Knopf soll auffallen (Robert,
+  11.09.2026). An einer Bohrung oder Verrundung steht er nicht.
 * **Aus dem Register herleiten lässt sich das nicht.** Gemessen am 07.09.2026:
   Nach Kategorie-Rang aus `MENU_GROUPS` sortiert stünden bei zwei gewählten
   Körpern *Auf dem Bett anordnen*, *Objekt duplizieren* und *Objekt entfernen*
@@ -324,6 +335,13 @@ sie kennt; das Fett bleibt, denn es ist neben der Akzentfarbe die zweite
 Kodierung (Regel 18). `tests/test_style.py` misst gegen die Schrift, mit der
 wirklich gezeichnet wird, und verbietet `setDefault(True)` außerhalb von
 `style.py`.
+
+**Ein Knopf, der verwirft, entsteht über `style.make_danger()`** — das
+Fehlerrot der Palette (`ROLES["error"]`) als Fläche, die Schrift darauf aus
+`readable_on`, das Wort als zweite Kodierung (Regel 18). *Abbrechen* unter
+*Übernehmen* im Merkmalfenster ist der Fall: gleich breit wie der Hauptknopf,
+und ohne eigene Farbe dessen Zwilling (Robert, 11.09.2026). `tests/test_style.py`
+misst die Fläche am gezeichneten Knopf.
 
 **Und wo keiner gesetzt wird, setzt Qt selbst einen.** Das ist die stille
 Hälfte derselben Regel, und sie ist die häufigere: `QDialog` macht beim
@@ -557,72 +575,68 @@ Drei Folgen für die Oberfläche:
   gestellt, und der Trennstrich hinter dem letzten direkten Block ist die ganze
   Antwort — die Zeilen dahinter tragen ihre Namen selbst.
 
-**Ob eine Operation überhaupt einen Menüort hat, entscheidet ihre Kachel im
-Katalog — nicht ihre Kategorie.** `catalogue_operations()`
-(`app/core/registry/surfaces.py`) ist die eine Quelle; Menüleiste,
-Kontextmenü, `menu_path` und drei Wächter fragen sie. Ein Baustein der
-Bibliothek steht im Katalog mit Bild, weil ein räumliches Teil als Textzeile
-die schlechtere Darstellung ist (§2.6) — im Menü standen 29 davon in sechs
-Untermenüs, jede Zeile eine Vokabel statt einer Form.
+**Wo eine Operation steht, entscheiden zwei Fragen: Gilt sie einer Auswahl,
+und hat sie eine Kachel im Katalog.**
 
-Die Frage an der Kategorie festzumachen ist die Sorte Näherung, die stimmt,
-bis sie nicht mehr stimmt: Nicht jede Operation der Kategorie hat eine Kachel,
-`create_lid` und `screw_lid` nicht.
-(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
+* **Was einer Auswahl gilt, steht rechts — und nur dort** (Robert,
+  11.09.2026: „da wir die operationen rechts im auswahlpanel haben brauchen
+  wir es nicht auch noch zusätzlich oben in der menüleiste"). Die Karte der
+  Handlungen zeigt an Körper und Merkmal, was das Register für sie kennt,
+  gruppiert nach `group_title(spec.category)` in einklappbaren Abschnitten,
+  mit Suchfeld, mit Grund an jeder gesperrten Handlung. Die Menüs *Objekt*,
+  *Ändern* und *Vorbereiten* gibt es deshalb nicht mehr: `PANEL_CATEGORIES`
+  (`app/core/registry/registry.py`) nennt ihre Kategorien, `in_the_menu_bar`
+  beantwortet die Frage je Kategorie, und `_build_menus` legt für eine
+  solche Gruppe **kein Menü** an. Die Aktionen entstehen trotzdem — am
+  Fenster, damit Strg+B bohrt, die Palette weiß, ob eine Handlung geht
+  (`_update_actions` liest `_op_actions`), und die Kürzelübersicht sie unter
+  „Handlungen rechts" führt. **Nackte Tasten bleiben an Objektbaum und
+  Ansicht** (`_scope_shortcut`): Am Fenster dazu läge Entf noch einmal über
+  dem Verlauf, wo *Schritt löschen* dieselbe Taste hat, und zwei Aktionen auf
+  einer Taste führt Qt beide nicht aus.
+* **In der Leiste bleibt, was keine Auswahl braucht**: *Datei*, *Bearbeiten*
+  (dort auch *Automatisch teilen*, ein Ablauf über mehreren Operationen),
+  *Erzeugen* mit Grundkörpern, Importen, Skizzen, Beschriftungen — und dem
+  Abschnitt *Bausteine*: Katalog, Gegenstücke und die zwei Deckel ohne
+  Kachel. Ein eigenes Menü *Bausteine* trug zuletzt genau diese vier Zeilen;
+  die Kategorie `parts` steht deshalb in der Gruppe *Erzeugen*
+  (`MENU_GROUPS`). *Ansicht* und *Hilfe* wie gehabt.
+* **Ob eine Operation mit Auswahl einen Menüort hat, entscheidet ihre Kachel
+  im Katalog — nicht ihre Kategorie.** `catalogue_operations()`
+  (`app/core/registry/surfaces.py`) ist die eine Quelle; Leiste, Karte,
+  `menu_path` und die Wächter fragen sie. Ein Baustein der Bibliothek steht im
+  Katalog mit Bild, weil ein räumliches Teil als Textzeile die schlechtere
+  Darstellung ist (§2.6). Nicht jede Operation der Kategorie hat eine Kachel:
+  `create_lid` und `screw_lid` nicht, und die stehen in der Karte an der
+  Fläche **und** unter *Erzeugen → Bausteine* — eine Ausnahme an der
+  Kategorie hatte sie einmal aus beidem genommen (Vorfall: ROADMAP-ARCHIV.md,
+  04.09.2026).
+* **Zum Katalog in einem Klick, wenn das Teil gewählt ist** (Roberts
+  Bedingung): der Hauptknopf *Bausteine* unter der Karte, an Körper und
+  Fläche; dazu *Datei → Bausteinkatalog …*, Strg+K und *Erzeugen →
+  Bausteine*. `test_a_chosen_part_reaches_the_catalogue_in_one_click` führt
+  die Bedingung wörtlich.
+* **Das Kontextmenü an Körper und Merkmal trägt keine Operationen.** Bis zum
+  11.09.2026 stand dort dieselbe Liste wie rechts — gruppiert, nach
+  `folded_groups` gefaltet, mit dem Katalog an der Stelle der Bausteine —,
+  und vier gemessene Zusagen (§40, §35, Roberts Klick, §18.5) schlossen sich
+  an der Fläche gegenseitig aus (Nachweise: ROADMAP-ARCHIV.md). Zwei Orte für
+  dieselbe Liste sind einer zu viel (Robert: „ebenso dann beim rechtsklick im
+  objektbaum"). Was bleibt, gibt es nur dort: *Diesen Schritt ändern* (der Weg
+  vom Ergebnis zurück zum Schritt, §21.2), *Auf dieser Fläche zeichnen* und
+  die Sichtbarkeit. Der Viewport zeigt dasselbe Menü.
+* **Der Wegweiser des Chats nennt den Ort, nicht mehr das Menü.**
+  `menu_path` schreibt für eine Handlung rechts „Handlungen rechts (bei
+  gewähltem Körper) → Vereinigen" beziehungsweise „(bei gewähltem Merkmal:
+  Fläche)", für alles in der Leiste den Menüweg wie bisher; die
+  Werkzeugbeschreibungen leiten mit „Ort:" ein (Prompt-Version 6). Handbuch
+  und Tour nennen dieselben Orte, und `test_every_menu_path_in_the_texts_exists_in_the_menu_bar`
+  hält jeden „A → B" in den Texten an der Leiste fest.
+* **`HANDLE_INSTEAD` bleibt** (`panels.py`): Es nimmt an der Bohrung *Zum
+  Langloch ziehen* aus `operations_for_feature`, weil der Griff im Bild die
+  Zeile ist — gebraucht vom Doppelklick im Baum, der die erste passende
+  Handlung startet. Am Langloch bleibt sie, weil sie dort die einzige ist.
 
-Zwei Sätze daraus, und der zweite ist der teurere:
-
-* **Was der Katalog vertritt, ist genau das, was er zeigt.** Ein Untermenü
-  oder ein Eintrag, der auf ihn verweist, darf nur die Ops ersetzen, die
-  darin vorkommen; alles andere steht daneben.
-* **Der Katalogeintrag tritt an die Stelle der gefalteten Gruppe, auf der
-  obersten Ebene.** *Baustein einsetzen …* ist damit **einen** Klick vom
-  gewählten Teil entfernt, so hat Robert die Bedingung gestellt, und
-  `test_a_chosen_part_reaches_the_catalogue_in_one_click` führt sie wörtlich.
-  Ein Zwischenstand legte ihn in ein Untermenü *Bausteine* und machte aus dem
-  einen Klick zwei; der Test hat es gefangen. **Eine Zusage, die man dreimal
-  zitiert hat, ist damit nicht eingehalten.**
-
-**Und an dieser Stelle schließen sich vier Zusagen gegenseitig aus.** Alle vier
-sind gemessen, keine ist erfunden:
-
-| | |
-|---|---|
-| §40 (P0) | jede Operation steht im Kontextmenü |
-| §35 | höchstens zwölf Zeilen je Menü |
-| Robert | ein Klick vom gewählten Teil zum Katalog |
-| §18.5, §2.6 | am Merkmal steht alles direkt, ohne Aufklappen |
-
-An einer Fläche ergeben alle vier zusammen **vierzehn** Zeilen. Drei Fassungen
-sind durchgemessen, jede bricht genau eine:
-
-| Fassung | Preis |
-|---|---|
-| Katalog ersetzt die Gruppe | *Deckel erzeugen* fehlt im Flächenmenü |
-| die zwei Deckel daneben | vierzehn Zeilen statt zwölf |
-| die zwei Deckel mitfalten | *Bohrung setzen* eine Ebene tiefer |
-
-Gewählt ist die erste, weil ihr Preis den seltensten Fall trifft: Die beiden
-Baustein-Operationen ohne Kachel stehen im Menü *Bausteine* der Menüleiste.
-**Das ist eine Bedienentscheidung und keine Bugfrage** — sie liegt Robert vor,
-und wer sie ändert, ändert eine der vier Zusagen mit.
-
-**An der Bohrung stellte sich dieselbe Rechnung ein zweites Mal, mit *Zum
-Langloch ziehen* als neunter Handlung.** Bis acht genügt „Bausteine" allein,
-um unter zwölf zu kommen, und `KEEP_VISIBLE` hält „Ändern"; ab neun genügt
-sie nicht mehr, und der Schutz hat nichts mehr zu wählen — gefaltet wurde
-„Ändern", also alle neun auf einmal, während die fünf Bausteine direkt
-standen. Der Schutz ist ein Rang unter denen, die allein genügen, kein
-Verbot; wer ihn zum Verbot macht, bekommt dreizehn Zeilen und zwei andere
-rote Tests. Gewählt (Robert, 11.09.2026): **Die Zeile geht, die einen Griff
-im Bild hat** — `HANDLE_INSTEAD` in `panels.py` nimmt sie an der Bohrung aus
-dem Menü, nicht aus `applies_to`. Menüleiste, Palette, Chat, Kommandozeile
-und der Griff selbst lesen weiter `applies_to`. Am Langloch bleibt sie, weil
-sie dort die einzige ist. Der Anschluss ist geprüft: Wo die Tabelle eine
-Zeile weglässt, muss der Griff tatsächlich sitzen
-(`test_a_row_handed_to_a_handle_has_that_handle`), und gezählt wird am
-gebauten Menü auf jeder Ebene, nicht über `operations_for_feature` — siehe
-die Testfalle unten.
 * **Ein Wächter ist so scharf wie seine weiteste Ausnahme.** Der Test, der
   „jede Operation ist im Menü auffindbar" zusichert, nahm die *Kategorie* aus
   — und blieb deshalb grün, während zwei Operationen nirgends standen. Wer

@@ -691,7 +691,13 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
     je Variante" — und beide Male dieselbe Auflage: erreichbar bleibt alles,
     notfalls über die Palette.
     """
-    from app.core.registry import MENU_TWINS, VARIANT_GROUPS, palette_entries, variant_members
+    from app.core.registry import (
+        MENU_TWINS,
+        VARIANT_GROUPS,
+        in_the_menu_bar,
+        palette_entries,
+        variant_members,
+    )
 
     labels = {action.text() for action in all_menu_actions(window)}
     offered = {entry.name for entry in palette_entries()}
@@ -708,7 +714,13 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
             partner = REGISTRY.get(MENU_TWINS[spec.name])
             assert partner.name in window._op_actions, "der sichtbare Zwilling trägt den Eintrag"
-            assert str(partner.title) in labels, "der sichtbare Zwilling trägt den Eintrag"
+            if in_the_menu_bar(partner.category):
+                assert str(partner.title) in labels, "der sichtbare Zwilling trägt den Eintrag"
+            else:
+                # Der Partner steht rechts (11.09.2026) — dort trägt er den Knopf.
+                assert partner.name in window.selection_operations._buttons, (
+                    "der sichtbare Zwilling trägt den Knopf rechts"
+                )
             continue
         if spec.name in variant_members():
             assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
@@ -732,15 +744,31 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             )
             assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
             continue
+        if not in_the_menu_bar(spec.category):
+            # **Vierter Fall, seit dem 11.09.2026: die Karte rechts.** Was einer
+            # Auswahl gilt, steht nicht in der Leiste — die Aktion gibt es
+            # trotzdem (Kürzel, Palette), der Knopf steht rechts, und der Weg
+            # des Chats nennt genau das.
+            assert spec.name in window._op_actions, f"{spec.name}: ohne Aktion kein Kürzel"
+            assert str(spec.title) not in labels, f"{spec.name} steht rechts und in der Leiste"
+            assert spec.name in window.selection_operations._buttons, f"{spec.name} fehlt rechts"
+            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            continue
         assert str(spec.title) in labels, f"{spec.name} is missing from the menu"
 
     assert gruppen <= labels, f"diese Sammeleinträge fehlen: {gruppen - labels}"
 
 
 def test_shortcuts_from_the_registry_are_installed(window: MainWindow) -> None:
+    """Jedes Kürzel des Registers hängt an einer Aktion — im Menü oder am Fenster.
+
+    Die Handlungen rechts haben seit dem 11.09.2026 keinen Menüeintrag mehr;
+    ihre Aktionen hängen am Fenster (oder, bei nackten Tasten wie Entf, an
+    Objektbaum und Ansicht), und dort muss das Kürzel stehen.
+    """
     shortcuts = {
         action.shortcut().toString().lower()
-        for action in all_menu_actions(window)
+        for action in (*all_menu_actions(window), *window._op_actions.values())
         if not action.shortcut().isEmpty()
     }
     for spec in REGISTRY.all():
@@ -2510,7 +2538,10 @@ def test_a_drag_on_the_slot_knobs_becomes_one_slot_step(window: MainWindow) -> N
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, hole)
 
-    window.viewport.slotDragged.emit(hole, 18.0, 30.0)
+    # Das vierte Argument ist die Stelle — ``None``, wenn das Loch bleibt, wo
+    # es ist; ein Zug am Bewegungsgriff, der zusammen mit dem Langlochzug
+    # wartet, gibt sie mit (11.09.2026).
+    window.viewport.slotDragged.emit(hole, 18.0, 30.0, None)
     window.session.wait_for_idle()
 
     assert [step.op for step in window.session.project.document.ops] == ["load", "slot_hole"]
@@ -2518,6 +2549,9 @@ def test_a_drag_on_the_slot_knobs_becomes_one_slot_step(window: MainWindow) -> N
     assert letzter.params["at_feature"] == hole
     assert float(letzter.params["slot_length"]) == pytest.approx(18.0)
     assert float(letzter.params["slot_angle"]) == pytest.approx(30.0)
+    assert all(float(letzter.params.get(axis) or 0.0) == 0.0 for axis in ("x", "y", "z")), (
+        "ohne Stelle bleibt das Loch, wo es ist — drei Nullen heißen das"
+    )
 
 
 def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: MainWindow) -> None:
@@ -3019,6 +3053,88 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     assert chosen.code == "arrange.below_bed", (
         f"vorgewählt ist {chosen.code!r} — der Befund ohne Handlung nützt hier nichts"
     )
+
+
+def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Ein Klick im Prüfbericht: zerlegen, ausrichten, auf die Platten — und
+    ein Undo nimmt alles zurück.
+
+    **Roberts Fall** (11.09.2026: „das druckoptimal ausrichten klappt nicht, es
+    werden nicht mehr platten angelegt"): Ein Schriftzug von 200 mm passt als
+    Ganzes auf kein Bett, die Kette hielt an, und die zwei Knöpfe hießen
+    Teilen und anderer Drucker. Hier steht der Weg von der Absage bis zu den
+    Platten — am Fenster, nicht am Verlauf: Dass ``History.split_and_retry``
+    die Teile einsetzt, prüft ``test_history.py``; dass der Kunde den Knopf
+    bekommt und er bis ans Ende läuft, nur diese Zeile.
+
+    Zwei lose Platten 80 x 80, ein halber Meter auseinander — der Schriftzug
+    im Kleinen. Nach dem Klick: kein Halt, zwei Körper, beide im Bett, ein
+    Zug im Verlauf; nach dem Undo wieder ein Körper und die Absage.
+    """
+    import trimesh
+
+    from app.core.errors import SPLIT_AND_RETRY
+    from app.ui.main_window import inputs_for
+    from app.ui.panels import actions_for_document, as_error
+
+    near = trimesh.creation.box(extents=(80.0, 80.0, 4.0))
+    far = trimesh.creation.box(extents=(80.0, 80.0, 4.0))
+    far.apply_translation((500.0, 0.0, 0.0))
+    path = tmp_path / "inseln.stl"
+    path.write_bytes(trimesh.util.concatenate([near, far]).export(file_type="stl"))
+    window.open_path(path)
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    spec = REGISTRY.get("orient_for_print")
+    window.session.apply(
+        spec.title,
+        [
+            OperationDraft(
+                op=spec.name,
+                inputs=inputs_for(spec, list(result.scene.objects), []),
+                params={"thorough": False},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    halted = window.session.evaluate_now()
+    window._on_scene(halted)
+    assert halted.stopped_at is not None, "der Körper passt — dann prüft der Test nichts"
+
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    handlers = window.error_handlers()
+    offered = actions_for_document(
+        refusal,
+        window.session.project.document,
+        stopped_at=halted.stopped_at,
+        live_objects=set(halted.scene.objects),
+    )
+    assert next(a.id for a in offered if a.id in handlers) == SPLIT_AND_RETRY.id, (
+        f"der erste Knopf ist die Zerlegung, nicht {[a.id for a in offered]}"
+    )
+    steps_before = len(window.session.history.transactions)
+
+    handlers[SPLIT_AND_RETRY.id](as_error(refusal, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None, (
+        f"die Kette hält weiter an: {[str(f.message) for f in after.scene.report.findings]}"
+    )
+    assert len(after.scene.objects) == 2
+    assert len(window.session.history.transactions) == steps_before + 1, "ein Zug, ein Undo"
+    half = window.session.profile.printer.build_volume[0] / 2.0
+    for name, entry in after.scene.objects.items():
+        box = entry.mesh.bounds
+        assert -half <= box.minimum[0] and box.maximum[0] <= half, f"{name} liegt neben dem Bett"
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    back = window.session.last_result
+    assert back is not None and list(back.scene.objects) == ["obj_1"]
+    assert back.stopped_at == halted.stopped_at, "nach dem Undo steht die Absage wieder da"
 
 
 def test_the_small_parts_button_removes_them_and_not_merely_runs(window: MainWindow) -> None:
@@ -9216,6 +9332,8 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
     for group in window._workspace_menus:
         built.update(paths_of(group, (group.title(),)))
 
+    from app.core.registry import in_the_menu_bar
+
     checked = 0
     for name, action in window._op_actions.items():
         if action not in built:
@@ -9227,9 +9345,23 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
     # geworden — eine Zahl, die beim nächsten Umbau wieder jemand senkt.
     # Geprüft wird stattdessen, dass die Kopplung **jede** Menüaktion erreicht:
     # Was einen Eintrag hat, hat auch einen genannten Weg, und der stimmt.
+    # **Und was rechts steht, nennt rechts** (11.09.2026): Diese Aktionen
+    # haben keinen Eintrag in der Leiste, und ihr Weg beginnt bei der Karte.
     assert checked, "keine einzige Kopplung gefunden — dann prüft dieser Test nichts"
-    ohne_weg = sorted(name for name, action in window._op_actions.items() if action not in built)
+    ohne_weg = sorted(
+        name
+        for name, action in window._op_actions.items()
+        if action not in built and in_the_menu_bar(REGISTRY.get(name).category)
+    )
     assert not ohne_weg, f"diese Menüaktionen haben keinen genannten Weg: {ohne_weg}"
+    rechts = [
+        name
+        for name, action in window._op_actions.items()
+        if action not in built and not in_the_menu_bar(REGISTRY.get(name).category)
+    ]
+    assert rechts, "keine Handlung rechts — dann prüft dieser Test den zweiten Ort nicht"
+    for name in rechts:
+        assert menu_path(REGISTRY.get(name)).startswith("Handlungen rechts"), name
 
 
 def test_scene_views_render_labelled_pngs(window: MainWindow) -> None:
@@ -12630,22 +12762,19 @@ def test_a_hole_does_not_offer_to_be_drawn_on(window: MainWindow) -> None:
     assert "Auf dieser Fläche zeichnen" not in labels, f"steht an einer Bohrung: {labels}"
 
 
-def test_the_three_slicer_handles_stand_in_the_menu_itself(window: MainWindow) -> None:
+def test_the_three_slicer_handles_stand_where_a_body_is_chosen(window: MainWindow) -> None:
     """Verschieben, Drehen, Skalieren stehen direkt da — nicht zwei Klicks tief.
 
     **Der Maßstab ist der Slicer, nicht ein CAD-Programm.** Wer Solidon öffnet,
     kommt von Cura oder PrusaSlicer, und dort liegen diese drei auf der
-    Werkzeugleiste. Hier lagen sie unter „Ändern" zwischen dreißig anderen
-    Einträgen: Rechtsklick, aufklappen, suchen (§2.6, §18.5).
+    Werkzeugleiste. Hier lagen sie einmal unter „Ändern" zwischen dreißig
+    anderen Einträgen (§2.6, §18.5).
 
-    **Gezählt wird am gebauten Menü**, nicht an ``operations_for_object()``.
-    Die Auskunft, welche Operation sich anbietet, ist eine andere als die,
-    welche Zeile ein Kunde sieht — dazwischen liegt die Gruppenfaltung, und
-    genau die war das Problem. Ein Test gegen die Registerliste wäre grün
-    geblieben, während die drei im Untermenü stecken.
-
-    Die Reihenfolge gehört zur Zusage: Sie ist die des Slicers und nicht die
-    des Registers.
+    **Seit dem 11.09.2026 trägt das Kontextmenü keine Operationen mehr**; die
+    drei stehen dort, wo ein gewählter Körper seine Handlungen hat: rechts in
+    der Karte, als eigene Knöpfe, und dazu als Werkzeug *Bewegen* in der
+    Werkzeugzeile mit dem Griff im Bild. Gezählt wird an den gebauten Knöpfen,
+    nicht an ``operations_for_object()``.
     """
     window.session.import_model(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -12653,27 +12782,15 @@ def test_the_three_slicer_handles_stand_in_the_menu_itself(window: MainWindow) -
     object_id = next(iter(result.scene.objects))
 
     window.object_tree.select_object(object_id)
-    menu = window.object_tree.context_menu()
+    QApplication.processEvents()
 
-    assert menu is not None
-    rows = [action for action in menu.actions() if not action.isSeparator()]
-    direct = [action.text().replace("&", "") for action in rows if action.menu() is None]
-
-    for wanted in ("Verschieben", "Drehen", "Skalieren"):
-        assert wanted in direct, (
-            f"'{wanted}' is not a row of the menu itself, only these are: {direct}"
-        )
-
-    at = [direct.index(name) for name in ("Verschieben", "Drehen", "Skalieren")]
-    assert at == sorted(at), f"the three keep the slicer's order, got {direct}"
-
-    # Und die Grenze hält weiterhin: drei Zeilen mehr oben heißt, dass die
-    # Faltung darunter sie mitzählen muss.
-    from app.ui.panels import MAX_MENU_ROWS
-
-    assert len(rows) <= MAX_MENU_ROWS, (
-        f"the menu grew to {len(rows)} rows, the limit is {MAX_MENU_ROWS}: "
-        f"{[action.text() for action in rows]}"
+    panel = window.selection_operations
+    for name in ("translate_object", "rotate_object", "scale_object"):
+        button = panel._buttons[name]
+        assert button.isVisibleTo(panel), f"{name} steht am gewählten Körper nicht rechts"
+        assert button.isEnabled(), f"{name} ist am gewählten Körper gesperrt"
+    assert any(str(tool.title) == tr("Bewegen") for tool in window.tools.tools().values()), (
+        "und das Werkzeug *Bewegen* steht in der Werkzeugzeile"
     )
 
 
@@ -13300,26 +13417,31 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
 
     **Roberts Bedingung zu dieser Änderung** war genau dieser Weg: „solange
     man einfach zum Katalog kommt, wenn man das Teil gewählt hat". Geprüft
-    wird deshalb beides — dass der Eintrag am gewählten Merkmal steht, und
-    dass er wirklich den Katalog ruft. Durchgereicht ist nicht gerufen.
+    wird deshalb beides — dass der Weg am gewählten Teil steht, und dass er
+    wirklich den Katalog ruft. Durchgereicht ist nicht gerufen.
+
+    **Der Weg ist seit dem 11.09.2026 der Hauptknopf rechts**, nicht mehr eine
+    Zeile im Kontextmenü: Das trägt keine Operationen mehr, und der Knopf
+    *Bausteine* steht in Akzentfarbe unter der Karte der Handlungen — an
+    Körper und Fläche, ein Klick.
     """
     from PySide6.QtWidgets import QMenu
 
     face, menu = _face_menu(window)
     assert face
     assert isinstance(menu, QMenu)
-
     titles = [action.text().replace("&", "") for action in menu.actions()]
-    assert "Baustein einsetzen …" in titles, (
-        f"der Weg zum Katalog fehlt am gewählten Teil — angeboten wird: {titles}"
-    )
+    assert "Baustein einsetzen …" not in titles, "im Kontextmenü steht der Katalog nicht mehr"
+
+    knopf = window.selection_operations.catalog_button
+    assert knopf.isVisibleTo(window.selection_operations), "der Knopf steht an der Fläche"
+    assert knopf.isDefault(), "und zwar als Hauptknopf"
 
     gerufen: list[bool] = []
     window.action_catalog = lambda: gerufen.append(True)  # type: ignore[method-assign]
-    window.object_tree.catalogRequested.connect(window.action_catalog)
-    entry = next(a for a in menu.actions() if a.text().replace("&", "") == "Baustein einsetzen …")
-    entry.trigger()
-    assert gerufen, "der Eintrag steht da, öffnet den Katalog aber nicht"
+    window.selection_operations.catalogRequested.connect(window.action_catalog)
+    knopf.click()
+    assert gerufen, "der Knopf steht da, öffnet den Katalog aber nicht"
 
     # Und die andere Hälfte: In der Menüleiste steht keiner mehr — gefragt
     # nach der **Kachel**, nicht nach der Kategorie. Hier stand

@@ -45,6 +45,17 @@ def as_trimesh(mesh: shapes.Mesh) -> trimesh.Trimesh:
             ),
             None,
         ),
+        (
+            "prism",
+            shapes.prism(
+                # Ein Rechteck 4 x 3 in der xy-Ebene, gegen den Uhrzeigersinn
+                # von oben — 6 hoch ergibt 72.
+                [(0.0, 0.0, 1.0), (4.0, 0.0, 1.0), (4.0, 3.0, 1.0), (0.0, 3.0, 1.0)],
+                (0.0, 0.0, 1.0),
+                6.0,
+            ),
+            72.0,
+        ),
     ],
 )
 def test_solid_shapes_are_closed_and_point_outwards(

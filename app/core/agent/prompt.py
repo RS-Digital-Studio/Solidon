@@ -39,7 +39,13 @@ from app.core.knowledge import rules
 #: sie entstand, wenn der Text etwas weniger sagt als vorher.
 #: Version 5 ergänzt die Oberflächennormale der Bausteinplatzierung. Auch
 #: diese Werkzeugkonvention gehört zur Herkunft eines Agentenvorschlags.
-PROMPT_VERSION = "5"
+#:
+#: Version 6 sagt „Ort" statt „Menü": Was einer Auswahl gilt, steht seit dem
+#: 11.09.2026 rechts im Fenster und in keinem Menü mehr; die
+#: Werkzeugbeschreibungen nennen den Ort („Handlungen rechts (bei gewähltem
+#: Körper) → Vereinigen"), und der Prompt verspricht nichts, was sie nicht
+#: einlösen.
+PROMPT_VERSION = "6"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -106,16 +112,20 @@ Vorschlag ändert.
 """
 
 
-#: Der Hinweis aufs Menü — nur für Schemata, die den Ort auch tragen.
+#: Der Hinweis auf den Ort — nur für Schemata, die ihn auch tragen.
 #:
 #: §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der Beschreibung
 #: jeder Operation, damit das Modell bei einer Wie-Frage sagen kann, wo die
 #: Funktion im Fenster liegt — es hat sonst keine Quelle dafür. Im kompakten
-#: Schema fehlt er, und dort darf dieser Satz nicht stehen.
+#: Schema fehlt er, und dort darf dieser Satz nicht stehen. Ein Ort ist ein
+#: Menü **oder** die Karte rechts: Was einer Auswahl gilt, steht dort, mit der
+#: Auswahl, die es braucht.
 _MENU_HINT = """
 Der Chat ist auch ein Suchfeld: Fragt jemand, wie etwas geht, nenne neben
-deinem Vorschlag auch, wo die Funktion im Menü steht — der Ort steht in jeder
-Werkzeugbeschreibung („Menü: …“). So findet er sie beim nächsten Mal selbst.
+deinem Vorschlag auch, wo die Funktion im Fenster steht — der Ort steht in
+jeder Werkzeugbeschreibung („Ort: …“): ein Menü der Leiste oder die Karte
+„Handlungen“ rechts, die zu einem gewählten Körper oder Merkmal gehört. So
+findet er sie beim nächsten Mal selbst.
 """
 
 

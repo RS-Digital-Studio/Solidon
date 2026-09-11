@@ -822,6 +822,115 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
 * **Und am Langloch stehen beide Griffe** — die Knöpfe für Länge und Richtung
   und die Pfeile und Ringe des Bewegungsgriffs, seit es sich versetzen und
   drehen lässt (RM-153). Der Ring um die Bohrachse dreht die Mittellinie.
+* **Solange die Platzierung läuft, ist ein Zug am Bewegungsgriff ein
+  Vorschlag** — wie am Langlochgriff. Pfeil: `featureMoveProposed`, Ring:
+  `featureTurnProposed`; die Zahlen landen in *Merkmal verschieben* bzw.
+  *Merkmal drehen*, der Griff bleibt an der neuen Stelle stehen
+  (`_grip_shift`, `move_proposal_waits()`), die Maßlinien folgen über
+  `PlacementFlow.move_to`, und erst das Übernehmen rechts macht einen Schritt
+  (Regel 2). Ohne Platzierung — an einem Zapfen, Kegel, einer Kugel, die
+  keinen Knopf ins Bild haben — bleibt der Zug ein Schritt wie seit dem
+  03.09.2026. Anlass: Robert, 11.09.2026, „nach dem verschieben verschwindet
+  das gizmo gleich ohne auf übernehmen zu klicken".
+* **Nach dem Übernehmen kommen Maße und Griffe wieder** — am selben Merkmal,
+  an seiner neuen Stelle (`MainWindow._measures_to_resume`, eingelöst in
+  `_show_feature_fields` über denselben Weg wie der Knopf). Jede Operation
+  beendet die Platzierung; wer aus ihr heraus übernommen hat, will danach
+  weiter im Bild arbeiten (Konzept Merkmalbedienung §4, Abnahme 1). Wechselt
+  das Merkmal dabei seinen Namen (`hole_1` → `slot_1`, zugesagt), findet
+  `_reselect_the_renamed` es an der Stelle wieder, die der Schritt genannt
+  hat — nach Baum **und** Ansicht, sonst geht die Nachwahl im Aufbau verloren.
+* **Ein wartender Langlochzug und ein Versetzen warten zusammen.** Der Zug am
+  Bewegungsgriff lässt den gezogenen Umriss stehen (`_end_drag` beendet ihn
+  nicht mehr, `_detach_gizmo` leert `_slot_target` nicht mehr; der neue Griff
+  trägt `_slot_waiting`), die Stelle geht in die Felder von *Zum Langloch
+  ziehen*, und `slot_hole` schneidet Länge und Stelle in **einem** Schritt
+  (`slotDragged` trägt die Stelle als viertes Argument). Verworfen wird der
+  Zug nur, wenn er selbst endet: Übernehmen, Escape (`cancel_slot_drag`),
+  Auswahlwechsel, Szenenaufbau (`drop_move_proposal`). Anlass: Robert,
+  11.09.2026, „das langloch ziehe und dann das langloch nochmal über das gizmo
+  verschieben will ist es wie abbrechen".
+* **Am Merkmal zielt die Platzierung nie.** Bis zum Abend des 11.09.2026 war
+  ein Klick neben dem Griff die Ansage, „woanders hinzuwollen": Die
+  Platzierung löste sich vom Merkmal, die Bohrungsvorschau klebte am Zeiger
+  wie beim Setzen einer neuen, und der Weg heraus war nicht zu finden
+  (Robert: „auf einmal war ich im modus eine neue Bohrung zu setzen … er
+  sollte an der stelle ja nichtmal kommen"). Wohin ein vorhandenes Loch soll,
+  sagen der Griff und die Felder rechts; ein Klick ins Bild gehört der Auswahl
+  (`PlacementFlow.pointer` gibt ihn im Zustand „sitzt am Merkmal" zurück).
+* **Escape verlässt die Maße** (`MainWindow._leave_the_measures`) — vor der
+  Auswahlstufe, wie jedes Werkzeug: Ein wartender Langlochzug und ein
+  vorgeschlagenes Versetzen werden verworfen, gerechnet ist bis dahin nichts;
+  die Auswahl bleibt, das nächste Escape geht die Stufe zurück.
+* **Die Maßlinien weichen dem Griff.** Sie laufen alle in der Mitte des
+  Merkmals zusammen, und dort sitzen Pfeile und Ringe; die Maßfläche spart
+  die Griffspanne aus ihrer Maske aus (`_Dimensions.clearing`, aus
+  `gizmo_reach()` wie die Felder). Der Umriss des Lochs bleibt darunter
+  sichtbar. Anlass: „das verschieben ist auch schwer durch die maßlinien zu
+  treffen/sehen".
+* **Ein Baustein sitzt sofort, und am gesetzten Baustein hängt ein Griff.**
+  Ein Baustein aus dem Katalog geht von selbst in die Platzierung — und seit
+  dem 11.09.2026 sitzt er dort ohne Klick auf der gewählten Fläche, sonst auf
+  der größten nach oben zeigenden (`PlacementFlow._begin_on_a_face`,
+  `UPWARD_FACE`), mit Werkzeugkörper, Maßlinien und den Feldern im Dialog.
+  Vorher stand mit gewähltem Körper und der Maus neben dem Teil nichts im
+  Bild, und *Übernehmen* schrieb einen roten Schritt ohne Position (Robert:
+  „im viewport gab es weder vorschau, noch das gizmo dazu"; gemessen an allen
+  24 einsetzbaren Bausteinen). Sobald die Stelle steht, hängt am
+  Werkzeugkörper der Bewegungsgriff (`viewport.grip_placement`,
+  `placementDragged` → `_dragged_at_the_tool` → `move_to`); der Griff der
+  Auswahl weicht ihm, weil beide an derselben Stelle säßen, und kommt mit
+  Escape zurück. **Ein Klick bestätigt keine Stelle, die niemand gewählt
+  hat**: Nach dem Sitz von selbst setzt er um (`_seated_by_default`), erst
+  der nächste übernimmt. Nur Bausteine — die Bohrung wird gezielt gesetzt, und
+  dieser Weg ist eingespielt.
+* **Das gewählte Loch ist selbst der Griff.** Ein Druck der linken Taste auf
+  ein gewähltes Loch (oder Langloch), solange keine Platzierung läuft, baut
+  den Langlochgriff für diesen einen Zug und gibt ihm den Druck
+  (`_pull_at_the_hole` → `SlotHandle.take_press`, der nähere Knopf); der Zug
+  rechnet wie am Knopf, aus der Mitte heraus. Das Loslassen ist der
+  gewohnte Vorschlag (`slotProposed`), und das Fenster holt dazu die Maße ins
+  Bild (`_on_slot_proposed` → `request_in_view`) — ab da stehen Knöpfe,
+  Umriss, Griff und Maßlinien wie nach dem Knopf. Neben dem Loch bleibt die
+  linke Taste beim Körper, wie das `solidon`-Schema es sagt. Anlass: Robert,
+  11.09.2026, „wenn ich jetzt eine bohrung an einer ecke zum langloch ziehen
+  will verschiebe ich immer den körper" — die Knöpfe kamen erst mit dem Knopf,
+  und ein Zug am Loch war bis dahin ein Zug am Körper darunter.
+* **Der Ring um die Bohrachse dreht das Langloch** — nicht seine Achse.
+  `_slot_turn_sign` erkennt den Ring, der parallel zur Achse des
+  Langlochgriffs läuft (`SLOT_RING_ALIGNED`); während des Zugs folgen Griff,
+  Marke und Beschriftung dem gerasteten Winkel (`_turn_slot_with`, Ansatz in
+  `_slot_turn_base`), und das Loslassen ist derselbe Vorschlag wie ein Zug an
+  den Knöpfen (`_on_slot_released` → *Zum Langloch ziehen* mit neuer
+  Richtung). Die zwei anderen Ringe kippen die Achse und bleiben *Merkmal
+  drehen*. Anlass: Robert, 11.09.2026, „bei gizmo vom langloch dreht sich
+  die vorschau vom langloch noch nicht".
+* **Die Marke folgt dem Griff, solange er steht** (`_slot_form_of`): dem
+  wartenden Zug, dem Zwischenstand einer Geste an Knöpfen oder Ring, sonst
+  den Maßen des Merkmals. `_repaint_preview` tauscht dabei nur die Punkte
+  (`update_points`), solange die Form ihre Punktzahl behält — ein Aktor je
+  Mausbewegung wäre ein Neuaufbau je Mausbewegung.
+* **Ein Klick auf das Modell verlässt die Maße nicht.** Solange eine
+  Platzierung läuft, nimmt `_on_left_click` einen Klick, der das Modell
+  trifft, gar nicht erst an — wer den Pfeil des Griffs verfehlt, wählt nicht
+  die Fläche daneben (Robert, 11.09.2026: „solange der klick auf dem modell
+  ist sollte das nicht passieren"). Heraus führen drei Wege, alle über
+  `MainWindow._leave_the_measures`: Escape, *Abbrechen* rechts unter
+  *Übernehmen* (`FeaturePanel.cancelRequested`, sichtbar nur mit Maßen im
+  Bild — `set_measuring`) und der Klick ins Leere (`_on_object_picked("")`).
+  Alle drei verwerfen, was wartete; gerechnet ist nichts (Regel 2). Ein
+  Auswahlwechsel über `select_features` verwirft ebenso wie `select_feature`.
+* **Die Marke trägt die Langlochform, und sie geht beim Zug mit.** Ein
+  wartender Langlochzug (`_slot_waiting`) und ein erkanntes Langloch werden
+  als Stadion gezeigt, in die Tiefe gezogen (`_feature_shape` →
+  `_slot_form_of`, `shapes.prism` über `slot_outline`) — nicht als Zylinder
+  der Bohrung, aus der es kommt. Nach dem Zug an den Knöpfen und nach jeder
+  getippten Zahl wird die Marke neu gezeichnet (`_repaint_preview`). Ein Zug
+  am Bewegungsgriff nimmt Marke, Knöpfe **und** Umriss mit
+  (`SlotHandle.shift`), und der frisch gebaute Griff danach trägt den Umriss
+  von Anfang an (`outlined=`), nicht erst mit dem nächsten Zug. Anlass:
+  Robert, 11.09.2026, „wenn ich die bohrung zum langloch schiebe im viewport
+  und das langloch dann verschiebe fehlt die richtige vorschau".
 * **Kürzer als `prepare.shortest_slot` lässt er sich nicht ziehen.** Der Kern
   lehnt das ab (`prepare.SLOT_TOO_SHORT`), und eine Geste, die in einer Absage
   endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und nicht

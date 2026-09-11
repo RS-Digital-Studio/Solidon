@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Final, Protocol, cast, runtime_checkable
 
 import numpy as np
 from PySide6.QtCore import (
@@ -218,6 +218,12 @@ class QuietHost(QObject):
         return False
 
 
+#: Ab welcher Neigung eine Fläche als „nach oben" gilt, wenn ein Baustein von
+#: selbst eine sucht (:meth:`PlacementFlow._face_to_seat_on`) — die Normale
+#: gegen z; 0,7 ist rund 45 Grad.
+UPWARD_FACE: Final = 0.7
+
+
 def starts_by_itself(spec: OperationSpec) -> bool:
     """Ob dieser Dialog von selbst in die Platzierung geht.
 
@@ -280,6 +286,14 @@ class _Dimensions(QWidget):
         #: Anteil der Vorschau — was hier verschwinden wird, ist dort schon
         #: orange, und zwei Farben für dieselbe Aussage wären eine zu viel.
         self.outline_colour: QColor | None = None
+        #: Wo der Bewegungsgriff steht — Mitte und Radius in Bildpunkten. Die
+        #: Maßlinien werden dort ausgespart: Sie laufen alle in der Mitte des
+        #: Merkmals zusammen, und genau dort sitzen Pfeile und Ringe. Vier
+        #: Linien mit Unterlage darüber, und der Griff ist nicht zu sehen und
+        #: kaum zu treffen (Robert, 11.09.2026: „das verschieben ist auch schwer
+        #: durch die maßlinien zu treffen/sehen"). Der Umriss bleibt: Er zeigt
+        #: das Loch, und das gehört unter den Griff.
+        self.clearing: tuple[QPointF, float] | None = None
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.hide()
@@ -321,12 +335,6 @@ class _Dimensions(QWidget):
                 marker = QPainterPath()
                 marker.addEllipse(point, 5.0, 5.0)
                 ink = ink.united(marker)
-        if len(self.outline) >= 3:
-            ring = QPainterPath()
-            ring.addPolygon(QPolygonF(self.outline))
-            ring.closeSubpath()
-            stroker.setWidth(6.0)
-            ink = ink.united(stroker.createStroke(ring))
         for start, end in self.lines:
             for polygon in self._arrowheads(start, end):
                 head = QPainterPath()
@@ -334,6 +342,19 @@ class _Dimensions(QWidget):
                 head.closeSubpath()
                 stroker.setWidth(2.0)
                 ink = ink.united(head).united(stroker.createStroke(head))
+        if self.clearing is not None:
+            # Die Linien weichen dem Griff; was darunter läge, wird nicht
+            # gezeichnet — die Maske klemmt auch das ``paintEvent``.
+            middle, radius = self.clearing
+            hole = QPainterPath()
+            hole.addEllipse(middle, radius, radius)
+            ink = ink.subtracted(hole)
+        if len(self.outline) >= 3:
+            ring = QPainterPath()
+            ring.addPolygon(QPolygonF(self.outline))
+            ring.closeSubpath()
+            stroker.setWidth(6.0)
+            ink = ink.united(stroker.createStroke(ring))
         area = QPainterPath()
         area.addRect(self.rect())
         ink = ink.intersected(area)
@@ -469,6 +490,17 @@ class PlacementFlow(QObject):
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
         #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
         #: seitenansicht sehen und dann die tiefe runterziehen").
+        self._seated_by_default = False
+        """Ob die Stelle **von selbst** gewählt wurde — noch von niemandem geklickt.
+
+        Ein Baustein sitzt seit dem 11.09.2026 sofort auf der gewählten oder
+        der obersten Fläche (:meth:`_begin_on_a_face`), damit Vorschau und
+        Griff da sind, bevor jemand zielt (Robert: „im viewport gab es weder
+        vorschau, noch das gizmo dazu"). Der Zeiger zielt dann nicht mehr —
+        aber ein Klick ins Bild **setzt um**, statt zu übernehmen: Wer nie
+        geklickt hat, hat die Stelle nie bestätigt, und ein Klick auf das Teil
+        darf keinen Schritt auslösen. Nach dem ersten Klick gilt, was immer
+        galt: Der nächste übernimmt."""
         self._seated_at_feature = False
         """Ob die Stelle einem vorhandenen Merkmal gehört.
 
@@ -584,6 +616,7 @@ class PlacementFlow(QObject):
         self.session.projectChanged.connect(self._document_changed)
         self.viewport.sceneApplied.connect(self._scene_applied)
         self.viewport.previewDragged.connect(self._dragged_in_preview)
+        self.viewport.placementDragged.connect(self._dragged_at_the_tool)
         self.viewport.set_preview_gizmo(_grips_its_preview(self.spec_of()))
         self.refresh_available()
         # **Wer eine platzierbare Operation wählt, will platzieren.** Der Weg
@@ -661,6 +694,7 @@ class PlacementFlow(QObject):
         self._epoch += 1
         self._result = self.session.last_result if self._change_op is None else None
         self._frozen = False
+        self._seated_by_default = False
         self._distance_valid = True
         self._commit_pending = False
         self._surface = None
@@ -731,6 +765,7 @@ class PlacementFlow(QObject):
         self.viewport.set_placement_pointer(None)
         for widget in self._widgets():
             widget.hide()
+        self.viewport.grip_placement(None)
         self._remove_tools()
         self._tool_context = None
         self._tool_key = ""
@@ -815,44 +850,25 @@ class PlacementFlow(QObject):
         if not self.active or self.viewport.slot_drag_waits():
             return False
         if self._seated_at_feature:
-            if event.kind == "move" and not event.buttons:
-                # **Die Stelle steht am Merkmal, nicht am Zeiger** — aber nur
-                # die freie Bewegung gehört dieser Zusage. Ein Zug mit
-                # gedrückter Taste ist eine Kamerageste, und die bleibt frei
-                # (Regel dieser Datei: „Was die Platzierung nicht nimmt,
-                # gehört der Kamera"). Ohne die Tastenfrage waren Drehen und
-                # Schieben mit rechter und mittlerer Taste tot, solange eine
-                # Bohrung gewählt war.
-                return True
-            if event.kind == "press" and event.button == "left":
-                # Gemerkt, damit das Loslassen darunter Klick und Zug
-                # auseinanderhalten kann; genommen wird die Geste wie bisher,
-                # weil ihr Loslassen die Stelle neu ausrichtet.
-                self._pressed_at = (event.x, event.y)
-                return True
-            if event.kind == "release" and event.button == "left":
-                # **Ein Zug ist kein Klick** — dieselbe Unterscheidung wie in
-                # der Tiefenstufe weiter unten, und aus demselben Grund. Wer
-                # am Bewegungsgriff ansetzt und den Pfeil verfehlt, zieht über
-                # das Bild; zählte dieses Loslassen als Ansage, sprang die
-                # Platzierung dabei vom gewählten Merkmal weg in ihr Zielen —
-                # die Bohrungsvorschau klebte danach am Zeiger, als setze man
-                # eine neue (Robert, 11.09.2026: „beim verschieben über Gizmo
-                # kommen wir in die ansicht vom bohrung setzen"). Gemessen
-                # wird an der Zugschwelle des Systems, wie überall in der
-                # Ansicht.
-                if not self._barely_moved(event):
-                    return True
-                # **Ein Klick ist die ausdrückliche Ansage, woanders
-                # hinzuwollen.** Danach zielt wieder der Zeiger, wie beim
-                # Setzen einer neuen Bohrung — und die Geste ist damit
-                # verbraucht: Ohne das ``return`` fiele sie in die
-                # ``confirm``-Kette weiter unten und **übernähme** die
-                # Platzierung, statt sie neu auszurichten. Der eingefrorene
-                # Zustand geht mit, sonst bliebe die alte Stelle stehen.
-                self._seated_at_feature = False
-                self._frozen = False
-                return True
+            # **Die Stelle steht am Merkmal, nicht am Zeiger** — aber nur die
+            # freie Bewegung gehört dieser Zusage. Ein Zug mit gedrückter
+            # Taste ist eine Kamerageste, und die bleibt frei (Regel dieser
+            # Datei: „Was die Platzierung nicht nimmt, gehört der Kamera").
+            # Ohne die Tastenfrage waren Drehen und Schieben mit rechter und
+            # mittlerer Taste tot, solange eine Bohrung gewählt war.
+            #
+            # **Am Merkmal zielt die Platzierung nie.** Bis zum Abend des
+            # 11.09.2026 war ein Klick neben dem Griff die Ansage, „woanders
+            # hinzuwollen": Die Platzierung löste sich vom Merkmal und zielte
+            # mit dem Zeiger — die Bohrungsvorschau klebte daran, als setze man
+            # eine neue, und der Weg heraus war nicht zu finden (Robert: „auf
+            # einmal war ich im modus eine neue Bohrung zu setzen … er sollte
+            # an der stelle ja nichtmal kommen"). Wohin ein vorhandenes Loch
+            # soll, sagen der Bewegungsgriff und die Felder rechts; ein Klick
+            # ins Bild gehört der Auswahl, wie ohne Platzierung auch. Trifft er
+            # etwas anderes, wechselt die Auswahl, und die Platzierung geht mit
+            # ihr (``MainWindow._on_feature_selected``).
+            return event.kind == "move" and not event.buttons
         if event.kind == "leave":
             return True
         confirm = event.kind == "release" and event.button == "left"
@@ -928,9 +944,13 @@ class PlacementFlow(QObject):
                 self._commit_pending = False
             if self._frozen and not confirm:
                 return True
-            if self._frozen and confirm:
+            if self._frozen and confirm and not self._seated_by_default:
                 self.accept()
                 return True
+            # Eine von selbst gewählte Stelle bestätigt kein Klick, er setzt
+            # um (siehe :attr:`_seated_by_default`) — und ab hier hat jemand
+            # geklickt.
+            self._seated_by_default = False
             self._pending = event.x, event.y, confirm
             self._commit_pending = confirm
             self._serial += 1
@@ -1078,7 +1098,10 @@ class PlacementFlow(QObject):
         —, geschieht hier nichts, und es bleibt beim Zeigen.
         """
         entry, feature = self._source_feature()
-        if entry is None or feature is None or self._surface is not None:
+        if entry is None or self._surface is not None:
+            return
+        if feature is None:
+            self._begin_on_a_face(entry)
             return
         stamp = self._serial
         object_id = entry.id
@@ -1127,6 +1150,136 @@ class PlacementFlow(QObject):
             self._seated_at_feature = False
 
         self.session.placement_async(compute, done, failed)
+
+    def _begin_on_a_face(self, entry: SceneObject) -> None:
+        """Ein Baustein sitzt sofort auf einer Fläche — ohne Klick, mit Griff.
+
+        **Wer einen Baustein wählt, soll ihn sehen.** Bis zum 11.09.2026 zeigte
+        die Platzierung ihn erst, wenn der Zeiger über einer Fläche stand; mit
+        einem gewählten Körper und der Maus neben dem Teil stand nichts im
+        Bild, und *Übernehmen* im Dialog schrieb einen roten Schritt („Es ist
+        auch keine Position eingetragen"; Robert: „im viewport gab es weder
+        vorschau, noch das gizmo dazu, kontrolliere mal alle Bausteine
+        darauf"). Gemessen an allen 24 einsetzbaren Bausteinen — jeder verhielt
+        sich so.
+
+        Gesetzt wird auf die **gewählte** Fläche, wenn eine gewählt ist (sie
+        steht als ``at_feature`` im Dialog), sonst auf die größte Fläche, die
+        nach oben zeigt — die Oberseite einer Platte, der häufigste Ort. Die
+        Stelle ist die Mitte der Fläche; liegt sie in einer Aussparung, ein
+        Punkt daneben, der sicher auf ihr liegt. Was daraus wird, ist derselbe
+        Weg wie nach einem Klick (:meth:`_settle`): Maßlinien, Felder, und der
+        Griff am Körper (``viewport.grip_placement``) — nur dass ein Klick
+        danach umsetzt statt zu übernehmen (:attr:`_seated_by_default`).
+
+        **Nur für Bausteine.** Eine Bohrung wird gezielt gesetzt, und dieser
+        Weg ist über Tage eingespielt; ein Baustein hat eine Grundfläche, die
+        man sehen will, bevor man ihn irgendwohin schiebt. Ohne Körper mit
+        einer solchen Fläche bleibt es beim Zeigen — der Rückfall, kein Fehler.
+        """
+        from app.core.knowledge.parts.ops import part_of
+
+        if part_of(self.spec_of().name) is None:
+            return
+        face = self._face_to_seat_on(entry)
+        if face is None or not face.face_indices:
+            return
+        stamp = self._serial
+        object_id = entry.id
+        first = int(face.face_indices[0])
+        features = entry.features
+
+        def compute() -> Any:
+            from shapely.geometry import Point
+
+            from app.core.sketch.planes import to_plane, to_world
+
+            mesh = as_mesh_data(entry.mesh)
+            prepared = placement.prepare_surface(mesh, first, features)
+            area = prepared.area
+            middle = area.centroid
+            if not area.contains(middle):
+                middle = area.representative_point()
+            centre = face.params["centre"]
+            flat = to_plane(prepared.frame, (float(centre[0]), float(centre[1]), float(centre[2])))
+            if area.contains(Point(flat)):
+                middle = Point(flat)
+            seat = to_world(prepared.frame, (float(middle.x), float(middle.y)))
+            return prepared, placement.at_point(prepared, seat)
+
+        def done(value: Any) -> None:
+            if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
+                return
+            if value is None or self._surface is not None:
+                return
+            self._prepared, self._surface = value
+            self._centre_id = ""
+            self._prepared_mesh = entry.mesh
+            self._patch_faces = frozenset(self._surface.face_indices)
+            self._object_id = object_id
+            self._distance_valid = True
+            self._seated_by_default = True
+            self._set_values()
+            self._settle()
+            # Der Satz sagt, was hier anders ist als nach einem Klick: Der
+            # Griff verschiebt, der Klick setzt um — und übernimmt nicht.
+            self._note.setText(
+                tr(
+                    "Sitzt auf der Fläche · Griff: verschieben · Klick: umsetzen · "
+                    "Übernehmen: ausführen · Esc: zurück"
+                )
+            )
+
+        def failed(_detail: str) -> None:
+            # Eine Fläche, auf der nichts sitzen kann, ist kein Fehler: Dann
+            # zielt der Zeiger, wie vor diesem Weg auch.
+            return
+
+        self.session.placement_async(compute, done, failed)
+
+    def _face_to_seat_on(self, entry: SceneObject) -> Feature | None:
+        """Die Fläche, auf die ein Baustein von selbst gesetzt wird.
+
+        Die gewählte, wenn eine gewählt ist — der Dialog trägt sie als
+        ``at_feature``. Sonst die größte, die nach oben zeigt: auf einer Platte
+        die Oberseite. Zeigt keine nach oben (eine Kugel, ein Zylinder auf der
+        Seite), gibt es keine — und der Zeiger zielt.
+        """
+        wanted = str(self.dialog.values().get("at_feature") or "")
+        chosen = entry.features.get(wanted)
+        if chosen is not None and chosen.kind == "face" and chosen.face_indices:
+            return chosen
+        best: Feature | None = None
+        best_area = 0.0
+        for feature in entry.features.values():
+            if feature.kind != "face" or not feature.face_indices:
+                continue
+            normal = feature.params.get("normal")
+            if normal is None or float(normal[2]) < UPWARD_FACE:
+                continue
+            area = float(feature.params.get("area") or 0.0)
+            if best is None or area > best_area:
+                best, best_area = feature, area
+        return best
+
+    def _dragged_at_the_tool(self, matrix: Any) -> None:
+        """Ein Zug am Griff des Werkzeugkörpers setzt die Stelle um.
+
+        Die Matrix ist die des Körpers **nach** dem Zug; ihre Verschiebung ist
+        sein Ursprung, und der sitzt im Bild an der Stelle der Platzierung
+        (``redraw`` legt ihn dorthin). Zurück in die Szene (§25), dann derselbe
+        Weg wie vom Bewegungsgriff am Merkmal: :meth:`move_to` lotet in die
+        Fläche und setzt Maßlinien und Felder nach. Liegt die Stelle neben der
+        Fläche, springt der Körper zurück — gezeichnet wird, was gilt.
+        """
+        if self._disposed or not self.active or self._surface is None or self._deepening:
+            return
+        shown = np.asarray(matrix, dtype=np.float64)[:3, 3]
+        point = self.viewport.scene_point_of(
+            (float(shown[0]), float(shown[1]), float(shown[2])), self._object_id
+        )
+        if not self.move_to(point):
+            self.redraw()
 
     def _invalid(self, message: str) -> None:
         self._surface = None
@@ -1384,6 +1537,43 @@ class PlacementFlow(QObject):
         self._set_values()
         self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
+
+    def move_to(self, point: Vec3) -> bool:
+        """Die Platzierung an einen Punkt setzen — von außen, etwa vom Griff.
+
+        **Der Zug am Bewegungsgriff und die Maßlinien meinen dieselbe Stelle.**
+        Er schlägt eine Mitte vor (``viewport.featureMoveProposed``), die
+        Felder rechts nehmen sie — und die Maßlinien im Bild sollen sie
+        zeigen, nicht die Stelle von vorher. Der Punkt wird in die Ebene der
+        Fläche gelotet: Der Griff sitzt auf halber Tiefe des Lochs, die
+        Maßlinien auf seiner Mündung, und ein Zug entlang der Achse hat auf
+        der Fläche keinen Ort (die Felder rechts tragen ihn trotzdem).
+
+        Liegt die Stelle nicht auf der Fläche, bleibt alles, wie es war;
+        gesagt hat es dann schon der Griff mit seinem Schatten.
+        """
+        if not self.active or self._surface is None or self._prepared is None:
+            return False
+        frame = self._prepared.frame
+        origin = np.asarray(frame.origin, dtype=np.float64)
+        normal = np.asarray(frame.normal, dtype=np.float64)
+        given = np.asarray(point, dtype=np.float64)
+        levelled = given - float(np.dot(given - origin, normal)) * normal
+        try:
+            changed = placement.at_point(
+                self._prepared, (float(levelled[0]), float(levelled[1]), float(levelled[2]))
+            )
+        except ValidationError, ValueError, ArithmeticError:
+            return False
+        self._frozen = True
+        self._distance_valid = True
+        self._pending = None
+        self._serial += 1
+        self._surface = changed
+        self._set_values()
+        self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
+        self.redraw()
+        return True
 
     def _settle(self) -> None:
         """Der Klick legt die Stelle fest — und danach stehen die Maße offen.
@@ -1916,6 +2106,7 @@ class PlacementFlow(QObject):
             for item in (self._tool, self._addition):
                 if item is not None:
                     item.set_visible(False)
+            self.viewport.grip_placement(None)
             self.viewport._draw()
             return
         self._show_bar()
@@ -2004,6 +2195,7 @@ class PlacementFlow(QObject):
                 item.set_visible(tool_valid and not has_outline)
         if not valid:
             self._canvas.hide()
+            self.viewport.grip_placement(None)
             self.viewport._draw()
             return
         point = np.asarray(surface.point, dtype=np.float64)
@@ -2016,6 +2208,22 @@ class PlacementFlow(QObject):
             self._tool.set_matrix(matrix)
             if self._addition is not None:
                 self._addition.set_matrix(matrix)
+        # **Steht die Stelle, steht der Griff am Körper** — für einen
+        # Baustein, der gesetzt ist und noch nicht übernommen (Robert,
+        # 11.09.2026: „noch das gizmo dazu"). Nicht in der Tiefenstufe, dort
+        # zieht die Maus die Tiefe; nicht am vorhandenen Merkmal, dort steht
+        # der Griff der Auswahl; und nicht, wo die Werte ohnehin im
+        # Merkmalfenster stehen. Frisch angehängt bei jedem Zeichnen, weil der
+        # Körper eben neu gesetzt wurde.
+        gripped = (
+            tool_valid
+            and self._frozen
+            and not self._deepening
+            and not self._seated_at_feature
+            and self._tool is not None
+            and not self.dialog.values_stand_elsewhere
+        )
+        self.viewport.grip_placement(self._tool if gripped else None)
         ratio = self.viewport._device_ratio()
 
         def screen(at: Vec3) -> QPointF:
@@ -2198,6 +2406,7 @@ class PlacementFlow(QObject):
         # ``reach``, weil der Griff an der Mitte der Bohrung sitzt und der
         # Setzpunkt an ihrer Mündung.
         handle = self.viewport.gizmo_reach()
+        self._canvas.clearing = None
         if handle is not None:
             origin, span = handle
             middle = screen(origin)
@@ -2205,6 +2414,8 @@ class PlacementFlow(QObject):
             around = max(
                 SPACE, round(math.hypot(rim.x() - middle.x(), rim.y() - middle.y())) + ROOMY
             )
+            # Dieselbe Spanne nimmt die Maßfläche aus ihren Linien heraus.
+            self._canvas.clearing = (middle, float(around))
             occupied.append(
                 QRect(
                     max(bounds.left() - around, min(round(middle.x()), bounds.right() + around)),

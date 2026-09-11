@@ -148,6 +148,7 @@ from app.core.registry import (
     caveat_line,
     folded_categories,
     group_for_variant,
+    in_the_menu_bar,
     menu_tree,
     needed_inputs,
     palette_entries,
@@ -194,6 +195,7 @@ from app.core.types import (
     Stroke,
     Vec3,
 )
+from app.core.units import EPS_GEOM, match_tolerance
 from app.i18n import _, format_decimal, tr
 from app.ui import first_run
 from app.ui.ai_disclosure import (
@@ -1769,6 +1771,7 @@ class MainWindow(QMainWindow):
         self.feature_panel = FeaturePanel(self)
         self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
         self.feature_panel.inViewRequested.connect(self._place_from_feature_panel)
+        self.feature_panel.cancelRequested.connect(self._leave_the_measures)
         self.feature_panel.fitRequested.connect(
             self._add_fit_from_panel, Qt.ConnectionType.QueuedConnection
         )
@@ -1864,6 +1867,8 @@ class MainWindow(QMainWindow):
         # einen Schritt und rechnet nichts nach (§18.11).
         self.viewport.featureMoved.connect(self._on_feature_moved)
         self.viewport.featureTurned.connect(self._on_feature_turned)
+        self.viewport.featureMoveProposed.connect(self._on_feature_move_proposed)
+        self.viewport.featureTurnProposed.connect(self._on_feature_turn_proposed)
         self.viewport.slotDragged.connect(self._on_slot_dragged)
         self.viewport.slotStarted.connect(self._close_the_other_way)
         self.viewport.slotProposed.connect(self._on_slot_proposed)
@@ -2929,32 +2934,25 @@ class MainWindow(QMainWindow):
             present = [sections[name] for name in categories if name in sections]
             if not present:
                 continue
+            if not in_the_menu_bar(present[0].category):
+                # **Was einer Auswahl gilt, steht rechts — und nicht noch
+                # einmal hier** (Robert, 11.09.2026: „da wir die operationen
+                # rechts im auswahlpanel haben brauchen wir es nicht auch noch
+                # zusätzlich oben in der menüleiste"). *Objekt*, *Ändern* und
+                # *Vorbereiten* waren dieselben Einträge wie die Karte der
+                # Handlungen, als Liste zum Absuchen (§2.6). Die Aktionen
+                # bleiben trotzdem: Am Fenster, damit Strg+B weiter bohrt,
+                # Entf weiter löscht und die Befehlspalette weiter weiß, ob
+                # eine Handlung gerade geht (``_update_actions`` liest sie).
+                for section in present:
+                    for spec in section.entries:
+                        if spec.name in MENU_TWINS or spec.name in variant_members():
+                            continue
+                        self._op_actions[spec.name] = self._operation_action(None, spec)
+                continue
             group = self._menu(str(title))
             groups[str(title)] = group
             self._workspace_menus.append(group)
-            if any(section.category == "parts" for section in present):
-                # **Ein Menü *Bausteine*, in dem keine Bausteine stehen,
-                # führt in die Irre.** Übrig sind hier zwei Operationen, die
-                # einen Deckel bauen; wer das Menü öffnet, um ein Scharnier zu
-                # suchen, findet zwei Deckel und keinen Hinweis. Der Katalog
-                # steht deshalb als erste Zeile darin — derselbe Befehl wie in
-                # *Datei*, nur an dem Ort, an dem danach gesucht wird.
-                group.addAction(self._catalog_action)
-                # **Und daneben die Gegenstücke** (RM-147 E1): Ein Paar ist
-                # kein Baustein im Katalog, sondern zwei — der Stift am einen
-                # Teil, die Bohrung am anderen. Wer sie sucht, sucht sie hier,
-                # und nicht unter *Bearbeiten*.
-                self.counterpart_action = self._add_action(
-                    group,
-                    tr("Gegenstücke setzen …"),
-                    None,
-                    self.action_counterpart,
-                    tr(
-                        "Beide Hälften einer Verbindung auf einmal: dieselben Maße, "
-                        "eine Passung, ein Schritt im Verlauf."
-                    ),
-                )
-                group.addSeparator()
             # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
             # ``group_is_flat`` für die ganze Gruppe: alles flach oder
             # jede Kategorie eine Ebene tiefer. Damit lagen im Menü
@@ -3036,6 +3034,26 @@ class MainWindow(QMainWindow):
                     target.setToolTipsVisible(True)
                     group.addMenu(target)
                     self._menus.append(target)
+                if section.category == "parts":
+                    # **Die Bausteine haben kein eigenes Menü mehr** — was von
+                    # der Kategorie in der Leiste steht, sind zwei Deckel, und
+                    # die gehören zum Erzeugen. Der Katalog steht als erste
+                    # Zeile des Abschnitts: derselbe Befehl wie in *Datei*, nur
+                    # an dem Ort, an dem nach einem Baustein gesucht wird. Und
+                    # daneben die Gegenstücke (RM-147 E1): Ein Paar ist kein
+                    # Baustein im Katalog, sondern zwei — der Stift am einen
+                    # Teil, die Bohrung am anderen.
+                    target.addAction(self._catalog_action)
+                    self.counterpart_action = self._add_action(
+                        target,
+                        tr("Gegenstücke setzen …"),
+                        None,
+                        self.action_counterpart,
+                        tr(
+                            "Beide Hälften einer Verbindung auf einmal: dieselben Maße, "
+                            "eine Passung, ein Schritt im Verlauf."
+                        ),
+                    )
                 subgroups: dict[str, QMenu] = {}
                 for spec in section.entries:
                     if spec.name in MENU_TWINS:
@@ -3564,7 +3582,16 @@ class MainWindow(QMainWindow):
         return made[group]
 
     def _operation_action(self, menu: Any, spec: OperationSpec) -> QAction:
-        """Ein Menüeintrag für eine Operation, überall gleich gebaut."""
+        """Ein Menüeintrag für eine Operation, überall gleich gebaut.
+
+        **Ohne Menü** (``menu is None``) entsteht dieselbe Aktion für eine
+        Handlung, die rechts in der Karte steht (11.09.2026): Sie hängt am
+        Fenster, damit ihr Kürzel greift und die Palette weiß, ob sie geht —
+        außer sie trägt eine nackte Taste. Die begrenzt :meth:`_scope_shortcut`
+        auf Objektbaum und Ansicht, und am Fenster dazu läge Entf noch einmal
+        über dem Verlauf, wo *Schritt löschen* dieselbe Taste hat: Zwei
+        Aktionen auf einer Taste führt Qt beide nicht aus.
+        """
         action = QAction(icon(icon_name_for(spec), self), str(spec.title), self)
         key = shortcut_for(spec.name, spec.shortcut, self.settings.shortcut_scheme)
         if key:
@@ -3581,7 +3608,10 @@ class MainWindow(QMainWindow):
         action.triggered.connect(
             weak_slot(self, lambda view, entry: view.launch_operation(entry), spec)
         )
-        menu.addAction(action)
+        if menu is not None:
+            menu.addAction(action)
+        elif key not in self._BARE_KEYS:
+            self.addAction(action)
         return action
 
     def launch_operation(self, spec: OperationSpec) -> None:
@@ -3937,6 +3967,11 @@ class MainWindow(QMainWindow):
         dazu sieht nur, wer mit der Maus darüberfährt. Mit einem gewählten
         Körper sind alle vier vollständig nutzbar — das Menü ist also nicht
         kaputt, es kommt nur zu früh.
+
+        **Diese vier Menüs gibt es seit dem 11.09.2026 nicht mehr** — ihre
+        Einträge stehen rechts in der Karte der Handlungen, die ohne Auswahl
+        ohnehin nicht dasteht. Die Regel bleibt für das nächste Menü, das ganz
+        gesperrt wäre; heute trifft sie keines.
 
         **Die Grenze läuft am Menü, nicht am Eintrag, und das ist der ganze
         Schnitt.** Ein Menü, in dem jeder Eintrag gesperrt ist, erklärt nichts —
@@ -7374,9 +7409,32 @@ class MainWindow(QMainWindow):
         if self.tools.active() is not None:
             self.tools.close_tool()
             return
+        if self._leave_the_measures():
+            return
         # Zuletzt der Weg aus der Auswahl heraus. Nur wenn kein Werkzeug offen
         # war: Wer eines geöffnet hat, meint mit Escape das Werkzeug.
         self._step_selection_out()
+
+    def _leave_the_measures(self) -> bool:
+        """Escape verlässt die Maße im Bild — und verwirft, was darin wartet.
+
+        Die stille Platzierung hat kein Fenster und damit kein Kreuz; ihr
+        Ausgang ist diese Taste. Verworfen wird, was noch kein Schritt ist: ein
+        gezogenes Langloch, das auf sein Übernehmen wartet, ein am Griff
+        vorgeschlagenes Versetzen. Gerechnet ist bis dahin nichts (Regel 2),
+        die Auswahl bleibt stehen — das nächste Escape geht dann eine Stufe
+        weiter, wie immer. Anlass: Robert, 11.09.2026, „kann auch den modus
+        nicht mehr verlassen".
+        """
+        waiting = self.viewport.slot_drag_waits() or self.viewport.move_proposal_waits()
+        running = self._quiet_placement is not None and self._quiet_placement.active
+        if not (waiting or running):
+            return False
+        if self.viewport.slot_drag_waits():
+            self.viewport.cancel_slot_drag()
+        self.viewport.drop_move_proposal()
+        self.end_quiet_placement()
+        return True
 
     def _step_selection_out(self) -> bool:
         """Escape geht eine Stufe zurück: Merkmal → Körper → nichts (§18.5).
@@ -9165,6 +9223,20 @@ class MainWindow(QMainWindow):
         self._quiet_host: Any = None
         """Ihr Träger. Getrennt geführt, damit ein Test ihn fragen kann, ohne
         durch den Fluss zu greifen."""
+        self._measures_to_resume: str = ""
+        """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
+
+        Jede Operation beendet die laufende Platzierung (`_scene_changed` →
+        `back()`); wer aus ihr heraus übernommen hat, will danach weiter im
+        Bild arbeiten — mit den Maßen an der neuen Stelle und den Griffen
+        (Konzept §4, Abnahme 1: „Maße stehen danach immer noch"; Robert,
+        11.09.2026: „nach dem verschieben verschwindet das gizmo gleich")."""
+        self._resume_near: Vec3 | None = None
+        """Wo das Merkmal nach dem Schritt liegen wird — für den Fall, dass es
+        dabei seinen Namen wechselt (``hole_1`` wird ``slot_1``, zugesagt in
+        ``SLOT_FEATURE_RENAMED``). Der Baum stellt nur eine Auswahl wieder her,
+        deren Kennung es noch gibt; das umbenannte Merkmal wird über seine
+        Stelle wiedergefunden (:meth:`_reselect_the_renamed`)."""
         # Wer das Fenster zumacht, während eine Vorschau darauf wartet, hätte
         # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
@@ -9193,6 +9265,42 @@ class MainWindow(QMainWindow):
             {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])},
         )
 
+    def _on_feature_move_proposed(self, feature_id: str, centre: Any) -> None:
+        """Ein Zug am Griff schlägt eine Mitte vor — die Felder rechts nehmen sie.
+
+        **Kein Schritt**, solange niemand übernimmt (Regel 2): Die Zahlen gehen
+        in *Merkmal verschieben*, die Handlung steht damit scharf, und die
+        Maßlinien im Bild folgen der neuen Stelle über den Träger der
+        Platzierung — vier Stellen, eine Bohrung. Bis zum 11.09.2026 war der Zug
+        selbst der Schritt, und mit ihm endete die Platzierung: Griff und
+        Maße waren weg, bevor jemand „Übernehmen" gelesen hatte (Robert:
+        „nach dem verschieben verschwindet das gizmo gleich ohne auf
+        übernehmen zu klicken").
+        """
+        values = {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])}
+        if not self.feature_panel.take_values("move_feature", values):
+            self.announce(tr("Die neue Stelle steht im Merkmalfenster."))
+        if self.viewport.slot_drag_waits():
+            # **Wartet ein Langlochzug, gehört die Stelle zu ihm.** Ziehen und
+            # Versetzen sind dann ein Schritt (``slot_hole`` nimmt beides), und
+            # der Knopf rechts steht auf *Zum Langloch ziehen* — nicht auf
+            # *Merkmal verschieben*, das das Langloch erst gar nicht kennt.
+            self.feature_panel.take_values("slot_hole", values)
+        flow = self._quiet_placement
+        if flow is not None and flow.active:
+            # Die Maßlinien folgen — über den Fluss, nicht über den Träger:
+            # Der Fluss schreibt beim nächsten Zeichnen seine eigene Stelle in
+            # den Träger zurück, und ein direkt gesetzter Wert wäre gleich
+            # wieder überschrieben.
+            flow.move_to((values["x"], values["y"], values["z"]))
+
+    def _on_feature_turn_proposed(self, feature_id: str, axis: str, angle: float) -> None:
+        """Ein Zug am Ring schlägt Achse und Winkel vor — für *Merkmal drehen*."""
+        if not self.feature_panel.take_values(
+            "rotate_feature", {"axis": axis, "angle": float(angle)}
+        ):
+            self.announce(tr("Achse und Winkel stehen im Merkmalfenster."))
+
     def _on_feature_turned(self, feature_id: str, axis: str, angle: float) -> None:
         """Ein Zug am Ring hat ein Merkmal gekippt — mit dem **gerasteten**
         Winkel, also dem, der während des Zugs am Zeiger stand."""
@@ -9215,19 +9323,34 @@ class MainWindow(QMainWindow):
             "slot_hole", {"slot_length": float(length), "slot_angle": float(angle)}
         ):
             self.announce(tr("Die Länge des Langlochs steht im Merkmalfenster."))
+        running = self._quiet_placement is not None and self._quiet_placement.active
+        if not running and self.object_tree.selected_feature() == feature_id:
+            # **Der Zug am Loch selbst holt die Maße ins Bild** (11.09.2026): Er
+            # kam ohne Platzierung (``Viewport._pull_at_the_hole``), und ab jetzt
+            # sollen Knöpfe, Umriss, Griff und Maßlinien stehen wie nach dem
+            # Knopf *Im Bild einstellen* — derselbe Weg, denn es ist derselbe
+            # Zustand: ein Vorschlag, der auf sein Übernehmen wartet.
+            self.feature_panel.request_in_view()
 
-    def _on_slot_dragged(self, feature_id: str, length: float, angle: float) -> None:
+    def _on_slot_dragged(
+        self, feature_id: str, length: float, angle: float, place: Any = None
+    ) -> None:
         """Ein Zug an den Knöpfen hat ein Loch in die Länge gezogen (§21.1).
 
         Länge und Richtung kommen fertig aus der Ansicht — sie hält das
-        Merkmal und hat den Zug auf dessen Mündungsebene gerechnet. Mitte,
-        Achse und Durchmesser stehen nicht dabei: *Zum Langloch ziehen* liest
-        sie aus dem Merkmal, und zwei Quellen für dieselbe Bohrung wären eine
-        zu viel.
+        Merkmal und hat den Zug auf dessen Mündungsebene gerechnet. Achse und
+        Durchmesser stehen nicht dabei: *Zum Langloch ziehen* liest sie aus
+        dem Merkmal, und zwei Quellen für dieselbe Bohrung wären eine zu viel.
+
+        **Die Mitte steht dabei, wenn sie sich geändert hat** — am
+        Bewegungsgriff oder in den Feldern rechts, während der Langlochzug
+        wartete. Dann ist es ein Schritt für beides; ohne Stelle bleibt das
+        Loch, wo es ist (drei Nullen heißen in ``slot_hole`` genau das).
         """
-        self._feature_step(
-            "slot_hole", feature_id, {"slot_length": float(length), "slot_angle": float(angle)}
-        )
+        values: dict[str, Any] = {"slot_length": float(length), "slot_angle": float(angle)}
+        if place is not None:
+            values.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})
+        self._feature_step("slot_hole", feature_id, values)
 
     def _feature_step(self, op: str, feature_id: str, params: dict[str, Any]) -> None:
         """Ein Zug, eine Transaktion — dieselbe Zusage wie am Körpergriff.
@@ -10820,7 +10943,15 @@ class MainWindow(QMainWindow):
         die Auswahl im Objektbaum liegt: Er weiß, was schon markiert ist, und
         er ist die eine Stelle, an der beide Wege — Baum und Bild —
         zusammenlaufen.
+
+        **Ein Klick ins Leere verlässt die Maße im Bild.** Er ist neben Escape
+        und *Abbrechen* der dritte Weg heraus (Robert, 11.09.2026: „solange
+        der klick auf dem modell ist" bleibt man drin — der Klick daneben nimmt
+        die Ansicht gar nicht erst an, siehe ``Viewport._on_left_click``). Was
+        darin wartete, geht mit; gerechnet ist bis dahin nichts (Regel 2).
         """
+        if not object_id and not add:
+            self._leave_the_measures()
         self.object_tree.select_object(object_id or None, add=add)
 
     def _on_feature_selected(self, feature_id: str | None) -> None:
@@ -10906,6 +11037,12 @@ class MainWindow(QMainWindow):
             alone=result is not None and len(result.scene.objects) == 1,
         )
         self.feature_dock.reveal()
+        resume = self._measures_to_resume == feature_id
+        # Ein anderes Merkmal löscht den Merker ebenso: Er gilt der Handlung,
+        # aus der er kam, und nicht der nächsten Auswahl.
+        self._measures_to_resume = ""
+        if resume and (self._quiet_placement is None or not self._quiet_placement.active):
+            self.feature_panel.request_in_view()
 
     def _close_the_other_way(self) -> None:
         """Ein Zug am Langlochgriff schließt die Platzierung an derselben Stelle.
@@ -11342,6 +11479,13 @@ class MainWindow(QMainWindow):
         die Felder rechts kennen sie nicht.
         """
         flow = self._quiet_placement
+        if flow is not None and flow.active:
+            # **Die Maße kommen nach dem Schritt wieder** — an demselben
+            # Merkmal, sobald das Merkmalfenster es neu zeigt
+            # (:meth:`_show_feature_fields`). Gemerkt wird hier, weil hier
+            # feststeht, dass jemand aus dem Bild heraus übernimmt.
+            self._measures_to_resume = self.object_tree.selected_feature() or ""
+            self._resume_near = self._where_the_step_puts_it(params)
         if flow is not None and flow.active and flow.spec_of().name == op:
             flow.accept()
             return
@@ -11352,11 +11496,71 @@ class MainWindow(QMainWindow):
         # (`apply_slot_drag`), und eine inzwischen gewechselte Auswahl meint
         # ein anderes Loch.
         if op == "slot_hole" and self.viewport.slot_drag_waits():
+            # Die Stelle kommt aus den Feldern rechts — dort landet der Zug am
+            # Bewegungsgriff ebenso wie eine getippte Zahl.
+            place = (
+                (float(params["x"]), float(params["y"]), float(params["z"]))
+                if all(name in params for name in ("x", "y", "z"))
+                else None
+            )
             self.viewport.apply_slot_drag(
-                float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
+                float(params.get("slot_length") or 0.0),
+                float(params.get("slot_angle") or 0.0),
+                place,
             )
             return
         self._apply_placed_feature(op, params)
+
+    def _where_the_step_puts_it(self, params: Mapping[str, Any]) -> Vec3 | None:
+        """Die Mitte, an der das gewählte Merkmal nach dem Schritt liegen wird.
+
+        Aus den Feldern, wenn der Schritt eine Stelle nennt; sonst die
+        gemessene Mitte des Merkmals. Drei Nullen heißen in ``slot_hole`` und
+        ``resize_hole`` „lass es, wo es ist" — und so werden sie hier gelesen.
+        """
+        feature_id = self.object_tree.selected_feature()
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        feature = entry.features.get(feature_id) if entry is not None and feature_id else None
+        named = tuple(float(params.get(name) or 0.0) for name in ("x", "y", "z"))
+        if all(name in params for name in ("x", "y", "z")) and any(
+            abs(value) > EPS_GEOM for value in named
+        ):
+            return (named[0], named[1], named[2])
+        if feature is not None and feature.params.get("centre") is not None:
+            centre = [float(value) for value in feature.params["centre"]]
+            return (centre[0], centre[1], centre[2])
+        return None
+
+    def _reselect_the_renamed(self, result: EvaluationResult) -> None:
+        """Ein Merkmal, das im Schritt seinen Namen gewechselt hat, wieder wählen.
+
+        ``hole_1`` wird beim ersten Zug ``slot_1`` (zugesagt, ``SLOT_FEATURE_RENAMED``),
+        und der Baum stellt eine Auswahl nur wieder her, deren Kennung es noch
+        gibt. Wer aus dem Bild heraus übernommen hat, stünde danach ohne
+        Auswahl da — und ohne die Maße, die wiederkommen sollen. Gesucht wird
+        deshalb an der Stelle, die der Schritt genannt hat: ein Loch oder
+        Langloch, dessen Mitte dort liegt.
+        """
+        wanted, near = self._measures_to_resume, self._resume_near
+        if not wanted or near is None or self.object_tree.selected_feature() is not None:
+            return
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            return
+        entry = result.scene.objects.get(object_id)
+        if entry is None or wanted in entry.features:
+            return
+        tolerance = match_tolerance(entry.mesh.bounds.diagonal)
+        for name, feature in entry.features.items():
+            if feature.kind not in ("hole", "slot") or feature.params.get("centre") is None:
+                continue
+            centre = [float(value) for value in feature.params["centre"]]
+            if all(abs(a - b) <= tolerance for a, b in zip(centre, near, strict=True)):
+                self._measures_to_resume = name
+                self.object_tree.select_feature(object_id, name)
+                return
 
     def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> None:
         """Der Schritt selbst — von der Handlung rechts oder aus der Platzierung.
@@ -11423,6 +11627,8 @@ class MainWindow(QMainWindow):
             # Wo keine Fläche zu finden ist, bleibt es beim Knopf rechts —
             # eine leere Platzierung wäre ein Zustand ohne Ausgang.
             self.end_quiet_placement()
+            return
+        self.feature_panel.set_measuring(True)
 
     def end_quiet_placement(self) -> None:
         """Eine laufende Platzierung ohne Dialog beenden und abräumen.
@@ -11437,6 +11643,7 @@ class MainWindow(QMainWindow):
         self._quiet_host = None
         if flow is not None:
             flow.dispose()
+        self.feature_panel.set_measuring(False)
 
     def close_measuring(self) -> None:
         """Das Messwerkzeug schließen: Modus aus, Maße weg.
@@ -12891,6 +13098,9 @@ class MainWindow(QMainWindow):
             self.session.project.document, result.stopped_at, self.session.history.undone
         )
         self._update_actions()
+        # Nach Baum **und** Ansicht: Beide stellen ihre Auswahl selbst wieder
+        # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
+        self._reselect_the_renamed(result)
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
             # Statusleiste sagt warum. Und der Bericht kommt nach vorn, auch
@@ -13427,6 +13637,8 @@ class MainWindow(QMainWindow):
             "repair_and_retry": self._repair_after_error,
             "remove_small_parts": self._remove_small_parts,
             "split_model": self._split_after_error,
+            "split_and_retry": self._split_and_retry_after_error,
+            "recount_and_retry": self._recount_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
@@ -13740,6 +13952,51 @@ class MainWindow(QMainWindow):
         object_id = self._object_of(error)
         if object_id is not None:
             self.action_auto_split(object_id)
+
+    def _split_and_retry_after_error(self, error: AppError) -> None:
+        """Lose Teile einzeln legen: zerlegen vor dem Schritt, der es vorschlug.
+
+        Der Vorschlag kommt vom Ausrichten (``prepare_ops._the_way_out_of``)
+        und nennt den Körper und die Zahl seiner losen Teile; der Verlauf
+        setzt *In Einzelteile zerlegen* vor den angehaltenen Schritt und plant
+        den Rest neu — derselbe Zug wie bei :meth:`_repair_after_error`
+        (§17.1). Hält die Kette nicht mehr dort, bleibt die Zerlegung allein
+        als nächster Schritt: Sie ist, was der Kunde angeklickt hat.
+        """
+        object_id = error.object_id
+        try:
+            count = int(str(error.values.get("count", "")))
+        except ValueError:
+            return
+        if object_id is None or count < 2:
+            return
+        result = self.session.last_result
+        if error.op_id is not None and result is not None and result.stopped_at == error.op_id:
+            self.session.split_and_retry(error.op_id, object_id, count)
+            return
+        self.session.apply(
+            REGISTRY.get("split_bodies").title,
+            [OperationDraft(op="split_bodies", inputs=(object_id,), params={"count": count})],
+        )
+
+    def _recount_after_error(self, error: AppError) -> None:
+        """Die Stückzahl einer Zerlegung auf die gemessene Zahl setzen — ein Klick.
+
+        Der Vorschlag kommt von *In Einzelteile zerlegen* (``split_bodies``),
+        wenn Stückzahl und Teile auseinanderliegen — als Warnung, wenn
+        überzählige Teile ihrem Nachbarn zugeschlagen wurden, als Halt, wenn
+        Teile fehlen. ``values["found"]`` ist die Zahl, die passt; der Verlauf
+        ersetzt den Schritt und plant den Rest neu (``History.recount_and_retry``).
+        """
+        if error.op_id is None:
+            return
+        try:
+            found = int(str(error.values.get("found", "")))
+        except ValueError:
+            return
+        if found < 2:
+            return
+        self.session.recount_and_retry(error.op_id, found)
 
     def _change_selection_after_error(self, error: AppError) -> None:
         """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.

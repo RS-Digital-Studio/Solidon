@@ -2473,6 +2473,39 @@ def placed_feature_kinds() -> frozenset[str]:
     return frozenset(kinds)
 
 
+#: Ab welcher Ausrichtung ein Ring des Bewegungsgriffs als „um die Bohrachse"
+#: gilt und damit die Richtung des Langlochs dreht statt seine Achse zu
+#: kippen — das Skalarprodukt beider Richtungen; 0,99 sind rund acht Grad.
+SLOT_RING_ALIGNED: Final = 0.99
+
+#: Wie weit die Längenzahl neben dem Langloch steht, im Maß seines Radius —
+#: außerhalb der Knöpfe (``KNOB_RADIUS_SHARE``), damit sie keinen verdeckt.
+SLOT_MEASURE_GAP: Final = 1.8
+
+
+def slot_measure_seat(handle: Any) -> Vec3:
+    """Wo die Länge eines Langlochs im Bild steht: quer neben seiner Mitte.
+
+    Nicht auf der Mittellinie — dort sitzt der Bewegungsgriff —, sondern
+    seitlich daneben, im Abstand des Radius mal :data:`SLOT_MEASURE_GAP`:
+    außerhalb des Umrisses und außerhalb der Knöpfe. Quer heißt senkrecht
+    zur Mittellinie und zur Achse.
+    """
+    import numpy as np
+
+    first, second = handle.knob_seats
+    centre = np.asarray(handle.clearance[0], dtype=float)
+    along = np.asarray(second, dtype=float) - np.asarray(first, dtype=float)
+    axis = np.asarray(handle.axis, dtype=float)
+    across = np.cross(axis, along)
+    span = float(np.linalg.norm(across))
+    if span <= EPS_GEOM:
+        return (float(centre[0]), float(centre[1]), float(centre[2]))
+    across = across / span
+    seat = centre + across * handle.radius * SLOT_MEASURE_GAP
+    return (float(seat[0]), float(seat[1]), float(seat[2]))
+
+
 #: Die Operation hinter dem Langlochgriff.
 #:
 #: Eine einzige, und das ist keine Verkürzung: *Zum Langloch ziehen* macht aus
@@ -3416,6 +3449,16 @@ class Viewport(QWidget):
     """Der nächste nötige Klick oder der Grund, warum keiner gezählt hat."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    placementDragged = Signal(object)
+    """Ein beendeter Zug am Griff des **Werkzeugkörpers** einer Platzierung.
+
+    Trägt die Matrix, die der Körper danach hat — ihre Verschiebung ist die
+    Stelle, an der er jetzt sitzt. Der Fluss der Platzierung
+    (``PlacementFlow._dragged_at_the_tool``) rechnet daraus den Punkt auf der
+    Fläche und setzt Maßlinien und Felder nach. Ein eigenes Signal neben
+    :attr:`previewDragged`, weil der Empfänger ein anderer ist: Dort schreibt
+    der Zug Zahlen in die Felder eines Erzeugers, hier bewegt er einen Körper,
+    der schon auf einer Fläche sitzt."""
     previewDragged = Signal(object)
     """Ein beendeter Zug am Griff der **Vorschau** — trägt die Matrix des Zugs.
 
@@ -3437,6 +3480,17 @@ class Viewport(QWidget):
     ``move_feature`` sie so verlangt und weil nur die Ansicht sie kennt: Sie
     hält das Merkmal in der Hand, das Fenster nicht. Ein Delta zu schicken
     hiesse, die Mitte auf der anderen Seite noch einmal zu suchen."""
+    featureMoveProposed = Signal(str, object)
+    """Ein Zug am Griff schlägt eine neue Mitte vor — Kennung und Zielmitte.
+
+    **Vorschlag statt Schritt, solange die Platzierung läuft** (Robert,
+    11.09.2026: „nach dem verschieben verschwindet das gizmo gleich ohne auf
+    übernehmen zu klicken"). Der Griff bleibt an der neuen Stelle stehen, die
+    Zahlen gehen in die Felder von *Merkmal verschieben*, und erst das
+    Übernehmen rechts macht daraus eine Operation (Regel 2) — dieselbe
+    Bedienung wie am Langlochgriff (:data:`slotProposed`)."""
+    featureTurnProposed = Signal(str, str, float)
+    """Ein Zug am Ring schlägt Achse und Winkel vor — für *Merkmal drehen*."""
     featureTurned = Signal(str, str, float)
     """Ein Zug hat ein Merkmal gekippt — Kennung, Achse, Winkel in Grad.
 
@@ -3445,7 +3499,7 @@ class Viewport(QWidget):
     45°-Magneten. Das Fenster könnte ihn nicht nachrechnen, ohne beides zu
     kennen — und ein Wert, der eine andere Drehung verspricht als die, die
     kommt, ist genau der Fehler, den der Zeiger heute Vormittag hatte."""
-    slotDragged = Signal(str, float, float)
+    slotDragged = Signal(str, float, float, object)
     """Ein Zug am Langlochgriff — Kennung, Länge und Richtung in Grad (§21.1).
 
     Zwei Zahlen und keine Matrix: Was hier gezogen wird, ist die **Form** eines
@@ -3880,6 +3934,14 @@ class Viewport(QWidget):
         self._gizmo: Gizmo | None = None
         self._preview_gizmo: Gizmo | None = None
         self._preview_gizmo_wanted = False
+        self._placement_grip: Gizmo | None = None
+        self._placement_grip_item: Item | None = None
+        """Der Griff am Werkzeugkörper einer Platzierung, und woran er hängt.
+
+        Ein eigener Platz neben ``_preview_gizmo``: Den räumt
+        :meth:`_redraw_difference` bei jeder Vorschau ab und baut ihn nur
+        wieder auf, wenn ein Erzeuger ihn will — der Griff an einem gesetzten
+        Baustein ginge dabei mit, obwohl der Baustein noch steht."""
         self._gizmo_wanted = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
@@ -3902,6 +3964,13 @@ class Viewport(QWidget):
         noch nicht gesetzten Bohrung zeigt. Dies hier ist ein **erkanntes**
         Merkmal, das gerade gewählt ist."""
         self._arc_actor: Any | None = None
+        self._slot_turn_base: float | None = None
+        """Die Richtung des Langlochgriffs, als der Zug am Ring begann.
+
+        Der Griff liefert je Bewegung den **ganzen** Winkel seit dem Drücken;
+        die Richtung des Langlochs ist dieser Winkel über der Richtung von
+        vorher. Gemerkt beim ersten sichtbaren Stück des Zugs, vergessen mit
+        seinem Ende (:meth:`_end_drag`)."""
         """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet."""
         self._face_seat: tuple[tuple[float, ...], tuple[float, ...], float] | None = None
         """Wo die letzte Merkmalsmarke sass und wie gross sie war.
@@ -3922,6 +3991,23 @@ class Viewport(QWidget):
 
         Nicht beim Übernehmen erfragt: Zwischen Zug und Knopf kann die Auswahl
         gewechselt haben, und die Leiste gehört dem Zug."""
+        self._slot_waiting: tuple[float, float] | None = None
+        """Länge und Richtung des wartenden Langlochzugs — damit ein frisch
+        gebauter Griff sie trägt und nicht die Maße des Merkmals.
+
+        Bis zum Abend des 11.09.2026 warf jeder Neuaufbau des Griffs den Zug
+        weg (``_detach_gizmo`` leerte ``_slot_target``): Wer sein gezogenes
+        Langloch danach am Bewegungsgriff versetzen wollte, sah es
+        zurückspringen (Robert: „ist es wie abbrechen")."""
+        self._move_target = ""
+        """Das Merkmal, dessen Versetzen auf sein Übernehmen wartet — sonst leer."""
+        self._grip_shift: Vec3 = (0.0, 0.0, 0.0)
+        """Wie weit der Griff vom Merkmal weg steht, solange der Vorschlag wartet.
+
+        Dieselbe Bauart wie ``SlotHandle._built_seats``: Der Griff wird nach
+        jedem Zug frisch gebaut, und ohne den gemerkten Versatz stünde er
+        wieder auf dem alten Loch, während die Felder rechts die neue Stelle
+        nennen."""
         self._slot_handle: SlotHandle | None = None
         """Die zwei Knöpfe, die ein Loch in die Länge ziehen (§21.1).
 
@@ -4438,10 +4524,24 @@ class Viewport(QWidget):
         Genau das tat der Vorschaugriff bis zum 09.09.2026 (Befund Robert:
         „wenn ich verschieben will verschiebe ich nur die Scene").
         """
-        for handle in (self._preview_gizmo, self._gizmo, self._scale_handle, self._slot_handle):
+        for handle in (
+            self._placement_grip,
+            self._preview_gizmo,
+            self._gizmo,
+            self._scale_handle,
+            self._slot_handle,
+        ):
             if handle is not None and handle.handle(event):
                 self._queue_feature_label_layout()
                 return
+        if (
+            event.kind == "press"
+            and event.button == "left"
+            and self._slot_handle is None
+            and self._placement_pointer is None
+            and self._pull_at_the_hole(event)
+        ):
+            return
         if self._placement_pointer is not None and self._placement_pointer(event):
             return
         if event.kind == "move":
@@ -4459,12 +4559,48 @@ class Viewport(QWidget):
         **Und baut die Griffe neu**: An Bohrung und Langloch kommen sie mit der
         Platzierung und gehen mit ihr (:meth:`set_gizmo`). Nur bei einem
         Wechsel — wer denselben Zeiger zweimal setzt, bekommt keinen zweiten
-        Aufbau.
+        Aufbau. Mit der Platzierung geht auch ein wartender Vorschlag.
         """
         changed = (self._placement_pointer is None) != (handler is None)
         self._placement_pointer = handler
+        if handler is None:
+            self.drop_move_proposal()
         if changed:
             self.set_gizmo(self._gizmo_wanted)
+
+    def move_proposal_waits(self) -> bool:
+        """Ob ein am Griff versetztes Merkmal auf sein Übernehmen wartet."""
+        return bool(self._move_target)
+
+    def proposed_centre(self, feature_id: str) -> Vec3 | None:
+        """Die vorgeschlagene Mitte dieses Merkmals — oder nichts, wenn keiner wartet."""
+        if self._move_target != feature_id:
+            return None
+        feature = self._features_of_selection().get(feature_id)
+        if feature is None or feature.params.get("centre") is None:
+            return None
+        centre = [float(value) for value in feature.params["centre"]]
+        return (
+            centre[0] + self._grip_shift[0],
+            centre[1] + self._grip_shift[1],
+            centre[2] + self._grip_shift[2],
+        )
+
+    def drop_move_proposal(self) -> None:
+        """Den wartenden Vorschlag vergessen — der Griff steht wieder am Merkmal.
+
+        Gerufen, wo der Vorschlag seinen Bezug verliert: Auswahlwechsel,
+        Szenenaufbau (nach dem Übernehmen sitzt das Merkmal an der neuen
+        Stelle, und ein Versatz darauf wäre doppelt) und Ende der Platzierung.
+        **Der wartende Langlochzug geht mit** — er hängt an derselben Auswahl.
+        """
+        self._move_target = ""
+        self._grip_shift = (0.0, 0.0, 0.0)
+        self._slot_target = ""
+        self._slot_waiting = None
+        if self._drag_kind == "slot":
+            self._drag_kind = None
+            self.drag_bar.dismiss()
 
     def placement_hit(
         self, x: int, y: int
@@ -5149,6 +5285,7 @@ class Viewport(QWidget):
 
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Bereitet teure Netze im Arbeiter vor und behält bis dahin das Bild."""
+        self.drop_move_proposal()
 
         self._requested_result = result
         self._scene_generation += 1
@@ -6958,9 +7095,11 @@ class Viewport(QWidget):
         if role == self._cursor_role:
             return
         self._cursor_role = role
-        if self.renderer is None:
+        widget = self.renderer.widget if self.renderer is not None else None
+        if widget is None:
+            # Ein Renderer ohne Fenster (offscreen) hat keinen Zeiger zu setzen.
             return
-        self.renderer.widget.setCursor(cursors.cursor(role, self))
+        widget.setCursor(cursors.cursor(role, self))
 
     def _resting_role(self) -> str:
         """Was ein Klick jetzt täte, wenn die Kamera stillsteht.
@@ -7865,6 +8004,8 @@ class Viewport(QWidget):
 
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature_refs = ()
+        if feature_id != self._selected_feature:
+            self.drop_move_proposal()
         # Umgekehrte Richtung derselben Regel wie in :meth:`select_edge` — und
         # sie gilt auch für ``None``: Wer die Merkmalsauswahl ändert, hat die
         # Kante nicht mehr gemeint, gleich ob ein Merkmal an ihre Stelle tritt
@@ -7899,7 +8040,14 @@ class Viewport(QWidget):
         # enthalten. Nur die neue vollständige Paarwahl ersetzt diese Menge.
         self._selected_feature_refs = ()
         self._selected_features = chosen
-        self._selected_feature = chosen[0] if len(chosen) == 1 else None
+        single = chosen[0] if len(chosen) == 1 else None
+        if single != self._selected_feature:
+            # Dieselbe Regel wie in :meth:`select_feature`: Ein Vorschlag
+            # gehört dem Merkmal, an dem er gemacht wurde. Hier fehlte sie, und
+            # ein leerer Aufruf ließ den wartenden Langlochzug am abgewählten
+            # Loch stehen (gemessen 11.09.2026).
+            self.drop_move_proposal()
+        self._selected_feature = single
         self._refresh_feature_selection()
 
     def _remember_feature_refs(self, refs: tuple[tuple[ObjectId, FeatureId], ...]) -> None:
@@ -10254,7 +10402,12 @@ class Viewport(QWidget):
         # schert, macht die eine Fähigkeit von der anderen abhängig.
         slotted = self.slot_handle_feature()
         marked = chosen if chosen is not None else slotted
-        if (not active and marked is None) or self._selected is None or self._preview_gizmo_wanted:
+        if (
+            (not active and marked is None)
+            or self._selected is None
+            or self._preview_gizmo_wanted
+            or self._placement_grip_item is not None
+        ):
             self.gizmoStatus.emit("")
             return
         if (
@@ -10330,13 +10483,19 @@ class Viewport(QWidget):
         if axis is None or diameter is None:
             return
         length = feature.params.get("length") or float(diameter)
+        angle = slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2])))
+        waiting = self._slot_waiting if self._slot_target == feature.id else None
+        if waiting is not None:
+            # Der Zug wartet noch: Der neue Griff zeigt ihn, nicht das Merkmal
+            # — mit dem Umriss, den der Zug hinterlassen hat.
+            length, angle = waiting
         self._slot_handle = SlotHandle(
             self.renderer,
             centre=(float(centre[0]), float(centre[1]), float(centre[2])),
             axis=(float(axis[0]), float(axis[1]), float(axis[2])),
             diameter=float(diameter),
             length=float(length),
-            angle=slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2]))),
+            angle=float(angle),
             # Der Knopf misst sich am Loch und nicht am Teil — und nie unter
             # dem Mindestmaß der Marke daneben, sonst hat eine Ø-1-Bohrung
             # einen Griff, den niemand trifft.
@@ -10346,6 +10505,7 @@ class Viewport(QWidget):
             interact_callback=self._on_slot_interacted,
             cancel_callback=self._on_slot_interaction_cancelled,
             settle_angle=self._settled_angle,
+            outlined=waiting is not None,
         )
 
     def _gizmo_scale_for(self, actor: Any, centre: Any = None) -> float:
@@ -10455,6 +10615,73 @@ class Viewport(QWidget):
             interact_callback=self._on_gizmo_interacted,
         )
 
+    def grip_placement(self, item: Item | None) -> None:
+        """Den Bewegungsgriff an den Werkzeugkörper einer Platzierung hängen — oder abnehmen.
+
+        **Ein gesetzter Baustein lässt sich anfassen** (Robert, 11.09.2026:
+        „im viewport gab es weder vorschau, noch das gizmo dazu"). Sobald die
+        Platzierung eine Stelle hat — durch Klick oder weil der Baustein von
+        selbst auf die gewählte Fläche gesetzt wurde —, steht hier derselbe
+        Griff wie am Körper, und sein Zug wird zur neuen Stelle
+        (:attr:`placementDragged`), nicht zu einer Operation.
+
+        **Der Griff der Auswahl geht, solange dieser steht.** Beide säßen
+        sonst an derselben Stelle: Der eine auf der gewählten Fläche, der
+        andere auf dem Baustein, der gerade darauf sitzt — zwei Sätze Pfeile
+        übereinander, und der untere verschöbe die Fläche statt des Bausteins.
+        Frisch gebaut bei jedem Aufruf, aus dem Grund, der bei ``set_gizmo``
+        steht: Der Griff rechnet gegen die Matrix, die sein Ziel beim Anhängen
+        hatte, und der Fluss setzt den Körper bei jedem Zeichnen neu.
+        """
+        grip = self._placement_grip
+        self._placement_grip = None
+        if grip is not None:
+            grip.remove()
+        was = self._placement_grip_item
+        self._placement_grip_item = item
+        if item is None:
+            if was is not None:
+                self.set_gizmo(self._gizmo_wanted)
+            return
+        if was is None:
+            self._detach_gizmo()
+        if self.renderer is None:
+            return
+        self._placement_grip = Gizmo(
+            self.renderer,
+            item,
+            scale=self._gizmo_scale_for(item),
+            line_radius=GIZMO_LINE_RADIUS,
+            release_callback=self._on_placement_grip_released,
+        )
+
+    def _on_placement_grip_released(self, matrix: Any) -> None:
+        """Ein Zug am Werkzeugkörper endet als Stelle, nicht als Operation.
+
+        Neu angehängt wird der Griff nicht hier, sondern vom Fluss, sobald der
+        Körper an seiner neuen Stelle gezeichnet ist (``redraw`` →
+        :meth:`grip_placement`) — dazwischen rechnete er gegen eine Matrix,
+        die es gleich nicht mehr gibt.
+        """
+        import numpy as np
+
+        self.placementDragged.emit(np.asarray(matrix, dtype=float))
+
+    def scene_point_of(self, point: Vec3, object_id: str = "") -> Vec3:
+        """Einen Ort aus dem Bild zurück in die Szene rechnen — die Umkehrung
+        von :meth:`view_point_of` für einen bekannten Körper (§25)."""
+        if not object_id or self._result is None:
+            return point
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return point
+
+        import numpy as np
+
+        shift = np.asarray(self._view_offset(entry, self._result), dtype=float)
+        moved = np.asarray(point, dtype=float) - shift
+        return (float(moved[0]), float(moved[1]), float(moved[2]))
+
     def _first_added_actor(self) -> Any:
         """Der Aktor des hinzugekommenen Volumens — daran hängt der Griff.
 
@@ -10497,8 +10724,12 @@ class Viewport(QWidget):
         Ruhe — eine leere Szene nimmt den Griff weg, aber nicht die
         Entscheidung, dass einer gewünscht ist.
         """
-        self._slot_target = ""
-        if self._drag_kind == "slot":
+        # **Der wartende Langlochzug bleibt.** Er gehört zur Auswahl, nicht
+        # zum Griff; abgeräumt wird er dort, wo die Auswahl wechselt oder die
+        # Platzierung endet (:meth:`drop_move_proposal`). Hier stand bis zum
+        # 11.09.2026 ``self._slot_target = ""`` — und damit verlor jeder Zug am
+        # Bewegungsgriff das eben gezogene Langloch.
+        if self._drag_kind == "slot" and not self._slot_target:
             self._drag_kind = None
             self.drag_bar.dismiss()
         if self._gizmo is not None:
@@ -10617,6 +10848,13 @@ class Viewport(QWidget):
                 )
                 for seat in self._slot_handle.knob_seats
             )
+            # **Und wie lang es ist, steht daneben** — quer neben der Mitte,
+            # außerhalb von Umriss und Knöpfen, und während des Zugs mit jeder
+            # Bewegung neu (:meth:`_update_slot_labels`). Die Zahl neben dem
+            # Zeiger verschwindet mit dem Loslassen; die hier bleibt, bis
+            # jemand übernimmt (Robert, 11.09.2026: „wenn man das langloch
+            # zieht wäre auch das maß nicht schlecht wie groß es ist").
+            marks.append((slot_measure_seat(self._slot_handle), self._slot_length_text()))
         base = np.asarray([point for point, _text in marks], dtype=float)
         texts = [text for _point, text in marks]
         self._gizmo_label_base = base
@@ -10681,6 +10919,7 @@ class Viewport(QWidget):
         self._drag_shadow(steps)
         self._draw_turn_arc(steps)
         self._drag_preview(steps)
+        self._turn_slot_with(steps)
         if (
             self._gizmo is not None
             and self._selected is not None
@@ -10735,6 +10974,50 @@ class Viewport(QWidget):
         return corrected
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
+
+    def _slot_turn_sign(self, axis: Axis | None) -> float:
+        """Ob dieser Ring das Langloch dreht — und in welche Richtung.
+
+        Null, wenn kein Langlochgriff steht oder der Ring nicht um die
+        Bohrachse läuft: Die zwei anderen Ringe kippen die Achse, das ist
+        *Merkmal drehen* und keine neue Richtung des Langlochs. Sonst ±1 —
+        das Vorzeichen sagt, ob der Ring mit der Achse oder gegen sie zählt;
+        die Richtung des Langlochs zählt gegen die x-Achse ihres Rahmens
+        rechtshändig um die Achse (:func:`app.ui.slot_handle.dragged_slot`).
+        """
+        import numpy as np
+
+        if self._slot_handle is None or self._gizmo is None or axis is None:
+            return 0.0
+        index = ("x", "y", "z").index(axis)
+        ring = np.asarray(self._gizmo.axes[index], dtype=float)
+        along = float(ring @ np.asarray(self._slot_handle.axis, dtype=float))
+        if abs(along) < SLOT_RING_ALIGNED:
+            return 0.0
+        return 1.0 if along > 0.0 else -1.0
+
+    def _turn_slot_with(self, steps: TransformSteps) -> None:
+        """Ein Zug am Ring um die Bohrachse dreht das Langloch im Bild mit.
+
+        **Die Vorschau dreht, nicht nur der Griff** (Robert, 11.09.2026: „bei
+        gizmo vom langloch dreht sich die vorschau vom langloch noch nicht").
+        Knöpfe, Umriss, die zwei L, die Längenzahl und die Marke folgen dem
+        gerasteten Winkel; was daraus wird, entscheidet das Loslassen
+        (:meth:`_emit_feature_drag`) — ein Vorschlag für *Zum Langloch ziehen*,
+        derselbe, den ein Zug an den Knöpfen macht.
+        """
+        if not steps.turns or self._slot_handle is None:
+            return
+        sign = self._slot_turn_sign(steps.axis)
+        if sign == 0.0:
+            return
+        if self._slot_turn_base is None:
+            self._slot_turn_base = float(self._slot_handle.angle)
+        self._slot_handle.set_values(
+            self._slot_handle.length, self._slot_turn_base + sign * self._settled_angle(steps.angle)
+        )
+        self._update_slot_labels()
+        self._repaint_preview()
 
     def _draw_turn_arc(self, steps: TransformSteps) -> None:
         """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet.
@@ -10858,6 +11141,8 @@ class Viewport(QWidget):
         self._drag_kind = "slot"
         self.drag_bar.follow_length(str(tr("Länge")), length)
         self._update_slot_labels()
+        # Die Marke wächst mit dem Umriss — eine Form für dasselbe Loch.
+        self._repaint_preview()
         self._queue_feature_label_layout()
 
     def _update_slot_labels(self) -> None:
@@ -10875,13 +11160,73 @@ class Viewport(QWidget):
                 origin + (point - origin) * GIZMO_LABEL_GAP
                 for origin, point in zip(centre, seat, strict=True)
             ]
+        # Die Länge steht hinter dem zweiten L; sie wandert mit und zählt mit.
+        if indices and indices[-1] + 1 < len(self._gizmo_label_texts):
+            measure = indices[-1] + 1
+            self._gizmo_label_base[measure] = list(slot_measure_seat(self._slot_handle))
+            self._gizmo_label_texts[measure] = self._slot_length_text()
         self._gizmo_labels.update_labels(self._gizmo_label_base, self._gizmo_label_texts)
+
+    def _slot_length_text(self) -> str:
+        """Die Länge des Langlochgriffs, wie das Merkmalfenster sie schreibt."""
+        if self._slot_handle is None:
+            return ""
+        return length(float(self._slot_handle.length))
+
+    def _pull_at_the_hole(self, event: PointerEvent) -> bool:
+        """Ein Druck auf das gewählte Loch beginnt den Zug zum Langloch.
+
+        **Ohne erst *Im Bild einstellen* zu drücken.** Die Knöpfe kommen seit
+        dem 11.09.2026 mit der Platzierung; wer vorher am Loch zog, zog seit
+        demselben Tag den ganzen Körper — im ``solidon``-Schema führt die linke
+        Taste das gewählte Teil, und ein gewähltes Loch war dabei nur ein
+        Klick auf den Körper darunter (Robert: „wenn ich jetzt eine bohrung
+        an einer ecke zum langloch ziehen will verschiebe ich immer den
+        körper"). Das Loch selbst ist aber der natürlichste Griff, den es
+        gibt: Anfassen und in die Länge ziehen.
+
+        Gebaut wird der Griff erst jetzt, für diesen einen Druck — Scheibe und
+        Marke wie in ``set_gizmo``, die Knöpfe dazu —, und der Druck geht an
+        den Knopf, der dem Zeiger näher liegt. Der Zug rechnet wie am Knopf,
+        aus der Mitte heraus: Wer vom Loch wegzieht, sieht das Langloch
+        wachsen. Beim Loslassen kommt der Vorschlag wie immer
+        (``slotProposed``), und das Fenster holt dazu die Maße ins Bild — ab da
+        stehen Knöpfe, Umriss und Griff wie nach dem Knopf.
+
+        Nur, wenn der Druck **das Loch** trifft (:meth:`_feature_at` über die
+        Dreiecke des Merkmals, mit :meth:`_aim_at`, damit ein Klick in die
+        Bohrung nicht ins Leere geht) — daneben bleibt es beim Körper, wie das
+        Schema es sagt.
+        """
+        import numpy as np
+
+        chosen = self.slot_handle_feature()
+        if chosen is None or self.renderer is None:
+            return False
+        point = self._aim_at(event.x, event.y)
+        if point is None or self._feature_at(self._from_view(point)) != chosen.id:
+            return False
+        self._face_handle(chosen)
+        self._attach_slot_handle(chosen)
+        handle = self._slot_handle
+        if handle is None:
+            return False
+        seats = [self.renderer.world_to_display(seat) for seat in handle.knob_seats]
+        nearer = int(
+            np.argmin([math.hypot(seat[0] - event.x, seat[1] - event.y) for seat in seats])
+        )
+        return handle.take_press(event, nearer)
 
     def _on_slot_interaction_cancelled(self) -> None:
         """Ein Zug zurück zum Ausgangspunkt räumt seine flüchtige Maßleiste ab."""
         self._drag_kind = None
         self.drag_bar.dismiss()
         self._update_slot_labels()
+        self._repaint_preview()
+        if self._placement_pointer is None:
+            # Der Griff kam für diesen einen Zug (:meth:`_pull_at_the_hole`);
+            # ohne Platzierung steht er sonst ohne seine Beschriftung da.
+            self.set_gizmo(self._gizmo_wanted)
         self._queue_feature_label_layout()
 
     def _on_slot_released(self, length: float, angle: float) -> None:
@@ -10907,7 +11252,11 @@ class Viewport(QWidget):
         # einmal fragt, bekommt die Antwort von *dann* — und das war an einer
         # inzwischen gewechselten Auswahl ein fremdes Loch.
         self._slot_target = chosen.id
+        self._slot_waiting = (float(length), float(angle))
         self.drag_bar.dismiss()
+        # Die Marke nimmt die Form des Vorschlags an — bis hierher zeigte sie
+        # die Bohrung, aus der das Langloch wird; der Umriss zeigte den Zug.
+        self._repaint_preview()
         # ``_drag_kind`` bleibt auf ``"slot"``: Daran hängen Escape (verwirft)
         # und die Eingabetaste (übernimmt) — der Zug ist noch nicht vorbei, er
         # wartet nur auf eine Zahl.
@@ -10931,6 +11280,12 @@ class Viewport(QWidget):
         if self._slot_handle is not None:
             self._slot_handle.set_values(float(length), float(angle))
             self._update_slot_labels()
+            if self._slot_target:
+                self._slot_waiting = (
+                    float(self._slot_handle.length),
+                    float(self._slot_handle.angle),
+                )
+                self._repaint_preview()
 
     def slot_drag_waits(self) -> bool:
         """Ob ein gezogenes Langloch auf seine Bestätigung wartet.
@@ -10947,7 +11302,15 @@ class Viewport(QWidget):
         """
         return bool(self._slot_target)
 
-    def apply_slot_drag(self, length: float, angle: float) -> None:
+    def cancel_slot_drag(self) -> None:
+        """Den wartenden Langlochzug verwerfen: Umriss weg, Griff frisch, kein Schritt."""
+        if self._slot_target:
+            self._slot_target = ""
+            self._slot_waiting = None
+            self._drag_kind = "slot"
+            self._end_drag()
+
+    def apply_slot_drag(self, length: float, angle: float, place: Vec3 | None = None) -> None:
         """Übernommen: jetzt wird aus dem Zug genau eine Operation (§15.5).
 
         Gemeldet wird an das Merkmal, das **gezogen** wurde, nicht an das
@@ -10964,8 +11327,18 @@ class Viewport(QWidget):
             # **Erst jetzt geht der andere Weg zu** — siehe :data:`slotStarted`.
             # Bis hierher war nichts geschehen, und die Maße der Platzierung
             # standen im Bild, wo sie hingehören.
+            #
+            # **Und die Stelle geht mit**, wenn dazu am Bewegungsgriff gezogen
+            # wurde: Ziehen und Versetzen in einem Schritt — ``slot_hole`` nimmt
+            # beides (Robert, 11.09.2026: „das langloch ziehe und dann das
+            # langloch nochmal über das gizmo verschieben will").
+            where = place if place is not None else self.proposed_centre(target)
+            self._slot_target = ""
+            self._slot_waiting = None
+            self.drop_move_proposal()
             self.slotStarted.emit()
-            self.slotDragged.emit(target, float(length), float(angle))
+            self.slotDragged.emit(target, float(length), float(angle), where)
+        self._drag_kind = "slot"
         self._end_drag()
 
     def _on_scale_interacted(self, factor: float) -> None:
@@ -11005,6 +11378,10 @@ class Viewport(QWidget):
         )
         if entry is not None and self._result is not None:
             centre = centre + np.asarray(self._view_offset(entry, self._result), dtype=float)
+        if self._move_target == feature.id:
+            # Ein Versetzen wartet auf sein Übernehmen: Marke und Griff stehen
+            # dort, wo der Zug hin will — das Loch selbst noch, wo es ist.
+            centre = centre + np.asarray(self._grip_shift, dtype=float)
         centre = self._handle_seat(feature, centre)
         # Normale bei einer Fläche, Achse bei einer Bohrung — und wo keines
         # von beidem steht, die Z-Achse: Die Scheibe soll das Merkmal zeigen,
@@ -11108,19 +11485,92 @@ class Viewport(QWidget):
 
     def _feature_shape(self, feature: Feature, centre: Any, normal: Any, radius: float) -> Any:
         """Die Gestalt eines Merkmals für Vorschau und Geist: eine Scheibe, oder
-        bei einer Tiefe ein Zylinder, der vom Sitz aus in den Körper reicht.
+        bei einer Tiefe ein Zylinder, der vom Sitz aus in den Körper reicht —
+        und bei einem Langloch das Stadion statt des Kreises.
 
-        Der Sitz liegt an der Öffnung (:meth:`_handle_seat`); der Zylinder
+        Der Sitz liegt an der Öffnung (:meth:`_handle_seat`); der Körper
         reicht von dort in den Körper hinein, also entgegen der Blickachse.
         """
-        depth = feature.params.get("depth")
-        if depth is None:
-            return shapes.disc(centre, normal, radius, 24)
         import numpy as np
 
+        depth = feature.params.get("depth")
         direction = np.asarray(normal, dtype=float)
+        slot = self._slot_form_of(feature)
+        if slot is not None:
+            # **Ein Langloch ist kein Kreis.** Die Vorschau eines gezogenen
+            # oder erkannten Langlochs deckte bis zum 11.09.2026 nur die
+            # Bohrung ab, aus der es kommt — neben dem Umriss des Griffs
+            # standen damit zwei Formen für dasselbe Loch (Robert: „fehlt die
+            # richtige vorschau"). Derselbe Umriss wie am Griff, und in die
+            # Tiefe gezogen, wo eine steht.
+            from app.ui.slot_handle import slot_outline
+
+            length, angle = slot
+            diameter = float(feature.params.get("diameter") or 2.0 * radius)
+            ring = slot_outline(
+                centre, feature.params.get("axis") or normal, diameter, length, angle
+            )
+            if len(ring) < 4:
+                return shapes.disc(centre, normal, radius, 24)
+            ring = ring[:-1]
+            if depth is None:
+                return shapes.polygon(ring)
+            return shapes.prism(ring - direction * float(depth), direction, float(depth))
+        if depth is None:
+            return shapes.disc(centre, normal, radius, 24)
         axis = np.asarray(centre, dtype=float) - direction * float(depth) / 2.0
         return shapes.cylinder(axis, direction, radius, float(depth), 24)
+
+    def _slot_form_of(self, feature: Feature) -> tuple[float, float] | None:
+        """Länge und Richtung, mit denen ein Merkmal als Langloch gezeigt wird.
+
+        Ein Zug, der auf sein Übernehmen wartet, geht vor: Er ist der
+        Vorschlag, und die Vorschau zeigt den Vorschlag (Regel 2). Sonst
+        gilt, was das Merkmal selbst trägt — ein erkanntes Langloch hat eine
+        Länge. Eine Bohrung hat keine, und für sie bleibt der Zylinder.
+        """
+        from app.core.geom.prepare import shortest_slot
+        from app.core.geom.prepare_ops import slot_angle_of
+
+        diameter = feature.params.get("diameter")
+        if diameter is None:
+            return None
+        handle = self._slot_handle
+        # **Der Griff ist die Wahrheit, solange er steht** — er trägt den
+        # wartenden Zug und, mitten in einer Geste, den Zwischenstand: Wer am
+        # Ring dreht oder an den Knöpfen zieht, sieht die Marke mitgehen
+        # (Robert, 11.09.2026: „dreht sich die vorschau vom langloch noch
+        # nicht"). Ohne Zug und ohne wartenden Vorschlag zeigt er die Maße des
+        # Merkmals — dieselbe Antwort wie darunter; an einer Bohrung ohne
+        # beides bleibt es beim Zylinder.
+        if (
+            handle is not None
+            and self._slot_handle_is_at(feature)
+            and (
+                self._slot_target == feature.id
+                or handle.pressing
+                or self._slot_turn_base is not None
+                or feature.kind == "slot"
+            )
+        ):
+            return (float(handle.length), float(handle.angle))
+        if self._slot_target == feature.id and self._slot_waiting is not None:
+            return self._slot_waiting
+        length = feature.params.get("length")
+        axis = feature.params.get("axis")
+        if feature.kind != "slot" or length is None or axis is None:
+            return None
+        # Geklemmt wie am Griff: Ein erkanntes Langloch an der Kippgrenze
+        # soll eine Vorschau bekommen, keine Ausnahme aus ``slot_travel``.
+        return (
+            max(float(length), shortest_slot(float(diameter))),
+            slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2]))),
+        )
+
+    def _slot_handle_is_at(self, feature: Feature) -> bool:
+        """Ob der stehende Langlochgriff dieses Merkmal meint."""
+        chosen = self.slot_handle_feature()
+        return chosen is not None and chosen.id == feature.id
 
     def _show_preview(self, feature: Feature, centre: Any, normal: Any, radius: float) -> None:
         """Das gewählte Merkmal in seiner Gestalt — ein eigener Aktor, damit
@@ -11136,6 +11586,34 @@ class Viewport(QWidget):
             style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.45, lighting=False, pickable=False),
         )
 
+    def _repaint_preview(self) -> None:
+        """Die Marke des gewählten Merkmals neu — nach einem Zug, der ihre Form ändert.
+
+        Der Sitz bleibt (:attr:`_face_seat`), nur die Gestalt wird neu
+        gerechnet: Ein wartender Langlochzug macht aus dem Zylinder das
+        Stadion (:meth:`_slot_form_of`).
+        """
+        chosen = self.slot_handle_feature()
+        seat = self._face_seat
+        if chosen is None or seat is None or self.renderer is None:
+            return
+        centre, normal, radius = seat
+        actor = self._shape_actor
+        if actor is not None:
+            # **Dieselbe Form, neue Punkte**: Mitten in einer Geste wird bei
+            # jeder Bewegung neu gezeichnet, und ein Aktor je Bewegung wäre
+            # ein Neuaufbau je Bewegung. Das Stadion behält seine Punktzahl;
+            # nur der Wechsel von Zylinder zu Stadion braucht einen neuen Aktor.
+            vertices, _faces = self._feature_shape(chosen, centre, normal, radius)
+            try:
+                actor.update_points(vertices)
+            except ValueError:
+                self._show_preview(chosen, centre, normal, radius)
+            else:
+                self.renderer.render()
+            return
+        self._show_preview(chosen, centre, normal, radius)
+
     def _drop_preview(self) -> None:
         """Nimmt die Vorschau weg."""
         if self._shape_actor is not None and self.renderer is not None:
@@ -11150,9 +11628,14 @@ class Viewport(QWidget):
         eine Drehung des Merkmals ändert seine Lage im Raum, und die liesse
         sich nur durch Neuaufbau einholen.
         """
-        if self._shape_actor is None or not steps.moves or steps.turns:
+        if not steps.moves or steps.turns:
             return
-        self._shape_actor.set_position((steps.offset[0], steps.offset[1], steps.offset[2]))
+        if self._shape_actor is not None:
+            self._shape_actor.set_position((steps.offset[0], steps.offset[1], steps.offset[2]))
+        if self._slot_handle is not None:
+            # Knöpfe und Umriss gehen mit — der Umriss zeigt das künftige Loch,
+            # und das soll dorthin, wohin gerade gezogen wird.
+            self._slot_handle.shift((steps.offset[0], steps.offset[1], steps.offset[2]))
 
     def _show_ghost(self, feature: Feature) -> None:
         """Der blasse Ring an der Ausgangsstelle, solange ein Merkmal gezogen wird.
@@ -11296,17 +11779,58 @@ class Viewport(QWidget):
             # Eine Fläche geht ihren eigenen Weg (Press/Pull, oben), und ohne
             # Merkmal gilt der Zug dem Körper.
             return False
+        # **Läuft die Platzierung, ist der Zug ein Vorschlag.** Das Merkmal
+        # trägt rechts den Knopf *Im Bild einstellen*, und alles, was danach
+        # im Bild geschieht, wartet auf das Übernehmen daneben — wie der Zug
+        # am Langlochgriff. Ohne Platzierung (ein Zapfen, ein Kegel, eine
+        # Kugel haben keinen Knopf) bleibt der Zug ein Schritt, wie seit dem
+        # 03.09.2026.
+        proposing = self._placement_pointer is not None and chosen.kind in placed_feature_kinds()
         if snapped.turns and snapped.axis is not None:
-            self.featureTurned.emit(chosen.id, snapped.axis, float(snapped.angle))
+            sign = self._slot_turn_sign(snapped.axis)
+            if proposing and sign != 0.0 and self._slot_handle is not None:
+                # **Der Ring um die Bohrachse ist eine neue Richtung des
+                # Langlochs**, kein *Merkmal drehen*: derselbe Vorschlag, den ein
+                # Zug an den Knöpfen macht, an dasselbe wartende Langloch — und
+                # der nächste Aufbau zeigt ihn (``_slot_waiting``).
+                base = (
+                    self._slot_turn_base
+                    if self._slot_turn_base is not None
+                    else float(self._slot_handle.angle)
+                )
+                angle = base + sign * float(snapped.angle)
+                self._slot_handle.set_values(self._slot_handle.length, angle)
+                self._on_slot_released(self._slot_handle.length, self._slot_handle.angle)
+                return True
+            if proposing:
+                self.featureTurnProposed.emit(chosen.id, snapped.axis, float(snapped.angle))
+            else:
+                self.featureTurned.emit(chosen.id, snapped.axis, float(snapped.angle))
             return True
         if snapped.moves:
             centre = [float(value) for value in chosen.params["centre"]]
-            target = (
-                centre[0] + snapped.offset[0],
-                centre[1] + snapped.offset[1],
-                centre[2] + snapped.offset[2],
+            shift = (
+                self._grip_shift
+                if proposing and self._move_target == chosen.id
+                else (0.0, 0.0, 0.0)
             )
-            self.featureMoved.emit(chosen.id, target)
+            target = (
+                centre[0] + shift[0] + snapped.offset[0],
+                centre[1] + shift[1] + snapped.offset[1],
+                centre[2] + shift[2] + snapped.offset[2],
+            )
+            if proposing:
+                # Der Griff bleibt an der neuen Stelle: Der nächste Aufbau
+                # (``_end_drag`` → ``set_gizmo``) liest den Versatz.
+                self._move_target = chosen.id
+                self._grip_shift = (
+                    target[0] - centre[0],
+                    target[1] - centre[1],
+                    target[2] - centre[2],
+                )
+                self.featureMoveProposed.emit(chosen.id, target)
+            else:
+                self.featureMoved.emit(chosen.id, target)
             return True
         # Ein Zug unter der Fangschwelle: verbraucht ist er trotzdem, denn er
         # gilt dem Merkmal. Ihn durchzulassen verschöbe das ganze Teil um
@@ -11340,10 +11864,19 @@ class Viewport(QWidget):
         if self._drag_kind == "pull":
             self._end_pull()
             return
-        self._drag_kind = None
+        # **Ein anderer Zug lässt den wartenden Langlochzug stehen.** Wer am
+        # Bewegungsgriff zieht, während das gezogene Langloch auf sein
+        # Übernehmen wartet, meint beides zusammen — Länge und Stelle in einem
+        # Schritt (``slot_hole`` kann das). Beendet wird der Langlochzug nur,
+        # wenn er selbst endet (Übernehmen, Escape) oder die Auswahl wechselt.
+        if self._drag_kind != "slot":
+            self._drag_kind = "slot" if self._slot_target else None
+        else:
+            self._drag_kind = None
         self._drag_axis = None
         self._drag_normal = None
         self._drag_face = None
+        self._slot_turn_base = None
         # Der Ring gehört dem Zug; was danach gilt, zeigt die Auswertung.
         self._drop_ghost()
         self._drop_turn_arc()
@@ -13696,6 +14229,16 @@ class Viewport(QWidget):
         # hervorgehobene Linie. Gelesen wird dieselbe Rangfolge wie beim
         # Zeiger (:meth:`_means_a_feature`), nicht eine zweite Aufzählung der
         # Flaggen.
+        if self._placement_pointer is not None and self._measure_mode == "off":
+            # **Ein Klick auf das Modell verlässt die Maße nicht** (Robert,
+            # 11.09.2026: „wenn ich leicht daneben klicke bin ich draußen,
+            # solange der klick auf dem modell ist sollte das nicht passieren").
+            # Wer am Griff ansetzt und den Pfeil verfehlt, trifft die Fläche
+            # daneben — bis hierher wählte das die Fläche und beendete damit
+            # die Platzierung samt allem, was darin wartete. Solange eine
+            # Platzierung läuft, gehört der Klick auf das Modell ihr; heraus
+            # führen Escape, *Abbrechen* rechts und der Klick ins Leere.
+            return
         if self._means_a_feature() and self._edge_click(x, y, point, add=add):
             return
         self.select_edge(None, None)

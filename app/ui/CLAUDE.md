@@ -683,10 +683,14 @@ Merkmalsanalyse und Bausteinkatalog bleiben getrennte Wege an der rechten
 Seite. Das Auswahlfeld führt zu beiden und baut keines von beiden nach. Seine
 Operationen stammen aus dem Operationsregister — Körperoperationen über
 `body_operations`, die Merkmalshandlungen über `feature_operations` aus
-demselben `applies_to`, aus dem das Kontextmenü am Merkmal seine Zeilen nimmt.
-Sie verwenden dieselbe Freigabe wie Menü und Palette und gehen ausnahmslos
-durch `MainWindow.launch_operation`, damit Gesten-Editoren und Undo erhalten
-bleiben.
+demselben `applies_to`, aus dem der Doppelklick im Baum seine erste passende
+Handlung nimmt. **Das Auswahlfeld ist für diese Handlungen der einzige Ort**
+(`PANEL_CATEGORIES`, `.claude/rules/oberflaeche.md`): Die Menüleiste trägt
+nur noch, was keine Auswahl braucht, und das Kontextmenü an Körper und Merkmal
+keine Operationen. Sie verwenden dieselbe Freigabe wie Menü und Palette und
+gehen ausnahmslos durch `MainWindow.launch_operation`, damit Gesten-Editoren
+und Undo erhalten bleiben. Seine Gruppen sind einklappbare Abschnitte
+(`panels.collapsible`), sein Knopf *Bausteine* ein Hauptknopf.
 
 Welche Handlungen **vorn** stehen, beantwortet `quick_names(bodies,
 feature_kind)`: bei mehreren Körpern die Booleschen, bei einem einzelnen

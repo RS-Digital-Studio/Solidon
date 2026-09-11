@@ -276,247 +276,20 @@ def test_the_variant_entry_keeps_the_shortcut_of_its_first_kind(window: MainWind
     ), "der Sammeleintrag führt nicht das Kürzel seiner ersten Art"
 
 
-def test_a_group_of_one_never_becomes_a_submenu() -> None:
-    """Ein Untermenü, das nichts bündelt, ist ein Klick für nichts (§2.6).
-
-    Die Menüleiste weiß das seit je (``registry.surfaces.group_is_flat``), das
-    **Kontextmenü** wusste es nicht: Es faltete jede Kategorie, sobald die
-    Zeilengrenze überschritten war. Am Flächenklick — damals 19 Operationen in
-    vier Gruppen, Bausteine 10, Ändern 5, Erzeugen 2, Vorbereiten 2 — kostete
-    das **jede** Operation zwei Klicks, auch die Bohrung, die zu zweit in
-    „Erzeugen" lag.
-
-    **Die Zahlen unten sind Rechenbeispiele und nicht der Katalog.** Sie waren
-    einmal beides, und das hielt nicht: Am 25.08.2026 standen an einer Fläche
-    31 Operationen, davon 22 Bausteine. Was das Register wirklich hergibt,
-    prüft :func:`test_the_context_menu_stays_within_its_rows`; hier steht die
-    Formel, und dafür sind ausgedachte Zahlen die klareren.
-
-    Geprüft wird die Rechnung, nicht das Menü: ``folded_groups`` braucht kein
-    Qt, und ein Test, der dafür ein Fenster baute, hebt die Abrissquote der
-    ganzen Datei (gemessen am 24.08.2026, 2 von 9 auf 2 von 3).
-    """
-    from app.core.registry.surfaces import folded_groups
-
-    passt = {"Bausteine": 4, "Ändern": 3}
-    assert folded_groups(passt) == [], "was in die Grenze passt, wird nicht gefaltet"
-
-    flaeche = {"Bausteine": 10, "Ändern": 5, "Erzeugen": 2, "Vorbereiten": 2}
-    assert folded_groups(flaeche) == ["Bausteine"], (
-        "am Flächenklick genügt es, die größte Gruppe zu falten — die übrigen "
-        "neun Einträge stehen dann direkt da"
-    )
-
-    einzeln = {f"Gruppe {nr}": 1 for nr in range(20)}
-    assert folded_groups(einzeln) == [], (
-        "zwanzig Gruppen mit je einem Eintrag ergeben zwanzig Untermenüs mit je "
-        "einem Eintrag — dann bleibt das Menü lieber lang"
-    )
-
-    # **Die häufige Geste bleibt oben** (Entscheidung Robert, 27.08.2026).
-    # Am echten Flächenklick sind es 22 Bausteine, und nach ihnen fehlt genau
-    # eine Zeile. Die Rechnung nahm dafür die hinterste Gruppe — seit dem
-    # Filament-Umbau liegt dort „Fläche färben", also die Geste, für die man
-    # überhaupt auf eine Fläche zeigt. Gemessen am gebauten Fenster stand sie
-    # danach unter „Vorbereiten", zusammen mit dem Prüfstück: zehn sichtbare
-    # Zeilen, und Farbe in keiner davon.
-    echt = {"Bausteine": 22, "Ändern": 5, "Erzeugen": 2, "Vorbereiten": 2}
-    gefaltet = folded_groups(echt, fixed=3, keep={"Vorbereiten", "Ändern"})
-    assert "Vorbereiten" not in gefaltet, (
-        "die Gruppe mit dem Färben darin bleibt sichtbar — sie trägt die "
-        "häufige Geste, und ein Untermenü kostet sie einen Klick"
-    )
-    assert "Bausteine" in gefaltet, "die zweiundzwanzig bleiben gefaltet"
-    assert "Ändern" not in gefaltet, (
-        "und die Bohrung bleibt oben — dafür wurde die Faltung am 24.08. umgebaut"
-    )
-
-    allein = {"Bausteine": 17}
-    assert folded_groups(allein) == [], (
-        "die einzige Gruppe wird nie gefaltet — sonst besteht das Menü aus einem "
-        "einzigen Untermenü, das heißt, wonach man gerade geklickt hat"
-    )
-    assert folded_groups(allein, fixed=3) == ["Bausteine"], (
-        "sobald daneben etwas Ungefaltetes steht, lohnt das Untermenü wieder"
-    )
-
-    gemischt = {"Groß": 8, "Mittel": 5, "Klein": 2, "Winzig": 1}
-    assert folded_groups(gemischt) == ["Groß"], (
-        "gefaltet wird von oben und nicht weiter, als die Grenze verlangt: "
-        "16 Einträge, „Groß“ gefaltet macht 9 Zeilen (5+2+1 direkt, eine für "
-        "das Untermenü) — „Mittel“ zu falten wäre ein Klick ohne Not"
-    )
-
-    hartnaeckig = {"A": 6, "B": 6, "C": 6}
-    assert folded_groups(hartnaeckig) == ["A", "B"], (
-        "18 Einträge, nach zwei Faltungen 8 Zeilen — die dritte Gruppe bleibt offen"
-    )
-
-
-#: Was am Flächenklick über den Operationen steht: Sichtbarkeit und der
-#: Skizzenschritt. Keine Operationen, aber Zeilen — und die Grenze gilt dem
-#: Menü. ``_add_operations`` zählt sie am gebauten Menü ab; hier steht der
-#: ungünstigste Fall, in dem alle drei da sind.
-FIXED_CONTEXT_ROWS = 3
-
-
 def _offered_at(kind: str) -> tuple[Any, ...]:
-    """Die Operationen, die am Kontextmenü dieser Art eine Zeile bekommen.
+    """Die Operationen, die an dieser Merkmalsart dem Doppelklick offenstehen.
 
     **Dieselbe Menge wie im Fenster**, nicht die Rohmenge aus ``applies_to``:
     ``shown_at_feature`` lässt weg, was ein Griff im Bild ersetzt
-    (``HANDLE_INSTEAD``). Mit der Rohmenge rechnete diese Datei eine Menülage
-    nach, die es im Fenster nicht gibt — an der Bohrung neun Handlungen statt
-    acht, und damit „Ändern" gefaltet statt „Bausteine".
+    (``HANDLE_INSTEAD``). Das Kontextmenü trägt seit dem 11.09.2026 keine
+    Operationen mehr; die Menge gilt dem Doppelklick im Baum, der die erste
+    passende Handlung startet.
     """
     from app.ui.panels import shown_at_feature
 
     return shown_at_feature(
         kind, [spec for spec in REGISTRY.all() if kind in (spec.applies_to or ())]
     )
-
-
-def context_rows(kind: str) -> tuple[int, list[str]]:
-    """Wie viele Zeilen das Kontextmenü eines Merkmals zeigt, und was es faltet.
-
-    Gerechnet wie ``PropertiesPanel._add_operations``: direkte Einträge plus
-    eine Zeile je gefaltetem Untermenü, und die festen Zeilen zählen beim
-    Falten mit. Zurück kommen die **Operationszeilen** — wer die ganze Menülänge
-    will, zählt ``FIXED_CONTEXT_ROWS`` dazu.
-
-    Ohne Qt, weil ein Fenster hier nichts beiträgt und die Abrissquote der
-    ganzen Datei hebt (gemessen am 24.08.2026).
-    """
-    from app.core.registry.surfaces import folded_groups, group_title
-    from app.ui.panels import groups_to_keep
-
-    sizes: dict[str, int] = {}
-    offered = _offered_at(kind)
-    for spec in offered:
-        title = group_title(str(spec.category))
-        sizes[title] = sizes.get(title, 0) + 1
-
-    # **Mit dem Schutz gerechnet, den auch die Anwendung mitgibt.** Ohne ihn
-    # prüfte diese Datei eine Menülage, die es im Fenster nicht gibt — und
-    # genau daran hängt die Zusage, dass Färben und Bohrung oben bleiben.
-    folded = folded_groups(sizes, fixed=FIXED_CONTEXT_ROWS, keep=groups_to_keep(offered))
-    rows = sum(count for title, count in sizes.items() if title not in folded) + len(folded)
-    return rows, folded
-
-
-def test_the_context_menu_stays_within_its_rows() -> None:
-    """Die Grenze gilt dem **Menü**, nicht der Formel dahinter.
-
-    ``test_a_group_of_one_never_becomes_a_submenu`` daneben prüft
-    ``folded_groups`` gründlich — aber mit einer von Hand eingetragenen
-    Verteilung, und die altert. Sie steht auf „Bausteine 10, Ändern 5,
-    Erzeugen 2, Vorbereiten 2", also 19 Operationen; am 25.08.2026 waren es
-    **31**, davon 22 Bausteine. Die Formel stimmt weiter, die Zahlen, an denen
-    sie geprüft wird, nicht mehr — dieselbe Art alternder Liste, die in
-    ``test_parts.py`` schon zweimal zugeschlagen hat.
-
-    Gezählt wird deshalb, was das Register hergibt, und bis zur fertigen
-    Menülänge.
-
-    **Und die drei festen Zeilen zählen mit.** Sie taten es lange nicht, und
-    das Flächenmenü stand damit auf dreizehn Zeilen gegen eine Grenze von
-    zwölf — geführt als dokumentierte Ausnahme, weil die zweite Gruppe, die
-    sonst fiele, „Ändern" gewesen wäre: mit der Bohrung darin, also genau dem
-    Eintrag, dessen zweiter Klick den ganzen Umbau ausgelöst hat.
-
-    Die Ausnahme ist am 25.08.2026 aufgelöst worden, und zwar an der Stelle,
-    an der sie entstand: ``folded_groups`` faltet nicht mehr die größte Gruppe,
-    sondern die hinterste, die allein genügt.
-
-    **Am 27.08.2026 hat dieselbe Rechnung dann das Färben verschluckt** — es
-    war mit dem Filament-Umbau nach „Vorbereiten" gekommen, also genau in die
-    Gruppe, die als hinterste fällt. Gemessen am gebauten Fenster: zehn
-    sichtbare Zeilen, Farbe in keiner. Seither nennt ``KEEP_VISIBLE`` die
-    Kategorien, deren Gruppe stehen bleibt (``colour`` und ``holes``), und
-    gefaltet wird stattdessen „Erzeugen". Kein Eintrag ist dabei tiefer
-    gerutscht, für den jemand auf eine Fläche zeigt.
-    """
-    from app.ui.panels import MAX_MENU_ROWS
-
-    for kind in ("face", "hole"):
-        rows, _ = context_rows(kind)
-        assert rows, f"{kind}: no operation offers itself at all"
-        assert rows + FIXED_CONTEXT_ROWS <= MAX_MENU_ROWS, (
-            f"{kind}: the menu shows {rows} operation rows plus {FIXED_CONTEXT_ROWS} fixed "
-            f"ones, the limit is {MAX_MENU_ROWS} — fold another group or take a fixed row out"
-        )
-
-
-def test_nothing_is_folded_that_did_not_have_to_be() -> None:
-    """Gefaltet wird, weil es sein muss — nicht, weil es ordentlich aussieht.
-
-    Die Zeilengrenze fängt nur die eine Richtung: Ein Menü, in dem **jede**
-    Gruppe zu einem Untermenü wird, hat vier Zeilen statt zehn und liegt damit
-    bequem unter der Grenze. Es kostet nur jede einzelne Operation einen
-    zweiten Klick — genau der Zustand, den der Umbau vom 24.08.2026 abgeschafft
-    hat, und den eine Prüfung auf „höchstens zwölf" nicht bemerkt.
-
-    Geprüft wird deshalb rückwärts: Jede gefaltete Gruppe wieder aufgemacht
-    muss die Grenze sprengen. Tut sie es nicht, war ihre Faltung ein Klick ohne
-    Not. Gerechnet wird gegen die **ganze** Menülänge, seit die festen Zeilen
-    mitzählen — sonst gälte die Gegenrichtung gegen eine andere Zahl als die
-    Grenze selbst, und „Vorbereiten" sähe wie eine Faltung ohne Not aus.
-    """
-    from app.ui.panels import MAX_MENU_ROWS
-
-    for kind in ("face", "hole"):
-        rows, folded = context_rows(kind)
-        for title in folded:
-            count = _group_size(kind, title)
-            # Diese eine Gruppe aufgemacht: ihre Einträge stehen dann direkt da,
-            # die eine Zeile ihres Untermenüs fällt weg.
-            unfolded = rows - 1 + count + FIXED_CONTEXT_ROWS
-            assert unfolded > MAX_MENU_ROWS, (
-                f"{kind}: '{title}' is folded away, but leaving it open would give "
-                f"{unfolded} rows — that fits in {MAX_MENU_ROWS}, so the submenu costs "
-                "a click for nothing"
-            )
-
-
-def test_the_drill_stays_one_click_away_on_a_face() -> None:
-    """Am Flächenklick steht die Bohrung direkt im Menü, nicht in einem Untermenü.
-
-    Das ist die Entscheidung vom 25.08.2026 und der Grund, aus dem
-    ``folded_groups`` nach der Reihenfolge der Menüleiste faltet statt nach der
-    Größe. Als die drei festen Zeilen mitzuzählen begannen, fehlte nach
-    „Bausteine" genau eine weitere Zeile — und die größte der übrigen Gruppen
-    ist „Ändern", die mit der Bohrung darin. Sie zu falten hätte genau den
-    zweiten Klick zurückgebracht, den der Umbau vom 24.08.2026 abgeschafft hat.
-
-    Der Test daneben zählt nur Zeilen und wäre auch dann grün: Zwölf Zeilen
-    sind zwölf Zeilen, gleich welche Gruppe zugeklappt ist. Diese Zusage ist
-    eine andere, und sie braucht ihren eigenen Test.
-
-    Gefragt wird an der **Operation** und nicht am Gruppennamen: Wer
-    ``drill_hole`` später in eine andere Kategorie hängt, soll hier eine
-    Antwort bekommen und keine stille Lücke.
-    """
-    from app.core.registry.surfaces import group_title
-
-    drill = next((spec for spec in REGISTRY.all() if str(spec.name) == "drill_hole"), None)
-    assert drill is not None, "drill_hole is gone from the registry — this test lost its subject"
-    assert "face" in (drill.applies_to or ()), (
-        "drill_hole no longer offers itself on a face — this test lost its subject"
-    )
-
-    _, folded = context_rows("face")
-    group = group_title(str(drill.category))
-    assert group not in folded, (
-        f"the face menu folds '{group}' away, and the drill sits in it — that is the second "
-        "click the rebuild of 2026-08-24 removed"
-    )
-
-
-def _group_size(kind: str, title: str) -> int:
-    """Wie viele Operationen dieses Merkmals in dieser Gruppe liegen."""
-    from app.core.registry.surfaces import group_title
-
-    return sum(1 for spec in _offered_at(kind) if group_title(str(spec.category)) == title)
 
 
 def test_a_row_handed_to_a_handle_has_that_handle() -> None:
@@ -552,33 +325,17 @@ def test_a_row_handed_to_a_handle_has_that_handle() -> None:
 
 
 def test_the_slot_keeps_its_only_operation_in_the_menu() -> None:
-    """Am Langloch bleibt *Zum Langloch ziehen* eine Zeile — es ist die einzige.
+    """Am Langloch bleibt *Zum Langloch ziehen* — es ist die einzige Handlung.
 
     ``HANDLE_INSTEAD`` nimmt sie an der **Bohrung** heraus, wo acht andere
-    Handlungen stehen. Am Langloch stünde ohne sie nur *Ausblenden*: genau
-    die Sackgasse, vor der ``SLOT_FROM`` warnt (§2.6). Der Griff sitzt auch
-    dort, aber ein Griff ersetzt eine Zeile unter vielen, nicht die einzige.
+    Handlungen stehen; am Langloch bliebe ohne sie dem Doppelklick nichts.
+    Der Griff sitzt auch dort, aber ein Griff ersetzt eine Zeile unter vielen,
+    nicht die einzige.
     """
     names = {str(spec.name) for spec in _offered_at("slot")}
     assert "slot_hole" in names, "the slot's only operation vanished from its menu"
     at_hole = {str(spec.name) for spec in _offered_at("hole")}
     assert "slot_hole" not in at_hole, "at the hole the row belongs to the handle"
-
-
-def test_no_submenu_holds_a_single_entry() -> None:
-    """Ein Untermenü mit einem Eintrag ist ein Klick für nichts (§2.6).
-
-    ``folded_groups`` faltet nie eine Gruppe von eins — geprüft ist das an der
-    Funktion. Hier steht dieselbe Frage an den **echten** Gruppen des
-    Registers, denn eine Gruppe schrumpft auch: Wer die vorletzte Operation aus
-    „Vorbereiten" wegnimmt, bekommt kein rotes Licht von einer Prüfung, die mit
-    ausgedachten Zahlen rechnet.
-    """
-    for kind in ("face", "hole"):
-        _, folded = context_rows(kind)
-        for title in folded:
-            count = _group_size(kind, title)
-            assert count > 1, f"{kind}: '{title}' holds {count} entry and still became a submenu"
 
 
 def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:
@@ -781,15 +538,20 @@ def test_the_shortcut_list_is_generated_from_the_menu_bar(window: MainWindow) ->
     Kameravorgaben gehen durch keine von beiden und standen deshalb in keiner
     Übersicht, obwohl sie im Menü daneben stehen.
 
-    Die Menüleiste kennt sie alle — dort landet jede Aktion, die ein Mensch
-    findet — und liefert die Gruppe gleich mit.
+    Die Menüleiste kennt die meisten — und liefert die Gruppe gleich mit.
+    **Seit dem 11.09.2026 nicht mehr alle:** Was einer Auswahl gilt, steht
+    rechts in der Karte der Handlungen und in keinem Menü; seine Tasten
+    (Strg+B, Entf, F2 …) kommen aus den Aktionen am Fenster, unter der Gruppe
+    „Handlungen rechts".
     """
     from PySide6.QtGui import QKeySequence
 
     from app.ui.shortcuts_window import entries
 
-    found = entries(window.menuBar())
+    found = entries(window.menuBar(), window)
     assert found, "es gibt Kürzel, also steht etwas drin"
+    groups = {group for group, _title, _shortcut in found}
+    assert "Handlungen rechts" in groups, "die Tasten der Handlungen rechts stehen mit drin"
 
     keys = {shortcut for _group, _title, shortcut in found}
     native = QKeySequence("Ctrl+S").toString(QKeySequence.SequenceFormat.NativeText)
@@ -1527,15 +1289,17 @@ def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
 
 
 def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:
-    """Vier Menüs, in denen auf der leeren Szene kein Eintrag geht.
+    """Ein Menü, in dem auf der leeren Szene kein Eintrag geht, tritt beiseite.
 
     **Robert am 23.08.2026:** „wenn man kein 3d modell ausgewählt hat bringen
     menüs wie bohrung anlegen nichts, hier ausblenden" — und auf die Rückfrage:
     „ausblenden wenn es nicht sinnvoll ist".
 
-    Gemessen auf der leeren Szene: *Objekt* 0 von 5, *Ändern* 0 von 34,
-    *Bausteine* 0 von 20, *Vorbereiten* 0 von 10. **Neunundsechzig gesperrte
-    Zeilen**, und die Erklärung sieht nur, wer mit der Maus darüberfährt.
+    Gemessen damals auf der leeren Szene: *Objekt* 0 von 5, *Ändern* 0 von 34,
+    *Bausteine* 0 von 20, *Vorbereiten* 0 von 10 — **neunundsechzig gesperrte
+    Zeilen**. Diese vier Menüs gibt es seit dem 11.09.2026 nicht mehr: Ihre
+    Einträge stehen rechts in der Karte der Handlungen (Robert: „brauchen wir
+    es nicht auch noch zusätzlich oben in der menüleiste").
 
     **Die Grenze läuft am Menü, nicht am Eintrag**, und das ist der ganze
     Schnitt: Ein Menü, in dem *jeder* Eintrag gesperrt ist, erklärt nichts —
@@ -1578,10 +1342,20 @@ def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:
         return gefunden
 
     leer = zustand()
+    # **Die vier Menüs von damals gibt es nicht mehr** (11.09.2026): Was einer
+    # Auswahl gilt, steht rechts in der Karte der Handlungen; *Bausteine* ist
+    # ein Abschnitt von *Erzeugen*. Damit steht auf der leeren Szene kein Menü
+    # mehr, in dem nichts geht — die Regel bleibt und hat heute keinen Fall.
+    # Geprüft wird ihr Versprechen: kein sichtbares Menü ohne einen Eintrag,
+    # der geht; und die alten Menüs sind fort, nicht bloß versteckt.
+    for name in ("Objekt", "Ändern", "Vorbereiten", "Bausteine"):
+        assert name not in leer, f"„{name}“ steht noch in der Leiste — die Karte rechts trägt es"
     ganz_gesperrt = [name for name, (frei, alle, _) in leer.items() if alle and not frei]
-    assert ganz_gesperrt, "ohne ein ganz gesperrtes Menü prüft dieser Test nichts"
     for name in ganz_gesperrt:
         assert not leer[name][2], f"„{name}“ ist ganz gesperrt und steht trotzdem da"
+    assert leer["Erzeugen"][2] and leer["Erzeugen"][0], (
+        "Erzeugen steht auf der leeren Szene und hat bedienbare Einträge — die Grundkörper"
+    )
 
     # **Die Gegenprobe, und sie ist die wichtigere Hälfte:** Wer einen Körper
     # hat, bekommt alles zurück. Ein Menü, das verschwindet und nicht
@@ -1926,14 +1700,15 @@ def test_a_flat_group_keeps_the_names_of_its_categories(window: MainWindow) -> N
     Zeilengrenze deshalb nicht mit — das prüft der Test gleich mit, denn sonst
     wäre die Beschriftung ein Verstoß gegen die Grenze, die sie einhalten soll.
     """
-    from app.core.registry import MENU_GROUPS, REGISTRY
-    from app.core.registry.surfaces import MAX_MENU_ROWS, group_is_flat
+    from app.core.registry import MENU_GROUPS, REGISTRY, in_the_menu_bar
+    from app.core.registry.surfaces import MAX_MENU_ROWS, folded_categories
 
     populated = {spec.category for spec in REGISTRY.all()}
     geprüft = 0
     for title, categories in MENU_GROUPS:
         present = [name for name in categories if name in populated]
-        if len(present) < 2 or not group_is_flat(present[0]):
+        # Eine Gruppe, die rechts in der Karte wohnt, hat kein Menü (11.09.2026).
+        if len(present) < 2 or not in_the_menu_bar(present[0]):
             continue
         menu = next(
             entry.menu()
@@ -1943,8 +1718,14 @@ def test_a_flat_group_keeps_the_names_of_its_categories(window: MainWindow) -> N
         headings = [
             entry.text() for entry in menu.actions() if entry.isSeparator() and entry.text()
         ]
-        assert len(headings) == len(present), (
-            f"{title}: {len(headings)} Überschriften für {len(present)} Kategorien"
+        # **Je direkte Kategorie eine Überschrift** — eine gefaltete trägt ihren
+        # Namen als Untermenü selbst. Seit *Bausteine* ein Abschnitt von
+        # *Erzeugen* ist (11.09.2026), gibt es in der Leiste keine ganz flache
+        # Gruppe aus mehreren Kategorien mehr; die Mischung ist der Regelfall.
+        direct = [name for name in present if name not in folded_categories(present[0])]
+        assert direct, f"{title}: alles gefaltet — dann steht kein Name im Menü selbst"
+        assert len(headings) == len(direct), (
+            f"{title}: {len(headings)} Überschriften für {len(direct)} direkte Kategorien"
         )
         # **Und sie sind sichtbar.** Diese Zusicherung fehlte, und deshalb war
         # der Test jahrelang grün über Überschriften, die niemand je gesehen
@@ -2009,42 +1790,6 @@ def test_no_category_is_folded_that_could_have_stayed() -> None:
     assert geprüft, "keine einzige gefaltete Kategorie — dann prüft dieser Test nichts"
 
 
-def test_folding_takes_the_rarer_category_when_two_are_the_same_size() -> None:
-    """Bei gleicher Größe entscheidet die Reihenfolge, nicht das Alphabet.
-
-    ``folded_groups`` fragte den Rang nur in dem Zweig, in dem eine einzelne
-    Gruppe schon genügt; im Ausweichzweig — der die großen zuerst nimmt — stand
-    nur die Größe und danach der Name. Gemessen am Menü *Ändern*: Bei einem
-    Gleichstand fiel *Verbinden und Abziehen* statt *Formgebung*, weil
-    ``boolean`` alphabetisch vor ``shaping`` steht. Die häufigere Gruppe wanderte
-    eine Ebene tiefer als die seltenere, und das ist genau die Umkehrung dessen,
-    was der Docstring zusagt.
-
-    **Der Aufbau ist der ganze Test**, und die erste Fassung hatte ihn falsch:
-    Sie ordnete „aaa" nach hinten — damit war dieselbe Gruppe alphabetisch
-    erste *und* hinterste, und beide Fassungen des Codes hätten sie gewählt. Der
-    Name muss der Ordnung **entgegenlaufen**, sonst prüft die Probe nichts.
-
-    Drei gleich große Gruppen, Grenze acht: Zwei müssen falten, und die dritte
-    ist die vorderste. Die alte Rechnung nahm zuerst „aaa" und ließ „ccc"
-    stehen — genau verkehrt herum.
-    """
-    from app.core.registry.surfaces import folded_groups
-
-    sizes = {"aaa": 5, "bbb": 5, "ccc": 5}
-    ordnung = {"aaa": 0, "bbb": 1, "ccc": 2}
-
-    gefaltet = folded_groups(sizes, limit=8, rank=lambda name: ordnung[name])
-
-    assert "aaa" not in gefaltet, (
-        f"gefaltet wurde {gefaltet} — die vorderste Gruppe muss stehen bleiben; "
-        "sie fällt nur, weil ihr Name alphabetisch vorn steht"
-    )
-    assert gefaltet[0] == "ccc", (
-        f"zuerst gefaltet wurde {gefaltet[0]} — erwartet ist die hinterste (ccc)"
-    )
-
-
 def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     """Was der Kern als Weg nennt, muss im Fenster auch dort liegen.
 
@@ -2087,16 +1832,32 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
             elif not entry.isSeparator():
                 gebaut[entry] = f"{blank(action.text())} → {blank(entry.text())}"
 
+    # **Zwei Orte, seit dem 11.09.2026.** Was einer Auswahl gilt, steht rechts
+    # in der Karte der Handlungen und in keinem Menü; sein Weg heißt
+    # „Handlungen rechts (…) → Titel", und die Karte muss den Knopf tragen.
+    # Alles andere liegt in der Leiste, und dort, wo der Kern es nennt.
+    from app.core.registry import in_the_menu_bar
+
+    in_the_panel = set(window.selection_operations._buttons)
     verglichen = 0
+    rechts = 0
     for name, action in window._op_actions.items():
         spec = REGISTRY.get(name)
-        assert action in gebaut, f"{name}: die Menüaktion hat keinen sichtbaren Weg"
         genannt = blank(menu_path(spec))
+        if not in_the_menu_bar(spec.category):
+            assert action not in gebaut, f"{name}: steht rechts und trotzdem in der Leiste"
+            assert genannt.startswith("Handlungen rechts"), f"{name}: nennt „{genannt}“"
+            assert genannt.endswith(f"→ {blank(str(spec.title))}"), f"{name}: „{genannt}“"
+            assert name in in_the_panel, f"{name}: rechts genannt, rechts kein Knopf"
+            rechts += 1
+            continue
+        assert action in gebaut, f"{name}: die Menüaktion hat keinen sichtbaren Weg"
         assert gebaut[action] == genannt, (
             f"{spec.name}: Handbuch und Agent nennen „{genannt}“, "
             f"im Fenster liegt sie unter „{gebaut[action]}“"
         )
         verglichen += 1
+    assert rechts, "keine Handlung rechts — dann prüft dieser Test die zweite Hälfte nicht"
 
     # **Kein Schwellenwert, sondern die Zusage selbst** (8b, 29.08.2026). Hier
     # stand „mindestens 60", dann „mindestens 50" — eine Zahl, die bei jedem

@@ -1,7 +1,7 @@
 # `app/core/registry/` — das Register
 
 Die eine Deklaration, die jede Oberfläche liest (§10). Wer eine Operation
-anlegt, trägt sie **hier** ein — und bekommt Menü, Dialog, Kontextmenü,
+anlegt, trägt sie **hier** ein — und bekommt Menü oder Karte rechts, Dialog,
 Befehlspalette, Kommandozeilenbefehl, Agentenwerkzeug und Handbuchseite, ohne
 sie irgendwo sonst zu erwähnen.
 
@@ -10,8 +10,8 @@ Die Regeln stehen in `.claude/rules/operationen.md`.
 ## Die eine Idee
 
 ```
-                        ┌──> menu_tree()        Menüs im Fenster
-                        ├──> context_menu()     Rechtsklick im Viewport
+                        ┌──> menu_tree()        Menüs im Fenster — oder die Karte rechts
+                        ├──> context_menu()     Rohmenge je Merkmal (Karte rechts, Doppelklick)
 @register_op(...)  ──>  ├──> palette_entries()  Befehlspalette
    REGISTRY             ├──> cli_commands()     Unterbefehle der CLI
                         ├──> tool_schemas()     was der Agent aufrufen kann
@@ -25,7 +25,7 @@ driftet ab — deshalb gibt es keine.
 
 | Datei | Rolle |
 |---|---|
-| `registry.py` | `register_op`, `OperationSpec`, `Registry`. Dazu die Ordnung: `CATEGORIES`, `MENU_GROUPS`, `MENU_TWINS`, `VARIANT_GROUPS` |
+| `registry.py` | `register_op`, `OperationSpec`, `Registry`. Dazu die Ordnung: `CATEGORIES`, `MENU_GROUPS`, `PANEL_CATEGORIES` mit `in_the_menu_bar` (welche Gruppen rechts in der Karte wohnen statt in der Leiste), `MENU_TWINS`, `VARIANT_GROUPS` |
 | `params.py` | Das Parameterschema: `param()`, `op_params()`, `validate()`, `json_schema()`. Grenzen, Einheiten, Vorgaben, Vorder- oder Rückseite des Dialogs |
 | `surfaces.py` | Alles, was **aus** dem Register erzeugt wird — die sechs Funktionen oben, dazu `parameter_table()`, `caveat_line()` und die Menüstruktur (siehe unten) |
 
@@ -53,8 +53,14 @@ keine vierte.
 `catalogue_operations()` (ebenfalls `surfaces.py`) nennt die Operationen, die
 im Bausteinkatalog eine Kachel haben. **Vier Stellen fragen sie**, und sie
 müssen dieselbe Antwort bekommen: die Menüleiste (`_build_menus` über `skip`),
-das Kontextmenü (`panels._add_operations`), `menu_path` und drei Wächter in
-`tests/`.
+die Karte rechts (`selection_operations.body_operations`,
+`feature_operations`), `menu_path` und die Wächter in `tests/`.
+
+**Und ob eine Operation überhaupt in die Leiste gehört, sagt `in_the_menu_bar`**
+(`registry.py`): Was einer Auswahl gilt — `PANEL_CATEGORIES` — steht rechts in
+der Karte der Handlungen und in keinem Menü; `menu_path` nennt dafür
+„Handlungen rechts (bei gewähltem Körper) → Titel". Die Regeln dazu stehen in
+`.claude/rules/oberflaeche.md`.
 
 Eine eigenständige Prüfkörperkachel umfasst sowohl ihren `create_`-Zugang als
 auch das kompatible `insert_`. Beide nennen denselben Katalogort und erzeugen

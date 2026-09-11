@@ -182,6 +182,23 @@ def make_primary(button: QPushButton) -> QPushButton:
     return button
 
 
+def make_danger(button: QPushButton) -> QPushButton:
+    """Macht einen Knopf zum Verwerfen kenntlich — das Fehlerrot als Fläche.
+
+    *Abbrechen* unter *Übernehmen* (Robert, 11.09.2026: „das abbrechen mit
+    rotem hintergrund"): Beide stehen übereinander, beide gleich breit, und
+    der eine wirft weg, was der andere ausführt. Die Farbe kommt aus der
+    Rolle ``error`` der Palette, je Thema in der Fassung, die auf der
+    Fensterfläche lesbar ist — das Wort auf dem Knopf ist die zweite
+    Kodierung (Regel 18), die Schrift darauf rechnet :func:`readable_on`.
+    Über eine Eigenschaft und nicht über ein Stylesheet je Widget, aus
+    demselben Grund wie :func:`set_level`.
+    """
+    button.setProperty("danger", True)
+    _repolish(button)
+    return button
+
+
 def make_large_target(button: QPushButton) -> QPushButton:
     """Markiert einen Knopf als große, fehlertolerante Trefferfläche.
 
@@ -488,6 +505,10 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     highlight = colours["highlight"]
     on_highlight = colours["highlight_text"]
     highlight_pressed = colours["highlight_pressed"]
+    from app.ui.palette import ROLES, readable_on
+
+    danger = ROLES["error"]
+    on_danger = readable_on(danger)
     accent_line = colours["accent_line"]
     hover = colours["alternate"]
     tooltip = colours["tooltip"]
@@ -608,6 +629,17 @@ QPushButton:default:pressed {{
     background: {highlight_pressed};
     border-color: {highlight_pressed};
 }}
+/* Ein Knopf, der verwirft (``make_danger``): das Fehlerrot der Palette als
+   Fläche, damit *Abbrechen* neben dem bernsteinfarbenen *Übernehmen* nicht
+   wie dessen Zwilling aussieht. Der Rahmen wechselt beim Überfahren wie am
+   Hauptknopf; gedrückt wird die Fläche dunkler über den Rahmen der Fläche. */
+QPushButton[danger="true"] {{
+    background: {danger};
+    color: {on_danger};
+    border-color: {danger};
+}}
+QPushButton[danger="true"]:hover {{ background: {danger}; border-color: {text}; }}
+QPushButton[danger="true"]:pressed {{ background: {danger}; border-color: {on_danger}; }}
 /* Zwei Bildpunkte Rahmen statt einem, und der Innenabstand gibt den einen
    wieder her: sonst wandert die Beschriftung beim Durchtabben um einen Punkt,
    und ein Dialog zittert unter der Tabulatortaste. */

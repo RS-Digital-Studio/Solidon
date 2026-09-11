@@ -60,7 +60,9 @@ def test_the_panel_is_the_registry_without_the_parts_catalogue(qt_app: QApplicat
 
     assert {spec.name for spec in specs} == set(panel._buttons)
     assert not (set(panel._buttons) & catalogue_operations())
-    assert all(spec.category != "parts" for spec in specs)
+    # **Die Kachel bleibt draußen, die Kategorie nicht** (11.09.2026): Die zwei
+    # Deckel ohne Kachel stehen an der Fläche, auf die sie gehören.
+    assert {"create_lid", "screw_lid"} <= set(panel._buttons)
     assert {"drill_hole", "resize_hole", "countersink_hole"} <= set(panel._buttons)
 
 
@@ -84,7 +86,7 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
     # nie eine Zeichenkette — die Zusage wäre immer erfüllt und wertlos.
     in_the_list = {
         str(button.property("operationName"))
-        for _heading, buttons in panel._groups.values()
+        for _section, _toggle, buttons in panel._groups.values()
         for button in buttons
     }
     for name in all_quick_names():
@@ -380,6 +382,60 @@ def test_every_action_row_keeps_a_keyboard_sized_height(qt_app: QApplication) ->
         assert panel._buttons[name].height() >= TARGET_SIZE
     assert panel.search.height() >= TARGET_SIZE
     assert panel.catalog_button.height() >= TARGET_SIZE
+
+
+def test_the_catalog_button_is_the_main_button_of_the_panel(qt_app: QApplication) -> None:
+    """*Bausteine* ist ein Hauptknopf: Akzentfarbe **und** halbfett (Regel 18).
+
+    Er stand als grauer Werkzeugknopf unter der Liste und ging zwischen den
+    Handlungen unter (Robert, 11.09.2026: „damit er auch auffällt"). Die Farbe
+    kommt aus ``QPushButton:default`` des Stylesheets, das Gewicht aus
+    ``make_primary`` — beides zusammen, nicht eines allein.
+    """
+    from PySide6.QtGui import QFont
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    assert panel.catalog_button.isDefault(), "die Akzentfarbe hängt am Default-Zustand"
+    assert panel.catalog_button.font().weight() >= QFont.Weight.DemiBold, "und fett dazu"
+
+
+def test_every_group_folds_and_a_search_hit_unfolds_it(qt_app: QApplication) -> None:
+    """Jede Gruppe ist ein Abschnitt zum Zuklappen — und ein Suchtreffer klappt ihn auf.
+
+    Graue Zwischenüberschriften über einer Wand gleicher Knöpfe (Robert,
+    11.09.2026: „monoton und dadurch unübersichtlich"). Jetzt trägt jede
+    Gruppe die Kopfzeile der linken Spalte: ein Umschalter mit Linie darunter.
+    Wer sucht, soll den Treffer sehen, auch wenn er die Gruppe vorher
+    zugeklappt hatte.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1))
+    panel.show()
+    qt_app.processEvents()
+
+    assert panel._groups, "sonst prüft dieser Test nichts"
+    folded: dict[str, list] = {}
+    for title, (section, toggle, buttons) in panel._groups.items():
+        assert toggle.isCheckable() and toggle.isChecked(), f"{title} beginnt offen"
+        shown = [button for button in buttons if button.isVisibleTo(panel)]
+        if not shown:
+            continue
+        toggle.setChecked(False)
+        qt_app.processEvents()
+        assert not any(button.isVisibleTo(panel) for button in shown), f"{title} klappt zu"
+        assert section.isVisibleTo(panel), "die Kopfzeile bleibt stehen"
+        folded[title] = shown
+
+    # Zugeklappt lassen — und nach einem Knopf daraus suchen.
+    title, shown = next(iter(folded.items()))
+    toggle = panel._groups[title][1]
+    wanted = shown[0]
+    panel.search.setText(str(wanted.property("operationTitle") or wanted.text()))
+    qt_app.processEvents()
+    assert toggle.isChecked(), f"ein Treffer öffnet {title}"
+    assert wanted.isVisibleTo(panel), "und der Treffer steht da"
 
 
 def test_no_action_stands_twice_in_the_selection_window(qt_app: QApplication) -> None:

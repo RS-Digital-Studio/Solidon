@@ -25,6 +25,8 @@ scrive in `website/version.json`.
 - Se un'asola sporge dal bordo a un'estremità, Solidon lo dice, anche quando il suo centro sta in pieno materiale.
 - Un'asola compare nell'albero degli oggetti come asola, con la sua larghezza e la sua lunghezza, anche in un modello che hai aperto e che ha disegnato qualcun altro.
 - Un'asola esistente si allunga in seguito, e la sua direzione resta dov'era.
+- Un foro o un'asola selezionati si regolano direttamente nella vista con «Imposta nella vista»: una maniglia per spostare e ruotare, pomelli per allungare, quote a bordi e centri.
+- Solo «Applica», a destra, ne fa un passo; Esc annulla. Un'asola allungata mostra la sua lunghezza e mantiene la sua forma quando la spostate con la maniglia.
 
 ### Riconoscimento
 
@@ -36,6 +38,21 @@ scrive in `website/version.json`.
 - Una scritta può usare ora otto caratteri invece di tre, più grassetto e corsivo. Il grassetto porta tratti più spessi a parità di altezza e resta leggibile dove lo stile normale sbava.
 - Accanto ai caratteri diritti ci sono ora uno tondo e uno manoscritto, entrambi in un solo stile. Tutti e otto viaggiano con il programma, così un progetto appare uguale ovunque.
 - Se un carattere è troppo fine per il tuo ugello, Solidon dice da quale altezza tiene, invece di stamparlo e lasciare che le lettere si impastino.
+
+### Blocchi e accoppiamenti
+
+- Un blocco dal catalogo compare subito nella vista: sulla faccia selezionata o sopra il corpo, con quote e maniglia. Un clic lo posiziona altrove, «Applica» lo inserisce.
+
+### Vista e utilizzo
+
+- Le azioni per un corpo o una caratteristica selezionati stanno a destra, in gruppi richiudibili, con ricerca. I menu Oggetto, Modifica e Prepara sono spariti; le scorciatoie restano.
+- Il clic destro su un corpo o una faccia mostra solo ciò che esiste soltanto lì: il passo dietro, lo schizzo sulla faccia, il nascondere. Il pulsante «Blocchi» è in colore d'accento.
+
+### Piano di stampa e consegna
+
+- Se un corpo fatto di pezzi singoli — una scritta, per esempio — non entra intero in nessun piano, il rapporto propone di separarlo e orientarlo subito: un clic e i pezzi stanno sui piani.
+- «Apri nello slicer» consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano.
+- Per separazione, scritta e texture il rapporto indica il numero nella frase, dove prima c'era un segnaposto tra parentesi graffe.
 
 ## 0.4.0
 

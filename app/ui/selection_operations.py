@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QToolButton,
@@ -44,7 +45,8 @@ from app.core.registry import (
 from app.i18n import tr
 from app.ui.icons import icon, icon_name_for
 from app.ui.leash import weak_slot
-from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, set_level
+from app.ui.panels import collapsible
+from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_large_target, make_primary, set_level
 
 QUICK_BODIES = ("union_objects", "subtract_objects", "intersect_objects")
 """Bei zwei oder mehr Körpern: die Handlungen, wegen derer die Auswahlfläche
@@ -182,15 +184,20 @@ def all_quick_names() -> tuple[str, ...]:
     return tuple(found)
 
 
-_SEPARATE_CATEGORIES = frozenset({"parts"})
-
-
 def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
     """Körperoperationen, ohne den getrennten Bausteinweg.
 
     Versteckte Rechenkern-Zwillinge sind keine zweite Handlung. Erzeuger ohne
     Eingang gehören ebenfalls nicht an eine Auswahl; sie bleiben im Menü und
     in der Befehlspalette.
+
+    **Draußen bleibt die Kachel, nicht die Kategorie** (11.09.2026). Hier stand
+    dazu ``_SEPARATE_CATEGORIES = {"parts"}``, und das nahm zwei Operationen
+    mit, die gar keine Kachel haben: *Deckel erzeugen* und *Drehdeckel
+    erzeugen* bauen einen Deckel auf eine Fläche, statt einen fertigen
+    einzusetzen — und standen damit nirgends an der Fläche, auf die sie gehören
+    (Entscheidung Robert: „Deckel/Drehdeckel zusätzlich rechts an einer
+    Fläche"). ``catalogue_operations()`` zieht die Linie dort, wo sie hingehört.
 
     **Die Zwillingsregel kommt aus dem Kern** und steht nicht ein drittes Mal
     hier (:func:`~app.core.registry.shown_of_twins`, 07.09.2026): Der Bezug
@@ -203,7 +210,6 @@ def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]
         for spec in specs
         if (spec.consumes != 0 or spec.takes_whole_scene)
         and spec.name not in catalogue
-        and spec.category not in _SEPARATE_CATEGORIES
         and not spec.applies_to
     )
 
@@ -216,9 +222,11 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
     zweite Rechnung. Sie standen bis zum 07.09.2026 nicht im Panel, und damit
     bot eine gewählte Fläche dort nichts an.
 
-    **Die Bausteine bleiben draußen.** Ein räumliches Teil als Textzeile ist
-    die schlechtere Darstellung; sie sind durch den Katalogknopf vertreten —
-    dieselbe Entscheidung, die auch die Menüleiste trifft.
+    **Die Bausteine mit Kachel bleiben draußen.** Ein räumliches Teil als
+    Textzeile ist die schlechtere Darstellung; sie sind durch den Katalogknopf
+    vertreten — dieselbe Entscheidung, die auch die Menüleiste trifft. Die
+    zwei Deckel ohne Kachel stehen hier an der Fläche (siehe
+    :func:`body_operations`).
 
     **Und dieselbe Erzeuger-Schranke wie bei :func:`body_operations`.** Ein
     Erzeuger ohne Eingang gehört an keine Auswahl, gleich ob sie einen Körper
@@ -234,7 +242,6 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
         if spec.applies_to
         and (spec.consumes != 0 or spec.takes_whole_scene)
         and spec.name not in catalogue
-        and spec.category not in _SEPARATE_CATEGORIES
     )
 
 
@@ -278,7 +285,12 @@ class SelectionOperationsPanel(QWidget):
         Senkung sechs (gemessen 09.09.2026; Robert: „bei einer Bohrung oder
         Senkung brauchen wir Filament und die Körperliste gar nicht")."""
         self._buttons: dict[str, QToolButton] = {}
-        self._groups: dict[str, tuple[QLabel, tuple[QToolButton, ...]]] = {}
+        self._groups: dict[str, tuple[QWidget, QToolButton, tuple[QToolButton, ...]]] = {}
+        """Je Gruppe ihr Abschnitt, sein Umschalter und ihre Knöpfe.
+
+        Der Abschnitt ist das, was die Suche ein- und ausblendet; der
+        Umschalter das, was sie beim Treffer öffnet — ein Treffer in einer
+        zugeklappten Gruppe wäre sonst einer, den niemand sieht."""
         self._states: dict[str, tuple[bool, str]] = {}
         self._quick_buttons: dict[str, QToolButton] = {}
         self._quick_shown: list[str] = []
@@ -333,7 +345,9 @@ class SelectionOperationsPanel(QWidget):
         content = QWidget(self)
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(TIGHT)
+        # Zwischen den Gruppen Luft, innerhalb eng: Die Gruppe ist die
+        # Einheit, die man überblickt, nicht der einzelne Knopf.
+        content_layout.setSpacing(NORMAL)
 
         grouped: dict[str, list[OperationSpec]] = {}
         for spec in operations:
@@ -343,15 +357,27 @@ class SelectionOperationsPanel(QWidget):
                 continue
             grouped.setdefault(str(group_title(spec.category)), []).append(spec)
         for title in sorted(grouped, key=str.casefold):
-            heading = QLabel(title, content)
-            set_level(heading, "caption")
-            content_layout.addWidget(heading)
+            # **Jede Gruppe ein Abschnitt, der sich zuklappen lässt** — mit
+            # der Kopfzeile und der Linie darunter, die auch die linke Spalte
+            # trägt (:func:`collapsible`). Eine graue Zwischenüberschrift über
+            # einer Liste gleicher Knöpfe machte aus fünfzig Handlungen eine
+            # Wand (Robert, 11.09.2026: „sieht alles ziemlich monoton und
+            # dadurch unübersichtlich aus").
+            box = QWidget(content)
+            box_layout = QVBoxLayout(box)
+            box_layout.setContentsMargins(0, TIGHT, 0, 0)
+            box_layout.setSpacing(TIGHT)
             buttons: list[QToolButton] = []
             for spec in sorted(grouped[title], key=lambda entry: str(entry.title).casefold()):
-                button = self._operation_button(spec, content)
-                content_layout.addWidget(button)
+                button = self._operation_button(spec, box)
+                box_layout.addWidget(button)
                 buttons.append(button)
-            self._groups[title] = (heading, tuple(buttons))
+            section = collapsible(title, box)
+            section.setParent(content)
+            toggle = section.findChild(QToolButton, "sectionHeading")
+            assert toggle is not None
+            content_layout.addWidget(section)
+            self._groups[title] = (section, toggle, tuple(buttons))
         content_layout.addStretch(1)
 
         self.scroller = QScrollArea(self)
@@ -366,10 +392,19 @@ class SelectionOperationsPanel(QWidget):
         # Ort für die Auswahl", A und C). Er tat nichts, als vom einen Ort zum
         # anderen zu führen — und seit die Maße des Gewählten über diesen
         # Handlungen stehen, führt er nirgendwohin.
-        self.catalog_button = QToolButton(self)
-        self.catalog_button.setText(tr("Bausteine"))
+        # **Ein Hauptknopf, kein Listeneintrag.** Er stand als grauer
+        # Werkzeugknopf unter der Liste und ging zwischen den Handlungen
+        # unter — dabei ist der Katalog an einem Körper oder einer Fläche der
+        # Weg zu 27 Teilen auf einmal (Robert, 11.09.2026: „wäre es auch gut in
+        # Orange zu machen damit er auch auffällt"). Akzentfarbe und halbfett
+        # kommen aus :func:`make_primary`, wie beim Übernehmen im
+        # Merkmalfenster — Fett ist die zweite Kodierung (Regel 18).
+        # ``make_large_target`` **und** ``setMinimumHeight``: Das Stylesheet
+        # setzt seine ``min-height`` beim Polieren erneut, und aus 44 Punkten
+        # würden 26 (siehe :func:`make_large_target`) — ohne Stylesheet gilt
+        # umgekehrt nur die Mindesthöhe am Widget.
+        self.catalog_button = make_large_target(make_primary(QPushButton(tr("Bausteine"), self)))
         self.catalog_button.setIcon(icon("category.parts", self.catalog_button))
-        self.catalog_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.catalog_button.setMinimumHeight(TARGET_SIZE)
         self.catalog_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.catalog_button.setToolTip(
@@ -533,7 +568,7 @@ class SelectionOperationsPanel(QWidget):
         )
         for name in self._quick_shown:
             self._wrap_label(self._quick_buttons[name], share)
-        for _heading, buttons in self._groups.values():
+        for _section, _toggle, buttons in self._groups.values():
             for button in buttons:
                 self._wrap_label(button, self.scroller.viewport().width())
 
@@ -632,7 +667,7 @@ class SelectionOperationsPanel(QWidget):
         if query is not None:
             self._query = query
         wanted = self._query.strip().casefold()
-        for title, (heading, buttons) in self._groups.items():
+        for title, (section, toggle, buttons) in self._groups.items():
             visible = False
             for button in buttons:
                 label = str(button.property("operationTitle") or button.text())
@@ -640,7 +675,11 @@ class SelectionOperationsPanel(QWidget):
                 fits = self._fits_the_level(str(button.property("operationName")))
                 button.setVisible(match and fits)
                 visible = visible or (match and fits)
-            heading.setVisible(visible)
+            section.setVisible(visible)
+            if wanted and visible and not toggle.isChecked():
+                # Ein Treffer öffnet seine Gruppe: Wer sucht, will sehen, was
+                # er gefunden hat — nicht erst aufklappen.
+                toggle.setChecked(True)
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._wrap_labels()

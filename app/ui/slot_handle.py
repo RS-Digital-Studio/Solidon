@@ -238,6 +238,7 @@ class SlotHandle:
         interact_callback: Callable[[float, float], None] | None = None,
         cancel_callback: Callable[[], None] | None = None,
         settle_angle: Callable[[float], float] | None = None,
+        outlined: bool = False,
     ) -> None:
         self._renderer = renderer
         self._release = release_callback
@@ -297,6 +298,22 @@ class SlotHandle:
                 )
             )
         self._outline: Item | None = None
+        self._shift = np.zeros(3)
+        """Wohin ein **fremder** Zug den Griff gerade trägt.
+
+        Wer am Bewegungsgriff zieht, während das gezogene Langloch auf sein
+        Übernehmen wartet, sieht Knöpfe und Umriss mitgehen (:meth:`shift`)
+        — sonst stünde der Umriss, der das künftige Loch zeigt, an der Stelle,
+        von der es gerade weggezogen wird. Flüchtig: Der nächste Aufbau setzt
+        den Griff an die neue Stelle und den Versatz auf null.
+        """
+        if outlined:
+            # **Ein Zug, der wartet, steht im Bild.** Der Griff wird nach jedem
+            # Zug am Bewegungsgriff frisch gebaut; ohne diesen Aufruf hätte er
+            # danach seine Knöpfe, aber nicht den Umriss, den sie einfassen
+            # (Robert, 11.09.2026: „das langloch dann verschiebe fehlt die
+            # richtige vorschau").
+            self._redraw()
 
     # --- Aufbau --------------------------------------------------------------------
 
@@ -318,6 +335,16 @@ class SlotHandle:
     def knobs(self) -> tuple[Item, ...]:
         """Die zwei Anfasser, ohne den Umriss."""
         return tuple(self._knobs)
+
+    @property
+    def axis(self) -> Vec3:
+        """Die Bohrachse, an der der Griff hängt."""
+        return (float(self._axis[0]), float(self._axis[1]), float(self._axis[2]))
+
+    @property
+    def radius(self) -> float:
+        """Der halbe Durchmesser des Lochs — das Maß, an dem die Beschriftung sitzt."""
+        return self._diameter / 2.0
 
     @property
     def knob_seats(self) -> tuple[Vec3, ...]:
@@ -412,6 +439,23 @@ class SlotHandle:
             self._select(None)
         return False
 
+    def take_press(self, event: PointerEvent, index: int) -> bool:
+        """Einen Druck annehmen, der nicht auf einem Knopf lag — am Loch selbst.
+
+        Wer ein gewähltes Loch anfasst und zieht, meint dasselbe wie am Knopf:
+        Länge und Richtung. Der Griff wird dafür erst gebaut, wenn der Druck
+        schon da ist; die Zeigerbewegung davor hat also keinen Knopf gefunden,
+        und :meth:`handle` wiese den Druck ab. Hier sagt der Aufrufer, welcher
+        Knopf gemeint ist — der nähere —, und der Druck geht denselben Weg.
+        """
+        self._hovered = index
+        return self.handle(event)
+
+    def shift(self, offset: Vec3) -> None:
+        """Knöpfe und Umriss um ``offset`` versetzen — ein fremder Zug trägt sie mit."""
+        self._shift = np.asarray(offset, dtype=float)
+        self._redraw()
+
     def set_values(self, length: float, angle: float) -> None:
         """Länge und Richtung von außen — die nachgebesserte Zahl aus der Leiste.
 
@@ -492,7 +536,7 @@ class SlotHandle:
         """Knöpfe an ihre neue Stelle, Umriss auf die neue Form."""
         for index, item in enumerate(self._knobs):
             seat = np.asarray(self._knob_seat(index, self.length, self.angle), dtype=float)
-            offset = seat - np.asarray(self._built_seats[index], dtype=float)
+            offset = seat - np.asarray(self._built_seats[index], dtype=float) + self._shift
             item.set_position((float(offset[0]), float(offset[1]), float(offset[2])))
         points = slot_outline(self._centre, self._axis, self._diameter, self.length, self.angle)
         if len(points) < 2:
@@ -509,4 +553,7 @@ class SlotHandle:
             )
         else:
             self._outline.update_points(points)
+        self._outline.set_position(
+            (float(self._shift[0]), float(self._shift[1]), float(self._shift[2]))
+        )
         self._renderer.render()

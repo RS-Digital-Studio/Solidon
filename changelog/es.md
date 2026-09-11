@@ -26,6 +26,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una ranura sobresale del borde por un extremo, Solidon lo advierte, aunque su centro esté bien dentro del material.
 - Una ranura figura en el árbol de objetos como ranura, con su anchura y su longitud, también en un modelo que usted haya abierto y que haya dibujado otra persona.
 - Una ranura existente se puede alargar después, y su dirección se mantiene donde estaba.
+- Un taladro o una ranura seleccionados se ajustan directamente en la vista con «Ajustar en la vista»: un asa para desplazar y girar, botones para estirar, cotas a bordes y centros.
+- Solo «Aplicar», a la derecha, lo convierte en un paso; Escape lo descarta. Una ranura estirada muestra su longitud y conserva su forma cuando la desplaza con el asa.
 
 ### Reconocimiento
 
@@ -37,6 +39,21 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una inscripción puede usar ahora ocho fuentes en lugar de tres, más negrita y cursiva. La negrita lleva trazos más gruesos con la misma altura y sigue siendo legible donde la normal se emborrona.
 - Junto a las fuentes rectas hay ahora una redonda y una manuscrita, ambas en un solo estilo. Las ocho viajan con el programa, así que un proyecto se ve igual en todas partes.
 - Si una fuente es demasiado fina para su boquilla, Solidon indica a partir de qué altura aguanta, en lugar de imprimirla y dejar que las letras se empasten.
+
+### Bloques y ajustes
+
+- Un bloque del catálogo aparece de inmediato en la vista: sobre la cara seleccionada o encima del cuerpo, con líneas de cota y asa. Un clic lo coloca en otro sitio, «Aplicar» lo inserta.
+
+### Vista y manejo
+
+- Las acciones para un cuerpo o característica seleccionados están a la derecha, en grupos plegables, con búsqueda. Los menús Objeto, Modificar y Preparar desaparecen; los atajos siguen.
+- El clic derecho sobre un cuerpo o una cara muestra solo lo que existe únicamente allí: el paso detrás, el boceto sobre la cara, ocultar. El botón «Bloques» está en color de acento.
+
+### Cama de impresión y entrega
+
+- Si un cuerpo de piezas sueltas —un rótulo, por ejemplo— no cabe entero en ninguna cama, el informe ofrece separarlo y orientarlo enseguida: un clic y las piezas quedan en las placas.
+- «Abrir en el slicer» entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa.
+- En separación, rotulación y textura el informe indica la cifra en la frase, donde antes había un marcador entre llaves.
 
 ## 0.4.0
 

@@ -289,6 +289,80 @@ def a_handle(renderer: RecordingRenderer, taken: list[tuple[float, float]]) -> S
     )
 
 
+def test_a_handle_built_for_a_waiting_drag_shows_its_outline_at_once() -> None:
+    """Ein Griff, der einen wartenden Zug trägt, steht mit seinem Umriss da.
+
+    Der Griff wird nach jedem Zug am Bewegungsgriff frisch gebaut. Bis zum
+    11.09.2026 zeichnete der Aufbau nur die Knöpfe; den Umriss gab es erst
+    mit dem nächsten Zug — nach dem Versetzen eines gezogenen Langlochs
+    standen zwei Knöpfe um nichts herum (Robert: „das langloch dann
+    verschiebe fehlt die richtige vorschau").
+    """
+    renderer = RecordingRenderer(size=(800, 600))
+    plain = a_handle(renderer, [])
+    assert plain._outline is None, "ohne wartenden Zug kein Umriss — der kommt mit dem Zug"
+    waiting = SlotHandle(
+        renderer,
+        centre=(0.0, 0.0, 5.0),
+        axis=(0.0, 0.0, 1.0),
+        diameter=BORE,
+        length=18.0,
+        angle=30.0,
+        knob_size=BORE,
+        colour="#ff9f1c",
+        release_callback=lambda length, angle: None,
+        outlined=True,
+    )
+    outline = waiting._outline
+    assert outline is not None, "der wartende Zug steht als Umriss im Bild"
+    expected = slot_outline((0.0, 0.0, 5.0), (0.0, 0.0, 1.0), BORE, 18.0, 30.0)
+    assert np.allclose(outline.points, expected), "und zwar der des Zugs, nicht der Bohrung"
+
+
+def test_a_foreign_drag_carries_knobs_and_outline_along() -> None:
+    """Ein Zug am Bewegungsgriff nimmt Knöpfe und Umriss mit — und lässt sie zurück.
+
+    Während des Zugs stehen beide dort, wohin gezogen wird: Der Umriss zeigt
+    das künftige Loch, und das soll an der Stelle stehen, die der Zeiger
+    gerade meint. Der Versatz sitzt **auf** dem der Knöpfe, nicht an seiner
+    Stelle — ein gezogener Griff hat seine Knöpfe schon aus der Bauposition
+    heraus verschoben.
+    """
+    renderer = RecordingRenderer(size=(800, 600))
+    handle = SlotHandle(
+        renderer,
+        centre=(0.0, 0.0, 5.0),
+        axis=(0.0, 0.0, 1.0),
+        diameter=BORE,
+        length=BORE,
+        angle=0.0,
+        knob_size=BORE,
+        colour="#ff9f1c",
+        release_callback=lambda length, angle: None,
+    )
+    handle.set_values(18.0, 0.0)
+    before = [np.asarray(knob.position(), dtype=float) for knob in handle.knobs]
+    # Gebaut an der Mindestlänge, gezogen auf 18: Der Versatz der Knöpfe ist
+    # die halbe Differenz — und genau darauf setzt der fremde Zug auf.
+    pulled = 9.0 - shortest_slot(BORE) / 2.0
+    assert before[0][0] == pytest.approx(pulled) and before[1][0] == pytest.approx(-pulled)
+
+    handle.shift((6.0, 4.0, 0.0))
+    after = [np.asarray(knob.position(), dtype=float) for knob in handle.knobs]
+    assert np.allclose(after[0] - before[0], (6.0, 4.0, 0.0))
+    assert np.allclose(after[1] - before[1], (6.0, 4.0, 0.0))
+    assert handle._outline is not None
+    assert np.allclose(handle._outline.position(), (6.0, 4.0, 0.0)), "der Umriss geht mit"
+    assert handle.knob_seats[0][0] == pytest.approx(9.0), (
+        "die Sitze bleiben, wo gebaut wird — die Beschriftung zieht der Griff selbst um"
+    )
+
+    handle.shift((0.0, 0.0, 0.0))
+    back = [np.asarray(knob.position(), dtype=float) for knob in handle.knobs]
+    assert np.allclose(back[0], before[0]) and np.allclose(back[1], before[1])
+    assert np.allclose(handle._outline.position(), (0.0, 0.0, 0.0))
+
+
 def test_one_pixel_of_pointer_jitter_does_not_start_a_slot_drag() -> None:
     """Ein Antippen mit Mauszittern eröffnet keine Langlochbearbeitung."""
     renderer = RecordingRenderer(size=(800, 600))
@@ -549,9 +623,38 @@ def test_a_slot_carries_the_knobs_and_the_grip(qt_app: object) -> None:
         viewport.deleteLater()
 
 
+def test_the_mark_at_a_slot_is_the_slot_and_not_its_bore(qt_app: object) -> None:
+    """Die Marke eines Langlochs deckt das Langloch — nicht nur einen Kreis darin.
+
+    Bis zum 11.09.2026 stand an einem erkannten Langloch derselbe Zylinder wie
+    an einer Bohrung: Ø 6 über einem Loch von 20 mm Länge. Neben dem Umriss
+    des Griffs waren das zwei Formen für dasselbe Loch.
+    """
+    from app.ui.viewport import Viewport
+
+    load_operations()
+    viewport = Viewport()
+    try:
+        viewport.renderer = RecordingRenderer(size=(800, 600))
+        a_slot_in_the_view(viewport)
+        viewport.set_gizmo(False)
+
+        mark = viewport._shape_actor
+        assert mark is not None, "das gewählte Langloch trägt seine Marke"
+        span = mark.points.max(axis=0) - mark.points.min(axis=0)
+        assert span[0] == pytest.approx(20.0, abs=0.05), "so lang wie das Langloch"
+        assert span[1] == pytest.approx(6.0, abs=0.05), "so breit wie seine Bohrung"
+        assert span[2] == pytest.approx(10.0, abs=0.05), "und so tief wie das Loch"
+        assert mark.points[:, 2].max() == pytest.approx(10.0), "vom Sitz an der Öffnung aus"
+    finally:
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
 def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) -> None:
     """Rastung, Beschriftung und freier Raum gehören zum aktuellen Griffstand."""
-    from app.ui.viewport import GIZMO_LABEL_GAP, Viewport
+    from app.ui.labels import length
+    from app.ui.viewport import GIZMO_LABEL_GAP, Viewport, slot_measure_seat
 
     load_operations()
     viewport = Viewport()
@@ -580,9 +683,17 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
             for seat in handle.knob_seats
         ]
         # Seit RM-153 stehen davor X, Y und Z des Bewegungsgriffs; die zwei L
-        # der Knöpfe sind die letzten beiden Marken.
-        assert viewport._gizmo_label_texts[-2:] == ["L", "L"]
-        np.testing.assert_allclose(viewport._gizmo_label_base[-2:], expected)
+        # der Knöpfe stehen dahinter, und die Länge ist die letzte Marke — sie
+        # folgt dem Zug wie die Knöpfe (Robert, 11.09.2026: „wenn man das
+        # langloch zieht wäre auch das maß nicht schlecht wie groß es ist").
+        assert viewport._gizmo_label_texts[-3:-1] == ["L", "L"]
+        assert viewport._gizmo_label_texts[-1] == length(handle.length), (
+            "die Länge steht im Bild, mit dem Wert des Zugs"
+        )
+        np.testing.assert_allclose(viewport._gizmo_label_base[-3:-1], expected)
+        np.testing.assert_allclose(
+            viewport._gizmo_label_base[-1], slot_measure_seat(handle), atol=1e-9
+        )
         handle.handle(PointerEvent("move", x, y))
         handle.handle(PointerEvent("release", x, y, button="left"))
         assert viewport._drag_kind is None
@@ -666,12 +777,23 @@ def test_a_cancelled_drag_leaves_nothing_behind(qt_app: object) -> None:
         assert viewport._slot_handle is not None
         viewport._slot_handle._release(30.0, 0.0)
 
-        # Abgebrochen wird über Escape — die eigene Leiste dafür ist am
-        # 11.09.2026 gefallen, und der Weg ist derselbe wie bei jedem Zug.
+        # **Ein anderer Zug lässt den wartenden stehen** (11.09.2026, Robert:
+        # „das langloch ziehe und dann das langloch nochmal über das gizmo
+        # verschieben will ist es wie abbrechen") — ``_end_drag`` allein bricht
+        # ihn nicht mehr ab, das tut der Griff auch nach einem Zug am Pfeil.
         viewport._end_drag()
+        assert viewport.slot_drag_waits(), "der Zug wartet weiter"
+        assert viewport._slot_handle is not None
+        assert viewport._slot_handle.length == pytest.approx(30.0), "und der neue Griff trägt ihn"
+
+        # Abgebrochen wird über Escape — die eigene Leiste dafür ist am
+        # 11.09.2026 gefallen; das Fenster nimmt ``cancel_slot_drag``.
+        viewport.cancel_slot_drag()
 
         assert not gemeldet, "abgebrochen wird nichts angewandt"
         assert not viewport.slot_drag_waits()
+        assert viewport._slot_handle is not None
+        assert viewport._slot_handle.length < 30.0, "der Griff zeigt wieder das Merkmal"
     finally:
         viewport.renderer = None
         viewport.deleteLater()
@@ -812,6 +934,7 @@ def test_a_slot_shows_a_letter_for_every_arrow_and_every_knob(qt_app: object) ->
         assert {"X", "Y", "Z"} <= set(geschrieben), geschrieben
         assert geschrieben.count("L") == 2, "die zwei Knöpfe tragen ihr L"
         assert "S" not in geschrieben, "kein Würfel, kein S"
+        assert geschrieben[-1].endswith("mm"), "und die Länge steht als Maß daneben"
     finally:
         viewport.renderer = None
         viewport.deleteLater()

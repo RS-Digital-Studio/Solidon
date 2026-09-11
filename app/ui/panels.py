@@ -96,7 +96,6 @@ from app.core.log import get_logger
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, shown_of_twins
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
-from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
 from app.core.scene.history import repair_is_available
 from app.core.types import Document, Feature, Finding, ObjectId, OpId, SceneObject
@@ -115,7 +114,6 @@ from app.ui.labels import (
     feature_measure,
     feature_name,
     fill_parameter_units,
-    group_title,
     kind_requirement,
     length,
     localised,
@@ -127,7 +125,7 @@ from app.ui.labels import (
 from app.ui.leash import weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_primary, rule, set_level
+from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_danger, make_primary, rule, set_level
 from app.ui.theme import UNDONE_COLOUR
 
 _log = get_logger(__name__)
@@ -154,42 +152,6 @@ MAX_MENU_ROWS = _MAX_MENU_ROWS
 OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 #: Die Transaktion, zu der eine Kindzeile gehört — daran hängt das Einklappen.
 GROUP_ROLE = int(Qt.ItemDataRole.UserRole) + 2
-
-
-#: Kategorien, deren Gruppe am Merkmal sichtbar bleibt.
-#:
-#: Nicht der Gruppentitel, sondern die **Kategorie** des Registereintrags: Der
-#: Titel ist übersetzt, und eine Liste deutscher Wörter träfe im englischen
-#: Fenster nichts. Hier steht ``colour``, weil das Färben die Geste ist, für
-#: die man auf eine Fläche zeigt (Entscheidung Robert, 27.08.2026) — wer eine
-#: weitere aufnimmt, nimmt damit in Kauf, dass etwas anderes wandert.
-#:
-#: ``holes`` steht daneben, weil es schon einmal geschützt war: Der Umbau vom
-#: 24.08.2026 hat die Faltung eigens umgestellt, damit die Bohrung nicht im
-#: Untermenü landet — sie ist die häufigste Geste an einer fremden Fläche
-#: überhaupt. Diese Zusage stand nur im Rang von ``MENU_GROUPS`` und wäre mit
-#: dem Schutz des Färbens verloren gegangen: Dann hätte die Rechnung sich
-#: „Ändern" genommen, und die Bohrung wäre gewandert. Was einmal ausdrücklich
-#: entschieden wurde, gehört ausdrücklich hierher und nicht in eine Ordnung,
-#: die jemand für einen anderen Zweck sortiert.
-KEEP_VISIBLE: Final = ("colour", "holes")
-
-
-#: Operationen, die im Kontextmenü **immer** direkt stehen, in dieser
-#: Reihenfolge.
-#:
-#: Verschieben, Drehen und Skalieren sind die drei Griffe, die ein Kunde aus
-#: seinem Slicer mitbringt — dort liegen sie auf der Werkzeugleiste, hier lagen
-#: sie zwei Klicks tief unter „Ändern", zwischen siebenundzwanzig anderen. Für
-#: jemanden ohne CAD-Erfahrung ist das der Unterschied zwischen „ich kann das
-#: Teil drehen" und „ich finde es nicht" (§2.6, §18.5).
-#:
-#: **Einzeln herausgezogen und nicht über die Gruppe**, denn „Ändern" bündelt
-#: sieben Kategorien mit dreißig Einträgen; sie stehen zu lassen hieße, ein
-#: Menü mit dreißig Zeilen zu bauen. Sie stehen deshalb vor der
-#: Gruppenrechnung im Menü — und werden von ihr als feste Zeilen mitgezählt,
-#: ohne dass jemand eine Zahl pflegen muss.
-ALWAYS_DIRECT: Final = ("translate_object", "rotate_object", "scale_object")
 
 
 #: Operationen, die am Kontextmenü **dieser** Merkmalsarten keine Zeile haben,
@@ -230,15 +192,6 @@ def shown_at_feature(kind: str, entries: Sequence[Any]) -> tuple[Any, ...]:
     Zeilen ohne Fenster nachrechnet und dabei dieselbe Menge braucht.
     """
     return tuple(spec for spec in entries if kind not in HANDLE_INSTEAD.get(str(spec.name), ()))
-
-
-def groups_to_keep(entries: Sequence[Any]) -> set[str]:
-    """Die Gruppentitel, die sichtbar bleiben sollen (:data:`KEEP_VISIBLE`)."""
-    return {
-        str(group_title(str(spec.category)))
-        for spec in entries
-        if str(spec.category) in KEEP_VISIBLE
-    }
 
 
 #: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste
@@ -1907,6 +1860,10 @@ class ObjectTree(QWidget):
         """Operationen, die auf einem gewählten Objekt arbeiten — der kürzeste
         Weg vom Sehen zum Tun (§2.6).
 
+        **Die Rohmenge, kein Menü mehr** (11.09.2026): Das Kontextmenü trägt
+        keine Operationen; wer sie sehen will, sieht rechts in die Karte der
+        Handlungen. Gefragt wird sie noch von Tests, die die Zuordnung prüfen.
+
         Angeboten werden alle, auch die, die auf dieser Bauart nicht können:
         Ausgegraut mit Grund steht sie da und sagt, was ihr fehlt — verschwunden
         ließe sie den Nutzer suchen, wo nichts fehlt (dieselbe Entscheidung wie
@@ -1943,6 +1900,10 @@ class ObjectTree(QWidget):
     def operations_for_feature(self, kind: str) -> tuple[Any, ...]:
         """Was eine Bohrung oder eine Fläche anbietet, direkt aus ``applies_to``
         (§10, §18.5).
+
+        **Gebraucht vom Doppelklick im Baum** (:meth:`_on_double_click`), der die
+        erste passende Handlung startet — im Kontextmenü stehen seit dem
+        11.09.2026 keine Operationen mehr, die stehen rechts in der Karte.
 
         **Ohne die zusammengelegten Zwillinge.** An jeder Fläche stand
         *Bohrung setzen* zweimal — ``drill_hole`` und ``drill_brep_hole``
@@ -2021,11 +1982,8 @@ class ObjectTree(QWidget):
             return None
 
         menu = QMenu(self)
-        # **Ohne diese Zeile schreibt das Menü seine Gründe ins Leere.** ``QMenu``
-        # zeigt Tooltips von Haus aus nicht an; ``_add_operation`` setzt an jeder
-        # gesperrten Operation den Satz, der sagt, was ihr fehlt, und Qt warf ihn
-        # weg. Die Menüleiste setzt es an ihren drei Stellen seit je — hier stand
-        # die ganze Kette da und war unsichtbar.
+        # ``QMenu`` zeigt Tooltips von Haus aus nicht an; die Sätze der
+        # Einträge sollen aber lesbar sein.
         menu.setToolTipsVisible(True)
         self._add_source_step(menu)
         # Vor der Sichtbarkeit und aus demselben Grund wie der Schritt darüber:
@@ -2033,225 +1991,14 @@ class ObjectTree(QWidget):
         # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
         self._add_sketch_on_face(menu)
         self._add_visibility(menu, chosen)
-
-        kind = self._feature_kind()
-        entries = self.operations_for_feature(kind) if kind else ()
-        if not entries:
-            # **Wer genauer gezeigt hat, bekommt nicht weniger.** Zu einer
-            # Merkmalsart ohne eigene Operationen bestand das Menü aus
-            # Ausblenden — weniger als bei einem Klick auf den Körper daneben,
-            # und der Körper *ist* mitgewählt. Beim Gewinde eines Bausteins
-            # (``thread``) ist das heute der Fall. Dieselbe Überlegung, aus der
-            # ``applies_to`` in der Befehlspalette eine Reihenfolge ist und
-            # keine Auswahl: Was zum Merkmal passt, steht vorn — was nicht dazu
-            # passt, verschwindet deswegen nicht.
-            entries = self.operations_for_object()
-        if entries:
-            menu.addSeparator()
-            self._add_operations(menu, entries, self.kinds_of_selection())
+        # **Keine Operationen mehr** (Robert, 11.09.2026: „ebenso dann beim
+        # rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste wie
+        # rechts in der Karte der Handlungen — gruppiert, gefaltet, mit dem
+        # Katalog an der Stelle der Bausteine —, und zwei Orte für dieselbe
+        # Liste sind einer zu viel. Was bleibt, gibt es nur hier: der Weg vom
+        # Ergebnis zurück zum Schritt, die Skizze auf der Fläche und die
+        # Sichtbarkeit des Körpers.
         return menu
-
-    def _add_operations(
-        self, menu: QMenu, entries: Sequence[Any], kinds: Sequence[str] = ()
-    ) -> None:
-        """Die Operationen ins Menü — flach, solange man sie überblickt.
-
-        An einem Merkmal sind es eine Handvoll, und die stehen direkt da: der
-        kurze Weg vom Sehen zum Tun (§2.6) verträgt kein Aufklappen. An einem
-        ganzen Körper sind es siebenundfünfzig, und eine Liste dieser Länge ist
-        kein Menü mehr, sondern ein Register ohne Suchfeld — dieselbe Grenze,
-        die `tests/test_interface_limits.py` für die Menüleiste zieht.
-
-        Gruppiert wird dann nach derselben Kategorie, nach der auch die
-        Menüleiste gruppiert. Beides kommt aus dem Register, kann also nicht
-        auseinanderlaufen.
-
-        **Und gruppiert wird nur, soweit es die Länge verlangt.** Hier stand
-        „über zwölf Zeilen: alles in Untermenüs", und das kostet an einem
-        Merkmal mehr, als es einbringt. Gemessen am Flächenklick, 19
-        Operationen in vier Gruppen:
-
-            10  Bausteine
-             5  Ändern
-             2  Erzeugen
-             2  Vorbereiten
-
-        Vorher wurden daraus vier Untermenüs, und damit brauchte **jede**
-        Operation zwei Klicks — auch die Bohrung, die mit einer zweiten Zeile
-        allein in „Erzeugen" lag. Eine Gruppe aus zwei Einträgen zu falten
-        spart eine Zeile und kostet für beide einen Klick; das ist ein
-        schlechtes Geschäft.
-
-        Untermenüs bekommen deshalb nur die **größten** Gruppen, und nur so
-        viele, bis der Rest in die Zeilengrenze passt. Am Flächenklick ist das
-        genau eine: „Bausteine" bündelt zehn Einträge zu einer Zeile, die
-        übrigen neun stehen direkt da. Zehn Zeilen, neun davon mit einem
-        Klick erreichbar statt keiner.
-
-        Dieselbe Abwägung steht längst in ``registry.surfaces.group_is_flat``
-        für die Menüleiste — eine Zwischenebene, die nichts bündelt, ist ein
-        Klick für nichts. Wiederverwenden ließ sie sich nicht: Sie rechnet
-        über die Gruppen der Leiste, hier geht es um die eines Merkmals.
-
-        **Die Grenze gilt dem ganzen Menü, nicht nur den Operationen.** Über
-        diesen Einträgen stehen noch Sichtbarkeit und der Skizzenschritt, und
-        am Flächenklick ergab das dreizehn Zeilen gegen eine Grenze von zwölf.
-        Sie zählen deshalb mit — gezählt am **gebauten** Menü und nicht als
-        Zahl im Code: Beide Schritte darüber sind an Bedingungen geknüpft, und
-        eine Konstante wäre in dem Augenblick falsch, in dem einer von ihnen
-        ausbleibt. Trennstriche zählen nicht, sie sind keine Zeile, auf die man
-        zeigt.
-
-        Wer die drei mitzählt, muss eine zweite Gruppe falten — und die darf
-        nicht „Ändern" sein, mit der Bohrung darin. Welche es wird, entscheidet
-        ``folded_groups`` an der Reihenfolge der Menüleiste; hier steht nur die
-        Zahl, gegen die es rechnet.
-        """
-        # **Die drei Slicer-Griffe zuerst, und zwar immer.** Vor der
-        # Gruppenrechnung, damit ``fixed`` sie unten als Zeilen mitzählt: So
-        # bleibt die Grenze gewahrt, ohne dass hier eine Zahl steht, die
-        # altert. Sortiert nach :data:`ALWAYS_DIRECT`, nicht nach dem
-        # Register — gesucht wird in der Reihenfolge, in der ein Slicer sie
-        # anbietet.
-        upfront = [spec for spec in entries if str(spec.name) in ALWAYS_DIRECT]
-        if upfront:
-            for spec in sorted(upfront, key=lambda s: ALWAYS_DIRECT.index(str(s.name))):
-                self._add_operation(menu, spec, kinds)
-            menu.addSeparator()
-            entries = [spec for spec in entries if str(spec.name) not in ALWAYS_DIRECT]
-
-        fixed = sum(1 for action in menu.actions() if not action.isSeparator())
-        if len(entries) + fixed <= MAX_MENU_ROWS:
-            for spec in entries:
-                self._add_operation(menu, spec, kinds)
-            return
-
-        groups: dict[str, list[Any]] = {}
-        for spec in entries:
-            groups.setdefault(group_title(str(spec.category)), []).append(spec)
-
-        # Jede gefaltete Kategorie spart ihre Einträge minus die eine Zeile,
-        # die ihr Untermenü kostet. Eine Kategorie mit einem Eintrag spart
-        # nichts und wird deshalb nie gefaltet — auch dann nicht, wenn es
-        # danach immer noch zu lang ist. Dann ist das Menü eben lang; ein
-        # Aufklappen, das nichts bündelt, macht es nicht kürzer, sondern nur
-        # tiefer.
-        folded = folded_groups(
-            {title: len(found) for title, found in groups.items()},
-            fixed=fixed,
-            keep=groups_to_keep(entries),
-        )
-
-        direct = [spec for spec in entries if group_title(str(spec.category)) not in folded]
-        for spec in direct:
-            self._add_operation(menu, spec, kinds)
-        if folded and direct:
-            menu.addSeparator()
-        # Mit dem Menü als Elternteil erzeugt, nicht über ``addMenu(titel)``:
-        # sonst hält nichts auf der Python-Seite das Untermenü, und sein
-        # C++-Objekt wird eingesammelt, während es noch im Menü hängt —
-        # dieselbe Falle wie in der Menüleiste.
-        parts_title = str(group_title("parts"))
-        for title in sorted(folded):
-            if title == parts_title:
-                # **Wo die Bausteine gefaltet würden, tritt der Katalog an ihre
-                # Stelle** — auf der obersten Ebene, nicht in einem Untermenü.
-                # Er kostet dieselbe eine Zeile und zeigt Bilder statt
-                # Textnamen (§2.6); siebzehn Zeilen wie
-                # „Heat-Set-Einpressbuchse" sind genau die Darstellung, gegen
-                # die der Katalog gebaut wurde. Und er bleibt damit **einen**
-                # Klick vom gewählten Teil entfernt, wie Robert es zur
-                # Bedingung gemacht hat — ein Untermenü machte daraus zwei,
-                # und `test_a_chosen_part_reaches_the_catalogue_in_one_click`
-                # hat das gefangen.
-                #
-                # **Was er nicht zeigt, steht in der Menüleiste.** Der
-                # Katalog zeigt ``PARTS.all()``; *Deckel erzeugen* und
-                # *Drehdeckel erzeugen* haben keine Kachel und sind hier
-                # deshalb nicht erreichbar — sie stehen im Menü *Bausteine*.
-                # Sie hier danebenzustellen kostete zwei Zeilen und riss die
-                # Grenze (gemessen: 14 an einer Fläche); sie mitzufalten hieß,
-                # *Bohrung setzen* eine Ebene tiefer zu legen. Welche der
-                # beiden Fassungen die richtige ist, entscheidet Robert.
-                self._add_catalog(menu)
-                continue
-            submenu = QMenu(title, menu)
-            # Ein Untermenü erbt die Eigenschaft nicht — und am ganzen Körper
-            # stehen die Operationen des exakten Kerns gerade hier drin.
-            submenu.setToolTipsVisible(True)
-            self._fill_submenu(submenu, groups[title], kinds)
-            menu.addMenu(submenu)
-
-    def _fill_submenu(self, menu: QMenu, specs: Sequence[Any], kinds: Sequence[str]) -> None:
-        """Ein gefaltetes Untermenü füllen — mit einer zweiten Ebene, wo es
-        sonst zu lang wird.
-
-        Betrifft die Bausteine, und erst seit sie vollständig an der Fläche
-        stehen: Vorher waren es zehn, seit `at_face` sind es siebzehn, und
-        siebzehn flach untereinander sind eine Liste zum Absuchen. Die
-        Gliederung ist nicht erfunden — es ist dieselbe Gruppe, nach der auch
-        der Katalog seine Kacheln und die Menüleiste ihre Einträge ordnet
-        (``parts.GROUPS``), dort in ``_subgroup_for``.
-
-        Was zu keinem Baustein gehört, bleibt oben stehen: ``create_lid`` ist
-        eine Operation und kein Eintrag der Bibliothek.
-        """
-        if len(specs) <= MAX_MENU_ROWS:
-            for spec in specs:
-                self._add_operation(menu, spec, kinds)
-            return
-
-        from app.core.knowledge.parts import GROUPS
-        from app.core.knowledge.parts.ops import part_of
-
-        buckets: dict[str, list[Any]] = {}
-        loose: list[Any] = []
-        for spec in specs:
-            part = part_of(str(spec.name))
-            if part is None:
-                loose.append(spec)
-            else:
-                buckets.setdefault(str(GROUPS[part.group]), []).append(spec)
-
-        # Dieselbe Regel wie eine Ebene höher, und aus demselben Grund: „Kabel
-        # und Schläuche" hat einen einzigen Baustein, und ein Untermenü dafür
-        # wäre der Klick für nichts, den dieser Umbau gerade abschafft.
-        sizes = {title: len(found) for title, found in buckets.items()}
-        deep = folded_groups(sizes, fixed=len(loose))
-
-        for spec in loose:
-            self._add_operation(menu, spec, kinds)
-        for title in sorted(buckets):
-            if title not in deep:
-                for spec in buckets[title]:
-                    self._add_operation(menu, spec, kinds)
-        if deep:
-            menu.addSeparator()
-        for title in sorted(deep):
-            deeper = QMenu(title, menu)
-            deeper.setToolTipsVisible(True)
-            for spec in buckets[title]:
-                self._add_operation(deeper, spec, kinds)
-            menu.addMenu(deeper)
-
-    def _add_operation(self, menu: QMenu, spec: Any, kinds: Sequence[str] = ()) -> None:
-        action = menu.addAction(str(spec.title))
-        action.setStatusTip(str(spec.doc))
-        action.setToolTip(str(spec.doc))
-        # **Was auf dieser Bauart nicht geht, sagt es vorher.** Hier stand jede
-        # Operation mit einem Eingang anklickbar da, auch die sieben des exakten
-        # Kerns: Wer am Netz-Körper *Verrunden* wählte, füllte einen Dialog aus
-        # und bekam danach eine Absage — die Sackgasse, die Regel 19 ausschließt
-        # und die die Menüleiste seit je vermeidet. Der Satz kommt aus
-        # ``labels``, damit beide Menüs dasselbe sagen.
-        reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self._result))
-        if reason:
-            action.setEnabled(False)
-            action.setStatusTip(reason)
-            action.setToolTip(reason)
-        action.triggered.connect(
-            lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
-        )
 
     def _on_double_click(self, item: QTreeWidgetItem, column: int) -> None:
         """Ein Doppelklick öffnet den Dialog, der diese Zeile ändert (§18.5).
@@ -2365,63 +2112,6 @@ class ObjectTree(QWidget):
             return None
         value: int | None = items[0].data(0, _STEP_ROLE)
         return value
-
-    def _add_catalog(self, menu: QMenu) -> None:
-        """„Baustein einsetzen …" — der kurze Weg vom gewählten Teil zum Katalog.
-
-        Die Bausteine haben seit dem 29.08.2026 keinen Menüort mehr: Ein
-        räumliches Teil als Textzeile zu führen ist die schlechtere
-        Darstellung (§2.6), und im Menü standen neunundzwanzig davon in sechs
-        Untermenüs. Der Katalog mit Bildern war schon immer der bessere Ort —
-        er lag nur in *Datei*, also dort, wo niemand hinsieht, der gerade auf
-        eine Fläche zeigt.
-
-        **Roberts Bedingung zu dieser Änderung**, und sie ist der Grund für
-        diesen Eintrag: „solange man einfach zum Katalog kommt, wenn man das
-        Teil gewählt hat". Von hier aus stimmt beides — die Auswahl steht, und
-        der Katalog weiß dadurch, dass er den Hinweis auf die fehlende Stelle
-        **nicht** zeigen muss.
-
-        **Er steht an der Stelle, an der die Bausteine gefaltet würden — nicht
-        fest oben im Menü** (:meth:`_add_operations`). Das ist eine
-        Berichtigung, keine Feinheit: Zuerst stand er unbedingt oben, also auch
-        dort, wo die Bausteine ohnehin flach danebenstanden. Am Merkmalsmenü
-        einer Bohrung gemessen:
-
-            Operationen für „hole"                  10
-            Zeilen darüber (mit diesem Eintrag)      3
-            13 > 12  ->  „Bausteine" wird gefaltet
-
-        Ohne ihn sind es zwölf, also genau die Grenze, und alles steht flach.
-        Die eine Zeile hat damit fünf Operationen eine Ebene tiefer geschoben —
-        *Kugellager einsetzen*, *Heat-Set-Einpressbuchse*, *Mutternfalle*,
-        *Schraube*, *Druckbares Gewinde* —, und das sind an einer Bohrung
-        genau die fünf, die überhaupt in Frage kommen. §18.5 nennt diesen Ort
-        „die wichtigste Einzelfunktion"; :meth:`_add_operations` rechnet
-        darüber vor, dass ein gesparter Zeilenplatz gegen einen zusätzlichen
-        Klick ein schlechtes Geschäft ist. Beides stand da, und die Zeile kam
-        trotzdem hinzu: **ein Diff zeigt seine eine Zeile, nicht die Grenze,
-        die sie reißt.**
-
-        Am neuen Ort kostet er keine eigene Zeile: Er tritt an die Stelle des
-        Untermenüs, das die Bausteine sonst bekämen. Wo sie flach passen — an
-        einer Bohrung —, stehen sie flach und der Eintrag entfällt; der Katalog
-        bleibt dann über *Datei → Bausteinkatalog …*, über das Menü *Bausteine*
-        und über Strg+K erreichbar, also über drei Wege, die immer offen sind.
-
-        **Ein Zwischenstand legte ihn stattdessen in ein Untermenü**, und
-        dieser Docstring hat ihn eine Weile als Sollzustand beschrieben. Das
-        machte aus Roberts einem Klick zwei;
-        ``test_a_chosen_part_reaches_the_catalogue_in_one_click`` hat es
-        gefangen. Was dabei offen bleibt, steht in
-        :meth:`_add_operations` — die zwei Baustein-Operationen **ohne** Kachel
-        sind auf diesem Weg nicht erreichbar und stehen in der Menüleiste.
-        """
-        insert = menu.addAction(tr("Baustein einsetzen …"))
-        insert.setStatusTip(
-            tr("Öffnet den Katalog mit Bildern — Mutternfalle, Rastnase, Scharnier und andere.")
-        )
-        insert.triggered.connect(lambda _checked=False: self.catalogRequested.emit())
 
     def _add_sketch_on_face(self, menu: QMenu) -> None:
         """„Auf dieser Fläche zeichnen" — der Weg auf ein vorhandenes Teil.
@@ -4693,6 +4383,13 @@ class FeaturePanel(QWidget):
     #: Maßlinien und Zahlenfeldern. Ein Empfänger, der beides gleich behandelt,
     #: legt beim Zeigen schon einen Schritt an.
     inViewRequested = Signal(str, dict)
+    #: *Abbrechen* unter dem Übernehmen: verwirft, was im Bild wartet — der
+    #: gezogene Umriss, das am Griff vorgeschlagene Versetzen —, und beendet
+    #: die Maße im Bild. Dasselbe wie Escape, nur als Knopf (Robert,
+    #: 11.09.2026: „unter dem übernehmen rechts sollte auch noch abbrechen
+    #: stehen"). Er steht nur, solange die Maße im Bild stehen
+    #: (:meth:`set_measuring`).
+    cancelRequested = Signal()
     #: Der Katalog, aus der Fläche heraus. An einer Fläche gilt keine der vier
     #: Merkmalshandlungen — dafür setzen dort fünfundzwanzig Bausteine an, und
     #: der Weg dorthin lag hinter Rechtsklick und Untermenü.
@@ -4781,6 +4478,16 @@ class FeaturePanel(QWidget):
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
         self._rows.addWidget(self._apply)
+        self._cancel = make_danger(QPushButton(tr("Abbrechen"), self))
+        self._cancel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
+        self._cancel.setStatusTip(self._cancel.toolTip())
+        self._cancel.clicked.connect(self.cancelRequested)
+        self._cancel.setVisible(False)
+        self._rows.addWidget(self._cancel)
+        self._measuring = False
+        """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
+        steht *Abbrechen* unter dem Übernehmen."""
         self._rows.addStretch(1)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
@@ -4848,6 +4555,7 @@ class FeaturePanel(QWidget):
         self._dots.clear()
         self._apply.setVisible(False)
         self._in_view.setVisible(False)
+        self._cancel.setVisible(False)
         self._into_view = None
         self._in_view_key = None
         self._armed_title.hide()
@@ -5542,10 +5250,11 @@ class FeaturePanel(QWidget):
         # Haken, das Übernehmen. Der Haken gehört unmittelbar über den Knopf,
         # dessen Umfang er ändert — ein Knopf dazwischen machte aus „für alle"
         # eine Frage, auf die zwei Knöpfe antworten.
-        for widget in (self._armed_title, self._in_view, self._every, self._apply):
+        for widget in (self._armed_title, self._in_view, self._every, self._apply, self._cancel):
             self._rows.removeWidget(widget)
             self._rows.insertWidget(self._rows.count() - 1, widget)
         self._settle_in_view()
+        self._cancel.setVisible(self._measuring and self._apply.isVisibleTo(self))
 
     def _separate(self) -> None:
         """Zieht einen Strich vor die nächste Handlung — außer vor die erste.
@@ -5672,6 +5381,25 @@ class FeaturePanel(QWidget):
         self._in_view.setToolTip(promise)
         self._in_view.setAccessibleName(str(tr("Im Bild einstellen")))
         self._in_view.setAccessibleDescription(promise)
+
+    def set_measuring(self, active: bool) -> None:
+        """Ob die Maße dieses Merkmals im Bild stehen — *Abbrechen* steht dann mit.
+
+        Das Fenster sagt es beim Start und beim Ende der Platzierung; das
+        Merkmalfenster weiß sonst nichts davon, es hält nur die Felder.
+        """
+        self._measuring = bool(active)
+        self._cancel.setVisible(self._measuring and self._apply.isVisibleTo(self))
+
+    def request_in_view(self) -> None:
+        """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
+
+        Für das Hauptfenster, das die Maße nach einem Übernehmen wieder ins
+        Bild bringt: Es klickt nicht auf ein Widget, es nimmt den Weg, der am
+        Widget hängt. Wo kein Knopf steht, geschieht nichts.
+        """
+        if self._into_view is not None:
+            self._into_view()
 
     def _every_for(self, op: str) -> QCheckBox | None:
         """Der Haken unten — aber nur, wenn diese Handlung eine Gruppe hat.

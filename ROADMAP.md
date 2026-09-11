@@ -94,6 +94,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
 | [RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken](#rm-141) | Bedienung und Darstellung | Exportformat, Zielordner und gewähltes Namensschema nach Wiederöffnen erhalten |
 | [RM-142 — Verbindliche Projektion beim Messen einlösen](#rm-142) | Bedienung und Darstellung | Orthografische Messansicht anschließen oder den Vertrag ausdrücklich neu entscheiden |
+| [RM-158 — Plattenwähler überlappt den Druckernamen in der Kopfzeile](#rm-158) | Bedienung und Darstellung | In Roberts Fenster gesehen, offscreen bei sechs Breiten nicht; am echten Fenster mit Skalierung nachstellen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -1093,6 +1094,36 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `tests/test_slot_features.py`, vier davon ohne den Auffangweg rot.
 
 ## Bedienung und Darstellung
+<a id="rm-158"></a>
+
+- [ ] **RM-158 — Plattenwähler überlappt den Druckernamen in der Kopfzeile.** Auf Roberts
+  Bildschirmfoto vom 11.09.2026 (2000 × 1088, neun Buchstaben auf vier Platten) stand „Alle
+  Platten" in der Kopfzeile über „Elegoo Centauri Carbon 2" — beide Zellen begannen an derselben
+  x-Stelle, der Wähler schmaler als sein Mindestmaß. Offscreen bei 1400 bis 2600 Pixeln Breite
+  liegen `plates`, `_divider` und `printer` sauber nebeneinander (`sonde_kopfzeile`); der Fall
+  braucht sein Fenster — Bildschirmskalierung, echte Schrift, und ob es ein Zwischenzustand nach
+  `show_plates` ist. Abnahme: am echten Fenster mit vier Platten keine Überdeckung, auch nach
+  Breitenänderung.
+
+<a id="rm-157"></a>
+
+- [x] **RM-157 — Ein Ort für die Handlungen an einer Auswahl.** Am 11.09.2026 auf Roberts
+  Durchsicht hin umgebaut: Die Menüs *Objekt*, *Ändern* und *Vorbereiten* sind aus der Leiste
+  genommen — ihre Einträge standen rechts in der Karte der Handlungen ein zweites Mal
+  (`PANEL_CATEGORIES`, `in_the_menu_bar`); *Bausteine* ist ein Abschnitt von *Erzeugen* mit
+  Katalog, Gegenstücken und den zwei Deckeln ohne Kachel, die jetzt auch rechts an der Fläche
+  stehen. Die Aktionen bleiben am Fenster (Kürzel, Palette, Kürzelübersicht unter „Handlungen
+  rechts"), nackte Tasten nur an Baum und Ansicht. Das Kontextmenü an Körper und Merkmal trägt
+  keine Operationen mehr — nur Schritt, Skizze und Sichtbarkeit. Die Karte rechts faltet ihre
+  Gruppen als einklappbare Abschnitte, der Knopf *Bausteine* ist ein Hauptknopf. Der Wegweiser
+  des Chats sagt „Ort:" und nennt für eine Handlung rechts die Karte samt der Auswahl, die es
+  braucht (Prompt-Version 6); Handbuch und Tour nennen dieselben Orte. **Dazu die Bausteine im
+  Bild:** Ein Baustein aus dem Katalog sitzt sofort auf der gewählten oder der obersten Fläche,
+  mit Körper, Maßlinien, Feldern und Bewegungsgriff; ein Klick setzt um, der zweite übernimmt
+  (gemessen an allen 24 einsetzbaren; vorher stand mit gewähltem Körper nichts im Bild, und
+  *Übernehmen* schrieb einen roten Schritt). Regeln: `.claude/rules/oberflaeche.md`,
+  `.claude/rules/ansicht.md`.
+
 <a id="rm-070"></a>
 
 - [~] **RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen.** HID-Anbindung und

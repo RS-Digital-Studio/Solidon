@@ -26,6 +26,8 @@ dans `website/version.json`.
 - Si un trou oblong dépasse le bord à une extrémité, Solidon le signale, même quand son centre se trouve au cœur de la matière.
 - Un trou oblong figure dans l'arbre des objets en tant que tel, avec sa largeur et sa longueur — y compris dans un modèle que vous avez ouvert et que quelqu'un d'autre a dessiné.
 - Un trou oblong existant s'étire ensuite en longueur, et sa direction reste là où elle était.
+- Un perçage ou un trou oblong sélectionné se règle directement dans la vue avec « Régler dans la vue » : une poignée pour déplacer et tourner, des boutons pour étirer, des cotes aux arêtes et centres.
+- Seul « Appliquer », à droite, en fait une étape ; Échap annule. Un trou oblong étiré affiche sa longueur et garde sa forme quand vous le déplacez par la poignée.
 
 ### Reconnaissance
 
@@ -37,6 +39,21 @@ dans `website/version.json`.
 - Une inscription dispose désormais de huit polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale et reste lisible là où le style normal bave.
 - À côté des polices droites, il y a maintenant une ronde et une manuscrite, toutes deux en un seul style. Les huit voyagent avec le programme : un projet a partout la même apparence.
 - Si une police est trop fine pour votre buse, Solidon indique à partir de quelle hauteur elle tient, au lieu de l'imprimer et de laisser les lettres se boucher.
+
+### Blocs et ajustements
+
+- Un bloc du catalogue apparaît aussitôt dans la vue : sur la face sélectionnée ou sur le dessus du corps, avec cotes et poignée. Un clic le place ailleurs, « Appliquer » l'insère.
+
+### Vue et utilisation
+
+- Les actions pour un corps ou une entité sélectionnés sont à droite, en groupes pliables, avec recherche. Les menus Objet, Modifier et Préparer disparaissent ; les raccourcis restent.
+- Le clic droit sur un corps ou une face ne montre que ce qui n'existe que là : l'étape derrière, l'esquisse sur la face, le masquage. Le bouton « Blocs » est en couleur d'accent.
+
+### Plateau et transmission
+
+- Si un corps fait de pièces détachées — un lettrage, par exemple — ne tient entier sur aucun plateau, le rapport propose de le séparer et de l'orienter : un clic, et les pièces sont sur les plateaux.
+- « Ouvrir dans le slicer » transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau.
+- Pour la séparation, le lettrage et la texture, le rapport donne le nombre dans la phrase, là où un espace réservé entre accolades figurait avant.
 
 ## 0.4.0
 
