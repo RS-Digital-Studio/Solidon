@@ -975,6 +975,27 @@ def test_a_face_is_named_by_where_it_looks() -> None:
     assert feature_name("face_9", face("face_9", (0.6, 0.0, 0.8))) == tr("Schrägfläche")
 
 
+def test_a_curved_face_is_named_by_its_hollowness_and_not_by_a_direction() -> None:
+    """Der Bogen eines D zeigt in jede Richtung seines Verlaufs — „Vorderseite"
+    wäre eine Aussage über nichts. Was ihn vom anderen Bogen unterscheidet,
+    ist, ob er hohl liegt: ``inner`` aus der Konvexität seiner Nähte. Das Maß
+    ist seine Fläche, wie bei der ebenen."""
+    from app.core.types import Feature
+    from app.ui.labels import area, feature_measure, feature_name
+
+    def curved(name: str, *, inner: bool) -> Feature:
+        return Feature(
+            id=name,
+            kind="curved_face",
+            params={"area": 381.7, "normal": (0.9, 0.0, 0.0), "inner": inner},
+            provenance="test",
+        )
+
+    assert feature_name("curve_1", curved("curve_1", inner=False)) == tr("Gerundete Seite")
+    assert feature_name("curve_2", curved("curve_2", inner=True)) == tr("Gerundete Seite innen")
+    assert feature_measure(curved("curve_1", inner=False)) == area(381.7)
+
+
 def test_a_sphere_and_a_torus_say_which_way_they_point() -> None:
     """``recess`` trennt bei Kugel und Torus dasselbe wie beim Kegel zwischen
     Senkung und Verjüngung: hinein oder heraus.
@@ -5200,6 +5221,64 @@ def test_the_filament_picker_leaves_at_a_feature_that_carries_none(window: MainW
     QApplication.processEvents()
     assert window.object_tree.selected_faces() == (("obj_1", faces[0]),)
     assert not window.quick_filament.isHidden(), "an einer Fläche gibt es etwas zuzuweisen"
+
+
+def test_a_curved_face_carries_a_filament_field_like_a_flat_one(qt_app: QApplication) -> None:
+    """Roberts Fall (11.09.2026): „bei den Seiten fehlen die gerundeten
+    flächen" — am D standen vier ebene Flächen im Baum, die zwei Bögen nicht,
+    und dem Bogen war kein Filament zu geben.
+
+    Ende zu Ende am Fenster: Ein D als Schriftzug, dann die Zeile der
+    gerundeten Seite im Baum — mit Namen, Farbfeld und dem Klick, der nach
+    dem Filament fragt —, und rechts der Filamentwähler, der an ihr bleibt,
+    wie er an einer ebenen Fläche bleibt und an einer Bohrung geht.
+    """
+    from app.core.scene import OperationDraft
+    from app.ui.panels import FILAMENT_COLUMN, _feature_item
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        assert window.session.apply(
+            "Schriftzug",
+            [
+                OperationDraft(
+                    op="create_label",
+                    inputs=(),
+                    params={"text": "D", "size": 60.0, "font": "DejaVu Sans Mono"},
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(30000)
+        result = window.session.evaluate_now()
+        window._on_scene(result)
+        features = result.scene.objects["obj_1"].features
+        curved = [key for key, feature in features.items() if feature.kind == "curved_face"]
+        assert len(curved) == 2, "der Bogen außen und der Bogen innen"
+
+        row = window.object_tree.tree.topLevelItem(0)
+        assert row is not None
+        for feature_id in curved:
+            line = _feature_item(row, feature_id)
+            assert line is not None, f"{feature_id} steht im Baum"
+            assert line.text(0) in (tr("Gerundete Seite"), tr("Gerundete Seite innen"))
+            assert not line.icon(FILAMENT_COLUMN).isNull(), "mit Farbfeld wie eine Ebene"
+            assert line.toolTip(FILAMENT_COLUMN), "und dem Namen des Filaments daneben"
+
+        asked: list[tuple[object, object]] = []
+        window.object_tree.filamentRequested.connect(lambda obj, feat: asked.append((obj, feat)))
+        line = _feature_item(row, curved[0])
+        assert line is not None
+        window.object_tree._on_cell_clicked(
+            window.object_tree.tree.indexFromItem(line, FILAMENT_COLUMN)
+        )
+        assert asked == [("obj_1", curved[0])], "der Klick fragt nach dem Filament der Seite"
+
+        window.object_tree.select_feature("obj_1", curved[0])
+        QApplication.processEvents()
+        assert window.object_tree.selected_faces() == (("obj_1", curved[0]),)
+        assert not window.quick_filament.isHidden(), "eine gerundete Seite lässt sich färben"
+    finally:
+        window.wait_for_workers()
 
 
 def _scene_with_fillets(radii: list[float]) -> Any:

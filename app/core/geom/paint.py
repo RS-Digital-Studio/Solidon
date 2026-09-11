@@ -151,7 +151,10 @@ class PaintParams(BaseParams):
     params=PaintParams,
     consumes=1,
     produces=1,
-    applies_to=["face"],
+    # Auch die gerundete Seite: Sie hat keine Ebene, aber Dreiecke — und
+    # gefärbt werden Dreiecke (Robert, 11.09.2026: „bei den Seiten fehlen die
+    # gerundeten flächen", am Bogen eines D, dem kein Filament zu geben war).
+    applies_to=["face", "curved_face"],
     doc=_(
         "Färbt eine erkannte Fläche vollständig in ein Filament. Die Grenze "
         "der Fläche kommt aus der Erkennung — kein Pinsel, kein Radius."

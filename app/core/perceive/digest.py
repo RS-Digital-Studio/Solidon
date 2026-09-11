@@ -360,6 +360,12 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
             f"{feature_id}  {tr('planar')} {float(params.get('area', 0.0)):.0f} mm², "
             f"{tr('Normale')} {normal}{at}"
         )
+    if feature.kind == "curved_face":
+        # Keine Normale: Der Bogen eines D zeigt in jede Richtung seines
+        # Verlaufs, und ein gemitteltes „+X" wäre eine Aussage über nichts.
+        # Ob die Seite hohl liegt, ist die Auskunft, die der Agent braucht.
+        shape = tr("gerundet innen") if params.get("inner") else tr("gerundet")
+        return f"{feature_id}  {shape} {float(params.get('area', 0.0)):.0f} mm²{at}"
     if feature.kind == "cone":
         # Der Öffnungswinkel steht vorn, weil er die Sache benennt: „90 Grad"
         # ist eine Senkung für eine Senkkopfschraube, „118 Grad" der Boden

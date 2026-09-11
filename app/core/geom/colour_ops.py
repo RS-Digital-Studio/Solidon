@@ -121,7 +121,7 @@ class ClearFilamentParams(BaseParams):
     params=ClearFilamentParams,
     consumes=1,
     produces=1,
-    applies_to=["face"],
+    applies_to=["face", "curved_face"],
     doc=_(
         "Entfernt die Filamentzuweisung am Körper oder an einer Fläche. "
         "Die übrigen Flächen behalten ihr Filament; die Geometrie bleibt unverändert."

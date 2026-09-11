@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-11 | [Sieben Befunde aus Roberts Fenster am Schriftzug (11.09.2026)](#sieben-befunde-aus-roberts-fenster-am-schriftzug-11092026) |
 | 2026-09-11 | [Hinter einen Halt kam jeder neue Schritt (11.09.2026)](#hinter-einen-halt-kam-jeder-neue-schritt-11092026) |
 | 2026-09-11 | [Ein Ort für die Handlungen an einer Auswahl (11.09.2026)](#ein-ort-für-die-handlungen-an-einer-auswahl-11092026) |
 | 2026-09-10 | [Drei Befunde an einem Kundenmodell (10.09.2026)](#drei-befunde-an-einem-kundenmodell-10092026) |
@@ -26741,3 +26742,82 @@ Schritt 2 (In Einzelteile zerlegen) an — …", und der erste Knopf der Absage
 („Stückzahl anpassen und erneut versuchen") löst den Halt: zehn Teile, alles
 wieder frei, die eigenen Hinweistexte zurück. Der Test dazu:
 `test_a_halted_chain_takes_no_new_step_and_names_the_way_on`.
+
+## Sieben Befunde aus Roberts Fenster am Schriftzug (11.09.2026)
+
+Robert arbeitete am Abend mit einem Schriftzug — zerlegen, ausrichten, in den
+Slicer — und meldete aus dem laufenden Fenster, was nicht stimmte. Der erste
+Befund (hinter einem Halt kam jeder neue Schritt) steht im Abschnitt darüber;
+die übrigen sechs hier, jeder mit Messung, Ursache und Test.
+
+**Die Buchstaben des Griffs blieben im Bild stehen** („die ganzen weißen
+symbole im viewport"). `_detach_gizmo` ließ die Beschriftungen nur fallen,
+wenn ein Langlochgriff stand — eine Regression aus `462be2f5`, die den Aufruf
+in den falschen Zweig geschoben hatte. Seither fallen sie bei jedem Abbau
+(`test_a_new_grip_leaves_no_letters_of_the_old_one`).
+
+**Ein zerlegter Schriftzug verlor sein Filament** („Filamente auch nicht").
+`split_bodies` baute die Teile über `submesh` neu und `MeshData.replacing`
+ließ die Slots fallen, sobald die Dreieckszahl nicht mehr stimmte — im Slicer
+stand ein zweites, graues Filament neben dem zugewiesenen. `_loose_parts`
+trägt jetzt die Dreiecksgruppen (`face_components`) mit und schneidet die
+Slots je Teil daraus (`test_split_bodies_keeps_the_filament_of_every_triangle`,
+`test_a_lettering_split_into_letters_keeps_its_one_filament`).
+
+**Die Platten lagen in einer Reihe, der Slicer legt sie ins Raster** („so
+ganz passt die ausrichtung an den platten … nicht"). Die 3MF setzte Platte
+zwei, drei und vier mit einem Achtel Abstand nebeneinander; Orca, Bambu und
+Elegoo bauen aus `PartPlate.cpp` ein Raster — `ceil(sqrt(n))` Spalten, Reihen
+nach unten, ein Fünftel Abstand —, gemessen am ElegooSlicer 1.5.3.4 über die
+Kommandozeile. `threemf.plate_origin` rechnet dasselbe
+(`test_plates_go_into_the_grid_of_the_slicer`). Die frühere Zahl „ein Achtel"
+war eine Fehllesung.
+
+**Der Plattenwähler lag über dem Druckernamen** (RM-158). `QGridLayout` gibt
+einer Spalte mit Stretch 0 und einem Widget mit `Ignored`-Politik null Breite,
+auch mit `minimumWidth`; fünf Sonden fanden es nicht, weil sie das Fenster
+anders bauten als die Anwendung — erst die sechste ging den Startweg
+(`build_application`, `restoreGeometry`, `show`, `start`, `open_path`).
+`_stretch_the_plate_column` setzt den Stretch, sobald die Platten erscheinen
+(`test_the_plate_filter_never_lies_over_the_printer`).
+
+**Gleiche Meldungen sind eine Zeile, die Zahl davor in Klammern** („beim
+prüfbericht auch gleiche Meldungen zusammenfassen und anzahl dann davor in
+Klammer anzeigen"). Zehn Buchstaben, zehnmal „Ausrichtung über die
+Schichtanalyse gesucht." Der Bericht bündelte bis dahin nur zwei Kennungen
+über die Körpergrenze und alles andere je Körper. Jetzt gilt der Satz: gleiche
+Kennung, Schwere, Meldung, Herkunft, Schritt und Handlungen sind eine Zeile
+„(10) …", ab zwei (`REPORT_BUNDLE_FROM`). Was die Mitglieder unterscheidet,
+steht im Tooltip; der Klick wählt alle Körper der Zeile, die Handlung fragt,
+für welche sie gelten soll, und läuft dann je Körper mit dessen eigenem Befund
+oder als ein Schritt je Körper in einer Transaktion. Zwei Nebenbefunde am
+selben Weg: Material und Zeit der G-Code-Gegenprobe wurden eine Zeile, deren
+Tooltip „Was: material" und „Was: time" sagte — die Größen heißen jetzt in
+jeder Sprache (`QUANTITY_TITLES`) —, und eine Sammelzeile ohne Körper nannte
+ihre Mitglieder „Objekte". Tests:
+`test_a_bundle_over_many_bodies_selects_all_of_them_on_click`,
+`test_the_same_message_about_another_body_becomes_one_counted_line`,
+`test_identical_findings_bundle_from_two_and_never_across_severity`,
+`test_time_and_material_are_cross_checked_too`.
+
+**Die rechte Spalte ist schmaler** („das panel mit prüfbericht/chat/Tour
+können wir auch ein bisschen schmaler machen"): `RIGHT_WIDTH` 450 → 400,
+`RIGHT_MAX` 520; das Modell bekommt den Platz.
+
+**Die gerundeten Seiten fehlten** („bei den Seiten fehlen die gerundeten
+flächen"). Ein D trug im Baum Ober- und Unterseite und die zwei geraden
+Flanken — den Bogen außen und den Bogen innen nicht, und Filament ließ sich
+ihnen nicht geben. Die Einpassung fragt nach Zylindern, Kugeln, Ringen und
+Verrundungen; ein Bogen über ein Drittel eines Kreises ist keines davon, und
+eine Ebene hat er auch nicht. Seither gibt es die Art `curved_face`:
+`detect_curved_faces` läuft als letzte Phase und nimmt, was an gerundeter Haut
+kein Merkmal beansprucht — zusammenhängend über glatte Nähte, mindestens ein
+Prozent der Oberfläche (`CURVED_SIDE_SHARE`), nie auf einer Freiform. `inner`
+kommt aus der Konvexität der Nähte. Gemessen: D zwei (382 und 267 mm², die
+kleinere innen), o eine, S zwei, 3 vier (zwei innen), I keine; am Korpus —
+Platte, Bohrungen, Zapfen, Verrundung, Pfanne, Ring — keine einzige. Eine
+eigene Art und nicht `face` mit Vermerk, weil zwölf Operationen an `face`
+eine Ebene voraussetzen; `applies_to` nennt beide nur bei `paint_slot` und
+`clear_filament`. Tests: `test_the_two_bows_of_a_d_are_curved_faces_outside_and_inside`,
+`test_a_constructed_part_leaves_no_curved_face_over`,
+`test_a_curved_face_carries_a_filament_field_like_a_flat_one`.

@@ -39,6 +39,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una inscripción puede usar ahora ocho fuentes en lugar de tres, más negrita y cursiva. La negrita lleva trazos más gruesos con la misma altura y sigue siendo legible donde la normal se emborrona.
 - Junto a las fuentes rectas hay ahora una redonda y una manuscrita, ambas en un solo estilo. Las ocho viajan con el programa, así que un proyecto se ve igual en todas partes.
 - Si una fuente es demasiado fina para su boquilla, Solidon indica a partir de qué altura aguanta, en lugar de imprimirla y dejar que las letras se empasten.
+- Los lados curvos de una letra, el arco de la D o el contorno de la o, aparecen ahora en el árbol de objetos como los rectos y aceptan su propio filamento. Antes faltaban por completo.
 
 ### Bloques y ajustes
 

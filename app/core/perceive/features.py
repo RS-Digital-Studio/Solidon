@@ -79,6 +79,10 @@ MIN_FACE_SHARE = 0.02
 #: liegen mit Faktor fünfzig Abstand dazwischen.
 BROAD_FACE_SHARE = 0.05
 
+#: Wie viel von der Oberfläche eines Körpers eine gerundete Seite mindestens
+#: einnimmt, um als Merkmal zu gelten — siehe :func:`detect_curved_faces`.
+CURVED_SIDE_SHARE = 0.01
+
 #: …und unter dieser absoluten Größe erst recht nicht, egal wie groß der Rest ist.
 #:
 #: Der relative Anteil allein hilft nur bei einem konstruierten Teil, wo eine
@@ -641,7 +645,19 @@ _SHAPES_ON_A_FREEFORM: Final[frozenset[str]] = frozenset({"sphere", "torus", "co
 #: trägt seinen Namen von dort. Wer es wie eine Bohrung prüfte, verlöre es bei
 #: jeder Operation, weil kein Partner zu finden ist.
 DETECTABLE_KINDS: frozenset[str] = frozenset(
-    {"hole", "pin", "face", "edge_loop", "cone", "sphere", "torus", "fillet", "void", "slot"}
+    {
+        "hole",
+        "pin",
+        "face",
+        "edge_loop",
+        "cone",
+        "sphere",
+        "torus",
+        "fillet",
+        "void",
+        "slot",
+        "curved_face",
+    }
 )
 
 
@@ -919,6 +935,16 @@ def detect(
         found, left_out = _shapes_on_a_freeform(
             found, unpublished_round_shapes=unpublished_round_shapes
         )
+        if check_cancelled is not None:
+            check_cancelled()
+        # **Zuletzt, denn sie nehmen den Rest.** Eine gerundete Seite ist,
+        # was nach Bohrungen, Stiften, Verrundungen, Kugeln, Ringen, Gewinden
+        # und ebenen Flächen an glatter, gerundeter Oberfläche übrig bleibt —
+        # deshalb nach allen anderen und nach dem Freiformfilter: Auf einer
+        # Figur wäre die ganze Haut eine einzige Seite, und die sagt nichts.
+        if not left_out:
+            for feature in detect_curved_faces(mesh, found):
+                found[feature.id] = feature
     if check_cancelled is not None:
         check_cancelled()
     _log.info("detected %d features, %d left out as freeform", len(found), left_out)
@@ -3386,6 +3412,97 @@ def detect_faces(
                     "inner": inner,
                 },
                 face_indices=tuple(int(index) for index in facet),
+            )
+        )
+    return features
+
+
+def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> list[Feature]:
+    """Gerundete Seiten: glatte, nicht ebene Flecken, die kein Merkmal beansprucht.
+
+    **Der Anlass** (Robert, 11.09.2026, am Schriftzug: „bei den Seiten fehlen
+    die gerundeten flächen"): Ein D trug im Objektbaum Ober- und Unterseite,
+    die linke und die rechte ebene Seite — den Bogen außen und den Bogen
+    innen nicht. Die Einpassung fragt nach Zylindern, Kugeln, Ringen und
+    Verrundungen, und ein Bogen über ein Drittel eines Kreises ist keines
+    davon; die ebenen Flächen fragen nach Koplanarität. Dazwischen fiel die
+    gerundete Seite durch — und Filament ließ sich ihr nicht zuweisen.
+
+    **Der Rest, nicht die Regel.** Genommen wird, was die Rundungsnaht kennt
+    (:func:`_curved_faces`: Dreiecke mit einem Nachbarn zwischen null Grad
+    und :data:`CURVATURE_LIMIT`) und was **kein** anderes Merkmal in seinen
+    ``face_indices`` führt; zusammenhängend über glatte Nähte, damit die
+    zwei Bögen einer 3 zwei Seiten bleiben und nicht an ihrer scharfen Kante
+    eine werden. Gemessen am Korpus (28 Netze, `tests/data/meshes`): keine
+    einzige gerundete Seite auf Platten, Bohrungen, Stiften, Kugeln, Ringen
+    und verrundeten Klötzen — alles dort ist beansprucht. Am D zwei, am o
+    eine (der Mantel; innen ist es ein Langloch), an der S zwei, an der 3
+    vier.
+
+    ``inner`` sagt, ob der Fleck hohl ist — wie die Innenwand eines D — und
+    kommt aus der Konvexität seiner Nähte, nicht aus einem Vergleich mit
+    anderen Flächen: Eine gerundete Seite hat keine Gegenseite mit gleicher
+    Normale. Die Normale ist das flächengewichtete Mittel und bei einem
+    geschlossenen Mantel entsprechend kurz — benannt wird über ``inner``,
+    nicht über sie.
+    """
+    body = mesh.raw
+    adjacency = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    if not len(adjacency):
+        return []
+    claimed: set[int] = set()
+    for feature in found.values():
+        claimed.update(feature.face_indices)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    smooth = angles < CURVATURE_LIMIT
+    rounded = set(adjacency[(angles > EPS_ANGLE) & smooth].ravel().tolist())
+    free = np.asarray(sorted(rounded - claimed), dtype=np.int64)
+    if not len(free):
+        return []
+    keep = np.isin(adjacency[:, 0], free) & np.isin(adjacency[:, 1], free) & smooth
+    groups = trimesh.graph.connected_components(
+        adjacency[keep], nodes=free, min_len=1, engine="scipy"
+    )
+    areas = np.asarray(body.area_faces, dtype=float)
+    convex = np.asarray(body.face_adjacency_convex, dtype=bool)
+    # **Gegen die ganze Oberfläche gemessen**, wie :data:`BROAD_FACE_SHARE`
+    # bei den ebenen Flächen, nur enger: Auf ``generated_figure.stl`` blieben
+    # zwischen sechs Kugeln sechs Flecken von 4 bis 40 mm² übrig — Übergänge,
+    # keine Seiten. Ein Prozent der Haut lässt die zwei Bögen eines D (2315
+    # und 3311 mm² an rund 20 000) stehen und die Übergänge fallen.
+    floor = max(MIN_FACE_AREA, float(body.area) * CURVED_SIDE_SHARE)
+    entries: list[tuple[np.ndarray, float]] = []
+    for group in groups:
+        patch = np.asarray(sorted(int(index) for index in group), dtype=np.int64)
+        area = float(areas[patch].sum())
+        if area < floor:
+            continue
+        entries.append((patch, area))
+    # Größte zuerst, bei gleicher Fläche die Eckennummern — dieselbe
+    # Stabilität wie bei den ebenen Flächen (:func:`detect_faces`).
+    entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
+
+    features: list[Feature] = []
+    for number, (patch, area) in enumerate(entries, start=1):
+        weights = areas[patch]
+        normals = np.asarray(body.face_normals, dtype=float)[patch]
+        mean = (normals * weights[:, None]).sum(axis=0) / max(float(weights.sum()), EPS_GEOM)
+        inside = np.isin(adjacency[:, 0], patch) & np.isin(adjacency[:, 1], patch)
+        seams = convex[inside]
+        inner = bool(len(seams)) and float(np.count_nonzero(~seams)) > len(seams) / 2.0
+        centre = _facet_centre(body, patch)
+        features.append(
+            Feature(
+                id=f"curve_{number}",
+                kind="curved_face",
+                provenance="detected",
+                params={
+                    "area": round(area, 4),
+                    "normal": (float(mean[0]), float(mean[1]), float(mean[2])),
+                    "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
+                    "inner": inner,
+                },
+                face_indices=tuple(int(index) for index in patch),
             )
         )
     return features

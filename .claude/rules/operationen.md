@@ -71,6 +71,15 @@ gegen den **eigenen** Registereintrag, nicht gegen eine Liste im Modul; den
 Satz dazu liefert `perceive.actions.reason_against`, damit Panel und Kern
 denselben sagen.
 
+**Und eine gerundete Seite ist keine Fläche mit Vermerk, sondern eine eigene
+Art** (`curved_face`, seit dem 11.09.2026: der Bogen eines D, der Mantel eines
+o). Zwölf Operationen an `face` setzen eine Ebene voraus — Bohren, Zeichnen,
+Versetzen —, und ein Bogen hat keine. Wer eine Op schreibt, die ohne Ebene
+auskommt, weil sie nur Dreiecke braucht (`paint_slot`, `clear_filament`),
+nennt beide Arten in `applies_to`; wer eine Ebene braucht, nennt nur `face`.
+Ein `applies_to=["face"]`, das stillschweigend auch für den Bogen gelten
+sollte, gibt es nicht.
+
 ## Parameter
 
 Jeder Parameter hat Titel, Vorgabe, Einheit, Grenzen und einen `doc`-Satz, der

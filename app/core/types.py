@@ -60,8 +60,19 @@ FeatureKind = Literal[
     "fillet",
     "void",
     "slot",
+    "curved_face",
 ]
 """Die Arten, die ein Merkmal haben kann.
+
+``curved_face`` ist eine gerundete Seite: ein glatter, nicht ebener Fleck,
+den kein anderes Merkmal beansprucht — der Bogen eines D, der Mantel eines o,
+die Schwünge eines S. Kein Zylinder, keine Kugel, keine Verrundung, sondern
+das, was nach all diesen Einpassungen an gerundeter Oberfläche übrig bleibt
+(Robert, 11.09.2026: „bei den Seiten fehlen die gerundeten flächen"). Eine
+eigene Art und nicht ``face`` mit Vermerk, weil zwölf Operationen an ``face``
+eine Ebene voraussetzen — Bohren, Zeichnen, Versetzen — und eine gerundete
+Seite keine hat; was an ihr geht, ist das Filament (``paint_slot``,
+``clear_filament``).
 
 ``slot`` ist das Langloch, und es steht hier, weil die Einpassung es nicht
 sieht: Sie findet darin zwei Zylinderausschnitte und nennt sie Verrundungen.

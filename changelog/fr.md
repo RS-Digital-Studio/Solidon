@@ -39,6 +39,7 @@ dans `website/version.json`.
 - Une inscription dispose désormais de huit polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale et reste lisible là où le style normal bave.
 - À côté des polices droites, il y a maintenant une ronde et une manuscrite, toutes deux en un seul style. Les huit voyagent avec le programme : un projet a partout la même apparence.
 - Si une police est trop fine pour votre buse, Solidon indique à partir de quelle hauteur elle tient, au lieu de l'imprimer et de laisser les lettres se boucher.
+- Les côtés arrondis d'une lettre — l'arc du D, le contour du o — figurent maintenant dans l'arbre des objets comme les droits et acceptent leur propre filament. Avant, ils y manquaient.
 
 ### Blocs et ajustements
 

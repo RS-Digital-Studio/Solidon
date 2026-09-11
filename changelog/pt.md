@@ -38,6 +38,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma inscrição pode usar agora oito tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura e continua legível onde o estilo normal borra.
 - Ao lado dos tipos de letra direitos há agora um redondo e um manuscrito, ambos num só estilo. Os oito viajam com o programa, por isso um projeto fica igual em todo o lado.
 - Se um tipo de letra for demasiado fino para o seu bico, o Solidon diz a partir de que altura aguenta, em vez de o imprimir e deixar as letras empastarem.
+- Os lados curvos de uma letra — o arco do D, o contorno do o — aparecem agora na árvore de objetos como os retos e aceitam um filamento próprio. Antes faltavam por completo.
 
 ### Blocos e ajustes
 

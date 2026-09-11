@@ -2616,7 +2616,11 @@ def test_curvature_splitting_scans_adjacency_once_for_many_failed_patches(
         nonlocal reads
         reads = 0
         forget_cache()
-        assert detect(_curvature_patch_family(count)) == {}
+        # Ohne Grundform bleibt von jedem Glied nur der Rest: eine gerundete
+        # Seite je Ellipsoid (``detect_curved_faces``, ein Zugriff auf die
+        # Nachbarschaft für alle zusammen) — und sonst nichts.
+        found = detect(_curvature_patch_family(count))
+        assert {feature.kind for feature in found.values()} == {"curved_face"}, found
         return reads
 
     few = reads_for(4)
@@ -3274,3 +3278,115 @@ def test_a_lopsided_winding_is_not_an_air_pocket() -> None:
             f"{name}: seine Flächen bleiben im Objektbaum"
         )
         assert not [feature for feature in found.values() if feature.kind == "void"], name
+
+
+# --- gerundete Seiten ----------------------------------------------------------
+
+
+def _letter(text: str) -> MeshData:
+    """Ein Buchstabe aus der Schriftzug-Operation — 60 mm hoch, 5 mm dick.
+
+    Dieselbe Schrift, mit der Robert den Fall sah: Ein D trug im Baum vier
+    ebene Flächen und keinen seiner zwei Bögen.
+    """
+    from app.core.geom.label_ops import local_text_body
+
+    forget_cache()
+    return local_text_body(text, 60.0, "DejaVu Sans Mono", 5.0, style="regular", angle=0.0)
+
+
+def test_the_two_bows_of_a_d_are_curved_faces_outside_and_inside() -> None:
+    """Roberts Fall (11.09.2026, am Schriftzug): „bei den Seiten fehlen die
+    gerundeten flächen". Ober- und Unterseite, die zwei geraden Flanken — und
+    der Bogen außen wie der Bogen innen fehlten, weil sie weder Zylinder noch
+    Kugel noch Ring sind und keine Ebene haben.
+
+    Jetzt sind sie ``curved_face``: der große Bogen außen zuerst (die Größe
+    ordnet wie bei den ebenen Flächen), der hohle innen als ``inner`` — aus
+    der Konvexität seiner Nähte gelesen, nicht aus einer Normale, die ein
+    Bogen nicht hat.
+    """
+    found = detect(_letter("D"))
+
+    curved = [feature for feature in found.values() if feature.kind == "curved_face"]
+    assert [feature.id for feature in curved] == ["curve_1", "curve_2"]
+    outer, inner = curved
+    assert outer.params["area"] > inner.params["area"], "der Bogen außen ist der größere"
+    assert outer.params["inner"] is False and inner.params["inner"] is True
+    assert outer.provenance == "detected" and outer.face_indices, "echte Dreiecke, kein Etikett"
+
+    planar = [feature for feature in found.values() if feature.kind == "face"]
+    assert len(planar) == 4, "die vier ebenen Flächen bleiben, wie sie waren"
+    claimed = {index for feature in planar for index in feature.face_indices}
+    assert not claimed & set(outer.face_indices) and not claimed & set(inner.face_indices), (
+        "eine gerundete Seite ist der Rest — nie ein Dreieck, das einer Ebene gehört"
+    )
+
+
+def test_the_curved_faces_of_a_letter_count_its_bows() -> None:
+    """Ein o hat einen Mantel (innen ist es ein Langloch), eine 3 zwei Bögen
+    außen und zwei innen — und ein I hat keinen: lauter Ebenen."""
+    found = detect(_letter("o"))
+    assert [f.kind for f in found.values() if f.kind == "curved_face"] == ["curved_face"]
+    assert "slot" in {f.kind for f in found.values()}, "die Öffnung des o bleibt ein Langloch"
+
+    found = detect(_letter("3"))
+    inner_flags = sorted(bool(f.params["inner"]) for f in found.values() if f.kind == "curved_face")
+    assert inner_flags == [False, False, True, True]
+
+    found = detect(_letter("I"))
+    assert not [f for f in found.values() if f.kind == "curved_face"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "cube_clean.stl",
+        "plate_holes.stl",
+        "post_with_fillet.stl",
+        "sphere_socket.stl",
+        "torus_ring.stl",
+    ],
+)
+def test_a_constructed_part_leaves_no_curved_face_over(name: str) -> None:
+    """Am Korpus bleibt nichts übrig: Bohrung, Zapfen, Verrundung, Pfanne und
+    Ring beanspruchen jedes gerundete Dreieck selbst. Eine gerundete Seite,
+    die hier auftauchte, wäre ein Merkmal zu viel — und ein Filamentfeld an
+    einem Fleck, den schon die Bohrung trägt."""
+    forget_cache()
+    found = detect(plate(name))
+    assert not [f for f in found.values() if f.kind == "curved_face"], name
+
+
+def test_a_freeform_gets_no_curved_face_because_its_skin_would_be_one() -> None:
+    """Auf einem Scan wäre die ganze Haut eine einzige gerundete Seite, und
+    die sagt nichts. Der Freiformfilter geht vor: Was er als erfunden verwirft,
+    bekommt auch keinen Rest."""
+    mesh = _scan_like_blob()
+    forget_cache()
+    found = detect(mesh)
+    assert freeform_dropped(mesh) > 0, "ohne Freiformurteil prüft der Test nichts"
+    assert not [f for f in found.values() if f.kind == "curved_face"]
+
+
+def test_turning_a_letter_does_not_renumber_its_curved_faces() -> None:
+    """Dieselbe Stabilität wie bei den ebenen Flächen: Größe zuerst, dann die
+    Eckennummern — und beides überlebt eine Drehung des Körpers."""
+    upright = _letter("3")
+    turned = MeshData.of(
+        upright.raw.copy().apply_transform(
+            trimesh.transformations.rotation_matrix(math.radians(90.0), (0.0, 0.0, 1.0))
+        )
+    )
+    before = {
+        f.id: (round(float(f.params["area"]), 1), f.params["inner"])
+        for f in detect(upright).values()
+        if f.kind == "curved_face"
+    }
+    forget_cache()
+    after = {
+        f.id: (round(float(f.params["area"]), 1), f.params["inner"])
+        for f in detect(turned).values()
+        if f.kind == "curved_face"
+    }
+    assert before == after and len(before) == 4

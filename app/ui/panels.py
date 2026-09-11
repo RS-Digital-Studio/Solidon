@@ -1382,9 +1382,9 @@ class ObjectTree(QWidget):
                 child.setStatusTip(0, tip.replace("\n", " · "))
                 child.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, tip)
                 # Nur Flächen tragen ein eigenes Filament — `paint_slot` gilt
-                # für `face` und für nichts sonst. Eine Bohrung bekommt deshalb
-                # kein Feld, das nichts täte.
-                if getattr(feature, "kind", "") == "face":
+                # für `face` und `curved_face` und für nichts sonst. Eine
+                # Bohrung bekommt deshalb kein Feld, das nichts täte.
+                if getattr(feature, "kind", "") in ("face", "curved_face"):
                     self._faces.add((object_id, feature_id))
                     self._show_filament(child, entry, feature_id)
 
@@ -1729,7 +1729,8 @@ class ObjectTree(QWidget):
     def selected_faces(self) -> tuple[tuple[str, str], ...]:
         """Davon die Flächen — die einzigen, denen ein Filament gehören kann.
 
-        ``paint_slot`` gilt für ``face`` und für nichts sonst; deshalb bekommt
+        ``paint_slot`` gilt für ``face`` und ``curved_face`` und für nichts
+        sonst; deshalb bekommt
         eine Bohrung in diesem Baum keine Filamentspalte. Der Schnellwähler
         rechts fragte bis zum 09.09.2026 :meth:`selected_features` und bot an
         einer gewählten Bohrung eine Zuweisung an, die es dort nicht gibt

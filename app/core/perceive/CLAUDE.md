@@ -320,3 +320,17 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Kette, `None` fordert die Ermittlung an. Freie Normalenkomponenten bleiben
   im vollständigen Platzierungsdialog; die Schnellbearbeitung bietet dafür
   ihre eigene Drehhandlung.
+- **Was nach allen Einpassungen an gerundeter Haut übrig bleibt, ist eine
+  gerundete Seite** (`detect_curved_faces`, Art `curved_face`). Der Bogen
+  eines D, der Mantel eines o, die Schwünge einer S: kein Zylinder, keine
+  Kugel, kein Ring, keine Ebene — und bis zum 11.09.2026 deshalb gar nichts,
+  ohne Zeile im Baum und ohne Filament. Die Phase läuft **zuletzt**, weil sie
+  den Rest nimmt: gerundete Dreiecke (`_curved_faces`), die kein Merkmal in
+  seinen `face_indices` führt, zusammenhängend über glatte Nähte, mindestens
+  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`. Auf einer
+  Freiform läuft sie nicht — dort wäre die ganze Haut eine Seite. Am Korpus
+  bleibt nichts übrig; das ist der Test, der die Phase in Schach hält.
+  `inner` kommt aus der Konvexität der Nähte, nicht aus einer Normale: Ein
+  Bogen hat keine. Eine **eigene Art** und nicht `face` mit Vermerk, weil
+  zwölf Operationen an `face` eine Ebene voraussetzen; was an ihr geht, sagt
+  `applies_to` — Filament, sonst nichts.

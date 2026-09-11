@@ -63,6 +63,7 @@ Nutzen da und sonst nichts.
 - Für eine Beschriftung stehen acht Schriften zur Wahl statt drei — dazu Fett und Kursiv. Fett trägt bei gleicher Höhe dickere Striche und bleibt lesbar, wo der normale Schnitt verschmiert.
 - Neben den geraden Schriften liegen jetzt eine runde und eine geschriebene bei — die beiden gibt es nur in einem Schnitt. Alle acht reisen mit dem Programm, ein Projekt sieht überall gleich aus.
 - Ist eine Schrift für Ihre Düse zu fein, sagt Solidon, ab welcher Höhe sie trägt — statt sie zu drucken und zulaufen zu lassen.
+- Die gerundeten Seiten eines Buchstabens — der Bogen des D, der Mantel des o — stehen jetzt im Objektbaum wie die geraden und nehmen ein eigenes Filament an. Vorher fehlten sie dort ganz.
 
 ### Bausteine und Passungen
 

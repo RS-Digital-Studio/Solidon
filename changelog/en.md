@@ -38,6 +38,7 @@ it into `website/version.json`.
 - A label can now use eight fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.
 - Beside the upright faces there is now a round one and a handwritten one — those two come in a single style. All eight travel with the program, so a project looks the same everywhere.
 - If a font is too fine for your nozzle, Solidon says from which height it carries — instead of printing it and letting the letters run together.
+- The curved sides of a letter — the bow of a D, the mantle of an o — now appear in the object tree like the straight ones and take a filament of their own. Before, they were missing there entirely.
 
 ### Building blocks and fits
 

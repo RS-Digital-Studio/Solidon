@@ -404,6 +404,7 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "fillet": _("Verrundung"),
     "void": _("Lufteinschluss"),
     "slot": _("Langloch"),
+    "curved_face": _("Gerundete Seite"),
 }
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")

@@ -161,6 +161,12 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "zieht sie hinein oder heraus, und Bohren, Beschriften und jeder Baustein "
         "brauchen sie als Unterlage."
     ),
+    "curved_face": _(
+        "Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — "
+        "der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen "
+        "brauchen eine Ebene; was an ihr geht, ist das Filament: „Filament auf "
+        "eine Fläche“ färbt sie, „Filament entfernen“ nimmt es wieder."
+    ),
     "fillet": _(
         "Eine Verrundung gehört zu ihrer Kante und hat ohne sie keine Lage. "
         "Bewegt oder kopiert man sie allein, bliebe die Kante scharf und die "

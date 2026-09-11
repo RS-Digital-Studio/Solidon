@@ -1624,6 +1624,13 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
                     side = str(positive if value > 0 else negative)
                     return str(tr("{side} innen").format(side=side)) if inner else side
         return tr("Schrägfläche innen") if inner else tr("Schrägfläche")
+    # Eine gerundete Seite zeigt nirgendwohin — sie ist der Bogen eines D,
+    # der Mantel eines o. Innen ist sie, wenn sie hohl liegt: die Innenwand
+    # des D, aus der Konvexität ihrer Nähte gelesen (``perceive.features``).
+    if feature.kind == "curved_face":
+        if bool(feature.params.get("inner", False)):
+            return tr("Gerundete Seite innen")
+        return tr("Gerundete Seite")
     if feature.kind == "hole":
         return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
     # **Mit Nummer, wie die Bohrung.** Ein Teil trägt selten eine Bohrung und
@@ -1703,7 +1710,9 @@ def feature_measure(feature: Feature) -> str:
     # während sie bei jedem anderen Merkmal etwas zeigt.
     if feature.kind == "fillet":
         return f"R{length(float(params.get('radius', 0.0)))}"
-    if feature.kind == "face":
+    # Zwei Vergleiche statt ``in``: So sieht mypy die Verzweigung vollständig
+    # und hält die Zeile am Ende weiter für unerreichbar.
+    if feature.kind == "face" or feature.kind == "curved_face":
         return area(float(params.get("area", 0.0)))
     if feature.kind == "cone":
         angle = float(params.get("angle", 0.0))
