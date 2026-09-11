@@ -51,6 +51,7 @@ dans `website/version.json`.
 - Si la chaîne s'arrête à une étape, les actions sont verrouillées et en donnent la raison ; essayer affiche les issues du rapport. Avant, l'étape restait en silence derrière, jamais calculée.
 - Le sélecteur de plateaux de l'en-tête se trouve à côté du nom de l'imprimante, plus par-dessus — même quand les plateaux n'arrivent qu'avec le projet ouvert.
 - Le rapport regroupe les messages identiques en une ligne, le nombre entre parenthèses devant. Un clic sélectionne toutes les pièces concernées ; une action demande auxquelles s'appliquer.
+- La colonne de droite avec le rapport, le chat et la visite est un peu plus étroite ; la place revient au modèle.
 
 ### Plateau et transmission
 

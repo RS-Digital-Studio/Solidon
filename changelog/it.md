@@ -50,6 +50,7 @@ scrive in `website/version.json`.
 - Se la catena si arresta a un passo, le azioni sono bloccate e ne dicono il motivo; chi ci prova vede subito le vie d'uscita del rapporto. Prima il passo finiva in silenzio dietro, mai calcolato.
 - Il selettore dei piatti nell'intestazione sta accanto al nome della stampante, non più sopra — anche quando i piatti arrivano solo con il progetto aperto.
 - Il rapporto raggruppa i messaggi uguali in una riga, con il numero tra parentesi davanti. Un clic seleziona tutte le parti interessate; un'azione chiede a quali applicarsi.
+- La colonna destra con rapporto, chat e tour è un po' più stretta; lo spazio va al modello.
 
 ### Piano di stampa e consegna
 

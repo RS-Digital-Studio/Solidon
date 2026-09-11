@@ -138,7 +138,14 @@ LEFT_WIDTH = 300
 #: einem gewählten Körper „fast die Hälfte fehlte" (Robert). 510 waren ein
 #: Zwischenstand und sind zurückgenommen: Sie überschritten auf einem 1200
 #: breiten Fenster die Enge-Schranke, und die hält die Mitte als Griff frei.
-RIGHT_WIDTH = 450
+#:
+#: **Und wieder ein Stück zurück am 11.09.2026**, von Robert („das panel mit
+#: prüfbericht/chat/Tour können wir auch ein bisschen schmaler machen"): Die
+#: Handlungen an der Auswahl wohnen seit dem 11.09.2026 im Auswahl-Dock
+#: rechts daneben, die Spalte trägt nur noch Prüfbericht, Chat und Tour — die
+#: Breite für zwei Karten stand vor einer. 400 ist ein Satz breit und lässt
+#: dem Bild, was die zweite Karte nicht mehr braucht.
+RIGHT_WIDTH = 400
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -151,7 +158,7 @@ RIGHT_WIDTH = 450
 #: bei 5000 Pixeln eine Wand.
 GROWTH_SHARE = 0.13
 LEFT_MAX = 420
-RIGHT_MAX = 580
+RIGHT_MAX = 520
 
 #: In einem schmalen Fenster dürfen die beiden Karten einander nicht
 #: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als
