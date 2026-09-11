@@ -10741,15 +10741,16 @@ class Viewport(QWidget):
         if self._slot_handle is not None:
             self._slot_handle.remove()
             self._slot_handle = None
-            # **Und die Leiste geht mit dem Griff.** Sie stand bis hierher nur
-            # in `_end_drag`, also am Ende eines Zugs — ein **Auswahlwechsel**
-            # räumte den Griff ab und ließ sie stehen. Gemessen an einer Platte
-            # mit `slot_1` und `hole_2`: Leiste weiter aktiv mit (40,0 | 15°),
-            # Griff inzwischen an `hole_2`, und *Übernehmen* meldete
-            # `('hole_2', 40.0, 15.0)` — ein 40-mm-Langloch in einem Loch, das
-            # niemand gezogen hat. Hier steht sie richtig: Diese Stelle deckt
-            # `select`, `select_feature`, den Szenenaufbau und die Vorschau.
-            self._drop_gizmo_labels()
+        # **Die Buchstaben gehen mit jedem Griff, nicht nur mit dem am
+        # Langloch.** Bis zum 11.09.2026 stand diese Zeile eine Stufe tiefer,
+        # im Zweig des Langlochgriffs — hineingerutscht, als die zweite
+        # Langlochleiste fiel (462be2f5) und der Satz über sie mitsamt seinem
+        # ``dismiss`` verschwand. Seither blieb bei jedem Auswahlwechsel das
+        # ``<->`` der vorigen Fläche im Bild stehen; Robert zählte auf einem
+        # Schriftzug ein Dutzend davon („die ganzen weißen symbole im
+        # viewport"). ``test_the_axis_letters_travel_with_the_drag`` hatte es
+        # gesehen und war rot.
+        self._drop_gizmo_labels()
         self._drop_face_handle()
         # **Und alles, was zum Zug gehört.** Bogen, Geisterring und der
         # Schattenversatz hingen nur an `_end_drag`, also am Loslassen — aber

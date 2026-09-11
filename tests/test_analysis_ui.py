@@ -2156,6 +2156,39 @@ def test_the_gizmo_follows_the_selection(qt_app: QApplication) -> None:
         viewport.deleteLater()
 
 
+def test_a_new_grip_leaves_no_letters_of_the_old_one(qt_app: QApplication) -> None:
+    """Jeder Aufbau des Griffs räumt die Buchstaben des vorigen ab — nicht nur
+    der am Langloch.
+
+    **Roberts Bild** (11.09.2026: „die ganzen weißen symbole im viewport … sind
+    komisch"): ein Dutzend ``<->`` über einem Schriftzug, eines je Fläche, die
+    er im Objektbaum angeklickt hatte. Seit 462be2f5 stand
+    ``_drop_gizmo_labels`` im Zweig des Langlochgriffs, und ohne Langloch
+    blieb die Beschriftung jedes vorigen Griffs stehen. Gemessen wird am
+    Renderer-Doppel: Nach dem zweiten Aufbau steht genau **eine**
+    Beschriftung im Bild, die erste ist entfernt.
+    """
+    viewport, renderer = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        first = viewport._gizmo_labels
+        assert first is not None
+
+        viewport.select("obj_2")
+        second = viewport._gizmo_labels
+        assert second is not None and second is not first, "der neue Griff hat neue Buchstaben"
+        assert first in renderer.removed, "die alten sind aus dem Bild"
+        standing = [
+            entry["item"]
+            for entry in renderer.entries("gizmo_labels")
+            if entry["item"] not in renderer.removed
+        ]
+        assert standing == [second], f"im Bild steht eine Beschriftung, nicht {len(standing)}"
+    finally:
+        viewport.deleteLater()
+
+
 def test_a_drag_below_the_snap_leaves_no_ghost(qt_app: QApplication) -> None:
     """Ein Zug unter der Fangschwelle erzeugt keine Operation — dann darf er
     auch keinen versetzten Griff hinterlassen: Er wird frisch angehängt."""
