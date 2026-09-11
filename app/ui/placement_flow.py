@@ -8,11 +8,21 @@ bleibt der einzige Weg ins Dokument.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, Protocol, cast, runtime_checkable
 
 import numpy as np
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QSignalBlocker, Qt, QTimer
+from PySide6.QtCore import (
+    QEvent,
+    QObject,
+    QPoint,
+    QPointF,
+    QRect,
+    QSignalBlocker,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import (
     QColor,
     QKeyEvent,
@@ -25,6 +35,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -47,7 +58,6 @@ from app.core.units import EPS_GEOM
 from app.i18n import tr
 from app.ui.labels import LengthSpin, feature_name, length
 from app.ui.leash import stop_watching_the_dying
-from app.ui.op_dialog import OperationDialog
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
@@ -66,6 +76,114 @@ SNAP_PIXELS = 12.0
 LEAST_DEPTH_MM = 0.1
 
 _log = get_logger(__name__)
+
+
+@runtime_checkable
+class PlacementHost(Protocol):
+    """Woran eine Platzierung hängt — und das ist weniger als ein Dialog.
+
+    `PlacementFlow` war an einen `OperationDialog` gebunden: Er war sein
+    Qt-Elternteil, lieferte die Werte, nahm sie zurück und führte am Ende die
+    Operation aus. Am gewählten Merkmal soll kein Dialog mehr aufgehen — seine
+    Zahlen stehen schon im Merkmalfenster (Robert, 11.09.2026: „werte im
+    dialog und in der rechten merkmalleiste doppelt, sehr verwirrend für den
+    Kunden").
+
+    **Der Vertrag ist erhoben, nicht entworfen.** Er zählt genau die Member
+    auf, die der Fluss am 11.09.2026 tatsächlich ansprach; die Namen bleiben
+    die des Dialogs, damit der Rebind mechanisch wird und kein Aufrufer
+    umdenken muss.
+
+    Die vier Fensterfragen (`show`, `raise_`, `activateWindow`, `isVisible`)
+    gehören dazu, obwohl ein Träger ohne Fenster sie leer beantwortet: Sie
+    sind der Rückweg aus der Platzierung (:meth:`PlacementFlow.back`), und
+    wer sie wegließe, müsste ihn an vier Stellen mit Fallunterscheidungen
+    pflastern.
+    """
+
+    surfaceRequested: Any
+    valuesChanged: Any
+    finished: Any
+
+    def values(self) -> Mapping[str, Any]: ...
+
+    def take_placement(self, values: Mapping[str, Any]) -> None: ...
+
+    def accept(self) -> None: ...
+
+    def show(self) -> None: ...
+
+    def raise_(self) -> None: ...
+
+    def activateWindow(self) -> None: ...  # noqa: N802 — Qt-Name
+
+    def isVisible(self) -> bool: ...  # noqa: N802 — Qt-Name
+
+
+class QuietHost(QObject):
+    """Ein Träger ohne Fenster — die Platzierung allein im Bild.
+
+    Er erfüllt :class:`PlacementHost` und zeigt nichts: Die Werte hält er
+    selbst, das Übernehmen reicht er an einen Rückruf weiter. Gedacht für das
+    **gewählte Merkmal**, wo die Zahlen rechts im Merkmalfenster stehen und
+    ein Dialog daneben sie ein zweites Mal zeigte.
+
+    **Sichtbar ist er nie**, und die vier Fensterfragen sagen das auch so:
+    ``isVisible()`` bleibt falsch, die drei anderen tun nichts. Ein Träger,
+    der auf ``show()`` doch etwas zeigte, wäre der Dialog unter neuem Namen.
+    """
+
+    surfaceRequested = Signal()
+    valuesChanged = Signal()
+    finished = Signal(int)
+
+    def __init__(
+        self,
+        values: Mapping[str, Any],
+        accepted: Callable[[Mapping[str, Any]], None],
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._values = dict(values)
+        self._accepted = accepted
+
+    def values(self) -> Mapping[str, Any]:
+        return dict(self._values)
+
+    def take_placement(self, values: Mapping[str, Any]) -> None:
+        """Ort und Maße zurück in den Träger — und die Runde ist gemeldet.
+
+        Dieselbe Zusage wie beim Dialog: Wer schreibt, löst ``valuesChanged``
+        aus; daran hängen Vorschau und Maßlinien.
+        """
+        self._values.update(values)
+        self.valuesChanged.emit()
+
+    def accept(self) -> None:
+        """Die Platzierung ist übernommen — was daraus wird, weiß der Rückruf.
+
+        **Der Träger führt nichts aus.** Er kennt weder Register noch Sitzung;
+        die Operation legt an, wer ihn gebaut hat. Ohne diese Trennung wäre er
+        eine zweite Stelle, an der Schritte entstehen (Regel 2).
+        """
+        self._accepted(self.values())
+        # Dieselbe Zahl, die ein angenommener `QDialog` sendet — wer an
+        # `finished` hängt, soll den Träger nicht am Code erkennen müssen.
+        self.finished.emit(int(QDialog.DialogCode.Accepted))
+
+    # --- die vier Fensterfragen, alle ohne Fenster --------------------------------
+
+    def show(self) -> None:
+        return None
+
+    def raise_(self) -> None:
+        return None
+
+    def activateWindow(self) -> None:  # noqa: N802 — Qt-Name
+        return None
+
+    def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
+        return False
 
 
 def starts_by_itself(spec: OperationSpec) -> bool:
@@ -249,18 +367,27 @@ class _Dimensions(QWidget):
 
 
 class PlacementFlow(QObject):
-    """Eine laufende Platzierung gehört genau einem vorhandenen Operationsdialog."""
+    """Eine laufende Platzierung gehört genau einem vorhandenen Träger.
+
+    Der Träger war bis zum 11.09.2026 immer ein `OperationDialog`. Er ist es
+    weiterhin, wo eine Operation ihre Werte in einem Dialog erfragt — am
+    gewählten Merkmal dagegen stehen sie rechts, und dort trägt ein
+    :class:`QuietHost` ohne Fenster. Was der Fluss davon braucht, steht in
+    :class:`PlacementHost`.
+    """
 
     def __init__(
         self,
-        dialog: OperationDialog,
+        dialog: PlacementHost,
         window: Any,
         spec_of: Callable[[], Any],
         inputs_of: Callable[[], tuple[str, ...]],
         *,
         change_op: int | None = None,
     ) -> None:
-        super().__init__(dialog)
+        # Jeder Träger ist ein ``QObject`` — das Protokoll kann es nicht
+        # verlangen (ein ``Protocol`` erbt nicht von Qt), also steht es hier.
+        super().__init__(cast(QObject, dialog))
         self.dialog = dialog
         self.window = window
         self.viewport = window.viewport
@@ -1071,7 +1198,12 @@ class PlacementFlow(QObject):
             return
         spec = self.spec_of()
         source, feature = self._source_feature()
-        values = self.dialog.values()
+        # **Eine eigene Kopie**, denn gleich werden Achsen und Ort auf null
+        # gesetzt: Der Schlüssel soll dieselbe Form beschreiben, gleich wo sie
+        # steht. Der Träger gibt ein ``Mapping`` zurück — er verspricht nicht,
+        # dass man hineinschreiben darf, und beim Dialog wäre es die Rechnung
+        # eines fremden Feldes.
+        values = dict(self.dialog.values())
         placed = placement_fields(spec.params)
         for name in (*(placed[axis] for axis in ("x", "y", "z")), *normal_fields(spec.params)):
             if name in values:

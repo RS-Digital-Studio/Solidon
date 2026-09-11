@@ -1665,3 +1665,68 @@ def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
         assert controller.can_place()
     finally:
         controller.dispose()
+
+
+def test_the_flow_runs_on_a_host_without_a_window(qt_app: QApplication) -> None:
+    """Dieselbe Platzierung, nur ohne Dialog darunter.
+
+    `PlacementFlow` hing an einem `OperationDialog`: Er war sein Qt-Elternteil,
+    lieferte die Werte, nahm sie zurück und führte am Ende aus. Am gewählten
+    Merkmal soll kein Dialog mehr aufgehen — seine Zahlen stehen rechts im
+    Merkmalfenster (Robert, 11.09.2026: „werte im dialog und in der rechten
+    merkmalleiste doppelt, sehr verwirrend für den Kunden").
+
+    Geprüft wird der **Vertrag an der Sache**, nicht am Namen: Ein `QuietHost`
+    trägt eine echte Platzierung von ihrem Start bis zum Übernehmen, und was
+    dabei herauskommt, sind dieselben Werte. Ein Protokoll ohne zweiten
+    Erfüller wäre Zierat — diese Zeilen sind sein Beleg.
+    """
+    from app.ui.placement_flow import PlacementHost, QuietHost
+
+    session = Session()
+    viewport = _Viewport()
+    controller: PlacementFlow | None = None
+    übernommen: list[Any] = []
+    try:
+        session.import_model(Path(__file__).parent / "data/meshes/cube_clean.stl")
+        assert session.wait_for_idle(30_000)
+        result = session.last_result
+        assert result is not None and result.complete
+        viewport.show_scene(result)
+        session.sceneChanged.connect(viewport.show_scene)
+        object_id, entry = next(iter(result.scene.objects.items()))
+        face = int(np.argmax(entry.mesh.raw.face_normals[:, 2]))
+        viewport.hit = object_id, tuple(entry.mesh.raw.triangles_center[face]), face, None
+        spec = REGISTRY.get("drill_hole")
+
+        host = QuietHost({"diameter": 5.0, "depth": 4.0}, übernommen.append)
+        assert isinstance(host, PlacementHost), "der Träger erfüllt den Vertrag"
+        assert not host.isVisible(), "und zeigt nie ein Fenster"
+
+        window = SimpleNamespace(
+            viewport=viewport, session=session, _clear_preview=session.cancel_preview
+        )
+        controller = PlacementFlow(host, window, lambda: spec, lambda: (object_id,))
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        assert controller.active, "die Platzierung läuft auch ohne Dialog"
+
+        _point(controller, session)
+        assert controller._surface is not None, "die Trägerfläche steht"
+        assert host.values()["diameter"] == pytest.approx(5.0), "die Werte kommen vom Träger"
+        # Der Ort wandert hinein wie beim Dialog — über `take_placement`, und
+        # zwar als die Felder, die das Schema führt (`x`, `y`, `z`), nicht als
+        # ein Tripel: Die Vorgabe kannte sie nicht, der Zug hat sie gesetzt.
+        assert {"x", "y", "z"} <= set(host.values()), "die Stelle wandert zurück"
+
+        controller._deepening = True
+        controller._depth_set = True
+        controller.accept()
+        assert übernommen, "das Übernehmen erreicht den Rückruf"
+        assert übernommen[-1]["diameter"] == pytest.approx(5.0)
+    finally:
+        if controller is not None:
+            controller.dispose()
+        session.release(30_000)
+        viewport.close()
+        qt_app.processEvents()
