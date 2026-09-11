@@ -26693,10 +26693,20 @@ bekommt jetzt alle gewählten Platten in einer Projektdatei
 (`knows_plates`; dieselbe Datei, die der Export für mehrere Platten längst
 schreibt), PrusaSlicer und Cura weiter je eine.
 
-Nicht nachgestellt: Auf seinem Bildschirm überlappte der Plattenwähler „Alle
-Platten" den Druckernamen in der Kopfzeile. Offscreen bei sechs Breiten
-zwischen 1400 und 2600 Pixeln liegen die Zellen sauber nebeneinander; der
-Fall braucht sein Fenster.
+Nachgestellt am selben Abend (RM-158): Auf seinem Bildschirm überlappte der
+Plattenwähler „Alle Platten" den Druckernamen. Offscreen bei sechs Breiten
+lagen die Zellen sauber nebeneinander, am echten zweiten Bildschirm mit
+seiner Geometrie ebenso, mit Bildschirmwechsel ebenso, klein gezeigt und
+groß gezogen ebenso — fünf Sonden, kein Fund. Erst der **Startweg der
+Anwendung** (`build_application`, `restoreGeometry`, `show`, `start`,
+`open_path`) zeigte es: Kopfzeile beim Bau kompakt, dann breit mit
+verstecktem Wähler, dann der Wähler. Die Spaltendehnung folgte dem
+Zeitpunkt des Anordnens statt der Sichtbarkeit, und ein `QGridLayout` gibt
+einer ungedehnten Spalte mit einem `Ignored`-Widget null Breite —
+nachgestellt in vier Zeilen Qt ohne Solidon. Die Lehre: Wer ein Fenster für
+eine Messung baut, baut es so, wie die Anwendung es baut — mit ihrer
+Reihenfolge von Größe, Zeigen und Öffnen —, oder er misst ein anderes
+Fenster.
 
 ## Hinter einen Halt kam jeder neue Schritt (11.09.2026)
 

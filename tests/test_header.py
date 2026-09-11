@@ -350,6 +350,64 @@ def test_an_open_project_gives_the_header_readable_room_before_toolbar_words(
     )
 
 
+def test_the_plate_filter_never_lies_over_the_printer(qt_app: QApplication) -> None:
+    """Der Plattenwähler bekommt seine Spalte auch dann, wenn er erst später dasteht.
+
+    **RM-158, Roberts Fenster** (11.09.2026): „Alle Platten" lag über „Elegoo
+    Centauri Carbon 2", beide begannen an derselben x-Stelle, der Wähler so
+    breit wie sein Mindestmaß. Nachgestellt über den Startweg der Anwendung:
+    Das Fenster wird 1280 breit gebaut (Kopfzeile kompakt), bekommt dann
+    seine gespeicherte Breite (breit, Wähler versteckt) und zeigt den Wähler
+    erst, wenn das Projekt seine Platten hat. Die Spaltendehnung stand nur,
+    wenn der Wähler beim Anordnen sichtbar war — und ein ``QGridLayout``
+    gibt einer ungedehnten Spalte mit einem ``Ignored``-Widget null Breite,
+    Mindestmaß hin oder her.
+
+    Gemessen wird am Ort: Der Wähler endet, bevor der Drucker beginnt — nach
+    dem Zeigen, und noch einmal, nachdem er wieder verschwunden und wieder
+    gekommen ist. Gegenprobe ohne ``_stretch_the_plate_column`` beim Zeigen:
+    der Wähler beginnt bei derselben x-Stelle wie der Drucker, rot.
+    """
+    from conftest import make_object
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.resize(1280, 820)
+        window.show()
+        window._show_start_screen(False)
+        qt_app.processEvents()
+        window.resize(2560, 1369)
+        qt_app.processEvents()
+        assert not window.header._compact, "breit genug für eine Zeile"
+        assert window.header.plates.isHidden(), "ohne Platten kein Wähler"
+
+        result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
+        window.header.show_project("Solidon3d", result, "mm")
+        window.header.show_profile(window.session.profile, result)
+        for plates in (4, 1, 4):
+            window.header.show_plates(plates)
+            qt_app.processEvents()
+            qt_app.processEvents()
+            if plates == 1:
+                assert window.header.plates.isHidden()
+                continue
+            header = window.header
+            right_edge = header.plates.x() + header.plates.width()
+            assert header.plates.width() >= header.plates.minimumWidth()
+            assert right_edge <= header.printer_control.x(), (
+                f"der Wähler ({header.plates.x()}..{right_edge}) liegt über dem Drucker "
+                f"(ab {header.printer_control.x()})"
+            )
+            # Ob der Druckername ungekürzt dasteht, misst nur die echte
+            # Plattform — offscreen hat jede Schrift dieselbe Phantommetrik.
+            # Hier zählt der Ort: Der Drucker beginnt hinter dem Trennstrich.
+            assert header.printer_control.x() > header._divider.x()
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
+
+
 def test_the_header_is_updated_where_the_state_changes() -> None:
     """Beide Auslöser, an der Quelle geprüft.
 

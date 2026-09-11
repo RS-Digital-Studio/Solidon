@@ -48,6 +48,7 @@ it into `website/version.json`.
 - The actions for a selected body or feature live in one place on the right, in groups you can fold, with a search box. The Object, Modify and Prepare menus are gone for that; shortcuts still work.
 - A right-click on a body or face shows only what exists there alone: the step behind it, the sketch on the face, hiding. The “Parts” button stands in accent colour.
 - When the chain stops at a step, the actions are locked and say why; trying anyway shows the report's ways out right away. Before, the step landed silently behind the halt, never computed.
+- The plate selector in the header sits beside the printer name instead of on top of it — even when the plates only arrive with the opened project.
 
 ### Print bed and handover
 

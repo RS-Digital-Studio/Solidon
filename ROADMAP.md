@@ -94,7 +94,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
 | [RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken](#rm-141) | Bedienung und Darstellung | Exportformat, Zielordner und gewähltes Namensschema nach Wiederöffnen erhalten |
 | [RM-142 — Verbindliche Projektion beim Messen einlösen](#rm-142) | Bedienung und Darstellung | Orthografische Messansicht anschließen oder den Vertrag ausdrücklich neu entscheiden |
-| [RM-158 — Plattenwähler überlappt den Druckernamen in der Kopfzeile](#rm-158) | Bedienung und Darstellung | In Roberts Fenster gesehen, offscreen bei sechs Breiten nicht; am echten Fenster mit Skalierung nachstellen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -1096,14 +1095,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 ## Bedienung und Darstellung
 <a id="rm-158"></a>
 
-- [ ] **RM-158 — Plattenwähler überlappt den Druckernamen in der Kopfzeile.** Auf Roberts
-  Bildschirmfoto vom 11.09.2026 (2000 × 1088, neun Buchstaben auf vier Platten) stand „Alle
-  Platten" in der Kopfzeile über „Elegoo Centauri Carbon 2" — beide Zellen begannen an derselben
-  x-Stelle, der Wähler schmaler als sein Mindestmaß. Offscreen bei 1400 bis 2600 Pixeln Breite
-  liegen `plates`, `_divider` und `printer` sauber nebeneinander (`sonde_kopfzeile`); der Fall
-  braucht sein Fenster — Bildschirmskalierung, echte Schrift, und ob es ein Zwischenzustand nach
-  `show_plates` ist. Abnahme: am echten Fenster mit vier Platten keine Überdeckung, auch nach
-  Breitenänderung.
+- [x] **RM-158 — Plattenwähler überlappt den Druckernamen in der Kopfzeile.** Auf Roberts
+  Bildschirmfoto vom 11.09.2026 stand „Alle Platten" über „Elegoo Centauri Carbon 2", beide an
+  derselben x-Stelle. Nachgestellt am 11.09.2026 über den **Startweg der Anwendung** — nicht über
+  Skalierung oder Schrift, sondern über die Reihenfolge: Das Fenster wird 1280 breit gebaut
+  (Kopfzeile kompakt), bekommt dann seine gespeicherte Breite (breit, Wähler versteckt) und zeigt
+  den Wähler erst mit den Platten des Projekts. Die Spaltendehnung stand nur, wenn der Wähler beim
+  Anordnen sichtbar war, und ein `QGridLayout` gibt einer ungedehnten Spalte mit einem
+  `Ignored`-Widget null Breite, Mindestmaß hin oder her. `HeaderBar._stretch_the_plate_column`
+  bindet die Dehnung an die Sichtbarkeit; `_arrange` sperrt den Wiedereintritt aus dem eigenen
+  `activate()`. Abgenommen am echten Fenster über `build_application` mit Roberts Geometrie und
+  vier Platten (Bildschirmaufnahme: Wähler, Trennstrich, Drucker nebeneinander); Test
+  `test_the_plate_filter_never_lies_over_the_printer`, Gegenprobe rot.
 
 <a id="rm-157"></a>
 

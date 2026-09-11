@@ -49,6 +49,7 @@ dans `website/version.json`.
 - Les actions pour un corps ou une entité sélectionnés sont à droite, en groupes pliables, avec recherche. Les menus Objet, Modifier et Préparer disparaissent ; les raccourcis restent.
 - Le clic droit sur un corps ou une face ne montre que ce qui n'existe que là : l'étape derrière, l'esquisse sur la face, le masquage. Le bouton « Blocs » est en couleur d'accent.
 - Si la chaîne s'arrête à une étape, les actions sont verrouillées et en donnent la raison ; essayer affiche les issues du rapport. Avant, l'étape restait en silence derrière, jamais calculée.
+- Le sélecteur de plateaux de l'en-tête se trouve à côté du nom de l'imprimante, plus par-dessus — même quand les plateaux n'arrivent qu'avec le projet ouvert.
 
 ### Plateau et transmission
 

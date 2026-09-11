@@ -366,6 +366,7 @@ class HeaderBar(QWidget):
         self._layout.setHorizontalSpacing(TIGHT)
         self._layout.setVerticalSpacing(TIGHT)
         self._compact = False
+        self._arranging = False
         self._arrange(False)
         # Dieselbe Trennung wie in der Statuszeile: Plattenwahl links,
         # Drucker und Material rechts — „… 220 mm   PLA" stand sonst als ein
@@ -419,9 +420,26 @@ class HeaderBar(QWidget):
         )
 
     def _arrange(self, compact: bool) -> None:
-        """Ordnet denselben Inhalt ohne Duplikat ein- oder zweizeilig an."""
-        if compact == self._compact and self._layout.count():
+        """Ordnet denselben Inhalt ohne Duplikat ein- oder zweizeilig an.
+
+        **Nicht von innen heraus noch einmal.** ``activate()`` am Ende löst
+        ein ``resizeEvent`` aus, und das fragt mit der **alten** Breite, ob
+        es kompakt sein soll — mitten im Umbau, und mit der Antwort von
+        vorhin: Ein Umbau auf zweizeilig stellte sich so noch im selben
+        Aufruf wieder einzeilig zurück (gemessen an der freistehenden
+        Kopfzeile in ``test_the_plate_filter_shows_its_complete_state_in_
+        every_language``, sobald die Plattenspalte ihr Mindestmaß bekam).
+        Solange hier umgebaut wird, gilt die Entscheidung des Aufrufers.
+        """
+        if self._arranging or (compact == self._compact and self._layout.count()):
             return
+        self._arranging = True
+        try:
+            self._rearrange(compact)
+        finally:
+            self._arranging = False
+
+    def _rearrange(self, compact: bool) -> None:
         widgets = (
             self.title,
             self.bounds,
@@ -466,13 +484,43 @@ class HeaderBar(QWidget):
                 (5, 3),
             ):
                 self._layout.setColumnStretch(column, stretch)
-            if not self.plates.isHidden():
-                self._layout.setColumnStretch(3, 1)
             self._divider.show()
         self._compact = compact
+        self._stretch_the_plate_column()
         self._layout.invalidate()
         self._layout.activate()
         self.updateGeometry()
+
+    def _stretch_the_plate_column(self) -> None:
+        """Die Spalte des Plattenwählers dehnt sich genau dann, wenn er dasteht.
+
+        **RM-158, und die Ursache lag im Zeitpunkt.** Der Wähler trägt die
+        Größenrichtlinie ``Ignored``, und ein ``QGridLayout`` rechnet für
+        eine Spalte **ohne** Dehnung dann mit null Breite — auch wenn das
+        Widget darin ein Mindestmaß hat (nachgestellt an vier Beschriftungen
+        in einem Gitter: die Spalte wird 0 breit, der Wähler 97, und der
+        Nachbar beginnt sechs Bildpunkte hinter seinem Anfang). Die Dehnung
+        stand hier bis zum 11.09.2026 nur, wenn der Wähler beim Anordnen
+        gerade **nicht** versteckt war — und die Anwendung ordnet zuerst
+        kompakt (das Fenster ist beim Bau 1280 breit), dann breit mit
+        verstecktem Wähler, und zeigt ihn erst, wenn das Projekt seine
+        Platten hat. In Roberts Fenster lag „Alle Platten" damit über
+        „Elegoo Centauri Carbon 2", beide an derselben x-Stelle. Eine Sonde,
+        die den Wähler beim Bau nicht versteckt vorfand, sah nichts davon.
+
+        Deshalb an einer Stelle, gerufen vom Anordnen **und** vom Zeigen: Die
+        Dehnung folgt der Sichtbarkeit, nicht dem Aufbau. Kompakt liegt der
+        Wähler in der zweiten Zeile über alle Spalten, dort bleibt die Spalte
+        ohne eigene Dehnung.
+        """
+        if not self._layout.count():
+            return
+        wanted = 0 if self._compact or self.plates.isHidden() else 1
+        # Nur bei einer Änderung: ``setColumnStretch`` entwertet das Layout
+        # auch für denselben Wert, und ein freistehendes Fenster nimmt beim
+        # nächsten Durchlauf sein Wunschmaß statt der gesetzten Breite.
+        if self._layout.columnStretch(3) != wanted:
+            self._layout.setColumnStretch(3, wanted)
 
     def _reflow(self) -> None:
         """Zieht nach, wenn ein neuer Text sein semantisches Minimum ändert."""
@@ -523,6 +571,7 @@ class HeaderBar(QWidget):
 
         many = plates > 1
         self.plates.setVisible(many)
+        self._stretch_the_plate_column()
         self._reflow()
         # **Gemeldet wird jede Änderung, nicht nur der Sonderfall „nur noch
         # eine Platte".** Fällt die Zahl auf genau die betrachtete Nummer,
