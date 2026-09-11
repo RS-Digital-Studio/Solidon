@@ -1387,6 +1387,25 @@ def _a_selected_hole(window):
     return object_id, hole
 
 
+def _measures_in_the_view(window):
+    """Drückt den Knopf, der die Maße des gewählten Merkmals ins Bild bringt.
+
+    **Seit dem 11.09.2026 kommt nichts von selbst** — der Selbststart ist
+    gefallen, weil sein Dialog dieselben Zahlen zeigte wie das Merkmalfenster
+    daneben (Robert: „werte im dialog und in der rechten merkmalleiste
+    doppelt"). Gefahren wird deshalb der Weg der Oberfläche: der Knopf.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    knopf = window.feature_panel._in_view
+    assert knopf.isVisibleTo(window.feature_panel), "an einer Bohrung steht der Knopf"
+    knopf.click()
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    return window._quiet_placement
+
+
 def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
     """Ein angeklicktes Loch zeigt seine Maße — und lässt sich übernehmen.
 
@@ -1398,18 +1417,21 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
     die Oberfläche nicht einlöst, ist schlimmer als kein Text.
 
     Geprüft wird deshalb bis zum Ende: Fläche, Werkzeug **und** der Knopf.
+
+    **Und seit dem 11.09.2026 über den Knopf im Merkmalfenster**, nicht mehr
+    von selbst: Der Dialog, der die Platzierung trug, zeigte dieselben Zahlen
+    ein zweites Mal (Robert: „werte im dialog und in der rechten
+    merkmalleiste doppelt").
     """
     from app.ui.op_dialog import OperationDialog
 
     window = _window_with_a_renderer()
     try:
         _a_selected_hole(window)
-        dialog = window._op_dialog
-        assert dialog is not None and dialog.spec.name == "resize_hole", (
-            "ein angeklicktes Loch bringt seine Maße von selbst ins Bild"
-        )
-        flow = dialog.placement_flow
-        assert flow.active and flow._surface is not None, "die Trägerfläche steht"
+        assert window._op_dialog is None, "ein angeklicktes Loch öffnet keinen Dialog mehr"
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active, "der Knopf bringt die Maße ins Bild"
+        assert flow._surface is not None, "die Trägerfläche steht"
         assert flow._tool_context is not None, "und ihr Werkzeugkörper auch"
         assert flow._accept.isEnabled(), "sonst verspricht die Leiste etwas, das nicht geht"
     finally:
@@ -1419,53 +1441,34 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
         window.release()
 
 
-def test_the_measures_start_once_per_chosen_feature(qt_app: QApplication) -> None:
-    """Der Dialog kommt einmal je Auswahl — nicht nach jedem Neuaufbau.
+def test_the_button_opens_the_measures_and_a_second_press_replaces_them(
+    qt_app: QApplication,
+) -> None:
+    """Zweimal derselbe Knopf legt keine zweite Platzierung übereinander.
 
-    Das Panel füllt sich auch nach der eigenen Operation wieder, weil die
-    Auswahl stehen bleibt; ohne Merker ging der Dialog nach jedem Übernehmen
-    sofort neu auf (Robert, 10.09.2026: „bei dem bohrung ändern kommt der
-    dialog auch immer wieder").
+    Bis zum 11.09.2026 hielt ein Merker (`_measured_for`) den **Selbststart**
+    davon ab, nach jeder Auswertung neu anzuspringen. Den Selbststart gibt es
+    nicht mehr; was bleibt, ist dieselbe Frage an den Knopf: Wer ihn zweimal
+    drückt, meint eine Platzierung und nicht zwei übereinander.
 
-    **Und die Gegenprobe steht dabei:** Eine Geste im Bild löscht den Merker,
-    denn danach will man sehen, wo das Merkmal jetzt sitzt.
+    Die Antwort steckt in `end_quiet_placement` — jeder neue Anlauf räumt den
+    alten ab. Ohne das lägen zwei Träger über demselben Loch, und welcher
+    beim Übernehmen gewinnt, entschiede die Reihenfolge.
     """
     from app.ui.op_dialog import OperationDialog
 
     window = _window_with_a_renderer()
     try:
-        _, hole = _a_selected_hole(window)
-        assert window._measured_for == hole, "der Merker steht am gewählten Merkmal"
-        for dialog in window.findChildren(OperationDialog):
-            dialog.reject()
-        # Das Fenster leert seine Buchhaltung erst, wenn Qt das
-        # ``finished``-Signal zustellt — gewartet wird auf die Sache, nicht auf
-        # eine Zahl von Durchläufen.
-        for _ in range(50):
-            if window._op_dialog is None:
-                break
-            QApplication.processEvents()
-        assert window._op_dialog is None, "der erste Dialog ist wirklich zu"
-        assert window._measured_for == hole, "der Merker überlebt das Zumachen"
+        _a_selected_hole(window)
+        erste = _measures_in_the_view(window)
+        assert erste is not None and erste.active, "der Knopf bringt die Maße ins Bild"
 
-        # **Dasselbe Merkmal noch einmal — und es bleibt bei nichts.** Gefragt
-        # wird die Buchhaltung des Fensters: `isHidden()` beantwortet
-        # Sichtbarkeit offscreen falsch, und ein abgewiesener Dialog lebt bis zu
-        # seinem `deleteLater` im Widgetbaum weiter (`.claude/rules/ansicht.md`,
-        # „Qt lügt vor dem Anzeigen").
-        result = window.session.evaluate_now()
-        _object_id, entry = next(iter(result.scene.objects.items()))
-        window._measure_in_the_view(entry.features[hole])
-        QApplication.processEvents()
-        assert window._op_dialog is None, "derselbe Aufbau bringt keinen zweiten Dialog"
-
-        # Und nach einer Geste im Bild steht er wieder zur Verfügung — der
-        # Merker fällt in `_feature_step`, also bei jedem Zug am Griff.
-        window._measured_for = ""
-        window._measure_in_the_view(entry.features[hole])
-        QApplication.processEvents()
-        assert window._op_dialog is not None, "nach einer Geste im Bild stehen die Maße wieder da"
-        assert window._op_dialog.spec.name == "resize_hole"
+        zweite = _measures_in_the_view(window)
+        assert zweite is not None and zweite.active, "und beim zweiten Mal wieder"
+        assert zweite is not erste, "es ist eine frische Platzierung"
+        assert not erste.active, "die erste ist abgeräumt, nicht liegengeblieben"
+        assert window._quiet_placement is zweite, "und das Fenster führt genau eine"
+        assert window._op_dialog is None, "ein Dialog geht dabei nie auf"
     finally:
         for dialog in window.findChildren(OperationDialog):
             dialog.reject()
@@ -1546,10 +1549,8 @@ def test_a_drag_beside_the_handle_keeps_the_measures_at_the_feature(
     window = _window_with_a_renderer()
     try:
         _a_selected_hole(window)
-        dialog = window._op_dialog
-        assert dialog is not None and dialog.spec.name == "resize_hole"
-        flow = dialog.placement_flow
-        assert flow._seated_at_feature, "die Maße stehen am gewählten Merkmal"
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow._seated_at_feature, "die Maße stehen am gewählten Merkmal"
 
         # Ein Zug über das halbe Bild, der keinen Griff trifft: Druck,
         # Bewegung, Loslassen weit entfernt.
@@ -1598,8 +1599,8 @@ def test_the_measures_come_back_after_a_gesture_in_the_view(qt_app: QApplication
     window = _window_with_a_renderer()
     try:
         _a_selected_hole(window)
-        erster = window._op_dialog
-        assert erster is not None and erster.placement_flow.active, "die Maße stehen"
+        erster = _measures_in_the_view(window)
+        assert erster is not None and erster.active, "die Maße stehen"
 
         # Ein Zug am Pfeil des Bewegungsgriffs: eine Merkmalsoperation entsteht.
         gizmo = window.viewport._gizmo
@@ -1620,10 +1621,14 @@ def test_the_measures_come_back_after_a_gesture_in_the_view(qt_app: QApplication
         assert [o.op for o in window.session.history.operations][-1] == "move_feature", (
             "ohne die Operation prüft der Rest nichts"
         )
-        danach = window._op_dialog
-        assert danach is not None, "nach der Geste stehen die Maße wieder da"
-        assert danach is not erster, "und zwar in einer frischen Platzierung"
-        assert danach.placement_flow.active, "sonst zeigt der Dialog nur alte Zahlen"
+        danach = window._quiet_placement
+        assert danach is None, "die Geste räumt die alte Platzierung ab"
+        assert not erster.active, "sie zeigt keine Zahlen von vorher mehr"
+        # **Und der Weg zurück steht sofort offen** — der Knopf im
+        # Merkmalfenster, an demselben Merkmal, das jetzt woanders sitzt.
+        frisch = _measures_in_the_view(window)
+        assert frisch is not None and frisch.active, "die Maße kommen auf Knopfdruck wieder"
+        assert frisch is not erster, "und zwar in einer frischen Platzierung"
     finally:
         for open_dialog in window.findChildren(OperationDialog):
             open_dialog.reject()

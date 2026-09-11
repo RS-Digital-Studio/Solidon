@@ -266,15 +266,26 @@ Am Merkmal ist der Klick selbst die Ansage (Robert, 10.09.2026: „über den
 viewport sehen wir weder maße noch etwas zum verschieben, verlängern, drehen
 usw"); der Würfel bleibt dabei weg.
 
-**Und die Maße wie beim Setzen stehen ohne Knopf da.** Wer ein Loch anklickt,
-bekommt die Flächenplatzierung mitsamt Maßlinien zu den Kanten und einem
-Zahlenfeld je Maß — `MainWindow._measure_in_the_view` startet sie, sobald das
-Merkmalsfenster eine Bohrung oder ein Langloch zeigt. Ein Knopf *Im Bild
-einstellen …* stand bis zum 10.09.2026 daneben und ist gefallen: Er bot an,
-was ohnehin geschieht, und stand an jeder Handlung, die auf einer Fläche sitzt
-— an einer Bohrung also mehrfach untereinander. `FeaturePanel.inViewRequested`
-bleibt getrennt von `operationRequested`, weil das eine zeigt und das andere
-schreibt.
+**Und die Maße wie beim Setzen kommen auf Knopfdruck.** Wer ein Loch gewählt
+hat, findet im Merkmalfenster *Im Bild einstellen*; der Knopf bringt die
+Flächenplatzierung mitsamt Maßlinien zu den Kanten und einem Zahlenfeld je Maß
+in die Szene. `FeaturePanel.inViewRequested` bleibt getrennt von
+`operationRequested`, weil das eine zeigt und das andere schreibt.
+
+**Er steht einmal je Merkmal, nicht je Handlung** (`_settle_in_view`). Die
+Maßlinien zeigen die Stelle des Lochs, und die ist dieselbe, gleich ob man
+gerade den Durchmesser oder die Länge ansieht; an der scharfen Handlung
+aufgehängt verschwände der Knopf, sobald jemand ein Feld von *Merkmal drehen*
+anfasst.
+
+**Und die Platzierung trägt dabei kein Fenster** (`QuietHost`, 11.09.2026).
+Bis dahin startete sie von selbst und hing an einem Operationsdialog, der
+daneben stand und Durchmesser, X, Y und Z ein zweites Mal zeigte — dieselben
+Zahlen, die rechts im Merkmalfenster stehen, nach einer Operation sogar mit
+anderen Werten (Robert: „werte im dialog und in der rechten merkmalleiste
+doppelt, sehr verwirrend für den Kunden"). Was der Fluss von seinem Träger
+braucht, steht in `PlacementHost`; `MainWindow.end_quiet_placement` räumt ihn
+ab, denn ohne Fenster meldet niemand sein Ende.
 
 **Sie beginnt dabei dort, wo das Merkmal schon sitzt** (`_begin_at_feature`,
 10.09.2026). Bis dahin fing jede Platzierung bei „Auf eine Oberfläche zeigen"
@@ -294,22 +305,17 @@ Bohrungsmitte (Robert: „wir wollen aber bei der bohrung das mittelloch"). Ein
 danach zielt wieder der Zeiger — beim Setzen einer neuen Bohrung ändert sich
 nichts.
 
-**Einmal je gewähltem Merkmal, nicht bei jedem Neuaufbau** (`_measured_for`).
-Das Panel füllt sich auch nach der eigenen Operation wieder, weil die Auswahl
-stehen bleibt; ohne den Merker ging der Dialog nach jedem Übernehmen sofort neu
-auf. Jede Geste im Bild — Griff, Ring, Langlochknopf — löscht ihn wieder, denn
-danach will man sehen, wo das Merkmal jetzt sitzt. **Beim Abwählen bleibt er
-dagegen stehen**: Der Szenenaufbau hebt die Auswahl kurz auf und stellt sie
-danach wieder her, und wer ihn dort löscht, bekommt den Dialog nach jedem
-gerechneten Schritt zurück.
+**Eine Geste im Bild räumt sie ab** (`_drop_stale_measures`). Was dort steht,
+gilt für einen Stand, den die Geste gerade ändert: Der Zug am Bewegungsgriff
+versetzt das Loch, der am Langlochgriff macht es länger. Der Knopf bringt sie
+danach zurück — an derselben Stelle, mit den neuen Zahlen.
 
-**Und ein Angebot tritt zurück, es verdrängt nicht.** Steht ein Dialog offen,
-gehört der Klick ihm — §18.5 sagt zu, dass er dann eine *Eingabe* ist und keine
-Auswahl. `run_operation` verwirft jeden offenen Operationsdialog, und der
-Selbststart lief darüber: Er warf genau den weg, den der Kunde gerade
-beantworten wollte. Ebenso fragt er nicht nach, ob zurückgenommene Schritte
-verworfen werden dürfen (Regel 19) — die Platzierung schreibt nichts, sie zeigt
-Maße, und die Frage steht bei ihrem *Übernehmen* richtig.
+**Ein Merker (`_measured_for`) und zwei Wächter standen hier bis zum
+11.09.2026** und hingen alle am Selbststart: Er sprang nach jeder Auswertung
+neu an, verwarf dabei offene Dialoge und fragte bei zurückgenommenen Schritten
+nach. Mit ihm sind sie gefallen. Was von der Frage bleibt, ist die Zusage von
+§18.5: Ein Klick auf ein Merkmal ist eine **Eingabe**, wo ein Dialog auf eines
+wartet — und das entscheidet weiterhin `_on_feature_picked`.
 
 **Der Werkzeugkörper gehört dazu, sonst bleibt der Knopf grau.**
 `PlacementFlow` gibt *Übernehmen* nur frei, wenn `placement.prepare_tool` einen

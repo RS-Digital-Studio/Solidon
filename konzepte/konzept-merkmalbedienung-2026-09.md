@@ -148,8 +148,8 @@ Jedes endet mit grünem Tor und einem Commit.
 | P1 | Die Maße überleben die eigene Operation (§1.3, zweiter Befund) | S | **fertig** (`5a18c950`) |
 | P2a | `can_place()` trägt die Bedingung, nicht mehr der Knopf | S | **fertig** (`c2522e99`) |
 | P5 | `surface_button` entfernen — **vorgezogen**, siehe Notiz unten | S | **fertig** (`afc15641`) |
-| P2b | `PlacementFlow` ohne Dialog tragbar machen (additiv) | L | offen |
-| P3 | Knopf rechts im Merkmalfenster, Selbststart aus — **das Umschalt-Paket** | L | offen |
+| P2b | `PlacementFlow` ohne Dialog tragbar machen (additiv) | L | **fertig** (`341fdb35`) |
+| P3 | Knopf rechts im Merkmalfenster, Selbststart aus — **das Umschalt-Paket** | L | **fertig** |
 | P4 | Untere Leisten abbauen: `_bar` am Merkmal, `SlotBar` | L | offen |
 | P6 | Toter Alt-Pfad raus, Doku und Regeln nachziehen | S | offen |
 
@@ -181,6 +181,20 @@ nur niemand mehr. P3 hängt den Knopf im Merkmalfenster daran.
 | `show()`, `raise_()`, `activateWindow()`, `isVisible()` | der Rückweg aus der Platzierung (`back`) |
 | `surfaceRequested`, `valuesChanged`, `finished` | die drei Signale |
 | Qt-Elternteil | `super().__init__(dialog)` |
+
+**P3 hat einen Fehler im Kern freigelegt, den der Dialog verdeckt hatte.**
+`surface_values` gab die Merkmalskennung nur für `move_feature` und
+`duplicate_feature` zurück und leerte sie sonst — richtig beim Setzen einer
+neuen Bohrung, falsch an einer bestehenden. Aufgefallen ist es nie, weil
+`OperationDialog.take_placement` nur Editoren setzt und es für `at_feature`
+keinen gibt: Der Dialog schützte die Kennung **zufällig**. Ein Träger ohne
+Fenster nimmt jeden Wert an und verlor damit genau die Kennung, aus der er
+sein Merkmal sucht. `AT_AN_EXISTING_FEATURE` (`scene/placement.py`) nennt die
+vier Operationen jetzt beim Namen; nebenbei geht damit auch *Merkmal
+verschieben* über diesen Weg, was vorher still scheiterte.
+
+Das ist die allgemeine Form: **Ein zufälliger Schutz sieht aus wie eine
+Zusage, bis jemand den Träger austauscht.**
 
 **Und eine Warnung an den nächsten Schritt:** Am 11.09.2026 arbeitete eine
 zweite Sitzung im selben Baum an derselben Ecke (`panels.py`,

@@ -2523,15 +2523,22 @@ def test_a_drag_on_the_slot_knobs_becomes_one_slot_step(window: MainWindow) -> N
 def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: MainWindow) -> None:
     """``inViewRequested`` zeigt — es legt keinen Schritt an (10.09.2026).
 
-    ``operationRequested`` führt aus, dieses öffnet den Dialog der Operation;
-    von dort startet die Flächenplatzierung mit ihren Maßlinien selbst. Wer
-    beide Signale gleich behandelte, schriebe schon beim Zeigen in den Verlauf
-    — deshalb sind es zwei.
+    ``operationRequested`` führt aus, dieses bringt die Flächenplatzierung
+    mit ihren Maßlinien in die Szene. Wer beide Signale gleich behandelte,
+    schriebe schon beim Zeigen in den Verlauf — deshalb sind es zwei.
 
-    Den Knopf *Im Bild einstellen …* gibt es seit demselben Tag nicht mehr; das
-    Signal trägt jetzt die Handlungen, deren eigener Knopf ins Bild führt
-    (``LEADS_INTO_THE_VIEW``), und den Weg über ein angeklicktes Loch.
+    **Und seit dem 11.09.2026 ohne Dialog.** Getragen wird die Platzierung
+    von einem ``QuietHost``: Er hält die Werte und zeigt nichts, weil sie
+    rechts im Merkmalfenster schon stehen (Robert: „werte im dialog und in
+    der rechten merkmalleiste doppelt"). Geprüft wird deshalb der Träger und
+    nicht mehr ein Fenster — die Zusage „gezeigt, nicht getan" ist dieselbe.
     """
+    # **Die Betriebslage, nicht der Nullzustand** (`.claude/rules/tests.md`):
+    # Ohne Renderer sagt `PlacementFlow.can_place()` nein, und offscreen gibt
+    # es nie einen. Die Attrappe stellt her, was der Kunde hat.
+    from render_fakes import RecordingRenderer
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
@@ -2543,27 +2550,45 @@ def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: Mai
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, hole)
 
+    durchmesser = float(entry.features[hole].params["diameter"])
     window.feature_panel.inViewRequested.emit(
-        "move_feature",
-        {
-            "at_feature": hole,
-            "x": float(centre[0]),
-            "y": float(centre[1]),
-            "z": float(centre[2]),
-        },
+        "resize_hole", {"at_feature": hole, "diameter": durchmesser}
     )
-    QApplication.processEvents()
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
 
-    dialoge = window.findChildren(OperationDialog)
     try:
-        assert dialoge, "der Dialog der Operation steht offen"
+        assert not window.findChildren(OperationDialog), "es geht kein Dialog mehr auf"
+        host = window._quiet_host
+        assert host is not None, "die Platzierung hat ihren Träger"
         assert [step.op for step in window.session.project.document.ops] == ["load"], (
             "gezeigt, nicht getan — im Verlauf steht nichts Neues"
         )
-        assert dialoge[-1].values().get("at_feature") == hole, "und er weiß, welches Merkmal"
+        assert host.values().get("at_feature") == hole, "und er weiß, welches Merkmal"
+
+        # **Und das Verschieben geht denselben Weg**, mit demselben Merkmal:
+        # Es stellt seine Stelle ebenfalls auf einer Fläche ein. Bis zum
+        # 11.09.2026 verlor es dabei die Kennung — `surface_values` gab sie
+        # nur für zwei Operationen zurück und leerte sie sonst, und ohne sie
+        # fand `_source_feature` das Merkmal nicht mehr.
+        window.feature_panel.inViewRequested.emit(
+            "move_feature",
+            {
+                "at_feature": hole,
+                "x": float(centre[0]),
+                "y": float(centre[1]),
+                "z": float(centre[2]),
+            },
+        )
+        window.session.wait_for_idle()
+        for _ in range(40):
+            QApplication.processEvents()
+        zweiter = window._quiet_host
+        assert zweiter is not None and zweiter is not host, "eine frische Platzierung"
+        assert zweiter.values().get("at_feature") == hole, "auch sie behält ihr Merkmal"
     finally:
-        for dialog in dialoge:
-            dialog.reject()
+        window.end_quiet_placement()
         QApplication.processEvents()
 
 

@@ -1512,6 +1512,12 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     assert plaetze[panel._every] == plaetze[panel._apply] - 1, (
         "der Haken gehört unmittelbar über den Knopf"
     )
+    # **Und der Weg ins Bild steht davor, nicht dazwischen** (11.09.2026): Der
+    # Haken ändert den Umfang des Übernehmens, also gehört er an dessen Seite;
+    # ein Knopf zwischen beiden machte aus „für alle" eine Frage, auf die zwei
+    # Knöpfe antworten.
+    assert plaetze[panel._in_view] < plaetze[panel._every], "der Weg ins Bild steht davor"
+    assert plaetze[panel._in_view] > max(zeilen), "aber auch er gehört nach unten"
 
 
 def test_the_all_alike_box_follows_the_armed_handling(qt_app: QApplication) -> None:

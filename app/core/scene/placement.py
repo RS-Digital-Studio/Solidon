@@ -51,6 +51,23 @@ _log = get_logger(__name__)
 #: zählt als Versatz vom Merkmal und bleibt auf null.
 FEATURE_FIELD = "at_feature"
 
+#: Welche Operationen ihre Stelle an einem **bestehenden** Merkmal einstellen.
+#:
+#: Sie unterscheiden sich von den übrigen darin, dass ``at_feature`` bei ihnen
+#: eine **Eingabe** ist und kein Ergebnis: Wer eine Bohrung ändert oder in die
+#: Länge zieht, hat sie schon gewählt. :func:`surface_values` gibt die Kennung
+#: deshalb zurück, statt sie zu leeren.
+#:
+#: **Der Unterschied fiel lange nicht auf**, weil der Operationsdialog die
+#: Kennung zufällig schützte: ``take_placement`` setzt nur Editoren, und für
+#: ``at_feature`` gibt es keinen. Ein Träger ohne Fenster nimmt jeden Wert an
+#: — und verlor damit genau die Kennung, aus der er sein Merkmal sucht
+#: (gemessen am 11.09.2026 an ``resize_hole``: ``at_feature`` kam als ``''``
+#: zurück, und ``_source_feature`` fand danach nichts mehr).
+AT_AN_EXISTING_FEATURE: Final = frozenset(
+    {"move_feature", "duplicate_feature", "slot_hole", "resize_hole"}
+)
+
 #: Die Position, in der Reihenfolge, in der die Parameter überall heißen.
 POSITION = ("x", "y", "z")
 
@@ -1230,9 +1247,7 @@ def surface_values(
         values["anchor"] = "mouth"
     if any(field.name == placed_fields[FEATURE_FIELD] for field in spec.params.spec()):
         values[placed_fields[FEATURE_FIELD]] = (
-            feature.id
-            if spec.name in {"move_feature", "duplicate_feature"} and feature is not None
-            else ""
+            feature.id if spec.name in AT_AN_EXISTING_FEATURE and feature is not None else ""
         )
     return values
 

@@ -4577,6 +4577,13 @@ class _Handling:
     run: Callable[[], None]
     op: str
     members: int
+    in_view: Callable[[], None] | None = None
+    """Der Weg ins Bild — oder nichts, wo die Handlung keine Stelle hat.
+
+    Getrennt von :attr:`run`, seit der 11.09.2026 die beiden auseinanderhält:
+    Bis dahin *war* das Übernehmen der Weg ins Bild, und wer eine Bohrung
+    ändern wollte, landete in der Platzierung statt bei seinem Ergebnis
+    (Robert: „auch 2 mal übernehmen einmal unten und einmal rechts")."""
 
 
 def _leads_into_the_view(op: str) -> bool:
@@ -4750,6 +4757,18 @@ class FeaturePanel(QWidget):
         # über ihm — die Überschrift, deren Felder gerade angefasst wurden —
         # und in seinem Tooltip; auf dem Knopf selbst wechselte der Text mit
         # jedem Klick ins nächste Feld und war damit unruhiger als hilfreich.
+        # **Und daneben der Weg ins Bild** (Robert, 11.09.2026: „das über den
+        # viewport wieder über einen button aktivieren"). Er steht nur an
+        # Handlungen, die eine Stelle auf einer Fläche haben, und er führt
+        # nichts aus: Er bringt die Maßlinien zu Kanten und Mitten in die
+        # Szene, wo sich die Stelle einstellen lässt. Bis zum 11.09.2026 tat
+        # das der Übernehmen-Knopf selbst — und damit gab es an einer Bohrung
+        # keinen Weg mehr, einfach zu übernehmen.
+        self._in_view = QPushButton(tr("Im Bild einstellen"), self)
+        self._in_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._in_view.clicked.connect(self._show_armed_in_view)
+        self._in_view.setVisible(False)
+        self._rows.addWidget(self._in_view)
         self._apply = make_primary(QPushButton(tr("Übernehmen"), self))
         self._apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._apply.clicked.connect(self._run_armed)
@@ -4760,6 +4779,11 @@ class FeaturePanel(QWidget):
         self._feature_id: str | None = None
         self._part_operation: int | None = None
         self._groups: dict[str, FeatureActionGroup] = {}
+        self._into_view: Callable[[], None] | None = None
+        """Der Weg ins Bild für das gezeigte Merkmal — oder nichts.
+
+        Gehört dem Merkmal und nicht der scharfen Handlung; siehe
+        :meth:`_settle_in_view`."""
         self._said_notes: set[str] = set()
         """Welche Gruppenbegründungen in diesem Panel schon stehen.
 
@@ -4814,6 +4838,8 @@ class FeaturePanel(QWidget):
         self._explanations.clear()
         self._dots.clear()
         self._apply.setVisible(False)
+        self._in_view.setVisible(False)
+        self._into_view = None
         self._armed_title.hide()
         self._every.setVisible(False)
         self._every.setChecked(False)
@@ -5368,17 +5394,19 @@ class FeaturePanel(QWidget):
                 else:
                     self.stepChangeRequested.emit(step, self._values(entries, widgets, fixed))
                 return
-            # **Wo die Handlung eine Stelle hat, führt sie ins Bild** (Robert,
-            # 10.09.2026: „einfach wie wenn ich eine bohrung setze … gleiche
-            # logik"). *Zum Langloch ziehen* sitzt auf einer Fläche und führt
-            # eine Mitte; wer darauf drückt, bekommt deshalb dieselbe
-            # Platzierung wie beim Setzen — Maßfelder zu Kanten und Mitten in
-            # der Szene, Übernehmen am Ende. Sofort auszuführen hieße, den
-            # Kunden um genau die Einstellung zu bringen, die er sucht.
-            if _leads_into_the_view(op_name):
-                self.inViewRequested.emit(op_name, self._values(entries, widgets, fixed))
-                return
             self._emit(op_name, entries, widgets, self._every_for(op_name), fixed)
+
+        def in_view() -> None:
+            """Dieselbe Handlung, aber im Bild eingestellt.
+
+            **Ein eigener Knopf, seit dem 11.09.2026.** Bis dahin führte das
+            *Übernehmen* selbst ins Bild, wo die Handlung eine Stelle hat —
+            und damit konnte man an einer Bohrung nichts mehr übernehmen,
+            ohne vorher durch die Platzierung zu gehen. Zwei Absichten
+            brauchen zwei Knöpfe (Robert, 11.09.2026: „das über den viewport
+            wieder über einen button aktivieren").
+            """
+            self.inViewRequested.emit(op_name, self._values(entries, widgets, fixed))
 
         # **Ein Knopf unten statt einer je Handlung** (Robert, 10.09.2026: „die
         # ganzen buttons um werte zu übernehmen durch einen unten ersetzen,
@@ -5392,6 +5420,7 @@ class FeaturePanel(QWidget):
             title=str(action.title),
             reason=str(action.reason) or str(action.title),
             run=run,
+            in_view=in_view if step is None and _leads_into_the_view(op_name) else None,
             op=op_name,
             members=members,
         )
@@ -5478,9 +5507,14 @@ class FeaturePanel(QWidget):
         nicht ganz oben"). Ihn am Ende umzuhängen ist billiger als jede
         Einfügestelle um eins zu verschieben und dabei eine zu vergessen.
         """
-        for widget in (self._armed_title, self._every, self._apply):
+        # **Die Reihenfolge ist eine Aussage:** Titel, der Weg ins Bild, der
+        # Haken, das Übernehmen. Der Haken gehört unmittelbar über den Knopf,
+        # dessen Umfang er ändert — ein Knopf dazwischen machte aus „für alle"
+        # eine Frage, auf die zwei Knöpfe antworten.
+        for widget in (self._armed_title, self._in_view, self._every, self._apply):
             self._rows.removeWidget(widget)
             self._rows.insertWidget(self._rows.count() - 1, widget)
+        self._settle_in_view()
 
     def _separate(self) -> None:
         """Zieht einen Strich vor die nächste Handlung — außer vor die erste.
@@ -5540,6 +5574,37 @@ class FeaturePanel(QWidget):
         entry = self._runs.get(self._armed or "")
         if entry is not None:
             entry.run()
+
+    def _show_armed_in_view(self) -> None:
+        """Bringt die Maße dieses Merkmals in die Szene, statt auszuführen."""
+        if self._into_view is not None:
+            self._into_view()
+
+    def _settle_in_view(self) -> None:
+        """Entscheidet, ob dieses Merkmal den Weg ins Bild anbietet.
+
+        **Einmal je Merkmal, nicht je Handlung**, und das ist der Unterschied
+        zum Knopf daneben: Die Maßlinien zeigen die Stelle des *Lochs* — zu
+        den Kanten der Fläche und zu den Mitten der Nachbarn —, und die ist
+        dieselbe, gleich ob man gerade den Durchmesser oder die Länge ansieht.
+        An der scharfen Handlung aufgehängt verschwände der Knopf, sobald
+        jemand ein Feld von *Merkmal drehen* anfasst, und wäre damit ein
+        Angebot, das man erst suchen muss.
+
+        Angeboten wird er, sobald **eine** Handlung dieses Merkmals dorthin
+        führt; welche, sagt :data:`LEADS_INTO_THE_VIEW`.
+        """
+        self._into_view = next(
+            (entry.in_view for entry in self._runs.values() if entry.in_view is not None), None
+        )
+        self._in_view.setVisible(self._into_view is not None)
+        if self._into_view is None:
+            return
+        zusage = str(tr("Maßlinien zu Kanten und Mitten in der Szene — dort einstellen."))
+        self._in_view.setStatusTip(zusage)
+        self._in_view.setToolTip(zusage)
+        self._in_view.setAccessibleName(str(tr("Im Bild einstellen")))
+        self._in_view.setAccessibleDescription(zusage)
 
     def _every_for(self, op: str) -> QCheckBox | None:
         """Der Haken unten — aber nur, wenn diese Handlung eine Gruppe hat.
