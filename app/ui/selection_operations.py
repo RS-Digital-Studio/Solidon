@@ -572,6 +572,14 @@ class SelectionOperationsPanel(QWidget):
         self.setVisible(selected > 0)
         if selected <= 0:
             return
+        # **Bausteine setzt man auf eine Fläche, nicht in ein Loch** (Robert,
+        # 10.09.2026: „ganz unten wenn wir runterscrollen noch bauteile, das
+        # brauchen wir bei gewählten merkmalen garnicht, nur flächen/Körper").
+        # Ein Baustein braucht Material, auf dem er sitzt; an einer Bohrung,
+        # einer Verrundung oder einem Zapfen führt der Knopf in einen Katalog,
+        # aus dem nichts an diese Stelle passt — und er stand dabei unter einer
+        # Liste, für die man scrollen muss.
+        self.catalog_button.setVisible(feature_kind in ("", "face"))
         self._lay_out_quick(quick_names(selected, feature_kind))
         self._wrap_labels()
         if self._feature_kind != feature_kind:

@@ -294,6 +294,25 @@ def divider(parent: QWidget) -> QWidget:
     return line
 
 
+def rule(parent: QWidget) -> QWidget:
+    """Eine waagerechte Linie zwischen zwei Blöcken, die einander nicht erklären.
+
+    Das Gegenstück zu :func:`divider`, nur für Untereinander: Im Merkmalsfenster
+    stehen mehrere Handlungen mit je eigenen Feldern, und ein Abstand allein
+    trennt sie nicht — an einer Bohrung folgen auf drei Zahlenfelder wieder
+    drei, und wer nicht auf die Überschriften sieht, liest sie als eine Reihe
+    (Robert, 10.09.2026: „die unterschiedlichen einstellungen noch abgrenzen
+    durch einen strich").
+    """
+    from PySide6.QtWidgets import QFrame
+
+    line = QFrame(parent)
+    line.setObjectName(DIVIDER)
+    line.setFrameShape(QFrame.Shape.HLine)
+    line.setFixedHeight(1)
+    return line
+
+
 def _repolish(widget: QWidget) -> None:
     """Qt liest dynamische Eigenschaften nur beim Aufbau — hier noch einmal."""
     style = widget.style()
@@ -545,6 +564,27 @@ QPushButton[targetSize="large"] {{
     min-height: {TARGET_SIZE - 2 * TIGHT - 2}px;
 }}
 QPushButton:hover {{ background: {hover}; }}
+/* Das Info-Zeichen neben einer Überschrift: ein Kreis mit „i" darin, dessen
+   Tooltip den Absatz trägt, der vorher unter der Zeile stand. Die Erklärung
+   verschwindet damit nicht, sie belegt nur keine drei Zeilen mehr, solange
+   niemand sie liest (Robert, 10.09.2026: „die beschreibungen die über den
+   buttons zum übernehmen dastehen auch in einen tooltipp"). Der Buchstabe ist
+   die zweite Kodierung neben der Form — Regel 18 gilt auch für ein Zeichen,
+   das nur eine Erklärung ankündigt. */
+QToolButton#infoDot {{
+    border: 1px solid {line};
+    border-radius: 9px;
+    min-width: 18px;
+    max-width: 18px;
+    min-height: 18px;
+    max-height: 18px;
+    padding: 0px;
+    color: {muted};
+    background: transparent;
+    font-weight: 600;
+}}
+QToolButton#infoDot:hover {{ color: {text}; border-color: {text}; background: {hover}; }}
+QToolButton#infoDot:focus {{ color: {text}; border-color: {highlight}; }}
 QPushButton:pressed {{ background: {line}; }}
 QPushButton:default {{
     background: {highlight};

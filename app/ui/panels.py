@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from itertools import pairwise
 from typing import Any, Final, cast
 
@@ -125,7 +125,7 @@ from app.ui.labels import (
 from app.ui.leash import weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_primary, set_level
+from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_primary, rule, set_level
 from app.ui.theme import UNDONE_COLOUR
 
 _log = get_logger(__name__)
@@ -4507,6 +4507,56 @@ def _group_reason_texts() -> dict[str, str]:
     }
 
 
+#: Die Handlungen, deren Knopf unmittelbar in die Platzierung führt.
+#:
+#: **Eine Aufzählung und keine Regel**, weil es eine Bedienentscheidung ist und
+#: keine Fähigkeit: *Merkmal verschieben* und *verdoppeln* tragen ihre Zahlen
+#: als Felder daneben und tun auf Klick, was dort steht; *Zum Langloch ziehen*
+#: ändert die **Form** eines Lochs, und wer sie ändert, will dabei sehen, wo es
+#: sitzt (Robert, 10.09.2026). Wer eine weitere Handlung so haben will, trägt
+#: sie hier ein — und nimmt ihr damit den unmittelbaren Klick.
+LEADS_INTO_THE_VIEW: Final[frozenset[str]] = frozenset({"slot_hole", "resize_hole"})
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Handling:
+    """Was der eine Knopf unten über eine Handlung wissen muss.
+
+    Seit dem 10.09.2026 steht kein Knopf mehr in jeder Zeile: Einer unten führt
+    die aus, an der zuletzt jemand etwas angefasst hat. Er braucht dafür ihren
+    Titel (für die Zusage daneben), ihren Satz, was sie tut — und wie viele
+    gleichartige Merkmale es gibt, denn der Haken darüber gehört ihr ebenso.
+    """
+
+    title: str
+    reason: str
+    run: Callable[[], None]
+    op: str
+    members: int
+
+
+def _leads_into_the_view(op: str) -> bool:
+    """Ob dieser Knopf ins Bild führt, statt sofort auszuführen."""
+    return op in LEADS_INTO_THE_VIEW and _places_on_a_surface(op)
+
+
+def _explained(action: Any) -> str:
+    """Der Satz hinter dem Info-Zeichen einer Handlung.
+
+    Drei Quellen, in dieser Reihenfolge: was zur **Lage** zu sagen ist, der
+    Grund der Handlung, und der ``doc``-Satz ihrer Operation. Der letzte ist
+    der Rückfall, der immer trägt — jede Operation hat einen (Regel 4), und er
+    steht ohnehin schon im Menü und über dem Dialog.
+    """
+    for text in (getattr(action, "note", ""), getattr(action, "reason", "")):
+        if text:
+            return str(text)
+    op = getattr(action, "op", None)
+    if op and REGISTRY.has(str(op)):
+        return str(REGISTRY.get(str(op)).doc or "")
+    return ""
+
+
 def _places_on_a_surface(op: str) -> bool:
     """Ob diese Operation ihre Stelle auf einer Fläche einstellen lässt.
 
@@ -4638,6 +4688,25 @@ class FeaturePanel(QWidget):
         # vier Knöpfe, zwischen denen so viel Luft steht, dass die Felder
         # darüber nicht mehr erkennbar zu ihnen gehören. Gemessen am
         # 03.09.2026, sichtbar erst im Bildschirmfoto eines hohen Fensters.
+        # **Der eine Knopf, und er steht unten.** Dort, wo eine Handlung endet:
+        # oben die Werte, unten das Tun — dieselbe Anordnung wie in jedem
+        # Dialog. Die Akzentfarbe kommt aus ``make_primary`` und mit ihr die
+        # Schriftfarbe darauf (``on_highlight`` im Stylesheet); halbfett steht
+        # daneben, damit die Bedeutung nicht allein an der Farbe hängt
+        # (Regel 18).
+        self._every = QCheckBox("", self)
+        self._every.setVisible(False)
+        self._rows.addWidget(self._every)
+        # **Der Knopf heißt „Übernehmen"** (Robert, 10.09.2026: „als text
+        # brauchen wir auch nur übernehmen"). Welche Handlung er meint, steht
+        # über ihm — die Überschrift, deren Felder gerade angefasst wurden —
+        # und in seinem Tooltip; auf dem Knopf selbst wechselte der Text mit
+        # jedem Klick ins nächste Feld und war damit unruhiger als hilfreich.
+        self._apply = make_primary(QPushButton(tr("Übernehmen"), self))
+        self._apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._apply.clicked.connect(self._run_armed)
+        self._apply.setVisible(False)
+        self._rows.addWidget(self._apply)
         self._rows.addStretch(1)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
@@ -4654,6 +4723,24 @@ class FeaturePanel(QWidget):
         self._fit_button: QPushButton | None = None
         self._fit_choice: QComboBox | None = None
         self._fit_reason = ""
+        self._runs: dict[str, _Handling] = {}
+        """Je Handlung ihr Titel, ihr Satz und was sie tut.
+
+        Die Knöpfe je Handlung sind am 10.09.2026 gefallen; was bleibt, ist
+        **einer** unten, und der braucht die Handlungen als Nachschlagewerk."""
+        self._armed: str | None = None
+        """Welche Handlung der Knopf unten gerade meint.
+
+        Die zuletzt angefasste: Wer einen Wert ändert oder in ein Feld klickt,
+        hat damit gesagt, worum es geht. Vorbelegt ist die erste — ein Knopf
+        ohne Bedeutung wäre schlechter als eine Vorgabe, die dasteht."""
+        self._dots: dict[int, tuple[QToolButton, QLabel]] = {}
+        """Je Handlungsbox ihr Info-Zeichen und die Überschrift daneben."""
+        self._explanations: dict[int, str] = {}
+        """Der Text hinter dem Info-Zeichen einer Handlung, nach ``id(box)``.
+
+        Zwei Quellen speisen ihn — der Satz der Handlung und der Nachweis ihrer
+        Gruppe —, und sie kommen an verschiedenen Stellen an."""
 
     @property
     def feature_id(self) -> str | None:
@@ -4673,6 +4760,13 @@ class FeaturePanel(QWidget):
         self._said_notes.clear()
         self._fit_button = None
         self._fit_choice = None
+        self._runs.clear()
+        self._armed = None
+        self._explanations.clear()
+        self._dots.clear()
+        self._apply.setVisible(False)
+        self._every.setVisible(False)
+        self._every.setChecked(False)
         self._empty.setVisible(True)
 
     def show_feature(
@@ -4800,6 +4894,7 @@ class FeaturePanel(QWidget):
         # wurde (`actions_for` begründet genau das). Sie nennt sie nur
         # zusammen, wenn sie denselben Satz teilen.
         for action in _folded(actions):
+            self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
@@ -4818,6 +4913,7 @@ class FeaturePanel(QWidget):
             catalog.clicked.connect(lambda _checked=False: self.catalogRequested.emit())
             self._rows.insertWidget(self._rows.count() - 1, catalog)
             self._built.append(catalog)
+        self._settle_apply()
 
     def show_part(self, operation: Any, spec: Any, *, title: str = "") -> None:
         """Was sich an diesem **Baustein** ändern lässt — an seinem Schritt.
@@ -4853,9 +4949,11 @@ class FeaturePanel(QWidget):
         self._built.append(heading)
 
         for action in part_actions(operation, spec):
+            self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
+        self._settle_apply()
 
     def show_edge(self, key: str, title: str) -> None:
         """Was sich an dieser **Kante** tun lässt — verrunden und fasen.
@@ -4886,9 +4984,11 @@ class FeaturePanel(QWidget):
         self._built.append(heading)
 
         for action in edge_actions(key):
+            self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
+        self._settle_apply()
 
     def shown_part_step(self) -> int | None:
         """Der Schritt, dessen Baustein gerade dasteht — sonst ``None``.
@@ -5038,16 +5138,6 @@ class FeaturePanel(QWidget):
                 note or tr("Speichert die Prüfbeziehung. Rückgängig entfernt sie wieder.")
             )
 
-    def _ask_for_the_view(
-        self,
-        op: str,
-        fields: Sequence[Any],
-        widgets: Mapping[str, QWidget],
-        fixed: Sequence[tuple[str, Any]],
-    ) -> None:
-        """Meldet, dass diese Handlung im Bild eingestellt werden soll."""
-        self.inViewRequested.emit(op, self._values(fields, widgets, fixed))
-
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
 
@@ -5078,6 +5168,13 @@ class FeaturePanel(QWidget):
             return box
 
         widgets: dict[str, QWidget] = {}
+        # **Der Schlüssel ist die Zeile, nicht die Operation.** Ein Baustein
+        # bietet *Maße ändern*, *verschieben* und *entfernen* an, und zwei
+        # davon tragen gar keine Operation (der Schritt ist die Handlung);
+        # unter ``str(action.op)`` hießen beide „None" und die letzte
+        # überschrieb die vorige — im Panel stand danach eine Handlung von
+        # dreien.
+        key = f"{len(self._runs)}|{action.op}"
         if action.fields:
             # **Die Gruppe sagt selbst, wozu sie gehört.** Bis hierher benannte
             # sie nur der Knopf **darunter**, und das trägt genau einmal: Beim
@@ -5096,15 +5193,29 @@ class FeaturePanel(QWidget):
             group_title.setWordWrap(True)
             set_level(group_title, "caption")
             fit_wrapped(group_title)
-            layout.addWidget(group_title)
-
-            if action.note:
-                note = QLabel(str(action.note), box)
-                note.setWordWrap(True)
-                note.setStatusTip(str(action.note))
-                note.setAccessibleDescription(str(action.note))
-                fit_wrapped(note)
-                layout.addWidget(note)
+            # **Die Erklärung steht an der Überschrift, nicht unter ihr.** Drei
+            # Zeilen Fließtext je Handlung füllten das Fenster, und an einer
+            # Bohrung stehen vier davon (Robert, 10.09.2026: „die beschreibungen
+            # die über den buttons zum übernehmen dastehen auch in einen
+            # tooltipp passen bei der überschrift von den werten mit einem i für
+            # infos"). Weg ist sie damit nicht: Der Tooltip trägt sie, die
+            # Statuszeile ebenso, und ``setAccessibleDescription`` reicht sie an
+            # den Bildschirmleser weiter — Qt liest einen Tooltip nicht von
+            # selbst vor.
+            head = QHBoxLayout()
+            head.setContentsMargins(0, 0, 0, 0)
+            head.setSpacing(TIGHT)
+            head.addWidget(group_title, 1)
+            # **Jede Handlung hat eine Erklärung.** Drei Quellen in dieser
+            # Reihenfolge: der Satz zur Lage (``note``, „Bohrung und Senkung
+            # gehen gemeinsam"), der Grund der Handlung, und zuletzt der
+            # ``doc``-Satz aus dem Register — die Beschreibung, die dieselbe
+            # Operation auch im Menü und im Dialog trägt. Ein Zeichen, das nur
+            # an einer von fünf Zeilen auftaucht, sieht aus wie ein Fehler und
+            # nicht wie ein Angebot (Robert, 11.09.2026: „ist nur hinter
+            # material verschieben").
+            self._explain(box, head, _explained(action), group_title)
+            layout.addLayout(head)
 
             form = QFormLayout()
             form.setContentsMargins(0, 0, 0, 0)
@@ -5119,6 +5230,7 @@ class FeaturePanel(QWidget):
                 self._watch(
                     editor,
                     str(action.op),
+                    key,
                     tuple(action.fields),
                     widgets,
                     tuple(getattr(action, "fixed", ())),
@@ -5148,19 +5260,13 @@ class FeaturePanel(QWidget):
         # **Der Haken steht nur da, wo es Geschwister gibt.** „Auf alle 1
         # anwenden" wäre eine Frage ohne Unterschied; ab dem zweiten
         # gleichartigen Merkmal spart er fünf Wege.
-        every: QCheckBox | None = None
-        undo_promise = ""
+        #
+        # **Und er steht unten, direkt über dem Knopf** (Robert, 10.09.2026:
+        # „alle 4 gleichzeitig dann auch vor dem übernehmen"). Er gehört zur
+        # Handlung, die gerade scharf ist — dieselbe Bewegung wie beim Knopf,
+        # und aus demselben Grund: Vier gleich beschriftete Haken untereinander
+        # sagen nicht, welcher welchen Zug meint.
         group = self._groups.get(str(action.op))
-        if group is not None and len(group.members) > 1:
-            every = QCheckBox(
-                tr("Auf alle {count} gleichartigen anwenden").format(count=len(group.members)),
-                box,
-            )
-            undo_promise = str(
-                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
-            )
-            every.setStatusTip(undo_promise)
-            layout.addWidget(every)
         if group is not None and (len(group.members) > 1 or group.uncertain):
             said = _feature_group_note(group)
             # **Derselbe Absatz steht einmal, nicht viermal.** Die Nachweise
@@ -5187,23 +5293,17 @@ class FeaturePanel(QWidget):
             # **Ohne Haken bleibt der Absatz stehen.** Eine einelementige
             # unsichere Gruppe hat kein Feld, das die Auskunft tragen könnte;
             # dort ist eine Wiederholung besser als ein Verlust.
-            if said in self._said_notes and every is not None:
-                every.setToolTip(said)
-                every.setStatusTip(f"{undo_promise} {said}")
-                every.setAccessibleDescription(said)
-            elif said:
+            if said and said not in self._said_notes:
+                # **Der Absatz sitzt am Info-Zeichen** — derselbe Grund wie bei
+                # ``action.note`` darüber, und dasselbe Zeichen: Wer die
+                # Überschrift überfliegt, sieht einen Kreis mit „i" und weiß,
+                # dass es dazu etwas zu lesen gibt. Einmal, nicht viermal: Die
+                # Nachweise gehören der **Gruppe**, und vier Handlungen an
+                # derselben Bohrungskette haben dieselben (Befund Robert,
+                # 07.09.2026).
                 self._said_notes.add(said)
-                note = QLabel(said, box)
-                note.setWordWrap(True)
-                note.setAccessibleDescription(said)
-                fit_wrapped(note)
-                layout.addWidget(note)
+                self._extend_explanation(box, said)
 
-        button = QPushButton(str(action.title), box)
-        button.setStatusTip(str(action.reason) or str(action.title))
-        # Der Knopf trägt den ganzen Titel und wird nicht gekürzt; die Breite
-        # gehört ihm, weil er die Handlung benennt.
-        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         op_name = str(action.op)
         entries = tuple(action.fields)
         fixed = tuple(getattr(action, "fixed", ()))
@@ -5218,47 +5318,189 @@ class FeaturePanel(QWidget):
                 else:
                     self.stepChangeRequested.emit(step, self._values(entries, widgets, fixed))
                 return
-            self._emit(op_name, entries, widgets, every, fixed)
+            # **Wo die Handlung eine Stelle hat, führt sie ins Bild** (Robert,
+            # 10.09.2026: „einfach wie wenn ich eine bohrung setze … gleiche
+            # logik"). *Zum Langloch ziehen* sitzt auf einer Fläche und führt
+            # eine Mitte; wer darauf drückt, bekommt deshalb dieselbe
+            # Platzierung wie beim Setzen — Maßfelder zu Kanten und Mitten in
+            # der Szene, Übernehmen am Ende. Sofort auszuführen hieße, den
+            # Kunden um genau die Einstellung zu bringen, die er sucht.
+            if _leads_into_the_view(op_name):
+                self.inViewRequested.emit(op_name, self._values(entries, widgets, fixed))
+                return
+            self._emit(op_name, entries, widgets, self._every_for(op_name), fixed)
 
-        button.clicked.connect(run)
-        layout.addWidget(button)
+        # **Ein Knopf unten statt einer je Handlung** (Robert, 10.09.2026: „die
+        # ganzen buttons um werte zu übernehmen durch einen unten ersetzen,
+        # damit wir bisschen platz sparen"). Fünf Knöpfe untereinander
+        # kosteten fünf Zeilen und sagten fünfmal dasselbe: „tu das hier".
+        # Was der eine unten tut, entscheidet die Handlung, an der zuletzt
+        # jemand etwas angefasst hat — und sein Text nennt sie beim Namen,
+        # damit niemand raten muss (:meth:`_arm`).
+        members = len(group.members) if group is not None else 0
+        self._runs[key] = _Handling(
+            title=str(action.title),
+            reason=str(action.reason) or str(action.title),
+            run=run,
+            op=op_name,
+            members=members,
+        )
+        if self._armed is None:
+            self._arm(key)
 
-        # **Und derselbe Weg im Bild, wo es ihn gibt** (Robert, 10.09.2026:
-        # „maße zu außenkanten oder mittelpunkt wie bohrung anlegen aber nicht
-        # und ich kann keinen wert eingeben"). Die Felder hier tragen den
-        # gemessenen Wert und ändern ihn auf Klick; was sie nicht zeigen, ist
-        # **wovon** gemessen wird. Beim Setzen einer Bohrung steht genau das
-        # im Bild: Maßlinien zu den Kanten der Fläche, jede mit ihrem eigenen
-        # Zahlenfeld. Diese Platzierung gibt es für dieselbe Operation schon —
-        # `move_feature` trägt `supports_surface_placement` —, sie war nur von
-        # hier aus nicht erreichbar.
-        #
-        # Gefragt wird der **Kern** und keine Namensliste: Was eine Fläche
-        # trägt, steht in `placement.supports_surface_placement`, und eine
-        # zweite Aufzählung daneben wüsste beim nächsten Zuwachs die Hälfte.
-        # Ein Baustein-Schritt bekommt ihn nicht — dort ändert man Maße, nicht
-        # eine Stelle.
-        if step is None and action.op is not None and _places_on_a_surface(op_name):
-            in_view = QPushButton(tr("Im Bild einstellen …"), box)
-            in_view.setStatusTip(
-                tr("Zeigt die Maße zu den Kanten im Bild — eintippen oder ziehen.")
-            )
-            in_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            # ``weak_slot`` und kein Lambda: Der Knopf ist ein **Kind** dieses
-            # Panels, und ein Lambda, das ``self`` fängt, schließt darüber einen
-            # Ring, den Pythons Sammler nicht bricht (`.claude/rules/wartezeit.md`,
-            # gemessen 10 von 10 Überlebenden). Die Werte kommen aus einer
-            # Schleife über die Handlungen — genau der Fall, für den es das gibt.
-            in_view.clicked.connect(
-                weak_slot(self, FeaturePanel._ask_for_the_view, op_name, entries, widgets, fixed)
-            )
-            layout.addWidget(in_view)
+        # **Einen Knopf ins Bild gibt es nicht mehr** (Robert, 10.09.2026: „im
+        # panel rechts können wir uns den button im bild einstellen sparen, da
+        # wir das sofort können … steht mehrmals da"). Er stand an jeder
+        # Handlung, die auf einer Fläche sitzt — an einer Bohrung also
+        # mehrfach untereinander —, und was er anbot, geschieht seit demselben
+        # Tag von selbst: Ein angeklicktes Loch bringt seine Maße mitsamt
+        # Maßlinien in die Szene (`MainWindow._measure_in_the_view`). Ein
+        # zweiter Weg zu etwas, das schon läuft, ist kein Angebot, sondern
+        # Platz, den die Zeilen darunter brauchen.
         return box
+
+    def _explain(self, box: QWidget, row: QHBoxLayout, text: str, title: QLabel) -> None:
+        """Hängt das Info-Zeichen an eine Überschrift — oder lässt es weg.
+
+        Ohne Text kein Zeichen: Ein Kreis, hinter dem nichts steht, ist eine
+        Ankündigung, die niemand einlöst.
+        """
+        # **Ein Knopf und kein Label.** Ein QLabel zeigt seinen Tooltip nur,
+        # solange die Maus wirklich darauf steht, und bei achtzehn Bildpunkten
+        # trifft das niemand zuverlässig (Robert, 11.09.2026: „der tooltip bei
+        # i geht auch nicht auf"). Ein QToolButton ist ein Trefferziel: Er
+        # nimmt Hover an, zeigt den Tooltip, lässt sich anklicken und mit der
+        # Tabulatortaste erreichen — und flach gezeichnet sieht er aus wie das
+        # Zeichen, das er ist.
+        dot = QToolButton(box)
+        dot.setObjectName("infoDot")
+        # **Auch ein Zeichen ist ein Oberflächentext** (Regel 20). „i" steht in
+        # allen sechs Sprachen für dasselbe, und genau deshalb ist der
+        # Katalogeintrag billig — aber die Entscheidung gehört dorthin und
+        # nicht in eine Zeile Code, die keine Sprache je sieht.
+        dot.setText(tr("i"))
+        dot.setAutoRaise(True)
+        dot.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        dot.setCursor(Qt.CursorShape.WhatsThisCursor)
+        dot.setVisible(False)
+        row.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
+        self._dots[id(box)] = (dot, title)
+        if text:
+            self._extend_explanation(box, text)
+
+    def _extend_explanation(self, box: QWidget, text: str) -> None:
+        """Nimmt einen weiteren Absatz hinter dasselbe Info-Zeichen.
+
+        Zwei Quellen speisen es — der Satz der Handlung und der Nachweis ihrer
+        Gruppe —, und beide sollen erreichbar sein, ohne dass zwei Zeichen
+        nebeneinander stehen.
+        """
+        entry = self._dots.get(id(box))
+        if entry is None or not text:
+            return
+        dot, title = entry
+        gathered = self._explanations.get(id(box), "")
+        gathered = f"{gathered}\n\n{text}" if gathered else text
+        self._explanations[id(box)] = gathered
+        for widget in (dot, title):
+            widget.setToolTip(gathered)
+            widget.setStatusTip(gathered)
+        # **Der Bildschirmleser bekommt ihn am Titel**, nicht am Zeichen: Der
+        # Kreis ist ein Bild, die Überschrift ist die Sache, zu der der Absatz
+        # gehört. Am Zeichen allein fände ihn niemand, der die Zeile vorgelesen
+        # bekommt (§19.1).
+        title.setAccessibleDescription(gathered)
+        dot.setAccessibleName(str(tr("Erklärung zu {title}")).format(title=title.text()))
+        dot.setVisible(True)
+
+    def _settle_apply(self) -> None:
+        """Schiebt den Knopf ans Ende, nachdem alle Zeilen stehen.
+
+        Er wird beim Aufbau des Panels **einmal** angelegt und liegt damit vor
+        den Zeilen, die ``show_feature`` und die anderen später einfügen —
+        sichtbar stand er dann ganz oben, über der Überschrift der Auswahl
+        (Robert, 10.09.2026: „ich hab doch gesagt der button soll unten sein
+        nicht ganz oben"). Ihn am Ende umzuhängen ist billiger als jede
+        Einfügestelle um eins zu verschieben und dabei eine zu vergessen.
+        """
+        for widget in (self._every, self._apply):
+            self._rows.removeWidget(widget)
+            self._rows.insertWidget(self._rows.count() - 1, widget)
+
+    def _separate(self) -> None:
+        """Zieht einen Strich vor die nächste Handlung — außer vor die erste.
+
+        Eine Handlung ist ein Block aus Überschrift, Feldern und (seit dem
+        10.09.2026) keinem eigenen Knopf mehr. Ohne Trennung folgen an einer
+        Bohrung auf drei Zahlenfelder wieder drei, und wer nicht auf die
+        Überschriften sieht, liest sie als eine Reihe (Robert, 10.09.2026:
+        „die unterschiedlichen einstellungen noch abgrenzen durch einen
+        strich"). Vor der ersten wäre er ein Strich gegen nichts.
+        """
+        if not self._built:
+            return
+        line = rule(self)
+        self._rows.insertWidget(self._rows.count() - 1, line)
+        self._built.append(line)
+
+    def _arm(self, key: str) -> None:
+        """Sagt dem Knopf unten, welche Zeile er meint.
+
+        Aufgerufen beim Aufbau (die erste gilt) und bei jeder Berührung eines
+        Feldes. ``key`` ist der **Zeilenschlüssel** aus :meth:`_build_action`
+        und nicht der Name der Operation: Ein Baustein bietet drei Handlungen
+        an, von denen zwei gar keine Operation tragen.
+        """
+        entry = self._runs.get(key)
+        if entry is None:
+            return
+        self._armed = key
+        # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
+        # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
+        # nicht, was übernommen wird (§19.1).
+        self._apply.setStatusTip(f"{entry.title} — {entry.reason}")
+        self._apply.setToolTip(entry.title)
+        self._apply.setAccessibleName(entry.title)
+        self._apply.setAccessibleDescription(entry.reason)
+        self._apply.setVisible(True)
+        applies_to_all = entry.members > 1
+        if applies_to_all:
+            promise = str(tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück."))
+            self._every.setText(
+                str(tr("Auf alle {count} gleichartigen anwenden")).format(count=entry.members)
+            )
+            self._every.setStatusTip(promise)
+            self._every.setAccessibleDescription(promise)
+        else:
+            # **Ein Haken, der nicht gilt, wird auch nicht gehalten.** Sonst
+            # stünde er ausgeblendet auf „an" und griffe wieder, sobald jemand
+            # eine Handlung mit Gruppe anfasst.
+            self._every.setChecked(False)
+        self._every.setVisible(applies_to_all)
+
+    def _run_armed(self) -> None:
+        """Führt aus, was der Knopf unten gerade meint."""
+        entry = self._runs.get(self._armed or "")
+        if entry is not None:
+            entry.run()
+
+    def _every_for(self, op: str) -> QCheckBox | None:
+        """Der Haken unten — aber nur, wenn diese Handlung eine Gruppe hat.
+
+        Er ist einer für alle Handlungen; wer keine gleichartigen Geschwister
+        hat, bekommt ``None`` und damit dieselbe Antwort wie früher, als es
+        seinen Haken gar nicht gab.
+        """
+        entry = self._runs.get(self._armed or "")
+        if entry is None or entry.op != op or entry.members <= 1:
+            return None
+        return self._every
 
     def _watch(
         self,
         editor: QWidget,
         op: str,
+        key: str,
         fields: Sequence[Any],
         widgets: Mapping[str, QWidget],
         fixed: Sequence[tuple[str, Any]] = (),
@@ -5271,6 +5513,10 @@ class FeaturePanel(QWidget):
         """
 
         def report(*_ignored: object) -> None:
+            # **Wer einen Wert ändert, meint diese Handlung.** Der Knopf unten
+            # folgt der Berührung; ohne das zeigte er auf die erste, während
+            # jemand in der vierten tippt.
+            self._arm(key)
             self.valuesChanged.emit(op, self._values(fields, widgets, fixed))
 
         if isinstance(editor, LengthSpin):

@@ -166,7 +166,59 @@ def a_hole() -> tuple[str, Feature]:
 
 
 def buttons(panel: FeaturePanel) -> list[str]:
-    return [knopf.text() for row in panel._built for knopf in row.findChildren(QPushButton)]
+    """Die Handlungen, die das Panel anbietet.
+
+    Seit dem 10.09.2026 steht kein Knopf mehr in jeder Zeile: Einer unten führt
+    die aus, an der zuletzt jemand etwas angefasst hat. Was angeboten wird,
+    steht deshalb in ``_runs`` und nicht mehr im Widgetbaum.
+    """
+    return [entry.title for entry in panel._runs.values()]
+
+
+def press(panel: FeaturePanel, title: str) -> None:
+    """Eine Handlung scharfschalten und den Knopf unten wirklich drücken.
+
+    Der Weg der Oberfläche in zwei Schritten: ``_arm`` ist die Methode, die
+    eine Feldberührung ruft, und danach wird der echte Knopf geklickt — nicht
+    die Funktion dahinter (`.claude/rules/tests.md`, „Am Weg vorbei").
+    """
+    for op, entry in panel._runs.items():
+        if entry.title == title:
+            panel._arm(op)
+            panel._apply.click()
+            return
+    raise AssertionError(f"keine Handlung {title!r} — angeboten sind {buttons(panel)}")
+
+
+def spoken(row: QWidget) -> str:
+    """Was diese Zeile sagt — sichtbar und hinter ihrem Info-Zeichen.
+
+    Seit dem 10.09.2026 steht die Erklärung im Tooltip der Überschrift statt
+    als Absatz darunter (Robert: „in einen tooltipp … mit einem i für infos").
+    Ein Test, der nur ``text()`` liest, misst seither die halbe Zeile.
+    """
+    stuecke: list[str] = []
+    for widget in row.findChildren(QWidget):
+        for teil in (
+            getattr(widget, "text", lambda: "")(),
+            widget.toolTip(),
+            widget.accessibleDescription(),
+        ):
+            if teil and teil not in stuecke:
+                stuecke.append(teil)
+    return " ".join(stuecke)
+
+
+def row_of(panel: FeaturePanel, title: str) -> QWidget:
+    """Die Zeile, deren Überschrift diese Handlung nennt.
+
+    Bis zum 10.09.2026 fand man sie an ihrem Knopf; den gibt es nicht mehr,
+    und die Überschrift trug den Titel schon immer daneben.
+    """
+    for row in panel._built:
+        if any(label.text() == title for label in row.findChildren(QLabel)):
+            return row
+    raise AssertionError(f"keine Zeile für {title!r} — angeboten sind {buttons(panel)}")
 
 
 def fields(row: QWidget) -> list[QWidget]:
@@ -240,35 +292,30 @@ def test_the_panel_offers_what_the_core_says_and_nothing_else(qt_app: QApplicati
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
 
-    # **Die Erwartung kommt aus dem Kern, nicht aus dem Prüfling.** Sie stand
-    # zuerst auf ``panels._places_on_a_surface`` — derselben Funktion, die das
-    # Panel selbst fragt; beide Seiten der Gleichung wären damit aus einer
-    # Quelle gekommen, und der Test blieb grün, als der Knopf im Review
-    # versuchsweise ganz verschwand (Gegenprobe gefahren, 10.09.2026).
-    # **Zwei Sorten Weg ins Bild, und der Unterschied ist Absicht.** Wo der
-    # Hauptknopf selbst hineinführt (``LEADS_INTO_THE_VIEW`` — *Bohrung ändern*
-    # und *Zum Langloch ziehen*), steht kein zweiter daneben; wo er sofort tut,
-    # was in seinen Feldern steht, bietet *Im Bild einstellen …* den anderen Weg
-    # an.
-    from app.ui.panels import LEADS_INTO_THE_VIEW
-
+    # **Je Handlung genau ein Knopf, und keiner mehr.** Ein zweiter *Im Bild
+    # einstellen …* stand bis zum 10.09.2026 an jeder Handlung, die auf einer
+    # Fläche sitzt — an einer Bohrung also mehrfach untereinander —, und was
+    # er anbot, geschieht seither von selbst: Ein angeklicktes Loch bringt
+    # seine Maße in die Szene (Robert: „können wir uns den button im bild
+    # einstellen sparen, da wir das sofort können … steht mehrmals da").
+    #
+    # Die Gegenprobe steht darunter: Mindestens eine dieser Handlungen sitzt
+    # auf einer Fläche, sonst wäre die Zusage leer und der Test grün, ohne
+    # etwas zu messen.
     expected: list[str] = []
-    ins_bild = 0
+    auf_einer_flaeche = 0
     for action in actions_for(feature):
         if action.op is None:
             continue
         expected.append(str(action.title))
-        if str(action.op) in LEADS_INTO_THE_VIEW:
-            ins_bild += 1
-            continue
         if REGISTRY.has(str(action.op)) and placement.supports_surface_placement(
             REGISTRY.get(str(action.op))
         ):
-            expected.append(str(tr("Im Bild einstellen …")))
-            ins_bild += 1
+            auf_einer_flaeche += 1
     assert expected, "ohne Handlungen prüft dieser Test nichts"
-    assert ins_bild, "an einer Bohrung gibt es mindestens einen Weg ins Bild"
+    assert auf_einer_flaeche, "an einer Bohrung sitzt mindestens eine Handlung auf einer Fläche"
     assert buttons(panel) == expected
+    assert str(tr("Im Bild einstellen …")) not in buttons(panel)
 
 
 def test_every_number_starts_on_what_was_measured(qt_app: QApplication) -> None:
@@ -279,11 +326,7 @@ def test_every_number_starts_on_what_was_measured(qt_app: QApplication) -> None:
     panel.show_feature(identifier, feature)
 
     centre = feature.params["centre"]
-    move = next(
-        row
-        for row in panel._built
-        if any(k.text() == "Merkmal verschieben" for k in row.findChildren(QPushButton))
-    )
+    move = row_of(panel, "Merkmal verschieben")
     spins = [widget for widget in fields(move) if isinstance(widget, LengthSpin)]
     assert len(spins) == 3, "Ort heißt drei Achsen"
     for spin, measured in zip(spins, centre, strict=True):
@@ -328,11 +371,7 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     panel.show_feature(identifier, feature)
     panel.show()
     QApplication.processEvents()
-    row = next(
-        entry
-        for entry in panel._built
-        if any(button.text() == str(action.title) for button in entry.findChildren(QPushButton))
-    )
+    row = row_of(panel, str(action.title))
     spin = next(widget for widget in fields(row) if isinstance(widget, LengthSpin))
     assert spin.isVisibleTo(panel), "der gemessene Durchmesser steht nicht sichtbar im Panel"
     assert spin.value_mm() == pytest.approx(measured), "das Panel klemmt den Messwert"
@@ -344,9 +383,7 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     emitted: list[tuple[str, dict[str, object]]] = []
     panel.operationRequested.connect(lambda op, params: emitted.append((op, params)))
     panel.inViewRequested.connect(lambda op, params: emitted.append((op, params)))
-    next(
-        button for button in row.findChildren(QPushButton) if button.text() == str(action.title)
-    ).click()
+    press(panel, str(action.title))
 
     assert len(emitted) == 1
     emitted_op, params = emitted[0]
@@ -366,13 +403,7 @@ def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplica
     seen: list[tuple[str, dict[str, object]]] = []
     panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
 
-    move = next(
-        knopf
-        for row in panel._built
-        for knopf in row.findChildren(QPushButton)
-        if knopf.text() == "Merkmal verschieben"
-    )
-    move.click()
+    press(panel, "Merkmal verschieben")
 
     assert len(seen) == 1
     op, params = seen[0]
@@ -413,9 +444,9 @@ def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplicatio
     move = next(
         row
         for row in panel._built
-        if any(button.text() == "Merkmal verschieben" for button in row.findChildren(QPushButton))
+        if any(label.text() == "Merkmal verschieben" for label in row.findChildren(QLabel))
     )
-    text = " ".join(label.text() for label in move.findChildren(QLabel))
+    text = spoken(move)
     assert "Bohrung und Senkung" in text
     assert "gemeinsam verschoben" in text
 
@@ -490,9 +521,9 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
     move = next(
         row
         for row in panel._built
-        if any(button.text() == "Merkmal verschieben" for button in row.findChildren(QPushButton))
+        if any(label.text() == "Merkmal verschieben" for label in row.findChildren(QLabel))
     )
-    text = " ".join(label.text() for label in move.findChildren(QLabel))
+    text = spoken(move)
     assert "Bohrung und Senkung" in text
     assert "gemeinsam verschoben" in text
 
@@ -631,16 +662,17 @@ def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> N
         mesh,
     )
     mit.show_feature(identifier, feature, features=available, mesh=mesh)
-    haken = [
-        widget
-        for row in mit._built
-        for widget in row.findChildren(QCheckBox)
-        if "alle" in widget.text()
+    # **Ein Haken für alle Handlungen, unten über dem Knopf** (10.09.2026). Er
+    # gehört der, die gerade scharf ist; welche Zahl er nennt, wechselt mit ihr.
+    mengen = {group.action: len(group.members) for group in groups}
+    with_group = [
+        schluessel for schluessel, eintrag in mit._runs.items() if mengen.get(eintrag.op, 0) > 1
     ]
-    assert haken, "mit Geschwistern schon"
-    expected = [len(group.members) for group in groups if len(group.members) > 1]
-    assert len(haken) == len(expected)
-    assert all(str(count) in box.text() for count, box in zip(expected, haken, strict=True))
+    assert with_group, "mit Geschwistern schon"
+    for schluessel in with_group:
+        mit._arm(schluessel)
+        assert mit._every.isVisibleTo(mit), f"{schluessel} hat Geschwister und keinen Haken"
+        assert str(mengen[mit._runs[schluessel].op]) in mit._every.text()
 
 
 def test_the_group_evidence_stands_once_and_not_at_every_handling(
@@ -701,31 +733,23 @@ def test_the_group_evidence_stands_once_and_not_at_every_handling(
     panel = FeaturePanel()
     panel.show_feature(identifier, feature, features=available, mesh=mesh)
 
-    haken = [
-        widget
-        for row in panel._built
-        for widget in row.findChildren(QCheckBox)
-        if "alle" in widget.text()
-    ]
-    assert len(haken) > 1, "der Fall braucht mehrere Handlungen mit Gruppe, sonst prüft er nichts"
+    mit_gruppe = [schluessel for schluessel, eintrag in panel._runs.items() if eintrag.members > 1]
+    assert len(mit_gruppe) > 1, (
+        "der Fall braucht mehrere Handlungen mit Gruppe, sonst prüft er nichts"
+    )
 
     said = next(iter(panel._said_notes))
-    absaetze = [
-        widget.text()
-        for row in panel._built
-        for widget in row.findChildren(QLabel)
-        if widget.text() == said
-    ]
+    # **Er steht einmal, und seit dem 10.09.2026 hinter einem Info-Zeichen.**
+    # Gezählt wird deshalb nicht mehr über ``text()``, sondern über die
+    # Erklärungen, die das Panel führt — eine je Zeile, die eine hat.
+    absaetze = [gathered for gathered in panel._explanations.values() if said in gathered]
     assert len(absaetze) == 1, f"der Absatz steht {len(absaetze)}-mal statt einmal"
 
-    tragen = [box for box in haken if said in box.toolTip()]
-    assert len(tragen) == len(haken) - 1, (
-        "jeder Haken ohne eigenen Absatz trägt die Auskunft, der erste braucht sie nicht"
-    )
-    assert all(said in box.accessibleDescription() for box in tragen)
-
-    ohne_zusage = [box for box in haken if "Strg+Z" not in box.statusTip()]
-    assert not ohne_zusage, f"{len(ohne_zusage)} von {len(haken)} Haken ohne Rücknahmezusage"
+    # **Und die Rücknahmezusage steht an jedem Stand des einen Hakens.** Sie
+    # ist der Grund, aus dem es keine Rückfrage gibt (Regel 19).
+    for schluessel in mit_gruppe:
+        panel._arm(schluessel)
+        assert "Strg+Z" in panel._every.statusTip(), f"{schluessel} ohne Rücknahmezusage"
 
 
 def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
@@ -743,11 +767,16 @@ def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
     )
     panel.operationRequested.connect(lambda op, params: einzeln.append((op, params)))
 
-    row = next(
-        row for row in panel._built if row.findChildren(QCheckBox) and row.findChildren(QPushButton)
+    # Der Weg der Oberfläche: Handlung scharfschalten, den Haken unten setzen,
+    # dann übernehmen — er gehört seit dem 10.09.2026 dem Knopf und nicht mehr
+    # der Zeile.
+    schluessel = next(
+        key for key, eintrag in panel._runs.items() if eintrag.title == "Merkmal verschieben"
     )
-    next(box for box in row.findChildren(QCheckBox) if "alle" in box.text()).setChecked(True)
-    row.findChildren(QPushButton)[0].click()
+    panel._arm(schluessel)
+    assert panel._every.isVisibleTo(panel), "die Bohrung hat gleichartige Geschwister"
+    panel._every.setChecked(True)
+    panel._apply.click()
 
     assert not einzeln, "gesetzt heißt: nicht nur dieses eine"
     assert fuer_alle, "die Sammelhandlung wurde nicht gemeldet"
@@ -773,11 +802,10 @@ def spread(panel: FeaturePanel, scroller: QScrollArea, height: int) -> int:
     layout = panel.layout()
     assert layout is not None
     layout.activate()
-    lagen = [
-        knopf.mapTo(panel, knopf.rect().topLeft()).y()
-        for row in panel._built
-        for knopf in row.findChildren(QPushButton)
-    ]
+    # **Gemessen an den Zeilen, nicht an ihren Knöpfen.** Die gibt es seit dem
+    # 10.09.2026 nur noch einmal, unten; auseinandergezogen würden aber die
+    # Handlungen, und das sind die Zeilen. Die Frage ist dieselbe geblieben.
+    lagen = [row.mapTo(panel, row.rect().topLeft()).y() for row in panel._built]
     assert len(lagen) >= 2, "mehrere Handlungen, sonst misst der Test nichts"
     return max(lagen) - min(lagen)
 
@@ -809,7 +837,7 @@ def test_a_tall_window_does_not_pull_the_handlings_apart(qt_app: QApplication) -
     tight = spread(panel, scroller, wanted)
     roomy = spread(panel, scroller, wanted * 3)
 
-    assert tight > 0, "die Knöpfe stehen überhaupt untereinander"
+    assert tight > 0, "die Handlungen stehen überhaupt untereinander"
     assert roomy == tight, (
         f"die Handlungen wandern mit der Fensterhöhe auseinander: {tight} -> {roomy} Punkte"
     )
@@ -1016,12 +1044,16 @@ def test_every_field_group_says_what_it_belongs_to(qt_app: QApplication) -> None
             kind.text() for kind in row.findChildren(QLabel) if kind.text() == "Merkmal verschieben"
         ]
         assert beschriftungen, (
-            "über den Feldern steht kein Titel — dann sagt nur der Knopf darunter, wozu sie gehören"
+            "über den Feldern steht kein Titel — dann sagt nichts mehr, wozu sie gehören"
         )
 
-        # Und sie steht **vor** den Feldern, nicht irgendwo im Kasten.
+        # Und sie steht **vor** den Feldern, nicht irgendwo im Kasten. Seit dem
+        # 10.09.2026 teilt sie ihre Zeile mit dem Info-Zeichen, steht also in
+        # einem Layout und nicht mehr unmittelbar im Kasten.
         layout = row.layout()
-        erstes = layout.itemAt(0).widget()
+        kopf = layout.itemAt(0).layout()
+        assert kopf is not None, "die Überschrift steht nicht mehr zuerst"
+        erstes = kopf.itemAt(0).widget()
         assert isinstance(erstes, QLabel) and erstes.text() == "Merkmal verschieben", (
             f"zuerst steht {erstes!r} statt der Überschrift"
         )
@@ -1130,13 +1162,12 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
     try:
         panel.show_part(step, spec)
 
-        buttons = panel.findChildren(QPushButton)
-        titles = [button.text() for button in buttons]
+        titles = buttons(panel)
         assert titles == ["Maße ändern", "Baustein verschieben", "Baustein entfernen"], titles
 
         # **Der zweite Knopf schreibt nur die Lage.** Wer beim Verschieben die
         # Maße mitschickte, setzte die Schraubengröße auf ihre Vorgabe zurück.
-        buttons[1].click()
+        press(panel, "Baustein verschieben")
         assert len(changed) == 1, "ein Zug, eine Meldung"
         op_id, params = changed[0]
         assert op_id == 7, "der Schritt, der den Baustein gesetzt hat"
@@ -1144,7 +1175,7 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
         assert params["x"] == pytest.approx(4.0), "der Wert aus dem Schritt steht im Feld"
 
         # Und Entfernen fragt nichts und nennt nur den Schritt.
-        buttons[2].click()
+        press(panel, "Baustein entfernen")
         assert removed == [7]
         assert len(changed) == 1, "Entfernen ist keine Wertänderung"
     finally:
@@ -1343,7 +1374,7 @@ def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplica
 
     panel.show_edge(schluessel, "Waagerecht · 30,00 mm · x -20,00, y 0,00")
 
-    knoepfe = {b.text(): b for b in panel.findChildren(QPushButton)}
+    knoepfe = buttons(panel)
     # **Die Menge kommt aus dem Register und steht nicht hier als Liste.**
     # Am 10.09.2026 kam *Wulst anlegen* als dritte Handlung dazu, und ein Test
     # mit zwei aufgezählten Titeln wäre daran rot geworden, ohne dass etwas
@@ -1356,7 +1387,7 @@ def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplica
     for beschriftung in panel.findChildren(QLabel):
         assert schluessel not in beschriftung.text(), "der Schlüssel ist keine Beschriftung"
 
-    knoepfe[str(REGISTRY.get("fillet_edges").title)].click()
+    press(panel, str(REGISTRY.get("fillet_edges").title))
 
     assert len(gerufen) == 1
     op, werte = gerufen[0]
@@ -1393,3 +1424,100 @@ def test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing() -> None:
         f"Absagen ohne eigenen Grund: {speechless} — ein Fehler endet nie mit "
         "„geht nicht“ (Regel 17)"
     )
+
+
+def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> None:
+    """Der Knopf und sein Haken stehen unten, nicht über den Zeilen.
+
+    Sie entstehen beim Aufbau des Panels und lagen damit **vor** allem, was
+    ``show_feature`` später einfügt — im Fenster stand „Uebernehmen" ganz
+    oben, über der Überschrift der Auswahl (Robert, 10.09.2026: „ich hab doch
+    gesagt der button soll unten sein nicht ganz oben"; „das übernehmen steht
+    noch oben").
+
+    Gemessen an den **Layoutplätzen**, nicht an Bildpunkten: Offscreen hat Qt
+    keine Schrift, und jede Höhe wäre damit erfunden
+    (`.claude/rules/ansicht.md`).
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    available = features.detect(mesh)
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
+
+    rows = panel.layout()
+    assert rows is not None
+    plaetze = {rows.itemAt(index).widget(): index for index in range(rows.count())}
+    zeilen = [plaetze[row] for row in panel._built if row in plaetze]
+    assert zeilen, "ohne Zeilen prüft dieser Test nichts"
+    assert plaetze[panel._apply] > max(zeilen), "der Knopf steht über den Handlungen"
+    assert plaetze[panel._every] == plaetze[panel._apply] - 1, (
+        "der Haken gehört unmittelbar über den Knopf"
+    )
+
+
+def test_the_all_alike_box_follows_the_armed_handling(qt_app: QApplication) -> None:
+    """Ein Haken für alle Handlungen — und er nennt die Zahl der scharfen.
+
+    Vier gleich beschriftete Haken untereinander sagten nicht, welcher welchen
+    Zug meint (Robert, 10.09.2026: „alle 4 gleichzeitig dann auch vor dem
+    übernehmen"). Der eine unten wechselt mit der Handlung, und wo es keine
+    Geschwister gibt, ist er weg statt ausgegraut.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    available = features.detect(mesh)
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
+
+    mit = [key for key, eintrag in panel._runs.items() if eintrag.members > 1]
+    ohne = [key for key, eintrag in panel._runs.items() if eintrag.members <= 1]
+    assert mit, "an dieser Platte hat mindestens eine Handlung Geschwister"
+
+    for key in mit:
+        panel._arm(key)
+        assert panel._every.isVisibleTo(panel)
+        assert str(panel._runs[key].members) in panel._every.text()
+    for key in ohne:
+        panel._arm(key)
+        assert not panel._every.isVisibleTo(panel), f"{key} hat keine Geschwister"
+
+
+def test_every_handling_carries_its_explanation_behind_one_sign(qt_app: QApplication) -> None:
+    """Jede Handlung trägt ein „i", und dahinter steht ihr Satz.
+
+    Der Absatz stand bis zum 10.09.2026 unter der Überschrift und füllte an
+    einer Bohrung vier Zeilen; er sitzt jetzt im Tooltip. Zwei Dinge sind
+    daran am 11.09.2026 nachgebessert worden, beide von Robert am laufenden
+    Fenster gefunden: Das Zeichen stand nur an *einer* Handlung („ist nur
+    hinter material verschieben") — wo ``note`` fehlt, gilt jetzt der eigene
+    Satz —, und es war ein ``QLabel``, dessen Tooltip bei achtzehn
+    Bildpunkten kaum aufging („der tooltip bei i geht auch nicht auf").
+
+    **Der Text bleibt für den Bildschirmleser an der Überschrift.** Ein
+    Tooltip wird nicht vorgelesen; ein zugänglicher Name schon (§19.1).
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    available = features.detect(mesh)
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
+
+    mit_feldern = [row for row in panel._built if fields(row)]
+    assert mit_feldern, "ohne Handlungen mit Feldern prüft dieser Test nichts"
+    for row in mit_feldern:
+        zeichen = [
+            widget for widget in row.findChildren(QToolButton) if widget.objectName() == "infoDot"
+        ]
+        assert len(zeichen) == 1, f"{row}: {len(zeichen)} Zeichen statt einem"
+        dot = zeichen[0]
+        assert dot.isVisibleTo(panel), "ein Zeichen ohne Text wäre eine leere Ankündigung"
+        assert dot.toolTip(), "und hinter ihm steht etwas"
+        titel = next(
+            label for label in row.findChildren(QLabel) if label.toolTip() == dot.toolTip()
+        )
+        assert titel.accessibleDescription() == dot.toolTip(), (
+            "der Bildschirmleser bekommt den Satz an der Überschrift"
+        )

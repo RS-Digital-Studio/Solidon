@@ -188,6 +188,13 @@ seinen Dialog behält und die Felder dafür hat — heute zwölf Operationen,
 die sieben Grundkörper samt dem Gewindebolzen und die vier freistehenden
 Bausteine.
 
+**Und die Maßfelder lassen ihm seinen Platz.** Sie sind Qt-Widgets über der
+Renderfläche, und was dort liegt, nimmt die Zeigerereignisse an — der Griff
+wäre sichtbar und tot. `Viewport.gizmo_reach()` nennt Ursprung und Reichweite,
+`PlacementFlow` hält daraus ein eigenes gesperrtes Rechteck frei (als zweites
+und nicht als größerer Radius: Der Griff sitzt an der Bohrungsmitte, der
+Setzpunkt an ihrer Mündung).
+
 **Und er kommt nie neben den Griff der Auswahl.** Der hängt am zuletzt
 gewählten Körper und trägt einen Skalierwürfel; die Vorschau daneben zeigt
 den Körper, den der Dialog gerade anlegt. Wer den Würfel anfasste, änderte
@@ -246,10 +253,15 @@ Am Merkmal ist der Klick selbst die Ansage (Robert, 10.09.2026: „über den
 viewport sehen wir weder maße noch etwas zum verschieben, verlängern, drehen
 usw"); der Würfel bleibt dabei weg.
 
-**Und der Weg zu den Maßen wie beim Setzen steht im Merkmalsfenster.**
-*Im Bild einstellen …* neben einer Handlung öffnet deren Dialog, und die
-Flächenplatzierung startet von dort selbst (`placement_flow.starts_by_itself`)
-— mit Maßlinien zu den Kanten und einem Zahlenfeld je Maß.
+**Und die Maße wie beim Setzen stehen ohne Knopf da.** Wer ein Loch anklickt,
+bekommt die Flächenplatzierung mitsamt Maßlinien zu den Kanten und einem
+Zahlenfeld je Maß — `MainWindow._measure_in_the_view` startet sie, sobald das
+Merkmalsfenster eine Bohrung oder ein Langloch zeigt. Ein Knopf *Im Bild
+einstellen …* stand bis zum 10.09.2026 daneben und ist gefallen: Er bot an,
+was ohnehin geschieht, und stand an jeder Handlung, die auf einer Fläche sitzt
+— an einer Bohrung also mehrfach untereinander. `FeaturePanel.inViewRequested`
+bleibt getrennt von `operationRequested`, weil das eine zeigt und das andere
+schreibt.
 
 **Sie beginnt dabei dort, wo das Merkmal schon sitzt** (`_begin_at_feature`,
 10.09.2026). Bis dahin fing jede Platzierung bei „Auf eine Oberfläche zeigen"
@@ -259,8 +271,48 @@ Die Fläche ohne Klick liefert `placement.seat_of`; der Rest ist derselbe Weg
 wie nach einem Treffer und endet gleich in Stufe zwei. Wo es keine Trägerfläche
 gibt, bleibt es beim Zeigen — kein Fehler, ein Rückfall. Welche Handlungen
 das anbieten, sagt der Kern (`placement.supports_surface_placement`), nicht
-eine Liste in der Oberfläche; `FeaturePanel.inViewRequested` ist getrennt von
-`operationRequested`, weil das eine zeigt und das andere schreibt.
+eine Liste in der Oberfläche.
+
+**Und dort zielt der Zeiger nicht** (`_seated_at_feature`, 11.09.2026). Die
+Stelle gehört dem Merkmal; eine Mausbewegung darüber verschob sie samt aller
+Maßlinien unter der Hand, und die Abstände liefen vom Zeiger statt von der
+Bohrungsmitte (Robert: „wir wollen aber bei der bohrung das mittelloch"). Ein
+**Klick** ist die ausdrückliche Ansage, das Loch woanders hinzusetzen, und
+danach zielt wieder der Zeiger — beim Setzen einer neuen Bohrung ändert sich
+nichts.
+
+**Einmal je gewähltem Merkmal, nicht bei jedem Neuaufbau** (`_measured_for`).
+Das Panel füllt sich auch nach der eigenen Operation wieder, weil die Auswahl
+stehen bleibt; ohne den Merker ging der Dialog nach jedem Übernehmen sofort neu
+auf. Jede Geste im Bild — Griff, Ring, Langlochknopf — löscht ihn wieder, denn
+danach will man sehen, wo das Merkmal jetzt sitzt. **Beim Abwählen bleibt er
+dagegen stehen**: Der Szenenaufbau hebt die Auswahl kurz auf und stellt sie
+danach wieder her, und wer ihn dort löscht, bekommt den Dialog nach jedem
+gerechneten Schritt zurück.
+
+**Und ein Angebot tritt zurück, es verdrängt nicht.** Steht ein Dialog offen,
+gehört der Klick ihm — §18.5 sagt zu, dass er dann eine *Eingabe* ist und keine
+Auswahl. `run_operation` verwirft jeden offenen Operationsdialog, und der
+Selbststart lief darüber: Er warf genau den weg, den der Kunde gerade
+beantworten wollte. Ebenso fragt er nicht nach, ob zurückgenommene Schritte
+verworfen werden dürfen (Regel 19) — die Platzierung schreibt nichts, sie zeigt
+Maße, und die Frage steht bei ihrem *Übernehmen* richtig.
+
+**Der Werkzeugkörper gehört dazu, sonst bleibt der Knopf grau.**
+`PlacementFlow` gibt *Übernehmen* nur frei, wenn `placement.prepare_tool` einen
+Körper geliefert hat; `_creation_tool` kennt dafür einen eigenen Zweig für
+`slot_hole` und `resize_hole`, der Mitte, Achse und Tiefe aus dem **Merkmal**
+liest. Wer eine weitere Operation in `supports_surface_placement` einträgt,
+trägt sie auch dort ein — sonst zeigt die Oberfläche Maßlinien und eine Leiste,
+die „Übernehmen" sagt, und nichts davon geht.
+
+**Zwei Wege dürfen nicht auf dasselbe Loch schreiben.** Der Zug am
+Langlochgriff macht ein Langloch, der Dialog *Bohrung ändern* eine runde
+Bohrung; nebeneinander offen nahm der eine zurück, was der andere gerade getan
+hatte. `Viewport.slotStarted` meldet das Übernehmen der Langlochleiste, und
+das Fenster schließt daraufhin die Platzierung an derselben Stelle. **Beim
+Übernehmen und nicht beim Ziehen**: Solange die Leiste offen ist, ist nichts
+geschehen (Regel 2) — und die Maße sollen währenddessen im Bild stehen.
 
 **Platzieren geht in drei Stufen** (Robert, 09.09.2026). Zeigen und klicken
 legt die **Stelle** fest (`_settle`) — der Klick schließt nicht mehr ab, denn
@@ -598,6 +650,12 @@ einen gestarteten Fremddienst; den Dienst selbst besitzt Solidon nicht.
 `MainWindow.wait_for_workers` bezieht alle eigenen Installationsdialoge ein,
 damit auch das Schließen der ganzen Anwendung denselben Vertrag einhält.
 
+**Bausteine setzt man auf eine Fläche, nicht in ein Loch.** Der Knopf
+*Bausteine* am Fuß des Auswahlfensters steht nur ohne Merkmal und an einer
+gewählten Fläche (`SelectionOperations.set_context`); an einer Bohrung, einer
+Verrundung oder einem Zapfen führte er in einen Katalog, aus dem nichts an
+diese Stelle passt — unter einer Liste, für die man erst scrollen muss.
+
 Merkmalsanalyse und Bausteinkatalog bleiben getrennte Wege an der rechten
 Seite. Das Auswahlfeld führt zu beiden und baut keines von beiden nach. Seine
 Operationen stammen aus dem Operationsregister — Körperoperationen über
@@ -651,6 +709,41 @@ Fenster: oben mit dem gemessenen Wert und einem Knopf, darunter als Knopf, der
 denselben Weg noch einmal anbietet. Der Kegel hat deshalb eine eigene Zeile in
 `QUICK_FEATURES` — seine einzige verbleibende Handlung ist *Senken*, und ohne
 den Eintrag stünde sie an keiner der beiden Stellen.
+
+### Das Merkmalsfenster hat einen Knopf, nicht fünf (10.09.2026)
+
+Vier bis fünf Handlungen stehen an einer Bohrung untereinander, und jede trug
+ihren eigenen Knopf: fünf Zeilen, die fünfmal dasselbe sagten. Es ist jetzt
+**einer unten**, und er führt die Handlung aus, an der zuletzt jemand einen
+Wert geändert hat (`FeaturePanel._arm`, `_runs`). Vier Entscheidungen daran:
+
+* **Er heißt „Übernehmen"** und trägt nicht den Handlungstitel — der wechselte
+  sonst mit jedem Klick ins nächste Feld. Welche Handlung gemeint ist, steht
+  über ihm; für den Bildschirmleser trägt er sie als zugänglichen Namen (§19.1).
+* **Er steht wirklich unten.** Er entsteht beim Aufbau des Panels und liegt
+  damit vor allem, was `show_feature` später einfügt; `_settle_apply` hängt ihn
+  und den Haken ans Ende, nachdem alle Zeilen stehen.
+* **Der Haken „Auf alle N gleichartigen anwenden" steht direkt darüber** — auch
+  er einer statt vier, und die Zahl wechselt mit der scharfen Handlung, denn
+  die Gruppen sind je Handlung verschieden. Ohne Geschwister ist er weg statt
+  ausgegraut, und er verliert dabei seinen Haken: ausgeblendet auf „an" griffe
+  er wieder, sobald eine Handlung mit Gruppe drankommt.
+* **Er trägt die Akzentfarbe** (`style.make_primary`) samt der Schriftfarbe
+  darauf, und halbfett daneben — Bedeutung nie allein über Farbe (Regel 18).
+
+**Die Erklärung sitzt am „i" neben der Überschrift.** Drei Zeilen Fließtext je
+Handlung füllten das Fenster; der Absatz steht jetzt im Tooltip eines kleinen
+Zeichens (`_explain`, `_extend_explanation`). Drei Quellen speisen ihn in
+dieser Reihenfolge: der Satz zur Lage (`note`), der Grund der Handlung, und der
+`doc`-Satz aus dem Register — der letzte trägt immer, denn jede Operation hat
+einen (Regel 4). **Ein `QToolButton` und kein `QLabel`**: Ein Label zeigt
+seinen Tooltip nur, solange die Maus genau darauf steht, und achtzehn
+Bildpunkte trifft niemand zuverlässig. Für den Bildschirmleser hängt der Text
+an der **Überschrift** — ein Tooltip wird nicht vorgelesen.
+
+**Und ein Strich trennt die Handlungen** (`style.rule`). An einer Bohrung
+folgen auf drei Zahlenfelder wieder drei; wer nicht auf die Überschriften
+sieht, liest sie als eine Reihe.
 
 **Eine Beschriftung, die nicht in ihre Spalte passt, bricht um** — Qt schnitte
 sie sonst zu „Bohrung versch…", und ein abgeschnittener Titel nennt seine

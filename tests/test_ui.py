@@ -2521,12 +2521,16 @@ def test_a_drag_on_the_slot_knobs_becomes_one_slot_step(window: MainWindow) -> N
 
 
 def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: MainWindow) -> None:
-    """*Im Bild einstellen …* zeigt — es legt keinen Schritt an (10.09.2026).
+    """``inViewRequested`` zeigt — es legt keinen Schritt an (10.09.2026).
 
-    Der Knopf daneben führt aus, dieser öffnet den Dialog der Operation; von
-    dort startet die Flächenplatzierung mit ihren Maßlinien selbst. Wer beide
-    Signale gleich behandelte, schriebe schon beim Zeigen in den Verlauf —
-    deshalb sind es zwei (``operationRequested`` und ``inViewRequested``).
+    ``operationRequested`` führt aus, dieses öffnet den Dialog der Operation;
+    von dort startet die Flächenplatzierung mit ihren Maßlinien selbst. Wer
+    beide Signale gleich behandelte, schriebe schon beim Zeigen in den Verlauf
+    — deshalb sind es zwei.
+
+    Den Knopf *Im Bild einstellen …* gibt es seit demselben Tag nicht mehr; das
+    Signal trägt jetzt die Handlungen, deren eigener Knopf ins Bild führt
+    (``LEADS_INTO_THE_VIEW``), und den Weg über ein angeklicktes Loch.
     """
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -2604,8 +2608,14 @@ def test_selecting_a_feature_fills_the_panel_and_clearing_empties_it(
 
 def test_a_changed_number_in_the_panel_becomes_a_step(window: MainWindow) -> None:
     """„Eine geänderte Zahl ist die Operation." Gemessen bis in die Geometrie:
-    Der Durchmesser der Bohrung wächst, und der Schritt steht im Verlauf."""
-    from PySide6.QtWidgets import QPushButton
+    Die Bohrung dreht sich, und der Schritt steht im Verlauf.
+
+    **Gedreht und nicht aufgebohrt**, seit dem 10.09.2026: *Bohrung ändern*
+    führt ins Bild statt sofort auszuführen (``LEADS_INTO_THE_VIEW``) — dort
+    stehen die Maße, und übernommen wird in der Szene. Was diese Zusage prüft,
+    ist der andere Fall: eine Handlung, deren Werte im Panel vollständig sind.
+    """
+    from PySide6.QtWidgets import QDoubleSpinBox, QLabel
 
     from app.ui.labels import LengthSpin
 
@@ -2616,27 +2626,40 @@ def test_a_changed_number_in_the_panel_becomes_a_step(window: MainWindow) -> Non
     hole = next(
         identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
     )
-    before = float(entry.features[hole].params["diameter"])
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
 
-    for row in window.feature_panel._built:
-        buttons = row.findChildren(QPushButton)
-        if not buttons or "ändern" not in buttons[0].text():
+    # **Der Weg der Oberfläche, seit ein Knopf unten für alle steht** (10.09.2026):
+    # In den Feldern der Handlung etwas ändern — das schaltet sie scharf — und
+    # dann den einen Knopf drücken.
+    panel = window.feature_panel
+    for schluessel, eintrag in panel._runs.items():
+        titel = eintrag.title
+        if "drehen" not in titel:
             continue
-        for spin in row.findChildren(LengthSpin):
-            spin.set_value_mm(spin.value_mm() + 2.0)
-        buttons[0].click()
+        zeile = next(
+            row
+            for row in panel._built
+            if any(label.text() == titel for label in row.findChildren(QLabel))
+        )
+        winkel = next(
+            widget
+            for widget in zeile.findChildren(QDoubleSpinBox)
+            if not isinstance(widget, LengthSpin)
+        )
+        winkel.setValue(30.0)
+        assert panel._armed == schluessel, "eine geänderte Zahl schaltet ihre Handlung scharf"
+        panel._apply.click()
         break
     else:
         pytest.fail("das Panel bot keine Änderung an")
     window.session.wait_for_idle()
 
-    assert [step.op for step in window.session.project.document.ops] == ["load", "resize_hole"]
-    after = window.session.evaluate_now().scene.objects[object_id].features.get(hole)
-    assert after is not None, "die Bohrung ist noch da"
-    assert float(after.params["diameter"]) > before + 1.5, "und sie ist größer geworden"
+    assert [step.op for step in window.session.project.document.ops] == ["load", "rotate_feature"]
+    letzter = window.session.project.document.ops[-1]
+    assert float(letzter.params["angle"]) == pytest.approx(30.0)
+    assert letzter.params["at_feature"] == hole, "und sie meint die angeklickte Bohrung"
 
 
 def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -> None:
@@ -14511,8 +14534,6 @@ def test_a_clicked_edge_reaches_the_selection_window(
     dahinter — dieselbe Regel wie überall: Wer eine Oberfläche prüft,
     drückt, tippt und wählt.
     """
-    from PySide6.QtWidgets import QPushButton
-
     from app.core.brep import edit as brep_edit
     from app.core.brep.features import features_of
     from app.core.brep.kernel import available
@@ -14547,7 +14568,10 @@ def test_a_clicked_edge_reaches_the_selection_window(
     window.viewport.select_edge("block", schluessel)
     window.viewport.edgePicked.emit("block", schluessel)
 
-    knoepfe = [b.text() for b in window.feature_panel.findChildren(QPushButton)]
+    # Angeboten wird über ``_runs``: Seit dem 10.09.2026 steht kein Knopf mehr
+    # in jeder Zeile, sondern einer unten für die Handlung, an der zuletzt
+    # jemand etwas angefasst hat.
+    knoepfe = [entry.title for entry in window.feature_panel._runs.values()]
     assert str(REGISTRY.get("fillet_edges").title) in knoepfe, (
         "die angeklickte Kante bietet ihre Handlungen an"
     )
@@ -14602,8 +14626,11 @@ def test_a_clicked_edge_reaches_the_selection_window(
     window._show_scene(danach)
     qt_app.processEvents()
     assert window.viewport.highlighted_edge() is None, "die Ansicht lässt die Kante fallen"
-    uebrig = [b for b in window.feature_panel.findChildren(QPushButton) if b.text() in knoepfe]
+    uebrig = [
+        eintrag.title for eintrag in window.feature_panel._runs.values() if eintrag.title in knoepfe
+    ]
     assert not uebrig, "und das Fenster überlebt sie nicht"
+    assert not window.feature_panel._apply.isVisible(), "der Knopf unten meint nichts mehr"
 
 
 def test_the_age_of_a_backup_follows_the_application_language(tmp_path: Path) -> None:
