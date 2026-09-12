@@ -119,84 +119,19 @@ def folded_groups(
 ) -> list[str]:
     """Welche Gruppen ein Untermenü bekommen, damit das Menü in die Grenze passt.
 
-    Reine Rechnung über Namen und Anzahlen — **kein Qt**, und deshalb ohne ein
-    einziges Fenster prüfbar. Das ist hier keine Stilfrage: Am 24.08.2026 wurde
-    gemessen, dass jeder Test, der über die ``window``-Fixture ein
-    ``MainWindow`` baut, die Abrissquote der **ganzen Testdatei** hebt (2 von 9
-    auf 2 von 3). Eine Frage, die eine Funktion beantworten kann, bekommt kein
-    Fenster.
+    Die Rechnung nimmt Namen und Zeilenzahlen ohne Qt entgegen. Gefaltet
+    werden nur Gruppen mit mindestens zwei Einträgen und nur so viele, bis
+    die Grenze eingehalten ist. Eine alleinstehende Gruppe ohne zusätzliche
+    feste Zeilen bekommt keine nutzlose Zwischenebene.
 
-    Gefaltet wird nur so weit, bis der Rest in die Grenze passt. Eine Gruppe
-    mit einem einzigen Eintrag wird **nie** gefaltet: Ihr Untermenü spart keine
-    Zeile und kostet einen Klick. Bleibt das Menü danach zu lang, bleibt es zu
-    lang — ein Aufklappen, das nichts bündelt, macht es nicht kürzer, sondern
-    nur tiefer.
+    ``fixed`` zählt nicht faltbare Zeilen mit. ``keep`` schützt Gruppen bei
+    der Auswahl, garantiert aber keinen dauerhaften Platz auf der ersten
+    Ebene. ``rank`` ordnet die Gruppen; ohne Angabe gilt ``menu_rank``.
 
-    **Welche Gruppe es trifft, entscheidet die Reihenfolge der Menüleiste.**
-    Genügt eine Gruppe allein, um unter die Grenze zu kommen, fällt die
-    **hinterste** aus ``MENU_GROUPS`` — die Leiste ordnet von häufig nach
-    vorbereitend, und wer falten muss, faltet hinten. Genügt keine allein,
-    fällt die größte, sonst käme die Rechnung nicht voran.
-
-    Vorher entschied allein die Größe, und das war am Flächenklick die falsche
-    Frage: Nach „Bausteine" fehlt genau **eine** Zeile, und die größte der
-    übrigen ist „Ändern" — mit der Bohrung darin, also genau dem Eintrag,
-    dessen zweiter Klick den Umbau vom 24.08.2026 ausgelöst hat. Eine Gruppe,
-    die ``MENU_GROUPS`` nicht kennt, steht hinten — dieselbe Antwort, die
-    ``group_title`` einer unbekannten Kategorie gibt.
-
-    **Die Zahlen dazu, gemessen am 27.08.2026** (und sie wandern: hier stand
-    „19 Operationen, davon 10 Bausteine", was einmal stimmte und mit jedem
-    neuen Baustein weiter danebenlag — wer sie als Grundlage nimmt, rechnet
-    dann mit zwölf Bausteinen zu wenig):
-
-    ===================  ====
-    Bausteine              22
-    Ändern                  5
-    Erzeugen                2
-    Vorbereiten             2
-    ===================  ====
-
-    Einunddreißig Operationen, drei feste Zeilen darüber. „Bausteine" spart
-    einundzwanzig und genügt trotzdem nicht — danach fehlt eine Zeile, und die
-    zweite Faltung entscheidet, welcher Eintrag einen Klick tiefer liegt. Wer
-    diese Rechnung anfasst, misst sie neu, statt die Tabelle zu glauben.
-
-    ``fixed`` sind Zeilen, die mitzählen, aber nie gefaltet werden können —
-    im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
-    gehören und deshalb keine Gruppe haben.
-
-    ``keep`` sind Gruppen, die **zuletzt** gefaltet werden, weil sie eine
-    Geste tragen, für die man überhaupt auf das Merkmal zeigt. Der Rang aus
-    ``MENU_GROUPS`` ordnet von häufig nach vorbereitend und war deshalb bis
-    zum 27.08.2026 die ganze Antwort — bis das Färben in „Vorbereiten"
-    landete, also ganz hinten. Am Flächenklick fehlt nach den Bausteinen
-    genau **eine** Zeile, und die Rechnung nahm sie sich dort: Gemessen am
-    gebauten Fenster stand „Filament auf eine Fläche" danach im Untermenü, unter einem
-    Wort, unter dem niemand Farbe sucht. Entscheidung Robert: Die häufige
-    Geste bleibt oben, das Seltenere wandert. Der Aufrufer nennt die Gruppen
-    über die **Kategorie** und nicht über den Titel, denn der ist übersetzt —
-    :func:`folded_categories` hält so *Bohrungen* in der Leiste; das
-    Kontextmenü, das hier einmal ``groups_to_keep`` beisteuerte, trägt seit dem
-    11.09.2026 keine Operationen mehr.
-
-    **Und die einzige Gruppe wird nie gefaltet**, gleich wie lang sie ist.
-    Bliebe sonst ein Menü, das aus einem einzigen Untermenü besteht: ein Klick
-    für alles, und die Zwischenebene hieße, wonach man ohnehin schon geklickt
-    hat. Auch :func:`folded_categories` vermeidet so „Bausteine → Bausteine → Deckel
-    erzeugen": Eine weitere Ebene würde nur denselben Namen wiederholen.
-
-    ``rank`` ordnet, wen es zuerst trifft. Ohne Angabe ist es die Reihenfolge
-    der Menüleiste (:func:`menu_rank`) — die Antwort für das **Kontextmenü**,
-    wo die Schlüssel Gruppentitel sind. Die **Leiste selbst** fragt dieselbe
-    Rechnung mit den Kategorien *einer* Gruppe als Schlüsseln, und dort ordnet
-    ihre Stellung in ``MENU_GROUPS``; siehe :func:`folded_categories`.
-
-    **Zwei Ordnungen, eine Rechnung.** Eine zweite Umsetzung wäre die zweite
-    Wahrheit, und an genau dieser Stelle ist die Leiste schon einmal
-    auseinandergelaufen: Sie hatte ein gröberes Modell (alles flach oder jede
-    Kategorie gefaltet), weil diese Funktion in der Oberfläche lag und der Kern
-    sie nicht fragen konnte. Deshalb steht sie seit dem 27.08.2026 hier.
+    Genügt eine Gruppe allein, gewinnt unter den ungeschützten die hinterste.
+    Genügt keine allein, gewinnt dort die größte. Rang, Größe und Name lösen
+    Gleichstände eindeutig auf. Die Menüleiste verwendet dieselbe Rechnung
+    für Kategorien innerhalb einer Gruppe über ``folded_categories``.
     """
     ordering = rank or menu_rank
     if len(sizes) < 2 and not fixed:
@@ -234,30 +169,17 @@ def folded_groups(
 
 
 def folded_categories(category: str, registry: Registry | None = None) -> frozenset[str]:
-    """Welche Kategorien **dieser Gruppe** ein Untermenü bekommen (§2.6).
+    """Welche Kategorien dieser Gruppe ein Untermenü bekommen (§2.6).
 
-    Die Antwort für die Menüleiste ersetzt die frühere Ganzgruppen-Abfrage:
-    Dort war es alles oder nichts — entweder war die
-    ganze Gruppe flach, oder **jede** Kategorie bekam eine Zwischenebene. Das
-    Kontextmenü kann das seit dem 24.08.2026 besser (:func:`folded_groups`
-    faltet nur so weit, bis der Rest passt); die Leiste konnte es nicht, weil
-    die Rechnung in der Oberfläche lag und der Kern sie von dort nicht fragen
-    darf (§8).
+    Gezählt werden die sichtbaren Zeilen aus ``menu_rows_of`` einschließlich
+    zusammengelegter Einträge. Die Reihenfolge folgt ``MENU_GROUPS``;
+    ``folded_groups`` bündelt nur so weit, bis der Rest in die Grenze passt.
+    Bohrungen sind bei der Auswahl geschützt, können aber gefaltet werden,
+    wenn ungeschützte Kategorien nicht genügen.
 
-    Gemessen am 27.08.2026, Menü *Ändern* bei einer Grenze von zwölf: Die
-    Kategorien tragen 9, 9, 4, 4, 3, 3 und 1 Zeilen, zusammen 33. Gefaltet
-    werden müssen **vier**, dann sind es elf — *Bohrungen*, *Oberfläche* und
-    *Reparatur* bleiben direkte Zeilen. Vorher lagen alle sieben eine Ebene
-    tiefer, und damit auch die Bohrung: genau der Eintrag, dessen zweiter Klick
-    den Umbau des Kontextmenüs ausgelöst hat.
-
-    **Die Ordnung ist die der Kategorien in ihrer Gruppe.** ``MENU_GROUPS``
-    zählt sie von häufig nach selten auf, und wer falten muss, faltet hinten —
-    dieselbe Regel, die :func:`folded_groups` für die Gruppen der Leiste
-    anwendet, eine Ebene tiefer.
-
-    Eine Gruppe mit einer einzigen besetzten Kategorie faltet nie: Die
-    Zwischenebene würde denselben Namen wie das Menü darüber wiederholen.
+    Eine Gruppe mit einer einzigen besetzten Kategorie bleibt flach. Welche
+    Gruppen tatsächlich in der Leiste erscheinen, entscheidet getrennt davon
+    ``in_the_menu_bar``; Handlungen rechts werden dadurch nicht zu Menüs.
     """
     source = registry or REGISTRY
     in_group = next(
@@ -286,24 +208,16 @@ def folded_categories(category: str, registry: Registry | None = None) -> frozen
 
 
 def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
-    """Der vollständige Menüweg eines Eintrags — mit denselben Ebenen, die
-    die Menüleiste einzieht (§2.6).
+    """Der tatsächliche Ort einer Operation aus denselben Daten wie die Oberfläche.
 
-    Drei Staffelungen, alle aus Kern-Daten: die Gruppe aus ``MENU_GROUPS``,
-    ein Kategorie-Untermenü für die Kategorien, die falten müssen
-    (:func:`folded_categories`), und die Bausteingruppe aus dem Katalog.
-    Die Werkzeugbeschreibungen des Agenten nannten nur Gruppe und Titel — der
-    Chat schickte den Nutzer nach „Ändern → Fase anbringen", während der
-    Eintrag unter „Ändern → Formgebung → Fase anbringen" steht; das traf 72
-    von 77 Ops. Ein Test hält Leiste und Pfad aneinander fest.
+    Zusammengelegte Zwillinge führen zum gemeinsamen Dialog. Bausteine nennen
+    den Katalog mit Gruppe und Kachel; auswahlbezogene Operationen nennen die
+    Handlungen rechts und das benötigte Merkmal beziehungsweise den Körper.
 
-    **Das Beispiel hier stand einmal auf der Bohrung**, und es ist mit dem
-    27.08.2026 unbrauchbar geworden: *Bohrungen* faltet seither nicht mehr,
-    also ist „Ändern → Bohrung setzen" der **richtige** Weg — der Docstring
-    führte den heutigen Sollzustand als Fehlerbild vor. Ein Beispiel altert mit
-    dem, was es zeigt; wer die Menütiefe ändert, sucht die Wege, die in
-    Docstrings, Katalogen und Tests als Zeichenketten stehen (gefunden wurden
-    fünf, vier davon in ``tests/test_agent_suite.py``).
+    Für Einträge der Menüleiste entstehen die Ebenen aus ``MENU_GROUPS`` und
+    ``folded_categories``. Eine Variantengruppe nennt den gemeinsamen Dialog
+    und die dort auszuwählende Variante. Diese Orte folgen dem Register und
+    behalten keine festgeschriebenen Beispielwege oder Operationszahlen.
     """
     source = registry or REGISTRY
     if spec.name in MENU_TWINS:
