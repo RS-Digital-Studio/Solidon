@@ -16,8 +16,13 @@ Merchant-of-Record-Anbieter und spätere Kanzleiarbeit. Bis zur Festlegung
 eines tatsächlich verfügbaren Budgets haben seine Kostensperren Vorrang vor
 den höheren Deckeln in den vorbereiteten Kanzleimails.
 
-Stand der Adress- und Inhaltsprüfung: 31.08.2026. Die Entwürfe sind **nicht
-versandt**. `X-Unsent: 1` kennzeichnet beide Dateien als ungesendete Entwürfe.
+Inhaltsabgleich von veröffentlichter Fassung und Demofrist: 12.09.2026.
+Stand der Adressprüfung: 31.08.2026. Die Entwürfe sind **nicht versandt**.
+`X-Unsent: 1` kennzeichnet beide Dateien als ungesendete Entwürfe.
+Vor einem Versand sind Empfänger, veröffentlichte Fassung
+(`website/version.json`), Demofrist (`app/core/activation/store.py`),
+Gewerbestand und Freigabe des Verkaufsstarts erneut abzugleichen; diese
+Entwürfe sind keine laufend aktualisierte Produktbeschreibung.
 
 ## Empfänger
 
@@ -31,8 +36,9 @@ versandt**. `X-Unsent: 1` kennzeichnet beide Dateien als ungesendete Entwürfe.
 - Beide Nachrichten einzeln versenden, nicht gegenseitig in Kopie setzen.
 - Absender und Antwortadresse sind `support@solidon3d.de`.
 - Die Nachrichten nennen die laufende kostenlose 0.x-Demophase ausdrücklich:
-  0.2.2 ist nur die aktuelle Fassung und bis 1.x können weitere kostenlose
-  0.x-Fassungen erscheinen. Rund 3.300 Website-Besucher und etwa 1.000
+  0.4.0 ist die veröffentlichte Fassung zum genannten Inhaltsstand; bis 1.x
+  können weitere kostenlose 0.x-Fassungen erscheinen. Die Demo ist bis
+  einschließlich 30.10.2026 nutzbar und startet danach nicht mehr. Rund 3.300 Website-Besucher und etwa 1.000
   Downloads in der ersten Woche sind keine Verkaufs-, Umsatz- oder
   Nutzerzahlen.
 - Solidon3D ist als Werkzeug für Hobbyanwender, Maker und Menschen ohne
