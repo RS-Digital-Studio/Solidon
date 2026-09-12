@@ -498,6 +498,50 @@ def test_private_cleanup_keeps_only_current_and_previous_utc_month(tmp_path: Pat
     assert not old.exists()
 
 
+@pytest.mark.parametrize("agent", ["Solidon/0.4.0", "Mozilla/5.0"])
+def test_private_cleanup_accepts_update_rows_from_the_live_writer(
+    tmp_path: Path, agent: str
+) -> None:
+    """Der echte Zähler darf die zeitgesteuerte Löschung nicht lahmlegen."""
+    paths = _prepare_cleanup_state(tmp_path, {"activation": 1000, "support": 3700})
+    old = tmp_path / "stats" / f"{_utc_month(-2)}.jsonl"
+    _write_month(old, _utc_month(-2))
+    with _php_server(tmp_path) as base:
+        status, _headers, _body = _request(f"{base}/count.php?u=1", headers={"User-Agent": agent})
+    assert status == 200
+    current = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
+    before = current.read_bytes()
+    assert json.loads(before)["k"] == "u"
+
+    result = _run_cleanup(tmp_path, paths)
+
+    assert result.returncode == 0, result.stderr
+    assert current.read_bytes() == before
+    assert not old.exists()
+    assert json.loads(paths["activation"].read_text(encoding="ascii")) == {}
+    assert json.loads(paths["support"].read_text(encoding="ascii")) == {}
+
+
+@pytest.mark.parametrize("version", ["0.4.0.1.2", "beliebig", "0.4.0\n", "1" * 17])
+def test_private_cleanup_rejects_invalid_update_versions_without_partial_deletion(
+    tmp_path: Path, version: str
+) -> None:
+    paths = _prepare_cleanup_state(tmp_path, {"activation": 1000})
+    old = tmp_path / "stats" / f"{_utc_month(-2)}.jsonl"
+    old_data = _write_month(old, _utc_month(-2))
+    current = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
+    row = json.loads(_write_month(current, _utc_month(0)))
+    row.update(k="u", v=version, r="")
+    current.write_text(json.dumps(row) + "\n", encoding="ascii")
+    before = paths["activation"].read_bytes()
+
+    result = _run_cleanup(tmp_path, paths)
+
+    assert result.returncode == 65
+    assert old.read_bytes() == old_data
+    assert paths["activation"].read_bytes() == before
+
+
 def test_private_cleanup_utc_month_window_handles_the_year_boundary() -> None:
     php = php_executable()
     source = CLEANUP.read_text(encoding="utf-8")

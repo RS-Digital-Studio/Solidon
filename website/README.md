@@ -165,6 +165,13 @@ sperrt den gesamten Lauf, weil er sonst die Frist umgehen könnte. Sicherungen
 müssen dieselbe Höchstfrist von 62 Kalendertagen technisch durchsetzen und
 bleiben bis zu diesem externen Nachweis ein Produktionsgate.
 
+Das Zeilenschema umfasst Seiten (`p`), Downloads (`d`) und Updateabrufe (`u`);
+bei Updateabrufen muss der Wert eine Fassung oder `unbekannt` sein. Neue
+Zählarten werden immer zusammen mit der Wartungsprüfung geändert. Zur
+Abnahme gehört eine vom echten Zähler geschriebene Zeile jeder Art und ein
+anschließender erfolgreicher Wartungslauf. Ein lokaler Test belegt dabei
+weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
+
 Private Ordner brauchen auf POSIX 0700, Zustandsdateien höchstens 0600. Ein
 Link, Mehrfachverweis, Eigentümerwechsel, Pfadtausch, falsches JSON oder zu
 weite Rechte beendet den gesamten Lauf, bevor eine andere Datei geändert

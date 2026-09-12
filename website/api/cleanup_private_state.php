@@ -8,6 +8,7 @@ const CLEANUP_MAX_MONTH_BYTES = 16 * 1024 * 1024;
 const CLEANUP_MAX_MONTH_TOTAL_BYTES = 64 * 1024 * 1024;
 const CLEANUP_MAX_MONTH_FILES = 120;
 const CLEANUP_MAX_MONTH_LINE_BYTES = 4096;
+const CLEANUP_MAX_VERSION_BYTES = 16;
 const CLEANUP_EXIT_CONFIGURATION = 64;
 const CLEANUP_EXIT_DATA = 65;
 const CLEANUP_EXIT_IO = 74;
@@ -407,7 +408,7 @@ function cleanup_validate_month_jsonl($stream, int $size, string $month, string 
             || !is_string($row['t']) || !is_string($row['k']) || !is_string($row['v'])
             || !is_string($row['r']) || !is_string($row['u'])
             || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/D', $row['t']) !== 1
-            || substr($row['t'], 0, 7) !== $month || !in_array($row['k'], ['p', 'd'], true)
+            || substr($row['t'], 0, 7) !== $month || !in_array($row['k'], ['p', 'd', 'u'], true)
             || strlen($row['v']) === 0 || strlen($row['v']) > 255
             || preg_match('/[\x00-\x1f\x7f]/', $row['v']) === 1
             || strlen($row['r']) > 80 || preg_match('/[\x00-\x20\x7f]/', $row['r']) === 1
@@ -422,7 +423,10 @@ function cleanup_validate_month_jsonl($stream, int $size, string $month, string 
             throw new CleanupFailure($label . ': Eine JSONL-Zeit ist ungültig.', CLEANUP_EXIT_DATA);
         }
         if (($row['k'] === 'p' && substr($row['v'], 0, 1) !== '/')
-            || ($row['k'] === 'd' && basename($row['v']) !== $row['v'])) {
+            || ($row['k'] === 'd' && basename($row['v']) !== $row['v'])
+            || ($row['k'] === 'u'
+                && (strlen($row['v']) > CLEANUP_MAX_VERSION_BYTES
+                    || preg_match('/^(?:[0-9]+(?:\.[0-9]+){0,3}|unbekannt)$/D', $row['v']) !== 1))) {
             throw new CleanupFailure($label . ': Ein JSONL-Ziel ist ungültig.', CLEANUP_EXIT_DATA);
         }
     }
