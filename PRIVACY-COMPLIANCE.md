@@ -23,7 +23,7 @@ Verantwortlicher und Stand:
 |---|---|
 | Website-/Downloadbetrieb | Serverprotokolle, Downloadzähler, Hoster, Missbrauchsschutz, konkrete Fristen |
 | Kauf, Rechnung und Merchant of Record | Vertrags-/Steuerdaten, Verkäuferrolle, Zahlungsdienstleister, gesetzliche Aufbewahrung |
-| Online- und Offlineaktivierung | Lizenz-/Gerätekennungen, Aktivierungsbeleg, Betrugsabwehr, keine regelmäßige Kontoprüfung |
+| Online- und Offlineaktivierung | Lizenz-/Gerätekennungen, Lizenzstatus und Anlagezeit, Aktivierungsbeleg, Versuchszähler; Betreiberprotokoll mit Kennung, Schlüsselhash, Zeitpunkt, Aktion, festem Grund und Änderungsstatus; Betrugsabwehr, keine regelmäßige Kontoprüfung |
 | Updateprüfung | Version, Plattform, minimal erforderliche Netzmetadaten, keine Projektdaten |
 | Support und Sicherheitsmeldungen | freiwillig ausgewählte Anhänge, Protokolle, Projekt-/Chatinhalt nur nach Vorschau, Tickets und Löschung |
 | Anthropic mit eigenem API-Schlüssel | direkte Nutzlast, Anbieterrolle, Empfängerland, Transfergrundlage, Speicher-/Trainingseinstellung |
