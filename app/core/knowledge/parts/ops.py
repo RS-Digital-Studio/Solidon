@@ -446,7 +446,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         name=op_name(spec.name),
         title=title,
         category="parts",
-        cache_version=spec.version,
+        cache_version=_result_version(spec),
         params=params,
         consumes=1,
         produces=1,
@@ -473,7 +473,7 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         produces=1,
         touches_features=True,
         doc=spec.doc or spec.title,
-        cache_version=spec.version,
+        cache_version=_result_version(spec),
         caveat=spec.caveat,
         registry=registry,
     )
@@ -492,6 +492,11 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
             ],
             findings=list(produced.findings),
         )
+
+
+def _result_version(spec: PartSpec) -> str:
+    """Der Bausteinstand einschließlich der materialabhängigen Federprüfung."""
+    return f"{spec.version}:spring:2" if spec.name in SPRING_ARMS else spec.version
 
 
 def _title_for(spec: PartSpec) -> TranslatableText | str:
@@ -923,6 +928,8 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
 
     Ohne Materialprofil oder ohne mechanische Kennwerte darin bleibt die
     Prüfung stumm, statt mit einem geratenen E-Modul zu rechnen (Regel 21).
+    Die endgültige Druckausrichtung ist hier nicht festgelegt. Deshalb gilt
+    ausdrücklich der vorsichtige Fall quer zu den Druckschichten.
     """
     fields = SPRING_ARMS.get(name)
     if fields is None or profile is None:
@@ -940,13 +947,18 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
         length=float(cast(float, arm_length)),
         thickness=float(cast(float, arm_thickness)),
         deflection=float(cast(float, travel)),
+        across_layers=True,
     )
     if load is None or load.holds:
         return None
     return Finding(
         code="part.spring_overloaded",
         severity="warning",
-        message=_("Der Federarm biegt sich über das, was das Material aushält."),
+        message=_(
+            "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. "
+            "Verlängern Sie den Arm oder verringern Sie den Federweg. "
+            "Prüfen Sie auch die Druckausrichtung."
+        ),
         values={
             "stress": round(load.stress, 1),
             "limit": round(load.limit, 1),

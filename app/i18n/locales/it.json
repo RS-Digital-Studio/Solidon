@@ -848,7 +848,7 @@
   "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine angeklickte Zylinderfläche trägt ihn selbst ein.": "Il diametro attorno a cui corre il motivo. Solo con l'avvolgimento. Una faccia cilindrica cliccata lo inserisce da sé.",
   "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg vergrößern oder das Kopfspiel verkleinern.": "La corsa di aggancio è troppo corta per lasciare un bordo di ritenuta. Aumenta la corsa o riduci il gioco della testa.",
   "Der Faktor muss endlich und größer als null sein.": "Il fattore deve essere finito e maggiore di zero.",
-  "Der Federarm biegt sich über das, was das Material aushält.": "Il braccio elastico si piega oltre quanto il materiale sopporta.",
+  "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. Verlängern Sie den Arm oder verringern Sie den Federweg. Prüfen Sie auch die Druckausrichtung.": "Il braccio elastico ha un margine insufficiente sotto carico perpendicolare agli strati di stampa. Allungare il braccio o ridurne la corsa. Controllare anche l’orientamento di stampa.",
   "Der Federarm selbst oder die Tasche mit der Rastkante dazu.": "Il braccio elastico stesso, o la tasca con il risalto per esso.",
   "Der Fehlerbericht liegt hier": "Il rapporto d'errore si trova qui",
   "Der Fehlerbericht ließ sich nicht ablegen": "Il rapporto d'errore non si è potuto salvare",

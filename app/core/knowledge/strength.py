@@ -82,7 +82,7 @@ def spring_load(
     length: float,
     thickness: float,
     deflection: float,
-    across_layers: bool = False,
+    across_layers: bool = True,
 ) -> SpringLoad | None:
     """Was der Arm aushält — oder ``None``, wenn das Material es nicht sagt.
 
@@ -91,6 +91,7 @@ def spring_load(
     der Streckgrenze. Die Lage entscheidet, ob der Abschlag gilt; das Material,
     wie groß er ist.
     Liegt er lang in der Druckebene und federt quer dazu, trägt er voll.
+    Ohne ausdrücklich bekannte Lage gilt die vorsichtige Querbelastung.
 
     **``None`` ist eine Antwort und keine Panne.** Ein Materialprofil ohne
     mechanische Kennwerte — ein selbst angelegtes, ein fremdes — kann diese
@@ -113,7 +114,7 @@ def safe_thickness(
     *,
     length: float,
     deflection: float,
-    across_layers: bool = False,
+    across_layers: bool = True,
     factor: float = SAFE_FACTOR,
 ) -> float | None:
     """Wie dick der Arm höchstens sein darf, damit er die Sicherheit hält.
@@ -125,6 +126,7 @@ def safe_thickness(
     **Höchstens, nicht mindestens**: Bei einer Blattfeder macht mehr Material
     den Arm nicht sicherer, sondern steifer, und die Spannung steigt mit ihm.
     Wer einen Arm verstärken will, verlängert ihn.
+    Wie bei :func:`spring_load` gilt ohne bekannte Lage die Querbelastung.
     """
     if material.youngs_modulus <= 0.0 or material.yield_strength <= 0.0:
         return None

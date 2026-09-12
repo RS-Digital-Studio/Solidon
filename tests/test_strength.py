@@ -65,7 +65,7 @@ def test_the_layer_direction_decides_and_it_is_not_a_property_of_the_filament(pl
     zwei verschiedene Grenzen, und keine der beiden Stellen sagte es.
     """
     quer = spring_load(pla, length=20.0, thickness=0.8, deflection=1.65, across_layers=True)
-    laengs = spring_load(pla, length=20.0, thickness=0.8, deflection=1.65)
+    laengs = spring_load(pla, length=20.0, thickness=0.8, deflection=1.65, across_layers=False)
     assert quer is not None and laengs is not None
 
     assert quer.stress == pytest.approx(laengs.stress), "die Spannung hängt nicht an der Lage"
@@ -79,14 +79,14 @@ def test_a_two_millimetre_cheek_would_have_held_after_all(pla) -> None:
     Der Naht-Adapter der Auffangrinne bekam 1,2 mm dicke Wangen mit der
     Begründung, zwei Millimeter ergäben 51,9 MPa und lägen damit über der
     Streckgrenze. Nachgerechnet sind es **28,6 MPa** bei 21 mm Länge und
-    1,2 mm Federweg — 1,75-fache Sicherheit, also tragfähig.
+    1,2 mm Federweg — längs zur Schichtebene 1,75-fache Sicherheit, also tragfähig.
 
     Die dünnere Wange bleibt trotzdem die bessere: Sie fügt sich mit weniger
     Kraft. Aber die Begründung war falsch, und niemand konnte das sehen,
     solange die Rechnung in einem Kommentar stand statt hier.
     """
-    dick = spring_load(pla, length=21.0, thickness=2.0, deflection=1.2)
-    duenn = spring_load(pla, length=21.0, thickness=1.2, deflection=1.2)
+    dick = spring_load(pla, length=21.0, thickness=2.0, deflection=1.2, across_layers=False)
+    duenn = spring_load(pla, length=21.0, thickness=1.2, deflection=1.2, across_layers=False)
     assert dick is not None and duenn is not None
 
     assert dick.stress == pytest.approx(28.6, abs=0.2), "nicht 51,9 — das war falsch gerechnet"
@@ -112,6 +112,51 @@ def test_the_answer_to_a_thickness_is_an_upper_bound(pla) -> None:
 
     assert gerade_noch.holds, "an der Grenze trägt er noch"
     assert not zu_dick.holds, "darüber nicht mehr"
+
+
+def test_an_unspecified_layer_direction_uses_the_weaker_case(pla) -> None:
+    """Ohne bestätigte Druckausrichtung wird der kritische 2-mm-Arm nicht freigesprochen."""
+    load = spring_load(pla, length=21.0, thickness=2.0, deflection=1.2)
+    thickness = safe_thickness(pla, length=21.0, deflection=1.2)
+    assert load is not None and thickness is not None
+    assert load.limit == pytest.approx(30.0)
+    assert load.safety == pytest.approx(1.05)
+    assert not load.holds
+    assert thickness == pytest.approx(1.4)
+
+
+def test_inserting_a_snap_arm_reports_the_conservative_layer_check() -> None:
+    """Der echte Bausteinaufruf trägt die ungünstige Lage in seinen Prüfbericht."""
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    source = SceneObject(
+        id="obj_1", name="Platte", mesh=MeshData.of(trimesh.creation.box((80, 40, 5)))
+    )
+    spec = REGISTRY.get("insert_snap_fit")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(length=21.0, thickness=2.0, hook=1.2, z=2.5),
+            profile=profiles.make_profile("centauri-carbon-2", "pla"),
+            quality="draft",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    warnings = [finding for finding in result.findings if finding.code == "part.spring_overloaded"]
+    assert len(warnings) == 1
+    assert warnings[0].values["limit"] == pytest.approx(30.0)
+    assert "quer zu den Druckschichten" in str(warnings[0].message)
 
 
 def test_a_material_without_numbers_says_so_instead_of_guessing(pla) -> None:

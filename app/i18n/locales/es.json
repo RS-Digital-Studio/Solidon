@@ -848,7 +848,7 @@
   "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine angeklickte Zylinderfläche trägt ihn selbst ein.": "El diámetro alrededor del cual corre el patrón. Solo al envolver. Una cara cilíndrica seleccionada lo introduce por sí misma.",
   "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg vergrößern oder das Kopfspiel verkleinern.": "El recorrido de enganche es demasiado corto para dejar un borde de retención. Aumentar el recorrido o reducir la holgura de la cabeza.",
   "Der Faktor muss endlich und größer als null sein.": "El factor debe ser finito y mayor que cero.",
-  "Der Federarm biegt sich über das, was das Material aushält.": "El brazo elástico se dobla más de lo que el material soporta.",
+  "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. Verlängern Sie den Arm oder verringern Sie den Federweg. Prüfen Sie auch die Druckausrichtung.": "El brazo elástico tiene muy poco margen al recibir carga perpendicular a las capas de impresión. Alargue el brazo o reduzca su recorrido. Revise también la orientación de impresión.",
   "Der Federarm selbst oder die Tasche mit der Rastkante dazu.": "El brazo elástico mismo, o el hueco con el resalte para él.",
   "Der Fehlerbericht liegt hier": "El informe de error está aquí",
   "Der Fehlerbericht ließ sich nicht ablegen": "El informe de error no se pudo guardar",

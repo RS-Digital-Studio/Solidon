@@ -848,7 +848,7 @@
   "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine angeklickte Zylinderfläche trägt ihn selbst ein.": "Le diamètre autour duquel court le motif. Seulement en enroulement. Une face cylindrique cliquée l'inscrit d'elle-même.",
   "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg vergrößern oder das Kopfspiel verkleinern.": "La course d’accrochage est trop courte pour conserver un rebord de retenue. Augmenter la course ou réduire le jeu de la tête.",
   "Der Faktor muss endlich und größer als null sein.": "Le facteur doit être fini et supérieur à zéro.",
-  "Der Federarm biegt sich über das, was das Material aushält.": "Le bras ressort fléchit au-delà de ce que le matériau supporte.",
+  "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. Verlängern Sie den Arm oder verringern Sie den Federweg. Prüfen Sie auch die Druckausrichtung.": "Le bras flexible a trop peu de marge sous une charge perpendiculaire aux couches d’impression. Allongez le bras ou réduisez sa course. Vérifiez aussi l’orientation d’impression.",
   "Der Federarm selbst oder die Tasche mit der Rastkante dazu.": "Le bras ressort lui-même, ou la poche avec son épaulement.",
   "Der Fehlerbericht liegt hier": "Le rapport d'erreur se trouve ici",
   "Der Fehlerbericht ließ sich nicht ablegen": "Le rapport d'erreur n'a pas pu être déposé",

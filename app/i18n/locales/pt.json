@@ -848,7 +848,7 @@
   "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine angeklickte Zylinderfläche trägt ihn selbst ein.": "O diâmetro à volta do qual o padrão corre. Só ao envolver. Clicar numa face cilíndrica preenche-o automaticamente.",
   "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg vergrößern oder das Kopfspiel verkleinern.": "O percurso de engate é demasiado curto para deixar um rebordo de retenção. Aumentar o percurso ou reduzir a folga da cabeça.",
   "Der Faktor muss endlich und größer als null sein.": "O fator tem de ser finito e maior do que zero.",
-  "Der Federarm biegt sich über das, was das Material aushält.": "O braço elástico dobra-se mais do que o material aguenta.",
+  "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. Verlängern Sie den Arm oder verringern Sie den Federweg. Prüfen Sie auch die Druckausrichtung.": "O braço elástico tem pouca margem quando sujeito a carga perpendicular às camadas de impressão. Aumente o comprimento do braço ou reduza o seu curso. Verifique também a orientação de impressão.",
   "Der Federarm selbst oder die Tasche mit der Rastkante dazu.": "O braço elástico em si, ou a bolsa com o ressalto para ele.",
   "Der Fehlerbericht liegt hier": "O relatório de erro está aqui",
   "Der Fehlerbericht ließ sich nicht ablegen": "O relatório de erro não se conseguiu guardar",

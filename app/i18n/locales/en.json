@@ -848,7 +848,7 @@
   "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine angeklickte Zylinderfläche trägt ihn selbst ein.": "The diameter the pattern runs around. Only when wrapping. Clicking a cylindrical face enters it here.",
   "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg vergrößern oder das Kopfspiel verkleinern.": "The engagement travel is too short to leave a retaining lip. Increase the travel or reduce the head clearance.",
   "Der Faktor muss endlich und größer als null sein.": "The factor must be finite and greater than zero.",
-  "Der Federarm biegt sich über das, was das Material aushält.": "The spring arm bends further than the material can take.",
+  "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. Verlängern Sie den Arm oder verringern Sie den Federweg. Prüfen Sie auch die Druckausrichtung.": "The spring arm has too little reserve when loaded across the print layers. Lengthen the arm or reduce its deflection. Also check the print orientation.",
   "Der Federarm selbst oder die Tasche mit der Rastkante dazu.": "The spring arm itself, or the pocket with the catch for it.",
   "Der Fehlerbericht liegt hier": "The error report is here",
   "Der Fehlerbericht ließ sich nicht ablegen": "The error report could not be stored",
