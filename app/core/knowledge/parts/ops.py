@@ -446,7 +446,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         name=op_name(spec.name),
         title=title,
         category="parts",
-        cache_version=_result_version(spec),
+        cache_version=f"{_result_version(spec)}:targets:2",
         params=params,
         consumes=1,
         produces=1,
@@ -709,7 +709,9 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             # wäre der Körper der letzte gültige und nicht None.
             return outcome
         source = outcome.outputs[0]
-        findings.extend(outcome.findings)
+        for finding in outcome.findings:
+            if finding not in findings:
+                findings.append(finding)
         solver = deepest((solver, outcome.solver))
     return OpResult(outputs=[source], solver=solver, findings=findings)
 

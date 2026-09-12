@@ -1203,6 +1203,93 @@ def test_the_fit_ladder_face_is_centred_on_its_pin_rail(steps: int) -> None:
     assert made.features["face_1"].params["centre"][2] == pytest.approx(3.0)
 
 
+def test_inserting_two_snap_arms_reports_the_same_load_warning_once(profile: Profile) -> None:
+    """Mehrere Ziele einer Operation vervielfachen keinen ortsunabhängigen Materialhinweis."""
+    import trimesh
+
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Feature, OpContext, Scene, SceneObject
+
+    source = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box((100, 60, 5))),
+        features={
+            name: Feature(
+                id=name,
+                kind="face",
+                provenance="generated",
+                params={"centre": (x, 0.0, 2.5), "normal": (0.0, 0.0, 1.0), "area": 6000.0},
+            )
+            for name, x in (("left", -25.0), ("right", 25.0))
+        },
+    )
+    spec = REGISTRY.get("insert_snap_fit")
+    outcome = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(length=21.0, thickness=2.0, hook=1.2, at_features=("left", "right")),
+            profile=profiles.make_profile("centauri-carbon-2", "pla"),
+            quality="draft",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    warnings = [entry for entry in outcome.findings if entry.code == "part.spring_overloaded"]
+    assert len(warnings) == 1
+    assert warnings[0].values["limit"] == pytest.approx(30.0)
+    assert outcome.outputs[0].mesh.volume > source.mesh.volume
+    assert {"snap_fit_arm_1", "snap_fit_arm_1_2"} <= set(outcome.outputs[0].features)
+
+
+def test_multiple_targets_keep_findings_with_distinct_locations(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gleicher Text an verschiedenen Stellen bleibt zweimal anklickbar."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Finding, OpContext, OpResult, Scene, SceneObject
+
+    spec = PARTS.get("snap_fit")
+    source = SceneObject(id="obj_1", name="Platte", mesh=spec.fn(spec.params()).mesh)
+    params = REGISTRY.get("insert_snap_fit").params(at_features=("left", "right"))
+
+    def placed(ctx: OpContext, _spec: PartSpec) -> OpResult:
+        target = str(ctx.params.at_feature)  # type: ignore[attr-defined]
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="test.warning",
+                    severity="warning",
+                    message="Stelle prüfen.",
+                    feature_ids=(target,),
+                    location=(-1.0 if target == "left" else 1.0, 0.0, 0.0),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(part_ops, "_insert_at", placed)
+    outcome = part_ops.insert(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=params,
+            profile=profile,
+            quality="draft",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        ),
+        spec,
+    )
+    assert [entry.feature_ids for entry in outcome.findings] == [("left",), ("right",)]
+    assert outcome.findings[0].location != outcome.findings[1].location
+
+
 def test_parts_without_host_tools_declare_every_feature() -> None:
     """Ohne Trägerwerkzeug gehört jedes Merkmal zum geprüften Bausteinkörper.
 
