@@ -67,3 +67,12 @@ welche Dateien geteilt sind — ein `git add` nimmt fremde Hunks mit, und
 `/liefern` wird ohnehin angesagt und nicht selbst gestartet. Siehe
 [[eigenen-lauf-ueber-die-elternkette-beenden]] und
 [[messwerkzeug-misst-sich-selbst]].
+
+**Nachtrag 12.09.2026 — die dritte Hand heißt Codex.** Während zwei
+Claude-Sitzungen (b3, 7d) je ein Review fuhren, wanderten 18 Dateien im Baum
+(`handover.py`, `recipe.py`, `main_window.py`, `session.py`, Tests, Regeln,
+Karten), die keine der beiden hielt — beide hielten die jeweils andere für den
+Urheber. Es war Roberts **Codex-Sitzung**, die Funde ihres eigenen Reviews
+behob. Codex erscheint in `ListAgents` nicht; die einzige Spur ist
+`git status`. Wer fremde Änderungen sieht, die keine gelistete Sitzung hält,
+fragt Robert, bevor er einen Agenten verdächtigt oder die Datei anfasst.

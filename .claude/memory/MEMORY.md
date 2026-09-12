@@ -12,6 +12,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Config-Dir ohne Schalter](config-dir-hat-keinen-schalter.md) · [Scratchpad nicht dauerhaft](scratchpad-ist-nicht-dauerhaft.md) · [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — Sonden treffen Roberts echte Daten.
 - [.venv auf 3.14.7](lokale-umgebung-python-version.md) · [.venv verliert Dateien](venv-dateien-verschwinden.md) — seit 06.09.2026 3.14; RECORD nennt die fehlende Datei.
 - [Abgebrochener Lauf: Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) · [Wartebedingung](wartebedingung-kennt-nur-einen-zustand.md) — Prozesse ohne Eltern; die Elternkette lügt nach einem Tod, nur die eigene Ausgabedatei beweist etwas; `until !` mit Umlaut meldet sofort.
+- [Handbuch nur beim Paketbau](handbuch-nur-beim-paketbau.md) — test_wording ist zwischen Releases rot, kein Fund.
 - [make_manual ohne --help](make-manual-kennt-kein-help.md) · [commit-msg verlangt Umlaute](commit-msg-hook-verlangt-echte-umlaute.md) — jedes Argument erzeugt alles; ASCII bricht den Commit.
 
 ## Roberts Vorgaben
@@ -20,7 +21,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) · [Plattformen gleich](plattformen-funktionieren-gleich.md) — alte Karten kein Kriterium; was Windows kann, können Mac und Linux.
 - [Beheben statt notieren](beheben-statt-notieren.md) · [Durchsicht je Version](durchsicht-je-version.md) · [Härtung trifft Altes](haertung-trifft-alten-zustand.md) — Fund → Messung → Fix → Test; „offen" am Code nachmessen.
 - [Befund aus dem laufenden Fenster altert](befund-aus-dem-laufenden-fenster-altert.md) — sein Fenster trägt den Stand seines Starts; den Fall erst am HEAD nachstellen, dann bauen.
-- [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen.
+- [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen; Handbuch nur beim Paketbau, test_wording-Rot dazwischen ist kein Fund.
 - [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — jeder Commit geht hinaus, außer er sagt es; Merge, kein Rebase; bump_version.py.
 - [Changelog vor dem Versionssprung](changelog-vor-dem-versionssprung.md) — Abschnitt zuerst, auch für unfertige Arbeit; die Version hebt erst der Bau.
 - [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung entscheidet](weitergabe-die-handlung-entscheidet.md) — was frei ist, wird gemacht; nachgefragt wird nach der Grenze der Handlung, nicht nach dem Absender.

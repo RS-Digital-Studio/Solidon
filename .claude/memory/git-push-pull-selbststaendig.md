@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: e828bb8c-574f-465c-baa0-bfcac75d3cde
-  modified: 2026-09-11T07:13:33.398Z
+  modified: 2026-09-12T17:25:13.767Z
 ---
 
 `git pull` und `git push` mache ich in diesem Repository **selbstständig**,
@@ -31,3 +31,15 @@ Entscheidung — die Antwort ist immer dieselbe.
   `git diff --name-only`) — bei Überschneidung mit eigenen offenen Dateien
   erst prüfen, dann zusammenführen.
 - Eigene unfertige Arbeit bleibt ungestaged aus dem Merge-Commit heraus.
+
+**Takt (Robert, 12.09.2026, während zwei Sitzungen und eine Codex-Sitzung im
+selben Baum arbeiteten):** „alle dateien bearbeiten, codex committet und pusht
+nach jedem abgeschlossenen punkt wie du es machen sollst." Also: **nach jedem
+abgeschlossenen Punkt ein Commit und ein Push**, nicht erst am Ende eines
+Reviews — kleine Einheiten, davor die betroffenen Tests, ruff, format und
+mypy; das geteilte Tor an Meilensteinen. Und **keine Dateisperre zwischen
+den Sitzungen**: Jede darf jede Datei bearbeiten, weil der schnelle Takt das
+Fenster für Überschneidungen klein hält. Fremde Hunks in einer geteilten
+Datei reiten dann mit — Robert nimmt das in Kauf; `git diff --cached --stat`
+vor dem Commit lesen und im Betreff nichts behaupten, was ein fremder Hunk
+tut ([[zweite-sitzung-im-selben-baum]]).
