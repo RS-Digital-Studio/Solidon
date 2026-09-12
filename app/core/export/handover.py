@@ -465,7 +465,8 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     values = as_mapping(settings, flavour)
     values |= _machine_keys(profile, flavour)
     if flavour == "cura":
-        return _cura_dependants(values, settings)
+        values = _cura_dependants(values, settings)
+    _without_line_break(values, flavour)
     return values
 
 
@@ -1238,7 +1239,7 @@ def _one_line(text: str) -> str:
     return " ".join(text.splitlines())
 
 
-def _without_line_break(values: Mapping[str, str], setup: SlicerSetup) -> None:
+def _without_line_break(values: Mapping[str, str], tool_name: str) -> None:
     """Hält an, wenn ein Einstellungswert einen Zeilenumbruch enthält (§28).
 
     Eine Slicer-Konfiguration trennt ihre Einträge mit Zeilenumbrüchen, und der
@@ -1262,7 +1263,7 @@ def _without_line_break(values: Mapping[str, str], setup: SlicerSetup) -> None:
     if not marked:
         return
     raise ExternalToolError(
-        tool=setup.name,
+        tool=tool_name,
         detail=_(
             "Eine Druckeinstellung enthält einen Zeilenumbruch. In einer "
             "Slicer-Konfiguration trennt der die Einträge und ergäbe eine "
@@ -1315,7 +1316,7 @@ def write_config(
         # die PrusaSlicer als Einstellung liest — mit ``post_process`` als
         # Befehl, den niemand gesetzt hat.
         flat = flat_values()
-        _without_line_break(flat, setup)
+        _without_line_break(flat, setup.name)
         lines = [f"# {_one_line(settings.title)} — von Solidon geschrieben, nicht von Hand"]
         lines += [f"{key} = {value}" for key, value in sorted(flat.items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1400,7 +1401,7 @@ def write_config(
     # ``-s``-Argument. Eine zweite Zeile wäre damit ein zusätzliches Argument
     # für CuraEngine.
     flat = flat_values()
-    _without_line_break(flat, setup)
+    _without_line_break(flat, setup.name)
     target.write_text(
         "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",

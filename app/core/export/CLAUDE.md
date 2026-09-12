@@ -43,6 +43,11 @@ keine Profilwahl. Nur `None` liest noch die alte Positionsfolge. Export und
 Verbrauchsplanung benutzen dieselbe Auflösung, auch nach Abwahl, Undo,
 Plattenwechsel oder Auswahl-Export.
 
+`handover.values_for` prüft sämtliche zusammengeführten Einstellungen auf
+Zeilentrenner, bevor sie den gemeinsamen Weg verlassen. Damit gilt dieselbe
+Grenze für Slicer-Konfigurationen und eingebettete Prusa-3MF-Einstellungen.
+Nach dem Ergänzen von Profilwerten wird an der Schreibstelle erneut geprüft.
+
 Profilvererbung wird mit sämtlichen Profilwurzeln des gewählten Slicers
 aufgelöst: Nutzerprofile können von installierten Profilen erben. Diese
 Wurzeln gehören auch in Filamenterkennung, Materialvergleich und Auslesen

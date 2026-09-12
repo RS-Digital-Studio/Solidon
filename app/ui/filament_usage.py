@@ -9,7 +9,7 @@ from functools import partial
 from typing import cast, override
 from uuid import uuid4
 
-from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -35,7 +35,7 @@ from app.core.scene.hashing import digest
 from app.i18n import source_text, tr
 from app.ui.filament_picker import NewFilamentDialog, hex_of, spool_label, swatch
 from app.ui.labels import NumberSpin, local_timestamp, localised
-from app.ui.leash import RELEASE_RETRY_MS, Worker, WorkerLeash, weak_slot
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, ROOMY, TARGET_SIZE, TIGHT, WIDE, make_primary, set_level
 
@@ -757,14 +757,6 @@ class UsageDialog(QDialog):
     def release(self, timeout_ms: int = 2000) -> None:
         self._tasks.release(timeout_ms)
 
-    def wait_for_workers(self, timeout_ms: int = 0) -> bool:
-        """Auch ein schon geschlossener Dialog hält bestätigte Lagerarbeit bis zum Ende."""
-        if timeout_ms > 0:
-            self.release(timeout_ms)
-        return self._tasks.worker is None and all(
-            not worker.isRunning() and worker.wait(0) for worker in self._tasks.leash.pending()
-        )
-
     def reject(self) -> None:
         """Ein bereits bestätigter atomarer Schreibvorgang wird nicht als Abbruch ausgegeben."""
         if self._pending != "book" or self._tasks.worker is None:
@@ -866,7 +858,6 @@ class UsageNotice(QWidget):
         self.requests: dict[str, UsageRequest] = {}
         self._pending: dict[str, UsageRequest] = {}
         self._booked: set[str] = set()
-        self._dialogs: list[UsageDialog] = []
         self._tasks = _UsageTasks(self)
         self._tasks.completed.connect(self._completed)
         self._tasks.rejected.connect(self._rejected)
@@ -950,36 +941,15 @@ class UsageNotice(QWidget):
         if request is None:
             return
         dialog = UsageDialog(request, self)
-        self._dialogs.append(dialog)
-        try:
-            if dialog.exec() == QDialog.DialogCode.Accepted:
-                self._booked.add(request.fingerprint)
-                self._sync_review()
-                self.changed.emit()
-        finally:
-            self._release_dialog(dialog)
-
-    def _release_dialog(self, dialog: UsageDialog) -> None:
-        """Ein beendeter Dialog verschwindet erst nach seiner letzten Lagerrückmeldung."""
-        if dialog.wait_for_workers(0):
-            self._dialogs.remove(dialog)
-            dialog.deleteLater()
-        else:
-            QTimer.singleShot(
-                RELEASE_RETRY_MS, self, weak_slot(self, UsageNotice._release_dialog, dialog)
-            )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._booked.add(request.fingerprint)
+            self._sync_review()
+            self.changed.emit()
 
     def release(self, timeout_ms: int = 2000) -> None:
         self._tasks.release(timeout_ms)
-        for dialog in tuple(self._dialogs):
-            dialog.release(timeout_ms)
 
     def wait_for_workers(self, timeout_ms: int = 0) -> bool:
         """Auch die eingereihten Buchungen enden, bevor ihr Besitzer geschlossen wird."""
-        if timeout_ms > 0:
-            self.release(timeout_ms)
-        return (
-            self._tasks.worker is None
-            and not self._pending
-            and all(dialog.wait_for_workers(0) for dialog in self._dialogs)
-        )
+        self._tasks.release(timeout_ms)
+        return self._tasks.worker is None and not self._pending

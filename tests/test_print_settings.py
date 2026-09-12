@@ -949,7 +949,8 @@ def test_a_line_break_in_the_title_never_becomes_an_ini_line(tmp_path: Path) -> 
     )
 
 
-def test_a_line_break_in_a_setting_value_is_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("destination", ["slicer", "export"])
+def test_a_line_break_in_a_setting_value_is_refused(tmp_path: Path, destination: str) -> None:
     """Werte werden abgelehnt, nicht bereinigt (Regel 21).
 
     Einen Wert stillschweigend zu ändern hieße, eine Druckeinstellung zu
@@ -963,7 +964,26 @@ def test_a_line_break_in_a_setting_value_is_refused(tmp_path: Path) -> None:
     setup = handover.SlicerSetup(executable=Path("PrusaSlicer.exe"), flavour="prusa")
 
     with pytest.raises(ExternalToolError) as caught:
-        handover.write_config(settings, profile, setup, tmp_path)
+        if destination == "slicer":
+            handover.write_config(settings, profile, setup, tmp_path)
+        else:
+            import trimesh
+
+            from app.core.export import writer
+            from app.core.geom.mesh import MeshData
+            from app.core.types import SceneObject
+
+            body = SceneObject("part", "Körper", MeshData.of(trimesh.creation.box((10, 10, 10))))
+            writer.write_assembly(
+                [body],
+                tmp_path,
+                project_name="Zeilengrenze",
+                profile=profile,
+                settings=settings,
+                flavour="prusa",
+                for_slicer=False,
+                checked=[],
+            )
 
     assert "filament_colour" in str(caught.value.values.get("setting", ""))
     assert caught.value.suggestions, "Regel 17: jede Ausnahme trägt einen Vorschlag"
