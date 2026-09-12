@@ -4274,6 +4274,74 @@ def test_resizing_a_slot_checks_its_two_ends(
     assert len(warnings) == int(opens)
 
 
+def test_a_cached_resize_cannot_hide_an_open_slot_flank(profile: Profile) -> None:
+    """Ein warmer Cache vor der Kantenprüfung darf den neuen Befund nicht verschweigen."""
+    import dataclasses
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.registry import Registry
+    from app.core.scene import ResultCache
+    from app.core.types import Operation, OpResult
+
+    body = edit.slot_bore(
+        edit.box(80.0, 40.0, 10.0),
+        position=(0.0, 8.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=20.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    slot = next(entry for entry in features_of(body).values() if entry.kind == "slot")
+    current = REGISTRY.get("resize_hole")
+
+    def make_plate(ctx: OpContext) -> OpResult:
+        return OpResult(
+            outputs=[
+                SceneObject(
+                    id="", name="Platte", kind="brep", mesh=body, features=features_of(body)
+                )
+            ]
+        )
+
+    def without_warning(ctx: OpContext) -> OpResult:
+        result = current.fn(ctx)
+        result.findings = [entry for entry in result.findings if entry.code != "bore.over_the_edge"]
+        return result
+
+    creator = dataclasses.replace(REGISTRY.get("create_brep_box"), fn=make_plate)
+    previous = dataclasses.replace(current, fn=without_warning, cache_version="")
+    before, after = Registry(), Registry()
+    for registry, resizing in ((before, previous), (after, current)):
+        registry.register(creator)
+        registry.register(resizing)
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op=creator.name, outputs=["obj_1"], params={}),
+            Operation(
+                id=2,
+                op="resize_hole",
+                inputs=["obj_1"],
+                outputs=["obj_1"],
+                params={"at_feature": slot.id, "diameter": 12.0},
+            ),
+        ],
+    )
+    cache = ResultCache()
+    old = evaluate(document, profile, registry=before, cache=cache)
+    assert old.complete and len(cache) == 2
+    assert not any(entry.code == "bore.over_the_edge" for entry in old.scene.report.findings)
+
+    fresh = evaluate(document, profile, registry=after, cache=cache)
+
+    assert fresh.complete
+    assert sum(entry.code == "bore.over_the_edge" for entry in fresh.scene.report.findings) == 1
+
+
 def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
     """Eine kürzere Länge wird abgelehnt, statt stillschweigend nichts zu tun.
 

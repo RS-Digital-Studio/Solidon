@@ -3087,6 +3087,7 @@ OPEN_BODY_DETAIL: Final = _(
 
 @register_op(
     name="resize_hole",
+    cache_version="2",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
