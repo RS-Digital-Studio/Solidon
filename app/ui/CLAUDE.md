@@ -566,6 +566,11 @@ deren Legende weiterhin physische Millimeterwerte nennt und die Abstufung
 ausweist. Der Viewport reicht die transformierten Werte an den Renderer;
 Messwerte, Schwellwerte und Hervorhebungen bleiben unverändert.
 
+Ausgetauschte Kacheln, Programmzeilen, Spulendetails und Legenden werden vor
+`deleteLater()` verborgen; das Entfernen aus dem Layout beendet ihre Sichtbarkeit
+nicht. Die Füllung und Dicke der Schichtbalken bleiben fachlich gebunden, ihre
+Randfarbe übernimmt der globale Stil über `layerLegendStroke` bei jedem Themenwechsel.
+
 **Dialoge**
 
 Operationsdialoge gehören dem Projekt, in dem sie geöffnet wurden. Ein

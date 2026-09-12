@@ -604,6 +604,7 @@ class InventoryView(QWidget):
             item = self.detail_layout.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
+                widget.hide()
                 widget.deleteLater()
         back = QPushButton(tr("Zurück zum Regal"), self.detail)
         back.clicked.connect(self.show_shelf)

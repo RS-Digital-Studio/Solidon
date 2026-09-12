@@ -1093,6 +1093,8 @@ QStatusBar::item {{ border: none; }}
    eigene Item-Rahmen sind oben ausgeschaltet, und ein 3D-Rahmen wäre
    ohnehin die falsche Form. */
 QFrame#{DIVIDER} {{ color: {line}; background: {line}; border: none; }}
+/* Die Konturfarbe bleibt fachlich fest, ihr Rand folgt dem Thema. */
+QFrame#layerLegendStroke {{ border-color: {line}; }}
 
 /* Der Hinweis unter dem Zeiger war das letzte Element ohne eigene Form: Qt
    zeichnete ihn kantig und randlos, während daneben jedes Feld seinen Radius

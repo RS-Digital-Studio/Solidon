@@ -371,3 +371,22 @@ def test_full_spool_is_only_set_by_explicit_action(qt_app: QApplication) -> None
     assert dialog.entry().remaining_grams is None
     dialog.full_spool_button.click()
     assert dialog.entry().remaining_grams == pytest.approx(750)
+
+
+def test_replaced_spool_details_hide_before_deferred_deletion(
+    inventory: InventoryView, qt_app: QApplication
+) -> None:
+    """Der nächste Detailaufbau zeigt keine Knöpfe der vorigen Spule mehr."""
+    first = filaments.save(filaments.CatalogueFilament("Erste", "#123456"))
+    second = filaments.save(filaments.CatalogueFilament("Zweite", "#123456"))
+    inventory.show_spool(first.identifier)
+    inventory.show()
+    qt_app.processEvents()
+    old = [
+        inventory.detail_layout.itemAt(index).widget()
+        for index in range(inventory.detail_layout.count())
+        if inventory.detail_layout.itemAt(index).widget() is not None
+    ]
+    assert old and all(widget.isVisible() for widget in old)
+    inventory.show_spool(second.identifier)
+    assert all(widget.isHidden() for widget in old)

@@ -1150,6 +1150,7 @@ class StartScreen(QWidget):
                 item = grid.takeAt(0)
                 widget = item.widget() if item is not None else None
                 if widget is not None:
+                    widget.hide()
                     widget.deleteLater()
         self.tiles = []
 

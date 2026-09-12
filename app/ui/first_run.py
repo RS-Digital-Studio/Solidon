@@ -588,6 +588,7 @@ class FirstRunDialog(QDialog):
             item = self._tool_rows.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
+                widget.hide()
                 widget.deleteLater()
         for state in states:
             self._tool_rows.addWidget(ToolRow(state, self.tools))

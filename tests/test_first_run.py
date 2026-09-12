@@ -2377,3 +2377,20 @@ def test_the_remote_service_survives_the_language_switch(qt_app: object) -> None
             fresh.deleteLater()
         install_language("de")
         set_language("de")
+
+
+def test_replaced_tool_rows_hide_before_deferred_deletion(qt_app: QApplication) -> None:
+    """Eine neue Erhebung entfernt die alten Programmzeilen sofort aus dem Bild."""
+    from app.ui.first_run import ToolRow
+
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+    try:
+        rows = dialog.tools.findChildren(ToolRow)
+        assert rows
+        for row in rows:
+            row.show()
+        dialog._fill_tools(())
+        assert all(row.isHidden() for row in rows)
+    finally:
+        dialog.reject()
+        dialog.deleteLater()

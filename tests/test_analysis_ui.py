@@ -5442,3 +5442,83 @@ def test_a_grabbable_preview_keeps_the_selection_gizmo_away(qt_app: QApplication
         assert viewport._gizmo is not None, "mit der Vorschau kommt er zurück"
     finally:
         viewport.deleteLater()
+
+
+def test_replaced_map_legend_hides_before_deferred_deletion(qt_app: QApplication) -> None:
+    """Alte Farbfelder und der Ausweg verschwinden im selben Aufruf wie die Karte."""
+    legend = MapLegend()
+    legend.show_map(
+        maps.AnalysisMap(kind="wall", title="x", values=(1.0,), unit="mm", low=1.0, high=4.0)
+    )
+    legend.offer("Ausweg", lambda: None)
+    legend.show()
+    qt_app.processEvents()
+    old = [
+        legend._layout.itemAt(index).widget()
+        for index in range(legend._layout.count())
+        if legend._layout.itemAt(index).widget() is not legend.note
+    ]
+    assert old and all(widget.isVisible() for widget in old)
+    legend.show_map(None)
+    assert all(widget.isHidden() for widget in old)
+    assert not legend.note.isHidden()
+    legend.deleteLater()
+
+
+def test_removed_layer_legend_hides_before_deferred_deletion(qt_app: QApplication) -> None:
+    """Ohne Schicht sind auch die noch lebenden alten Legendeneinträge unsichtbar."""
+    bar = LayerBar()
+    bar.set_active(True)
+    layer = SimpleNamespace(z=1.0, area=100.0, islands=[(0.0, 0.0)], overhang_area=5.0)
+    bar.show_result(SimpleNamespace(layers=[layer]))
+    bar.show()
+    qt_app.processEvents()
+    old = [
+        bar._legend.itemAt(index).widget()
+        for index in range(bar._legend.count())
+        if bar._legend.itemAt(index).widget() is not None
+    ]
+    assert old and all(widget.isVisible() for widget in old)
+    bar.show_result(None)
+    assert all(widget.isHidden() for widget in old)
+    bar.deleteLater()
+
+
+@pytest.mark.parametrize("chosen", ["light", "dark"])
+def test_existing_layer_stroke_border_follows_theme(qt_app: QApplication, chosen: str) -> None:
+    """Ein echter Themenwechsel färbt den bestehenden Rand bei unverändertem Inhalt."""
+    from PySide6.QtWidgets import QFrame
+
+    from app.ui.palette import ROLES
+    from app.ui.theme import THEMES, apply_theme, current_theme
+
+    previous = current_theme()
+    before = "dark" if chosen == "light" else "light"
+    apply_theme(qt_app, before)
+    bar = LayerBar()
+    try:
+        bar.set_active(True)
+        layer = SimpleNamespace(z=1.0, area=100.0, islands=[], overhang_area=0.0)
+        bar.show_result(SimpleNamespace(layers=[layer]))
+        bar.show()
+        qt_app.processEvents()
+        entry = bar._legend.itemAt(0).widget()
+        stroke = entry.layout().itemAt(0).widget()
+        assert isinstance(stroke, QFrame)
+
+        def colours() -> tuple[str, str]:
+            picture = stroke.grab().toImage()
+            return (
+                picture.pixelColor(0, picture.height() // 2).name(),
+                picture.pixelColor(picture.width() // 2, picture.height() // 2).name(),
+            )
+
+        assert colours() == (THEMES[before]["line"], ROLES["layer"])
+        apply_theme(qt_app, chosen)
+        qt_app.processEvents()
+        assert bar._legend.itemAt(0).widget() is entry
+        assert colours() == (THEMES[chosen]["line"], ROLES["layer"])
+    finally:
+        bar.close()
+        bar.deleteLater()
+        apply_theme(qt_app, previous)

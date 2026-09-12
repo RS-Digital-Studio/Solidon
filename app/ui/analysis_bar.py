@@ -35,7 +35,6 @@ from app.ui.leash import weak_slot
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT, make_primary
-from app.ui.theme import THEMES, current_theme
 from app.ui.tool_strip import BarComboBox
 
 #: Wie lang der Farbbalken der Ringlegende ist.
@@ -114,6 +113,7 @@ class MapLegend(QWidget):
             item = self._layout.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None and widget is not self.note:
+                widget.hide()
                 widget.deleteLater()
         self.entries = []
         # Der Knopf ist eben mitgegangen. Die Referenz darauf zeigte danach
@@ -478,6 +478,7 @@ class LayerBar(QWidget):
             item = self._legend.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
+                widget.hide()
                 widget.deleteLater()
 
     def _show_readout(self) -> None:
@@ -554,10 +555,10 @@ class LayerBar(QWidget):
             # Rollenbefund (03.09.2026). Was hier zählt: Der **Name** daneben
             # ist lesbar, und die Balkenhöhe trägt die Aussage ein zweites Mal.
             stroke = QFrame(entry)
+            stroke.setObjectName("layerLegendStroke")
             stroke.setFixedSize(STROKE_LENGTH, LAYER_WIDTHS[role] + 2 * STROKE_EDGE)
             stroke.setStyleSheet(
-                f"background: {ROLES[role]};"
-                f"border: {STROKE_EDGE}px solid {THEMES[current_theme()]['line']};"
+                f"background: {ROLES[role]};border-width: {STROKE_EDGE}px; border-style: solid;"
             )
             row.addWidget(stroke)
             row.addWidget(QLabel(name, entry))

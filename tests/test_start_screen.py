@@ -1133,3 +1133,18 @@ def test_the_drop_area_is_a_keyboard_button(screen: StartScreen) -> None:
     QTest.keyClick(area, Qt.Key.Key_Space)
 
     assert seen == ["import"]
+
+
+@pytest.mark.parametrize("grid_name", ["examples_grid", "more_grid"])
+def test_replaced_example_tiles_hide_before_deferred_deletion(
+    screen: StartScreen, qt_app: QApplication, grid_name: str
+) -> None:
+    """Alte Kacheln bleiben zwischen Neuaufbau und Qt-Löschung unsichtbar."""
+    grid = getattr(screen, grid_name)
+    old = [grid.itemAt(index).widget() for index in range(grid.count())]
+    assert old
+    for tile in old:
+        tile.show()
+    assert all(not tile.isHidden() for tile in old)
+    screen.show_examples()
+    assert all(tile.isHidden() for tile in old)
