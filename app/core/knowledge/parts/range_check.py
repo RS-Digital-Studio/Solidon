@@ -762,7 +762,7 @@ class _IntersectionCheck:
                 array = None
                 if use_pointer:
                     try:
-                        pointer = ids.GetPointer(0)
+                        pointer: object = ids.GetPointer(0)
                         match = (
                             re.fullmatch(r"_([0-9a-fA-F]+)_p_void", pointer)
                             if isinstance(pointer, str)
