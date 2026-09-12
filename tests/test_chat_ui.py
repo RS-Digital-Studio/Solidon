@@ -114,7 +114,43 @@ def test_without_a_model_the_chat_says_so_once(qt_app: QApplication) -> None:
 
     assert not panel.input.isEnabled()
     assert not panel.send.isEnabled()
-    assert "Sprachmodell" in panel.hint.text()
+    assert "Sprachmodell" in panel.access_hint.text()
+
+
+def test_chat_access_reason_stays_next_to_its_action(qt_app: QApplication) -> None:
+    """Modellmangel und Lizenzsperre behalten Satz und Rückweg im selben Abschnitt."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QLabel
+
+    from app.core import activation
+    from app.ui.dialogs import licence_lock_line
+
+    panel = ChatPanel()
+    panel.resize(400, 700)
+    panel.show()
+    try:
+        for locked in (False, True):
+            panel.set_available(locked, "test:model")
+            panel.set_locked(locked)
+            qt_app.processEvents()
+            text = str(licence_lock_line(activation.state())) if locked else "Sprachmodell"
+            reason = next(
+                label
+                for label in panel.findChildren(QLabel)
+                if text in label.text() and label.isVisibleTo(panel)
+            )
+            button = panel.unlock if locked else panel.setup
+            assert button.isVisibleTo(panel)
+            bottom = reason.mapTo(panel, QPoint(0, reason.height())).y()
+            top = button.mapTo(panel, QPoint(0, 0)).y()
+            assert 0 <= top - bottom <= panel.content_layout.spacing()
+        panel.set_locked(False)
+        assert panel.hint.isVisibleTo(panel)
+        assert "test:model" in panel.hint.text()
+        assert panel.setup.isHidden()
+        assert panel.unlock.isHidden()
+    finally:
+        panel.deleteLater()
 
 
 def test_with_a_model_the_line_is_open(qt_app: QApplication) -> None:
@@ -1606,17 +1642,17 @@ def test_a_damaged_installation_does_not_offer_a_key_that_would_not_help(
 
     monkeypatch.setattr(activation, "_cached", activation.Activation(damaged=True))
     panel.set_locked(True)
-    beschaedigt = panel.hint.text()
+    beschaedigt = panel.access_hint.text()
     knopf_beschaedigt = panel.unlock.isVisibleTo(panel)
 
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
     panel.set_locked(True)
-    abgelaufen = panel.hint.text()
+    abgelaufen = panel.access_hint.text()
     knopf_abgelaufen = panel.unlock.isVisibleTo(panel)
 
     monkeypatch.setattr(store, "TRIAL_FROM", None)
     panel.set_locked(True)
-    ohne_test = panel.hint.text()
+    ohne_test = panel.access_hint.text()
 
     assert "Testzeitraum" not in beschaedigt, "wer bezahlt hat, wird nicht nach dem gefragt"
     assert not knopf_beschaedigt, "und bekommt keinen Knopf in eine Sackgasse"

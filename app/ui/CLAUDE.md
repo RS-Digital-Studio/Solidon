@@ -600,6 +600,10 @@ zum Schnittkörper, mit gemeinsamer Platzierung und gemeinsamem Abbau.
 
 ## P0-08 — KI-Hinweis an der Sendegrenze
 
+Im Chat stehen Mangel- und Lizenzgrund direkt über dem passenden
+Einrichtungs- oder Freischaltknopf im Rollbereich. Die reine Modellzeile
+bleibt bei der Eingabe; beim Entsperren kehrt die Modellverfügbarkeit zurück.
+
 `ai_disclosure.py` hält den sichtbaren Informationstext, den lokalen
 Anzeigenachweis und die gemeinsame Sperre zusammen. `ensure_ai_disclosure`
 steht vor jedem echten LLM-Modellaufruf: im Hauptfenster unmittelbar vor

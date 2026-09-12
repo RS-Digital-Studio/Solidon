@@ -11517,7 +11517,7 @@ def test_an_expired_trial_greys_the_writing_side_out(
 
     assert not window.chat.input.isEnabled()
     assert window.chat.unlock.isVisibleTo(window.chat)
-    assert "Lizenzschlüssel" in window.chat.hint.text()
+    assert "Lizenzschlüssel" in window.chat.access_hint.text()
 
 
 def test_entering_a_key_puts_everything_back(

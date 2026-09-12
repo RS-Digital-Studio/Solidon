@@ -161,6 +161,8 @@ class ChatPanel(QWidget):
         self.hint = QLabel("", self)
         self.hint.setObjectName("chatModelHint")
         self.hint.setWordWrap(True)
+        self.access_hint = QLabel("", self)
+        self.access_hint.setWordWrap(True)
         # §2.7: ein Hinweis, der nur feststellt, was fehlt, lässt den
         # Benutzer stehen. Der Knopf daneben führt dorthin, wo es behoben
         # wird — sichtbar nur, solange etwas zu beheben ist.
@@ -313,6 +315,7 @@ class ChatPanel(QWidget):
         self.content_layout = QVBoxLayout(self.content_viewport)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.addWidget(self.notice)
+        self.content_layout.addWidget(self.access_hint)
         self.content_layout.addWidget(self.setup)
         self.content_layout.addWidget(self.unlock)
         self.content_layout.addWidget(self.welcome)
@@ -330,12 +333,8 @@ class ChatPanel(QWidget):
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.content_scroll, stretch=1)
         layout.addLayout(entry_row)
-        # **Zuletzt, nicht zuerst.** „Modell: ollama:qwen3:14b" stand als
-        # oberste Zeile des Reiters; es beantwortet eine Frage, die niemand
-        # als erste stellt, und der Satz daneben — „Der Chat braucht einen
-        # Zugang zu einem Sprachmodell" — ist die Ausnahme: Er steht bei
-        # fehlendem Zugang neben seinem Knopf und wird deshalb mit ihm
-        # zusammen sichtbar.
+        # Die Modellzeile bleibt bei der Eingabe. Der Mangel- oder Sperrgrund
+        # steht im Rollbereich unmittelbar vor seinem Einrichtungsweg.
         layout.addWidget(self.hint)
 
         self._available = False
@@ -351,16 +350,21 @@ class ChatPanel(QWidget):
         nörgeln.
         """
         self._available = available
-        self.hint.setText(
-            f"{tr('Modell')}: {backend}"
-            if available
-            else tr(
-                "Der Chat braucht einen Zugang zu einem Sprachmodell — einen eigenen "
-                "Schlüssel oder ein lokal installiertes Modell. Alles andere "
-                "funktioniert ohne."
+        self._backend_name = backend
+        self.hint.setText(f"{tr('Modell')}: {backend}" if available else "")
+        self.hint.setVisible(available and not self._locked)
+        if not self._locked:
+            self.access_hint.setText(
+                tr(
+                    "Der Chat braucht einen Zugang zu einem Sprachmodell — einen eigenen "
+                    "Schlüssel oder ein lokal installiertes Modell. Alles andere "
+                    "funktioniert ohne."
+                )
+                if not available
+                else ""
             )
-        )
-        self.setup.setVisible(not available)
+        self.access_hint.setVisible(not available or self._locked)
+        self.setup.setVisible(not available and not self._locked)
         self._update_enabled()
 
     def set_notice(self, text: str) -> None:
@@ -373,9 +377,8 @@ class ChatPanel(QWidget):
         Seite — das Panel sagt es in einer Zeile mit dem Weg zurück und hält
         sich sonst heraus (§27).
 
-        Wird nach :meth:`set_available` gerufen und überschreibt dessen
-        Hinweis; beim Entsperren stellt der nächste ``set_available``-Lauf
-        ihn wieder her.
+        Der Lizenzgrund ersetzt den fehlenden Zugang direkt bei dessen
+        Handlung; beim Entsperren wird die Modellverfügbarkeit wieder gezeigt.
 
         **Zwei Lagen, zwei Sätze — und der Knopf gehört nur zu einer.** Hier
         stand ein fester Satz über den abgelaufenen Testzeitraum, abgeleitet
@@ -394,10 +397,10 @@ class ChatPanel(QWidget):
 
         state = activation.state()
         self._locked = locked
+        self.set_available(self._available, self._backend_name)
         self.unlock.setVisible(locked and not state.damaged)
         if locked:
-            self.hint.setText(licence_lock_line(state))
-            self.setup.setVisible(False)
+            self.access_hint.setText(licence_lock_line(state))
         self._update_enabled()
 
     def set_busy(self, busy: bool) -> None:
