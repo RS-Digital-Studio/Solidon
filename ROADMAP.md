@@ -43,7 +43,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Flatpak-Lauf belegen; die CI baut mit Inno Setup 6 und protokolliert die Fassung nicht |
-| [RM-065 — TLS und Update-Prüfung auf einem Kunden-Mac bestätigen](#rm-065) | Plattformen, Pakete und Grafik | Aktualisierungsprüfung aus dem aktuellen Mac-Paket erfolgreich ausführen |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Hohlkugel-Zielreihe samt echter Warnung auf Apple Silicon messen |
@@ -71,7 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
-| [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
+| [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
@@ -387,10 +386,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-065"></a>
 
-- [ ] **RM-065 — TLS und Update-Prüfung auf einem Kunden-Mac bestätigen.** Der certifi-Rückfall und
-  die Vorrangregel für eine Firmen-CA sind gebaut; Paketinhalt allein genügt nicht. Abnahme:
-  aktuelles `.pkg` starten und die Aktualisierungsprüfung erfolgreich ausführen, bei einem Fehler
-  den konkreten TLS-Grund aus dem Protokoll festhalten.
+- [x] **RM-065 — TLS und Update-Prüfung auf einem Kunden-Mac bestätigen.** Der certifi-Rückfall und
+  die Vorrangregel für eine Firmen-CA sind gebaut; Paketinhalt allein genügt nicht, und deshalb
+  stand der Punkt offen, obwohl der Code seit dem 27.08.2026 stand.
+
+  **Abgenommen am 12.09.2026** (Robert: „die spacemaus und update auf dem mac funktionieren jetzt
+  problemlos"). Die Aktualisierungsprüfung läuft auf dem Mac durch; ein TLS-Grund aus dem Protokoll
+  wird damit nicht gebraucht.
+
+  Was der Nachweis **nicht** deckt und auch nie sollte: die Firmen-CA. Ihre Vorrangregel ist gebaut
+  und geprüft, aber ein Mac hinter einem abfangenden Firmenproxy stand nie zur Verfügung — das ist
+  keine offene Arbeit, sondern eine benannte Grenze des Nachweises.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
 
@@ -1246,10 +1252,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 - [~] **RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen.** HID-Anbindung und
   Kameraabbildung sind gebaut und von Robert mit SpaceMouse Compact gefahren; macOS nutzt inzwischen
-  den 3Dconnexion-Treiber. Offen: aktueller Mac-Gerätetest, Linux-Rechte und Gerätetest, Verhalten
-  bei paralleler 3DxWare-Mausemulation sowie Bildrate an einem Netz mit 1 Mio. Dreiecken. Abnahme je
-  Plattform mit benanntem Gerät, Treiber und reproduzierbarer Navigation; eine automatische Änderung
-  der Treiberkonfiguration vorher entscheiden.
+  den 3Dconnexion-Treiber.
+
+  **Der Mac ist gefahren** (Robert, 12.09.2026: „die spacemaus und update auf dem mac funktionieren
+  jetzt problemlos"). Das ist ein Feldnachweis und kein Testlauf — er zählt für die Plattform, auf
+  der er stattfand, und für nichts sonst.
+
+  Offen bleiben damit: **Linux** (Rechte und Gerätetest), das Verhalten bei paralleler
+  3DxWare-Mausemulation und die Bildrate an einem Netz mit 1 Mio. Dreiecken. Abnahme je Plattform
+  mit benanntem Gerät, Treiber und reproduzierbarer Navigation; eine automatische Änderung der
+  Treiberkonfiguration vorher entscheiden.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
 
