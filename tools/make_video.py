@@ -2747,9 +2747,10 @@ def compose_feature_short(
         shutil.rmtree(target_frames)
     target_frames.mkdir(parents=True)
     width, height = 1080, 1920
-    model_rect = QRect(310, 0, 1358, 920)
+    # Die Querformatbeschriftung beginnt bei y=862; sie gehört nicht in den Bildausschnitt.
+    model_rect = QRect(310, 0, 1358, 850)
     detail_rects = {
-        "mesh": QRect(310, 0, 1358, 920),
+        "mesh": model_rect,
         "recognise": QRect(1660, 70, 260, 220),
         "preview_feature": QRect(1660, 135, 260, 210),
         "apply_feature": QRect(1660, 135, 260, 210),
@@ -2815,14 +2816,16 @@ def compose_feature_short(
             title = QFont("Segoe UI")
             title.setPixelSize(54)
             title.setWeight(QFont.Weight.Bold)
-            while QFontMetrics(title).horizontalAdvance(caption[0]) > 960:
+            while (
+                title.pixelSize() > 18 and QFontMetrics(title).horizontalAdvance(caption[0]) > 960
+            ):
                 title.setPixelSize(title.pixelSize() - 1)
             painter.setFont(title)
             painter.setPen(QColor("#f5f7fa"))
             painter.drawText(
                 QRectF(60.0, 98.0, 960.0, 72.0),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                caption[0],
+                QFontMetrics(title).elidedText(caption[0], Qt.TextElideMode.ElideRight, 960),
             )
             detail_font = QFont("Segoe UI")
             detail_font.setPixelSize(35)
@@ -3283,10 +3286,9 @@ def _aim_camera(
 def hide_axis_marker(window: Any) -> None:
     """Das Achsenkreuz in der Ecke abschalten.
 
-    Der Nachbar von :func:`hide_orientation_widget`, und er wird getrennt
-    gerufen: Im **Loop** ist die Anwendung die Aussage, dort gehören ihre
-    Bedienelemente ins Bild. In der Drehreihe ist es das **Teil**, und ein
-    Achsenkreuz, das sich mitdreht, ist Werkzeug im Schaufenster.
+    Im **Loop** ist die Anwendung die Aussage, dort gehören ihre Bedienelemente
+    ins Bild. Drehreihe und Hochformat blenden das Kreuz aus: Dort zeigt die
+    Aufnahme das Teil, und die Ecke bleibt für die Abspielsteuerung frei.
 
     Über den Vertrag des Renderers (``set_axes_marker(None)``) und nicht über
     dessen Innereien: Ein ``getattr`` auf ein Widget, das es nicht gibt, liefert
@@ -3675,6 +3677,7 @@ def shoot_language(
     else:
         print("Aufnahme hoch:")
         show_panels(window, False)
+        hide_axis_marker(window)
         window.resize(*PORTRAIT)
         settle_resize(window, app)
         portrait = shoot_storyboard(

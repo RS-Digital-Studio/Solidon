@@ -1869,6 +1869,50 @@ def test_the_feature_film_proves_the_same_identity_in_both_languages() -> None:
         assert sum(seconds for _key, _path, seconds in timing) == 27.0
 
 
+@pytest.mark.parametrize("long_title", [False, True])
+def test_short_frame_excludes_landscape_caption_and_bounds_title_size(
+    tmp_path: Path, qt_app, monkeypatch: pytest.MonkeyPatch, long_title: bool
+) -> None:
+    """Ein echtes Short-Bild enthält keinen abgeschnittenen Querformatkasten."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QColor, QFont, QImage, QPainter
+
+    from tools.make_video import Shot, compose_feature_short
+
+    frames = tmp_path / "landscape"
+    frames.mkdir()
+    frame = QImage(1920, 1080, QImage.Format.Format_RGB32)
+    frame.fill(QColor("#336644"))
+    painter = QPainter(frame)
+    painter.fillRect(QRect(310, 862, 1358, 112), QColor("#ff00ff"))
+    painter.end()
+    assert frame.save(str(frames / "00000.png"))
+    sizes = []
+    original = QFont.setPixelSize
+
+    def measured_size(font: QFont, size: int) -> None:
+        assert size >= 18, "die Verkleinerung muss vor unlesbaren Schriftgrößen enden"
+        sizes.append(size)
+        original(font, size)
+
+    monkeypatch.setattr(QFont, "setPixelSize", measured_size)
+    title = "Ein lesbarer Titel " * (1000 if long_title else 1)
+    result = compose_feature_short(
+        Shot(frames, 1, (310, 0, 1358, 920)),
+        tmp_path / "portrait",
+        [("mesh", tmp_path / "nicht-verwendet.wav", 0.001)],
+        "de",
+        {"mesh": (title, "Das Modell bleibt sichtbar")},
+    )
+    shown = QImage(str(result.frames / "00000.png"))
+
+    assert (shown.width(), shown.height(), result.count) == (1080, 1920, 1)
+    assert shown.pixelColor(540, 900).name() == "#336644"
+    assert shown.pixelColor(540, 1630).name() == "#336644"
+    if long_title:
+        assert 18 in sizes
+
+
 def test_the_press_short_series_proves_each_claim_in_one_clip() -> None:
     """Redaktionen bekommen einzelne Belege statt eines allgemeinen Imagefilms."""
     from tools.make_video import (
