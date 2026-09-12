@@ -38,11 +38,14 @@ Wahl.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections import deque
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import date
+from functools import partial
+from typing import cast
 
-from PySide6.QtCore import QEvent, QPoint, QSignalBlocker, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -68,7 +71,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import discover, tools
-from app.core.errors import AppError
+from app.core.errors import AppError, InternalError
 from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.handover import detect
 from app.core.geom.attributes import used_slots
@@ -76,8 +79,8 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, profiles
 from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
-from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin, localised
+from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
 from app.ui.panels import MAX_ROWS, collapsible, least_height_of, row_height_of, view_chrome
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
@@ -838,6 +841,106 @@ class NewFilamentDialog(QDialog):
         )
 
 
+class _CatalogueWrite(Worker):
+    """Ein bestätigter Lagerauftrag wartet auf die Dateisperre außerhalb von Qt."""
+
+    completed = Signal(object)
+    rejected = Signal(object)
+
+    def __init__(self, action: Callable[[], object]) -> None:
+        super().__init__()
+        self._action: Callable[[], object] | None = action
+
+    def work(self) -> None:
+        assert self._action is not None
+        try:
+            result = self._action()
+        except AppError as problem:
+            self.rejected.emit(problem)
+            return
+        self.completed.emit(result)
+
+    def release_finished_references(self) -> None:
+        self._action = None
+        super().release_finished_references()
+
+
+class CatalogueWrites(QObject):
+    """Spulenwähler und Regal teilen geordnete Schreibaufträge samt Fensterabschluss."""
+
+    completed = Signal(object)
+    rejected = Signal(object)
+    busyChanged = Signal(bool)
+
+    def __init__(self, parent: QWidget) -> None:
+        owner = parent
+        while owner.parentWidget() is not None:
+            owner = cast(QWidget, owner.parentWidget())
+        super().__init__(owner)
+        self.worker: _CatalogueWrite | None = None
+        self._pending: deque[Callable[[], object]] = deque()
+        self._leash = WorkerLeash(self)
+        if owner is not parent:
+            parent.destroyed.connect(self._release_when_unused)
+
+    def _release_when_unused(self) -> None:
+        """Ein entfernter Wähler behält nur noch seine bereits bestätigten Aufträge."""
+        if self.wait_for_workers(0):
+            self.deleteLater()
+        else:
+            QTimer.singleShot(
+                RELEASE_RETRY_MS, self, weak_slot(self, CatalogueWrites._release_when_unused)
+            )
+
+    @property
+    def pending(self) -> bool:
+        """Fachliche Rückmeldungen gehören noch zum Auftrag, auch wenn der Thread fertig ist."""
+        return self.worker is not None or bool(self._pending)
+
+    def run(self, action: Callable[[], object]) -> None:
+        self._pending.append(action)
+        self._start_pending()
+
+    def _start_pending(self) -> None:
+        if self.worker is not None:
+            return
+        if not self._pending:
+            self.busyChanged.emit(False)
+            return
+        worker = _CatalogueWrite(self._pending.popleft())
+        self.worker = worker
+        worker.completed.connect(self._completed)
+        worker.rejected.connect(self._rejected)
+        worker.crashed.connect(self._crashed)
+        self.busyChanged.emit(True)
+        self._leash.start(worker)
+
+    def _completed(self, result: object) -> None:
+        if self.sender() is not self.worker:
+            return
+        self.worker = None
+        self.completed.emit(result)
+        self._start_pending()
+
+    def _rejected(self, problem: object) -> None:
+        if self.sender() is not self.worker:
+            return
+        self.worker = None
+        self.rejected.emit(problem)
+        self._start_pending()
+
+    def _crashed(self, detail: str) -> None:
+        self._rejected(InternalError(detail=detail))
+
+    def wait_for_workers(self, timeout_ms: int = 0) -> bool:
+        """Bestätigte Schreibvorgänge laufen aus, bevor das Hauptfenster endet."""
+        if timeout_ms > 0:
+            self._leash.wait_all(timeout_ms)
+        return not self.pending and all(
+            not worker.isRunning() and worker.wait(0) for worker in self._leash.pending()
+        )
+
+
 class FilamentField(QComboBox):
     """Der Wähler selbst. Sein Wert ist die Slotnummer — wie eh und je.
 
@@ -852,6 +955,7 @@ class FilamentField(QComboBox):
     filamentChosen = Signal(str, str, str, str)
     spoolChosen = Signal(object)
     choiceNotice = Signal(str)
+    pendingChanged = Signal(bool)
 
     def __init__(
         self,
@@ -868,6 +972,10 @@ class FilamentField(QComboBox):
         #: Die zuletzt wirklich gewählte Zeile — der Rückweg, wenn „Neues
         #: Filament …" abgebrochen wird (UI-24).
         self._last_position = -1
+        self._writes = CatalogueWrites(self)
+        self._writes.completed.connect(self._entry_saved)
+        self._writes.rejected.connect(self._write_failed)
+        self._writes.busyChanged.connect(self._write_busy)
         self.setToolTip(
             tr(
                 "Welches Filament diese Fläche bekommt. Die Vorwahl steht darunter — "
@@ -1126,12 +1234,11 @@ class FilamentField(QComboBox):
         if not entry.name:
             self.setCurrentIndex(before)
             return
-        try:
-            entry = filaments.save(entry)
-        except AppError as problem:
-            self.setCurrentIndex(before)
-            show_error(problem, self)
-            return
+        self.setCurrentIndex(before)
+        self._writes.run(partial(filaments.save, entry))
+
+    def _entry_saved(self, result: object) -> None:
+        entry = cast(filaments.CatalogueFilament, result)
         # Neu aufbauen statt einzufügen: Die Nummernvergabe hängt an der
         # ganzen Liste, und eine von Hand eingeschobene Zeile hätte sie
         # doppelt vergeben.
@@ -1142,6 +1249,26 @@ class FilamentField(QComboBox):
         if place >= 0:
             self.setCurrentIndex(place)
             self._chosen(place)
+
+    def _write_failed(self, problem: object) -> None:
+        self.choiceNotice.emit(str(problem))
+
+    def _write_busy(self, busy: bool) -> None:
+        self.setEnabled(not busy)
+        if busy:
+            self.choiceNotice.emit(tr("Das Filamentlager wird gespeichert …"))
+        self.pendingChanged.emit(busy)
+
+    @property
+    def pending(self) -> bool:
+        """Die neue Auswahl steht erst nach dem bestätigten Schreiben fest."""
+        return self._writes.pending
+
+    def wait_for_workers(self, timeout_ms: int = 0) -> bool:
+        return self._writes.wait_for_workers(timeout_ms)
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        self.wait_for_workers(timeout_ms)
 
     def _position_of(self, name: str) -> int:
         for position in range(self.count()):
@@ -1213,6 +1340,10 @@ class FilamentPanel(QWidget):
         self.hint = QLabel(self)
         self.hint.setWordWrap(True)
         set_level(self.hint, "caption")
+        self._writes = CatalogueWrites(self)
+        self._writes.completed.connect(self._catalogue_saved)
+        self._writes.rejected.connect(self._write_failed)
+        self._writes.busyChanged.connect(self._write_busy)
 
         self.add_button = QPushButton(tr("Filament anlegen …"), self)
         self.add_button.clicked.connect(self._add)
@@ -1535,13 +1666,28 @@ class FilamentPanel(QWidget):
         entry = dialog.entry()
         if not entry.name:
             return
-        try:
-            filaments.save(entry)
-        except AppError as problem:
-            self.hint.setText(str(problem))
-            return
+        self._writes.run(partial(filaments.save, entry))
+
+    def _catalogue_saved(self, _result: object) -> None:
         self._fill()
         self.catalogueChanged.emit()
+
+    def _write_failed(self, problem: object) -> None:
+        self.hint.setText(str(problem))
+        self._fit()
+
+    def _write_busy(self, busy: bool) -> None:
+        self.list.setEnabled(not busy)
+        self.add_button.setEnabled(not busy)
+        if busy:
+            self.hint.setText(tr("Das Filamentlager wird gespeichert …"))
+            self._fit()
+
+    def wait_for_workers(self, timeout_ms: int = 0) -> bool:
+        return self._writes.wait_for_workers(timeout_ms)
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        self.wait_for_workers(timeout_ms)
 
     def _on_activated(self, item: QListWidgetItem) -> None:
         if item.data(_SLOT_ROLE) is not None:
@@ -1572,25 +1718,13 @@ class FilamentPanel(QWidget):
         dialog = NewFilamentDialog(self, entry=chosen)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        try:
-            filaments.save(dialog.entry())
-        except AppError as problem:
-            self.hint.setText(str(problem))
-            return
-        self._fill()
-        self.catalogueChanged.emit()
+        self._writes.run(partial(filaments.save, dialog.entry()))
 
     def _remove(self) -> None:
         chosen = self._chosen()
         if chosen is None:
             return
-        try:
-            filaments.archive(chosen.identifier)
-        except AppError as problem:
-            self.hint.setText(str(problem))
-            return
-        self._fill()
-        self.catalogueChanged.emit()
+        self._writes.run(partial(filaments.archive, chosen.identifier))
 
     def _on_context_menu(self, where: QPoint) -> None:
         if self._chosen() is None:

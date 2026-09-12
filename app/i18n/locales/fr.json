@@ -609,6 +609,7 @@
   "Das Filamentlager ist auch ohne Auswahl erreichbar.": "Le stock de filament est accessible même sans sélection.",
   "Das Filamentlager lässt sich nicht lesen. Die Datei bleibt unverändert. Stellen Sie eine Sicherung wieder her oder prüfen Sie die Datei filaments.json.": "Impossible de lire le stock de filament. Le fichier reste inchangé. Restaurez une sauvegarde ou vérifiez le fichier filaments.json.",
   "Das Filamentlager wird gerade geändert. Versuchen Sie es erneut.": "Le stock de filament est en cours de modification. Veuillez réessayer.",
+  "Das Filamentlager wird gespeichert …": "Enregistrement du stock de filament …",
   "Das Filamentprofil des Herstellers nennt andere Werte als die Einstellungen. Übergeben werden die Einstellungen.": "Le profil de filament du fabricant annonce d'autres valeurs que les réglages. Ce sont les réglages qui sont transmis.",
   "Das Geräte-Zertifikat gehört zu einem anderen Lizenzschlüssel.": "Le certificat de l’appareil appartient à une autre clé de licence.",
   "Das Geräte-Zertifikat gehört zu einem anderen Rechner.": "Le certificat de l’appareil appartient à un autre ordinateur.",

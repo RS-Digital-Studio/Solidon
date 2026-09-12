@@ -229,7 +229,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import FilamentPanel, spool_slot
+from app.ui.filament_picker import CatalogueWrites, FilamentPanel, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
@@ -15532,6 +15532,10 @@ class MainWindow(QMainWindow):
         viewport_idle = self.viewport.wait_for_workers(remaining)
         inventory_idle = all(
             notice.wait_for_workers(0) for notice in self.findChildren(UsageNotice)
+        )
+        inventory_idle = (
+            all(writer.wait_for_workers(0) for writer in self.findChildren(CatalogueWrites))
+            and inventory_idle
         )
         if self._inventory_view is not None:
             from app.ui.filament_inventory import InventoryView

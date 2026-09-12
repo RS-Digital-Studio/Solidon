@@ -28,6 +28,13 @@ Vorgang gebunden. Ein Wechsel von Detail, Regal, Filter oder Journalauswahl
 verwirft das Angebot; verspätete Konflikte öffnen es nicht in einer anderen
 Ansicht. Eingereihte Rücknahmen bewahren ihren ursprünglichen Zielkontext.
 
+`FilamentField` und `FilamentPanel` schreiben über `CatalogueWrites` außerhalb
+des Qt-Hauptthreads. Die Steuerung gehört dem obersten Fenster und hält
+bestätigte Aufträge über verworfene Kinddialoge hinaus. Erst die erfolgreiche
+Speicherung aktualisiert die Auswahl; `MainWindow.wait_for_workers` wartet
+die Aufträge vor dem Schließen ab. Operationsdialoge berücksichtigen den
+`pending`-Zustand des Filamentfelds auch bei direktem `accept()`.
+
 Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
 fachlichen Sicherungs- oder Wiederholungsweg. Unerwartete Ausnahmen werden
 protokolliert und als interner Fehler kenntlich gemacht.

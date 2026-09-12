@@ -541,6 +541,7 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
     panel.list.setCurrentRow(row)
 
     panel._remove()
+    _wait_for_catalogue(panel)
 
     assert [entry.name for entry in filaments.catalogue()] == [], (
         "aus dem Katalog, nicht nur aus der Liste"
@@ -550,6 +551,161 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
         for index in range(panel.list.count())
     )
     assert filaments.catalogue(include_archived=True)[0].archived
+
+
+def _wait_for_catalogue(widget) -> None:
+    """Der Fachabschluss muss im Widget ankommen, nicht nur auf der Platte."""
+    from time import monotonic
+
+    from PySide6.QtTest import QTest
+
+    deadline = monotonic() + 5
+    while not widget.wait_for_workers(0) and monotonic() < deadline:
+        QTest.qWait(10)
+    assert widget.wait_for_workers(0)
+
+
+@pytest.mark.parametrize("action", ["create", "edit", "archive", "field"])
+def test_catalogue_writes_leave_qt_free_until_the_atomic_result_arrives(
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    """Vier Schreibwege halten Qt frei und übernehmen nur den gespeicherten Stand."""
+    from threading import Event, get_ident
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QDialog
+
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    original_entry = filaments.save(filaments.CatalogueFilament("Alt", "#ffffff"))
+    panel = FilamentPanel()
+    panel.list.setCurrentRow(
+        next(
+            row
+            for row in range(panel.list.count())
+            if panel.list.item(row).text().startswith("Alt")
+        )
+    )
+    field = FilamentField(0)
+    selected = []
+    field.spoolChosen.connect(selected.append)
+    entered, released = Event(), Event()
+    qt_thread = get_ident()
+    threads = []
+    original = filaments.archive if action == "archive" else filaments.save
+
+    def write(*args, **kwargs):
+        threads.append(get_ident())
+        entered.set()
+        if get_ident() != qt_thread:
+            assert released.wait(5)
+        return original(*args, **kwargs)
+
+    def confirm(dialog):
+        dialog.name.setText("Neu")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(filaments, "archive" if action == "archive" else "save", write)
+    monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
+    owner = field if action == "field" else panel
+    try:
+        if action == "create":
+            panel.add_button.click()
+        elif action == "edit":
+            panel.list.itemDoubleClicked.emit(panel.list.currentItem())
+        elif action == "archive":
+            panel._remove()
+        else:
+            field._make_one(field.findData(NEW_FILAMENT))
+        assert entered.wait(2)
+        assert threads[0] != qt_thread
+        assert not owner.wait_for_workers(0)
+        responsive = []
+        QTimer.singleShot(0, lambda: responsive.append(True))
+        QApplication.processEvents()
+        assert responsive
+        if action == "field":
+            assert not field.isEnabled()
+            assert field.currentData() == 0
+            assert not selected
+        else:
+            assert not panel.list.isEnabled()
+            assert not panel.add_button.isEnabled()
+            assert "gespeichert" in panel.hint.text()
+    finally:
+        released.set()
+        if hasattr(owner, "wait_for_workers"):
+            _wait_for_catalogue(owner)
+    entries = filaments.catalogue(include_archived=True)
+    if action == "archive":
+        assert entries[0].archived
+    elif action == "edit":
+        assert len(entries) == 1
+        assert entries[0].name == "Neu"
+        assert entries[0].identifier == original_entry.identifier
+    else:
+        assert {entry.name for entry in entries} == {"Alt", "Neu"}
+    if action == "field":
+        assert field.isEnabled()
+        assert len(selected) == 1 and selected[0].name == "Neu"
+        assert "Neu" in field.currentText()
+    else:
+        assert panel.list.isEnabled()
+        assert panel.add_button.isEnabled()
+
+
+@pytest.mark.parametrize("owner_kind", ["field", "panel"])
+@pytest.mark.parametrize("failure", ["expected", "unexpected"])
+def test_a_failed_catalogue_write_keeps_the_old_selection_and_can_be_retried(
+    qt_app: QApplication,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    owner_kind: str,
+    failure: str,
+) -> None:
+    """Eine Absage oder Ausnahme löst die Sperre und übernimmt keine ungespeicherte Spule."""
+    from PySide6.QtWidgets import QDialog
+
+    from app.core.errors import FileWriteError
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    owner = FilamentField(0) if owner_kind == "field" else FilamentPanel()
+    notices = []
+    if owner_kind == "field":
+        owner.choiceNotice.connect(notices.append)
+    original = filaments.save
+
+    def save(_entry):
+        if failure == "expected":
+            raise FileWriteError(detail="Die Datei ist gesperrt.")
+        raise RuntimeError("Die Datei ist gesperrt.")
+
+    def confirm(dialog):
+        dialog.name.setText("Neue Spule")
+        return QDialog.DialogCode.Accepted
+
+    def choose():
+        if owner_kind == "field":
+            owner._make_one(owner.findData(NEW_FILAMENT))
+        else:
+            owner.add_button.click()
+        _wait_for_catalogue(owner)
+
+    monkeypatch.setattr(filaments, "save", save)
+    monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
+    choose()
+    assert "gesperrt" in (notices[-1] if owner_kind == "field" else owner.hint.text())
+    assert filaments.catalogue() == ()
+    if owner_kind == "field":
+        assert owner.isEnabled()
+        assert owner.currentData() == 0
+    else:
+        assert owner.add_button.isEnabled()
+    monkeypatch.setattr(filaments, "save", original)
+    choose()
+    assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
 
 
 def test_a_filament_without_a_colour_is_never_shown_blank(qt_app: QApplication) -> None:

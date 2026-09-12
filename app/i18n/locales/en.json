@@ -609,6 +609,7 @@
   "Das Filamentlager ist auch ohne Auswahl erreichbar.": "The filament inventory is available even without a selection.",
   "Das Filamentlager lässt sich nicht lesen. Die Datei bleibt unverändert. Stellen Sie eine Sicherung wieder her oder prüfen Sie die Datei filaments.json.": "The filament inventory cannot be read. The file remains unchanged. Restore a backup or check the filaments.json file.",
   "Das Filamentlager wird gerade geändert. Versuchen Sie es erneut.": "The filament inventory is currently being changed. Please try again.",
+  "Das Filamentlager wird gespeichert …": "Saving the filament inventory …",
   "Das Filamentprofil des Herstellers nennt andere Werte als die Einstellungen. Übergeben werden die Einstellungen.": "The maker's filament profile names values other than the settings. The settings are what gets handed over.",
   "Das Geräte-Zertifikat gehört zu einem anderen Lizenzschlüssel.": "The device certificate belongs to a different licence key.",
   "Das Geräte-Zertifikat gehört zu einem anderen Rechner.": "The device certificate belongs to a different computer.",

@@ -609,6 +609,7 @@
   "Das Filamentlager ist auch ohne Auswahl erreichbar.": "O inventário de filamentos também está acessível sem selecionar nada.",
   "Das Filamentlager lässt sich nicht lesen. Die Datei bleibt unverändert. Stellen Sie eine Sicherung wieder her oder prüfen Sie die Datei filaments.json.": "Não foi possível ler o inventário de filamentos. O ficheiro permanece inalterado. Restaure uma cópia de segurança ou verifique o ficheiro filaments.json.",
   "Das Filamentlager wird gerade geändert. Versuchen Sie es erneut.": "O inventário de filamentos está a ser alterado. Tente novamente.",
+  "Das Filamentlager wird gespeichert …": "A guardar o inventário de filamento …",
   "Das Filamentprofil des Herstellers nennt andere Werte als die Einstellungen. Übergeben werden die Einstellungen.": "O perfil de filamento do fabricante indica valores diferentes das configurações. O que se entrega são as configurações.",
   "Das Geräte-Zertifikat gehört zu einem anderen Lizenzschlüssel.": "O certificado do dispositivo pertence a outra chave de licença.",
   "Das Geräte-Zertifikat gehört zu einem anderen Rechner.": "O certificado do dispositivo pertence a outro computador.",

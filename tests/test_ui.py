@@ -1298,6 +1298,71 @@ def test_a_dialog_is_generated_from_the_parameter_schema(qt_app: QApplication) -
     assert values["weld"] is True
 
 
+@pytest.mark.parametrize("finish", ["accept", "reject"])
+def test_operation_waits_for_the_saved_spool_and_window_keeps_a_cancelled_dialogs_write(
+    window: MainWindow,
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    finish: str,
+) -> None:
+    """Anwenden wartet auf die neue Spule; Abbrechen verliert keinen bestätigten Lagerauftrag."""
+    from time import monotonic
+
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtTest import QTest
+
+    from app.core.knowledge import filaments
+    from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    original = filaments.save
+    entered, released = threading.Event(), threading.Event()
+
+    def save(entry):
+        entered.set()
+        assert released.wait(5)
+        return original(entry)
+
+    def confirm(dialog):
+        dialog.name.setText("Neue Spule")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(filaments, "save", save)
+    monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
+    dialog = OperationDialog(REGISTRY.get("assign_slot"), ["obj_1"], window, values={"slot": 0})
+    field = dialog.findChild(FilamentField)
+    assert field is not None
+    writer = field._writes
+    dialog.show()
+    try:
+        field._make_one(field.findData(NEW_FILAMENT))
+        assert entered.wait(2)
+        assert not dialog._accept_button.isEnabled()
+        assert "gespeichert" in dialog._accept_button.toolTip()
+        dialog.accept()
+        assert not dialog.isHidden()
+        if finish == "reject":
+            dialog.reject()
+            dialog.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert not window.wait_for_workers(0)
+        assert writer.parent() is window
+    finally:
+        released.set()
+        deadline = monotonic() + 5
+        while not writer.wait_for_workers(0) and monotonic() < deadline:
+            QTest.qWait(10)
+    assert writer.wait_for_workers(0)
+    assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
+    if finish == "accept":
+        assert dialog._accept_button.isEnabled()
+        assert dialog.values()["name"] == "Neue Spule"
+        dialog.accept()
+        assert dialog.result() == QDialog.DialogCode.Accepted
+        dialog.deleteLater()
+
+
 def test_choosing_a_profileless_filament_clears_old_slicer_metadata(
     qt_app: QApplication,
 ) -> None:

@@ -1582,8 +1582,15 @@ class OperationDialog(QDialog):
         self._source_fields = tuple(
             editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
         )
+        from app.ui.filament_picker import FilamentField
+
+        self._filament_fields = tuple(
+            editor for editor in self._editors.values() if isinstance(editor, FilamentField)
+        )
         for field in self._source_fields:
             field.pendingChanged.connect(self._follow_source_pending)
+        for filament in self._filament_fields:
+            filament.pendingChanged.connect(self._follow_source_pending)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -1600,7 +1607,9 @@ class OperationDialog(QDialog):
     def _follow_source_pending(self, _pending: bool = False) -> None:
         """Während des Lesens keine Operation mit einem alten Leerwert anwenden."""
 
-        pending = any(field.pending for field in self._source_fields)
+        source_pending = any(field.pending for field in self._source_fields)
+        filament_pending = any(field.pending for field in self._filament_fields)
+        pending = source_pending or filament_pending
         button = self._accept_button
         incomplete = any(
             isinstance(editor, FeatureSetField) and not editor.valid
@@ -1616,8 +1625,12 @@ class OperationDialog(QDialog):
         )
         reason = (
             tr("Datei wird gelesen …")
-            if pending
-            else (tr("Flächen markieren oder den ganzen Körper wählen.") if incomplete else "")
+            if source_pending
+            else (
+                tr("Das Filamentlager wird gespeichert …")
+                if filament_pending
+                else (tr("Flächen markieren oder den ganzen Körper wählen.") if incomplete else "")
+            )
             or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
         )
         incomplete = incomplete or no_edge
@@ -1629,7 +1642,9 @@ class OperationDialog(QDialog):
     def accept(self) -> None:
         """Erst anwenden, wenn jede nachgereichte Quelle wirklich feststeht."""
 
-        if any(field.pending for field in self._source_fields):
+        if any(field.pending for field in self._source_fields) or any(
+            filament.pending for filament in self._filament_fields
+        ):
             return
         if any(
             isinstance(editor, FeatureSetField) and not editor.valid
