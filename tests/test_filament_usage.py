@@ -168,6 +168,26 @@ def test_gcode_length_uses_the_individual_filament_diameter_and_density() -> Non
     assert result.lines[0].converted_from_length
 
 
+@pytest.mark.parametrize(
+    "moves",
+    [
+        "M82\nG92 E0\nG1 E10\nG1 X10 E20\n",
+        "M82\nG92 E0\nG1 X10 E10\nG1 X20 E9\nG1 E10\nG1 X30 E20\n",
+    ],
+)
+def test_gcode_booking_offer_includes_stationary_consumption(moves: str) -> None:
+    """Das Lagerangebot erhält die vollen 20 mm einschließlich Reinigung und Wiederförderung."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
+    request = replace(request, lines=(replace(request.lines[0], diameter=1.75, density=1.24),))
+
+    line = from_gcode(request, parse(moves)).lines[0]
+
+    assert line.grams == pytest.approx(0.059650990510036195)
+    assert line.source == "gcode"
+    assert line.converted_from_length
+
+
 @pytest.mark.parametrize("total_only", [False, True])
 @pytest.mark.parametrize("field", ["density", "diameter"])
 @pytest.mark.parametrize("invalid", [None, 0.0, -1.0, float("nan"), float("inf")])

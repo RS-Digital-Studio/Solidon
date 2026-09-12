@@ -412,6 +412,8 @@ class _ExtrusionState:
     unknown_volume_lengths: dict[int, float] = field(default_factory=dict)
     support: dict[int, float] = field(default_factory=dict)
     support_volumes: dict[int, float] = field(default_factory=dict)
+    retracted: dict[int, tuple[float, bool]] = field(default_factory=dict)
+    unknown_amounts: set[int] = field(default_factory=set)
     used_tools: set[int] = field(default_factory=set)
     all_extent: _Extent = field(default_factory=_Extent)
     model_extent: _Extent = field(default_factory=_Extent)
@@ -427,6 +429,21 @@ class _ExtrusionState:
             delta = value
             self.position += value
         return delta
+
+    def consume(self, tool: int, step: float, *, volumetric: bool, area: float | None) -> float:
+        """Nur neue Förderung zählen; Rückzug und Wiederförderung gleichen sich je Werkzeug aus."""
+        debt, was_volumetric = self.retracted.get(tool, (0.0, volumetric))
+        if debt > 0.0 and was_volumetric != volumetric:
+            if area is None:
+                # Ohne Durchmesser lässt sich ein noch offener Rückzug nicht
+                # zwischen Millimetern und Kubikmillimetern umrechnen.
+                self.unknown_amounts.add(tool)
+                debt = 0.0
+            else:
+                debt = debt * area if volumetric else debt / area
+        remaining = step - debt
+        self.retracted[tool] = (max(-remaining, 0.0), volumetric)
+        return max(remaining, 0.0)
 
 
 #: Kommentarzeilen, die die verbreiteten Slicer schreiben. Ein Muster je
@@ -683,7 +700,13 @@ def analyze_lines(
                 warnings.append(found_warning.group("text").strip())
             elapsed = _TIME_ELAPSED.search(stripped)
             if elapsed is not None:
-                last_elapsed = float(elapsed.group(1))
+                # ``1.2.3`` und ``.`` kommen durch das Muster. Ein fremder
+                # Dialekt darf den Lauf nicht abreißen — die Zeile steht nach
+                # dem gelungenen Slicen, und die Druckdatei läge dann in einem
+                # Arbeitsordner, der gleich gelöscht wird.
+                seconds = _number(elapsed.group(1))
+                if seconds is not None and math.isfinite(seconds):
+                    last_elapsed = seconds
             if _LAYER_CHANGE.fullmatch(stripped):
                 layer_changes += 1
             setting = _SETTING_LINE.match(stripped)
@@ -785,10 +808,35 @@ def analyze_lines(
         position = endpoint
 
         steps = [state.step(words["E"]) for state in extrusion_states] if "E" in words else []
-        if code != 0:
-            for state, step in zip(extrusion_states, steps, strict=False):
-                if step > 0.0:
-                    state.used_tools.add(active_tool)
+        if not steps:
+            continue
+        diameter = (
+            commanded_diameters.get(active_tool)
+            or _at(stated_material.get("filament_diameter", ()), active_tool)
+            or _at(diameters, active_tool)
+        )
+        area = _filament_area(diameter)
+        consumed = []
+        # Material fließt auch ohne XY-Weg und bei G0. Erst die Prüfung der
+        # Druckbahnen darunter schließt Reinigung und Leerfahrten aus.
+        for state, step in zip(extrusion_states, steps, strict=True):
+            amount = state.consume(active_tool, step, volumetric=volumetric, area=area)
+            consumed.append(amount)
+            if step > 0.0:
+                state.used_tools.add(active_tool)
+            if volumetric:
+                state.volumes[active_tool] = state.volumes.get(active_tool, 0.0) + amount
+                if area is None:
+                    state.unknown_volume_lengths[active_tool] = (
+                        state.unknown_volume_lengths.get(active_tool, 0.0) + amount
+                    )
+                else:
+                    state.lengths[active_tool] = state.lengths.get(active_tool, 0.0) + amount / area
+            else:
+                state.lengths[active_tool] = state.lengths.get(active_tool, 0.0) + amount
+                state.linear_lengths[active_tool] = (
+                    state.linear_lengths.get(active_tool, 0.0) + amount
+                )
         travelled = code in (2, 3) or any(
             name in words
             and (
@@ -798,7 +846,7 @@ def analyze_lines(
             )
             for name, position_before, position_after in zip("XY", start, endpoint, strict=False)
         )
-        if code == 0 or not travelled or not steps:
+        if code == 0 or not travelled:
             continue
         end = (endpoint[0], endpoint[1], endpoint[2])
         points = _path_points(
@@ -828,31 +876,12 @@ def analyze_lines(
                     centres_absolute=arc_centres_absolute,
                 )
             inside = path_check(GcodePath(start, end, centre, code == 2))
-        for state, step in zip(extrusion_states, steps, strict=True):
-            if volumetric:
-                state.volumes[active_tool] = state.volumes.get(active_tool, 0.0) + step
-                diameter = (
-                    commanded_diameters.get(active_tool)
-                    or _at(stated_material.get("filament_diameter", ()), active_tool)
-                    or _at(diameters, active_tool)
-                )
-                area = _filament_area(diameter)
-                if area is None:
-                    state.unknown_volume_lengths[active_tool] = (
-                        state.unknown_volume_lengths.get(active_tool, 0.0) + step
-                    )
-                else:
-                    state.lengths[active_tool] = state.lengths.get(active_tool, 0.0) + step / area
-            else:
-                state.lengths[active_tool] = state.lengths.get(active_tool, 0.0) + step
-                state.linear_lengths[active_tool] = (
-                    state.linear_lengths.get(active_tool, 0.0) + step
-                )
+        for state, step, amount in zip(extrusion_states, steps, consumed, strict=True):
             if step <= 0.0:
                 continue
             if active_support:
                 support_amounts = state.support_volumes if volumetric else state.support
-                support_amounts[active_tool] = support_amounts.get(active_tool, 0.0) + step
+                support_amounts[active_tool] = support_amounts.get(active_tool, 0.0) + amount
             state.all_extent.add(*points)
             state.all_paths_inside = state.all_paths_inside and inside
             if after_first_layer:
@@ -914,6 +943,8 @@ def analyze_lines(
         support_cm3 = _complete_sum(volumes) if volumes else 0.0
         if support_cm3 is not None:
             support_cm3 += sum(state.support_volumes.values()) / 1000.0
+        if state.unknown_amounts.intersection(state.support.keys() | state.support_volumes.keys()):
+            support_cm3 = None
         metrics.support_mm3 = support_cm3 * 1000.0 if support_cm3 is not None else None
     motion_lengths: dict[int, float | None] = dict(state.lengths)
     for tool, volume in state.unknown_volume_lengths.items():
@@ -921,6 +952,8 @@ def analyze_lines(
         motion_lengths[tool] = (
             state.lengths.get(tool, 0.0) + volume / area if area is not None else None
         )
+    for tool in state.unknown_amounts:
+        motion_lengths[tool] = None
     _motion_fallback(
         metrics,
         motion_lengths,
@@ -931,6 +964,8 @@ def analyze_lines(
         for tool, length in enumerate(metrics.filament_mm_by_tool):
             if metrics.filament_mm_sources[tool] == "header":
                 volume_cm3 = _volume(length, _at(metrics.filament_diameters, tool))
+            elif tool in state.unknown_amounts:
+                volume_cm3 = None
             else:
                 volume_cm3 = _volume(
                     max(state.linear_lengths.get(tool, 0.0), 0.0),

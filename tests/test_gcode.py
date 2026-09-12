@@ -149,7 +149,9 @@ def test_invalid_bambu_header_tools_have_an_actionable_error(identifiers: str) -
 @pytest.mark.parametrize("dialect", [";FLAVOR:Marlin\n", "; gcode_flavor = marlin2\n"])
 def test_marlin_g90_clears_relative_extrusion(dialect: str) -> None:
     result = gcode.analyze(dialect + "M83\nG90\nG0 X10 Y10 Z0.2\nG1 X20 E10\nG1 X300 E9\n")
-    assert result.metrics.filament_mm == pytest.approx(9)
+    # Nach 10 mm neuer Förderung holt E9 nur 1 mm zurück; das bereits
+    # verbrauchte Material bleibt auch beim bewegten Rückzug erhalten.
+    assert result.metrics.filament_mm == pytest.approx(10)
     assert result.extent is not None
     assert result.extent.maximum[0] == pytest.approx(20)
 
@@ -171,7 +173,9 @@ def test_marlin_extrusion_rules_are_not_assumed_for_unknown_firmware(dialect: st
 def test_footer_firmware_is_used_without_reading_the_stream_twice() -> None:
     lines = iter("M83\nG90\nG1 X10 E10\nG1 X300 E9\n; gcode_flavor = marlin\n".splitlines())
     result = gcode.analyze_lines(lines)
-    assert result.metrics.filament_mm == pytest.approx(9)
+    # Marlin liest E9 als Rückzug, nicht als weitere 9 mm. Der Rückzug
+    # nimmt dem bereits gedruckten Material seine 10 mm nicht wieder weg.
+    assert result.metrics.filament_mm == pytest.approx(10)
     assert result.extent is not None
     assert result.extent.maximum[0] == pytest.approx(10)
 
@@ -231,6 +235,72 @@ def test_stationary_extrusion_with_repeated_coordinates_is_not_a_print() -> None
     result = gcode.analyze("M83\nG0 X10 Y10 Z0.2\nG1 X10 Y10 E5\n")
     assert not result.extrudes
     assert result.extent is None
+
+
+@pytest.mark.parametrize(
+    ("moves", "expected"),
+    [
+        ("M82\nG92 E0\nG1 E10\nG1 X10 E20\n", (20.0,)),
+        ("M82\nG92 E0\nG1 X10 E10\nG1 X20 E9\nG1 E10\nG1 X30 E20\n", (20.0,)),
+        (
+            "M83\nG1 E10\nG1 X10 E10\nG1 E-3\nG1 E3\nG1 X20 E5\nG1 E-50\n",
+            (25.0,),
+        ),
+        ("M82\nG92 E0\nG1 E10\nG92 E0\nG1 X10 E10\n", (20.0,)),
+        ("M83\nG0 X10 E5\nG1 X20 E10\n", (15.0,)),
+        (
+            "M83\nT0\nG1 X10 E10\nG1 E-3\nT1\nG1 E4\nT0\nG1 E3\nG1 X20 E5\n",
+            (15.0, 4.0),
+        ),
+    ],
+)
+def test_motion_consumption_includes_purge_without_counting_reprime_twice(
+    moves: str, expected: tuple[float, ...]
+) -> None:
+    """Neue Förderung zählt je Werkzeug; Wiederförderung und Endrückzug ändern sie nicht."""
+    metrics = gcode.parse(moves)
+
+    assert metrics.filament_mm_by_tool == pytest.approx(expected)
+    assert metrics.filament_mm == pytest.approx(sum(expected))
+    assert metrics.filament_mm_sources == ("motion",) * len(expected)
+
+
+def test_stationary_material_is_neither_a_path_nor_support() -> None:
+    """Auch unter einem Stützmarker verbraucht die Reinigung Material ohne Modellbahn."""
+    paths: list[gcode.GcodePath] = []
+    result = gcode.analyze(
+        "M83\nG0 X200 Y200 Z0.2\n;TYPE:Support\nG1 X200 Y200 E5\n",
+        path_check=lambda path: paths.append(path) or True,
+    )
+
+    assert result.metrics.filament_mm == pytest.approx(5.0)
+    assert result.metrics.support_mm3 == pytest.approx(0.0)
+    assert not paths
+    assert not result.extrudes
+    assert result.extent is None
+
+
+def test_volumetric_purge_and_reprime_preserve_volume() -> None:
+    """M200 zählt auch stationär Kubikmillimeter; ein Rückzug verbraucht nichts erneut."""
+    metrics = gcode.parse(
+        "M200 D2\nM83\nG1 E10\nG1 E-2\nG1 E3\nG1 X20 E4\nG1 E-50\n",
+        densities=(1.24,),
+    )
+
+    assert metrics.filament_mm == pytest.approx(15.0 / math.pi)
+    assert metrics.material_cm3 == pytest.approx(0.015)
+    assert metrics.grams() == pytest.approx(0.0186)
+
+
+def test_reprime_changes_units_with_volumetric_extrusion() -> None:
+    """Ein linearer Rückzug bleibt nach M200 dieselbe zurückgeholte Filamentmenge."""
+    metrics = gcode.parse(
+        f"M83\nG1 X10 E10\nG1 E-2\nM200 D2\nG1 E{2 * math.pi}\nG1 X20 E{math.pi}\n",
+        densities=(1.24,),
+    )
+
+    assert metrics.filament_mm == pytest.approx(11.0)
+    assert metrics.material_cm3 == pytest.approx(11.0 * math.pi / 1000.0)
 
 
 def test_m200_extrusion_is_volume_and_not_linear_filament_length() -> None:
@@ -1141,3 +1211,11 @@ def test_the_file_says_which_bed_it_printed_on() -> None:
     assert prusa is not None
     assert (prusa.minimum, prusa.maximum) == ((-110.0, -110.0, 0.0), (110.0, 110.0, 250.0))
     assert gcode.stated_bed(CURA) is None, "CuraEngine schreibt seine Bettform nicht"
+
+
+@pytest.mark.parametrize("stamp", ["1.2.3", ".", "..", "9" * 400])
+def test_a_malformed_time_stamp_does_not_abort_the_analysis(stamp: str) -> None:
+    # Die Zeile steht nach dem gelungenen Slicen — ein Abriss hier kostete die
+    # fertige Druckdatei. Der unlesbare Stempel wird übergangen, der nächste zählt.
+    text = f"M83\nG0 X0 Y0 Z0.2\nG1 X10 E1\n;TIME_ELAPSED:{stamp}\n;TIME_ELAPSED:12.5\n"
+    assert gcode.analyze(text).metrics.print_seconds == 12.5

@@ -109,6 +109,13 @@ verwendet. Unbelegte Einzelwerte werden aus solchen Wechseln nicht geraten.
 belegtem Durchmesser je Werkzeug um. Angaben im Dateikopf gewinnen vor
 mitgegebenen Materialdaten. Bewegungen liefern werkzeugweise Längen;
 `M200` liefert direkt Volumen, auch ohne bekannten Filamentdurchmesser.
+Die Mengenbilanz zählt neue Förderung auch stationär und bei `G0`.
+Rückzug bleibt je Werkzeug als offener Weg erhalten; Wiederförderung verbraucht
+ihn zuerst, und ein Endrückzug senkt keinen bereits entstandenen Verbrauch.
+Ein Wechsel zwischen linearer und volumetrischer Extrusion rechnet offene
+Rückzüge mit dem belegten Durchmesser um; fehlt er, bleibt die Menge unbekannt.
+Druckbahnen, Modellgrenzen und Stützvolumen bleiben von stationärer Reinigung
+und Leerfahrten getrennt. Ausdrückliche Mengenheader behalten ihren Vorrang.
 Angegebene Grammmengen gelten auch
 bei null. Eigene Ausgaben tragen `resolved_filament_grams` aus demselben
 eingefrorenen Bedarf wie das Lagerangebot. Die Gesamtmethode `grams` verwendet
