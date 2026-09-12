@@ -69,6 +69,43 @@ def _release_unstarted_worker(owner: object, field: str, worker: Worker) -> None
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
+def test_legacy_paint_finding_opens_its_real_values_and_history(window, monkeypatch):
+    """Die alte Farbdatei führt über die sichtbaren Befundknöpfe bis zu ihren erhaltenen Werten."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.dialogs import StepValuesDialog
+
+    window.session.open_project(Path(__file__).parent / "data" / "projects" / "painted_v13.p3d")
+    assert window.session.wait_for_idle(30000)
+    result = window.session.last_result
+    assert result is not None and result.stopped_at == 2
+    window._on_scene(result)
+    listing = window.report.list
+    row = next(
+        index
+        for index in range(listing.count())
+        if listing.item(index).data(Qt.ItemDataRole.UserRole).code == "evaluate.legacy_point_paint"
+    )
+    listing.setCurrentRow(row)
+    opened, visited = [], []
+
+    def read_values(dialog):
+        assert dialog.text.isReadOnly()
+        opened.append(dialog.text.toPlainText())
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(StepValuesDialog, "exec", read_values)
+    monkeypatch.setattr(window, "_flash_area", visited.append)
+    buttons = {button.text(): button for button in window.report._offers.findChildren(QPushButton)}
+    buttons["Werte ansehen"].click()
+    assert len(opened) == 1
+    assert "radius" in opened[0] and "12.0" in opened[0]
+    assert all(name in opened[0] for name in ("x", "y", "z", "slot"))
+    buttons["Verlauf zeigen"].click()
+    assert visited == ["history"]
+    assert window.session.project.document.ops[1].params["radius"] == pytest.approx(12.0)
+
+
 def test_rebuilding_the_object_tree_preserves_click_order(window: MainWindow) -> None:
     """Einheiten- und Szenenwechsel vertauschen keine Booleschen Operanden."""
     assert window.session.apply(
