@@ -31,7 +31,7 @@ from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
 from app.core.registry import REGISTRY
-from app.core.types import Feature, OpContext, Profile, Scene, SceneObject
+from app.core.types import Feature, Finding, OpContext, Profile, Scene, SceneObject
 
 
 def plate() -> MeshData:
@@ -354,6 +354,13 @@ def test_the_digest_tells_the_agent_where_a_slot_points(profile: Profile) -> Non
 
 
 def run_op(op: str, entry: SceneObject, profile: Profile, **params: object) -> SceneObject:
+    """Nur den Körper zurückgeben, wenn der Test keine Befunde braucht."""
+    return run_op_with_findings(op, entry, profile, **params)[0]
+
+
+def run_op_with_findings(
+    op: str, entry: SceneObject, profile: Profile, **params: object
+) -> tuple[SceneObject, list[Finding]]:
     """Eine Operation fahren und danach neu erkennen, wie die Auswertung es tut."""
     from app.core.scene.cancel import NeverCancelled
 
@@ -373,8 +380,7 @@ def run_op(op: str, entry: SceneObject, profile: Profile, **params: object) -> S
         )
     )
     out = result.outputs[0]
-    run_op.findings = list(result.findings)  # type: ignore[attr-defined]
-    return dataclasses.replace(out, features=detect(as_mesh_data(out.mesh)))
+    return dataclasses.replace(out, features=detect(as_mesh_data(out.mesh))), list(result.findings)
 
 
 def a_slotted_plate(profile: Profile) -> SceneObject:
@@ -407,9 +413,11 @@ def test_pulling_a_slot_across_itself_says_what_it_makes(profile: Profile) -> No
     entry = a_slotted_plate(profile)
     slot = next(name for name, f in entry.features.items() if f.kind == "slot")
 
-    run_op("slot_hole", entry, profile, at_feature=slot, slot_length=24.0, slot_angle=90.0)
+    _output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=slot, slot_length=24.0, slot_angle=90.0
+    )
 
-    codes = {finding.code for finding in run_op.findings}  # type: ignore[attr-defined]
+    codes = {finding.code for finding in findings}
     assert "slot_hole.crosses" in codes
     assert "slot_hole.feature_renamed" not in codes, (
         "aus einem Langloch wird kein Langloch — es wird länger"
@@ -834,9 +842,11 @@ def test_a_slot_that_is_no_longer_one_says_so(
         else bore
     )
 
-    pulled = run_op("slot_hole", started, profile, at_feature=chosen, **values)
+    pulled, findings = run_op_with_findings(
+        "slot_hole", started, profile, at_feature=chosen, **values
+    )
 
-    codes = [entry.code for entry in run_op.findings]  # type: ignore[attr-defined]
+    codes = [entry.code for entry in findings]
     if kind == "über den Rand":
         assert "slot_hole.feature_lost" not in codes
         assert any(
@@ -845,11 +855,7 @@ def test_a_slot_that_is_no_longer_one_says_so(
         )
         return
     assert "slot_hole.feature_lost" in codes, f"{kind}: gesagt wird es, gefunden: {codes}"
-    lost = next(
-        entry
-        for entry in run_op.findings  # type: ignore[attr-defined]
-        if entry.code == "slot_hole.feature_lost"
-    )
+    lost = next(entry for entry in findings if entry.code == "slot_hole.feature_lost")
     assert lost.severity == "warning"
     assert not any(feature.kind == "slot" for feature in pulled.features.values()), (
         f"{kind}: und ein Langloch ist wirklich keines mehr"
@@ -879,9 +885,11 @@ def test_the_same_word_comes_from_the_exact_kernel(profile: Profile) -> None:
     )
     bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
 
-    run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0, x=38.0, y=0.0, z=5.0)
+    _output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=bore, slot_length=20.0, x=38.0, y=0.0, z=5.0
+    )
 
-    codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
+    codes = [found.code for found in findings]
     assert "slot_hole.feature_lost" not in codes, codes
     assert "bore.over_the_edge" in codes
 
@@ -927,11 +935,11 @@ def test_a_lost_slot_does_not_borrow_its_neighbour(profile: Profile) -> None:
     entry, lower, upper = _two_slots_side_by_side(profile)
 
     # Sechzehn quer: von y = -2 bis 14, das untere Loch endet bei -4.
-    pulled = run_op(
+    pulled, findings = run_op_with_findings(
         "slot_hole", entry, profile, at_feature=upper, slot_length=16.0, slot_angle=90.0
     )
 
-    codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
+    codes = [found.code for found in findings]
     assert "slot_hole.feature_lost" in codes, codes
     # Das untere Langloch heißt weiter, wie es hieß, und liegt, wo es lag.
     remaining = [name for name, feature in pulled.features.items() if feature.kind == "slot"]
@@ -970,9 +978,11 @@ def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profil
         key=lambda name: float(entry.features[name].params["centre"][1]),
     )
 
-    run_op("slot_hole", entry, profile, at_feature=upper, slot_length=16.0, slot_angle=90.0)
+    _output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=upper, slot_length=16.0, slot_angle=90.0
+    )
 
-    codes = [found.code for found in run_op.findings]  # type: ignore[attr-defined]
+    codes = [found.code for found in findings]
     assert "slot_hole.feature_lost" in codes, codes
 
 
@@ -1211,11 +1221,11 @@ def test_pulling_twice_with_the_same_angle_lengthens_on_both_kernels(profile: Pr
         assert shown == pytest.approx(45.0, abs=0.5), f"{entry.kind}: das Feld zeigt {shown}"
 
         again = dataclasses.replace(first, features=found)
-        second = run_op(
+        second, findings = run_op_with_findings(
             "slot_hole", again, profile, at_feature=slot.id, slot_length=26.0, slot_angle=45.0
         )
 
-        codes = [finding.code for finding in run_op.findings]  # type: ignore[attr-defined]
+        codes = [finding.code for finding in findings]
         assert "slot_hole.crosses" not in codes, f"{entry.kind}: {codes}"
         longer = only_slot(as_mesh_data(second.mesh))
         assert float(longer.params["length"]) == pytest.approx(26.0, abs=0.1), entry.kind
@@ -1236,8 +1246,10 @@ def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
         _exact_plate_with_a_bore((0.0, 0.0, 1.0), at=36.0),
     ):
         bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
-        run_op("slot_hole", entry, profile, at_feature=bore, slot_length=20.0)
-        codes[entry.kind] = {finding.code for finding in run_op.findings}  # type: ignore[attr-defined]
+        _output, findings = run_op_with_findings(
+            "slot_hole", entry, profile, at_feature=bore, slot_length=20.0
+        )
+        codes[entry.kind] = {finding.code for finding in findings}
 
     assert "bore.over_the_edge" in codes["mesh"], codes
     assert "bore.over_the_edge" in codes["brep"], codes
