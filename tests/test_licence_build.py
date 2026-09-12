@@ -207,3 +207,29 @@ def test_nothing_may_shadow_a_boundary_file(
         shadow.write_bytes(b"keine echte Erweiterung")
         assert not _no_shadow_beside(tmp_path, files), f"{suffix} verdrängt die Quelle"
         shadow.unlink()
+
+
+def test_every_loadable_extension_suffix_is_blocked_beside_signed_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der echte Finder darf keine Erweiterung wählen, die das Manifest übersieht."""
+    import importlib.machinery
+    import sys
+
+    from app.core.activation.integrity import _no_shadow_beside
+
+    source = tmp_path / "history.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    for suffix in importlib.machinery.EXTENSION_SUFFIXES:
+        shadow = source.with_suffix(suffix)
+        shadow.write_bytes(b"Platzhalter; nur die Importauswahl wird abgefragt")
+        finder = importlib.machinery.FileFinder(
+            str(tmp_path),
+            (importlib.machinery.ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES),
+            (importlib.machinery.SourceFileLoader, importlib.machinery.SOURCE_SUFFIXES),
+        )
+        spec = finder.find_spec("history")
+        assert spec is not None and Path(spec.origin) == shadow
+        assert not _no_shadow_beside(tmp_path, {"history.py": ""}), suffix
+        shadow.unlink()

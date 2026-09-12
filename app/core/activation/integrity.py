@@ -23,6 +23,7 @@ nur eine Seite versteht.
 from __future__ import annotations
 
 import hashlib
+import importlib.machinery
 import importlib.util
 import json
 import sys
@@ -136,8 +137,9 @@ def _no_shadow_beside(root: Path, files: dict[str, str]) -> bool:
       zu Änderungszeit und Größe der Quelle passt — beides kann setzen, wer
       die Installation erreicht. Die Prüfung sähe die unveränderte Quelle,
       während fremder Bytecode läuft.
-    * **Eine Erweiterung gleichen Namens** (``.pyd`` / ``.so``). Der
-      ``FileFinder`` fragt sie vor der Quelle.
+    * **Eine Erweiterung gleichen Namens** (``.pyd`` / ``.so``, auch mit
+      ABI-Kennung). Der ``FileFinder`` fragt sie vor der Quelle; seine
+      vollständige Endungsliste ist deshalb Teil dieser Prüfung.
 
     Gesucht wird nur im **gefrorenen** Zustand. In der Entwicklung ist ein
     ``__pycache__`` der Normalfall und keine Manipulation; dort schreibt
@@ -150,10 +152,11 @@ def _no_shadow_beside(root: Path, files: dict[str, str]) -> bool:
     """
     if not getattr(sys, "frozen", False):
         return True
+    suffixes = dict.fromkeys((*importlib.machinery.EXTENSION_SUFFIXES, ".pyd", ".so"))
     for name in files:
         source = root / name
         cached = importlib.util.cache_from_source(str(source))
-        beside = [Path(cached), *(source.with_suffix(one) for one in (".pyd", ".so"))]
+        beside = [Path(cached), *(source.with_suffix(one) for one in suffixes)]
         found = next((one for one in beside if one.exists()), None)
         if found is not None:
             _log.warning("something shadows a licence boundary file: %s", found.name)

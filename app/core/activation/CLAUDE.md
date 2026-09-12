@@ -54,6 +54,11 @@ ist **gitignoriert** — ändert sich eine der Grenzdateien, wird
 `tests/test_packaging.py` rot, und die Antwort ist ein neuer Bau, kein
 Löschen. Die CI überspringt diesen Test.
 
+Im eingefrorenen Paket sperrt die Prüfung auch Nachbardateien, die eine
+gedeckte Quelle verdrängen könnten: den aktiven Bytecodecache und alle
+Erweiterungsendungen des Importfinders einschließlich ABI-Kennung. Die
+bisherigen allgemeinen Endungen `.pyd` und `.so` bleiben ebenfalls gesperrt.
+
 Diese sieben Python-Quellen werden zusätzlich von Cython übersetzt. Ihr
 Ruff-Ziel bleibt deshalb Python 3.13: Cython 3.3 versteht die ungeklammerten
 Ausnahmegruppen von Python 3.14 noch nicht. Laufzeit und erzeugte Erweiterungen
