@@ -372,6 +372,9 @@ Nachbarebenen** und nicht über den Radius, denn der stammt aus einem Sehnenzug
 und ist ein wenig zu klein (2,9772 an einer Rundung von 3,0). Der Füllkörper
 ist der Zwickel **ohne** Bogen; er deckt die Rundung ab, und seine Flanken
 liegen in den Nachbarebenen, wo ohnehin Material ist.
+Beim erneuten Verrunden geht das vollständige `MeshData` aus `unround` in
+`round_edges` weiter. So können beide Booleschen Schritte die Materialslots
+erhaltener Flächen übertragen; ein Neuaufbau allein aus `raw` verlöre sie.
 
 `bead_edges` legt einen **Wulst** auf: ein Rundstab auf der Kante, je Stück ein
 Zylinder und je Knick eine Kugel. Die Stücke gehen einzeln in die Kette —

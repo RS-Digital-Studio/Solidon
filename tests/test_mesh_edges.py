@@ -688,6 +688,46 @@ def test_changing_a_radius_is_taking_away_and_rounding_again() -> None:
         assert changed.is_watertight and changed.body_count == 1
 
 
+@pytest.mark.parametrize("radius", [1.0, 5.0], ids=["smaller", "larger"])
+def test_changing_a_mesh_radius_keeps_the_materials_on_unchanged_faces(radius: float) -> None:
+    """Zwei eingefärbte Seiten behalten beim Ändern einer Rundung ihr Filament.
+
+    Geprüft wird die Zuweisung an erhaltenen Flächen. Neu entstandene
+    Schnittflächen dürfen weiterhin den Schnittslot der Booleschen Op tragen.
+    """
+    body = rounded_block()
+    slots = tuple(3 if centre[0] > 0.0 else 2 for centre in body.raw.triangles_center)
+    painted = MeshData(body.raw, slots=slots)
+    features = detect(painted)
+    chosen = next(
+        feature
+        for feature in features.values()
+        if feature.kind == "fillet"
+        and feature.params["centre"][0] > 0.0
+        and feature.params["centre"][1] > 0.0
+    )
+    source = SceneObject(id="obj_1", name="Zweifarbig", mesh=painted, features=features)
+
+    changed = run("resize_feature", source, at_feature=chosen.id, diameter=2.0 * radius).outputs[0]
+
+    assert isinstance(changed.mesh, MeshData)
+    assert len(changed.mesh.slots) == changed.mesh.triangle_count
+    for side, slot in ((-1.0, 2), (1.0, 3)):
+        retained = [
+            index
+            for index, centre in enumerate(changed.mesh.raw.triangles_center)
+            if math.isclose(centre[0], side * WIDTH / 2.0, abs_tol=1e-6) and centre[1] < 0.0
+        ]
+        assert retained, "die unveränderte Seitenfläche muss noch vorhanden sein"
+        assert all(changed.mesh.slots[index] == slot for index in retained)
+    assert painted.slots == slots, "die Eingabe bleibt unverändert"
+    assert changed.mesh.is_watertight and changed.mesh.component_count == 1
+    assert changed.mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - (3.0 * cross_section(FILLET) + cross_section(radius)) * HEIGHT,
+        abs=1e-3,
+    )
+
+
 def test_a_fillet_next_to_parallel_faces_is_a_sentence() -> None:
     """Wo keine zwei Ebenen zusammenstoßen, gibt es keine Kante darunter.
 

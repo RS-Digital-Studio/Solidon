@@ -953,9 +953,8 @@ def reround(mesh: MeshData, feature: Feature, radius: float) -> BooleanOutcome:
         )
     corner = sharp_corner(mesh, feature)
     taken = unround(mesh, feature)
-    sharp = MeshData(taken.mesh.raw)
     key = edge_key(_placed(corner))
-    again = round_edges(sharp, radius, "named", [key])
+    again = round_edges(taken.mesh, radius, "named", [key])
     return BooleanOutcome(
         mesh=again.mesh,
         solver=deepest([taken.solver, again.solver]) or again.solver,
