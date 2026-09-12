@@ -62,7 +62,10 @@ WALL_MOUNT_KEEPS_HOLE_WALLS = PartChange(
     ),
     effect=(
         "Die eingetragene Breite und Höhe bleiben Mindestmaße; die Rückplatte "
-        "wächst nur dann, wenn Schraubengröße oder Lochzahl mehr Rand und Steg brauchen."
+        "wächst nur dann, wenn Schraubengröße oder Lochzahl mehr Rand und Steg brauchen. "
+        "Die Schraubenlöcher schneiden jetzt durch die Platte; zuvor lagen ihre "
+        "Werkzeuge vollständig daneben und trugen nichts ab. Die Lochmitten liegen "
+        "auf halber Plattenhöhe statt auf drei Vierteln."
     ),
 )
 
