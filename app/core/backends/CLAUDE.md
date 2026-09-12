@@ -76,3 +76,18 @@ bei `_cancel_job_by_id` und `interrupt_if_running`.
 - **Kein fremder Quelltext wird ausgeführt** (Regel 11), auch nicht der eines
   Sprachmodells.
 - Ein Schlüssel gehört dem Nutzer und reist nie in einer Projektdatei mit.
+
+## Gewichte werden vor der Freigabe geprüft
+
+TripoSG-Download und Bestandsübernahme verwenden denselben Prüfer im Python
+von ComfyUI. Der feste Modellstand und alle Größen müssen stimmen; für jede
+LFS-Datei wird der von Hugging Face gelieferte SHA-256 gestreamt geprüft.
+Beim Download geschieht das nach dem Kopieren, vor dem Austausch des alten
+Bestands. Ohne gelieferten LFS-Hash bleibt die Größenprüfung.
+
+Die Abschlussmarke mit Format 2 hält Größen, geprüfte Hashes und zugehörige
+Änderungszeiten. `weights_present` prüft diese Marke und den aktuellen
+Dateistand offline, ohne bei jeder Anzeige 7,5 GB erneut zu lesen. Eine alte
+Größenmarke oder eine nachträglich geänderte Gewichtsdatei verlangt erneut die
+Einrichtungsprüfung. Das ist keine Signatur der lokalen Ablage und schützt
+nicht gegen jemanden, der Datei und Abschlussmarke gemeinsam manipuliert.

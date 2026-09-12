@@ -2504,13 +2504,92 @@ def _write_test_weights(root: Path) -> None:
 
 
 def _test_weights_info(revision: str) -> SimpleNamespace:
+    import hashlib
+
     return SimpleNamespace(
         sha=revision,
         siblings=[
-            SimpleNamespace(rfilename="model_index.json", size=2),
-            SimpleNamespace(rfilename="transformer/model.safetensors", size=7),
+            SimpleNamespace(rfilename="model_index.json", size=2, lfs=None),
+            SimpleNamespace(
+                rfilename="transformer/model.safetensors",
+                size=7,
+                lfs=SimpleNamespace(sha256=hashlib.sha256(b"weights").hexdigest()),
+            ),
         ],
     )
+
+
+@pytest.mark.parametrize("download", [False, True], ids=["adopt", "download"])
+def test_corrupt_weights_of_the_expected_size_never_receive_a_completion_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, download: bool
+) -> None:
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "models/triposg/TripoSG"
+    target.mkdir(parents=True)
+    scratch = tmp_path / "scratch"
+    root = scratch if download else target
+    root.mkdir(exist_ok=True)
+    _write_test_weights(root)
+    (root / "transformer/model.safetensors").write_bytes(b"corrupt")
+
+    class Api:
+        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
+            return _test_weights_info(revision)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(HfApi=Api, snapshot_download=lambda *a, **k: str(scratch)),
+    )
+    args = [str(target), comfy_setup.WEIGHTS_REPO]
+    if download:
+        args.append(str(scratch))
+    args.append(comfy_setup.WEIGHTS_REVISION)
+    monkeypatch.setattr(sys, "argv", ["-c", *args])
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        exec(comfy_setup._FETCH_WEIGHTS if download else comfy_setup._ADOPT_WEIGHTS, {})
+    assert not (target / ".solidon-complete.json").exists()
+    assert not comfy_setup.weights_present(tmp_path)
+
+
+def test_weights_are_verified_after_copying_before_replacing_the_previous_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "previous").write_bytes(b"previous-complete-installation")
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    _write_test_weights(scratch)
+    original_move = shutil.move
+
+    def corrupt_copy(source: str, destination: str) -> str:
+        result = original_move(source, destination)
+        (Path(destination) / "transformer/model.safetensors").write_bytes(b"corrupt")
+        return result
+
+    info = _test_weights_info(comfy_setup.WEIGHTS_REVISION)
+    api = SimpleNamespace(model_info=lambda *a, **k: info)
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(HfApi=lambda: api, snapshot_download=lambda *a, **k: str(scratch)),
+    )
+    monkeypatch.setattr(shutil, "move", corrupt_copy)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["-c", str(target), comfy_setup.WEIGHTS_REPO, str(scratch), comfy_setup.WEIGHTS_REVISION],
+    )
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        exec(comfy_setup._FETCH_WEIGHTS, {})
+    assert (target / "previous").read_bytes() == b"previous-complete-installation"
+    assert not (target.with_name("target.part") / ".solidon-complete.json").exists()
 
 
 def test_incomplete_legacy_weights_do_not_count_as_ready(tmp_path: Path) -> None:
@@ -2526,7 +2605,7 @@ def test_incomplete_legacy_weights_do_not_count_as_ready(tmp_path: Path) -> None
         "files": {"model_index.json": 2, "transformer/model.safetensors": 7},
     }
     (root / ".solidon-complete.json").write_text(json.dumps(marker), encoding="utf-8")
-    assert comfy_setup.weights_present(tmp_path)
+    assert not comfy_setup.weights_present(tmp_path), "an old size-only marker needs verification"
     (root / "transformer/model.safetensors").write_bytes(b"half")
     assert not comfy_setup.weights_present(tmp_path)
 
@@ -2554,13 +2633,48 @@ def test_complete_legacy_weights_are_adopted_without_a_download(
     )
     exec(comfy_setup._ADOPT_WEIGHTS, {})
     assert comfy_setup.weights_present(tmp_path)
+    marker = json.loads((root / ".solidon-complete.json").read_text(encoding="utf-8"))
+    expected = _test_weights_info(comfy_setup.WEIGHTS_REVISION).siblings[1].lfs.sha256
+    assert marker["sha256"] == {"transformer/model.safetensors": expected}
+
+    # Auch gleich große spätere Änderungen verlangen die vollständige Prüfung neu.
+    import os
+
+    weights = root / "transformer/model.safetensors"
+    previous = weights.stat()
+    weights.write_bytes(b"changed")
+    os.utime(weights, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000))
+    assert not comfy_setup.weights_present(tmp_path)
 
     # Eine halbe Datei bekommt keine Marke — dann lädt der gewöhnliche Weg.
     (root / ".solidon-complete.json").unlink()
     (root / "transformer/model.safetensors").write_bytes(b"half")
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError):
         exec(comfy_setup._ADOPT_WEIGHTS, {})
     assert not (root / ".solidon-complete.json").exists()
+
+
+def test_weight_files_without_lfs_metadata_keep_the_size_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.backends import comfy_setup
+
+    root = tmp_path / "models/triposg/TripoSG"
+    root.mkdir(parents=True)
+    _write_test_weights(root)
+    info = _test_weights_info(comfy_setup.WEIGHTS_REVISION)
+    info.siblings[1].lfs = None
+    api = SimpleNamespace(model_info=lambda *a, **k: info)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(HfApi=lambda: api))
+    monkeypatch.setattr(
+        sys, "argv", ["-c", str(root), comfy_setup.WEIGHTS_REPO, comfy_setup.WEIGHTS_REVISION]
+    )
+    exec(comfy_setup._ADOPT_WEIGHTS, {})
+    assert comfy_setup.weights_present(tmp_path)
+    marker = json.loads((root / ".solidon-complete.json").read_text(encoding="utf-8"))
+    assert marker["sha256"] == {}
+    (root / "transformer/model.safetensors").write_bytes(b"half")
+    assert not comfy_setup.weights_present(tmp_path)
 
 
 @pytest.mark.parametrize("cancelled", [False, True], ids=("incomplete", "cancelled"))
@@ -2621,16 +2735,11 @@ def test_fetch_weights_adopts_a_legacy_installation_and_clears_replacement_lefto
 
     def fake_run(command: list[str], *_args: object, **_kwargs: object) -> None:
         checks.append(command)
-        # Das Prüfprogramm schreibt die Marke wie der echte Lauf.
-        (root / ".solidon-complete.json").write_text(
-            json.dumps(
-                {
-                    "revision": comfy_setup.WEIGHTS_REVISION,
-                    "files": {"model_index.json": 2, "transformer/model.safetensors": 7},
-                }
-            ),
-            encoding="utf-8",
-        )
+        # Nur die Metadaten sind eine Attrappe; das echte Programm prüft die Datei.
+        api = SimpleNamespace(model_info=lambda *a, **k: _test_weights_info(command[-1]))
+        monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(HfApi=lambda: api))
+        monkeypatch.setattr(sys, "argv", ["-c", *command[4:]])
+        exec(command[3], {})
 
     monkeypatch.setattr(comfy_setup, "_run", fake_run)
     monkeypatch.setattr(

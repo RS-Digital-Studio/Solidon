@@ -799,20 +799,39 @@ def install_packages(
 
 
 def weights_present(comfyui: Path) -> bool:
-    """Prüft den abgeschlossenen Download samt Dateigrößen, ohne Netz oder Modellladen."""
+    """Prüft Abschlussmarke und Dateistand; Hashbildung geschieht bei der Einrichtung."""
     root = comfyui / "models" / "triposg" / "TripoSG"
     marker = root / ".solidon-complete.json"
     try:
         if marker.stat().st_size > 64 * 1024:
             return False
         stored = json.loads(marker.read_text(encoding="utf-8"))
-        if not isinstance(stored, dict) or stored.get("revision") != WEIGHTS_REVISION:
+        if (
+            not isinstance(stored, dict)
+            or stored.get("revision") != WEIGHTS_REVISION
+            or stored.get("format") != 2
+        ):
             return False
         files = stored.get("files")
         if not isinstance(files, dict) or "model_index.json" not in files:
             return False
         if not any(name.endswith((".safetensors", ".bin")) for name in files):
             return False
+        hashes = stored.get("sha256")
+        mtimes = stored.get("mtimes_ns")
+        if not isinstance(hashes, dict) or not isinstance(mtimes, dict):
+            return False
+        if set(hashes) != set(mtimes) or not set(hashes) <= set(files):
+            return False
+        for name, digest in hashes.items():
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+                or not isinstance(mtimes[name], int)
+                or isinstance(mtimes[name], bool)
+            ):
+                return False
         for name, size in files.items():
             relative = Path(name)
             if (
@@ -825,11 +844,66 @@ def weights_present(comfyui: Path) -> bool:
                 or not (root / relative).resolve().is_relative_to(root.resolve())
                 or not (root / relative).is_file()
                 or (root / relative).stat().st_size != size
+                or (name in mtimes and (root / relative).stat().st_mtime_ns != mtimes[name])
             ):
                 return False
         return True
     except OSError, ValueError, TypeError:
         return False
+
+
+#: Derselbe Prüfer läuft bei Download und Bestandsübernahme im fremden Python.
+#: Die Abschlussmarke hält die geprüften LFS-Hashes und Änderungszeiten; alte
+#: Größenmarken werden einmalig nachgeprüft, nicht still als geprüft übernommen.
+_VERIFY_WEIGHTS = """
+def verify_weights(root, info):
+    import hashlib
+    files = {entry.rfilename: entry.size for entry in info.siblings}
+    if "model_index.json" not in files or not any(
+        name.endswith((".safetensors", ".bin")) for name in files
+    ):
+        raise RuntimeError(
+            "Der Modellbestand ist unvollständig. Starten Sie die Einrichtung erneut."
+        )
+    hashes, mtimes = {}, {}
+    for entry in info.siblings:
+        name, size = entry.rfilename, entry.size
+        path = root / name
+        if (
+            not path.resolve().is_relative_to(root.resolve())
+            or ":" in name or ".." in Path(name).parts
+            or not isinstance(size, int) or isinstance(size, bool) or size < 0
+            or not path.is_file() or path.stat().st_size != size
+        ):
+            raise RuntimeError(
+                f"Die Modelldatei {name} fehlt oder ist unvollständig. "
+                "Starten Sie die Einrichtung erneut."
+            )
+        expected = getattr(getattr(entry, "lfs", None), "sha256", None)
+        if expected is None:
+            continue
+        if (
+            not isinstance(expected, str) or len(expected) != 64
+            or any(letter not in "0123456789abcdef" for letter in expected)
+        ):
+            raise RuntimeError(f"Die Prüfsumme für {name} ist ungültig.")
+        print(f"SHA-256: {name}", flush=True)
+        before = path.stat()
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            while block := stream.read(1024 * 1024):
+                digest.update(block)
+        after = path.stat()
+        if digest.hexdigest() != expected or (
+            before.st_size, before.st_mtime_ns
+        ) != (after.st_size, after.st_mtime_ns):
+            raise RuntimeError(
+                f"Die Prüfsumme der Modelldatei {name} stimmt nicht. "
+                "Starten Sie die Einrichtung erneut."
+            )
+        hashes[name], mtimes[name] = expected, after.st_mtime_ns
+    return {"format": 2, "files": files, "sha256": hashes, "mtimes_ns": mtimes}
+"""
 
 
 #: Das Programm, das die Gewichte holt. Es steht hier als Text, weil es im
@@ -884,7 +958,9 @@ def weights_present(comfyui: Path) -> bool:
 #: Datei fort, also kostet ein neuer Anlauf nur das, was noch fehlt. Ein
 #: Abbruch von außen kommt durch — ``_run`` beendet den Prozess, und eine
 #: Schleife im Kind hält das nicht auf.
-_FETCH_WEIGHTS = """
+_FETCH_WEIGHTS = (
+    _VERIFY_WEIGHTS
+    + """
 import json, os, shutil, sys, uuid
 from pathlib import Path
 from huggingface_hub import HfApi, snapshot_download
@@ -902,22 +978,6 @@ if resolved != revision:
         f"Der geladene Modellstand ist {resolved} statt {revision}. "
         "Löschen Sie den Zwischenordner und starten Sie die Einrichtung erneut."
     )
-files = {entry.rfilename: entry.size for entry in info.siblings}
-if "model_index.json" not in files or not any(
-    name.endswith((".safetensors", ".bin")) for name in files
-):
-    raise RuntimeError("Der Modellbestand ist unvollständig. Starten Sie die Einrichtung erneut.")
-for name, size in files.items():
-    path = scratch / name
-    if (
-        not path.resolve().is_relative_to(scratch.resolve())
-        or not isinstance(size, int) or size < 0
-        or not path.is_file() or path.stat().st_size != size
-    ):
-        raise RuntimeError(
-            f"Die Modelldatei {name} ist unvollständig. "
-            "Starten Sie die Einrichtung erneut."
-        )
 shutil.rmtree(scratch / ".cache", ignore_errors=True)
 print("Verschieben", flush=True)
 target.parent.mkdir(parents=True, exist_ok=True)
@@ -931,10 +991,10 @@ staging = target.with_name(target.name + ".part")
 if staging.exists():
     shutil.rmtree(staging, ignore_errors=True)
 shutil.move(str(scratch), str(staging))
-# Erst der vollständig kopierte Bestand trägt die Abschlussmarkierung.
-(staging / ".solidon-complete.json").write_text(
-    json.dumps({"revision": revision, "files": files}), encoding="utf-8"
-)
+# Erst der vollständig kopierte und geprüfte Bestand trägt die Abschlussmarke.
+verified = verify_weights(staging, info)
+verified["revision"] = revision
+(staging / ".solidon-complete.json").write_text(json.dumps(verified), encoding="utf-8")
 backup = target.with_name(target.name + ".previous-" + uuid.uuid4().hex)
 if target.exists():
     os.replace(str(target), str(backup))
@@ -947,16 +1007,20 @@ except OSError:
 if backup.exists():
     shutil.rmtree(backup)
 """
+)
 
 
 #: Einen Bestand, der vor der Abschlussmarke geladen wurde, prüfen statt
 #: 7,5 GB neu zu holen: Die Marke schrieb bis zum 06.09.2026 nur der neue
 #: Kopierweg, und jede ältere Installation galt damit als unvollständig
 #: (Gesamtreview CORE-24, Nachprüfung). Gefragt wird die Dateiliste des
-#: Modellstands (wenige KB), verglichen wird Datei für Datei mit Größe; nur
+#: Modellstands (wenige KB), verglichen wird Datei für Datei mit Größe und
+#: bei LFS mit SHA-256; nur
 #: ein vollständiger Bestand bekommt die Marke. Fehlt eine Datei, endet das
 #: Programm mit einem Satz, und der gewöhnliche Download läuft.
-_ADOPT_WEIGHTS = """
+_ADOPT_WEIGHTS = (
+    _VERIFY_WEIGHTS
+    + """
 import json, sys
 from pathlib import Path
 from huggingface_hub import HfApi
@@ -967,24 +1031,15 @@ revision = sys.argv[3]
 info = HfApi().model_info(repo, revision=revision, files_metadata=True)
 if info.sha != revision:
     raise SystemExit(f"Der Modellstand ist {info.sha} statt {revision}.")
-files = {entry.rfilename: entry.size for entry in info.siblings}
-if "model_index.json" not in files or not any(
-    name.endswith((".safetensors", ".bin")) for name in files
-):
-    raise SystemExit("Der Modellbestand ist unvollständig.")
-for name, size in files.items():
-    path = target / name
-    if (
-        not path.resolve().is_relative_to(target.resolve())
-        or not isinstance(size, int) or size < 0
-        or not path.is_file() or path.stat().st_size != size
-    ):
-        raise SystemExit(f"Die Modelldatei {name} fehlt oder ist unvollständig.")
-(target / ".solidon-complete.json").write_text(
-    json.dumps({"revision": revision, "files": files}), encoding="utf-8"
-)
+verified = verify_weights(target, info)
+verified["revision"] = revision
+marker = target / ".solidon-complete.json"
+staged_marker = marker.with_suffix(".tmp")
+staged_marker.write_text(json.dumps(verified), encoding="utf-8")
+staged_marker.replace(marker)
 print("Vorhandene Gewichte übernommen", flush=True)
 """
+)
 
 
 def _discard_replaced_weights(target: Path) -> None:
