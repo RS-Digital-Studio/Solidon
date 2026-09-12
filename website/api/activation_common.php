@@ -190,8 +190,39 @@ function activation_require_private_directory(string $path): void
     }
 }
 
+/** Ein eigener Ratenstartwert; das Signaturgeheimnis wird hier niemals gelesen. */
+function activation_rate_secret(string $ratePath): string
+{
+    $path = $ratePath . '.key';
+    $stream = activation_open_rate_state($path);
+    try {
+        $raw = stream_get_contents($stream, 65);
+        if ($raw === '') {
+            $raw = bin2hex(random_bytes(32));
+            if (!activation_write_rate_state($path, $stream, $raw)) {
+                throw new ActivationFailure(
+                    'Der Missbrauchsschutz konnte nicht sicher gespeichert werden.',
+                    503,
+                    'service_unavailable'
+                );
+            }
+        }
+        if (!is_string($raw) || preg_match('/^[0-9a-f]{64}$/D', $raw) !== 1) {
+            throw new ActivationFailure(
+                'Der Missbrauchsschutz ist noch nicht sicher eingerichtet.',
+                503,
+                'service_unavailable'
+            );
+        }
+        return hex2bin($raw);
+    } finally {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+    }
+}
+
 /** Zwei nicht verknüpfbare Kennzeichen für das laufende und vorige Zeitfenster. */
-function activation_rate_client_keys(string $scope, int $window, int $now): array
+function activation_rate_client_keys(string $secret, string $scope, int $window, int $now): array
 {
     if ($window <= 0 || $window > ACTIVATION_RATE_RETENTION_SECONDS) {
         throw new ActivationFailure(
@@ -200,7 +231,7 @@ function activation_rate_client_keys(string $scope, int $window, int $now): arra
             'service_unavailable'
         );
     }
-    $root = hash_hmac('sha256', 'solidon|activation-rate', activation_seed(), true);
+    $root = hash_hmac('sha256', 'solidon|activation-rate', $secret, true);
     $address = (string) ($_SERVER['REMOTE_ADDR'] ?? '-');
     $bucket = intdiv($now, $window);
     $keys = [];
@@ -357,6 +388,7 @@ function activation_consume_client_rate(string $scope, int $limit, int $window):
         : activation_data_path('SOLIDON_ACTIVATION_RATE_FILE', 'activation-rate.json');
     $parent = dirname($path);
     activation_require_private_directory($parent);
+    $secret = activation_rate_secret($path);
     $stream = activation_open_rate_state($path);
     try {
         $raw = stream_get_contents($stream);
@@ -369,7 +401,7 @@ function activation_consume_client_rate(string $scope, int $limit, int $window):
             );
         }
         $now = time();
-        $clientKeys = activation_rate_client_keys($scope, $window, $now);
+        $clientKeys = activation_rate_client_keys($secret, $scope, $window, $now);
         $key = $clientKeys[0];
         $globalKey = $scope . ':global';
         $kept = [];

@@ -35,6 +35,24 @@ def test_setup_refuses_every_target_inside_the_repository() -> None:
     assert not target.exists()
 
 
+def test_setup_creates_an_independent_rate_key_without_replacing_it(tmp_path: Path) -> None:
+    rate_key = tmp_path / "server" / "activation-rate.json.key"
+    assert setup_activation_server(["--rate-key", str(rate_key)]) == 0
+    value = rate_key.read_bytes()
+    assert len(bytes.fromhex(value.decode("ascii"))) == 32
+    with pytest.raises(SystemExit):
+        setup_activation_server(["--rate-key", str(rate_key)])
+    assert rate_key.read_bytes() == value
+    public_target = Path(__file__).parent.parent / "website" / "niemals-rate.key"
+    with pytest.raises(SystemExit):
+        setup_activation_server(["--rate-key", str(public_target)])
+    assert not public_target.exists()
+    collision = tmp_path / "gemeinsamer-pfad"
+    with pytest.raises(SystemExit):
+        setup_activation_server(["--private", str(collision), "--rate-key", str(collision)])
+    assert not collision.exists()
+
+
 def test_setup_prepares_the_complete_database(tmp_path: Path) -> None:
     database = tmp_path / "server" / "activation.sqlite"
     operator_token = tmp_path / "server" / "operator.token"

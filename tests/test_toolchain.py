@@ -699,6 +699,9 @@ def test_developer_notes_stay_off_the_public_server() -> None:
     assert not upload.wanted(upload.LOCAL_ROOT / "README.md")
     assert not upload.wanted(upload.LOCAL_ROOT / "dl" / "Solidon3D-Setup.exe")
     assert not upload.wanted(upload.LOCAL_ROOT / "activation.seed")
+    for name in ("activation-rate.json.key", "support-rate.json.key", "rate.KEY"):
+        assert not upload.wanted(upload.LOCAL_ROOT / name)
+        assert not upload.allowed_by_name(upload.LOCAL_ROOT / name)
     assert not upload.wanted(upload.LOCAL_ROOT / "operator.token")
     assert not upload.wanted(upload.LOCAL_ROOT / "api" / "activation.sqlite")
     assert not upload.wanted(upload.LOCAL_ROOT / "Anfrage.solidon-request")

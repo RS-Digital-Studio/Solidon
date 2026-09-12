@@ -10,9 +10,8 @@ activation_security_headers();
 try {
     activation_require_method('POST');
     activation_require_trusted_origin();
-    // Erst die Erweiterung, dann Rumpf und Ratenbegrenzung: Beide brauchen
-    // sodium selbst (activation_seed), und ohne die Prüfung davor endete ein
-    // fehlendes sodium im allgemeinen 503 statt in der gezielten Meldung.
+    // Fehlende Erweiterungen werden vor der späteren Signaturprüfung erkannt.
+    // Die Ratenbegrenzung verwendet einen eigenen Startwert ohne sodium.
     if (!function_exists('sodium_crypto_sign_verify_detached')
         || !extension_loaded('pdo_sqlite')) {
         throw new ActivationFailure(

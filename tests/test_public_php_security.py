@@ -350,6 +350,10 @@ def test_private_cleanup_honours_every_age_boundary(tmp_path: Path) -> None:
     )
     activation_before = paths["activation"].read_bytes()
     support_before = paths["support"].read_bytes()
+    rate_key = tmp_path / "activation-rate.json.key"
+    rate_key.write_text("cd" * 32, encoding="ascii")
+    _chmod_private(rate_key)
+    os.utime(rate_key, (0, 0))
 
     first = _run_cleanup(tmp_path, paths)
 
@@ -368,6 +372,7 @@ def test_private_cleanup_honours_every_age_boundary(tmp_path: Path) -> None:
     assert second.returncode == 0, second.stderr
     assert json.loads(paths["activation"].read_text(encoding="ascii")) == {}
     assert json.loads(paths["support"].read_text(encoding="ascii")) == {}
+    assert rate_key.read_text(encoding="ascii") == "cd" * 32
 
 
 def test_private_cleanup_removes_legacy_sha_keys_while_holding_the_state_lock(
@@ -1237,6 +1242,40 @@ def test_counter_rejects_group_readable_quota_and_month_files(
     assert status == 429
 
 
+def test_activation_rate_key_never_depends_on_the_signing_seed(tmp_path: Path) -> None:
+    php_extension("sodium")
+    database = tmp_path / "activation.sqlite"
+    seed = tmp_path / "activation.seed"
+    environment = {
+        "SOLIDON_ACTIVATION_DB": str(database),
+        "SOLIDON_ACTIVATION_SEED_FILE": str(seed),
+    }
+    headers = {"Content-Type": "application/json"}
+    rate_key = tmp_path / "activation-rate.json.key"
+    with _php_server(tmp_path, environment) as base:
+        status, _headers, answer = _request(
+            f"{base}/activation.php", method="POST", data=b"{}", headers=headers
+        )
+        assert status == 400, answer
+        secret = rate_key.read_bytes()
+        assert re.fullmatch(rb"[0-9a-f]{64}", secret)
+        assert not seed.exists() and not database.exists()
+        seed.write_text("absichtlich-kein-Signaturschlüssel", encoding="utf-8")
+        _chmod_private(seed)
+        status, _headers, answer = _request(
+            f"{base}/activation.php", method="POST", data=b"{}", headers=headers
+        )
+        assert status == 400, answer
+        assert rate_key.read_bytes() == secret
+        assert seed.read_text(encoding="utf-8") == "absichtlich-kein-Signaturschlüssel"
+        rate_key.write_text("beschädigt", encoding="utf-8")
+        status, _headers, answer = _request(
+            f"{base}/activation.php", method="POST", data=b"{}", headers=headers
+        )
+        assert status == 503, answer
+        assert rate_key.read_text(encoding="utf-8") == "beschädigt"
+
+
 @pytest.mark.parametrize("endpoint", ["activation", "support"])
 def test_one_client_cannot_fill_the_global_request_budget(tmp_path: Path, endpoint: str) -> None:
     """Abgewiesene IP-Anfragen zählen nicht weiter gegen alle anderen Nutzer."""
@@ -1334,10 +1373,6 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     ]:
         _chmod_private(path)
 
-    seed = bytes(range(32))
-    seed_file = tmp_path / "activation.seed"
-    seed_file.write_text(seed.hex(), encoding="ascii")
-    seed_file.chmod(0o600)
     access_dir = tmp_path / "access"
     access_dir.mkdir(mode=0o700)
     password_hash = subprocess.run(
@@ -1353,7 +1388,6 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     )
     access_file.chmod(0o600)
     environment = {
-        "SOLIDON_ACTIVATION_SEED_FILE": str(seed_file),
         "SOLIDON_STATS_ACCESS_FILE": str(access_file),
     }
     prepend = tmp_path / "php-test-extensions.php"
@@ -1364,40 +1398,9 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
         "{ return strlen($value); }\n"
         "  function mb_substr(string $value, int $offset, ?int $length = null): string "
         "{ return substr($value, $offset, $length); }\n"
-        "}\n"
-        "if (!function_exists('sodium_crypto_sign_seed_keypair')) {\n"
-        "  define('SODIUM_CRYPTO_SIGN_SEEDBYTES', 32);\n"
-        "  function sodium_crypto_sign_seed_keypair(string $seed): string { return $seed; }\n"
-        "  function sodium_crypto_sign_publickey(string $pair): string "
-        "{ return hash('sha256', $pair, true); }\n"
         "}\n",
         encoding="utf-8",
     )
-    # **Den erwarteten Schlüssel rechnet PHP, nicht Python.** Hier stand
-    # ``hashlib.sha256(seed)`` — das ist der Ersatz aus dem Prepend darüber,
-    # und der greift nur, wo sodium *fehlt*. Mit echtem sodium (in der
-    # Linux-CI, und lokal sobald die Erweiterung geladen ist) rechnet der
-    # Server Ed25519, der Vergleich in ``activation_seed`` scheitert mit 503,
-    # und die Ratenbegrenzung kommt nie an die Reihe: Der rohe Hash blieb in
-    # der Datei liegen, und dieser Test war rot, ohne dass am Endpunkt etwas
-    # falsch war. Dasselbe Prepend, derselbe Rechenweg — dann ist es egal,
-    # welche Antwort die Umgebung gibt.
-    # ``auto_prepend_file`` gilt für Skripte, nicht für ``-r`` — deshalb das
-    # ``require`` im Code selbst.
-    environment["SOLIDON_ACTIVATION_TEST_PUBLIC_KEY"] = subprocess.run(
-        [
-            php,
-            "-r",
-            "require $argv[2]; echo bin2hex(sodium_crypto_sign_publickey("
-            "sodium_crypto_sign_seed_keypair(hex2bin($argv[1]))));",
-            seed.hex(),
-            str(prepend),
-        ],
-        capture_output=True,
-        check=True,
-        text=True,
-        timeout=30,
-    ).stdout.strip()
     form_headers = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Origin": "https://solidon3d.de",
@@ -1795,8 +1798,12 @@ def test_private_php_state_rejects_symlinked_storage_paths(tmp_path: Path) -> No
     assert list(target.iterdir()) == []
 
 
-def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path) -> None:
-    """Support-Schlüssel und Tageswert folgen keinem fremden Dateiverweis."""
+@pytest.mark.parametrize("link_kind", ["symlink", "hardlink"])
+def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path, link_kind: str) -> None:
+    """Ratenstartwerte und Tageswert folgen keinem fremden Dateiverweis."""
+    php_extension("sodium")
+    activation_target = tmp_path / "activation-secret-target"
+    activation_target.write_text("unverändert", encoding="utf-8")
     support_target = tmp_path / "support-secret-target"
     support_target.write_text("unverändert", encoding="utf-8")
     count_target = tmp_path / "count-secret-target"
@@ -1804,10 +1811,17 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path) -> None:
     stats_dir = tmp_path / "stats"
     stats_dir.mkdir(mode=0o700)
     try:
-        (tmp_path / "support-rate.json.key").symlink_to(support_target)
-        (stats_dir / "salt.json").symlink_to(count_target)
+        for link, target in (
+            (tmp_path / "activation-rate.json.key", activation_target),
+            (tmp_path / "support-rate.json.key", support_target),
+            (stats_dir / "salt.json", count_target),
+        ):
+            if link_kind == "symlink":
+                link.symlink_to(target)
+            else:
+                os.link(target, link)
     except OSError:
-        pytest.skip("dieser Prüfstand darf keine Datei-Symlinks anlegen")
+        pytest.skip("dieser Prüfstand darf keine Dateiverweise anlegen")
 
     prepend = tmp_path / "php-test-mbstring.php"
     prepend.write_text(
@@ -1831,6 +1845,12 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path) -> None:
         f"--{boundary}--\r\n"
     ).encode()
     with _php_server(tmp_path, prepend=prepend) as base:
+        activation_status = _request(
+            f"{base}/activation.php",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )[0]
         support_status = _request(
             f"{base}/support.php",
             method="POST",
@@ -1847,7 +1867,8 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path) -> None:
             },
         )[0]
 
-    assert support_status == 503
+    assert activation_status == support_status == 503
+    assert activation_target.read_text(encoding="utf-8") == "unverändert"
     assert count_status == 204
     assert support_target.read_text(encoding="utf-8") == "unverändert"
     assert count_target.read_text(encoding="utf-8") == "unverändert"

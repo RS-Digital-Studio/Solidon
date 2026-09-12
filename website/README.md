@@ -89,6 +89,18 @@ Anwendung und PHP übereinstimmen. Danach kommen Startwert, Betreiber-Token und
 Datenbank per FTPS nach `solidon3d.de/appdata/`; das Verzeichnis muss für PHP
 beschreibbar bleiben.
 
+Der Missbrauchsschutz liest keinen Signaturstartwert. Er verwendet einen
+eigenen 256-Bit-Wert in `activation-rate.json.key`, unmittelbar neben der
+konfigurierten `activation-rate.json`. Fehlt er, legt der Dienst ihn unter
+exklusiver Sperre mit privaten Rechten und bestätigtem Schreiben an. Ein
+beschädigter oder verknüpfter Bestand wird abgelehnt, nie ersetzt. Zur
+getrennten lokalen Vorbereitung dient `setup_activation_server.py --rate-key
+<absoluter privater Pfad>/activation-rate.json.key`. Dieser Wert gehört nur
+in den privaten Serverordner; der Website-Abgleich sperrt `.key` auch bei
+ausdrücklich genannten Dateien. Beim Umstellen auf diesen Vertrag bleibt
+`activation.seed` unverändert; das bestehende globale Kurzzeitkontingent
+bleibt wirksam, ältere IP-Pseudonyme laufen nach ihrer bisherigen Frist aus.
+
 Nur bei einem abweichenden Ablageort sind Servervariablen nötig:
 
 ```text
@@ -186,8 +198,8 @@ Wartungslauf und Löschfristen.
 Private Ordner brauchen auf POSIX 0700, Zustandsdateien höchstens 0600. Ein
 Link, Mehrfachverweis, Eigentümerwechsel, Pfadtausch, falsches JSON oder zu
 weite Rechte beendet den gesamten Lauf, bevor eine andere Datei geändert
-wird. Geheimnisdateien wie `stats/rate.key`, `support-rate.json.key`, der
-Aktivierungsstartwert und `stats-access.php` sind keine Bereinigungsziele und
+wird. Geheimnisdateien wie `stats/rate.key`, `support-rate.json.key`,
+`activation-rate.json.key`, der Aktivierungsstartwert und `stats-access.php` sind keine Bereinigungsziele und
 werden niemals gelöscht.
 
 Die Exitcodes sind Teil des Betriebsvertrags: 0 bedeutet vollständig geprüft,

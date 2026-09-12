@@ -5,6 +5,8 @@ ausgegeben. Die Datei gehört anschließend außerhalb des Web-Stammverzeichniss
 auf den Server. Die SQLite-Datei wird mit derselben festen Struktur angelegt,
 die der PHP-Dienst erwartet. Ziele innerhalb des Repositorys werden abgelehnt,
 damit ein späterer Website-Abgleich keine privaten Daten veröffentlichen kann.
+Der optionale Ratenstartwert ist unabhängig vom Signaturschlüssel, wird mit
+privaten Rechten exklusiv angelegt und niemals ersetzt.
 
 Beispiel::
 
@@ -19,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import secrets
 import sqlite3
 import sys
@@ -92,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--private", type=Path, help="Startwert außerhalb des Repositorys")
     parser.add_argument("--database", type=Path, help="SQLite-Datei außerhalb des Repositorys")
     parser.add_argument(
+        "--rate-key", type=Path, help="Getrennter Ratenstartwert außerhalb des Repositorys"
+    )
+    parser.add_argument(
         "--operator-token",
         type=Path,
         help="256-Bit-Zugang der privaten Support-Verwaltung außerhalb des Repositorys",
@@ -111,8 +117,9 @@ def main(argv: list[str] | None = None) -> int:
         arguments.private is None
         and arguments.database is None
         and arguments.operator_token is None
+        and arguments.rate_key is None
     ):
-        parser.error("mindestens --private, --database oder --operator-token angeben")
+        parser.error("mindestens --private, --database, --operator-token oder --rate-key angeben")
     if arguments.replace and arguments.private is None:
         parser.error("--replace gilt nur zusammen mit --private")
     if arguments.replace_operator_token and arguments.operator_token is None:
@@ -127,6 +134,14 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.operator_token is not None
         else None
     )
+    rate_key = (
+        _external_target(parser, arguments.rate_key) if arguments.rate_key is not None else None
+    )
+    if rate_key is not None:
+        if rate_key in (private, database, operator_token):
+            parser.error("der Ratenstartwert braucht einen eigenen Pfad")
+        if rate_key.exists():
+            parser.error(f"{rate_key} besteht bereits; ein Ratenstartwert wird nicht ersetzt")
     if private is not None and private.exists() and not arguments.replace:
         parser.error(f"{private} besteht bereits; zum bewussten Ersetzen --replace angeben")
     if (
@@ -160,6 +175,15 @@ def main(argv: list[str] | None = None) -> int:
             operator_token.chmod(0o600)
         print("Privater Betreiberzugang wurde geschrieben (Inhalt wird nicht ausgegeben):")
         print(f"  {operator_token}")
+    if rate_key is not None:
+        rate_key.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(rate_key, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(secrets.token_hex(32).encode("ascii"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        print("Privater Ratenstartwert wurde geschrieben (Inhalt wird nicht ausgegeben):")
+        print(f"  {rate_key}")
     return 0
 
 

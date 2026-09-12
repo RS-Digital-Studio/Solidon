@@ -231,6 +231,7 @@ def files_since(reference: str) -> list[Path]:
 #: die Zwischendateien der Freischaltung.
 PRIVATE_ENDINGS: Final = (
     ".seed",
+    ".key",
     ".sqlite",
     ".sqlite3",
     ".sqlite-wal",
