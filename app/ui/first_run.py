@@ -648,11 +648,6 @@ def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...
         return "", ()
 
 
-def _printer_from_slicer() -> str:
-    """Rückwärtskompatibler Einzelzugriff für den Druckervorschlag."""
-    return _defaults_from_slicer()[0]
-
-
 def _select(box: QComboBox, identifier: str) -> None:
     index = box.findData(identifier)
     if index >= 0:
