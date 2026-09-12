@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import http.server
 import json
+import socket
 import threading
 import time
 from collections.abc import Callable
@@ -399,24 +400,61 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
     assert transport.calls == []
 
 
-def test_a_blocking_local_ollama_request_can_be_cancelled() -> None:
-    """Abbrechen schließt die laufende Verbindung und wartet nicht zehn Minuten."""
+@pytest.mark.parametrize("stage", ("before_headers", "http10", "connection_close", "keep_alive"))
+def test_a_blocking_local_ollama_request_can_be_cancelled(
+    monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Abbruch beendet auch nach den Headern den Request-Thread und seinen Socket."""
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
     started = threading.Event()
+    disconnected = threading.Event()
+    release_response = threading.Event()
+    read_limited = llm.read_limited
+
+    def read_response(response: Any, **kwargs: Any) -> bytes:
+        # Erst hier hat getresponse() den Socket bei HTTP/1.0 beziehungsweise
+        # Connection: close aus dem HTTPConnection-Objekt entfernt.
+        started.set()
+        return read_limited(response, **kwargs)
+
+    monkeypatch.setattr(llm, "read_limited", read_response)
 
     class Blocking(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0" if stage == "http10" else "HTTP/1.1"
+
         def do_POST(self) -> None:
             self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            started.set()
-            time.sleep(5.0)
+            if stage == "before_headers":
+                started.set()
+            else:
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                if stage == "connection_close":
+                    self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(b"{")
+                self.wfile.flush()
+            self.connection.settimeout(2.0)
+            try:
+                if not self.connection.recv(1):
+                    disconnected.set()
+            except TimeoutError:
+                pass
+            release_response.wait(3.0)
+            if stage != "before_headers":
+                try:
+                    self.wfile.write(b"}")
+                    self.wfile.flush()
+                except OSError:
+                    pass
+            self.close_connection = True
 
         def log_message(self, _format: str, *_args: object) -> None:
             pass
 
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Blocking)
-    server.daemon_threads = True
+    server = http.server.HTTPServer(("127.0.0.1", 0), Blocking)
     serving = threading.Thread(target=server.serve_forever, daemon=True)
     serving.start()
     token = CancelSignal()
@@ -429,16 +467,140 @@ def test_a_blocking_local_ollama_request_can_be_cancelled() -> None:
         except BaseException as error:
             errors.append(error)
 
+    before = set(threading.enumerate())
     worker = threading.Thread(target=ask)
-    worker.start()
-    assert started.wait(1.0)
-    token.cancel()
-    worker.join(1.0)
-    server.shutdown()
-    server.server_close()
+    requests: list[threading.Thread] = []
+    try:
+        worker.start()
+        assert started.wait(2.0)
+        requests = [
+            thread
+            for thread in threading.enumerate()
+            if thread not in before and thread.name == "ollama-request"
+        ]
+        assert len(requests) == 1
+        token.cancel()
+        worker.join(1.0)
 
-    assert not worker.is_alive(), "der lokale HTTP-Aufruf läuft trotz Abbruch weiter"
-    assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
+        assert not worker.is_alive(), "der lokale HTTP-Aufruf läuft trotz Abbruch weiter"
+        assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
+        assert disconnected.wait(1.0), "die Gegenstelle sieht den Abbruch nicht"
+        requests[0].join(1.0)
+        assert not requests[0].is_alive(), "der eigentliche Request-Thread liest weiter"
+    finally:
+        release_response.set()
+        server.shutdown()
+        server.server_close()
+        serving.join(2.0)
+        worker.join(2.0)
+        for request in requests:
+            request.join(2.0)
+
+
+def test_a_connection_completed_after_cancellation_sends_no_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein später beendeter Verbindungsaufbau darf kein abgebrochenes POST nachholen."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    connecting = threading.Event()
+    release_connect = threading.Event()
+    requests: list[threading.Thread] = []
+    sockets: list[socket.socket] = []
+    sent: list[str] = []
+
+    def connect(connection: Any) -> None:
+        requests.append(threading.current_thread())
+        connecting.set()
+        release_connect.wait(3.0)
+        connection.sock = socket.socket()
+        sockets.append(connection.sock)
+
+    monkeypatch.setattr(llm.http.client.HTTPConnection, "connect", connect)
+    monkeypatch.setattr(
+        llm.http.client.HTTPConnection,
+        "request",
+        lambda _self, method, *_args, **_kwargs: sent.append(method),
+    )
+    token = CancelSignal()
+    errors: list[BaseException] = []
+
+    def ask() -> None:
+        try:
+            llm.post_json_local_cancelable("http://127.0.0.1:1/api/chat", {}, {}, token)
+        except BaseException as error:
+            errors.append(error)
+
+    caller = threading.Thread(target=ask)
+    try:
+        caller.start()
+        assert connecting.wait(2.0)
+        token.cancel()
+        caller.join(1.0)
+        assert not caller.is_alive()
+        assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
+    finally:
+        release_connect.set()
+        caller.join(2.0)
+        for request in requests:
+            request.join(2.0)
+    assert not sent
+    assert sockets and all(sock.fileno() == -1 for sock in sockets)
+    assert all(not request.is_alive() for request in requests)
+
+
+@pytest.mark.parametrize(
+    ("status", "payload", "error_type"),
+    (
+        (200, b"{}", None),
+        (200, b"not-json", BackendAnswerUnreadable),
+        (503, b"busy", BackendUnavailable),
+    ),
+)
+def test_cancelable_http_closes_its_response_on_success_and_error(
+    monkeypatch: pytest.MonkeyPatch, status: int, payload: bytes, error_type: type[Exception] | None
+) -> None:
+    """Auch ohne Abbruch verlässt keine offene Antwort den Request-Thread."""
+    from app.core.scene.cancel import CancelSignal
+
+    responses: list[Any] = []
+    read_limited = llm.read_limited
+
+    def read_response(response: Any, **kwargs: Any) -> bytes:
+        responses.append(response)
+        return read_limited(response, **kwargs)
+
+    monkeypatch.setattr(llm, "read_limited", read_response)
+
+    class Answer(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Answer)
+    serving = threading.Thread(target=server.serve_forever, daemon=True)
+    serving.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/api/chat"
+        if error_type is None:
+            assert llm.post_json_local_cancelable(url, {}, {}, CancelSignal()) == {}
+        else:
+            with pytest.raises(error_type):
+                llm.post_json_local_cancelable(url, {}, {}, CancelSignal())
+        assert len(responses) == 1 and responses[0].isclosed()
+    finally:
+        server.shutdown()
+        server.server_close()
+        serving.join(2.0)
 
 
 def test_the_backend_learns_from_its_own_answer_where_it_computes() -> None:

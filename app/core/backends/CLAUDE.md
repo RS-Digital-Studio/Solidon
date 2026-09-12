@@ -39,6 +39,13 @@ Werkzeuge nicht aufruft, ist dann nicht zu dumm — es hat sie nie gesehen.
 `tools/check_local_model.py` prüft genau das, bevor eine Modellmessung
 etwas aussagt.
 
+Der abbrechbare lokale HTTP-Transport hält den verbundenen Socket bis zum
+Ende des Request-Threads fest. Auch bei HTTP/1.0 und `Connection: close`
+erreicht ein Abbruch damit den Antwortkörper. Der Abbruch unterbricht den
+Socket; Antwort und Verbindung schließt ihr Request-Thread, bevor der
+Aufrufer zurückkehrt. Wird erst während eines Abbruchs eine Verbindung
+hergestellt, verhindert die erneute Tokenprüfung das anschließende POST.
+
 ## Lokale KI teilt eine Grafikkarte
 
 Ollama und ComfyUI laufen auf demselben Rechner nie gleichzeitig durch

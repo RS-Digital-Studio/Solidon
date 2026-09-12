@@ -422,29 +422,37 @@ def post_json_local_cancelable(
     target = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
     answers: list[dict[str, Any]] = []
     errors: list[BaseException] = []
+    active_socket: socket.socket | None = None
     # Dieselbe Grenze wie im nicht abbrechbaren Weg: Ein Ollama, das antwortet,
     # ist noch kein Ollama — hinter der Adresse kann ein beliebiger Dienst
     # liegen, und ein endloser Strom füllte sonst den Arbeitsspeicher.
     deadline = deadline_after(LOCAL_TIMEOUT_SECONDS)
 
     def request() -> None:
+        nonlocal active_socket
         try:
+            connection.connect()
+            # HTTP/1.0 und Connection: close übertragen den Socket beim Lesen
+            # der Header an die Antwort. connection.sock ist danach None;
+            # der Abbruch muss denselben Netzsocket weiterhin erreichen.
+            active_socket = connection.sock
+            cancelled.raise_if_cancelled()
             connection.request(
                 "POST",
                 target,
                 body=body,
                 headers={"Content-Type": "application/json", **headers},
             )
-            response = connection.getresponse()
-            raw = read_limited(response, limit=MAX_RESPONSE_BYTES, deadline=deadline)
-            if response.status >= 400:
-                raise BackendUnavailable(
-                    status=response.status,
-                    # Fremder Text, also redigiert und gedeckelt — er steht
-                    # gleich in einer Meldung und im Protokoll (§33.2).
-                    detail=redact_external(raw.decode("utf-8", errors="replace"), limit=500),
-                )
-            answers.append(_as_object(raw, url))
+            with connection.getresponse() as response:
+                raw = read_limited(response, limit=MAX_RESPONSE_BYTES, deadline=deadline)
+                if response.status >= 400:
+                    raise BackendUnavailable(
+                        status=response.status,
+                        # Fremder Text, also redigiert und gedeckelt — er steht
+                        # gleich in einer Meldung und im Protokoll (§33.2).
+                        detail=redact_external(raw.decode("utf-8", errors="replace"), limit=500),
+                    )
+                answers.append(_as_object(raw, url))
         except TimeoutError as error:
             errors.append(BackendTooSlow(seconds=LOCAL_TIMEOUT_SECONDS))
             errors[-1].__cause__ = error
@@ -460,19 +468,30 @@ def post_json_local_cancelable(
         except BaseException as error:
             errors.append(error)
         finally:
-            finished.set()
             connection.close()
+            finished.set()
 
     worker = threading.Thread(target=request, name="ollama-request", daemon=True)
     worker.start()
     while not finished.wait(0.05):
         if not cancelled.is_cancelled:
             continue
-        sock = connection.sock
+        sock = active_socket or connection.sock
         if sock is not None:
             with suppress(OSError):
                 sock.shutdown(socket.SHUT_RDWR)
-        connection.close()
+            # makefile() hält den Descriptor trotz socket.close() offen.
+            # Windows weckt den wartenden Leser erst beim tatsächlichen
+            # Schließen. detach() verhindert dabei ein späteres doppeltes
+            # Schließen durch Antwort oder Verbindung.
+            with suppress(OSError):
+                descriptor = sock.detach()
+                if descriptor >= 0:
+                    socket.close(descriptor)
+            # Der Request-Thread schließt Antwort und Verbindung selbst.
+            # Vorzeitiges close() könnte während request() den Socket leeren
+            # und damit eine automatische zweite Verbindung auslösen.
+            worker.join()
         raise OperationCancelled
 
     cancelled.raise_if_cancelled()
