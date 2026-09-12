@@ -46,6 +46,8 @@ GERMAN_WORDS = frozenset(
         "marke",
         "eigene",
         "vom",
+        "genannt",
+        "ordnung",
         "abstand",
         # Beide als ganzes Wort und nicht als Stamm: Als
         # Teilzeichenkette träfe "anker" die englischen "banker",
@@ -318,6 +320,8 @@ def test_the_check_would_catch_a_violation() -> None:
     assert offences_in("marke")
     assert offences_in("eigene")
     assert offences_in("vom_material")
+    assert offences_in("genannt")
+    assert offences_in("ordnung")
     assert offences_in("wall_staerke")
     assert offences_in("baustein_registry")
     assert offences_in("hoehe")
