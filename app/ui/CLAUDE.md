@@ -60,6 +60,9 @@ Kennungen unterscheiden gleiche Etiketten; Details und zugängliche
 Beschreibungen bewahren die Kennung unabhängig von dieser Verkürzung.
 
 `filament_usage.py` hält Angebote erfolgreicher Ausgaben ohne Zeitlimit bereit.
+Beim Anlegen einer Spule im Buchungsdialog bleiben gewählte Spulen, manuelle
+Mengen und Aufteilungen erhalten. Die neue Spule füllt höchstens eine noch
+freie Hauptposition und bleibt in allen passenden Auswahllisten erreichbar.
 Ein Dialogwechsel übernimmt sie mit `auto_book=False`, damit der Transfer keinen
 neuen Buchungsanlass schafft. Lagerzugriff und atomare Journaländerungen laufen
 über Arbeiter; Aufteilung, Wiederholungsdruck und manuelle Korrektur sind

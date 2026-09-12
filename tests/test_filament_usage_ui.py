@@ -559,3 +559,30 @@ def test_stale_manual_correction_reports_a_conflict_and_preserves_newer_quantiti
     assert stale.state.text() and not stale.state.isHidden()
     assert _remaining(entry) == pytest.approx(459)
     assert filaments.bookings()[0].positions[0].grams == pytest.approx(41)
+
+
+@pytest.mark.parametrize("already_chosen", [False, True])
+def test_creating_a_spool_preserves_existing_booking_choices(
+    already_chosen: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine neue Spule ergänzt freie Zeilen und bewahrt ausdrücklich gewählte Mengen und Spulen."""
+    first = _spool() if already_chosen else None
+    dialog = _dialog(_request(first))
+    try:
+        dialog.amounts[0].setValue(99)
+        before = dialog.choices[0].currentData()
+
+        def accepted(editor):
+            editor.name.setText("Neue Spule")
+            return QDialog.DialogCode.Accepted
+
+        monkeypatch.setattr(usage_ui.NewFilamentDialog, "exec", accepted)
+        dialog._create_spool()
+        _wait(dialog)
+        new = next(entry for entry in filaments.catalogue() if entry.name == "Neue Spule")
+        assert dialog.choices[0].findData(new.identifier) >= 0
+        assert dialog.choices[0].currentData() == (before if already_chosen else new.identifier)
+        assert dialog.amounts[0].value() == pytest.approx(99)
+    finally:
+        dialog.release()
+        dialog.deleteLater()

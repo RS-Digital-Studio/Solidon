@@ -392,12 +392,14 @@ class UsageDialog(QDialog):
                 self._fill_choice(
                     choice, self._lines[index], choice.currentData() or "", suggest=False
                 )
-        self._operation_changed()
-        if self._created_identifier and self.choices:
-            choice = next((one for one in self.choices if not one.currentData()), self.choices[0])
-            choice.setCurrentIndex(choice.findData(self._created_identifier))
+        if self._created_identifier:
+            choice = next((one for one in self.choices if not one.currentData()), None)
+            if choice is not None:
+                choice.setCurrentIndex(choice.findData(self._created_identifier))
             self._created_identifier = ""
             self._validate()
+        else:
+            self._operation_changed()
 
     def _rejected(self, problem: object) -> None:
         self._validate()
