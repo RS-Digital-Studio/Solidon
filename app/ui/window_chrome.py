@@ -183,6 +183,8 @@ def install(application: Any) -> ChromeWatcher | None:
     """
     if not available():
         return None
+    for existing in application.findChildren(ChromeWatcher):
+        return existing
     watcher = ChromeWatcher()
     watcher.setParent(application)
     application.installEventFilter(watcher)

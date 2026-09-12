@@ -876,6 +876,9 @@ ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·
 §19.1) · `icons.py` · `motion.py` (Bewegung an einer Stelle, nicht an
 zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 
+Das Anmelden des Fensterchroms ist idempotent: Beide Startwege teilen den
+Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
+
 Beim Ablösen einer Auswahlblende übernimmt der Renderer alle noch offenen
 Farbziele der vorigen Blende. Sonst bleibt bei einer schnellen
 Mehrfachauswahl der zuerst gewählte Körper auf seiner Zwischenfarbe stehen.

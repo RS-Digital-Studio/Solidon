@@ -36,6 +36,32 @@ from app.ui import window_chrome
 from app.ui.theme import apply_theme
 
 
+def test_reinstalling_chrome_does_not_duplicate_painting(qt_app: QApplication, monkeypatch) -> None:
+    """Beide Startwege teilen einen Wächter und malen bei einem Ereignis einmal."""
+    from PySide6.QtCore import QEvent
+
+    monkeypatch.setattr(window_chrome, "available", lambda: True)
+    painted: list[QWidget] = []
+    repainted: list[int] = []
+    monkeypatch.setattr(window_chrome, "paint_chrome", lambda window: painted.append(window))
+    monkeypatch.setattr(window_chrome, "paint_every_window", lambda: repainted.append(1))
+    first = window_chrome.install(qt_app)
+    second = window_chrome.install(qt_app)
+    dialog = QDialog()
+    try:
+        QApplication.sendEvent(dialog, QEvent(QEvent.Type.Show))
+        QApplication.sendEvent(qt_app, QEvent(QEvent.Type.ApplicationPaletteChange))
+        assert painted == [dialog]
+        assert repainted == [1]
+        assert first is second
+    finally:
+        for watcher in {first, second}:
+            qt_app.removeEventFilter(watcher)
+            watcher.setParent(None)
+            watcher.deleteLater()
+        dialog.deleteLater()
+
+
 def test_a_window_that_appears_is_painted(qt_app: QApplication, monkeypatch) -> None:
     """Jedes Fenster wird angestrichen, sobald es erscheint.
 
