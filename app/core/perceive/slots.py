@@ -464,10 +464,10 @@ def find_slots(
 
     ``check_cancelled`` darf ``OperationCancelled`` werfen (§2.8), geprüft je
     Bogen der äußeren Schleife. Die Suche geht über **alle Paare** von
-    Innenverrundungen, und das ist quadratisch: An einer Platte mit 48
-    verrundeten Taschen (13 070 Dreiecke, 192 Bögen, 18 336 Paare) kostet sie
-    2,0 s — über der Schwelle, ab der §2.8 einen Abbruch verlangt, und das
-    schon weit unter den 200 000 Dreiecken aus §31.
+    Innenverrundungen; ihre Zahl wächst quadratisch mit der Bogenzahl. Der
+    Abbruch gehört zum gesamten Erkennungslauf, unabhängig davon, wie schnell
+    dieser Teilschritt an einem einzelnen Prüfkörper ist. Der Ganzkörpertest
+    mit vielen Taschen in ``tests/test_performance.py`` misst diesen Weg.
     """
     body = mesh.raw
     candidates = [
