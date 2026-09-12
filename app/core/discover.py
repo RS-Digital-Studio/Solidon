@@ -509,12 +509,15 @@ def program_mark(name: str, names: tuple[str, ...] | None = None) -> str:
     Ordnernamen und fand für ein versioniertes AppImage nie einen
     (Gesamtreview 05.09.2026, CORE-12 und CORE-16).
 
-    Ohne Treffer bleibt die nackte Form selbst die Marke.
+    Gleich lange Treffer werden alphabetisch geordnet. Ohne Treffer bleibt
+    die nackte Form selbst die Marke.
     """
     from app.core.tools import SLICERS
 
     plain = plain_name(name)
-    marks = sorted({plain_name(entry) for entry in (names or SLICERS)}, key=len)
+    marks = sorted(
+        {plain_name(entry) for entry in (names or SLICERS)}, key=lambda mark: (len(mark), mark)
+    )
     return next((mark for mark in marks if mark and mark in plain), plain)
 
 

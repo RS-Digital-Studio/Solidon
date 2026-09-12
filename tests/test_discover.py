@@ -15,6 +15,7 @@ Test selbst gebaut hat.
 from __future__ import annotations
 
 import logging
+import os
 import stat
 import subprocess
 import sys
@@ -1082,6 +1083,27 @@ def test_the_workspace_of_a_sandboxed_program_lands_where_it_can_read(
         (folder / "platte.3mf").write_text("x")
 
     assert not folder.exists(), "der Ordner wird hinterher geräumt"
+
+
+def test_an_ambiguous_program_mark_is_stable_across_processes() -> None:
+    """Gleich lange bekannte Namen werden nicht vom Hash-Startwert des Prozesses entschieden."""
+    script = (
+        "from app.core.discover import program_mark; "
+        "print(program_mark('alpha-bravo', ('alpha', 'bravo')))"
+    )
+    marks = [
+        subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+        ).stdout.strip()
+        for seed in ("0", "4")
+    ]
+
+    assert all(mark in {"alpha", "bravo"} for mark in marks)
+    assert len(set(marks)) == 1
 
 
 def test_different_slicers_in_one_bin_folder_stay_apart(tmp_path: Path) -> None:
