@@ -207,9 +207,11 @@ def test_no_fill_colour_is_used_as_text() -> None:
     # ``border``: Für Flächen ist die Farbe richtig, für Rahmen gilt eine
     # andere Schwelle (3,0), und beide prüfen eigene Tests.
     pattern = re.compile(r"[^-\w]color:\s*\{ROLES\[")
+    paths = sorted(ui.rglob("*.py"))
+    assert ui / "viewport.py" in paths and ui / "render" / "api.py" in paths
     guilty = [
-        f"{path.name}:{number}"
-        for path in sorted(ui.glob("*.py"))
+        f"{path.relative_to(ui)}:{number}"
+        for path in paths
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
         if pattern.search(line)
     ]

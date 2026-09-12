@@ -1268,10 +1268,14 @@ def test_no_file_of_the_corpus_is_refused() -> None:
     solid an" abgewiesen hätte.
     """
     korpus = Path(__file__).parent / "data"
+    dateien = [
+        pfad
+        for pfad in sorted(korpus.rglob("*"))
+        if pfad.is_file() and pfad.suffix.lower() in (".stl", ".3mf", ".obj", ".ply")
+    ]
+    assert korpus / "meshes" / "cube_clean.stl" in dateien, "Der Modellkorpus fehlt."
     gefallen = []
-    for pfad in sorted(korpus.rglob("*")):
-        if not pfad.is_file() or pfad.suffix.lower() not in (".stl", ".3mf", ".obj", ".ply"):
-            continue
+    for pfad in dateien:
         try:
             import_plan("src_1", pfad.name, pfad.read_bytes())
         except ValidationError as fehler:

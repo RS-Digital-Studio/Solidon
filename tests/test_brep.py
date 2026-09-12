@@ -1440,6 +1440,7 @@ def test_every_opencascade_import_in_the_application_resolves() -> None:
 
     root = Path(__file__).resolve().parent.parent
     missing: list[str] = []
+    checked: set[tuple[str, str]] = set()
     for path in sorted([*(root / "app").rglob("*.py"), *(root / "tools").rglob("*.py")]):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -1448,6 +1449,7 @@ def test_every_opencascade_import_in_the_application_resolves() -> None:
             if node.module != "OCP" and not node.module.startswith("OCP."):
                 continue
             for alias in node.names:
+                checked.add((node.module, alias.name))
                 try:
                     getattr(importlib.import_module(node.module), alias.name)
                 except Exception as problem:
@@ -1455,6 +1457,7 @@ def test_every_opencascade_import_in_the_application_resolves() -> None:
                         f"{path.relative_to(root)}:{node.lineno} {node.module}.{alias.name}"
                         f" ({type(problem).__name__})"
                     )
+    assert checked, "Keine OCP-Importe gefunden; die Prüfung hat keinen Gegenstand."
     assert not missing, "\n".join(missing)
 
 

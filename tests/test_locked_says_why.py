@@ -288,6 +288,39 @@ def window(qt_app: QApplication, session: Session) -> MainWindow:
     return MainWindow(session, UiSettings())
 
 
+def _silent_buttons(dialog: QDialog) -> list[str]:
+    """Sichtbare gesperrte Knöpfe mit mindestens einem stummen Rückmeldekanal."""
+    return [
+        button.text()
+        for button in dialog.findChildren(QPushButton)
+        if button.isVisibleTo(dialog)
+        and button.text()
+        and not button.isEnabled()
+        and not all(
+            text.strip()
+            for text in (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        )
+    ]
+
+
+@pytest.mark.parametrize("missing", ["tooltip", "status", "accessible", "none"])
+def test_the_button_guard_finds_each_missing_channel(qt_app: QApplication, missing: str) -> None:
+    """Ein absichtlich stummer Knopf beweist den Wächter für jeden der drei Kanäle."""
+    dialog = QDialog()
+    button = QPushButton("Übernehmen", dialog)
+    button.setEnabled(False)
+    button.setToolTip(" " if missing == "tooltip" else "Wählen Sie einen Körper.")
+    button.setStatusTip(" " if missing == "status" else "Wählen Sie einen Körper.")
+    button.setAccessibleDescription(" " if missing == "accessible" else "Wählen Sie einen Körper.")
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        assert _silent_buttons(dialog) == ([] if missing == "none" else ["Übernehmen"])
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize("name", sorted(BUILDERS))
 def test_no_locked_button_stays_silent(name: str, session: Session, qt_app: QApplication) -> None:
     """Jeder gesperrte, sichtbare Knopf nennt seinen Grund — an allen drei Kanälen.
@@ -306,14 +339,7 @@ def test_no_locked_button_stays_silent(name: str, session: Session, qt_app: QApp
         for _ in range(10):
             qt_app.processEvents()
 
-        silent = [
-            button.text()
-            for button in dialog.findChildren(QPushButton)
-            if button.isVisibleTo(dialog)
-            and button.text()
-            and not button.isEnabled()
-            and not (button.toolTip() and button.statusTip() and button.accessibleDescription())
-        ]
+        silent = _silent_buttons(dialog)
         assert not silent, f"{name}: gesperrt und ohne Grund: {silent}"
     finally:
         dialog.close()
