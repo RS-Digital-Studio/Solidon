@@ -1189,6 +1189,28 @@ def test_the_colour_button_keeps_its_value_and_its_sentence(qt_app: QApplication
     assert "Die Farbe für die Vorschau." in button.toolTip()
 
 
+@pytest.mark.parametrize("slicer", [None, "PrusaSlicer.exe", "orca-slicer.exe"])
+def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch, slicer: str | None
+) -> None:
+    """Eine erneuerte Sliceranzeige darf den Hexwert nicht auf die ursprüngliche Farbe setzen."""
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QColorDialog
+
+    dialog._slicer_path = Path(slicer) if slicer else None
+    dialog._mark_fields_this_slicer_ignores()
+    editor = dialog._editors["filament.colour"]
+    own_status, own_description = editor.statusTip(), editor.accessibleDescription()
+    for colour in ("#123456", "#987654"):
+        monkeypatch.setattr(QColorDialog, "getColor", lambda *_args, value=colour: QColor(value))
+        editor.click()
+        dialog._mark_fields_this_slicer_ignores()
+        assert dialog.settings.filament.colour == colour
+        assert colour.upper() in editor.toolTip()
+        assert editor.statusTip() == own_status
+        assert editor.accessibleDescription() == own_description
+
+
 # --- ohne Slicer --------------------------------------------------------------------
 
 

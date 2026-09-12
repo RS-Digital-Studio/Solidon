@@ -4379,6 +4379,8 @@ class PrintSettingsDialog(QDialog):
                     continue
                 own = widget.property(_OWN_TIP)
                 if own is None:
+                    if not reason:
+                        continue
                     # Beim ersten Mal sind die drei Kanäle die eigenen — und
                     # sie sind **nicht** derselbe Text: Der Farbknopf nennt im
                     # Tooltip zuerst den Hexwert und hängt den Satz an, während
@@ -4391,6 +4393,8 @@ class PrintSettingsDialog(QDialog):
                 widget.setToolTip(reason or str(tip))
                 widget.setStatusTip(reason or str(status))
                 widget.setAccessibleDescription(reason or str(described))
+                if not reason:
+                    widget.setProperty(_OWN_TIP, None)
 
     def _show_slicer_state(self) -> None:
         """Ob ein Slicer da ist — und wenn nicht, der Weg zu einem.
