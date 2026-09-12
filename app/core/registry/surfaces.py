@@ -74,63 +74,6 @@ def menu_tree(
 MAX_MENU_ROWS: Final = 12
 
 
-def group_is_flat(category: str, registry: Registry | None = None) -> bool:
-    """Ob die Menügruppe dieser Kategorie ohne Zwischenebene auskommt (§2.6).
-
-    **Zwei Maße maßen dieselbe Sache, und sie waren sich uneinig.** Der Aufbau
-    zog eine Zwischenebene ein, sobald eine Gruppe *mehr als eine Kategorie*
-    hatte; die Hausgrenze zählt aber *Zeilen* (zwölf je Menü). Damit bekam
-    „Vorbereiten" ein Untermenü, weil es zwei Kategorien hat — nicht, weil es
-    zu lang wäre. Gerechnet wird deshalb hier, statt an zwei Stellen gewusst.
-
-    Gezählt werden die sichtbaren Einträge aller besetzten Kategorien der
-    Gruppe. Zusammengelegte Zwillinge (``MENU_TWINS``) haben keinen eigenen
-    Eintrag und zählen nicht mit. Trennstriche zählen ebenfalls nicht: Sie
-    sind der Ersatz für die Namen der Untermenüs, die wegfallen, und wer sie
-    mitzählte, bestrafte das Flachziehen für seine eigene Wirkung.
-
-    **Und Variantengruppen zählen als eine Zeile, nicht als ihre Mitglieder.**
-    Das war der Fehler, und er kostete genau ein Menü: *Erzeugen* zeigt **11**
-    Einträge, gezählt wurden **14**, und die Grenze liegt bei zwölf — die
-    Zwischenebene entstand also für drei Operationen, die das Menü gar nicht
-    zeigt (``sketch_revolve``, ``sketch_sweep``, ``sketch_loft`` stehen unter
-    dem Sammeleintrag). Damit kostete jede Erzeugungs-Operation einen dritten
-    Klick, und zwar in dem Menü, das Weg 2 trägt.
-
-    Gemessen am 27.08.2026 beim Vergleich mit Fusion, wo dieselbe Handlung
-    einen Klick kostet. Die Regel selbst stand schon da — „gefaltet wird, weil
-    es sein muss, nicht weil es ordentlich aussieht" (``folded_groups``); was
-    fehlte, war eine Zählung, die zählt, was zu sehen ist. Derselbe Fehler wie
-    ein Sollwert, der aus dem Prüfling kommt: Die Zahl war plausibel und
-    beschrieb etwas anderes als die Frage.
-
-    **Eine Gruppe mit einer einzigen besetzten Kategorie ist immer flach**,
-    gleich wie lang sie ist — ihre Zwischenebene hieße genauso wie das Menü
-    darüber („Bausteine → Bausteine → Deckel erzeugen"). Das ist keine
-    Ausnahme von der Zeilenregel, sondern eine zweite Frage, die dieselbe
-    Antwort braucht: Eine Kategorie-Ebene ist dort nie das, was die Länge
-    lösen würde. Die Bausteine lösen ihre zwanzig Zeilen über die
-    Bausteingruppen, und die zählt diese Funktion zu Recht nicht.
-
-    Die Bedingung steht hier und nicht in den Aufrufern, weil sonst jeder
-    weitere sie neu lernen müsste — genau der Grund, aus dem die Funktion in
-    den Kern gehört.
-
-    **Seit dem 27.08.2026 ist das nur noch die halbe Frage**, und die Antwort
-    kommt von :func:`folded_categories`: „ganz flach" heißt „keine einzige
-    Kategorie muss falten". Vorher war es die *ganze* Frage — entweder passte
-    eine Gruppe vollständig, oder **jede** ihrer Kategorien bekam eine
-    Zwischenebene. Im Menü *Ändern* lagen damit alle sieben eine Ebene tiefer,
-    auch *Reparatur* mit einem Eintrag.
-
-    Die Funktion bleibt, weil ihre Frage weiter vorkommt (ein Menü ohne jedes
-    Untermenü zeigt alle seine Kategorienamen). Sie **rechnet** aber nicht mehr
-    selbst: Zwei Rechnungen über dieselbe Sache waren genau der Grund, aus dem
-    die Leiste und das Kontextmenü auseinandergelaufen sind.
-    """
-    return not folded_categories(category, registry)
-
-
 def menu_rows_of(categories: Collection[str], registry: Registry | None = None) -> int:
     """Wie viele Zeilen diese Kategorien flach in einem Menü belegen.
 
@@ -139,9 +82,9 @@ def menu_rows_of(categories: Collection[str], registry: Registry | None = None) 
     Eintrag, und die Mitglieder einer Variantengruppe teilen einen — vier
     Skizzen-Operationen sind eine Zeile.
 
-    Als eigene Funktion, damit sie prüfbar ist, ohne ein Fenster zu bauen: Ein
-    Test über ``group_is_flat`` sieht nur ja oder nein und könnte die Zahl
-    dahinter nicht gegen die des gebauten Menüs halten.
+    Als eigene Funktion, damit sie prüfbar ist, ohne ein Fenster zu bauen: Die
+    Zeilenzahl lässt sich gegen das gebaute Menü halten, unabhängig davon,
+    welche Kategorien anschließend gefaltet werden.
     """
     source = registry or REGISTRY
     inside = [spec for spec in source.all() if spec.category in categories]
@@ -240,10 +183,8 @@ def folded_groups(
     **Und die einzige Gruppe wird nie gefaltet**, gleich wie lang sie ist.
     Bliebe sonst ein Menü, das aus einem einzigen Untermenü besteht: ein Klick
     für alles, und die Zwischenebene hieße, wonach man ohnehin schon geklickt
-    hat. Das ist dieselbe Ausnahme, die ``registry.surfaces.group_is_flat`` für
-    die Menüleiste macht — dort wörtlich als „Bausteine → Bausteine → Deckel
-    erzeugen" beschrieben. Sie stand hier zuerst nicht, obwohl der Text auf die
-    Regel verwies: Eine zitierte Regel ist keine befolgte.
+    hat. Auch :func:`folded_categories` vermeidet so „Bausteine → Bausteine → Deckel
+    erzeugen": Eine weitere Ebene würde nur denselben Namen wiederholen.
 
     ``rank`` ordnet, wen es zuerst trifft. Ohne Angabe ist es die Reihenfolge
     der Menüleiste (:func:`menu_rank`) — die Antwort für das **Kontextmenü**,
@@ -257,7 +198,7 @@ def folded_groups(
     Kategorie gefaltet), weil diese Funktion in der Oberfläche lag und der Kern
     sie nicht fragen konnte. Deshalb steht sie seit dem 27.08.2026 hier.
     """
-    ordnung = rank or menu_rank
+    ordering = rank or menu_rank
     if len(sizes) < 2 and not fixed:
         return []
     rows = sum(sizes.values()) + fixed
@@ -273,7 +214,7 @@ def folded_groups(
             # die Antwort eindeutig bleibt.
             title = min(
                 enough,
-                key=lambda name: (name in keep, -ordnung(name), -foldable[name], name),
+                key=lambda name: (name in keep, -ordering(name), -foldable[name], name),
             )
         else:
             # **Bei gleicher Größe entscheidet die Reihenfolge, nicht das
@@ -285,7 +226,7 @@ def folded_groups(
             # die häufigere Gruppe wanderte eine Ebene tiefer als die seltenere.
             title = min(
                 foldable,
-                key=lambda name: (name in keep, -foldable[name], -ordnung(name), name),
+                key=lambda name: (name in keep, -foldable[name], -ordering(name), name),
             )
         folded.append(title)
         rows -= foldable.pop(title) - 1
@@ -295,8 +236,8 @@ def folded_groups(
 def folded_categories(category: str, registry: Registry | None = None) -> frozenset[str]:
     """Welche Kategorien **dieser Gruppe** ein Untermenü bekommen (§2.6).
 
-    Die Antwort für die Menüleiste, und sie ersetzt die gröbere von
-    :func:`group_is_flat`: Dort war es alles oder nichts — entweder war die
+    Die Antwort für die Menüleiste ersetzt die frühere Ganzgruppen-Abfrage:
+    Dort war es alles oder nichts — entweder war die
     ganze Gruppe flach, oder **jede** Kategorie bekam eine Zwischenebene. Das
     Kontextmenü kann das seit dem 24.08.2026 besser (:func:`folded_groups`
     faltet nur so weit, bis der Rest passt); die Leiste konnte es nicht, weil
@@ -315,8 +256,8 @@ def folded_categories(category: str, registry: Registry | None = None) -> frozen
     dieselbe Regel, die :func:`folded_groups` für die Gruppen der Leiste
     anwendet, eine Ebene tiefer.
 
-    Eine Gruppe mit einer einzigen besetzten Kategorie faltet nie, aus dem
-    Grund, der bei :func:`group_is_flat` steht.
+    Eine Gruppe mit einer einzigen besetzten Kategorie faltet nie: Die
+    Zwischenebene würde denselben Namen wie das Menü darüber wiederholen.
     """
     source = registry or REGISTRY
     in_group = next(
@@ -413,8 +354,8 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         return f"{_panel_place(spec)} → {spec.title}"
     steps = [group_title(spec.category)]
 
-    # **Je Kategorie gefragt, nicht je Gruppe.** ``group_is_flat`` beantwortet
-    # dieselbe Frage gröber — alles flach oder jede Kategorie eine Ebene
+    # **Je Kategorie gefragt, nicht je Gruppe.** Die frühere Abfrage war gröber:
+    # alles flach oder jede Kategorie eine Ebene
     # tiefer —, und die Leiste faltet seit dem 27.08.2026 nur so weit, wie sie
     # muss. Ein Pfad, der die alte Frage stellt, schickt den Nutzer und den
     # Agenten zu einer Zwischenebene, die es nicht mehr gibt.

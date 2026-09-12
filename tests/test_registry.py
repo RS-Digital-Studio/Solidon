@@ -354,3 +354,35 @@ def test_the_twin_rule_takes_the_set_itself_as_its_reference(
         "drill_hole",
         "hollow_object",
     }
+
+
+@pytest.mark.parametrize(
+    "sizes, limit, fixed, keep, ranking, expected",
+    [
+        ({"only": 20}, 12, 0, (), {}, []),
+        ({"only": 20}, 12, 1, (), {}, ["only"]),
+        ({"a": 1, "b": 1}, 1, 0, (), {}, []),
+        ({"a": 5, "b": 4}, 9, 0, (), {}, []),
+        ({"a": 5, "b": 4}, 8, 0, (), {"a": 0, "b": 1}, ["b"]),
+        ({"a": 5, "b": 4}, 8, 0, ("b",), {"a": 0, "b": 1}, ["a"]),
+        ({"a": 5, "b": 4}, 8, 0, (), {}, ["a"]),
+        ({"b": 5, "a": 5}, 9, 0, (), {}, ["a"]),
+        ({"a": 5, "b": 5, "c": 5}, 8, 0, (), {"a": 0, "b": 1, "c": 2}, ["c", "b"]),
+        ({"a": 5, "b": 5, "c": 5}, 8, 0, ("c",), {"a": 0, "b": 1, "c": 2}, ["b", "a"]),
+        ({"b": 5, "a": 5, "c": 4}, 6, 0, (), {}, ["a", "b"]),
+    ],
+)
+def test_menu_folding_keeps_rank_ties_and_protected_groups(
+    sizes: dict[str, int],
+    limit: int,
+    fixed: int,
+    keep: tuple[str, ...],
+    ranking: dict[str, int],
+    expected: list[str],
+) -> None:
+    """Die kleinste nötige Faltung bleibt bei Rang, Gleichstand und Schutz eindeutig."""
+    from app.core.registry.surfaces import folded_groups
+
+    assert (
+        folded_groups(sizes, limit, fixed, keep, rank=lambda name: ranking.get(name, 0)) == expected
+    )

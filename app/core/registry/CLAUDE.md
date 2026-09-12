@@ -31,14 +31,13 @@ driftet ab — deshalb gibt es keine.
 
 ### Wie tief ein Menü wird, entscheidet der Kern
 
-Vier Funktionen in `surfaces.py`, und sie bauen aufeinander auf:
+Drei Funktionen in `surfaces.py`, und sie bauen aufeinander auf:
 
 | Funktion | Beantwortet |
 |---|---|
 | `menu_rows_of(kategorien)` | Wie viele Zeilen belegen die flach? Gezählt wird, **was zu sehen ist** — `MENU_TWINS` haben keinen Eintrag, eine Variantengruppe teilt einen |
 | `folded_groups(größen, …, rank=…)` | Welche dieser Posten müssen ein Untermenü bekommen, damit der Rest in die Grenze passt? |
 | `folded_categories(kategorie)` | Dasselbe für die Kategorien **einer Menügruppe** — die Antwort, die `menu_path` und `_build_menus` benutzen |
-| `group_is_flat(kategorie)` | Kommt die Gruppe **ganz** ohne Zwischenebene aus? Ein dünner Aufrufer über `folded_categories` |
 
 **Eine Rechnung, zwei Oberflächen.** `folded_groups` lag bis zum 27.08.2026 in
 `app/ui/panels.py` — der Kern konnte sie von dort nicht fragen (§8) und hatte

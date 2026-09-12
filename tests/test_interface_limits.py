@@ -1288,110 +1288,54 @@ def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
     assert not roh, f"diese Zeichentasten haben keinen Namen, nur ihren Schlüssel: {roh}"
 
 
-def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:
-    """Ein Menü, in dem auf der leeren Szene kein Eintrag geht, tritt beiseite.
-
-    **Robert am 23.08.2026:** „wenn man kein 3d modell ausgewählt hat bringen
-    menüs wie bohrung anlegen nichts, hier ausblenden" — und auf die Rückfrage:
-    „ausblenden wenn es nicht sinnvoll ist".
-
-    Gemessen damals auf der leeren Szene: *Objekt* 0 von 5, *Ändern* 0 von 34,
-    *Bausteine* 0 von 20, *Vorbereiten* 0 von 10 — **neunundsechzig gesperrte
-    Zeilen**. Diese vier Menüs gibt es seit dem 11.09.2026 nicht mehr: Ihre
-    Einträge stehen rechts in der Karte der Handlungen (Robert: „brauchen wir
-    es nicht auch noch zusätzlich oben in der menüleiste").
-
-    **Die Grenze läuft am Menü, nicht am Eintrag**, und das ist der ganze
-    Schnitt: Ein Menü, in dem *jeder* Eintrag gesperrt ist, erklärt nichts —
-    es ist Lärm. Ein Menü mit gemischtem Inhalt behält seine grauen Zeilen samt
-    Grund, denn dort steht die Erklärung **neben einem Eintrag, der geht**, und
-    dieser Vergleich sagt dem Kunden mehr als das Verschwinden.
-
-    Was nicht verschwindet: die Werkzeugzeile. Sie nennt den Grund im Klartext
-    („Dafür braucht es einen Körper in der Szene.") und ist die Stelle, an der
-    ein Anfänger zuerst hinsieht.
-    """
+def test_workspace_menus_remain_available_without_selection(qt_app: QApplication) -> None:
+    """Die Leiste bleibt nutzbar; auswahlbezogene Handlungen stehen in der rechten Karte."""
+    from app.i18n import tr
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    qt_app.processEvents()
-    # **Weg vom Startbildschirm, sonst misst dieser Test etwas anderes.** Dort
-    # blendet ``_workspace_menus`` ohnehin alles bis auf *Datei* und *Hilfe*
-    # aus — ein zweiter, älterer Schnitt aus demselben Gedanken. Gefragt ist
-    # hier die leere Szene: Der Kunde hat den Startbildschirm hinter sich und
-    # noch nichts gebaut.
     window._show_start_screen(False)
     window._update_actions()
     qt_app.processEvents()
 
-    def zustand() -> dict[str, tuple[int, int, bool]]:
-        gefunden: dict[str, tuple[int, int, bool]] = {}
-        for handle in window.menuBar().actions():
-            menu = handle.menu()
-            if menu is None:
-                continue
-            eintraege = [a for a in menu.actions() if not a.isSeparator() and a.menu() is None]
-            for a in list(menu.actions()):
-                unter = a.menu()
-                if unter is not None:
-                    eintraege += [b for b in unter.actions() if not b.isSeparator()]
-            frei = sum(1 for a in eintraege if a.isEnabled())
-            gefunden[handle.text().replace("&", "")] = (frei, len(eintraege), handle.isVisible())
-        return gefunden
+    def visible_menus() -> set[str]:
+        return {
+            action.text().replace("&", "")
+            for action in window.menuBar().actions()
+            if action.menu() is not None and action.isVisible()
+        }
 
-    leer = zustand()
-    # **Die vier Menüs von damals gibt es nicht mehr** (11.09.2026): Was einer
-    # Auswahl gilt, steht rechts in der Karte der Handlungen; *Bausteine* ist
-    # ein Abschnitt von *Erzeugen*. Damit steht auf der leeren Szene kein Menü
-    # mehr, in dem nichts geht — die Regel bleibt und hat heute keinen Fall.
-    # Geprüft wird ihr Versprechen: kein sichtbares Menü ohne einen Eintrag,
-    # der geht; und die alten Menüs sind fort, nicht bloß versteckt.
-    for name in ("Objekt", "Ändern", "Vorbereiten", "Bausteine"):
-        assert name not in leer, f"„{name}“ steht noch in der Leiste — die Karte rechts trägt es"
-    ganz_gesperrt = [name for name, (frei, alle, _) in leer.items() if alle and not frei]
-    for name in ganz_gesperrt:
-        assert not leer[name][2], f"„{name}“ ist ganz gesperrt und steht trotzdem da"
-    assert leer["Erzeugen"][2] and leer["Erzeugen"][0], (
-        "Erzeugen steht auf der leeren Szene und hat bedienbare Einträge — die Grundkörper"
-    )
+    try:
+        empty = visible_menus()
+        assert {tr("Datei"), tr("Erzeugen"), tr("Hilfe")} <= empty
+        all_names = {action.text().replace("&", "") for action in window.menuBar().actions()}
+        assert not all_names.intersection(
+            {tr(name) for name in ("Objekt", "Ändern", "Vorbereiten", "Bausteine")}
+        )
+        create = next(
+            action.menu()
+            for action in window.menuBar().actions()
+            if action.text().replace("&", "") == tr("Erzeugen")
+        )
+        assert any(action.isEnabled() and not action.isSeparator() for action in create.actions())
 
-    # **Die Gegenprobe, und sie ist die wichtigere Hälfte:** Wer einen Körper
-    # hat, bekommt alles zurück. Ein Menü, das verschwindet und nicht
-    # wiederkommt, wäre schlimmer als eines, das grau dasteht.
-    gemischt = [name for name, (frei, alle, _) in leer.items() if frei and alle]
-    for name in gemischt:
-        assert leer[name][2], f"„{name}“ hat bedienbare Einträge und ist trotzdem fort"
-
-    # Und die zweite Hälfte: Wer einen Körper hat, bekommt alle vier zurück.
-    window.session.import_model(Path("tests/data/meshes/plate_holes.stl"))
-    window.session.wait_for_idle()
-    for _ in range(8):
+        window.session.import_model(Path("tests/data/meshes/plate_holes.stl"))
+        window.session.wait_for_idle()
         qt_app.processEvents()
-    window._update_actions()
-    qt_app.processEvents()
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+        assert len(result.scene.objects) == 1
+        window._update_actions()
+        assert visible_menus() == empty
 
-    # **Die Zwischenstufe zuerst, und sie ist die, an der es einmal schiefging:**
-    # Ein Körper liegt da, aber niemand hat ihn angeklickt. Die erste Fassung
-    # blendete hier weiter aus — der Kunde sieht sein Teil und findet *Ändern*
-    # nicht mehr, obwohl ihm nur ein Klick fehlt. Ein Menü, das bei jeder
-    # Auswahl kommt und geht, lässt die Leiste flackern; das ist schlimmer als
-    # eine graue Zeile, die ihren Grund nennt.
-    for name, (_frei, alle, sichtbar) in zustand().items():
-        assert sichtbar or not alle, f"„{name}“ fehlt, obwohl ein Körper in der Szene liegt"
-
-    window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
-    window._update_actions()
-    qt_app.processEvents()
-
-    voll = zustand()
-    for name in ganz_gesperrt:
-        frei, _, sichtbar = voll[name]
-        assert frei, f"„{name}“ ist auch mit einem Körper ganz gesperrt — dann ist es kaputt"
-        assert sichtbar, f"„{name}“ kam nicht zurück"
-
-    window.release()
+        window.object_tree.select_object(next(iter(result.scene.objects)))
+        window._update_actions()
+        qt_app.processEvents()
+        assert visible_menus() == empty
+    finally:
+        window.release()
 
 
 # --- Eigene Bausteine des Nutzers (§24.5, Konzept E1) -----------------------------
