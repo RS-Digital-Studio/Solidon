@@ -295,3 +295,48 @@ def test_escape_cancels_the_run_like_the_button_does(qt_app: QApplication) -> No
         assert dialog._worker is None
     finally:
         dialog.deleteLater()
+
+
+def test_the_engraving_is_on_by_default_and_the_tick_reaches_the_run(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Haken ist der ganze Zweck des Laufs — und er muss unten ankommen.
+
+    Gemessen am Argument, mit dem der Dialog ``build_variants`` ruft: Ein Haken,
+    der im Fenster steht und beim Rechnen nicht gelesen wird, ist eine Zusage
+    ohne Wirkung.
+    """
+    from app.ui import variants_dialog as module
+
+    dialog = VariantsDialog(session_with_parameter())
+    try:
+        monkeypatch.setattr(
+            module.QFileDialog,
+            "getExistingDirectory",
+            staticmethod(lambda *_a, **_k: str(tmp_path)),
+        )
+        seen: list[object] = []
+
+        def watching(*_args: Any, **kwargs: Any) -> Any:
+            seen.append(kwargs.get("mark"))
+            return _empty_set(str(kwargs.get("parameter")))
+
+        monkeypatch.setattr(module, "build_variants", watching)
+
+        assert dialog.mark.isChecked(), "die Kennzeichnung ist die Vorgabe"
+        assert dialog.mark.accessibleDescription(), "der Satz erreicht auch den Bildschirmleser"
+
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None and worker.wait(30_000)
+        QApplication.processEvents()
+
+        dialog.mark.setChecked(False)
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None and worker.wait(30_000)
+        QApplication.processEvents()
+
+        assert seen == [True, False], f"der Haken kam nicht an: {seen}"
+    finally:
+        dialog.deleteLater()

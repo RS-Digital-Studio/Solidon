@@ -21,7 +21,7 @@ import dataclasses
 from dataclasses import dataclass, field
 
 from app.core.errors import ValidationError
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import apply, translation
 from app.core.log import get_logger
 from app.core.scene.evaluate import evaluate
@@ -38,6 +38,7 @@ from app.core.types import (
     SceneObject,
     SourceAccess,
 )
+from app.core.units import EPS_GEOM
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
@@ -53,6 +54,20 @@ DEFAULT_GAP = 8.0
 #: Mehr als das ist kein Kalibrierdruck mehr, sondern eine Platte voller
 #: Vermutungen (§28.3 nennt vier).
 MAX_VARIANTS = 12
+
+#: Wie tief der Wert in die Oberseite graviert wird. Drei Schichten zu 0,2 mm:
+#: tief genug, dass die Zahl nach dem Abkühlen noch zu lesen ist, flach genug,
+#: dass sie an einer dünnen Decke nicht durchbricht.
+MARK_DEPTH = 0.6
+
+#: Wie viel von der kürzeren Kante der Oberseite die Zahl einnehmen darf.
+#: Ein Drittel lässt Rand stehen, auch wenn das Teil oben zuläuft.
+MARK_SHARE = 1.0 / 3.0
+
+#: Kleiner als das wird keine Zahl graviert — dann meldet der Lauf es lieber.
+#: Unter zwei Millimetern ist eine Ziffer in jeder Schrift ein Fleck, und die
+#: Düse legt ihre Striche ohnehin nicht mehr getrennt.
+MARK_LEAST_SIZE = 2.0
 
 
 @dataclass(slots=True)
@@ -94,6 +109,7 @@ def build(
     step: float,
     count: int = 4,
     gap: float = DEFAULT_GAP,
+    mark: bool = True,
     quality: Quality = "draft",
     sources: SourceAccess | None = None,
     progress: ProgressFn = _silent,
@@ -115,6 +131,12 @@ def build(
     Auswertung prüft den Token selbst, und die Prüfung hier davor spart den
     Aufbau des nächsten Dokuments. Was bis dahin fertig war, kommt zurück —
     ein halber Satz ist kein Kalibrierdruck, und wer abbricht, weiß das.
+
+    ``mark`` graviert jedem Teil seinen Wert in die Oberseite (:func:`_marked`)
+    und ist die Vorgabe: Der Objektname trägt ihn nur in der Szene, und die ist
+    zu, wenn die Teile vom Bett kommen. Aus heißt, das Teil bleibt Punkt für
+    Punkt das, was der Stapel gerechnet hat — für den Fall, dass die Oberseite
+    zur Sache gehört.
     """
     if parameter not in document.parameters:
         raise ValidationError(
@@ -170,12 +192,75 @@ def build(
             made.variants.append(variant)
             continue
 
-        width = _place(variant, result.scene, index, value, offset, gap)
+        width = _place(
+            variant,
+            result.scene,
+            index,
+            value,
+            offset,
+            gap,
+            profile if mark else None,
+            quality,
+        )
         offset += width + gap
         made.variants.append(variant)
 
     _log.info("built %d variants of %s", len(made.variants), parameter)
     return made
+
+
+def _marked(mesh: MeshData, text: str, profile: Profile, quality: Quality) -> MeshData | None:
+    """Graviert ``text`` in die Oberseite — oder gibt nichts zurück, wenn dort
+    kein Platz dafür ist.
+
+    **Der Name steht in der Szene, und die ist nach dem Druck zu.** Vier
+    Varianten derselben Toleranz sehen einander zum Verwechseln ähnlich; wer
+    sie ohne Kennzeichnung druckt, misst am nächsten Morgen vier Teile und
+    weiß bei keinem, welcher Wert dahinterstand. Dieselbe Begründung trägt
+    `knowledge/parts/testbodies.py` für seine gravierten Striche.
+
+    Eingelassen und nicht erhaben: Ein aufgesetztes Zeichen braucht Stützen,
+    wo es übersteht, und eine Zahl auf der Oberseite ist genau dort, wo der
+    Drucker ohnehin eine ebene Fläche hinterlässt.
+
+    Die Größe kommt vom Teil und die Untergrenze vom Drucker
+    (`label_ops.too_thin_to_print`, Regel 7): Eine Ziffer, deren Striche
+    schmaler sind als die schmalste Bahn, wird nicht gedruckt — sie wäre eine
+    Kennzeichnung, die es nur in der Datei gibt.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.label_ops import (
+        FONTS,
+        local_text_body,
+        narrowest_bead,
+        outlines,
+        too_thin_to_print,
+    )
+
+    box = mesh.bounds
+    width = float(box.maximum[0] - box.minimum[0])
+    depth = float(box.maximum[1] - box.minimum[1])
+    size = min(width, depth) * MARK_SHARE
+    if size < MARK_LEAST_SIZE:
+        return None
+    shapes = outlines(text, size, FONTS[0])
+    if not shapes:
+        return None
+    if too_thin_to_print(shapes, size, narrowest_bead(profile)) is not None:
+        return None
+
+    top = float(box.maximum[2])
+    letters = local_text_body(text, size, FONTS[0], MARK_DEPTH, mode="engraved")
+    centre = box.centre
+    # ``mode="engraved"`` legt die Buchstaben unter Z = 0 und lässt sie um
+    # ``BOOLEAN_OVERLAP`` darüber hinausragen; auf die Oberkante gehoben
+    # schneiden sie damit genau ``MARK_DEPTH`` tief ein, ohne eine Fläche mit
+    # dem Körper zu teilen.
+    tool = apply(letters, translation((float(centre[0]), float(centre[1]), top)))
+    cut = boolean("difference", [mesh, tool], quality=quality)
+    if cut.mesh.volume >= mesh.volume - EPS_GEOM:
+        return None
+    return cut.mesh
 
 
 def _place(
@@ -185,6 +270,8 @@ def _place(
     value: float,
     offset: float,
     gap: float,
+    profile: Profile | None = None,
+    quality: Quality = "draft",
 ) -> float:
     """Rückt einen Lauf aus dem Weg des vorigen und benennt ihn nach seinem
     Wert.
@@ -202,11 +289,34 @@ def _place(
     group_max = max(float(mesh.bounds.maximum[0]) for mesh in meshes.values())
     width = group_max - group_min
     shift = offset - group_min
+    unmarked: list[str] = []
     for object_id, entry in scene.objects.items():
         moved = apply(meshes[object_id], translation((shift, 0.0, 0.0)))
         name = f"{entry.name} {tr('Variante')} {value:g}"
+        if profile is not None:
+            engraved = _marked(moved, f"{value:g}", profile, quality)
+            if engraved is None:
+                unmarked.append(str(entry.name))
+            else:
+                moved = engraved
         variant.objects[f"{object_id}_v{index + 1}"] = dataclasses.replace(
             entry, id=f"{object_id}_v{index + 1}", name=name, mesh=moved
+        )
+    if unmarked:
+        variant.findings.append(
+            Finding(
+                code="variants.no_mark",
+                severity="info",
+                message=_(
+                    "Auf diesem Teil ist kein Platz für die eingravierte Zahl — es "
+                    "bleibt unbeschriftet. Nach dem Druck sagt die Reihenfolge auf der "
+                    "Platte, welches welches ist: der kleinste Wert links."
+                ),
+                values={
+                    "parts": ", ".join(unmarked),
+                    "value": round(value, 4),
+                },
+            )
         )
     return width
 

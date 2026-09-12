@@ -520,6 +520,114 @@ def test_the_values_can_be_read_before_the_run() -> None:
     assert variants.values(0.10, 0.05, 4) == (0.10, 0.15, 0.20, 0.25)
 
 
+# --- und die Kennzeichnung am gedruckten Teil (RM-147) --------------------------------
+#
+# Der Objektname trug den Wert seit jeher, und der steht in der Szene. Nach dem
+# Druck liegen vier gleich aussehende Teile auf dem Tisch, und die Szene ist zu
+# — genau der Fall, für den `testbodies` seine Striche graviert: „eine gedruckte
+# Leiter ohne Beschriftung ist am nächsten Morgen ein Rätsel".
+
+
+def plate_project() -> Project:
+    """Ein Teil, das groß genug ist, um seinen Wert zu tragen."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.parameters["spiel"] = Parameter(name="spiel", value=0.1, unit="mm")
+    History(project.document).apply(
+        "Platte",
+        [
+            OperationDraft(
+                op="create_box", params={"width": 30.0, "depth": 30.0, "height": "=4+@spiel"}
+            )
+        ],
+    )
+    return project
+
+
+def test_every_variant_carries_its_value_in_the_part(profile: Profile) -> None:
+    """Der Wert steht **im** Teil, nicht nur im Namen: Material fehlt, wo er steht."""
+    project = plate_project()
+
+    marked = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=2,
+        sources=ProjectSources(project),
+    )
+    plain = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=2,
+        mark=False,
+        sources=ProjectSources(project),
+    )
+
+    engraved = sorted(entry.mesh.volume for entry in marked.scene(profile).objects.values())
+    untouched = sorted(entry.mesh.volume for entry in plain.scene(profile).objects.values())
+    assert len(engraved) == 2, "zwei Varianten, zwei Körper"
+    for with_mark, without in zip(engraved, untouched, strict=True):
+        assert with_mark < without, "die Gravur nimmt Material weg"
+        assert with_mark > without * 0.95, "sie frisst das Teil nicht auf"
+
+
+def test_the_mark_stays_in_the_top_of_the_part(profile: Profile) -> None:
+    """Graviert wird von oben, und nur dort — Höhe und Boden bleiben, was sie waren.
+
+    Gemessen an zwei Querschnitten: dicht unter der Oberkante fehlt Fläche, wo
+    die Ziffern stehen; unter der Gravurtiefe ist die Platte wieder voll.
+    """
+    from app.core.slice.analysis import cross_section
+
+    project = plate_project()
+
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=1,
+        sources=ProjectSources(project),
+    )
+    body = next(iter(made.scene(profile).objects.values())).mesh
+
+    assert body.bounds.maximum[2] == pytest.approx(4.10, abs=1e-6), "die Oberkante bleibt"
+    assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "der Boden auch"
+
+    whole = 30.0 * 30.0
+    in_the_mark = cross_section(body, 4.10 - variants.MARK_DEPTH / 2.0)
+    below_it = cross_section(body, 4.10 - variants.MARK_DEPTH - 0.5)
+    assert in_the_mark is not None and below_it is not None, "beide Ebenen treffen die Platte"
+    assert in_the_mark.area < whole - 1.0, "in Höhe der Gravur fehlt Fläche"
+    assert below_it.area == pytest.approx(whole, rel=1e-6), "darunter ist die Platte voll"
+
+
+def test_a_part_too_small_for_a_mark_says_so_instead_of_engraving_rubbish(
+    profile: Profile,
+) -> None:
+    """Auf einem Zapfen von einem Millimeter steht keine Zahl (Regel 17)."""
+    project = project_with_parameter()
+
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=1,
+        sources=ProjectSources(project),
+    )
+
+    codes = {entry.code for entry in made.variants[0].findings}
+    assert "variants.no_mark" in codes, f"kein Hinweis auf die fehlende Kennzeichnung: {codes}"
+    assert made.complete, "eine fehlende Gravur macht den Lauf nicht kaputt"
+
+
 # --- der Dialog (§28.3, zweiter Schritt) ----------------------------------------------
 
 

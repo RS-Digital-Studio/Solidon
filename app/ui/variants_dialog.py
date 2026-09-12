@@ -18,6 +18,7 @@ from typing import Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -120,11 +121,31 @@ class VariantsDialog(QDialog):
         if chosen is not None:
             self.first.setValue(float(document.parameters[chosen].value))
 
+        # **Die Zahl gehört ins Teil und nicht nur in den Namen.** Vier
+        # Varianten derselben Toleranz sehen einander zum Verwechseln ähnlich;
+        # die Szene weiß, welche welche ist, und die ist zu, sobald die Teile
+        # vom Bett kommen. Der Haken steht an, weil das der Zweck des ganzen
+        # Laufs ist — aus schaltet ihn, wem die Oberseite seines Teils heilig
+        # ist.
+        self.mark = QCheckBox(tr("Wert in die Oberseite gravieren"), self)
+        self.mark.setChecked(True)
+        marking = tr(
+            "Jedes Teil trägt seinen Wert eingelassen auf der Oberseite — nach dem "
+            "Druck ist das die einzige Stelle, an der er noch steht. Wo kein Platz "
+            "dafür ist, sagt es der Bericht."
+        )
+        # Drei Kanäle, weil ein Satz, den nur die Maus findet, für einen
+        # Bildschirmleser keiner ist (Regel 18).
+        self.mark.setToolTip(marking)
+        self.mark.setStatusTip(marking)
+        self.mark.setAccessibleDescription(marking)
+
         form = QFormLayout()
         form.addRow(tr("Parameter"), self.parameter)
         form.addRow(tr("Erster Wert"), self.first)
         form.addRow(tr("Schrittweite"), self.step)
         form.addRow(tr("Anzahl"), self.count)
+        form.addRow("", self.mark)
 
         self.state = QLabel(
             tr("Die Varianten stehen nebeneinander auf einer Platte und werden exportiert."),
@@ -215,6 +236,7 @@ class VariantsDialog(QDialog):
             first=self.first.value(),
             step=self.step.value(),
             count=self.count.value(),
+            mark=self.mark.isChecked(),
             sources=ProjectSources(project),
         )
         worker.progressed.connect(self._advance)

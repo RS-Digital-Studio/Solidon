@@ -108,6 +108,15 @@ Eingangsanzahl aus dem Register, bevor Geometrie gerechnet wird.
 `ops.py` (Umbenennen, Löschen, Duplizieren, Muster) · `variants.py` (der
 Variantengenerator, §28.3)
 
+Der Variantengenerator **graviert jedem Teil seinen Wert in die Oberseite**
+(`_marked`, RM-147) — eingelassen, mit der Größe aus dem Teil und der
+Untergrenze aus der Düse (`label_ops.too_thin_to_print`). Der Objektname trägt
+ihn nur in der Szene, und die ist zu, sobald die Teile vom Bett kommen; wo kein
+Platz dafür ist, steht `variants.no_mark` im Bericht statt einer Zahl, die
+niemand lesen kann. Dass hier Geometrie außerhalb einer Operation entsteht, ist
+dieselbe Ausnahme wie beim Anordnen daneben: Was zurückkommt, ist ein
+Druckauftrag und kein Dokumentzustand (Regel 2).
+
 `History.apply` führt während der Planung die lebenden Objektkennungen nach
 jedem Schritt fort. Ein im selben Bündel verbrauchter Eingang ist für den
 nächsten Schritt ungültig; die Ablehnung lässt das Dokument unverändert.
