@@ -138,6 +138,11 @@ niemand lesen kann. Dass hier Geometrie außerhalb einer Operation entsteht, ist
 dieselbe Ausnahme wie beim Anordnen daneben: Was zurückkommt, ist ein
 Druckauftrag und kein Dokumentzustand (Regel 2).
 
+Unter der gesamten Schrift prüft `_marked` den Materialraum bis zur
+Gravurtiefe plus Mindestwandstärke des Profils. Fehlt dort Material, bleibt
+das Teil mit `variants.no_mark` unverändert. Die Gesamthöhe allein reicht
+nicht: Auch ein hoher Hohlkörper kann eine dünne Decke haben.
+
 `History.apply` führt während der Planung die lebenden Objektkennungen nach
 jedem Schritt fort. Ein im selben Bündel verbrauchter Eingang ist für den
 nächsten Schritt ungültig; die Ablehnung lässt das Dokument unverändert.

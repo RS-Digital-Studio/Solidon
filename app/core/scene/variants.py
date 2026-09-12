@@ -56,8 +56,8 @@ DEFAULT_GAP = 8.0
 MAX_VARIANTS = 12
 
 #: Wie tief der Wert in die Oberseite graviert wird. Drei Schichten zu 0,2 mm:
-#: tief genug, dass die Zahl nach dem Abkühlen noch zu lesen ist, flach genug,
-#: dass sie an einer dünnen Decke nicht durchbricht.
+#: tief genug, dass die Zahl nach dem Abkühlen noch zu lesen ist. Darunter
+#: muss die Mindestwandstärke des Profils vollständig stehen bleiben.
 MARK_DEPTH = 0.6
 
 #: Wie viel von der kürzeren Kante der Oberseite die Zahl einnehmen darf.
@@ -250,8 +250,19 @@ def _marked(mesh: MeshData, text: str, profile: Profile, quality: Quality) -> Me
         return None
 
     top = float(box.maximum[2])
-    letters = local_text_body(text, size, FONTS[0], MARK_DEPTH, mode="engraved")
     centre = box.centre
+    required = MARK_DEPTH + profile.minimum_wall_thickness
+    if top - float(box.minimum[2]) < required:
+        return None
+    # Die Gesamthöhe sagt nichts über eine dünne Decke über einem Hohlraum.
+    # Unter der gesamten Schrift muss bis zur verbleibenden Mindestwand
+    # Material stehen; ein außerhalb liegender Rest verbietet die Gravur.
+    support = local_text_body(text, size, FONTS[0], required)
+    support = apply(support, translation((float(centre[0]), float(centre[1]), top - required)))
+    outside = boolean("difference", [support, mesh], quality=quality, allow_empty=True)
+    if outside.mesh.volume > EPS_GEOM:
+        return None
+    letters = local_text_body(text, size, FONTS[0], MARK_DEPTH, mode="engraved")
     # ``mode="engraved"`` legt die Buchstaben unter Z = 0 und lässt sie um
     # ``BOOLEAN_OVERLAP`` darüber hinausragen; auf die Oberkante gehoben
     # schneiden sie damit genau ``MARK_DEPTH`` tief ein, ohne eine Fläche mit

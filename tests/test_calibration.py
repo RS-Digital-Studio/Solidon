@@ -607,6 +607,54 @@ def test_the_mark_stays_in_the_top_of_the_part(profile: Profile) -> None:
     assert below_it.area == pytest.approx(whole, rel=1e-6), "darunter ist die Platte voll"
 
 
+@pytest.mark.parametrize("shape", ["plate", "roof"])
+@pytest.mark.parametrize("thickness", [0.4, 1.0])
+def test_a_variant_mark_preserves_thin_plates_and_roofs(
+    profile: Profile, shape: str, thickness: float
+) -> None:
+    """Die Zahl darf weder durchbrechen noch weniger als die Mindestwand stehen lassen."""
+    from app.core.geom.mesh import as_mesh_data
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.parameters["spiel"] = Parameter(name="spiel", value=thickness, unit="mm")
+    drafts = [
+        OperationDraft(
+            op="create_box",
+            params={"width": 30.0, "depth": 30.0, "height": "@spiel" if shape == "plate" else 10.0},
+        )
+    ]
+    if shape == "roof":
+        drafts.extend(
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 26.0, "depth": 26.0, "height": "=10-@spiel"}
+                ),
+                OperationDraft(op="subtract_objects", inputs=("obj_1", "obj_2")),
+            ]
+        )
+    History(project.document).apply("Dünne Oberseite", drafts)
+
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=thickness,
+        step=0.1,
+        count=1,
+        sources=ProjectSources(project),
+    )
+
+    assert made.complete
+    assert len(made.scene(profile).objects) == 1
+    body = as_mesh_data(next(iter(made.scene(profile).objects.values())).mesh)
+    expected = 30.0 * 30.0 * thickness
+    if shape == "roof":
+        expected += (30.0 * 30.0 - 26.0 * 26.0) * (10.0 - thickness)
+    assert body.volume == pytest.approx(expected, abs=1e-4)
+    assert body.is_watertight and body.component_count == 1
+    assert "variants.no_mark" in {finding.code for finding in made.variants[0].findings}
+
+
 def test_a_part_too_small_for_a_mark_says_so_instead_of_engraving_rubbish(
     profile: Profile,
 ) -> None:
