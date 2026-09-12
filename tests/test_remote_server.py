@@ -701,6 +701,36 @@ def test_a_simple_browser_post_never_reaches_the_handler() -> None:
         running.stop()
 
 
+@pytest.mark.parametrize(
+    "origin", ["http://localhost:abc", "http://localhost:99999", "http://[::1"]
+)
+def test_a_malformed_origin_gets_403_and_never_reaches_the_bridge(
+    server: tuple[RemoteServer, _Bridge], origin: str
+) -> None:
+    """Ein kaputter Origin-Kopf bekommt eine HTTP-Antwort; der Server arbeitet danach weiter."""
+    running, bridge = server
+    call = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "place_on_bed", "arguments": {}},
+    }
+    status = _raw_post(
+        running.port,
+        [
+            f"Host: 127.0.0.1:{running.port}",
+            "Content-Type: application/json",
+            f"Origin: {origin}",
+        ],
+        json.dumps(call).encode("utf-8"),
+    )
+
+    assert status == 403
+    assert bridge.calls == []
+    accepted, _body = post(running.port, call)
+    assert accepted == 200 and len(bridge.calls) == 1
+
+
 def test_a_rebound_domain_does_not_pass_as_this_machine() -> None:
     """Die ``Host``-Kopfzeile muss diesen Server benennen.
 

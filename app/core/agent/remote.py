@@ -147,12 +147,15 @@ def origin_allowed(origin: str | None, port: int) -> bool:
     """
     if origin is None:
         return True
-    parts = urlsplit(origin)
-    if parts.scheme != "http":
+    try:
+        parts = urlsplit(origin)
+        return (
+            parts.scheme == "http"
+            and (parts.hostname or "") in LOOPBACK_HOSTS
+            and parts.port == port
+        )
+    except ValueError:
         return False
-    if (parts.hostname or "") not in LOOPBACK_HOSTS:
-        return False
-    return parts.port == port
 
 
 def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:

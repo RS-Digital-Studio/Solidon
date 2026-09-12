@@ -248,6 +248,21 @@ def test_a_web_page_cannot_drive_the_interface() -> None:
     assert not remote.origin_allowed("https://localhost:8787", 8787), "wir sprechen kein TLS"
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://localhost:abc",
+        "http://localhost:99999",
+        "http://127.0.0.1:-1",
+        "http://[::1",
+        "http://[broken]:8787",
+    ],
+)
+def test_a_malformed_origin_is_refused_without_raising(origin: str) -> None:
+    """Ungültige Port- und Rechnerangaben bleiben eine Ablehnung des Anfrageursprungs."""
+    assert not remote.origin_allowed(origin, 8787)
+
+
 def test_calling_an_operation_that_does_not_exist_says_so() -> None:
     """Regel 17 gilt auch über die Leitung."""
     bridge = _Bridge()
