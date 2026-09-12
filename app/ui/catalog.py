@@ -130,8 +130,20 @@ class PartCatalog(QDialog):
 
     partChosen = Signal(str)
     saveRequested = Signal()
+    """Den gewählten Ausschnitt als eigenen Baustein ablegen (E4).
+
+    Ein Signal und kein Aufruf: Der Katalog hat kein Dokument und keine
+    Sitzung. Was daraus wird, entscheidet das Fenster."""
     shareRequested = Signal()
+    """Den gewählten Baustein als lokale Datei exportieren.
+
+    Wie ``saveRequested`` nur ein Ruf und keine Handlung: Welche Datei
+    entsteht und wohin sie geschrieben wird, weiß das Fenster."""
     adoptRequested = Signal()
+    """Eine lokale Bausteindatei dauerhaft in den Katalog aufnehmen.
+
+    Braucht keine Auswahl — anders als der Export ist das Einlesen
+    ohne Vorbedingung, und ein Knopf ohne Vorbedingung wird nicht gesperrt."""
     removeRequested = Signal(str)
     draftRequested = Signal(str)
     """Den gewählten eigenen Baustein als bearbeitbaren Entwurf öffnen (E6).
@@ -146,19 +158,9 @@ class PartCatalog(QDialog):
     Datei geht, fragt das Fenster, und dort liegt auch der Weg zu den aktuellen
     Werten des Bausteins."""
     undoFileRequested = Signal()
+    """Die letzte Dateiänderung des Katalogs im Fenster rückgängig machen."""
     showAffectedStepRequested = Signal()
-    """Eine lokale Bausteindatei soll dauerhaft in den Katalog.
-
-    Braucht keine Auswahl — anders als der Export ist das Einlesen
-    ohne Vorbedingung, und ein Knopf ohne Vorbedingung wird nicht gesperrt."""
-    """Der gewählte Baustein soll als lokale Datei exportiert werden.
-
-    Wie ``saveRequested`` nur ein Ruf und keine Handlung: Welche Datei
-    entsteht und wohin sie geschrieben wird, weiß das Fenster."""
-    """Der Kunde will den gewählten Ausschnitt als eigenen Baustein ablegen (E4).
-
-    Ein Signal und kein Aufruf: Der Katalog hat kein Dokument und keine
-    Sitzung. Was daraus wird, entscheidet das Fenster."""
+    """Den von der Bausteindatei betroffenen Verlaufsschritt im Fenster zeigen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
