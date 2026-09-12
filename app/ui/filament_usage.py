@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from app.core.errors import AppError
 from app.core.export.threemf import slot_identity
-from app.core.filament_usage import UsageLine, UsageRequest
+from app.core.filament_usage import UsageLine, UsageRequest, costs_for
 from app.core.knowledge import filaments
 from app.core.scene.hashing import digest
 from app.i18n import source_text, tr
@@ -698,22 +698,8 @@ class UsageDialog(QDialog):
 
     def _update_costs(self, positions: tuple[filaments.BookingPosition, ...]) -> None:
         for line, label in zip(self._lines, self.costs, strict=True):
-            totals: dict[str, float] = {}
             rows = [one for one in positions if one.filament_key == _line_key(line)]
-            for one in rows:
-                entry = self._entries.get(one.spool_identifier)
-                if (
-                    entry is None
-                    or entry.price is None
-                    or not entry.currency
-                    or not entry.spool_grams
-                    or one.grams < 0
-                ):
-                    totals.clear()
-                    break
-                totals[entry.currency] = (
-                    totals.get(entry.currency, 0) + entry.price * one.grams / entry.spool_grams
-                )
+            totals = costs_for(rows, self._entries)
             label.setText(
                 tr("Materialkosten: {cost}").format(
                     cost=" + ".join(

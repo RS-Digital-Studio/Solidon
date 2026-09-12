@@ -44,6 +44,11 @@ Zusätzliche Werkzeuge des Slicers erhalten eigene ungebundene Bedarfzeilen.
 Eine Werkzeugnummer beweist weder eine Materialart noch eine lokale Spule;
 fehlende Einzelmengen bleiben auch bei bekannter Gesamtsumme unbekannt.
 
+`filament_usage.costs_for` berechnet aus übergebenen Buchungspositionen und
+Spulendaten ungerundete Kosten je Währung, ohne selbst Dateien zu lesen.
+Fehlt ein nötiger Einzelwert, bleibt die gesamte Auswahl unbekannt. Ein
+gespeicherter Nullpreis bleibt von fehlenden Preisangaben unterscheidbar.
+
 Flächen- und Volumenanzeigen bewahren kleine Nichtnullwerte: Unter einem
 Quadrat- beziehungsweise Kubikmillimeter wächst die Zahl der Nachkommastellen,
 unter der Anzeigegrenze steht eine Schranke mit Vorzeichen statt null.

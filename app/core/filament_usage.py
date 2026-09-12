@@ -10,7 +10,7 @@ import hashlib
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from app.core.export import threemf
 from app.core.export.handover import configured_slots, override_for, settings_for_slot
@@ -22,6 +22,9 @@ from app.core.slice.estimate import estimate
 from app.core.slice.gcode import GcodeMetrics
 from app.core.types import MaterialSlot, PrintSettings, Profile, SceneObject, SpoolBinding
 from app.i18n import _, source_text
+
+if TYPE_CHECKING:
+    from app.core.knowledge.filaments import BookingPosition, CatalogueFilament
 
 UsageSource = Literal["internal", "gcode", "manual"]
 
@@ -47,6 +50,38 @@ class UsageRequest:
     project_name: str
     plate: int
     lines: tuple[UsageLine, ...]
+
+
+def costs_for(
+    positions: Sequence[BookingPosition], entries: Mapping[str, CatalogueFilament]
+) -> dict[str, float] | None:
+    """Berechnet belegte Spulenkosten je Währung ohne Dateizugriff oder Rundung.
+
+    Ein fehlender oder ungültiger Einzelwert lässt die gesamte Auswahl unbekannt.
+    Eine leere Auswahl bleibt leer; ein ausdrücklich gespeicherter Nullpreis zählt.
+    """
+    totals: dict[str, float] = {}
+    for position in positions:
+        entry = entries.get(position.spool_identifier)
+        if (
+            entry is None
+            or entry.price is None
+            or not math.isfinite(entry.price)
+            or entry.price < 0.0
+            or entry.spool_grams is None
+            or not math.isfinite(entry.spool_grams)
+            or entry.spool_grams <= 0.0
+            or not entry.currency.strip()
+            or not math.isfinite(position.grams)
+            or position.grams < 0.0
+        ):
+            return None
+        amount = entry.price * (position.grams / entry.spool_grams)
+        total = totals.get(entry.currency, 0.0) + amount
+        if not math.isfinite(total):
+            return None
+        totals[entry.currency] = total
+    return totals
 
 
 def spool_for(settings: PrintSettings, slot: MaterialSlot) -> str:

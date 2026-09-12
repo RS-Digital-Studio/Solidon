@@ -9,17 +9,90 @@ from pathlib import Path
 import pytest
 import trimesh
 
+from app.core import filament_usage
 from app.core.errors import ValidationError
 from app.core.export import handover, threemf
 from app.core.filament_usage import from_gcode, prepare, spool_for, with_spool
 from app.core.geom.mesh import MeshData
-from app.core.knowledge import profiles
+from app.core.knowledge import filaments, profiles
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.project import PROJECT_ENTRY, load, save
 from app.core.scene.serialise import print_settings_from_data, print_settings_to_data
 from app.core.slice.gcode import GcodeMetrics, parse
 from app.core.types import FilamentSettings, MaterialSlot, PrintSettings, SceneObject, SlotOverride
 from app.i18n import TranslatableText
+
+
+def test_costs_keep_currencies_separate_and_do_not_round() -> None:
+    """Mehrere Positionen teilen ihre Spulenpreise, aber nie fremde Währungen."""
+    entries = {
+        "dollar": filaments.CatalogueFilament(
+            "Dollar", "#112233", price=31.0, currency="USD", spool_grams=3000.0
+        ),
+        "euro": filaments.CatalogueFilament(
+            "Euro", "#112233", price=20.0, currency="EUR", spool_grams=1000.0
+        ),
+        "free": filaments.CatalogueFilament(
+            "Geschenk", "#112233", price=0.0, currency="GBP", spool_grams=1000.0
+        ),
+    }
+    positions = (
+        filaments.BookingPosition("dollar", 1.0),
+        filaments.BookingPosition("euro", 200.0),
+        filaments.BookingPosition("dollar", 10.0),
+        filaments.BookingPosition("free", 200.0),
+    )
+
+    costs = filament_usage.costs_for(positions, entries)
+
+    assert costs == pytest.approx({"USD": 341.0 / 3000.0, "EUR": 4.0, "GBP": 0.0})
+    assert filament_usage.costs_for((), {}) == {}
+    assert filament_usage.costs_for((filaments.BookingPosition("euro", 0.0),), entries) == {
+        "EUR": 0.0
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("price", None),
+        ("price", -1.0),
+        ("price", math.nan),
+        ("price", math.inf),
+        ("spool_grams", None),
+        ("spool_grams", 0.0),
+        ("spool_grams", -1.0),
+        ("spool_grams", math.nan),
+        ("spool_grams", math.inf),
+        ("currency", ""),
+        ("currency", " "),
+        ("grams", -1.0),
+        ("grams", math.nan),
+        ("grams", math.inf),
+        ("entry", None),
+    ],
+)
+def test_costs_leave_the_whole_selection_unknown_if_one_position_is_unknown(
+    field: str,
+    value: object,
+) -> None:
+    """Eine Teilrechnung darf keinen vollständigen bekannten Preis vortäuschen."""
+    known = filaments.CatalogueFilament(
+        "Bekannt", "#112233", price=20.0, currency="EUR", spool_grams=1000.0
+    )
+    entries = {"known": known, "other": known}
+    positions = (
+        filaments.BookingPosition("known", 200.0),
+        filaments.BookingPosition("other", 50.0),
+    )
+    if field == "entry":
+        entries.pop("other")
+    elif field == "grams":
+        positions = (positions[0], replace(positions[1], grams=value))
+    else:
+        entries["other"] = replace(known, **{field: value})
+
+    assert filament_usage.costs_for(positions, entries) is None
 
 
 def test_bound_profiles_follow_identity_after_removal_and_do_not_fill_new_slots():
