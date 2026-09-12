@@ -36,7 +36,15 @@ from app.core.geom.transform import apply, place_on_bed, translation
 from app.core.ingest import threemf as threemf_reader
 from app.core.ingest.loader import normalise, read_model
 from app.core.knowledge import print_settings, profiles
-from app.core.types import MaterialSlot, Profile, SceneObject, Source, SourceOrigin
+from app.core.types import (
+    Finding,
+    MaterialSlot,
+    Profile,
+    Scene,
+    SceneObject,
+    Source,
+    SourceOrigin,
+)
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -267,6 +275,103 @@ def test_the_licence_of_a_source_is_mentioned_once(profile: Profile) -> None:
     assert len(licence_findings) == 1
     assert licence_findings[0].severity == "info"
     assert "CC BY-NC 4.0" in str(licence_findings[0].values["sources"])
+
+
+# --- die zwei Fragen, die kein Körper allein beantwortet (§29, RM-140) ----------
+
+
+def _tube_scene(profile: Profile, inner: float, outer: float) -> tuple[Scene, SceneObject]:
+    """Ein Rohr als Szene — das kleinste Teil, an dem eine Wand entsteht."""
+    from app.core.perceive.features import detect
+
+    mesh = MeshData.of(
+        trimesh.creation.annulus(r_min=inner / 2.0, r_max=outer / 2.0, height=20.0, sections=96)
+    )
+    entry = SceneObject(id="obj_1", name="Rohr", mesh=mesh, features=detect(mesh))
+    return Scene(objects={"obj_1": entry}, profile=profile), entry
+
+
+def test_a_wall_too_thin_to_print_is_named_before_the_file_exists(profile: Profile) -> None:
+    """§29 zählt „keine Dünnstellen unter der Mindestwandstärke" auf.
+
+    Die Zeile stand seit je im Bauplan und in keiner Prüfung: Eine Wand steht
+    nicht in einem Körper, sondern zwischen einer Bohrung und dem Mantel um
+    sie herum — und die Prüfung sah nur die Auswahl. Mit der Szene sieht sie
+    das Verhältnis.
+    """
+    scene, entry = _tube_scene(profile, inner=19.0, outer=20.0)
+
+    findings = check_before_export([entry], profile, {}, scene=scene)
+
+    assert "perceive.thin_wall" in {finding.code for finding in findings}
+
+
+def test_without_the_scene_the_export_makes_nothing_up(profile: Profile) -> None:
+    """Die Gegenprobe, und sie ist zugleich die Zusage aus Regel 21.
+
+    Ein Aufrufer ohne Szene — die Kommandozeile hatte lange keine — bekommt
+    den Bericht, den er belegen kann. Geraten wird nichts.
+    """
+    _scene, entry = _tube_scene(profile, inner=19.0, outer=20.0)
+
+    findings = check_before_export([entry], profile, {})
+
+    assert "perceive.thin_wall" not in {finding.code for finding in findings}
+
+
+def test_a_violated_fit_is_named_before_the_file_exists(profile: Profile) -> None:
+    """Die zweite Zeile aus §29: „keine verletzten Passungen".
+
+    Gemessen an einer Bohrung, die kleiner ist als ihr Stift — das Teil lässt
+    sich fügen, sobald man es mit einem Hammer meint.
+    """
+    from tests.test_digest_and_fits import clearance_fit, pin_and_hole
+
+    scene = pin_and_hole(4.9, 5.0, profile)
+    scene.fits.append(clearance_fit())
+
+    findings = check_before_export(list(scene.objects.values()), profile, {}, scene=scene)
+
+    assert [finding.code for finding in findings if finding.code.startswith("fit.")], (
+        "eine Passung, die nicht aufgeht, gehört vor die Datei und nicht dahinter"
+    )
+
+
+def test_a_fit_of_a_body_that_stays_home_is_not_reported(profile: Profile) -> None:
+    """Gemeldet wird, was die geschriebenen Körper betrifft.
+
+    Gefragt wird trotzdem an der **ganzen** Szene: Die zweite Hälfte einer
+    Passung mag außen vor bleiben, aufgelöst werden muss sie dennoch — sonst
+    käme „Merkmal verloren" zurück, und das ist eine andere Aussage.
+    """
+    from tests.test_digest_and_fits import clearance_fit, pin_and_hole
+
+    scene = pin_and_hole(4.9, 5.0, profile)
+    scene.fits.append(clearance_fit())
+    ohne = [entry for key, entry in scene.objects.items() if key != "obj_1"]
+
+    findings = check_before_export(ohne, profile, {}, scene=scene)
+
+    assert not [finding.code for finding in findings if finding.code.startswith("fit.")]
+
+
+def test_a_report_that_was_already_taken_is_not_taken_twice(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """``checked`` schreibt mit dem Bericht, den der Kunde gesehen hat (RM-140).
+
+    Die Prüfung ist der teure Teil des Exports; zweimal zu prüfen hieße, den
+    Kunden zweimal warten zu lassen — und ein zweites Ergebnis wäre auch ein
+    zweiter Zustand. Gemessen wird an einer Zusage, die kein zweiter Lauf
+    erzeugen würde.
+    """
+    fremd = [
+        Finding(code="export.not_watertight", severity="warning", message="aus dem ersten Lauf")
+    ]
+    plan = plan_export([scene_object()], project_name="Dose", profile=profile, checked=fremd)
+
+    assert [finding.message for finding in plan.findings] == ["aus dem ersten Lauf"]
+    assert write_plan(plan, tmp_path)
 
 
 # --- writing --------------------------------------------------------------------

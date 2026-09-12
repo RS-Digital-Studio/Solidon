@@ -103,6 +103,28 @@ Sie läuft **vorher**, nicht nachher: Wasserdichtheit, Bauraum, Wandstärken.
 Was sie findet, ist ein Befund mit Handlungsvorschlag (Regel 17) — kein
 abgebrochener Export.
 
+**Zwei der fünf Fragen aus §29 stehen in keinem einzelnen Körper**, und
+deshalb nimmt `check_before_export` seit dem 12.09.2026 die Szene entgegen
+(RM-140): Eine verletzte Passung steht zwischen zwei Merkmalen
+(`scene.fits.check`), eine Wand unter der Mindeststärke zwischen einer Bohrung
+und dem Mantel um sie herum (`scene.evaluate.check_thin_walls`, RM-127). Die
+Prüfung sah bis dahin nur die **Auswahl**, und damit lagen diese zwei Zeilen
+des Bauplans seit je brach.
+
+Gefragt wird an der ganzen Szene, geantwortet über die Auswahl: Eine Passung,
+deren zweite Hälfte nicht mit exportiert wird, muss dennoch aufgelöst werden —
+sonst käme „Merkmal verloren" zurück, und das ist eine andere Aussage. Ohne
+Szene bleiben beide Fragen ungestellt; ein Aufrufer, der keine hat, bekommt
+den Bericht, den er belegen kann, und keinen erfundenen (Regel 21). Der Import
+liegt dafür in der Funktion — `export → scene` ist eine **träge** Kante und
+steht so in `tests/test_core_package_direction.py`.
+
+**Und `checked` nimmt einen Bericht entgegen, statt ihn zweimal zu erheben.**
+Die Oberfläche prüft, zeigt, fragt und schreibt erst dann (siehe
+`app/ui/CLAUDE.md`); die Prüfung ist der teure Teil, und ein zweites Ergebnis
+wäre auch ein zweiter Zustand. Eine **leere** Liste ist dabei eine Antwort und
+kein fehlender Wert — geprüft wird auf `None`.
+
 ## Grenzen
 
 - **Kein G-Code wird geschrieben** (§22). Das ist Sache des Slicers.

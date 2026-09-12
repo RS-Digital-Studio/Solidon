@@ -106,6 +106,7 @@ from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
     ExportFormat,
+    check_before_export,
     clearance_margin,
     plan_export,
     safe_name,
@@ -217,6 +218,7 @@ from app.ui.dialogs import (
     ParameterDialog,
     StepValuesDialog,
     confirm_discard,
+    confirm_export,
     confirm_unsaved,
     damaged_line,
     licence_lock_line,
@@ -757,17 +759,26 @@ class _ExportWorker(Worker):
     Balken läuft, das Fenster reagiert, und der Menüeintrag ist gesperrt,
     damit kein zweiter Lauf auf denselben Ordner schreibt.
 
-    Die Befunde der Prüfung kommen mit dem Ergebnis zurück, nicht davor. §29
-    sagt „vor dem Schreiben", und genau das ist hier nicht mehr zu haben:
-    **die Prüfung ist der lange Teil**, sie im Hauptthread zu lassen wäre die
-    Blockade, gegen die dieser Arbeiter geschrieben ist. Die Baugruppe macht
-    es seit je so — sie prüft und schreibt in einem Zug —, und der Abstand
-    zwischen beidem ist jetzt derselbe Wimpernschlag.
+    **Und die Befunde kommen jetzt wirklich vor dem Schreiben** (RM-140). Sie
+    kamen lange mit dem Ergebnis zurück, mit einer Begründung, die stimmte und
+    die falsche Folgerung zog: Die Prüfung ist der lange Teil, sie gehört
+    nicht in den Hauptthread — daraus folgt aber nicht, dass sie mit dem
+    Schreiben in einem Zug laufen muss. Sie läuft **hier**, und wo sie etwas
+    findet, hört dieser Lauf auf (``checked``); das Fenster zeigt den Bericht,
+    fragt, und ein zweiter Lauf schreibt mit demselben Bericht, statt ihn noch
+    einmal zu erheben. §29 sagt „Bericht, keine Blockade" — die Frage hat
+    deshalb einen Knopf, der weitergeht.
+
+    **Ohne Befund wird nicht gefragt.** Der häufige Fall ist der saubere, und
+    ein Dialog, der „alles in Ordnung" sagt, ist ein Klick ohne Auskunft.
+    Gefragt wird ab ``warning``; der Lizenzhinweis (§16.3) ist ``info`` und
+    hält niemanden auf.
     """
 
     done = Signal(object, object)
     failed = Signal(object)
     usageReady = Signal(object)
+    checked = Signal(object)
 
     def __init__(
         self,
@@ -783,6 +794,9 @@ class _ExportWorker(Worker):
         inventory_settings: Any = None,
         project_name: str = "",
         all_objects: Sequence[Any] | None = None,
+        scene: Any = None,
+        document: Any = None,
+        checked: list[Finding] | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -796,12 +810,31 @@ class _ExportWorker(Worker):
         self._inventory_settings = inventory_settings
         self._project_name = project_name
         self._all_objects = tuple(all_objects) if all_objects is not None else tuple(objects)
+        self._scene = scene
+        self._document = document
+        #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
+        #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
+        #: Liste ist eine Antwort und keine fehlende.
+        self._checked = checked
 
     def work(self) -> None:
         try:
             if self._format == "3mf":
                 self._settings = self._profiles_for_selection(self._settings)
                 self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
+            if self._checked is None:
+                found = check_before_export(
+                    self._objects,
+                    self._profile,
+                    dict(self._sources),
+                    self._format,
+                    scene=self._scene,
+                    document=self._document,
+                )
+                if any(entry.severity in ("warning", "error") for entry in found):
+                    self.checked.emit(found)
+                    return
+                self._checked = found
             usage = (
                 prepare_usage(
                     self._objects, self._inventory_settings, self._profile, self._project_name
@@ -877,6 +910,9 @@ class _ExportWorker(Worker):
             setup=setup,
             flavour=setup.flavour if setup is not None else "orca",
             for_slicer=False,
+            scene=self._scene,
+            document=self._document,
+            checked=self._checked,
         )
         return [written_path], list(findings)
 
@@ -894,6 +930,9 @@ class _ExportWorker(Worker):
             export_format=self._format,
             scheme=fixed if len(self._objects) == 1 else None,
             sources=self._sources,
+            scene=self._scene,
+            document=self._document,
+            checked=self._checked,
         )
         return write_plan(plan, self._target.parent, self._format), list(plan.findings)
 
@@ -5897,8 +5936,17 @@ class MainWindow(QMainWindow):
         target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
         self._start_export(target, export_format)
 
-    def _start_export(self, target: Path, export_format: ExportFormat) -> None:
+    def _start_export(
+        self,
+        target: Path,
+        export_format: ExportFormat,
+        checked: list[Finding] | None = None,
+    ) -> None:
         """Schreiben, wohin schon entschieden ist — ohne Dateidialog.
+
+        ``checked`` trägt den Bericht, den der erste Lauf erhoben hat und den
+        der Kunde gerade gesehen hat (§29, RM-140): Damit wird nicht zweimal
+        geprüft, und geschrieben wird genau das, wozu er Ja gesagt hat.
 
         Getrennt von :meth:`action_export`, weil ein zweiter Anlauf denselben
         Ort meint: Die häufigste Ursache für einen gescheiterten Export ist
@@ -5950,6 +5998,13 @@ class MainWindow(QMainWindow):
             inventory_settings=inventory_settings,
             project_name=self.session.document_name or target.stem,
             all_objects=tuple(result.scene.objects.values()),
+            # Die Szene und das Dokument: Zwei der fünf Fragen aus §29 stehen
+            # nicht im einzelnen Körper — eine Passung steht zwischen zwei
+            # Merkmalen, eine Wand zwischen einer Bohrung und dem Mantel um
+            # sie herum. Ohne beides bliebe die Prüfung, was sie war.
+            scene=result.scene,
+            document=self.session.project.document,
+            checked=checked,
         )
         self._export_worker = worker
         # Die Flagge, nicht nur das Worker-Feld: ``_anything_running`` fragt
@@ -5959,6 +6014,7 @@ class MainWindow(QMainWindow):
         self._exporting = True
         worker.done.connect(self._export_done)
         worker.failed.connect(self._export_failed)
+        worker.checked.connect(self._export_checked)
         worker.usageReady.connect(self.usage_notice.offer)
         # **Und das Unerwartete.** Der Menüeintrag ist gesperrt, solange
         # geschrieben wird; eine Ausnahme, die den Thread abriss, ließ ihn für
@@ -5981,6 +6037,34 @@ class MainWindow(QMainWindow):
         # gewinnt, entschiede die Reihenfolge zweier Threads.
         self._update_actions()
         self._leash.start(worker)
+
+    def _export_checked(self, findings: list[Finding]) -> None:
+        """Der Bericht, bevor die Datei entsteht (§29, RM-140).
+
+        Drei Dinge in dieser Reihenfolge, und die Reihenfolge ist die Aussage:
+        Der Prüfbericht bekommt die Befunde und rückt nach vorn — dort stehen
+        sie vollständig, mit Werten, Körpernamen und dem Klick, der hinführt.
+        Dann erst fragt der Dialog, und er fragt kurz. Wer Ja sagt, bekommt
+        einen zweiten Lauf mit **demselben** Bericht: Die Prüfung ist der
+        teure Teil, und ein zweites Ergebnis wäre auch ein zweiter Zustand.
+
+        Der Arbeiter dieses ersten Laufs ist hier noch am Auslaufen. Das ist
+        in Ordnung und sogar nötig: Der modale Dialog dreht die Ereignisschleife
+        weiter, ``_export_worker_done`` kommt darin an und räumt das Feld, bevor
+        ``_start_export`` es neu belegt.
+        """
+        self._exporting = False
+        self._set_progress_state("export", active=False)
+        self.report.add_findings(list(findings))
+        self._focus_report()
+        attempt = self._export_attempt
+        if attempt is None or not confirm_export(findings, self):
+            # Abgebrochen heißt: es gibt nichts zu wiederholen. Ein
+            # stehengebliebener Versuch wäre beim nächsten Schreibfehler ein
+            # Wiederholknopf auf ein Ziel, das niemand mehr gemeint hat.
+            self._export_attempt = None
+            return
+        self._start_export(attempt[0], attempt[1], checked=findings)
 
     def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""

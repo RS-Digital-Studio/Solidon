@@ -66,7 +66,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
-from app.core.types import Profile
+from app.core.types import Finding, Profile
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
 from app.ui.ai_disclosure import (
@@ -3012,6 +3012,44 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     if clicked is save:
         return "save"
     return "discard" if clicked is discard else "cancel"
+
+
+#: Wie viele Sätze der Dialog vor dem Export zeigt. Fünf passen in einen
+#: Blick; eine längere Liste ist der Prüfbericht, und den öffnet das Fenster
+#: daneben ohnehin.
+EXPORT_LINES: Final[int] = 5
+
+
+def confirm_export(findings: Sequence[Finding], parent: QWidget | None = None) -> bool:
+    """Was vor dem Schreiben aufgefallen ist — und die Wahl (§29, RM-140).
+
+    §29 nennt die Exportprüfung ausdrücklich „Bericht, nicht Blockade": „Wer
+    trotzdem exportieren will, kann das — er weiß dann nur, was er tut." Genau
+    diese zwei Hälften sind die zwei Knöpfe. Regel 19 verbietet Rückfragen vor
+    **rücknehmbaren** Handlungen; eine geschriebene Datei ist keine, sie liegt
+    danach auf der Platte und im Zweifel im Slicer.
+
+    **Weitergehen ist die Vorgabe.** Der Kunde hat Format, Ordner und Namen
+    schon gewählt; ein Dialog, dessen Eingabetaste diese Arbeit wegwirft, wäre
+    die Blockade, die §29 nicht will. Was er stattdessen tut, ist: sagen, was
+    er weiß, bevor es zu spät ist.
+
+    Gefragt wird nur, wenn es etwas zu fragen gibt — der Aufrufer ruft diese
+    Funktion gar nicht erst ohne Befund (siehe ``_ExportWorker``).
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setWindowTitle(tr("Vor dem Export gefunden"))
+    box.setText(tr("Die Datei ist noch nicht geschrieben — die Prüfung hat etwas gefunden."))
+    lines = [f"· {finding.message}" for finding in findings[:EXPORT_LINES]]
+    if len(findings) > EXPORT_LINES:
+        lines.append(tr("Der Rest steht im Prüfbericht."))
+    box.setInformativeText(umbruch.join(lines))
+    write = box.addButton(tr("Trotzdem exportieren"), QMessageBox.ButtonRole.AcceptRole)
+    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(write)
+    box.exec()
+    return box.clickedButton() is write
 
 
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:

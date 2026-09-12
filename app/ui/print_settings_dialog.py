@@ -78,12 +78,14 @@ from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import estimate
 from app.core.types import (
     BoundingBox,
+    Document,
     Finding,
     HandoverKind,
     MaterialSlot,
     PrintSettings,
     Profile,
     QualityPreset,
+    Scene,
     SceneObject,
     SettingAdvice,
     SliceResult,
@@ -1496,6 +1498,13 @@ class _PlateJob:
     profile: Profile
     slot_profiles: Mapping[threemf.SlotKey, str]
     with_settings: bool = True
+    #: Die Szene und das Dokument, aus denen die Körper kommen. Zwei der fünf
+    #: Fragen aus §29 stehen in keinem einzelnen Körper — eine Passung steht
+    #: zwischen zwei Merkmalen, eine Wand zwischen einer Bohrung und dem
+    #: Mantel um sie herum (RM-140). Auch die Übergabe an den Slicer ist ein
+    #: Export, und ihr Bericht war bis dahin um diese zwei Zeilen ärmer.
+    scene: Scene | None = None
+    document: Document | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1624,6 +1633,8 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         flavour=job.setup.flavour,
         place_on_bed=keep,
         setup=job.setup,
+        scene=job.scene,
+        document=job.document,
     )
     by_plate: dict[int, tuple[MaterialSlot, ...]] = {}
     for plate in job.plates:
@@ -1653,6 +1664,8 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         flavour=job.setup.flavour,
         place_on_bed=keep,
         setup=job.setup,
+        scene=job.scene,
+        document=job.document,
     )
     return PlateRun(
         plate=plate,
@@ -5437,6 +5450,8 @@ class PrintSettingsDialog(QDialog):
             profile=self.session.profile,
             slot_profiles=slot_profiles,
             with_settings=with_settings,
+            scene=None if self.session.last_result is None else self.session.last_result.scene,
+            document=self.session.project.document,
         )
 
     def _plate_run(

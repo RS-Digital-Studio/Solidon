@@ -524,6 +524,11 @@ def command_export(args: argparse.Namespace) -> int:
         export_format=args.export_format,
         scheme=args.scheme,
         sources=project.document.sources,
+        # Zwei der fünf Fragen aus §29 stehen nicht im einzelnen Körper: eine
+        # verletzte Passung und eine Wand unter der Mindeststärke. Beide
+        # brauchen die Szene, aus der die Körper kommen (RM-140).
+        scene=result.scene,
+        document=project.document,
     )
     # Die Prüfung spricht, bevor die Dateien existieren — eine Warnung ist
     # also eine Warnung über das, was geschrieben wird, nicht über das, was

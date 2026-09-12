@@ -119,11 +119,18 @@ EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
 #: Träge Kanten: ``a`` importiert ``b`` nur innerhalb von Funktionen.
 #: Träge gehaltene Rückrichtungen sowie das Objektmaterial des exakten
 #: Bohrungswegs; keine davon erweitert den eifrigen Importkreis.
+#:
+#: ``export → scene`` kam am 12.09.2026 dazu (RM-140): §29 verlangt vor dem
+#: Schreiben auch einen Blick auf verletzte Passungen und zu dünne Wände, und
+#: beides steht in der Szene und nicht im einzelnen Körper. Träge, weil der
+#: Kreis sonst um ein Paket wüchse — ``scene`` importiert ``geom``, und
+#: ``geom`` erreicht ``export`` bereits träge zurück.
 LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
     {
         ("brep", "knowledge"),
         ("brep", "perceive"),
         ("export", "brep"),
+        ("export", "scene"),
         ("geom", "brep"),
         ("geom", "export"),
         ("geom", "ingest"),

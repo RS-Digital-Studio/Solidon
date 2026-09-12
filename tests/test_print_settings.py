@@ -3833,7 +3833,7 @@ def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path:
 
     from app.core.export import handover
     from app.core.geom.mesh import MeshData
-    from app.core.types import MaterialSlot, SceneObject
+    from app.core.types import MaterialSlot, Scene, SceneObject
     from app.ui.print_settings_dialog import PrintSettingsDialog
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -3845,8 +3845,12 @@ def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path:
     weiss = MaterialSlot(index=0, name="Weiß")
     erste = SceneObject(id="A", name="A", mesh=box, material_slots=[rot], plate=0)
     zweite = SceneObject(id="B", name="B", mesh=box, material_slots=[weiss, rot], plate=1)
+    # Eine **echte** Szene und keine Attrappe: Der Dialog reicht sie seit
+    # RM-140 bis in die Exportprüfung durch, und die fragt nach Passungen und
+    # Wandstärken. Ein ``SimpleNamespace`` hat beides nicht.
     dialog.session.last_result = SimpleNamespace(
-        scene=SimpleNamespace(objects={"A": erste, "B": zweite}), stopped_at=None
+        scene=Scene(objects={"A": erste, "B": zweite}, profile=dialog.session.profile),
+        stopped_at=None,
     )
     # Was der Kunde bei „Alle Platten" sieht und zuordnet: Rot, dann Weiß.
     assert [str(slot.name) for slot in dialog._plate_slots()] == ["Rot", "Weiß"]

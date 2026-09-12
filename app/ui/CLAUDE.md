@@ -604,6 +604,31 @@ seinem Signal leert, hält es bis zur Entscheidung den unbearbeiteten
 Eingabetext: Bei einem Abbruch kommen auch Leerraum und Zeilenumbrüche
 vollständig und markiert ins Feld zurück.
 
+## §29 — der Bericht kommt vor der Datei
+
+`_ExportWorker` prüfte und schrieb in einem Zug; die Befunde kamen an, als die
+Datei schon dalag. Seit dem 12.09.2026 hört sein erster Lauf an der Prüfung
+auf: Findet sie etwas ab `warning`, meldet er es über `checked` und endet.
+`MainWindow._export_checked` legt die Befunde in den Prüfbericht, rückt ihn
+nach vorn und fragt über `dialogs.confirm_export`; ein Ja startet einen
+zweiten Lauf mit **demselben** Bericht (`checked=`), statt ein zweites Mal zu
+prüfen.
+
+Die alte Begründung stimmte und zog die falsche Folgerung: Die Prüfung ist der
+lange Teil und gehört nicht in den Hauptthread — daraus folgt aber nicht, dass
+sie mit dem Schreiben in einem Zug laufen muss.
+
+Der Arbeiter des ersten Laufs ist während des Dialogs noch am Auslaufen, und
+das ist nötig: Der modale Dialog dreht die Ereignisschleife weiter,
+`_export_worker_done` kommt darin an und räumt das Feld, bevor `_start_export`
+es neu belegt.
+
+**Die Szene reist mit** (`scene=`, `document=`), weil zwei der fünf Fragen aus
+§29 in keinem einzelnen Körper stehen — eine verletzte Passung und eine Wand
+unter der Mindeststärke. Dasselbe gilt für die Übergabe an den Slicer:
+`_PlateJob` trägt beide Felder, und ihr Bericht war bis dahin um diese zwei
+Zeilen ärmer.
+
 ## §29 — was die Datei mitnimmt
 
 `print_disclosure.py` steht vor dem ersten Öffnen der Druckeinstellungen und

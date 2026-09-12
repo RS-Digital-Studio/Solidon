@@ -107,7 +107,7 @@ bestimmte meint, nennt sie. Meldet es
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
-| Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — 47 eifrige und 12 träge Kanten eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
+| Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — 47 eifrige und 14 träge Kanten eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
 | Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
 | Verwenden die gemeinsamen Hooks das unterstützte Protokoll und richtige Patchpfade? | `test_solidon3d_hooks.py`; echte Event-Auslösung im Editor ist zusätzlich zu prüfen |

@@ -10,6 +10,7 @@ from app.core.errors import FileWriteError, OperationCancelled
 from app.core.export import handover
 from app.core.filament_usage import with_spool
 from app.core.geom.mesh import MeshData
+from app.core.geom.transform import place_on_bed
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.slice.gcode import GcodeMetrics
 from app.core.types import MaterialSlot, SceneObject
@@ -20,11 +21,18 @@ from app.ui.settings import UiSettings
 
 
 def body(identifier: str = "body", plate: int = 0) -> SceneObject:
+    """Ein Klotz, **auf dem Bett** — dort steht er beim Kunden, kurz vor dem Export.
+
+    Ein Quader aus ``trimesh`` liegt um den Ursprung und damit zur Hälfte
+    unter der Druckplatte. Das ist ein echter Befund (``arrange.below_bed``),
+    und seit RM-140 hält der Export daran an und fragt, statt zu schreiben —
+    diese Fälle wollen aber die geschriebene Datei prüfen und nicht die Frage.
+    """
     return SceneObject(
         id=identifier,
         name=identifier,
         plate=plate,
-        mesh=MeshData.of(trimesh.creation.box(extents=(20, 20, 20))),
+        mesh=place_on_bed(MeshData.of(trimesh.creation.box(extents=(20, 20, 20)))),
         material_slots=[MaterialSlot(0, "PLA Rot", (1.0, 0.0, 0.0), None, "PLA")],
     )
 

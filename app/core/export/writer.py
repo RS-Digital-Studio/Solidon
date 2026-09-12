@@ -44,11 +44,13 @@ from app.core.log import get_logger
 from app.core.types import (
     BoundingBox,
     BRepBody,
+    Document,
     Finding,
     MaterialSlot,
     Mesh,
     PrintSettings,
     Profile,
+    Scene,
     SceneObject,
     SettingAdvice,
     Source,
@@ -200,8 +202,18 @@ def plan_export(
     export_format: ExportFormat = "stl",
     scheme: str | None = None,
     sources: dict[str, Source] | None = None,
+    scene: Scene | None = None,
+    document: Document | None = None,
+    checked: Sequence[Finding] | None = None,
 ) -> ExportPlan:
-    """Ermittelt die Dateinamen und führt die Prüfung vor dem Export aus."""
+    """Ermittelt die Dateinamen und führt die Prüfung vor dem Export aus.
+
+    ``checked`` übernimmt einen Bericht, den jemand schon erhoben hat, statt
+    ihn ein zweites Mal zu rechnen (RM-140): Das Fenster prüft zuerst, zeigt
+    die Befunde und schreibt erst nach der Antwort — und die Prüfung ist der
+    teure Teil. Eine leere Liste ist dabei eine Antwort und kein fehlender
+    Wert; deshalb wird auf ``None`` geprüft.
+    """
     if not objects:
         raise ValidationError(
             field="objects",
@@ -245,7 +257,18 @@ def plan_export(
         ) from problem
     return ExportPlan(
         entries=entries,
-        findings=tuple(check_before_export(objects, profile, sources or {}, export_format)),
+        findings=tuple(checked)
+        if checked is not None
+        else tuple(
+            check_before_export(
+                objects,
+                profile,
+                sources or {},
+                export_format,
+                scene=scene,
+                document=document,
+            )
+        ),
     )
 
 
@@ -621,6 +644,9 @@ def check_before_export(
     profile: Profile,
     sources: dict[str, Source],
     export_format: ExportFormat = "stl",
+    *,
+    scene: Scene | None = None,
+    document: Document | None = None,
 ) -> list[Finding]:
     """Ein Bericht vor dem Schreiben, keine Sperre (§29).
 
@@ -628,6 +654,13 @@ def check_before_export(
     einen Plan ohne einen einzigen Befund — der Fehler kam erst beim Schreiben,
     nach dem Klick auf Speichern. Die Auskunft war die ganze Zeit verfügbar:
     Der Körper weiß, ob er exakt ist, und das Format weiß, ob es das braucht.
+
+    **Und die Szene gehört ebenfalls dazu** (RM-140). §29 zählt fünf Fragen
+    auf; zwei davon stellt kein Körper für sich allein, sondern nur im
+    Verhältnis zu anderen: eine verletzte Passung und eine Wand unter der
+    Mindeststärke. Ohne ``scene`` bleiben sie ungestellt — ein Aufrufer, der
+    keine Szene hat, bekommt den Bericht, den er belegen kann, und keinen
+    erfundenen (Regel 21).
     """
     findings: list[Finding] = []
     meshes = [as_mesh_data(entry.mesh) for entry in objects]
@@ -701,6 +734,55 @@ def check_before_export(
         )
     )
     findings.extend(_licence_findings(sources))
+    findings.extend(_fits_and_walls(objects, profile, scene, document))
+    return findings
+
+
+def _fits_and_walls(
+    objects: list[SceneObject],
+    profile: Profile,
+    scene: Scene | None,
+    document: Document | None,
+) -> list[Finding]:
+    """Die zwei Fragen aus §29, die ein einzelner Körper nicht beantwortet.
+
+    Eine Passung steht **zwischen** zwei Merkmalen, eine Wand zwischen einer
+    Bohrung und dem Mantel um sie herum — beides steht in keinem der Körper,
+    die gerade geschrieben werden, sondern in der Szene, aus der sie kommen.
+    Deshalb lagen die zwei Zeilen von §29 seit je brach: Die Prüfung sah nur
+    die Auswahl.
+
+    **Gefragt wird an der Szene, geantwortet wird über die Auswahl.** Die
+    Passungen laufen gegen die ganze Szene — eine Passung, deren zweite Hälfte
+    nicht mit exportiert wird, lässt sich sonst gar nicht auflösen und käme als
+    „Merkmal verloren" zurück, was sie nicht ist. Gemeldet wird davon, was
+    einen der geschriebenen Körper betrifft. Die Wandstärke braucht diese
+    Vorsicht nicht: Sie gehört einem Körper, also rechnet sie auf der
+    eingeschränkten Szene.
+
+    Träge importiert, damit die Exportschicht das Szenenpaket nicht beim Laden
+    mitzieht — dieselbe Bauart wie bei ``handover`` und ``brep`` darüber.
+    """
+    if scene is None:
+        return []
+    from app.core.scene.evaluate import check_thin_walls
+    from app.core.scene.fits import check as check_fits
+
+    wanted = {entry.id for entry in objects}
+    findings = [
+        finding
+        for finding in check_fits(scene, profile, document=document)
+        if finding.object_id is None or finding.object_id in wanted
+    ]
+    findings.extend(
+        check_thin_walls(
+            replace(
+                scene,
+                objects={key: value for key, value in scene.objects.items() if key in wanted},
+                profile=profile,
+            )
+        )
+    )
     return findings
 
 
@@ -900,6 +982,9 @@ def write_assembly(
     place_on_bed: bool = False,
     setup: SlicerSetup | None = None,
     for_slicer: bool = True,
+    scene: Scene | None = None,
+    document: Document | None = None,
+    checked: Sequence[Finding] | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
@@ -942,7 +1027,13 @@ def write_assembly(
 
     # Diese Funktion schreibt immer 3MF — das steht in ihrem Namen und in
     # ihrem Docstring, also gibt es hier nichts zu wählen.
-    findings = check_before_export(chosen, profile, sources or {}, "3mf")
+    findings = (
+        list(checked)
+        if checked is not None
+        else check_before_export(
+            chosen, profile, sources or {}, "3mf", scene=scene, document=document
+        )
+    )
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag.

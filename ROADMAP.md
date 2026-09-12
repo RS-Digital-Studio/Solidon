@@ -69,7 +69,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
-| [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
@@ -783,12 +782,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-140"></a>
 
-- [ ] **RM-140 — Exportbefunde vor dem Schreiben sichtbar machen.** Bauplan §29 verlangt sichtbare Befunde vor dem Schreiben bei weiterhin möglichem
-  Export. `_ExportWorker` prüft und schreibt derzeit in einem Lauf; Befunde kommen erst danach.
-  `check_before_export()` enthält keine Passungs- oder Wandstärkenprüfung. Den Vorprüfungsweg im
-  Arbeiter ausführen, aktuelle Passungen und die Endwandstärken aus RM-127 anschließen und vor dem
-  Schreiben anzeigen. Abnahme: verletzte Passung und dünne Endwand sind vorher sichtbar, große
-  Projekte bleiben bedienbar, ein bewusst fortgesetzter Export schreibt das gewählte Ergebnis.
+- [x] **RM-140 — Exportbefunde vor dem Schreiben sichtbar machen.** Am 12.09.2026 gebaut, in
+  zwei Hälften.
+
+  **Die Prüfung war unvollständig.** §29 zählt fünf Fragen auf; zwei davon stellte
+  `check_before_export` nie, und zwar aus demselben Grund: Sie stehen in keinem einzelnen Körper.
+  Eine verletzte Passung steht zwischen zwei Merkmalen, eine Wand unter der Mindeststärke
+  zwischen einer Bohrung und dem Mantel um sie herum — die Prüfung sah aber nur die **Auswahl**.
+  Sie nimmt jetzt die Szene entgegen und fragt `scene.fits.check` und `check_thin_walls`
+  (RM-127). Gefragt wird an der ganzen Szene, gemeldet über die Auswahl: Eine Passung, deren
+  zweite Hälfte zu Hause bleibt, muss trotzdem aufgelöst werden, sonst käme „Merkmal verloren"
+  zurück. Ohne Szene bleiben beide Fragen ungestellt (Regel 21) — die Kommandozeile und die
+  Übergabe an den Slicer reichen sie deshalb ebenfalls durch.
+
+  **Die Befunde kamen zu spät.** `_ExportWorker` prüfte und schrieb in einem Zug, mit einer
+  Begründung, die stimmte und die falsche Folgerung zog: Die Prüfung ist der lange Teil und
+  gehört nicht in den Hauptthread — daraus folgt nicht, dass sie mit dem Schreiben zusammen
+  laufen muss. Sein erster Lauf hört jetzt an der Prüfung auf, sobald etwas ab `warning`
+  dasteht; der Prüfbericht bekommt die Befunde und rückt nach vorn, `dialogs.confirm_export`
+  fragt, und ein Ja startet einen zweiten Lauf mit **demselben** Bericht statt einer zweiten
+  Prüfung. Weitergehen ist die Vorgabe — §29 sagt „Bericht, nicht Blockade" —, und ohne Befund
+  wird gar nicht gefragt: Ein Dialog, der „alles in Ordnung" sagt, ist ein Klick ohne Auskunft.
+
+  `export → scene` ist damit eine neue, **träge** Importkante und steht so in
+  `tests/test_core_package_direction.py` (jetzt 47 eifrige und 14 träge).
+
+  Nachweis: fünf Fälle in `tests/test_export.py` — dünne Wand und verletzte Passung vor der
+  Datei, keine erfundene Aussage ohne Szene, die Passung eines nicht exportierten Körpers bleibt
+  draußen, und ein übergebener Bericht wird nicht zweimal erhoben — dazu zwei in
+  `tests/test_ui.py`: Der Export fragt und schreibt beim Abbrechen nichts, ein sauberer fragt
+  nicht. Vier Gegenproben, jede einzeln rot: ohne die zwei neuen Prüfungen, ohne den Filter auf
+  die Auswahl, ohne den `checked`-Zweig und ohne die Frage im Arbeiter.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
 

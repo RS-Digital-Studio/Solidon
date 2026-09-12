@@ -118,10 +118,10 @@ Eintrag auf ein Untermodul und ein Attribut zeigt, das es gibt.
 Pakete hängen im Kreis.** Gemessen am 07.09.2026 stehen acht der dreizehn
 Unterpakete in **einem** Kreis über eifrige Importe — `brep`, `geom`,
 `ingest`, `knowledge`, `perceive`, `scene`, `sketch`, `slice`, mit `geom` als
-Nabe. Dreizehn weitere Kanten sind bewusst träge, also in eine Funktion gelegt,
+Nabe. Vierzehn weitere Kanten sind bewusst träge, also in eine Funktion gelegt,
 damit sie den Kreis beim Import nicht schließen.
 `tests/test_core_package_direction.py` friert diesen Stand ein: 47 eifrige und
-13 träge Kanten, jede einzeln aufgeführt. Eine neue Kante ist damit eine
+14 träge Kanten, jede einzeln aufgeführt. Eine neue Kante ist damit eine
 Entscheidung und keine stille Zeile, eine abgebaute verschwindet auch aus der
 Liste, und ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
 

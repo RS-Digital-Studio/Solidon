@@ -16,6 +16,23 @@ vor rücknehmbaren Handlungen**, kein „Möchten Sie wirklich", keine Sackgasse
 (Regel 19). Die ausdrücklich gewünschte Ausnahme ist das Löschen im Verlauf:
 Die Nachfrage nennt mitbetroffene Schritte und den Rückweg über Strg+Z.
 
+**Und die zweite Ausnahme verlässt das Dokument** (§29, RM-140): Eine
+geschriebene Datei holt kein Undo zurück, sie liegt danach auf der Platte und
+im Zweifel im Slicer. Der Export prüft deshalb zuerst, zeigt die Befunde im
+Prüfbericht und fragt dann — mit zwei Knöpfen, von denen einer weitergeht
+(`dialogs.confirm_export`). Drei Dinge halten den Dialog davon ab, zur
+Blockade zu werden, die §29 ausdrücklich nicht will:
+
+* **Gefragt wird nur, wenn es etwas zu fragen gibt** — ab `warning`. Der
+  Lizenzhinweis (§16.3) ist `info` und hält niemanden auf, und ein Dialog, der
+  „alles in Ordnung" sagt, ist ein Klick ohne Auskunft.
+* **Weitergehen ist die Vorgabe.** Format, Ordner und Namen stehen schon; eine
+  Eingabetaste, die diese Arbeit wegwirft, wäre die schlechtere Voreinstellung.
+* **Der Bericht steht daneben, nicht im Dialog.** Der Prüfbericht bekommt die
+  Befunde und rückt nach vorn — dort stehen sie vollständig, mit Werten,
+  Körpernamen und dem Klick, der hinführt; der Dialog zeigt die ersten Sätze
+  und verweist für den Rest dorthin.
+
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
 Schritt an, zeigt das Bild den letzten vollständig gerechneten Zustand — und
 was hinter dem Halt steht, wird nicht gerechnet. Ein neuer Schritt landete

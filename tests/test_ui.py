@@ -6936,11 +6936,33 @@ def wait_for_export(window: MainWindow) -> None:
     Nach dem Warten einmal zustellen — ``done`` ist eine Warteschlangen-
     Verbindung, und ohne ``processEvents`` kämen weder Meldung noch Befunde je
     an.
+
+    **Zwei Runden, seit der Export erst prüft und dann schreibt** (§29,
+    RM-140): Der erste Lauf endet an der Prüfung, wenn sie etwas findet; die
+    Antwort darauf startet den zweiten. Wo nichts gefragt wird, ist die zweite
+    Runde ein ``processEvents`` ohne Arbeiter und kostet nichts.
     """
-    worker = window._export_worker
-    if worker is not None:
-        worker.wait(20_000)
-    QApplication.processEvents()
+    for _ in range(2):
+        worker = window._export_worker
+        if worker is not None:
+            worker.wait(20_000)
+        QApplication.processEvents()
+
+
+def export_anyway(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Frage vor dem Schreiben bejahen (§29, RM-140).
+
+    Zwei Körper genau übereinander sind ein Befund, und seit RM-140 fragt der
+    Export danach, bevor er schreibt. Ein Test, dessen Szene eine Warnung
+    trägt, beantwortet sie — sonst stünde die Suite offscreen an einem modalen
+    Dialog, und zwar ohne rot zu werden (siehe ``.claude/rules/oberflaeche.md``).
+    """
+
+    def trotzdem(box: QMessageBox) -> int:
+        next(entry for entry in box.buttons() if entry.text() == tr("Trotzdem exportieren")).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", trotzdem)
 
 
 def test_export_suggests_the_complete_print_format_first(
@@ -6994,6 +7016,103 @@ def test_export_writes_the_selected_format(
 
     assert target.is_file(), "der gewählte Name ist die Datei, nicht ein Schema daraus"
     assert target.stat().st_size > 0
+
+
+def _thin_walled_tube(window: MainWindow) -> None:
+    """Ein Rohr mit einem halben Millimeter Wand — der kleinste Körper, an dem
+    die Exportprüfung etwas zu sagen hat, das sie vor RM-140 nicht sagte."""
+    window.session.apply(
+        "Zylinder",
+        [OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 20.0})],
+    )
+    window.session.wait_for_idle()
+    window.session.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole", inputs=("obj_1",), params={"diameter": 19.0, "x": 0.0, "y": 0.0}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+
+def test_the_export_asks_before_it_writes(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§29: „Bericht, nicht Blockade" — und beides vor der Datei (RM-140).
+
+    Die Prüfung lief bis dahin mit dem Schreiben in einem Zug; die Befunde
+    kamen an, als die Datei schon auf der Platte lag. Jetzt hört der erste
+    Lauf an der Prüfung auf: Der Prüfbericht bekommt die Befunde, der Dialog
+    fragt, und erst ein Ja schreibt.
+
+    Gemessen an der Wandstärke, weil sie der Teil ist, der vorher gar nicht
+    geprüft wurde — sie ist damit zugleich der Beleg, dass die Szene beim
+    Export ankommt.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    _thin_walled_tube(window)
+    target = tmp_path / "rohr.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    gesehen: list[str] = []
+
+    def abbrechen(box: QMessageBox) -> int:
+        gesehen.append(box.informativeText())
+        next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen")).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", abbrechen)
+    window.action_export()
+    wait_for_export(window)
+
+    assert gesehen, "der Export schrieb, ohne die Befunde zu zeigen"
+    assert "Wand" in gesehen[0], f"der Dialog nennt nicht, was gefunden wurde: {gesehen[0]!r}"
+    assert not target.exists(), "abgebrochen heißt: keine Datei"
+
+    def trotzdem(box: QMessageBox) -> int:
+        next(entry for entry in box.buttons() if entry.text() == tr("Trotzdem exportieren")).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", trotzdem)
+    window.action_export()
+    wait_for_export(window)
+
+    assert target.is_file(), "ein bewusst fortgesetzter Export schreibt"
+
+
+def test_a_clean_export_asks_nothing(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenprobe, und sie ist eine eigene Zusage.
+
+    Der häufige Fall ist der saubere. Ein Dialog, der „alles in Ordnung" sagt,
+    ist ein Klick ohne Auskunft — und nach dem dritten liest ihn niemand mehr.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    target = tmp_path / "wuerfel.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+
+    def niemals(box: QMessageBox) -> int:
+        raise AssertionError(f"ein sauberer Export fragt nicht: {box.text()!r}")
+
+    monkeypatch.setattr(QMessageBox, "exec", niemals)
+    window.action_export()
+    wait_for_export(window)
+
+    assert target.is_file()
 
 
 def test_changing_only_the_export_filter_changes_format_and_suffix(
@@ -7068,6 +7187,9 @@ def test_export_as_3mf_writes_one_assembly(
         "getSaveFileName",
         staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
     )
+    # Zweimal dasselbe Modell heißt zwei Körper am selben Ort — ein Befund, und
+    # seit RM-140 fragt der Export danach, bevor er schreibt.
+    export_anyway(monkeypatch)
     window.object_tree.tree.clearSelection()
     window.action_export()
     wait_for_export(window)
@@ -7676,6 +7798,8 @@ def test_export_as_3mf_carries_the_print_settings(
         "getSaveFileName",
         staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
     )
+    # Zwei Körper am selben Ort — der Export fragt danach (§29, RM-140).
+    export_anyway(monkeypatch)
     window.object_tree.tree.clearSelection()
     window.action_export()
     wait_for_export(window)
