@@ -1038,7 +1038,7 @@ def write_assembly(
     Hand öffnet, ordnet ohnehin neu an, und eine zurückgelesene Platte läge
     sonst um den halben Bauraum verschoben im nächsten Dokument.
 
-    Und es gilt für jede Familie — ob, sagt :func:`wants_bed_coordinates`,
+    Und es gilt für jede Familie — ob, sagt :func:`needs_bed_translation`,
     und dort steht auch, warum Cura und PrusaSlicer die Teile lange
     unverschoben bekamen und was das auf der Maschine bedeutete
     (Gesamtreview 05.09.2026, CORE-17). Ein Würfel, den das Dokument bei

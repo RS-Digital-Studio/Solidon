@@ -185,7 +185,7 @@ statt 660.**
 
 Wer eine Cura-Zuordnung ergänzt, prüft deshalb immer mit: hängt etwas an dem
 neuen Schlüssel? Reine Kopien kommen in `CURA_MIRRORED`, einfache Faktoren in
-`CURA_SCALED`, Gerechnetes in `_cura_rated` — dort **die Formel aus der
+`CURA_SCALED`, Gerechnetes in `_cura_computed` — dort **die Formel aus der
 Definition**, nicht die eigene Meinung darüber, was richtig wäre. Was
 absichtlich wegbleibt, kommt mit Begründung in `CURA_UNTOUCHED`;
 `tests/test_print_settings.py` lässt keine dritte Möglichkeit zu.

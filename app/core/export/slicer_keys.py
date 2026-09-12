@@ -442,7 +442,7 @@ CURA: Final[tuple[Row, ...]] = (
     # an der ein Wert aus der Projektdatei wörtlich in ein ``-s``-Argument
     # gelangte. Ausgeschrieben ist es nicht länger, aber es ist eine
     # Positivliste: Was nicht darin steht, wird die Vorgabe aus
-    # :data:`app.core.types.Adhesion` und nicht der fremde Text.
+    # :data:`app.core.types.AdhesionSettings` und nicht der fremde Text.
     (
         "adhesion.kind",
         "adhesion_type",

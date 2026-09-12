@@ -122,7 +122,7 @@ OUTPUT_NAME: Final = "solidon.gcode"
 _NO_STATEMENT: Final = frozenset({"nil", "", "none"})
 
 #: Vorgabewerte aus ``fdmprinter.def.json``, die in eine gerechnete Ableitung
-#: eingehen und die Solidon selbst nicht setzt (siehe :func:`_cura_rated`).
+#: eingehen und die Solidon selbst nicht setzt (siehe :func:`_cura_computed`).
 #: Ausgeschrieben, weil eine Zahl mitten in einer Formel niemandem sagt, woher
 #: sie kommt — und weil die Definition nicht auf jedem Rechner liegt.
 _SUPPORT_SKIP_PER_MM: Final = 20.0
