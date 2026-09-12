@@ -243,7 +243,7 @@ def apply_counterpart(
     )
     steps = document.ops[-2:]
     made = [step.outputs[0] for step in steps if step.outputs]
-    _log.info("counterpart %s: %s and %s in one transaction", pair.key, *made[:2] or ("?", "?"))
+    _log.info("counterpart %s: %s in one transaction", pair.key, ", ".join(made) or "?")
     return CounterpartApplied(
         object_ids=made,
         op_ids=tuple(step.id for step in steps),

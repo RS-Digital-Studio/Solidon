@@ -26,7 +26,7 @@ from app.core.knowledge import profiles
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import new_project
-from app.core.types import Document, Profile, Scene
+from app.core.types import Document, Operation, Profile, Scene, Transaction
 
 
 @pytest.fixture(autouse=True)
@@ -88,6 +88,29 @@ def test_both_halves_land_in_one_step_with_one_set_of_measurements(profile: Prof
 
     result = evaluate(document, profile, cache=cache)
     assert result.stopped_at is None, "beide Hälften rechnen durch"
+
+
+@pytest.mark.parametrize("count", [0, 1, 2])
+def test_counterpart_logging_preserves_incomplete_results(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, count: int
+) -> None:
+    """Auch der schon abgefangene unvollständige Rückgabefall bleibt protokollierbar."""
+    document = new_project("centauri-carbon-2", "petg").document
+    document.ops = [
+        Operation(index + 1, "insert_dowel", {}, outputs=(f"obj_{index + 1}",))
+        for index in range(count)
+    ]
+    transaction = Transaction("t1", "Paar", tuple(step.id for step in document.ops))
+    monkeypatch.setattr(History, "apply", lambda *_args, **_kwargs: transaction)
+
+    with caplog.at_level("INFO", logger="app.core.counterpart"):
+        applied = apply_counterpart(document, pair_named("dowel"), "obj_1", "obj_2", {}, {}, {})
+
+    assert applied.object_ids == [f"obj_{index + 1}" for index in range(count)]
+    messages = [entry.getMessage() for entry in caplog.records if "counterpart" in entry.name]
+    assert len(messages) == 1
+    assert "dowel" in messages[0]
+    assert all(identifier in messages[0] for identifier in applied.object_ids)
 
 
 def test_the_fit_names_the_features_the_run_really_created(profile: Profile) -> None:
