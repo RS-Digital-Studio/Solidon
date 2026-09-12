@@ -524,7 +524,7 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
 def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
     """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
 
-    Neutral bleibt die Standfläche auf Z = 0: dort behält der Körper sein Maß,
+    Neutral bleibt die Unterkante des Körpers: dort behält der Körper sein Maß,
     nach oben wird er schmaler."""
     require()
     from OCP.BRepOffsetAPI import BRepOffsetAPI_DraftAngle
@@ -538,7 +538,7 @@ def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
     uprights = _upright_faces(working)
     if not uprights:
         raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
-    neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)))
+    neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, solid.bounds.minimum[2]), gp_Dir(0.0, 0.0, 1.0)))
     builder = BRepOffsetAPI_DraftAngle(working.shape)
     for face in uprights:
         builder.Add(face, gp_Dir(0.0, 0.0, 1.0), math.radians(angle_deg), neutral)

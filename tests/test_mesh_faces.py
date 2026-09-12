@@ -212,6 +212,35 @@ def test_both_kernels_draft_to_the_same_body() -> None:
     assert meshed.volume == pytest.approx(exact.volume, abs=1e-6)
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("bottom", [-30.0, -10.0, 0.0, 8.0])
+def test_drafting_keeps_the_actual_bottom_at_every_height(kind: str, bottom: float) -> None:
+    """Ein verschobener Quader behält dieselben Maße und denselben analytischen Abtrag."""
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+
+    exact = edit.moved(edit.box(WIDTH, DEPTH, HEIGHT), (0.0, 0.0, bottom))
+    mesh = exact if kind == "brep" else as_mesh_data(exact)
+    features = features_of(exact) if kind == "brep" else detect(mesh)
+    source = SceneObject(id="obj_1", name="Quader", kind=kind, mesh=mesh, features=features)
+
+    result = run("draft_faces", source, angle=DRAFT)
+
+    changed = as_mesh_data(result.outputs[0].mesh)
+    assert changed.is_watertight
+    assert changed.volume == pytest.approx(drafted_volume(DRAFT), abs=1e-6)
+    assert changed.bounds.minimum == pytest.approx((-WIDTH / 2, -DEPTH / 2, bottom), abs=1e-6)
+    assert changed.bounds.maximum == pytest.approx(
+        (WIDTH / 2, DEPTH / 2, bottom + HEIGHT), abs=1e-6
+    )
+    if kind == "mesh":
+        assert result.solver.strategy == "direct"
+    assert source.mesh.volume == pytest.approx(WIDTH * DEPTH * HEIGHT, abs=1e-6)
+
+
 def test_both_kernels_push_the_same_single_face() -> None:
     """Und beim Versetzen trifft der exakte Kern jetzt auch **eine** Fläche.
 

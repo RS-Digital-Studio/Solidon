@@ -136,6 +136,7 @@ class DraftParams(BaseParams):
 
 @register_op(
     name="draft_faces",
+    cache_version="2",
     title=_("Formschräge anstellen"),
     category="shaping",
     params=DraftParams,

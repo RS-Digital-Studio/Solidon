@@ -330,6 +330,10 @@ nie gebildet; das trifft auch einen Umriss mit Loch. `_prism_from` nimmt einen
 **Versatz je Knoten**: fest ergibt das gerade Prisma des Versetzens, mit der
 Höhe wachsend den Keil der Formschräge.
 
+Die neutrale Ebene der Formschräge liegt in beiden Kernen auf der unteren
+Z-Grenze des Körpers. Ein reiner Höhenversatz ändert weder Abtrag noch Maße;
+auch vollständig unter Z = 0 entstehen vollwertige Keile statt Nullvolumen.
+
 `face_ops.py` — *Fläche versetzen* und *Formschräge anstellen* im Register,
 kernübergreifend wie `edge_ops.py`. **Und `push_face` hat dabei seinen
 Parameter gewechselt**: Es nahm eine Richtung und bewegte jede Fläche, die

@@ -229,13 +229,13 @@ def _border_edges(corners: np.ndarray) -> list[tuple[int, int]]:
 def draft_vertical(mesh: MeshData, angle_deg: float) -> BooleanOutcome:
     """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
 
-    Neutral bleibt die Standfläche auf ``z = 0``: Dort behält der Körper sein
+    Neutral bleibt die Unterkante des Körpers: Dort behält der Körper sein
     Maß, nach oben wird er schmaler. Wörtlich dieselbe Zusage wie im exakten
     Kern (``brep.profiles.draft_vertical``), damit dieselbe Menüzeile an
     beiden Körperarten dasselbe bedeutet.
 
     Gebaut wird je Wand ein **Keil**: das Prisma über ihren Dreiecken, dessen
-    Deckel mit der Höhe nach innen wandert (``tan(Winkel)·z``). Alle Keile zusammen
+    Deckel mit der Höhe über der Unterkante nach innen wandert. Alle Keile zusammen
     werden in einem Zug abgezogen; an den Ecken überlappen sie sich, und genau
     das ist der Grund für den einen Zug — die Überlappung löst die Boolesche
     Rechnung, und niemand muss die Ecke eigens ausrechnen.
@@ -251,11 +251,12 @@ def draft_vertical(mesh: MeshData, angle_deg: float) -> BooleanOutcome:
         raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
 
     slope = math.tan(math.radians(angle_deg))
+    bottom = mesh.bounds.minimum[2]
     tools: list[MeshData] = []
     for triangles, normal in upright:
 
         def _wedge(points: np.ndarray, normal: np.ndarray = normal) -> np.ndarray:
-            return -np.outer(np.maximum(points[:, 2], 0.0) * slope, normal)
+            return -np.outer(np.maximum(points[:, 2] - bottom, 0.0) * slope, normal)
 
         tools.append(_prism_from(mesh, triangles, _wedge))
 
