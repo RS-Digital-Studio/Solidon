@@ -39,7 +39,7 @@ nimmt es `logging` direkt.
 | Ordner | Inhalt |
 |---|---|
 | `core/` | Der kopflose Kern — eigene `CLAUDE.md`, dort geht die Pyramide weiter |
-| `ui/` | PySide6-Oberfläche, 55 Module |
+| `ui/` | PySide6-Oberfläche |
 | `cli/` | Kommandozeile auf demselben Kern |
 | `i18n/` | Übersetzung, `locales/` trägt die fünf Katalogdateien |
 | `images/` | Bildschirmfotos fürs Handbuch, je Sprache ein Ordner — **erzeugt**, nicht von Hand gepflegt (`tools/make_figures.py`) |

@@ -32,7 +32,7 @@ apply.py      annehmen oder verwerfen — beides vollständig
 
 | Datei | Rolle |
 |---|---|
-| `session.py` | Ein Zug, von der Anfrage zum Vorschlag (§26.5) — 900 Zeilen |
+| `session.py` | Ein Zug, von der Anfrage zum Vorschlag (§26.5) |
 | `context.py` | Was der Agent zu sehen bekommt (§26.1) |
 | `prompt.py` | Der Systemprompt (§26.1, §39) |
 | `tools.py` | Was er tun kann (§26.2) |
