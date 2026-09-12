@@ -12,6 +12,7 @@ from shapely.geometry import box
 from app.core.export import handover
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
+from app.i18n import TranslatableText
 
 BED = "; printable_area = 0x0,100x0,100x100,0x100\n"
 EXCLUSION = "; bed_exclude_area = 40x40,60x40,60x60,40x60\n"
@@ -30,6 +31,9 @@ def test_a_line_crossing_an_exclusion_is_found_even_with_endpoints_outside_it() 
     assert finding.code == "gcode.off_the_bed"
     assert finding.values["axis"] == "XY"
     assert finding.source == "gcode"
+    reason = finding.values["reason"]
+    assert isinstance(reason, TranslatableText)
+    assert reason.translate("de") == "Druckfläche"
 
 
 @pytest.mark.parametrize("arc", ["G2", "G3"])

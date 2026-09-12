@@ -15,6 +15,7 @@ from app.core.export import threemf as writer
 from app.core.geom.mesh import MeshData
 from app.core.ingest import threemf as reader
 from app.core.types import MaterialSlot
+from app.i18n import TranslatableText
 
 
 def _parts() -> list[writer.AssemblyPart]:
@@ -115,12 +116,22 @@ def test_native_face_paint_overrides_object_tool(prusa: bool) -> None:
     assert [slot.colour for slot in part.slots] == [(1.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
 
 
-@pytest.mark.parametrize("paint", ["841", "ZZ", "9C"])
-def test_unrepresentable_native_paint_stops_before_losing_colours(paint: str) -> None:
+@pytest.mark.parametrize(
+    ("paint", "reason"),
+    [
+        ("841", "Teilflächenbemalung oder nicht unterstützte Flächenzuordnung"),
+        ("ZZ", "Ungültige Flächenbemalung"),
+        ("9C", "Werkzeugnummer außerhalb der Filamentpalette"),
+    ],
+)
+def test_unrepresentable_native_paint_stops_before_losing_colours(paint: str, reason: str) -> None:
     with pytest.raises(ValidationError) as caught:
         reader.read_objects(_native(paint=paint))
     assert caught.value.constraint == "unsupported_material_semantics"
     assert caught.value.suggestions
+    detail = caught.value.values["reason"]
+    assert isinstance(detail, TranslatableText), "eigene Fehlergründe bleiben übersetzbar"
+    assert detail.translate("de") == reason
 
 
 def _changed(payload: bytes, replacements: dict[str, bytes]) -> bytes:

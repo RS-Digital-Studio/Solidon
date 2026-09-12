@@ -2427,7 +2427,7 @@ def off_the_bed(
                 "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine "
                 "Sperrfläche. Prüfen Sie das Druckerprofil und die Anordnung im Slicer."
             ),
-            values={"axis": "XY", "reason": "printable_area"},
+            values={"axis": "XY", "reason": _("Druckfläche")},
             source="gcode",
         )
     return Finding(

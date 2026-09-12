@@ -37,7 +37,7 @@ from app.core.errors import CANCEL, SPLIT_BY_FILAMENT, Action, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot, ProgressFn
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -76,7 +76,7 @@ class _NativeMaterials:
     volumes: dict[str, list[tuple[int, int, int]]] = field(default_factory=dict)
 
 
-def _unsupported_materials(reason: str) -> ValidationError:
+def _unsupported_materials(reason: TranslatableText | str) -> ValidationError:
     """Keine Teilflächen oder mehrdeutigen Werkzeugangaben still verlieren."""
     return ValidationError(
         field="file",
@@ -114,7 +114,7 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
     kinds = values.get("filament_type", [])
     titles = values.get("filament_settings_id", [])
     if not isinstance(colours, list) or not all(isinstance(c, str) for c in colours):
-        raise _unsupported_materials("invalid filament_colour")
+        raise _unsupported_materials(_("Ungültige Filamentfarbliste"))
     result.palette = tuple(
         MaterialSlot(
             index=index,
@@ -144,25 +144,27 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
             tool = _native_tool(obj)
             if tool is not None:
                 if identifier in result.objects and result.objects[identifier] != tool:
-                    raise _unsupported_materials("conflicting object extruders")
+                    raise _unsupported_materials(
+                        _("Widersprüchliche Werkzeugzuordnungen für dasselbe Objekt")
+                    )
                 result.objects[identifier] = tool
             for part in obj.findall("part"):
                 if part.get("subtype", "normal_part") != "normal_part":
-                    raise _unsupported_materials("non-model part")
+                    raise _unsupported_materials(_("Teilbereich ist kein druckbares Modellteil"))
                 part_tool = _native_tool(part)
                 if part_tool is not None:
                     result.parts[identifier, part.get("id", "")] = part_tool
             for volume in obj.findall("volume"):
                 kind = volume.find("metadata[@key='volume_type']")
                 if kind is not None and kind.get("value") != "ModelPart":
-                    raise _unsupported_materials("non-model volume")
+                    raise _unsupported_materials(_("Volumenbereich ist kein druckbares Modellteil"))
                 volume_tool = _native_tool(volume)
                 if volume_tool is not None:
                     try:
                         first = int(volume.get("firstid", ""))
                         last = int(volume.get("lastid", ""))
                     except ValueError as problem:
-                        raise _unsupported_materials("invalid volume range") from problem
+                        raise _unsupported_materials(_("Ungültiger Dreiecksbereich")) from problem
                     result.volumes.setdefault(identifier, []).append((first, last, volume_tool))
     return result
 
@@ -175,13 +177,13 @@ def _native_tool(node: ET.Element) -> int | None:
         try:
             value = int(entry.get("value", ""))
         except ValueError as problem:
-            raise _unsupported_materials("invalid extruder") from problem
+            raise _unsupported_materials(_("Ungültige Werkzeugnummer")) from problem
         if value < 0:
-            raise _unsupported_materials("negative extruder")
+            raise _unsupported_materials(_("Negative Werkzeugnummer"))
         if value:
             found.add(value - 1)
     if len(found) > 1:
-        raise _unsupported_materials("conflicting extruders")
+        raise _unsupported_materials(_("Widersprüchliche Werkzeugnummern"))
     return next(iter(found), None)
 
 
@@ -192,11 +194,13 @@ def _paint_tool(value: str) -> int | None:
     braucht höchstens drei Ziffern; echte Teilflächen werden hier nicht geraten.
     """
     if len(value) not in (1, 2, 3):
-        raise _unsupported_materials("split or unsupported face paint")
+        raise _unsupported_materials(
+            _("Teilflächenbemalung oder nicht unterstützte Flächenzuordnung")
+        )
     try:
         digits = [int(char, 16) for char in value]
     except ValueError as problem:
-        raise _unsupported_materials("invalid face paint") from problem
+        raise _unsupported_materials(_("Ungültige Flächenbemalung")) from problem
     if len(digits) == 1 and digits[0] in (0, 4, 8):
         state = digits[0] >> 2
     elif len(digits) == 2 and digits[-1] == 12 and digits[0] < 15:
@@ -204,9 +208,11 @@ def _paint_tool(value: str) -> int | None:
     elif len(digits) == 3 and digits[1:] == [15, 12]:
         state = digits[0] + 18
     else:
-        raise _unsupported_materials("split or unsupported face paint")
+        raise _unsupported_materials(
+            _("Teilflächenbemalung oder nicht unterstützte Flächenzuordnung")
+        )
     if state > NATIVE_TOOL_LIMIT:
-        raise _unsupported_materials("unsupported native filament number")
+        raise _unsupported_materials(_("Nicht unterstützte Filamentnummer"))
     return state - 1 if state else None
 
 
@@ -751,10 +757,10 @@ def _native_groups_of(leaf: _Leaf) -> Groups | None:
     covered: set[int] = set()
     for first, last, tool in leaf.volumes:
         if first < 0 or last < first or last >= len(triangles):
-            raise _unsupported_materials("volume range outside mesh")
+            raise _unsupported_materials(_("Dreiecksbereich liegt außerhalb des Netzes"))
         for index in range(first, last + 1):
             if index in covered:
-                raise _unsupported_materials("overlapping volumes")
+                raise _unsupported_materials(_("Überlappende Dreiecksbereiche"))
             covered.add(index)
             tools[index] = tool
     for index, face in enumerate(triangles):
@@ -768,7 +774,7 @@ def _native_groups_of(leaf: _Leaf) -> Groups | None:
         }
         assigned = {_paint_tool(code) for code in codes}
         if len(assigned) > 1:
-            raise _unsupported_materials("conflicting native face colours")
+            raise _unsupported_materials(_("Widersprüchliche Farbzuordnungen auf derselben Fläche"))
         painted_tool = next(iter(assigned), None)
         if painted_tool is not None:
             tools[index] = painted_tool
@@ -777,7 +783,7 @@ def _native_groups_of(leaf: _Leaf) -> Groups | None:
             tools[index] = 0
     palette = leaf.native.palette
     if any(tool is None or tool < 0 or tool >= len(palette) for tool in tools):
-        raise _unsupported_materials("extruder outside filament palette")
+        raise _unsupported_materials(_("Werkzeugnummer außerhalb der Filamentpalette"))
     used = sorted({int(tool) for tool in tools if tool is not None})
     order = {tool: index for index, tool in enumerate(used)}
     return Groups(
