@@ -90,6 +90,11 @@ sofort und nach einem Neustart wieder her; erneutes Speichern oder Exportieren
 macht daraus keinen eigenen Baustein. Ein gleichnamiger eigener Baustein wird
 nicht still ersetzt; dieser Konflikt gehört sichtbar in den Importablauf.
 
+Dateiablehnungen bewahren ihren konkreten, fest übersetzten Prüfgrund.
+Fremde Kennungen werden weiterhin aus dem öffentlichen Fehlerpfad entfernt;
+Dateiinhalte werden nicht in den Erklärungssatz übernommen. Allgemeine Sätze
+dienen nur als Rückfall, wenn ein Aufrufer keinen Prüfgrund mitgibt.
+
 Eine Rezeptdatei wird zuerst vollständig in eine Tempdatei ihres Zielordners
 geschrieben und synchronisiert. Erst danach wird sie atomar veröffentlicht:
 beim Import ohne Überschreiben, beim ausdrücklichen Ersetzen per Replace. Die

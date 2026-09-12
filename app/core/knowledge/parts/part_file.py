@@ -1516,22 +1516,24 @@ class PartFileIO:
             )
 
     def _recipe_error(
-        self, detail: Any, *, field: str = "recipe", **values: Any
+        self, detail: TranslatableText | None = None, *, field: str = "recipe", **values: Any
     ) -> ValidationError:
+        """Bewahrt den eigenen Prüfsatz; fremde Kennungen bleiben aus dem Fehlerpfad."""
         field = self._public_error_field(field)
-        if field == "name":
-            detail = _("Der Name kann nicht verwendet werden. Wählen Sie einen anderen Namen.")
-        elif "source" in field or "payload" in field:
-            detail = _(
-                "Dieser Baustein kann nicht hinzugefügt werden, weil die Datei nicht "
-                "alle benötigten Daten sicher enthält. Wählen Sie eine andere Datei."
-            )
-        else:
-            detail = _(
-                "Dieser Baustein kann nicht hinzugefügt werden, weil seine Datei "
-                "unvollständig oder nicht mit dieser Solidon-Version kompatibel ist. "
-                "Wählen Sie eine andere Datei."
-            )
+        if detail is None:
+            if field == "name":
+                detail = _("Der Name kann nicht verwendet werden. Wählen Sie einen anderen Namen.")
+            elif "source" in field or "payload" in field:
+                detail = _(
+                    "Dieser Baustein kann nicht hinzugefügt werden, weil die Datei nicht "
+                    "alle benötigten Daten sicher enthält. Wählen Sie eine andere Datei."
+                )
+            else:
+                detail = _(
+                    "Dieser Baustein kann nicht hinzugefügt werden, weil seine Datei "
+                    "unvollständig oder nicht mit dieser Solidon-Version kompatibel ist. "
+                    "Wählen Sie eine andere Datei."
+                )
         return ValidationError(
             field=field,
             detail=detail,

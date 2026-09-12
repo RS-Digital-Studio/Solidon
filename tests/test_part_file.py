@@ -1177,6 +1177,25 @@ def test_file_origin_is_closed_and_strict(
     assert raised.value.suggestions
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "reason"),
+    [
+        ("group", "private_unknown_group", "Die Gruppe des Rezepts ist ungültig."),
+        ("license", "private_unknown_license", "Die Lizenz des Rezepts ist ungültig."),
+    ],
+)
+def test_a_recipe_error_names_its_specific_static_reason(
+    part_payload: bytes, field: str, value: object, reason: str
+) -> None:
+    """Der eigene Prüfsatz bleibt sichtbar, ohne fremde Werte einzusetzen."""
+    data = json.loads(part_payload)
+    data[field] = value
+    with pytest.raises(ValidationError) as caught:
+        PartFileIO().validate(json.dumps(data).encode())
+    assert str(caught.value.detail) == reason
+    assert caught.value.suggestions
+
+
 def test_unknown_operations_and_code_shaped_data_are_rejected(part_payload: bytes) -> None:
     data = json.loads(part_payload)
     data["document"]["ops"][0]["op"] = "execute_foreign_code"
