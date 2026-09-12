@@ -131,6 +131,26 @@ nicht übertragen. Ein abweichender absoluter Serverpfad wird ausschließlich
 über `SOLIDON_STATS_ACCESS_FILE` gesetzt. Fehlt die Datei oder sind Lage oder
 Rechte zu weit, bleibt `api/stats.php` mit einer generischen 503-Antwort zu.
 
+Der Statistikzugang wird ausdrücklich **manuell per FTPS** übertragen:
+
+1. Im Domainordner `solidon3d.de` den privaten Nachbarordner `appdata`
+   anlegen, falls er fehlt, und **vor** der Übertragung mit
+   `SITE CHMOD 700 appdata` schließen. Bei einem Fehler anhalten.
+2. In `appdata` wechseln und die lokale `appdata/stats-access.php` unter
+   dem freien Namen `.stats-access.php.tmp` hochladen. Eine vorhandene
+   temporäre Datei zuerst zuordnen; keinen fremden Upload überschreiben.
+3. `SITE CHMOD 600 .stats-access.php.tmp` ausführen, die Datei per FTPS
+   zurücklesen und bytegenau mit der lokalen Datei vergleichen. Bei einer
+   Abweichung bleibt der bisherige Zugang bestehen; die eigene temporäre
+   Datei entfernen und den Upload wiederholen.
+4. Erst nach erfolgreichem Vergleich die temporäre Datei per `RNFR`/`RNTO`
+   in `stats-access.php` umbenennen, die Rechte erneut mit `LIST` prüfen und
+   die Anmeldung an `api/stats.php` testen. Schlägt die Umbenennung fehl,
+   den alten Zugang erhalten und die Serverrechte prüfen.
+
+Diese Schritte führt `make_stats_access.py` nicht selbst aus; seine
+Erfolgsmeldung bestätigt ausschließlich die lokale Datei.
+
 Die öffentlichen Ratenkennungen unterscheiden `rate_limit_client` (zu viele
 Anfragen eines Anschlusses) und `rate_limit_global` (Gesamtgrenze des Dienstes),
 beide im rollierenden 900-Sekunden-Fenster, von `rate_limit_daily` (fünf neu

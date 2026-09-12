@@ -26,8 +26,10 @@ der Befehlsgeschichte. An PHP geht es über eine Umgebungsvariable und nicht
 sichtbar.
 
 Die Datei ist in ``.gitignore`` und wandert nie mit dem öffentlichen
-Website-Abgleich. Der private Deploymentweg legt sie serverseitig als
-``appdata/stats-access.php`` mit Rechten 0600 in einem Ordner mit 0700 ab.
+Website-Abgleich. Der Betreiber überträgt sie getrennt per FTPS nach
+``appdata/stats-access.php``. Vor dem Upload bekommt der Serverordner 0700,
+die zunächst temporäre Datei danach 0600. Der vollständige manuelle Ablauf
+mit Rücklesen und Umbenennen steht in ``website/README.md``.
 
 """
 
@@ -205,7 +207,11 @@ def main() -> int:
 
     print(f"Angelegt: {TARGET.relative_to(ROOT)}")
     print("Sie steht in .gitignore und gehört nicht in den öffentlichen Website-Abgleich.")
-    print("Der private Deploymentweg legt sie serverseitig unter appdata/stats-access.php ab.")
+    print("Jetzt getrennt per FTPS übertragen; der manuelle Ablauf steht in website/README.md.")
+    print("Vor dem Upload: SITE CHMOD 700 appdata im Domainordner.")
+    print("Im Ordner appdata zunächst als .stats-access.php.tmp hochladen,")
+    print("SITE CHMOD 600 .stats-access.php.tmp, zurücklesen und bytegenau vergleichen;")
+    print("erst danach in stats-access.php umbenennen und die Anmeldung prüfen.")
     return 0
 
 
