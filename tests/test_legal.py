@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -152,6 +153,33 @@ def test_the_selling_page_links_every_legal_text(page_name: str) -> None:
 
     missing = [name for name in REQUIRED_LINKS if f"/{name}" not in html]
     assert not missing, f"{page_name} verlinkt nicht: {', '.join(missing)}"
+
+
+def test_every_public_html_page_links_imprint_and_privacy() -> None:
+    """Auch ein direkter Aufruf einer Unterseite erreicht die Anbieterinformationen."""
+
+    class Links(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.targets: set[str] = set()
+            self.document = False
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "html":
+                self.document = True
+            if tag == "a":
+                self.targets.add(dict(attrs).get("href") or "")
+
+    pages = list(WEBSITE.rglob("*.html"))
+    assert pages
+    for page in pages:
+        links = Links()
+        links.feed(page.read_text(encoding="utf-8"))
+        if not links.document:
+            # Maschinenbelege wie Googles Domainprüfung sind keine Inhaltsseiten.
+            continue
+        links.targets.add("/" + page.relative_to(WEBSITE).as_posix())
+        assert {"/impressum.html", "/datenschutz.html"} <= links.targets, page
 
 
 def test_sale_texts_appear_with_the_first_price() -> None:

@@ -51,6 +51,8 @@ Katalogen unter `app/i18n/locales/`. Titel, Navigation, Sprunglinks,
 Inhaltsverzeichnis und PDF-Ränder werden nicht in `make_manual.py` je Sprache
 abgeschrieben. Damit erzeugt eine weitere vollständige Katalogdatei auch ihre
 vollständige Handbuchseite ohne deutschen Mischrahmen.
+Die Handbuch-Fußzeile hält Impressum und Datenschutz bei einem direkten
+Seitenaufruf erreichbar; ihre Texte kommen ebenfalls aus den Katalogen.
 
 ## Vier Dinge, die beim Ausliefern schiefgehen
 

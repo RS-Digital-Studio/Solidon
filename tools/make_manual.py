@@ -669,6 +669,15 @@ def _staged(match: re.Match[str]) -> str:
     return f'<figure class="screenshot"{limit}><div class="stage">{bild}</div>'
 
 
+def _footer(language: str) -> str:
+    """Die Rechtsinformationen bleiben auch bei einem direkten Handbuchaufruf erreichbar."""
+    links = " · ".join(
+        f'<a href="/{path}">{site_text(label, language)}</a>'
+        for path, label in (("impressum.html", "Impressum"), ("datenschutz.html", "Datenschutz"))
+    )
+    return f'<footer class="site no-print"><div class="wrap">{COPYRIGHT} · {links}</div></footer>'
+
+
 def page_html(language: str, prefix: str) -> str:
     body = _classify(
         manual.as_html(
@@ -736,7 +745,8 @@ def page_html(language: str, prefix: str) -> str:
         f"{anchored(body)}\n"
         # Der Zähler, wie auf jeder anderen Seite. Ohne ihn stand das
         # Handbuch in sechs Sprachen in keiner Statistik.
-        f'</main>\n<script src="/site.js" defer></script>\n</body>\n</html>\n'
+        f"</main>\n{_footer(language)}\n"
+        f'<script src="/site.js" defer></script>\n</body>\n</html>\n'
     )
 
 
