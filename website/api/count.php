@@ -727,10 +727,10 @@ function referrer_host(): string
         return '';
     }
 
-    // Der eigene Name ohne Port. ``HTTP_HOST`` trägt ihn mit, sobald der
-    // Server nicht auf 80 oder 443 hört — beim Ausprobieren auf dem eigenen
-    // Rechner ist das die Regel, und ohne diese Zeile zählte dort jeder
-    // Sprung von Seite zu Seite als Verweis von außen.
+    // Die eigene Produktionsdomain wird fest verglichen, mit oder ohne www.
+    // HTTP_HOST stammt aus der Anfrage und darf diese Grenze nicht verändern.
+    // Ein lokaler Prüfserver wird dadurch nicht als Produktionsdomain behandelt;
+    // seine Adresse bleibt gegebenenfalls ein externer Verweis.
     $bare = static fn (string $name): string => preg_replace('/^www\./', '', $name) ?? $name;
     if ($host === '' || $bare($host) === 'solidon3d.de') {
         return '';
