@@ -4370,7 +4370,7 @@
   "Weitere Operationen durchsuchen": "Rechercher d’autres opérations",
   "Weitere Spule": "Autre bobine",
   "Weiß": "Blanc",
-  "Welche Fläche wandert. Beim Anklicken steht sie hier; ohne Angabe gelten die Richtungsfelder, und dann wandert jede Fläche, die dorthin zeigt.": "Quelle face se déplace. Un clic l'inscrit ici ; sans indication, les champs de direction s'appliquent, et alors toute face pointant par là se déplace.",
+  "Welche Fläche wandert. Beim Anklicken steht sie hier. Ohne Angabe gilt nur an einem exakten Körper der ältere Richtungsweg: Dann wandert jede Fläche, deren Normale in die angegebene Richtung zeigt.": "La face à déplacer. Un clic sur une face la renseigne ici. Sans indication, l’ancienne méthode fondée sur la direction s’applique uniquement à un corps exact : chaque face dont la normale pointe dans la direction indiquée se déplace.",
   "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte.": "Quelles arêtes sont visées — verticales, horizontales, en haut, en bas, toutes, ou choisies une à une.",
   "Welche Maße soll man einstellen können?": "Quelles cotes doit-on pouvoir régler ?",
   "Welche Modelle Solidon benutzt": "Quels modèles Solidon utilise",

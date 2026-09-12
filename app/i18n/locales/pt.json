@@ -4370,7 +4370,7 @@
   "Weitere Operationen durchsuchen": "Pesquisar mais operações",
   "Weitere Spule": "Outra bobina",
   "Weiß": "Branco",
-  "Welche Fläche wandert. Beim Anklicken steht sie hier; ohne Angabe gelten die Richtungsfelder, und dann wandert jede Fläche, die dorthin zeigt.": "Que face se desloca. Ao clicar fica indicada aqui; sem indicação valem os campos de direção, e então desloca-se toda a face que aponte nesse sentido.",
+  "Welche Fläche wandert. Beim Anklicken steht sie hier. Ohne Angabe gilt nur an einem exakten Körper der ältere Richtungsweg: Dann wandert jede Fläche, deren Normale in die angegebene Richtung zeigt.": "Qual a face a deslocar. Ao clicar numa face, esta fica indicada aqui. Se o campo ficar vazio, o método anterior baseado na direção aplica-se apenas a um corpo exato: desloca-se cada face cuja normal aponta na direção indicada.",
   "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte.": "Que arestas se querem dizer — verticais, horizontais, em cima, em baixo, todas ou escolhidas uma a uma.",
   "Welche Maße soll man einstellen können?": "Que cotas devem poder ser ajustadas?",
   "Welche Modelle Solidon benutzt": "Que modelos o Solidon usa",

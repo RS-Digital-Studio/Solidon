@@ -50,9 +50,9 @@ class PushFaceParams(BaseParams):
         default="",
         kind="feature",
         doc=_(
-            "Welche Fläche wandert. Beim Anklicken steht sie hier; ohne Angabe "
-            "gelten die Richtungsfelder, und dann wandert jede Fläche, die "
-            "dorthin zeigt."
+            "Welche Fläche wandert. Beim Anklicken steht sie hier. Ohne Angabe "
+            "gilt nur an einem exakten Körper der ältere Richtungsweg: Dann "
+            "wandert jede Fläche, deren Normale in die angegebene Richtung zeigt."
         ),
     )
     nx: float = param(

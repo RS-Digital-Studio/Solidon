@@ -4370,7 +4370,7 @@
   "Weitere Operationen durchsuchen": "Search more operations",
   "Weitere Spule": "Another spool",
   "Weiß": "White",
-  "Welche Fläche wandert. Beim Anklicken steht sie hier; ohne Angabe gelten die Richtungsfelder, und dann wandert jede Fläche, die dorthin zeigt.": "Which face moves. Clicking one puts it here; without an entry the direction fields apply, and then every face pointing that way moves.",
+  "Welche Fläche wandert. Beim Anklicken steht sie hier. Ohne Angabe gilt nur an einem exakten Körper der ältere Richtungsweg: Dann wandert jede Fläche, deren Normale in die angegebene Richtung zeigt.": "Which face moves. Clicking a face fills this in. If left empty, the legacy direction-based method applies only to an exact body: every face whose normal points in the specified direction moves.",
   "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte.": "Which edges are meant — upright, level, top, bottom, all, or picked one by one.",
   "Welche Maße soll man einstellen können?": "Which dimensions should be adjustable?",
   "Welche Modelle Solidon benutzt": "Which models Solidon uses",

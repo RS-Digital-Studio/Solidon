@@ -4370,7 +4370,7 @@
   "Weitere Operationen durchsuchen": "Cerca altre operazioni",
   "Weitere Spule": "Altra bobina",
   "Weiß": "Bianco",
-  "Welche Fläche wandert. Beim Anklicken steht sie hier; ohne Angabe gelten die Richtungsfelder, und dann wandert jede Fläche, die dorthin zeigt.": "Quale faccia si sposta. Cliccandola viene indicata qui; senza indicazione valgono i campi di direzione, e allora si sposta ogni faccia che punti in quel verso.",
+  "Welche Fläche wandert. Beim Anklicken steht sie hier. Ohne Angabe gilt nur an einem exakten Körper der ältere Richtungsweg: Dann wandert jede Fläche, deren Normale in die angegebene Richtung zeigt.": "Quale faccia si sposta. Facendo clic su una faccia, questa viene indicata qui. Se il campo è vuoto, il metodo precedente basato sulla direzione si applica solo a un corpo esatto: si sposta ogni faccia la cui normale punta nella direzione indicata.",
   "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte.": "Quali spigoli si intendono — verticali, orizzontali, sopra, sotto, tutti oppure scelti uno per uno.",
   "Welche Maße soll man einstellen können?": "Quali quote devono poter essere regolate?",
   "Welche Modelle Solidon benutzt": "Quali modelli usa Solidon",
