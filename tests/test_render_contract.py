@@ -445,8 +445,8 @@ def test_camera_pose_projection_and_dolly(renderer: Renderer) -> None:
 def test_quality_switches_and_the_axes_marker_survive_without_a_window(
     renderer: Renderer,
 ) -> None:
-    """FXAA und SSAO laufen ohne Fenster durch; das Achsenkreuz braucht einen
-    Interactor und bleibt ohne Fenster still — kein Absturz, kein Bild."""
+    """Kantenglättung (DDAA), Umgebungsverdeckung und Achsenkreuz laufen auch
+    ohne Fenster durch."""
     vertices, faces = cube()
     renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
     look_down(renderer, (0.0, 20.0, 0.0, 20.0, 0.0, 20.0))

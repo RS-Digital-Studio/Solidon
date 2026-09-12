@@ -124,8 +124,9 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   durchscheinende Flächen behalten ihre gewichtete Mischung und Tiefenprüfung.
   Der Effekt arbeitet vor der abschließenden Kantenglättung. Seine Texturen
   gehören pygfx und folgen dessen Fenstergröße; es gibt keine Bildkopie zur
-  CPU. AO-aus hängt den eigenen Pass ab, FXAA-aus entfernt seine tatsächliche
-  Stufe. Beim Schließen werden auch abgehängte Passressourcen im noch
+  CPU. AO-aus hängt den eigenen Pass ab; ausgeschaltete Kantenglättung
+  (`ppaa`, pygfx' DDAA) entfernt ihre tatsächliche Stufe. Beim Schließen werden
+  auch abgehängte Passressourcen im noch
   lebenden Kontext freigegeben. Tiefenwerte, Auswahl und Beschriftungen
   bleiben außerhalb dieser Farbkorrektur.
 * **Was vorn gezeichnet wird, wird vorn gepickt.** `keep_in_front` heißt

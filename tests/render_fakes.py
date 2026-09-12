@@ -425,7 +425,7 @@ class BrokenDriverRenderer(RecordingRenderer):
     """
 
     def set_anti_aliasing(self, enabled: bool) -> None:
-        raise RuntimeError("kein FXAA auf diesem Treiber")
+        raise RuntimeError("keine Kantenglättung auf diesem Treiber")
 
     def set_ambient_occlusion(self, enabled: bool, *, radius: float, bias: float) -> None:
         raise RuntimeError("kein SSAO auf diesem Treiber")
