@@ -826,56 +826,41 @@ function activation_seed(): string
     return $seed;
 }
 
-/** Begrenzt gültig signierte Aktivierungsversuche auf fünf je UTC-Tag. */
+/** Zählt neue Geräteplätze innerhalb der Vergabetransaktion, höchstens fünf je UTC-Tag. */
 function activation_consume_rate(PDO $database, string $digest): void
 {
     $day = gmdate('Y-m-d');
-    try {
-        $database->exec('BEGIN IMMEDIATE');
-        // Der Zähler schützt nur den laufenden UTC-Tag. Ältere Zeilen würden
-        // weder die Entscheidung verändern noch dem Kunden helfen; der
-        // nächste gültige Aktivierungsversuch räumt sie deshalb gemeinsam ab.
-        $purge = $database->prepare('DELETE FROM activation_attempts WHERE day < ?');
-        $purge->execute([$day]);
-        $insert = $database->prepare(
-            'INSERT OR IGNORE INTO activation_attempts(licence_digest, day, attempts) VALUES(?, ?, 0)'
-        );
-        $insert->execute([$digest, $day]);
-        $select = $database->prepare(
-            'SELECT attempts FROM activation_attempts WHERE licence_digest = ? AND day = ?'
-        );
-        $select->execute([$digest, $day]);
-        if ((int) $select->fetchColumn() >= 5) {
-            throw new ActivationFailure(
-                'Für diesen Lizenzschlüssel gab es heute zu viele Aktivierungsversuche.',
-                429,
-                'rate_limit'
-            );
-        }
-        $update = $database->prepare(
-            'UPDATE activation_attempts SET attempts = attempts + 1 '
-            . 'WHERE licence_digest = ? AND day = ?'
-        );
-        $update->execute([$digest, $day]);
-        activation_commit($database);
-    } catch (ActivationFailure $problem) {
-        activation_rollback($database);
-        throw $problem;
-    } catch (Throwable $problem) {
-        activation_rollback($database);
+    // Der Zähler schützt nur den laufenden UTC-Tag. Ältere Zeilen würden
+    // weder die Entscheidung verändern noch dem Kunden helfen; der
+    // nächste neu vergebene Geräteplatz räumt sie deshalb gemeinsam ab.
+    $purge = $database->prepare('DELETE FROM activation_attempts WHERE day < ?');
+    $purge->execute([$day]);
+    $insert = $database->prepare(
+        'INSERT OR IGNORE INTO activation_attempts(licence_digest, day, attempts) VALUES(?, ?, 0)'
+    );
+    $insert->execute([$digest, $day]);
+    $select = $database->prepare(
+        'SELECT attempts FROM activation_attempts WHERE licence_digest = ? AND day = ?'
+    );
+    $select->execute([$digest, $day]);
+    if ((int) $select->fetchColumn() >= 5) {
         throw new ActivationFailure(
-            'Die Aktivierung konnte gerade nicht geprüft werden. Versuchen Sie es später erneut.',
-            503,
-            'service_unavailable'
+            'Für diesen Lizenzschlüssel wurden heute bereits fünf Geräteplätze vergeben.',
+            429,
+            'rate_limit'
         );
     }
+    $update = $database->prepare(
+        'UPDATE activation_attempts SET attempts = attempts + 1 '
+        . 'WHERE licence_digest = ? AND day = ?'
+    );
+    $update->execute([$digest, $day]);
 }
 
 /** Vergibt idempotent den einzigen aktiven Geräteplatz und signiert ihn. */
 function activation_issue(array $request): string
 {
     $database = activation_database();
-    activation_consume_rate($database, $request['digest']);
     $deviceHex = bin2hex($request['device_public']);
     $today = gmdate('Y-m-d');
     try {
@@ -904,6 +889,7 @@ function activation_issue(array $request): string
             );
         }
         if ($active === false) {
+            activation_consume_rate($database, $request['digest']);
             $active = [
                 'id' => bin2hex(random_bytes(16)),
                 'device_public' => $deviceHex,

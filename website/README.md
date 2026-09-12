@@ -99,8 +99,10 @@ SOLIDON_ACTIVATION_MAJOR=1
 ```
 
 Die Bereitschaftsprobe öffnet die Datenbank nur lesend und legt weder Datei
-noch Tabellen an. Gültig signierte Aktivierungsversuche sind je Schlüssel auf
-fünf pro UTC-Tag begrenzt. Daneben begrenzt ein zweckgetrenntes
+noch Tabellen an. Je Schlüssel werden höchstens fünf neue Geräteplätze pro
+UTC-Tag vergeben. Zähler und Geräteplatz werden in derselben Transaktion
+gespeichert; abgewiesene Anfragen, das erneute Abrufen eines bestehenden
+Zertifikats und Deaktivierungen verbrauchen keinen Tagesplatz. Daneben begrenzt ein zweckgetrenntes
 HMAC-Pseudonym der IP-Adresse Anfragen für 900 Sekunden; die IP-Adresse selbst
 steht nicht in der Anwendungsdatei. Der unten beschriebene minütliche
 Wartungslauf bereinigt diese kurzlebigen Zustände auch ohne einen weiteren

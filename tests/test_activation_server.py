@@ -215,13 +215,6 @@ def test_php_issues_one_idempotent_device_certificate(
         )
         assert first.device_name == "Ä" * 80, "80 Unicode-Zeichen sind nicht 160 Bytes"
 
-        with contextlib.closing(sqlite3.connect(database)) as stored:
-            stored.execute(
-                "INSERT INTO activation_attempts(licence_digest, day, attempts) "
-                "VALUES('veraltet', '2000-01-01', 3)"
-            )
-            stored.commit()
-
         again_status, again_answer = _post(url, request_text)
         assert again_status == 200, again_answer
         again = certificate.parse_certificate(
@@ -232,16 +225,17 @@ def test_php_issues_one_idempotent_device_certificate(
         )
         assert again.activation_id == first.activation_id, "Wiederholen belegt keinen zweiten Platz"
         with contextlib.closing(sqlite3.connect(database)) as stored:
-            assert stored.execute(
-                "SELECT COUNT(*) FROM activation_attempts WHERE day < date('now')"
-            ).fetchone() == (0,), "ein Tageslimit ist kein unbegrenztes Nutzungsprotokoll"
+            assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(1,)]
 
         second_keyring = _MemoryKeyring()
         monkeypatch.setattr(device, "_load_keyring", lambda: second_keyring)
         other_request = certificate.create_request(licence_text, "Laptop")
-        refused_status, refused_answer = _post(url, other_request)
-        assert refused_status == 409
-        assert json.loads(refused_answer)["code"] == "device_limit"
+        for _attempt in range(5):
+            refused_status, refused_answer = _post(url, other_request)
+            assert refused_status == 409, refused_answer
+            assert json.loads(refused_answer)["code"] == "device_limit"
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(1,)]
 
         forged_payload = json.dumps(
             {
@@ -287,6 +281,25 @@ def test_php_issues_one_idempotent_device_certificate(
         assert json.loads(repeated_answer) == {"ok": True}
 
         monkeypatch.setattr(device, "_load_keyring", lambda: second_keyring)
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            stored.execute(
+                "INSERT INTO activation_attempts(licence_digest, day, attempts) "
+                "VALUES('veraltet', '2000-01-01', 3)"
+            )
+            stored.execute(
+                "CREATE TRIGGER reject_activation BEFORE INSERT ON activations "
+                "BEGIN SELECT RAISE(FAIL, 'test'); END"
+            )
+            stored.commit()
+
+        failed_status, failed_answer = _post(url, other_request)
+        assert failed_status == 503, failed_answer
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            assert stored.execute(
+                "SELECT attempts FROM activation_attempts WHERE day = date('now')"
+            ).fetchall() == [(1,)], "Speicherfehler darf keinen Tagesplatz verbrauchen"
+            stored.execute("DROP TRIGGER reject_activation")
+            stored.commit()
         second_status, second_answer = _post(url, other_request)
         assert second_status == 200, second_answer
         second = certificate.parse_certificate(
@@ -297,9 +310,43 @@ def test_php_issues_one_idempotent_device_certificate(
         )
         assert second.activation_id != first.activation_id
 
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(2,)]
+
+        # Drei weitere Freigaben füllen das Tageskontingent. Eine Wiederholung
+        # liefert auch danach das bestehende Zertifikat, ein neuer Platz nicht.
+        current = second
+        for _attempt in range(3):
+            release = certificate.create_deactivation(licence_text, current)
+            released, release_answer = _post(
+                f"http://127.0.0.1:{port}/api/deactivation.php", release
+            )
+            assert released == 200, release_answer
+            issued, issued_answer = _post(url, other_request)
+            assert issued == 200, issued_answer
+            current = certificate.parse_certificate(
+                issued_answer,
+                licence,
+                device.ensure_public_key(),
+                activation_public_key=activation_public,
+            )
+        repeated, repeated_answer = _post(url, other_request)
+        assert repeated == 200, repeated_answer
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(5,)]
+        released, release_answer = _post(
+            f"http://127.0.0.1:{port}/api/deactivation.php",
+            certificate.create_deactivation(licence_text, current),
+        )
+        assert released == 200, release_answer
         limited_status, limited_answer = _post(url, other_request)
         assert limited_status == 429, limited_answer
         assert json.loads(limited_answer)["code"] == "rate_limit"
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(5,)]
+            assert stored.execute(
+                "SELECT COUNT(*) FROM activations WHERE deactivated_at IS NULL"
+            ).fetchone() == (0,)
     finally:
         process.terminate()
         process.wait(timeout=5)
@@ -441,6 +488,8 @@ def test_private_operator_path_manages_one_licence_and_records_every_change(
         blocked_activation, blocked_activation_answer = _post(activation_url, activation_request)
         assert blocked_activation == 403, blocked_activation_answer
         assert json.loads(blocked_activation_answer)["code"] == "licence_blocked"
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(1,)]
 
         for action in ("unblock", "release", "reset_attempts"):
             status, answer = _operator_post(
