@@ -51,7 +51,7 @@ from app.core.geom.mesh import (
 )
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.prepare import shortest_slot
-from app.core.geom.section import SectionPlane, cut, plane_patch
+from app.core.geom.section import SectionPlane, clip_triangles, cut, plane_patch
 from app.core.geom.transform import (
     Axis,
     TransformSteps,
@@ -165,6 +165,14 @@ FLIGHT_KEYS: Final[dict[str, dict[str, float]]] = {
     "d": {"x": 1.0},
     "q": {"rx": 1.0},
     "e": {"rx": -1.0},
+}
+#: Dieselben Tasten, wie Qt sie in ``QKeyEvent.key()`` nennt — der Weg, auf
+#: dem Drücken und Loslassen erkannt werden. ``text()`` taugt dafür nicht:
+#: Bei gehaltenem Strg trägt es das Steuerzeichen (``'\x17'`` für W), und wer
+#: W hält, Strg dazunimmt und W loslässt, käme damit nie an ``discard`` vorbei
+#: — die Ansicht flöge weiter, bis der Fokus wechselt.
+_FLIGHT_BY_QT_KEY: Final[dict[int, str]] = {
+    int(getattr(Qt.Key, f"Key_{letter.upper()}")): letter for letter in FLIGHT_KEYS
 }
 #: Takt des Fluges in Millisekunden — derselbe wie bei der 3D-Maus (~60 Hz).
 #:
@@ -1822,12 +1830,6 @@ def unavailable_hint(system: str = "") -> str:
     )
 
 
-def _hex(colour: tuple[float, float, float]) -> str:
-    """Eine Slotfarbe (0 bis 1 je Kanal, §20) als Hexwert für den Renderer."""
-    red, green, blue = (round(max(0.0, min(1.0, part)) * 255) for part in colour)
-    return f"#{red:02x}{green:02x}{blue:02x}"
-
-
 def source_colours(mesh: Any, face_count: int) -> Any | None:
     """Darstellungsfarben einer importierten Datei als RGB-Zellenwerte.
 
@@ -2408,7 +2410,7 @@ GIZMO_LINE_RADIUS = 0.035
 #: Schaft. Wie viele Bildpunkte daraus werden, entscheidet der Zoom.
 #:
 #: Achtzig ist doppelt so viel, wie der Kommentar an :data:`GIZMO_SCALE` als
-#: „zu klein" nennt (vierzig), und liegt in der Grössenordnung des räumlichen
+#: „zu klein" nennt (vierzig), und liegt in der Größenordnung des räumlichen
 #: Ziehgriffs (:data:`PULL_HANDLE_PIXELS`, 38 — dort ist es allerdings die
 #: **halbe** Länge, gemessen vom Mittelpunkt).
 GIZMO_LEAST_PIXELS = 80.0
@@ -2436,7 +2438,7 @@ def movable_feature_kinds() -> frozenset[str]:
     vorgeführt.** Er nannte „heute ``hole`` und ``pin``" und führte Kuppe und
     Kugel als gesperrt; gemessen am selben Nachmittag deckt ``move_feature``
     ``hole``, ``pin``, ``cone`` und ``sphere``, ``rotate_feature`` die ersten
-    drei (der Kugel fehlt eine Lage, die sich drehen liesse). Die Zahl war
+    drei (der Kugel fehlt eine Lage, die sich drehen ließe). Die Zahl war
     beim Aufschreiben richtig und drei Commits später falsch — genau deshalb
     steht sie hier als Beispiel und nicht als Bedingung.
 
@@ -3479,7 +3481,7 @@ class Viewport(QWidget):
     Die Zielmitte kommt **absolut** und nicht als Versatz, weil
     ``move_feature`` sie so verlangt und weil nur die Ansicht sie kennt: Sie
     hält das Merkmal in der Hand, das Fenster nicht. Ein Delta zu schicken
-    hiesse, die Mitte auf der anderen Seite noch einmal zu suchen."""
+    hieße, die Mitte auf der anderen Seite noch einmal zu suchen."""
     featureMoveProposed = Signal(str, object)
     """Ein Zug am Griff schlägt eine neue Mitte vor — Kennung und Zielmitte.
 
@@ -3959,7 +3961,13 @@ class Viewport(QWidget):
         angewandt wird."""
         self._gizmo_label_texts: list[str] = []
         self._face_actor: Any | None = None
+        """Die Scheibe, an der der Gizmo hängt, wenn eine Fläche gewählt ist."""
         self._ghost_actor: Any | None = None
+        """Der blasse Ring an der Ausgangsstelle, solange ein Merkmal gezogen wird.
+
+        Ohne ihn zeigt der Zug nur, **wohin** — nicht, von wo. Der Körper steht
+        währenddessen still (seine Geometrie ändert sich erst bei der
+        Auswertung), und damit sah es aus, als bewege sich gar nichts."""
         self._shape_actor: Any | None = None
         """Das Merkmal in seiner Gestalt — eigener Aktor, damit der Griff an der
         Öffnung bleibt und nicht am Schwerpunkt eines Zylinders.
@@ -3968,6 +3976,7 @@ class Viewport(QWidget):
         noch nicht gesetzten Bohrung zeigt. Dies hier ist ein **erkanntes**
         Merkmal, das gerade gewählt ist."""
         self._arc_actor: Any | None = None
+        """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet."""
         self._slot_turn_base: float | None = None
         """Die Richtung des Langlochgriffs, als der Zug am Ring begann.
 
@@ -3975,18 +3984,11 @@ class Viewport(QWidget):
         die Richtung des Langlochs ist dieser Winkel über der Richtung von
         vorher. Gemerkt beim ersten sichtbaren Stück des Zugs, vergessen mit
         seinem Ende (:meth:`_end_drag`)."""
-        """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet."""
         self._face_seat: tuple[tuple[float, ...], tuple[float, ...], float] | None = None
-        """Wo die letzte Merkmalsmarke sass und wie gross sie war.
+        """Wo die letzte Merkmalsmarke saß und wie groß sie war.
 
-        Der Geisterring braucht dieselbe Stelle und dasselbe Mass; zwei
+        Der Geisterring braucht dieselbe Stelle und dasselbe Maß; zwei
         Rechnungen dafür liefen beim nächsten Zuwachs auseinander."""
-        """Der blasse Ring an der Ausgangsstelle, solange ein Merkmal gezogen wird.
-
-        Ohne ihn zeigt der Zug nur, **wohin** — nicht, von wo. Der Körper steht
-        währenddessen still (seine Geometrie ändert sich erst bei der
-        Auswertung), und damit sah es aus, als bewege sich gar nichts."""
-        """Die Scheibe, an der der Gizmo hängt, wenn eine Fläche gewählt ist."""
         self._scale_handle: ScaleHandle | None = None
         """Der Würfel zum Skalieren (§18.11) — nur am Objekt-Gizmo. Eine
         Fläche kennt nur vor und zurück, sie hat keine Größe zu ändern."""
@@ -4013,6 +4015,12 @@ class Viewport(QWidget):
         wieder auf dem alten Loch, während die Felder rechts die neue Stelle
         nennen."""
         self._slot_handle: SlotHandle | None = None
+        self._slot_borrowed = False
+        """Ob der Langlochgriff nur für einen Druck am Loch geliehen ist
+        (:meth:`_pull_at_the_hole`). Dann geht er mit einem Loslassen ohne Zug
+        wieder ab — sonst blieben Scheibe, Vorschau und Knöpfe stehen, und der
+        nächste Druck am Loch verschöbe den Körper, weil der Zug am Loch auf
+        ``_slot_handle is None`` wartet."""
         """Die zwei Knöpfe, die ein Loch in die Länge ziehen (§21.1).
 
         Der Gegenpart des Würfels eine Ebene tiefer: Am ganzen Körper ändert
@@ -4481,14 +4489,6 @@ class Viewport(QWidget):
                 if not here.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents):
                     return False
                 here = here.parentWidget()
-        forward = getattr(renderer, "_pointer", None)
-        if not callable(forward):
-            return False
-        button = None
-        if kind in ("press", "release"):
-            from app.ui.render.gfx_renderer import _button_of
-
-            button = _button_of(event.button())
         moved = QMouseEvent(
             event.type(),
             QPointF(at),
@@ -4497,7 +4497,7 @@ class Viewport(QWidget):
             event.buttons(),
             event.modifiers(),
         )
-        forward(kind, moved, button)
+        renderer.deliver_pointer(kind, moved)
         return True
 
     def _on_pointer(self, event: PointerEvent) -> None:
@@ -4539,6 +4539,20 @@ class Viewport(QWidget):
             self._slot_handle,
         ):
             if handle is not None and handle.handle(event):
+                if (
+                    event.kind == "release"
+                    and handle is self._slot_handle
+                    and self._slot_borrowed
+                    and self._placement_pointer is None
+                ):
+                    # **Ein Klick ohne Zug am Loch gibt den Griff zurück.** Der
+                    # Griff kam für diesen einen Druck; ein echter Zug hat ihn
+                    # über ``_on_slot_released`` behalten, ein Zug zurück zum
+                    # Anfang ihn über den Abbruch abgeräumt. Was hier noch
+                    # geliehen ist, hat nichts vorgeschlagen — und stünde sonst
+                    # mit Scheibe, Vorschau und zwei Knöpfen ohne Buchstaben in
+                    # der Auswahlfarbe im Bild.
+                    self._on_slot_interaction_cancelled()
                 self._queue_feature_label_layout()
                 return
         if (
@@ -5344,12 +5358,28 @@ class Viewport(QWidget):
             may_decimate = not (self._map is not None and self._map_object == object_id)
             if mesh.triangle_count > DISPLAY_DECIMATION_ABOVE and may_decimate:
                 key = _display_key(object_id, mesh, result.object_hashes.get(object_id, ""))
-                found = self._display_cache.get(key)
+                # Lesen wie ``_for_display``: heraus und hinten wieder hinein,
+                # damit die Verdrängung in ``_apply_scene`` den am längsten
+                # nicht gebrauchten Eintrag trifft und nicht den zuerst
+                # eingefügten — sonst dezimierte ein Körper bei jedem
+                # Szenenaufbau neu, während ein selten gebrauchter blieb.
+                found = self._display_cache.pop(key, None)
                 if found is None:
                     cache_key = key
                     heavy = True
                 else:
+                    self._display_cache[key] = found
                     mesh = found
+            if cache_key is not None or plane is not None:
+                # **Der Arbeiter bekommt eine eigene Kopie.** Bis sein Ergebnis
+                # da ist, bleibt ``self._result`` die alte Auswertung, und die
+                # trägt für unveränderte Körper dasselbe ``MeshData`` wie die
+                # neue — der Hauptthread liest daran weiter (Hüllquader beim
+                # Zeigerhalt, Normalen beim Merkmalsfleck), während ``cut`` und
+                # ``decimate`` im Nebenthread dieselben trägen trimesh-Caches
+                # füllen. Der Cache ist nicht threadsicher; die Kopie kostet
+                # einen Bruchteil der Dezimierung und trennt die beiden.
+                mesh = _detached(mesh)
             tasks.append((object_id, mesh, cache_key))
         return (tasks, plane, second) if heavy else None
 
@@ -5540,7 +5570,7 @@ class Viewport(QWidget):
         self._actor_scene = result
         # **Und mit ihnen die gemerkten Farben.** Ein neuer Aktor kommt grau
         # aus der Geometrie; stünde hier noch der Stand von vorhin, hielte
-        # `_apply_selection_colour` die Auswahl für unverändert und **liesse
+        # `_apply_selection_colour` die Auswahl für unverändert und **ließe
         # den gewählten Körper grau** — die Auswahl verschwände beim
         # Neuzeichnen aus dem Bild, ohne dass sich an ihr etwas geändert hat.
         # Eine laufende Blende gehört ebenfalls zu Aktoren, die es nicht mehr
@@ -5925,7 +5955,7 @@ class Viewport(QWidget):
             slot = known.get(index)
             colour = slot.colour if slot is not None else None
             if colour is not None:
-                table.append(_hex(colour))
+                table.append(hex_of(colour))
                 continue
             table.append(slot_colour(index) or self._object_colour)
         # **Gefragt wird der Slot mit dem Index null, nicht der zuerst
@@ -6767,8 +6797,10 @@ class Viewport(QWidget):
         # Szenenfarbe zu machen, hieße denselben Wert zweimal zu benennen.
         exact = THEMES["light" if theme == "light" else "dark"]
         # Gegen den Verlauf trägt ``grid_minor`` nicht zuverlässig. Beide
-        # Rasterstufen benutzen deshalb den sichtbaren Farbton; ihre Deckkraft
-        # und Breite machen daraus leise Zwischenlinien und klare Fünfermarken.
+        # Rasterstufen benutzen deshalb den sichtbaren Farbton; allein ihre
+        # Deckkraft (0,32 gegen 0,72 in ``show_sketch``) macht daraus leise
+        # Zwischenlinien und klare Fünfermarken — die Breite ist bei beiden
+        # dieselbe.
         self._grid_minor_colour = exact["grid_major"]
         self._grid_major_colour = exact["grid_major"]
         self._sketch_colour = text_colour("info", colours["top"])
@@ -8819,17 +8851,10 @@ class Viewport(QWidget):
         if inside:
             return corners
 
-        from app.core.deferred import trimesh
-        from app.core.geom.mesh import MeshData
-
-        # Getrennte Dreiecke sind eine offene Renderfläche. Der vorhandene
-        # Kern-Schnitt fügt ihr keine künstlichen Auswahlkappen hinzu und
-        # ändert weder Szenennetz noch den Deckelbefund des eigentlichen Körpers.
-        patch = MeshData(
-            trimesh.Trimesh(corners, _triangle_faces(len(corners) // 3), process=False)
-        )
-        clipped = cut(patch, plane, second).mesh.raw
-        return np.asarray(clipped.vertices[clipped.faces], dtype=float).reshape(-1, 3)
+        # Die Kappung selbst rechnet der Kern (``ansicht.md``: in ``app/ui``
+        # gibt es kein ``trimesh``); hier bleibt nur die Vorentscheidung, ob
+        # überhaupt geschnitten werden muss.
+        return clip_triangles(corners, plane, second)
 
     def _redraw_candidates(self) -> None:
         """Die Merkmale einer offenen Frage im Bild hervorheben (§21.3).
@@ -10368,7 +10393,7 @@ class Viewport(QWidget):
         Flächen; bei jedem anderen Merkmal sprang er in die Mitte des
         Hüllquaders. Gemessen an ``motor-mountstp.stl`` mit 27 Merkmalen:
 
-            gewählt       Merkmal sitzt bei      Griff sass bei
+            gewählt       Merkmal sitzt bei      Griff saß bei
             Fläche        (-3,0 / 0,4 / 0,0)     auf der Fläche
             Bohrung       (-13 / -13 / 2)        (0 / 0 / 30)
             Verrundung    (-13 / -4,5 / 10)      (0 / 0 / 30)
@@ -10574,7 +10599,7 @@ class Viewport(QWidget):
         )
 
     def _gizmo_scale_for(self, actor: Any, centre: Any = None) -> float:
-        """Der Massstab des Griffs — gross genug, um ihn zu treffen.
+        """Der Maßstab des Griffs — groß genug, um ihn zu treffen.
 
         **Marke und Werkzeug ziehen gegeneinander, und eine Millimeterzahl kann
         nur eines von beiden.** Die Scheibe soll das Merkmal genau abdecken
@@ -10585,12 +10610,12 @@ class Viewport(QWidget):
         gut einer dick. Der Kommentar an :data:`GIZMO_SCALE` nennt vierzig
         Bildpunkte ausdrücklich als **zu klein** (3d-druck-85, 03.09.2026).
 
-        **Treffbarkeit ist eine Grösse in Bildpunkten, keine in Millimetern**
-        — sie hängt am Zoom. Dieselbe Datei weiss das an drei anderen Stellen
+        **Treffbarkeit ist eine Größe in Bildpunkten, keine in Millimetern**
+        — sie hängt am Zoom. Dieselbe Datei weiß das an drei anderen Stellen
         (:data:`PULL_HIT_PIXELS`, :data:`CURSOR_PIXELS`,
         :data:`PULL_HANDLE_PIXELS`), und hier fehlte es. Der Anteil gilt
         deshalb weiter als Vorgabe; unterschreitet er
-        :data:`GIZMO_LEAST_PIXELS`, wächst der Griff auf dieses Mass.
+        :data:`GIZMO_LEAST_PIXELS`, wächst der Griff auf dieses Maß.
 
         Damit ist der Widerspruch aufgelöst, an dem heute zwei Fassungen
         gescheitert sind: Die Marke bleibt am Merkmal, der Griff wird
@@ -10602,22 +10627,13 @@ class Viewport(QWidget):
             # Ohne Angabe der Sitz der Marke — und ohne Marke die Mitte des
             # Aktors, an dem der Griff hängt.
             centre = self._face_seat[0] if self._face_seat else actor.centre()
-        # **Ohne Projektion gilt der Anteil**, und zwar ohne dass der Griff
-        # deshalb ausfällt: Offscreen gibt es keinen Renderer, und dort sieht
-        # den Griff ohnehin niemand. Ihn hier von der Projektion abhängig zu
-        # machen hiesse, jeden Test, der einen Griff anhängt, an eine
-        # vollständige Kamera-Attrappe zu binden — dreizehn wurden dabei rot,
-        # keiner davon an der Sache.
         # **Und wenn die Projektion nichts hergibt, gilt der Anteil.** Der
-        # Deckel in Bildpunkten ist eine Verbesserung, kein Muss: Offscreen
-        # gibt es keinen Renderer, in Prüfständen keine vollständige Kamera,
-        # und in beiden Lagen sieht den Griff ohnehin niemand. Ihn davon
-        # abhängig zu machen band dreizehn Tests an eine Kamera-Attrappe, und
-        # keiner von ihnen wurde an seiner Sache rot.
-        try:
-            scale = self._pixels_per_mm_at(centre)
-        except Exception:
-            scale = None
+        # Deckel in Bildpunkten ist eine Verbesserung, kein Muss: Ohne Renderer
+        # oder ohne brauchbare Kamera antwortet ``_pixels_per_mm_at`` mit
+        # ``None`` — es fängt seine Sonderfälle selbst —, und dann bleibt es
+        # beim Verhältnis zur Marke. In beiden Lagen sieht den Griff ohnehin
+        # niemand.
+        scale = self._pixels_per_mm_at(centre)
         if scale is None or scale <= EPS_GEOM or length <= EPS_GEOM:
             return GIZMO_SCALE
         least = GIZMO_LEAST_PIXELS / scale
@@ -10998,7 +11014,7 @@ class Viewport(QWidget):
         # Ereignisdurchlauf lesen alle Merkmalsmarken denselben neuen Aktorstand.
         self._queue_feature_label_layout()
         # **Der Ring erscheint mit dem ersten sichtbaren Stück des Zugs.** Ihn
-        # schon beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu
+        # schon beim Anhängen des Griffs zu zeigen hieße, eine Bewegung zu
         # behaupten, die noch keine ist.
         if self._ghost_actor is None and (steps.moves or steps.turns):
             chosen = self.gizmo_feature()
@@ -11038,8 +11054,6 @@ class Viewport(QWidget):
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
         return corrected
-        # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
-        # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
 
     def _slot_turn_sign(self, axis: Axis | None) -> float:
         """Ob dieser Ring das Langloch dreht — und in welche Richtung.
@@ -11090,7 +11104,7 @@ class Viewport(QWidget):
 
         **Der Radius ist der des Griffs, nicht der des Körpers.** Hier stand
         der Körperaktor, während ``set_gizmo`` bei einem gewählten Merkmal die
-        Scheibe übergibt — der Bogen war damit sechsmal so gross wie das
+        Scheibe übergibt — der Bogen war damit sechsmal so groß wie das
         Werkzeug, dessen Drehung er zeigt (3d-druck-85, 03.09.2026).
         """
         if self.renderer is None or not steps.turns or steps.axis is None:
@@ -11166,7 +11180,7 @@ class Viewport(QWidget):
         stehen, wie er es bisher immer tat, und das Loslassen richtet ihn. Ein
         falsch gedrehter Schatten wäre schlechter als ein stehender.
         """
-        # **Eine Drehung schliesst das Mitziehen aus, auch wenn sie mit einer
+        # **Eine Drehung schließt das Mitziehen aus, auch wenn sie mit einer
         # Verschiebung kommt.** Der Versatz allein wäre dann ein halb richtiger
         # Schatten: an der neuen Stelle, in der alten Form. Stehen zu bleiben
         # ist die ehrlichere Vorschau, und das Loslassen richtet beides.
@@ -11281,10 +11295,12 @@ class Viewport(QWidget):
         nearer = int(
             np.argmin([math.hypot(seat[0] - event.x, seat[1] - event.y) for seat in seats])
         )
+        self._slot_borrowed = True
         return handle.take_press(event, nearer)
 
     def _on_slot_interaction_cancelled(self) -> None:
         """Ein Zug zurück zum Ausgangspunkt räumt seine flüchtige Maßleiste ab."""
+        self._slot_borrowed = False
         self._drag_kind = None
         self.drag_bar.dismiss()
         self._update_slot_labels()
@@ -11310,6 +11326,9 @@ class Viewport(QWidget):
         geschehen (Regel 2).
         """
         chosen = self.slot_handle_feature()
+        # Ein echter Zug behält den Griff, auch wenn er geliehen war: Ab hier
+        # stehen Knöpfe, Umriss und Griff wie nach *Im Bild einstellen*.
+        self._slot_borrowed = False
         if chosen is None or self._slot_handle is None:
             self._end_drag()
             return
@@ -11427,7 +11446,7 @@ class Viewport(QWidget):
 
         **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
         genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
-        damit den Griff statt des Körpers, und die Bohrung liess sich nicht
+        damit den Griff statt des Körpers, und die Bohrung ließ sich nicht
         mehr auswählen (Robert, 03.09.2026).
         """
         import numpy as np
@@ -11456,7 +11475,7 @@ class Viewport(QWidget):
         normal = np.asarray(direction, dtype=float)
         radius = self._handle_radius(feature)
         # Gemerkt, damit der Geisterring (:meth:`_show_ghost`) dieselbe Stelle
-        # und dasselbe Mass nimmt. Zwei Rechnungen für denselben Sitz liefen
+        # und dasselbe Maß nimmt. Zwei Rechnungen für denselben Sitz liefen
         # beim nächsten Zuwachs auseinander, und dann läge der Ring neben der
         # Marke, die er begleiten soll.
         self._face_seat = (tuple(float(v) for v in centre), tuple(float(v) for v in normal), radius)
@@ -11478,7 +11497,7 @@ class Viewport(QWidget):
         03.09.2026). Gemessen am laufenden Fenster, Bohrung Ø 7,34 durch eine
         35 mm dicke Platte:
 
-            Griffspanne     61,14 mm   — gross genug
+            Griffspanne     61,14 mm   — groß genug
             Ursprung z      17,50 mm   — **mitten im Material**
             Pfeil X, Y      getroffen -> der Körper
             Pfeil Z         getroffen -> ein Griff-Aktor
@@ -11518,7 +11537,7 @@ class Viewport(QWidget):
         return np.asarray(centre, dtype=float) + direction * (float(depth) / 2.0) * towards
 
     def _handle_radius(self, feature: Feature) -> float:
-        """Wie gross die Scheibe wird, die ein gewähltes Merkmal markiert.
+        """Wie groß die Scheibe wird, die ein gewähltes Merkmal markiert.
 
         „Ein kleiner Überstand ist noch da" (Robert, 03.09.2026). Die Scheibe
         mass sich an der **Objektdiagonale**, und das ist bei einem Merkmal die
@@ -11529,7 +11548,7 @@ class Viewport(QWidget):
             Scheibe daraus     15,18 mm   -> 2,1-mal die Bohrung
             Überstand je Seite  3,92 mm
 
-        **Hat das Merkmal ein eigenes Mass, gilt das.** Eine Bohrung und ein
+        **Hat das Merkmal ein eigenes Maß, gilt das.** Eine Bohrung und ein
         Zapfen kennen ihren Durchmesser; die Scheibe deckt ihn dann genau ab
         und markiert, was gewählt ist, statt darüber hinauszustehen.
 
@@ -11691,7 +11710,7 @@ class Viewport(QWidget):
 
         Der Griff hängt an der Scheibe und wandert von selbst; die Vorschau ist
         ein eigener Aktor und muss nachgeführt werden. Nur beim Verschieben —
-        eine Drehung des Merkmals ändert seine Lage im Raum, und die liesse
+        eine Drehung des Merkmals ändert seine Lage im Raum, und die ließe
         sich nur durch Neuaufbau einholen.
         """
         if not steps.moves or steps.turns:
@@ -11751,6 +11770,11 @@ class Viewport(QWidget):
         if self._face_actor is not None and self.renderer is not None:
             self.renderer.remove(self._face_actor)
         self._face_actor = None
+        # Der Sitz gehört zur Marke: Bliebe er stehen, mäße ``_gizmo_scale_for``
+        # den Bildmaßstab des Körpergriffs an der Stelle eines längst
+        # abgewählten Merkmals — und der Sitz überlebte sonst jeden
+        # Szenenaufbau und jeden Projektwechsel.
+        self._face_seat = None
 
     def bounds_size(self) -> Vec3:
         """Wie groß das gewählte Objekt ist — für Griffe, die mitwachsen."""
@@ -11833,10 +11857,10 @@ class Viewport(QWidget):
         (§15.5).
 
         Der Rückgabewert sagt, ob der Zug hier verbraucht wurde. ``False``
-        heisst nicht „nichts passiert", sondern „das gilt dem ganzen Teil" —
+        heißt nicht „nichts passiert", sondern „das gilt dem ganzen Teil" —
         der Aufrufer schickt ihn dann den gewohnten Weg.
 
-        **Skalieren fehlt mit Absicht.** Ein Merkmal hat keine Grösse, die
+        **Skalieren fehlt mit Absicht.** Ein Merkmal hat keine Größe, die
         dieser Griff ändern könnte; darum steht an ihm auch kein
         Skalierwürfel (siehe :meth:`set_gizmo`).
         """
@@ -12069,11 +12093,11 @@ class Viewport(QWidget):
                 QEvent.Type.MouseButtonDblClick,
                 QEvent.Type.KeyPress,
             ):
-                schliessend = kind == QEvent.Type.MouseButtonDblClick or event.key() in (
+                closing = kind == QEvent.Type.MouseButtonDblClick or event.key() in (
                     Qt.Key.Key_Return,
                     Qt.Key.Key_Enter,
                 )
-                if schliessend and self._sketch_finish_stroke():
+                if closing and self._sketch_finish_stroke():
                     return True
 
         if (
@@ -13139,15 +13163,15 @@ class Viewport(QWidget):
         if self._scheme != "solidon" or self.renderer is None:
             super().keyPressEvent(event)
             return
-        axes = FLIGHT_KEYS.get(event.text().lower())
-        if axes is None or event.isAutoRepeat():
+        key = _FLIGHT_BY_QT_KEY.get(int(event.key()))
+        if key is None or event.isAutoRepeat():
             # Die Wiederholung trägt nichts bei: Die Taste liegt schon im Satz.
-            if axes is None:
+            if key is None:
                 super().keyPressEvent(event)
             else:
                 event.accept()
             return
-        self._flying.add(event.text().lower())
+        self._flying.add(key)
         self._start_flying()
         event.accept()
 
@@ -13159,8 +13183,8 @@ class Viewport(QWidget):
         ``isAutoRepeat`` endete der Flug damit bei jedem Takt der Tastatur und
         begänne neu — sichtbar als Stottern.
         """
-        key = event.text().lower()
-        if key not in FLIGHT_KEYS or event.isAutoRepeat():
+        key = _FLIGHT_BY_QT_KEY.get(int(event.key()))
+        if key is None or event.isAutoRepeat():
             super().keyReleaseEvent(event)
             return
         self._flying.discard(key)
@@ -13191,8 +13215,16 @@ class Viewport(QWidget):
             self._flight_timer.start()
 
     def _stop_flying(self) -> None:
-        if self._flight_timer is not None:
+        """Den Takt anhalten — und nachziehen, was nach jeder Kamerafahrt fällig ist.
+
+        Der Tastenflug ist der fünfte Kameratreiber neben Mauszug, 3D-Maus,
+        Kameravorgabe und ``fly_to``; die vier anderen rufen am Ende
+        :meth:`settle_camera`, und ohne den Ruf hier fiel der Kontaktschatten
+        nach WASD in die alte Blickrichtung.
+        """
+        if self._flight_timer is not None and self._flight_timer.isActive():
             self._flight_timer.stop()
+            self.settle_camera()
 
     def _fly_one_tick(self) -> None:
         """Ein Takt Flug — mit der Zeit, die wirklich vergangen ist.
@@ -13397,7 +13429,7 @@ class Viewport(QWidget):
         was im Bild steht, und im Bild steht mehr als die Szene: die Pfeile
         des Bewegungsgriffs, sein Skalierwürfel, Marken, Schatten, das Bett.
         Mit eingeschaltetem Griff traf ein Klick auf eine Bohrung dessen
-        Pfeil, und die Bohrung liess sich nicht mehr auswählen (Robert,
+        Pfeil, und die Bohrung ließ sich nicht mehr auswählen (Robert,
         03.09.2026). Die Liste bleibt leer, wenn es keine Körper gibt
         (Skizzenmodus, leeres Projekt); dann pickt der Renderer über die ganze
         Szene. Die Toleranz ist ein Anteil der Bilddiagonale und geht
@@ -14295,7 +14327,7 @@ class Viewport(QWidget):
         # hervorgehobene Linie. Gelesen wird dieselbe Rangfolge wie beim
         # Zeiger (:meth:`_means_a_feature`), nicht eine zweite Aufzählung der
         # Flaggen.
-        if self._placement_pointer is not None and self._measure_mode == "off":
+        if self._placement_pointer is not None and self._means_a_feature():
             # **Ein Klick auf das Modell verlässt die Maße nicht** (Robert,
             # 11.09.2026: „wenn ich leicht daneben klicke bin ich draußen,
             # solange der klick auf dem modell ist sollte das nicht passieren").
@@ -14304,6 +14336,12 @@ class Viewport(QWidget):
             # die Platzierung samt allem, was darin wartete. Solange eine
             # Platzierung läuft, gehört der Klick auf das Modell ihr; heraus
             # führen Escape, *Abbrechen* rechts und der Klick ins Leere.
+            #
+            # **Aber nur der Auswahlklick.** Messen, Trennen, Skelett und
+            # Formen setzen eine Stelle, keine Auswahl — gefragt wird dieselbe
+            # Rangfolge wie beim Zeiger, nicht allein das Messen: Mit
+            # ``_measure_mode == "off"`` als Frage nahmen *Trennen* und
+            # *Skelett* während einer Platzierung stumm keinen Klick mehr an.
             return
         if self._means_a_feature() and self._edge_click(x, y, point, add=add):
             return
@@ -14345,6 +14383,20 @@ def _ring_points(centre: Any, normal: Any, radius: float, count: int = 48) -> An
         # Tiefenpuffer und zerfällt beim Drehen in Striche.
         + axis * radius * 0.02
     )
+
+
+def _detached(mesh: Any) -> Any:
+    """Eine eigene Kopie eines Netzes für den Nebenthread.
+
+    Ein exakter Körper (``to_mesh``) tesselliert dort ohnehin frisch und
+    bleibt, wie er ist; ein ``MeshData`` bekommt Ecken, Dreiecke und Farben
+    kopiert — die Slots reisen als unveränderliche Folge mit.
+    """
+    raw = getattr(mesh, "raw", None)
+    replacing = getattr(mesh, "replacing", None)
+    if raw is None or not callable(replacing):
+        return mesh
+    return replacing(raw.copy())
 
 
 def _triangle_faces(count: int) -> Any:
