@@ -4544,6 +4544,7 @@
   "Wird geholt": "Descargando",
   "Wird geladen …": "Descargando …",
   "Wird geladen: {done}": "Descargando: {done}",
+  "Wird geschlossen, sobald die laufenden Arbeiten beendet sind.": "Esta ventana se cerrará cuando terminen las tareas en curso.",
   "Wird gesendet …": "Enviando …",
   "Wird gespeichert …": "Guardando …",
   "Wird gestartet": "Iniciando",

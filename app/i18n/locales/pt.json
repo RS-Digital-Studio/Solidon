@@ -4544,6 +4544,7 @@
   "Wird geholt": "A obter",
   "Wird geladen …": "A transferir …",
   "Wird geladen: {done}": "A transferir: {done}",
+  "Wird geschlossen, sobald die laufenden Arbeiten beendet sind.": "Esta janela será fechada quando as tarefas em curso terminarem.",
   "Wird gesendet …": "A enviar …",
   "Wird gespeichert …": "A guardar …",
   "Wird gestartet": "A iniciar",

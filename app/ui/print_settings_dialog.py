@@ -5876,6 +5876,8 @@ class PrintSettingsDialog(QDialog):
     def _wait_without_blocking(self) -> None:
         """Den Dialog sichtbar behalten und den Arbeiter über die Ereignisschleife abholen."""
 
+        self.state.setText(tr("Wird geschlossen, sobald die laufenden Arbeiten beendet sind."))
+        self.state.show()
         self.setEnabled(False)
         self._settle_timer.start()
 

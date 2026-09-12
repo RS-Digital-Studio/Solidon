@@ -4544,6 +4544,7 @@
   "Wird geholt": "Fetching",
   "Wird geladen …": "Downloading …",
   "Wird geladen: {done}": "Downloading: {done}",
+  "Wird geschlossen, sobald die laufenden Arbeiten beendet sind.": "This window will close when the ongoing tasks have finished.",
   "Wird gesendet …": "Sending …",
   "Wird gespeichert …": "Saving …",
   "Wird gestartet": "Starting",

@@ -1620,6 +1620,52 @@ class WaitingWorker:
         return True
 
 
+@pytest.mark.parametrize("work", ["profile", "stock"])
+def test_closing_explains_why_profile_or_stock_work_keeps_the_window_open(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch, work: str
+) -> None:
+    """Auch ohne Slicerauftrag bleibt der aufgeschobene Fensterabschluss sichtbar erklärt."""
+    from PySide6.QtTest import QTest
+
+    from app.ui import print_settings_dialog as module
+
+    entered, released = threading.Event(), threading.Event()
+
+    def blocked(*_args, **_kwargs):
+        entered.set()
+        assert released.wait(3)
+        return []
+
+    if work == "profile":
+        monkeypatch.setattr(module.slicer_profiles, "find_profiles", blocked)
+        worker = module._ProfileWorker(Path("orca-slicer.exe"), "orca")
+        dialog._profile_worker = worker
+    else:
+        monkeypatch.setattr(module, "prepare_usage", blocked)
+        worker = module._StockWorker((), dialog.settings, dialog.session.profile)
+        dialog._stock_worker = worker
+    dialog.show()
+    dialog._leash.start(worker)
+    try:
+        assert entered.wait(1)
+        dialog.reject()
+        assert not dialog.isHidden()
+        assert not dialog.isEnabled()
+        assert dialog.state.isVisibleTo(dialog)
+        assert "geschlossen" in dialog.state.text()
+        assert "laufenden Arbeiten" in dialog.state.text()
+        QTest.qWait(20)
+        assert not dialog._settled
+    finally:
+        released.set()
+        assert worker.wait(2_000)
+        deadline = time.monotonic() + 2
+        while not dialog._settled and time.monotonic() < deadline:
+            QTest.qWait(10)
+    assert dialog._settled
+    assert dialog.isHidden()
+
+
 def test_every_way_out_waits_for_the_profile_search(dialog: PrintSettingsDialog) -> None:
     """Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit.
 
