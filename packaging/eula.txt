@@ -1,7 +1,7 @@
 Endnutzer-Lizenzvertrag für Solidon3D
 -------------------------------------
 
-Stand: 31. August 2026 · Fassung 1.6
+Stand: 12. September 2026 · Fassung 1.7
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
@@ -32,8 +32,13 @@ Weiterentwicklung einstellen, und es endet nicht mit einer neuen Hauptversion.
 Die Lizenz ist an Sie als Person gebunden, nicht an ein Gerät. Sie dürfen
 Solidon3D auf allen Geräten installieren, die Sie selbst nutzen —
 Arbeitsplatz, Notebook, Werkstattrechner. Freigeschaltet ist dabei ein
-Rechner zugleich; den Wechsel nehmen Sie jederzeit selbst vor, ohne uns zu
-fragen und ohne Wartezeit.
+Rechner zugleich; den Wechsel nehmen Sie selbst vor, ohne uns zu fragen.
+
+Zum Missbrauchsschutz sind je Lizenzschlüssel fünf gültig signierte
+Aktivierungsversuche pro UTC-Kalendertag möglich. Dabei zählen auch Versuche,
+die wegen eines bereits aktiven anderen Rechners oder eines gesperrten
+Schlüssels abgewiesen werden. Das Tageslimit beginnt um 00:00 Uhr UTC neu.
+Deaktivierungen zählen nicht gegen dieses Tageslimit.
 
 Was nicht erlaubt ist: dass mehrere Personen mit einer Lizenz arbeiten.
 Für jede weitere Person, die die Software benutzt, wird eine weitere Lizenz
