@@ -328,5 +328,12 @@ Kopf dieser Datei die Streichung als Version 3 beschrieb und der Eintrag
 darüber unter derselben Nummer den Zuwachs nennt. Projekte aus diesem Zeitraum
 tragen deshalb Version 3 für denselben Satz aus neun Regeln, der seit der
 Berichtigung Version 4 heißt."""
+measurement_note = """
+Der Nummernwechsel am 02.09.2026 (2ad87acc) änderte keinen Regelinhaltswert.
+Er berichtigt nur die doppelt verwendete Versionsnummer; die neun Regeln
+entsprechen unverändert dem Stand von v0.2.0. Für die tatsächliche Streichung
+am 26.08.2026 (bc92469a) ist kein Vorher-/Nachher-Suitelauf dokumentiert.
+Die folgenden Angaben bleiben deshalb ausdrücklich nicht gemessen; weder
+die Nummernkorrektur noch spätere Strukturtests ersetzen diesen Nachweis."""
 suite_before = "nicht gemessen"
 suite_after = "nicht gemessen"
