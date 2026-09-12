@@ -971,7 +971,7 @@ def _seat_at(
         try:
             prepared = prepare_surface(mesh, entry.face_indices[0], features)
         except ValidationError:
-            return None
+            continue
         area = prepared.area
         if not isinstance(area, Polygon) or not area.interiors:
             return prepared, mouth

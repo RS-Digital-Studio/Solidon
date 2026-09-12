@@ -1194,6 +1194,41 @@ def test_a_feature_that_is_already_there_knows_its_distances(beschreibung, werte
     assert sorted(edge.distance for edge in spot.edges) == pytest.approx([15.0, 20.0])
 
 
+def test_an_unusable_surface_candidate_does_not_hide_a_valid_mouth(monkeypatch):
+    """Eine nicht vorbereitbare Fläche verdrängt keine spätere gültige Fläche derselben Mündung."""
+    from dataclasses import replace
+
+    mesh, found = _plate_with()
+    feature = next(entry for entry in found.values() if entry.kind == "hole")
+    top = next(
+        entry
+        for entry in found.values()
+        if entry.kind == "face" and entry.params["normal"][2] > 0.99
+    )
+    unusable = replace(top, id="unusable_face", face_indices=(-1,))
+    candidates = {unusable.id: unusable, **found}
+    original = placement.prepare_surface
+    inspected = []
+
+    def prepare(mesh, index, features):
+        inspected.append(index)
+        if index == -1:
+            raise ValidationError("face", "Diese Fläche ist nicht zusammenhängend.")
+        return original(mesh, index, features)
+
+    monkeypatch.setattr(placement, "prepare_surface", prepare)
+
+    seat = placement.seat_of(mesh, feature, candidates)
+
+    assert -1 in inspected
+    assert seat is not None
+    prepared, mouth = seat
+    assert mouth == pytest.approx((10.0, 5.0, 5.0))
+    assert sorted(
+        edge.distance for edge in placement.at_point(prepared, mouth).edges
+    ) == pytest.approx([15.0, 20.0])
+
+
 def test_the_flanks_of_a_slot_are_not_its_distance_to_the_edge():
     """Die eigene Öffnung ist keine Bezugskante — die Gegenprobe zur Füllung.
 
