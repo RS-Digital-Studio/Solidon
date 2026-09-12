@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -1592,6 +1593,43 @@ def test_the_matcher_answer_lands_in_the_stack_beside_seed() -> None:
     # Zweimal dasselbe schreiben ändert nichts — sonst gälte das Dokument nach
     # jeder Auswertung als geändert, ohne dass jemand etwas entschieden hat.
     assert history.record_matches({1: {"pin_1": abdruck}}) is False
+
+
+def test_a_recorded_match_survives_saving_and_reopening(tmp_path: Path) -> None:
+    """Die Antwort ist erst dann einmal gegeben, wenn sie das Schließen übersteht (RM-024).
+
+    ``Operation.matches`` wird serialisiert, und `record_matches` schreibt
+    hinein — beides stand, und dazwischen fehlte der Nachweis. Ohne ihn wäre
+    die Zusage aus §15.7 („einmal fragen, nie wieder") an die geöffnete
+    Sitzung gebunden: Wer sein Projekt zumacht und morgen weiterarbeitet,
+    bekäme dieselben Fenster noch einmal, und genau das waren die 99.
+
+    Geprüft wird die runde Reise durch die Datei und nicht nur das Feld: Ein
+    Abdruck ist eine verschachtelte Zuordnung mit Listen darin, und die
+    Projektdatei kennt weder Tupel noch Numpy.
+    """
+    from app.core.scene.project import load, new_project, save
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    abdruck = {
+        "kind": "hole",
+        "relative": [0.1, -0.25, 0.0],
+        "axis": [0.0, 0.0, 1.0],
+        "diameter": 4.2,
+    }
+    assert history.record_matches({1: {"pin_1": abdruck}}) is True
+
+    reopened = load(save(project, tmp_path / "zuordnung.p3d"))
+
+    assert reopened.document.ops[0].matches == {"pin_1": abdruck}, (
+        "die Antwort hat die Datei nicht überstanden — die Frage käme wieder"
+    )
+    assert "pin_1" not in reopened.document.ops[0].params, "eine Antwort ist keine Eingabe"
 
 
 # --- Übersetzbare Parameter (§4.1, Format 10) -----------------------------------

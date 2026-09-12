@@ -51,7 +51,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
 | [RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen](#rm-023) | Geometrie, Erkennung und Druckvorbereitung | Verweisfilter nach einem Wechsel der Objektkennung prüfen |
-| [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Prüfkörper steht; Abnahme über `evaluate` selbst und ein Rundlauf für `matches` fehlen |
+| [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
 | [RM-045 — Drei Laufzeitkosten des Geometriereviews messen](#rm-045) | Geometrie, Erkennung und Druckvorbereitung | Aushöhlen, Formkopien und Innenraumketten getrennt vermessen |
@@ -526,17 +526,43 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-024"></a>
 
-- [ ] **RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen.**
+- [~] **RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen.**
   `Operation.matches` und Speichern/Wiederöffnen sind gebaut. **Auch der geometrisch echte Fall
   steht** (nachgemessen 10.09.2026): `tests/test_evaluation.py` führt eine Platte mit zwei nah
   beieinander liegenden Bohrungen über die echte Erkennung — einmal gefragt, aufgeschrieben,
-  beim zweiten Lauf still. Was fehlt, ist zweierlei: Die Abnahme läuft dort über
-  `_with_features` und nicht über `evaluate` selbst, dessen Tests die Mehrdeutigkeit noch per
-  Monkeypatch erzwingen; und für `Operation.matches` gibt es keinen Speichern-/Wiederöffnen-
-  Rundlauf, obwohl das Feld serialisiert wird. Abnahme über `evaluate`:
-  jede nötige Entscheidung einmal, erneute Auswertung und Wiederöffnen ohne dieselbe Rückfrage;
-  Abbruch liefert einen Befund. Die historische 99→7→0-Reihe nur mit dem damaligen 52-Teile-Projekt
-  vergleichen.
+  beim zweiten Lauf still.
+
+  **Der Rundlauf steht seit dem 12.09.2026.** `test_a_recorded_match_survives_saving_and_reopening`
+  schreibt eine Antwort über `record_matches`, speichert, öffnet wieder und findet sie unverändert
+  — ohne ihn wäre die Zusage aus §15.7 an die geöffnete Sitzung gebunden gewesen, und wer sein
+  Projekt zumacht, bekäme dieselben Fenster am nächsten Tag noch einmal. Gegenprobe ohne das Lesen
+  des Feldes in `serialise` rot.
+
+  **Die Abnahme „über `evaluate`" ist am 12.09.2026 gemessen worden, und das Ergebnis ist ein
+  anderes als erwartet: Aus dem Operationskatalog lässt sich kein geometrischer Konflikt bauen.**
+  Acht Stapel gefahren, keiner löst die Frage aus — eine Platte mit zwei Bohrungen, ein
+  einseitiger Anbau, eine Vierteldrehung, eine halbe Drehung, ein dritter Schnitt zwischen zwei
+  Bohrungen, ein gestauchter Körper, ein Steg quer durch ein Langloch, ein versetztes Loch an
+  einem 400er Träger. Zwei Gründe, beide am Code nachgemessen und beide **richtiges** Verhalten:
+
+  * **Der Abgleich normiert alt und neu im selben Rahmen.** Am Vereinigungsschritt stand
+    `old_centre` auf der Mitte des *gewachsenen* Körpers, und damit kosten Merkmale, die sich am
+    Material nicht bewegt haben, nichts. Ein Träger, der um sechs Millimeter länger wird, behält
+    seine Bohrungen eindeutig — nur ein Aufruf von Hand, der die alte Mitte einsetzt, erzeugt die
+    Mehrdeutigkeit künstlich.
+  * **Jede Operation, die ein Merkmal anfasst, erklärt es** (§21.2). Bei `move_feature` sah der
+    Abgleich `alt={'hole_1': −10}` gegen `neu={'hole_1': −10, …}` — die verschobene Bohrung war
+    schon deklariert, und der Abstand war null. Die Frage des Abgleichs gehört damit der
+    **Wiedererkennung nach einer nicht erklärten Änderung**, also dem Weg über `load` und fremde
+    Netze — dort kamen die 99 Fenster her, an einem Projekt aus 52 Teilen.
+
+  Offen bleibt daher nicht mehr „die Abnahme über `evaluate`", sondern die Frage davor: ein
+  **Korpuskörper**, dessen erneute Erkennung nach einer formenden Operation echt mehrdeutig wird
+  (Kandidaten: ein eingelesenes Netz mit dicht benachbarten Bohrungen, danach Reparieren oder
+  Dreiecke verringern). Erst mit ihm ist die Reihe „einmal gefragt, wiederöffnen ohne Rückfrage,
+  Abbruch liefert einen Befund" über `evaluate` zu zeigen; bis dahin trägt sie
+  `_with_features` an derselben Geometrie. Die historische 99→7→0-Reihe nur mit dem damaligen
+  52-Teile-Projekt vergleichen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
 
