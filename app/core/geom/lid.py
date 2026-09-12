@@ -762,7 +762,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
                 id="",
                 # Wie beim Deckel darüber: kein Quellbezug, kein
                 # eingefrorenes Wort.
-                name=_("Drehdeckel"),
+                name=ctx.scene.unused_name(str(_("Drehdeckel"))),
                 mesh=lid,
                 material=source.material,
                 features={CAP_THREAD_FEATURE: cap_thread},

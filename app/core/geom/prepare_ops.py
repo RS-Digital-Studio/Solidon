@@ -4993,7 +4993,7 @@ def test_piece(ctx: OpContext) -> OpResult:
                 source,
                 mesh=piece,
                 # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort.
-                name=_("Prüfstück"),
+                name=ctx.scene.unused_name(str(_("Prüfstück"))),
                 features={},
             )
         ],

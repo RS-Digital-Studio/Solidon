@@ -179,7 +179,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**7. Sitzt das Loch falsch, wird es verschoben, nicht neu gebohrt.** "
             "Ein Doppelklick auf den Schritt im Verlauf öffnet ihn wieder. Zahl "
             "ändern, übernehmen, fertig. Das gilt auch noch nächste Woche.\n\n"
-            "**8. Drucken.** *Datei → Druckeinstellungen*, dann *Slicen*: Der "
+            "**8. Drucken.** *Datei → Drucken vorbereiten*, dann *Slicen*: Der "
             "Slicer rechnet die Druckdatei, ohne dass man ihn zu sehen "
             "bekommt, und *Druckdatei speichern* legt sie ab. Wer lieber im "
             "Slicer weiterarbeitet, nimmt *Im Slicer öffnen* — oder "
@@ -1186,7 +1186,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         summary=_("Vom fertigen Modell zur Druckdatei, ohne Solidon zu verlassen."),
         title=_("Drucken"),
         body=_(
-            "*Datei → Druckeinstellungen* (Strg+P) ist der Weg vom Modell zur "
+            "*Datei → Drucken vorbereiten* (Strg+P) ist der Weg vom Modell zur "
             "Druckdatei. Der Slicer rechnet sie — aber bedient wird er von "
             "hier, und in aller Regel bekommt man ihn nicht mehr zu sehen.\n\n"
             "**Der Drucker steht oben im Dialog** und lässt sich auch direkt aus "

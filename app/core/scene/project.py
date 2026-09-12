@@ -331,11 +331,24 @@ def _read_linked_source(
                 )
             payload = stream.read(MAX_FILE_BYTES + 1)
     except OSError as problem:
+        # **Ein ``OSError`` ist nicht „beschädigt"** (RM-097). So hieß der Satz
+        # hier, und er behauptete damit etwas über den Inhalt der Datei, wo das
+        # Betriebssystem über den **Zugriff** gesprochen hat: fehlende Rechte,
+        # ein getrenntes Netzlaufwerk, ein Wechselmedium, das niemand
+        # eingelegt hat. Anders als bei der beschädigten ZIP eine Ebene tiefer,
+        # wo `BadZipFile` genau das sagt.
+        #
+        # Der Grund des Systems reist als Wert mit — er ist das Einzige, was
+        # an dieser Stelle wirklich feststeht, und ohne ihn sucht der Kunde
+        # eine Beschädigung, die es nicht gibt.
         raise ValidationError(
             field=field,
-            detail=_("Die Datei lässt sich nicht öffnen; sie ist beschädigt."),
+            detail=_(
+                "Die verknüpfte Datei lässt sich nicht lesen. Prüfen Sie, ob sie noch "
+                "an ihrem Platz liegt und ob dieser erreichbar ist."
+            ),
             constraint="unreadable",
-            values={**values, "path": source.path},
+            values={**values, "path": source.path, "reason": problem.strerror or str(problem)},
         ) from problem
     if len(payload) > MAX_FILE_BYTES:
         raise ValidationError(

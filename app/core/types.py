@@ -1115,6 +1115,28 @@ class Scene:
     profile: Profile | None = None
     report: Report = field(default_factory=Report)
 
+    def unused_name(self, wanted: str) -> str:
+        """Der Name, wenn er frei ist — sonst derselbe mit einem Zähler.
+
+        **Zwei Objekte mit demselben Namen sind im Baum eines** (RM-097).
+        *Prüfstück* und *Drehdeckel* trugen ihren Namen als festes Wort; wer
+        zwei Toleranzleitern anlegte oder zwei Dosen verschloss, fand zwei
+        Zeilen, die gleich heißen, und musste die richtige durch Anklicken
+        suchen. Die Kopie macht es seit je anders (``scene.ops._copy_name``).
+
+        Der Zähler beginnt bei zwei, denn der erste heißt, wie er heißt — „Deckel
+        1" neben nichts wäre eine Nummer ohne Reihe. Dieselbe Zählweise wie bei
+        den Passungen (``lid_flow._unused_name``); zwei Fassungen derselben
+        Frage liefen auseinander.
+        """
+        taken = {str(entry.name) for entry in self.objects.values()}
+        if wanted not in taken:
+            return wanted
+        number = 2
+        while f"{wanted} {number}" in taken:
+            number += 1
+        return f"{wanted} {number}"
+
 
 # --- Operationskontext ----------------------------------------------------------
 

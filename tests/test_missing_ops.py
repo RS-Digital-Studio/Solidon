@@ -1357,3 +1357,38 @@ def test_both_labelling_ops_report_a_face_too_fine_for_the_nozzle(profile: Profi
         "create_label", None, profile, text="SOLIDON3D", size=30.0, font="DejaVu Sans", depth=0.6
     )
     assert not [entry for entry in quiet.findings if entry.code == "label.too_fine"]
+
+
+def test_a_second_screw_lid_gets_a_number(profile: Profile) -> None:
+    """Zwei Objekte mit demselben Namen sind im Baum eines (RM-097).
+
+    *Drehdeckel* und *Prüfstück* trugen ihren Namen als festes Wort. Wer zwei
+    Dosen verschloss, fand zwei Zeilen, die gleich heißen, und musste die
+    richtige durch Anklicken suchen — die Kopie macht es seit je anders.
+
+    Der Zähler beginnt bei zwei: Der erste heißt, wie er heißt, und „Drehdeckel
+    1" neben nichts wäre eine Nummer ohne Reihe.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    tin = SceneObject(id="obj_1", name="Dose", mesh=hollow(block(), 3.0, open_top=True).mesh)
+    schon_da = SceneObject(id="obj_9", name="Drehdeckel", mesh=block())
+    spec = REGISTRY.get("screw_lid")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={tin.id: tin, schon_da.id: schon_da}),
+            inputs=[tin],
+            params=spec.params(),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    namen = [str(entry.name) for entry in result.outputs]
+    assert "Drehdeckel 2" in namen, f"der zweite Deckel heißt wie der erste: {namen}"

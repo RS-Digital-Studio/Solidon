@@ -63,7 +63,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Geschützte Flächen an die Ebenensuche hängen und im Dokument speichern; schräge Ebenen, Symmetrie, Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
-| [RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben](#rm-097) | Geometrie, Erkennung und Druckvorbereitung | Sechs kleine Stellen: Lesefehlertext, zwei Namen ohne Zähler, ein doppeltes `_fell_apart`, zwei feste Zahlen, ein Menütext |
+| [RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben](#rm-097) | Geometrie, Erkennung und Druckvorbereitung | Vier Stellen sind behoben; offen bleiben `NOISE_VOLUME` und `BRIDGE_FROM` am Profil — ein eigener Eingriff, kein kleiner Fix |
 | [RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen](#rm-109) | Geometrie, Erkennung und Druckvorbereitung | Mindestbreitenprüfung mit gleichem Befund gezielt beschleunigen |
 | [RM-127 — Wandstärke nach Änderungen am fertigen Modell prüfen](#rm-127) | Geometrie, Erkennung und Druckvorbereitung | Dünne Wände am Endzustand in beiden Änderungsreihenfolgen prüfen |
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Entscheiden, ob eine Verrundung ohne jede Operation in der Merkmalsliste stehen soll |
@@ -651,22 +651,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-097"></a>
 
-- [~] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** **Die Restliste ist
-  kürzer als sie dasteht** (nachgemessen 10.09.2026). Erledigt sind: der aussagekräftige
-  Lesefehler bei verknüpften Quellen (leere und ungültige Prüfsumme werden abgewiesen, eine
-  fehlende Verknüpfung hat ihren eigenen Satz), die einmalige Ermittlung von
-  `support_on_model` (ein Aufrufer je Analyse), die profilgebundene Schichtschwelle
-  `WIDTH_INTERESTING` und der Namensparameter am Deckel.
+- [~] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** **Vier von sechs
+  Stellen sind am 12.09.2026 gefallen**, und eine davon war schon vorher weg:
 
-  **Offen bleiben sechs kleine Stellen**: der übrige `OSError` beim Öffnen heißt weiterhin
-  „sie ist beschädigt", obwohl er auch etwas anderes sein kann; „Prüfstück" und „Drehdeckel"
-  tragen keinen Zähler und sind damit im Baum nicht unterscheidbar; `_fell_apart` steht doppelt
-  (`label_ops.py` und `texture_ops.py`, die Doppelung ist im Code selbst vermerkt);
-  `NOISE_VOLUME` und `BRIDGE_FROM` stehen als feste Zahlen statt am Profil (Regel 7); und der
-  Menüeintrag heißt weiter „Druckeinstellungen …", während der Weg dahinter der Slicer-Weg ist.
-  Abnahme je Änderung am betroffenen Kunden- und Fehlerfall.
+  * Der `OSError` beim Lesen einer verknüpften Quelle hieß „sie ist beschädigt" und
+    behauptete damit etwas über den **Inhalt**, wo das Betriebssystem über den **Zugriff**
+    gesprochen hat — fehlende Rechte, ein getrenntes Netzlaufwerk, ein Wechselmedium. Der
+    Satz nennt jetzt, was feststeht, und der Systemgrund reist als Wert mit. Die
+    `BadZipFile`-Stelle daneben bleibt: Dort ist „beschädigt" die Wahrheit.
+  * *Prüfstück* und *Drehdeckel* bekommen einen Zähler (`Scene.unused_name`). Zwei Objekte
+    mit demselben Namen sind im Baum eines; die Kopie macht es seit je anders. Der Zähler
+    beginnt bei zwei — der erste heißt, wie er heißt.
+  * **`_fell_apart` war längst entdoppelt**: Beide Fassungen tragen je *eine* Anweisung, den
+    Aufruf an `boolean.fell_apart`; was doppelt aussieht, sind die Docstrings, und die
+    beschreiben verschiedene Fälle (Schrift gegen Muster). Nachgemessen am Code, nicht
+    geglaubt.
+  * Der Menüeintrag heißt ***Drucken vorbereiten …*** statt *Druckeinstellungen …* — ein
+    Laie sucht den Weg zum Drucker nicht unter einem Wort für Einstellungen, und der Weg
+    dahinter ist der Slicer-Weg. Der Dialog behält seinen Namen: Der Eintrag nennt die
+    Handlung, der Dialog den Inhalt. Handbuch und Befehlspalette sind nachgezogen, die zwei
+    langen Handbuchtexte in allen fünf Sprachen umgeschlüsselt.
 
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
+  **Offen bleiben die zwei Zahlen** — und sie sind keine kleine Stelle mehr, sondern ein
+  eigener Eingriff: `NOISE_VOLUME` (`geom/difference.py`) und `BRIDGE_FROM`
+  (`slice/analysis.py`) gehören ans Profil (Regel 7), aber weder `Difference` noch
+  `slice_body` kennen eines. Die Schichtanalyse ist von Profilen bewusst entkoppelt und nimmt
+  Zahlen — `overhang_angle` ist dasselbe Muster. Der Weg ist deshalb ein weiterer Parameter
+  bis `_bridge_width` hinunter und ein Profilwert beim Aufrufer
+  (`Profile.minimum_wall_thickness`, denn die Zahl **ist** zwei Bahnbreiten: am Centauri 0,84
+  statt 1,0). Bei `Difference` dasselbe mit `smallest_printable_volume`.
 
 <a id="rm-109"></a>
 

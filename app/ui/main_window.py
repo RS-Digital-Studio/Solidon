@@ -2793,7 +2793,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             file_menu,
-            tr("Druckeinstellungen …"),
+            tr("Drucken vorbereiten …"),
             "Ctrl+P",
             self.action_print_settings,
             tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
@@ -7192,7 +7192,7 @@ class MainWindow(QMainWindow):
             "file.import": (tr("Modell einfügen …"), "Ctrl+I", self.action_import),
             "file.export": (tr("Exportieren …"), "Ctrl+E", self.action_export),
             "file.print_settings": (
-                tr("Druckeinstellungen …"),
+                tr("Drucken vorbereiten …"),
                 "Ctrl+P",
                 self.action_print_settings,
             ),
