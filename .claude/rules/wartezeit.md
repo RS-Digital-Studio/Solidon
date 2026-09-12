@@ -135,14 +135,12 @@ Netze bleiben unveränderliche Referenzen. Ein ausdrücklich neuer Versuch
 darf den heutigen Stand einsammeln und prüft ihn erneut.
 
 **Was nicht sofort da ist, wird nachgereicht statt erwartet.** Der
-Druckeinstellungen-Dialog wartete bis zu zwei Sekunden auf die Schichtanalyse —
-die schlechtere Hälfte beider Möglichkeiten: lang genug, um sich wie ein Hänger
-zu lesen, und ohne Zusage, denn wer den Zeitraum riss, bekam den Dialog eben
-doch ohne sie. Er geht jetzt sofort auf, `take_slice_result` trägt sie in die
-Vorschlagsliste nach. Der Rückruf zeigt dabei auf ein **Feld des Fensters**
-(`_settings_dialog`), nicht auf eine gebundene Methode des Dialogs: der wird
-nach `exec` weggeräumt, und ein Rückruf in ein zerstörtes C++-Objekt ist der
-Absturz ohne Zeile.
+Druckeinstellungen-Dialog öffnet vor der Schichtanalyse. Sein `_AdviceWorker`
+berechnet den gewählten Ausgabeumfang mit den aktuellen Druckwerten; nur der
+passende Auftrag darf die Vorschlagsliste aktualisieren. Ändern sich Körper,
+Plattenwahl oder Schichtraster, wird der frühere Auftrag abgelöst. Beim
+Schließen bricht der Dialog seine Analyse kooperativ ab und hält ihre Arbeiter
+bis zum vollständigen Ende, bevor er selbst freigegeben wird.
 
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
 

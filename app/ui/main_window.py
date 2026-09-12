@@ -1614,11 +1614,6 @@ class MainWindow(QMainWindow):
         Ein zweiter Programmfehler wird an ihn angehängt, statt ein zweites
         modales Fenster darüber zu stellen — siehe :meth:`report_error`.
         """
-        self._settings_dialog: PrintSettingsDialog | None = None
-        """Der offene Druckeinstellungen-Dialog, solange er offen ist (§29).
-        Die nachgereichte Schichtanalyse findet über ihn ihren Weg — nach
-        ``exec`` steht hier wieder ``None``, und der Rückruf läuft ins
-        Leere statt in ein zerstörtes Widget."""
         self._op_dialog: OperationDialog | None = None
         """Der offene Operationsdialog. Er sperrt das Fenster nicht mehr, also
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
@@ -5638,7 +5633,6 @@ class MainWindow(QMainWindow):
         dialog.exec()
         for request in dialog.usage_notice.requests.values():
             self.usage_notice.offer(request, auto_book=False)
-        self._settings_dialog = None
 
         # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
         # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
@@ -5694,38 +5688,6 @@ class MainWindow(QMainWindow):
             # jeder geschlossene Dialog samt seinen neunzehn Feldern bis zum
             # Ende der Sitzung als unsichtbares Kind erhalten.
             dialog.deleteLater()
-
-    def _current_slice(self) -> SliceResult | None:
-        """Die Schichtanalyse des gewählten Körpers, wenn sie schon vorliegt.
-
-        Liegt sie nicht vor, startet :meth:`_slice_of` sie und gibt ``None``
-        zurück — **ohne** darauf zu warten. Der Weg zu den Druckeinstellungen
-        stand hier zwei Sekunden still, weil ohne Analyse kein einziger
-        Vorschlag zur Geometrie zustande kommt: keine Stützen, keine Haftung,
-        keine Mindestschichtzeit, und die Warnung „Die Überhänge sind zu groß,
-        um sich selbst zu tragen" erst danach, wenn überhaupt.
-
-        Beides ist zu haben. Der Dialog geht sofort auf und bekommt die
-        Analyse nachgereicht (``take_slice_result``) — an genau der Stelle,
-        an der sie etwas ändert, nämlich in der Vorschlagsliste.
-        """
-        object_id = self.object_tree.selected()
-        if object_id is None:
-            return None
-        return self._slice_of(object_id)
-
-    def _slice_for_settings(self, result: SliceResult | None) -> None:
-        """Die fertige Analyse in den offenen Druckeinstellungen-Dialog.
-
-        Über das Feld und nicht als gebundene Methode des Dialogs in der
-        Warteliste: Der Dialog wird nach ``exec`` weggeräumt
-        (``deleteLater``), und ein Rückruf in ein zerstörtes C++-Objekt ist
-        der Absturz ohne Zeile. Ist keiner mehr offen, ist das Ergebnis
-        einfach nichts wert — im Cache liegt es trotzdem.
-        """
-        dialog = self._settings_dialog
-        if dialog is not None:
-            dialog.take_slice_result(result)
 
     def _gcode_returned(
         self, outcomes: list[SliceOutcome], comparison: SliceComparison | None = None

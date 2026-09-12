@@ -7942,16 +7942,7 @@ def test_a_failed_export_can_be_repeated_without_choosing_the_file_again(
 def test_the_print_settings_open_before_the_layer_analysis(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """§2.8: Der Weg zu den Druckeinstellungen wartet auf nichts mehr.
-
-    ``_current_slice(wait=True)`` hielt ihn bis zu zwei Sekunden an
-    (``worker.wait``) — die schlechtere Hälfte beider Möglichkeiten: lange
-    genug, um sich wie ein Hänger zu lesen, und ohne Zusage, denn wer den
-    Zeitraum riss, bekam den Dialog eben doch ohne Analyse.
-
-    Geprüft wird die ganze Kette: Der Dialog steht ohne Analyse da, und sie
-    findet ihn, solange er offen ist.
-    """
+    """§2.8: Der echte Dialog öffnet sofort und analysiert seinen Auftrag im Arbeiter."""
     import time
 
     from app.ui import main_window as module
@@ -7964,6 +7955,7 @@ def test_the_print_settings_open_before_the_layer_analysis(
 
     at_open: list[Any] = []
     at_close: list[Any] = []
+    analysed: list[set[str]] = []
 
     class ImmediateDialog(module.PrintSettingsDialog):
         """Statt zu warten: einmal nachsehen, dann die Ereignisse laufen
@@ -7975,6 +7967,7 @@ def test_the_print_settings_open_before_the_layer_analysis(
             while self.slice_result is None and time.perf_counter() < deadline:
                 QApplication.processEvents()
             at_close.append(self.slice_result)
+            analysed.append(set(self._body_analyses))
             return 0
 
     monkeypatch.setattr(module, "PrintSettingsDialog", ImmediateDialog)
@@ -7985,22 +7978,9 @@ def test_the_print_settings_open_before_the_layer_analysis(
     assert at_close and at_close[0] is not None, (
         "die Analyse hat den offenen Dialog nie erreicht — genau dafür war das Warten da"
     )
-    assert window._settings_dialog is None, (
-        "der Rückruf zeigte nach dem Schließen weiter auf ein Widget, das weggeräumt wird"
+    assert analysed == [set(window.session.last_result.scene.objects)], (
+        "der Dialog muss den tatsächlichen Ausgabeumfang selbst analysieren"
     )
-
-
-def test_a_late_layer_analysis_finds_no_dialog(window: MainWindow) -> None:
-    """Ist keiner mehr offen, ist das Ergebnis nichts wert — und darf keinen
-    Absturz kosten.
-
-    Der Dialog wird nach ``exec`` weggeräumt (``deleteLater``); eine gebundene
-    Methode von ihm in der Warteliste wäre ein Rückruf in ein zerstörtes
-    C++-Objekt, also der Absturz ohne Zeile.
-    """
-    window._slice_for_settings(None)
-
-    assert window._settings_dialog is None
 
 
 def test_closing_the_print_settings_keeps_what_was_changed(
