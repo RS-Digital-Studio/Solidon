@@ -2557,10 +2557,7 @@ def fit_stadium(
     _values, vectors = np.linalg.eigh(normals.T @ normals)
     axis = vectors[:, 0]
     axis = axis / float(np.linalg.norm(axis))
-    magnitudes = np.abs(axis)
-    leading = int(np.flatnonzero(magnitudes >= float(magnitudes.max()) - EPS_GEOM)[0])
-    if axis[leading] < 0.0:
-        axis = -axis
+    axis = np.asarray(positive_axis((float(axis[0]), float(axis[1]), float(axis[2]))), dtype=float)
     if float(np.abs(normals @ axis).max()) >= ACROSS_THE_AXIS:
         return None
 
@@ -3968,7 +3965,8 @@ def _shells_inside_the_material(
     Reihenfolge, welches der angrenzenden Dreiecke antwortet. Bei einem
     Zylinder liegen fünf der sechs Extremecken auf demselben Ring.
     """
-    solid = [faces for number, faces in enumerate(components) if number not in set(hollow)]
+    hollow_indices = set(hollow)
+    solid = [faces for number, faces in enumerate(components) if number not in hollow_indices]
     if not solid:
         return [False] * len(hollow)
     material = trimesh.Trimesh(

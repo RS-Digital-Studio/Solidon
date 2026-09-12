@@ -15,6 +15,10 @@ Nachbarflächen. Tangenz und Kreisform werden lokal geprüft; die gemeinsame
 Flächentabelle liefert auch die Randkanten. Der Abbruch wird innerhalb der
 Flutung geprüft, ohne pro Bogen Felder über das gesamte Netz anzulegen.
 
+Zylinder- und Stadionfits legen ihr Achsvorzeichen gemeinsam über
+`units.positive_axis` fest; nahe Betragsgleichheit folgt derselben Regel wie
+im exakten Kern.
+
 Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
 ebenen Flanken. Die Bogenanpassung erkennt die Form, ihr an Dreiecksschwerpunkten
 gemessener Radius verkürzt jedoch das Maß beim wiederholten Bearbeiten.
@@ -172,7 +176,7 @@ unberührt; das Budget gilt nur der Karte.
 
 | Datei | Rolle |
 |---|---|
-| `features.py` | Merkmalserkennung (§21.1) — **rund 3 700 Zeilen**, das größte Modul in `perceive/`. Darin auch `detect_voids`: Hohlräume ohne Weg nach außen, belegt über vier Tore |
+| `features.py` | Merkmalserkennung (§21.1): Flächenformen einpassen und benennen; `detect_voids` belegt Hohlräume ohne Weg nach außen über vier Tore |
 | `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener |
 | `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127) |
