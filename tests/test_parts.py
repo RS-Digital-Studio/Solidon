@@ -2230,6 +2230,23 @@ def test_heatset_entries_name_the_real_product_variant() -> None:
     assert regular.outer == short.outer == pytest.approx(6.3, abs=0.01)
 
 
+@pytest.mark.parametrize("lead_in", [False, True])
+def test_the_m25_heatset_seat_uses_the_manufacturers_four_millimetre_hole(
+    lead_in: bool,
+) -> None:
+    """Ruthex RX-M2,5x5,7: d1=4,6, d3=4,0 und L=5,7 im Herstellerdatenblatt."""
+    entry = standards.insert("M2.5")
+    spec = PARTS.get("heatset_m4")
+    built = spec.fn(spec.params(size="M2.5", lead_in=lead_in, extra_depth=0.0))
+
+    assert entry.outer == pytest.approx(4.6)
+    assert entry.length == pytest.approx(5.7)
+    assert entry.hole == pytest.approx(4.0)
+    assert built.features["bore_1"].params["diameter"] == pytest.approx(4.0)
+    assert built.mesh.bounds.size[:2] == pytest.approx((5.0, 5.0) if lead_in else (4.0, 4.0))
+    assert built.mesh.is_watertight and built.mesh.component_count == 1
+
+
 def test_every_heatset_insert_is_wider_than_its_installation_hole() -> None:
     """`outer == hole` war zweimal dieselbe Bohrung, kein Buchsenmaß."""
     for size in standards.insert_sizes():

@@ -12,6 +12,11 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 8: Ruthex RX-M2,5x5,7 verwendet das empfohlene Einbauloch d3=4,0 mm
+# statt 3,6 mm. Außenmaß d1=4,6 mm und Länge L=5,7 mm sind bestätigt.
+# Quelle: Herstellerdatenblatt, Maßtabelle auf Seite 1:
+# https://www.igo3d.com/mediafiles/Sonstiges/Ruthex/ruthex_Datenblatt_RX-Serie.pdf
+
 # Version 7 seit dem 28.08.2026: Die ISO-7089-Scheiben decken jetzt dieselben
 # Größen M2 bis M8 ab wie die Schraubentabelle; das Schraubenloch kann ihre
 # Tasche unmittelbar schneiden.
@@ -31,7 +36,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "7"
+version = "8"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -244,8 +249,8 @@ size = "M2.5"
 thread = "M2.5"
 outer = 4.6
 length = 5.7
-hole = 3.6
-note = "Ruthex RX-M2.5x5.7; Außenmaß aus Hersteller-STEP"
+hole = 4.0
+note = "Ruthex RX-M2.5x5.7; RX-Produktdatenblatt: d1=4,6 mm, d3=4,0 mm; Außenmaß durch Hersteller-STEP bestätigt"
 
 [[inserts]]
 size = "M3"

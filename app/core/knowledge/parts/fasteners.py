@@ -102,6 +102,15 @@ INSERT_LEAD_IS_ITS_OWN_SIZE = PartChange(
 )
 
 
+M25_INSTALLATION_HOLE = PartChange(
+    version="17",
+    date="2026-09-12",
+    reason="Das Ruthex-Produktdatenblatt nennt für RX-M2,5x5,7 ein Einbauloch von 4,0 mm.",
+    effect="Der M2.5-Sitz wächst von 3,6 auf 4,0 mm Durchmesser; seine Einführöffnung "
+    "wächst ebenfalls um 0,4 mm. Alte Projekte mit dieser Größe auf die Wandstärke prüfen.",
+)
+
+
 HEAD_ROOM_CUTS_DOWNWARD = PartChange(
     version="9",
     date="2026-08-26",
@@ -429,7 +438,12 @@ def size_for_printed_screw(diameter: float) -> dict[str, Any]:
         "Lötkolben trägt eine Mutternfalle ähnlich viel, und ein Schraubenloch reicht, "
         "wo die Schraube durch das Teil gehen darf."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, INSERT_LEAD_IS_ITS_OWN_SIZE],
+    changes=[
+        FIRST_RELEASE,
+        FACE_GIVES_DIRECTION,
+        INSERT_LEAD_IS_ITS_OWN_SIZE,
+        M25_INSTALLATION_HOLE,
+    ],
 )
 def heatset_insert(raw: BaseParams) -> PartResult:
     params = cast(HeatsetParams, raw)

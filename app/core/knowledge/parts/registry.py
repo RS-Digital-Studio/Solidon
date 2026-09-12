@@ -694,7 +694,7 @@ def register_part(
 #: Automatische Passungswerte lesen das Material des Zielkörpers statt des
 #: Projekts (``MATERIAL_OF_TARGET``), und der Kabelclip misst seine Verengung
 #: am Kabel statt am aufgeweiteten Sitz (``structure.py``, 06.09.2026).
-LIBRARY_VERSION: Final = "16"
+LIBRARY_VERSION: Final = "17"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
