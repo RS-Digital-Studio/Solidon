@@ -82,6 +82,12 @@ def check(url: str) -> tuple[bool, str]:
             )
     except HTTPError as problem:
         message = f"Aktivierungsdienst antwortet mit HTTP {problem.code}."
+        if problem.code == 503:
+            message += (
+                " Zuerst die privaten Dateirechte prüfen: appdata 0700, activation.seed, "
+                "activation.sqlite und operator.token 0600 (SITE CHMOD über FTPS)."
+            )
+        message += " Das private Serverprotokoll prüfen."
         try:
             body = read_limited(problem, limit=MAX_RESPONSE_BYTES, deadline=deadline)
             answer = load_json(body, max_bytes=MAX_RESPONSE_BYTES)
@@ -117,7 +123,11 @@ def check(url: str) -> tuple[bool, str]:
     except StrictJsonError:
         return False, "Aktivierungsdienst sendet kein lesbares JSON."
     if answer != {"ok": True, "protocol": 1}:
-        return False, "Aktivierungsdienst meldet sich, ist aber nicht einsatzbereit."
+        return (
+            False,
+            "Aktivierungsdienst meldet sich, ist aber nicht einsatzbereit. "
+            "Endpunktversion und privates Serverprotokoll prüfen, dann erneut abfragen.",
+        )
     return True, "Aktivierungsdienst ist bereit (Protokoll 1)."
 
 

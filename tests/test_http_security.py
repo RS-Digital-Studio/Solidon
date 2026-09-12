@@ -980,6 +980,31 @@ def test_health_error_body_timeout_keeps_status_and_closes_response(
     monkeypatch.setattr(check_activation, "_open_health", fail)
     assert check_activation.check(check_activation.DEFAULT_URL) == (
         False,
-        "Aktivierungsdienst antwortet mit HTTP 503.",
+        "Aktivierungsdienst antwortet mit HTTP 503."
+        " Zuerst die privaten Dateirechte prüfen: appdata 0700, activation.seed, "
+        "activation.sqlite und operator.token 0600 (SITE CHMOD über FTPS)."
+        " Das private Serverprotokoll prüfen.",
     )
     assert stream.closed
+
+
+@pytest.mark.parametrize("status", [500, 503])
+def test_health_http_status_always_suggests_a_private_operator_check(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    error = urllib.error.HTTPError(
+        check_activation.DEFAULT_URL, status, "private-secret", {}, io.BytesIO(b"not json")
+    )
+    monkeypatch.setattr(error, "set_read_timeout", lambda seconds: None, raising=False)
+
+    def fail(request: object, *, timeout: float) -> None:
+        raise error
+
+    monkeypatch.setattr(check_activation, "_open_health", fail)
+    ready, message = check_activation.check(check_activation.DEFAULT_URL)
+    assert not ready
+    assert "Serverprotokoll prüfen" in message
+    assert "private-secret" not in message
+    if status == 503:
+        assert "0700" in message and "0600" in message
+        assert "activation.seed" in message and "activation.sqlite" in message
