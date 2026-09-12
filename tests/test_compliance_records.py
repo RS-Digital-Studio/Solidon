@@ -198,14 +198,24 @@ def test_the_single_incident_intake_covers_all_three_legal_clocks() -> None:
 def test_public_security_text_does_not_claim_an_unproven_reporting_operation() -> None:
     """Die Kundenseite verspricht keinen ENISA-Betrieb vor seiner Abnahme."""
 
+    unproven = {
+        "de": "noch nicht vollständig nachgewiesen",
+        "en": "not yet been fully demonstrated",
+        "es": "aún no está plenamente acreditada",
+        "fr": "n’est pas encore entièrement attestée",
+        "it": "non è ancora pienamente documentata",
+        "pt": "ainda não está plenamente comprovada",
+    }
+    incident = (ROOT / "SECURITY-INCIDENT.md").read_text(encoding="utf-8")
     files = [ROOT / "SECURITY.md", *(ROOT / "website").glob("**/security.html")]
+    assert len(files) == 7
     for path in files:
-        text = path.read_text(encoding="utf-8")
-        assert "ENISA Single Reporting Platform" not in text, path
-        assert "plataforma única de ENISA" not in text, path
-        assert "plateforme unique de l’ENISA" not in text, path
-        assert "piattaforma unica ENISA" not in text, path
-        assert "plataforma única da ENISA" not in text, path
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        language = path.parent.name if path.parent.name in unproven else "de"
+        assert "2024/2847" in text and "CSIRT" in text, path
+        assert "single-reporting-platform-srp" in text, path
+        if "- [ ]" in incident:
+            assert unproven[language] in text, path
 
 
 def test_product_liability_cutoff_uses_the_corrected_directive_date() -> None:

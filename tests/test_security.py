@@ -174,7 +174,10 @@ def test_the_twenty_four_hour_route_stays_a_release_blocker_until_it_is_real() -
     assert "darf keine Verkaufs- oder Sicherheitsfassung freigegeben werden" in collapsed
     assert "EU-Login" in text
     assert "Primary" in text and "Secondary" in text
-    assert "zuständige **CSIRT**" in text
+    assert "deutsches **CSIRT**" in text
+    assert "EU-Login mit MFA" in collapsed
+    assert "Herstellerprüfung erst beim Meldebedarf" in collapsed
+    assert "Art. 14 schreibt diese konkrete Organisation nicht vor" in collapsed
     assert "24 Stunden an sieben Tagen" in text
     assert "höchstens 15 Minuten" in text
     assert "Probelauf außerhalb der Arbeitszeit" in text
