@@ -150,6 +150,13 @@ NEEDED_GIGABYTES: Final = 9.0
 #: einmal „alle Lizenzen sind geprüft" — genau so eine Behauptung war der
 #: GPL-Knoten ``RMBG``: wahr gemeint, von keinem Test gehalten (Regel 22).
 ANTLR_PACKAGE: Final = "antlr4-python3-runtime==4.9.3"
+SETUPTOOLS_PACKAGE: Final = "setuptools==83.0.0"
+SETUPTOOLS_SOURCE: Final = (
+    "setuptools @ https://files.pythonhosted.org/packages/5d/40/"
+    "e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/"
+    "setuptools-83.0.0-py3-none-any.whl"
+    "#sha256=29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+)
 ANTLR_SOURCE: Final = (
     "antlr4-python3-runtime @ "
     "https://files.pythonhosted.org/packages/3e/38/"
@@ -169,7 +176,7 @@ BINARY_PACKAGES: Final = (
     "lazy_loader==0.5",
     "omegaconf==2.3.1",
 )
-PACKAGES: Final = (*BINARY_PACKAGES, ANTLR_PACKAGE)
+PACKAGES: Final = (*BINARY_PACKAGES, ANTLR_PACKAGE, SETUPTOOLS_PACKAGE)
 
 
 #: Wo ComfyUI erfahrungsgemäß liegt, wenn niemand etwas anderes sagt.
@@ -442,8 +449,8 @@ def _run(
     what: TranslatableText | str,
     progress: ProgressFn,
     cancelled: CancelledFn | None = None,
-) -> None:
-    """Einen Schritt laufen lassen — abbrechbar, mitten drin.
+) -> str:
+    """Einen Schritt laufen lassen und seine letzten Ausgabezeilen zurückgeben.
 
     **``subprocess.run`` machte „Abbrechen" beim längsten Schritt wirkungslos.**
     Es blockiert bis zum Ende des Prozesses; die Abbruchprüfung lag *zwischen*
@@ -521,6 +528,7 @@ def _run(
         raise SetupFailed(f"{what}: {problem}") from problem
     if code:
         raise SetupFailed(str(what) + chr(10) + chr(10).join(lines))
+    return "\n".join(lines)
 
 
 #: Wie oft ein Download wiederholt wird, bevor er als gescheitert gilt.
@@ -762,9 +770,10 @@ def install_packages(
     auch Python 3.10; zwei Pakete tragen deshalb je eine festgeschriebene
     Fassung für 3.10 und eine für neuere Interpreter. ANTLR 4.9.3 gibt es nur
     als Quellpaket; dessen unveränderliche PyPI-Adresse und SHA-256 sind
-    deshalb festgeschrieben, und die isolierte Bauumgebung darf keine weiteren
-    Pakete nachladen.
+    deshalb festgeschrieben. Der Bau darf keine weiteren Pakete verdeckt
+    nachladen; ein fehlendes Build-Backend wird vorher gezielt ergänzt.
     """
+    _ensure_antlr_build_backend(python, progress, cancelled)
     _run(
         [
             str(python),
@@ -796,6 +805,42 @@ def install_packages(
         progress,
         cancelled,
     )
+
+
+def _ensure_antlr_build_backend(
+    python: Path, progress: ProgressFn, cancelled: CancelledFn | None
+) -> None:
+    """Ein vorhandener Baukasten bleibt; nur ein fehlender Import wird nachgezogen."""
+    step = _("ANTLR-Laufzeit für TripoSG nachziehen")
+    result = _run([str(python), "-s", "-c", _CHECK_BUILD_BACKEND], step, progress, cancelled)
+    if result.rsplit("\n", 1)[-1] == "missing":
+        _run(
+            [
+                str(python),
+                "-s",
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--only-binary=:all:",
+                "--require-hashes",
+                SETUPTOOLS_SOURCE,
+            ],
+            step,
+            progress,
+            cancelled,
+        )
+
+
+_CHECK_BUILD_BACKEND = """
+try:
+    import setuptools.build_meta
+    from setuptools.command.bdist_wheel import bdist_wheel
+except ImportError:
+    print("missing", flush=True)
+else:
+    print("ready", flush=True)
+"""
 
 
 def weights_present(comfyui: Path) -> bool:

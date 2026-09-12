@@ -240,3 +240,4 @@ typeguard = { licence = "MIT", note = "direkt durch comfy_setup installiert" }
 diffusers = { licence = "Apache-2.0", note = "direkt durch comfy_setup installiert" }
 omegaconf = { licence = "BSD-3-Clause", note = "direkt durch comfy_setup installiert" }
 antlr4-python3-runtime = { licence = "BSD-3-Clause", note = "direkt durch comfy_setup in Version 4.9.3 installiert" }
+setuptools = { licence = "MIT", note = "nur bei fehlendem ANTLR-Build-Backend in ComfyUI installiert; 83.0.0, LICENSE im SHA-256-gebundenen Wheel; https://pypi.org/project/setuptools/83.0.0/" }

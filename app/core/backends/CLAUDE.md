@@ -91,3 +91,9 @@ Dateistand offline, ohne bei jeder Anzeige 7,5 GB erneut zu lesen. Eine alte
 Größenmarke oder eine nachträglich geänderte Gewichtsdatei verlangt erneut die
 Einrichtungsprüfung. Das ist keine Signatur der lokalen Ablage und schützt
 nicht gegen jemanden, der Datei und Abschlussmarke gemeinsam manipuliert.
+
+ANTLR wird im vorhandenen ComfyUI-Python ohne verdeckte Bauabhängigkeiten
+gebaut. Ein Import prüft zuerst `setuptools.build_meta` und `bdist_wheel`.
+Nur bei fehlendem Import zieht die Einrichtung den festen universellen
+Setuptools-Wheel mit SHA-256 nach; vorhandene funktionsfähige Bauwerkzeuge
+bleiben erhalten. Abbruch und andere Prozessfehler starten keine Installation.

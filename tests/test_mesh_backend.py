@@ -902,6 +902,7 @@ def test_the_package_list_carries_what_a_fresh_comfyui_lacks() -> None:
         "lazy_loader==0.5",
         "omegaconf==2.3.1",
         "antlr4-python3-runtime==4.9.3",
+        "setuptools==83.0.0",
     )
 
 
@@ -933,21 +934,29 @@ def test_fixed_packages_cover_every_supported_comfy_python(
     assert selected["scikit-image"] == [scikit_image]
 
 
+@pytest.mark.parametrize("missing_backend", [False, True])
 def test_package_installation_allows_only_fixed_artifacts(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, missing_backend: bool
 ) -> None:
     """Wheels sind Pflicht; das einzige Quellpaket trägt eine Prüfsumme."""
     from app.core.backends import comfy_setup
 
     commands: list[list[str]] = []
 
-    def remember(command, _what, _progress, _cancelled=None) -> None:
+    def remember(command, _what, _progress, _cancelled=None) -> str:
         commands.append(command)
+        return "missing" if missing_backend else "ready"
 
     monkeypatch.setattr(comfy_setup, "_run", remember)
 
     comfy_setup.install_packages(Path("python"))
 
+    assert commands.pop(0) == ["python", "-s", "-c", comfy_setup._CHECK_BUILD_BACKEND]
+    if missing_backend:
+        bootstrap = commands.pop(0)
+        assert bootstrap[-1] == comfy_setup.SETUPTOOLS_SOURCE
+        assert "#sha256=" in bootstrap[-1]
+        assert {"--no-deps", "--only-binary=:all:", "--require-hashes"} <= set(bootstrap)
     assert len(commands) == 2
     assert "--no-deps" in commands[0]
     assert "--only-binary=:all:" in commands[0]
@@ -963,6 +972,26 @@ def test_package_installation_allows_only_fixed_artifacts(
         "antlr4-python3-runtime-4.9.3.tar.gz"
         "#sha256=f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"
     )
+
+
+@pytest.mark.parametrize("failure", ["cancelled", "process_error"])
+def test_build_backend_probe_failure_does_not_start_any_package_installation(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    from app.core.backends import comfy_setup
+
+    commands: list[list[str]] = []
+    exception = comfy_setup.Cancelled if failure == "cancelled" else comfy_setup.SetupFailed
+
+    def fail(command, *_args, **_kwargs):
+        commands.append(command)
+        raise exception("probe stopped")
+
+    monkeypatch.setattr(comfy_setup, "_run", fail)
+    with pytest.raises(exception):
+        comfy_setup.install_packages(Path("python"))
+    assert len(commands) == 1
+    assert "pip" not in commands[0]
 
 
 def test_setting_up_looks_whether_the_nodes_load(
