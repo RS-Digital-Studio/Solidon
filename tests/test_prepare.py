@@ -4408,6 +4408,73 @@ def test_a_countersunk_bore_cannot_be_pulled_into_a_slot(
     assert not any(entry.code.startswith("resize.") for entry in accepted.findings)
 
 
+@pytest.mark.parametrize("operation", ["resize", "slot"])
+@pytest.mark.parametrize(
+    "direction, depth",
+    [
+        ((0.0, 0.0, 0.0), 10.0),
+        ((0.0, 0.0, 1.0), 0.0),
+        ((math.nan, 0.0, 1.0), 10.0),
+        ((0.0, 0.0, 1.0), math.nan),
+    ],
+)
+def test_invalid_detected_bore_geometry_has_a_translated_error(
+    operation: str, direction: Vec3, depth: float, profile: Profile
+) -> None:
+    """Öffentliche Geometriehelfer melden unbrauchbare Achsen und Tiefen als Eingabefehler."""
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare import slot_bore
+
+    body = cube()
+    common = {
+        "position": (0.0, 0.0, 0.0),
+        "direction": direction,
+        "depth": depth,
+        "diameter": 8.0,
+        "through": True,
+        "profile": profile,
+    }
+    with pytest.raises(ValidationError) as caught:
+        if operation == "resize":
+            resize_bore(body, previous_diameter=6.0, **common)
+        else:
+            slot_bore(body, length=20.0, angle_deg=0.0, **common)
+
+    assert caught.value.field == "at_feature"
+    assert caught.value.constraint == "no_geometry"
+    assert "neu erkennen" in str(caught.value.detail)
+
+
+@pytest.mark.parametrize("operation", ["resize_hole", "slot_hole"])
+def test_bore_operations_reject_a_zero_axis_before_geometry(
+    operation: str, profile: Profile
+) -> None:
+    import dataclasses
+
+    from app.core.errors import ValidationError
+
+    drilled = drill(
+        cube(),
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=6.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    features = detect(drilled)
+    hole = next(entry for entry in features.values() if entry.kind == "hole")
+    broken = dataclasses.replace(hole, params={**hole.params, "axis": (0.0, 0.0, 0.0)})
+    source = SceneObject(
+        id="obj_1", name="Bohrung", mesh=drilled, features={**features, hole.id: broken}
+    )
+    params = {"diameter": 8.0} if operation == "resize_hole" else {"slot_length": 20.0}
+
+    with pytest.raises(ValidationError) as caught:
+        _run_op(operation, source, profile, at_feature=hole.id, **params)
+
+    assert caught.value.constraint == "no_geometry"
+
+
 def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
     """Eine kürzere Länge wird abgelehnt, statt stillschweigend nichts zu tun.
 

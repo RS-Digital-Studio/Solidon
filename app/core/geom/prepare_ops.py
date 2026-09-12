@@ -64,6 +64,7 @@ from app.core.geom.prepare import (
     BoreAnchor,
     arrange_on_bed,
     bore_diameter,
+    bore_geometry_error,
     check_build_volume,
     check_collisions,
     check_join_path,
@@ -3087,7 +3088,7 @@ OPEN_BODY_DETAIL: Final = _(
 
 @register_op(
     name="resize_hole",
-    cache_version="2",
+    cache_version="3",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -3527,7 +3528,7 @@ SLOT_FEATURE_RENAMED: Final = _(
 
 @register_op(
     name="slot_hole",
-    cache_version="2",
+    cache_version="3",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -4147,33 +4148,19 @@ def _bore_vector(feature: Feature, name: str) -> tuple[float, float, float]:
     if (
         not isinstance(value, tuple | list)
         or len(value) != 3
-        or not all(isinstance(entry, int | float) for entry in value)
+        or not all(isinstance(entry, int | float) and math.isfinite(entry) for entry in value)
     ):
-        raise ValidationError(
-            field="at_feature",
-            detail=_(
-                "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. "
-                "Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut."
-            ),
-            value=feature.id,
-            constraint="no_geometry",
-        )
+        raise bore_geometry_error(feature.id)
+    if name == "axis" and math.hypot(*value) <= EPS_GEOM:
+        raise bore_geometry_error(feature.id)
     return (float(value[0]), float(value[1]), float(value[2]))
 
 
 def _bore_number(feature: Feature, name: str) -> float:
     """Ein positives Bohrungsmaß aus der Erkennung."""
     value = feature.params.get(name)
-    if not isinstance(value, int | float) or float(value) <= EPS_GEOM:
-        raise ValidationError(
-            field="at_feature",
-            detail=_(
-                "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. "
-                "Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut."
-            ),
-            value=feature.id,
-            constraint="no_geometry",
-        )
+    if not isinstance(value, int | float) or not math.isfinite(value) or float(value) <= EPS_GEOM:
+        raise bore_geometry_error(feature.id)
     return float(value)
 
 

@@ -85,6 +85,19 @@ class BoreResult:
     findings: list[Finding]
 
 
+def bore_geometry_error(value: str | None = None) -> ValidationError:
+    """Ein unbrauchbares Bohrungsmerkmal braucht eine neue Erkennung."""
+    return ValidationError(
+        field="at_feature",
+        detail=_(
+            "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. "
+            "Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut."
+        ),
+        value=value,
+        constraint="no_geometry",
+    )
+
+
 def compensation_findings(nominal: float, cut: float, compensate: bool) -> list[Finding]:
     """Der Hinweis, dass eine Bohrung um die Materialtoleranz gewachsen ist.
 
@@ -313,6 +326,8 @@ def resize_bore(
     unverändert bestätigt, darf nicht allein durch eine noch einmal
     aufgeschlagene Materialtoleranz eine andere Bohrung bekommen.
     """
+    if not math.isfinite(depth) or depth <= EPS_GEOM:
+        raise bore_geometry_error()
     cut_diameter = bore_diameter(diameter, profile, compensate)
     if is_close(cut_diameter, previous_diameter):
         return BoreResult(
@@ -331,16 +346,14 @@ def resize_bore(
 
     vector = np.asarray(direction, dtype=float)
     length = float(np.linalg.norm(vector))
-    if length <= EPS_GEOM:
-        raise ValueError("a bore direction must not be zero")
+    if not math.isfinite(length) or length <= EPS_GEOM:
+        raise bore_geometry_error()
     unit = vector / length
     grows = cut_diameter > previous_diameter
     # Nur ein abziehendes Werkzeug darf über beide Mündungen hinausragen.
     # Beim Verkleinern wird der Ring vereinigt; dieselbe Zugabe würde dann an
     # beiden Außenseiten als tastbarer Kragen Teil des Modells werden.
     height = depth + (BOOLEAN_OVERLAP * 2.0 if through and grows else 0.0)
-    if height <= EPS_GEOM:
-        raise ValueError("a detected bore must have a positive depth")
     to_world = np.asarray(
         trimesh.geometry.align_vectors(np.array([0.0, 0.0, 1.0]), unit),
         dtype=float,
@@ -475,10 +488,10 @@ def slot_bore(
         )
     vector = np.asarray(direction, dtype=float)
     span = float(np.linalg.norm(vector))
-    if span <= EPS_GEOM:
-        raise ValueError("a bore direction must not be zero")
-    if depth <= EPS_GEOM:
-        raise ValueError("a detected bore must have a positive depth")
+    if not math.isfinite(span) or span <= EPS_GEOM:
+        raise bore_geometry_error()
+    if not math.isfinite(depth) or depth <= EPS_GEOM:
+        raise bore_geometry_error()
     unit = vector / span
     axis: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
     frame = frame_of(axis, position)
