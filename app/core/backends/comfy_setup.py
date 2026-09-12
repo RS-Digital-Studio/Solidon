@@ -38,7 +38,6 @@ from pathlib import Path
 from typing import IO, Final
 
 from app.core import discover
-from app.core.errors import AppError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -1018,7 +1017,7 @@ def adopt_weights(
             progress,
             cancelled,
         )
-    except AppError as problem:
+    except SetupFailed as problem:
         _log.info("vorhandene TripoSG-Gewichte nicht übernommen: %s", problem)
         return False
     return weights_present(comfyui)

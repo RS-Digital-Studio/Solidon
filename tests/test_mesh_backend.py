@@ -2542,6 +2542,45 @@ def test_complete_legacy_weights_are_adopted_without_a_download(
     assert not (root / ".solidon-complete.json").exists()
 
 
+@pytest.mark.parametrize("cancelled", [False, True], ids=("incomplete", "cancelled"))
+def test_rejected_legacy_weights_reach_download_unless_cancelled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cancelled: bool
+) -> None:
+    """Ein halber Altbestand lädt weiter; ein Nutzerabbruch startet keinen Download."""
+    from app.core.backends import comfy_setup
+
+    root = tmp_path / "models/triposg/TripoSG"
+    root.mkdir(parents=True)
+    (root / "model_index.json").write_text("{}", encoding="utf-8")
+    checks: list[list[str]] = []
+    downloads: list[list[str]] = []
+
+    def reject(command: list[str], *_args: object, **_kwargs: object) -> None:
+        checks.append(command)
+        if cancelled:
+            raise comfy_setup.Cancelled()
+        raise comfy_setup.SetupFailed("Die Modelldatei fehlt oder ist unvollständig.")
+
+    monkeypatch.setattr(comfy_setup, "_run", reject)
+    monkeypatch.setattr(comfy_setup, "scratch_dir", lambda _name: tmp_path / "scratch")
+    monkeypatch.setattr(comfy_setup, "_space_or_stop", lambda _where: None)
+    monkeypatch.setattr(
+        comfy_setup, "_run_repeatedly", lambda command, *a, **k: downloads.append(command)
+    )
+
+    if cancelled:
+        with pytest.raises(comfy_setup.Cancelled):
+            comfy_setup.fetch_weights(tmp_path, Path(sys.executable))
+    else:
+        comfy_setup.fetch_weights(tmp_path, Path(sys.executable))
+
+    assert len(checks) == 1 and comfy_setup._ADOPT_WEIGHTS in checks[0]
+    assert len(downloads) == (0 if cancelled else 1)
+    if downloads:
+        assert comfy_setup._FETCH_WEIGHTS in downloads[0]
+        assert str(root) in downloads[0]
+
+
 def test_fetch_weights_adopts_a_legacy_installation_and_clears_replacement_leftovers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
