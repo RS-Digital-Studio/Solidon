@@ -388,6 +388,53 @@ def test_a_sweep_follows_a_drawn_path_around_its_corner() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("centres", "radius", "plane", "corner"),
+    [
+        (((0.0, 0.0),), 3.0, "plane:xz", False),
+        (((0.0, 0.0),), 3.0, "plane:yz", True),
+        (((-2.0, 0.0), (2.0, 0.0)), 1.0, "plane:xz", True),
+    ],
+    ids=["Ring-gerade", "Ring-Ecke", "zwei-Löcher-Ecke"],
+)
+def test_a_drawn_sweep_preserves_every_inner_contour(
+    centres: tuple[tuple[float, float], ...], radius: float, plane: str, corner: bool
+) -> None:
+    """Ein Rohr und ein Kanal mit zwei Öffnungen behalten ihre Innenkonturen.
+
+    Die gezeichnete Bahn führte nur den Außendraht und füllte alle Löcher.
+    Der Querschnitt liegt symmetrisch um die Bahn, damit Fläche mal Bahnlänge
+    auch an der Gehrung das unabhängige Sollvolumen ergibt.
+    """
+    outline = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("circle", ((0.0, 0.0), (5.0, 0.0))),
+            *(
+                SketchElement("circle", (centre, (centre[0] + radius, centre[1])))
+                for centre in centres
+            ),
+        ),
+    )
+    points = [(0.0, 0.0), (0.0, 20.0)]
+    if corner:
+        points.append((15.0, 20.0))
+    body = solid_of(
+        run(
+            "sketch_sweep",
+            sketch=sketch_to_text(outline),
+            along="drawn",
+            path_sketch=_path(*points, plane=plane),
+        )
+    )
+
+    area = math.pi * (25.0 - len(centres) * radius**2)
+    length = 35.0 if corner else 20.0
+    assert body.volume == pytest.approx(area * length, rel=1e-6)
+    assert body.is_closed
+    assert body.solid_count == 1
+
+
 def test_a_sweep_follows_a_path_with_a_rounded_corner() -> None:
     """Der Hauptfall war ungeprüft: eine Bahn mit einem **Bogen** darin.
 

@@ -398,7 +398,12 @@ def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Soli
         raise GeometryError(
             detail=_("Diese Bahn ergibt keinen geschlossenen Körper — prüfen Sie ihren Verlauf.")
         )
-    return solid.replacing(builder.Shape())
+    solid = solid.replacing(builder.Shape())
+    # MakePipeShell nimmt einen Draht, keine Fläche mit Innenkonturen. Jedes
+    # Loch folgt derselben Bahn und wird wie beim Loft vom Außenkörper abgezogen.
+    for hole in profile.holes:
+        solid = _fuzzy_boolean("difference", solid, sweep_path(hole, path, plane))
+    return solid
 
 
 def loft(

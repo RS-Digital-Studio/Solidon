@@ -166,6 +166,10 @@ also genau das erste Segment, und ohne ein Wort dazu. `MakeSolid()` schließt
 die Schale danach zu einem Körper; ohne diesen Schritt wäre das Ergebnis hohl,
 und das fiele erst beim Schneiden oder Exportieren auf.
 
+Innenkonturen folgen einzeln derselben Bahn und werden mit derselben
+Booleschen Differenz wie beim Loft vom Außenkörper abgezogen. `MakePipeShell`
+übernimmt nur den Außendraht; Löcher einer Profilfläche übernimmt es nicht.
+
 ## Was er einbringt
 
 Was ein Netz nicht geben kann: echte Kanten — und damit Fasen und
