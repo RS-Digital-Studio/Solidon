@@ -105,7 +105,7 @@ class FilletParams(BaseParams):
 
 @register_op(
     name="fillet_edges",
-    cache_version="2",
+    cache_version="3",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -157,7 +157,7 @@ class ChamferParams(BaseParams):
 
 @register_op(
     name="chamfer_edges",
-    cache_version="2",
+    cache_version="3",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -204,7 +204,7 @@ class BeadParams(BaseParams):
 
 @register_op(
     name="bead_edges",
-    cache_version="2",
+    cache_version="3",
     title=_("Wulst anlegen"),
     category="shaping",
     params=BeadParams,

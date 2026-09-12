@@ -427,6 +427,9 @@ def wanted[AnyEdge: SelectableEdge](
     Kante nicht, bei genannten sind sie verschwunden — ein Schritt davor hat
     sie weggenommen. Wer denselben Satz für beides schriebe, schickte den
     Kunden in die falsche Richtung (Regel 17).
+
+    Eine ausdrücklich benannte Auswahl gilt nur vollständig: Fehlt auch nur
+    ein Schlüssel, wird keine der übrigen Kanten bearbeitet (§21.3).
     """
     if choice == "named" and not keys:
         raise GeometryError(
@@ -435,13 +438,13 @@ def wanted[AnyEdge: SelectableEdge](
         )
     if keys:
         chosen = named_edges(edges, keys)
-        if not chosen:
+        if len(chosen) != len(keys):
             raise GeometryError(
                 detail=_(
-                    "Die gewählten Kanten gibt es an diesem Körper nicht mehr — "
-                    "ein Schritt davor hat sie verändert. Wählen Sie sie neu."
+                    "Mindestens eine gewählte Kante gibt es an diesem Körper nicht mehr — "
+                    "ein Schritt davor hat sie verändert. Wählen Sie die Kanten neu."
                 ),
-                values={"edges": len(keys)},
+                values={"edges": len(keys), "missing": len(keys) - len(chosen)},
             )
         return chosen
     chosen = choose(edges, choice)

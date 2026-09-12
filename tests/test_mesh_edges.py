@@ -242,7 +242,10 @@ def test_a_named_rim_chamfer_cuts_the_requested_side_of_a_tube(outer: bool) -> N
 
 
 @pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges", "bead_edges"])
-def test_a_warm_legacy_edge_cache_cannot_hide_an_ambiguous_selection(operation: str) -> None:
+@pytest.mark.parametrize("missing", [False, True], ids=["ambiguous", "partly-missing"])
+def test_a_warm_legacy_edge_cache_cannot_hide_an_invalid_selection(
+    operation: str, missing: bool
+) -> None:
     """Ein gespeichertes Ergebnis der alten Auswahl überspringt keine neue Prüfung."""
     import dataclasses
 
@@ -251,7 +254,10 @@ def test_a_warm_legacy_edge_cache_cannot_hide_an_ambiguous_selection(operation: 
     from app.core.types import Document, Operation
 
     load_operations()
-    body, _ = _tube_edges("brep")
+    body, found = _tube_edges("brep")
+    keys = f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000"
+    if missing:
+        keys = f"{edge_key(found[0])} e:99.00,99.00,99.00:1.000,0.000,0.000"
 
     def make_tube(ctx: OpContext) -> OpResult:
         return OpResult(outputs=[SceneObject(id="", name="Rohr", mesh=body, kind="brep")])
@@ -263,7 +269,7 @@ def test_a_warm_legacy_edge_cache_cannot_hide_an_ambiguous_selection(operation: 
 
     source = dataclasses.replace(REGISTRY.get("create_brep_cylinder"), fn=make_tube)
     current = REGISTRY.get(operation)
-    previous = dataclasses.replace(current, fn=old_result, cache_version="")
+    previous = dataclasses.replace(current, fn=old_result, cache_version="2" if missing else "")
     before, after = Registry(), Registry()
     for registry, editing in ((before, previous), (after, current)):
         registry.register(source)
@@ -278,10 +284,7 @@ def test_a_warm_legacy_edge_cache_cannot_hide_an_ambiguous_selection(operation: 
                 op=operation,
                 inputs=["obj_1"],
                 outputs=["obj_1"],
-                params={
-                    "edges": "named",
-                    "edge_keys": f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000",
-                },
+                params={"edges": "named", "edge_keys": keys},
             ),
         ],
     )
@@ -293,7 +296,8 @@ def test_a_warm_legacy_edge_cache_cannot_hide_an_ambiguous_selection(operation: 
     fresh = evaluate(document, profile, registry=after, cache=cache)
 
     assert fresh.stopped_at == 2
-    assert any("nicht eindeutig" in str(entry.message) for entry in fresh.scene.report.findings)
+    expected = "nicht mehr" if missing else "nicht eindeutig"
+    assert any(expected in str(entry.message) for entry in fresh.scene.report.findings)
 
 
 def test_a_groove_tells_its_inner_edges_from_its_outer_ones() -> None:
@@ -696,6 +700,41 @@ def test_a_key_that_names_no_edge_is_a_sentence_not_a_silent_pass() -> None:
 
     assert problem.value.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
     assert "nicht mehr" in str(problem.value.detail)
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges", "bead_edges"])
+def test_a_partly_orphaned_selection_stops_the_whole_edge_operation(
+    backend: str, operation: str
+) -> None:
+    """Nach dem Verrunden einer von zwei Kanten bleibt keine stille Teilauswahl."""
+    if backend == "brep":
+        brep = pytest.importorskip("app.core.brep.edit")
+        if not pytest.importorskip("app.core.brep.kernel").available():
+            pytest.skip("OpenCASCADE is an optional dependency")
+        body = brep.box(WIDTH, DEPTH, HEIGHT)
+        original = brep.edges_of(body)
+    else:
+        body = block()
+        original = edges_of(body)
+    upright = sorted((entry for entry in original if entry.upright), key=lambda entry: entry.middle)
+    keys = [edge_key(entry) for entry in upright[:2]]
+    source = SceneObject(id="obj_1", name="Block", mesh=body, kind=backend)
+    first = run("fillet_edges", source, radius=1.0, edges="named", edge_keys=keys[0]).outputs[0]
+    remaining = brep.edges_of(first.mesh) if backend == "brep" else edges_of(first.mesh)
+    assert named_edges(remaining, [keys[0]]) == []
+    assert len(named_edges(remaining, [keys[1]])) == 1
+    before = first.mesh.volume
+    assert before < source.mesh.volume
+
+    with pytest.raises(GeometryError) as problem:
+        run(operation, first, edges="named", edge_keys=" ".join(keys))
+
+    assert problem.value.suggestions
+    assert problem.value.values["missing"] == 1
+    assert "nicht mehr" in str(problem.value.detail)
+    assert first.mesh.volume == pytest.approx(before)
+    assert first.mesh.is_watertight and first.mesh.component_count == 1
 
 
 def test_a_group_choice_ignores_an_older_single_pick_on_a_mesh() -> None:

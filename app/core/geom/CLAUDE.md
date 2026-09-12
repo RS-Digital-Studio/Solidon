@@ -360,6 +360,9 @@ Linienschwerpunkt, am Kreis also den Radius. Mitte und Richtung allein
 unterscheiden die konzentrischen Ränder eines Rohrs nicht. Alte Schlüssel
 bleiben als Alias lesbar, wenn genau eine Kante passt. Mehrere Treffer
 halten zur Neuauswahl an; keine Reihenfolge entscheidet über die Geometrie.
+Eine explizite Auswahl muss vollständig auflösbar sein. Fehlt nur eine der
+genannten Kanten, hält der ganze Bearbeitungsschritt an; die noch vorhandenen
+Kanten werden nicht als stillschweigende Teilauswahl behandelt.
 
 `rounding_tool` baut den Werkzeugkörper: im Querschnitt der Zwickel zwischen
 den zwei Flächen und dem Bogen, stückweise über den Zug gezogen. Wie fein der
