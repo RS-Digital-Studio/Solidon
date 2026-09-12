@@ -723,6 +723,7 @@ class _IntersectionCheck:
         quadratische Paarmatrix.
         """
         import ctypes
+        import re
 
         import numpy as np
         from vtkmodules.vtkCommonCore import vtkIdList, vtkIdTypeArray
@@ -733,7 +734,9 @@ class _IntersectionCheck:
         locator.SetDataSet(data)
         locator.BuildLocator()
         ids = vtkIdList()
-        id_type = ctypes.c_int64 if vtkIdTypeArray().GetDataTypeSize() == 8 else ctypes.c_int32
+        id_size = vtkIdTypeArray().GetDataTypeSize()
+        id_type = ctypes.c_int64 if id_size == 8 else ctypes.c_int32
+        use_pointer = id_size in (4, 8)
         pending = _PendingPairs()
         try:
             for first_index, triangle in enumerate(self.triangles):
@@ -749,8 +752,27 @@ class _IntersectionCheck:
                 count = ids.GetNumberOfIds()
                 if not count:
                     continue
-                address = int(ids.GetPointer(0).split("_")[1], 16)
-                array = np.ctypeslib.as_array((id_type * count).from_address(address))
+                array = None
+                if use_pointer:
+                    try:
+                        pointer = ids.GetPointer(0)
+                        match = (
+                            re.fullmatch(r"_([0-9a-fA-F]+)_p_void", pointer)
+                            if isinstance(pointer, str)
+                            else None
+                        )
+                        address = int(match[1], 16) if match else 0
+                        if address:
+                            array = np.ctypeslib.as_array((id_type * count).from_address(address))
+                    except AttributeError, TypeError, ValueError, RuntimeError, OverflowError:
+                        pass
+                if array is None:
+                    # Ein anderer Wrapper stellt IDs über seine öffentliche
+                    # Zugriffsmethode bereit. Der restliche Lauf bleibt dabei.
+                    use_pointer = False
+                    array = np.fromiter(
+                        (ids.GetId(index) for index in range(count)), dtype=np.int64, count=count
+                    )
                 later = np.array(array[array > first_index], dtype=np.int64, copy=True)
                 if not len(later):
                     continue

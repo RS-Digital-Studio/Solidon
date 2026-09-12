@@ -402,15 +402,40 @@ def test_float32_contact_deduplication_keeps_a_short_real_intersection() -> None
     assert has_self_intersections(SimpleNamespace(raw=mesh))
 
 
+@pytest.mark.parametrize("pointer_style", ["native", "opaque", "null", "error"])
 def test_vectorized_large_mesh_path_matches_analytic_contact_cases(
     monkeypatch: pytest.MonkeyPatch,
+    pointer_style: str,
 ) -> None:
     """Der skalierbare Pfad trennt Kontakt, Schnitt und Flächenüberdeckung exakt."""
     from types import SimpleNamespace
 
     import trimesh
+    from vtkmodules import vtkCommonCore
 
     from app.core.knowledge.parts import range_check
+
+    instances: list[Any] = []
+    if pointer_style != "native":
+
+        class DifferentPointer(vtkCommonCore.vtkIdList):
+            def __init__(self) -> None:
+                super().__init__()
+                self.pointer_calls = 0
+                self.item_calls = 0
+                instances.append(self)
+
+            def GetPointer(self, index: int) -> Any:  # noqa: N802 - VTK-API
+                self.pointer_calls += 1
+                if pointer_style == "error":
+                    raise RuntimeError("Zeigerzugriff nicht verfügbar")
+                return "_0000000000000000_p_void" if pointer_style == "null" else object()
+
+            def GetId(self, index: int) -> int:  # noqa: N802 - VTK-API
+                self.item_calls += 1
+                return super().GetId(index)
+
+        monkeypatch.setattr(vtkCommonCore, "vtkIdList", DifferentPointer)
 
     cases = (
         (
@@ -467,6 +492,9 @@ def test_vectorized_large_mesh_path_matches_analytic_contact_cases(
             vertices=np.asarray(vertices), faces=np.asarray(faces), process=False
         )
         assert has_self_intersections(SimpleNamespace(raw=mesh)) is expected
+    for instance in instances:
+        assert instance.pointer_calls == 1
+        assert instance.item_calls > 0
 
 
 def test_manifold_thread_union_is_not_a_vtk_self_intersection() -> None:
