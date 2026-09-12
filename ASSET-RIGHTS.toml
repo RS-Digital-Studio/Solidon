@@ -12,7 +12,7 @@ platform_exceptions = [
 ]
 excluded = [
   "Feedback/ — interne Fehlerbelege, keine Auslieferung",
-  "marketing/ — interne Arbeitsdateien, keine Auslieferung",
+  "marketing/ — Arbeits- und Kommunikationsdateien außerhalb der Auslieferung mit Anwendung oder Website; marketing/youtube/ enthält aus make_youtube_art.py erzeugte Kanalbilder für eine gesonderte Veröffentlichung sowie eine interne Vorschau der Sichtbereiche",
   "tools/voice-reference.wav — reproduzierbare interne Synthesereferenz, keine Auslieferung",
   "website/teile/ — Erzeugungsquellen der Website, vom Web-Uploader ausgeschlossen",
   "tests/, tmp/, build/, dist/ und Caches — Prüf- oder Arbeitsergebnisse, keine Auslieferung",
