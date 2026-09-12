@@ -81,6 +81,7 @@ class PushFaceParams(BaseParams):
 
 @register_op(
     name="push_face",
+    cache_version="2",
     title=_("Fläche versetzen"),
     category="shaping",
     params=PushFaceParams,
@@ -101,9 +102,12 @@ class PushFaceParams(BaseParams):
     shortcut="Q",
 )
 def push_face_op(ctx: OpContext) -> OpResult:
+    from app.core.geom.prepare_ops import _reject_oversized
+
     params = cast(PushFaceParams, ctx.params)
     source = ctx.inputs[0]
     chosen = _chosen_face(source, params.face)
+    _reject_oversized("distance", abs(params.distance), source.mesh, kind="length")
 
     if source.kind == "brep":
         return _on_a_solid(ctx, params, chosen)

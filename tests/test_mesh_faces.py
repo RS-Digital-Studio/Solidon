@@ -311,6 +311,36 @@ def test_the_menu_entries_work_on_an_imported_mesh() -> None:
     assert drafted.outputs[0].mesh.volume == pytest.approx(drafted_volume(DRAFT), abs=1e-6)
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("distance", [-100000.0, 100000.0])
+def test_pushing_rejects_a_distance_many_times_larger_than_the_body(
+    kind: str, distance: float
+) -> None:
+    """Ein fehlendes Dezimalzeichen darf keinen hundert Meter langen Körper erzeugen."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.errors import ValidationError
+    from app.core.geom.mesh import as_mesh_data
+
+    exact = edit.box(WIDTH, DEPTH, HEIGHT)
+    body = exact if kind == "brep" else as_mesh_data(exact)
+    features = features_of(exact) if kind == "brep" else detect(body)
+    top = next(
+        entry
+        for entry in features.values()
+        if entry.kind == "face" and entry.params["normal"][2] > 0.9
+    )
+    source = SceneObject(id="obj_1", name="Klotz", kind=kind, mesh=body, features=features)
+
+    with pytest.raises(ValidationError) as caught:
+        run("push_face", source, face=top.id, distance=distance)
+
+    assert caught.value.field == "distance"
+    assert caught.value.constraint == "maximum"
+    assert "Länge" in str(caught.value.detail)
+    assert body.volume == pytest.approx(WIDTH * DEPTH * HEIGHT, abs=1e-6)
+
+
 def test_pushing_without_a_chosen_face_says_what_is_missing() -> None:
     """Am Netz gibt es den Richtungsweg nicht — und der Satz sagt, was fehlt.
 
