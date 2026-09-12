@@ -1153,18 +1153,7 @@ def drill(
     if nothing is not None:
         findings.append(nothing)
     findings.extend(over_the_edge(mesh, position, axis, cut_diameter, body=mesh))
-    if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
-        findings.append(
-            Finding(
-                code="bore.compensated",
-                severity="info",
-                message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
-                values={
-                    "nominal": format_length(diameter),
-                    "cut": format_length(cut_diameter),
-                },
-            )
-        )
+    findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
         mesh=outcome.mesh, solver=outcome.solver, diameter=cut_diameter, findings=findings
     )
