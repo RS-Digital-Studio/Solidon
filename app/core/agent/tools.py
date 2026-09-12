@@ -211,7 +211,7 @@ def operation_tools(
             if not compact:
                 # Auch der Menüweg endet mit dem Titel der Operation — bei einem
                 # Rezept ist das derselbe fremde Text. Also ebenso abflachen,
-                # sonst käme der Titel über die Hintertür „Menü: …"
+                # sonst käme der Titel über die Hintertür „Ort: …"
                 # ungerahmt zurück.
                 menu = untrusted_recipe_text(foreign_source, menu_path(spec, source))
                 description = f"{description} {tr('Ort')}: {menu}."
