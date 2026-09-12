@@ -1,5 +1,8 @@
 # Sicherheits- und Produktvorfälle — interner Ablauf
 
+Nachweisstand: 12. September 2026. Die externen Bereitschaftsnachweise unten
+sind offen; dieser Text bestätigt keine betriebliche Freigabe.
+
 Diese Datei ist die **eine** Arbeitsanweisung für Schwachstellen,
 Datenschutzverletzungen und Produktsicherheitsvorfälle in Solidon3D.
 Verantwortlich ist Robert Schneider, RS Digital. Eingangskanal ist
@@ -36,8 +39,10 @@ Vorgangskennung nachvollziehbar.
 
 Für aktiv ausgenutzte Schwachstellen und schwere Sicherheitsvorfälle gelten
 die 24-/72-Stunden- und Abschlussfristen im Abschnitt „Verbindliche CRA-Uhr“.
-Die externen Bereitschaftspunkte vor dem 11. September 2026 bleiben
-Release-Blocker.
+Art. 14 gilt seit dem 11. September 2026 auch für zuvor in Verkehr gebrachte
+Produkte im Anwendungsbereich. Die offen gebliebenen Bereitschaftspunkte sind
+jetzt zu erledigen; die bereits verbreitete Demo und der noch ausstehende
+Verkaufsstart verschieben keine gesetzliche Meldepflicht.
 
 ### DSGVO-Uhr
 
@@ -79,31 +84,42 @@ späteste rechtlich erforderliche Datum: Vor jeder später in Verkehr gebrachten
 Verlängerung verlangen. Der öffentlich genannte Termin wird nie nach vorn
 verschoben.
 
-## Release-Blocker vor dem 11. September 2026
+## Offene Betriebsbereitschaft seit dem 11. September 2026
 
 Der Meldeweg ist **noch nicht betriebsbereit**, solange einer der folgenden
 externen Punkte offen ist. In diesem Zustand darf keine Verkaufs- oder
 Sicherheitsfassung freigegeben werden; ein Dokument ersetzt weder Zugang noch
 Bereitschaft.
 
-- [ ] Für Robert Schneider ist ein funktionsfähiges **EU-Login** angelegt und
-  der Zugang zur ENISA Single Reporting Platform einmal vollständig geprüft.
-- [ ] In der Plattform ist Robert Schneider als **Primary** zugeordnet; eine
-  von Robert namentlich bestimmte, erreichbare Person ist als **Secondary**
-  hinterlegt und hat ihren Zugang selbst getestet.
-- [ ] Das für Deutschland zuständige **CSIRT** (das BSI, Art. 14 Abs. 7 CRA:
-  Mitgliedstaat der Hauptniederlassung) ist in der Plattform ausgewählt;
-  die Zuordnung und der sichtbare Plattformstatus sind im privaten
-  Betriebsnachweis festgehalten.
+- [ ] Robert Schneider hat sein persönliches **EU-Login mit MFA** eingerichtet
+  und die Anmeldung selbst getestet; der Zugang zum aktuellen SRP-Portal ist
+  erreichbar. Der private Nachweis enthält Datum und Ergebnis, keine Passwörter.
+- [ ] Robert ist für die Meldung verantwortlich; eine namentlich bestimmte,
+  erreichbare Vertretung kennt Ablauf und Herstellerangaben und hat ihren
+  eigenen EU-Login-Zugang mit MFA getestet. Das ist die interne Vertretung;
+  eine bereits verifizierte Secondary-Rolle in der SRP wird nicht vorausgesetzt.
+- [ ] Zuständiges deutsches **CSIRT**, Herstellerangaben und Registrierungsweg
+  sind anhand der aktuellen ENISA-Anleitung vorbereitet. Bereits vorhandene
+  Plattformrollen und ihr tatsächlicher Status sind privat dokumentiert.
 - [ ] `support@solidon3d.de` alarmiert **24 Stunden an sieben Tagen** per
   Push-Anruf oder gleichwertigem lautem Alarm sowohl Primary als auch
   Secondary. Bleibt die Annahme 15 Minuten aus, wird automatisch an die jeweils
   andere Person eskaliert. Eine bloße werktägliche Postfachprüfung genügt nicht.
-- [ ] Ein Probelauf außerhalb der Arbeitszeit belegt: Testmail → Alarm an beide
-  Personen in höchstens 15 Minuten → Anmeldung → Auswahl des deutschen CSIRT →
-  vollständig ausgefüllte Frühwarnung bis unmittelbar vor dem Absenden. Datum,
-  Zeiten und Ergebnis liegen im privaten Betriebsnachweis; es wird keine
-  fingierte Meldung abgesendet.
+- [ ] Ein Probelauf außerhalb der Arbeitszeit belegt: interne Testmail → Alarm
+  an beide Personen in höchstens 15 Minuten → EU-Login-Anmeldung → Trockenübung
+  der Registrierung und Frühwarnung anhand der aktuellen SRP-Anleitung.
+  Datum, Zeiten und Ergebnis liegen im privaten Betriebsnachweis. Es wird
+  weder eine fingierte Meldung angelegt oder abgesendet noch allein für den
+  Test eine Herstellerprüfung ausgelöst.
+
+Die ENISA empfiehlt die SRP-Registrierung und Herstellerprüfung erst beim
+Meldebedarf. Meldungen sind während der laufenden Herstellerprüfung möglich;
+auf deren Abschluss darf eine fällige Meldung nicht warten. Eine Secondary-Rolle
+kann erst nach Verifizierung der Primary-Zuordnung eingeladen werden. Die
+Vertretung, der 15-Minuten-Alarm und der monatliche Probelauf oben sind interne
+Vorgaben; Art. 14 schreibt diese konkrete Organisation nicht vor.
+Quelle, geprüft am 12. September 2026:
+[ENISA-SRP-FAQ, Zugang und Rollen](https://www.enisa.europa.eu/topics/product-security/single-reporting-platform-srp/frequently-asked-questions).
 
 Diese Häkchen enthalten keine Zugangsdaten. Primary und Secondary wiederholen
 den Bereitschaftstest monatlich sowie vor jeder Verkaufsfassung. Fällt Zugang,
@@ -130,10 +146,12 @@ Alarmierung oder Vertretung aus, ist die Release-Sperre sofort wieder aktiv.
 
 - **Aktiv ausgenutzte Schwachstelle:** belastbarer Hinweis, dass ein böswilliger
   Akteur die Schwachstelle bereits ausnutzt.
-- **Schwerer Sicherheitsvorfall:** Beeinträchtigung von Verfügbarkeit,
-  Authentizität, Integrität oder Vertraulichkeit, die zu einer schweren
-  Betriebsstörung oder erheblichen materiellen beziehungsweise immateriellen
-  Schäden führt oder führen kann.
+- **Schwerer Sicherheitsvorfall (Art. 14 Abs. 5 CRA):** Das Produkt kann
+  sensible oder wichtige Daten oder Funktionen nicht mehr ausreichend in
+  Verfügbarkeit, Authentizität, Integrität oder Vertraulichkeit schützen; oder
+  der Vorfall führt oder kann zur Einführung oder Ausführung von Schadcode im
+  Produkt oder in den Netz- und Informationssystemen eines Nutzers führen.
+  Ein bereits eingetretener erheblicher Schaden ist keine Voraussetzung.
 - **Sonstige Schwachstelle:** koordinierte Bearbeitung und Abhilfe, aber keine
   CRA-Sofortmeldung allein aufgrund des Eingangs.
 
@@ -141,6 +159,12 @@ Unsicherheit verkürzt keine Frist. Bei begründetem Verdacht werden parallel
 Auswirkung eingegrenzt, Abhilfe vorbereitet und der Meldeweg geprüft.
 
 ## Verbindliche CRA-Uhr
+
+Die Frühwarnung und die 72-Stunden-Meldung sind unverzüglich abzugeben; die
+Stundenzahlen sind Höchstfristen, keine Wartezeiten. Fehlende Vertretung,
+Plattformprüfung oder Release-Freigabe halten diese Uhren nicht an. Die
+Bestätigung an die meldende Person binnen zwei Arbeitstagen ist davon getrennt.
+Rechtsgrundlage: [CRA Art. 14, 69 Abs. 3 und 71](https://eur-lex.europa.eu/eli/reg/2024/2847/oj/deu).
 
 Die aktuelle Oberfläche und Anleitung der ENISA Single Reporting Platform
 werden zu Beginn jedes meldepflichtigen Vorgangs über
@@ -191,8 +215,9 @@ nachgewiesen.
 - Alarmierung des Support-Postfachs rund um die Uhr aktiv halten; Primary und
   Secondary bestätigen oder eskalieren jeden Sicherheitsalarm sofort.
 - ENISA-Anleitung und Kontaktdaten vor jedem Verkaufsrelease gegenlesen.
-- EU-Login, Rollen, deutsches CSIRT und den dokumentierten Probelauf vor jedem
-  Verkaufsrelease gegen den privaten Betriebsnachweis prüfen.
+- EU-Login mit MFA, vorbereitete Registrierung, gegebenenfalls bestehende
+  Rollen, deutsches CSIRT und Probelauf vor jedem Verkaufsrelease gegen den
+  privaten Betriebsnachweis prüfen.
 - SBOM aus jedem Zielpaket archivieren und für die gesamte Unterstützungsdauer
   auffindbar halten.
 - Diesen Ablauf nach einem Vorfall und mindestens vor jeder Hauptversion

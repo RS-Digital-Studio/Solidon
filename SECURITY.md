@@ -48,12 +48,18 @@ externe KI-Anbieter werden nicht mitgeliefert; eine Schwachstelle in ihrer
 Anbindung darf trotzdem gemeldet werden, wenn Solidon3D sie auslöst oder
 verstärkt.
 
-Bei einer nachweislich aktiv ausgenutzten Schwachstelle oder einem schweren
-Sicherheitsvorfall prüfen wir unverzüglich, welche gesetzlichen Meldungen und
-Fristen für den konkreten Fall gelten. Ab dem 11. September 2026 melden wir
-aktiv ausgenutzte Schwachstellen und schwere Sicherheitsvorfälle nach
-Artikel 14 der Cyber-Resilienz-Verordnung (EU) 2024/2847 an die zuständige
-Stelle — für Deutschland das BSI — und informieren betroffene Nutzer über den
-Update-Hinweis der Anwendung und die Sicherheitsseite der Website. Für die
-meldende Person bleibt der Weg derselbe: eine Nachricht an die oben genannte
-Adresse genügt.
+Seit dem 11. September 2026 gelten für Solidon die Meldepflichten nach
+[Artikel 14 der Cyber-Resilienz-Verordnung (EU) 2024/2847](https://eur-lex.europa.eu/eli/reg/2024/2847/oj/deu).
+Aktiv ausgenutzte Schwachstellen und schwere Vorfälle mit Auswirkungen auf die
+Produktsicherheit sind über die
+[ENISA Single Reporting Platform](https://www.enisa.europa.eu/topics/product-security/single-reporting-platform-srp)
+an das zuständige koordinierende CSIRT und gleichzeitig an ENISA zu melden.
+Die betriebliche Bereitschaft dieses Meldewegs ist noch nicht vollständig
+nachgewiesen. Das verschiebt weder die gesetzlichen Meldefristen noch die
+Pflicht, betroffene Nutzer zu informieren. Der Update-Hinweis der Anwendung
+und die Sicherheitsseite dienen der Nutzerinformation. Die Antwortfrist von
+zwei Arbeitstagen an meldende Personen ist keine Frist für Behördenmeldungen.
+Für die meldende Person bleibt der Weg derselbe: eine Nachricht an die oben
+genannte Adresse genügt.
+
+Stand: 12. September 2026
