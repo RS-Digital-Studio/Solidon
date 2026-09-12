@@ -1303,6 +1303,25 @@ class ParamSpec:
     "up_to"``: Eine zweite Operation mit Zielfläche hätte ihren Parameter exakt
     so nennen müssen, sonst hätte der Cache still ein veraltetes Ergebnis
     geliefert."""
+    optional: bool = False
+    """Dieser Zahlenparameter kennt „nicht gesagt" — sein Wert darf ``None`` sein.
+
+    **Für Zahlen, bei denen die Null ein gültiger Wert ist** (RM-154). Ein
+    Textfeld hat den leeren Text dafür, ein Merkmalsfeld die leere Kennung; eine
+    Koordinate hat nichts dergleichen: ``x = 0`` ist die Mitte des Teils, und
+    Solidon legt einen Quader **um** den Ursprung. ``slot_hole`` und
+    ``resize_hole`` lasen drei Nullen in ``x/y/z`` deshalb als „lass das Loch,
+    wo es ist" — womit es sich in jede Stelle versetzen ließ außer in die
+    Teilemitte, also ausgerechnet in den häufigsten Ort.
+
+    Wo eine Null **physisch unmöglich** ist — eine Länge, ein Durchmesser —,
+    braucht es das nicht: Dort ist die Null selbst schon eindeutig „nicht
+    gesagt", und ein zweiter Mechanismus daneben wäre einer, der mit dem ersten
+    auseinanderlaufen kann.
+
+    Der Wert reist als ``null`` in der Projektdatei, fehlt im Werkzeugschema
+    des Agenten als Pflichtfeld und steht im Dialog als leeres Feld mit einem
+    Sondertext am Mindestwert."""
 
 
 @runtime_checkable

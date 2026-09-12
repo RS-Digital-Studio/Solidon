@@ -3713,3 +3713,46 @@ def test_variant_rebuild_retires_focused_fields_after_the_new_schema_is_ready(
     finally:
         dialog.reject()
         dialog.deleteLater()
+
+
+def test_an_optional_number_starts_empty_and_stays_empty(qt_app: QApplication) -> None:
+    """Ein optionales Zahlenfeld sagt „nicht gesagt" und nicht „null" (RM-154).
+
+    ``x/y/z`` von *Bohrung ändern* lasen drei Nullen als „lass das Loch, wo es
+    ist". Damit ließ es sich in jede Stelle versetzen außer in den Ursprung —
+    und Solidon legt einen Quader **um** den Ursprung. Seit die Felder
+    ``optional`` tragen, gibt es dafür einen eigenen Zustand; ohne ihn schöbe
+    ein bloßes Bestätigen im Dialog jedes Loch in die Teilemitte.
+    """
+    dialog = OperationDialog(REGISTRY.get("resize_hole"), {"obj_1": "Körper"})
+    try:
+        for axis in ("x", "y", "z"):
+            field = dialog._editors[axis]
+            assert field.value() is None, f"{axis} startet mit einer Zahl statt leer"
+            assert field.spin.specialValueText(), f"{axis} zeigt keinen Text für „leer“"
+
+        assert dialog.values()["x"] is None, "der Dialog gibt eine Null weiter"
+
+        dialog._editors["x"].set_value(12.5)
+        assert dialog._editors["x"].value() == pytest.approx(12.5)
+        assert dialog._editors["y"].value() is None, "das Nachbarfeld bleibt leer"
+    finally:
+        dialog.deleteLater()
+
+
+def test_a_zero_typed_into_an_optional_field_means_zero(qt_app: QApplication) -> None:
+    """Die Gegenrichtung: Wer null einträgt, meint die Mitte des Teils.
+
+    Genau das war vorher unerreichbar — und es ist der häufigste Ort
+    überhaupt, weil Solidons Grundkörper um den Ursprung liegen.
+    """
+    dialog = OperationDialog(REGISTRY.get("resize_hole"), {"obj_1": "Körper"})
+    try:
+        dialog._editors["x"].set_value(0.0)
+        dialog._editors["y"].set_value(0.0)
+
+        assert dialog._editors["x"].value() == pytest.approx(0.0)
+        assert dialog.values()["x"] == pytest.approx(0.0)
+        assert dialog.values()["z"] is None, "was niemand angefasst hat, bleibt ungesagt"
+    finally:
+        dialog.deleteLater()

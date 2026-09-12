@@ -90,6 +90,38 @@ Einstellungen" (§2.4).
 Toleranzen verweisen ins Materialprofil (`auto:<material>`), nie als Zahl.
 Wo ein Projektparameter passt, steht keine Streuzahl.
 
+### Eine Zahl, die nicht gesagt wurde (`optional`, RM-154)
+
+`ParamSpec.optional` erlaubt einer Zahl den Wert `None`. Gebraucht wird das,
+**wo die Null selbst ein gültiger Wert ist**: Ein Textfeld hat den leeren Text,
+ein Merkmalsfeld die leere Kennung, eine Koordinate hat nichts dergleichen.
+`slot_hole` und `resize_hole` lasen drei Nullen in `x/y/z` als „lass das Loch,
+wo es ist" — damit ließ es sich in jede Stelle versetzen außer in den Ursprung,
+und Solidon legt einen Quader **um** den Ursprung. An einer mittig gelegten
+Platte war (0 | 0 | 0) also nicht der Randfall, sondern die Mitte des Teils.
+
+Wo eine Null **physisch unmöglich** ist — eine Länge, ein Durchmesser, eine
+Anzahl —, braucht es das nicht: Dort ist die Null schon eindeutig „nicht
+gesagt", und ein zweiter Mechanismus daneben liefe mit dem ersten auseinander.
+
+Vier Stellen lösen es ein, und jede ist nötig:
+
+* **Der Kern** (`params._coerce`) lässt `None` als Erstes durch — ein `None`
+  hat weder Art noch Grenzen, jede Prüfung darunter schlüge daran fehl.
+* **Der Agent** bekommt `"null"` in die Typliste (`json_schema`). Ohne das
+  bliebe ihm nur, eine Zahl zu erfinden, und die naheliegendste wäre die Null.
+* **Der Dialog** setzt den leeren Zustand **einen Schritt unter** den
+  Mindestwert und schreibt dort einen Sondertext (Qts `setSpecialValueText`).
+  Ein Drehfeld hat immer eine Zahl; ohne diesen Platz gäbe es keinen Wert für
+  „habe ich nicht gesagt", und ein bloßes Bestätigen schöbe jedes Loch in den
+  Ursprung.
+* **Die Operation** fragt `is None` und nicht `is_zero` — `prepare_ops.
+  _named_place` beantwortet das einmal für beide Lochoperationen.
+
+Und die Gegenrichtung gehört zur Zusage: Genannt ist eine Stelle, sobald
+**eine** der drei Achsen eine Zahl trägt. Wer eine Achse nennt, beschreibt
+einen Ort und keine Verschiebung.
+
 ### Sammelparameter (`kind` in `sketch`, `strokes`, `armature`)
 
 Ein Editor sammelt darin, was er nicht in Zahlen fassen kann: eine Skizze als
@@ -525,8 +557,9 @@ Zahl.
 
 ## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
 
-`slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; drei Nullen
-heißen „lass es, wo es ist"). Wer versetzt, schließt zuerst die alte Stelle —
+`slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; **leer
+heißt „lass es, wo es ist"**, seit die drei Felder `optional` tragen — siehe
+„Eine Zahl, die nicht gesagt wurde" oben). Wer versetzt, schließt zuerst die alte Stelle —
 am Netz über `prepare_ops._closed_at`, am exakten Körper über
 `brep.edit.fill_bore` — und schneidet an der neuen. Bis dahin lehnte der exakte
 Kern das mit einem Satz ab; die Absage ist gefallen, weil ihr Grund gefallen

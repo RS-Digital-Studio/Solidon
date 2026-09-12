@@ -180,11 +180,23 @@ class ValueField(QWidget):
         dieses Feld verschöbe ein Dialog, den man in Zoll nur *ansieht*, jedes
         Maß um den Rundungsfehler seiner Anzeige."""
 
+        self._optional = entry.optional
+        """Ob dieses Feld „nicht gesagt" kennt (RM-154).
+
+        Der leere Zustand sitzt **einen Schritt unter** dem Mindestwert und
+        trägt dort einen Sondertext — Qts eigenes Mittel dafür
+        (``setSpecialValueText``). Ein Drehfeld hat immer eine Zahl; ohne diesen
+        Platz gäbe es keinen Wert, der „habe ich nicht gesagt" bedeutet, und
+        eine Bestätigung im Dialog schöbe jedes Loch in den Ursprung."""
+
         self.spin = NumberSpin(self)
         self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
         )
+        if self._optional:
+            self.spin.setMinimum(self.spin.minimum() - 10.0 ** -self.spin.decimals())
+            self.spin.setSpecialValueText(tr("wie gemessen"))
         self.spin.setMaximum(
             self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
         )
@@ -387,6 +399,13 @@ class ValueField(QWidget):
             self.toggle.setChecked(True)
             self._switch(True)
             return
+        if value is None and self._optional:
+            # **Leer heißt hier etwas**, und zwar „nicht gesagt" (RM-154). Ohne
+            # diese Zeile stünde die Null da, und die ist an einer Koordinate
+            # die Mitte des Teils.
+            self._core = None
+            self.spin.setValue(self.spin.minimum())
+            return
         if value is not None:
             try:
                 self._core = float(value)
@@ -399,18 +418,23 @@ class ValueField(QWidget):
                 self.toggle.setChecked(True)
                 self._switch(True)
 
-    def value(self) -> float | int | str:
-        """Die Zahl, oder der Ausdruck wörtlich.
+    def value(self) -> float | int | str | None:
+        """Die Zahl, der Ausdruck wörtlich — oder nichts.
 
         Ein leer geräumtes Ausdrucksfeld gibt die Zahl zurück, die daneben
         stand. Ein leerer Text wäre weder das eine noch das andere, und der
         Stapel bekäme einen Parameter, den keine Auswertung lesen kann.
+
+        ``None`` gibt allein ein ``optional``-Feld zurück, und nur auf seinem
+        Sonderwert: „nicht gesagt" (RM-154).
         """
         if self.toggle.isChecked() and (entered := self.text.text().strip()):
             # Ein Ausdruck bleibt wörtlich. Ihn umzurechnen hieße, „=@breite/2"
             # in eine Zahl zu verwandeln — die Bindung wäre weg, und §13 rechnet
             # ohnehin in Millimetern.
             return entered
+        if self._optional and self.spin.value() <= self.spin.minimum():
+            return None
         number = self._number()
         return int(number) if self._entry.kind == "int" and number.is_integer() else number
 
@@ -996,8 +1020,11 @@ class ArmatureField(QWidget):
         """
         from app.core.geom.pose import pose_text
 
+        # Ein Gelenkwinkel ist nie optional — null Grad heißt null Grad, und
+        # ein Knochen ohne Winkel wäre keine Stellung. ``or 0.0`` ist deshalb
+        # kein Rückfall, sondern die Zusage, dass hier eine Zahl steht.
         return pose_text(
-            {bone: [field.value() for field in row] for bone, row in self._fields.items()}
+            {bone: [field.value() or 0.0 for field in row] for bone, row in self._fields.items()}
         )
 
 

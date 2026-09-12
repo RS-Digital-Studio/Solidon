@@ -3026,32 +3026,44 @@ class ResizeHoleParams(BaseParams):
             "die Bohrung trägt sie ein."
         ),
     )
-    x: float = param(
+    x: float | None = param(
         title=_("X"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
         placement="front",
-        doc=_("Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige."),
+        doc=_(
+            "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
+            "leer heißt, sie bleibt, wo sie ist."
+        ),
     )
-    y: float = param(
+    y: float | None = param(
         title=_("Y"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
         placement="front",
-        doc=_("Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige."),
+        doc=_(
+            "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
+            "leer heißt, sie bleibt, wo sie ist."
+        ),
     )
-    z: float = param(
+    z: float | None = param(
         title=_("Z"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
         placement="front",
-        doc=_("Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige."),
+        doc=_(
+            "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
+            "leer heißt, sie bleibt, wo sie ist."
+        ),
     )
     compensate: bool = param(
         title=_("Materialtoleranz berücksichtigen"),
@@ -3098,9 +3110,12 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # sie, wo sie ist" — dieselbe Lesart wie bei *Zum Langloch ziehen*, und aus
     # demselben Grund: Über Chat und Kommandozeile nennt niemand eine Stelle.
     measured_centre = _bore_vector(feature, "centre")
-    placed: Vec3 = (params.x, params.y, params.z)
-    named_a_place = not all(is_zero(value) for value in placed)
-    centre = placed if named_a_place else measured_centre
+    # **„Nicht gesagt" steht als ``None`` da und nicht als Null** (RM-154).
+    # Hier stand ``not all(is_zero(value) for value in placed)``, und damit ließ
+    # sich das Loch in jede Stelle versetzen außer in den Ursprung — an einer
+    # mittig gelegten Platte also ausgerechnet in die Mitte des Teils.
+    centre = _named_place(params.x, params.y, params.z) or measured_centre
+    named_a_place = centre is not measured_centre
     # **Versetzt ist erst, wer wirklich woanders landet.** Wer die heutige
     # Mitte noch einmal einträgt, nennt eine Stelle und wechselt keine; das
     # Loch dafür zu schließen und neu zu bohren wäre Arbeit ohne Wirkung.
@@ -3377,32 +3392,44 @@ class SlotHoleParams(BaseParams):
             "Die erkannte Bohrung, die zum Langloch wird. Ein Klick auf die Bohrung trägt sie ein."
         ),
     )
-    x: float = param(
+    x: float | None = param(
         title=_("X"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
         placement="front",
-        doc=_("Die Mitte des Langlochs. Beim Anklicken steht hier die heutige der Bohrung."),
+        doc=_(
+            "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
+            "der Bohrung; leer heißt, sie bleibt, wo sie ist."
+        ),
     )
-    y: float = param(
+    y: float | None = param(
         title=_("Y"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
         placement="front",
-        doc=_("Die Mitte des Langlochs. Beim Anklicken steht hier die heutige der Bohrung."),
+        doc=_(
+            "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
+            "der Bohrung; leer heißt, sie bleibt, wo sie ist."
+        ),
     )
-    z: float = param(
+    z: float | None = param(
         title=_("Z"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
         placement="front",
-        doc=_("Die Mitte des Langlochs. Beim Anklicken steht hier die heutige der Bohrung."),
+        doc=_(
+            "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
+            "der Bohrung; leer heißt, sie bleibt, wo sie ist."
+        ),
     )
 
 
@@ -3477,8 +3504,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Antwort — ein Langloch wanderte in die Ecke des Bauraums, weil niemand
     # eine Stelle genannt hat. Der Ursprung als *gewollte* Zielmitte ist der
     # seltenere Fall, und für ihn steht ein Tausendstel daneben.
-    placed: Vec3 = (params.x, params.y, params.z)
-    centre = _bore_vector(feature, "centre") if all(is_zero(value) for value in placed) else placed
+    centre = _named_place(params.x, params.y, params.z) or _bore_vector(feature, "centre")
     axis = _bore_vector(feature, "axis")
     diameter = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
@@ -3998,6 +4024,25 @@ def _chosen_bore(source: SceneObject, name: str, *, op: str = "") -> Feature:
             values={"kind": feature.kind},
         )
     return feature
+
+
+def _named_place(x: float | None, y: float | None, z: float | None) -> Vec3 | None:
+    """Die genannte Stelle — oder nichts, wenn keine genannt wurde (RM-154).
+
+    **Drei Nullen waren einmal die Antwort auf beides.** ``x/y/z`` lasen sich
+    als „lass das Loch, wo es ist", sobald alle drei null waren; damit ließ es
+    sich in jede Stelle versetzen außer in den Ursprung — und Solidon legt einen
+    Quader **um** den Ursprung, an einer mittig gelegten Platte ist (0 | 0 | 0)
+    also die Mitte des Teils und kein Randfall.
+
+    Seit die drei Felder ``optional`` tragen, steht „nicht gesagt" als ``None``
+    da. Genannt ist eine Stelle, sobald **eine** der drei Achsen eine Zahl
+    trägt; die übrigen fallen auf null zurück, denn wer eine Achse nennt,
+    beschreibt einen Ort und keine Verschiebung.
+    """
+    if x is None and y is None and z is None:
+        return None
+    return (float(x or 0.0), float(y or 0.0), float(z or 0.0))
 
 
 def _bore_vector(feature: Feature, name: str) -> tuple[float, float, float]:

@@ -76,7 +76,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
 | [RM-156 — Die Breite eines Langlochs ändern](#rm-156) | Geometrie, Erkennung und Druckvorbereitung | `resize_hole` nimmt nur die runde Bohrung; am Langloch fehlt der Weg zu einer anderen Breite |
-| [RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden](#rm-154) | Geometrie, Erkennung und Druckvorbereitung | Eine 0 im Richtungsfeld stellt ein Langloch nicht gerade; der optionale Zahlenparameter fehlt im ganzen Register |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -1055,17 +1054,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-154"></a>
 
-- [ ] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** Der Winkelfall ist am
-  11.09.2026 behoben: `slot_angle=0` bedeutet null Grad, an Mesh und B-Rep. Oberfläche und
-  Vorschau belegen die vorhandene Richtung vor; der Kern ersetzt keinen ausdrücklich
-  gesetzten Winkel mehr durch die bisherige Richtung. Gegenproben schneiden ein versetztes
-  45-Grad-Langloch auf null Grad und messen die Ergebnisrichtung an beiden Kernen.
+- [x] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** Der Winkelfall war am
+  11.09.2026 behoben; der Rest am 12.09.2026. `ParamSpec.optional` erlaubt einer Zahl den
+  Wert `None`, und `x/y/z` von `slot_hole` und `resize_hole` tragen ihn. Damit lässt sich ein
+  Loch in die **Teilemitte** schieben — vorher der einzige Ort, den es nicht erreichte, und
+  ausgerechnet der häufigste, weil Solidon seine Grundkörper um den Ursprung legt.
 
-  **Und seit dem 11.09.2026 hängen sechs weitere Felder derselben Bauart daran.** `slot_hole`
-  und `resize_hole` lesen drei Nullen in `x/y/z` als „lass das Loch, wo es ist“ — damit
-  lässt es sich in jede Stelle versetzen außer in den **Ursprung**, und an einer mittig
-  gelegten Platte ist (0 | 0 | z) kein Randfall, sondern die Mitte des Teils. Abnahme dafür:
-  ein Loch in die Teilemitte schieben, und der Schritt trägt die drei Nullen als Absicht.
+  Vier Stellen lösen es ein: `params._coerce` lässt `None` als Erstes durch (ein `None` hat
+  weder Art noch Grenzen), `json_schema` nimmt `"null"` in die Typliste, der Dialog setzt den
+  leeren Zustand einen Schritt unter den Mindestwert mit `setSpecialValueText`, und
+  `prepare_ops._named_place` beantwortet die Frage einmal für beide Operationen. Ohne die
+  dritte schöbe ein bloßes Bestätigen im Dialog jedes Loch in den Ursprung — das Drehfeld hat
+  immer eine Zahl.
+
+  **Wo die Null physisch unmöglich ist, braucht es das nicht** — eine Länge, ein Durchmesser,
+  eine Anzahl. Dort ist die Null schon eindeutig „nicht gesagt", und ein zweiter Mechanismus
+  daneben liefe mit dem ersten auseinander. Die Regel steht in `.claude/rules/operationen.md`
+  unter „Eine Zahl, die nicht gesagt wurde".
+
+  Nachweis: zwei Fälle in `tests/test_brep.py` (Loch in die Mitte, und die Gegenrichtung: wer
+  nichts sagt, versetzt nichts) und zwei in `tests/test_operation_ui.py` (das Feld startet
+  leer; eine getippte Null meint die Null). Gegenproben gefahren, alle vier rot ohne den Fix.
 
 <a id="rm-155"></a>
 

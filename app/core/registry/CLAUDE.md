@@ -26,7 +26,7 @@ driftet ab — deshalb gibt es keine.
 | Datei | Rolle |
 |---|---|
 | `registry.py` | `register_op`, `OperationSpec`, `Registry`. Dazu die Ordnung: `CATEGORIES`, `MENU_GROUPS`, `PANEL_CATEGORIES` mit `in_the_menu_bar` (welche Gruppen rechts in der Karte wohnen statt in der Leiste), `MENU_TWINS`, `VARIANT_GROUPS` |
-| `params.py` | Das Parameterschema: `param()`, `op_params()`, `validate()`, `json_schema()`. Grenzen, Einheiten, Vorgaben, Vorder- oder Rückseite des Dialogs |
+| `params.py` | Das Parameterschema: `param()`, `op_params()`, `validate()`, `json_schema()`. Grenzen, Einheiten, Vorgaben, Vorder- oder Rückseite des Dialogs — und `optional` für eine Zahl, bei der die Null ein gültiger Wert ist (RM-154) |
 | `surfaces.py` | Alles, was **aus** dem Register erzeugt wird — die sechs Funktionen oben, dazu `parameter_table()`, `caveat_line()` und die Menüstruktur (siehe unten) |
 
 ### Wie tief ein Menü wird, entscheidet der Kern

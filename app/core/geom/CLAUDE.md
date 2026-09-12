@@ -208,7 +208,9 @@ nachträglich auseinander (`prepare.slot_bore`, exakt `brep.edit.slot_bore`).
 Die Regel dazu steht in `.claude/rules/operationen.md`.
 
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
-drei Nullen heißen „lass es, wo es ist"). Wer versetzt, schließt zuerst die
+**leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,
+und die Felder sind `optional`, weil die Null an einer Koordinate die Mitte des
+Teils ist). Wer versetzt, schließt zuerst die
 alte Stelle — am Netz über `_closed_at`, am exakten Körper über
 `brep.edit.fill_bore` — und schneidet an der neuen. **Geschnitten und nicht
 geändert**: `resize_bore` verglich dort die zwei Durchmesser, fand sie gleich

@@ -108,6 +108,7 @@ def param(
     required: bool | None = None,
     subtractive_on: tuple[str | bool, ...] | None = None,
     targets_feature: bool = False,
+    optional: bool = False,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -120,6 +121,9 @@ def param(
 
     ``targets_feature`` markiert einen Parameter, der ein Merkmal als **Ziel**
     nennt — siehe :attr:`app.core.types.ParamSpec.targets_feature`.
+
+    ``optional`` lässt für eine Zahl das „nicht gesagt" zu — siehe
+    :attr:`app.core.types.ParamSpec.optional`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -135,6 +139,7 @@ def param(
             "required": required,
             "subtractive_on": subtractive_on,
             "targets_feature": targets_feature,
+            "optional": optional,
         }
     }
     if default is MISSING:
@@ -148,6 +153,11 @@ def _kind_of(annotation: Any, declared: ParamKind | None, choices: tuple[str, ..
     if choices:
         return "enum"
     name = annotation if isinstance(annotation, str) else getattr(annotation, "__name__", "")
+    # **Ein optionaler Parameter behält die Art seines Wertes** (RM-154). Die
+    # Annotation heißt dort ``float | None``; das ``| None`` sagt, dass „nicht
+    # gesagt" vorkommen darf, und nicht, dass hier eine andere Art steht.
+    if isinstance(name, str) and name.endswith(" | None"):
+        name = name.removesuffix(" | None")
     kind = _KIND_BY_ANNOTATION.get(name)
     if kind is None:
         raise InternalError(
@@ -204,6 +214,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 depends_on=metadata["depends_on"],
                 subtractive_on=metadata["subtractive_on"],
                 targets_feature=metadata["targets_feature"],
+                optional=metadata["optional"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]
@@ -264,6 +275,15 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
     :data:`TEXT_KINDS` oder :data:`LIST_KINDS` ein;
     ``test_every_parameter_kind_is_sorted_into_a_check`` hält sie vollständig.
     """
+    # **„Nicht gesagt" ist ein Wert, und nur eine Zahl braucht ihn** (RM-154).
+    # Ein Textfeld hat den leeren Text, ein Merkmalsfeld die leere Kennung; eine
+    # Koordinate hat nichts dergleichen, denn die Null ist dort die Mitte des
+    # Teils. Die Frage steht vor allen anderen: Ein ``None`` hat weder Art noch
+    # Grenzen, und jede Prüfung darunter würde daran scheitern statt es
+    # durchzulassen.
+    if value is None and spec.optional:
+        return None
+
     if spec.kind == "bool":
         if not isinstance(value, bool):
             raise ValidationError(
@@ -585,6 +605,13 @@ def json_schema(
             # Grenzen prüft vor dem Anlegen derselbe Kern wie beim Neurechnen.
             entry["type"] = [_JSON_TYPE[spec.kind], "string"]
             entry["pattern"] = r"^(?:@[A-Za-z_][A-Za-z0-9_]*|=.+)$"
+        if spec.optional:
+            # **„Nicht gesagt" muss sagbar sein** (RM-154). Ohne ``null`` im
+            # Schema bliebe dem Modell nur, eine Zahl zu erfinden — und die
+            # naheliegendste wäre die Null, also genau der Wert, den der
+            # optionale Parameter von „nicht gesagt" trennen soll.
+            kinds = entry["type"] if isinstance(entry["type"], list) else [entry["type"]]
+            entry["type"] = [*kinds, "null"]
         description = str(spec.doc) if spec.doc is not None else str(spec.title)
         if spec.unit:
             description = f"{description} [{spec.unit}]"

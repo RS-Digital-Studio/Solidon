@@ -2025,3 +2025,62 @@ def test_the_exact_drill_makes_a_slot_through_the_operation(profile: Profile) ->
     measured = math.degrees(math.atan2(direction[1], direction[0])) % 180.0
     assert measured == pytest.approx(30.0, abs=0.5)
     assert "bore.over_the_edge" not in {finding.code for finding in result.findings}
+
+
+def test_a_bore_moves_into_the_middle_of_the_part(profile: Profile) -> None:
+    """Drei Nullen sind eine Stelle und keine Absage (RM-154).
+
+    ``x/y/z`` lasen sich als „lass das Loch, wo es ist", sobald alle drei null
+    waren. Damit ließ es sich in jede Stelle versetzen **außer** in den
+    Ursprung — und Solidon legt einen Quader um den Ursprung, an einer mittig
+    gelegten Platte ist (0 | 0 | 0) also die Mitte des Teils und kein Randfall.
+
+    Seit die Felder ``optional`` tragen, steht „nicht gesagt" als ``None`` da,
+    und die Null bedeutet wieder, was sie sagt. Gemessen wird an der Lage der
+    Bohrung, nicht am Volumen: Das bleibt beim Versetzen gleich, und genau
+    daran ist der Fehler zwei Wochen lang vorbeigegangen.
+    """
+    original = edit.bore(block(), position=(12.0, 8.0, HEIGHT), axis="z", diameter=6.0)
+    features = features_of(original)
+    bore = next(entry for entry in features.values() if entry.kind == "hole")
+    source = SceneObject(id="obj_1", name="Block", mesh=original, kind="brep", features=features)
+
+    moved = run(
+        "resize_hole",
+        source,
+        profile,
+        at_feature=bore.id,
+        diameter=6.0,
+        x=0.0,
+        y=0.0,
+        z=0.0,
+    ).outputs[0]
+
+    holes = [entry for entry in moved.features.values() if entry.kind == "hole"]
+    assert len(holes) == 1, f"ein Loch erwartet, gefunden: {len(holes)}"
+    centre = holes[0].params["centre"]
+    assert abs(float(centre[0])) < 0.05 and abs(float(centre[1])) < 0.05, (
+        f"das Loch steht bei {centre} und nicht in der Mitte"
+    )
+
+
+def test_a_bore_that_names_no_place_stays_where_it_is(profile: Profile) -> None:
+    """Die Gegenrichtung derselben Zusage: Wer nichts sagt, versetzt nichts.
+
+    Über Chat und Kommandozeile nennt niemand eine Stelle, und dort wäre der
+    Ursprung die falsche Antwort — ohne diese Hälfte wanderte jede Bohrung in
+    die Mitte, sobald jemand nur ihren Durchmesser ändert.
+    """
+    original = edit.bore(block(), position=(12.0, 8.0, HEIGHT), axis="z", diameter=6.0)
+    features = features_of(original)
+    bore = next(entry for entry in features.values() if entry.kind == "hole")
+    source = SceneObject(id="obj_1", name="Block", mesh=original, kind="brep", features=features)
+
+    changed = run("resize_hole", source, profile, at_feature=bore.id, diameter=9.0).outputs[0]
+
+    holes = [entry for entry in changed.features.values() if entry.kind == "hole"]
+    centre = holes[0].params["centre"]
+    assert abs(float(centre[0]) - 12.0) < 0.05 and abs(float(centre[1]) - 8.0) < 0.05, (
+        f"das Loch ist nach {centre} gewandert, ohne dass jemand eine Stelle nannte"
+    )
+    assert holes[0].params["diameter"] == pytest.approx(9.0, abs=0.05)
