@@ -36,6 +36,17 @@ diesem Stichtag bleiben ohne nachträgliche Gerätebindung gültig. Das Zertifik
 hat kein Ablaufdatum: Nach dem ausdrücklichen Aktivierungsklick bleibt die
 Anwendung ohne Konto, Hintergrundprüfung und Netz verwendbar.
 
+## Persönliche Ablagen
+
+Kaufcode, Geräte-Zertifikat, offene Abmeldung und Zeitmarker schreiben über
+`store._write_place`: eine eindeutige private Nachbardatei, vollständiges
+Schreiben und Synchronisieren, Schließen, dann atomarer Ersatz. Ein
+Schreibfehler bewahrt den vollständigen vorigen Wert; eigene temporäre
+Dateien werden aufgeräumt. Unter POSIX sind der Zielordner 0700 und die
+Datei von der Anlage an 0600. Auch bestehende Kaufcode-/Zertifikats-/
+Abmeldedateien erhalten beim Lesen diese privaten Rechte. Unter Windows
+gilt die vom Benutzerprofil geerbte Zugriffsliste.
+
 ## Das Lizenzmanifest ist ein Artefakt je Arbeitsbaum
 
 `tools/build_licence_module.py` baut das Prüfmodul aus den Grenzdateien. Es

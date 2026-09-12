@@ -57,12 +57,16 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from contextlib import suppress
 from datetime import date, timedelta
+from os import fsync
+from os import name as os_name
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Final, Literal
 
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_config_dir, user_data_dir
+from app.core.paths import user_config_dir, user_data_dir
 
 _log = get_logger(__name__)
 
@@ -160,7 +164,7 @@ def read_key() -> str | None:
     """
     path = key_path()
     try:
-        text = path.read_text(encoding="utf-8").strip()
+        text = _read_private_text(path)
     except (OSError, ValueError):
         return None
     return text or None
@@ -175,8 +179,7 @@ def write_key(text: str) -> bool:
     bezahlten Schlüssels wäre die falsche Richtung des Fehlers.
     """
     try:
-        ensure_dir(user_config_dir())
-        key_path().write_text(text.strip(), encoding="utf-8")
+        _write_place(key_path(), text.strip())
     except OSError as problem:
         _log.warning("licence key could not be written: %s", problem)
         return False
@@ -207,7 +210,7 @@ def certificate_path() -> Path:
 def read_certificate() -> str | None:
     """Das abgelegte Geräte-Zertifikat, oder ``None`` bei jedem Lesefehler."""
     try:
-        text = certificate_path().read_text(encoding="utf-8").strip()
+        text = _read_private_text(certificate_path())
     except (OSError, ValueError):
         return None
     return text or None
@@ -216,10 +219,7 @@ def read_certificate() -> str | None:
 def write_certificate(text: str) -> bool:
     """Legt ein zuvor vollständig geprüftes Geräte-Zertifikat ab."""
     try:
-        ensure_dir(user_config_dir())
-        scratch = certificate_path().with_suffix(".tmp")
-        scratch.write_text(text.strip(), encoding="utf-8")
-        scratch.replace(certificate_path())
+        _write_place(certificate_path(), text.strip())
     except OSError as problem:
         _log.warning("activation certificate could not be written: %s", problem)
         return False
@@ -243,7 +243,7 @@ def pending_deactivation_path() -> Path:
 def read_pending_deactivation() -> str | None:
     """Liest die wiederholbare Geräteabmeldung, falls eine aussteht."""
     try:
-        text = pending_deactivation_path().read_text(encoding="utf-8").strip()
+        text = _read_private_text(pending_deactivation_path())
     except (OSError, ValueError):
         return None
     return text or None
@@ -252,11 +252,7 @@ def read_pending_deactivation() -> str | None:
 def write_pending_deactivation(text: str) -> bool:
     """Legt eine signierte Geräteabmeldung vor der lokalen Sperre atomar ab."""
     try:
-        ensure_dir(user_config_dir())
-        target = pending_deactivation_path()
-        scratch = target.with_suffix(".tmp")
-        scratch.write_text(text.strip(), encoding="utf-8")
-        scratch.replace(target)
+        _write_place(pending_deactivation_path(), text.strip())
     except OSError as problem:
         _log.warning("pending deactivation could not be written: %s", problem)
         return False
@@ -338,12 +334,41 @@ def _places_complete() -> bool:
     return trial_path().is_file() and second_trial_path().is_file()
 
 
+def _read_private_text(path: Path) -> str:
+    """Liest persönliche Ablagedaten; bestehende POSIX-Dateien werden dabei privat."""
+    if os_name != "nt":
+        path.parent.chmod(0o700)
+        path.chmod(0o600)
+    return path.read_text(encoding="utf-8").strip()
+
+
 def _write_place(path: Path, text: str) -> None:
-    """Ein Ort, atomar geschrieben — halbe Marker sähen wie angefasste aus."""
-    ensure_dir(path.parent)
-    scratch = path.parent / (path.name + ".tmp")
-    scratch.write_text(text, encoding="utf-8")
-    scratch.replace(path)
+    """Privat und atomar: erst vollständig synchronisieren, dann den Namen ersetzen."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os_name != "nt":
+        path.parent.chmod(0o700)
+    scratch: Path | None = None
+    try:
+        # NamedTemporaryFile legt mit 0600 an; kein offenes Zeitfenster und
+        # kein gemeinsamer .tmp-Name bei zwei gleichzeitigen Schreibvorgängen.
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            scratch = Path(stream.name)
+            stream.write(text)
+            stream.flush()
+            fsync(stream.fileno())
+        scratch.replace(path)
+    finally:
+        if scratch is not None:
+            with suppress(OSError):
+                scratch.unlink(missing_ok=True)
 
 
 def _write_trial(first_run: date, last_seen: date) -> None:

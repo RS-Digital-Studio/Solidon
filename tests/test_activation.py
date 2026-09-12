@@ -1009,7 +1009,7 @@ def test_a_read_only_profile_keeps_the_checked_key_only_for_the_session(
     def refuse(*_arguments: object, **_keywords: object) -> None:
         raise OSError("read-only profile")
 
-    monkeypatch.setattr(store, "ensure_dir", refuse)
+    monkeypatch.setattr(Path, "mkdir", refuse)
     state = activation.remember(make_key(TEST_SEED, a_licence(purchased_on=date(2026, 11, 1))))
     assert state.needs_activation
     assert not state.unlocked, "ein Kaufcode ohne Geräte-Zertifikat öffnet nichts"
@@ -1077,7 +1077,13 @@ def test_there_is_no_switch_to_flip() -> None:
                 else ""
             )
             assert reached not in {"environ", "getenv"}, f"{source.name} reads the environment"
-        assert "os" not in _imported_modules(source), f"{source.name} imports os"
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert all(alias.name != "os" for alias in node.names), source.name
+            elif isinstance(node, ast.ImportFrom) and node.module == "os":
+                # Nur die Ablage braucht Dateisynchronisierung und POSIX-Erkennung.
+                assert source.name == "store.py", source.name
+                assert {alias.name for alias in node.names} <= {"fsync", "name"}, source.name
 
 
 def test_an_activation_document_is_read_through_the_json_boundary() -> None:
@@ -1141,3 +1147,84 @@ def test_a_marker_with_a_non_ascii_signature_ends_the_trial(own_config: Path) ->
     store.trial_path().write_text(json_module.dumps(data), encoding="utf-8")
 
     assert store.trial_days_left(start + timedelta(days=1)) == 0
+
+
+@pytest.mark.parametrize(
+    "writer, reader, path_name",
+    [
+        ("write_key", "read_key", "key_path"),
+        ("write_certificate", "read_certificate", "certificate_path"),
+        ("write_pending_deactivation", "read_pending_deactivation", "pending_deactivation_path"),
+    ],
+)
+@pytest.mark.parametrize("failure", ["sync", "replace"])
+def test_activation_storage_keeps_the_previous_complete_value_on_write_failure(
+    own_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    writer: str,
+    reader: str,
+    path_name: str,
+    failure: str,
+) -> None:
+    write = getattr(store, writer)
+    read = getattr(store, reader)
+    target = getattr(store, path_name)()
+    assert write("previous-complete-value")
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise OSError("test write failure")
+
+    if failure == "sync":
+        monkeypatch.setattr(store, "fsync", refuse)
+    else:
+        monkeypatch.setattr(Path, "replace", refuse)
+    assert not write("replacement-value")
+    assert read() == "previous-complete-value"
+    assert not list(target.parent.glob(".*.tmp"))
+
+
+def test_activation_storage_does_not_overwrite_an_existing_scratch_name(own_config: Path) -> None:
+    target = store.key_path()
+    scratch = target.with_suffix(".tmp")
+    scratch.write_bytes(b"unrelated-existing-file")
+    assert store.write_key("new-complete-value")
+    assert store.read_key() == "new-complete-value"
+    assert scratch.read_bytes() == b"unrelated-existing-file"
+
+
+def test_activation_storage_uses_private_posix_permissions(own_config: Path) -> None:
+    import os
+
+    if os.name == "nt":
+        pytest.skip("POSIX-Dateirechte sind auf Windows nicht prüfbar")
+    for writer, path in (
+        (store.write_key, store.key_path()),
+        (store.write_certificate, store.certificate_path()),
+        (store.write_pending_deactivation, store.pending_deactivation_path()),
+    ):
+        assert writer("private-value")
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert path.parent.stat().st_mode & 0o777 == 0o700
+    store._write_place(store.second_trial_path(), "private-marker")
+    assert store.second_trial_path().stat().st_mode & 0o777 == 0o600
+    assert store.second_trial_path().parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_reading_legacy_activation_files_restricts_their_posix_permissions(
+    own_config: Path,
+) -> None:
+    import os
+
+    if os.name == "nt":
+        pytest.skip("POSIX-Dateirechte sind auf Windows nicht prüfbar")
+    for reader, path in (
+        (store.read_key, store.key_path()),
+        (store.read_certificate, store.certificate_path()),
+        (store.read_pending_deactivation, store.pending_deactivation_path()),
+    ):
+        path.write_text("legacy-value", encoding="utf-8")
+        path.chmod(0o644)
+        path.parent.chmod(0o755)
+        assert reader() == "legacy-value"
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert path.parent.stat().st_mode & 0o777 == 0o700
