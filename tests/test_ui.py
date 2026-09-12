@@ -14375,6 +14375,75 @@ def test_closing_the_measure_tool_takes_the_dimensions_with_it(window: MainWindo
     assert window.measure_bar.mode.currentData() == "off", "und schaltet das Messen ab"
 
 
+def test_measuring_switches_the_view_to_parallel_and_back(window: MainWindow) -> None:
+    """§18.1 sagt es ohne Vorbehalt: orthografisch ist beim Messen Pflicht (RM-142).
+
+    Der Werkzeugweg setzte nur den Messmodus; die vorhandene Umschaltung
+    gehörte dem Skizzeneditor. Wer perspektivisch arbeitete und zu messen
+    anfing, setzte seine Punkte in einem Bild, in dem zwei gleich lange
+    Strecken verschieden lang aussehen — die Maße stimmten, das Zielen nicht.
+    """
+    window.action_projection("perspective")
+
+    window.tools.toggle("measure")
+
+    assert window.viewport.projection == "orthographic"
+    assert [
+        action.data() for action in window._projection_group.actions() if action.isChecked()
+    ] == ["orthographic"], "das Menü sagt, was gilt"
+
+    window.tools.toggle("measure")
+
+    assert window.viewport.projection == "perspective", "und danach steht die Ansicht wie vorher"
+
+
+def test_the_measuring_detour_leaves_the_stored_setting_alone(window: MainWindow) -> None:
+    """Messen stellt vorübergehend um, es entscheidet nichts (RM-142).
+
+    ``settings.projection`` ist die Wahl des Nutzers. Sie zu überschreiben
+    hieße, aus einem Werkzeug eine Einstellung zu machen — dieselbe Trennung
+    wie beim Skizzeneditor.
+    """
+    window.action_projection("perspective")
+
+    window.tools.toggle("measure")
+
+    assert window.settings.projection == "perspective"
+
+
+def test_changing_the_kind_of_measurement_keeps_the_way_back(window: MainWindow) -> None:
+    """Von *Abstand* auf *Wandstärke* ist kein Verlassen (RM-142).
+
+    Ein zweites Merken überschriebe die Projektion, zu der der Nutzer
+    zurückwill — er wäre nach dem Messen orthografisch, ohne es je gewählt zu
+    haben.
+    """
+    window.action_projection("perspective")
+    window.tools.toggle("measure")
+
+    window.measure_bar.mode.setCurrentIndex(2)
+    assert window.measure_bar.mode.currentData() == "thickness", "sonst prüft der Test nichts"
+    window.tools.toggle("measure")
+
+    assert window.viewport.projection == "perspective"
+
+
+def test_choosing_a_projection_while_measuring_wins(window: MainWindow) -> None:
+    """Die Pflicht gilt dem Werkzeug, nicht gegen den Nutzer (RM-142).
+
+    Wer während des Messens ausdrücklich umschaltet, meint es — und bekäme
+    beim Schließen des Werkzeugs sonst einen Zustand zurück, den er eine
+    Minute vorher verworfen hat.
+    """
+    window.action_projection("orthographic")
+    window.tools.toggle("measure")
+
+    window.action_projection("perspective")
+    window.tools.toggle("measure")
+
+    assert window.viewport.projection == "perspective", "die spätere Wahl ist das Rückkehrziel"
+
+
 def test_the_view_settings_are_still_there_after_a_restart(qt_app: QApplication) -> None:
     """Darstellung, Schattierung und Projektion überleben das Schließen.
 

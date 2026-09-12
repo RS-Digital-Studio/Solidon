@@ -477,6 +477,32 @@ breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals, denn es ist
 dieselbe Frage — wie weit daneben meint noch dies. Bei 24 Pixeln, also weit
 außerhalb der Bohrung, bleibt es die Fläche.
 
+### Messen ist orthografisch, und zwar von selbst (RM-142)
+
+§18.1 sagt es ohne Vorbehalt: „orthografisch ist beim Messen Pflicht". Der
+Werkzeugweg setzte trotzdem nur den Messmodus — die vorhandene Umschaltung
+gehörte dem Skizzeneditor. Wer perspektivisch arbeitete und zu messen anfing,
+setzte seine Punkte in einem Bild, in dem zwei gleich lange Strecken
+verschieden lang aussehen, je weiter sie von der Bildmitte weg liegen.
+
+**Die Maße waren nie falsch** — sie kommen aus den Fangkoordinaten und nicht
+aus dem Bild. Falsch war, worauf der Nutzer beim Setzen zielt, und das ist der
+Grund für die Pflicht.
+
+`MainWindow._on_measure_mode` schaltet deshalb beim **Betreten** um und beim
+**Verlassen** zurück. Drei Feinheiten hängen daran:
+
+* **Nicht bei jedem Wechsel der Messart.** Von *Abstand* auf *Wandstärke* ist
+  kein Verlassen; ein zweites Merken überschriebe die Projektion, zu der der
+  Nutzer zurückwill, und er stünde nach dem Messen orthografisch da, ohne es
+  je gewählt zu haben.
+* **`settings.projection` bleibt unberührt.** Messen stellt vorübergehend um,
+  wie der Skizzeneditor daneben; die gespeicherte Wahl gehört dem Nutzer. Das
+  Häkchen im Menü zieht dagegen mit, denn es sagt, was **gilt**.
+* **Eine ausdrückliche Wahl im Menü gewinnt.** `action_projection` setzt
+  währenddessen auch das Rückkehrziel — die Pflicht gilt dem Werkzeug, nicht
+  gegen den Nutzer.
+
 ### Beim Messen zeigt der Zeiger, wohin der Klick fällt
 
 Der Abschnitt darüber gilt der **Auswahl**: Dort fragt der Zeiger dieselbe

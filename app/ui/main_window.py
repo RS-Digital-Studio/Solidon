@@ -1891,7 +1891,7 @@ class MainWindow(QMainWindow):
         self.section_bar.sectionChanged.connect(self._on_section)
         self.measure_bar = MeasureBar(self)
         self.viewport.measurementStatus.connect(self.measure_bar.show_status)
-        self.measure_bar.modeChanged.connect(self.viewport.set_measure_mode)
+        self.measure_bar.modeChanged.connect(self._on_measure_mode)
         self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
         self.measure_bar.undoRequested.connect(self.viewport.undo_measurement)
         self.transform_bar = TransformBar(self)
@@ -2090,6 +2090,9 @@ class MainWindow(QMainWindow):
         self._sketch_target: str | None = None
         self._mode_before_sketch: DisplayMode = "solid"
         self._projection_before_sketch: Projection = "perspective"
+        #: Die Projektion, zu der das Messen zurückkehrt — ``None``, solange
+        #: nicht gemessen wird (RM-142).
+        self._projection_before_measure: Projection | None = None
         """Die Darstellung vor dem Skizzenmodus (§30.1, P4).
 
         Er blendet das Modell durchscheinend, damit die Zeichnung darauf
@@ -11831,6 +11834,42 @@ class MainWindow(QMainWindow):
             flow.dispose()
         self.feature_panel.set_measuring(False)
 
+    def _on_measure_mode(self, mode: str) -> None:
+        """Messen heißt orthografisch (§18.1, RM-142).
+
+        Der Bauplan sagt es ohne Vorbehalt: „orthografisch ist beim Messen
+        Pflicht". Der Weg dorthin setzte trotzdem nur den Messmodus; die
+        vorhandene Umschaltung gehörte dem Skizzeneditor. Wer perspektivisch
+        arbeitete und zu messen anfing, setzte seine Punkte in einem Bild, in
+        dem zwei gleich lange Strecken verschieden lang aussehen — je weiter
+        von der Bildmitte weg, desto mehr.
+
+        **Die Maße selbst waren nie falsch.** Sie kommen aus den
+        Fangkoordinaten und nicht aus dem Bild; falsch war, worauf der Nutzer
+        beim Setzen zielt, und das ist der Grund für die Pflicht.
+
+        Umgeschaltet wird **beim Betreten und beim Verlassen**, nicht bei
+        jedem Wechsel der Messart: Wer von *Abstand* auf *Wandstärke* geht,
+        bleibt im Werkzeug, und ein zweites Merken überschriebe die Projektion,
+        zu der er zurückwill. Die dauerhafte Einstellung bleibt unberührt —
+        Messen stellt vorübergehend um, wie der Skizzeneditor daneben, und
+        ``settings.projection`` ist die Wahl des Nutzers und nicht die des
+        Werkzeugs. Das Häkchen im Menü zieht mit, denn es sagt, was **gilt**.
+
+        Wer währenddessen im Menü umschaltet, bekommt seine Wahl und behält
+        sie auch nach dem Messen (siehe :meth:`action_projection`): Die Pflicht
+        gilt dem Werkzeug, nicht gegen den Nutzer.
+        """
+        if mode != "off" and self._projection_before_measure is None:
+            self._projection_before_measure = self.viewport.projection
+            self.viewport.set_projection("orthographic")
+            _tick(self._projection_group, "orthographic")
+        elif mode == "off" and self._projection_before_measure is not None:
+            back, self._projection_before_measure = self._projection_before_measure, None
+            self.viewport.set_projection(back)
+            _tick(self._projection_group, back)
+        self.viewport.set_measure_mode(mode)  # type: ignore[arg-type]
+
     def close_measuring(self) -> None:
         """Das Messwerkzeug schließen: Modus aus, Maße weg.
 
@@ -11903,7 +11942,16 @@ class MainWindow(QMainWindow):
         Wer misst, arbeitet orthografisch, und wer das einmal eingestellt hat,
         meint es dauerhaft (§18.1). Der Skizzenmodus stellt sie ebenfalls
         vorübergehend um und nimmt es zurück — auch das ist keine Entscheidung.
+
+        **Ein Klick hier ist eine, und zwar auch während des Messens**
+        (RM-142). Das Messwerkzeug stellt beim Betreten orthografisch und
+        kehrt beim Verlassen zurück; wer zwischendurch ausdrücklich umschaltet,
+        bestimmt damit auch das Ziel dieser Rückkehr. Ohne diese Zeile spränge
+        die Ansicht beim Schließen des Werkzeugs auf einen Zustand, den der
+        Nutzer eine Minute vorher verworfen hat.
         """
+        if self._projection_before_measure is not None:
+            self._projection_before_measure = projection  # type: ignore[assignment]
         self.viewport.set_projection(projection)  # type: ignore[arg-type]
         self.settings.projection = projection
         self._store_settings()

@@ -83,7 +83,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
 | [RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken](#rm-141) | Bedienung und Darstellung | Exportformat, Zielordner und gewähltes Namensschema nach Wiederöffnen erhalten |
-| [RM-142 — Verbindliche Projektion beim Messen einlösen](#rm-142) | Bedienung und Darstellung | Orthografische Messansicht anschließen oder den Vertrag ausdrücklich neu entscheiden |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -1650,12 +1649,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-142"></a>
 
-- [ ] **RM-142 — Verbindliche Projektion beim Messen einlösen.** Bauplan §18.1 verlangt orthografische Darstellung beim Messen. Der Werkzeugweg
-  ruft `Viewport.set_measure_mode()` auf, setzt dabei aber keine Projektion; der vorhandene
-  orthografische Wechsel gehört zum Skizzenweg. Den Messablauf einschließlich Rückweg eindeutig
-  festlegen und anschließen. Falls lediglich eine Empfehlung beabsichtigt ist, diese
-  Produktentscheidung ausdrücklich treffen. Abnahme: Messen aus perspektivischer Ansicht folgt
-  dem festgelegten Vertrag, zeigt korrekte Maße und erhält einen verständlichen Kamera-Rückweg.
+- [x] **RM-142 — Verbindliche Projektion beim Messen einlösen.** Am 12.09.2026 gebaut. **Eine
+  Produktentscheidung war nicht nötig**, der Bauplan sagt es ohne Vorbehalt: „orthografisch ist
+  beim Messen Pflicht" (§18.1). Der Werkzeugweg setzte trotzdem nur den Messmodus; die
+  vorhandene Umschaltung gehörte dem Skizzeneditor.
+
+  **Die Maße waren dabei nie falsch** — sie kommen aus den Fangkoordinaten und nicht aus dem
+  Bild. Falsch war, worauf der Nutzer beim Setzen zielt: Perspektivisch erscheinen zwei gleich
+  lange Strecken verschieden lang, je weiter sie von der Bildmitte weg liegen, und genau dorthin
+  setzt man beim Messen Punkte. Dasselbe Argument steht seit dem Skizzeneditor im Code, nur an
+  der anderen Stelle.
+
+  `MainWindow._on_measure_mode` schaltet beim Betreten um und beim Verlassen zurück. Drei
+  Feinheiten gehören dazu, und jede hat ihren eigenen Fall: **nicht bei jedem Wechsel der
+  Messart** (von *Abstand* auf *Wandstärke* ist kein Verlassen — ein zweites Merken machte aus
+  dem Rückweg eine Einbahnstraße), **`settings.projection` bleibt unberührt** (Messen stellt
+  vorübergehend um, wie der Skizzeneditor; das Häkchen im Menü zieht dagegen mit, denn es sagt,
+  was gilt), und **eine ausdrückliche Wahl im Menü gewinnt** — wer währenddessen umschaltet,
+  bestimmt damit das Rückkehrziel, sonst spränge die Ansicht beim Schließen auf einen Zustand,
+  den er eine Minute vorher verworfen hat.
+
+  Nachweis: vier Fälle in `tests/test_ui.py`, vier Gegenproben einzeln rot (ohne die Umschaltung,
+  ohne den Rückweg, mit Merken bei jedem Wechsel, ohne die Menüwahl als Rückkehrziel).
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
 
