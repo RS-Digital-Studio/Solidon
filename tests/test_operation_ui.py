@@ -1540,7 +1540,10 @@ def test_the_edge_list_comes_from_the_body_in_the_window(window: MainWindow) -> 
     )
 
 
-def test_an_empty_edge_choice_locks_the_button_instead_of_failing(window: MainWindow) -> None:
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges"])
+def test_an_empty_edge_choice_locks_the_button_instead_of_failing(
+    window: MainWindow, operation: str
+) -> None:
     """„Einzeln gewählt" ohne Kreuz ist ein Knopf, der sicher scheitert (E4).
 
     Der Kern sagt dann „für diese Auswahl ist noch keine Kante benannt" — ein
@@ -1551,7 +1554,9 @@ def test_an_empty_edge_choice_locks_the_button_instead_of_failing(window: MainWi
     from PySide6.QtWidgets import QComboBox
 
     kanten = {"e:-20.00,-15.00,10.00:0.000,0.000,1.000": "Senkrecht · 20 mm · x -20,0, y -15,0"}
-    dialog = OperationDialog(REGISTRY.get("fillet_edges"), {}, window, edges=kanten)
+    dialog = OperationDialog(REGISTRY.get(operation), {}, window, edges=kanten)
+    accepted = []
+    dialog.accepted.connect(lambda: accepted.append(True))
     try:
         knopf = dialog._accept_button
         assert knopf.isEnabled(), "an einer Gruppe ist nichts unvollständig"
@@ -1562,9 +1567,13 @@ def test_an_empty_edge_choice_locks_the_button_instead_of_failing(window: MainWi
 
         assert not knopf.isEnabled(), "ohne Kreuz kann der Knopf nichts ausrichten"
         assert "Kante" in knopf.toolTip(), f"ohne Grund: {knopf.toolTip()!r}"
+        dialog.accept()
+        assert not accepted, "auch direkte Annahme muss eine leere Kantenwahl sperren"
 
         dialog._editors["edge_keys"].list.item(0).setCheckState(Qt.CheckState.Checked)
         assert knopf.isEnabled(), "mit einem Kreuz geht es wieder"
+        dialog.accept()
+        assert accepted == [True]
     finally:
         dialog.deleteLater()
 

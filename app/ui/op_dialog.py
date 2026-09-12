@@ -1647,7 +1647,7 @@ class OperationDialog(QDialog):
         ):
             return
         if any(
-            isinstance(editor, FeatureSetField) and not editor.valid
+            isinstance(editor, (FeatureSetField, EdgeSetField)) and not editor.valid
             for editor in self._editors.values()
         ):
             return
