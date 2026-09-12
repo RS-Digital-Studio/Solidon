@@ -94,8 +94,9 @@ def test_the_entry_stays_locked_until_two_places_are_marked(qt_app: QApplication
         window.deleteLater()
 
 
+@pytest.mark.parametrize("unit", ["mm", "in"])
 def test_both_halves_and_their_fit_come_from_one_click(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, unit: str
 ) -> None:
     """Der ganze Weg: zwei Stellen, ein Dialog, ein Schritt, eine Passung.
 
@@ -107,7 +108,7 @@ def test_both_halves_and_their_fit_come_from_one_click(
     """
     from app.ui import counterpart_dialog as module
 
-    window = MainWindow(Session(), UiSettings())
+    window = MainWindow(Session(), UiSettings(display_unit=unit))
     try:
         first, second = _two_plates(window)
         window.object_tree.select_features(
@@ -127,6 +128,9 @@ def test_both_halves_and_their_fit_come_from_one_click(
 
         assert len(document.transactions) == before + 1, "beide Hälften sind eine Handlung"
         assert [step.params["kind"] for step in document.ops[-2:]] == ["pin", "bore"]
+        for step in document.ops[-2:]:
+            assert step.params["diameter"] == pytest.approx(4.0)
+            assert step.params["length"] == pytest.approx(8.0)
         assert document.ops[-2].params["at_feature"] == _top_face(window, first)
         assert len(document.fits) == 1, "und ihre Passung gehört dazu"
 
@@ -238,8 +242,10 @@ def test_the_preview_shows_both_halves_before_anything_is_built(
         window.deleteLater()
 
 
+@pytest.mark.parametrize("unit", ["mm", "in"])
 def test_the_dialog_shows_the_shared_measurements_of_the_chosen_pair(
     qt_app: QApplication,
+    unit: str,
 ) -> None:
     """Die Maße kommen aus dem Bausteinschema, nicht aus einer zweiten Liste.
 
@@ -249,12 +255,26 @@ def test_the_dialog_shows_the_shared_measurements_of_the_chosen_pair(
     """
     from app.core.bootstrap import load_operations
     from app.ui.counterpart_dialog import CounterpartDialog
+    from app.ui.labels import LengthSpin, set_display_unit
 
     load_operations()
+    set_display_unit(unit)
     dialog = CounterpartDialog("Oberseite", "Oberseite")
     try:
         assert set(dialog.shared()) >= {"diameter", "length"}
-        assert dialog.shared()["diameter"] > 0.0
+        assert [
+            dialog.shared()[name] for name in ("diameter", "length", "chamfer")
+        ] == pytest.approx((4.0, 8.0, 0.6)), (
+            "die Vorgaben bleiben in jeder Anzeigeeinheit dieselben Millimetermaße"
+        )
+        diameter = dialog._fields["diameter"]
+        assert isinstance(diameter, LengthSpin)
+        factor = 25.4 if unit == "in" else 1.0
+        precision = 0.5 * 10 ** -diameter.decimals() * factor
+        assert diameter.minimum() * factor == pytest.approx(1.0, abs=precision)
+        assert diameter.maximum() * factor == pytest.approx(30.0, abs=precision)
+        diameter.setValue(6.35 / factor)
+        assert dialog.shared()["diameter"] == pytest.approx(6.35)
 
         dialog.pairs.setCurrentIndex(dialog.pairs.findData("screw_and_nut"))
         werte = dialog.shared()

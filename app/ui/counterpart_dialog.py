@@ -149,12 +149,15 @@ class CounterpartDialog(QDialog):
             box.setToolTip(str(entry.doc))
             return box
         spin = LengthSpin(self) if entry.unit == "mm" else NumberSpin(self)
-        spin.setRange(
-            float(entry.minimum if entry.minimum is not None else -1_000_000.0),
-            float(entry.maximum if entry.maximum is not None else 1_000_000.0),
-        )
-        spin.setDecimals(2)
-        spin.setValue(float(entry.default))
+        minimum = float(entry.minimum if entry.minimum is not None else -1_000_000.0)
+        maximum = float(entry.maximum if entry.maximum is not None else 1_000_000.0)
+        if isinstance(spin, LengthSpin):
+            spin.set_range_mm(minimum, maximum)
+            spin.set_value_mm(float(entry.default))
+        else:
+            spin.setRange(minimum, maximum)
+            spin.setDecimals(2)
+            spin.setValue(float(entry.default))
         spin.setAccessibleName(str(entry.title))
         spin.setToolTip(str(entry.doc))
         return spin
