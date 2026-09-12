@@ -1468,6 +1468,7 @@
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "L’operazione scelta non funziona con questi corpi nella loro posizione attuale: di solito si toccano solo su una faccia o uno spigolo. Sposti uno dei due abbastanza da far sovrapporre davvero i corpi.",
   "Die gewählte Datei wird begrenzt in das Projekt aufgenommen.": "Il file selezionato viene letto con un limite di dimensione e aggiunto al progetto.",
   "Die gewählte G-Code-Datei wird gelesen und ausgewertet.": "Il file G-code selezionato viene letto e analizzato.",
+  "Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu.": "Lo spigolo selezionato è ambiguo — selezionalo di nuovo sul corpo.",
   "Die gewählten Kanten gibt es an diesem Körper nicht mehr — ein Schritt davor hat sie verändert. Wählen Sie sie neu.": "Gli spigoli scelti non ci sono più su questo corpo — un passo prima li ha cambiati. Sceglili di nuovo.",
   "Die gewählten Schritte werden aus dem Verlauf gelöscht. Strg+Z stellt alle gemeinsam wieder her.": "I passaggi selezionati verranno eliminati dalla cronologia. Ctrl+Z li ripristina tutti insieme.",
   "Die geänderte Bohrung ließ den Körper offen.": "Il foro modificato ha lasciato il corpo aperto.",

@@ -56,10 +56,10 @@ class MeshEdge:
     """Eine Kante des Netzes — beschrieben wie eine des exakten Kerns.
 
     ``points`` ist der Zug selbst, von einem Ende zum anderen. ``middle``,
-    ``direction`` und ``length`` sind die drei Zahlen, aus denen
-    :func:`edge_key` den Schlüssel baut, und sie bedeuten dasselbe wie bei
-    ``brep.edit.EdgeInfo``: die Mitte des Zugs, seine Richtung von Anfang zu
-    Ende, seine Länge entlang der Punkte.
+    ``direction`` und ``length`` bedeuten dasselbe wie bei ``brep.edit.EdgeInfo``:
+    die Mitte des Zugs, seine Richtung von Anfang zu Ende und seine Länge.
+    :func:`edge_key` liest Mitte und Richtung, bei geschlossenen Zügen auch
+    ``extent``, ihren größten Abstand von der Mitte.
 
     ``normals`` trägt je **Stück** des Zugs die zwei Flächennormalen, zwischen
     denen es liegt — so viele Paare, wie es Stücke gibt. Ein Werkzeug zum
@@ -84,13 +84,18 @@ class MeshEdge:
     def flat(self) -> bool:
         return abs(self.direction[2]) < 0.1
 
+    @property
+    def extent(self) -> float:
+        """Der größte Abstand vom Linienschwerpunkt, am Kreis sein Radius."""
+        return max(math.dist(self.middle, point) for point in self.points)
+
 
 class HasPlacement(Protocol):
     """Was :func:`edge_key` von einer Kante braucht — und mehr nicht.
 
     ``MeshEdge`` und ``brep.edit.EdgeInfo`` haben nichts gemeinsam als diese
-    zwei Zahlen, und für den Schlüssel genügen sie beiden. Dieselbe Bauart
-    wie ``boolean.HasVolume``, und aus demselben Grund: Die Funktion soll für
+    geometrischen Auskünfte. Dieselbe Bauart wie ``boolean.HasVolume``,
+    und aus demselben Grund: Die Funktion soll für
     beide Kerne gelten, ohne einen von ihnen zu kennen.
     """
 
@@ -100,9 +105,12 @@ class HasPlacement(Protocol):
     @property
     def direction(self) -> Vec3: ...
 
+    @property
+    def extent(self) -> float: ...
+
 
 def edge_key(entry: HasPlacement) -> str:
-    """Der stabile Verweis auf **eine** Kante — Mittelpunkt und Richtung.
+    """Der stabile Verweis auf **eine** Kante — Lage und bei Ringen ihre Größe.
 
     Wörtlich dasselbe Format wie ``brep.edit.edge_key``, und das ist der
     Punkt: Eine Kante trägt denselben Schlüssel, gleich aus welchem Kern sie
@@ -123,7 +131,21 @@ def edge_key(entry: HasPlacement) -> str:
     Zeichenketten. Gemessen an einem Zylinder: Der exakte Kern gab
     ``0.000,-0.000,0.000``, das Netz ``0.000,0.000,0.000``, und beide meinten
     die entartete Richtung eines geschlossenen Kreises.
+
+    Geschlossene Kanten tragen zusätzlich ihren größten Abstand von der
+    Mitte. Sonst heißen die beiden Ränder eines Rohrs gleich: Ihre Mitten
+    fallen zusammen, und ihre Richtungen sind beide null. Der Abstand bleibt
+    bei einer Unterteilung derselben Segmente erhalten; die Polygonlänge
+    dagegen weicht von der exakten Kreislänge ab.
     """
+    placement = _placement_key(entry)
+    if math.dist(entry.direction, (0.0, 0.0, 0.0)) <= EPS_GEOM:
+        return f"{placement}:r:{_unsigned_zero(entry.extent, 2):.2f}"
+    return placement
+
+
+def _placement_key(entry: HasPlacement) -> str:
+    """Der bisherige Schlüssel bleibt für eindeutige gespeicherte Auswahlen lesbar."""
     direction = entry.direction
     lead = next((value for value in direction if abs(value) > 1e-6), 1.0)
     sign = -1.0 if lead < 0.0 else 1.0
@@ -371,9 +393,28 @@ def named_edges[AnyEdge: SelectableEdge](
     macht, entscheidet der Aufrufer.** Eine Kante kann verschwunden sein, weil
     ein Schritt davor sie weggenommen hat, und dann ist das eine Auskunft an
     den Kunden und kein Programmfehler (Regel 17).
+
+    Mehrdeutige Schlüssel halten dagegen hier an: Ein alter Rohrschlüssel
+    oder eine Quantisierungskollision darf keine Kante zufällig auswählen.
     """
-    described = {edge_key(entry): entry for entry in edges}
-    return [described[key] for key in keys if key in described]
+    described: dict[str, list[AnyEdge]] = {}
+    for entry in edges:
+        key = edge_key(entry)
+        described.setdefault(key, []).append(entry)
+        legacy = _placement_key(entry)
+        if legacy != key:
+            described.setdefault(legacy, []).append(entry)
+    selected: list[AnyEdge] = []
+    for key in keys:
+        matches = described.get(key, [])
+        if len(matches) > 1:
+            raise GeometryError(
+                detail=_("Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu."),
+                values={"key": key, "matches": len(matches)},
+            )
+        if matches:
+            selected.append(matches[0])
+    return selected
 
 
 def wanted[AnyEdge: SelectableEdge](
@@ -966,6 +1007,7 @@ def reround(mesh: MeshData, feature: Feature, radius: float) -> BooleanOutcome:
 class _Placed:
     middle: Vec3
     direction: Vec3
+    extent: float
 
 
 def _placed(corner: SharpCorner) -> _Placed:
@@ -976,6 +1018,7 @@ def _placed(corner: SharpCorner) -> _Placed:
     return _Placed(
         middle=(float(middle[0]), float(middle[1]), float(middle[2])),
         direction=(float(along[0]), float(along[1]), float(along[2])),
+        extent=float(np.linalg.norm(corner.end - corner.start)) / 2.0,
     )
 
 

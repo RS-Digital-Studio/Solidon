@@ -1468,6 +1468,7 @@
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "L’opération choisie ne fonctionne pas avec ces corps dans leur position actuelle — le plus souvent, ils ne se touchent que par une face ou une arête. Déplacez l’un d’eux assez loin pour que les corps se chevauchent réellement.",
   "Die gewählte Datei wird begrenzt in das Projekt aufgenommen.": "Le fichier sélectionné est lu avec une limite de taille et ajouté au projet.",
   "Die gewählte G-Code-Datei wird gelesen und ausgewertet.": "Le fichier G-code sélectionné est en cours de lecture et d’analyse.",
+  "Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu.": "L'arête sélectionnée est ambiguë — la sélectionner à nouveau sur le corps.",
   "Die gewählten Kanten gibt es an diesem Körper nicht mehr — ein Schritt davor hat sie verändert. Wählen Sie sie neu.": "Les arêtes choisies ne sont plus sur ce corps — une étape précédente les a modifiées. Choisissez-les à nouveau.",
   "Die gewählten Schritte werden aus dem Verlauf gelöscht. Strg+Z stellt alle gemeinsam wieder her.": "Les étapes sélectionnées seront supprimées de l’historique. Ctrl+Z les restaure toutes ensemble.",
   "Die geänderte Bohrung ließ den Körper offen.": "Le trou modifié a laissé le corps ouvert.",

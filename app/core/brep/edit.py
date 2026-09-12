@@ -30,7 +30,7 @@ from app.core.geom.edges import named_edges as edges_named
 from app.core.geom.edges import wanted as edges_wanted
 from app.core.log import get_logger
 from app.core.types import PlaneFrame, Point2, Transform, Vec3
-from app.core.units import EPS_GEOM, is_close
+from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -66,6 +66,15 @@ class EdgeInfo:
     @property
     def flat(self) -> bool:
         return abs(self.direction[2]) < 0.1
+
+    @property
+    def extent(self) -> float:
+        """Der größte Abstand vom Linienschwerpunkt, am Kreis sein Radius.
+
+        Die Abtastung bleibt unter der Auflösung des Schlüssels. Bei einem
+        Kreis liegen alle Punkte im selben Abstand von seiner Mitte.
+        """
+        return max(math.dist(self.middle, point) for point in edge_points(self, EPS_DISPLAY / 10.0))
 
 
 def box(width: float, depth: float, height: float) -> Solid:
@@ -216,8 +225,8 @@ def edge_key(entry: EdgeInfo) -> str:
 
     Der Schlüssel kommt deshalb aus der **Geometrie**: Mittelpunkt und
     Richtung, auf hundertstel Millimeter beziehungsweise drei Stellen
-    gerundet. Zwei verschiedene Kanten teilen beides nicht — sie lägen
-    aufeinander.
+    gerundet. Bei geschlossenen Kurven kommt ihre Ausdehnung hinzu, damit
+    die konzentrischen Ränder eines Rohrs verschieden heißen.
 
     **Die Richtung ohne Vorzeichen**, denn dieselbe Kante kann in beide
     Richtungen laufen, je nachdem, welche Fläche sie beschreibt: Die erste

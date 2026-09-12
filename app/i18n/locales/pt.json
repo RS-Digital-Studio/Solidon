@@ -1468,6 +1468,7 @@
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "A operação selecionada não funciona com estes corpos na posição atual — normalmente apenas se tocam numa face ou aresta. Mova um deles o suficiente para que os corpos se sobreponham de facto.",
   "Die gewählte Datei wird begrenzt in das Projekt aufgenommen.": "O ficheiro selecionado é lido com um limite de tamanho e adicionado ao projeto.",
   "Die gewählte G-Code-Datei wird gelesen und ausgewertet.": "O ficheiro G-code selecionado está a ser lido e analisado.",
+  "Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu.": "A aresta selecionada é ambígua — selecioná-la novamente no corpo.",
   "Die gewählten Kanten gibt es an diesem Körper nicht mehr — ein Schritt davor hat sie verändert. Wählen Sie sie neu.": "As arestas escolhidas já não estão neste corpo — um passo anterior alterou-as. Escolha-as de novo.",
   "Die gewählten Schritte werden aus dem Verlauf gelöscht. Strg+Z stellt alle gemeinsam wieder her.": "Os passos selecionados serão eliminados do histórico. Ctrl+Z restaura-os todos em conjunto.",
   "Die geänderte Bohrung ließ den Körper offen.": "O furo alterado deixou o corpo aberto.",

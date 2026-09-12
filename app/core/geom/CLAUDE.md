@@ -355,6 +355,12 @@ für beide Kerne, `brep.edit` ruft sie. `MeshEdge.convex` sagt zusätzlich, ob
 Material weggeht oder dazukommt; am exakten Körper weiß das die Topologie
 selbst — und daran hängt beim Verrunden, ob abgezogen oder vereinigt wird.
 
+Geschlossene Kantenzüge tragen im Schlüssel zusätzlich ihre Ausdehnung vom
+Linienschwerpunkt, am Kreis also den Radius. Mitte und Richtung allein
+unterscheiden die konzentrischen Ränder eines Rohrs nicht. Alte Schlüssel
+bleiben als Alias lesbar, wenn genau eine Kante passt. Mehrere Treffer
+halten zur Neuauswahl an; keine Reihenfolge entscheidet über die Geometrie.
+
 `rounding_tool` baut den Werkzeugkörper: im Querschnitt der Zwickel zwischen
 den zwei Flächen und dem Bogen, stückweise über den Zug gezogen. Wie fein der
 Bogen wird, sagt `_arc_steps` — aus `units.MAX_FACET_SAG` und

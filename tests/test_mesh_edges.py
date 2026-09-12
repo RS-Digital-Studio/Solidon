@@ -32,9 +32,13 @@ from app.core.geom.edges import (
     bevel_edges,
     edge_key,
     edges_of,
+    named_edges,
     reround,
     round_edges,
     unround,
+)
+from app.core.geom.edges import (
+    wanted as wanted_edges,
 )
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
@@ -140,6 +144,156 @@ def test_both_kernels_name_the_same_edge_the_same_way() -> None:
     assert len(circles_brep) == 2, "ein Zylinder hat zwei Kreiskanten — die Naht zählt nicht"
     assert circles_mesh == circles_brep
     assert not any("-0.000" in key for key in circles_mesh), "eine Null trägt kein Vorzeichen"
+
+
+def _tube_edges(backend: str, inner: float = 5.0) -> tuple[Any, list[Any]]:
+    """Ein Rohr mit konzentrischen Rändern, an beiden Kernen auf dem Bett."""
+    if backend == "mesh":
+        raw = trimesh.creation.annulus(r_min=inner, r_max=RADIUS, height=HEIGHT, sections=64)
+        raw.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        body = MeshData(raw)
+        return body, edges_of(body)
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    body = brep.cylinder(2.0 * RADIUS, HEIGHT)
+    if inner > 0.0:
+        body = brep.boolean("difference", [body, brep.cylinder(2.0 * inner, HEIGHT)])
+    return body, brep.edges_of(body)
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+def test_concentric_rims_have_distinct_stable_keys(backend: str) -> None:
+    """Innen- und Außenrand teilen die Mitte, sind aber verschiedene Kanten."""
+    _, found = _tube_edges(backend)
+    _, again = _tube_edges(backend)
+    keys = [edge_key(entry) for entry in found]
+
+    assert len(found) == len(set(keys)) == 4
+    assert sorted(keys) == sorted(edge_key(entry) for entry in again)
+    for entry, key in zip(found, keys, strict=True):
+        selected = named_edges(found, [key])
+        assert selected == [entry]
+
+
+def test_concentric_rim_keys_agree_between_kernels_and_after_subdivision() -> None:
+    """Die Ergänzung am Schlüssel erhält die Zusage für Netz und exakten Kreis."""
+    mesh, coarse = _tube_edges("mesh")
+    _, exact = _tube_edges("brep")
+    fine = edges_of(MeshData(mesh.raw.subdivide()))
+
+    keys = sorted(edge_key(entry) for entry in exact)
+    assert len(set(keys)) == 4
+    assert sorted(edge_key(entry) for entry in coarse) == keys
+    assert sorted(edge_key(entry) for entry in fine) == keys
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+def test_an_unambiguous_legacy_rim_key_still_selects_its_edge(backend: str) -> None:
+    """Ein gespeicherter Zylinderrand bleibt nach der Schlüsselergänzung lesbar."""
+    _, found = _tube_edges(backend, inner=0.0)
+    selected = wanted_edges(found, "named", [f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000"])
+
+    assert len(selected) == 1
+    assert selected[0].middle[2] == pytest.approx(HEIGHT)
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+def test_an_ambiguous_legacy_rim_key_stops_before_modifying_a_body(backend: str) -> None:
+    """Ein alter Rohrschlüssel verrät nicht, ob innen oder außen gemeint war."""
+    _, found = _tube_edges(backend)
+    with pytest.raises(GeometryError) as problem:
+        wanted_edges(found, "named", [f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000"])
+
+    assert problem.value.suggestions
+    assert "nicht eindeutig" in str(problem.value.detail)
+
+
+def test_a_remaining_key_collision_is_never_resolved_by_iteration_order() -> None:
+    """Auch zwei sehr nahe Kanten dürfen bei der Quantisierung nicht verschmelzen."""
+    thin = MeshData(trimesh.creation.box(extents=(0.004, 10.0, 10.0)))
+    found = edges_of(thin)
+    key = edge_key(next(entry for entry in found if entry.upright))
+
+    with pytest.raises(GeometryError) as problem:
+        wanted_edges(found, "named", [key])
+
+    assert problem.value.suggestions
+    assert "nicht eindeutig" in str(problem.value.detail)
+
+
+@pytest.mark.parametrize("outer", [False, True], ids=["inner", "outer"])
+def test_a_named_rim_chamfer_cuts_the_requested_side_of_a_tube(outer: bool) -> None:
+    """Das Volumen der gewählten Ringfase folgt ihrer eigenen Kreisgeometrie."""
+    body, found = _tube_edges("brep")
+    upper = [entry for entry in found if entry.middle[2] > HEIGHT / 2.0]
+    selected = (max if outer else min)(upper, key=lambda entry: entry.length)
+    source = SceneObject(id="obj_1", name="Rohr", mesh=body, kind="brep")
+
+    changed = run(
+        "chamfer_edges", source, distance=1.0, edges="named", edge_keys=edge_key(selected)
+    )
+    solid = changed.outputs[0].mesh
+    # Integration des Kreisrings über eine 45-Grad-Fase von einem Millimeter:
+    # außen π(R d² - d³/3), innen π(r d² + d³/3).
+    removed = math.pi * (RADIUS - 1.0 / 3.0 if outer else 5.0 + 1.0 / 3.0)
+    assert solid.volume == pytest.approx(body.volume - removed, abs=1e-6)
+    assert solid.is_watertight and solid.component_count == 1
+
+
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges", "bead_edges"])
+def test_a_warm_legacy_edge_cache_cannot_hide_an_ambiguous_selection(operation: str) -> None:
+    """Ein gespeichertes Ergebnis der alten Auswahl überspringt keine neue Prüfung."""
+    import dataclasses
+
+    from app.core.registry import Registry
+    from app.core.scene import ResultCache, evaluate
+    from app.core.types import Document, Operation
+
+    load_operations()
+    body, _ = _tube_edges("brep")
+
+    def make_tube(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=[SceneObject(id="", name="Rohr", mesh=body, kind="brep")])
+
+    def old_result(ctx: OpContext) -> OpResult:
+        # Der alte Lauf hat seine Auswahl bereits gerechnet. Der Inhalt ist
+        # für den Cache-Test nebensächlich; die neue Auswahl muss neu laufen.
+        return OpResult(outputs=[dataclasses.replace(ctx.inputs[0])])
+
+    source = dataclasses.replace(REGISTRY.get("create_brep_cylinder"), fn=make_tube)
+    current = REGISTRY.get(operation)
+    previous = dataclasses.replace(current, fn=old_result, cache_version="")
+    before, after = Registry(), Registry()
+    for registry, editing in ((before, previous), (after, current)):
+        registry.register(source)
+        registry.register(editing)
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op=source.name, inputs=[], outputs=["obj_1"], params={}),
+            Operation(
+                id=2,
+                op=operation,
+                inputs=["obj_1"],
+                outputs=["obj_1"],
+                params={
+                    "edges": "named",
+                    "edge_keys": f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000",
+                },
+            ),
+        ],
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    cache = ResultCache()
+
+    old = evaluate(document, profile, registry=before, cache=cache)
+    assert old.complete and len(cache) == 2
+    fresh = evaluate(document, profile, registry=after, cache=cache)
+
+    assert fresh.stopped_at == 2
+    assert any("nicht eindeutig" in str(entry.message) for entry in fresh.scene.report.findings)
 
 
 def test_a_groove_tells_its_inner_edges_from_its_outer_ones() -> None:
