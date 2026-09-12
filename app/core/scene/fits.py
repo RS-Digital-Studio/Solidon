@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-from app.core.errors import AppError
+from app.core.errors import AppError, InternalError
 from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
 from app.core.knowledge.profiles import for_object, resolve_tolerance
@@ -207,6 +207,8 @@ def active_fits(document: Document) -> list[Fit]:
 
 def check(scene: Scene, profile: Profile, *, document: Document | None = None) -> list[Finding]:
     """Prüft jede Passung der Szene. Verletzungen sind nie still (§14)."""
+    if document is None and any(fit.when_positive is not None for fit in scene.fits):
+        raise InternalError(detail="Bedingte Passungen brauchen ihr Dokument für die Prüfung.")
     findings: list[Finding] = []
     for fit in scene.fits:
         try:

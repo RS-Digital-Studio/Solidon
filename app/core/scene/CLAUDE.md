@@ -185,6 +185,8 @@ fünf Schritte eines Formatwechsels). Die Dreiecksgrenze der
 Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `evaluate.py`.
 
 Bedingte Passungen speichern `when_positive=(operation_id, parameter_name)`.
+Ihre Prüfung verlangt das zugehörige Dokument; fehlt es beim Aufruf, ist
+das ein Programmfehler und kein ungültiger Kundenparameter.
 `fits.pair_problem` prüft die fachliche Eignung für die Auswertung und die
 manuelle Anlage gemeinsam; `pair_kinds` bietet nur passende neue Beziehungen
 an. Durchmesser allein belegen keine Innen-/Außenrolle. Deckelmerkmale tragen

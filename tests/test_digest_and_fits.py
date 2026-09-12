@@ -543,6 +543,21 @@ def test_a_fit_that_matches_the_profile_says_nothing(profile: Profile) -> None:
     assert fit_check.check(scene, profile) == []
 
 
+def test_a_conditional_fit_requires_its_document_without_blaming_the_step(profile: Profile) -> None:
+    """Ein fehlender Aufrufparameter ist keine ungültige Eingabe des Kunden."""
+    from app.core.errors import InternalError
+    from app.core.scene import History, OperationDraft
+
+    scene = pin_and_hole(5.0 + profile.material.clearance, 5.0, profile)
+    scene.fits.append(replace(clearance_fit(), when_positive=(1, "width")))
+    document = Document(format_version=1, app_version="0.0.1")
+    History(document).apply("Quader", [OperationDraft(op="create_box", params={"width": 5.0})])
+
+    assert fit_check.check(scene, profile, document=document) == []
+    with pytest.raises(InternalError):
+        fit_check.check(scene, profile)
+
+
 def test_a_tight_fit_is_reported(profile: Profile) -> None:
     """§14: Verletzungen erscheinen im Prüfbericht, nie still."""
     scene = pin_and_hole(5.02, 5.0, profile)
