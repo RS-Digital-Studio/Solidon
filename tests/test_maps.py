@@ -799,7 +799,14 @@ def test_the_support_map_marks_the_same_triangles_as_a_triangle_by_triangle_sear
     centres = np.asarray(mesh.raw.triangles_center, dtype=float)
     zu_fuss: list[int] = []
     for index, centre in enumerate(centres):
-        region = maps._region_at(regions, float(centre[2]), profile.printer.layer_height)
+        region = next(
+            (
+                shapes
+                for height, shapes in regions
+                if abs(height - float(centre[2])) <= profile.printer.layer_height
+            ),
+            None,
+        )
         if region is None:
             continue
         punkt = Point(float(centre[0]), float(centre[1]))

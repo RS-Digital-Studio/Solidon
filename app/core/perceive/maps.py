@@ -23,7 +23,6 @@ from typing import Any, Final, Literal
 
 import numpy as np
 import shapely
-from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.deferred import trimesh
@@ -86,12 +85,6 @@ MAP_LIMIT_TRIANGLES = 900_000
 #: anderen aufwendigen Karte, der Wandstärke, drei Sekunden. Der Lauf bleibt
 #: im Hintergrund; danach erhält der Nutzer einen konkreten Ausweg.
 SUPPORT_MAP_BUDGET_SECONDS = 3.0
-
-#: Nach so vielen Dreiecken wird gefragt, ob abgebrochen werden soll. Bei
-#: 512 liegt der Abstand zwischen zwei Fragen unter einer Millisekunde — fein
-#: genug, dass ein Kartenwechsel sofort wirkt, grob genug, dass die Frage
-#: selbst nicht ins Gewicht fällt.
-CANCEL_EVERY = 512
 
 #: Wie weit über der Mindestwandstärke die Skala der Wandstärkenkarte endet.
 #: Fünf mal zwei Extrusionsbreiten sind das Zehnfache einer Bahn — darüber
@@ -1051,26 +1044,6 @@ def _marked_by_layer(
         found.append(members[inside])
 
     return np.concatenate(found) if found else np.zeros(0, dtype=int)
-
-
-def _region_at(
-    regions: list[tuple[float, list[Any]]], z: float, layer_height: float
-) -> list[Any] | None:
-    """Die ungestützten Konturen der Schicht, in der dieses Dreieck liegt.
-
-    Steht neben :func:`_marked_by_layer` und wird von ihm **nicht** benutzt —
-    für einen einzelnen Punkt ist die gerade Suche billiger als der Aufbau
-    einer Gruppierung, und `maps.location_of` fragt genau so.
-    """
-    for height, shapes in regions:
-        if abs(height - z) <= layer_height:
-            return shapes
-    return None
-
-
-def _inside(shapes: list[Any], x: float, y: float) -> bool:
-    point = Point(x, y)
-    return any(shape.intersects(point) for shape in shapes)
 
 
 def _drop_below(mesh: MeshData, field: SolidField, centres: Any) -> Any:
