@@ -39,6 +39,25 @@ def _parameter(name: str, value: float) -> Parameter:
     return Parameter(name=name, value=value, unit="mm")
 
 
+def test_draft_outputs_respect_used_and_undone_numbers(history: History) -> None:
+    """Ein fremder Entwurf darf keine inzwischen vergebene Kennung übernehmen."""
+    history.apply("Erzeugen", [OperationDraft(op="make_object")])
+    planned = OperationDraft(op="make_object", outputs=("obj_2",))
+    assert history.outputs_still_free([planned])
+    assert history.outputs_still_free([OperationDraft(op="make_object")])
+    assert history.outputs_still_free(
+        [OperationDraft(op="rename_object", inputs=("obj_1",), outputs=("obj_1",))]
+    )
+
+    history.apply("Inzwischen erzeugt", [OperationDraft(op="make_object")])
+    assert not history.outputs_still_free([planned])
+    history.undo()
+    assert not history.outputs_still_free([planned])
+    history.apply("Anderer Zug", [OperationDraft(op="rename_object", inputs=("obj_1",))])
+    assert not history.outputs_still_free([planned])
+    assert history.outputs_still_free([OperationDraft(op="make_object", outputs=("obj_3",))])
+
+
 def test_a_batch_cannot_reuse_an_input_consumed_inside_it(
     document: Document, registry: Registry
 ) -> None:
