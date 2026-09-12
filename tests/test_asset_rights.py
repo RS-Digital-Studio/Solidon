@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import json
 import tomllib
@@ -10,42 +9,13 @@ from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
 
+from tools import asset_rights
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "ASSET-RIGHTS.toml"
-DELIVERY_ROOTS = ("app/images/", "app/examples/", "packaging/", "website/")
-DELIVERED_SUFFIXES = {
-    ".gif",
-    ".icns",
-    ".ico",
-    ".jpeg",
-    ".jpg",
-    ".mp3",
-    ".mp4",
-    ".ogg",
-    ".otf",
-    ".png",
-    ".p3d",
-    ".svg",
-    ".ttf",
-    ".wav",
-    ".webm",
-    ".webp",
-    ".woff2",
-}
-REQUIRED_FIELDS = {
-    "art",
-    "creator",
-    "rights_holder",
-    "source",
-    "license",
-    "generator",
-    "inputs",
-    "derivative_status",
-    "evidence",
-    "redistribution_right",
-    "platforms",
-    "status",
-}
+DELIVERY_ROOTS = (*asset_rights.APPLICATION_ROOTS, asset_rights.WEBSITE_ROOT)
+DELIVERED_SUFFIXES = asset_rights.DELIVERED_SUFFIXES
+REQUIRED_FIELDS = asset_rights.ASSET_FIELDS
 EXAMPLE_STEMS = (
     "aushoehlen-und-teilen",
     "dose-mit-deckel",
@@ -89,35 +59,13 @@ EXAMPLE_SOURCE_POLICY: dict[str, dict[str, Any]] = {
         },
     },
 }
-PLATFORMS = {"windows", "macos", "linux", "web"}
-PATH_INPUT_ROOTS = ("app/", "packaging/", "tests/", "tools/", "website/")
-STATUS = {"cleared", "distribution_blocked"}
-REDISTRIBUTION = {
-    "blocked",
-    "confirmed_in_product",
-    "confirmed_on_website",
-    "confirmed_with_notice",
-}
-LICENSES = {
-    "LicenseRef-Solidon-Examples",
-    "LicenseRef-Solidon-Proprietary",
-    "OFL-1.1",
-}
-DERIVATIVE_STATUS = {
-    "derived_from_icon",
-    "generated_from_mit_source",
-    "generated_from_own_sources",
-    "original",
-    "third_party_unmodified",
-}
-ART_SUFFIXES = {
-    "font": {".otf", ".ttf", ".woff2"},
-    "icon": {".icns", ".ico", ".svg"},
-    "image": {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"},
-    "video": {".mp4", ".png", ".webm"},
-    "audio": {".mp3", ".ogg", ".wav"},
-    "project": {".p3d"},
-}
+PLATFORMS = asset_rights.ALL_PLATFORMS
+PATH_INPUT_ROOTS = asset_rights.PATH_INPUT_ROOTS
+STATUS = asset_rights.ALLOWED_STATUS
+REDISTRIBUTION = asset_rights.ALLOWED_REDISTRIBUTION
+LICENSES = asset_rights.ALLOWED_LICENSES
+DERIVATIVE_STATUS = asset_rights.ALLOWED_DERIVATIVES
+ART_SUFFIXES = asset_rights.ART_SUFFIXES
 
 
 def load_manifest() -> dict[str, Any]:
@@ -148,20 +96,6 @@ def tracked_delivered_assets() -> set[str]:
     return delivered
 
 
-def matches(pattern: str, paths: set[str]) -> set[str]:
-    """Git-Pfade gegen ein absichtlich einfaches Glob-Muster vergleichen."""
-
-    return {path for path in paths if fnmatch.fnmatchcase(path, pattern)}
-
-
-def record_paths(asset: dict[str, Any], paths: set[str]) -> set[str]:
-    """Ein Pattern oder eine explizite fail-closed Pfadliste auflösen."""
-
-    if "paths" in asset:
-        return set(asset["paths"]) & paths
-    return matches(asset["pattern"], paths)
-
-
 def record_name(asset: dict[str, Any]) -> str:
     """Einen stabilen Namen für Befunde zu einem Rechteblock liefern."""
 
@@ -171,7 +105,7 @@ def record_name(asset: dict[str, Any]) -> str:
 
 
 def test_manifest_has_complete_shape() -> None:
-    """Jede Rechtekette trägt dieselben prüfbaren Angaben."""
+    """Unabhängige Schema-Gegenprobe; Wertemengen kommen aus dem geprüften Werkzeug."""
 
     data = load_manifest()
     assert data["schema_version"] == 1
@@ -244,7 +178,7 @@ def test_every_delivered_asset_has_exactly_one_rights_record() -> None:
     owners: dict[str, list[str]] = {path: [] for path in assets}
     unused: list[str] = []
     for asset in data["asset"]:
-        found = record_paths(asset, assets)
+        found = asset_rights._record_paths(asset, assets)
         if not found:
             unused.append(record_name(asset))
         for path in found:
@@ -405,10 +339,10 @@ def test_rights_records_match_media_kind_and_platform() -> None:
 
     data = load_manifest()
     assets = tracked_delivered_assets()
-    full_application_platforms = {"windows", "macos", "linux"}
+    full_application_platforms = asset_rights.APPLICATION_PLATFORMS
 
     for asset in data["asset"]:
-        found = record_paths(asset, assets)
+        found = asset_rights._record_paths(asset, assets)
         allowed_suffixes = ART_SUFFIXES[asset["art"]]
         wrong = sorted(path for path in found if Path(path).suffix.lower() not in allowed_suffixes)
         assert not wrong, f"{record_name(asset)} hat die falsche Medienart: {wrong}"
@@ -461,7 +395,7 @@ def test_published_pages_do_not_reference_distribution_blocked_media() -> None:
     for asset in data["asset"]:
         if asset["status"] != "distribution_blocked":
             continue
-        blocked_media = record_paths(asset, assets)
+        blocked_media = asset_rights._record_paths(asset, assets)
         for document in website_sources:
             content = document.read_text(encoding="utf-8")
             for path in blocked_media:
