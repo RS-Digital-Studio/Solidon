@@ -1,8 +1,9 @@
 # Drittanbieter-Lizenzen
 
 Erzeugt für Solidon3D 0.4.0 auf `win-amd64`.
-Quelle sind die Lizenzdateien der tatsächlich installierten Ziel-Wheels
-und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
+Diese Entwicklungsvorschau nennt die installierten Ziel-Wheels und ihre Lizenztexte.
+Die zusätzlichen nativen Laufzeitfamilien stehen erst in der Beilage des gebauten Pakets,
+erzeugt aus dessen tatsächlicher Stückliste (SBOM).
 
 | Paket | Version | SPDX-Ausdruck | Quelle |
 |---|---:|---|---|

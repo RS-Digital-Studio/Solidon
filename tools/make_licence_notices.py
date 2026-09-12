@@ -343,12 +343,21 @@ def collect_artifact_components(sbom: dict[str, Any]) -> tuple[ComponentNotice, 
 
 def render_notices(components: tuple[ComponentNotice, ...]) -> str:
     """Schreibt Index und vollständige Texte in stabiler Reihenfolge."""
+    runtime_names = {policy.name for policy in _runtime_policies().values()}
+    has_runtime = any(component.name in runtime_names for component in components)
+    provenance = (
+        "Quelle sind die installierten Ziel-Wheels, die Stückliste (SBOM) des gebauten Pakets\n"
+        "und die im Repository mit SHA-256 festgeschriebenen Ergänzungen."
+        if has_runtime
+        else "Diese Entwicklungsvorschau nennt die installierten Ziel-Wheels und ihre Lizenztexte.\n"
+        "Die zusätzlichen nativen Laufzeitfamilien stehen erst in der Beilage des gebauten Pakets,\n"
+        "erzeugt aus dessen tatsächlicher Stückliste (SBOM)."
+    )
     lines = [
         "# Drittanbieter-Lizenzen",
         "",
         f"Erzeugt für {APP_NAME} {APP_VERSION} auf `{sysconfig.get_platform()}`.",
-        "Quelle sind die Lizenzdateien der tatsächlich installierten Ziel-Wheels",
-        "und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.",
+        provenance,
         "",
         "| Paket | Version | SPDX-Ausdruck | Quelle |",
         "|---|---:|---|---|",

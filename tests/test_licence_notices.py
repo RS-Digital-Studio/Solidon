@@ -87,6 +87,24 @@ def test_checked_in_notice_is_the_deterministic_target_output() -> None:
     assert make_licence_notices.render_notices(components) == expected
 
 
+def test_the_notice_names_whether_native_artifact_families_are_present() -> None:
+    """Eine Wheel-Vorschau behauptet nicht den Inhalt einer fertigen Paketbeilage."""
+    wheels = make_licence_notices.collect_components()
+    preview = make_licence_notices.render_notices(wheels).split("| Paket |")[0]
+    assert "Entwicklungsvorschau" in preview
+    assert "erst in der Beilage des gebauten Pakets" in preview
+    native = make_licence_notices.ComponentNotice(
+        name="CPython runtime",
+        version="3.14.0",
+        expression="Python-2.0",
+        source_url="https://www.python.org/",
+        texts=(),
+    )
+    artifact = make_licence_notices.render_notices((*wheels, native)).split("| Paket |")[0]
+    assert "Entwicklungsvorschau" not in artifact
+    assert "Quelle sind" in artifact and "Stückliste (SBOM) des gebauten Pakets" in artifact
+
+
 def test_machine_readable_manifest_has_the_same_component_and_text_records() -> None:
     components = make_licence_notices.collect_components()
     document = json.loads(make_licence_notices.render_manifest(components))
