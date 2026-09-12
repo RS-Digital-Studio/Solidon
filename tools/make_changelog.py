@@ -312,8 +312,8 @@ def released_only(entries: tuple[changes.Entry, ...], published: str) -> tuple[c
     Fassung nennt, nimmt der nächste Durchgang sie mit; erzwungen wird das vom
     Fehler darunter und von ``tests/test_changelog_website.py``.
     """
-    grenze = _as_numbers(published)
-    return tuple(entry for entry in entries if _as_numbers(entry.version) <= grenze)
+    limit = _as_numbers(published)
+    return tuple(entry for entry in entries if _as_numbers(entry.version) <= limit)
 
 
 def render_page(language: str) -> str:

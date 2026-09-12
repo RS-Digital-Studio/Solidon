@@ -717,12 +717,12 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     wäre auch keine bessere Antwort, weil sie die neue Fassung verschweigt.
     """
     versprochen: set[str] = set()
-    erwartet: dict[str, int] = {}
+    expected_sizes: dict[str, int] = {}
     payload: dict[str, Any] = {}
     if any(path.name == "version.json" for path in files):
         payload = json.loads((LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
         versprochen |= promised_files(payload)
-        erwartet = promised_sizes(payload)
+        expected_sizes = promised_sizes(payload)
 
     # Was die hochzuladenden Seiten selbst im Kasten anbieten.
     im_kasten: set[str] = set()
@@ -765,7 +765,7 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
         local_file = LOCAL_ROOT / "dl" / name
         if local_file.is_file():
             return oben[name] == local_file.stat().st_size
-        expected = erwartet.get(name)
+        expected = expected_sizes.get(name)
         return expected is None or oben[name] == expected
 
     def partial(name: str) -> bool:
@@ -793,7 +793,7 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     for name in fehlt_fuer_update:
         if partial(name):
             local_file = LOCAL_ROOT / "dl" / name
-            full_size = local_file.stat().st_size if local_file.is_file() else erwartet[name]
+            full_size = local_file.stat().st_size if local_file.is_file() else expected_sizes[name]
             print(f"  {name} — liegt oben mit {oben[name]} statt {full_size} Bytes")
         else:
             print(f"  {name}")

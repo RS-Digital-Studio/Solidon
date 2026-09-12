@@ -35,6 +35,14 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 #: nach wie vor ein Verstoß.
 GERMAN_WORDS = frozenset(
     {
+        "erwartet",
+        "fehlend",
+        "gelesen",
+        "grenze",
+        "lage",
+        "treffer",
+        "vergeben",
+        "zeichen",
         "marke",
         "eigene",
         "vom",

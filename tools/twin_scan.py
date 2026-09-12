@@ -505,11 +505,11 @@ def main(argv: list[str] | None = None) -> int:
     # und geht in tausend Ausgabezeilen unter. Eine Grundmenge, die still
     # schrumpft, ist genau der Fehler, gegen den die Mindestzählung steht
     # (Befund solidon-e8, 07.09.2026).
-    fehlend = len(files) - len(trees)
-    gelesen = f"{len(trees)} von {len(files)} Dateien" if fehlend else f"{len(trees)} Dateien"
-    print(f"{gelesen}, {lines} Zeilen, {len(entries)} Funktionen")
-    if fehlend:
-        print(f"!! {fehlend} Datei(en) ließen sich nicht lesen — siehe stderr")
+    unreadable = len(files) - len(trees)
+    summary = f"{len(trees)} von {len(files)} Dateien" if unreadable else f"{len(trees)} Dateien"
+    print(f"{summary}, {lines} Zeilen, {len(entries)} Funktionen")
+    if unreadable:
+        print(f"!! {unreadable} Datei(en) ließen sich nicht lesen — siehe stderr")
     if len(entries) < FLOOR:
         print(
             f"\nNur {len(entries)} Funktionen gelesen — das ist keine Messung. Stimmt der Pfad?",

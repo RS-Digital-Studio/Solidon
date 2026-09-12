@@ -856,15 +856,15 @@ def cap_groups(blocks: list[dict[str, object]], kept: int) -> list[dict[str, obj
     taken = [0] * len(blocks)
     left = min(kept, sum(sizes))
     while left > 0:
-        vergeben = False
+        handed_out = False
         for index, size in enumerate(sizes):
             if left <= 0:
                 break
             if taken[index] < size:
                 taken[index] += 1
                 left -= 1
-                vergeben = True
-        if not vergeben:
+                handed_out = True
+        if not handed_out:
             break
     capped: list[dict[str, object]] = []
     for block, count in zip(blocks, taken, strict=True):

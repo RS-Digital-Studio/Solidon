@@ -124,11 +124,11 @@ def place_line(lines: list[str], line: str, section: str | None) -> list[str]:
     # Titel ist bei drei Maschinen ein realistisches Merge-Artefakt, und
     # `lines.index` nähme still den ersten — die Nachzählung unten fängt das
     # nicht, denn eine Zeile im falschen Abschnitt ist auch „genau eine dazu".
-    treffer = lines.count(heading)
-    if treffer != 1:
+    hits = lines.count(heading)
+    if hits != 1:
         raise IndexWriteError(
-            f'Der Abschnitt „{section}" steht {treffer}-mal im Index.'
-            if treffer
+            f'Der Abschnitt „{section}" steht {hits}-mal im Index.'
+            if hits
             else f'Der Abschnitt „{section}" steht nicht im Index.'
         )
     start = lines.index(heading)
@@ -168,7 +168,7 @@ def insert(index: Path, line: str, *, section: str | None = None) -> int:
     daneben und ``os.replace``: Ein Abbruch mitten im Schreiben hinterlässt
     damit den alten Index und keinen halben.
     """
-    if any(zeichen in line for zeichen in "\r\n"):
+    if any(character in line for character in "\r\n"):
         # Die Nachzählung unten zählt **Listenelemente**, zusammengefügt wird
         # danach über den Zeilenumbruch — eine Zeile mit Umbruch darin bestünde
         # die Prüfung und legte trotzdem zwei an. Ein Wagenrücklauf wäre
