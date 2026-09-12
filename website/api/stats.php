@@ -858,7 +858,7 @@ $available = months($dir);
 $zone = new DateTimeZone(DISPLAY_ZONE);
 $current = (new DateTimeImmutable('now', $zone))->format('Y-m');
 $month = (string) ($_GET['m'] ?? ($available[0] ?? $current));
-if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+if (!preg_match('/^\d{4}-\d{2}$/D', $month)) {
     $month = $current;
 }
 

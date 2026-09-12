@@ -464,7 +464,7 @@ if (mb_strlen($message) > 60000) {
 }
 
 $kindValue = support_post_text('kind');
-$kind = preg_match('/^[a-z]{1,16}$/', $kindValue) === 1
+$kind = preg_match('/^[a-z]{1,16}$/D', $kindValue) === 1
     ? $kindValue
     : 'idea';
 $subject = header_safe(support_post_text('subject')) ?: 'Solidon3D — Rückmeldung';

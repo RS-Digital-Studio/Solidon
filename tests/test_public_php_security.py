@@ -1858,6 +1858,32 @@ def _stats_test_access(tmp_path: Path) -> tuple[dict[str, str], dict[str, str]]:
     return {"SOLIDON_STATS_ACCESS_FILE": str(path)}, {"Cookie": f"solidon_stats={token}"}
 
 
+@pytest.mark.parametrize(
+    ("filename", "variable", "valid"),
+    [
+        ("stats.php", "month", "2026-09"),
+        ("support.php", "kindValue", "idea"),
+        ("count.php", "agent", "Solidon/0.4.0"),
+    ],
+)
+def test_php_text_patterns_reject_a_final_newline(filename: str, variable: str, valid: str) -> None:
+    """PCREs Dollaranker darf hinter dem erlaubten Feld keinen Zeilenrest dulden."""
+    source = (API / filename).read_text(encoding="utf-8")
+    match = re.search(r"preg_match\('([^']+)', \$" + variable + r"\b", source)
+    assert match
+    code = (
+        'echo json_encode([preg_match($argv[1], $argv[2]), preg_match($argv[1], $argv[2]."\\n")]);'
+    )
+    result = subprocess.run(
+        [php_executable(), "-r", code, match[1], valid],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [1, 0]
+
+
 def test_update_version_chart_keeps_even_small_counts_visible(tmp_path: Path) -> None:
     stats = tmp_path / "stats"
     stats.mkdir(mode=0o700)

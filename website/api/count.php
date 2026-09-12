@@ -612,7 +612,7 @@ function client_version(): string
     if (!is_string($agent) || $agent === '') {
         return 'unbekannt';
     }
-    if (preg_match('#^Solidon/([0-9]+(?:\.[0-9]+){0,3})$#', $agent, $found) !== 1) {
+    if (preg_match('#^Solidon/([0-9]+(?:\.[0-9]+){0,3})$#D', $agent, $found) !== 1) {
         return 'unbekannt';
     }
     $version = $found[1];
