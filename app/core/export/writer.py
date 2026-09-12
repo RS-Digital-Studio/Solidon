@@ -1254,7 +1254,9 @@ def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | No
 
     ``bed`` sind die Bettmaße, wenn die Teile in Maschinenkoordinaten gehen
     (:func:`needs_bed_translation`): Verschoben wird über die Punkte, denn ein
-    STL hat keine Platzierungsmatrix.
+    STL hat keine Platzierungsmatrix. Der aktuelle Cura-Weg übergibt jedoch
+    ``bed=None``, weil CuraEngine die mittig gelieferten Teile selbst auf dem
+    Bett platziert; ``needs_bed_translation("cura")`` ist daher falsch.
     """
     bodies = []
     for entry in objects:
