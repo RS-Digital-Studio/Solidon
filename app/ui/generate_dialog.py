@@ -39,11 +39,11 @@ from PySide6.QtWidgets import (
 
 from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
-from app.core.errors import CANCEL, AppError, OperationCancelled
+from app.core.errors import CANCEL, AppError, InternalError, OperationCancelled
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
-from app.ui.dialogs import spoken_values
+from app.ui.dialogs import show_error, spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
@@ -847,7 +847,9 @@ class GenerateDialog(QDialog):
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
         _log.warning("generation crashed: %s", detail)
-        self._on_failed(f"{UNEXPECTED_CRASH!s} {detail}")
+        error = InternalError(detail=detail)
+        self._on_failed(error)
+        show_error(error, self)
 
     def _on_failed(self, problem: object) -> None:
         """Was nicht ging, warum, und was jetzt hilft — alle drei (§2.7).

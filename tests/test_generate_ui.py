@@ -765,6 +765,7 @@ def test_an_unexpected_error_does_not_leave_the_generator_waiting(
         def text_to_mesh(self, prompt: str, *, seed: int = 0, progress: object = None) -> object:
             raise KeyError("outputs")
 
+    monkeypatch.setattr("app.ui.generate_dialog.show_error", lambda *args: None, raising=False)
     dialog = GenerateDialog(backend=Bricht())
     wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("ein Halter")
@@ -776,8 +777,48 @@ def test_an_unexpected_error_does_not_leave_the_generator_waiting(
         dialog._worker.wait(20)
     qt_app.processEvents()
 
-    assert "schiefgegangen" in dialog.state.text()
+    assert "unerwartet" in dialog.state.text()
     assert dialog.progress.isHidden(), "kein Balken über einem Lauf, den es nicht gibt"
+
+
+@pytest.mark.parametrize("kind", ["generate", "setup"])
+def test_an_unexpected_generator_error_offers_a_working_report_action(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Beide Dialoge reichen den Programmfehler an die wirklich geklickte Berichtshandlung."""
+    from PySide6.QtWidgets import QMessageBox, QWidget
+
+    from app.core.backends import comfy_setup
+    from app.core.errors import REPORT_ERROR, InternalError
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    reported: list[object] = []
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {REPORT_ERROR.id: reported.append}
+
+    def choose_report(box: QMessageBox) -> int:
+        next(button for button in box.buttons() if button.text() == str(REPORT_ERROR.label)).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", choose_report)
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda: Path("comfy"))
+    host = Host()
+    dialog = (
+        GenerateDialog(backend=ScriptedMeshBackend(), parent=host)
+        if kind == "generate"
+        else ComfySetupDialog(host)
+    )
+    try:
+        dialog._crashed("missing output")
+        assert len(reported) == 1
+        assert isinstance(reported[0], InternalError)
+        assert str(reported[0].detail) == "missing output"
+        assert dialog.progress.isHidden()
+    finally:
+        dialog.release()
+        host.deleteLater()
 
 
 def test_the_setup_dialog_says_how_long_a_step_has_been_running(

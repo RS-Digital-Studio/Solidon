@@ -34,9 +34,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.backends import comfy_setup
+from app.core.errors import InternalError
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.labels import UNEXPECTED_CRASH
+from app.ui.dialogs import show_error
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary, set_role
 
@@ -267,7 +268,9 @@ class ComfySetupDialog(QDialog):
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
         self._idle()
         _log.warning("comfy setup crashed: %s", detail)
-        set_role(self.state, "warning", f"{UNEXPECTED_CRASH!s} {detail}")
+        error = InternalError(detail=detail)
+        set_role(self.state, "warning", f"{error.title!s} {detail}")
+        show_error(error, self)
 
     def _idle(self) -> None:
         self._tick.stop()

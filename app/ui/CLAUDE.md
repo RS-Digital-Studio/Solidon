@@ -1048,6 +1048,10 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
 ## Zustandsbindung in asynchronen Bedienwegen
 
+Unerwartete Fehler beim Erzeugen oder Einrichten von ComfyUI verlassen den
+Wartezustand als `InternalError`. Die gemeinsame Fehleranzeige verbindet den
+Berichtsknopf mit den Fehlerhandlungen des Hauptfensters.
+
 Im Erzeugen-Dialog gehören Fortschrittsbalken und Schritttext dem laufenden
 Auftrag. Änderungen an der nächsten Beschreibung sperren weiterhin einen
 zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
