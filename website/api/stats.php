@@ -993,18 +993,18 @@ function megabytes(int $bytes): string
 }
 
 /**
- * Maskiert einen Text fuer die Ausgabe.
+ * Maskiert einen Text für die Ausgabe.
  *
  * Nimmt auch eine Ganzzahl, und das ist kein Komfort: Sechs Aufrufstellen
- * uebergeben einen **Array-Schluessel**, und PHP wandelt einen kanonischen
+ * übergeben einen **Array-Schlüssel**, und PHP wandelt einen kanonischen
  * Dezimaltext beim Eintragen still in einen `int`. Ein Referrer-Host, der nur
- * aus Ziffern besteht, kam so als `int` hier an und liess die Seite unter
+ * aus Ziffern besteht, kam so als `int` hier an und ließ die Seite unter
  * `declare(strict_types=1)` mit einem `TypeError` mitten im Rendern
  * abbrechen — die Statistik brach ab der Herkunftstabelle ab, mit Status 200
- * (Sicherheitsdurchsicht 04.09.2026). `count.php` laesst einen rein
+ * (Sicherheitsdurchsicht 04.09.2026). `count.php` lässt einen rein
  * numerischen Host inzwischen nicht mehr durch; diese Signatur ist die
  * Gegenprobe an der Stelle, an der es darauf ankommt, und deckt zugleich die
- * fuenf Schluessel, die heute noch niemand von aussen setzen kann.
+ * fünf Schlüssel, die heute noch niemand von außen setzen kann.
  */
 function e(string|int $text): string
 {
