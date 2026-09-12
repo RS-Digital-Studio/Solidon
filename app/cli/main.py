@@ -259,7 +259,7 @@ def command_scad(args: argparse.Namespace) -> int:
     spec = PARTS.get(args.part)
     given: dict[str, Any] = {}
     for entry in args.set or ():
-        name, _, raw = entry.partition("=")
+        name, _separator, raw = entry.partition("=")
         if not name or not raw:
             raise UserError(
                 detail=tr("Schreiben Sie die Werte als Name=Wert, zum Beispiel length=30."),
