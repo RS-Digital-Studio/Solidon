@@ -26,6 +26,18 @@ def test_openssl_uses_the_canonical_apache_text_without_foreign_attribution() ->
     assert "OCP contributors" not in notices[0].content
 
 
+def test_appimage_and_glib_use_the_same_canonical_lgpl_source() -> None:
+    """Dieselbe GNU-Quelle bezeichnet dieselben Bytes, nicht die ältere OCCT-Kopie."""
+    records = make_licence_notices._fixed_records("runtime")
+    source = "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
+    appimage = next(
+        notice for _versions, notice in records["appimage-type2-runtime"] if notice.source == source
+    )
+    glib = next(notice for _versions, notice in records["glib"] if notice.source == source)
+    assert appimage.content == glib.content
+    assert appimage.sha256 == glib.sha256
+
+
 def test_every_target_component_has_version_expression_and_full_text() -> None:
     components = make_licence_notices.collect_components()
     expected = {licences.normalise(name) for name in licences.runtime_packages()}

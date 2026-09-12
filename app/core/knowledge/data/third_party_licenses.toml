@@ -56,10 +56,10 @@ source = "https://raw.githubusercontent.com/AppImage/type2-runtime/dd6cebe/LICEN
 sha256 = "c7622e449c9c01fca503a98bc74846ff9595b254ec2b3d4979d42bf884bd1a88"
 
 [[text]]
-path = "third_party_licenses/OCCT-LGPL-2.1.txt"
+path = "third_party_licenses/LGPL-2.1.txt"
 runtime = ["appimage-type2-runtime"]
 source = "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
-sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
+sha256 = "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
 
 # Laufzeitfamilien werden erst aus dem fertigen Kundenartefakt übernommen.
 # ``notice_package`` bezeichnet die Distribution, deren mitgelieferte Texte
