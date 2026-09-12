@@ -1471,6 +1471,27 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
 
+    def set_export_choice(self, export_format: str, scheme: str | None = None) -> None:
+        """Was dieses Projekt beim nächsten Export vorschlägt (§29, RM-141).
+
+        Dieselbe Bauart wie :meth:`set_print_settings` daneben und aus
+        demselben Grund: keine Operation, keine Transaktion — es entsteht
+        keine Geometrie. Das Projekt gilt danach als geändert, damit die Wahl
+        nicht beim nächsten Schließen verloren geht.
+
+        ``scheme=None`` heißt „unverändert lassen": Wer ein 3MF schreibt,
+        benutzt kein Namensschema, und sein Export soll das gemerkte nicht
+        stillschweigend wegwerfen.
+        """
+        document = self.project.document
+        wanted = document.export_scheme if scheme is None else scheme
+        if (document.export_format, document.export_scheme) == (export_format, wanted):
+            return
+        document.export_format = export_format
+        document.export_scheme = wanted
+        self._dirty = True
+        self.projectChanged.emit()
+
     def import_model(
         self,
         path: Path,

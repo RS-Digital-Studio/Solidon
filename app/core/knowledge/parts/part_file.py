@@ -725,6 +725,12 @@ class PartFileIO:
                 "chat",
                 "numbering",
                 "print_settings",
+                # Ein Rezept trägt den Dokumentausschnitt, wie er geschrieben
+                # wird — und dazu gehören seit Formatversion 23 die
+                # Exportvorgaben (RM-141). Für einen Baustein sagen sie nichts;
+                # sie hier zu verbieten hieße aber, ein gültiges Dokument
+                # abzulehnen, und das wäre die falsche Stelle dafür.
+                "export",
             },
             "document",
         )

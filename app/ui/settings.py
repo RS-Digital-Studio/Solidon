@@ -25,6 +25,8 @@ _log = get_logger(__name__)
 
 SETTINGS_FILE = "settings.json"
 MAX_RECENT = 10
+#: Für wie viele Projekte der Exportordner gemerkt wird (§29, RM-141).
+MAX_EXPORT_DIRS = 20
 
 
 @dataclass(slots=True)
@@ -32,6 +34,19 @@ class UiSettings:
     """Alles, was sich das Fenster über Sitzungen hinweg merkt."""
 
     recent: list[str] = field(default_factory=list)
+    export_dirs: dict[str, str] = field(default_factory=dict)
+    """Wohin zuletzt exportiert wurde, je Projekt (§29, RM-141).
+
+    **Hier und nicht im Projekt**, weil ein Ordner ein absoluter Pfad ist und
+    damit nicht in eine Projektdatei gehört (Regel 12) — derselbe Schnitt wie
+    beim Slicer-Pfad, der beim Gerät bleibt, während die Übergabeart im
+    Dokument steht. Der Schlüssel ist der Projektpfad; ein noch namenloses
+    Projekt benutzt den leeren Schlüssel und bekommt damit den Ordner, den
+    der Kunde zuletzt für ein namenloses gewählt hat.
+
+    Gedeckelt wie die Liste darüber: :data:`MAX_EXPORT_DIRS` Einträge, der
+    älteste fällt heraus. Ein Ordner, den es nicht mehr gibt, wird beim Lesen
+    übergangen — der Dateidialog stünde sonst im Nichts."""
     navigation: str = "solidon"
     theme: str = "dark"
     diff_palette: str = "blue_orange"
@@ -221,6 +236,24 @@ class UiSettings:
     def remember(self, path: Path) -> None:
         text = str(path)
         self.recent = [text, *(entry for entry in self.recent if entry != text)][:MAX_RECENT]
+
+    def remember_export_dir(self, project: Path | None, folder: Path) -> None:
+        """Wohin dieses Projekt zuletzt exportiert hat (§29, RM-141)."""
+        key = str(project) if project is not None else ""
+        kept = {name: value for name, value in self.export_dirs.items() if name != key}
+        # Der jüngste ans Ende, und vorn fällt ab, was zu alt wurde: Ein
+        # ``dict`` hält seine Einfügereihenfolge, also genügt das Neuanlegen.
+        ordered = list(kept.items())[-(MAX_EXPORT_DIRS - 1) :]
+        self.export_dirs = dict([*ordered, (key, str(folder))])
+
+    def export_dir(self, project: Path | None) -> Path | None:
+        """Der gemerkte Ordner dieses Projekts, sofern es ihn noch gibt."""
+        key = str(project) if project is not None else ""
+        stored = self.export_dirs.get(key) or self.export_dirs.get("")
+        if not stored:
+            return None
+        folder = Path(stored)
+        return folder if folder.is_dir() else None
 
     def existing_recent(self) -> list[Path]:
         """Zuletzt geöffnete Projekte, die es noch gibt — ein toter Eintrag hilft

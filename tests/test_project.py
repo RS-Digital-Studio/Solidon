@@ -2462,3 +2462,55 @@ os._exit(42)
             process.kill()
             process.wait(timeout=5)
         module.discard_recovery(candidate)
+
+
+# --- was ein Projekt über seinen Export weiß (RM-141) -----------------------------
+
+
+def test_the_export_choice_survives_saving_and_reopening(tmp_path: Path) -> None:
+    """§29 sagt „Ordner, Format und Übergabeart werden je Projekt gemerkt".
+
+    Format und Namensschema reisen mit dem Projekt: Ein Gehäuse, das als 3MF
+    zum Slicer geht, geht beim nächsten Mal wieder als 3MF; ein Modell für
+    einen Dienstleister bleibt STL. Der **Ordner** steht ausdrücklich nicht
+    dabei — ein absoluter Pfad gehört nicht in eine Projektdatei (Regel 12).
+    """
+    project = new_project("generic-220", "pla")
+    project.document.export_format = "stl"
+    project.document.export_scheme = "{index}_{object}"
+
+    save(project, tmp_path / "halter.p3d")
+    wieder = load(tmp_path / "halter.p3d")
+
+    assert wieder.document.export_format == "stl"
+    assert wieder.document.export_scheme == "{index}_{object}"
+
+
+def test_no_folder_travels_in_the_project_file(tmp_path: Path) -> None:
+    """Regel 12, und der Grund dafür steht in der Gegenprobe.
+
+    Ein Exportordner ist ein absoluter Pfad; er zeigt auf dem zweiten Rechner
+    ins Leere oder — schlimmer — auf einen fremden Ordner. Gemerkt wird er
+    deshalb beim Gerät, in ``UiSettings.export_dirs``.
+    """
+    project = new_project("generic-220", "pla")
+    project.document.export_format = "stl"
+
+    save(project, tmp_path / "halter.p3d")
+    with zipfile.ZipFile(tmp_path / "halter.p3d") as container:
+        text = container.read("project.json").decode("utf-8")
+
+    assert '"export"' in text, "Format und Schema stehen darin"
+    assert str(tmp_path) not in text, "der Ordner nicht"
+
+
+def test_a_file_from_before_the_export_memory_opens_without_one() -> None:
+    """22 → 23: Eine ältere Datei hat keine Vorgaben, und das heißt „wie bisher".
+
+    Leer steht für „noch nie exportiert" — dann gilt 3MF und die Vorgabe, die
+    zur Zahl der Teile passt. Genau das Verhalten, das diese Datei kennt.
+    """
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v22.p3d")
+
+    assert project.document.format_version == FORMAT_VERSION
+    assert (project.document.export_format, project.document.export_scheme) == ("", "")

@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 22
+FORMAT_VERSION: Final = 23
 
 
 @dataclass(frozen=True, slots=True)
@@ -562,6 +562,17 @@ def _add_slot_profile_bindings(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _remember_the_export(data: dict[str, Any]) -> dict[str, Any]:
+    """22 → 23: Ein Projekt merkt sich Format und Namensschema (§29, RM-141).
+
+    Beides leer heißt „noch nie exportiert": Dann gilt 3MF und die Vorgabe,
+    die zur Zahl der Teile passt — genau das Verhalten, das eine Datei von
+    vor diesem Schritt gewohnt ist.
+    """
+    data.setdefault("export", {"format": "", "scheme": ""})
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -585,6 +596,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=19, to_version=20, apply=_keep_explicit_choices),
     Step(from_version=20, to_version=21, apply=_add_spool_bindings),
     Step(from_version=21, to_version=22, apply=_add_slot_profile_bindings),
+    Step(from_version=22, to_version=23, apply=_remember_the_export),
 )
 
 

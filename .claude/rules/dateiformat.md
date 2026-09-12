@@ -24,6 +24,16 @@ Keine absoluten Pfade. Kein ausführbarer Code. Keine eigenen Bausteine — ein
 Projekt verweist auf sie namentlich, und fehlt einer, hält die Auswertung an
 und sagt welcher (§24.5, §32).
 
+**Der Exportordner ist der Fall, an dem sich das entscheidet** (RM-141,
+Version 23). §29 sagt „Ordner, Format und Übergabeart werden je Projekt
+gemerkt" — je Projekt, nicht in der Projektdatei. Format und Namensschema
+stehen seither in `Document.export_format` und `Document.export_scheme`, denn
+sie gehören zum Teil: Ein Gehäuse für den eigenen Slicer bleibt 3MF, ein
+Modell für einen Dienstleister bleibt STL. Der **Ordner** steht in
+`UiSettings.export_dirs`, geschlüsselt nach Projektpfad — derselbe Schnitt wie
+beim Slicer-Pfad neben der Übergabeart: Der zweite Rechner hat einen anderen
+Ordner, aber dieselbe Gewohnheit.
+
 ## Transaktionstitel
 
 Seit Version 6 trägt ein Titel aus dem Code `title_translatable`: `title` ist

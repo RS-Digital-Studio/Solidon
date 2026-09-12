@@ -922,13 +922,25 @@ class _ExportWorker(Worker):
         welches ist. Geschweifte Klammern im Namen sind Zeichen, keine
         Platzhalter — ``format`` sähe das anders.
         """
-        fixed = self._target.stem.replace("{", "{{").replace("}", "}}")
+        stem = self._target.stem
+        # **Ein getippter Name mit Klammern ist ein Muster** (§29, RM-141).
+        # Der Dialog schlägt bei mehreren Dateien das Schema vor, und was der
+        # Kunde daraus macht, gilt: Er kann Felder umstellen, weglassen oder
+        # eigenen Text dazwischensetzen. Ohne Klammern ist es ein Name — dann
+        # gilt er bei einem Körper unverändert und bei mehreren als
+        # ``{project}`` in der Vorgabe.
+        #
+        # ``project_name`` folgt derselben Trennung: Wer einen Namen tippt,
+        # hat damit den Projektteil gewählt; wer ein Muster tippt, meint mit
+        # ``{project}`` das Projekt und nicht sein eigenes Muster.
+        looks_like_scheme = "{" in stem and "}" in stem
+        fixed = stem.replace("{", "{{").replace("}", "}}")
         plan = plan_export(
             self._objects,
-            project_name=self._target.stem,
+            project_name=self._project_name if looks_like_scheme else stem,
             profile=self._profile,
             export_format=self._format,
-            scheme=fixed if len(self._objects) == 1 else None,
+            scheme=stem if looks_like_scheme else (fixed if len(self._objects) == 1 else None),
             sources=self._sources,
             scene=self._scene,
             document=self._document,
@@ -5959,15 +5971,55 @@ class MainWindow(QMainWindow):
         # ihn tragen kann.
         if any(entry.kind == "brep" for entry in objects):
             offered.append("STEP (*.step)")
+        # **Format, Ordner und Namensschema kommen aus dem Projekt** (§29,
+        # RM-141). Der Dialog begann bisher jedes Mal bei 3MF im zuletzt
+        # benutzten Ordner *irgendeines* Vorgangs — wer ein Modell für einen
+        # Dienstleister pflegt (STL) und daneben ein Gehäuse für den eigenen
+        # Slicer (3MF), stellte bei jedem Export beides neu ein.
+        from app.core.export.writer import FORMAT_SUFFIX, default_scheme
+
+        document = self.session.project.document
+        remembered = document.export_format if document.export_format in FORMAT_SUFFIX else ""
+        wanted = remembered or "3mf"
+        if wanted in FORMAT_SUFFIX:
+            label = next(entry for entry in offered if f"*{FORMAT_SUFFIX[wanted]}" in entry)
+            offered = [label, *(entry for entry in offered if entry != label)]
         filters = ";;".join(offered)
-        suggested_name = f"{stem}.3mf"
-        name, chosen_filter = QFileDialog.getSaveFileName(
-            self, tr("Exportieren"), suggested_name, filters
-        )
+        # **Bei mehreren Dateien steht das Schema im Namensfeld**, und das ist
+        # der Kundenweg aus §29 („Namensschema … konfigurierbar"): Der Kunde
+        # sieht die Platzhalter, kann sie umstellen, ergänzen oder wegwerfen.
+        # Ein eigener Dialog dafür wäre ein zweiter Schritt vor einer
+        # Handlung, die ohnehin schon einen hat.
+        multiple = wanted != "3mf" and len(objects) > 1
+        scheme = document.export_scheme or default_scheme(objects)
+        base = scheme.replace("{project}", stem) if multiple else stem
+        suggested_name = f"{base}{FORMAT_SUFFIX[wanted]}"
+        folder = self.settings.export_dir(self.session.path)
+        start = str(folder / suggested_name) if folder is not None else suggested_name
+        name, chosen_filter = QFileDialog.getSaveFileName(self, tr("Exportieren"), start, filters)
         if not name:
             return
         target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
+        self._remember_export(target, export_format, multiple=multiple)
         self._start_export(target, export_format)
+
+    def _remember_export(self, target: Path, export_format: str, *, multiple: bool) -> None:
+        """Was dieses Projekt beim nächsten Export wieder vorschlägt (RM-141).
+
+        Gemerkt wird **vor** dem Schreiben und nicht danach: Die Wahl hat der
+        Kunde getroffen, und ob die Datei am Ende im Slicer offen liegt,
+        ändert daran nichts — der zweite Anlauf soll denselben Ort meinen
+        (§2.7).
+
+        Das Namensschema nur, wo eines im Spiel war: Wer ein 3MF schreibt,
+        benutzt keines, und sein Export darf das gemerkte nicht wegwerfen.
+        Erkannt wird es an den Klammern — ein getippter Name ohne sie ist ein
+        Name und kein Muster.
+        """
+        self.settings.remember_export_dir(self.session.path, target.parent)
+        self._store_settings()
+        looks_like_scheme = multiple and "{" in target.stem
+        self.session.set_export_choice(export_format, target.stem if looks_like_scheme else None)
 
     def _start_export(
         self,

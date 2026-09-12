@@ -222,13 +222,7 @@ def plan_export(
         )
 
     count = len(objects)
-    plates = len({entry.plate for entry in objects})
-    if scheme is not None:
-        pattern = scheme
-    elif plates > 1:
-        pattern = PLATE_SCHEME
-    else:
-        pattern = DEFAULT_SCHEME if count > 1 else SINGLE_SCHEME
+    pattern = scheme if scheme is not None else default_scheme(objects)
     suffix = FORMAT_SUFFIX[export_format]
 
     try:
@@ -270,6 +264,20 @@ def plan_export(
             )
         ),
     )
+
+
+def default_scheme(objects: Sequence[SceneObject]) -> str:
+    """Das Namensschema, das ohne eigene Angabe gilt (§29).
+
+    Eine Funktion und kein Ausdruck in :func:`plan_export`, weil das Fenster
+    dieselbe Frage stellt (RM-141): Es zeigt das Muster im Namensfeld des
+    Dateidialogs, damit der Kunde es ändern kann. Zwei Stellen, die es
+    ausrechnen, wären zwei Antworten.
+    """
+    plates = len({entry.plate for entry in objects})
+    if plates > 1:
+        return PLATE_SCHEME
+    return DEFAULT_SCHEME if len(objects) > 1 else SINGLE_SCHEME
 
 
 def _entries_for(

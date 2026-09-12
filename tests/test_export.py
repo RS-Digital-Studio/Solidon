@@ -2278,3 +2278,49 @@ def test_shared_slicer_reports_legacy_material_loss_and_keeps_the_first_material
         flavour=flavour,
     )
     assert "slicer.overrides_unreachable" in {entry.code for entry in findings}
+
+
+# --- die Vorgabe steht an einer Stelle (RM-141) -----------------------------------
+
+
+def test_the_default_scheme_is_asked_and_not_recomputed(profile: Profile) -> None:
+    """Das Fenster zeigt dasselbe Muster, nach dem der Kern benennt (§29, RM-141).
+
+    Es schreibt es bei mehreren Dateien ins Namensfeld des Dateidialogs,
+    damit der Kunde es ändern kann. Zwei Stellen, die es ausrechnen, wären
+    zwei Antworten — und die des Dialogs wäre die sichtbare.
+    """
+    from app.core.export.writer import DEFAULT_SCHEME, PLATE_SCHEME, SINGLE_SCHEME, default_scheme
+
+    one = scene_object()
+    two = [scene_object(), scene_object("obj_2", "Deckel")]
+    plates = [scene_object(), replace(scene_object("obj_2", "Deckel"), plate=1)]
+
+    assert default_scheme([one]) == SINGLE_SCHEME
+    assert default_scheme(two) == DEFAULT_SCHEME
+    assert default_scheme(plates) == PLATE_SCHEME
+
+    plan = plan_export(two, project_name="Projekt", profile=profile)
+    assert [entry.filename for entry in plan.entries] == [
+        "Projekt_Halterung_1von2.stl",
+        "Projekt_Deckel_2von2.stl",
+    ], "und der Plan benennt danach"
+
+
+def test_a_chosen_scheme_decides_the_names(profile: Profile) -> None:
+    """Ein selbst gewähltes Muster gilt, Feld für Feld (§29, RM-141).
+
+    Der Kunde tippt es ins Namensfeld; was dort mit Klammern steht, ist ein
+    Muster und kein Name. Hier steht, was daraus wird — auch die Reihenfolge,
+    denn genau dafür stellt jemand ein Schema um.
+    """
+    two = [scene_object(), scene_object("obj_2", "Deckel")]
+
+    plan = plan_export(
+        two,
+        project_name="Projekt",
+        profile=profile,
+        scheme="{index}_{object}",
+    )
+
+    assert [entry.filename for entry in plan.entries] == ["1_Halterung.stl", "2_Deckel.stl"]

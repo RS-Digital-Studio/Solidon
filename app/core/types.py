@@ -1678,6 +1678,34 @@ class Document:
     auch wenn dazwischen etwas anderes gedruckt wurde. ``None`` heißt: noch
     nichts eingestellt, es gilt die Auflösung aus Stufe, Material und Drucker.
     """
+    export_format: str = ""
+    """Das zuletzt benutzte Ausgabeformat dieses Projekts (§29, RM-141).
+
+    §29 sagt „Ordner, Format und Übergabeart werden je Projekt gemerkt", und
+    die Übergabeart steht mit derselben Begründung in
+    :attr:`PrintSettings.handover`: Sie gehört zum Teil und nicht zum Rechner.
+    Ein Gehäuse, das als 3MF zum Slicer geht, geht beim nächsten Mal wieder
+    als 3MF; ein Modell für einen Dienstleister bleibt STL.
+
+    Leer heißt „noch nie exportiert" — dann gilt 3MF, der vorgeschlagene
+    Kundenweg. Als ``str`` und nicht als ``ExportFormat``: Der Literal-Typ
+    lebt in ``export/writer.py``, und der Kern der Szene kennt den Schreiber
+    nicht. Eine Datei mit einem unbekannten Wert fällt beim Lesen auf die
+    Vorgabe zurück, statt den Export zu verweigern.
+
+    **Der Ordner steht ausdrücklich nicht hier**: Er ist ein absoluter Pfad
+    und gehört damit nicht in eine Projektdatei (Regel 12). Er bleibt beim
+    Gerät, in ``UiSettings.export_dirs`` — derselbe Schnitt wie beim
+    Slicer-Pfad neben der Übergabeart.
+    """
+    export_scheme: str = ""
+    """Wie die Dateien heißen, wenn eine je Körper entsteht (§29, RM-141).
+
+    Ein Muster mit Platzhaltern, ``{project}_{object}_{index}von{count}`` als
+    Vorgabe — die Felder zählt ``export.writer.SCHEME_FIELDS`` auf. Leer heißt
+    „die Vorgabe, passend zur Zahl der Teile und Platten"; gemerkt wird nur,
+    was jemand ausdrücklich getippt hat.
+    """
     highest_transaction: int = 0
     """Die höchste je vergebene Transaktionsnummer — mit ``highest_op`` und
     ``highest_object`` die Wasserlinie der Nummernvergabe (§15.4).

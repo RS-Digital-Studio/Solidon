@@ -15341,3 +15341,170 @@ def test_the_section_plane_cuts_every_plate_at_its_own_place(window: MainWindow)
         assert width == pytest.approx(whole / 2.0, abs=1.0), (
             f"jedes Teil wird an seiner eigenen Mitte geschnitten: {cut_widths}"
         )
+
+
+# --- der Export beginnt, wo er zuletzt aufgehört hat (RM-141) ---------------------
+
+
+def _asked_dialog(
+    monkeypatch: pytest.MonkeyPatch, answer: tuple[str, str]
+) -> list[tuple[str, str]]:
+    """Merkt sich Vorgabename und Filter des Dateidialogs und antwortet fest."""
+    from PySide6.QtWidgets import QFileDialog
+
+    asked: list[tuple[str, str]] = []
+
+    def remember(_parent: object, _title: str, name: str, filters: str) -> tuple[str, str]:
+        asked.append((name, filters))
+        return answer
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(remember))
+    return asked
+
+
+def test_the_format_of_the_last_export_comes_back(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§29: „Ordner, Format und Übergabeart werden je Projekt gemerkt" (RM-141).
+
+    Der Dialog begann bisher jedes Mal bei 3MF. Wer ein Modell für einen
+    Dienstleister pflegt (STL) und daneben ein Gehäuse für den eigenen Slicer
+    (3MF), stellte bei jedem Export beides neu ein.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    _asked_dialog(monkeypatch, (str(tmp_path / "wuerfel.stl"), "STL (*.stl)"))
+    window.action_export()
+    wait_for_export(window)
+
+    assert window.session.project.document.export_format == "stl", "die Wahl steht im Projekt"
+
+    asked = _asked_dialog(monkeypatch, ("", ""))
+    window.action_export()
+
+    assert asked, "der Dialog wurde gefragt"
+    name, filters = asked[0]
+    assert name.endswith(".stl"), f"der Vorschlag folgt der letzten Wahl: {name}"
+    assert filters.split(";;", 1)[0] == "STL (*.stl)", "und der erste Filter auch"
+
+
+def test_two_projects_keep_their_own_choice(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Projekte, zwei Vorgaben — getrennt gemerkt (RM-141).
+
+    Die Abnahme des Punktes in einem Satz: zwei Projekte mit unterschiedlichen
+    Vorgaben wieder öffnen und getrennt korrekt exportieren.
+    """
+    stl_projekt = tmp_path / "dienstleister.p3d"
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    _asked_dialog(monkeypatch, (str(tmp_path / "teil.stl"), "STL (*.stl)"))
+    window.action_export()
+    wait_for_export(window)
+    window.session.save_project(stl_projekt)
+
+    drei_mf = tmp_path / "gehaeuse.p3d"
+    window.session.start_new()
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    _asked_dialog(monkeypatch, (str(tmp_path / "teil.3mf"), "3MF (*.3mf)"))
+    window.action_export()
+    wait_for_export(window)
+    window.session.save_project(drei_mf)
+
+    window.open_path(stl_projekt)
+    window.session.wait_for_idle()
+    asked = _asked_dialog(monkeypatch, ("", ""))
+    window.action_export()
+    assert asked[0][0].endswith(".stl"), f"das eine Projekt bleibt bei STL: {asked[0][0]}"
+
+    window.open_path(drei_mf)
+    window.session.wait_for_idle()
+    asked = _asked_dialog(monkeypatch, ("", ""))
+    window.action_export()
+    assert asked[0][0].endswith(".3mf"), f"das andere bei 3MF: {asked[0][0]}"
+
+
+def test_the_naming_scheme_is_offered_and_kept(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Namensschema steht im Namensfeld — dort kann man es ändern (§29, RM-141).
+
+    Der Bauplan sagt „Namensschema bei mehreren Teilen, konfigurierbar". Ein
+    eigener Dialog dafür wäre ein zweiter Schritt vor einer Handlung, die
+    ohnehin einen hat; der Dateidialog fragt schon nach dem Namen, und bei
+    mehreren Dateien **ist** der Name das Muster.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.import_model(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    window.session.set_export_choice("stl")
+    export_anyway(monkeypatch)
+
+    asked = _asked_dialog(monkeypatch, (str(tmp_path / "{index}_{object}.stl"), "STL (*.stl)"))
+    window.action_export()
+    wait_for_export(window)
+
+    assert "{object}" in asked[0][0], f"das Muster steht im Vorschlag: {asked[0][0]}"
+    geschrieben = sorted(path.name for path in tmp_path.glob("*.stl"))
+    assert geschrieben == ["1_Wuerfel.stl", "2_Platte.stl"] or len(geschrieben) == 2, geschrieben
+    assert all(name[0].isdigit() for name in geschrieben), (
+        f"das getippte Muster hat die Namen gemacht: {geschrieben}"
+    )
+    assert window.session.project.document.export_scheme == "{index}_{object}", "und es bleibt"
+
+
+def test_a_plain_name_does_not_become_a_scheme(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Klammern ist ein Name ein Name (RM-141).
+
+    Er darf das gemerkte Muster nicht überschreiben — sonst verlöre es, wer
+    einmal einen festen Namen tippt, und bekäme beim nächsten Export wieder
+    die Vorgabe.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.import_model(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    window.session.set_export_choice("stl", "{index}_{object}")
+    export_anyway(monkeypatch)
+
+    _asked_dialog(monkeypatch, (str(tmp_path / "alles.stl"), "STL (*.stl)"))
+    window.action_export()
+    wait_for_export(window)
+
+    assert window.session.project.document.export_scheme == "{index}_{object}"
+    geschrieben = sorted(path.name for path in tmp_path.glob("*.stl"))
+    assert all(name.startswith("alles") for name in geschrieben), (
+        f"der getippte Name trägt die Dateien: {geschrieben}"
+    )
+
+
+def test_the_export_folder_stays_with_the_machine(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Ordner wird gemerkt — beim Gerät, nicht im Projekt (Regel 12, RM-141).
+
+    Ein absoluter Pfad gehört nicht in eine Projektdatei: Er zeigt auf dem
+    zweiten Rechner ins Leere oder, schlimmer, auf einen fremden Ordner.
+    Derselbe Schnitt wie beim Slicer-Pfad neben der Übergabeart.
+    """
+    folder = tmp_path / "ausgabe"
+    folder.mkdir()
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    _asked_dialog(monkeypatch, (str(folder / "wuerfel.stl"), "STL (*.stl)"))
+    window.action_export()
+    wait_for_export(window)
+
+    assert window.settings.export_dir(window.session.path) == folder
+
+    asked = _asked_dialog(monkeypatch, ("", ""))
+    window.action_export()
+
+    assert asked[0][0].startswith(str(folder)), f"der Dialog beginnt dort: {asked[0][0]}"

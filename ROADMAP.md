@@ -80,7 +80,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
-| [RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken](#rm-141) | Bedienung und Darstellung | Exportformat, Zielordner und gewähltes Namensschema nach Wiederöffnen erhalten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -1680,12 +1679,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-141"></a>
 
-- [ ] **RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken.** Bauplan §29 sagt gespeicherte Exportvorgaben und ein wählbares Namensschema zu.
-  `PrintSettings.handover` merkt die Übergabeart; `action_export()` startet dagegen wieder mit
-  3MF und Projektstamm. Das Namensschema existiert im Kern, hat für mehrere Objekte aber keinen
-  entsprechenden Kundenweg. Abnahme: zwei Projekte mit unterschiedlichen Vorgaben wieder öffnen
-  und getrennt korrekt exportieren; ein selbst gewähltes Schema bleibt erhalten. Gerätepfade
-  bleiben lokal oder werden projektkonform relativ behandelt (Regel 12).
+- [x] **RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken.** Am
+  12.09.2026 gebaut. §29 sagt „Ordner, Format und Übergabeart werden je Projekt gemerkt" —
+  gemerkt war die Übergabeart, der Rest begann bei jedem Export wieder bei 3MF und dem
+  Projektstamm. Wer ein Modell für einen Dienstleister pflegt (STL) und daneben ein Gehäuse für
+  den eigenen Slicer (3MF), stellte jedes Mal beides neu ein.
+
+  **Drei Sachen werden gemerkt, und sie liegen an zwei Orten.** Format und Namensschema stehen
+  im Dokument (`export_format`, `export_scheme`, Formatversion 23 mit Migration und
+  `example_v23.p3d`): Sie gehören zum Teil, wie die Übergabeart daneben. Der **Ordner** steht in
+  `UiSettings.export_dirs`, geschlüsselt nach Projektpfad — ein absoluter Pfad gehört nicht in
+  eine Projektdatei (Regel 12), und derselbe Schnitt gilt für den Slicer-Pfad: Der zweite
+  Rechner hat einen anderen Ordner, aber dieselbe Gewohnheit. Ein Ordner, den es nicht mehr
+  gibt, wird beim Lesen übergangen; gedeckelt ist die Liste auf zwanzig Projekte.
+
+  **Der Kundenweg fürs Schema ist das Namensfeld selbst.** Entstehen mehrere Dateien, steht dort
+  nicht mehr `projekt.stl`, sondern `projekt_{object}_{index}von{count}.stl` — der Kunde sieht
+  die Platzhalter, stellt sie um, ergänzt eigenen Text oder wirft sie weg. Was mit Klammern
+  getippt wird, ist ein Muster; was ohne sie getippt wird, ist ein Name und überschreibt das
+  gemerkte Muster nicht. Ein eigener Dialog dafür wäre ein zweiter Schritt vor einer Handlung,
+  die ohnehin schon einen hat — und ins Datei-Menü passt kein dreizehnter Eintrag (zwölf sind
+  die Grenze, `tests/test_interface_limits.py`).
+
+  Dabei ist `default_scheme` aus `plan_export` herausgewachsen: Das Fenster zeigt jetzt dasselbe
+  Muster, nach dem der Kern benennt, und zwei Stellen, die es ausrechnen, wären zwei Antworten.
+
+  Nachweis: fünf Fälle in `tests/test_ui.py`, zwei in `tests/test_export.py`, drei in
+  `tests/test_project.py` (darunter die Zusicherung, dass **kein** Ordner in der Projektdatei
+  steht). Sieben Gegenproben, jede einzeln rot.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
 

@@ -933,6 +933,11 @@ def document_to_data(document: Document) -> dict[str, Any]:
             if document.print_settings is None
             else print_settings_to_data(document.print_settings)
         ),
+        # Format und Namensschema des letzten Exports (§29, RM-141). Der
+        # Ordner fehlt hier mit Absicht — ein absoluter Pfad gehört nicht in
+        # eine Projektdatei (Regel 12), er steht in den Einstellungen des
+        # Geräts.
+        "export": {"format": document.export_format, "scheme": document.export_scheme},
     }
 
 
@@ -969,4 +974,8 @@ def document_from_data(data: dict[str, Any]) -> Document:
             if isinstance(stored := data.get("print_settings"), dict)
             else None
         ),
+        export_format=str(exported.get("format", ""))
+        if isinstance(exported := data.get("export"), dict)
+        else "",
+        export_scheme=str(exported.get("scheme", "")) if isinstance(exported, dict) else "",
     )
