@@ -2844,6 +2844,14 @@ class AboutDialog(QDialog):
             tr(
                 "Bausteinbibliothek und Referenzkorpus stehen unter der MIT-Lizenz, "
                 "weil ihr Inhalt in den Ergebnissen der Nutzer landet."
+            )
+            + "\n\n"
+            + tr(
+                "Die mitgelieferten Beispiele gehören RS Digital. Sie dürfen sie öffnen, "
+                "bearbeiten, drucken und exportieren sowie individuell bearbeitete Ergebnisse "
+                "weitergeben. Für die Weitergabe der unveränderten ursprünglichen P3D- und "
+                "SVG-Dateien brauchen Sie eine gesonderte Erlaubnis; bloßes Umbenennen oder "
+                "Umwandeln genügt nicht."
             ),
             self,
         )

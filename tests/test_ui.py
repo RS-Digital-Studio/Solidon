@@ -1509,6 +1509,7 @@ def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) 
     assert "Solidon" in texts
     assert "RS Digital" in texts
     assert "MIT" in texts, "the parts library exception is named"
+    assert "P3D- und SVG-Dateien" in texts and "gesonderte Erlaubnis" in texts
 
     listing = dialog.findChild(QTextBrowser)
     assert listing is not None
