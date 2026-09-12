@@ -84,6 +84,13 @@ Die Auswertung hält mit `evaluate.legacy_point_paint` an diesem Schritt an
 und bietet seine rohen Werte sowie den Verlauf an. Die alten Felder werden
 nicht als korrigierbare Eingaben des heutigen Flächendialogs ausgegeben.
 
+Nicht erreichbare verknüpfte Quellen verhindern weder Speichern noch Öffnen
+der Projektwerte. Der Bericht nennt die Quelle; der bisherige Abdruck bleibt
+erhalten. Auswertung und Quellenzugriff verlangen weiterhin die passende
+Prüfsumme. Abweichender Inhalt, Größenverletzungen oder ein Pfad außerhalb
+des Projektordners werden auch beim Speichern und Öffnen abgewiesen.
+Erneute Erreichbarkeit entfernt den alten Verknüpfungshinweis.
+
 ## Die Karte
 
 **Das Dokument**

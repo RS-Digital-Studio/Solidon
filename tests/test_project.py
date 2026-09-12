@@ -325,6 +325,78 @@ def test_a_linked_source_gets_a_checksum_when_saved(tmp_path: Path) -> None:
     assert load(path).document.sources["src_1"].sha256 == expected
 
 
+@pytest.mark.parametrize("autosave", [False, True])
+def test_an_unavailable_link_does_not_prevent_saving_or_recovering_project_changes(
+    tmp_path: Path, autosave: bool
+) -> None:
+    """Eine entfernte Quelle blockiert keine Projektsicherung und wird später wieder geprüft."""
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=linked.name, sha256="", embedded=False
+    )
+    path = save(project, tmp_path / "projekt.p3d")
+    expected = project.document.sources["src_1"].sha256
+    linked.unlink()
+    project.document.parameters["width"] = Parameter(name="width", value=42.0, unit="mm")
+
+    written = write_autosave(project, path) if autosave else save(project, path)
+    reopened = load(written)
+    assert reopened.document.parameters["width"].value == pytest.approx(42.0)
+    assert reopened.document.sources["src_1"].sha256 == expected
+    unavailable = [
+        entry
+        for entry in reopened.report.findings
+        if entry.code == "project.linked_source_unavailable"
+    ]
+    assert len(unavailable) == 1
+    assert unavailable[0].values["source"] == "src_1"
+    assert unavailable[0].suggestions
+    with pytest.raises(ValidationError) as missing:
+        ProjectSources(reopened, tmp_path).read("src_1")
+    assert missing.value.constraint == "missing_link"
+
+    linked.write_bytes(MESH_PAYLOAD)
+    assert ProjectSources(reopened, tmp_path).read("src_1") == MESH_PAYLOAD
+    save(reopened, path)
+    assert not any(
+        entry.code == "project.linked_source_unavailable" for entry in load(path).report.findings
+    )
+
+
+@pytest.mark.parametrize("stage", ["resolve", "open"])
+def test_a_temporarily_unreadable_link_preserves_the_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Auch verweigerter Zugriff beim Auflösen oder Öffnen verliert keine Projektwerte."""
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    expected = project_module.checksum(MESH_PAYLOAD)
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=linked.name, sha256=expected, embedded=False
+    )
+    original = getattr(Path, stage)
+
+    def deny(path, *args, **kwargs):
+        if path == linked:
+            raise PermissionError("Quelle vorübergehend gesperrt")
+        return original(path, *args, **kwargs)
+
+    with monkeypatch.context() as blocked:
+        blocked.setattr(Path, stage, deny)
+        reopened = load(save(project, tmp_path / "gesichert.p3d"))
+        assert reopened.document.sources["src_1"].sha256 == expected
+        assert any(
+            entry.code == "project.linked_source_unavailable" for entry in reopened.report.findings
+        )
+        with pytest.raises(ValidationError) as caught:
+            ProjectSources(reopened, tmp_path).read("src_1")
+        assert caught.value.constraint == "unreadable"
+    assert ProjectSources(reopened, tmp_path).read("src_1") == MESH_PAYLOAD
+
+
 @pytest.mark.parametrize("method", ["read", "identity"])
 def test_a_changed_linked_source_is_refused(
     tmp_path: Path,

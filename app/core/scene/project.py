@@ -40,7 +40,7 @@ from typing import Any, BinaryIO, Final
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
-from app.core.errors import PROGRAMMING_ERRORS, FileWriteError, ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, SHOW_DETAILS, FileWriteError, ValidationError
 from app.core.ingest.loader import (
     MAX_ARCHIVE_ENTRIES,
     MAX_COMPRESSION_RATIO,
@@ -215,6 +215,38 @@ class ProjectSources:
         )
 
 
+def _read_linked_for_container(
+    source_id: SourceId,
+    source: Source,
+    base_dir: Path,
+    findings: list[Finding],
+    *,
+    require_checksum: bool = True,
+) -> bytes | None:
+    """Eine nicht erreichbare Quelle hält die Projektsicherung selbst nicht an."""
+    try:
+        return _read_linked_source(
+            source,
+            base_dir,
+            field=f"sources.{source_id}",
+            values={"source": source_id},
+            require_checksum=require_checksum,
+        )
+    except ValidationError as problem:
+        if problem.constraint not in {"missing_link", "unreadable"}:
+            raise
+        findings.append(
+            Finding(
+                code="project.linked_source_unavailable",
+                severity="warning",
+                message=problem.detail or problem.title or "",
+                values={"source": source_id, "path": source.path},
+                suggestions=(SHOW_DETAILS,),
+            )
+        )
+        return None
+
+
 def new_project(printer: str = "", material: str = "") -> Project:
     """Ein leeres Projekt auf der aktuellen Formatversion."""
     return Project(
@@ -289,6 +321,16 @@ def _read_linked_source(
             detail=_("Die verknüpfte Datei wurde nicht gefunden."),
             constraint="missing_link",
             values={**values, "path": source.path},
+        ) from problem
+    except OSError as problem:
+        raise ValidationError(
+            field=field,
+            detail=_(
+                "Die verknüpfte Datei lässt sich nicht lesen. Prüfen Sie, ob sie noch "
+                "an ihrem Platz liegt und ob dieser erreichbar ist."
+            ),
+            constraint="unreadable",
+            values={**values, "path": source.path, "reason": problem.strerror or str(problem)},
         ) from problem
     try:
         resolved_link.relative_to(resolved_base)
@@ -1241,16 +1283,19 @@ def save(project: Project, path: Path) -> Path:
                 values={"path": source.path, "sources": f"{first}, {source_id}"},
             )
 
+    unavailable: list[Finding] = []
     for source_id, source in list(document.sources.items()):
         _check_relative(source.path, f"sources.{source_id}.path")
         if not source.embedded:
-            linked_payload = _read_linked_source(
+            linked_payload = _read_linked_for_container(
+                source_id,
                 source,
                 path.parent,
-                field=f"sources.{source_id}",
-                values={"source": source_id},
+                unavailable,
                 require_checksum=False,
             )
+            if linked_payload is None:
+                continue
             # Ein neuer Link darf ohne Abdruck im Arbeitsspeicher entstehen;
             # spätestens die erste Speicherung bindet ihn an genau die Datei,
             # die dabei vorlag. Einen vorhandenen, falschen Abdruck hat der
@@ -1291,6 +1336,16 @@ def save(project: Project, path: Path) -> Path:
         )
     gathered_payloads = externalise(data, _next_gathered(data))
 
+    project.report = Report(
+        findings=(
+            *(
+                entry
+                for entry in project.report.findings
+                if entry.code != "project.linked_source_unavailable"
+            ),
+            *unavailable,
+        )
+    )
     report_data = report_to_data(project.report)
     _validate_report_schema(report_data)
     if has_lone_surrogate(report_data):
@@ -1461,12 +1516,14 @@ def load(path: Path) -> Project:
             linked_bytes = 0
             for source_id, source in document.sources.items():
                 if not source.embedded:
-                    linked_payload = _read_linked_source(
+                    linked_payload = _read_linked_for_container(
+                        source_id,
                         source,
                         path.parent,
-                        field=f"sources.{source_id}",
-                        values={"source": source_id},
+                        arrived,
                     )
+                    if linked_payload is None:
+                        continue
                     linked_bytes += len(linked_payload)
                     if linked_bytes > MAX_LINKED_SOURCE_BYTES:
                         raise _too_large(
@@ -1513,12 +1570,19 @@ def load(path: Path) -> Project:
                 report = report_from_data(report_data)
             else:
                 report = Report()
-            if arrived:
-                # Was beim Aufnehmen schiefging, steht im Bericht der Datei —
-                # sichtbar, bis die erste Auswertung ihn ersetzt, und die
-                # scheitert an einem fehlenden Baustein dann mit eigener
-                # Meldung (§15.2).
-                report = Report(findings=(*report.findings, *arrived))
+            # Link-Erreichbarkeit gilt dem aktuellen Öffnen. Ein alter Hinweis
+            # verschwindet, sobald die Quelle wieder lesbar ist; andere Befunde
+            # und die Auskünfte zu aufgenommenen Rezepten bleiben erhalten.
+            report = Report(
+                findings=(
+                    *(
+                        entry
+                        for entry in report.findings
+                        if entry.code != "project.linked_source_unavailable"
+                    ),
+                    *arrived,
+                )
+            )
             thumbnail = (
                 _read_archive_entry(container, infos[THUMBNAIL_ENTRY])
                 if THUMBNAIL_ENTRY in names
