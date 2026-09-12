@@ -87,8 +87,13 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   gerechnet und lässt Beschriftungen aus: pygfx rechnet ihn je Objekt
   rekursiv, und 76 Objekte kosteten 5 ms je Aufruf.
 * **Ein Item hält seinen tatsächlichen Zustand.** Deckkraft und Pickbarkeit
-  beginnen beim übergebenen Stil. Geometrieupdates gelten auch für Linien und
-  Punkte; Polylinien behalten ihre Trenner. Beschriftungsupdates ersetzen ihre
+  beginnen beim übergebenen Stil.
+  Rückseiten und Kanten folgen jeder Deckkraftänderung des Körpers. Eine
+  ausdrücklich abweichende Rückseitendeckkraft behält ihr Verhältnis zur
+  anfänglichen Körperdeckkraft; bei anfangs null gilt volle Deckkraft als
+  Bezug. Beschriftungsfelder und Ankerpunkte behalten ihren eigenen Stil.
+  Geometrieupdates gelten auch für Linien und Punkte; Polylinien behalten
+  ihre Trenner. Beschriftungsupdates ersetzen ihre
   Pickregistrierung bei geänderter Objektmenge vollständig. Ihr Feld wird nur
   bei geänderten Ankern, Kamera oder Transformation neu angepasst; Entfernen
   und Schließen lösen die Registrierungen. Die Feldmaße stammen aus dem

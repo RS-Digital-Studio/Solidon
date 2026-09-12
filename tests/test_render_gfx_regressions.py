@@ -78,6 +78,51 @@ def test_initial_style_is_readable_and_nonpickable_surface_does_not_cover(
     assert hit is not None and hit.item is body
 
 
+@pytest.mark.parametrize(
+    "initial,backface,expected",
+    [
+        (1.0, None, (0.16, 0.0, 1.0)),
+        (0.8, 0.4, (0.08, 0.0, 0.5)),
+        (0.0, 0.4, (0.064, 0.0, 0.4)),
+    ],
+)
+def test_backface_opacity_follows_item_changes(
+    renderer: GfxRenderer,
+    initial: float,
+    backface: float | None,
+    expected: tuple[float, ...],
+) -> None:
+    """Dämpfen und Wiederherstellen gelten auch der anders gefärbten Innenwand."""
+    from dataclasses import replace
+
+    style = SurfaceStyle(
+        colour="#b9c4d0",
+        opacity=initial,
+        backface_colour="#8b3a3a",
+        backface_opacity=backface,
+        lighting=False,
+        show_edges=True,
+    )
+    item = renderer.add_surface(*cube(), name="body", style=style)
+    look_down(renderer, item.bounds())
+    for opacity, back_opacity in zip((0.16, 0.0, 1.0), expected, strict=True):
+        item.set_opacity(opacity)
+        actual = renderer.screenshot()
+        item.set_visible(False)
+        reference = renderer.add_surface(
+            *cube(),
+            name="reference",
+            style=replace(style, opacity=opacity, backface_opacity=back_opacity),
+        )
+        fresh = renderer.screenshot()
+        renderer.remove(reference)
+        item.set_visible(True)
+        assert np.abs(actual.astype(int) - fresh.astype(int)).max() <= 1
+        assert item.objects[1].material.opacity == pytest.approx(back_opacity)
+        alpha_mode = "auto" if back_opacity >= 1.0 else "weighted_blend"
+        assert item.objects[1].material.alpha_mode == alpha_mode
+
+
 def test_surface_edges_follow_the_surface_opacity(renderer: GfxRenderer) -> None:
     item = renderer.add_surface(
         *cube(),

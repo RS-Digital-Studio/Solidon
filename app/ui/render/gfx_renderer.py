@@ -265,13 +265,20 @@ class GfxItem(Item):
 
     def set_opacity(self, opacity: float) -> None:
         self._opacity = float(opacity)
-        for obj in self._coloured() + ([self.edge_line] if self.edge_line is not None else []):
-            obj.material.opacity = self._opacity
+        for obj in self.objects:
+            if not getattr(obj, "_solidon_coloured", True) and not getattr(
+                obj, "_solidon_mesh", False
+            ):
+                # Beschriftungsfelder und Ankerpunkte tragen ihren eigenen
+                # Stil; Rückseiten und Körperkanten gehören dagegen zum Netz.
+                continue
+            opacity = self._opacity * getattr(obj, "_solidon_opacity_share", 1.0)
+            obj.material.opacity = opacity
             if not getattr(obj, "_solidon_text", False):
                 obj.material.alpha_mode = (
                     "solid"
                     if getattr(obj, "_solidon_force_opaque", False)
-                    else _alpha_mode(self._opacity)
+                    else _alpha_mode(opacity)
                 )
         self._changed()
 
@@ -951,6 +958,11 @@ class GfxRenderer(Renderer):
                 ),
             )
             back._solidon_coloured = False
+            if style.backface_opacity is not None:
+                # Bei einer anfangs unsichtbaren Vorderseite bezieht sich der
+                # ausdrücklich gesetzte Anteil auf volle Deckkraft.
+                base_opacity = style.opacity if style.opacity > 0.0 else 1.0
+                back._solidon_opacity_share = style.backface_opacity / base_opacity
             back._solidon_mesh = True
             back._solidon_positions = mesh._solidon_positions
             back._solidon_force_opaque = style.force_opaque
