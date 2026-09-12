@@ -226,9 +226,12 @@ def ensure_print_disclosure(
             return PrintDisclosureResult.REJECTED
         settings.print_settings_in_files = dialog.shares_settings()
         remember_disclosure(settings)
-        save_settings(settings)
+        if save_settings(settings) is None:
+            clear_disclosure(settings)
+            return PrintDisclosureResult.FAILED
     except Exception:  # ein Hinweis darf die Arbeit nicht anhalten
         _log.exception("print disclosure could not be shown")
+        clear_disclosure(settings)
         return PrintDisclosureResult.FAILED
     finally:
         if dialog is not None:

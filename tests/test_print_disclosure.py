@@ -31,7 +31,9 @@ from app.ui.settings import UiSettings, is_utc_timestamp
 @pytest.fixture(autouse=True)
 def _no_real_settings_write(monkeypatch: pytest.MonkeyPatch) -> None:
     """Kein Test schreibt in die echten Oberflächeneinstellungen."""
-    monkeypatch.setattr("app.ui.print_disclosure.save_settings", lambda _settings: None)
+    monkeypatch.setattr(
+        "app.ui.print_disclosure.save_settings", lambda _settings: Path("settings.json")
+    )
 
 
 def test_a_fresh_installation_has_not_seen_the_notice() -> None:
@@ -220,6 +222,45 @@ def test_leaving_the_print_notice_keeps_the_previous_choice(
     assert not stored
     assert result.may_continue
     assert result is not PrintDisclosureResult.ACKNOWLEDGED
+
+
+def test_a_failed_print_notice_save_remains_retryable(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein echter Schreibfehler meldet FAILED und lässt keinen bloßen Speichermerker gelten."""
+    from app.ui import settings as settings_module
+
+    settings = UiSettings()
+    destination = tmp_path / "settings.json"
+    monkeypatch.setattr(settings_module, "settings_path", lambda: destination)
+    monkeypatch.setattr("app.ui.print_disclosure.someone_is_watching", lambda: True)
+    monkeypatch.setattr("app.ui.print_disclosure.save_settings", settings_module.save_settings)
+    original_replace = Path.replace
+
+    def refuse(path: Path, target: Path) -> Path:
+        if Path(target) == destination:
+            raise OSError("disk full")
+        return original_replace(path, target)
+
+    shown: list[bool] = []
+
+    def accept(dialog: PrintDisclosureDialog) -> int:
+        shown.append(True)
+        dialog.share.setChecked(False)
+        return int(PrintDisclosureDialog.DialogCode.Accepted)
+
+    monkeypatch.setattr(PrintDisclosureDialog, "exec", accept)
+    monkeypatch.setattr(Path, "replace", refuse)
+    result = ensure_print_disclosure(settings)
+    assert result is PrintDisclosureResult.FAILED
+    assert result.may_continue
+    assert not disclosure_is_current(settings)
+    assert not destination.exists()
+    monkeypatch.setattr(Path, "replace", original_replace)
+    assert ensure_print_disclosure(settings) is PrintDisclosureResult.ACKNOWLEDGED
+    assert shown == [True, True]
+    assert disclosure_is_current(settings_module.load_settings())
+    assert not settings_module.load_settings().print_settings_in_files
 
 
 def test_a_failing_notice_does_not_block_the_dialog(

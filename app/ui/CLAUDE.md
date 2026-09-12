@@ -696,6 +696,10 @@ Nur „Verstanden“ übernimmt die Dateibeilage und merkt den Hinweis. Escape
 und Fensterschließen lassen beide Werte unverändert; der Druckdialog bleibt
 auch über diesen Rückweg erreichbar.
 
+Ein fehlgeschlagenes Speichern liefert `FAILED` und löscht den vorgemerkten
+Hinweisnachweis, damit ein späterer Versuch tatsächlich erneut speichern kann.
+Die gerade bewusst gewählte Dateibeilage bleibt für die laufende Sitzung erhalten.
+
 Drei Stellen tragen sie: Der Hinweis fragt einmal je Textfassung, der
 Umschalter im Kopf des Druckdialogs zeigt und ändert sie, und
 `settings_for_export()` beantwortet damit die Frage, was eine Datei
