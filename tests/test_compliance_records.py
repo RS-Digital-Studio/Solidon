@@ -23,7 +23,8 @@ RECORDS: dict[str, tuple[str, ...]] = {
         "Rücknahme oder Rückruf",
     ),
     "EXPORT-COMPLIANCE.md": (
-        "Freigabestatus: GESPERRT",
+        "Prüfstatus: Die erforderlichen Freigaben sind nicht belegt",
+        "betriebliche Lücke offen",
         "Art. 5n",
         "Anhang XXXIX",
         "Eigentum und Kontrolle",
@@ -46,10 +47,12 @@ RECORDS: dict[str, tuple[str, ...]] = {
         "monatlichen Reichweitenzeilen",
     ),
     "AI-COMPLIANCE.md": (
-        "Freigabestatus: GESPERRT",
+        "Prüfstatus: Technische Teilnachweise vorhanden, Gesamtfreigabe offen",
         "Sie interagieren mit einem KI-System",
         "Interaktion mit einem KI-System",
-        "vor der ersten Modellkommunikation",
+        "vor dem ersten Chat-Aufruf",
+        "nicht von dieser Chatabnahme erfasst",
+        "F-U6-4",
         "Anthropic",
         "Ollama",
         "Art. 50 Abs. 2",
@@ -154,7 +157,8 @@ def test_withdrawal_api_never_mutates_on_a_link_preview() -> None:
 def test_ai_disclosure_keeps_local_and_cloud_paths_in_the_same_gate() -> None:
     text = (ROOT / "AI-COMPLIANCE.md").read_text(encoding="utf-8")
 
-    assert "ersten Anthropic- und Ollama-Aufruf" in text
+    assert "ersten Chat-Aufruf an Anthropic oder Ollama" in text
+    assert "vor der Ollama-Werkzeugprobe erzwungen" in text
     assert "sendet nichts" in text
     for required in (
         "bis zu zwölf frühere Chatbeiträge",

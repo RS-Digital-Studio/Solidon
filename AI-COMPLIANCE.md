@@ -1,16 +1,27 @@
 # KI-Transparenz und KI-Kompetenz — Solidon
 
-Stand: 31. August 2026 · Prozessfassung 1.0
+Stand: 12. September 2026 · Prozessfassung 1.1
 
-**Freigabestatus: GESPERRT.** Der KI-Chat darf erst freigegeben werden, wenn
-die Offenlegung vor der ersten Modellkommunikation in allen sechs Sprachen und
-für Anthropic wie Ollama getestet ist. Die Konstruktionsanwendung ohne Chat
-bleibt davon unabhängig nutzbar.
+**Prüfstatus: Technische Teilnachweise vorhanden, Gesamtfreigabe offen.**
+Der KI-Chat ist in der öffentlichen Demo bereits verfügbar. Seine Sendegrenze
+und die Ollama-Werkzeugprobe verwenden `ensure_ai_disclosure()`; gezielte
+Tests belegen Abbruch, Fortfahren, Zielbindung und den versionierten Nachweis.
+Die Texte für Anthropic sowie lokales und entferntes Ollama liegen in allen
+sechs Sprachen vor. Das belegt weder die vollständige Barrierefreiheitsabnahme
+noch Rollenprüfung, Ausgabekennzeichnung oder KI-Kompetenz.
+
+Weg 3 (Bild-/Texterzeugung über ComfyUI) ist eine eigene Modellgrenze und
+nicht von dieser Chatabnahme erfasst. Beschreibung, Startwert und gegebenenfalls
+Bilddatei können an ein entferntes ComfyUI-Ziel gehen. Sein zielgebundener
+Hinweis und die Abbruch-/Zielwechselgrenze sind gesondert nachzuweisen (F-U6-4).
+Offene Kriterien unten bezeichnen fehlende Nachweise; die Verfügbarkeit eines
+Wegs ist keine rechtliche oder betriebliche Freigabe.
 
 ## Einheitliche Offenlegung
 
-Vor der ersten Nachricht an ein Modell zeigt Solidon gut wahrnehmbar und
-barrierefrei mindestens:
+Der folgende Offenlegungsvertrag gilt für den KI-Chat und die
+Ollama-Werkzeugprobe. Vor der ersten Nachricht zeigt Solidon gut wahrnehmbar
+und barrierefrei mindestens:
 
 **Dialogtitel:** „Interaktion mit einem KI-System“
 
@@ -75,13 +86,14 @@ der zum ausgewählten Backend gehörende Abschnitt zugänglich angezeigt wurden.
 ## Nachweis und Zustandsmodell
 
 Gespeichert werden ausschließlich Version und Zeitpunkt der angezeigten
-Offenlegung sowie der gewählte Backend-Typ. Eine erneute Anzeige ist nötig,
+Offenlegung, der gewählte Backend-Typ und die normalisierte Zieladresse. Eine erneute Anzeige ist nötig,
 wenn sich Datenarten, Empfänger, Zweck, Anbieterrolle oder Textversion ändern.
 Der Zustand ist kein Konto, wird nicht zu Telemetrie und reist nicht in einer
 Projektdatei. Ein Zurücksetzen in den Einstellungen ist möglich.
 
-Die Anwendung verhindert den ersten Modellaufruf technisch, solange die
-aktuelle Offenlegung nicht vollständig angezeigt wurde. Abbruch oder
+Die Chat-Sendegrenze und die Ollama-Werkzeugprobe verhindern den ersten
+Modellaufruf technisch, solange die aktuelle Offenlegung nicht vollständig
+angezeigt wurde. Abbruch oder
 Barrierefreiheitsfehler führt zurück zur Backend-Auswahl und sendet nichts.
 
 ## Rollen und Ausgaben
@@ -93,9 +105,13 @@ oder ein lokales Modell entscheidet diese Rollen nicht automatisch.
 Gespeicherter Chat und daraus erzeugte Vorschläge tragen Provenienz: Backend,
 Modellkennung, Zeitpunkt und Kennzeichnung als KI-Ausgabe. Exporte von Text
 und anderen erfassten synthetischen Inhalten werden gegen Art. 50 Abs. 2 der
-Verordnung (EU) 2024/1689 und die Übergangsregel bis 2. Dezember 2026 geprüft.
-Für 3D-Geometrie wird weder eine Pflicht noch eine Ausnahme ohne fachliche
-Einordnung behauptet.
+Verordnung (EU) 2024/1689 geprüft. Die Übergangsfrist in Art. 111 Abs. 4 bis
+2. Dezember 2026 betrifft nur erfasste KI-Systeme, die vor dem 2. August 2026
+in Verkehr gebracht wurden; sie wird für Solidon nicht ohne passenden Beleg
+in Anspruch genommen. Für 3D-Geometrie wird weder eine Pflicht noch eine
+Ausnahme ohne fachliche Einordnung behauptet.
+Quelle, geprüft am 12. September 2026:
+[KI-Verordnung, konsolidierte Fassung vom 27. Juli 2026, Art. 4, 50, 111 und 113](https://eur-lex.europa.eu/legal-content/DE/TXT/?uri=CELEX:02024R1689-20260727).
 
 ## Grenzen des Agenten
 
@@ -124,16 +140,30 @@ dokumentiert:
 
 ## Freigabekriterien und Handoff
 
-- [ ] Offenlegung vor dem ersten Anthropic- und Ollama-Aufruf erzwungen,
-- [ ] Texte in Deutsch, Englisch, Spanisch, Französisch, Italienisch und
-      Portugiesisch vollständig,
+- [x] Offenlegung vor dem ersten Chat-Aufruf an Anthropic oder Ollama und
+      vor der Ollama-Werkzeugprobe erzwungen; Abbruch und Zielbindung geprüft,
+- [x] Chat-/Werkzeugproben-Texte für alle drei Zielklassen in Deutsch, Englisch,
+      Spanisch, Französisch, Italienisch und Portugiesisch vollständig,
+- [ ] Weg 3: eigene Offenlegung für Beschreibung, Startwert und Bilddatei;
+      Loopback/Remote-Ziel, Zielwechsel, Abbruch und erste Übermittlung geprüft,
 - [ ] Tastatur-/Screenreader-/Abbruchtests bestanden,
 - [ ] Cloud-Nutzlastvorschau und aktuelle Anbieter-/Datenschutzlinks vorhanden,
-- [ ] versionierter Anzeigenachweis ohne Projekt-/Telemetriedaten,
+- [x] versionierter Chat-Anzeigenachweis mit Backend, normalisiertem Ziel und
+      UTC-Zeitpunkt ohne Projekt-/Telemetriedaten,
 - [ ] Rollenakte und Art.-50-Abs.-2-Entscheidung fachlich bestätigt,
 - [ ] KI-Kompetenznachweis vorhanden.
 
-UI-Handoff: Eigentümer sind Einrichtungsdialog/Backend-Auswahl und die
-Chat-Sendegrenze. Der Test muss den tatsächlichen ersten Netzwerk- oder lokalen
+Die abgehakten technischen Kriterien sind durch die gezielten Prüfungen
+`test_the_record_binds_version_backend_target_and_a_real_utc_timestamp`,
+`test_every_catalog_translates_all_three_target_paths_and_actions`,
+`test_back_blocks_the_actual_first_chat_call_and_restores_every_character`,
+`test_accepting_sends_exactly_once_and_the_same_target_needs_no_repeat` und
+`test_tool_probe_is_gated_and_uses_the_exact_disclosed_remote_target` in
+`tests/test_ai_disclosure.py` belegt. Sie sind keine Gesamtfreigabe der Akte.
+
+UI-Handoff: Eigentümer sind Einrichtungsdialog/Backend-Auswahl,
+Chat-Sendegrenze und für Weg 3 `GenerateDialog._start`. Der Erzeuger übernimmt
+keinen Chat-Merker; sein Nachweis ist an Datenarten, Textversion und das
+konkrete normalisierte Ziel gebunden. Der Test muss den tatsächlichen ersten Netzwerk- oder lokalen
 Modellaufruf beobachten; ein vorhandener Textschlüssel allein ist kein
 Nachweis.

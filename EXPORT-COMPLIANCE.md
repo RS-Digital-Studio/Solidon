@@ -1,17 +1,28 @@
 # Sanktions- und Exportkontrollprozess — Solidon
 
-Stand: 31. August 2026 · Prozessfassung 1.0
+Stand: 12. September 2026 · Prozessfassung 1.1
 
-**Freigabestatus: GESPERRT.** Öffentlicher Verkauf, Aktivierung, Support und
-gezielte Bereitstellung außerhalb des festgelegten Gebiets bleiben gesperrt,
-bis Empfänger-, Eigentums-, Länder- und Endverwendungsprüfung dokumentiert
-sind. Eine IP-Sperre allein ist kein Prüfverfahren.
+**Prüfstatus: Die erforderlichen Freigaben sind nicht belegt.** Die kostenlose
+Demo wird öffentlich angeboten; Download und Support sind erreichbar. Im
+vorhandenen Download- und Aktivierungscode ist keine Länder- oder
+Empfängerprüfung durchgesetzt. Ein festgelegtes Vertriebsgebiet ist in dieser
+Akte nicht nachgewiesen. Der frühere pauschale Sperrvermerk beschrieb deshalb
+keine wirksame technische Sperre dieser Wege.
+
+Die nachstehenden Empfänger-, Eigentums-, Länder- und Endverwendungsprüfungen
+bleiben erforderlich; kostenloser Download, bereits laufender Support und die
+Sanktionsklausel in der EULA ersetzen sie nicht. Robert muss die tatsächlichen
+Bereitstellungswege fachlich bewerten lassen und die erforderlichen Prüfungen
+und Einschränkungen durchsetzen und nachweisen. Bis dahin bleibt die
+betriebliche Lücke offen. Verkauf und eine globale Vertriebsfreigabe werden
+mit dieser Bestandsbeschreibung nicht freigegeben. Eine IP-Sperre allein ist
+kein Prüfverfahren.
 
 ## Geltungsbereich
 
 Der Prozess gilt für Download, Kauf, Lizenzschlüssel, Aktivierung,
-Offlineaktivierung, Update, Support, individuelle Dateiübermittlung,
-Tauschbörse und technische Hilfe. Er gilt für unentgeltliche und entgeltliche
+Offlineaktivierung, Update, Support, individuelle Dateiübermittlung
+und technische Hilfe. Er gilt für unentgeltliche und entgeltliche
 Bereitstellung sowie für direkte und mittelbare Empfänger.
 
 Solidon ist allgemeine CAD-/3D-Konstruktionssoftware mit Kryptografie für
@@ -28,6 +39,10 @@ Anhang XXXIX verboten sind, werden nicht an die russische Regierung oder in
 Russland niedergelassene juristische Personen, Organisationen oder
 Einrichtungen erbracht. Gleiches gilt für Umgehung, mittelbare Bereitstellung
 und kontrollierte Empfänger, soweit der aktuelle Rechtsakt dies erfasst.
+Die gesonderte Pflichtprüfung für technische Hilfe und andere zugehörige
+Leistungen folgt insbesondere aus Art. 5n Abs. 3a; ein offener Supportkanal ist
+keine Ausnahme. Quelle, geprüft am 12. September 2026:
+[Russland-Embargoverordnung, konsolidierte Fassung vom 24. Juli 2026, Art. 5n und Anhang XXXIX](https://eur-lex.europa.eu/legal-content/DE/TXT/?uri=CELEX:02014R0833-20260724).
 
 Daneben werden jeweils aktuelle EU-Sanktionslisten, Eigentum und Kontrolle,
 Embargos, sektorale Verbote, Endverwendung und Catch-all-Hinweise geprüft.
