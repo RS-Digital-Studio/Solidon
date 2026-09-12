@@ -38,6 +38,11 @@ die Aufträge vor dem Schließen ab. Operationsdialoge berücksichtigen den
 Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
 fachlichen Sicherungs- oder Wiederholungsweg. Unerwartete Ausnahmen werden
 protokolliert und als interner Fehler kenntlich gemacht.
+`ErrorNotice` bewahrt Angaben und Vorschläge auch in eingebetteten Anzeigen.
+Nur örtlich verdrahtete Wiederholungs- oder Korrekturhandlungen verändern das
+Lager oder die Auswahl; bestätigte Schreibaufträge behalten ihre ursprünglichen
+Daten. Neue Zustände sperren und entfernen alte Fehlerknöpfe. Während einer
+laufenden Buchung bleiben ihre Folgeaktionen gesperrt und ihr Hinweis lesbar.
 Lagerleser verwenden die gemeinsame nach Dateistempel erneuerte Momentaufnahme;
 Lesefehler bleiben auch in Vorwahl, Filamentpanel und Startkachel sichtbar.
 Spulendetail und Buchungsvorschlag verbinden Spulen und Journal aus jeweils

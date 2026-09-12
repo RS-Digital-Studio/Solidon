@@ -12,7 +12,9 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments
 from app.core.types import SceneObject
 from app.i18n import tr
+from app.ui.dialogs import ErrorNotice
 from app.ui.filament_picker import hex_of, spool_label, spool_slot, swatch
+from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, set_level
 
 
@@ -43,9 +45,7 @@ class QuickFilamentPicker(QWidget):
         )
         self.picker.activated.connect(self._chosen)
         layout.addWidget(self.picker)
-        self.notice = QLabel(self)
-        self.notice.setWordWrap(True)
-        self.notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.notice = ErrorNotice(self)
         self.notice.hide()
         layout.addWidget(self.notice)
         self.clear_button = QPushButton(tr("Filament entfernen"), self)
@@ -117,9 +117,10 @@ class QuickFilamentPicker(QWidget):
             entries = filaments.catalogue()
         except AppError as problem:
             entries = ()
-            self.notice.setText(str(problem))
+            self.notice.set_error(problem, {"retry": weak_slot(self, QuickFilamentPicker.refresh)})
             self.notice.show()
         else:
+            self.notice.clear()
             self.notice.hide()
         with QSignalBlocker(self.picker):
             self.picker.clear()
@@ -179,7 +180,7 @@ class QuickFilamentPicker(QWidget):
         try:
             entry = filaments.get(identifier)
         except AppError as problem:
-            self.notice.setText(str(problem))
+            self.notice.set_error(problem, {"retry": weak_slot(self, QuickFilamentPicker.refresh)})
             self.notice.show()
             return
         expected = self.picker.itemData(index, int(Qt.ItemDataRole.UserRole) + 1)
@@ -194,5 +195,6 @@ class QuickFilamentPicker(QWidget):
             )
             self.notice.show()
             return
+        self.notice.clear()
         self.notice.hide()
         self.spoolChosen.emit(entry)

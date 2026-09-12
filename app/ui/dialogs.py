@@ -2592,6 +2592,101 @@ def spoken_values(error: AppError) -> list[str]:
     ]
 
 
+def problem_text(
+    problem: object, handlers: Mapping[str, Callable[[AppError], None]] | None = None
+) -> str:
+    """Ein eingebetteter Fehler bewahrt Angaben und nicht ausführbare Vorschläge."""
+    if not isinstance(problem, AppError):
+        return str(problem)
+    return "\n".join(
+        [str(problem), *spoken_values(problem), *unhandled_advice(problem, handlers or {})]
+    )
+
+
+class ErrorNotice(QWidget):
+    """Ein sichtbarer Satz mit passenden Handlungen, ohne einen weiteren Dialog."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.label = QLabel(self)
+        self.label.setWordWrap(True)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self._problem: AppError | None = None
+        self._handlers: dict[str, Callable[[AppError], None]] = {}
+        self._buttons: list[QPushButton] = []
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(TIGHT)
+        self._layout.addWidget(self.label)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - wie die ersetzte Beschriftung
+        """Ein neuer Zustand entfernt die Handlungen des vorherigen Fehlers."""
+        self._problem = None
+        self._handlers.clear()
+        for button in self._buttons:
+            self._layout.removeWidget(button)
+            button.setEnabled(False)
+            button.hide()
+            button.deleteLater()
+        self._buttons.clear()
+        self.label.setText(text)
+        self.setAccessibleDescription(text)
+
+    def text(self) -> str:
+        return self.label.text()
+
+    def clear(self) -> None:
+        self.setText("")
+
+    def set_actions_enabled(self, enabled: bool) -> None:
+        """Laufende Aufträge sperren ihre Folgeaktionen, der Rat bleibt lesbar."""
+        for button in self._buttons:
+            button.setEnabled(enabled)
+
+    def set_error(
+        self,
+        problem: object,
+        handlers: Mapping[str, Callable[[AppError], None]] | None = None,
+    ) -> None:
+        """Nur örtlich bekannte Handlungen dürfen Lagerzustand oder Auswahl verändern."""
+        if not isinstance(problem, AppError):
+            self.setText(str(problem))
+            return
+        inherited = handlers_of(self)
+        known = {
+            name: weak_slot(self, ErrorNotice._from_window, name, forward=True)
+            for name in (SHOW_DETAILS.id, REPORT_ERROR.id)
+            if name in inherited
+        }
+        known.update(handlers or {})
+        self.setText(problem_text(problem, known))
+        actions = [action for action in problem.suggestions if action.id in known]
+        actions = actions or offered_actions(problem, known)
+        if not actions:
+            return
+        # Der Fehlerrahmen kann seinen Qt-Besitzer halten; gespeichert werden
+        # Ursache, Werte und Handlungen wie beim Rat im Druckdialog.
+        self._problem = problem.with_traceback(None)
+        self._handlers = known
+        for action in actions:
+            button = QPushButton(str(action.label), self)
+            if action.primary:
+                make_primary(button)
+            button.clicked.connect(weak_slot(self, ErrorNotice._activate, action.id))
+            self._layout.addWidget(button)
+            self._buttons.append(button)
+
+    def _activate(self, name: str) -> None:
+        handler = self._handlers.get(name)
+        if handler is not None and self._problem is not None:
+            handler(self._problem)
+
+    def _from_window(self, name: str, problem: AppError) -> None:
+        handler = handlers_of(self).get(name)
+        if handler is not None:
+            handler(problem)
+
+
 def show_error(
     error: AppError,
     parent: QWidget | None = None,

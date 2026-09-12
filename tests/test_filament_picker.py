@@ -702,6 +702,157 @@ def test_a_failed_catalogue_write_keeps_the_old_selection_and_can_be_retried(
     assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
 
 
+@pytest.mark.parametrize("kind", ["quick", "inventory", "panel", "usage"])
+def test_inventory_errors_keep_advice_and_retry_their_own_read(
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Der Rat bleibt sichtbar, der Knopf lädt diese Ansicht und ein alter Knopf wird unwirksam."""
+    from time import monotonic
+
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+    from shiboken6 import isValid
+
+    from app.core.errors import RETRY, Action, UserError
+    from app.core.filament_usage import UsageRequest
+    from app.ui import filament_usage as usage_ui
+    from app.ui.filament_assignment import QuickFilamentPicker
+    from app.ui.filament_inventory import InventoryView
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
+    if kind == "quick":
+        owner = QuickFilamentPicker()
+        notice, refresh = owner.notice, owner.refresh
+    elif kind == "inventory":
+        owner = InventoryView()
+        notice, refresh = owner.message, owner.refresh
+    elif kind == "panel":
+        owner = FilamentPanel()
+        notice, refresh = owner.hint, owner._fill
+    else:
+        owner = usage_ui.UsageDialog(UsageRequest("geometry", "Projekt", 0, ()))
+        notice, refresh = owner.state, owner._load
+
+    def settle():
+        if kind != "usage":
+            return
+        deadline = monotonic() + 5
+        while not owner.wait_for_workers(0) and monotonic() < deadline:
+            QTest.qWait(10)
+        assert owner.wait_for_workers(0)
+
+    settle()
+    source, name = (usage_ui, "_snapshot") if kind == "usage" else (filaments, "catalogue")
+    original = getattr(source, name)
+    broken = True
+    calls = []
+    advice = "Prüfen Sie die Sicherung des Lagers."
+
+    def read(*args, **kwargs):
+        calls.append(True)
+        if broken:
+            raise UserError(
+                detail="Das Lager ist nicht lesbar.",
+                suggestions=(RETRY, Action("check_inventory_backup", advice)),
+            )
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(source, name, read)
+    try:
+        refresh()
+        settle()
+        assert advice in notice.text(), "der fachliche Rat ging bei str(error) verloren"
+        retry = next(
+            button
+            for button in notice.findChildren(QPushButton)
+            if button.text() == str(RETRY.label)
+        )
+        refresh()
+        settle()
+        if isValid(retry):
+            retry.click()
+        assert len(calls) == 2, "ein alter Fehlerknopf darf keine neue Meldung auslösen"
+        retry = next(
+            button
+            for button in notice.findChildren(QPushButton)
+            if button.text() == str(RETRY.label) and not button.isHidden()
+        )
+        broken = False
+        retry.click()
+        settle()
+        assert len(calls) == 3
+        assert "nicht lesbar" not in notice.text()
+        if isValid(retry):
+            retry.click()
+        settle()
+        assert len(calls) == 3, "ein abgeräumter Fehlerknopf darf keinen neuen Auftrag starten"
+    finally:
+        owner.close()
+        owner.deleteLater()
+
+
+@pytest.mark.parametrize("kind", ["panel", "operation"])
+def test_catalogue_error_retries_the_confirmed_spool_without_a_second_entry_dialog(
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Eine wieder verfügbare Datei erhält genau den bereits bestätigten Spuleneintrag."""
+    from PySide6.QtWidgets import QDialog, QPushButton
+
+    from app.core.errors import RETRY, FileWriteError
+    from app.core.registry import REGISTRY
+    from app.ui.filament_picker import FilamentPanel
+    from app.ui.op_dialog import OperationDialog
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    original = filaments.save
+    broken = True
+    writes, confirmations = [], []
+
+    def save(entry):
+        writes.append(entry)
+        if broken:
+            raise FileWriteError(detail="Das Lager ist gesperrt.", suggestions=(RETRY,))
+        return original(entry)
+
+    def confirm(dialog):
+        confirmations.append(True)
+        dialog.name.setText("Bestätigte Spule")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(filaments, "save", save)
+    monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
+    if kind == "panel":
+        owner = writer = FilamentPanel()
+        notice = owner.hint
+        owner.add_button.click()
+    else:
+        owner = OperationDialog(REGISTRY.get("assign_slot"), ["obj_1"], values={"slot": 0})
+        writer = owner.findChild(FilamentField)
+        assert writer is not None
+        notice = owner._filament_notice
+        writer._make_one(writer.findData(NEW_FILAMENT))
+    try:
+        _wait_for_catalogue(writer)
+        assert "gesperrt" in notice.text()
+        retry = next(
+            button
+            for button in notice.findChildren(QPushButton)
+            if button.text() == str(RETRY.label)
+        )
+        broken = False
+        retry.click()
+        _wait_for_catalogue(writer)
+        assert len(writes) == 2 and writes[0] is writes[1]
+        assert confirmations == [True]
+        assert [entry.name for entry in filaments.catalogue()] == ["Bestätigte Spule"]
+        assert "gesperrt" not in notice.text()
+    finally:
+        owner.close()
+        owner.deleteLater()
+
+
 def test_a_filament_without_a_colour_is_never_shown_blank(qt_app: QApplication) -> None:
     """Jedes Filament hat eine Farbe im Bild — auch vor der ersten Wahl.
 

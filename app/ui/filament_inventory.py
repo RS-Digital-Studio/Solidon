@@ -35,6 +35,7 @@ from app.core.knowledge import filaments
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
 from app.i18n import tr
+from app.ui.dialogs import ErrorNotice
 from app.ui.filament_picker import (
     NewFilamentDialog,
     configured_spools,
@@ -471,8 +472,7 @@ class InventoryView(QWidget):
         self.detail_layout.setContentsMargins(0, 0, NORMAL, NORMAL)
         self.detail_layout.setSpacing(NORMAL)
         self.pages.addWidget(detail_scroll)
-        self.message = QLabel(self)
-        self.message.setWordWrap(True)
+        self.message = ErrorNotice(self)
         outer.addWidget(self.message)
         self.retry_button = QPushButton(tr("Erneut laden"), self)
         self.retry_button.clicked.connect(self.refresh)
@@ -526,13 +526,14 @@ class InventoryView(QWidget):
             self._entries = filaments.catalogue(include_archived=self.archived.isChecked())
         except AppError as problem:
             self._failed("")
-            self.message.setText(str(problem))
+            self.message.set_error(problem, {"retry": weak_slot(self, InventoryView.refresh)})
             return
         except Exception as problem:
             _log.exception("filament inventory could not be read")
             self._failed("")
-            self.message.setText(str(InternalError(detail=f"{type(problem).__name__}: {problem}")))
+            self.message.set_error(InternalError(detail=f"{type(problem).__name__}: {problem}"))
             return
+        self.message.clear()
         count = len(self._entries)
         self.summary.setText(
             tr("Noch keine Spule eingetragen")
@@ -637,7 +638,7 @@ class InventoryView(QWidget):
             snapshot = filaments.read_snapshot()
         except AppError as problem:
             self._failed("")
-            self.message.setText(str(problem))
+            self.message.set_error(problem, {"retry": weak_slot(self, InventoryView.refresh)})
             return
         entry = snapshot.spools.get(identifier)
         if entry is None:
@@ -850,7 +851,7 @@ class InventoryView(QWidget):
             return filaments.get(self._selected_id)
         except AppError as problem:
             self._failed("")
-            self.message.setText(str(problem))
+            self.message.set_error(problem, {"retry": weak_slot(self, InventoryView.refresh)})
             return None
 
     def _reverse(self) -> None:
@@ -1000,7 +1001,7 @@ class InventoryView(QWidget):
             self._start_next()
             return
         self._failed("")
-        self.message.setText(str(problem))
+        self.message.set_error(problem)
         if isinstance(problem, ValidationError) and problem.constraint == "stock_conflict":
             self._keep_count_target = target
         self.keep_count_button.setVisible(self._keep_count_target is not None)

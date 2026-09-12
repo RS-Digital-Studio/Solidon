@@ -79,6 +79,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, profiles
 from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
+from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.labels import NumberSpin, localised
 from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
@@ -881,6 +882,8 @@ class CatalogueWrites(QObject):
             owner = cast(QWidget, owner.parentWidget())
         super().__init__(owner)
         self.worker: _CatalogueWrite | None = None
+        self._active_action: Callable[[], object] | None = None
+        self._failed_action: Callable[[], object] | None = None
         self._pending: deque[Callable[[], object]] = deque()
         self._leash = WorkerLeash(self)
         if owner is not parent:
@@ -901,8 +904,14 @@ class CatalogueWrites(QObject):
         return self.worker is not None or bool(self._pending)
 
     def run(self, action: Callable[[], object]) -> None:
+        self._failed_action = None
         self._pending.append(action)
         self._start_pending()
+
+    def retry_failed(self) -> None:
+        """Nur den noch angebotenen fehlgeschlagenen Auftrag erneut ausführen."""
+        if self._failed_action is not None and not self.pending:
+            self.run(self._failed_action)
 
     def _start_pending(self) -> None:
         if self.worker is not None:
@@ -910,7 +919,8 @@ class CatalogueWrites(QObject):
         if not self._pending:
             self.busyChanged.emit(False)
             return
-        worker = _CatalogueWrite(self._pending.popleft())
+        self._active_action = self._pending.popleft()
+        worker = _CatalogueWrite(self._active_action)
         self.worker = worker
         worker.completed.connect(self._completed)
         worker.rejected.connect(self._rejected)
@@ -922,6 +932,8 @@ class CatalogueWrites(QObject):
         if self.sender() is not self.worker:
             return
         self.worker = None
+        self._active_action = None
+        self._failed_action = None
         self.completed.emit(result)
         self._start_pending()
 
@@ -929,6 +941,8 @@ class CatalogueWrites(QObject):
         if self.sender() is not self.worker:
             return
         self.worker = None
+        self._failed_action = self._active_action
+        self._active_action = None
         self.rejected.emit(problem)
         self._start_pending()
 
@@ -958,6 +972,7 @@ class FilamentField(QComboBox):
     filamentChosen = Signal(str, str, str, str)
     spoolChosen = Signal(object)
     choiceNotice = Signal(str)
+    choiceProblem = Signal(object)
     pendingChanged = Signal(bool)
 
     def __init__(
@@ -975,6 +990,7 @@ class FilamentField(QComboBox):
         #: Die zuletzt wirklich gewählte Zeile — der Rückweg, wenn „Neues
         #: Filament …" abgebrochen wird (UI-24).
         self._last_position = -1
+        self._retry_error: Callable[[], None] | None = None
         self._writes = CatalogueWrites(self)
         self._writes.completed.connect(self._entry_saved)
         self._writes.rejected.connect(self._write_failed)
@@ -988,7 +1004,7 @@ class FilamentField(QComboBox):
         self._fill(int(start))
         self.activated.connect(self._chosen)
 
-    def _fill(self, start: int) -> None:
+    def _fill(self, start: int) -> bool:
         """Baut die Liste aus den drei Quellen (siehe Modul-Docstring)."""
         taken: set[int] = set()
 
@@ -1020,16 +1036,19 @@ class FilamentField(QComboBox):
         #    (:meth:`_chosen`), nicht beim Auflisten (Gesamtreview
         #    05.09.2026, UI-25).
         body_taken = set(taken)
+        loaded = True
         try:
             entries = filaments.catalogue()
         except AppError as problem:
+            loaded = False
             entries = ()
             self.addItem(str(problem))
             self.setItemData(self.count() - 1, 0, int(Qt.ItemDataRole.UserRole) - 1)
             self.setItemData(
-                self.count() - 1, str(problem), Qt.ItemDataRole.AccessibleDescriptionRole
+                self.count() - 1, problem_text(problem), Qt.ItemDataRole.AccessibleDescriptionRole
             )
-            self.setToolTip(str(problem))
+            self.setToolTip(problem_text(problem))
+            self._show_problem(problem, weak_slot(self, FilamentField._reload))
         for filament in entries:
             identity = threemf.slot_identity(spool_slot(filament))
             matching = next(
@@ -1103,6 +1122,7 @@ class FilamentField(QComboBox):
         if position >= 0:
             self.setCurrentIndex(position)
         self._last_position = self.currentIndex()
+        return loaded
 
     def _label(self, index: int, name: str, material_type: str = "") -> str:
         """Wie ein Eintrag dasteht: Nummer und Name, oder was davon es gibt."""
@@ -1145,7 +1165,7 @@ class FilamentField(QComboBox):
             entry = filaments.get(str(identifier)) if identifier else None
         except AppError as problem:
             self.setCurrentIndex(before)
-            self.choiceNotice.emit(str(problem))
+            self._show_problem(problem, weak_slot(self, FilamentField._reload))
             return
         if identifier:
             cached = tuple(
@@ -1186,6 +1206,7 @@ class FilamentField(QComboBox):
             if free is not None:
                 self.setItemData(position, free)
         self._last_position = position
+        self._retry_error = None
         self.choiceNotice.emit("")
         self.filamentChosen.emit(
             str(name or ""),
@@ -1257,11 +1278,30 @@ class FilamentField(QComboBox):
             self._chosen(place)
 
     def _write_failed(self, problem: object) -> None:
-        self.choiceNotice.emit(str(problem))
+        self._show_problem(problem, weak_slot(self._writes, CatalogueWrites.retry_failed))
+
+    def _show_problem(self, problem: object, retry: Callable[[], None]) -> None:
+        self._retry_error = retry
+        self.choiceNotice.emit(problem_text(problem))
+        self.choiceProblem.emit(problem)
+
+    def retry_choice(self, _problem: AppError) -> None:
+        """Ein Fehlerknopf wiederholt ausschließlich seinen Lese- oder Schreibweg."""
+        if self._retry_error is not None:
+            self._retry_error()
+
+    def _reload(self) -> None:
+        chosen = self.currentData()
+        self.clear()
+        if not self._fill(int(chosen) if isinstance(chosen, int) else 0):
+            return
+        self._retry_error = None
+        self.choiceNotice.emit("")
 
     def _write_busy(self, busy: bool) -> None:
         self.setEnabled(not busy)
         if busy:
+            self._retry_error = None
             self.choiceNotice.emit(tr("Das Filamentlager wird gespeichert …"))
         self.pendingChanged.emit(busy)
 
@@ -1343,9 +1383,8 @@ class FilamentPanel(QWidget):
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
 
-        self.hint = QLabel(self)
-        self.hint.setWordWrap(True)
-        set_level(self.hint, "caption")
+        self.hint = ErrorNotice(self)
+        set_level(self.hint.label, "caption")
         self._writes = CatalogueWrites(self)
         self._writes.completed.connect(self._catalogue_saved)
         self._writes.rejected.connect(self._write_failed)
@@ -1563,7 +1602,7 @@ class FilamentPanel(QWidget):
         try:
             entries = filaments.catalogue()
         except AppError as problem:
-            self.hint.setText(str(problem))
+            self.hint.set_error(problem, {"retry": weak_slot(self, FilamentPanel._fill)})
             self._fit()
             return
         self.list.clear()
@@ -1662,7 +1701,7 @@ class FilamentPanel(QWidget):
         try:
             return filaments.get(str(item.data(_ID_ROLE)))
         except AppError as problem:
-            self.hint.setText(str(problem))
+            self.hint.set_error(problem, {"retry": weak_slot(self, FilamentPanel._fill)})
             return None
 
     def _add(self) -> None:
@@ -1682,7 +1721,9 @@ class FilamentPanel(QWidget):
         self.catalogueChanged.emit()
 
     def _write_failed(self, problem: object) -> None:
-        self.hint.setText(str(problem))
+        self.hint.set_error(
+            problem, {"retry": weak_slot(self._writes, CatalogueWrites.retry_failed)}
+        )
         self._fit()
 
     def _write_busy(self, busy: bool) -> None:

@@ -408,7 +408,8 @@ class UsageDialog(QDialog):
     def _rejected(self, problem: object) -> None:
         self._validate()
         self.state.set_error(
-            problem, {"retry": lambda _error: self._load()} if self._pending == "load" else {}
+            problem,
+            {"retry": weak_slot(self, UsageDialog._load)} if self._pending == "load" else {},
         )
         self.state.show()
         self.reload_button.show()
@@ -963,13 +964,14 @@ class UsageNotice(QWidget):
             )
         )
         if problem is not None:
-            self.state.set_error(problem, {"correct_input": lambda _error: self._review()})
+            self.state.set_error(problem, {"correct_input": weak_slot(self, UsageNotice._review)})
         else:
             self.state.setText(state)
         self.state.setVisible(bool(state))
         self.review.setToolTip(state)
         self.review.setAccessibleDescription(state)
         busy = self._tasks.worker is not None
+        self.state.set_actions_enabled(not busy)
         self.review.setEnabled(not busy)
         self.review.setText(
             tr("Bestand wird geprüft …")
@@ -984,10 +986,14 @@ class UsageNotice(QWidget):
         )
 
     def _rejected(self, problem: object) -> None:
-        self._problems[self._active] = problem
+        self._problems[self._active] = (
+            problem.with_traceback(None) if isinstance(problem, AppError) else problem
+        )
         self._completed(None)
 
     def _review(self) -> None:
+        if self._tasks.worker is not None:
+            return
         request = self.requests.get(self.choice.currentData())
         if request is None:
             return

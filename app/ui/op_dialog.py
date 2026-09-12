@@ -48,6 +48,7 @@ from app.core.registry import OperationSpec, caveat_line, inactive_dependency
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
+from app.ui.dialogs import ErrorNotice
 from app.ui.labels import (
     NumberSpin,
     choice_label,
@@ -1512,9 +1513,7 @@ class OperationDialog(QDialog):
         applies.setVisible(bool(note))
         self._note = applies
         layout.addWidget(applies)
-        self._filament_notice = QLabel(self)
-        self._filament_notice.setWordWrap(True)
-        self._filament_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self._filament_notice = ErrorNotice(self)
         self._filament_notice.hide()
         layout.addWidget(self._filament_notice)
         layout.addLayout(front)
@@ -1976,6 +1975,7 @@ class OperationDialog(QDialog):
             picker.filamentChosen.connect(self._fill_filament_fields)
             picker.spoolChosen.connect(self._filament_spool_chosen)
             picker.choiceNotice.connect(self._filament_choice_notice)
+            picker.choiceProblem.connect(self._filament_choice_problem)
             return picker
         if entry.kind == "int" and entry.name == self.spec.produces_from:
             spin = QSpinBox(self)
@@ -2436,6 +2436,19 @@ class OperationDialog(QDialog):
         """Eine überholte Lagerwahl wird im offenen Dialog erklärt und neu angeboten."""
         self._filament_notice.setText(message)
         self._filament_notice.setVisible(bool(message))
+
+    def _filament_choice_problem(self, problem: object) -> None:
+        """Der Lagerfehler behält seine eigenen Handlungen im Operationsdialog."""
+        from app.ui.filament_picker import FilamentField
+
+        picker = self.sender()
+        handlers = (
+            {"retry": weak_slot(picker, FilamentField.retry_choice, forward=True)}
+            if isinstance(picker, FilamentField)
+            else {}
+        )
+        self._filament_notice.set_error(problem, handlers)
+        self._filament_notice.show()
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""

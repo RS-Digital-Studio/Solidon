@@ -10,7 +10,7 @@ from time import monotonic
 
 import pytest
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog, QLabel
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton
 
 from app.core.filament_usage import UsageLine, UsageRequest, from_gcode
 from app.core.knowledge import filaments
@@ -318,7 +318,7 @@ def test_notice_action_follows_the_selected_outputs_booking_state() -> None:
     assert len(filaments.bookings()) == 1
 
 
-@pytest.mark.parametrize("recovery", ["review", "automatic"])
+@pytest.mark.parametrize("recovery", ["review", "inline", "automatic"])
 def test_automatic_booking_error_stays_visible_with_its_output_until_corrected(
     monkeypatch: pytest.MonkeyPatch, recovery: str
 ) -> None:
@@ -359,8 +359,30 @@ def test_automatic_booking_error_stays_visible_with_its_output_until_corrected(
     assert "Bestand" in visible_error()
     assert filaments.bookings() == ()
 
+    if recovery == "inline":
+        from app.core.errors import CORRECT_INPUT
+
+        entered.clear()
+        released.clear()
+        try:
+            notice.offer(other)
+            assert entered.wait(1)
+            notice.choice.setCurrentIndex(notice.choice.findData(failed.fingerprint))
+            correction = next(
+                button
+                for button in notice.state.findChildren(QPushButton)
+                if button.text() == str(CORRECT_INPUT.label) and not button.isHidden()
+            )
+            assert not correction.isEnabled()
+            correction.click()
+            assert not notice._dialogs
+            assert filaments.bookings() == ()
+        finally:
+            released.set()
+            _wait(notice)
+
     filaments.set_remaining(entry.identifier, 100)
-    if recovery == "review":
+    if recovery in {"review", "inline"}:
 
         def confirm(dialog: UsageDialog) -> int:
             _wait(dialog)
@@ -370,7 +392,15 @@ def test_automatic_booking_error_stays_visible_with_its_output_until_corrected(
             return dialog.result()
 
         monkeypatch.setattr(UsageDialog, "exec", confirm)
-        notice.review.click()
+        if recovery == "review":
+            notice.review.click()
+        else:
+            correction = next(
+                button
+                for button in notice.state.findChildren(QPushButton)
+                if button.text() == str(CORRECT_INPUT.label) and not button.isHidden()
+            )
+            correction.click()
     else:
         notice.offer(failed)
         _wait(notice)

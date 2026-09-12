@@ -635,7 +635,7 @@ def test_cancelled_search_cannot_finish_the_following_spool_write(
 
 def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: InventoryView) -> None:
     """Eine beschädigte Datei zeigt den vorhandenen Sicherungsweg und bewahrt die letzte Ansicht."""
-    from app.core.errors import ValidationError
+    from app.core.errors import CORRECT_INPUT, ValidationError
 
     entry = filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
     inventory.refresh()
@@ -644,7 +644,10 @@ def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: Inventor
     with pytest.raises(ValidationError) as caught:
         filaments.catalogue()
     inventory.refresh()
-    assert inventory.message.text() == str(caught.value)
+    assert inventory.message.text().startswith(str(caught.value))
+    assert "Feld: catalogue" in inventory.message.text()
+    assert "Bedingung: unreadable" in inventory.message.text()
+    assert str(CORRECT_INPUT.label) in inventory.message.text()
     assert "Sicherung" in inventory.message.text()
     assert inventory._entries == saved and saved[0].identifier == entry.identifier
     assert not inventory.retry_button.isHidden()
@@ -654,16 +657,18 @@ def test_unexpected_inventory_read_error_is_reported_and_logged(
     inventory: InventoryView, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Ein Programmfehler beim Lesen wird weder verschwiegen noch zum Schreibfehler umgedeutet."""
-    from app.core.errors import InternalError
+    from app.core.errors import REPORT_ERROR, SHOW_DETAILS, InternalError
 
     def broken(*args, **kwargs):
         raise RuntimeError("inventory-read-probe")
 
     monkeypatch.setattr(filaments, "catalogue", broken)
     inventory.refresh()
-    assert inventory.message.text() == str(
-        InternalError(detail="RuntimeError: inventory-read-probe")
+    assert inventory.message.text().startswith(
+        str(InternalError(detail="RuntimeError: inventory-read-probe"))
     )
+    assert str(REPORT_ERROR.label) in inventory.message.text()
+    assert str(SHOW_DETAILS.label) in inventory.message.text()
     assert "inventory-read-probe" in caplog.text
     assert not inventory.retry_button.isHidden()
 
