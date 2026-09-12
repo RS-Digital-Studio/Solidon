@@ -370,8 +370,35 @@ def test_php_issues_one_idempotent_device_certificate(
         process.wait(timeout=5)
 
 
+def test_health_limits_requests_before_reading_the_signing_key(tmp_path: Path) -> None:
+    from tests.test_public_php_security import _php_server
+
+    seed = tmp_path / "activation.seed"
+    seed.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed.chmod(0o600)
+    database = tmp_path / "activation.sqlite"
+    assert setup_activation_server(["--database", str(database)]) == 0
+    before = database.read_bytes()
+    environment = {
+        "SOLIDON_ACTIVATION_SEED_FILE": str(seed),
+        "SOLIDON_ACTIVATION_DB": str(database),
+        "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": ed25519.public_key(ACTIVATION_SEED).hex(),
+    }
+    with _php_server(tmp_path, environment) as base:
+        for _attempt in range(60):
+            status, answer = _get(f"{base}/activation-health.php")
+            assert status == 200, answer
+        seed.write_text("kein gültiger Startwert", encoding="utf-8")
+        status, answer = _get(f"{base}/activation-health.php")
+        assert status == 429, answer
+    assert database.read_bytes() == before
+    assert (tmp_path / "activation-rate.json.key").is_file()
+    state = json.loads((tmp_path / "activation-rate.json").read_bytes())
+    assert len(state["health:global"]) == 60
+
+
 def test_health_check_never_creates_a_missing_database(tmp_path: Path) -> None:
-    """Die öffentliche Bereitschaftsprobe verändert keinen Serverzustand."""
+    """Die öffentliche Bereitschaftsprobe legt keine fehlende Lizenzdatenbank an."""
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
     seed_file.chmod(0o600)

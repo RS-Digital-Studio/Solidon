@@ -110,8 +110,10 @@ SOLIDON_ACTIVATION_OPERATOR_TOKEN_FILE=/absoluter/pfad/operator.token
 SOLIDON_ACTIVATION_MAJOR=1
 ```
 
-Die Bereitschaftsprobe öffnet die Datenbank nur lesend und legt weder Datei
-noch Tabellen an. Je Schlüssel werden höchstens fünf neue Geräteplätze pro
+Die Bereitschaftsprobe öffnet die Lizenzdatenbank nur lesend und legt darin
+weder Datei noch Tabellen an. Ihr getrennter Missbrauchszähler begrenzt jeden
+Anschluss auf 60 Prüfungen in 900 Sekunden, bevor Signaturschlüssel oder
+Lizenzdatenbank gelesen werden. Je Schlüssel werden höchstens fünf neue Geräteplätze pro
 UTC-Tag vergeben. Zähler und Geräteplatz werden in derselben Transaktion
 gespeichert; abgewiesene Anfragen, das erneute Abrufen eines bestehenden
 Zertifikats und Deaktivierungen verbrauchen keinen Tagesplatz. Daneben begrenzt ein zweckgetrenntes

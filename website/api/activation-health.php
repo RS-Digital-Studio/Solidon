@@ -1,5 +1,5 @@
 <?php
-/** Lesender Bereitschaftstest des Aktivierungsdienstes. */
+/** Bereitschaftstest mit lesender Lizenzdatenbank und getrenntem Missbrauchszähler. */
 
 declare(strict_types=1);
 
@@ -9,6 +9,7 @@ header('Content-Type: application/json; charset=utf-8');
 activation_security_headers();
 try {
     activation_require_method('GET');
+    activation_consume_client_rate('health', 60, 900);
     if (!function_exists('sodium_crypto_sign_verify_detached')
         || !extension_loaded('pdo_sqlite')) {
         throw new ActivationFailure(
