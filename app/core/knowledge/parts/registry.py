@@ -701,7 +701,9 @@ def register_part(
 #: Toleranzleitern trennen Zapfen- und Lochleiste zum Zusammenstecken.
 #: Version 17: Die Ruthex-M2,5-Einpressbuchse erhält das herstellerseitige
 #: Einbauloch von 4,0 statt 3,6 mm; auch ihre Einführschräge folgt diesem Maß.
-LIBRARY_VERSION: Final = "17"
+#: Version 18: Der Flächenbezug der Toleranzleiter liegt mittig auf der
+#: Zapfenleiste statt um die Gravurtiefe vom Rand versetzt.
+LIBRARY_VERSION: Final = "18"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

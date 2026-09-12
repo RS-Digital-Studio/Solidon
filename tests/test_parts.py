@@ -1192,6 +1192,17 @@ def feature_requirements(spec: PartSpec) -> tuple[FeatureRequirement, ...]:
     return spec.feature_requirements
 
 
+@pytest.mark.parametrize("steps", [3, 4, 7])
+def test_the_fit_ladder_face_is_centred_on_its_pin_rail(steps: int) -> None:
+    """Der Flächenbezug kommt aus der Leiste, nicht aus der Tiefe ihrer Beschriftung."""
+    spec = PARTS.get("fit_ladder")
+    made = spec.fn(spec.params(steps=steps))
+    rail = min(made.mesh.raw.split(), key=lambda part: float(part.bounds[0, 1]))
+    expected_xy = rail.bounds[:, :2].mean(axis=0)
+    assert made.features["face_1"].params["centre"][:2] == pytest.approx(expected_xy)
+    assert made.features["face_1"].params["centre"][2] == pytest.approx(3.0)
+
+
 def test_parts_without_host_tools_declare_every_feature() -> None:
     """Ohne Trägerwerkzeug gehört jedes Merkmal zum geprüften Bausteinkörper.
 

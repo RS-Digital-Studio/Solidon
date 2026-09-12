@@ -100,6 +100,14 @@ FIT_LADDER_CAN_BE_ASSEMBLED = PartChange(
     "Zapfendurchmesser und Spielstufen bleiben erhalten; die Grundplatte wird geteilt.",
 )
 
+FIT_LADDER_FACE_AT_RAIL_CENTRE = PartChange(
+    version="18",
+    date="2026-09-12",
+    reason="Der Flächenbezug lag um die Gravurtiefe vom Leistenrand versetzt statt in der Mitte.",
+    effect="Die benannte Fläche liegt mittig auf der Zapfenleiste. Daran ausgerichtete "
+    "Folgeschritte verschieben sich; Leisten, Zapfen, Bohrungen und Spielmaße bleiben gleich.",
+)
+
 #: Höhe der eingravierten Beschriftungen. Zwei Schichten zu 0,2 mm — lesbar,
 #: billig.
 LABEL_DEPTH = 0.4
@@ -199,6 +207,7 @@ class FitLadderParams(BaseParams):
         FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE,
         FIT_LADDER_NUMBERS_ITS_STEPS,
         FIT_LADDER_CAN_BE_ASSEMBLED,
+        FIT_LADDER_FACE_AT_RAIL_CENTRE,
     ],
 )
 def fit_ladder(raw: BaseParams) -> PartResult:
@@ -216,11 +225,7 @@ def fit_ladder(raw: BaseParams) -> PartResult:
         shapes.moved(shapes.box(width, rail_depth, base_height), (0.0, y, 0.0))
         for y in (pin_y, bore_y)
     ]
-    features = [
-        face(
-            "face_1", width * rail_depth, (0.0, pin_y - rail_depth / 2.0 + LABEL_DEPTH, base_height)
-        )
-    ]
+    features = [face("face_1", width * rail_depth, (0.0, pin_y, base_height))]
     cutters = []
 
     for index in range(params.steps):
