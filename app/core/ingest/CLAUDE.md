@@ -45,3 +45,7 @@ gegen eine geänderte Quelle neu rechnen.
 - Ein Fehlerbild wird eine **Testdatei** in `tests/data/`, kein Sonderfall im
   Code.
 - Nichts aus einer geöffneten Datei wird ausgeführt (Regel 13).
+- Modelldownloads laufen immer über `fetch._open_download` und die gemeinsame
+  HTTP-Grenze: geprüfte Weiterleitungen, Gesamtfrist einschließlich Headern
+  und eine begrenzbare Leseantwort. Tests ersetzen nur den Transport; einen
+  öffentlichen Umgehungsparameter gibt es nicht.

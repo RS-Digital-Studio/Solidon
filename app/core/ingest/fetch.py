@@ -26,8 +26,6 @@ from __future__ import annotations
 
 import re
 import urllib.error
-import urllib.request
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -186,22 +184,13 @@ def fetch_model(
     url: str,
     *,
     progress: ProgressFn | None = None,
-    opener: Callable[..., Any] | None = None,
 ) -> FetchedModel:
-    """Holt eine Modelldatei und gibt sie mit ihrer Herkunft zurück.
-
-    ``opener`` ist der Einstieg für die Suite: sie fährt diesen Weg gegen
-    einen eigenen Server, statt ins Netz zu greifen.
-    """
+    """Holt eine Modelldatei über die gemeinsame HTTP-Grenze und bewahrt ihre Herkunft."""
     address = check_url(url)
     deadline = deadline_after(TIMEOUT_SECONDS)
     answer: Any
     try:
-        if callable(opener):
-            request = urllib.request.Request(address, headers={"User-Agent": USER_AGENT})
-            answer = opener(request, timeout=TIMEOUT_SECONDS)
-        else:
-            answer, address = _open_download(address, deadline)
+        answer, address = _open_download(address, deadline)
     except urllib.error.HTTPError as error:
         # Ein HTTPError ist selbst eine offene Antwort. Wer ihn nur auswertet,
         # lässt einen Socket zurück — im Testlauf eine ResourceWarning, in
@@ -243,7 +232,6 @@ def fetch_model(
                 answer,
                 progress,
                 deadline=deadline,
-                require_timeout=opener is None,
             )
     except UnsafeUrlError as problem:
         raise _url_validation_error(address, problem) from problem
@@ -281,7 +269,6 @@ def _read_limited(
     progress: ProgressFn | None,
     *,
     deadline: float,
-    require_timeout: bool,
 ) -> bytes:
     """Liest mit Fortschritt und bricht ab, sobald die Grenze überschritten
     ist.
@@ -296,7 +283,7 @@ def _read_limited(
         answer,  # type: ignore[arg-type]
         limit=MAX_FILE_BYTES,
         deadline=deadline,
-        require_timeout=require_timeout,
+        require_timeout=True,
         chunk_size=CHUNK_BYTES,
     ):
         seen += len(chunk)

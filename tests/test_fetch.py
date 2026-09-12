@@ -16,7 +16,7 @@ import pytest
 
 import app.core.http as http_boundary
 from app.core.errors import ExternalToolError, ValidationError
-from app.core.ingest.fetch import ALLOWED_SUFFIXES, check_url, fetch_model
+from app.core.ingest.fetch import ALLOWED_SUFFIXES, TIMEOUT_SECONDS, check_url, fetch_model
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -226,11 +226,14 @@ class _Redirected:
     def __exit__(self, *args: object) -> None:
         return None
 
+    def set_read_timeout(self, seconds: float) -> None:
+        assert 0.0 < seconds <= TIMEOUT_SECONDS
+
     def read(self, size: int) -> bytes:
         raise AssertionError("gelesen wird erst nach der zweiten Prüfung")
 
 
-def test_a_redirect_cannot_leave_http() -> None:
+def test_a_redirect_cannot_leave_http(monkeypatch: pytest.MonkeyPatch) -> None:
     """§32: Geprüft wird die eingetippte Adresse — und der erreichte Ort.
 
     Dazwischen liegt der Weiterleitungs-Handler von urllib, und der folgt
@@ -238,16 +241,17 @@ def test_a_redirect_cannot_leave_http() -> None:
     antwortet, käme sonst an der Schemaprüfung vorbei, obwohl sie genau dafür
     da ist.
     """
+    monkeypatch.setattr(
+        "app.core.ingest.fetch.open_public_url",
+        lambda _address, **_kwargs: _Redirected("ftp://example.invalid/teil.stl"),
+    )
     with pytest.raises(ValidationError) as raised:
-        fetch_model(
-            "http://example.invalid/teil.stl",
-            opener=lambda request, timeout: _Redirected("ftp://example.invalid/teil.stl"),
-        )
+        fetch_model("http://example.invalid/teil.stl")
 
     assert raised.value.values["constraint"] == "scheme"
 
 
-def test_a_redirect_within_http_goes_through() -> None:
+def test_a_redirect_within_http_goes_through(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die übliche Weiterleitung bleibt eine übliche Weiterleitung — und der
     erreichte Ort ist der, der in die Provenienz gehört (§16.3)."""
 
@@ -257,27 +261,31 @@ def test_a_redirect_within_http_goes_through() -> None:
             self._rest = b""
             return payload
 
-    fetched = fetch_model(
-        "http://example.invalid/teil.stl",
-        opener=lambda request, timeout: _Body("https://cdn.example.invalid/teil.stl"),
+    monkeypatch.setattr(
+        "app.core.ingest.fetch.open_public_url",
+        lambda _address, **_kwargs: _Body("https://cdn.example.invalid/teil.stl"),
     )
+    fetched = fetch_model("http://example.invalid/teil.stl")
 
     assert fetched.url == "https://cdn.example.invalid/teil.stl"
 
 
-def test_a_download_does_not_store_a_signed_query_in_its_provenance() -> None:
+def test_a_download_does_not_store_a_signed_query_in_its_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _Body(_Redirected):
         def read(self, size: int) -> bytes:
             payload = getattr(self, "_rest", b"solid teil\n")
             self._rest = b""
             return payload
 
-    fetched = fetch_model(
-        "https://example.invalid/teil.stl?token=geheim#ansicht",
-        opener=lambda request, timeout: _Body(
+    monkeypatch.setattr(
+        "app.core.ingest.fetch.open_public_url",
+        lambda _address, **_kwargs: _Body(
             "https://cdn.example.invalid/teil.stl?signature=noch-geheimer"
         ),
     )
+    fetched = fetch_model("https://example.invalid/teil.stl?token=geheim#ansicht")
 
     assert fetched.url == "https://cdn.example.invalid/teil.stl"
     assert "geheim" not in fetched.url
@@ -291,12 +299,28 @@ def test_a_download_does_not_store_a_signed_query_in_its_provenance() -> None:
         "https://name:kennwort@cdn.example.invalid/teil.stl",
     ),
 )
-def test_a_public_https_download_cannot_redirect_to_a_weaker_boundary(final: str) -> None:
+def test_a_public_https_download_cannot_redirect_to_a_weaker_boundary(
+    final: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "app.core.ingest.fetch.open_public_url",
+        lambda _address, **_kwargs: _Redirected(final),
+    )
     with pytest.raises(ValidationError):
-        fetch_model(
-            "https://example.invalid/teil.stl",
-            opener=lambda request, timeout: _Redirected(final),
-        )
+        fetch_model("https://example.invalid/teil.stl")
+
+
+def test_a_download_response_must_support_a_read_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auch eine Transportattrappe kommt ohne begrenzbaren Leseweg nicht zum Lesen."""
+    from app.core.http import ResponseTimeoutUnavailableError
+
+    answer = _Redirected("https://example.invalid/teil.stl")
+    monkeypatch.setattr(answer, "set_read_timeout", None)
+    monkeypatch.setattr("app.core.ingest.fetch.open_public_url", lambda _address, **_kwargs: answer)
+    with pytest.raises(ExternalToolError) as caught:
+        fetch_model("https://example.invalid/teil.stl")
+    assert isinstance(caught.value.__cause__, ResponseTimeoutUnavailableError)
+    assert caught.value.suggestions
 
 
 def test_the_readable_formats_are_the_same_ones_the_drop_area_takes() -> None:
