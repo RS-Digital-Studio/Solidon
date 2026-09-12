@@ -908,7 +908,7 @@ def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
             entry.code,
             entry.object_id,
             entry.severity,
-            tuple(sorted((entry.values or {}).items(), key=str)),
+            tuple(sorted((name, str(value)) for name, value in (entry.values or {}).items())),
         )
         last[key] = index
     keep = set(last.values())

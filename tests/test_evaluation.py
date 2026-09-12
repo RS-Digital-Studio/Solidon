@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -990,8 +991,9 @@ def test_an_insufficient_decimation_keeps_the_fresh_size_finding() -> None:
     assert codes.count("perceive.too_large") == 1, "die frische Auskunft bleibt"
 
 
+@pytest.mark.parametrize("value", [12.0, [1, 2], {"parts": [1, 2]}, _("Teil")])
 def test_the_report_of_a_real_run_carries_each_sentence_once(
-    document: Document, profile: Profile
+    document: Document, profile: Profile, value: Any
 ) -> None:
     """Und die Anwendung tut es auch, nicht nur die Funktion.
 
@@ -1019,7 +1021,14 @@ def test_the_report_of_a_real_run_carries_each_sentence_once(
     def first(ctx: OpContext) -> OpResult:
         return OpResult(
             outputs=[SceneObject(id="", name="Teil", mesh=_mesh(10.0))],
-            findings=[Finding(code="test.always", severity="info", message=_("Immer."))],
+            findings=[
+                Finding(
+                    code="test.always",
+                    severity="info",
+                    message=_("Immer."),
+                    values={"value": value},
+                )
+            ],
         )
 
     @register_op(
@@ -1041,6 +1050,7 @@ def test_the_report_of_a_real_run_carries_each_sentence_once(
                     severity="info",
                     message=_("Immer."),
                     object_id=ctx.inputs[0].id,
+                    values={"value": value},
                 )
             ],
         )
