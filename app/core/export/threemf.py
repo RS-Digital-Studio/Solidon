@@ -48,6 +48,7 @@ from app.core.ingest.threemf import (
 from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.core.types import MaterialSlot, SceneObject
+from app.core.units import is_zero
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -700,7 +701,7 @@ def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> 
     """
     across = (bed[0] / 2.0 if bed else 0.0) + origin[0]
     along = (bed[1] / 2.0 if bed else 0.0) + origin[1]
-    if not across and not along:
+    if is_zero(across) and is_zero(along):
         return None
     return f"1 0 0 0 1 0 0 0 1 {across:g} {along:g} 0"
 
