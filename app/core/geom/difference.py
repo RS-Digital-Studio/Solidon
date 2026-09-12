@@ -21,13 +21,33 @@ from app.core.errors import PROGRAMMING_ERRORS, GeometryError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
-from app.core.types import Finding, ObjectId, Quality, Scene, SceneObject, SolverInfo
+from app.core.types import (
+    Finding,
+    ObjectId,
+    Profile,
+    Quality,
+    Scene,
+    SceneObject,
+    SolverInfo,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
 
 #: Volumen darunter sind Vernetzungsrauschen, keine Änderung (§11.2 dem
-#: Sinne nach).
+#: Sinne nach) — **die Antwort für einen Aufrufer ohne Drucker**.
+#:
+#: **Wer ein Profil kennt, misst an der Düse** (Regel 7, RM-097).
+#: ``Profile.smallest_printable_volume`` ist ein Stück Extrusionsbahn von
+#: einer Bahnbreite Länge: am Centauri 0,035 mm³, an einer 0,8er Düse 0,28 —
+#: das Fünfunddreißigfache dieser Zahl. Dieselbe Grenze und dieselbe
+#: Begründung wie bei :func:`boolean.without_effect`: Eine Änderung, die
+#: kleiner ist als das, was der Drucker überhaupt hinterlässt, hat niemand je
+#: zu sehen bekommen, und eine Meldung darüber bringt niemanden weiter.
+#:
+#: Das Rauschen bleibt daneben stehen, weil es eine andere Frage beantwortet:
+#: Es ist die Untergrenze der Rechnung und nicht die des Drucks. Wer keinen
+#: Drucker kennt, soll keinen erfinden.
 NOISE_VOLUME = 1e-3
 
 
@@ -42,10 +62,14 @@ class Difference:
     removed_volume: float = 0.0
     solvers: tuple[SolverInfo, ...] = ()
     findings: list[Finding] = field(default_factory=list)
+    #: Ab welchem Volumen diese Differenz eine Änderung ist. Kommt vom Drucker,
+    #: wo einer bekannt ist; sonst bleibt es beim Vernetzungsrauschen (siehe
+    #: :data:`NOISE_VOLUME`).
+    noise_volume: float = NOISE_VOLUME
 
     @property
     def changed(self) -> bool:
-        return self.added_volume > NOISE_VOLUME or self.removed_volume > NOISE_VOLUME
+        return self.added_volume > self.noise_volume or self.removed_volume > self.noise_volume
 
 
 @dataclass(slots=True)
@@ -71,9 +95,21 @@ class SceneDifference:
         return sum(entry.removed_volume for entry in self.entries.values())
 
 
-def compare(before: MeshData, after: MeshData, *, quality: Quality = "draft") -> Difference:
-    """Ein Körper gegen seinen Nachfolger."""
-    entry = Difference(object_id="")
+def compare(
+    before: MeshData,
+    after: MeshData,
+    *,
+    quality: Quality = "draft",
+    profile: Profile | None = None,
+) -> Difference:
+    """Ein Körper gegen seinen Nachfolger.
+
+    ``profile`` entscheidet, ab wann die Differenz eine **Änderung** ist: das
+    kleinste Volumen, das dieser Drucker überhaupt hinterlässt (Regel 7,
+    RM-097). Ohne Profil bleibt es beim Vernetzungsrauschen — ein Aufrufer,
+    der keinen Drucker kennt, soll keinen erfinden.
+    """
+    entry = Difference(object_id="", noise_volume=_noise(profile))
     added = _cut(after, before, quality)
     removed = _cut(before, after, quality)
 
@@ -95,19 +131,30 @@ def compare(before: MeshData, after: MeshData, *, quality: Quality = "draft") ->
     return entry
 
 
+def _noise(profile: Profile | None) -> float:
+    """Die Grenze zwischen „hat sich etwas geändert" und „Rauschen"."""
+    return profile.smallest_printable_volume if profile is not None else NOISE_VOLUME
+
+
 def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -> SceneDifference:
     """Die Differenz einer ganzen Transaktion — die Einheit, in der §18.7
-    misst."""
+    misst.
+
+    Den Drucker bringt die Szene mit; gefragt wird die **nachher**, denn um
+    deren Zustand geht es. Eine Szene ohne Profil gibt es (Tests, ein frisch
+    geöffnetes Dokument), und dann misst die Differenz am Rauschen.
+    """
+    profile = after.profile if after.profile is not None else before.profile
     result = SceneDifference()
     result.created = tuple(name for name in after.objects if name not in before.objects)
     result.deleted = tuple(name for name in before.objects if name not in after.objects)
 
     for object_id in result.created:
-        difference = _whole_body(after.objects[object_id], object_id, added=True)
+        difference = _whole_body(after.objects[object_id], object_id, added=True, profile=profile)
         if difference is not None:
             result.entries[object_id] = difference
     for object_id in result.deleted:
-        difference = _whole_body(before.objects[object_id], object_id, added=False)
+        difference = _whole_body(before.objects[object_id], object_id, added=False, profile=profile)
         if difference is not None:
             result.entries[object_id] = difference
 
@@ -132,13 +179,19 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
             continue
         if _same_geometry(first, second):
             continue
-        difference = compare(first, second, quality=quality)
+        difference = compare(first, second, quality=quality, profile=profile)
         difference.object_id = object_id
         result.entries[object_id] = difference
     return result
 
 
-def _whole_body(entry: SceneObject, object_id: str, *, added: bool) -> Difference | None:
+def _whole_body(
+    entry: SceneObject,
+    object_id: str,
+    *,
+    added: bool,
+    profile: Profile | None = None,
+) -> Difference | None:
     """Ein Körper, der ganz erschienen oder ganz verschwunden ist.
 
     **Die Differenz eines neuen Körpers ist er selbst.** Hier stand nichts —
@@ -171,7 +224,8 @@ def _whole_body(entry: SceneObject, object_id: str, *, added: bool) -> Differenc
         # Dreiecke hat, fehlt in der Ansicht, statt den Zug abzubrechen.
         return None
     volume = max(mesh.volume, 0.0)
-    if volume < NOISE_VOLUME:
+    noise = _noise(profile)
+    if volume < noise:
         return None
     return Difference(
         object_id=object_id,
@@ -179,6 +233,7 @@ def _whole_body(entry: SceneObject, object_id: str, *, added: bool) -> Differenc
         removed=None if added else mesh,
         added_volume=volume if added else 0.0,
         removed_volume=0.0 if added else volume,
+        noise_volume=noise,
     )
 
 

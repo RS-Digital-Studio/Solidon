@@ -1096,12 +1096,18 @@ class _SliceWorker(Worker):
     done = Signal(object)
 
     def __init__(
-        self, entry: Any, layer_height: float, *, overhang_angle: float | None = None
+        self,
+        entry: Any,
+        layer_height: float,
+        *,
+        overhang_angle: float | None = None,
+        bridge_from: float | None = None,
     ) -> None:
         super().__init__()
         self._entry = entry
         self._layer_height = layer_height
         self._overhang_angle = overhang_angle
+        self._bridge_from = bridge_from
 
     def work(self) -> None:
         self.done.emit(
@@ -1109,6 +1115,7 @@ class _SliceWorker(Worker):
                 as_mesh_data(self._entry.mesh),
                 self._layer_height,
                 overhang_angle=self._overhang_angle,
+                bridge_from=self._bridge_from,
             )
         )
 
@@ -10118,10 +10125,14 @@ class MainWindow(QMainWindow):
             return None
 
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
+        # Die Mindestwand ist zugleich die Brückenbreite — zwei
+        # Extrusionsbahnen, aus dem Material und nicht aus dem Code (Regel 7).
+        wall, angle = profiles.analysis_limits(self.session.profile, entry)
         worker = _SliceWorker(
             entry,
             self.session.profile.printer.layer_height,
-            overhang_angle=profiles.analysis_limits(self.session.profile, entry)[1],
+            overhang_angle=angle,
+            bridge_from=wall,
         )
         # Ohne Empfänger blieb „Die Schichtanalyse läuft …" für immer stehen,
         # und die Warteschlange der Druckeinstellungen leerte sich nie

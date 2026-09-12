@@ -1711,7 +1711,7 @@ class _AdviceWorker(Worker):
         slot_profiles: Mapping[threemf.SlotKey, str],
         fit_kinds: tuple[str, ...],
         connectors: tuple[float, ...],
-        previous: Mapping[str, tuple[float, SliceResult]],
+        previous: Mapping[str, tuple[float, float, SliceResult]],
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1739,7 +1739,7 @@ class _AdviceWorker(Worker):
 
     def _calculate(self) -> None:
         """Erst messen, dann die Regeln je Körper und tatsächlicher Spule anwenden."""
-        results: dict[str, tuple[float, SliceResult]] = {}
+        results: dict[str, tuple[float, float, SliceResult]] = {}
         common: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
         materials: dict[
             threemf.SlotKey,
@@ -1776,17 +1776,35 @@ class _AdviceWorker(Worker):
                 (process.overhang_limit_degrees for _slot, process, _effective in processes),
                 default=profiles.for_process(own_profile, self.settings).overhang_limit_degrees,
             )
+            # **Und die Brückenbreite gehört dazu** (Regel 7, RM-097): Sie sind
+            # zwei Extrusionsbahnen, also die Mindestwand — und wie beim Winkel
+            # entscheidet bei mehreren Materialien das strengere, hier also die
+            # **größte** Wand. Sie steht im Schlüssel des Messwertspeichers
+            # neben dem Winkel: ``_analysis_context`` kennt die Materialien
+            # nicht, und ein Ergebnis, das einen Materialwechsel überlebt,
+            # spräche über einen Drucker, den niemand mehr gemeint hat.
+            wall = max(
+                (process.minimum_wall_thickness for _slot, process, _effective in processes),
+                default=profiles.for_process(own_profile, self.settings).minimum_wall_thickness,
+            )
             previous = self.previous.get(body.id)
-            result = previous[1] if previous is not None and is_close(previous[0], angle) else None
+            result = (
+                previous[2]
+                if previous is not None
+                and is_close(previous[0], angle)
+                and is_close(previous[1], wall)
+                else None
+            )
             if result is None:
                 result = slice_body(
                     mesh,
                     self.settings.layers.layer_height,
                     first_layer_height=self.settings.layers.first_layer_height,
                     overhang_angle=angle,
+                    bridge_from=wall,
                     cancelled=self.cancelled,
                 )
-            results[body.id] = (angle, result)
+            results[body.id] = (angle, wall, result)
             for slot, material_profile, effective in processes:
                 entries = advise.advise(
                     effective,
@@ -2307,7 +2325,7 @@ class PrintSettingsDialog(QDialog):
         self._advice_pending = False
         self._advice_problem = ""
         self._analysed_context: tuple[Any, ...] | None = None
-        self._body_analyses: dict[str, tuple[float, SliceResult]] = {}
+        self._body_analyses: dict[str, tuple[float, float, SliceResult]] = {}
         self._advice_timer = QTimer(self)
         self._advice_timer.setSingleShot(True)
         self._advice_timer.setInterval(200)
@@ -4948,7 +4966,7 @@ class PrintSettingsDialog(QDialog):
         context: tuple[Any, ...] | None,
         analysis_context: tuple[Any, ...],
         entries: list[SettingAdvice],
-        results: dict[str, tuple[float, SliceResult]],
+        results: dict[str, tuple[float, float, SliceResult]],
     ) -> None:
         """Ein verspätetes Ergebnis kann weder eine Wahl noch eine neue Analyse ersetzen."""
         if (
@@ -4960,7 +4978,7 @@ class PrintSettingsDialog(QDialog):
         ):
             return
         self._body_analyses = results
-        self.slice_result = next(iter(results.values()))[1] if len(results) == 1 else None
+        self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
         self._analysed_context = analysis_context
         self._advice_entries = entries
         self._advice_pending = False

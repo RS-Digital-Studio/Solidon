@@ -1121,6 +1121,7 @@
   "Die Bohrung wurde geändert, lässt sich in dieser Größe aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf sie verweisen, verlieren ihren Bezug.": "The bore was changed but can no longer be found as a feature at this size. The geometry is correct; later steps referring to it lose their reference.",
   "Die Bohrung wurde um die Materialtoleranz vergrößert.": "The bore was widened by the material tolerance.",
   "Die Breite ist für diese Kanten zu groß.": "The width is too large for these edges.",
+  "Die Brückenbreite muss größer als null sein.": "The bridge width has to be greater than zero.",
   "Die Buchse kommt in das erste Teil, das Loch für die Schraube in das zweite. Dieselbe Größe für beide — sonst greift die Schraube nicht oder klemmt im Durchgang.": "The insert goes into the first part, the hole for the screw into the second. The same size for both — otherwise the screw will not bite or will jam in the clearance hole.",
   "Die ComfyUI-Kommandozeile wurde gestartet, aber das Backend antwortet noch nicht. Prüfen Sie die ComfyUI-Protokolle und versuchen Sie es erneut.": "The ComfyUI command line was started, but the backend is not responding yet. Check the ComfyUI logs and try again.",
   "Die Datei dieses Bausteins ließ sich nicht lesen. Speichern Sie ihn neu, dann steht sie wieder.": "The file for this part could not be read. Save it again and it will be there.",

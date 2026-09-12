@@ -359,6 +359,23 @@ jeder freien Bahn müssen aufliegen. Eine kurze, aber ungestützte Querrichtung
 verkürzt keinen Steg. Ohne beidseitig getragene Richtung bleibt das Ergebnis
 eine konservative geometrische Schätzung, keine Werkzeugbahnplanung.
 
+**Ab wann eine freie Fläche eine Brücke ist, sagt der Drucker** (Regel 7,
+RM-097). Es sind zwei Extrusionsbahnen — darunter kragt die Wandlinie selbst
+vor und liegt zur Hälfte auf der Schicht darunter, darüber muss der Slicer
+quer spannen. Die Zahl stand als runder Millimeter im Code und begründete sich
+mit „zwei Bahnen einer 0,4er-Düse": Das sind 0,84. `slice_body` nimmt sie als
+`bridge_from` entgegen, wie den Überhangwinkel daneben und aus demselben
+Grund — die Schichtanalyse bleibt von Profilen entkoppelt und nimmt Zahlen.
+Hereingegeben wird `Profile.minimum_wall_thickness`, über
+`profiles.analysis_limits` die größte Mindestwand der tatsächlich verwendeten
+Materialien.
+
+Gemessen an zwei Pfeilern mit 1,0 mm Spalt und einer Decke darüber: Der
+Centauri meldet 0,9 mm Brücke, eine 0,8er Düse schweigt zu Recht, und die alte
+Codezahl schwieg für beide. **Wer die Zahl zwischenspeichert, nimmt sie in den
+Schlüssel** — der Messwertspeicher des Druckdialogs trägt sie neben dem
+Winkel, denn sein Geometriekontext kennt die Materialien nicht.
+
 Eine einzelne variable Arachne-Bahn kann eine dünne Wand drucken. Die
 Zwei-Bahn-Betrachtung begründet daher keine allgemeine Aussage, dass eine
 Wand nicht druckbar sei. Unterhalb der angesetzten Mindestbahnbreite fordert

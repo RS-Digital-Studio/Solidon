@@ -348,7 +348,12 @@ der Unterschied ist der Faktor zwischen 104,45 mm³ und 28,97.
 **Messen und Schneiden**
 
 `measure.py` (§18.3 — Abstand, Wandstärke, Winkel, und der **Fang**: `visible_edges` und `corner_points` sagen, was im Bild überhaupt eine Kante oder eine Ecke ist, `snap` zieht den Klick darauf) · `section.py` (Ebene durch einen Körper, §18.2) ·
-`difference.py` (was eine Änderung hinzugefügt und was sie entfernt hat)
+`difference.py` (was eine Änderung hinzugefügt und was sie entfernt hat —
+**ab wann das eine Änderung ist, sagt der Drucker**:
+`Profile.smallest_printable_volume`, dieselbe Grenze und dieselbe Begründung
+wie bei `boolean.without_effect`. Die Szene bringt das Profil mit; ohne eines
+bleibt es beim Vernetzungsrauschen, denn wer keinen Drucker kennt, soll keinen
+erfinden — Regel 7, RM-097)
 
 **Netz, Farbe, Text**
 

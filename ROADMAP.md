@@ -62,7 +62,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Geschützte Flächen an die Ebenensuche hängen und im Dokument speichern; schräge Ebenen, Symmetrie, Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
-| [RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben](#rm-097) | Geometrie, Erkennung und Druckvorbereitung | Vier Stellen sind behoben; offen bleiben `NOISE_VOLUME` und `BRIDGE_FROM` am Profil — ein eigener Eingriff, kein kleiner Fix |
 | [RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen](#rm-109) | Geometrie, Erkennung und Druckvorbereitung | Mindestbreitenprüfung mit gleichem Befund gezielt beschleunigen |
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Entscheiden, ob eine Verrundung ohne jede Operation in der Merkmalsliste stehen soll |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Organische und mechanische 200.000-Dreiecke-Fälle gegen eine Sekunde messen |
@@ -665,7 +664,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-097"></a>
 
-- [~] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** **Vier von sechs
+- [x] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** **Alle sechs
   Stellen sind am 12.09.2026 gefallen**, und eine davon war schon vorher weg:
 
   * Der `OSError` beim Lesen einer verknüpften Quelle hieß „sie ist beschädigt" und
@@ -686,14 +685,36 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     Handlung, der Dialog den Inhalt. Handbuch und Befehlspalette sind nachgezogen, die zwei
     langen Handbuchtexte in allen fünf Sprachen umgeschlüsselt.
 
-  **Offen bleiben die zwei Zahlen** — und sie sind keine kleine Stelle mehr, sondern ein
-  eigener Eingriff: `NOISE_VOLUME` (`geom/difference.py`) und `BRIDGE_FROM`
-  (`slice/analysis.py`) gehören ans Profil (Regel 7), aber weder `Difference` noch
-  `slice_body` kennen eines. Die Schichtanalyse ist von Profilen bewusst entkoppelt und nimmt
-  Zahlen — `overhang_angle` ist dasselbe Muster. Der Weg ist deshalb ein weiterer Parameter
-  bis `_bridge_width` hinunter und ein Profilwert beim Aufrufer
-  (`Profile.minimum_wall_thickness`, denn die Zahl **ist** zwei Bahnbreiten: am Centauri 0,84
-  statt 1,0). Bei `Difference` dasselbe mit `smallest_printable_volume`.
+  **Die zwei Zahlen sind am 12.09.2026 gefallen**, beide nach dem Muster von
+  `overhang_angle`: Die Schichtanalyse bleibt von Profilen entkoppelt und nimmt Zahlen, und
+  der Aufrufer, der einen Drucker kennt, gibt dessen Zahl herein.
+
+  * **`BRIDGE_FROM`** (`slice/analysis.py`) wird zu `bridge_from` — ein Parameter bis
+    `_bridge_width` hinunter, geprüft wie der Winkel daneben (Regel 17). Der runde Millimeter
+    begründete sich mit „zwei Bahnen einer 0,4er-Düse", und die sind **0,84**; genau das ist
+    `Profile.minimum_wall_thickness`. Hereingegeben wird sie an den vier Stellen, die den
+    Winkel schon aus `profiles.analysis_limits` holen — die Funktion liefert beide Grenzen in
+    einem Aufruf. Gemessen an zwei Pfeilern mit **1,0 mm Spalt** und einer Decke darüber: der
+    Centauri meldet **0,9 mm** Brücke, eine 0,8er Düse (1,68) schweigt zu Recht, und die alte
+    Codezahl schwieg für beide. Der Messwertspeicher des Druckdialogs trägt die Wand seither
+    im Schlüssel neben dem Winkel — sein Geometriekontext kennt die Materialien nicht, und ein
+    Ergebnis, das einen Materialwechsel überlebt, spräche über einen Drucker, den niemand mehr
+    gemeint hat.
+  * **`NOISE_VOLUME`** (`geom/difference.py`) bleibt als Untergrenze der **Rechnung** stehen
+    und ist nicht mehr die der **Änderung**: `Difference.noise_volume` kommt aus
+    `Profile.smallest_printable_volume`, dieselbe Grenze und dieselbe Begründung wie bei
+    `boolean.without_effect`. Die Szene bringt das Profil mit (`compare_scenes`). Gemessen an
+    einem Quader, der um zwei Zehntausendstel Millimeter wächst: **0,02 mm³**, mehr als das
+    Rauschen und ein Fünfzehntel dessen, was der Centauri überhaupt hinterlässt — die
+    Differenzansicht meldete das als Änderung, und im Chat stand „+0,00 cm³".
+
+  Nachweis: zwei Fälle in `tests/test_slice.py`, drei in `tests/test_difference.py` und der
+  Anschlusstest `test_the_layer_analysis_takes_both_limits_from_the_material` — nicht „der Kern
+  kann es", sondern „das Fenster tut es". Dazu die Attrappe in `test_print_settings_ui.py`, die
+  `bridge_from` ausdrücklich in ihrer Signatur führt und rot wird, wenn der Dialog die Zahl
+  nicht mehr hereingibt. Vier Gegenproben, jede einzeln rot: die Codezahl zurück in
+  `_bridge_width`, die Konstante zurück in `Difference.changed`, `compare_scenes` ohne
+  Weitergabe des Profils, und das Fenster ohne die eine Zeile.
 
 <a id="rm-109"></a>
 

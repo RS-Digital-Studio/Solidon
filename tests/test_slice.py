@@ -28,6 +28,7 @@ from app.core.slice.analysis import (
     total_overhang,
 )
 from app.core.slice.orientation import search
+from app.core.types import Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -869,3 +870,76 @@ def test_a_forty_five_degree_transition_spans_nothing() -> None:
     result = slice_body(body, 0.2)
 
     assert max(layer.bridge_width for layer in result.layers) < 1.0
+
+
+# --- die Brückenbreite kommt vom Drucker (RM-097) ---------------------------------
+
+
+def _spanning(gap: float) -> MeshData:
+    """Zwei Pfeiler mit einem Spalt dazwischen und einer Decke darüber.
+
+    Die Decke ist genau über dem Spalt ungestützt; ihre Bahnen müssen dort
+    quer spannen. Der kleinste Körper, an dem sich „Überhang" und „Brücke"
+    überhaupt unterscheiden lassen.
+    """
+    half = gap / 2.0
+    left = trimesh.creation.box(extents=(10.0 - half, 20.0, 2.0))
+    left.apply_translation([-(10.0 + half) / 2.0, 0.0, 1.0])
+    right = trimesh.creation.box(extents=(10.0 - half, 20.0, 2.0))
+    right.apply_translation([(10.0 + half) / 2.0, 0.0, 1.0])
+    lid = trimesh.creation.box(extents=(20.0, 20.0, 1.0))
+    lid.apply_translation([0.0, 0.0, 2.5])
+    return MeshData.of(trimesh.util.concatenate([left, right, lid]))
+
+
+def _widest(mesh: MeshData, bridge_from: float | None) -> float:
+    return max(
+        (layer.bridge_width for layer in slice_body(mesh, 0.2, bridge_from=bridge_from).layers),
+        default=0.0,
+    )
+
+
+def test_the_bridge_width_comes_from_the_printer(profile: Profile) -> None:
+    """AGENTS.md Regel 7: die Zahl lebt im Profil, nicht im Code (RM-097).
+
+    ``BRIDGE_FROM = 1.0`` stand als runder Millimeter da und begründete sich
+    selbst mit „zwei Bahnen einer 0,4er-Düse" — das sind 0,84. Genau diese
+    Zahl ist ``Profile.minimum_wall_thickness``, und genau dazwischen liegt
+    ein Fall, den der Kunde sieht: Über einem Spalt von **1,0 mm** hängen nach
+    Abzug der Überhangzugabe 0,9 mm Bahn frei. Der Centauri muss das
+    überbrücken; die Codezahl schwieg dazu.
+
+    Und die Gegenrichtung gehört dazu, denn sie ist der Grund für Regel 7:
+    An einer **0,8er Düse** sind zwei Bahnen 1,68 mm, und dort trägt sich
+    dieselbe Stelle. Dieselbe Geometrie, zwei Drucker, zwei richtige
+    Antworten — eine Zahl im Code kann nur eine davon geben.
+    """
+    mesh = _spanning(1.0)
+    assert profile.minimum_wall_thickness == pytest.approx(0.84), (
+        "zwei Extrusionsbahnen am Centauri — die Zahl, um die es geht"
+    )
+
+    assert _widest(mesh, profile.minimum_wall_thickness) == pytest.approx(0.9, abs=0.05), (
+        "über einem Spalt von 1,0 mm spannen 0,9 mm frei, und das ist eine Brücke"
+    )
+    assert _widest(mesh, 1.68) == 0.0, (
+        "an einer 0,8er Düse sind 1,68 mm zwei Bahnen — dort trägt sich die Stelle"
+    )
+    assert _widest(mesh, None) == 0.0, (
+        "die Codezahl schwieg hier, und das ist der Befund, um den es geht"
+    )
+
+
+def test_a_bridge_width_that_is_no_width_is_refused() -> None:
+    """Regel 17: Die Zahl kommt aus einem Profil, also kann sie falsch ankommen.
+
+    Ein eigenes ``materials.toml`` bringt den Fall bis in die Oberfläche —
+    dieselbe Sorgfalt wie beim Überhangwinkel und der Schichthöhe daneben.
+    """
+    from app.core.errors import ValidationError
+
+    mesh = _spanning(1.0)
+    for wrong in (0.0, -1.0, math.inf):
+        with pytest.raises(ValidationError) as caught:
+            slice_body(mesh, 0.2, bridge_from=wrong)
+        assert caught.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“"

@@ -1121,6 +1121,7 @@
   "Die Bohrung wurde geändert, lässt sich in dieser Größe aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf sie verweisen, verlieren ihren Bezug.": "Le perçage a été modifié, mais à cette taille il ne peut plus être retrouvé comme élément. La géométrie est correcte ; les étapes ultérieures qui s'y réfèrent perdent leur référence.",
   "Die Bohrung wurde um die Materialtoleranz vergrößert.": "Le perçage a été élargi de la tolérance du matériau.",
   "Die Breite ist für diese Kanten zu groß.": "La largeur est trop grande pour ces arêtes.",
+  "Die Brückenbreite muss größer als null sein.": "La largeur de pont doit être supérieure à zéro.",
   "Die Buchse kommt in das erste Teil, das Loch für die Schraube in das zweite. Dieselbe Größe für beide — sonst greift die Schraube nicht oder klemmt im Durchgang.": "L’insert va dans la première pièce, le trou pour la vis dans la seconde. La même taille pour les deux — sinon la vis ne prend pas ou coince dans le passage.",
   "Die ComfyUI-Kommandozeile wurde gestartet, aber das Backend antwortet noch nicht. Prüfen Sie die ComfyUI-Protokolle und versuchen Sie es erneut.": "La ligne de commande de ComfyUI a été lancée, mais le backend ne répond pas encore. Consultez les journaux de ComfyUI et réessayez.",
   "Die Datei dieses Bausteins ließ sich nicht lesen. Speichern Sie ihn neu, dann steht sie wieder.": "Le fichier de ce bloc n'a pas pu être lu. Enregistrez-le de nouveau et il sera de retour.",

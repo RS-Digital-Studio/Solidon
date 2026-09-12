@@ -1121,6 +1121,7 @@
   "Die Bohrung wurde geändert, lässt sich in dieser Größe aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf sie verweisen, verlieren ihren Bezug.": "Il foro è stato modificato, ma a questa dimensione non si ritrova più come elemento. La geometria è corretta; i passi successivi che vi fanno riferimento perdono il collegamento.",
   "Die Bohrung wurde um die Materialtoleranz vergrößert.": "Il foro è stato allargato della tolleranza del materiale.",
   "Die Breite ist für diese Kanten zu groß.": "La larghezza è troppo grande per questi spigoli.",
+  "Die Brückenbreite muss größer als null sein.": "La larghezza del ponte deve essere maggiore di zero.",
   "Die Buchse kommt in das erste Teil, das Loch für die Schraube in das zweite. Dieselbe Größe für beide — sonst greift die Schraube nicht oder klemmt im Durchgang.": "L’inserto va nel primo pezzo, il foro per la vite nel secondo. La stessa misura per entrambi, altrimenti la vite non fa presa o si blocca nel passaggio.",
   "Die ComfyUI-Kommandozeile wurde gestartet, aber das Backend antwortet noch nicht. Prüfen Sie die ComfyUI-Protokolle und versuchen Sie es erneut.": "La riga di comando di ComfyUI è stata avviata, ma il backend non risponde ancora. Controllare i registri di ComfyUI e riprovare.",
   "Die Datei dieses Bausteins ließ sich nicht lesen. Speichern Sie ihn neu, dann steht sie wieder.": "Il file di questo blocco non si è potuto leggere. Salvalo di nuovo e tornerà al suo posto.",

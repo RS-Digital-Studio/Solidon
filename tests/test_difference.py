@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -203,3 +204,75 @@ def test_a_body_that_vanished_is_shown_as_removed() -> None:
     entry = difference.entries["obj_1"]
     assert entry.removed_volume == pytest.approx(8000.0, rel=1e-6)
     assert entry.added_volume == 0.0
+
+
+# --- was als Änderung zählt, sagt der Drucker (RM-097) ----------------------------
+
+
+def _box(height: float) -> MeshData:
+    return MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, height)))
+
+
+def test_a_change_below_what_the_printer_leaves_is_no_change(profile: Profile) -> None:
+    """AGENTS.md Regel 7: die Grenze lebt im Profil, nicht im Code (RM-097).
+
+    ``NOISE_VOLUME = 1e-3`` war die Untergrenze der **Rechnung** und wurde als
+    Untergrenze der **Änderung** gelesen. Zwischen beiden liegt der Fall, den
+    der Kunde sieht: Ein Quader, der um zwei Zehntausendstel Millimeter
+    wächst, ändert 0,02 mm³ — mehr als das Rauschen und ein Fünfzehntel
+    dessen, was der Centauri überhaupt hinterlässt. Die Differenzansicht
+    meldete das als Änderung, und im Chat stand „+0,00 cm³".
+
+    Dieselbe Grenze und dieselbe Begründung wie bei
+    :func:`boolean.without_effect`; ohne Profil bleibt es beim Rauschen — wer
+    keinen Drucker kennt, soll keinen erfinden.
+    """
+    winzig = compare(_box(10.0), _box(10.0002), profile=profile)
+
+    assert winzig.added_volume == pytest.approx(0.02, abs=0.005), "die Zahl, um die es geht"
+    assert not winzig.changed, (
+        "0,02 mm³ sind ein Fünfzehntel dessen, was diese Düse legt — das sieht niemand"
+    )
+    assert compare(_box(10.0), _box(10.0002)).changed, (
+        "ohne Profil bleibt es beim Rauschen, und das ist die Antwort, die belegt ist"
+    )
+
+
+def test_the_same_change_reads_differently_on_a_coarser_nozzle(profile: Profile) -> None:
+    """Die Gegenrichtung, und sie ist der Grund für Regel 7.
+
+    Ein Zehntel Kubikmillimeter ist am Centauri (0,42 mm Bahn, 0,2 mm Schicht)
+    das Dreifache einer Bahnportion und damit eine Änderung. An einer 0,8er
+    Düse sind es 0,28 mm³ je Portion, und dieselbe Änderung verschwindet
+    darin. Dieselbe Geometrie, zwei Drucker, zwei richtige Antworten — eine
+    Zahl im Code kann nur eine davon geben.
+    """
+    grob = replace(
+        profile,
+        printer=replace(
+            profile.printer, nozzle_diameter=0.8, extrusion_width=0.84, layer_height=0.4
+        ),
+    )
+
+    assert compare(_box(10.0), _box(10.001), profile=profile).changed
+    assert not compare(_box(10.0), _box(10.001), profile=grob).changed
+
+
+def test_the_scene_hands_its_printer_to_the_difference(profile: Profile) -> None:
+    """Die Szene bringt den Drucker mit — sonst käme die Zahl nie an.
+
+    ``compare_scenes`` ist der Weg, den die Anwendung geht (``Session``), und
+    ohne diese eine Zeile bliebe die Profilgrenze eine Möglichkeit, die
+    niemand benutzt — die Sorte Lücke, die Testart „Anschluss" meint.
+    """
+
+    def scene_with(height: float, *, with_printer: bool) -> Scene:
+        entry = SceneObject(id="obj_1", name="Klotz", mesh=_box(height))
+        return Scene(objects={"obj_1": entry}, profile=profile if with_printer else None)
+
+    assert not compare_scenes(
+        scene_with(10.0, with_printer=True), scene_with(10.0002, with_printer=True)
+    ).changed
+    assert compare_scenes(
+        scene_with(10.0, with_printer=False), scene_with(10.0002, with_printer=False)
+    ).changed

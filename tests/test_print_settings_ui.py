@@ -4759,7 +4759,11 @@ def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(q
     release = threading.Event()
     calls = []
 
-    def measure(mesh, height, *, first_layer_height, overhang_angle, cancelled):
+    def measure(mesh, height, *, first_layer_height, overhang_angle, bridge_from, cancelled):
+        # ``bridge_from`` ausdrücklich in der Signatur und nicht in ``**kwargs``:
+        # Die Attrappe soll rot werden, wenn der Dialog die Zahl nicht mehr
+        # hereingibt — sie kommt seit RM-097 aus dem Material.
+        assert bridge_from > 0.0
         calls.append((height, first_layer_height, threading.get_ident()))
         if len(calls) == 1:
             entered.set()
@@ -5134,7 +5138,11 @@ def test_print_advice_rechecks_the_strictest_slot_calibration_when_reusing_geome
 
     measured = calculate({})
     assert measured[body.id][0] == pytest.approx(60.0)
-    initial = measured[body.id][1]
+    # Der Messwertspeicher trägt seit RM-097 drei Werte: Winkel, Mindestwand
+    # (zugleich die Brückenbreite) und das Ergebnis. Beide Grenzen stehen im
+    # Schlüssel, denn ``_analysis_context`` kennt die Materialien nicht.
+    initial = measured[body.id][2]
+    first_wall = measured[body.id][1]
     if change == "material":
         body.material_slots = [MaterialSlot(0, "PETG", material_type="PETG")]
     elif change == "printer":
@@ -5145,8 +5153,11 @@ def test_print_advice_rechecks_the_strictest_slot_calibration_when_reusing_geome
     repeated = calculate(measured)
     assert len(results) == 2
     assert repeated[body.id][0] == pytest.approx(45.0)
-    assert repeated[body.id][1] is not initial
-    assert repeated[body.id][1].support_volume > initial.support_volume
+    assert repeated[body.id][2] is not initial
+    assert repeated[body.id][2].support_volume > initial.support_volume
+    assert repeated[body.id][1] > 0.0 and first_wall > 0.0, (
+        "die Brückenbreite steht neben dem Winkel im Schlüssel (RM-097)"
+    )
 
 
 @pytest.mark.parametrize("flavour", ["cura", "prusa"])

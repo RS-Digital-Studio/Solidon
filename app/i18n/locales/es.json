@@ -1121,6 +1121,7 @@
   "Die Bohrung wurde geändert, lässt sich in dieser Größe aber nicht mehr als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die auf sie verweisen, verlieren ihren Bezug.": "El orificio se modificó, pero con este tamaño ya no puede encontrarse como característica. La geometría es correcta; los pasos posteriores que se refieran a él pierden su referencia.",
   "Die Bohrung wurde um die Materialtoleranz vergrößert.": "El taladro fue ampliado con la tolerancia del material.",
   "Die Breite ist für diese Kanten zu groß.": "La anchura es demasiado grande para estas aristas.",
+  "Die Brückenbreite muss größer als null sein.": "El ancho de puente debe ser mayor que cero.",
   "Die Buchse kommt in das erste Teil, das Loch für die Schraube in das zweite. Dieselbe Größe für beide — sonst greift die Schraube nicht oder klemmt im Durchgang.": "El inserto va en la primera pieza y el agujero para el tornillo en la segunda. El mismo tamaño para ambos: de lo contrario el tornillo no agarra o se atasca en el paso.",
   "Die ComfyUI-Kommandozeile wurde gestartet, aber das Backend antwortet noch nicht. Prüfen Sie die ComfyUI-Protokolle und versuchen Sie es erneut.": "Se inició la línea de comandos de ComfyUI, pero el backend aún no responde. Compruebe los registros de ComfyUI e inténtelo de nuevo.",
   "Die Datei dieses Bausteins ließ sich nicht lesen. Speichern Sie ihn neu, dann steht sie wieder.": "El archivo de este bloque no se pudo leer. Guárdelo de nuevo y volverá a estar ahí.",

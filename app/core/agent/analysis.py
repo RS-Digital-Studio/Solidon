@@ -135,10 +135,15 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
         if _too_large(entry):
             lines.append(_skipped(object_id))
             continue
+        # Beide Grenzen aus einem Aufruf: die größte Mindestwand der
+        # verwendeten Materialien und ihr kleinster Überhangwinkel. Die Wand
+        # ist zugleich die Brückenbreite — zwei Extrusionsbahnen (Regel 7).
+        wall, angle = profiles.analysis_limits(profile, entry)
         result = slice_body(
             as_mesh_data(entry.mesh),
             layer_height=profile.printer.layer_height,
-            overhang_angle=profiles.analysis_limits(profile, entry)[1],
+            overhang_angle=angle,
+            bridge_from=wall,
         )
         islands = island_layers(result)
         thinnest = narrowest_measured(result)
@@ -197,10 +202,12 @@ def _advice(
         lines.append(_skipped(first_id))
         result = None
     else:
+        wall, angle = profiles.analysis_limits(profile, first)
         result = slice_body(
             as_mesh_data(first.mesh),
             layer_height=profile.printer.layer_height,
-            overhang_angle=profiles.analysis_limits(profile, first)[1],
+            overhang_angle=angle,
+            bridge_from=wall,
         )
     advice = advise_module.advise(
         settings,

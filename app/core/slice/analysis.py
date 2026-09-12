@@ -84,13 +84,23 @@ WIDTH_LOST_FROM = 0.01
 WIDTH_INTERESTING = 2.0
 
 #: Ab welcher Breite eine ungestützte Fläche als Brücke zählt und nicht mehr
-#: als Überhang.
+#: als Überhang — **wenn kein Drucker bekannt ist**.
 #:
 #: Darunter kragt die Wandlinie selbst vor und liegt zur Hälfte auf der Schicht
 #: darunter — das trägt sich. Darüber muss der Slicer die Fläche füllen, und
 #: dafür legt er gerade Bahnen, die er quer über die Öffnung spannt statt
-#: entlang der Kontur. Ein Millimeter sind zwei Bahnen einer 0,4er-Düse; das
-#: ist die Grenze, an der aus Vorkragen ein Überspannen wird.
+#: entlang der Kontur. Die Grenze sind **zwei Extrusionsbahnen**; der runde
+#: Millimeter hier ist die Zahl für einen Aufrufer, der kein Profil mitbringt.
+#:
+#: **Wer einen Drucker kennt, gibt dessen Zahl herein** (Regel 7, RM-097).
+#: ``Profile.minimum_wall_thickness`` *ist* diese zwei Bahnbreiten und ergibt
+#: am Centauri 0,84 statt 1,0, an einer 0,8er Düse 1,68 — über
+#: ``profiles.analysis_limits`` die größte Mindestwand der tatsächlich
+#: verwendeten Materialien. Dass der runde Millimeter danebenlag, sagt seine
+#: eigene Begründung: Zwei Bahnen einer 0,4er Düse sind 0,84 und nicht 1,0.
+#:
+#: Dieselbe Bauart wie ``overhang_angle`` daneben, und aus demselben Grund:
+#: Die Schichtanalyse ist von Profilen bewusst entkoppelt und nimmt Zahlen.
 BRIDGE_FROM = 1.0
 
 #: Unter so vielen Schichten kostet das Auffächern mehr, als es spart — acht
@@ -140,6 +150,7 @@ def slice_body(
     footing_height: float | None = None,
     first_layer_height: float | None = None,
     overhang_angle: float | None = None,
+    bridge_from: float | None = None,
     cancelled: CancelToken | None = None,
 ) -> SliceResult:
     """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
@@ -159,6 +170,12 @@ def slice_body(
     einmal anders aus (§22.3). Wer die Schichthöhe des Druckers kennt, gibt
     ihre Hälfte hier herein und bekommt eine Zahl, die nur noch am Körper
     hängt.
+
+    ``bridge_from`` ist die Breite, ab der eine ungestützte Fläche als Brücke
+    zählt — zwei Extrusionsbahnen, also ``Profile.minimum_wall_thickness``
+    (Regel 7, RM-097). Ohne Angabe gilt :data:`BRIDGE_FROM`, der runde
+    Millimeter für einen Aufrufer ohne Profil. Gelesen wird sie nur bei
+    ``detail="full"``: Die Stützenmessung kennt keine Brücken.
 
     ``first_layer_height`` setzt zusätzlich das tatsächliche Druckraster:
     Die erste Schnittmitte liegt auf seiner halben Höhe, die zweite eine
@@ -194,6 +211,17 @@ def slice_body(
         raise ValidationError(
             "overhang_angle",
             _("Wählen Sie für die Überhanggrenze einen Winkel zwischen 0 und 90 Grad."),
+            constraint="range",
+        )
+    span = BRIDGE_FROM if bridge_from is None else bridge_from
+    if not math.isfinite(span) or span <= 0.0:
+        # Dieselbe Sorgfalt wie beim Winkel darüber: Die Zahl kommt aus einem
+        # Profil, und ein eigenes ``materials.toml`` bringt diesen Fall bis in
+        # die Oberfläche (Regel 17).
+        raise ValidationError(
+            "bridge_from",
+            _("Die Brückenbreite muss größer als null sein."),
+            value=bridge_from,
             constraint="range",
         )
     overhang_factor = math.tan(math.radians(angle))
@@ -235,6 +263,7 @@ def slice_body(
         detail,
         first_layer_height=first_layer_height,
         overhang_factor=overhang_factor,
+        bridge_from=span,
         cancelled=cancelled,
     )
     support = _support_volume(
@@ -435,6 +464,7 @@ def _measure_all(
     *,
     first_layer_height: float | None = None,
     overhang_factor: float = OVERHANG_ANGLE_FACTOR,
+    bridge_from: float = BRIDGE_FROM,
     cancelled: CancelToken | None = None,
 ) -> list[LayerMetrics | None]:
     """Misst jede Schicht, auf so vielen Threads wie die Maschine hat.
@@ -478,7 +508,9 @@ def _measure_all(
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             step = _layer_step(index, layer_height, first_layer_height)
-            results[index] = _measure(shape, below, plate, step, detail, overhang_factor)
+            results[index] = _measure(
+                shape, below, plate, step, detail, overhang_factor, bridge_from
+            )
         return results
 
     def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]) -> None:
@@ -486,7 +518,7 @@ def _measure_all(
             cancelled.raise_if_cancelled()
         index, shape, below, plate = job
         step = _layer_step(index, layer_height, first_layer_height)
-        results[index] = _measure(shape, below, plate, step, detail, overhang_factor)
+        results[index] = _measure(shape, below, plate, step, detail, overhang_factor, bridge_from)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
 
@@ -989,6 +1021,7 @@ def _measure(
     layer_height: float = 0.2,
     detail: Detail = "full",
     overhang_factor: float = OVERHANG_ANGLE_FACTOR,
+    bridge_from: float = BRIDGE_FROM,
 ) -> LayerMetrics:
     area = float(shape.area)
     reach = max(layer_height * overhang_factor, OVERHANG_MARGIN)
@@ -1027,15 +1060,16 @@ def _measure(
     # Ist selbst jenseits der größeren Überhangzugabe nichts frei, kann in
     # dem schmalen Band bis zur kleineren Brückenzugabe keine druckrelevante
     # Spannweite liegen. Bei 0,2-mm-Schichten sind das höchstens 0,15 mm je
-    # Seite, deutlich unter ``BRIDGE_FROM``. Damit entfallen an einer glatten
-    # Kugel rund 340 zweite Buffer-/Differenzrechnungen. Bei groben Schichten,
-    # deren Band selbst breit genug wäre, bleibt die vollständige Messung.
+    # Seite, deutlich unter einer Brückenbreite. Damit entfallen an einer
+    # glatten Kugel rund 340 zweite Buffer-/Differenzrechnungen. Bei groben
+    # Schichten, deren Band selbst breit genug wäre, bleibt die vollständige
+    # Messung.
     bridge_width = (
         0.0
         if previous is None
         or previous.is_empty
-        or (region is not None and region.is_empty and reach - OVERHANG_MARGIN < BRIDGE_FROM / 2.0)
-        else _bridge_width(shape, previous)
+        or (region is not None and region.is_empty and reach - OVERHANG_MARGIN < bridge_from / 2.0)
+        else _bridge_width(shape, previous, bridge_from)
     )
 
     return LayerMetrics(
@@ -1359,7 +1393,11 @@ def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
     return best
 
 
-def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> float:
+def _bridge_width(
+    shape: ShapelyPolygon,
+    previous: ShapelyPolygon | None,
+    bridge_from: float = BRIDGE_FROM,
+) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
     muss (§22.2).
 
@@ -1367,6 +1405,9 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
     überhaupt breiter als zwei Bahnen? Ein Kegel unter 45 Grad legt je Schicht
     einen halben Millimeter frei, und der trägt sich selbst — das ist ein
     Überhang und keine Brücke. Dann: wie weit hängen die Bahnen frei?
+
+    Wie breit „zwei Bahnen" sind, sagt ``bridge_from`` — am Drucker gemessen
+    und nicht im Code gesetzt (Regel 7, siehe :data:`BRIDGE_FROM`).
 
     Das ist nicht die Ausdehnung der ungestützten Fläche. Eine Ringschulter um
     eine Öffnung ist selbst nur drei Millimeter breit; frei hängt eine Bahn
@@ -1400,7 +1441,7 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
         return 0.0
     # Eine einzelne Erosion statt einer Suche: gefragt ist nicht, wie breit die
     # Fläche ist, sondern ob sie über der Grenze liegt.
-    if _eroded(free, BRIDGE_FROM / 2.0).is_empty:
+    if _eroded(free, bridge_from / 2.0).is_empty:
         return 0.0
 
     widest = 0.0

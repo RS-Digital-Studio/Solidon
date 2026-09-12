@@ -2782,6 +2782,46 @@ def test_a_superseded_workers_result_is_dropped(window: MainWindow) -> None:
     assert window._slice_key is None
 
 
+def test_the_layer_analysis_takes_both_limits_from_the_material(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Testart „Anschluss": Nicht „der Kern kann es", sondern „das Fenster tut es".
+
+    ``slice_body`` nimmt die Brückenbreite seit RM-097 als Zahl entgegen, weil
+    die Schichtanalyse von Profilen entkoppelt bleibt (Regel 7). Damit steht
+    und fällt die Sache an der einen Zeile, die sie hereingibt — und die ist
+    von außen unsichtbar: Ohne sie rechnete das Fenster weiter, nur mit dem
+    runden Millimeter aus dem Code.
+
+    Gemessen wird an derselben Quelle, aus der schon der Überhangwinkel kommt:
+    ``profiles.analysis_limits`` liefert beide Grenzen in einem Aufruf, die
+    größte Mindestwand und den kleinsten Winkel der verwendeten Materialien.
+    """
+    from app.core.knowledge import profiles as profile_module
+    from app.core.types import SliceResult
+    from app.ui import main_window as module
+
+    seen: list[tuple[float | None, float | None]] = []
+
+    def measure(_mesh, _height, *, overhang_angle, bridge_from):
+        seen.append((overhang_angle, bridge_from))
+        return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0)
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    wall, angle = profile_module.analysis_limits(window.session.profile, entry)
+
+    window._slice_of("obj_1")
+    worker = window._slice_worker
+    assert worker is not None and worker.wait(20_000)
+    QApplication.processEvents()
+
+    assert seen == [(angle, wall)], (
+        "das Fenster gibt beide Grenzen herein — die Wand ist die Brückenbreite"
+    )
+    assert wall == pytest.approx(0.84), "zwei Extrusionsbahnen, nicht der runde Millimeter"
+
+
 def test_when_the_slice_arrives_every_waiter_is_served_once(window: MainWindow) -> None:
     """Wer sich angestellt hat, bekommt das Ergebnis — und die Reihe ist danach leer."""
     from app.core.types import SliceResult
