@@ -196,7 +196,7 @@ from app.core.types import (
     Stroke,
     Vec3,
 )
-from app.core.units import EPS_GEOM, match_tolerance
+from app.core.units import EPS_GEOM, is_close, match_tolerance
 from app.i18n import _, format_decimal, tr
 from app.ui import first_run
 from app.ui.ai_disclosure import (
@@ -11717,6 +11717,31 @@ class MainWindow(QMainWindow):
             self.viewport.reshape_slot(
                 float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
             )
+        self._end_changed_quiet_placement()
+        flow, host = self._quiet_placement, self._quiet_host
+        if flow is not None and flow.active:
+            flow.cancel_pending_accept()
+        if flow is not None and flow.active and host is not None and flow.spec_of().name == op:
+            previous = host.values()
+            axes = ("x", "y", "z")
+            has_position = all(
+                isinstance(params.get(axis), int | float)
+                and isinstance(previous.get(axis), int | float)
+                for axis in axes
+            )
+            moved = has_position and any(
+                not is_close(float(params[axis]), float(previous[axis])) for axis in axes
+            )
+            if moved and not flow.move_to(
+                tuple(float(params[axis]) for axis in axes), on_plane_only=True
+            ):
+                # Freie Koordinaten dürfen die Trägerfläche verlassen. Dann
+                # gilt die normale Vorschau mit den eingegebenen Werten.
+                self.end_quiet_placement()
+            else:
+                self._drop_feature_preview()
+                host.take_placement(params)
+                return
         self._feature_pending = (op, dict(params))
         self._feature_preview.start()
 
@@ -11761,9 +11786,9 @@ class MainWindow(QMainWindow):
         **Läuft eine Platzierung, schließt dieser Knopf sie ab.** Sie hat seit
         dem 11.09.2026 keine eigene Leiste mehr, und damit kein eigenes
         Übernehmen (Robert: „auch 2 mal übernehmen einmal unten und einmal
-        rechts … nur die rechte verwenden"). Die Werte kommen dann aus ihr und
-        nicht aus den Feldern: Im Bild hat jemand eine Stelle eingestellt, und
-        die Felder rechts kennen sie nicht.
+        rechts … nur die rechte verwenden"). Träger und Felder halten denselben
+        Stand: Die Bildposition folgt in die Felder, getippte Maße zurück in
+        die Platzierung. Ihr Werkzeugkörper wird mit diesen Werten übernommen.
         """
         self._end_changed_quiet_placement()
         flow = self._quiet_placement
@@ -11929,6 +11954,12 @@ class MainWindow(QMainWindow):
         self._quiet_host = host
         self._quiet_placement = flow
         self._quiet_target = target
+
+        def show_values() -> None:
+            if self._quiet_host is host:
+                self.feature_panel.take_values(op, host.values(), arm=False)
+
+        host.valuesChanged.connect(show_values)
         flow.start()
         if not flow.active:
             # Wo keine Fläche zu finden ist, bleibt es beim Knopf rechts —

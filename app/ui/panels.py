@@ -5414,7 +5414,7 @@ class FeaturePanel(QWidget):
             self._every.setChecked(False)
         self._every.setVisible(applies_to_all)
 
-    def take_values(self, op: str, values: Mapping[str, Any]) -> bool:
+    def take_values(self, op: str, values: Mapping[str, Any], *, arm: bool = True) -> bool:
         """Vorgeschlagene Zahlen in die Felder dieser Handlung — und sie scharf.
 
         Der Gegenweg zu :attr:`valuesChanged`: Ein Zug im Bild schlägt Länge
@@ -5426,6 +5426,8 @@ class FeaturePanel(QWidget):
 
         Der Rückgabewert sagt, ob die Handlung überhaupt angeboten wird: An
         einem Merkmal ohne sie geschieht nichts, und der Aufrufer weiß es.
+        Die reine Rückmeldung aus einer Platzierung setzt ``arm=False``: Sie
+        aktualisiert Zahlen, ohne die gerade gewählte Handlung zu wechseln.
         """
         found = next(((key, entry) for key, entry in self._runs.items() if entry.op == op), None)
         if found is None or found[1].take is None:
@@ -5433,7 +5435,8 @@ class FeaturePanel(QWidget):
         key, entry = found
         assert entry.take is not None
         entry.take(values)
-        self._arm(key)
+        if arm:
+            self._arm(key)
         return True
 
     def _run_armed(self) -> None:

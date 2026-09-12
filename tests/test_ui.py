@@ -2703,6 +2703,142 @@ def test_a_feature_placement_stays_with_its_selected_place(
     assert step.params["at_feature"] == selected_hole
 
 
+def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[str, Any]]:
+    """Eine Bohrung mit echten Maßfeldern und einer vorbereiteten Bildplatzierung."""
+    from render_fakes import RecordingRenderer
+
+    from app.ui.labels import LengthSpin
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    window.object_tree.select_feature(object_id, hole)
+    window.feature_panel._in_view.click()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    flow = window._quiet_placement
+    assert flow is not None and flow.active and flow._accept.isEnabled()
+    fields = {
+        field.accessibleName().rsplit(" — ", 1)[-1]: field
+        for field in window.feature_panel.findChildren(LengthSpin)
+        if field.isVisibleTo(window.feature_panel) and "Bohrung ändern" in field.accessibleName()
+    }
+    return object_id, hole, flow, fields
+
+
+@pytest.mark.parametrize("position_source", ["view", "panel", "normal"])
+def test_panel_dimensions_and_placement_position_are_adopted_together(
+    window: MainWindow, position_source: str
+) -> None:
+    """Bildposition und zuletzt getippte Maße werden gemeinsam ein rücknehmbarer Schritt."""
+    object_id, hole, flow, fields = _hole_fields_in_placement(window)
+    before = len(window.session.project.document.ops)
+    wanted_position = [fields[axis].value_mm() for axis in ("X", "Y", "Z")]
+    axis = 2 if position_source == "normal" else 0
+    wanted_position[axis] += 1.0
+    if position_source == "view":
+        assert flow.move_to(tuple(wanted_position))
+        assert fields["X"].value_mm() == pytest.approx(wanted_position[0])
+    else:
+        fields[("X", "Y", "Z")[axis]].set_value_mm(wanted_position[axis])
+    wanted_diameter = fields["Durchmesser"].value_mm() + 1.0
+    fields["Durchmesser"].set_value_mm(wanted_diameter)
+    assert window.session.wait_for_idle(30_000)
+    if position_source != "normal":
+        assert flow.active
+        assert window._quiet_host.values()["diameter"] == pytest.approx(wanted_diameter)
+        assert flow._tool_context is not None
+        assert flow._tool_context.mesh.bounds.size[0] == pytest.approx(wanted_diameter)
+
+    window.feature_panel._apply.click()
+    assert window.session.wait_for_idle(30_000)
+
+    assert len(window.session.project.document.ops) == before + 1
+    step = window.session.project.document.ops[-1]
+    assert step.op == "resize_hole" and step.params["at_feature"] == hole
+    assert tuple(step.inputs) == (object_id,)
+    assert step.params["diameter"] == pytest.approx(wanted_diameter)
+    assert [step.params[axis] for axis in ("x", "y", "z")] == pytest.approx(wanted_position)
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    assert len(window.session.project.document.ops) == before
+
+
+@pytest.mark.parametrize(
+    "next_action", ["accept", "cancel", "selection", "project", "edit", "operation"]
+)
+def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, next_action: str
+) -> None:
+    """Ein Klick wartet auf die neuen Maße; Abbruch und Kontextwechsel verwerfen ihn."""
+    from app.core.scene import placement
+
+    _, hole, flow, fields = _hole_fields_in_placement(window)
+    before = len(window.session.project.document.ops)
+    entered, proceed = threading.Event(), threading.Event()
+    prepare = placement.prepare_tool
+
+    def held_prepare(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        assert proceed.wait(15)
+        return prepare(*args, **kwargs)
+
+    monkeypatch.setattr(placement, "prepare_tool", held_prepare)
+    wanted = fields["Durchmesser"].value_mm() + 1.0
+    fields["Durchmesser"].set_value_mm(wanted)
+    try:
+        assert entered.wait(5), "das neue Werkzeug rechnet"
+        window.feature_panel._apply.click()
+        assert len(window.session.project.document.ops) == before
+        if next_action == "cancel":
+            window.feature_panel._cancel.click()
+        elif next_action == "selection":
+            result = window.session.last_result
+            assert result is not None
+            object_id, entry = next(iter(result.scene.objects.items()))
+            other = next(
+                name
+                for name, feature in entry.features.items()
+                if feature.kind == "hole" and name != hole
+            )
+            window.object_tree.select_feature(object_id, other)
+        elif next_action == "project":
+            window.session.start_new()
+        elif next_action == "edit":
+            fields["Durchmesser"].set_value_mm(wanted + 1.0)
+        elif next_action == "operation":
+            from PySide6.QtWidgets import QDoubleSpinBox
+
+            angle = next(
+                field
+                for field in window.feature_panel.findChildren(QDoubleSpinBox)
+                if field.isVisibleTo(window.feature_panel)
+                and "Merkmal drehen" in field.accessibleName()
+                and "Winkel" in field.accessibleName()
+            )
+            angle.setValue(angle.value() + 15.0)
+        proceed.set()
+        assert window.session.wait_for_idle(30_000)
+
+        if next_action == "accept":
+            assert len(window.session.project.document.ops) == before + 1
+            step = window.session.project.document.ops[-1]
+            assert step.op == "resize_hole" and step.params["at_feature"] == hole
+            assert step.params["diameter"] == pytest.approx(wanted)
+        else:
+            assert len(window.session.project.document.ops) == (
+                0 if next_action == "project" else before
+            )
+            assert flow.active == (next_action in ("edit", "operation"))
+    finally:
+        proceed.set()
+        assert window.session.wait_for_idle(30_000)
+
+
 def test_the_gizmo_sentence_reaches_the_status_line(window: MainWindow) -> None:
     """Was der Griff bewegen wird, sagt die Ansicht — und der Kunde liest es.
 

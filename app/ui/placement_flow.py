@@ -485,6 +485,7 @@ class PlacementFlow(QObject):
         self._frozen = False
         self._distance_valid = True
         self._commit_pending = False
+        self._accept_pending = False
         self._updating = False
         #: Ob die Tiefenstufe läuft — Stufe 2 der Platzierung. Der Klick legt
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
@@ -697,6 +698,7 @@ class PlacementFlow(QObject):
         self._seated_by_default = False
         self._distance_valid = True
         self._commit_pending = False
+        self._accept_pending = False
         self._surface = None
         self._serial += 1
         # **Und der Knopf sagt wieder, was er tut.** Zurückgesetzt wurde sein
@@ -760,6 +762,7 @@ class PlacementFlow(QObject):
         self._serial += 1
         self._pending = None
         self._commit_pending = False
+        self._accept_pending = False
         self._leave_depth()
         self._timer.stop()
         self.viewport.set_placement_pointer(None)
@@ -1284,6 +1287,7 @@ class PlacementFlow(QObject):
     def _invalid(self, message: str) -> None:
         self._surface = None
         self._commit_pending = False
+        self._accept_pending = False
         self._note.setText(message)
         self._accept.setEnabled(False)
         self.redraw()
@@ -1377,8 +1381,13 @@ class PlacementFlow(QObject):
         finally:
             self._updating = False
 
+    def cancel_pending_accept(self) -> None:
+        """Eine jüngere Handlung verwirft den noch wartenden Übernehmen-Klick."""
+        self._accept_pending = False
+
     def _values_changed(self) -> None:
         if not self._disposed and not self._updating:
+            self._accept_pending = False
             self.refresh_available()
             if self.active:
                 self._request_tool()
@@ -1483,10 +1492,14 @@ class PlacementFlow(QObject):
                 self.redraw()
             if self._tool_again and self.active:
                 self._request_tool()
+            elif self._accept_pending and self.active:
+                self._accept_pending = False
+                self.accept()
 
         self.session.placement_async(compute, done, lambda _detail: done(None))
 
     def _distance_changed(self, _value: float) -> None:
+        self._accept_pending = False
         if not self.active or self._surface is None or len(self._surface.edges) < 2:
             return
         try:
@@ -1513,6 +1526,7 @@ class PlacementFlow(QObject):
 
     def _centre_changed(self, _value: float) -> None:
         """Beide signierten Maße halten dieselbe gewählte Mitte als Bezug."""
+        self._accept_pending = False
         if not self.active or self._surface is None or not self._centre_id:
             return
         try:
@@ -1538,7 +1552,7 @@ class PlacementFlow(QObject):
         self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
 
-    def move_to(self, point: Vec3) -> bool:
+    def move_to(self, point: Vec3, *, on_plane_only: bool = False) -> bool:
         """Die Platzierung an einen Punkt setzen — von außen, etwa vom Griff.
 
         **Der Zug am Bewegungsgriff und die Maßlinien meinen dieselbe Stelle.**
@@ -1551,13 +1565,23 @@ class PlacementFlow(QObject):
 
         Liegt die Stelle nicht auf der Fläche, bleibt alles, wie es war;
         gesagt hat es dann schon der Griff mit seinem Schatten.
+
+        Bei ``on_plane_only`` bleibt die getippte Tiefe verbindlich. Eine
+        Änderung entlang der Flächennormalen übernimmt die normale Feldvorschau.
         """
+        self._accept_pending = False
         if not self.active or self._surface is None or self._prepared is None:
             return False
         frame = self._prepared.frame
         origin = np.asarray(frame.origin, dtype=np.float64)
         normal = np.asarray(frame.normal, dtype=np.float64)
         given = np.asarray(point, dtype=np.float64)
+        if on_plane_only:
+            fields = placement_fields(self.spec_of().params)
+            values = self.dialog.values()
+            current = np.asarray([values[fields[axis]] for axis in ("x", "y", "z")], dtype=float)
+            if abs(float(np.dot(given - current, normal))) > EPS_GEOM:
+                return False
         levelled = given - float(np.dot(given - origin, normal)) * normal
         try:
             changed = placement.at_point(
@@ -1636,11 +1660,17 @@ class PlacementFlow(QObject):
             or not self.session.result_current
             or not self.viewport.is_scene_applied(self._result)
             or self._surface is None
-            or self._tool is None
-            or self._tool_context is None
-            or not self._accept.isEnabled()
         ):
             return
+        if self._tool_busy:
+            # Der Knopf im Merkmalfenster bleibt erreichbar, während eine
+            # neue Maßangabe ihr Werkzeug vorbereitet. Sein Klick gehört dem
+            # fertigen Werkzeug; Abbruch und neuere Eingaben löschen ihn.
+            self._accept_pending = self.dialog.values_stand_elsewhere and self._distance_valid
+            return
+        if self._tool is None or self._tool_context is None or not self._accept.isEnabled():
+            return
+        self._accept_pending = False
         # **Der Klick legt die Stelle fest, nicht das ganze Loch.** Wer eine
         # Bohrung setzt, hat danach noch eine Tiefe einzustellen; bis zum
         # 09.09.2026 wurde sie mit der Vorgabe gesetzt — bei ``depth = 0``

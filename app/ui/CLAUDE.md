@@ -311,6 +311,14 @@ Baumauswahl wird erst nach der Ereignisrunde bewertet. Vor dem Übernehmen
 prüft ihr Rückruf zusätzlich Träger, Dokument und Auswertung, damit ein alter
 Auftrag keine inzwischen gleich benannte Stelle verändert.
 
+Träger und Merkmalsfelder gleichen ihre Werte in beide Richtungen ab.
+Bildpositionen aktualisieren die Felder ohne Wechsel der aktiven Handlung
+(`take_values(..., arm=False)`); getippte Maße erneuern das Platzierungswerkzeug.
+Koordinaten innerhalb der Trägerfläche führen die Maßlinien nach, freie
+Koordinaten außerhalb wechseln in die normale Feldvorschau. Ein Übernehmen
+während des Werkzeugaufbaus wartet auf dessen Ergebnis; Abbruch, Kontextwechsel
+und neuere Eingaben löschen diese wartende Übernahme.
+
 **Sie beginnt dabei dort, wo das Merkmal schon sitzt** (`_begin_at_feature`,
 10.09.2026). Bis dahin fing jede Platzierung bei „Auf eine Oberfläche zeigen"
 an — richtig für ein Werkzeug, das noch nirgends sitzt, falsch für eine
