@@ -198,7 +198,11 @@ Wurzel hält vor der Verbindung an. Jede Datei wird unter einem eindeutigen
 Zwischennamen übertragen und vollständig zurückgelesen; erst der Bytevergleich
 erlaubt das Umbenennen auf das Ziel. Ein Abbruch nennt den Sicherungsordner
 und den Rückweg per FTPS. Der Austausch ist je Datei atomar, nicht über die
-gesamte Gruppe von Endpunktdateien.
+gesamte Gruppe von Endpunktdateien. Private Zielordner werden vor dem ersten
+Upload auf 0700 gesetzt, vorhandene Zustandsdateien und neue temporäre
+Dateien auf 0600; das gilt auch für Sicherungen. Ein Rechtefehler hält an.
+Erst der öffentliche Bereitschaftsnachweis und eine authentifizierte reine
+Betreiberabfrage mit synthetischer Kennung erlauben die Erfolgsmeldung.
 
 **Website** `upload_website.py` (schließt `website/teile/` als lokalen
 Projektquellordner vollständig aus; Bausteindateien werden ausschließlich

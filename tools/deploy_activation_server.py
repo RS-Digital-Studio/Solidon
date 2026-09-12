@@ -23,11 +23,12 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.activation import certificate, ed25519
-from tools import upload_website
+from tools import check_activation, licence_admin, upload_website
 from tools.setup_activation_server import ROOT
 
 PUBLIC_FILES = (
@@ -71,12 +72,32 @@ def _remote_bytes(session: ftplib.FTP_TLS, path: str) -> bytes | None:
         raise
 
 
-def _store_bytes(session: ftplib.FTP_TLS, path: str, payload: bytes) -> None:
+def _private_directory(session: ftplib.FTP_TLS, path: str) -> None:
+    """Schließt den privaten Zielordner, bevor erstmals Inhalte übertragen werden."""
+    upload_website.ensure_dir(session, path.strip("/").split("/"))
+    session.sendcmd("SITE CHMOD 700 .")
+
+
+def _private_file(session: ftplib.FTP_TLS, path: str) -> None:
+    """Setzt auch einen bestehenden Serverzustand auf die verlangten Dateirechte."""
     directories, name = _remote_parts(path)
     upload_website.ensure_dir(session, directories)
+    session.sendcmd(f"SITE CHMOD 600 {name}")
+
+
+def _store_bytes(
+    session: ftplib.FTP_TLS, path: str, payload: bytes, *, private: bool = False
+) -> None:
+    directories, name = _remote_parts(path)
+    if private:
+        _private_directory(session, "/".join(directories))
+    else:
+        upload_website.ensure_dir(session, directories)
     temporary = f".{name}.{uuid.uuid4().hex}.tmp"
     try:
         session.storbinary(f"STOR {temporary}", io.BytesIO(payload))
+        if private:
+            session.sendcmd(f"SITE CHMOD 600 {temporary}")
         staged_path = "/".join([*directories, temporary])
         if _remote_bytes(session, staged_path) != payload:
             raise SystemExit(
@@ -228,12 +249,36 @@ def _paths(access: dict[str, object]) -> tuple[str, str, str]:
     return webroot, data_root, backup_root
 
 
+def _check_ready(health_url: str, token: str) -> None:
+    """Prüft beide Dienste ohne echte Lizenzkennung oder Supportänderung."""
+    ready, message = check_activation.check(health_url)
+    if not ready:
+        raise SystemExit(message)
+    digest = "0" * 64
+    try:
+        state = licence_admin.OperatorClient(urljoin(health_url, "operator.php"), token).call(
+            "lookup", digest
+        )
+    except licence_admin.OperatorError as problem:
+        raise SystemExit(
+            "Die private Support-Verwaltung ist noch nicht bereit. "
+            "operator.token, Dateirechte und privates Serverprotokoll prüfen."
+        ) from problem
+    if not isinstance(state.get("licence"), dict) or state["licence"].get("digest") != digest:
+        raise SystemExit(
+            "Die private Support-Verwaltung liefert nicht den erwarteten Status. "
+            "Endpunktversion und Serverprotokoll prüfen."
+        )
+    print("Aktivierungsdienst und private Support-Verwaltung sind bereit.")
+
+
 def deploy(
     seed: Path,
     database: Path,
     operator_token: Path,
     *,
     rotate_operator_token: bool = False,
+    health_url: str = check_activation.DEFAULT_URL,
 ) -> None:
     """Prüft, sichert und lädt alle zusammengehörigen Aktivierungsdateien."""
     seed = seed.expanduser().resolve()
@@ -252,6 +297,16 @@ def deploy(
         raise SystemExit("Der private Aktivierungsstartwert passt nicht zum eingebauten Schlüssel.")
     if not _operator_token_is_valid(operator_token):
         raise SystemExit("Der private Betreiberzugang muss 32 zufällige Bytes als Hex enthalten.")
+    try:
+        health_url = check_activation._checked_url(health_url)
+        licence_admin.OperatorClient(
+            urljoin(health_url, "operator.php"), operator_token.read_text(encoding="ascii").strip()
+        )
+    except (ValueError, licence_admin.OperatorError) as problem:
+        raise SystemExit(
+            "Die Bereitschaftsadresse ist nicht sicher verwendbar. "
+            "Vor dem Upload --health-url auf die HTTPS-Adresse des Zielservers setzen."
+        ) from problem
     _check_php()
 
     access = upload_website.read_access()
@@ -264,6 +319,8 @@ def deploy(
 
     session = upload_website.connect(access)
     try:
+        _private_directory(session, data_root)
+        _private_directory(session, backup_root)
         remote_seed_path = f"{data_root}/activation.seed"
         remote_database_path = f"{data_root}/activation.sqlite"
         remote_operator_path = f"{data_root}/operator.token"
@@ -287,6 +344,14 @@ def deploy(
             local_operator,
             rotate_operator_token,
         )
+
+        for path, existing in (
+            (remote_seed_path, remote_seed),
+            (remote_database_path, remote_database),
+            (remote_operator_path, remote_operator),
+        ):
+            if existing is not None:
+                _private_file(session, path)
 
         targets: list[tuple[str, bytes]] = []
         if remote_seed is None:
@@ -315,21 +380,23 @@ def deploy(
         for remote, previous in backup_sources.items():
             name = remote.strip("/").replace("/", "__")
             backup_path = f"{backup}/{name}"
-            _store_bytes(session, backup_path, previous)
+            _store_bytes(session, backup_path, previous, private=True)
             if _remote_bytes(session, backup_path) != previous:
                 raise SystemExit(f"Serversicherung ließ sich nicht bestätigen: {remote}")
             backed_up += 1
         print(f"{backed_up} vorhandene Datei(en) gesichert unter {backup}.")
 
         for remote, payload in targets:
-            _store_bytes(session, remote, payload)
+            _store_bytes(session, remote, payload, private=remote.startswith(data_root + "/"))
             stored = _remote_bytes(session, remote)
             if stored != payload:
                 raise SystemExit(f"Upload ließ sich nicht bytegenau bestätigen: {remote}")
             print(f"  {remote} ({len(payload)} Bytes)")
+        _check_ready(health_url, local_operator.decode("ascii").strip())
     except (OSError, EOFError, ftplib.Error, SystemExit) as problem:
+        detail = f"{problem} " if isinstance(problem, SystemExit) else ""
         raise SystemExit(
-            f"Deployment nicht abgeschlossen. Sicherungsordner: {backup}. "
+            f"{detail}Deployment nicht abgeschlossen. Sicherungsordner: {backup}. "
             "Den bestätigten Sicherungsbestand vor einem erneuten Versuch über FTPS prüfen; "
             "bei Bedarf die betroffene Sicherungsdatei an ihren ursprünglichen Zielpfad "
             "zurückspielen und den Dienst mit tools/check_activation.py erneut prüfen."
@@ -359,6 +426,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="abweichenden Betreiberzugang nach bestätigter Sicherung bewusst ersetzen",
     )
+    parser.add_argument(
+        "--health-url", default=check_activation.DEFAULT_URL, help="Bereitschaftsendpunkt des Ziels"
+    )
     arguments = parser.parse_args(argv)
     if not arguments.apply:
         parser.error("ohne --apply wird der Produktivserver nicht verändert")
@@ -367,6 +437,7 @@ def main(argv: list[str] | None = None) -> int:
         arguments.database,
         arguments.operator_token,
         rotate_operator_token=arguments.rotate_operator_token,
+        health_url=arguments.health_url,
     )
     return 0
 

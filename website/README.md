@@ -268,8 +268,20 @@ python tools/deploy_activation_server.py --apply `
   --seed "$env:LOCALAPPDATA\Solidon3D\server\activation.seed" `
   --database "$env:LOCALAPPDATA\Solidon3D\server\activation.sqlite" `
   --operator-token "$env:LOCALAPPDATA\Solidon3D\server\operator.token"
-python tools/check_activation.py
 ```
+
+Das Deployment setzt private Ordner vor dem Schreiben auf 0700 und Dateien
+auf 0600, einschließlich vorhandener Zustände und Sicherungen. Jede Datei
+wird erst unter einem eigenen temporären Namen übertragen, zurückgelesen und
+nach Bytevergleich umbenannt. Die gesamte Endpunktgruppe wird dabei nicht in
+einer einzigen Transaktion ersetzt. Der Abschluss prüft den öffentlichen
+Bereitschaftsendpunkt und `operator.php` mit einer authentifizierten
+`lookup`-Abfrage der synthetischen Kennung aus 64 Nullen; es wird keine
+Supportänderung ausgelöst und keine echte Kundenkennung benötigt. Bei einem
+anderen Ziel wird `--health-url <HTTPS-Adresse des Bereitschaftsendpunkts>`
+angegeben; die Betreiberadresse liegt daneben. Ein Fehler nennt den
+Sicherungsordner und den Rückweg. `python tools/check_activation.py` bleibt
+die separate öffentliche Wiederholprobe.
 
 Eine Betreiber-Tokenrotation ist ein eigener, absichtlicher Wartungsschritt:
 zuerst mit `setup_activation_server.py --replace-operator-token` eine neue

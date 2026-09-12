@@ -2344,6 +2344,7 @@ def test_activation_deployment_failure_names_backup_and_recovery(
     monkeypatch.setattr(deployment, "_database_bytes", lambda value, **_kwargs: value)
     monkeypatch.setattr(deployment, "_remote_database_snapshot", lambda *_args: None)
     monkeypatch.setattr(deployment, "_remote_bytes", lambda *_args: None)
+    monkeypatch.setattr(deployment, "_private_directory", lambda *_args: None)
     monkeypatch.setattr(deployment, "PUBLIC_FILES", ())
     monkeypatch.setattr(
         deployment.upload_website,
@@ -2361,3 +2362,143 @@ def test_activation_deployment_failure_names_backup_and_recovery(
     with pytest.raises(SystemExit, match="domain/backups/activation/") as raised:
         deployment.deploy(*paths)
     assert "FTPS" in str(raised.value) and "erneut prüfen" in str(raised.value)
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("failed_stage", ["none", "chmod", "health", "operator"])
+def test_activation_deployment_closes_private_files_and_checks_both_services(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, failed_stage: str
+) -> None:
+    """Der echte Deploymentablauf schließt Altbestand und Neuanlage vor der Abnahme."""
+    import ftplib
+    import posixpath
+    from types import SimpleNamespace
+
+    from tools import check_activation, licence_admin
+    from tools import deploy_activation_server as deployment
+    from tools.setup_activation_server import _initialise_database
+
+    paths = [tmp_path / name for name in ("activation.seed", "activation.sqlite", "operator.token")]
+    paths[0].write_text("cd" * 32, encoding="ascii")
+    _initialise_database(paths[1])
+    paths[2].write_text("ab" * 32, encoding="ascii")
+    public = tmp_path / "website" / "api" / "operator.php"
+    public.parent.mkdir(parents=True)
+    public.write_bytes(b"complete endpoint")
+
+    class Server:
+        def __init__(self) -> None:
+            self.current = ""
+            self.directories = {
+                "",
+                "domain",
+                "domain/httpdocs",
+                "domain/httpdocs/api",
+                "domain/appdata",
+            }
+            self.modes = dict.fromkeys(self.directories, 0o755)
+            self.files = {"domain/httpdocs/api/operator.php": b"previous endpoint"}
+            if existing:
+                self.files.update(
+                    {"domain/appdata/" + path.name: path.read_bytes() for path in paths}
+                )
+            self.modes.update(dict.fromkeys(self.files, 0o644))
+            self.writes = 0
+            self.closed = False
+
+        def at(self, name: str) -> str:
+            return posixpath.normpath(posixpath.join(self.current, name)).removeprefix("/")
+
+        def cwd(self, name: str) -> None:
+            target = "" if name == "/" else self.at(name)
+            if target not in self.directories:
+                raise ftplib.error_perm("550 missing")
+            self.current = target
+
+        def mkd(self, name: str) -> None:
+            target = self.at(name)
+            self.directories.add(target)
+            self.modes[target] = 0o755
+
+        def nlst(self) -> list[str]:
+            return [
+                posixpath.basename(path)
+                for path in self.files
+                if posixpath.dirname(path) == self.current
+            ]
+
+        def sendcmd(self, command: str) -> str:
+            prefix, mode, name = command.rsplit(" ", 2)
+            assert prefix == "SITE CHMOD"
+            if failed_stage == "chmod":
+                raise ftplib.error_perm("550 forbidden")
+            self.modes[self.at(name)] = int(mode, 8)
+            return "200 mode changed"
+
+        def storbinary(self, command: str, stream: object) -> None:
+            path = self.at(command[5:])
+            if not path.startswith("domain/httpdocs/"):
+                assert self.modes[self.current] == 0o700
+            self.files[path] = stream.read()
+            self.modes[path] = 0o644
+            self.writes += 1
+
+        def retrbinary(self, command: str, consume: object) -> None:
+            consume(self.files[self.at(command[5:])])
+
+        def rename(self, old: str, new: str) -> None:
+            source, target = self.at(old), self.at(new)
+            self.files[target] = self.files.pop(source)
+            self.modes[target] = self.modes.pop(source)
+
+        def delete(self, name: str) -> None:
+            self.files.pop(self.at(name), None)
+
+        def quit(self) -> None:
+            self.closed = True
+
+    server = Server()
+    probes: list[str] = []
+
+    def health(url: str) -> tuple[bool, str]:
+        probes.append("health")
+        for path in paths:
+            assert server.modes["domain/appdata/" + path.name] == 0o600
+        assert server.modes["domain/appdata"] == 0o700
+        assert server.files["domain/httpdocs/api/operator.php"] == b"complete endpoint"
+        return failed_stage != "health", "Bereitschaft prüfen"
+
+    def operator(action: str, digest: str) -> dict[str, object]:
+        probes.append("operator")
+        assert action == "lookup" and digest == "0" * 64
+        if failed_stage == "operator":
+            raise licence_admin.OperatorError("Betreiberzugang prüfen")
+        return {"ok": True, "licence": {"digest": digest, "status": "unknown"}}
+
+    monkeypatch.setattr(deployment, "_seed_matches", lambda _path: True)
+    monkeypatch.setattr(deployment, "_check_php", lambda: None)
+    monkeypatch.setattr(deployment, "PUBLIC_FILES", (Path("api/operator.php"),))
+    monkeypatch.setattr(deployment.upload_website, "LOCAL_ROOT", tmp_path / "website")
+    monkeypatch.setattr(
+        deployment.upload_website,
+        "read_access",
+        lambda: {"root": "domain/httpdocs", "host": "ftp.example.test"},
+    )
+    monkeypatch.setattr(deployment.upload_website, "connect", lambda _access: server)
+    monkeypatch.setattr(check_activation, "check", health)
+    monkeypatch.setattr(
+        licence_admin, "OperatorClient", lambda url, token: SimpleNamespace(call=operator)
+    )
+    if failed_stage == "none":
+        deployment.deploy(*paths)
+        assert probes == ["health", "operator"]
+        for path in server.files:
+            if "/backups/" in path:
+                assert server.modes[path] == 0o600
+                assert server.modes[posixpath.dirname(path)] == 0o700
+    else:
+        with pytest.raises(SystemExit, match="Sicherungsordner"):
+            deployment.deploy(*paths)
+        if failed_stage == "chmod":
+            assert server.writes == 0 and not probes
+    assert server.closed
