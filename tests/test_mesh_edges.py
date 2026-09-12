@@ -871,8 +871,67 @@ def test_taking_one_radius_away_leaves_the_other_alone() -> None:
     )
 
 
-def test_the_nearest_axis_decides_and_not_its_parametric_origin() -> None:
-    """Welche Rundung gemeint ist, entscheidet der Abstand zur **Achse**.
+@pytest.mark.parametrize("height", [5.0, 25.0], ids=["lower", "upper"])
+@pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])
+def test_coaxial_fillets_are_edited_at_the_selected_height(height: float, operation: str) -> None:
+    """Gleicher Radius und gleiche Achse machen zwei Rundungen nicht zu einer.
+
+    Zwei verrundete Platten hängen an einem mittigen Steg zusammen. Nur die
+    angeklickte Rundung darf verschwinden oder ihren Radius ändern; die
+    zweite liegt zwanzig Millimeter höher beziehungsweise tiefer.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = brep.fillet(brep.box(20.0, 20.0, 10.0), 1.0, "vertical")
+    solid = brep.boolean(
+        "union", [plate, brep.moved(plate, (0.0, 0.0, 20.0)), brep.cylinder(4.0, 30.0)]
+    )
+    features = features_of(solid)
+    chosen = next(
+        feature
+        for feature in features.values()
+        if feature.kind == "fillet"
+        and feature.params["centre"][0] > 0.0
+        and feature.params["centre"][1] > 0.0
+        and math.isclose(feature.params["centre"][2], height)
+    )
+    source = SceneObject(
+        id="obj_1", name="Doppelplatte", mesh=solid, kind="brep", features=features
+    )
+    params: dict[str, Any] = {"at_feature": chosen.id}
+    if operation == "resize_feature":
+        params["diameter"] = 4.0
+
+    changed = run(operation, source, **params).outputs[0]
+    assert isinstance(changed.mesh, Solid)
+    remaining = [entry for entry in features_of(changed.mesh).values() if entry.kind == "fillet"]
+    coaxial = sorted(
+        (entry.params["centre"][2], entry.params["radius"])
+        for entry in remaining
+        if entry.params["centre"][0] > 0.0 and entry.params["centre"][1] > 0.0
+    )
+    expected = [(30.0 - height, 1.0)]
+    radius_squared = 0.0
+    if operation == "resize_feature":
+        expected.append((height, 2.0))
+        radius_squared = 4.0
+    assert len(remaining) == 6 + len(expected)
+    assert len(coaxial) == len(expected)
+    for actual, expected_fillet in zip(coaxial, sorted(expected), strict=True):
+        assert actual == pytest.approx(expected_fillet, abs=1e-6)
+    assert changed.kind == "brep" and changed.mesh.is_watertight
+    assert changed.mesh.component_count == 1
+    assert changed.mesh.volume == pytest.approx(
+        solid.volume + (1.0 - radius_squared) * (1.0 - math.pi / 4.0) * 10.0, abs=1e-6
+    )
+
+
+def test_the_fillet_location_decides_and_not_its_parametric_origin() -> None:
+    """Welche Rundung gemeint ist, entscheidet ihre Lage am Körper.
 
     ``gp_Cylinder.Location()`` ist irgendein Punkt auf der Achse, den die
     Parametrisierung gewählt hat — an einer oberen Rundung liegt er am

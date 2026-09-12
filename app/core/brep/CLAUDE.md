@@ -144,12 +144,15 @@ R = 3: 23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·2
 Verrundung an der zurückgekommenen Kante.
 
 **Gesucht wird die Fläche über Radius und Lage**, und die Lage über den Abstand
-zur **Achse**. `gp_Cylinder.Location()` ist irgendein Punkt darauf, den die
-Parametrisierung gewählt hat: An einer oberen Rundung liegt er am Rand der
-Kante, fünfzehn Millimeter neben dem Schwerpunkt, den das Merkmal nennt — und
-dann gewinnt der Ursprung einer *anderen* Rundung. Der Radius filtert davor
-grob (`FILLET_RADIUS_SLACK`), weil der Netz-Kern ihn an einem Sehnenzug misst
-und deshalb ein wenig zu klein herauskommt.
+zur **begrenzten Zylinderfläche** (`BRepExtrema_DistShapeShape`). Die unendliche
+Achse unterscheidet keine getrennten Rundungen gleicher Achse und gleichen
+Radius. `gp_Cylinder.Location()` hilft ebenso wenig: Die Parametrisierung
+wählt irgendeinen Punkt auf der Achse, auch weit neben dem Merkmalsschwerpunkt.
+Der Flächenabstand berücksichtigt dagegen die tatsächliche Ausdehnung und
+bleibt von diesem Ursprung unabhängig. Der Radius filtert davor grob
+(`FILLET_RADIUS_SLACK`), weil der Netz-Kern ihn an einem Sehnenzug misst und
+deshalb ein wenig zu klein herauskommt. Ist der Abstand nicht bestimmbar,
+bricht die Zuordnung ab, statt eine andere Fläche zu bearbeiten.
 
 **Und `push_faces` nimmt einen Ort entgegen.** Ohne ihn bewegte es jede Fläche,
 deren Normale in die gegebene Richtung zeigt — an einer Treppe alle Stufen

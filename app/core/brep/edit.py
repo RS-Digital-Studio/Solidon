@@ -928,11 +928,15 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
 def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
     """Die Zylinderfläche dieses Radius an dieser Stelle — oder ``None``."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.GeomAbs import GeomAbs_Cylinder
+    from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_FACE
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
+    probe = BRepBuilderAPI_MakeVertex(gp_Pnt(*centre)).Vertex()
     best: Any | None = None
     closest = math.inf
     explorer = TopExp_Explorer(solid.shape, TopAbs_FACE)
@@ -945,27 +949,15 @@ def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
         cylinder = surface.Cylinder()
         if abs(cylinder.Radius() - radius) > FILLET_RADIUS_SLACK * max(radius, 1.0):
             continue
-        away = _off_the_axis(cylinder, centre)
+        # Die begrenzte Fläche unterscheidet auch zwei Rundungen auf derselben
+        # Achse. Weder die unendliche Achse noch ihr beliebiger Ursprung tun das.
+        distance = BRepExtrema_DistShapeShape(probe, face)
+        if not distance.IsDone():
+            return None
+        away = distance.Value()
         if away < closest:
             best, closest = face, away
     return best
-
-
-def _off_the_axis(cylinder: Any, centre: Vec3) -> float:
-    """Wie weit der Punkt von der **Achse** liegt — nicht von ihrem Ursprung.
-
-    ``gp_Cylinder.Location()`` ist irgendein Punkt auf der Achse, den die
-    Parametrisierung gewählt hat; bei einer langen Rundung liegt er weit von
-    der Stelle entfernt, die der Kunde meint. Gemessen wird deshalb der
-    Abstand zur Geraden, und der ist von der Parametrisierung unabhängig.
-    """
-    spot = cylinder.Location()
-    direction = cylinder.Axis().Direction()
-    origin = (spot.X(), spot.Y(), spot.Z())
-    along = (direction.X(), direction.Y(), direction.Z())
-    towards = [centre[index] - origin[index] for index in range(3)]
-    reach = sum(towards[index] * along[index] for index in range(3))
-    return math.dist(centre, [origin[index] + reach * along[index] for index in range(3)])
 
 
 def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
