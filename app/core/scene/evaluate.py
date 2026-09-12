@@ -35,7 +35,7 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.geom.mesh import MeshData
-from app.core.knowledge.profiles import for_process
+from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
@@ -2186,9 +2186,10 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
     spricht über den Wert, den jemand eingetragen hat, und der bleibt wahr,
     gleich was danach kommt.
 
-    **Die Grenze kommt aus dem Profil** (Regel 7): `minimum_wall_thickness`
-    sind zwei Extrusionsbreiten, am Centauri 0,84 mm und an einer 0,8er Düse
-    das Doppelte. Ohne Profil gibt es keine Aussage — ein Aufrufer, der keinen
+    **Die Grenze gilt den verwendeten Materialien** (Regel 7):
+    `analysis_limits` berücksichtigt Körpermaterial und benutzte Spulen samt
+    ihrer Kalibrierung. Eine unbekannte Materialart übernimmt keine fremde
+    Messung. Ohne Profil gibt es keine Aussage — ein Aufrufer, der keinen
     Drucker kennt, soll keinen erfinden.
 
     **Gemeldet wird je Körper einmal**, und zwar die dünnste Stelle. Ein Rohr
@@ -2198,11 +2199,13 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
     profile = scene.profile
     if profile is None:
         return []
-    least = profile.minimum_wall_thickness
     findings: list[Finding] = []
     for object_id, entry in scene.objects.items():
         thinnest = thinnest_sleeve(entry.features)
-        if thinnest is None or thinnest.thickness >= least - EPS_GEOM:
+        if thinnest is None:
+            continue
+        least, _overhang = analysis_limits(profile, entry)
+        if thinnest.thickness >= least - EPS_GEOM:
             continue
         bore = entry.features.get(thinnest.bore)
         centre = centre_of(bore) if bore is not None else None

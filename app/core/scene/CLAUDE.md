@@ -104,8 +104,11 @@ späterer Schritt noch umdreht. Eine Wand steht in keinem Merkmal — sie
 entsteht zwischen einer Bohrung und dem Mantel um sie herum
 (`perceive.relations.thinnest_sleeve` — dieselbe Regel wie `sleeve_at`, aber
 in einem Durchgang über den ganzen Körper statt einem je Merkmal), und wer
-aufbohrt und danach außen wächst, hat am Ende eine gute. Die Grenze kommt aus `Profile.minimum_wall_thickness`
-(Regel 7); ohne Profil gibt es keine Aussage. Gemeldet wird je Körper einmal,
+aufbohrt und danach außen wächst, hat am Ende eine gute. Die Grenze kommt je
+Körper aus `profiles.analysis_limits`: Körpermaterial und tatsächlich benutzte
+Spulen bestimmen die Mindestwand samt ihrer Kalibrierung. Unbekannte Materialien
+übernehmen keine fremde Kalibrierung (Regel 7); ohne Profil gibt es keine Aussage.
+Gemeldet wird je Körper einmal,
 die dünnste Stelle, mit beiden Merkmalen und dem Ort der Bohrung — damit der
 Klick im Prüfbericht irgendwohin führt (§2.7).
 

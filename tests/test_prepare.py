@@ -4490,6 +4490,62 @@ def test_a_wall_that_carries_is_not_reported(profile: Profile) -> None:
     assert check_thin_walls(scene) == []
 
 
+@pytest.mark.parametrize("before_export", [False, True])
+def test_a_wall_warning_uses_each_body_material(before_export: bool) -> None:
+    """Eine PLA-Kalibrierung darf PETG und unbekannte Spulen nicht freigeben."""
+    from dataclasses import replace
+
+    from app.core.export.writer import check_before_export
+    from app.core.scene.evaluate import check_thin_walls
+    from app.core.types import MaterialSlot
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    profile = replace(
+        profile,
+        material=replace(
+            profile.material,
+            calibrated=True,
+            minimum_wall=0.4,
+            calibration_printer=profile.printer.id,
+            calibration_nozzle_diameter=profile.printer.nozzle_diameter,
+            calibration_layer_height=profile.printer.layer_height,
+            calibration_extrusion_width=profile.printer.extrusion_width,
+        ),
+    )
+    mesh = _tube(inner=19.0, outer=20.0)
+    base = SceneObject(id="pla", name="PLA-Rohr", mesh=mesh, features=detect(mesh), material="pla")
+    objects = [
+        base,
+        replace(base, id="petg", material="petg"),
+        replace(
+            base,
+            id="spool",
+            material=None,
+            material_slots=[MaterialSlot(index=0, name="PETG-Spule", material_type="PETG")],
+        ),
+        replace(
+            base,
+            id="unknown",
+            material=None,
+            material_slots=[MaterialSlot(index=0, name="Unbekannte Spule")],
+        ),
+    ]
+    scene = Scene(objects={entry.id: entry for entry in objects}, profile=profile)
+
+    findings = (
+        check_before_export(objects, profile, {}, scene=scene)
+        if before_export
+        else check_thin_walls(scene)
+    )
+    walls = {item.object_id: item for item in findings if item.code == "perceive.thin_wall"}
+
+    assert profile.minimum_wall_thickness == pytest.approx(0.4)
+    assert set(walls) == {"petg", "spool", "unknown"}
+    for finding in walls.values():
+        assert finding.values["wall_mm"] == pytest.approx(0.5)
+        assert finding.values["least_mm"] == pytest.approx(0.84)
+
+
 def _thin_wall_codes(document: Document, profile: Profile) -> list[str]:
     """Die Wandbefunde eines gefahrenen Stapels — mehr braucht der Vergleich nicht."""
     result = evaluate(document, profile)
