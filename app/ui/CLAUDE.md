@@ -728,6 +728,10 @@ Zeilen ärmer.
 
 ## §29 — was die Datei mitnimmt
 
+Fehler der Druckempfehlung zeigen ausführbare Vorschläge aus `handlers_of`
+als Knöpfe; Rückwege ohne Handler bleiben als Text erhalten. Jede neue
+Prüfung entfernt die alten Handlungen, und ein Klick liest den aktuellen Fehler.
+
 `print_disclosure.py` steht vor dem ersten Öffnen der Druckeinstellungen und
 sagt, wie die Erfahrungswerte entstehen, wann sie mitgegeben werden und dass
 die Werte vor dem Druck zu prüfen sind. Anders als der

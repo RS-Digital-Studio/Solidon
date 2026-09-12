@@ -2342,6 +2342,7 @@ class PrintSettingsDialog(QDialog):
         self._advice_choices: dict[object, bool] = {}
         self._advice_pending = False
         self._advice_problem = ""
+        self._advice_error: AppError | None = None
         self._analysed_context: tuple[Any, ...] | None = None
         self._body_analyses: dict[str, tuple[float, float, SliceResult]] = {}
         self._advice_timer = QTimer(self)
@@ -4200,6 +4201,10 @@ class PrintSettingsDialog(QDialog):
         self.advice_state.setTextFormat(Qt.TextFormat.PlainText)
         self.advice_state.setWordWrap(True)
         inner.addWidget(self.advice_state)
+        self._advice_offers = QWidget(holder)
+        self._advice_offer_row = QVBoxLayout(self._advice_offers)
+        self._advice_offer_row.setContentsMargins(0, 0, 0, 0)
+        inner.addWidget(self._advice_offers)
         self.advice_progress = QProgressBar(holder)
         self.advice_progress.setRange(0, 0)
         self.advice_progress.setTextVisible(False)
@@ -4836,6 +4841,7 @@ class PrintSettingsDialog(QDialog):
                 self._advice_request = context
                 self._advice_entries = []
                 self._advice_problem = ""
+                self._advice_error = None
                 self._advice_pending = True
                 if self._advice_worker is not None:
                     self._advice_worker.cancel()
@@ -4848,6 +4854,7 @@ class PrintSettingsDialog(QDialog):
             self._advice_request = None
             self._advice_pending = False
             self._advice_problem = ""
+            self._advice_error = None
             self._advice_timer.stop()
             if self._advice_worker is not None:
                 self._advice_worker.cancel()
@@ -4991,6 +4998,7 @@ class PrintSettingsDialog(QDialog):
         self._advice_entries = entries
         self._advice_pending = False
         self._advice_problem = ""
+        self._advice_error = None
         self._show_advice()
 
     def _advice_failed(
@@ -5016,8 +5024,13 @@ class PrintSettingsDialog(QDialog):
         self._advice_entries = []
         self._advice_pending = False
         problem = detail if isinstance(detail, AppError) else InternalError(detail=detail)
+        # Der Rückweg braucht Fehlerdaten, aber keine Aufrufrahmen des Arbeiters.
+        self._advice_error = problem.with_traceback(None)
+        handlers = handlers_of(self)
         suggestions = " · ".join(
-            str(action.label) for action in problem.suggestions if action.id != "cancel"
+            str(action.label)
+            for action in problem.suggestions
+            if action.id != "cancel" and action.id not in handlers
         )
         self._advice_problem = "\n".join(
             part for part in (str(problem.detail or problem.title), suggestions) if part
@@ -5029,6 +5042,48 @@ class PrintSettingsDialog(QDialog):
         field = problem.values.get("field")
         if isinstance(field, str) and field in self._fields:
             self._lift(field)
+
+    def _show_advice_offers(self) -> None:
+        """Die ausführbaren Rückwege teilen den Fehler mit der sichtbaren Zustandszeile."""
+        row = self._advice_offer_row
+        while row.count():
+            item = row.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.setEnabled(False)
+                widget.hide()
+                widget.deleteLater()
+        problem = self._advice_error
+        handlers = handlers_of(self)
+        offered = (
+            [
+                action
+                for action in problem.suggestions
+                if action.id != "cancel" and action.id in handlers
+            ]
+            if problem is not None and not self._advice_pending
+            else []
+        )
+        for action in offered:
+            button = QPushButton(str(action.label), self._advice_offers)
+            if action.primary:
+                make_primary(button)
+            button.clicked.connect(
+                weak_slot(self, PrintSettingsDialog._run_advice_action, action.id)
+            )
+            row.addWidget(button)
+        self._advice_offers.setVisible(bool(offered))
+
+    def _run_advice_action(self, action_id: str) -> None:
+        """Ein Klick liest den noch aktuellen Fehler und die Handlungen des Fensters."""
+        problem = self._advice_error
+        if self._settling or self._advice_pending or problem is None:
+            return
+        if not any(action.id == action_id for action in problem.suggestions):
+            return
+        handler = handlers_of(self).get(action_id)
+        if handler is not None:
+            handler(problem)
 
     def _advice_progressed(
         self,
@@ -5069,6 +5124,7 @@ class PrintSettingsDialog(QDialog):
             if self._advice_worker is not None:
                 self._advice_worker.cancel()
             self._advice_pending = False
+            self._advice_error = None
             self._advice_problem = tr(
                 "Prüfung abgebrochen. Prüfen Sie die Druckempfehlungen erneut."
             )
@@ -5085,6 +5141,7 @@ class PrintSettingsDialog(QDialog):
 
     def _show_advice(self) -> None:
         """Die aktuelle Messung anzeigen, ohne dabei eine neue anzufordern."""
+        self._show_advice_offers()
         entries = self._current_advice()
         blocker = QSignalBlocker(self.advice_view)
         self.advice_view.clear()

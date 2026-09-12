@@ -4985,6 +4985,49 @@ def test_print_advice_failure_has_a_retry_and_never_claims_the_part_is_ready(
     assert len(attempts) == 2
 
 
+def test_print_advice_offers_executable_actions_and_removes_stale_buttons(qt_app, monkeypatch):
+    """Ein Analysefehler reicht seinen konkreten Rückweg und dieselben Fehlerdaten weiter."""
+    from app.core.errors import Action, AppError
+    from app.ui import print_settings_dialog as module
+
+    problem = AppError(
+        detail="Profil konnte nicht gelesen werden <Datei>.",
+        suggestions=[
+            Action("show_output", "Ausgabe ansehen"),
+            Action("manual_help", "Profil im Slicer prüfen"),
+            Action("cancel", "Abbrechen"),
+        ],
+    )
+
+    def fail(*_args, **_kwargs):
+        raise problem
+
+    monkeypatch.setattr(module, "slice_body", fail)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    handled = []
+    monkeypatch.setattr(dialog, "error_handlers", lambda: {"show_output": handled.append})
+    deadline = time.monotonic() + 5
+    while dialog._advice_pending and time.monotonic() < deadline:
+        qt_app.processEvents()
+        time.sleep(0.005)
+    actions = [
+        button
+        for button in dialog.findChildren(QPushButton)
+        if button.text() == "Ausgabe ansehen" and not button.isHidden()
+    ]
+    assert len(actions) == 1
+    assert "Ausgabe ansehen" not in dialog.advice_state.text()
+    assert "Profil im Slicer prüfen" in dialog.advice_state.text()
+    assert "Abbrechen" not in dialog.advice_state.text()
+    actions[0].click()
+    assert handled == [problem]
+    dialog._editors["layers.layer_height"].setValue(0.3)
+    assert actions[0].isHidden()
+    actions[0].click()
+    assert handled == [problem]
+    dialog.reject()
+
+
 def test_cancelled_print_advice_keeps_its_state_when_a_late_error_arrives(qt_app, monkeypatch):
     """Ein überholter Fehler ersetzt weder den Abbruch noch den ausdrücklichen Neuversuch."""
     from app.core.errors import ValidationError
