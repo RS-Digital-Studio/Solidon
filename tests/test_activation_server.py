@@ -359,7 +359,7 @@ def test_php_issues_one_idempotent_device_certificate(
         assert released == 200, release_answer
         limited_status, limited_answer = _post(url, other_request)
         assert limited_status == 429, limited_answer
-        assert json.loads(limited_answer)["code"] == "rate_limit"
+        assert json.loads(limited_answer)["code"] == "rate_limit_daily"
         with contextlib.closing(sqlite3.connect(database)) as stored:
             assert stored.execute("SELECT attempts FROM activation_attempts").fetchall() == [(5,)]
             assert stored.execute(

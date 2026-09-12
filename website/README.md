@@ -131,6 +131,13 @@ nicht übertragen. Ein abweichender absoluter Serverpfad wird ausschließlich
 über `SOLIDON_STATS_ACCESS_FILE` gesetzt. Fehlt die Datei oder sind Lage oder
 Rechte zu weit, bleibt `api/stats.php` mit einer generischen 503-Antwort zu.
 
+Die öffentlichen Ratenkennungen unterscheiden `rate_limit_client` (zu viele
+Anfragen eines Anschlusses) und `rate_limit_global` (Gesamtgrenze des Dienstes),
+beide im rollierenden 900-Sekunden-Fenster, von `rate_limit_daily` (fünf neu
+vergebene Geräteplätze je Schlüssel und UTC-Tag). Anwendung und Dateiweg nennen
+die passende Wartezeit; bei kurzen Sperren bleibt erneutes Versuchen möglich.
+Die ältere, mehrdeutige Kennung `rate_limit` wird ohne Tageszusage erklärt.
+
 Serverfehler der Aktivierung und Statistik schreiben feste Ursachenkennungen in
 PHPs privates Fehlerprotokoll: etwa `private_file_missing`, `seed_invalid`,
 `database_schema_missing` oder `access_hash_invalid`. Bei Aktivierungsfehlern

@@ -438,8 +438,11 @@ function activation_consume_client_rate(string $scope, int $limit, int $window):
             static fn($stamp): bool => is_int($stamp)
                 && $stamp > $now - $window && $stamp <= $now
         ));
-        if (count($kept) >= $limit || count($global) >= $limit * 100) {
-            throw new ActivationFailure('Zu viele Anforderungen in kurzer Zeit.', 429, 'rate_limit');
+        if (count($kept) >= $limit) {
+            throw new ActivationFailure('Zu viele Anforderungen von diesem Anschluss in kurzer Zeit.', 429, 'rate_limit_client');
+        }
+        if (count($global) >= $limit * 100) {
+            throw new ActivationFailure('Zu viele Anforderungen an den Dienst in kurzer Zeit.', 429, 'rate_limit_global');
         }
         $kept[] = $now;
         $global[] = $now;
@@ -917,7 +920,7 @@ function activation_consume_rate(PDO $database, string $digest): void
         throw new ActivationFailure(
             'Für diesen Lizenzschlüssel wurden heute bereits fünf Geräteplätze vergeben.',
             429,
-            'rate_limit'
+            'rate_limit_daily'
         );
     }
     $update = $database->prepare(

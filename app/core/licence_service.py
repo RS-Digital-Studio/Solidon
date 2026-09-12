@@ -160,8 +160,24 @@ def _error_from(answer: dict[str, object]) -> ActivationServiceError:
         )
     elif code == "rate_limit":
         detail = _(
-            "Für diesen Lizenzschlüssel gab es heute zu viele Aktivierungsversuche. "
-            "Versuchen Sie es morgen erneut oder wenden Sie sich an den Support."
+            "Der Aktivierungsdienst hat weitere Anfragen vorübergehend begrenzt. "
+            "Versuchen Sie es später erneut oder wenden Sie sich an den Support."
+        )
+    elif code == "rate_limit_client":
+        detail = _(
+            "Über diesen Internetanschluss kamen zu viele Anfragen in kurzer Zeit. "
+            "Versuchen Sie es in 15 Minuten erneut."
+        )
+    elif code == "rate_limit_global":
+        detail = _(
+            "Der Aktivierungsdienst hat gerade sehr viele Anfragen erhalten. Versuchen "
+            "Sie es in 15 Minuten erneut."
+        )
+    elif code == "rate_limit_daily":
+        detail = _(
+            "Für diesen Lizenzschlüssel wurden heute bereits fünf neue Geräteplätze "
+            "vergeben. Versuchen Sie es nach dem nächsten Tageswechsel um 00:00 Uhr UTC "
+            "erneut oder wenden Sie sich an den Support."
         )
     elif code == "activation_not_found":
         detail = _(
@@ -174,9 +190,12 @@ def _error_from(answer: dict[str, object]) -> ActivationServiceError:
             "den Lizenzschlüssel oder wenden Sie sich an den Support."
         )
     suggestions: tuple[Action, ...]
-    if code == "rate_limit":
+    if code == "rate_limit_daily":
         suggestions = (REPORT_ERROR, CANCEL)
     elif code in {
+        "rate_limit",
+        "rate_limit_client",
+        "rate_limit_global",
         "activation_not_found",
         "device_limit",
         "licence_blocked",

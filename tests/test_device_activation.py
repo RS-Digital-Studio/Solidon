@@ -8,6 +8,7 @@ auch der Dienst halten — ein Einbruch dort darf nie neue Kaufcodes erlauben.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -366,8 +367,8 @@ def test_the_online_client_accepts_a_certificate_but_explains_a_server_error(
     ).encode()
     with pytest.raises(ActivationServiceError) as rate:
         activate("{}", sender=lambda _payload: limited)
-    assert "morgen" in str(rate.value.detail)
-    assert {action.id for action in rate.value.suggestions} == {"report_error", "cancel"}
+    assert "morgen" not in str(rate.value.detail)
+    assert {action.id for action in rate.value.suggestions} == {"retry", "report_error", "cancel"}
 
 
 def test_the_online_client_accepts_only_a_confirmed_deactivation() -> None:
@@ -455,3 +456,49 @@ def test_changing_a_signed_deactivation_is_rejected(
         certificate.parse_deactivation(
             json.dumps(document), licence_public_key=ed25519.public_key(LICENCE_SEED)
         )
+
+
+@pytest.mark.parametrize("sender", [activate, deactivate], ids=["activate", "deactivate"])
+@pytest.mark.parametrize(
+    "code, clue, retry",
+    [
+        ("rate_limit_client", "Internetanschluss", True),
+        ("rate_limit_global", "Dienst", True),
+        ("rate_limit_daily", "00:00 Uhr UTC", False),
+        ("rate_limit", "vorübergehend begrenzt", True),
+    ],
+)
+def test_rate_limits_explain_the_actual_wait_and_offer_the_right_actions(
+    sender: Callable[..., object], code: str, clue: str, retry: bool
+) -> None:
+    raw = json.dumps({"ok": False, "code": code, "error": "private-server-prose"}).encode()
+    with pytest.raises(ActivationServiceError) as raised:
+        sender("{}", sender=lambda _payload: raw)
+    error = raised.value
+    detail = str(error.detail)
+    assert clue.lower() in detail.lower()
+    assert "private-server-prose" not in detail
+    actions = {action.id for action in error.suggestions}
+    assert actions == {"report_error", "cancel"} | ({"retry"} if retry else set())
+    assert ("15 Minuten" in detail) is (code in {"rate_limit_client", "rate_limit_global"})
+
+
+@pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
+@pytest.mark.parametrize(
+    "code", ["rate_limit", "rate_limit_client", "rate_limit_global", "rate_limit_daily"]
+)
+def test_activation_rate_limit_texts_are_complete_in_each_catalog(language: str, code: str) -> None:
+    from app.i18n import TranslatableText
+    from app.i18n.catalog import install_language, read_catalog
+
+    detail = licence_service._error_from({"code": code}).detail
+    assert isinstance(detail, TranslatableText)
+    catalog = read_catalog(language)
+    assert detail.msgid in catalog
+    install_language(language)
+    translated = detail.translate(language)
+    assert translated == catalog[detail.msgid]
+    assert translated != detail.msgid
+    assert "{" not in translated and "}" not in translated
+    assert ("15" in translated) is (code in {"rate_limit_client", "rate_limit_global"})
+    assert ("00:00" in translated and "UTC" in translated) is (code == "rate_limit_daily")

@@ -2656,3 +2656,27 @@ def test_stats_configuration_has_private_diagnostics(
     assert expected in diagnostic
     assert secret not in diagnostic + body
     assert str(path) not in diagnostic + body
+
+
+@pytest.mark.parametrize("scope", ["client", "global"])
+def test_activation_burst_limits_have_distinct_codes(tmp_path: Path, scope: str) -> None:
+    state_file = tmp_path / "activation-rate.json"
+    _chmod_private(tmp_path)
+    if scope == "global":
+        state_file.write_text(json.dumps({"issue:global": [int(time.time())] * 3000}))
+        _chmod_private(state_file)
+    headers = {"Content-Type": "application/json"}
+    with _php_server(tmp_path) as base:
+        if scope == "client":
+            for _attempt in range(30):
+                status, _, _ = _request(
+                    f"{base}/activation.php", method="POST", data=b"{}", headers=headers
+                )
+                assert status == 400
+        before = state_file.read_bytes()
+        status, _, body = _request(
+            f"{base}/activation.php", method="POST", data=b"{}", headers=headers
+        )
+    assert status == 429
+    assert json.loads(body)["code"] == f"rate_limit_{scope}"
+    assert state_file.read_bytes() == before
