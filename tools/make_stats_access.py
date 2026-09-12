@@ -166,7 +166,7 @@ def main() -> int:
         "$p = getenv('SOLIDON_STATS_PASSWORD');"
         "$h = password_hash($p, PASSWORD_DEFAULT);"
         "if (!password_verify($p, $h)) {"
-        "  fwrite(STDERR, 'Der Hash prueft sich selbst nicht.'); exit(1);"
+        "  fwrite(STDERR, 'Der Hash besteht die eigene Kontrolle nicht.'); exit(1);"
         "}"
         "echo $h;",
         password,

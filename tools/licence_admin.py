@@ -1323,7 +1323,7 @@ class SupportWindow:
         self.server_loaded_digest = self.current.digest
         badge = {
             "active": (tr("✓ Aktivierungen erlaubt"), "ActiveStatus.TLabel"),
-            "blocked": (tr("⛔ Neue Aktivierungen gesperrt"), "BlockedStatus.TLabel"),
+            "blocked": (tr("! Neue Aktivierungen gesperrt"), "BlockedStatus.TLabel"),
             "unknown": (tr("○ Noch nie aktiviert"), "NeutralStatus.TLabel"),
         }.get(status, (tr("? Unbekannter Serverzustand"), "NeutralStatus.TLabel"))
         self.status_badge.configure(text=badge[0], style=badge[1])
