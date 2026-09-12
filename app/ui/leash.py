@@ -43,13 +43,12 @@ die Ursache steht drei Dateien weiter.
 from __future__ import annotations
 
 import gc
-import warnings
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QEvent, QMetaMethod, QObject, QThread, QTimer, Signal
 from shiboken6 import isValid
 
 from app.core.log import get_logger
@@ -248,43 +247,19 @@ class Worker(QThread):
         nicht pauschal getrennt: Ergebnis, Fehler und ``finished`` müssen vor
         diesem Punkt vollständig beim Besitzer angekommen sein.
         """
-        names: list[str] = []
-        for worker_type in type(self).__mro__:
-            for name, declaration in vars(worker_type).items():
-                if isinstance(declaration, Signal) and name not in names:
-                    names.append(name)
-            if worker_type is Worker:
-                break
-        # Nur Signale, die die Workerklassen selbst als Ausgänge deklarieren,
-        # plus QThreads Abschluss. QObject.destroyed, started und fremde
-        # Infrastruktur bleiben ausdrücklich unangetastet.
-        self._disconnect_finished_signals(
-            *(getattr(self, name) for name in names),
-            self.finished,
-        )
-
-    @staticmethod
-    def _disconnect_finished_signals(*signals: Any) -> None:
-        """Vorhandene eigene Verbindungen ohne Warnung lösen.
-
-        Ein Signal darf bei einem kleinen eigenständigen Test ohne Empfänger
-        bleiben. PySide 6.11.2 gibt dann ``False`` zurück und meldet genau die
-        Warnung ``Failed to disconnect (None)``. Nur dieser belegte Leerfall
-        bleibt still; jeder andere Binding- oder Besitzfehler bricht durch.
-        """
-        for signal in signals:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always", RuntimeWarning)
-                disconnected = signal.disconnect()
-            empty = (
-                disconnected is False
-                and len(caught) == 1
-                and str(caught[0].message).startswith(
-                    "libpyside: Failed to disconnect (None) from signal"
-                )
-            )
-            if caught and not empty:
-                raise RuntimeError(str(caught[0].message))
+        meta = self.metaObject()
+        first = Worker.staticMetaObject.methodOffset()  # type: ignore[attr-defined]
+        own_signals = [
+            meta.method(index)
+            for index in range(first, meta.methodCount())
+            if meta.method(index).methodType() == QMetaMethod.MethodType.Signal
+        ]
+        own_signals.append(meta.method(meta.indexOfSignal("finished()")))
+        # QObject trennt auch leere Signale ohne PySides SignalInstance-Warnung.
+        # Deshalb sind keine prozessweiten Warnfilter nötig. QObject.destroyed,
+        # QThread.started und andere geerbte Infrastruktur bleiben verbunden.
+        for signal in own_signals:
+            QObject.disconnect(self, signal, None, QMetaMethod())  # type: ignore[call-overload]
 
 
 class WorkerLeash:

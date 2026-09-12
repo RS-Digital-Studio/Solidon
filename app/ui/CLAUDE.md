@@ -925,6 +925,9 @@ Eine `WorkerLeash` hält ihren Fensterbesitzer nicht zurück: Der Besitzer hält
 die Leine bereits, alle Zeitgeber gehören dem langlebigen Keeper und die
 Fertigrückrufe verwenden schwache Verweise. Damit entsteht um Qt-Fenster kein
 Python-Zyklus, dessen Abbau in einen späteren Worker- oder Widgetaufbau fällt.
+Fertige Arbeiter trennen ihre eigenen Signale einschließlich aller Überladungen
+über Qts Metamethoden; `started` und `destroyed` bleiben verbunden. Die Trennung
+benötigt keine globalen Warnfilter und fängt keine Warnung eines anderen Threads ab.
 
 **Hilfe und Bedienung**
 

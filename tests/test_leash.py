@@ -638,3 +638,83 @@ def test_the_leash_turns_away_what_is_not_a_worker(qt_app: QApplication) -> None
 
     assert set(leash._alive) == vorher, "ein Fremdkörper ist in die Menge gelangt"
     assert fremd not in leash._alive
+
+
+def test_finishing_one_worker_does_not_capture_another_threads_warning(
+    qt_app: QApplication,
+) -> None:
+    """Die echte Signaltrennung lässt eine zeitgleiche fremde Warnung beim Absender."""
+    import threading
+    import warnings
+    from typing import override
+
+    ready = threading.Event()
+    reported = threading.Event()
+
+    class NotifyingWorker(Worker):
+        done = Signal()
+        observed = False
+
+        @override
+        def disconnectNotify(self, signal) -> None:
+            if not self.observed and bytes(signal.name()) == b"done":
+                self.observed = True
+                ready.set()
+                assert reported.wait(2)
+            super().disconnectNotify(signal)
+
+    def report() -> None:
+        assert ready.wait(2)
+        warnings.warn("Warnung des anderen Arbeiters", UserWarning, stacklevel=2)
+        reported.set()
+
+    worker = NotifyingWorker()
+    worker.done.connect(lambda: None)
+    other = threading.Thread(target=report)
+    with pytest.warns(UserWarning, match="Warnung des anderen Arbeiters"):
+        other.start()
+        try:
+            worker.release_finished_references()
+        finally:
+            other.join(3)
+            assert not other.is_alive()
+    worker.deleteLater()
+
+
+def test_worker_cleanup_disconnects_all_own_overloads_and_preserves_infrastructure(
+    qt_app: QApplication,
+) -> None:
+    """Die Qt-Metadaten erfassen Unterklassen, Überladungen und unverbundene Ausgänge."""
+    import warnings
+
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    class ParentWorker(Worker):
+        unused = Signal()
+        inherited = Signal()
+
+    class ChildWorker(ParentWorker):
+        overloaded = Signal((int,), (str,))
+
+    worker = ChildWorker()
+    seen = []
+    worker.overloaded[int].connect(lambda value: seen.append(value))
+    worker.overloaded[str].connect(lambda value: seen.append(value))
+    worker.inherited.connect(lambda: seen.append("inherited"))
+    worker.finished.connect(lambda: seen.append("finished"))
+    worker.started.connect(lambda: seen.append("started"))
+    worker.destroyed.connect(lambda: seen.append("destroyed"))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        worker.release_finished_references()
+        worker.release_finished_references()
+    assert not caught
+    worker.overloaded[int].emit(5)
+    worker.overloaded[str].emit("unused")
+    worker.inherited.emit()
+    worker.finished.emit()
+    worker.started.emit()
+    assert seen == ["started"]
+    worker.deleteLater()
+    QCoreApplication.sendPostedEvents(worker, QEvent.Type.DeferredDelete)
+    assert seen == ["started", "destroyed"]
