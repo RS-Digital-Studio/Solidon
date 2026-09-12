@@ -15508,3 +15508,72 @@ def test_the_export_folder_stays_with_the_machine(
     window.action_export()
 
     assert asked[0][0].startswith(str(folder)), f"der Dialog beginnt dort: {asked[0][0]}"
+
+
+# --- es geht kein zweites Fenster auf (RM-101) ------------------------------------
+
+
+def _top_level_names() -> set[str]:
+    """Jedes elternlose Widget dieser Anwendung, mit Typ und Titel."""
+    return {
+        f"{type(widget).__name__}({widget.windowTitle() or widget.objectName() or '-'})"
+        for widget in QApplication.topLevelWidgets()
+        if widget.parent() is None
+    }
+
+
+def test_no_second_window_appears_along_the_way(window: MainWindow) -> None:
+    """Die Beobachtung, die den Punkt getragen hat — am aktuellen Fenster gemessen.
+
+    Jemand hat ein fremdes Fenster gesehen; der Verdacht (ein elternlos
+    gebauter Befundknopf) war am 10.09.2026 am Code widerlegt, die
+    Beobachtung blieb offen. Hier steht der Weg, auf dem sie auftreten müsste:
+    aufbauen, zeigen, ein Modell öffnen, die fünf Werkzeuge auf- und zumachen,
+    den Prüfbericht füllen. Gemessen am 12.09.2026 bleibt es bei **einem**
+    Fenster, und das Hauptfenster behält den Fokus.
+
+    Gezählt wird der Zuwachs und nicht der Bestand: Die Suite hält Fenster
+    früherer Tests absichtlich am Leben (`_pin_ui_widgets`), und ein
+    absoluter Vergleich prüfte deren Aufräumen statt dieses Fensters.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    before = _top_level_names()
+    window.show()
+    QApplication.processEvents()
+
+    assert QApplication.activeWindow() is window, "das Hauptfenster ist das aktive"
+
+    # Zweimal dasselbe Modell: Das zweite landet unter der Platte und gibt
+    # einen Befund **mit Handlung** — nur dafür baut ``_show_offers`` Knöpfe,
+    # und genau die standen unter Verdacht.
+    for _ in range(2):
+        window.open_path(MESHES / "block_with_rounded_edge.stl")
+        window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+    QApplication.processEvents()
+    assert window.report._offers.findChildren(QPushButton), (
+        "ohne einen Befundknopf prüft dieser Test den Verdacht nicht"
+    )
+
+    for tool in ("measure", "section", "layers", "explode", "split"):
+        window.tools.toggle(tool)
+        QApplication.processEvents()
+        window.tools.toggle(tool)
+        QApplication.processEvents()
+
+    # **Und die Merkmalleiste**, die ihre Felder auf demselben Weg wegräumt:
+    # ein Merkmal wählen füllt sie, die Auswahl aufheben leert sie.
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    if entry.features:
+        window.object_tree.select_object(object_id)
+        window.object_tree.select_feature(object_id, next(iter(entry.features)))
+        QApplication.processEvents()
+        window.object_tree.tree.clearSelection()
+        QApplication.processEvents()
+
+    grown = {name for name in _top_level_names() - before if not name.startswith("MainWindow(")}
+    assert not grown, f"es ist ein fremdes Fenster aufgegangen: {sorted(grown)}"
+    assert QApplication.activeWindow() is window, "und der Fokus liegt weiter beim Hauptfenster"

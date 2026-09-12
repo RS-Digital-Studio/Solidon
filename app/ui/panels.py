@@ -3370,7 +3370,21 @@ class ReportPanel(QWidget):
             item = row.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
-                widget.setParent(None)
+                # **Verstecken, nicht elternlos machen** (RM-101).
+                # ``setParent(None)`` macht aus einem Kind-Widget ein
+                # Top-Level-Fenster — ein Knopf „Auf das Bett setzen", der
+                # allein auf dem Bildschirm steht, bis ``deleteLater`` die
+                # nächste Runde der Ereignisschleife erreicht. Gemessen am
+                # 12.09.2026: vier solche Knöpfe nach einem Befundwechsel,
+                # zwei davon sichtbar. Dasselbe Wissen steht seit dem
+                # Skizzeneditor zweimal im Code
+                # (``MainWindow._close_sketch``, ``SketchEditor.take_side_box``)
+                # — hier stand es nicht.
+                #
+                # ``takeAt`` hat es schon aus dem Layout genommen; ``hide``
+                # nimmt es aus dem Bild, und der Elternteil trägt es bis zum
+                # Löschen.
+                widget.hide()
                 widget.deleteLater()
 
         items = self.list.selectedItems()
@@ -4623,9 +4637,15 @@ class FeaturePanel(QWidget):
         return self._feature_id
 
     def clear(self) -> None:
-        """Zurück auf den leeren Zustand."""
+        """Zurück auf den leeren Zustand.
+
+        Versteckt und gelöscht, nicht elternlos gemacht: ``setParent(None)``
+        macht aus einem Kind-Widget ein eigenes Fenster, bis der Löschauftrag
+        die Ereignisschleife erreicht (RM-101, dieselbe Stelle wie in
+        :meth:`ReportPanel._show_offers`).
+        """
         for widget in self._built:
-            widget.setParent(None)
+            widget.hide()
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None

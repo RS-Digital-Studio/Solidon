@@ -74,7 +74,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
 | [RM-088 — Verständlichkeit für Laien im Regelwerk verankern](#rm-088) | Bedienung und Darstellung | Verständlichkeitsregel und begründete Ausnahmen entscheiden |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
-| [RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen](#rm-101) | Bedienung und Darstellung | Verdacht am Code widerlegt; das gesehene fremde Fenster bleibt unerklärt |
 | [RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen](#rm-108) | Bedienung und Darstellung | Schlüsseldialog während laufender Abfrage ohne Wartefrist schließen |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
@@ -1513,15 +1512,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-101"></a>
 
-- [ ] **RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen.** **Der Verdacht ist am
-  Code widerlegt** (10.09.2026): Der Befundknopf entsteht in `ui/panels.py` mit Elternwidget und
-  wird erst danach ins Layout gehängt — und zwar seit dem 27.08.2026, also schon vor der
-  Messung, die den Verdacht auslöste. Ein Suchlauf über elternlos konstruierte Knöpfe in
-  `app/ui/` fand keinen im Ladeweg. Damit ist die vermutete Ursache erledigt; was der Punkt
-  noch trägt, ist die **Beobachtung** selbst — es hat jemand ein fremdes Fenster gesehen, und
-  woher es kam, ist offen. Am aktuellen Fenster reproduzieren, bevor weiter gesucht wird.
-  Abnahme: kein fremdes Top-Level-Fenster, Hauptfenster behält Fokus und der Befundknopf
-  funktioniert nach Einhängen ins Layout. Den alten Verdacht nicht als bestätigte Ursache behandeln.
+- [x] **RM-101 — Elternloser Handlungsknopf im Fensteraufbau.** Am 12.09.2026 reproduziert und
+  behoben. **Die Beobachtung war echt, und der Verdacht zeigte in die richtige Richtung — nur
+  eine Zeile daneben.** Am Code widerlegt war „elternlos **konstruiert**" (10.09.2026, und das
+  stimmt weiter: `_show_offers` baut jeden Knopf mit `self._offers` als Elternteil). Gefunden
+  wurde „elternlos **gemacht**": Beim Wegräumen der alten Knöpfe stand dort
+  `widget.setParent(None)`, und Qt kennt keinen elternlosen Zustand — ein Widget ohne
+  Elternteil **ist** ein Top-Level-Fenster.
+
+  Gemessen am Fenster mit einem echten Befund (zwei Körper übereinander,
+  `arrange.below_bed`): **vier** Knöpfe „Auf das Bett setzen" als eigene Fenster nach einem
+  Befundwechsel, **zwei davon sichtbar** — bis `deleteLater` die nächste Runde der
+  Ereignisschleife erreicht. Genau das hatte jemand gesehen.
+
+  Weggeräumt wird jetzt mit `hide()` und `deleteLater()`: `takeAt` nimmt das Widget aus dem
+  Layout, `hide` aus dem Bild, und der Elternteil trägt es bis zum Löschen. Dieselbe Stelle
+  gab es ein zweites Mal in `FeaturePanel.clear`.
+
+  **Das Wissen stand schon zweimal im Code und einmal nicht**: `MainWindow._close_sketch` nennt
+  den Absturz, `SketchEditor.take_side_box` die falsch aufgelösten Tastenkürzel — und der
+  Prüfbericht tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel; sie steht jetzt
+  in `.claude/rules/oberflaeche.md`.
+
+  Nachweis: `test_no_second_window_appears_along_the_way` in `tests/test_ui.py` geht den ganzen
+  Weg — aufbauen, zeigen, zwei Modelle öffnen, einen Befund mit Handlung erzeugen, die fünf
+  Werkzeuge auf und zu, ein Merkmal wählen und abwählen — und zählt den **Zuwachs** an
+  Top-Level-Fenstern; das Hauptfenster behält dabei den Fokus. Er war vor dem Fix rot, und
+  beide Gegenproben (Prüfbericht, Merkmalleiste) sind es einzeln ebenfalls.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 

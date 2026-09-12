@@ -54,6 +54,25 @@ Erleichterung:
   „Zuletzt geöffnet" — vorher stand dort nur, was als Projekt geöffnet wurde,
   und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog.
 
+## `setParent(None)` macht ein Kind zum Fenster (RM-101)
+
+Qt kennt keinen „elternlosen Zustand" — ein Widget ohne Elternteil **ist** ein
+Top-Level-Fenster. Wer ein Kind-Widget wegräumen will und ihm den Elternteil
+nimmt, stellt es für die Dauer bis zum Löschen als eigenes Fenster auf den
+Bildschirm. Gemessen am 12.09.2026 im Prüfbericht: vier Knöpfe „Auf das Bett
+setzen" als Top-Level nach einem Befundwechsel, zwei davon sichtbar — und
+genau das hatte jemand gesehen.
+
+**Weggeräumt wird deshalb mit `hide()` und `deleteLater()`**, nie über den
+Elternteil. `takeAt` nimmt es aus dem Layout, `hide` aus dem Bild, und der
+Elternteil trägt es bis zum Löschen.
+
+Dasselbe Wissen stand vorher zweimal als Kommentar im Code und einmal nicht:
+`MainWindow._close_sketch` nennt den Absturz („ein Fenster, das im selben
+Atemzug gelöscht wird"), `SketchEditor.take_side_box` die falsch aufgelösten
+Tastenkürzel („`plane:xy` statt `plane:xz`"), und `ReportPanel._show_offers`
+tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel.
+
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
 Schritt an, zeigt das Bild den letzten vollständig gerechneten Zustand — und
 was hinter dem Halt steht, wird nicht gerechnet. Ein neuer Schritt landete
