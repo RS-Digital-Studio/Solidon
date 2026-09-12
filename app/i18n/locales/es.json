@@ -5097,5 +5097,7 @@
   "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder nehmen Sie eine Schrift, die fett und kursiv mitbringt.": "«{font}» solo existe en un estilo. Elija «Normal» o tome una fuente que incluya negrita y cursiva.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "«{licence}» no es ninguna de las licencias permitidas.",
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "«{name}» no es un nombre de bloque válido: se permiten minúsculas, cifras y guiones bajos, empezando por una letra.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» convirtió las caras y aristas editables por separado en triángulos fijos. Esta herramienta debe aparecer antes de ese paso en el historial. Deshaz los pasos desde allí, aplica la herramienta y vuelve a crear los pasos restantes."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» convirtió las caras y aristas editables por separado en triángulos fijos. Esta herramienta debe aparecer antes de ese paso en el historial. Deshaz los pasos desde allí, aplica la herramienta y vuelve a crear los pasos restantes.",
+  "Noch keine Spule eingetragen": "Todavía no hay bobinas registradas",
+  "Eine Spule im Lager": "Una bobina en el inventario"
 }

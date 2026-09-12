@@ -119,6 +119,17 @@ def test_empty_shelf_offers_both_entrances(inventory: InventoryView) -> None:
     assert filaments.catalogue() == ()
 
 
+def test_inventory_summary_distinguishes_zero_one_and_many(inventory):
+    """Die tatsächliche Spulenzahl bestimmt Leerzustand, Einzahl und Mehrzahl."""
+    assert inventory.summary.text() == "Noch keine Spule eingetragen"
+    for count in (1, 2):
+        filaments.save(filaments.CatalogueFilament(f"Spule {count}", "#123456"))
+        inventory.refresh()
+        assert inventory.summary.text() == (
+            "Eine Spule im Lager" if count == 1 else "2 Spulen im Lager"
+        )
+
+
 def test_detail_reads_spool_and_journal_from_one_complete_snapshot(inventory, monkeypatch):
     """Ein Austausch zwischen Lesen und Zeichnen mischt keinen Rest mit einem jüngeren Journal."""
     entry = filaments.save(filaments.CatalogueFilament("Spule", "#112233", remaining_grams=500))

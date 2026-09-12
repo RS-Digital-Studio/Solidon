@@ -533,7 +533,16 @@ class InventoryView(QWidget):
             self._failed("")
             self.message.setText(str(InternalError(detail=f"{type(problem).__name__}: {problem}")))
             return
-        self.summary.setText(tr("{count} Spulen im Lager").format(count=len(self._entries)))
+        count = len(self._entries)
+        self.summary.setText(
+            tr("Noch keine Spule eingetragen")
+            if count == 0
+            else (
+                tr("Eine Spule im Lager")
+                if count == 1
+                else tr("{count} Spulen im Lager").format(count=count)
+            )
+        )
         self.retry_button.hide()
         self._refill()
         if self._selected_id:

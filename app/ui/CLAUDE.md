@@ -72,6 +72,7 @@ Breite, Schrift, Stil und Sichtbarkeit erneuern diesen Höhenvertrag.
 
 Spulenkarten zeichnen die Restmenge zusätzlich zur Farbe als Zahl und
 Füllstand; unbekannter und archivierter Bestand tragen sichtbare Texte.
+Die Lagerzusammenfassung unterscheidet Leerzustand, eine Spule und mehrere Spulen.
 Nennfüllung, Restmenge und Lagerort stehen im Spulendialog vorn. Kurze
 Kennungen unterscheiden gleiche Etiketten; Details und zugängliche
 Beschreibungen bewahren die Kennung unabhängig von dieser Verkürzung.
