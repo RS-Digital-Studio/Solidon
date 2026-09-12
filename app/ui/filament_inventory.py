@@ -42,7 +42,7 @@ from app.ui.filament_picker import (
     swatch,
 )
 from app.ui.labels import NumberSpin, local_timestamp, localised
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, WIDE, make_primary, set_level
 
@@ -563,7 +563,7 @@ class InventoryView(QWidget):
                     self._low_stock_percent,
                     show_identifier=labels[entry.name, entry.colour] > 1,
                 )
-                card.clicked.connect(partial(self._open_card, entry.identifier))
+                card.clicked.connect(weak_slot(self, InventoryView._open_card, entry.identifier))
                 self.grid.addWidget(card, row + index // columns, index % columns)
                 self.cards.append(card)
                 if entry.identifier == focused:

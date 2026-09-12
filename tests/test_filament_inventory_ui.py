@@ -532,3 +532,37 @@ def test_unexpected_inventory_read_error_is_reported_and_logged(
     )
     assert "inventory-read-probe" in caplog.text
     assert not inventory.retry_button.isHidden()
+
+
+def test_spool_cards_do_not_keep_the_inventory_alive(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unpinned_windows,
+) -> None:
+    """Die echten Spulenkarten halten ihr losgelassenes Lager nicht über den Klickpfad fest."""
+    import gc
+    import weakref
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.save(filaments.CatalogueFilament("Spule", "#123456"))
+    references = []
+    for _ in range(3):
+        view = InventoryView()
+        assert view.cards
+        view.cards[0].click()
+        assert view._selected_id == view.cards[0].entry.identifier
+        view.show_shelf()
+        references.append(weakref.ref(view))
+        view.release()
+        del view
+    qt_app.processEvents()
+    gc.collect()
+    try:
+        assert all(reference() is None for reference in references)
+    finally:
+        for reference in references:
+            remaining = reference()
+            if remaining is not None:
+                remaining.deleteLater()
+        qt_app.processEvents()
