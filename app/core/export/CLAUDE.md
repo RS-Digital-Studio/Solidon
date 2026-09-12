@@ -10,7 +10,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 |---|---|
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141) |
 | `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29). Gelesen wird in `ingest/threemf.py` |
-| `handover.py` | Übergabe an den Slicer (§29, §28.1) — **2 000 Zeilen**, das größte Modul hier |
+| `handover.py` | Übergabe an den Slicer (§29, §28.1) |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
 | `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt |
 
