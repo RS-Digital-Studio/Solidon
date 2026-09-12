@@ -1173,6 +1173,106 @@ def test_counter_rate_limit_caps_disk_growth(tmp_path: Path) -> None:
         assert (tmp_path / "stats" / "quota.lock").stat().st_mode & 0o077 == 0
 
 
+def test_update_head_emits_no_body_even_without_http_server_filtering(tmp_path: Path) -> None:
+    """Der Endpunkt selbst unterdrückt den Körper und lässt den Zähler unberührt."""
+    docroot = _temporary_docroot(tmp_path)
+    (docroot / "version.json").write_text('{"version":"0.4.0"}', encoding="utf-8")
+    environment = os.environ.copy()
+    environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
+    result = subprocess.run(
+        [
+            php_executable(),
+            "-r",
+            '$_SERVER["REQUEST_METHOD"]="HEAD"; $_GET["u"]="1"; include $argv[1];',
+            str(docroot / "api" / "count.php"),
+        ],
+        capture_output=True,
+        env=environment,
+        timeout=5,
+    )
+
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    assert result.stdout == b""
+    assert not (tmp_path / "stats").exists()
+
+
+def test_update_response_keeps_one_file_snapshot_across_the_counter(tmp_path: Path) -> None:
+    """Ein Dateiaustausch im Zählweg trennt Antwortkörper und Dateilänge nicht."""
+    docroot = _temporary_docroot(tmp_path)
+    metadata = b'{"version":"0.4.0"}'
+    replacement = b'{"version":"0.4.1","note":"neuer Stand"}'
+    (docroot / "version.json").write_bytes(metadata)
+    endpoint = docroot / "api" / "count.php"
+    source = endpoint.read_text(encoding="utf-8")
+    recording = _php_function(source, "record")
+    substituted = (
+        recording[: recording.index("{") + 1]
+        + " file_put_contents(VERSION_FILE, '"
+        + replacement.decode("ascii")
+        + "'); return true; }"
+    )
+    endpoint.write_text(source.replace(recording, substituted, 1), encoding="utf-8")
+
+    with _php_server(tmp_path, docroot=docroot) as base:
+        status, headers, body = _request(f"{base}/count.php?u=1")
+
+    assert (status, body.encode()) == (200, metadata)
+    assert int(headers["Content-Length"]) == len(metadata)
+    assert (docroot / "version.json").read_bytes() == replacement
+
+
+@pytest.mark.parametrize("state_name", ["rate.key", "rate.json", "quota.lock", "month"])
+def test_busy_counter_storage_keeps_updates_available_and_reports_storage_failure(
+    tmp_path: Path, state_name: str
+) -> None:
+    """Eine fremde Dateisperre darf keine Updateanfrage auf unbestimmte Zeit halten."""
+    docroot = _temporary_docroot(tmp_path)
+    metadata = b'{"version":"0.4.0"}'
+    (docroot / "version.json").write_bytes(metadata)
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Origin": "https://solidon3d.de",
+    }
+    with _php_server(tmp_path, docroot=docroot) as base:
+        assert _request(f"{base}/count.php?u=1")[0] == 200
+        state = (
+            tmp_path
+            / "stats"
+            / (f"{datetime.now(UTC):%Y-%m}.jsonl" if state_name == "month" else state_name)
+        )
+        locker = subprocess.Popen(
+            [
+                php_executable(),
+                "-r",
+                '$f=fopen($argv[1],"r+b"); flock($f,LOCK_EX); '
+                'fwrite(STDOUT,"gesperrt\\n"); fflush(STDOUT); fgets(STDIN);',
+                str(state),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert locker.stdout is not None
+            assert locker.stdout.readline().strip() == "gesperrt"
+            started = time.monotonic()
+            status, response_headers, body = _request(f"{base}/count.php?u=1")
+            assert time.monotonic() - started < 1.5
+            assert (status, body.encode()) == (200, metadata)
+            assert int(response_headers["Content-Length"]) == len(body.encode())
+            status = _request(
+                f"{base}/count.php",
+                method="POST",
+                data=urlencode({"p": "/busy"}).encode("ascii"),
+                headers=headers,
+            )[0]
+            assert status == 503, "eine belegte Ablage ist keine Überschreitung des Besucherlimits"
+        finally:
+            locker.communicate("weiter\n", timeout=5)
+        assert locker.returncode == 0
+
+
 @pytest.mark.parametrize("state_name", ["quota", "month"])
 @pytest.mark.parametrize("link_kind", ["symlink", "hardlink"])
 def test_counter_rejects_linked_quota_and_month_files(
@@ -1209,7 +1309,7 @@ def test_counter_rejects_linked_quota_and_month_files(
             headers=headers,
         )[0]
 
-    assert status == 429
+    assert status == 503
     assert protected.read_text(encoding="utf-8") == "unverändert"
 
 
@@ -1239,7 +1339,7 @@ def test_counter_rejects_group_readable_quota_and_month_files(
             },
         )[0]
 
-    assert status == 429
+    assert status == 503
 
 
 def test_activation_rate_key_never_depends_on_the_signing_seed(tmp_path: Path) -> None:
@@ -1578,7 +1678,7 @@ def test_corrupt_rate_limit_states_fail_closed(tmp_path: Path) -> None:
             },
         )[0]
 
-    assert count_status == 429
+    assert count_status == 503
     assert support_status == 503
     assert activation_status == 503
     # Auch die Anmeldung: Ein Zähler, der sich nicht lesen lässt, ist kein
@@ -1630,7 +1730,7 @@ def test_counter_storage_quotas_fail_closed_without_growth(tmp_path: Path, quota
         download_status, target = _without_redirects(f"{base}/count.php?f={package}", "GET")
         assert (download_status, target) == (302, f"/dl/{package}")
 
-    assert status == 204, "Volle Ablage ist keine Überschreitung des Besucherlimits"
+    assert status == 503, "Volle Ablage ist keine Überschreitung des Besucherlimits"
     assert f"Solidon count storage quota: {quota}" in log.read_text(encoding="utf-8")
     assert {path: path.stat().st_size for path in watched} == before
 

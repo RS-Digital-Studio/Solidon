@@ -208,9 +208,14 @@ weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
 
 Erreicht die Statistik ihre Monats- oder Gesamtquote, schreibt der Zähler
 keine weitere Zeile und nennt die betroffene Grenze im privaten PHP-Log.
-Seitenzählpunkte bleiben dabei bei HTTP 204, Downloads und Versionsdateien
-werden weiter ausgeliefert. Der Betreiber prüft bei einer Speicherquote zuerst
-Wartungslauf und Löschfristen.
+Seitenzählpunkte melden einen Speicherfehler mit HTTP 503; nur ein tatsächlich
+überschrittenes Besucherlimit liefert 429. Downloads und Versionsdateien werden
+weiter ausgeliefert. Alle Dateisperren eines Zählaufrufs teilen eine Wartefrist
+von 250 Millisekunden. Bei einer Speicherquote prüft der Betreiber zuerst
+Wartungslauf und Löschfristen, bei belegten Sperren die laufenden Zugriffe.
+Die Updateantwort liest ihre Versionsdatei einmal vor dem Zählversuch; Inhalt
+und Content-Length gehören damit zum selben Stand. HEAD verändert den Zähler
+nicht und sendet keinen Antwortkörper.
 
 Private Ordner brauchen auf POSIX 0700, Zustandsdateien höchstens 0600. Ein
 Link, Mehrfachverweis, Eigentümerwechsel, Pfadtausch, falsches JSON oder zu

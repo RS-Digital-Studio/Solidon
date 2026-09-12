@@ -179,9 +179,11 @@ function count_stream_is_named_private(string $path, $stream): bool
         && (DIRECTORY_SEPARATOR !== '/' || ((int) $opened['mode'] & 0077) === 0);
 }
 
-/** Öffnet eine private Datei ohne Links oder Mehrfachverweise. */
+/** Öffnet eine private Datei; alle Sperren zusammen warten höchstens 250 Millisekunden. */
 function count_open_private_state(string $path, bool $create = true, int $lockMode = LOCK_EX)
 {
+    static $deadline = null;
+    $deadline = $deadline ?? hrtime(true) + 250000000;
     if (is_link($path)) {
         return null;
     }
@@ -205,11 +207,16 @@ function count_open_private_state(string $path, bool $create = true, int $lockMo
         }
         $stream = @fopen($path, $create ? 'r+b' : 'rb');
     }
-    if (!is_resource($stream) || !flock($stream, $lockMode)) {
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
+    if (!is_resource($stream)) {
         return null;
+    }
+    while (!flock($stream, $lockMode | LOCK_NB)) {
+        if (hrtime(true) >= $deadline) {
+            fclose($stream);
+            error_log('Solidon count: Dateisperre belegt; laufende Wartung und Zugriffe prüfen.');
+            return null;
+        }
+        usleep(5000);
     }
     if ($created && DIRECTORY_SEPARATOR === '/' && !@chmod($path, 0600)) {
         flock($stream, LOCK_UN);
@@ -426,8 +433,9 @@ function count_rate_client_keys(string $rateSecret, int $now): array
     return array_values(array_unique($keys));
 }
 
-function count_consume_rate(string $dir, string $rateSecret, int $now): bool
+function count_consume_rate(string $dir, string $rateSecret, int $now, ?bool &$limited = null): bool
 {
+    $limited = false;
     $path = $dir . '/rate.json';
     $stream = count_open_private_state($path);
     if (!is_resource($stream)) {
@@ -461,6 +469,7 @@ function count_consume_rate(string $dir, string $rateSecret, int $now): bool
         ));
         if (count($kept) >= COUNT_MAX_PER_MINUTE
             || count($global) >= COUNT_MAX_GLOBAL_PER_MINUTE) {
+            $limited = true;
             return false;
         }
         $kept[] = $now;
@@ -627,8 +636,9 @@ function client_version(): string
     return strlen($version) <= MAX_VERSION ? $version : 'unbekannt';
 }
 
-function record(string $kind, string $value): bool
+function record(string $kind, string $value, ?bool &$limited = null): bool
 {
+    $limited = false;
     if (opted_out()) {
         return true;  // Der Download läuft trotzdem — nur die Zeile entsteht nicht.
     }
@@ -647,17 +657,21 @@ function record(string $kind, string $value): bool
             . '— es wird nichts gezählt.',
             $wanted
         ));
-        return true;  // Kein Ablageort — dann eben keine Zahl. Ein Zähler hält nie den Betrieb an.
+        return false;  // Downloads und Updates werten Statistikfehler nicht als Abrufsperre.
     }
 
     try {
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $rateSecret = count_rate_secret($dir);
         if ($rateSecret === null
-            || !count_consume_rate($dir, $rateSecret, $now->getTimestamp())) {
+            || !count_consume_rate($dir, $rateSecret, $now->getTimestamp(), $limited)) {
+            if (!$limited) {
+                error_log('Solidon count: Ratenzustand nicht verfügbar; Rechte und Inhalt prüfen.');
+            }
             return false;
         }
     } catch (Throwable $problem) {
+        error_log('Solidon count: Ratenzustand nicht lesbar; Ablage und PHP-Protokoll prüfen.');
         return false;
     }
 
@@ -680,19 +694,25 @@ function record(string $kind, string $value): bool
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         );
     } catch (Throwable $problem) {
-        return true;  // Ein Statistikfehler hält Seiten und Downloads nicht an.
+        error_log('Solidon count: Statistikzeile nicht erzeugt; Ablage und PHP-Protokoll prüfen.');
+        return false;
     }
     if ($line !== false) {
         $path = $dir . '/' . $now->format('Y-m') . '.jsonl';
         try {
-            return count_append($dir, $path, $line);
+            $written = count_append($dir, $path, $line);
+            if (!$written) {
+                error_log('Solidon count: Statistikzeile nicht gespeichert; Ablagerechte prüfen.');
+            }
+            return $written;
         } catch (CountStorageFull $problem) {
             error_log('Solidon count storage quota: ' . $problem->getMessage()
                 . '. Wartungslauf und Löschfristen prüfen; es wird nichts gezählt.');
-            return true;  // Der Abruf läuft weiter, ohne die Speichergrenze zu überschreiten.
+            return false;  // Der Abruf läuft weiter, ohne die Speichergrenze zu überschreiten.
         }
     }
-    return true;
+    error_log('Solidon count: Statistikzeile nicht kodierbar; PHP-Protokoll prüfen.');
+    return false;
 }
 
 /**
@@ -845,7 +865,7 @@ if ($method === 'POST') {
 // anderen Eingängen, und ohne Absender steht dort „unbekannt".
 $updateValue = $_GET['u'] ?? '';
 if ((is_string($updateValue) ? $updateValue : '') !== '') {
-    if ($method !== 'GET' && $method !== 'HEAD') {
+    if ($method !== 'GET') {
         header('Allow: GET, HEAD');
         http_response_code(405);
         exit;
@@ -854,17 +874,22 @@ if ((is_string($updateValue) ? $updateValue : '') !== '') {
         http_response_code(404);
         exit;
     }
+    $metadata = @file_get_contents(VERSION_FILE);
+    if ($metadata === false) {
+        http_response_code(503);
+        exit;
+    }
     if ($counts) {
         record('u', client_version());
     }
     header('Content-Type: application/json; charset=utf-8');
-    header('Content-Length: ' . (string) filesize(VERSION_FILE));
+    header('Content-Length: ' . (string) strlen($metadata));
     // Dieselbe Zusage wie für die Seiten: cachen ja, aber vor jeder Nutzung
     // nachfragen. Eine Versionsdatei, die im Browsercache altert, meldet dem
     // Kunden tagelang das Update nicht, das längst da ist.
     header('Cache-Control: no-cache');
-    if ($method !== 'HEAD') {
-        readfile(VERSION_FILE);
+    if ($counts) {
+        echo $metadata;
     }
     exit;
 }
@@ -900,8 +925,9 @@ if ($page !== '') {
         http_response_code(405);
         exit;
     }
-    if (!record('p', clean_path($page))) {
-        http_response_code(429);
+    $limited = false;
+    if (!record('p', clean_path($page), $limited)) {
+        http_response_code($limited ? 429 : 503);
         exit;
     }
     http_response_code(204);
