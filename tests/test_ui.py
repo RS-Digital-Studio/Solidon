@@ -15441,7 +15441,7 @@ def test_the_format_of_the_last_export_comes_back(
     (3MF), stellte bei jedem Export beides neu ein.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(30_000)
 
     _asked_dialog(monkeypatch, (str(tmp_path / "wuerfel.stl"), "STL (*.stl)"))
     window.action_export()

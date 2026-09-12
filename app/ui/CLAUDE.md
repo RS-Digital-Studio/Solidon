@@ -623,6 +623,12 @@ Bericht gemeinsam an den Schreibdurchgang weiter. Ein Auswahlwechsel, eine
 neue Auswertung oder ein anderes Projekt im Fenster verändern diese Datei
 nicht. Ein ausdrücklich neu gestarteter Export liest den heutigen Stand.
 
+Das gemerkte Exportformat wird gegen die aktuelle Auswahl geprüft. Besteht
+sie nur aus Netzen, fällt ein gemerktes STEP für den Dialog auf 3MF zurück;
+Dateiendung und Namensvorschlag folgen diesem angebotenen Format. Ein
+Abbruch des Dialogs lässt die Projektpräferenz stehen, sodass eine spätere
+B-Rep-Auswahl weiterhin STEP vorschlägt.
+
 Der Arbeiter des ersten Laufs ist während des Dialogs noch am Auslaufen, und
 der modale Dialog dreht die Ereignisschleife weiter. `_export_worker_done`
 räumt ausschließlich sein eigenes Feld; `_run_export` verbindet beide
