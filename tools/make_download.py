@@ -882,6 +882,14 @@ def write_version(packages: list[Package]) -> None:
     zweite Stelle ist immer die, die driftet. Gerechnet sind sie hier ohnehin
     schon — für den Kasten.
 
+    **Und der Hinweistext wird eingefordert, nicht geschrieben.** Er ist das
+    einzige Feld, das hier bewusst stehen bleibt, und genau deshalb reiste
+    derselbe Satz von 0.3.0 bis 0.4.0 mit — samt der Behauptung, dies sei „das
+    bisher größte Update", und samt einer Neuerung aus einer Fassung davor
+    (Befund Robert, 12.09.2026). ``notes_version`` sagt, wofür er geschrieben
+    wurde; steht er auf einer älteren Fassung, hält dieser Lauf an. Eine
+    Automatik, deren Ausbleiben niemandem auffällt, ist keine.
+
     ``url``, ``notes`` und ``notes_by_language`` bleiben unberührt: Die eine
     ist die Adresse der Seite, die anderen ein Satz, den ein Mensch schreibt —
     einmal ohne Sprachangabe für die Fassungen bis 0.1.5, die das zweite Feld
@@ -921,6 +929,15 @@ def write_version(packages: list[Package]) -> None:
             "size": package.bytes_,
             "sha256": package.hash_,
         }
+
+    written_for = data.get("notes_version")
+    if data.get("notes_by_language") and written_for != APP_VERSION:
+        raise SystemExit(
+            f"Der Hinweistext in {VERSION_FILE.name} ist für "
+            f"{written_for or 'keine genannte Fassung'} geschrieben, gebaut wird "
+            f"{APP_VERSION}. Erst den Satz für diese Fassung schreiben und "
+            "'notes_version' nachziehen — er steht im Update-Fenster über der Punkteliste."
+        )
 
     data["version"] = APP_VERSION
     # **Vor der Kappung eingehängt**, aus demselben Grund wie die Gruppen: Die

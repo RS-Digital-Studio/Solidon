@@ -116,18 +116,28 @@ Bei einem beauftragten Website-Release:
 1. Rechtekette öffentlicher Medien in `ASSET-RIGHTS.toml` prüfen, bei unklaren
    Nutzungsrechten `.agents/skills/legal-review/SKILL.md`. Lokale Modellquellen unter `website/teile/`
    bleiben intern; die Auswahlfilter von `upload_website.py` erhalten.
-2. `make_download.py` mit den tatsächlichen angebotenen Paketen aufrufen.
+2. **Zuerst den Hinweistext der Fassung schreiben.** `notes_by_language` in
+   `website/version.json` ist das einzige Feld, das ein Mensch schreibt und das
+   `make_download.py` ausdrücklich stehen lässt — und genau deshalb reiste
+   derselbe Satz von 0.3.0 bis 0.4.0 mit, samt der Behauptung „Das bisher
+   größte Update" (Befund Robert, 12.09.2026). Neben den sechs Sätzen steht
+   `notes_version`; nennt es eine andere Fassung als die gebaute, hält
+   `make_download.py` an und sagt, was fehlt.
+3. `make_download.py` mit den tatsächlichen angebotenen Paketen aufrufen.
    Versionsdatei über `tools/sign_version.py` mit der vorgesehenen externen
    Schlüsseldatei signieren; keine ungeschützte Ersatzversion veröffentlichen.
-3. Betroffene Seiten und Generatorausgaben prüfen, dann `stamp_assets.py`.
-4. Große Pakete einzeln und zuerst hochladen, mit Pfad ab `website/`.
+   **Jede Änderung an `version.json` verlangt eine neue Unterschrift** — sie
+   deckt jedes Feld außer sich selbst, und eine ungültige Datei verwirft jede
+   ausgelieferte Installation ungelesen.
+4. Betroffene Seiten und Generatorausgaben prüfen, dann `stamp_assets.py`.
+5. Große Pakete einzeln und zuerst hochladen, mit Pfad ab `website/`.
    Ausgabe und Prozessausgang je Upload lesen.
-5. Seiten und signierte Versionsdatei über die passende geprüfte Dateiauswahl
+6. Seiten und signierte Versionsdatei über die passende geprüfte Dateiauswahl
    hochladen. `--fehlend` nimmt Pakete aus und ersetzt ihren Upload nicht.
-6. `upload_website.py --nachpruefen` gegen den Server ausführen. Lokale Dateien
+7. `upload_website.py --nachpruefen` gegen den Server ausführen. Lokale Dateien
    und ein erfolgreicher Uploadaufruf belegen nicht den ausgelieferten Inhalt.
    Bei visuellen Änderungen zusätzlich `.agents/skills/website-review/SKILL.md` auf den Zielseiten.
-7. Alte Pakete zunächst mit `--alte-pakete` nur auflisten. Löschen mit
+8. Alte Pakete zunächst mit `--alte-pakete` nur auflisten. Löschen mit
    zusätzlichem `--wirklich` nur im beauftragten Bereinigungsumfang und nach
    Prüfung der konkreten Liste; nicht pauschal als Teil jedes Uploads.
 

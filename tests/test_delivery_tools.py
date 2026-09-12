@@ -127,6 +127,59 @@ def test_the_missing_files_mode_does_not_pass_an_unsigned_manifest(
     )
 
 
+def test_a_note_written_for_an_older_release_is_not_accepted() -> None:
+    """Der Hinweistext driftete zwei Veröffentlichungen weit (Robert, 12.09.2026).
+
+    Er ist das einzige Feld der ``version.json``, das ein Mensch schreibt und
+    das ``write_version`` deshalb ausdrücklich in Ruhe lässt — und genau das
+    hat ihn von 0.3.0 bis 0.4.0 mitreisen lassen, samt der Behauptung „Das
+    bisher größte Update" und einer Neuerung aus der Fassung davor. Was ihn
+    hält, ist ``notes_version``: Steht er auf einer anderen Fassung als die
+    Datei, gehört er zu einer anderen Veröffentlichung.
+    """
+    from tools.upload_website import StrictJsonError, _validate_remote_version
+
+    payload = json.loads((upload.LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
+    _validate_remote_version(payload)
+
+    # **Die eingecheckte Datei trägt das Feld noch nicht**, und das ist kein
+    # Versäumnis: Sie ist unterschrieben, und die Unterschrift deckt jedes Feld
+    # außer sich selbst. Eingetragen wird es mit dem Satz der nächsten Fassung,
+    # und dann wird neu unterschrieben (``tools/sign_version.py``). Bis dahin
+    # hält ``write_version`` den Bau an, statt den alten Satz mitzunehmen.
+    _validate_remote_version(dict(payload, notes_version=payload["version"]))
+
+    stale = dict(payload, notes_version="0.3.0")
+    with pytest.raises(StrictJsonError) as caught:
+        _validate_remote_version(stale)
+    assert "notes_version" in str(caught.value)
+
+
+def test_the_download_build_stops_at_a_note_from_a_former_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Riegel gehört an den Anfang des Baus, nicht ans Ende der Kette.
+
+    Die Prüfung beim Hochladen fängt es auch — aber dann liegen die Pakete
+    schon gebaut da und der Kasten der Seite ist geschrieben.
+    ``write_version`` hält an, solange der Satz für eine ältere Fassung
+    geschrieben ist, und sagt, was zu tun ist (Regel 17).
+    """
+    from tools import make_download
+
+    target = tmp_path / "version.json"
+    payload = json.loads((upload.LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
+    target.write_text(json.dumps(dict(payload, notes_version="0.3.0")), encoding="utf-8")
+    monkeypatch.setattr(make_download, "VERSION_FILE", target)
+
+    with pytest.raises(SystemExit) as stopped:
+        make_download.write_version([])
+
+    said = str(stopped.value)
+    assert "0.3.0" in said and make_download.APP_VERSION in said
+    assert "notes_version" in said, "ohne den Feldnamen sucht der Leser"
+
+
 # --- make_download ---------------------------------------------------------------
 
 

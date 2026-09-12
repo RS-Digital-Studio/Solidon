@@ -114,6 +114,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
 | [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Der Website-Fehlalarm ist behoben; offen bleibt der rote Vorwarnlauf gegen die neuesten Abhängigkeiten |
+| [RM-162 — Der Hinweistext der Fassung nennt ein Update, das es nicht gab](#rm-162) | Veröffentlichung, Betrieb und Vertrieb | Sechs Sätze stehen bereit; das Eintragen braucht den Signierschlüssel und einen Upload |
 | [RM-091 — CRA-Meldebereitschaft vor dem 11.09.2026 herstellen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf vor dem 11.09.2026 belegen |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
@@ -1964,6 +1965,63 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Konformitätsfreigabe ableiten.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-162"></a>
+
+- [ ] **RM-162 — Der Hinweistext der Fassung nennt ein Update, das es nicht gab.** Robert am
+  12.09.2026: „bei unserem changelog in der app haben wir auch immer drin stehen das bisher
+  größte update, obwohl das nicht stimmt". Nachgemessen: `notes_by_language` in
+  `website/version.json` steht seit **0.3.0** unverändert da und reiste über 0.3.1 bis 0.4.0 mit.
+  Der Satz behauptet zweierlei, das nicht stimmt — „Das bisher größte Update" (0.2.0 hatte 75
+  Punkte, 0.4.0 hat 62) und eine Neuerung aus der Fassung davor („Aus Schritten im Verlauf wird
+  ein eigener Baustein", Zeile 534 des Changelogs, also 0.3.0).
+
+  **Der Riegel steht** (12.09.2026): `write_version` hält den Paketbau an, solange
+  `notes_version` nicht die gebaute Fassung nennt, und `_validate_remote_version` weist ein
+  Manifest ab, dessen Satz zu einer anderen Fassung gehört. Nachweis:
+  `test_a_note_written_for_an_older_release_is_not_accepted` und
+  `test_the_download_build_stops_at_a_note_from_a_former_release`, beide mit Gegenprobe.
+
+  **Was bleibt, braucht den Schlüssel.** `website/version.json` ist Ed25519-unterschrieben, und
+  der private Teil liegt im Passwortmanager, nie im Repository (`tools/sign_version.py`). Ein
+  geänderter Satz macht die Unterschrift ungültig, und eine ungültige Datei verwirft **jede**
+  ausgelieferte Installation ungelesen — der Kunde erführe von gar keinem Update mehr. Die
+  Korrektur ist deshalb kein Commit, sondern ein Handgriff mit dem Schlüssel:
+
+  1. die sechs Sätze unten in `notes_by_language` eintragen,
+  2. `"notes_version": "0.4.0"` daneben,
+  3. `python tools/sign_version.py --private geheim.key`,
+  4. hochladen (`python tools/upload_website.py`).
+
+  Die Sätze stehen bereit, in der Reihenfolge der Katalogsprachen:
+
+  - **de** — Neu ist vor allem: Ihr Filamentbestand hat einen eigenen Ort — ein Regal mit dem
+    Füllstand je Spule, und beim Drucken bucht Solidon den Verbrauch auf Nachfrage ab. Beim
+    Bohren stellen Sie die Tiefe mit der Maus ein, während das Modell durchscheinend wird. Die
+    Demo bleibt vollständig und ohne Schlüssel, bis zum 30.10.2026.
+  - **en** — New above all: your filament stock has a place of its own — a rack showing how much
+    is left on each spool, and when you print, Solidon books the amount used if you let it. When
+    drilling, you set the depth with the mouse while the model turns translucent. The demo stays
+    complete and needs no key, until 30 October 2026.
+  - **es** — Lo nuevo sobre todo: su existencia de filamento tiene un sitio propio — una
+    estantería con el nivel de cada bobina, y al imprimir Solidon apunta el consumo si usted se
+    lo permite. Al taladrar ajusta la profundidad con el ratón mientras el modelo se vuelve
+    translúcido. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.
+  - **fr** — Surtout : votre stock de filament a désormais sa place — une étagère indiquant ce
+    qui reste sur chaque bobine, et à l’impression Solidon décompte la quantité utilisée si vous
+    l’acceptez. Au perçage, vous réglez la profondeur à la souris pendant que le modèle devient
+    translucide. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.
+  - **it** — Soprattutto: le tue bobine hanno un posto tutto loro — uno scaffale con il livello
+    di ciascuna, e stampando Solidon registra il consumo se glielo permetti. Nel forare imposti
+    la profondità con il mouse mentre il modello diventa traslucido. La demo resta completa e
+    senza chiave, fino al 30 ottobre 2026.
+  - **pt** — Sobretudo: o seu stock de filamento tem um lugar próprio — uma estante com o nível
+    de cada bobina, e ao imprimir o Solidon regista o consumo se o permitir. Ao furar, ajusta a
+    profundidade com o rato enquanto o modelo fica translúcido. A demo continua completa e sem
+    chave, até 30 de outubro de 2026.
+
+  Abnahme: Der Satz im Update-Fenster nennt die Fassung, die er beschreibt, und das Feld
+  `notes_version` steht auf ihr; `tools/sign_version.py --check` bestätigt die Unterschrift.
 
 ## Kundenrückmeldungen
 

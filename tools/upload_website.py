@@ -118,6 +118,7 @@ _VERSION_FIELDS = frozenset(
         "changes",
         "changes_total",
         "notes_by_language",
+        "notes_version",
         "groups",
         "signature",
     }
@@ -440,6 +441,17 @@ def _validate_remote_version(value: object) -> dict[str, Any]:
         ):
             reject("notes_by_language enthält einen ungültigen Sprachschlüssel")
         text(note, f"notes_by_language.{language}", maximum=800)
+
+    # **Für welche Fassung der Satz geschrieben wurde.** Er ist das einzige
+    # Feld, das ein Mensch schreibt und das ``write_version`` deshalb
+    # ausdrücklich in Ruhe lässt — und genau darum reiste er von 0.3.0 bis
+    # 0.4.0 unverändert mit, samt der Behauptung, dies sei „das bisher größte
+    # Update". Steht er auf einer anderen Fassung als die Datei, gehört er zu
+    # einer anderen Veröffentlichung.
+    if "notes_version" in value:
+        text(value["notes_version"], "notes_version", maximum=32)
+        if value["notes_version"] != value.get("version"):
+            reject("notes_version gehört zu einer anderen Fassung als version")
 
     changes = value.get("changes", {})
     if not isinstance(changes, dict) or len(changes) > 16:
