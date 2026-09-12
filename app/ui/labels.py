@@ -776,6 +776,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "circle": _("Kreis"),
     "polygon": _("Vieleck"),
     "slot": _("Langloch"),
+    # Die zwei Lochbilder. Sie stehen bei den Grundformen, weil sie dasselbe
+    # sind — ein Umriss, den die Operation hochzieht oder ausschneidet —, nur
+    # dass es mehrere davon sind.
+    "bolt_circle": _("Lochkreis"),
+    "hole_grid": _("Lochraster"),
     # Die vier Verbinder. „round" und „hex" wären als Schlüssel noch zu
     # erraten, „dovetail" und „snap" nicht — und das sind die beiden, für die
     # man sich bewusst entscheidet.
@@ -926,6 +931,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "circle": _("Runder Umriss aus dem Durchmesser."),
     "polygon": _("Regelmäßiges Vieleck mit wählbarer Eckenzahl."),
     "slot": _("Langloch mit runden Enden — für Schrauben, die Spiel brauchen."),
+    "bolt_circle": _("Löcher gleichmäßig auf einem Teilkreis — Flansch, Deckel, Nabe."),
+    "hole_grid": _("Löcher in Spalten und Zeilen — Lüftungsgitter, Steckplatte, Lochblech."),
     "round": _("Runder Stift — einfach und unempfindlich gegen Toleranzen."),
     "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
     "dovetail": _(

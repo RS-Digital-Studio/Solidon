@@ -53,12 +53,62 @@ _LENGTH_DOC = _(
     "Länge in X. Beim Kreis und beim Vieleck ist das der Durchmesser, "
     "beim Langloch die Gesamtlänge über die runden Enden."
 )
+#: Derselbe Satz, wo auch die Lochbilder zur Wahl stehen — sie nehmen dasselbe Feld.
+_PATTERN_LENGTH_DOC = _(
+    "Länge in X. Beim Kreis und beim Vieleck ist das der Durchmesser, "
+    "beim Langloch die Gesamtlänge über die runden Enden, beim Lochkreis der "
+    "Teilkreisdurchmesser und beim Lochraster der Abstand von Mitte zu Mitte."
+)
 _WIDTH_DOC = _("Breite in Y. Beim Kreis und beim Vieleck ohne Wirkung.")
 _SHAPE_DOC = _("Rechteck, Langloch, Kreis oder Vieleck — die Maße stehen darunter.")
+#: Wo die zwei Muster zur Wahl stehen, nennt der Satz sie mit.
+_SHAPE_AND_PATTERN_DOC = _(
+    "Rechteck, Langloch, Kreis, Vieleck — oder ein Lochbild: Lochkreis und "
+    "Lochraster geben so viele Löcher, wie darunter eingestellt sind."
+)
 _CORNERS_DOC = _("Zahl der Ecken, nur beim Vieleck.")
+_COUNT_DOC = _("Zahl der Löcher auf dem Teilkreis, nur beim Lochkreis.")
+_COLUMNS_DOC = _("Löcher in x-Richtung, nur beim Lochraster.")
+_ROWS_DOC = _("Löcher in y-Richtung, nur beim Lochraster.")
+_HOLE_DIAMETER_DOC = _("Durchmesser jedes einzelnen Lochs, beim Lochkreis und beim Lochraster.")
 _SKETCH_DOC = _(
     "Eine gezeichnete Skizze anstelle der Grundform. Leer heißt: die Grundform oben gilt."
 )
+
+
+@dataclasses.dataclass(frozen=True)
+class _Pattern:
+    """Die Zahlen eines Lochbilds — was Lochkreis und Lochraster zusätzlich brauchen.
+
+    Sie reisen zusammen, weil sie zusammen gebraucht werden: ``_regions_for``
+    trägt schon acht Stellen, und vier weitere Zahlen einzeln durchzureichen
+    hieße, drei Aufrufe anzufassen, die von Lochbildern nichts wissen.
+    """
+
+    count: int
+    columns: int
+    rows: int
+    hole_diameter: float
+
+
+def _pattern_of(params: SketchExtrudeParams | SketchPocketParams) -> _Pattern:
+    """Die vier Lochbildzahlen aus dem Schema, das sie trägt."""
+    return _Pattern(params.count, params.columns, params.rows, params.hole_diameter)
+
+
+def _pattern_profiles(shape: str, length: float, pattern: _Pattern) -> list[Profile]:
+    """Ein Lochbild — jedes Loch ein eigener Umriss, keiner im anderen.
+
+    ``length`` trägt auch hier das Hauptmaß: beim Lochkreis den
+    Teilkreisdurchmesser, beim Raster den Abstand von Mitte zu Mitte. Dasselbe
+    Feld, in dem beim Kreis der Durchmesser steht — ein zweites daneben wäre
+    ein zweiter Ort für dieselbe Sache.
+    """
+    if shape == "bolt_circle":
+        sketch = shapes.bolt_circle(length, pattern.count, pattern.hole_diameter)
+    else:
+        sketch = shapes.hole_grid(pattern.columns, pattern.rows, length, pattern.hole_diameter)
+    return list(regions_of(solve_sketch(sketch)))
 
 
 def _sketch_profile(shape: str, length: float, width: float, corners: int) -> Profile:
@@ -139,6 +189,7 @@ def _regions_for(
     corners: int,
     region: int,
     findings: list[Finding],
+    pattern: _Pattern | None = None,
 ) -> list[Profile]:
     """Die Umrisse, die extrudiert werden — einer, oder alle nebeneinander.
 
@@ -149,8 +200,14 @@ def _regions_for(
 
     Löcher sind keine Regionen — sie hängen an ihrer Außenkontur und wandern
     mit ihr. Eine Nummer zählt deshalb nur die Umrisse, die für sich stehen.
+
+    Ein **Lochbild** ist der dritte Fall: Es kommt ohne Zeichnung und bringt
+    trotzdem viele Umrisse mit. ``pattern`` reichen nur die zwei Operationen
+    herein, die damit umgehen — Hochziehen und Tasche.
     """
     if not sketch_text:
+        if pattern is not None and shape in shapes.PATTERN_CHOICES:
+            return _pattern_profiles(shape, length, pattern)
         return [_sketch_profile(shape, length, width, corners)]
     found = regions_of(_solved_drawing(ctx, sketch_text, findings))
     if region == 0:
@@ -272,10 +329,18 @@ def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
 @op_params
 class SketchExtrudeParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="rectangle",
+        choices=shapes.SHAPE_AND_PATTERN_CHOICES,
+        doc=_SHAPE_AND_PATTERN_DOC,
     )
     length: float = param(
-        title=_("Länge"), default=40.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+        title=_("Länge"),
+        default=40.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_PATTERN_LENGTH_DOC,
     )
     width: float = param(
         title=_("Breite"),
@@ -293,6 +358,39 @@ class SketchExtrudeParams(BaseParams):
         minimum=0.1,
         maximum=1000.0,
         doc=_("Wie hoch der Körper gezogen wird, vom Druckbett nach oben."),
+    )
+    count: int = param(
+        title=_("Löcher"),
+        default=6,
+        minimum=2,
+        maximum=200,
+        doc=_COUNT_DOC,
+        depends_on=("shape", ("bolt_circle",)),
+    )
+    columns: int = param(
+        title=_("Spalten"),
+        default=4,
+        minimum=1,
+        maximum=100,
+        doc=_COLUMNS_DOC,
+        depends_on=("shape", ("hole_grid",)),
+    )
+    rows: int = param(
+        title=_("Zeilen"),
+        default=3,
+        minimum=1,
+        maximum=100,
+        doc=_ROWS_DOC,
+        depends_on=("shape", ("hole_grid",)),
+    )
+    hole_diameter: float = param(
+        title=_("Loch-Ø"),
+        default=4.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_HOLE_DIAMETER_DOC,
+        depends_on=("shape", ("bolt_circle", "hole_grid")),
     )
     corners: int = param(
         title=_("Ecken"),
@@ -359,6 +457,7 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
         params.corners,
         params.region,
         findings,
+        _pattern_of(params),
     )
     bodies = [profiles.extrude(one, height, plane, frame) for one in chosen]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
@@ -368,10 +467,18 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
 @op_params
 class SketchPocketParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="rectangle",
+        choices=shapes.SHAPE_AND_PATTERN_CHOICES,
+        doc=_SHAPE_AND_PATTERN_DOC,
     )
     length: float = param(
-        title=_("Länge"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+        title=_("Länge"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_PATTERN_LENGTH_DOC,
     )
     width: float = param(
         title=_("Breite"),
@@ -390,6 +497,39 @@ class SketchPocketParams(BaseParams):
         maximum=1000.0,
         doc=_("Wie tief die Tasche von ihrer Oberkante nach unten schneidet."),
         depends_on=("through", (False,)),
+    )
+    count: int = param(
+        title=_("Löcher"),
+        default=6,
+        minimum=2,
+        maximum=200,
+        doc=_COUNT_DOC,
+        depends_on=("shape", ("bolt_circle",)),
+    )
+    columns: int = param(
+        title=_("Spalten"),
+        default=4,
+        minimum=1,
+        maximum=100,
+        doc=_COLUMNS_DOC,
+        depends_on=("shape", ("hole_grid",)),
+    )
+    rows: int = param(
+        title=_("Zeilen"),
+        default=3,
+        minimum=1,
+        maximum=100,
+        doc=_ROWS_DOC,
+        depends_on=("shape", ("hole_grid",)),
+    )
+    hole_diameter: float = param(
+        title=_("Loch-Ø"),
+        default=4.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_HOLE_DIAMETER_DOC,
+        depends_on=("shape", ("bolt_circle", "hole_grid")),
     )
     through: bool = param(
         title=_("Durchgehend"),
@@ -614,6 +754,7 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
             params.corners,
             params.region,
             findings,
+            _pattern_of(params),
         )
     ]
     if frame is not None:

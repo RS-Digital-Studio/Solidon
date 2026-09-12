@@ -31,7 +31,7 @@ Grundebene oder auf einer Fläche des Modells.
 |---|---|
 | `solver.py` | Der 2D-Löser |
 | `profile.py` | Vom gelösten Element zum geschlossenen Umriss |
-| `shapes.py` | Die Grundformen (Ausgabestufe eins) |
+| `shapes.py` | Die Grundformen und die zwei Lochbilder (Ausgabestufe eins) |
 | `planes.py` | Wo eine Skizze liegt |
 | `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln |
 | `ops.py` | Die Operationen der Kategorie „Skizze" |
@@ -80,4 +80,13 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
   wird vorher — dieselbe Ebene, gleich viele getrennte Umrisse; die gleiche
   Zahl der Löcher je Paar prüft `brep.profiles.loft` selbst. Verbunden wird in
   der Reihenfolge von `regions_of`, und der `doc`-Satz sagt das.
+- **Ein Lochbild ist eine Grundform mit mehreren Umrissen** (`bolt_circle`,
+  `hole_grid`, RM-147). Sie stehen in `shapes.PATTERN_CHOICES` und nicht in
+  `SHAPE_CHOICES`: Nur *Grundform hochziehen* und *Tasche schneiden* rechnen
+  mit mehreren Umrissen, Drehen, Ziehen und Übergang mit genau einem. Das
+  Hauptmaß bleibt `length` — beim Lochkreis der Teilkreisdurchmesser, beim
+  Raster der Abstand von Mitte zu Mitte —, dazu kommen `count`, `columns`,
+  `rows` und `hole_diameter` über `depends_on`. Assoziativ ist daran nichts
+  (Konzept P15, E11): Die Parametrik liegt eine Ebene höher, ein
+  Projektparameter dreht den Teilkreis.
 - **Kein Qt.** Der Editor ruft hier herein, nie umgekehrt.

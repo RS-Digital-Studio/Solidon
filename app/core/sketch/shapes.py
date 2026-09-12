@@ -21,6 +21,17 @@ from app.i18n import _
 #: Die Grundformen, die jede Skizzen-Op anbietet — eine Quelle für alle Dialoge.
 SHAPE_CHOICES: tuple[str, ...] = ("rectangle", "slot", "circle", "polygon")
 
+#: Die zwei Muster — sie geben **mehrere** Umrisse zurück und nicht einen.
+#:
+#: Deshalb stehen sie nicht in :data:`SHAPE_CHOICES`: Drehen, Ziehen und
+#: Übergang rechnen mit genau einem Querschnitt, und ein Lochkreis um eine
+#: Achse gedreht ist kein Bauteil. Angeboten werden sie nur dort, wo mehrere
+#: Umrisse ohnehin vorkommen — beim Hochziehen und bei der Tasche.
+PATTERN_CHOICES: tuple[str, ...] = ("bolt_circle", "hole_grid")
+
+#: Was Hochziehen und Tasche zur Wahl stellen: beides zusammen.
+SHAPE_AND_PATTERN_CHOICES: tuple[str, ...] = SHAPE_CHOICES + PATTERN_CHOICES
+
 
 def rectangle(length: float, width: float) -> Sketch:
     """Ein Rechteck, Länge in X, Breite in Y.

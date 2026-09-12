@@ -81,7 +81,7 @@ def brep_box(width: float = 40.0, depth: float = 30.0, height: float = 20.0) -> 
     return entry
 
 
-# --- Extrudieren: vier Grundformen gegen vier Formeln ---------------------------
+# --- Extrudieren: sechs Grundformen gegen sechs Formeln -------------------------
 
 
 def test_an_extruded_rectangle_is_a_block() -> None:
@@ -102,6 +102,116 @@ def test_an_extruded_slot_is_a_rectangle_plus_a_circle() -> None:
 def test_an_extruded_hexagon_matches_the_regular_polygon_area() -> None:
     body = solid_of(run("sketch_extrude", shape="polygon", length=20, corners=6, height=3))
     assert body.volume == pytest.approx(3.0 * math.sqrt(3.0) / 2.0 * 100.0 * 3.0, rel=1e-9)
+
+
+# --- Die zwei Muster: sie geben mehrere Umrisse und nicht einen -----------------
+#
+# Bis zum 12.09.2026 gab es den Lochkreis nur als Menüeintrag im Skizzeneditor,
+# mit Ø 50, sechs Löchern und Ø 4 fest im Aufruf. Wer andere Maße wollte, zog
+# jeden Kreis von Hand nach; Kommandozeile und Agent kannten die Form gar nicht,
+# denn was nicht im Register steht, steht in keinem der drei Wege.
+
+
+def test_an_extruded_bolt_circle_is_one_pin_per_hole() -> None:
+    """Sechs getrennte Zapfen, nicht ein Körper — jeder mit seinem eigenen Volumen."""
+    body = solid_of(
+        run(
+            "sketch_extrude",
+            shape="bolt_circle",
+            length=50,
+            count=6,
+            hole_diameter=4,
+            height=10,
+        )
+    )
+    assert body.solid_count == 6, "sechs Löcher auf dem Teilkreis sind sechs Körper"
+    assert body.volume == pytest.approx(6.0 * math.pi * 4.0 * 10.0, rel=1e-9)
+
+
+def test_the_bolt_circle_sits_on_the_pitch_diameter_it_was_given() -> None:
+    """Der Teilkreis ist ein Maß und keine Näherung: Ø 50 plus das Loch außen."""
+    from app.core.brep.profiles import bounds
+
+    body = solid_of(
+        run("sketch_extrude", shape="bolt_circle", length=50, count=4, hole_diameter=4, height=2)
+    )
+    xmin, ymin, _zmin, xmax, ymax, _zmax = bounds(body)
+    assert xmax - xmin == pytest.approx(54.0, abs=1e-6), "Teilkreis 50 plus ein Lochdurchmesser"
+    assert ymax - ymin == pytest.approx(54.0, abs=1e-6)
+
+
+def test_an_extruded_hole_grid_counts_columns_times_rows() -> None:
+    body = solid_of(
+        run(
+            "sketch_extrude",
+            shape="hole_grid",
+            length=10,
+            columns=4,
+            rows=3,
+            hole_diameter=3,
+            height=2,
+        )
+    )
+    assert body.solid_count == 12, "vier Spalten mal drei Zeilen"
+    assert body.volume == pytest.approx(12.0 * math.pi * 2.25 * 2.0, rel=1e-9)
+
+
+def test_a_bolt_circle_pocket_drills_every_hole_at_once() -> None:
+    """Der eigentliche Fall: ein Flanschbild in einen Körper, ein Schritt."""
+    result = run(
+        "sketch_pocket",
+        brep_box(),
+        shape="bolt_circle",
+        length=20,
+        count=4,
+        hole_diameter=3,
+        depth=5,
+    )
+    assert solid_of(result).volume == pytest.approx(24000.0 - 4.0 * math.pi * 2.25 * 5.0, rel=1e-9)
+
+
+def test_a_bolt_circle_whose_holes_outgrow_their_pitch_says_so() -> None:
+    """Zwölf Millimeter Loch auf einem Teilkreis von zehn gibt keinen Kranz."""
+    with pytest.raises(ValidationError) as caught:
+        run("sketch_extrude", shape="bolt_circle", length=10, count=6, hole_diameter=12, height=5)
+
+    assert caught.value.field == "hole_diameter"
+    assert caught.value.suggestions, "eine Absage trägt eine Handlung (Regel 17)"
+
+
+def test_a_bolt_circle_needs_at_least_two_holes() -> None:
+    with pytest.raises(ValidationError) as caught:
+        run("sketch_extrude", shape="bolt_circle", length=50, count=1, hole_diameter=4, height=5)
+
+    assert caught.value.field == "count"
+
+
+def test_only_the_two_ops_that_survive_several_outlines_offer_the_patterns() -> None:
+    """Ein Lochkreis um eine Achse gedreht ist kein Bauteil, sondern ein Missverständnis.
+
+    ``sketch_revolve``, ``sketch_sweep`` und ``sketch_loft`` rechnen mit genau
+    **einem** Umriss. Sie bekommen die Muster deshalb gar nicht erst zur Wahl —
+    was nicht geht, steht nicht im Auswahlfeld, statt hinterher abgelehnt zu
+    werden.
+    """
+    offered = {}
+    for name in (
+        "sketch_extrude",
+        "sketch_pocket",
+        "sketch_revolve",
+        "sketch_sweep",
+        "sketch_loft",
+    ):
+        shape = next(p for p in REGISTRY.get(name).params.spec() if p.name == "shape")
+        offered[name] = set(shape.choices or ())
+
+    assert offered, "keine Operation trägt shape — dann prüft dieser Test nichts"
+    for name in ("sketch_extrude", "sketch_pocket"):
+        assert {"bolt_circle", "hole_grid"} <= offered[name], f"{name} braucht die Muster"
+    for name in ("sketch_revolve", "sketch_sweep", "sketch_loft"):
+        assert not {"bolt_circle", "hole_grid"} & offered[name], (
+            f"{name} rechnet mit einem Umriss und darf die Muster nicht anbieten"
+        )
 
 
 def _square(half: float, *, clockwise: bool) -> tuple[SketchElement, ...]:
