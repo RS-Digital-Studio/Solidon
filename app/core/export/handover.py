@@ -2261,28 +2261,17 @@ def _run_slicer(
 
 
 def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
-    """Der Bauraum in den Koordinaten, in denen **dieser** Slicer schreibt.
+    """Der Bauraum aller unterstützten Slicerfamilien beginnt an der Bettecke.
 
-    Zwei Welten, und sie zu verwechseln kostet einen falschen Befund bei jedem
-    Lauf: Cura und PrusaSlicer bekommen von Solidon eine Maschine um den
-    Ursprung (:func:`_machine_keys`), die Orca-Familie lädt ihr eigenes
-    Maschinenprofil und misst von der Ecke der Platte.
+    Cura und Prusa erhalten diese Koordinaten über :func:`_machine_keys`,
+    die Orca-Familie über ihr Maschinenprofil. Der Familienparameter bleibt
+    Teil des gemeinsamen Aufrufvertrags.
 
-    Gefragt wird über :func:`wants_bed_coordinates` und nicht über den
-    Familiennamen: Es ist dieselbe Frage, die auch die Übergabe stellt, und
-    zwei Formulierungen davon laufen auseinander, sobald eine vierte Familie
-    dazukommt.
-
-    Das hier ist die **Annahme**. Was die Datei selbst über ihr Bett sagt,
-    liest :func:`gcode.stated_bed`, und das gilt vor — gebraucht wird die
-    Annahme nur, wo der Slicer schweigt, also bei ``cura``, und dort weiß
-    Solidon die Maße genau, weil es sie selbst geschrieben hat.
+    Dies ist die Annahme für Dateien ohne Bettangabe. Was die Datei selbst
+    über ihr Bett sagt, liest :func:`gcode.stated_bed`; diese Angabe geht vor.
     """
     width, depth, height = profile.printer.build_volume
-    if wants_bed_coordinates(flavour):
-        return BoundingBox((0.0, 0.0, 0.0), (width, depth, height))
-    half_width, half_depth = width / 2.0, depth / 2.0
-    return BoundingBox((-half_width, -half_depth, 0.0), (half_width, half_depth, height))
+    return BoundingBox((0.0, 0.0, 0.0), (width, depth, height))
 
 
 def _usable_area(contour: Sequence[tuple[float, float]]) -> BaseGeometry | None:
