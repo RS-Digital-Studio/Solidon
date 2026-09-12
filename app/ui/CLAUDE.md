@@ -1015,6 +1015,10 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
 ## Zustandsbindung in asynchronen Bedienwegen
 
+Im Erzeugen-Dialog gehören Fortschrittsbalken und Schritttext dem laufenden
+Auftrag. Änderungen an der nächsten Beschreibung sperren weiterhin einen
+zweiten Start und überschreiben weder den Fortschritt noch seinen Zustand.
+
 - Quellenarbeiter gehören zu genau einem Projekt und gegebenenfalls zu einem
   beim Start gewählten Zielkörper. Späte Signale dürfen weder einen später
   gewählten Körper bearbeiten noch den Zustand eines anderen Projekts melden.

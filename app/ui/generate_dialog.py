@@ -545,6 +545,11 @@ class GenerateDialog(QDialog):
             self.setupRequested.emit()
 
     def _update_state(self) -> None:
+        if self._busy:
+            # Eingaben gehören dem nächsten Auftrag. Fortschritt und Schritt
+            # bleiben bis zum Ende beim laufenden Erzeuger.
+            self._lock_make(False)
+            return
         # **Drei Lagen, und die mittlere war die schlimmste.** Geprüft wurde,
         # ob ein Port antwortet — und dann stand „Bereit" da, auch wenn dieses
         # ComfyUI die Knoten des Ablaufs nicht kennt. Wer es installiert und

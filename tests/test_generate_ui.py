@@ -1086,12 +1086,35 @@ class _HeldBackend(ScriptedMeshBackend):
     def __init__(self, gate: threading.Event) -> None:
         super().__init__(fallback=(MESHES / "cube_clean.stl").read_bytes())
         self.gate = gate
-        self.calls = 0
+        self.started = 0
 
     def text_to_mesh(self, prompt: str, **kwargs: object) -> object:
-        self.calls += 1
+        self.started += 1
         self.gate.wait(10.0)
         return super().text_to_mesh(prompt, **kwargs)  # type: ignore[arg-type]
+
+
+def test_editing_the_prompt_keeps_the_running_generation_visible(qt_app: QApplication) -> None:
+    """Ein geänderter nächster Auftrag lässt Fortschritt und Schritt des laufenden stehen."""
+    gate = threading.Event()
+    dialog = GenerateDialog(backend=_HeldBackend(gate))
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("Würfel")
+        dialog._start()
+        assert dialog._worker is not None
+        dialog._on_step(0.37, "Geometrie wird erzeugt")
+        dialog.prompt.setText("Würfel mit Füßen")
+        assert not dialog.progress.isHidden()
+        assert (dialog.progress.minimum(), dialog.progress.maximum()) == (0, 100)
+        assert dialog.progress.value() == 37
+        assert dialog.state.text() == "Geometrie wird erzeugt"
+        assert not ok(dialog).isEnabled()
+        assert dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel).isEnabled()
+    finally:
+        gate.set()
+        dialog.release()
+        dialog.deleteLater()
 
 
 def test_another_attempt_during_a_run_does_not_start_a_second_job(qt_app: QApplication) -> None:
@@ -1116,7 +1139,7 @@ def test_another_attempt_during_a_run_does_not_start_a_second_job(qt_app: QAppli
         gate.set()
         assert first.wait(10_000)
         qt_app.processEvents()
-        assert backend.calls == 1
+        assert backend.started == 1
         assert dialog.again.isEnabled(), "nach dem Lauf steht der Knopf wieder"
     finally:
         gate.set()
