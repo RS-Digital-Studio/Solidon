@@ -50,6 +50,10 @@ hat aber keinen Einfluss auf die geometrische Kandidatenauswahl.
 
 Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
 `tools/build_slice_core.py` baut ihn, das Budget dafür steht in §31.
+Der Ebenenschnitt verlangt `PLANE_SEGMENTS_API = 2`, einschließlich des
+optionalen Abbruchrückrufs. Ein älterer oder unbekannter lokaler Bau nimmt
+für diese Rechnung den NumPy-Weg. Die nativen Vergleichstests nennen den
+nötigen Neubau, statt einen unpassenden Aufruf zu versuchen.
 
 Eine geschlossene verkettete Kontur kann geometrisch trotzdem ungültig sein,
 etwa wenn eine Ebene genau durch die auslaufende Ecke eines Verbinders geht

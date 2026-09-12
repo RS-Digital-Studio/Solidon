@@ -660,7 +660,8 @@ def _plane_segments(
     # Ein ignorierter lokaler Bau kann älter als die Quelle sein. Der
     # Quellklon bleibt dann funktionsfähig und sagt über die übersprungenen
     # Vergleichstests klar, dass ``build_slice_core.py`` erneut laufen muss.
-    if _chain is not None and hasattr(_chain, "plane_segments"):
+    # Version 2 bestätigt auch den optionalen Abbruchrückruf als fünftes Argument.
+    if _chain is not None and getattr(_chain, "PLANE_SEGMENTS_API", None) == 2:
         args = (
             np.ascontiguousarray(mesh.raw.vertices, dtype=np.float64),
             np.ascontiguousarray(mesh.raw.faces, dtype=np.int64),

@@ -41,7 +41,7 @@ from app.core.slice import analysis
 from app.core.slice.analysis import cross_section, cross_sections, slice_body
 
 pytestmark = pytest.mark.skipif(
-    analysis._chain is None or not hasattr(analysis._chain, "plane_segments"),
+    analysis._chain is None or getattr(analysis._chain, "PLANE_SEGMENTS_API", None) != 2,
     reason="app/core/slice/_chain ist nicht aktuell gebaut (tools/build_slice_core.py)",
 )
 

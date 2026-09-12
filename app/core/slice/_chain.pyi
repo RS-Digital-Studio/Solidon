@@ -10,6 +10,8 @@ from collections.abc import Callable
 import numpy as np
 import numpy.typing as npt
 
+PLANE_SEGMENTS_API: int
+
 def plane_segments(
     vertices: npt.NDArray[np.float64],
     faces: npt.NDArray[np.int64],

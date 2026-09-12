@@ -9,14 +9,18 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import trimesh
 
+from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import place_on_bed
 from app.core.ingest.loader import normalise
+from app.core.scene.cancel import CancelSignal
+from app.core.slice import analysis
 from app.core.slice.analysis import (
     WIDTH_INTERESTING,
     cross_section,
@@ -54,6 +58,66 @@ def test_a_cube_has_the_same_cross_section_all_the_way_up() -> None:
     for layer in result.layers:
         assert layer.area == pytest.approx(400.0, rel=TOLERANCE)
     assert result.first_layer_area == pytest.approx(400.0, rel=TOLERANCE)
+
+
+@pytest.mark.parametrize("api", [None, 1, 999])
+@pytest.mark.parametrize("cancellable", [False, True])
+def test_an_incompatible_compiled_cut_uses_the_available_fallback(
+    monkeypatch: pytest.MonkeyPatch, api: int | None, cancellable: bool
+) -> None:
+    """Ein alter lokaler Vierparameter-Bau verhindert keine aktuelle Schichtanalyse."""
+    mesh = on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    calls = []
+
+    def old_cut(vertices, faces, heights, epsilon):
+        calls.append((vertices, faces, heights, epsilon))
+        return analysis._plane_segments_numpy(mesh, heights)
+
+    compiled = SimpleNamespace(plane_segments=old_cut, chain_rings=lambda *_args: (0, 0))
+    if api is not None:
+        compiled.PLANE_SEGMENTS_API = api
+    monkeypatch.setattr(analysis, "_chain", compiled)
+
+    result = slice_body(mesh, 2.0, cancelled=CancelSignal() if cancellable else None)
+
+    assert not calls
+    assert len(result.layers) == 10
+    assert [layer.area for layer in result.layers] == pytest.approx([400.0] * 10)
+    assert result.first_layer_area == pytest.approx(400.0)
+
+
+def test_an_incompatible_compiled_cut_keeps_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch der wegen einer alten Erweiterung gewählte Rückfallweg hört auf das Token."""
+    mesh = on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+
+    def old_cut(vertices, faces, heights, epsilon):
+        pytest.fail("the incompatible function must not be called")
+
+    monkeypatch.setattr(analysis, "_chain", SimpleNamespace(plane_segments=old_cut))
+    token = CancelSignal()
+    token.cancel()
+
+    with pytest.raises(OperationCancelled):
+        analysis._plane_segments(mesh, np.array([1.0]), cancelled=token)
+
+
+def test_a_current_compiled_cut_does_not_hide_internal_type_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine bestätigte Schnittstelle macht einen Fehler ihres Rumpfs nicht zum Rückfall."""
+    mesh = on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+
+    def broken_cut(*_args):
+        raise TypeError("native internal type error")
+
+    monkeypatch.setattr(
+        analysis, "_chain", SimpleNamespace(PLANE_SEGMENTS_API=2, plane_segments=broken_cut)
+    )
+
+    with pytest.raises(TypeError, match="native internal type error"):
+        slice_body(mesh, 2.0, cancelled=CancelSignal())
 
 
 def test_a_cylinder_matches_pi_r_squared() -> None:

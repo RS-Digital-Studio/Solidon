@@ -30,6 +30,9 @@ import numpy as np
 
 from libc.math cimport fabs
 
+#: Version 2 nimmt einen optionalen Abbruchrückruf als fünftes Argument an.
+PLANE_SEGMENTS_API = 2
+
 
 cdef Py_ssize_t _lower_bound(double[::1] values, double target) noexcept nogil:
     """Erster Index mit ``Wert >= target``."""
