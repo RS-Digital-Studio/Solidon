@@ -1458,7 +1458,7 @@ def _fitted(
         tori = _merged_tori(body, tori)
         if check_cancelled is not None:
             check_cancelled()
-        helices = find_helices(mesh)
+        helices = find_helices(mesh, check_cancelled=check_cancelled)
         found = _without_thread_turns(body, found, helices=helices)
         if check_cancelled is not None:
             check_cancelled()

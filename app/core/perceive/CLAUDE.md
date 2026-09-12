@@ -288,6 +288,12 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   aus dem es sie braucht: Ein Mantel mit Spiral-Naht ist eine echte Wendel
   über zwanzig Windungen und hat trotzdem kein Gewinde. Ein Gewinde aus einem
   **Baustein** läuft hier nie durch — es steht ohnehin in der Szene (§24.1).
+  Die Steigungssuche berechnet nur begrenzte Zeilenblöcke der Phasenmatrix.
+  Jede Zeile enthält weiterhin alle Punkte in derselben Reihenfolge; damit
+  bleiben Konzentration, Grundton und Schärfe unabhängig von der Blockgröße.
+  Die Anzahl der gleichzeitig berechneten Steigungen richtet sich nach der
+  Punktzahl. `detect` reicht seine Abbruchprüfung bis in diese Blöcke und in
+  die Kantenzugsuche weiter; ein Abbruch veröffentlicht keinen Merkmalscache.
 - **Was für kein Werkzeug groß genug ist, ist kein Merkmal.**
   `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für **alle sechs** eingepassten
   Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht

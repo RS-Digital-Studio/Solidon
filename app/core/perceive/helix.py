@@ -61,6 +61,7 @@ und die Steigung ist nicht mehr abzulesen. Lieber nichts sagen als das Falsche
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
@@ -97,6 +98,11 @@ MIN_CHAIN_EDGES: Final = 200
 #: abgeschnittener Hang. 6,0 mm deckt jedes metrische Regelgewinde bis M36.
 PITCH_RANGE: Final = (0.3, 6.0)
 PITCH_STEP: Final = 0.01
+
+#: Höchstens 2 MiB je Steigungs-Zwischenmatrix, statt aller Steigungen auf einmal.
+#: Ganze Punktzeilen bewahren die Reihenfolge der Mittelwertbildung. Ist schon
+#: eine Zeile größer, bleibt nur deren linearer Speicherbedarf übrig.
+PITCH_BLOCK_VALUES: Final = 262_144
 
 #: Wie stark der Gipfel seinen eigenen Untergrund überragen muss.
 #:
@@ -186,26 +192,36 @@ class Helix:
         return 2.0 * radius
 
 
-def find_helices(mesh: MeshData) -> list[Helix]:
+def find_helices(
+    mesh: MeshData, *, check_cancelled: Callable[[], None] | None = None
+) -> list[Helix]:
     """Jede Wendel des Körpers, gemessen an seinen scharfen Kanten.
 
     Gibt eine leere Liste zurück, wenn keine da ist — der übliche Fall, und er
     kostet nur die Kantensuche.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     body = mesh.raw
     if len(body.faces) < MIN_CHAIN_EDGES:
         return []
     found: list[Helix] = []
-    for chain in _sharp_chains(body):
-        helix = _helix_of(body, chain)
+    for chain in _sharp_chains(body, check_cancelled=check_cancelled):
+        if check_cancelled is not None:
+            check_cancelled()
+        helix = _helix_of(body, chain, check_cancelled=check_cancelled)
         if helix is not None:
             found.append(helix)
+    if check_cancelled is not None:
+        check_cancelled()
     if found:
         _log.info("found %d helices", len(found))
     return found
 
 
-def _sharp_chains(body: trimesh.Trimesh) -> list[NDArray[np.float64]]:
+def _sharp_chains(
+    body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
+) -> list[NDArray[np.float64]]:
     """Die scharfen Kanten, über gemeinsame Ecken zu Zügen verbunden.
 
     **Zusammenhängend und nicht am Stück**: Der Kamm eines Gewindes ist *ein*
@@ -216,6 +232,8 @@ def _sharp_chains(body: trimesh.Trimesh) -> list[NDArray[np.float64]]:
     """
     angles = np.degrees(body.face_adjacency_angles)
     edges = body.face_adjacency_edges[angles > SHARP_EDGE_LIMIT]
+    if check_cancelled is not None:
+        check_cancelled()
     if len(edges) < MIN_CHAIN_EDGES:
         return []
     labels = trimesh.graph.connected_component_labels(  # type: ignore[no-untyped-call]
@@ -224,13 +242,20 @@ def _sharp_chains(body: trimesh.Trimesh) -> list[NDArray[np.float64]]:
     belongs = labels[edges[:, 0]]
     chains: list[NDArray[np.float64]] = []
     for label in np.unique(belongs):
+        if check_cancelled is not None:
+            check_cancelled()
         mine = belongs == label
         if int(mine.sum()) >= MIN_CHAIN_EDGES:
             chains.append(np.asarray(body.vertices[edges[mine]].mean(axis=1), dtype=float))
     return chains
 
 
-def _helix_of(body: trimesh.Trimesh, chain: NDArray[np.float64]) -> Helix | None:
+def _helix_of(
+    body: trimesh.Trimesh,
+    chain: NDArray[np.float64],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Helix | None:
     """Prüft einen Kantenzug auf alle vier Bedingungen."""
     centre = chain.mean(axis=0)
     offset = chain - centre
@@ -244,7 +269,9 @@ def _helix_of(body: trimesh.Trimesh, chain: NDArray[np.float64]) -> Helix | None
     if mean_radius <= 0.0 or float(radius.std()) / mean_radius > CREST_SPREAD_LIMIT:
         return None
 
-    pitch, concentration, sharpness = _best_pitch(offset, axis, along)
+    pitch, concentration, sharpness = _best_pitch(
+        offset, axis, along, check_cancelled=check_cancelled
+    )
     if concentration < MIN_CONCENTRATION or sharpness < MIN_SHARPNESS:
         return None
     low = float(along.min())
@@ -255,6 +282,8 @@ def _helix_of(body: trimesh.Trimesh, chain: NDArray[np.float64]) -> Helix | None
         return None
 
     groove = _groove(body, centre, axis, low, high, radius, pitch)
+    if check_cancelled is not None:
+        check_cancelled()
     if groove is None:
         return None
     crest, depth, internal = groove
@@ -276,7 +305,11 @@ def _helix_of(body: trimesh.Trimesh, chain: NDArray[np.float64]) -> Helix | None
 
 
 def _best_pitch(
-    offset: NDArray[np.float64], axis: NDArray[np.float64], along: NDArray[np.float64]
+    offset: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    along: NDArray[np.float64],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> tuple[float, float, float]:
     """Der Grundton der Konzentration, und wie sehr er heraussticht.
 
@@ -292,9 +325,19 @@ def _best_pitch(
     angle = np.arctan2(offset @ second, offset @ first)
 
     pitches = np.arange(PITCH_RANGE[0], PITCH_RANGE[1] + PITCH_STEP, PITCH_STEP)
-    rest = (along[None, :] - pitches[:, None] * angle[None, :] / (2 * math.pi)) % pitches[:, None]
-    phase = 2 * math.pi * rest / pitches[:, None]
-    strength = np.hypot(np.cos(phase).mean(axis=1), np.sin(phase).mean(axis=1))
+    strength = np.empty(len(pitches), dtype=float)
+    rows = max(1, PITCH_BLOCK_VALUES // len(along))
+    for start in range(0, len(pitches), rows):
+        if check_cancelled is not None:
+            check_cancelled()
+        block = pitches[start : start + rows]
+        rest = (along[None, :] - block[:, None] * angle[None, :] / (2 * math.pi)) % block[:, None]
+        phase = 2 * math.pi * rest / block[:, None]
+        strength[start : start + len(block)] = np.hypot(
+            np.cos(phase).mean(axis=1), np.sin(phase).mean(axis=1)
+        )
+    if check_cancelled is not None:
+        check_cancelled()
 
     highest = float(strength.max())
     rises = np.r_[True, strength[1:] >= strength[:-1]]

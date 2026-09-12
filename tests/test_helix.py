@@ -13,6 +13,7 @@ Wendel aus dem Baum.
 
 from __future__ import annotations
 
+import tracemalloc
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,20 @@ from app.core.scene.project import ProjectSources, new_project
 
 #: Der Referenzkorpus. Keine dieser Dateien trägt ein Gewinde.
 CORPUS = sorted((Path(__file__).parent / "data" / "meshes").glob("*.stl"))
+
+#: Eingecheckte Gegenfälle: scharfe Kanten, scheinbar periodische Senkungen,
+#: dichter Zylindermantel, Ring und getrennte Komponenten. Lokal erzeugte
+#: Leistungsmodelle gehören nicht zur notwendigen Grundmenge eines Klons.
+REQUIRED_CORPUS = frozenset(
+    {
+        "cube_clean.stl",
+        "dense_cylinder.stl",
+        "plate_countersunk.stl",
+        "plate_countersunk_blind.stl",
+        "torus_ring.stl",
+        "two_components.stl",
+    }
+)
 
 #: Arten, die eine Wendel verschluckt — dieselben wie in der Erkennung.
 FITTED = ("hole", "pin", "cone", "sphere", "torus", "fillet")
@@ -91,6 +106,73 @@ def _tapped(size: str, core: float) -> MeshData:
 def _only(helices: list[Helix]) -> Helix:
     assert len(helices) == 1, f"expected exactly one helix, got {len(helices)}"
     return helices[0]
+
+
+def test_the_helix_counterexamples_are_present() -> None:
+    """Fehlende Referenzdateien dürfen keine verkürzte grüne Reihe ergeben."""
+    assert {path.name for path in CORPUS} >= REQUIRED_CORPUS
+
+
+def test_pitch_search_keeps_its_workspace_bounded() -> None:
+    """Eine analytische Wendel braucht keine Matrix über alle Steigungen.
+
+    Die Achse ist Z, die Steigung 1,25 mm und der Radius 3 mm. Ihre
+    Konzentration ist eins. 30 003 Punkte benötigen als Koordinaten weniger
+    als ein Megabyte; 32 MiB Arbeitsraum lassen reichlich Platz für die
+    Suche, aber nicht für mehrere vollständige 571-mal-30-003-Matrizen.
+    """
+    from app.core.perceive.helix import _best_pitch
+
+    along = np.linspace(-12.5, 12.5, 30_003)
+    angle = 2.0 * np.pi * along / 1.25
+    offset = np.column_stack((3.0 * np.cos(angle), 3.0 * np.sin(angle), along))
+    tracemalloc.start()
+    try:
+        pitch, concentration, _sharpness = _best_pitch(offset, np.array([0.0, 0.0, 1.0]), along)
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert pitch == pytest.approx(1.25, abs=0.005)
+    assert concentration == pytest.approx(1.0, abs=1e-12)
+    assert peak < 32 * 1024 * 1024, f"pitch workspace used {peak / 1024**2:.1f} MiB"
+
+
+def test_cancellation_inside_pitch_search_leaves_no_recognition_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der echte Erkennungsweg hält während der Steigungssuche kooperativ an."""
+    from app.core.errors import OperationCancelled
+    from app.core.perceive import features as features_module
+    from app.core.perceive import helix as helix_module
+    from app.core.scene.cancel import CancelSignal
+
+    mesh = _bolt("M5")
+    before = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
+    features_module.forget_cache()
+    signal = CancelSignal()
+    original = np.cos
+    processed: list[int] = []
+
+    def cancel_after_first_block(values: np.ndarray) -> np.ndarray:
+        result = original(values)
+        if values.ndim == 2 and values.shape[1] > 200:
+            processed.append(values.shape[0])
+            signal.cancel()
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(helix_module.np, "cos", cancel_after_first_block)
+        with pytest.raises(OperationCancelled):
+            detect(mesh, check_cancelled=signal.raise_if_cancelled)
+
+    assert len(processed) == 1
+    assert processed[0] < 571, "the entire pitch matrix ran before cancellation"
+    assert not features_module._FEATURE_CACHE
+    assert not features_module._CACHE_INDICES
+    assert not features_module._FREEFORM_DROPPED
+    np.testing.assert_array_equal(mesh.raw.vertices, before[0])
+    np.testing.assert_array_equal(mesh.raw.faces, before[1])
 
 
 @pytest.mark.parametrize(
