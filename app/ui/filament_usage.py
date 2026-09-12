@@ -393,9 +393,9 @@ class UsageDialog(QDialog):
                     choice, self._lines[index], choice.currentData() or "", suggest=False
                 )
         if self._created_identifier:
-            choice = next((one for one in self.choices if not one.currentData()), None)
-            if choice is not None:
-                choice.setCurrentIndex(choice.findData(self._created_identifier))
+            free_choice = next((one for one in self.choices if not one.currentData()), None)
+            if free_choice is not None:
+                free_choice.setCurrentIndex(free_choice.findData(self._created_identifier))
             self._created_identifier = ""
             self._validate()
         else:
