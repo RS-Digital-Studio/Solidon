@@ -77,7 +77,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
 | [RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen](#rm-101) | Bedienung und Darstellung | Verdacht am Code widerlegt; das gesehene fremde Fenster bleibt unerklärt |
 | [RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen](#rm-108) | Bedienung und Darstellung | Schlüsseldialog während laufender Abfrage ohne Wartefrist schließen |
-| [RM-124 — Zusätzlichen Render durch show_build_volume messen](#rm-124) | Bedienung und Darstellung | Bauraum-Aufwand messen; unnötigen Aufbau bei unverändertem Zustand vermeiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
@@ -1586,10 +1585,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-124"></a>
 
-- [ ] **RM-124 — Zusätzlichen Render durch show_build_volume messen.** Den unveränderten Bauraum
-  beim Auswerten nicht erneut aufbauen, falls eine Messung den Aufwand bestätigt. Abnahme: aktueller
-  pygfx-Aufwand vorher/nachher sowie richtige Aktualisierung bei Bauraum, Plattenzahl, Profil,
-  Zeichenebene, Bettsichtbarkeit und Plattenumriss.
+- [x] **RM-124 — Zusätzlichen Render durch show_build_volume messen.** Am 12.09.2026 gemessen
+  und behoben. **Die Messung bestätigt den Aufwand**, am eigenen Renderer ohne Fenster:
+
+  | Kulisse | vorher | nachher |
+  |---|---|---|
+  | ein Bett | 19,2 ms | **2,1 ms** |
+  | vier Betten | 71,3 ms | **2,5 ms** |
+
+  Das Fenster ruft `show_build_volume` bei **jeder** Auswertung — es weiß nicht, ob sich am
+  Bauraum etwas geändert hat, und die Ansicht wusste es auch nicht: Vier Aktoren je Platte
+  flogen weg und kamen identisch wieder, im Qt-Hauptthread. Die verbliebenen zwei Millisekunden
+  sind das Anfordern des Bildes und nicht der Aufbau.
+
+  `_bed_built` merkt sich, woraus die stehende Kulisse gebaut wurde: Renderer, Bauraum,
+  Plattenzahl und die beiden Bettfarben. Jedes davon hat seinen Grund — der **Renderer**, weil
+  ein Austausch dieselben Aktoren woanders braucht; die **Farben**, weil ein Themenwechsel sonst
+  ein fast schwarzes Bett auf hellem Grund stehen ließe. Was an vorhandenen Aktoren hängt, wird
+  weiterhin bei jedem Aufruf gesetzt: Bettsichtbarkeit und Zeichenebene über das neue
+  `_apply_bed_visibility`, die Deckkraft über `_apply_bed_transparency`. Vorher galt dort die
+  Reihenfolge „frisch gebaut, dann ausblenden"; die gibt es nicht mehr.
+
+  Nachweis: drei Fälle in `tests/test_plates.py`, drei Gegenproben einzeln rot (ohne den
+  Wächter, ohne die Farben im Zustand, ohne den Renderer im Zustand). **Die vierte ist grün
+  geblieben und steht deshalb hier**: Mit der alten, nur ausblendenden Sichtbarkeitsregel läuft
+  der dritte Test durch, weil `set_bed_visible` und das Ende des Zeichenmodus die Sichtbarkeit
+  selbst wiederherstellen — ein Ablauf, in dem die alte Regel falsch liegt, ließ sich nicht
+  konstruieren. Die Zusammenführung bleibt trotzdem, weil eine Stelle für eine Regel besser ist
+  als zwei; als Nachweis wird sie nicht ausgegeben.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-eine-aufräum-durchsicht-offenließ-04092026).
 

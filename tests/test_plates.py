@@ -9,6 +9,7 @@ auseinanderhalten kann.
 from __future__ import annotations
 
 import dataclasses
+from typing import Any
 
 import pytest
 import trimesh
@@ -19,7 +20,7 @@ from app.core.geom.mesh import MeshData
 from app.core.geom.prepare import MAX_PLATES, arrange_on_bed, check_build_volume, check_collisions
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, Profile, Scene, SceneObject
+from app.core.types import OpContext, PlaneFrame, Profile, Scene, SceneObject
 from app.ui.header import ALL_PLATES, HeaderBar
 
 
@@ -690,3 +691,138 @@ def test_a_plate_that_survives_is_kept_without_a_word(qt_app: QApplication) -> N
 
     assert bar.plate == 1, "die zweite Platte ist noch da"
     assert seen == [], "wo sich nichts ändert, wird nichts gemeldet"
+
+
+# --- die Kulisse wird nur gebaut, wenn sie sich ändert (RM-124) -------------------
+
+
+def _with_recorder(profile: Profile) -> tuple[Any, Any]:
+    """Ein Viewport mit Aufzeichnung und einem stehenden Bett."""
+    from render_fakes import RecordingRenderer
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer(size=(900, 600))
+    viewport.show_build_volume(profile)
+    return viewport, viewport.renderer
+
+
+def _bed_actors(renderer: Any) -> int:
+    """Wie viele Aktoren der Kulisse bisher entstanden sind."""
+    return sum(
+        1 for _kind, entry in renderer.drawn if entry["name"].startswith(("bed_", "build_volume_"))
+    )
+
+
+def _rebuilds(viewport: Any, renderer: Any, work: Any) -> int:
+    """Wie viele Aktoren der Kulisse ein Aufruf neu anlegt.
+
+    Nur die der Kulisse: ``set_theme`` zeichnet die Szene gleich mit, und
+    deren Aktoren beantworten eine andere Frage.
+    """
+    before = _bed_actors(renderer)
+    work()
+    return _bed_actors(renderer) - before
+
+
+def test_an_unchanged_build_volume_is_not_built_again(
+    profile: Profile, qt_app: QApplication
+) -> None:
+    """Das Fenster ruft die Kulisse bei **jeder** Auswertung (RM-124).
+
+    Sie warf dabei vier Aktoren je Platte weg, um dieselben vier wieder
+    anzulegen. Gemessen am 12.09.2026 am eigenen Renderer ohne Fenster:
+    19,2 ms für ein Bett, 71,3 ms für vier — im Qt-Hauptthread, für ein Bild,
+    das sich nicht unterscheidet. Danach sind es 2,1 und 2,5 ms, und die sind
+    das Anfordern des Bildes und nicht der Aufbau.
+    """
+    viewport, renderer = _with_recorder(profile)
+
+    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(profile)) == 0
+    assert not renderer.removed, "und weggeworfen wird auch nichts"
+
+
+def test_every_reason_to_build_the_bed_again_still_builds_it(
+    profile: Profile, qt_app: QApplication
+) -> None:
+    """Vier Gründe, und jeder muss durchkommen (RM-124).
+
+    Ein anderer Bauraum, eine Platte mehr, andere Farben aus dem Thema, ein
+    anderer Renderer. Ein Wächter, der einen davon verschluckt, lässt eine
+    Kulisse stehen, die etwas anderes zeigt als die Szene.
+    """
+    from render_fakes import RecordingRenderer
+
+    viewport, renderer = _with_recorder(profile)
+
+    larger = dataclasses.replace(
+        profile,
+        printer=dataclasses.replace(profile.printer, build_volume=(300.0, 300.0, 400.0)),
+    )
+    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 4, (
+        "ein anderer Bauraum"
+    )
+
+    viewport._plate_count = lambda: 3  # type: ignore[method-assign]
+    assert _rebuilds(viewport, renderer, lambda: viewport.show_build_volume(larger)) == 12, (
+        "drei Platten, drei Betten"
+    )
+
+    # Der Themenwechsel baut die Kulisse selbst neu — er ruft
+    # ``show_build_volume``, und genau das muss durchkommen, sonst stünde ein
+    # fast schwarzes Bett auf hellem Grund.
+    assert _rebuilds(viewport, renderer, lambda: viewport.set_theme("light")) == 12, "andere Farben"
+
+    zweiter = RecordingRenderer(size=(900, 600))
+    viewport.renderer = zweiter
+    assert _rebuilds(viewport, zweiter, lambda: viewport.show_build_volume(larger)) == 12, (
+        "ein anderer Renderer braucht seine eigenen Aktoren"
+    )
+
+
+def test_the_bed_keeps_what_was_hidden_and_gets_it_back(
+    profile: Profile, qt_app: QApplication
+) -> None:
+    """Sichtbarkeit und Zeichenebene über einen Aufruf hinweg (RM-124).
+
+    Vorher galt die Reihenfolge: frisch gebaut, dann ausblenden. Seit die
+    Aktoren stehen bleiben, gilt die Regel in **beide** Richtungen
+    (``_apply_bed_visibility``, eine Stelle statt zweier).
+
+    **Dieser Test ist ein Wächter um den Wächter und kein Nachweis dafür.**
+    Gegengeprüft am 12.09.2026: Mit der alten, nur ausblendenden Fassung
+    bleibt er grün, weil ``set_bed_visible`` und das Ende des Zeichenmodus die
+    Sichtbarkeit selbst wiederherstellen — ein Ablauf, in dem die alte Regel
+    falsch liegt, ließ sich nicht konstruieren. Was er sichert, ist das, was
+    zählt: Der neue Wächter darf keinen dieser Zustände verschlucken.
+    """
+    viewport, _renderer = _with_recorder(profile)
+
+    viewport.set_bed_visible(False)
+    viewport.show_build_volume(profile)
+    assert not any(actor.visible() for actor in viewport._frame_actors), "ausgeblendet bleibt aus"
+
+    viewport.set_bed_visible(True)
+    viewport.show_build_volume(profile)
+    assert all(actor.visible() for actor in viewport._frame_actors), "und kommt wieder"
+
+    viewport.set_sketching(
+        PlaneFrame(
+            origin=(0.0, 0.0, 0.0),
+            x_axis=(1.0, 0.0, 0.0),
+            y_axis=(0.0, 1.0, 0.0),
+            normal=(0.0, 0.0, 1.0),
+        )
+    )
+    viewport.show_build_volume(profile)
+    assert not any(actor.visible() for actor in viewport._ground_actors), (
+        "der Boden tritt beim Zeichnen ab"
+    )
+    assert any(
+        actor.visible() for actor in viewport._frame_actors if actor not in viewport._ground_actors
+    ), "die Bauraumkanten bleiben"
+
+    viewport.set_sketching(None)
+    viewport.show_build_volume(profile)
+    assert all(actor.visible() for actor in viewport._frame_actors), "und danach steht alles wieder"

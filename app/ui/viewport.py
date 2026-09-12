@@ -3778,6 +3778,10 @@ class Viewport(QWidget):
         """Die laufende Auswahlblende, damit die nächste sie ablösen kann."""
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
+        #: Woraus die stehende Kulisse gebaut wurde — Renderer, Bauraum,
+        #: Plattenzahl und die beiden Farben (RM-124). Stimmt das Tupel noch,
+        #: gibt es nichts neu zu bauen.
+        self._bed_built: tuple[Any, ...] | None = None
         self._sketch_frame: PlaneFrame | None = None
         self._zone_margins: tuple[int, int, int] = (0, 0, 0)
         """Verdeckte Bildränder links, rechts und unten, in Bildpunkten."""
@@ -6586,23 +6590,33 @@ class Viewport(QWidget):
         self._beds_drawn = beds
         if self.renderer is None:
             return
-        for actor in self._frame_actors:
-            self.renderer.remove(actor)
-        self._frame_actors.clear()
-        self._ground_actors.clear()
-        self._bed_surfaces.clear()
-        for plate in range(beds):
-            self._draw_one_bed(plate, plate_shift(plate, width)[0], width, depth, height)
+        # **Gebaut wird nur, was sich geändert hat** (RM-124). Das Fenster ruft
+        # diese Methode bei **jeder** Auswertung, und sie warf vier Aktoren je
+        # Platte weg, um dieselben vier wieder anzulegen: gemessen am eigenen
+        # Renderer ohne Fenster 19,2 ms für ein Bett und 71,3 ms für vier — im
+        # Qt-Hauptthread, für ein Bild, das sich nicht unterscheidet.
+        #
+        # Der Renderer steht mit im Tupel, weil ein Austausch (Tests, ein neu
+        # aufgebautes Fenster) dieselben Aktoren woanders braucht.
+        built = (self.renderer, width, depth, height, beds, self._bed_colour, self._bed_surface)
+        if built != self._bed_built:
+            for actor in self._frame_actors:
+                self.renderer.remove(actor)
+            self._frame_actors.clear()
+            self._ground_actors.clear()
+            self._bed_surfaces.clear()
+            for plate in range(beds):
+                self._draw_one_bed(plate, plate_shift(plate, width)[0], width, depth, height)
+            self._bed_built = built
         # Der Zustand entscheidet, nicht die Aufruf-Reihenfolge: Während des
         # Zeichnens tritt der Boden ab (siehe ``set_sketching``), und ein hier
         # frisch gebautes Bett hat sich daran zu halten — sonst liegen Bett-
         # und Zeichenraster wieder übereinander, sobald eine Platte dazukommt.
-        if self._sketch_frame is not None:
-            for actor in self._ground_actors:
-                actor.set_visible(False)
-        if not self._bed_visible:
-            for actor in self._frame_actors:
-                actor.set_visible(False)
+        #
+        # **Beide Richtungen**, seit oben nicht mehr jedes Mal neu gebaut wird:
+        # Ein Aktor, der aus einem früheren Zustand unsichtbar steht, bekommt
+        # seine Sichtbarkeit sonst nie zurück.
+        self._apply_bed_visibility()
         self._apply_bed_transparency()
         self._draw()
 
@@ -6622,10 +6636,20 @@ class Viewport(QWidget):
         self._bed_visible = bool(visible)
         if self.renderer is None:
             return
+        self._apply_bed_visibility()
+        self._draw()
+
+    def _apply_bed_visibility(self) -> None:
+        """Wer von der Kulisse zu sehen ist: alles, außer der Boden zeichnet.
+
+        Eine Stelle für die Regel, seit :meth:`show_build_volume` die Aktoren
+        stehen lässt, statt sie neu zu bauen (RM-124) — dort galt vorher die
+        Reihenfolge („frisch gebaut, dann ausblenden"), und die gibt es nicht
+        mehr.
+        """
         for actor in self._frame_actors:
             hidden_by_sketch = self._sketch_frame is not None and actor in self._ground_actors
             actor.set_visible(self._bed_visible and not hidden_by_sketch)
-        self._draw()
 
     def _draw_one_bed(
         self,

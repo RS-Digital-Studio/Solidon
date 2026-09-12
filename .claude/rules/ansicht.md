@@ -1274,6 +1274,27 @@ Zähler. Gegenprobe: jede der acht Prüfungen **einzeln** ausgebaut,
 achtmal rot — ein Lauf mit allen acht Mutationen hätte beim ersten
 abgebrochen und die übrigen sieben ungeprüft gelassen.
 
+## Die Kulisse wird nur gebaut, wenn sie sich ändert (RM-124)
+
+Das Fenster ruft `show_build_volume` bei **jeder** Auswertung — es weiß nicht,
+ob sich am Bauraum etwas geändert hat, und die Ansicht wusste es auch nicht.
+Vier Aktoren je Platte flogen weg und kamen identisch wieder: gemessen am
+12.09.2026 am eigenen Renderer ohne Fenster **19,2 ms für ein Bett und 71,3 ms
+für vier**, im Qt-Hauptthread. Danach sind es 2,1 und 2,5 ms, und das ist das
+Anfordern des Bildes, nicht der Aufbau.
+
+`_bed_built` merkt sich, woraus die stehende Kulisse gebaut wurde: **Renderer,
+Bauraum, Plattenzahl und die beiden Bettfarben**. Jedes davon hat seinen Grund
+— der Renderer, weil ein Austausch dieselben Aktoren woanders braucht; die
+Farben, weil ein Themenwechsel sonst ein fast schwarzes Bett auf hellem Grund
+stehen ließe.
+
+Was **nicht** im Zustand steht, hängt an vorhandenen Aktoren und wird bei jedem
+Aufruf gesetzt: Bettsichtbarkeit und Zeichenebene über `_apply_bed_visibility`,
+die Deckkraft über `_apply_bed_transparency`. Vorher galt dort die Reihenfolge
+(„frisch gebaut, dann ausblenden"); die gibt es nicht mehr, also gilt die Regel
+in beide Richtungen.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an
