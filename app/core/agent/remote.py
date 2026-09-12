@@ -38,7 +38,7 @@ from app.core.errors import AppError
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger
-from app.core.registry import Registry
+from app.core.registry import REGISTRY, Registry
 from app.core.types import FeatureRef
 from app.i18n import TranslatableText, _
 
@@ -202,7 +202,10 @@ def looks_like_path(value: str) -> bool:
     einen scheinbaren Workspace-Bezug herstellen, und nach einem anderen
     Programmstart auf einen anderen Ort zeigen. Erkannt wird, was Pfadsyntax
     trägt: Laufwerksbuchstabe, führender oder enthaltener Trenner,
-    Punktsegment, Dateiendung oder URL-Form.
+    Punktsegment oder URL-Form. Ein bloßer Punkt oder Doppelpunkt mitten im
+    Text ist keine Pfadsyntax: Beschriftungen und Merkmalskennungen verwenden
+    beides. Kein Operationsparameter öffnet einen solchen Text als Datei;
+    Importquellen werden ausschließlich über ihre Projektkennung gelesen.
 
     **``file:`` kam durch**, und zwar weil es keines der anderen vier Merkmale
     trifft: kein führender Trenner, der Doppelpunkt steht an fünfter Stelle
@@ -217,37 +220,11 @@ def looks_like_path(value: str) -> bool:
         return False
     if text.lower().startswith("file:"):
         return True
-    if text.startswith(("/", "\\", "~", ".")):
+    if text in {".", ".."} or text.startswith(("/", "\\", "~")):
         return True
     if len(text) > 1 and text[1] == ":" and text[0].isalpha():
         return True
-    # Ein NTFS-Datenstrom hängt ``:name`` auch an endungslose Namen wie
-    # ``README``. Leerraum trennt dagegen natürliche Beschriftungen wie
-    # „Deckel: links“; reine Uhrzeiten bleiben ebenfalls gewöhnlicher Text.
-    stream_parts = text.split(":")
-    if (
-        len(stream_parts) >= 2
-        and all(not any(character.isspace() for character in part) for part in stream_parts)
-        and any(not part.isdecimal() for part in stream_parts)
-    ):
-        return True
-    normalised = text.replace("\\", "/")
-    if "/" in normalised:
-        return True
-    # Ein einzelner relativer Dateiname hat keinen Trenner. Eine knappe,
-    # alphanumerische Endung ist die verbleibende eindeutige Pfadspur. Ihre
-    # Länge und Leerraum im Stamm sagen nichts darüber aus, ob ein Dateisystem
-    # den Namen annimmt; nur rein numerische Endungen bleiben Versionsangaben.
-    stem, separator, suffix = normalised.rpartition(".")
-    forbidden = '<>:"/\\|?*'
-    return bool(
-        separator
-        and stem
-        and suffix
-        and any(character.isalpha() for character in suffix)
-        and not suffix.endswith((" ", "."))
-        and not any(ord(character) < 0x20 or character in forbidden for character in suffix)
-    )
+    return "/" in text or "\\" in text
 
 
 def _holds_path(value: Any) -> bool:
@@ -310,27 +287,50 @@ def check_call(name: str, arguments: dict[str, Any], registry: Registry | None =
     if name not in known:
         raise RemoteRefusedError(_("Diese Operation gibt es nicht."))
     _refuse_gathered(name, arguments, registry)
+    source = registry or REGISTRY
+    feature_fields = (
+        {
+            entry.name: entry.kind == "features"
+            for entry in source.get(name).params.spec()
+            if entry.kind in {"feature", "features"} or entry.targets_feature
+        }
+        if source.has(name)
+        else {}
+    )
     for key, value in arguments.items():
-        if name == ADD_FIT and key in {"a", "b"}:
+        pair_member = name == ADD_FIT and key in {"a", "b"}
+        if pair_member or key in feature_fields:
             try:
-                if not isinstance(value, str):
+                entries = value if feature_fields.get(key) else (value,)
+                if not isinstance(entries, (list, tuple)):
                     raise ValueError
-                reference = FeatureRef.parse(value)
+                for entry in entries:
+                    _check_feature_text(entry, require_reference=pair_member)
             except ValueError as problem:
-                raise RemoteRefusedError(
+                message = (
                     _("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
-                ) from problem
-            # Doppelpunkt und Punkt gehören zur Schreibweise einer
-            # Merkmalreferenz. Die Teile dazwischen bleiben jedoch gewöhnliche
-            # Fernwerte und damit unter demselben zentralen Pfadwächter wie
-            # jedes andere Argument.
-            if not _holds_path((reference.object_id, reference.feature_id.split("."))):
-                continue
+                    if pair_member
+                    else _("Wählen Sie die gewünschten Merkmale aus der Liste.")
+                )
+                raise RemoteRefusedError(f"{message} ({key})") from problem
         if _holds_path(value):
             refused = _(
                 "Ein Wert sieht aus wie ein Dateipfad — über diese Schnittstelle geht das nicht."
             )
             raise RemoteRefusedError(f"{refused} ({key})")
+
+
+def _check_feature_text(value: Any, *, require_reference: bool) -> None:
+    """Prüft dieselbe Merkmalschreibweise für alle passenden Schemafelder."""
+    if not isinstance(value, str):
+        raise ValueError
+    if require_reference or ":" in value:
+        reference = FeatureRef.parse(value)
+        if ":" in reference.feature_id:
+            raise ValueError
+        # Auch hinter dem Trenner bleibt Pfadsyntax gesperrt, etwa obj_2:../x.
+        if _holds_path((reference.object_id, reference.feature_id)):
+            raise ValueError
 
 
 def _refuse_gathered(name: str, arguments: dict[str, Any], registry: Registry | None) -> None:

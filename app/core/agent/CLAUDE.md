@@ -121,3 +121,19 @@ der Auslastung der Maschine handelt, misst nicht den Prompt. Wer eine
 abgenommen" ist ein gültiger Stand.
 
 Verschlechtert sich die Quote, wird die Änderung zurückgenommen.
+
+## Fernwerte sind Daten
+
+Der MCP-Pfadwächter erkennt explizite Pfadsyntax: `file:`, Laufwerke,
+Verzeichnistrenner, Heimverzeichnis- und Punktsegmente. Ein Punkt oder
+Doppelpunkt mitten in einem Freitext macht daraus keinen Dateizugriff;
+Objektnamen, Beschriftungen und Profilnamen bleiben verwendbar. Die
+Dateigrenze liegt zusätzlich am Quellenvertrag: Importoperationen lesen
+nur bereits im Projekt registrierte Quellen über `ctx.sources`, nie einen
+Fernwert als lokalen Dateinamen. Neue Operationen halten dieselbe Grenze.
+
+Merkmalfelder kommen aus `kind="feature"`, `kind="features"` und
+`targets_feature`; alle verwenden dieselbe Prüfung für unqualifizierte
+Kennungen und `obj_2:op5.hole_1`. Passungspaare brauchen immer einen
+qualifizierten Verweis. Auch innerhalb eines Verweises bleiben lokale
+Pfadangaben gesperrt.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -152,14 +153,14 @@ def test_an_operation_that_runs_foreign_source_never_travels_over_the_wire(
         ".\\model.stl",
         "models/part.stl",
         "models\\part.stl",
-        "part.stl",
-        "mein modell.stl",
-        "payload.diesisteineungewoehnlichlangeendung",
-        "payload.dies-ist-eine-ungewöhnlich-lange-endung",
-        "part.stl:stream",
-        "README:stream",
-        "README:stream:$DATA",
-        "README::$DATA",
+        "./part.stl",
+        "./mein modell.stl",
+        "./payload.diesisteineungewoehnlichlangeendung",
+        "./payload.dies-ist-eine-ungewöhnlich-lange-endung",
+        "./part.stl:stream",
+        "./README:stream",
+        "./README:stream:$DATA",
+        "./README::$DATA",
         ".",
     ],
 )
@@ -191,6 +192,76 @@ def test_an_ordinary_name_still_gets_through() -> None:
     )
     assert answer["result"]["isError"] is False
     assert bridge.calls == [("translate_object", {"name": "Deckel 2"})]
+
+
+@pytest.mark.parametrize(
+    "name,field,value",
+    [
+        ("align_to_feature", "target", "obj_2:hole_1"),
+        ("create_label", "text", "www.solidon3d.de"),
+        ("create_label", "text", "Solidon v1.0 final"),
+        ("rename_object", "name", "Deckel.oben"),
+        ("assign_slot", "slicer_profile", "0.20mm Standard"),
+    ],
+)
+def test_registered_tool_text_and_feature_arguments_reach_the_bridge(
+    name: str, field: str, value: str
+) -> None:
+    schema = next(tool["inputSchema"] for tool in remote.remote_tools() if tool["name"] == name)
+    assert field in schema["properties"]
+    bridge = _Bridge()
+    arguments = {field: value}
+    answer = remote.handle(request("tools/call", {"name": name, "arguments": arguments}), bridge)
+    assert answer["result"]["isError"] is False
+    assert bridge.calls == [(name, arguments)]
+
+
+@pytest.mark.parametrize("value", ["op5.hole_1", "obj_2:op5.hole_1"])
+def test_every_registered_feature_field_uses_the_same_reference_contract(value: str) -> None:
+    from app.core.registry import REGISTRY
+
+    checked: set[str] = set()
+    for tool in remote.remote_tools():
+        name = tool["name"]
+        if not REGISTRY.has(name):
+            continue
+        for entry in REGISTRY.get(name).params.spec():
+            if entry.kind not in {"feature", "features"} and not entry.targets_feature:
+                continue
+            argument = [value] if entry.kind == "features" else value
+            remote.check_call(name, {entry.name: argument})
+            checked.add(entry.kind if not entry.targets_feature else "target")
+            for forbidden in ("obj_2:../secret", "file:secret", "C:secret"):
+                argument = [forbidden] if entry.kind == "features" else forbidden
+                with pytest.raises(remote.RemoteRefusedError):
+                    remote.check_call(name, {entry.name: argument})
+    assert checked >= {"feature", "features", "target"}
+
+
+@pytest.mark.parametrize("value", ["obj_2:", ":hole_1", "obj_2:hole_1:stream"])
+def test_malformed_references_are_also_refused_in_registered_target_fields(value: str) -> None:
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call("align_to_feature", {"target": value})
+
+
+@pytest.mark.parametrize("value", ["Deckel.oben", "part.stl", "README:stream"])
+def test_a_bare_name_is_text_and_does_not_grant_access_to_a_local_source(
+    value: str, tmp_path: Path
+) -> None:
+    from app.core.registry import REGISTRY
+    from app.core.scene.project import ProjectSources, new_project
+
+    remote.check_call("rename_object", {"name": value})
+    source_field = next(
+        entry for entry in REGISTRY.get("load").params.spec() if entry.name == "source"
+    )
+    assert source_field.kind == "source"
+    # Selbst ein existierender Nachbar wird nicht zur importierten Quelle.
+    (tmp_path / "part.stl").write_bytes(b"private-local-content")
+    sources = ProjectSources(new_project(), base_dir=tmp_path)
+    with pytest.raises(ValidationError) as raised:
+        sources.read(value)
+    assert raised.value.constraint == "unknown_source"
 
 
 def test_only_the_loopback_address_may_talk() -> None:
@@ -385,7 +456,7 @@ def test_a_path_outside_the_feature_fields_of_add_fit_stays_refused() -> None:
     with pytest.raises(remote.RemoteRefusedError):
         remote.check_call(
             "add_fit",
-            {"name": "README:stream", "a": "obj_1:hole_1", "b": "obj_2:pin_1"},
+            {"name": "./README:stream", "a": "obj_1:hole_1", "b": "obj_2:pin_1"},
         )
 
 
