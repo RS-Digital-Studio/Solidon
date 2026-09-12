@@ -1341,11 +1341,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bekannte Bauart. Nachweis: sechs Fälle in `tests/test_print_settings.py`, Mutationsprobe
   neun rot.
 
-  **Offen bleibt die Ursache bei Bambu.** Zu klären ist, ob eine Angabe fehlt, die Bambu Studio
-  über den Konsolenweg für die AMS-Zuordnung verlangt, oder ob sein CLI-Zweig Mehrfarbe
-  schlicht nicht bedient. Abnahme: ein von Bambu Studio selbst gespeichertes zweifarbiges
-  Projekt gegen Solidons Datei stellen — läuft dessen eigene Datei über die Kommandozeile
-  mehrfarbig durch, liegt der Unterschied in der Datei und ist auffindbar.
+  **Die Ursache liegt nicht bei Solidon**, und das ist gemessen. Eine von ElegooSlicer selbst
+  gespeicherte zweifarbige Projektdatei — dieselbe, die dort ohne jedes geladene Profil mit
+  `; filament: 2,1` und 66 Werkzeugwechseln durchläuft — ergibt bei Bambu Studio
+  `; filament: 1` und **0,00 g**. Auch der Weg entscheidet nichts: mit `--load-filaments`
+  2,82 g, ohne 0,00 g, ganz ohne geladene Profile 0,00 g. Bambus Konsolenzweig ordnet die
+  Materialslots einer übergebenen 3MF nicht den Filamenten zu.
+
+  **Offen bleibt die letzte Trennung.** Roberts Datei gilt einem Centauri Carbon 2, den Bambu
+  Studio nicht kennt — das erklärt die 0,00 g dort mit. Was fehlt, ist eine von Bambu Studio
+  selbst für einen Bambu-Drucker gespeicherte Mehrfarbdatei: Läuft die über die Kommandozeile
+  mehrfarbig durch, ist der Unterschied in der Datei auffindbar; läuft sie es nicht, kann der
+  CLI-Zweig es nicht, und die Grenze gehört vor dem Lauf benannt statt danach gemeldet.
 
 <a id="rm-164"></a>
 

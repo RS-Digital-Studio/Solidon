@@ -706,11 +706,19 @@ def test_a_real_slot_survives_the_shortcuts_that_make_the_search_fast() -> None:
 def test_feature_detection_on_a_freeform_tracks_the_real_customer_path() -> None:
     """Die Freiform prüft tausende Fits, bevor sie erfundene Formen weglässt.
 
-    Gemessen auf Roberts Maschine: 1,41 s synthetisch, 1,52 s am organischen
-    197k-Kundenmodell und 2,76 s am 277k-Segel. Das liegt oberhalb des
-    allgemeinen Ein-Sekunden-Ziels und wird deshalb getrennt geführt; der
-    Zehn-Sekunden-Wächter behauptet keine Zielerfüllung, sondern fängt wie die
-    übrigen plattformübergreifenden Schwellen nur eine Größenordnung.
+    Gemessen auf Roberts Maschine: **1,00 s** synthetisch (RM-132, 12.09.2026;
+    davor 1,41). Die 120 610 Flecken einer verrauschten Oberfläche wurden für
+    die Nachtrennung einzeln gruppiert, obwohl nur 1 650 von ihnen groß genug
+    zum Einpassen sind, und die Fleckenbildung selbst lief Zeile für Zeile —
+    zusammen vier Zehntel Sekunde für Stücke, die niemand liest.
+
+    Die beiden Kundenwerte daneben stammen vom 10.09.2026 und sind seither
+    nicht neu gemessen: 1,52 s am organischen 197k-Modell, 2,76 s am
+    277k-Segel. Das Ein-Sekunden-Ziel aus §31 ist damit am synthetischen Fall
+    erreicht und am Kundenfall offen; der Zehn-Sekunden-Wächter behauptet
+    weiterhin keine Zielerfüllung, sondern fängt wie die übrigen
+    plattformübergreifenden Schwellen nur eine Größenordnung. Die Zahl, die
+    eine Verlangsamung meldet, ist die Regressionsmarke daneben.
     """
     mesh = freeform_feature_mesh()
     forget_cache()

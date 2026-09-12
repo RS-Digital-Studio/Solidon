@@ -184,6 +184,11 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Krümmung baut die Flächennachbarschaft einmal für alle ungeeigneten Flecken
   auf und prüft den Abbruch zwischen ihnen. Ihre Schwellen und die Reihenfolge
   der Kanten bleiben dabei dieselben.
+  **Geteilt wird nur, was jemand liest** (RM-132): `_fitted` sagt der
+  Nachtrennung über `worth_splitting`, welche Flecken groß genug zum
+  Einpassen sind, und für die übrigen kommt der Fleck ungeteilt zurück. Ein
+  Stück ist nie größer als sein Fleck, die Antwort ändert sich also nicht — an
+  einer verrauschten Freiform sind es 1 650 von 120 610 Flecken.
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - **Ein Hohlraum ohne Weg nach außen ist keine Bohrung.** `detect_voids` findet
   geschlossene Innenschalen über vier Tore — dichtes Netz, einheitlicher

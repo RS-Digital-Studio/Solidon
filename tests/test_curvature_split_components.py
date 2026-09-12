@@ -122,3 +122,39 @@ def test_a_cancel_after_the_native_search_stops_before_results_are_returned(
             jumps,
             check_cancelled=stop,
         )
+
+
+def test_a_patch_that_nobody_reads_is_not_split(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``worth_splitting`` spart die Teilung, ohne eine Antwort zu ändern (RM-132).
+
+    Wo die Maske steht, kommt dieselbe Teilung heraus wie ohne sie; wo sie
+    fehlt, bleibt der Fleck, wie er hereinkam. Das ist die ganze Zusage — die
+    Ersparnis selbst steht in der Laufzeit, nicht in einer Zusicherung.
+    """
+    body, patches, jumps = _branched_components()
+    ganz = features_module._split_patches_by_curvature(body, patches, jumps)
+    assert any(len(pieces) > 1 for pieces in ganz), "ohne echte Teilung sagt der Test nichts"
+
+    maske = np.asarray([True, False, False, False])
+
+    actual = features_module._split_patches_by_curvature(
+        body, patches, jumps, worth_splitting=maske
+    )
+
+    assert actual[0] == ganz[0], "ein gewollter Fleck wird geteilt wie zuvor"
+    assert actual[1:] == [[patch] for patch in patches[1:]], (
+        f"ungewollte Flecken kommen ungeteilt zurück: {actual[1:]}"
+    )
+
+
+def test_without_the_mask_every_patch_is_still_split() -> None:
+    """Die Maske ist eine Ergänzung und keine neue Voreinstellung (RM-132).
+
+    Der Vertrag der Funktion bleibt: Ohne Angabe wird jeder Fleck geteilt,
+    auch einer mit zwei Dreiecken. Wer sie weglässt, bekommt, was er bekam.
+    """
+    body, patches, jumps = _branched_components()
+
+    actual = features_module._split_patches_by_curvature(body, patches, jumps)
+
+    assert actual == _previous_result(body, patches, jumps)

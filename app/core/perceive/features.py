@@ -1412,8 +1412,21 @@ def _fitted(
                 if check_cancelled is not None:
                     check_cancelled()
                 jumps = _curvature_jumps(body)
+                # Nur die Flecken, deren Stücke unten überhaupt gelesen werden
+                # (RM-132) — ein Stück ist nie größer als sein Fleck, und ein
+                # Fleck unter ``MIN_PATCH_FACES`` kommt an ``classify`` nicht
+                # vorbei.
+                big_enough = np.fromiter(
+                    (len(entry) >= MIN_PATCH_FACES for entry in patches),
+                    dtype=bool,
+                    count=len(patches),
+                )
                 curvature_splits = _split_patches_by_curvature(
-                    body, patches, jumps, check_cancelled=check_cancelled
+                    body,
+                    patches,
+                    jumps,
+                    worth_splitting=big_enough,
+                    check_cancelled=check_cancelled,
                 )
             if check_cancelled is not None:
                 check_cancelled()
@@ -3183,6 +3196,7 @@ def _split_patches_by_curvature(
     patches: list[list[int]],
     jump: np.ndarray,
     *,
+    worth_splitting: np.ndarray | None = None,
     check_cancelled: Callable[[], None] | None = None,
 ) -> list[list[list[int]]]:
     """Flecken am **Sprung der Krümmung** in einem Körperdurchgang teilen.
@@ -3214,6 +3228,18 @@ def _split_patches_by_curvature(
     zu. Ein gemeinsamer Komponentenlauf beschriftet den ganzen Graphen; die
     anschließende Gruppierung je Originalfleck bewahrt dieselbe Reihenfolge von
     Gruppen und Dreiecken wie der frühere einzelne Durchgang.
+
+    ``worth_splitting`` sagt je Fleck, ob seine Teilung überhaupt gebraucht
+    wird; wo nicht, kommt der Fleck ungeteilt zurück (RM-132). Der Aufrufer
+    weiß das und die Funktion nicht: :func:`_fitted` sieht ein Stück nur an,
+    wenn sein Fleck mindestens :data:`MIN_PATCH_FACES` Dreiecke hat, und ein
+    Stück ist nie größer als sein Fleck. **Auf einer Freiform ist das fast
+    alles**: Der 200 000-Dreiecke-Körper aus den Leistungstests zerfällt in
+    120 610 Flecken, von denen 1 650 groß genug sind. Die übrigen 118 960
+    kosteten je einen ``np.unique``-Lauf und bei 8 229 von ihnen eine
+    Gruppierung — 0,56 von 1,40 Sekunden der ganzen Erkennung, für Stücke, die
+    niemand liest. Ohne die Maske bleibt es beim alten Verhalten: Jeder Fleck
+    wird geteilt.
     """
     if check_cancelled is not None:
         check_cancelled()
@@ -3266,7 +3292,9 @@ def _split_patches_by_curvature(
     for patch_index, patch in enumerate(patches):
         if check_cancelled is not None:
             check_cancelled()
-        if not active[patch_index]:
+        if not active[patch_index] or (
+            worth_splitting is not None and not worth_splitting[patch_index]
+        ):
             split.append([patch])
             continue
         nodes = np.unique(np.asarray(patch, dtype=np.intp))
@@ -3304,18 +3332,31 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
     Facetten, die groß genug für eigene Flächen sind, und wird ohnehin nicht
     als Zylinder gelesen.
     """
-    wanted = set(faces)
     pairs = np.asarray(body.face_adjacency)
+    adjacency = pairs[:0]
     if len(pairs):
         angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
         pairs = pairs[angles < CURVATURE_LIMIT]
-    adjacency = [pair for pair in pairs if pair[0] in wanted and pair[1] in wanted]
-    if not adjacency:
+        # **Beides als Feld, nicht Zeile für Zeile** (RM-132). Die Auswahl
+        # stand als Schleife über die Nachbarpaare mit einer Menge daneben und
+        # das Ergebnis als ``int()`` je Dreieck. Beides ist dieselbe Antwort
+        # und kostete am 200 000-Dreiecke-Freiformkörper 20 und 84
+        # Millisekunden gegen 4 und 14 — die 120 610 Flecken einer verrauschten
+        # Oberfläche zahlen jede Python-Schleife hundertzwanzigtausendfach.
+        #
+        # **Beide Enden werden geprüft, obwohl ``connected_components`` das
+        # auch tut** (es verwirft Kanten, deren Knoten nicht in ``nodes``
+        # stehen). Die Aussage „ein Fleck besteht nur aus den gewünschten
+        # Dreiecken" gehört hierher und nicht in eine fremde Bibliothek; sie
+        # kostet zwei Millisekunden. Ein Test dafür gibt es aus demselben
+        # Grund nicht: Weggelassen ändert sich keine Antwort.
+        wanted = np.zeros(len(body.faces), dtype=bool)
+        wanted[np.asarray(faces, dtype=np.intp)] = True
+        adjacency = pairs[wanted[pairs[:, 0]] & wanted[pairs[:, 1]]]
+    if not len(adjacency):
         return [[index] for index in faces]
-    groups = trimesh.graph.connected_components(
-        np.asarray(adjacency), nodes=np.asarray(faces), engine="scipy"
-    )
-    return [[int(index) for index in group] for group in groups]
+    groups = trimesh.graph.connected_components(adjacency, nodes=np.asarray(faces), engine="scipy")
+    return [group.tolist() for group in groups]
 
 
 # --- Flächen ---------------------------------------------------------------------

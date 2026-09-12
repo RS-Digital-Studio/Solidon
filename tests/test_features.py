@@ -3390,3 +3390,53 @@ def test_turning_a_letter_does_not_renumber_its_curved_faces() -> None:
         if f.kind == "curved_face"
     }
     assert before == after and len(before) == 4
+
+
+def test_the_patch_search_gives_what_the_row_by_row_filter_gave() -> None:
+    """Die Fleckenbildung rechnet im Feld und antwortet wie zuvor (RM-132).
+
+    Die Auswahl der Nachbarpaare stand als Schleife mit einer Menge daneben,
+    das Ergebnis als ``int()`` je Dreieck — an einer verrauschten Freiform mit
+    120 610 Flecken kostete beides zusammen hundert Millisekunden. Gerechnet
+    wird jetzt über zwei Felder; geprüft wird gegen genau die Formulierung,
+    die sie ersetzt, **einschließlich der Reihenfolge**: Die Nummerierung der
+    Merkmale hängt an ihr (§21.2).
+    """
+    mesh = plate("post_with_fillet.stl")
+    body = mesh.raw
+    planar = features_module._large_facet_faces(body)
+    curved = [index for index in range(len(body.faces)) if index not in planar]
+
+    def row_by_row(faces: list[int]) -> list[list[int]]:
+        wanted = set(faces)
+        pairs = np.asarray(body.face_adjacency)
+        angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+        pairs = pairs[angles < features_module.CURVATURE_LIMIT]
+        adjacency = [pair for pair in pairs if pair[0] in wanted and pair[1] in wanted]
+        if not adjacency:
+            return [[index] for index in faces]
+        groups = trimesh.graph.connected_components(
+            np.asarray(adjacency), nodes=np.asarray(faces), engine="scipy"
+        )
+        return [[int(index) for index in group] for group in groups]
+
+    expected = row_by_row(curved)
+
+    assert features_module._connected_patches(body, curved) == expected
+    assert len(expected) > 1, "ein einziger Fleck prüft die Auswahl nicht"
+
+
+def test_a_patch_search_without_a_single_neighbour_returns_each_triangle() -> None:
+    """Der Randfall der Feldrechnung: keine zulässige Kante, jedes Dreieck für sich.
+
+    Ein Ikosaeder knickt an jeder seiner Kanten um 41,8 Grad; unter
+    ``CURVATURE_LIMIT`` bleibt keine einzige Nachbarschaft übrig. Vorher
+    entschied darüber eine leere Liste, jetzt ein leeres Feld — und ``not []``
+    und ``not len(feld)`` sind dieselbe Frage nur für den, der sie beide
+    hingeschrieben hat. (Ein Würfel taugt dafür nicht: Seine zwei Dreiecke je
+    Seite liegen in einer Ebene und sind damit Nachbarn.)
+    """
+    body = trimesh.creation.icosphere(subdivisions=0)
+    faces = list(range(len(body.faces)))
+
+    assert features_module._connected_patches(body, faces) == [[index] for index in faces]
