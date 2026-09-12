@@ -865,30 +865,9 @@ if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
 $rows = entries($dir, $month, $month_complete);
 $pages = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'p');
 $downloads = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'd');
-// Die Update-Prüfungen der Anwendung. **Abrufe, nicht Installationen** — wer
-// dreimal am Tag startet, steht dreimal darin; die Zahl der Kennzeichen
-// darunter kommt dem „wie viele Rechner" näher.
+// Updateabrufe tragen keine Besucherkennung. Wiederholte Abrufe bleiben
+// einzelne Prüfungen; eine Zahl von Installationen lässt sich daraus nicht ableiten.
 $updates = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'u');
-$update_marks = [];
-// **Und dasselbe je Fassung.** Die Prüfungen allein sagen, wie oft gestartet
-// wurde; erst die Kennzeichen sagen, auf wie vielen Rechnern. Wer die
-// Anwendung dreimal am Tag öffnet, steht dreimal in der einen Zahl und einmal
-// in der anderen — und die Frage „wie viele hängen noch auf der alten
-// Fassung" beantwortet nur die zweite.
-$marks_per_version = [];
-foreach ($updates as $row) {
-    if ($row['mark'] === '') {
-        continue;
-    }
-    $key = $row['day'] . '/' . $row['mark'];
-    $update_marks[$key] = true;
-    $marks_per_version[$row['value']][$key] = true;
-}
-$installs_per_version = array_map(
-    static fn (array $marks): int => count($marks),
-    $marks_per_version
-);
-arsort($installs_per_version);
 
 $per_day = [];
 foreach ($rows as $row) {
@@ -1101,7 +1080,6 @@ sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p
   <div class="zahl"><b><?= e($pages_per_visit) ?></b><span>Seiten je Besuch</span></div>
   <div class="zahl"><b><?= number_format((float) count($downloads), 0, ',', '.') ?></b><span>Downloads im Monat</span></div>
   <div class="zahl"><b><?= number_format((float) count($updates), 0, ',', '.') ?></b><span>Update-Prüfungen im Monat</span></div>
-  <div class="zahl"><b><?= number_format((float) count($update_marks), 0, ',', '.') ?></b><span>Installationen (Tag mal Kennzeichen)</span></div>
   <div class="zahl"><b><?= $today_pages ?> · <?= $today_downloads ?> · <?= $today_updates ?></b><span>heute: Aufrufe · Downloads · Updates</span></div>
 </div>
 
@@ -1164,17 +1142,12 @@ sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p
 </table>
 
 <h2>Update-Prüfungen</h2>
-<p class="hinweis">Jede laufende Installation fragt beim Start, ob es etwas
-Neues gibt, und nennt dabei ihre Fassung. Das ist die einzige Zahl hier, die
-von <em>benutzten</em> Installationen kommt — ein Download sagt nur, dass
-jemand die Datei geholt hat. Wer auf einer alten Fassung steht, steht hier
-also auch, und man sieht, ob ein Update ankommt.</p>
-<p class="hinweis"><b>Installationen</b> zählt Tageskennzeichen, <b>Prüfungen</b>
-zählt Abrufe: Wer die Anwendung dreimal am Tag öffnet, steht dreimal rechts und
-einmal links. Für „wie viele hängen noch auf der alten Fassung" ist die linke
-Spalte die richtige — über mehrere Tage summiert sie, weil das Kennzeichen
-jeden Tag neu entsteht; innerhalb eines Tages ist sie eine Zahl von
-Rechnern.</p>
+<p class="hinweis">Die Anwendung nennt bei einer Updateprüfung ihre Fassung.
+Gezählt werden Abrufe, auch wiederholte: Drei Prüfungen derselben Anwendung
+stehen dreimal in der Zahl. Es werden keine Besucherkennzeichen für diese
+Auswertung gebildet. Die Tabelle zeigt die Verteilung der abgerufenen
+Fassungen; wie viele Rechner oder Personen dahinterstehen, lässt sich daraus
+nicht bestimmen.</p>
 <?php
 $versions = tally($rows, 'value', 'u');
 ?>
@@ -1184,25 +1157,14 @@ $versions = tally($rows, 'value', 'u');
   niemand die Anwendung gestartet.</p>
 <?php else: ?>
 <table>
-  <tr><th>Fassung</th><th class="n">Installationen</th><th class="n">Prüfungen</th><th style="width:45%"></th></tr>
-  <?php $update_peak = max(1, max($installs_per_version ?: [1])); ?>
-  <?php foreach ($installs_per_version as $name => $installs): ?>
+  <tr><th>Fassung</th><th class="n">Prüfungen</th><th style="width:45%"></th></tr>
+  <?php $update_peak = max(1, max($versions ?: [1])); ?>
+  <?php foreach ($versions as $name => $count): ?>
   <tr>
     <td><?= e((string) $name) ?></td>
-    <td class="n"><?= number_format((float) $installs, 0, ',', '.') ?></td>
-    <td class="n"><?= number_format((float) ($versions[$name] ?? 0), 0, ',', '.') ?></td>
-    <td><i style="width:<?= (int) round($installs / $update_peak * 100) ?>%"></i></td>
+    <td class="n"><?= number_format((float) $count, 0, ',', '.') ?></td>
+    <td><i style="width:<?= (int) round($count / $update_peak * 100) ?>%"></i></td>
   </tr>
-  <?php endforeach; ?>
-  <?php foreach ($versions as $name => $count): ?>
-    <?php if (!isset($installs_per_version[$name])): ?>
-    <tr>
-      <td><?= e((string) $name) ?></td>
-      <td class="n">—</td>
-      <td class="n"><?= number_format((float) $count, 0, ',', '.') ?></td>
-      <td></td>
-    </tr>
-    <?php endif; ?>
   <?php endforeach; ?>
 </table>
 <?php endif; ?>

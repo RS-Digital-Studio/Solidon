@@ -499,8 +499,9 @@ def test_private_cleanup_keeps_only_current_and_previous_utc_month(tmp_path: Pat
 
 
 @pytest.mark.parametrize("agent", ["Solidon/0.4.0", "Mozilla/5.0"])
+@pytest.mark.parametrize("legacy_mark", [False, True])
 def test_private_cleanup_accepts_update_rows_from_the_live_writer(
-    tmp_path: Path, agent: str
+    tmp_path: Path, agent: str, legacy_mark: bool
 ) -> None:
     """Der echte Zähler darf die zeitgesteuerte Löschung nicht lahmlegen."""
     paths = _prepare_cleanup_state(tmp_path, {"activation": 1000, "support": 3700})
@@ -510,6 +511,10 @@ def test_private_cleanup_accepts_update_rows_from_the_live_writer(
         status, _headers, _body = _request(f"{base}/count.php?u=1", headers={"User-Agent": agent})
     assert status == 200
     current = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
+    if legacy_mark:
+        row = json.loads(current.read_bytes())
+        row.update(u="a1b2c3d4", r="example.org")
+        current.write_text(json.dumps(row) + "\n", encoding="ascii")
     before = current.read_bytes()
     assert json.loads(before)["k"] == "u"
 
@@ -1824,6 +1829,69 @@ def _without_redirects(url: str, method: str) -> tuple[int, str]:
     except HTTPError as problem:
         with problem:
             return problem.code, problem.headers.get("Location", "")
+
+
+def _stats_test_access(tmp_path: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """Privater Prüfzugang mit echtem PHP-Token, ohne Produktivzugang."""
+    php = php_executable()
+    source = (API / "stats.php").read_text(encoding="utf-8")
+    code = (
+        "const COOKIE_DAYS = 30;\n"
+        + _php_function(source, "signing_key")
+        + "\n"
+        + _php_function(source, "make_token")
+        + "\n$hash = password_hash('nur-lokaler-Test', PASSWORD_DEFAULT);"
+        "echo json_encode([$hash, make_token($hash)]);"
+    )
+    result = subprocess.run([php, "-r", code], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    password_hash, token = json.loads(result.stdout)
+    access = tmp_path / "private-access"
+    access.mkdir(mode=0o700)
+    path = access / "stats-access.php"
+    path.write_text("<?php return ['hash' => " + repr(password_hash) + "];", encoding="ascii")
+    _chmod_private(path)
+    return {"SOLIDON_STATS_ACCESS_FILE": str(path)}, {"Cookie": f"solidon_stats={token}"}
+
+
+def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path) -> None:
+    docroot = _temporary_docroot(tmp_path)
+    metadata = b'{"version":"0.4.0"}'
+    (docroot / "version.json").write_bytes(metadata)
+    environment, stats_headers = _stats_test_access(tmp_path)
+    month = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
+    with _php_server(tmp_path, environment, docroot=docroot) as base:
+        for _attempt in range(2):
+            status, headers, body = _request(
+                f"{base}/count.php?u=1",
+                headers={"User-Agent": "Solidon/0.4.0", "Referer": "https://example.org/private"},
+            )
+            assert (status, body.encode()) == (200, metadata)
+            assert headers["Content-Type"].startswith("application/json")
+        rows = [json.loads(line) for line in month.read_text(encoding="utf-8").splitlines()]
+        assert len(rows) == 2
+        assert all(row["u"] == row["r"] == "" for row in rows)
+        assert not (tmp_path / "stats" / "salt.json").exists()
+        status, _headers, page = _request(
+            f"{base}/count.php",
+            method="POST",
+            data=b"p=%2Ftest",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": "https://solidon3d.de",
+            },
+        )
+        assert status == 204
+        rows = [json.loads(line) for line in month.read_text(encoding="utf-8").splitlines()]
+        assert rows[-1]["k"] == "p" and len(rows[-1]["u"]) == 8
+        assert (tmp_path / "stats" / "salt.json").exists()
+        status, _headers, page = _request(f"{base}/stats.php", headers=stats_headers)
+        assert status == 200 and "</html>" in page
+        updates = page.split("<h2>Update-Prüfungen</h2>")[1].split("<h2>Downloads</h2>")[0]
+        assert '<th class="n">Prüfungen</th>' in updates
+        assert "Installationen" not in updates
+        assert "Installationen (Tag mal Kennzeichen)" not in page
+        assert re.search(r"0\.4\.0</td>\s*<td class=\"n\">2</td>", updates)
 
 
 def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:

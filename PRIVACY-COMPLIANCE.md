@@ -24,7 +24,7 @@ Verantwortlicher und Stand:
 | Website-/Downloadbetrieb | Serverprotokolle, Downloadzähler, Hoster, Missbrauchsschutz, konkrete Fristen |
 | Kauf, Rechnung und Merchant of Record | Vertrags-/Steuerdaten, Verkäuferrolle, Zahlungsdienstleister, gesetzliche Aufbewahrung |
 | Online- und Offlineaktivierung | Lizenz-/Gerätekennungen, Lizenzstatus und Anlagezeit, Aktivierungsbeleg, Versuchszähler; Betreiberprotokoll mit Kennung, Schlüsselhash, Zeitpunkt, Aktion, festem Grund und Änderungsstatus; Betrugsabwehr, keine regelmäßige Kontoprüfung |
-| Updateprüfung | Version, Plattform, minimal erforderliche Netzmetadaten, keine Projektdaten |
+| Updateprüfung | Abrufzeit und Fassung, keine Besucherkennung oder Verweisquelle in der Statistik, keine Installationszahl; höchstens laufender und vorheriger UTC-Monat; kurzlebiger Missbrauchsschutz und Hosting-Protokolle getrennt, keine Projektdaten |
 | Support und Sicherheitsmeldungen | freiwillig ausgewählte Anhänge, Protokolle, Projekt-/Chatinhalt nur nach Vorschau, Tickets und Löschung |
 | Anthropic mit eigenem API-Schlüssel | direkte Nutzlast, Anbieterrolle, Empfängerland, Transfergrundlage, Speicher-/Trainingseinstellung |
 | Lokales Ollama | grundsätzlich lokale Verarbeitung; Netz-/Installationswege und Protokolle gesondert abgrenzen |

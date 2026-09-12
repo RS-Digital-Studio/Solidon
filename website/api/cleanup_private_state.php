@@ -412,7 +412,8 @@ function cleanup_validate_month_jsonl($stream, int $size, string $month, string 
             || strlen($row['v']) === 0 || strlen($row['v']) > 255
             || preg_match('/[\x00-\x1f\x7f]/', $row['v']) === 1
             || strlen($row['r']) > 80 || preg_match('/[\x00-\x20\x7f]/', $row['r']) === 1
-            || preg_match('/^[0-9a-f]{8}$/D', $row['u']) !== 1) {
+            || (($row['k'] !== 'u' || $row['u'] !== '')
+                && preg_match('/^[0-9a-f]{8}$/D', $row['u']) !== 1)) {
             throw new CleanupFailure($label . ': Eine JSONL-Zeile hat das falsche Schema.', CLEANUP_EXIT_DATA);
         }
         $when = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $row['t']);

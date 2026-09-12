@@ -25,6 +25,8 @@
  *
  * **Was gespeichert wird und was nicht.** Gespeichert werden Zeitpunkt, der
  * abgerufene Pfad, der Host der verweisenden Seite und ein Tageskennzeichen.
+ * Bei Updateabrufen werden nur Zeitpunkt und Fassung gespeichert; Herkunft
+ * und Tageskennzeichen bleiben leer, ein Tageswert wird dafür nicht gelesen.
  * Nicht gespeichert werden IP-Adresse und User-Agent. Das Tageskennzeichen
  * ist ein gekürzter HMAC aus IP und User-Agent unter einem privaten
  * Zufallswert, der am ersten Aufruf jedes UTC-Tags neu entsteht — damit lassen sich
@@ -652,15 +654,20 @@ function record(string $kind, string $value): bool
     }
 
     try {
-        $day = count_day($now);
-        $salt = day_salt($dir, $day);
+        $mark = '';
+        $referrer = '';
+        if ($kind !== 'u') {
+            $day = count_day($now);
+            $mark = visitor_mark(day_salt($dir, $day));
+            $referrer = referrer_host();
+        }
         $line = json_encode(
             [
                 't' => $now->format('c'),
                 'k' => $kind,
                 'v' => $value,
-                'r' => referrer_host(),
-                'u' => visitor_mark($salt),
+                'r' => $referrer,
+                'u' => $mark,
             ],
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         );

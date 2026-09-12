@@ -167,7 +167,12 @@ bleiben bis zu diesem externen Nachweis ein Produktionsgate.
 
 Das Zeilenschema umfasst Seiten (`p`), Downloads (`d`) und Updateabrufe (`u`);
 bei Updateabrufen muss der Wert eine Fassung oder `unbekannt` sein. Neue
-Zählarten werden immer zusammen mit der Wartungsprüfung geändert. Zur
+Updatezeilen tragen weder Herkunft noch Besucherkennzeichen; nur Seiten und
+Downloads nutzen den Tageswert. Die Auswertung zeigt Abrufzahlen je Fassung,
+keine Installationszahlen. Der Wartungslauf akzeptiert auch ältere
+Updatezeilen mit Kennzeichen, damit deren fristgerechte Löschung möglich
+bleibt; die Auswertung nutzt diese Altkennzeichen nicht mehr. Neue Zählarten
+werden immer zusammen mit der Wartungsprüfung geändert. Zur
 Abnahme gehört eine vom echten Zähler geschriebene Zeile jeder Art und ein
 anschließender erfolgreicher Wartungslauf. Ein lokaler Test belegt dabei
 weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
