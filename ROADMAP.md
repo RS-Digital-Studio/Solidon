@@ -74,7 +74,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
-| [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -957,25 +956,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-151"></a>
 
-- [ ] **RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan.** Aufgefallen am
-  10.09.2026 an Roberts `garden-hose-holder.3mf`: ein konstruierter Halter mit einem organisch
-  geschwungenen Bogen, dessen 194 nicht veröffentlichte Kugel- und Ringkandidaten ihn auf einen
-  Rundformanteil von 0,701 gegen die Schwelle 0,700 bringen — ein Tausendstel. Die Entscheidung,
-  seine 252 erfundenen Rundformen wegzulassen, ist **richtig** und bleibt; falsch ist der Satz
-  daneben: „Dieses Modell ist eine Freiform, etwa ein Scan" — und das liest ein Kunde als
-  Aussage über sein Teil, nicht über eine Zählung. **Der Satz steht in
-  `scene/evaluate.py` und nicht in `perceive`**, als Befund `perceive.freeform` mit der Zahl in
-  `values["dropped"]`; die Schwelle daneben ist `perceive/features.FREEFORM_ROUND_SHARE`, und
-  sie darf laut ihrem eigenen Kommentar ausdrücklich nicht nachgezogen werden. Wer den Satz
-  ändert, ändert damit den **Katalogschlüssel** — die deutsche Quelle ist der Text selbst, und
-  ohne die fünf Übersetzungen fielen `en`, `es`, `fr`, `it` und `pt` auf Deutsch zurück. Der Fund selbst
-  (vier verlorene Senkungen) ist am selben Tag behoben — `features.sits_at_the_mouth_of` rettet,
-  was an einer Bohrung hängt —, der Text nicht.
-  Abnahme: Der Befund sagt, was gemessen wurde und was daraus folgt, ohne dem Modell eine Herkunft
-  zuzuschreiben, die niemand geprüft hat; die Zahl bleibt darin (Regel 17). Vorher entscheiden, ob
-  daneben ein zweiter Zustand gebraucht wird — „überwiegend rund" gegen „Freiform" —, oder ob ein
-  Satz für beide Fälle reicht. Ein zweiter Zustand kostet eine Schwelle mehr, und die Lücke
-  zwischen Nozzle-Box (59 Prozent) und Retro-Maus (77 Prozent) ist schmal.
+- [x] **RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan.** Am 12.09.2026
+  behoben. Der Befund `perceive.freeform` sagte „Dieses Modell ist eine Freiform, etwa ein
+  Scan" — und das liest ein Kunde als Aussage über sein Teil, nicht über eine Zählung.
+  Roberts `garden-hose-holder.3mf` ist ein konstruierter Halter, dessen geschwungener Bogen
+  ihn mit 0,701 gegen die Schwelle 0,700 dorthin brachte.
+
+  Er nennt jetzt, **was gemessen wurde**: „Die Oberfläche dieses Modells ist überwiegend
+  gekrümmt. Kugeln, Ringe, Kegel und Verrundungen … sind an einer solchen Fläche keine
+  Merkmale und wurden weggelassen; Bohrungen, Zapfen und ebene Flächen bleiben." Die Zahl
+  bleibt darin (Regel 17), die Entscheidung darunter unverändert.
+
+  **Ein zweiter Zustand kommt nicht** — die vorab zu treffende Entscheidung. „Überwiegend
+  rund" neben „Freiform" kostete eine zweite Schwelle, und die Lücke zwischen Nozzle-Box
+  (59 Prozent) und Retro-Maus (77 Prozent) ist schmal; zwei Sätze, deren Grenze niemand
+  nachmisst, sind schlechter als einer, der wahr ist. Der Grund steht am Befund selbst.
+
+  Der Katalogschlüssel ist in allen fünf Sprachen getauscht, der alte hinaus. Nachweis: die
+  Zusicherung in `tests/test_evaluation.py` (kein „Scan" im Satz, „gekrümmt" darin), Gegenprobe
+  mit dem alten Wortlaut rot.
 
 <a id="rm-152"></a>
 

@@ -1199,10 +1199,28 @@ def _with_features(
             Finding(
                 code="perceive.freeform",
                 severity="info",
+                # **Der Satz sagt, was gemessen wurde — nicht, woher das Teil
+                # kommt** (RM-151). Er hieß „Dieses Modell ist eine Freiform,
+                # etwa ein Scan", und das liest ein Kunde als Aussage über sein
+                # Teil: Roberts `garden-hose-holder.3mf` ist ein konstruierter
+                # Halter, dessen geschwungener Bogen ihn mit 0,701 gegen die
+                # Schwelle 0,700 dorthin brachte — ein Tausendstel.
+                #
+                # **Die Entscheidung darunter ist richtig und bleibt.** Eine
+                # gekrümmte Fläche passt örtlich immer auf eine Kugel; die
+                # Nachtrennung zerlegt sie in Dutzende Flecken, und jeder
+                # fittet. Was fällt, ist die Herkunftsbehauptung daneben.
+                #
+                # **Und ein zweiter Zustand** — „überwiegend rund" gegen
+                # „Freiform" — **kommt nicht.** Er kostete eine zweite Schwelle,
+                # und die Lücke zwischen Nozzle-Box (59 Prozent) und Retro-Maus
+                # (77 Prozent) ist schmal; zwei Sätze, deren Grenze niemand
+                # nachmisst, sind schlechter als einer, der wahr ist.
                 message=_(
-                    "Dieses Modell ist eine Freiform, etwa ein Scan. Kugeln, Ringe, Kegel "
-                    "und Verrundungen, die die Erkennung darauf fand, sind keine Merkmale "
-                    "und wurden weggelassen; Bohrungen, Zapfen und ebene Flächen bleiben."
+                    "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Kugeln, "
+                    "Ringe, Kegel und Verrundungen, die die Erkennung darin fand, sind "
+                    "an einer solchen Fläche keine Merkmale und wurden weggelassen; "
+                    "Bohrungen, Zapfen und ebene Flächen bleiben."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,

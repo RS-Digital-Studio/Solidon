@@ -2463,6 +2463,13 @@ def test_what_the_recognition_left_out_on_a_freeform_is_said(
     assert freeform[0].severity == "info"
     assert freeform[0].values["dropped"] == 281
     assert freeform[0].object_id == "obj_1" and freeform[0].op_id == 1
+    # **Und er sagt, was gemessen wurde, nicht woher das Teil kommt** (RM-151).
+    # „Dieses Modell ist eine Freiform, etwa ein Scan" stand über einer Zählung
+    # und las sich als Aussage über das Bauteil: Roberts konstruierter Halter
+    # kam mit 0,701 gegen die Schwelle 0,700 dorthin, also um ein Tausendstel.
+    gesagt = str(freeform[0].message)
+    assert "Scan" not in gesagt, f"der Satz schreibt dem Modell eine Herkunft zu: {gesagt}"
+    assert "gekrümmt" in gesagt, f"und er nennt nicht, was gemessen wurde: {gesagt}"
 
 
 def test_a_model_that_is_no_freeform_gets_no_such_finding(

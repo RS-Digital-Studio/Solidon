@@ -393,6 +393,16 @@ dazu:
 * **Nicht still.** `freeform_dropped` nennt die Zahl, und die Auswertung macht
   daraus `perceive.freeform` (Regel 17). Ein Merkmal, das verschwindet, ohne
   dass ein Satz sagt warum, ist schlimmer als eines, das dasteht.
+* **Und der Satz nennt die Messung, nicht die Herkunft** (12.09.2026, RM-151).
+  Er hieß „Dieses Modell ist eine Freiform, etwa ein Scan"; das liest ein Kunde
+  als Aussage über sein Bauteil, und Roberts konstruierter `garden-hose-holder`
+  kam mit einem Rundformanteil von 0,701 gegen die Schwelle 0,700 dorthin — um
+  ein Tausendstel. Was er jetzt sagt, ist prüfbar: Die Oberfläche ist
+  überwiegend gekrümmt, und an einer solchen sind die vier Rundformen keine
+  Merkmale. **Ein zweiter Zustand** — „überwiegend rund" gegen „Freiform" —
+  **kommt nicht**: Er kostete eine zweite Schwelle in einer Lücke, die schmal
+  ist, und zwei Sätze, deren Grenze niemand nachmisst, sind schlechter als
+  einer, der wahr ist.
 * **Wer die Schwelle anfasst, misst an beiden Seiten** — an der Nozzle-Box
   (konstruiert, 59 Prozent rund) und an der Retro-Maus (Figur, 77 Prozent).
   Dazwischen liegt die Lücke, und sie ist schmal. Die Merkmals*zahl* und der
