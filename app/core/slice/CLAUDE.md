@@ -64,12 +64,17 @@ Reparatureingang dienen. Der analytische Korpusfall dazu steht in
 `tests/data/meshes/dovetail_vertex_plane.ply`; `tests/test_slice_core.py`
 hält Schichtfolge, Querschnitt und Stützvolumen zwischen beiden Wegen gleich.
 
-`slice_body` nimmt optional einen `CancelToken`. Ohne Token bleibt der native
-Fastpath ohne Python-Rückruf. Mit Token prüft der Cython-Kern periodisch im
-Flächen- und Flächen-mal-Schichten-Lauf; der NumPy-Rückfallweg verarbeitet
+`slice_body` und `cross_sections` nehmen optional einen `CancelToken`. Ohne
+Token bleibt der native Fastpath ohne Python-Rückruf. Mit Token prüft der
+Cython-Kern periodisch im Flächen- und Flächen-mal-Schichten-Lauf;
+der NumPy-Rückfallweg verarbeitet
 begrenzte Flächenblöcke. Polygonaufbau, GEOS-Messung und Stützvolumen prüfen
 zwischen Schichten beziehungsweise Differenzen. Jeder Weg behält dieselbe
 Segmentreihenfolge und dieselben Analysewerte.
+
+Die Analysekarten reichen ihr Abbruch- und Budgetsignal über `solid_field`
+auch in diesen Schnittweg. Das Füllen des Voxelfelds prüft es vor jedem
+Querschnitt und vor der Rückgabe; ein abgebrochenes Feld wird nicht veröffentlicht.
 
 ## Grenzen
 

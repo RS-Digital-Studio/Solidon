@@ -562,7 +562,9 @@ def cross_section(mesh: MeshData, z: float) -> ShapelyPolygon | None:
     return cross_sections(mesh, np.array([z], dtype=float))[0]
 
 
-def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
+def cross_sections(
+    mesh: MeshData, heights: Any, *, cancelled: CancelToken | None = None
+) -> list[ShapelyPolygon | None]:
     """Viele Ebenen auf einmal — der Grund, warum die Schichtanalyse
     überhaupt brauchbar ist.
 
@@ -576,7 +578,7 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
     Detail: eine Schicht mit der darunter zu vergleichen bedeutet nur etwas,
     wenn beide auf dieselbe Karte gezeichnet sind.
     """
-    return _cross_sections(mesh, heights, capture_contours=False)[0]
+    return _cross_sections(mesh, heights, capture_contours=False, cancelled=cancelled)[0]
 
 
 def _cross_sections(

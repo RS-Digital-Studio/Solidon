@@ -392,10 +392,14 @@ class SolidField:
 MAX_GRID_STEPS = 300
 
 
-def solid_field(mesh: MeshData, pitch: float | None = None) -> SolidField:
+def solid_field(
+    mesh: MeshData, pitch: float | None = None, *, cancelled: CancelToken | None = None
+) -> SolidField:
     """Rastert den Körper: welche Zellen Material halten und welche nicht."""
     import shapely
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     step = pitch if pitch is not None else default_pitch(mesh)
     low = np.asarray(mesh.bounds.minimum, dtype=float) - step
     high = np.asarray(mesh.bounds.maximum, dtype=float) + step
@@ -410,12 +414,16 @@ def solid_field(mesh: MeshData, pitch: float | None = None) -> SolidField:
     # Dreiecke einmal je Schicht ab — dreihundert Schichten eines Körpers mit
     # dreihunderttausend Dreiecken sind die Stelle, an der die Wandkarte die
     # meiste Zeit verbrachte.
-    for index, shape in enumerate(cross_sections(mesh, axes[2])):
+    for index, shape in enumerate(cross_sections(mesh, axes[2], cancelled=cancelled)):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if shape is None or shape.is_empty:
             continue
         inside = shapely.contains_xy(shape, flat_x, flat_y)
         filled[:, :, index] = inside.reshape(grid_x.shape)
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     return SolidField(
         filled=filled,
         origin=np.array([axis[0] for axis in axes], dtype=float),
@@ -948,7 +956,7 @@ def support_map(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     centres = np.asarray(body.triangles_center, dtype=float)
-    field = solid_field(mesh)
+    field = solid_field(mesh, cancelled=cancelled)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     drops = _drop_below(mesh, field, centres)

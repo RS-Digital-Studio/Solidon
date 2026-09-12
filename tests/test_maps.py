@@ -724,6 +724,50 @@ def test_the_support_budget_uses_an_injected_monotonic_clock() -> None:
     }
 
 
+@pytest.mark.parametrize("phase", ["sections", "raster"])
+def test_support_budget_interrupts_inside_the_solid_field(
+    phase: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach Ablauf im Schnitt oder ersten Rasterquerschnitt läuft kein Restfeld weiter."""
+    from app.core.slice import analysis
+    from app.core.types import SliceResult
+
+    now = [0.0]
+    deadline = maps._MapDeadline(None, 3.0, clock=lambda: now[0])
+    monkeypatch.setattr(
+        maps,
+        "slice_body",
+        lambda *_args, **_kwargs: SliceResult(
+            layers=(), support_volume=0.0, first_layer_area=0.0, source="internal"
+        ),
+    )
+    original_segments = analysis._plane_segments
+    original_contains = maps.shapely.contains_xy
+    rastered = 0
+
+    def expire_in_segments(*args, **kwargs):
+        if phase == "sections":
+            now[0] = 4.25
+        return original_segments(*args, **kwargs)
+
+    def expire_in_raster(*args, **kwargs):
+        nonlocal rastered
+        answer = original_contains(*args, **kwargs)
+        rastered += 1
+        if phase == "raster":
+            now[0] = 4.25
+        return answer
+
+    monkeypatch.setattr(analysis, "_plane_segments", expire_in_segments)
+    monkeypatch.setattr(maps.shapely, "contains_xy", expire_in_raster)
+    with pytest.raises(maps.MapBudgetExceeded):
+        maps.support_map(cube(), cancelled=deadline)
+
+    assert rastered == (0 if phase == "sections" else 1), (
+        f"{rastered} raster sections after the budget expired in {phase}"
+    )
+
+
 def test_support_checks_the_budget_after_an_atomic_stage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -740,7 +784,7 @@ def test_support_checks_the_budget_after_an_atomic_stage(
         ),
     )
 
-    def slow_field(_mesh: MeshData) -> object:
+    def slow_field(_mesh: MeshData, *, cancelled=None) -> object:
         now[0] = 4.25
         return object()
 
