@@ -679,7 +679,9 @@ def register_part(
 #: Eckwinkel halten die Mindestwandstärke, der Eckwinkel nennt die Mitte
 #: seiner Auflagefläche statt ihrer Kante, und das Übermaß der
 #: Magnet-Haltelippe kommt aus dem Materialprofil statt aus einer Zahl
-#: (``structure.py``, ``mounting.py``, 26.08.2026). Version 12: Das
+#: (``structure.py``, ``mounting.py``, 26.08.2026). Version 11: Die druckbare
+#: Schraube und Mutter ergänzen das gedruckte Gewinde
+#: (``fasteners.py``, 28.08.2026). Version 12: Das
 #: Schraubenloch benutzt für einen zylindrischen Kopf dessen wirkliches Maß
 #: und kann eine Unterlegscheibe einlassen. Im selben Stand kommen der neue
 #: Lagersitz und optionale Sondermaße für Magnet und Kabel hinzu; Letztere
@@ -694,6 +696,11 @@ def register_part(
 #: Automatische Passungswerte lesen das Material des Zielkörpers statt des
 #: Projekts (``MATERIAL_OF_TARGET``), und der Kabelclip misst seine Verengung
 #: am Kabel statt am aufgeweiteten Sitz (``structure.py``, 06.09.2026).
+#: Version 16: Filmscharniere weisen Folien ab, die nicht dünner als ihre
+#: Flügel sind; Kabeldurchführungen ergänzen den tragenden Klemmblock und
+#: Toleranzleitern trennen Zapfen- und Lochleiste zum Zusammenstecken.
+#: Version 17: Die Ruthex-M2,5-Einpressbuchse erhält das herstellerseitige
+#: Einbauloch von 4,0 statt 3,6 mm; auch ihre Einführschräge folgt diesem Maß.
 LIBRARY_VERSION: Final = "17"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
