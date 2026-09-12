@@ -781,10 +781,13 @@ class NewFilamentDialog(QDialog):
             )
             return
         dialog = SlicerFilamentDialog(self, entries, self.slicer_profile.text().strip())
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            chosen = dialog.chosen_profile()
-            self.slicer_profile.setText(chosen)
-            self._show_clear_state(bool(chosen))
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                chosen = dialog.chosen_profile()
+                self.slicer_profile.setText(chosen)
+                self._show_clear_state(bool(chosen))
+        finally:
+            dialog.deleteLater()
 
     def _show_clear_state(self, has_profile: bool) -> None:
         """Der Entfernen-Knopf sagt, warum er nichts zu tun hat.
@@ -1227,15 +1230,18 @@ class FilamentField(QComboBox):
         if not (0 <= before < self.count()) or self.itemData(before) == NEW_FILAMENT:
             before = max(0, position - 1)
         dialog = NewFilamentDialog(self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                self.setCurrentIndex(before)
+                return
+            entry = dialog.entry()
+            if not entry.name:
+                self.setCurrentIndex(before)
+                return
             self.setCurrentIndex(before)
-            return
-        entry = dialog.entry()
-        if not entry.name:
-            self.setCurrentIndex(before)
-            return
-        self.setCurrentIndex(before)
-        self._writes.run(partial(filaments.save, entry))
+            self._writes.run(partial(filaments.save, entry))
+        finally:
+            dialog.deleteLater()
 
     def _entry_saved(self, result: object) -> None:
         entry = cast(filaments.CatalogueFilament, result)
@@ -1661,12 +1667,15 @@ class FilamentPanel(QWidget):
 
     def _add(self) -> None:
         dialog = NewFilamentDialog(self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        entry = dialog.entry()
-        if not entry.name:
-            return
-        self._writes.run(partial(filaments.save, entry))
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            entry = dialog.entry()
+            if not entry.name:
+                return
+            self._writes.run(partial(filaments.save, entry))
+        finally:
+            dialog.deleteLater()
 
     def _catalogue_saved(self, _result: object) -> None:
         self._fill()
@@ -1716,9 +1725,12 @@ class FilamentPanel(QWidget):
         if chosen is None:
             return
         dialog = NewFilamentDialog(self, entry=chosen)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self._writes.run(partial(filaments.save, dialog.entry()))
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            self._writes.run(partial(filaments.save, dialog.entry()))
+        finally:
+            dialog.deleteLater()
 
     def _remove(self) -> None:
         chosen = self._chosen()

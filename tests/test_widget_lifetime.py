@@ -76,6 +76,102 @@ HOW_MANY = 10
 EVENT_ROUNDS = 5
 
 
+@pytest.mark.parametrize(
+    "route",
+    [
+        "panel_add",
+        "panel_edit",
+        "field",
+        "inventory_add",
+        "inventory_edit",
+        "inventory_import",
+        "usage",
+        "profile",
+        "bodies",
+    ],
+)
+def test_finished_filament_and_body_dialogs_are_released(qt_app, tmp_path, monkeypatch, route):
+    """Wiederholtes Verlassen lässt keine unsichtbaren Dialoge am weiterlebenden Besitzer."""
+    from functools import partial
+    from pathlib import Path
+    from time import monotonic
+
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog
+    from shiboken6 import isValid
+
+    from app.core.export.slicer_profiles import SlicerProfile
+    from app.core.filament_usage import UsageRequest
+    from app.core.knowledge import filaments
+    from app.ui import filament_picker as picker
+    from app.ui.filament_inventory import InventoryView
+    from app.ui.filament_usage import UsageDialog
+    from app.ui.panels import BodyChoiceDialog
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "spools.json")
+    entry = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    if route.startswith("panel"):
+        owner = picker.FilamentPanel()
+        owner.list.setCurrentRow(
+            next(
+                row
+                for row in range(owner.list.count())
+                if owner.list.item(row).text().startswith(entry.name)
+            )
+        )
+        trigger = owner._add if route == "panel_add" else owner._edit
+    elif route == "field":
+        owner = picker.FilamentField(0)
+        trigger = partial(owner._make_one, owner.findData(picker.NEW_FILAMENT))
+    elif route.startswith("inventory"):
+        owner = InventoryView()
+        owner.show_spool(entry.identifier)
+        trigger = (
+            owner._add
+            if route == "inventory_add"
+            else owner._edit
+            if route == "inventory_edit"
+            else partial(owner._choose_import, (entry,))
+        )
+    elif route == "usage":
+        owner = UsageDialog(UsageRequest("output", "Halter", 0, ()))
+        until = monotonic() + 3
+        while owner._tasks.worker is not None and monotonic() < until:
+            QTest.qWait(10)
+        assert owner._tasks.worker is None
+        trigger = owner._create_spool
+    elif route == "profile":
+        owner = picker.NewFilamentDialog()
+        monkeypatch.setattr(
+            picker,
+            "slicer_filaments",
+            lambda: (SlicerProfile(Path("profile.json"), "Profil", "filament", from_user=True),),
+        )
+        trigger = owner._choose_slicer_profile
+    else:
+        owner = QWidget()
+        trigger = partial(BodyChoiceDialog.ask, owner, "Körper", ("one", "two"), {})
+    opened = []
+
+    def leave(dialog):
+        opened.append(dialog)
+        dialog.reject()
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(QDialog, "exec", leave)
+    try:
+        for _ in range(3):
+            trigger()
+        assert len(opened) == 3
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert all(not isValid(dialog) for dialog in opened)
+        assert isValid(owner)
+    finally:
+        owner.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     """Die Widget-Klassen, die auf ihre Freigabe geprüft werden.
 

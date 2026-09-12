@@ -3163,9 +3163,12 @@ class BodyChoiceDialog(QDialog):
     ) -> tuple[str, ...]:
         """Fragen und antworten — leer, wenn abgebrochen wurde."""
         dialog = cls(parent, title, bodies, names)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return ()
-        return dialog.chosen()
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return ()
+            return dialog.chosen()
+        finally:
+            dialog.deleteLater()
 
 
 class ReportPanel(QWidget):

@@ -77,6 +77,10 @@ Breite messen (`totalHeightForWidth`). Wunsch, Mindesthöhe und Zuteilung
 enthalten denselben umbrochenen Hinweis und nur sichtbare Bedienelemente.
 Breite, Schrift, Stil und Sichtbarkeit erneuern diesen Höhenvertrag.
 
+Filament-, Slicerprofil- und Körperwahldialoge werden nach jeder modalen
+Antwort im `finally` zur Löschung vorgemerkt. Nur kopierte Fachdaten reisen
+in nachfolgende Lagerarbeiter; der offene Besitzer hält keine beendeten Dialoge.
+
 Spulenkarten zeichnen die Restmenge zusätzlich zur Farbe als Zahl und
 Füllstand; unbekannter und archivierter Bestand tragen sichtbare Texte.
 Die Lagerzusammenfassung unterscheidet Leerzustand, eine Spule und mehrere Spulen.

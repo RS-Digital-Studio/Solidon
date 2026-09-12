@@ -818,16 +818,22 @@ class InventoryView(QWidget):
 
     def _add(self) -> None:
         dialog = NewFilamentDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._run(partial(filaments.save, dialog.entry()), self._saved)
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._run(partial(filaments.save, dialog.entry()), self._saved)
+        finally:
+            dialog.deleteLater()
 
     def _edit(self) -> None:
         entry = self._selected_entry()
         if entry is None:
             return
         dialog = NewFilamentDialog(self, entry=entry)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._run(partial(filaments.save, dialog.entry()), self._saved)
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._run(partial(filaments.save, dialog.entry()), self._saved)
+        finally:
+            dialog.deleteLater()
 
     def _duplicate(self) -> None:
         self._run(partial(filaments.duplicate, self._selected_id), self._saved)
@@ -901,9 +907,12 @@ class InventoryView(QWidget):
             )
             return
         dialog = SlicerSpoolDialog(entries, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self._run(partial(filaments.synchronise, dialog.chosen_spools()), self._saved)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            self._run(partial(filaments.synchronise, dialog.chosen_spools()), self._saved)
+        finally:
+            dialog.deleteLater()
 
     def _run(
         self,

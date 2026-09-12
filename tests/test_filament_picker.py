@@ -314,13 +314,7 @@ def test_a_cancelled_new_filament_leaves_a_usable_value(
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     from app.ui import filament_picker
 
-    class Cancelled:
-        def __init__(self, *_args: object, **_kwargs: object) -> None: ...
-
-        def exec(self) -> int:
-            return 0  # QDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(filament_picker, "NewFilamentDialog", Cancelled)
+    monkeypatch.setattr(filament_picker.NewFilamentDialog, "exec", lambda _dialog: 0)
 
     field = FilamentField(0)
     position = field.findData(NEW_FILAMENT)

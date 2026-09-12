@@ -722,9 +722,12 @@ class UsageDialog(QDialog):
 
     def _create_spool(self) -> None:
         dialog = NewFilamentDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._pending = "create"
-            self._tasks.run(partial(filaments.save, dialog.entry()))
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._pending = "create"
+                self._tasks.run(partial(filaments.save, dialog.entry()))
+        finally:
+            dialog.deleteLater()
 
     def _book(self, _checked: bool = False, *, correct_manual: bool = False) -> None:
         self._validate()
