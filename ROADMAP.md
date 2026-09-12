@@ -62,7 +62,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Entscheiden, ob eine Verrundung ohne jede Operation in der Merkmalsliste stehen soll |
-| [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Organische und mechanische 200.000-Dreiecke-Fälle gegen eine Sekunde messen |
+| [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | 1,400 auf 1,004 s gebracht; offen ist die Entscheidung zwischen Stapelumbau der Einpassungen und einem neu gefassten Ziel |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
@@ -862,11 +862,49 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-132"></a>
 
-- [ ] **RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen.** Die Merkmals-Erkennung organischer
-  Freiformen auf das allgemeine Ein-Sekunden-Ziel für 200000 Dreiecke bringen oder das Ziel
-  ausdrücklich neu entscheiden. Abnahme: organischer und mechanischer Referenzfall, unveränderte
-  Merkmale/IDs und isolierte Laufzeitmessung; großzügigere Regressionsgrenzen nicht als
-  Zielerfüllung werten.
+- [~] **RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen.** Am 12.09.2026 gemessen und
+  beschleunigt. **Die Zeit lag nicht in den Einpassungen allein, sondern in der Arbeit an
+  Flecken, die niemand liest.** Der 200 000-Dreiecke-Freiformkörper zerfällt in **120 610**
+  Flecken — eine verrauschte Oberfläche hat sie —, von denen **1 650** die
+  `MIN_PATCH_FACES`-Schwelle erreichen. Die Nachtrennung nach Krümmung gruppierte trotzdem
+  jeden einzelnen.
+
+  Zwei Änderungen, beide ohne eine andere Antwort:
+
+  * `_fitted` sagt der Nachtrennung über `worth_splitting`, welche Flecken groß genug sind.
+    Ein Stück ist nie größer als sein Fleck, ein zu kleiner Fleck kommt an `classify` also
+    ohnehin nicht vorbei. **1,400 → 1,075 s.**
+  * `_connected_patches` wählt die Nachbarpaare über zwei Felder statt Zeile für Zeile und gibt
+    die Gruppen über `tolist()` statt `int()` je Dreieck zurück — 20 und 84 Millisekunden gegen
+    4 und 14, hundertzwanzigtausendfach. **1,075 → 1,004 s.**
+
+  | Körper | vorher | nachher | Merkmale |
+  |---|---|---|---|
+  | Freiform 200 000 Dreiecke (organisch) | 1,400 s | **1,004 s** | 0 |
+  | Lochplatte 203 776 Dreiecke (mechanisch) | 0,649 s | **0,508 s** | 10 |
+
+  Merkmale und IDs an sieben Körpern zeichengleich — die beiden Referenzfälle, `plate_holes`,
+  `post_with_fillet`, `plate_countersunk`, `plate_chamfer_and_taper` und `torus_ring`. Nachweis:
+  vier Fälle in `tests/test_curvature_split_components.py` und `tests/test_features.py`, vier
+  Gegenproben einzeln rot (ohne die Maske, die Regel fest verdrahtet statt über den Parameter,
+  mit umgedrehter Fleckenreihenfolge, ohne den leeren Rückweg). Keine Schranke wurde
+  aufgeweicht.
+
+  **Und das Ziel ist damit nicht erreicht, sondern angekommen:** 1,004 s sind vier Millisekunden
+  über der Sekunde, und das gilt für den **synthetischen** Körper auf dieser Maschine. Der
+  organische 197k-Kundenfall stand am 10.09.2026 bei 1,52 s; um denselben Anteil schneller wären
+  es 1,09. Was noch darin steckt, ist gemessen: 55 Prozent der verbliebenen Sekunde sind die
+  Einpassungen selbst (`fit_torus` 0,33 s, `fit_cone` 0,21, `fit_sphere` 0,10 — über 1 650
+  Flecken mit im Mittel sechs Dreiecken), 14 Prozent `body.facets` von trimesh. Beide sind keine
+  verschenkte Arbeit: Die Zahl der abgelehnten Kugel- und Ringkandidaten **ist** die
+  Freiformentscheidung (`unpublished_round_shapes`), sie lässt sich nicht überspringen. Wer
+  weiter will, verarbeitet die Flecken im Stapel statt einzeln — ein Umbau der drei `fit_*`,
+  kein Feilen.
+
+  **Zur Entscheidung für Robert:** weiter mit dem Stapelumbau, oder §31 neu fassen. Das Ziel
+  nennt heute keine Referenzmaschine und stützt sich auf eine Kugel, die keine Bohrungen hat;
+  ein Ziel je Körperart (mechanisch unter 1 s, organisch unter 2 s) wäre die ehrlichere Zusage.
+  Eine Bauplanänderung steht nicht ohne Ansage an.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-die-erkennung-wirklich-kostet-04092026).
 
