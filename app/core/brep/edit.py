@@ -939,7 +939,7 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
     23884,115 mm³ nach dem Wegnehmen einer, analytisch 23845,487 + 1,9314·20 —
     dieselbe Zahl auf vier Stellen, in 18 ms.
 
-    Gesucht wird die Fläche über ihre **Lage** und ihren Radius, nicht ueber
+    Gesucht wird die Fläche über ihre **Lage** und ihren Radius, nicht über
     einen Index: Ein Index in die Topologie verschiebt sich, sobald davor etwas
     anderes passiert (§21.2, derselbe Grund wie bei :func:`edge_key`).
     """
@@ -954,6 +954,7 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
                 "davor hat den Körper verändert. Wählen Sie sie neu."
             ),
             values={"radius_mm": round(radius, 3)},
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     builder = BRepAlgoAPI_Defeaturing()
     builder.SetShape(solid.shape)
@@ -966,6 +967,7 @@ def unround(solid: Solid, centre: Vec3, radius: float) -> Solid:
                 "treffen sich danach nicht. Nehmen Sie sie zusammen mit den "
                 "angrenzenden weg, oder verrunden Sie stattdessen neu."
             ),
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     return Solid(builder.Shape())
 
@@ -1030,6 +1032,7 @@ def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
                 "Nach dem Wegnehmen der Rundung ist an dieser Stelle keine Kante "
                 "übrig, die sich verrunden ließe."
             ),
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     nearest = min(described, key=lambda entry: math.dist(entry.middle, centre))
     return fillet(sharp, wanted, "named", [edge_key(nearest)])

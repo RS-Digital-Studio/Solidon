@@ -168,6 +168,37 @@ def test_a_named_edge_that_is_gone_says_so_instead_of_doing_nothing() -> None:
     assert "keine Kante benannt" in str(leer.value.detail)
 
 
+@pytest.mark.parametrize("failure", ["missing_rounding", "defeaturing", "missing_edge"])
+def test_rounding_failures_offer_editing_instead_of_mesh_repair(
+    failure: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein exakter Rundungsfehler führt zurück zur Eingabe, nicht zur Netzreparatur."""
+    from unittest.mock import Mock
+
+    import OCP.BRepAlgoAPI as brep_api  # noqa: N813 - Name der externen OCP-API
+
+    source = block()
+    centre = (WIDTH / 2.0, DEPTH / 2.0, HEIGHT / 2.0)
+    if failure != "missing_rounding":
+        source = edit.fillet(source, 3.0, "vertical")
+    before = source.volume
+    if failure == "defeaturing":
+        builder = Mock()
+        builder.IsDone.return_value = False
+        monkeypatch.setattr(brep_api, "BRepAlgoAPI_Defeaturing", lambda: builder)
+    elif failure == "missing_edge":
+        monkeypatch.setattr(edit, "edges_of", lambda _solid: ())
+
+    with pytest.raises(GeometryError) as failed:
+        if failure == "missing_edge":
+            edit.reround(source, centre, 3.0, 2.0)
+        else:
+            edit.unround(source, centre, 3.0)
+
+    assert {action.id for action in failed.value.suggestions} == {"correct_input", "cancel"}
+    assert source.volume == pytest.approx(before, abs=EPS_GEOM)
+
+
 def test_a_chamfer_takes_off_exactly_its_triangle() -> None:
     distance = 2.0
 
