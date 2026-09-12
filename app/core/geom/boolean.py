@@ -297,8 +297,31 @@ def _run_stage(
     return _voxel(kind, meshes)
 
 
+def _native_contact(body: Any, volume: float) -> bool:
+    """Erkennt ausschließlich Volumenreste innerhalb der nativen Float64-Rechengrenze."""
+    bounds = body.bounding_box()
+    # Ein exakt flacher Hüllquader beweist Nullvolumen. Das native Integral
+    # kann für solche Kontaktflächen trotzdem positive oder negative
+    # Rundungsreste liefern; sie rechtfertigen keinen geometrischen Rückfall.
+    if any(bounds[index + 3] <= bounds[index] for index in range(3)):
+        return True
+    # Gedrehte oder gekrümmte Nullhüllen besitzen einen räumlichen Hüllquader.
+    # Die Fehlerfortpflanzung über Differenzen, Kreuz- und Skalarprodukt hat
+    # die Form gamma(8) * Koordinatengröße * Oberfläche: Positionsunsicherheit
+    # mal Fläche ergibt Volumenunsicherheit. Das Band folgt Float64, nicht
+    # einer Drucktoleranz, EPS_GEOM oder einer absoluten Volumenschranke.
+    relative_error = 8.0 * np.finfo(np.float64).eps
+    roundoff = (
+        relative_error
+        / (1.0 - relative_error)
+        * max(abs(value) for value in bounds)
+        * body.surface_area()
+    )
+    return math.isfinite(roundoff) and abs(volume) <= roundoff
+
+
 def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) -> MeshData | None:
-    """Rechnet in Float64 und übernimmt die native Leerauskunft vor der Vernetzung."""
+    """Rechnet in Float64 und verwirft belegte Kontaktreste auch neben echten Volumenkörpern."""
     import manifold3d
 
     if not all(
@@ -327,38 +350,35 @@ def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) ->
     result = manifold3d.Manifold.batch_boolean(manifolds, operation)
     if result.status() != manifold3d.Error.NoError:
         return None
-    bounds = result.bounding_box()
-    # Ein exakt flacher Hüllquader beweist Nullvolumen. Das native Integral
-    # kann für solche Kontaktflächen trotzdem positive oder negative
-    # Rundungsreste liefern; sie rechtfertigen keinen geometrischen Rückfall.
-    if any(bounds[index + 3] <= bounds[index] for index in range(3)):
-        return like.replacing(trimesh.Trimesh())
     volume = result.volume()
-    if not math.isfinite(volume):
-        return None
-    # Gedrehte oder gekrümmte Nullhüllen besitzen einen räumlichen Hüllquader.
-    # Die Fehlerfortpflanzung über Differenzen, Kreuz- und Skalarprodukt hat
-    # die Form gamma(8) * Koordinatengröße * Oberfläche: Positionsunsicherheit
-    # mal Fläche ergibt Volumenunsicherheit. Das Band folgt Float64, nicht
-    # einer Drucktoleranz, EPS_GEOM oder einer absoluten Volumenschranke.
-    relative_error = 8.0 * np.finfo(np.float64).eps
-    roundoff = (
-        relative_error
-        / (1.0 - relative_error)
-        * max(abs(value) for value in bounds)
-        * result.surface_area()
-    )
-    if math.isfinite(roundoff) and abs(volume) <= roundoff:
+    if _native_contact(result, volume):
         return like.replacing(trimesh.Trimesh())
-    if volume < 0.0:
+    if not math.isfinite(volume) or volume < 0.0:
         return None
-    built = result.to_mesh64()
+    parts = result.decompose()
+    kept = [part for part in parts if not _native_contact(part, part.volume())]
+    if not kept:
+        return like.replacing(trimesh.Trimesh())
+    if len(kept) == len(parts):
+        kept = [result]
+    vertices: list[np.ndarray] = []
+    faces: list[np.ndarray] = []
+    vertex_offset = 0
+    for part in kept:
+        built = part.to_mesh64()
+        vertices.append(
+            np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True)
+        )
+        faces.append(np.asarray(built.tri_verts, dtype=np.int64) + vertex_offset)
+        vertex_offset += len(vertices[-1])
+    # Die Schalen bleiben orientiert nebeneinander: Eine native Vereinigung
+    # würde negative Innenschalen als eigenständige Körper behandeln und füllen.
     return like.replacing(
         trimesh.Trimesh(
             # Die Ausgabe besitzt ihre Puffer: Nachfolgende Netzoperationen
             # dürfen nicht am schreibgeschützten Speicher des Kerns hängen.
-            vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True),
-            faces=np.array(built.tri_verts, dtype=np.int64, order="C", copy=True),
+            vertices=np.concatenate(vertices) if len(vertices) > 1 else vertices[0],
+            faces=np.concatenate(faces) if len(faces) > 1 else faces[0],
             process=False,
         )
     )

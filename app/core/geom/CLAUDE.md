@@ -30,6 +30,8 @@ Nach dem Verschließen der Bohrung bleiben es zwei Ringe, und die Senkung
 gehört sich dann selbst. Größenänderungen bleiben einzelne
 Abschnitte und melden die übrigen; bei mehrteiligen Ketten wird keine
 unvollständige automatische Änderung einer einzelnen Senkung vorgeschlagen.
+Die geprüfte Eigenständigkeit erreicht Werkzeugbau und Verschluss auch beim
+Versetzen, Verdoppeln und der freien Platzierung samt ihrer Vorschau.
 
 Die Regeln stehen in `.claude/rules/operationen.md`.
 
@@ -121,7 +123,14 @@ wird als leeres Netz weitergegeben; erst `allow_empty` entscheidet, ob das
 eine zulässige Antwort ist. Für gedrehte und gekrümmte Kontaktflächen begrenzt
 `gamma(8) * max|Koordinate| * Oberfläche` die native Float64-Rundung.
 Dieses datenabhängige Band ist keine Drucktoleranz; echte dünne Schnitte
-oberhalb der Rechenunsicherheit bleiben erhalten. Die Plausibilität verwendet
+oberhalb der Rechenunsicherheit bleiben erhalten. Dieselbe Grenze gilt je
+nativer Zusammenhangskomponente, damit Kontaktreste auch neben echten Körpern
+verschwinden. Verbleibende Schalen werden als orientierte Mesh-Puffer angefügt;
+eine erneute native Vereinigung würde negative Hohlraumschalen füllen.
+Änderungen am gemeinsamen Kern entwerten den Ergebnis-Cache über
+`paths.results_cache_dir()` für alle Operationen: im Quellbetrieb durch den
+Core-Zeitstempel, im Paket durch die Anwendungsfassung (§38).
+Die Plausibilität verwendet
 das orientierte Volumenintegral ohne
 Schwerpunktdivision und lehnt offene oder umgestülpte Ergebnisse weiterhin ab.
 Die native Eingangsgrenze fordert schreibbare C-Puffer; die Rückvernetzung

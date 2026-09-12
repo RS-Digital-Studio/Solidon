@@ -59,6 +59,45 @@ def test_a_thin_positive_intersection_is_not_rounded_into_contact(
     assert outcome.solver.attempted == ("direct",)
 
 
+@pytest.mark.parametrize("offset", [0.0, 1000.0])
+def test_contact_shells_do_not_survive_beside_a_hollow_and_a_tiny_part(offset: float) -> None:
+    """Echte Kontaktreste verschwinden; innere Schale und 10⁻¹²-mm³-Teil bleiben erhalten."""
+    from app.core.knowledge.parts.testbodies import FitLadderParams, fit_ladder
+
+    built = fit_ladder(FitLadderParams(diameter=6.0, steps=4, first=0.1, step=0.05))
+    male, female = sorted(built.mesh.raw.split(), key=lambda body: body.bounds[0, 1])
+    pin, bore = (built.features[name].params["centre"] for name in ("pin_1", "bore_1"))
+    female.apply_translation((pin[0] - bore[0], pin[1] - bore[1], 3.0))
+    outer = box(20.0, (300.0, 0.0, 0.0)).raw
+    inner = box(10.0, (300.0, 0.0, 0.0)).raw
+    inner.invert()
+    tiny = box(0.0001, (330.0, 0.0, 0.0)).raw
+    envelope = trimesh.creation.box(extents=(80.0, 40.0, 40.0))
+    envelope.apply_translation((315.0, 0.0, 0.0))
+    left = trimesh.util.concatenate((male, outer, inner, tiny))
+    right = trimesh.util.concatenate((female, envelope))
+    matrix = trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 2.0, 3.0))
+    matrix[:3, 3] = (offset, 0.0, 0.0)
+    for body in (left, right):
+        body.apply_transform(matrix)
+
+    outcome = boolean("intersection", [MeshData.of(left), MeshData.of(right)], stages=("direct",))
+
+    shells = outcome.mesh.raw.split(only_watertight=False)
+    assert len(shells) == 3, "only outer shell, hollow inner shell and tiny solid remain"
+    assert all(shell.is_watertight and shell.is_winding_consistent for shell in shells)
+    volumes = sorted(float(shell.volume) for shell in shells)
+    assert volumes[0] == pytest.approx(-1000.0, abs=1e-7)
+    assert volumes[1] == pytest.approx(1e-12, rel=1e-6, abs=0.0)
+    assert volumes[2] == pytest.approx(8000.0, abs=1e-7)
+    assert outcome.mesh.volume == pytest.approx(7000.0, abs=1e-7)
+    assert outcome.solver.attempted == ("direct",)
+    following = boolean("intersection", [outcome.mesh, MeshData.of(right)], stages=("direct",))
+    assert following.mesh.raw.body_count == 3
+    assert following.mesh.volume == pytest.approx(outcome.mesh.volume, abs=1e-7)
+    assert following.solver.attempted == ("direct",)
+
+
 @pytest.mark.parametrize(
     "diameter,steps,first,step", [(6.0, 4, 0.1, 0.05), (2.0, 8, 0.0, 0.01), (30.0, 8, 1.0, 0.5)]
 )

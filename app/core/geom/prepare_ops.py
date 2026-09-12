@@ -802,8 +802,8 @@ def _feature_body(mesh: MeshData, feature: Feature, *, alone: bool = False) -> M
 
     Wer ``alone`` setzt, hat die Frage anderswo beantwortet — an derselben
     Kette, aus der auch der gemeinsame Körper entsteht
-    (:func:`_stands_alone`). Dieselbe Unterscheidung trifft
-    :func:`feature_placement_geometry` seit je; sie fehlte allein hier.
+    (:func:`_stands_alone`). Derselbe belegte Alleinstand gilt beim Versetzen,
+    Kopieren und in der Platzierungsvorschau.
     """
     rings = (0, 1, 2) if alone else (0, 1)
     return _body_from_faces(mesh, feature.face_indices, allowed_rings=rings)
@@ -1753,7 +1753,9 @@ def feature_placement_geometry(
         raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
     centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
     related = chain or (feature,)
-    built = _paired_cavity_body(body, *chain) if chain else _tool_for(body, feature, centre)
+    built = (
+        _paired_cavity_body(body, *chain) if chain else _tool_for(body, feature, centre, alone=True)
+    )
     if built is None:
         raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
     frame = _feature_mount(body, feature, related, built)
@@ -1835,6 +1837,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                 quality=ctx.quality,
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
+                alone=True,
             )
         body, closed_solver = closed.mesh, closed.solver
         findings.extend(closed.findings)
@@ -2169,11 +2172,12 @@ def move_feature(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            alone=True,
         )
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
             "difference" if cavity else "union",
-            [closed.mesh, _tool_for(body, feature, target)],
+            [closed.mesh, _tool_for(body, feature, target, alone=True)],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
@@ -2370,7 +2374,10 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     change: BooleanKind = "difference" if cavity else "union"
     placed = boolean(
         change,
-        [body, _tool_for(body, feature, target)],
+        [
+            body,
+            _tool_for(body, feature, target, alone=_stands_alone(body, feature, source.features)),
+        ],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,

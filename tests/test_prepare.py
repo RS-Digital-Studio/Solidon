@@ -3823,6 +3823,64 @@ def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
     assert koerper.raw.body_count == 1
 
 
+@pytest.mark.parametrize("operation", ["move_feature", "duplicate_feature"])
+@pytest.mark.parametrize("surface_path", [False, True], ids=["coordinates", "surface"])
+@pytest.mark.parametrize("angle", [0.0, 37.0], ids=["flat", "turned"])
+def test_a_standalone_countersink_can_be_moved_and_copied(
+    profile: Profile, operation: str, surface_path: bool, angle: float
+) -> None:
+    """Die Bohrung ist gefüllt; ihre Senkung bleibt auf beiden Wegen eigenständig editierbar."""
+    import dataclasses
+
+    from shapely.geometry import Point
+
+    from app.core.slice.analysis import cross_section
+
+    entry, bore, _countersink = _plate_with_a_countersunk_bore()
+    original = as_mesh_data(entry.mesh)
+    full_volume = float(np.prod(original.raw.bounds[1] - original.raw.bounds[0]))
+    single = _run_op("remove_feature", entry, profile, at_feature=bore, sections="single").outputs[
+        0
+    ]
+    matrix = np.asarray(rotation("y", angle))
+    matrix[:3, 3] = (3.0, -2.0, 5.0)
+    single = dataclasses.replace(single, mesh=apply(as_mesh_data(single.mesh), matrix))
+    single = dataclasses.replace(single, features=detect(as_mesh_data(single.mesh)))
+    feature = next(found for found in single.features.values() if found.kind == "cone")
+    centre = np.asarray(feature.params["centre"], dtype=float)
+    target = centre + matrix[:3, :3] @ np.array([12.0, 0.0, 0.0])
+    normal = matrix[:3, 2]
+    extra = {"nx": normal[0], "ny": normal[1], "nz": normal[2]} if surface_path else {}
+    before = single.mesh.volume
+    vertices_before = np.array(single.mesh.raw.vertices, copy=True)
+
+    changed = _run_op(
+        operation,
+        single,
+        profile,
+        at_feature=feature.id,
+        x=target[0],
+        y=target[1],
+        z=target[2],
+        **extra,
+    ).outputs[0]
+    mesh = as_mesh_data(changed.mesh)
+    expected = before if operation == "move_feature" else 2.0 * before - full_volume
+    assert mesh.volume == pytest.approx(expected, abs=1e-3)
+    assert mesh.is_watertight and mesh.raw.body_count == 1
+    inverse = np.linalg.inv(matrix)
+    wall = np.asarray(single.mesh.raw.triangles)[list(feature.face_indices)].reshape(-1, 3)
+    levels = trimesh.transform_points(wall, inverse)[:, 2]
+    section = cross_section(apply(mesh, inverse), float(levels.min() + levels.max()) / 2.0)
+    assert section is not None
+    positions = trimesh.transform_points([centre, target], inverse)
+    assert [section.contains(Point(*point[:2])) for point in positions] == [
+        operation == "move_feature",
+        False,
+    ]
+    np.testing.assert_array_equal(single.mesh.raw.vertices, vertices_before)
+
+
 # --- Langlöcher (§25) -------------------------------------------------------------
 #
 # Ein Langloch ist eine Bohrung, die auseinandergezogen wurde: derselbe
