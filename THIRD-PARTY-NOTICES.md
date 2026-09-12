@@ -10,10 +10,10 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | cadquery-ocp-proxy | 8.0.1.0.0 | `Apache-2.0` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/b0495a71d10168b96cef8043ac39020a3fa45372/LICENSE) |
 | certifi | 2026.7.22 | `MPL-2.0` | [Quelltext](https://github.com/certifi/python-certifi) |
 | cffi | 2.1.1 | `MIT` | [Quelltext](https://cffi.readthedocs.io/) |
-| contourpy | 1.3.3 | `BSD-3-Clause` | [Quelltext](https://github.com/contourpy/contourpy) |
+| contourpy | 1.4.0 | `BSD-3-Clause` | [Quelltext](https://github.com/contourpy/contourpy) |
 | cycler | 0.12.1 | `BSD-3-Clause` | [Quelltext](https://github.com/matplotlib/cycler) |
 | fast_simplification | 0.2.0 | `MIT` | [Quelltext](https://github.com/pyvista/fast-simplification) |
-| fonttools | 4.64.0 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
+| fonttools | 4.65.0 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
 | freetype-py | 2.5.1 | `BSD-3-Clause` | [Quelltext](https://github.com/rougier/freetype-py) |
 | hidapi | 0.15.0 | `BSD-3-Clause` | [Quelltext](https://github.com/trezor/cython-hidapi) |
 | hsluv | 5.0.4 | `MIT` | [Quelltext](https://www.hsluv.org) |
@@ -26,12 +26,12 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | kiwisolver | 1.5.1 | `BSD-3-Clause` | [Quelltext](https://github.com/nucleic/kiwi) |
 | lazy-loader | 0.5 | `BSD-3-Clause` | [Quelltext](https://github.com/scientific-python/lazy-loader) |
 | lxml | 6.1.3 | `BSD-3-Clause` | [Quelltext](https://github.com/lxml/lxml) |
-| manifold3d | 3.5.2 | `Apache-2.0` | [Quelltext](https://github.com/elalish/manifold) |
+| manifold3d | 3.5.3 | `Apache-2.0` | [Quelltext](https://github.com/elalish/manifold) |
 | MarkupSafe | 3.0.3 | `BSD-3-Clause` | [Quelltext](https://github.com/pallets/markupsafe/) |
-| matplotlib | 3.11.1 | `LicenseRef-Matplotlib` | [Quelltext](https://matplotlib.org) |
+| matplotlib | 3.11.2 | `LicenseRef-Matplotlib` | [Quelltext](https://matplotlib.org) |
 | more-itertools | 11.1.0 | `MIT` | [Quelltext](https://github.com/more-itertools/more-itertools) |
 | networkx | 3.6.1 | `BSD-3-Clause` | [Quelltext](https://networkx.org/) |
-| numpy | 2.5.2 | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` | [Quelltext](https://github.com/numpy/numpy) |
+| numpy | 2.5.3 | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` | [Quelltext](https://github.com/numpy/numpy) |
 | packaging | 26.3 | `Apache-2.0 OR BSD-2-Clause` | [Quelltext](https://github.com/pypa/packaging) |
 | pillow | 12.3.0 | `MIT-CMU` | [Quelltext](https://github.com/python-pillow/Pillow) |
 | pycparser | 3.0 | `BSD-3-Clause` | [Quelltext](https://github.com/eliben/pycparser) |
@@ -50,7 +50,7 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | shiboken6 | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
 | six | 1.17.0 | `MIT` | [Quelltext](https://github.com/benjaminp/six) |
 | svg.path | 7.1 | `MIT` | [Quelltext](https://github.com/regebro/svg.path) |
-| tifffile | 2026.8.23 | `BSD-3-Clause` | [Quelltext](https://www.cgohlke.com) |
+| tifffile | 2026.9.9 | `BSD-3-Clause` | [Quelltext](https://www.cgohlke.com) |
 | trimesh | 5.1.0 | `MIT` | [Quelltext](https://github.com/mikedh/trimesh) |
 | uharfbuzz | 0.56.1 | `Apache-2.0` | [Quelltext](https://github.com/trufont/uharfbuzz) |
 | vhacdx | 0.0.10 | `BSD-3-Clause` | [Quelltext](https://github.com/trimesh/vhacdx) |
@@ -1086,20 +1086,20 @@ documentation is licensed as follows:
     DEALINGS IN THE SOFTWARE.
 ```
 
-### contourpy 1.3.3
+### contourpy 1.4.0
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### contourpy-1.3.3.dist-info/LICENSE
+#### contourpy-1.4.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:contourpy-1.3.3.dist-info/LICENSE
+Quelle: wheel:contourpy-1.4.0.dist-info/licenses/LICENSE
 
-SHA-256: `34170979fc64f4f5e6dfa66ef27dec314ffffc5852000c60f4836ec1dfbf156e`
+SHA-256: `11401c428c7014a75728e8679f9c000aacf262015aaba65a760d41aa1130b3af`
 
 ```text
 BSD 3-Clause License
 
-Copyright (c) 2021-2025, ContourPy Developers.
+Copyright (c) 2021-2026, ContourPy Developers.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1202,13 +1202,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### fonttools 4.64.0
+### fonttools 4.65.0
 
 SPDX-Ausdruck: `MIT`
 
-#### fonttools-4.64.0.dist-info/licenses/LICENSE
+#### fonttools-4.65.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:fonttools-4.64.0.dist-info/licenses/LICENSE
+Quelle: wheel:fonttools-4.65.0.dist-info/licenses/LICENSE
 
 SHA-256: `6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383`
 
@@ -1236,9 +1236,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### fonttools-4.64.0.dist-info/licenses/LICENSE.external
+#### fonttools-4.65.0.dist-info/licenses/LICENSE.external
 
-Quelle: wheel:fonttools-4.64.0.dist-info/licenses/LICENSE.external
+Quelle: wheel:fonttools-4.65.0.dist-info/licenses/LICENSE.external
 
 SHA-256: `94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69`
 
@@ -3147,13 +3147,13 @@ be used in advertising or otherwise to promote the sale, use or other deal-
 ings in this Software without prior written authorization from him.
 ```
 
-### manifold3d 3.5.2
+### manifold3d 3.5.3
 
 SPDX-Ausdruck: `Apache-2.0`
 
-#### manifold3d-3.5.2.dist-info/licenses/AUTHORS
+#### manifold3d-3.5.3.dist-info/licenses/AUTHORS
 
-Quelle: wheel:manifold3d-3.5.2.dist-info/licenses/AUTHORS
+Quelle: wheel:manifold3d-3.5.3.dist-info/licenses/AUTHORS
 
 SHA-256: `074a43d4b1626a34a0a14a036d00100524dd463604b2570c4d76c7baa63608f3`
 
@@ -3170,9 +3170,9 @@ Geoff deRosenroll <geoffder>
 Google LLC
 ```
 
-#### manifold3d-3.5.2.dist-info/licenses/LICENSE
+#### manifold3d-3.5.3.dist-info/licenses/LICENSE
 
-Quelle: wheel:manifold3d-3.5.2.dist-info/licenses/LICENSE
+Quelle: wheel:manifold3d-3.5.3.dist-info/licenses/LICENSE
 
 SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
 
@@ -3421,13 +3421,13 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### matplotlib 3.11.1
+### matplotlib 3.11.2
 
 SPDX-Ausdruck: `LicenseRef-Matplotlib`
 
-#### matplotlib-3.11.1.dist-info/LICENSE
+#### matplotlib-3.11.2.dist-info/LICENSE
 
-Quelle: wheel:matplotlib-3.11.1.dist-info/LICENSE
+Quelle: wheel:matplotlib-3.11.2.dist-info/LICENSE
 
 SHA-256: `822e8e528147569a41975592aee19c11992ab667ba50451cd929031d5fc74491`
 
@@ -5010,13 +5010,13 @@ NetworkX is distributed with the 3-clause BSD license.
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### numpy 2.5.2
+### numpy 2.5.3
 
 SPDX-Ausdruck: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0`
 
-#### numpy-2.5.2.dist-info/licenses/LICENSE.txt
+#### numpy-2.5.3.dist-info/licenses/LICENSE.txt
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/LICENSE.txt
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/LICENSE.txt
 
 SHA-256: `a7a1034ce1018ae36675f3e4c85f07854e4cc9ac87c1d0252e75002d52ec95e4`
 
@@ -5936,9 +5936,9 @@ Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt
+#### numpy-2.5.3.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt
 
 SHA-256: `fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec`
 
@@ -5966,9 +5966,9 @@ SHA-256: `fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec`
   3. This notice may not be removed or altered from any source distribution.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING
+#### numpy-2.5.3.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING
 
 SHA-256: `3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98`
 
@@ -5989,9 +5989,9 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/highway/LICENSE
+#### numpy-2.5.3.dist-info/licenses/numpy/_core/src/highway/LICENSE
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/highway/LICENSE
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/_core/src/highway/LICENSE
 
 SHA-256: `b8b1fae5894cfbe213b47f1378bb2269cf82de18b34447e871c0225ace0d3ad7`
 
@@ -6369,9 +6369,9 @@ express Statement of Purpose.
     this CC0 or use of the Work.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt
+#### numpy-2.5.3.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt
 
 SHA-256: `f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c`
 
@@ -6405,9 +6405,9 @@ Ryan Juckett's original code was under the Zlib license; he gave numpy
 permission to include it under the MIT license instead.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md
 
 SHA-256: `211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910`
 
@@ -6442,9 +6442,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE
+#### numpy-2.5.3.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE
 
 SHA-256: `c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9`
 
@@ -6481,9 +6481,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md
 
 SHA-256: `a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056`
 
@@ -6515,9 +6515,9 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt
+#### numpy-2.5.3.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt
 
 SHA-256: `a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55`
 
@@ -6572,9 +6572,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/ma/LICENSE
+#### numpy-2.5.3.dist-info/licenses/numpy/ma/LICENSE
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/ma/LICENSE
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/ma/LICENSE
 
 SHA-256: `4a765ceefcddd40d6518f2f22f0fe2c6d532890be821d8bb1f2c21ebafed8817`
 
@@ -6605,9 +6605,9 @@ SHA-256: `4a765ceefcddd40d6518f2f22f0fe2c6d532890be821d8bb1f2c21ebafed8817`
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/LICENSE.md
 
 SHA-256: `1900269b4c2f0ff0c7ad01ecf13f5ded5610968a0cf1fb6bc3a83bccc2b4c38d`
 
@@ -6685,9 +6685,9 @@ often the algorithm's designer. Component licenses are located with
 the component code.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/src/distributions/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/src/distributions/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/distributions/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/src/distributions/LICENSE.md
 
 SHA-256: `5f6ed77cd0326d7a2598962550123657845db4e8095ee29904f70e2717c0816e`
 
@@ -6755,9 +6755,9 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md
 
 SHA-256: `ef21afaad4bb20d2020491dc27ed55ba0d042f1b9487911a57f28b46b407a2b7`
 
@@ -6825,9 +6825,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md
 
 SHA-256: `d7e9361b9533f48dd1e60ff7e4ab4dd1b53230ca2d4bf8d79bf3efa5f53336be`
 
@@ -6856,9 +6856,9 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/src/philox/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/src/philox/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/philox/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/src/philox/LICENSE.md
 
 SHA-256: `6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800`
 
@@ -6896,9 +6896,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md
 
 SHA-256: `9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f`
 
@@ -6932,9 +6932,9 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-#### numpy-2.5.2.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md
+#### numpy-2.5.3.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md
 
-Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md
+Quelle: wheel:numpy-2.5.3.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md
 
 SHA-256: `82606ac1b37d264a2260639f8a1646f2a66b713941447e01362e1fef587b73a8`
 
@@ -14650,13 +14650,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### tifffile 2026.8.23
+### tifffile 2026.9.9
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### tifffile-2026.8.23.dist-info/licenses/LICENSE
+#### tifffile-2026.9.9.dist-info/licenses/LICENSE
 
-Quelle: wheel:tifffile-2026.8.23.dist-info/licenses/LICENSE
+Quelle: wheel:tifffile-2026.9.9.dist-info/licenses/LICENSE
 
 SHA-256: `3cf196b1625812d2d119518294043e71017fe858355a58eb48e1e35b61213ce9`
 
