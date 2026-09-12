@@ -95,7 +95,6 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, shown_of_twins
-from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.scene import EvaluationResult
 from app.core.scene.history import repair_is_available
 from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId
@@ -134,16 +133,6 @@ _log = get_logger(__name__)
 #: allein (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
 
-#: Wie viele Operationen ein Kontextmenü flach zeigt, bevor es nach Kategorie
-#: gruppiert. Dieselbe Zahl, die ``MAX_SUBMENU_ENTRIES`` in
-#: ``tests/test_interface_limits.py`` der Menüleiste zieht, und aus demselben
-#: Grund: darüber liest niemand mehr, er sucht.
-# **Aus dem Kern, nicht als eigene Zahl.** Dieselbe Grenze aus §35 steht in
-# ``registry/surfaces.py``, und dort gehört sie hin: Sie beschreibt, was ein
-# Menü tragen kann, und der Kern baut die Menüstruktur. Zwei Zahlen für eine
-# Grenze sind zwei Stellen, an denen jemand die eine erhöht.
-MAX_MENU_ROWS = _MAX_MENU_ROWS
-
 #: Datenrolle einer Verlaufszeile: **alle** Operationen, die sie umfasst, als
 #: Tupel. Neben ``UserRole``, das die *eine* Operation zum Öffnen trägt und
 #: bei einer Transaktion aus mehreren Schritten leer bleibt — ein Doppelklick
@@ -154,37 +143,21 @@ OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 GROUP_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 
 
-#: Operationen, die am Kontextmenü **dieser** Merkmalsarten keine Zeile haben,
-#: weil ein Griff im Bild sie dort anbietet — Operation → Merkmalsarten.
+#: Operationen, die der Doppelklick diesen Merkmalsarten nicht erneut anbietet,
+#: weil ein Griff im Bild die Handlung bereits übernimmt — Operation → Merkmalsarten.
 #:
-#: *Zum Langloch ziehen* an der Bohrung: Der Langlochgriff
-#: (``viewport.SLOT_HANDLE_OP``) sitzt an jeder Art, die ``slot_hole``
-#: annimmt, und ein Zug daran **ist** die Handlung — direkter als eine Zeile,
-#: die denselben Dialog öffnet. Die Zeile kostete außerdem die Grenze: Mit ihr
-#: trug die Bohrung neun Handlungen, und ab neun genügt „Bausteine" allein
-#: nicht mehr, um unter zwölf Zeilen zu kommen — ``folded_groups`` faltete dann
-#: „Ändern", also alle neun auf einmal. Gemessen am 11.09.2026 mit fünf
-#: Bausteinen und zwei festen Zeilen: bis acht Handlungen zwölf Zeilen und
-#: „Bausteine" gefaltet, ab neun neun Zeilen und „Ändern" gefaltet. Dass
-#: ``KEEP_VISIBLE`` „Ändern" schützt, half nicht: Der Schutz wählt unter den
-#: Gruppen, die allein genügen, und ab neun war das nur noch diese eine.
-#: Welche Zeile geht, hat Robert entschieden (11.09.2026): nicht *Prüfstück
-#: erzeugen*, nicht die Grenze — die Zeile, die einen Griff hat.
-#:
-#: **Am Langloch bleibt sie.** Dort ist sie die einzige Operation, und ein Menü
-#: aus *Ausblenden* wäre die Sackgasse, vor der ``prepare_ops.SLOT_FROM``
-#: warnt. Und was hier steht, verschwindet nur aus diesem Menü: Menüleiste,
-#: Befehlspalette, Chat und Kommandozeile lesen ``applies_to``, und das bleibt.
-#: Der Griff liest es auch — ``tests/test_interface_limits.py`` prüft, dass er
-#: an jeder Art sitzt, die hier steht, denn ohne ihn wäre die Zeile kein
-#: Umweg, sondern der einzige Weg.
+#: An einer Bohrung führt der Langlochgriff direkt zum Langloch. An einem
+#: bestehenden Langloch bleibt die Operation erreichbar, weil sie dort die
+#: Bearbeitung seiner Maße eröffnet. Andere Zugangswege lesen weiter das Register.
+#: ``tests/test_interface_limits.py`` prüft, dass jede hier ausgenommene Art
+#: tatsächlich einen passenden Griff besitzt.
 HANDLE_INSTEAD: Final[dict[str, frozenset[str]]] = {
     "slot_hole": frozenset({"hole"}),
 }
 
 
 def shown_at_feature(kind: str, entries: Sequence[Any]) -> tuple[Any, ...]:
-    """Was von den Operationen einer Merkmalsart eine Zeile im Menü bekommt.
+    """Welche Operationen der Doppelklick auf diese Merkmalsart anbietet.
 
     Die Rohmenge liefert ``REGISTRY.for_feature``; hier fällt weg, was
     :data:`HANDLE_INSTEAD` an dieser Art dem Griff überlässt. Eine Funktion und

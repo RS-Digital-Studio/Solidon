@@ -393,8 +393,7 @@ SCOPE_NUMBERS_SHOWN = 8
 def scope_text(op_ids: tuple[int, ...], total: int) -> str:
     """Der Satz über dem Dialog: welche Schritte in den Baustein wandern.
 
-    Reine Rechnung über zwei Zahlen und deshalb ohne Fenster prüfbar —
-    dieselbe Überlegung wie bei ``folded_groups`` in ``panels.py``.
+    Reine Rechnung über zwei Zahlen und deshalb ohne Fenster prüfbar.
 
     Drei Fälle, und der erste ist der häufige: Wer sein Teil gerade gebaut
     hat, wählt nichts aus und bekommt den ganzen Stapel. Das ist richtig so,
