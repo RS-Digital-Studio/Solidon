@@ -119,8 +119,13 @@ def prepare_target() -> None:
         raise SystemExit("Der Statistikzugang darf nicht im Dokumentenstamm liegen.")
     if TARGET.is_symlink():
         raise SystemExit("Der Statistikzugang darf kein symbolischer Verweis sein.")
-    TARGET.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    TARGET.parent.chmod(0o700)
+    prepare_private_directory(TARGET.parent)
+
+
+def prepare_private_directory(path: Path) -> None:
+    """Schließt den Zielordner vor dem ersten privaten Schreibvorgang."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.chmod(0o700)
 
 
 def write_private(path: Path, text: str) -> None:
@@ -132,9 +137,14 @@ def write_private(path: Path, text: str) -> None:
     except BaseException:
         os.close(descriptor)
         raise
-    with stream:
-        stream.write(text)
-    path.chmod(0o600)
+    try:
+        with stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
 
 
 def main() -> int:

@@ -21,15 +21,16 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import os
 import secrets
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.activation import ed25519
+from tools.make_stats_access import prepare_private_directory, write_private
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -49,7 +50,11 @@ def _external_target(parser: argparse.ArgumentParser, target: Path) -> Path:
 
 def _initialise_database(target: Path) -> None:
     """Legt die feste Serverstruktur an, ohne bestehende Daten zu löschen."""
-    target.parent.mkdir(parents=True, exist_ok=True)
+    prepare_private_directory(target.parent)
+    if target.exists():
+        target.chmod(0o600)
+    else:
+        write_private(target, "")
     with contextlib.closing(sqlite3.connect(target)) as database:
         database.executescript(
             """
@@ -86,8 +91,18 @@ def _initialise_database(target: Path) -> None:
             """
         )
         database.commit()
-    with contextlib.suppress(OSError):
-        target.chmod(0o600)
+
+
+def _write_secret(target: Path, text: str, *, replace_existing: bool = False) -> None:
+    """Ersetzt einen freigegebenen Bestand erst nach vollständigem privaten Schreiben."""
+    prepare_private_directory(target.parent)
+    if not replace_existing:
+        write_private(target, text)
+        return
+    with tempfile.TemporaryDirectory(prefix=f".{target.name}.", dir=target.parent) as directory:
+        staged = Path(directory) / target.name
+        write_private(staged, text)
+        staged.replace(target)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -154,36 +169,37 @@ def main(argv: list[str] | None = None) -> int:
             "--replace-operator-token angeben"
         )
 
-    if private is not None:
-        private.parent.mkdir(parents=True, exist_ok=True)
-        seed = secrets.token_bytes(ed25519.POINT_BYTES)
-        private.write_text(seed.hex() + "\n", encoding="ascii")
-        with contextlib.suppress(OSError):
-            private.chmod(0o600)
-        print("Privater Aktivierungsschlüssel wurde geschrieben (Inhalt wird nicht ausgegeben):")
-        print(f"  {private}")
-        print("Öffentlicher Aktivierungsschlüssel für Anwendung und Dienst:")
-        print(f"  {ed25519.public_key(seed).hex()}")
-    if database is not None:
-        _initialise_database(database)
-        print("Aktivierungsdatenbank ist eingerichtet:")
-        print(f"  {database}")
-    if operator_token is not None:
-        operator_token.parent.mkdir(parents=True, exist_ok=True)
-        operator_token.write_text(secrets.token_hex(32) + "\n", encoding="ascii")
-        with contextlib.suppress(OSError):
-            operator_token.chmod(0o600)
-        print("Privater Betreiberzugang wurde geschrieben (Inhalt wird nicht ausgegeben):")
-        print(f"  {operator_token}")
-    if rate_key is not None:
-        rate_key.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        descriptor = os.open(rate_key, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(secrets.token_hex(32).encode("ascii"))
-            stream.flush()
-            os.fsync(stream.fileno())
-        print("Privater Ratenstartwert wurde geschrieben (Inhalt wird nicht ausgegeben):")
-        print(f"  {rate_key}")
+    try:
+        if private is not None:
+            seed = secrets.token_bytes(ed25519.POINT_BYTES)
+            _write_secret(private, seed.hex() + "\n", replace_existing=arguments.replace)
+            print(
+                "Privater Aktivierungsschlüssel wurde geschrieben (Inhalt wird nicht ausgegeben):"
+            )
+            print(f"  {private}")
+            print("Öffentlicher Aktivierungsschlüssel für Anwendung und Dienst:")
+            print(f"  {ed25519.public_key(seed).hex()}")
+        if database is not None:
+            _initialise_database(database)
+            print("Aktivierungsdatenbank ist eingerichtet:")
+            print(f"  {database}")
+        if operator_token is not None:
+            _write_secret(
+                operator_token,
+                secrets.token_hex(32) + "\n",
+                replace_existing=arguments.replace_operator_token,
+            )
+            print("Privater Betreiberzugang wurde geschrieben (Inhalt wird nicht ausgegeben):")
+            print(f"  {operator_token}")
+        if rate_key is not None:
+            _write_secret(rate_key, secrets.token_hex(32))
+            print("Privater Ratenstartwert wurde geschrieben (Inhalt wird nicht ausgegeben):")
+            print(f"  {rate_key}")
+    except OSError, sqlite3.Error:
+        parser.error(
+            "Die privaten Aktivierungsdateien ließen sich nicht sicher vorbereiten. "
+            "Eigentümer, Verzeichnisrechte und freien Speicher am gewählten Ort prüfen."
+        )
     return 0
 
 

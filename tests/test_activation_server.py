@@ -562,3 +562,94 @@ def test_private_operator_path_manages_one_licence_and_records_every_change(
     finally:
         process.terminate()
         process.wait(timeout=5)
+
+
+@pytest.mark.parametrize(
+    "option,filename",
+    [
+        ("--private", "activation.seed"),
+        ("--database", "activation.sqlite"),
+        ("--operator-token", "operator.token"),
+        ("--rate-key", "activation-rate.json.key"),
+    ],
+)
+def test_setup_creates_each_private_file_exclusively_before_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, option: str, filename: str
+) -> None:
+    """Auch SQLite bekommt vor dem Öffnen eine exklusiv angelegte private Datei."""
+    opened: list[tuple[int, int]] = []
+    target = tmp_path / "server" / filename
+    original = os.open
+
+    def capture(path: object, flags: int, mode: int = 0o777, **kwargs: object) -> int:
+        if Path(path) == target:
+            opened.append((flags, mode))
+        return original(path, flags, mode, **kwargs)
+
+    monkeypatch.setattr(os, "open", capture)
+    assert setup_activation_server([option, str(target)]) == 0
+    assert any(flags & os.O_EXCL and mode == 0o600 for flags, mode in opened)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Echte POSIX-Dateirechte")
+def test_setup_private_files_and_directory_have_private_posix_modes(tmp_path: Path) -> None:
+    target = tmp_path / "server"
+    assert (
+        setup_activation_server(
+            [
+                "--private",
+                str(target / "activation.seed"),
+                "--database",
+                str(target / "activation.sqlite"),
+                "--operator-token",
+                str(target / "operator.token"),
+                "--rate-key",
+                str(target / "activation-rate.json.key"),
+            ]
+        )
+        == 0
+    )
+    assert target.stat().st_mode & 0o777 == 0o700
+    assert all(path.stat().st_mode & 0o777 == 0o600 for path in target.iterdir())
+
+
+def test_setup_does_not_write_secret_when_private_directory_cannot_be_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "server" / "activation.seed"
+    original = Path.chmod
+
+    def fail(path: Path, mode: int, **kwargs: object) -> None:
+        if path == target.parent:
+            raise PermissionError("private-error")
+        original(path, mode, **kwargs)
+
+    monkeypatch.setattr(Path, "chmod", fail)
+    with pytest.raises(SystemExit):
+        setup_activation_server(["--private", str(target)])
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("replace_existing", [False, True])
+def test_setup_failed_secret_write_keeps_only_the_previous_complete_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace_existing: bool
+) -> None:
+    """Synchronisationsfehler veröffentlichen weder neue noch halbe Geheimnisse."""
+    from tools import setup_activation_server as setup
+
+    target = tmp_path / "private" / "operator.token"
+    if replace_existing:
+        target.parent.mkdir()
+        target.write_text("previous", encoding="ascii")
+
+    def fail(descriptor: int) -> None:
+        raise OSError("disk error")
+
+    monkeypatch.setattr(os, "fsync", fail)
+    with pytest.raises(OSError):
+        setup._write_secret(target, "new", replace_existing=replace_existing)
+    if replace_existing:
+        assert target.read_text(encoding="ascii") == "previous"
+        assert list(target.parent.iterdir()) == [target]
+    else:
+        assert not list(target.parent.iterdir())
