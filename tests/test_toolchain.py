@@ -614,7 +614,9 @@ def test_freezing_keeps_the_head_that_explains_the_file(tmp_path, monkeypatch) -
 
 
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
-def test_freezing_keeps_only_foreign_platform_pins(tmp_path, monkeypatch, platform):
+def test_freezing_keeps_only_foreign_platform_pins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
     """Ein Windows-Freeze bewahrt Linux/macOS, aber keine ausgebauten Adapter."""
     from types import SimpleNamespace
 
@@ -2087,7 +2089,7 @@ def test_no_generated_comparison_runs_in_the_ci() -> None:
     """Erzeugtes gehört nicht in die CI (Entscheidung Robert, 03.09.2026).
 
     **Warum das ein Test ist und keine Absprache.** Ein Wächter, der immer
-    schreit, warnt vor nichts mehr — und genau dahin führen die zwölf Tests aus
+    schreit, warnt vor nichts mehr — und genau dahin führen die Fenstertests aus
     :data:`RENDERED_TESTS`, wenn die CI sie fährt: Jede neue Operation macht
     sie rot, ohne dass am Code etwas falsch wäre. Am 03.09.2026 waren es
     achtzehn rote Läufe für vier neue Operationen, behoben mit zwei

@@ -160,7 +160,9 @@ def test_a_number_written_as_a_product_is_read(tmp_path: Path) -> None:
     assert werte == {65536}, f"beide Schreibweisen sind derselbe Wert: {werte}"
 
 
-def test_an_empty_tree_is_an_error_and_not_a_result(tmp_path: Path, capsys) -> None:
+def test_an_empty_tree_is_an_error_and_not_a_result(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Null Funde über null Dateien ist kein „alles in Ordnung".
 
     Der Anlass, 07.09.2026: Ein Lauf mit einem Git-Bash-Pfad (``/c/Users/…``)
@@ -174,7 +176,9 @@ def test_an_empty_tree_is_an_error_and_not_a_result(tmp_path: Path, capsys) -> N
     assert "keine Messung" in capsys.readouterr().err
 
 
-def test_a_path_that_is_no_directory_says_so(tmp_path: Path, capsys) -> None:
+def test_a_path_that_is_no_directory_says_so(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Und ein Pfad, den diese Plattform nicht kennt, wird benannt."""
     assert twin_scan.main([str(tmp_path / "gibt-es-nicht")]) == 2
     fehler = capsys.readouterr().err

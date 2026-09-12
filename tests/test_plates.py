@@ -698,9 +698,8 @@ def test_a_plate_that_survives_is_kept_without_a_word(qt_app: QApplication) -> N
 
 def _with_recorder(profile: Profile) -> tuple[Any, Any]:
     """Ein Viewport mit Aufzeichnung und einem stehenden Bett."""
-    from render_fakes import RecordingRenderer
-
     from app.ui.viewport import Viewport
+    from tests.render_fakes import RecordingRenderer
 
     viewport = Viewport()
     viewport.renderer = RecordingRenderer(size=(900, 600))
@@ -752,7 +751,7 @@ def test_every_reason_to_build_the_bed_again_still_builds_it(
     anderer Renderer. Ein Wächter, der einen davon verschluckt, lässt eine
     Kulisse stehen, die etwas anderes zeigt als die Szene.
     """
-    from render_fakes import RecordingRenderer
+    from tests.render_fakes import RecordingRenderer
 
     viewport, renderer = _with_recorder(profile)
 

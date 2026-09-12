@@ -20,7 +20,6 @@ import math
 import numpy as np
 import pytest
 import trimesh
-from render_fakes import RecordingRenderer
 
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -31,6 +30,7 @@ from app.core.sketch.planes import frame_of
 from app.core.types import Feature, OpContext, Profile, Scene, SceneObject
 from app.ui.render.api import PointerEvent
 from app.ui.slot_handle import SlotHandle, dragged_slot, slot_outline
+from tests.render_fakes import RecordingRenderer
 
 #: Der Durchmesser, mit dem hier gebohrt wird — groß genug, dass die Erkennung
 #: das Langloch danach sicher wiederfindet.

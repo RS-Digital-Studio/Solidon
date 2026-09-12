@@ -486,7 +486,9 @@ def test_a_project_without_own_parts_says_nothing_on_the_way_out() -> None:
     assert part_check.check_outgoing(document) == []
 
 
-def test_cable_preview_shows_the_cut_support_instead_of_a_tool_in_air(monkeypatch):
+def test_cable_preview_shows_the_cut_support_instead_of_a_tool_in_air(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.core import drawing
     from app.core.geom.mesh import as_mesh_data
     from app.core.knowledge.parts.build import subtract
@@ -507,7 +509,7 @@ def test_cable_preview_shows_the_cut_support_instead_of_a_tool_in_air(monkeypatc
     assert measured == pytest.approx([expected.volume])
 
 
-def test_scad_exports_the_required_host_addition():
+def test_scad_exports_the_required_host_addition() -> None:
     spec = PARTS.get("cable_gland")
     text = scad.to_scad(spec)
     assert "module cable_gland_host_add()" in text

@@ -13,6 +13,8 @@ hier ist Geometrie *vor* dem Slicer.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import trimesh
 
@@ -185,7 +187,7 @@ def test_the_digest_says_how_solid_a_body_is() -> None:
 
 
 @pytest.mark.parametrize("structure", lattice.STRUCTURES)
-def test_round_imported_cavity_adds_nothing_outside_the_original_envelope(structure):
+def test_round_imported_cavity_adds_nothing_outside_the_original_envelope(structure: str) -> None:
     from app.core.geom.boolean import boolean
 
     outer = MeshData.of(trimesh.creation.cylinder(radius=10, height=20, sections=48))
@@ -200,7 +202,7 @@ def test_round_imported_cavity_adds_nothing_outside_the_original_envelope(struct
     assert filled.volume > shell.volume
 
 
-def test_vented_concave_cavity_survives_storage_and_stays_inside():
+def test_vented_concave_cavity_survives_storage_and_stays_inside() -> None:
     from app.core.geom.boolean import boolean
     from app.core.geom.hollow import hollow
 
@@ -221,7 +223,7 @@ def test_vented_concave_cavity_survives_storage_and_stays_inside():
     assert outside.mesh.volume < 1e-6
 
 
-def test_an_imported_vented_shell_without_cavity_data_is_refused():
+def test_an_imported_vented_shell_without_cavity_data_is_refused() -> None:
     """Ohne ``MeshData.cavity`` bleibt ein entlüftetes Importnetz eine einzige
     Schale, und die Füllung kann seinen Innenraum nicht kennen — sie sagt es.
 
@@ -247,7 +249,7 @@ def test_an_imported_vented_shell_without_cavity_data_is_refused():
         )
 
 
-def test_cavity_metadata_is_not_recursively_serialized():
+def test_cavity_metadata_is_not_recursively_serialized() -> None:
     import dataclasses
 
     body = MeshData.of(trimesh.creation.box())
@@ -257,7 +259,7 @@ def test_cavity_metadata_is_not_recursively_serialized():
     assert once.replacing(body.raw.copy()).cavity is None
 
 
-def test_document_hollow_lattice_roundtrip_uses_the_same_enclosed_geometry(tmp_path):
+def test_document_hollow_lattice_roundtrip_uses_the_same_enclosed_geometry(tmp_path: Path) -> None:
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, load, new_project, save
 
@@ -280,7 +282,7 @@ def test_document_hollow_lattice_roundtrip_uses_the_same_enclosed_geometry(tmp_p
     assert result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((20, 20, 20), abs=1e-5)
 
 
-def test_open_import_has_no_guessed_cavity():
+def test_open_import_has_no_guessed_cavity() -> None:
     from app.core.geom.boolean import boolean
 
     outer = trimesh.creation.cylinder(radius=10, height=20, sections=48)

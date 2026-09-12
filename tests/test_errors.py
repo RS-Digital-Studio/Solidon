@@ -630,7 +630,7 @@ def test_missing_software_offers_the_install_list_and_not_a_bug_report() -> None
         assert "report_error" not in ids, "fehlende Software ist kein Fehlerbericht"
 
 
-def test_all_three_refusals_of_the_alignment_offer_a_way_out(monkeypatch) -> None:
+def test_all_three_refusals_of_the_alignment_offer_a_way_out() -> None:
     """Regel 17 für alle drei, nicht für eine.
 
     ``align.py`` sagt dreimal „An diesem Merkmal lässt sich nichts ausrichten."
