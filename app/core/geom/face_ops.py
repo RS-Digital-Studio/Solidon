@@ -188,10 +188,11 @@ def _chosen_face(source: SceneObject, name: str) -> Feature | None:
 
 def _no_face() -> Exception:
     """Der Satz, wenn keine Fläche benannt ist (Regel 17)."""
-    from app.core.errors import GeometryError
+    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
 
     return GeometryError(
         detail=_("Für diese Handlung ist keine Fläche gewählt — klicken Sie eine im Bild an."),
+        suggestions=(CHANGE_SELECTION, CANCEL),
     )
 
 

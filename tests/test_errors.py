@@ -29,6 +29,63 @@ from app.core.errors import (
 )
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        "no-face",
+        "stale-face",
+        "zero-normal",
+        "curved-face",
+        "no-edge",
+        "stale-edge",
+        "ambiguous-edge",
+        "empty-group",
+    ],
+)
+def test_selection_errors_offer_a_new_selection(case: str) -> None:
+    """Eine neue Auswahl behebt diese Fälle; Netzreparatur und Defektkarte tun es nicht."""
+    import dataclasses
+
+    import trimesh
+
+    from app.core.geom import edges, faces
+    from app.core.geom.face_ops import _no_face
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Feature
+
+    mesh = MeshData(trimesh.creation.box((20.0, 20.0, 20.0)))
+    feature = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.0, 1.0)},
+        face_indices=(0, 1),
+    )
+    with pytest.raises(GeometryError) as caught:
+        if case == "no-face":
+            raise _no_face()
+        if case == "stale-face":
+            feature = dataclasses.replace(feature, face_indices=(len(mesh.raw.faces),))
+            faces.push_face(mesh, feature, 1.0)
+        elif case == "zero-normal":
+            feature.params["normal"] = (0.0, 0.0, 0.0)
+            faces.face_normal(feature)
+        elif case == "curved-face":
+            feature = dataclasses.replace(feature, face_indices=tuple(range(len(mesh.raw.faces))))
+            faces.push_face(mesh, feature, 1.0)
+        elif case == "no-edge":
+            edges.wanted(edges.edges_of(mesh), "named", ())
+        elif case == "stale-edge":
+            edges.wanted(edges.edges_of(mesh), "named", ("missing",))
+        elif case == "ambiguous-edge":
+            edge = edges.edges_of(mesh)[0]
+            edges.wanted([edge, edge], "named", (edges.edge_key(edge),))
+        elif case == "empty-group":
+            edges.wanted([], "vertical", ())
+
+    assert caught.value.suggestions == (errors.CHANGE_SELECTION, errors.CANCEL)
+
+
 def _import_every_core_module() -> None:
     """Zieht jedes Modul unter ``app.core`` einmal herein.
 

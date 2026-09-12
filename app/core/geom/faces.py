@@ -26,7 +26,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from app.core.errors import GeometryError, ValidationError
+from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
@@ -60,6 +60,7 @@ def face_normal(feature: Feature) -> Vec3:
     if length <= EPS_GEOM:
         raise GeometryError(
             detail=_("Zu dieser Fläche ist keine Richtung bekannt. Wählen Sie sie im Bild erneut."),
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     return tuple(float(value) for value in raw / length)  # type: ignore[return-value]
 
@@ -92,6 +93,7 @@ def push_face(mesh: MeshData, feature: Feature, distance: float) -> BooleanOutco
                 "versetzen oder die Richtung umkehren."
             ),
             values={"distance_mm": round(distance, 3)},
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     return outcome
 
@@ -192,6 +194,7 @@ def _triangles_of(mesh: MeshData, feature: Feature) -> list[int]:
                 "hat ihn verändert. Wählen Sie sie neu."
             ),
             values={"faces": len(feature.face_indices)},
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     return chosen
 
@@ -206,6 +209,7 @@ def _must_be_flat(mesh: MeshData, triangles: list[int], normal: np.ndarray) -> N
                 "Wählen Sie eine ebene Fläche, oder ändern Sie das Merkmal über "
                 "seine Maße."
             ),
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
 
 
@@ -265,6 +269,7 @@ def draft_vertical(mesh: MeshData, angle_deg: float) -> BooleanOutcome:
         raise GeometryError(
             detail=_("Mit diesem Winkel bleibt vom Körper nichts übrig — kleiner anstellen."),
             values={"angle_deg": round(angle_deg, 2)},
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     return outcome
 

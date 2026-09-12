@@ -33,7 +33,7 @@ from typing import Any, Literal, Protocol
 
 import numpy as np
 
-from app.core.errors import GeometryError, ValidationError
+from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
@@ -420,6 +420,7 @@ def named_edges[AnyEdge: SelectableEdge](
             raise GeometryError(
                 detail=_("Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu."),
                 values={"key": key, "matches": len(matches)},
+                suggestions=(CHANGE_SELECTION, CANCEL),
             )
         if matches:
             selected.append(matches[0])
@@ -444,6 +445,7 @@ def wanted[AnyEdge: SelectableEdge](
         raise GeometryError(
             detail=_("Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus."),
             values={"choice": choice},
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     if keys:
         chosen = named_edges(edges, keys)
@@ -454,6 +456,7 @@ def wanted[AnyEdge: SelectableEdge](
                     "ein Schritt davor hat sie verändert. Wählen Sie die Kanten neu."
                 ),
                 values={"edges": len(keys), "missing": len(keys) - len(chosen)},
+                suggestions=(CHANGE_SELECTION, CANCEL),
             )
         return chosen
     chosen = choose(edges, choice)
@@ -461,6 +464,7 @@ def wanted[AnyEdge: SelectableEdge](
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
             values={"choice": choice},
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     return chosen
 
@@ -561,6 +565,7 @@ def rounding_tool(
                 "Das Maß ist für diese Kante zu groß — sie hat keine Flächen, auf "
                 "denen die Bearbeitung Platz findet. Wählen Sie ein kleineres."
             ),
+            suggestions=(CORRECT_INPUT, CANCEL),
             values={"radius": radius},
         )
     if len(pieces) == 1:
@@ -1650,6 +1655,7 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
                 "Diese Kante ist zu kurz für einen Wulst. Wählen Sie eine andere "
                 "oder einen kleineren Radius."
             ),
+            suggestions=(CORRECT_INPUT, CANCEL),
         )
     return [MeshData(part) for part in parts]
 
