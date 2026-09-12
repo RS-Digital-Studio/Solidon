@@ -90,6 +90,9 @@ von der Buchung. Die Einstellung liegt lokal, die Vorbereitungskennung im Projek
 Die erste automatische Buchung benutzt eine aus dem Fingerabdruck abgeleitete
 Vorgangskennung, damit gleichzeitige Zustellungen denselben Abzug treffen.
 Beim Schließen zählen laufende und eingereihte Lagerhandlungen mit.
+Wartet der Druckdialog beim Schließen auf Arbeiter, sperrt er nur die
+Eingaben und Handlungen. Zustandszeile und Fortschritt behalten ihre normale
+Darstellung, bis der letzte Arbeiter beendet ist.
 Der Buchungsstatus folgt dem ausgewählten Ausgabe-Fingerabdruck. Manuelle
 Korrekturen übergeben den gelesenen Vorgangsstand, damit ein älterer Dialog
 keine jüngere Aufteilung überschreibt. Der Auswahl-Export ordnet gespeicherte

@@ -30,6 +30,8 @@ from uuid import uuid4
 from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QStandardItemModel
 from PySide6.QtWidgets import (
+    QAbstractButton,
+    QAbstractItemView,
     QAbstractSpinBox,
     QCheckBox,
     QColorDialog,
@@ -5878,7 +5880,12 @@ class PrintSettingsDialog(QDialog):
 
         self.state.setText(tr("Wird geschlossen, sobald die laufenden Arbeiten beendet sind."))
         self.state.show()
-        self.setEnabled(False)
+        for control in self.findChildren(QWidget):
+            if isinstance(
+                control,
+                (QAbstractButton, QAbstractItemView, QAbstractSpinBox, QComboBox, QLineEdit),
+            ):
+                control.setEnabled(False)
         self._settle_timer.start()
 
     def _finish_when_settled(self) -> None:
