@@ -990,6 +990,30 @@ def _arguments(value: Any) -> dict[str, Any]:
 DEFAULT_OLLAMA_MODEL = "qwen3:14b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
+#: Wie lange Ollama das Modell zwischen zwei Schritten desselben Vorschlags hält.
+#:
+#: Ein Werkzeugaufruf und die abschließende Antwort gehören zu einem Zug und
+#: sollen nicht zweimal kalt starten. Nach dem gesamten Zug entlädt
+#: :meth:`OllamaBackend.resource_session` ausdrücklich. Die eine Minute ist nur das
+#: Sicherheitsnetz für einen Prozessabbruch und direkte Diagnoseaufrufe.
+OLLAMA_KEEP_ALIVE = "60s"
+
+#: Wie lange warmgehalten wird, wenn das Modell auf dem Prozessor rechnet.
+#:
+#: **Dort kostet Warmhalten mehr, als es bringt.** Gemessen am 31.08.2026 auf
+#: derselben Maschine, einmal vor und einmal nach einem Neustart, der Ollamas
+#: GPU-Erkennung reparierte: auf der Karte 19 641 Token in **9,7 Sekunden**,
+#: auf dem Prozessor dieselben 19 641 in **701**. Zwischen Werkzeugaufruf und
+#: Abschluss liegen trotzdem nur Sekunden; dafür reicht der kürzere Rückfall.
+#:
+#: Dreißig Sekunden reichen zwischen zwei unmittelbar aufeinanderfolgenden
+#: Schritten. Nach dem Zug gilt ohnehin die ausdrückliche Freigabe.
+OLLAMA_KEEP_ALIVE_ON_CPU = "30s"
+
+#: Entladen ist eine Verwaltungsanfrage, keine Modellrechnung. Bleibt sie
+#: länger offen, darf der fertige Vorschlag trotzdem zur Oberfläche zurück.
+OLLAMA_RELEASE_SECONDS = 10.0
+
 #: Wie groß das Kontextfenster sein muss, das Ollama für einen Aufruf öffnet.
 #:
 #: **Ohne diese Angabe schneidet Ollama den Prompt ab**, und zwar stillschweigend:
@@ -1035,30 +1059,6 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: meldete — das Modell rechnete vollständig auf der CPU. ``prompt_eval_count``
 #: zählt trotzdem die Nutzlast: Die Dauer gehört der Maschine, die Token
 #: gehören dem Schema.
-#: Wie lange Ollama das Modell zwischen zwei Schritten desselben Vorschlags hält.
-#:
-#: Ein Werkzeugaufruf und die abschließende Antwort gehören zu einem Zug und
-#: sollen nicht zweimal kalt starten. Nach dem gesamten Zug entlädt
-#: :meth:`OllamaBackend.resource_session` ausdrücklich. Die eine Minute ist nur das
-#: Sicherheitsnetz für einen Prozessabbruch und direkte Diagnoseaufrufe.
-OLLAMA_KEEP_ALIVE = "60s"
-
-#: Wie lange warmgehalten wird, wenn das Modell auf dem Prozessor rechnet.
-#:
-#: **Dort kostet Warmhalten mehr, als es bringt.** Gemessen am 31.08.2026 auf
-#: derselben Maschine, einmal vor und einmal nach einem Neustart, der Ollamas
-#: GPU-Erkennung reparierte: auf der Karte 19 641 Token in **9,7 Sekunden**,
-#: auf dem Prozessor dieselben 19 641 in **701**. Zwischen Werkzeugaufruf und
-#: Abschluss liegen trotzdem nur Sekunden; dafür reicht der kürzere Rückfall.
-#:
-#: Dreißig Sekunden reichen zwischen zwei unmittelbar aufeinanderfolgenden
-#: Schritten. Nach dem Zug gilt ohnehin die ausdrückliche Freigabe.
-OLLAMA_KEEP_ALIVE_ON_CPU = "30s"
-
-#: Entladen ist eine Verwaltungsanfrage, keine Modellrechnung. Bleibt sie
-#: länger offen, darf der fertige Vorschlag trotzdem zur Oberfläche zurück.
-OLLAMA_RELEASE_SECONDS = 10.0
-
 OLLAMA_CONTEXT_TOKENS = 32768
 
 
@@ -1475,16 +1475,6 @@ OLLAMA_SUGGESTIONS: Final = (
 )
 
 
-#: Was zu einem installierten Modell danebensteht, wenn es in
-#: :data:`OLLAMA_SUGGESTIONS` bekannt ist.
-#:
-#: **Die Zahl entscheidet die Wahl, und sie stand nur bei den empfohlenen.**
-#: Ein Kunde mit drei installierten Modellen sah drei nackte Namen; dass
-#: ``mistral-nemo`` in dieser Messung null von fünf Aufrufen schaffte, war
-#: nirgends zu lesen. Ein Modell, das die Aufrufe als Fließtext ausgibt, sieht
-#: im Chat aus, als arbeite es — genau deshalb gibt es
-#: ``tools/check_local_model.py``, und genau deshalb gehört sein Ergebnis in
-#: die Auswahl und nicht nur in einen Docstring.
 def normalised_model_name(name: str) -> str:
     """Der Vergleichsname einer Ollama-Modellfamilie.
 
@@ -1511,7 +1501,19 @@ def known_model_suggestion(name: str) -> tuple[float, TranslatableText] | None:
 
 
 def known_model_note(name: str) -> TranslatableText | None:
-    """Der Satz zu einem Modellnamen, oder ``None`` für ein unbekanntes."""
+    """Der Satz zu einem Modellnamen, oder ``None`` für ein unbekanntes.
+
+    Was zu einem installierten Modell danebensteht, wenn es in
+    :data:`OLLAMA_SUGGESTIONS` bekannt ist.
+
+    **Die Zahl entscheidet die Wahl, und sie stand nur bei den empfohlenen.**
+    Ein Kunde mit drei installierten Modellen sah drei nackte Namen; dass
+    ``mistral-nemo`` in dieser Messung null von fünf Aufrufen schaffte, war
+    nirgends zu lesen. Ein Modell, das die Aufrufe als Fließtext ausgibt, sieht
+    im Chat aus, als arbeite es — genau deshalb gibt es
+    ``tools/check_local_model.py``, und genau deshalb gehört sein Ergebnis in
+    die Auswahl und nicht nur in einen Docstring.
+    """
     suggestion = known_model_suggestion(name)
     return suggestion[1] if suggestion is not None else None
 
