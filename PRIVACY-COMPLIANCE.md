@@ -1,6 +1,6 @@
 # Datenschutzorganisation — Verzeichnis, Interessenabwägung und Nachweise
 
-Stand: 31. August 2026 · Organisationsfassung 1.0
+Stand: 12. September 2026 · Organisationsfassung 1.1
 
 **Freigabestatus: GESPERRT.** `DATENSCHUTZ.md` informiert Betroffene; diese
 interne Akte weist Rechenschaft, Verträge, Löschung, Betroffenenrechte und
@@ -56,7 +56,7 @@ die Verarbeitung bleibt deshalb vollständig im Anwendungsbereich der DSGVO.
 | Aktivierungsendpunkte | HMAC-Pseudonym und Anforderungszeit | 900 Sekunden |
 | Anmeldung zur privaten Statistik | HMAC-Pseudonym und Anforderungszeit | 900 Sekunden |
 | Supportversand | HMAC-Pseudonym und Anforderungszeit | 3.600 Sekunden |
-| Tagesbesucherzählung | HMAC aus IP-Adresse, Browserkennung und privatem Tageswert | ein UTC-Tag |
+| Tagesbesucherzählung | HMAC aus IP-Adresse, Browserkennung und privatem Tageswert | ein Kalendertag (Europe/Berlin) |
 
 Die Anwendung berücksichtigt jeweils nur das laufende und vorige Zeitfenster,
 entfernt überfällige und frühere ungesalzene SHA-Schlüssel beim
