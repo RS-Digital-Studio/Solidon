@@ -21,6 +21,11 @@ der Handbuchinhalt. Eine Katalogdatei reicht deshalb auch für den vollständige
 Webrahmen einer neuen Sprache; feste Sprachtabellen im Generator sind kein
 zulässiger zweiter Katalog.
 
+Der Übersetzungskontext ist sowohl als zweites Argument als auch über
+`context=` zulässig. Nur `msgid` ist positionsgebunden, damit derselbe Name
+auch als Platzhalterwert verwendbar bleibt. Der Einsammler und der Laufzeitweg
+verwenden denselben Kontextschlüssel; `context` ist kein Formatierungswert.
+
 **Deutsch hat keine Datei.** Es ist die Quellsprache — der deutsche Text steht
 im Code, die Kataloge übersetzen ihn weg.
 

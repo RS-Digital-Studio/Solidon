@@ -1125,7 +1125,7 @@ def test_a_dialog_built_after_a_language_change_speaks_that_language(
                 deutsch = source_text(wert)
                 if not deutsch:
                     continue
-                englisch = tr(deutsch)
+                englisch = tr(deutsch, getattr(wert, "context", None))
                 if englisch != deutsch:
                     gewandert += 1
                 if str(wert) != englisch:
@@ -5256,3 +5256,25 @@ def test_direct_3mf_export_preserves_format_and_native_settings(
         assert "3D/3dmodel.model" in archive.namelist()
         if flavour == "prusa":
             assert "Metadata/Slic3r_PE.config" in archive.namelist()
+
+
+@pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
+def test_top_surface_speed_uses_its_context_in_the_built_dialog(
+    session: Session, language: str
+) -> None:
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language, read_catalog
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    built = PrintSettingsDialog(session, UiSettings())
+    try:
+        expected = read_catalog(language)["Druckgeschwindigkeit\x04Oberfläche"]
+        field = next(field for field in FIELDS if field.path == "speed.top_surface")
+        assert str(field.title) == expected
+        assert expected in {label.text() for label in built.findChildren(QLabel)}
+    finally:
+        built.close()
+        built.deleteLater()
+        set_language(previous)

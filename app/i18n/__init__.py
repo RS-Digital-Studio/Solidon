@@ -125,7 +125,7 @@ class TranslatableText:
         return self.translate()
 
 
-def _(msgid: str, context: str | None = None, /, **values: object) -> TranslatableText:
+def _(msgid: str, /, context: str | None = None, **values: object) -> TranslatableText:
     """Markiert einen Text zur Übersetzung. Der kanonische Name in
     Deklarationen.
 
@@ -135,7 +135,7 @@ def _(msgid: str, context: str | None = None, /, **values: object) -> Translatab
     return TranslatableText(msgid, context, values or None)
 
 
-def tr(msgid: str, context: str | None = None, /, **values: object) -> str:
+def tr(msgid: str, /, context: str | None = None, **values: object) -> str:
     """Übersetzt sofort. Für Oberflächen, die jetzt eine nackte Zeichenkette
     brauchen."""
     return TranslatableText(msgid, context, values or None).translate()

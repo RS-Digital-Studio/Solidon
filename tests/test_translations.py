@@ -962,3 +962,24 @@ def test_no_source_text_writes_ae_for_a_umlaut() -> None:
         "Message-ID: Wer sie später berichtigt, macht alle fünf Übersetzungen "
         f"tot. {treffer}"
     )
+
+
+@pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
+def test_context_keywords_reach_the_runtime_catalog(language: str) -> None:
+    from app.i18n import _, tr
+
+    install_language(language)
+    expected = read_catalog(language)["Druckgeschwindigkeit\x04Oberfläche"]
+    text = _("Oberfläche", context="Druckgeschwindigkeit")
+    assert text.context == "Druckgeschwindigkeit"
+    assert text.values is None
+    assert text.translate(language) == expected
+    assert _("Oberfläche", "Druckgeschwindigkeit").translate(language) == expected
+    set_language(language)
+    try:
+        assert tr("Oberfläche", context="Druckgeschwindigkeit") == expected
+        assert tr("Oberfläche", "Druckgeschwindigkeit") == expected
+        assert tr("Feld {msgid}", msgid="Wert") == "Feld Wert"
+        assert str(_("Slot {number}", number=3)).endswith("3")
+    finally:
+        set_language(SOURCE_LANGUAGE)
