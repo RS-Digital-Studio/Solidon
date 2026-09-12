@@ -4769,6 +4769,7 @@ def test_a_wall_too_thin_to_print_is_reported_at_the_end(profile: Profile) -> No
 
     assert findings, "eine Wand von einem halben Millimeter bleibt unerwähnt"
     assert findings[0].code == "perceive.thin_wall"
+    assert [action.id for action in findings[0].suggestions] == ["show_history", "show_details"]
     assert findings[0].severity == "warning"
     assert findings[0].object_id == "obj_1", "ein Klick auf die Zeile muss irgendwohin führen"
     assert set(findings[0].feature_ids) == {"hole_1", "pin_1"}, (

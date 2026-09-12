@@ -29,6 +29,9 @@ from app.core import expressions
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    SHOW_DETAILS,
+    SHOW_HISTORY,
+    SHOW_STEP_VALUES,
     AmbiguityError,
     AppError,
     InternalError,
@@ -318,6 +321,7 @@ def evaluate(
                     ),
                     op_id=operation.id,
                     values={"operation": operation.op},
+                    suggestions=(SHOW_STEP_VALUES, SHOW_HISTORY),
                 )
             )
             stopped_at = operation.id
@@ -2221,6 +2225,7 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
                 object_id=object_id,
                 feature_ids=(thinnest.bore, thinnest.wall),
                 values={"wall_mm": round(thinnest.thickness, 2), "least_mm": round(least, 2)},
+                suggestions=(SHOW_HISTORY, SHOW_DETAILS),
                 location=None
                 if centre is None
                 else (float(centre[0]), float(centre[1]), float(centre[2])),

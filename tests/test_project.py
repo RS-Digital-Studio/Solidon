@@ -1487,6 +1487,7 @@ def test_a_file_with_a_step_this_version_cannot_run_still_opens() -> None:
     )
     assert finding.op_id == 2, "der Befund nennt den Schritt, nicht bloß die Datei"
     assert finding.values["operation"] == "create_from_scad"
+    assert [action.id for action in finding.suggestions] == ["show_step_values", "show_history"]
     assert "unerwarteter Fehler" not in str(finding.message), (
         "ein Zustand, mit dem zu rechnen war, ist kein Programmfehler"
     )
