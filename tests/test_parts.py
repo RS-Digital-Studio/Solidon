@@ -1290,6 +1290,55 @@ def test_multiple_targets_keep_findings_with_distinct_locations(
     assert outcome.findings[0].location != outcome.findings[1].location
 
 
+@pytest.mark.parametrize(
+    ("name", "axis", "code"),
+    [
+        ("living_hinge", "x", "parts.standing_on_edge"),
+        ("living_hinge", "z", ""),
+        ("pegboard_hook", "z", "parts.up_points_nowhere"),
+        ("pegboard_hook", "y", ""),
+        ("snap_fit", "z", "part.spring_overloaded"),
+    ],
+)
+def test_standalone_parts_run_their_orientation_and_material_guards(
+    profile: Profile, name: str, axis: str, code: str
+) -> None:
+    """Die Erzeugeroperation löst dieselben Druckbedingungen ein wie Einsetzen."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = dataclasses.replace(PARTS.get(name), standalone=True)
+    registry = type(REGISTRY)()
+    parts = PartRegistry()
+    parts.register(spec)
+    part_ops.register_all(parts, registry)
+    operation = registry.get(f"create_{name}")
+    values: dict[str, Any] = {"axis": axis}
+    if name == "snap_fit":
+        values.update(length=21.0, thickness=2.0, hook=1.2)
+    outcome = operation.fn(
+        OpContext(
+            scene=Scene(),
+            inputs=[],
+            params=operation.params(**values),
+            profile=profiles.make_profile("centauri-carbon-2", "pla"),
+            quality="draft",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    warnings = [
+        entry
+        for entry in outcome.findings
+        if entry.code
+        in {"parts.standing_on_edge", "parts.up_points_nowhere", "part.spring_overloaded"}
+    ]
+    assert [entry.code for entry in warnings] == ([code] if code else [])
+    assert outcome.outputs[0].mesh.is_watertight
+
+
 def test_parts_without_host_tools_declare_every_feature() -> None:
     """Ohne Trägerwerkzeug gehört jedes Merkmal zum geprüften Bausteinkörper.
 

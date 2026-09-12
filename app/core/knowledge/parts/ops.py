@@ -473,12 +473,12 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         produces=1,
         touches_features=True,
         doc=spec.doc or spec.title,
-        cache_version=_result_version(spec),
+        cache_version=f"{_result_version(spec)}:guards:2",
         caveat=spec.caveat,
         registry=registry,
     )
     def run(ctx: OpContext) -> OpResult:
-        _params, produced = _built_part(spec, ctx.params, ctx.profile, ctx.quality)
+        part_params, produced = _built_part(spec, ctx.params, ctx.profile, ctx.quality)
         direction = _free_direction(ctx.params)
         placed = _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
         features = _placed_features(
@@ -486,11 +486,19 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         )
         from app.i18n import source_text
 
+        findings = list(produced.findings)
+        for finding in (
+            _lying_flat(spec, ctx.params, direction),
+            _standing_on_edge(spec, ctx.params, direction),
+            _spring_finding(spec.name, part_params, ctx.profile),
+        ):
+            if finding is not None:
+                findings.append(finding)
         return OpResult(
             outputs=[
                 SceneObject(id="", name=source_text(spec.title), mesh=placed, features=features)
             ],
-            findings=list(produced.findings),
+            findings=findings,
         )
 
 
