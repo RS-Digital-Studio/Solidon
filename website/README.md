@@ -177,6 +177,12 @@ Abnahme gehört eine vom echten Zähler geschriebene Zeile jeder Art und ein
 anschließender erfolgreicher Wartungslauf. Ein lokaler Test belegt dabei
 weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
 
+Erreicht die Statistik ihre Monats- oder Gesamtquote, schreibt der Zähler
+keine weitere Zeile und nennt die betroffene Grenze im privaten PHP-Log.
+Seitenzählpunkte bleiben dabei bei HTTP 204, Downloads und Versionsdateien
+werden weiter ausgeliefert. Der Betreiber prüft bei einer Speicherquote zuerst
+Wartungslauf und Löschfristen.
+
 Private Ordner brauchen auf POSIX 0700, Zustandsdateien höchstens 0600. Ein
 Link, Mehrfachverweis, Eigentümerwechsel, Pfadtausch, falsches JSON oder zu
 weite Rechte beendet den gesamten Lauf, bevor eine andere Datei geändert

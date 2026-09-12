@@ -1589,6 +1589,11 @@ def test_corrupt_rate_limit_states_fail_closed(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("quota", ["month", "total"])
 def test_counter_storage_quotas_fail_closed_without_growth(tmp_path: Path, quota: str) -> None:
+    docroot = _temporary_docroot(tmp_path)
+    metadata = b'{"version":"0.4.0"}'
+    (docroot / "version.json").write_bytes(metadata)
+    package = "Solidon3D-Setup-0.0.0-test.exe"
+    (docroot / "dl" / package).write_bytes(b"kein echtes Paket")
     directory = tmp_path / "stats"
     directory.mkdir(mode=0o700)
     current = directory / f"{datetime.now(UTC):%Y-%m}.jsonl"
@@ -1612,12 +1617,18 @@ def test_counter_storage_quotas_fail_closed_without_growth(tmp_path: Path, quota
         "Origin": "https://solidon3d.de",
     }
 
-    with _php_server(tmp_path) as base:
+    log = tmp_path / "quota.log"
+    with _php_server(tmp_path, error_log=log, docroot=docroot) as base:
         status, _headers, _body = _request(
             f"{base}/count.php", method="POST", data=body, headers=headers
         )
+        update_status, _headers, update_body = _request(f"{base}/count.php?u=1")
+        assert (update_status, update_body.encode()) == (200, metadata)
+        download_status, target = _without_redirects(f"{base}/count.php?f={package}", "GET")
+        assert (download_status, target) == (302, f"/dl/{package}")
 
-    assert status == 429
+    assert status == 204, "Volle Ablage ist keine Überschreitung des Besucherlimits"
+    assert f"Solidon count storage quota: {quota}" in log.read_text(encoding="utf-8")
     assert {path: path.stat().st_size for path in watched} == before
 
 

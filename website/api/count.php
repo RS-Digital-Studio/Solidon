@@ -535,7 +535,12 @@ function count_append_stream(string $path, $stream, string $data): bool
     return true;
 }
 
-/** Schreibt nur innerhalb atomar geprüfter Monats- und Gesamtquoten. */
+/** Eine volle Statistikablage ist kein Fehlverhalten des aktuellen Besuchers. */
+final class CountStorageFull extends RuntimeException
+{
+}
+
+/** Schreibt nur innerhalb atomar geprüfter Quoten; meldet eine volle Ablage gesondert. */
 function count_append(string $dir, string $path, string $line): bool
 {
     $resolvedDir = realpath($dir);
@@ -559,8 +564,11 @@ function count_append(string $dir, string $path, string $line): bool
         $addition = strlen($line) + 1;
         $monthStat = fstat($month);
         $monthBytes = is_array($monthStat) ? (int) ($monthStat['size'] ?? -1) : -1;
-        if ($monthBytes < 0 || $monthBytes + $addition > COUNT_MAX_MONTH_BYTES) {
+        if ($monthBytes < 0) {
             return false;
+        }
+        if ($monthBytes + $addition > COUNT_MAX_MONTH_BYTES) {
+            throw new CountStorageFull('month');
         }
         $total = 0;
         foreach (glob($dir . '/*.jsonl') ?: [] as $candidate) {
@@ -584,7 +592,7 @@ function count_append(string $dir, string $path, string $line): bool
             }
             $total += $bytes;
             if ($total + $addition > COUNT_MAX_TOTAL_BYTES) {
-                return false;
+                throw new CountStorageFull('total');
             }
         }
         return count_append_stream($path, $month, $line . "\n");
@@ -676,7 +684,13 @@ function record(string $kind, string $value): bool
     }
     if ($line !== false) {
         $path = $dir . '/' . $now->format('Y-m') . '.jsonl';
-        return count_append($dir, $path, $line);
+        try {
+            return count_append($dir, $path, $line);
+        } catch (CountStorageFull $problem) {
+            error_log('Solidon count storage quota: ' . $problem->getMessage()
+                . '. Wartungslauf und Löschfristen prüfen; es wird nichts gezählt.');
+            return true;  // Der Abruf läuft weiter, ohne die Speichergrenze zu überschreiten.
+        }
     }
     return true;
 }
