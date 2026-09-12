@@ -67,6 +67,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
+| [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
+| [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -1309,6 +1311,63 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   r = 3 — keines wird ein Langloch; an fünf Korpus- und Kundenmodellen kein verändertes
   Merkmal, zehn bis zwanzig Prozent mehr Erkennungszeit. Nachweis: fünf Fälle in
   `tests/test_slot_features.py`, vier davon ohne den Auffangweg rot.
+
+<a id="rm-163"></a>
+
+- [~] **RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg.** Robert am
+  12.09.2026: „teste das mit mehreren Betten und filamentübergabe usw über alle slicer die wir
+  unterstützen bzw alle die installiert sind". Sechs Programme sind auf dieser Maschine
+  installiert; gefahren wurden drei Platten mit bis zu vier PLA-Farben, je Platte ein eigener
+  Konsolenlauf, alle mit Maschinen- **und** Prozessprofil wie im Druckdialog.
+
+  **Mehrplattenbelegung und Filamentübergabe halten**, und zwar überall, wo der Slicer sie
+  kennt: OrcaSlicer und ElegooSlicer rechnen alle drei Platten mit 2, 3 und 2 Spulen und 102,
+  199 und 92 Werkzeugwechseln; die Werkzeugnummern bleiben über die Platten hinweg dieselben.
+  PrusaSlicer und CuraEngine bekommen einen Filamentsatz und sagen es auch
+  (`slicer.overrides_unreachable`). Der Öffnen-Weg schreibt der Orca-Familie **eine**
+  Projektdatei mit drei Plattenblöcken.
+
+  **Bambu Studio 2.3 nicht.** Derselbe Würfel einfarbig 4,31 g, zweifarbig 2,82 g — ein
+  Filament statt zwei, kein Werkzeugwechsel, Exit 0, kein Wort in Ausgabe oder Protokoll. Bei
+  drei Farben 28,07 + 37,95 g statt dreier Mengen; eine Platte mit zwei einfarbigen Körpern
+  verschiedener Spule brach ganz ab. Dieselben Dateien laufen bei Orca und Elegoo richtig
+  durch, die Übergabe ist also in Ordnung. Versuche, Bambu zu bewegen, sind gemessen und
+  gescheitert: `filament_map_mode` im Plattenblock ließ es 300 Sekunden hängen.
+
+  **Solidon sagt es jetzt** (12.09.2026): `handover.spools_left_out` vergleicht die Werkzeuge,
+  die die Flächen der Platte benutzen (`threemf.tools_in_use`), mit denen, die der G-Code
+  wirklich fährt, und meldet `gcode.spool_left_out` als Fehler mit dem Namen der fehlenden
+  Spule. Für Familien ohne Filamentprofile je Spule schweigt die Prüfung — dort ist es die
+  bekannte Bauart. Nachweis: sechs Fälle in `tests/test_print_settings.py`, Mutationsprobe
+  neun rot.
+
+  **Offen bleibt die Ursache bei Bambu.** Zu klären ist, ob eine Angabe fehlt, die Bambu Studio
+  über den Konsolenweg für die AMS-Zuordnung verlangt, oder ob sein CLI-Zweig Mehrfarbe
+  schlicht nicht bedient. Abnahme: ein von Bambu Studio selbst gespeichertes zweifarbiges
+  Projekt gegen Solidons Datei stellen — läuft dessen eigene Datei über die Kommandozeile
+  mehrfarbig durch, liegt der Unterschied in der Datei und ist auffindbar.
+
+<a id="rm-164"></a>
+
+- [~] **RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft.** Das
+  Programm war installiert und wurde von Solidon gar nicht erkannt — `flavour_of` gab `None`,
+  und damit war es im Druckdialog nicht wählbar. Es ist ab Version 6 ein Orca-Abkömmling:
+  derselbe Profilbaum mit `machine_list`/`sub_path`, dieselben Schlüsselnamen; als `orca`
+  behandelt findet Solidon in Version 7.2 **4234 Profile** (459 Maschinen, 1240 Prozesse,
+  2535 Filamente). Seit dem 12.09.2026 steht es in `FLAVOUR_BY_NAME`, mit Fall in
+  `tests/test_print_settings.py`.
+
+  **Der Konsolenlauf ließ sich nicht abnehmen**: dreimal `0xC0000005` mitten im eigenen Start,
+  vor jeder Modellverarbeitung. Das Programm war auf dieser Maschine allerdings **nie
+  eingerichtet** — es stand im Dialog „Bitte wählen Sie den Softwaremodus" —, und ein Urteil
+  über seine Kommandozeile auf dieser Grundlage wäre voreilig. Ein Absturz wird seither als
+  Absturz gemeldet statt als „keine Druckdatei geschrieben" (`handover.crashed`), mit dem Rat,
+  den Slicer einmal von Hand zu starten.
+
+  Abnahme: Creality Print einrichten (Modus und Drucker wählen), dann drei Platten mit
+  mehreren Spulen übergeben — einmal über *Im Slicer öffnen*, einmal über *Slicen*. Läuft der
+  Konsolenweg auch dann nicht, gehört die Einschränkung benannt, statt sie den Kunden am
+  Absturz erfahren zu lassen.
 
 ## Bedienung und Darstellung
 <a id="rm-158"></a>

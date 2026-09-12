@@ -21,7 +21,7 @@ from app.core.errors import ExternalToolError, ValidationError
 from app.core.export import handover, slicer_keys
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.project import PROJECT_ENTRY, load, new_project, save
-from app.core.slice import advise
+from app.core.slice import advise, gcode
 from app.core.types import (
     BoundingBox,
     LayerInfo,
@@ -855,6 +855,10 @@ def test_the_prusa_family_writes_no_word_booleans(flavour: str) -> None:
         ("orca-slicer.exe", "orca"),
         ("elegoo-slicer.exe", "orca"),
         ("BambuStudio.exe", "orca"),
+        # Creality Print ab Version 6 ist ein Orca-Abkömmling. Gemessen an 7.2:
+        # derselbe Profilbaum, 4234 lesbare Profile, dieselbe Übergabedatei.
+        ("CrealityPrint.exe", "orca"),
+        ("creality-print", "orca"),
         ("CuraEngine.exe", "cura"),
         ("notepad.exe", None),
     ],
@@ -2013,6 +2017,183 @@ def test_a_print_file_shorter_than_the_model_is_an_error() -> None:
     assert handover.too_short(half, 10.0, settings) is None, "volle Höhe: kein Befund"
     assert handover.too_short(half, 10.3, settings) is None, (
         "zwei Schichthöhen Luft für Rundung und erste Schicht"
+    )
+
+
+#: Ein G-Code, der nur Werkzeug 0 benutzt — zwei Zeilen Förderung reichen,
+#: denn geprüft wird die Werkzeugliste und nicht die Geometrie.
+_ONE_TOOL = "G90\nM82\nT0\nG1 X10 Y0 E1\nG1 Z0.2\nG1 X20 Y0 E2\n"
+#: Derselbe Druck mit beiden Werkzeugen.
+_TWO_TOOLS = _ONE_TOOL + "T1\nG1 X30 Y0 E3\nG1 X40 Y0 E4\n"
+
+
+def _slots(count: int) -> tuple[MaterialSlot, ...]:
+    farben = ("Rot", "Blau", "Grün")
+    return tuple(
+        MaterialSlot(index, f"PLA {farben[index]}", None, None, "PLA") for index in range(count)
+    )
+
+
+def test_a_filament_missing_from_the_print_file_is_an_error() -> None:
+    """Bambu Studio ließ ein zweifarbiges Teil halb weg und meldete Erfolg.
+
+    Gemessen am 12.09.2026 mit Bambu Studio 2.3: derselbe Würfel einfarbig
+    4,31 g, zweifarbig 2,82 g — ein Filament statt zwei, Exit 0, kein Wort in
+    Ausgabe oder Protokoll. Höhe, Bauraum und geschriebene Werte stimmen alle;
+    die drei bisherigen Gegenproben schweigen deshalb.
+    """
+    analysis = gcode.analyze(_ONE_TOOL)
+    slots = _slots(2)
+
+    left_out = handover.spools_left_out(analysis, (0, 1), slots, "orca")
+    assert left_out is not None, "zwei Spulen übergeben, eine gedruckt — ein Befund"
+    assert left_out.severity == "error"
+    assert left_out.source == "gcode", "die Aussage kommt aus der Druckdatei (Regel 14)"
+    assert "PLA Blau" in str(left_out.values["filament"]), (
+        "der Kunde soll wissen, welche Spule fehlt, nicht nur dass eine fehlt"
+    )
+
+    assert handover.spools_left_out(gcode.analyze(_TWO_TOOLS), (0, 1), slots, "orca") is None, (
+        "beide Werkzeuge im G-Code: kein Befund"
+    )
+
+
+@pytest.mark.parametrize("flavour", ["prusa", "cura"])
+def test_slicers_without_filament_profiles_get_no_second_complaint(flavour: str) -> None:
+    """Dass Prusa und Cura nur ein Filament fahren, sagt ``unreachable_overrides``
+    schon vor dem Lauf. Ein zweiter Befund über dieselbe Sache macht den ersten
+    schwächer, nicht den Bericht vollständiger."""
+    assert (
+        handover.spools_left_out(gcode.analyze(_ONE_TOOL), (0, 1), _slots(2), flavour)  # type: ignore[arg-type]
+        is None
+    )
+
+
+def test_a_single_spool_is_never_a_missing_one() -> None:
+    """Mit einem Werkzeug gibt es nichts zu verwechseln — und ein G-Code ohne
+    jeden Werkzeugbefehl ist dann der Normalfall, kein Verlust."""
+    assert handover.spools_left_out(gcode.analyze(_ONE_TOOL), (0,), _slots(1), "orca") is None
+    assert handover.spools_left_out(gcode.analyze(_ONE_TOOL), (), _slots(2), "orca") is None, (
+        "ohne Angabe entfällt der Vergleich, geraten wird nichts (Regel 21)"
+    )
+
+
+def test_a_file_without_any_extrusion_gets_the_clearer_error() -> None:
+    """Ohne eine einzige Förderbewegung bleibt die Werkzeugliste leer — und
+    dann ist „eine Spule fehlt" die schwächere von zwei Aussagen. Der Lauf
+    hält für diesen Fall schon vorher an, mit „keine einzige Materialbahn"."""
+    leer = gcode.analyze("G90\nG1 X10 Y0\n")
+    assert not leer.extrudes and not leer.metrics.used_tools
+    assert handover.spools_left_out(leer, (0, 1), _slots(2), "orca") is None
+
+
+def test_an_implicit_first_tool_still_shows_the_missing_second() -> None:
+    """Der gemessene Bambu-Fall trug **keinen einzigen** Werkzeugbefehl: Der
+    Slicer druckte alles mit dem Ausgangswerkzeug und ließ die zweite Farbe
+    weg. Wer hier auf ein ausdrückliches ``T0`` wartet, sieht genau den Fall
+    nicht, für den die Prüfung gebaut wurde."""
+    implizit = gcode.analyze("G90\nM82\nG1 X10 Y0 E1\nG1 X20 Y0 E2\n")
+    assert implizit.metrics.used_tools == (0,), "Werkzeug 0 gilt auch ungenannt"
+
+    left_out = handover.spools_left_out(implizit, (0, 1), _slots(2), "orca")
+    assert left_out is not None, "zwei Spulen übergeben, eine gedruckt"
+    assert "PLA Blau" in str(left_out.values["filament"])
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        # Windows meldet einen abgebrochenen Prozess als NTSTATUS. Gemessen an
+        # Creality Print 7.2 am 12.09.2026, dreimal derselbe Aufruf.
+        (0xC0000005, True),
+        (0xC0000409, True),
+        # POSIX zählt anders: ein Signal kommt als negative Zahl zurück.
+        (-11, True),
+        (-6, True),
+        # Und das hier sind gewöhnliche Fehlschläge, keine Abstürze: der
+        # Slic3r-Zweig gibt -17 als unsigned, CuraEngine eine schlichte 1.
+        (0, False),
+        (1, False),
+        (4294967279, True),
+    ],
+)
+def test_a_crash_is_told_apart_from_a_refusal(code: int, expected: bool) -> None:
+    """Beide enden ohne Druckdatei, aber sie verlangen verschiedene Antworten:
+    „Prüfen Sie Ihr Profil" hilft bei einem Absturz niemandem."""
+    assert handover.crashed(code) is expected
+
+
+def test_a_crashed_slicer_says_so_instead_of_blaming_the_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kette bis zum Kunden, nicht nur das Prädikat.
+
+    Gemessen an Creality Print 7.2 (12.09.2026): ``0xC0000005`` mitten im
+    eigenen Start, keine Ausgabe. Ohne diese Unterscheidung bekam der Kunde
+    „Der Slicer hat keine Druckdatei geschrieben" samt dem Rat, sein
+    Slicer-Profil zu prüfen — dort ist nichts zu finden.
+    """
+
+    class _Crashed:
+        returncode = 0xC0000005
+        stdout = b"crealityprint_main start\n"
+        stderr = b""
+
+    model = tmp_path / "model.3mf"
+    model.write_bytes(b"PK\x05\x06" + b"\x00" * 18)
+    executable = tmp_path / "CrealityPrint.exe"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: _Crashed())
+    profile = profiles.make_profile()
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert "abgestürzt" in str(raised.value.detail), str(raised.value.detail)
+    assert raised.value.suggestions, "Regel 17: jede Ausnahme trägt einen Vorschlag"
+    assert raised.value.suggestions[0].id == "choose_slicer", (
+        "Der erste Ausweg hängt an keiner Vermutung: Gemessen ist der Absturz, nicht "
+        "sein Grund — und auf einem Rechner mit mehreren Slicern ist der Wechsel der "
+        "kürzeste Weg zur Druckdatei (Regel 21)"
+    )
+    assert [action.id for action in raised.value.suggestions].count("retry") == 1, (
+        "das Wiederholen bleibt dabei — nach einem Start von Hand ist es der nächste Schritt"
+    )
+
+
+def test_a_left_out_spool_reaches_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und auch diese Kette bis zum Ende: ``slice_model`` muss die erwarteten
+    Werkzeuge annehmen und den Befund in seine Liste legen. Eine Prüfung, die
+    nur als Funktion stimmt, hat der Kunde nie gesehen."""
+    model, setup = _slicer_writing(monkeypatch, tmp_path, _ONE_TOOL, flavour="orca")
+    profile = profiles.make_profile()
+    slots = _slots(2)
+
+    outcome = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        setup,
+        output_dir=tmp_path,
+        slots=slots,
+        expected_tools=(0, 1),
+    )
+    codes = [entry.code for entry in outcome.findings]
+    assert "gcode.spool_left_out" in codes, codes
+
+    ohne = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        setup,
+        output_dir=tmp_path,
+        slots=slots,
+    )
+    assert "gcode.spool_left_out" not in [entry.code for entry in ohne.findings], (
+        "ohne Angabe entfällt der Vergleich — geraten wird nichts (Regel 21)"
     )
 
 

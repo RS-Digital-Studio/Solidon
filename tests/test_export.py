@@ -759,6 +759,49 @@ def test_a_filament_keeps_its_extruder_across_the_plates_of_one_job() -> None:
     )
 
 
+def test_only_painted_faces_count_as_a_tool_in_use() -> None:
+    """Die Gegenprobe nach dem Slicen fragt nach den **Flächen**, nicht nach
+    der Slotliste.
+
+    Ein Körper darf einen Slot deklarieren, den keines seiner Dreiecke trägt —
+    eine alte Spulenwahl, eine gelöschte Bemalung. Zählte ``tools_in_use`` die
+    Deklaration mit, meldete ``handover.spools_left_out`` bei jedem solchen
+    Druck eine verlorene Spule, obwohl nichts fehlt; und ein Fehlalarm, den
+    der Kunde dreimal gesehen hat, nimmt dem echten Befund die Wirkung.
+    """
+    red = MaterialSlot(index=0, name="Rot")
+    white = MaterialSlot(index=1, name="Weiß")
+    box = trimesh.creation.box()
+    faces = len(box.faces)
+
+    declared_only = threemf.AssemblyPart(
+        mesh=MeshData.of(box, slots=(0,) * faces), name="A", slots=(red, white)
+    )
+    assert threemf.tools_in_use([declared_only]) == (0,), (
+        "Weiß steht in der Liste, aber auf keinem Dreieck"
+    )
+
+    painted = threemf.AssemblyPart(
+        mesh=MeshData.of(box, slots=tuple(0 if i < faces // 2 else 1 for i in range(faces))),
+        name="B",
+        slots=(red, white),
+    )
+    assert threemf.tools_in_use([painted]) == (0, 1), "bemalt: beide Werkzeuge"
+
+    # Und die Nummern sind die des Auftrags, nicht die der Platte — dieselbe
+    # Unterscheidung wie bei ``merge_slots`` eine Zeile darüber.
+    second = threemf.AssemblyPart(
+        mesh=MeshData.of(box, slots=(1,) * faces), name="C", slots=(white,)
+    )
+    whole = [painted, second]
+    assert threemf.tools_in_use([second], across=whole) == (1,), (
+        "Weiß bleibt Werkzeug 2, auch wenn es auf dieser Platte allein liegt"
+    )
+    assert threemf.tools_in_use([second]) == (0,), (
+        "ohne den Auftrag ist die Platte der Auftrag — dann ist Weiß das erste Werkzeug"
+    )
+
+
 def test_a_lettering_split_into_letters_keeps_its_one_filament(
     tmp_path: Path, profile: Profile
 ) -> None:

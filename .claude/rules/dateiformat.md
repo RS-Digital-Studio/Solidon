@@ -189,6 +189,41 @@ um — für sie rechnet `_angle_from_horizontal` in `90 − Wert`. Gemessen an
 einem Keil mit 30° Neigung: die beiden kippen zwischen 20 und 40, Cura
 zwischen 50 und 70.
 
+## Eine gelungene Übergabe ist noch kein vollständiger Druck
+
+Ein Slicer, der mit Exit 0 zurückkommt und eine Datei hinterlässt, hat damit
+nicht gesagt, dass der Auftrag darin steht. **Gemessen am 12.09.2026 mit Bambu
+Studio 2.3**: derselbe Würfel einfarbig 4,31 g, zweifarbig 2,82 g — ein
+Filament statt zwei, ein Drittel weniger Material, kein Werkzeugwechsel, kein
+Wort in Ausgabe oder Protokoll. OrcaSlicer und ElegooSlicer rechnen dieselbe
+Platte aus denselben Dateien mit beiden Spulen und 102 Werkzeugwechseln; die
+Übergabe war also in Ordnung.
+
+Deshalb wird **nach** dem Lauf geprüft, was hineingehörte (`spools_left_out`,
+siehe die Karte des Gebiets). Wer eine neue Zusage an den Slicer gibt, fragt
+sich, woran man ihr Einlösen in der fertigen Datei erkennt — eine Zusage, die
+nur die Übergabe kennt, wird bei einem fremden Programm irgendwann still
+gebrochen.
+
+**Und eine Prüfung dieser Art zählt die Flächen, nicht die Deklaration.** Ein
+Körper darf einen Materialslot tragen, den keines seiner Dreiecke benutzt. Wer
+dagegen prüft, meldet bei jedem solchen Druck einen Verlust, der keiner ist —
+und ein Fehlalarm, den der Kunde dreimal gesehen hat, nimmt dem echten Befund
+die Wirkung.
+
+## Ein Absturz ist keine Absage
+
+Beide enden ohne Druckdatei, und bis zum 12.09.2026 bekamen beide denselben
+Satz: „Der Slicer hat keine Druckdatei geschrieben", dazu den Rat, das
+Slicer-Profil zu prüfen. Bei einem Absturz ist dort nichts zu finden.
+`crashed()` unterscheidet sie am Rückgabewert — POSIX zählt Signale negativ,
+Windows meldet einen `NTSTATUS` ab `0xC0000000` —, und die Prüfung steht
+**vor** den Ausgabeprüfungen: Ein abgestürztes Programm schreibt keinen Satz,
+an dem sie greifen könnten.
+
+Gemessen an Creality Print 7.2, das auf dieser Maschine nie eingerichtet war:
+dreimal `0xC0000005` mitten im eigenen Start, lange bevor es das Modell ansieht.
+
 ## Wie eine Zuordnung geprüft wird
 
 Ein falscher Schlüsselname fällt nicht von selbst auf — kein Slicer meldet

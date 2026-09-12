@@ -757,6 +757,13 @@ FLAVOUR_BY_NAME: Final[tuple[tuple[str, SlicerFlavour], ...]] = (
     ("bambu-studio", "orca"),
     ("elegooslicer", "orca"),
     ("elegoo-slicer", "orca"),
+    # Creality Print ab Version 6 ist ein Orca-Abkömmling: Profilbaum mit
+    # ``machine_list``/``sub_path``, Filamente je Drucker, dieselben
+    # Schlüsselnamen. Gemessen an Version 7.2 auf dieser Maschine findet
+    # Solidon darin 4234 Profile — 459 Maschinen, 1240 Prozesse, 2535
+    # Filamente — und die Übergabedatei ist dieselbe wie für OrcaSlicer.
+    ("crealityprint", "orca"),
+    ("creality-print", "orca"),
     ("curaengine", "cura"),
     ("cura", "cura"),
 )

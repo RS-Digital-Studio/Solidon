@@ -74,12 +74,41 @@ Teilbezogene Prusa-Einstellungen stehen in
 Beilage. Ein nicht unterstützter Mehrmaterialumfang wird auch ohne manuelle
 Spulenüberschreibungen vor der Übergabe benannt.
 
+## Die vier Gegenproben nach dem Lauf
+
+`slice_model` fragt vier Mal, ob die Druckdatei den Auftrag wirklich enthält.
+Jede sieht etwas, das die anderen durchlassen:
+
+| Prüfung | Frage |
+|---|---|
+| `off_the_bed` | Liegt der Druck im Bauraum? |
+| `too_short` | Ist das ganze Modell darin, oder wurde unten abgeschnitten? |
+| `verify_settings` | Hat der Slicer die geschriebenen Werte übernommen? |
+| `spools_left_out` | Sind **alle übergebenen Spulen** gedruckt worden? |
+
+Die vierte fragt gegen `expected_tools`, und das kommt aus
+`threemf.tools_in_use` — den Werkzeugen, die die **Flächen** einer Platte
+benutzen, nicht den deklarierten Slots. Ein Körper darf einen Slot tragen, den
+keines seiner Dreiecke benutzt; gegen die Deklaration geprüft, meldete jeder
+solche Druck eine verlorene Spule. Ohne `expected_tools` entfällt der
+Vergleich, und für Familien ohne Filamentprofile je Spule schweigt sie ganz —
+dort sagt `unreachable_overrides` dasselbe schon vor dem Lauf.
+
+`crashed` trennt den abgestürzten Slicer vom ablehnenden: Beide enden ohne
+Druckdatei, aber „prüfen Sie Ihr Profil" hilft bei einem Absturz niemandem.
+POSIX zählt Signale negativ, Windows meldet einen `NTSTATUS` ab `0xC0000000`.
+
 ## Warum `slicer_keys.py` existiert
 
 Weil dieselbe Einstellung in Cura, PrusaSlicer, OrcaSlicer und ElegooSlicer
 vier verschiedene Namen hat. Eine Übersetzungstabelle an einer Stelle ist der
 Preis dafür, dass §29 überhaupt einlösbar ist — verstreute Sonderfälle wären
 es nicht.
+
+Drei Familien decken sechs Programme ab: `prusa` (PrusaSlicer, SuperSlicer),
+`orca` (OrcaSlicer, Bambu Studio, ElegooSlicer, **Creality Print** ab Version 6)
+und `cura` (CuraEngine). `FLAVOUR_BY_NAME` ordnet über den Dateinamen zu;
+`flavour_of` ist die einzige Stelle, an der ein Programm zu einer Familie wird.
 
 ## Der Slicer wird gerufen, nie mitgeliefert
 

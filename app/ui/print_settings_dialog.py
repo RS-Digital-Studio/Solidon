@@ -1479,6 +1479,13 @@ class PlateRun:
     """Was beim Schreiben der Baugruppe auffiel — Haftungsränder,
     Filamentwechsel. Sie reisen mit ihrer Platte, damit im Prüfbericht steht,
     welche gemeint ist."""
+    used_tools: tuple[int, ...] = ()
+    """Welche Werkzeuge die **Flächen** dieser Platte benutzen, lokal gezählt.
+
+    Für die Gegenprobe nach dem Lauf (``handover.spools_left_out``): Bambu
+    Studio ließ ein zweifarbiges Teil halb weg und meldete Erfolg. Die
+    deklarierte Spulenliste taugt dafür nicht — sie kann einen Eintrag
+    tragen, den keine Fläche benutzt."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1676,6 +1683,14 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             (as_mesh_data(entry.mesh).bounds.size[2] for entry in on_plate), default=None
         ),
         findings=tuple(findings),
+        used_tools=threemf.tools_in_use(
+            [
+                threemf.AssemblyPart(
+                    mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                )
+                for entry in on_plate
+            ]
+        ),
     )
 
 
@@ -2009,6 +2024,7 @@ class _SliceWorker(Worker):
                     keep_arrangement=entry.keep_arrangement,
                     slots=entry.slots,
                     model_height=entry.model_height,
+                    expected_tools=entry.used_tools,
                     cancelled=self.cancelled,
                 )
             except OperationCancelled:

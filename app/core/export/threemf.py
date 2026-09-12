@@ -211,6 +211,37 @@ def merge_slots(
     return [slot for slot in order if slot_identity(slot) in here]
 
 
+def tools_in_use(
+    parts: Sequence[AssemblyPart], across: Sequence[AssemblyPart] | None = None
+) -> tuple[int, ...]:
+    """Welche Werkzeuge die **Flächen** dieser Teile wirklich benutzen (§20).
+
+    Die Gegenprobe nach dem Slicen braucht diese Zahl, und die Slotliste
+    beantwortet sie nicht: Ein Körper darf einen Slot deklarieren, den keines
+    seiner Dreiecke trägt — eine alte Spulenwahl, eine gelöschte Bemalung —,
+    und eine Prüfung gegen die Deklaration schlüge dann bei einem Druck an,
+    dem nichts fehlt (``handover.spools_left_out``).
+
+    Gezählt wird in derselben Nummerierung wie in der geschriebenen Datei:
+    über :func:`slot_identity` in die Reihenfolge aus :func:`merge_slots`.
+    ``across`` bedeutet dasselbe wie dort — der Auftrag gibt die Nummern vor,
+    ``parts`` ist die Platte.
+    """
+    # Örtlich wie in :func:`_slots_for`: ``geom.attributes`` wird von hier aus
+    # nur für diese eine Frage gebraucht, und der Import bleibt dort, wo er
+    # gilt.
+    from app.core.geom.attributes import used_slots
+
+    positions = {slot_identity(entry): entry.index for entry in merge_slots(parts, across=across)}
+    tools: set[int] = set()
+    for part in parts:
+        active = set(used_slots(part.mesh))
+        for slot in assembly_slots(part):
+            if slot.index in active and slot_identity(slot) in positions:
+                tools.add(positions[slot_identity(slot)])
+    return tuple(sorted(tools))
+
+
 def by_extruder(slots: Sequence[MaterialSlot]) -> list[MaterialSlot | None]:
     """Dieselben Slots an ihrem Extruderplatz, mit ``None`` in den Lücken (§20).
 

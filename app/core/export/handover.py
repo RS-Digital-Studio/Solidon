@@ -81,7 +81,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.i18n import _
+from app.i18n import _, source_text
 
 _log = get_logger(__name__)
 
@@ -2464,6 +2464,79 @@ def too_short(
     )
 
 
+def spools_left_out(
+    analysis: gcode.GcodeAnalysis,
+    expected: Sequence[int],
+    slots: Sequence[MaterialSlot],
+    flavour: SlicerFlavour,
+) -> Finding | None:
+    """Fehlt eine übergebene Spule in der Druckdatei? (§28.2, Regel 14)
+
+    Die vierte Gegenprobe, und sie sieht, was die drei anderen durchlassen:
+    Eine Datei kann die volle Höhe haben, auf dem Bett liegen und jeden
+    geschriebenen Wert bestätigen — und trotzdem ist ein Teil des Körpers
+    nicht darin, weil der Slicer ein Werkzeug stillschweigend weggelassen hat.
+
+    **Gemessen an Bambu Studio 2.3** (12.09.2026): derselbe zweifarbige
+    Würfel, einmal einfarbig übergeben und einmal zweifarbig. Einfarbig
+    4,31 g, zweifarbig 2,82 g — ein Drittel weniger Material, ein Filament
+    statt zwei, **Exit 0 und kein Wort** in Ausgabe oder Protokoll.
+    OrcaSlicer und ElegooSlicer rechnen dieselbe Platte mit beiden Spulen und
+    102 Werkzeugwechseln. Ein Kunde, der die Datei an den Drucker gibt, sieht
+    den fehlenden Teil erst nach Stunden auf der Platte.
+
+    Verglichen werden die Werkzeuge, die die **Flächen der Platte** benutzen,
+    mit denen, die im G-Code wirklich fördern (``metrics.used_tools``). Ein
+    deklarierter, aber unbemalter Slot steht nicht in ``expected`` — sonst
+    schlüge die Prüfung bei jedem Körper an, dessen alte Spulenliste einen
+    Eintrag mehr trägt als seine Flächen.
+
+    **Nur für Familien mit Filamentprofilen je Spule.** PrusaSlicer und
+    CuraEngine nehmen einen Satz Filamentwerte für die ganze Platte
+    (:func:`slicer_keys.has_filament_profiles`); dass dort nur ein Werkzeug im
+    G-Code steht, ist ihre bekannte Bauart und keine verlorene Spule.
+    :func:`unreachable_overrides` sagt das dem Kunden bereits, bevor der Lauf
+    beginnt — ein zweiter Befund über dieselbe Sache macht den ersten
+    schwächer, nicht den Bericht vollständiger.
+
+    Ohne ``expected`` entfällt der Vergleich; geraten wird nichts (Regel 21).
+    """
+    if not has_filament_profiles(flavour):
+        return None
+    wanted = {int(tool) for tool in expected}
+    # Mit einem einzigen Werkzeug gibt es nichts zu verwechseln, und ein
+    # G-Code ohne jeden Werkzeugbefehl ist dann der Normalfall.
+    if len(wanted) < 2:
+        return None
+    metrics = analysis.metrics
+    if not metrics.used_tools:
+        # Die Liste ist genau dann leer, wenn die Datei **nichts** fördert —
+        # ein ungenanntes Werkzeug gilt als Werkzeug 0, und das ist wichtig:
+        # Der gemessene Bambu-Fall trug keinen einzigen ``T``-Befehl. Fördert
+        # nichts, hält ``slice_model`` schon vorher an („keine einzige
+        # Materialbahn"), und diese Aussage ist die deutlichere von beiden.
+        return None
+    missing = sorted(wanted - set(metrics.used_tools))
+    if not missing:
+        return None
+    by_index = {slot.index: slot for slot in slots}
+    names = [source_text(by_index[tool].name) for tool in missing if tool in by_index]
+    return Finding(
+        code="gcode.spool_left_out",
+        severity="error",
+        message=_(
+            "Der Slicer hat nicht alle Filamente gedruckt — was auf den fehlenden "
+            "Spulen liegt, ist nicht in der Druckdatei."
+        ),
+        values={
+            "filament": ", ".join(names) if names else ", ".join(str(tool + 1) for tool in missing),
+            "expected": len(wanted),
+            "found": len(set(metrics.used_tools) & wanted),
+        },
+        source="gcode",
+    )
+
+
 def _readback_materials(
     config: SlicerConfig,
     settings: PrintSettings,
@@ -2522,6 +2595,7 @@ def slice_model(
     slots: Sequence[MaterialSlot] = (),
     cancelled: CancelToken | None = None,
     model_height: float | None = None,
+    expected_tools: Sequence[int] = (),
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
 
@@ -2646,6 +2720,31 @@ def slice_model(
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
             # ohne Text zu melden — und das ist schlimmer als keiner.
             output = _tail(completed.stdout, completed.stderr)
+            # **Vor den Ausgabeprüfungen**, denn ein abgestürztes Programm
+            # schreibt keinen Satz, an dem sie greifen könnten: Es fällt mitten
+            # im Lauf um, und was dasteht, ist die letzte Zeile davor. Der
+            # Kunde bekäme sonst „Der Slicer hat keine Druckdatei geschrieben"
+            # und den Rat, sein Profil zu prüfen — dort ist nichts zu finden.
+            if crashed(completed.returncode):
+                raise ExternalToolError(
+                    tool=setup.name,
+                    exit_code=completed.returncode,
+                    detail=_(
+                        "Der Slicer ist abgestürzt, statt den Auftrag abzulehnen — die "
+                        "Ursache liegt bei ihm und nicht bei dieser Datei. Starten Sie ihn "
+                        "einmal von Hand: Ein Slicer, dessen Ersteinrichtung noch offen "
+                        "ist, bricht hier ab."
+                    ),
+                    values={"output": output},
+                    # **Die Ursache wird nicht behauptet** (Regel 21): Gemessen
+                    # ist der Absturz und dass dieselbe Datei bei anderen
+                    # Slicern durchläuft; die offene Ersteinrichtung ist der
+                    # Fall, der hier auftrat, nicht der einzig mögliche.
+                    # Deshalb steht der Slicerwechsel vorn — auf einem Rechner
+                    # mit mehreren ist er der kürzeste Ausweg, und er hängt an
+                    # keiner Vermutung (§2.1).
+                    suggestions=(CHOOSE_SLICER, RETRY, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
+                )
             if _says_outside_the_volume(output):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -2720,6 +2819,10 @@ def slice_model(
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
         # er wird nie geraten.
         short = too_short(analysis, model_height, settings) if model_height is not None else None
+        # Die vierte: Sind alle übergebenen Spulen darin? Die drei darüber
+        # sehen eine Datei, der ein ganzes Filament fehlt, nicht an — sie hat
+        # die volle Höhe, liegt auf dem Bett und bestätigt jeden Wert.
+        left_out = spools_left_out(analysis, expected_tools, slots, setup.flavour)
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Version gelten mag oder nicht.
@@ -2745,6 +2848,7 @@ def slice_model(
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),
+        *([left_out] if left_out is not None else []),
         *gcode.findings_for(metrics),
     ]
     if arranged_by_slicer:
@@ -3019,6 +3123,32 @@ def _says_no_layers(output: str) -> bool:
     """Sagt die Ausgabe des Slicers, dass keine druckbare Schicht entstand?"""
     lowered = output.lower()
     return any(phrase in lowered for phrase in NO_LAYERS)
+
+
+def crashed(exit_code: int) -> bool:
+    """Ist der Slicer abgestürzt, statt ordentlich aufzugeben?
+
+    Ein Absturz und ein abgelehnter Auftrag sehen für den Aufrufer gleich aus —
+    beide enden ohne Druckdatei —, aber sie verlangen verschiedene Antworten.
+    „Der Slicer hat keine Druckdatei geschrieben" schickt den Kunden zu seinem
+    Profil; bei einem Absturz gibt es dort nichts zu finden.
+
+    **Gemessen an Creality Print 7.2** (12.09.2026): dreimal derselbe Aufruf,
+    dreimal ``0xC0000005`` nach der Zeile ``crealityprint_main start``, keine
+    Ausgabe, kein Protokolleintrag. Das Programm war auf dieser Maschine nie
+    eingerichtet und bricht in seinem eigenen Start ab, lange bevor es das
+    Modell ansieht.
+
+    Zwei Schreibweisen, weil zwei Betriebssysteme verschieden zählen: POSIX
+    meldet ein Signal als negative Zahl (``-11`` für SIGSEGV), Windows einen
+    ``NTSTATUS`` im Bereich ``0xC0000000``. Ein gewöhnlicher Fehlschlag ist
+    beides nicht — der Slic3r-Zweig gibt ``-17``, Cura ``1``.
+    """
+    if exit_code < 0:
+        return True
+    # ``0xC0000000`` ist die NTSTATUS-Schwere „error"; alles darüber ist ein
+    # abgebrochener Prozess, nicht sein eigener Rückgabewert.
+    return 0xC0000000 <= exit_code <= 0xFFFFFFFF
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

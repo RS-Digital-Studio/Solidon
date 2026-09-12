@@ -1094,6 +1094,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "extruder": _("Extruder"),
     "faces": _("Flächen"),
     "factor": _("Maßstab"),
+    # Die Spule, die in der Druckdatei fehlt (``gcode.spool_left_out``) — mit
+    # ihrem Namen, denn eine Werkzeugnummer sucht niemand im Regal.
+    "filament": _("Filament"),
     # Was tatsächlich da war, wo eine Zahl verlangt wurde — beim Zerlegen die
     # Teile, die der Körper hat, gegen die Stückzahl im Feld.
     "found": _("Gefunden"),
