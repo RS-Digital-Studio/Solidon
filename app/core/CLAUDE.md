@@ -117,6 +117,13 @@ sendet nie) · `support.py` (**der einzige Weg hinaus**, an einem Knopf) ·
 nach ausdrücklichem Klick; der Freischaltzustand selbst bleibt vollständig
 lokal)
 
+`feedback.py` speichert unter `versions[branding.APP_VERSION]` in
+`feedback.json` die aktive Nutzungszeit und den Einladungsstand. Jede
+Demo-Version fragt nach 15 aktiven Minuten genau einmal, auch über Neustarts
+hinweg. Antwort, Absage und bereits gezeigte Einladung gelten nur für diese
+Version; der frühere globale Stand wird nicht übernommen. Bekannte Versionen
+behalten ihren Stand auch beim Zurückwechseln.
+
 **Technik:** `bootstrap.py` füllt das Register · `lazy.py` verhindert
 Import-Deadlocks zwischen Kernpaketen (siehe unten) · `deferred.py` hält
 `trimesh`/`scipy`/`networkx` bis zum ersten wirklichen Rechenschritt aus dem

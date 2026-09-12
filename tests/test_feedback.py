@@ -1,4 +1,4 @@
-"""Der Bogen nach dreißig Minuten (§37.2) — zählen, fragen, aufhören.
+"""Der Bogen nach fünfzehn Minuten je Version (§37.2) — zählen, fragen, aufhören.
 
 Die drei Fragen dieser Datei: Wird die Zeit richtig gezählt? Wird zur richtigen
 Zeit gefragt — und, wichtiger, wann wird **nicht** mehr gefragt? Und bleibt der
@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from app import branding
 from app.core import activation, feedback
 from app.i18n import TranslatableText
 
@@ -66,13 +67,13 @@ def test_time_never_runs_backwards() -> None:
     assert feedback.read().used_seconds == pytest.approx(600)
 
 
-def test_nobody_is_asked_before_the_half_hour(demo: None) -> None:
-    """Eine Minute vor der Zeit wird nicht gefragt, eine Sekunde danach schon."""
-    feedback.record(feedback.DUE_SECONDS - 60)
-    assert not feedback.due(), "vor der halben Stunde bleibt es still"
+def test_nobody_is_asked_before_fifteen_minutes(demo: None) -> None:
+    """Vor fünfzehn Minuten bleibt es still, genau an der Grenze wird gefragt."""
+    feedback.record(15 * 60 - 1)
+    assert not feedback.due(), "vor fünfzehn Minuten bleibt es still"
 
-    feedback.record(61)
-    assert feedback.due(), "danach wird gefragt"
+    feedback.record(1)
+    assert feedback.due(), "nach fünfzehn Minuten wird gefragt"
 
 
 def test_the_sold_version_does_not_ask(sold: None) -> None:
@@ -87,7 +88,7 @@ def test_the_sold_version_does_not_ask(sold: None) -> None:
 
 
 def test_a_refusal_holds(demo: None) -> None:
-    """*Nein danke* ist eine Antwort und gilt dauerhaft."""
+    """*Nein danke* ist eine Antwort und gilt für diese Version."""
     feedback.record(feedback.DUE_SECONDS)
     feedback.mark_declined()
 
@@ -103,20 +104,58 @@ def test_an_answer_ends_it(demo: None) -> None:
     assert not feedback.due()
 
 
-def test_three_invitations_are_enough(demo: None) -> None:
-    """Wer nichts entscheidet, wird dreimal gefragt und dann nicht mehr.
-
-    Der Streifen kommt wieder, weil „stehen gelassen" keine Antwort ist —
-    aber nicht endlos, weil der vierte ungelesen weggeklickt würde.
-    """
+def test_one_invitation_per_version_is_enough(demo: None) -> None:
+    """Auch eine unbeantwortete Einladung erscheint in derselben Version nur einmal."""
     feedback.record(feedback.DUE_SECONDS)
-
-    for round_number in range(feedback.MAX_INVITATIONS):
-        assert feedback.due(), f"Einladung {round_number + 1} steht noch aus"
-        feedback.mark_invited()
-
-    assert not feedback.due(), "nach der dritten ist Schluss"
+    assert feedback.due()
+    feedback.mark_invited()
+    feedback.record(feedback.DUE_SECONDS)
+    assert not feedback.due(), "nach der ersten Einladung ist Schluss"
+    assert not feedback.enabled()
     assert feedback.read().settled
+
+
+@pytest.mark.parametrize("outcome", ["invited", "answered", "declined"])
+def test_a_new_version_gets_its_own_fifteen_minutes(
+    monkeypatch: pytest.MonkeyPatch, demo: None, outcome: str
+) -> None:
+    """Antwort, Absage und Einladung gelten je Version, auch beim Zurückwechseln."""
+    monkeypatch.setattr(branding, "APP_VERSION", "0.4.0")
+    feedback.record(900)
+    getattr(feedback, f"mark_{outcome}")()
+    previous = feedback.read()
+
+    monkeypatch.setattr(branding, "APP_VERSION", "0.4.1")
+    assert feedback.read() == feedback.Progress()
+    assert feedback.enabled()
+    assert not feedback.due()
+    feedback.record(899)
+    assert not feedback.due()
+    feedback.record(1)
+    assert feedback.due()
+    feedback.mark_invited()
+
+    monkeypatch.setattr(branding, "APP_VERSION", "0.4.0")
+    assert feedback.read() == previous
+    assert not feedback.due()
+
+    monkeypatch.setattr(branding, "APP_VERSION", "0.4.1")
+    assert not feedback.due(), "auch nach einem Versionswechsel keine zweite Einladung"
+
+
+def test_unversioned_progress_does_not_suppress_the_new_survey(
+    own_config: Path, demo: None
+) -> None:
+    """Der alte globale Stand sperrt keine neue Version und liefert ihr keine Nutzungszeit."""
+    (own_config / feedback.STATE_FILE).write_text(
+        json.dumps({"used_seconds": 3600, "invitations": 3, "answered": True, "declined": True}),
+        encoding="utf-8",
+    )
+    assert feedback.read() == feedback.Progress()
+    assert feedback.enabled()
+    assert not feedback.due()
+    feedback.record(900)
+    assert feedback.due()
 
 
 def test_a_broken_file_costs_nothing_but_the_count(own_config: Path) -> None:
@@ -342,6 +381,53 @@ def test_the_clock_does_not_start_when_there_is_nothing_to_ask(qt_app: object, d
     clock.start()
 
     assert not clock.running()
+
+
+def test_the_clock_offers_once_after_fifteen_active_minutes_across_restarts(
+    qt_app: object, demo: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Neustarts zählen weiter; nur eine neue Version bekommt eine neue Einladung."""
+    from app.ui.survey import SurveyNotice, UsageClock
+
+    monkeypatch.setattr(branding, "APP_VERSION", "0.4.0")
+    notice = SurveyNotice()
+    clock = UsageClock()
+    clock.due.connect(clock.stop)
+    clock.due.connect(notice.ask)
+    try:
+        clock.start()
+        for _minute in range(8):
+            _work_happened(qt_app)
+            clock.tick()
+        assert not notice.isVisible()
+        clock.stop()
+
+        clock = UsageClock()
+        clock.due.connect(clock.stop)
+        clock.due.connect(notice.ask)
+        clock.start()
+        for _minute in range(6):
+            _work_happened(qt_app)
+            clock.tick()
+        assert not notice.isVisible()
+        _work_happened(qt_app)
+        clock.tick()
+        assert notice.isVisible()
+        assert feedback.read().invitations == 1
+        assert not clock.running()
+
+        notice.hide()
+        clock = UsageClock()
+        clock.start()
+        assert not clock.running(), "diese Version hat bereits eingeladen"
+
+        monkeypatch.setattr(branding, "APP_VERSION", "0.4.1")
+        clock.start()
+        assert clock.running(), "die neue Version zählt wieder"
+        assert feedback.read().used_seconds == pytest.approx(0)
+    finally:
+        clock.stop()
+        notice.close()
 
 
 def test_a_moving_mouse_is_not_work(qt_app: object, demo: None) -> None:

@@ -331,7 +331,7 @@ class SupportDialog(QDialog):
             self.kind.addItem(str(support.KIND_NAMES[entry]), entry)
         if kind in OCCASION_KINDS:
             # **Zwei Arten, die man nicht wählt, sondern bekommt.** Der
-            # Fehlerbericht kommt aus einem Absturz, der Bogen aus dreißig
+            # Fehlerbericht kommt aus einem Absturz, der Bogen aus fünfzehn
             # Minuten Nutzung — beide stehen in der Liste, damit das Feld nicht
             # leer aussieht, und in keiner Auswahl, weil sie ohne ihren Anlass
             # nicht existieren.

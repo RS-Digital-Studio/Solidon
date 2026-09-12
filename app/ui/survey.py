@@ -269,7 +269,7 @@ class SurveyNotice(QFrame):
     """*Rückmeldung geben* — das Fenster öffnet den Bogen."""
 
     declined = Signal()
-    """*Nein danke*. Eine Antwort, und sie gilt dauerhaft."""
+    """*Nein danke*. Eine Antwort, und sie gilt für diese Version."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -377,7 +377,7 @@ class SurveyNotice(QFrame):
         """Zeigt die Karte und zählt die Einladung.
 
         Gezählt wird **hier** und nicht, wenn die Uhr sich meldet: Eine
-        Einladung, die niemand gesehen hat, soll keine der drei verbrauchen.
+        Einladung, die niemand gesehen hat, soll diese Version nicht erledigen.
         """
         self.show()
         self.adjustSize()

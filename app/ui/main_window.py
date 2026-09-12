@@ -15017,7 +15017,7 @@ class MainWindow(QMainWindow):
                 )
 
     def _offer_survey(self) -> None:
-        """Die halbe Stunde ist zusammen: Die Karte tritt über die Ansicht.
+        """Die fünfzehn Minuten sind zusammen: Die Karte tritt über die Ansicht.
 
         **Kein Dialog an dieser Stelle.** Der Update-Hinweis kommt beim Start,
         dieser mitten in die Arbeit — ein Fenster, das dort alles anhält, wird
