@@ -2871,6 +2871,7 @@
   "Keine Auswahl": "Nessuna selezione",
   "Keine Befunde.": "Nessun rilievo.",
   "Keine Befunde. Das Teil ist druckbereit.": "Nessun rilievo. Il pezzo è pronto per la stampa.",
+  "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter Datei → Einstellungen.": "Nessun profilo di filamento trovato. Controlla lo slicer in File → Impostazioni.",
   "Keine Karte": "Nessuna mappa",
   "Keine Objekte.": "Nessun oggetto.",
   "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht sein Profil hier.": "Nessun profilo trovato — senza, questo slicer rifiuta l'incarico. Apri lo slicer una volta e aggiungi una stampante; poi il suo profilo compare qui.",

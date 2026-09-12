@@ -2871,6 +2871,7 @@
   "Keine Auswahl": "Sin selección",
   "Keine Befunde.": "Sin hallazgos.",
   "Keine Befunde. Das Teil ist druckbereit.": "Sin hallazgos. La pieza está lista para imprimir.",
+  "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter Datei → Einstellungen.": "No se encontraron perfiles de filamento. Compruebe el laminador en Archivo → Ajustes.",
   "Keine Karte": "Sin mapa",
   "Keine Objekte.": "No hay objetos.",
   "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht sein Profil hier.": "No se encontraron perfiles — sin ellos este slicer rechaza el trabajo. Abrir el slicer una vez y añadir una impresora; después su perfil aparece aquí.",

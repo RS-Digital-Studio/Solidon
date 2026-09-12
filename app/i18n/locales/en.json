@@ -2871,6 +2871,7 @@
   "Keine Auswahl": "No selection",
   "Keine Befunde.": "No findings.",
   "Keine Befunde. Das Teil ist druckbereit.": "No findings. The part is ready to print.",
+  "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter Datei → Einstellungen.": "No filament profiles found. Check the slicer under File → Settings.",
   "Keine Karte": "No map",
   "Keine Objekte.": "No objects.",
   "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht sein Profil hier.": "No profiles found — without them this slicer refuses the job. Open the slicer once and add a printer; its profile then appears here.",

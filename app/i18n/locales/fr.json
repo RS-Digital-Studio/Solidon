@@ -2871,6 +2871,7 @@
   "Keine Auswahl": "Aucune sélection",
   "Keine Befunde.": "Aucun constat.",
   "Keine Befunde. Das Teil ist druckbereit.": "Aucune anomalie. La pièce est prête à imprimer.",
+  "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter Datei → Einstellungen.": "Aucun profil de filament trouvé. Vérifiez le logiciel de tranchage dans Fichier → Paramètres.",
   "Keine Karte": "Aucune carte",
   "Keine Objekte.": "Aucun objet.",
   "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht sein Profil hier.": "Aucun profil trouvé — sans eux, ce slicer refuse le travail. Ouvrir le slicer une fois et ajouter une imprimante ; son profil apparaîtra ensuite ici.",

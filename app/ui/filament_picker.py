@@ -37,6 +37,7 @@ Wahl.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
@@ -81,6 +82,8 @@ from app.ui.overlay import rows_height
 from app.ui.panels import MAX_ROWS, collapsible, least_height_of, row_height_of, view_chrome
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 from app.ui.theme import current_theme, slot_colour, viewport_colours
+
+_log = logging.getLogger(__name__)
 
 #: Kantenlänge des Farbfelds vor einem Eintrag, in Bildpunkten.
 #:
@@ -405,6 +408,7 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
         flavour = detect(chosen).flavour
         return tuple(slicer_profiles.find_profiles(chosen, flavour, kinds=("filament",)))
     except Exception:  # ein fremder Bestand scheitert auf viele Arten
+        _log.exception("Der Filamentprofilbestand lässt sich nicht lesen.")
         return ()
 
 
@@ -754,6 +758,7 @@ class NewFilamentDialog(QDialog):
 
     def _choose_slicer_profile(self) -> None:
         """Den Bestand des Slicers aufschlagen und eines auswählen."""
+        self._validate()
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             entries = slicer_filaments()
@@ -761,8 +766,11 @@ class NewFilamentDialog(QDialog):
             QApplication.restoreOverrideCursor()
         if not entries:
             # Regel 17: Ein Fehlschlag endet nie mit „geht nicht".
-            self.slicer_profile.setPlaceholderText(
-                tr("Kein Slicer eingerichtet — unter Datei → Einstellungen eintragen.")
+            self.validation.setText(
+                tr(
+                    "Keine Filamentprofile gefunden. "
+                    "Prüfen Sie den Slicer unter Datei → Einstellungen."
+                )
             )
             return
         dialog = SlicerFilamentDialog(self, entries, self.slicer_profile.text().strip())

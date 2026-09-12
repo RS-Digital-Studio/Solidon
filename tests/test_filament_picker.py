@@ -870,6 +870,55 @@ def test_an_empty_result_says_what_to_do(qt_app: QApplication) -> None:
     assert not dialog._ok_button.isEnabled(), "ohne Treffer gibt es nichts zu übernehmen"
 
 
+@pytest.mark.parametrize("lookup", ["empty", "broken"])
+def test_profile_choice_reports_an_empty_search_beside_an_existing_profile(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    lookup: str,
+) -> None:
+    """Ein vorhandener Profilname darf den Hinweis einer erfolglosen Suche nicht verdecken."""
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QToolButton
+
+    from app.core.export import handover, slicer_profiles
+    from app.ui import filament_picker as module
+
+    executable = Path("prusa-slicer.exe")
+    monkeypatch.setattr(module.discover, "find_programs", lambda *_args: [executable])
+    monkeypatch.setattr(module.discover, "remembered_path", lambda *_args: str(executable))
+    monkeypatch.setattr(module, "detect", lambda _path: handover.SlicerSetup(executable, "prusa"))
+
+    def find(*_args, **_kwargs):
+        if lookup == "broken":
+            raise OSError("Unlesbarer Profilbestand")
+        return []
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", find)
+    dialog = NewFilamentDialog(name="PETG", slicer_profile="Bestehendes PETG")
+    heading = dialog.more_section.findChild(QToolButton, "sectionHeading")
+    assert heading is not None
+    heading.click()
+    dialog.choose_profile.click()
+    assert dialog.slicer_profile.text() == "Bestehendes PETG"
+    assert dialog.validation.isVisibleTo(dialog)
+    assert "Keine Filamentprofile" in dialog.validation.text()
+    assert "Einstellungen" in dialog.validation.text()
+    assert QApplication.overrideCursor() is None
+    if lookup == "broken":
+        assert "Unlesbarer Profilbestand" in caplog.text
+
+    selected = slicer_profiles.SlicerProfile(Path("new.json"), "PETG Neu", "filament")
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: [selected])
+    monkeypatch.setattr(
+        module.SlicerFilamentDialog, "exec", lambda _self: module.QDialog.DialogCode.Accepted
+    )
+    dialog.choose_profile.click()
+    assert dialog.slicer_profile.text() == "PETG Neu"
+    assert not dialog.validation.text()
+
+
 def test_the_profile_of_a_spool_can_be_chosen_and_removed(qt_app: QApplication) -> None:
     """Der eigentliche Fund vom 03.09.2026.
 
