@@ -93,6 +93,8 @@ Spulen, letzte Bestandsfeststellungen und Buchungen stehen gemeinsam in der
 versionierten `filaments.json`. Lesen, Prüfen und atomarer Dateitausch liegen
 unter einer Betriebssystemsperre. Die Migration alter Listenkataloge speichert
 Lager- und Spulenkennungen im selben Vorgang; unbekannte Mengen bleiben leer.
+Die Lagerkennung wird bei ihrer ersten Abfrage gespeichert. Wiederholte
+Abfragen einer bereits gespeicherten Kennung lösen keinen Dateitausch aus.
 Die Vorwahl darf einen Lesefehler mit einer leeren Liste beantworten;
 `catalogue(strict=True)` meldet ihn in der Lageransicht. Jeder Schreibweg
 verweigert das Überschreiben einer beschädigten oder neueren Datei.

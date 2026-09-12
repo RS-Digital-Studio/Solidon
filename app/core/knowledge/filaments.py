@@ -551,7 +551,8 @@ def catalogue(
 def inventory_identifier() -> str:
     """Die beständige örtliche Lagerkennung wird vor der ersten Rückgabe gespeichert."""
     with _transaction() as state:
-        state.dirty = True
+        if not catalogue_path().exists():
+            state.dirty = True
         return state.identifier
 
 

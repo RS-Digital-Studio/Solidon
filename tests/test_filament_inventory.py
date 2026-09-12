@@ -687,3 +687,24 @@ for index in range(12):
     assert len(filaments.catalogue()) == 25
     assert current(first).remaining_grams == pytest.approx(458)
     assert len(filaments.bookings()) == 1
+
+
+def test_inventory_identifier_only_writes_for_its_first_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die erste Kennung wird dauerhaft, spätere Lesezugriffe verändern die Datei nicht."""
+    writes = []
+    original = filaments._write
+
+    def remember(state) -> None:
+        writes.append(state.identifier)
+        original(state)
+
+    monkeypatch.setattr(filaments, "_write", remember)
+    first = filaments.inventory_identifier()
+    persisted = filaments.catalogue_path().read_bytes()
+    assert writes == [first]
+    for _ in range(3):
+        assert filaments.inventory_identifier() == first
+    assert writes == [first]
+    assert filaments.catalogue_path().read_bytes() == persisted
