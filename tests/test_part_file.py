@@ -1096,6 +1096,21 @@ def test_nested_part_installs_and_reopens_in_a_fresh_receiver(part, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_a_dependency_named_like_a_builtin_names_the_conflict(part: recipe.Recipe) -> None:
+    """Der geprüfte Name eines gelieferten Bausteins ist ein behebbarer Konflikt."""
+    data = _nested_part_data(part)
+    child = data["dependencies"].pop("review_inner")
+    child["name"] = "dowel"
+    data["dependencies"]["dowel"] = child
+    data["document"]["ops"][-1]["op"] = "insert_dowel"
+    with pytest.raises(ValidationError) as caught:
+        PartFileIO().validate(json.dumps(data).encode())
+    assert caught.value.field == "dependencies"
+    assert "dowel" in str(caught.value.detail)
+    assert "umbenennen" in str(caught.value.detail)
+    assert caught.value.suggestions
+
+
 @pytest.mark.parametrize("problem", ["cycle", "nested", "count", "unknown", "budget", "shipped"])
 def test_nested_recipe_boundaries_stop_before_build(part, monkeypatch, problem):
     data = _nested_part_data(part)

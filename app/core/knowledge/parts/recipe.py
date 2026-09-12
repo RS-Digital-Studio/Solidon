@@ -533,10 +533,27 @@ def _collect_dependencies(part: Recipe, parts: PartRegistry | None = None) -> Re
     return bundled
 
 
+def require_dependency_name(name: str) -> None:
+    """Eine Beilage darf keinen mitgelieferten Baustein ersetzen; beide Wege sagen warum."""
+    from app.core.knowledge.parts.registry import PARTS
+
+    if PARTS.has(name) and PARTS.get(name).source == "shipped":
+        raise ValidationError(
+            "dependencies",
+            _(
+                "Das Rezept bringt einen Baustein namens {name} mit, aber so heißt "
+                "ein gelieferter Baustein. Das Rezept ohne diesen Baustein "
+                "speichern oder ihn umbenennen.",
+                name=name,
+            ),
+            constraint="recipe_dependencies",
+            suggestions=(CANCEL,),
+        )
+
+
 def dependency_registry(part: Recipe, base: Registry | None = None) -> Registry:
     """Ein privates Operationsregister; Rezeptbeilagen ändern nie den lokalen Katalog."""
     from app.core.knowledge.parts import ops as part_ops
-    from app.core.knowledge.parts.registry import PARTS
     from app.core.registry import REGISTRY
 
     operations = Registry()
@@ -544,21 +561,7 @@ def dependency_registry(part: Recipe, base: Registry | None = None) -> Registry:
         operations.register(operation)
     parts = PartRegistry()
     for name in dependency_order(file_data(part)):
-        if PARTS.has(name) and PARTS.get(name).source == "shipped":
-            # Auch auf dem Bauweg ein Satz mit Vorschlag, kein Codestring:
-            # ``with_dependencies`` hüllt denselben Fall ein, ``build`` ruft
-            # diese Funktion aber unmittelbar (Review 06.09.2026).
-            raise ValidationError(
-                "dependencies",
-                _(
-                    "Das Rezept bringt einen Baustein namens {name} mit, aber so heißt "
-                    "ein gelieferter Baustein. Das Rezept ohne diesen Baustein "
-                    "speichern oder ihn umbenennen.",
-                    name=name,
-                ),
-                constraint="recipe_dependencies",
-                suggestions=(CANCEL,),
-            )
+        require_dependency_name(name)
         child = from_data(part.dependencies[name])
         operations.remove(part_ops.op_name(name))
         register(child, parts, operations)

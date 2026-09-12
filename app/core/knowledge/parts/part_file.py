@@ -398,7 +398,7 @@ class PartFileIO:
             order = recipe.dependency_order(normalized)
             if order:
                 from app.core.knowledge.parts import ops as part_ops
-                from app.core.knowledge.parts.registry import PARTS, PartRegistry
+                from app.core.knowledge.parts.registry import PartRegistry
 
                 private_registry = Registry()
                 for operation in active_registry.all():
@@ -407,8 +407,7 @@ class PartFileIO:
                 private_parts = PartRegistry()
                 normalized["dependencies"] = dict(normalized["dependencies"])
                 for name in order:
-                    if PARTS.has(name) and PARTS.get(name).source == "shipped":
-                        raise ValueError("recipe_dependency_shadows_shipped_part")
+                    recipe.require_dependency_name(name)
                     child_payload = json.dumps(
                         normalized["dependencies"][name], ensure_ascii=False
                     ).encode("utf-8")
