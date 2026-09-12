@@ -210,6 +210,8 @@ entsteht einmal (`prepare.slot_profile`) und wird von beiden Kernen aufgezogen
 `slot_travel` rechnet die Gesamtlänge des Dialogs in die Mittellinie um und
 lehnt dabei die Aufweitung ab; `slot_ends` nennt die beiden Endpunkte, an
 denen jede Prüfung fragen muss, die für eine runde Bohrung an der Mitte fragt.
+`prepare.edge_findings` stellt diese Frage beim Setzen, Ziehen und
+Verbreitern für beide Kerne und meldet eine offene Flanke höchstens einmal.
 Der Weg dorthin hat zwei Eingänge: `drill_hole` setzt eines (`slotted`,
 `slot_length`, `slot_angle`), `slot_hole` zieht eine **erkannte** Bohrung
 nachträglich auseinander (`prepare.slot_bore`, exakt `brep.edit.slot_bore`).

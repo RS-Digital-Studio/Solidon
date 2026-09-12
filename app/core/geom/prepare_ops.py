@@ -71,14 +71,13 @@ from app.core.geom.prepare import (
     compensation_findings,
     countersink,
     drill,
+    edge_findings,
     named_for,
-    over_the_edge_along,
     plug,
     resize_bore,
     shell,
     shortest_slot,
     slot_bore,
-    slot_ends,
     slot_travel,
     split_at_plane,
 )
@@ -3247,8 +3246,18 @@ def resize_hole(ctx: OpContext) -> OpResult:
             nothing = without_effect(source.mesh, solid, change, ctx.profile)
             if nothing is not None:
                 findings.append(nothing)
+        from app.core.sketch.planes import frame_of
+
         findings.extend(
-            over_the_edge_along(source.mesh, centre, axis, cut, body=as_mesh_data(source.mesh))
+            edge_findings(
+                source.mesh,
+                position=centre,
+                frame=frame_of(axis, centre),
+                diameter=cut,
+                travel=slot_travel_now,
+                angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
+                body=as_mesh_data(source.mesh),
+            )
         )
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
         findings.extend(_widening_findings(source, feature, params.diameter))
@@ -3718,23 +3727,20 @@ def slot_hole(ctx: OpContext) -> OpResult:
         if nothing is not None:
             findings.append(nothing)
         findings.extend(_widening_findings(source, feature, diameter))
-        # **Und die Kantenfrage, an beiden Enden** — wie der Netz-Zwilling
-        # (``prepare._edge_findings``) und wie ``drill_brep_hole`` mit
-        # Langloch. Bis zum 11.09.2026 stellte dieser Zweig sie als einziger
-        # nicht: Eine Bohrung Ø 6, neun Millimeter vor der Kante, auf 20
-        # gezogen, meldete am Netz ``bore.over_the_edge`` und am exakten
-        # Körper nichts (Fund des Reviews). Ohne Netz bleibt es beim
-        # Hüllquader, und der ist dort zu streng und nie zu milde.
+        # Die Kantenfrage gilt beiden Bogenmittelpunkten, wie beim Verbreitern.
         from app.core.sketch.planes import frame_of
 
-        travel = slot_travel(diameter=diameter, length=params.slot_length)
-        for end in slot_ends(centre, frame_of(axis, centre), travel, angle):
-            open_flank = over_the_edge_along(
-                source.mesh, end, axis, diameter, body=as_mesh_data(source.mesh)
+        findings.extend(
+            edge_findings(
+                source.mesh,
+                position=centre,
+                frame=frame_of(axis, centre),
+                diameter=diameter,
+                travel=slot_travel(diameter=diameter, length=params.slot_length),
+                angle_deg=angle,
+                body=as_mesh_data(source.mesh),
             )
-            if open_flank:
-                findings.extend(open_flank)
-                break
+        )
         exact_features = features_of(solid)
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den

@@ -4237,6 +4237,43 @@ def test_a_detected_bore_becomes_a_slot(document: Document, profile: Profile) ->
     )
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    "y, diameter, opens", [(8.0, 8.0, False), (8.0, 12.0, True), (0.0, 28.0, True)]
+)
+def test_resizing_a_slot_checks_its_two_ends(
+    kind: str, y: float, diameter: float, opens: bool, profile: Profile
+) -> None:
+    """Die Mitte bleibt im Material, obwohl die verbreiterten Enden die Flanke öffnen."""
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    original = edit.slot_bore(
+        edit.box(80.0, 40.0, 10.0),
+        position=(0.0, y, 0.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=20.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    mesh = original if kind == "brep" else as_mesh_data(original)
+    features = features_of(original) if kind == "brep" else detect(mesh)
+    slot = next(entry for entry in features.values() if entry.kind == "slot")
+    source = SceneObject(id="obj_1", name="Platte", kind=kind, mesh=mesh, features=features)
+
+    result = _run_op("resize_hole", source, profile, at_feature=slot.id, diameter=diameter)
+
+    assert as_mesh_data(result.outputs[0].mesh).raw.is_watertight
+    assert result.outputs[0].mesh.volume < original.volume
+    warnings = [finding for finding in result.findings if finding.code == "bore.over_the_edge"]
+    assert len(warnings) == int(opens)
+
+
 def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
     """Eine kürzere Länge wird abgelehnt, statt stillschweigend nichts zu tun.
 

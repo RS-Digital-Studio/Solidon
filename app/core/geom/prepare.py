@@ -531,7 +531,7 @@ def slot_bore(
     if nothing is not None:
         findings.append(nothing)
     findings.extend(
-        _edge_findings(
+        edge_findings(
             mesh,
             position=position,
             frame=frame,
@@ -829,14 +829,15 @@ def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> Ske
     )
 
 
-def _edge_findings(
-    mesh: MeshData,
+def edge_findings(
+    mesh: HasBounds,
     *,
     position: Vec3,
     frame: PlaneFrame,
     diameter: float,
     travel: float,
     angle_deg: float,
+    body: MeshData | None = None,
 ) -> list[Finding]:
     """Die Kantenwarnung für eine runde Bohrung — und für beide Enden eines Langlochs.
 
@@ -845,10 +846,12 @@ def _edge_findings(
     höchstens einmal: Zwei gleichlautende Sätze über dasselbe Loch sagen nichts
     Zweites und sind der Lärm, nach dem niemand mehr in den Bericht sieht.
     """
+    if body is None and isinstance(mesh, MeshData):
+        body = mesh
     if travel <= EPS_GEOM:
-        return over_the_edge_along(mesh, position, frame.normal, diameter, body=mesh)
+        return over_the_edge_along(mesh, position, frame.normal, diameter, body=body)
     for end in slot_ends(position, frame, travel, angle_deg):
-        found = over_the_edge_along(mesh, end, frame.normal, diameter, body=mesh)
+        found = over_the_edge_along(mesh, end, frame.normal, diameter, body=body)
         if found:
             return found
     return []
@@ -1074,7 +1077,7 @@ def drill(
         if nothing is not None:
             findings.append(nothing)
         findings.extend(
-            _edge_findings(
+            edge_findings(
                 mesh,
                 position=position,
                 frame=frame,
