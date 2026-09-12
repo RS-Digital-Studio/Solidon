@@ -1237,6 +1237,62 @@ def test_counter_rejects_group_readable_quota_and_month_files(
     assert status == 429
 
 
+@pytest.mark.parametrize("endpoint", ["activation", "support"])
+def test_one_client_cannot_fill_the_global_request_budget(tmp_path: Path, endpoint: str) -> None:
+    """Abgewiesene IP-Anfragen zählen nicht weiter gegen alle anderen Nutzer."""
+    from app.core.activation.ed25519 import public_key
+
+    php_extension("sodium")
+    seed = bytes(range(32))
+    seed_file = tmp_path / "activation.seed"
+    seed_file.write_text(seed.hex(), encoding="ascii")
+    _chmod_private(seed_file)
+    prepend = tmp_path / "client-address.php"
+    prepend.write_text(
+        "<?php $_SERVER['REMOTE_ADDR'] = $_SERVER['HTTP_X_TEST_ADDRESS'] ?? '192.0.2.1';",
+        encoding="ascii",
+    )
+    environment = {
+        "SOLIDON_ACTIVATION_SEED_FILE": str(seed_file),
+        "SOLIDON_ACTIVATION_DB": str(tmp_path / "activation.sqlite"),
+        "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": public_key(seed).hex(),
+    }
+    budget = 30 if endpoint == "activation" else 12
+    payload = (
+        b"{}"
+        if endpoint == "activation"
+        else b'--test\r\nContent-Disposition: form-data; name="message"\r\n\r\n'
+        b"Lokaler Test\r\n--test--\r\n"
+    )
+    content_type = (
+        "application/json" if endpoint == "activation" else "multipart/form-data; boundary=test"
+    )
+    accepted_status = 400 if endpoint == "activation" else 502
+    global_key = "issue:global" if endpoint == "activation" else "global"
+    headers = {"Content-Type": content_type, "X-Test-Address": "192.0.2.1"}
+    with _php_server(tmp_path, environment, prepend=prepend) as base:
+        for _attempt in range(budget):
+            status, _headers, answer = _request(
+                f"{base}/{endpoint}.php", method="POST", data=payload, headers=headers
+            )
+            assert status == accepted_status, answer
+        state_path = tmp_path / f"{endpoint}-rate.json"
+        before = state_path.read_bytes()
+        assert len(json.loads(before)[global_key]) == budget
+        for _attempt in range(10):
+            status, _headers, answer = _request(
+                f"{base}/{endpoint}.php", method="POST", data=payload, headers=headers
+            )
+            assert status == 429, answer
+        assert state_path.read_bytes() == before
+        headers["X-Test-Address"] = "192.0.2.2"
+        status, _headers, answer = _request(
+            f"{base}/{endpoint}.php", method="POST", data=payload, headers=headers
+        )
+        assert status == accepted_status, answer
+        assert len(json.loads(state_path.read_bytes())[global_key]) == budget + 1
+
+
 def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     tmp_path: Path,
 ) -> None:
