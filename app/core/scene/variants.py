@@ -55,19 +55,9 @@ DEFAULT_GAP = 8.0
 #: Vermutungen (§28.3 nennt vier).
 MAX_VARIANTS = 12
 
-#: Wie tief der Wert in die Oberseite graviert wird, in Millimetern und
-#: unabhängig vom Druckraster. Die Tiefe hält die Zahl nach dem Abkühlen lesbar. Darunter
-#: muss die Mindestwandstärke des Profils vollständig stehen bleiben.
-MARK_DEPTH = 0.6
-
 #: Wie viel von der kürzeren Kante der Oberseite die Zahl einnehmen darf.
 #: Ein Drittel lässt Rand stehen, auch wenn das Teil oben zuläuft.
 MARK_SHARE = 1.0 / 3.0
-
-#: Kleiner als das wird keine Zahl graviert — dann meldet der Lauf es lieber.
-#: Unter zwei Millimetern ist eine Ziffer in jeder Schrift ein Fleck, und die
-#: Düse legt ihre Striche ohnehin nicht mehr getrennt.
-MARK_LEAST_SIZE = 2.0
 
 
 @dataclass(slots=True)
@@ -199,7 +189,7 @@ def build(
             value,
             offset,
             gap,
-            profile if mark else None,
+            result.scene.profile if mark else None,
             quality,
         )
         offset += width + gap
@@ -241,7 +231,7 @@ def _marked(mesh: MeshData, text: str, profile: Profile, quality: Quality) -> Me
     width = float(box.maximum[0] - box.minimum[0])
     depth = float(box.maximum[1] - box.minimum[1])
     size = min(width, depth) * MARK_SHARE
-    if size < MARK_LEAST_SIZE:
+    if size <= EPS_GEOM:
         return None
     shapes = outlines(text, size, FONTS[0])
     if not shapes:
@@ -251,7 +241,9 @@ def _marked(mesh: MeshData, text: str, profile: Profile, quality: Quality) -> Me
 
     top = float(box.maximum[2])
     centre = box.centre
-    required = MARK_DEPTH + profile.minimum_wall_thickness
+    # Drei reale Druckschichten machen die Gravur auch nach dem Abkühlen lesbar.
+    mark_depth = 3.0 * profile.printer.layer_height
+    required = mark_depth + profile.minimum_wall_thickness
     if top - float(box.minimum[2]) < required:
         return None
     # Die Gesamthöhe sagt nichts über eine dünne Decke über einem Hohlraum.
@@ -262,10 +254,10 @@ def _marked(mesh: MeshData, text: str, profile: Profile, quality: Quality) -> Me
     outside = boolean("difference", [support, mesh], quality=quality, allow_empty=True)
     if outside.mesh.volume > EPS_GEOM:
         return None
-    letters = local_text_body(text, size, FONTS[0], MARK_DEPTH, mode="engraved")
+    letters = local_text_body(text, size, FONTS[0], mark_depth, mode="engraved")
     # ``mode="engraved"`` legt die Buchstaben unter Z = 0 und lässt sie um
     # ``BOOLEAN_OVERLAP`` darüber hinausragen; auf die Oberkante gehoben
-    # schneiden sie damit genau ``MARK_DEPTH`` tief ein, ohne eine Fläche mit
+    # schneiden sie damit genau ``mark_depth`` tief ein, ohne eine Fläche mit
     # dem Körper zu teilen.
     tool = apply(letters, translation((float(centre[0]), float(centre[1]), top)))
     cut = boolean("difference", [mesh, tool], quality=quality)

@@ -576,15 +576,28 @@ def test_every_variant_carries_its_value_in_the_part(profile: Profile) -> None:
         assert with_mark > without * 0.95, "sie frisst das Teil nicht auf"
 
 
-def test_the_mark_stays_in_the_top_of_the_part(profile: Profile) -> None:
+@pytest.mark.parametrize("layer_height,use_settings", [(0.1, False), (0.2, False), (0.4, True)])
+def test_the_mark_stays_in_the_top_of_the_part(
+    profile: Profile, layer_height: float, use_settings: bool
+) -> None:
     """Graviert wird von oben, und nur dort — Höhe und Boden bleiben, was sie waren.
 
     Gemessen an zwei Querschnitten: dicht unter der Oberkante fehlt Fläche, wo
     die Ziffern stehen; unter der Gravurtiefe ist die Platte wieder voll.
     """
     from app.core.slice.analysis import cross_section
+    from app.core.types import PrintSettings
 
     project = plate_project()
+    if use_settings:
+        settings = PrintSettings()
+        project.document.print_settings = dataclasses.replace(
+            settings, layers=dataclasses.replace(settings.layers, layer_height=layer_height)
+        )
+    else:
+        profile = dataclasses.replace(
+            profile, printer=dataclasses.replace(profile.printer, layer_height=layer_height)
+        )
 
     made = variants.build(
         project.document,
@@ -601,8 +614,9 @@ def test_the_mark_stays_in_the_top_of_the_part(profile: Profile) -> None:
     assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "der Boden auch"
 
     whole = 30.0 * 30.0
-    in_the_mark = cross_section(body, 4.10 - variants.MARK_DEPTH / 2.0)
-    below_it = cross_section(body, 4.10 - variants.MARK_DEPTH - 0.5)
+    expected_depth = 3.0 * layer_height
+    in_the_mark = cross_section(body, 4.10 - expected_depth * 0.75)
+    below_it = cross_section(body, 4.10 - expected_depth - 0.02)
     assert in_the_mark is not None and below_it is not None, "beide Ebenen treffen die Platte"
     assert in_the_mark.area < whole - 1.0, "in Höhe der Gravur fehlt Fläche"
     assert below_it.area == pytest.approx(whole, rel=1e-6), "darunter ist die Platte voll"

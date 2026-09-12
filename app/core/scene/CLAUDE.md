@@ -151,7 +151,10 @@ dieselbe Ausnahme wie beim Anordnen daneben: Was zurückkommt, ist ein
 Druckauftrag und kein Dokumentzustand (Regel 2).
 
 Unter der gesamten Schrift prüft `_marked` den Materialraum bis zur
-Gravurtiefe plus Mindestwandstärke des Profils. Fehlt dort Material, bleibt
+Gravurtiefe plus Mindestwandstärke des Profils. Die Tiefe entspricht drei
+Druckschichten einschließlich der im Projekt gewählten Schichthöhe; die
+kleinste Schrift ergibt sich aus ihrer Kontur und der schmalsten Druckbahn.
+Fehlt dort Material, bleibt
 das Teil mit `variants.no_mark` unverändert. Die Gesamthöhe allein reicht
 nicht: Auch ein hoher Hohlkörper kann eine dünne Decke haben.
 
