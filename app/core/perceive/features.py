@@ -457,9 +457,6 @@ SPHERE_MIN_CURVATURE_BALANCE = 0.5
 #: gemessenen Familien und ist weiterhin frei von Lage, Drehung und Maßstab.
 SPHERE_LOCAL_TOLERANCE = 0.002
 
-#: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
-#: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
-#: Einpassung und nicht die Fertigung.
 #: Um wie viel besser eine Kugel passen muss, um einen brauchbaren Kegelfit zu
 #: verdrängen — als Verhältnis der Rückstände.
 #:
@@ -524,6 +521,9 @@ CONE_SAME_ANGLE = 10.0
 #: gemeinsame Fit muss danach immer noch ``good`` sein.
 CONE_SAME_AXIS = 8.0
 
+#: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
+#: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
+#: Einpassung und nicht die Fertigung.
 SINK_AXIS_LIMIT = 2.0
 
 
