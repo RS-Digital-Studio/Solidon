@@ -28,7 +28,6 @@ from app.ui.overlay import (
     LEFT_MAX,
     LEFT_WIDTH,
     MARGIN,
-    NARROW_CARD_SHARE,
     RIGHT_MAX,
     RIGHT_WIDTH,
     OverlayHost,
@@ -264,12 +263,9 @@ def test_the_zones_sit_on_top_and_take_nothing_away(window: MainWindow) -> None:
 
     assert right.geometry().right() == width - MARGIN - 1
     assert right.geometry().top() == MARGIN
-    # **Die Enge-Schranke gilt auch für die Wunschbreite.** Seit die rechte
-    # Karte 510 Punkte will, überschreitet sie auf einem 1200 breiten Fenster
-    # die 42 Prozent aus :data: — und die sind es, die die
-    # Mitte als Griff auf die Ansicht freihalten. Geprüft wird deshalb der
-    # Wunsch **oder** die Schranke, je nachdem, welche zuerst greift.
-    assert right.geometry().width() == min(RIGHT_WIDTH, int(width * NARROW_CARD_SHARE))
+    # Der Anschluss nutzt dieselbe responsive Breite wie die Kartenplatzierung;
+    # die unabhängigen Maßgrenzen prüft die anschließende Breitenmatrix.
+    assert right.geometry().width() == card_width(RIGHT_WIDTH, RIGHT_MAX, width)
 
     # Die Werkzeugzeile ist so breit, wie sie sein muss, und liegt mittig.
     assert bottom.geometry().bottom() <= height - MARGIN
@@ -301,7 +297,7 @@ def test_the_work_cards_use_full_hd_and_grow_with_large_screens() -> None:
         )
 
 
-@pytest.mark.parametrize("width", (640, 800, 1200, 1920, 2560, 3072))
+@pytest.mark.parametrize("width", (640, 800, 1200, 1920, 2560, 3072, 3840))
 def test_the_overlay_matrix_keeps_every_zone_inside_and_the_viewport_whole(
     qt_app: QApplication, width: int
 ) -> None:

@@ -2067,6 +2067,7 @@ def test_the_minimum_system_versions_on_the_website_match_installer_and_bundle()
         "19044": "21H2",
         "19045": "22H2",
     }
+    assert build.group(1) in releases, "Neuen Windows-Build in der Versionszuordnung ergänzen."
     release = releases[build.group(1)]
     spec = SPEC.read_text(encoding="utf-8")
     mac = re.search(r'"LSMinimumSystemVersion": "(\d+)(?:\.\d+)?"', spec)

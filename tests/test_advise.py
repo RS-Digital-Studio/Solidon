@@ -260,7 +260,7 @@ def test_below_one_nozzle_line_the_slicer_check_is_still_required() -> None:
     findings = advise.warnings_for(settings, profile, result_with([0.0] * 20, min_width=thin))
 
     hits = [entry for entry in findings if entry.code == "settings.wall_below_nozzle"]
-    assert hits, "below the assumed minimum line width a warning must remain"
+    assert hits, "unterhalb der angesetzten Mindestbahnbreite muss die Warnung bleiben"
     assert hits[0].values["width_mm"] == thin
 
 
@@ -284,7 +284,7 @@ def test_above_two_nozzle_lines_the_advice_works_again() -> None:
 
 
 def test_the_outer_wall_is_checked_too() -> None:
-    """Geprüft wurden zwei von sechs Geschwindigkeiten.
+    """Geprüft wurden nur einzelne Geschwindigkeiten.
 
     Eine Stufe, die nur an der Außenwand zieht, kam damit ohne einen Satz
     durch — und die Außenwand ist die Bahn, die man sieht.

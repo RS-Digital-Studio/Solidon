@@ -410,9 +410,9 @@ def test_embedded_picker_fits_the_narrow_selection_dock(qt_app: QApplication) ->
     assert session.wait_for_idle()
     result = session.evaluate_now()
     window.object_tree.select_object(next(iter(result.scene.objects)))
-    # Offscreen hat synthetische Schriftmetriken. Der Einzelknopf bestimmt
-    # deshalb beide Seiten der Breitenzusage; die echten 244 Pixel werden
-    # zusätzlich auf der nativen Plattform geprüft.
+    # Offscreen hat synthetische Schriftmetriken. Geprüft wird mindestens
+    # 244 Pixel Breite, bei größeren Knopfmaßen entsprechend mehr. Das ist
+    # keine Messung einer festen nativen Fensterbreite.
     width = max(
         244, window.quick_filament.inventory_button.minimumSizeHint().width() + 2 * NORMAL + 20
     )

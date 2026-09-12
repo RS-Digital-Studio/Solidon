@@ -395,7 +395,6 @@ class PartSpec:
     """
     changes: tuple[PartChange, ...] = ()
     grip_from_profile: bool = True
-    """Ob ``grip=0`` das Materialübermaß meint; konstruktive Verengungen nicht."""
     feasible: Feasibility | None = None
     """Eine erklärte Bedingung **zwischen** Parametern, die keine Einzelgrenze
     ausdrücken kann: Gibt den fachlichen Grund zurück, wenn eine Kombination
@@ -407,6 +406,7 @@ class PartSpec:
     Gedächtnis „Bausteinbereich ist ein Produktionsvertrag“: bedingte
     Eigenschaften stehen als Metadaten am Baustein, nicht als Sonderfall im
     Prüfkern und nicht als stille Kappung im Baustein."""
+    """Ob ``grip=0`` das Materialübermaß meint; konstruktive Verengungen nicht."""
     source: str = "shipped"
     """``shipped``, ``user`` oder ``recipe`` — der Katalog weist die Herkunft
     aus (§24.5). ``user`` heißt weiter: eine ``.py`` aus dem Nutzerordner; ein

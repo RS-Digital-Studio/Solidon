@@ -2110,6 +2110,9 @@ def _a_part_placement(window, name: str):
         if flow._surface is not None and flow._tool is not None:
             break
         time.sleep(0.02)
+    assert flow._surface is not None and flow._tool is not None, (
+        "Die Bausteinplatzierung lieferte vor Ablauf der Wartezeit weder Fläche noch Werkzeug."
+    )
     for _ in range(20):
         QApplication.processEvents()
     return dialog, flow

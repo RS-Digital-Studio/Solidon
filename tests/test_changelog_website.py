@@ -38,7 +38,7 @@ def test_the_picker_offers_every_published_version(language: str) -> None:
     expected = tuple(entry.version for entry in released_only(changes.history(language), public))
 
     assert offered == expected
-    assert expected, "an empty picker would make the assertion above meaningless"
+    assert expected, "ohne Einträge sagt die Zusicherung darüber nichts"
     assert re.search(rf'<option value="{re.escape(public)}" selected>', text)
 
 
@@ -65,7 +65,7 @@ def test_a_version_that_cannot_be_downloaded_stays_off_the_page(
     assert '<option value="0.2.2" selected>0.2.2 — diese Version</option>' in text
     assert '<option value="0.3.0">' not in text
     assert 'data-version="0.2.2"' in text and 'data-version="0.3.0"' not in text
-    assert '<option value="0.2.1">' in text, "older versions stay — only newer ones go"
+    assert '<option value="0.2.1">' in text, "ältere Fassungen bleiben — nur neuere fallen weg"
 
 
 def test_a_missing_public_version_stops_with_the_next_action(

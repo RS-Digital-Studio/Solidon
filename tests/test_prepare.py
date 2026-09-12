@@ -3700,7 +3700,7 @@ def test_a_snap_fit_says_how_far_something_has_to_give() -> None:
     assert eintrag.values["at"] > 0.0, "und der Befund sagt, wo auf dem Weg es eng wird"
 
 
-def _plate_with_a_countersunk_bore(profile: Profile) -> tuple[SceneObject, str, str]:
+def _plate_with_a_countersunk_bore() -> tuple[SceneObject, str, str]:
     """Die gesenkte Platte aus dem Korpus, wie die Erkennung sie sieht.
 
     Aus der Datei und nicht selbst gebohrt: Die Kette aus Bohrung und Senkung
@@ -3715,7 +3715,6 @@ def _plate_with_a_countersunk_bore(profile: Profile) -> tuple[SceneObject, str, 
     bore = next(name for name, found in features.items() if found.kind == "hole")
     countersink = next(name for name, found in features.items() if found.kind == "cone")
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=features)
-    assert entry.mesh is not None and profile is not None
     return entry, bore, countersink
 
 
@@ -3730,7 +3729,7 @@ def test_removing_a_bore_asks_about_its_countersink(profile: Profile) -> None:
     Das ist keine Bestätigung vor einer rücknehmbaren Handlung (Regel 19): Es
     wird nicht gefragt, **ob** entfernt wird, sondern **was**.
     """
-    entry, bore, countersink = _plate_with_a_countersunk_bore(profile)
+    entry, bore, countersink = _plate_with_a_countersunk_bore()
 
     gefragt: list[tuple[str, list[str]]] = []
 
@@ -3792,7 +3791,7 @@ def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
     ``[hole_1, cone_1]`` samt berührtem fremden Rand meldet und danach nichts
     von beidem.
     """
-    entry, bore, countersink = _plate_with_a_countersunk_bore(profile)
+    entry, bore, countersink = _plate_with_a_countersunk_bore()
 
     import dataclasses
 

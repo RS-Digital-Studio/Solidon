@@ -1569,8 +1569,6 @@ def test_a_rigid_move_leaves_an_exact_body_exact(op: str, params: dict[str, obje
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
 
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen exakten Körper")
     profile = make_profile("centauri-carbon-2", "pla")
     project = new_project("centauri-carbon-2", "pla")
     document = project.document
@@ -1610,8 +1608,6 @@ def test_a_scaled_body_becomes_a_mesh_and_says_so() -> None:
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
 
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen exakten Körper")
     profile = make_profile("centauri-carbon-2", "pla")
     project = new_project("centauri-carbon-2", "pla")
     document = project.document
@@ -1678,8 +1674,6 @@ def test_a_radius_that_eats_the_wall_is_refused_instead_of_taking_the_process(
     die Absage — dass der Test überhaupt bis zu seiner Zusicherung kommt, ist
     die halbe Aussage.
     """
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen exakten Körper")
 
     with pytest.raises(GeometryError) as raised:
         edit.fillet(_hollow_box(), radius, "top")
@@ -1691,8 +1685,6 @@ def test_a_radius_that_eats_the_wall_is_refused_instead_of_taking_the_process(
 @pytest.mark.parametrize("radius", [0.8, 1.2, 1.4])
 def test_a_radius_that_fits_the_wall_still_works(radius: float) -> None:
     """Und was passt, geht weiter durch — der Schutz sperrt nicht das Übliche."""
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen exakten Körper")
 
     body = _hollow_box()
     turned = edit.fillet(body, radius, "top")
