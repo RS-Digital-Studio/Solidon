@@ -26,6 +26,7 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
@@ -663,9 +664,14 @@ def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
     Sekunde beim bloßen Zeigen (Befund Robert, 09.09.2026: „bei der Vorschau
     mit der Bohrung ist es noch relativ langsam").
     """
-    cached = raw._cache.cache.get(_ADJACENCY_KEY) if raw._cache.verify() is None else None
-    if isinstance(cached, dict):
-        return cached
+    try:
+        cache = raw._cache
+        cached = cache.cache.get(_ADJACENCY_KEY) if cache.verify() is None else None
+    except AttributeError, TypeError, KeyError:
+        cache = None
+    else:
+        if isinstance(cached, dict):
+            return cached
     _, inverse = np.unique(vertices, axis=0, return_inverse=True)
     faces = inverse[np.asarray(raw.faces, dtype=np.int64)]
     edges = np.sort(faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1)
@@ -679,7 +685,10 @@ def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
             first, second = entries
             adjacency.setdefault(first, []).append(second)
             adjacency.setdefault(second, []).append(first)
-    raw._cache[_ADJACENCY_KEY] = adjacency
+    if cache is not None:
+        # Die private Cacheform darf die berechnete Auskunft nicht verhindern.
+        with suppress(AttributeError, TypeError, KeyError):
+            cache[_ADJACENCY_KEY] = adjacency
     return adjacency
 
 

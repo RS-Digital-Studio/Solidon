@@ -19,6 +19,34 @@ def _top(mesh):
     return int(np.argmax(np.asarray(mesh.raw.face_normals)[:, 2]))
 
 
+@pytest.mark.parametrize("cache_kind", ["missing", "malformed", "read_only"])
+def test_original_face_adjacency_survives_an_unavailable_private_cache(cache_kind):
+    """Die exakten Originalkanten brauchen keine bestimmte private Cacheform."""
+    from types import SimpleNamespace
+
+    vertices = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)])
+    raw = SimpleNamespace(faces=np.array([(0, 1, 2), (3, 4, 5)]))
+    if cache_kind != "missing":
+        raw._cache = SimpleNamespace(
+            verify=lambda: None, cache=None if cache_kind == "malformed" else {}
+        )
+    assert placement._welded_adjacency(raw, vertices) == {0: [1], 1: [0]}
+
+
+def test_original_face_adjacency_cache_follows_mesh_changes():
+    """Ein Treffer wird wiederverwendet, ein neuer echter Spalt nicht überbrückt."""
+    raw = trimesh.Trimesh(
+        vertices=[(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)],
+        faces=[(0, 1, 2), (3, 4, 5)],
+        process=False,
+    )
+    first = placement._welded_adjacency(raw, raw.vertices)
+    assert first == {0: [1], 1: [0]}
+    assert placement._welded_adjacency(raw, raw.vertices) is first
+    raw.vertices[3, 0] += 0.001
+    assert placement._welded_adjacency(raw, raw.vertices) == {}
+
+
 @pytest.mark.parametrize("slotted", [False, True])
 def test_blind_feature_from_below_finds_its_actual_mouth(slotted):
     """Die kanonisch positive Achse verlegt die Mündung nicht auf den Sacklochboden."""

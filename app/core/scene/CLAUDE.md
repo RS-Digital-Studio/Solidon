@@ -9,6 +9,9 @@ Regeln: `.claude/rules/operationen.md`, für die Projektdatei zusätzlich
 Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der
 Sacklochboden ist deshalb keine Trägerfläche. `mouth_outline` gewinnt den
 Werkzeugumriss aus der konvexen Hülle der Mündungspunkte (§21.1).
+Die Nachbarschaft exakter Originalkanten nutzt den privaten Trimesh-Cache
+als Beschleunigung. Fehlt dessen Lese- oder Schreibschnittstelle, bleibt
+dieselbe Berechnung ohne Cache verfügbar; echte Spalten bleiben offen.
 
 Spulenbindungen in `PrintSettings` speichern die vollständige Druckfilament-
 Identität und eine lokale Kennung, niemals Pfade. `slot_profiles` bleibt eine
