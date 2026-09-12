@@ -85,6 +85,79 @@ FIGURE_PATTERN: Final = re.compile(r"!\[\]\(figure:([a-z0-9-]+)\)")
 #: ist, weiß das Handbuch. ``tests/test_manual.py`` hält Knopftext und
 #: Seitentitel zusammen.
 FIRST_MINUTES: Final = "start"
+SPACEMOUSE_ACCESS: Final = "spacemouse-access"
+
+_SPACEMOUSE_LINUX = _(
+    "**Linux (USB oder USB-Empfänger, mit systemd-logind)**\n\n"
+    "Ein gefundenes Gerät kann noch für Ihren Benutzer gesperrt sein. Unter "
+    "*3D-Maus-Hilfe → Anleitung kopieren* erhalten Sie die Befehle für genau "
+    "die erkannte Hersteller- und Produktkennung. Prüfen Sie diese vor dem "
+    "Ausführen im Terminal. Das Anlegen der udev-Regel benötigt einmalig "
+    "Administratorrechte; Solidon selbst läuft als normaler Benutzer. "
+    "Die Regel gibt den Zugriff nur dem aktiven, lokal angemeldeten Benutzer. "
+    "Stecken Sie das Gerät danach ab und wieder ein; Solidon sucht automatisch weiter.\n\n"
+    "Die Regel gilt für USB, auch mit USB-Empfänger. Bei Bluetooth zuerst per USB "
+    "verbinden und die Anleitung für dieses Gerät kopieren. Ohne systemd-logind "
+    "lassen Sie die benutzerbezogene Gerätefreigabe durch Ihre Systemverwaltung "
+    "einrichten. Andere Programme, die das Gerät exklusiv geöffnet haben, zuerst schließen."
+)
+_SPACEMOUSE_MAC = _(
+    "**macOS**\n\n"
+    "Installieren oder aktualisieren Sie 3DxWare von 3Dconnexion und aktivieren "
+    "Sie dessen Treibererweiterung. Ab macOS 15: *Systemeinstellungen → Allgemein "
+    "→ Anmeldeobjekte & Erweiterungen → Treibererweiterungen* öffnen und "
+    "*3DconnexionHelper* einschalten. Bis macOS 14: unter *Datenschutz & Sicherheit* "
+    "die blockierte Systemsoftware von *3DconnexionHelper* erlauben. Folgen Sie "
+    "den weiteren Hinweisen des Treiberinstallationsprogramms und starten Sie "
+    "Solidon danach neu. Die Anleitung des Herstellers steht unter "
+    "3dconnexion.com im Support unter „Enabling 3Dconnexion Extension After Installing the Driver“."
+)
+_SPACEMOUSE_WINDOWS = _(
+    "**Windows und andere Systeme**\n\n"
+    "Stecken Sie das Gerät ab und wieder ein. Schließen Sie andere Programme, "
+    "die es exklusiv verwenden könnten, und prüfen Sie den Anschluss sowie "
+    "die Geräte- und Treiberhinweise von 3Dconnexion. Solidon sucht automatisch weiter."
+)
+
+
+def spacemouse_access_help(platform: str, device: tuple[int, int] | None = None) -> str:
+    """Die Betriebssystemhilfe, optional mit einer gerätebezogenen USB-Freigabe.
+
+    Die Regel läuft vor systemds 73-seat-late.rules. Dessen uaccess-Builtin
+    vergibt die ACL an den aktiven Benutzer des Sitzplatzes, keine Freigabe
+    für alle Benutzer. Die Befehle werden nur angezeigt beziehungsweise kopiert.
+    """
+    if platform == "darwin":
+        return str(_SPACEMOUSE_MAC)
+    if not platform.startswith("linux"):
+        return str(_SPACEMOUSE_WINDOWS)
+    text = str(_SPACEMOUSE_LINUX)
+    if device is not None:
+        vendor, product = device
+        path = f"/etc/udev/rules.d/70-solidon-spacemouse-{vendor:04x}-{product:04x}.rules"
+        rule = (
+            f'SUBSYSTEM=="hidraw", ATTRS{{idVendor}}=="{vendor:04x}", '
+            f'ATTRS{{idProduct}}=="{product:04x}", TAG+="uaccess"'
+        )
+        text += (
+            f"\n\n```sh\nsudo tee {path} <<'EOF'\n{rule}\nEOF\n"
+            "sudo udevadm control --reload-rules\n```"
+        )
+    return text
+
+
+def _spacemouse_page() -> Page:
+    """Dieselbe Hilfe im Handbuch und im kopierbaren Gerätehinweis."""
+    return Page(
+        key=SPACEMOUSE_ACCESS,
+        title=_("Wenn die 3D-Maus nicht reagiert"),
+        summary=_(
+            "Ein erkanntes Gerät braucht Zugriff durch Solidon; hier steht der Weg zur Freigabe."
+        ),
+        body="\n\n".join(
+            spacemouse_access_help(platform) for platform in ("linux", "darwin", "win32")
+        ),
+    )
 
 
 #: Die geschriebenen Seiten, in der Reihenfolge, in der sie jemand liest.
@@ -242,7 +315,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "liegen vier weitere Belegungen, die Cura, Bambu Studio, Orca und "
             "PrusaSlicer, das CAD und Blender nachbilden; dort wählt die linke "
             "Taste wieder aus, und die Tastatur fliegt nicht. Eine 3D-Maus "
-            "(SpaceMouse) fährt dieselbe Kamera, sobald sie eingesteckt ist: "
+            "(SpaceMouse) fährt dieselbe Kamera, wenn Solidon das Gerät öffnen kann: "
             "Die Kappe ist das Teil — Schieben verschiebt es, Drehen dreht es, "
             "zu sich ziehen holt es näher, und eine Gerätetaste passt alles "
             "ein. Geschwindigkeit und Richtung stehen in den Einstellungen, "
@@ -2447,7 +2520,7 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         )
         for category in source.by_category()
     )
-    return INTRODUCTION + knowledge_pages() + generated
+    return (*INTRODUCTION, _spacemouse_page(), *knowledge_pages(), *generated)
 
 
 def find(key: str, registry: Registry | None = None) -> Page | None:

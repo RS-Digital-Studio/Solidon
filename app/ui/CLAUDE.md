@@ -175,6 +175,12 @@ Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des
 Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
+Ein gefundenes, aber nicht zugängliches Gerät zählt als gesehen. Der Leser
+unterscheidet die Zugriffssperre von einer leeren oder gescheiterten Suche;
+der Controller meldet sie einmal je Sitzung und sucht weiter. Das Fenster
+zeigt dazu einen Hilfezugang in der Statusleiste. Die kopierte Linux-Regel
+begrenzt `uaccess` auf die erkannte USB-Hersteller-/Produktkennung; weder
+globale Schreibrechte noch eine automatische Berechtigungsänderung gehören dazu.
 **`camera_step` hat drei Aufrufer, nicht einen:** die Kappe, das Kippen mit
 dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
 an allen dreien

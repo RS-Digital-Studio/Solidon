@@ -12,6 +12,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import inspect
+import sys
 import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -1915,6 +1916,7 @@ class MainWindow(QMainWindow):
                 ),
             )
         )
+        self.spacemouse.deviceBlocked.connect(self._spacemouse_blocked)
         self.viewport.measurementTaken.connect(self._on_measurement)
         self.viewport.sceneFailed.connect(self._viewport_failed)
         self.viewport.sceneApplied.connect(self._sync_section_controls)
@@ -2679,6 +2681,20 @@ class MainWindow(QMainWindow):
         self.usage_notice.choice.setMaximumWidth(180)
         self.usage_notice.changed.connect(self._refresh_inventory)
         bar.addPermanentWidget(self.usage_notice)
+        self.spacemouse_help = QToolButton(self)
+        self.spacemouse_help.setAutoRaise(True)
+        self.spacemouse_help.setText(tr("3D-Maus-Hilfe"))
+        self.spacemouse_help.setAccessibleName(tr("Hilfe zum Zugriff auf die 3D-Maus"))
+        self.spacemouse_help.setVisible(False)
+        help_menu = QMenu(self.spacemouse_help)
+        help_menu.addAction(
+            tr("Handbuch öffnen"), lambda: self.action_manual(manual.SPACEMOUSE_ACCESS)
+        )
+        help_menu.addAction(tr("Anleitung kopieren"), self._copy_spacemouse_help)
+        self.spacemouse_help.setMenu(help_menu)
+        self.spacemouse_help.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.spacemouse.deviceOpened.connect(self._spacemouse_opened)
+        bar.addPermanentWidget(self.spacemouse_help)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -5348,6 +5364,29 @@ class MainWindow(QMainWindow):
             window.show_page(page)
         window.raise_()
         window.activateWindow()
+
+    def _spacemouse_blocked(self) -> None:
+        """Den einmaligen Gerätehinweis mit einem bleibenden Hilfezugang verbinden."""
+        self.spacemouse_help.show()
+        self.announce(
+            tr(
+                "3D-Maus gefunden, aber nicht zugänglich. Unter „3D-Maus-Hilfe“ "
+                "steht der Weg zur Freigabe."
+            )
+        )
+
+    def _spacemouse_opened(self) -> None:
+        """Nach einer erfolgreichen Freigabe bleibt keine veraltete Sperrmeldung stehen."""
+        if not self.spacemouse_help.isHidden():
+            self.spacemouse_help.hide()
+            self.announce(tr("3D-Maus verbunden."))
+
+    def _copy_spacemouse_help(self) -> None:
+        """Die passende Anleitung kopieren; keine Geräteberechtigung selbst verändern."""
+        QApplication.clipboard().setText(
+            manual.spacemouse_access_help(sys.platform, self.spacemouse.blocked_device)
+        )
+        self.announce(tr("Anleitung für die 3D-Maus kopiert."))
 
     def action_about(self) -> None:
         AboutDialog(self).exec()

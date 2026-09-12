@@ -531,6 +531,8 @@ class HidReader:
         self._device: Any = None
         self._module: Any = None
         self._unavailable = False
+        self.blocked_device: tuple[int, int] | None = None
+        """Hersteller und Produkt eines gefundenen, aber nicht zugänglichen Geräts."""
 
     @property
     def is_open(self) -> bool:
@@ -550,6 +552,8 @@ class HidReader:
         """Die Bewegungsschnittstelle des ersten bekannten Geräts öffnen."""
         if self._device is not None:
             return True
+        previous = self.blocked_device
+        self.blocked_device = None
         hid = self._hid()
         if hid is None:
             return False
@@ -562,16 +566,28 @@ class HidReader:
                 # nicht die von Logitech, unter der auch Tastaturempfänger
                 # laufen.
                 candidates = [info for info in devices if info.get("vendor_id") == 0x256F]
-            if not candidates:
-                return False
-            device = hid.device()
-            device.open_path(candidates[0]["path"])
-            device.set_nonblocking(True)
         except (OSError, ValueError, KeyError) as problem:
-            _log.debug("3D mouse not opened: %s", problem)
+            _log.debug("3D mouse enumeration failed: %s", problem)
             return False
-        self._device = device
-        return True
+        for candidate in candidates:
+            device = None
+            try:
+                device = hid.device()
+                device.open_path(candidate["path"])
+                device.set_nonblocking(True)
+            except (OSError, ValueError, KeyError) as problem:
+                if device is not None:
+                    with contextlib.suppress(OSError, ValueError):
+                        device.close()
+                if self.blocked_device is None:
+                    self.blocked_device = (candidate["vendor_id"], candidate["product_id"])
+                    if self.blocked_device != previous:
+                        _log.warning("3D mouse found but not accessible: %s", problem)
+            else:
+                self._device = device
+                self.blocked_device = None
+                return True
+        return False
 
     def read(self) -> list[bytes]:
         """Was seit dem letzten Aufruf ankam — leer, wenn nichts."""
@@ -736,6 +752,11 @@ class DriverReader:
             return self._delegate.is_open
         return self._client != 0 and (self._devices > 0 or bool(self._pending))
 
+    @property
+    def blocked_device(self) -> tuple[int, int] | None:
+        """Auch ein verweigerter HID-Rückfall bleibt als Gerätefund sichtbar."""
+        return self._delegate.blocked_device if self._delegate is not None else None
+
     def open(self) -> bool:
         """Anmelden, wenn noch nicht geschehen; offen erst mit einem Gerät."""
         if self._delegate is not None:
@@ -866,6 +887,12 @@ class SpaceMouseController(QObject):
     deviceSeen = Signal()
     """Zum ersten Mal hat ein Gerät gemeldet — die Einstellungszeile darf erscheinen."""
 
+    deviceBlocked = Signal()
+    """Ein gefundenes Gerät ließ sich nicht öffnen — einmal je Sitzung mit Hilfe melden."""
+
+    deviceOpened = Signal()
+    """Das Gerät ist zugänglich; ein vorheriger Zugriffshinweis darf verschwinden."""
+
     def __init__(
         self,
         viewport: Any,
@@ -890,6 +917,7 @@ class SpaceMouseController(QObject):
         self._scan.timeout.connect(self._look_for_device)
         self._scan_wait = SCAN_MS
         self._was_active = False
+        self._blocked_notified = False
 
     def start(self) -> None:
         """Nach einem Gerät sehen — erst wenn das Fenster steht, dann immer seltener."""
@@ -909,6 +937,11 @@ class SpaceMouseController(QObject):
         """Der zuletzt gelesene Zustand der Kappe."""
         return self._motion
 
+    @property
+    def blocked_device(self) -> tuple[int, int] | None:
+        """Die Kennungen für eine auf das gefundene Gerät begrenzte Freigabe."""
+        return self._reader.blocked_device
+
     def _look_for_device(self) -> None:
         if self._reader.open():
             self._scan.stop()
@@ -918,7 +951,13 @@ class SpaceMouseController(QObject):
             # Eingesteckt heißt gesehen: Die Einstellungszeile soll da sein,
             # bevor jemand die Kappe zum ersten Mal anfasst.
             self._mark_seen()
+            self.deviceOpened.emit()
             return
+        if self.blocked_device is not None:
+            self._mark_seen()
+            if not self._blocked_notified:
+                self._blocked_notified = True
+                self.deviceBlocked.emit()
         self._scan.start(self._scan_wait)
         self._scan_wait = min(SCAN_MAX_MS, self._scan_wait * 2)
 

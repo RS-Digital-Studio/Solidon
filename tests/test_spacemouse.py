@@ -580,6 +580,180 @@ def test_the_settings_carry_the_four_fields_with_their_defaults() -> None:
     assert settings.spacemouse_seen is False
 
 
+def test_a_blocked_device_is_seen_once_and_recovers_without_restart(
+    qt_app: QApplication, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein echter Öffnungsfehler meldet Hilfe, hält die Suche aber am Leben."""
+    from app.ui.spacemouse import HidReader
+
+    allowed = False
+    closed: list[bool] = []
+
+    class Device:
+        def open_path(self, path: bytes) -> None:
+            if not allowed:
+                raise OSError("Permission denied")
+
+        def set_nonblocking(self, value: bool) -> None:
+            pass
+
+        def close(self) -> None:
+            closed.append(True)
+
+    reader = HidReader()
+    reader._module = SimpleNamespace(
+        enumerate=lambda: [{"vendor_id": 0x256F, "product_id": 0xC635, "path": b"hidraw1"}],
+        device=Device,
+    )
+    settings = _Settings()
+    controller = SpaceMouseController(_Viewport(), settings, lambda: None, reader=reader)
+    blocked: list[bool] = []
+    opened: list[bool] = []
+    controller.deviceBlocked.connect(lambda: blocked.append(True))
+    controller.deviceOpened.connect(lambda: opened.append(True))
+    try:
+        for _ in range(3):
+            controller._look_for_device()
+        assert settings.spacemouse_seen
+        assert controller.blocked_device == (0x256F, 0xC635)
+        assert blocked == [True] and len(closed) == 3
+        warnings = [
+            entry for entry in caplog.records if "found but not accessible" in entry.message
+        ]
+        assert len(warnings) == 1 and warnings[0].levelname == "WARNING"
+        assert controller._scan.isActive() and not controller._poll.isActive()
+        allowed = True
+        controller._look_for_device()
+        assert controller.blocked_device is None and opened == [True]
+        assert controller._poll.isActive() and not controller._scan.isActive()
+    finally:
+        controller.stop()
+
+
+def test_no_device_and_a_failed_scan_do_not_claim_a_blocked_device(qt_app: QApplication) -> None:
+    """Kein Gerät und kein lesbarer Bus sind keine festgestellte Gerätesperre."""
+    from app.ui.spacemouse import HidReader
+
+    reader = HidReader()
+    settings = _Settings()
+    controller = SpaceMouseController(_Viewport(), settings, lambda: None, reader=reader)
+    blocked: list[bool] = []
+    controller.deviceBlocked.connect(lambda: blocked.append(True))
+    try:
+        reader._module = SimpleNamespace(enumerate=list)
+        controller._look_for_device()
+
+        def inaccessible_bus() -> list[dict[str, Any]]:
+            raise OSError("Cannot enumerate devices")
+
+        reader._module = SimpleNamespace(enumerate=inaccessible_bus)
+        controller._look_for_device()
+        assert not blocked and not settings.spacemouse_seen
+        assert controller.blocked_device is None
+    finally:
+        controller.stop()
+
+
+def test_a_blocked_first_interface_does_not_hide_an_accessible_device() -> None:
+    """Bei mehreren Treffern zählt eine wirklich geöffnete Schnittstelle."""
+    from app.ui.spacemouse import HidReader
+
+    class Device:
+        def open_path(self, path: bytes) -> None:
+            if path == b"blocked":
+                raise OSError("Device busy")
+
+        def set_nonblocking(self, value: bool) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    reader = HidReader()
+    reader._module = SimpleNamespace(
+        enumerate=lambda: [
+            {"vendor_id": 0x256F, "product_id": 0xC635, "path": path}
+            for path in (b"blocked", b"available")
+        ],
+        device=Device,
+    )
+    try:
+        assert reader.open() and reader.blocked_device is None
+    finally:
+        reader.close()
+
+
+def test_driver_fallback_keeps_the_blocked_device_visible() -> None:
+    """Ein nicht verfügbarer Mac-Treiber verdeckt keine HID-Zugriffssperre."""
+    from app.ui.spacemouse import HidReader
+
+    class Blocked(HidReader):
+        def open(self) -> bool:
+            self.blocked_device = (0x256F, 0xC635)
+            return False
+
+    reader = DriverReader(loader=lambda: None, fallback=Blocked())
+    assert not reader.open()
+    assert reader.blocked_device == (0x256F, 0xC635)
+    reader.close()
+
+
+def test_the_linux_help_limits_access_to_the_detected_usb_device() -> None:
+    """Die kopierte Regel öffnet weder alle Eingabegeräte noch alle Benutzer."""
+    from app.core import manual
+
+    text = manual.spacemouse_access_help("linux", (0x046D, 0xC626))
+    assert 'ATTRS{idVendor}=="046d"' in text and 'ATTRS{idProduct}=="c626"' in text
+    assert 'SUBSYSTEM=="hidraw"' in text and 'TAG+="uaccess"' in text
+    assert "70-solidon-spacemouse-046d-c626.rules" in text
+    assert "udevadm control --reload-rules" in text
+    assert "0666" not in text and "chmod" not in text
+    assert "sudo tee" not in manual.spacemouse_access_help("linux")
+    assert "Treibererweiterungen" in manual.spacemouse_access_help("darwin")
+    assert "udev" not in manual.spacemouse_access_help("win32")
+    page = manual.find(manual.SPACEMOUSE_ACCESS)
+    assert page is not None and "systemd-logind" in str(page.body)
+
+
+def test_the_blocked_mouse_notice_opens_help_and_copies_the_device_rule(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Hinweis steht im vorhandenen Fenster und seine beiden Wege funktionieren."""
+    from app.core import manual
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.spacemouse import HidReader
+
+    class Blocked(HidReader):
+        def open(self) -> bool:
+            self.blocked_device = (0x256F, 0xC635)
+            return False
+
+    window = MainWindow(Session(), UiSettings())
+    pages: list[str] = []
+    monkeypatch.setattr(window, "action_manual", pages.append)
+    monkeypatch.setattr("app.ui.main_window.sys", SimpleNamespace(platform="linux"))
+    window.spacemouse._reader = Blocked()
+    try:
+        window.spacemouse._look_for_device()
+        assert not window.spacemouse_help.isHidden()
+        assert "nicht zugänglich" in window._announcement
+        menu = window.spacemouse_help.menu()
+        assert menu is not None
+        menu.actions()[0].trigger()
+        assert pages == [manual.SPACEMOUSE_ACCESS]
+        menu.actions()[1].trigger()
+        assert 'ATTRS{idProduct}=="c635"' in QApplication.clipboard().text()
+        assert "kopiert" in window._announcement
+        window.spacemouse.deviceOpened.emit()
+        assert window.spacemouse_help.isHidden()
+        assert "verbunden" in window._announcement
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_the_settings_row_appears_only_after_a_device_was_seen(qt_app: QApplication) -> None:
     """Kein Gerät, keine Spur — ab dem ersten Gerät bleibt die Zeile, auch abgezogen."""
     from app.ui.settings import UiSettings

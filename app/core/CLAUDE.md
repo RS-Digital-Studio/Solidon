@@ -92,7 +92,9 @@ die Passung an dieselbe Transaktion.
 
 **Dokumentation, ohne Qt gezeichnet:**
 
-`manual.py` (Handbuch: geschriebene Seiten plus Referenz aus dem Register) ·
+`manual.py` (Handbuch: geschriebene Seiten plus Referenz aus dem Register;
+`spacemouse_access_help` liefert außerdem die kopierbare Betriebssystemhilfe,
+mit gerätebezogener USB-Regel nur bei bekannter Hersteller-/Produktkennung) ·
 `figures.py` (Abbildungskatalog) · `drawing.py` (SVG: Maßlinien, Schemata,
 Netzprojektion) · `markup.py` (Markdown → HTML, nur die selbst erzeugte
 Teilmenge) · `examples.py` · `tour.py`
