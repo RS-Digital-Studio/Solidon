@@ -4202,6 +4202,7 @@
   "Vergrößert die Bohrung um den Wert aus dem Materialprofil.": "Alarga o furo pelo valor do perfil de material.",
   "Verjüngung": "Conicidade",
   "Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.": "Ligados: o furo e o escareamento são deslocados em conjunto.",
+  "Verknüpft: {count} Abschnitte dieser Öffnung werden gemeinsam verschoben.": "Vinculadas: {count} seções desta abertura serão movidas juntas.",
   "Verknüpfte Quellen brauchen einen gespeicherten Projektordner.": "As fontes ligadas precisam de uma pasta de projeto guardada.",
   "Verlauf": "Histórico",
   "Verlauf zeigen": "Mostrar o histórico",

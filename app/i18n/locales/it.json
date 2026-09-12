@@ -4202,6 +4202,7 @@
   "Vergrößert die Bohrung um den Wert aus dem Materialprofil.": "Allarga il foro del valore preso dal profilo del materiale.",
   "Verjüngung": "Rastremazione",
   "Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.": "Collegati: il foro e la svasatura vengono spostati insieme.",
+  "Verknüpft: {count} Abschnitte dieser Öffnung werden gemeinsam verschoben.": "Collegate: {count} sezioni di questa apertura verranno spostate insieme.",
   "Verknüpfte Quellen brauchen einen gespeicherten Projektordner.": "Le origini collegate hanno bisogno di una cartella di progetto salvata.",
   "Verlauf": "Cronologia",
   "Verlauf zeigen": "Mostra la cronologia",

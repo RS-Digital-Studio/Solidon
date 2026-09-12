@@ -483,7 +483,7 @@ def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplicatio
         if any(label.text() == "Merkmal verschieben" for label in row.findChildren(QLabel))
     )
     text = spoken(move)
-    assert "Bohrung und Senkung" in text
+    assert "3 Abschnitte dieser Öffnung" in text
     assert "gemeinsam verschoben" in text
 
 
@@ -560,7 +560,7 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
         if any(label.text() == "Merkmal verschieben" for label in row.findChildren(QLabel))
     )
     text = spoken(move)
-    assert "Bohrung und Senkung" in text
+    assert "2 Abschnitte dieser Öffnung" in text
     assert "gemeinsam verschoben" in text
 
 

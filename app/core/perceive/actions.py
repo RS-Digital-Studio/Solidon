@@ -489,7 +489,10 @@ def _note_for(
         )
     if not linked:
         return ""
-    return _("Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.")
+    return _(
+        "Verknüpft: {count} Abschnitte dieser Öffnung werden gemeinsam verschoben.",
+        count=len(linked),
+    )
 
 
 def instead_of(op: str, kind: str) -> Any:
@@ -540,10 +543,7 @@ def reason_against(op: str, kind: str) -> TranslatableText | None:
 
 def _spec_or_none(name: str) -> Any:
     """Der Registereintrag, oder ``None``, wenn es ihn (noch) nicht gibt."""
-    try:
-        return REGISTRY.get(name)
-    except Exception:
-        return None
+    return REGISTRY.get(name) if REGISTRY.has(name) else None
 
 
 def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
@@ -581,7 +581,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
     """
     from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
 
-    lage = frozenset(PART_PLACEMENT_PARAMS)
+    placement_params = frozenset(PART_PLACEMENT_PARAMS)
     schema = {entry.name: entry for entry in spec.params.spec()}
     values = dict(getattr(operation, "params", {}) or {})
 
@@ -607,7 +607,9 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
         return tuple(fields)
 
     measures = tuple(
-        name for name, entry in schema.items() if entry.placement == "front" and name not in lage
+        name
+        for name, entry in schema.items()
+        if entry.placement == "front" and name not in placement_params
     )
     placement = tuple(name for name in ("x", "y", "z") if name in schema)
 

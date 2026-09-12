@@ -1863,6 +1863,60 @@ def test_the_actions_of_a_bore_come_with_their_measured_values() -> None:
     assert by_op["remove_feature"].fields == (), "eine Handlung ohne Felder ist ein Knopf"
 
 
+@pytest.mark.parametrize("count", (2, 3))
+def test_the_move_note_counts_the_actual_cavity_sections(count: int) -> None:
+    """Stufenbohrungen nennen ihre zwei oder drei Zylinder, keine erfundene Senkung."""
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.relations import cavity_chains
+
+    load_operations()
+    contour = [[12.0, 0.0], [12.0, 4.0 * count], [2.0 + count, 4.0 * count]]
+    for index in range(count, 0, -1):
+        contour.append([2.0 + index, 4.0 * (index - 1)])
+        if index > 1:
+            contour.append([1.0 + index, 4.0 * (index - 1)])
+    contour.append([12.0, 0.0])
+    mesh = MeshData.of(trimesh.creation.revolve(contour, sections=48))
+    features = detect(mesh)
+    chains = cavity_chains(features, mesh)
+    assert len(chains) == 1
+    chain = chains[0]
+    assert len(chain) == count
+    assert {feature.kind for feature in chain} == {"hole"}
+
+    for feature in chain:
+        move = next(
+            action
+            for action in actions_for(feature, features, mesh=mesh)
+            if action.op == "move_feature"
+        )
+        assert str(move.note) == (
+            f"Verknüpft: {count} Abschnitte dieser Öffnung werden gemeinsam verschoben."
+        )
+
+
+def test_feature_actions_do_not_swallow_an_unexpected_registry_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein kaputter vorhandener Eintrag ist keine noch nicht registrierte Operation."""
+    from app.core.bootstrap import load_operations
+    from app.core.perceive import actions
+
+    load_operations()
+    assert actions._spec_or_none("absent_operation") is None
+    original_get = actions.REGISTRY.get
+
+    def broken_get(name: str):
+        if name == "move_feature":
+            raise RuntimeError("registry broken")
+        return original_get(name)
+
+    monkeypatch.setattr(actions.REGISTRY, "get", broken_get)
+    bore = Feature(id="hole_1", kind="hole", provenance="detected", params={"diameter": 6.0})
+    with pytest.raises(RuntimeError, match="registry broken"):
+        actions_for(bore)
+
+
 def test_an_edge_loop_is_told_why_nothing_applies() -> None:
     """Was nicht gilt, kommt **mit** — als Satz, nicht als Lücke.
 

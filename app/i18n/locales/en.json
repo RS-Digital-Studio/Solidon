@@ -4202,6 +4202,7 @@
   "Vergrößert die Bohrung um den Wert aus dem Materialprofil.": "Widens the bore by the value from the material profile.",
   "Verjüngung": "Taper",
   "Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.": "Linked: The bore and countersink move together.",
+  "Verknüpft: {count} Abschnitte dieser Öffnung werden gemeinsam verschoben.": "Linked: {count} sections of this opening will move together.",
   "Verknüpfte Quellen brauchen einen gespeicherten Projektordner.": "Linked sources need a saved project folder.",
   "Verlauf": "History",
   "Verlauf zeigen": "Show the history",
