@@ -855,6 +855,8 @@ class UsageNotice(QWidget):
         self.requests: dict[str, UsageRequest] = {}
         self._pending: dict[str, UsageRequest] = {}
         self._booked: set[str] = set()
+        self._problems: dict[str, str] = {}
+        self._active = ""
         self._dialogs: list[UsageDialog] = []
         self._tasks = _UsageTasks(self)
         self._tasks.completed.connect(self._completed)
@@ -869,11 +871,19 @@ class UsageNotice(QWidget):
         self.review = QPushButton(tr("Filament abziehen …"), self)
         self.review.clicked.connect(self._review)
         self.choice.currentIndexChanged.connect(self._sync_review)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(0, TIGHT, 0, TIGHT)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, TIGHT, 0, TIGHT)
+        layout.setSpacing(TIGHT)
+        row = QHBoxLayout()
         row.setSpacing(NORMAL)
         row.addWidget(self.choice, 1)
         row.addWidget(self.review)
+        layout.addLayout(row)
+        self.state = QLabel("", self)
+        self.state.setTextFormat(Qt.TextFormat.PlainText)
+        self.state.setWordWrap(True)
+        self.state.hide()
+        layout.addWidget(self.state)
         self.hide()
 
     def offer(self, request: UsageRequest, *, auto_book: bool = True) -> None:
@@ -904,11 +914,15 @@ class UsageNotice(QWidget):
             return
         key = next(iter(self._pending))
         request = self._pending.pop(key)
+        self._active = key
+        self._problems.pop(key, None)
         self.review.setEnabled(False)
         self.review.setText(tr("Bestand wird geprüft …"))
         self._tasks.run(partial(_auto_book, request))
+        self._sync_review()
 
     def _completed(self, result: object) -> None:
+        self._active = ""
         if result is not None:
             self._booked.add(cast(filaments.InventoryBooking, result).fingerprint)
             self.changed.emit()
@@ -917,6 +931,11 @@ class UsageNotice(QWidget):
 
     def _sync_review(self, _index: int = -1) -> None:
         """Die Handlung gehört zur ausgewählten Ausgabe, nicht zum letzten Arbeiterergebnis."""
+        problem = self._problems.get(self.choice.currentData(), "")
+        self.state.setText(problem)
+        self.state.setVisible(bool(problem))
+        self.review.setToolTip(problem)
+        self.review.setAccessibleDescription(problem)
         busy = self._tasks.worker is not None
         self.review.setEnabled(not busy)
         self.review.setText(
@@ -930,8 +949,7 @@ class UsageNotice(QWidget):
         )
 
     def _rejected(self, problem: object) -> None:
-        self.review.setToolTip(str(problem))
-        self.review.setAccessibleDescription(str(problem))
+        self._problems[self._active] = str(problem)
         self._completed(None)
 
     def _review(self) -> None:
@@ -943,6 +961,7 @@ class UsageNotice(QWidget):
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 self._booked.add(request.fingerprint)
+                self._problems.pop(request.fingerprint, None)
                 self._sync_review()
                 self.changed.emit()
         finally:

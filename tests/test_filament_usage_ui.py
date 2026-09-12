@@ -10,7 +10,7 @@ from time import monotonic
 
 import pytest
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QLabel
 
 from app.core.filament_usage import UsageLine, UsageRequest, from_gcode
 from app.core.knowledge import filaments
@@ -253,6 +253,69 @@ def test_notice_action_follows_the_selected_outputs_booking_state() -> None:
     notice.choice.setCurrentIndex(notice.choice.findData(pending.fingerprint))
     assert notice.review.text() == "Filament abziehen …"
     assert len(filaments.bookings()) == 1
+
+
+@pytest.mark.parametrize("recovery", ["review", "automatic"])
+def test_automatic_booking_error_stays_visible_with_its_output_until_corrected(
+    monkeypatch: pytest.MonkeyPatch, recovery: str
+) -> None:
+    """Eine verspätete Lagerabsage gehört zur Ausgabe und bleibt am Buchungsweg lesbar."""
+    entry = _spool(10)
+    failed = _request(entry)
+    other = replace(_request(None), fingerprint="other-output", project_name="Deckel")
+    original = usage_ui._auto_book
+    entered, released = Event(), Event()
+
+    def delayed(request: UsageRequest):
+        entered.set()
+        assert released.wait(3)
+        return original(request)
+
+    monkeypatch.setattr(usage_ui, "_auto_book", delayed)
+    notice = UsageNotice(UiSettings(inventory_booking_mode="auto"))
+    try:
+        notice.offer(failed)
+        assert entered.wait(1)
+        notice.offer(other, auto_book=False)
+    finally:
+        released.set()
+        _wait(notice)
+
+    def visible_error() -> str:
+        return "\n".join(label.text() for label in notice.findChildren(QLabel) if label.isVisible())
+
+    assert not visible_error()
+    assert notice.review.toolTip() == ""
+    notice.choice.setCurrentIndex(notice.choice.findData(failed.fingerprint))
+    assert "Bestand" in visible_error()
+    assert notice.review.isEnabled()
+    assert "Bestand" in notice.review.accessibleDescription()
+    notice.choice.setCurrentIndex(notice.choice.findData(other.fingerprint))
+    assert not visible_error()
+    notice.choice.setCurrentIndex(notice.choice.findData(failed.fingerprint))
+    assert "Bestand" in visible_error()
+    assert filaments.bookings() == ()
+
+    filaments.set_remaining(entry.identifier, 100)
+    if recovery == "review":
+
+        def confirm(dialog: UsageDialog) -> int:
+            _wait(dialog)
+            assert dialog.request == failed
+            dialog.book_button.click()
+            _wait(dialog)
+            return dialog.result()
+
+        monkeypatch.setattr(UsageDialog, "exec", confirm)
+        notice.review.click()
+    else:
+        notice.offer(failed)
+        _wait(notice)
+    assert not visible_error()
+    assert notice.review.toolTip() == ""
+    assert notice.review.accessibleDescription() == ""
+    assert notice.review.text() == "Buchung ansehen …"
+    assert _remaining(entry) == pytest.approx(58)
 
 
 def test_unknown_material_is_not_a_matching_spool_suggestion() -> None:
