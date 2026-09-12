@@ -737,6 +737,15 @@ def evaluate(
     )
 
 
+#: Die Parameterarten, deren Wert eine Quellenkennung ist — was eine
+#: Operation über ``ctx.sources`` liest. Jede davon gehört mit ihrer
+#: **Inhaltsprüfsumme** in den Cache-Schlüssel, nicht mit ihrem Namen: Jedes
+#: Projekt nennt sein erstes Bild ``src_1``. Bis zum 05.09.2026 stand hier nur
+#: ``source``, und ``displace_image`` liest sein Bild als ``image`` — zwei
+#: Projekte mit verschiedenen Bildern bekamen aus dem Plattencache dasselbe
+#: Relief, mit ``complete=True`` (Gesamtreview, CORE-11).
+SOURCE_KINDS: Final = frozenset({"source", "image"})
+
 #: Welcher Befund welchen aufhebt: der Schlüssel wird gestrichen, sobald einer
 #: aus seiner Menge an einem **späteren** Schritt steht.
 #:
@@ -751,15 +760,6 @@ def evaluate(
 #: beschreiben einen Zustand, den es nicht mehr gibt. Als Hinweis wären sie
 #: nicht milder, sondern falsch. Was übrig bleibt, ist der Satz des Schritts,
 #: der es behoben hat — und der erzählt die ganze Geschichte.
-#: Die Parameterarten, deren Wert eine Quellenkennung ist — was eine
-#: Operation über ``ctx.sources`` liest. Jede davon gehört mit ihrer
-#: **Inhaltsprüfsumme** in den Cache-Schlüssel, nicht mit ihrem Namen: Jedes
-#: Projekt nennt sein erstes Bild ``src_1``. Bis zum 05.09.2026 stand hier nur
-#: ``source``, und ``displace_image`` liest sein Bild als ``image`` — zwei
-#: Projekte mit verschiedenen Bildern bekamen aus dem Plattencache dasselbe
-#: Relief, mit ``complete=True`` (Gesamtreview, CORE-11).
-SOURCE_KINDS: Final = frozenset({"source", "image"})
-
 SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     "ingest.not_watertight": frozenset({"repair.holes_filled"}),
     "ingest.small_components": frozenset({"repair.components_removed"}),

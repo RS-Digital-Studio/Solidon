@@ -55,8 +55,8 @@ DEFAULT_GAP = 8.0
 #: Vermutungen (§28.3 nennt vier).
 MAX_VARIANTS = 12
 
-#: Wie tief der Wert in die Oberseite graviert wird. Drei Schichten zu 0,2 mm:
-#: tief genug, dass die Zahl nach dem Abkühlen noch zu lesen ist. Darunter
+#: Wie tief der Wert in die Oberseite graviert wird, in Millimetern und
+#: unabhängig vom Druckraster. Die Tiefe hält die Zahl nach dem Abkühlen lesbar. Darunter
 #: muss die Mindestwandstärke des Profils vollständig stehen bleiben.
 MARK_DEPTH = 0.6
 

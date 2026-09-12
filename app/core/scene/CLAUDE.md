@@ -94,7 +94,7 @@ Speichern und Wiederöffnen. Erst die Anzeige löst die gewählte Sprache auf.
 |---|---|
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5). `OperationDraft` ist der Schritt, bevor er zählt |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5) — **opt-in je Operation**: wer keine Kumulationsregel hat, bekommt einen eigenen Schritt |
-| `evaluate.py` | Die Auswertung (§15.1) — 1 500 Zeilen, das Herz |
+| `evaluate.py` | Die Auswertung (§15.1) |
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, im Speicher und auf der Platte |
 | `hashing.py` | Stabile Hashes: `operation_hash()`, `object_hash()`, `profile_key()` |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
@@ -177,7 +177,7 @@ erneut versuchen — und `split_and_retry` daneben, dasselbe Muster mit *In
 Einzelteile zerlegen* statt der Reparatur, beide über `_retried_after`),
 `project.py` und `migrations.py` (keine absoluten Pfade, kein Code, die
 fünf Schritte eines Formatwechsels). Die Dreiecksgrenze der
-Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `perceive/`.
+Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `evaluate.py`.
 
 Bedingte Passungen speichern `when_positive=(operation_id, parameter_name)`.
 `fits.pair_problem` prüft die fachliche Eignung für die Auswertung und die
