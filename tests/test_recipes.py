@@ -1044,6 +1044,118 @@ def test_a_draft_opens_when_its_dependencies_are_in_the_catalogue(profile: Profi
     assert [entry.op for entry in project.document.ops] == ["create_box"]
 
 
+@pytest.mark.parametrize("nested", [False, True], ids=["direkt", "verschachtelt"])
+def test_a_draft_keeps_embedded_dependency_versions(profile: Profile, nested: bool) -> None:
+    """Öffnen und erneutes Verpacken erhalten die eingebetteten Maße.
+
+    Ein gleichnamiger lokaler Unterbaustein ist absichtlich doppelt so breit.
+    Auch eine weitere Verschachtelung darf dessen Version nicht übernehmen.
+    """
+    import app.core.registry as registry_module
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.history import History
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.types import DocumentChange, DocumentState, Transaction
+
+    def box(name: str, width: float) -> recipe.Recipe:
+        return recipe.Recipe(
+            name=name,
+            title="Unterbaustein",
+            group="structure",
+            document=Document(
+                format_version=FORMAT_VERSION,
+                app_version="test",
+                ops=[
+                    Operation(
+                        id=1,
+                        op="create_box",
+                        outputs=("obj_1",),
+                        params={"width": width, "depth": 4.0, "height": 4.0},
+                    )
+                ],
+            ),
+            features={"top": "face_top"},
+        )
+
+    def attached(name: str, child: str) -> recipe.Recipe:
+        result = box(name, 10.0)
+        result.document.ops[0] = dataclasses.replace(
+            result.document.ops[0], params={"width": 10.0, "depth": 10.0, "height": 10.0}
+        )
+        result.document.ops.append(
+            Operation(
+                id=2,
+                op=part_ops.op_name(child),
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"x": 8.0, "z": 4.0},
+            )
+        )
+        return result
+
+    parts, registry = PartRegistry(), Registry()
+    for operation in registry_module.REGISTRY.all():
+        registry.register(operation)
+    old = box("draft_leaf", 10.0)
+    local = box(old.name, 20.0)
+    recipe.register(local, parts, registry)
+    dependencies = {old.name: recipe.to_data(old)}
+    child = old.name
+    if nested:
+        middle = attached("draft_middle", old.name)
+        dependencies[middle.name] = recipe.to_data(middle)
+        recipe.register(middle, parts, registry)
+        child = middle.name
+    outer = dataclasses.replace(attached("draft_outer", child), dependencies=dependencies)
+    operation = outer.document.ops[-1]
+    earlier = dataclasses.replace(operation, params={"x": 6.0, "z": 4.0})
+    outer.document.transactions.append(
+        Transaction(
+            id="t1",
+            title="Unterbaustein versetzt",
+            ops=(),
+            changes=DocumentChange(
+                before=DocumentState(edited_ops={operation.id: earlier}),
+                after=DocumentState(edited_ops={operation.id: operation}),
+            ),
+        )
+    )
+    original = recipe.file_data(outer)
+    expected = recipe.build(outer, profile=profile, registry=registry).mesh.volume
+    if not nested:
+        assert expected == pytest.approx(1128.0)
+    previous = {entry.name: entry.version for entry in parts.all()}
+
+    project = recipe.draft(outer, parts, registry)
+    opened = evaluate(project.document, profile, registry=registry)
+
+    assert opened.complete
+    assert opened.scene.objects["obj_1"].mesh.volume == pytest.approx(expected)
+    assert recipe.file_data(outer) == original
+    assert all(parts.get(name).version == version for name, version in previous.items())
+    bound = project.document.ops[-1].op
+    history = History(project.document)
+    history.undo()
+    assert project.document.ops[-1].op == bound
+    assert project.document.ops[-1].params["x"] == pytest.approx(6.0)
+    history.redo()
+    assert project.document.ops[-1].op == bound
+    assert evaluate(project.document, profile, registry=registry).scene.objects[
+        "obj_1"
+    ].mesh.volume == pytest.approx(expected)
+    before_reopening = len(parts.all())
+    assert recipe.draft(outer, parts, registry).document.ops[-1].op == bound
+    assert len(parts.all()) == before_reopening
+    travelling = recipe.for_container(project.document, parts)
+    assert travelling
+    packed = recipe.with_dependencies(
+        dataclasses.replace(outer, document=project.document, dependencies={}), parts
+    )
+    assert recipe.build(packed, profile=profile, registry=registry).mesh.volume == pytest.approx(
+        expected
+    )
+
+
 def test_an_edited_import_stays_an_import(profile: Profile) -> None:
     """Die Quittung belegt die Reise, nicht den Inhalt (§32).
 

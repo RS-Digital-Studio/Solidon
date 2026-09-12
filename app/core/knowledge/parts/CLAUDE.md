@@ -59,6 +59,10 @@ Kopie, damit ein Entwurf den Katalogeintrag nicht schon beim Bearbeiten
 ändert. Der Entwurf trägt keinen Dateipfad, `Session.open_draft` merkt sich
 die Herkunft am Dokument, und der Rezeptdialog belegt daraus seine Felder vor.
 Ein Rezept mit Beilagen lässt sich nur öffnen, wenn diese im Katalog stehen.
+Weicht die eingebettete Version ab, erhält sie nach dem mitgereisten
+Namensvertrag einen eigenen Eintrag. Der Entwurf bindet seine Operationen und
+Undo-Fassungen an diesen Namen. Jeder direkte Unterbaustein nimmt seine
+transitiven Beilagen mit; lokale Einträge und Rezeptquelldaten bleiben erhalten.
 
 ## Rezept gegen `.py` — der Unterschied ist die Sicherheit
 

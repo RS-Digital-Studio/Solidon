@@ -1954,7 +1954,9 @@ def capture(
     return recipe
 
 
-def draft(recipe: Recipe, parts: PartRegistry | None = None) -> Project:
+def draft(
+    recipe: Recipe, parts: PartRegistry | None = None, registry: Registry | None = None
+) -> Project:
     """Das Rezept zurück in ein bearbeitbares Projekt (E6, RM-147).
 
     Der Gegenweg zu :func:`capture`. Bis hierher galt „Ändern heißt neu
@@ -1973,15 +1975,15 @@ def draft(recipe: Recipe, parts: PartRegistry | None = None) -> Project:
     Projekt. Was aus ihm wird, entscheidet der Rezeptdialog — ein zweiter
     Baustein unter neuem Namen oder der Ersatz dieses einen.
 
-    **Beilagen müssen im Katalog stehen.** Ein Rezept, das andere Rezepte
-    mitbringt, löst sie beim Bauen über ein privates Register auf
-    (:func:`dependency_registry`); ein Dokument im Fenster hat dieses Register
-    nicht, und seine Schritte fänden ihre Operation nicht. Gesagt wird das
-    hier und nicht als Auswertungsfehler nach dem Öffnen — dort stünde der
-    Kunde vor einem Entwurf, der aus Gründen anhält, die nichts mit seiner
-    Arbeit zu tun haben.
+    **Beilagen müssen im Katalog stehen.** Abweichende eingebettete Fassungen
+    erhalten wie mitgereiste Rezepte einen freien Namen neben dem lokalen
+    Stand. Der Entwurf verweist auf diese Fassung, einschließlich seiner
+    gespeicherten Undo-Seiten. Verschachtelte Beilagen behalten ihre eigenen
+    eingebetteten Versionen; Speichern und erneutes Erfassen nehmen sie mit.
     """
-    from app.core.knowledge.parts.registry import PARTS
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.knowledge.parts.registry import PARTS, used_parts
+    from app.core.registry import REGISTRY
 
     # Träge wie ``shared`` weiter oben, und aus demselben Grund: ``project.py``
     # importiert dieses Modul für die Reise eines Rezepts in der Projektdatei.
@@ -2002,10 +2004,28 @@ def draft(recipe: Recipe, parts: PartRegistry | None = None) -> Project:
             constraint="missing",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    return Project(
-        document=document_from_data(document_to_data(recipe.document)),
-        sources=dict(recipe.payloads),
-    )
+    data = document_to_data(recipe.document)
+    names: dict[str, str] = {}
+    for name in sorted(set(used_parts(recipe.document.ops)) & recipe.dependencies.keys()):
+        child = from_data(recipe.dependencies[name])
+        # Der Container hält alle Beilagen flach. Der direkt verwendete
+        # Unterbaustein braucht für seine eigene Reise nur seine Nachkommen.
+        child = with_dependencies(
+            dataclasses.replace(child, dependencies=dict(recipe.dependencies)), known
+        )
+        arrived = _beside_existing(child, known)
+        if not known.has(arrived.name):
+            register(arrived, known, registry or REGISTRY, source=TRAVELLED_SOURCE)
+        names[op_name(name)] = op_name(arrived.name)
+
+    operations = list(data["ops"])
+    for transaction in data.get("transactions", []):
+        for state in (transaction.get("changes") or {}).values():
+            operations.extend((state.get("edited_ops") or {}).values())
+    for operation in operations:
+        if operation is not None:
+            operation["op"] = names.get(operation["op"], operation["op"])
+    return Project(document=document_from_data(data), sources=dict(recipe.payloads))
 
 
 def _mentions(ops: list[Any], source_id: str) -> bool:
@@ -2052,6 +2072,21 @@ def for_container(document: Document, parts: PartRegistry | None = None) -> dict
         nested = from_data(dict(spec.recipe_data))
         pending.extend(sorted(set(used_parts(nested.document.ops)) - visited))
     return travelling
+
+
+def _beside_existing(arrived: Recipe, parts: PartRegistry) -> Recipe:
+    """Findet denselben Stand oder einen freien Namen, ohne den Katalog zu ändern."""
+    if not parts.has(arrived.name) or parts.get(arrived.name).version == fingerprint(arrived):
+        return arrived
+    suffix = "_travelled"
+    ordinal = 1
+    while True:
+        ending = suffix if ordinal == 1 else f"{suffix}_{ordinal}"
+        name = f"{arrived.name[: 120 - len(ending)].rstrip('_')}{ending}"
+        candidate = dataclasses.replace(arrived, name=name)
+        if not parts.has(name) or parts.get(name).version == fingerprint(candidate):
+            return candidate
+        ordinal += 1
 
 
 def adopt(
@@ -2101,33 +2136,9 @@ def adopt(
     try:
         arrived = from_data(data)
         announced = _announced(arrived)
-        mark = fingerprint(arrived)
-        name = arrived.name
-        if source.has(name):
-            local = source.get(name)
-            if local.version == mark:
-                return announced
-            stem = arrived.name
-            suffix = "_travelled"
-            name = f"{stem[: 120 - len(suffix)].rstrip('_')}{suffix}"
-            # Verglichen wird der Abdruck der **umbenannten** Fassung: Der
-            # Name gehört zu den kanonischen Daten, und ein Vergleich gegen
-            # den unumbenannten Abdruck wäre nie gleich — jedes erneute
-            # Öffnen tauschte dann ein identisches Rezept gegen sich selbst.
-            ordinal = 1
-            while source.has(name):
-                candidate = dataclasses.replace(arrived, name=name)
-                mark = fingerprint(candidate)
-                if source.get(name).version == mark:
-                    return announced
-                # Auch der abgeleitete Name kann dem Nutzer gehören. Jeder
-                # vorhandene Stand bleibt erhalten, einschließlich anderer
-                # noch geöffneter Projekte mit mitgereisten Fassungen.
-                ordinal += 1
-                numbered = f"{suffix}_{ordinal}"
-                name = f"{stem[: 120 - len(numbered)].rstrip('_')}{numbered}"
-            arrived = dataclasses.replace(arrived, name=name)
-        register(arrived, source, registry, source=catalog_source)
+        arrived = _beside_existing(arrived, source)
+        if not source.has(arrived.name):
+            register(arrived, source, registry, source=catalog_source)
         return announced
     except Exception as problem:  # Regel 17: Befund statt Abbruch
         _log.warning("travelled recipe failed to adopt: %s", problem)

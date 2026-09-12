@@ -178,6 +178,10 @@ Parameter, als Daten in `<Nutzerdaten>/parts/recipes/*.json`. Was dabei gilt:
   werden sonst nur von einem privaten Register aufgelöst, das ein Dokument im
   Fenster nicht hat, und der Entwurf hielte an einer Stelle an, die mit der
   Arbeit des Kunden nichts zu tun hat.
+  Ein gleicher Name genügt nicht als Versionsbindung: Abweichende eingebettete
+  Fassungen stehen als mitgereiste Einträge neben dem lokalen Stand. Der
+  Entwurf verweist einschließlich seiner Undo-Seiten darauf; verschachtelte
+  Beilagen reisen mit ihrem jeweiligen Unterbaustein weiter.
 - **Ein eingelesenes Rezept bleibt eingelesen, auch bearbeitet.** Die Quittung
   (`ImportedOrigin`) belegt die **Reise** und nicht den Inhalt; `capture` nimmt
   sie deshalb entgegen und reicht sie durch. Ohne das machte `_catalog_source`
