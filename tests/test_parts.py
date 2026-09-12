@@ -1192,6 +1192,135 @@ def feature_requirements(spec: PartSpec) -> tuple[FeatureRequirement, ...]:
     return spec.feature_requirements
 
 
+@pytest.mark.parametrize(
+    "stage", ["mesh", "wall", "measurement", "intersection", "gap", "features", "feasible"]
+)
+def test_a_broken_check_reports_its_corner_and_continues(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Auch nach dem Bau darf ein einzelner Prüffehler den Bericht nicht verlieren."""
+    import trimesh
+
+    from app.core.geom import mesh as mesh_module
+    from app.core.knowledge.parts import range_check
+    from app.core.types import Feature
+
+    @op_params
+    class PairParams(BaseParams):
+        size: float = param(title="Maß", default=1.0, minimum=1.0, maximum=2.0)
+
+    body = MeshData.of(trimesh.load(MESHES / "cube_clean.stl"))
+    result = PartResult(
+        mesh=body,
+        features={
+            "face_1": Feature(
+                id="face_1", kind="face", provenance="generated", params={"area": 400.0}
+            )
+        },
+    )
+    built: list[float] = []
+
+    def build(values: BaseParams) -> PartResult:
+        built.append(float(values.size))  # type: ignore[attr-defined]
+        return result
+
+    calls = 0
+
+    def first_fails(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ValueError("Prüfsonde: Parameter oder Geometrie korrigieren.")
+        return original(*args, **kwargs)
+
+    targets = {
+        "mesh": (mesh_module, "as_mesh_data"),
+        "wall": (WallRequirement, "minimum"),
+        "measurement": (range_check, "local_wall_thickness"),
+        "intersection": (range_check, "has_self_intersections"),
+        "gap": (range_check, "printable_gap"),
+        "features": (FeatureRequirement, "applies"),
+    }
+    feasible = None
+    if stage == "feasible":
+
+        def original(_values: BaseParams) -> str:
+            return ""
+
+        feasible = first_fails
+    else:
+        target, name = targets[stage]
+        original = getattr(target, name)
+        monkeypatch.setattr(target, name, first_fails)
+    report = check_range(
+        PairParams,
+        build,
+        profile,
+        feasible=feasible,
+        bodies=2 if stage == "gap" else 1,
+        features=(FeatureRequirement("face"),),
+    )
+
+    assert report.checked == 2
+    assert built[-1] == pytest.approx(2.0)
+    matching = [failure for failure in report.failures if "Prüfsonde" in failure.reason]
+    assert len(matching) == 1
+    assert matching[0].values == {"size": 1.0}
+    assert not report.passed
+
+
+@pytest.mark.parametrize("during_build", [True, False])
+def test_an_explicit_range_cancellation_does_not_turn_into_a_failed_corner(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, during_build: bool
+) -> None:
+    """Auch ein geworfener Kernabbruch ohne äußeres Token erhält nur den Teilbericht."""
+    from app.core.errors import OperationCancelled
+    from app.core.knowledge.parts import range_check
+
+    @op_params
+    class PairParams(BaseParams):
+        size: float = param(title="Maß", default=1.0, minimum=1.0, maximum=2.0)
+
+    calls = 0
+
+    def stop(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        raise OperationCancelled
+
+    spec = PARTS.get("gusset")
+    build = stop if during_build else lambda _values: spec.fn(spec.params())
+    if not during_build:
+        monkeypatch.setattr(range_check, "local_wall_thickness", stop)
+    report = check_range(PairParams, build, profile)
+    assert calls == 1
+    assert report.checked == 0
+    assert len(report.failures) == 1
+    assert "abgebrochen" in report.failures[0].reason.lower()
+    assert not report.passed
+
+
+def test_an_invalid_wall_declaration_is_reported_at_each_corner(profile: Profile) -> None:
+    """Ein fehlender Wandparameter bleibt ein Vertragsfehler im Bereichsbericht."""
+    import trimesh
+
+    @op_params
+    class PairParams(BaseParams):
+        size: float = param(title="Maß", default=1.0, minimum=1.0, maximum=2.0)
+
+    body = MeshData.of(trimesh.load(MESHES / "cube_clean.stl"))
+    report = check_range(
+        PairParams,
+        lambda _values: PartResult(mesh=body),
+        profile,
+        wall=WallRequirement.from_parameter("missing_wall"),
+    )
+    assert report.checked == 2
+    assert len(report.failures) == 2
+    assert all("missing_wall" in entry.reason for entry in report.failures)
+    assert not report.passed
+
+
 def test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic(
     profile: Profile,
 ) -> None:

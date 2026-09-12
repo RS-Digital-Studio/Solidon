@@ -1230,6 +1230,30 @@ def test_the_button_cannot_while_the_check_runs(qt_app: QApplication) -> None:
         dialog.deleteLater()
 
 
+def test_a_range_error_reaches_the_dialog_as_a_correctable_error(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Kernfehler nach capture erhält seinen Text und seine Handlungen."""
+    import app.ui.recipe_dialog as module
+    from app.core.errors import ValidationError
+
+    problem = ValidationError(field="exposed", detail="Weniger Maße freigeben.")
+
+    def reject_range(*args: object, **kwargs: object) -> object:
+        raise problem
+
+    monkeypatch.setattr(module.recipes, "range_check", reject_range)
+    worker = module._CheckWorker(lambda: object(), None)
+    heard: list[object] = []
+    worker.failed.connect(heard.append)
+    try:
+        worker.work()
+        assert heard == [problem]
+        assert problem.suggestions
+    finally:
+        worker.deleteLater()
+
+
 def test_a_failed_range_check_leaves_the_dialog_with_the_signal(qt_app: QApplication) -> None:
     """Der Warnsatz überlebt das Schließen, weil er mit dem Signal hinausfährt.
 

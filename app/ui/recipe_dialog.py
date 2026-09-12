@@ -142,22 +142,20 @@ class _CheckWorker(Worker):
         self.step.emit(0.0, str(tr("Der Ausschnitt wird geschnitten und einmal gerechnet …")))
         try:
             recipe = self._cut()
-        except AppError as error:
-            # Der Kern prüft beim Schneiden und sagt mit Vorschlag, was fehlt.
-            # Hier wird nichts umformuliert — der Satz von dort ist genauer als
-            # jeder, den dieser Dialog erfinden könnte.
-            self.failed.emit(error)
-            return
-        if self.is_cancelled:
-            return
-        self.done.emit(
-            recipes.range_check(
+            if self.is_cancelled:
+                return
+            checked = recipes.range_check(
                 recipe,
                 self._profile,
                 progress=lambda share, note: self.step.emit(float(share), str(note)),
                 cancelled=self,
             )
-        )
+        except AppError as error:
+            # Schnitt und Bereichsplanung tragen beide einen konkreten
+            # Handlungsvorschlag; er gehört unverändert in den Dialog.
+            self.failed.emit(error)
+            return
+        self.done.emit(checked)
 
 
 #: Die Einheiten, die ein freigegebenes Maß tragen kann — und was sie bewirken.

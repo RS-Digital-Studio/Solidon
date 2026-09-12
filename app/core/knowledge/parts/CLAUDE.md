@@ -120,6 +120,10 @@ Mehr als `range_check.MAX_CORNERS` Kombinationen werden mit Anzahl und
 Änderungsvorschlag abgewiesen; Stichproben ersetzen den Vertrag nicht.
 `recipe.capture` begrenzt zusätzlich die freigegebenen Felder nach
 `shared.MAX_EXPOSED`. Der Rezeptdialog zeigt die Prüfmenge vor dem Start.
+Jede Phase einer Ecke einschließlich Machbarkeitsbedingung, Wandvertrag und
+Merkmalprüfung gehört in deren Fehlerbericht. Nur eine erklärte Ablehnung
+beim Bau zählt als Ausschluss; ein Prüffehler darf weder diesen Status
+erhalten noch den restlichen Bericht verlieren. Abbruch bleibt ein eigener Weg.
 
 1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
 2. Umsetzung gegen `manifold3d`

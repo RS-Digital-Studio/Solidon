@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Final, SupportsInt, cast
 
-from app.core.errors import ValidationError
+from app.core.errors import OperationCancelled, ValidationError
 from app.core.knowledge.parts.ops import PLAY_FIELD
 from app.core.knowledge.parts.registry import FeatureRequirement, PartSpec, WallRequirement
 from app.core.types import BaseParams, CancelToken, PartResult, Profile, ProgressFn
@@ -1287,147 +1287,148 @@ def check(
         entered = dict(values)
         if PLAY_FIELD in entered and not entered[PLAY_FIELD]:
             entered[PLAY_FIELD] = profile.material.clearance
-        declared = str(feasible(params(**entered)) or "") if feasible is not None else ""
         try:
-            result: PartResult = build(params(**entered))
-        except ValidationError as problem:
-            if declared:
+            instance = params(**entered)
+            declared = str(feasible(instance) or "") if feasible is not None else ""
+            try:
+                result: PartResult = build(instance)
+            except ValidationError:
+                if not declared:
+                    raise
                 excluded.append(RangeExclusion(dict(entered), declared[:200]))
-            else:
-                add(entered, str(problem))
-            checked += 1
-            announce(index, 4)
-            if checked % 16 == 0:
-                gc.collect()
-            continue
-        except Exception as problem:  # eine brechende Ecke ist das Ergebnis, kein Absturz
-            add(entered, str(problem))
-            checked += 1
-            announce(index, 4)
-            if checked % 16 == 0:
-                gc.collect()
-            continue
-        if declared:
-            add(
-                entered,
-                str(_("als nicht baubar erklärt, baut aber: {reason}")).format(reason=declared),
-            )
-        announce(index, 1)
-        if _is_cancelled(token):
-            break
-
-        mesh = as_mesh_data(result.mesh)
-        if not mesh.is_watertight:
-            add(entered, str(_("nicht wasserdicht")))
-        if mesh.volume <= 0.0:
-            add(entered, str(_("kein Volumen")))
-        if not joined_by_host and mesh.component_count != max(bodies, 1):
-            # **Die erklärte Zahl, nicht die Eins.** Wer nichts deklariert,
-            # bekommt ``bodies=1`` und damit genau die alte Prüfung; wer zwei
-            # erklärt, muss zwei bauen — auch das ist eine Zusage, die brechen
-            # kann, und ein Scharnier, das in drei Teile fällt, ist genauso
-            # kaputt wie eine Rastnase, die in zwei fällt.
-            add(
-                entered,
-                str(_("zerfällt in {found} Teile statt {declared}")).format(
-                    found=mesh.component_count, declared=max(bodies, 1)
-                ),
-            )
-
-        minimum = wall.minimum(entered, profile)
-        measured = local_wall_thickness(mesh, token) if minimum is not None else None
-        if _is_cancelled(token):
-            break
-        if minimum is not None:
-            if measured is None:
-                add(entered, str(_("Wandstärke nicht messbar")))
-            elif measured < minimum - EPS_GEOM:
+                checked += 1
+                announce(index, 4)
+                if checked % 16 == 0:
+                    gc.collect()
+                continue
+            if declared:
                 add(
                     entered,
-                    f"{_('dünner als druckbar')!s}: {measured:.3f} mm < {minimum:.3f} mm",
+                    str(_("als nicht baubar erklärt, baut aber: {reason}")).format(reason=declared),
                 )
-        announce(index, 2)
-        if _is_cancelled(token):
-            break
+            announce(index, 1)
+            if _is_cancelled(token):
+                break
 
-        if mesh.is_watertight and mesh.volume > 0.0 and has_self_intersections(mesh, token):
-            add(entered, str(_("Selbstdurchdringung")))
-        if _is_cancelled(token):
-            break
-        announce(index, 3)
+            mesh = as_mesh_data(result.mesh)
+            if not mesh.is_watertight:
+                add(entered, str(_("nicht wasserdicht")))
+            if mesh.volume <= 0.0:
+                add(entered, str(_("kein Volumen")))
+            if not joined_by_host and mesh.component_count != max(bodies, 1):
+                # **Die erklärte Zahl, nicht die Eins.** Wer nichts deklariert,
+                # bekommt ``bodies=1`` und damit genau die alte Prüfung; wer zwei
+                # erklärt, muss zwei bauen — auch das ist eine Zusage, die brechen
+                # kann, und ein Scharnier, das in drei Teile fällt, ist genauso
+                # kaputt wie eine Rastnase, die in zwei fällt.
+                add(
+                    entered,
+                    str(_("zerfällt in {found} Teile statt {declared}")).format(
+                        found=mesh.component_count, declared=max(bodies, 1)
+                    ),
+                )
 
-        gap = printable_gap(mesh, profile, cancelled=token) if bodies > 1 else None
-        if _is_cancelled(token):
-            break
-        if bodies > 1 and gap is None and mesh.component_count > 1:
-            add(
-                entered,
-                str(
-                    _(
-                        "Der Abstand zwischen den Teilkörpern ist nicht messbar. "
-                        "Die Geometrie reparieren und erneut prüfen."
+            minimum = wall.minimum(entered, profile)
+            measured = local_wall_thickness(mesh, token) if minimum is not None else None
+            if _is_cancelled(token):
+                break
+            if minimum is not None:
+                if measured is None:
+                    add(entered, str(_("Wandstärke nicht messbar")))
+                elif measured < minimum - EPS_GEOM:
+                    add(
+                        entered,
+                        f"{_('dünner als druckbar')!s}: {measured:.3f} mm < {minimum:.3f} mm",
                     )
-                ),
-            )
-        if (
-            gap is not None
-            # **``EPS_DISPLAY`` und nicht ``EPS_GEOM``**: Das hier ist eine
-            # Fertigungsfrage, kein Rechenvergleich. Der gemessene Spalt fällt
-            # um Bruchteile kleiner aus als der eingestellte, weil ein
-            # facettierter Zylinder seine Sehne zeigt und nicht den Bogen —
-            # gemessen 0,2499 bei eingestellten 0,25, und mit dem
-            # Rechenepsilon meldete die Prüfung ein Scharnier, das genau
-            # richtig gebaut war. Ein Hundertstel Millimeter liegt unter jeder
-            # Druckauflösung; was darunter liegt, ist kein Spalt und kein
-            # Fehler.
-            and (gap < profile.material.clearance - EPS_DISPLAY)
-        ):
-            # **Der Spalt ist bei einem print-in-place-Teil die ganze Sache.**
-            # Zu eng verschweißt beim Drucken, und aus zwei Körpern wird einer
-            # — der Bereichstest sähe davon nichts, weil er die Geometrie vor
-            # dem Drucker prüft und nicht danach. Gemessen wird gegen das
-            # kalibrierte Material und nie gegen eine Zahl im Code (Regel 7).
-            add(
-                entered,
-                str(_("Spalt {gap} mm — der Drucker legt {least} mm")).format(
-                    gap=round(gap, 2), least=round(profile.material.clearance, 2)
-                ),
-            )
+            announce(index, 2)
+            if _is_cancelled(token):
+                break
 
-        generated_features = getattr(result, "features", {})
-        names = tuple(generated_features)
-        for name, feature in generated_features.items():
-            if feature.id != name:
+            if mesh.is_watertight and mesh.volume > 0.0 and has_self_intersections(mesh, token):
+                add(entered, str(_("Selbstdurchdringung")))
+            if _is_cancelled(token):
+                break
+            announce(index, 3)
+
+            gap = printable_gap(mesh, profile, cancelled=token) if bodies > 1 else None
+            if _is_cancelled(token):
+                break
+            if bodies > 1 and gap is None and mesh.component_count > 1:
                 add(
                     entered,
-                    str(_("Merkmal {name}: ID {found} statt {expected}")).format(
-                        name=name, found=feature.id, expected=name
+                    str(
+                        _(
+                            "Der Abstand zwischen den Teilkörpern ist nicht messbar. "
+                            "Die Geometrie reparieren und erneut prüfen."
+                        )
                     ),
                 )
-            if feature.provenance != "generated":
+            if (
+                gap is not None
+                # **``EPS_DISPLAY`` und nicht ``EPS_GEOM``**: Das hier ist eine
+                # Fertigungsfrage, kein Rechenvergleich. Der gemessene Spalt fällt
+                # um Bruchteile kleiner aus als der eingestellte, weil ein
+                # facettierter Zylinder seine Sehne zeigt und nicht den Bogen —
+                # gemessen 0,2499 bei eingestellten 0,25, und mit dem
+                # Rechenepsilon meldete die Prüfung ein Scharnier, das genau
+                # richtig gebaut war. Ein Hundertstel Millimeter liegt unter jeder
+                # Druckauflösung; was darunter liegt, ist kein Spalt und kein
+                # Fehler.
+                and (gap < profile.material.clearance - EPS_DISPLAY)
+            ):
+                # **Der Spalt ist bei einem print-in-place-Teil die ganze Sache.**
+                # Zu eng verschweißt beim Drucken, und aus zwei Körpern wird einer
+                # — der Bereichstest sähe davon nichts, weil er die Geometrie vor
+                # dem Drucker prüft und nicht danach. Gemessen wird gegen das
+                # kalibrierte Material und nie gegen eine Zahl im Code (Regel 7).
                 add(
                     entered,
-                    str(_("Merkmal {name}: Herkunft {found} statt generated")).format(
-                        name=name, found=feature.provenance
+                    str(_("Spalt {gap} mm — der Drucker legt {least} mm")).format(
+                        gap=round(gap, 2), least=round(profile.material.clearance, 2)
                     ),
                 )
-            if not feature.params:
-                add(entered, str(_("Merkmal {name}: ohne Maße")).format(name=name))
-            if features and not any(
-                requirement.applies(entered)
-                and (name == requirement.name or name.startswith(f"{requirement.name}_"))
-                for requirement in features
-            ):
-                add(entered, str(_("Merkmal {name}: nicht deklariert")).format(name=name))
-        for requirement in features:
-            if requirement.applies(entered) and not any(
-                name == requirement.name or name.startswith(f"{requirement.name}_")
-                for name in names
-            ):
-                add(
-                    entered,
-                    str(_("Merkmal {name}: fehlt")).format(name=requirement.name),
-                )
+
+            generated_features = getattr(result, "features", {})
+            names = tuple(generated_features)
+            for name, feature in generated_features.items():
+                if feature.id != name:
+                    add(
+                        entered,
+                        str(_("Merkmal {name}: ID {found} statt {expected}")).format(
+                            name=name, found=feature.id, expected=name
+                        ),
+                    )
+                if feature.provenance != "generated":
+                    add(
+                        entered,
+                        str(_("Merkmal {name}: Herkunft {found} statt generated")).format(
+                            name=name, found=feature.provenance
+                        ),
+                    )
+                if not feature.params:
+                    add(entered, str(_("Merkmal {name}: ohne Maße")).format(name=name))
+                if features and not any(
+                    requirement.applies(entered)
+                    and (name == requirement.name or name.startswith(f"{requirement.name}_"))
+                    for requirement in features
+                ):
+                    add(entered, str(_("Merkmal {name}: nicht deklariert")).format(name=name))
+            for requirement in features:
+                if requirement.applies(entered) and not any(
+                    name == requirement.name or name.startswith(f"{requirement.name}_")
+                    for name in names
+                ):
+                    add(
+                        entered,
+                        str(_("Merkmal {name}: fehlt")).format(name=requirement.name),
+                    )
+
+        except OperationCancelled, _RangeCancelledError:
+            break
+        except Exception as problem:  # Jede Prüfphase gehört zur betroffenen Ecke.
+            if _is_cancelled(token):
+                break
+            add(entered, str(problem))
 
         checked += 1
         announce(index, 4)
