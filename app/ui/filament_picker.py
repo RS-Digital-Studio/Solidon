@@ -74,7 +74,7 @@ from app.core.export.handover import detect
 from app.core.geom.attributes import used_slots
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, profiles
-from app.core.types import MaterialSlot, PrintSettings, SceneObject
+from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin, localised
@@ -412,8 +412,12 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
         return ()
 
 
-def configured_spools() -> tuple[filaments.CatalogueFilament, ...]:
+def configured_spools(
+    *, cancelled: CancelToken | None = None
+) -> tuple[filaments.CatalogueFilament, ...]:
     """Nur die im Slicer eingerichteten Filamente besitzen eine belegte Farbe."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     slicer = tools.by_id("slicer")
     executable = slicer.path() if slicer is not None else None
     if executable is None:
@@ -421,7 +425,7 @@ def configured_spools() -> tuple[filaments.CatalogueFilament, ...]:
     flavour = slicer_keys.flavour_of(executable.name)
     if flavour is None:
         return ()
-    loaded = slicer_profiles.configured_filaments(flavour, executable)
+    loaded = slicer_profiles.configured_filaments(flavour, executable, cancelled=cancelled)
     counts: dict[str, int] = {}
     for entry in loaded:
         counts[entry.profile] = counts.get(entry.profile, 0) + 1

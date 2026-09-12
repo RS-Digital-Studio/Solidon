@@ -1207,9 +1207,9 @@ def test_one_name_index_serves_a_whole_kind_instead_of_one_per_profile(
     laeufe: list[tuple[Path, object]] = []
     echtes = sp._names_in
 
-    def gezaehlt(wurzel: Path, art: object = None) -> dict[str, Path]:
+    def gezaehlt(wurzel: Path, art: object = None, *, cancelled=None) -> dict[str, Path]:
         laeufe.append((wurzel, art))
-        return echtes(wurzel, art)
+        return echtes(wurzel, art, cancelled=cancelled)
 
     monkeypatch.setattr(sp, "_names_in", gezaehlt)
     passende = sp.processes([maschine, *erben], maschine)
@@ -1220,3 +1220,69 @@ def test_one_name_index_serves_a_whole_kind_instead_of_one_per_profile(
         f"{len(laeufe)} Indexläufe für {len(set(laeufe))} verschiedene Ablagen — "
         "derselbe Index wird je Profil neu aufgestellt"
     )
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_cancelled_spool_search_does_not_start_discovery(tmp_path, monkeypatch, flavour):
+    """Ein bereits beendeter Auftrag startet keine Suche in fremden Dateien."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    cancelled = CancelSignal()
+    cancelled.cancel()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("cancelled search still reached profile discovery")
+
+    monkeypatch.setattr(sp, "profile_roots", forbidden)
+    with pytest.raises(OperationCancelled):
+        sp.configured_filaments(flavour, tmp_path / "slicer.exe", cancelled=cancelled)
+
+
+def test_cancel_during_inheritance_stops_reading_the_profile_index(tmp_path, monkeypatch):
+    """Die Erbsuche liest nach einem Abbruch keine weiteren Herstellerdateien."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    folder = tmp_path / "filament"
+    leaf = folder / "z-child.json"
+    _write(leaf, {"name": "Child", "inherits": "Base"})
+    for index in range(20):
+        _write(folder / f"{index:02}.json", {"name": f"Aux {index}"})
+    cancelled = CancelSignal()
+    original = Path.read_text
+    read = []
+
+    def remember(path, *args, **kwargs):
+        result = original(path, *args, **kwargs)
+        read.append(path.name)
+        if path.name == "00.json":
+            cancelled.cancel()
+        return result
+
+    monkeypatch.setattr(Path, "read_text", remember)
+    with pytest.raises(OperationCancelled):
+        sp.resolve_values(leaf, cancelled=cancelled)
+    assert read == ["z-child.json", "00.json"]
+
+
+def test_cancelled_prusa_spool_search_stops_at_the_read_profile(prusa, monkeypatch):
+    """Auch der Prusa-Zweig beendet seinen echten Dateidurchgang kooperativ."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    cancelled = CancelSignal()
+    original = sp._read_prusa_ini
+    read = []
+
+    def remember(path):
+        result = original(path)
+        read.append(path.name)
+        if path.name == "Meine Spule.ini":
+            cancelled.cancel()
+        return result
+
+    monkeypatch.setattr(sp, "_read_prusa_ini", remember)
+    with pytest.raises(OperationCancelled):
+        sp.configured_filaments("prusa", prusa, cancelled=cancelled)
+    assert read[-1] == "Meine Spule.ini"

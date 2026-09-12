@@ -16,6 +16,11 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 STEP geht über `brep/step.py`, nicht von hier.
 
+Die Erhebung eingelegter Slicerfilamente nimmt einen `CancelToken` an.
+Orca-Dateisuche, Namensindex und Vererbung sowie Prusa-Dateien und Abschnitte
+prüfen ihn zwischen ihren Schritten; auch das Einsammeln vor dem Sortieren
+bleibt abbrechbar. Ein Abbruch liefert keinen unvollständigen Profilbestand.
+
 Der SCAD-Ausgabeweg von CLI und Bausteinkatalog läuft über
 `writer.export_part_scad`: erst `activation.require(EXPORT)`, dann die
 Textkonvertierung. Damit liegt er in derselben vom Manifest gedeckten Grenze

@@ -20,6 +20,9 @@ Hier steht die Karte, dort das Gesetz.
 `InventoryView` reiht bestätigte Lagerhandlungen geordnet ein; Rückmeldungen
 gelten nur ihrem aktiven Arbeiter. Abgebrochene Suchen bleiben bis zum Threadende
 gehalten und dürfen spätere Aufträge nicht verändern.
+Der Abbrechen-Knopf einer Lagersuche setzt denselben `CancelSignal`, den die
+Profil-Dateisuche und Vererbung prüfen. Er beendet die Suche kooperativ;
+gespeicherte Lagerhandlungen werden weiterhin vollständig ausgeführt.
 Die Rücknahmeausnahme bei jüngerer Bestandsfeststellung bleibt an Spule und
 Vorgang gebunden. Ein Wechsel von Detail, Regal, Filter oder Journalauswahl
 verwirft das Angebot; verspätete Konflikte öffnen es nicht in einer anderen

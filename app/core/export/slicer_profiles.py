@@ -25,7 +25,7 @@ import math
 import os
 import re
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -39,12 +39,27 @@ from app.core.export.slicer_keys import (
     has_user_profile_tree,
 )
 from app.core.log import get_logger
-from app.core.types import PrinterProfile
+from app.core.types import CancelToken, PrinterProfile
 from app.i18n import _
 
 _log = get_logger(__name__)
 
 ProfileKind = Literal["machine", "process", "filament"]
+
+
+def _check_cancelled(cancelled: CancelToken | None) -> None:
+    """Ein Dateischritt oder Profilabschnitt beginnt nur im noch gültigen Suchauftrag."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+
+
+def _checked_paths(paths: Iterable[Path], cancelled: CancelToken | None) -> Iterator[Path]:
+    """Auch das Einsammeln vor einer Sortierung bleibt zwischen Dateitreffern abbrechbar."""
+    _check_cancelled(cancelled)
+    for path in paths:
+        _check_cancelled(cancelled)
+        yield path
+
 
 #: Der Namensindex einer Profilablage: je Wurzel und Art ein Name-auf-Pfad.
 #:
@@ -341,7 +356,9 @@ def _prusa_presets(executable: Path) -> Mapping[str, str]:
     return dict(parsed["presets"])
 
 
-def _prusa_configured(executable: Path) -> tuple[SlicerFilament, ...]:
+def _prusa_configured(
+    executable: Path, cancelled: CancelToken | None = None
+) -> tuple[SlicerFilament, ...]:
     """Die eingelegten Spulen von PrusaSlicer.
 
     **Der Name ist die sichere Auskunft, alles andere kommt nur, wo es
@@ -351,19 +368,24 @@ def _prusa_configured(executable: Path) -> tuple[SlicerFilament, ...]:
     sich nicht ohne Raten sagen lässt, bleibt leer — eine erfundene
     Materialart wäre schlechter als keine (Regel 21).
     """
+    _check_cancelled(cancelled)
     presets = _prusa_presets(executable)
     if not presets:
         return ()
-    profiles = {entry.name: entry for entry in find_profiles(executable, "prusa", ("filament",))}
+    profiles = {
+        entry.name: entry
+        for entry in _prusa_profiles(executable, frozenset(("filament",)), cancelled)
+    }
     roots = profile_roots("prusa", executable)
     keys = ["filament", *(f"filament_{index}" for index in range(1, _PRUSA_EXTRUDERS))]
     found: list[SlicerFilament] = []
     for key in keys:
+        _check_cancelled(cancelled)
         name = str(presets.get(key, "")).strip()
         if not name:
             continue
         entry = profiles.get(name)
-        values = resolve_profile(entry, roots) if entry is not None else {}
+        values = resolve_profile(entry, roots, cancelled=cancelled) if entry is not None else {}
         colour = str(values.get("filament_colour", "")).strip()
         found.append(
             SlicerFilament(
@@ -372,6 +394,7 @@ def _prusa_configured(executable: Path) -> tuple[SlicerFilament, ...]:
                 material_type=str(values.get("filament_type", "")).strip(),
             )
         )
+    _check_cancelled(cancelled)
     return tuple(found)
 
 
@@ -380,7 +403,9 @@ def _prusa_configured(executable: Path) -> tuple[SlicerFilament, ...]:
 _COLOUR_LOOKS_RIGHT: Final = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
-def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[SlicerFilament, ...]:
+def configured_filaments(
+    flavour: SlicerFlavour, executable: Path, *, cancelled: CancelToken | None = None
+) -> tuple[SlicerFilament, ...]:
     """Die im Slicer eingelegten Filamente samt Farbe und Typ (§20, §29).
 
     Die Orca-Familie hält die physische Belegung nicht in den
@@ -396,8 +421,9 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
     die eingelegten Filamente werden als Vorwahl übernommen — nur für eine der
     drei Familien eingelöst.
     """
+    _check_cancelled(cancelled)
     if flavour == "prusa":
-        return _prusa_configured(executable)
+        return _prusa_configured(executable, cancelled)
     if not has_user_profile_tree(flavour):
         return ()
     roots = profile_roots(flavour, executable)
@@ -405,6 +431,7 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
     result: list[SlicerFilament] = []
     seen_filaments: set[tuple[str, str]] = set()
     for root in user_roots(flavour, executable):
+        _check_cancelled(cancelled)
         config = root.parent.parent / f"{root.parent.parent.name}.conf"
         if config in seen_configs or not config.is_file():
             continue
@@ -422,8 +449,9 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
         names = _filament_names(state)
         colours = _filament_colours(state)
         for index, name in enumerate(names):
-            path = _named_profile(executable, flavour, name, "filament")
-            values = resolve_values(path, roots) if path is not None else {}
+            _check_cancelled(cancelled)
+            path = _named_profile(executable, flavour, name, "filament", cancelled=cancelled)
+            values = resolve_values(path, roots, cancelled=cancelled) if path is not None else {}
             colour = colours[index] if index < len(colours) else ""
             if not _is_colour(colour):
                 colour = _first_string(values.get("filament_colour"))
@@ -441,6 +469,7 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
                     material_type=material_type,
                 )
             )
+    _check_cancelled(cancelled)
     return tuple(result)
 
 
@@ -503,6 +532,8 @@ def _named_profile(
     flavour: SlicerFlavour,
     name: str,
     kind: ProfileKind,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> Path | None:
     """Eine Profil-Datei über ihren Namen, ohne den ganzen Bestand zu lesen.
 
@@ -520,7 +551,7 @@ def _named_profile(
     for root in roots:
         # Profilnamen können Schrägstriche oder Globzeichen enthalten. Sie
         # sind Identitäten und werden nie als Suchmuster interpretiert.
-        for path in root.rglob("*.json"):
+        for path in _checked_paths(root.rglob("*.json"), cancelled):
             if path.stem != name:
                 continue
             if _kind_of(path, root) != kind:
@@ -533,7 +564,7 @@ def _named_profile(
                 return path
         # Noch innerhalb derselben Quelle suchen: Ein umbenanntes eigenes
         # Profil gewinnt auch gegen einen passend benannten Installationspfad.
-        found = _names_in(root, kind).get(name)
+        found = _names_in(root, kind, cancelled=cancelled).get(name)
         if found is not None:
             return found
     return None
@@ -1235,15 +1266,15 @@ _PRUSA_KINDS: Final[dict[str, ProfileKind]] = {
 }
 
 
-def _prusa_files(root: Path) -> list[Path]:
+def _prusa_files(root: Path, cancelled: CancelToken | None = None) -> list[Path]:
     """Aktive Bündel und eigene Profile; Update-Downloads unter cache bleiben draußen."""
     return sorted(
         {
-            *root.glob("*.ini"),
+            *_checked_paths(root.glob("*.ini"), cancelled),
             *(
                 path
                 for directory in (*_PRUSA_KINDS, "vendor")
-                for path in (root / directory).glob("*.ini")
+                for path in _checked_paths((root / directory).glob("*.ini"), cancelled)
             ),
         }
     )
@@ -1268,7 +1299,14 @@ def _prusa_list(value: str) -> list[str]:
 class _PrusaStore:
     """Ein Lesedurchgang: Abschnitte und aufgelöste Werte bleiben im Speicher."""
 
-    def __init__(self, roots: Sequence[Path], *, eager: bool = True) -> None:
+    def __init__(
+        self,
+        roots: Sequence[Path],
+        *,
+        eager: bool = True,
+        cancelled: CancelToken | None = None,
+    ) -> None:
+        self.cancelled = cancelled
         self.roots = roots
         self.documents: dict[Path, configparser.ConfigParser] = {}
         self.entries: list[SlicerProfile] = []
@@ -1277,7 +1315,8 @@ class _PrusaStore:
         if not eager:
             return
         for root in roots:
-            for path in _prusa_files(root):
+            for path in _prusa_files(root, self.cancelled):
+                _check_cancelled(self.cancelled)
                 if len(self.documents) >= MAX_FILES:
                     return
                 self.read(path)
@@ -1287,7 +1326,8 @@ class _PrusaStore:
         prefix = next(key for key, value in _PRUSA_KINDS.items() if value == kind)
         heading = f"[{prefix}:{name}]"
         for root in self.roots:
-            for index, path in enumerate(_prusa_files(root)):
+            for index, path in enumerate(_prusa_files(root, self.cancelled)):
+                _check_cancelled(self.cancelled)
                 if index >= MAX_FILES:
                     break
                 if path in self.documents:
@@ -1304,6 +1344,7 @@ class _PrusaStore:
 
     def read(self, path: Path) -> None:
         """Ein Bündel oder eine kopflose eigene Einzeldatei lesen."""
+        _check_cancelled(self.cancelled)
         if path in self.documents:
             return
         document = _read_prusa_ini(path)
@@ -1324,6 +1365,7 @@ class _PrusaStore:
                 )
             )
         for section in document.sections():
+            _check_cancelled(self.cancelled)
             prefix, separator, name = section.partition(":")
             kind = _PRUSA_KINDS.get(prefix)
             if separator and kind:
@@ -1343,6 +1385,7 @@ class _PrusaStore:
         self, profile: SlicerProfile, active: frozenset[tuple[Path, str]] = frozenset()
     ) -> dict[str, Any]:
         """Innerhalb eines Bündels erben; eigene Dateien dürfen Herstellerbasen nutzen."""
+        _check_cancelled(self.cancelled)
         key = (profile.path, profile.section)
         if key in active or len(active) >= MAX_INHERITANCE:
             raise _incomplete_profile(profile.path)
@@ -1376,11 +1419,14 @@ class _PrusaStore:
         return values
 
 
-def _prusa_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[SlicerProfile]:
+def _prusa_profiles(
+    executable: Path, wanted: frozenset[ProfileKind], cancelled: CancelToken | None = None
+) -> list[SlicerProfile]:
     """Native Profile, mit aufgelöster Maschinenidentität und unsichtbaren Erbbasen."""
-    store = _PrusaStore(profile_roots("prusa", executable))
+    store = _PrusaStore(profile_roots("prusa", executable), cancelled=cancelled)
     found: dict[tuple[ProfileKind, str], SlicerProfile] = {}
     for entry in store.entries:
+        _check_cancelled(cancelled)
         if entry.kind not in wanted or (entry.name.startswith("*") and entry.name.endswith("*")):
             continue
         try:
@@ -1423,6 +1469,7 @@ def resolve_profile(
     roots: Sequence[Path] = (),
     *,
     indexes: ProfileIndexes | None = None,
+    cancelled: CancelToken | None = None,
 ) -> dict[str, Any]:
     """Native Werte ausschreiben, ohne Formeln oder G-Code auszuführen.
 
@@ -1430,10 +1477,11 @@ def resolve_profile(
     Orca behalten die Werttypen ihrer Dateien. Eine Prusa-Bündeldatei braucht
     zwingend die Abschnittsidentität aus :func:`profile_by_name`.
     """
+    _check_cancelled(cancelled)
     if profile.path.suffix == ".ini":
-        store = _PrusaStore(roots, eager=False)
+        store = _PrusaStore(roots, eager=False, cancelled=cancelled)
         return dict(store.resolve(profile))
-    return resolve_values(profile.path, roots, indexes=indexes)
+    return resolve_values(profile.path, roots, indexes=indexes, cancelled=cancelled)
 
 
 def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
@@ -1460,7 +1508,9 @@ def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
     return found
 
 
-def _names_in(root: Path, kind: ProfileKind | None) -> dict[str, Path]:
+def _names_in(
+    root: Path, kind: ProfileKind | None, *, cancelled: CancelToken | None = None
+) -> dict[str, Path]:
     """Profilname → Datei für alles unter ``root`` — bei ``kind`` nur die
     Profile dieser Art, gemessen am Ordner unterhalb der Wurzel.
 
@@ -1471,7 +1521,8 @@ def _names_in(root: Path, kind: ProfileKind | None) -> dict[str, Path]:
     aussieht.
     """
     index: dict[str, Path] = {}
-    for count, entry in enumerate(sorted(root.rglob("*.json"))):
+    for count, entry in enumerate(sorted(_checked_paths(root.rglob("*.json"), cancelled))):
+        _check_cancelled(cancelled)
         if count >= MAX_FILES:
             break
         if kind is not None and _kind_of(entry, root) != kind:
@@ -1490,6 +1541,7 @@ def resolve_values(
     roots: Sequence[Path] = (),
     *,
     indexes: ProfileIndexes | None = None,
+    cancelled: CancelToken | None = None,
 ) -> dict[str, Any]:
     """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
 
@@ -1503,6 +1555,7 @@ def resolve_values(
     :func:`find_profiles` nicht auf. Hier werden sie gebraucht, also werden sie
     hier gelesen.
     """
+    _check_cancelled(cancelled)
     if path.name.endswith(".def.json"):
         return _cura_definition_values(path, roots)
     if path.name.endswith(".xml.fdm_material"):
@@ -1523,11 +1576,14 @@ def resolve_values(
             # dessen Abschnitt, statt zufällig den ersten zu übernehmen.
             raise _incomplete_profile(path)
         return resolve_profile(
-            SlicerProfile(path, path.stem, kind, from_user=True), roots, indexes=indexes
+            SlicerProfile(path, path.stem, kind, from_user=True),
+            roots,
+            indexes=indexes,
+            cancelled=cancelled,
         )
     values: dict[str, Any] = {}
     # Wurzel zuerst, Spezielles gewinnt
-    for loaded in reversed(_chain(path, roots, indexes=indexes)):
+    for loaded in reversed(_chain(path, roots, indexes=indexes, cancelled=cancelled)):
         values.update({key: value for key, value in loaded.items() if key not in DESCRIBING_KEYS})
     return values
 
@@ -1570,6 +1626,7 @@ def _chain(
     roots: Sequence[Path] = (),
     *,
     indexes: ProfileIndexes | None = None,
+    cancelled: CancelToken | None = None,
 ) -> list[dict[str, Any]]:
     """Die Profile der Erbkette, spezifisches zuerst.
 
@@ -1588,23 +1645,25 @@ def _chain(
     indexes = {} if indexes is None else indexes
 
     def lookup(current: Path, name: str) -> Path | None:
+        _check_cancelled(cancelled)
         family = _family(current)
         family_key = (family, None)
         if family_key not in indexes:
-            indexes[family_key] = _names_in(family, None)
+            indexes[family_key] = _names_in(family, None, cancelled=cancelled)
         local = indexes[family_key].get(name)
         if local is not None and local != current:
             return local
         for root in _store_roots(current, roots):
             key = (root, _kind_by_folder(current))
             if key not in indexes:
-                indexes[key] = _names_in(root, key[1])
+                indexes[key] = _names_in(root, key[1], cancelled=cancelled)
             found = indexes[key].get(name)
             if found is not None:
                 return found
         return None
 
     def visit(current: Path, active: frozenset[Path], template: bool) -> list[dict[str, Any]]:
+        _check_cancelled(cancelled)
         if current in active or len(active) >= MAX_INHERITANCE:
             if template:
                 raise _incomplete_profile(path)

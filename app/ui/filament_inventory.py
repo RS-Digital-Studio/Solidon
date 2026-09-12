@@ -30,9 +30,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError, InternalError, ValidationError
+from app.core.errors import AppError, InternalError, OperationCancelled, ValidationError
 from app.core.knowledge import filaments
 from app.core.log import get_logger
+from app.core.scene.cancel import CancelSignal
 from app.i18n import tr
 from app.ui.filament_picker import (
     NewFilamentDialog,
@@ -55,14 +56,23 @@ class _InventoryWork(Worker):
     completed = Signal(object)
     rejected = Signal(object)
 
-    def __init__(self, action: Callable[[], object]) -> None:
+    def __init__(
+        self, action: Callable[[], object], *, cancelled: CancelSignal | None = None
+    ) -> None:
         super().__init__()
         self._action: Callable[[], object] | None = action
+        self.cancelled = cancelled
 
     def work(self) -> None:
         assert self._action is not None
         try:
+            if self.cancelled is not None:
+                self.cancelled.raise_if_cancelled()
             result = self._action()
+            if self.cancelled is not None:
+                self.cancelled.raise_if_cancelled()
+        except OperationCancelled:
+            return
         except AppError as problem:
             self.rejected.emit(problem)
             return
@@ -334,7 +344,12 @@ class InventoryView(QWidget):
         self._leash = WorkerLeash(self)
         self._callback: Callable[[object], None] | None = None
         self._pending_actions: deque[
-            tuple[Callable[[], object], Callable[[object], None], tuple[str, str] | None]
+            tuple[
+                Callable[[], object],
+                Callable[[object], None],
+                tuple[str, str] | None,
+                CancelSignal | None,
+            ]
         ] = deque()
         self._reverse_target: tuple[str, str] | None = None
         self._keep_count_target: tuple[str, str] | None = None
@@ -859,7 +874,12 @@ class InventoryView(QWidget):
         self.keep_count_button.hide()
 
     def _import(self) -> None:
-        self._run(configured_spools, self._choose_import)
+        cancelled = CancelSignal()
+        self._run(
+            partial(configured_spools, cancelled=cancelled),
+            self._choose_import,
+            cancelled=cancelled,
+        )
 
     def _choose_import(self, result: object) -> None:
         entries = tuple(result) if isinstance(result, (tuple, list)) else ()
@@ -882,19 +902,20 @@ class InventoryView(QWidget):
         callback: Callable[[object], None],
         *,
         reverse_target: tuple[str, str] | None = None,
+        cancelled: CancelSignal | None = None,
     ) -> None:
         """Bestätigte Eingaben bleiben bis zu ihrer Ausführung in Reihenfolge erhalten."""
-        self._pending_actions.append((action, callback, reverse_target))
+        self._pending_actions.append((action, callback, reverse_target, cancelled))
         self._start_next()
 
     def _start_next(self) -> None:
         """Schreiben und Suchen halten die letzte gültige Ansicht sichtbar."""
         if self._worker is not None or not self._pending_actions:
             return
-        action, callback, self._reverse_target = self._pending_actions.popleft()
+        action, callback, self._reverse_target, cancelled = self._pending_actions.popleft()
         self._callback = callback
         self._clear_stock_conflict()
-        worker = _InventoryWork(action)
+        worker = _InventoryWork(action, cancelled=cancelled)
         self._worker = worker
         worker.completed.connect(self._completed)
         worker.rejected.connect(self._rejected)
@@ -970,7 +991,8 @@ class InventoryView(QWidget):
     def _cancel(self) -> None:
         if self._worker is None or self._callback != self._choose_import:
             return
-        self._worker.requestInterruption()
+        if self._worker.cancelled is not None:
+            self._worker.cancelled.cancel()
         self._worker = None
         self._callback = None
         self.message.setText(

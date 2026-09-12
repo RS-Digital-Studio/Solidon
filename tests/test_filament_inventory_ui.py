@@ -575,7 +575,7 @@ def test_cancelled_search_cannot_finish_the_following_spool_write(
     changed: list[bool] = []
     inventory.catalogueChanged.connect(lambda: changed.append(True))
 
-    def search() -> tuple[filaments.CatalogueFilament, ...]:
+    def search(*, cancelled=None) -> tuple[filaments.CatalogueFilament, ...]:
         search_started.set()
         assert finish_search.wait(5)
         if search_outcome == "rejected":
@@ -689,3 +689,61 @@ def test_spool_cards_do_not_keep_the_inventory_alive(
             if remaining is not None:
                 remaining.deleteLater()
         qt_app.processEvents()
+
+
+def test_cancel_button_stops_the_actual_slicer_profile_walk(inventory, tmp_path, monkeypatch):
+    """Der Kundenknopf erreicht die laufende Dateisuche statt nur ihre spätere Antwort."""
+    import json
+    from types import SimpleNamespace
+
+    from app.core import tools
+    from app.core.export import slicer_profiles
+
+    executable = tmp_path / "orca-slicer.exe"
+    executable.write_bytes(b"")
+    root = tmp_path / "OrcaSlicer" / "user" / "default"
+    root.mkdir(parents=True)
+    (root.parent.parent / "OrcaSlicer.conf").write_text(
+        json.dumps(
+            {
+                "presets": {"machine": "Printer"},
+                "orca_presets": [
+                    {"machine": "Printer", "filament": "Missing", "filament_colors": "#123456"}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    for index in range(20):
+        (root / f"{index:02}.json").write_text(json.dumps({"name": str(index)}), encoding="utf-8")
+    monkeypatch.setattr(tools, "by_id", lambda _key: SimpleNamespace(path=lambda: executable))
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *args: (root,))
+    monkeypatch.setattr(slicer_profiles, "install_root", lambda *_args: None)
+    original = Path.rglob
+    entered, released = Event(), Event()
+    visited = []
+
+    def delayed_walk(path, pattern):
+        for entry in original(path, pattern):
+            visited.append(entry)
+            if len(visited) == 1:
+                entered.set()
+                assert released.wait(3)
+            yield entry
+
+    monkeypatch.setattr(Path, "rglob", delayed_walk)
+    inventory.import_button.click()
+    worker = inventory._worker
+    try:
+        assert entered.wait(1)
+        inventory._show_wait_progress()
+        inventory.cancel_button.click()
+        assert inventory._worker is None
+    finally:
+        released.set()
+        assert worker.wait(2000)
+        QTest.qWait(30)
+    assert len(visited) == 1
+    assert inventory.wait_for_workers(0)
+    assert "abgebrochen" in inventory.message.text()
+    assert filaments.catalogue() == ()
