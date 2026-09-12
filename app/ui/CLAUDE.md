@@ -897,6 +897,10 @@ Python-Zyklus, dessen Abbau in einen späteren Worker- oder Widgetaufbau fällt.
 `manual_window.py` · `tour.py` · `shortcuts_window.py` ·
 `shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py`
 
+Die Befehlspalette trennt Titel und Kürzel nur in der ersten Zeile. Ein
+Sperrgrund oder erklärender Satz bleibt darunter in der Titelspalte; das
+rechtsbündige Kürzel behält die Höhe der ersten Zeile.
+
 **Navigationstasten gehören dem fokussierten Inhalt.** Der gemeinsame
 `NavigationKeys`-Filter schützt Pos1, Ende, Bild auf und Bild ab in Listen,
 Bäumen, Text- und Zahlenfeldern sowie Reglern (`QAbstractSlider`). Beim

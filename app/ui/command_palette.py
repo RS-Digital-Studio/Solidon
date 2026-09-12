@@ -364,10 +364,11 @@ class _Rows(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
-        title, shortcut = text.split("	", 1)
+        first_line, separator, detail = text.partition("\n")
+        title, shortcut = first_line.split("	", 1)
         plain = QStyleOptionViewItem(option)
         self.initStyleOption(plain, index)
-        plain.text = title
+        plain.text = f"{title}{separator}{detail}"
         style = option.widget.style() if option.widget else None
         if style is not None:
             style.drawControl(QStyle.ControlElement.CE_ItemViewItem, plain, painter, option.widget)
@@ -380,6 +381,11 @@ class _Rows(QStyledItemDelegate):
         )
         area = QRect(option.rect)
         area.setRight(area.right() - SHORTCUT_MARGIN)
+        if separator:
+            line_height = plain.fontMetrics.height()
+            text_height = line_height + plain.text.count("\n") * plain.fontMetrics.lineSpacing()
+            area.setTop(area.top() + max(0, (area.height() - text_height) // 2))
+            area.setHeight(line_height)
         painter.drawText(
             area,
             int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),

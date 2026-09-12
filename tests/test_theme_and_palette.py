@@ -949,3 +949,64 @@ def test_the_palette_lines_its_shortcuts_up(qt_app: QApplication) -> None:
         )
     finally:
         palette.deleteLater()
+
+
+def test_the_native_palette_keeps_its_second_line_below_the_title() -> None:
+    """Echte Schriftmetriken prüfen die gezeichneten Textspalten einer gesperrten Zeile."""
+    import os
+    import subprocess
+    import sys
+
+    platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
+    if platform == "xcb" and not os.environ.get("DISPLAY"):
+        pytest.skip("kein X11-Display für die nativen Schriftmetriken")
+    script = """
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtGui import QImage, QPainter
+from PySide6.QtWidgets import (
+    QApplication, QListWidget, QProxyStyle, QStyle, QStyleFactory, QStyleOptionViewItem,
+)
+from app.ui.command_palette import _Rows
+
+application = QApplication([])
+drawn, shortcuts = [], []
+class Style(QProxyStyle):
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_ItemViewItem:
+            drawn.append(option.text)
+        super().drawControl(element, option, painter, widget)
+class Painter(QPainter):
+    def drawText(self, area, flags, text):
+        shortcuts.append((QRect(area), text))
+        return super().drawText(area, flags, text)
+
+view = QListWidget()
+style = Style(QStyleFactory.create("Fusion"))
+style.setParent(view)
+view.setStyle(style)
+view.addItem("Bohrung setzen\\tCtrl+B\\nWählen Sie zuerst einen Körper.")
+view.item(0).setFlags(view.item(0).flags() & ~Qt.ItemFlag.ItemIsEnabled)
+option = QStyleOptionViewItem()
+option.rect = QRect(0, 0, 520, 48)
+option.widget = view
+image = QImage(520, 48, QImage.Format.Format_ARGB32)
+image.fill(Qt.GlobalColor.white)
+painter = Painter(image)
+try:
+    _Rows(view).paint(painter, option, view.model().index(0, 0))
+finally:
+    painter.end()
+assert drawn == ["Bohrung setzen\\nWählen Sie zuerst einen Körper."], drawn
+assert len(shortcuts) == 1 and shortcuts[0][1] == "Ctrl+B", shortcuts
+assert shortcuts[0][0].bottom() < option.rect.center().y() + 2, shortcuts
+view.close()
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": platform},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
