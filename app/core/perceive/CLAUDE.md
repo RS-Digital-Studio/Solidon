@@ -14,6 +14,12 @@ Die Suche nach Randöffnungen erweitert einen Bogen nur über erreichbare
 Nachbarflächen. Tangenz und Kreisform werden lokal geprüft; die gemeinsame
 Flächentabelle liefert auch die Randkanten. Der Abbruch wird innerhalb der
 Flutung geprüft, ohne pro Bogen Felder über das gesamte Netz anzulegen.
+Die Paarsuche normiert jede Bogenachse einmal und verwirft getrennte
+Mantelstücke vor der Richtungsrechnung. Der Leistungstest misst zusätzlich
+den vollständigen Erkennungslauf an vielen verrundeten Taschen.
+Die vorgeschaltete Gewindeunterdrückung liest Zylinderachsen, Mitten und
+Radien einmal und prüft je Ausgangszylinder ein lineares Feld. Axiale
+Fortsetzung und die bestehenden Winkel-/Abstandsschranken bleiben maßgeblich.
 
 Zylinder- und Stadionfits legen ihr Achsvorzeichen gemeinsam über
 `units.positive_axis` fest; nahe Betragsgleichheit folgt derselben Regel wie

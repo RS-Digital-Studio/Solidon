@@ -497,6 +497,7 @@ def find_slots(
     # werden deshalb über alle Paare geteilt — der Grund steht bei
     # :func:`_shells_for`.
     masks: dict[bytes, _Shells] = {}
+    axes = {index: _unit(fit.axis) for index, fit, _patch in candidates}
 
     found: list[Slot] = []
     taken: set[int] = set()
@@ -508,7 +509,9 @@ def find_slots(
         for second in range(first + 1, len(candidates)):
             if candidates[second][0] in taken:
                 continue
-            slot = _slot_from(body, normals, graph, masks, candidates[first], candidates[second])
+            slot = _slot_from(
+                body, normals, graph, masks, candidates[first], candidates[second], axes
+            )
             if slot is not None:
                 found.append(slot)
                 taken.update(slot.swallowed)
@@ -553,6 +556,7 @@ def _slot_from(
     masks: dict[bytes, _Shells],
     first: tuple[int, CylinderFit, list[int]],
     second: tuple[int, CylinderFit, list[int]],
+    axes: Mapping[int, np.ndarray | None],
 ) -> Slot | None:
     """Ob diese zwei Zylinderausschnitte ein Langloch sind — und welches.
 
@@ -568,8 +572,8 @@ def _slot_from(
     ):
         return None
 
-    axis_a = _unit(fit_a.axis)
-    axis_b = _unit(fit_b.axis)
+    axis_a = axes[index_a]
+    axis_b = axes[index_b]
     if axis_a is None or axis_b is None or abs(float(axis_a @ axis_b)) < PARALLEL_AXES:
         return None
     # Die gemeinsame Achse, aus beiden gemittelt: Das Vorzeichen der zweiten
@@ -577,6 +581,12 @@ def _slot_from(
     # Achse die andere auf.
     axis = _unit(axis_a + (axis_b if float(axis_a @ axis_b) > 0.0 else -axis_b))
     if axis is None:
+        return None
+
+    # Getrennte Mantelstücke scheiden vor der Richtungsrechnung aus. Die
+    # topologische Antwort hängt nur an der Achse, nicht an der Mittellinie.
+    across_mask, labels, touched = _shells_for(normals, axis, graph, masks)
+    if not _shares_a_shell(labels, graph, (index_a, patch_a), (index_b, patch_b), touched):
         return None
 
     centre_a = np.asarray(fit_a.centre, dtype=float)
@@ -590,10 +600,6 @@ def _slot_from(
         return None
     direction = sideways / travel
     across = np.cross(axis, direction)
-
-    across_mask, labels, touched = _shells_for(normals, axis, graph, masks)
-    if not _shares_a_shell(labels, graph, (index_a, patch_a), (index_b, patch_b), touched):
-        return None
 
     faces = _connected_shell(across_mask, graph, patch_a, patch_b)
     if faces is None:

@@ -1763,26 +1763,33 @@ def _without_thread_turns(
         return found
 
     advance_tolerance = weld_tolerance(float(np.linalg.norm(body.extents)))
+    axes = np.asarray([fit.axis for fit, _patch in found], dtype=float)
+    centres = np.asarray([fit.centre for fit, _patch in found], dtype=float)
+    radii = np.asarray([fit.radius for fit, _patch in found], dtype=float)
+    parallel_limit = math.cos(math.radians(SINK_AXIS_LIMIT))
     used: set[int] = set()
     for index, (fit, _patch) in enumerate(found):
         if index in used:
             continue
-        axis = np.asarray(fit.axis, dtype=float)
-        centre = np.asarray(fit.centre, dtype=float)
-        stack = [index]
-        for other_index, (other, _other_patch) in enumerate(found):
-            if other_index == index or other_index in used:
-                continue
-            if abs(float(axis @ np.asarray(other.axis, dtype=float))) < math.cos(
-                math.radians(SINK_AXIS_LIMIT)
-            ):
-                continue
-            offset = np.asarray(other.centre, dtype=float) - centre
-            across = offset - float(offset @ axis) * axis
-            if float(np.linalg.norm(across)) > fit.radius * SINK_FIT_LIMIT:
-                continue
-            if abs(other.radius - fit.radius) <= fit.radius * CYLINDER_TOLERANCE:
-                stack.append(other_index)
+        axis = axes[index]
+        offset = centres - centres[index]
+        across = offset - (offset @ axis)[:, None] * axis
+        # Dieselben Paarbedingungen in einem begrenzten Feld je Ausgangsfit.
+        # Kein quadratisches Feld und keine wiederholten Arrays je Taschenbogenpaar.
+        coaxial = np.flatnonzero(
+            (np.abs(axes @ axis) >= parallel_limit)
+            & (np.linalg.norm(across, axis=1) <= fit.radius * SINK_FIT_LIMIT)
+        ).tolist()
+        stack = [
+            index,
+            *(
+                other_index
+                for other_index in coaxial
+                if other_index != index
+                and other_index not in used
+                and abs(radii[other_index] - fit.radius) <= fit.radius * CYLINDER_TOLERANCE
+            ),
+        ]
 
         thread_stack: list[int] = []
         if len(stack) >= THREAD_TURNS and _one_run(
@@ -1799,17 +1806,10 @@ def _without_thread_turns(
             # als vorher und immer noch eins.
             low = min(_axial_span(body, found[entry][1], fit.axis)[0] for entry in thread_stack)
             high = max(_axial_span(body, found[entry][1], fit.axis)[1] for entry in thread_stack)
-            for other_index, (other, other_patch) in enumerate(found):
+            for other_index in coaxial:
                 if other_index in used:
                     continue
-                if abs(float(axis @ np.asarray(other.axis, dtype=float))) < math.cos(
-                    math.radians(SINK_AXIS_LIMIT)
-                ):
-                    continue
-                offset = np.asarray(other.centre, dtype=float) - centre
-                across = offset - float(offset @ axis) * axis
-                if float(np.linalg.norm(across)) > fit.radius * SINK_FIT_LIMIT:
-                    continue
+                other_patch = found[other_index][1]
                 other_low, other_high = _axial_span(body, other_patch, fit.axis)
                 if other_low >= low - EPS_GEOM and other_high <= high + EPS_GEOM:
                     used.add(other_index)

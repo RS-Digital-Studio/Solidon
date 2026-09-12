@@ -627,6 +627,20 @@ def test_looking_for_slots_does_not_grow_with_the_whole_mesh() -> None:
     assert taken < 2.5, "die Suche darf nicht wieder mit dem ganzen Netz wachsen"
 
 
+def test_complete_detection_includes_the_many_pocket_slot_search() -> None:
+    """Die Zeitgrenze umfasst Fits, geschlossene Paare und offene Mündungssuche."""
+    mesh = pocketed_plate(64)
+    forget_cache()
+    found: list[Any] = []
+
+    taken = measure("detect_pocketed_17k", lambda: found.append(detect(mesh)))
+
+    assert len(found) == 1
+    assert sum(feature.kind == "fillet" for feature in found[0].values()) == 256
+    assert not any(feature.kind == "slot" for feature in found[0].values())
+    assert taken < 2.5, "the target is one second; 2.5 catches the previous full-path regression"
+
+
 def test_a_tilted_body_is_not_the_expensive_case() -> None:
     """Derselbe Körper, gekippt — und genau daran ist der erste Anlauf gescheitert.
 

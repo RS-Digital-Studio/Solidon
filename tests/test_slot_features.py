@@ -89,6 +89,28 @@ def test_open_slot_search_checks_only_adjacent_faces(monkeypatch: pytest.MonkeyP
     )
 
 
+def test_unconnected_arcs_need_no_slot_direction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Getrennte Taschen werden abgewiesen, bevor ihre Querrichtungen gerechnet werden."""
+    import numpy as np
+
+    from tests.test_performance import pocketed_plate
+
+    mesh = _one_body(pocketed_plate(16))
+    fitted = _fitted(mesh)
+    original = np.cross
+    calls = 0
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(np, "cross", counted)
+
+    assert find_slots(mesh, fitted.fillets) == []
+    assert calls < 8 * len(fitted.fillets), "fremde Mantelstücke brauchen keine Querrichtung"
+
+
 def only_slot(mesh: MeshData) -> Feature:
     """Das eine erkannte Langloch — und die Zusicherung, dass es eines ist."""
     found = [entry for entry in detect(mesh).values() if entry.kind == "slot"]
