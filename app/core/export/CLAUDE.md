@@ -128,7 +128,9 @@ dort sagt `unreachable_overrides` dasselbe schon vor dem Lauf.
 
 `crashed` trennt den abgestürzten Slicer vom ablehnenden: Beide enden ohne
 Druckdatei, aber „prüfen Sie Ihr Profil" hilft bei einem Absturz niemandem.
-POSIX zählt Signale negativ, Windows meldet einen `NTSTATUS` ab `0xC0000000`.
+POSIX zählt Signale negativ, Windows meldet einen `NTSTATUS` mit Fehlerschwere
+und freiem reserviertem Bit 28. Als DWORD gelieferte eigene Fehlercodes wie
+Bambus `-100` bleiben reguläre Absagen, auch wenn ihre Zahl größer ausfällt.
 
 ## Warum `slicer_keys.py` existiert
 

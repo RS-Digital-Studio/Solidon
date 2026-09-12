@@ -3187,14 +3187,15 @@ def crashed(exit_code: int) -> bool:
 
     Zwei Schreibweisen, weil zwei Betriebssysteme verschieden zählen: POSIX
     meldet ein Signal als negative Zahl (``-11`` für SIGSEGV), Windows einen
-    ``NTSTATUS`` im Bereich ``0xC0000000``. Ein gewöhnlicher Fehlschlag ist
-    beides nicht — der Slic3r-Zweig gibt ``-17``, Cura ``1``.
+    ``NTSTATUS`` mit Fehlerschwere und freiem reserviertem Bit 28. Eigene
+    negative Windows-Rückgabewerte kommen dagegen als unsigned DWORD an:
+    Bambus ``-100`` ist ``0xFFFFFF9C`` und kein gültiger NTSTATUS.
     """
     if exit_code < 0:
         return True
-    # ``0xC0000000`` ist die NTSTATUS-Schwere „error"; alles darüber ist ein
-    # abgebrochener Prozess, nicht sein eigener Rückgabewert.
-    return 0xC0000000 <= exit_code <= 0xFFFFFFFF
+    # MS-ERREF §2.3: Schwere 11, N-Bit 0; das Customer-Bit bleibt frei,
+    # damit auch nicht abgefangene C++-Ausnahmen (0xE06D7363) erkannt werden.
+    return exit_code <= 0xFFFFFFFF and exit_code & 0xD0000000 == 0xC0000000
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:
