@@ -48,12 +48,16 @@ def test_native_qt_canvas_draws_and_releases_its_renderer() -> None:
         pytest.skip("kein X11-Display für den nativen Qt-Fensterweg")
     script = """
 import gc
+import math
 import weakref
-from PySide6.QtCore import QEvent, QLocale, Qt
+from PySide6.QtCore import QEvent, QLocale, QPoint, QPointF, Qt
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QLineEdit, QVBoxLayout, QWidget
 from app.ui.render.factory import make_renderer
 from app.ui.render.api import SurfaceStyle
+from app.ui.render.navigator import Navigator, WHEEL_STEP
+from tests.test_navigator import _Log
 from tests.test_render_contract import cube, look_down
 
 application = QApplication([])
@@ -84,6 +88,41 @@ view.render()
 print("gerendert", flush=True)
 assert view.screenshot().max() > 100
 print("bild geprueft", flush=True)
+# Die echten Qt-Radereignisse müssen bis zur Kamera reichen, auch unterhalb
+# einer Raste. Beide Projektionen behalten dabei den Weltpunkt am Zeiger.
+navigator = Navigator(view, "solidon", _Log().callbacks())
+token = view.add_pointer_listener(navigator.handle)
+pointer = QPointF(75, 45)
+ratio = view.widget.devicePixelRatioF()
+x, y = round(pointer.x() * ratio), round(pointer.y() * ratio)
+for parallel in (False, True):
+    view.set_parallel_projection(parallel)
+    for angles in ([15] * 8, [60, 60], [120], [180], [240], [-15] * 8, [-120], [0]):
+        pose = view.camera_pose()
+        scale = view.parallel_scale()
+        distance = math.dist(pose.position, pose.focal_point)
+        anchor = view.display_to_world(x, y, view.focal_depth())
+        total = 0
+        for angle in angles:
+            event = QWheelEvent(
+                pointer, pointer, QPoint(), QPoint(0, angle), Qt.MouseButton.NoButton,
+                Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False,
+            )
+            QApplication.sendEvent(view.widget, event)
+            total += angle
+            factor = (1.0 + WHEEL_STEP) ** (total / 120.0)
+            after = view.camera_pose()
+            actual = scale / view.parallel_scale() if parallel else (
+                distance / math.dist(after.position, after.focal_point)
+            )
+            assert math.isclose(actual, factor, rel_tol=1e-10), (parallel, angles, total, actual)
+            current = view.display_to_world(x, y, view.focal_depth())
+            assert math.dist(anchor, current) < 1e-8
+        view.set_camera_pose(pose)
+        view.set_parallel_scale(scale)
+view.remove_pointer_listener(token)
+del navigator
+print("feine und normale Radbewegungen geprüft", flush=True)
 text_field.setFocus()
 application.processEvents()
 assert application.focusWidget() is text_field

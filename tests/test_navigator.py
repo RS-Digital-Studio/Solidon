@@ -270,7 +270,7 @@ def release(
     return PointerEvent("release", x, y, button, frozenset(), shift, ctrl)  # type: ignore[arg-type]
 
 
-def wheel(x: int, y: int, delta: int) -> PointerEvent:
+def wheel(x: int, y: int, delta: float) -> PointerEvent:
     return PointerEvent("wheel", x, y, delta=delta)
 
 
@@ -392,18 +392,19 @@ def test_turntable_camera_matches_the_direct_call(scene: tuple[_FlatRenderer, _L
     assert renderer.pose.view_up == pytest.approx(expected[1])
 
 
+@pytest.mark.parametrize("steps", [0.125, 0.5, 1.0, 1.5, 3.0])
 def test_a_wheel_step_keeps_the_point_under_the_pointer(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, _Log], steps: float
 ) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "solidon", log.callbacks())
     before = renderer.display_to_world(320, 60, 0.5)
-    navigator.handle(wheel(320, 60, 1))
-    assert renderer.scale == pytest.approx(50.0 / (1.0 + WHEEL_STEP))
+    navigator.handle(wheel(320, 60, steps))
+    assert renderer.scale == pytest.approx(50.0 / (1.0 + WHEEL_STEP) ** steps)
     after = renderer.display_to_world(320, 60, 0.5)
     assert after == pytest.approx(before, abs=1e-9)
     assert ("camera",) in log.calls
-    navigator.handle(wheel(320, 60, -1))
+    navigator.handle(wheel(320, 60, -steps))
     assert renderer.scale == pytest.approx(50.0)
 
 

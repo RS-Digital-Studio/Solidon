@@ -165,7 +165,7 @@ class CameraPose:
 class PointerEvent:
     """Eine Zeigergeste im Bild, in Qt-Zählung (Ursprung oben links).
 
-    ``delta`` trägt beim Rad die Rasten (positiv heißt heran). ``button``
+    ``delta`` trägt beim Rad auch Bruchteile einer Raste (positiv heißt heran). ``button``
     nennt beim Drücken und Loslassen die Taste; beim Bewegen ist es ``None``,
     die gedrückten Tasten stehen in ``buttons``.
     """
@@ -178,7 +178,7 @@ class PointerEvent:
     shift: bool = False
     ctrl: bool = False
     alt: bool = False
-    delta: int = 0
+    delta: float = 0.0
 
 
 @dataclass(frozen=True)

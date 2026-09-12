@@ -736,7 +736,7 @@ class GfxRenderer(Renderer):
             """Die pygfx-Leinwand als Qt-Widget; Zeigergesten kommen hier an."""
 
             def _pointer(
-                self, kind: str, event: Any, button: MouseButton | None, delta: int = 0
+                self, kind: str, event: Any, button: MouseButton | None, delta: float = 0.0
             ) -> None:
                 if renderer := renderer_ref():
                     renderer._pointer(kind, event, button, delta)
@@ -759,7 +759,7 @@ class GfxRenderer(Renderer):
                 self._pointer("press", event, _button_of(event.button()))
 
             def wheelEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-                steps = round(event.angleDelta().y() / 120.0) if event.angleDelta().y() else 0
+                steps = event.angleDelta().y() / 120.0
                 self._pointer("wheel", event, None, delta=steps)
 
             def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
@@ -789,7 +789,9 @@ class GfxRenderer(Renderer):
         widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         return widget
 
-    def _pointer(self, kind: str, event: Any, button: MouseButton | None, delta: int = 0) -> None:
+    def _pointer(
+        self, kind: str, event: Any, button: MouseButton | None, delta: float = 0.0
+    ) -> None:
         from PySide6.QtCore import Qt
 
         ratio = self._ratio()

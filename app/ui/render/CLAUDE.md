@@ -43,6 +43,10 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   `PointerEvent` beim Viewport an (`_on_pointer`), der sie erst dem Zeiger,
   dann den Griffen und zuletzt dem Navigator gibt. Die Kamera führt der
   Navigator über den Vertrag (`set_camera_pose`, `dolly`).
+  Radbewegungen reisen als Bruchteile einer Raste in `PointerEvent.delta`:
+  Der Qt-Adapter teilt den Winkel durch 120, ohne jedes Ereignis zu runden.
+  Der Navigator verwendet den Anteil als Exponenten des Zoomfaktors; so
+  reagieren feine Räder sofort und behalten den Weltpunkt unter dem Zeiger.
 * **Zeichnen an einer Stelle.** Kein Aufruf hier zeichnet von selbst;
   `render()` ruft der Viewport in `_draw`. Am Widget zeichnet `render()`
   **synchron** (`force_draw`), sobald es sichtbar ist — `request_draw` allein
