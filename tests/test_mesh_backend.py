@@ -14,6 +14,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import pytest
 from packaging.requirements import Requirement
@@ -2014,51 +2015,36 @@ def _cancel_and_collect(server: Comfy) -> list[tuple[str, dict]]:
         generator.text_to_mesh("ein Halter", cancelled=abgebrochen)
 
     return [
-        (url.rsplit("/", 1)[-1], json.loads((body or b"{}").decode("utf-8")))
+        (urlsplit(url).path.lstrip("/"), json.loads((body or b"{}").decode("utf-8")))
         for url, body in server.posts
     ]
 
 
 def test_a_running_generation_can_be_cancelled() -> None:
-    """**Bis zu einer Stunde war eine laufende Erzeugung nicht abbrechbar.**
-
-    Der Dialog wartet beim Schließen fünfzig Millisekunden auf seinen Arbeiter
-    und lässt dann los; der Arbeiter rechnete weiter und meldete sein Ergebnis
-    an ein Fenster, das es nicht mehr gab. Gefragt wird jetzt in der
-    Warteschleife — dort wird die Zeit verbracht.
-
-    Unterbrochen wird, weil dieser Auftrag in ``queue_running`` steht: Der
-    Test daneben zeigt den wartenden Fall, in dem ``/interrupt`` ausbleibt.
-    """
+    """Der aktuelle Server bekommt einen atomaren Abbruch genau der eigenen ID."""
 
     class Running(Comfy):
         def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
-            # Nur die Frage nach der Schlange wird beantwortet; das Löschen ist
-            # ein POST auf dieselbe Adresse und gehört in die Liste der Sendungen.
-            if url.endswith("/queue") and body is None:
-                return json.dumps(
-                    {"queue_running": [[0, "job-1", {}]], "queue_pending": []}
-                ).encode()
+            if url.endswith("/api/jobs/job-1/cancel"):
+                self.posts.append((url, body))
+                return b'{"cancelled": true}'
             return super().__call__(url, body, headers)
 
     posts = _cancel_and_collect(Running(ready_after=99))
 
-    assert ("queue", {"delete": ["job-1"]}) in posts
-    assert ("interrupt", {"prompt_id": "job-1"}) in posts
+    assert ("api/jobs/job-1/cancel", {}) in posts
+    assert not [entry for entry in posts if entry[0] in {"interrupt", "queue"}]
     assert ("free", {"unload_models": True, "free_memory": True}) in posts
 
 
 def test_cancelling_a_waiting_job_leaves_a_foreign_job_alone() -> None:
-    """**``/interrupt`` wählt nicht aus — es beendet, was gerade rechnet.**
-
-    Das ``prompt_id`` im Rumpf sieht wie eine Auswahl aus und ist keine.
-    Unbedingt geschickt, traf der Abbruch auf einem geteilten ComfyUI den
-    fremden Auftrag, der gerade lief, während der eigene unversehrt in der
-    Schlange stand. Wartet der eigene Auftrag nur, genügt darum ``delete``.
-    """
+    """Ohne Job-Endpunkt wird nur die eigene wartende ID entfernt."""
 
     class Queued(Comfy):
         def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if url.endswith("/api/jobs/job-1/cancel"):
+                self.posts.append((url, body))
+                raise GenerationFailed()
             if url.endswith("/queue") and body is None:
                 return json.dumps(
                     {"queue_running": [[0, "fremd", {}]], "queue_pending": [[1, "job-1"]]}
@@ -2071,6 +2057,95 @@ def test_cancelling_a_waiting_job_leaves_a_foreign_job_alone() -> None:
     assert not [entry for entry in posts if entry[0] == "interrupt"], (
         "der eigene Auftrag wartete nur — unterbrochen worden wäre der fremde"
     )
+
+
+@pytest.mark.parametrize("reply", (None, b"", b"[]", b'{"cancelled": "true"}', b'{"cancelled": 1}'))
+def test_legacy_cancellation_never_interrupts_the_next_job(reply: bytes | None) -> None:
+    """Der eigene Auftrag endet zwischen Anfrage und Löschversuch; der nächste bleibt heil."""
+    running = "job-1"
+    pending = ["job-1", "foreign-pending"]
+    interrupted: list[str] = []
+    posts: list[tuple[str, dict]] = []
+
+    def transport(url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+        nonlocal running
+        path = urlsplit(url).path.lstrip("/")
+        if body is None:
+            return json.dumps({"queue_running": [[0, running, {}]], "queue_pending": []}).encode()
+        values = json.loads(body)
+        posts.append((path, values))
+        if path == "api/jobs/job-1/cancel":
+            if reply is None:
+                raise GenerationFailed()
+            return reply
+        if path == "queue":
+            pending[:] = [job for job in pending if job not in values.get("delete", [])]
+            running = "foreign-running"
+        elif path == "interrupt":
+            # ComfyUI 0.3.51 ignoriert den Rumpf des globalen Endpunkts.
+            interrupted.append(running)
+        return b"{}"
+
+    ComfyBackend(transport=transport)._cancel_job("job-1")
+
+    assert not interrupted
+    assert pending == ["foreign-pending"]
+    assert posts == [("api/jobs/job-1/cancel", {}), ("queue", {"delete": ["job-1"]})]
+
+
+@pytest.mark.parametrize("cancelled", (True, False))
+def test_job_cancellation_acknowledgement_needs_no_global_fallback(cancelled: bool) -> None:
+    """Auch ein bestätigtes No-op für einen fertigen Job löst keinen weiteren Eingriff aus."""
+    posts: list[tuple[str, bytes | None]] = []
+
+    def transport(url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+        posts.append((url, body))
+        return json.dumps({"cancelled": cancelled}).encode()
+
+    ComfyBackend(url="http://127.0.0.1:8188/comfy", transport=transport)._cancel_job("id/+?#")
+
+    assert posts == [("http://127.0.0.1:8188/comfy/api/jobs/id%2F%2B%3F%23/cancel", b"{}")]
+
+
+def test_legacy_running_job_releases_the_local_wait_and_ai_slot() -> None:
+    """Der alte Server darf weiterrechnen; Solidons Abbruch und lokale Sperre enden trotzdem."""
+    from app.core.backends import resources
+
+    class Legacy(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if url.endswith("/api/jobs/job-1/cancel"):
+                self.posts.append((url, body))
+                raise GenerationFailed()
+            if url.endswith("/queue") and body is None:
+                return b'{"queue_running": [[0, "job-1", {}]], "queue_pending": []}'
+            return super().__call__(url, body, headers)
+
+    posts = _cancel_and_collect(Legacy(ready_after=99))
+
+    assert ("queue", {"delete": ["job-1"]}) in posts
+    assert not [entry for entry in posts if entry[0] == "interrupt"]
+    acquired = resources._LOCAL_AI_LOCK.acquire(blocking=False)
+    try:
+        assert acquired, "der aufgegebene Lauf hält Solidons lokale KI-Sperre weiter"
+    finally:
+        if acquired:
+            resources._LOCAL_AI_LOCK.release()
+
+
+def test_failed_cancel_endpoints_do_not_hide_the_requested_cancellation() -> None:
+    """Fehler der Gegenstelle ersetzen OperationCancelled nicht durch einen Folgefehler."""
+
+    class Unreachable(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if url.endswith(("/cancel", "/queue")) and body is not None:
+                self.posts.append((url, body))
+                raise GenerationFailed()
+            return super().__call__(url, body, headers)
+
+    posts = _cancel_and_collect(Unreachable(ready_after=99))
+    assert ("api/jobs/job-1/cancel", {}) in posts
+    assert ("queue", {"delete": ["job-1"]}) in posts
+    assert not [entry for entry in posts if entry[0] == "interrupt"]
 
 
 def test_a_successful_local_generation_releases_comfy_models() -> None:

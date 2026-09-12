@@ -1142,38 +1142,40 @@ class ComfyBackend:
                 raise GenerationFailed(
                     detail=_(
                         "Der Generator rechnet seit einer Stunde an diesem Auftrag. "
-                        "Der Auftrag wird jetzt auch in ComfyUI beendet."
+                        "Solidon beendet das Warten. Ältere ComfyUI-Server können "
+                        "den Auftrag noch zu Ende rechnen."
                     )
                 )
             progress(0.5, self._waiting_text(job, waited))
             time.sleep(self.poll_seconds)
 
     def _cancel_job(self, job: str) -> None:
-        """Nimmt diesen Auftrag aus der Schlange — und unterbricht nur ihn.
+        """Bricht atomar genau diesen Auftrag ab, sonst entfernt es nur seinen Warteplatz.
 
-        **``/interrupt`` wählt nicht aus.** ComfyUI beendet damit, was gerade
-        rechnet, gleich von wem es stammt; das ``prompt_id`` im Rumpf sieht wie
-        eine Auswahl aus und ist keine. Unbedingt geschickt traf der Abbruch
-        deshalb auf einem geteilten Server den **fremden** Auftrag, der gerade
-        lief — und der eigene wartete davor unversehrt weiter.
-
-        Gefragt wird darum zuerst die Warteschlange: Läuft der eigene Auftrag,
-        wird unterbrochen; wartet er nur, genügt ``delete``. Ohne Auskunft wird
-        nicht unterbrochen — ein eigener Auftrag, der zu Ende rechnet, kostet
-        weniger als ein fremder, der abbricht.
+        Der Job-Endpunkt prüft und unterbricht unter derselben Serversperre.
+        Ältere Server kennen ihn nicht; deren `/interrupt` ignoriert entweder
+        die ID oder trennt Prüfung und Unterbrechung. Eine vorher gelesene
+        Warteschlange macht diesen globalen Weg nicht sicher.
         """
-        actions: list[tuple[str, dict[str, object]]] = [("queue", {"delete": [job]})]
-        if self._is_running(job):
-            actions.append(("interrupt", {"prompt_id": job}))
-        for path, values in actions:
-            try:
-                self.transport(
-                    f"{self.base}/{path}",
-                    json.dumps(values).encode("utf-8"),
-                    {"Content-Type": "application/json"},
-                )
-            except AppError, OSError, ValueError:
-                _log.warning("ComfyUI job %s could not be cancelled via %s", job, path)
+        headers = {"Content-Type": "application/json"}
+        identifier = urllib.parse.quote(job, safe="")
+        try:
+            answer = _answer_json(
+                self.transport(f"{self.base}/api/jobs/{identifier}/cancel", b"{}", headers)
+            )
+            if isinstance(answer, dict) and isinstance(answer.get("cancelled"), bool):
+                # False bestätigt einen bereits fertigen oder unbekannten
+                # Auftrag. Auch dann ist kein weiterer Eingriff nötig.
+                return
+        except AppError, OSError, ValueError:
+            pass
+        _log.info("ComfyUI job %s has no confirmed atomic cancellation; removing queue entry", job)
+        try:
+            self.transport(
+                f"{self.base}/queue", json.dumps({"delete": [job]}).encode("utf-8"), headers
+            )
+        except AppError, OSError, ValueError:
+            _log.warning("ComfyUI job %s could not be removed from the queue", job)
 
     def _release_resources(self) -> None:
         """Gibt lokal zwischengespeicherte Modelle nach Solidons Auftrag frei."""
@@ -1207,27 +1209,6 @@ class ComfyBackend:
             for entry in queue.get(group) or ():
                 if isinstance(entry, list) and job in [str(field) for field in entry]:
                     return True
-        return False
-
-    def _is_running(self, job: str) -> bool:
-        """Rechnet ComfyUI gerade an genau diesem Auftrag?
-
-        Enger als :meth:`_still_working`, und der Unterschied ist der Grund für
-        die eigene Methode: Ein wartender Auftrag lässt sich löschen, ein
-        laufender nur unterbrechen — und ``/interrupt`` trifft den, der gerade
-        rechnet, nicht den, den man nennt.
-
-        Ein Fehlschlag heißt hier **False**: Ohne Auskunft wird nicht
-        unterbrochen.
-        """
-        try:
-            answer = self.transport(f"{self.base}/queue", None, {})
-            queue = _answer_json(answer)
-        except AppError, OSError, ValueError:
-            return False
-        for entry in queue.get("queue_running") or ():
-            if isinstance(entry, list) and job in [str(field) for field in entry]:
-                return True
         return False
 
     def _waiting_text(self, job: str, seconds: float) -> str:

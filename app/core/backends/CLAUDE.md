@@ -52,8 +52,19 @@ Ollama und ComfyUI laufen auf demselben Rechner nie gleichzeitig durch
 Solidon. `resources.local_ai_slot()` serialisiert nur Loopback-Adressen;
 entfernte, möglicherweise geteilte Server bleiben unberührt. Ollama hält das
 Modell innerhalb eines vollständigen Agentenvorschlags warm und entlädt es im
-`finally`. ComfyUI löscht oder unterbricht beim Abbruch nur Solidons eigene
-Auftrags-ID und gibt seinen lokalen Modellcache nach jedem Auftrag frei.
+`finally`. ComfyUI erhält beim Abbruch ausschließlich Solidons eigene
+Auftrags-ID über `POST /api/jobs/{job_id}/cancel`. Der Endpunkt prüft und
+unterbricht atomar; `cancelled: false` bestätigt einen bereits beendeten oder
+unbekannten Auftrag. Ohne diese bestätigte Fähigkeit wird nur der eigene
+Warteschlangeneintrag über `/queue` entfernt. Ein älterer Server kann einen
+bereits laufenden Auftrag zu Ende rechnen, während Solidon sein Warten und
+seine lokale KI-Sperre beendet. `/interrupt` wird nie aufgerufen: Eine
+vorherige Warteschlangenabfrage verhindert den Wechsel zum nächsten Auftrag
+nicht. Nach jedem Auftrag wird weiterhin der lokale Modellcache freigegeben.
+
+Der Vertrag des atomaren Endpunkts steht in
+[ComfyUIs server.py](https://github.com/Comfy-Org/ComfyUI/blob/master/server.py)
+bei `_cancel_job_by_id` und `interrupt_if_running`.
 
 ## Grenzen
 
