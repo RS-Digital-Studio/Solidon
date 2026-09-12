@@ -943,3 +943,96 @@ def test_a_bridge_width_that_is_no_width_is_refused() -> None:
         with pytest.raises(ValidationError) as caught:
             slice_body(mesh, 0.2, bridge_from=wrong)
         assert caught.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“"
+
+
+# --- die Öffnung sagt Nein, ohne alles zu puffern (RM-109) ------------------------
+
+
+def _many_parts(count: int, width: float, thin: float | None = None) -> object:
+    """Eine Schicht aus vielen getrennten Streifen — der Fall der Rändelplatte.
+
+    ``thin`` setzt genau einen davon schmaler; er steht an letzter Stelle,
+    damit die Reihenfolge der Teile die Antwort nicht trägt.
+    """
+    from shapely.geometry import MultiPolygon
+    from shapely.geometry import box as shapely_box
+
+    parts = [shapely_box(index * 3.0, 0.0, index * 3.0 + width, 10.0) for index in range(count)]
+    if thin is not None:
+        last = count * 3.0
+        parts.append(shapely_box(last, 0.0, last + thin, 10.0))
+    return MultiPolygon(parts)
+
+
+def test_the_opening_gives_the_same_answer_with_and_without_the_shortcut() -> None:
+    """Der Teileweg beantwortet dieselbe Frage wie die ganze Form (RM-109).
+
+    Die Abkürzung darf das Ergebnis nicht verschieben — sie darf nur früher
+    fertig sein. Geprüft wird gegen die Rechnung, die sie ersetzt: den
+    Flächenverlust der **ganzen** Form gegen das feste Budget.
+
+    Gefahren über einen Bereich von Weiten, weil die Halbierung die Frage
+    genau so stellt: Jede einzelne muss stimmen, nicht nur die letzte.
+    """
+    from app.core.slice.analysis import WIDTH_LOST_FROM, _opening_loss, _survives_opening
+
+    for shape in (
+        _many_parts(200, 1.5),
+        _many_parts(200, 1.5, thin=0.2),
+        _many_parts(3, 4.0),
+    ):
+        for width in (0.05, 0.1, 0.25, 0.5, 1.0, 1.6, 2.0, 3.0):
+            genau = _opening_loss(shape, width) <= WIDTH_LOST_FROM
+            assert _survives_opening(shape, width) is genau, (
+                f"die Abkürzung weicht ab: Weite {width}, {len(shape.geoms)} Teile"
+            )
+
+
+def test_a_single_thin_strip_among_many_wide_ones_is_still_found() -> None:
+    """Und die Zusage, um die es bei der Beschleunigung ging (RM-109).
+
+    „Ohne dünne Rippen wieder zu übersehen" ist die halbe Abnahme des Punktes.
+    Zweihundert breite Streifen und einer von zwei Zehnteln: Die gemessene
+    Breite gehört dem dünnen, nicht dem Mittel.
+    """
+    from app.core.slice.analysis import minimum_width
+
+    assert minimum_width(_many_parts(200, 1.5, thin=0.2)) == pytest.approx(0.2, abs=0.05)
+    assert minimum_width(_many_parts(200, 1.5)) == pytest.approx(1.5, abs=0.05)
+
+
+def test_the_shortcut_looks_at_a_bounded_number_of_parts() -> None:
+    """Vergebliche Arbeit bleibt gedeckelt.
+
+    Übersteht die Schicht die Öffnung, war der Teileweg umsonst — und genau
+    dafür gibt es die Obergrenze: Eine Rändelschicht hat 2 898 Teile, und alle
+    einzeln zu puffern wäre die Arbeit, die eingespart werden sollte.
+    """
+    from app.core.slice.analysis import WIDTH_SCAN_PARTS, _thinnest_first
+
+    shape = _many_parts(500, 1.5)
+
+    looked = _thinnest_first(shape)
+
+    assert len(looked) == WIDTH_SCAN_PARTS, "der Deckel gilt"
+    assert _thinnest_first(_many_parts(1, 1.5)) == [], (
+        "eine einzelne Form hat nichts vorzusortieren"
+    )
+
+
+def test_the_thinnest_part_is_looked_at_first() -> None:
+    """Die Reihenfolge ist der Grund, aus dem die Abkürzung meistens greift.
+
+    Der dünne Streifen steht in ``_many_parts`` an letzter Stelle. Steht er
+    danach vorn, ordnet die Vorsortierung tatsächlich — und nicht die Liste.
+    """
+    from app.core.slice.analysis import _thinnest_first
+
+    shape = _many_parts(200, 1.5, thin=0.2)
+
+    first = _thinnest_first(shape)[0]
+
+    left, _bottom, right, _top = first.bounds
+    assert right - left == pytest.approx(0.2, abs=0.001), (
+        "der dünnste Streifen steht vorn, nicht der erste der Liste"
+    )

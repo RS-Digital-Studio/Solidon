@@ -359,6 +359,18 @@ jeder freien Bahn müssen aufliegen. Eine kurze, aber ungestützte Querrichtung
 verkürzt keinen Steg. Ohne beidseitig getragene Richtung bleibt das Ergebnis
 eine konservative geometrische Schätzung, keine Werkzeugbahnplanung.
 
+**Die Öffnung sagt Nein aus den Teilen und Ja aus der ganzen Form** (RM-109).
+Der Flächenverlust ist eine Summe über die getrennten Konturen einer Schicht,
+und jeder Summand ist nicht negativ: Reißt schon der dünnste Teil das Budget,
+steht das Nein fest, und die restlichen zweitausendachthundert müssen nicht
+mehr gepuffert werden. Umgekehrt gilt das nicht — berühren sich die Öffnungen
+zweier Teile, zählt die geteilte Fläche in der Summe doppelt, der Teileweg
+unterschätzt den Verlust also. Ein Ja kommt deshalb immer aus der ganzen Form,
+und `WIDTH_SCAN_PARTS` deckelt, wie viel vergebliche Arbeit der Teileweg davor
+kosten darf. Wer an dieser Stelle etwas ändert, prüft beide Richtungen gegen
+`_opening_loss` über der ganzen Form — die Halbierung fragt jede Weite
+einzeln, und eine verschobene Antwort verschiebt die gemeldete Breite.
+
 **Ab wann eine freie Fläche eine Brücke ist, sagt der Drucker** (Regel 7,
 RM-097). Es sind zwei Extrusionsbahnen — darunter kragt die Wandlinie selbst
 vor und liegt zur Hälfte auf der Schicht darunter, darüber muss der Slicer

@@ -61,7 +61,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Geschützte Flächen an die Ebenensuche hängen und im Dokument speichern; schräge Ebenen, Symmetrie, Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
-| [RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen](#rm-109) | Geometrie, Erkennung und Druckvorbereitung | Mindestbreitenprüfung mit gleichem Befund gezielt beschleunigen |
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Entscheiden, ob eine Verrundung ohne jede Operation in der Merkmalsliste stehen soll |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Organische und mechanische 200.000-Dreiecke-Fälle gegen eine Sekunde messen |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
@@ -763,10 +762,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-109"></a>
 
-- [ ] **RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen.** Die Vorprüfung der
-  Mindestbreite optimieren, ohne dünne Rippen wieder zu übersehen. Abnahme: Rändelplatte,
-  Rippenplatte und Kugel mit identischen Befunden vor/nach der Änderung, aktuelle isolierte
-  Laufzeiten und keine Verschlechterung der Formprüfung.
+- [x] **RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen.** Am 12.09.2026 gebaut.
+  **Die Vorprüfung war es nicht.** Der Punkt stand unter der Annahme, die vorgeschaltete Frage
+  „lohnt eine Messung überhaupt" koste die Zeit; gemessen kosteten die zweiunddreißig
+  Vorprüfungen der Platte zusammen **1,8 Millisekunden**. Die 4,24 Sekunden lagen in den beiden
+  Schichten, die tatsächlich gemessen wurden: Die Halbierung stellt je Schicht sieben Fragen,
+  und jede Frage pufferte alle 2 898 getrennten Konturen der Rändelzone auf einmal — 300
+  Millisekunden für eine Ja/Nein-Antwort.
+
+  `_survives_opening` beantwortet das Nein jetzt aus den Teilen. Der Flächenverlust ist eine
+  Summe über sie, und jeder Summand ist nicht negativ: Reißt schon der dünnste Teil das Budget,
+  steht die Antwort fest. Das **Ja** bleibt die ganze Form — berühren sich die Öffnungen zweier
+  Teile, zählt die geteilte Fläche in der Summe doppelt, der Teileweg unterschätzt den Verlust
+  also und taugt nur für die eine Richtung. `WIDTH_SCAN_PARTS = 64` deckelt, wie viel
+  vergebliche Arbeit davor anfallen darf; die Vorsortierung nach mittlerer Weite (vierfache
+  Fläche über dem Umfang) rechnet Fläche und Umfang aller Teile in einem Feld, weil sie einzeln
+  abgefragt 15 Millisekunden je Frage kosteten — mehr als die Puffer danach.
+
+  | Körper | vorher | nachher | kleinste Breite | Prüfsumme der Breiten |
+  |---|---|---|---|---|
+  | Rändelplatte (45 884 Dreiecke) | 6,98 s | **3,53 s** | 0,0277 mm | 60,0554 |
+  | Rippenplatte | 0,017 s | 0,019 s | 0,3043 mm | 56,0860 |
+  | Kugel | 0,072 s | 0,073 s | 2,0000 mm | 400,0000 |
+
+  Befunde überall gleich, Schicht für Schicht — die Prüfsumme ist die Summe aller gemeldeten
+  Breiten. `_survives_opening` fiel von 4,31 auf 0,86 Sekunden, von sechzig auf
+  vierundzwanzig Prozent des Laufs. Die beiden kleinen Körper verlieren einen Wimpernschlag an
+  die Vorsortierung; bei einer einzelnen Kontur steht sie gar nicht erst an.
+
+  Nachweis: vier Fälle in `tests/test_slice.py` — der Teileweg antwortet über einen Bereich von
+  Weiten wie die ganze Form, ein dünner Streifen unter zweihundert breiten wird weiter gefunden,
+  der Deckel gilt, und der dünnste Teil steht vorn. Vier Gegenproben, jede einzeln rot: ohne den
+  exakten Rückfall, ohne Rückfall und ohne Vorsortierung, ohne die Obergrenze, ohne die
+  Vorsortierung. **Der Beweis der Beschleunigung ist die Messung, nicht ein Test** — ein
+  Verhalten hat sich ja gerade nicht geändert; im Tor steht sie als Schranke von
+  `test_the_layer_analysis_survives_a_knurled_surface`, die von zwölf auf acht Sekunden
+  gezogen ist.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 

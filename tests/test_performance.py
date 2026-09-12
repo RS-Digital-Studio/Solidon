@@ -813,10 +813,17 @@ def test_the_layer_analysis_survives_a_knurled_surface() -> None:
     2 898 Ringen also 8,4 Millionen. Über den räumlichen Index sind es vier
     Sekunden; die Schranke hier fängt die Größenordnung, die 25-%-Schwelle
     des Vergleichslaufs den Rest.
+
+    **Die zweite Hälfte lag in der Breitenmessung** (RM-109, 12.09.2026).
+    Von sieben Sekunden gingen 4,24 an ``_survives_opening``: Die Halbierung
+    stellt je gemessener Schicht sieben Fragen, und jede pufferte alle 2 898
+    Konturen auf einmal. Sie sagt jetzt Nein, sobald die dünnsten Teile das
+    Budget zusammen reißen — gemessen 6,98 auf 3,53 Sekunden bei
+    unveränderten Befunden. Die Schranke steht deshalb bei acht statt zwölf.
     """
     mesh = knurled_plate()
     taken = measure("slice_knurl", lambda: slice_body(mesh, 0.2))
-    assert taken < 12.0
+    assert taken < 8.0
 
 
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:

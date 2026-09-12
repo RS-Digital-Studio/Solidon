@@ -77,6 +77,16 @@ WIDTH_SIMPLIFY = 0.01
 #: Millimeter Bahn ab.
 WIDTH_LOST_FROM = 0.01
 
+#: Wie viele Teile die Öffnung einzeln ansieht, bevor sie die ganze Form
+#: fragt (RM-109).
+#:
+#: Der Teileweg beantwortet nur das **Nein** und kostet dafür im besten Fall
+#: einen einzigen Puffer statt dreitausend. Übersteht die Schicht die Öffnung,
+#: war er vergeblich — und diese Zahl ist die Obergrenze dafür: vierundsechzig
+#: Konturen einer Rändelschicht sind gemessen sieben Millisekunden gegen die
+#: dreihundert der ganzen Form.
+WIDTH_SCAN_PARTS = 64
+
 #: Über dieser Breite ist eine Struktur schlicht „dick" und wird nicht weiter
 #: gemessen. Zwei Millimeter sind fünf Düsendurchmesser — keine Warnung in
 #: §22.2 schaut darüber, und die Suche nach einem exakten Wert dort oben
@@ -1203,8 +1213,62 @@ def _survives_opening(shape: ShapelyPolygon, width: float) -> bool:
     nicht mehr gültig: Eine Schwelle von ``width * width`` übersieht bei
     zwei Millimetern eine Rippe, die sie bei einem halben findet, und die
     Halbierung läuft an ihr vorbei.
+
+    **Ein Nein steht fest, sobald ein einziges Teil zu viel verliert**
+    (RM-109). Eine Rändelschicht besteht aus 2 898 getrennten Konturen mit
+    zusammen 14 400 Punkten; sie alle zu puffern kostete je Frage 300
+    Millisekunden, und die Halbierung stellt sieben davon. Gemessen am
+    12.09.2026: 4,24 Sekunden für vierzehn Fragen, sechzig Prozent der ganzen
+    Schichtanalyse — während die zweiunddreißig Vorprüfungen derselben Platte
+    zusammen 1,8 Millisekunden brauchten. Der Aufwand lag nicht an der
+    Vorprüfung, sondern an den wenigen Schichten, die überhaupt gemessen
+    werden.
+
+    Der Verlust ist eine **Summe** über die Teile, und jeder Summand ist
+    nicht negativ: Wer das Budget schon nach dem ersten Teil überschreitet,
+    überschreitet es auch mit allen. Die dünnsten zuerst — ein Teil, dessen
+    mittlere Weite kleiner ist, verliert eher.
+
+    **Und das Ja bleibt die ganze Form.** Die Öffnungen zweier Teile dürfen
+    sich berühren, und eine geteilte Fläche zählt dann in der Summe doppelt:
+    Der Teileweg unterschätzt den Verlust, taugt also für das Nein und nicht
+    für das Ja. Wer das Budget nach :data:`WIDTH_SCAN_PARTS` Teilen noch
+    nicht gerissen hat, bekommt die exakte Antwort über die ganze Form — mit
+    einer Obergrenze für die vergebliche Arbeit statt einer Wette.
     """
+    lost = 0.0
+    for part in _thinnest_first(shape):
+        lost += _opening_loss(part, width)
+        if lost > WIDTH_LOST_FROM:
+            return False
     return _opening_loss(shape, width) <= WIDTH_LOST_FROM
+
+
+def _thinnest_first(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
+    """Die dünnsten :data:`WIDTH_SCAN_PARTS` Teile dieser Form, dünnste zuerst.
+
+    Die mittlere Weite ordnet sie — vierfache Fläche über dem Umfang, dieselbe
+    Zahl, mit der :func:`minimum_width` ihre Klammer beginnt. Ein Teil, dessen
+    mittlere Weite kleiner ist, verliert bei einer Öffnung eher.
+
+    **Gerechnet wird über alle Teile auf einmal.** Fläche und Umfang einzeln
+    abzufragen kostete an einer Rändelschicht 15 Millisekunden je Frage — mehr
+    als die Puffer, die danach nötig waren; Shapely rechnet beides über ein
+    Feld in einem Zehntel davon. Eine Form ohne Teile beantwortet die Frage
+    ohne Umweg: Dort gibt es nichts vorzusortieren, und der Weg über die ganze
+    Form steht ohnehin dahinter.
+    """
+    parts = getattr(shape, "geoms", None)
+    if parts is None or len(parts) <= 1:
+        return []
+    entries = np.asarray(list(parts), dtype=object)
+    lengths = shapely.length(entries)
+    ordered = np.argsort(
+        np.where(
+            lengths > EPS_GEOM, 4.0 * shapely.area(entries) / np.maximum(lengths, EPS_GEOM), 0.0
+        )
+    )
+    return [entries[index] for index in ordered[:WIDTH_SCAN_PARTS]]
 
 
 def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERESTING) -> float:
@@ -1250,8 +1314,8 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
     low = 0.0
     high = float(interesting_below) if interesting_below > 0.0 else _open_bracket(coarse)
     # Die vierfache Fläche über dem Umfang ist die mittlere Breite dieser
-    # Form — bei einem langen Streifen genau seine Breite, bei einer Scheibe
-    # ihr Durchmesser. Ein Mittel liegt nie unter dem Kleinsten, taugt also
+    # Form — bei einer Scheibe ihr Durchmesser, bei einem langen Streifen
+    # knapp seine doppelte Breite. Ein Mittel liegt nie unter dem Kleinsten, taugt also
     # als Startpunkt; welche Seite der Klammer es besetzt, sagt ein Versuch.
     guess = 4.0 * float(coarse.area) / float(coarse.length)
     if EPS_GEOM < guess < high:
