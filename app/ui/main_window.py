@@ -4646,7 +4646,7 @@ class MainWindow(QMainWindow):
         if self.session.only_imported:
             clear_autosave(self.session.path, self.session.recovery_token)
             return True
-        answer =        answer = confirm_unsaved(self.session.title, self)
+        answer = confirm_unsaved(self.session.title, self)
         if answer == "cancel":
             return False
         if answer == "save":
