@@ -152,6 +152,23 @@ def test_the_arrows_follow_the_theme_and_survive_a_missing_cache() -> None:
     assert "image: url(" not in stylesheet("dark", 10, None)
 
 
+def test_a_failed_arrow_cache_is_reported_without_stopping_the_stylesheet(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Fehlende Schreibrechte bleiben im Protokoll sichtbar; die Oberfläche startet weiter."""
+    from app.ui.style import arrow_files
+
+    def denied(_path: Path, *_args: object, **_kwargs: object) -> int:
+        raise PermissionError("Pfeilcache ist schreibgeschützt")
+
+    monkeypatch.setattr(Path, "write_text", denied)
+    with caplog.at_level("INFO", logger="app.ui.style"):
+        arrows = arrow_files("dark")
+    assert arrows is None
+    assert "Pfeilcache ist schreibgeschützt" in caplog.text
+    assert "QSpinBox" in stylesheet("dark", 10, arrows)
+
+
 def test_a_splitter_handle_can_be_hit_with_a_mouse() -> None:
     """Ein Bildpunkt Griff ist eine Trennlinie, kein Griff.
 

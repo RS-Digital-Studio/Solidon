@@ -40,7 +40,10 @@ from PySide6.QtWidgets import (
     QWidgetAction,
 )
 
+from app.core.log import get_logger
 from app.ui.theme import THEMES, Theme
+
+_log = get_logger(__name__)
 
 #: Die Grundzahl des Rasters. Jeder Abstand in der Oberfläche ist ein
 #: Vielfaches davon — ``tests/test_style.py`` prüft das.
@@ -425,7 +428,8 @@ def arrow_files(theme: Theme) -> dict[str, str] | None:
             target.write_text(template.format(colour=THEMES[theme]["text"]), encoding="utf-8")
             paths[direction] = target.as_posix()
         return paths
-    except OSError:
+    except OSError as problem:
+        _log.info("Die Pfeile des Zahlenfelds ließen sich nicht ablegen: %s", problem)
         return None
 
 
