@@ -142,12 +142,13 @@ def test_the_second_read_pass_is_cancellable_between_paths() -> None:
 
 
 @pytest.mark.parametrize("crosses", [False, True])
+@pytest.mark.parametrize("unusable_exclusion", [False, True])
 def test_slice_model_replays_the_real_output_for_the_contour_check(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, crosses: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, crosses: bool, unusable_exclusion: bool
 ) -> None:
     payload = (
         BED
-        + EXCLUSION
+        + ("; bed_exclude_area = 10x10,10x10,10x10\n" if unusable_exclusion else EXCLUSION)
         + START
         + ("G0 X20 Y50\nG1 X80 E1\n" if crosses else "G0 X80 Y50\nG2 X80 Y50 I-30 J0 E1\n")
     )
@@ -169,27 +170,39 @@ def test_slice_model_replays_the_real_output_for_the_contour_check(
         handover.SlicerSetup(executable=executable, flavour="prusa"),
         output_dir=tmp_path,
     )
-    assert any(finding.code == "gcode.off_the_bed" for finding in outcome.findings) is crosses
+    codes = {finding.code for finding in outcome.findings}
+    assert ("gcode.off_the_bed" in codes) is (crosses and not unusable_exclusion)
+    assert ("gcode.invalid_build_area" in codes) is unusable_exclusion
+    assert (tmp_path / "produced.gcode").read_text(encoding="utf-8") == payload
 
 
 @pytest.mark.parametrize(
-    "line",
+    ("line", "warns"),
     [
-        "; bed_exclude_area = 0x0,10x10,10x0,0x10\n",
-        "; bed_exclude_area = 10x10,10x10,10x10\n",
+        ("; bed_exclude_area = 0x0,10x10,10x0,0x10\n", False),
+        ("; bed_exclude_area = 10x10,10x10,10x10\n", True),
     ],
 )
-def test_an_unusable_exclusion_in_the_file_does_not_abort_the_check(line: str) -> None:
+def test_an_unusable_exclusion_in_the_file_does_not_abort_the_check(line: str, warns: bool) -> None:
     # Ein Schmetterling ließ GEOS mit einer Ausnahme abbrechen, drei gleiche
     # Punkte ergeben keine Fläche — beides stammt aus der fremden Datei und
     # darf den Lauf nach dem gelungenen Slicen nicht abreißen.
     text = BED + line + START + "G0 X50 Y50\nG1 X60 E1\n"
-    assert handover.off_the_bed(text, profiles.make_profile(), "prusa") is None
+    finding = handover.off_the_bed(text, profiles.make_profile(), "prusa")
+    if warns:
+        assert finding is not None and finding.code == "gcode.invalid_build_area"
+        assert finding.severity == "warning" and finding.suggestions
+    else:
+        assert finding is None
     outside = BED + line + START + "G0 X150 Y50\nG1 X160 E1\n"
-    assert handover.off_the_bed(outside, profiles.make_profile(), "prusa") is not None
+    finding = handover.off_the_bed(outside, profiles.make_profile(), "prusa")
+    assert finding is not None and finding.code == "gcode.off_the_bed"
+    if warns:
+        assert isinstance(finding.values["detail"], TranslatableText)
 
 
-def test_a_bed_outline_without_area_falls_back_to_the_profile() -> None:
+@pytest.mark.parametrize("unusable_exclusion", [False, True])
+def test_a_bed_outline_without_area_falls_back_to_the_profile(unusable_exclusion: bool) -> None:
     profile = profiles.make_profile()
     printer = replace(
         profile.printer,
@@ -198,9 +211,14 @@ def test_a_bed_outline_without_area_falls_back_to_the_profile() -> None:
     )
     profile = replace(profile, printer=printer)
     flat = "; printable_area = 0x0,100x0,50x0\n"
-    assert (
-        handover.off_the_bed(flat + START + "G0 X5 Y50\nG1 X50 Y5 E1\n", profile, "prusa") is None
-    )
-    assert (
-        handover.off_the_bed(flat + START + "G0 X5 Y5\nG1 X10 E1\n", profile, "prusa") is not None
-    )
+    if unusable_exclusion:
+        flat += "; bed_exclude_area = 10x10,10x10,10x10\n"
+    finding = handover.off_the_bed(flat + START + "G0 X5 Y50\nG1 X50 Y5 E1\n", profile, "prusa")
+    assert finding is not None and finding.code == "gcode.invalid_build_area"
+    assert finding.severity == "warning" and finding.source == "gcode"
+    assert isinstance(finding.message, TranslatableText)
+    assert "Bettkontur" in finding.message.translate("de")
+    assert ("Sperrkontur" in finding.message.translate("de")) is unusable_exclusion
+    outside = handover.off_the_bed(flat + START + "G0 X5 Y5\nG1 X10 E1\n", profile, "prusa")
+    assert outside is not None and outside.code == "gcode.off_the_bed"
+    assert isinstance(outside.values["detail"], TranslatableText)

@@ -2335,6 +2335,9 @@ def off_the_bed(
     Der Speicher wächst nicht mit der Zahl der Bahnen. Ohne ``replay`` kann
     eine bereits gelesene Analyse allein keinen Durchtritt durch eine innere
     Sperrfläche belegen.
+
+    Unbrauchbare Konturen bleiben als Warnung sichtbar. Liegt zusätzlich
+    eine Bahn außerhalb, trägt der Fehler die Einschränkung als Einzelheit.
     """
     from io import StringIO
 
@@ -2351,21 +2354,49 @@ def off_the_bed(
     # sich selbst schneidet oder keine Fläche hat, ließ GEOS mit einer
     # Ausnahme abbrechen — nach dem gelungenen Slicen, mit der Druckdatei in
     # einem Ordner, der gleich gelöscht wird. Was keine Fläche ergibt, fällt
-    # auf das Profil zurück oder wird übergangen, und das Protokoll sagt es.
+    # auf das Profil zurück oder wird übergangen; der Prüfbericht sagt es.
+    notes: list[TranslatableText] = []
     area = _usable_area(analysis.bed_outline) if analysis.bed_outline else None
     if area is None:
         if analysis.bed_outline:
             _log.warning("the bed outline of the print file has no area; using the profile")
+            notes.append(
+                _(
+                    "Die Bettkontur der Druckdatei hat keine nutzbare Fläche; "
+                    "geprüft wurde gegen das Druckerprofil."
+                )
+            )
         area = build_area.printable_area(profile.printer)
         if wants_bed_coordinates(flavour):
             width, depth, _height = profile.printer.build_volume
             area = translate(area, xoff=width / 2.0, yoff=depth / 2.0)
+    excluded_invalid = False
     for contour in analysis.excluded_areas:
         blocked = _usable_area(contour)
         if blocked is None:
             _log.warning("an exclusion area of the print file has no area and is ignored")
+            excluded_invalid = True
             continue
         area = area.difference(blocked)
+    if excluded_invalid:
+        notes.append(
+            _(
+                "Mindestens eine Sperrkontur der Druckdatei hat keine nutzbare Fläche "
+                "und wurde bei der Prüfung ausgelassen."
+            )
+        )
+    warning = None
+    if notes:
+        detail = (
+            notes[0] if len(notes) == 1 else _("{first} {second}", first=notes[0], second=notes[1])
+        )
+        warning = Finding(
+            code="gcode.invalid_build_area",
+            severity="warning",
+            message=_("{detail} Prüfen Sie die Druckfläche im Slicer.", detail=detail),
+            source="gcode",
+            suggestions=(CHECK_SLICER_PROFILE,),
+        )
     height = (
         analysis.bed.maximum[2]
         if analysis.bed is not None and math.isfinite(analysis.bed.maximum[2])
@@ -2384,7 +2415,7 @@ def off_the_bed(
     if worst <= profile.printer.extrusion_width:
         allowed = area.buffer(profile.printer.extrusion_width, join_style="mitre")
         if allowed.covers(box(*extent.minimum[:2], *extent.maximum[:2])):
-            return None
+            return warning
         inside = analysis.paths_inside
         if isinstance(payload, str):
             text_payload = payload
@@ -2405,7 +2436,7 @@ def off_the_bed(
         if inside is not False:
             # Eine Hüllbox über einer Sperrzone beweist keine Materialbahn
             # darin. Ohne erneuten Zugriff auf die Bahnen fehlt der Nachweis.
-            return None
+            return warning
         return Finding(
             code="gcode.off_the_bed",
             severity="error",
@@ -2413,7 +2444,11 @@ def off_the_bed(
                 "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine "
                 "Sperrfläche. Prüfen Sie das Druckerprofil und die Anordnung im Slicer."
             ),
-            values={"axis": "XY", "reason": _("Druckfläche")},
+            values={
+                "axis": "XY",
+                "reason": _("Druckfläche"),
+                **({"detail": warning.message} if warning else {}),
+            },
             source="gcode",
         )
     return Finding(
@@ -2427,6 +2462,7 @@ def off_the_bed(
             "excess_mm": worst,
             "printed": f"{extent.minimum[axis]:.1f}..{extent.maximum[axis]:.1f}",
             "allowed": f"{bed.minimum[axis]:.1f}..{bed.maximum[axis]:.1f}",
+            **({"detail": warning.message} if warning else {}),
         },
         source="gcode",
     )

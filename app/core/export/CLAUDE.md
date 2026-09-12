@@ -154,6 +154,10 @@ ein zentriertes STL selbst, Prusa- und Orca-Projekte erhalten versetzte Punkte.
 Ein fehlgeschlagener Anordnungsversuch gilt nur für seinen Auftrag. Erst eine
 ausdrückliche Ablehnung der CLI-Option wird für weitere Aufträge gemerkt.
 
+Unbrauchbare Bett- und Sperrkonturen der Druckdatei bleiben als Warnung im
+Prüfbericht. Ein gleichzeitig nachgewiesener Bauraumübertritt hat Vorrang und
+trägt den Profilrückfall oder die ausgelassene Sperre als Einzelheit mit.
+
 Curas Lüfterhochlauf bildet keine feste Zahl ausgeschalteter Schichten ab.
 Der gemeinsame Exaktwert bleibt deshalb gesperrt; `setting_limitations`
 benennt die abweichende Bedeutung bei der Übergabe.
