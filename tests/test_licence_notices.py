@@ -54,6 +54,36 @@ def test_fixed_licence_sources_do_not_follow_development_branches() -> None:
     assert not moving, moving
 
 
+@pytest.mark.parametrize("family", ["Liberation", "Comfortaa", "DancingScript"])
+def test_font_licence_corruption_is_rejected(
+    family: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch reine Schriftbeilagen müssen den gehashten Quelltext behalten."""
+    from app.core.geom.label_ops import BUNDLED_FONT_LICENCES
+
+    filename = BUNDLED_FONT_LICENCES[family]
+    manifest = make_licence_notices.FIXED_MANIFEST.read_text(encoding="utf-8")
+    matching = [
+        block
+        for block in manifest.split("[[text]]")[1:]
+        if f'path = "third_party_licenses/{filename}"' in block
+    ]
+    assert len(matching) == 1, filename
+    manifest_path = tmp_path / "third_party_licenses.toml"
+    manifest_path.write_text("[[text]]" + matching[0], encoding="utf-8")
+    target = tmp_path / "third_party_licenses" / filename
+    target.parent.mkdir()
+    target.write_bytes(
+        (make_licence_notices.FIXED_ROOT / "third_party_licenses" / filename).read_bytes()
+    )
+    monkeypatch.setattr(make_licence_notices, "FIXED_MANIFEST", manifest_path)
+    monkeypatch.setattr(make_licence_notices, "FIXED_ROOT", tmp_path)
+    assert make_licence_notices._fixed_records() == {}
+    target.write_text("Lizenztext wurde abgeschnitten.\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Prüfen Sie Quelle und Manifest gemeinsam"):
+        make_licence_notices._fixed_records()
+
+
 def test_every_target_component_has_version_expression_and_full_text() -> None:
     components = make_licence_notices.collect_components()
     expected = {licences.normalise(name) for name in licences.runtime_packages()}

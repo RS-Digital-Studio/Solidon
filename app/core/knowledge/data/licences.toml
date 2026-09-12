@@ -28,6 +28,9 @@
 # Fassung im Dateinamen gegen die Schriftdatei selbst, und
 # `test_the_bundled_fonts_are_listed_here` hält diese Aufzählung gegen die
 # Zuordnung — eine vierte Sippe stünde sonst nirgends in der Aktenlage.
+# Zusätzlich führt `third_party_licenses.toml` ihre festen Primärquellen und
+# SHA-256-Werte. `test_font_licence_corruption_is_rejected` belegt, dass der
+# Beilagengenerator auch einen beschädigten Schriftlizenztext zurückweist.
 #
 # Sie erscheinen **nicht** in `THIRD-PARTY-NOTICES.md`: Die Beilage entsteht
 # aus den installierten Wheels und den nativen Laufzeitteilen, und eine Schrift

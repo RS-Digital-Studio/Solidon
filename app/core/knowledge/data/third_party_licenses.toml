@@ -1,6 +1,23 @@
-# Fest eingecheckte Lizenztexte für Ziel-Wheels, die den gewählten
-# Open-Source-Lizenzweg nicht selbst vollständig mitbringen. Jede Quelle ist
+# Fest eingecheckte Lizenztexte für Ziel-Wheels, Laufzeitteile und Schriften.
+# Sie belegen den gewählten Open-Source-Lizenzweg. Jede Quelle ist
 # auf eine unveränderliche Fassung festgelegt; der Generator prüft die Bytes.
+
+# Schriften sind weder Wheels noch native Laufzeitfamilien. Ihre Texte werden
+# geprüft und als Dateien mitgeliefert, ohne sie einem Paket zuzuordnen.
+[[text]]
+path = "third_party_licenses/Comfortaa-3.105-OFL-1.1.txt"
+source = "https://raw.githubusercontent.com/google/fonts/d76415e6d10823546b8d0029bef09921eed0cbce/ofl/comfortaa/OFL.txt"
+sha256 = "c89ab37b152eaa07dc5e8d100d6ffb968226a0c4988bdff16a97e73174e9c77c"
+
+[[text]]
+path = "third_party_licenses/DancingScript-2.001-OFL-1.1.txt"
+source = "https://raw.githubusercontent.com/google/fonts/f8dc91f6f13564fd038c60c02e82f305be8c551d/ofl/dancingscript/OFL.txt"
+sha256 = "c02c0002d3bbd41a16933c162888c400469c7029f1362ca9d60d5ed20ea7d157"
+
+[[text]]
+path = "third_party_licenses/Liberation-2.1.5-OFL-1.1.txt"
+source = "https://raw.githubusercontent.com/liberationfonts/liberation-fonts/2.1.5/LICENSE"
+sha256 = "a0c060f758d33ee59a674cd7b45914a560d0a5935968af5e87b0c6981fd89ddc"
 
 [[text]]
 path = "third_party_licenses/LGPL-3.0.txt"
