@@ -47,7 +47,6 @@ import gc
 import math
 import threading
 import weakref
-from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -68,45 +67,6 @@ from app.ui.viewport import PLATE_GAP
 from tests.render_fakes import BrokenDriverRenderer, RecordingItem, RecordingRenderer
 
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def _release_each_view_before_the_next() -> Iterator[None]:
-    """Räumt nach jedem Test auf, damit sich keine Ansichten anhäufen.
-
-    **Ohne diese Fixture hängt die ganze Datei an der Größe eines Viewports.**
-    Gemessen am 03.09.2026: Zwei zusätzliche Instanzattribute — zwei leere
-    Wörterbücher, sonst nichts — ließen den Lauf bei Test 29 von 148 mit
-    ``0xC0000374`` abbrechen, einer Heap-Beschädigung. Eines allein lief
-    durch, zwei nicht:
-
-        HEAD + 1 belangloses Attribut     142 passed
-        HEAD + 2 belanglose Attribute     Riss bei 28 Fortschrittszeichen
-        HEAD + 310 Kommentarzeilen        142 passed
-
-    Die Zeile, die es auslöste, war also nie die Ursache — fünf Einzelproben
-    an meinem eigenen Code blieben deshalb alle rot und schlossen nichts aus.
-    Was wirklich geschieht: Die Tests erzeugen ihre Ansichten lokal und geben
-    sie nie frei. Sie sammeln sich an, bis
-    ``test_the_camera_watcher_holds_the_view_only_weakly`` ein ``gc.collect``
-    ruft und sie **alle auf einmal** sterben — dabei reißt VTK. Werden die
-    Objekte größer, reißt es früher.
-
-    Ein Sammellauf nach jedem Test löst sie einzeln auf, und die Datei läuft
-    wieder ganz durch. Das kostet den Lauf 2,3 → 8,7 Sekunden, und das ist
-    der Preis dafür, dass die nächste Sitzung ein Feld hinzufügen darf, ohne
-    eine Woche zu suchen.
-
-    **Das ist keine Tarnung eines echten Fehlers.** In der Anwendung gibt es
-    einen Viewport und nicht hundertachtundvierzig; die Anhäufung entsteht
-    erst im Testlauf. Was sie deckt, ist ein bekannter Riss beim Abbau
-    (`ROADMAP.md`), und der wird davon nicht besser oder schlechter — nur
-    verteilt statt gebündelt.
-    """
-    import gc
-
-    yield
-    gc.collect()
 
 
 def test_the_effective_qt_platform_keeps_the_view_out_after_the_environment_changes(
@@ -2224,29 +2184,7 @@ def _horizon_tilt(
 
 
 def test_the_view_stays_upright_while_it_turns() -> None:
-    """Zwölf diagonale Züge, und der Horizont steht immer noch waagerecht.
-
-    Robert, 04.09.2026: „das rotieren neigt immer noch statt den winkel zur
-    mitte zu lassen." Der Trackball von VTK dreht um das Oben **der Kamera**
-    und führt es mit; über eine Geste summiert sich daraus eine Schräglage.
-
-    Die Gegenprobe steht im Test, damit die Zahl nicht nur in der
-    Commit-Meldung lebt: Dieselben zwölf Züge, mit ``Azimuth``, ``Elevation``
-    und ``OrthogonalizeViewUp`` gerechnet — also so, wie die Basisklasse es
-    tut —, kippen den Horizont um mehr als sechzig Grad.
-
-    **Gemessen an der echten ``vtkCamera``, und deshalb übersprungen, wenn es
-    sie nicht gibt.** Ein Nachbau der Formel wäre keine Gegenprobe mehr,
-    sondern dieselbe Rechnung zweimal. ``vtk`` steckt heute noch als kopflose
-    Geometriebibliothek in der Bereichsprüfung; fällt es ganz (Registerpunkt),
-    verschwindet mit ihm diese Messung — und nicht der Test, der den
-    Drehteller prüft.
-    """
-    pytest.importorskip(
-        "vtkmodules.vtkRenderingCore", reason="ohne VTK gibt es die Gegenprobe nicht mehr"
-    )
-    from vtkmodules.vtkRenderingCore import vtkCamera
-
+    """Zwölf diagonale Züge lassen den Horizont waagerecht, auch ohne VTK."""
     from app.ui.render.navigator import turntable_camera
 
     focal = (0.0, 0.0, 0.0)
@@ -2260,6 +2198,13 @@ def test_the_view_stays_upright_while_it_turns() -> None:
         "der Drehteller lässt die Ansicht aufrecht"
     )
 
+
+def test_the_old_vtk_trackball_tilts_the_horizon() -> None:
+    """Die historische Trackball-Gegenprobe braucht die echte vtkCamera."""
+    pytest.importorskip("vtkmodules.vtkRenderingCore", reason="optionale VTK-Gegenprobe")
+    from vtkmodules.vtkRenderingCore import vtkCamera
+
+    focal = (0.0, 0.0, 0.0)
     camera = vtkCamera()
     camera.SetPosition(0.0, -100.0, 60.0)
     camera.SetFocalPoint(*focal)
@@ -2308,23 +2253,8 @@ def test_turning_stops_at_the_pole_and_finds_its_way_back() -> None:
     assert height_angle(position) < POLE_LIMIT_DEGREES, "der Rückweg nach unten ist offen"
 
 
-def test_the_turn_keeps_its_distance_and_the_speed_it_had() -> None:
-    """Der Abstand zur Mitte bleibt, und die Geschwindigkeit ist die gewohnte.
-
-    Das Zweite ist die stille Zusage dieser Änderung: Wer das Neigen abstellt,
-    darf nicht nebenbei die Empfindlichkeit verstellen. Geprüft gegen
-    ``vtkCamera.Azimuth`` mit der Formel der Basisklasse — bei einem rein
-    waagerechten Zug müssen beide denselben Standort ergeben. Wie die
-    Gegenprobe darüber hängt auch diese am echten VTK und überspringt sich
-    ohne es.
-    """
-    import math
-
-    pytest.importorskip(
-        "vtkmodules.vtkRenderingCore", reason="ohne VTK gibt es die Gegenprobe nicht mehr"
-    )
-    from vtkmodules.vtkRenderingCore import vtkCamera
-
+def test_the_turn_keeps_its_distance() -> None:
+    """Diagonale Züge verändern den Abstand zur Mitte nicht."""
     from app.ui.render.navigator import turntable_camera
 
     focal = (0.0, 0.0, 0.0)
@@ -2337,6 +2267,17 @@ def test_the_turn_keeps_its_distance_and_the_speed_it_had() -> None:
 
     assert math.dist(position, focal) == pytest.approx(math.dist(start, focal))
 
+
+def test_the_turn_keeps_the_horizontal_speed_of_vtk() -> None:
+    """Die optionale Gegenprobe vergleicht die Empfindlichkeit mit vtkCamera.Azimuth."""
+    pytest.importorskip("vtkmodules.vtkRenderingCore", reason="optionale VTK-Gegenprobe")
+    from vtkmodules.vtkRenderingCore import vtkCamera
+
+    from app.ui.render.navigator import turntable_camera
+
+    focal = (0.0, 0.0, 0.0)
+    size = (1100, 650)
+    start = (0.0, -100.0, 60.0)
     camera = vtkCamera()
     camera.SetPosition(*start)
     camera.SetFocalPoint(*focal)
