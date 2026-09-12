@@ -328,12 +328,9 @@ def analysis_limits(profile: Profile, entry: SceneObject) -> tuple[float, float]
     walls = [item.minimum_wall_thickness for item in used]
     angles = [item.overhang_limit_degrees for item in used]
     if unknown:
-        walls.append(2.0 * profile.printer.extrusion_width)
-        angles.append(
-            Profile(
-                profile.printer, replace(profile.material, calibration_printer="")
-            ).overhang_limit_degrees
-        )
+        uncalibrated = Profile(profile.printer, replace(profile.material, calibration_printer=""))
+        walls.append(uncalibrated.minimum_wall_thickness)
+        angles.append(uncalibrated.overhang_limit_degrees)
     return (
         max(walls, default=profile.minimum_wall_thickness),
         min(angles, default=profile.overhang_limit_degrees),
