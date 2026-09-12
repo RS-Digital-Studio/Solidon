@@ -194,7 +194,11 @@ Bestand erst nach vollständigem Schreiben. Rechtefehler werden nicht unterdrüc
 Der Aktivierungs-Deploymentweg akzeptiert nur eindeutige Serverpfade mit
 Elternordner. Private Daten und Sicherungen müssen neben dem Dokumentenstamm
 liegen; ein bloßes `httpdocs`, Traversierung oder eine öffentliche private
-Wurzel hält vor der Verbindung an.
+Wurzel hält vor der Verbindung an. Jede Datei wird unter einem eindeutigen
+Zwischennamen übertragen und vollständig zurückgelesen; erst der Bytevergleich
+erlaubt das Umbenennen auf das Ziel. Ein Abbruch nennt den Sicherungsordner
+und den Rückweg per FTPS. Der Austausch ist je Datei atomar, nicht über die
+gesamte Gruppe von Endpunktdateien.
 
 **Website** `upload_website.py` (schließt `website/teile/` als lokalen
 Projektquellordner vollständig aus; Bausteindateien werden ausschließlich

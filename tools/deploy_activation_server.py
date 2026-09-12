@@ -20,6 +20,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -73,7 +74,19 @@ def _remote_bytes(session: ftplib.FTP_TLS, path: str) -> bytes | None:
 def _store_bytes(session: ftplib.FTP_TLS, path: str, payload: bytes) -> None:
     directories, name = _remote_parts(path)
     upload_website.ensure_dir(session, directories)
-    session.storbinary(f"STOR {name}", io.BytesIO(payload))
+    temporary = f".{name}.{uuid.uuid4().hex}.tmp"
+    try:
+        session.storbinary(f"STOR {temporary}", io.BytesIO(payload))
+        staged_path = "/".join([*directories, temporary])
+        if _remote_bytes(session, staged_path) != payload:
+            raise SystemExit(
+                f"Der temporäre Upload von {path} stimmt nicht mit der lokalen Datei überein. "
+                "Die bestehende Zieldatei bleibt erhalten; Verbindung prüfen und erneut versuchen."
+            )
+        session.rename(temporary, name)
+    finally:
+        with contextlib.suppress(OSError, EOFError, ftplib.Error):
+            session.delete(temporary)
 
 
 def _seed_matches(path: Path) -> bool:
@@ -314,6 +327,13 @@ def deploy(
             if stored != payload:
                 raise SystemExit(f"Upload ließ sich nicht bytegenau bestätigen: {remote}")
             print(f"  {remote} ({len(payload)} Bytes)")
+    except (OSError, EOFError, ftplib.Error, SystemExit) as problem:
+        raise SystemExit(
+            f"Deployment nicht abgeschlossen. Sicherungsordner: {backup}. "
+            "Den bestätigten Sicherungsbestand vor einem erneuten Versuch über FTPS prüfen; "
+            "bei Bedarf die betroffene Sicherungsdatei an ihren ursprünglichen Zielpfad "
+            "zurückspielen und den Dienst mit tools/check_activation.py erneut prüfen."
+        ) from problem
     finally:
         with contextlib.suppress(Exception):
             session.quit()

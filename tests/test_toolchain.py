@@ -2280,3 +2280,84 @@ def test_activation_deployment_rejects_ambiguous_or_public_private_roots(root: s
 
     with pytest.raises(SystemExit, match="Dokumentenstamm"):
         deployment._paths({"root": root})
+
+
+@pytest.mark.parametrize("failure", ["none", "write", "verify", "rename"])
+def test_activation_upload_publishes_only_complete_verified_bytes(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Ein abgerissener oder beschädigter Upload lässt den alten Endpunkt stehen."""
+    from tools import deploy_activation_server as deployment
+
+    class Server:
+        def __init__(self) -> None:
+            self.files = {"endpoint.php": b"previous"}
+            self.renamed: list[str] = []
+
+        def storbinary(self, command: str, stream: object) -> None:
+            name = command.removeprefix("STOR ")
+            self.files[name] = stream.read() if failure != "write" else b"part"
+            if failure == "write":
+                raise OSError("connection lost")
+
+        def nlst(self) -> list[str]:
+            return list(self.files)
+
+        def retrbinary(self, command: str, consume: object) -> None:
+            consume(b"corrupt" if failure == "verify" else self.files[command[5:]])
+
+        def rename(self, source: str, target: str) -> None:
+            assert self.files[source] == b"complete"
+            if failure == "rename":
+                raise OSError("rename refused")
+            self.renamed.append(target)
+            self.files[target] = self.files.pop(source)
+
+        def delete(self, name: str) -> None:
+            self.files.pop(name, None)
+
+    server = Server()
+    monkeypatch.setattr(deployment.upload_website, "ensure_dir", lambda *_args: None)
+    if failure == "none":
+        deployment._store_bytes(server, "domain/httpdocs/endpoint.php", b"complete")
+        assert server.files == {"endpoint.php": b"complete"}
+        assert server.renamed == ["endpoint.php"]
+    else:
+        with pytest.raises((OSError, SystemExit)):
+            deployment._store_bytes(server, "domain/httpdocs/endpoint.php", b"complete")
+        assert server.files == {"endpoint.php": b"previous"}
+
+
+def test_activation_deployment_failure_names_backup_and_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ein Verbindungsabbruch führt zum konkreten gesicherten Bestand zurück."""
+    from types import SimpleNamespace
+
+    from tools import deploy_activation_server as deployment
+
+    paths = [tmp_path / name for name in ("activation.seed", "activation.sqlite", "operator.token")]
+    for path in paths:
+        path.write_text("ab" * 32, encoding="ascii")
+    monkeypatch.setattr(deployment, "_seed_matches", lambda _path: True)
+    monkeypatch.setattr(deployment, "_check_php", lambda: None)
+    monkeypatch.setattr(deployment, "_database_bytes", lambda value, **_kwargs: value)
+    monkeypatch.setattr(deployment, "_remote_database_snapshot", lambda *_args: None)
+    monkeypatch.setattr(deployment, "_remote_bytes", lambda *_args: None)
+    monkeypatch.setattr(deployment, "PUBLIC_FILES", ())
+    monkeypatch.setattr(
+        deployment.upload_website,
+        "read_access",
+        lambda: {"root": "domain/httpdocs", "host": "ftp.example.test"},
+    )
+    monkeypatch.setattr(
+        deployment.upload_website, "connect", lambda _access: SimpleNamespace(quit=lambda: None)
+    )
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise OSError("connection lost")
+
+    monkeypatch.setattr(deployment, "_store_bytes", fail)
+    with pytest.raises(SystemExit, match="domain/backups/activation/") as raised:
+        deployment.deploy(*paths)
+    assert "FTPS" in str(raised.value) and "erneut prüfen" in str(raised.value)
