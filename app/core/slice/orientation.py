@@ -153,24 +153,6 @@ class SearchResult:
         return max(0.0, self.baseline.support_volume - self.best.support_volume)
 
 
-def sample_directions(count: int, seed: int | None = None) -> list[Vec3]:
-    """Gleichmäßig über die Kugel verteilte Richtungen, gedreht um einen
-    gesetzten Versatz.
-    """
-    generator = np.random.default_rng(seed or 0)
-    offset = float(generator.random())
-    golden = math.pi * (3.0 - math.sqrt(5.0))
-
-    found: list[Vec3] = []
-    for index in range(max(1, count)):
-        z = 1.0 - 2.0 * (index + offset) / max(count, 1)
-        z = float(np.clip(z, -1.0, 1.0))
-        radius = math.sqrt(max(0.0, 1.0 - z * z))
-        angle = golden * index
-        found.append((radius * math.cos(angle), radius * math.sin(angle), z))
-    return found
-
-
 def _unique_directions(directions: list[Vec3]) -> list[Vec3]:
     """Entfernt Lagen, die dieselbe Schichtanalyse erneut auslösen würden.
 

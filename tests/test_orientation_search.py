@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import pytest
@@ -19,7 +18,6 @@ from app.core.slice.orientation import (
     FINALISTS,
     best_face_candidate,
     judge,
-    sample_directions,
     search,
 )
 from app.core.types import Profile
@@ -29,16 +27,6 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 def corpus(name: str) -> MeshData:
     return place_on_bed(normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh)
-
-
-def test_the_sampling_covers_the_sphere() -> None:
-    directions = sample_directions(200, seed=1)
-
-    assert len(directions) == 200
-    for direction in directions:
-        assert abs(math.sqrt(sum(value**2 for value in direction)) - 1.0) < 1e-9
-    assert min(d[2] for d in directions) < -0.9, "downwards is covered"
-    assert max(d[2] for d in directions) > 0.9, "upwards too"
 
 
 def test_geometric_candidates_include_new_convex_hull_normals():
@@ -89,14 +77,6 @@ def test_shortlist_matches_the_fully_sliced_geometric_candidates(organic, profil
     assert result.tried <= FINALISTS + 1
 
 
-def test_the_seed_decides_the_sampling() -> None:
-    """§11.3: ohne den gespeicherten Startwert suchte dieselbe Datei nicht
-    gleich.
-    """
-    assert sample_directions(50, seed=7) == sample_directions(50, seed=7)
-    assert sample_directions(50, seed=7) != sample_directions(50, seed=8)
-
-
 def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
     """Achsen stehen fest und als Flächennormalen in derselben Kandidatenliste.
 
@@ -122,11 +102,6 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
         orientation,
         "face_candidates",
         lambda _mesh, **_kwargs: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
-    )
-    monkeypatch.setattr(
-        orientation,
-        "sample_directions",
-        lambda _count, _seed: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0)],
     )
     monkeypatch.setattr(orientation, "judge", record)
 
@@ -220,6 +195,51 @@ def test_a_pose_that_cannot_stand_never_wins(profile: Profile) -> None:
     assert ohne.best.first_layer_area > profile.smallest_first_layer, (
         "auch ohne Profil steht die Lage — die Vorauswahl sortiert nach Standfläche"
     )
+
+
+def test_search_passes_the_profile_footing_limit_to_the_final_choice(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Echte Geometriekandidaten; nur ihre teuren Schnittkennzahlen sind kontrolliert.
+
+    Die Lage mit dem geringsten Stützbedarf steht unter der Profilgrenze. Erreicht diese
+    Grenze die abschließende Wahl nicht, gewinnen beide Suchen dieselbe Lage.
+    """
+    from app.core.slice import orientation
+
+    body = MeshData.of(trimesh.creation.box(extents=(10.0, 20.0, 30.0)))
+    baseline = (0.0, 0.0, -1.0)
+    standing = (1.0, 0.0, 0.0)
+    floor = profile.smallest_first_layer
+    measured = []
+
+    def controlled_judge(
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
+        *,
+        overhang_angle: float | None = None,
+    ) -> orientation.Candidate:
+        measured.append(direction)
+        if direction == baseline:
+            return orientation.Candidate(direction, 1.0, floor / 2.0, 30.0)
+        if direction == standing:
+            return orientation.Candidate(direction, 2.0, floor * 2.0, 10.0)
+        return orientation.Candidate(direction, 10.0, floor * 3.0, 20.0)
+
+    monkeypatch.setattr(orientation, "judge", controlled_judge)
+
+    without_profile = search(body, count=6)
+    with_profile = search(body, count=6, profile=profile)
+
+    assert baseline in measured and standing in measured
+    assert without_profile.best.direction == baseline
+    assert with_profile.best.direction == standing
+    assert without_profile.best.first_layer_area < floor
+    assert with_profile.best.first_layer_area >= floor
+    assert without_profile.mesh.bounds.size[2] == pytest.approx(30.0)
+    assert with_profile.mesh.bounds.size[2] == pytest.approx(10.0)
 
 
 def test_the_floor_only_ranks_and_never_refuses(profile: Profile) -> None:
