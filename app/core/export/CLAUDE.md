@@ -16,6 +16,11 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 STEP geht über `brep/step.py`, nicht von hier.
 
+Objektbezogene Druckvorschläge werden vor der Formatwahl ausgewertet. Eine
+STL-Übergabe meldet nicht übertragbare Werte als Warnung mit dem konkreten
+Vorschlag; sie behauptet keine angewendete Einstellung. 3MF nennt die
+tatsächlich mitgeschriebenen Abweichungen als Information.
+
 Geometrieblöcke ersetzen ausschließlich vollständige `<mesh>`-Platzhalter.
 Titel, Körper- und Materialnamen bleiben XML-maskierte Nutzerdaten, selbst
 wenn sie eine der zufälligen Geometriemarken enthalten. Die Gegenprobe liest

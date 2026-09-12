@@ -943,28 +943,38 @@ def _part_settings(
     return handover.object_keys(settings, advice, flavour), advice
 
 
-def _part_setting_findings(advice: Sequence[SettingAdvice]) -> list[Finding]:
+def _part_setting_findings(
+    advice: Sequence[SettingAdvice], *, applied: bool = True
+) -> list[Finding]:
     """Was der Export je Teil selbst entschieden hat, in einem Satz je Grund.
 
     Einmal je Grund und nicht je Teil: Zwölf Behälter auf zu kleiner Fläche
     ergäben zwölf gleiche Zeilen, und elf davon verdrängen andere (§26.1).
     Dieselbe Zurückhaltung wie beim ungedeckelten Schnitt in ``autosplit``.
 
-    Die Schwere kommt vom Rat selbst. ``for_part`` gibt ``info``, und das ist
-    richtig: Hier ist nichts kaputt, hier hat die Anwendung etwas getan, das
+    Bei übernommenen Werten kommt die Schwere vom Rat selbst. ``for_part`` gibt
+    ``info``, und das ist richtig: Hier hat die Anwendung etwas getan, das
     der Kunde wissen soll — ein Brim kostet Material und muss abgeschnitten
-    werden.
+    werden. Kann die Ausgabe die Werte nicht tragen, wird daraus eine Warnung.
     """
     counted: dict[tuple[str, str], list[SettingAdvice]] = {}
     for entry in advice:
         counted.setdefault((entry.path, str(entry.reason)), []).append(entry)
     return [
         Finding(
-            code="export.part_setting",
-            severity=group[0].severity,
-            message=_(
-                "Für einzelne Teile gilt eine andere Einstellung als für die Platte — "
-                "die Geometrie verlangt es."
+            code="export.part_setting" if applied else "export.part_setting_unavailable",
+            severity=group[0].severity if applied else "warning",
+            message=(
+                _(
+                    "Für einzelne Teile gilt eine andere Einstellung als für die Platte — "
+                    "die Geometrie verlangt es."
+                )
+                if applied
+                else _(
+                    "Dieser Slicer übernimmt die empfohlenen Einstellungen für einzelne Teile "
+                    "nicht. Übernehmen Sie den genannten Vorschlag für die ganze Platte oder "
+                    "wählen Sie einen Slicer, der 3MF-Baugruppen liest."
+                )
             ),
             values={
                 "objects": len(group),
@@ -1054,7 +1064,18 @@ def write_assembly(
     width, depth, _height = profile.printer.build_volume
     bed = (width, depth) if place_on_bed and needs_bed_translation(flavour) else None
 
-    if for_slicer and not reads_assembly_file(flavour):
+    as_stl = for_slicer and not reads_assembly_file(flavour)
+    # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
+    # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch ein Format
+    # ohne Einstellungen je Teil muss den unerfüllten Vorschlag benennen.
+    part_advice = {
+        entry.id: _part_settings(as_mesh_data(entry.mesh), settings, flavour) for entry in chosen
+    }
+    findings += _part_setting_findings(
+        [advice for _keys, own in part_advice.values() for advice in own], applied=not as_stl
+    )
+
+    if as_stl:
         if settings is not None:
             from app.core.export import handover
 
@@ -1075,15 +1096,6 @@ def write_assembly(
         )
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
-
-    # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
-    # die Schlüssel wie der Grund kommen aus demselben Aufruf.
-    part_advice = {
-        entry.id: _part_settings(as_mesh_data(entry.mesh), settings, flavour) for entry in chosen
-    }
-    findings += _part_setting_findings(
-        [advice for _keys, own in part_advice.values() for advice in own]
-    )
 
     parts = [
         threemf.AssemblyPart(

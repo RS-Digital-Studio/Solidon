@@ -2007,6 +2007,33 @@ def test_a_brim_the_export_adds_by_itself_is_said_out_loud(
     assert treffer[0].values["value"] == "brim"
 
 
+@pytest.mark.parametrize("adhesion", ["skirt", "brim"])
+def test_cura_says_when_part_settings_cannot_be_carried(
+    tmp_path: Path, profile: Profile, adhesion: str
+) -> None:
+    """Curas STL trägt keinen Brim je Körper; der Export erklärt den unerfüllten Rat."""
+    mesh = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 80.0)))
+    body = replace(scene_object("obj_1", "Turm"), mesh=mesh)
+    settings = print_settings.resolve(profile, "standard")
+    settings = print_settings.with_path(settings, "adhesion.kind", adhesion)
+
+    written, findings = write_assembly(
+        [body], tmp_path, project_name="Turm", profile=profile, settings=settings, flavour="cura"
+    )
+
+    assert written.suffix == ".stl"
+    assert read_mesh(written.read_bytes(), ".stl").volume == pytest.approx(mesh.volume)
+    unavailable = [entry for entry in findings if entry.code == "export.part_setting_unavailable"]
+    assert len(unavailable) == (1 if adhesion == "skirt" else 0)
+    assert not [entry for entry in findings if entry.code == "export.part_setting"]
+    if unavailable:
+        assert unavailable[0].severity == "warning"
+        assert unavailable[0].values["setting"] == "adhesion.kind"
+        assert unavailable[0].values["value"] == "brim"
+        assert unavailable[0].values["objects"] == 1
+        assert str(unavailable[0].values["reason"])
+
+
 def test_nothing_is_said_when_every_part_takes_the_plates_setting(
     tmp_path: Path, profile: Profile
 ) -> None:
