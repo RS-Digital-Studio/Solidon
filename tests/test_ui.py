@@ -2626,6 +2626,83 @@ def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: Mai
         QApplication.processEvents()
 
 
+@pytest.mark.parametrize(
+    "selection", ["other_feature", "other_body", "same", "none", "project", "evaluation"]
+)
+def test_a_feature_placement_stays_with_its_selected_place(
+    window: MainWindow, selection: str
+) -> None:
+    """Eine neue Auswahl übernimmt keine wartende Änderung der vorherigen Stelle."""
+    from render_fakes import RecordingRenderer
+
+    from app.ui.labels import LengthSpin
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    if selection == "other_body":
+        window.session.import_model(MESHES / "plate_holes.stl")
+        assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [name for name, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2
+    window.object_tree.select_feature(object_id, holes[0])
+    panel = window.feature_panel
+    panel._in_view.click()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    flow, host = window._quiet_placement, window._quiet_host
+    assert flow is not None and flow.active and flow._accept.isEnabled()
+    assert host is not None
+    before = len(window.session.project.document.ops)
+
+    selected_object, selected_hole = object_id, holes[0]
+    if selection == "other_feature":
+        selected_hole = holes[1]
+    elif selection == "other_body":
+        selected_object = next(name for name in result.scene.objects if name != object_id)
+        assert selected_hole in result.scene.objects[selected_object].features
+    elif selection == "project":
+        window.session.start_new()
+        window.session.import_model(MESHES / "plate_holes.stl")
+        assert window.session.wait_for_idle(30_000)
+    elif selection == "evaluation":
+        window.session.evaluate_now()
+    if selection == "none":
+        window.object_tree.select_object(None)
+    else:
+        window.object_tree.select_feature(selected_object, selected_hole)
+    QApplication.processEvents()
+
+    if selection == "same":
+        assert window._quiet_placement is flow and flow.active
+        assert window._quiet_host is host
+        assert len(window.session.project.document.ops) == before
+    else:
+        assert not flow.active, "die Maßlinien der vorigen Stelle werden abgeräumt"
+        host.accept()
+        assert len(window.session.project.document.ops) == before, "der alte Rückruf ist ungültig"
+        if selection in ("none", "project", "evaluation"):
+            return
+    diameter = next(
+        field
+        for field in panel.findChildren(LengthSpin)
+        if field.isVisibleTo(panel)
+        and "Bohrung ändern" in field.accessibleName()
+        and "Durchmesser" in field.accessibleName()
+    )
+    diameter.set_value_mm(diameter.value_mm() + 0.5)
+    panel._apply.click()
+    assert window.session.wait_for_idle(30_000)
+    step = window.session.project.document.ops[-1]
+    assert len(window.session.project.document.ops) == before + 1
+    assert step.op == "resize_hole"
+    assert tuple(step.inputs) == (selected_object,)
+    assert step.params["at_feature"] == selected_hole
+
+
 def test_the_gizmo_sentence_reaches_the_status_line(window: MainWindow) -> None:
     """Was der Griff bewegen wird, sagt die Ansicht — und der Kunde liest es.
 

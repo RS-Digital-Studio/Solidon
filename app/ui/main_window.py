@@ -9452,6 +9452,8 @@ class MainWindow(QMainWindow):
         self._quiet_host: Any = None
         """Ihr Träger. Getrennt geführt, damit ein Test ihn fragen kann, ohne
         durch den Fluss zu greifen."""
+        self._quiet_target: tuple[str, str | None] | None = None
+        """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._measures_to_resume: str = ""
         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
 
@@ -11763,6 +11765,7 @@ class MainWindow(QMainWindow):
         nicht aus den Feldern: Im Bild hat jemand eine Stelle eingestellt, und
         die Felder rechts kennen sie nicht.
         """
+        self._end_changed_quiet_placement()
         flow = self._quiet_placement
         if flow is not None and flow.active:
             # **Die Maße kommen nach dem Schritt wieder** — an demselben
@@ -11899,14 +11902,33 @@ class MainWindow(QMainWindow):
         self._drop_feature_preview()
         self.end_quiet_placement()
         spec = REGISTRY.get(op)
+        document = self.session.project.document
+        result = self.session.last_result
+        target = (object_id, self.object_tree.selected_feature())
+
+        def apply_placement(values: Mapping[str, Any]) -> None:
+            # Ein schon zugestellter Rückruf gehört weiterhin seinem Träger
+            # und Dokumentstand, auch wenn inzwischen dieselben Kennungen in
+            # einem anderen Projekt oder an einer neuen Auswahl vorkommen.
+            if (
+                self._quiet_host is not host
+                or self.session.project.document is not document
+                or self.session.last_result is not result
+                or not self.session.result_current
+                or (self.object_tree.selected(), self.object_tree.selected_feature()) != target
+            ):
+                return
+            self._apply_placed_feature(op, values)
+
         host = QuietHost(
             params,
-            lambda values: self._apply_placed_feature(op, values),
+            apply_placement,
             known=[field.name for field in spec.params.spec()],
         )
         flow = PlacementFlow(host, self, lambda: spec, lambda: (object_id,))
         self._quiet_host = host
         self._quiet_placement = flow
+        self._quiet_target = target
         flow.start()
         if not flow.active:
             # Wo keine Fläche zu finden ist, bleibt es beim Knopf rechts —
@@ -11914,6 +11936,12 @@ class MainWindow(QMainWindow):
             self.end_quiet_placement()
             return
         self.feature_panel.set_measuring(True)
+
+    def _end_changed_quiet_placement(self) -> None:
+        """Eine Platzierung räumen, sobald die Auswahl eine andere Stelle meint."""
+        selected = (self.object_tree.selected(), self.object_tree.selected_feature())
+        if self._quiet_target is not None and self._quiet_target != selected:
+            self.end_quiet_placement()
 
     def end_quiet_placement(self) -> None:
         """Eine laufende Platzierung ohne Dialog beenden und abräumen.
@@ -11926,6 +11954,7 @@ class MainWindow(QMainWindow):
         """
         flow, self._quiet_placement = self._quiet_placement, None
         self._quiet_host = None
+        self._quiet_target = None
         if flow is not None:
             flow.dispose()
         self.feature_panel.set_measuring(False)
@@ -14522,6 +14551,13 @@ class MainWindow(QMainWindow):
         )
 
     def _on_selection(self, object_id: str | None) -> None:
+        if self._quiet_target is not None:
+            if object_id is None:
+                # Der Baum leert beim Wiederwählen kurz seine Auswahl. Erst
+                # nach dieser Runde steht fest, ob sie wirklich leer bleibt.
+                QTimer.singleShot(0, self, self._end_changed_quiet_placement)
+            else:
+                self._end_changed_quiet_placement()
         # **Alle gewählten Körper, nicht nur der erste.** Hier stand
         # ``select(object_id)`` — die Kennung des ersten Eintrags —, während
         # die Statuszeile drei Zeilen weiter unten mit ``selected_objects()``

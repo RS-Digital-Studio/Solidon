@@ -305,6 +305,12 @@ doppelt, sehr verwirrend für den Kunden"). Was der Fluss von seinem Träger
 braucht, steht in `PlacementHost`; `MainWindow.end_quiet_placement` räumt ihn
 ab, denn ohne Fenster meldet niemand sein Ende.
 
+Die stille Platzierung gehört zu einem festen Körper und Merkmal. Eine andere
+Auswahl räumt sie ab; das kurzzeitige Leeren beim Wiederherstellen derselben
+Baumauswahl wird erst nach der Ereignisrunde bewertet. Vor dem Übernehmen
+prüft ihr Rückruf zusätzlich Träger, Dokument und Auswertung, damit ein alter
+Auftrag keine inzwischen gleich benannte Stelle verändert.
+
 **Sie beginnt dabei dort, wo das Merkmal schon sitzt** (`_begin_at_feature`,
 10.09.2026). Bis dahin fing jede Platzierung bei „Auf eine Oberfläche zeigen"
 an — richtig für ein Werkzeug, das noch nirgends sitzt, falsch für eine
