@@ -2554,7 +2554,8 @@ class PrintSettingsDialog(QDialog):
             tr(
                 "Mit Haken tragen eine gespeicherte 3MF und die Übergabe an den Slicer "
                 "diese Werte. Ohne Haken geht nur die Geometrie hinaus, und Ihr Slicer "
-                "arbeitet mit seinem eigenen Profil."
+                "arbeitet mit seinem eigenen Profil. Beim direkten Slicen aus Solidon "
+                "gelten diese Werte immer, unabhängig vom Haken."
             )
         )
         self.share_settings.setStatusTip(self.share_settings.toolTip())

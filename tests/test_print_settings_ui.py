@@ -4290,6 +4290,8 @@ def test_the_head_offers_the_way_back(dialog: PrintSettingsDialog) -> None:
         ("accessible description", dialog.share_settings.accessibleDescription()),
     ):
         assert "Geometrie" in value, f"der {channel} sagt, was ohne Haken hinausgeht: {value!r}"
+        assert "direkten Slicen" in value
+        assert "unabhängig vom Haken" in value
 
     dialog.share_settings.setChecked(False)
     assert not dialog.ui_settings.print_settings_in_files, (
