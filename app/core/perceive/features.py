@@ -1002,6 +1002,18 @@ def _threads_instead_of_phantoms(
     if not helices:
         return found
 
+    # Die Dateireihenfolge ihrer Kantenzüge darf keine Merkmalskennung bestimmen.
+    # Gleiche Mittelpunkte werden über die gemessenen Gewindemaße aufgelöst.
+    helices = sorted(
+        helices,
+        key=lambda entry: (
+            tuple(round(value, 3) for value in entry.centre),
+            round(entry.diameter, 3),
+            round(entry.pitch, 3),
+            round(entry.length, 3),
+            entry.internal,
+        ),
+    )
     kept = dict(found)
     for number, helix in enumerate(helices, start=1):
         on_the_helix = set(helix.face_indices)

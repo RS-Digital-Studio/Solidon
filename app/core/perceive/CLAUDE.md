@@ -294,6 +294,8 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Die Anzahl der gleichzeitig berechneten Steigungen richtet sich nach der
   Punktzahl. `detect` reicht seine Abbruchprüfung bis in diese Blöcke und in
   die Kantenzugsuche weiter; ein Abbruch veröffentlicht keinen Merkmalscache.
+  `thread_N` wird nach der räumlichen Mitte und bei gleicher Mitte nach den
+  gemessenen Gewindemaßen vergeben, unabhängig von der Vertexreihenfolge.
 - **Was für kein Werkzeug groß genug ist, ist kein Merkmal.**
   `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für **alle sechs** eingepassten
   Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht

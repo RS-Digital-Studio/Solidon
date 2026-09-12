@@ -285,6 +285,43 @@ def test_the_tree_shows_one_thread_instead_of_a_handful_of_phantoms() -> None:
     assert fitted == [], f"Phantome übrig: {[(f.id, f.kind) for f in fitted]}"
 
 
+def test_thread_names_do_not_follow_vertex_order() -> None:
+    """M5 links und M8 rechts behalten ihre Namen nach einer anderen Speicherung."""
+    from app.core.perceive.features import forget_cache
+
+    mesh = _built(
+        OperationDraft(op="create_box", params={"width": 80.0, "depth": 40.0, "height": 6.0}),
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={"size": "M5", "length": 12.0, "internal": False, "z": 6.0, "x": -20.0},
+        ),
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={"size": "M8", "length": 12.0, "internal": False, "z": 6.0, "x": 20.0},
+        ),
+    )
+    for seed in (7, 11, 23):
+        order = np.random.default_rng(seed).permutation(len(mesh.raw.vertices))
+        inverse = np.empty_like(order)
+        inverse[order] = np.arange(len(order))
+        rewritten = MeshData.of(
+            trimesh.Trimesh(
+                vertices=mesh.raw.vertices[order], faces=inverse[mesh.raw.faces], process=False
+            )
+        )
+        forget_cache()
+        threads = {
+            str(key): value for key, value in detect(rewritten).items() if value.kind == "thread"
+        }
+        assert set(threads) == {"thread_1", "thread_2"}
+        for identifier, diameter, x in (("thread_1", 5.0, -20.0), ("thread_2", 8.0, 20.0)):
+            feature = threads[identifier]
+            assert feature.params["diameter"] == pytest.approx(diameter, abs=0.4), seed
+            assert feature.params["centre"][0] == pytest.approx(x, abs=0.2), seed
+
+
 def test_a_body_without_a_helix_keeps_every_feature() -> None:
     """Ohne Wendel ändert sich nichts — die Unterdrückung greift nur dort.
 
