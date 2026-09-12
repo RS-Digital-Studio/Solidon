@@ -700,8 +700,12 @@ class Session(QObject):
 
     @property
     def busy(self) -> bool:
-        """True, solange eine Auswertung läuft — der Fortschritt gehört ihr."""
-        return self._worker is not None and self._worker.isRunning()
+        """Auswertung und Einleseplan teilen sich den Fortschritt bis zum Ende.
+
+        Auch ein fertiger Faden zählt bis zur Zustellung seines Endsignals:
+        Sein Ergebnis kann noch die nächste Auswertung anstoßen.
+        """
+        return self._worker is not None or self._plan is not None
 
     @property
     def document_name(self) -> str:
@@ -1641,9 +1645,9 @@ class Session(QObject):
             self._on_plan_ready(plan, source_id)
             return
 
-        self.busyChanged.emit(True)
         worker = _PlanWorker(source_id, path.name, payload, unit, first_model, self.report_progress)
         self._plan = worker
+        self.busyChanged.emit(True)
         # **An die Leine, wie jeder andere Arbeiter auch.** Ohne diese Zeile
         # holt der Speicherbereiniger den Arbeiter, während sein Faden noch
         # läuft: Der Lauf starb dann irgendwo später mit einer
@@ -1683,6 +1687,7 @@ class Session(QObject):
         """
         if self._plan is worker:
             self._plan = None
+            self.busyChanged.emit(self.busy)
         self._leash.hold_until_done(worker)
 
     def _stale_import(self, source_id: str, generation: int | None) -> bool:
@@ -1702,7 +1707,6 @@ class Session(QObject):
         ``History.apply`` ändert das Dokument und fragt die Lizenzgrenze; beides
         gehört dorthin, wo auch alles andere am Dokument geschieht.
         """
-        self.busyChanged.emit(False)
         if self._stale_import(source_id, generation):
             return
         if generation is not None and self._cancel_by_user and self.cancel_signal.is_cancelled:
@@ -1738,7 +1742,6 @@ class Session(QObject):
         Projektwechsel trägt das neue womöglich dieselbe Kennung, und die
         gehört ihm (UI-01).
         """
-        self.busyChanged.emit(False)
         if self._stale_import(source_id, generation):
             return
         self._drop_source(source_id)
@@ -2251,7 +2254,6 @@ class Session(QObject):
             return
         self.cancel_signal.reset()
         self._cancel_by_user = False
-        self.busyChanged.emit(True)
         worker = _EvaluationWorker(self)
         # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
         # fertig, bevor Qt seine Signale zugestellt hat — und in dieser Lücke
@@ -2275,6 +2277,7 @@ class Session(QObject):
         worker.cancelled.connect(partial(self._on_cancelled, finished=worker))
         worker.finished.connect(partial(self._on_thread_done, worker))
         self._worker = worker
+        self.busyChanged.emit(True)
         self._leash.start(worker)
 
     def run_evaluation(self, quality: Quality | None = None) -> EvaluationResult:
@@ -2741,7 +2744,7 @@ class Session(QObject):
             self._rerun_pending = False
             self.evaluate_async()
             return
-        self.busyChanged.emit(False)
+        self.busyChanged.emit(self.busy)
 
     def release(self, timeout_ms: int = 10_000) -> None:
         """Alles loslassen, was diese Sitzung außerhalb von Qt hält.

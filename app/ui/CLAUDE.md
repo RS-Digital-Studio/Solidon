@@ -130,6 +130,11 @@ bevor es jemand wusste:
   damit einen Weg, den das Fenster nicht mehr geht — fünf Tests in
   `test_ui.py` hingen daran (03.09.2026).
 
+  Einleseplan und Auswertung teilen sich `busy` und `busyChanged`. Erst die
+  zugestellten Endsignale beider Arbeiter beenden den Fortschritt; weder die
+  leere Startauswertung noch ein Importfehler dürfen den noch laufenden
+  anderen Arbeiter ausblenden. So bleibt auch Abbrechen bis zum Ende erreichbar.
+
 ## Die Karte
 
 Zwei benannte Merkmale verschiedener Körper werden im Objektbaum gemeinsam

@@ -9901,6 +9901,100 @@ def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
     assert "nz" not in moved.params or moved.params["nz"] == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize("cancel", [False, True])
+def test_import_from_start_keeps_progress_until_the_plan_finishes(
+    window: MainWindow,
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    cancel: bool,
+) -> None:
+    """Die leere Startauswertung beendet weder Planfortschritt noch Abbrechen."""
+    from app.ui import session as module
+
+    entered, proceed = threading.Event(), threading.Event()
+    real_work = module._PlanWorker.work
+
+    def held_work(worker: Any) -> None:
+        entered.set()
+        assert proceed.wait(30)
+        real_work(worker)
+
+    monkeypatch.setattr(module, "PLAN_IN_WORKER_ABOVE", 0)
+    monkeypatch.setattr(module._PlanWorker, "work", held_work)
+    seen: list[bool] = []
+    window.session.busyChanged.connect(seen.append)
+    window._show_start_screen(True)
+    window.open_path(MESHES / "cube_clean.stl")
+    planner = window.session._plan
+    try:
+        assert entered.wait(5)
+        assert planner is not None
+        if window.session._worker is not None:
+            assert window.session._worker.wait(5000)
+        qt_app.processEvents()
+        qt_app.processEvents()
+        assert planner.isRunning()
+        assert window.session._worker is None, "the initial evaluation must have finished"
+        assert window.session.busy
+        assert False not in seen, "progress must not end before the import plan"
+        assert window._progress_states["evaluation"].active
+        window._show_progress_bar()
+        assert window.cancel_button.isVisibleTo(window)
+        assert window.cancel_button.isEnabled()
+        if cancel:
+            window.cancel_button.click()
+    finally:
+        proceed.set()
+        assert window.session.wait_for_idle(30_000)
+
+    assert not window.session.busy
+    assert not window._progress_states["evaluation"].active
+    assert not window.cancel_button.isVisibleTo(window)
+    assert seen[-1] is False
+    assert bool(window.session.project.document.ops) is not cancel
+    assert bool(window.session.project.sources) is not cancel
+
+
+def test_an_import_failure_does_not_end_another_evaluation(
+    session: Session, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der frühere Fehler des Plans lässt die laufende Auswertung sichtbar."""
+    from app.ui import session as module
+
+    entered, proceed = threading.Event(), threading.Event()
+    real_evaluation = session.run_evaluation
+
+    def held_evaluation(quality: Any = None) -> Any:
+        entered.set()
+        assert proceed.wait(30)
+        return real_evaluation(quality)
+
+    monkeypatch.setattr(module, "PLAN_IN_WORKER_ABOVE", 0)
+    monkeypatch.setattr(session, "run_evaluation", held_evaluation)
+    seen: list[bool] = []
+    failed: list[object] = []
+    session.busyChanged.connect(seen.append)
+    session.importFailed.connect(failed.append)
+    session.evaluate_async()
+    try:
+        assert entered.wait(5)
+        session.import_payload_async("broken.stl", b"broken")
+        planner = session._plan
+        assert planner is not None and planner.wait(5000)
+        qt_app.processEvents()
+        qt_app.processEvents()
+        assert failed, "the import must have reported its failure"
+        assert session._plan is None
+        assert session.busy
+        assert False not in seen, "the failed plan must not end the evaluation's progress"
+    finally:
+        proceed.set()
+        assert session.wait_for_idle(30_000)
+
+    assert not session.busy
+    assert seen[-1] is False
+
+
 def test_a_late_worker_does_not_switch_off_its_successor(session: Session) -> None:
     """Der Nachzügler meldete „fertig" mitten in den Lauf seines Nachfolgers.
 

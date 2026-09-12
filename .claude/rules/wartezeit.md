@@ -100,6 +100,12 @@ wer danach die Szene fragte, bekam eine leere. Wer einen Arbeiter dazubaut,
 trägt ihn dort ein; sonst wartet die Schleife auf einen Lauf, den es noch gar
 nicht gibt.
 
+**Einleseplan und Auswertung besitzen denselben Beschäftigtzustand.**
+`Session.busy` zählt beide bis zur Zustellung ihres Endsignals. Ein einzelnes
+Ergebnis oder ein Fehler schaltet die Anzeige nicht aus, solange der andere
+Arbeiter noch dazugehört. Das gilt auch für die leere Auswertung beim ersten
+Import vom Startbildschirm: Sie kann lange vor dem Einleseplan enden.
+
 **Und seine Antwort trägt das Dokument, für das er lief.** Zwischen Start und
 Antwort kann ein neues Projekt offen sein, und das trägt wieder eine eigene
 `src_1`: Der verspätete Fehler des alten Imports räumte sie aus dem **neuen**
