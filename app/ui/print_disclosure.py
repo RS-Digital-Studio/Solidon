@@ -77,6 +77,9 @@ class PrintDisclosureResult(Enum):
     ACKNOWLEDGED = "acknowledged"
     """Gerade gelesen und bestätigt."""
 
+    REJECTED = "rejected"
+    """Geschlossen, ohne die Dateibeilage oder den Anzeigenachweis zu ändern."""
+
     FAILED = "failed"
     """Der Hinweis ließ sich nicht zeigen oder nicht merken."""
 
@@ -216,13 +219,18 @@ def ensure_print_disclosure(
         return PrintDisclosureResult.ALREADY_SEEN
     if not someone_is_watching():
         return PrintDisclosureResult.NO_ONE_THERE
+    dialog: PrintDisclosureDialog | None = None
     try:
         dialog = PrintDisclosureDialog(settings.print_settings_in_files, parent)
-        dialog.exec()
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return PrintDisclosureResult.REJECTED
         settings.print_settings_in_files = dialog.shares_settings()
         remember_disclosure(settings)
         save_settings(settings)
     except Exception:  # ein Hinweis darf die Arbeit nicht anhalten
         _log.exception("print disclosure could not be shown")
         return PrintDisclosureResult.FAILED
+    finally:
+        if dialog is not None:
+            dialog.deleteLater()
     return PrintDisclosureResult.ACKNOWLEDGED

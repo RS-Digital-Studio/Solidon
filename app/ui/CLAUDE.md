@@ -688,6 +688,10 @@ Schäden gelten die Nummern 10 und 11 des Lizenzvertrags. Anders als der
 KI-Hinweis sperrt er nichts — hier verlässt nichts das Gerät, und die Wahl
 darunter entscheidet erst über das Speichern.
 
+Nur „Verstanden“ übernimmt die Dateibeilage und merkt den Hinweis. Escape
+und Fensterschließen lassen beide Werte unverändert; der Druckdialog bleibt
+auch über diesen Rückweg erreichbar.
+
 Drei Stellen tragen sie: Der Hinweis fragt einmal je Textfassung, der
 Umschalter im Kopf des Druckdialogs zeigt und ändert sie, und
 `settings_for_export()` beantwortet damit die Frage, was eine Datei

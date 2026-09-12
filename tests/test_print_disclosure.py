@@ -168,7 +168,7 @@ def test_the_choice_from_the_notice_reaches_the_settings(
     def _answer(dialog: PrintDisclosureDialog) -> int:
         shown.append(True)
         dialog.share.setChecked(False)
-        return 0
+        return int(PrintDisclosureDialog.DialogCode.Accepted)
 
     monkeypatch.setattr(PrintDisclosureDialog, "exec", _answer)
     # Die Suite läuft offscreen, und dort erscheint der Hinweis mit Absicht
@@ -188,6 +188,38 @@ def test_the_choice_from_the_notice_reaches_the_settings(
     assert again is PrintDisclosureResult.ALREADY_SEEN
     assert shown == [True], "und kein zweites Mal gefragt"
     assert not settings.print_settings_in_files, "die frühere Wahl bleibt"
+
+
+@pytest.mark.parametrize("answer", ["escape", "close"])
+def test_leaving_the_print_notice_keeps_the_previous_choice(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    """Ein verworfener Haken entscheidet weder die Dateibeilage noch den Nachweis."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    stored: list[object] = []
+    monkeypatch.setattr("app.ui.print_disclosure.someone_is_watching", lambda: True)
+    monkeypatch.setattr("app.ui.print_disclosure.save_settings", lambda value: stored.append(value))
+
+    def leave(dialog: PrintDisclosureDialog) -> int:
+        dialog.show()
+        dialog.share.setChecked(False)
+        if answer == "escape":
+            QTest.keyClick(dialog, Qt.Key.Key_Escape)
+        else:
+            dialog.close()
+        return int(dialog.result())
+
+    monkeypatch.setattr(PrintDisclosureDialog, "exec", leave)
+    settings = UiSettings()
+    result = ensure_print_disclosure(settings)
+    assert settings.print_settings_in_files
+    assert not settings.print_disclosure_version
+    assert not settings.print_disclosure_at_utc
+    assert not stored
+    assert result.may_continue
+    assert result is not PrintDisclosureResult.ACKNOWLEDGED
 
 
 def test_a_failing_notice_does_not_block_the_dialog(
