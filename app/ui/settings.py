@@ -190,6 +190,13 @@ class UiSettings:
     Der Merker bleibt lokal in den Oberflächeneinstellungen und reist nie in
     einer Projektdatei."""
 
+    generation_disclosure_version: str = ""
+    generation_disclosure_target: str = ""
+    generation_disclosure_data: str = ""
+    generation_disclosure_at_utc: str = ""
+    """Eigener Hinweisnachweis für Text/Bild-Erzeugung; ein Chat-Hinweis gilt
+    nicht für ComfyUI und seine anderen Datenarten."""
+
     print_disclosure_version: str = ""
     print_disclosure_at_utc: str = ""
     """§29: Textfassung und UTC-Zeitpunkt des zuletzt gezeigten Druckhinweises

@@ -632,6 +632,16 @@ seinem Signal leert, hält es bis zur Entscheidung den unbearbeiteten
 Eingabetext: Bei einem Abbruch kommen auch Leerraum und Zeilenumbrüche
 vollständig und markiert ins Feld zurück.
 
+Weg 3 nutzt denselben zugänglichen Dialog mit eigenem Erzeugertext vor dem
+Start des Arbeiters. ComfyUI erhält Beschreibung oder Bild, Startwert,
+Erzeugungsablauf und Modellwahl; der Hinweis unterscheidet Loopback und
+Remote. Sein separater `generation_disclosure_*`-Nachweis bindet Textfassung,
+Datenarten, bereinigtes Ziel und UTC-Zeitpunkt. Ein Chatnachweis ersetzt ihn
+nicht. Der Auftrag hält eine Kopie des geprüften Comfy-Backends; wechselt das
+Ziel während des Hinweises, verlangt der Dialog einen neuen Start. Abbruch,
+Darstellungs- und Speicherfehler starten keinen Arbeiter. Der Rücksetzknopf in
+den Einstellungen entfernt beide Nachweise erst beim Speichern.
+
 ## §29 — der Bericht kommt vor der Datei
 
 `_ExportWorker` hört im ersten Lauf an der Prüfung auf: Findet sie etwas ab

@@ -136,6 +136,103 @@ def test_the_record_binds_version_backend_target_and_a_real_utc_timestamp() -> N
     assert not settings.ai_disclosure_at_utc
 
 
+@pytest.mark.parametrize("field", ["version", "target", "data", "at_utc"])
+def test_comfy_record_is_separate_and_invalidates_each_contract_field(field: str) -> None:
+    """Der Chatmerker erklärt keinen Erzeuger; alle vier Bestandteile gehören zum Nachweis."""
+    from app.ui.ai_disclosure import target_for_comfy
+
+    settings = UiSettings()
+    chat = target_for_ollama("https://same.example")
+    target = target_for_comfy("https://user:secret@same.example:443/path?token=hidden#part")
+    assert target.address == "https://same.example"
+    assert target.target_class == "remote"
+    remember_disclosure(settings, chat)
+    assert not disclosure_is_current(settings, target)
+    remember_disclosure(settings, target)
+    assert disclosure_is_current(settings, chat)
+    assert disclosure_is_current(settings, target)
+    assert not disclosure_is_current(settings, target_for_comfy("http://localhost:8188"))
+    assert not disclosure_is_current(settings, target_for_comfy("https://other.example"))
+    setattr(settings, f"generation_disclosure_{field}", "outdated")
+    assert not disclosure_is_current(settings, target)
+    assert disclosure_is_current(settings, chat)
+    clear_disclosure(settings)
+    assert not disclosure_is_current(settings, chat)
+
+
+@pytest.mark.parametrize("address", ["http://127.0.0.1:8188", "https://comfy.example"])
+def test_comfy_notice_explains_its_own_payload_and_accessible_back_path(
+    qt_app: QApplication, address: str
+) -> None:
+    """Beide Erzeugerziele zeigen Datenarten und einen zugänglichen Rückweg ohne Chatbehauptung."""
+    from app.ui.ai_disclosure import target_for_comfy
+
+    target = target_for_comfy(address)
+    dialog = AiDisclosureDialog(target)
+    try:
+        _show_until_ready(dialog, qt_app)
+        text = dialog.provider_text.text()
+        for expected in (target.address, "Beschreibung", "Bild", "Startwert", "Modellwahl"):
+            assert expected in text
+        assert ("anderen Rechner" in text) is (target.target_class == "remote")
+        assert "3D-Modell" in dialog.general_text.text()
+        assert "Erzeugen-Dialog" in dialog.back_button.accessibleDescription()
+        assert not dialog.external_links
+    finally:
+        dialog.deleteLater()
+
+
+def test_main_window_keeps_the_generation_record_in_its_live_settings(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, window: MainWindow
+) -> None:
+    """Ein späteres Speichern des Hauptfensters überschreibt keinen separat geladenen Merker."""
+    from app.core.backends.mesh import ComfyBackend, Readiness
+    from app.ui.ai_disclosure import target_for_comfy
+    from app.ui.generate_dialog import GenerateDialog
+
+    target = target_for_comfy("https://comfy.example")
+    monkeypatch.setattr(ComfyBackend, "readiness", lambda *args: Readiness.READY)
+    monkeypatch.setattr(ComfyBackend, "model_choices", lambda *args: {})
+
+    def close(dialog: GenerateDialog) -> int:
+        assert dialog.settings is window.settings
+        remember_disclosure(dialog.settings, target)
+        dialog.release()
+        return int(QDialog.DialogCode.Rejected)
+
+    monkeypatch.setattr(GenerateDialog, "exec", close)
+    window._generate(None)
+    assert disclosure_is_current(window.settings, target)
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_comfy_notice_translations_fit_at_large_text(qt_app: QApplication, language: str) -> None:
+    """Die beiden Datenwege bleiben mit großer Schrift in jeder Sprache erreichbar."""
+    from app.ui.ai_disclosure import target_for_comfy
+
+    install_language(language)
+    set_language(language)
+    try:
+        for address in ("http://localhost:8188", "https://comfy.example"):
+            dialog = AiDisclosureDialog(target_for_comfy(address))
+            try:
+                font = dialog.font()
+                font.setPointSizeF(max(font.pointSizeF(), 9.0) * 2)
+                dialog.setFont(font)
+                dialog.resize(320, 480)
+                _show_until_ready(dialog, qt_app)
+                assert dialog.scroll_area.horizontalScrollBar().maximum() == 0
+                for label in (dialog.heading, dialog.general_text, dialog.provider_text):
+                    assert label.height() + 1 >= label.heightForWidth(label.width())
+                for button in (dialog.back_button, dialog.continue_button):
+                    assert dialog.rect().contains(button.mapTo(dialog, button.rect().bottomRight()))
+            finally:
+                dialog.deleteLater()
+    finally:
+        install_language("de")
+        set_language("de")
+
+
 def test_ollama_targets_are_normalised_classified_and_free_of_secrets() -> None:
     local = target_for_ollama(
         "http://name:secret@127.0.0.1:11434/reverse/api/chat?token=hidden#fragment"

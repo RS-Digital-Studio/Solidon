@@ -160,6 +160,10 @@ class SettingsDialog(QDialog):
             or settings.ai_disclosure_backend
             or settings.ai_disclosure_target
             or settings.ai_disclosure_at_utc
+            or settings.generation_disclosure_version
+            or settings.generation_disclosure_target
+            or settings.generation_disclosure_data
+            or settings.generation_disclosure_at_utc
         )
         # **Gesperrt heißt: der Grund steht dort, wo sonst der Zweck steht.**
         # Der Knopf trug seine Beschreibung unabhängig vom Zustand, und die
@@ -168,8 +172,8 @@ class SettingsDialog(QDialog):
         # Wer den grauen Knopf anfasst, will wissen, warum er grau ist.
         note = (
             tr(
-                "Löscht nur den lokalen Anzeigenachweis. Vor der nächsten "
-                "Chatnachricht erscheint der KI-Hinweis erneut."
+                "Löscht nur die lokalen Anzeigenachweise. Vor der nächsten "
+                "KI-Anfrage erscheint der passende Hinweis erneut."
             )
             if has_disclosure
             else tr(
@@ -362,7 +366,7 @@ class SettingsDialog(QDialog):
 
         self._reset_ai_disclosure = True
         self.ai_disclosure_reset.setEnabled(False)
-        self.ai_disclosure_reset.setText(tr("Wird vor der nächsten Nachricht angezeigt"))
+        self.ai_disclosure_reset.setText(tr("Wird vor der nächsten KI-Anfrage angezeigt"))
         self.ai_disclosure_reset.setAccessibleName(self.ai_disclosure_reset.text())
 
 

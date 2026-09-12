@@ -37,6 +37,138 @@ def wait_for_readiness(dialog: GenerateDialog, qt_app: QApplication) -> None:
     qt_app.processEvents()
 
 
+@pytest.mark.parametrize("image", [None, b"private image"])
+@pytest.mark.parametrize("answer", ["back", "escape", "close", "host_change", "storage_failure"])
+def test_comfy_disclosure_blocks_the_actual_generator(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, image: bytes | None, answer: str
+) -> None:
+    """Text und Bild erreichen den Erzeuger erst nach dem gültigen Hinweis für sein Ziel."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog
+
+    from app.core.backends.mesh import ComfyBackend, Readiness
+    from app.ui.ai_disclosure import AiDisclosureDialog
+    from app.ui.settings import UiSettings
+
+    called: list[object] = []
+    backend = ComfyBackend(url="https://comfy.example")
+    monkeypatch.setattr(ComfyBackend, "readiness", lambda *args: Readiness.READY)
+    monkeypatch.setattr(ComfyBackend, "model_choices", lambda *args: {})
+
+    def send(*args, **kwargs):
+        called.append(args)
+        raise OperationCancelled
+
+    monkeypatch.setattr(ComfyBackend, "text_to_mesh", send)
+    monkeypatch.setattr(ComfyBackend, "image_to_mesh", send)
+    monkeypatch.setattr("app.ui.ai_disclosure.save_settings", lambda settings: None)
+
+    def respond(notice: AiDisclosureDialog) -> int:
+        notice.show()
+        qt_app.processEvents()
+        if answer == "escape":
+            QTest.keyClick(notice, Qt.Key.Key_Escape)
+        elif answer == "close":
+            notice.close()
+        elif answer == "back":
+            notice.back_button.click()
+        else:
+            notice._content_was_shown = True
+            if answer == "host_change":
+                backend.url = "https://other.example"
+                monkeypatch.setattr(
+                    "app.ui.ai_disclosure.save_settings", lambda settings: Path("settings.json")
+                )
+            return int(QDialog.DialogCode.Accepted)
+        return int(notice.result())
+
+    monkeypatch.setattr(AiDisclosureDialog, "exec", respond)
+    dialog = GenerateDialog(backend=backend, settings=UiSettings())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("private description")
+        dialog._image = image
+        dialog._start()
+        if dialog._worker is not None:
+            assert dialog._worker.wait(5000)
+        assert called == []
+        assert dialog._worker is None
+        assert not dialog._busy
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("image", [None, b"private image"])
+@pytest.mark.parametrize("address", ["http://127.0.0.1:8188", "https://comfy.example"])
+def test_comfy_sends_only_after_the_separate_notice_and_reuses_its_record(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, image: bytes | None, address: str
+) -> None:
+    """Ein wirklicher Hinweis öffnet nur den gezeigten Erzeugerweg samt Startwert."""
+    from PySide6.QtTest import QTest
+
+    from app.core.backends.mesh import ComfyBackend, Readiness
+    from app.ui.ai_disclosure import (
+        AiDisclosureDialog,
+        remember_disclosure,
+        target_for_comfy,
+        target_for_ollama,
+    )
+    from app.ui.settings import UiSettings
+
+    settings = UiSettings()
+    remember_disclosure(settings, target_for_ollama("https://chat.example"))
+    calls: list[tuple[str, object, int]] = []
+    shown: list[object] = []
+    backend = ComfyBackend(url=address)
+    monkeypatch.setattr(ComfyBackend, "readiness", lambda *args: Readiness.READY)
+    monkeypatch.setattr(ComfyBackend, "model_choices", lambda *args: {})
+    monkeypatch.setattr(
+        "app.ui.ai_disclosure.save_settings", lambda settings: Path("settings.json")
+    )
+
+    def send(target: ComfyBackend, payload: object, *, seed: int, **kwargs):
+        calls.append((target.url, payload, seed))
+        return GeneratedMesh(
+            mesh=FakeMesh(), payload=b"mesh", suffix=".stl", backend="comfyui", seed=seed
+        )
+
+    def accept(notice: AiDisclosureDialog) -> int:
+        shown.append(notice.target)
+        notice.show()
+        for _ in range(20):
+            qt_app.processEvents()
+            if notice.continue_button.isEnabled():
+                break
+            QTest.qWait(5)
+        assert notice.content_was_shown
+        notice.continue_button.click()
+        return int(notice.result())
+
+    monkeypatch.setattr(ComfyBackend, "text_to_mesh", send)
+    monkeypatch.setattr(ComfyBackend, "image_to_mesh", send)
+    monkeypatch.setattr(AiDisclosureDialog, "exec", accept)
+    dialog = GenerateDialog(backend=backend, settings=settings)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("private description")
+        dialog._image = image
+        dialog.seed.setValue(17)
+        for _ in range(2):
+            dialog._start()
+            assert dialog._worker is not None
+            assert dialog._worker.wait(5000)
+            qt_app.processEvents()
+        assert calls == [(address, image or "private description", 17)] * 2
+        assert len(dialog.tries) == 2
+        assert shown == [target_for_comfy(address)]
+        assert settings.ai_disclosure_backend == "ollama"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def finish(dialog: GenerateDialog, qt_app: QApplication) -> None:
     """Den Arbeiter zu Ende laufen lassen, ohne den Oberflächen-Thread zu
     blockieren.
@@ -540,7 +672,7 @@ def test_the_dialog_names_the_middle_state_before_the_run(
     class Halb:
         """Ein ComfyUI, das läuft und die Knoten nicht kennt."""
 
-        id = "comfyui"
+        id = "scripted"
         available = True
 
         def readiness(self) -> mesh.Readiness:
@@ -563,7 +695,7 @@ def test_the_button_leads_where_the_state_says(
     from app.core.backends import mesh
 
     class Lage:
-        id = "comfyui"
+        id = "scripted"
 
         def __init__(self, readiness: mesh.Readiness) -> None:
             self._readiness = readiness
@@ -601,7 +733,7 @@ def test_an_unknown_answer_does_not_lock_the_button(
     from app.core.backends import mesh
 
     class Fremd:
-        id = "comfyui"
+        id = "scripted"
         available = True
 
         def readiness(self) -> mesh.Readiness:
@@ -627,7 +759,7 @@ def test_an_unexpected_error_does_not_leave_the_generator_waiting(
     """
 
     class Bricht:
-        id = "comfyui"
+        id = "scripted"
         available = True
 
         def text_to_mesh(self, prompt: str, *, seed: int = 0, progress: object = None) -> object:
@@ -737,7 +869,7 @@ class WaitingBackend:
 
     @property
     def id(self) -> str:
-        return "waiting"
+        return "scripted"
 
     @property
     def available(self) -> bool:
@@ -831,7 +963,7 @@ class LageMitZaehler:
     *Erzeugen* wirklich einen Wurf auslöst.
     """
 
-    id = "comfyui"
+    id = "scripted"
     available = True
 
     def __init__(self, lage: object) -> None:
@@ -906,7 +1038,7 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
     grund = "Torch not compiled with CUDA enabled"
 
     class Bricht:
-        id = "comfyui"
+        id = "scripted"
         available = True
 
         def readiness(self, workflow: str = "image_to_mesh") -> mesh.Readiness:
@@ -940,7 +1072,7 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
 class MitAuswahl:
     """Ein ComfyUI, das für zwei Rollen mehrere Dateien anbietet."""
 
-    id = "comfyui"
+    id = "scripted"
     available = True
 
     def __init__(self, choices: dict[str, tuple[str, ...]]) -> None:

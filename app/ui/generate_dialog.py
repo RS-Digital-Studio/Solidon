@@ -15,6 +15,7 @@ sieht aus wie ein Fehler; eine, die sich erklärt, nicht.
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
@@ -41,10 +42,12 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, OperationCancelled
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
 from app.ui.dialogs import spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
+from app.ui.settings import UiSettings, load_settings
 from app.ui.style import make_primary
 
 _log = get_logger(__name__)
@@ -247,9 +250,16 @@ class GenerateDialog(QDialog):
     """ComfyUI läuft, kennt aber die Knoten nicht — der Weg dorthin ist ein
     anderer als der zur Liste der Programme."""
 
-    def __init__(self, backend: MeshBackend | None = None, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        backend: MeshBackend | None = None,
+        parent: QWidget | None = None,
+        *,
+        settings: UiSettings | None = None,
+    ) -> None:
         super().__init__(parent)
         self.backend: MeshBackend = backend or ComfyBackend()
+        self.settings = settings if settings is not None else load_settings()
         # **Vor der Bereitschaftsfrage**, denn die hängt daran: Mit Bild fährt
         # dieser Dialog den Bildweg, ohne den Textweg, und die beiden brauchen
         # nicht dasselbe. Ohne diese Zeile hier oben lief ``_workflow`` in ein
@@ -734,12 +744,33 @@ class GenerateDialog(QDialog):
             # Klicks starteten zwei Aufträge, von denen Abbrechen nur den
             # letzten erreichte (Gesamtreview 05.09.2026, UI-23).
             return
+        backend = self.backend
+        # Der Hinweis kann eine Ereignisschleife öffnen. Der Auftrag bleibt
+        # an seiner geprüften Adresse, auch wenn das Backend später wechselt.
+        bound_backend = replace(backend) if isinstance(backend, ComfyBackend) else backend
+        result = ensure_ai_disclosure(self.settings, bound_backend, self)
+        if not result.allowed:
+            if result is DisclosureResult.FAILED:
+                self.state.setText(
+                    tr("Der KI-Hinweis konnte nicht abgeschlossen werden. Versuchen Sie es erneut.")
+                )
+            return
+        if isinstance(backend, ComfyBackend):
+            assert isinstance(bound_backend, ComfyBackend)
+            if self.backend is not backend or backend.url != bound_backend.url:
+                self.state.setText(
+                    tr("Das Erzeugerziel hat sich geändert. Starten Sie die Anfrage erneut.")
+                )
+                return
+            backend = bound_backend
+        elif self.backend is not backend:
+            return
         self._remember_models()
         self._running(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
 
-        worker = _Worker(self.backend, self.prompt.text().strip(), self._image, self.seed.value())
+        worker = _Worker(backend, self.prompt.text().strip(), self._image, self.seed.value())
         worker.done.connect(self._on_done)
         worker.failed.connect(self._on_failed)
         # **Und das Unerwartete.** Der Arbeiter fing ``AppError``; alles andere

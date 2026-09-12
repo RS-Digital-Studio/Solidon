@@ -39,14 +39,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.backends import llm
+from app.core.backends import llm, mesh
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
 
 AI_DISCLOSURE_VERSION = "1.4"
-SUPPORTED_AI_BACKENDS = frozenset({"anthropic", "ollama"})
+GENERATION_DISCLOSURE_VERSION = "1.0"
+GENERATION_DISCLOSURE_DATA = "description,image,seed,workflow,model_choices"
+SUPPORTED_AI_BACKENDS = frozenset({"anthropic", "ollama", "comfyui"})
 ANTHROPIC_PRIVACY_URL = "https://www.anthropic.com/legal/privacy"
 ANTHROPIC_COMMERCIAL_TERMS_URL = "https://www.anthropic.com/legal/commercial-terms"
 _LOCAL_PRIVACY_LINK = "solidon:privacy"
@@ -87,6 +89,11 @@ def target_for_backend(backend: Any) -> AiDisclosureTarget | None:
     backend_id = str(getattr(backend, "id", "")) if backend is not None else ""
     if backend_id == "scripted":
         return None
+    if backend_id == "comfyui":
+        configured = getattr(backend, "url", None)
+        if not isinstance(configured, str):
+            raise ValueError("ComfyUI disclosure target has no address")
+        return target_for_comfy(configured)
     if backend_id == "anthropic":
         return AiDisclosureTarget(
             "anthropic", "hosted", _normalised_http_address(llm.ANTHROPIC_URL)
@@ -108,6 +115,15 @@ def target_for_ollama(url: str | None = None) -> AiDisclosureTarget:
     if host is None:
         raise ValueError("Ollama disclosure target has no host")
     return AiDisclosureTarget("ollama", "local" if _is_loopback(host) else "remote", address)
+
+
+def target_for_comfy(url: str) -> AiDisclosureTarget:
+    """Bindet den Erzeugerhinweis an die effektive ComfyUI-Adresse."""
+    address = _normalised_http_address(mesh.comfy_base(url))
+    host = urllib.parse.urlsplit(address).hostname
+    if host is None:
+        raise ValueError("ComfyUI disclosure target has no host")
+    return AiDisclosureTarget("comfyui", "local" if _is_loopback(host) else "remote", address)
 
 
 def _normalised_http_address(url: str) -> str:
@@ -141,7 +157,12 @@ def _title_text() -> str:
     return tr("Interaktion mit einem KI-System")
 
 
-def _general_text() -> str:
+def _general_text(target: AiDisclosureTarget) -> str:
+    if target.backend == "comfyui":
+        return tr(
+            "Sie erzeugen mit einem KI-System ein 3D-Modell. Das Ergebnis kann Fehler "
+            "enthalten. Prüfen Sie den Körper und seine Druckbarkeit vor der Verwendung."
+        )
     return tr(
         "Sie interagieren mit einem KI-System. Antworten können falsch oder "
         "unvollständig sein. Solidon führt daraus keine Geometrie ungeprüft aus: "
@@ -150,6 +171,26 @@ def _general_text() -> str:
 
 
 def _provider_text(target: AiDisclosureTarget) -> str:
+    if target.backend == "comfyui":
+        location = (
+            tr("ComfyUI unter {target} läuft auf diesem Rechner.", target=target.address)
+            if target.target_class == "local"
+            else tr(
+                "ComfyUI unter {target} läuft auf einem anderen Rechner. Verwenden Sie "
+                "nur ein Ziel, dessen Betreiber und Übertragungsweg Sie vertrauen.",
+                target=target.address,
+            )
+        )
+        return (
+            location
+            + "\n\n"
+            + tr(
+                "An dieses Ziel gehen Ihre Beschreibung oder das gewählte Bild sowie der "
+                "Startwert, der Erzeugungsablauf und die Modellwahl. Projektdatei, Szene und "
+                "Chatverlauf werden nicht mitgesendet. Installation und Modelldownloads "
+                "können weitere Netzverbindungen verwenden."
+            )
+        )
     if target.backend == "anthropic":
         return tr(
             "Wenn Sie Anthropic wählen, werden Ihre Chatnachricht und die zuvor angezeigte "
@@ -190,6 +231,13 @@ def _provider_text(target: AiDisclosureTarget) -> str:
 def disclosure_is_current(settings: Any, target: AiDisclosureTarget) -> bool:
     """Ob Textfassung, Anbieter und tatsächliches Datenziel unverändert sind."""
 
+    if target.backend == "comfyui":
+        return (
+            settings.generation_disclosure_version == GENERATION_DISCLOSURE_VERSION
+            and settings.generation_disclosure_target == target.record_key
+            and settings.generation_disclosure_data == GENERATION_DISCLOSURE_DATA
+            and is_utc_timestamp(settings.generation_disclosure_at_utc)
+        )
     return (
         target.backend in SUPPORTED_AI_BACKENDS
         and settings.ai_disclosure_version == AI_DISCLOSURE_VERSION
@@ -209,19 +257,31 @@ def remember_disclosure(
     timestamp = now or utc_timestamp()
     if not is_utc_timestamp(timestamp):
         raise ValueError("AI disclosure timestamp must be an ISO-8601 UTC timestamp")
+    if target.backend == "comfyui":
+        settings.generation_disclosure_version = GENERATION_DISCLOSURE_VERSION
+        settings.generation_disclosure_target = target.record_key
+        settings.generation_disclosure_data = GENERATION_DISCLOSURE_DATA
+        settings.generation_disclosure_at_utc = timestamp
+        return
     settings.ai_disclosure_version = AI_DISCLOSURE_VERSION
     settings.ai_disclosure_backend = target.backend
     settings.ai_disclosure_target = target.record_key
     settings.ai_disclosure_at_utc = timestamp
 
 
-def clear_disclosure(settings: Any) -> None:
+def clear_disclosure(settings: Any, target: AiDisclosureTarget | None = None) -> None:
     """Schließt die Sendesperre wieder; Projekt und Chat bleiben unangetastet."""
 
-    settings.ai_disclosure_version = ""
-    settings.ai_disclosure_backend = ""
-    settings.ai_disclosure_target = ""
-    settings.ai_disclosure_at_utc = ""
+    if target is None or target.backend != "comfyui":
+        settings.ai_disclosure_version = ""
+        settings.ai_disclosure_backend = ""
+        settings.ai_disclosure_target = ""
+        settings.ai_disclosure_at_utc = ""
+    if target is None or target.backend == "comfyui":
+        settings.generation_disclosure_version = ""
+        settings.generation_disclosure_target = ""
+        settings.generation_disclosure_data = ""
+        settings.generation_disclosure_at_utc = ""
 
 
 def ensure_ai_disclosure(
@@ -229,7 +289,7 @@ def ensure_ai_disclosure(
     backend_or_target: Any,
     parent: QWidget | None = None,
 ) -> DisclosureResult:
-    """Einzige Oberflächengrenze vor jedem echten LLM-Modellaufruf.
+    """Oberflächengrenze vor LLM-Aufrufen und der Erzeugung mit ComfyUI.
 
     Das geskriptete Testbackend hat kein externes Modell. Unbekannte Backends,
     ungültige Ziele, Darstellungsfehler und Speicherfehler bleiben geschlossen.
@@ -266,7 +326,7 @@ def ensure_ai_disclosure(
         stored = save_settings(settings)
     except OSError, TypeError, ValueError:
         _log.exception("AI disclosure record could not be stored")
-        clear_disclosure(settings)
+        clear_disclosure(settings, target)
         return DisclosureResult.FAILED
     if stored is None:
         # ``save_settings`` wirft bei einem Dateifehler nicht mehr, es gibt
@@ -275,7 +335,7 @@ def ensure_ai_disclosure(
         # (Gesamtreview 05.09.2026, UI-05). Geschlossen bleiben heißt: ohne
         # geschriebenen Nachweis keine Freigabe.
         _log.error("AI disclosure record could not be stored: settings file not written")
-        clear_disclosure(settings)
+        clear_disclosure(settings, target)
         return DisclosureResult.FAILED
     return DisclosureResult.ACCEPTED
 
@@ -295,7 +355,7 @@ class AiDisclosureDialog(QDialog):
         self._required_heights: dict[QWidget, int] = {}
         self.setWindowTitle(_title_text())
         self.setAccessibleName(_title_text())
-        self.setAccessibleDescription(_general_text())
+        self.setAccessibleDescription(_general_text(target))
         self.setModal(True)
         self.setMinimumSize(300, 340)
         self.resize(600, 460)
@@ -307,7 +367,7 @@ class AiDisclosureDialog(QDialog):
         self.heading.setAccessibleDescription(self.heading.text())
         set_level(self.heading, "title")
 
-        self.general_text = _paragraph(_general_text(), self)
+        self.general_text = _paragraph(_general_text(target), self)
         set_level(self.general_text, "body")
 
         self.provider_card = QFrame(self)
@@ -395,7 +455,9 @@ class AiDisclosureDialog(QDialog):
         self.back_button = QPushButton(tr("Zurück"), self)
         self.back_button.setAccessibleName(self.back_button.text())
         self.back_button.setAccessibleDescription(
-            tr("Kehrt zur Auswahl des Chat-Zugangs zurück und sendet nichts.")
+            tr("Kehrt zum Erzeugen-Dialog zurück und sendet nichts.")
+            if target.backend == "comfyui"
+            else tr("Kehrt zur Auswahl des Chat-Zugangs zurück und sendet nichts.")
         )
 
         self.buttons = QDialogButtonBox(self)

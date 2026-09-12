@@ -5079,7 +5079,7 @@ class MainWindow(QMainWindow):
         # Socket mit Zeitlimit — gemessen eine halbe Sekunde. Damit gehört er
         # in die mittlere Zeile der Wartezeit-Tabelle (§2.8).
         with waiting():
-            dialog = GenerateDialog(parent=self)
+            dialog = GenerateDialog(parent=self, settings=self.settings)
         # Regel 17: „Es läuft kein Generator" bot nichts an. Von hier führt der
         # Weg in die Liste der zusätzlichen Programme, und danach sieht der
         # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll
