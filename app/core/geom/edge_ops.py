@@ -30,6 +30,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Literal, cast
 
+from app.core.geom.boolean import HasVolume
 from app.core.geom.edges import (
     EDGE_CHOICES,
     EdgeChoice,
@@ -37,7 +38,7 @@ from app.core.geom.edges import (
     bevel_edges,
     round_edges,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, Profile, SceneObject
 from app.core.units import EPS_GEOM
@@ -105,7 +106,7 @@ class FilletParams(BaseParams):
 
 @register_op(
     name="fillet_edges",
-    cache_version="3",
+    cache_version="5",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -157,7 +158,7 @@ class ChamferParams(BaseParams):
 
 @register_op(
     name="chamfer_edges",
-    cache_version="3",
+    cache_version="5",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -271,7 +272,7 @@ def _worked(
     """
     source = ctx.inputs[0]
     if source.kind == "brep":
-        return _on_a_solid(source, size, choice, keys, rounded=rounded)
+        return _on_a_solid(source, size, choice, keys, profile=ctx.profile, rounded=rounded)
 
     body = as_mesh_data(source.mesh)
     work = round_edges if rounded else bevel_edges
@@ -298,6 +299,7 @@ def _on_a_solid(
     choice: EdgeChoice,
     keys: tuple[str, ...],
     *,
+    profile: Profile | None,
     rounded: bool,
 ) -> OpResult:
     """Der exakte Weg — träge geholt, weil OpenCASCADE optional ist (§36).
@@ -312,8 +314,10 @@ def _on_a_solid(
 
     work = edit.fillet if rounded else edit.chamfer
     solid = work(cast(Solid, source.mesh), size, choice, keys)
+    empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))]
+        outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))],
+        findings=[dataclasses.replace(empty, object_id=source.id)] if empty is not None else [],
     )
 
 
@@ -328,8 +332,8 @@ __all__ = [
 
 
 def _too_small_to_see(
-    before: MeshData,
-    after: MeshData,
+    before: HasVolume,
+    after: HasVolume,
     profile: Profile | None,
     *,
     kind: Literal["fillet", "chamfer", "bead"],

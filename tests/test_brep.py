@@ -593,6 +593,27 @@ def test_a_tiny_bead_names_the_bead_in_its_warning(kind: str, profile: Profile) 
     assert "Verrundung" not in str(warnings[0].message)
 
 
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges"])
+@pytest.mark.parametrize("size, tiny", [(0.01, True), (1.5, False)])
+def test_exact_edge_operations_report_changes_below_print_resolution(
+    operation: str, size: float, tiny: bool, profile: Profile
+) -> None:
+    """Die Druckgrenze stammt aus dem Profil und gilt auch für exakte Flächen."""
+    source = SceneObject(id="obj_1", name="Klotz", kind="brep", mesh=block())
+    params = {"radius" if operation == "fillet_edges" else "distance": size}
+
+    result = run(operation, source, profile, **params)
+
+    assert result.outputs[0].kind == "brep"
+    assert result.outputs[0].mesh.is_closed
+    assert result.outputs[0].mesh.volume < source.mesh.volume
+    warnings = [finding for finding in result.findings if finding.code == "edges.without_effect"]
+    assert len(warnings) == int(tiny)
+    if tiny:
+        assert warnings[0].object_id == source.id
+        assert 0.0 < warnings[0].values["removed_mm3"] < profile.smallest_printable_volume
+
+
 def test_brep_to_mesh_is_a_step_in_the_stack(profile: Profile) -> None:
     """§30: eine Richtung — und rücknehmbar, weil es eine Operation ist wie
     jede andere.
