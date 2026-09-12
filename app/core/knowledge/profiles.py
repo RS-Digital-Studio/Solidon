@@ -70,7 +70,7 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
     except (TypeError, ValueError, IndexError) as exc:
         raise ValidationError(
             field=f"{identifier}.printable_area",
-            detail=_("Die Druckkontur ist ungültig. Prüfe das Druckerprofil."),
+            detail=_("Die Druckkontur ist ungültig. Prüfen Sie das Druckerprofil."),
             values={"file": str(source)},
         ) from exc
     nozzle = float(table.get("nozzle_diameter", 0.4))

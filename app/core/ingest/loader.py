@@ -279,8 +279,8 @@ def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfRefer
         raise ValidationError(
             field="file",
             detail=_(
-                "Die GLTF-Datei verweist nach außen. Speichere Modell und Begleitdateien "
-                "in demselben Ordner oder exportiere als GLB."
+                "Die GLTF-Datei verweist nach außen. Speichern Sie Modell und Begleitdateien "
+                "in demselben Ordner oder exportieren Sie als GLB."
             ),
             constraint="scheme",
             values={"dependency": uri},
@@ -293,8 +293,8 @@ def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfRefer
         raise ValidationError(
             field="file",
             detail=_(
-                "Die GLTF-Datei verweist aus ihrem Ordner heraus. Lege die Begleitdatei "
-                "neben das Modell oder exportiere als GLB."
+                "Die GLTF-Datei verweist aus ihrem Ordner heraus. Legen Sie die Begleitdatei "
+                "neben das Modell oder exportieren Sie als GLB."
             ),
             constraint="absolute_path",
             values={"dependency": uri},
@@ -303,8 +303,8 @@ def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfRefer
         raise ValidationError(
             field="file",
             detail=_(
-                "Zur GLTF-Datei fehlt eine Begleitdatei. Lege sie neben das Modell oder "
-                "exportiere als GLB."
+                "Zur GLTF-Datei fehlt eine Begleitdatei. Legen Sie sie neben das Modell oder "
+                "exportieren Sie als GLB."
             ),
             constraint="missing_file",
             values={"dependency": uri},
@@ -316,8 +316,8 @@ def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfRefer
         raise ValidationError(
             field="file",
             detail=_(
-                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfe ihre Zugriffsrechte "
-                "oder exportiere als GLB."
+                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfen Sie ihre Zugriffsrechte "
+                "oder exportieren Sie als GLB."
             ),
             constraint="unreadable",
             values={"dependency": uri},
@@ -348,8 +348,8 @@ def _embedded_gltf_uri(reference: _GltfReference, cached: dict[Path, str]) -> st
         raise ValidationError(
             field="file",
             detail=_(
-                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfe ihre Zugriffsrechte "
-                "oder exportiere als GLB."
+                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfen Sie ihre Zugriffsrechte "
+                "oder exportieren Sie als GLB."
             ),
             constraint="unreadable",
             values={"dependency": reference.uri},
@@ -358,8 +358,8 @@ def _embedded_gltf_uri(reference: _GltfReference, cached: dict[Path, str]) -> st
         raise ValidationError(
             field="file",
             detail=_(
-                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfe ihre Zugriffsrechte "
-                "oder exportiere als GLB."
+                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfen Sie ihre Zugriffsrechte "
+                "oder exportieren Sie als GLB."
             ),
             constraint="unreadable",
             values={"dependency": reference.uri},
@@ -485,7 +485,7 @@ def check_readable(payload: bytes, suffix: str) -> None:
             field="file",
             detail=_(
                 "Die Datei ist leer. Meistens ist ein Download abgebrochen — "
-                "lade sie erneut herunter und öffne sie noch einmal."
+                "laden Sie sie erneut herunter und öffnen Sie sie noch einmal."
             ),
             constraint="file_empty",
             values={"size": 0},
@@ -502,7 +502,7 @@ def check_readable(payload: bytes, suffix: str) -> None:
                 field="file",
                 detail=_(
                     "Diese Datei ist kein 3MF-Archiv, auch wenn sie so heißt. "
-                    "Prüfe, ob der Download vollständig war, und lade sie sonst "
+                    "Prüfen Sie, ob der Download vollständig war, und laden Sie sie sonst "
                     "erneut herunter."
                 ),
                 constraint="not_an_archive",
@@ -539,7 +539,7 @@ def check_readable(payload: bytes, suffix: str) -> None:
             field="file",
             detail=_(
                 "Die Datei enthält kein Modell: Sie ist gültig aufgebaut, führt "
-                "aber null Dreiecke. Prüfe im Ursprungsprogramm, ob beim "
+                "aber null Dreiecke. Prüfen Sie im Ursprungsprogramm, ob beim "
                 "Exportieren etwas ausgewählt war."
             ),
             constraint="no_triangles",
@@ -552,7 +552,7 @@ def check_readable(payload: bytes, suffix: str) -> None:
             field="file",
             detail=_(
                 "Die Datei enthält kein Modell: Sie ist gültig aufgebaut, führt "
-                "aber null Dreiecke. Prüfe im Ursprungsprogramm, ob beim "
+                "aber null Dreiecke. Prüfen Sie im Ursprungsprogramm, ob beim "
                 "Exportieren etwas ausgewählt war."
             ),
             constraint="no_triangles",
@@ -565,7 +565,7 @@ def check_readable(payload: bytes, suffix: str) -> None:
             field="file",
             detail=_(
                 "Die Datei ist unvollständig: Ihr Kopf nennt mehr Dreiecke, als "
-                "enthalten sind. Meistens ist ein Download abgebrochen — lade "
+                "enthalten sind. Meistens ist ein Download abgebrochen — laden Sie "
                 "sie erneut herunter."
             ),
             constraint="file_truncated",

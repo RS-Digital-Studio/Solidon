@@ -444,7 +444,7 @@ def search(
                 severity="warning",
                 message=_(
                     "Der Schwerpunkt liegt außerhalb der Auflage. "
-                    "Prüfe Stützen oder eine größere Plattenhaftung."
+                    "Prüfen Sie Stützen oder eine größere Plattenhaftung."
                 ),
                 source="internal",
             )

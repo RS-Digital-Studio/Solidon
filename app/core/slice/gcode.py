@@ -567,7 +567,7 @@ def _bambu_tool_numbers(value: str) -> tuple[int, ...]:
     if len(set(ids)) != len(ids):
         raise ValidationError(
             field="gcode.tool",
-            detail=_("Die Filamentliste nennt ein Werkzeug mehrfach. Prüfe die Slicer-Datei."),
+            detail=_("Die Filamentliste nennt ein Werkzeug mehrfach. Prüfen Sie die Slicer-Datei."),
             suggestions=(CHECK_SLICER_PROFILE,),
         )
     return ids

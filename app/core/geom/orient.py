@@ -30,7 +30,7 @@ class NoFittingOrientationError(GeometryError):
 
     default_title = _(
         "Keine geprüfte Lage passt in den Druckbereich. "
-        "Wähle einen anderen Drucker oder teile das Modell."
+        "Wählen Sie einen anderen Drucker oder teilen Sie das Modell."
     )
     default_suggestions = (SPLIT_MODEL, CHOOSE_PRINTER, CANCEL)
 

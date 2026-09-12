@@ -791,7 +791,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     if len(ctx.inputs) < 2:
         raise GeometryError(
             _("Diese Operation braucht mindestens zwei Objekte."),
-            detail=_("Wähle im Objektbaum oder im Bild einen zweiten Körper dazu."),
+            detail=_("Wählen Sie im Objektbaum oder im Bild einen zweiten Körper dazu."),
             suggestions=(CHOOSE, CANCEL),
         )
     from app.core.brep import edit

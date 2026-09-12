@@ -835,7 +835,7 @@ def limitation(flavour: SlicerFlavour, path: str) -> TranslatableText | None:
     if flavour == "cura" and path == "cooling.disable_first_layers":
         return _(
             "Cura regelt den Lüfter über einen Hochlauf. Eine feste Anzahl Schichten "
-            "ohne Lüfter lässt sich hier nicht übertragen. Stelle den Hochlauf in Cura ein."
+            "ohne Lüfter lässt sich hier nicht übertragen. Stellen Sie den Hochlauf in Cura ein."
         )
     return None
 
