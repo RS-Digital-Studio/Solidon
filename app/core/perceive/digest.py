@@ -13,12 +13,12 @@ nachsieht, was dem Modell gesagt wurde.
 from __future__ import annotations
 
 import math
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from pathlib import PurePosixPath
 from typing import Final
 
-from app.core.perceive.relations import sleeve_at
-from app.core.types import Document, Feature, FeatureId, ObjectId, Operation, Scene, SceneObject
+from app.core.perceive.relations import Sleeve, sleeves_of
+from app.core.types import Document, Feature, ObjectId, Operation, Scene, SceneObject
 from app.core.units import EPS_GEOM, format_length, format_volume, round_display
 from app.i18n import TranslatableText, tr
 
@@ -255,20 +255,21 @@ def _object_lines(object_id: ObjectId, entry: SceneObject, plates: int = 1) -> l
 
     lines = [f"{object_id}  {as_name(entry.name)}  " + ", ".join(facts)]
     lines.append("  " + _extent_line(entry))
+    sleeves = sleeves_of(entry.features)
     for feature_id, feature in entry.features.items():
         lines.append(
-            "  " + _feature_line(feature_id, feature) + _wall_note(feature, entry.features)
+            "  " + _feature_line(feature_id, feature) + _wall_note(feature, sleeves.get(feature_id))
         )
     return lines
 
 
-def _wall_note(feature: Feature, features: Mapping[FeatureId, Feature]) -> str:
+def _wall_note(feature: Feature, sleeve: Sleeve | None) -> str:
     """Die Wand, die dieses Merkmal mit seinem Nachbarn teilt — oder nichts.
 
     **Sie steht in keinem der beiden Merkmale.** Eine Bohrung nennt ihren
     Durchmesser, ein Zapfen den seinen, und dass zwischen beiden 3,40 mm
     Material liegen, ergibt sich erst aus ihrem Verhältnis
-    (:func:`relations.sleeve_at`). Der Agent hat genau diesen Text und sonst
+    (:func:`relations.sleeves_of`). Der Agent hat genau diesen Text und sonst
     nichts (§26.1): Ohne die Zeile liest er zwei unabhängige Zahlen und
     vergrößert die Bohrung eines Rohrs, bis von der Wand nichts übrig ist.
 
@@ -276,7 +277,6 @@ def _wall_note(feature: Feature, features: Mapping[FeatureId, Feature]) -> str:
     Warnung vor einer Änderung, und geändert werden kann jedes von beiden —
     eine Auskunft nur an einem wäre an der anderen Hälfte der Fälle stumm.
     """
-    sleeve = sleeve_at(feature, features)
     if sleeve is None:
         return ""
     partner = sleeve.wall if feature.id == sleeve.bore else sleeve.bore

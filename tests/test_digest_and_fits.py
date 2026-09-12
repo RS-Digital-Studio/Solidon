@@ -1017,3 +1017,59 @@ def test_a_plain_plate_says_nothing_about_walls(profile: Profile) -> None:
     text = digest(plate_scene(profile))
 
     assert " Wand " not in text, f"die Platte meldet eine Wand, die es nicht gibt:\n{text}"
+
+
+def test_the_digest_measures_each_sleeve_feature_only_once(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vierzig Rohre nennen beide Wandpartner, ohne die Maße quadratisch zu lesen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive import relations
+
+    bodies = []
+    features = {}
+    for index in range(40):
+        centre = (36.0 * (index % 8), 36.0 * (index // 8), 0.0)
+        tube = trimesh.creation.annulus(r_min=8.0, r_max=14.0, height=20.0, sections=32)
+        tube.apply_translation(centre)
+        bodies.append(tube)
+        for kind, diameter in (("hole", 16.0), ("pin", 28.0)):
+            identifier = f"{kind}_{index + 1}"
+            features[identifier] = Feature(
+                id=identifier,
+                kind=kind,
+                provenance="detected",
+                params={
+                    "diameter": diameter,
+                    "depth": 20.0,
+                    "centre": centre,
+                    "axis": (0.0, 0.0, 1.0),
+                },
+            )
+    entry = SceneObject(
+        id="obj_1",
+        name="Rohre",
+        mesh=MeshData.of(trimesh.util.concatenate(bodies)),
+        features=features,
+    )
+    measured = relations._measured
+    calls = 0
+
+    def measure(feature: Feature):
+        nonlocal calls
+        calls += 1
+        return measured(feature)
+
+    monkeypatch.setattr(relations, "_measured", measure)
+    text = digest(Scene(objects={"obj_1": entry}, profile=profile))
+    lines = [line for line in text.splitlines() if "Wand" in line and "mm" in line]
+
+    assert len(lines) == 80
+    for index in range(40):
+        for one, other in (("hole", "pin"), ("pin", "hole")):
+            line = next(line for line in lines if line.split()[0] == f"{one}_{index + 1}")
+            assert "6.00 mm" in line or "6,00 mm" in line
+            assert line.endswith(f"zu {other}_{index + 1}")
+    assert calls <= len(features), f"{calls} measurements for {len(features)} features"

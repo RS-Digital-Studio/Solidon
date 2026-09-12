@@ -306,8 +306,8 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
 
     Was ein Rohr ausmacht, steht in :func:`_sleeve_between`; hier steht nur,
     dass alle Kandidaten gefragt werden. Wer dieselbe Frage für einen **ganzen
-    Körper** stellt, nimmt :func:`thinnest_sleeve` — dieselbe Regel, ein
-    Durchgang statt n.
+    Körper** stellt, nimmt :func:`sleeves_of` für jede Merkmalszeile oder
+    :func:`thinnest_sleeve` für das Minimum — dieselbe Regel, ein Durchgang.
 
     ``None``, wo es keinen Partner gibt oder die Zahlen für die Frage nicht
     reichen.
@@ -335,6 +335,35 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
     return best
 
 
+def _all_sleeves(features: Mapping[FeatureId, Feature]) -> Iterable[Sleeve]:
+    """Alle belegten Rohrpaare, mit einmal gelesenen Maßen je Merkmal."""
+    measured = [entry for entry in map(_measured, features.values()) if entry is not None]
+    hollow = [entry for entry in measured if entry.inside]
+    solid = [entry for entry in measured if not entry.inside]
+    for bore in hollow:
+        for wall in solid:
+            found = _sleeve_between(bore, wall)
+            if found is not None:
+                yield found
+
+
+def sleeves_of(features: Mapping[FeatureId, Feature]) -> dict[FeatureId, Sleeve]:
+    """Die dünnste belegte Wand an jedem Merkmal, in einem gemeinsamen Durchgang.
+
+    Der Steckbrief nennt beide Seiten eines Rohrs. Ein Paar wird deshalb nur
+    einmal geprüft, sein Ergebnis aber bei Bohrung und Mantel eingeordnet.
+    Bei gleicher Wandstärke gilt wie bei :func:`sleeve_at` die Reihenfolge
+    der Merkmale; Maße oder Zuordnungen werden nicht anders bewertet.
+    """
+    result: dict[FeatureId, Sleeve] = {}
+    for sleeve in _all_sleeves(features):
+        for identifier in (sleeve.bore, sleeve.wall):
+            previous = result.get(identifier)
+            if previous is None or sleeve.thickness < previous.thickness:
+                result[identifier] = sleeve
+    return result
+
+
 def thinnest_sleeve(features: Mapping[FeatureId, Feature]) -> Sleeve | None:
     """Die dünnste Wand eines ganzen Körpers, in einem Durchgang (RM-127).
 
@@ -348,16 +377,7 @@ def thinnest_sleeve(features: Mapping[FeatureId, Feature]) -> Sleeve | None:
     :class:`_Measured`; der Kern davon ist, dass ein Körper mit fünfhundert
     Bohrungen von 25,8 auf 1,7 Millisekunden fällt.
     """
-    measured = [entry for entry in map(_measured, features.values()) if entry is not None]
-    hollow = [entry for entry in measured if entry.inside]
-    solid = [entry for entry in measured if not entry.inside]
-    best: Sleeve | None = None
-    for bore in hollow:
-        for wall in solid:
-            found = _sleeve_between(bore, wall)
-            if found is not None and (best is None or found.thickness < best.thickness):
-                best = found
-    return best
+    return min(_all_sleeves(features), key=lambda entry: entry.thickness, default=None)
 
 
 def _overlap(along: float, depth: float, other_depth: float) -> float:

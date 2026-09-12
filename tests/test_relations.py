@@ -20,6 +20,8 @@ from app.core.perceive.relations import (
     Sleeve,
     bore_and_widening_at,
     sleeve_at,
+    sleeves_of,
+    thinnest_sleeve,
 )
 from app.core.types import Feature, is_a_cavity
 
@@ -234,6 +236,11 @@ def test_the_thinnest_wall_wins() -> None:
     assert abs(found.thickness - 6.0) < 0.1, (
         f"Wand {found.thickness:.2f} mm — erwartet 6,0, die dünnere der beiden"
     )
+    batch = sleeves_of(features)
+    assert batch[bores[0].id] == found
+    assert thinnest_sleeve(features) == found
+    for feature in features.values():
+        assert batch.get(feature.id) == sleeve_at(feature, features)
 
 
 def test_the_overlap_is_what_separates_the_two_cases() -> None:
@@ -350,7 +357,7 @@ def test_the_geometry_layer_asks_this_question_instead_of_answering_it() -> None
     ]
     assert not stellen, (
         "die Hohlraumfrage wird in der Geometrieschicht beantwortet statt über "
-        f"perceive.relations.is_a_cavity gestellt: {', '.join(stellen)}"
+        f"app.core.types.is_a_cavity gestellt: {', '.join(stellen)}"
     )
 
 
@@ -403,3 +410,24 @@ def test_a_slot_counts_as_a_cavity() -> None:
     slot = next(f for f in features.values() if f.kind == "slot")
 
     assert is_a_cavity(slot), "ein Langloch ist ein Hohlraum wie eine Bohrung"
+
+
+def test_sleeve_batches_keep_each_side_and_reject_countersinks() -> None:
+    """Rohr und Langloch liefern beide Seiten; Senkungen und reine Platten keine."""
+    for mesh, thickness in (
+        (_tube(), 6.0),
+        (_pin_with_slot(), 3.0),
+        (_corpus("plate_countersunk.stl"), None),
+        (_corpus("plate_holes.stl"), None),
+    ):
+        features = detect(mesh)
+        batch = sleeves_of(features)
+        if thickness is None:
+            assert not batch
+            assert thinnest_sleeve(features) is None
+        else:
+            assert len(batch) == 2
+            assert all(abs(sleeve.thickness - thickness) < 0.2 for sleeve in batch.values())
+            assert all(sleeve.bore in batch and sleeve.wall in batch for sleeve in batch.values())
+        for feature in features.values():
+            assert batch.get(feature.id) == sleeve_at(feature, features)
