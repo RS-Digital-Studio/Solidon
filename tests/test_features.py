@@ -2756,7 +2756,7 @@ def test_batched_curvature_splitting_checks_for_cancellation_inside_the_work() -
     assert checks == 8
 
 
-def _mast_after_moving_its_pin(tmp_path: Path) -> tuple[MeshData, dict[str, object]]:
+def _mast_after_moving_its_pin(tmp_path: Path, seed: int) -> tuple[MeshData, dict[str, object]]:
     """Ein eingelesener Mast, dessen Zapfen einmal versetzt wurde.
 
     **Eingelesen und nicht gebaut**, weil es genau um den Weg geht, den ein
@@ -2792,7 +2792,7 @@ def _mast_after_moving_its_pin(tmp_path: Path) -> tuple[MeshData, dict[str, obje
                 # und wie viele Streifen dabei entstehen, hängt daran. Ohne
                 # festen Wert schwankt die Zahl der Funde von Lauf zu Lauf, und
                 # ein Test darüber wäre eine Münze.
-                seed=902239366,
+                seed=seed,
             ),
         ],
     )
@@ -2805,7 +2805,8 @@ def _mast_after_moving_its_pin(tmp_path: Path) -> tuple[MeshData, dict[str, obje
     return entry.mesh, dict(entry.features)
 
 
-def test_a_boolean_seam_does_not_become_a_feature(tmp_path: Path) -> None:
+@pytest.mark.parametrize("seed", [0, 1, 7, 23, 902239366])
+def test_a_boolean_seam_does_not_become_a_feature(tmp_path: Path, seed: int) -> None:
     """Ein versetztes Merkmal erfand fünfzig Formen, die es nicht gibt.
 
     Gemessen von 3d-druck-11 an einem Kundenmodell und hier nachgestellt: Ein
@@ -2820,14 +2821,17 @@ def test_a_boolean_seam_does_not_become_a_feature(tmp_path: Path) -> None:
     Durchmesser groß genug. Zu klein ist ihre **Breite**
     (:data:`app.core.perceive.features.MIN_SURFACE_WIDTH`).
 
-    **Null wird es nicht, und der Test behauptet es auch nicht.** Über zehn
-    Startwerte gemessen fallen 369 erfundene Formen auf 22 — je Lauf eine bis
-    vier bleiben übrig, und welche, hängt am Stups der Rückfallkette. Wer hier
+    Eine historische Messung über zehn Startwerte senkte 369 erfundene Formen
+    auf 22 — je Lauf eine bis vier bleiben übrig, und welche, hängt am Stups
+    der Rückfallkette. Wer hier
     ``== {}`` schreibt, bekommt einen Test, der bei jedem zweiten Startwert
     rot ist; die verbleibenden gehören in die Zusammenführung der Flächen und
     nicht in diese Schranke.
+
+    Fünf hier gespeicherte Startwerte prüfen unterschiedliche Neuvernetzungen.
+    Jeder Lauf muss auch den echten Zapfen mit seinem Durchmesser behalten.
     """
-    _mesh, features = _mast_after_moving_its_pin(tmp_path)
+    _mesh, features = _mast_after_moving_its_pin(tmp_path, seed)
     fitted = {
         name: feature
         for name, feature in features.items()
