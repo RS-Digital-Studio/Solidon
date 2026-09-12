@@ -197,6 +197,23 @@ def test_every_known_platform_package_has_an_exact_policy_record() -> None:
         assert licences.licence_allowed(expression, policy), name
 
 
+def test_a_missing_macos_renderer_approval_is_caught_on_every_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die macOS-Anbindung darf auch auf einem Windows-Baurechner nicht fehlen."""
+    policy = licences.load_policy()
+    known = {
+        name: record
+        for name, record in policy.known.items()
+        if licences.normalise(name) != "rubicon-objc"
+    }
+    monkeypatch.setattr(licences, "load_policy", lambda: replace(policy, known=known))
+    assert any(
+        entry.package == "rubicon-objc" and "Plattformabhängigkeit" in entry.reason
+        for entry in licences.check()
+    )
+
+
 @pytest.mark.parametrize("package", ["pymeshlab", "PyQt5", "PyQt6"])
 def test_the_plan_names_these_as_forbidden(package: str) -> None:
     assert package in licences.load_policy().banned_packages

@@ -82,6 +82,7 @@ PLATFORM_PACKAGES: Final[dict[str, str]] = {
     "cffi": "MIT",
     "pycparser": "BSD-3-Clause",
     "pywin32-ctypes": "BSD-3-Clause",
+    "rubicon-objc": "BSD-3-Clause",
 }
 
 _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
