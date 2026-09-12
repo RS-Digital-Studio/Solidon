@@ -4884,6 +4884,39 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
     assert handover.override_for(dialog.settings, slot).cooling == effective.cooling
 
 
+@pytest.mark.parametrize("when", ["before_open", "field_change"])
+def test_empty_print_dialog_explains_an_impossible_flow_and_recovers(qt_app, when):
+    """Auch ohne Modell bleiben ungültige Empfehlungen sichtbar korrigierbar."""
+    session = Session()
+    settings = print_settings.resolve(session.profile)
+    invalid = replace(
+        settings,
+        layers=replace(settings.layers, layer_height=0.8, line_width=2.0),
+        filament=replace(settings.filament, max_flow=0.5),
+    )
+    if when == "before_open":
+        session.set_print_settings(invalid)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    if when == "field_change":
+        dialog._editors["layers.layer_height"].setValue(0.8)
+        dialog._editors["layers.line_width"].setValue(2.0)
+        dialog._editors["filament.max_flow"].setValue(0.5)
+    assert dialog.settings.filament.max_flow == pytest.approx(0.5)
+    assert "Volumenstrom" in dialog.advice_state.text()
+    assert "Verringern" in dialog.advice_state.text()
+    assert not dialog.advice_state.isHidden()
+    assert not dialog.apply_button.isEnabled()
+    assert dialog.advice_view.topLevelItemCount() == 0
+    assert dialog.advice_control.text() == tr("Erneut prüfen")
+    dialog.advice_control.click()
+    assert "Volumenstrom" in dialog.advice_state.text()
+    dialog._editors["filament.max_flow"].setValue(12.0)
+    assert not dialog._advice_problem
+    assert dialog.advice_state.isHidden()
+    assert dialog._current_advice()
+    dialog.reject()
+
+
 @pytest.mark.parametrize("known_problem", [False, True])
 def test_print_advice_failure_has_a_retry_and_never_claims_the_part_is_ready(
     qt_app,

@@ -4696,11 +4696,7 @@ class PrintSettingsDialog(QDialog):
         noch nicht fest, was ankommt, und eine leere Liste wäre die schlechtere
         Auskunft.
         """
-        entries = (
-            self._advice_entries
-            if self._plate_bodies()
-            else advise.advise(self.settings, self.session.profile, self.slice_result)
-        )
+        entries = self._advice_entries
         flavour = self._current_flavour()
         if flavour is None:
             return entries
@@ -4869,6 +4865,12 @@ class PrintSettingsDialog(QDialog):
             self._advice_timer.stop()
             if self._advice_worker is not None:
                 self._advice_worker.cancel()
+            try:
+                self._advice_entries = advise.advise(
+                    self.settings, self.session.profile, self.slice_result
+                )
+            except AppError as problem:
+                self._set_advice_problem(problem)
         self._show_advice()
 
     def _analysis_context(self) -> tuple[Any, ...]:
@@ -5020,6 +5022,11 @@ class PrintSettingsDialog(QDialog):
             or context != self._advice_context()
         ):
             return
+        self._set_advice_problem(detail)
+        self._show_advice()
+
+    def _set_advice_problem(self, detail: AppError | str) -> None:
+        """Auch Empfehlungen ohne Modell nennen denselben Grund und den passenden Rückweg."""
         self._advice_entries = []
         self._advice_pending = False
         problem = detail if isinstance(detail, AppError) else InternalError(detail=detail)
@@ -5036,7 +5043,6 @@ class PrintSettingsDialog(QDialog):
         field = problem.values.get("field")
         if isinstance(field, str) and field in self._fields:
             self._lift(field)
-        self._show_advice()
 
     def _advice_progressed(
         self,
