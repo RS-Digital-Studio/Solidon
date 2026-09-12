@@ -1438,8 +1438,18 @@ def check(
         # zwanzigmal langsamer. Die Paar- und Grenzmenge bleibt unverändert.
         if checked % 16 == 0:
             gc.collect()
-    if checked < len(plan) and not failures:
-        add({}, str(_("Wird abgebrochen …")))
+    if checked < len(plan):
+        add(
+            {},
+            str(
+                _(
+                    "Bereichstest abgebrochen: {checked} von {total} Kombinationen geprüft. "
+                    "Starten Sie die Prüfung erneut, um den Rest zu prüfen.",
+                    checked=checked,
+                    total=len(plan),
+                )
+            ),
+        )
     if progress is not None and checked == len(plan):
         progress(1.0, str(_("Bereichstest abgeschlossen")))
     report = RangeReport(checked=checked, failures=tuple(failures), excluded=tuple(excluded))

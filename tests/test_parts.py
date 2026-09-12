@@ -1471,6 +1471,32 @@ def test_an_explicit_range_cancellation_does_not_turn_into_a_failed_corner(
     assert not report.passed
 
 
+def test_cancelling_after_a_failed_corner_keeps_both_failure_and_progress(profile: Profile) -> None:
+    """Ein vorhandener Fehler verschluckt nicht, dass der Rest ungeprüft blieb."""
+    from app.core.errors import OperationCancelled
+
+    @op_params
+    class PairParams(BaseParams):
+        size: float = param(title="Maß", default=1.0, minimum=1.0, maximum=2.0)
+
+    calls = 0
+
+    def build(_values: BaseParams) -> PartResult:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ValueError("Erste Ecke: Geometrie korrigieren.")
+        raise OperationCancelled
+
+    report = check_range(PairParams, build, profile)
+    assert report.checked == 1
+    assert len(report.failures) == 2
+    assert report.failures[0].values == {"size": 1.0}
+    assert "abgebrochen" in report.failures[1].reason.lower()
+    assert "1 von 2" in report.failures[1].reason
+    assert not report.passed
+
+
 def test_an_invalid_wall_declaration_is_reported_at_each_corner(profile: Profile) -> None:
     """Ein fehlender Wandparameter bleibt ein Vertragsfehler im Bereichsbericht."""
     import trimesh

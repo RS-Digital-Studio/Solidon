@@ -1003,11 +1003,8 @@ class PartFileIO:
                 len(failures),
                 int(limits["max_range_failures"]),
             )
-        if len(failures) > checked:
-            raise self._recipe_error(
-                _("Der Bereichsbericht enthält mehr Fehler als Prüfungen."),
-                field="range_report",
-            )
+        # Eine Ecke kann mehrere Befunde tragen; ein Abbruch ergänzt einen
+        # weiteren Eintrag, ohne eine ungeprüfte Ecke als geprüft zu zählen.
         for index, failure in enumerate(failures):
             field = f"range_report.failures.{index}"
             if not isinstance(failure, dict):

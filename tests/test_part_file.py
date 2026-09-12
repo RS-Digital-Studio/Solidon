@@ -1196,6 +1196,28 @@ def test_a_recipe_error_names_its_specific_static_reason(
     assert caught.value.suggestions
 
 
+@pytest.mark.parametrize("checked", [0, 1])
+def test_a_partial_range_report_survives_file_exchange(part: recipe.Recipe, checked: int) -> None:
+    """Prüffehler und Abbruch sind mehrere Befunde, keine zusätzlichen geprüften Ecken."""
+    from app.core.knowledge.parts.range_check import RangeFailure, RangeReport
+
+    failures = (
+        [
+            RangeFailure({"width": 5.0}, "Wand zu dünn."),
+            RangeFailure({"width": 5.0}, "Merkmal fehlt."),
+        ]
+        if checked
+        else []
+    )
+    failures.append(
+        RangeFailure({}, f"Bereichstest abgebrochen: {checked} von 8 Kombinationen geprüft.")
+    )
+    partial = dataclasses.replace(part, range_report=RangeReport(checked, tuple(failures)))
+    imported = PartFileIO().validate(PartFileIO().export_file(partial))
+    assert imported.range_report == partial.range_report
+    assert not imported.range_report.passed
+
+
 def test_unknown_operations_and_code_shaped_data_are_rejected(part_payload: bytes) -> None:
     data = json.loads(part_payload)
     data["document"]["ops"][0]["op"] = "execute_foreign_code"
