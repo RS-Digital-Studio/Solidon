@@ -36,6 +36,18 @@ kosteten Zeit:
   **eigenen** Ersetzungen darauf anwenden, `git hash-object -w --path <datei>
   --stdin` und `git update-index --cacheinfo 100644,<sha>,<datei>`. Der
   Arbeitsbaum bleibt unberührt, im Index steht nur die eigene Zeile.
+- **Hunkweise filtern reicht dafür nicht.** Am 12.09.2026 zweimal versucht: Ein
+  Filter, der Hunks mit den eigenen Marken nimmt, zieht die fremden Zeilen mit,
+  die im **selben** Hunk stehen — meine zwei ROADMAP-Punkte lagen neben RM-132,
+  RM-159 und RM-160 der anderen Sitzung, und beide Male standen sie im Index.
+  Die Trennung geht nur zeilengenau, also über den selbst gebauten Blob eine
+  Zeile weiter unten.
+- **Und wenn sie gerade gestaged hat, ist auch der Index ihrer.** Mitten in
+  meinem Commit standen plötzlich `perceive/features.py` und vier ihrer Tests
+  im Index. `git reset` darauf nähme ihr die Vorbereitung weg; der Ausweg ist
+  ein eigener Index: `GIT_INDEX_FILE=<scratchpad>/mein_index git read-tree HEAD`,
+  dann `update-index` und `commit` mit derselben Variable. Die Hooks laufen
+  normal, ihr Index bleibt unberührt.
 - **Die Falle daran ist HEAD selbst.** Bewegt er sich zwischen dem Bauen des
   Blobs und dem Commit — und das tut er, wenn die andere Sitzung gerade
   committet —, dann **nimmt der Blob ihre frische Arbeit zurück**: Er ist gegen

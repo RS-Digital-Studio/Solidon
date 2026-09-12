@@ -62,6 +62,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 ## Messen und Prüfen
 
 - [Nachricht ist ein Satzende](nachricht-ist-ein-satzende.md) — beginnt sie mitten im Satz, liefert die Transkriptsuche den Anfang; erst dann messen.
+- [Prüfstand ohne Profil meldet fremden Fehler](pruefstand-ohne-profil-meldet-fremden-fehler.md) — wer den Bedienweg unvollständig nachbaut, berichtet einen Produktfehler, den es nicht gibt.
 - [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) · [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) · [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) · [Am Eingang drehen](am-eingang-drehen.md) — jede Messung antwortet auf ihre eigene Frage.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) · [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) · [Benannte Falle](benannte-falle-schuetzt-nicht.md) · [Geprüft fühlt sich wie vollständig an](geprueft-fuehlt-sich-wie-vollstaendig-an.md) — ansehen, mutieren; Notiz gekannt, Fehler gemacht; die geprüfte Hälfte deckt die andere.
 - [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) · [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) · [Zwei Schwellen](zwei-schwellen-eine-frage.md) · [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md) — Grenzen.
