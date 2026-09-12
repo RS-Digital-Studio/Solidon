@@ -179,6 +179,32 @@ def test_invalid_optional_printer_geometry_is_rejected(extra):
         )
 
 
+@pytest.mark.parametrize("field", ["printable_height", "printable_area", "bed_exclusions"])
+def test_invalid_build_limits_offer_a_printer_profile_change(field):
+    """Ein Maschinenfehler verlangt kein Feld, das im Operationsdialog gar nicht existiert."""
+    from app.core.build_area import printable_area, printable_height
+    from app.core.errors import CHOOSE_PRINTER, ValidationError
+
+    invalid = ((0.0, 0.0), (10.0, 0.0), (5.0, 0.0))
+    value = (
+        -1.0
+        if field == "printable_height"
+        else (invalid,)
+        if field == "bed_exclusions"
+        else invalid
+    )
+    printer = replace(make_profile().printer, **{field: value})
+
+    with pytest.raises(ValidationError) as caught:
+        if field == "printable_height":
+            printable_height(printer)
+        else:
+            printable_area(printer)
+
+    assert caught.value.suggestions == (CHOOSE_PRINTER,)
+    assert "Prüfen Sie das Druckerprofil." in str(caught.value)
+
+
 def test_auto_split_does_not_claim_a_nominally_fitting_body_is_printable():
     from app.core.geom import autosplit
 

@@ -15,7 +15,7 @@ from shapely.affinity import translate
 from shapely.geometry import Polygon, box
 from shapely.geometry.base import BaseGeometry
 
-from app.core.errors import ValidationError
+from app.core.errors import CHOOSE_PRINTER, ValidationError
 from app.core.types import BoundingBox, Mesh, PrinterProfile, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -29,7 +29,8 @@ def printable_height(printer: PrinterProfile) -> float:
     if not math.isfinite(height) or height <= 0.0:
         raise ValidationError(
             field="printable_height",
-            detail=_("Die Druckhöhe ist ungültig. Prüfe das Druckerprofil."),
+            detail=_("Die Druckhöhe ist ungültig. Prüfen Sie das Druckerprofil."),
+            suggestions=(CHOOSE_PRINTER,),
         )
     return height
 
@@ -41,7 +42,8 @@ def _contour(points: tuple[tuple[float, float], ...]) -> Polygon:
     if polygon.is_empty or not polygon.is_valid or not finite:
         raise ValidationError(
             field="printable_area",
-            detail=_("Die Druckkontur ist ungültig. Prüfe das Druckerprofil."),
+            detail=_("Die Druckkontur ist ungültig. Prüfen Sie das Druckerprofil."),
+            suggestions=(CHOOSE_PRINTER,),
         )
     return polygon
 
