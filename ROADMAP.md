@@ -75,7 +75,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
-| [RM-156 — Die Breite eines Langlochs ändern](#rm-156) | Geometrie, Erkennung und Druckvorbereitung | `resize_hole` nimmt nur die runde Bohrung; am Langloch fehlt der Weg zu einer anderen Breite |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -1042,15 +1041,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-156"></a>
 
-- [ ] **RM-156 — Die Breite eines Langlochs ändern.** `resize_hole` nimmt nur die runde Bohrung
-  (`applies_to=["hole"]`), `resize_feature` nur Materie; am Langloch führt heute kein Weg zu einer
-  anderen Breite, und `NOT_APPLICABLE_HERE` sagt das an beiden Zeilen als „noch nicht gebaut".
-  Der Werkzeugkörper ist da (`_feature_solid` mit `scale`), die Rückzuordnung von `resize_hole`
-  (`_recognised_resized_feature`, `_expected_bore`) kennt aber nur den Durchmesser einer
-  Bohrung — am Langloch müsste sie Länge und Richtung mitführen, und am exakten Kern baut
-  `brep.edit.resize_bore` einen Zylinder. Abnahme: Ein Langloch Ø 6 auf 20 wird über das Feld
-  *Durchmesser* zu Ø 8 auf 22 (der Weg bleibt, die Enden wachsen), an beiden Kernen, mit
-  derselben Kennung.
+- [x] **RM-156 — Die Breite eines Langlochs ändern.** Am 12.09.2026 gebaut: *Bohrung ändern*
+  nimmt das Langloch an (`applies_to=["hole", "slot"]`), und der Durchmesser ist dort seine
+  **Breite**. Die Länge folgt aus dem gemessenen **Weg** plus der neuen Breite — Ø 6 auf 20
+  wird zu Ø 8 auf 22, genau die Abnahme. Gerechnet wird über den Weg und nicht über die
+  Länge: Er ist der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern verlöre,
+  bekäme ein anderes Bauteil.
+
+  **Gefüllt wird immer, auch ohne Versatz.** Beim Verbreitern deckt der neue Umriss den alten
+  mit ab; beim Verschmälern bliebe ohne das Füllen die alte Breite stehen, und das Maß im
+  Objektbaum wäre eine Behauptung über Material, das nicht mehr da ist. Die Zugabe entfällt
+  dabei — sie hält den Werkzeugkörper von der alten Bohrungswand fern, und die ist eben
+  zugegangen.
+
+  An **beiden Kernen** derselbe Weg: am Netz `_closed_at` + `prepare.slot_bore`, am exakten
+  Körper `edit.fill_bore` + `edit.slot_bore`. Die Rückzuordnung brauchte nichts Eigenes; die
+  Kennung bleibt in beiden Fällen. Die zwei Zeilen in `NOT_APPLICABLE_HERE`, die das als „noch
+  nicht gebaut" auswiesen, sind gefallen; `resize_feature` behält seine — es gilt Materie, und
+  ein Langloch ist ein Hohlraum.
+
+  Nachweis: zwei Fälle in `tests/test_slot_features.py` (breiter mit erhaltenem Weg, schmaler
+  mit mehr Material), einer in `tests/test_brep.py` und einer über `reason_against`. Gegenprobe
+  gefahren: alle vier rot ohne den Eintrag in `applies_to`.
 
 <a id="rm-154"></a>
 

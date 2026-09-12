@@ -3093,7 +3093,11 @@ OPEN_BODY_DETAIL: Final = _(
     params=ResizeHoleParams,
     consumes=1,
     produces=1,
-    applies_to=["hole"],
+    # **Auch am Langloch** (RM-156): Dort ist der Durchmesser seine Breite, und
+    # die Länge folgt daraus — der Weg bleibt, die Enden wachsen mit. Die Zeile
+    # in ``NOT_APPLICABLE_HERE``, die das als „noch nicht gebaut" auswies, ist
+    # mit ihrer Lücke gefallen.
+    applies_to=["hole", "slot"],
     touches_features=True,
     deterministic=False,
     doc=_("Ändert den Durchmesser einer erkannten Bohrung."),
@@ -3102,7 +3106,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     """Der gemeinsame Kundenweg für STL-Netze und exakte STEP-Körper."""
     params = cast(ResizeHoleParams, ctx.params)
     source = ctx.inputs[0]
-    feature = _chosen_bore(source, params.at_feature)
+    feature = _chosen_bore(source, params.at_feature, op="resize_hole")
     # **Auch das Ändern führt eine Stelle** (Robert, 10.09.2026: „auch beim
     # ändern einer bohrung"). Damit bekommt *Bohrung ändern* dieselbe
     # Flächenplatzierung wie *Bohrung setzen*: Die Maße zu Kanten und Mitten
@@ -3128,6 +3132,12 @@ def resize_hole(ctx: OpContext) -> OpResult:
     _reject_oversized("diameter", params.diameter, source.mesh)
     through = bool(feature.params.get("through", False))
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
+    # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
+    # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
+    # verlöre, bekäme ein anderes Bauteil. Ø 6 auf 20 wird damit zu Ø 8 auf 22.
+    slot_travel_now = _bore_number(feature, "travel") if feature.kind == "slot" else 0.0
+    slot_length_now = slot_travel_now + cut if feature.kind == "slot" else 0.0
     # **Gesucht wird danach, wo das Merkmal jetzt sitzt.** Beide Kerne ordnen
     # die neue Geometrie über Maß *und* Lage wieder ihrem Namen zu; mit der
     # alten Mitte findet keiner von beiden das versetzte Loch — der Netz-Weg
@@ -3157,7 +3167,33 @@ def resize_hole(ctx: OpContext) -> OpResult:
         # **Und an der neuen Stelle wird gebohrt, nicht geändert.** Dort ist
         # nichts, was ein neues Maß bekommen könnte; `resize_bore` ließe ein
         # unverändertes Maß ohnehin liegen und gäbe den gefüllten Körper zurück.
-        if moved_hole:
+        if feature.kind == "slot":
+            # **Ein Langloch wird gefüllt und neu geschnitten, in beide
+            # Richtungen** (RM-156). Beim Verbreitern deckte der neue Umriss den
+            # alten zwar mit ab; beim Verschmälern bliebe ohne das Füllen die
+            # alte Breite stehen, und das Maß im Objektbaum wäre eine Behauptung
+            # über Material, das nicht mehr da ist. Ein Weg für beide Fälle ist
+            # billiger als zwei, die sich in einem unterscheiden.
+            angle_now = slot_angle_of(feature, axis)
+            solid = edit.slot_bore(
+                edit.fill_bore(
+                    source.mesh,
+                    position=measured_centre,
+                    direction=axis,
+                    diameter=previous,
+                    depth=depth,
+                    length=_bore_number(feature, "length"),
+                    angle_deg=angle_now,
+                ),
+                position=centre,
+                direction=axis,
+                diameter=cut,
+                depth=_through_bore_depth(source.mesh, centre, axis) if through else depth,
+                length=slot_length_now,
+                angle_deg=angle_now,
+                overlap=0.0,
+            )
+        elif moved_hole:
             solid = edit.cut_bore(
                 edit.fill_bore(
                     source.mesh,
@@ -3248,7 +3284,11 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # an dieser Stelle beantwortbar, und danach ist sie es nicht mehr.
     exact_depth = _mesh_bore_depth(body, feature, axis, depth)
     closed_first: list[Finding] = []
-    if moved_hole:
+    # **Ein Langloch geht immer zu, bevor es neu geschnitten wird** (RM-156) —
+    # auch ohne Versatz. Beim Verbreitern deckte der neue Umriss den alten mit
+    # ab; beim Verschmälern bliebe die alte Breite stehen, und das Maß im
+    # Objektbaum wäre eine Behauptung über Material, das nicht mehr da ist.
+    if moved_hole or feature.kind == "slot":
         # Dieselbe Paarung wie beim Versetzen: alte Stelle zu, neue auf. Ohne
         # sie bliebe die Bohrung stehen und die geänderte entstünde daneben.
         closing = _closed_at(
@@ -3262,7 +3302,26 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
         body = closing.mesh
         closed_first = list(closing.findings)
-    if moved_hole:
+    if feature.kind == "slot":
+        # **Das Langloch wird neu geschnitten, mit der neuen Breite und der
+        # Länge, die aus seinem Weg folgt** (RM-156). Die Zugabe entfällt: Sie
+        # hält den Werkzeugkörper von der alten Bohrungswand fern, und die ist
+        # eben zugegangen — mit ihr wüchse die Breite bei jedem Zug.
+        result = slot_bore(
+            body,
+            position=centre,
+            direction=axis,
+            diameter=cut,
+            depth=exact_depth,
+            through=through,
+            length=slot_length_now,
+            angle_deg=slot_angle_of(feature, axis),
+            profile=ctx.profile,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            overlap=0.0,
+        )
+    elif moved_hole:
         # **An der neuen Stelle wird gebohrt, nicht geändert.** Die alte ist
         # eben zugegangen; dort, wo die Bohrung hinsoll, ist volles Material.
         # `resize_bore` verglich stattdessen die zwei Durchmesser, fand sie

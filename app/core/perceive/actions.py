@@ -122,17 +122,13 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("sphere", "slot_hole"): _(
         "Eine Kugelfläche hat keine Achse, entlang der ein Loch länger würde."
     ),
-    # **Ein „noch nicht", kein „nie".** Versetzen, Drehen, Verdoppeln und
-    # Entfernen nehmen das Langloch seit dem 11.09.2026 (RM-153); seine Breite
-    # ändert bis heute keine Operation — ``resize_hole`` nimmt nur die runde
-    # Bohrung, ``resize_feature`` nur Materie. Der Satz nennt, was geht.
+    # **Die Breite nimmt seit dem 12.09.2026 *Bohrung ändern*** (RM-156) — der
+    # Satz, der hier stand, ist mit seiner Lücke gefallen. ``resize_feature``
+    # bleibt draußen: Es gilt Materie, und ein Langloch ist ein Hohlraum; wer
+    # es dort ruft, liest über ``instead_of`` den Namen der richtigen Zeile.
     ("slot", "resize_feature"): _(
-        "Die Breite eines Langlochs zu ändern ist sinnvoll und noch nicht gebaut. "
-        "Länge und Richtung ändern Sie über „Zum Langloch ziehen“."
-    ),
-    ("slot", "resize_hole"): _(
-        "Die Breite eines Langlochs zu ändern ist sinnvoll und noch nicht gebaut. "
-        "Länge und Richtung ändern Sie über „Zum Langloch ziehen“."
+        "Ein Langloch ist ein Hohlraum und keine Materie. Seine Breite ändert "
+        "„Bohrung ändern“, Länge und Richtung „Zum Langloch ziehen“."
     ),
 }
 

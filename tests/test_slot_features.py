@@ -1237,3 +1237,70 @@ def test_the_crossing_warning_starts_at_half_a_degree(angle: float, says_so: boo
     finding = _slot_across_a_slot(slot, (0.0, 0.0, 1.0), angle)
 
     assert (finding is not None) is says_so, (angle, finding)
+
+
+# --- die Breite eines Langlochs (RM-156) ----------------------------------------------
+
+
+def test_a_slot_gets_wider_and_keeps_its_travel(profile: Profile) -> None:
+    """Ø 6 auf 20 wird zu Ø 8 auf 22 — der Weg bleibt, die Enden wachsen.
+
+    Bis zum 12.09.2026 führte am Langloch kein Weg zu einer anderen Breite:
+    ``resize_hole`` nahm nur die runde Bohrung, ``resize_feature`` nur Materie,
+    und `NOT_APPLICABLE_HERE` sagte an beiden Zeilen „noch nicht gebaut"
+    (RM-156).
+
+    **Gemessen wird der Weg und nicht die Länge**, denn er ist der Grund, aus
+    dem es Langlöcher gibt: Wer die Breite ändert und dabei den Verschiebeweg
+    verlöre, bekäme ein anderes Bauteil. Die Länge folgt daraus — sie ist der
+    Weg plus die neue Breite.
+    """
+    mesh = slotted(profile, diameter=6.0, slot_length=20.0)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    before = only_slot(mesh)
+    travel = float(before.params["travel"])
+
+    wider = run_op("resize_hole", entry, profile, at_feature=before.id, diameter=8.0)
+
+    slots = [feature for feature in wider.features.values() if feature.kind == "slot"]
+    assert len(slots) == 1, f"ein Langloch erwartet, gefunden: {len(slots)}"
+    assert slots[0].id == before.id, "die Kennung bleibt — jeder spätere Schritt hängt daran"
+    assert float(slots[0].params["diameter"]) == pytest.approx(8.0, abs=0.2)
+    assert float(slots[0].params["travel"]) == pytest.approx(travel, abs=0.2), (
+        "der Verschiebeweg ist der Grund, aus dem es Langlöcher gibt"
+    )
+    assert float(slots[0].params["length"]) == pytest.approx(travel + 8.0, abs=0.3)
+
+
+def test_a_slot_gets_narrower_again(profile: Profile) -> None:
+    """Die Gegenrichtung: schmaler heißt, die alte Stelle geht zuerst zu.
+
+    Beim Verbreitern deckt der neue Umriss den alten mit ab; beim Verschmälern
+    bliebe ohne das Füllen die alte Breite stehen, und das Maß im Objektbaum
+    wäre eine Behauptung über Material, das nicht mehr da ist.
+    """
+    mesh = slotted(profile, diameter=8.0, slot_length=22.0)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    before = only_slot(mesh)
+
+    narrower = run_op("resize_hole", entry, profile, at_feature=before.id, diameter=5.0)
+
+    slots = [feature for feature in narrower.features.values() if feature.kind == "slot"]
+    assert len(slots) == 1
+    assert float(slots[0].params["diameter"]) == pytest.approx(5.0, abs=0.2)
+    assert as_mesh_data(narrower.mesh).volume > as_mesh_data(mesh).volume, (
+        "ein schmaleres Loch lässt mehr Material stehen"
+    )
+
+
+def test_the_panel_no_longer_says_the_width_is_unbuilt() -> None:
+    """Was gebaut ist, steht nicht mehr unter „noch nicht gebaut" (Regel 17).
+
+    Ein Satz, der eine Fähigkeit verneint, altert mit ihr — und ein
+    ausgegrauter Knopf über einer Handlung, die es gibt, ist schlimmer als
+    keiner.
+    """
+    from app.core.perceive.actions import NOT_APPLICABLE_HERE, reason_against
+
+    assert ("slot", "resize_hole") not in NOT_APPLICABLE_HERE
+    assert reason_against("resize_hole", "slot") is None, "die Operation nimmt das Langloch an"

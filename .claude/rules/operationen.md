@@ -540,8 +540,24 @@ Schneiden. **Drehen** braucht die mitgedrehte Mittellinie
 mit der neuen; wer beides mit der neuen tut, füllt neben dem Loch und
 schneidet ein Kreuz hinein.
 
-Was das Langloch **nicht** nimmt und warum, steht in
-`perceive.actions.NOT_APPLICABLE_HERE`: die Breite (RM-156).
+**Und seine Breite ändert *Bohrung ändern*** (12.09.2026, RM-156). Der
+Durchmesser ist dort seine **Breite**, und die Länge folgt daraus: `resize_hole`
+rechnet sie aus dem gemessenen **Weg** plus der neuen Breite — Ø 6 auf 20 wird
+zu Ø 8 auf 22. Gerechnet wird über den Weg und nicht über die Länge, denn er ist
+der Grund, aus dem es Langlöcher gibt; wer ihn beim Verbreitern verlöre, bekäme
+ein anderes Bauteil.
+
+**Gefüllt wird dabei immer, auch ohne Versatz.** Beim Verbreitern deckt der
+neue Umriss den alten zwar mit ab; beim Verschmälern bliebe ohne das Füllen die
+alte Breite stehen, und das Maß im Objektbaum wäre eine Behauptung über
+Material, das nicht mehr da ist. Ein Weg für beide Richtungen ist billiger als
+zwei, die sich in einer unterscheiden. Die Zugabe entfällt (`overlap=0.0`): Sie
+hält den Werkzeugkörper von der alten Bohrungswand fern, und die ist eben
+zugegangen.
+
+Was das Langloch **nicht** nimmt, ist `resize_feature` — das gilt Materie, und
+ein Langloch ist ein Hohlraum. Der Satz in
+`perceive.actions.NOT_APPLICABLE_HERE` nennt dafür die zwei Zeilen, die es gibt.
 
 **Und seine Wand wird an der dünnsten Stelle genannt** (12.09.2026, RM-152).
 `relations.sleeve_at` schloss es aus, weil seine Rechnung der halbe

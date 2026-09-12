@@ -2084,3 +2084,28 @@ def test_a_bore_that_names_no_place_stays_where_it_is(profile: Profile) -> None:
         f"das Loch ist nach {centre} gewandert, ohne dass jemand eine Stelle nannte"
     )
     assert holes[0].params["diameter"] == pytest.approx(9.0, abs=0.05)
+
+
+def test_an_exact_slot_gets_wider_and_keeps_its_travel(profile: Profile) -> None:
+    """Dieselbe Zusage wie am Netz, am exakten Körper (RM-156).
+
+    „Zwischen den beiden soll es keinen Unterschied geben bei gar nichts"
+    (Robert, 10.09.2026) — also wird hier dasselbe gemessen: Ø 6 auf 20 wird zu
+    Ø 8 auf 22, der Weg bleibt, und die Kennung geht nicht verloren.
+    """
+    original = a_slotted_block(length=20.0)
+    features = features_of(original)
+    slot = next(entry for entry in features.values() if entry.kind == "slot")
+    travel = float(slot.params["length"]) - float(slot.params["diameter"])
+    source = SceneObject(id="obj_1", name="Platte", mesh=original, kind="brep", features=features)
+
+    wider = run("resize_hole", source, profile, at_feature=slot.id, diameter=8.0).outputs[0]
+
+    assert wider.kind == "brep", "der exakte Körper bleibt exakt"
+    slots = [entry for entry in wider.features.values() if entry.kind == "slot"]
+    assert len(slots) == 1, f"ein Langloch erwartet: {[e.kind for e in wider.features.values()]}"
+    assert slots[0].id == slot.id, "die Kennung bleibt"
+    assert float(slots[0].params["diameter"]) == pytest.approx(8.0, abs=0.15)
+    assert float(slots[0].params["length"]) - float(slots[0].params["diameter"]) == pytest.approx(
+        travel, abs=0.15
+    ), "der Verschiebeweg bleibt"

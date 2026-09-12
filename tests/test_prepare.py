@@ -1391,7 +1391,9 @@ def test_the_preparation_operations_are_registered_completely() -> None:
     assert REGISTRY.get("drill_hole").applies_to == ("face",)
     assert REGISTRY.get("drill_hole").requires_seed, "it uses the boolean fallback chain"
     resize = REGISTRY.get("resize_hole")
-    assert resize.applies_to == ("hole",)
+    # Und am Langloch (RM-156): Dort ist der Durchmesser seine Breite, und die
+    # Länge folgt aus dem Weg, der bleibt.
+    assert resize.applies_to == ("hole", "slot")
     assert resize.requires_seed, "der Mesh-Weg benutzt dieselbe Boolesche Rückfallkette"
     diameter = next(entry for entry in resize.params.spec() if entry.name == "diameter")
     feature = next(entry for entry in resize.params.spec() if entry.name == "at_feature")
