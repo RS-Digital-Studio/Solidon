@@ -71,7 +71,12 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 14. **Kennzahlen aus Schichtanalyse und G-Code werden nie vermischt** —
     Herkunft immer ausweisen (§22.5).
 15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Einen Slicer
-    nur extern aufrufen, nie mitliefern.
+    nur extern aufrufen, nie mitliefern. Die bereits freigegebene GCC-Laufzeit
+    in Ziel-Wheels ist ausschließlich mit dem vollständigen SPDX-Paar
+    `GPL-3.0-or-later WITH GCC-exception-3.1` aus `licences.toml/allowed_with`
+    zulässig (§36). Das ist keine allgemeine Freigabe für GPL-Code oder andere
+    Linking-Ausnahmen; die konkrete Laufzeit muss die Ausnahme tragen und
+    deren Bedingungen erfüllen.
 
 **Bedienung**
 16. **Jeder Agentenvorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn

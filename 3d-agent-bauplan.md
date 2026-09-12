@@ -2486,7 +2486,7 @@ Die historischen Fälle und Messreihen stehen im [Roadmap-Archiv](ROADMAP-ARCHIV
 |---|---|---|
 | trimesh | MIT | unkritisch |
 | manifold3d | Apache-2.0 | unkritisch, Kern der Bausteine |
-| numpy, scipy | BSD | unkritisch; scipy trägt Skizzen-Solver und Zuordnung |
+| numpy, scipy | BSD; Ziel-Wheels können GCC-Laufzeit mit GCC Runtime Library Exception 3.1 enthalten | scipy trägt Skizzen-Solver und Zuordnung; vollständiger SPDX-Ausdruck und Laufzeitbelege stehen in der Lizenzakte |
 | shapely | BSD-3, bündelt GEOS (LGPL) | Polygonarbeit hinter Schnitt und Schichtanalyse |
 | networkx | BSD-3 | Konturhierarchie des gedeckelten Schnitts — `rtree` ist am 24.08.2026 durch `app/core/geom/enclosure.py` (shapely-STRtree) ersetzt und steht auf der Sperrliste: libspatialindex korrumpierte den Heap |
 | scikit-image | BSD-3 | Marching Cubes der Voxelstufe (§17.2) |
@@ -2514,6 +2514,13 @@ was Solidon nur *aufruft* und was es in eine fremde Umgebung *installiert*. Ein
 extern gestarteter Slicer taucht in keiner Prüfung der eigenen Laufzeit auf und
 wäre sonst die einzige Abhängigkeit ohne Akte. Diese Tabelle nennt die
 Entscheidungen, die Datei die Belege.
+
+Die GCC-Laufzeit ist nur über das bereits freigegebene vollständige Paar
+`GPL-3.0-or-later WITH GCC-exception-3.1` zugelassen. Die Ausnahme gilt für
+die entsprechend gekennzeichneten Laufzeitdateien und verlangt einen
+geeigneten Übersetzungsvorgang; sie gibt beliebigen GPL-Code nicht frei.
+Die Bedingungen stehen im [GCC-Originaltext](https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html).
+Die Zuordnung und Belege werden am konkreten Zielpaket geprüft.
 
 **Lizenz und Lieferbarkeit werden vor dem Einbau geprüft.** Eine neue native
 Abhängigkeit braucht zulässige Lizenzbedingungen und installierbare Räder für

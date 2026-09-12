@@ -25,5 +25,7 @@ im Baustein ein Fehler ist (Regel 7).
   gemessen: Agenten-Suite vorher und nachher, Version erhöhen, und bei
   schlechterer Quote zurücknehmen — nicht „trotzdem behalten".
 - **`licences.toml`** ist die Freigabeliste. Eine neue Abhängigkeit wird
-  **hier** eingetragen, bevor sie eingebaut wird. GPL kommt nicht hinein
-  (Regel 15), `tests/test_licences.py` hält dagegen.
+  **hier** eingetragen, bevor sie eingebaut wird. Regel 15 schließt GPL aus;
+  das dort ausdrücklich genannte GCC-Laufzeitpaar wird vollständig über
+  `allowed_with` geprüft. Beliebige Linking-Ausnahmen genügen nicht.
+  `tests/test_licences.py` prüft erlaubte und verbotene Ausdrücke.
