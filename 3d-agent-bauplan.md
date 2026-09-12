@@ -2090,6 +2090,30 @@ sie werden nie stillschweigend weggelassen. Eine Änderung des Packverfahrens
 wird an denselben Referenzteilen auf Plattenzahl, Kollisionsfreiheit,
 Mindestabstände und reproduzierbare Anordnung geprüft.
 
+**Ein Zug am Griff meint einen Platz, kein Maß.** Eine Bewegung, die aus dem
+Viewport kommt, speichert den Weg, den der Zeiger zurückgelegt hat — und der
+gilt nur, solange davor nichts anderes wird. Ordnet ein früherer Schritt nach
+einer Parameteränderung neu an, startet der Körper woanders, und derselbe Weg
+führt neben das Bett. Deshalb holen die drei Operationen des Gizmos einen
+Körper auf die Druckfläche zurück, wenn ihre Bewegung ihn darüber hinaus
+trägt: so wenig wie möglich, bei belegtem Platz auf eine freie Stelle
+derselben Platte, und mit einem Befund, der es sagt. Geprüft wird der Eingang
+— wer schon daneben stand, bleibt geparkt —, und bewegt wird nur waagerecht;
+die Höhe hat *Auf das Bett setzen*.
+
+Das ist eine Eigenschaft des **Zuges** und nicht der Operation: Ein getippter
+Wert ist eine Ansage und wird ausgeführt, auch über den Bauraum hinaus, wo der
+Bauraumbefund sie beantwortet. Beides steht als Parameter in der Op, nicht als
+Regel bei der Auswertung (§17.1), damit ein Rezept dieselbe Operation ohne
+diese Rückholung benutzen kann.
+
+**Und die Nummern der Teile hängen an der Geometrie, nicht am Rauschen.**
+*In Einzelteile zerlegen* ordnet nach Volumen; zwei gleich große Teile
+entscheiden über ihre Lage. Gerechnete Volumina schwanken in den letzten
+Stellen mit der Tessellierung, und ein Tausch der Nummern nähme jedem späteren
+Schritt sein Ziel — die Kennung eines Objekts ist der Anker für alles, was
+danach kommt.
+
 **Formate**: STL binär, **3MF mit Objektnamen, Anordnung und Farbgruppen**,
 OBJ, PLY, GLB zum Zeigen, STEP bei B-Rep-Objekten.
 

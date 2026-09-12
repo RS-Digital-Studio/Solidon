@@ -3517,6 +3517,65 @@ def test_split_bodies_joins_the_surplus_to_its_nearest_neighbour(profile: Profil
     assert RECOUNT_AND_RETRY in surplus.suggestions, "ein Klick setzt die Stückzahl auf vier"
 
 
+def test_split_bodies_numbers_equal_parts_by_where_they_sit(profile: Profile) -> None:
+    """Zwei gleich große Teile bekommen ihre Nummer nach der Lage, nicht nach dem Rauschen.
+
+    **Der Anlass** (gemessen am 12.09.2026 an *Solidon3D* über neun
+    Schriftgrößen): Die beiden `o` sind gleich groß, ihre gerechneten Volumina
+    unterschieden sich bei 110 mm um 1e-10 von 19 559 — Rauschen aus der
+    Tessellierung. Bei 110 und 120 mm tauschten `obj_5` und `obj_6` dadurch
+    ihre Nummer, bei 100, 130 und 150 nicht. Jeder spätere Schritt hängt an
+    der Objektkennung: eine Filamentzuweisung, eine Bohrung, ein Zug am Griff
+    griffe nach einer Parameteränderung am anderen Teil.
+
+    Geprüft mit zwei Würfeln, deren Volumen sich um ein Billionstel
+    unterscheidet — genau der Größenordnung, um die es geht. Der linke muss
+    zuerst kommen, gleich welcher der beiden minimal größer gerechnet wird.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    def zwei(rechts_groesser: bool) -> list[float]:
+        kante = 10.0
+        winzig = kante * (1.0 + 1e-12)
+        teile = []
+        for size, x in (
+            (winzig if rechts_groesser else kante, 50.0),
+            (kante if rechts_groesser else winzig, -50.0),
+        ):
+            wuerfel = trimesh.creation.box(extents=(size, size, size))
+            wuerfel.apply_translation((x, 0.0, 0.0))
+            teile.append(wuerfel)
+        entry = SceneObject(
+            id="obj_1", name="Paar", mesh=MeshData.of(trimesh.util.concatenate(teile))
+        )
+        result = _run_op("split_bodies", entry, profile, count=2)
+        return [float(as_mesh_data(o.mesh).bounds.centre[0]) for o in result.outputs]
+
+    assert zwei(rechts_groesser=True)[0] < 0.0, (
+        "der rechte Würfel wurde erster, weil er ein Billionstel größer gerechnet wurde"
+    )
+    assert zwei(rechts_groesser=False)[0] < 0.0, "und umgekehrt genauso"
+
+    # **Ein echter Unterschied entscheidet weiter das Volumen.** Die Rundung
+    # nagelt den Gleichstand fest, sie ersetzt die Sortierung nicht — sonst
+    # stünden bei einer zu kleinen Stückzahl die falschen Teile einzeln.
+    grosser_rechts = trimesh.creation.box(extents=(12.0, 12.0, 12.0))
+    grosser_rechts.apply_translation((50.0, 0.0, 0.0))
+    kleiner_links = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    kleiner_links.apply_translation((-50.0, 0.0, 0.0))
+    ungleich = SceneObject(
+        id="obj_1",
+        name="Paar",
+        mesh=MeshData.of(trimesh.util.concatenate([grosser_rechts, kleiner_links])),
+    )
+    result = _run_op("split_bodies", ungleich, profile, count=2)
+    assert float(as_mesh_data(result.outputs[0].mesh).bounds.centre[0]) > 0.0, (
+        "der größere steht zuerst, auch wenn er rechts liegt"
+    )
+
+
 def test_split_bodies_with_too_few_parts_offers_the_measured_count(profile: Profile) -> None:
     """Weniger Teile als die Stückzahl: der Halt nennt die Zahl, die passt."""
     import trimesh

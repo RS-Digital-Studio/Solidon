@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.build_area import fits_xy, printable_area
 from app.core.geom.mesh import read_mesh
 from app.core.geom.transform import (
     anchor_point,
@@ -470,4 +471,225 @@ def test_a_named_pivot_of_zero_is_a_point_and_not_a_missing_value(
     assert gedreht[0] == pytest.approx(-versetzt[0], abs=1e-6), (
         f"um den Ursprung gedreht muss aus x={versetzt[0]} x={-versetzt[0]} werden, "
         f"wurde {gedreht[0]} — der Nullpunkt wurde als „nicht gesetzt“ gelesen"
+    )
+
+
+# --- auf dem Bett gehalten (§29) ------------------------------------------------
+
+
+def loaded_twice(document: Document) -> History:
+    """Zwei Würfel, damit ein Platz auch belegt sein kann."""
+    history = prepared(document)
+    history.apply(
+        _("Laden"),
+        [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})],
+    )
+    return history
+
+
+def test_a_move_beyond_the_edge_comes_back(document: Document, profile: Profile) -> None:
+    """Ein Zug über den Rand endet auf der Fläche — und am nächsten Platz.
+
+    Der Anlass war kein Zug, sondern eine Parameteränderung darüber: Der Zug
+    speichert einen Weg, und wenn *Druckoptimal ausrichten* danach neu
+    anordnet, führt derselbe Weg neben das Bett. Geprüft wird die Wirkung, und
+    die ist dieselbe.
+    """
+    history = prepared(document)
+    history.apply(
+        _("Verschieben"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"dx": 300.0, "keep_on_bed": True},
+            )
+        ],
+    )
+
+    result = evaluate_with(document, profile)
+    mesh = result.scene.objects["obj_1"].mesh
+    area = printable_area(profile.printer)
+
+    assert fits_xy(mesh, area), f"steht bei x={mesh.bounds.centre[0]} und damit neben dem Bett"
+    # Zurückgeschoben und nicht quer über die Platte gelegt: Der Körper steht
+    # an der Kante, an der er hinausgelaufen wäre.
+    assert mesh.bounds.maximum[0] == pytest.approx(area.bounds[2], abs=1e-6)
+    assert any(
+        finding.code == "transform.nudged_onto_bed" for finding in result.scene.report.findings
+    ), "die Rückholung geschieht, wird aber nicht gesagt"
+
+
+def test_a_typed_value_is_carried_out_as_it_stands(document: Document, profile: Profile) -> None:
+    """Getippt wird ausgeführt, gezogen wird gezeigt.
+
+    Die Vorgabe des Parameters ist **aus**, und das trägt zwei Fälle, die es
+    wirklich gibt: Das Galerieteil *gehaeuse* schiebt seinen Deckel um 135 mm
+    und graviert danach bei x = 135 — eine stille Rückholung ließe die Gravur
+    ins Leere greifen. Und ein Kranz, der bewusst über den Bauraum gelegt
+    wird, soll das melden statt zurückzurücken
+    (`test_scene_ops.test_a_ring_that_leaves_the_build_volume_is_refused_with_advice`).
+    """
+    history = prepared(document)
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 300.0})],
+    )
+
+    result = evaluate_with(document, profile)
+    mesh = result.scene.objects["obj_1"].mesh
+
+    assert mesh.bounds.centre[0] == pytest.approx(300.0)
+    assert not any(
+        finding.code.startswith("transform.nudged") or finding.code.startswith("transform.rearr")
+        for finding in result.scene.report.findings
+    )
+
+
+def test_who_stood_outside_already_stays_outside(document: Document, profile: Profile) -> None:
+    """Ein geparkter Körper bleibt geparkt, so oft man ihn noch zieht.
+
+    Geprüft wird der **Eingang**: Lag er nicht auf der Fläche, ist seine Lage
+    eine Absicht und keine Panne. Ohne diese Bedingung finge der zweite Zug
+    ein, was der erste bewusst hinausgelegt hat — und ein Körper, den man
+    einmal neben das Bett gelegt hat, wäre dort nicht mehr zu bewegen.
+    """
+    history = prepared(document)
+    # Getippt und damit bewusst: der Körper wird neben das Bett gelegt.
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 300.0})],
+    )
+    # Und jetzt gezogen — der Haken ist gesetzt und greift trotzdem nicht.
+    history.apply(
+        _("Verschieben"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"dy": 5.0, "keep_on_bed": True},
+            )
+        ],
+    )
+
+    mesh = evaluate_with(document, profile).scene.objects["obj_1"].mesh
+    assert mesh.bounds.centre[0] == pytest.approx(300.0), "der geparkte Körper wurde eingefangen"
+
+
+def test_a_taken_place_makes_it_rearrange(document: Document, profile: Profile) -> None:
+    """Steht am nächsten Platz schon jemand, wird neu eingeordnet.
+
+    Zurückschieben ist die Vorgabe, weil es am wenigsten bewegt — aber es darf
+    nicht in einen Nachbarn schieben. Dann sucht dieselbe Anordnung, die
+    *Auf dem Bett anordnen* benutzt, eine freie Stelle.
+    """
+    area = printable_area(profile.printer)
+    history = loaded_twice(document)
+    # Der zweite Würfel an die rechte Kante — genau dorthin, wohin der erste
+    # zurückgeschoben würde.
+    history.apply(
+        _("Verschieben"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_2",),
+                params={"dx": area.bounds[2] - 10.0},
+            )
+        ],
+    )
+    history.apply(
+        _("Verschieben"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"dx": 300.0, "keep_on_bed": True},
+            )
+        ],
+    )
+
+    result = evaluate_with(document, profile)
+    first = result.scene.objects["obj_1"].mesh
+    second = result.scene.objects["obj_2"].mesh
+
+    assert fits_xy(first, area)
+    assert any(
+        finding.code == "transform.rearranged_on_bed" for finding in result.scene.report.findings
+    )
+    # Und wirklich frei: Die Hüllquader dürfen sich in XY nicht überlappen.
+    apart = (
+        first.bounds.maximum[0] <= second.bounds.minimum[0]
+        or second.bounds.maximum[0] <= first.bounds.minimum[0]
+        or first.bounds.maximum[1] <= second.bounds.minimum[1]
+        or second.bounds.maximum[1] <= first.bounds.minimum[1]
+    )
+    assert apart, "neu eingeordnet und trotzdem im Nachbarn"
+
+
+def test_growing_over_the_edge_is_held_too(document: Document, profile: Profile) -> None:
+    """Auch Wachsen bringt einen Körper über den Rand — ohne dass jemand schiebt."""
+    area = printable_area(profile.printer)
+    history = prepared(document)
+    history.apply(
+        _("Verschieben"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"dx": area.bounds[2] - 10.0},
+            )
+        ],
+    )
+    history.apply(
+        _("Skalieren"),
+        [
+            OperationDraft(
+                op="scale_object",
+                inputs=("obj_1",),
+                params={"factor": 4.0, "keep_on_bed": True},
+            )
+        ],
+    )
+
+    result = evaluate_with(document, profile)
+    assert fits_xy(result.scene.objects["obj_1"].mesh, area)
+
+
+def test_the_reported_matrix_lands_the_input_on_the_result(profile: Profile) -> None:
+    """Die gemeldete Bewegung ist die Verschiebung **und** die Rückholung.
+
+    Sie ist die Auskunft für Vorschau und Gizmo, und die muss den Eingang
+    genau auf den Ausgang legen. Ohne die Nachführung zeigte die Vorschau den
+    Körper dort, wohin die Zahlen zeigen — also neben dem Bett, wo er
+    hinterher nicht liegt. Dieselbe Rechnung wie bei *Druckoptimal
+    ausrichten*, wenn es nach dem Drehen anordnet.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import apply
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    body = as_mesh_data(cube())
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body)
+    spec = REGISTRY.get("translate_object")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(dx=300.0, keep_on_bed=True),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    assert result.transform is not None
+    laid = apply(body, np.asarray(result.transform, dtype=float))
+    assert laid.bounds.centre == pytest.approx(result.outputs[0].mesh.bounds.centre, abs=1e-6), (
+        "die gemeldete Matrix zeigt woanders hin als der Körper liegt"
     )

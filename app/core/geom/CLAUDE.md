@@ -195,6 +195,14 @@ verstifteten Hälften, §22.3) ·
 Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 `orient.py`
 
+**Die Nummer eines zerlegten Teils hängt an der Geometrie, nicht am Rauschen.**
+`_loose_parts` ordnet nach Volumen — aber nach dem **gerundeten Verhältnis zum
+größten Teil** (`_SAME_SIZE`), und bei Gleichstand entscheidet `_where_it_sits`,
+die Mitte des Hüllquaders. Der Grund steht in beiden Docstrings: Zwei gleich
+große Teile unterschieden sich in den letzten Stellen mit der Tessellierung,
+und ihre Nummern tauschten bei manchen Größen. Die Kennung eines Objekts ist
+der Anker für jeden späteren Schritt; ein Tausch nimmt ihm sein Ziel.
+
 **Ein Langloch ist eine Bohrung mit zwei Bogenmittelpunkten.** Der Umriss
 entsteht einmal (`prepare.slot_profile`) und wird von beiden Kernen aufgezogen
 — vom Netz-Kern über `sketch_solid.extrude_profile`, vom exakten über
@@ -282,6 +290,33 @@ Ergebnis seine Gültigkeit, nachdem jemand einen nicht gewählten Körper
 verschoben hat — der gedrehte wiche einem Nachbarn aus, der längst woanders
 steht. Die Regel dazu steht in `.claude/rules/operationen.md` unter „Und die
 vierte hängt an keinem Parameter".
+
+**Ein Zug speichert einen Weg, gemeint war ein Platz.** `back_onto_bed` holt
+zurück, was eine Bewegung von der Druckfläche geschoben hat, und die drei
+Operationen, die ein Gizmo-Zug anlegt — `translate_object`, `rotate_object`,
+`scale_object` — rufen es über den Parameter `keep_on_bed`. Erst wird
+zurückgeschoben, den kürzesten Weg, den `placement_offset` ohnehin zuerst
+prüft; steht dort ein Nachbar, sucht `arrange_on_bed` eine freie Stelle **auf
+derselben Platte**. Ist dort nichts frei, bleibt der Körper liegen und
+`check_build_volume` sagt es wie bisher — ein Plattenwechsel hinter dem Rücken
+des Kunden wäre ein Teil, das er beim Drucken nicht wiederfindet.
+
+**Die Vorgabe ist aus, und den Haken setzt der Zug** (`MainWindow.
+_on_transform_dragged`, vier Stellen). Ein getippter Wert ist eine Ansage und
+wird ausgeführt; ein Zug ist ein Zeigen. Der Unterschied ist gemessen: Das
+Galerieteil `website/teile/gehaeuse.p3d` schiebt seinen Deckel um 135 mm und
+graviert danach bei x = 135 — mit stiller Rückholung fiel „SOLIDON" in sieben
+lose Buchstaben —, und ein Kranz, der bewusst über den Bauraum gelegt wird,
+soll das melden statt zurückzurücken.
+
+Drei Bedingungen tragen das Verhalten, und jede hat ihren Grund: Geprüft wird
+der **Eingang** (wer schon daneben stand, ist geparkt und wird nicht
+eingefangen), bewegt wird nur in **XY** (die Höhe hat *Auf das Bett setzen*,
+und ein für einen Schnitt angehobener Körper darf nicht heruntergezogen
+werden), und die **gemeldete Matrix** trägt Bewegung und Rückholung zusammen
+— sonst zeigte die Vorschau dorthin, wohin die Zahlen weisen, und der Körper
+läge woanders. Auch diese drei lesen die übrigen Körper, also tragen auch sie
+`reads_other_bodies=True`.
 
 **Kanten**
 

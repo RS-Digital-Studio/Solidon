@@ -5148,8 +5148,48 @@ def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], i
     ]
     largest = max((volume for _body, volume, _slots in found), default=0.0) or 1.0
     kept = [entry for entry in found if keep_tiny or entry[1] >= largest * 0.01]
-    kept.sort(key=lambda entry: -entry[1])
+    kept.sort(key=lambda entry: (-round(entry[1] / largest, _SAME_SIZE), _where_it_sits(entry[0])))
     return kept, len(found) - len(kept)
+
+
+#: Ab welcher Stelle zwei Teile als **gleich groß** gelten — relativ zum
+#: größten, nicht absolut, denn ein Volumen von 20 000 mm³ und eines von 2 mm³
+#: rauschen verschieden stark.
+#:
+#: **Neun Stellen, und die Zahl ist gemessen** (12.09.2026 an *Solidon3D*): Die
+#: beiden `o` sind Punkt auf Punkt gleich groß, ihre gerechneten Volumina
+#: unterschieden sich bei 110 mm um 1e-10 von 19 559 — fünf Größenordnungen
+#: unter der letzten Stelle einer doppelten Genauigkeit, also Rauschen aus der
+#: Tessellierung und keine Aussage über die Form. Neun Stellen liegen weit über
+#: diesem Rauschen und weit unter jedem echten Unterschied: Die nächsten zwei
+#: wirklich verschiedenen Buchstaben desselben Schriftzugs trennen zehn
+#: Prozent.
+_SAME_SIZE = 9
+
+
+def _where_it_sits(body: Any) -> tuple[float, float, float]:
+    """Die Mitte des Hüllquaders — das Zweitkriterium beim Sortieren.
+
+    **Zwei gleich große Teile hatten keine Ordnung** (gemessen am 12.09.2026 an
+    *Solidon3D* über acht Schriftgrößen): Die beiden `o` sind gleich groß, und
+    bei Gleichstand entschied, in welcher Reihenfolge :func:`face_components`
+    sie liefert. Bei 110 und 120 mm tauschten `obj_5` und `obj_6` ihre Nummer,
+    bei 100, 130 und 150 nicht.
+
+    Bei zwei gleichen Teilen ist der Tausch folgenlos — aber **jeder spätere
+    Schritt hängt an der Objektkennung**, und nach einer Parameteränderung
+    griffe er am anderen Teil: eine Filamentzuweisung, eine Bohrung, ein Zug
+    am Griff. Die Lage entscheidet das eindeutig und übersteht eine
+    Größenänderung: Skaliert der ganze Schriftzug, skalieren alle Mitten mit
+    demselben Faktor um denselben Punkt, und ihre Ordnung bleibt.
+
+    Nur der **Gleichstand** wird damit festgenagelt, nicht die Sortierung
+    selbst — die bleibt das Volumen, denn sie entscheidet, welche Teile bei
+    einer zu kleinen Stückzahl einzeln stehen (siehe :data:`_SAME_SIZE` dazu,
+    ab wann zwei Volumina als gleich gelten).
+    """
+    centre = body.bounds.mean(axis=0)
+    return (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
 @register_op(

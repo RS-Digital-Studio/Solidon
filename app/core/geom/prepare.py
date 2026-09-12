@@ -43,7 +43,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.measure import surface_gap
-from app.core.geom.mesh import MeshData, concatenated, ray_hit_distances
+from app.core.geom.mesh import MeshData, as_mesh_data, concatenated, ray_hit_distances
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
@@ -2015,6 +2015,104 @@ def _fits_alone(mesh: MeshData, profile: Profile, spacing: float) -> bool:
     dort steht der Körper auf der Platte.
     """
     return placement_offset(mesh, profile.printer, margin=spacing) is not None
+
+
+def back_onto_bed(
+    mesh: Mesh,
+    others: Sequence[MeshData],
+    profile: Profile,
+    *,
+    spacing: float = 5.0,
+) -> tuple[Vec3, list[Finding]]:
+    """Der XY-Versatz, der einen Körper wieder auf die Druckfläche bringt (§29).
+
+    **Der Anlass** (Robert, 12.09.2026: „wenn ich die Schriftgröße änder passt
+    das Druckoptimal ausrichten nicht mehr"). Ein Zug am Gizmo speichert einen
+    *Weg*, gemeint war ein *Platz*: Solange sich davor nichts ändert, ist das
+    dasselbe. Ändert der Kunde einen Parameter weiter oben, ordnet *Druckoptimal
+    ausrichten* neu an — der Körper startet woanders, derselbe Weg wird trotzdem
+    daraufgerechnet, und er landet neben dem Bett. Gemessen an einem Schriftzug
+    *Solidon3D*, dessen Größe von 100 auf 130 mm ging: ein Buchstabe 70,41 mm
+    außerhalb, und aufräumen musste der Kunde von Hand.
+
+    **So wenig bewegen wie nötig.** Erst wird zurückgeschoben — die kürzeste
+    Strecke, die den Körper wieder ganz auf die Fläche bringt (das kann
+    :func:`placement_offset` bereits, es sortiert seine Kandidaten nach
+    Entfernung). Wer ein Teil zwei Millimeter über den Rand zieht, bekommt es um
+    zwei Millimeter zurück und nicht quer über die Platte gelegt. Erst wenn
+    dort ein anderer Körper steht, wird neu eingeordnet.
+
+    **Und nur auf der eigenen Platte.** ``others`` sind die Körper, die diese
+    Platte teilen; um sie herum wird gesucht. Ein Plattenwechsel hinter dem
+    Rücken des Kunden findet nicht statt: Ist auf seiner Platte nichts frei,
+    bleibt der Körper, wo er ist, und :func:`check_build_volume` sagt es wie
+    bisher. Eine Heilung, die schweigend die Platte wechselt, wäre ein Teil,
+    das der Kunde beim Drucken nicht wiederfindet.
+
+    Der Versatz ist rein waagerecht. Die Höhe hat *Auf das Bett setzen*, und
+    ein bewusst angehobener Körper — für einen Booleschen Schnitt etwa — darf
+    davon nicht heruntergezogen werden.
+    """
+    area = printable_area(profile.printer)
+    if fits_xy(mesh, area):
+        return (0.0, 0.0, 0.0), []
+
+    body = as_mesh_data(mesh)
+    nudge = placement_offset(body, profile.printer)
+    if nudge is not None:
+        offset = (nudge[0], nudge[1], 0.0)
+        if not _runs_into(body, offset, others):
+            return offset, [
+                Finding(
+                    code="transform.nudged_onto_bed",
+                    severity="info",
+                    message=_(
+                        "Der Körper ragte über die Druckfläche hinaus und wurde zurückgeschoben."
+                    ),
+                    values={"distance": format_length(math.hypot(nudge[0], nudge[1]), "mm")},
+                )
+            ]
+
+    arrangement = arrange_on_bed(
+        [body],
+        profile,
+        spacing,
+        plates=1,
+        occupied=[(other, 0) for other in others],
+    )
+    placed = arrangement.meshes[0]
+    # Die Befunde der Anordnung bleiben hier: Sie beschreiben einen Probelauf
+    # mit einem einzigen Körper und einer einzigen Platte, nicht die Szene.
+    if not fits_xy(placed, area):
+        return (0.0, 0.0, 0.0), []
+    offset = (
+        float(placed.bounds.centre[0] - body.bounds.centre[0]),
+        float(placed.bounds.centre[1] - body.bounds.centre[1]),
+        0.0,
+    )
+    return offset, [
+        Finding(
+            code="transform.rearranged_on_bed",
+            severity="info",
+            message=_(
+                "Der Körper passte an seiner Stelle nicht mehr auf die "
+                "Druckfläche und wurde neu eingeordnet."
+            ),
+        )
+    ]
+
+
+def _runs_into(body: MeshData, offset: Vec3, others: Sequence[MeshData]) -> bool:
+    """Steckt der Körper an der neuen Stelle in einem seiner Nachbarn?
+
+    Paarweise gegen den einen Körper und nicht ``check_collisions`` über die
+    ganze Liste: Die Nachbarn untereinander sind nicht die Frage, und ihre
+    Befunde gehören nicht in diese Operation.
+    """
+    moved = body.raw.copy()
+    moved.apply_transform(translation(offset))
+    shifted = body.replacing(moved)
+    return any(check_collisions([shifted, other]) for other in others)
 
 
 def check_build_volume(

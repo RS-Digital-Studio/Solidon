@@ -41,6 +41,7 @@ from app.core.types import (
     MaterialSlot,
     OpContext,
     OpResult,
+    SceneObject,
     SolverInfo,
     Transform,
     Vec3,
@@ -96,6 +97,95 @@ def as_transform(matrix: Any) -> Transform:
     return cast(Transform, tuple(rows))
 
 
+def _keeping_on_bed() -> Any:
+    """Der Parameter, der einen bewegten Körper auf der Druckfläche hält.
+
+    **Die Vorgabe ist aus, und das ist der ganze Unterschied.** Ein getippter
+    Wert ist eine *Ansage* — „um 150 mm nach rechts" —, und die führt Solidon
+    aus, auch wenn das Teil dabei vom Bett läuft; der Bauraumbefund sagt es
+    danach. Ein Zug am Griff ist ein *Zeigen*, und wer zeigt, meint einen
+    Platz. Deshalb setzt das Fenster den Haken beim Ziehen (`MainWindow.
+    _on_transform_dragged`), und ein Rezept, das dieselbe Operation mit Zahlen
+    füllt, bekommt ihn nicht.
+
+    Der Unterschied ist nicht theoretisch: Das Galerieteil *gehaeuse* schiebt
+    seinen Deckel um 135 mm zur Seite und graviert danach bei x = 135. Eine
+    Rückholung dieses Schrittes ließe die Gravur ins Leere greifen, und
+    „SOLIDON" fiele in sieben lose Buchstaben.
+
+    Dreimal derselbe Wortlaut an drei Klassen — einmal geschrieben, damit die
+    drei Dialoge nicht auseinanderlaufen. Ein Feld-Objekt darf nicht geteilt
+    werden, deshalb eine Fabrik und keine Konstante.
+    """
+    return param(
+        title=_("Auf dem Bett halten"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Bringt die Bewegung den Körper über den Rand der Druckfläche, wird er "
+            "zurückgeholt — so wenig wie möglich, und wenn dort ein anderer steht, "
+            "an die nächste freie Stelle. Ein Zug am Griff setzt das von selbst: "
+            "Wer zieht, zeigt auf einen Platz. Getippte Werte führt Solidon aus, "
+            "wie sie dastehen."
+        ),
+    )
+
+
+def _held_on_bed(
+    ctx: OpContext, source: SceneObject, moved: Any, matrix: Any
+) -> tuple[Any, Any, list[Finding]]:
+    """Holt zurück, was eine Bewegung von der Druckfläche geschoben hat (§29).
+
+    **Warum eine Regel und nicht ein Befund** (Robert, 12.09.2026: „das ist
+    aber zu kompliziert für den Kunden, wie können wir das automatisieren?").
+    Ein Zug am Gizmo speichert einen *Weg*; gemeint war ein *Platz*. Wer
+    danach einen Parameter weiter oben ändert, lässt *Druckoptimal ausrichten*
+    neu anordnen — der Körper startet woanders, derselbe Weg wird trotzdem
+    daraufgerechnet, und er liegt neben dem Bett. Aufräumen hieß bis hierher:
+    den Schritt im Verlauf finden und löschen. Das ist ein Urteil, das der
+    Kunde nicht fällen kann.
+
+    **Wer schon daneben stand, wird nicht eingefangen.** Geprüft wird der
+    *Eingang*: Lag er nicht auf der Fläche, ist seine Lage eine Absicht und
+    keine Panne — ein geparkter Körper bleibt geparkt, so oft man ihn noch
+    schiebt.
+
+    **Und getippt wird ausgeführt, gezogen wird gezeigt.** Der Haken kommt vom
+    Zug am Griff und nicht von der Vorgabe (siehe :func:`_keeping_on_bed`);
+    ein Rezept mit `dx = 150` läuft weiter über den Bauraum hinaus und meldet
+    es, statt still zurückzurücken.
+
+    Die Regel steht als Parameter in der Operation und nicht in der
+    Auswertung (Bauplan §17.1: „Beides steht als Parameter in der Op, nicht
+    als Regel bei der Auswertung"). Wer neben das Bett legen will, nimmt den
+    Haken heraus; der Befund nennt ihn.
+
+    **Die gemeldete Matrix wird nachgeführt.** Sie ist die Auskunft für
+    Vorschau und Gizmo und muss den Eingang genau auf den Ausgang legen —
+    erst die Bewegung, dann die Rückholung. Dieselbe Rechnung wie bei
+    *Druckoptimal ausrichten*, wenn es nach dem Drehen anordnet.
+    """
+    from app.core.build_area import fits_xy, printable_area
+    from app.core.geom.prepare import back_onto_bed
+
+    printer = getattr(ctx.profile, "printer", None)
+    if printer is None or not getattr(ctx.params, "keep_on_bed", False):
+        return moved, matrix, []
+    # **Wer schon daneben stand, wird nicht eingefangen** — geprüft am Eingang.
+    if not fits_xy(source.mesh, printable_area(printer)):
+        return moved, matrix, []
+    others = [
+        as_mesh_data(other.mesh)
+        for key, other in ctx.scene.objects.items()
+        if key != source.id and other.plate == source.plate
+    ]
+    offset, findings = back_onto_bed(moved, others, ctx.profile)
+    if max(abs(value) for value in offset) <= EPS_GEOM:
+        return moved, matrix, findings
+    correction = translation(offset)
+    return moved_body(moved, correction), correction @ matrix, findings
+
+
 @op_params
 class TranslateParams(BaseParams):
     dx: float = param(
@@ -116,6 +206,7 @@ class TranslateParams(BaseParams):
         unit="mm",
         doc=_("Positiv geht nach oben. Zum Aufsetzen gibt es *Auf das Bett setzen*."),
     )
+    keep_on_bed: bool = _keeping_on_bed()
 
 
 def _too_small_to_print(mesh: object, profile: object) -> list[Finding]:
@@ -190,6 +281,12 @@ def _stood_still(matrix: object) -> list[Finding]:
     consumes=1,
     produces=1,
     shortcut="Ctrl+T",
+    # ``keep_on_bed`` sucht den freien Platz um die **übrigen** Körper herum;
+    # kein Parameter benennt sie, also steht die Lesart am Register
+    # (`.claude/rules/operationen.md`, „Eine Operation, die an ihren eigenen
+    # Eingängen vorbei liest"). Ohne das behielte eine verschobene Kopie ihre
+    # Rückholung, nachdem der Nachbar längst woanders steht.
+    reads_other_bodies=True,
     doc=_("Verschiebt ein Objekt um die angegebenen Millimeter."),
 )
 def translate_object(ctx: OpContext) -> OpResult:
@@ -199,10 +296,11 @@ def translate_object(ctx: OpContext) -> OpResult:
     # ``moved_body`` statt ``apply``: Ein exakter Körper übersteht eine
     # Verschiebung als exakter Körper, und Verrunden bleibt danach möglich.
     moved = moved_body(source.mesh, matrix)
+    moved, matrix, held = _held_on_bed(ctx, source, moved, matrix)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=moved)],
         transform=as_transform(matrix),
-        findings=_stood_still(matrix),
+        findings=[*_stood_still(matrix), *held],
     )
 
 
@@ -253,6 +351,7 @@ class RotateParams(BaseParams):
         placement="advanced",
         doc=_("Gilt nur, wenn der Drehpunkt „Genannter Punkt“ ist."),
     )
+    keep_on_bed: bool = _keeping_on_bed()
 
 
 @register_op(
@@ -263,6 +362,8 @@ class RotateParams(BaseParams):
     consumes=1,
     produces=1,
     shortcut="Ctrl+R",
+    # Wie bei *Verschieben*: ``keep_on_bed`` liest die übrigen Körper.
+    reads_other_bodies=True,
     doc=_(
         "Dreht ein Objekt um eine Achse. Der Drehpunkt entscheidet, worum: um die "
         "eigene Mitte, um den Nullpunkt des Projekts oder um die Mitte der Platte."
@@ -278,10 +379,11 @@ def rotate_object(ctx: OpContext) -> OpResult:
     )
     matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
     turned = moved_body(source.mesh, matrix)
+    turned, matrix, held = _held_on_bed(ctx, source, turned, matrix)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=turned)],
         transform=as_transform(matrix),
-        findings=_stood_still(matrix),
+        findings=[*_stood_still(matrix), *held],
     )
 
 
@@ -358,6 +460,7 @@ class ScaleParams(BaseParams):
         placement="advanced",
         doc=_("Gilt nur, wenn der Bezugspunkt „Genannter Punkt“ ist."),
     )
+    keep_on_bed: bool = _keeping_on_bed()
 
 
 @register_op(
@@ -367,6 +470,10 @@ class ScaleParams(BaseParams):
     params=ScaleParams,
     consumes=1,
     produces=1,
+    # Wie bei *Verschieben*: ``keep_on_bed`` liest die übrigen Körper. Hier
+    # wiegt es schwerer als dort — ein Körper, der wächst, verlässt die Fläche,
+    # ohne dass jemand ihn geschoben hätte.
+    reads_other_bodies=True,
     doc=_("Skaliert ein Objekt gleichmäßig oder achsweise."),
 )
 def scale_object(ctx: OpContext) -> OpResult:
@@ -383,10 +490,15 @@ def scale_object(ctx: OpContext) -> OpResult:
     )
     matrix = scaling(factors, pivot)
     scaled = apply(as_mesh_data(source.mesh), matrix)
+    scaled, matrix, held = _held_on_bed(ctx, source, scaled, matrix)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=scaled)],
         transform=as_transform(matrix),
-        findings=[*_stood_still(matrix), *_too_small_to_print(scaled, ctx.profile)],
+        findings=[
+            *_stood_still(matrix),
+            *_too_small_to_print(scaled, ctx.profile),
+            *held,
+        ],
     )
 
 

@@ -174,6 +174,14 @@ die Hashes **aller** Objekte unter `#scene` in den Schlüssel. Ohne das wich
 ein gedrehter Körper einem Nachbarn aus, der längst woanders stand — mit
 Cache-Treffer, über das Schließen hinaus.
 
+**Und die fünfte kam mit der Rückholung auf das Bett.** `translate_object`,
+`rotate_object` und `scale_object` tragen `keep_on_bed`: Führt die Bewegung
+den Körper über den Rand der Druckfläche, wird er zurückgeholt — und die
+freie Stelle dafür sucht `back_onto_bed` um die **übrigen** Körper derselben
+Platte herum. Kein Parameter benennt sie, also steht auch diese Lesart am
+Register (`reads_other_bodies`). Ohne sie behielte ein zurückgeholter Körper
+seine Stelle, nachdem der Nachbar, dem er auswich, längst woanders steht.
+
 Wer eine neue Lesart aus `ctx.scene` baut, trägt sie hier ein — dieselbe
 Pflicht wie bei `NESTED_REFERENCES` darüber. Und die Frage davor lautet, ob
 ein *Parameter* das Gelesene benennt: Wenn ja, gehört sie zu den drei oben;
@@ -598,7 +606,7 @@ Zahl.
 
 `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; **leer
 heißt „lass es, wo es ist"**, seit die drei Felder `optional` tragen — siehe
-„Eine Zahl, die nicht gesagt wurde" oben). Wer versetzt, schließt zuerst die alte Stelle —
+„Eine Zahl, die nicht gesagt wurde" unten). Wer versetzt, schließt zuerst die alte Stelle —
 am Netz über `prepare_ops._closed_at`, am exakten Körper über
 `brep.edit.fill_bore` — und schneidet an der neuen. Bis dahin lehnte der exakte
 Kern das mit einem Satz ab; die Absage ist gefallen, weil ihr Grund gefallen

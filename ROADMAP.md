@@ -1349,6 +1349,66 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Merkmal, zehn bis zwanzig Prozent mehr Erkennungszeit. Nachweis: fünf Fälle in
   `tests/test_slot_features.py`, vier davon ohne den Auffangweg rot.
 
+<a id="rm-160"></a>
+
+- [x] **RM-160 — Stückzahl-Nummern bei gleichem Volumen festnageln.** `split_bodies`
+  sortierte seine Teile nach Volumen, und bei Gleichstand entschied die Reihenfolge, in der
+  `face_components` sie liefert. Gemessen am 12.09.2026 an *Solidon3D*: Die beiden `o` sind
+  gleich groß, und bei 110 und 120 mm tauschten `obj_5` und `obj_6` ihre Nummer, bei 100, 130
+  und 150 nicht. Bei zwei gleichen Teilen ist das folgenlos — aber jeder spätere Schritt hängt
+  an der Objektkennung, und nach einer Parameteränderung griffe er am anderen Teil.
+
+  **Ein Zweitkriterium allein reichte nicht**, und das war der Lerngewinn: Der Gleichstand ist
+  keiner. Bei 110 mm standen `19559.4779178143` gegen `...142` — ein Zehntel Milliardstel von
+  19 559, fünf Größenordnungen unter der letzten Stelle einer doppelten Genauigkeit, also
+  Rauschen aus der Tessellierung. Sortiert wird deshalb nach dem **gerundeten Verhältnis zum
+  größten Teil** (`_SAME_SIZE = 9` Stellen — weit über dem Rauschen, weit unter den zehn
+  Prozent, die zwei wirklich verschiedene Buchstaben trennen), und erst bei Gleichstand
+  entscheidet die Mitte des Hüllquaders. Sie übersteht eine Größenänderung: Skalieren alle
+  Teile um denselben Faktor, bleibt ihre Ordnung. Die Sortierung selbst bleibt das Volumen —
+  sie entscheidet, welche Teile bei zu kleiner Stückzahl einzeln stehen.
+
+  Nachweis: Zuordnung Teil → Nummer über neun Schriftgrößen von 100 bis 200 mm verglichen,
+  **null Abweichungen** (vorher zwei Größen mit getauschten Nummern);
+  `test_split_bodies_numbers_equal_parts_by_where_they_sit` mit zwei Würfeln, deren Volumen
+  sich um ein Billionstel unterscheidet, in beiden Richtungen, dazu die Gegenrichtung mit
+  echtem Größenunterschied — ohne die Rundung rot.
+
+<a id="rm-159"></a>
+
+- [x] **RM-159 — Ein Handzug greift nach einer Parameteränderung ins Leere.** Robert am
+  12.09.2026: „wenn ich die Schriftgröße änder passt das Druckoptimal ausrichten nicht mehr".
+  An `Solidon3d.p3d` nachgemessen: Der Verlauf trug hinter *Druckoptimal ausrichten* ein
+  `translate_object` auf `obj_3` mit dx 101,36 / dy 76,16 mm. Ein Zug am Gizmo speichert einen
+  **Weg**, gemeint war ein **Platz** — solange sich davor nichts ändert, ist das dasselbe.
+  Bei Schriftgröße 130 ordnete Schritt 4 neu an, `obj_3` startete woanders, derselbe Weg wurde
+  trotzdem daraufgerechnet: 70,41 mm neben dem Bett. Aufräumen hieß, den Schritt im Verlauf zu
+  finden und zu löschen — ein Urteil, das der Kunde nicht fällen kann (Robert: „das ist aber zu
+  kompliziert für den Kunden, wie können wir das automatisieren?").
+
+  **Gebaut als Regel in der Operation und nicht in der Auswertung**, wie Bauplan §17.1 es
+  verlangt: `geom.prepare.back_onto_bed` liefert den XY-Versatz zurück auf die Druckfläche, und
+  `translate_object`, `rotate_object` und `scale_object` rufen ihn über den Parameter
+  `keep_on_bed`. **Die Vorgabe ist aus, und den Haken setzt der Zug am Griff**
+  (`MainWindow._on_transform_dragged`): Ein getippter Wert ist eine Ansage und wird
+  ausgeführt, ein Zug ist ein Zeigen. Zwei Fälle haben das erzwungen — das Galerieteil
+  *gehaeuse* schiebt seinen Deckel um 135 mm und graviert danach bei x = 135 (eine stille
+  Rückholung ließ „SOLIDON" in sieben lose Buchstaben fallen), und ein Kranz, der bewusst
+  über den Bauraum gelegt wird, soll das melden statt zurückzurücken. Erst zurückschieben — den
+  kürzesten Weg, den `placement_offset` ohnehin zuerst prüft —, bei belegtem Platz über
+  `arrange_on_bed` eine freie Stelle **auf derselben Platte**. Geprüft wird der Eingang, damit
+  ein geparkter Körper geparkt bleibt; bewegt wird nur in XY; die gemeldete Matrix trägt
+  Bewegung und Rückholung zusammen. Die drei Registereinträge tragen `reads_other_bodies=True`.
+
+  Nachweis: Roberts Projekt auf Schriftgröße 130 gerechnet — vorher `arrange.out_of_build_volume`
+  mit 70,41 mm, jetzt neun Körper auf zwei Platten, alle auf der Fläche, null Überschneidungen.
+  Sechs Fälle in `tests/test_transform.py`, Gegenprobe mit abgeschaltetem Haken drei davon rot;
+  `test_website` und `test_scene_ops` haben die Vorgabe entschieden. **Ein vorhandener Zug in
+  einer gespeicherten Datei trägt den Haken nicht** — dort wird er im Schritt gesetzt oder der
+  Zug einmal wiederholt; eine Migration rät nicht, welche `translate_object` aus einem Zug
+  stammt. **Bauplan §29 trägt die Regel** seit dem 12.09.2026 selbst — Zug gegen getippten
+  Wert, Rückholung nur waagerecht, geprüft am Eingang.
+
 <a id="rm-163"></a>
 
 - [~] **RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg.** Robert am

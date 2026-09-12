@@ -9807,7 +9807,20 @@ class MainWindow(QMainWindow):
                 OperationDraft(
                     op="translate_object",
                     inputs=(object_id,),
-                    params={"dx": steps.offset[0], "dy": steps.offset[1], "dz": steps.offset[2]},
+                    # **Ein Zug ist ein Zeigen, kein Rechenweg** (§29). Der
+                    # Draft trägt einen Weg, gemeint ist ein Platz: Ändert
+                    # jemand später einen Parameter weiter oben, ordnet
+                    # *Druckoptimal ausrichten* neu an, und derselbe Weg führt
+                    # ins Leere neben dem Bett (Robert, 12.09.2026). Der Haken
+                    # holt den Körper dann zurück. Getippte Werte in
+                    # ``TransformBar`` bekommen ihn nicht — eine Zahl ist eine
+                    # Ansage, und die wird ausgeführt.
+                    params={
+                        "dx": steps.offset[0],
+                        "dy": steps.offset[1],
+                        "dz": steps.offset[2],
+                        "keep_on_bed": True,
+                    },
                 )
                 for object_id in self.inputs_for_transform("translate_object")
             )
@@ -9817,7 +9830,12 @@ class MainWindow(QMainWindow):
                 OperationDraft(
                     op="rotate_object",
                     inputs=(object_id,),
-                    params={"axis": steps.axis, "angle": steps.angle, **pivot},
+                    params={
+                        "axis": steps.axis,
+                        "angle": steps.angle,
+                        "keep_on_bed": True,
+                        **pivot,
+                    },
                 )
                 for object_id in self.inputs_for_transform("rotate_object")
             )
@@ -9827,7 +9845,7 @@ class MainWindow(QMainWindow):
                 OperationDraft(
                     op="scale_object",
                     inputs=(object_id,),
-                    params={"factor": steps.scale, **pivot},
+                    params={"factor": steps.scale, "keep_on_bed": True, **pivot},
                 )
                 for object_id in self.inputs_for_transform("scale_object")
             )
@@ -9859,7 +9877,7 @@ class MainWindow(QMainWindow):
                 OperationDraft(
                     op="scale_object",
                     inputs=(object_id,),
-                    params={"factor": float(factor), **pivot},
+                    params={"factor": float(factor), "keep_on_bed": True, **pivot},
                 )
                 for object_id in chosen
             ],
