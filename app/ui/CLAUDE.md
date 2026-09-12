@@ -31,6 +31,9 @@ Spulen zeigt die Auswahl einen bleibenden Hinweis und lädt ihre Angebote neu.
 Filamentangaben werden nur als ausdrücklich ungebundene Projektwerte übernommen.
 Schnellauswahl und Projektübersicht lesen tatsächlich verwendete Mesh-Slots;
 verwaiste Definitionen werden nicht als belegte Filamente dargestellt.
+Der Objektbaum erhebt die Belegung einmal je Körperaufbau. Seine Flächenzeilen
+lesen nur die Dreiecke des jeweiligen Merkmals und zeigen dafür Farbe, Namen
+und zugängliche Beschreibung aus derselben Slotdefinition.
 Eine gemischte Auswahl benennt ganze Körper und einzelne Flächen getrennt.
 „Filament entfernen“ benutzt denselben Umfang. Die ausgewählten Körper und
 Flächen werden als `clear_filament`-Operationen in einer Transaktion abgelegt;

@@ -5522,3 +5522,62 @@ def test_existing_layer_stroke_border_follows_theme(qt_app: QApplication, chosen
         bar.close()
         bar.deleteLater()
         apply_theme(qt_app, previous)
+
+
+@pytest.mark.parametrize(
+    "slots, expected_body, expected_face",
+    [
+        ((2,) * 12, "PETG Rot", "PETG Rot"),
+        ((0,) * 12, "Ohne Filament", "Ohne Filament"),
+        ((1, 2) * 6, "PLA Weiß", "PETG Rot"),
+    ],
+)
+def test_tree_filament_labels_follow_real_body_and_feature_slots(
+    qt_app: QApplication, slots, expected_body, expected_face, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Körper und Fläche nennen die verwendeten Filamente statt verwaister Definitionen."""
+    import trimesh
+
+    from app.core.geom import attributes
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, MaterialSlot, Scene, SceneObject
+    from app.ui.panels import FILAMENT_COLUMN, ObjectTree, _feature_item
+
+    original = attributes.used_slots
+    surveys = []
+
+    def surveyed(mesh):
+        surveys.append(mesh)
+        return original(mesh)
+
+    monkeypatch.setattr(attributes, "used_slots", surveyed)
+    mesh = MeshData.of(trimesh.creation.box(), slots=slots)
+    entry = SceneObject(
+        "obj",
+        "Körper",
+        mesh,
+        material_slots=[
+            MaterialSlot(1, "PLA Weiß", (1.0, 1.0, 1.0, 1.0)),
+            MaterialSlot(2, "PETG Rot", (1.0, 0.0, 0.0, 1.0)),
+        ],
+        features={"face": Feature("face", "face", "generated", {}, face_indices=(1,))},
+    )
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(scene=Scene(objects={entry.id: entry})))
+        body = tree.tree.topLevelItem(0)
+        face = _feature_item(body, "face")
+        assert face is not None
+        assert expected_body in body.toolTip(FILAMENT_COLUMN)
+        assert expected_face in face.toolTip(FILAMENT_COLUMN)
+        for row in (body, face):
+            assert row.data(
+                FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleDescriptionRole
+            ) == row.toolTip(FILAMENT_COLUMN)
+        if len(set(slots)) == 1:
+            assert "weitere" not in body.toolTip(FILAMENT_COLUMN)
+        assert "weitere" not in face.toolTip(FILAMENT_COLUMN)
+        assert len(surveys) == 1
+    finally:
+        tree.deleteLater()

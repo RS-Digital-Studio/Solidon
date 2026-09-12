@@ -98,7 +98,7 @@ from app.core.registry import REGISTRY, shown_of_twins
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.scene import EvaluationResult
 from app.core.scene.history import repair_is_available
-from app.core.types import Document, Feature, Finding, ObjectId, OpId, SceneObject
+from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import handlers_of
@@ -1298,7 +1298,13 @@ class ObjectTree(QWidget):
             if origin:
                 tip += f" · {origin}"
             item.setToolTip(0, tip)
-            self._show_filament(item, entry)
+            from app.core.export.threemf import slots_for_object
+            from app.core.geom.attributes import used_slots
+
+            mesh = as_mesh_data(entry.mesh)
+            definitions = slots_for_object(entry)
+            occupied = set(used_slots(mesh))
+            self._show_filament(item, tuple(slot for slot in definitions if slot.index in occupied))
             if entry.kind == "brep":
                 # Die ausführliche Folge steht im Tooltip; im schmalen Baum
                 # muss die zweite Kodierung vollständig lesbar bleiben.
@@ -1397,7 +1403,14 @@ class ObjectTree(QWidget):
                 # Bohrung bekommt deshalb kein Feld, das nichts täte.
                 if getattr(feature, "kind", "") in ("face", "curved_face"):
                     self._faces.add((object_id, feature_id))
-                    self._show_filament(child, entry, feature_id)
+                    face_slots = {
+                        mesh.slots[face] if mesh.slots else 0 for face in feature.face_indices
+                    }
+                    self._show_filament(
+                        child,
+                        tuple(slot for slot in definitions if slot.index in face_slots),
+                        feature_id,
+                    )
 
                 made[feature_id] = child
                 if feature_id in under:
@@ -1532,19 +1545,17 @@ class ObjectTree(QWidget):
     def _show_filament(
         self,
         item: QTreeWidgetItem,
-        entry: SceneObject,
+        slots: tuple[MaterialSlot, ...],
         feature_id: str | None = None,
     ) -> None:
         """Das Farbfeld einer Zeile setzen, samt Namen für Tooltip und Leser.
 
-        Gelesen wird derselbe Zustand wie im Filamentbereich: die tatsächlich
-        belegten Slots des Körpers. Ein Körper ohne eigenen Slot trägt die
-        Farbe des Teils — das ist der Normalfall nach jedem Import und keine
-        fehlende Angabe.
+        Der Aufbau reicht nur tatsächlich verwendete Slots des Körpers oder
+        dieser Fläche durch. Ohne Belegung gilt die Farbe des Teils — das ist
+        der Normalfall nach jedem Import und keine fehlende Angabe.
         """
         from app.ui.filament_picker import shown_colour, unpainted_colour
 
-        slots = tuple(getattr(entry, "material_slots", ()) or ())
         if slots:
             slot = slots[0]
             colour = shown_colour(int(slot.index), slot.colour)
