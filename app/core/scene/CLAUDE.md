@@ -118,7 +118,7 @@ danach kommt.
 | Datei | Rolle |
 |---|---|
 | `fits.py` | Passungen zwischen Merkmalen (§14) — Verletzungen werden erkannt, nicht stillschweigend gerechnet |
-| `orphans.py` | Merkmalsverweise, die ihr Merkmal verloren haben (§21.3). Statt zu raten: `question_for()` und `candidates_of()` |
+| `orphans.py` | Merkmalsverweise, die ihr Merkmal verloren haben (§21.3). Statt zu raten: `question_for()` und `candidates_of()`. **Die Kandidaten folgen der Objektidentität durch den Stapel** (`lineage()`, RM-023): Nach einer Zerlegung trägt nur das erste Stück die alte Kennung, und der Verweis findet sein Merkmal am abgetrennten Körper wieder — aber nur dort, nicht an jedem fremden mit demselben Namen |
 | `placement.py` | Dialogvorbelegung und genaue Oberflächenplatzierung am Originalnetz (§18.5). `seat_of` beantwortet die Frage daneben: **wo sitzt, was schon da ist** — die Trägerfläche eines erkannten Merkmals samt seiner Mündung, für die Maßlinien am gewählten Merkmal |
 
 **Operationen dieses Gebiets**

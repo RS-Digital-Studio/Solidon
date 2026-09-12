@@ -704,6 +704,22 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Rezeptmaße erhalten bleiben. Beim Merkmalsversetzen ist `source` zusammen
   mit `feature` Pflicht; vollständige Bohrketten bilden ein Werkzeug.
 
+- **Ein Verweis folgt seinem Körper durch den Stapel** (`scene/orphans.lineage`,
+  RM-023). Er nennt die Kennung, die der Körper **damals** hatte; teilt eine
+  spätere Operation ihn, trägt nur das erste Stück sie weiter
+  (`History._outputs_for`). Der Verweisfilter sucht die Kandidaten deshalb an
+  allen Körpern, in deren Herkunft der genannte steht — nicht an dem einen mit
+  der alten Kennung (dort kam statt der Frage aus §21.3 eine Sackgasse) und
+  nicht an allen (zwei Platten tragen beide ein `hole_1`, und eine Frage nach
+  einem fremden Loch ist schlechter als keine). Hängen die Kandidaten an
+  mehreren Körpern, nennt jede Antwort ihren — `obj_3:hole_1`; sonst bleibt es
+  bei der bloßen Kennung.
+
+  **Ein Operationsverweis bleibt dabei bei seinem Körper**, und das ist keine
+  Vorsicht, sondern die Darstellung: Ein `kind="feature"`-Parameter trägt nur
+  die Merkmalskennung und wird gegen `inputs[0]` aufgelöst. Eine Antwort auf
+  einen anderen Körper ließe sich dort nicht hinschreiben — angeboten wird
+  deshalb nur, was auch ankommt.
 - **Vergebene Merkmalskennungen bleiben reserviert.** Die Auswertung führt
   `SceneObject.reserved_feature_ids` über Zwischenoperationen fort und
   verhindert eine neue Zuordnung gelöschter Namen. Cache und Objekthash

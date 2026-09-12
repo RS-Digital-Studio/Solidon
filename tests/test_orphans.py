@@ -618,21 +618,30 @@ def test_the_same_identifier_on_two_bodies_is_announced_twice(scene: Scene) -> N
     """Merkmalskennungen sind je Körper vergeben, nicht je Szene.
 
     Beim leeren Objektnamen — der Skizzenebene, die auf jeder planaren Fläche
-    zu Hause sein darf — sucht ``_candidates`` über alle Körper und wirft die
-    Kennungen in eine Menge: Zwei ``face_1`` fallen dort zu **einem** Eintrag
-    zusammen. Die Auswahl ist damit richtig (zurückgeschrieben wird die
-    Kennung), die Hervorhebung wäre es nicht — sie muss beide Fundorte kennen,
-    sonst leuchtet sie an einer Stelle zu wenig.
+    zu Hause sein darf — sucht ``_candidates`` über alle Körper. Zwei
+    ``face_1`` sind dort **zwei** Kandidaten und nicht einer: Die Auswahl wäre
+    mit einer Kennung noch richtig (zurückgeschrieben wird sie), die
+    Hervorhebung nicht — sie muss beide Fundorte kennen, sonst leuchtet sie an
+    einer Stelle zu wenig.
+
+    Seit RM-023 sind die Kandidaten selbst Paare aus Körper und Kennung; die
+    getrennte Paarbildung daneben ist damit fort.
     """
-    from app.core.scene.orphans import _candidate_pairs
+    from app.core.scene.orphans import Reference, _candidates
 
     zweiter = replace(scene.objects["obj_1"], id="obj_2")
     beide = replace(scene, objects={"obj_1": scene.objects["obj_1"], "obj_2": zweiter})
     gemeinsam = sorted(set(scene.objects["obj_1"].features))[:1]
+    verweis = Reference(
+        where="plane:1:sketch", ref=FeatureRef(object_id="", feature_id=gemeinsam[0])
+    )
 
-    paare = _candidate_pairs(beide, FeatureRef(object_id="", feature_id=gemeinsam[0]), gemeinsam)
+    paare = _candidates(beide, verweis, {})
 
-    assert sorted(paare) == [("obj_1", gemeinsam[0]), ("obj_2", gemeinsam[0])]
+    assert [paar for paar in paare if paar[1] == gemeinsam[0]] == [
+        ("obj_1", gemeinsam[0]),
+        ("obj_2", gemeinsam[0]),
+    ]
 
 
 def test_opening_checks_only_references_of_the_current_stage(scene: Scene) -> None:
@@ -661,3 +670,124 @@ def test_opening_checks_only_references_of_the_current_stage(scene: Scene) -> No
     ]
     final = orphans.pending_references(document, None)
     assert final and all(reference.kind == "fit" for reference in final)
+
+
+# --- der Verweis folgt der Objektidentität (RM-023) -------------------------------
+
+
+def _split_document() -> Document:
+    """Ein Stapel, der einen Körper zerlegt — obj_1 bleibt, obj_3 kommt dazu.
+
+    Genau das tut ``History._outputs_for`` bei *In Einzelteile zerlegen*: Das
+    erste Stück trägt die Kennung des Ausgangskörpers weiter, der Rest bekommt
+    eine frische. Ein Verweis, der vorher geschrieben wurde, nennt damit einen
+    Körper, an dem sein Merkmal nicht mehr hängt.
+    """
+    document = document_with(
+        Fit(
+            name="stift_1",
+            a=FeatureRef("obj_1", "hole_9"),
+            b=FeatureRef("obj_1", "hole_1"),
+            kind="clearance",
+        )
+    )
+    document.ops.append(
+        Operation(id=1, op="split_bodies", inputs=("obj_1",), outputs=("obj_1", "obj_3"))
+    )
+    return document
+
+
+def _split_scene(scene: Scene) -> Scene:
+    """Dieselbe Platte zweimal — als obj_1 und als das abgetrennte obj_3."""
+    piece = replace(scene.objects["obj_1"], id="obj_3")
+    return replace(scene, objects={"obj_1": scene.objects["obj_1"], "obj_3": piece})
+
+
+def test_a_reference_finds_its_feature_on_the_body_that_came_out_of_the_split(
+    scene: Scene,
+) -> None:
+    """§21.3 auch über einen Kennungswechsel hinweg (RM-023).
+
+    Gemessen am 12.09.2026 an zwei Klötzen mit je einer Bohrung: Nach *In
+    Einzelteile zerlegen* stand die rechte Bohrung als ``obj_3:hole_1`` in der
+    Szene, die Passung zeigte weiter auf ``obj_1:hole_2`` — und statt der
+    Frage kam eine Sackgasse („Die Schritte ab dort zurücknehmen und vor der
+    Passung ausführen"). Der Verweisfilter sah nur den Körper, dessen Kennung
+    im Verweis steht.
+
+    Jetzt folgt er der Abstammung aus dem Stapel: Zu ``obj_1`` gehören alle
+    Körper, in deren Herkunft ``obj_1`` steht — und weil die Kandidaten dann
+    an zwei Körpern hängen, nennt jede Antwort ihren.
+    """
+    document = _split_document()
+    asked: list[tuple[str, list[str]]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append((question, list(choices)))
+        return next(choice for choice in choices if choice.startswith("obj_3:"))
+
+    result = orphans.check(document, _split_scene(scene), answer)
+
+    assert asked, "der Verweis endete stumm, statt zu fragen"
+    assert any(choice.startswith("obj_3:") for choice in asked[0][1]), (
+        f"das abgetrennte Stück stand nicht zur Wahl: {asked[0][1]}"
+    )
+    assert any(choice.startswith("obj_1:") for choice in asked[0][1]), (
+        "der Körper gehört an jede Antwort, sobald es mehr als einen gibt"
+    )
+    assert document.fits[0].a.object_id == "obj_3", "die Antwort trägt den Körper mit"
+    assert result.rewritten == 1
+
+
+def test_the_same_name_on_an_unrelated_body_is_no_candidate(scene: Scene) -> None:
+    """Und die Gegenrichtung, die den Fix erst tragbar macht.
+
+    Über **alle** Körper zu suchen wäre die falsche Abhilfe: Zwei Platten
+    tragen beide ein ``hole_1``, und eine Frage nach einem fremden Loch ist
+    schlechter als keine. Gefragt wird der Stapel, nicht die Szene.
+    """
+    document = _split_document()
+    scene_with_stranger = _split_scene(scene)
+    stranger = replace(scene.objects["obj_1"], id="obj_7")
+    scene_with_stranger = replace(
+        scene_with_stranger,
+        objects={**scene_with_stranger.objects, "obj_7": stranger},
+    )
+    asked: list[list[str]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(list(choices))
+        return next(choice for choice in choices if choice.startswith("obj_3:"))
+
+    orphans.check(document, scene_with_stranger, answer)
+
+    assert asked, "ohne Frage sagt dieser Test nichts"
+    assert not [choice for choice in asked[0] if choice.startswith("obj_7:")], (
+        f"ein fremder Körper stand zur Wahl: {asked[0]}"
+    )
+
+
+def test_an_operation_reference_stays_with_its_own_body(scene: Scene) -> None:
+    """Ein ``kind="feature"``-Parameter trägt keinen Körper — also wird keiner angeboten.
+
+    Er wird gegen ``inputs[0]`` aufgelöst (`.claude/rules/operationen.md`).
+    Eine Antwort, die auf ein anderes Objekt zeigt, ließe sich dort gar nicht
+    hinschreiben; sie anzubieten hieße, eine Wahl zu stellen, die beim
+    Übernehmen still verloren geht.
+    """
+    document = document_with_op("hole_9")
+    document.ops.append(
+        Operation(id=2, op="split_bodies", inputs=("obj_1",), outputs=("obj_1", "obj_3"))
+    )
+    asked: list[list[str]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(list(choices))
+        return choices[0]
+
+    orphans.check(document, _split_scene(scene), answer)
+
+    assert asked, "ohne Frage sagt dieser Test nichts"
+    assert not [choice for choice in asked[0] if ":" in choice], (
+        f"eine Operation bekam einen fremden Körper zur Wahl: {asked[0]}"
+    )

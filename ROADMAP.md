@@ -50,7 +50,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
-| [RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen](#rm-023) | Geometrie, Erkennung und Druckvorbereitung | Verweisfilter nach einem Wechsel der Objektkennung prüfen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
@@ -517,10 +516,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-023"></a>
 
-- [ ] **RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen.** Der Verweisfilter in
-  `evaluate` hängt noch an der gespeicherten Objekt-ID. Objektidentität durch den Stapel verfolgen;
-  Abnahme: ein benutztes Merkmal erreicht seine Zuordnungsfrage auch nach einem Kennungswechsel,
-  gleichnamige Merkmale anderer Körper erzeugen keine zusätzlichen Fragen.
+- [x] **RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen.** Am 12.09.2026
+  gebaut. **Der Befund stand und war nachmessbar**: Zwei Klötze mit je einer Bohrung, eine
+  Passung auf die rechte, danach *In Einzelteile zerlegen*. Danach hieß die rechte Bohrung
+  `obj_3:hole_1`, die Passung zeigte weiter auf `obj_1:hole_2` — und statt der Frage aus §21.3
+  kam eine Sackgasse: „Die Schritte ab dort zurücknehmen und vor der Passung ausführen."
+
+  `orphans.lineage()` liest die Abstammung aus dem Stapel — `Operation.inputs` und `outputs`
+  bilden den DAG (§12) —, und die Kandidaten kommen aus allen Körpern, in deren Herkunft der
+  genannte steht. **Nicht aus allen überhaupt**: Zwei Platten tragen beide ein `hole_1`, und
+  eine Frage nach einem fremden Loch ist schlechter als keine. Hängen die Kandidaten an
+  mehreren Körpern, nennt jede Antwort ihren (`obj_3:hole_1`); sonst bleibt es bei der bloßen
+  Kennung, damit der Normalfall unverändert liest. Die Antwort trägt den Körper mit — ein
+  Umschreiben nur der Merkmalskennung zeigte weiter auf den falschen.
+
+  **Ein Operationsverweis bleibt bei seinem Körper**, und das ist die Darstellung und keine
+  Vorsicht: Ein `kind="feature"`-Parameter trägt nur die Kennung und wird gegen `inputs[0]`
+  aufgelöst. Eine Antwort auf ein anderes Objekt ließe sich dort nicht hinschreiben; sie
+  anzubieten hieße, eine Wahl zu stellen, die beim Übernehmen still verloren geht.
+
+  Nachweis: drei Fälle in `tests/test_orphans.py` — die Frage kommt und nennt beide Körper, ein
+  unbeteiligter Körper mit demselben Namen steht nicht zur Wahl, und ein Operationsverweis
+  bekommt keinen fremden. Drei Gegenproben, jede einzeln rot: ohne den Stammbaum, über alle
+  Körper, und ohne die Grenze für Operationsverweise. Die getrennte Paarbildung für die
+  Hervorhebung (`_candidate_pairs`) ist dabei entfallen — die Kandidaten **sind** jetzt Paare.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
 
