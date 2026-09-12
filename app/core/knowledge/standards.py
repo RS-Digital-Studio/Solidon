@@ -175,15 +175,14 @@ def load(path: Path | None = None) -> Tables:
         version=str(data.get("version", "0")),
         # Das Leitmaß je Tabelle: die Schraube nach ihrem Nennmaß (mit dem
         # das Durchgangsloch aufsteigt), die Buchse nach dem Loch, in das sie
-        # gepresst wird. Die übrigen Tabellen hat kein Aufrufer der Reihe nach
-        # abgeklappert, und eine Sortierung ohne Frage dahinter wäre eine
-        # Zusage, die niemand braucht.
+        # gepresst wird, das Lager nach seiner Bohrung. Diese Reihenfolge
+        # erreicht auch die Größenwahl im Bausteindialog.
         screws=_index(Screw, data.get("screws", ()), "screws", source, "nominal"),
         nuts=_index(Nut, data.get("nuts", ()), "nuts", source),
         washers=_index(Washer, data.get("washers", ()), "washers", source),
         inserts=_index(Insert, data.get("inserts", ()), "inserts", source, "hole"),
         magnets=_index(Magnet, data.get("magnets", ()), "magnets", source),
-        bearings=_index(Bearing, data.get("bearings", ()), "bearings", source),
+        bearings=_index(Bearing, data.get("bearings", ()), "bearings", source, "inner"),
         profiles=_index(ProfileSlot, data.get("profiles", ()), "profiles", source),
         tubes=_index(Tube, data.get("tubes", ()), "tubes", source),
         boards=_index(Board, data.get("boards", ()), "boards", source),

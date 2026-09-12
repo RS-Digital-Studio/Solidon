@@ -2245,6 +2245,13 @@ def test_the_bearing_table_covers_small_and_common_housings() -> None:
     )
 
 
+def test_bearing_choices_are_ordered_by_the_shaft_they_fit() -> None:
+    """Die Lagersitz-Auswahl steigt nach Wellendurchmesser, bei Gleichstand nach Nummer."""
+    sizes = standards.bearing_sizes()
+    assert len(sizes) >= 8
+    assert sizes == tuple(sorted(sizes, key=lambda size: (standards.bearing(size).inner, size)))
+
+
 def test_every_screw_has_the_holes_that_belong_to_it() -> None:
     for size in standards.screw_sizes():
         entry = standards.screw(size)
