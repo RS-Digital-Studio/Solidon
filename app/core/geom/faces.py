@@ -110,7 +110,7 @@ def _prism_over(mesh: MeshData, feature: Feature, distance: float) -> MeshData:
     # Prisma ins Material zu legen und abzuziehen; mit ``abs`` stand es außen,
     # die Differenz traf nichts, und der Körper kam unverändert zurück —
     # wasserdicht, einteilig, 24000 mm³ statt 18000.
-    return _prism_from(mesh, triangles, lambda _knoten: normal * distance)
+    return _prism_from(mesh, triangles, lambda _points: normal * distance)
 
 
 def _prism_from(

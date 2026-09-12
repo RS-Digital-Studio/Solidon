@@ -140,6 +140,7 @@ GERMAN_WORDS = frozenset(
 #: Wort gesucht — drei Einträge sind aus genau diesem Grund umgezogen (siehe
 #: dort).
 GERMAN_STEMS = (
+    "knoten",
     "allein",
     "aenderung",
     "befehl",
@@ -306,6 +307,7 @@ def test_the_check_would_catch_a_violation() -> None:
     assert offences_in("wall_staerke")
     assert offences_in("baustein_registry")
     assert offences_in("hoehe")
+    assert offences_in("_knoten")
     assert not offences_in("detail_view")
     assert not offences_in("part_registry")
     # Der Nachtrag vom 25.08.2026: Ein Werkzeug unter ``tools/`` sprach
