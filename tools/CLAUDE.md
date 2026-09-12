@@ -178,6 +178,11 @@ Datenbank vorbereiten) · `deploy_activation_server.py` (diese privaten Werte
 und die Endpunkte mit Sicherung ausliefern) · `licence_archive.py` (gemeinsame
 Dateisperre für Generator und Support-Oberfläche)
 
+Der Aktivierungs-Deploymentweg akzeptiert nur eindeutige Serverpfade mit
+Elternordner. Private Daten und Sicherungen müssen neben dem Dokumentenstamm
+liegen; ein bloßes `httpdocs`, Traversierung oder eine öffentliche private
+Wurzel hält vor der Verbindung an.
+
 **Website** `upload_website.py` (schließt `website/teile/` als lokalen
 Projektquellordner vollständig aus; Bausteindateien werden ausschließlich
 lokal ausgetauscht und nie über die Website verteilt) · `make_stats_access.py` (schreibt den

@@ -2232,3 +2232,26 @@ def test_a_promised_package_without_a_size_is_not_reported_as_fine(
     assert code == 1, "ohne Sollwert darf der Lauf nicht mit Erfolg enden"
     assert "OHNE MASS" in ausgabe, f"die Auskunft fehlt: {ausgabe!r}"
     assert "  ok " not in ausgabe, f"siebzehn Bytes galten als vollständig: {ausgabe!r}"
+
+
+@pytest.mark.parametrize(
+    "root",
+    [
+        "httpdocs",
+        "/httpdocs/",
+        "",
+        "domain/../httpdocs",
+        "domain//httpdocs",
+        "domain/./httpdocs",
+        "domain\\httpdocs",
+        "domain/httpdocs\n",
+        "domain/appdata",
+        "domain/backups",
+    ],
+)
+def test_activation_deployment_rejects_ambiguous_or_public_private_roots(root: str) -> None:
+    """Ungültige Zugangswurzeln können nie private Uploadziele liefern."""
+    from tools import deploy_activation_server as deployment
+
+    with pytest.raises(SystemExit, match="Dokumentenstamm"):
+        deployment._paths({"root": root})

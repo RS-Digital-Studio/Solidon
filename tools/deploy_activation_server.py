@@ -193,8 +193,26 @@ def _operator_upload_needed(remote: bytes | None, local: bytes, rotate: bool) ->
 def _paths(access: dict[str, object]) -> tuple[str, str, str]:
     """Leitet Webroot, privaten Datenpfad und Sicherungswurzel gemeinsam ab."""
     webroot = str(access["root"]).strip("/")
-    domain_root = webroot.rsplit("/", 1)[0]
-    return webroot, f"{domain_root}/appdata", f"{domain_root}/backups/activation"
+    parts = webroot.split("/")
+    if (
+        len(parts) < 2
+        or any(part in {"", ".", ".."} for part in parts)
+        or "\\" in webroot
+        or any(ord(character) < 32 or ord(character) == 127 for character in webroot)
+    ):
+        raise SystemExit(
+            "Den FTPS-Dokumentenstamm als <domain>/<dokumentenstamm> angeben; "
+            "relative oder mehrdeutige Pfade sind für private Dateien nicht sicher."
+        )
+    domain_root = "/".join(parts[:-1])
+    data_root = f"{domain_root}/appdata"
+    backup_root = f"{domain_root}/backups/activation"
+    if any(path == webroot or path.startswith(webroot + "/") for path in (data_root, backup_root)):
+        raise SystemExit(
+            "Private Daten und Sicherungen liegen im Dokumentenstamm. "
+            "Im FTPS-Zugang einen getrennten öffentlichen Dokumentenstamm angeben."
+        )
+    return webroot, data_root, backup_root
 
 
 def deploy(
