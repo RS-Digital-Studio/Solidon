@@ -8,13 +8,10 @@ Bohrung ist keine zweite Bohrung; ein Zapfen um eine Bohrung ist ein Rohr mit
 einer Wand. Wer eines von beiden ändert, ändert das andere mit — und genau das
 sagte ihm bisher niemand.
 
-**Warum ein eigenes Modul.** ``features.py`` ist mit rund 3700 Zeilen das größte
-in ``perceive/``, und die Nachbarschaften werden nicht bei einer bleiben:
-Senkung über Bohrung, Rohr, Bohrungsraster, Bohrung durch zwei Wände. Vier
-davon dort einzuhängen hieße, eine Datei weiter wachsen zu lassen, die schon
-heute niemand am Stück liest. Die Erkennung einzelner Merkmale und die Frage,
-wie sie zueinander stehen, sind zwei Aufgaben (Vereinbarung 3d-druck-f9 /
-3d-druck-11, 04.09.2026).
+**Warum ein eigenes Modul.** Die Erkennung einzelner Merkmale und ihre
+Beziehungen sind getrennte Aufgaben. Senkungen über Bohrungen, Rohre,
+Bohrungsraster und Hohlraumketten lesen die Merkmalsgeometrie und ergänzen
+ihre Nachbarschaft; sie verändern die Erkennung selbst nicht.
 
 **Die Richtung der Importe ist einseitig:** Diese Datei liest ``features.py``,
 nie umgekehrt. Sie benutzt dessen Schwellen (:data:`SINK_AXIS_LIMIT`,
@@ -27,6 +24,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -767,12 +765,22 @@ _POSE_PARAMETERS = frozenset({"axis", "centre", "normal", "position"})
 _DIAGNOSTIC_PARAMETERS = frozenset({"residual"})
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _SurfacePatch:
-    """Ein echter Flächenausschnitt und seine Prüfstellen."""
+    """Ein echter Flächenausschnitt und seine nur bei Bedarf gebildeten Suchbäume."""
 
     points: NDArray[np.float64]
     edge_lengths: NDArray[np.float64]
+
+    @cached_property
+    def points_tree(self) -> Any:
+        """Den räumlichen Suchbaum für alle Vergleiche dieses Ausschnitts teilen."""
+        return cKDTree(self.points)
+
+    @cached_property
+    def edges_tree(self) -> Any:
+        """Die Dreiecksformen einmal indizieren, bevor die Punktabdeckung folgt."""
+        return cKDTree(self.edge_lengths)
 
 
 @dataclass(slots=True)
@@ -1151,19 +1159,15 @@ def _build_surface_patch(scope: tuple[Feature, ...], mesh: MeshData) -> _Surface
 
 def _same_surface_patch(reference: _SurfacePatch, candidate: _SurfacePatch) -> bool:
     """Punktabdeckung und Dreiecksformen stimmen innerhalb der Auflösung."""
-    reference_edges = cKDTree(reference.edge_lengths)
-    candidate_edges = cKDTree(candidate.edge_lengths)
-    edges_to_candidate = candidate_edges.query(reference.edge_lengths, p=np.inf)[0]
-    edges_to_reference = reference_edges.query(candidate.edge_lengths, p=np.inf)[0]
+    edges_to_candidate = candidate.edges_tree.query(reference.edge_lengths, p=np.inf)[0]
+    edges_to_reference = reference.edges_tree.query(candidate.edge_lengths, p=np.inf)[0]
     if (
         float(np.max(edges_to_candidate, initial=0.0)) > EPS_DISPLAY
         or float(np.max(edges_to_reference, initial=0.0)) > EPS_DISPLAY
     ):
         return False
-    reference_tree = cKDTree(reference.points)
-    candidate_tree = cKDTree(candidate.points)
-    to_candidate = candidate_tree.query(reference.points)[0]
-    to_reference = reference_tree.query(candidate.points)[0]
+    to_candidate = candidate.points_tree.query(reference.points)[0]
+    to_reference = reference.points_tree.query(candidate.points)[0]
     return bool(
         float(np.max(to_candidate, initial=0.0)) <= EPS_DISPLAY
         and float(np.max(to_reference, initial=0.0)) <= EPS_DISPLAY

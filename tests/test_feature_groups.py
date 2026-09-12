@@ -308,6 +308,46 @@ def test_complete_surface_shape_uses_the_actual_patch_not_only_sphere_radius() -
     assert "sphere_cap" not in _targets(group)
 
 
+def test_a_group_builds_each_surface_index_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Acht gleiche Kugeln teilen ihre Suchbäume nur während dieser Auswahl."""
+    bodies = []
+    features = {}
+    offset = 0
+    for index in range(8):
+        centre = (20.0 * index, 0.0, 0.0)
+        body = trimesh.creation.icosphere(subdivisions=2, radius=5.0)
+        body.apply_translation(centre)
+        bodies.append(body)
+        identifier = f"sphere_{index + 1}"
+        features[identifier] = Feature(
+            id=identifier,
+            kind="sphere",
+            provenance="detected",
+            params={"diameter": 10.0, "centre": centre, "recess": False},
+            face_indices=tuple(range(offset, offset + len(body.faces))),
+        )
+        offset += len(body.faces)
+    mesh = MeshData.of(trimesh.util.concatenate(bodies))
+    original = relations.cKDTree
+    built = 0
+
+    def counted(*args: object, **kwargs: object):
+        nonlocal built
+        built += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(relations, "cKDTree", counted)
+    actions = ("move_feature", "duplicate_feature", "remove_feature")
+    grouped = alike_for_actions(actions, "sphere_1", features, mesh)
+
+    assert all(_targets(group) == tuple(features) for group in grouped), {
+        group.action: (_targets(group), group.uncertain) for group in grouped
+    }
+    assert built == 2 * len(features), f"{built} surface indexes for {len(features)} patches"
+    assert alike_for_actions(actions, "sphere_1", features, mesh) == grouped
+    assert built == 4 * len(features), "surface indexes must not survive their selection context"
+
+
 def test_a_whole_shape_without_surface_evidence_is_reported() -> None:
     """Ohne Flächen darf der Kern aus gleichen Kennzahlen keine Form erfinden."""
     feature = Feature(
