@@ -78,7 +78,7 @@ def test_the_agent_uses_the_backends_resource_session(project: Project, profile:
         left = 0
 
         @contextmanager
-        def resource_session(self, _cancelled: object):
+        def resource_session(self, _cancelled: object, progress=None):
             self.entered += 1
             try:
                 yield
@@ -96,6 +96,40 @@ def test_the_agent_uses_the_backends_resource_session(project: Project, profile:
     agent.propose("Beschreibe das Modell")
 
     assert (backend.entered, backend.left) == (1, 1)
+
+
+def test_the_agent_reports_waiting_and_cancels_before_entering_ollama(
+    project: Project, profile: Profile
+) -> None:
+    from app.core.backends.llm import OllamaBackend
+    from app.core.backends.resources import local_ai_slot
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+    seen: list[tuple[int, str]] = []
+    calls: list[object] = []
+
+    def progress(step: int, text: str) -> None:
+        seen.append((step, text))
+        token.cancel()
+
+    def transport(*args: object, **kwargs: object) -> dict:
+        calls.append(args)
+        return {}
+
+    agent = AgentSession(
+        backend=OllamaBackend(url="http://localhost:11434", transport=transport),
+        document=project.document,
+        profile=profile,
+        cancelled=token,
+        progress=progress,
+    )
+    with local_ai_slot("http://localhost:8188", None), pytest.raises(OperationCancelled):
+        agent.propose("Beschreibe das Modell")
+    assert len(seen) == 1 and seen[0][0] == 0
+    assert "Grafikkarte" in seen[0][1]
+    assert calls == [], "a cancelled waiter must neither generate nor unload"
 
 
 def test_the_agent_passes_its_cancel_token_into_a_cancellable_backend(

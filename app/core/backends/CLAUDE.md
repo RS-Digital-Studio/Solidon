@@ -50,8 +50,11 @@ hergestellt, verhindert die erneute Tokenprüfung das anschließende POST.
 
 Ollama und ComfyUI laufen auf demselben Rechner nie gleichzeitig durch
 Solidon. `resources.local_ai_slot()` serialisiert nur Loopback-Adressen;
-entfernte, möglicherweise geteilte Server bleiben unberührt. Ollama hält das
-Modell innerhalb eines vollständigen Agentenvorschlags warm und entlädt es im
+entfernte, möglicherweise geteilte Server bleiben unberührt. Das
+Warten auf die Spur meldet genau einmal den Grund, bleibt abbrechbar und
+endet spätestens nach zehn Minuten mit einem erneuten Versuch als Vorschlag.
+Eine abgewiesene Chat-Freigabe betritt die Spur nicht und entlädt kein Modell.
+Ollama hält das Modell innerhalb eines vollständigen Agentenvorschlags warm und entlädt es im
 `finally`. ComfyUI erhält beim Abbruch ausschließlich Solidons eigene
 Auftrags-ID über `POST /api/jobs/{job_id}/cancel`. Der Endpunkt prüft und
 unterbricht atomar; `cancelled: false` bestätigt einen bereits beendeten oder

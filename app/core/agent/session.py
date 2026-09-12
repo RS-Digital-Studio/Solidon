@@ -313,17 +313,17 @@ class AgentSession:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
         angewandt.
         """
+        # §2 C: Schon der Vorschlag kostet Modellaufrufe. Vor der gemeinsamen
+        # Spur ablehnen, damit eine gesperrte Sitzung kein anderes Modell entlädt.
+        activation.require(activation.CHAT)
         resource_session = getattr(self.backend, "resource_session", None)
         if not callable(resource_session):
             return self._propose(request)
-        with resource_session(self.cancelled):
+        with resource_session(self.cancelled, progress=lambda text: self._progress(0, text)):
             return self._propose(request)
 
     def _propose(self, request: str) -> Proposal:
         """Führt den Zug innerhalb einer gegebenenfalls belegten Ressourcenspur aus."""
-        # §2 C: der Chat braucht die Freischaltung — schon der Vorschlag, nicht
-        # erst das Übernehmen, denn er kostet Modellaufrufe und liefert Arbeit.
-        activation.require(activation.CHAT)
         active = self.rule_set or rules.load()
         proposal = Proposal(request=request, origin=self._origin(active))
 

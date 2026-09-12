@@ -59,6 +59,28 @@ def _lock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
 
 
+def test_a_locked_chat_neither_enters_nor_unloads_a_local_resource_session(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile
+) -> None:
+    from app.core.backends.llm import OllamaBackend
+
+    calls: list[object] = []
+
+    def transport(*args: object, **kwargs: object) -> dict:
+        calls.append(args)
+        return {}
+
+    agent = AgentSession(
+        backend=OllamaBackend(url="http://localhost:11434", transport=transport),
+        document=new_project().document,
+        profile=profile,
+    )
+    _lock(monkeypatch)
+    with pytest.raises(LicenceRequired):
+        agent.propose("Beschreibe das Modell")
+    assert calls == [], "a locked chat must not even unload the local model"
+
+
 def _certificate() -> activation.ActivationCertificate:
     """Ein bereits geprüftes Gerätezertifikat für reine Grenztests."""
     return activation.ActivationCertificate(

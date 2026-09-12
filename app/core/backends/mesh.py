@@ -1064,7 +1064,7 @@ class ComfyBackend:
         progress: ProgressFn,
         cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
-        with local_ai_slot(self.base, cancelled):
+        with local_ai_slot(self.base, cancelled, lambda text: progress(0.0, text)):
             progress(0.1, str(_("Auftrag abschicken")))
             payload = json.dumps({"prompt": graph, "client_id": uuid.uuid4().hex}).encode("utf-8")
             answer = self.transport(

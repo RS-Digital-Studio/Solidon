@@ -1167,10 +1167,12 @@ class OllamaBackend:
             return False
 
     @contextmanager
-    def resource_session(self, cancelled: CancelToken | None) -> Iterator[None]:
+    def resource_session(
+        self, cancelled: CancelToken | None, progress: Callable[[str], None] | None = None
+    ) -> Iterator[None]:
         """Hält einen vollständigen Agentenzug exklusiv und räumt danach auf."""
         address = ollama_endpoint(self.url)
-        with local_ai_slot(address, cancelled):
+        with local_ai_slot(address, cancelled, progress):
             try:
                 yield
             finally:

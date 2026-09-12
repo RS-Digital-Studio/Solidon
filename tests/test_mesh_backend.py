@@ -101,6 +101,27 @@ def backend(server: Comfy) -> ComfyBackend:
     return ComfyBackend(transport=server, poll_seconds=0.0)
 
 
+def test_comfy_waiting_reports_progress_and_cancels_without_submitting_a_job() -> None:
+    from app.core.backends.resources import local_ai_slot
+    from app.core.errors import OperationCancelled
+
+    server = Comfy()
+    generator = ComfyBackend(url="http://localhost:8188", transport=server, poll_seconds=0.0)
+    seen: list[tuple[float, str]] = []
+    stopped = False
+
+    def progress(fraction: float, text: str) -> None:
+        nonlocal stopped
+        seen.append((fraction, text))
+        stopped = True
+
+    with local_ai_slot("http://localhost:11434", None), pytest.raises(OperationCancelled):
+        generator.text_to_mesh("ein Halter", progress=progress, cancelled=lambda: stopped)
+    assert len(seen) == 1 and seen[0][0] == 0.0
+    assert "Grafikkarte" in seen[0][1]
+    assert not server.posts, "a waiting cancellation must not submit, cancel or unload a job"
+
+
 def _opened_by(fake: object) -> Callable[[str], SimpleNamespace]:
     """Lenkt ``opener_for`` auf eine Attrappe um.
 

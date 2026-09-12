@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import threading
+import time
+
+import pytest
 
 from app.core.errors import OperationCancelled
 from app.core.scene.cancel import CancelSignal
@@ -44,3 +47,45 @@ def test_remote_backends_do_not_share_the_local_slot() -> None:
         local_ai_slot("http://192.0.2.1:8188", None),
     ):
         pass
+
+
+def test_waiting_reports_once_and_times_out_without_releasing_the_other_job(monkeypatch) -> None:
+    from app.core.backends import resources
+
+    monkeypatch.setattr(resources, "MAX_WAIT_SECONDS", 0.02)
+    seen: list[str] = []
+    with resources.local_ai_slot("http://localhost:11434", None):
+        started = time.monotonic()
+        with (
+            pytest.raises(resources.LocalAiBusyError) as raised,
+            resources.local_ai_slot("http://localhost:8188", None, seen.append),
+        ):
+            pytest.fail("the occupied local slot must not be entered")
+        assert time.monotonic() - started < 1.0
+        assert resources._LOCAL_AI_LOCK.locked()
+    assert len(seen) == 1
+    assert "Grafikkarte" in seen[0]
+    assert {action.id for action in raised.value.suggestions} == {"retry", "cancel"}
+    with resources.local_ai_slot("http://localhost:8188", None, seen.append):
+        pass
+    assert len(seen) == 1, "there is no waiting message for an immediately available slot"
+
+
+def test_waiting_can_be_cancelled_from_its_progress_callback() -> None:
+    from app.core.backends import resources
+
+    token = CancelSignal()
+    seen: list[str] = []
+
+    def progress(text: str) -> None:
+        seen.append(text)
+        token.cancel()
+
+    with resources.local_ai_slot("http://localhost:11434", None):
+        with (
+            pytest.raises(OperationCancelled),
+            resources.local_ai_slot("http://localhost:8188", token, progress),
+        ):
+            pytest.fail("a cancelled waiter must not enter")
+        assert resources._LOCAL_AI_LOCK.locked()
+    assert len(seen) == 1
