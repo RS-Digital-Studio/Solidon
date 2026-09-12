@@ -57,9 +57,9 @@ from app.ui.render.api import (
 
 _log = logging.getLogger(__name__)
 
-#: Wie weit neben einem Objekt der Zeiger es noch trifft, in Bildpunkten —
-#: übernommen vom früheren VTK-Renderer, damit die Griffe gleich gut
-#: greifbar bleiben.
+#: Wie weit neben einem Objekt der Zeiger es noch trifft, in logischen
+#: Qt-Bildpunkten. Die Pickgrenze rechnet sie mit dem Geräteverhältnis um,
+#: damit die Fangbreite bei jeder Bildschirmskalierung gleich bleibt.
 PICK_SLACK_PIXELS = 4.0
 
 #: Der senkrechte Öffnungswinkel, mit dem die Kamera beginnt — VTKs Vorgabe,
@@ -1530,7 +1530,7 @@ class GfxRenderer(Renderer):
             found = self._item_of(self._info_at(x, y))
             if found is not None:
                 return found
-            return self._item_of(self._info_near(x, y, PICK_SLACK_PIXELS))
+            return self._item_of(self._info_near(x, y, PICK_SLACK_PIXELS * self._ratio()))
         finally:
             self._restore(restore)
 

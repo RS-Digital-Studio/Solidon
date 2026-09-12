@@ -411,7 +411,11 @@ class Renderer(ABC):
 
     @abstractmethod
     def pick_item(self, x: float, y: float) -> Item | None:
-        """Was auch immer unter einem Bildpunkt liegt, auch Linien und Punkte."""
+        """Was unter einem Gerätebildpunkt liegt, auch Linien und Punkte.
+
+        Die zusätzliche Fangbreite bleibt in logischen Qt-Bildpunkten gleich,
+        unabhängig vom Geräteverhältnis des Fensters.
+        """
 
     # --- Bild ---------------------------------------------------------------------
 

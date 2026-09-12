@@ -175,6 +175,72 @@ print("native canvas drawn and released")
     assert "native canvas drawn and released" in done.stdout
 
 
+@pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
+@pytest.mark.parametrize("scale", [1, 2])
+def test_native_item_pick_slack_stays_constant_on_hidpi_screens(scale: int) -> None:
+    """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar."""
+    platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
+    if platform == "xcb" and not os.environ.get("DISPLAY"):
+        if os.environ.get("CI"):
+            pytest.fail("Der native Linux-Fenstertest braucht DISPLAY, zum Beispiel durch Xvfb.")
+        pytest.skip("kein X11-Display für den nativen Qt-Fensterweg")
+    script = """
+import math
+import os
+from PySide6.QtCore import QEvent
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
+from app.ui.render.api import SurfaceStyle
+from app.ui.render.factory import make_renderer
+from tests.test_render_contract import look_down, plate
+
+application = QApplication([])
+window = QWidget()
+window.resize(400, 300)
+layout = QVBoxLayout(window)
+layout.setContentsMargins(0, 0, 0, 0)
+view = make_renderer(window)
+layout.addWidget(view.widget)
+window.show()
+application.processEvents()
+ratio = view.widget.devicePixelRatioF()
+print(f"Geräteverhältnis: {ratio}", flush=True)
+assert math.isclose(ratio, float(os.environ["QT_SCALE_FACTOR"]))
+try:
+    for overlay in (False, True):
+        item = view.add_surface(
+            *plate(0, 20), name="handle",
+            style=SurfaceStyle(lighting=False, keep_in_front=overlay),
+        )
+        look_down(view, item.bounds())
+        view.render()
+        x, y, _depth = view.world_to_display((20, 10, 0))
+        assert view.pick_surface(x + 3 * ratio, y, tolerance=0) is None
+        assert view.pick_item(x + 3 * ratio, y) is item, (ratio, overlay)
+        assert view.pick_item(x + 6 * ratio, y) is None, (ratio, overlay)
+        view.remove(item)
+finally:
+    view.close()
+    window.close()
+    window.deleteLater()
+    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env={
+            **os.environ,
+            "QT_QPA_PLATFORM": platform,
+            "QT_SCREEN_SCALE_FACTORS": "1",
+            "QT_SCALE_FACTOR": str(scale),
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "Traceback" not in done.stderr, done.stderr
+
+
 def test_the_viewport_asks_the_factory_before_it_builds(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ohne Adapter bleibt die Ansicht leer — und sagt es nicht erst beim Absturz."""
     from app.ui import viewport

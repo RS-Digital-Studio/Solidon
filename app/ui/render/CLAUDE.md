@@ -138,7 +138,9 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   Puffer, in den gezeichnet wurde, und trifft deshalb, was zu sehen ist — der
   Skalierwürfel an einem würfelförmigen Körper liegt in dessen Hüllquader und
   wäre sonst nie zu greifen. Die Toleranz von `pick_item` ist eine Zahl in
-  Bildpunkten (`PICK_SLACK_PIXELS`).
+  logischen Qt-Bildpunkten (`PICK_SLACK_PIXELS`); `pick_item` rechnet sie mit
+  dem Geräteverhältnis in die Gerätepixel des Pickpuffers um. So bleibt ein
+  Griff bei 200 Prozent Skalierung im selben sichtbaren Abstand greifbar.
 * **Durchscheinende Körper mischen sich reihenfolgeunabhängig**
   (`weighted_blend`): pygfx sortiert Durchscheinendes je Bild nach dem
   Abstand der Objektposition zur Kamera, und die Körper des Viewports sitzen
