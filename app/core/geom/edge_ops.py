@@ -204,7 +204,7 @@ class BeadParams(BaseParams):
 
 @register_op(
     name="bead_edges",
-    cache_version="3",
+    cache_version="4",
     title=_("Wulst anlegen"),
     category="shaping",
     params=BeadParams,
@@ -217,18 +217,17 @@ class BeadParams(BaseParams):
     ),
     caveat=_(
         "Ein Wulst steht über den Körper hinaus und ändert damit sein Außenmaß. "
-        "Wo es auf das Maß ankommt, gehört er nach innen oder gar nicht hin."
+        "Wo es auf das Maß ankommt, gehört er nach innen oder gar nicht hin. "
+        "Ein exakter Körper wird dabei zum Netz; seine Flächen und Kanten werden "
+        "zu festen Dreiecken. Rückgängig stellt den exakten Körper wieder her."
     ),
 )
 def bead_edges_op(ctx: OpContext) -> OpResult:
     """Die Gegenrichtung zu Verrunden und Fase: Material kommt dazu.
 
-    **Nur am Netz**, und das ist keine Lücke, sondern die Sache: Ein Wulst ist
-    aufgelegtes Material und keine Änderung der Topologie — der exakte Kern
-    hätte dafür denselben Weg über die Boolesche Vereinigung, und was dabei
-    herauskäme, wäre ein Körper mit einer Fläche mehr und keinem Gewinn. Ein
-    exakter Körper geht deshalb über die Tessellation und kommt als Netz
-    zurück; der ``caveat`` der Operation sagt es.
+    Der Wulst wird am tessellierten Körper vereinigt. Ein exakter Eingang
+    kommt deshalb als Netz zurück; Einschränkung und Ergebnisbefund benennen
+    den Verlust der exakten Geometrie.
     """
     params = cast(BeadParams, ctx.params)
     source = ctx.inputs[0]
@@ -240,12 +239,17 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         _chosen_edges(params.edges, params.edge_keys),
     )
     empty = _too_small_to_see(body, outcome.mesh, ctx.profile, rounded=True)
+    conversion = []
+    if source.kind == "brep":
+        from app.core.brep.ops import converted_finding
+
+        conversion.append(converted_finding(source, outcome.mesh))
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, kind="mesh", features={})],
         solver=outcome.solver,
         findings=[
             dataclasses.replace(entry, object_id=source.id)
-            for entry in [*outcome.findings, empty]
+            for entry in [*outcome.findings, *conversion, empty]
             if entry is not None
         ],
     )

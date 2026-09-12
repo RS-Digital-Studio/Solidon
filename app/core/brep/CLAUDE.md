@@ -18,6 +18,10 @@ Flächenkarte, nicht über eine angenommene gleiche Besuchsreihenfolge.
 `brep_to_mesh` ruft diesen Weg direkt auf; ein zusätzlicher Qualitäts-Solid
 wäre vor der Mesherkopie redundant.
 
+`ops.converted_finding` meldet jede absichtliche Vernetzung eines exakten
+Körpers, auch beim Wulst. Weitere Netzbearbeitung bleibt möglich; verloren
+geht die exakte Geometrie, und Rückgängig stellt sie wieder her.
+
 Boolesche Operationen werden durch `kernel.boolean_builder` leer angelegt:
 NonDestructive und gegebenenfalls Fuzzy-Toleranz stehen **vor** dem ersten
 Build. Der Zwei-Shape-Konstruktor rechnet bereits und wird nicht benutzt.

@@ -33,7 +33,7 @@ from app.core.errors import (
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import (
     bore_diameter,
     compensation_findings,
@@ -650,6 +650,7 @@ class ToMeshParams(BaseParams):
 
 @register_op(
     name="brep_to_mesh",
+    cache_version="2",
     requires_kind="brep",
     title=_("Flächenbearbeitung beenden"),
     category="mesh",
@@ -677,18 +678,21 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
     mesh = tessellate(body.shape, params.deflection)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, kind="mesh", features={})],
-        findings=[
-            Finding(
-                code="brep.converted",
-                severity="info",
-                message=_(
-                    "Flächen und Kanten sind jetzt feste Dreiecke und nicht mehr einzeln "
-                    "bearbeitbar. Rückgängig stellt den vorherigen Zustand wieder her."
-                ),
-                object_id=source.id,
-                values={"triangles": mesh.triangle_count},
-            )
-        ],
+        findings=[converted_finding(source, mesh)],
+    )
+
+
+def converted_finding(source: SceneObject, mesh: MeshData) -> Finding:
+    """Eine beabsichtigte Vernetzung benennt den Verlust der exakten Geometrie."""
+    return Finding(
+        code="brep.converted",
+        severity="info",
+        message=_(
+            "Die exakten Flächen und Kanten sind jetzt feste Dreiecke. Weitere "
+            "Bearbeitungen rechnen am Netz. Rückgängig stellt den exakten Körper wieder her."
+        ),
+        object_id=source.id,
+        values={"triangles": mesh.triangle_count},
     )
 
 

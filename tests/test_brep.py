@@ -558,6 +558,25 @@ def test_a_mesh_body_is_turned_away_with_a_sentence(profile: Profile) -> None:
     assert error.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
 
 
+def test_a_bead_reports_the_loss_of_exact_faces(profile: Profile) -> None:
+    """Die zusätzliche Leiste lässt einen exakten Körper sichtbar zum Netz werden."""
+    original = block()
+    entry = SceneObject(
+        id="obj_1", name="Klotz", mesh=original, kind="brep", features=features_of(original)
+    )
+
+    result = run("bead_edges", entry, profile, radius=1.5)
+
+    assert result.outputs[0].kind == "mesh"
+    assert result.outputs[0].mesh.is_watertight
+    assert result.outputs[0].mesh.volume > original.volume
+    notices = [finding for finding in result.findings if finding.code == "brep.converted"]
+    assert len(notices) == 1
+    assert notices[0].object_id == entry.id
+    assert notices[0].values["triangles"] == result.outputs[0].mesh.triangle_count
+    assert entry.kind == "brep" and entry.mesh is original
+
+
 def test_brep_to_mesh_is_a_step_in_the_stack(profile: Profile) -> None:
     """§30: eine Richtung — und rücknehmbar, weil es eine Operation ist wie
     jede andere.
