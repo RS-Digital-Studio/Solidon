@@ -29,7 +29,8 @@
   # `veraltet.php` anhand des Namens und der `version.json` — eine
   # Versionsnummer an dieser Stelle wäre beim nächsten Release still falsch.
   RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteRule ^dl/(Solidon3D-[A-Za-z0-9._-]+)$ /dl/veraltet.php?datei=$1 [L,QSA]
+  # Der Dateiname kommt allein aus dem Pfad; eine Query darf ihn nicht ersetzen.
+  RewriteRule ^dl/(Solidon3D-[A-Za-z0-9._-]+)$ /dl/veraltet.php?datei=$1 [L]
 
   # **Die Update-Prüfung der Anwendung wird gezählt, ohne dass sie es merkt.**
   # Sie fragt `version.json` direkt ab — eine statische Datei, von der PHP nie

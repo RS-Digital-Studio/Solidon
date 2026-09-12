@@ -2111,6 +2111,11 @@ def test_an_old_download_link_leads_to_the_current_one(tmp_path: Path) -> None:
     `.pkg` angefragt hat, sitzt an einem Mac und ist mit einer `.exe` nicht
     bedient.
     """
+    rules = (ROOT / "website" / ".htaccess").read_text(encoding="utf-8")
+    rule = next(line for line in rules.splitlines() if "RewriteRule ^dl/" in line)
+    assert "QSA" not in rule, (
+        "Eine queryseitige datei darf die Plattform aus dem Pfad nicht ersetzen"
+    )
     manifest = json.loads((ROOT / "website" / "version.json").read_text(encoding="utf-8"))
     with _php_server(tmp_path) as base:
         for name, platform in (
