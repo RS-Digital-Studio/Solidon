@@ -79,7 +79,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen](#rm-108) | Bedienung und Darstellung | Schlüsseldialog während laufender Abfrage ohne Wartefrist schließen |
 | [RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen](#rm-119) | Bedienung und Darstellung | Schnittebene auf versetzten Platten und in Explosionsdarstellung prüfen |
 | [RM-124 — Zusätzlichen Render durch show_build_volume messen](#rm-124) | Bedienung und Darstellung | Bauraum-Aufwand messen; unnötigen Aufbau bei unverändertem Zustand vermeiden |
-| [RM-130 — Speicherhinweis nach reinem Import verständlich gestalten](#rm-130) | Bedienung und Darstellung | Speicherhinweis nach reinem Betrachten eines Imports entscheiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
@@ -1578,10 +1577,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-130"></a>
 
-- [ ] **RM-130 — Speicherhinweis nach reinem Import verständlich gestalten.** Den
-  Schließen-/Speichern-Ablauf für einen nur betrachteten Import entscheiden und an Kundendateien
-  umsetzen. Abnahme: reines Öffnen/Betrachten wird verständlich behandelt, tatsächliche Bearbeitung
-  bleibt vor Datenverlust geschützt, Import-/Projektzustände sind eindeutig.
+- [x] **RM-130 — Speicherhinweis nach reinem Import verständlich gestalten.** Am 12.09.2026
+  entschieden und gebaut. **Die Entscheidung ist Regel 19, andersherum gelesen**: Sie verbietet
+  die Nachfrage vor rücknehmbaren Handlungen, und ein eingelesenes Modell ist genau das — die
+  Datei liegt weiter auf der Platte. Wer eine STL öffnet, dreht und schließt, wird deshalb nicht
+  mehr gefragt. Was gefragt wird, ist nicht der Aufwand, sondern die **Reproduzierbarkeit**: Ein
+  63-MB-Container kostet vierzehn Sekunden, aber er kostet sie ein zweites Mal genauso; was er
+  nicht kostet, ist eine Entscheidung, die jemand noch einmal treffen müsste.
+
+  `ingest.plan.is_only_imported` zählt deshalb alles mit, was eine solche Entscheidung
+  festhält: jede Operation außer `load` und `load_step` (`load_outline` gehört ausdrücklich
+  nicht dazu — eine Zeichnung auf eine Höhe zu ziehen ist Konstruktion), jede Quelle, die nicht
+  aus einem Import stammt, Parameter, Passungen, Gesprächsbeiträge, Druckeinstellungen und jede
+  Transaktion mit `changes` — Drucker- und Materialwechsel stehen nicht im Stapel, sondern dort
+  (§15.5). `Session.only_imported` legt die fehlende Projektdatei dazu: Sobald es eine gibt,
+  geht es um Änderungen an etwas, das der Kunde pflegt.
+
+  **Zwei Dinge gehören dazu, sonst wäre es ein Verlust statt einer Erleichterung.** `modified`
+  bleibt unangetastet, damit die automatische Sicherung (§38) weiterläuft — ein Absturz nach
+  einem vierzehn Sekunden langen Import soll den Stand nicht kosten; das bewusste Schließen
+  räumt sie dabei selbst weg, sonst böte der nächste Start sie an. Und ein eingelesenes Modell
+  steht seither in **„Zuletzt geöffnet"**: Dort stand bisher nur, was als Projekt geöffnet
+  wurde, und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog. Die
+  Überschrift heißt „Zuletzt geöffnet" und nicht „Projekte" — sie stimmt also weiter.
+
+  Nachweis: vier Fälle in `tests/test_ingest.py` (darunter sieben Wege, aus einem Import ein
+  Dokument zu machen) und drei in `tests/test_ui.py`. Sieben Gegenproben, jede einzeln rot.
+  `test_closing_with_unsaved_changes_asks` legt jetzt ausdrücklich einen Quader an, bevor es
+  die Frage erwartet — ohne Arbeit gibt es keine mehr.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
 

@@ -47,7 +47,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.loader import read_bounded_payload, read_local_payload
-from app.core.ingest.plan import import_plan
+from app.core.ingest.plan import import_plan, is_only_imported
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
@@ -679,6 +679,23 @@ class Session(QObject):
     @property
     def modified(self) -> bool:
         return self._dirty
+
+    @property
+    def only_imported(self) -> bool:
+        """Ob hier nichts liegt, was nicht in seinen Dateien steht (RM-130).
+
+        Zwei Bedingungen, und die zweite steht im Kern
+        (:func:`app.core.ingest.plan.is_only_imported`): Es gibt **keine
+        Projektdatei** — sonst geht es um Änderungen an etwas, das der Kunde
+        pflegt —, und das Dokument besteht aus nichts als eingelesenen
+        Dateien.
+
+        :attr:`modified` bleibt davon unberührt, und das ist Absicht: Die
+        automatische Sicherung (§38) hängt daran, und ein Absturz nach einem
+        vierzehn Sekunden langen Import soll den Stand nicht kosten. Was sich
+        ändert, ist die Frage beim **bewussten** Schließen.
+        """
+        return self.path is None and is_only_imported(self.project.document)
 
     @property
     def busy(self) -> bool:

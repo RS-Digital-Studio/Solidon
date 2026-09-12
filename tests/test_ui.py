@@ -6299,7 +6299,11 @@ def test_the_handlers_are_found_through_the_parent_window(window: MainWindow) ->
 
 
 def test_closing_with_unsaved_changes_asks(window: MainWindow, monkeypatch) -> None:
-    """Der Menühinweis versprach das seit jeher; gefragt wurde nie."""
+    """Der Menühinweis versprach das seit jeher; gefragt wurde nie.
+
+    **Gearbeitet wird hier ausdrücklich**, seit ein reines Einlesen nicht mehr
+    fragt (RM-130): Der Quader ist die Änderung, die verloren ginge.
+    """
     import app.ui.main_window as module
 
     asked: list[str] = []
@@ -6309,10 +6313,55 @@ def test_closing_with_unsaved_changes_asks(window: MainWindow, monkeypatch) -> N
 
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
+    assert window.session.apply("Quader", [OperationDraft(op="create_box")])
+    window.session.wait_for_idle()
     assert window.session.modified
 
     assert not window._may_discard(), "Abbrechen hält das Schließen an"
     assert asked, "gefragt wurde"
+
+
+def test_a_model_that_was_only_looked_at_closes_without_a_question(
+    window: MainWindow, monkeypatch
+) -> None:
+    """Wer nur hinsieht, wird nicht gefragt (RM-130).
+
+    Eine STL öffnen, drehen, schließen — dabei ist nichts entstanden, was es
+    nicht schon gäbe. Die Frage „Speichern / Verwerfen / Abbrechen" war
+    technisch richtig (der Import ist eine Operation) und aus Kundensicht eine
+    Frage nach etwas, das er nicht getan hat; Regel 19 verlangt sie nur dort,
+    wo etwas unwiederbringlich weg wäre. Gemeldet von Robert am 04.09.2026 an
+    allen neunzehn Kundendateien.
+    """
+    import app.ui.main_window as module
+
+    def niemals(title: str, parent: object) -> str:
+        raise AssertionError("ein reines Einlesen darf nicht fragen")
+
+    monkeypatch.setattr(module, "confirm_unsaved", niemals)
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    assert window.session.modified, "gesichert wird weiterhin — der Absturz kennt keine Nachfrage"
+    assert window.session.only_imported
+    assert window._may_discard()
+
+
+def test_a_model_that_was_only_looked_at_lands_in_the_recent_list(window: MainWindow) -> None:
+    """Und der Weg zurück ist ein Klick (RM-130).
+
+    Ohne die Frage beim Schließen ist „Zuletzt geöffnet" der einzige Weg
+    zurück zu einer Datei, die man sich gerade angesehen hat — vorher stand
+    dort nur, was als Projekt geöffnet wurde. Die Überschrift heißt „Zuletzt
+    geöffnet" und nicht „Projekte"; sie stimmt also weiter.
+    """
+    window.settings.recent = []
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    assert window.settings.recent == [str(MESHES / "cube_clean.stl")]
 
 
 def test_a_saved_project_closes_without_a_question(window: MainWindow, tmp_path: Path) -> None:
@@ -6331,6 +6380,9 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
     genau das ist die Frage, die jemand stellt, der vor dem Dialog steht.
     Deshalb geht dieser Test über ``close()`` und sieht dem Fenster danach an,
     dass es noch da ist.
+
+    Der Quader ist die Arbeit, um die es geht: Ein bloßes Einlesen fragt seit
+    RM-130 nicht mehr, und ein Test ohne Frage prüfte hier gar nichts.
     """
     import app.ui.main_window as module
 
@@ -6338,6 +6390,8 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
     monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: answers[0])
 
     window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     window.session.wait_for_idle()
     window.show()
     assert window.session.modified
@@ -6360,10 +6414,16 @@ def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
     einzufügen rief dann ``start_new`` ohne jede Frage — Dokument samt
     Verlauf ersetzt, Undo holte nichts zurück (Gesamtreview-b, Bericht 08,
     Fund 1). Jetzt kommt dieselbe Frage wie beim Öffnen einer ``.p3d``.
+
+    Gearbeitet wird dafür ausdrücklich — der Quader neben dem eingelesenen
+    Würfel. Ein reines Einlesen wird seit RM-130 nicht mehr gefragt, und der
+    Fund von damals betraf das Verwerfen von **Arbeit**.
     """
     import app.ui.main_window as module
 
     window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     window.session.wait_for_idle()
     assert window.session.modified
     window.action_new()

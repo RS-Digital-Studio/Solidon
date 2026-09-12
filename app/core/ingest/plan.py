@@ -32,7 +32,7 @@ from app.core.ingest.loader import (
 )
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.scene.history import OperationDraft
-from app.core.types import ProgressFn
+from app.core.types import Document, ProgressFn
 from app.i18n import TranslatableText, _
 
 #: Der Titel der Transaktion je Weg. Im Verlauf steht er, nicht der Op-Name.
@@ -170,3 +170,56 @@ def import_plan(
         ),
         asks_unit=asks,
     )
+
+
+#: Die Operationen, die eine Datei **nur hereinnehmen**.
+#:
+#: ``load_outline`` steht ausdrücklich nicht dabei: Eine flache Zeichnung wird
+#: dort auf eine Höhe gezogen, die niemand aus der Datei lesen kann — das ist
+#: eine Konstruktionsentscheidung und kein Einlesen.
+PLAIN_IMPORT_OPS: Final[frozenset[str]] = frozenset({"load", "load_step"})
+
+
+def is_only_imported(document: Document) -> bool:
+    """Ob dieses Dokument nichts enthält, was nicht in seinen Dateien steht
+    (RM-130).
+
+    **Wozu die Frage gestellt wird.** Wer eine STL öffnet, ansieht und das
+    Fenster schließt, bekam „Ungesicherte Änderungen — Speichern / Verwerfen /
+    Abbrechen". Technisch stimmte das (der Import ist eine Operation im
+    Stapel, und die Sitzung gilt danach als geändert), für den Kunden war es
+    eine Frage nach etwas, das er nicht getan hat (Robert, 04.09.2026;
+    gemessen an allen neunzehn Kundendateien). Regel 19 verlangt die Nachfrage
+    dort, wo etwas unwiederbringlich weg wäre — und ein eingelesenes Modell
+    ist das nicht: Die Datei liegt weiter auf der Platte.
+
+    **Wonach gefragt wird, ist die Reproduzierbarkeit und nicht der Aufwand.**
+    Ein 63-MB-Container kostet vierzehn Sekunden, aber er kostet sie ein
+    zweites Mal genauso; was er nicht kostet, ist eine Entscheidung, die
+    jemand noch einmal treffen müsste. Deshalb zählt hier alles mit, was eine
+    solche Entscheidung festhält:
+
+    * jede Operation, die keine reine Ladeoperation ist
+      (:data:`PLAIN_IMPORT_OPS`) — auch ein Verschieben auf dem Bett,
+    * jede Quelle, die nicht aus einem Import stammt; ein **erzeugtes** Modell
+      trägt Anfrage und Startwert in seiner Herkunft und ist ohne die
+      Projektdatei weg,
+    * Parameter, Passungen und Gesprächsbeiträge,
+    * Druckeinstellungen — Stufe, Düse und Material sind eine Wahl,
+    * und jede Transaktion mit ``changes``: Drucker- und Materialwechsel
+      stehen nicht im Stapel, sondern dort (§15.5).
+
+    Ein leerer Stapel ist **nicht** „nur importiert": Dort gibt es nichts zu
+    verlieren, und die Frage stellt sich gar nicht erst.
+    """
+    if not document.ops:
+        return False
+    if document.parameters or document.fits or document.chat:
+        return False
+    if document.print_settings is not None:
+        return False
+    if any(operation.op not in PLAIN_IMPORT_OPS for operation in document.ops):
+        return False
+    if any(source.kind != "import" for source in document.sources.values()):
+        return False
+    return all(entry.changes is None for entry in document.transactions)

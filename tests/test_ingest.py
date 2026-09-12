@@ -24,7 +24,7 @@ from app.core.ingest.loader import (
     normalise,
 )
 from app.core.ingest.ops import unit_question
-from app.core.ingest.plan import import_plan
+from app.core.ingest.plan import import_plan, is_only_imported
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import CachedResult, DiskCache
 from app.core.scene.project import Project, ProjectSources, checksum, new_project
@@ -1672,3 +1672,123 @@ def test_an_unsaveable_document_says_so_instead_of_raising(tmp_path: Path) -> No
 
     assert raised.value.suggestions, "Regel 17: ein Fehler endet nie ohne Vorschlag"
     assert not (tmp_path / "projekt.p3d").exists()
+
+
+# --- was nur eingelesen wurde (RM-130) --------------------------------------------
+
+
+def _after_an_import(name: str = "cube_clean.stl") -> Any:
+    """Eine Sitzung, in der genau eine Datei eingelesen wurde."""
+    from app.ui.session import Session
+
+    session = Session()
+    assert session.import_model(MESHES / name), "der Import selbst muss durchgehen"
+    return session
+
+
+def test_a_document_that_only_read_files_says_so() -> None:
+    """Der Normalfall des Kunden: ansehen, nichts tun (RM-130).
+
+    Zwei Dateien nacheinander sind immer noch nichts, was jemand getan hat —
+    beide liegen auf der Platte, beide kommen beim nächsten Mal genauso
+    wieder herein.
+    """
+    session = _after_an_import()
+
+    assert is_only_imported(session.project.document)
+    assert session.only_imported
+
+    assert session.import_model(MESHES / "plate_holes.stl")
+    assert is_only_imported(session.project.document)
+
+
+def test_an_empty_document_is_not_only_imported() -> None:
+    """Ohne Stapel gibt es nichts zu verlieren, und die Frage stellt sich nicht."""
+    from app.ui.session import Session
+
+    assert not is_only_imported(Session().project.document)
+
+
+def test_anything_beyond_reading_a_file_counts_as_work() -> None:
+    """Jede Entscheidung, die jemand noch einmal treffen müsste, zählt (RM-130).
+
+    Sieben Wege, aus einem eingelesenen Modell ein Dokument zu machen — und
+    jeder einzelne muss die Frage beim Schließen zurückholen. Der Reihe nach:
+    eine Operation, die keine Ladeoperation ist; ein benannter Parameter; eine
+    Passung; ein Gesprächsbeitrag; gewählte Druckeinstellungen; eine
+    **erzeugte** Quelle (sie trägt Anfrage und Startwert und ist ohne die
+    Projektdatei weg); und ein Drucker- oder Materialwechsel, der nicht im
+    Stapel steht, sondern in den Änderungen der Transaktion (§15.5).
+    """
+    from dataclasses import replace
+
+    from app.core.types import (
+        ChatEntry,
+        DocumentChange,
+        DocumentState,
+        FeatureRef,
+        Fit,
+        Operation,
+        Parameter,
+        PrintSettings,
+    )
+
+    def mit_operation(document: Any) -> None:
+        document.ops.append(Operation(id=99, op="create_box", inputs=(), outputs=("obj_9",)))
+
+    def mit_parameter(document: Any) -> None:
+        document.parameters["hoehe"] = Parameter(name="hoehe", value=10.0)
+
+    def mit_passung(document: Any) -> None:
+        document.fits.append(
+            Fit(name="stift_1", a=FeatureRef("obj_1", "hole_1"), b=FeatureRef("obj_1", "pin_1"))
+        )
+
+    def mit_beitrag(document: Any) -> None:
+        document.chat.append(ChatEntry(id="chat_1", role="user", text="Mach es hohl"))
+
+    def mit_druckeinstellungen(document: Any) -> None:
+        document.print_settings = PrintSettings()
+
+    def mit_erzeugter_quelle(document: Any) -> None:
+        key = next(iter(document.sources))
+        document.sources[key] = replace(document.sources[key], kind="generated")
+
+    def mit_druckerwechsel(document: Any) -> None:
+        document.transactions[0] = replace(
+            document.transactions[0],
+            changes=DocumentChange(
+                before=DocumentState(printer="generic-220"),
+                after=DocumentState(printer="centauri-carbon"),
+            ),
+        )
+
+    for name, aendern in (
+        ("eine Operation", mit_operation),
+        ("ein Parameter", mit_parameter),
+        ("eine Passung", mit_passung),
+        ("ein Gesprächsbeitrag", mit_beitrag),
+        ("Druckeinstellungen", mit_druckeinstellungen),
+        ("eine erzeugte Quelle", mit_erzeugter_quelle),
+        ("ein Druckerwechsel", mit_druckerwechsel),
+    ):
+        session = _after_an_import()
+        assert is_only_imported(session.project.document), name
+        aendern(session.project.document)
+        assert not is_only_imported(session.project.document), (
+            f"{name} macht aus dem Einlesen ein Dokument"
+        )
+
+
+def test_a_saved_project_is_never_only_imported(tmp_path: Path) -> None:
+    """Sobald es eine Datei gibt, geht es um Änderungen an ihr (RM-130).
+
+    Eine gespeicherte Projektdatei ist das, was der Kunde pflegt; was daran
+    ungesichert ist, wird gefragt — auch wenn der Stapel nur einen Import
+    trägt.
+    """
+    session = _after_an_import()
+    session.save_project(tmp_path / "projekt.p3d")
+
+    assert is_only_imported(session.project.document), "am Dokument ändert das Speichern nichts"
+    assert not session.only_imported, "die Sitzung hat jetzt eine Datei"

@@ -33,6 +33,27 @@ Blockade zu werden, die §29 ausdrücklich nicht will:
   Körpernamen und dem Klick, der hinführt; der Dialog zeigt die ersten Sätze
   und verweist für den Rest dorthin.
 
+**Und dieselbe Regel andersherum: Wer nur hinsieht, wird nicht gefragt**
+(RM-130). Eine STL öffnen, drehen, schließen — dabei entsteht nichts, was es
+nicht schon gäbe. Bis zum 12.09.2026 kam trotzdem „Ungesicherte Änderungen",
+weil der Import eine Operation im Stapel ist und die Sitzung danach als
+geändert gilt (gemessen an allen neunzehn Kundendateien; Robert, 04.09.2026:
+eine Frage nach etwas, das er nicht getan hat). Gefragt wird jetzt nur, wenn
+etwas verloren ginge, das nicht in seinen Dateien steht
+(`ingest.plan.is_only_imported`, gelesen über `Session.only_imported`).
+
+Zwei Dinge gehören dazu, und ohne sie wäre es ein Verlust statt einer
+Erleichterung:
+
+* **Gesichert wird weiter.** `Session.modified` bleibt, was es war — die
+  automatische Sicherung (§38) hängt daran, und ein Absturz nach einem
+  vierzehn Sekunden langen Import soll den Stand nicht kosten. Nur das
+  **bewusste** Schließen fragt nicht mehr; es räumt die Sicherung dabei
+  selbst weg, sonst böte der nächste Start sie an.
+* **Der Weg zurück ist ein Klick.** Ein eingelesenes Modell steht seither in
+  „Zuletzt geöffnet" — vorher stand dort nur, was als Projekt geöffnet wurde,
+  und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog.
+
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
 Schritt an, zeigt das Bild den letzten vollständig gerechneten Zustand — und
 was hinter dem Halt steht, wird nicht gerechnet. Ein neuer Schritt landete
@@ -86,7 +107,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-881 Parameter der 110 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+884 Parameter der 110 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der

@@ -4552,6 +4552,12 @@ class MainWindow(QMainWindow):
         #: Die Meldung „Geladen: …" gehört ans Ende des Vorgangs, und der
         #: endet seit dem Arbeiter nicht mehr in derselben Methode.
         self._pending_download = ""
+        #: Die Datei, deren Import gerade läuft — für „Zuletzt geöffnet"
+        #: (RM-130). Dasselbe Muster wie ``_pending_download`` daneben und aus
+        #: demselben Grund: ``importFinished`` meldet nur, ob es geklappt hat,
+        #: und der Weg dorthin führt durch einen Arbeiter. Ein Download hat
+        #: keinen Pfad auf der Platte und bleibt deshalb draußen.
+        self._pending_import: Path | None = None
         self.session.importFailed.connect(self._on_import_failed)
         self.session.importFinished.connect(self._on_import_finished)
         self.session.failed.connect(self._on_error)
@@ -4625,10 +4631,22 @@ class MainWindow(QMainWindow):
         rücknehmbaren Handlungen, und ein verworfenes Dokument holt kein Undo
         zurück. Die Frage bietet deshalb das Speichern gleich mit an, statt
         den Nutzer zurückzuschicken.
+
+        **Ein reines Ansehen wird nicht gefragt** (RM-130). Wer eine STL
+        öffnet, dreht und schließt, hat nichts getan, was verloren gehen kann
+        — die Datei liegt weiter auf der Platte, und ihr Pfad steht seit
+        demselben Tag in „Zuletzt geöffnet". Dieselbe Regel 19, nur
+        andersherum gelesen: Wo nichts unwiederbringlich ist, wird nicht
+        gefragt. Die Sicherung wird dabei geräumt wie bei einem Verwerfen,
+        sonst böte der nächste Start die Wiederherstellung eines Modells an,
+        das niemand vermisst.
         """
         if not self.session.modified:
             return True
-        answer = confirm_unsaved(self.session.title, self)
+        if self.session.only_imported:
+            clear_autosave(self.session.path, self.session.recovery_token)
+            return True
+        answer =        answer = confirm_unsaved(self.session.title, self)
         if answer == "cancel":
             return False
         if answer == "save":
@@ -4713,6 +4731,7 @@ class MainWindow(QMainWindow):
                 # der Aufruf sofort zurück, der Zeiger verschwindet mit dem
                 # ``with``, und die Ladeanzeige mit ihrem Fortschritt übernimmt.
                 # Eine Fallunterscheidung braucht es dafür nicht.
+                self._pending_import = path
                 with waiting():
                     self.session.import_model_async(path)
                 return
@@ -4816,6 +4835,7 @@ class MainWindow(QMainWindow):
         # der Körper einer Baugruppe dauert bei 63 MB vierzehn Sekunden, und
         # die gehören nicht in den Hauptthread. Der Fehler kommt über
         # ``importFailed``, der Wartezeiger deckt den kurzen Weg.
+        self._pending_import = Path(name)
         with waiting():
             self.session.import_model_async(Path(name))
 
@@ -13314,10 +13334,22 @@ class MainWindow(QMainWindow):
 
         Der Startbildschirm weicht erst hier — vorher wäre er einer leeren
         Szene gewichen, und der Kunde sähe vierzehn Sekunden lang nichts.
+
+        **Und die Datei kommt in „Zuletzt geöffnet"** (RM-130). Bisher stand
+        dort nur, was als Projekt geöffnet wurde; ein eingelesenes Modell war
+        beim nächsten Start wieder eine Suche im Dateidialog. Das war
+        verschmerzbar, solange das Schließen danach fragte — seit es das nicht
+        mehr tut, ist die Liste der Weg zurück. Die Liste selbst heißt
+        „Zuletzt geöffnet" und nicht „Projekte"; sie stimmt also weiter.
         """
         geladen, self._pending_download = self._pending_download, ""
+        eingelesen, self._pending_import = self._pending_import, None
         if accepted:
             self._show_start_screen(False)
+            if eingelesen is not None:
+                self.settings.remember(eingelesen)
+                self._store_settings()
+                self.start_screen.show_recent(self.settings.existing_recent())
             if geladen:
                 self.announce(f"{tr('Geladen')}: {geladen}")
         else:
