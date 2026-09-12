@@ -3230,9 +3230,8 @@ class ReportPanel(QWidget):
     und genau dort stand der Kunde, der wissen wollte, ob er jetzt drucken
     kann, vor „Keine Befunde." und sonst nichts. Der Weg zum Slicer lag allein
     hinter *Datei → Druckeinstellungen …*, einem Namen, unter dem ein Laie nichts
-    sucht — der Eintrag heißt seit dem 12.09.2026 *Drucken vorbereiten*
-    nichts sucht (Review 02.09.2026). Das Fenster verdrahtet dieses Signal mit
-    demselben Dialog.
+    sucht. Der Eintrag heißt *Drucken vorbereiten*. Das Fenster verdrahtet dieses
+    Signal mit demselben Dialog.
     """
 
     alertsChanged = Signal(int)
