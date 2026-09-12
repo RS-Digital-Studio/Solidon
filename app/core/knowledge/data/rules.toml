@@ -17,8 +17,9 @@
 # hängen könnte. Eine Übersetzung ändert keine Regel, deshalb bleibt die
 # Version, wo sie ist.
 #
-# Version 4 (26.08.2026) streicht zwei Regeln, ohne eine zu ersetzen:
-# „OpenSCAD-Auflösung" und „Eigener Kern vor OpenSCAD". Beide beschrieben den
+# Der seit 26.08.2026 geltende Regelsatz streicht zwei Regeln, ohne eine zu ersetzen:
+# scad_fn („OpenSCAD-Auflösung") und exact_before_script („Eigener Kern vor OpenSCAD").
+# Seit 02.09.2026 trägt derselbe Satz die berichtigte Nummer 4. Beide Regeln beschrieben den
 # Umgang mit einem Weg, den es seit dem OpenSCAD-Ausbau nicht mehr gibt — die
 # erste riet zu einer Einstellung in einem Programm, das gar nicht mehr
 # gerufen wird, die zweite wog den eigenen Kern gegen eine Alternative ab, die
@@ -315,14 +316,17 @@ suite_after = "15/15"
 version = "4"
 date = "2026-08-26"
 reason = """
-Drei Regeln gestrichen, ohne eine zu ersetzen: exact_before_script,
-OpenSCAD-Auflösung und Eigener Kern vor OpenSCAD. Anlass ist der Ausbau von
+Zwei Regeln gestrichen, ohne eine zu ersetzen: scad_fn (OpenSCAD-Auflösung)
+und exact_before_script (Eigener Kern vor OpenSCAD). Kennung und Titel der
+zweiten Regel bezeichneten denselben Eintrag, nicht zwei Regeln. Anlass ist der Ausbau von
 OpenSCAD — es gibt keinen Weg mehr dorthin (AGENTS.md Regel 11), und eine
 Regel, die vor etwas warnt, das niemand mehr tun kann, kostet Platz im Auftrag
 und lehrt eine Unterscheidung ohne Gegenstand. Was Eigener Kern vor OpenSCAD
 inhaltlich schützte — nimm das Genaue, nicht das Nachgebaute —, sagt Bausteine
 vor Primitiven weiter. Die Version stand bis zum 02.09.2026 auf 3, obwohl der
 Kopf dieser Datei die Streichung als Version 3 beschrieb und der Eintrag
-darüber unter derselben Nummer den Zuwachs nennt."""
+darüber unter derselben Nummer den Zuwachs nennt. Projekte aus diesem Zeitraum
+tragen deshalb Version 3 für denselben Satz aus neun Regeln, der seit der
+Berichtigung Version 4 heißt."""
 suite_before = "nicht gemessen"
 suite_after = "nicht gemessen"
