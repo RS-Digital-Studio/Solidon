@@ -329,6 +329,24 @@ def evaluate(
         spec = source.get(operation.op)
         progress(position / total, str(spec.title))
 
+        if operation.op == "paint_slot" and {"radius", "x", "y", "z"} <= operation.params.keys():
+            findings.append(
+                Finding(
+                    code="evaluate.legacy_point_paint",
+                    severity="error",
+                    message=_(
+                        "Dieser ältere Farbschritt färbt um einen Punkt statt eine Fläche. "
+                        "Seine Werte bleiben erhalten. Entfernen Sie den Schritt im Verlauf "
+                        "und weisen Sie das Filament der gewünschten Fläche erneut zu."
+                    ),
+                    op_id=operation.id,
+                    values={"operation": operation.op},
+                    suggestions=(SHOW_STEP_VALUES, SHOW_HISTORY),
+                )
+            )
+            stopped_at = operation.id
+            break
+
         operation, stray = _without_stray_inputs(operation, spec)
         if stray is not None:
             findings.append(stray)

@@ -1442,13 +1442,23 @@ def test_a_point_stroke_from_before_the_filament_rebuild_still_opens() -> None:
         "und seine Werte mit ihm — sie sind die Arbeit des Kunden"
     )
 
-    result = evaluate(project.document, profiles.make_profile("centauri-carbon-2", "petg"))
-
-    codes = {finding.code for finding in result.scene.report.findings}
-    assert codes, "eine Datei, die nicht rechnen kann, sagt es"
-    assert not any(code.startswith("internal") for code in codes), (
-        "ein Zustand, mit dem zu rechnen war, ist kein Programmfehler"
+    result = evaluate(
+        project.document,
+        profiles.make_profile("centauri-carbon-2", "petg"),
+        sources=ProjectSources(
+            project=project, base_dir=Path(__file__).parent / "data" / "projects"
+        ),
     )
+
+    assert result.stopped_at == 2
+    assert result.completed == (1,)
+    finding = next(
+        item for item in result.scene.report.findings if item.code == "evaluate.legacy_point_paint"
+    )
+    assert finding.op_id == 2
+    assert [action.id for action in finding.suggestions] == ["show_step_values", "show_history"]
+    assert "Farbschritt" in str(finding.message)
+    assert "field" not in finding.values
 
 
 def test_a_file_with_a_step_this_version_cannot_run_still_opens() -> None:

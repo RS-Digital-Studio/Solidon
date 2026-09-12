@@ -76,6 +76,11 @@ Löschtitel lesen die Operationstitel aus dem Register ihrer `History`.
 Die einzelnen Namen bleiben verschachtelte übersetzbare Werte, auch beim
 Speichern und Wiederöffnen. Erst die Anzeige löst die gewählte Sprache auf.
 
+Historische Farbschritte mit Punkt und Radius bleiben unverändert erhalten.
+Die Auswertung hält mit `evaluate.legacy_point_paint` an diesem Schritt an
+und bietet seine rohen Werte sowie den Verlauf an. Die alten Felder werden
+nicht als korrigierbare Eingaben des heutigen Flächendialogs ausgegeben.
+
 ## Die Karte
 
 **Das Dokument**
