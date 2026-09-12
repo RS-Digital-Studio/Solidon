@@ -21,6 +21,10 @@ Hier steht die Karte, dort das Gesetz.
 gelten nur ihrem aktiven Arbeiter. Abgebrochene Suchen bleiben bis zum Threadende
 gehalten und dürfen spätere Aufträge nicht verändern.
 
+Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
+fachlichen Sicherungs- oder Wiederholungsweg. Unerwartete Ausnahmen werden
+protokolliert und als interner Fehler kenntlich gemacht.
+
 `filament_inventory.py` zeigt und verwaltet Spulen ohne Renderer; `filament_picker.py`
 enthält den gemeinsamen Spulendialog und die Übernahme konfigurierter Slicerfilamente.
 `filament_assignment.py` zeigt die Schnellauswahl. Beide Auswahlwege melden

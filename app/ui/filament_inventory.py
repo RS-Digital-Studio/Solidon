@@ -30,8 +30,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError, ValidationError
+from app.core.errors import AppError, InternalError, ValidationError
 from app.core.knowledge import filaments
+from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.filament_picker import (
     NewFilamentDialog,
@@ -44,6 +45,8 @@ from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, WIDE, make_primary, set_level
+
+_log = get_logger(__name__)
 
 
 class _InventoryWork(Worker):
@@ -506,8 +509,14 @@ class InventoryView(QWidget):
             self._entries = filaments.catalogue(
                 include_archived=self.archived.isChecked(), strict=True
             )
-        except Exception:
+        except AppError as problem:
             self._failed("")
+            self.message.setText(str(problem))
+            return
+        except Exception as problem:
+            _log.exception("filament inventory could not be read")
+            self._failed("")
+            self.message.setText(str(InternalError(detail=f"{type(problem).__name__}: {problem}")))
             return
         self.summary.setText(tr("{count} Spulen im Lager").format(count=len(self._entries)))
         self.retry_button.hide()

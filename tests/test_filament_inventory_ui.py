@@ -497,3 +497,38 @@ def test_cancelled_search_cannot_finish_the_following_spool_write(
         _wait_for_action(inventory)
     assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
     assert changed == [True]
+
+
+def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: InventoryView) -> None:
+    """Eine beschädigte Datei zeigt den vorhandenen Sicherungsweg und bewahrt die letzte Ansicht."""
+    from app.core.errors import ValidationError
+
+    entry = filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
+    inventory.refresh()
+    saved = inventory._entries
+    filaments.catalogue_path().write_text('{"format_version": 1, "broken": true}', encoding="utf-8")
+    with pytest.raises(ValidationError) as caught:
+        filaments.catalogue(strict=True)
+    inventory.refresh()
+    assert inventory.message.text() == str(caught.value)
+    assert "Sicherung" in inventory.message.text()
+    assert inventory._entries == saved and saved[0].identifier == entry.identifier
+    assert not inventory.retry_button.isHidden()
+
+
+def test_unexpected_inventory_read_error_is_reported_and_logged(
+    inventory: InventoryView, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Programmfehler beim Lesen wird weder verschwiegen noch zum Schreibfehler umgedeutet."""
+    from app.core.errors import InternalError
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("inventory-read-probe")
+
+    monkeypatch.setattr(filaments, "catalogue", broken)
+    inventory.refresh()
+    assert inventory.message.text() == str(
+        InternalError(detail="RuntimeError: inventory-read-probe")
+    )
+    assert "inventory-read-probe" in caplog.text
+    assert not inventory.retry_button.isHidden()
