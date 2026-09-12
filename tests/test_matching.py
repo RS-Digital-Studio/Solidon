@@ -4,6 +4,7 @@ können (§21.2, §21.3).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -457,6 +458,39 @@ def test_matching_against_nothing_is_not_a_crash() -> None:
     assert match({}, holes, mesh.bounds.centre, mesh.bounds.diagonal).fresh == tuple(holes)
     assert match(holes, {}, mesh.bounds.centre, mesh.bounds.diagonal).orphaned == tuple(holes)
     assert match({}, {}, mesh.bounds.centre, mesh.bounds.diagonal).settled
+
+
+def test_recognition_and_ids_survive_printer_and_material_changes(document, profile) -> None:
+    """Fertigungsprofile ändern die Analyse, niemals die erkannte Modellgeometrie."""
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    History(document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    sources = ProjectSources(project)
+    before = evaluate(document, profile, sources=sources)
+    assert before.complete
+    features = before.scene.objects["obj_1"].features
+    assert any(feature.kind == "hole" for feature in features.values())
+    for width in (0.26, 0.84):
+        changed = replace(
+            profile,
+            printer=replace(profile.printer, nozzle_diameter=width, extrusion_width=width),
+            material=replace(profile.material, clearance=width),
+        )
+        forget_cache()
+        after = evaluate(document, changed, sources=sources)
+        assert after.complete
+        assert after.scene.objects["obj_1"].features == features
 
 
 def test_identifiers_survive_ten_operations(document, profile) -> None:

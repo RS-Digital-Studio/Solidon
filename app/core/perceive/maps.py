@@ -47,7 +47,7 @@ from app.core.types import (
     SliceResult,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_DISPLAY
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM
 from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
@@ -322,7 +322,9 @@ def build(
         raise MapTooLarge(mesh.triangle_count, MAP_LIMIT_TRIANGLES)
 
     if kind == "wall":
-        return wall_thickness_map(mesh, wall)
+        return wall_thickness_map(
+            mesh, wall, default_pitch(mesh, profile.printer.extrusion_width if profile else None)
+        )
     if kind == "overhang":
         return overhang_map(mesh, angle)
     if kind == "defects":
@@ -334,7 +336,11 @@ def build(
     if kind == "fits":
         return fit_map(mesh, entry, scene)
     return support_map(
-        mesh, profile.printer.layer_height if profile else 0.2, budget, overhang_angle=angle
+        mesh,
+        profile.printer.layer_height if profile else 0.2,
+        budget,
+        overhang_angle=angle,
+        pitch=default_pitch(mesh, profile.printer.extrusion_width if profile else None),
     )
 
 
@@ -431,12 +437,17 @@ def solid_field(
     )
 
 
-def default_pitch(mesh: MeshData, extrusion_width: float = 0.42) -> float:
+def default_pitch(mesh: MeshData, extrusion_width: float | None = None) -> float:
     """Eine halbe Extrusionsbreite, aber nie mehr Schritte, als das Raster
-    zulässt.
+    zulässt. Ohne Druckerprofil bestimmt allein die Modellgröße die Auflösung;
+    es wird keine Düse angenommen.
     """
     diagonal = float(mesh.bounds.diagonal)
-    return max(extrusion_width / 2.0, diagonal / MAX_GRID_STEPS)
+    return max(
+        extrusion_width / 2.0 if extrusion_width is not None else 0.0,
+        diagonal / MAX_GRID_STEPS,
+        EPS_GEOM,
+    )
 
 
 def _indices(field: SolidField, points: Any) -> Any:
@@ -921,6 +932,7 @@ def support_map(
     cancelled: CancelToken | None = None,
     *,
     overhang_angle: float | None = None,
+    pitch: float | None = None,
 ) -> AnalysisMap:
     """Wie hoch die Stützsäule unter jedem Dreieck wüchse.
 
@@ -956,7 +968,7 @@ def support_map(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     centres = np.asarray(body.triangles_center, dtype=float)
-    field = solid_field(mesh, cancelled=cancelled)
+    field = solid_field(mesh, pitch, cancelled=cancelled)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     drops = _drop_below(mesh, field, centres)

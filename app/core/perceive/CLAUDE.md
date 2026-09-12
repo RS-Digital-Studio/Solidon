@@ -38,6 +38,11 @@ Wandkarten beginnen bei null und deckeln ausschließlich die obere
 Farbgrenze. So behalten Karte und Legende dieselbe geordnete Skala, auch
 wenn jede gemessene Wand bereits dicker als der Deckel ist (§18.4).
 
+Wand- und Stützkarten erhalten ihre Rasterweite über `maps.build` aus der
+realen Extrusionsbreite des Profils. Ohne Profil gilt nur die geometrische
+Rastergrenze. Erkennungsauflösung und Herstellbarkeit bleiben getrennt
+(§11.2): Drucker- und Materialwechsel verändern keine Merkmale oder IDs.
+
 ## Wozu das gut ist
 
 Ohne diese Schicht könnte der Agent nur Zahlen sehen. Mit ihr sieht er
@@ -332,9 +337,9 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   die Kantenzugsuche weiter; ein Abbruch veröffentlicht keinen Merkmalscache.
   `thread_N` wird nach der räumlichen Mitte und bei gleicher Mitte nach den
   gemessenen Gewindemaßen vergeben, unabhängig von der Vertexreihenfolge.
-- **Was für kein Werkzeug groß genug ist, ist kein Merkmal.**
-  `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für **alle sechs** eingepassten
-  Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht
+- **Die automatische Erkennung hat eine profilunabhängige Auflösung.**
+  `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für die eingepassten
+  Rundformen. Die Frage steht
   einmal als `_too_small_to_make`, damit die nächste Art sie nicht wieder
   übersieht; beim Torus entscheidet das kleinere von Ring und Röhre.
 - **Und ein Langloch ist ebenso wenig eine Grundform wie eine Wendel.**

@@ -8,6 +8,7 @@ Seite reichlich.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +51,23 @@ def object_with(mesh: MeshData) -> SceneObject:
 
 
 # --- wall thickness -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["wall", "support"])
+@pytest.mark.parametrize("width", [0.26, 0.84])
+def test_distance_maps_sample_the_actual_printer_width(profile, kind, width) -> None:
+    """Beide Karten nennen die Auflösung des wirklichen Druckerprofils."""
+    mesh = cube()
+    selected = replace(profile, printer=replace(profile.printer, extrusion_width=width))
+    analysis = maps.build(kind, object_with(mesh), profile=selected)
+    expected = max(width / 2.0, mesh.bounds.diagonal / maps.MAX_GRID_STEPS)
+    assert analysis.resolution == pytest.approx(expected)
+
+
+def test_a_profile_free_distance_grid_depends_on_geometry() -> None:
+    """Ohne Drucker begrenzt die Modellgröße das Raster, keine angenommene Düse."""
+    mesh = cube()
+    assert maps.default_pitch(mesh) == pytest.approx(mesh.bounds.diagonal / maps.MAX_GRID_STEPS)
 
 
 def test_the_wall_map_measures_the_plate(profile: Profile) -> None:
@@ -696,7 +714,7 @@ def test_the_support_map_is_not_refused_by_a_triangle_guess(
     monkeypatch.setattr(
         maps,
         "support_map",
-        lambda _mesh, _height, cancelled, overhang_angle: (
+        lambda _mesh, _height, cancelled, overhang_angle, pitch: (
             called.append(cancelled)
             or maps.AnalysisMap(kind="support", title="x", values=(), unit="mm", low=0.0, high=0.0)
         ),
@@ -784,7 +802,7 @@ def test_support_checks_the_budget_after_an_atomic_stage(
         ),
     )
 
-    def slow_field(_mesh: MeshData, *, cancelled=None) -> object:
+    def slow_field(_mesh: MeshData, pitch=None, *, cancelled=None) -> object:
         now[0] = 4.25
         return object()
 

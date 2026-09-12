@@ -99,18 +99,18 @@ MIN_FACE_AREA = 4.0
 #: dann kann die eine die andere verdecken, also innen liegen.
 PARALLEL_FACE_COSINE: Final = 0.99
 
-#: Zylinder unter diesem Durchmesser sind keine Merkmale, sondern Artefakte.
+#: Kleinster Durchmesser der automatischen geometrischen Einpassung.
 #:
-#: Eine Düse legt 0,4 mm breite Bahnen; ein Loch von 0,05 mm hat kein Werkzeug
-#: gemacht und keines wird je hineinpassen. Auf einem erzeugten Netz entstehen
-#: solche Zylinderfits an jeder Stelle, an der ein paar Dreiecke zufällig um
-#: eine Achse herumstehen.
+#: Unter dieser Erkennungsauflösung werden keine Rundformen veröffentlicht.
+#: Erzeugte Netze tragen dort zahlreiche zufällige Fits aus wenigen Dreiecken
+#: (siehe :func:`_too_small_to_make`). Das ist eine Grenze der automatischen
+#: Erkennung, keine Aussage über die Herstellbarkeit. Sie bleibt bei Drucker-
+#: und Materialwechsel gleich (§11.2, §21.1); die Druckbarkeit prüft die Analyse.
 #:
 #: **Die Schranke gilt beiden Richtungen, und der Name sagt das.** Sie hieß
 #: ``MIN_HOLE_DIAMETER`` und stand nur in :func:`detect_holes`; eine Erhebung
 #: von 0,05 mm kam als Zapfen zurück, während die gleich große Vertiefung
-#: daneben verworfen wurde. Ein Zapfen ist das, womit man eine Bohrung paart
-#: (§14) — was für kein Werkzeug zu klein ist, ist für keine Passung zu klein.
+#: daneben verworfen wurde. Beide Formen teilen dieselbe Erkennungsauflösung.
 MIN_CYLINDER_DIAMETER = 0.5
 
 #: Wie breit ein Fleck mindestens sein muss, um eine Fläche zu sein.
@@ -132,12 +132,11 @@ MIN_CYLINDER_DIAMETER = 0.5
 #: 0,52 bis 89,91 mm im Durchmesser und liegen damit über der Schranke. Die
 #: falsche Achse: Nicht ihr Durchmesser ist zu klein, sondern ihre **Breite**.
 #:
-#: Die Größenordnung kommt aus derselben Überlegung wie oben — eine Düse legt
-#: 0,4 mm breite Bahnen, und was schmaler ist als eine halbe Bahn, hat kein
-#: Werkzeug gemacht. Der Platz kommt aus der Messung: Die Streifen sind 0,013
+#: Die Grenze trennt die gemessenen Nahtstreifen von echten Flächen und bleibt
+#: unabhängig vom Druckerprofil (§11.2). Die Streifen sind 0,013
 #: bis 0,038 mm breit, das schmalste echte Merkmal über Korpus und
 #: Kundendatei 0,379 mm, die schmalste echte Verrundung 0,646 mm. 0,2 liegt
-#: mit Faktor fünf von beiden Seiten dazwischen.
+#: zwischen diesen beiden gemessenen Bereichen.
 MIN_SURFACE_WIDTH = 0.2
 
 #: … außer sie bestehen aus mindestens so vielen koplanaren Dreiecken. Ein
@@ -1930,10 +1929,9 @@ def _a_sliver(body: trimesh.Trimesh, patch: list[int]) -> bool:
 
 
 def _too_small_to_make(size: float) -> bool:
-    """Ob ein Maß unter dem liegt, was überhaupt herstellbar ist.
+    """Ob ein Maß unter der automatischen Erkennungsauflösung liegt.
 
-    **Die Begründung ist wörtlich die von** :data:`MIN_CYLINDER_DIAMETER`: Was
-    für kein Werkzeug groß genug ist, ist auch kein Merkmal. Sie galt für
+    **Die gemeinsame Grenze steht in** :data:`MIN_CYLINDER_DIAMETER`. Sie galt für
     Bohrung und Zapfen, seit dem 03.09.2026 auch für die Verrundung — und für
     Kegel, Kugel und Torus fehlte sie weiter. Als eigene Frage, damit die
     nächste Merkmalsart sie nicht wieder übersieht.
@@ -1941,12 +1939,13 @@ def _too_small_to_make(size: float) -> bool:
     **Der Befund, an Roberts Modellen gemessen (03.09.2026):**
     `garden-hose-holder.3mf` (392 532 Dreiecke) lieferte **1130 Merkmale** —
     497 Kugeln, 421 Tori, 183 Kegel —, und **257 davon trugen ein Maß unter
-    einer Extrusionsbahn** (0,42 mm), der kleinste Kegel 0,0074 mm. Ein
+    0,42 mm**, der kleinste Kegel 0,0074 mm. Ein
     Objektbaum mit tausend Einträgen, von denen ein Viertel Tesselierung ist,
     beantwortet keine Frage; er verdeckt die Antwort.
 
-    Robert dazu am selben Tag: „wir brauchen auch nur Merkmale usw, die auch
-    von der Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+    Die Erkennung veröffentlicht unter ihrer festen Auflösung keine Rundform;
+    sie behauptet damit weder deren Abwesenheit noch deren Undruckbarkeit.
+    Ein Profilwechsel verändert diese geometrische Entscheidung nicht.
 
     **Und sie ist die einzige Stelle, an der verglichen wird.** Als sie entstand,
     bekamen nur die drei neuen Erkenner sie; Bohrung, Zapfen und Verrundung

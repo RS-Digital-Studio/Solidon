@@ -451,11 +451,11 @@ def find_slots(
     gerichteten: Ein Langloch ist ein Hohlraum, und eine außen liegende Rundung
     kann keiner sein.
 
-    **Was zu klein für ein Werkzeug ist, siebt der Aufrufer aus**, so wie bei
+    **Fits unter der Erkennungsauflösung siebt der Aufrufer aus**, so wie bei
     :func:`app.core.perceive.features.detect_fillets`: ``detect`` reicht
     ``_fillets_worth_naming`` herein, und dort steht die Frage einmal
     (``_too_small_to_make``). Wer die rohe Liste übergibt, bekommt auch
-    Langlöcher, die kein Bohrer je gemacht hat.
+    Langlöcher unter dieser Auflösung, unabhängig von ihrer Herstellbarkeit.
 
     **Das Netz muss verschweißt sein.** Die Prüfung läuft über die
     Flächennachbarschaft, und eine roh geladene STL hat keine (siehe
