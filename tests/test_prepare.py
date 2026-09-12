@@ -4238,6 +4238,74 @@ def test_a_detected_bore_becomes_a_slot(document: Document, profile: Profile) ->
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_resizing_a_slot_to_its_width_keeps_the_original(kind: str, profile: Profile) -> None:
+    """Eine unveränderte Breite lässt auch am Netz das Original unangetastet."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    exact = edit.slot_bore(
+        edit.box(80.0, 40.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=20.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    mesh = exact if kind == "brep" else as_mesh_data(exact)
+    features = features_of(exact) if kind == "brep" else detect(mesh)
+    slot = next(entry for entry in features.values() if entry.kind == "slot")
+    source = SceneObject(id="obj_1", name="Platte", kind=kind, mesh=mesh, features=features)
+
+    result = _run_op(
+        "resize_hole", source, profile, at_feature=slot.id, diameter=slot.params["diameter"]
+    )
+
+    assert result.outputs[0] is source
+    assert [entry.code for entry in result.findings] == ["bore.resize_unchanged"]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("operation", ["slot_hole", "resize_hole"])
+def test_repeated_slot_edits_keep_the_width(kind: str, operation: str, profile: Profile) -> None:
+    """Längerziehen und Versetzen übernehmen bei jedem Schritt dieselbe Flankenbreite."""
+    import dataclasses
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    exact = edit.slot_bore(
+        edit.box(80.0, 40.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=20.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    mesh = exact if kind == "brep" else as_mesh_data(exact)
+    source = SceneObject(id="obj_1", name="Platte", kind=kind, mesh=mesh)
+    for step in range(3):
+        features = features_of(source.mesh) if kind == "brep" else detect(source.mesh)
+        source = dataclasses.replace(source, features=features)
+        slot = next(entry for entry in features.values() if entry.kind == "slot")
+        width = float(slot.params["diameter"])
+        assert width == pytest.approx(6.0, abs=0.0001)
+        params = (
+            {"slot_length": 24.0 + step * 4.0}
+            if operation == "slot_hole"
+            else {"diameter": width, "y": 2.0 + step * 2.0}
+        )
+        source = _run_op(operation, source, profile, at_feature=slot.id, **params).outputs[0]
+        assert as_mesh_data(source.mesh).is_watertight
+    features = features_of(source.mesh) if kind == "brep" else detect(source.mesh)
+    slot = next(entry for entry in features.values() if entry.kind == "slot")
+    assert float(slot.params["diameter"]) == pytest.approx(6.0, abs=0.0001)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
 @pytest.mark.parametrize(
     "y, diameter, opens", [(8.0, 8.0, False), (8.0, 12.0, True), (0.0, 28.0, True)]
 )

@@ -11,6 +11,10 @@ vorhandenen Bogen- und Flankenflächen bilden ein `slot` mit `open`,
 `arc_centre`, `mouth_centre` und `opening_normal`. `matching.moved_features`
 transformiert diese Punkte und Richtungen zusammen mit der Merkmalsachse.
 
+Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
+ebenen Flanken. Die Bogenanpassung erkennt die Form, ihr an Dreiecksschwerpunkten
+gemessener Radius verkürzt jedoch das Maß beim wiederholten Bearbeiten.
+
 Wandkarten beginnen bei null und deckeln ausschließlich die obere
 Farbgrenze. So behalten Karte und Legende dieselbe geordnete Skala, auch
 wenn jede gemessene Wand bereits dicker als der Deckel ist (§18.4).

@@ -3090,7 +3090,7 @@ OPEN_BODY_DETAIL: Final = _(
 
 @register_op(
     name="resize_hole",
-    cache_version="3",
+    cache_version="4",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -3135,6 +3135,8 @@ def resize_hole(ctx: OpContext) -> OpResult:
     _reject_oversized("diameter", params.diameter, source.mesh)
     through = bool(feature.params.get("through", False))
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    if is_close(cut, previous) and not moved_hole:
+        return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
     # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
     # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
     # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
@@ -3161,8 +3163,6 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 detail="a scene object marked as brep does not carry a Solid",
                 values={"object": source.id},
             )
-        if is_close(cut, previous) and not moved_hole:
-            return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
         # **Wer versetzt, schließt die alte Stelle** — dieselbe Paarung wie am
         # Netz (`_closed_at` weiter unten), nur exakt gerechnet. Bis zum
         # 10.09.2026 stand hier eine Absage; der Kern konnte kein Loch füllen.
@@ -3530,7 +3530,7 @@ SLOT_FEATURE_RENAMED: Final = _(
 
 @register_op(
     name="slot_hole",
-    cache_version="3",
+    cache_version="4",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort

@@ -520,6 +520,14 @@ def _slot_from(
     if not _flanks_are_flat(body, faces, set(patch_a) | set(patch_b), centre, across, radius):
         return None
 
+    # Die Zylinderanpassung misst Dreiecksschwerpunkte, also innerhalb des
+    # Kreisbogens. Die Breite tragen dagegen die bereits geprüften ebenen
+    # Flanken: Ihr Abstand bleibt auch nach erneutem Schneiden derselbe.
+    flank_faces = sorted(faces - set(patch_a) - set(patch_b))
+    flank_points = np.asarray(body.triangles, dtype=float)[flank_faces].reshape(-1, 3)
+    flank_distances = (flank_points - centre) @ across
+    diameter = float(np.ptp(flank_distances))
+
     corners = np.asarray(body.triangles, dtype=float)[list(faces)].reshape(-1, 3) - centre
     along_axis = corners @ axis
     depth = float(along_axis.max() - along_axis.min())
@@ -531,7 +539,7 @@ def _slot_from(
         centre=(float(middle[0]), float(middle[1]), float(middle[2])),
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
         direction=(float(direction[0]), float(direction[1]), float(direction[2])),
-        diameter=radius * 2.0,
+        diameter=diameter,
         travel=travel,
         depth=depth,
         through=_reaches_through(body, middle, axis, direction, travel, depth),

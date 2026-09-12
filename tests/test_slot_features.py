@@ -78,6 +78,17 @@ def test_a_slot_is_one_feature_and_not_two_fillets(profile: Profile) -> None:
     assert not [entry for entry in found.values() if entry.kind == "hole"]
 
 
+@pytest.mark.parametrize("angle", [0.0, 31.0, 90.0])
+def test_a_slot_width_is_the_distance_between_its_flat_flanks(
+    angle: float, profile: Profile
+) -> None:
+    """Die ebenen Wände liefern die Breite ohne Sehnenverlust der Bogenfacetten."""
+    mesh = slotted(profile, diameter=6.0, slot_length=20.0, slot_angle=angle)
+    slot = only_slot(mesh)
+
+    assert float(slot.params["diameter"]) == pytest.approx(6.0, abs=0.0001)
+
+
 def test_a_slot_carries_the_measures_it_was_cut_with(profile: Profile) -> None:
     slot = only_slot(slotted(profile, diameter=5.0, slot_length=20.0))
 
