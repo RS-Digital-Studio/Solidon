@@ -17,8 +17,11 @@ Zwei Zusagen tragen das Ganze, und beide stehen hier:
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from itertools import product
 from typing import Any
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -318,6 +321,415 @@ def test_a_groove_tells_its_inner_edges_from_its_outer_ones() -> None:
     assert len(inner) == 2, "eine durchgehende Nut hat zwei Bodenkanten"
     assert all(round(entry.length, 3) == DEPTH for entry in inner)
     assert len(found) - len(inner) > 10, "und ringsum bleiben die Außenkanten"
+
+
+def _worked_corner(raw: Any, point: np.ndarray, rounded: bool, count: int = 3) -> Any:
+    """Bearbeitet die wirklichen Kanten an einer analytisch vorgegebenen Ecke."""
+    body = MeshData(raw)
+    touching = [
+        entry
+        for entry in edges_of(body)
+        if min(math.dist(point, entry.points[0]), math.dist(point, entry.points[-1])) < 1e-7
+    ]
+    assert len(touching) == max(3, count)
+    keys = [edge_key(entry) for entry in touching[:count]] if count else []
+    edit = round_edges if rounded else bevel_edges
+    result = edit(body, 3.0, "named" if count else "all", keys)
+    assert result.mesh.is_watertight and result.mesh.component_count == 1
+    assert result.solver.strategy == "direct"
+    return result.mesh.raw
+
+
+@pytest.mark.parametrize("count,expected", [(0, 7064.0), (3, 7748.0), (2, 7829.0)])
+@pytest.mark.parametrize("transformed", [False, True], ids=["original", "rotated-subdivided"])
+def test_chamfers_close_the_selected_cube_corners(
+    count: int, expected: float, transformed: bool
+) -> None:
+    """Drei Fasen treffen sich an einer zusätzlichen Ebene, zwei unmittelbar.
+
+    Am Würfel mit a=20 und d=3 gilt für alle zwölf Kanten:
+    a³ - 12 (d²/2) a + 8 (2d³/3). Bei drei Kanten an nur einer Ecke
+    wird ein Eckterm addiert, bei zwei der gemeinsame Überlapp d³/3.
+    """
+    raw = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    frame = np.eye(4)
+    if transformed:
+        raw = raw.subdivide()
+        frame = trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 2.0, 3.0))
+        frame[:3, 3] = (11.0, -7.0, 5.0)
+        raw.apply_transform(frame)
+    point = trimesh.transform_points([[10.0, 10.0, 10.0]], frame)[0]
+
+    changed = _worked_corner(raw, point, False, count)
+
+    assert changed.volume == pytest.approx(expected, abs=1e-5)
+    if count != 2:
+        vertices = trimesh.transform_points(changed.vertices, np.linalg.inv(frame))
+        if not count:
+            vertices = np.abs(vertices)
+        assert np.max(vertices.sum(axis=1)) <= 24.0 + 1e-6
+
+
+def _assert_spherical_corner(
+    raw: Any, centre: np.ndarray, inside: Callable[[np.ndarray], np.ndarray]
+) -> None:
+    """Prüft Kugelradius und Sehnenabweichung an Punkten und ganzen Facetten."""
+    samples = np.vstack([raw.vertices, raw.triangles_center])
+    selected = samples[inside(samples)]
+    assert len(selected) >= 3
+    distances = np.linalg.norm(selected - centre, axis=1)
+    assert float(distances.max()) <= 3.0 + 1e-6
+    assert float(distances.min()) >= 3.0 - MAX_FACET_SAG - 1e-6
+    complete = inside(raw.triangles.reshape(-1, 3)).reshape(-1, 3).all(axis=1)
+    assert complete.any()
+    triangles = raw.triangles[complete]
+    closest = trimesh.triangles.closest_point(
+        triangles, np.broadcast_to(centre, (len(triangles), 3))
+    )
+    assert float(np.linalg.norm(closest - centre, axis=1).min()) >= 3.0 - MAX_FACET_SAG - 1e-6
+
+
+def test_three_rounded_edges_meet_on_a_sphere_at_every_cube_corner() -> None:
+    """Die drei Zylinder allein lassen einen Überstand außerhalb der Sollkugel."""
+    raw = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    changed = _worked_corner(raw, np.asarray((10.0, 10.0, 10.0)), True, count=0)
+    for signs in product((-1.0, 1.0), repeat=3):
+        direction = np.asarray(signs)
+        centre = direction * 7.0
+        _assert_spherical_corner(
+            changed,
+            centre,
+            lambda points, direction=direction: (points * direction >= 7.0 - 1e-7).all(axis=1),
+        )
+
+
+def test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere() -> None:
+    """Am Tetraeder berührt die Kugel y=0, z=0 und x+y+z=40.
+
+    Ihr Zentrum ist daher (40 - 3(2+√3), 3, 3). Der Normalenkegel
+    besteht aus dx >= 0, dy <= dx und dz <= dx.
+    """
+    raw = trimesh.convex.convex_hull(np.asarray([(0, 0, 0), (40, 0, 0), (0, 40, 0), (0, 0, 40)]))
+    changed = _worked_corner(raw, np.asarray((40.0, 0.0, 0.0)), True)
+    centre = np.asarray((40.0 - 3.0 * (2.0 + math.sqrt(3.0)), 3.0, 3.0))
+
+    def inside(points: np.ndarray) -> np.ndarray:
+        delta = points - centre
+        return (
+            (delta[:, 0] >= -1e-7)
+            & (delta[:, 1] <= delta[:, 0] + 1e-7)
+            & (delta[:, 2] <= delta[:, 0] + 1e-7)
+        )
+
+    _assert_spherical_corner(changed, centre, inside)
+
+
+def test_nonorthogonal_chamfers_meet_at_their_face_offsets() -> None:
+    """Die Eckebene folgt drei Abständen in den schrägen Tetraederflächen."""
+    raw = trimesh.convex.convex_hull(np.asarray([(0, 0, 0), (40, 0, 0), (0, 40, 0), (0, 0, 40)]))
+    changed = _worked_corner(raw, np.asarray((40.0, 0.0, 0.0)), False)
+    inset = 3.0 * math.sqrt(2.0 / 3.0)
+    contacts = np.asarray(
+        [
+            (40.0 - 3.0 * (1.0 + math.sqrt(2.0)), 3.0, 0.0),
+            (40.0 - 3.0 * (1.0 + math.sqrt(2.0)), 0.0, 3.0),
+            (40.0 - 2.0 * inset, inset, inset),
+        ]
+    )
+    normal = np.cross(contacts[1] - contacts[0], contacts[2] - contacts[0])
+    normal /= np.linalg.norm(normal)
+    if float(normal @ (np.asarray((40.0, 0.0, 0.0)) - contacts[0])) < 0.0:
+        normal = -normal
+
+    distances = (changed.vertices - contacts[0]) @ normal
+    assert float(distances.max()) <= 1e-6
+    assert np.count_nonzero(np.abs(distances) < 1e-6) >= 3
+
+
+@pytest.mark.parametrize("rounded", [False, True], ids=["chamfer", "fillet"])
+def test_four_pyramid_edges_have_a_continuous_bounded_corner(rounded: bool) -> None:
+    """Vier gleiche Seitenflächen erlauben eine Kugel bzw. eine ebene Fasenhaube."""
+    raw = trimesh.convex.convex_hull(
+        np.asarray([(-10, -10, 0), (10, -10, 0), (10, 10, 0), (-10, 10, 0), (0, 0, 20)])
+    )
+    changed = _worked_corner(raw, np.asarray((0.0, 0.0, 20.0)), rounded, count=4)
+    if not rounded:
+        # Die beiden Rücknahmen auf einer Seitenfläche treffen auf deren
+        # Mittellinie; die Flächengeometrie liefert inset=R*sqrt(6/5).
+        inset = 3.0 * math.sqrt(6.0 / 5.0)
+        height = 20.0 - 2.0 * inset
+        assert float(changed.vertices[:, 2].max()) == pytest.approx(height, abs=1e-6)
+        expected = np.asarray(
+            [(inset, 0, height), (-inset, 0, height), (0, inset, height), (0, -inset, height)]
+        )
+        distances = np.linalg.norm(changed.vertices[:, None] - expected, axis=2)
+        assert float(np.min(distances, axis=0).max()) < 1e-6
+        return
+    centre = np.asarray((0.0, 0.0, 20.0 - 3.0 * math.sqrt(5.0)))
+
+    def inside(points: np.ndarray) -> np.ndarray:
+        delta = points - centre
+        return delta[:, 2] >= (np.abs(delta[:, 0]) + np.abs(delta[:, 1])) / 2.0 - 1e-7
+
+    _assert_spherical_corner(changed, centre, inside)
+
+
+def test_an_unequal_pyramid_rounds_around_the_offset_ridge() -> None:
+    """Vier nicht gemeinsam versetzbare Ebenen ergeben zwei Zentren und einen Grat.
+
+    Die rechteckige Basis ±10×±6 bei h=20 besitzt nach Versatz um R=3
+    den Grat z=20−sqrt(109), y=0, x=±(sqrt(109)−3sqrt(5))/2.
+    Im Normalenfächer des Grats ist die Sollfläche dessen Radius-3-Kapsel.
+    """
+    raw = trimesh.convex.convex_hull(
+        np.asarray([(-10, -6, 0), (10, -6, 0), (10, 6, 0), (-10, 6, 0), (0, 0, 20)])
+    )
+    changed = _worked_corner(raw, np.asarray((0.0, 0.0, 20.0)), True, count=4)
+    height = 20.0 - math.sqrt(109.0)
+    half = (math.sqrt(109.0) - 3.0 * math.sqrt(5.0)) / 2.0
+    samples = np.vstack([changed.vertices, changed.triangles_center])
+    samples = samples[samples[:, 2] >= height - 1e-7]
+    nearest = np.column_stack(
+        [np.clip(samples[:, 0], -half, half), np.zeros(len(samples)), np.full(len(samples), height)]
+    )
+    delta = samples - nearest
+    inside = delta[:, 2] >= 0.5 * np.abs(delta[:, 0]) + 0.3 * np.abs(delta[:, 1]) - 1e-7
+    distances = np.linalg.norm(delta[inside], axis=1)
+    assert len(distances) > 10
+    assert float(distances.max()) <= 3.0 + 1e-6
+    assert float(distances.min()) >= 3.0 - MAX_FACET_SAG - 1e-6
+
+
+@pytest.mark.parametrize("rounded", [False, True], ids=["chamfer", "fillet"])
+def test_three_concave_edges_close_the_inner_pocket_corner(rounded: bool) -> None:
+    """Die Taschenecke ist das Komplement der entsprechenden Außenecke."""
+    outer = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 40.0)))
+    void = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    void.apply_translation((0.0, 0.0, 10.0))
+    pocket = boolean("difference", [outer, MeshData(void)]).mesh
+    changed = _worked_corner(pocket.raw, np.asarray((10.0, 10.0, 0.0)), rounded)
+
+    if not rounded:
+        assert changed.volume == pytest.approx(pocket.volume + 252.0, abs=1e-5)
+        return
+    centre = np.asarray((7.0, 7.0, 3.0))
+
+    def inside(points: np.ndarray) -> np.ndarray:
+        return (
+            (points[:, 0] >= 7.0 - 1e-7)
+            & (points[:, 0] <= 10.0 + 1e-7)
+            & (points[:, 1] >= 7.0 - 1e-7)
+            & (points[:, 1] <= 10.0 + 1e-7)
+            & (points[:, 2] >= -1e-7)
+            & (points[:, 2] <= 3.0 + 1e-7)
+        )
+
+    _assert_spherical_corner(changed, centre, inside)
+
+
+def _notched_block(complement: bool = False) -> Any:
+    """L-Profil und sein offener Gegenkörper mit demselben gemischten Knoten."""
+    from shapely.geometry import Polygon
+
+    profile = Polygon([(0, 0), (20, 0), (20, 10), (10, 10), (10, 20), (0, 20)])
+    body = trimesh.creation.extrude_polygon(profile, 20.0)
+    if not complement:
+        return body
+    host = trimesh.creation.box((30.0, 30.0, 40.0))
+    host.apply_translation((15.0, 15.0, 10.0))
+    return boolean("difference", [MeshData(host), MeshData(body)]).mesh.raw
+
+
+@pytest.mark.parametrize("rounded", [False, True], ids=["chamfer", "fillet"])
+@pytest.mark.parametrize("complement", [False, True], ids=["outside", "inside"])
+@pytest.mark.parametrize("transformed", [False, True], ids=["original", "rotated"])
+def test_mixed_corners_join_on_a_plane_or_torus(
+    rounded: bool, complement: bool, transformed: bool
+) -> None:
+    """Der L-Knoten braucht sowohl Abtrag als auch Ergänzung am lokalen Anschluss."""
+    raw = _notched_block(complement)
+    frame = np.eye(4)
+    if transformed:
+        frame = trimesh.transformations.rotation_matrix(math.radians(31.0), (2.0, 1.0, -3.0))
+        frame[:3, 3] = (-15.0, 10.0, 7.0)
+        raw.apply_transform(frame)
+    point = trimesh.transform_points([[10.0, 10.0, 20.0]], frame)[0]
+    changed = _worked_corner(raw, point, rounded)
+    original_coordinates = changed.copy()
+    original_coordinates.apply_transform(np.linalg.inv(frame))
+    samples = np.vstack([original_coordinates.vertices, original_coordinates.triangles_center])
+    local = samples[
+        (samples[:, 0] >= 7.0 - 1e-6)
+        & (samples[:, 0] <= 13.0 + 1e-6)
+        & (samples[:, 1] >= 7.0 - 1e-6)
+        & (samples[:, 1] <= 13.0 + 1e-6)
+        & (samples[:, 2] >= 17.0 - 1e-6)
+        & (samples[:, 2] <= 20.0 + 1e-6)
+    ]
+    assert len(local) >= 4
+    if not rounded:
+        expected = raw.volume + (-9.0 if complement else 9.0)
+        assert changed.volume == pytest.approx(expected, abs=1e-5)
+        distances = local.sum(axis=1) - 40.0
+        # Bei der inneren Ecke liegen zusätzlich die ursprünglichen
+        # Taschenwände in Q; vier Kontakte müssen trotzdem auf der Kappe sein.
+        assert np.count_nonzero(np.abs(distances) < 1e-6) >= 4
+        return
+    rho = np.linalg.norm(local[:, :2] - (13.0, 13.0), axis=1)
+    patch = local[rho < 6.0 - 1e-6]
+    radial = np.linalg.norm(patch[:, :2] - (13.0, 13.0), axis=1)
+    distance = np.abs(np.sqrt((radial - 6.0) ** 2 + (patch[:, 2] - 17.0) ** 2) - 3.0)
+    assert len(distance) > 10
+    assert float(distance.max()) <= MAX_FACET_SAG + 1e-6
+
+
+def test_a_mixed_corner_preserves_an_unrelated_hole() -> None:
+    """Der lokale Ersatz darf keine fremde Bohrung zuschütten."""
+    raw = _notched_block()
+    hole = trimesh.creation.cylinder(radius=0.4, height=30.0, sections=24)
+    hole.apply_translation((8.0, 8.0, 15.0))
+    drilled = boolean("difference", [MeshData(raw), MeshData(hole)]).mesh
+    keys = [
+        edge_key(entry)
+        for entry in edges_of(drilled)
+        if min(math.dist((10, 10, 20), entry.points[0]), math.dist((10, 10, 20), entry.points[-1]))
+        < 1e-7
+    ]
+    assert len(keys) == 3
+    before = drilled.raw.vertices.copy()
+    with pytest.raises(GeometryError, match="weiteres Detail"):
+        round_edges(drilled, 3.0, "named", keys)
+    assert np.array_equal(drilled.raw.vertices, before)
+
+
+@pytest.mark.parametrize("connected", [False, True], ids=["two-parts", "one-part"])
+@pytest.mark.parametrize("rounded", [False, True], ids=["chamfer", "fillet"])
+def test_independent_mixed_corners_keep_their_own_working_frames(
+    connected: bool, rounded: bool
+) -> None:
+    """Zwei verschieden gerichtete Anschlüsse brauchen je ihren eigenen Rahmen."""
+    first = _notched_block()
+    second = first.copy()
+    frame = trimesh.transformations.rotation_matrix(math.radians(31.0), (2.0, 1.0, -3.0))
+    frame[:3, 3] = (55.0, 10.0, 7.0)
+    second.apply_transform(frame)
+    body = MeshData(trimesh.util.concatenate([first, second]))
+    if connected:
+        start = np.asarray((10.0, 5.0, 5.0))
+        end = trimesh.transform_points([start], frame)[0]
+        bridge = trimesh.creation.cylinder(radius=1.0, segment=[start, end], sections=12)
+        body = boolean("union", [body, MeshData(bridge)]).mesh
+    count = 1 if connected else 2
+    assert body.component_count == count
+    points = np.asarray([(10.0, 10.0, 20.0), trimesh.transform_points([[10, 10, 20]], frame)[0]])
+    keys = [
+        edge_key(entry)
+        for entry in edges_of(body)
+        if any(
+            min(math.dist(point, entry.points[0]), math.dist(point, entry.points[-1])) < 1e-7
+            for point in points
+        )
+    ]
+    assert len(keys) == 6
+    edit = round_edges if rounded else bevel_edges
+    result = edit(body, 3.0, "named", keys)
+    assert result.mesh.is_watertight and result.mesh.component_count == count
+    assert result.solver.strategy == "direct"
+    if not rounded:
+        assert result.mesh.volume == pytest.approx(body.volume + 18.0, abs=1e-5)
+    else:
+        # Die analytisch geprüfte Einzelrundung muss unabhängig von einer
+        # entfernten zweiten Ecke denselben Volumenbeitrag behalten.
+        single = _worked_corner(first, points[0], True)
+        assert result.mesh.volume == pytest.approx(
+            body.volume + 2.0 * (single.volume - first.volume), abs=1e-5
+        )
+
+
+@pytest.mark.parametrize("size", [0.5, 3.0, 10.0])
+def test_mixed_corner_facets_respect_the_torus_error_budget(size: float) -> None:
+    """Auch das Facetteninnere hält den Abstand zur analytischen Torusfläche ein."""
+    from app.core.geom.edges import _mixed_corner_region
+
+    region, target = _mixed_corner_region(size, rounded=True)
+    assert target.is_watertight and target.component_count == 1
+    assert target.volume < region.volume
+    triangles = target.raw.triangles
+    # Nur die gekrümmte Fläche, nicht die ebenen Hilfsdeckel des Werkzeugs.
+    side = np.zeros(len(triangles), dtype=bool)
+    for axis, levels in ((0, (-size, size)), (1, (-size, size)), (2, (-size, 0.0))):
+        for level in levels:
+            side |= np.max(np.abs(triangles[:, :, axis] - level), axis=1) < 1e-7
+    curved = triangles[~side]
+    weights = np.asarray([(a / 8, b / 8, (8 - a - b) / 8) for a in range(9) for b in range(9 - a)])
+    samples = np.einsum("ij,kjl->kil", weights, curved).reshape(-1, 3)
+    radius = np.linalg.norm(samples[:, :2] - size, axis=1)
+    distance = np.abs(np.sqrt((radius - 2.0 * size) ** 2 + (samples[:, 2] + size) ** 2) - size)
+    assert float(distance.max()) <= MAX_FACET_SAG
+
+
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges"])
+def test_a_warm_edge_cache_recomputes_the_corner_surface(operation: str) -> None:
+    """Ein echter Cache mit den bisherigen Kantenprismen bekommt neue Eckflächen."""
+    import dataclasses
+
+    from app.core.geom.edges import rounding_tool
+    from app.core.registry import Registry
+    from app.core.scene import ResultCache, evaluate
+    from app.core.types import Document, Operation
+
+    load_operations()
+    rounded = operation == "fillet_edges"
+
+    def make_cube(ctx: OpContext) -> OpResult:
+        return OpResult(
+            outputs=[
+                SceneObject(id="", name="Würfel", mesh=MeshData(trimesh.creation.box((20, 20, 20))))
+            ]
+        )
+
+    def old_result(ctx: OpContext) -> OpResult:
+        body = ctx.inputs[0].mesh
+        tools = [rounding_tool(entry, 3.0, rounded) for entry in edges_of(body)]
+        result = boolean("difference", [body, *tools])
+        return OpResult(
+            outputs=[dataclasses.replace(ctx.inputs[0], mesh=result.mesh)], solver=result.solver
+        )
+
+    source = dataclasses.replace(REGISTRY.get("create_box"), fn=make_cube)
+    current = REGISTRY.get(operation)
+    previous = dataclasses.replace(current, fn=old_result, cache_version="5")
+    before, after = Registry(), Registry()
+    for registry, editing in ((before, previous), (after, current)):
+        registry.register(source)
+        registry.register(editing)
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op=source.name, inputs=[], outputs=["obj_1"], params={}),
+            Operation(
+                id=2,
+                op=operation,
+                inputs=["obj_1"],
+                outputs=["obj_1"],
+                params={"edges": "all", "radius" if rounded else "distance": 3.0},
+            ),
+        ],
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    cache = ResultCache()
+    old = evaluate(document, profile, registry=before, cache=cache)
+    assert old.complete and len(cache) == 2
+    fresh = evaluate(document, profile, registry=after, cache=cache)
+    assert fresh.complete and len(cache) == 3
+    changed = fresh.scene.objects["obj_1"].mesh.raw
+    if rounded:
+        _assert_spherical_corner(
+            changed, np.asarray((7.0, 7.0, 7.0)), lambda points: (points >= 7.0 - 1e-7).all(axis=1)
+        )
+    else:
+        assert changed.volume == pytest.approx(7064.0, abs=1e-5)
 
 
 # --- Verrunden am Netz --------------------------------------------------------

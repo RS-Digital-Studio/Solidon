@@ -29,7 +29,7 @@ import itertools
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, Protocol
 
 import numpy as np
 
@@ -67,6 +67,10 @@ class MeshEdge:
     ihre Winkelhalbierende, wohin die Rundung geht, und der Winkel zwischen
     ihnen, wie weit. Am Zug variieren sie, deshalb je Stück und nicht je
     Kante — bei einem Bogen dreht sich die Halbierende mit.
+
+    ``node_indices`` hält die ursprünglichen Netzknoten für den Eckanschluss
+    fest. Nur innerhalb dieser einen Topologie gilt die Nummer; sie wird
+    weder im Kantenschlüssel noch in einer Projektdatei gespeichert.
     """
 
     points: tuple[Vec3, ...]
@@ -75,6 +79,7 @@ class MeshEdge:
     middle: Vec3
     convex: bool
     normals: tuple[tuple[Vec3, Vec3], ...] = ()
+    node_indices: tuple[int, ...] = ()
 
     @property
     def upright(self) -> bool:
@@ -207,14 +212,17 @@ def edges_of(mesh: MeshData, angle: float = SHARP_EDGE_ANGLE) -> list[MeshEdge]:
     for nodes, is_convex in _chains(segments, convex):
         points = vertices[nodes]
         normals = tuple(sides[(min(a, b), max(a, b))] for a, b in itertools.pairwise(nodes))
-        described = _describe(points, is_convex, normals)
+        described = _describe(points, is_convex, normals, tuple(nodes))
         if described is not None:
             found.append(described)
     return found
 
 
 def _describe(
-    points: np.ndarray, convex: bool, normals: tuple[tuple[np.ndarray, np.ndarray], ...] = ()
+    points: np.ndarray,
+    convex: bool,
+    normals: tuple[tuple[np.ndarray, np.ndarray], ...] = (),
+    node_indices: tuple[int, ...] = (),
 ) -> MeshEdge | None:
     """Aus einem Punktzug die Zahlen, an denen eine Auswahl hängt."""
     steps = np.linalg.norm(np.diff(points, axis=0), axis=1)
@@ -245,6 +253,7 @@ def _describe(
             (tuple(float(v) for v in first), tuple(float(v) for v in second))  # type: ignore[misc]
             for first, second in normals
         ),
+        node_indices=node_indices,
     )
 
 
@@ -477,7 +486,14 @@ EDGE_OVERSHOOT = 0.01
 UPRIGHT_TO_AXIS = 0.1
 
 
-def rounding_tool(entry: MeshEdge, radius: float, rounded: bool = True) -> MeshData:
+def rounding_tool(
+    entry: MeshEdge,
+    radius: float,
+    rounded: bool = True,
+    *,
+    min_steps: int = 0,
+    extend_ends: bool = True,
+) -> MeshData:
     """Der Körper, der aus einer Kante eine Rundung oder eine Fase macht.
 
     Im Querschnitt ist es der Zwickel zwischen den beiden Flächen und dem
@@ -503,6 +519,10 @@ def rounding_tool(entry: MeshEdge, radius: float, rounded: bool = True) -> MeshD
     **Gebaut wird stückweise.** Jedes Stück des Zugs bekommt sein eigenes
     Prisma mit seinem eigenen Querschnitt; vereinigt ergeben sie den ganzen
     Körper. An einem Bogen dreht sich die Winkelhalbierende dabei mit.
+
+    Ein gemischter Eckanschluss setzt ``min_steps`` gemeinsam für Torus und
+    Zylinder. Dort verhindert ``extend_ends=False`` einen Schnitt auf der
+    anderen Seite des Knotens, wo wieder Material stehen kann.
     """
     if radius <= EPS_GEOM:
         raise ValidationError(
@@ -529,7 +549,9 @@ def rounding_tool(entry: MeshEdge, radius: float, rounded: bool = True) -> MeshD
             radius,
             entry.convex,
             rounded,
-            subtracted=entry.convex,
+            subtracted=entry.convex and extend_ends,
+            min_steps=min_steps,
+            flank_overlap=0.0 if extend_ends else EPS_GEOM,
         )
         if wedge is not None:
             pieces.append(wedge)
@@ -561,6 +583,8 @@ def _wedge(
     convex: bool,
     rounded: bool,
     subtracted: bool,
+    min_steps: int = 0,
+    flank_overlap: float = 0.0,
 ) -> MeshData | None:
     """Ein Stück des Werkzeugs — das Prisma über einem Querschnitt.
 
@@ -611,8 +635,22 @@ def _wedge(
     bow: list[np.ndarray] = []
     if rounded:
         centre = start + radius / math.sin(half) * into
-        bow = _arc(centre, first_touch, second_touch, radius)
+        bow = _arc(centre, first_touch, second_touch, radius, min_steps=min_steps)
     profile = [start, first_touch, *bow, second_touch]
+    if flank_overlap > 0.0:
+        # Die Schnittkurve bleibt unverändert. Nur die beiden ursprünglichen
+        # Kontaktseiten reichen aus dem Schnittmaterial beziehungsweise in
+        # das vorhandene Material hinein; so bleibt keine innere Naht stehen.
+        sign = 1.0 if convex else -1.0
+        shifted = sign * flank_overlap
+        profile = [
+            start + shifted * (one + two) / (1.0 + float(np.dot(one, two))),
+            first_touch + shifted * one,
+            first_touch,
+            *bow,
+            second_touch,
+            second_touch + shifted * two,
+        ]
 
     # **Zwei senkrechte Achsen in der Querschnittsebene.** Die beiden
     # Flächenrichtungen sind es nicht — bei jedem Winkel außer neunzig Grad
@@ -703,7 +741,12 @@ def _arc_steps(radius: float, span: float) -> int:
 
 
 def _arc(
-    centre: np.ndarray, first: np.ndarray, second: np.ndarray, radius: float
+    centre: np.ndarray,
+    first: np.ndarray,
+    second: np.ndarray,
+    radius: float,
+    *,
+    min_steps: int = 0,
 ) -> list[np.ndarray]:
     """Die Zwischenpunkte des Rundungsbogens von einem Berührpunkt zum anderen."""
     one = (first - centre) / radius
@@ -714,7 +757,7 @@ def _arc(
     if length <= EPS_GEOM:
         return []
     axis = axis / length
-    steps = _arc_steps(radius, span)
+    steps = max(_arc_steps(radius, span), min_steps)
     points = []
     for step in range(1, steps):
         angle = span * step / steps
@@ -760,11 +803,476 @@ def bevel_edges(
     return _worked_edges(mesh, distance, choice, keys, rounded=False)
 
 
+def _mixed_corner_region(size: float, *, rounded: bool) -> tuple[MeshData, MeshData]:
+    """Ersatzquader und Zielmaterial für zwei konvexe und eine konkave Kante.
+
+    Kanonischer Knoten ist der Ursprung, die Deckflächennormale zeigt nach
+    +Z, die konkave Kante nach -Z und die seitlichen Außennormalen nach +X/+Y.
+    Der Quader reicht von ``(-size,-size,-size)`` bis ``(size,size,0)``.
+    Die Größe ist bereits positiv validiert. Transformation, lokale Ersetzung und Prüfung auf
+    andere betroffene Merkmale gehören zum Aufrufer.
+
+    Für die Rundung liegt die Torusachse bei ``(size,size,-size)``. Beide
+    Winkelrichtungen teilen sich ein Raster, das am vierfachen Radius bemessen
+    ist. Damit bleiben die Sehnenabweichungen für den Außenring mit ``2*size``
+    und das Röhrenprofil mit ``size`` zusammen unter dem gemeinsamen Budget.
+    Die angrenzenden Zylinder müssen dieselbe Mindestschrittzahl erhalten.
+    """
+    import trimesh
+
+    region = trimesh.creation.box((2.0 * size, 2.0 * size, size))
+    region.apply_translation((0.0, 0.0, -size / 2.0))
+    if not rounded:
+        points = np.asarray(
+            [
+                (-1.0, -1.0, -1.0),
+                (1.0, -1.0, -1.0),
+                (-1.0, 1.0, -1.0),
+                (1.0, 0.0, -1.0),
+                (0.0, 1.0, -1.0),
+                (-1.0, -1.0, 0.0),
+                (1.0, -1.0, 0.0),
+                (-1.0, 1.0, 0.0),
+            ],
+            dtype=float,
+        )
+        return MeshData(region), _hull(points * size)
+
+    steps = _arc_steps(4.0 * size, math.pi / 2.0)
+    angles = np.linspace(0.0, math.pi / 2.0, steps + 1)
+    sine, cosine = np.sin(angles), np.cos(angles)
+    # Analytische Endpunkte teilen wirklich dieselben Knoten mit den Seiten.
+    sine[0], sine[-1] = 0.0, 1.0
+    cosine[0], cosine[-1] = 1.0, 0.0
+    vertices: list[tuple[float, float, float]] = []
+    indices: dict[tuple[float, float, float], int] = {}
+    rings: list[list[int]] = []
+    faces: list[tuple[int, int, int]] = []
+    for height, radius in zip(size * (sine - 1.0), size * (2.0 - cosine), strict=True):
+        outline = [(-size, size), (-size, -size), (size, -size)]
+        outline.extend(zip(size - radius * cosine[::-1], size - radius * sine[::-1], strict=True))
+        ring = []
+        for x, y in outline:
+            point = (float(x), float(y), float(height))
+            if point not in indices:
+                indices[point] = len(vertices)
+                vertices.append(point)
+            ring.append(indices[point])
+        rings.append(ring)
+
+    for lower, upper in itertools.pairwise(rings):
+        for first in range(len(lower)):
+            second = (first + 1) % len(lower)
+            faces.extend(
+                (
+                    (lower[first], lower[second], upper[second]),
+                    (lower[first], upper[second], upper[first]),
+                )
+            )
+    # Die Ecke (-size,-size) sieht den gesamten Querschnitt. Ihr Fächer
+    # schließt die nicht konvexe Kontur, ohne den ausgesparten Viertelkreis.
+    for ring, reverse in ((rings[0], True), (rings[-1], False)):
+        for first in range(len(ring)):
+            second = (first + 1) % len(ring)
+            face = (ring[1], ring[first], ring[second])
+            faces.append((face[0], face[2], face[1]) if reverse else face)
+    # Am obersten Ring fallen die zwei Bogenenden mit den Quaderecken zusammen.
+    faces = [face for face in faces if len(set(face)) == 3]
+    target = trimesh.Trimesh(vertices=np.asarray(vertices), faces=np.asarray(faces), process=False)
+    return MeshData(region), MeshData(target)
+
+
+def _extend_corner_contacts(body: MeshData, size: float) -> MeshData:
+    """Extrudiert nur die fünf künstlichen Randflächen um EPS_GEOM nach außen."""
+    import trimesh
+
+    raw = body.raw
+    for axis, level, sign in (
+        (0, -size, -1.0),
+        (0, size, 1.0),
+        (1, -size, -1.0),
+        (1, size, 1.0),
+        (2, -size, -1.0),
+    ):
+        vertices = np.asarray(raw.vertices)
+        faces = np.asarray(raw.faces)
+        picked = np.max(np.abs(vertices[faces, axis] - level), axis=1) <= EPS_GEOM
+        chosen = faces[picked]
+        if not len(chosen):
+            continue
+        indices = np.unique(chosen)
+        mapping = np.full(len(vertices), -1, dtype=np.int64)
+        mapping[indices] = np.arange(len(indices)) + len(vertices)
+        extra = vertices[indices].copy()
+        extra[:, axis] += sign * EPS_GEOM
+        oriented = np.concatenate([chosen[:, [0, 1]], chosen[:, [1, 2]], chosen[:, [2, 0]]])
+        _, inverse, counts = np.unique(
+            np.sort(oriented, axis=1), axis=0, return_inverse=True, return_counts=True
+        )
+        rim = oriented[counts[inverse] == 1]
+        sides: list[tuple[int, int, int]] = []
+        for first, second in rim:
+            sides.extend(
+                (
+                    (first, second, mapping[second]),
+                    (first, mapping[second], mapping[first]),
+                )
+            )
+        raw = trimesh.Trimesh(
+            vertices=np.vstack([vertices, extra]),
+            faces=np.vstack([faces[~picked], mapping[chosen], sides]),
+            process=False,
+        )
+    return MeshData(raw)
+
+
+def _corner_stars(
+    entries: Sequence[MeshEdge], selected: Sequence[MeshEdge]
+) -> list[list[tuple[MeshEdge, int]]]:
+    """Die vollständig gewählten Knoten der ursprünglichen Netztopologie.
+
+    Ein offener Kantenzug endet an einem wirklichen Netzknoten. Seine Nummer
+    bleibt hier erhalten; ein räumlich naher, aber getrennter Körper darf
+    nicht versehentlich dieselbe Eckfläche bekommen.
+    """
+    stars: dict[int, list[tuple[MeshEdge, int]]] = {}
+    for entry in entries:
+        if not entry.node_indices or entry.node_indices[0] == entry.node_indices[-1]:
+            continue
+        for end in (0, -1):
+            stars.setdefault(entry.node_indices[end], []).append((entry, end))
+    selected_ids = {id(entry) for entry in selected}
+    return [
+        star
+        for star in stars.values()
+        if len(star) > THROUGH and all(id(entry) in selected_ids for entry, _ in star)
+    ]
+
+
+def _distinct_vectors(vectors: Sequence[np.ndarray]) -> np.ndarray:
+    """Gleichgerichtete Flächennormalen nur einmal, unabhängig von Dreiecken."""
+    unique: list[np.ndarray] = []
+    for vector in vectors:
+        if not any(float(np.linalg.norm(vector - other)) <= EPS_GEOM for other in unique):
+            unique.append(vector)
+    return np.asarray(unique)
+
+
+def _cone_planes(normals: np.ndarray) -> np.ndarray:
+    """Stützebenen des positiven Normalenkegels, mit der Außenseite positiv."""
+    planes: list[np.ndarray] = []
+    for first, second in itertools.combinations(normals, 2):
+        direction = np.cross(first, second)
+        length = float(np.linalg.norm(direction))
+        if length <= EPS_GEOM:
+            continue
+        direction /= length
+        products = normals @ direction
+        if float(products.max()) <= EPS_GEOM:
+            planes.append(direction)
+        elif float(products.min()) >= -EPS_GEOM:
+            planes.append(-direction)
+    return _distinct_vectors(planes)
+
+
+def _halfspace_vertices(normals: np.ndarray, offsets: np.ndarray) -> np.ndarray:
+    """Die Ecken eines beschränkten Schnitts von Halbräumen n·x <= d."""
+    points: list[np.ndarray] = []
+    for indices in itertools.combinations(range(len(normals)), 3):
+        rows = normals[list(indices)]
+        if abs(float(np.linalg.det(rows))) <= EPS_GEOM:
+            continue
+        point = np.linalg.solve(rows, offsets[list(indices)])
+        if bool(np.all(normals @ point <= offsets + EPS_GEOM)):
+            points.append(point)
+    return _distinct_vectors(points)
+
+
+def _hull(points: np.ndarray) -> MeshData:
+    """Ein kleiner konvexer Werkzeugkörper aus seinen geometrischen Eckpunkten."""
+    import trimesh
+
+    return MeshData(trimesh.convex.convex_hull(points))
+
+
+def _corner_ball(radius: float) -> np.ndarray:
+    """Kugelknoten mit begrenzter Facettenabweichung auch im Dreiecksinneren."""
+    import trimesh
+
+    divisions = 0
+    while True:
+        ball = trimesh.creation.icosphere(subdivisions=divisions, radius=radius)
+        supports = np.einsum("ij,ij->i", ball.triangles[:, 0], ball.face_normals)
+        arcs = np.linalg.norm(np.diff(ball.vertices[ball.edges_unique], axis=1)[:, 0], axis=1)
+        if float(supports.min()) >= radius - MAX_FACET_SAG and float(arcs.max()) <= (
+            2.0 * radius * math.sin(MAX_FACET_ANGLE / 2.0)
+        ):
+            return np.asarray(ball.vertices)
+        divisions += 1
+
+
+def _chamfer_contacts(
+    star: list[tuple[MeshEdge, int]], normals: np.ndarray, size: float, sign: float
+) -> np.ndarray:
+    """Schnittpunkte der beiden Fasenflanken auf jeder ursprünglichen Fläche."""
+    boundaries: list[tuple[np.ndarray, float, np.ndarray]] = []
+    for entry, end in star:
+        pair = sign * np.asarray(entry.normals[end], dtype=float)
+        along = np.asarray(entry.points[1 if end == 0 else -2]) - entry.points[end]
+        along /= float(np.linalg.norm(along))
+        bisector = pair.sum(axis=0)
+        bisector /= float(np.linalg.norm(bisector))
+        inward = _along_face(pair[0], along, -bisector)
+        assert inward is not None
+        boundaries.append((bisector, float(size * np.dot(bisector, inward)), pair))
+    contacts: list[np.ndarray] = []
+    for normal in normals:
+        touching = [
+            (bisector, offset)
+            for bisector, offset, pair in boundaries
+            if bool(np.any(np.linalg.norm(pair - normal, axis=1) <= EPS_GEOM))
+        ]
+        if len(touching) != THROUGH:
+            continue
+        rows = np.vstack([normal, touching[0][0], touching[1][0]])
+        contacts.append(np.linalg.solve(rows, [0.0, touching[0][1], touching[1][1]]))
+    return np.asarray(contacts)
+
+
+def _corner_tools(
+    star: list[tuple[MeshEdge, int]], size: float, *, rounded: bool, ball_vertices: np.ndarray
+) -> tuple[BooleanKind, MeshData, list[BooleanOutcome]] | None:
+    """Die Eckfläche verbindet die Flanken am ursprünglichen gemeinsamen Knoten.
+
+    Eine Kugel ersetzt bei gleichem Radius die Zylinderschnitte innerhalb
+    ihres Normalenkegels. Der Bereich reicht bis zu den Nachbarflächen;
+    das Tetraeder aus Ecke und Berührpunkten wäre zu klein. Eine Fase
+    verbindet stattdessen die Schnittpunkte auf diesen Flächen.
+    """
+    entry, end = star[0]
+    if any(other.convex != entry.convex for other, _ in star):
+        return None
+    sign = 1.0 if entry.convex else -1.0
+    normals = _distinct_vectors(
+        [sign * np.asarray(normal) for other, tip in star for normal in other.normals[tip]]
+    )
+    if len(normals) < 3:
+        return None
+    vertex = np.asarray(entry.points[end])
+    kind: BooleanKind = "difference" if entry.convex else "union"
+    if not rounded:
+        contacts = _chamfer_contacts(star, normals, size, sign)
+        cap = _hull(np.vstack([np.zeros(3), contacts])).raw
+        offsets = np.einsum("ij,ij->i", cap.face_normals, cap.triangles[:, 0])
+        beyond = offsets > EPS_GEOM
+        # Nur die äußeren Hilfsflächen bekommen Überstand. Die eigentliche
+        # Eckfläche bleibt exakt auf den berechneten Kontaktpunkten.
+        overshoot = EDGE_OVERSHOOT if entry.convex else 0.0
+        corners = _halfspace_vertices(
+            np.vstack([normals, cap.face_normals[beyond]]),
+            np.concatenate([np.full(len(normals), overshoot), offsets[beyond]]),
+        )
+        return kind, _hull(corners + vertex), []
+    centre = np.linalg.lstsq(normals, np.full(len(normals), -size), rcond=None)[0]
+    if float(np.max(np.abs(normals @ centre + size))) > EPS_GEOM:
+        # Mehr als drei Flächen haben nicht notwendig ein gemeinsames
+        # Offsetzentrum. Der wirkliche versetzte Polyeder besitzt dann
+        # mehrere Ecken und verbindende Grate. Seine Minkowski-Summe mit
+        # der Kugel verbindet sie, ohne ein beliebiges Ebenentripel zu wählen.
+        eroded = _halfspace_vertices(normals, np.full(len(normals), -size))
+        axis = normals.sum(axis=0)
+        axis /= float(np.linalg.norm(axis))
+        depth = float(np.min(eroded @ axis)) - size
+        rows = np.vstack([normals, -axis])
+        corners = _halfspace_vertices(
+            rows, np.append(np.full(len(normals), EDGE_OVERSHOOT), -depth)
+        )
+        # Die künstliche Abschlussebene liegt eine weitere Kugelbreite
+        # hinter dem Werkzeugrand und kann dessen Fläche nicht beeinflussen.
+        core = _halfspace_vertices(rows, np.append(np.full(len(normals), -size), size - depth))
+        ball_points = (core[:, None, :] + ball_vertices).reshape(-1, 3)
+    else:
+        cone = _cone_planes(normals)
+        corners = _halfspace_vertices(
+            np.vstack([normals, cone]),
+            np.concatenate([np.full(len(normals), EDGE_OVERSHOOT), cone @ centre]),
+        )
+        ball_points = ball_vertices + centre
+    local = _hull(corners + vertex)
+    ball = _hull(ball_points + vertex)
+    removed = boolean("difference", [local, ball], quality="fine", allow_empty=True)
+    return kind, removed.mesh, [removed]
+
+
+def _mixed_corner_frame(star: list[tuple[MeshEdge, int]]) -> tuple[np.ndarray, bool] | None:
+    """Der lokale Rahmen eines gemischten orthogonalen Dreiflächenknotens."""
+    convex_count = sum(entry.convex for entry, _ in star)
+    if len(star) != 3 or convex_count not in (1, 2):
+        return None
+    complement = convex_count == 1
+    lone, end = next((entry, end) for entry, end in star if entry.convex == complement)
+    sign = -1.0 if complement else 1.0
+    sides = sign * np.asarray(lone.normals[end])
+    normals = _distinct_vectors(
+        [sign * np.asarray(normal) for entry, tip in star for normal in entry.normals[tip]]
+    )
+    if len(normals) != 3:
+        return None
+    top = next(
+        normal
+        for normal in normals
+        if bool(np.all(np.linalg.norm(sides - normal, axis=1) > EPS_GEOM))
+    )
+    axes = np.column_stack([sides[0], sides[1], top])
+    if not bool(np.all(np.abs(axes.T @ axes - np.eye(3)) <= EPS_GEOM)):
+        return None
+    frame = np.eye(4)
+    frame[:3, :3] = axes
+    frame[:3, 3] = lone.points[end]
+    return frame, complement
+
+
+def _check_corner_region(
+    mesh: MeshData, region: MeshData, frame: np.ndarray, size: float, complement: bool
+) -> BooleanOutcome:
+    """Der örtliche Ersatz muss ausschließlich die drei gewählten Flächen treffen."""
+    clipped = boolean("intersection", [mesh, region], quality="fine", allow_empty=True)
+    local = (clipped.mesh.raw.triangles - frame[:3, 3]) @ frame[:3, :3]
+    allowed = np.zeros(len(local), dtype=bool)
+    for axis, levels in ((0, (-size, 0.0, size)), (1, (-size, 0.0, size)), (2, (-size, 0.0))):
+        for level in levels:
+            allowed |= np.max(np.abs(local[:, :, axis] - level), axis=1) <= EPS_GEOM
+    expected = (1.0 if complement else 3.0) * size**3
+    if not bool(allowed.all()) or abs(clipped.mesh.volume - expected) > EPS_GEOM * region.raw.area:
+        raise GeometryError(
+            detail=_(
+                "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie "
+                "ein kleineres Maß oder bearbeiten Sie die Kanten einzeln."
+            ),
+            values={"size": size},
+        )
+    return clipped
+
+
+def _selected_edge_groups(selected: Sequence[MeshEdge]) -> list[list[MeshEdge]]:
+    """Verbindet gewählte Züge über ihre ursprünglichen gemeinsamen Knoten."""
+    around: dict[int, list[int]] = {}
+    for index, entry in enumerate(selected):
+        for node in (entry.node_indices[0], entry.node_indices[-1]):
+            around.setdefault(node, []).append(index)
+    remaining = set(range(len(selected)))
+    groups: list[list[MeshEdge]] = []
+    while remaining:
+        pending = [min(remaining)]
+        connected: set[int] = set()
+        while pending:
+            index = pending.pop()
+            if index not in remaining:
+                continue
+            remaining.remove(index)
+            connected.add(index)
+            entry = selected[index]
+            for node in (entry.node_indices[0], entry.node_indices[-1]):
+                pending.extend(around[node])
+        groups.append([selected[index] for index in sorted(connected)])
+    return groups
+
+
 def _worked_edges(
     mesh: MeshData,
     size: float,
     choice: EdgeChoice,
     keys: Sequence[str],
+    *,
+    rounded: bool,
+) -> BooleanOutcome:
+    """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen."""
+    entries = edges_of(mesh)
+    chosen = wanted(entries, choice, keys)
+    groups = _selected_edge_groups(chosen)
+    mixed = any(_mixed_corner_frame(star) is not None for star in _corner_stars(entries, chosen))
+    if len(groups) == 1 or not mixed:
+        return _placed_edge_work(mesh, entries, chosen, size, rounded=rounded)
+    runs: list[BooleanOutcome] = []
+    body = mesh
+    for group in groups:
+        result = _placed_edge_work(body, entries, group, size, rounded=rounded)
+        runs.append(result)
+        body = result.mesh
+    solver = deepest(run.solver for run in runs)
+    assert solver is not None
+    return BooleanOutcome(body, solver, [finding for run in runs for finding in run.findings])
+
+
+def _placed_edge_work(
+    mesh: MeshData,
+    entries: Sequence[MeshEdge],
+    chosen: Sequence[MeshEdge],
+    size: float,
+    *,
+    rounded: bool,
+) -> BooleanOutcome:
+    """Rechnet eine unabhängige Auswahlgruppe mit ihrer unveränderten Ausgangstopologie."""
+    frame = next(
+        (
+            located[0]
+            for star in _corner_stars(entries, chosen)
+            if (located := _mixed_corner_frame(star)) is not None
+        ),
+        None,
+    )
+    if frame is None:
+        return _edge_work(mesh, entries, chosen, size, rounded=rounded)
+    raw = mesh.raw.copy()
+    delta = np.asarray(raw.vertices) - frame[:3, 3]
+    local = delta @ frame[:3, :3]
+    # Subtraktion, Skalarprodukte und die vorher berechneten Einheitsnormalen
+    # tragen Float64-Rauschen. Nur dessen Band an den drei belegten Ebenen
+    # durch den Knoten wird bereinigt, kein geometrischer Abstand gerundet.
+    roundoff = 32.0 * np.finfo(float).eps
+    error = roundoff * (np.abs(delta) @ np.abs(frame[:3, :3]) + np.abs(frame[:3, 3]).sum() + 1.0)
+    local[np.abs(local) <= error] = 0.0
+    raw.vertices = local
+    if float(np.linalg.det(frame[:3, :3])) < 0.0:
+        raw.faces = raw.faces[:, ::-1]
+    local_entries: list[MeshEdge] = []
+    local_chosen: list[MeshEdge] = []
+    selected_ids = {id(entry) for entry in chosen}
+    for entry in entries:
+        # Nach einer anderen Auswahlgruppe ist der Körper neu vernetzt.
+        # Die gespeicherten Knotennummern verbinden weiterhin die gewählten
+        # Züge, sind aber keine Indizes dieses Zwischenkörpers mehr.
+        offset = np.asarray(entry.points) - frame[:3, 3]
+        points = offset @ frame[:3, :3]
+        noise = roundoff * (
+            np.abs(offset) @ np.abs(frame[:3, :3]) + np.abs(frame[:3, 3]).sum() + 1.0
+        )
+        points[np.abs(points) <= noise] = 0.0
+        normals = np.asarray(entry.normals) @ frame[:3, :3]
+        normals[np.abs(normals) <= roundoff] = 0.0
+        normals /= np.linalg.norm(normals, axis=2, keepdims=True)
+        placed = _describe(
+            points,
+            entry.convex,
+            tuple((pair[0], pair[1]) for pair in normals),
+            entry.node_indices,
+        )
+        assert placed is not None
+        local_entries.append(placed)
+        if id(entry) in selected_ids:
+            local_chosen.append(placed)
+    result = _edge_work(mesh.replacing(raw), local_entries, local_chosen, size, rounded=rounded)
+    world = result.mesh.raw.copy()
+    world.apply_transform(frame)
+    result.mesh = result.mesh.replacing(world)
+    return result
+
+
+def _edge_work(
+    mesh: MeshData,
+    entries: Sequence[MeshEdge],
+    chosen: Sequence[MeshEdge],
+    size: float,
     *,
     rounded: bool,
 ) -> BooleanOutcome:
@@ -777,16 +1285,60 @@ def _worked_edges(
     (:func:`~app.core.geom.boolean.deepest`): Wer wissen will, was seine Maße
     wert sind, interessiert sich für die, die am stärksten geglättet hat.
     """
-    chosen = wanted(edges_of(mesh), choice, keys)
-    outer = [rounding_tool(entry, size, rounded) for entry in chosen if entry.convex]
-    inner = [rounding_tool(entry, size, rounded) for entry in chosen if not entry.convex]
+    stars = _corner_stars(entries, chosen)
+    mixed = [
+        (star, located) for star in stars if (located := _mixed_corner_frame(star)) is not None
+    ]
+    refined_ids = {id(entry) for star, _ in mixed for entry, _ in star}
+    steps = _arc_steps(4.0 * size, math.pi / 2.0) if mixed and rounded else 0
+    outer: list[MeshData] = []
+    inner: list[MeshData] = []
+    for entry in chosen:
+        tool = rounding_tool(
+            entry,
+            size,
+            rounded,
+            min_steps=steps if id(entry) in refined_ids else 0,
+            extend_ends=id(entry) not in refined_ids,
+        )
+        (outer if entry.convex else inner).append(tool)
+    runs: list[BooleanOutcome] = []
+    ball_vertices = _corner_ball(size) if stars and rounded else np.empty((0, 3))
+    for star in stars:
+        prepared = _corner_tools(star, size, rounded=rounded, ball_vertices=ball_vertices)
+        if prepared is not None:
+            kind, tool, preparation = prepared
+            runs.extend(preparation)
+            (outer if kind == "difference" else inner).append(tool)
+    regions: list[MeshData] = []
+    targets: list[MeshData] = []
+    for _star, (frame, complement) in mixed:
+        region, target = _mixed_corner_region(size, rounded=rounded)
+        if complement:
+            reversed_target = boolean("difference", [region, target], quality="fine")
+            runs.append(reversed_target)
+            target = reversed_target.mesh
+        target = _extend_corner_contacts(target, size)
+        region.raw.apply_transform(frame)
+        target.raw.apply_transform(frame)
+        runs.append(_check_corner_region(mesh, region, frame, size, complement))
+        regions.append(region)
+        targets.append(target)
+    if regions:
+        clipped_inner = []
+        for tool in inner:
+            clipped = boolean("difference", [tool, *regions], quality="fine", allow_empty=True)
+            runs.append(clipped)
+            if clipped.mesh.triangle_count:
+                clipped_inner.append(clipped.mesh)
+        inner = [*clipped_inner, *targets]
+        outer.extend(regions)
 
     body = mesh
-    runs: list[BooleanOutcome] = []
     for kind, tools in (("difference", outer), ("union", inner)):
         if not tools:
             continue
-        outcome = boolean(cast(BooleanKind, kind), [body, *tools], quality="fine")
+        outcome = boolean(kind, [body, *tools], quality="fine")
         body = outcome.mesh
         runs.append(outcome)
     # Ohne Kante hätte ``wanted`` angehalten, und ``rounding_tool`` wirft,

@@ -1184,6 +1184,7 @@
   "Die Druckempfehlungen werden für die gewählten Platten geprüft …": "Vérification des recommandations d’impression pour les plateaux sélectionnés …",
   "Die Druckhöhe ist ungültig. Prüfe das Druckerprofil.": "La hauteur d’impression est invalide. Vérifiez le profil d’imprimante.",
   "Die Druckkontur ist ungültig. Prüfe das Druckerprofil.": "Le contour imprimable est invalide. Vérifiez le profil d’imprimante.",
+  "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie ein kleineres Maß oder bearbeiten Sie die Kanten einzeln.": "Le traitement du coin modifierait un autre détail. Choisir une cote plus petite ou modifier les arêtes séparément.",
   "Die Eingabe dieses Schritts prüfen und erneut platzieren.": "Vérifier l’entrée de cette étape et placer à nouveau.",
   "Die Eingabe war so nicht verwendbar.": "L'entrée n'était pas utilisable telle quelle.",
   "Die Eingangsgeometrie wurde minimal gestört, um die Operation zu lösen.": "La géométrie d'entrée a été perturbée de façon minime pour faire aboutir l'opération.",

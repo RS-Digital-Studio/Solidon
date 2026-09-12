@@ -1184,6 +1184,7 @@
   "Die Druckempfehlungen werden für die gewählten Platten geprüft …": "Verifica dei consigli di stampa per i piatti selezionati …",
   "Die Druckhöhe ist ungültig. Prüfe das Druckerprofil.": "L’altezza di stampa non è valida. Verifica il profilo della stampante.",
   "Die Druckkontur ist ungültig. Prüfe das Druckerprofil.": "Il contorno stampabile non è valido. Verifica il profilo della stampante.",
+  "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie ein kleineres Maß oder bearbeiten Sie die Kanten einzeln.": "La lavorazione dell'angolo modificherebbe un altro dettaglio. Scegli una misura inferiore oppure lavora gli spigoli singolarmente.",
   "Die Eingabe dieses Schritts prüfen und erneut platzieren.": "Controlla l’input di questo passo e posiziona di nuovo.",
   "Die Eingabe war so nicht verwendbar.": "L'immissione non era utilizzabile così com'era.",
   "Die Eingangsgeometrie wurde minimal gestört, um die Operation zu lösen.": "La geometria in ingresso è stata perturbata al minimo per far riuscire l'operazione.",

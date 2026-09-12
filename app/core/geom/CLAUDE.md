@@ -382,10 +382,52 @@ Bogen wird, sagt `_arc_steps` — aus `units.MAX_FACET_SAG` und
 `MAX_FACET_ANGLE`, denselben zwei Grenzen, mit denen OpenCASCADE tesselliert.
 Eine feste Stückzahl wäre bei R = 30 zu grob und bei R = 0,5 Verschwendung.
 
+Vollständig gewählte Eckknoten bekommen eigene Anschlussflächen. Der Knoten
+stammt aus `MeshEdge.node_indices`, nicht aus gerundeten Ortskoordinaten.
+Zwei zusammentreffende Kanten behalten den unmittelbaren Flankenschnitt.
+Bei rein konvexen oder konkaven Knoten begrenzt der ursprüngliche
+Normalenkegel den Kugelanschluss; ein Tetraeder aus den Berührpunkten
+reicht dafür nicht. Mehr als drei Ebenen werden gemeinsam versetzt:
+Gibt es mehrere Offsetzentren, verbindet sie die Minkowski-Summe des
+versetzten lokalen Polyeders mit der Kugel. Die facettierte Kugel wird je
+Operation einmal erzeugt und hält die Sehnenabweichung im Dreiecksinneren ein.
+
+Fasen verbinden die tatsächlichen Schnittpunkte ihrer Flanken auf den
+Nachbarflächen. Bei mehr als drei Flächen schließt deren ebene oder
+facettierte konvexe Hülle die Ecke. Diese Mesh-Kappe kann von OpenCASCADEs
+Splinekappe abweichen; Flankenabstände und Kontaktpunkte bleiben exakt.
+Die Eckwerkzeuge werden gemeinsam mit den Kantenwerkzeugen geschnitten.
+
+Der gemischte orthogonale Dreiflächenknoten verwendet einen örtlich
+begrenzten Ebenen- oder Torusübergang, auch in der komplementären Innenform.
+Seine drei Zylinder teilen die feinere Winkelunterteilung der Torusfläche;
+beide Parameterrichtungen teilen sich die zulässige Sehnenabweichung.
+Die Auswahl wird zuerst im Weltsystem aufgelöst. Die Rechnung erfolgt im
+Rahmen des gemischten Knotens; nur das aus den Float64-Rechenschritten
+abgeleitete Rauschen an seinen drei belegten Ebenen wird bereinigt.
+Knoten-IDs und Materialslots bleiben beim Hin- und Rückweg erhalten.
+Unabhängige Gruppen gewählter Züge rechnen nacheinander in ihren eigenen
+Rahmen, auch auf demselben Körper. Gemeinsame ursprüngliche Knoten bestimmen
+die Gruppen; ihre Reihenfolge folgt der ursprünglichen Auswahlliste.
+Die Ausgangspunkte und Normalen bleiben maßgeblich: Nach einer Gruppe sind
+deren Knotennummern keine Vertexindizes des neu vernetzten Zwischenkörpers.
+Rechenstufen und Befunde aller Gruppen gehen ins gemeinsame Ergebnis ein.
+Die fünf künstlichen Kontaktseiten des Ersatzkörpers überlappen den
+Anschluss um `EPS_GEOM`; die echte Oberfläche und die Kurven bleiben stehen.
+Die ursprünglichen Kontaktflanken der drei Kantenwerkzeuge verwenden
+denselben numerischen Überlapp statt einer Zugabe zum Bauteilmaß.
+Vor einem lokalen Materialersatz müssen die tatsächlichen Eingangsflächen
+und das Volumen den drei ursprünglichen Ebenen entsprechen. Ein weiteres
+Detail im Bereich hält mit einem Vorschlag für ein kleineres Maß an.
+Alle Booleschen Vorbereitungen tragen ihre Rechenstufe und Befunde bis zum
+Operationsergebnis weiter.
+
 **Den Überstand an den Enden bekommt, was abgezogen wird — nicht, was außen
 liegt.** Beim Verrunden fällt beides zusammen (außen abziehen, innen
 vereinigen), beim Wegnehmen einer Rundung nicht: Dort wird außen *vereinigt*,
 und ein Überstand klebt an, statt zu helfen.
+An einem gemischten Eckanschluss enden die Kantenwerkzeuge genau am Knoten;
+ein Überstand könnte auf dessen anderer Seite eine innere Fehlstelle schneiden.
 
 `unround` und `reround` gehen den Weg zurück: `sharp_corner` rechnet aus einer
 erkannten Rundung die Kante, die sie ersetzt hat — über den **Schnitt der zwei

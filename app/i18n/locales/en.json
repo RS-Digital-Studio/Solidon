@@ -1184,6 +1184,7 @@
   "Die Druckempfehlungen werden für die gewählten Platten geprüft …": "Checking print recommendations for the selected plates …",
   "Die Druckhöhe ist ungültig. Prüfe das Druckerprofil.": "The print height is invalid. Check the printer profile.",
   "Die Druckkontur ist ungültig. Prüfe das Druckerprofil.": "The printable outline is invalid. Check the printer profile.",
+  "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie ein kleineres Maß oder bearbeiten Sie die Kanten einzeln.": "The corner operation would change another detail. Choose a smaller size or edit the edges individually.",
   "Die Eingabe dieses Schritts prüfen und erneut platzieren.": "Check this step’s input and place again.",
   "Die Eingabe war so nicht verwendbar.": "The input could not be used as given.",
   "Die Eingangsgeometrie wurde minimal gestört, um die Operation zu lösen.": "The input geometry was disturbed minimally to make the operation work.",

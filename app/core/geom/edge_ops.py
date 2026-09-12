@@ -106,7 +106,7 @@ class FilletParams(BaseParams):
 
 @register_op(
     name="fillet_edges",
-    cache_version="5",
+    cache_version="6",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -158,7 +158,7 @@ class ChamferParams(BaseParams):
 
 @register_op(
     name="chamfer_edges",
-    cache_version="5",
+    cache_version="6",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,

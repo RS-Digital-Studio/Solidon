@@ -1184,6 +1184,7 @@
   "Die Druckempfehlungen werden für die gewählten Platten geprüft …": "Comprobando las recomendaciones de impresión para las placas seleccionadas …",
   "Die Druckhöhe ist ungültig. Prüfe das Druckerprofil.": "La altura de impresión no es válida. Revisa el perfil de impresora.",
   "Die Druckkontur ist ungültig. Prüfe das Druckerprofil.": "El contorno imprimible no es válido. Revisa el perfil de impresora.",
+  "Die Eckbearbeitung würde ein weiteres Detail verändern. Wählen Sie ein kleineres Maß oder bearbeiten Sie die Kanten einzeln.": "El tratamiento de la esquina modificaría otro detalle. Elegir una cota menor o editar las aristas por separado.",
   "Die Eingabe dieses Schritts prüfen und erneut platzieren.": "Revisar la entrada de este paso y volver a colocar.",
   "Die Eingabe war so nicht verwendbar.": "La entrada no era utilizable tal cual.",
   "Die Eingangsgeometrie wurde minimal gestört, um die Operation zu lösen.": "La geometría de entrada fue perturbada mínimamente para resolver la operación.",
