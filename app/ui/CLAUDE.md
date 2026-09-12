@@ -236,6 +236,10 @@ globale Schreibrechte noch eine automatische Berechtigungsänderung gehören daz
 dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
 an allen dreien
 
+Flugtasten folgen den Qt-Tastenkennungen, auch wenn Strg ihren Ereignistext
+verändert. Loslassen und Fokusverlust beenden den Takt und stellen den
+Kameraruhezustand einschließlich Schatten wieder her.
+
 **Wer eine Fläche braucht, kommt gleich hin — wer keine braucht, behält
 seinen Dialog.** `placement_flow.starts_by_itself(spec)` zieht die Grenze an
 `consumes`: Baustein, Beschriftung und Bohrung sitzen auf etwas und gehen
@@ -526,6 +530,9 @@ Die Rückrechnung liest den beim Aktoraufbau gespeicherten Versatz und die
 tatsächlich gezeichneten Körper. Während eines neuen Ansichtsauftrags und
 nach dessen Fehler bleibt dieses letzte Bild die Grundlage des Picks;
 angeforderte Platten- oder Explosionszustände greifen erst mit dem neuen Bild.
+Ansichtsarbeiter bekommen eigene Netzkopien für Schnitt und Dezimierung;
+bei exakten Körpern wird nur ihre Anzeigetessellation kopiert. Cachetreffer
+werden vor der Verdrängung als zuletzt verwendet markiert.
 Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
 deren sichtbare Körpermenge. Ihre Entscheidung wird bis zu einem Wechsel
 dieser beiden Eingaben behalten; Kamerabewegungen lösen keine erneute exakte

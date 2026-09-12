@@ -487,6 +487,10 @@ wie bei `boolean.without_effect`. Die Szene bringt das Profil mit; ohne eines
 bleibt es beim Vernetzungsrauschen, denn wer keinen Drucker kennt, soll keinen
 erfinden — Regel 7, RM-097)
 
+`section.clip_triangles` begrenzt lose Markierungsdreiecke an denselben
+Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche
+Kappen; die übergebenen Eckpunkte und der ursprüngliche Körper bleiben erhalten.
+
 **Netz, Farbe, Text**
 
 `mesh_ops.py` (Arbeit am Netz selbst) · `colour_ops.py` · `paint.py` (Flächen

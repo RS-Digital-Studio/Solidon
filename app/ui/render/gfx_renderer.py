@@ -1769,6 +1769,10 @@ class GfxRenderer(Renderer):
 
     # --- Zeiger -------------------------------------------------------------------
 
+    def deliver_pointer(self, kind: str, event: Any) -> None:
+        button = _button_of(event.button()) if kind in ("press", "release") else None
+        self._pointer(kind, event, button)
+
     def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int:
         token = self._next_token
         self._next_token += 1

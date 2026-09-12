@@ -217,6 +217,9 @@ class _FlatRenderer(Renderer):
     def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int:
         return 1
 
+    def deliver_pointer(self, kind: str, event: Any) -> None:
+        del kind, event  # ohne Fenster kommt hier nichts an
+
     def remove_pointer_listener(self, token: int) -> None:
         return
 

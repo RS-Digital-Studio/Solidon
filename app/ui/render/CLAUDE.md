@@ -43,6 +43,9 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   `PointerEvent` beim Viewport an (`_on_pointer`), der sie erst dem Zeiger,
   dann den Griffen und zuletzt dem Navigator gibt. Die Kamera führt der
   Navigator über den Vertrag (`set_camera_pose`, `dolly`).
+  Außerhalb der Renderfläche empfangene Qt-Mausereignisse kommen über
+  `deliver_pointer` in denselben Zeigerpfad; bedienbare Überlagerungen behalten
+  ihre Ereignisse. Die Koordinatenumrechnung gehört weiterhin dem Renderer.
   Radbewegungen reisen als Bruchteile einer Raste in `PointerEvent.delta`:
   Der Qt-Adapter teilt den Winkel durch 120, ohne jedes Ereignis zu runden.
   Der Navigator verwendet den Anteil als Exponenten des Zoomfaktors; so

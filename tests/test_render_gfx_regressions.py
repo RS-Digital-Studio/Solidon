@@ -880,3 +880,34 @@ def test_the_axes_letters_stay_inside_their_field(renderer: GfxRenderer) -> None
             assert not edge, f"{name}: a letter touches the edge of the field"
         for letter in letters:
             letter.visible = True
+
+
+@pytest.mark.parametrize("kind", ["press", "move", "release"])
+def test_public_pointer_delivery_uses_the_renderers_normal_event_path(renderer, kind):
+    """Weitergereichte Qt-Ereignisse bewahren Tasten, Modifikatoren und Koordinaten."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    types = {
+        "press": QEvent.Type.MouseButtonPress,
+        "move": QEvent.Type.MouseMove,
+        "release": QEvent.Type.MouseButtonRelease,
+    }
+    events = []
+    renderer.add_pointer_listener(events.append)
+    event = QMouseEvent(
+        types[kind],
+        QPointF(12.0, 23.0),
+        QPointF(112.0, 223.0),
+        Qt.MouseButton.RightButton if kind != "move" else Qt.MouseButton.NoButton,
+        Qt.MouseButton.RightButton,
+        Qt.ShiftModifier | Qt.ControlModifier,
+    )
+    renderer.deliver_pointer(kind, event)
+    assert len(events) == 1
+    delivered = events[0]
+    assert (delivered.kind, delivered.x, delivered.y) == (kind, 12, 23)
+    assert delivered.button == ("right" if kind != "move" else None)
+    assert delivered.buttons == frozenset({"right"})
+    assert delivered.shift and delivered.ctrl and not delivered.alt
+    assert event.isAccepted()

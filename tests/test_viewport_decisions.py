@@ -6743,3 +6743,266 @@ def test_the_picker_is_warmed_up_before_the_first_gesture(qt_app: QApplication) 
     viewport.show_scene(None)
     qt_app.processEvents()
     assert len(renderer.pick_calls) == 1, "das Aufwärmen lief ein zweites Mal"
+
+
+@pytest.mark.parametrize("end", ["release", "focus"])
+def test_flight_ends_after_modifier_change_and_settles_the_camera(qt_app, end):
+    """Strg beim Loslassen und Fokusverlust beenden den tatsächlichen Flugtakt."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QFocusEvent, QKeyEvent
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    viewport.set_navigation("solidon")
+    settled = []
+    viewport.cameraMoved.connect(lambda: settled.append(True))
+    try:
+        QApplication.sendEvent(
+            viewport, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_W, Qt.NoModifier, "w")
+        )
+        assert viewport._flight_timer is not None and viewport._flight_timer.isActive()
+        if end == "release":
+            event = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_W, Qt.ControlModifier, chr(23))
+        else:
+            event = QFocusEvent(QEvent.Type.FocusOut)
+        QApplication.sendEvent(viewport, event)
+        assert not viewport._flight_timer.isActive()
+        assert not viewport._flying
+        assert settled == [True]
+        QApplication.sendEvent(viewport, QFocusEvent(QEvent.Type.FocusOut))
+        assert settled == [True], "ein bereits beendeter Flug zeichnet nicht erneut"
+    finally:
+        viewport.release()
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
+def test_viewport_forwards_qt_gestures_through_the_public_renderer_contract(qt_app):
+    """Randereignisse behalten lokale Koordinaten und lassen bedienbare Kinder frei."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton, QWidget
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    canvas = QWidget(viewport)
+    canvas.setGeometry(60, 40, 200, 150)
+    renderer.widget = canvas
+    viewport.resize(400, 300)
+    viewport.show()
+    canvas.show()
+    canvas.raise_()
+    try:
+        QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, Qt.ShiftModifier, QPoint(80, 70))
+        assert [(event.kind, event.x, event.y) for event in renderer.delivered] == [
+            ("press", 20, 30),
+            ("release", 20, 30),
+        ]
+        assert all(event.shift and event.button == "left" for event in renderer.delivered)
+        button = QPushButton("Maß", viewport)
+        button.setGeometry(60, 40, 80, 40)
+        button.show()
+        button.raise_()
+        QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=QPoint(80, 70))
+        assert len(renderer.delivered) == 2, "das überlagerte Feld bekommt seinen eigenen Klick"
+    finally:
+        viewport.release()
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
+def test_clicking_a_hole_twice_releases_the_borrowed_handle_before_the_next_drag(
+    qt_app, monkeypatch
+):
+    """Ein bloßer Lochklick hinterlässt keinen Griff, der den folgenden Zug verdeckt."""
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer(size=(800, 600), scale=10.0)
+    viewport.renderer = renderer
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+    viewport.select_feature("hole_1")
+    viewport.set_gizmo(True)
+    viewport.set_navigation("solidon")
+    centre = (-10.0, 0.0, 5.0)
+    monkeypatch.setattr(viewport, "_aim_at", lambda *_args: centre)
+    monkeypatch.setattr(viewport, "_feature_at", lambda *_args: "hole_1")
+    proposed, moved = [], []
+    viewport.slotProposed.connect(lambda *args: proposed.append(args))
+    viewport.transformDragged.connect(moved.append)
+    x, y, _ = renderer.world_to_display(centre)
+    press = PointerEvent("press", round(x), round(y), button="left", buttons=frozenset({"left"}))
+    release = PointerEvent("release", round(x), round(y), button="left")
+    try:
+        for _ in range(2):
+            viewport._on_pointer(press)
+            assert viewport._slot_handle is not None
+            viewport._on_pointer(release)
+            assert viewport._slot_handle is None
+            assert viewport._face_seat is None
+            assert not proposed and not moved
+        viewport._on_pointer(press)
+        viewport._on_pointer(
+            PointerEvent("move", round(x) + 120, round(y), buttons=frozenset({"left"}))
+        )
+        viewport._on_pointer(PointerEvent("release", round(x) + 120, round(y), button="left"))
+        assert len(proposed) == 1 and proposed[0][0] == "hole_1"
+        assert viewport._slot_handle is not None
+        assert not moved, "ein Lochzug verschiebt nicht den ganzen Körper"
+    finally:
+        viewport.release()
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
+@pytest.mark.parametrize("preparation", ["decimation", "section"])
+@pytest.mark.parametrize("mesh_kind", ["mesh", "exact"])
+def test_scene_worker_owns_its_mesh_and_evicts_the_least_recently_used_display(
+    qt_app, monkeypatch, preparation, mesh_kind
+):
+    """Ein echter Ansichtsauftrag teilt keine Netzcaches und verdrängt den unbenutzten Eintrag."""
+    from threading import Event
+    from time import monotonic
+
+    from PySide6.QtTest import QTest
+
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport, _display_key
+
+    monkeypatch.setattr(
+        module, "DISPLAY_DECIMATION_ABOVE", 1 if preparation == "decimation" else 100
+    )
+    monkeypatch.setattr(module, "DISPLAY_CACHE_KEPT", 2)
+    from app.core.geom.mesh import as_mesh_data
+
+    if mesh_kind == "exact":
+        from app.core.brep.edit import box
+
+        mesh = box(1.0, 1.0, 1.0)
+    else:
+        mesh = MeshData.of(trimesh.creation.box())
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    hot = _display_key("hot", mesh, "hot-hash")
+    cold = _display_key("cold", mesh, "cold-hash")
+    display_mesh = as_mesh_data(mesh)
+    viewport._display_cache.update({hot: display_mesh, cold: display_mesh})
+    entered, release = Event(), Event()
+    received = []
+
+    def inspect(work_mesh, *_args, **_kwargs):
+        received.append(work_mesh)
+        entered.set()
+        assert release.wait(3)
+        if preparation == "section":
+            from app.core.geom.section import SectionResult
+
+            return SectionResult(mesh=work_mesh, capped=True)
+        return work_mesh
+
+    if preparation == "section":
+        from app.core.geom.section import SectionPlane
+
+        viewport._section = SectionPlane.along("z", 0.0)
+    monkeypatch.setattr(module, "decimate" if preparation == "decimation" else "cut", inspect)
+    result = EvaluationResult(
+        Scene(objects={name: SceneObject(name, name, mesh) for name in ("hot", "new")}),
+        object_hashes={"hot": "hot-hash", "new": "new-hash"},
+    )
+    try:
+        if mesh_kind == "exact":
+            prepared = viewport._scene_tasks(result)
+            assert prepared is not None
+            assert all(isinstance(task[1], MeshData) for task in prepared[0]), (
+                "ein exakter Körper darf nicht durch eine Dreieckskopie in Solid.replacing laufen"
+            )
+        viewport.show_scene(result)
+        assert entered.wait(1)
+        assert len(received) == 1 and received[0] is not mesh
+        assert not np.shares_memory(received[0].raw.vertices, mesh.raw.vertices)
+        assert not np.shares_memory(received[0].raw.faces, mesh.raw.faces)
+        release.set()
+        deadline = monotonic() + 5
+        while not viewport.is_scene_applied(result) and monotonic() < deadline:
+            QTest.qWait(10)
+        assert viewport.is_scene_applied(result)
+        assert all(work_mesh is not mesh for work_mesh in received)
+        if preparation == "decimation":
+            assert hot in viewport._display_cache and cold not in viewport._display_cache
+    finally:
+        release.set()
+        viewport.release()
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
+@pytest.mark.parametrize("mode", ["split", "bone", "sculpt"])
+def test_placement_keeps_nonselection_tools_receiving_the_clicked_position(
+    qt_app, monkeypatch, mode
+):
+    """Eine laufende Platzierung verschluckt keine Punkte für ein anderes aktives Werkzeug."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    point = (2.0, 3.0, 4.0)
+    monkeypatch.setattr(viewport, "_world_at", lambda *_args: point)
+    viewport.set_placement_pointer(lambda _event: False)
+    picked = []
+    if mode == "split":
+        viewport.set_splitting(True)
+        viewport.splitPointRequested.connect(picked.append)
+    elif mode == "bone":
+        viewport.set_boning(True)
+        viewport.boneRequested.connect(picked.append)
+    else:
+        viewport.set_sculpting(True)
+        viewport.sculptRequested.connect(picked.append)
+    try:
+        viewport._on_left_click(20, 30)
+        assert picked == [point]
+    finally:
+        viewport.release()
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
+@pytest.mark.parametrize("slice_width, expected_area", [(None, 1.0), (0.5, 0.75)])
+def test_feature_patch_clipping_uses_the_core_without_changing_the_source(
+    qt_app, slice_width, expected_area
+):
+    """Offene Markierungen bleiben im sichtbaren Halbraum oder in seiner Scheibe."""
+    from app.core.geom.section import SectionPlane
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport._section = SectionPlane.along("x", 0.0)
+    viewport._slice_thickness = slice_width
+    corners = np.asarray([[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
+    original = corners.copy()
+    try:
+        clipped = viewport._clip_feature_corners(corners)
+        triangles = clipped.reshape(-1, 3, 3)
+        area = (
+            np.linalg.norm(
+                np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]),
+                axis=1,
+            ).sum()
+            / 2.0
+        )
+        assert area == pytest.approx(expected_area)
+        assert np.all(clipped[:, 0] <= 1e-10)
+        if slice_width is not None:
+            assert np.all(clipped[:, 0] >= -slice_width - 1e-10)
+        assert np.array_equal(corners, original)
+    finally:
+        viewport.deleteLater()
