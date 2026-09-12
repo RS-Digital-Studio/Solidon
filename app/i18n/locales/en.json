@@ -2359,6 +2359,7 @@
   "Filamentgewicht der vollen Spule, ohne die leere Spule.": "Filament weight of the full spool, excluding the empty spool.",
   "Filamentlager": "Filament inventory",
   "Filamentlager wird aktualisiert": "Updating filament inventory",
+  "Filamentlager · {count} Spule": "Filament inventory · {count} spool",
   "Filamentlager · {count} Spulen": "Filament inventory · {count} spools",
   "Filamentlager öffnen": "Open filament inventory",
   "Filamentlager …": "Filament inventory …",

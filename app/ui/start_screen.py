@@ -702,7 +702,11 @@ class InventoryStartCard(QPushButton):
     def refresh(self) -> None:
         """Nur die Kachel liest das Lager; das Projekt bleibt unverändert."""
         entries = filaments.catalogue()
-        text = tr("Filamentlager · {count} Spulen").format(count=len(entries))
+        text = (
+            tr("Filamentlager · {count} Spule")
+            if len(entries) == 1
+            else tr("Filamentlager · {count} Spulen")
+        ).format(count=len(entries))
         self.caption.setText(text)
         self.setAccessibleName(text)
         self.setAccessibleDescription(tr("Spulen ansehen, anlegen und Bestand pflegen."))

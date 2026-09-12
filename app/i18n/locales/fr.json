@@ -2359,6 +2359,7 @@
   "Filamentgewicht der vollen Spule, ohne die leere Spule.": "Poids du filament d'une bobine pleine, sans la bobine vide.",
   "Filamentlager": "Stock de filament",
   "Filamentlager wird aktualisiert": "Mise à jour du stock de filament",
+  "Filamentlager · {count} Spule": "Stock de filament · {count} bobine",
   "Filamentlager · {count} Spulen": "Stock de filament · {count} bobines",
   "Filamentlager öffnen": "Ouvrir le stock de filament",
   "Filamentlager …": "Stock de filament …",

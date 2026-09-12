@@ -256,10 +256,15 @@ def test_start_card_opens_inventory_without_project(
     screen.inventoryRequested.connect(lambda: seen.append(True))
     screen.inventory_button.click()
     assert seen == [True]
-    assert "0 Spulen" in screen.inventory_button.accessibleName()
+    assert screen.inventory_button.accessibleName() == "Filamentlager · 0 Spulen"
     filaments.save(filaments.CatalogueFilament("Spule", "#ffffff"))
     screen.refresh_inventory()
-    assert "1 Spulen" in screen.inventory_button.accessibleName()
+    assert screen.inventory_button.accessibleName() == "Filamentlager · 1 Spule"
+    assert screen.inventory_button.caption.text() == "Filamentlager · 1 Spule"
+    filaments.save(filaments.CatalogueFilament("Zweite Spule", "#112233"))
+    screen.refresh_inventory()
+    assert screen.inventory_button.accessibleName() == "Filamentlager · 2 Spulen"
+    assert screen.inventory_button.caption.text() == "Filamentlager · 2 Spulen"
 
 
 def test_edit_preserves_identifier_and_other_same_named_spool(
