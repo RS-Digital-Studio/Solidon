@@ -629,8 +629,9 @@ def test_the_wall_around_a_slot_reaches_the_agent() -> None:
     slot = next(entry for entry in found.values() if entry.kind == "slot")
 
     from app.core.perceive.digest import _wall_note
+    from app.core.perceive.relations import sleeves_of
 
-    line = _feature_line(slot.id, slot) + _wall_note(slot, found)
+    line = _feature_line(slot.id, slot) + _wall_note(slot, sleeves_of(found).get(slot.id))
 
     assert "Wand" in line, f"der Steckbrief nennt keine Wand: {line}"
     # Der Steckbrief schreibt für das Modell und nicht für den Kunden — dort
