@@ -5138,5 +5138,6 @@
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "«{name}» no es un nombre de bloque válido: se permiten minúsculas, cifras y guiones bajos, empezando por una letra.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» convirtió las caras y aristas editables por separado en triángulos fijos. Esta herramienta debe aparecer antes de ese paso en el historial. Deshaz los pasos desde allí, aplica la herramienta y vuelve a crear los pasos restantes.",
   "Für diese Ausgabe ist keine weitere Filamentbuchung vorgemerkt.": "No hay prevista ninguna otra reserva de filamento para esta salida.",
-  "Nicht gebucht — ansehen …": "Sin registrar — ver …"
+  "Nicht gebucht — ansehen …": "Sin registrar — ver …",
+  "Dieser Datei fehlt die Prüfsumme einer eingebetteten Quelle. Öffnen Sie eine unveränderte Sicherung des Projekts.": "A este archivo le falta la suma de comprobación de una fuente incrustada. Abra una copia de seguridad sin modificar del proyecto."
 }

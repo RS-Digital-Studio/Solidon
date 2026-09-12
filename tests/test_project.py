@@ -300,7 +300,9 @@ def test_checksums_are_written_and_verified(
 
     with pytest.raises(ValidationError) as caught:
         load(path)
-    assert caught.value.constraint == "checksum"
+    assert caught.value.constraint == ("checksum" if declared else "checksum_missing")
+    if not declared:
+        assert "fehlt die Prüfsumme" in str(caught.value.detail)
     assert caught.value.suggestions
 
 

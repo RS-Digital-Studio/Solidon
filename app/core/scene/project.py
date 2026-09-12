@@ -1486,7 +1486,17 @@ def load(path: Path) -> Project:
                 if payload is None:
                     payload = _read_archive_entry(container, infos[source.path])
                     entry_payloads[source.path] = payload
-                if not source.sha256 or checksum(payload) != source.sha256:
+                if not source.sha256:
+                    raise ValidationError(
+                        field=f"sources.{source_id}",
+                        detail=_(
+                            "Dieser Datei fehlt die Prüfsumme einer eingebetteten Quelle. "
+                            "Öffnen Sie eine unveränderte Sicherung des Projekts."
+                        ),
+                        constraint="checksum_missing",
+                        values={"source": source_id},
+                    )
+                if checksum(payload) != source.sha256:
                     raise ValidationError(
                         field=f"sources.{source_id}",
                         detail=_("Eine Quelle stimmt nicht mit ihrer Prüfsumme überein."),
