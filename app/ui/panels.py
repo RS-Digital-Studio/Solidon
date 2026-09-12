@@ -1325,11 +1325,6 @@ class ObjectTree(QWidget):
             # unterschiedliche Maße hinter einem Klick versteckt (Befund
             # Robert, 09.09.2026). Der Schlüssel entscheidet also, ob ein Dach
             # zusammenfasst oder verdeckt.
-            alike: dict[tuple[str, str], int] = {}
-            for other_id, other in entry.features.items():
-                if _part_group(other.created_by, document) is None:
-                    schluessel = (feature_name(other_id, other), feature_measure(other))
-                    alike[schluessel] = alike.get(schluessel, 0) + 1
             by_kind: dict[tuple[str, str], QTreeWidgetItem] = {}
             # **Und eine Senkung steht unter ihrer Bohrung.** Sie sind ein
             # Merkmal in zwei Flächen: Wer die Bohrung ändert, meint die
@@ -1352,6 +1347,11 @@ class ObjectTree(QWidget):
             for chain in chains:
                 for parent, nested in pairwise(chain):
                     under[nested.id] = parent.id
+            alike: dict[tuple[str, str], int] = {}
+            for other_id, other in entry.features.items():
+                if other_id not in under and _part_group(other.created_by, document) is None:
+                    group_key = (feature_name(other_id, other), feature_measure(other))
+                    alike[group_key] = alike.get(group_key, 0) + 1
             made: dict[str, QTreeWidgetItem] = {}
             waiting: list[tuple[str, QTreeWidgetItem]] = []
             for feature_id, feature in entry.features.items():

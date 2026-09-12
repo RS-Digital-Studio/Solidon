@@ -1091,6 +1091,8 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
   Merkmalspanel reicht das `MeshData` optional bis `actions_for` durch:
   Aufrufer ohne Netz behalten die bisherige Paar-Auskunft, die Oberfläche mit
   Netz nennt auch bei der vollständigen Kette vorab das gemeinsame Versetzen.
+  Sammeldächer zählen nur ihre direkten, freien Merkmale. Untergeordnete
+  Senkungen zählen weder zur Schwelle noch zur Beschriftung eines anderen Dachs.
 - **Kurzlebige Warnungsmarken sind semantischer Ansichts-Zustand.** Ring und
   Beschriftung im nativen Renderer sind nur die Darstellung. Baut eine
   Analysekarte dieselbe Auswertung neu auf, werden beide aus Punkt, Text und

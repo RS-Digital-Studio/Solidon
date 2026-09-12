@@ -15142,6 +15142,59 @@ def test_the_marked_row_is_the_emphasised_candidate(
     assert gezeigt[-1] is None, "zwei Fundorte, eine Frage — keiner wird betont"
 
 
+@pytest.mark.parametrize("standalone", [3, 4])
+def test_feature_roof_counts_only_its_own_cavity_children(qt_app, monkeypatch, standalone):
+    """Gleich große freie Senkungen zählen eine untergeordnete Senkung nicht mit."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+    from app.core.perceive.relations import cavity_chains
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+    from app.ui.labels import feature_measure, feature_name
+    from app.ui.panels import BUNDLE_FROM, ObjectTree
+
+    bodies = []
+    for index in range(standalone + 1):
+        profile = (
+            [[12, 0], [12, 8.5], [5.5, 8.5], [3, 6], [3, 0], [12, 0]]
+            if index == standalone
+            else [[12, 0], [12, 2.5], [5.5, 2.5], [3, 0], [12, 0]]
+        )
+        body = trimesh.creation.revolve(profile, sections=48)
+        body.apply_translation([index * 30, 0, 0])
+        bodies.append(body)
+    mesh = MeshData.of(trimesh.util.concatenate(bodies))
+    features = detect(mesh)
+    cones = [feature for feature in features.values() if feature.kind == "cone"]
+    assert len(cones) == standalone + 1
+    assert len({(feature_name(one.id, one), feature_measure(one)) for one in cones}) == 1
+    chains = cavity_chains(features, mesh)
+    assert len(chains) == 1 and chains[0][-1].kind == "cone"
+    nested = chains[0][-1].id
+    tree = ObjectTree()
+    monkeypatch.setattr(tree, "_want_preview", lambda *_args: None)
+    obj = SceneObject(id="part", name="Teil", mesh=mesh, features=features)
+    tree.show_scene(EvaluationResult(Scene(objects={obj.id: obj})))
+    top = tree.tree.topLevelItem(0)
+    roofs = [
+        top.child(index)
+        for index in range(top.childCount())
+        if top.child(index).text(0).startswith("Senkung (")
+    ]
+    if standalone < BUNDLE_FROM:
+        assert roofs == []
+    else:
+        assert len(roofs) == 1
+        assert roofs[0].text(0) == f"Senkung ({standalone})"
+        assert roofs[0].childCount() == standalone
+        assert all(
+            roofs[0].child(index).data(1, Qt.ItemDataRole.UserRole) != nested
+            for index in range(roofs[0].childCount())
+        )
+
+
 def test_many_features_of_one_kind_stand_under_one_roof(window: MainWindow) -> None:
     """Eine STEP-Datei bringt Dutzende gleichnamige Verrundungen mit.
 
