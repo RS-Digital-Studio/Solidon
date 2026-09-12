@@ -332,6 +332,11 @@ läge woanders. Auch diese drei lesen die übrigen Körper, also tragen auch sie
 
 **Kanten**
 
+Das Entfernen und Ändern einer erkannten Netzrundung rekonstruiert die
+ursprüngliche Kante nur zwischen genau zwei nachgewiesenen ebenen Flächen.
+Die Flächenerkennung grenzt diese von Mantelfacetten ab; eine Tangente einer
+gekrümmten Nachbarwand darf keine Ersatzebene für einen Füllkörper werden.
+
 `faces.py` — die **Flächen** eines Netzes bearbeiten, Gegenstück zu `edges.py`:
 *Fläche versetzen* und die *Formschräge*. Über der gewählten Fläche entsteht ein
 Prisma ihres eigenen Umrisses — Boden und Deckel sind ihre Dreiecke, der Mantel

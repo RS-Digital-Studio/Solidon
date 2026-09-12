@@ -2501,7 +2501,7 @@ class RemoveFeatureParams(BaseParams):
 
 @register_op(
     name="remove_feature",
-    cache_version="2",
+    cache_version="3",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -2897,7 +2897,7 @@ class ResizeFeatureParams(BaseParams):
 
 @register_op(
     name="resize_feature",
-    cache_version="2",
+    cache_version="3",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,

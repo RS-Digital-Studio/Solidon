@@ -1425,12 +1425,13 @@ def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
     axis = np.asarray(feature.params["axis"], dtype=float)
     axis = axis / float(np.linalg.norm(axis))
     normals, neighbours = _around(mesh, triangles, axis)
-    if len(normals) < THROUGH:
+    if len(normals) != THROUGH:
         raise GeometryError(
             detail=_(
                 "Diese Rundung grenzt nicht an zwei ebene Flächen — sie lässt sich "
                 "nicht auf eine Kante zurückführen. Verrunden Sie stattdessen neu."
             ),
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     first, second = normals[0], normals[1]
     line, point = _plane_cut(first, neighbours[0], second, neighbours[1])
@@ -1478,6 +1479,12 @@ def _around(
     Rundung *liegt*, und die stehen senkrecht auf ihrer Achse.
     """
     own = set(triangles)
+    from app.core.perceive.features import detect_faces
+
+    # Eine Mantelfacette besitzt ebenfalls eine Normale, aber keine ebene
+    # Nachbarfläche. Dieselbe Flächenerkennung wie beim Anklicken belegt die
+    # Ebene; sonst würde deren lokale Tangente eine falsche Kante erzeugen.
+    planar = {index for feature in detect_faces(mesh) for index in feature.face_indices}
     raw = mesh.raw
     face_normals = np.asarray(raw.face_normals, dtype=float)
     centres = np.asarray(raw.triangles_center, dtype=float)
@@ -1490,6 +1497,8 @@ def _around(
         normal = face_normals[outside]
         if abs(float(np.dot(normal, axis))) > UPRIGHT_TO_AXIS:
             continue
+        if outside not in planar:
+            return [], []
         if any(float(np.dot(normal, seen)) > 1.0 - EPS_GEOM for seen in normals):
             continue
         normals.append(normal)

@@ -1424,6 +1424,39 @@ def test_changing_a_mesh_radius_keeps_the_materials_on_unchanged_faces(radius: f
     )
 
 
+@pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])
+def test_a_fillet_beside_a_curved_wall_does_not_invent_a_plane(
+    operation: str, profile: Profile
+) -> None:
+    """Die Tangente einer Zylinderfacette ist keine Ebene der ursprünglichen Kante."""
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+
+    exact = edit.boolean(
+        "union", [edit.cylinder(20.0, 20.0), edit.moved(edit.box(20.0, 8.0, 20.0), (10, 0, 0))]
+    )
+    edge = next(
+        entry
+        for entry in edit.edges_of(exact)
+        if entry.upright and entry.middle[0] < 15.0 and entry.middle[1] > 0.0
+    )
+    body = as_mesh_data(edit.fillet(exact, 2.0, keys=[edit.edge_key(edge)]))
+    features = detect(body)
+    feature = next(entry for entry in features.values() if entry.kind == "fillet")
+    source = SceneObject(id="obj_1", name="Anschluss", mesh=body, features=features)
+    before = body.volume
+    params = {"at_feature": feature.id}
+    if operation == "resize_feature":
+        params["diameter"] = 6.0
+
+    with pytest.raises(GeometryError) as problem:
+        run(operation, source, profile, **params)
+
+    assert "zwei ebene Flächen" in str(problem.value.detail)
+    assert {entry.id for entry in problem.value.suggestions} == {"change_selection", "cancel"}
+    assert body.volume == pytest.approx(before)
+
+
 def test_a_fillet_next_to_parallel_faces_is_a_sentence() -> None:
     """Wo keine zwei Ebenen zusammenstoßen, gibt es keine Kante darunter.
 
