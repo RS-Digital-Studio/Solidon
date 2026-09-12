@@ -75,7 +75,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
-| [RM-152 — Die Wandstärke um ein Langloch messen](#rm-152) | Geometrie, Erkennung und Druckvorbereitung | `sleeve_at` rechnet mit einem Durchmesser und träfe die dünnste Stelle nicht; danach `slot` in `is_a_cavity` |
 | [RM-156 — Die Breite eines Langlochs ändern](#rm-156) | Geometrie, Erkennung und Druckvorbereitung | `resize_hole` nimmt nur die runde Bohrung; am Langloch fehlt der Weg zu einer anderen Breite |
 | [RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden](#rm-154) | Geometrie, Erkennung und Druckvorbereitung | Eine 0 im Richtungsfeld stellt ein Langloch nicht gerade; der optionale Zahlenparameter fehlt im ganzen Register |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
@@ -982,17 +981,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-152"></a>
 
-- [ ] **RM-152 — Die Wandstärke um ein Langloch messen.** `relations.sleeve_at` beantwortet „wie
-  dick ist die Wand um dieses Loch" und rechnet dafür den halben Unterschied zweier Durchmesser.
-  Das gilt, wo die Wand rundum gleich ist — an einem Langloch nicht: Gemessen an einem Zapfen Ø 20
-  mit einem Langloch Ø 8 auf 14 mm sind es an den Flanken 6 mm und an den Enden **3 mm**, und die
-  Auskunft nennte die doppelte Stärke der dünnsten Stelle. Wandstärke ist druckkritisch, also
-  schweigt sie heute: `types.is_a_cavity` führt `slot` deshalb nicht, und der Grund steht dort.
-  Der Preis ist, dass der Steckbrief dem Agenten an einem Langloch keine Wand nennt und dass
-  Rundformen an einer Langlochmündung im Freiformfilter nicht gerettet werden (beides gemessen
-  folgenlos, solange kein Modell mit Langloch als Freiform gilt). Abnahme: `sleeve_at` liefert für
-  ein Langloch die **dünnste** Wand oder zwei Werte mit ihren Orten, ein Testfall an einem Zapfen
-  mit Langloch, und `slot` steht danach in `is_a_cavity`.
+- [x] **RM-152 — Die Wandstärke um ein Langloch messen.** Am 12.09.2026 gebaut. `Sleeve`
+  führt den Weg der Mittellinie mit (`bore_travel`), und `thickness` zieht seine Hälfte ab:
+  Die Enden eines Langlochs sitzen um `travel / 2` aus der Mitte, und dort ist die Wand am
+  dünnsten. Am Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm — den Zahlen, an denen der Punkt
+  entstand — kommen **2,9996 mm** heraus statt der 6,0, die der halbe Durchmesserunterschied
+  ergab.
+
+  **Der Weg gehört der Höhlung**, nicht dem gefragten Merkmal: Von außen geklickt ist das
+  Langloch der Kandidat, und eine Bohrung trägt gar keinen. Und wo daraus keine positive Wand
+  mehr wird, ist es kein Rohr, sondern eine offene Flanke — bei der runden Bohrung fängt das
+  der Durchmesservergleich ab, beim Langloch erst die fertige Zahl.
+
+  `slot` stand in `is_a_cavity` bereits seit RM-153; der Kommentarblock darunter, der das
+  Gegenteil behauptete, ist gefallen. Nachweis: zwei Fälle in `tests/test_relations.py`
+  (Gegenprobe ohne die Wegkorrektur rot) und der Steckbriefsatz in
+  `tests/test_slot_features.py` — der Test, der dort das Schweigen festschrieb, ist von der
+  Zusage abgelöst, die an seine Stelle tritt.
 
 <a id="rm-153"></a>
 

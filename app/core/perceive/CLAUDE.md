@@ -152,7 +152,7 @@ unberührt; das Budget gilt nur der Karte.
 | `features.py` | Merkmalserkennung (§21.1) — **rund 3 700 Zeilen**, das größte Modul in `perceive/`. Darin auch `detect_voids`: Hohlräume ohne Weg nach außen, belegt über vier Tore |
 | `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener |
 | `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
-| `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen |
+| `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden |
 | `maps.py` | Analysekarten (§18.4) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |

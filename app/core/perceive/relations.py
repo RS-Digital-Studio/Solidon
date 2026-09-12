@@ -98,15 +98,29 @@ class Sleeve:
     overlap: float
     """Wie weit die beiden sich längs der Achse überdecken, als Anteil des
     kürzeren — die Zahl, die das Rohr von der Senkung trennt."""
+    bore_travel: float = 0.0
+    """Wie weit die Mittellinie der Höhlung wandert — null bei einer Bohrung.
+
+    Ein Langloch hat keine gleichmäßige Wand: Was an den Flanken steht, fehlt
+    an den Enden, und zwar um den halben Weg. Die Zahl gehört deshalb zum
+    Rohr und nicht zur Höhlung allein — erst zusammen mit dem Außendurchmesser
+    wird daraus eine Wandstärke."""
 
     @property
     def thickness(self) -> float:
-        """Die Wand zwischen beiden, in Millimetern.
+        """Die Wand zwischen beiden, in Millimetern — an der dünnsten Stelle.
 
         Der halbe Unterschied der Durchmesser, denn beide sind koaxial: Was
         außen dazukommt, verteilt sich auf zwei Seiten.
+
+        **Und beim Langloch geht der halbe Weg ab.** Seine Enden sitzen um
+        ``travel / 2`` aus der Mitte, und dort ist die Wand am dünnsten:
+        Gemessen an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm stehen
+        an den Flanken 6 mm und an den Enden 3. Wandstärke ist druckkritisch —
+        die dickere der beiden Zahlen zu nennen wäre schlimmer als zu
+        schweigen (RM-152).
         """
-        return (self.outer_diameter - self.bore_diameter) / 2.0
+        return (self.outer_diameter - self.bore_diameter) / 2.0 - self.bore_travel / 2.0
 
 
 FeatureGroupEvidence = Literal[
@@ -202,21 +216,10 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
     depth = float(feature.params.get("depth") or 0.0)
     if axis is None or centre is None or diameter <= EPS_GEOM or depth <= EPS_GEOM:
         return None
-    # **Ein Langloch hat keine gleichmäßige Wand — also nennt niemand eine.**
-    # Die Rechnung darunter ist der halbe Unterschied zweier Durchmesser, und
-    # an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm ergäbe sie 6 mm,
-    # wo die dünnste Stelle 3 mm misst. Bis zum 11.09.2026 hielt
-    # ``is_a_cavity`` das Langloch deshalb aus allem heraus; seit es dort ein
-    # Hohlraum ist (RM-153, sonst ließe es sich weder versetzen noch
-    # entfernen), steht die Ausnahme hier, wo sie hingehört — und RM-152 nennt,
-    # was an ihre Stelle träte: eine Wand, an der dünnsten Stelle gemessen.
-    if feature.kind == "slot":
-        return None
-
     inside = is_a_cavity(feature)
     best: Sleeve | None = None
     for candidate in features.values():
-        if candidate.id == feature.id or candidate.kind == "slot":
+        if candidate.id == feature.id:
             continue
         if is_a_cavity(candidate) == inside:
             continue
@@ -260,13 +263,24 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
             continue
         bore_diameter = diameter if inside else other_diameter
         outer_diameter = other_diameter if inside else diameter
+        # **Der Weg gehört der Höhlung**, nicht dem Merkmal, das gerade gefragt
+        # wurde: Von außen geklickt ist das Langloch der Kandidat, und eine
+        # Bohrung trägt gar keinen.
+        hollow = feature if inside else candidate
         found = Sleeve(
             bore=feature.id if inside else candidate.id,
             wall=candidate.id if inside else feature.id,
             bore_diameter=bore_diameter,
             outer_diameter=outer_diameter,
             overlap=share,
+            bore_travel=float(hollow.params.get("travel") or 0.0),
         )
+        # **Ein Langloch, das länger ist als sein Mantel, hat keine Wand,
+        # sondern eine offene Flanke.** Bei einer runden Bohrung fängt das
+        # schon der Durchmesservergleich oben ab; beim Langloch entscheidet die
+        # Gesamtlänge, und die steht erst hier zur Verfügung.
+        if found.thickness <= EPS_GEOM:
+            continue
         # **Die dünnste Wand gewinnt.** Stehen mehrere Hüllen um dieselbe
         # Bohrung — ein Rohr in einem Rohr —, ist die innerste diejenige, die
         # als Erste zu dünn wird. Eine beliebige davon zu nennen hieße, die

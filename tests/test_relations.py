@@ -352,3 +352,54 @@ def test_the_geometry_layer_asks_this_question_instead_of_answering_it() -> None
         "die Hohlraumfrage wird in der Geometrieschicht beantwortet statt über "
         f"perceive.relations.is_a_cavity gestellt: {', '.join(stellen)}"
     )
+
+
+# --- die Wand um ein Langloch (RM-152) ------------------------------------------------
+
+
+def _pin_with_slot() -> MeshData:
+    """Ein Zapfen Ø 20 mit einem durchgehenden Langloch Ø 8 auf 14 mm.
+
+    Die Zahlen sind die aus RM-152, und sie sind mit Absicht so gewählt, dass
+    die beiden Antworten weit auseinanderliegen: An den Flanken stehen 6 mm
+    Wand, an den **Enden** 3. Wandstärke ist druckkritisch, also gilt die
+    dünnste Stelle — die doppelte Zahl zu nennen wäre schlimmer als zu
+    schweigen.
+    """
+    pin = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96)
+    travel = 14.0 - 8.0
+    middle = trimesh.creation.box(extents=(travel, 8.0, 30.0))
+    tool = middle
+    for side in (-travel / 2.0, travel / 2.0):
+        cap = trimesh.creation.cylinder(radius=4.0, height=30.0, sections=64)
+        cap.apply_translation((side, 0.0, 0.0))
+        tool = tool.union(cap)
+    return MeshData.of(pin.difference(tool))
+
+
+def test_the_wall_around_a_slot_is_measured_where_it_is_thinnest() -> None:
+    """Ein Langloch hat keine gleichmäßige Wand — die Enden entscheiden.
+
+    Der halbe Unterschied zweier Durchmesser gilt, wo die Wand rundum gleich
+    ist. Hier ergäbe er 6,0 mm und läge damit um das Doppelte über der Stelle,
+    an der das Teil wirklich reißt.
+    """
+    features = detect(_pin_with_slot())
+    slot = next(f for f in features.values() if f.kind == "slot")
+
+    found = sleeve_at(slot, features)
+
+    assert found is not None, "das Langloch im Zapfen findet seine Wand nicht"
+    assert found.bore == slot.id
+    assert abs(found.thickness - 3.0) < 0.2, (
+        f"Wand {found.thickness:.3f} mm statt 3,0 — (20 − 8) / 2 abzüglich des halben Wegs"
+    )
+
+
+def test_a_slot_counts_as_a_cavity() -> None:
+    """Ohne diese Antwort trüge *Merkmal verschieben* an der alten Stelle ab
+    statt zu füllen — und das Volumen bliebe dabei gleich (RM-153)."""
+    features = detect(_pin_with_slot())
+    slot = next(f for f in features.values() if f.kind == "slot")
+
+    assert is_a_cavity(slot), "ein Langloch ist ein Hohlraum wie eine Bohrung"

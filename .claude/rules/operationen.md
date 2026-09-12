@@ -509,10 +509,19 @@ mit der neuen; wer beides mit der neuen tut, füllt neben dem Loch und
 schneidet ein Kreuz hinein.
 
 Was das Langloch **nicht** nimmt und warum, steht in
-`perceive.actions.NOT_APPLICABLE_HERE`: die Breite (RM-156). Und
-`relations.sleeve_at` schließt es selbst aus — seine Rechnung ist der halbe
-Unterschied zweier Durchmesser, und am Langloch träfe sie die dünnste Stelle
-nicht (RM-152).
+`perceive.actions.NOT_APPLICABLE_HERE`: die Breite (RM-156).
+
+**Und seine Wand wird an der dünnsten Stelle genannt** (12.09.2026, RM-152).
+`relations.sleeve_at` schloss es aus, weil seine Rechnung der halbe
+Unterschied zweier Durchmesser ist — an einem Zapfen Ø 20 mit einem Langloch
+Ø 8 auf 14 mm ergibt das 6 mm, wo die dünnste Stelle 3 misst. `Sleeve` führt
+jetzt den Weg der Mittellinie mit (`bore_travel`), und `thickness` zieht seine
+Hälfte ab: Die Enden sitzen um `travel / 2` aus der Mitte, und dort reißt das
+Teil. Der Weg gehört dabei der **Höhlung** und nicht dem gefragten Merkmal —
+von außen geklickt ist das Langloch der Kandidat. Wo daraus keine positive
+Wand mehr wird, ist es kein Rohr, sondern eine offene Flanke; bei der runden
+Bohrung fängt das der Durchmesservergleich ab, beim Langloch erst die fertige
+Zahl.
 
 ## Ein Loch versetzt man an beiden Kernen gleich (11.09.2026)
 

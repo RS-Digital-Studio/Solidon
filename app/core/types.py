@@ -366,21 +366,6 @@ def is_a_cavity(feature: Feature) -> bool:
     return bool(feature.params.get("recess", False))
 
 
-#: **Und ``slot`` steht dort nicht, obwohl ein Langloch ein Hohlraum ist.**
-#:
-#: Die Aussage wäre wahr und der Gewinn klein: Von den zehn Aufrufern gehen
-#: sieben durch Operationen, deren ``applies_to`` ein Langloch gar nicht
-#: durchlässt. Der größte übrige — :func:`app.core.perceive.relations.sleeve_at`
-#: — rechnet daraus aber eine **falsche Wandstärke**: Er sucht einen koaxialen
-#: Mantel und meldet den halben Unterschied der Durchmesser — das gilt nur, wo die Wand
-#: rundum gleich ist. Gemessen an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf
-#: 14 mm: an den Flanken 6 mm, an den Enden **3 mm** — die Auskunft nennte die
-#: doppelte Stärke der dünnsten Stelle, und Wandstärke ist druckkritisch.
-#:
-#: Wer ``sleeve_at`` beibringt, ein Langloch zu messen, trägt ``slot`` hier ein
-#: — bis dahin ist das Schweigen die richtigere Antwort (ROADMAP RM-152).
-
-
 #: Wie viele Filamente die Operationen benennen lassen (§20).
 #:
 #: Mehr als acht ist keine Maschine, die jemand besitzt, und jedes einzelne

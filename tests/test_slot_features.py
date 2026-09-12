@@ -523,19 +523,22 @@ def test_the_digest_names_the_axis_where_it_really_is_one(
     assert wanted in _feature_line(slot.id, slot)
 
 
-def test_a_slot_is_not_called_a_sleeve() -> None:
-    """Ein Langloch hat keine gleichmäßige Wand — also nennt niemand eine.
+def test_the_wall_around_a_slot_reaches_the_agent() -> None:
+    """Der Steckbrief nennt die Wand — und zwar die dünnste (RM-152).
 
-    ``relations.sleeve_at`` rechnet den halben Unterschied zweier Durchmesser
-    und meldete damit an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm
-    **6 mm** Wand, wo die dünnste Stelle 3 mm misst. Bis zum 11.09.2026 hielt
-    ``is_a_cavity`` das Langloch deshalb aus allem heraus — und damit auch aus
-    Versetzen, Drehen und Entfernen. Seit es dort ein Hohlraum ist (RM-153),
-    schweigt ``sleeve_at`` selbst (RM-152 nennt, was an die Stelle träte);
-    dieser Test hält fest, dass die Auskunft schweigt statt zu raten.
+    Hier stand bis zum 12.09.2026 das Gegenteil: ``sleeve_at`` schwieg am
+    Langloch, weil der halbe Unterschied zweier Durchmesser an einem Zapfen
+    Ø 20 mit einem Langloch Ø 8 auf 14 mm **6 mm** ergab, wo die dünnste
+    Stelle 3 misst — und eine zu dicke Wandangabe ist schlimmer als keine.
+    Der Test schrieb dieses Schweigen fest; abgelöst wird er von der Zusage,
+    die an seine Stelle tritt.
+
+    **Und geprüft wird am Steckbrief und nicht an der Rechnung.** Die misst
+    ``test_relations.py``; hier zählt, dass der Satz beim Agenten ankommt — er
+    hat genau diesen Text und sonst nichts (§26.1), und ohne ihn liest er zwei
+    unabhängige Zahlen und zieht das Langloch auf, bis von der Wand nichts
+    übrig ist.
     """
-    from app.core.perceive.relations import sleeve_at
-
     pin = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96)
     tool = MeshData.of(trimesh.creation.box(extents=(6.0, 8.0, 40.0)))
     for x in (-3.0, 3.0):
@@ -546,7 +549,16 @@ def test_a_slot_is_not_called_a_sleeve() -> None:
     found = detect(body)
     slot = next(entry for entry in found.values() if entry.kind == "slot")
 
-    assert sleeve_at(slot, found) is None
+    from app.core.perceive.digest import _wall_note
+
+    line = _feature_line(slot.id, slot) + _wall_note(slot, found)
+
+    assert "Wand" in line, f"der Steckbrief nennt keine Wand: {line}"
+    # Der Steckbrief schreibt für das Modell und nicht für den Kunden — dort
+    # steht der Punkt, und ``localised`` hat hier nichts zu suchen.
+    assert "Wand 3.00 mm" in line, (
+        f"genannt wird die dünnste Stelle, nicht die Flanke (6,0): {line}"
+    )
 
 
 def test_the_slot_defaults_make_a_slot_and_not_an_error(profile: Profile) -> None:
