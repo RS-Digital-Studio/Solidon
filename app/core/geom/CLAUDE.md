@@ -217,6 +217,12 @@ Der Weg dorthin hat zwei Eingänge: `drill_hole` setzt eines (`slotted`,
 nachträglich auseinander (`prepare.slot_bore`, exakt `brep.edit.slot_bore`).
 Die Regel dazu steht in `.claude/rules/operationen.md`.
 
+Auch beim nachträglichen Ziehen bleibt die Kombination mit einer Senkung
+ausgeschlossen. `slot_hole` prüft vorher die topologische Hohlraumkette;
+ein verbundener oder mehrdeutiger weiterer Abschnitt hält die Handlung an.
+Eine gesonderte runde Aufweitung lässt sich nicht durch bloßes Ändern ihres
+Durchmessers zu einer passenden Langlochsenkung machen.
+
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,
 und die Felder sind `optional`, weil die Null an einer Koordinate die Mitte des

@@ -4342,6 +4342,72 @@ def test_a_cached_resize_cannot_hide_an_open_slot_flank(profile: Profile) -> Non
     assert sum(entry.code == "bore.over_the_edge" for entry in fresh.scene.report.findings) == 1
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("widening_depth", [0.0, 2.0])
+def test_a_countersunk_bore_cannot_be_pulled_into_a_slot(
+    kind: str, widening_depth: float, profile: Profile
+) -> None:
+    """Eine vorhandene Kegel- oder Zylindersenkung darf keine verbotene Kombination erzeugen."""
+    import dataclasses
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.errors import ValidationError
+
+    exact = edit.box(80.0, 40.0, 10.0)
+    body = exact if kind == "brep" else as_mesh_data(exact)
+    source = SceneObject(id="obj_1", name="Platte", kind=kind, mesh=body)
+    drilled = _run_op(
+        "drill_brep_hole" if kind == "brep" else "drill_hole",
+        source,
+        profile,
+        diameter=5.0,
+        x=0.0,
+        y=0.0,
+        z=10.0,
+        compensate=False,
+        widening_diameter=9.0,
+        widening_depth=widening_depth,
+        transition_angle=90.0,
+    ).outputs[0]
+    drilled = _run_op(
+        "drill_brep_hole" if kind == "brep" else "drill_hole",
+        drilled,
+        profile,
+        diameter=5.0,
+        x=-25.0,
+        y=0.0,
+        z=10.0,
+        compensate=False,
+    ).outputs[0]
+    features = features_of(drilled.mesh) if kind == "brep" else detect(drilled.mesh)
+    drilled = dataclasses.replace(drilled, features=features)
+    hole = min(
+        (
+            entry
+            for entry in features.values()
+            if entry.kind == "hole" and abs(entry.params["centre"][0]) < 1.0
+        ),
+        key=lambda entry: entry.params["diameter"],
+    )
+    volume = drilled.mesh.volume
+
+    with pytest.raises(ValidationError) as caught:
+        _run_op("slot_hole", drilled, profile, at_feature=hole.id, slot_length=20.0)
+
+    assert caught.value.field == "at_feature"
+    assert caught.value.constraint == "slot_and_widening"
+    assert drilled.mesh.volume == pytest.approx(volume, abs=1e-8)
+    plain = next(
+        entry
+        for entry in features.values()
+        if entry.kind == "hole" and entry.params["centre"][0] < -20.0
+    )
+    accepted = _run_op("slot_hole", drilled, profile, at_feature=plain.id, slot_length=20.0)
+    assert accepted.outputs[0].mesh.volume < volume
+    assert not any(entry.code.startswith("resize.") for entry in accepted.findings)
+
+
 def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
     """Eine kürzere Länge wird abgelehnt, statt stillschweigend nichts zu tun.
 

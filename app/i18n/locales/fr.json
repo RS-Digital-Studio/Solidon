@@ -1531,6 +1531,7 @@
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "Cette contrainte désigne un point qui n'existe pas.",
   "Diese Bedingungsart gibt es nicht.": "Ce type de contrainte n'existe pas.",
   "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "Ce perçage traversait la pièce et ne le fait plus à son nouvel emplacement — son axe ne franchit pas entièrement la matière à cet endroit.",
+  "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung.": "Ce perçage est relié à d’autres sections de la cavité. Supprimez d’abord la fraisure ou sélectionnez un perçage sans fraisure.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "Ce perçage mesure {measure} mm et ne correspond à aucune taille normalisée. À quelle vis appartient-il ?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "Ce perçage mesure {measure} mm — le trou de passage pour {screw}.",
   "Diese Bohrung misst {measure} mm. Keine Normgröße ist eindeutig zugeordnet.": "Ce perçage mesure {measure} mm. Aucune taille normalisée n’est attribuée sans ambiguïté.",

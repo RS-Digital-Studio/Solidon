@@ -3527,6 +3527,7 @@ SLOT_FEATURE_RENAMED: Final = _(
 
 @register_op(
     name="slot_hole",
+    cache_version="2",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -3561,6 +3562,37 @@ def slot_hole(ctx: OpContext) -> OpResult:
     params = cast(SlotHoleParams, ctx.params)
     source = ctx.inputs[0]
     feature = _chosen_bore(source, params.at_feature, op="slot_hole")
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    body = as_mesh_data(source.mesh)
+    neighbours = source.features
+    selected = feature
+    if source.kind == "brep":
+        # Der exakte Merkmalsbaum beschreibt Kegelflächen noch nicht als Senkung.
+        # Die Netz-Erkennung ergänzt sie; dieselben Dreiecke benennen die Bohrung.
+        from app.core.perceive.features import detect
+
+        neighbours = detect(body)
+        faces = set(feature.face_indices)
+        matching = [
+            entry
+            for entry in neighbours.values()
+            if entry.kind == feature.kind and faces.intersection(entry.face_indices)
+        ]
+        if len(matching) == 1:
+            selected = matching[0]
+    chain, touches_other = cavity_chain_state_at(selected, neighbours, body)
+    if touches_other or (chain is not None and len(chain) > 1):
+        raise ValidationError(
+            field="at_feature",
+            constraint="slot_and_widening",
+            value=feature.id,
+            detail=_(
+                "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. "
+                "Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung."
+            ),
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
     # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,
     # 10.09.2026: „einfach wie wenn ich eine bohrung setze"). Damit ist *Zum
     # Langloch ziehen* dieselbe Bedienung wie *Bohrung setzen*: Die
@@ -3727,7 +3759,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
         nothing = without_effect(source.mesh, solid, "difference", ctx.profile)
         if nothing is not None:
             findings.append(nothing)
-        findings.extend(_widening_findings(source, feature, diameter))
         # Die Kantenfrage gilt beiden Bogenmittelpunkten, wie beim Verbreitern.
         from app.core.sketch.planes import frame_of
 
@@ -3846,7 +3877,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
         *said,
         *filled,
         *result.findings,
-        *_widening_findings(source, feature, diameter),
     ]
     if pulled_feature is None:
         findings.append(_slot_no_longer_a_feature(feature, params.slot_length))

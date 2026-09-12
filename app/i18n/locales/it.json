@@ -1531,6 +1531,7 @@
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "Questo vincolo punta a un punto che non esiste.",
   "Diese Bedingungsart gibt es nicht.": "Questo tipo di vincolo non esiste.",
   "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "Questo foro attraversava il pezzo e nella nuova posizione non lo fa più: il suo asse non attraversa del tutto il materiale lì.",
+  "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung.": "Questo foro è collegato ad altre sezioni della cavità. Rimuovere prima la svasatura oppure selezionare un foro senza svasatura.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "Questo foro misura {measure} mm e non corrisponde a nessuna misura normalizzata. A quale vite appartiene?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "Questo foro misura {measure} mm — il foro passante per {screw}.",
   "Diese Bohrung misst {measure} mm. Keine Normgröße ist eindeutig zugeordnet.": "Questo foro misura {measure} mm. Non è stata assegnata in modo univoco alcuna misura normalizzata.",

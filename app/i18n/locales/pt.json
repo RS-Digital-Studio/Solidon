@@ -1531,6 +1531,7 @@
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "Esta restrição aponta para um ponto que não existe.",
   "Diese Bedingungsart gibt es nicht.": "Este tipo de restrição não existe.",
   "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "Este furo atravessava a peça e no novo lugar já não o faz — o seu eixo não atravessa o material por completo aí.",
+  "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung.": "Este furo está ligado a outras secções da cavidade. Remova primeiro o escareado ou selecione um furo sem escareado.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "Este furo mede {measure} mm e não corresponde a nenhuma medida normalizada. A que parafuso pertence?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "Este furo mede {measure} mm — o furo de passagem para {screw}.",
   "Diese Bohrung misst {measure} mm. Keine Normgröße ist eindeutig zugeordnet.": "Este furo mede {measure} mm. Não foi atribuído de forma inequívoca nenhum tamanho normalizado.",
