@@ -15458,6 +15458,36 @@ def test_the_format_of_the_last_export_comes_back(
     assert filters.split(";;", 1)[0] == "STL (*.stl)", "und der erste Filter auch"
 
 
+@pytest.mark.parametrize("selection", ["mesh", "brep", "all"])
+def test_remembered_step_follows_the_current_selection(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, selection: str
+) -> None:
+    """Eine Netzauswahl bleibt exportierbar, auch wenn das Projekt STEP bevorzugt."""
+    assert window.session.apply(
+        "Zwei Körper",
+        [OperationDraft(op="create_box"), OperationDraft(op="create_brep_box")],
+    )
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.last_result
+    assert result is not None
+    if selection != "all":
+        body = next(entry for entry in result.scene.objects.values() if entry.kind == selection)
+        window.object_tree.select_object(body.id)
+    window.session.set_export_choice("step", "{index}_{object}")
+    asked = _asked_dialog(monkeypatch, ("", ""))
+
+    window.action_export()
+
+    assert len(asked) == 1
+    name, filters = asked[0]
+    expected = "3MF (*.3mf)" if selection == "mesh" else "STEP (*.step)"
+    assert filters.split(";;", 1)[0] == expected
+    assert name.endswith(".3mf" if selection == "mesh" else ".step")
+    assert ("STEP (*.step)" in filters) == (selection != "mesh")
+    assert ("{object}" in name) == (selection == "all")
+    assert window.session.project.document.export_format == "step"
+
+
 def test_two_projects_keep_their_own_choice(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

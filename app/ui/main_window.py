@@ -6000,9 +6000,13 @@ class MainWindow(QMainWindow):
         document = self.session.project.document
         remembered = document.export_format if document.export_format in FORMAT_SUFFIX else ""
         wanted = remembered or "3mf"
-        if wanted in FORMAT_SUFFIX:
-            label = next(entry for entry in offered if f"*{FORMAT_SUFFIX[wanted]}" in entry)
-            offered = [label, *(entry for entry in offered if entry != label)]
+        label = next((entry for entry in offered if f"*{FORMAT_SUFFIX[wanted]}" in entry), None)
+        if label is None:
+            # Die Auswahl kann inzwischen nur Netze enthalten. Der Vorschlag
+            # braucht dann ein angebotenes Format samt passender Dateiendung.
+            wanted = "3mf"
+            label = offered[0]
+        offered = [label, *(entry for entry in offered if entry != label)]
         filters = ";;".join(offered)
         # **Bei mehreren Dateien steht das Schema im Namensfeld**, und das ist
         # der Kundenweg aus §29 („Namensschema … konfigurierbar"): Der Kunde
