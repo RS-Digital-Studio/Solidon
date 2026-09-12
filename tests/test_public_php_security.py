@@ -2589,3 +2589,70 @@ def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
     totals = json.loads(result.stdout)
     assert totals["pages"] == 16384, "bis zur Grenze gezählt"
     assert totals["complete"] is False, "und die Grenze reist mit"
+
+
+@pytest.mark.parametrize(
+    "case, expected",
+    [
+        ("missing", "private_file_missing"),
+        ("relative", "path_not_absolute"),
+        ("invalid", "seed_invalid"),
+    ],
+)
+def test_activation_configuration_has_private_diagnostics(
+    tmp_path: Path, case: str, expected: str
+) -> None:
+    from tools import check_activation
+
+    secret = "private-fixture-do-not-print"
+    path = tmp_path / "private-signature.seed"
+    if case == "invalid":
+        path.write_text(secret, encoding="ascii")
+        _chmod_private(path)
+    log = tmp_path / "private-errors.log"
+    _chmod_private(tmp_path)
+    with _php_server(
+        tmp_path,
+        {"SOLIDON_ACTIVATION_SEED_FILE": "relative.seed" if case == "relative" else str(path)},
+        error_log=log,
+    ) as base:
+        status, _headers, body = _request(f"{base}/activation-health.php")
+        ready, message = check_activation.check(f"{base}/activation-health.php")
+        assert not ready
+        assert "PHP-Fehlerprotokoll" in message
+    assert status == 503
+    assert json.loads(body)["code"] == "service_unavailable"
+    assert expected not in body
+    diagnostic = log.read_text(encoding="utf-8") if log.exists() else ""
+    assert expected in diagnostic
+    assert secret not in diagnostic + body
+    assert str(path) not in diagnostic + body
+
+
+@pytest.mark.parametrize(
+    "case, expected",
+    [
+        ("missing", "access_file_missing"),
+        ("empty", "access_hash_missing"),
+        ("invalid", "access_hash_invalid"),
+    ],
+)
+def test_stats_configuration_has_private_diagnostics(
+    tmp_path: Path, case: str, expected: str
+) -> None:
+    secret = "private-fixture-do-not-print"
+    path = tmp_path / "private-access.php"
+    if case != "missing":
+        value = secret if case == "invalid" else ""
+        path.write_text("<?php return ['hash' => '" + value + "'];", encoding="ascii")
+        _chmod_private(path)
+    log = tmp_path / "private-errors.log"
+    _chmod_private(tmp_path)
+    with _php_server(tmp_path, {"SOLIDON_STATS_ACCESS_FILE": str(path)}, error_log=log) as base:
+        status, _headers, body = _request(f"{base}/stats.php")
+    assert status == 503
+    assert body == "Diese Seite ist vorübergehend nicht verfügbar.\n"
+    diagnostic = log.read_text(encoding="utf-8") if log.exists() else ""
+    assert expected in diagnostic
+    assert secret not in diagnostic + body
+    assert str(path) not in diagnostic + body

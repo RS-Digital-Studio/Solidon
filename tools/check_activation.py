@@ -81,8 +81,28 @@ def check(url: str) -> tuple[bool, str]:
                 deadline=deadline,
             )
     except HTTPError as problem:
-        problem.close()
-        return False, f"Aktivierungsdienst antwortet mit HTTP {problem.code}."
+        message = f"Aktivierungsdienst antwortet mit HTTP {problem.code}."
+        try:
+            body = read_limited(problem, limit=MAX_RESPONSE_BYTES, deadline=deadline)
+            answer = load_json(body, max_bytes=MAX_RESPONSE_BYTES)
+            if (
+                isinstance(answer, dict)
+                and answer.get("ok") is False
+                and answer.get("code") == "service_unavailable"
+            ):
+                message += " Serverkonfiguration im privaten PHP-Fehlerprotokoll prüfen."
+        except (
+            HttpBoundaryError,
+            ResponseDeadlineError,
+            StrictJsonError,
+            URLError,
+            TimeoutError,
+            OSError,
+        ):
+            pass  # Fremde Fehlertexte und unlesbare Antworten ergänzen den Status nicht.
+        finally:
+            problem.close()
+        return False, message
     except ResponseTooLargeError:
         return False, "Aktivierungsdienst sendet eine ungewöhnlich große Antwort."
     except HttpBoundaryError:

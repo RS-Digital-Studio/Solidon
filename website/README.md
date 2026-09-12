@@ -131,6 +131,14 @@ nicht übertragen. Ein abweichender absoluter Serverpfad wird ausschließlich
 über `SOLIDON_STATS_ACCESS_FILE` gesetzt. Fehlt die Datei oder sind Lage oder
 Rechte zu weit, bleibt `api/stats.php` mit einer generischen 503-Antwort zu.
 
+Serverfehler der Aktivierung und Statistik schreiben feste Ursachenkennungen in
+PHPs privates Fehlerprotokoll: etwa `private_file_missing`, `seed_invalid`,
+`database_schema_missing` oder `access_hash_invalid`. Bei Aktivierungsfehlern
+steht die Quellstelle dazu; Schlüssel, Kaufcodes, Anfragen und konfigurierte
+Dateipfade werden nicht protokolliert. Das Hosting muss dieses Protokoll privat
+und für den Betreiber lesbar halten. `tools/check_activation.py` verweist bei
+einem gültigen `service_unavailable` darauf; fremde Servertexte gibt es nicht aus.
+
 ### Zeitgesteuerte Löschung privater Missbrauchszähler
 
 `api/cleanup_private_state.php` ist ausschließlich ein CLI-Wartungslauf;

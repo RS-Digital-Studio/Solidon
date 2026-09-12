@@ -15,7 +15,8 @@ try {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist auf diesem Server noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'extensions_missing'
         );
     }
     activation_seed();
@@ -28,7 +29,8 @@ try {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'database_schema_missing'
         );
     }
     echo json_encode(
@@ -41,6 +43,7 @@ try {
     activation_answer_error(new ActivationFailure(
         'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
         503,
-        'service_unavailable'
+        'service_unavailable',
+        'health_read'
     ));
 }

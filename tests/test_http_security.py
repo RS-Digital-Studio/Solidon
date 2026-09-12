@@ -933,3 +933,53 @@ def test_an_opener_puts_its_headers_under_the_same_deadline(
         left.close()
         writer.join(timeout=1.0)
     assert not writer.is_alive()
+
+
+@pytest.mark.parametrize(
+    "raw, useful",
+    [
+        (b'{"ok":false,"code":"service_unavailable","error":"private-secret"}', True),
+        (b'{"ok":false,"code":"private-secret"}', False),
+        (b'{"ok":false,"code":"service_unavailable","x":NaN}', False),
+        (b'{"ok":false,"code":"service_unavailable","x":"' + b"x" * 4096 + b'"}', False),
+    ],
+)
+def test_health_error_body_is_bounded_and_only_known_codes_are_shown(
+    monkeypatch: pytest.MonkeyPatch, raw: bytes, useful: bool
+) -> None:
+    stream = io.BytesIO(raw)
+    error = urllib.error.HTTPError(check_activation.DEFAULT_URL, 503, "Error", {}, stream)
+    monkeypatch.setattr(error, "set_read_timeout", lambda seconds: None, raising=False)
+
+    def fail(request: object, *, timeout: float) -> None:
+        raise error
+
+    monkeypatch.setattr(check_activation, "_open_health", fail)
+    ready, message = check_activation.check(check_activation.DEFAULT_URL)
+    assert not ready
+    assert "HTTP 503" in message
+    assert ("PHP-Fehlerprotokoll" in message) is useful
+    assert "private-secret" not in message
+    assert stream.closed
+
+
+def test_health_error_body_timeout_keeps_status_and_closes_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stream = io.BytesIO(b"unfinished")
+    error = urllib.error.HTTPError(check_activation.DEFAULT_URL, 503, "Error", {}, stream)
+    monkeypatch.setattr(error, "set_read_timeout", lambda seconds: None, raising=False)
+
+    def expire(size: int) -> bytes:
+        raise TimeoutError("private-secret")
+
+    def fail(request: object, *, timeout: float) -> None:
+        raise error
+
+    monkeypatch.setattr(error, "read1", expire)
+    monkeypatch.setattr(check_activation, "_open_health", fail)
+    assert check_activation.check(check_activation.DEFAULT_URL) == (
+        False,
+        "Aktivierungsdienst antwortet mit HTTP 503.",
+    )
+    assert stream.closed

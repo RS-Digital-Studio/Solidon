@@ -34,15 +34,18 @@ final class ActivationFailure extends RuntimeException
     public string $reason;
     public int $status;
     public string $errorCode;
+    public string $diagnostic;
 
     public function __construct(
         string $reason,
         int $status = 400,
-        string $errorCode = 'invalid_request'
+        string $errorCode = 'invalid_request',
+        string $diagnostic = 'unexpected_failure'
     ) {
         $this->reason = $reason;
         $this->status = $status;
         $this->errorCode = $errorCode;
+        $this->diagnostic = $diagnostic;
         parent::__construct($reason);
     }
 }
@@ -148,18 +151,23 @@ function activation_path_is_public(string $path): bool
 /** Prüft Existenz, Lage und auf POSIX die Rechte einer Geheimnisdatei. */
 function activation_require_private_file(string $path): void
 {
-    if (!is_file($path) || !is_readable($path) || activation_path_is_public($path)) {
+    $diagnostic = !is_file($path) ? 'private_file_missing'
+        : (!is_readable($path) ? 'private_file_unreadable'
+            : (activation_path_is_public($path) ? 'private_file_location' : ''));
+    if ($diagnostic !== '') {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            $diagnostic
         );
     }
     if (DIRECTORY_SEPARATOR === '/' && ((int) fileperms($path) & 0077) !== 0) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'private_file_permissions'
         );
     }
 }
@@ -171,21 +179,24 @@ function activation_require_private_directory(string $path): void
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'private_directory_create'
         );
     }
     if (DIRECTORY_SEPARATOR === '/' && ((int) fileperms($path) & 0077) !== 0) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'private_directory_permissions'
         );
     }
     if (activation_path_is_public($path)) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'private_directory_location'
         );
     }
 }
@@ -203,7 +214,8 @@ function activation_rate_secret(string $ratePath): string
                 throw new ActivationFailure(
                     'Der Missbrauchsschutz konnte nicht sicher gespeichert werden.',
                     503,
-                    'service_unavailable'
+                    'service_unavailable',
+                    'rate_secret_write'
                 );
             }
         }
@@ -211,7 +223,8 @@ function activation_rate_secret(string $ratePath): string
             throw new ActivationFailure(
                 'Der Missbrauchsschutz ist noch nicht sicher eingerichtet.',
                 503,
-                'service_unavailable'
+                'service_unavailable',
+                'rate_secret_invalid'
             );
         }
         return hex2bin($raw);
@@ -228,7 +241,8 @@ function activation_rate_client_keys(string $secret, string $scope, int $window,
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'rate_window_invalid'
         );
     }
     $root = hash_hmac('sha256', 'solidon|activation-rate', $secret, true);
@@ -249,7 +263,8 @@ function activation_open_rate_state(string $path)
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'rate_symlink'
         );
     }
     $previousMask = umask(0077);
@@ -264,7 +279,8 @@ function activation_open_rate_state(string $path)
             throw new ActivationFailure(
                 'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
                 503,
-                'service_unavailable'
+                'service_unavailable',
+                'rate_symlink'
             );
         }
         $stream = @fopen($path, 'r+b');
@@ -276,7 +292,8 @@ function activation_open_rate_state(string $path)
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'rate_open_or_lock'
         );
     }
     if ($created && DIRECTORY_SEPARATOR === '/' && !@chmod($path, 0600)) {
@@ -285,7 +302,8 @@ function activation_open_rate_state(string $path)
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'rate_permissions_set'
         );
     }
     clearstatcache(true, $path);
@@ -301,7 +319,8 @@ function activation_open_rate_state(string $path)
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'rate_identity_or_permissions'
         );
     }
     return $stream;
@@ -397,7 +416,8 @@ function activation_consume_client_rate(string $scope, int $limit, int $window):
             throw new ActivationFailure(
                 'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
                 503,
-                'service_unavailable'
+                'service_unavailable',
+                'rate_state_invalid'
             );
         }
         $now = time();
@@ -443,7 +463,8 @@ function activation_consume_client_rate(string $scope, int $limit, int $window):
             throw new ActivationFailure(
                 'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
                 503,
-                'service_unavailable'
+                'service_unavailable',
+                'rate_state_write'
             );
         }
     } finally {
@@ -462,6 +483,15 @@ if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath(__FILE__
 /** Eine JSON-Fehlermeldung mit stabiler Kennung für die Anwendung. */
 function activation_answer_error(ActivationFailure $problem): void
 {
+    if ($problem->status >= 500) {
+        // Nur feste Ursachenkennungen und Quellstellen, niemals Pfade, Werte oder Anfragen.
+        $diagnostic = preg_match('/^[a-z_]{1,64}$/D', $problem->diagnostic) === 1
+            ? $problem->diagnostic : 'unexpected_failure';
+        $source = basename($problem->getFile());
+        $source = preg_match('/^[A-Za-z0-9_.-]+$/D', $source) === 1 ? $source : 'unknown.php';
+        error_log('Solidon Aktivierung: ' . $diagnostic . ' (' . $source . ':'
+            . $problem->getLine() . '). Serverkonfiguration und privaten Speicher prüfen.');
+    }
     http_response_code($problem->status);
     echo json_encode(
         ['ok' => false, 'code' => $problem->errorCode, 'error' => $problem->reason],
@@ -722,14 +752,16 @@ function activation_data_path(string $setting, string $filename): string
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'path_not_absolute'
         );
     }
     if (activation_path_is_public($path)) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'path_not_private'
         );
     }
     return $path;
@@ -773,7 +805,8 @@ function activation_database(bool $initialise = true): PDO
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'database_missing'
         );
     }
     $parent = dirname($path);
@@ -800,7 +833,8 @@ function activation_database(bool $initialise = true): PDO
         throw new ActivationFailure(
             'Der Aktivierungsdienst kann seinen sicheren Speicher gerade nicht öffnen.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'database_open'
         );
     }
     return $database;
@@ -833,15 +867,18 @@ function activation_seed(): string
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'seed_read'
         );
     }
-    $seed = hex2bin(trim($text));
+    $value = trim($text);
+    $seed = preg_match('/^[0-9a-fA-F]{64}$/D', $value) === 1 ? hex2bin($value) : false;
     if ($seed === false || strlen($seed) !== SODIUM_CRYPTO_SIGN_SEEDBYTES) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst hat keinen gültigen Signaturschlüssel.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'seed_invalid'
         );
     }
     $pair = sodium_crypto_sign_seed_keypair($seed);
@@ -852,7 +889,8 @@ function activation_seed(): string
         throw new ActivationFailure(
             'Der Signaturschlüssel des Aktivierungsdienstes passt nicht zur Anwendung.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'seed_public_mismatch'
         );
     }
     return $seed;
@@ -949,7 +987,8 @@ function activation_issue(array $request): string
         throw new ActivationFailure(
             'Die Aktivierung konnte gerade nicht gespeichert werden. Versuchen Sie es erneut.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'certificate_store'
         );
     }
 
@@ -1014,7 +1053,8 @@ function activation_deactivate(array $request): void
         throw new ActivationFailure(
             'Der Geräteplatz konnte gerade nicht freigegeben werden. Versuchen Sie es erneut.',
             503,
-            'service_unavailable'
+            'service_unavailable',
+            'deactivation_store'
         );
     }
 }

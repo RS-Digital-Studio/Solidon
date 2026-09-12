@@ -197,26 +197,24 @@ function stored_hash(): string
         && DIRECTORY_SEPARATOR === '/'
         && ((((int) fileperms($path) & 0077) !== 0)
             || (((int) fileperms(dirname($path)) & 0077) !== 0));
-    $access = $present && !$exposed ? @include $path : null;
+    if (!$present) {
+        stats_unavailable($path === '' ? 'access_path_rejected' : 'access_file_missing');
+    }
+    if ($exposed) {
+        stats_unavailable('access_permissions');
+    }
+    if (!is_readable($path)) {
+        stats_unavailable('access_unreadable');
+    }
+    $access = @include $path;
     $hash = is_array($access) ? (string) ($access['hash'] ?? '') : '';
-
-    if ($hash === '' || $exposed) {
-        http_response_code(503);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo "Diese Seite ist vorübergehend nicht verfügbar.
-";
-        exit;
+    if ($hash === '') {
+        stats_unavailable('access_hash_missing');
     }
 
-    // Ein Hash, den `password_verify` nicht deuten kann, sagt sonst zu jedem
-    // Passwort Nein — und der Grund sähe von außen aus wie ein Tippfehler.
-    // Der häufigste Fall ist ein Hash, dem beim Anlegen die `$`-Zeichen
-    // ausgetrieben wurden; er ist dann zu kurz und trägt keinen Algorithmus.
+    // Ein beschädigter Hash, etwa durch verlorene Dollarzeichen, ist kein falsches Passwort.
     if ((password_get_info($hash)['algo'] ?? null) === null) {
-        http_response_code(503);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo "Diese Seite ist vorübergehend nicht verfügbar.\n";
-        exit;
+        stats_unavailable('access_hash_invalid');
     }
 
     return $hash;
@@ -421,8 +419,12 @@ function stats_write_rate_state(string $path, $stream, string $data): bool
  *  Antwort wie bei einer unbrauchbaren Zugangsdatei. Vorher stand hier ein
  *  vorgetäuschter Sperrzustand, und die Anmeldung sagte „Zu viele Versuche“,
  *  obwohl niemand es versucht hatte; fail-closed bleibt, der Satz stimmt jetzt. */
-function stats_unavailable(): never
+function stats_unavailable(string $diagnostic): never
 {
+    $diagnostic = preg_match('/^[a-z_]{1,64}$/D', $diagnostic) === 1
+        ? $diagnostic : 'unexpected_failure';
+    error_log('Solidon Statistik: ' . $diagnostic
+        . '. Private Zugangsdatei, Passwort-Hash und Zählerspeicher prüfen.');
     http_response_code(503);
     header('Content-Type: text/plain; charset=utf-8');
     echo "Diese Seite ist vorübergehend nicht verfügbar.
@@ -436,13 +438,13 @@ function stats_update_tries(bool $add, string $hash): array
     $path = tries_file();
     $stream = stats_open_rate_state($path);
     if (!is_resource($stream)) {
-        stats_unavailable();  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
+        stats_unavailable('rate_open_or_permissions');  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
     }
     try {
         $raw = stream_get_contents($stream);
         $state = $raw === '' ? [] : json_decode($raw === false ? '' : $raw, true);
         if ($raw === false || !is_array($state)) {
-            stats_unavailable();  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
+            stats_unavailable('rate_state_invalid');  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
         }
         $now = time();
         $clientKeys = stats_rate_client_keys($hash, $now);
@@ -478,7 +480,7 @@ function stats_update_tries(bool $add, string $hash): array
         $state[$globalKey] = $global;
         $encoded = json_encode($state, JSON_UNESCAPED_SLASHES);
         if (!is_string($encoded) || !stats_write_rate_state($path, $stream, $encoded)) {
-            stats_unavailable();  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
+            stats_unavailable('rate_state_write');  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
         }
         return ['ip' => $kept, 'global' => $global];
     } finally {
