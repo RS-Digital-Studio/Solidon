@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sysconfig
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
@@ -36,6 +37,21 @@ def test_appimage_and_glib_use_the_same_canonical_lgpl_source() -> None:
     glib = next(notice for _versions, notice in records["glib"] if notice.source == source)
     assert appimage.content == glib.content
     assert appimage.sha256 == glib.sha256
+
+
+def test_fixed_licence_sources_do_not_follow_development_branches() -> None:
+    """Eine Lizenzakte darf nicht unbemerkt dem nächsten Entwicklungsstand folgen."""
+    with make_licence_notices.FIXED_MANIFEST.open("rb") as stream:
+        records = tomllib.load(stream)["text"]
+    moving = [
+        record["path"]
+        for record in records
+        if any(
+            marker in record["source"]
+            for marker in ("/master/", "/main/", "?h=master", "?h=main", "/HEAD/")
+        )
+    ]
+    assert not moving, moving
 
 
 def test_every_target_component_has_version_expression_and_full_text() -> None:

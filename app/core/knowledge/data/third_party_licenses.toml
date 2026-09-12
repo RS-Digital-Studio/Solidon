@@ -252,7 +252,8 @@ sha256 = "19672c6153d8c4870abe734fa4dd2197481a311f4788d02ad729be07e116b26b"
 [[text]]
 path = "third_party_licenses/xcb-util-keysyms-0.4.0.txt"
 runtime = ["xcb-util-keysyms"]
-source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-keysyms/-/raw/master/COPYING"
+# Lizenzkopf der benannten Quelldatei; nur der C-Kommentarmantel ist entfernt.
+source = "https://xorg.freedesktop.org/archive/individual/xcb/xcb-util-keysyms-0.4.0.tar.bz2#xcb-util-keysyms-0.4.0/keysyms/keysyms.c"
 sha256 = "d499c1bf2c2a5f0a0498e5204d998388e308dcf2273dfbe2250a5b9a73f66537"
 
 [[text]]
@@ -466,8 +467,8 @@ sha256 = "ab16324368f400cba266adeec84f06ff8e01f9bbd647998689b9d782ba30162c"
 [[text]]
 path = "third_party_licenses/libcap-2.66.txt"
 runtime = ["libcap"]
-source = "https://raw.githubusercontent.com/mhiramat/libcap/master/License"
-sha256 = "088cabde4662b4121258d298b0b2967bc1abffa134457ed9bc4a359685ab92bc"
+source = "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.66.tar.xz#libcap-2.66/License"
+sha256 = "f58c80bcce8c929db39a23c32e924876e3311f3ffa54f66076c38056d38fa59b"
 
 [[text]]
 path = "third_party_licenses/lz4-1.9.4.txt"

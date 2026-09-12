@@ -1,7 +1,13 @@
 # Release-Lizenzakte
 
-`third_party_licenses.toml` ist der freigegebene Katalog. Die eigentliche
-Release-Akte entsteht erst aus dem fertigen Kundenartefakt:
+`third_party_licenses.toml` ist der freigegebene Katalog.
+
+Eine Quelle mit Archiv-URL und `#Pfad` bezeichnet genau das Mitglied dieses
+Versionsarchivs. Bei einem Lizenzkopf im Quelltext beschreibt der Eintrag,
+welcher Kommentarmantel entfernt wurde; Lizenzwortlaut und Zuschreibungen
+bleiben unverändert. Hashes verwenden die Zeilennormalisierung des Generators.
+
+Die eigentliche Release-Akte entsteht erst aus dem fertigen Kundenartefakt:
 
 ```text
 python tools/make_licence_notices.py --sbom <artefakt>/Solidon3D.cdx.json \
