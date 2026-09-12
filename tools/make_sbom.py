@@ -1294,16 +1294,16 @@ def main() -> int:
     if arguments.locate_artifact is not None:
         try:
             print(locate_artifact_sbom(arguments.locate_artifact))
-        except RuntimeError as problem:
-            print(problem, file=sys.stderr)
+        except (OSError, RuntimeError) as problem:
+            print(f"{problem} Kundenartefakt und Leserechte prüfen.", file=sys.stderr)
             return 2
         return 0
 
     try:
         bom = build_bom()
         rendered = render_bom(bom)
-    except RuntimeError as problem:
-        print(problem, file=sys.stderr)
+    except (OSError, KeyError, ValueError, RuntimeError) as problem:
+        print(f"{problem} Baueingaben und Zugriffsrechte prüfen.", file=sys.stderr)
         return 2
 
     if arguments.check:
@@ -1321,8 +1321,16 @@ def main() -> int:
         print(f"{arguments.output} passt zur Laufzeitumgebung.")
         return 0
 
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(rendered, encoding="utf-8")
+    try:
+        arguments.output.parent.mkdir(parents=True, exist_ok=True)
+        arguments.output.write_text(rendered, encoding="utf-8")
+    except OSError:
+        print(
+            "Die Stückliste ließ sich nicht schreiben. Ausgabeordner, Schreibrechte "
+            "und freien Speicher prüfen, dann erneut erzeugen.",
+            file=sys.stderr,
+        )
+        return 2
     count = len(bom["components"])
     print(f"{arguments.output} geschrieben: {count} Laufzeitpakete für {sysconfig.get_platform()}.")
     return 0

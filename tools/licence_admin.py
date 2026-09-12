@@ -1452,7 +1452,14 @@ def main(argv: list[str] | None = None) -> int:
             "vollständigen Desktop-Python-Installation starten."
         )
         return 1
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        print(
+            "Tk kann kein Fenster öffnen. Das Werkzeug in einer Desktop-Sitzung "
+            "mit verfügbarem Bildschirm erneut starten."
+        )
+        return 1
     SupportWindow(
         root,
         endpoint=arguments.endpoint,

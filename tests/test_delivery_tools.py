@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -311,3 +312,67 @@ def test_without_local_packages_the_manifest_size_decides_whether_a_package_is_w
         kept = upload.hold_back_version(object(), "root", [local / "version.json"])  # type: ignore[arg-type]
 
     assert kept == [local / "version.json"], "stimmt die Größe, geht sie hoch"
+
+
+def test_notice_cli_explains_a_missing_sbom_without_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from tools import make_licence_notices
+
+    monkeypatch.setattr(
+        sys, "argv", ["make_licence_notices", "--sbom", str(tmp_path / "missing.json")]
+    )
+    assert make_licence_notices.main() == 1
+    message = capsys.readouterr().out
+    assert "prüfen" in message and "Traceback" not in message
+
+
+@pytest.mark.parametrize("problem_type", [OSError, zipfile.BadZipFile])
+def test_signing_cli_explains_file_errors_without_a_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    problem_type: type[Exception],
+) -> None:
+    from tools import sign_release
+
+    def fail(**_kwargs: object) -> None:
+        raise problem_type("broken input")
+
+    monkeypatch.setattr(sign_release, "run", fail)
+    assert sign_release.main(["--subject", "test"]) == 1
+    message = capsys.readouterr().out
+    assert "prüfen" in message and "Traceback" not in message
+
+
+def test_sbom_cli_explains_an_unwritable_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from tools import make_sbom
+
+    parent = tmp_path / "file-instead-of-directory"
+    parent.write_text("existing", encoding="utf-8")
+    monkeypatch.setattr(make_sbom, "build_bom", lambda: {"components": []})
+    monkeypatch.setattr(sys, "argv", ["make_sbom", "--output", str(parent / "bom.json")])
+    assert make_sbom.main() == 2
+    message = capsys.readouterr().err
+    assert "prüfen" in message and "Traceback" not in message
+    assert parent.read_text(encoding="utf-8") == "existing"
+
+
+def test_operator_cli_explains_a_missing_display(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from types import SimpleNamespace
+
+    from tools import licence_admin
+
+    class DisplayError(Exception):
+        pass
+
+    def fail() -> None:
+        raise DisplayError("no display")
+
+    monkeypatch.setitem(sys.modules, "tkinter", SimpleNamespace(Tk=fail, TclError=DisplayError))
+    assert licence_admin.main([]) == 1
+    message = capsys.readouterr().out
+    assert "Bildschirm" in message and "starten" in message

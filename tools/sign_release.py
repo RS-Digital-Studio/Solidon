@@ -566,6 +566,12 @@ def main(argv: list[str] | None = None) -> int:
     except SigningError as problem:
         print(problem)
         return 1
+    except OSError, zipfile.BadZipFile:
+        print(
+            "Die Signierdateien ließen sich nicht vollständig lesen oder ablegen. "
+            "Eingangsarchiv, freien Speicher und Schreibrechte prüfen, dann erneut starten."
+        )
+        return 1
     return 0
 
 

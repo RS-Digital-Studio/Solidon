@@ -882,30 +882,39 @@ def main() -> int:
             return 1
         print(f"Release-Lizenzprüfung grün: {len(verified)} Komponenten")
         return 0
-    components = (
-        collect_artifact_components(json.loads(arguments.sbom.read_text(encoding="utf-8")))
-        if arguments.sbom
-        else collect_components()
-    )
-    notices = render_notices(components)
-    manifest = render_manifest(components)
-    if arguments.check:
-        current_notices = (
-            arguments.output.read_text(encoding="utf-8") if arguments.output.is_file() else ""
+    try:
+        components = (
+            collect_artifact_components(json.loads(arguments.sbom.read_text(encoding="utf-8")))
+            if arguments.sbom
+            else collect_components()
         )
-        current_manifest = (
-            arguments.manifest.read_text(encoding="utf-8") if arguments.manifest.is_file() else ""
-        )
-        if current_notices != notices or current_manifest != manifest:
-            print("Lizenzbeilage oder Lizenzmanifest passt nicht zur Zielumgebung.")
-            return 1
+        notices = render_notices(components)
+        manifest = render_manifest(components)
+        if arguments.check:
+            current_notices = (
+                arguments.output.read_text(encoding="utf-8") if arguments.output.is_file() else ""
+            )
+            current_manifest = (
+                arguments.manifest.read_text(encoding="utf-8")
+                if arguments.manifest.is_file()
+                else ""
+            )
+            if current_notices != notices or current_manifest != manifest:
+                print("Lizenzbeilage oder Lizenzmanifest passt nicht zur Zielumgebung.")
+                return 1
+            return 0
+        arguments.output.parent.mkdir(parents=True, exist_ok=True)
+        arguments.manifest.parent.mkdir(parents=True, exist_ok=True)
+        arguments.output.write_text(notices, encoding="utf-8")
+        arguments.manifest.write_text(manifest, encoding="utf-8")
+        print(f"{arguments.output}: {len(components)} Laufzeitkomponenten")
         return 0
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.manifest.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(notices, encoding="utf-8")
-    arguments.manifest.write_text(manifest, encoding="utf-8")
-    print(f"{arguments.output}: {len(components)} Laufzeitkomponenten")
-    return 0
+    except (OSError, KeyError, ValueError, RuntimeError) as problem:
+        print(
+            f"Lizenzbeilage nicht erzeugt: {problem} "
+            "SBOM, Quellen und Schreibrechte am gewählten Ausgabeort prüfen."
+        )
+        return 1
 
 
 if __name__ == "__main__":
