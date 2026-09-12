@@ -1430,6 +1430,42 @@ def test_a_deleted_step_of_an_unknown_operation_keeps_its_number() -> None:
     assert "9" in titel, titel
 
 
+def test_a_deletion_uses_the_historys_own_registry(history: History) -> None:
+    """Ein Ablauf mit eigenem Register verliert die dort bekannten Namen nicht."""
+    create(history)
+
+    transaction = history.remove_operations([history.operations[0].id])
+
+    assert "Objekt erzeugen" in str(transaction.title)
+
+
+@pytest.mark.parametrize("count", [1, 2, 4])
+def test_saved_deletion_titles_follow_the_selected_language(
+    document: Document, tmp_path: Path, count: int
+) -> None:
+    """Auch die Namen innerhalb einer gespeicherten Löschzeile wechseln die Sprache."""
+    from app.core.registry import REGISTRY
+    from app.i18n import TranslatableText
+    from app.i18n.catalog import install_language
+
+    install_language("en")
+    history = History(document)
+    for _index in range(count):
+        history.apply("Quader", [OperationDraft(op="create_box")])
+    history.remove_operations([step.id for step in history.operations])
+    target = save(Project(document=document), tmp_path / "deletion.p3d")
+
+    title = load(target).document.transactions[-1].title
+
+    assert isinstance(title, TranslatableText)
+    registered = REGISTRY.get("create_box").title
+    assert isinstance(registered, TranslatableText)
+    english = registered.translate("en")
+    assert english != registered.translate("de")
+    assert title.translate("en").count(english) == min(count, 3)
+    assert registered.translate("de") not in title.translate("en")
+
+
 def test_changing_the_input_of_a_one_to_one_step_moves_its_output_with_it(
     profile: Profile,
 ) -> None:

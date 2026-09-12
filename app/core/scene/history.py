@@ -1208,7 +1208,7 @@ class History:
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=_deletion_title(versions),
+            title=_deletion_title(versions, self._registry),
             ops=(),
             changes=changes,
         )
@@ -1675,7 +1675,9 @@ def _outputs_following(entry: Operation, inputs: Sequence[ObjectId]) -> tuple[Ob
     return (*tuple(inputs)[:kept], *entry.outputs[kept:])
 
 
-def _deletion_title(versions: Mapping[OpId, Operation]) -> TranslatableText:
+def _deletion_title(
+    versions: Mapping[OpId, Operation], registry: Registry = REGISTRY
+) -> TranslatableText:
     """Was gelöscht wurde, steht im Titel — nicht nur, dass gelöscht wurde.
 
     **Der Fall.** Im Verlauf eines Kunden standen zwei Einträge untereinander,
@@ -1699,24 +1701,28 @@ def _deletion_title(versions: Mapping[OpId, Operation]) -> TranslatableText:
     Nummer: Sie ist das, wonach der Kunde im Verlauf sucht, und sie stimmt
     auch dann.
     """
-    genannt: list[str] = []
+    named: list[TranslatableText | str] = []
     for op_id, entry in versions.items():
         try:
-            genannt.append(f"{op_id} {REGISTRY.get(entry.op).title}")
+            named.append(_("{number} {title}", number=op_id, title=registry.get(entry.op).title))
         except AppError:
-            genannt.append(str(op_id))
+            named.append(str(op_id))
 
-    if len(genannt) == 1:
-        return _("Schritt löschen: {step}", step=genannt[0])
-    if len(genannt) <= _NAMED_IN_TITLE:
+    if len(named) == 1:
+        return _("Schritt löschen: {step}", step=named[0])
+    # Die Liste bewahrt jeden Namen als übersetzbaren Wert, auch nach dem Speichern.
+    steps = named[0] if named else ""
+    for title in named[1:_NAMED_IN_TITLE]:
+        steps = _("{head}, {tail}", head=steps, tail=title)
+    if len(named) <= _NAMED_IN_TITLE:
         return _(
             "{count} Schritte löschen: {steps}",
-            count=len(genannt),
-            steps=", ".join(genannt),
+            count=len(named),
+            steps=steps,
         )
     return _(
         "{count} Schritte löschen: {steps} und {rest} weitere",
-        count=len(genannt),
-        steps=", ".join(genannt[:_NAMED_IN_TITLE]),
-        rest=len(genannt) - _NAMED_IN_TITLE,
+        count=len(named),
+        steps=steps,
+        rest=len(named) - _NAMED_IN_TITLE,
     )

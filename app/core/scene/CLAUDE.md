@@ -72,6 +72,10 @@ unmittelbar vor diesem Schritt: bereits verbrauchte und erst später erzeugte
 Objekte sind keine zulässigen Eingänge. Verlauf und Auswertung prüfen dieselbe
 Eingangsanzahl aus dem Register, bevor Geometrie gerechnet wird.
 
+Löschtitel lesen die Operationstitel aus dem Register ihrer `History`.
+Die einzelnen Namen bleiben verschachtelte übersetzbare Werte, auch beim
+Speichern und Wiederöffnen. Erst die Anzeige löst die gewählte Sprache auf.
+
 ## Die Karte
 
 **Das Dokument**
