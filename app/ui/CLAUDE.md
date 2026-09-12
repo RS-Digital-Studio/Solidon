@@ -722,9 +722,8 @@ Zeilen ärmer.
 ## §29 — was die Datei mitnimmt
 
 `print_disclosure.py` steht vor dem ersten Öffnen der Druckeinstellungen und
-sagt dreierlei: Die Werte sind Erfahrungswerte; sie reisen mit einer
-gespeicherten 3MF und mit der Übergabe an den Slicer; für Ergebnis und
-Schäden gelten die Nummern 10 und 11 des Lizenzvertrags. Anders als der
+sagt, wie die Erfahrungswerte entstehen, wann sie mitgegeben werden und dass
+die Werte vor dem Druck zu prüfen sind. Anders als der
 KI-Hinweis sperrt er nichts — hier verlässt nichts das Gerät, und die Wahl
 darunter entscheidet erst über das Speichern.
 
