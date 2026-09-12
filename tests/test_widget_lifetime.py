@@ -738,3 +738,37 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
         f"{len(alive)} von {HOW_MANY} Fenstern überlebten, nachdem sie den "
         f"{name} geöffnet hatten — der Dialog wird nicht freigegeben"
     )
+
+
+@pytest.mark.parametrize("withdrawn", [False, True])
+def test_real_viewport_comparison_filter_is_released(
+    qt_app: QApplication, unpinned_windows: None, withdrawn: bool
+) -> None:
+    """Ein wirklicher Vorschauvergleich empfängt Tasten und überlebt seine Ansicht nicht."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    from app.ui.viewport import Viewport
+
+    receiver = QWidget()
+    view = Viewport()
+    view.mark_preview("Vorschau")
+    press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    release = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(receiver, press)
+    assert view.difference_held
+    QApplication.sendEvent(receiver, release)
+    assert not view.difference_held
+    if withdrawn:
+        view.mark_preview("")
+        QApplication.sendEvent(receiver, press)
+        assert not view.difference_held
+    view_reference, filter_reference = weakref.ref(view), weakref.ref(view._compare)
+    view.close()
+    view.release_renderer()
+    del view
+    gc.collect()
+    assert view_reference() is None
+    assert filter_reference() is None
+    QApplication.sendEvent(receiver, press)
+    receiver.deleteLater()

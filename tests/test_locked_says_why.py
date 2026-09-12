@@ -458,6 +458,30 @@ def test_no_locked_context_entry_stays_silent(window: MainWindow) -> None:
     assert not hidden, f"Menü zeigt keine Hinweise: {hidden}"
 
 
+def test_viewport_context_request_shows_the_explained_body_menu(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das echte Viewportsignal erreicht das gebaute Körpermenü samt gesperrten Gründen."""
+    _with_a_selected_body(window)
+    from PySide6.QtCore import QTimer
+
+    shown = []
+    original = window.object_tree.context_menu
+
+    def build_menu():
+        menu = original()
+        assert menu is not None
+        shown.append(menu)
+        QTimer.singleShot(0, menu.close)
+        return menu
+
+    monkeypatch.setattr(window.object_tree, "context_menu", build_menu)
+    window.viewport.contextMenuAt.emit(11, 22)
+    assert len(shown) == 1 and shown[0].actions()
+    silent, hidden = _locked_without_reason(shown[0])
+    assert not silent and not hidden
+
+
 def _with_a_selected_body(window: MainWindow) -> None:
     """Ein Netz laden und seinen Körper wählen — die Lage, in der die meisten
     Operationen überhaupt erst freigegeben werden."""
