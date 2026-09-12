@@ -204,6 +204,12 @@ Dateien auf 0600; das gilt auch für Sicherungen. Ein Rechtefehler hält an.
 Erst der öffentliche Bereitschaftsnachweis und eine authentifizierte reine
 Betreiberabfrage mit synthetischer Kennung erlauben die Erfolgsmeldung.
 
+Das Signierwerkzeug prüft auch die abschließende Kopie unter `dist/` gegen
+den Hash des signierten Installers. Paket und Prüfsummendatei werden in einem
+eigenen temporären Ordner vorbereitet; erst vollständige Kopien ersetzen die
+sichtbaren Dateien. Ein später Fehler beim Ersetzen der Prüfsummendatei
+entfernt die veraltete Prüfsumme und meldet keinen Erfolg.
+
 **Website** `upload_website.py` (schließt `website/teile/` als lokalen
 Projektquellordner vollständig aus; Bausteindateien werden ausschließlich
 lokal ausgetauscht und nie über die Website verteilt) · `make_stats_access.py` (schreibt den

@@ -34,6 +34,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -503,8 +504,26 @@ def run(
         )
     output_dir.mkdir(parents=True, exist_ok=True)
     result = output_dir / setup.name
-    shutil.copy2(setup, result)
-    shutil.copy2(checksum, output_dir / checksum.name)
+    expected_hash = _sha256(setup)
+    with tempfile.TemporaryDirectory(prefix=".signing-output-", dir=output_dir) as directory:
+        staged = Path(directory) / setup.name
+        staged_checksum = Path(directory) / checksum.name
+        shutil.copy2(setup, staged)
+        shutil.copy2(checksum, staged_checksum)
+        if _sha256(staged) != expected_hash or staged_checksum.read_text(encoding="ascii") != (
+            f"{expected_hash}  {setup.name}\n"
+        ):
+            raise SigningError(
+                "Die abschließende Kopie stimmt nicht mit dem signierten Installer überein. "
+                "Freien Speicher und Datenträger prüfen; der bisherige Installer bleibt erhalten."
+            )
+        staged.replace(result)
+        try:
+            staged_checksum.replace(output_dir / checksum.name)
+        except OSError:
+            # Nach dem Paketwechsel darf keine alte Prüfsumme daneben stehen.
+            (output_dir / checksum.name).unlink(missing_ok=True)
+            raise
     print(f"Signierter Installer: {result}")
     print(f"Prüfsumme: {output_dir / checksum.name}")
     return result

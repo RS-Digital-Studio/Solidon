@@ -403,3 +403,62 @@ def test_the_command_line_reports_a_missing_archive_with_the_way_out(
     )
     assert code == 1
     assert "--run" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("failure", ["copy", "corrupt", "checksum"])
+def test_final_signing_copy_keeps_the_previous_complete_package(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Abbruch und falsche Kopierbytes werden vor dem sichtbaren Paketwechsel erkannt."""
+    output = signing["output"]
+    assert isinstance(output, Path)
+    output.mkdir()
+    result = output / f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    result.write_bytes(b"previous installer")
+    checksum = result.with_name(result.name + ".sha256")
+    checksum.write_bytes(b"previous checksum")
+    original = sign_release.shutil.copy2
+
+    def copy(source: object, target: object, **kwargs: object) -> object:
+        destination = Path(target)
+        if destination.is_relative_to(output):
+            if failure == "copy" or (failure == "checksum" and destination.suffix == ".sha256"):
+                destination.write_bytes(b"partial")
+                raise OSError("copy failed")
+            if failure == "corrupt" and destination.suffix == ".exe":
+                destination.write_bytes(b"incorrect bytes")
+                return destination
+        return original(source, target, **kwargs)
+
+    monkeypatch.setattr(sign_release.shutil, "copy2", copy)
+    with pytest.raises((OSError, sign_release.SigningError)):
+        _go(signing)
+    assert result.read_bytes() == b"previous installer"
+    assert checksum.read_bytes() == b"previous checksum"
+    assert set(output.iterdir()) == {result, checksum}
+
+
+def test_final_checksum_replace_failure_removes_an_obsolete_checksum(
+    signing: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach dem vollständigen Paketwechsel darf keine frühere Prüfsumme stehen bleiben."""
+    output = signing["output"]
+    assert isinstance(output, Path)
+    output.mkdir()
+    result = output / f"{APP}-Setup-{make_installer.APP_VERSION}.exe"
+    checksum = result.with_name(result.name + ".sha256")
+    result.write_bytes(b"previous installer")
+    checksum.write_bytes(b"previous checksum")
+    original = Path.replace
+
+    def fail(path: Path, target: Path) -> Path:
+        if target == checksum:
+            raise OSError("rename failed")
+        return original(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail)
+    with pytest.raises(OSError):
+        _go(signing)
+    assert result.read_bytes().endswith(FakeTools.SIGNATURE)
+    assert not checksum.exists()
+    assert list(output.iterdir()) == [result]
