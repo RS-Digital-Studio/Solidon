@@ -606,22 +606,24 @@ vollständig und markiert ins Feld zurück.
 
 ## §29 — der Bericht kommt vor der Datei
 
-`_ExportWorker` prüfte und schrieb in einem Zug; die Befunde kamen an, als die
-Datei schon dalag. Seit dem 12.09.2026 hört sein erster Lauf an der Prüfung
-auf: Findet sie etwas ab `warning`, meldet er es über `checked` und endet.
+`_ExportWorker` hört im ersten Lauf an der Prüfung auf: Findet sie etwas ab
+`warning`, meldet er es über `checked` und endet.
 `MainWindow._export_checked` legt die Befunde in den Prüfbericht, rückt ihn
 nach vorn und fragt über `dialogs.confirm_export`; ein Ja startet einen
 zweiten Lauf mit **demselben** Bericht (`checked=`), statt ein zweites Mal zu
 prüfen.
 
-Die alte Begründung stimmte und zog die falsche Folgerung: Die Prüfung ist der
-lange Teil und gehört nicht in den Hauptthread — daraus folgt aber nicht, dass
-sie mit dem Schreiben in einem Zug laufen muss.
+`_start_export` sammelt die Auswahl einmal und kopiert Dokument und lokale
+Einstellungen für diesen Auftrag. Die Bestätigung bekommt den geprüften
+Arbeiter; dessen `after_check` reicht Körper, Quellen, Profile, Ziel und
+Bericht gemeinsam an den Schreibdurchgang weiter. Ein Auswahlwechsel, eine
+neue Auswertung oder ein anderes Projekt im Fenster verändern diese Datei
+nicht. Ein ausdrücklich neu gestarteter Export liest den heutigen Stand.
 
 Der Arbeiter des ersten Laufs ist während des Dialogs noch am Auslaufen, und
-das ist nötig: Der modale Dialog dreht die Ereignisschleife weiter,
-`_export_worker_done` kommt darin an und räumt das Feld, bevor `_start_export`
-es neu belegt.
+der modale Dialog dreht die Ereignisschleife weiter. `_export_worker_done`
+räumt ausschließlich sein eigenes Feld; `_run_export` verbindet beide
+Durchgänge mit derselben Fortschritts- und Fehlerbehandlung.
 
 **Die Szene reist mit** (`scene=`, `document=`), weil zwei der fünf Fragen aus
 §29 in keinem einzelnen Körper stehen — eine verletzte Passung und eine Wand

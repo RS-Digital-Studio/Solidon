@@ -7078,6 +7078,75 @@ def test_export_writes_the_selected_format(
     assert target.stat().st_size > 0
 
 
+@pytest.mark.parametrize("change", ["selection", "geometry", "project"])
+def test_export_keeps_the_checked_objects_while_the_window_changes(
+    window: MainWindow,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+) -> None:
+    """Vorprüfung und Datei meinen dieselben Körper und denselben Dokumentstand."""
+    import trimesh
+
+    assert window.session.apply(
+        "Zwei Körper",
+        [
+            OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 10.0}),
+            OperationDraft(op="create_box", params={"width": 30.0, "depth": 10.0, "height": 10.0}),
+        ],
+    )
+    assert window.session.wait_for_idle(30000)
+    entered, proceed = threading.Event(), threading.Event()
+    checked: list[tuple[list[str], float]] = []
+
+    def held_check(objects: list[SceneObject], *args: Any, **kwargs: Any) -> list[Finding]:
+        entered.set()
+        assert proceed.wait(15)
+        checked.append(([body.id for body in objects], kwargs["document"].ops[0].params["width"]))
+        return [
+            Finding(
+                code="export.not_watertight",
+                severity="warning",
+                message="Das Objekt ist nicht geschlossen.",
+                object_id=objects[0].id,
+            )
+        ]
+
+    monkeypatch.setattr(main_window_module, "check_before_export", held_check)
+    export_anyway(monkeypatch)
+    window.object_tree.select_object("obj_1")
+    target = tmp_path / "auswahl.stl"
+    window._start_export(target, "stl")
+    try:
+        assert entered.wait(5)
+        if change == "selection":
+            window.object_tree.select_object("obj_2")
+        elif change == "geometry":
+            window.session.change_params(1, {"width": 40.0, "depth": 10.0, "height": 10.0})
+            assert window.session.wait_for_idle(30000)
+        else:
+            window.session.start_new()
+            assert window.session.wait_for_idle(30000)
+            assert window.session.apply(
+                "Neues Projekt",
+                [
+                    OperationDraft(
+                        op="create_box", params={"width": 50.0, "depth": 10.0, "height": 10.0}
+                    )
+                ],
+            )
+            assert window.session.wait_for_idle(30000)
+        proceed.set()
+        wait_for_export(window)
+        assert checked == [(["obj_1"], 10.0)], "only the original document is checked, once"
+        assert target.is_file()
+        written = trimesh.load_mesh(target)
+        assert written.extents[0] == pytest.approx(10.0), "the checked body reaches the file"
+    finally:
+        proceed.set()
+        wait_for_export(window)
+
+
 def _thin_walled_tube(window: MainWindow) -> None:
     """Ein Rohr mit einem halben Millimeter Wand — der kleinste Körper, an dem
     die Exportprüfung etwas zu sagen hat, das sie vor RM-140 nicht sagte."""

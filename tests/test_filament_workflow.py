@@ -478,8 +478,9 @@ def test_dialog_confirmation_rechecks_the_selected_spool(qt_app, inventory, monk
 
 
 @pytest.mark.parametrize("bound", [False, True])
+@pytest.mark.parametrize("confirm", [False, True])
 def test_selected_export_keeps_the_selected_filaments_project_profile(
-    qt_app, tmp_path, monkeypatch, bound
+    qt_app, tmp_path, monkeypatch, bound, confirm
 ):
     """Die zweite Projektspule wird beim Export allein nicht zur ersten Profilwahl."""
     import json
@@ -532,8 +533,25 @@ def test_selected_export_keeps_the_selected_filaments_project_profile(
         all_objects=(first, selected),
     )
     offered = []
+    checked = []
+    if confirm:
+        from app.core.types import Finding
+
+        monkeypatch.setattr(
+            main_window,
+            "check_before_export",
+            lambda *_args, **_kwargs: [
+                Finding(code="export.not_watertight", severity="warning", message="Prüfhinweis")
+            ],
+        )
+        worker.checked.connect(checked.append)
     worker.usageReady.connect(offered.append)
     worker.work()
+    if confirm:
+        assert checked and not (tmp_path / "selected.3mf").exists()
+        writer = worker.after_check(checked[0])
+        writer.usageReady.connect(offered.append)
+        writer.work()
     with zipfile.ZipFile(tmp_path / "selected.3mf") as archive:
         written = json.loads(archive.read("Metadata/project_settings.config"))
     assert written["filament_max_volumetric_speed"] == ["21"]

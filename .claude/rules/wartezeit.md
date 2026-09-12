@@ -120,6 +120,14 @@ die Bedienbarkeit — der Balken läuft, das Fenster reagiert, der Menüeintrag 
 gesperrt, solange geschrieben wird. Wer einen Arbeiter ohne Abbrechen baut,
 schreibt diese Begründung in seinen Docstring; ohne sie ist es Bequemlichkeit.
 
+**Vorprüfung und Schreiben gehören demselben Exportauftrag.** Ein
+bestätigter Bericht gibt nur die Körper, Quellen und Einstellungen frei, die
+geprüft wurden. Die Fortsetzung übernimmt diesen Stand vom ersten Arbeiter;
+sie liest weder die heutige Auswahl noch das inzwischen geänderte Dokument.
+Dokument und lokale Einstellungen werden beim Start kopiert, ausgewertete
+Netze bleiben unveränderliche Referenzen. Ein ausdrücklich neuer Versuch
+darf den heutigen Stand einsammeln und prüft ihn erneut.
+
 **Was nicht sofort da ist, wird nachgereicht statt erwartet.** Der
 Druckeinstellungen-Dialog wartete bis zu zwei Sekunden auf die Schichtanalyse —
 die schlechtere Hälfte beider Möglichkeiten: lang genug, um sich wie ein Hänger

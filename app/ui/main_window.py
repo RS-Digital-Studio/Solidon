@@ -16,7 +16,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
@@ -817,11 +817,27 @@ class _ExportWorker(Worker):
         #: Liste ist eine Antwort und keine fehlende.
         self._checked = checked
 
+    def after_check(self, findings: list[Finding]) -> _ExportWorker:
+        """Den geprüften Auftrag zum Schreiben weiterreichen, ohne ihn neu einzusammeln."""
+        return _ExportWorker(
+            self._objects,
+            self._target,
+            self._format,
+            profile=self._profile,
+            sources=self._sources,
+            settings=self._settings,
+            ui_settings=self._ui_settings,
+            material=self._material,
+            inventory_settings=self._inventory_settings,
+            project_name=self._project_name,
+            all_objects=self._all_objects,
+            scene=self._scene,
+            document=self._document,
+            checked=list(findings),
+        )
+
     def work(self) -> None:
         try:
-            if self._format == "3mf":
-                self._settings = self._profiles_for_selection(self._settings)
-                self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
             if self._checked is None:
                 found = check_before_export(
                     self._objects,
@@ -835,6 +851,9 @@ class _ExportWorker(Worker):
                     self.checked.emit(found)
                     return
                 self._checked = found
+            if self._format == "3mf":
+                self._settings = self._profiles_for_selection(self._settings)
+                self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
             usage = (
                 prepare_usage(
                     self._objects, self._inventory_settings, self._profile, self._project_name
@@ -6025,13 +6044,8 @@ class MainWindow(QMainWindow):
         self,
         target: Path,
         export_format: ExportFormat,
-        checked: list[Finding] | None = None,
     ) -> None:
         """Schreiben, wohin schon entschieden ist — ohne Dateidialog.
-
-        ``checked`` trägt den Bericht, den der erste Lauf erhoben hat und den
-        der Kunde gerade gesehen hat (§29, RM-140): Damit wird nicht zweimal
-        geprüft, und geschrieben wird genau das, wozu er Ja gesagt hat.
 
         Getrennt von :meth:`action_export`, weil ein zweiter Anlauf denselben
         Ort meint: Die häufigste Ursache für einen gescheiterten Export ist
@@ -6058,12 +6072,17 @@ class MainWindow(QMainWindow):
         self._write_failure = None
 
         inventory_settings = self._inventory_settings() if export_format == "3mf" else None
+        # Der Dokumentstand gehört zur Prüfung, die sichtbare Auswahl zum
+        # Auftrag. Beides bleibt bis zur Datei gleich, auch wenn das Fenster
+        # währenddessen weiterarbeitet. Die Netze des Ergebnisses sind bereits
+        # unveränderlich; die bearbeitbaren Dokumentwerte brauchen eine Kopie.
+        document = deepcopy(self.session.project.document)
         worker = _ExportWorker(
             objects,
             target,
             export_format,
             profile=self.session.profile,
-            sources=self.session.project.document.sources,
+            sources=document.sources,
             # Die Druckeinstellungen reisen mit, und mit ihnen das Profil des
             # eingestellten Slicers (§29). Ohne beides ist die Datei reine
             # Geometrie: Der Slicer füllt sie aus dem, was gerade bei ihm
@@ -6075,10 +6094,8 @@ class MainWindow(QMainWindow):
             # **Es sei denn, der Kunde will das nicht.** Die drei Fälle stehen
             # in :func:`settings_for_export`, damit ein Test sie fragen kann;
             # als Ausdruck an dieser Stelle waren sie es nicht.
-            settings=settings_for_export(
-                self.session.project.document, self.session.profile, self.settings
-            ),
-            ui_settings=self.settings,
+            settings=settings_for_export(document, self.session.profile, self.settings),
+            ui_settings=deepcopy(self.settings),
             material=self.session.profile.material.id,
             inventory_settings=inventory_settings,
             project_name=self.session.document_name or target.stem,
@@ -6088,9 +6105,12 @@ class MainWindow(QMainWindow):
             # Merkmalen, eine Wand zwischen einer Bohrung und dem Mantel um
             # sie herum. Ohne beides bliebe die Prüfung, was sie war.
             scene=result.scene,
-            document=self.session.project.document,
-            checked=checked,
+            document=document,
         )
+        self._run_export(worker)
+
+    def _run_export(self, worker: _ExportWorker) -> None:
+        """Einen feststehenden Exportauftrag prüfen oder nach Bestätigung schreiben."""
         self._export_worker = worker
         # Die Flagge, nicht nur das Worker-Feld: ``_anything_running`` fragt
         # sie, und ohne sie nahm das Ende einer Auswertung dem noch
@@ -6099,7 +6119,7 @@ class MainWindow(QMainWindow):
         self._exporting = True
         worker.done.connect(self._export_done)
         worker.failed.connect(self._export_failed)
-        worker.checked.connect(self._export_checked)
+        worker.checked.connect(partial(self._export_checked, worker))
         worker.usageReady.connect(self.usage_notice.offer)
         # **Und das Unerwartete.** Der Menüeintrag ist gesperrt, solange
         # geschrieben wird; eine Ausnahme, die den Thread abriss, ließ ihn für
@@ -6107,7 +6127,7 @@ class MainWindow(QMainWindow):
         # exportieren und erfuhr nicht, warum.
         worker.crashed.connect(lambda detail: self._export_failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._export_worker_done(done))
-        text = tr("Exportiert wird … {name}").format(name=target.name)
+        text = tr("Exportiert wird … {name}").format(name=worker._target.name)
         self._set_progress_state(
             "export",
             active=True,
@@ -6123,7 +6143,7 @@ class MainWindow(QMainWindow):
         self._update_actions()
         self._leash.start(worker)
 
-    def _export_checked(self, findings: list[Finding]) -> None:
+    def _export_checked(self, worker: _ExportWorker, findings: list[Finding]) -> None:
         """Der Bericht, bevor die Datei entsteht (§29, RM-140).
 
         Drei Dinge in dieser Reihenfolge, und die Reihenfolge ist die Aussage:
@@ -6135,8 +6155,9 @@ class MainWindow(QMainWindow):
 
         Der Arbeiter dieses ersten Laufs ist hier noch am Auslaufen. Das ist
         in Ordnung und sogar nötig: Der modale Dialog dreht die Ereignisschleife
-        weiter, ``_export_worker_done`` kommt darin an und räumt das Feld, bevor
-        ``_start_export`` es neu belegt.
+        weiter, ``_export_worker_done`` kommt darin an und räumt das Feld. Der
+        geprüfte Arbeiter hält seinen Auftrag bis zur Antwort; die Fortsetzung
+        übernimmt seine Körper und Werte, unabhängig vom heutigen Fenster.
         """
         self._exporting = False
         self._set_progress_state("export", active=False)
@@ -6149,7 +6170,7 @@ class MainWindow(QMainWindow):
             # Wiederholknopf auf ein Ziel, das niemand mehr gemeint hat.
             self._export_attempt = None
             return
-        self._start_export(attempt[0], attempt[1], checked=findings)
+        self._run_export(worker.after_check(findings))
 
     def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
