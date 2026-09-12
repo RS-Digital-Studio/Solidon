@@ -1266,7 +1266,7 @@
   "Die Kanten der vorhandenen Körper auf dieser Ebene in die Skizze holen.": "Bring the edges of the existing bodies on this plane into the sketch.",
   "Die Kanten stehen in der Reihenfolge, in der sie am Körper liegen.": "The edges are listed in the order they sit on the body.",
   "Die Kappe ist das Teil: Schieben verschiebt, Drehen dreht, zu sich ziehen holt es näher. Jede Gerätetaste passt alles ein.": "The cap is the part: pushing moves it, twisting turns it, pulling it towards you brings it closer. Any device button fits everything into view.",
-  "Die Karte läuft jedes Dreieck ab, und ihr Budget ist begrenzt (§31).": "The map walks every triangle, and its budget is limited (§31).",
+  "Die Karte läuft jedes Dreieck ab, und ihr Budget ist begrenzt.": "The map walks every triangle, and its budget is limited.",
   "Die Kennung eines Rezeptschritts ist ungültig.": "The identifier of a recipe step is invalid.",
   "Die Kennung eines Rezeptschritts kommt mehrfach vor.": "The identifier of a recipe step is duplicated.",
   "Die Kette hält an": "The chain stops",
