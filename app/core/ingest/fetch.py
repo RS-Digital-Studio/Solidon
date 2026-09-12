@@ -237,7 +237,7 @@ def fetch_model(
             public_address = redact_url(address)
             # Erst die Herkunft, dann der Name: Eine Modellseite trägt keine
             # Endung. Die hilfreiche Meldung dazu geht der Endungsprüfung vor.
-            _reject_web_page(answer, "", public_address)
+            _reject_web_page(answer, public_address)
             name = _name_from(answer, public_address)
             payload = _read_limited(
                 answer,
@@ -352,7 +352,7 @@ def _name_from(answer: object, url: str) -> str:
     )
 
 
-def _reject_web_page(answer: object, name: str, url: str) -> None:
+def _reject_web_page(answer: object, url: str) -> None:
     """Eine Modellseite ist keine Modelldatei — und sagt das auch so.
 
     Der Fall ist nicht selten, sondern der Normalfall: wer eine Adresse aus
@@ -370,7 +370,7 @@ def _reject_web_page(answer: object, name: str, url: str) -> None:
                 "danach hier ablegen."
             ),
             constraint="web_page",
-            values={"url": url, "name": name, "type": kind},
+            values={"url": url, "type": kind},
             suggestions=[_DOWNLOAD_YOURSELF],
         )
 

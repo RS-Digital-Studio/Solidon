@@ -128,6 +128,7 @@ def test_a_web_page_is_not_a_model(server: str) -> None:
         fetch_model(f"{server}/seite.stl")
 
     assert raised.value.values["constraint"] == "web_page"
+    assert "name" not in raised.value.values
     assert raised.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen\u201c"
 
 
