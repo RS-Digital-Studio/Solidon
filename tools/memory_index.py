@@ -223,6 +223,13 @@ def main(argv: list[str] | None = None) -> int:
     options = parser.parse_args(argv)
     try:
         position = insert(options.index, options.line, section=options.section)
+    except (OSError, UnicodeError) as problem:
+        print(
+            f"Nicht geschrieben: {options.index}: {problem}. "
+            "Prüfen Sie Pfad, UTF-8-Kodierung und Schreibrechte und versuchen Sie es erneut.",
+            file=sys.stderr,
+        )
+        return 1
     except IndexWriteError as problem:
         print(f"Nicht geschrieben: {problem}", file=sys.stderr)
         return 1

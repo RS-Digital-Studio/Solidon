@@ -73,6 +73,36 @@ def test_the_rest_of_the_file_stays_byte_for_byte(tmp_path: Path) -> None:
     assert nachher == vorher
 
 
+@pytest.mark.parametrize("missing_parent", [False, True])
+def test_an_unreadable_index_is_reported_without_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], missing_parent: bool
+) -> None:
+    """Der CLI-Aufruf nennt den unlesbaren Index und einen nächsten Schritt."""
+    folder = tmp_path / "fehlt" if missing_parent else tmp_path
+    path = folder / "MEMORY.md"
+    assert memory_index.main(["--index", str(path), "--line", "- [Probe](probe.md)"]) == 1
+    error = capsys.readouterr().err
+    assert str(path) in error and "Prüfen Sie" in error
+    assert "Traceback" not in error
+    assert not path.exists()
+
+
+def test_a_failed_replace_keeps_the_index_and_reports_the_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein Schreibfehler bewahrt die alte Datei und entfernt die temporäre Ausgabe."""
+    path = _index(tmp_path)
+
+    def refuse(source: Path, target: Path) -> None:
+        raise PermissionError("Datei gesperrt")
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    assert memory_index.main(["--index", str(path), "--line", "- [Probe](probe.md)"]) == 1
+    assert str(path) in capsys.readouterr().err
+    assert path.read_text(encoding="utf-8") == BEISPIEL
+    assert not list(tmp_path.glob(".memory-index-*"))
+
+
 def test_a_line_without_a_pointer_is_refused(tmp_path: Path) -> None:
     """Ohne ``[Titel](datei.md)`` findet ``test_directory_docs`` den Eintrag nicht.
 
