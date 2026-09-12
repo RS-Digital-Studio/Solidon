@@ -577,6 +577,22 @@ def test_a_bead_reports_the_loss_of_exact_faces(profile: Profile) -> None:
     assert entry.kind == "brep" and entry.mesh is original
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_tiny_bead_names_the_bead_in_its_warning(kind: str, profile: Profile) -> None:
+    """Der Hinweis muss die ausgeführte Handlung benennen."""
+    body = block()
+    source = SceneObject(
+        id="obj_1", name="Klotz", kind=kind, mesh=body if kind == "brep" else as_mesh_data(body)
+    )
+
+    result = run("bead_edges", source, profile, radius=0.01)
+
+    warnings = [finding for finding in result.findings if finding.code == "edges.without_effect"]
+    assert len(warnings) == 1
+    assert "Wulst" in str(warnings[0].message)
+    assert "Verrundung" not in str(warnings[0].message)
+
+
 def test_brep_to_mesh_is_a_step_in_the_stack(profile: Profile) -> None:
     """§30: eine Richtung — und rücknehmbar, weil es eine Operation ist wie
     jede andere.

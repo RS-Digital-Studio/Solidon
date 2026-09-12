@@ -1014,6 +1014,7 @@
   "Der Winkel muss zwischen null und 30 Grad liegen.": "L'angolo deve essere compreso tra zero e 30 gradi.",
   "Der Winkel muss zwischen null und 360 Grad liegen.": "L'angolo deve essere compreso tra zero e 360 gradi.",
   "Der Workflow verlangt eine unbekannte Modellrolle.": "Il workflow richiede un ruolo del modello sconosciuto.",
+  "Der Wulst ist zu klein, um im Druck anzukommen. Wählen Sie einen größeren Radius, oder prüfen Sie, ob die gewählten Kanten noch da sind.": "Il cordone è troppo piccolo per comparire nella stampa. Scegliere un raggio maggiore oppure verificare che gli spigoli selezionati esistano ancora.",
   "Der Ziehgriff zieht eine Höhe auf — bei {op} entscheidet das der Dialog.": "La maniglia estrude un'altezza — con {op} lo decide la finestra di dialogo.",
   "Der Zufall spielt mit — ein weiterer Versuch kostet nichts als Zeit.": "Il caso ci mette lo zampino — un altro tentativo non costa nulla se non tempo.",
   "Der Zugang zum Schlüsselbund des Betriebssystems fehlt. Installieren Sie Solidon vollständig neu oder wenden Sie sich an den Support.": "Non è possibile accedere al portachiavi del sistema operativo. Reinstalla completamente Solidon o contatta il supporto.",

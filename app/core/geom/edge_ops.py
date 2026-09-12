@@ -28,7 +28,7 @@ Gruppen („alle senkrechten") rechnet ``geom.edges.wanted`` für beide.
 from __future__ import annotations
 
 import dataclasses
-from typing import cast
+from typing import Literal, cast
 
 from app.core.geom.edges import (
     EDGE_CHOICES,
@@ -204,7 +204,7 @@ class BeadParams(BaseParams):
 
 @register_op(
     name="bead_edges",
-    cache_version="4",
+    cache_version="5",
     title=_("Wulst anlegen"),
     category="shaping",
     params=BeadParams,
@@ -238,7 +238,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
     )
-    empty = _too_small_to_see(body, outcome.mesh, ctx.profile, rounded=True)
+    empty = _too_small_to_see(body, outcome.mesh, ctx.profile, kind="bead")
     conversion = []
     if source.kind == "brep":
         from app.core.brep.ops import converted_finding
@@ -276,7 +276,9 @@ def _worked(
     body = as_mesh_data(source.mesh)
     work = round_edges if rounded else bevel_edges
     outcome = work(body, size, choice, keys)
-    empty = _too_small_to_see(body, outcome.mesh, ctx.profile, rounded=rounded)
+    empty = _too_small_to_see(
+        body, outcome.mesh, ctx.profile, kind="fillet" if rounded else "chamfer"
+    )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         # Beide Handlungen fahren bis zu zwei Boolesche Schnitte; welche Stufe
@@ -330,7 +332,7 @@ def _too_small_to_see(
     after: MeshData,
     profile: Profile | None,
     *,
-    rounded: bool,
+    kind: Literal["fillet", "chamfer", "bead"],
 ) -> Finding | None:
     """Hat die Bearbeitung etwas bewirkt, das im Druck ankommt?
 
@@ -354,10 +356,15 @@ def _too_small_to_see(
         severity="warning",
         message=(
             _(
+                "Der Wulst ist zu klein, um im Druck anzukommen. Wählen Sie einen "
+                "größeren Radius, oder prüfen Sie, ob die gewählten Kanten noch da sind."
+            )
+            if kind == "bead"
+            else _(
                 "Die Verrundung ist zu klein, um im Druck anzukommen. Wählen Sie einen "
                 "größeren Radius, oder prüfen Sie, ob die gewählten Kanten noch da sind."
             )
-            if rounded
+            if kind == "fillet"
             else _(
                 "Die Fase ist zu klein, um im Druck anzukommen. Wählen Sie eine größere "
                 "Breite, oder prüfen Sie, ob die gewählten Kanten noch da sind."
