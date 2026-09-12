@@ -85,6 +85,34 @@ def _bolt(size: str, length: float = 12.0) -> MeshData:
     )
 
 
+def test_a_thread_axis_does_not_inherit_the_sign_of_the_svd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei gültige SVD-Vorzeichen desselben Gewindes geben dieselbe Achse aus."""
+    mesh = _bolt("M6")
+    first = find_helices(mesh)
+    assert first
+    original = np.linalg.svd
+
+    def negative_axis(*args, **kwargs):
+        left, values, directions = original(*args, **kwargs)
+        if directions[0, np.argmax(np.abs(directions[0]))] > 0.0:
+            directions[0] *= -1.0
+            left[:, 0] *= -1.0
+        return left, values, directions
+
+    monkeypatch.setattr(np.linalg, "svd", negative_axis)
+    second = find_helices(mesh)
+
+    assert len(second) == len(first)
+    for before, after in zip(first, second, strict=True):
+        assert after.axis[int(np.argmax(np.abs(after.axis)))] > 0.0
+        np.testing.assert_allclose(after.axis, before.axis, atol=1e-12)
+        assert after.pitch == pytest.approx(before.pitch)
+        assert after.length == pytest.approx(before.length)
+        assert after.face_indices == before.face_indices
+
+
 def _tapped(size: str, core: float) -> MeshData:
     """Ein Block mit einem Kernloch und einem Innengewinde darin.
 

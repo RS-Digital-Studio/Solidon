@@ -316,10 +316,11 @@ def apply_mapping(
     gesperrt — eine ID, die eben noch etwas anderes hieß, sofort neu zu
     vergeben, ließe Passungen und Ops auf das falsche Merkmal zeigen.
 
-    ``previous`` liegt bereits im neuen Bezugsrahmen. Bei Zylindermerkmalen
-    gibt seine Achse das Vorzeichen der neuen Messachse vor; die gemessene
-    Achslage bleibt erhalten. Kegel und Flächennormalen sind geometrisch
-    gerichtet und übernehmen dieses Vorzeichen nicht.
+    ``previous`` liegt bereits im neuen Bezugsrahmen. Bei Bohrung, Zapfen,
+    Verrundung, Langloch und Gewinde gibt seine Achse das Vorzeichen der neuen
+    Messachse vor; die gemessene Achslage bleibt erhalten. Kegel und
+    Flächennormalen sind geometrisch gerichtet. Der Torus trägt die Normale
+    seiner Symmetrieebene, keine Längsrichtung, und behält sie ebenfalls.
     """
     renamed: dict[FeatureId, Feature] = {}
     reverse = {value: key for key, value in result.mapping.items()}
@@ -334,7 +335,7 @@ def apply_mapping(
         if (
             target is not None
             and previous is not None
-            and feature.kind in {"hole", "pin", "fillet"}
+            and feature.kind in {"hole", "pin", "fillet", "slot", "thread"}
         ):
             reference = previous.get(target)
             if reference is not None and "axis" in reference.params and "axis" in feature.params:

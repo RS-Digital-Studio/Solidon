@@ -284,14 +284,16 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   der Achse ist der Mittelwert der beiden Vertexextrema des Flecks. Ein
   Dreiecksschwerpunkt würde dicht unterteilte Abschnitte stärker gewichten und
   verschöbe das Werkzeug beim Ändern einer Bohrung.
-- **Zylinderachsen behalten ihren gerichteten Bezug.** Beim ersten Fit ist
+- **Zylinderachsen behalten ihren gerichteten Bezug.** Bohrung, Zapfen,
+  Verrundung, Langloch und Gewinde teilen diese Zuordnung. Beim ersten Fit ist
   die erste größte Betragskomponente positiv; nahezu gleich große Komponenten
   werden innerhalb der Rechengenauigkeit gleich behandelt. Nach einer
   Zuordnung richtet sich ausschließlich das Vorzeichen der neuen Messachse
   am Vorgänger aus. Dieser ist über `moved_features` bereits mit der
   Operationsmatrix transformiert. Eine alte Weltachse wird nie unverändert
   auf einen gedrehten Körper kopiert; Kegel und Flächennormalen bleiben
-  geometrisch gerichtet.
+  geometrisch gerichtet. Der Torus behält die gemessene Normale seiner
+  Symmetrieebene, da sie keine Längsrichtung darstellt.
 - **Gewindegänge schreiten entlang der Achse fort.** Drei gleich dicke Fits
   zählen nur, wenn jeder weitere Abschnitt den lückenlosen Lauf um mehr als
   die Schweißtoleranz verlängert. Eine geometrisch erkannte Wendel entfernt

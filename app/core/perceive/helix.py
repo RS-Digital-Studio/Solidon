@@ -71,7 +71,7 @@ from numpy.typing import NDArray
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, positive_axis
 
 _log = get_logger(__name__)
 
@@ -260,7 +260,7 @@ def _helix_of(
     centre = chain.mean(axis=0)
     offset = chain - centre
     _, _, directions = np.linalg.svd(offset, full_matrices=False)
-    axis = np.asarray(directions[0], dtype=float)
+    axis = np.asarray(positive_axis(tuple(float(value) for value in directions[0])), dtype=float)
 
     along = offset @ axis
     across = offset - np.outer(along, axis)

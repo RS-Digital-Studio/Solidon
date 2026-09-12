@@ -368,18 +368,19 @@ def test_a_bore_axis_has_no_sign() -> None:
     assert same < 1.0, "dieselbe Bohrung, nur mit umgekehrt gelesener Achse"
 
 
-def test_matching_keeps_the_new_axis_measurement_with_the_previous_direction() -> None:
+@pytest.mark.parametrize("kind", ["hole", "pin", "fillet", "slot", "thread"])
+def test_matching_keeps_the_new_axis_measurement_with_the_previous_direction(kind: str) -> None:
     """Die Orientierung reist mit, eine tatsächliche Änderung der Achslage bleibt messbar."""
     old = Feature(
         id="hole_old",
-        kind="hole",
+        kind=kind,
         provenance="detected",
         params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 5.0},
     )
     measured = (0.01, 0.0, -float(np.sqrt(1.0 - 0.01**2)))
     new = Feature(
         id="hole_new",
-        kind="hole",
+        kind=kind,
         provenance="detected",
         params={**old.params, "axis": measured},
     )
