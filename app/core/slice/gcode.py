@@ -1120,7 +1120,7 @@ def stated_bed(text: str) -> BoundingBox | None:
     * PrusaSlicer schreibt ``bed_shape`` und ``max_print_height`` — bei ihm
       genau das, was Solidon ihm gegeben hat,
     * CuraEngine schreibt nichts davon; dort bleibt es bei dem, was Solidon
-      selbst gesetzt hat (:func:`app.core.export.handover.bed_box`).
+      selbst gesetzt hat (:func:`app.core.export.handover.off_the_bed`).
 
     **Und das ist der Unterschied zwischen einer wahren und einer geratenen
     Aussage.** Bei der Orca-Familie kommt das Maschinenprofil aus dem Bestand

@@ -17,7 +17,7 @@ import trimesh
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
 from app.core.export import handover, slicer_keys, threemf
 from app.core.export.handover import with_slot_profiles
-from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
+from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
     arrangement_holds,
     check_adhesion_clearance,
@@ -1592,15 +1592,24 @@ def test_every_flavour_answers_every_property() -> None:
     )
 
 
-def test_the_bed_box_matches_the_machine_coordinate_contract(profile: Profile) -> None:
-    """Alle Familien schreiben Bettkoordinaten; die Prüfbox deckt den ganzen Bauraum."""
-    flavours = get_args(SlicerFlavour)
-    assert len(flavours) >= 3, f"zu wenige Familien gefunden: {flavours}"
-    for flavour in flavours:
-        assert wants_bed_coordinates(flavour)
-        box = handover.bed_box(profile, flavour)
-        assert box.minimum == pytest.approx((0.0, 0.0, 0.0))
-        assert box.maximum == pytest.approx(profile.printer.build_volume)
+@pytest.mark.parametrize("flavour", get_args(SlicerFlavour))
+def test_the_print_file_is_checked_in_machine_coordinates(
+    profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """Alle Familien prüfen Bahnen ohne Bettkopf vom Ursprung bis zur vollen Größe."""
+    width, depth, height = profile.printer.build_volume
+    start = "G90\nM83\n;LAYER:0\nG0 X0 Y0 Z0\n"
+    inside = start + f"G1 X{width} Y{depth} Z{height} E1\n"
+    assert handover.off_the_bed(inside, profile, flavour) is None
+
+    for axis, bound in zip("XYZ", (width, depth, height), strict=True):
+        for outside in (-2.0, bound + 2.0):
+            moving_axis = "Y" if axis == "X" else "X"
+            text = start + f"G1 {moving_axis}1 {axis}{outside} E1\n"
+            finding = handover.off_the_bed(text, profile, flavour)
+            assert finding is not None, (flavour, axis, outside)
+            assert finding.code == "gcode.off_the_bed"
+            assert finding.source == "gcode"
 
 
 def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:

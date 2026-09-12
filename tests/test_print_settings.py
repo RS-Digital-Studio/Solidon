@@ -4612,11 +4612,6 @@ def test_prusa_and_cura_get_the_bed_of_the_machine_not_of_the_document(tmp_path:
     assert cura["z_seam_x"] == f"{width / 2.0:g}", "hinten in der Mitte, in Bettkoordinaten"
     assert cura["z_seam_y"] == f"{depth:g}"
 
-    for flavour in ("prusa", "cura", "orca"):
-        box = handover.bed_box(profile, flavour)
-        assert box.minimum == (0.0, 0.0, 0.0), flavour
-        assert box.maximum == (width, depth, height), flavour
-
 
 def test_slot_advice_uses_inherited_values_and_the_adopted_group_reaches_both_outputs(
     tmp_path: Path,

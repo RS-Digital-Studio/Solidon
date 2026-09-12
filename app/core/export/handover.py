@@ -2260,20 +2260,6 @@ def _run_slicer(
     )
 
 
-def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
-    """Der Bauraum aller unterstützten Slicerfamilien beginnt an der Bettecke.
-
-    Cura und Prusa erhalten diese Koordinaten über :func:`_machine_keys`,
-    die Orca-Familie über ihr Maschinenprofil. Der Familienparameter bleibt
-    Teil des gemeinsamen Aufrufvertrags.
-
-    Dies ist die Annahme für Dateien ohne Bettangabe. Was die Datei selbst
-    über ihr Bett sagt, liest :func:`gcode.stated_bed`; diese Angabe geht vor.
-    """
-    width, depth, height = profile.printer.build_volume
-    return BoundingBox((0.0, 0.0, 0.0), (width, depth, height))
-
-
 def _usable_area(contour: Sequence[tuple[float, float]]) -> BaseGeometry | None:
     """Die Fläche einer fremden Kontur, oder ``None``, wenn keine darin steckt.
 

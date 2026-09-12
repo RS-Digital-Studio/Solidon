@@ -97,10 +97,11 @@ Orca-Familie schreibt nichts. Drei Dinge gelten dabei:
 - **Die Stelle wird über alle Bewegungen nachgeführt**, auch die leeren: Z steht
   so gut wie nie in derselben Zeile wie die Bahn, und ein `G1 Y30 E0.5` behält
   sein X von vorher.
-- **Der Bauraum hat je Familie andere Koordinaten** (`handover.bed_box`). Cura
-  und PrusaSlicer bekommen von Solidon eine Maschine um den Ursprung, die
-  Orca-Familie lädt ihr eigenes Profil und misst von der Ecke. Beides zu
-  verwechseln kostet einen falschen Befund bei jedem Lauf.
+- **Die Druckdatei wird in Maschinenkoordinaten geprüft** (`handover.off_the_bed`).
+  Bei allen unterstützten Familien liegt der Ursprung an der Bettecke.
+  Die Verschiebung der Eingabegeometrie ist davon getrennt: CuraEngine führt
+  sie selbst aus, Prusa- und Orca-Projekte enthalten sie bereits. Nennt die
+  Druckdatei ihre Bettkontur, hat diese Vorrang vor dem Druckerprofil.
 
 Gemeldet, nicht gesperrt (§29), und unter einer Bahnbreite gar nicht: die Bahn
 liegt mit ihrer halben Breite ohnehin neben der Mitte, die gemessen wird.
