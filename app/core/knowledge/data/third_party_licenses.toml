@@ -38,10 +38,10 @@ source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V8_0_1/LICENSE
 sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
 
 [[text]]
-path = "third_party_licenses/OCP-Apache-2.0.txt"
+path = "third_party_licenses/Apache-2.0.txt"
 runtime = ["openssl"]
 source = "https://www.apache.org/licenses/LICENSE-2.0.txt"
-sha256 = "a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd"
+sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 
 [[text]]
 path = "third_party_licenses/libffi-3.4.4.txt"

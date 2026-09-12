@@ -16,6 +16,16 @@ from app.core.knowledge import licences
 from tools import make_licence_notices
 
 
+def test_openssl_uses_the_canonical_apache_text_without_foreign_attribution() -> None:
+    """Die Laufzeit darf nicht das Copyright der OCP-Beilage übernehmen."""
+    records = make_licence_notices._fixed_records("runtime")
+    notices = [notice for _versions, notice in records["openssl"]]
+    assert len(notices) == 1
+    assert notices[0].name == "Apache-2.0.txt"
+    assert "Copyright [yyyy] [name of copyright owner]" in notices[0].content
+    assert "OCP contributors" not in notices[0].content
+
+
 def test_every_target_component_has_version_expression_and_full_text() -> None:
     components = make_licence_notices.collect_components()
     expected = {licences.normalise(name) for name in licences.runtime_packages()}
