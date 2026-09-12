@@ -432,3 +432,24 @@ def test_embedded_picker_fits_the_narrow_selection_dock(qt_app: QApplication) ->
     )
     QApplication.processEvents()
     assert quick.scope.height() >= quick.scope.heightForWidth(quick.scope.width())
+
+
+def test_refresh_only_visits_each_whole_body_slot_array_once(
+    picker: QuickFilamentPicker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Text und Entfernen-Knopf teilen denselben vollständigen Flächendurchlauf."""
+    from app.ui import filament_assignment
+
+    calls = []
+    original = filament_assignment.used_slots
+
+    def counted(mesh):
+        calls.append(mesh)
+        return original(mesh)
+
+    monkeypatch.setattr(filament_assignment, "used_slots", counted)
+    first = _body("one", "Teil", [MaterialSlot(1, "Rot")])
+    second = _body("two", "Anderes Teil")
+    picker.set_context([first, second])
+    assert len(calls) == 2
+    assert picker.clear_button.isEnabled()

@@ -43,6 +43,8 @@ Spulen zeigt die Auswahl einen bleibenden Hinweis und lädt ihre Angebote neu.
 Filamentangaben werden nur als ausdrücklich ungebundene Projektwerte übernommen.
 Schnellauswahl und Projektübersicht lesen tatsächlich verwendete Mesh-Slots;
 verwaiste Definitionen werden nicht als belegte Filamente dargestellt.
+Die Schnellauswahl teilt eine Sloterhebung je ganz gewähltem Körper zwischen
+Beschriftung und Entfernen-Knopf.
 Der Objektbaum erhebt die Belegung einmal je Körperaufbau. Seine Flächenzeilen
 lesen nur die Dreiecke des jeweiligen Merkmals und zeigen dafür Farbe, Namen
 und zugängliche Beschreibung aus derselben Slotdefinition.

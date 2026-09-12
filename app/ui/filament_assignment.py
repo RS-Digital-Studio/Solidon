@@ -66,6 +66,12 @@ class QuickFilamentPicker(QWidget):
 
     def refresh(self) -> None:
         """Neue Lagerwerte stehen sofort zur Wahl, die Szene bleibt dabei unverändert."""
+        face_owners = {owner for owner, _feature in self._selected_features}
+        occupied = {
+            obj.id: set(used_slots(as_mesh_data(obj.mesh)))
+            for obj in self._objects
+            if obj.id not in face_owners
+        }
         if not self._objects:
             current = tr("Körper wählen, um ein Filament zuzuweisen")
             scope = tr("Das Filamentlager ist auch ohne Auswahl erreichbar.")
@@ -90,7 +96,7 @@ class QuickFilamentPicker(QWidget):
             all_assigned = True
             for obj in self._objects:
                 declared = {slot.index: slot for slot in slots_for_object(obj)}
-                for index in used_slots(as_mesh_data(obj.mesh)):
+                for index in occupied[obj.id]:
                     slot = declared.get(index)
                     if slot is None:
                         all_assigned = False
@@ -132,7 +138,7 @@ class QuickFilamentPicker(QWidget):
                 )
             self.picker.setCurrentIndex(0)
         self.picker.setEnabled(bool(self._objects))
-        removable = self._has_assigned_selection()
+        removable = self._has_assigned_selection(occupied)
         self.clear_button.setEnabled(removable)
         explanation = (
             tr("Entfernt die Zuweisung in der angezeigten Auswahl. Strg+Z stellt sie wieder her.")
@@ -143,7 +149,7 @@ class QuickFilamentPicker(QWidget):
         self.clear_button.setStatusTip(explanation)
         self.clear_button.setAccessibleDescription(explanation)
 
-    def _has_assigned_selection(self) -> bool:
+    def _has_assigned_selection(self, occupied: dict[str, set[int]]) -> bool:
         """Nur tatsächliche Zuweisungen im gewählten Wirkungsbereich lassen sich entfernen."""
         for body in self._objects:
             mesh = as_mesh_data(body.mesh)
@@ -160,7 +166,7 @@ class QuickFilamentPicker(QWidget):
                     for face in body.features[feature].face_indices
                 }
             else:
-                indices = set(used_slots(mesh))
+                indices = occupied[body.id]
             if any(slot.index in indices for slot in slots_for_object(body)):
                 return True
         return False
