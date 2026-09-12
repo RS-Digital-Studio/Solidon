@@ -678,9 +678,7 @@ class SketchCanvas(QWidget):
         )
         self.second_measure_field.setAccessibleName(tr("Höhe"))
         self.second_measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
-        self.measure_lock = QLabel(tr("🔒"), self)
-        self.measure_lock.setAccessibleName(tr("Breite"))
-        self.measure_lock.setVisible(False)
+        self.measure_lock = self._lock_label(tr("Breite"), tr("Die Breite steht schon fest."))
         # Am Kreis steht neben dem Feld, was die Zahl bedeutet — Ø oder R —,
         # und ein Klick tauscht es. Die Wahl gilt in jedem Kreisfeld der
         # Anwendung (``labels.set_circle_measure``) und bleibt gespeichert.
@@ -704,9 +702,7 @@ class SketchCanvas(QWidget):
             weak_slot(self, SketchCanvas._follow_circle_measure)
         )
         self._name_circle_button()
-        self.second_measure_lock = QLabel(tr("🔒"), self)
-        self.second_measure_lock.setAccessibleName(tr("Höhe"))
-        self.second_measure_lock.setVisible(False)
+        self.second_measure_lock = self._lock_label(tr("Höhe"), tr("Die Höhe steht schon fest."))
         self._rectangle_measures: list[float | None] = [None, None]
         self.measuringChanged.connect(self._place_measure_field)
         self._measure_host: QWidget | None = None
@@ -2622,6 +2618,23 @@ class SketchCanvas(QWidget):
         self._reset_measure_entry()
         self.insert_shape(rectangle, joins)
         self.measuringChanged.emit(0.0)
+
+    def _lock_label(self, name: str, note: str) -> QLabel:
+        """Ein Vorhängeschloss neben einem Maßfeld: dieses Maß steht schon fest.
+
+        Ein Symbol aus :mod:`app.ui.icons`, kein Schriftzeichen — das Emoji,
+        das hier stand, hing an der Schrift des Systems und fiel auf manchem
+        Rechner zum Kästchen zusammen. Der Name trägt das Maß für den
+        Bildschirmleser, der Tooltip sagt den Zustand in Worten (Regel 18).
+        """
+        label = QLabel(self)
+        size = self.fontMetrics().height()
+        label.setPixmap(icons.icon("locked", label).pixmap(size, size))
+        label.setAccessibleName(name)
+        label.setAccessibleDescription(note)
+        label.setToolTip(note)
+        label.setVisible(False)
+        return label
 
     def _measure_widgets(self) -> tuple[QWidget, ...]:
         """Alle zum Zeiger gehörenden Maßanzeigen, gemeinsam verleihbar."""

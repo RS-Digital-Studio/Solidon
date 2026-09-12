@@ -236,6 +236,15 @@ PATHS: Final[dict[str, str]] = {
     "done": ('<path d="M4.5 12.5l4.5 4.5L19.5 7" />'),
     # Ein Pfeil auf den aktuellen Schritt der Tour.
     "step": ('<path d="M4 12h12.5" /><path d="M11.5 6.5 17 12l-5.5 5.5" />'),
+    # Ein Vorhängeschloss neben einem Maßfeld: dieses Maß steht schon fest.
+    # Die Zahl daneben bleibt lesbar (Regel 18) — das Zeichen sagt nur den
+    # Zustand. Ein Symbol statt eines Emojis, weil ein Emoji an der Schrift
+    # des Systems hängt und auf manchem Rechner als Kästchen erscheint.
+    "locked": (
+        '<rect x="5.5" y="10.5" width="13" height="9" rx="1.5" />'
+        '<path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />'
+        '<path d="M12 14v2.5" />'
+    ),
     # --- Zeichenwerkzeuge ------------------------------------------------------
     #
     # Hier tragen die Symbole **allein**, ohne Beschriftung. Der Grund ist nicht
