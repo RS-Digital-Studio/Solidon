@@ -349,8 +349,10 @@ def render_notices(components: tuple[ComponentNotice, ...]) -> str:
         "Quelle sind die installierten Ziel-Wheels, die Stückliste (SBOM) des gebauten Pakets\n"
         "und die im Repository mit SHA-256 festgeschriebenen Ergänzungen."
         if has_runtime
-        else "Diese Entwicklungsvorschau nennt die installierten Ziel-Wheels und ihre Lizenztexte.\n"
-        "Die zusätzlichen nativen Laufzeitfamilien stehen erst in der Beilage des gebauten Pakets,\n"
+        else "Diese Entwicklungsvorschau nennt die installierten Ziel-Wheels "
+        "und ihre Lizenztexte.\n"
+        "Die zusätzlichen nativen Laufzeitfamilien stehen erst in der Beilage "
+        "des gebauten Pakets,\n"
         "erzeugt aus dessen tatsächlicher Stückliste (SBOM)."
     )
     lines = [
