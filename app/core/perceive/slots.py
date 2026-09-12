@@ -218,6 +218,10 @@ def open_slots_instead_of_fillets(
     vertices = np.asarray(body.vertices)
     tolerance = weld_tolerance(mesh.bounds.diagonal)
     kept = dict(found)
+    if not fillets or not len(adjacency):
+        return kept
+    starts, order = _neighbourhood_order(adjacency, len(normals))
+    graph = starts, order % len(adjacency)
     covered = {face for f in kept.values() if f.kind == "slot" for face in f.face_indices}
     for fit, patch in fillets:
         if check_cancelled is not None:
@@ -244,34 +248,26 @@ def open_slots_instead_of_fillets(
         centre = centre + solved[0] * u + solved[1] * v
         if radius <= tolerance:
             continue
-        # Nur ebene, zur Rundwand tangentiale Nachbarn erweitern den Mantel.
-        distances = np.einsum("ijk,ik->ij", triangles - centre, normals)
-        tangent = (np.abs(normals @ axis) <= ACROSS_THE_AXIS) & (
-            np.max(np.abs(distances + radius), axis=1) <= tolerance
+        chosen, rim, has_flanks = _open_slot_shell(
+            triangles,
+            normals,
+            adjacency,
+            graph,
+            patch,
+            centre,
+            axis,
+            radius,
+            tolerance,
+            check_cancelled=check_cancelled,
         )
-        relative = triangles - centre
-        radial_points = relative - np.outer((relative @ axis).ravel(), axis).reshape(relative.shape)
-        on_arc = (
-            np.max(np.abs(np.linalg.norm(radial_points, axis=2) - radius), axis=1) <= tolerance
-        ) & (np.einsum("ij,ij->i", radial_points.mean(axis=1), normals) < 0.0)
-        chosen = np.zeros(len(normals), dtype=bool)
-        chosen[patch] = True
-        while True:
-            rim = chosen[adjacency[:, 0]] != chosen[adjacency[:, 1]]
-            neighbours = adjacency[rim].reshape(-1)
-            added = neighbours[(tangent[neighbours] | on_arc[neighbours]) & ~chosen[neighbours]]
-            if not len(added):
-                break
-            chosen[added] = True
-        rim = chosen[adjacency[:, 0]] != chosen[adjacency[:, 1]]
-        vectors = vertices[edges[:, 1]] - vertices[edges[:, 0]]
+        vectors = vertices[edges[rim, 1]] - vertices[edges[rim, 0]]
         lengths = np.linalg.norm(vectors, axis=1)
         axial = np.abs(vectors @ axis) >= PARALLEL_AXES * lengths
-        boundary = np.flatnonzero(rim & axial & (lengths > tolerance))
+        boundary = rim[axial & (lengths > tolerance)]
         if len(boundary) < 2:
             continue
         neighbours = adjacency[boundary]
-        outside = np.where(chosen[neighbours[:, 0]], neighbours[:, 1], neighbours[:, 0])
+        outside = np.where(np.isin(neighbours[:, 0], chosen), neighbours[:, 1], neighbours[:, 0])
         normal = normals[outside[0]]
         points = vertices[edges[boundary]].reshape(-1, 3)
         if np.any(normals[outside] @ normal < PARALLEL_AXES) or np.ptp(points @ normal) > tolerance:
@@ -292,11 +288,11 @@ def open_slots_instead_of_fillets(
         reach = mesh.bounds.diagonal * 2.0
         if not _reaches_through(body, mouth + normal * reach / 2.0, normal, axis, 0.0, reach):
             continue
-        flank_faces = np.flatnonzero(chosen & ~on_arc)
-        travel = float(np.linalg.norm(mouth - centre)) if len(flank_faces) else 0.0
+        travel = float(np.linalg.norm(mouth - centre)) if has_flanks else 0.0
         direction = (mouth - centre) / travel if travel > tolerance else normal
         middle = centre + direction * travel / 2.0
-        indices = tuple(int(face) for face in np.flatnonzero(chosen))
+        indices = tuple(int(face) for face in chosen)
+        selected = set(indices)
         number = 1
         while f"slot_{number}" in kept:
             number += 1
@@ -307,7 +303,7 @@ def open_slots_instead_of_fillets(
             if not (
                 feature.kind in SWALLOWED_BY_A_SLOT
                 and feature.face_indices
-                and set(indices).issuperset(feature.face_indices)
+                and selected.issuperset(feature.face_indices)
             )
         }
         kept[name] = Feature(
@@ -332,6 +328,79 @@ def open_slots_instead_of_fillets(
         )
         covered.update(indices)
     return kept
+
+
+def _open_slot_shell(
+    triangles: np.ndarray,
+    normals: np.ndarray,
+    adjacency: np.ndarray,
+    graph: tuple[np.ndarray, np.ndarray],
+    patch: Sequence[int],
+    centre: np.ndarray,
+    axis: np.ndarray,
+    radius: float,
+    tolerance: float,
+    *,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[np.ndarray, np.ndarray, bool]:
+    """Erweitert den Bogen nur über erreichbare Flanken und weitere Kreisfacetten.
+
+    Jede besuchte Fläche wird einmal geometrisch geprüft. Abgelehnte Nachbarn
+    bleiben als Grenze bekannt; ferne Dreiecke bekommen weder eine Maske noch
+    ein eigenes Koordinatenfeld für diesen Bogen.
+    """
+    chosen = set(patch)
+    visited = set(patch)
+    frontier = np.asarray(sorted(chosen), dtype=np.int64)
+    _allowed, on_arc = _open_slot_candidates(
+        triangles[frontier], normals[frontier], centre, axis, radius, tolerance
+    )
+    arc_faces = set(frontier[on_arc])
+    incident_rows = []
+    while len(frontier):
+        if check_cancelled is not None:
+            check_cancelled()
+        incident = _adjacent_rows(graph, frontier)
+        incident_rows.append(incident)
+        neighbours = np.unique(adjacency[incident])
+        candidates = np.asarray(
+            [face for face in neighbours if face not in visited], dtype=np.int64
+        )
+        if not len(candidates):
+            break
+        visited.update(candidates)
+        allowed, on_arc = _open_slot_candidates(
+            triangles[candidates], normals[candidates], centre, axis, radius, tolerance
+        )
+        frontier = candidates[allowed]
+        chosen.update(frontier)
+        arc_faces.update(candidates[on_arc])
+    selected = np.asarray(sorted(chosen), dtype=np.int64)
+    incident = np.unique(np.concatenate(incident_rows))
+    first = np.isin(adjacency[incident, 0], selected)
+    second = np.isin(adjacency[incident, 1], selected)
+    return selected, incident[first != second], not arc_faces.issuperset(chosen)
+
+
+def _open_slot_candidates(
+    triangles: np.ndarray,
+    normals: np.ndarray,
+    centre: np.ndarray,
+    axis: np.ndarray,
+    radius: float,
+    tolerance: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Dieselben Tangenz- und Kreisbedingungen an einer lokalen Nachbarmenge."""
+    relative = triangles - centre
+    distances = np.einsum("ijk,ik->ij", relative, normals)
+    tangent = (np.abs(normals @ axis) <= ACROSS_THE_AXIS) & (
+        np.max(np.abs(distances + radius), axis=1) <= tolerance
+    )
+    radial = relative - np.outer((relative @ axis).ravel(), axis).reshape(relative.shape)
+    on_arc = (np.max(np.abs(np.linalg.norm(radial, axis=2) - radius), axis=1) <= tolerance) & (
+        np.einsum("ij,ij->i", radial.mean(axis=1), normals) < 0.0
+    )
+    return tangent | on_arc, on_arc
 
 
 def slots_from_stadiums(mesh: MeshData, stadiums: Sequence[tuple[Any, list[int]]]) -> list[Slot]:
@@ -456,11 +525,25 @@ def _neighbourhood(neighbours: np.ndarray, count: int) -> tuple[np.ndarray, np.n
     300 000 Kanten, und die einzeln in Python anzufassen kostet mehr als die
     ganze Erkennung darf (§31).
     """
-    both = np.concatenate((neighbours, neighbours[:, ::-1]))
-    order = np.argsort(both[:, 0], kind="stable")
-    sorted_edges = both[order]
-    starts = np.searchsorted(sorted_edges[:, 0], np.arange(count + 1))
-    return starts, np.ascontiguousarray(sorted_edges[:, 1])
+    starts, order = _neighbourhood_order(neighbours, count)
+    targets = np.concatenate((neighbours[:, 1], neighbours[:, 0]))
+    return starts, np.ascontiguousarray(targets[order])
+
+
+def _neighbourhood_order(neighbours: np.ndarray, count: int) -> tuple[np.ndarray, np.ndarray]:
+    """Dieselbe stabile Flächenordnung für Nachbarflächen und Nachbarkanten."""
+    sources = np.concatenate((neighbours[:, 0], neighbours[:, 1]))
+    order = np.argsort(sources, kind="stable")
+    starts = np.searchsorted(sources[order], np.arange(count + 1))
+    return starts, order
+
+
+def _adjacent_rows(graph: tuple[np.ndarray, np.ndarray], faces: np.ndarray) -> np.ndarray:
+    """Die Nachbarschaftszeilen gewählter Flächen, ohne Schleife über das ganze Netz."""
+    starts, rows = graph
+    counts = starts[faces + 1] - starts[faces]
+    offsets = np.repeat(starts[faces] - np.cumsum(counts) + counts, counts)
+    return np.unique(rows[offsets + np.arange(int(counts.sum()))])
 
 
 def _slot_from(

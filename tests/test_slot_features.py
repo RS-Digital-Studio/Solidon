@@ -51,11 +51,79 @@ def slotted(profile: Profile, **values: float | str) -> MeshData:
     return drill(plate(), profile=profile, **settings).mesh  # type: ignore[arg-type]
 
 
+def test_open_slot_search_checks_only_adjacent_faces(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Viele Taschenecken prüfen nur ihre Nachbarn; die echte Randöffnung bleibt."""
+    import numpy as np
+
+    from app.core.geom.boolean import boolean
+    from app.core.perceive.features import _fitted
+    from app.core.perceive.slots import slots_instead_of_half_bores
+    from tests.test_performance import pocketed_plate
+
+    plate = pocketed_plate(16)
+    cutter = trimesh.creation.cylinder(radius=3.0, height=24.0, sections=64)
+    cutter.apply_translation((plate.bounds.maximum[0] - 1.0, 0.0, 0.0))
+    mesh = boolean("difference", [plate, MeshData.of(cutter)]).mesh
+    fitted = _fitted(mesh)
+    assert sum(fit.inward for fit, _patch in fitted.fillets) >= 50
+    original = np.einsum
+    checked = 0
+
+    def counted(expression, *values, **kwargs):
+        nonlocal checked
+        if expression == "ijk,ik->ij":
+            checked += len(values[0])
+        return original(expression, *values, **kwargs)
+
+    monkeypatch.setattr(np, "einsum", counted)
+    found = slots_instead_of_half_bores(mesh, {}, fitted.fillets, stadiums=fitted.stadiums)
+    openings = [feature for feature in found.values() if feature.kind == "slot"]
+
+    assert len(openings) == 1
+    assert openings[0].params["open"] is True
+    assert openings[0].params["diameter"] == pytest.approx(6.0, abs=0.01)
+    assert openings[0].params["depth"] == pytest.approx(20.0, abs=0.01)
+    assert checked < 8 * mesh.triangle_count, (
+        f"{checked} triangle distance tests for {mesh.triangle_count} triangles"
+    )
+
+
 def only_slot(mesh: MeshData) -> Feature:
     """Das eine erkannte Langloch — und die Zusicherung, dass es eines ist."""
     found = [entry for entry in detect(mesh).values() if entry.kind == "slot"]
     assert len(found) == 1, f"genau ein Langloch erwartet, gefunden: {len(found)}"
     return found[0]
+
+
+def test_open_slot_search_can_stop_inside_a_single_wall(profile: Profile) -> None:
+    """Auch die Nachbarsuche einer einzelnen Öffnung lässt sich abbrechen."""
+    from app.core.perceive.slots import open_slots_instead_of_fillets
+
+    class StopHereError(RuntimeError):
+        pass
+
+    mesh = drill(
+        plate(),
+        position=(29.0, 0.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        slot_length=18.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    fillets = [entry for entry in _fitted(mesh).fillets if entry[0].inward]
+    assert len(fillets) == 1
+    calls = 0
+
+    def stop() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise StopHereError
+
+    with pytest.raises(StopHereError):
+        open_slots_instead_of_fillets(mesh, {}, fillets, check_cancelled=stop)
+    assert calls == 3
 
 
 # --- Was ein Langloch ist ---------------------------------------------------------

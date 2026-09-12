@@ -10,6 +10,10 @@ Bohrungen und Langlöcher mit einer ebenen freien Mündung (§21.1). Die
 vorhandenen Bogen- und Flankenflächen bilden ein `slot` mit `open`,
 `arc_centre`, `mouth_centre` und `opening_normal`. `matching.moved_features`
 transformiert diese Punkte und Richtungen zusammen mit der Merkmalsachse.
+Die Suche nach Randöffnungen erweitert einen Bogen nur über erreichbare
+Nachbarflächen. Tangenz und Kreisform werden lokal geprüft; die gemeinsame
+Flächentabelle liefert auch die Randkanten. Der Abbruch wird innerhalb der
+Flutung geprüft, ohne pro Bogen Felder über das gesamte Netz anzulegen.
 
 Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
 ebenen Flanken. Die Bogenanpassung erkennt die Form, ihr an Dreiecksschwerpunkten
