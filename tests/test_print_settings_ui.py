@@ -4896,7 +4896,11 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(handover, "profile_file", lambda *_args: profile)
+    monkeypatch.setattr(
+        handover,
+        "profile_source",
+        lambda *_args: SlicerProfile(profile, "Maker PLA", "filament", from_user=True),
+    )
     monkeypatch.setattr(handover, "_profile_roots", lambda *_args: (tmp_path,))
     slot = MaterialSlot(0, "Maker PLA", material="Maker PLA", material_type="PLA")
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=(slot,))])
