@@ -304,14 +304,15 @@ steht. Die Regel dazu steht in `.claude/rules/operationen.md` unter „Und die
 vierte hängt an keinem Parameter".
 
 **Ein Zug speichert einen Weg, gemeint war ein Platz.** `back_onto_bed` holt
-zurück, was eine Bewegung von der Druckfläche geschoben hat, und die drei
-Operationen, die ein Gizmo-Zug anlegt — `translate_object`, `rotate_object`,
+zurück, was eine Bewegung von der Druckfläche oder in ein anderes Teil
+geschoben hat. Die drei Operationen, die ein Gizmo-Zug anlegt —
+`translate_object`, `rotate_object`,
 `scale_object` — rufen es über den Parameter `keep_on_bed`. Erst wird
 zurückgeschoben, den kürzesten Weg, den `placement_offset` ohnehin zuerst
 prüft; steht dort ein Nachbar, sucht `arrange_on_bed` eine freie Stelle **auf
 derselben Platte**. Ist dort nichts frei, bleibt der Körper liegen und
-`check_build_volume` sagt es wie bisher — ein Plattenwechsel hinter dem Rücken
-des Kunden wäre ein Teil, das er beim Drucken nicht wiederfindet.
+die Bauraum- und Kollisionsprüfung sagen es wie bisher — ein Plattenwechsel
+hinter dem Rücken des Kunden wäre ein Teil, das er beim Drucken nicht wiederfindet.
 
 **Die Vorgabe ist aus, und den Haken setzt der Zug** (`MainWindow.
 _on_transform_dragged`, vier Stellen). Ein getippter Wert ist eine Ansage und

@@ -2029,7 +2029,7 @@ def back_onto_bed(
     *,
     spacing: float = 5.0,
 ) -> tuple[Vec3, list[Finding]]:
-    """Der XY-Versatz, der einen Körper wieder auf die Druckfläche bringt (§29).
+    """Der XY-Versatz zu einem freien Platz auf der Druckfläche (§29).
 
     **Der Anlass** (Robert, 12.09.2026: „wenn ich die Schriftgröße änder passt
     das Druckoptimal ausrichten nicht mehr"). Ein Zug am Gizmo speichert einen
@@ -2057,12 +2057,17 @@ def back_onto_bed(
     Der Versatz ist rein waagerecht. Die Höhe hat *Auf das Bett setzen*, und
     ein bewusst angehobener Körper — für einen Booleschen Schnitt etwa — darf
     davon nicht heruntergezogen werden.
+
+    Auch innerhalb der Druckfläche kann der alte Handzug nach einer
+    Größenänderung in einen Nachbarn führen. Die Bettbindung hält deshalb
+    beide Bedingungen: innerhalb der Fläche und ohne Überschneidung.
     """
     area = printable_area(profile.printer)
-    if fits_xy(mesh, area):
+    body = as_mesh_data(mesh)
+    inside = fits_xy(body, area)
+    if inside and not _runs_into(body, (0.0, 0.0, 0.0), others):
         return (0.0, 0.0, 0.0), []
 
-    body = as_mesh_data(mesh)
     nudge = placement_offset(body, profile.printer)
     if nudge is not None:
         offset = (nudge[0], nudge[1], 0.0)
@@ -2095,13 +2100,21 @@ def back_onto_bed(
         float(placed.bounds.centre[1] - body.bounds.centre[1]),
         0.0,
     )
+    # Die Suche legt auf Z=0; die tatsächliche Korrektur bewahrt die Höhe.
+    # Nur diese endgültige Lage darf als kollisionsfrei gemeldet werden.
+    if _runs_into(body, offset, others):
+        return (0.0, 0.0, 0.0), []
     return offset, [
         Finding(
             code="transform.rearranged_on_bed",
             severity="info",
-            message=_(
-                "Der Körper passte an seiner Stelle nicht mehr auf die "
-                "Druckfläche und wurde neu eingeordnet."
+            message=(
+                _("Der Körper überschnitt sich mit einem anderen Teil und wurde neu eingeordnet.")
+                if inside
+                else _(
+                    "Der Körper passte an seiner Stelle nicht mehr auf die "
+                    "Druckfläche und wurde neu eingeordnet."
+                )
             ),
         )
     ]

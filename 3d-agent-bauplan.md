@@ -2096,8 +2096,9 @@ gilt nur, solange davor nichts anderes wird. Ordnet ein früherer Schritt nach
 einer Parameteränderung neu an, startet der Körper woanders, und derselbe Weg
 führt neben das Bett. Deshalb holen die drei Operationen des Gizmos einen
 Körper auf die Druckfläche zurück, wenn ihre Bewegung ihn darüber hinaus
-trägt: so wenig wie möglich, bei belegtem Platz auf eine freie Stelle
-derselben Platte, und mit einem Befund, der es sagt. Geprüft wird der Eingang
+trägt oder in ein anderes Teil schiebt: so wenig wie möglich, bei belegtem
+Platz auf eine freie Stelle derselben Platte, und mit einem Befund, der es
+sagt. Geprüft wird der Eingang
 — wer schon daneben stand, bleibt geparkt —, und bewegt wird nur waagerecht;
 die Höhe hat *Auf das Bett setzen*.
 

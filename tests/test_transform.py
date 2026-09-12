@@ -477,6 +477,76 @@ def test_a_named_pivot_of_zero_is_a_point_and_not_a_missing_value(
 # --- auf dem Bett gehalten (§29) ------------------------------------------------
 
 
+def test_a_lettering_resize_keeps_a_saved_drag_clear(profile: Profile) -> None:
+    """Der Handzug bleibt nach 100 → 130 mm auch innerhalb des Betts kollisionsfrei."""
+    import dataclasses
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare import check_collisions
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    def run(name, entries, values, surroundings=None):
+        spec = REGISTRY.get(name)
+        return spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry for entry in surroundings or entries}),
+                inputs=entries,
+                params=spec.params(**values),
+                profile=profile,
+                quality="fine",
+                seed=7,
+                progress=lambda *args: None,
+                ask=lambda *args: None,
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    def lettering(size):
+        body = run("create_label", [], {"text": "Solidon3D", "size": size, "depth": 13.0}).outputs[
+            0
+        ]
+        body = dataclasses.replace(body, id="obj_1")
+        parts = run("split_bodies", [body], {"count": 9}).outputs
+        parts = [dataclasses.replace(part, id=f"obj_{i + 1}") for i, part in enumerate(parts)]
+        oriented = run("orient_for_print", parts, {"thorough": True}).outputs
+        return [run("place_on_bed", [part], {}).outputs[0] for part in oriented]
+
+    def collisions(body, surroundings):
+        return [
+            finding
+            for other in surroundings
+            if other.id != body.id and other.plate == body.plate
+            for finding in check_collisions([body.mesh, other.mesh])
+        ]
+
+    small, large = lettering(100.0), lettering(130.0)
+    offset = {"dx": -70.0, "dy": -100.0}
+    before = run("translate_object", [small[2]], offset, small).outputs[0]
+    assert fits_xy(before.mesh, printable_area(profile.printer))
+    assert not collisions(before, small)
+    unchanged = run("translate_object", [small[2]], {**offset, "keep_on_bed": True}, small).outputs[
+        0
+    ]
+    assert unchanged.mesh.bounds.centre == pytest.approx(before.mesh.bounds.centre)
+
+    # Freie Modellierung führt die Zahlen auch nach der Größenänderung aus.
+    free = run("translate_object", [large[2]], offset, large).outputs[0]
+    assert fits_xy(free.mesh, printable_area(profile.printer))
+    assert collisions(free, large), "the saved drag must reproduce the reported overlap"
+
+    result = run("translate_object", [large[2]], {**offset, "keep_on_bed": True}, large)
+    held = result.outputs[0]
+    assert fits_xy(held.mesh, printable_area(profile.printer))
+    assert not collisions(held, large)
+    assert held.plate == large[2].plate
+    assert held.mesh.bounds.minimum[2] == pytest.approx(large[2].mesh.bounds.minimum[2])
+    assert any(finding.code == "transform.rearranged_on_bed" for finding in result.findings)
+    assert result.transform is not None
+    transformed = apply(as_mesh_data(large[2].mesh), result.transform)
+    assert transformed.bounds.centre == pytest.approx(held.mesh.bounds.centre)
+
+
 def loaded_twice(document: Document) -> History:
     """Zwei Würfel, damit ein Platz auch belegt sein kann."""
     history = prepared(document)

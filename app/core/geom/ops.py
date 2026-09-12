@@ -122,7 +122,8 @@ def _keeping_on_bed() -> Any:
         default=False,
         placement="advanced",
         doc=_(
-            "Bringt die Bewegung den Körper über den Rand der Druckfläche, wird er "
+            "Bringt die Bewegung den Körper über den Rand der Druckfläche "
+            "oder in ein anderes Teil, wird er "
             "zurückgeholt — so wenig wie möglich, und wenn dort ein anderer steht, "
             "an die nächste freie Stelle. Ein Zug am Griff setzt das von selbst: "
             "Wer zieht, zeigt auf einen Platz. Getippte Werte führt Solidon aus, "
@@ -134,7 +135,7 @@ def _keeping_on_bed() -> Any:
 def _held_on_bed(
     ctx: OpContext, source: SceneObject, moved: Any, matrix: Any
 ) -> tuple[Any, Any, list[Finding]]:
-    """Holt zurück, was eine Bewegung von der Druckfläche geschoben hat (§29).
+    """Hält bewegte Körper auf der Druckfläche und frei von Überschneidungen (§29).
 
     **Warum eine Regel und nicht ein Befund** (Robert, 12.09.2026: „das ist
     aber zu kompliziert für den Kunden, wie können wir das automatisieren?").
@@ -275,6 +276,7 @@ def _stood_still(matrix: object) -> list[Finding]:
 
 @register_op(
     name="translate_object",
+    cache_version="2",
     title=_("Verschieben"),
     category="transform",
     params=TranslateParams,
@@ -356,6 +358,7 @@ class RotateParams(BaseParams):
 
 @register_op(
     name="rotate_object",
+    cache_version="2",
     title=_("Drehen"),
     category="transform",
     params=RotateParams,
@@ -465,6 +468,7 @@ class ScaleParams(BaseParams):
 
 @register_op(
     name="scale_object",
+    cache_version="2",
     title=_("Skalieren"),
     category="transform",
     params=ScaleParams,
