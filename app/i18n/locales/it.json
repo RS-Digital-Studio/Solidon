@@ -1181,7 +1181,7 @@
   "Die Dreiecke liegen jetzt gleichmäßig über der Oberfläche.": "Ora i triangoli sono distribuiti in modo uniforme sulla superficie.",
   "Die Druckdatei enthält keine einzige Materialbahn — der Slicer hat das Modell nicht verarbeitet.": "Il file di stampa non contiene un solo percorso di materiale — lo slicer non ha elaborato il modello.",
   "Die Druckdatei fährt über den Bauraum hinaus — der Slicer hat ihn nicht geprüft.": "Il file di stampa esce dal volume di stampa — lo slicer non l'ha verificato.",
-  "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine Sperrfläche. Prüfe das Druckerprofil und die Anordnung im Slicer.": "Il file deposita materiale fuori dall’area stampabile o in una zona esclusa. Verifica il profilo della stampante e la disposizione nello slicer.",
+  "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine Sperrfläche. Prüfen Sie das Druckerprofil und die Anordnung im Slicer.": "Il file deposita materiale fuori dall’area stampabile o in una zona esclusa. Verifica il profilo della stampante e la disposizione nello slicer.",
   "Die Druckdatei ist niedriger als das Modell — was unter dem Druckbett lag, hat der Slicer nicht gedruckt.": "Il file di stampa è più basso del modello — ciò che stava sotto il piano non è stato elaborato.",
   "Die Druckdatei nennt für diese Größe keinen Messwert.": "Il file di stampa non riporta un valore misurato per questa grandezza.",
   "Die Druckdatei schreibt weiterhin der Slicer.": "Il file di stampa continua a scriverlo lo slicer.",

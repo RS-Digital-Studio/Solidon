@@ -1181,7 +1181,7 @@
   "Die Dreiecke liegen jetzt gleichmäßig über der Oberfläche.": "The triangles now sit evenly across the surface.",
   "Die Druckdatei enthält keine einzige Materialbahn — der Slicer hat das Modell nicht verarbeitet.": "The print file contains not a single extrusion path — the slicer did not process the model.",
   "Die Druckdatei fährt über den Bauraum hinaus — der Slicer hat ihn nicht geprüft.": "The print file runs beyond the build volume — the slicer did not check it.",
-  "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine Sperrfläche. Prüfe das Druckerprofil und die Anordnung im Slicer.": "The print file deposits material outside the printable area or through an exclusion zone. Check the printer profile and arrangement in the slicer.",
+  "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine Sperrfläche. Prüfen Sie das Druckerprofil und die Anordnung im Slicer.": "The print file deposits material outside the printable area or through an exclusion zone. Check the printer profile and arrangement in the slicer.",
   "Die Druckdatei ist niedriger als das Modell — was unter dem Druckbett lag, hat der Slicer nicht gedruckt.": "The print file is shorter than the model — what lay below the print bed was not sliced.",
   "Die Druckdatei nennt für diese Größe keinen Messwert.": "The print file names no measured value for this quantity.",
   "Die Druckdatei schreibt weiterhin der Slicer.": "The slicer still writes the print file.",

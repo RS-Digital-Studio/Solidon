@@ -1181,7 +1181,7 @@
   "Die Dreiecke liegen jetzt gleichmäßig über der Oberfläche.": "Os triângulos ficam agora repartidos por igual sobre a superfície.",
   "Die Druckdatei enthält keine einzige Materialbahn — der Slicer hat das Modell nicht verarbeitet.": "O ficheiro de impressão não contém um único caminho de material — o slicer não processou o modelo.",
   "Die Druckdatei fährt über den Bauraum hinaus — der Slicer hat ihn nicht geprüft.": "O ficheiro de impressão sai para fora do volume de impressão — o slicer não o verificou.",
-  "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine Sperrfläche. Prüfe das Druckerprofil und die Anordnung im Slicer.": "O ficheiro deposita material fora da área imprimível ou numa zona excluída. Verifica o perfil da impressora e a disposição no slicer.",
+  "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine Sperrfläche. Prüfen Sie das Druckerprofil und die Anordnung im Slicer.": "O ficheiro deposita material fora da área imprimível ou numa zona excluída. Verifica o perfil da impressora e a disposição no slicer.",
   "Die Druckdatei ist niedriger als das Modell — was unter dem Druckbett lag, hat der Slicer nicht gedruckt.": "O ficheiro de impressão é mais baixo do que o modelo — o que estava abaixo da mesa não foi fatiado.",
   "Die Druckdatei nennt für diese Größe keinen Messwert.": "O ficheiro de impressão não indica um valor medido para esta grandeza.",
   "Die Druckdatei schreibt weiterhin der Slicer.": "Quem escreve o ficheiro de impressão continua a ser o slicer.",
