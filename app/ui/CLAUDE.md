@@ -1052,6 +1052,11 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
 ## Zustandsbindung in asynchronen Bedienwegen
 
+Der Einstellungsdialog hält ungespeicherte Antworten in einem eigenen Entwurf.
+Sprachwechsel bauen ihn sofort neu auf und nehmen auch einen vorgemerkten
+KI-Hinweis-Reset mit. Speichern übernimmt die Werte; Abbrechen verwirft sie
+und stellt Sprache sowie Qt-Katalog des ursprünglichen Fensters wieder her.
+
 Beim Sprachwechsel der ersten Schritte werden Antworten für den Neuaufbau
 übertragen. Erst die Annahme setzt `first_run_done`; die Sprachwahl beendet
 die Einrichtung nicht.

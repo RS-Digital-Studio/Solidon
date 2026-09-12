@@ -1300,7 +1300,6 @@
   "Die Nummerierungsangaben des Rezepts sind ungültig.": "The numbering references of the recipe are invalid.",
   "Die Nutgröße der Schiene — bei den üblichen Profilen die Zahl im Namen.": "The slot size of the rail — on the usual extrusions it is the number in the name.",
   "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Kugeln, Ringe, Kegel und Verrundungen, die die Erkennung darin fand, sind an einer solchen Fläche keine Merkmale und wurden weggelassen; Bohrungen, Zapfen und ebene Flächen bleiben.": "The surface of this model is largely curved. Spheres, tori, cones and fillets that the recognition found in it are not features on such a surface and were left out; bores, pins and flat faces remain.",
-  "Die Oberfläche stellt sich gleich darauf um.": "The interface will switch over right away.",
   "Die Oberfläche vor diesem Schritt wird vorbereitet …": "Preparing the surface as it was before this step …",
   "Die Oberfläche wird noch vorbereitet. Einen Moment warten.": "The surface is still being prepared. Please wait a moment.",
   "Die Oberfläche, wie sie gedruckt wird.": "The surface as it will be printed.",

@@ -6721,13 +6721,12 @@ def test_the_settings_dialog_writes_every_value_back(qt_app: QApplication) -> No
     assert settings.check_for_updates
 
 
-def test_a_language_change_says_that_it_waits(qt_app: QApplication) -> None:
-    """Sie wirkt erst beim nächsten Start — das stillschweigend zu übergehen
-    liest sich, als hätte die Einstellung nicht gewirkt."""
+def test_a_language_change_requests_a_new_settings_dialog(qt_app: QApplication) -> None:
+    """Die gewählte Sprache fordert denselben Neuaufbau wie die ersten Schritte an."""
+    from app.ui.first_run import LANGUAGE_CHANGED
     from app.ui.settings_dialog import SettingsDialog
 
     dialog = SettingsDialog(UiSettings())
-    assert not dialog.language_note.isVisible()
 
     other = next(
         index
@@ -6735,7 +6734,82 @@ def test_a_language_change_says_that_it_waits(qt_app: QApplication) -> None:
         if dialog.language.itemData(index) != UiSettings().language
     )
     dialog.language.setCurrentIndex(other)
-    assert dialog.language_note.isVisibleTo(dialog)
+    assert dialog.result() == LANGUAGE_CHANGED
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_two_settings_language_changes_preserve_edits_and_honour_cancel(
+    qt_app: QApplication, window: MainWindow, monkeypatch: pytest.MonkeyPatch, accept: bool
+) -> None:
+    """Zwei echte Dialog-Neuaufbauten bewahren Antworten; nur Speichern ändert die Vorgaben."""
+    from copy import deepcopy
+
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+    from app.ui.app import install_qt_translations
+    from app.ui.settings_dialog import SettingsDialog
+
+    window.settings.ai_disclosure_version = "previously shown"
+    original = deepcopy(window.settings)
+    previous_language = get_language()
+    shown: list[str] = []
+    stored: list[object] = []
+    changed: list[bool] = []
+    window.languageChanged.connect(lambda: changed.append(True))
+    monkeypatch.setattr(window, "_store_settings", lambda: stored.append(deepcopy(window.settings)))
+    monkeypatch.setattr(window, "_apply_settings", lambda: None)
+    monkeypatch.setattr(window, "_apply_remote", lambda: None)
+
+    def answer(dialog: SettingsDialog) -> int:
+        shown.append(get_language())
+        if len(shown) == 1:
+            dialog.unit.setCurrentIndex(dialog.unit.findData("in"))
+            dialog.theme.setCurrentIndex(dialog.theme.findData("light"))
+            dialog.navigation.setCurrentIndex(dialog.navigation.findData("orbit"))
+            dialog.updates.setChecked(not original.check_for_updates)
+            dialog.remote_port.setValue(9888)
+            dialog.ai_disclosure_reset.click()
+            dialog.language.setCurrentIndex(dialog.language.findData("en"))
+        else:
+            assert dialog.windowTitle() == tr("Einstellungen")
+            assert dialog.unit.currentData() == "in"
+            assert dialog.theme.currentData() == "light"
+            assert dialog.navigation.currentData() == "orbit"
+            assert dialog.updates.isChecked() is not original.check_for_updates
+            assert dialog.remote_port.value() == 9888
+            assert dialog._reset_ai_disclosure
+            assert not dialog.ai_disclosure_reset.isEnabled()
+            assert window.settings == original, "der Entwurf wurde vor dem Speichern übernommen"
+            if len(shown) == 2:
+                dialog.language.setCurrentIndex(dialog.language.findData("fr"))
+            elif accept:
+                dialog.accept()
+            else:
+                dialog.reject()
+        return int(dialog.result())
+
+    monkeypatch.setattr(SettingsDialog, "exec", answer)
+    try:
+        window.action_settings()
+        assert shown == [original.language, "en", "fr"]
+        if accept:
+            assert window.settings.language == "fr"
+            assert window.settings.display_unit == "in"
+            assert window.settings.theme == "light"
+            assert window.settings.remote_port == 9888
+            assert not window.settings.ai_disclosure_version
+            assert get_language() == "fr"
+            assert stored == [window.settings]
+            assert changed == [True]
+        else:
+            assert window.settings == original
+            assert get_language() == original.language
+            assert not stored
+            assert not changed
+    finally:
+        install_language(previous_language)
+        set_language(previous_language)
+        install_qt_translations(qt_app, previous_language)
 
 
 def test_the_printer_of_an_open_project_can_change(session: Session) -> None:

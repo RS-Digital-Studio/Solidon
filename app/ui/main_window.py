@@ -7301,14 +7301,46 @@ class MainWindow(QMainWindow):
         Ohne Rückfrage, aus demselben Grund wie dort: Der Dialog ist modal,
         offen ist sonst nichts, und Dokument samt Verlauf wandern mit.
         """
-        # Was an den Feldern umgeschaltet wurde, gehört in die Einstellungen,
-        # bevor der Dialog sie liest und zurückschreibt.
-        self.settings.circle_measure = circle_measure()
-        dialog = SettingsDialog(self.settings, self)
-        if dialog.exec() != SettingsDialog.DialogCode.Accepted:
-            return
+        from app.i18n import set_language
+        from app.i18n.catalog import install_language
+        from app.ui.app import install_qt_translations
+
+        def switch_language(chosen: str) -> None:
+            """Aktiviert Sprache und Qt-Katalog für den nächsten Dialogaufbau."""
+            install_language(chosen)
+            set_language(chosen)
+            application = QApplication.instance()
+            if application is not None:
+                install_qt_translations(application, chosen)
+
+        draft = deepcopy(self.settings)
+        draft.circle_measure = circle_measure()
         spoken = self.settings.language
-        dialog.apply_to(self.settings)
+        reset_disclosure = False
+        accepted = False
+        try:
+            while True:
+                dialog = SettingsDialog(draft, self)
+                try:
+                    if reset_disclosure:
+                        dialog._reset_disclosure()
+                    answer = dialog.exec()
+                    if answer == first_run.LANGUAGE_CHANGED:
+                        reset_disclosure = reset_disclosure or dialog._reset_ai_disclosure
+                        dialog.apply_to(draft)
+                        switch_language(draft.language)
+                        continue
+                    if answer != SettingsDialog.DialogCode.Accepted:
+                        return
+                    dialog.apply_to(self.settings)
+                    self.settings.circle_measure = draft.circle_measure
+                    accepted = True
+                    break
+                finally:
+                    dialog.deleteLater()
+        finally:
+            if not accepted:
+                switch_language(spoken)
         self._store_settings()
         self._apply_settings()
         self._apply_remote()

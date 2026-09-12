@@ -39,6 +39,7 @@ from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.ai_disclosure import clear_disclosure
+from app.ui.first_run import LANGUAGE_CHANGED
 from app.ui.labels import TrackSlider, by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import align_forms
@@ -90,9 +91,6 @@ class SettingsDialog(QDialog):
 
         self.language = _choices(self, {key: language_name(key) for key in available_languages()})
         _select(self.language, settings.language)
-        self.language_note = QLabel(tr("Die Oberfläche stellt sich gleich darauf um."), self)
-        self.language_note.setWordWrap(True)
-        self.language_note.setVisible(False)
         self.language.currentIndexChanged.connect(self._language_changed)
 
         self.unit = _choices(self, {key: key for key in DISPLAY_UNITS})
@@ -296,7 +294,6 @@ class SettingsDialog(QDialog):
         box = QGroupBox(tr("Anwendung"), self)
         form = QFormLayout(box)
         form.addRow(tr("Sprache"), self.language)
-        form.addRow("", self.language_note)
         form.addRow(tr("Anzeigeeinheit"), self.unit)
         form.addRow(tr("Thema"), self.theme)
         form.addRow(tr("Navigation"), self.navigation)
@@ -331,14 +328,10 @@ class SettingsDialog(QDialog):
         return box
 
     def _language_changed(self) -> None:
-        """§38: eine Änderung, die erst nach dem Neustart wirkt, sagt das.
-
-        Der Sprachkatalog wird beim Start installiert; die Texte, die schon
-        auf dem Bildschirm stehen, wechseln nicht mit. Das stillschweigend zu
-        übergehen hieß, dass die Einstellung aussieht, als hätte sie nicht
-        gewirkt.
-        """
-        self.language_note.setVisible(str(self.language.currentData()) != self.settings.language)
+        """Fordert den Neuaufbau mit den ungespeicherten Antworten in der neuen Sprache an."""
+        chosen = str(self.language.currentData())
+        if chosen and chosen != self.settings.language:
+            self.done(LANGUAGE_CHANGED)
 
     def apply_to(self, settings: UiSettings) -> UiSettings:
         """Schreibt die Antworten zurück. Nur beim Annehmen aufgerufen."""
