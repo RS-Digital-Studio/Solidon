@@ -586,3 +586,59 @@ def test_creating_a_spool_preserves_existing_booking_choices(
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+@pytest.mark.parametrize("pending", ["load", "create"])
+def test_notice_keeps_closed_dialog_workers_and_then_deletes_the_dialog(
+    monkeypatch: pytest.MonkeyPatch, pending: str
+) -> None:
+    """Schließen wartet auf Kinddialogarbeit und gibt den beendeten Dialog danach frei."""
+    from shiboken6 import isValid
+
+    entered, finish = Event(), Event()
+    original = usage_ui._snapshot if pending == "load" else filaments.save
+    opened: list[UsageDialog] = []
+    notice = UsageNotice(UiSettings())
+    notice.offer(_request(_spool()))
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert finish.wait(5)
+        return original(*args, **kwargs)
+
+    def accept_spool(editor):
+        editor.name.setText("Neue Spule")
+        return QDialog.DialogCode.Accepted
+
+    def dismiss(dialog: UsageDialog) -> int:
+        opened.append(dialog)
+        if pending == "create":
+            _wait(dialog)
+            dialog.add_button.click()
+        assert entered.wait(2)
+        dialog.reject()
+        return dialog.result()
+
+    monkeypatch.setattr(
+        usage_ui if pending == "load" else filaments,
+        "_snapshot" if pending == "load" else "save",
+        blocked,
+    )
+    monkeypatch.setattr(usage_ui.NewFilamentDialog, "exec", accept_spool)
+    monkeypatch.setattr(UsageDialog, "exec", dismiss)
+    try:
+        notice.review.click()
+        assert opened and isValid(opened[0])
+        assert not notice.wait_for_workers(0)
+    finally:
+        finish.set()
+        for dialog in opened:
+            if isValid(dialog):
+                _wait(dialog)
+    deadline = monotonic() + 3
+    while isValid(opened[0]) and monotonic() < deadline:
+        QTest.qWait(10)
+    assert not isValid(opened[0])
+    assert notice.wait_for_workers(0)
+    if pending == "create":
+        assert any(entry.name == "Neue Spule" for entry in filaments.catalogue())
