@@ -52,6 +52,7 @@ from app.branding import (
 )
 from tools import make_installer
 from tools.make_installer import _sha256
+from tools.make_sbom import ARTIFACT_SBOM_NAME
 
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_NAME = "solidon3d-windows-signing-input"
@@ -414,7 +415,7 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
     App-Baum selbst betrifft.
     """
     artifact_root = resolve_handoff_path(stage, str(handoff["source_dir"]))
-    sboms = sorted(artifact_root.rglob(f"{APP_NAME}.cdx.json"))
+    sboms = sorted(artifact_root.rglob(ARTIFACT_SBOM_NAME))
     if len(sboms) != 1:
         raise SigningError("Die Endartefakt-SBOM fehlt im Arbeitsordner oder ist mehrdeutig.")
     evidence.parent.mkdir(parents=True, exist_ok=True)

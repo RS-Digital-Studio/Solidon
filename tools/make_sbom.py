@@ -40,7 +40,8 @@ from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME
 from app.core.knowledge import licences
 
 ROOT: Final = Path(__file__).resolve().parent.parent
-OUTPUT: Final = ROOT / "build" / "Solidon3D.cdx.json"
+ARTIFACT_SBOM_NAME: Final = f"{APP_NAME}.cdx.json"
+OUTPUT: Final = ROOT / "build" / ARTIFACT_SBOM_NAME
 RUNTIME_EXTRAS: Final = licences.RUNTIME_EXTRAS
 SPDX_ALIASES: Final = {"LGPL-3.0": "LGPL-3.0-only"}
 NON_SPDX_LICENCES: Final = {
@@ -946,11 +947,11 @@ def locate_artifact_sbom(
 ) -> Path:
     """Findet genau eine Stückliste im Zielartefakt der aktuellen Plattform."""
     root = artifact_root(dist, platform=platform, app_name=app_name)
-    files = sorted(root.rglob("Solidon3D.cdx.json")) if root.is_dir() else []
+    files = sorted(root.rglob(ARTIFACT_SBOM_NAME)) if root.is_dir() else []
     if len(files) != 1:
         raise RuntimeError(
             f"Im Kundenartefakt {root} wurde {len(files)}-mal "
-            "Solidon3D.cdx.json gefunden; erwartet ist genau eine Datei. "
+            f"{ARTIFACT_SBOM_NAME} gefunden; erwartet ist genau eine Datei. "
             "Bauen Sie das Zielpaket neu und prüfen Sie die PyInstaller-Datenliste."
         )
     return files[0]

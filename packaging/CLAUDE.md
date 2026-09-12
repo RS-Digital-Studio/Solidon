@@ -123,7 +123,9 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
   stehen, gelangen hinein; CPython, PyInstaller-Bootloader, Kryptografie- und
   Compilerlaufzeiten sowie jede PE-/ELF-/Mach-O-Datei werden aus dem fertigen
   Paket inventarisiert. Sie reist genau einmal im Kundenartefakt mit; eine
-  eingecheckte plattformspezifische Kopie gibt es absichtlich nicht.
+  eingecheckte plattformspezifische Kopie gibt es absichtlich nicht. Ihr
+  Dateiname kommt aus `make_sbom.ARTIFACT_SBOM_NAME`, ebenso in den
+  Lizenzbelegen und im lokalen Signierwerkzeug.
   PySide6-Essentials weist Qt, cadquery-ocp-novtk OCCT, Shapely GEOS und VTK
   seine nativen Bibliotheken als eigene Komponenten mit gewählter
   Lizenzgrundlage aus. Windows bindet die exakte libffi-Version an den

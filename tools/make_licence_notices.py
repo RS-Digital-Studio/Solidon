@@ -23,6 +23,7 @@ from urllib.parse import unquote
 
 from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
 from app.core.knowledge import licences
+from tools.make_sbom import ARTIFACT_SBOM_NAME
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 OUTPUT: Final = ROOT / "THIRD-PARTY-NOTICES.md"
@@ -413,7 +414,7 @@ weiter für Solidon; die Lizenztexte unten gelten für die jeweiligen Bibliothek
    Anwendungsordner in einen eigenen beschreibbaren Ordner, damit die installierte
    Fassung für den Rückweg erhalten bleibt. Erhalten Sie Unterordner und Symlinks.
 2. Entnehmen Sie die Bibliotheksversionen dieser Tabelle und die exakten relativen
-   Dateipfade der Datei `Solidon3D.cdx.json` im selben Kundenpaket. Die Einträge
+   Dateipfade der Datei `{ARTIFACT_SBOM_NAME}` im selben Kundenpaket. Die Einträge
    vom Typ `file` nennen dessen native Dateien. Eine Entwicklungsvorschau ohne
    diese Paketstückliste ersetzt die Dateiliste Ihrer Installation nicht.
 3. Bauen Sie Ihre geänderte Bibliothek aus dem dort bezeichneten Quellstand für
@@ -494,7 +495,7 @@ def render_manifest(components: tuple[ComponentNotice, ...]) -> str:
         ],
         "release_gate": {
             "artifact_notice": OUTPUT.name,
-            "artifact_sbom": "Solidon3D.cdx.json",
+            "artifact_sbom": ARTIFACT_SBOM_NAME,
             "runtime_families": sorted(policies),
             "source_delivery": sorted(
                 identifier for identifier, policy in policies.items() if policy.source_delivery

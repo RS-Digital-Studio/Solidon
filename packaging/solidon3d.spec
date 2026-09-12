@@ -433,7 +433,7 @@ _sbom_folder = (
     _artifact / "Contents" / "Resources" if sys.platform == "darwin" else _artifact / "_internal"
 )
 _sbom = make_sbom.write_bom(
-    _sbom_folder / "Solidon3D.cdx.json",
+    _sbom_folder / make_sbom.ARTIFACT_SBOM_NAME,
     included_distributions=_included_distributions,
     customer_artifact=_artifact,
 )
