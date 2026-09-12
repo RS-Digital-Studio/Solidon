@@ -1,5 +1,8 @@
 """Lokale, nicht ausgelieferte Support-Oberfläche für Solidon-Lizenzen.
 
+Das interne Betreiberwerkzeug ist bewusst deutschsprachig; es verwendet
+keinen Kundenkatalog. Die Handlungs- und Anlasscodes bleiben sprachneutral.
+
 Das vollständige Schlüsselarchiv bleibt auf Roberts Rechner. Zum Server geht
 ausschließlich der SHA-256-Digest der signierten Lizenznutzlast. Der Server
 liefert Aktivierungszustand und -verlauf und nimmt vier eng benannte
@@ -52,7 +55,6 @@ from app.core.http import (
 )
 from app.core.json_boundary import loads as load_json
 from app.core.log import redact_external
-from app.i18n import tr
 from tools.licence_archive import ArchiveBusyError, archive_lock
 
 if os.name == "nt":
@@ -94,12 +96,12 @@ ACTION_LABELS: Final = {
     "reset_attempts": "Tageslimit zurücksetzen",
 }
 REASON_LABELS: Final = {
-    "Gerätewechsel im Support": "support_device_change",
-    "Erstattung": "refund",
-    "Verdacht auf Weitergabe": "suspected_abuse",
-    "Korrektur": "correction",
-    "Datenauskunft": "data_request",
-    "Sonstiger Vorgang": "other",
+    "support_device_change": "Gerätewechsel im Support",
+    "refund": "Erstattung",
+    "suspected_abuse": "Verdacht auf Weitergabe",
+    "correction": "Korrektur",
+    "data_request": "Datenauskunft",
+    "other": "Sonstiger Vorgang",
 }
 
 
@@ -341,7 +343,7 @@ def load_archive(path: Path) -> list[SupportLicence]:
         lines = path.expanduser().read_text(encoding="utf-8").splitlines()
     except OSError as problem:
         raise OperatorError(
-            tr("Das private Schlüsselarchiv ließ sich nicht lesen. Anderen Ort wählen.")
+            "Das private Schlüsselarchiv ließ sich nicht lesen. Anderen Ort wählen."
         ) from problem
     records: list[SupportLicence] = []
     seen: set[str] = set()
@@ -381,17 +383,13 @@ def load_archive(path: Path) -> list[SupportLicence]:
                 raise ValueError("purchased_on")
         except (KeyError, TypeError, ValueError, key.LicenceKeyError) as problem:
             raise OperatorError(
-                tr(
-                    "Das private Schlüsselarchiv ist in Zeile {line} beschädigt. "
-                    "Sicherung wiederherstellen."
-                ).format(line=number)
+                f"Das private Schlüsselarchiv ist in Zeile {number} beschädigt. "
+                "Sicherung wiederherstellen."
             ) from problem
         if record.digest in seen:
             raise OperatorError(
-                tr(
-                    "Das private Schlüsselarchiv enthält die Lizenz {digest} doppelt. "
-                    "Archiv bereinigen."
-                ).format(digest=record.digest[:12])
+                f"Das private Schlüsselarchiv enthält die Lizenz {record.digest[:12]} doppelt. "
+                "Archiv bereinigen."
             )
         seen.add(record.digest)
         if record.transaction:
@@ -399,10 +397,8 @@ def load_archive(path: Path) -> list[SupportLicence]:
             previous = transactions.get(transaction_key)
             if previous is not None and previous != record.digest:
                 raise OperatorError(
-                    tr(
-                        "Das private Schlüsselarchiv ordnet die Transaktion {transaction} "
-                        "mehreren Lizenzen zu. Zuordnung korrigieren."
-                    ).format(transaction=record.transaction)
+                    f"Das private Schlüsselarchiv ordnet die Transaktion {record.transaction} "
+                    "mehreren Lizenzen zu. Zuordnung korrigieren."
                 )
             transactions[transaction_key] = record.digest
         records.append(record)
@@ -458,9 +454,7 @@ def assign_transaction(path: Path, digest: str, transaction: str) -> None:
     """Ordnet einen Vorrat lokal einer MoR-Transaktion zu, atomar und prüfbar."""
     wanted = " ".join(transaction.split()).strip()
     if not wanted or len(wanted) > 128:
-        raise OperatorError(
-            tr("Die Transaktionskennung muss zwischen 1 und 128 Zeichen lang sein.")
-        )
+        raise OperatorError("Die Transaktionskennung muss zwischen 1 und 128 Zeichen lang sein.")
     target = path.expanduser()
     try:
         with archive_lock(target):
@@ -473,7 +467,7 @@ def assign_transaction(path: Path, digest: str, transaction: str) -> None:
             matches = [record for record in raw_records if record.get("digest") == digest]
             if len(matches) != 1:
                 raise OperatorError(
-                    tr("Die Lizenz steht nicht genau einmal im privaten Archiv. Archiv prüfen.")
+                    "Die Lizenz steht nicht genau einmal im privaten Archiv. Archiv prüfen."
                 )
             duplicate = next(
                 (
@@ -486,10 +480,8 @@ def assign_transaction(path: Path, digest: str, transaction: str) -> None:
             )
             if duplicate is not None:
                 raise OperatorError(
-                    tr(
-                        "Diese MoR-Transaktion ist bereits einer anderen Lizenz "
-                        "zugeordnet. Bestehende Zuordnung prüfen."
-                    )
+                    "Diese MoR-Transaktion ist bereits einer anderen Lizenz "
+                    "zugeordnet. Bestehende Zuordnung prüfen."
                 )
             matches[0]["transaction"] = wanted
             payload = "".join(
@@ -520,7 +512,7 @@ def assign_transaction(path: Path, digest: str, transaction: str) -> None:
         raise OperatorError(str(problem)) from problem
     except (OSError, ValueError) as problem:
         raise OperatorError(
-            tr("Die Transaktionszuordnung ließ sich nicht speichern. Anderen Ort prüfen.")
+            "Die Transaktionszuordnung ließ sich nicht speichern. Anderen Ort prüfen."
         ) from problem
     with contextlib.suppress(OSError):
         target.chmod(0o600)
@@ -561,11 +553,11 @@ def read_token(path: Path) -> str:
         token = raw.decode("ascii").strip()
     except (OSError, UnicodeError) as problem:
         raise OperatorError(
-            tr("Der Betreiberzugang ließ sich nicht lesen. Tokendatei auswählen.")
+            "Der Betreiberzugang ließ sich nicht lesen. Tokendatei auswählen."
         ) from problem
     if TOKEN_PATTERN.fullmatch(token) is None:
         raise OperatorError(
-            tr("Der Betreiberzugang ist beschädigt. Er muss 32 zufällige Bytes enthalten.")
+            "Der Betreiberzugang ist beschädigt. Er muss 32 zufällige Bytes enthalten."
         )
     return token
 
@@ -583,16 +575,14 @@ class OperatorClient:
             )
         except ValueError as problem:
             raise OperatorError(
-                tr("Die Support-Verwaltung braucht HTTPS. Serveradresse korrigieren.")
+                "Die Support-Verwaltung braucht HTTPS. Serveradresse korrigieren."
             ) from problem
         parsed = urlparse(checked)
         local = parsed.hostname in {"127.0.0.1", "localhost", "::1"}
         if parsed.scheme != "https" and not (parsed.scheme == "http" and local):
-            raise OperatorError(
-                tr("Die Support-Verwaltung braucht HTTPS. Serveradresse korrigieren.")
-            )
+            raise OperatorError("Die Support-Verwaltung braucht HTTPS. Serveradresse korrigieren.")
         if TOKEN_PATTERN.fullmatch(token) is None:
-            raise OperatorError(tr("Der Betreiberzugang ist nicht verwendbar. Tokendatei prüfen."))
+            raise OperatorError("Der Betreiberzugang ist nicht verwendbar. Tokendatei prüfen.")
         self.endpoint = checked
         self.token = token
 
@@ -626,7 +616,7 @@ class OperatorClient:
                     validate_http_url(response_url(response, self.endpoint), allow_http=True),
                 ):
                     raise OperatorError(
-                        tr("Die Serverantwort war nicht lesbar. Serverprotokoll prüfen.")
+                        "Die Serverantwort war nicht lesbar. Serverprotokoll prüfen."
                     )
                 status = response.status
                 answer = read_limited(
@@ -647,41 +637,37 @@ class OperatorClient:
                     )
                 except HttpBoundaryError as boundary:
                     raise OperatorError(
-                        tr(
-                            "Die Support-Verwaltung ist nicht erreichbar. Verbindung prüfen "
-                            "und erneut versuchen."
-                        )
+                        "Die Support-Verwaltung ist nicht erreichbar. Verbindung prüfen "
+                        "und erneut versuchen."
                     ) from boundary
             finally:
                 problem.close()
         except (OSError, URLError, ResponseDeadlineError, ResponseTooLargeError) as problem:
             raise OperatorError(
-                tr(
-                    "Die Support-Verwaltung ist nicht erreichbar. Verbindung prüfen und "
-                    "erneut versuchen."
-                )
+                "Die Support-Verwaltung ist nicht erreichbar. Verbindung prüfen und "
+                "erneut versuchen."
             ) from problem
         try:
             result = load_json(answer, max_bytes=MAX_OPERATOR_RESPONSE_BYTES)
         except (UnicodeError, ValueError) as problem:
             raise OperatorError(
-                tr("Die Serverantwort war nicht lesbar. Serverprotokoll prüfen.")
+                "Die Serverantwort war nicht lesbar. Serverprotokoll prüfen."
             ) from problem
         if not isinstance(result, dict) or status >= 400 or result.get("ok") is not True:
             code = result.get("code") if isinstance(result, dict) else ""
             if code == "operator_forbidden":
-                help_text = tr("Tokendatei und Servereinrichtung abgleichen.")
+                help_text = "Tokendatei und Servereinrichtung abgleichen."
             elif code == "service_unavailable":
-                help_text = tr("Aktivierungsdatenbank und Betreiberzugang auf dem Server prüfen.")
+                help_text = "Aktivierungsdatenbank und Betreiberzugang auf dem Server prüfen."
             else:
-                help_text = tr("Eingabe prüfen und erneut versuchen.")
+                help_text = "Eingabe prüfen und erneut versuchen."
             detail = (
                 redact_external(result.get("error", ""), limit=300)
                 if isinstance(result, dict)
                 else ""
             )
             raise OperatorError(
-                f"{detail or tr('Die Support-Handlung wurde abgelehnt.')} {help_text}"
+                f"{detail or ('Die Support-Handlung wurde abgelehnt.')} {help_text}"
             )
         return result
 
@@ -715,7 +701,7 @@ class SupportWindow:
         self.server_loaded_digest: str | None = None
         self.pending_notice = ""
 
-        root.title(tr("Solidon · private Support-Verwaltung"))
+        root.title("Solidon · private Support-Verwaltung")
         root.minsize(1200, 760)
         root.geometry("1280x800")
         self._configure_style(root)
@@ -731,24 +717,25 @@ class SupportWindow:
         self.archive_path = tk.StringVar(value=str(archive_path or ""))
         self.query = tk.StringVar()
         self.summary = tk.StringVar(
-            value=tr("Eine Lizenz auswählen — danach erscheint hier der vollständige Supportfall.")
+            value=("Eine Lizenz auswählen — danach erscheint hier der vollständige Supportfall.")
         )
         self.message = tk.StringVar(
-            value=tr("Bereit · Mit Schlüssel, Bestellung, Transaktion, E-Mail oder Digest suchen.")
+            value=("Bereit · Mit Schlüssel, Bestellung, Transaktion, E-Mail oder Digest suchen.")
         )
-        self.reason = tk.StringVar(value=next(iter(REASON_LABELS)))
+        self.reason_codes = tuple(REASON_LABELS)
+        self.reason = tk.StringVar(value=REASON_LABELS[self.reason_codes[0]])
 
         hero = ttk.Frame(frame, style="Hero.TFrame", padding=(20, 13))
         hero.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         hero.columnconfigure(0, weight=1)
         ttk.Label(
             hero,
-            text=tr("Kundenlizenz finden und Supportfall lösen"),
+            text=("Kundenlizenz finden und Supportfall lösen"),
             style="HeroTitle.TLabel",
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             hero,
-            text=tr(
+            text=(
                 "Keine CAD-Kenntnisse nötig: Kundenangabe suchen, Zustand lesen, "
                 "passende Supportaktion wählen."
             ),
@@ -756,36 +743,36 @@ class SupportWindow:
         ).grid(row=1, column=0, sticky="w", pady=(5, 0))
         ttk.Label(
             hero,
-            text=tr("✓ PRIVAT · Nur die anonyme Lizenzkennung geht zum Server"),
+            text=("✓ PRIVAT · Nur die anonyme Lizenzkennung geht zum Server"),
             style="Privacy.TLabel",
             padding=(12, 7),
         ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(24, 0))
 
         settings = ttk.LabelFrame(
             frame,
-            text=tr("Sichere Verbindung und lokale Daten"),
+            text=("Sichere Verbindung und lokale Daten"),
             style="Card.TLabelframe",
             padding=(12, 7),
         )
         settings.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         settings.columnconfigure(1, weight=1)
         settings.columnconfigure(4, weight=1)
-        ttk.Label(settings, text=tr("Server")).grid(row=0, column=0, sticky="w")
+        ttk.Label(settings, text=("Server")).grid(row=0, column=0, sticky="w")
         ttk.Entry(settings, textvariable=self.endpoint).grid(
             row=0, column=1, columnspan=5, sticky="ew", padx=(8, 0), pady=(0, 8)
         )
-        ttk.Label(settings, text=tr("Betreiberzugang")).grid(row=1, column=0, sticky="w")
+        ttk.Label(settings, text=("Betreiberzugang")).grid(row=1, column=0, sticky="w")
         ttk.Entry(settings, textvariable=self.token_path).grid(
             row=1, column=1, sticky="ew", padx=(8, 6)
         )
-        ttk.Button(settings, text=tr("Datei wählen …"), command=self._choose_token).grid(
+        ttk.Button(settings, text=("Datei wählen …"), command=self._choose_token).grid(
             row=1, column=2, sticky="ew", padx=(0, 18)
         )
-        ttk.Label(settings, text=tr("Schlüsselarchiv")).grid(row=1, column=3, sticky="w")
+        ttk.Label(settings, text=("Schlüsselarchiv")).grid(row=1, column=3, sticky="w")
         ttk.Entry(settings, textvariable=self.archive_path).grid(
             row=1, column=4, sticky="ew", padx=(8, 6)
         )
-        ttk.Button(settings, text=tr("Datei wählen …"), command=self._choose_archive).grid(
+        ttk.Button(settings, text=("Datei wählen …"), command=self._choose_archive).grid(
             row=1, column=5, sticky="ew"
         )
 
@@ -802,7 +789,7 @@ class SupportWindow:
 
         search_card = ttk.LabelFrame(
             left,
-            text=tr("1 · Kundenlizenz finden"),
+            text=("1 · Kundenlizenz finden"),
             style="Card.TLabelframe",
             padding=12,
         )
@@ -811,7 +798,7 @@ class SupportWindow:
         search_card.rowconfigure(3, weight=1)
         ttk.Label(
             search_card,
-            text=tr(
+            text=(
                 "Einfach die Angabe des Kunden einfügen. Teilstücke reichen bei "
                 "Bestellung, E-Mail, Transaktion und Lizenzkennung."
             ),
@@ -827,13 +814,13 @@ class SupportWindow:
         entry.bind("<Return>", lambda _event: self.search())
         ttk.Button(
             search,
-            text=tr("Lizenz suchen"),
+            text=("Lizenz suchen"),
             command=self.search,
             style="Primary.TButton",
         ).grid(row=0, column=1, padx=(8, 0))
         ttk.Label(
             search_card,
-            text=tr("Suchergebnisse"),
+            text=("Suchergebnisse"),
             style="Section.TLabel",
         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(14, 7))
 
@@ -849,11 +836,11 @@ class SupportWindow:
             selectmode="browse",
         )
         for column, title, width in (
-            ("transaction", tr("Transaktion"), 100),
-            ("order", tr("Bestellung"), 90),
-            ("holder", tr("Käuferkennung"), 125),
-            ("date", tr("Datum"), 70),
-            ("digest", tr("Lizenzkennung"), 125),
+            ("transaction", ("Transaktion"), 100),
+            ("order", ("Bestellung"), 90),
+            ("holder", ("Käuferkennung"), 125),
+            ("date", ("Datum"), 70),
+            ("digest", ("Lizenzkennung"), 125),
         ):
             self.results.heading(column, text=title)
             self.results.column(column, width=width, minwidth=80)
@@ -870,14 +857,14 @@ class SupportWindow:
         local_actions.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         self.copy_button = ttk.Button(
             local_actions,
-            text=tr("Schlüssel kopieren"),
+            text=("Schlüssel kopieren"),
             command=self.copy_key,
             state="disabled",
         )
         self.copy_button.grid(row=0, column=0, sticky="w")
         self.assign_button = ttk.Button(
             local_actions,
-            text=tr("MoR-Transaktion zuordnen"),
+            text=("MoR-Transaktion zuordnen"),
             command=self.assign_current_transaction,
             state="disabled",
         )
@@ -885,7 +872,7 @@ class SupportWindow:
 
         state_card = ttk.LabelFrame(
             right,
-            text=tr("2 · Supportfall verstehen"),
+            text=("2 · Supportfall verstehen"),
             style="Card.TLabelframe",
             padding=12,
         )
@@ -897,14 +884,14 @@ class SupportWindow:
         state_header.columnconfigure(0, weight=1)
         self.status_badge = ttk.Label(
             state_header,
-            text=tr("○ Noch nicht geprüft"),
+            text=("○ Noch nicht geprüft"),
             style="NeutralStatus.TLabel",
             padding=(12, 7),
         )
         self.status_badge.grid(row=0, column=0, sticky="w")
         self.lookup_button = ttk.Button(
             state_header,
-            text=tr("Serverzustand aktualisieren"),
+            text=("Serverzustand aktualisieren"),
             command=self.lookup,
             state="disabled",
         )
@@ -918,7 +905,7 @@ class SupportWindow:
         ).grid(row=1, column=0, sticky="ew", pady=(12, 8))
         warning = ttk.Label(
             state_card,
-            text=tr(
+            text=(
                 "Hinweis: Eine Sperre verhindert neue Aktivierungen. Bereits ausgestellte "
                 "Offline-Freischaltungen bleiben auf dem vorhandenen Rechner gültig."
             ),
@@ -932,34 +919,34 @@ class SupportWindow:
         notebook.grid(row=3, column=0, sticky="nsew")
         self.activations = self._tree_tab(
             notebook,
-            tr("Geräte und Plätze"),
+            ("Geräte und Plätze"),
             (
-                ("state", tr("Zustand"), 80),
-                ("device", tr("Gerätename"), 110),
-                ("from", tr("Aktiviert"), 95),
-                ("to", tr("Freigegeben"), 105),
-                ("id", tr("Aktivierungskennung"), 130),
+                ("state", ("Zustand"), 80),
+                ("device", ("Gerätename"), 110),
+                ("from", ("Aktiviert"), 95),
+                ("to", ("Freigegeben"), 105),
+                ("id", ("Aktivierungskennung"), 130),
             ),
         )
         self.attempts = self._tree_tab(
             notebook,
-            tr("Tageslimit"),
-            (("day", tr("Tag"), 180), ("count", tr("Gültige Versuche"), 180)),
+            ("Tageslimit"),
+            (("day", ("Tag"), 180), ("count", ("Gültige Versuche"), 180)),
         )
         self.events = self._tree_tab(
             notebook,
-            tr("Änderungsprotokoll"),
+            ("Änderungsprotokoll"),
             (
-                ("at", tr("Zeitpunkt"), 140),
-                ("action", tr("Handlung"), 150),
-                ("reason", tr("Anlass"), 140),
-                ("changed", tr("Wirkung"), 90),
+                ("at", ("Zeitpunkt"), 140),
+                ("action", ("Handlung"), 150),
+                ("reason", ("Anlass"), 140),
+                ("changed", ("Wirkung"), 90),
             ),
         )
 
         actions = ttk.LabelFrame(
             frame,
-            text=tr("3 · Passende Supportaktion"),
+            text=("3 · Passende Supportaktion"),
             style="Card.TLabelframe",
             padding=(12, 8),
         )
@@ -967,20 +954,21 @@ class SupportWindow:
         actions.columnconfigure(1, weight=1)
         ttk.Label(
             actions,
-            text=tr("Anlass für das Änderungsprotokoll"),
+            text=("Anlass für das Änderungsprotokoll"),
             style="Section.TLabel",
         ).grid(row=0, column=0, sticky="w")
-        reasons = ttk.Combobox(
+        self.reason_choice = ttk.Combobox(
             actions,
             state="readonly",
-            values=[tr(label) for label in REASON_LABELS],
+            values=list(REASON_LABELS.values()),
             textvariable=self.reason,
             width=32,
         )
-        reasons.grid(row=0, column=1, sticky="w", padx=(10, 0))
+        self.reason_choice.current(0)
+        self.reason_choice.grid(row=0, column=1, sticky="w", padx=(10, 0))
         ttk.Label(
             actions,
-            text=tr("Jede Änderung wird ohne Namen oder E-Mail protokolliert."),
+            text=("Jede Änderung wird ohne Namen oder E-Mail protokolliert."),
             style="Muted.TLabel",
         ).grid(row=0, column=2, sticky="e", padx=(20, 0))
         action_row = ttk.Frame(actions, style="Card.TFrame")
@@ -991,7 +979,7 @@ class SupportWindow:
         for grid_column, action in enumerate(ACTION_LABELS):
             button = ttk.Button(
                 action_row,
-                text=tr(ACTION_LABELS[action]),
+                text=(ACTION_LABELS[action]),
                 command=partial(self.change, action),
                 state="disabled",
                 style="Danger.TButton" if action == "block" else "Support.TButton",
@@ -1144,14 +1132,14 @@ class SupportWindow:
             )
 
     def _choose_token(self) -> None:
-        chosen = self.filedialog.askopenfilename(title=tr("Betreiberzugang auswählen"))
+        chosen = self.filedialog.askopenfilename(title=("Betreiberzugang auswählen"))
         if chosen:
             self.token_path.set(chosen)
             if self.current is not None:
                 self.lookup()
 
     def _choose_archive(self) -> None:
-        chosen = self.filedialog.askopenfilename(title=tr("Schlüsselarchiv auswählen"))
+        chosen = self.filedialog.askopenfilename(title=("Schlüsselarchiv auswählen"))
         if chosen:
             self.archive_path.set(chosen)
             self._reload_archive()
@@ -1167,22 +1155,18 @@ class SupportWindow:
             self.records = []
             self.message.set(str(problem))
             return
-        self.message.set(
-            tr("{count} Lizenz(en) aus dem privaten Archiv geladen.").format(
-                count=len(self.records)
-            )
-        )
+        self.message.set(f"{len(self.records)} Lizenz(en) aus dem privaten Archiv geladen.")
 
     def search(self) -> None:
         self._reload_archive()
         self.current = None
         self._set_server_controls(False)
         self.status_badge.configure(
-            text=tr("○ Noch nicht geprüft"),
+            text=("○ Noch nicht geprüft"),
             style="NeutralStatus.TLabel",
         )
         self.summary.set(
-            tr("Eine Lizenz auswählen — danach erscheint hier der vollständige Supportfall.")
+            "Eine Lizenz auswählen — danach erscheint hier der vollständige Supportfall."
         )
         for item in self.results.get_children():
             self.results.delete(item)
@@ -1191,7 +1175,7 @@ class SupportWindow:
         except OperatorError, key.LicenceKeyError:
             self.found = []
             self.message.set(
-                tr("Die Suche war nicht verwendbar. Lizenzschlüssel oder Suchtext prüfen.")
+                "Die Suche war nicht verwendbar. Lizenzschlüssel oder Suchtext prüfen."
             )
             return
         for index, record in enumerate(self.found):
@@ -1200,19 +1184,19 @@ class SupportWindow:
                 "end",
                 iid=str(index),
                 values=(
-                    record.transaction or tr("noch nicht zugeordnet"),
-                    record.order or tr("nicht im Archiv"),
-                    record.holder or tr("unpersonalisiert"),
+                    record.transaction or ("noch nicht zugeordnet"),
+                    record.order or ("nicht im Archiv"),
+                    record.holder or ("unpersonalisiert"),
                     record.purchased_on.isoformat() if record.purchased_on else "—",
                     record.digest,
                 ),
             )
         if not self.found:
             self.message.set(
-                tr("Keine passende Lizenz gefunden. Vollständigen Schlüssel oder Digest anfordern.")
+                "Keine passende Lizenz gefunden. Vollständigen Schlüssel oder Digest anfordern."
             )
             return
-        self.message.set(tr("{count} passende Lizenz(en) gefunden.").format(count=len(self.found)))
+        self.message.set(f"{len(self.found)} passende Lizenz(en) gefunden.")
         if len(self.found) == 1:
             self.results.selection_set("0")
             self.results.focus("0")
@@ -1234,23 +1218,23 @@ class SupportWindow:
     def _client(self) -> OperatorClient:
         token_name = self.token_path.get().strip()
         if not token_name:
-            raise OperatorError(tr("Betreiberzugang auswählen und erneut versuchen."))
+            raise OperatorError("Betreiberzugang auswählen und erneut versuchen.")
         return OperatorClient(self.endpoint.get().strip(), read_token(Path(token_name)))
 
     def _run(self, work: Any, done: Any, context_digest: str) -> None:
         """Zeigt eine Serverantwort nur noch bei derselben ausgewählten Lizenz."""
         if self.busy:
-            self.message.set(tr("Auswahl geändert; der aktuelle Zustand wird gleich geladen."))
+            self.message.set("Auswahl geändert; der aktuelle Zustand wird gleich geladen.")
             return
         self.busy = True
         self._set_server_controls(False)
         status_badge = getattr(self, "status_badge", None)
         if status_badge is not None:
             status_badge.configure(
-                text=tr("… Serverzustand wird geprüft"),
+                text=("… Serverzustand wird geprüft"),
                 style="NeutralStatus.TLabel",
             )
-        self.message.set(tr("Serverzustand wird sicher geladen …"))
+        self.message.set("Serverzustand wird sicher geladen …")
 
         def execute() -> None:
             try:
@@ -1265,14 +1249,14 @@ class SupportWindow:
                     # Die Serverantwort gehört zur alten Zeile. Sie darf weder
                     # Überschrift noch Verlauf der neuen Auswahl füllen; deren
                     # Abfrage wurde während ``busy`` bewusst zurückgestellt.
-                    self.message.set(tr("Auswahl geändert; aktueller Zustand wird geladen …"))
+                    self.message.set("Auswahl geändert; aktueller Zustand wird geladen …")
                     self.lookup()
                     return
                 if problem is not None:
                     self._set_server_controls(False)
                     if status_badge is not None:
                         status_badge.configure(
-                            text=tr("! Serverzustand nicht verfügbar"),
+                            text=("! Serverzustand nicht verfügbar"),
                             style="BlockedStatus.TLabel",
                         )
                     self.message.set(str(problem))
@@ -1299,15 +1283,15 @@ class SupportWindow:
             return
         if self.server_loaded_digest != self.current.digest:
             self.message.set(
-                tr("Zuerst den aktuellen Serverzustand laden; danach ist die Handlung verfügbar.")
+                "Zuerst den aktuellen Serverzustand laden; danach ist die Handlung verfügbar."
             )
             self.lookup()
             return
-        selected_reason = self.reason.get()
-        reason = REASON_LABELS.get(selected_reason)
-        if reason is None:
-            self.message.set(tr("Einen festen Anlass auswählen und erneut versuchen."))
+        selected_reason = self.reason_choice.current()
+        if not 0 <= selected_reason < len(self.reason_codes):
+            self.message.set("Einen festen Anlass auswählen und erneut versuchen.")
             return
+        reason = self.reason_codes[selected_reason]
         digest = self.current.digest
         self._run(
             lambda: self._client().call(action, digest, reason),
@@ -1322,17 +1306,17 @@ class SupportWindow:
         status = str(licence.get("status", "unknown"))
         self.server_loaded_digest = self.current.digest
         badge = {
-            "active": (tr("✓ Aktivierungen erlaubt"), "ActiveStatus.TLabel"),
-            "blocked": (tr("! Neue Aktivierungen gesperrt"), "BlockedStatus.TLabel"),
-            "unknown": (tr("○ Noch nie aktiviert"), "NeutralStatus.TLabel"),
-        }.get(status, (tr("? Unbekannter Serverzustand"), "NeutralStatus.TLabel"))
+            "active": (("✓ Aktivierungen erlaubt"), "ActiveStatus.TLabel"),
+            "blocked": (("! Neue Aktivierungen gesperrt"), "BlockedStatus.TLabel"),
+            "unknown": (("○ Noch nie aktiviert"), "NeutralStatus.TLabel"),
+        }.get(status, (("? Unbekannter Serverzustand"), "NeutralStatus.TLabel"))
         self.status_badge.configure(text=badge[0], style=badge[1])
-        holder = self.current.holder or tr("unpersonalisiert")
-        order = self.current.order or tr("nicht im Archiv")
-        transaction = self.current.transaction or tr("noch nicht zugeordnet")
-        created = licence.get("created_at") or tr("noch nie aktiviert")
+        holder = self.current.holder or ("unpersonalisiert")
+        order = self.current.order or ("nicht im Archiv")
+        transaction = self.current.transaction or ("noch nicht zugeordnet")
+        created = licence.get("created_at") or ("noch nie aktiviert")
         self.summary.set(
-            tr(
+            (
                 "Kunde: {holder}\nKauf: MoR {transaction} · Bestellung {order}\n"
                 "Lizenz: {key}\nErster Serverkontakt: {created}"
             ).format(
@@ -1340,14 +1324,14 @@ class SupportWindow:
                 order=order,
                 holder=holder,
                 created=created,
-                key=self.current.masked_key or tr("nur Digest vorhanden"),
+                key=self.current.masked_key or ("nur Digest vorhanden"),
             )
         )
         self._fill_tree(
             self.activations,
             [
                 (
-                    tr("aktiv") if row.get("active") else tr("deaktiviert"),
+                    ("aktiv") if row.get("active") else ("deaktiviert"),
                     row.get("device_name", ""),
                     row.get("activated_on", ""),
                     row.get("deactivated_at") or "—",
@@ -1360,15 +1344,14 @@ class SupportWindow:
             self.attempts,
             [(row.get("day", ""), row.get("attempts", 0)) for row in answer.get("attempts", [])],
         )
-        reason_by_code = {code: label for label, code in REASON_LABELS.items()}
         self._fill_tree(
             self.events,
             [
                 (
                     row.get("occurred_at", ""),
-                    tr(ACTION_LABELS.get(str(row.get("action", "")), str(row.get("action", "")))),
-                    tr(reason_by_code.get(str(row.get("reason", "")), str(row.get("reason", "")))),
-                    tr("geändert") if row.get("changed") else tr("ohne Zustandswechsel"),
+                    (ACTION_LABELS.get(str(row.get("action", "")), str(row.get("action", "")))),
+                    (REASON_LABELS.get(str(row.get("reason", "")), str(row.get("reason", "")))),
+                    ("geändert") if row.get("changed") else ("ohne Zustandswechsel"),
                 )
                 for row in answer.get("events", [])
             ],
@@ -1377,16 +1360,16 @@ class SupportWindow:
         if action:
             changed = bool(answer.get("changed"))
             self.message.set(
-                tr("{action}: {result}.").format(
-                    action=tr(ACTION_LABELS.get(action, action)),
-                    result=tr("Zustand geändert") if changed else tr("war bereits so"),
+                ("{action}: {result}.").format(
+                    action=(ACTION_LABELS.get(action, action)),
+                    result=("Zustand geändert") if changed else ("war bereits so"),
                 )
             )
         elif self.pending_notice:
             self.message.set(self.pending_notice)
             self.pending_notice = ""
         else:
-            self.message.set(tr("Serverzustand wurde aktualisiert."))
+            self.message.set("Serverzustand wurde aktualisiert.")
 
     @staticmethod
     def _fill_tree(tree: Any, rows: list[tuple[object, ...]]) -> None:
@@ -1397,20 +1380,20 @@ class SupportWindow:
 
     def copy_key(self) -> None:
         if self.current is None or not self.current.licence_key:
-            self.message.set(tr("Für diese Lizenz liegt lokal kein vollständiger Schlüssel vor."))
+            self.message.set("Für diese Lizenz liegt lokal kein vollständiger Schlüssel vor.")
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(self.current.licence_key)
-        self.message.set(tr("Der vollständige Lizenzschlüssel liegt in der Zwischenablage."))
+        self.message.set("Der vollständige Lizenzschlüssel liegt in der Zwischenablage.")
 
     def assign_current_transaction(self) -> None:
         """Verknüpft einen Pool-Schlüssel lokal mit dem Kauf im MoR-Dashboard."""
         if self.current is None or not self.archive_path.get().strip():
-            self.message.set(tr("Zuerst eine Lizenz aus dem privaten Archiv auswählen."))
+            self.message.set("Zuerst eine Lizenz aus dem privaten Archiv auswählen.")
             return
         transaction = self.simpledialog.askstring(
-            tr("Transaktion zuordnen"),
-            tr("Transaktionskennung aus dem Merchant-of-Record-Dashboard:"),
+            ("Transaktion zuordnen"),
+            ("Transaktionskennung aus dem Merchant-of-Record-Dashboard:"),
             initialvalue=self.current.transaction,
             parent=self.root,
         )
@@ -1423,9 +1406,7 @@ class SupportWindow:
             return
         digest = self.current.digest
         self.query.set(digest)
-        self.pending_notice = tr(
-            "Die MoR-Transaktion wurde eindeutig im privaten Archiv zugeordnet."
-        )
+        self.pending_notice = "Die MoR-Transaktion wurde eindeutig im privaten Archiv zugeordnet."
         self.search()
 
 

@@ -482,3 +482,46 @@ def test_a_server_error_keeps_refresh_available_but_changes_locked(
     assert refresh.values[-1]["state"] == "normal"
     assert "nicht verfügbar" in str(badge.values[-1]["text"])
     assert "Verbindung prüfen" in messages[-1]
+
+
+@pytest.mark.parametrize(
+    "position,expected",
+    [
+        *enumerate(
+            [
+                "support_device_change",
+                "refund",
+                "suspected_abuse",
+                "correction",
+                "data_request",
+                "other",
+            ]
+        ),
+        (-1, None),
+        (6, None),
+    ],
+)
+def test_operator_reason_uses_the_selected_code_instead_of_display_text(
+    position: int, expected: str | None
+) -> None:
+    """Anzeigeänderungen können keinen der sechs festen Serveranlässe umdeuten."""
+    window = object.__new__(licence_admin.SupportWindow)
+    window.current = licence_admin.SupportLicence("aa" * 32, "", None, None, "A", "")
+    window.server_loaded_digest = window.current.digest
+    window.reason_codes = (
+        "support_device_change",
+        "refund",
+        "suspected_abuse",
+        "correction",
+        "data_request",
+        "other",
+    )
+    window.reason_choice = SimpleNamespace(current=lambda: position)
+    window.reason = SimpleNamespace(get=lambda: "Geänderter sichtbarer Text")
+    window.message = SimpleNamespace(set=lambda _value: None)
+    calls: list[tuple[str, str, str]] = []
+    window._client = lambda: SimpleNamespace(call=lambda *args: calls.append(args))
+    window._run = lambda work, done, digest: work()
+    window._show_state = lambda *_args: None
+    licence_admin.SupportWindow.change(window, "block")
+    assert calls == ([] if expected is None else [("block", "aa" * 32, expected)])

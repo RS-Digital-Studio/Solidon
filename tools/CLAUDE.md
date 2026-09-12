@@ -185,6 +185,10 @@ Datenbank vorbereiten) · `deploy_activation_server.py` (diese privaten Werte
 und die Endpunkte mit Sicherung ausliefern) · `licence_archive.py` (gemeinsame
 Dateisperre für Generator und Support-Oberfläche)
 
+Die interne Support-Oberfläche ist deutschsprachig und verwendet keinen
+Kundenkatalog. Anlass und Handlung werden über feste Servercodes geführt;
+sichtbare Beschriftungen dienen nicht als Nachschlageschlüssel.
+
 Private Statistik- und Aktivierungsdateien verwenden denselben exklusiven
 0600-Schreiber aus `make_stats_access.py`. Der Elternordner wird vor dem
 ersten Schreiben auf 0700 geschlossen. SQLite erhält zuerst eine leere
