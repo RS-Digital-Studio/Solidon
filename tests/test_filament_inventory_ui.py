@@ -26,6 +26,79 @@ def _wait_for_action(view: InventoryView) -> None:
     QTest.qWait(20)
 
 
+def _stock_conflict(view: InventoryView):
+    """Zwei Vorgänge der ersten Spule liegen vor einer jüngeren Bestandsfeststellung."""
+    first = filaments.save(filaments.CatalogueFilament("Erste", "#123456", remaining_grams=200))
+    second = filaments.save(filaments.CatalogueFilament("Zweite", "#654321", remaining_grams=300))
+    for identifier, entry in (("first", first), ("second", first), ("other", second)):
+        filaments.book(identifier, identifier, [filaments.BookingPosition(entry.identifier, 20)])
+    filaments.set_remaining(first.identifier, 150)
+    view.show_spool(first.identifier)
+    view.history.setCurrentRow(0)
+    return first, second
+
+
+@pytest.mark.parametrize("change", ["spool", "shelf", "filter", "history"])
+def test_stock_conflict_exception_does_not_follow_selection(inventory, change):
+    """Die bewahrende Rücknahme darf nie über einen anderen Vorgang ausgelöst werden."""
+    _first, second = _stock_conflict(inventory)
+    inventory.reverse_button.click()
+    _wait_for_action(inventory)
+    assert not inventory.keep_count_button.isHidden()
+    assert inventory.message.text()
+    if change == "spool":
+        inventory.show_spool(second.identifier)
+        inventory.history.setCurrentRow(0)
+    elif change == "shelf":
+        inventory.show_shelf()
+    elif change == "filter":
+        inventory.search.setText("Erste")
+    else:
+        inventory.history.setCurrentRow(1)
+    assert inventory.keep_count_button.isHidden()
+    assert not inventory.message.text()
+    inventory._reverse_preserving_counts()
+    assert all(not booking.reversed_at for booking in filaments.bookings())
+
+
+def test_stock_conflict_exception_keeps_its_exact_operation(inventory):
+    """Der zweite bewusste Klick behält den gezählten Bestand und nimmt nur den Anlass zurück."""
+    first, _second = _stock_conflict(inventory)
+    identifier = inventory.history.currentItem().data(Qt.ItemDataRole.UserRole)
+    inventory.reverse_button.click()
+    _wait_for_action(inventory)
+    inventory.keep_count_button.click()
+    _wait_for_action(inventory)
+    reversed_ids = {booking.operation_id for booking in filaments.bookings() if booking.reversed_at}
+    assert reversed_ids == {identifier}
+    assert filaments.get(first.identifier).remaining_grams == pytest.approx(150)
+
+
+def test_late_stock_conflict_does_not_reopen_exception_on_another_spool(inventory, monkeypatch):
+    """Ein noch arbeitender alter Klick liefert keine Ausnahme in das inzwischen neue Detail."""
+    _first, second = _stock_conflict(inventory)
+    entered, released = Event(), Event()
+    original = filaments.reverse_booking
+
+    def delayed(*args, **kwargs):
+        entered.set()
+        assert released.wait(3)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(filaments, "reverse_booking", delayed)
+    inventory.reverse_button.click()
+    try:
+        assert entered.wait(1)
+        inventory.show_spool(second.identifier)
+        inventory.history.setCurrentRow(0)
+    finally:
+        released.set()
+        _wait_for_action(inventory)
+    assert inventory.keep_count_button.isHidden()
+    assert not inventory.message.text()
+    assert all(not booking.reversed_at for booking in filaments.bookings())
+
+
 @pytest.fixture
 def inventory(qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Jeder Kundenweg besitzt ein eigenes echtes Lager auf der Platte."""

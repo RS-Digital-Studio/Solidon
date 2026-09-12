@@ -333,9 +333,11 @@ class InventoryView(QWidget):
         self._worker: _InventoryWork | None = None
         self._leash = WorkerLeash(self)
         self._callback: Callable[[object], None] | None = None
-        self._pending_actions: deque[tuple[Callable[[], object], Callable[[object], None]]] = (
-            deque()
-        )
+        self._pending_actions: deque[
+            tuple[Callable[[], object], Callable[[object], None], tuple[str, str] | None]
+        ] = deque()
+        self._reverse_target: tuple[str, str] | None = None
+        self._keep_count_target: tuple[str, str] | None = None
         self._wait_cursor = QTimer(self)
         self._wait_cursor.setSingleShot(True)
         self._wait_cursor.timeout.connect(self._show_wait_cursor)
@@ -524,6 +526,7 @@ class InventoryView(QWidget):
 
     def _refill(self, *_args: object) -> None:
         """Suche und Gruppierung verändern die Auswahl der sichtbaren Spulen."""
+        self._clear_stock_conflict()
         focused = next((card.entry.identifier for card in self.cards if card.hasFocus()), "")
         for row in range(self.grid.rowCount()):
             self.grid.setRowStretch(row, 0)
@@ -605,6 +608,7 @@ class InventoryView(QWidget):
 
     def show_spool(self, identifier: str) -> None:
         """Das Detail bleibt auch bei gleichen Etiketten genau an dieser Spule."""
+        self._clear_stock_conflict()
         try:
             snapshot = filaments.read_snapshot()
         except AppError as problem:
@@ -761,11 +765,16 @@ class InventoryView(QWidget):
             item.setFlags(Qt.ItemFlag.NoItemFlags)
 
     def _history_selected(self, row: int) -> None:
+        if self._keep_count_target is not None and not self._matches_reverse_target(
+            self._keep_count_target
+        ):
+            self._clear_stock_conflict()
         self.reverse_button.setEnabled(
             row >= 0 and not bool(self.history.item(row).data(int(Qt.ItemDataRole.UserRole) + 1))
         )
 
     def show_shelf(self) -> None:
+        self._clear_stock_conflict()
         self._selected_id = ""
         self.pages.setCurrentIndex(0)
 
@@ -818,17 +827,36 @@ class InventoryView(QWidget):
         item = self.history.currentItem()
         if item is not None:
             identifier = str(item.data(Qt.ItemDataRole.UserRole))
-            self._run(partial(filaments.reverse_booking, identifier), self._saved)
+            self._run(
+                partial(filaments.reverse_booking, identifier),
+                self._saved,
+                reverse_target=(self._selected_id, identifier),
+            )
 
     def _reverse_preserving_counts(self) -> None:
         """Die erklärte Ausnahme wird erst auf diesen zweiten bewussten Klick ausgeführt."""
-        item = self.history.currentItem()
-        if item is not None:
-            identifier = str(item.data(Qt.ItemDataRole.UserRole))
+        target = self._keep_count_target
+        self._clear_stock_conflict()
+        if target is not None and self._matches_reverse_target(target):
             self._run(
-                partial(filaments.reverse_booking, identifier, preserve_newer_counts=True),
+                partial(filaments.reverse_booking, target[1], preserve_newer_counts=True),
                 self._saved,
+                reverse_target=target,
             )
+
+    def _matches_reverse_target(self, target: tuple[str, str]) -> bool:
+        """Eine Rücknahme gehört sowohl zur Spule als auch zum ausgewählten Vorgang."""
+        if target[0] != self._selected_id or self.pages.currentIndex() != 1:
+            return False
+        item = self.history.currentItem()
+        return item is not None and str(item.data(Qt.ItemDataRole.UserRole)) == target[1]
+
+    def _clear_stock_conflict(self) -> None:
+        """Eine andere Ansicht übernimmt weder Erklärung noch Ausnahme eines alten Vorgangs."""
+        if self._keep_count_target is not None:
+            self.message.clear()
+        self._keep_count_target = None
+        self.keep_count_button.hide()
 
     def _import(self) -> None:
         self._run(configured_spools, self._choose_import)
@@ -848,18 +876,24 @@ class InventoryView(QWidget):
             return
         self._run(partial(filaments.synchronise, dialog.chosen_spools()), self._saved)
 
-    def _run(self, action: Callable[[], object], callback: Callable[[object], None]) -> None:
+    def _run(
+        self,
+        action: Callable[[], object],
+        callback: Callable[[object], None],
+        *,
+        reverse_target: tuple[str, str] | None = None,
+    ) -> None:
         """Bestätigte Eingaben bleiben bis zu ihrer Ausführung in Reihenfolge erhalten."""
-        self._pending_actions.append((action, callback))
+        self._pending_actions.append((action, callback, reverse_target))
         self._start_next()
 
     def _start_next(self) -> None:
         """Schreiben und Suchen halten die letzte gültige Ansicht sichtbar."""
         if self._worker is not None or not self._pending_actions:
             return
-        action, callback = self._pending_actions.popleft()
+        action, callback, self._reverse_target = self._pending_actions.popleft()
         self._callback = callback
-        self.keep_count_button.hide()
+        self._clear_stock_conflict()
         worker = _InventoryWork(action)
         self._worker = worker
         worker.completed.connect(self._completed)
@@ -922,11 +956,15 @@ class InventoryView(QWidget):
         """Fachliche Konflikte nennen ihren Grund; Angaben ändern bleibt erreichbar."""
         if self._take_callback() is None:
             return
+        target = self._reverse_target
+        if target is not None and not self._matches_reverse_target(target):
+            self._start_next()
+            return
         self._failed("")
         self.message.setText(str(problem))
-        self.keep_count_button.setVisible(
-            isinstance(problem, ValidationError) and problem.constraint == "stock_conflict"
-        )
+        if isinstance(problem, ValidationError) and problem.constraint == "stock_conflict":
+            self._keep_count_target = target
+        self.keep_count_button.setVisible(self._keep_count_target is not None)
         self._start_next()
 
     def _cancel(self) -> None:

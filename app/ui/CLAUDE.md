@@ -20,6 +20,10 @@ Hier steht die Karte, dort das Gesetz.
 `InventoryView` reiht bestätigte Lagerhandlungen geordnet ein; Rückmeldungen
 gelten nur ihrem aktiven Arbeiter. Abgebrochene Suchen bleiben bis zum Threadende
 gehalten und dürfen spätere Aufträge nicht verändern.
+Die Rücknahmeausnahme bei jüngerer Bestandsfeststellung bleibt an Spule und
+Vorgang gebunden. Ein Wechsel von Detail, Regal, Filter oder Journalauswahl
+verwirft das Angebot; verspätete Konflikte öffnen es nicht in einer anderen
+Ansicht. Eingereihte Rücknahmen bewahren ihren ursprünglichen Zielkontext.
 
 Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
 fachlichen Sicherungs- oder Wiederholungsweg. Unerwartete Ausnahmen werden
