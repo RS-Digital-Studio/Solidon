@@ -549,7 +549,7 @@ class FirstRunDialog(QDialog):
         chosen = str(self.language.currentData())
         if not chosen or chosen == self.settings.language:
             return
-        self.apply_to(self.settings)
+        self._carry_over(self.settings)
         install_language(chosen)
         set_language(chosen)
         application = QApplication.instance()
@@ -562,16 +562,18 @@ class FirstRunDialog(QDialog):
     # --- result -----------------------------------------------------------------
 
     def apply_to(self, settings: UiSettings) -> UiSettings:
-        """Schreibt die Antworten zurück. Beim Annehmen aufgerufen, nie beim
-        Überspringen.
-        """
+        """Übernimmt die Antworten und markiert die angenommene Einrichtung als beendet."""
+        self._carry_over(settings)
+        settings.first_run_done = True
+        return settings
+
+    def _carry_over(self, settings: UiSettings) -> None:
+        """Bewahrt Antworten beim Sprachwechsel, ohne die Einrichtung abzuschließen."""
         settings.language = str(self.language.currentData())
         settings.printer = str(self.printer.currentData())
         # Keine Frage mehr, aber weiterhin ein vollständiger Projektvorgabensatz:
         # Bis ein Filamentprofil seinen Typ liefert, gilt die dokumentierte Kernvorgabe.
         settings.material = settings.material or profiles.DEFAULT_MATERIAL
-        settings.first_run_done = True
-        return settings
 
     def _fill_tools(self, states: tuple[tools.ToolState, ...]) -> None:
         """Eine Zeile je Programm, neu gebaut statt neu beschriftet.

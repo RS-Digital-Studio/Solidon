@@ -1048,6 +1048,10 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
 ## Zustandsbindung in asynchronen Bedienwegen
 
+Beim Sprachwechsel der ersten Schritte werden Antworten für den Neuaufbau
+übertragen. Erst die Annahme setzt `first_run_done`; die Sprachwahl beendet
+die Einrichtung nicht.
+
 Unerwartete Fehler beim Erzeugen oder Einrichten von ComfyUI verlassen den
 Wartezustand als `InternalError`. Die gemeinsame Fehleranzeige verbindet den
 Berichtsknopf mit den Fehlerhandlungen des Hauptfensters.

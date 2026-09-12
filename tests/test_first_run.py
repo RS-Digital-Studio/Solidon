@@ -1692,6 +1692,7 @@ def test_choosing_a_language_switches_the_dialog_at_once(qt_app: QApplication) -
     before.language.setCurrentIndex(other)
 
     assert before.result() == LANGUAGE_CHANGED, "der Dialog schließt sich für den Neuaufbau"
+    assert not settings.first_run_done, "der Sprachwechsel beendet die Einrichtung noch nicht"
     assert settings.language == "en", "und die Wahl steht schon in den Einstellungen"
 
     after = FirstRunDialog(settings)
