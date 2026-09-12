@@ -1,11 +1,9 @@
-"""Die Bausteinbibliothek (Bauplan §24).
+"""Die Bausteinbibliothek und ihre Bereichsprüflogik (Bauplan §24).
 
-§24.3 setzt die Latte: jeder Baustein wird über seinen gesamten
-Parameterbereich gerechnet — wasserdicht, Mindestwandstärke, keine
-Selbstdurchdringung an den Grenzen, Merkmale richtig benannt. **Ein Baustein
-ohne diesen Test gilt als nicht vorhanden.** Also ist der Bereichstest über das
-Register parametrisiert: ein neuer Baustein ist abgedeckt, sobald er deklariert
-ist, und ein Baustein, der an seinen eigenen Grenzen scheitert, scheitert hier.
+Die Bibliothek wird bei Änderungen von Hand über ihre Parametergrenzen
+gerechnet. Diese Datei prüft die Deklarationen, den Anschluss an die gemeinsame
+Bereichsprüfung sowie Wandmessung, Selbstdurchdringung und benannte Merkmale.
+Sie führt keinen vollständigen Bereichslauf über sämtliche Bausteine aus.
 """
 
 from __future__ import annotations
@@ -63,6 +61,37 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 # --- die Bibliothek ---------------------------------------------------------------
+
+
+def test_registered_range_check_uses_every_declared_requirement(profile: Profile) -> None:
+    """Der Registerweg reicht auch optionale Pflichten und Abbruch zum gemeinsamen Prüfer."""
+    from app.core.knowledge.parts import range_check
+    from app.core.scene.cancel import CancelSignal
+
+    spec = dataclasses.replace(
+        PARTS.get("heatset_m4"),
+        joined_by_host=True,
+        bodies=2,
+        feasible=lambda values: values["size"] != "M2",
+    )
+    progress = mock.Mock()
+    cancelled = CancelSignal()
+    report = range_check.RangeReport(checked=1)
+    with mock.patch.object(range_check, "check", return_value=report) as checker:
+        seen = range_check.check_part(spec, profile, progress=progress, cancelled=cancelled)
+    assert seen is report
+    checker.assert_called_once_with(
+        spec.params,
+        spec.fn,
+        profile,
+        progress=progress,
+        cancelled=cancelled,
+        joined_by_host=True,
+        bodies=2,
+        wall=spec.wall,
+        features=spec.feature_requirements,
+        feasible=spec.feasible,
+    )
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:

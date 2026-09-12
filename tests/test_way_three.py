@@ -289,6 +289,8 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
+    assert entry.mesh.is_watertight
+    assert entry.mesh.component_count == 1
 
 
 def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(

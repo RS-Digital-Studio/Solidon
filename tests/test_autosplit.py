@@ -585,7 +585,9 @@ def test_final_progress_cancellation_applies_no_split(profile: Profile) -> None:
     assert tuple(project.document.transactions) == before_transactions
 
 
-def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> None:
+def test_auto_dovetails_take_part_in_the_support_choice(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Die Nahtsuche bewertet die Verbinder, die Auto Split wirklich baut.
 
     Der analytische Körper erweitert den Balken aus ``crossed_overhangs`` auf
@@ -674,7 +676,19 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     assert evaluated_left == pytest.approx(left_final)
     assert evaluated_right == pytest.approx(right_final)
 
+    measured_counts = []
+    original_support = autosplit._support_after_cut
+
+    def record_support(*args, **kwargs):
+        measured_counts.append(kwargs.get("connector_count", 0))
+        return original_support(*args, **kwargs)
+
+    monkeypatch.setattr(autosplit, "_support_after_cut", record_support)
     chosen = autosplit.find_plane(mesh, profile)
+
+    assert measured_counts and set(measured_counts) == {pins.PIN_COUNT}, (
+        "Die Suche muss die Verbinderzahl bis zur echten Stützrechnung weiterreichen."
+    )
 
     assert chosen is not None
     # Beide liegen auf dem Raster und haben dieselbe billige Punktzahl. Die
