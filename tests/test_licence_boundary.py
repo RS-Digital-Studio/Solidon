@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 
@@ -195,6 +196,45 @@ def test_an_expired_trial_blocks_removing_a_step(monkeypatch: pytest.MonkeyPatch
     assert raised.value.suggestions, "Regel 17: auch diese Ausnahme trägt Handlungen"
     assert list(project.document.ops) == before_ops, "abgelehnt heißt: nichts geschrieben"
     assert list(project.document.transactions) == before_transactions
+
+
+@pytest.mark.parametrize("method", ["repair_and_retry", "split_and_retry", "recount_and_retry"])
+@pytest.mark.parametrize("licensed", [False, True])
+def test_retry_boundaries_keep_reading_free_and_guard_changes(
+    monkeypatch: pytest.MonkeyPatch, method: str, licensed: bool
+) -> None:
+    """Jeder Wiederholungsweg prüft selbst, bevor er den Verlauf neu plant."""
+    project = _project()
+    history = History(project.document)
+    history.apply(
+        "Zerlegen",
+        [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 2})],
+    )
+    step = project.document.ops[-1]
+    arguments = {
+        "repair_and_retry": (step.id,),
+        "split_and_retry": (step.id, "obj_1", 2),
+        "recount_and_retry": (step.id, 3),
+    }
+    before = deepcopy(project.document)
+    if licensed:
+        _license(monkeypatch)
+    else:
+        _lock(monkeypatch)
+
+    assert history.operation(step.id) == step
+    assert history.removal_closure([step.id]) == (step.id,)
+    retry = getattr(history, method)
+    if licensed:
+        retry(*arguments[method])
+        assert project.document.ops != before.ops
+        assert len(project.document.transactions) == len(before.transactions) + 1
+    else:
+        with pytest.raises(LicenceRequired) as caught:
+            retry(*arguments[method])
+        assert caught.value.action == activation.CHANGE
+        assert caught.value.suggestions
+        assert project.document == before
 
 
 def test_an_expired_trial_blocks_the_export(
