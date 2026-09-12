@@ -4555,6 +4555,9 @@ class MainWindow(QMainWindow):
         #: Die Meldung „Geladen: …" gehört ans Ende des Vorgangs, und der
         #: endet seit dem Arbeiter nicht mehr in derselben Methode.
         self._pending_download = ""
+        #: Wessen Schichtanalyse die Leiste gerade zeigt — die Konturen im Bild
+        #: gehören zu diesem Körper und wandern mit ihm (RM-119).
+        self._layer_object: ObjectId | None = None
         #: Die Datei, deren Import gerade läuft — für „Zuletzt geöffnet"
         #: (RM-130). Dasselbe Muster wie ``_pending_download`` daneben und aus
         #: demselben Grund: ``importFinished`` meldet nur, ob es geklappt hat,
@@ -10097,6 +10100,7 @@ class MainWindow(QMainWindow):
                 )
             return
         self.layer_bar.show_note("")
+        self._layer_object = object_id
         # Eine gebundene Methode statt eines Lambdas je Schritt: sie ist bei
         # jedem Aufruf dieselbe, also reiht die Warteliste sie nur einmal ein —
         # und sie liest den Schieber erst, wenn das Ergebnis da ist. Gezeigt
@@ -10111,7 +10115,12 @@ class MainWindow(QMainWindow):
         if result is None or not result.layers:
             self.viewport.set_layer(None)
             return
-        self.viewport.set_layer(result.layers[min(index, len(result.layers) - 1)])
+        # Mit dem Körper: Seine Konturen gehören dorthin, wo er im Bild steht,
+        # und das ist bei mehreren Druckplatten nicht sein Ort in der Szene
+        # (RM-119).
+        self.viewport.set_layer(
+            result.layers[min(index, len(result.layers) - 1)], self._layer_object
+        )
 
     def _slice_of(self, object_id: ObjectId, then: Any = None) -> SliceResult | None:
         """Die Schichtanalyse eines Körpers — aus dem Cache oder gerechnet.

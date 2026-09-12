@@ -15204,3 +15204,140 @@ def test_the_age_of_a_backup_follows_the_application_language(tmp_path: Path) ->
     assert deutsch != englisch, (
         f"beide Sprachen schreiben {deutsch!r} — das Datum hängt nicht an der Sprache"
     )
+
+
+# --- die Schicht gehört ihrem Körper, auch auf Platte zwei (RM-119) ---------------
+
+
+def _two_plates(window: MainWindow) -> Any:
+    """Zwei Bretter 200 auf 200 — mehr als ein Bett fasst, also zwei Platten."""
+    for _ in range(2):
+        window.session.apply(
+            "Anlegen",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 200.0, "depth": 200.0, "height": 20.0}
+                )
+            ],
+        )
+        window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    window.session.apply(
+        "Anordnen",
+        [
+            OperationDraft(
+                op="arrange_bed", inputs=tuple(result.scene.objects), params={"plates": 2}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    assert {entry.plate for entry in result.scene.objects.values()} == {0, 1}, "zwei Platten"
+    window.viewport.show_scene(result)
+    window.viewport.wait_for_workers(5000)
+    return result
+
+
+def _layer_lines(window: MainWindow) -> Any:
+    """Die x-Spanne der gezeichneten Schichtkonturen."""
+    import numpy as np
+
+    points = [
+        np.asarray(entry["item"].points, dtype=float)
+        for kind, entry in window.viewport.renderer.drawn
+        if kind == "lines" and entry["name"] == "layer"
+    ]
+    assert points, "ohne gezeichnete Kontur sagt der Test nichts"
+    stacked = np.vstack(points)
+    return float(stacked[:, 0].min()), float(stacked[:, 0].max())
+
+
+def test_the_layer_outline_follows_its_body_to_the_second_plate(window: MainWindow) -> None:
+    """Die Schichtlinien lagen quer über dem falschen Teil (RM-119).
+
+    Gemessen am 12.09.2026: Der Körper auf Platte 2 steht im Bild bei x 160
+    bis 360 — eine Bettbreite plus Abstand weiter —, seine Schichtkonturen
+    wurden bei x -100 bis 100 gezeichnet, also auf dem Teil daneben. Die
+    Konturen entstehen in Szenenkoordinaten, und dort liegen beide Platten
+    übereinander; was sie nicht bekamen, war der Ansichtsversatz, den jede
+    andere Zeichenstelle über ``_view_offset`` längst nimmt.
+    """
+    from render_fakes import RecordingRenderer
+
+    from app.core.slice.analysis import slice_body
+
+    result = _two_plates(window)
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    second = next(key for key, entry in result.scene.objects.items() if entry.plate == 1)
+    box = result.scene.objects[second].mesh.bounds
+
+    layers = slice_body(result.scene.objects[second].mesh, 2.0)
+    window.viewport.set_layer(layers.layers[3], second)
+
+    low, high = _layer_lines(window)
+    shift = float(window.viewport._view_offset(result.scene.objects[second], result)[0])
+    assert shift > 100.0, "ohne Versatz prüft der Test nichts"
+    assert low == pytest.approx(box.minimum[0] + shift, abs=1.0)
+    assert high == pytest.approx(box.maximum[0] + shift, abs=1.0)
+
+
+def test_looking_at_one_plate_puts_the_outline_back(window: MainWindow) -> None:
+    """Und beim Blick auf eine einzelne Platte steht sie wieder am Szenenort.
+
+    Dann zeichnet die Ansicht ein Bett, und darauf gehört das, was darauf
+    liegt — ``_plate_offset`` ist null, und die Konturen dürfen nicht auf
+    einem festen Versatz kleben bleiben.
+    """
+    from render_fakes import RecordingRenderer
+
+    from app.core.slice.analysis import slice_body
+
+    result = _two_plates(window)
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    second = next(key for key, entry in result.scene.objects.items() if entry.plate == 1)
+    box = result.scene.objects[second].mesh.bounds
+
+    window.viewport.set_plate(1)
+    layers = slice_body(result.scene.objects[second].mesh, 2.0)
+    window.viewport.set_layer(layers.layers[3], second)
+
+    low, high = _layer_lines(window)
+    assert low == pytest.approx(box.minimum[0], abs=1.0)
+    assert high == pytest.approx(box.maximum[0], abs=1.0)
+
+
+def test_the_section_plane_cuts_every_plate_at_its_own_place(window: MainWindow) -> None:
+    """Und die Entscheidung daneben: Der Schnitt ist eine Szenenebene (RM-119).
+
+    Bei zwei Platten liegen die Körper in der Szene übereinander und im Bild
+    nebeneinander. Eine Ebene bei x = 0 schneidet deshalb **beide** Teile in
+    ihrer Mitte — im Bild sieht man zwei aufgeschnittene Bretter, und genau
+    das ist die Frage, für die ein Schnitt da ist (Wandstärke, Innenraum).
+
+    Eine Bildebene wäre die schlechtere Antwort: Sie träfe immer nur eine
+    Platte, und der Schieberweg müsste mit jeder weiteren um eine Bettbreite
+    wachsen — er kommt aus den Körpergrenzen (`section_ranges`), also aus der
+    Szene. Schnitt und Bedienung stimmen so überein.
+    """
+    import numpy as np
+
+    from app.core.geom.section import SectionPlane
+
+    result = _two_plates(window)
+    window.viewport.set_section(SectionPlane.along("x", 0.0))
+
+    cut_widths = []
+    for entry in result.scene.objects.values():
+        raw = getattr(window.viewport._sectioned(entry.mesh), "raw", None)
+        assert raw is not None and len(raw.faces), "jedes Teil bleibt sichtbar"
+        points = np.asarray(raw.vertices, dtype=float)
+        cut_widths.append(float(points[:, 0].max() - points[:, 0].min()))
+
+    assert len(cut_widths) == 2
+    whole = 200.0
+    for width in cut_widths:
+        assert width == pytest.approx(whole / 2.0, abs=1.0), (
+            f"jedes Teil wird an seiner eigenen Mitte geschnitten: {cut_widths}"
+        )

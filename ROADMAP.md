@@ -77,7 +77,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
 | [RM-101 — Elternlosen Handlungsknopf im Fensteraufbau zuordnen](#rm-101) | Bedienung und Darstellung | Verdacht am Code widerlegt; das gesehene fremde Fenster bleibt unerklärt |
 | [RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen](#rm-108) | Bedienung und Darstellung | Schlüsseldialog während laufender Abfrage ohne Wartefrist schließen |
-| [RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen](#rm-119) | Bedienung und Darstellung | Schnittebene auf versetzten Platten und in Explosionsdarstellung prüfen |
 | [RM-124 — Zusätzlichen Render durch show_build_volume messen](#rm-124) | Bedienung und Darstellung | Bauraum-Aufwand messen; unnötigen Aufbau bei unverändertem Zustand vermeiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
@@ -1558,10 +1557,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-119"></a>
 
-- [ ] **RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen.** Die sichtbare
-  Schnittebene bei versetzten Druckplatten und Explosionsdarstellung in den richtigen Koordinaten
-  auswerten. Abnahme: senkrechte und waagerechte Ebenen treffen das im Bild gewählte Teil auf jeder
-  Platte; Schnitt, Marke und Bedienung stimmen überein.
+- [x] **RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen.** Am 12.09.2026 am
+  Bild gemessen — und das Ergebnis ist ein anderes als der Code-Befund vom 04.09.2026 vermuten
+  ließ. Aufbau: zwei Bretter 200 auf 200, `arrange_bed` mit zwei Platten, Versatz 260 mm nach +X.
+
+  **Der Schnitt selbst ist richtig, und zwar als Entscheidung.** Eine Ebene bei x = 0 schneidet
+  beide Bretter in ihrer Mitte; im Bild stehen danach zwei aufgeschnittene Teile nebeneinander.
+  Genau das ist die Frage, für die ein Schnitt da ist — Wandstärke, Innenraum. Eine **Bild**ebene
+  wäre die schlechtere Antwort: Sie träfe immer nur eine Platte, und der Schieberweg müsste mit
+  jeder weiteren um eine Bettbreite wachsen. Er kommt aus den Körpergrenzen (`section_ranges`),
+  also aus der Szene — Schnitt und Bedienung stimmen damit überein, und wer das eine ändert,
+  ändert beides. Ein Test nagelt die Entscheidung fest; die Gegenprobe mit der Ebene im Bild ist
+  rot.
+
+  **Falsch lag die Marke daneben.** Die Schichtkonturen (§18.10) wurden in Szenenkoordinaten
+  gezeichnet, ohne den Ansichtsversatz: Das Brett auf Platte 2 steht im Bild bei x 160 bis 360,
+  seine Konturen lagen bei -100 bis 100 — quer über dem **anderen** Teil. Derselbe Fehler, den
+  der Kommentar an `_redraw_measurements` für die Maße als behoben beschreibt; die Rechnung war
+  gepflegt, die Liste derer, die sie benutzen, nicht. `Viewport.set_layer` nimmt jetzt den
+  Körper entgegen, dem die Schicht gehört, und `_layer_shift` gibt ihren Konturen denselben
+  Versatz wie Maßen, Merkmalsflächen und Fangmarke. Beim Blick auf eine einzelne Platte ist er
+  null, und die Konturen stehen wieder am Szenenort.
+
+  Nachweis: drei Fälle in `tests/test_ui.py`, drei Gegenproben einzeln rot (ohne den Versatz an
+  den Konturen, mit festem Plattenversatz, mit der Ebene im Bild statt in der Szene).
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#viewport-werkzeuge-aus-kundensicht-03092026).
 

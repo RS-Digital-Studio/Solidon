@@ -1302,8 +1302,22 @@ genau eines. Drei Dinge hängen daran:
 
 Der Versatz liegt mit dem Auseinanderziehen (§18.8) zusammen in
 `_view_offset`, damit jede Zeichenstelle beides bekommt oder keines. **Maße und
-Fangmarke gehen seit dem 03.09.2026 mit**; was noch nicht mitgeht, ist die
-Schnittebene.
+Fangmarke gehen seit dem 03.09.2026 mit, die Schichtkonturen seit dem
+12.09.2026** (RM-119): Sie lagen bei zwei Platten quer über dem falschen Teil —
+gemessen am Brett auf Platte 2, das im Bild bei x 160 bis 360 steht, während
+seine Kontur bei -100 bis 100 gezeichnet wurde. `set_layer` nimmt dafür den
+Körper entgegen, dem die Schicht gehört; ohne ihn gibt es keinen Versatz, den
+man zuordnen könnte.
+
+**Die Schnittebene geht ausdrücklich nicht mit, und das ist eine Entscheidung**
+(RM-119, 12.09.2026). Sie ist eine **Szenen**ebene: Bei zwei Platten liegen die
+Körper in der Szene übereinander, eine Ebene bei x = 0 schneidet also beide in
+ihrer Mitte, und im Bild stehen zwei aufgeschnittene Teile nebeneinander. Genau
+das ist die Frage, für die ein Schnitt da ist — Wandstärke, Innenraum. Eine
+Bildebene träfe immer nur eine Platte, und der Schieberweg müsste mit jeder
+weiteren um eine Bettbreite wachsen; er kommt aus den Körpergrenzen
+(`section_ranges`), also aus der Szene. Schnitt und Bedienung stimmen so
+überein, und wer das ändert, ändert beides.
 
 **Und das Schwierige daran ist nicht die Rechnung, sondern die Zuordnung.**
 `view_point_of` braucht einen Körper, und in der Szene liegen die Platten

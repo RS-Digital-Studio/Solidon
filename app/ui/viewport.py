@@ -4182,6 +4182,9 @@ class Viewport(QWidget):
         """Die durchscheinende Fläche unter dem ruhenden Zeiger (§18.5)."""
         self._layer_actors: list[Any] = []
         self._layer: LayerInfo | None = None
+        #: Wessen Schicht gezeigt wird. Ihre Konturen wandern mit diesem
+        #: Körper, wenn die Ansicht ihn versetzt (RM-119).
+        self._layer_object: ObjectId | None = None
         self._layer_rebuild = QTimer(self)
         """Der Körperschnitt zum Schieber, aufgeschoben bis zur Ruhe: die
         Körper an der Schichthöhe zu kappen ist ein echter Geometrieschnitt
@@ -6162,8 +6165,12 @@ class Viewport(QWidget):
 
         An einer Stelle zusammengefasst, damit jede Zeichenstelle beides
         bekommt oder keines. Merkmalsfläche, Merkmalsbeschriftung, Griffscheibe,
-        Differenzvorschau, Maße und die Fangmarke gehen mit; was **nicht**
-        mitgeht, ist die Schnittebene.
+        Differenzvorschau, Maße, die Fangmarke und seit dem 12.09.2026 auch die
+        Schichtkonturen gehen mit (RM-119). Was **nicht** mitgeht, ist die
+        Schnittebene, und das ist eine Entscheidung: Sie ist eine Szenenebene
+        und schneidet damit jedes Teil an seiner eigenen Stelle — bei zwei
+        Platten also beide, statt nur die eine, über der sie im Bild gerade
+        liegt. Die Begründung steht in `.claude/rules/ansicht.md`.
 
         **Ein Ort braucht dafür seinen Körper**, und den kennt nicht jeder
         Aufrufer. Ein Maß trägt ihn seit dem 03.09.2026 selbst
@@ -10144,12 +10151,20 @@ class Viewport(QWidget):
 
     # --- layer analysis (§18.10) ------------------------------------------------
 
-    def set_layer(self, layer: LayerInfo | None) -> None:
+    def set_layer(self, layer: LayerInfo | None, object_id: ObjectId | None = None) -> None:
         """Zeigt die Konturen einer Schicht. Geometrie, keine
         Werkzeugwege (§18.10).
+
+        ``object_id`` ist der Körper, dem die Schicht gehört — ohne ihn liegen
+        ihre Konturen dort, wo er **in der Szene** steht, und das ist bei
+        mehreren Druckplatten nicht, wo er im Bild steht (RM-119). Gemessen am
+        12.09.2026 an zwei Platten mit je einem Brett 200 auf 200: Die Kontur des
+        Teils auf Platte 2 lag bei Bild-x -100 bis 100, der Körper dazu bei 160
+        bis 360 — die Schichtlinien lagen quer über dem **anderen** Teil.
         """
         was = self._layer
         self._layer = layer
+        self._layer_object = object_id
         # Die Körper werden neu gebaut, weil sie jetzt anders geschnitten sind
         # — aber nicht bei jedem Schritt: der Schnitt ist echte Geometrie und
         # kostet an einem texturierten Netz um die Sekunde. Sofort geschnitten
@@ -10180,16 +10195,22 @@ class Viewport(QWidget):
         # machten aus einem Schieberschritt Sekunden — ein Renderer zahlt je
         # Actor, nicht je Linie (unter VTK gemessen; bei pygfx ist jeder Actor
         # ebenso ein eigenes Objekt in der Szene).
+        # **Mit dem Körper, dem die Schicht gehört** (RM-119). Sein Platz im
+        # Bild ist nicht sein Platz in der Szene, sobald mehrere Druckplatten
+        # nebeneinander stehen oder die Ansicht auseinandergezogen ist — und
+        # die Konturen sind eine Aussage über *dieses* Teil.
+        shift = self._layer_shift()
         contours = [
             ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
         ]
-        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer", LAYER_WIDTHS["layer"])
+        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer", LAYER_WIDTHS["layer"], shift)
         self._add_rings(
             [polygon.outline for polygon in layer.islands],
             layer.z,
             ISLAND_COLOUR,
             "island",
             LAYER_WIDTHS["island"],
+            shift,
         )
         self._add_rings(
             [polygon.outline for polygon in layer.overhangs],
@@ -10197,10 +10218,28 @@ class Viewport(QWidget):
             OVERHANG_COLOUR,
             "overhang",
             LAYER_WIDTHS["overhang"],
+            shift,
         )
 
+    def _layer_shift(self) -> Any:
+        """Der Ansichtsversatz des Körpers, dessen Schicht gezeigt wird (RM-119)."""
+        import numpy as np
+
+        if self._layer_object is None or self._result is None:
+            return np.zeros(3)
+        entry = self._result.scene.objects.get(self._layer_object)
+        if entry is None:
+            return np.zeros(3)
+        return np.asarray(self._view_offset(entry, self._result), dtype=float)
+
     def _add_rings(
-        self, rings: list[Any], z: float, colour: str, name: str, width: int = 2
+        self,
+        rings: list[Any],
+        z: float,
+        colour: str,
+        name: str,
+        width: int = 2,
+        shift: Any = None,
     ) -> None:
         """Geschlossene Konturen einer Schicht als **einen** Aktor je Rolle.
 
@@ -10221,6 +10260,8 @@ class Viewport(QWidget):
                 continue
             flat = np.asarray(ring, dtype=float)
             points = np.column_stack([flat, np.full(len(flat), z)])
+            if shift is not None:
+                points = points + np.asarray(shift, dtype=float)
             pieces.append(np.repeat(points, 2, axis=0)[1:-1])
         if not pieces:
             return
