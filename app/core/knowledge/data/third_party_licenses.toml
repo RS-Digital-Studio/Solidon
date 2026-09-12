@@ -70,7 +70,7 @@ sha256 = "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388"
 path = "third_party_licenses/AppImage-type2-runtime-dd6cebe.txt"
 runtime = ["appimage-type2-runtime"]
 source = "https://raw.githubusercontent.com/AppImage/type2-runtime/dd6cebe/LICENSE"
-sha256 = "c7622e449c9c01fca503a98bc74846ff9595b254ec2b3d4979d42bf884bd1a88"
+sha256 = "aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1"
 
 [[text]]
 path = "third_party_licenses/LGPL-2.1.txt"
