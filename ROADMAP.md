@@ -38,7 +38,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 |---|---|---|
 | [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Die Identität kommt jetzt aus dem Schlüsselbund; offen bleiben `MACOS_SIGNING_MODE` zurück auf `notarized` und ein Bau, der es belegt |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
-| [RM-161 — Das eingecheckte Lizenzmanifest deckt zwei Grenzdateien nicht mehr](#rm-161) | Plattformen, Pakete und Grafik | `tools/build_licence_module.py` vor dem nächsten Paketbau fahren; ohne das startet das Paket gesperrt |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
@@ -461,23 +460,29 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-161"></a>
 
-- [ ] **RM-161 — Das eingecheckte Lizenzmanifest deckt zwei Grenzdateien nicht mehr.**
-  `tests/test_packaging.py::test_a_manifest_that_no_longer_covers_the_boundary_files_stops_the_build`
-  ist rot und war es am 12.09.2026 auch an HEAD ohne jede lokale Änderung — nachgemessen über
-  einen Stash: `packaging/build/licence.manifest` deckt `core/scene/history.py` und
-  `core/export/writer.py` nicht mehr. Beide sind Grenzdateien aus §2 C; ein daraus gebautes
-  Paket startet und ist gesperrt, und genau das sagt der Test.
+- [x] **RM-161 — Das Lizenzmanifest deckte zwei Grenzdateien nicht mehr.** Am 12.09.2026
+  behoben, und zwei Annahmen des Punktes haben sich dabei erledigt.
 
-  **Es ist kein Codefehler, sondern ein nicht gefahrener Erzeuger** — dieselbe Klasse wie die
-  `rendered`-Tests: `python tools/build_licence_module.py` schreibt das Manifest neu. Der
-  Lauf braucht Cython und einen C-Compiler und gehört an den Anfang des Paketbaus, nicht an
-  jeden Commit; auf dieser Maschine findet `vswhere` das installierte Visual Studio nicht, die
-  Umgebung ist deshalb von Hand zu aktivieren (der Weg steht im Docstring des Werkzeugs).
+  **Der Erzeuger läuft auf dieser Maschine**, ohne eine von Hand aktivierte Umgebung:
+  `python tools/build_licence_module.py` übersetzt die sieben Freischaltmodule und signiert
+  `packaging/build/licence.manifest` in einem Zug. Danach ist `tests/test_packaging.py`
+  vollständig grün (91 Fälle). Die Notiz über `vswhere` stammt von einer anderen Lage und gilt
+  hier nicht.
 
-  Abnahme: `tools/build_licence_module.py` gefahren, der Test grün, und ein Paket, das
-  ungesperrt startet. Zu entscheiden ist daneben, ob der Test zur Marke `rendered` gehört —
-  er prüft ein eingechecktes Erzeugnis gegen seinen Erzeuger, und die CI fährt diese Marke
-  ausdrücklich nicht.
+  **Und das Manifest ist nicht eingecheckt** — `.gitignore` schließt `build/` aus. Damit ist
+  auch die offene Frage beantwortet: Der Test gehört **nicht** zur Marke `rendered`. Er
+  überspringt sich selbst, wenn kein gebautes Prüfmodul da ist („kein gebautes Prüfmodul —
+  nichts zu vergleichen"), ist auf einem frischen Klon also nie rot. Rot wird er genau dort, wo
+  er es soll: auf einer Maschine, auf der gebaut **und** danach eine Grenzdatei geändert wurde.
+  Das war hier der Fall, und zwar zweimal nacheinander durch eigene Arbeit an
+  `core/export/writer.py` (RM-140, RM-141). Ein `rendered` daran hätte genau diese Meldung
+  abgeschaltet.
+
+  Nicht gebaut wurde ein **Paket**: Dass eines ungesperrt startet, zeigt erst der nächste
+  Paketbau, und der gehört zu [RM-011](#rm-011) und [RM-055](#rm-055). Der Weg dorthin ist
+  gesperrt, falls jemand den Schritt vergisst — `packaging/solidon3d.spec` bricht ohne das
+  übersetzte Prüfmodul ab, `tools/make_installer.py` prüft das Manifest noch einmal, und
+  `/erzeugen` nennt den Lauf an seinem Platz.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
