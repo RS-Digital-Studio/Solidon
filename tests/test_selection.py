@@ -2112,7 +2112,7 @@ def test_the_pointer_over_an_edge_promises_what_the_click_does(qt_app: QApplicat
     an dieser Stelle benennt.
 
     Geprüft wird die **Rolle**, nicht das Bild: Offscreen gibt es keinen
-    Zeiger, den man ansehen koennte, und ``_resting_role`` ist die Stelle, an
+    Zeiger, den man ansehen könnte, und ``_resting_role`` ist die Stelle, an
     der die Rangfolge steht.
     """
     view = Viewport()

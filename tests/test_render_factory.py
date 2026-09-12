@@ -87,7 +87,7 @@ look_down(view, body.bounds())
 view.render()
 print("gerendert", flush=True)
 assert view.screenshot().max() > 100
-print("bild geprueft", flush=True)
+print("bild geprüft", flush=True)
 # Die echten Qt-Radereignisse müssen bis zur Kamera reichen, auch unterhalb
 # einer Raste. Beide Projektionen behalten dabei den Weltpunkt am Zeiger.
 navigator = Navigator(view, "solidon", _Log().callbacks())
@@ -134,7 +134,7 @@ QTest.keyClicks(number_field, "12,5")
 QTest.keyClick(number_field, Qt.Key.Key_Return)
 assert abs(number_field.value() - 12.5) < 1e-9
 reference = weakref.ref(view)
-print("vor schliessen", flush=True)
+print("vor schließen", flush=True)
 view.close()
 view.close()
 print("geschlossen", flush=True)

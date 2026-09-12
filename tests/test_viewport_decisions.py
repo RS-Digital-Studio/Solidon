@@ -5198,13 +5198,13 @@ def test_a_chosen_feature_gets_its_grip_without_opening_a_tool(qt_app: QApplicat
         viewport.select("obj_1")
         viewport.set_gizmo(False)
 
-        assert viewport._gizmo is None, "am ganzen Koerper entscheidet das Werkzeug"
+        assert viewport._gizmo is None, "am ganzen Körper entscheidet das Werkzeug"
 
         viewport.select_feature("hole_1")
-        assert viewport._gizmo is None, "die Auswahl allein zeigt nur, was gewaehlt ist"
+        assert viewport._gizmo is None, "die Auswahl allein zeigt nur, was gewählt ist"
         viewport.set_placement_pointer(lambda event: False)
         assert viewport._gizmo is not None, "mit *Im Bild einstellen* steht er"
-        assert viewport._scale_handle is None, "und ohne Wuerfel — ein Merkmal hat keine Groesse"
+        assert viewport._scale_handle is None, "und ohne Würfel — ein Merkmal hat keine Größe"
         viewport.set_placement_pointer(None)
         assert viewport._gizmo is None, "und geht mit der Platzierung"
 
@@ -5243,7 +5243,7 @@ def test_the_movable_kinds_come_from_the_register(qt_app: QApplication) -> None:
         gefunden += 1
         erwartet.update(REGISTRY.get(name).applies_to or ())
     assert gefunden, f"keine der Griff-Operationen im Register: {GIZMO_FEATURE_OPS}"
-    assert erwartet, "eine leere Menge liesse den Griff nie an einem Merkmal sitzen"
+    assert erwartet, "eine leere Menge ließe den Griff nie an einem Merkmal sitzen"
     assert movable_feature_kinds() == frozenset(erwartet)
 
 

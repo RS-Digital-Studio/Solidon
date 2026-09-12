@@ -546,7 +546,7 @@ def test_the_first_tour_describes_the_report_it_really_gets() -> None:
     assert len(findings) == 3, [str(entry.message) for entry in findings]
     assert {entry.severity for entry in findings} == {"info"}
     codes = {entry.code for entry in findings}
-    assert "repair.nothing_to_do" in codes, "der Text nennt es, also gehoert der Befund dazu"
+    assert "repair.nothing_to_do" in codes, "der Text nennt es, also gehört der Befund dazu"
 
     tour = tour_for("weg1-halterung-anpassen")
     assert tour is not None

@@ -1488,7 +1488,7 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     """Der Knopf und sein Haken stehen unten, nicht über den Zeilen.
 
     Sie entstehen beim Aufbau des Panels und lagen damit **vor** allem, was
-    ``show_feature`` später einfügt — im Fenster stand „Uebernehmen" ganz
+    ``show_feature`` später einfügt — im Fenster stand „Übernehmen" ganz
     oben, über der Überschrift der Auswahl (Robert, 10.09.2026: „ich hab doch
     gesagt der button soll unten sein nicht ganz oben"; „das übernehmen steht
     noch oben").

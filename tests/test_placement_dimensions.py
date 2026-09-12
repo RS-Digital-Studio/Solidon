@@ -420,7 +420,7 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
         target = QPoint(round(x / ratio), round(y / ratio))
 
         # **Gemessen wird gegen die Vorschau, nicht gegen einen Punkt.** Was
-        # der Kunde sehen will, ist der Werkzeugkoerper an seiner Stelle; ein
+        # der Kunde sehen will, ist der Werkzeugkörper an seiner Stelle; ein
         # Feld neun Bildpunkte neben der Mitte deckt eine Bohrung von sechzig
         # Bildpunkten weiterhin zu. Die Ausdehnung kommt aus demselben Netz,
         # das der Fluss vorbereitet hat.
@@ -437,7 +437,7 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
             1, round(math.hypot(rand[0] / ratio - target.x(), rand[1] / ratio - target.y()))
         )
         preview = QRect(target.x() - reach, target.y() - reach, 2 * reach, 2 * reach)
-        assert reach > 1, "ohne ausgedehnte Vorschau prueft der Test nur einen Punkt"
+        assert reach > 1, "ohne ausgedehnte Vorschau prüft der Test nur einen Punkt"
 
         covering = [
             field.objectName() or type(field).__name__
@@ -445,7 +445,7 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
             if field.isVisible() and field.geometry().intersects(preview)
         ]
         assert not covering, (
-            f"diese Felder liegen ueber der Vorschau {preview} am Setzpunkt: {covering}"
+            f"diese Felder liegen über der Vorschau {preview} am Setzpunkt: {covering}"
         )
     finally:
         flow.dispose()

@@ -434,7 +434,7 @@ def test_glb_keeps_the_measurements_it_was_given() -> None:
 
     assert back.triangle_count == original.triangle_count
     # In Metern, seit dem 05.09.2026 (CORE-33): der Leser skaliert bewusst nicht
-    # zurueck, die Einheit fragt die Eingangsstufe.
+    # zurück, die Einheit fragt die Eingangsstufe.
     assert back.volume == pytest.approx(original.volume * 1e-9, rel=1e-6)
     assert back.bounds.size == pytest.approx((0.010, 0.040, 0.020), abs=1e-9)
 

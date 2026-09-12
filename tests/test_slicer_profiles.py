@@ -815,7 +815,7 @@ def cura_bestand(tmp_path: Path) -> Path:
     """Ein Bestand, wie Cura ihn ausliefert.
 
     Drei Formate nebeneinander — Drucker als JSON, Qualität als INI, Material
-    als XML — und die Ordner heissen anders als bei der Orca-Familie. Genau
+    als XML — und die Ordner heißen anders als bei der Orca-Familie. Genau
     daran fand die gemeinsame Suche bis zum 08.09.2026 nichts.
     """
     root = tmp_path / "share" / "cura" / "resources"
@@ -908,8 +908,8 @@ def test_cura_printers_are_found_and_base_classes_are_not(cura: Path) -> None:
 
 
 def test_a_cura_printer_carries_the_id_its_profiles_point_at(cura: Path) -> None:
-    """``abax_pri3.def.json`` heisst ``abax_pri3`` — genau darauf zeigt
-    ``definition`` in jedem Qualitätsprofil. ``Path.stem`` allein liesse
+    """``abax_pri3.def.json`` heißt ``abax_pri3`` — genau darauf zeigt
+    ``definition`` in jedem Qualitätsprofil. ``Path.stem`` allein ließe
     ``.def`` stehen, und dann fände kein Profil seinen Drucker."""
     found = next(
         entry
@@ -937,7 +937,7 @@ def test_a_cura_material_becomes_a_readable_filament(cura: Path) -> None:
     namen = sorted(entry.name for entry in found)
 
     assert namen == ["Best Filament PETG Orange", "Generic PLA"], (
-        f"gefunden: {namen} — die zerrissene Datei fehlt einfach, sie reisst nichts ab"
+        f"gefunden: {namen} — die zerrissene Datei fehlt einfach, sie reißt nichts ab"
     )
     petg = next(entry for entry in found if entry.name.startswith("Best"))
     assert petg.filament_type == "PETG"
