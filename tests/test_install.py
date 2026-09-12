@@ -919,6 +919,30 @@ def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) 
     assert "Ordner" in gefragt[1], "beim zweiten Mal steht der Grund über dem Feld"
 
 
+@pytest.mark.parametrize("present", [False, True])
+def test_an_available_install_button_discards_its_previous_block_reason(
+    qt_app: QApplication, present: bool
+) -> None:
+    """Ein neuer Status entfernt die alte Absage aus allen drei Hilfekanälen."""
+    from app.ui.install_dialog import _Row
+
+    requirement = by_id("keyring")
+    row = _Row(requirement)
+    blocked = install.Status(requirement=requirement, present=False, reason="Paketverwaltung fehlt")
+    try:
+        row.show_status(blocked)
+        assert row.action.toolTip() == "Paketverwaltung fehlt"
+        assert not row.action.isEnabled()
+        row.show_status(replace(blocked, present=present, installable=not present))
+        assert row.action.isEnabled() is not present
+        assert row.action.isHidden() is present
+        assert row.action.toolTip() == ""
+        assert row.action.statusTip() == ""
+        assert row.action.accessibleDescription() == ""
+    finally:
+        row.deleteLater()
+
+
 def test_comfyui_offers_a_local_app_and_a_network_address(qt_app: QApplication) -> None:
     """ComfyUI ist Dienst und lokale App — „Ort“ darf nicht nur eine URL meinen."""
     from app.ui.install_dialog import _Row
