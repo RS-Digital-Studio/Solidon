@@ -1003,8 +1003,9 @@ function megabytes(int $bytes): string
  * abbrechen — die Statistik brach ab der Herkunftstabelle ab, mit Status 200
  * (Sicherheitsdurchsicht 04.09.2026). `count.php` lässt einen rein
  * numerischen Host inzwischen nicht mehr durch; diese Signatur ist die
- * Gegenprobe an der Stelle, an der es darauf ankommt, und deckt zugleich die
- * fünf Schlüssel, die heute noch niemand von außen setzen kann.
+ * Gegenprobe an der Stelle, an der es darauf ankommt, und deckt auch andere
+ * numerische Tabellenschlüssel ab. Vor einer URL-Kodierung muss der Name
+ * ebenfalls als Text vorliegen.
  */
 function e(string|int $text): string
 {
@@ -1189,7 +1190,7 @@ $listed = $files + array_map(static fn (int $size): int => 0, $present);
           <?php /* Der Link zeigt auf die Datei, nicht auf `count.php?f=`:
                    Wer hier klickt, prüft die eigene Seite — und das darf die
                    Zahl daneben nicht bewegen. */ ?>
-          <a href="/dl/<?= e(rawurlencode($name)) ?>"><?= e($name) ?></a>
+          <a href="/dl/<?= e(rawurlencode((string) $name)) ?>"><?= e($name) ?></a>
         <?php else: ?>
           <?= e($name) ?> <span class="leer">nicht mehr im Ordner</span>
         <?php endif; ?>

@@ -1854,6 +1854,20 @@ def _stats_test_access(tmp_path: Path) -> tuple[dict[str, str], dict[str, str]]:
     return {"SOLIDON_STATS_ACCESS_FILE": str(path)}, {"Cookie": f"solidon_stats={token}"}
 
 
+def test_stats_renders_a_numeric_download_filename_completely(tmp_path: Path) -> None:
+    docroot = _temporary_docroot(tmp_path)
+    (docroot / "dl" / "2026").write_bytes(b"kein echtes Paket")
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_month(stats / f"{_utc_month(0)}.jsonl", _utc_month(0))
+    environment, headers = _stats_test_access(tmp_path)
+    with _php_server(tmp_path, environment, docroot=docroot) as base:
+        status, _headers, page = _request(f"{base}/stats.php", headers=headers)
+    assert status == 200
+    assert '<a href="/dl/2026">2026</a>' in page
+    assert "</html>" in page, "Ein 200 mit abgebrochenem Rumpf ist keine erfolgreiche Statistik"
+
+
 def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path) -> None:
     docroot = _temporary_docroot(tmp_path)
     metadata = b'{"version":"0.4.0"}'
