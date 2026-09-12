@@ -1,6 +1,6 @@
 # KI-Transparenz und KI-Kompetenz — Solidon
 
-Stand: 12. September 2026 · Prozessfassung 1.1
+Stand: 12. September 2026 · Prozessfassung 1.2
 
 **Prüfstatus: Technische Teilnachweise vorhanden, Gesamtfreigabe offen.**
 Der KI-Chat ist in der öffentlichen Demo bereits verfügbar. Seine Sendegrenze
@@ -10,10 +10,12 @@ Die Texte für Anthropic sowie lokales und entferntes Ollama liegen in allen
 sechs Sprachen vor. Das belegt weder die vollständige Barrierefreiheitsabnahme
 noch Rollenprüfung, Ausgabekennzeichnung oder KI-Kompetenz.
 
-Weg 3 (Bild-/Texterzeugung über ComfyUI) ist eine eigene Modellgrenze und
-nicht von dieser Chatabnahme erfasst. Beschreibung, Startwert und gegebenenfalls
-Bilddatei können an ein entferntes ComfyUI-Ziel gehen. Sein zielgebundener
-Hinweis und die Abbruch-/Zielwechselgrenze sind gesondert nachzuweisen (F-U6-4).
+Weg 3 (Bild-/Texterzeugung über ComfyUI) hat einen eigenen technischen
+Teilnachweis. Sein Hinweis nennt Beschreibung oder Bilddatei, Startwert,
+Erzeugungsablauf und Modellwahl sowie das lokale oder entfernte Ziel. Tests
+beobachten den tatsächlichen Generatoraufruf: Abbruch, Zielwechsel und ein
+fehlgeschlagener Speichervorgang verhindern ihn; erst der angezeigte und
+gespeicherte Hinweis lässt ihn zu (F-U6-4).
 Offene Kriterien unten bezeichnen fehlende Nachweise; die Verfügbarkeit eines
 Wegs ist keine rechtliche oder betriebliche Freigabe.
 
@@ -86,7 +88,9 @@ der zum ausgewählten Backend gehörende Abschnitt zugänglich angezeigt wurden.
 ## Nachweis und Zustandsmodell
 
 Gespeichert werden ausschließlich Version und Zeitpunkt der angezeigten
-Offenlegung, der gewählte Backend-Typ und die normalisierte Zieladresse. Eine erneute Anzeige ist nötig,
+Offenlegung, der gewählte Backend-Typ und die normalisierte Zieladresse.
+Der Erzeuger führt seinen eigenen Nachweis samt Datenumfangskennung; ein
+Chatnachweis ersetzt ihn nicht. Eine erneute Anzeige ist nötig,
 wenn sich Datenarten, Empfänger, Zweck, Anbieterrolle oder Textversion ändern.
 Der Zustand ist kein Konto, wird nicht zu Telemetrie und reist nicht in einer
 Projektdatei. Ein Zurücksetzen in den Einstellungen ist möglich.
@@ -144,7 +148,8 @@ dokumentiert:
       vor der Ollama-Werkzeugprobe erzwungen; Abbruch und Zielbindung geprüft,
 - [x] Chat-/Werkzeugproben-Texte für alle drei Zielklassen in Deutsch, Englisch,
       Spanisch, Französisch, Italienisch und Portugiesisch vollständig,
-- [ ] Weg 3: eigene Offenlegung für Beschreibung, Startwert und Bilddatei;
+- [x] Weg 3: eigene Offenlegung für Beschreibung oder Bilddatei, Startwert,
+      Erzeugungsablauf und Modellwahl;
       Loopback/Remote-Ziel, Zielwechsel, Abbruch und erste Übermittlung geprüft,
 - [ ] Tastatur-/Screenreader-/Abbruchtests bestanden,
 - [ ] Cloud-Nutzlastvorschau und aktuelle Anbieter-/Datenschutzlinks vorhanden,
@@ -159,7 +164,14 @@ Die abgehakten technischen Kriterien sind durch die gezielten Prüfungen
 `test_back_blocks_the_actual_first_chat_call_and_restores_every_character`,
 `test_accepting_sends_exactly_once_and_the_same_target_needs_no_repeat` und
 `test_tool_probe_is_gated_and_uses_the_exact_disclosed_remote_target` in
-`tests/test_ai_disclosure.py` belegt. Sie sind keine Gesamtfreigabe der Akte.
+`tests/test_ai_disclosure.py` belegt. Für Weg 3 belegen dort die Prüfungen
+`test_comfy_record_is_separate_and_invalidates_each_contract_field` und
+`test_comfy_notice_translations_fit_at_large_text` den eigenen Nachweis und
+die übersetzte Anzeige. In `tests/test_generate_ui.py` beobachten
+`test_comfy_disclosure_blocks_the_actual_generator` und
+`test_comfy_sends_only_after_the_separate_notice_and_reuses_its_record` die
+Sendegrenze für Text und Bild an lokale und entfernte Ziele. Diese gezielten
+Prüfungen sind keine Gesamtfreigabe der Akte.
 
 UI-Handoff: Eigentümer sind Einrichtungsdialog/Backend-Auswahl,
 Chat-Sendegrenze und für Weg 3 `GenerateDialog._start`. Der Erzeuger übernimmt
