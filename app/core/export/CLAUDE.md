@@ -102,7 +102,9 @@ und meldet keine Abweichung gegen eine überholte Projektvorgabe.
 Teilbezogene Prusa-Einstellungen stehen in
 `Metadata/Slic3r_PE_model.config`, Orca-Einstellungen in dessen eigener
 Beilage. Ein nicht unterstützter Mehrmaterialumfang wird auch ohne manuelle
-Spulenüberschreibungen vor der Übergabe benannt.
+Spulenüberschreibungen vor der Übergabe benannt. Dabei zählt jede weitere
+Filamentidentität, auch bei gleichem Materialtyp und gleichen Druckwerten;
+mehrere Körper mit derselben Filamentidentität ergeben keine zusätzliche Spule.
 
 ## Die vier Gegenproben nach dem Lauf
 

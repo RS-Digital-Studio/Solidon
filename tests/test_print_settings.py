@@ -1276,6 +1276,33 @@ def test_a_slicer_that_takes_one_filament_says_so() -> None:
     assert handover.unreachable_overrides(leer, prusa) == []
 
 
+@pytest.mark.parametrize("flavour", ["prusa", "cura"])
+@pytest.mark.parametrize("different_colour", [False, True])
+def test_two_filaments_with_equal_print_values_still_report_the_lost_spool(
+    flavour: handover.SlicerFlavour, different_colour: bool
+) -> None:
+    """Zwei PLA-Spulen verschwinden auch bei gleichen Temperaturen nicht aus der Warnung."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    first = MaterialSlot(0, "PLA Orange", (177 / 255, 99 / 255, 10 / 255), None, "PLA")
+    second = replace(
+        first,
+        index=1,
+        name="Zweite PLA-Spule",
+        colour=(1.0, 1.0, 1.0) if different_colour else first.colour,
+    )
+    setup = handover.SlicerSetup(executable=Path("slicer.exe"), flavour=flavour)
+
+    findings = handover.unreachable_overrides(settings, setup, (first, second), profile=profile)
+
+    assert [finding.code for finding in findings] == ["slicer.overrides_unreachable"]
+    assert findings[0].values["slots"] == 1
+    assert not handover.unreachable_overrides(settings, setup, (second,), profile=profile)
+    assert not handover.unreachable_overrides(
+        settings, setup, (first, replace(first, index=1)), profile=profile
+    ), "zwei Körper mit derselben Spule sind kein Mehrfilamentauftrag"
+
+
 def test_a_single_profile_slicer_uses_the_first_filaments_values(tmp_path: Path) -> None:
     """Ein Satz heißt erster Extruder, nicht Projektwert trotz eigener Wahl.
 
@@ -2151,6 +2178,7 @@ def test_an_implicit_first_tool_still_shows_the_missing_second() -> None:
         # Creality Print 7.2 am 12.09.2026, dreimal derselbe Aufruf.
         (0xC0000005, True),
         (0xC0000409, True),
+        (0xE06D7363, True),
         # POSIX zählt anders: ein Signal kommt als negative Zahl zurück.
         (-11, True),
         (-6, True),
@@ -2158,7 +2186,10 @@ def test_an_implicit_first_tool_still_shows_the_missing_second() -> None:
         # Slic3r-Zweig gibt -17 als unsigned, CuraEngine eine schlichte 1.
         (0, False),
         (1, False),
-        (4294967279, True),
+        (4294967279, False),
+        (4294967196, False),
+        (0xFFFFFFFF, False),
+        (0xD0000005, False),
     ],
 )
 def test_a_crash_is_told_apart_from_a_refusal(code: int, expected: bool) -> None:
@@ -4680,7 +4711,7 @@ def test_unreachable_material_defaults_are_reported_without_manual_overrides(fla
     setup = handover.SlicerSetup(Path("slicer"), flavour)
     findings = handover.unreachable_overrides(settings, setup, slots, profile=profile)
     assert "slicer.overrides_unreachable" in {entry.code for entry in findings}
-    same = (slots[0], replace(slots[1], material_type="PLA"))
+    same = (slots[0], replace(slots[0], index=1))
     assert handover.unreachable_overrides(settings, setup, same, profile=profile) == []
 
 

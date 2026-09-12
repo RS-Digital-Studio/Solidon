@@ -1007,21 +1007,10 @@ def unreachable_overrides(
         and (not present or entry.key in present)
         and (reachable is None or entry.key != reachable)
     }
-    if slots:
-        first = slots[0]
-        baseline = (
-            settings_for_slot(settings, profile, first, setup) if profile is not None else None
-        )
-        for slot in slots[1:]:
-            different = (slot.material, slot.material_type) != (first.material, first.material_type)
-            if profile is not None and baseline is not None:
-                own = settings_for_slot(settings, profile, slot, setup)
-                different = any(
-                    getattr(own, name) != getattr(baseline, name)
-                    for name in ("temperature", "cooling", "retraction", "filament")
-                )
-            if different:
-                affected.add(threemf.slot_identity(slot))
+    # Auf diesem Übergabeweg bleibt auch von zwei PLA-Farben nur ein Filament.
+    # Gleiche Druckwerte machen die zweite Spule nicht zur ersten. Dieselbe
+    # Identität an mehreren Körpern zählt dagegen weiterhin nur einmal.
+    affected.update(identity for identity in present if identity != reachable)
     if not affected:
         return findings
     return [
