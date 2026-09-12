@@ -2,7 +2,8 @@
 
 Die Kennung gehört zur physischen Spule, der Name ist ein mehrfach erlaubtes
 Etikett. Projektwerte bleiben in den Materialslots. Katalog und Journal werden
-unter derselben Prozesssperre gelesen, geprüft und atomar ersetzt. Fehlende
+unter derselben Prozesssperre geändert und atomar ersetzt. Reine Leser teilen
+unveränderliche, nach Dateistempel erneuerte Momentaufnahmen ohne Schreibsperre. Fehlende
 Mengen bleiben unbekannt; beschädigte Dateien werden niemals überschrieben.
 """
 
@@ -13,13 +14,14 @@ import json
 import math
 import os
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PureWindowsPath
 from time import monotonic, sleep
-from typing import Any, Final, Literal
+from types import MappingProxyType
+from typing import Any, BinaryIO, Final, Literal
 from uuid import uuid4
 
 from app.core.errors import RETRY, FileWriteError, ValidationError
@@ -128,6 +130,38 @@ class _Inventory:
     counts: dict[str, float | None] = field(default_factory=dict)
     journal: dict[str, InventoryBooking] = field(default_factory=dict)
     dirty: bool = False
+
+
+@dataclass(frozen=True)
+class InventorySnapshot:
+    """Ein vollständig validierter alter oder neuer Dateistand, ausschließlich lesbar."""
+
+    identifier: str
+    spools: Mapping[str, CatalogueFilament]
+    journal: Mapping[str, InventoryBooking]
+
+    def catalogue(self, include_archived: bool = False) -> tuple[CatalogueFilament, ...]:
+        """Spulen und Journal können gemeinsam aus genau diesem Stand angezeigt werden."""
+        return _sorted(self, include_archived)
+
+    def bookings(self, spool_identifier: str | None = None) -> tuple[InventoryBooking, ...]:
+        """Verlauf einschließlich früherer Spulenzuordnungen in einer Korrektur."""
+        return tuple(
+            booking
+            for booking in self.journal.values()
+            if spool_identifier is None
+            or any(
+                position.spool_identifier == spool_identifier
+                for positions in (
+                    booking.positions,
+                    *(one.previous_positions for one in booking.corrections),
+                )
+                for position in positions
+            )
+        )
+
+
+_SNAPSHOT_CACHE: tuple[Path, tuple[int, ...], InventorySnapshot] | None = None
 
 
 def catalogue_path() -> Path:
@@ -268,14 +302,14 @@ def _same_amount(left: float | None, right: float | None) -> bool:
 
 
 @contextmanager
-def _catalogue_lock() -> Iterator[None]:
+def _catalogue_lock(timeout_seconds: float = _LOCK_TIMEOUT_SECONDS) -> Iterator[None]:
     """Ein Betriebssystemschloss umfasst Lesen, Prüfung und atomaren Dateitausch."""
     ensure_dir(catalogue_path().parent)
     descriptor = os.open(catalogue_path().with_suffix(".lock"), os.O_CREAT | os.O_RDWR, 0o600)
     native = importlib.import_module("msvcrt" if os.name == "nt" else "fcntl")
     acquired = False
     try:
-        deadline = monotonic() + _LOCK_TIMEOUT_SECONDS
+        deadline = monotonic() + timeout_seconds
         while not acquired:
             try:
                 if os.name == "nt":
@@ -422,6 +456,11 @@ def _read() -> _Inventory:
         return _Inventory(identifier=uuid4().hex)
     except (OSError, ValueError) as problem:
         raise _unreadable() from problem
+    return _decode_inventory(data)
+
+
+def _decode_inventory(data: Any) -> _Inventory:
+    """Prüft denselben vollständigen Datenvertrag für Leser und schreibende Transaktionen."""
     try:
         if isinstance(data, list):
             return _migrate_list(data)
@@ -502,16 +541,16 @@ def _write(state: _Inventory) -> None:
             json.dump(data, stream, ensure_ascii=False, indent=2, allow_nan=False)
             stream.flush()
             os.fsync(stream.fileno())
-        scratch.replace(target)
+        _replace_snapshot(scratch, target)
     finally:
         scratch.unlink(missing_ok=True)
 
 
 @contextmanager
-def _transaction() -> Iterator[_Inventory]:
+def _transaction(timeout_seconds: float = _LOCK_TIMEOUT_SECONDS) -> Iterator[_Inventory]:
     """Auch eine Migration wird unter derselben Sperre genau einmal gespeichert."""
     try:
-        with _catalogue_lock():
+        with _catalogue_lock(timeout_seconds):
             state = _read()
             yield state
             if state.dirty:
@@ -520,7 +559,9 @@ def _transaction() -> Iterator[_Inventory]:
         raise FileWriteError(detail=str(problem)) from problem
 
 
-def _sorted(state: _Inventory, include_archived: bool = False) -> tuple[CatalogueFilament, ...]:
+def _sorted(
+    state: _Inventory | InventorySnapshot, include_archived: bool = False
+) -> tuple[CatalogueFilament, ...]:
     """Namen werden sprachgerecht sortiert, gleiche Etiketten behalten ihre Kennung."""
     return tuple(
         sorted(
@@ -530,22 +571,144 @@ def _sorted(state: _Inventory, include_archived: bool = False) -> tuple[Catalogu
     )
 
 
-def catalogue(
-    include_archived: bool = False, *, strict: bool = False
-) -> tuple[CatalogueFilament, ...]:
-    """Alle aktiven Spulen; strict meldet Lesefehler für die Lageransicht.
+def _windows_file_api() -> Any:
+    """Die drei Windows-Dateiaufrufe mit zeigerbreiten Signaturen."""
+    import ctypes
 
-    Die Vorwahl darf beim Programmstart leer bleiben. Jeder Schreibweg liest
-    dagegen streng neu und verweigert das Überschreiben einer beschädigten Datei.
-    """
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = (
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    )
+    kernel32.CreateFileW.restype = ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    kernel32.SetFileInformationByHandle.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    )
+    kernel32.SetFileInformationByHandle.restype = ctypes.c_int
+    return kernel32
+
+
+def _replace_snapshot(source: Path, target: Path) -> None:
+    """Atomarer Austausch; offene Leser behalten ihren alten Stand auch auf Windows."""
+    if os.name != "nt":
+        source.replace(target)
+        return
+    import ctypes
+
+    kernel32 = _windows_file_api()
+    name = str(target.absolute())
+    units = len(name.encode("utf-16-le")) // 2
+
+    class RenameInfo(ctypes.Structure):
+        """FILE_RENAME_INFO mit ausreichend Platz für den vollständigen Zielnamen."""
+
+        _fields_ = [
+            ("flags", ctypes.c_uint32),
+            ("root_directory", ctypes.c_void_p),
+            ("name_length", ctypes.c_uint32),
+            ("name", ctypes.c_wchar * (units + 1)),
+        ]
+
+    # REPLACE_IF_EXISTS | POSIX_SEMANTICS: offene Griffe bleiben am alten
+    # Dateistand, neue Griffe öffnen den neuen. Kein Löschen vor dem Austausch.
+    info = RenameInfo(0x3, None, units * 2, name)
+    handle = kernel32.CreateFileW(str(source), 0x10000, 0x7, None, 3, 0, None)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
     try:
-        with _transaction() as state:
-            return _sorted(state, include_archived)
-    except (ValidationError, FileWriteError) as problem:
-        if strict:
-            raise
-        _log.warning("filament inventory unreadable: %s", problem)
-        return ()
+        if not kernel32.SetFileInformationByHandle(
+            handle, 22, ctypes.byref(info), ctypes.sizeof(info)
+        ):  # FileRenameInfoEx
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _open_snapshot(path: Path) -> BinaryIO:
+    """Ein offener Leser darf den atomaren Austausch auch auf Windows nicht sperren."""
+    if os.name != "nt":
+        return path.open("rb")
+    import ctypes
+    import msvcrt
+
+    kernel32 = _windows_file_api()
+    handle = kernel32.CreateFileW(
+        str(path),
+        0x80000000,
+        0x00000007,
+        None,
+        3,
+        0x08000080,
+        None,
+    )  # GENERIC_READ; FILE_SHARE_READ | WRITE | DELETE; OPEN_EXISTING
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        descriptor = msvcrt.open_osfhandle(int(handle), os.O_RDONLY | os.O_BINARY)
+    except BaseException:
+        kernel32.CloseHandle(handle)
+        raise
+    return os.fdopen(descriptor, "rb")
+
+
+def _file_stamp(info: os.stat_result) -> tuple[int, ...]:
+    """Identität, Größe und Zeit erkennen Austausch ebenso wie eine Änderung vor Ort."""
+    # Unter Windows liefert stat noch die Erstellungszeit als ctime, fstat
+    # hingegen die Änderungszeit. Beide dürfen denselben Stand erkennen.
+    stamp = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+    return stamp if os.name == "nt" else (*stamp, info.st_ctime_ns)
+
+
+def read_snapshot() -> InventorySnapshot:
+    """Liest ohne Schreibschloss; ein geänderter oder unlesbarer Stand ersetzt keinen Wert still.
+
+    Der Stempel gehört zum offenen Dateigriff. Ein gleichzeitiger atomarer
+    Austausch lässt diesen Griff am alten vollständigen Stand, und der nächste
+    Aufruf erkennt über den Pfadstempel den neuen Stand. Fehler gehen an den
+    Aufrufer statt an eine leere Liste oder einen veralteten Cache.
+    """
+    global _SNAPSHOT_CACHE
+    path = catalogue_path()
+    try:
+        stamp = _file_stamp(path.stat())
+        cached = _SNAPSHOT_CACHE
+        if cached is not None and cached[0] == path and cached[1] == stamp:
+            return cached[2]
+        with _open_snapshot(path) as stream:
+            stamp = _file_stamp(os.fstat(stream.fileno()))
+            state = _decode_inventory(json.loads(stream.read().decode("utf-8")))
+    except FileNotFoundError:
+        return InventorySnapshot("", MappingProxyType({}), MappingProxyType({}))
+    except (OSError, ValueError) as problem:
+        raise _unreadable() from problem
+    if state.dirty:
+        # Eine Migration schreibt; sie wartet im Leser niemals auf einen
+        # anderen Prozess. Bei Konkurrenz bleibt der sichtbare Wiederholungsweg.
+        with _transaction(timeout_seconds=0.0):
+            pass
+        return read_snapshot()
+    snapshot = InventorySnapshot(
+        state.identifier,
+        MappingProxyType(dict(state.spools)),
+        MappingProxyType(dict(state.journal)),
+    )
+    _SNAPSHOT_CACHE = (path, stamp, snapshot)
+    return snapshot
+
+
+def catalogue(include_archived: bool = False) -> tuple[CatalogueFilament, ...]:
+    """Alle aktiven Spulen; Lesefehler bleiben als begründete Ausnahme sichtbar."""
+    return read_snapshot().catalogue(include_archived)
 
 
 def inventory_identifier() -> str:
@@ -558,8 +721,7 @@ def inventory_identifier() -> str:
 
 def get(identifier: str) -> CatalogueFilament | None:
     """Auch eine archivierte Spule ist über ihre Kennung eindeutig erreichbar."""
-    with _transaction() as state:
-        return state.spools.get(identifier)
+    return read_snapshot().spools.get(identifier)
 
 
 def _required(state: _Inventory, identifier: str) -> CatalogueFilament:
@@ -767,20 +929,7 @@ def _validate_positions(positions: Sequence[BookingPosition]) -> None:
 
 def bookings(spool_identifier: str | None = None) -> tuple[InventoryBooking, ...]:
     """Verlauf in Buchungsreihenfolge, wahlweise mit allen Positionen eines Spulenvorgangs."""
-    with _transaction() as state:
-        return tuple(
-            booking
-            for booking in state.journal.values()
-            if spool_identifier is None
-            or any(
-                position.spool_identifier == spool_identifier
-                for positions in (
-                    booking.positions,
-                    *(one.previous_positions for one in booking.corrections),
-                )
-                for position in positions
-            )
-        )
+    return read_snapshot().bookings(spool_identifier)
 
 
 def _remaining(

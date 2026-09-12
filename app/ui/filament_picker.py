@@ -897,7 +897,17 @@ class FilamentField(QComboBox):
         #    (:meth:`_chosen`), nicht beim Auflisten (Gesamtreview
         #    05.09.2026, UI-25).
         body_taken = set(taken)
-        for filament in filaments.catalogue():
+        try:
+            entries = filaments.catalogue()
+        except AppError as problem:
+            entries = ()
+            self.addItem(str(problem))
+            self.setItemData(self.count() - 1, 0, int(Qt.ItemDataRole.UserRole) - 1)
+            self.setItemData(
+                self.count() - 1, str(problem), Qt.ItemDataRole.AccessibleDescriptionRole
+            )
+            self.setToolTip(str(problem))
+        for filament in entries:
             identity = threemf.slot_identity(spool_slot(filament))
             matching = next(
                 (
@@ -1008,7 +1018,12 @@ class FilamentField(QComboBox):
             return
         before = self._last_position
         identifier = self.itemData(position, _ID_ROLE)
-        entry = filaments.get(str(identifier)) if identifier else None
+        try:
+            entry = filaments.get(str(identifier)) if identifier else None
+        except AppError as problem:
+            self.setCurrentIndex(before)
+            self.choiceNotice.emit(str(problem))
+            return
         if identifier:
             cached = tuple(
                 str(self.itemData(position, role) or "")
@@ -1396,6 +1411,12 @@ class FilamentPanel(QWidget):
 
     def _fill(self) -> None:
         """Beide Hälften neu schreiben — Überschrift, Zeilen, Hinweis."""
+        try:
+            entries = filaments.catalogue()
+        except AppError as problem:
+            self.hint.setText(str(problem))
+            self._fit()
+            return
         self.list.clear()
         if self._used:
             self._heading(tr("Im Projekt"))
@@ -1422,7 +1443,6 @@ class FilamentPanel(QWidget):
                 self.list.addItem(item)
 
         self._heading(tr("Im Regal"))
-        entries = filaments.catalogue()
         for entry in entries:
             label = spool_label(entry)
             item = QListWidgetItem(swatch(entry.colour), label)
@@ -1490,7 +1510,11 @@ class FilamentPanel(QWidget):
         name = item.data(_NAME_ROLE)
         if not name:
             return None
-        return filaments.get(str(item.data(_ID_ROLE)))
+        try:
+            return filaments.get(str(item.data(_ID_ROLE)))
+        except AppError as problem:
+            self.hint.setText(str(problem))
+            return None
 
     def _add(self) -> None:
         dialog = NewFilamentDialog(self)

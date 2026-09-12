@@ -53,6 +53,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import examples
+from app.core.errors import AppError
 from app.core.examples import Example
 from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
 from app.core.ingest.plan import MODEL_SUFFIXES
@@ -701,7 +702,14 @@ class InventoryStartCard(QPushButton):
 
     def refresh(self) -> None:
         """Nur die Kachel liest das Lager; das Projekt bleibt unverändert."""
-        entries = filaments.catalogue()
+        try:
+            entries = filaments.catalogue()
+        except AppError as problem:
+            self.caption.setText(f"{tr('Filamentlager')} · {problem}")
+            self.setAccessibleName(self.caption.text())
+            self.setAccessibleDescription(tr("Spulen ansehen, anlegen und Bestand pflegen."))
+            self.colours.clear()
+            return
         text = (
             tr("Filamentlager · {count} Spule")
             if len(entries) == 1

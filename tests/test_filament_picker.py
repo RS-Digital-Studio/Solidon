@@ -40,6 +40,34 @@ def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
     assert hex_of(None) == "", "keine Farbe ist keine Farbe, nicht Schwarz"
 
 
+def test_broken_inventory_keeps_project_choice_and_reports_error(qt_app, tmp_path, monkeypatch):
+    """Vorwahl und Panel zeigen Lesefehler, Projektfilamente bleiben erhalten."""
+    from app.ui.filament_picker import FilamentPanel
+
+    path = tmp_path / "filaments.json"
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: path)
+    first = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    panel = FilamentPanel()
+    before = [panel.list.item(row).text() for row in range(panel.list.count())]
+    field = FilamentField(2, slots=[MaterialSlot(2, "Projekt")])
+    selected = next(row for row in range(field.count()) if "Spule" in field.itemText(row))
+    seen = []
+    field.choiceNotice.connect(seen.append)
+    path.write_text("{kaputt", encoding="utf-8")
+    panel.refresh_catalogue()
+    assert "Sicherung" in panel.hint.text()
+    assert [panel.list.item(row).text() for row in range(panel.list.count())] == before
+    field._chosen(selected)
+    assert field.currentData() == 2
+    assert "Sicherung" in seen[-1]
+    fresh = FilamentField(2, slots=[MaterialSlot(2, "Projekt")])
+    assert fresh.currentData() == 2
+    errors = [row for row in range(fresh.count()) if "Sicherung" in fresh.itemText(row)]
+    assert len(errors) == 1
+    assert not fresh.model().flags(fresh.model().index(errors[0], 0)) & Qt.ItemFlag.ItemIsEnabled
+    assert first.identifier
+
+
 def test_full_spool_can_be_entered_without_opening_optional_details(qt_app: QApplication) -> None:
     """Die Voraussetzung des Vollspulenknopfs liegt auf derselben sichtbaren Seite."""
     dialog = NewFilamentDialog()

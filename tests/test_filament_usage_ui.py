@@ -488,14 +488,14 @@ def test_concurrent_stock_change_reports_error_without_partial_booking() -> None
 def test_file_wait_runs_outside_the_qt_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     request = _request(None)
     entered, released = Event(), Event()
-    original = filaments.catalogue
+    original = filaments.read_snapshot
 
     def blocked(*args: object, **kwargs: object):
         entered.set()
         assert released.wait(3)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(filaments, "catalogue", blocked)
+    monkeypatch.setattr(filaments, "read_snapshot", blocked)
     dialog = UsageDialog(request)
     try:
         assert entered.wait(1)

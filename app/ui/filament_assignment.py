@@ -107,13 +107,21 @@ class QuickFilamentPicker(QWidget):
                 count=len(self._objects)
             )
         self.scope.setText(scope)
+        try:
+            entries = filaments.catalogue()
+        except AppError as problem:
+            entries = ()
+            self.notice.setText(str(problem))
+            self.notice.show()
+        else:
+            self.notice.hide()
         with QSignalBlocker(self.picker):
             self.picker.clear()
             self.picker.addItem(current, "")
             if self._objects and not self._selected_features and len(keys) == 1 and all_assigned:
                 self.picker.setItemIcon(0, swatch(hex_of(slots[0].colour)))
             self.picker.setToolTip(current)
-            for entry in filaments.catalogue():
+            for entry in entries:
                 label = spool_label(entry)
                 self.picker.addItem(swatch(entry.colour), label, entry.identifier)
                 row = self.picker.count() - 1

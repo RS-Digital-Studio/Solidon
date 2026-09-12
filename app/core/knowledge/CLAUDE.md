@@ -97,14 +97,20 @@ zurückschreibt. Archivieren erhält Kennung und Verlauf. Die alten Namenswege
 sie raten bei zwei gleichen Etiketten keine physische Spule.
 
 Spulen, letzte Bestandsfeststellungen und Buchungen stehen gemeinsam in der
-versionierten `filaments.json`. Lesen, Prüfen und atomarer Dateitausch liegen
-unter einer Betriebssystemsperre. Die Migration alter Listenkataloge speichert
+versionierten `filaments.json`. Schreibendes Lesen, Prüfen und atomarer Dateitausch
+liegen unter einer Betriebssystemsperre. Die Migration alter Listenkataloge speichert
 Lager- und Spulenkennungen im selben Vorgang; unbekannte Mengen bleiben leer.
 Die Lagerkennung wird bei ihrer ersten Abfrage gespeichert. Wiederholte
 Abfragen einer bereits gespeicherten Kennung lösen keinen Dateitausch aus.
-Die Vorwahl darf einen Lesefehler mit einer leeren Liste beantworten;
-`catalogue(strict=True)` meldet ihn in der Lageransicht. Jeder Schreibweg
-verweigert das Überschreiben einer beschädigten oder neueren Datei.
+Reine Leser teilen eine unveränderliche `InventorySnapshot` ohne Schreibschloss.
+Dateiidentität, Größe und Änderungszeit erneuern den Cache bei jedem geänderten
+Stand; ein Lesefehler wird nie als leere Liste oder veralteter Cache beantwortet.
+Spulen und Journal einer gemeinsamen Anzeige stammen aus derselben Momentaufnahme.
+Eine erforderliche Migration wartet im Leser nicht auf eine fremde Sperre und
+meldet bei Konkurrenz den Wiederholungsweg. Auf Windows erlaubt der offene
+Dateigriff den Austausch; `FileRenameInfoEx` mit POSIX-Semantik erhält offene
+Leser am vollständigen alten Stand. Jeder Schreibweg verweigert das Überschreiben
+einer beschädigten oder neueren Datei.
 
 `book` nimmt einen ganzen Vorgang an. Seine Kennung macht Zustellungen
 idempotent; ein gleicher Fingerabdruck mit neuer Vorgangskennung bedeutet

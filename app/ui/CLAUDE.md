@@ -24,6 +24,10 @@ gehalten und dürfen spätere Aufträge nicht verändern.
 Lesefehler im Lager bewahren die letzte gültige Ansicht und zeigen den
 fachlichen Sicherungs- oder Wiederholungsweg. Unerwartete Ausnahmen werden
 protokolliert und als interner Fehler kenntlich gemacht.
+Lagerleser verwenden die gemeinsame nach Dateistempel erneuerte Momentaufnahme;
+Lesefehler bleiben auch in Vorwahl, Filamentpanel und Startkachel sichtbar.
+Spulendetail und Buchungsvorschlag verbinden Spulen und Journal aus jeweils
+genau einem vollständigen Stand.
 
 `filament_inventory.py` zeigt und verwaltet Spulen ohne Renderer; `filament_picker.py`
 enthält den gemeinsamen Spulendialog und die Übernahme konfigurierter Slicerfilamente.

@@ -46,6 +46,48 @@ def test_empty_shelf_offers_both_entrances(inventory: InventoryView) -> None:
     assert filaments.catalogue() == ()
 
 
+def test_detail_reads_spool_and_journal_from_one_complete_snapshot(inventory, monkeypatch):
+    """Ein Austausch zwischen Lesen und Zeichnen mischt keinen Rest mit einem jüngeren Journal."""
+    entry = filaments.save(filaments.CatalogueFilament("Spule", "#112233", remaining_grams=500))
+    original = filaments.read_snapshot
+    observed = []
+
+    def replace_after_read():
+        snapshot = original()
+        filaments.book("external", "geometry", [filaments.BookingPosition(entry.identifier, 100)])
+        return snapshot
+
+    original_fill = inventory._fill_history
+
+    def remember(shown, bookings):
+        observed.append((shown, bookings))
+        original_fill(shown, bookings)
+
+    monkeypatch.setattr(filaments, "read_snapshot", replace_after_read)
+    monkeypatch.setattr(inventory, "_fill_history", remember)
+    inventory.show_spool(entry.identifier)
+    assert observed == [(entry, ())]
+    assert "Noch keine Buchungen" in inventory.history.item(0).text()
+    monkeypatch.setattr(filaments, "read_snapshot", original)
+    inventory.show_spool(entry.identifier)
+    assert observed[-1][0].remaining_grams == pytest.approx(400)
+    assert observed[-1][1][0].operation_id == "external"
+
+
+def test_damaged_inventory_between_detail_and_edit_keeps_explanation(inventory):
+    """Auch ein späterer Detailklick lässt weder Ausnahme noch leeres Regal zurück."""
+    entry = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    inventory.show_spool(entry.identifier)
+    old_history = inventory.history
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    inventory.show_spool(entry.identifier)
+    inventory._edit()
+    inventory._archive()
+    assert inventory.history is old_history
+    assert "Sicherung" in inventory.message.text()
+    assert not inventory.retry_button.isHidden()
+
+
 def test_unknown_is_preserved_when_edit_dialog_opens(qt_app: QApplication) -> None:
     """Öffnen und unverändertes Speichern machen aus unbekannt weder leer noch voll."""
     entry = filaments.CatalogueFilament("Altspule", "#112233", identifier="old")
@@ -508,7 +550,7 @@ def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: Inventor
     saved = inventory._entries
     filaments.catalogue_path().write_text('{"format_version": 1, "broken": true}', encoding="utf-8")
     with pytest.raises(ValidationError) as caught:
-        filaments.catalogue(strict=True)
+        filaments.catalogue()
     inventory.refresh()
     assert inventory.message.text() == str(caught.value)
     assert "Sicherung" in inventory.message.text()

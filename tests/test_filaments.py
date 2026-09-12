@@ -98,7 +98,8 @@ def test_a_broken_file_never_gets_overwritten(own_catalogue: Path) -> None:
     """Der Start bleibt möglich; kein Schreibweg darf einen beschädigten Bestand löschen."""
     filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
 
-    assert filaments.catalogue() == ()
+    with pytest.raises(ValidationError):
+        filaments.catalogue()
 
     with pytest.raises(ValidationError) as raised:
         filaments.remember("PETG Rot", "#d02020")

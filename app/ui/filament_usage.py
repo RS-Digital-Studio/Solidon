@@ -82,11 +82,13 @@ def _source(line: UsageLine) -> str:
     return tr("Aus G-Code geplant")
 
 
-def _previous(request: UsageRequest) -> list[filaments.InventoryBooking]:
+def _previous(
+    request: UsageRequest, snapshot: filaments.InventorySnapshot | None = None
+) -> list[filaments.InventoryBooking]:
     """Ein Fingerabdruck kann nach ausdrücklichen Wiederholungen mehrere Vorgänge haben."""
     return [
         booking
-        for booking in filaments.bookings()
+        for booking in (snapshot or filaments.read_snapshot()).bookings()
         if booking.fingerprint == request.fingerprint and not booking.reversed_at
     ]
 
@@ -101,7 +103,8 @@ class _Snapshot:
 
 def _snapshot(request: UsageRequest) -> _Snapshot:
     """Die abschließende Buchung prüft diesen Vorschlagsstand nochmals unter Sperre."""
-    return _Snapshot(filaments.catalogue(strict=True), tuple(_previous(request)))
+    snapshot = filaments.read_snapshot()
+    return _Snapshot(snapshot.catalogue(), tuple(_previous(request, snapshot)))
 
 
 class _UsageWork(Worker):

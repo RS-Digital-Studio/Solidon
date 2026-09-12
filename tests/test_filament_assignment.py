@@ -49,6 +49,27 @@ def test_no_selection_keeps_inventory_reachable(picker: QuickFilamentPicker) -> 
     assert not picker.clear_button.isEnabled()
 
 
+def test_inventory_error_is_visible_and_repaired_file_refreshes_choices(
+    picker: QuickFilamentPicker,
+) -> None:
+    """Kein leeres Lager als Fehlerersatz und kein veralteter Snapshot nach Reparatur."""
+    from dataclasses import replace
+
+    first = filaments.save(filaments.CatalogueFilament("Alt", "#112233"))
+    picker.set_context([_body("part", "Teil")])
+    before = filaments.catalogue_path().read_bytes()
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    picker.refresh()
+    assert not picker.notice.isHidden()
+    assert "Sicherung" in picker.notice.text()
+    assert picker.inventory_button.isEnabled()
+    filaments.catalogue_path().write_bytes(before)
+    filaments.save(replace(first, name="Neu"))
+    picker.refresh()
+    assert picker.notice.isHidden()
+    assert "Neu" in picker.picker.itemText(1)
+
+
 def test_removal_is_reachable_without_a_catalogue_spool(picker: QuickFilamentPicker) -> None:
     """Auch ein fremdes Projektfilament lässt sich ohne Besitzangabe wieder entfernen."""
     seen = []

@@ -40,6 +40,28 @@ def screen(qt_app: QApplication) -> StartScreen:
     return StartScreen()
 
 
+def test_inventory_card_shows_read_failure_and_recovers(qt_app, tmp_path, monkeypatch):
+    """Das erste Fenster zeigt beschädigten Bestand als Fehler und bleibt erreichbar."""
+    from app.core.knowledge import filaments
+    from app.ui.start_screen import InventoryStartCard
+
+    path = tmp_path / "filaments.json"
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: path)
+    filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    before = path.read_bytes()
+    card = InventoryStartCard()
+    assert "1 Spule" in card.caption.text()
+    path.write_text("{kaputt", encoding="utf-8")
+    card.refresh()
+    assert "Sicherung" in card.caption.text()
+    assert card.accessibleName() == card.caption.text()
+    assert card.isEnabled()
+    path.write_bytes(before)
+    card.refresh()
+    assert "1 Spule" in card.caption.text()
+    assert "Sicherung" not in card.caption.text()
+
+
 def test_the_start_screen_fits_a_laptop_without_scrolling(qt_app: QApplication) -> None:
     """Der erste Eindruck darf nicht rollen.
 

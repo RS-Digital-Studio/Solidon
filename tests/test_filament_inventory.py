@@ -55,12 +55,12 @@ def test_same_labels_remain_independent_spools() -> None:
 def test_legacy_migration_persists_unique_ids_without_inventing_amounts() -> None:
     legacy = Path(__file__).parent / "data" / "filament_catalogue_v0.json"
     filaments.catalogue_path().write_bytes(legacy.read_bytes())
-    first = filaments.catalogue(strict=True)
+    first = filaments.catalogue()
     encoded = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
     assert encoded["format_version"] == filaments.FORMAT_VERSION
     assert encoded["inventory_identifier"]
     assert len({entry.identifier for entry in first}) == 2
-    assert filaments.catalogue(strict=True) == first
+    assert filaments.catalogue() == first
     for entry in first:
         assert entry.diameter_mm is entry.spool_grams is entry.remaining_grams is None
     assert filaments.inventory_identifier() == encoded["inventory_identifier"]
@@ -327,9 +327,8 @@ def test_out_of_range_number_in_file_is_rejected_without_overwriting() -> None:
     data["stock_counts"][first.identifier] = 10**400
     broken = json.dumps(data)
     filaments.catalogue_path().write_text(broken, encoding="utf-8")
-    assert filaments.catalogue() == ()
     with pytest.raises(ValidationError) as raised:
-        filaments.catalogue(strict=True)
+        filaments.catalogue()
     assert raised.value.constraint == "unreadable"
     assert filaments.catalogue_path().read_text(encoding="utf-8") == broken
 
@@ -587,9 +586,8 @@ def test_explicit_recount_of_the_same_quantity_also_protects_newer_knowledge() -
 @pytest.mark.parametrize("broken", ["{", "null", '{"format_version":999}', '[{"name":"PLA"}]'])
 def test_corrupt_and_future_catalogues_are_never_overwritten(broken: str) -> None:
     filaments.catalogue_path().write_text(broken, encoding="utf-8")
-    assert filaments.catalogue() == ()
     with pytest.raises(ValidationError):
-        filaments.catalogue(strict=True)
+        filaments.catalogue()
     with pytest.raises(ValidationError):
         spool()
     assert filaments.catalogue_path().read_text(encoding="utf-8") == broken
@@ -647,7 +645,7 @@ def test_failed_atomic_replace_keeps_stock_and_journal_together(
     def fail(source: Path, target: Path) -> Path:
         raise OSError("simulated full disk")
 
-    monkeypatch.setattr(Path, "replace", fail)
+    monkeypatch.setattr(filaments, "_replace_snapshot", fail)
     with pytest.raises(FileWriteError):
         filaments.book("print", "geometry", [position(first)])
     assert filaments.catalogue_path().read_bytes() == before
@@ -708,3 +706,196 @@ def test_inventory_identifier_only_writes_for_its_first_persistence(
         assert filaments.inventory_identifier() == first
     assert writes == [first]
     assert filaments.catalogue_path().read_bytes() == persisted
+
+
+def test_readers_do_not_wait_for_a_foreign_process_inventory_lock() -> None:
+    """Ein echtes fremdes Schreibschloss sperrt keinen Leser des letzten fertigen Standes."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    first = spool()
+    code = """from pathlib import Path
+import sys
+from app.core.knowledge import filaments
+filaments.catalogue_path = lambda: Path(sys.argv[1])
+with filaments._catalogue_lock():
+    print('locked', flush=True)
+    sys.stdin.readline()
+"""
+    child = subprocess.Popen(
+        [sys.executable, "-c", code, str(filaments.catalogue_path())],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        assert child.stdout.readline().strip() == "locked"
+        read = pool.submit(
+            lambda: (filaments.catalogue(), filaments.get(first.identifier), filaments.bookings())
+        )
+        try:
+            entries, found, journal = read.result(timeout=1)
+        except TimeoutError:
+            pytest.fail("an inventory reader waited for the foreign write lock")
+        assert entries == (first,) and found == first and journal == ()
+    finally:
+        child.communicate("\n", timeout=5)
+        pool.shutdown(wait=True)
+    assert child.returncode == 0
+
+
+def test_an_open_snapshot_survives_a_real_atomic_replacement() -> None:
+    """Auch Windows darf tauschen, während ein Leser den vollständigen alten Stand offen hält."""
+    first = spool()
+    before = filaments.read_snapshot()
+    code = """from pathlib import Path
+from dataclasses import replace
+import sys
+from app.core.knowledge import filaments
+filaments.catalogue_path = lambda: Path(sys.argv[1])
+filaments.book('external-print', 'geometry', [filaments.BookingPosition(sys.argv[2], 100)])
+entry = filaments.get(sys.argv[2])
+filaments.save(replace(entry, name='Extern geändert'))
+"""
+    with filaments._open_snapshot(filaments.catalogue_path()) as stream:
+        result = subprocess.run(
+            [sys.executable, "-c", code, str(filaments.catalogue_path()), first.identifier],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+        held = json.loads(stream.read())
+    after = filaments.read_snapshot()
+    assert held["spools"][0]["name"] == before.spools[first.identifier].name == first.name
+    assert held["spools"][0]["remaining_grams"] == pytest.approx(500)
+    assert after.spools[first.identifier].name == "Extern geändert"
+    assert after.spools[first.identifier].remaining_grams == pytest.approx(400)
+    assert held["bookings"] == []
+    assert before.bookings() == ()
+    assert after.bookings()[0].operation_id == "external-print"
+    assert after is not before
+    assert filaments.get(first.identifier) == after.spools[first.identifier]
+
+
+def test_snapshot_cache_is_immutable_and_never_masks_a_damaged_new_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Cache spart Decodierung, lässt aber weder Mutationen noch alte Daten nach Fehlern zu."""
+    from dataclasses import FrozenInstanceError
+
+    first = spool()
+    decoded = []
+    original = filaments._decode_inventory
+
+    def recorded(data):
+        decoded.append(data)
+        return original(data)
+
+    monkeypatch.setattr(filaments, "_decode_inventory", recorded)
+    snapshot = filaments.read_snapshot()
+    assert filaments.catalogue() == (first,)
+    assert filaments.get(first.identifier) == first
+    assert filaments.bookings() == ()
+    assert len(decoded) == 1
+    with pytest.raises(TypeError):
+        snapshot.spools[first.identifier] = replace(first, name="Falsch")
+    with pytest.raises(FrozenInstanceError):
+        snapshot.spools[first.identifier].name = "Falsch"
+    filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
+    for read in (filaments.catalogue, lambda: filaments.get(first.identifier), filaments.bookings):
+        with pytest.raises(ValidationError) as caught:
+            read()
+        assert caught.value.constraint == "unreadable"
+    assert snapshot.spools[first.identifier] == first
+
+
+def test_replaced_file_identity_invalidates_equal_size_and_timestamp_cache() -> None:
+    """Ein atomar ersetzter gleich großer Stand bleibt auch mit erhaltener Uhrzeit neu."""
+    import os
+
+    first = spool()
+    snapshot = filaments.read_snapshot()
+    path = filaments.catalogue_path()
+    stamp = path.stat()
+    replacement = path.with_suffix(".replacement")
+    replacement.write_bytes(path.read_bytes().replace(b"PETG Rot", b"PETG Neu"))
+    os.utime(replacement, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    filaments._replace_snapshot(replacement, path)
+    changed = filaments.read_snapshot()
+    assert changed is not snapshot
+    assert changed.spools[first.identifier].name == "PETG Neu"
+
+
+def test_atomic_snapshot_replacement_handles_full_unicode_names(tmp_path: Path) -> None:
+    """Auch ein Zeichen aus zwei UTF-16-Einheiten kürzt den nativen Zielpuffer nicht."""
+    target = tmp_path / "Änderung-\U00010400.json"
+    source = tmp_path / "quelle.json"
+    target.write_bytes(b"old")
+    source.write_bytes(b"new")
+    with filaments._open_snapshot(target) as stream:
+        filaments._replace_snapshot(source, target)
+        assert stream.read() == b"old"
+        assert target.read_bytes() == b"new"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows schützt schreibgeschützte Zieldateien")
+def test_windows_readonly_inventory_preserves_previous_stock_and_journal() -> None:
+    """Ein echter nativer Austauschfehler lässt die alte Datei vollständig erhalten."""
+    import stat
+
+    first = spool()
+    path = filaments.catalogue_path()
+    before = path.read_bytes()
+    path.chmod(stat.S_IREAD)
+    try:
+        with pytest.raises(FileWriteError):
+            filaments.book("blocked", "geometry", [position(first)])
+        assert path.read_bytes() == before
+    finally:
+        path.chmod(stat.S_IWRITE | stat.S_IREAD)
+    assert filaments.bookings() == ()
+
+
+def test_a_legacy_inventory_under_a_foreign_lock_reports_retry_without_waiting() -> None:
+    """Eine schreibende Migration wartet nicht und erfindet kein leeres Regal."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    legacy = Path(__file__).parent / "data" / "filament_catalogue_v0.json"
+    filaments.catalogue_path().write_bytes(legacy.read_bytes())
+    code = """from pathlib import Path
+import sys
+from app.core.knowledge import filaments
+filaments.catalogue_path = lambda: Path(sys.argv[1])
+with filaments._catalogue_lock():
+    print('locked', flush=True)
+    sys.stdin.readline()
+"""
+    child = subprocess.Popen(
+        [sys.executable, "-c", code, str(filaments.catalogue_path())],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        assert child.stdout.readline().strip() == "locked"
+        read = pool.submit(filaments.catalogue)
+        try:
+            with pytest.raises(FileWriteError) as caught:
+                read.result(timeout=1)
+        except TimeoutError:
+            pytest.fail("migration waited for the foreign write lock")
+        assert caught.value.suggestions
+        assert filaments.catalogue_path().read_bytes() == legacy.read_bytes()
+    finally:
+        child.communicate("\n", timeout=5)
+        pool.shutdown(wait=True)
+    migrated = filaments.catalogue()
+    assert len(migrated) == 2
+    assert (
+        json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))["format_version"]
+        == filaments.FORMAT_VERSION
+    )

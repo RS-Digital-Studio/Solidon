@@ -506,9 +506,7 @@ class InventoryView(QWidget):
     def refresh(self, *_args: object) -> None:
         """Lagerdaten neu lesen, ohne gespeicherte Projektwerte anzufassen."""
         try:
-            self._entries = filaments.catalogue(
-                include_archived=self.archived.isChecked(), strict=True
-            )
+            self._entries = filaments.catalogue(include_archived=self.archived.isChecked())
         except AppError as problem:
             self._failed("")
             self.message.setText(str(problem))
@@ -607,7 +605,13 @@ class InventoryView(QWidget):
 
     def show_spool(self, identifier: str) -> None:
         """Das Detail bleibt auch bei gleichen Etiketten genau an dieser Spule."""
-        entry = filaments.get(identifier)
+        try:
+            snapshot = filaments.read_snapshot()
+        except AppError as problem:
+            self._failed("")
+            self.message.setText(str(problem))
+            return
+        entry = snapshot.spools.get(identifier)
         if entry is None:
             self.show_shelf()
             return
@@ -697,17 +701,19 @@ class InventoryView(QWidget):
         self.reverse_button = QPushButton(tr("Gewählten Vorgang zurücknehmen"), self.detail)
         self.reverse_button.clicked.connect(self._reverse)
         self.detail_layout.addWidget(self.reverse_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        self._fill_history(entry)
+        self._fill_history(entry, snapshot.bookings(identifier))
         self.pages.setCurrentIndex(1)
 
-    def _fill_history(self, entry: filaments.CatalogueFilament) -> None:
+    def _fill_history(
+        self, entry: filaments.CatalogueFilament, bookings: tuple[filaments.InventoryBooking, ...]
+    ) -> None:
         """Jede Herkunft bleibt sichtbar; Rücknahme gilt dem gesamten Vorgang."""
         source_names = {
             "internal": tr("Solidon-Schätzung"),
             "gcode": tr("Aus G-Code geplant"),
             "manual": tr("Von Hand eingetragen"),
         }
-        for booking in reversed(filaments.bookings(entry.identifier)):
+        for booking in reversed(bookings):
             lines = [
                 booking.project_name or tr("Druckvorgang"),
                 local_timestamp(booking.created_at),
@@ -783,7 +789,7 @@ class InventoryView(QWidget):
             self._run(partial(filaments.save, dialog.entry()), self._saved)
 
     def _edit(self) -> None:
-        entry = filaments.get(self._selected_id)
+        entry = self._selected_entry()
         if entry is None:
             return
         dialog = NewFilamentDialog(self, entry=entry)
@@ -794,10 +800,19 @@ class InventoryView(QWidget):
         self._run(partial(filaments.duplicate, self._selected_id), self._saved)
 
     def _archive(self) -> None:
-        entry = filaments.get(self._selected_id)
+        entry = self._selected_entry()
         if entry is not None:
             action = filaments.restore if entry.archived else filaments.archive
             self._run(partial(action, entry.identifier), self._saved)
+
+    def _selected_entry(self) -> filaments.CatalogueFilament | None:
+        """Eine externe Lagerbeschädigung bleibt auch zwischen Anzeige und Klick sichtbar."""
+        try:
+            return filaments.get(self._selected_id)
+        except AppError as problem:
+            self._failed("")
+            self.message.setText(str(problem))
+            return None
 
     def _reverse(self) -> None:
         item = self.history.currentItem()
