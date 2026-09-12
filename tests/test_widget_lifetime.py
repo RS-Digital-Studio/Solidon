@@ -391,7 +391,7 @@ def _watchers() -> list[tuple[str, Callable[[], object]]]:
     from app.ui.catalog import PartCatalog
     from app.ui.chat import ChatPanel
     from app.ui.op_dialog import ValueField
-    from app.ui.overlay import OverlayHost
+    from app.ui.overlay import CardColumn, OverlayHost
     from app.ui.sketch_editor import SketchPanel
     from app.ui.survey import SurveyNotice
     from app.ui.viewport import Viewport
@@ -404,6 +404,7 @@ def _watchers() -> list[tuple[str, Callable[[], object]]]:
         ("SurveyNotice", SurveyNotice),
         ("Viewport", Viewport),
         ("OverlayHost", lambda: OverlayHost(QWidget())),
+        ("CardColumn", CardColumn),
     ]
 
 
@@ -468,8 +469,9 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
 
     Deshalb zwei Gruppen:
 
-    * ``x.installEventFilter(self)`` — der Filter ist die Klasse dieser Datei,
-      also muss der Ruf hier stehen. Streng geprüft.
+    * ``x.installEventFilter(self)`` — der Filter ist die umgebende Klasse;
+      ihr eigener ``eventFilter`` muss abbestellen. Eine andere Klasse in
+      derselben Datei deckt die Stelle nicht.
     * ``x.installEventFilter(<etwas anderes>)`` — der Filter lebt woanders und
       ist statisch nicht aufzulösen. Getragen wird die Stelle vom
       parametrisierten Test darüber; hier wird nur die Zahl festgehalten,
@@ -488,12 +490,17 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
     immortal = ("application", "app", "instance")
 
     own: list[str] = []
+    without: list[str] = []
     foreign: list[str] = []
     for path in sorted(Path("app/ui").glob("*.py")):
         source = path.read_text(encoding="utf-8")
         if "installEventFilter" not in source:
             continue
-        for node in ast.walk(ast.parse(source)):
+        tree = ast.parse(source)
+        parents = {
+            child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)
+        }
+        for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
             if node.func.attr != "installEventFilter" or not node.args:
@@ -507,6 +514,27 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id == "self":
                 own.append(where)
+                owner = parents.get(node)
+                while owner is not None and not isinstance(owner, ast.ClassDef):
+                    owner = parents.get(owner)
+                filters = (
+                    [
+                        method
+                        for method in owner.body
+                        if isinstance(method, ast.FunctionDef) and method.name == "eventFilter"
+                    ]
+                    if isinstance(owner, ast.ClassDef)
+                    else []
+                )
+                guarded = any(
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Name)
+                    and call.func.id == "stop_watching_the_dying"
+                    for method in filters
+                    for call in ast.walk(method)
+                )
+                if not guarded:
+                    without.append(f"{where} ({owner.name if owner else 'ohne Klasse'})")
             else:
                 foreign.append(where)
 
@@ -519,14 +547,6 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
         "main_window.py:1552 war einer; wenn er weg ist, gehört diese Zahl nachgezogen"
     )
 
-    without = sorted(
-        {
-            place.split(":")[0]
-            for place in own
-            if "stop_watching_the_dying"
-            not in (Path("app/ui") / place.split(":")[0]).read_text(encoding="utf-8")
-        }
-    )
     assert not without, (
         "setzt sich als Filter auf ein sterbliches Widget, bestellt aber nie ab: "
         + ", ".join(without)

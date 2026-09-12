@@ -33,6 +33,10 @@ Rundungsmerkmale, während echte regelmäßige Vielecke Bezugskanten behalten.
 
 ## Die Fahrweise — nicht `pytest -q` am Stück
 
+`test_widget_lifetime.py` ordnet `installEventFilter(self)` seiner umgebenden
+Klasse zu und prüft deren eigenen `eventFilter` auf den Abmeldegriff. Ein
+anderer Filter in derselben Datei erfüllt diesen Vertrag nicht.
+
 Der ganze Lauf in einem Prozess kommt seit dem 16.08.2026 nicht mehr durch:
 rund 22 Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile.
 Die Suite baut über siebenhundert Fenster mit Ansicht nacheinander auf, und

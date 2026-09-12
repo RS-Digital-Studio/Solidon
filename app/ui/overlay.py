@@ -331,23 +331,31 @@ class CardColumn(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(MARGIN)
-        self._cards: list[QWidget] = []
 
     def add_card(self, card: QWidget, stretch: int = 0) -> None:
         """Eine Karte unten anfügen; sie bekommt Stil und Deckfläche der Zonen."""
         card.setObjectName(CARD)
         card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         card.installEventFilter(self)
-        self._cards.append(card)
         layout = self.layout()
         assert isinstance(layout, QVBoxLayout)
         layout.addWidget(card, stretch)
 
     def card_rects(self) -> list[QRect]:
         """Die Flächen der sichtbaren Karten, in den Koordinaten der Spalte."""
-        return [card.geometry() for card in self._cards if card.isVisibleTo(self)]
+        layout = self.layout()
+        assert isinstance(layout, QVBoxLayout)
+        rects = []
+        for index in range(layout.count()):
+            item = layout.itemAt(index)
+            card = item.widget() if item is not None else None
+            if card is not None and card.isVisibleTo(self):
+                rects.append(card.geometry())
+        return rects
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if event.type() in (
             QEvent.Type.Move,
             QEvent.Type.Resize,

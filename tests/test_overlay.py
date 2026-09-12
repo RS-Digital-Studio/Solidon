@@ -995,3 +995,28 @@ def test_a_card_column_masks_only_its_visible_cards(qt_app: QApplication) -> Non
         )
     finally:
         column.deleteLater()
+
+
+def test_a_card_column_forgets_a_card_deleted_on_its_own(qt_app: QApplication) -> None:
+    """Die überlebende Karte berechnet ihre Maske ohne die gelöschte Schwester."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    from app.ui.overlay import CardColumn
+
+    column = CardColumn()
+    upper, lower = QWidget(), QWidget()
+    column.add_card(upper)
+    column.add_card(lower)
+    column.resize(200, 300)
+    column.show()
+    qt_app.processEvents()
+    try:
+        upper.deleteLater()
+        QCoreApplication.sendPostedEvents(upper, QEvent.Type.DeferredDelete)
+        assert column.card_rects() == [lower.geometry()]
+        lower.hide()
+        assert column.card_rects() == []
+        lower.show()
+        assert column.card_rects() == [lower.geometry()]
+    finally:
+        column.deleteLater()

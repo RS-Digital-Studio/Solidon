@@ -553,6 +553,10 @@ nachgeführt) ·
 Loch — bestätigt wird im Merkmalfenster) ·
 `facts.py` (was das Teil kostet, während man daran baut)
 
+`CardColumn` liest seine Karten aus dem besitzenden Layout; einzeln gelöschte
+Widgets bleiben dadurch nicht in einer zweiten Liste für die Maske stehen.
+Sein Ereignisfilter bestellt wie jeder sterbliche Filter beim `Destroy` ab.
+
 Die Legende in `analysis_bar.py` verteilt bei vielen benannten Kartenstufen
 ihre Beispiele über den gesamten Farbbereich und nennt die Zahl ausgelassener
 Stufen. Jeder Beispielname behält exakt die Farbe seiner ursprünglichen Stufe.
