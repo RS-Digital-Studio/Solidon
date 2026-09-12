@@ -257,6 +257,7 @@ def command_scad(args: argparse.Namespace) -> int:
             values={"known": ", ".join(sorted(known))},
         )
     spec = PARTS.get(args.part)
+    kinds = {parameter.name: parameter.kind for parameter in spec.params.spec()}
     given: dict[str, Any] = {}
     for entry in args.set or ():
         name, _separator, raw = entry.partition("=")
@@ -266,7 +267,7 @@ def command_scad(args: argparse.Namespace) -> int:
                 suggestions=(CANCEL,),
                 values={"given": entry},
             )
-        given[name.strip()] = _as_value(raw.strip())
+        given[name.strip()] = _as_value(raw.strip(), boolean=kinds.get(name.strip()) == "bool")
     values = validate(spec.params, given) if given else spec.params()
     text = export_part_scad(spec, values)
     if args.out:
@@ -277,7 +278,7 @@ def command_scad(args: argparse.Namespace) -> int:
     return 0
 
 
-def _as_value(raw: str) -> Any:
+def _as_value(raw: str, *, boolean: bool = False) -> Any:
     """Zahl, Wahrheitswert oder Text — geraten wird nur die **Schreibweise**.
 
     Ob der Wert zum Parameter passt, entscheidet danach ``validate`` gegen das
@@ -289,6 +290,14 @@ def _as_value(raw: str) -> Any:
         return True
     if raw.lower() in {"nein", "false", "falsch"}:
         return False
+    if boolean:
+        if raw in {"0", "1"}:
+            return raw == "1"
+        raise UserError(
+            detail=tr("Für Wahrheitswerte verwenden Sie true oder false (alternativ 1 oder 0)."),
+            suggestions=(CANCEL,),
+            values={"given": raw},
+        )
     try:
         return int(raw)
     except ValueError:
@@ -572,7 +581,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--set",
         action="append",
         metavar="NAME=WERT",
-        help=tr("Einen Parameterwert setzen, mehrfach möglich"),
+        help=tr(
+            "Einen Parameterwert setzen, mehrfach möglich; Wahrheitswerte: true/false oder 1/0"
+        ),
     )
     scad.add_argument("--out", help=tr("Zieldatei statt der Ausgabe"))
     scad.set_defaults(handler=command_scad)

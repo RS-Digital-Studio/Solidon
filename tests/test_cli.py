@@ -714,3 +714,50 @@ def test_a_scad_value_goes_through_the_same_check_as_the_dialog(
 
     printed = capsys.readouterr()
     assert "300" in printed.out + printed.err, "der Höchstwert des Schemas steht in der Absage"
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_scad_boolean_help_and_values_are_portable_across_languages(
+    language: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    import json
+
+    from app.core.export import writer
+    from app.i18n import SOURCE_LANGUAGE, set_language
+
+    (tmp_path / "settings.json").write_text(json.dumps({"language": language}), encoding="utf-8")
+    monkeypatch.setattr("app.cli.main.user_config_dir", lambda: tmp_path)
+    seen: list[bool] = []
+
+    def export(spec, values) -> str:
+        assert spec.name == "heatset_m4"
+        assert isinstance(values.lead_in, bool)
+        seen.append(values.lead_in)
+        return "// SCAD probe\n"
+
+    monkeypatch.setattr(writer, "export_part_scad", export)
+    try:
+        with pytest.raises(SystemExit) as caught:
+            main(["scad", "--help"])
+        assert caught.value.code == 0
+        help_text = capsys.readouterr().out
+        assert "true/false" in help_text and "1/0" in help_text
+        for value in ("true", "false", "1", "0"):
+            assert main(["scad", "heatset_m4", "--set", f"lead_in={value}"]) == 0
+        assert seen == [True, False, True, False]
+        capsys.readouterr()
+        assert main(["scad", "heatset_m4", "--set", "lead_in=oui"]) != 0
+        error = capsys.readouterr().err
+        assert "true" in error and "false" in error and "oui" in error
+        assert len(seen) == 4, "invalid Boolean text must not reach the export"
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+
+@pytest.mark.parametrize("raw", ["0", "1"])
+def test_scad_numeric_values_are_not_reinterpreted_as_boolean(raw: str) -> None:
+    from app.cli.main import _as_value
+
+    value = _as_value(raw)
+    assert type(value) is int
+    assert value == int(raw)

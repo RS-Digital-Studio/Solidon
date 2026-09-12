@@ -47,3 +47,9 @@ auszuprobieren — und der einzige, der in einem Testlauf ohne Fenster durchkomm
 `--at-features face_1 face_2`. Der Parser reicht echte Kennungen als Liste an
 das Parameterschema weiter. Bei `clear_filament` bleibt das alte einzelne
 `--at-feature` gültig; ohne beide Angaben betrifft die Abwahl den ganzen Körper.
+
+`scad --set NAME=WERT` nennt in jeder Sprache dieselben Wahrheitswerte:
+`true`/`false`, alternativ `1`/`0`. Ziffern werden nur bei einem im
+Bausteinschema als `bool` deklarierten Parameter in Wahrheitswerte umgewandelt.
+Die bisherigen deutschen Wörter bleiben für bestehende Skripte gültig;
+ein anderer Text nennt die sprachunabhängigen Werte in der Fehlermeldung.
