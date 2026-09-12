@@ -1415,6 +1415,30 @@ def test_an_empty_message_cannot_be_sent(qt_app: QApplication) -> None:
     assert dialog.send.isEnabled()
 
 
+@pytest.mark.parametrize("kind", ["idea", "survey"])
+def test_typing_a_support_note_does_not_build_attachments(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Das Freischalten liest nur den Nachrichtentext; Anhänge entstehen für die Sendung."""
+    from PySide6.QtTest import QTest
+
+    dialog = SupportDialog(kind=kind)
+    assembled: list[bool] = []
+    monkeypatch.setattr(dialog, "_attachments", lambda: assembled.append(True) or [])
+    try:
+        QTest.keyClicks(dialog.message, "Ein Hinweis")
+        assert dialog.send.isEnabled()
+        assert not assembled
+        assert "Ein Hinweis" in dialog.ticket().message
+        assert assembled == [True]
+        dialog.message.clear()
+        assert not dialog.send.isEnabled()
+        assert assembled == [True]
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_a_survey_answer_can_be_sent_without_the_optional_fields(qt_app: QApplication) -> None:
     """Bewertung oder eine Antwort genügt; der freie Nachtrag bleibt freiwillig."""
     from app.core.support import KIND_SURVEY

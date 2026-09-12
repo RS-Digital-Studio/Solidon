@@ -934,6 +934,10 @@ Kopfzeilenhöhe. Text- und Zahlenfelder behalten normale Zeicheneingaben vor
 fensterweiten Einzeltasten-Kürzeln; die Linux-Auslieferung verwendet dafür den
 geprüften X11-/Xwayland-Pfad.
 
+Beim Tippen im Rückmeldefeld prüft die Sendefreigabe nur Bogen und Nachricht.
+Protokoll und Sitzungsanhang entstehen für Vorschau oder Sendung, nicht pro
+Tastendruck; `ticket()` verwendet denselben zusammengesetzten Nachrichtentext.
+
 Der Selbstversand des Supportberichts verwendet im Flatpak asynchron
 `Email.ComposeEmail` über QtDBus und übergibt Betreff und Inhalt unkodiert als
 Portalwerte. Außerhalb des Flatpaks bleibt `QDesktopServices` mit `mailto:`.

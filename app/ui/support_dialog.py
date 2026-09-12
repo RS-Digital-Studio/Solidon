@@ -469,18 +469,16 @@ class SupportDialog(QDialog):
         """Die Sendung, wie sie gerade dasteht."""
         return Ticket(
             kind=str(self.kind.currentData() or KIND_IDEA),
-            # Der Bogen setzt seine Antworten zum Nachrichtentext zusammen —
-            # im Kern, damit die Vorschau darunter genau das zeigt, was ankommt.
-            # Das freie Feld hängt sich an, statt den Bogen zu ersetzen.
-            message=(
-                self.survey.text(self.message.toPlainText())
-                if self.survey is not None
-                else self.message.toPlainText()
-            ),
+            message=self._message_text(),
             contact=self.contact.text().strip(),
             detail=self.detail,
             attachments=self._attachments(),
         )
+
+    def _message_text(self) -> str:
+        """Bogen und freier Nachtrag, ohne Protokoll oder Sitzungsanhang zu bauen."""
+        text = self.message.toPlainText()
+        return self.survey.text(text) if self.survey is not None else text
 
     def _attachments(self) -> list[support.Attachment]:
         """Was angehakt ist — und erst dann gebaut wird."""
@@ -620,7 +618,7 @@ class SupportDialog(QDialog):
         # aber nicht, dass eine einzelne Antwort im unsichtbaren Teil des
         # Formulars den Senden-Knopf nicht freischaltet. Maßgeblich ist daher
         # dieselbe Sendung, die ``_start`` anschließend prüft und verschickt.
-        has_content = bool(self.ticket().message.strip() or self.detail.strip())
+        has_content = bool(self._message_text().strip() or self.detail.strip())
         self.send.setEnabled(has_content and not running)
 
     # --- Senden -----------------------------------------------------------------
