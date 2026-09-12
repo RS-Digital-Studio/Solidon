@@ -1584,25 +1584,32 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
 
     from app.ui.palette import ROLES, contrast_ratio, readable_on
     from app.ui.style import make_danger
-    from app.ui.theme import apply_theme
+    from app.ui.theme import apply_theme, current_theme
 
-    for theme in ("dark", "light"):
-        apply_theme(qt_app, theme)
-        qt_app.setStyleSheet(stylesheet(theme, 10))
-        holder = QWidget()
-        button = make_danger(QPushButton("Abbrechen", holder))
-        button.resize(160, 40)
-        holder.resize(200, 60)
-        holder.show()
-        qt_app.processEvents()
-        image = button.grab().toImage()
-        seen = image.pixelColor(image.width() // 4, image.height() // 2)
-        wanted = QColor(ROLES["error"])
-        assert (seen.red(), seen.green(), seen.blue()) == (
-            wanted.red(),
-            wanted.green(),
-            wanted.blue(),
-        ), f"{theme}: der Knopf ist {seen.name()}, nicht {wanted.name()}"
-        assert contrast_ratio(readable_on(ROLES["error"]), ROLES["error"]) >= 4.5
-        holder.deleteLater()
-    qt_app.setStyleSheet("")
+    previous_theme = current_theme()
+    previous_palette = qt_app.palette()
+    previous_sheet = qt_app.styleSheet()
+    try:
+        for theme in ("dark", "light"):
+            apply_theme(qt_app, theme)
+            qt_app.setStyleSheet(stylesheet(theme, 10))
+            holder = QWidget()
+            button = make_danger(QPushButton("Abbrechen", holder))
+            button.resize(160, 40)
+            holder.resize(200, 60)
+            holder.show()
+            qt_app.processEvents()
+            image = button.grab().toImage()
+            seen = image.pixelColor(image.width() // 4, image.height() // 2)
+            wanted = QColor(ROLES["error"])
+            assert (seen.red(), seen.green(), seen.blue()) == (
+                wanted.red(),
+                wanted.green(),
+                wanted.blue(),
+            ), f"{theme}: der Knopf ist {seen.name()}, nicht {wanted.name()}"
+            assert contrast_ratio(readable_on(ROLES["error"]), ROLES["error"]) >= 4.5
+            holder.deleteLater()
+    finally:
+        apply_theme(qt_app, previous_theme)
+        qt_app.setPalette(previous_palette)
+        qt_app.setStyleSheet(previous_sheet)

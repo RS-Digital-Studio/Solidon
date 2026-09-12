@@ -177,29 +177,37 @@ def test_card_keeps_room_for_location_identity_and_low_stock_after_polish(
     from PySide6.QtGui import QFontMetrics
 
     from app.ui.style import apply_style
-    from app.ui.theme import apply_theme
+    from app.ui.theme import apply_theme, current_theme
 
-    apply_theme(qt_app, "dark")
-    apply_style(qt_app, "dark")
-    card = SpoolCard(
-        filaments.CatalogueFilament(
-            "Spule",
-            "#aabbcc",
-            identifier="unique",
-            location="Schrank",
-            spool_grams=1000,
-            remaining_grams=50,
+    previous_theme = current_theme()
+    previous_palette = qt_app.palette()
+    previous_sheet = qt_app.styleSheet()
+    try:
+        apply_theme(qt_app, "dark")
+        apply_style(qt_app, "dark")
+        card = SpoolCard(
+            filaments.CatalogueFilament(
+                "Spule",
+                "#aabbcc",
+                identifier="unique",
+                location="Schrank",
+                spool_grams=1000,
+                remaining_grams=50,
+            )
         )
-    )
-    card.resize(250, 190)
-    card.show()
-    QApplication.processEvents()
-    font = card.font()
-    font.setBold(True)
-    bottom = 128 + (QFontMetrics(font).height() + 3) * 6
-    assert card.minimumHeight() > bottom
-    assert card.height() > bottom
-    card.close()
+        card.resize(250, 190)
+        card.show()
+        QApplication.processEvents()
+        font = card.font()
+        font.setBold(True)
+        bottom = 128 + (QFontMetrics(font).height() + 3) * 6
+        assert card.minimumHeight() > bottom
+        assert card.height() > bottom
+        card.close()
+    finally:
+        apply_theme(qt_app, previous_theme)
+        qt_app.setPalette(previous_palette)
+        qt_app.setStyleSheet(previous_sheet)
 
 
 def test_journal_timestamp_uses_local_time_without_storage_precision(qt_app: QApplication) -> None:
