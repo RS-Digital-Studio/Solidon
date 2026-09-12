@@ -1749,10 +1749,10 @@ def _orca_filament(
         # Eine lokale Spule anderen Typs erbt keine fremden Materialwerte
         # oder Startsequenzen aus der allgemeinen Herstellerunterlage.
         chosen = ""
-    marke = _profile_name(chosen) if chosen else ""
+    brand = _profile_name(chosen) if chosen else ""
     document: dict[str, object] = {
         "type": "filament",
-        "name": f"Solidon {marke or settings.title}",
+        "name": f"Solidon {brand or settings.title}",
         "from": "User",
         "instantiation": "true",
         "filament_type": [
@@ -1787,17 +1787,19 @@ def _orca_filament(
     # mehr, sondern ein Wert aus der falschen Zeile — PLA fährt 210 bei 21.
     # Wo der Slot sein eigenes Profil nennt, gilt deshalb der Hersteller für
     # alles, was am Material hängt.
-    eigene = {key: [value] for key, value in values.items()}
+    own_values = {key: [value] for key, value in values.items()}
     if slot is not None and slot.material and inherited:
         override = override_for(settings, slot)
-        vom_material = {
+        from_the_material = {
             orca
             for solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK
             if orca in inherited
             and (override is None or getattr(override, solidon.partition(".")[0]) is None)
         }
-        eigene = {key: value for key, value in eigene.items() if key not in vom_material}
-    document.update(eigene)
+        own_values = {
+            key: value for key, value in own_values.items() if key not in from_the_material
+        }
+    document.update(own_values)
     # Die ausdrücklich gewählte Spule gewinnt zuletzt. Eine lokale PLA-Spule
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.

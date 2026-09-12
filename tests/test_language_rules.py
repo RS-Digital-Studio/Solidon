@@ -35,6 +35,9 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 #: nach wie vor ein Verstoß.
 GERMAN_WORDS = frozenset(
     {
+        "marke",
+        "eigene",
+        "vom",
         "abstand",
         # Beide als ganzes Wort und nicht als Stamm: Als
         # Teilzeichenkette träfe "anker" die englischen "banker",
@@ -304,6 +307,9 @@ def test_module_names_are_english() -> None:
 
 def test_the_check_would_catch_a_violation() -> None:
     """Ein Wächter, der laut scheitert, falls die Wortlisten je geleert werden."""
+    assert offences_in("marke")
+    assert offences_in("eigene")
+    assert offences_in("vom_material")
     assert offences_in("wall_staerke")
     assert offences_in("baustein_registry")
     assert offences_in("hoehe")
@@ -366,6 +372,8 @@ def test_the_check_leaves_english_words_alone() -> None:
     assert not offences_in("masses")
     assert not offences_in("spanned")
     assert not offences_in("passthrough")
+    assert not offences_in("marker")
+    assert not offences_in("marked")
 
 
 #: Wörter, an denen eine Sprache zu erkennen ist, ohne den Satz zu verstehen.
