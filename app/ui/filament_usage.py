@@ -508,6 +508,7 @@ class UsageDialog(QDialog):
 
     def _clear_allocations(self, index: int) -> None:
         for _choice, _amount, widget in self.allocations[index]:
+            widget.hide()
             widget.deleteLater()
         self.allocations[index].clear()
 
@@ -551,6 +552,7 @@ class UsageDialog(QDialog):
         self, index: int, allocation: tuple[QComboBox, NumberSpin, QWidget]
     ) -> None:
         self.allocations[index].remove(allocation)
+        allocation[2].hide()
         allocation[2].deleteLater()
         self._validate()
 
