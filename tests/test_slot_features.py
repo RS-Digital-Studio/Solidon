@@ -52,6 +52,116 @@ def slotted(profile: Profile, **values: float | str) -> MeshData:
     return drill(plate(), profile=profile, **settings).mesh  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(("angle", "expected"), [(0.4, True), (0.6, False)])
+def test_slot_pair_axis_agreement_has_a_boundary(profile, angle, expected) -> None:
+    """Gemessene Bogenachsen dürfen nur innerhalb einer halben Gradabweichung paaren."""
+    import numpy as np
+
+    mesh = _one_body(slotted(profile, diameter=10.0, slot_length=25.0))
+    arcs = _fitted(mesh).fillets
+    assert len(arcs) == 2
+    fit, patch = arcs[1]
+    turn = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 0.0, 0.0))[:3, :3]
+    measured = dataclasses.replace(fit, axis=tuple(turn @ np.asarray(fit.axis)))
+    assert bool(find_slots(mesh, [arcs[0], (measured, patch)])) is expected
+
+
+@pytest.mark.parametrize(("ratio", "expected"), [(1.008, True), (1.012, False)])
+def test_slot_pair_radius_agreement_has_a_boundary(profile, ratio, expected) -> None:
+    """Die zwei gemessenen Endradien dürfen sich nur um ein Prozent unterscheiden."""
+    mesh = _one_body(slotted(profile, diameter=10.0, slot_length=25.0))
+    arcs = _fitted(mesh).fillets
+    assert len(arcs) == 2
+    fit, patch = arcs[1]
+    measured = dataclasses.replace(fit, radius=fit.radius * ratio)
+    assert bool(find_slots(mesh, [arcs[0], (measured, patch)])) is expected
+
+
+@pytest.mark.parametrize(("angle", "expected"), [(0.8, True), (1.2, False)])
+def test_slot_shell_has_a_boundary_for_sloping_walls(angle, expected) -> None:
+    """An einer echten schrägen Wand endet der quer zur Bohrachse erreichbare Mantel."""
+    import numpy as np
+
+    from app.core.perceive.slots import _neighbourhood, _shells_for
+
+    body = trimesh.creation.box(extents=(20.0, 10.0, 2.0))
+    body.vertices[:, 1] += body.vertices[:, 2] * math.tan(math.radians(angle))
+    graph = _neighbourhood(body.face_adjacency, len(body.faces))
+    mask, _labels, _touched = _shells_for(body.face_normals, np.array((0.0, 0.0, 1.0)), graph, {})
+    sloped = np.flatnonzero(np.abs(body.face_normals[:, 1]) > 0.9)
+    assert len(sloped) == 4
+    assert all(mask[index] is expected for index in sloped)
+
+
+@pytest.mark.parametrize(("offset", "expected"), [(0.075, True), (0.125, False)])
+def test_slot_flanks_have_a_boundary_for_distance_from_the_end_radius(offset, expected) -> None:
+    """Echte Flankendreiecke 1,5 bzw. 2,5 Prozent neben dem Radius halten die 2-Prozent-Grenze."""
+    import numpy as np
+
+    from app.core.perceive.slots import _flanks_are_flat
+
+    body = trimesh.creation.box(extents=(20.0, 10.0 + 2.0 * offset, 2.0))
+    sides = set(np.flatnonzero(np.abs(body.face_normals[:, 1]) > 0.9).tolist())
+    assert (
+        _flanks_are_flat(body, sides, set(), np.zeros(3), np.array((0.0, 1.0, 0.0)), 5.0)
+        is expected
+    )
+
+
+@pytest.mark.parametrize("axis", [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (1.0, 2.0, 3.0)])
+def test_several_slots_keep_their_ids_with_permuted_triangles_and_pair_order(profile, axis) -> None:
+    """Drei unabhängige Mündungen bleiben nach schräger Lage und anderer Fleckenfolge dieselben."""
+    import numpy as np
+
+    from app.core.perceive.features import forget_cache
+
+    mesh = plate()
+    for x, y, diameter, length in (
+        (-15.0, -9.0, 3.0, 10.0),
+        (0.0, 9.0, 4.0, 12.0),
+        (15.0, -9.0, 5.0, 14.0),
+    ):
+        mesh = drill(
+            mesh,
+            profile=profile,
+            position=(x, y, 5.0),
+            axis="z",
+            diameter=diameter,
+            compensate=False,
+            slot_length=length,
+        ).mesh
+    raw = mesh.raw.copy()
+    raw.apply_transform(trimesh.transformations.rotation_matrix(math.radians(37.0), axis))
+    turned = _one_body(MeshData.of(raw))
+    arcs = _fitted(turned).fillets
+    forward = find_slots(turned, arcs)
+    backward = find_slots(turned, list(reversed(arcs)))
+    assert len(forward) == len(backward) == 3
+
+    def locations(slots):
+        return sorted((slot.centre, slot.diameter) for slot in slots)
+
+    for first, second in zip(locations(forward), locations(backward), strict=True):
+        assert first[0] == pytest.approx(second[0], abs=1e-9)
+        assert first[1] == pytest.approx(second[1], abs=1e-9)
+    forget_cache()
+    before = {name: value for name, value in detect(turned).items() if value.kind == "slot"}
+    rng = np.random.default_rng(51)
+    permuted = MeshData.of(
+        trimesh.Trimesh(raw.vertices, raw.faces[rng.permutation(len(raw.faces))])
+    )
+    forget_cache()
+    after = {name: value for name, value in detect(permuted).items() if value.kind == "slot"}
+    assert before.keys() == after.keys()
+    for name in before:
+        assert before[name].params["centre"] == pytest.approx(
+            after[name].params["centre"], abs=1e-9
+        )
+        assert before[name].params["diameter"] == pytest.approx(
+            after[name].params["diameter"], abs=1e-9
+        )
+
+
 def test_open_slot_search_checks_only_adjacent_faces(monkeypatch: pytest.MonkeyPatch) -> None:
     """Viele Taschenecken prüfen nur ihre Nachbarn; die echte Randöffnung bleibt."""
     import numpy as np
