@@ -5362,6 +5362,12 @@ def _cut_and_pin(
     connector_start = next_connector_index(source.features)
 
     first, second, findings = split_at_plane(mesh, plane)
+    # **Verorten kann nur die Operation** (RM-039). `split_at_plane` rechnet auf
+    # einem Netz und kennt keine Kennungen; eine Berichtshandlung liest ihr Ziel
+    # aber aus dem Befund und nicht aus der Auswahl — ohne den Körper führte
+    # *Reparieren und erneut versuchen* ins Leere. Dieselbe Aufteilung wie beim
+    # Aushöhlen, und derselbe Satz steht dort.
+    findings = [dataclasses.replace(entry, object_id=source.id) for entry in findings]
     _both_halves_or_stop(first, second, plane.position)
 
     # **Der Wunschdurchmesser geht in die Planung hinein**, nicht hinterher in

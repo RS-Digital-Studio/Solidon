@@ -378,6 +378,17 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # wo Bauraum oder Suchgrenze die Antwort verändern können.
     "split.no_plane": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
     "split.cut_failed": (SPLIT_ALONG_LINE, SHOW_DETAILS),
+    # **Der Satz nennt den Rückweg, und hier steht er als Knopf** (RM-039).
+    # „Reparieren Sie es und teilen Sie danach erneut" stand im Befund, seine
+    # Geschwister darüber trugen Handlungen, und dieser trug keine — ein Satz
+    # ohne Weg nach vorn, und Regel 17 gilt im Bericht so gut wie im Dialog.
+    #
+    # **Dieselbe Handlung wie bei den anderen „nicht geschlossen"-Befunden**,
+    # weil es dieselbe Ursache ist: `SectionResult.capped` ist genau
+    # `is_watertight` der Eingabe, das Modell war also schon vor dem Schnitt
+    # offen. *Stellen zeigen* steht nicht daneben — der Befund trägt keinen
+    # Ort, und ein Knopf, der ins Leere führt, ist schlechter als keiner.
+    "split.uncapped": (REPAIR_AND_RETRY,),
     "split.too_many_parts": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
     # Die Druckdatei ist niedriger als das Modell: CuraEngine schneidet unter
     # ``z = 0`` wortlos ab (gemessen 30.08.2026, 50 statt 100 Schichten). Die

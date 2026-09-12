@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 
@@ -23,7 +23,7 @@ from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
-from app.core.types import Finding
+from app.core.types import CancelToken, Finding
 from app.core.units import EPS_GEOM, format_length, weld_digits, weld_tolerance
 from app.i18n import _
 
@@ -370,6 +370,148 @@ def remove_small_components(
         else ()
     )
     return MeshData.of(body, slots=slots), len(pieces) - len(keep)
+
+
+#: Wie viele Dreieckspaare die Durchdringungssuche höchstens prüft.
+#:
+#: Die Karte hat ein Interaktionsbudget (§18.4, §31), und die Suche ist im
+#: schlechtesten Fall quadratisch — ein Netz aus lauter deckungsgleichen
+#: Flächen erzeugt beliebig viele Paare. Zwei Millionen Paare rechnet numpy in
+#: Bruchteilen einer Sekunde; darüber bricht die Suche ab und meldet, was sie
+#: bis dahin gefunden hat. Eine unvollständige Markierung ist dabei ehrlich:
+#: Was dasteht, ist wirklich eine Durchdringung.
+MAX_INTERSECTION_PAIRS: Final = 2_000_000
+
+
+def self_intersecting_faces(
+    mesh: MeshData, cancelled: CancelToken | None = None
+) -> tuple[int, ...]:
+    """Welche Dreiecke durch andere Dreiecke desselben Netzes laufen (§18.4).
+
+    **Eine Durchdringung ist räumlich und nicht topologisch** — und genau
+    deshalb fand die Netzfehlerkarte sie nicht (RM-143). Offene und verzweigte
+    Kanten stehen in der Kantentabelle; zwei Wände, die einander schneiden,
+    haben dagegen lauter saubere Kanten mit je zwei Flächen, und die Tabelle
+    sagt dazu nichts. `broken_selfint.stl` ist der Fall: zwei Quader, die
+    durcheinanderlaufen, jede Kante in Ordnung.
+
+    Gerechnet wird in zwei Stufen, weil die zweite teuer ist:
+
+    * **Sweep-and-Prune über x.** Die Dreiecke werden nach ihrem kleinsten x
+      sortiert; für jedes kommen nur die in Frage, deren x-Intervall es noch
+      überlappt. Ohne diesen Filter wären es bei 10 000 Dreiecken fünfzig
+      Millionen Paare.
+    * **Segment gegen Dreieck**, für jede der drei Kanten beider Partner
+      (Möller-Trumbore, vektorisiert). Zwei Dreiecke schneiden sich genau
+      dann, wenn eine Kante des einen die Fläche des anderen durchstößt — das
+      ist der Test, der keine Ausnahme kennt.
+
+    **Nachbarn zählen nicht.** Zwei Dreiecke, die sich eine Kante oder eine
+    Ecke teilen, berühren einander per Definition; sie als Durchdringung zu
+    melden hieße, jedes Netz zu markieren. Verglichen wird über die
+    **Eckpunkte**, nicht über die Indizes: Ein eingelesenes STL trägt dieselbe
+    Ecke oft mehrfach, und zwei Dreiecke mit verschiedenen Indizes können
+    dieselbe Kante meinen.
+    """
+    body = mesh.raw
+    faces = np.asarray(body.faces)
+    if len(faces) < 2:
+        return ()
+    corners = np.asarray(body.vertices, dtype=float)[faces]
+    low, high = corners.min(axis=1), corners.max(axis=1)
+
+    # **Sweep-and-Prune, aber ohne Python-Schleife über die Paare.** Die erste
+    # Fassung lief je Dreieck durch seine Nachbarn und brauchte an einer Kugel
+    # mit 20 480 Dreiecken 5,3 Sekunden — die Karte hat drei (§18.4, §31).
+    # Sortiert man nach dem kleinsten x, ist die Menge der Partner je Dreieck
+    # ein **zusammenhängender Bereich** im sortierten Feld, und den findet
+    # ``searchsorted`` für alle auf einmal.
+    order = np.argsort(low[:, 0], kind="stable")
+    starts = low[order, 0]
+    reach = np.searchsorted(starts, high[order, 0], side="right")
+
+    hit: set[int] = set()
+    counted = 0
+    # Blockweise, damit die Paarliste den Speicher nicht sprengt: 14 Millionen
+    # Paare wären als zwei Indexfelder schon ein Viertel Gigabyte.
+    for begin in range(0, len(order), _SWEEP_BLOCK):
+        # **Zwischen den Blöcken, nicht in der inneren Schleife.** Ein Block
+        # ist ein numpy-Aufruf und kooperativ ohnehin nicht zu unterbrechen —
+        # dieselbe Grenze wie in ``boolean.boolean``.
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        block = np.arange(begin, min(begin + _SWEEP_BLOCK, len(order)))
+        counts = np.maximum(reach[block] - block - 1, 0)
+        if not counts.any():
+            continue
+        left = np.repeat(block, counts)
+        offsets = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
+        right = left + 1 + offsets
+        counted += len(left)
+        if counted > MAX_INTERSECTION_PAIRS:
+            _log.info("self-intersection search stopped after %d pairs", counted)
+            break
+        first, second = order[left], order[right]
+        # Die zwei übrigen Achsen, vektorisiert — das schlägt den Großteil weg.
+        apart = np.any(low[second, 1:] > high[first, 1:], axis=1) | np.any(
+            low[first, 1:] > high[second, 1:], axis=1
+        )
+        first, second = first[~apart], second[~apart]
+        for one, other in zip(first, second, strict=True):
+            if int(one) in hit and int(other) in hit:
+                continue
+            if _share_a_corner(corners[one], corners[other]):
+                continue
+            if _triangles_cross(corners[one], corners[other]):
+                hit.add(int(one))
+                hit.add(int(other))
+    return tuple(sorted(hit))
+
+
+#: Wie viele Dreiecke ein Sweep-Block umfasst. Groß genug, dass numpy die
+#: Paarbildung trägt, klein genug, dass die Indexfelder in den Cache passen.
+_SWEEP_BLOCK: Final = 4096
+
+
+def _share_a_corner(one: np.ndarray, other: np.ndarray) -> bool:
+    """Teilen sich die zwei Dreiecke eine Ecke? Dann berühren sie einander."""
+    return bool(np.any(np.all(np.isclose(one[:, None, :], other[None, :, :]), axis=2)))
+
+
+def _triangles_cross(one: np.ndarray, other: np.ndarray) -> bool:
+    """Durchstößt eine Kante des einen die Fläche des anderen — in beide
+    Richtungen gefragt, denn ein Dreieck kann ganz im anderen liegen."""
+    return _edges_pierce(one, other) or _edges_pierce(other, one)
+
+
+def _edges_pierce(edges_of: np.ndarray, face: np.ndarray) -> bool:
+    """Möller-Trumbore für die drei Kanten eines Dreiecks gegen ein zweites.
+
+    Ein Treffer zählt nur **innerhalb** der Strecke und **innerhalb** des
+    Dreiecks; die Ränder bleiben draußen (``EPS_GEOM``), denn eine Kante, die
+    genau auf einer Fläche endet, berührt sie und läuft nicht hindurch.
+    """
+    starts = edges_of
+    directions = np.roll(edges_of, -1, axis=0) - edges_of
+    first, second = face[1] - face[0], face[2] - face[0]
+    normals = np.cross(directions, second)
+    determinants = normals @ first
+    parallel = np.abs(determinants) <= EPS_GEOM
+    safe = np.where(parallel, 1.0, determinants)
+    offsets = starts - face[0]
+    u = np.einsum("ij,ij->i", offsets, normals) / safe
+    crossed = np.cross(offsets, first)
+    v = np.einsum("ij,ij->i", directions, crossed) / safe
+    t = (crossed @ second) / safe
+    inside = (
+        ~parallel
+        & (u > EPS_GEOM)
+        & (v > EPS_GEOM)
+        & (u + v < 1.0 - EPS_GEOM)
+        & (t > EPS_GEOM)
+        & (t < 1.0 - EPS_GEOM)
+    )
+    return bool(np.any(inside))
 
 
 def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:

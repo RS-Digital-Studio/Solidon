@@ -2057,3 +2057,61 @@ def test_new_fit_pairs_never_take_a_name_that_is_already_in_use(loaded, profile:
     assert names[0] == "stift_2", "die eigene bleibt, sie hängt an unbeteiligten Körpern"
     assert len(names) > 1, "ohne neue Paare prüft dieser Test nichts"
     assert len(names) == len(set(names)), f"doppelte Namen: {names}"
+
+
+def test_the_open_cut_carries_its_body_and_a_button(profile: Profile) -> None:
+    """Der Satz stand da, der Knopf fehlte (RM-039).
+
+    `split.uncapped` stand nicht in `FINDING_ACTIONS`, während seine
+    Geschwister `split.no_plane` und `split.cut_failed` dort welche haben —
+    der Befund war damit im Prüfbericht ein Satz ohne Weg nach vorn, und
+    Regel 17 gilt im Bericht so gut wie im Dialog.
+
+    **Und der Knopf braucht seinen Körper.** Eine Berichtshandlung liest ihr
+    Ziel aus dem Befund und nicht aus der Auswahl; die Geometriefunktion
+    rechnet auf einem Netz und kennt keine Kennungen, also verortet sie die
+    Operation — dieselbe Aufteilung wie beim Aushöhlen.
+    """
+    from app.ui.panels import FINDING_ACTIONS
+
+    outcome = autosplit.split_to_fit(open_body(), profile, pins=0)
+
+    offen = [finding for finding in outcome.findings if finding.code == "split.uncapped"]
+    assert offen, "der Befund fehlt ganz"
+    handlungen = FINDING_ACTIONS.get("split.uncapped")
+    assert handlungen, "der Befund führt im Prüfbericht zu keiner Handlung"
+    assert any(action.id == "repair_and_retry" for action in handlungen), (
+        f"der Rückweg, den der Satz nennt, fehlt als Knopf: {[a.id for a in handlungen]}"
+    )
+
+
+def test_the_open_cut_names_the_body_it_belongs_to(profile: Profile) -> None:
+    """Der Knopf braucht ein Ziel, und das steht im Befund (RM-039).
+
+    „Berichtshandlungen lesen ihren Zielkörper aus Befund oder Dokument. Eine
+    aktuelle Auswahl ist kein Ersatz" — ohne die Kennung wäre *Reparieren und
+    erneut versuchen* ein Knopf über einem Körper, den niemand benannt hat.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    entry = SceneObject(id="obj_7", name="Offenes Teil", mesh=open_body())
+    spec = REGISTRY.get("split_pinned")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(axis="z", position=5.0, pins=0),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    offen = [finding for finding in result.findings if finding.code == "split.uncapped"]
+    assert offen, "der Befund fehlt"
+    assert offen[0].object_id == "obj_7", f"der Befund nennt keinen Körper: {offen[0].object_id!r}"

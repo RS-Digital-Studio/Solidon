@@ -105,7 +105,15 @@ WALL_SCALE_FACTOR = 5.0
 #: feste deutsche Zeichenketten hier und liefen an ``tr()`` vorbei bis in die
 #: Legende (Regel 20). Aufgelöst wird erst beim Bauen der Karte
 #: (:func:`_named`) — beim Import steht die Sprache noch nicht fest.
-DEFECT_LEVELS: Final = (_("in Ordnung"), _("offene Kante"), _("verzweigte Kante"))
+DEFECT_LEVELS: Final = (
+    _("in Ordnung"),
+    _("offene Kante"),
+    _("verzweigte Kante"),
+    # **Die dritte Stufe ist die einzige räumliche** (RM-143). Die zwei
+    # darüber stehen in der Kantentabelle; zwei Wände, die einander
+    # schneiden, haben lauter saubere Kanten mit je zwei Flächen.
+    _("Durchdringung"),
+)
 
 #: Flächenkategorien der Passungskarte, ebenso übersetzbar.
 FIT_LEVELS: Final = (_("unbeteiligt"), _("Teil einer Passung"), _("Passung verletzt"))
@@ -325,7 +333,7 @@ def build(
     if kind == "overhang":
         return overhang_map(mesh, angle)
     if kind == "defects":
-        return defect_map(mesh)
+        return defect_map(mesh, cancelled)
     if kind == "curvature":
         return curvature_map(mesh, entry.features)
     if kind == "features":
@@ -581,8 +589,21 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
 # --- Netzdefekte ----------------------------------------------------------------
 
 
-def defect_map(mesh: MeshData) -> AnalysisMap:
-    """Offene Kanten und nicht-mannigfaltige Kanten, je Dreieck (§18.4)."""
+def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> AnalysisMap:
+    """Offene Kanten, verzweigte Kanten und Durchdringungen, je Dreieck (§18.4).
+
+    **Die dritte war zugesagt und fehlte** (RM-143). Die ersten beiden liest
+    die Kantentabelle: eine Kante mit einer Fläche ist offen, eine mit dreien
+    verzweigt. Eine **Selbstdurchdringung** steht dort nicht — zwei Wände, die
+    einander schneiden, haben lauter saubere Kanten mit je zwei Flächen, und
+    genau deshalb sah die Karte an `broken_selfint.stl` nichts.
+
+    Sie ist die teuerste der drei und steht deshalb zuletzt: Ihre Suche ist
+    räumlich (`repair.self_intersecting_faces`), nicht tabellarisch, und
+    deckelt sich selbst an der Zahl der geprüften Paare.
+    """
+    from app.core.geom.repair import self_intersecting_faces
+
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
     if len(body.faces):
@@ -596,6 +617,8 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
             for edge in np.atleast_1d(np.asarray(group)):
                 face = int(edge) // 3
                 values[face] = max(values[face], level)
+        for face in self_intersecting_faces(mesh, cancelled):
+            values[face] = 3.0
 
     return AnalysisMap(
         kind="defects",
@@ -603,7 +626,7 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
         values=tuple(float(value) for value in values),
         unit="",
         low=0.0,
-        high=2.0,
+        high=3.0,
         highlighted=tuple(int(index) for index in np.nonzero(values > 0.0)[0]),
         threshold=1.0,
         categories=_named(DEFECT_LEVELS),

@@ -153,7 +153,7 @@ unberührt; das Budget gilt nur der Karte.
 | `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener |
 | `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden |
-| `maps.py` | Analysekarten (§18.4) |
+| `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **drei** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
 | `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21); `reason_against` beantwortet dieselbe Frage für den Kern |

@@ -187,6 +187,42 @@ def test_a_clean_body_has_a_clean_map() -> None:
     assert set(analysis.values) == {0.0}
 
 
+def test_the_defect_map_marks_where_the_body_runs_through_itself() -> None:
+    """Bauplan §18.4 verspricht Durchdringungen, und die Karte fand keine (RM-143).
+
+    Sie markierte offene und verzweigte Kanten — beides Topologie. Eine
+    Selbstdurchdringung ist aber **räumlich**: Zwei Wände, die einander
+    schneiden, haben lauter saubere Kanten mit je zwei Flächen, und die
+    Kantentabelle sagt dazu gar nichts. `broken_selfint.stl` ist genau dieser
+    Fall — zwei Quader, die durcheinanderlaufen, 24 Dreiecke, von keiner
+    Booleschen angefasst.
+
+    **Eine allgemeine Fehlermeldung ersetzt die Markierung nicht** (§18.4): Der
+    Kunde soll die Stelle im Bild finden, nicht erfahren, dass es sie gibt.
+    """
+    broken = normalise(read_mesh((MESHES / "broken_selfint.stl").read_bytes(), ".stl"), "mm").mesh
+
+    analysis = maps.defect_map(broken)
+
+    durchdrungen = [index for index, value in enumerate(analysis.values) if value >= 3.0]
+    assert durchdrungen, "die zwei Quader laufen durcheinander, und die Karte schweigt"
+    assert set(durchdrungen) <= set(analysis.highlighted), "die Stellen sind nicht auffindbar"
+    # Regel 18: Die Bedeutung steht als Wort daneben, nicht nur als Farbe.
+    assert analysis.categories[3] == "Durchdringung"
+
+
+def test_a_clean_body_is_not_called_self_intersecting() -> None:
+    """Die Gegenprobe, und sie trägt den Wert des Ganzen.
+
+    Ein Würfel schneidet sich nicht — würde die Prüfung ihn markieren, wäre
+    die Karte Lärm statt Auskunft, und nach dem dritten Mal sieht niemand mehr
+    hin.
+    """
+    analysis = maps.defect_map(cube())
+
+    assert all(value < 3.0 for value in analysis.values)
+
+
 # --- curvature ------------------------------------------------------------------
 
 

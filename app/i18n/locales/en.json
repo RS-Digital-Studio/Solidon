@@ -1851,6 +1851,7 @@
   "Dunkel": "Dark",
   "Dunkle Geometrie auf hellem Grund.": "Dark geometry on a light background.",
   "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind hervorgehoben: dort beginnt Material in der Luft.": "Scrub through the height and look at the cross-section. Islands are highlighted: that is where material starts in mid-air.",
+  "Durchdringung": "self-intersection",
   "Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die zieht jeder Ruck am Kabel direkt an der Lötstelle.": "Gland for a round cable with a clamping point behind it. Without it every tug on the cable pulls straight at the solder joint.",
   "Durchgang": "through",
   "Durchgangsloch": "Clearance hole",

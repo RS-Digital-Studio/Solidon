@@ -52,7 +52,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
 | [RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen](#rm-023) | Geometrie, Erkennung und Druckvorbereitung | Verweisfilter nach einem Wechsel der Objektkennung prüfen |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Prüfkörper steht; Abnahme über `evaluate` selbst und ein Rundlauf für `matches` fehlen |
-| [RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären](#rm-039) | Geometrie, Erkennung und Druckvorbereitung | Der Befund erklärt es jetzt; offen ist der Knopf im Prüfbericht (`FINDING_ACTIONS`) |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
 | [RM-045 — Drei Laufzeitkosten des Geometriereviews messen](#rm-045) | Geometrie, Erkennung und Druckvorbereitung | Aushöhlen, Formkopien und Innenraumketten getrennt vermessen |
@@ -72,7 +71,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
-| [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
@@ -519,29 +517,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-039"></a>
 
-- [~] **RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären.** **Der Befund
-  nennt seit dem 10.09.2026 die Ursache**: „Die Schnittflächen bleiben offen: Das Modell hat
-  schon vor dem Schnitt ein Loch. Reparieren Sie es und teilen Sie danach erneut."
+- [x] **RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären.** Der Satz
+  steht seit dem 10.09.2026, der **Knopf** seit dem 12.09.2026: `split.uncapped` trägt in
+  `FINDING_ACTIONS` jetzt *Reparieren und erneut versuchen* — dieselbe Handlung wie die
+  anderen „nicht geschlossen"-Befunde, weil es dieselbe Ursache ist. *Stellen zeigen* steht
+  nicht daneben: Der Befund trägt keinen Ort, und ein Knopf ins Leere ist schlechter als
+  keiner.
 
-  Der alte Satz — „Die Schnittflächen konnten nicht geschlossen werden" — war nicht falsch,
-  aber er zeigte in die falsche Richtung: Er klang nach einem Fehler des Schnitts, also suchte
-  man am Schnitt. Der Schnitt kann nichts dafür. `SectionResult.capped` ist genau
-  `is_watertight` der **Eingabe** (`section._apply` liest sie und reicht sie durch), das
-  Modell war also schon vorher offen — und ein offenes Netz lässt sich nicht ehrlich deckeln.
-  Nachweis: `tests/test_autosplit.py::test_the_open_cut_says_why_and_what_to_do` prüft die
-  Aussage und nicht den Wortlaut; Gegenprobe gefahren, mit dem alten Satz ist er rot. Die fünf
-  Kataloge sind nachgezogen — der Meldungstext **ist** der Schlüssel, und ohne sie fielen
-  `en`, `es`, `fr`, `it` und `pt` auf Deutsch zurück.
+  **Und der Knopf braucht seinen Körper.** Eine Berichtshandlung liest ihr Ziel aus dem Befund
+  und nicht aus der Auswahl; `split_at_plane` rechnet auf einem Netz und kennt keine
+  Kennungen, also verortet sie die Operation — dieselbe Aufteilung wie beim Aushöhlen.
 
-  **Offen bleibt der Knopf.** `split.uncapped` steht nicht in `FINDING_ACTIONS`
-  (`app/ui/panels.py`), also führt der Befund im Prüfbericht zu keiner Handlung; die
-  Geschwister `split.no_plane` und `split.cut_failed` haben dort welche.
-  `REPAIR_AND_RETRY` gibt es bereits. Nicht gemacht, weil an `panels.py` am selben Tag eine
-  zweite Sitzung arbeitete und eine Zeile in einer fremden offenen Datei verloren geht.
-  Abnahme dann: offenes Netz erzeugt den verständlichen Befund **mit** anklickbarem Rückweg,
-  ein sauber geschlossenes Netz bleibt unverändert.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-linux-kunde-und-was-sein-protokoll-trug-06092026).
+  Nachweis: zwei Fälle in `tests/test_autosplit.py` (die Handlung steht im Bericht, der Befund
+  nennt `obj_7`), Gegenprobe ohne die Verortung rot.
 
 <a id="rm-041"></a>
 
@@ -776,14 +764,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-143"></a>
 
-- [ ] **RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren.** Die Netzfehlerkarte aus Bauplan §18.4 verspricht Durchdringungen.
-  `perceive/maps.py:defect_map()` markiert aktuell offene und nicht-mannigfaltige Kanten, führt
-  aber keine Schnittprüfung aus. Anforderung an einem reproduzierbaren Körper anschließen;
-  eine generelle Fehlermeldung ersetzt die räumliche Markierung nicht. Abnahme: betroffene
-  Dreiecke sind sichtbar auffindbar, ein sauberer Gegenkörper bleibt unmarkiert und die
-  Bedeutung ist zusätzlich zur Farbe erkennbar.
+- [x] **RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren.** Am
+  12.09.2026 gebaut. Bauplan §18.4 verspricht Durchdringungen; die Karte markierte offene und
+  verzweigte Kanten und fand keine — beides steht in der **Kantentabelle**, eine
+  Durchdringung ist dagegen **räumlich**: Zwei Wände, die einander schneiden, haben lauter
+  saubere Kanten mit je zwei Flächen, und die Tabelle sagt dazu nichts.
 
-  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+  `repair.self_intersecting_faces` beantwortet die Frage in zwei Stufen — Sweep-and-Prune über
+  x, dann Segment gegen Dreieck (Möller-Trumbore) für beide Partner. Nachbarn zählen nicht,
+  und verglichen wird über die **Eckpunkte** statt über die Indizes: Ein eingelesenes STL
+  trägt dieselbe Ecke oft mehrfach.
+
+  **Die erste Fassung war zu langsam, und das Budget hat es gesagt**: 5,3 s an einer Kugel mit
+  20 480 Dreiecken, wo §18.4 drei nennt. Die Paarbildung läuft jetzt vektorisiert —
+  `searchsorted` liefert je Dreieck den zusammenhängenden Bereich seiner Partner, blockweise,
+  damit die Indexfelder den Speicher nicht sprengen. Gemessen: **474 ms** an derselben Kugel,
+  elfmal schneller. Dazu das Abbruchtoken zwischen den Blöcken und ein harter Deckel an der
+  Paarzahl.
+
+  Nachweis: `broken_selfint.stl` aus dem Korpus (zwei Quader, die durcheinanderlaufen) markiert
+  8 von 24 Dreiecken, ein Würfel keines; die Stufe heißt „Durchdringung" und steht als Wort in
+  der Legende (Regel 18), in allen fünf Sprachen. Gegenprobe ohne die Suche rot.
 
 <a id="rm-147"></a>
 
