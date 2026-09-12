@@ -568,6 +568,8 @@ class MaterialProfile:
     Die Grenze, gegen die eine Biegespannung gehalten wird. Darüber verformt
     sich ein Arm bleibend oder bricht, statt zurückzukommen.
     """
+    layer_bond_ratio: float = 0.0
+    """Anteil der Streckgrenze quer zur Schichtebene, zwischen 0 und 1; 0 heißt unbekannt."""
     minimum_wall: float | None = None
     """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
     overhang_angle: float | None = None

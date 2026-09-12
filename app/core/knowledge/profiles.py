@@ -119,6 +119,7 @@ def _material_from_table(
             # sonst hinter jeder Federrechnung, ohne dass es jemand sähe.
             youngs_modulus=float(table.get("youngs_modulus", 0.0)),
             yield_strength=float(table.get("yield_strength", 0.0)),
+            layer_bond_ratio=float(table.get("layer_bond_ratio", 0.0)),
             minimum_wall=(float(table["minimum_wall"]) if "minimum_wall" in table else None),
             overhang_angle=(float(table["overhang_angle"]) if "overhang_angle" in table else None),
             calibration_printer=str(table.get("calibration_printer", "")),

@@ -158,6 +158,7 @@ def test_process_measurements_reach_only_the_measured_print_process(own_profiles
     assert measured.overhang_limit_degrees == pytest.approx(60.0)
     assert after.youngs_modulus == pytest.approx(before.material.youngs_modulus)
     assert after.yield_strength == pytest.approx(before.material.yield_strength)
+    assert after.layer_bond_ratio == pytest.approx(before.material.layer_bond_ratio)
     for changes in (
         {"id": "other-printer"},
         {"nozzle_diameter": before.printer.nozzle_diameter * 2},

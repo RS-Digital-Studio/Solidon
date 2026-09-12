@@ -138,7 +138,7 @@ def test_the_hash_covers_everything_a_result_depends_on(profile: Profile) -> Non
 def test_the_profile_enters_the_hash(profile: Profile) -> None:
     from app.core.knowledge import profiles as profile_table
 
-    for name in ("youngs_modulus", "yield_strength"):
+    for name in ("youngs_modulus", "yield_strength", "layer_bond_ratio"):
         different = dataclasses.replace(
             profile, material=dataclasses.replace(profile.material, **{name: 123.456})
         )

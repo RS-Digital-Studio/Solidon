@@ -67,6 +67,7 @@ def profile_key(profile: Profile) -> str:
         material.shrinkage,
         material.youngs_modulus,
         material.yield_strength,
+        material.layer_bond_ratio,
         profile.minimum_wall_thickness,
         profile.overhang_limit_degrees,
     )

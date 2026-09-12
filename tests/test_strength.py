@@ -17,7 +17,6 @@ import pytest
 
 from app.core.knowledge import profiles
 from app.core.knowledge.strength import (
-    ACROSS_LAYERS,
     cantilever_stress,
     safe_thickness,
     spring_load,
@@ -70,7 +69,7 @@ def test_the_layer_direction_decides_and_it_is_not_a_property_of_the_filament(pl
     assert quer is not None and laengs is not None
 
     assert quer.stress == pytest.approx(laengs.stress), "die Spannung hängt nicht an der Lage"
-    assert quer.limit == pytest.approx(laengs.limit * ACROSS_LAYERS), "die Grenze schon"
+    assert quer.limit == pytest.approx(laengs.limit * pla.layer_bond_ratio), "die Grenze schon"
     assert quer.safety == pytest.approx(1.73, abs=0.02), "nicht 2,9 — das war ohne Abschlag"
 
 
@@ -132,6 +131,28 @@ def test_a_material_without_numbers_says_so_instead_of_guessing(pla) -> None:
     )
 
 
+@pytest.mark.parametrize("ratio", [0.25, 0.8])
+def test_the_materials_layer_bond_controls_both_spring_answers(pla, ratio: float) -> None:
+    """Zwei Profile gleicher Steifigkeit können unterschiedlich gut zwischen Schichten haften."""
+    material = replace(pla, layer_bond_ratio=ratio)
+    load = spring_load(material, length=21.0, thickness=2.0, deflection=1.2, across_layers=True)
+    thickness = safe_thickness(material, length=21.0, deflection=1.2, across_layers=True)
+
+    assert load is not None and thickness is not None
+    assert load.limit == pytest.approx(50.0 * ratio)
+    assert thickness == pytest.approx(2.0 * 21.0**2 * 50.0 * ratio / (3 * 3500.0 * 1.2 * 1.5))
+
+
+@pytest.mark.parametrize("ratio", [0.0, -0.2, 1.1, float("nan"), float("inf")])
+def test_an_unknown_layer_bond_has_no_invented_spring_limit(pla, ratio: float) -> None:
+    """Ohne brauchbaren Lagenfaktor bleibt nur die ausdrücklich längs gerechnete Antwort."""
+    material = replace(pla, layer_bond_ratio=ratio)
+    params = {"length": 21.0, "deflection": 1.2}
+    assert spring_load(material, thickness=2.0, across_layers=True, **params) is None
+    assert safe_thickness(material, across_layers=True, **params) is None
+    assert spring_load(material, thickness=2.0, across_layers=False, **params) is not None
+
+
 def test_every_material_that_ships_carries_its_numbers() -> None:
     """Die sechs mitgelieferten Profile können die Frage beantworten.
 
@@ -147,6 +168,7 @@ def test_every_material_that_ships_carries_its_numbers() -> None:
         material = profiles.make_profile("centauri-carbon-2", kennung).material
         assert material.youngs_modulus > 0.0, f"{kennung} ohne E-Modul"
         assert material.yield_strength > 0.0, f"{kennung} ohne Streckgrenze"
+        assert 0.0 < material.layer_bond_ratio <= 1.0, f"{kennung} ohne Lagenfaktor"
 
     tpu = profiles.make_profile("centauri-carbon-2", "tpu-95a").material
     pla = profiles.make_profile("centauri-carbon-2", "pla").material

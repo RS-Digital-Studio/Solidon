@@ -31,19 +31,6 @@ from dataclasses import dataclass
 
 from app.core.types import MaterialProfile
 
-#: Was ein gedrucktes Teil **quer zur Schichtrichtung** noch trägt. [K]
-#:
-#: Die Kennwerte in ``materials.toml`` gelten längs zur Schichtebene — so
-#: misst man einen Zugstab, und so steht es in den Datenblättern. Quer dazu
-#: hält nur die Haftung zwischen zwei Bahnen, und die ist schwächer; üblich
-#: gerechnet wird mit rund sechzig Prozent.
-#:
-#: **Ob der Abschlag gilt, entscheidet die Lage auf der Platte, nicht das
-#: Material.** Ein Arm, der lang in der Druckebene liegt und quer dazu federt,
-#: wird auf Zug entlang seiner Bahnen belastet und trägt voll. Einer, der
-#: aufrecht steht, biegt sich über seine Schichtfugen und trägt weniger.
-ACROSS_LAYERS = 0.6
-
 #: Ab welcher Sicherheit ein Federarm als tragfähig gilt. [S]
 #:
 #: Eins wäre die Streckgrenze selbst — dort verformt sich der Arm bleibend.
@@ -100,7 +87,9 @@ def spring_load(
     """Was der Arm aushält — oder ``None``, wenn das Material es nicht sagt.
 
     ``across_layers`` beschreibt, wie das Teil **liegt**: Biegt sich der Arm
-    über seine Schichtfugen, trägt er nur ``ACROSS_LAYERS`` der Streckgrenze.
+    über seine Schichtfugen, trägt er den Anteil ``material.layer_bond_ratio``
+    der Streckgrenze. Die Lage entscheidet, ob der Abschlag gilt; das Material,
+    wie groß er ist.
     Liegt er lang in der Druckebene und federt quer dazu, trägt er voll.
 
     **``None`` ist eine Antwort und keine Panne.** Ein Materialprofil ohne
@@ -111,7 +100,9 @@ def spring_load(
     if material.youngs_modulus <= 0.0 or material.yield_strength <= 0.0:
         return None
     stress = cantilever_stress(length, thickness, deflection, material.youngs_modulus)
-    limit = material.yield_strength * (ACROSS_LAYERS if across_layers else 1.0)
+    limit = _yield_limit(material, across_layers)
+    if limit is None:
+        return None
     if stress <= 0.0:
         return SpringLoad(stress=0.0, limit=limit, safety=float("inf"))
     return SpringLoad(stress=stress, limit=limit, safety=limit / stress)
@@ -139,7 +130,19 @@ def safe_thickness(
         return None
     if length <= 0.0 or abs(deflection) <= 0.0 or factor <= 0.0:
         return None
-    limit = material.yield_strength * (ACROSS_LAYERS if across_layers else 1.0)
+    limit = _yield_limit(material, across_layers)
+    if limit is None:
+        return None
     return (
         2.0 * length * length * limit / (3.0 * material.youngs_modulus * abs(deflection) * factor)
     )
+
+
+def _yield_limit(material: MaterialProfile, across_layers: bool) -> float | None:
+    """Die richtungsabhängige Grenze, ohne eine unbekannte Schichthaftung zu ergänzen."""
+    if not across_layers:
+        return material.yield_strength
+    ratio = material.layer_bond_ratio
+    if not 0.0 < ratio <= 1.0:
+        return None
+    return material.yield_strength * ratio
