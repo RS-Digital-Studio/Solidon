@@ -2089,6 +2089,30 @@ def test_slicers_without_filament_profiles_get_no_second_complaint(flavour: str)
     )
 
 
+def test_missing_spool_names_follow_the_report_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gesammelte automatische Namen bleiben auch nach einem Sprachwechsel übersetzbar."""
+    import app.i18n as i18n
+    from app.i18n.catalog import read_catalog
+
+    monkeypatch.setattr(i18n, "_language", "de")
+    for language in ("en", "fr"):
+        monkeypatch.setitem(i18n._catalogs, language, read_catalog(language))
+    names = (i18n._("Quader"), i18n._("Zylinder"))
+    slots = (
+        MaterialSlot(index=0, name="PETG Weiß"),
+        MaterialSlot(index=1, name=names[0]),
+        MaterialSlot(index=2, name=names[1]),
+    )
+    finding = handover.spools_left_out(gcode.analyze(_ONE_TOOL), (0, 1, 2), slots, "orca")
+    assert finding is not None
+    value = finding.values["filament"]
+    assert isinstance(value, i18n.TranslatableText)
+    for language in ("en", "fr"):
+        expected = ", ".join(name.translate(language) for name in names)
+        assert value.translate(language) == expected
+        assert expected != "Quader, Zylinder"
+
+
 def test_a_single_spool_is_never_a_missing_one() -> None:
     """Mit einem Werkzeug gibt es nichts zu verwechseln — und ein G-Code ohne
     jeden Werkzeugbefehl ist dann der Normalfall, kein Verlust."""

@@ -81,7 +81,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.i18n import _, source_text
+from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
@@ -2550,7 +2550,12 @@ def spools_left_out(
     if not missing:
         return None
     by_index = {slot.index: slot for slot in slots}
-    names = [source_text(by_index[tool].name) for tool in missing if tool in by_index]
+    names = [by_index[tool].name for tool in missing if tool in by_index]
+    label: str | TranslatableText = (
+        names[0] if names else ", ".join(str(tool + 1) for tool in missing)
+    )
+    for name in names[1:]:
+        label = _("{head}, {tail}", head=label, tail=name)
     return Finding(
         code="gcode.spool_left_out",
         severity="error",
@@ -2559,7 +2564,7 @@ def spools_left_out(
             "Spulen liegt, ist nicht in der Druckdatei."
         ),
         values={
-            "filament": ", ".join(names) if names else ", ".join(str(tool + 1) for tool in missing),
+            "filament": label,
             "expected": len(wanted),
             "found": len(set(metrics.used_tools) & wanted),
         },
