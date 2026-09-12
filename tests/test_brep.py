@@ -1682,6 +1682,51 @@ def test_a_radius_that_eats_the_wall_is_refused_instead_of_taking_the_process(
     assert "Radius" in str(raised.value.detail)
 
 
+@pytest.mark.parametrize("with_post", [False, True])
+@pytest.mark.parametrize("rounded", [False, True])
+@pytest.mark.parametrize("moved", [False, True])
+def test_edge_size_uses_its_neighbouring_walls_not_the_remote_plate(
+    with_post: bool, rounded: bool, moved: bool
+) -> None:
+    """Eine dünne Grundplatte begrenzt die Rundung senkrechter Kanten nicht."""
+    source = edit.box(100.0, 100.0, 3.0)
+    edge_length = 4.0 * 3.0
+    if with_post:
+        source = edit.boolean(
+            "union", [source, edit.moved(edit.box(30.0, 30.0, 20.0), (0.0, 0.0, 3.0))]
+        )
+        edge_length += 4.0 * 20.0
+    choice = "vertical"
+    keys = []
+    if moved:
+        matrix = trimesh.transformations.rotation_matrix(math.radians(31.0), (2.0, 1.0, -3.0))
+        matrix[:3, 3] = (103.0, -27.0, 48.0)
+        source = edit.transformed(
+            source, tuple(tuple(float(value) for value in row) for row in matrix)
+        )
+        keys = [
+            edit.edge_key(edge)
+            for edge in edit.edges_of(source)
+            if abs(sum(edge.direction[i] * float(matrix[i, 2]) for i in range(3))) >= 1.0 - EPS_GEOM
+        ]
+        assert len(keys) == (8 if with_post else 4)
+        choice = "named"
+    original_volume = source.volume
+    size = 4.0
+    expected_area = size**2 * (1.0 - math.pi / 4.0) if rounded else size**2 / 2.0
+
+    result = (
+        edit.fillet(source, size, choice, keys)
+        if rounded
+        else edit.chamfer(source, size, choice, keys)
+    )
+
+    assert result.volume == pytest.approx(original_volume - edge_length * expected_area, abs=1e-6)
+    assert result.solid_count == 1
+    assert result.to_mesh().is_watertight
+    assert source.volume == pytest.approx(original_volume, abs=1e-9)
+
+
 @pytest.mark.parametrize("radius", [0.8, 1.2, 1.4])
 def test_a_radius_that_fits_the_wall_still_works(radius: float) -> None:
     """Und was passt, geht weiter durch — der Schutz sperrt nicht das Übliche."""

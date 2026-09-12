@@ -29,6 +29,14 @@ Fillet, Chamfer, Shell, Draft, ShapeFix und Press/Pull erhalten private
 Eingabeformen einschließlich der daraus gewählten Flächen/Kanten. Ein neuer
 Ergebnis-Solid trennt anschließend auch die vom Builder geteilten Unterformen.
 
+Die Wandschranke vor Fillet und Chamfer prüft die echten Trägerflächen der
+gewählten Kanten. `triangles_of_face` ordnet ihnen die Werte der Wandkarte zu;
+eine nur am Endpunkt berührende Stirnfläche begrenzt keine quer dazu laufende
+Rundung. Jede Trägerfläche braucht eine belegte Probe; fehlt sie am Rasterrand,
+misst `geom.measure.wall_thickness` dieselben Dreiecksschwerpunkte per Strahl.
+So bleibt der Schutz vor einem nativen Absturz an dünnen Wänden bestehen,
+ohne eine entfernte Grundplatte zum Radiuslimit aller Kanten zu machen.
+
 Exakte Bounds bleiben eine Float64-Antwort aus `AddOptimal` ohne Triangulation
 und Formtoleranz; Zeichenwege sollen dafür keinen nativen Aufruf je Frame
 auslösen. Ein Bounds-Cache ersetzt keinen Eigentumsvertrag.

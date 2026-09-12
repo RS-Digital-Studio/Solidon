@@ -289,7 +289,7 @@ def fillet(
     working = Solid(solid.shape, deflection=solid.deflection)
     chosen = _wanted(working, choice, keys)
 
-    _fits_the_wall(working, radius, len(chosen), "fillet")
+    _fits_the_wall(working, radius, chosen, "fillet")
     builder = BRepFilletAPI_MakeFillet(working.shape)
     for entry in chosen:
         builder.Add(radius, entry.edge)
@@ -313,7 +313,7 @@ def chamfer(
     working = Solid(solid.shape, deflection=solid.deflection)
     chosen = _wanted(working, choice, keys)
 
-    _fits_the_wall(working, distance, len(chosen), "chamfer")
+    _fits_the_wall(working, distance, chosen, "chamfer")
     builder = BRepFilletAPI_MakeChamfer(working.shape)
     for entry in chosen:
         builder.Add(distance, entry.edge)
@@ -345,32 +345,73 @@ def _wall_not_proven() -> GeometryError:
     )
 
 
-def _thinnest_wall(solid: Solid) -> float:
-    """Die dünnste belegte Stelle des Körpers in Millimetern.
+def _edge_wall_faces(solid: Solid, edges: Sequence[EdgeInfo]) -> list[int]:
+    """Die echten Trägerflächen der gewählten Kanten, in stabiler Flächenordnung."""
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
 
-    **Warum das vor einer Verrundung steht: ein Absturz.** An Roberts
-    Filamenthalter, einem auf 3 mm ausgehöhlten Kasten, nahm ein Radius von
-    3 mm auf den oberen Kanten den ganzen Prozess mit — Zugriffsverletzung in
-    ``BRepFilletAPI_MakeFillet::Build``, kein Traceback, kein Dialog, die
-    Arbeit des Kunden weg (06.09.2026). Eine Rundung, die dicker ist als die
-    Wand, hat keinen Platz; OpenCASCADE merkt es erst mitten im Bau.
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    wanted = ShapeMap()
+    for entry in edges:
+        if not neighbours.Contains(entry.edge):
+            raise _wall_not_proven()
+        for face in neighbours.FindFromKey(entry.edge):
+            wanted.Add(face)
+    return [index for index, face in enumerate(solid.faces()) if wanted.Contains(face)]
 
-    Gemessen wird auf der Tessellation über dieselbe Karte, die auch das
-    Messwerkzeug und die Analyseansicht benutzen (§18.3) — an dem Kasten
-    0,23 Sekunden und 2,09 mm für eine 3-mm-Wand. Die Karte misst also etwas
-    zu knapp, und das ist die richtige Richtung: Die Schranke fällt eher zu
-    streng aus als zu großzügig, und wo sie greift, steht ein Satz statt
-    eines Absturzes.
+
+def _thinnest_wall(solid: Solid, edges: Sequence[EdgeInfo]) -> float:
+    """Die dünnste belegte Wand an den Trägerflächen dieser Kanten.
+
+    Eine 3-mm-Grundplatte begrenzt keine senkrechte Rundung am massiven
+    Aufbau. Auch ihre Stirnflächen berühren senkrechte Kanten nur am Ende;
+    sie tragen die Kante nicht. Die Topologie entscheidet deshalb, welche
+    Werte der unveränderten Wandkarte zur Auswahl gehören (§18.3).
+
+    Der Schutz bleibt vor dem nativen Bau: Am 3-mm-Hohlkasten kann Radius 3
+    die ganze Anwendung in ``MakeFillet::Build`` beenden. Seine dünnen
+    Seitenwände tragen die oberen Kanten und bleiben vollständig geprüft.
+    Jede beteiligte Fläche braucht dafür wenigstens eine endliche positive
+    Wandprobe. Wo das Raster an einer schmalen Fläche keine liefert, misst
+    derselbe Wandstrahl wie das Messwerkzeug ihre Dreiecksschwerpunkte.
+    Ohne belegte Zuordnung und Wandprobe gibt es keine Freigabe.
     """
+    from app.core.geom.measure import wall_thickness
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.maps import wall_thickness_map
 
     try:
-        values = [
-            value
-            for value in wall_thickness_map(as_mesh_data(solid)).values
-            if math.isfinite(value) and value > 0.0
-        ]
+        mesh = as_mesh_data(solid)
+        measured = wall_thickness_map(mesh).values
+        if len(measured) != solid.triangle_count:
+            raise _wall_not_proven()
+        values: list[float] = []
+        for face in _edge_wall_faces(solid, edges):
+            indices = solid.triangles_of_face(face)
+            known = [
+                measured[index]
+                for index in indices
+                if math.isfinite(measured[index]) and measured[index] > 0.0
+            ]
+            if not known:
+                for index in indices:
+                    centre = cast(
+                        Vec3, tuple(float(value) for value in mesh.raw.triangles_center[index])
+                    )
+                    inward = cast(
+                        Vec3, tuple(-float(value) for value in mesh.raw.face_normals[index])
+                    )
+                    value = wall_thickness(mesh, centre, inward)
+                    if value is not None and math.isfinite(value) and value > 0.0:
+                        known.append(value)
+            if not known:
+                raise _wall_not_proven()
+            values.append(min(known))
     except GeometryError:
         raise
     except PROGRAMMING_ERRORS:
@@ -382,15 +423,15 @@ def _thinnest_wall(solid: Solid) -> float:
     return min(values)
 
 
-def _fits_the_wall(solid: Solid, size: float, edges: int, kind: str) -> None:
-    """Hält an, wo die Rundung dicker wäre als die dünnste Wand."""
-    thinnest = _thinnest_wall(solid)
+def _fits_the_wall(solid: Solid, size: float, edges: Sequence[EdgeInfo], kind: str) -> None:
+    """Hält an, wo die Rundung dicker wäre als eine Wand ihrer Trägerflächen."""
+    thinnest = _thinnest_wall(solid, edges)
     if size < thinnest:
         return
     raise GeometryError(
         detail=_too_large(kind),
         suggestions=(CORRECT_INPUT, CANCEL),
-        values={"size_mm": round(size, 3), "edges": edges, "wall_mm": round(thinnest, 2)},
+        values={"size_mm": round(size, 3), "edges": len(edges), "wall_mm": round(thinnest, 2)},
     )
 
 
