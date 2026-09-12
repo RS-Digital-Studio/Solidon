@@ -450,7 +450,10 @@ def _paint_code(extruder: int) -> str:
     if not 0 <= extruder < NATIVE_TOOL_LIMIT:
         raise ValidationError(
             field="slots",
-            detail=_("Dieses native 3MF-Farbformat unterstützt höchstens 32 Filamente."),
+            detail=_(
+                "Diese 3MF-Ausgabe kann höchstens 32 Filamente zuordnen. "
+                "Teilen Sie den Auftrag nach Filamenten auf."
+            ),
             constraint="native_filament_limit",
             suggestions=(SPLIT_FILAMENT_FILES, CANCEL),
         )

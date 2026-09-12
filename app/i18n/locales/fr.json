@@ -1793,7 +1793,7 @@
   "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere dafür im Dialog der Grundform „Flächen und Kanten später bearbeiten“ — auch nachträglich über den Schritt im Verlauf. Eine STEP-Datei bringt diese Flächen und Kanten ebenfalls mit.": "Cet outil a besoin de faces et d’arêtes modifiables séparément. Activez « Modifier les faces et les arêtes plus tard » dans la boîte de dialogue de la forme de base, même ultérieurement depuis l’étape de l’historique. Un fichier STEP fournit également ces faces et arêtes.",
   "Dieses Werkzeug gibt es nicht": "Cet outil n'existe pas",
   "Dieses Zeichen ist in Ausdrücken nicht erlaubt.": "Ce caractère n'est pas autorisé dans les expressions.",
-  "Dieses native 3MF-Farbformat unterstützt höchstens 32 Filamente.": "Ce format de couleur 3MF natif prend en charge au maximum 32 filaments.",
+  "Diese 3MF-Ausgabe kann höchstens 32 Filamente zuordnen. Teilen Sie den Auftrag nach Filamenten auf.": "Cet export 3MF peut attribuer au maximum 32 filaments. Répartissez le travail par filament.",
   "Differenzansicht": "Vue des différences",
   "Direkt bewegt": "Déplacé directement",
   "Direkte Adresse der Modelldatei:": "Adresse directe du fichier de modèle :",

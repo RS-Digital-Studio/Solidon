@@ -1793,7 +1793,7 @@
   "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere dafür im Dialog der Grundform „Flächen und Kanten später bearbeiten“ — auch nachträglich über den Schritt im Verlauf. Eine STEP-Datei bringt diese Flächen und Kanten ebenfalls mit.": "Questo strumento richiede facce e spigoli modificabili singolarmente. Attiva «Modifica facce e spigoli in seguito» nella finestra della forma di base, anche successivamente tramite il passaggio nella cronologia. Anche un file STEP contiene queste facce e questi spigoli.",
   "Dieses Werkzeug gibt es nicht": "Questo strumento non esiste",
   "Dieses Zeichen ist in Ausdrücken nicht erlaubt.": "Questo carattere non è consentito nelle espressioni.",
-  "Dieses native 3MF-Farbformat unterstützt höchstens 32 Filamente.": "Questo formato colore 3MF nativo supporta al massimo 32 filamenti.",
+  "Diese 3MF-Ausgabe kann höchstens 32 Filamente zuordnen. Teilen Sie den Auftrag nach Filamenten auf.": "Questa esportazione 3MF può assegnare al massimo 32 filamenti. Suddividi il lavoro per filamento.",
   "Differenzansicht": "Vista delle differenze",
   "Direkt bewegt": "Spostato direttamente",
   "Direkte Adresse der Modelldatei:": "Indirizzo diretto del file del modello:",
