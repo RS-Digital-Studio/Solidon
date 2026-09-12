@@ -60,6 +60,16 @@ heraus nachinstallieren, §36) · `network.py` (CA-Satz für macOS und Pakete oh
 `tools.py` (externe Programme) · `log.py`
 (lokales Protokoll, §33.2)
 
+Die Programmsuche bietet dieselben Quellen in Einzahl und Mehrzahl:
+Windows-App-Paths, Flatpak-Exporte, Installationsordner, AppImages und den
+Host-PATH. `find_programs()` sammelt jede passende Installation, während
+`find_program()` beim ersten Treffer anhält. Gewählte Pfade werden gemeinsam
+geprüft; dazu zählen auch macOS-App-Bundles und außerhalb des eigenen
+Flatpak-Sandkastens liegende Host-Pfade. Erst nach dem Sammeln werden doppelte
+Pfade und Startprogramme derselben Installation zusammengeführt. Jede
+AppImage-Datei zählt dabei als eigene Installation, auch bei mehreren
+Versionen im selben Ordner.
+
 **Abläufe, die mehrere Operationen bündeln:**
 
 `lid_flow.py` (Deckel erzeugen) · `split.py` (Auto Split als eine Transaktion)

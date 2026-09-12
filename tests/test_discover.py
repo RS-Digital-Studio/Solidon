@@ -16,13 +16,138 @@ from __future__ import annotations
 
 import logging
 import stat
+import subprocess
 import sys
 import urllib.request
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from app.core import discover
+
+
+@pytest.fixture
+def isolated_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die echte Suchkette sieht ausschließlich die Ablagen des jeweiligen Tests."""
+    monkeypatch.setattr(discover.sys, "platform", "linux")
+    monkeypatch.setattr(discover.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(discover, "_load", dict)
+    monkeypatch.setattr(discover, "_install_roots", tuple)
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", ())
+    monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", ())
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    monkeypatch.setattr(
+        discover,
+        "run_limited",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 1, b"", b""),
+    )
+
+
+@pytest.mark.parametrize("source", ("appimage", "flatpak", "registry", "host"))
+def test_plural_search_keeps_every_installation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    source: str,
+) -> None:
+    """Jede Suchstufe liefert beide Slicer; der erste bleibt die einzelne Antwort."""
+    names = ("orcaslicer", "prusa-slicer")
+    if source == "appimage":
+        programs = (
+            _appimage(tmp_path, "OrcaSlicer_Linux_V2.1.1.AppImage"),
+            _appimage(tmp_path, "PrusaSlicer-2.8.1+linux-x64-GTK3.AppImage"),
+        )
+        monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", (str(tmp_path),))
+    elif source == "flatpak":
+        programs = tuple(
+            tmp_path / name for name in ("com.orca.OrcaSlicer", "com.prusa.PrusaSlicer")
+        )
+        for program in programs:
+            program.touch()
+        monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", (str(tmp_path),))
+    elif source == "registry":
+        programs = tuple(tmp_path / f"{name}.exe" for name in names)
+        for program in programs:
+            program.touch()
+        entries = {(0, "orcaslicer.exe"): programs[0], (1, "prusa-slicer.exe"): programs[1]}
+
+        def open_key(root: int, key: str) -> nullcontext[Path]:
+            path = entries.get((root, key.rsplit("\\", 1)[-1]))
+            if path is None:
+                raise FileNotFoundError(key)
+            return nullcontext(path)
+
+        monkeypatch.setattr(discover.sys, "platform", "win32")
+        monkeypatch.setitem(
+            sys.modules,
+            "winreg",
+            SimpleNamespace(
+                HKEY_CURRENT_USER=0,
+                HKEY_LOCAL_MACHINE=1,
+                OpenKey=open_key,
+                QueryValueEx=lambda path, _name: (str(path), 1),
+            ),
+        )
+    else:
+        programs = tuple(tmp_path / "outside-sandbox" / name for name in names)
+        by_name = dict(zip(names, programs, strict=True))
+        monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+        monkeypatch.setattr(
+            discover,
+            "run_limited",
+            lambda command, **_kwargs: subprocess.CompletedProcess(
+                command, 0, str(by_name[command[-1]]).encode(), b""
+            ),
+        )
+
+    # Das erste Programm wird zusätzlich über PATH gefunden. Dieselbe Datei
+    # aus zwei Quellen darf keine doppelte Zeile in der Slicerauswahl erzeugen.
+    monkeypatch.setattr(
+        discover.shutil, "which", lambda name: str(programs[0]) if name == names[0] else None
+    )
+    plural = discover.unpatched_find_programs
+    single = discover.unpatched_find_program
+    assert plural("slicer", names) == programs
+    monkeypatch.setattr(discover.shutil, "which", lambda _name: None)
+    assert single("slicer", names) == programs[0]
+
+
+def test_plural_search_keeps_separate_appimage_versions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_search: None
+) -> None:
+    """Jede AppImage-Datei ist eine eigene Installation, auch im selben Ordner."""
+    first = _appimage(tmp_path, "OrcaSlicer_Linux_V2.1.1.AppImage")
+    second = _appimage(tmp_path, "OrcaSlicer_Linux_V2.1.2.AppImage")
+    blocked = _appimage(tmp_path, "OrcaSlicer_Linux_V2.1.3.AppImage")
+    monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", (str(tmp_path), str(tmp_path)))
+    monkeypatch.setattr(discover.os, "access", lambda path, _mode: path != blocked)
+
+    plural = discover.unpatched_find_programs
+    assert plural("slicer", ("orcaslicer",)) == (first, second)
+
+
+@pytest.mark.parametrize("kind", ("bundle", "host"))
+def test_plural_search_keeps_a_chosen_bundle_or_host_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    kind: str,
+) -> None:
+    """Ein gültiger gemerkter Pfad gilt in der Mehrzahl ebenso wie in der Einzahl."""
+    program = tmp_path / "custom" / ("Slicer.app" if kind == "bundle" else "slicer")
+    if kind == "bundle":
+        program.mkdir(parents=True)
+        monkeypatch.setattr(discover.sys, "platform", "darwin")
+    else:
+        monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "remembered_path", lambda _tool_id: str(program))
+
+    plural = discover.unpatched_find_programs
+    single = discover.unpatched_find_program
+    assert plural("slicer", ("not-on-the-path",)) == (program,)
+    assert single("slicer", ("not-on-the-path",)) == program
 
 
 @pytest.fixture

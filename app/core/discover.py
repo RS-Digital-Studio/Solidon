@@ -334,8 +334,8 @@ def refresh_path() -> bool:
     return True
 
 
-def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
-    """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf."""
+def _remembered_program(tool_id: str) -> Path | None:
+    """Der gewählte Startpfad, mit derselben Prüfung für Einzel- und Mehrfachsuche."""
     chosen = remembered_path(tool_id)
     if chosen and "://" not in chosen:
         # Die Bedingung schließt eine **Adresse** aus, und das ist keine
@@ -367,6 +367,14 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
         # er hielte das Programm für „gefunden", während jeder Aufruf scheitert.
         # Einmal sagen, dann weitersuchen.
         _log.warning("remembered path for %s is gone: %s", tool_id, chosen)
+    return None
+
+
+def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
+    """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf."""
+    chosen = _remembered_program(tool_id)
+    if chosen is not None:
+        return chosen
 
     candidates = tuple(names)
     for name in candidates:
@@ -417,21 +425,22 @@ def find_programs(tool_id: str, names: Iterable[str]) -> tuple[Path, ...]:
         ):
             found.append(entry)
 
-    chosen = remembered_path(tool_id)
-    if chosen and "://" not in chosen and Path(chosen).is_file():
-        keep(Path(chosen))
+    keep(_remembered_program(tool_id))
 
     for name in candidates:
         located = shutil.which(name)
         if located:
             keep(Path(located))
 
-    keep(_from_registry(candidates))
-    keep(_from_flatpak(candidates))
-    for entry in _all_from_folders(candidates):
-        keep(entry)
-    keep(_from_appimage(candidates))
-    keep(_from_host(candidates))
+    for search in (
+        _all_from_registry,
+        _all_from_flatpak,
+        _all_from_folders,
+        _all_from_appimage,
+        _all_from_host,
+    ):
+        for entry in search(candidates):
+            keep(entry)
     return _one_per_installation(found, candidates)
 
 
@@ -449,22 +458,26 @@ def _one_per_installation(found: list[Path], names: tuple[str, ...]) -> tuple[Pa
     Kommandozeilenfassung dort, wo eine gebraucht wird.
     """
     rank = {plain_name(name): index for index, name in enumerate(names)}
+
     # Je Ordner **und** Programm: Unter Linux und in einem Homebrew-``bin``
     # liegen verschiedene Slicer nebeneinander, und nach dem Ordner allein
     # blieb dort einer übrig (CORE-12). Die zwei Wege in dasselbe Programm —
     # Fenster und Kommandozeile — fallen weiter zusammen.
+    def installation(entry: Path) -> tuple[Path, str]:
+        # Eine AppImage-Datei ist selbst die Installation; zwei Versionen
+        # dürfen auch im selben Downloadordner getrennt angeboten werden.
+        location = entry if entry.suffix.lower() == ".appimage" else entry.parent
+        return location, program_mark(entry.name, names)
+
     best: dict[tuple[Path, str], Path] = {}
     for entry in found:
-        key = (entry.parent, program_mark(entry.name, names))
+        key = installation(entry)
         current = best.get(key)
         if current is None or rank.get(plain_name(entry.name), len(rank)) < rank.get(
             plain_name(current.name), len(rank)
         ):
             best[key] = entry
-    return tuple(
-        best[key]
-        for key in dict.fromkeys((entry.parent, program_mark(entry.name, names)) for entry in found)
-    )
+    return tuple(best[key] for key in dict.fromkeys(installation(entry) for entry in found))
 
 
 def _all_from_folders(names: tuple[str, ...]) -> tuple[Path, ...]:
@@ -519,6 +532,11 @@ def plain_name(name: str) -> str:
 
 
 def _from_flatpak(names: tuple[str, ...]) -> Path | None:
+    """Der erste Flatpak-Fund in der üblichen Suchreihenfolge."""
+    return next(_all_from_flatpak(names), None)
+
+
+def _all_from_flatpak(names: tuple[str, ...]) -> Iterator[Path]:
     """Die Startprogramme, die Flatpak exportiert (siehe :data:`_FLATPAK_EXPORTS`).
 
     Verglichen wird das letzte Stück der Anwendungskennung:
@@ -533,7 +551,7 @@ def _from_flatpak(names: tuple[str, ...]) -> Path | None:
     damit nichts — außer dass es ihn überhaupt gibt.
     """
     if not sys.platform.startswith("linux"):
-        return None
+        return
     wanted = {plain_name(name) for name in names}
     for folder in _FLATPAK_EXPORTS:
         directory = Path(folder).expanduser()
@@ -543,8 +561,7 @@ def _from_flatpak(names: tuple[str, ...]) -> Path | None:
             continue
         for entry in entries:
             if entry.is_file() and plain_name(entry.name.rsplit(".", 1)[-1]) in wanted:
-                return entry
-    return None
+                yield entry
 
 
 def in_flatpak() -> bool:
@@ -671,6 +688,11 @@ def _matches_appimage(stem: str, wanted: frozenset[str]) -> bool:
 
 
 def _from_appimage(names: tuple[str, ...]) -> Path | None:
+    """Das erste startbare AppImage in der üblichen Suchreihenfolge."""
+    return next(_all_from_appimage(names), None)
+
+
+def _all_from_appimage(names: tuple[str, ...]) -> Iterator[Path]:
     """AppImages in den üblichen Ablagen — **der häufigste Linux-Fall**.
 
     PrusaSlicer, OrcaSlicer, Cura und BambuStudio liefern für Linux in erster
@@ -686,7 +708,7 @@ def _from_appimage(names: tuple[str, ...]) -> Path | None:
     lassen.
     """
     if not sys.platform.startswith("linux"):
-        return None
+        return
     wanted = frozenset(plain_name(name) for name in names)
     for folder in _APPIMAGE_FOLDERS:
         directory = Path(folder).expanduser()
@@ -704,11 +726,15 @@ def _from_appimage(names: tuple[str, ...]) -> Path | None:
                 # liegt da, sie ist nur nicht ausführbar.
                 _log.info("appimage found but not executable: %s", entry)
                 continue
-            return entry
-    return None
+            yield entry
 
 
 def _from_host(names: tuple[str, ...]) -> Path | None:
+    """Der erste Treffer im PATH außerhalb des eigenen Flatpak-Sandkastens."""
+    return next(_all_from_host(names), None)
+
+
+def _all_from_host(names: tuple[str, ...]) -> Iterator[Path]:
     """Was der Rechner draußen im PATH hat — die sechste Suchstufe.
 
     Nur aus einem Flatpak heraus, und dort die einzige, die überhaupt etwas
@@ -717,7 +743,7 @@ def _from_host(names: tuple[str, ...]) -> Path | None:
     trotzdem — über :func:`on_host`.
     """
     if not in_flatpak():
-        return None
+        return
     for name in names:
         try:
             # Fester Befehl, und die Namen kommen aus dem Register - keine
@@ -730,12 +756,11 @@ def _from_host(names: tuple[str, ...]) -> Path | None:
             )
         except (OSError, subprocess.SubprocessError) as problem:
             _log.info("cannot ask the host for %s: %s", name, problem)
-            return None
+            return
         found = answer.stdout.decode("utf-8", errors="replace").strip().splitlines()
         if answer.returncode == 0 and found:
             _log.info("found %s on the host: %s", name, found[0])
-            return Path(found[0])
-    return None
+            yield Path(found[0])
 
 
 def sandboxed(program: Path | str | None) -> bool:
@@ -848,8 +873,13 @@ def _workspace_error(target: str, problem: OSError) -> errors.FileWriteError:
 
 def _from_registry(names: tuple[str, ...]) -> Path | None:
     """Windows *App Paths*: wo ein Installationsprogramm seine Datei nennt."""
+    return next(_all_from_registry(names), None)
+
+
+def _all_from_registry(names: tuple[str, ...]) -> Iterator[Path]:
+    """Alle passenden Windows *App Paths*, zuerst die Einträge des Nutzers."""
     if sys.platform != "win32":
-        return None
+        return
     import winreg
 
     key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
@@ -863,8 +893,7 @@ def _from_registry(names: tuple[str, ...]) -> Path | None:
                 continue
             path = Path(str(value).strip('"'))
             if path.is_file():
-                return path
-    return None
+                yield path
 
 
 def _from_folders(names: tuple[str, ...]) -> Path | None:
