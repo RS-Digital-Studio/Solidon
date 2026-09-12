@@ -1858,6 +1858,24 @@ def _stats_test_access(tmp_path: Path) -> tuple[dict[str, str], dict[str, str]]:
     return {"SOLIDON_STATS_ACCESS_FILE": str(path)}, {"Cookie": f"solidon_stats={token}"}
 
 
+def test_update_version_chart_keeps_even_small_counts_visible(tmp_path: Path) -> None:
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    month = stats / f"{_utc_month(0)}.jsonl"
+    row = json.loads(_write_month(month, _utc_month(0)))
+    row.update(k="u", v="0.4.0", r="", u="")
+    line = json.dumps(row) + "\n"
+    row["v"] = "0.3.4"
+    month.write_text(line * 1000 + json.dumps(row) + "\n", encoding="ascii")
+    environment, headers = _stats_test_access(tmp_path)
+    with _php_server(tmp_path, environment) as base:
+        status, _headers, page = _request(f"{base}/stats.php", headers=headers)
+    assert status == 200 and "</html>" in page
+    updates = page.split("<h2>Update-Prüfungen</h2>")[1].split("<h2>Downloads</h2>")[0]
+    bars = re.findall(r'<span class="balken" style="width:\s*(\d+)%">', updates)
+    assert bars == ["100", "1"], "Beide positiven Werte brauchen einen sichtbaren Balken"
+
+
 def test_stats_renders_a_numeric_download_filename_completely(tmp_path: Path) -> None:
     docroot = _temporary_docroot(tmp_path)
     (docroot / "dl" / "2026").write_bytes(b"kein echtes Paket")

@@ -1164,7 +1164,7 @@ $versions = tally($rows, 'value', 'u');
   <tr>
     <td><?= e((string) $name) ?></td>
     <td class="n"><?= number_format((float) $count, 0, ',', '.') ?></td>
-    <td><i style="width:<?= (int) round($count / $update_peak * 100) ?>%"></i></td>
+    <td><span class="balken" style="width: <?= max(1, (int) round($count / $update_peak * 100)) ?>%"></span></td>
   </tr>
   <?php endforeach; ?>
 </table>
