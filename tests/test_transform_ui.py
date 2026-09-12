@@ -622,13 +622,20 @@ def test_moving_never_drops_to_the_bed(window: MainWindow) -> None:
 
     window.transform_bar.to_bed.setChecked(True)
     window.transform_bar.role_buttons["move"].click()
+    before_z = next(iter(result.scene.objects.values())).mesh.raw.bounds[0, 2]
     window.transform_bar.dz.set_value_mm(10.0)
-    QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
+    QTest.keyClick(window.transform_bar.dz.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     ops = [entry.op for entry in window.session.project.document.ops]
+    assert ops[-1] == "translate_object", f"die Eingabe hat keine Verschiebung angelegt: {ops}"
     assert "place_on_bed" not in ops, (
         f"Verschieben hat aufgesetzt und damit die Ansage überschrieben: {ops}"
+    )
+    moved = window.session.last_result
+    assert moved is not None
+    assert next(iter(moved.scene.objects.values())).mesh.raw.bounds[0, 2] == pytest.approx(
+        before_z + 10.0
     )
 
 

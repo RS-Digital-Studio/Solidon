@@ -312,7 +312,7 @@ def test_a_capped_list_points_at_the_full_changelog(
 
     text = dialog.more.text()
     assert dialog.more.isVisibleTo(dialog)
-    assert "2" in text and "115" in text, "die Zahlen sagen, wie viel fehlt"
+    assert text.startswith("Gezeigt sind 2 von 115 Punkten."), "die Zahlen sagen, wie viel fehlt"
     assert 'href="https://solidon3d.de/changelog.html"' in text
     assert dialog.more.openExternalLinks(), "der Verweis soll auch wirken"
 

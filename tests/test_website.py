@@ -2335,6 +2335,7 @@ def test_the_checked_address_of_a_start_page_is_the_one_the_server_answers() -> 
     from tools import upload_website
 
     rule = re.search(
+        r"RewriteCond\s+%\{THE_REQUEST\}[^\n]+\n\s*"
         r"RewriteRule\s+(\S+)\s+\S+\s+\[R=301[^\]]*\]",
         (WEBSITE / ".htaccess").read_text(encoding="utf-8"),
     )
@@ -2350,7 +2351,8 @@ def test_the_checked_address_of_a_start_page_is_the_one_the_server_answers() -> 
         address = upload_website.public_url("solidon3d.de/httpdocs", target)
         path = address.removeprefix("https://solidon3d.de/")
 
-        assert not re.match(r"^(.*/)?index\.html$", path), (
+        assert re.match(rule.group(1), target), f"die Regel erfasst {target} nicht mehr"
+        assert not re.match(rule.group(1), path), (
             f"{target} würde unter {address} geprüft — diese Adresse beantwortet der "
             "Server mit einer 301 auf das Verzeichnis, und der Abgleich liest das als "
             "Abweichung."

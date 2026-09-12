@@ -1212,7 +1212,7 @@ def test_an_unusable_file_is_refused_before_it_reaches_the_stack(
     """
     with pytest.raises(ValidationError) as gefangen:
         import_plan("src_1", name, payload)
-    assert gefangen.value.values.get("constraint", constraint) is not None
+    assert gefangen.value.constraint == constraint
     # Regel 17: Der Satz sagt, was zu tun ist — nicht nur, was nicht geht.
     assert str(gefangen.value.detail)
 

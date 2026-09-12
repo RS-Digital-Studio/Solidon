@@ -1586,7 +1586,10 @@ def test_every_flavour_answers_every_property() -> None:
         and callable(getattr(slicer_keys, name))
         and _asks_only_a_flavour(getattr(slicer_keys, name))
     }
-    assert found <= set(expected), f"nicht in der Tabelle: {sorted(found - set(expected))}"
+    assert found == set(expected), (
+        f"nicht in der Tabelle: {sorted(found - set(expected))}; "
+        f"nicht als Prädikat gefunden: {sorted(set(expected) - found)}"
+    )
 
 
 def test_the_bed_box_asks_the_same_source_as_the_handover(profile: Profile) -> None:

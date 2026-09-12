@@ -18,7 +18,7 @@ import pytest
 import trimesh
 
 from app.core.export import threemf
-from app.core.export.writer import GLB_METRES_PER_MM, check_filament_changes, export_bytes
+from app.core.export.writer import check_filament_changes, export_bytes
 from app.core.geom.mesh import MeshData
 from app.core.ingest import threemf as threemf_reader
 from app.core.knowledge import print_settings, profiles
@@ -67,7 +67,7 @@ def _metres(*millimetres: float) -> tuple[float, ...]:
     """glTF kennt genau eine Einheit, und Solidon schreibt sie seit dem 05.09.2026
     auch (Gesamtreview, CORE-33): Was hier in Millimetern gebaut wird, steht in
     der Datei in Metern."""
-    return tuple(value * GLB_METRES_PER_MM for value in millimetres)
+    return tuple(value / 1000.0 for value in millimetres)
 
 
 def test_a_glb_stands_upright_for_the_viewer_that_receives_it() -> None:

@@ -8,7 +8,6 @@ nichts hinausgeht.
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -19,6 +18,7 @@ import pytest
 from app.core import support
 from app.core.errors import AppError, UserError
 from app.core.support import Attachment, Ticket
+from tests.php_probe import php_executable
 
 # --- was in der Sendung steht ---------------------------------------------------------
 
@@ -349,7 +349,6 @@ def test_the_endpoint_reads_every_field_the_client_sends() -> None:
     )
 
 
-@pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
 def test_the_endpoint_is_valid_php() -> None:
     """Die Datei wird nie hier ausgeführt — also prüft sie hier auch niemand.
 
@@ -357,14 +356,12 @@ def test_the_endpoint_is_valid_php() -> None:
     Ein Tippfehler fällt damit frühestens dem ersten Nutzer auf, der etwas
     schickt, und der bekommt eine leere Antwort statt einer Fehlermeldung.
     """
-    php = shutil.which("php")
-    assert php is not None  # für mypy — skipif hat es schon geprüft
+    php = php_executable()
     done = subprocess.run([php, "-l", str(ENDPOINT)], capture_output=True, text=True, timeout=30)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
 
 
-@pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
 def test_the_subject_never_exceeds_a_mime_word() -> None:
     """RFC 2047 erlaubt 75 Zeichen je Wort, der Betreff darf 200 tragen.
 
@@ -375,8 +372,7 @@ def test_the_subject_never_exceeds_a_mime_word() -> None:
     Geprüft wird an der echten Funktion, nicht an einem Nachbau: Das Skript
     daneben schneidet sie aus ``support.php`` heraus und lässt sie laufen.
     """
-    php = shutil.which("php")
-    assert php is not None  # skipif hat es geprüft, mypy weiß das nicht
+    php = php_executable()
 
     # Ohne ``php.ini`` sucht PHP seine Erweiterungen unter dem eingebauten
     # Standardpfad — bei einer entpackten Installation liegen sie neben der
@@ -403,7 +399,7 @@ def test_the_subject_never_exceeds_a_mime_word() -> None:
         timeout=30,
     )
 
-    assert done.stdout == "ok", f"{done.stdout}\n{done.stderr}"
+    assert done.returncode == 0 and done.stdout == "ok", f"{done.stdout}\n{done.stderr}"
 
 
 def test_two_reports_in_the_same_second_get_two_folders(tmp_path: Path) -> None:

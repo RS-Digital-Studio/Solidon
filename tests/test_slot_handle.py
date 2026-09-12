@@ -697,7 +697,7 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
         handle.handle(PointerEvent("move", x, y))
         handle.handle(PointerEvent("release", x, y, button="left"))
         assert viewport._drag_kind is None
-        assert not viewport.drag_bar.isVisible()
+        assert viewport.drag_bar.isHidden()
     finally:
         viewport.renderer = None
         viewport.deleteLater()

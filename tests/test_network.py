@@ -148,9 +148,13 @@ def test_a_missing_directory_is_no_store(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert not network.default_paths_exist()
 
 
-def test_the_running_process_reports_its_own_anchors() -> None:
-    """Die Zahl kommt aus dem Prozess und nicht aus einer Annahme."""
-    assert network.trusted_anchors() >= 0
+def test_the_running_process_reports_its_own_anchors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemeldet werden die CA-Anker, nicht alle Zertifikate oder eine feste Null."""
+    from types import SimpleNamespace
+
+    context = SimpleNamespace(cert_store_stats=lambda: {"x509": 19, "x509_ca": 7, "crl": 3})
+    monkeypatch.setattr(network.ssl, "create_default_context", lambda: context)
+    assert network.trusted_anchors() == 7
 
 
 def test_an_empty_linux_store_is_replaced_with_real_trusted_certificates(
