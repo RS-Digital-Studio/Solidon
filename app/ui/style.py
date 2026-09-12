@@ -844,11 +844,8 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
    Dialogs, in beiden Themen. Wer das sieht, hält es für einen Grafikfehler
    und klickt nicht hin.
 
-   Gezeichnet werden sie hier aus Rahmen: eine Fläche der Größe null, deren
-   drei Kanten ein Dreieck stehen lassen. Ein Bild wäre die andere
-   Möglichkeit und die schlechtere — es müsste als Datei neben dem Paket
-   liegen, und eine Datei, die beim Paketieren vergessen wird, nimmt den
-   Pfeilen ihr Aussehen genauso still, wie es hier verloren ging. */
+   ``arrow_files`` erzeugt dafür SVG-Dateien in den Farben des Themas.
+   Ihr Docstring begründet den Bildweg und die Ablage im Cache. */
 /* **Vier Punkte breiter, und der Trennstrich rückt nach innen.** Die
    Zielfläche war rund zehn auf elf Punkte — für eine Maus wenig, für einen
    Stift oder eine zittrige Hand zu wenig, und die Knöpfe liegen übereinander,
