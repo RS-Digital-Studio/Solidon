@@ -110,6 +110,70 @@ def test_hovering_an_arrow_highlights_it_and_nothing_else(scene: tuple) -> None:
     assert [item.colour() for item in gizmo.items][2] == AXIS_COLOURS[2]
 
 
+@pytest.mark.parametrize("kind", ["gizmo", "scale", "slot"])
+def test_leaving_a_handle_removes_the_highlight_from_the_drawn_frame(
+    scene: tuple, kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Leave zeichnet den geänderten Griff sofort; der Test fordert kein Bild an."""
+    from app.ui.scale_widget import ScaleHandle
+    from app.ui.slot_handle import SlotHandle
+
+    renderer, body, gizmo, _releases = scene
+    handle = gizmo
+    if kind == "gizmo":
+        x, y = arrow_tip_pixel(renderer, gizmo, 2)
+    else:
+        gizmo.remove()
+        if kind == "scale":
+            handle = ScaleHandle(
+                renderer, body, scale=0.4, colour="#00c0ff", release_callback=lambda factor: None
+            )
+            point = handle.grip_position
+        else:
+            handle = SlotHandle(
+                renderer,
+                centre=(10.0, 10.0, 20.0),
+                axis=(0.0, 0.0, 1.0),
+                diameter=6.0,
+                length=10.0,
+                angle=0.0,
+                knob_size=5.0,
+                colour="#ff9f1c",
+                release_callback=lambda length, angle: None,
+            )
+            point = handle.knobs[0].centre()
+        x, y, _depth = renderer.world_to_display(point)
+    renderer.render()
+    plain = np.asarray(renderer._renderer.snapshot()).copy()
+    draws: list[bool] = []
+    real_render = renderer.render
+
+    def render() -> None:
+        draws.append(True)
+        real_render()
+
+    monkeypatch.setattr(renderer, "render", render)
+    try:
+        handle.handle(hover(x, y))
+        highlighted = np.asarray(renderer._renderer.snapshot()).copy()
+        assert not np.array_equal(plain, highlighted), "the pointer must reach the handle"
+        count = len(draws)
+        handle.handle(PointerEvent("leave", 0, 0))
+        cleared = np.asarray(renderer._renderer.snapshot()).copy()
+        assert np.array_equal(plain, cleared), "the last drawn frame still shows the highlight"
+        assert len(draws) == count + 1
+        handle.handle(PointerEvent("leave", 0, 0))
+        assert len(draws) == count + 1, "an unchanged handle needs no further frame"
+        handle.handle(hover(x, y))
+        assert handle.handle(press(x, y))
+        count = len(draws)
+        handle.handle(PointerEvent("leave", 0, 0))
+        assert handle.pressing, "leaving the canvas must not interrupt a drag"
+        assert len(draws) == count
+    finally:
+        handle.remove()
+
+
 def test_dragging_an_arrow_moves_the_body_along_its_axis_only(scene: tuple) -> None:
     renderer, body, gizmo, releases = scene
     x, y = arrow_tip_pixel(renderer, gizmo, 2)

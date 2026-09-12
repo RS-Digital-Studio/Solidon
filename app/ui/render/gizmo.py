@@ -244,8 +244,9 @@ class Gizmo:
             if self._release is not None:
                 self._release(self._cached.copy())
             return True
-        if event.kind == "leave" and not self.pressing:
+        if event.kind == "leave" and not self.pressing and self._selected is not None:
             self._select(None)
+            self._renderer.render()
         return False
 
     def _hover(self, event: PointerEvent) -> None:

@@ -47,6 +47,10 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   Der Qt-Adapter teilt den Winkel durch 120, ohne jedes Ereignis zu runden.
   Der Navigator verwendet den Anteil als Exponenten des Zoomfaktors; so
   reagieren feine Räder sofort und behalten den Weltpunkt unter dem Zeiger.
+  Verlassen des Bildes nimmt eine Griffhervorhebung zurück und zeichnet diese
+  Änderung sofort, auch bei Skalierwürfel und Langlochknöpfen. Ohne
+  Hervorhebung entsteht kein zusätzliches Bild; ein laufender Zug behält
+  seine Hervorhebung und endet erst mit dem Loslassen.
 * **Zeichnen an einer Stelle.** Kein Aufruf hier zeichnet von selbst;
   `render()` ruft der Viewport in `_draw`. Am Widget zeichnet `render()`
   **synchron** (`force_draw`), sobald es sichtbar ist — `request_draw` allein

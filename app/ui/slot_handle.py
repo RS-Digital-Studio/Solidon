@@ -435,8 +435,9 @@ class SlotHandle:
                 return True
             self._release(self.length, self.angle)
             return True
-        if event.kind == "leave" and not self.pressing:
+        if event.kind == "leave" and not self.pressing and self._hovered is not None:
             self._select(None)
+            self._renderer.render()
         return False
 
     def take_press(self, event: PointerEvent, index: int) -> bool:

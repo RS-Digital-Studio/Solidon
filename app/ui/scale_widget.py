@@ -169,8 +169,9 @@ class ScaleHandle:
             self._start = None
             self._release(self._factor)
             return True
-        if event.kind == "leave" and not self.pressing:
+        if event.kind == "leave" and not self.pressing and self._hovered:
             self._set_hovered(False)
+            self._renderer.render()
         return False
 
     def _hover(self, event: PointerEvent) -> None:
