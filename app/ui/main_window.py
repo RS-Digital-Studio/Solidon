@@ -6520,8 +6520,8 @@ class MainWindow(QMainWindow):
         zeigt als sein Modell. Ohne einen solchen Schritt bleiben die Vorgaben,
         und das ist die ehrliche Antwort auf „einen Baustein mitnehmen".
         """
+        from app.core.export.writer import export_part_scad
         from app.core.knowledge.parts.registry import PARTS
-        from app.core.knowledge.parts.scad import to_scad
 
         spec = PARTS.get(name)
         target, _filter = QFileDialog.getSaveFileName(
@@ -6533,7 +6533,7 @@ class MainWindow(QMainWindow):
         if not target:
             return
         try:
-            text = to_scad(spec, self._current_part_values(spec))
+            text = export_part_scad(spec, self._current_part_values(spec))
             Path(target).write_text(text, encoding="utf-8")
         except (AppError, OSError) as error:
             show_error(

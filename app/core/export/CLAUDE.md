@@ -16,6 +16,12 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 STEP geht über `brep/step.py`, nicht von hier.
 
+Der SCAD-Ausgabeweg von CLI und Bausteinkatalog läuft über
+`writer.export_part_scad`: erst `activation.require(EXPORT)`, dann die
+Textkonvertierung. Damit liegt er in derselben vom Manifest gedeckten Grenze
+wie die anderen Exporte. `knowledge.parts.scad.to_scad` bleibt als Teil der
+MIT-Bibliothek unabhängig verwendbar.
+
 Objektbezogene Druckvorschläge werden vor der Formatwahl ausgewertet. Eine
 STL-Übergabe meldet nicht übertragbare Werte als Warnung mit dem konkreten
 Vorschlag; sie behauptet keine angewendete Einstellung. 3MF nennt die

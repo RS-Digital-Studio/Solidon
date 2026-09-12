@@ -244,8 +244,8 @@ def command_scad(args: argparse.Namespace) -> int:
     genannten Werte — dieselbe Prüfung wie im Dialog, also mit Grenzen und
     Meldung statt einer stillen Übernahme.
     """
+    from app.core.export.writer import export_part_scad
     from app.core.knowledge.parts import PARTS
-    from app.core.knowledge.parts.scad import to_scad
     from app.core.registry import validate
 
     load_user_parts()
@@ -268,7 +268,7 @@ def command_scad(args: argparse.Namespace) -> int:
             )
         given[name.strip()] = _as_value(raw.strip())
     values = validate(spec.params, given) if given else spec.params()
-    text = to_scad(spec, values)
+    text = export_part_scad(spec, values)
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
         print(tr("Geschrieben: {path}").format(path=args.out))

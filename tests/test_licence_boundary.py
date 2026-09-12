@@ -594,3 +594,35 @@ def test_an_image_needs_the_same_permission_as_everything_else(
         session.import_image(bild)
 
     assert not session.project.document.sources, "abgelehnt heißt: nichts geschrieben"
+
+
+@pytest.mark.parametrize("unlocked", [False, True], ids=["locked", "licensed"])
+@pytest.mark.parametrize("to_file", [False, True], ids=["stdout", "file"])
+def test_the_scad_command_obeys_the_export_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    unlocked: bool,
+    to_file: bool,
+) -> None:
+    from argparse import Namespace
+
+    from app.cli.main import command_scad
+
+    target = tmp_path / "rib.scad"
+    if to_file:
+        target.write_bytes(b"existing-output")
+    (_license if unlocked else _lock)(monkeypatch)
+    arguments = Namespace(part="rib", set=["length=30"], out=str(target) if to_file else None)
+    if unlocked:
+        assert command_scad(arguments) == 0
+        content = target.read_text(encoding="utf-8") if to_file else capsys.readouterr().out
+        assert "polyhedron" in content
+        assert "length = 30" in content
+    else:
+        with pytest.raises(LicenceRequired) as raised:
+            command_scad(arguments)
+        assert raised.value.action == activation.EXPORT
+        assert not capsys.readouterr().out
+        if to_file:
+            assert target.read_bytes() == b"existing-output"

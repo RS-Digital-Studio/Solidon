@@ -1694,3 +1694,40 @@ def test_a_shipped_part_can_be_written_even_though_it_cannot_be_shared(
     )
     assert catalog.export_scad.isEnabled(), "als OpenSCAD geht er trotzdem heraus"
     catalog.deleteLater()
+
+
+@pytest.mark.parametrize("unlocked", [False, True], ids=["locked", "licensed"])
+def test_the_catalog_scad_export_obeys_the_export_boundary(
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, unlocked: bool
+) -> None:
+    from types import SimpleNamespace
+
+    from app.core import activation
+    from app.core.errors import LicenceRequired
+    from app.ui import main_window
+    from tests.test_licence_boundary import _license, _lock
+
+    target = tmp_path / "rib.scad"
+    target.write_bytes(b"existing-output")
+    catalog = PartCatalog()
+    errors = []
+    monkeypatch.setattr(
+        main_window.QFileDialog, "getSaveFileName", lambda *_args: (str(target), "")
+    )
+    monkeypatch.setattr(main_window, "show_error", lambda error, _parent: errors.append(error))
+    (_license if unlocked else _lock)(monkeypatch)
+    host = SimpleNamespace(_current_part_values=lambda spec: spec.params(length=30))
+    try:
+        main_window.MainWindow._write_part_scad(host, catalog, "rib")
+        if unlocked:
+            assert not errors
+            assert "polyhedron" in target.read_text(encoding="utf-8")
+            assert "length = 30" in target.read_text(encoding="utf-8")
+        else:
+            assert len(errors) == 1
+            assert isinstance(errors[0], LicenceRequired)
+            assert errors[0].action == activation.EXPORT
+            assert target.read_bytes() == b"existing-output"
+    finally:
+        catalog.close()
+        catalog.deleteLater()

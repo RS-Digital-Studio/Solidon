@@ -64,6 +64,8 @@ if TYPE_CHECKING:
     # G-Code-Auswertung mit, und ein Export soll nicht davon abhängen, dass
     # ein Slicer im Spiel ist.
     from app.core.export.handover import SlicerSetup
+    from app.core.knowledge.parts.registry import PartSpec
+    from app.core.types import BaseParams
 
 _log = get_logger(__name__)
 
@@ -114,6 +116,18 @@ _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 #: bei null: dort liegt die Grundfläche selbst, und ein Schnitt genau in einer
 #: Fläche liefert je nach Netz alles oder nichts.
 FOOTPRINT_HEIGHT = 0.2
+
+
+def export_part_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
+    """Gibt einen Baustein nach Prüfung der Exportfreigabe als OpenSCAD-Text aus.
+
+    CLI und Katalog benutzen dieselbe signierte Grenze. Die MIT-Bibliothek
+    darunter bleibt unabhängig vom Aktivierungszustand verwendbar.
+    """
+    activation.require(activation.EXPORT)
+    from app.core.knowledge.parts.scad import to_scad
+
+    return to_scad(spec, params)
 
 
 def safe_name(text: str, fallback: str = "teil") -> str:
