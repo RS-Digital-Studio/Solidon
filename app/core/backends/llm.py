@@ -1752,7 +1752,7 @@ def local_model_expectation() -> TranslatableText:
         "7,8 Token je Sekunde und brauchte rund 42 Minuten bis zum Beginn der "
         "Antwort. Das überschreitet Solidons Zehn-Minuten-Grenze; ein "
         "vollständiger Auftrag kann so nicht abgeschlossen werden. Solidon "
-        "zeigt den verwendeten Rechenweg an. Verwende eine geeignete "
+        "zeigt den verwendeten Rechenweg an. Für zügige Antworten braucht es eine geeignete "
         "Grafikkarte oder einen Schlüssel für ein gehostetes Modell."
     )
 
@@ -1979,7 +1979,8 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
         "Anwendung ist rund {tokens} Token lang, es dauert hier also etwa "
         "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Das "
         "überschreitet Solidons Zehn-Minuten-Grenze; dieser vollständige "
-        "Auftrag kann so nicht abgeschlossen werden. Verwende eine geeignete "
+        "Auftrag kann so nicht abgeschlossen werden. Für zügige Antworten braucht es eine "
+        "geeignete "
         "Grafikkarte oder einen Schlüssel für ein gehostetes Modell — alles "
         "außer dem Chat bleibt ohne beides benutzbar."
     )
