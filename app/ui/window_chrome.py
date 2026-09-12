@@ -174,7 +174,7 @@ class ChromeWatcher(QObject):
         return False
 
 
-def install(application: Any) -> ChromeWatcher | None:
+def install(application: QObject) -> ChromeWatcher | None:
     """Den Wächter anmelden und zurückgeben — ``None``, wo es nichts zu tun gibt.
 
     Der Rückgabewert bekommt die Anwendung als Elternteil: Ein ``QObject``,
