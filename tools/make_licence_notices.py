@@ -369,7 +369,9 @@ def render_notices(components: tuple[ComponentNotice, ...]) -> str:
         lines.append(
             f"| {component.name} | {component.version} | `{component.expression}` | {source} |"
         )
-    lines.extend(["", "## Vollständige Hinweise und Lizenztexte", ""])
+    lines.extend(
+        ["", library_replacement_notes(), "", "## Vollständige Hinweise und Lizenztexte", ""]
+    )
     for component in components:
         lines.extend(
             [
@@ -395,6 +397,79 @@ def render_notices(components: tuple[ComponentNotice, ...]) -> str:
                 ]
             )
     return "\n".join(lines).rstrip() + "\n"
+
+
+def library_replacement_notes() -> str:
+    """Die LGPL-Austauschanleitung reist mit jeder erzeugten Paketbeilage."""
+    return f"""## Dynamisch gebundene Bibliotheken austauschen
+
+Die LGPL-Rechte an Qt/PySide6, GEOS und weiteren entsprechend lizenzierten
+Bestandteilen bleiben bestehen. Sie dürfen diese Bibliotheken ändern und
+schnittstellenkompatible Fassungen einsetzen sowie die dafür nötigen
+Untersuchungen und Rückentwicklungen vornehmen. Solidons eigene Lizenz gilt
+weiter für Solidon; die Lizenztexte unten gelten für die jeweiligen Bibliotheken.
+
+1. Speichern Sie Ihr Projekt und beenden Sie Solidon. Kopieren Sie den gesamten
+   Anwendungsordner in einen eigenen beschreibbaren Ordner, damit die installierte
+   Fassung für den Rückweg erhalten bleibt. Erhalten Sie Unterordner und Symlinks.
+2. Entnehmen Sie die Bibliotheksversionen dieser Tabelle und die exakten relativen
+   Dateipfade der Datei `Solidon3D.cdx.json` im selben Kundenpaket. Die Einträge
+   vom Typ `file` nennen dessen native Dateien. Eine Entwicklungsvorschau ohne
+   diese Paketstückliste ersetzt die Dateiliste Ihrer Installation nicht.
+3. Bauen Sie Ihre geänderte Bibliothek aus dem dort bezeichneten Quellstand für
+   dasselbe Betriebssystem, dieselbe Prozessorarchitektur und eine kompatible ABI.
+   Bei Qt müssen Bibliotheken, Plugins und PySide6-Anbindung zusammenpassen;
+   ein beliebiges neueres Wheel ist kein kompatibler Ersatz. Bewahren Sie die
+   erforderlichen Lizenzhinweise auch in Ihrer geänderten Fassung auf.
+4. Ersetzen Sie in Ihrer Kopie die betreffenden geteilten Bibliotheken an den
+   vorhandenen Pfaden. Behalten Sie Dateinamen, Abhängigkeiten und Verknüpfungen
+   bei. Solidons ausführbare Datei braucht für diesen Austausch keinen Neubau.
+5. Starten Sie die Kopie, öffnen Sie ein Projekt und prüfen Sie die betroffenen
+   Funktionen. Prüfen Sie mit den Modul-/Prozesswerkzeugen Ihres Betriebssystems,
+   dass tatsächlich Ihre Ersatzdateien geladen wurden. Bei einem Fehler schließen
+   Sie die Kopie und verwenden wieder die erhaltene Originalinstallation.
+
+**Windows:** Der Ordner neben `Solidon3D.exe` heißt `_internal`; Qt liegt darunter
+in `PySide6`, zum Beispiel `_internal/PySide6/Qt6Core.dll`. Ersetzen Sie die
+zusammengehörenden DLLs und erforderlichen Plugins dort. Starten Sie anschließend
+die `Solidon3D.exe` Ihrer Kopie, nicht die Verknüpfung der Originalinstallation.
+
+**Linux/AppImage:** Entpacken Sie die eigene Paketkopie mit
+`./Solidon3D.AppImage --appimage-extract` in einem leeren Arbeitsordner.
+Bearbeiten Sie die Bibliotheken im entstandenen `squashfs-root` anhand der
+Paketstückliste und starten Sie danach `./squashfs-root/AppRun`.
+Die unveränderte AppImage-Datei bleibt Ihr Rückweg; ein neues Image ist für
+diesen Start nicht erforderlich.
+
+**Linux/Flatpak:** Verändern Sie nicht den verwalteten Installationsbestand.
+Übernehmen Sie das Bundle mit `flatpak build-import-bundle` in ein eigenes
+lokales Repository und dessen Anwendungsbaum in ein beschreibbares Buildverzeichnis.
+Ersetzen Sie die Bibliotheken unter `files` an ihren bisherigen Pfaden; `/usr`
+gehört zur separaten Flatpak-Laufzeit. Mit `flatpak build` lässt sich dieser
+Baum in der passenden Laufzeit starten; `flatpak build-export` und
+`flatpak build-bundle` erzeugen daraus bei Bedarf Ihr eigenes lokales Paket.
+Die Befehlsargumente und der OSTree-Checkout richten sich nach Architektur,
+Ref und Metadaten Ihres Bundles, siehe die Flatpak-Befehlsreferenz unten.
+
+**macOS:** Kopieren Sie `Solidon3D.app` in Ihren eigenen Ordner und verwenden Sie
+im Finder „Paketinhalt zeigen“. Native Bibliotheken liegen unter
+`Contents/Frameworks`; Verknüpfungen aus `Contents/Resources` bleiben erhalten.
+Änderungen machen die Herstellersignatur ungültig. Signieren Sie geänderte
+eingebettete Bibliotheken und anschließend das äußere Bundle mit `codesign`
+lokal neu, von innen nach außen. Eine lokale Ad-hoc-Signatur ersetzt keine
+Herstellersignatur oder Notarisierung. Schalten Sie dafür weder Gatekeeper
+noch andere systemweite Sicherheitsprüfungen ab.
+
+Offizielle Anleitungen:
+- [Qt unter der LGPL und deren Austauschrechte](https://doc.qt.io/qt-6/lgpl.html)
+- [Qt aus dem Quelltext bauen](https://doc.qt.io/qt-6/build-sources.html)
+- [AppImages entpacken](https://docs.appimage.org/user-guide/run-appimages.html)
+- [Flatpak-Befehle und Buildverzeichnisse](https://docs.flatpak.org/en/latest/flatpak-command-reference.html)
+- [Apples Signierwerkzeuge](https://developer.apple.com/library/archive/technotes/tn2206/_index.html)
+
+Die passenden Quellstände, Lizenztexte und weitere Hinweise zu Ihrem konkreten
+Paket erhalten Sie auch unter {SUPPORT_ADDRESS}. Ein Austausch ist kein Nachweis,
+dass eine beliebige geänderte Bibliothek mit dieser Anwendung kompatibel ist."""
 
 
 def render_manifest(components: tuple[ComponentNotice, ...]) -> str:
