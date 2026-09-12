@@ -9,4 +9,13 @@
  */
 declare(strict_types=1);
 
+// Diese Datei liefert nur eine Konstante an ihre PHP-Aufrufer, keinen Endpunkt.
+if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    header('Cache-Control: no-store');
+    header('X-Content-Type-Options: nosniff');
+    header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
+    http_response_code(404);
+    exit;
+}
+
 const DAY_ZONE = 'Europe/Berlin';

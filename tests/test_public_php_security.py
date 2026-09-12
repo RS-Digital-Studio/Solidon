@@ -32,6 +32,7 @@ ENDPOINTS = (
     "deactivation.php",
     "activation-health.php",
     "activation_common.php",
+    "day_zone.php",
     "operator.php",
     "count.php",
     "stats.php",
@@ -1034,11 +1035,14 @@ def test_count_rate_window_survives_utc_midnight_without_the_day_salt() -> None:
     assert "count_consume_rate($dir, $rateSecret" in source
 
 
-def test_activation_common_is_not_a_public_blank_endpoint(tmp_path: Path) -> None:
+@pytest.mark.parametrize("endpoint", ["activation_common.php", "day_zone.php"])
+def test_shared_php_helpers_are_not_public_blank_endpoints(tmp_path: Path, endpoint: str) -> None:
     with _php_server(tmp_path) as base:
-        status, _headers, _body = _request(f"{base}/activation_common.php")
+        status, headers, _body = _request(f"{base}/{endpoint}")
 
     assert status == 404
+    assert headers["Cache-Control"] == "no-store"
+    assert headers["X-Content-Type-Options"] == "nosniff"
 
 
 @pytest.mark.parametrize(
