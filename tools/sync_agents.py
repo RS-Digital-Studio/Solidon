@@ -132,7 +132,7 @@ def _to_codex_skills(text: str) -> str:
     return SKILL_PATTERN.sub(replace, text)
 
 
-def _quote(text: str, *, name: str, field: str) -> str:
+def _quote(text: str) -> str:
     """Verpackt einen Text als mehrzeilige TOML-Zeichenkette."""
     # Normale Texte behalten die gut lesbare Darstellung. JSON maskiert die
     # Sonderfälle zugleich gültig für eine einfache TOML-Zeichenkette.
@@ -176,16 +176,13 @@ def render(path: Path) -> str:
 
     lines = [
         f'name = "{name}"',
-        "description = " + _quote(description, name=name, field="description"),
+        "description = " + _quote(description),
         f'model = "{MODELS[model]}"',
         f'model_reasoning_effort = "{fields["effort"].strip()}"',
     ]
     if not any(tool in tools for tool in WRITING_TOOLS):
         lines.append('sandbox_mode = "read-only"')
-    lines.append(
-        "developer_instructions = "
-        + _quote(_to_codex_skills(body), name=name, field="developer_instructions")
-    )
+    lines.append("developer_instructions = " + _quote(_to_codex_skills(body)))
     return "\n".join(lines) + "\n"
 
 

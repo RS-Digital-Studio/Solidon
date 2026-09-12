@@ -48,8 +48,8 @@ cd "$SUITE_WURZEL" || exit 1
 # Fensterdatei mit Exit 127 zurück („Befehl nicht gefunden"), und das sieht aus
 # wie der bekannte Absturz beim Abbau, ist aber keiner.
 #
-# Gesucht wird in dieser Reihenfolge: was der Aufrufer nennt (`SUITE_PYTHON`,
-# das setzt `tools/to_main.py`), dann die eigene `.venv`, dann die des
+# Gesucht wird in dieser Reihenfolge: was der Aufrufer nennt (`SUITE_PYTHON`),
+# dann die eigene `.venv`, dann die des
 # Hauptbaums über das gemeinsame Git-Verzeichnis.
 # **In Anführungszeichen, überall.** Der Projektordner heißt "3D Druck" —
 # mit Leerzeichen. Relativ (`.venv/…`) fiel das nie auf; sobald der Pfad
