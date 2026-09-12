@@ -173,6 +173,11 @@ Innenkonturen folgen einzeln derselben Bahn und werden mit derselben
 Booleschen Differenz wie beim Loft vom Außenkörper abgezogen. `MakePipeShell`
 übernimmt nur den Außendraht; Löcher einer Profilfläche übernimmt es nicht.
 
+Die Anfangstangente der ersten gerichteten Drahtkante muss senkrecht zum
+XY-Querschnitt verlaufen. Geprüft wird die exakte Kurvenableitung, damit
+Bögen und Splines nicht nach ihrer Sehne beurteilt werden. Schräger oder
+entarteter Beginn hält vor dem Körperaufbau mit einem Handlungsvorschlag an.
+
 ## Was er einbringt
 
 Was ein Netz nicht geben kann: echte Kanten — und damit Fasen und

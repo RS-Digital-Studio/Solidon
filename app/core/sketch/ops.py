@@ -1009,8 +1009,8 @@ class SketchSweepParams(BaseParams):
         placement="advanced",
         doc=_(
             "Der Verlauf, dem der Querschnitt folgt — offen gezeichnet, auf der "
-            "Vorder- oder Seitenansicht. Ihr Anfang kommt in den Ursprung: Die "
-            "Bahn beschreibt einen Verlauf, keinen Ort."
+            "Vorder- oder Seitenansicht und am Anfang senkrecht nach oben oder unten. "
+            "Ihr Anfang kommt in den Ursprung: Die Bahn beschreibt einen Verlauf, keinen Ort."
         ),
         depends_on=("along", ("drawn",)),
     )
@@ -1033,6 +1033,7 @@ class SketchSweepParams(BaseParams):
     name="sketch_sweep",
     title=_("Entlang eines Bogens führen"),
     category="sketch",
+    cache_version="profile-holes-normal-start-1",
     params=SketchSweepParams,
     consumes=0,
     produces=1,

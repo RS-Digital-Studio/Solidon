@@ -544,6 +544,104 @@ def test_a_sweep_along_a_drawn_path_says_what_it_cannot_use() -> None:
     assert "Enden" in str(ring.value.detail)
 
 
+@pytest.mark.parametrize("plane", ["plane:xz", "plane:yz"])
+@pytest.mark.parametrize(
+    "element",
+    [
+        SketchElement("line", ((0.0, 0.0), (28.2842712474619, 28.2842712474619))),
+        SketchElement("line", ((0.0, 0.0), (40.0, 0.0))),
+        SketchElement("arc", ((20.0, 20.0), (0.0, 0.0), (0.0, 40.0))),
+        SketchElement("spline", ((0.0, 0.0), (20.0, 20.0), (20.0, 40.0))),
+    ],
+    ids=["schräge-Linie", "waagerechte-Linie", "Bogen", "Spline"],
+)
+def test_a_drawn_sweep_rejects_a_start_tangent_across_its_profile(
+    plane: str, element: SketchElement
+) -> None:
+    """Ein schräger Anfang darf den Querschnitt weder verzerren noch auslöschen."""
+    drawing = Sketch(plane=plane, elements=(element,))
+    with pytest.raises(ValidationError) as caught:
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=10.0,
+            along="drawn",
+            path_sketch=sketch_to_text(drawing),
+        )
+    assert caught.value.constraint == "path_start"
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize("plane", ["plane:xz", "plane:yz"])
+def test_a_sweep_accepts_a_curved_path_with_a_normal_start(plane: str) -> None:
+    """Die Anfangstangente zählt, nicht die schräge Sehne des Viertelkreises."""
+    drawing = Sketch(
+        plane=plane,
+        elements=(SketchElement("arc", ((20.0, 0.0), (0.0, 0.0), (20.0, -20.0))),),
+    )
+    body = solid_of(
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=2.0,
+            along="drawn",
+            path_sketch=sketch_to_text(drawing),
+        )
+    )
+    assert body.volume == pytest.approx(math.pi * (math.pi * 20.0 / 2.0), rel=1e-6)
+    assert body.is_closed
+
+
+def test_a_sweep_does_not_reuse_a_cached_solid_without_its_hole(profile: Profile) -> None:
+    """Ein vor der Korrektur gespeicherter Vollkörper ersetzt kein Ringprofil."""
+    from app.core.registry import Registry
+
+    spec = REGISTRY.get("sketch_sweep")
+
+    def old_sweep(ctx: OpContext) -> OpResult:
+        # Der alte Erzeuger verlor den Innenkreis; dieselbe Eingabe blieb im Hash.
+        return spec.fn(
+            dataclasses.replace(
+                ctx, params=dataclasses.replace(ctx.params, sketch="", shape="circle", length=10.0)
+            )
+        )
+
+    legacy = Registry()
+    legacy.register(dataclasses.replace(spec, cache_version="", fn=old_sweep))
+    drawing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("circle", ((0.0, 0.0), (5.0, 0.0))),
+            SketchElement("circle", ((0.0, 0.0), (3.0, 0.0))),
+        ),
+    )
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(
+                id=1,
+                op="sketch_sweep",
+                outputs=("obj_1",),
+                params={
+                    "sketch": sketch_to_text(drawing),
+                    "along": "drawn",
+                    "path_sketch": _path((0.0, 0.0), (0.0, 20.0)),
+                },
+            )
+        ],
+    )
+    cache = ResultCache()
+    before = evaluate(document, profile, cache=cache, registry=legacy)
+    assert before.complete
+    assert before.scene.objects["obj_1"].mesh.volume == pytest.approx(math.pi * 25.0 * 20.0)
+
+    after = evaluate(document, profile, cache=cache)
+
+    assert after.complete
+    assert after.scene.objects["obj_1"].mesh.volume == pytest.approx(math.pi * 16.0 * 20.0)
+
+
 def test_a_loft_spans_between_two_independent_drawings() -> None:
     """RM-147 E2: rund unten, eckig oben — der Loft, den jedes CAD hat.
 

@@ -359,8 +359,12 @@ def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Soli
     ist; wer sie einführt, führt sie an beiden Stellen ein.
     """
     require()
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepBuilderAPI import BRepBuilderAPI_RightCorner
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopAbs import TopAbs_REVERSED
 
     if plane not in PATH_PLANES:
         raise ValidationError(
@@ -380,6 +384,25 @@ def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Soli
     begin = path.segments[0].start
     at_origin = shifted(Profile(segments=path.segments), -begin[0], -begin[1])
     spine = _wire(at_origin, lift)
+    first = BRepTools_WireExplorer(spine).Current()
+    curve = BRepAdaptor_Curve(first)
+    start = (
+        curve.LastParameter() if first.Orientation() == TopAbs_REVERSED else curve.FirstParameter()
+    )
+    tangent = gp_Vec()
+    curve.D1(start, gp_Pnt(), tangent)
+    # Die Sehne eines Bogens zeigt nicht in seine Anfangsrichtung. Geprüft
+    # wird dieselbe exakte Kurve, die anschließend den Querschnitt führt.
+    length = tangent.Magnitude()
+    if length <= EPS_GEOM or math.hypot(tangent.X(), tangent.Y()) > EPS_GEOM * length:
+        raise ValidationError(
+            "path_sketch",
+            _(
+                "Der Bahnanfang muss senkrecht zum Querschnitt verlaufen. "
+                "Zeichnen Sie ihn senkrecht nach oben oder unten."
+            ),
+            constraint="path_start",
+        )
     # **``MakePipeShell`` und nicht ``MakePipe``**, und das ist der ganze
     # Unterschied zwischen einer Bahn und einem Bogen: An einer scharfen Ecke
     # hört ``MakePipe`` auf zu bauen. Gemessen an einer Bahn aus 40 mm hoch und
