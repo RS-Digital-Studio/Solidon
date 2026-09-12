@@ -2496,6 +2496,7 @@
   "Geben Sie einen Namen für diesen Rechner ein.": "Enter a name for this computer.",
   "Geben Sie mindestens ein Maß frei — sonst ist das Teil starr.": "Release at least one dimension — otherwise the part is rigid.",
   "Geben Sie mindestens eine Stelle frei, an der man das Teil anfasst.": "Release at least one place to grab the part by.",
+  "Geben Sie options als Liste von Antwortmöglichkeiten an, zum Beispiel [\"Ja\", \"Nein\"]. Für eine freie Antwort lassen Sie options weg.": "Provide options as a list of possible answers, for example [\"Yes\", \"No\"]. For a free-text answer, omit options.",
   "Geben Sie {field} als Liste von Kennungen an, zum Beispiel [\"obj_1\"]. Wiederholen Sie den Aufruf mit dieser Liste.": "Give {field} as a list of identifiers, for example [\"obj_1\"]. Repeat the call with that list.",
   "Gedruckt": "Printed",
   "Gedruckte Mutter": "Printed nut",

@@ -2496,6 +2496,7 @@
   "Geben Sie einen Namen für diesen Rechner ein.": "Saisissez un nom pour cet ordinateur.",
   "Geben Sie mindestens ein Maß frei — sonst ist das Teil starr.": "Libérez au moins une cote — sinon la pièce est figée.",
   "Geben Sie mindestens eine Stelle frei, an der man das Teil anfasst.": "Libérez au moins un endroit par lequel saisir la pièce.",
+  "Geben Sie options als Liste von Antwortmöglichkeiten an, zum Beispiel [\"Ja\", \"Nein\"]. Für eine freie Antwort lassen Sie options weg.": "Fournissez options sous forme de liste de réponses possibles, par exemple [\"Oui\", \"Non\"]. Pour une réponse libre, omettez options.",
   "Geben Sie {field} als Liste von Kennungen an, zum Beispiel [\"obj_1\"]. Wiederholen Sie den Aufruf mit dieser Liste.": "Indiquez {field} sous forme de liste d'identifiants, par exemple [\"obj_1\"]. Répétez l'appel avec cette liste.",
   "Gedruckt": "Imprimé",
   "Gedruckte Mutter": "Écrou imprimé",

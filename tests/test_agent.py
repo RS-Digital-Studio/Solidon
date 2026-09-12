@@ -758,6 +758,82 @@ def test_asking_reaches_the_surface(project: Project, profile: Profile) -> None:
     assert proposal.questions[0].answer == "hole_1"
 
 
+@pytest.mark.parametrize("extra", [{}, {"options": []}], ids=("omitted", "empty"))
+def test_ask_user_accepts_free_text_without_options(
+    profile: Profile, extra: dict[str, Any]
+) -> None:
+    """Eine offene Maßfrage braucht gemäß Werkzeugschema keine Antwortvorgaben."""
+    asked: list[tuple[str, list[str]]] = []
+
+    def answer(question: str, options: list[str]) -> str:
+        asked.append((question, options))
+        return "6,5 mm"
+
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="ask_user",
+                        arguments={"question": "Welcher Durchmesser?", **extra},
+                    ),
+                )
+            ),
+            Reply(text="Ich verwende 6,5 mm."),
+        ]
+    )
+    project = new_project("centauri-carbon-2", "petg")
+    agent = AgentSession(backend=backend, document=project.document, profile=profile, ask=answer)
+
+    proposal = agent.propose("Eine Bohrung mit meinem Wunschmaß")
+
+    assert asked == [("Welcher Durchmesser?", [])]
+    assert proposal.invalid_calls == 0
+    assert len(proposal.questions) == 1
+    assert proposal.questions[0].options == ()
+    assert proposal.questions[0].answer == "6,5 mm"
+    response = next(message.content for message in backend.seen[1] if message.tool_call_id == "1")
+    assert response == "Antwort: 6,5 mm"
+
+
+@pytest.mark.parametrize("options", [None, "Ja", ["Ja", 3], [""]])
+def test_invalid_question_options_explain_answers_instead_of_object_ids(
+    profile: Profile, options: object
+) -> None:
+    """Eine abgelehnte Rückfrage erklärt Antwortmöglichkeiten und erreicht den Rückruf nicht."""
+    asked: list[str] = []
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="ask_user",
+                        arguments={"question": "Welche?", "options": options},
+                    ),
+                )
+            ),
+            Reply(text="Ich korrigiere die Auswahl."),
+        ]
+    )
+    project = new_project("centauri-carbon-2", "petg")
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        ask=lambda question, _options: asked.append(question) or "Ja",
+    )
+
+    proposal = agent.propose("Frag nach meiner Auswahl")
+
+    assert proposal.invalid_calls == 1
+    assert not proposal.questions and not asked
+    response = next(message.content for message in backend.seen[1] if message.tool_call_id == "1")
+    assert "Antwortmöglichkeiten" in response and "options" in response
+    assert "obj_1" not in response
+
+
 def test_the_step_limit_is_hard(project: Project, profile: Profile) -> None:
     """§26.5: ein Modell, das sich im Kreis dreht, hält an, und der Vorschlag
     sagt warum.

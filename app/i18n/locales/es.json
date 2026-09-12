@@ -2496,6 +2496,7 @@
   "Geben Sie einen Namen für diesen Rechner ein.": "Introduzca un nombre para este ordenador.",
   "Geben Sie mindestens ein Maß frei — sonst ist das Teil starr.": "Libere al menos una medida; de lo contrario, la pieza queda rígida.",
   "Geben Sie mindestens eine Stelle frei, an der man das Teil anfasst.": "Libere al menos un punto por el que se agarre la pieza.",
+  "Geben Sie options als Liste von Antwortmöglichkeiten an, zum Beispiel [\"Ja\", \"Nein\"]. Für eine freie Antwort lassen Sie options weg.": "Indique options como una lista de respuestas posibles, por ejemplo [\"Sí\", \"No\"]. Para permitir una respuesta libre, omita options.",
   "Geben Sie {field} als Liste von Kennungen an, zum Beispiel [\"obj_1\"]. Wiederholen Sie den Aufruf mit dieser Liste.": "Indique {field} como una lista de identificadores, por ejemplo [\"obj_1\"]. Repita la llamada con esa lista.",
   "Gedruckt": "Impreso",
   "Gedruckte Mutter": "Tuerca impresa",

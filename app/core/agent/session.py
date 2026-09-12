@@ -239,20 +239,27 @@ def _written_call_finding(name: str) -> Finding:
     )
 
 
-def _names_from(arguments: dict[str, Any], field: str, *, required: bool = False) -> list[str]:
+def _names_from(arguments: dict[str, Any], field: str) -> list[str]:
     """Ein Listenfeld des Aufrufs als Namen — oder ein Satz, der sagt, was fehlt.
 
-    Ein fehlendes Feld heißt „keine Auswahl“, sofern es nicht ``required``
-    ist; ``null`` ist dagegen ein Wert, und zwar ein falscher — genau wie ein
+    Ein fehlendes Feld heißt „keine Auswahl“; ``null`` ist dagegen ein Wert,
+    und zwar ein falscher — genau wie ein
     Skalar (``objects: 3``, ``objects: "obj_1"``): keine Liste — die
     Zeichenkette zerfiele in Buchstaben, die Zahl brach den ganzen Zug ab
     (Gesamtreview 05.09.2026, CORE-03). Beides bekommt dieselbe Antwort, und
     das Modell wiederholt den Aufruf mit einer Liste.
     """
-    raw = arguments.get(field, None if required else [])
+    raw = arguments.get(field, [])
     if not isinstance(raw, list) or any(
         not isinstance(entry, str) or not entry.strip() for entry in raw
     ):
+        if field == "options":
+            raise ValueError(
+                tr(
+                    "Geben Sie options als Liste von Antwortmöglichkeiten an, zum Beispiel "
+                    '["Ja", "Nein"]. Für eine freie Antwort lassen Sie options weg.'
+                )
+            )
         raise ValueError(
             tr(
                 "Geben Sie {field} als Liste von Kennungen an, zum Beispiel "
@@ -562,7 +569,7 @@ class AgentSession:
         wurde.
         """
         text = str(arguments.get("question", "")).strip()
-        options = _names_from(arguments, "options", required=True)
+        options = _names_from(arguments, "options")
         question = Question(text=text, options=tuple(options))
         proposal.questions.append(question)
         answer = self.ask(text, options)

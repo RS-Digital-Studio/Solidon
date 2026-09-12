@@ -2496,6 +2496,7 @@
   "Geben Sie einen Namen für diesen Rechner ein.": "Inserire un nome per questo computer.",
   "Geben Sie mindestens ein Maß frei — sonst ist das Teil starr.": "Rendi regolabile almeno una misura, altrimenti il pezzo resta rigido.",
   "Geben Sie mindestens eine Stelle frei, an der man das Teil anfasst.": "Rendi disponibile almeno un punto a cui agganciare il pezzo.",
+  "Geben Sie options als Liste von Antwortmöglichkeiten an, zum Beispiel [\"Ja\", \"Nein\"]. Für eine freie Antwort lassen Sie options weg.": "Indichi options come elenco di risposte possibili, per esempio [\"Sì\", \"No\"]. Per una risposta libera, ometta options.",
   "Geben Sie {field} als Liste von Kennungen an, zum Beispiel [\"obj_1\"]. Wiederholen Sie den Aufruf mit dieser Liste.": "Indica {field} come elenco di identificativi, ad esempio [\"obj_1\"]. Ripeti la chiamata con questo elenco.",
   "Gedruckt": "Stampato",
   "Gedruckte Mutter": "Dado stampato",
