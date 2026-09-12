@@ -168,7 +168,6 @@ class RecordingRenderer(Renderer):
         self.picks: dict[tuple[int, int], Pick] = {}
         self.item_picks: dict[tuple[int, int], Item] = {}
         self.listeners: dict[int, Callable[[PointerEvent], None]] = {}
-        self.delivered: list[PointerEvent] = []
         self.closed = False
         self.clips = 0
         self.pick_calls: list[tuple[float, float, list[Item] | None, float]] = []
@@ -413,32 +412,6 @@ class RecordingRenderer(Renderer):
 
     def remove_pointer_listener(self, token: int) -> None:
         self.listeners.pop(token, None)
-
-    def deliver_pointer(self, kind: str, event: Any) -> None:
-        """Ein Qt-Ereignis wie der echte Renderer in eine Zeigergeste übersetzen."""
-        from PySide6.QtCore import Qt
-
-        names = {
-            Qt.MouseButton.LeftButton: "left",
-            Qt.MouseButton.MiddleButton: "middle",
-            Qt.MouseButton.RightButton: "right",
-        }
-        buttons = event.buttons()
-        modifiers = event.modifiers()
-        position = event.position()
-        pointer = PointerEvent(
-            kind,  # type: ignore[arg-type]
-            round(position.x()),
-            round(position.y()),
-            names.get(event.button()) if kind in ("press", "release") else None,  # type: ignore[arg-type]
-            frozenset(name for flag, name in names.items() if buttons & flag),  # type: ignore[arg-type]
-            bool(modifiers & Qt.KeyboardModifier.ShiftModifier),
-            bool(modifiers & Qt.KeyboardModifier.ControlModifier),
-            bool(modifiers & Qt.KeyboardModifier.AltModifier),
-        )
-        self.delivered.append(pointer)
-        for listener in list(self.listeners.values()):
-            listener(pointer)
 
     def close(self) -> None:
         self.closed = True

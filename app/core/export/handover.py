@@ -28,7 +28,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from app.core import activation, discover
 from app.core.errors import (
@@ -82,6 +82,9 @@ from app.core.types import (
     SlotProfileBinding,
 )
 from app.i18n import _, source_text
+
+if TYPE_CHECKING:
+    from shapely.geometry.base import BaseGeometry
 
 _log = get_logger(__name__)
 
@@ -2279,6 +2282,32 @@ def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
     return BoundingBox((-half_width, -half_depth, 0.0), (half_width, half_depth, height))
 
 
+def _usable_area(contour: Sequence[tuple[float, float]]) -> BaseGeometry | None:
+    """Die Fläche einer fremden Kontur, oder ``None``, wenn keine darin steckt.
+
+    ``make_valid`` macht aus einem Schmetterling zwei Dreiecke und aus drei
+    Punkten auf einer Linie einen Strich; nur was Fläche hat, taugt als Bett
+    oder Sperre. Ein Wert, den GEOS gar nicht annimmt, ist ebenfalls keine.
+    """
+    from shapely import make_valid
+    from shapely.errors import GEOSException
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+
+    try:
+        shape = make_valid(Polygon(contour))
+    except ValueError, GEOSException:
+        return None
+    pieces = [
+        piece
+        for piece in getattr(shape, "geoms", (shape,))
+        if piece.geom_type in ("Polygon", "MultiPolygon") and piece.area > 0.0
+    ]
+    if not pieces:
+        return None
+    return unary_union(pieces)
+
+
 def off_the_bed(
     payload: str | gcode.GcodeAnalysis,
     profile: Profile,
@@ -2332,7 +2361,7 @@ def off_the_bed(
     from io import StringIO
 
     from shapely.affinity import translate
-    from shapely.geometry import Polygon, box
+    from shapely.geometry import box
 
     from app.core import build_area
 
@@ -2340,15 +2369,25 @@ def off_the_bed(
     extent = analysis.extent
     if extent is None:
         return None
-    if analysis.bed_outline:
-        area = Polygon(analysis.bed_outline)
-    else:
+    # Bett und Sperrflächen kommen aus einer fremden Datei. Eine Kontur, die
+    # sich selbst schneidet oder keine Fläche hat, ließ GEOS mit einer
+    # Ausnahme abbrechen — nach dem gelungenen Slicen, mit der Druckdatei in
+    # einem Ordner, der gleich gelöscht wird. Was keine Fläche ergibt, fällt
+    # auf das Profil zurück oder wird übergangen, und das Protokoll sagt es.
+    area = _usable_area(analysis.bed_outline) if analysis.bed_outline else None
+    if area is None:
+        if analysis.bed_outline:
+            _log.warning("the bed outline of the print file has no area; using the profile")
         area = build_area.printable_area(profile.printer)
         if wants_bed_coordinates(flavour):
             width, depth, _height = profile.printer.build_volume
             area = translate(area, xoff=width / 2.0, yoff=depth / 2.0)
     for contour in analysis.excluded_areas:
-        area = area.difference(Polygon(contour))
+        blocked = _usable_area(contour)
+        if blocked is None:
+            _log.warning("an exclusion area of the print file has no area and is ignored")
+            continue
+        area = area.difference(blocked)
     height = (
         analysis.bed.maximum[2]
         if analysis.bed is not None and math.isfinite(analysis.bed.maximum[2])

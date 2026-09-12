@@ -166,3 +166,37 @@ def test_slice_model_replays_the_real_output_for_the_contour_check(
         output_dir=tmp_path,
     )
     assert any(finding.code == "gcode.off_the_bed" for finding in outcome.findings) is crosses
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "; bed_exclude_area = 0x0,10x10,10x0,0x10\n",
+        "; bed_exclude_area = 10x10,10x10,10x10\n",
+    ],
+)
+def test_an_unusable_exclusion_in_the_file_does_not_abort_the_check(line: str) -> None:
+    # Ein Schmetterling ließ GEOS mit einer Ausnahme abbrechen, drei gleiche
+    # Punkte ergeben keine Fläche — beides stammt aus der fremden Datei und
+    # darf den Lauf nach dem gelungenen Slicen nicht abreißen.
+    text = BED + line + START + "G0 X50 Y50\nG1 X60 E1\n"
+    assert handover.off_the_bed(text, profiles.make_profile(), "prusa") is None
+    outside = BED + line + START + "G0 X150 Y50\nG1 X160 E1\n"
+    assert handover.off_the_bed(outside, profiles.make_profile(), "prusa") is not None
+
+
+def test_a_bed_outline_without_area_falls_back_to_the_profile() -> None:
+    profile = profiles.make_profile()
+    printer = replace(
+        profile.printer,
+        build_volume=(100, 100, 100),
+        printable_area=((0, -50), (50, 0), (0, 50), (-50, 0)),
+    )
+    profile = replace(profile, printer=printer)
+    flat = "; printable_area = 0x0,100x0,50x0\n"
+    assert (
+        handover.off_the_bed(flat + START + "G0 X5 Y50\nG1 X50 Y5 E1\n", profile, "prusa") is None
+    )
+    assert (
+        handover.off_the_bed(flat + START + "G0 X5 Y5\nG1 X10 E1\n", profile, "prusa") is not None
+    )

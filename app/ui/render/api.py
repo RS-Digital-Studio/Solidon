@@ -455,20 +455,5 @@ class Renderer(ABC):
     def remove_pointer_listener(self, token: int) -> None: ...
 
     @abstractmethod
-    def deliver_pointer(self, kind: str, event: Any) -> None:
-        """Ein Qt-Mausereignis zustellen, das neben der Renderfläche ankam.
-
-        Der Viewport fängt Mausereignisse, die nicht auf der Renderfläche
-        landen (Randzonen, durchlässige Kinder), rechnet sie in deren
-        Koordinaten um und gibt sie hier ab. Der Renderer macht daraus
-        dieselbe :class:`PointerEvent` wie aus einem eigenen Ereignis und ruft
-        seine Zuhörer; ``kind`` ist ``press``, ``release`` oder ``move``, die
-        Taste liest er selbst aus dem Ereignis. Ein Renderer ohne Fenster
-        stellt zu, was er kann — die Attrappe der Tests sieht die Geste damit
-        wie der echte, statt dass ein Weiterreichen über ``getattr`` still
-        ausfiele.
-        """
-
-    @abstractmethod
     def close(self) -> None:
         """Den nativen Renderer vor seinem Qt-Elternfenster abbauen."""

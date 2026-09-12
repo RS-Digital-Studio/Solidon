@@ -189,27 +189,6 @@ def cut(mesh: MeshData, plane: SectionPlane, second: SectionPlane | None = None)
     return SectionResult(mesh=_keeping_slots(mesh, body), capped=capped)
 
 
-def clip_triangles(
-    corners: np.ndarray, plane: SectionPlane, second: SectionPlane | None = None
-) -> np.ndarray:
-    """Lose Dreiecke an der Schnittebene kappen — für die Anzeige, ohne Deckel.
-
-    ``corners`` sind ``3·n`` Eckpunkte, je drei ein Dreieck: die Form, in der
-    die Ansicht Merkmalsflecken und Kandidaten hinlegt. Zurück kommt dieselbe
-    Form mit dem, was auf der behaltenen Seite liegt, an der Ebene sauber
-    geschnitten. Ein loses Dreiecksfeld ist keine geschlossene Fläche;
-    :func:`cut` setzt darauf keine Kappe und fasst den Körper, zu dem die
-    Dreiecke gehören, nicht an.
-    """
-    points = np.asarray(corners, dtype=float).reshape(-1, 3)
-    if len(points) == 0:
-        return np.empty((0, 3), dtype=float)
-    faces = np.arange(len(points), dtype=np.int64).reshape(-1, 3)
-    patch = MeshData(trimesh.Trimesh(points, faces, process=False))
-    clipped = cut(patch, plane, second).mesh.raw
-    return np.asarray(clipped.vertices[clipped.faces], dtype=float).reshape(-1, 3)
-
-
 def _keeping_slots(mesh: MeshData, body: trimesh.Trimesh) -> MeshData:
     """§20: ein Schnitt ist eine Boolesche Op gegen einen Halbraum, und er
     behält die Slots.

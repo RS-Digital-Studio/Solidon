@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import secrets
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -33,7 +34,7 @@ from typing import Final
 from xml.etree import ElementTree as ET
 
 from app.branding import APP_NAME, APP_VERSION
-from app.core.errors import CANCEL, SPLIT_FILAMENT_FILES, ValidationError
+from app.core.errors import CANCEL, SPLIT_FILAMENT_FILES, InternalError, ValidationError
 from app.core.export import slicer_keys
 from app.core.geom.mesh import MeshData
 from app.core.ingest.threemf import (
@@ -480,7 +481,12 @@ def _slots_for(mesh: MeshData, slots: Sequence[MaterialSlot] | None) -> list[Mat
 #: den Fehler gefangen, weil sie zählt statt zu ersetzen — eine Ersetzung ohne
 #: Zählung hätte die Geometrie des ersten Teils mitten in die Marke des
 #: zwanzigsten geschrieben.
-_GEOMETRY_MARK: Final = "[SOLIDON-MESH-{number}]"
+#:
+#: Die Kennung je Körper ist zufällig: Ein Objektname reist unverändert ins
+#: XML, und ein Körper namens ``[SOLIDON-MESH-2]`` ließ die Zählung mit
+#: einer nackten Ausnahme abbrechen. Auf das Ergebnis hat der Zufall keinen
+#: Einfluss — die Marke wird ersetzt und steht in keiner Datei.
+_GEOMETRY_MARK: Final = "[SOLIDON-MESH-{run}-{number}]"
 
 
 def _write_geometry(
@@ -530,7 +536,7 @@ def _write_geometry(
     Objekt Dreiecke und Ecken und verlangt, dass keine Marke im ausgelieferten
     Dokument stehen bleibt.
     """
-    mark = _GEOMETRY_MARK.format(number=number)
+    mark = _GEOMETRY_MARK.format(run=secrets.token_hex(6), number=number)
     geometry = ET.SubElement(parent, "mesh")
     geometry.text = mark
 
@@ -559,15 +565,18 @@ def _write_geometry(
 def _fill_in(document: bytes, blocks: Sequence[tuple[str, bytes]]) -> bytes:
     """Setzt jede Geometrie an die Stelle ihrer Marke.
 
-    Die Marke steht als Text in einem leeren ``<mesh>``-Element, also genau
-    zwischen ``<mesh>`` und ``</mesh>`` — ersetzt wird sie deshalb wörtlich.
-    Fehlte eine, bliebe sie als Text in der Datei stehen; deshalb wird gezählt.
+    Gezählt und ersetzt wird das vollständige ``<mesh>``-Platzhalterelement.
+    Namen dürfen denselben Text enthalten; XML-Sonderzeichen sind darin
+    maskiert und können deshalb nicht mit dem Element selbst kollidieren.
+    Fehlte eine Marke, bliebe sie in der Datei stehen; deshalb wird gezählt.
     """
     for mark, geometry in blocks:
-        marker = mark.encode("ascii")
+        marker = f"<mesh>{mark}</mesh>".encode("ascii")
         if document.count(marker) != 1:
-            raise RuntimeError(f"Die Marke {mark} steht {document.count(marker)}-mal im Dokument.")
-        document = document.replace(marker, geometry, 1)
+            # Ein Programmfehler, kein Bedienfehler — und einer, der den
+            # Export-Arbeiter nicht abreißen darf (§33.1, Regel 17).
+            raise InternalError(values={"mark": mark, "count": document.count(marker)})
+        document = document.replace(marker, b"<mesh>" + geometry + b"</mesh>", 1)
     return document
 
 

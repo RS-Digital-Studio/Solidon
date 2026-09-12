@@ -2324,3 +2324,16 @@ def test_a_chosen_scheme_decides_the_names(profile: Profile) -> None:
     )
 
     assert [entry.filename for entry in plan.entries] == ["1_Halterung.stl", "2_Deckel.stl"]
+
+
+def test_a_body_named_like_the_geometry_mark_still_exports() -> None:
+    # Der Name reist unverändert ins XML. Vorher zählte die Marke doppelt,
+    # und ein RuntimeError riss den Export-Arbeiter ohne einen Weg ab.
+    part = threemf.AssemblyPart(
+        mesh=MeshData.of(trimesh.creation.box((10, 10, 10))), name="[SOLIDON-MESH-2]"
+    )
+    with zipfile.ZipFile(BytesIO(threemf.write_assembly([part], "Test"))) as archive:
+        model = archive.read("3D/3dmodel.model").decode("utf-8")
+    assert 'name="[SOLIDON-MESH-2]"' in model
+    assert "SOLIDON-MESH-" not in model.replace("[SOLIDON-MESH-2]", "")
+    assert model.count("<vertex ") == 8
