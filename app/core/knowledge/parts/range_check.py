@@ -17,6 +17,7 @@ from __future__ import annotations
 import gc
 import itertools
 import math
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Final, SupportsInt, cast
@@ -49,6 +50,12 @@ def _corner_values(params: type[BaseParams]) -> list[tuple[str, list[Any]]]:
 #: Vollständige Kombinationen pro Lauf. Deckt die mitgelieferte Bibliothek
 #: (höchstens 320 Ecken je Baustein) ab und begrenzt fremde Parameterprodukte.
 MAX_CORNERS: Final = 512
+
+
+def _collect_on_main_thread() -> None:
+    """Kernzyklen sammeln, ohne im Arbeiter fremde GUI-Objekte zu finalisieren."""
+    if threading.current_thread() is threading.main_thread():
+        gc.collect()
 
 
 def corner_count(params: type[BaseParams]) -> int:
@@ -1321,7 +1328,7 @@ def check(
                 checked += 1
                 announce(index, 4)
                 if checked % 16 == 0:
-                    gc.collect()
+                    _collect_on_main_thread()
                 continue
             if declared:
                 add(
@@ -1458,8 +1465,10 @@ def check(
         # periodischen Lauf sammelte die vollständige Bibliothek vor dem
         # ersten Gewinde bereits über ein Gigabyte an und wurde durch Paging
         # zwanzigmal langsamer. Die Paar- und Grenzmenge bleibt unverändert.
+        # Nur im Hauptthread erzwingen: Der globale Sammler könnte sonst
+        # auch GUI-Objekte aus fremden Referenzzyklen im Arbeiter zerstören.
         if checked % 16 == 0:
-            gc.collect()
+            _collect_on_main_thread()
     if checked < len(plan):
         add(
             {},
@@ -1475,7 +1484,7 @@ def check(
     if progress is not None and checked == len(plan):
         progress(1.0, str(_("Bereichstest abgeschlossen")))
     report = RangeReport(checked=checked, failures=tuple(failures), excluded=tuple(excluded))
-    gc.collect()
+    _collect_on_main_thread()
     return report
 
 

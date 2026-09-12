@@ -129,6 +129,9 @@ Jede Phase einer Ecke einschließlich Machbarkeitsbedingung, Wandvertrag und
 Merkmalprüfung gehört in deren Fehlerbericht. Nur eine erklärte Ablehnung
 beim Bau zählt als Ausschluss; ein Prüffehler darf weder diesen Status
 erhalten noch den restlichen Bericht verlieren. Abbruch bleibt ein eigener Weg.
+Explizite zyklische Speicherbereinigung läuft nur im Hauptthread. Eine
+Bereichsprüfung im Arbeiter darf durch den globalen Sammler keine fremden
+Qt-Objekte finalisieren; deren Lebenszeitbereinigung bleibt bei der Oberfläche.
 
 1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
 2. Umsetzung gegen `manifold3d`

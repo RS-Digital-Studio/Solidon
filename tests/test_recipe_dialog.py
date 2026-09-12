@@ -1230,6 +1230,83 @@ def test_the_button_cannot_while_the_check_runs(qt_app: QApplication) -> None:
         dialog.deleteLater()
 
 
+@pytest.mark.parametrize("excluded", [False, True])
+def test_the_range_worker_does_not_collect_main_thread_qt_cycles(
+    qt_app: QApplication, excluded: bool
+) -> None:
+    """Explizite Sammlung darf ein GUI-Objekt erst wieder im Hauptthread erreichen."""
+    import gc
+    import threading
+
+    from PySide6.QtCore import QObject
+
+    from app.core.errors import ValidationError
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts.range_check import check
+    from app.core.registry import op_params, param
+    from app.core.types import BaseParams
+
+    owner = threading.get_ident()
+    collected: list[int] = []
+    rescued: list[QObject] = []
+
+    class CyclicObject(QObject):
+        def __init__(self) -> None:
+            super().__init__()
+            self.cycle = self
+
+        def __del__(self) -> None:
+            collected.append(threading.get_ident())
+            rescued.append(self)  # native Löschung für diese Gegenprobe im Hauptthread halten
+
+    @op_params
+    class SixteenCorners(BaseParams):
+        first: bool = param(title="Erste Option", default=False)
+        second: bool = param(title="Zweite Option", default=False)
+        third: bool = param(title="Dritte Option", default=False)
+        fourth: bool = param(title="Vierte Option", default=False)
+
+    def fails(_values: BaseParams) -> Any:
+        if excluded:
+            raise ValidationError(detail="Prüfecke korrigieren.")
+        raise ValueError("Prüfecke korrigieren.")
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    def check_corners() -> None:
+        report = check(
+            SixteenCorners,
+            fails,
+            profile,
+            feasible=(lambda _values: "Nicht baubar.") if excluded else None,
+        )
+        assert report.checked == 16
+
+    enabled = gc.isenabled()
+    gc.disable()
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        transient = CyclicObject()
+        del transient
+        worker = threading.Thread(target=check_corners)
+        worker.start()
+        worker.join(timeout=10)
+        assert not worker.is_alive()
+        assert not collected, "der Arbeitsthread hat einen GUI-Zyklus eingesammelt"
+        check_corners()
+        assert collected == [owner]
+    finally:
+        gc.collect()
+        for item in rescued:
+            item.cycle = None
+            item.deleteLater()
+        rescued.clear()
+        dialog.release()
+        dialog.deleteLater()
+        if enabled:
+            gc.enable()
+
+
 def test_a_range_error_reaches_the_dialog_as_a_correctable_error(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
