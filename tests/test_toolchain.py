@@ -1869,6 +1869,31 @@ def test_the_feature_film_proves_the_same_identity_in_both_languages() -> None:
         assert sum(seconds for _key, _path, seconds in timing) == 27.0
 
 
+def test_feature_caption_uses_the_explicit_target_without_extending_the_session() -> None:
+    """Zwei Filmziele an derselben schreibgeschützten Sitzung behalten ihre eigenen Maße."""
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    from tools.make_video import feature_caption
+
+    @dataclass(frozen=True, slots=True)
+    class ReadOnlySession:
+        last_result: Any
+
+    holes = {
+        "hole_1": SimpleNamespace(kind="hole", params={"diameter": 4.0}),
+        "hole_7": SimpleNamespace(kind="hole", params={"diameter": 8.0}),
+    }
+    session = ReadOnlySession(
+        SimpleNamespace(scene=SimpleNamespace(objects={"plate": SimpleNamespace(features=holes)}))
+    )
+
+    assert "4,00" in feature_caption(session, "de", "recognise", "hole_1")[1]
+    assert "8,00" in feature_caption(session, "de", "recognise", "hole_7")[1]
+    with pytest.raises(SystemExit, match="hole_99"):
+        feature_caption(session, "de", "recognise", "hole_99")
+
+
 @pytest.mark.parametrize("long_title", [False, True])
 def test_short_frame_excludes_landscape_caption_and_bounds_title_size(
     tmp_path: Path, qt_app, monkeypatch: pytest.MonkeyPatch, long_title: bool

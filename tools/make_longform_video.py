@@ -988,7 +988,7 @@ def _begin_video(
 
 def _finish_video(session: Session, window: MainWindow) -> None:
     """Arbeiter und OpenGL-Kontext ohne Speichernachfrage freigeben."""
-    session._dirty = False
+    session.forget_changes()
     window.close()
     session.release(120_000)
     release_viewport(window)

@@ -866,6 +866,18 @@ class Session(QObject):
         self.projectChanged.emit()
         return target
 
+    def forget_changes(self) -> None:
+        """Bestätigt das bewusst verworfene Dokument, ohne seine Quelle zu schreiben.
+
+        Für Aufnahmewerkzeuge nach Abschluss ihrer Arbeit: Die eigene
+        Wiederherstellung verschwindet ebenfalls. Dies speichert keine
+        Änderungen und ersetzt keine Verwerfentscheidung des Nutzers.
+        """
+        clear_autosave(self.path, self.recovery_token)
+        self.release_recovery()
+        self._dirty = False
+        self.projectChanged.emit()
+
     def autosave(self) -> None:
         """Container zur Absturz-Wiederherstellung neben dem Projekt (§38)."""
         if self._dirty:

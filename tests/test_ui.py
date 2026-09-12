@@ -690,6 +690,38 @@ def test_the_title_marks_unsaved_changes(session: Session, tmp_path: Path) -> No
     assert session.title == "projekt.p3d*", f"mit Datei sagt es der Stern: {session.title!r}"
 
 
+@pytest.mark.parametrize("named", [False, True])
+def test_forgetting_recording_changes_removes_only_its_recovery(
+    session: Session, tmp_path: Path, named: bool
+) -> None:
+    """Bewusstes Verwerfen schreibt keine Quelle und lässt fremde Sicherungen bestehen."""
+    from app.core.scene.project import autosave_path
+
+    target = tmp_path / "quelle.p3d"
+    if named:
+        session.save_project(target)
+    original = target.read_bytes() if named else None
+    session.apply("Aufnahmekörper", [OperationDraft(op="create_box", inputs=(), params={})])
+    assert session.wait_for_idle()
+    session.autosave()
+    own = autosave_path(session.path, session.recovery_token)
+    other = autosave_path(None, "andere-aufnahme")
+    other.parent.mkdir(parents=True, exist_ok=True)
+    other.write_bytes(b"fremde Sicherung")
+    assert own.exists() and session.modified
+    changes = []
+    session.projectChanged.connect(lambda: changes.append(True))
+
+    session.forget_changes()
+
+    assert not session.modified
+    assert not own.exists()
+    assert other.read_bytes() == b"fremde Sicherung"
+    assert changes == [True]
+    assert (target.read_bytes() if named else None) == original
+    assert named or not target.exists()
+
+
 # --- window ---------------------------------------------------------------------
 
 

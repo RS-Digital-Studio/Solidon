@@ -38,6 +38,13 @@ ein sauberes Ergebnis.
 
 ## Die Familien
 
+Aufnahmewerkzeuge reichen ihre feste Merkmalskennung als Argument bis zur
+Auswahl und Beschriftung durch; sie ergänzen keine Attribute an `Session`.
+Nach Abschluss einer bewusst verworfenen Aufnahme räumt `Session.forget_changes()`
+deren Änderungsmarkierung und eigene Wiederherstellung. Die Quelldatei bleibt
+dabei ungeschrieben; das anschließende Schließen läuft durch den normalen
+Fenster- und Arbeiterabbau.
+
 **Umgebung und Git**
 
 | Werkzeug | Tut |

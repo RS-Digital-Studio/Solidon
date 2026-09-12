@@ -1983,12 +1983,7 @@ def hold_step(window: QWidget, app: QApplication) -> StepFn:
     return step
 
 
-def _feature_target_id(session: Any) -> str:
-    """Die für den Film gewählte, über alle Szenen feste Merkmalskennung."""
-    return str(getattr(session, "_video_feature_id", "hole_1"))
-
-
-def _feature_demo_target(session: Any) -> tuple[str, str, Any]:
+def _feature_demo_target(session: Any, target_id: str) -> tuple[str, str, Any]:
     """Den einen belegten Zielpunkt des Merkmalsfilms finden.
 
     Die Kennung wird absichtlich verlangt statt durch „die erste Bohrung“
@@ -1999,7 +1994,6 @@ def _feature_demo_target(session: Any) -> tuple[str, str, Any]:
     result = session.last_result
     if result is None:
         raise SystemExit("Keine ausgewertete Szene für den Merkmalsfilm")
-    target_id = _feature_target_id(session)
     for object_id, entry in result.scene.objects.items():
         feature = entry.features.get(target_id)
         if feature is not None and feature.kind == "hole":
@@ -2040,12 +2034,11 @@ def _feature_move_row(window: Any) -> tuple[Any, Any]:
     return fields[0], button
 
 
-def _feature_holes(session: Any) -> tuple[str, list[tuple[str, Any]]]:
+def _feature_holes(session: Any, target_id: str) -> tuple[str, list[tuple[str, Any]]]:
     """Die belegten Bohrungen der Presseplatte in stabiler Reihenfolge."""
     result = session.last_result
     if result is None:
         raise SystemExit("Keine ausgewertete Szene für den Merkmalsfilm")
-    target_id = _feature_target_id(session)
     for object_id, entry in result.scene.objects.items():
         holes = sorted(
             (
@@ -2060,13 +2053,15 @@ def _feature_holes(session: Any) -> tuple[str, list[tuple[str, Any]]]:
     raise SystemExit(f"Das Pressemodell mit {target_id} wurde nicht gefunden")
 
 
-def feature_caption(session: Any, language: str, scene: str) -> tuple[str, str]:
+def feature_caption(
+    session: Any, language: str, scene: str, target_id: str = "hole_1"
+) -> tuple[str, str]:
     """Messwert und Anzahl aus dem gezeigten Modell statt aus Werbetext lesen."""
     title, detail = FEATURE_CAPTIONS[language][scene]
     if scene in {"recognise", "resize_preview"}:
         from app.core.scene.placement import screw_for_bore
 
-        _object_id, _feature_id, feature = _feature_demo_target(session)
+        _object_id, _feature_id, feature = _feature_demo_target(session, target_id)
         diameter = float(feature.params["diameter"])
         size = screw_for_bore(diameter)
         if scene == "resize_preview":
@@ -2081,7 +2076,7 @@ def feature_caption(session: Any, language: str, scene: str) -> tuple[str, str]:
         suffix = f" · {size} clearance" if size else ""
         return title, f"Recognised: Ø {diameter:.2f} mm{suffix}"
     if scene in {"all_prepare", "all_apply"}:
-        _object_id, holes = _feature_holes(session)
+        _object_id, holes = _feature_holes(session, target_id)
         count = len(holes)
         words = (
             {2: "ZWEI", 3: "DREI", 4: "VIER", 5: "FÜNF", 6: "SECHS"}
@@ -2121,7 +2116,9 @@ def _widget_centre(window: Any, widget: Any) -> tuple[float, float]:
     return float(point.x()), float(point.y())
 
 
-def _feature_click(window: Any) -> tuple[Any, tuple[float, float, float], tuple[float, float]]:
+def _feature_click(
+    window: Any, target_id: str
+) -> tuple[Any, tuple[float, float, float], tuple[float, float]]:
     """Eingabeziel und sichtbare Stelle auf der Innenwand der Zielbohrung.
 
     Die Mitte eines Durchgangslochs ist leer und deshalb kein Klickziel. Der
@@ -2130,7 +2127,7 @@ def _feature_click(window: Any) -> tuple[Any, tuple[float, float, float], tuple[
     """
     from PySide6.QtCore import QPoint
 
-    _object_id, _feature_id, feature = _feature_demo_target(window.session)
+    _object_id, _feature_id, feature = _feature_demo_target(window.session, target_id)
     centre = tuple(float(value) for value in feature.params["centre"])
     diameter = float(feature.params["diameter"])
     depth = float(feature.params["depth"])
@@ -2163,6 +2160,7 @@ def feature_demo_step(
     app: QApplication,
     session: Any,
     scene: str,
+    target_id: str = "hole_1",
 ) -> tuple[StepFn, PointerFn | None]:
     """Den sichtbaren Bedienweg einer Szene samt gezeichnetem Zeiger bauen.
 
@@ -2178,8 +2176,7 @@ def feature_demo_step(
         return orbit_step(window, app, 1.0, turns=0.18), None
 
     if scene == "recognise":
-        target_id = _feature_target_id(session)
-        _interactor, world, feature_point = _feature_click(window)
+        _interactor, world, feature_point = _feature_click(window, target_id)
         viewport = window.viewport.renderer.widget
         start = _widget_centre(window, viewport)
         clicked = False
@@ -2209,7 +2206,6 @@ def feature_demo_step(
         return hold_step(window, app), None
 
     if scene == "remove_undo":
-        target_id = _feature_target_id(session)
         restored = False
 
         def undo_step(index: int, total: int) -> None:
@@ -2222,7 +2218,7 @@ def feature_demo_step(
                 )
                 session.wait_for_idle(120_000)
                 settle(app, 30)
-                _object_id, feature_id, _feature = _feature_demo_target(session)
+                _object_id, feature_id, _feature = _feature_demo_target(session, target_id)
                 if feature_id != target_id:
                     raise SystemExit("Strg+Z hat die entfernte Bohrung nicht wiederhergestellt")
                 restored = True
@@ -2240,13 +2236,12 @@ def feature_demo_step(
         window.viewport.zoom(1.45)
         settle(app, 20)
 
-    _interactor, _world, feature_point = _feature_click(window)
+    _interactor, _world, feature_point = _feature_click(window, target_id)
 
     if scene == "pair_select":
         from app.ui.panels import _feature_item
 
-        object_id, holes = _feature_holes(session)
-        target_id = _feature_target_id(session)
+        object_id, holes = _feature_holes(session, target_id)
         first = next(feature for feature_id, feature in holes if feature_id == target_id)
         first_diameter = float(first.params.get("diameter", 0.0))
         second_id, _second = min(
@@ -2369,8 +2364,7 @@ def feature_demo_step(
     button_point = _widget_centre(window, button)
     applied = False
     before_transactions = len(session.project.document.transactions)
-    _object_id, holes_before = _feature_holes(session)
-    target_id = _feature_target_id(session)
+    _object_id, holes_before = _feature_holes(session, target_id)
 
     def apply_step(index: int, total: int) -> None:
         nonlocal applied
@@ -2385,7 +2379,7 @@ def feature_demo_step(
                 if target_id in result.scene.objects[_object_id].features:
                     raise SystemExit("Die gewählte Bohrung blieb nach Entfernen bestehen")
             else:
-                _after_object, feature_id, feature = _feature_demo_target(session)
+                _after_object, feature_id, feature = _feature_demo_target(session, target_id)
                 if feature_id != target_id:
                     raise SystemExit(f"Die Bohrungskennung wechselte zu {feature_id}")
                 if scene == "apply_feature":
@@ -2401,7 +2395,7 @@ def feature_demo_step(
                 ):
                     raise SystemExit("Die Bohrung wurde nicht auf 6,5 mm geändert")
                 elif scene == "all_apply":
-                    _after_object, holes_after = _feature_holes(session)
+                    _after_object, holes_after = _feature_holes(session, target_id)
                     measured = [
                         float(hole.params.get("diameter", 0.0)) for _feature_id, hole in holes_after
                     ]
@@ -2416,7 +2410,7 @@ def feature_demo_step(
                             "Die Sammelhandlung wurde nicht als eine Transaktion gespeichert"
                         )
                 elif scene == "duplicate_apply":
-                    _after_object, holes_after = _feature_holes(session)
+                    _after_object, holes_after = _feature_holes(session, target_id)
                     if len(holes_after) != len(holes_before) + 1:
                         raise SystemExit(
                             "Die Duplizierung erzeugte nicht genau eine weitere Bohrung"
@@ -2432,7 +2426,9 @@ def feature_demo_step(
     return apply_step, apply_pointer
 
 
-def reset_feature_demo(window: Any, app: QApplication, session: Any) -> None:
+def reset_feature_demo(
+    window: Any, app: QApplication, session: Any, target_id: str = "hole_1"
+) -> None:
     """Den Merkmalsfilm auf die eingelesene Ausgangsdatei zurückstellen."""
     window._drop_feature_preview()
     edited = {
@@ -2444,7 +2440,7 @@ def reset_feature_demo(window: Any, app: QApplication, session: Any) -> None:
     while session.project.document.ops and session.project.document.ops[-1].op in edited:
         session.undo()
         session.wait_for_idle(120_000)
-    object_id, _feature_id, _feature = _feature_demo_target(session)
+    object_id, _feature_id, _feature = _feature_demo_target(session, target_id)
     window.object_tree.select_object(object_id)
     window.feature_dock.hide()
     # Das Verbergen gehört dem Aufnahmewerkzeug, nicht dem Nutzer. Der Dock
@@ -2460,17 +2456,18 @@ def prepare_feature_demo_scene(
     session: Any,
     scene: str,
     panel_visible: bool,
+    target_id: str = "hole_1",
 ) -> None:
     """Den Anfangszustand einer sichtbaren Bediensequenz herstellen."""
     if scene == "mesh":
-        object_id, _feature_id, _feature = _feature_demo_target(session)
+        object_id, _feature_id, _feature = _feature_demo_target(session, target_id)
         window.object_tree.select_object(object_id)
         window.feature_dock.hide()
         window.feature_dock.dismissed = False
         settle(app, 20)
         return
     if scene == "recognise":
-        object_id, _feature_id, _feature = _feature_demo_target(session)
+        object_id, _feature_id, _feature = _feature_demo_target(session, target_id)
         window.object_tree.select_object(object_id)
         window.feature_dock.hide()
         window.feature_dock.dismissed = False
@@ -2494,6 +2491,7 @@ def shoot_storyboard(
     morph_span: tuple[float, float] = MORPH,
     start_degrees: float = 0.0,
     feature_panel_visible: bool = True,
+    target_id: str = "hole_1",
 ) -> Shot:
     """Alle Szenen des Drehbuchs hintereinander aufnehmen.
 
@@ -2508,7 +2506,7 @@ def shoot_storyboard(
     feature_demo = any(key in FEATURE_DEMO_SCENES for key, _path, _seconds in spoken)
     reset_morph(session)
     if feature_demo:
-        reset_feature_demo(window, app, session)
+        reset_feature_demo(window, app, session, target_id)
     # Und den Versatz auch: ``shoot_storyboard`` läuft zweimal am selben
     # Fenster, quer und hoch. Bliebe die Explosion stehen, begänne das
     # Hochformat mit einem Korb, der schon auseinander ist.
@@ -2521,9 +2519,9 @@ def shoot_storyboard(
         pointer: PointerFn | None = None
         caption: tuple[str, str] | None = None
         if key in FEATURE_DEMO_SCENES:
-            prepare_feature_demo_scene(window, app, session, key, feature_panel_visible)
-            step, pointer = feature_demo_step(window, app, session, key)
-            caption = feature_caption(session, language, key)
+            prepare_feature_demo_scene(window, app, session, key, feature_panel_visible, target_id)
+            step, pointer = feature_demo_step(window, app, session, key, target_id)
+            caption = feature_caption(session, language, key, target_id)
         if key == "closing":
             # Die Schlusskarte kommt aus dem Zeichenprogramm, nicht aus dem
             # Fenster — sie zeigt nichts aus der Anwendung.
@@ -2557,7 +2555,7 @@ def shoot_storyboard(
         print(f"  {key:12s} {count:4d} Bilder")
     reset_morph(session)
     if feature_demo:
-        reset_feature_demo(window, app, session)
+        reset_feature_demo(window, app, session, target_id)
     window.viewport.set_explosion(0.0)  # type: ignore[attr-defined]
     settle(app, 20)
     readout.extend([""] * (total - len(readout)))
@@ -3629,7 +3627,6 @@ def shoot_language(
         print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
 
     session = Session()
-    session._video_feature_id = feature_id
     window = MainWindow(session, UiSettings())
     window.resize(*WINDOW)
     window.show()
@@ -3656,14 +3653,14 @@ def shoot_language(
     # Zwei Formate an **einem** Fenster, aus demselben Grund wie oben.
     print("Aufnahme quer:")
     landscape = shoot_storyboard(
-        window, app, session, frames / "landscape", spoken, language=language
+        window, app, session, frames / "landscape", spoken, language=language, target_id=feature_id
     )
 
     portrait: Shot | None = None
     if feature_short:
         print("Komposition Short:")
         short_captions = {
-            key: feature_caption(session, language, key)
+            key: feature_caption(session, language, key, feature_id)
             for key, _path, _seconds in spoken
             if key != "closing"
         }
@@ -3690,6 +3687,7 @@ def shoot_language(
             label=READOUT_LABEL.get(language, MORPH_PARAMETER),
             language=language,
             feature_panel_visible=False,
+            target_id=feature_id,
         )
         show_panels(window, True)
     print("Kodierung:")
@@ -3722,7 +3720,7 @@ def shoot_language(
     # darf deshalb kein Speichern-Dialog auf Bedienung warten: Quelle und
     # fertiger Film liegen bereits an ihren Zielorten, das geöffnete Dokument
     # sollte nie geschrieben werden.
-    session._dirty = False
+    session.forget_changes()
     window.close()
     release_viewport(window)
 
