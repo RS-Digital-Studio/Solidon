@@ -520,6 +520,115 @@ def test_every_worker_in_the_surface_uses_the_base_class() -> None:
     assert not strays, "erbt von QThread statt von leash.Worker: " + ", ".join(strays)
 
 
+def _delegates_crash_connection(tree, builds) -> bool:
+    """Verfolgt den gebauten Arbeiter durch Parameter und zurückgegebene Fabrikwerte."""
+    import ast
+
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    functions = [
+        one for one in ast.walk(tree) if isinstance(one, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    calls = [one for one in ast.walk(tree) if isinstance(one, ast.Call)]
+
+    def name(expression):
+        return getattr(expression, "id", getattr(expression, "attr", ""))
+
+    def accepts(call, value) -> bool:
+        candidates = [one for one in functions if one.name == name(call.func)]
+        if len(candidates) != 1:
+            return False
+        target = candidates[0]
+        parameters = list(target.args.posonlyargs) + list(target.args.args)
+        if (
+            isinstance(call.func, ast.Attribute)
+            and parameters
+            and parameters[0].arg in ("self", "cls")
+        ):
+            parameters = parameters[1:]
+        for argument, parameter in zip(call.args, parameters, strict=False):
+            same_name = (
+                isinstance(argument, ast.Name)
+                and isinstance(value, ast.Name)
+                and argument.id == value.id
+            )
+            if not same_name and ast.dump(argument) != ast.dump(value):
+                continue
+            for connection in ast.walk(target):
+                if not isinstance(connection, ast.Call) or name(connection.func) != "connect":
+                    continue
+                signal = getattr(connection.func, "value", None)
+                if (
+                    name(signal) == "crashed"
+                    and name(getattr(signal, "value", None)) == parameter.arg
+                ):
+                    return True
+        return False
+
+    def consumed(value, seen=frozenset()) -> bool:
+        if value in seen:
+            return False
+        seen = seen | {value}
+        parent = parents.get(value)
+        if isinstance(parent, ast.Call):
+            return accepts(parent, value)
+        if isinstance(parent, (ast.Assign, ast.AnnAssign)):
+            targets = parent.targets if isinstance(parent, ast.Assign) else [parent.target]
+            scope = parent
+            while scope in parents and not isinstance(
+                scope, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                scope = parents[scope]
+            return any(
+                isinstance(target, ast.Name) and accepts(call, target)
+                for target in targets
+                for call in ast.walk(scope)
+                if isinstance(call, ast.Call)
+            )
+        if isinstance(parent, ast.Return):
+            scope = parent
+            while scope in parents and not isinstance(
+                scope, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                scope = parents[scope]
+            if not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return False
+            callers = [call for call in calls if name(call.func) == scope.name]
+            return bool(callers) and all(consumed(call, seen) for call in callers)
+        return False
+
+    return bool(builds) and all(consumed(build) for build in builds)
+
+
+@pytest.mark.parametrize(
+    "factory, connected", [(False, True), (True, True), (False, False), (True, False)]
+)
+def test_the_crash_guard_follows_only_the_passed_worker(factory: bool, connected: bool) -> None:
+    """Eine verbundene Helferparametergrenze zählt; fremde Signale daneben nicht."""
+    import ast
+
+    source = (
+        "def run(worker, other):\n    "
+        + ("worker" if connected else "other")
+        + ".crashed.connect(handler)\n"
+    )
+    if factory:
+        source += "def make():\n    return SomeWorker()\ndef begin():\n    run(make(), other)\n"
+    else:
+        source += "def begin():\n    worker = SomeWorker()\n    run(worker, other)\n"
+    tree = ast.parse(source)
+    node = next(
+        one
+        for one in ast.walk(tree)
+        if isinstance(one, ast.FunctionDef) and one.name == ("make" if factory else "begin")
+    )
+    builds = [
+        one
+        for one in ast.walk(node)
+        if isinstance(one, ast.Call) and getattr(one.func, "id", "") == "SomeWorker"
+    ]
+    assert _delegates_crash_connection(tree, builds) is connected
+
+
 def test_every_worker_has_somebody_listening_for_its_crash() -> None:
     """Ein Signal, das niemand hört, ist keine Antwort.
 
@@ -532,8 +641,9 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
     standen taub da — die Legende blieb für immer auf „wird berechnet", die
     Schichtanalyse-Zeile stand, und „Nach einer neuen Version sehen" wurde ein
     toter Knopf (Gesamtreview 25.08.2026, I-2/E-8). Geprüft wird jetzt: In
-    jeder Funktion, die einen ``…Worker(...)`` baut, wird auch
-    ``crashed.connect`` gerufen.
+    jeder Funktion, die einen ``…Worker(...)`` baut, wird entweder direkt
+    ``crashed.connect`` gerufen oder genau dieser Arbeiter an einen verbundenen
+    Helferparameter übergeben. Rückgebende Fabriken werden an ihren Aufrufern geprüft.
     """
     import ast
     from pathlib import Path
@@ -577,7 +687,7 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
                 and getattr(getattr(call.func, "value", None), "attr", "") == "crashed"
                 for call in ast.walk(node)
             )
-            if not listens:
+            if not listens and not _delegates_crash_connection(tree, builds):
                 deaf.append(f"{path.name}:{node.name}")
 
     assert sites >= 10, f"nur {sites} Startstellen gefunden — dann prüft der Lauf zu wenig"

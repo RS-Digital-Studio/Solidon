@@ -7,6 +7,11 @@ Die Regeln stehen in `.claude/rules/tests.md` — dort auch die Messfallen, die
 schon einmal zugeschnappt sind. Hier steht, **wie sie gefahren wird** und
 **was wo geprüft wird**.
 
+Der Crash-Wächter in `test_leash.py` verfolgt auch Arbeiter, die eine Fabrik
+zurückgibt oder an einen Helfer übergibt. Nur die Verbindung des entsprechenden
+Parameters zählt; ein verbundenes anderes Signal im Helfer deckt den Arbeiter
+nicht ab. Kleine positive und negative Quelltextfälle prüfen diese Grenze.
+
 `test_filament_inventory.py` prüft Migration und atomare Mehrspulenbuchungen
 einschließlich echter Prozesskonkurrenz. `test_filament_usage.py` verbindet
 Projektbindung, Ausgabeumfang und werkzeugweise Mengen. Die getrennten
