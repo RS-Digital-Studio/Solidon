@@ -396,6 +396,52 @@ def test_an_assembly_keeps_every_part() -> None:
     assert threemf_reader.count_objects(payload) == 2
 
 
+@pytest.mark.parametrize("assembly", [False, True], ids=["single", "assembly"])
+@pytest.mark.parametrize(
+    "name",
+    ["[SOLIDON-MESH-0123456789ab-2]", "<mesh>[SOLIDON-MESH-0123456789ab-2]</mesh>"],
+    ids=["marker", "escaped_element"],
+)
+def test_geometry_markers_in_names_survive_export_and_import(
+    monkeypatch: pytest.MonkeyPatch, assembly: bool, name: str
+) -> None:
+    """Titel, Körper- und Materialname dürfen auch die genaue Geometriemarke tragen."""
+    # Die Zufallskennung festlegen, damit der Name sicher mit der Marke
+    # kollidiert; Zufall allein trennt Nutzernamen nicht von XML-Struktur.
+    monkeypatch.setattr(threemf.secrets, "token_hex", lambda _size: "0123456789ab")
+    slot = threemf.MaterialSlot(0, name, colour=(1.0, 0.0, 0.0))
+    bodies = [_part((10, 10, 10), name, slot)]
+    if assembly:
+        bodies.append(_part((20, 5, 5), f"Boden {name}", slot))
+        payload = threemf.write_assembly(bodies, name)
+    else:
+        payload = threemf.write(bodies[0].mesh, [slot], name)
+
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        root = ET.fromstring(container.read(threemf.MODEL_PATH))
+    title = root.find(f"{{{CORE}}}metadata[@name='Title']")
+    assert title is not None and title.text == name
+    # Beim Einzelkörper liest der Import eine einzige Standardfarbe
+    # absichtlich ohne Slot; der geschriebene Materialname bleibt dennoch Pflicht.
+    materials = root.findall(f"{{{CORE}}}resources/{{{CORE}}}basematerials/{{{CORE}}}base")
+    assert [entry.get("name") for entry in materials] == [name]
+    assert [entry.get("displaycolor") for entry in materials] == ["#FF0000"]
+
+    restored = threemf_reader.read_objects(payload)
+    assert len(restored) == len(bodies)
+    if assembly:
+        assert [entry.name for entry in restored] == [entry.name for entry in bodies]
+    for expected, actual in zip(bodies, restored, strict=True):
+        assert actual.mesh.raw.is_watertight
+        assert actual.mesh.volume == pytest.approx(expected.mesh.volume)
+        assert actual.mesh.raw.extents == pytest.approx(expected.mesh.raw.extents)
+        assert actual.mesh.triangle_count == expected.mesh.triangle_count
+        if assembly:
+            assert [entry.name for entry in actual.slots] == [name]
+            assert actual.slots[0].colour == pytest.approx((1.0, 0.0, 0.0))
+            assert set(actual.mesh.slots) == {0}
+
+
 def test_the_same_colour_becomes_the_same_extruder() -> None:
     """§20: ein Slot ist ein Filament, kein Objektmerkmal. Ohne Zusammenlegung
     fragte der Slicer nach drei Filamenten für einen einfarbigen Druck."""

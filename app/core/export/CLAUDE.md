@@ -16,6 +16,11 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 STEP geht über `brep/step.py`, nicht von hier.
 
+Geometrieblöcke ersetzen ausschließlich vollständige `<mesh>`-Platzhalter.
+Titel, Körper- und Materialnamen bleiben XML-maskierte Nutzerdaten, selbst
+wenn sie eine der zufälligen Geometriemarken enthalten. Die Gegenprobe liest
+die erzeugte 3MF wieder ein und prüft Namen, Materialien und Geometrie.
+
 `threemf.assembly_slots()` ergänzt tatsächlich verwendete, aber nicht
 deklarierte Materialplätze neutral. Export, globales Zusammenlegen und
 Verbrauchsplanung benutzen diese gemeinsame Liste. Fehlende Plätze dürfen
