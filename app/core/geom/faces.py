@@ -30,7 +30,7 @@ from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryErr
 from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
-from app.core.types import Feature, Vec3
+from app.core.types import Feature, Quality, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -65,7 +65,9 @@ def face_normal(feature: Feature) -> Vec3:
     return tuple(float(value) for value in raw / length)  # type: ignore[return-value]
 
 
-def push_face(mesh: MeshData, feature: Feature, distance: float) -> BooleanOutcome:
+def push_face(
+    mesh: MeshData, feature: Feature, distance: float, *, quality: Quality = "fine"
+) -> BooleanOutcome:
     """Versetzt **eine** Fläche entlang ihrer Normalen; die Nachbarwände wachsen mit.
 
     ``distance`` zählt nach außen positiv, nach innen negativ — dasselbe
@@ -85,7 +87,7 @@ def push_face(mesh: MeshData, feature: Feature, distance: float) -> BooleanOutco
         )
     tool = _prism_over(mesh, feature, distance)
     kind: BooleanKind = "union" if distance > 0.0 else "difference"
-    outcome = boolean(kind, [mesh, tool], quality="fine")
+    outcome = boolean(kind, [mesh, tool], quality=quality)
     if outcome.mesh.raw.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_(
@@ -230,7 +232,9 @@ def _border_edges(corners: np.ndarray) -> list[tuple[int, int]]:
     return [order[key] for key, times in seen.items() if times == 1]
 
 
-def draft_vertical(mesh: MeshData, angle_deg: float) -> BooleanOutcome:
+def draft_vertical(
+    mesh: MeshData, angle_deg: float, *, quality: Quality = "fine"
+) -> BooleanOutcome:
     """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
 
     Neutral bleibt die Unterkante des Körpers: Dort behält der Körper sein
@@ -264,7 +268,7 @@ def draft_vertical(mesh: MeshData, angle_deg: float) -> BooleanOutcome:
 
         tools.append(_prism_from(mesh, triangles, _wedge))
 
-    outcome = boolean("difference", [mesh, *tools], quality="fine")
+    outcome = boolean("difference", [mesh, *tools], quality=quality)
     if outcome.mesh.raw.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_("Mit diesem Winkel bleibt vom Körper nichts übrig — kleiner anstellen."),

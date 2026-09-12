@@ -111,6 +111,10 @@ Iterieren schnell bleibt (§31).
 
 `tests/test_boolean.py` erzwingt jede Stufe einzeln.
 
+Kanten- und Flächenoperationen reichen `ctx.quality` durch alle Teilschritte,
+auch Werkzeugvereinigung, Eckanschlüsse und Wiederherstellung einer Rundung.
+Kein innerer Booleschritt darf den Entwurf auf feine Qualität hochstufen.
+
 Die drei nativen Netzstufen übergeben `Mesh64` an Manifold und lesen dessen
 Status und Volumen vor der Rückvernetzung. Nullvolumen bei flächigem Kontakt
 wird als leeres Netz weitergegeben; erst `allow_empty` entscheidet, ob das

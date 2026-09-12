@@ -81,7 +81,7 @@ class PushFaceParams(BaseParams):
 
 @register_op(
     name="push_face",
-    cache_version="2",
+    cache_version="3",
     title=_("Fläche versetzen"),
     category="shaping",
     params=PushFaceParams,
@@ -115,7 +115,7 @@ def push_face_op(ctx: OpContext) -> OpResult:
     body = as_mesh_data(source.mesh)
     if chosen is None:
         raise _no_face()
-    outcome = push_face(body, chosen, params.distance)
+    outcome = push_face(body, chosen, params.distance, quality=ctx.quality)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         solver=outcome.solver,
@@ -140,7 +140,7 @@ class DraftParams(BaseParams):
 
 @register_op(
     name="draft_faces",
-    cache_version="2",
+    cache_version="3",
     title=_("Formschräge anstellen"),
     category="shaping",
     params=DraftParams,
@@ -168,7 +168,7 @@ def draft_faces(ctx: OpContext) -> OpResult:
             ]
         )
 
-    outcome = draft_vertical(as_mesh_data(source.mesh), params.angle)
+    outcome = draft_vertical(as_mesh_data(source.mesh), params.angle, quality=ctx.quality)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         solver=outcome.solver,

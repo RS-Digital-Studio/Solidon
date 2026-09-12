@@ -106,7 +106,7 @@ class FilletParams(BaseParams):
 
 @register_op(
     name="fillet_edges",
-    cache_version="6",
+    cache_version="7",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -158,7 +158,7 @@ class ChamferParams(BaseParams):
 
 @register_op(
     name="chamfer_edges",
-    cache_version="6",
+    cache_version="7",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -205,7 +205,7 @@ class BeadParams(BaseParams):
 
 @register_op(
     name="bead_edges",
-    cache_version="5",
+    cache_version="6",
     title=_("Wulst anlegen"),
     category="shaping",
     params=BeadParams,
@@ -238,6 +238,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         params.radius,
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
+        quality=ctx.quality,
     )
     empty = _too_small_to_see(body, outcome.mesh, ctx.profile, kind="bead")
     conversion = []
@@ -276,7 +277,7 @@ def _worked(
 
     body = as_mesh_data(source.mesh)
     work = round_edges if rounded else bevel_edges
-    outcome = work(body, size, choice, keys)
+    outcome = work(body, size, choice, keys, quality=ctx.quality)
     empty = _too_small_to_see(
         body, outcome.mesh, ctx.profile, kind="fillet" if rounded else "chamfer"
     )

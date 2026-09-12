@@ -39,7 +39,7 @@ from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
-from app.core.types import Feature, Vec3, is_a_cavity
+from app.core.types import Feature, Quality, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG
 from app.i18n import _
 
@@ -497,6 +497,7 @@ def rounding_tool(
     *,
     min_steps: int = 0,
     extend_ends: bool = True,
+    quality: Quality = "fine",
 ) -> MeshData:
     """Der Körper, der aus einer Kante eine Rundung oder eine Fase macht.
 
@@ -576,7 +577,7 @@ def rounding_tool(
     # Häute ohne Dicke stehen. Der Körper war danach wasserdicht und trug sein
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
-    return boolean("union", pieces, quality="fine").mesh
+    return boolean("union", pieces, quality=quality).mesh
 
 
 def _wedge(
@@ -780,6 +781,8 @@ def round_edges(
     radius: float,
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
+    *,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Verrundet die gewählten Kanten eines Netzes — dieselbe Handlung wie
     ``brep.edit.fillet``, an einem Körper, der keine Topologie hat.
@@ -790,7 +793,7 @@ def round_edges(
     :data:`~app.core.units.MAX_FACET_SAG` von der Rundung abweicht, also
     genauso weit wie die Flächen, die der exakte Kern ausgibt.
     """
-    return _worked_edges(mesh, radius, choice, keys, rounded=True)
+    return _worked_edges(mesh, radius, choice, keys, rounded=True, quality=quality)
 
 
 def bevel_edges(
@@ -798,6 +801,8 @@ def bevel_edges(
     distance: float,
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
+    *,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Fast die gewählten Kanten — dieselbe Handlung wie ``brep.edit.chamfer``.
 
@@ -805,7 +810,7 @@ def bevel_edges(
     exakten Kern. Am Netz ist die Fase der genauere der beiden Fälle: Sie ist
     eine Ebene, und eine Ebene hat ein Netz exakt — hier weicht nichts ab.
     """
-    return _worked_edges(mesh, distance, choice, keys, rounded=False)
+    return _worked_edges(mesh, distance, choice, keys, rounded=False, quality=quality)
 
 
 def _mixed_corner_region(size: float, *, rounded: bool) -> tuple[MeshData, MeshData]:
@@ -1045,7 +1050,12 @@ def _chamfer_contacts(
 
 
 def _corner_tools(
-    star: list[tuple[MeshEdge, int]], size: float, *, rounded: bool, ball_vertices: np.ndarray
+    star: list[tuple[MeshEdge, int]],
+    size: float,
+    *,
+    rounded: bool,
+    ball_vertices: np.ndarray,
+    quality: Quality = "fine",
 ) -> tuple[BooleanKind, MeshData, list[BooleanOutcome]] | None:
     """Die Eckfläche verbindet die Flanken am ursprünglichen gemeinsamen Knoten.
 
@@ -1105,7 +1115,7 @@ def _corner_tools(
         ball_points = ball_vertices + centre
     local = _hull(corners + vertex)
     ball = _hull(ball_points + vertex)
-    removed = boolean("difference", [local, ball], quality="fine", allow_empty=True)
+    removed = boolean("difference", [local, ball], quality=quality, allow_empty=True)
     return kind, removed.mesh, [removed]
 
 
@@ -1138,10 +1148,16 @@ def _mixed_corner_frame(star: list[tuple[MeshEdge, int]]) -> tuple[np.ndarray, b
 
 
 def _check_corner_region(
-    mesh: MeshData, region: MeshData, frame: np.ndarray, size: float, complement: bool
+    mesh: MeshData,
+    region: MeshData,
+    frame: np.ndarray,
+    size: float,
+    complement: bool,
+    *,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Der örtliche Ersatz muss ausschließlich die drei gewählten Flächen treffen."""
-    clipped = boolean("intersection", [mesh, region], quality="fine", allow_empty=True)
+    clipped = boolean("intersection", [mesh, region], quality=quality, allow_empty=True)
     local = (clipped.mesh.raw.triangles - frame[:3, 3]) @ frame[:3, :3]
     allowed = np.zeros(len(local), dtype=bool)
     for axis, levels in ((0, (-size, 0.0, size)), (1, (-size, 0.0, size)), (2, (-size, 0.0))):
@@ -1190,6 +1206,7 @@ def _worked_edges(
     keys: Sequence[str],
     *,
     rounded: bool,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen."""
     entries = edges_of(mesh)
@@ -1197,11 +1214,11 @@ def _worked_edges(
     groups = _selected_edge_groups(chosen)
     mixed = any(_mixed_corner_frame(star) is not None for star in _corner_stars(entries, chosen))
     if len(groups) == 1 or not mixed:
-        return _placed_edge_work(mesh, entries, chosen, size, rounded=rounded)
+        return _placed_edge_work(mesh, entries, chosen, size, rounded=rounded, quality=quality)
     runs: list[BooleanOutcome] = []
     body = mesh
     for group in groups:
-        result = _placed_edge_work(body, entries, group, size, rounded=rounded)
+        result = _placed_edge_work(body, entries, group, size, rounded=rounded, quality=quality)
         runs.append(result)
         body = result.mesh
     solver = deepest(run.solver for run in runs)
@@ -1216,6 +1233,7 @@ def _placed_edge_work(
     size: float,
     *,
     rounded: bool,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Rechnet eine unabhängige Auswahlgruppe mit ihrer unveränderten Ausgangstopologie."""
     frame = next(
@@ -1227,7 +1245,7 @@ def _placed_edge_work(
         None,
     )
     if frame is None:
-        return _edge_work(mesh, entries, chosen, size, rounded=rounded)
+        return _edge_work(mesh, entries, chosen, size, rounded=rounded, quality=quality)
     raw = mesh.raw.copy()
     delta = np.asarray(raw.vertices) - frame[:3, 3]
     local = delta @ frame[:3, :3]
@@ -1266,7 +1284,9 @@ def _placed_edge_work(
         local_entries.append(placed)
         if id(entry) in selected_ids:
             local_chosen.append(placed)
-    result = _edge_work(mesh.replacing(raw), local_entries, local_chosen, size, rounded=rounded)
+    result = _edge_work(
+        mesh.replacing(raw), local_entries, local_chosen, size, rounded=rounded, quality=quality
+    )
     world = result.mesh.raw.copy()
     world.apply_transform(frame)
     result.mesh = result.mesh.replacing(world)
@@ -1280,6 +1300,7 @@ def _edge_work(
     size: float,
     *,
     rounded: bool,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Der gemeinsame Weg von Verrundung und Fase.
 
@@ -1305,12 +1326,15 @@ def _edge_work(
             rounded,
             min_steps=steps if id(entry) in refined_ids else 0,
             extend_ends=id(entry) not in refined_ids,
+            quality=quality,
         )
         (outer if entry.convex else inner).append(tool)
     runs: list[BooleanOutcome] = []
     ball_vertices = _corner_ball(size) if stars and rounded else np.empty((0, 3))
     for star in stars:
-        prepared = _corner_tools(star, size, rounded=rounded, ball_vertices=ball_vertices)
+        prepared = _corner_tools(
+            star, size, rounded=rounded, ball_vertices=ball_vertices, quality=quality
+        )
         if prepared is not None:
             kind, tool, preparation = prepared
             runs.extend(preparation)
@@ -1320,19 +1344,19 @@ def _edge_work(
     for _star, (frame, complement) in mixed:
         region, target = _mixed_corner_region(size, rounded=rounded)
         if complement:
-            reversed_target = boolean("difference", [region, target], quality="fine")
+            reversed_target = boolean("difference", [region, target], quality=quality)
             runs.append(reversed_target)
             target = reversed_target.mesh
         target = _extend_corner_contacts(target, size)
         region.raw.apply_transform(frame)
         target.raw.apply_transform(frame)
-        runs.append(_check_corner_region(mesh, region, frame, size, complement))
+        runs.append(_check_corner_region(mesh, region, frame, size, complement, quality=quality))
         regions.append(region)
         targets.append(target)
     if regions:
         clipped_inner = []
         for tool in inner:
-            clipped = boolean("difference", [tool, *regions], quality="fine", allow_empty=True)
+            clipped = boolean("difference", [tool, *regions], quality=quality, allow_empty=True)
             runs.append(clipped)
             if clipped.mesh.triangle_count:
                 clipped_inner.append(clipped.mesh)
@@ -1343,7 +1367,7 @@ def _edge_work(
     for kind, tools in (("difference", outer), ("union", inner)):
         if not tools:
             continue
-        outcome = boolean(kind, [body, *tools], quality="fine")
+        outcome = boolean(kind, [body, *tools], quality=quality)
         body = outcome.mesh
         runs.append(outcome)
     # Ohne Kante hätte ``wanted`` angehalten, und ``rounding_tool`` wirft,
@@ -1496,7 +1520,7 @@ def _plane_cut(
     return line, np.linalg.solve(matrix, right)
 
 
-def unround(mesh: MeshData, feature: Feature) -> BooleanOutcome:
+def unround(mesh: MeshData, feature: Feature, *, quality: Quality = "fine") -> BooleanOutcome:
     """Nimmt eine erkannte Rundung weg und stellt die scharfe Kante her.
 
     Der Füllkörper ist der **Zwickel ohne Bogen** — das Dreieck zwischen der
@@ -1530,11 +1554,13 @@ def unround(mesh: MeshData, feature: Feature) -> BooleanOutcome:
             ),
         )
     kind: BooleanKind = "union" if corner.convex else "difference"
-    outcome = boolean(kind, [mesh, filler], quality="fine")
+    outcome = boolean(kind, [mesh, filler], quality=quality)
     return BooleanOutcome(mesh=outcome.mesh, solver=outcome.solver, findings=list(outcome.findings))
 
 
-def reround(mesh: MeshData, feature: Feature, radius: float) -> BooleanOutcome:
+def reround(
+    mesh: MeshData, feature: Feature, radius: float, *, quality: Quality = "fine"
+) -> BooleanOutcome:
     """Ändert den Radius einer erkannten Rundung — wegnehmen, neu verrunden.
 
     **Zwei Schritte und nicht einer**, weil es zwischen ihnen etwas gibt, das
@@ -1553,9 +1579,9 @@ def reround(mesh: MeshData, feature: Feature, radius: float) -> BooleanOutcome:
             value=radius,
         )
     corner = sharp_corner(mesh, feature)
-    taken = unround(mesh, feature)
+    taken = unround(mesh, feature, quality=quality)
     key = edge_key(_placed(corner))
-    again = round_edges(taken.mesh, radius, "named", [key])
+    again = round_edges(taken.mesh, radius, "named", [key], quality=quality)
     return BooleanOutcome(
         mesh=again.mesh,
         solver=deepest([taken.solver, again.solver]) or again.solver,
@@ -1587,6 +1613,8 @@ def bead_edges(
     radius: float,
     choice: EdgeChoice = "all",
     keys: Sequence[str] = (),
+    *,
+    quality: Quality = "fine",
 ) -> BooleanOutcome:
     """Legt einen Wulst auf die gewählten Kanten — eine runde Leiste.
 
@@ -1623,7 +1651,7 @@ def bead_edges(
     tools: list[MeshData] = []
     for entry in chosen:
         tools.extend(_rod_along(entry, radius))
-    return boolean("union", [mesh, *tools], quality="fine")
+    return boolean("union", [mesh, *tools], quality=quality)
 
 
 def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:

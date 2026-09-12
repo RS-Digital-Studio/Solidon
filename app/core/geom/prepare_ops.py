@@ -2501,6 +2501,7 @@ class RemoveFeatureParams(BaseParams):
 
 @register_op(
     name="remove_feature",
+    cache_version="2",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -2896,6 +2897,7 @@ class ResizeFeatureParams(BaseParams):
 
 @register_op(
     name="resize_feature",
+    cache_version="2",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -6313,7 +6315,7 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
         return _exact_fillet(ctx, source, name, None)
     from app.core.geom.edges import unround
 
-    outcome = unround(as_mesh_data(source.mesh), source.features[name])
+    outcome = unround(as_mesh_data(source.mesh), source.features[name], quality=ctx.quality)
     return _after_the_fillet(source, name, outcome)
 
 
@@ -6328,7 +6330,7 @@ def _reshape_the_fillet(
         return _exact_fillet(ctx, source, name, radius)
     from app.core.geom.edges import reround
 
-    outcome = reround(as_mesh_data(source.mesh), source.features[name], radius)
+    outcome = reround(as_mesh_data(source.mesh), source.features[name], radius, quality=ctx.quality)
     return _after_the_fillet(source, name, outcome)
 
 

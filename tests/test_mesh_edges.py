@@ -991,7 +991,14 @@ def test_a_sharp_corner_tells_the_two_formulas_apart() -> None:
 # --- Als Operation, wie der Kunde sie fährt -----------------------------------
 
 
-def run(op: str, entry: SceneObject, profile: Profile | None = None, **params: Any) -> OpResult:
+def run(
+    op: str,
+    entry: SceneObject,
+    profile: Profile | None = None,
+    *,
+    quality: str = "fine",
+    **params: Any,
+) -> OpResult:
     """Eine Operation so fahren, wie die Auswertung sie fährt."""
     load_operations()
     spec = REGISTRY.get(op)
@@ -1001,13 +1008,97 @@ def run(op: str, entry: SceneObject, profile: Profile | None = None, **params: A
             inputs=[entry],
             params=spec.params(**params),
             profile=profile,
-            quality="fine",
+            quality=quality,
             seed=None,
             progress=lambda fraction, text: None,
             ask=lambda question, choices: choices[0],
             cancelled=NeverCancelled(),
         )
     )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "fillet_edges",
+        "chamfer_edges",
+        "bead_edges",
+        "push_face",
+        "draft_faces",
+        "remove_feature",
+        "resize_feature",
+        "fillet-all",
+        "mixed-fillet",
+        "mixed-chamfer",
+    ],
+)
+def test_draft_shaping_keeps_every_boolean_in_draft(
+    operation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Nutzeroperation reicht den Entwurf bis zum letzten Geometrieschritt durch."""
+    from app.core.geom import edges, faces
+
+    body = block()
+    params: dict[str, Any] = {}
+    if operation in {"fillet-all", "mixed-fillet", "mixed-chamfer"}:
+        if operation.startswith("mixed-"):
+            body = MeshData(_notched_block())
+        params["edges"] = "all"
+        operation = "chamfer_edges" if operation == "mixed-chamfer" else "fillet_edges"
+    if operation in {"remove_feature", "resize_feature"}:
+        body = round_edges(body, 2.0, "vertical").mesh
+    features = detect(body)
+    if operation in {"remove_feature", "resize_feature"}:
+        feature = next(entry for entry in features.values() if entry.kind == "fillet")
+        params["at_feature"] = feature.id
+        if operation == "resize_feature":
+            params["diameter"] = 6.0
+    elif operation == "push_face":
+        feature = next(
+            entry
+            for entry in features.values()
+            if entry.kind == "face" and entry.params["normal"][2] > 0.9
+        )
+        params.update(face=feature.id, distance=1.0)
+    source = SceneObject(id="obj_1", name="Klotz", mesh=body, features=features)
+    seen: list[str] = []
+
+    def measured(*args: Any, **kwargs: Any) -> Any:
+        seen.append(kwargs.get("quality", "fine"))
+        return boolean(*args, **kwargs)
+
+    monkeypatch.setattr(edges, "boolean", measured)
+    monkeypatch.setattr(faces, "boolean", measured)
+
+    result = run(operation, source, quality="draft", **params)
+
+    assert result.outputs[0].mesh.is_watertight
+    assert seen and set(seen) == {"draft"}
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_shaping_uses_only_the_fallback_stages_of_its_quality(
+    quality: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein erzwungenes Kernversagen darf im Entwurf keine teuren Folgestufen starten."""
+    import importlib
+
+    from app.core.errors import BooleanFailedError
+
+    engine = importlib.import_module("app.core.geom.boolean")
+    seen: list[str] = []
+
+    def unavailable(kind: Any, meshes: Any, stage: str, seed: Any) -> None:
+        seen.append(stage)
+        raise RuntimeError("forced unavailable geometry kernel")
+
+    monkeypatch.setattr(engine, "_run_stage", unavailable)
+    with pytest.raises(BooleanFailedError) as caught:
+        run("fillet_edges", imported(), quality=quality)
+
+    expected = ["direct", "welded"] + (["jittered", "voxel"] if quality == "fine" else [])
+    assert seen == expected
+    assert list(caught.value.attempted) == expected
 
 
 def imported(mesh: MeshData | None = None) -> SceneObject:
