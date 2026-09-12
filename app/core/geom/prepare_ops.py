@@ -1587,7 +1587,7 @@ def _tool_for(
         )
     body = built.raw.copy()
     body.apply_translation(-np.asarray(measured, dtype=float))
-    if scale != 1.0:
+    if not is_close(scale, 1.0):
         body.apply_scale(scale)  # type: ignore[no-untyped-call]
     body.apply_transform(matrix)
     body.apply_translation(np.asarray(centre, dtype=float))
