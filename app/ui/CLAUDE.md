@@ -17,6 +17,10 @@ Hier steht die Karte, dort das Gesetz.
 
 ## Filamente und lokales Lager
 
+`InventoryView` reiht bestätigte Lagerhandlungen geordnet ein; Rückmeldungen
+gelten nur ihrem aktiven Arbeiter. Abgebrochene Suchen bleiben bis zum Threadende
+gehalten und dürfen spätere Aufträge nicht verändern.
+
 `filament_inventory.py` zeigt und verwaltet Spulen ohne Renderer; `filament_picker.py`
 enthält den gemeinsamen Spulendialog und die Übernahme konfigurierter Slicerfilamente.
 `filament_assignment.py` zeigt die Schnellauswahl. Beide Auswahlwege melden

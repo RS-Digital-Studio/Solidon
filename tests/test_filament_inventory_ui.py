@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event
 from time import monotonic
 
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
+from app.core.errors import ValidationError
 from app.core.knowledge import filaments
 from app.ui.filament_inventory import InventoryView, SlicerSpoolDialog, SpoolCard
 from app.ui.filament_picker import NewFilamentDialog
@@ -395,3 +397,103 @@ def test_replaced_spool_details_hide_before_deferred_deletion(
     assert old and all(widget.isVisible() for widget in old)
     inventory.show_spool(second.identifier)
     assert all(widget.isHidden() for widget in old)
+
+
+@pytest.mark.parametrize("first_outcome", ["saved", "rejected", "crashed"])
+def test_next_confirmed_spool_is_saved_after_the_current_action(
+    inventory: InventoryView, monkeypatch: pytest.MonkeyPatch, first_outcome: str
+) -> None:
+    """Eine zweite bestätigte Eingabe überlebt Erfolg und Fehler des vorigen Auftrags."""
+    started, finish = Event(), Event()
+    original_save = filaments.save
+    names = iter(("Erste Spule", "Zweite Spule"))
+
+    def accept(dialog: NewFilamentDialog) -> int:
+        dialog.name.setText(next(names))
+        return QDialog.DialogCode.Accepted
+
+    def save(entry: filaments.CatalogueFilament) -> filaments.CatalogueFilament:
+        if entry.name == "Erste Spule":
+            started.set()
+            assert finish.wait(5)
+            if first_outcome == "rejected":
+                raise ValidationError("stock", "Bestand prüfen.")
+            if first_outcome == "crashed":
+                raise OSError("Lagerdatei nicht erreichbar")
+        return original_save(entry)
+
+    monkeypatch.setattr(NewFilamentDialog, "exec", accept)
+    monkeypatch.setattr(filaments, "save", save)
+    try:
+        inventory.add_button.click()
+        assert started.wait(2)
+        inventory.add_button.click()
+        assert not inventory.wait_for_workers(0)
+    finally:
+        finish.set()
+        _wait_for_action(inventory)
+    expected = {"Zweite Spule"}
+    if first_outcome == "saved":
+        expected.add("Erste Spule")
+    assert {entry.name for entry in filaments.catalogue()} == expected
+    assert filaments.get(inventory._selected_id).name == "Zweite Spule"
+
+
+@pytest.mark.parametrize("search_outcome", ["found", "rejected", "crashed"])
+def test_cancelled_search_cannot_finish_the_following_spool_write(
+    inventory: InventoryView, monkeypatch: pytest.MonkeyPatch, search_outcome: str
+) -> None:
+    """Eine verspätete Suchantwort weder öffnet den Import noch beendet sie das Speichern."""
+    from app.ui import filament_inventory
+
+    search_started, finish_search = Event(), Event()
+    save_started, finish_save = Event(), Event()
+    original_save = filaments.save
+    changed: list[bool] = []
+    inventory.catalogueChanged.connect(lambda: changed.append(True))
+
+    def search() -> tuple[filaments.CatalogueFilament, ...]:
+        search_started.set()
+        assert finish_search.wait(5)
+        if search_outcome == "rejected":
+            raise ValidationError("profile", "Profil prüfen.")
+        if search_outcome == "crashed":
+            raise OSError("Suchpfad nicht erreichbar")
+        return ()
+
+    def save(entry: filaments.CatalogueFilament) -> filaments.CatalogueFilament:
+        save_started.set()
+        assert finish_save.wait(5)
+        return original_save(entry)
+
+    def accept(dialog: NewFilamentDialog) -> int:
+        dialog.name.setText("Neue Spule")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(filament_inventory, "configured_spools", search)
+    monkeypatch.setattr(filaments, "save", save)
+    monkeypatch.setattr(NewFilamentDialog, "exec", accept)
+    try:
+        inventory.import_button.click()
+        assert search_started.wait(2)
+        search_worker = inventory._worker
+        inventory._show_wait_progress()
+        inventory.cancel_button.click()
+        cancelled_message = inventory.message.text()
+        inventory.add_button.click()
+        assert save_started.wait(2)
+        write_worker = inventory._worker
+        assert write_worker is not search_worker
+        finish_search.set()
+        assert search_worker.wait(2000)
+        QTest.qWait(20)
+        assert inventory._worker is write_worker
+        assert not inventory.wait_for_workers(0)
+        assert inventory.message.text() == cancelled_message
+        assert changed == []
+    finally:
+        finish_search.set()
+        finish_save.set()
+        _wait_for_action(inventory)
+    assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
+    assert changed == [True]

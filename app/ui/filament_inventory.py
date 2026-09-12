@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Callable
 from functools import partial
 from typing import Any
@@ -330,6 +330,9 @@ class InventoryView(QWidget):
         self._worker: _InventoryWork | None = None
         self._leash = WorkerLeash(self)
         self._callback: Callable[[object], None] | None = None
+        self._pending_actions: deque[tuple[Callable[[], object], Callable[[object], None]]] = (
+            deque()
+        )
         self._wait_cursor = QTimer(self)
         self._wait_cursor.setSingleShot(True)
         self._wait_cursor.timeout.connect(self._show_wait_cursor)
@@ -756,9 +759,14 @@ class InventoryView(QWidget):
         self._leash.wait_all(timeout_ms)
 
     def wait_for_workers(self, timeout_ms: int = 0) -> bool:
-        """Laufende Lageränderungen enden vor dem Schließen des Hauptfensters."""
-        self.release(timeout_ms)
-        return not any(worker.isRunning() for worker in self._leash.pending())
+        """Laufende und eingereihte Lageränderungen enden vor dem Hauptfenster."""
+        if timeout_ms > 0:
+            self.release(timeout_ms)
+        return (
+            self._worker is None
+            and not self._pending_actions
+            and not any(worker.isRunning() for worker in self._leash.pending())
+        )
 
     def _add(self) -> None:
         dialog = NewFilamentDialog(self)
@@ -817,16 +825,22 @@ class InventoryView(QWidget):
         self._run(partial(filaments.synchronise, dialog.chosen_spools()), self._saved)
 
     def _run(self, action: Callable[[], object], callback: Callable[[object], None]) -> None:
+        """Bestätigte Eingaben bleiben bis zu ihrer Ausführung in Reihenfolge erhalten."""
+        self._pending_actions.append((action, callback))
+        self._start_next()
+
+    def _start_next(self) -> None:
         """Schreiben und Suchen halten die letzte gültige Ansicht sichtbar."""
-        if self._worker is not None:
+        if self._worker is not None or not self._pending_actions:
             return
+        action, callback = self._pending_actions.popleft()
         self._callback = callback
         self.keep_count_button.hide()
         worker = _InventoryWork(action)
         self._worker = worker
         worker.completed.connect(self._completed)
         worker.rejected.connect(self._rejected)
-        worker.crashed.connect(self._failed)
+        worker.crashed.connect(self._work_failed)
         self._wait_cursor.start(200)
         self._wait_progress.start(2000)
         self._leash.start(worker)
@@ -847,18 +861,31 @@ class InventoryView(QWidget):
         self.progress.hide()
         self.cancel_button.hide()
 
-    def _completed(self, result: object) -> None:
+    def _take_callback(self) -> Callable[[object], None] | None:
+        """Nur die Antwort des aktuellen Auftrags darf dessen Wartezustand beenden."""
+        if self._worker is None or self.sender() is not self._worker:
+            return None
         callback = self._callback
         self._worker = None
         self._callback = None
         self._stop_waiting()
+        return callback
+
+    def _completed(self, result: object) -> None:
+        callback = self._take_callback()
         if callback is not None:
-            callback(result)
+            try:
+                callback(result)
+            finally:
+                self._start_next()
+
+    def _work_failed(self, reason: str) -> None:
+        if self._take_callback() is None:
+            return
+        self._failed(reason)
+        self._start_next()
 
     def _failed(self, _reason: str) -> None:
-        self._worker = None
-        self._callback = None
-        self._stop_waiting()
         self.message.setText(
             tr(
                 "Das Lager konnte nicht aktualisiert werden. Angaben und Schreibrechte prüfen "
@@ -869,15 +896,20 @@ class InventoryView(QWidget):
 
     def _rejected(self, problem: object) -> None:
         """Fachliche Konflikte nennen ihren Grund; Angaben ändern bleibt erreichbar."""
+        if self._take_callback() is None:
+            return
         self._failed("")
         self.message.setText(str(problem))
         self.keep_count_button.setVisible(
             isinstance(problem, ValidationError) and problem.constraint == "stock_conflict"
         )
+        self._start_next()
 
     def _cancel(self) -> None:
-        if self._worker is not None:
-            self._worker.requestInterruption()
+        if self._worker is None or self._callback != self._choose_import:
+            return
+        self._worker.requestInterruption()
+        self._worker = None
         self._callback = None
         self.message.setText(
             tr(
@@ -886,6 +918,7 @@ class InventoryView(QWidget):
             )
         )
         self._stop_waiting()
+        self._start_next()
 
     def _saved(self, _result: object) -> None:
         if isinstance(_result, filaments.CatalogueFilament):
