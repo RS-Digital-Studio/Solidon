@@ -89,6 +89,8 @@ Sie entsteht bei der Auswertung (`evaluate._renamed`), nicht beim Anlegen des
 Schritts. Deshalb sind es dort zwei Aufrufe: `apply_counterpart` legt die
 Geometrie an, `attach_fit` liest die Namen aus der gerechneten Szene und hängt
 die Passung an dieselbe Transaktion.
+Dieser Schritt muss beim Nachtragen weiterhin der letzte sein. Ein inzwischen
+geänderter Verlauf bleibt unangetastet und bekommt einen erklärenden Befund.
 
 **Dokumentation, ohne Qt gezeichnet:**
 

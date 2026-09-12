@@ -147,6 +147,40 @@ def test_one_undo_takes_the_geometry_and_the_fit(profile: Profile) -> None:
     assert document.fits == [], "und die Passung mit ihnen"
 
 
+@pytest.mark.parametrize("change", ["new_step", "undo", "empty_history"])
+def test_a_late_fit_leaves_a_changed_history_untouched(profile: Profile, change: str) -> None:
+    """Ein altes Auswertungsergebnis trägt keine Passung an einer anderen Transaktion vorbei ein."""
+    document, cache, _scene = _two_plates(profile)
+    pair = pair_named("dowel")
+    applied = apply_counterpart(
+        document,
+        pair,
+        "obj_1",
+        "obj_2",
+        shared={"diameter": 6.0, "length": 8.0},
+        first_place={"z": 10.0},
+        second_place={"z": 10.0},
+    )
+    result = evaluate(document, profile, cache=cache)
+    assert result.stopped_at is None
+    history = History(document)
+    if change == "new_step":
+        history.apply("Ein weiterer Körper", [OperationDraft(op="create_box")])
+    else:
+        history.undo()
+        if change == "empty_history":
+            history.undo()
+    before_fits = tuple(document.fits)
+    before_transactions = tuple(document.transactions)
+
+    attach_fit(document, applied, pair, result.scene)
+
+    assert tuple(document.fits) == before_fits
+    assert tuple(document.transactions) == before_transactions
+    assert applied.fit is None
+    assert [finding.code for finding in applied.findings] == ["parts.counterpart_unpaired"]
+
+
 def test_a_second_pair_gets_its_own_fit(profile: Profile) -> None:
     """Zwei Stifte sind zwei Paare — nicht ein Name, der den ersten überschreibt.
 

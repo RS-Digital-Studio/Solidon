@@ -277,6 +277,22 @@ def attach_fit(
         _log.info("counterpart: %d output(s), no fit", len(applied.object_ids))
         return applied
 
+    last = document.transactions[-1] if document.transactions else None
+    if last is None or last.id != applied.transaction:
+        applied.findings.append(
+            Finding(
+                code="parts.counterpart_unpaired",
+                severity="warning",
+                message=_(
+                    "Der Verlauf hat sich seit dem Einsetzen geändert. Die Passung wurde "
+                    "nicht nachgetragen. Prüfen Sie die beiden Hälften im aktuellen Modell "
+                    "und tragen Sie die Passung bei Bedarf im Merkmalfenster ein."
+                ),
+                values={"pair": pair.key},
+            )
+        )
+        return applied
+
     first = _made_feature(
         scene, applied.object_ids[0], applied.op_ids[0], pair.part_a, pair.feature_a
     )
@@ -307,13 +323,8 @@ def attach_fit(
         tolerance="auto:",
     )
     changes = change_for(document, fits=[*document.fits, fit])
+    document.transactions[-1] = dataclasses.replace(last, changes=changes)
     document.fits.append(fit)
-    # Dieselbe Transaktion wie die Geometrie — solange sie die letzte ist. Wer
-    # zwischen Anwenden und Anhängen etwas anderes tut, bekommt die Passung
-    # ohne Undo-Bindung; deshalb prüft die Bedingung und rät nicht.
-    last = document.transactions[-1] if document.transactions else None
-    if last is not None and last.id == applied.transaction:
-        document.transactions[-1] = dataclasses.replace(last, changes=changes)
 
     applied.fit = fit if fit in active_fits(document) else None
     applied.findings.append(
