@@ -544,13 +544,19 @@ def _describe(
             # im Material, ist es eine Verrundung, liegt sie außerhalb, eine
             # Kehle. Gemessen an einem L-Profil mit verrundeten Kanten: 26
             # Verrundungen, 2 Kehlen an der einspringenden Ecke.
+            # Mindestens halbe Mäntel sind radiale Wände: Ihre Achse kann
+            # beiderseits im Hohlraum liegen. Dort zählt die Mantelnormale
+            # einschließlich der Händigkeit des Zylinderrahmens.
             return "fillet", {
-                "radius": round(radius, 4),
-                "diameter": round(radius * 2.0, 4),
+                "radius": radius,
+                "diameter": radius * 2.0,
                 "centre": middle,
                 "axis": _oriented(axis),
                 "length": round(depth, 4),
-                "recess": not _axis_in_material(inside, cylinder, centre),
+                "recess": (hollow == cylinder.Position().Direct())
+                if turn >= math.pi - EPS_GEOM
+                else not _axis_in_material(inside, cylinder, centre),
+                **({"radial": True} if turn >= math.pi - EPS_GEOM else {}),
             }
 
         # **Der Mittelpunkt liegt auf der Achse, nicht im Flächenschwerpunkt.**

@@ -2897,7 +2897,7 @@ class ResizeFeatureParams(BaseParams):
 
 @register_op(
     name="resize_feature",
-    cache_version="3",
+    cache_version="4",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -6311,6 +6311,14 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
     Und wieder zwei Kerne: Der exakte nimmt die Rundungsfläche als Ding
     (``BRepAlgoAPI_Defeaturing``), das Netz legt den Zwickel dazu.
     """
+    if source.features[name].params.get("radial", False):
+        raise GeometryError(
+            _(
+                "Diese runde Wand ist keine abgerundete Kante. Ändern Sie "
+                "ihren Radius über „Merkmal ändern“."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     if source.kind == "brep":
         return _exact_fillet(ctx, source, name, None)
     from app.core.geom.edges import unround
@@ -6326,6 +6334,18 @@ def _reshape_the_fillet(
     radius: float,
 ) -> OpResult:
     """Den Radius einer erkannten Rundung ändern."""
+    if is_close(radius, float(source.features[name].params["radius"])):
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="resize_feature.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal hat dieses Maß schon."),
+                    feature_ids=(name,),
+                )
+            ],
+        )
     if source.kind == "brep":
         return _exact_fillet(ctx, source, name, radius)
     from app.core.geom.edges import reround

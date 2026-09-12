@@ -211,6 +211,8 @@ der Anker für jeden späteren Schritt; ein Tausch nimmt ihm sein Ziel.
 entsteht einmal (`prepare.slot_profile`) und wird von beiden Kernen aufgezogen
 — vom Netz-Kern über `sketch_solid.extrude_profile`, vom exakten über
 `brep.profiles.extrude`, wo die Enden echte Zylinderflächen bleiben.
+Der Umriss normalisiert seinen Winkel auf eine halbe Umdrehung: geometrisch
+gleiche Langlöcher erhalten dadurch auch dieselbe Facettierung und Schnittfolge.
 `slot_travel` rechnet die Gesamtlänge des Dialogs in die Mittellinie um und
 lehnt dabei die Aufweitung ab; `slot_ends` nennt die beiden Endpunkte, an
 denen jede Prüfung fragen muss, die für eine runde Bohrung an der Mitte fragt.
@@ -385,6 +387,16 @@ halten zur Neuauswahl an; keine Reihenfolge entscheidet über die Geometrie.
 Eine explizite Auswahl muss vollständig auflösbar sein. Fehlt nur eine der
 genannten Kanten, hält der ganze Bearbeitungsschritt an; die noch vorhandenen
 Kanten werden nicht als stillschweigende Teilauswahl behandelt.
+
+`edges.radial_rounding` bearbeitet positiv belegte Zylinderwände innerhalb
+ihrer eigenen Randkurven. Die ausgewählten Knoten skalieren radial samt
+Sehnenunterteilungen; angrenzende Flächen müssen in ihren bisherigen Ebenen
+bleiben. Ein geschlossener Zwischenkörper zwischen
+alter und neuer Haut prüft boolesch auf fremdes Material und Wandverlust.
+Sein Volumen muss auch zum Ergebnis mit der ursprünglichen Topologie passen;
+Nullhäute einer bloßen Neuvernetzung werden damit kein Bestandteil des Modells.
+Werden bisherige Dreiecksdiagonalen eines ebenen Randes durch die Änderung
+ungültig, übernimmt stattdessen der geprüfte Schnitt dessen neue Triangulation.
 
 `rounding_tool` baut den Werkzeugkörper: im Querschnitt der Zwickel zwischen
 den zwei Flächen und dem Bogen, stückweise über den Zug gezogen. Wie fein der

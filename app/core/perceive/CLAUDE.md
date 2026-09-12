@@ -97,6 +97,21 @@ Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
 Die Oberfläche fragt die Merkmalsart **nicht** — sie rendert die Liste. Sonst
 führt sie dieselbe Tabelle ein zweites Mal.
 
+Rundungen zeigen den gemessenen Radius. `ActionField.parameter_factor`
+übersetzt dieses sichtbare Maß für Vorschau und Übernehmen in den
+Durchmesserparameter von `resize_feature`. `feature_value_source` gibt auch
+der Sammelhandlung denselben Radius als Vergleichsmaß; ein fehlender
+Durchmesser darf weder einen Vorgabewert noch eine falsche Gruppe erzeugen.
+Innen- und Außenrundungen bilden getrennte Gruppen. Positiv kreisförmig
+belegte Zylinderwände tragen `radial=True`: Ihr Radius ist bearbeitbar,
+„Merkmal entfernen“ kann dort keine scharfe Ersatzkante herstellen und nennt
+stattdessen die Radiusbearbeitung.
+
+Bei grob facettierten Langlöchern dürfen abgelehnte Bogenpaare über den
+gesamten zusammenhängenden Mantel als Stadion belegt werden. Die Richtung
+kommt aus einer vorhandenen ebenen Flanke, die Prüfung aus `fit_stadium`;
+ein ähnlicher Radius allein belegt kein Langloch.
+
 **Und der Kern fragt hier ebenfalls nach.** `reason_against(op, kind)` gibt
 `None` zurück, wenn die Operation diese Art annimmt, und sonst den Satz, der im
 Panel in der ausgegrauten Zeile steht. `geom/prepare_ops.py` ruft es, bevor es

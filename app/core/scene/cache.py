@@ -58,8 +58,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 
 #: Die Kompatibilität umfasst Geometrie und erzeugte Merkmalsauskunft, darunter
 #: exakte Blindböden, Gewinde und eindeutige Innen-/Außenrollen für Passungen.
-#: Stand 4 ergänzt offene Langlöcher und korrigierte Füll-/Schneidkörper.
-CACHE_FORMAT_VERSION: Final = 4
+#: Merkmalsänderungen wie zusammengefasste Langlochwände und radial bearbeitbare
+#: Zylinderwände verlangen auch für bereits gespeicherte Ergebnisse neue Auskunft.
+CACHE_FORMAT_VERSION: Final = 5
 
 
 @dataclass(frozen=True, slots=True)

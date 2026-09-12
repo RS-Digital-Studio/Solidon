@@ -817,7 +817,10 @@ def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> Ske
             values={"shortest": format_length(shortest_slot(radius * 2.0))},
         )
     half = travel / 2.0
-    turn = math.radians(angle_deg)
+    # Ein Stadion ist nach einer halben Drehung derselbe Umriss. Gleiche
+    # Formen beginnen an denselben Punkten, damit auch ihre Facettierung
+    # und anschließende Schnitte übereinstimmen.
+    turn = math.radians(angle_deg % 180.0)
     cosine, sine = math.cos(turn), math.sin(turn)
 
     def turned(x: float, y: float) -> tuple[float, float]:

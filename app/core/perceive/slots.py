@@ -601,15 +601,38 @@ def _slot_from(
 
     centre = (centre_a + centre_b) / 2.0
     if not _flanks_are_flat(body, faces, set(patch_a) | set(patch_b), centre, across, radius):
-        return None
+        # Grobe Bogenflecken können Tangentenstücke mittragen und ihre
+        # Nachbarn noch Bogenreste. Dann gilt der vorhandene Formnachweis
+        # für den ganzen Mantel; die Fitgrenze wird nicht aufgeweitet.
+        from app.core.perceive.features import fit_stadium
 
-    # Die Zylinderanpassung misst Dreiecksschwerpunkte, also innerhalb des
-    # Kreisbogens. Die Breite tragen dagegen die bereits geprüften ebenen
-    # Flanken: Ihr Abstand bleibt auch nach erneutem Schneiden derselbe.
-    flank_faces = sorted(faces - set(patch_a) - set(patch_b))
-    flank_points = np.asarray(body.triangles, dtype=float)[flank_faces].reshape(-1, 3)
-    flank_distances = (flank_points - centre) @ across
-    diameter = float(np.ptp(flank_distances))
+        flank_faces = faces - set(patch_a) - set(patch_b)
+        if not flank_faces:
+            return None
+        flank = max(flank_faces, key=lambda face: float(body.area_faces[face]))
+        along_flank = _unit(np.cross(axis, normals[flank]))
+        if along_flank is None:
+            return None
+        stadium = fit_stadium(
+            body,
+            sorted(faces),
+            direction_hint=(float(along_flank[0]), float(along_flank[1]), float(along_flank[2])),
+        )
+        if stadium is None or not stadium.good or not stadium.inward:
+            return None
+        centre = np.asarray(stadium.centre, dtype=float)
+        axis = np.asarray(stadium.axis, dtype=float)
+        direction = np.asarray(stadium.direction, dtype=float)
+        travel = stadium.travel
+        diameter = stadium.radius * 2.0
+    else:
+        # Die Zylinderanpassung misst Dreiecksschwerpunkte, also innerhalb des
+        # Kreisbogens. Die Breite tragen dagegen die bereits geprüften ebenen
+        # Flanken: Ihr Abstand bleibt auch nach erneutem Schneiden derselbe.
+        flank_indices = sorted(faces - set(patch_a) - set(patch_b))
+        flank_points = np.asarray(body.triangles, dtype=float)[flank_indices].reshape(-1, 3)
+        flank_distances = (flank_points - centre) @ across
+        diameter = float(np.ptp(flank_distances))
 
     corners = np.asarray(body.triangles, dtype=float)[list(faces)].reshape(-1, 3) - centre
     along_axis = corners @ axis

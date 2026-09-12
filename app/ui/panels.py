@@ -5218,7 +5218,10 @@ class FeaturePanel(QWidget):
                     # `set_value_mm` gesetzt; wer `setValue` nähme, schriebe
                     # den Kernwert in ein Feld, das in Zoll anzeigt (§19.3).
                     if isinstance(editor, LengthSpin):
-                        editor.set_value_mm(float(value))
+                        factor = next(
+                            field.parameter_factor for field in entries if field.name == name
+                        )
+                        editor.set_value_mm(float(value) / factor)
                     else:
                         editor.setValue(float(value))
 
@@ -5606,7 +5609,7 @@ class FeaturePanel(QWidget):
         for field in fields:
             widget = widgets.get(str(field.name))
             if isinstance(widget, LengthSpin):
-                params[str(field.name)] = widget.value_mm()
+                params[str(field.name)] = widget.value_mm() * field.parameter_factor
             elif isinstance(widget, QCheckBox):
                 params[str(field.name)] = widget.isChecked()
             elif isinstance(widget, QComboBox):

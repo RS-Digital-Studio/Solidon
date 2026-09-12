@@ -39,8 +39,8 @@ from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
-from app.core.types import Feature, Quality, Vec3, is_a_cavity
-from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG
+from app.core.types import Feature, Mesh, Quality, Vec3, is_a_cavity
+from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG, weld_tolerance
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1570,7 +1570,7 @@ def unround(mesh: MeshData, feature: Feature, *, quality: Quality = "fine") -> B
 def reround(
     mesh: MeshData, feature: Feature, radius: float, *, quality: Quality = "fine"
 ) -> BooleanOutcome:
-    """Ändert den Radius einer erkannten Rundung — wegnehmen, neu verrunden.
+    """Ändert den Radius einer erkannten Rundung oder belegten Zylinderwand.
 
     **Zwei Schritte und nicht einer**, weil es zwischen ihnen etwas gibt, das
     beide brauchen: die scharfe Kante. Eine Rundung direkt zu vergrößern hieße,
@@ -1580,6 +1580,9 @@ def reround(
     Die Kante wird über ihren **Schlüssel** wiedergefunden und nicht über einen
     Index: Zwischen Auffüllen und Neuverrunden ist das Netz ein anderes, und
     jede Nummer darin zeigt danach woandershin (§21.2).
+
+    Eine mindestens halb umlaufende Zylinderwand besitzt dagegen keine
+    scharfe Ersatzkante; ihr eigener Rand begrenzt die radiale Bearbeitung.
     """
     if radius <= EPS_GEOM:
         raise ValidationError(
@@ -1587,6 +1590,9 @@ def reround(
             _("Ohne Radius entsteht keine Rundung. Dieser Wert muss größer als null sein."),
             value=radius,
         )
+    radial = radial_rounding(mesh, feature, radius, quality=quality)
+    if radial is not None:
+        return radial
     corner = sharp_corner(mesh, feature)
     taken = unround(mesh, feature, quality=quality)
     key = edge_key(_placed(corner))
@@ -1596,6 +1602,131 @@ def reround(
         solver=deepest([taken.solver, again.solver]) or again.solver,
         findings=[*taken.findings, *again.findings],
     )
+
+
+def radial_rounding(
+    mesh: MeshData, feature: Feature, radius: float, *, quality: Quality = "fine"
+) -> BooleanOutcome | None:
+    """Ändert einen belegten Zylindermantel nur innerhalb seiner ausgewählten Haut.
+
+    Der Werkzeugkörper liegt zwischen alter und radial versetzter Haut.
+    Geschlossen wird ausschließlich an deren eigenen Randkanten. Weder
+    ein voller Zylinder noch eine angenommene scharfe Kante greifen daneben.
+    Die Ausgabe behält ihre Topologie und Randebenen; das Boolesche belegt
+    unabhängig davon, dass der gesamte Zwischenraum frei veränderbar ist.
+    """
+    from app.core.deferred import trimesh
+    from app.core.perceive.features import fit_cylinder, radial_cylinder
+
+    patch = list(feature.face_indices)
+    if not patch:
+        return None
+    fit = fit_cylinder(mesh.raw, patch)
+    if fit is None:
+        return None
+    fitted = radial_cylinder(mesh.raw, fit, patch)
+    if fitted is None:
+        return None
+    indices, reverse = np.unique(np.asarray(mesh.raw.faces)[patch], return_inverse=True)
+    old = np.asarray(mesh.raw.vertices)[indices]
+    faces = reverse.reshape(-1, 3)
+    axis = np.asarray(fitted.axis)
+    centre = np.asarray(fitted.centre)
+    relative = old - centre
+    axial = np.outer(relative @ axis, axis)
+    radial = relative - axial
+    # Auch nachträglich eingefügte Punkte auf einer Sehne skalieren mit.
+    # Sie auf den Kreis zu ziehen würde die vorhandene Facette ausbeulen.
+    fresh = centre + axial + radial * (radius / fitted.radius)
+    changed = mesh.raw.copy()
+    vertices = np.array(changed.vertices, copy=True)
+    vertices[indices] = fresh
+    changed.vertices = vertices
+    touched = np.any(np.isin(np.asarray(mesh.raw.faces), indices), axis=1)
+    neighbours = np.array(touched, copy=True)
+    neighbours[patch] = False
+    # Am Rand dürfen nur die Trimmkurven der vorhandenen Ebenen wandern.
+    # Eine schräge oder gekrümmte Nachbarhaut würde mitverformt; dafür reicht
+    # der belegte Zylinderradius allein nicht als geometrische Absicht aus.
+    displacements = vertices - np.asarray(mesh.raw.vertices)
+    plane_error = np.einsum(
+        "ijk,ik->ij",
+        displacements[np.asarray(mesh.raw.faces)[neighbours]],
+        np.asarray(mesh.raw.face_normals)[neighbours],
+    )
+    same_side = np.einsum(
+        "ij,ij->i",
+        np.asarray(mesh.raw.face_normals)[touched],
+        np.asarray(changed.face_normals)[touched],
+    )
+    if np.any(np.abs(plane_error) > weld_tolerance(mesh.bounds.diagonal)):
+        raise GeometryError(
+            detail=_(
+                "Diese Zylinderfläche lässt sich innerhalb ihrer Ränder nicht versetzen. "
+                "Wählen Sie einen kleineren Unterschied zum bisherigen Radius."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    edges = np.vstack((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
+    _unique_edges, locations, counts = np.unique(
+        np.sort(edges, axis=1), axis=0, return_index=True, return_counts=True
+    )
+    boundary = edges[locations[counts == 1]]
+    size = len(old)
+    walls = np.vstack(
+        (
+            np.column_stack((boundary[:, 0], boundary[:, 0] + size, boundary[:, 1] + size)),
+            np.column_stack((boundary[:, 0], boundary[:, 1] + size, boundary[:, 1])),
+        )
+    )
+    skin = trimesh.Trimesh(
+        vertices=np.vstack((old, fresh)),
+        faces=np.vstack((faces, faces[:, ::-1] + size, walls)),
+        process=False,
+    )
+    if skin.volume < 0.0:
+        skin.invert()
+    if not skin.is_watertight or not skin.is_winding_consistent:
+        raise GeometryError(detail=_("Diese Zylinderfläche hat keinen geschlossenen Rand."))
+    subtracted = (radius > fitted.radius) == fitted.inward
+    outcome = boolean(
+        "difference" if subtracted else "union",
+        [mesh, MeshData.of(skin)],
+        quality=quality,
+        allow_empty=True,
+    )
+    outcome.mesh, _shells = remove_hollow_shells(outcome.mesh)
+    validate_radial_change(mesh, outcome.mesh, float(skin.volume), float(skin.area))
+    if np.any(same_side <= 0.0):
+        # Die Randebene bleibt gleich, ihre bisherigen Dreiecksdiagonalen
+        # können bei verschobenen Trimmkurven aber außerhalb der Fläche
+        # liegen. Dann liefert der bereits geprüfte Schnitt die neue Teilung.
+        return outcome
+    # Das Boolesche belegt den freien Zwischenraum. Zurück geht die eigene
+    # Topologie: An deckungsgleichen Endrändern erzeugt die Neuvernetzung
+    # sonst gelegentlich angehängte Nullhäute mit alten Außenmaßen.
+    candidate = mesh.replacing(changed)
+    validate_radial_change(mesh, candidate, float(skin.volume), float(skin.area))
+    outcome.mesh = candidate
+    return outcome
+
+
+def validate_radial_change(before: Mesh, after: Mesh, volume: float, area: float) -> None:
+    """Der gesamte radiale Zwischenkörper muss frei von anderem Material bleiben."""
+    tolerance = weld_tolerance(before.bounds.diagonal) * area
+    if (
+        not after.is_watertight
+        or after.component_count != before.component_count
+        or after.volume <= EPS_GEOM
+        or abs(abs(after.volume - before.volume) - volume) > tolerance
+    ):
+        raise GeometryError(
+            detail=_(
+                "Dieser Radius reicht über die angrenzende Wand oder trifft anderes Material. "
+                "Wählen Sie einen kleineren Unterschied zum bisherigen Radius."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
 
 
 @dataclass(frozen=True, slots=True)

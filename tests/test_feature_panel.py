@@ -429,6 +429,111 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     assert accepted.diameter == pytest.approx(measured)
 
 
+@pytest.mark.parametrize("recess", [False, True], ids=["fillet", "groove"])
+@pytest.mark.parametrize("unit", ["mm", "in"])
+def test_a_rounding_shows_its_radius_and_sends_the_diameter(
+    qt_app: QApplication, recess: bool, unit: LengthUnit
+) -> None:
+    """Das angezeigte Rundungsmaß gilt für Vorschau und Übernehmen, auch in Zoll."""
+    from app.ui.labels import set_display_unit
+
+    feature = Feature(
+        id="fillet_1",
+        kind="fillet",
+        provenance="detected",
+        params={"radius": 11.96, "recess": recess, "centre": (0.0, 0.0, 0.0)},
+    )
+    panel = FeaturePanel()
+    try:
+        set_display_unit(unit)
+        panel.show_feature(feature.id, feature)
+    finally:
+        set_display_unit("mm")
+    panel.show()
+    QApplication.processEvents()
+    row = row_of(panel, "Merkmal ändern")
+    spin = next(widget for widget in fields(row) if isinstance(widget, LengthSpin))
+    assert spin.isVisibleTo(panel)
+    assert spin.accessibleName() == "Merkmal ändern — Radius"
+    assert spin.value_mm() == pytest.approx(11.96)
+    assert panel.take_values("resize_feature", {"diameter": 10.0})
+    assert spin.value_mm() == pytest.approx(5.0)
+
+    previews: list[tuple[str, dict[str, Any]]] = []
+    applied: list[tuple[str, dict[str, Any]]] = []
+    panel.valuesChanged.connect(lambda op, values: previews.append((op, values)))
+    panel.operationRequested.connect(lambda op, values: applied.append((op, values)))
+    spin.set_value_mm(8.5)
+    press(panel, "Merkmal ändern")
+    expected = ("resize_feature", {"at_feature": feature.id, "diameter": 17.0})
+    assert previews[-1] == expected
+    assert applied == [expected]
+    assert "Merkmal entfernen" in buttons(panel)
+
+
+def test_a_round_wall_offers_radius_instead_of_removing_a_corner(
+    qt_app: QApplication,
+) -> None:
+    """Eine offene Klemme hat einen änderbaren Radius, aber keine scharfe Ersatzkante."""
+    feature = Feature(
+        id="fillet_1",
+        kind="fillet",
+        provenance="detected",
+        params={"radius": 12.0, "recess": True, "radial": True},
+    )
+    panel = FeaturePanel()
+    panel.show_feature(feature.id, feature)
+    assert "Merkmal ändern" in buttons(panel)
+    assert "Merkmal entfernen" not in buttons(panel)
+    removal = next(
+        action for action in actions_for(feature) if str(action.title) == "Merkmal entfernen"
+    )
+    assert removal.op is None
+    assert "Radius" in str(removal.reason)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbours(
+    qt_app: QApplication, kind: str
+) -> None:
+    """Anklicken und unverändert übernehmen bewahrt das Teil; ein neuer Radius wirkt lokal."""
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.types import SceneObject
+    from tests.test_mesh_edges import run
+
+    exact = edit.fillet(edit.box(40.0, 30.0, 20.0), 3.0, "vertical")
+    body = exact if kind == "brep" else as_mesh_data(exact)
+    found = features_of(exact) if kind == "brep" else features.detect(body)
+    rounding = next(feature for feature in found.values() if feature.kind == "fillet")
+    source = SceneObject(id="obj_1", name="Prüfteil", kind=kind, mesh=body, features=found)
+    panel = FeaturePanel()
+    panel.show_feature(rounding.id, rounding)
+    sent: list[tuple[str, dict[str, Any]]] = []
+    panel.operationRequested.connect(lambda op, values: sent.append((op, values)))
+    press(panel, "Merkmal ändern")
+    op, values = sent.pop()
+    assert run(op, source, **values).outputs[0] is source
+
+    row = row_of(panel, "Merkmal ändern")
+    spin = next(widget for widget in fields(row) if isinstance(widget, LengthSpin))
+    spin.set_value_mm(1.5)
+    press(panel, "Merkmal ändern")
+    op, values = sent.pop()
+    changed = run(op, source, **values).outputs[0]
+    result_mesh = as_mesh_data(changed.mesh)
+    result_features = features_of(changed.mesh) if kind == "brep" else features.detect(result_mesh)
+    radii = sorted(
+        float(feature.params["radius"])
+        for feature in result_features.values()
+        if feature.kind == "fillet"
+    )
+    assert radii == pytest.approx([1.5, 3.0, 3.0, 3.0], abs=0.04)
+    assert result_mesh.is_watertight and result_mesh.component_count == 1
+    assert result_mesh.volume > as_mesh_data(source.mesh).volume
+
+
 def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplication) -> None:
     """Das Panel rechnet nichts — es nennt Operation und Werte, wie der
     Operationsdialog auch. ``at_feature`` steht dabei nicht als Feld: Welches

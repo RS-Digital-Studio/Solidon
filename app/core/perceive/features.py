@@ -21,7 +21,7 @@ import hashlib
 import math
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final, NamedTuple
 
 import numpy as np
@@ -2187,10 +2187,13 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
                 "length": round(_patch_extent(body, patch, fit.axis), 4),
                 "recess": fit.inward,
                 "residual": round(fit.residual, 4),
+                **({"radial": True} if radial is not None else {}),
             },
             face_indices=tuple(patch),
         )
-        for number, (fit, patch) in enumerate(big, start=1)
+        for number, (fitted, patch) in enumerate(big, start=1)
+        for radial in (radial_cylinder(body, fitted, patch),)
+        for fit in (radial or fitted,)
     ]
 
 
@@ -2458,7 +2461,66 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
     )
 
 
-def fit_stadium(body: trimesh.Trimesh, patch: list[int]) -> StadiumFit | None:
+def radial_cylinder(
+    body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]
+) -> CylinderFit | None:
+    """Belegt einen mindestens halben Zylindermantel an seinen tatsächlichen Ecken.
+
+    Ein solcher Mantel kann keine Verrundung zwischen zwei sich schneidenden
+    Tangentialebenen sein. Sein Radius wird radial geändert. Eine beliebige
+    gute Einpassung genügt dafür nicht: Alle Ecken müssen denselben Kreis
+    und alle Flächennormalen dieselbe Achse belegen. Zusätzliche Eckpunkte
+    mitten auf vorhandenen Sehnen zählen als Unterteilung derselben Haut.
+    """
+    from scipy.spatial import ConvexHull, QhullError
+    from shapely import distance
+    from shapely import points as planar_points
+    from shapely.geometry import Polygon
+
+    axis = np.asarray(fit.axis, dtype=float)
+    if np.max(np.abs(np.asarray(body.face_normals)[patch] @ axis)) > ACROSS_THE_AXIS:
+        return None
+    centre = np.asarray(fit.centre, dtype=float)
+    points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[patch])]
+    first, second = _plane_basis(axis)
+    flat = np.column_stack(((points - centre) @ first, (points - centre) @ second))
+    try:
+        hull = ConvexHull(flat)
+    except QhullError:
+        return None
+    tolerance = weld_tolerance(float(np.linalg.norm(body.extents)))
+    # Nach mehreren Schnitten können Sehnenpunkte um Rundungsfehler außen
+    # liegen und dadurch selbst Hull-Ecken werden. Nur numerisch kollineare
+    # Unterteilungen fallen weg; derselbe Schweißabstand gilt am ganzen Netz.
+    outline = np.asarray(
+        Polygon(flat[hull.vertices]).simplify(tolerance).exterior.coords, dtype=float
+    )[:-1]
+    circle, radius = _fit_circle(outline)
+    if radius <= tolerance:
+        return None
+    distances = np.linalg.norm(outline - circle, axis=1)
+    error = float(np.max(np.abs(distances - radius)))
+    if error > tolerance:
+        return None
+    # Der Schnittkern darf eine Facette unterteilen. Deren neue Knoten
+    # liegen auf der Sehne, nicht auf dem Kreis; der Abstand zur gesamten
+    # konvexen Kontur beweist, dass keine weitere Einbuchtung versteckt ist.
+    away = distance(planar_points(flat), Polygon(outline).exterior)
+    if float(np.max(away)) > tolerance:
+        return None
+    shifted = centre + first * circle[0] + second * circle[1]
+    refined = replace(
+        fit,
+        centre=(float(shifted[0]), float(shifted[1]), float(shifted[2])),
+        radius=radius,
+        residual=error / radius,
+    )
+    return refined if angular_span(body, refined, patch) >= 180.0 - EPS_GEOM else None
+
+
+def fit_stadium(
+    body: trimesh.Trimesh, patch: list[int], *, direction_hint: Vec3 | None = None
+) -> StadiumFit | None:
     """Ein Stadion durch einen Fleck: zwei Halbkreise über einer Strecke.
 
     Dieselbe Bauart wie :func:`fit_cylinder` — die Achse ist der Eigenvektor
@@ -2486,6 +2548,10 @@ def fit_stadium(body: trimesh.Trimesh, patch: list[int]) -> StadiumFit | None:
     beim Zylinder: Der Schwerpunkt einer Bogenfacette liegt um die Sehnenhöhe
     innerhalb der Kontur, die Ecke liegt darauf — und bei einem Weg von einer
     Sehnenbreite ist das der Unterschied zwischen Form und Rauschen.
+
+    Eine bereits belegte Flankenrichtung darf die Scheitelsuche ersetzen.
+    An groben Bögen liegen deren äußerste Netzecken neben dem Scheitel;
+    ihre Verbindung kippt dann gegen die tatsächlichen parallelen Flanken.
     """
     normals = np.asarray(body.face_normals[patch], dtype=float)
     _values, vectors = np.linalg.eigh(normals.T @ normals)
@@ -2512,13 +2578,17 @@ def fit_stadium(body: trimesh.Trimesh, patch: list[int]) -> StadiumFit | None:
     # keines. Die Ausdehnung dagegen ist in genau einer Richtung um den Weg
     # größer — grob über einen halben Kreis gesucht, dann exakt aus den zwei
     # Scheiteln, die dort ganz außen liegen.
-    angles = np.linspace(0.0, np.pi, STADIUM_SWEEP, endpoint=False)
-    sweep = np.column_stack([np.cos(angles), np.sin(angles)])
-    projected = centred @ sweep.T
-    widest = int(np.argmax(projected.max(axis=0) - projected.min(axis=0)))
-    apex_a = centred[int(np.argmax(projected[:, widest]))]
-    apex_b = centred[int(np.argmin(projected[:, widest]))]
-    chord = apex_a - apex_b
+    if direction_hint is None:
+        angles = np.linspace(0.0, np.pi, STADIUM_SWEEP, endpoint=False)
+        sweep = np.column_stack([np.cos(angles), np.sin(angles)])
+        projected = centred @ sweep.T
+        widest = int(np.argmax(projected.max(axis=0) - projected.min(axis=0)))
+        apex_a = centred[int(np.argmax(projected[:, widest]))]
+        apex_b = centred[int(np.argmin(projected[:, widest]))]
+        chord = apex_a - apex_b
+    else:
+        hint = np.asarray(direction_hint, dtype=float)
+        chord = np.array([hint @ basis_u, hint @ basis_v])
     if float(np.linalg.norm(chord)) <= EPS_GEOM:
         return None
     along_2d = chord / float(np.linalg.norm(chord))

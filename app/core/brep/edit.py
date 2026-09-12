@@ -39,11 +39,6 @@ _log = get_logger(__name__)
 #: und gilt für beide Kerne. Hier bleibt der Name, unter dem das Register und
 #: die Operationen sie ansprechen; zwei Aufzählungen hießen, dass ein Kern
 #: eines Tages eine sechste Art kennt und der andere nicht.
-#: Wie weit ein gemessener Rundungsradius vom gesuchten abweichen darf.
-#: Der Netz-Kern misst ihn an einem Sehnenzug und kommt deshalb ein wenig zu
-#: klein heraus — 2,9772 an einer Rundung, die mit 3,0 gebaut wurde.
-FILLET_RADIUS_SLACK = 0.05
-
 EdgeChoice = SharedEdgeChoice
 EDGE_CHOICES: tuple[EdgeChoice, ...] = SHARED_EDGE_CHOICES
 
@@ -956,7 +951,10 @@ def _cylinder_at(solid: Solid, centre: Vec3, radius: float) -> Any | None:
         if surface.GetType() != GeomAbs_Cylinder:
             continue
         cylinder = surface.Cylinder()
-        if abs(cylinder.Radius() - radius) > FILLET_RADIUS_SLACK * max(radius, 1.0):
+        # Der Radius kommt aus derselben exakten Topologie. Ein relatives
+        # Fenster verwechselte die nahe Außenwand einer dünnen C-Klemme mit
+        # ihrer Innenwand, weil deren Fläche dem Schwerpunkt näher liegt.
+        if not is_close(float(cylinder.Radius()), radius):
             continue
         # Die begrenzte Fläche unterscheidet auch zwei Rundungen auf derselben
         # Achse. Weder die unendliche Achse noch ihr beliebiger Ursprung tun das.
@@ -980,6 +978,9 @@ def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
     Achse der alten Rundung. Ein Index in die Topologie wäre nach dem
     Defeaturing ein anderer.
     """
+    radial = radial_rounding(solid, centre, radius, wanted)
+    if radial is not None:
+        return radial
     sharp = unround(solid, centre, radius)
     described = edges_of(sharp)
     if not described:
@@ -991,3 +992,48 @@ def reround(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid:
         )
     nearest = min(described, key=lambda entry: math.dist(entry.middle, centre))
     return fillet(sharp, wanted, "named", [edge_key(nearest)])
+
+
+def radial_rounding(solid: Solid, centre: Vec3, radius: float, wanted: float) -> Solid | None:
+    """Versetzt einen mindestens halben Zylindermantel innerhalb seiner echten Randkurven."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepGProp import BRepGProp
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    from app.core.geom.edges import validate_radial_change
+
+    face = _cylinder_at(solid, centre, radius)
+    if face is None:
+        return None
+    surface = BRepAdaptor_Surface(face)
+    if abs(surface.LastUParameter() - surface.FirstUParameter()) < math.pi - EPS_GEOM:
+        return None
+    # Linkshändige Zylindersysteme kehren die natürliche Mantelnormale um;
+    # die Topologieorientierung allein bezeichnet dort die falsche Seite.
+    inward = (face.Orientation() == TopAbs_REVERSED) == surface.Cylinder().Position().Direct()
+    actual = float(surface.Cylinder().Radius())
+    offset = (actual - wanted) if inward else (wanted - actual)
+    private = BRepBuilderAPI_Copy(face, True, False).Shape()
+    builder = BRepOffsetAPI_MakeThickSolid()
+    builder.MakeThickSolidBySimple(private, offset)
+    if not builder.IsDone() or not BRepCheck_Analyzer(builder.Shape()).IsValid():
+        raise GeometryError(
+            detail=_(
+                "Diese Zylinderfläche lässt sich innerhalb ihrer Ränder nicht versetzen. "
+                "Wählen Sie einen kleineren Unterschied zum bisherigen Radius."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    skin = Solid(builder.Shape())
+    if skin.volume < 0.0:
+        skin = skin.replacing(skin.shape.Reversed())
+    props = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(skin.shape, props)
+    subtracted = (wanted > actual) == inward
+    result = boolean("difference" if subtracted else "union", [solid, skin])
+    validate_radial_change(solid, result, skin.volume, float(props.Mass()))
+    return result

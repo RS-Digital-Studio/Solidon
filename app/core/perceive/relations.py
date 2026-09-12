@@ -1010,7 +1010,7 @@ def _target_dimensions(spec: Any, feature: Feature) -> tuple[str, ...]:
     """Gemessene Längen, die diese Operation tatsächlich ändert."""
     dimensions = set()
     for entry in spec.params.spec():
-        source = feature_value_source(entry.name)
+        source = feature_value_source(entry.name, feature)
         if source is None:
             continue
         key, index = source
@@ -1067,6 +1067,10 @@ def _target_comparison(
     complete_shape: bool,
 ) -> tuple[_Comparison, FeatureGroupReason | None]:
     """Maß und Achse des gewählten Rollenabschnitts vergleichen."""
+    if reference.kind == candidate.kind == "fillet" and is_a_cavity(reference) != is_a_cavity(
+        candidate
+    ):
+        return "different", None
     dimensions = (
         _dimension_comparison(reference, candidate)
         if complete_shape

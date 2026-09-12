@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from pathlib import Path
 
 import pytest
 import trimesh
@@ -155,6 +156,38 @@ def test_a_slot_width_is_the_distance_between_its_flat_flanks(
     slot = only_slot(mesh)
 
     assert float(slot.params["diameter"]) == pytest.approx(6.0, abs=0.0001)
+
+
+@pytest.mark.parametrize("angle", [0.0, 31.0, 90.0])
+def test_coarse_slot_walls_keep_their_whole_opening(angle: float) -> None:
+    """Grobe Bögen und Tangentenstücke sind zusammen zwei Öffnungen.
+
+    Die eigene Korpusplatte hält den Fehler der Schwammablage fest: Die
+    Einpassung lieferte einzelne Hohlkehlen, die Flankenprüfung verwarf das
+    Langloch. Acht Segmente je Halbkreis belegen die Kontur trotzdem.
+    """
+    source = Path(__file__).parent / "data" / "meshes" / "plate_coarse_slots.stl"
+    body = trimesh.load_mesh(source, process=True)
+    assert body.is_watertight and body.is_winding_consistent
+    removed_area = 3.8 * (3.8 + 21.0) + 2.0 * 8.0 * 1.9**2 * math.sin(math.pi / 8.0)
+    assert body.volume == pytest.approx(70.0 * 24.0 * 2.0 - 2.0 * removed_area, abs=0.0001)
+    body.apply_transform(trimesh.transformations.rotation_matrix(math.radians(angle), (1, 2, 3)))
+    body.apply_translation((103.0, -27.0, 48.0))
+
+    found = detect(MeshData.of(body))
+    openings = sorted(
+        (feature for feature in found.values() if feature.kind == "slot"),
+        key=lambda feature: float(feature.params["length"]),
+    )
+
+    assert len(openings) == 2
+    assert not any(feature.kind == "fillet" for feature in found.values())
+    for slot, length in zip(openings, (7.6, 24.8), strict=True):
+        assert float(slot.params["diameter"]) == pytest.approx(3.8, abs=0.001)
+        assert float(slot.params["length"]) == pytest.approx(length, abs=0.001)
+        assert float(slot.params["depth"]) == pytest.approx(2.0, abs=0.001)
+        assert slot.params["through"]
+        assert len(slot.face_indices) == 36
 
 
 def test_a_slot_carries_the_measures_it_was_cut_with(profile: Profile) -> None:

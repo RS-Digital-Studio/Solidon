@@ -153,10 +153,20 @@ Achse unterscheidet keine getrennten Rundungen gleicher Achse und gleichen
 Radius. `gp_Cylinder.Location()` hilft ebenso wenig: Die Parametrisierung
 wählt irgendeinen Punkt auf der Achse, auch weit neben dem Merkmalsschwerpunkt.
 Der Flächenabstand berücksichtigt dagegen die tatsächliche Ausdehnung und
-bleibt von diesem Ursprung unabhängig. Der Radius filtert davor grob
-(`FILLET_RADIUS_SLACK`), weil der Netz-Kern ihn an einem Sehnenzug misst und
-deshalb ein wenig zu klein herauskommt. Ist der Abstand nicht bestimmbar,
+bleibt von diesem Ursprung unabhängig. Der ungerundete Radius aus der exakten
+Merkmalsauskunft muss zuvor innerhalb von `is_close` passen; eine breite
+Radiustoleranz könnte an einer dünnen Wand die gegenüberliegende Seite wählen.
+Ist der Abstand nicht bestimmbar,
 bricht die Zuordnung ab, statt eine andere Fläche zu bearbeiten.
+
+Mindestens halbe Zylinderwände tragen `radial=True`. `radial_rounding` baut
+den Zwischenkörper aus einer privaten Kopie der begrenzten Mantelfläche und
+prüft die gesamte Volumenänderung mit `geom.edges.validate_radial_change`.
+Innen und außen ergeben sich aus Flächenorientierung und Händigkeit des
+Zylinderrahmens gemeinsam. Die Achse eines offenen Rings kann auf beiden
+Seiten außerhalb des Materials liegen und genügt für diese Unterscheidung
+nicht. Eine solche Wand hat keine scharfe Ersatzkante; ihr Radius ist der
+Bearbeitungsweg.
 
 **Und `push_faces` nimmt einen Ort entgegen.** Ohne ihn bewegte es jede Fläche,
 deren Normale in die gegebene Richtung zeigt — an einer Treppe alle Stufen

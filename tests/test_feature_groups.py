@@ -223,6 +223,30 @@ def test_only_resize_uses_the_registered_measured_shape_dimension(
     assert "same_target_dimensions" not in whole.evidence
 
 
+def test_rounding_resize_groups_by_radius_instead_of_missing_diameter() -> None:
+    """Gleiche Kehlenradien bilden die Größenhandlung; Außenrundungen bleiben ausgenommen."""
+    mesh = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 10.0)))
+    features = {
+        f"fillet_{index}": Feature(
+            id=f"fillet_{index}",
+            kind="fillet",
+            provenance="detected",
+            params={
+                "radius": radius,
+                "centre": (float(index * 10), 0.0, 0.0),
+                "axis": (0.0, 0.0, 1.0),
+                "recess": recess,
+            },
+        )
+        for index, (radius, recess) in enumerate(
+            ((3.0, True), (3.0, True), (6.0, True), (3.0, False)), start=1
+        )
+    }
+    group = alike_for_action("resize_feature", "fillet_1", features, mesh)
+    assert set(_targets(group)) == {"fillet_1", "fillet_2"}
+    assert "same_target_dimensions" in group.evidence
+
+
 def test_cone_angles_use_the_existing_angular_measurement_resolution(
     garden_pattern: tuple[MeshData, dict[str, Feature]],
 ) -> None:

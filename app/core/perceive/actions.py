@@ -90,19 +90,6 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
     ("sphere", "rotate_feature"): _(
         "Eine Kugelfläche hat keine Lage, die sich drehen ließe — gedreht sähe sie aus wie vorher."
     ),
-    # **Und er trennt „nie" von „noch nicht".** Eine Verrundung zu versetzen ist
-    # sinnlos — die Kante bliebe scharf zurück. Ihren Radius zu ändern oder sie
-    # ganz wegzunehmen ist dagegen sinnvoll und nur nicht gebaut. Beides mit
-    # demselben Satz zu beantworten hieße, dem Kunden ein Nein zu geben, wo ein
-    # Noch-nicht steht (Bitte 3d-druck-d4, 03.09.2026).
-    ("fillet", "resize_feature"): _(
-        "Den Radius einer Verrundung zu ändern ist sinnvoll und noch nicht "
-        "gebaut. Bis dahin hilft nur, die Kante neu zu verrunden."
-    ),
-    ("fillet", "remove_feature"): _(
-        "Eine Verrundung wegzunehmen heißt, die Kante wieder scharf zu machen — "
-        "sinnvoll und noch nicht gebaut."
-    ),
     # **Drei Arten, die *Zum Langloch ziehen* nicht annimmt** — und jede aus
     # ihrem eigenen Grund. Ohne diese drei Sätze stand die Zeile seit dem
     # 10.09.2026 an Zapfen, Senkung und Kugel mit dem Auffangsatz „Für diese
@@ -246,13 +233,15 @@ _FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
 }
 
 
-def feature_value_source(field: str) -> FeatureValueSource | None:
+def feature_value_source(field: str, feature: Feature | None = None) -> FeatureValueSource | None:
     """Die gemessene Kennzahl hinter einem Handlungsfeld.
 
     Die Gruppenauskunft liest damit dieselbe Zuordnung wie das Panel. Ein
     Index kennzeichnet eine Komponente der Position; ohne Index ist es ein
     skalares Maß des Merkmals.
     """
+    if field == "diameter" and feature is not None and feature.kind == "fillet":
+        return ("radius", None)
     return _FROM_FEATURE.get(field)
 
 
@@ -272,6 +261,8 @@ class ActionField:
     minimum: float | None = None
     maximum: float | None = None
     choices: tuple[tuple[str, TranslatableText | str], ...] = ()
+    parameter_factor: float = 1.0
+    """Faktor vom sichtbaren Maß zum Operationsparameter, etwa Radius zu Durchmesser."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -368,7 +359,7 @@ def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
     slotted = _slot_value(spec, feature)
     if slotted is not None:
         return slotted
-    reads = _FROM_FEATURE.get(spec.name)
+    reads = feature_value_source(spec.name, feature)
     if reads is None:
         return spec.default  # type: ignore[no-any-return]
     key, index = reads
@@ -385,6 +376,23 @@ def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
         return spec.default  # type: ignore[no-any-return]
 
 
+def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
+    """Ein gemessenes Maß samt Rückübersetzung in den gespeicherten Parameter."""
+    radius = entry.name == "diameter" and feature.kind == "fillet"
+    factor = 2.0 if radius else 1.0
+    return ActionField(
+        name=entry.name,
+        label=_("Radius") if radius else entry.title,
+        unit=str(entry.unit or ""),
+        value=_value_of(entry, feature, op),
+        kind=_kind_of(entry),
+        minimum=entry.minimum / factor if entry.minimum is not None else None,
+        maximum=entry.maximum / factor if entry.maximum is not None else None,
+        choices=tuple((choice, choice) for choice in entry.choices),
+        parameter_factor=factor,
+    )
+
+
 def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
     """Die Felder einer Operation — ohne die Merkmalskennung.
 
@@ -392,16 +400,7 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
     ist, und ein Feld dafür wäre eine Frage, deren Antwort schon dasteht.
     """
     return tuple(
-        ActionField(
-            name=entry.name,
-            label=entry.title,
-            unit=str(entry.unit or ""),
-            value=_value_of(entry, feature, spec.name),
-            kind=_kind_of(entry),
-            minimum=entry.minimum,
-            maximum=entry.maximum,
-            choices=tuple((choice, choice) for choice in entry.choices),
-        )
+        _action_field(entry, feature, spec.name)
         for entry in spec.params.spec()
         # Die freie Oberflächenrichtung gehört zum Platzierungsdialog.
         # Die Schnellbearbeitung verschiebt das gewählte Merkmal mit seiner
@@ -443,7 +442,23 @@ def actions_for(
             # des Panels — sie fehlt, und die Oberfläche bietet sie nicht an.
             continue
         fitting = next((spec for spec in known if feature.kind in spec.applies_to), None)
-        if fitting is not None:
+        if (
+            fitting is not None
+            and fitting.name == "remove_feature"
+            and feature.kind == "fillet"
+            and feature.params.get("radial", False)
+        ):
+            actions.append(
+                FeatureAction(
+                    title=fitting.title,
+                    op=None,
+                    reason=_(
+                        "Diese runde Wand ist keine abgerundete Kante. Ändern Sie "
+                        "ihren Radius über „Merkmal ändern“."
+                    ),
+                )
+            )
+        elif fitting is not None:
             actions.append(
                 FeatureAction(
                     title=fitting.title,

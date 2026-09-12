@@ -71,6 +71,48 @@ def plate_holes() -> None:
     write(trimesh.boolean.difference([plate, *drills]), "plate_holes.stl")
 
 
+def plate_coarse_slots() -> None:
+    """Zwei grob facettierte Langlöcher, deren Bogenflecken Tangentenreste tragen."""
+    from shapely.geometry import LineString
+
+    plate = trimesh.creation.box(extents=(70.0, 24.0, 2.0))
+    tools = []
+    for travel, y in ((3.8, -5.0), (21.0, 5.0)):
+        outline = LineString([(-travel / 2.0, y), (travel / 2.0, y)]).buffer(1.9, quad_segs=4)
+        tool = trimesh.creation.extrude_polygon(outline, height=4.0)
+        tool.apply_translation((0.0, 0.0, -2.0))
+        tools.append(tool)
+    write(trimesh.boolean.difference([plate, *tools]), "plate_coarse_slots.stl")
+
+
+def open_cylinder_clip() -> None:
+    """Ein offener Clip: Innenradius 12, Außenradius 16, Höhe 17 und 184 Grad."""
+    from shapely.geometry import Polygon
+
+    angles = np.linspace(0.0, math.radians(184.0), 73)
+    outer = np.column_stack((16.0 * np.cos(angles), 16.0 * np.sin(angles)))
+    inner = np.column_stack((12.0 * np.cos(angles[::-1]), 12.0 * np.sin(angles[::-1])))
+    outline = Polygon(np.vstack((outer, inner)))
+    clip = trimesh.creation.extrude_polygon(outline, height=17.0)
+    write(clip, "open_cylinder_clip.stl")
+    # Zusätzliche Knoten innerhalb der Deckelflächen dürfen beim Ändern
+    # einer Trimmkurve keine veralteten Dreiecksdiagonalen erzwingen.
+    caps = np.flatnonzero(np.isclose(np.abs(clip.face_normals[:, 2]), 1.0))
+    faces = np.asarray(clip.faces)[caps]
+    centres = np.arange(len(caps)) + len(clip.vertices)
+    divided = np.vstack(
+        [np.column_stack((faces[:, edge], faces[:, (edge + 1) % 3], centres)) for edge in range(3)]
+    )
+    write(
+        trimesh.Trimesh(
+            vertices=np.vstack((clip.vertices, clip.triangles_center[caps])),
+            faces=np.vstack((np.delete(clip.faces, caps, axis=0), divided)),
+            process=False,
+        ),
+        "open_cylinder_clip_cap_nodes.stl",
+    )
+
+
 def plate_holes_twin() -> None:
     """Zwei gleiche Bohrungen dicht beieinander — der Mehrdeutigkeitsfall für
     §21.2.
@@ -649,6 +691,8 @@ if __name__ == "__main__":
     bracket_inch()
     plate_cm()
     plate_holes()
+    plate_coarse_slots()
+    open_cylinder_clip()
     plate_holes_twin()
     plate_countersunk()
     plate_countersunk_blind()
