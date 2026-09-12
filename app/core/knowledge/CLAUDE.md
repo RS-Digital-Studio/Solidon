@@ -17,6 +17,7 @@ Rechenwegs, nicht Beiwerk.
 |---|---|
 | `profiles.py` | Drucker- und Materialprofile (§38). **Hier stehen die Toleranzen**, auf die `auto:<material>` verweist |
 | `standards.py` | Normteilmaße (§24.2) — M3, M4, Einpressbuchsen, Lager |
+| `strength.py` | Blattfederrechnung für Schnapphaken und Klemmzungen; mechanische Kennwerte aus dem Materialprofil |
 | `print_settings.py` | Löst Stufe + Material + Drucker zu Einstellungen auf (§29) |
 | `rules.py` | Die Regelsammlung für den Agenten (§39) |
 | `calibration.py` | Selbstkalibrierung (§28.3) |
@@ -24,7 +25,7 @@ Rechenwegs, nicht Beiwerk.
 | `licences.py` | Lizenzprüfung der Abhängigkeiten (§36) |
 | `tables.py` | Der eine TOML-Leser für Dateien, die auch von Hand geschrieben sein können — ein Syntaxfehler wird ein Satz mit Dateinamen (Regel 17); Profile, Druckeinstellungen und Kalibrierung rufen ihn mit ihrem Titel |
 | `parts/` | Die Bausteinbibliothek — eigene `CLAUDE.md`, **eigene Lizenz** |
-| `data/` | **Wo das Wissen wirklich steht**: sechs TOML-Dateien (siehe unten) |
+| `data/` | **Wo das Wissen wirklich steht**: sieben TOML-Dateien und die Lizenztexte (siehe unten) |
 
 ## Das Wissen steht in `data/`, nicht im Code
 
@@ -38,9 +39,15 @@ Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:
 | `standards.toml` | Normteilmaße |
 | `rules.toml` | **Die Regelsammlung des Agenten** (§39) |
 | `licences.toml` | Die Freigabeliste der Abhängigkeiten (§36) |
+| `third_party_licenses.toml` | Feste Quellen, Hashes und Zuordnung der Lizenztexte für Pakete, Laufzeitteile und Schriften (§36) |
+| `third_party_licenses/` | Vollständige Lizenztexte und Anleitung zur Release-Lizenzakte in `README.md` |
 
-`AGENTS.md` nennt für die Regelsammlung einen Pfad `core/knowledge/rules/` —
-**den gibt es nicht.** Der Eintrag gehört in `data/rules.toml`.
+Der Eintrag für eine neue Agentenregel gehört in `data/rules.toml`.
+
+`strength.py` verwendet E-Modul, Streckgrenze und `layer_bond_ratio` aus dem
+Materialprofil. Die Lage bestimmt, ob der Schichtabschlag gilt; das Profil
+bestimmt seine Größe. Ohne bekannte Druckrichtung gilt Querbelastung. Ein
+fehlender mechanischer Kennwert ergibt keine erfundene Tragfähigkeitsangabe.
 
 ## Warum das keine Konstanten im Code sind
 

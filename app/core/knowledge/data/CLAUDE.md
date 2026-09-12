@@ -1,7 +1,7 @@
 # `data/` — die Wissensbasis
 
-Sechs TOML-Dateien. **Hier stehen die Zahlen**, die im Code nichts zu suchen
-haben.
+Sieben TOML-Dateien und die Lizenztexte. **Hier stehen die Zahlen**, die im
+Code nichts zu suchen haben.
 
 | Datei | Inhalt | Wer liest |
 |---|---|---|
@@ -11,6 +11,8 @@ haben.
 | `standards.toml` | Normteilmaße (§24.2) | `standards.py` |
 | `rules.toml` | Die Regelsammlung des Agenten (§39) | `rules.py` |
 | `licences.toml` | Die Freigabeliste der Abhängigkeiten (§36) | `licences.py` |
+| `third_party_licenses.toml` | Feste Lizenzquellen, Hashes und Paket-/Laufzeitzuordnung einschließlich reiner Schriftbeilagen (§36) | `tools/make_licence_notices.py` |
+| `third_party_licenses/` | Vollständige Lizenztexte; `README.md` beschreibt die Release-Lizenzakte | Beilagengenerator und Paketbau |
 
 ## Warum das keine Konstanten sind
 
