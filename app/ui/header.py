@@ -196,19 +196,6 @@ class _EphemeralLabel(QLabel):
         self._display = text
         self._set_accessible_text(text)
 
-    def setSummary(self, summary: str, full: str) -> None:  # noqa: N802 — Qt-Name
-        """Eine kurze Auskunft zeigen und den vollen Inhalt zugänglich halten."""
-        self._full = full
-        self._display = summary
-        self._set_accessible_text(full)
-        # Die Zahl ist der Zweck einer echten Kurzfassung. Sie darf nicht
-        # noch einmal zu „… Filamente“ gekürzt werden; für die Namen gibt es
-        # den Tooltip. Ein einzelner, beliebig langer Profilname bleibt wie
-        # bisher kürzbar und darf die Kopfzeile nicht verdrängen.
-        if summary != full:
-            self.setMinimumWidth(self.fontMetrics().horizontalAdvance(summary))
-        self._fit()
-
     def _set_accessible_text(self, full: str) -> None:
         """Tooltip, Mindestmaß und sichtbare Fassung gemeinsam nachführen."""
         self.setToolTip(full)
