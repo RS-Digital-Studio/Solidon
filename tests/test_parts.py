@@ -204,6 +204,38 @@ def test_the_library_really_has_2114_cartesian_boundaries() -> None:
     assert sum(len(corners(spec)) for spec in PARTS.all()) == 2114
 
 
+def test_a_range_limit_is_checked_before_materialising_combinations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein großer Bereich wird vollständig abgewiesen, bevor das Produkt wächst."""
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts import range_check
+
+    schema = op_params(
+        type(
+            "WideRangeParams",
+            (BaseParams,),
+            {
+                "__annotations__": {f"dimension_{i}": float for i in range(32)},
+                **{
+                    f"dimension_{i}": param(title="Maß", default=1.0, minimum=1.0, maximum=2.0)
+                    for i in range(32)
+                },
+            },
+        )
+    )
+
+    def must_not_materialise(*_args: Any) -> None:
+        raise AssertionError("the limit must precede the Cartesian product")
+
+    monkeypatch.setattr(range_check.itertools, "product", must_not_materialise)
+    with pytest.raises(ValidationError) as caught:
+        core_corners(schema)
+    assert caught.value.values["count"] == 2**32
+    assert caught.value.values["limit"] == 512
+    assert caught.value.suggestions
+
+
 def test_local_wall_measurement_finds_a_thin_appendage_on_a_large_body() -> None:
     """Ein Hüllquader misst das Teil, nicht seine lokale Wandstärke."""
     import trimesh

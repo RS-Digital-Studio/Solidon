@@ -1265,6 +1265,38 @@ def test_the_recipe_file_is_data_not_code(profile: Profile, tmp_path: Path) -> N
 # --- Der Bereichstest (E3) --------------------------------------------------------
 
 
+@pytest.mark.parametrize("count", [10, 33])
+def test_capture_refuses_an_unbounded_range_before_building(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, count: int
+) -> None:
+    """Auch der direkte Kernaufruf begrenzt freigegebene Maße und Kombinationen."""
+    exposed = tuple(
+        recipe.ExposedParam(
+            name=f"dimension_{i}", title="Maß", default=1.0, minimum=1.0, maximum=2.0
+        )
+        for i in range(count)
+    )
+
+    def must_not_build(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the limit must precede the first build")
+
+    monkeypatch.setattr(recipe, "build", must_not_build)
+    with pytest.raises(ValidationError) as caught:
+        recipe.capture(
+            _document(),
+            {},
+            name="too_wide",
+            title="Zu viele Maße",
+            group="structure",
+            op_ids=(1,),
+            exposed=exposed,
+            features={"face": "face_1"},
+            profile=profile,
+        )
+    assert caught.value.field == "exposed"
+    assert caught.value.suggestions
+
+
 def test_the_range_check_passes_a_healthy_recipe_and_keeps_the_hash(
     profile: Profile, tmp_path: Path
 ) -> None:

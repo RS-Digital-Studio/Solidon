@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import gc
 import itertools
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Final, SupportsInt, cast
@@ -26,6 +27,49 @@ from app.core.knowledge.parts.registry import FeatureRequirement, PartSpec, Wall
 from app.core.types import BaseParams, CancelToken, PartResult, Profile, ProgressFn
 from app.core.units import EPS_DISPLAY, EPS_GEOM
 from app.i18n import _
+
+
+def _corner_values(params: type[BaseParams]) -> list[tuple[str, list[Any]]]:
+    """Die unterschiedlichen Randwerte je Feld, noch ohne ihr kartesisches Produkt."""
+    lists: list[tuple[str, list[Any]]] = []
+    for entry in params.spec():
+        values: list[Any] = []
+        if entry.kind == "enum":
+            values = list(entry.choices)
+        elif entry.kind == "bool":
+            values = [True, False]
+        elif entry.kind in ("float", "int"):
+            values = [entry.minimum, entry.maximum]
+        values = list(dict.fromkeys(value for value in values if value is not None))
+        if values:
+            lists.append((entry.name, values))
+    return lists
+
+
+#: Vollständige Kombinationen pro Lauf. Deckt die mitgelieferte Bibliothek
+#: (höchstens 320 Ecken je Baustein) ab und begrenzt fremde Parameterprodukte.
+MAX_CORNERS: Final = 512
+
+
+def corner_count(params: type[BaseParams]) -> int:
+    """Zählt den ganzen Bereich, ohne eine einzige Kombination anzulegen."""
+    return math.prod(len(values) for _name, values in _corner_values(params))
+
+
+def require_range_size(count: int) -> None:
+    """Weist zu große Bereiche vor dem Rechnen ab; niemals nur teilweise prüfen."""
+    if count > MAX_CORNERS:
+        raise ValidationError(
+            field="exposed",
+            constraint="maximum",
+            values={"count": count, "limit": MAX_CORNERS},
+            detail=_(
+                "Der Bereichstest umfasst {count} Kombinationen; höchstens {limit} "
+                "sind möglich. Geben Sie weniger Maße frei.",
+                count=count,
+                limit=MAX_CORNERS,
+            ),
+        )
 
 
 def corners(params: type[BaseParams]) -> list[dict[str, Any]]:
@@ -41,18 +85,8 @@ def corners(params: type[BaseParams]) -> list[dict[str, Any]]:
     Builds 73,2 Sekunden. Das ist ein sichtbarer, abbrechbarer Arbeitslauf und
     kein Grund, die zugesagte Menge still zu verkürzen.
     """
-    lists: list[tuple[str, list[Any]]] = []
-    for entry in params.spec():
-        values: list[Any] = []
-        if entry.kind == "enum":
-            values = list(entry.choices)
-        elif entry.kind == "bool":
-            values = [True, False]
-        elif entry.kind in ("float", "int"):
-            values = [entry.minimum, entry.maximum]
-        values = list(dict.fromkeys(value for value in values if value is not None))
-        if values:
-            lists.append((entry.name, values))
+    lists = _corner_values(params)
+    require_range_size(math.prod(len(values) for _name, values in lists))
     if not lists:
         return [{}]
     return [

@@ -781,7 +781,7 @@ def _with_values(document: Document, recipe: Recipe, values: dict[str, float]) -
 # --- Anschluss an Katalog und Register (E1/E5) -----------------------------------
 
 
-def _params_class(recipe: Recipe) -> type[BaseParams]:
+def _params_class(exposed: tuple[ExposedParam, ...], name: str = "range") -> type[BaseParams]:
     """Die Parameterklasse des Rezepts — aus Daten, denselben Weg entlang.
 
     Eine **rohe** Klasse, kein fertiges Dataclass: ``op_params`` friert
@@ -791,10 +791,10 @@ def _params_class(recipe: Recipe) -> type[BaseParams]:
     Fassung; zwei drifteten auseinander.
     """
     namespace: dict[str, Any] = {
-        "__annotations__": {entry.name: float for entry in recipe.exposed},
+        "__annotations__": {entry.name: float for entry in exposed},
         "__module__": __name__,
     }
-    for entry in recipe.exposed:
+    for entry in exposed:
         namespace[entry.name] = param(
             title=entry.title,
             default=float(entry.default),
@@ -804,7 +804,14 @@ def _params_class(recipe: Recipe) -> type[BaseParams]:
             placement="front" if entry.placement == "front" else "advanced",
             doc=entry.doc or entry.title,
         )
-    return op_params(type(f"Recipe_{recipe.name}_Params", (BaseParams,), namespace))
+    return op_params(type(f"Recipe_{name}_Params", (BaseParams,), namespace))
+
+
+def range_size(exposed: tuple[ExposedParam, ...]) -> int:
+    """Nennt vor dem Schnitt die vollständige Zahl der zu prüfenden Kombinationen."""
+    from app.core.knowledge.parts.range_check import corner_count
+
+    return corner_count(_params_class(exposed))
 
 
 def range_check(
@@ -824,7 +831,7 @@ def range_check(
     """
     from app.core.knowledge.parts.range_check import check
 
-    params_cls = _params_class(recipe)
+    params_cls = _params_class(recipe.exposed, recipe.name)
 
     def built(values: BaseParams) -> PartResult:
         raw = {entry.name: float(getattr(values, entry.name)) for entry in recipe.exposed}
@@ -866,7 +873,7 @@ def register(
     from app.core.knowledge.parts import ops as part_ops
     from app.core.knowledge.parts.registry import PARTS
 
-    params_cls = _params_class(recipe)
+    params_cls = _params_class(recipe.exposed, recipe.name)
 
     def build_with_profile(
         params: BaseParams, profile: Profile | None, quality: Quality = "fine"
@@ -1900,6 +1907,21 @@ def capture(
     Baustein still einen eigenen — §32 will das Gegenteil. Ein frisch
     erfasster Ausschnitt lässt es leer, und das ist die Vorgabe.
     """
+    from app.core.knowledge.parts import shared
+    from app.core.knowledge.parts.range_check import require_range_size
+
+    if len(exposed) > shared.MAX_EXPOSED:
+        raise ValidationError(
+            field="exposed",
+            constraint="maximum",
+            values={"count": len(exposed), "limit": shared.MAX_EXPOSED},
+            detail=_(
+                "Ein Rezept kann höchstens {limit} Maße freigeben. "
+                "Nehmen Sie weitere Maße aus der Freigabe.",
+                limit=shared.MAX_EXPOSED,
+            ),
+        )
+    require_range_size(range_size(exposed))
     if not features:
         # §24.1 verlangt es ohnehin beim Registrieren — aber dort hieße der
         # Fehler „beim Laden", und der Kunde stünde vor einem gespeicherten

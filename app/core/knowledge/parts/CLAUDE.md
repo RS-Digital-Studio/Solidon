@@ -115,6 +115,12 @@ unberührt.
 
 ## Ein neuer Baustein
 
+Bereichstests zählen das vollständige kartesische Produkt vor jedem Bau.
+Mehr als `range_check.MAX_CORNERS` Kombinationen werden mit Anzahl und
+Änderungsvorschlag abgewiesen; Stichproben ersetzen den Vertrag nicht.
+`recipe.capture` begrenzt zusätzlich die freigegebenen Felder nach
+`shared.MAX_EXPOSED`. Der Rezeptdialog zeigt die Prüfmenge vor dem Start.
+
 1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
 2. Umsetzung gegen `manifold3d`
 3. **Benannte Features zurückgeben** — das sind die Provenienz-IDs, an denen

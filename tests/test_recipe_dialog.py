@@ -83,6 +83,30 @@ def test_an_identifier_survives_umlauts_and_spaces() -> None:
     assert _identifier("!!!") == "eigener_baustein", "leer wäre kein Name"
 
 
+def test_the_dialog_names_and_limits_the_range_before_starting(qt_app: QApplication) -> None:
+    """Zehn Maße würden 1024 Ecken starten; das sieht man vor dem Anlegen."""
+    document = replace(
+        _document(),
+        parameters={
+            f"dimension_{i}": Parameter(name=f"dimension_{i}", value=1.0) for i in range(10)
+        },
+    )
+    dialog = RecipeDialog(document, {}, (0,), (_feature("hole_1"),), None)
+    try:
+        dialog.title.setText("Großer Bereich")
+        assert not dialog._save.isEnabled()
+        assert "1024" in dialog.range_plan.text()
+        assert "512" in dialog.range_plan.text()
+        assert "Maße" in dialog._save.accessibleDescription()
+        dialog._params[-1].take.setChecked(False)
+        assert dialog._save.isEnabled()
+        assert "512" in dialog.range_plan.text()
+        assert "Kombinationen" in dialog.range_plan.text()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_the_dialog_offers_a_row_for_every_parameter(qt_app: QApplication) -> None:
     """Jeder Projektparameter kann ein einstellbares Maß des Bausteins werden.
 

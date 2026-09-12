@@ -564,6 +564,9 @@ class RecipeDialog(QDialog):
         # Was der Bereichstest ergeben hat — leer, bis er gelaufen ist. Er
         # läuft beim Speichern und nicht vorher: Der Kunde soll die Grenzen
         # erst festlegen, sonst prüft er einen Bereich, den er gleich ändert.
+        self.range_plan = QLabel("", self)
+        self.range_plan.setWordWrap(True)
+        layout.addWidget(self.range_plan)
         self.report = QLabel("", self)
         self.report.setWordWrap(True)
         # **Die Zahl steht neben dem Balken, nicht darauf** (`tests/test_style.py`):
@@ -747,6 +750,18 @@ class RecipeDialog(QDialog):
         adjustable = any(row.take.isChecked() for row in self._params)
         ordered = all(row.ordered() for row in self._params if row.take.isChecked())
         unique = self._unique_feature_names()
+        from app.core.knowledge.parts.range_check import require_range_size
+
+        exposed = tuple(row.exposed() for row in self._params if row.take.isChecked())
+        count = recipes.range_size(exposed)
+        range_error = ""
+        try:
+            require_range_size(count)
+        except AppError as error:
+            range_error = str(error.detail)
+        self.range_plan.setText(
+            range_error or tr("Bereichstest: {count} Kombinationen.").format(count=count)
+        )
         # **Ein vergebener Name ist kein Fehler, sondern der zweite Fall.**
         # „Ändern heißt neu speichern" steht im Handbuch (Kapitel *Eigene
         # Bausteine*), und wer die Breite seines Halters nachträglich ändert,
@@ -754,11 +769,17 @@ class RecipeDialog(QDialog):
         # tut, und daneben steht, was mit dem vorhandenen Stand geschieht.
         taken = bool(title) and taken_name(_identifier(title))
         self._save.setEnabled(
-            bool(title) and named and adjustable and ordered and unique and not self._checking
+            bool(title)
+            and named
+            and adjustable
+            and ordered
+            and unique
+            and not range_error
+            and not self._checking
         )
         self._save.setText(tr("Baustein ersetzen") if taken else tr("Baustein anlegen"))
         hint = (
-            self._why_locked(named, adjustable, ordered, unique)
+            range_error or self._why_locked(named, adjustable, ordered, unique)
             if not self._save.isEnabled()
             else str(
                 tr(
