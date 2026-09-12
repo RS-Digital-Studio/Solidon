@@ -2317,13 +2317,17 @@ def test_every_delivered_kind_finds_its_current_file(tmp_path: Path) -> None:
 
     Geprüft wird jede Art, die ``make_download.DELIVERED`` ausliefert, und
     zwar gegen die Fassung, die ``version.json`` **hier** nennt: Der
-    PHP-Prüfstand serviert ``website/``, dieselbe Datei liest der Auffangpfad.
+    PHP-Prüfstand serviert eine private Kopie mit selbst angelegten Paketen.
     """
     import json
 
     from tools.make_download import DELIVERED
 
-    manifest = json.loads((ROOT / "website" / "version.json").read_text(encoding="utf-8"))
+    docroot = _temporary_docroot(tmp_path)
+    shutil.copy2(ROOT / "website" / "dl" / "veraltet.php", docroot / "dl" / "veraltet.php")
+    manifest_text = (ROOT / "website" / "version.json").read_text(encoding="utf-8")
+    (docroot / "version.json").write_text(manifest_text, encoding="utf-8")
+    manifest = json.loads(manifest_text)
     fassung = str(manifest["version"])
     alt = "0.2.2"
     assert alt != fassung, "der alte Name muss ein anderer sein als der aktuelle"
@@ -2348,25 +2352,13 @@ def test_every_delivered_kind_finds_its_current_file(tmp_path: Path) -> None:
         "eine neue Art gehört auch hierher"
     )
 
-    # Nur das AppImage prüft im PHP-Weg zusätzlich, ob die versprochene Datei
-    # wirklich im Downloadordner liegt. Dieser Ordner ist absichtlich
-    # ignoriert: Auf der Release-Maschine liegen dort alte Pakete, in einem
-    # frischen Klon und in der CI nicht. Der Prüfstand legt deshalb genau das
-    # aktuelle AppImage selbst an und räumt nur seinen eigenen Platzhalter
-    # wieder weg.
-    appimage = ROOT / "website" / "dl" / f"Solidon3D-{fassung}-x86_64.AppImage"
-    existed = appimage.is_file()
-    if not existed:
-        appimage.write_bytes(b"kein echtes Paket")
-    try:
-        with _php_server(tmp_path) as base:
-            for angefragt, erwartet in fälle:
-                status, target = _redirect_target(base, angefragt)
-                assert status == 302, f"{angefragt}: {status}"
-                assert target == f"https://solidon3d.de/dl/{erwartet}", f"{angefragt}: {target}"
-    finally:
-        if not existed:
-            appimage.unlink(missing_ok=True)
+    for _old_name, current_name in fälle:
+        (docroot / "dl" / current_name).write_bytes(b"kein echtes Paket")
+    with _php_server(tmp_path, docroot=docroot) as base:
+        for angefragt, erwartet in fälle:
+            status, target = _redirect_target(base, angefragt)
+            assert status == 302, f"{angefragt}: {status}"
+            assert target == f"https://solidon3d.de/dl/{erwartet}", f"{angefragt}: {target}"
 
 
 def test_a_numeric_referrer_host_can_neither_be_stored_nor_break_the_report() -> None:
