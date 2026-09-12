@@ -147,6 +147,69 @@ def test_dismissed_dialog_keeps_stock_unchanged() -> None:
     assert _remaining(entry) == pytest.approx(500)
 
 
+@pytest.mark.parametrize("decline", [False, True])
+def test_explicit_nonbooking_stays_visible_and_can_be_reopened(monkeypatch, decline):
+    """Nur der benannte Knopf merkt die Entscheidung; ein späteres Buchen bleibt möglich."""
+    from PySide6.QtWidgets import QPushButton
+
+    entry = _spool()
+    request = _request(entry)
+    notice = UsageNotice(UiSettings())
+    notice.offer(request)
+
+    def leave(dialog):
+        _wait(dialog)
+        if decline:
+            button = next(
+                button
+                for button in dialog.findChildren(QPushButton)
+                if button.text() == "Nicht buchen"
+            )
+            button.click()
+        else:
+            dialog.reject()
+        return dialog.result()
+
+    monkeypatch.setattr(UsageDialog, "exec", leave)
+    notice.review.click()
+    assert notice.choice.count() == 1
+    assert notice.requests[request.fingerprint] == request
+    assert notice.review.text() == (
+        "Nicht gebucht — ansehen …" if decline else "Filament abziehen …"
+    )
+    assert bool(notice.state.text()) == decline
+    assert filaments.bookings() == ()
+    assert _remaining(entry) == pytest.approx(500)
+    if decline:
+        notice.offer(replace(request, fingerprint="other-output"), auto_book=False)
+        assert notice.review.text() == "Filament abziehen …"
+        assert notice.state.text() == ""
+        notice.choice.setCurrentIndex(notice.choice.findData(request.fingerprint))
+        assert notice.review.text() == "Nicht gebucht — ansehen …"
+        notice.settings.inventory_booking_mode = "auto"
+        notice.offer(request)
+        _wait(notice)
+        assert filaments.bookings() == ()
+        assert notice.review.text() == "Nicht gebucht — ansehen …"
+
+    def book(dialog):
+        _wait(dialog)
+        dialog.book_button.click()
+        _wait(dialog)
+        return dialog.result()
+
+    monkeypatch.setattr(UsageDialog, "exec", book)
+    notice.review.click()
+    assert notice.review.text() == "Buchung ansehen …"
+    assert notice.state.text() == ""
+    assert len(filaments.bookings()) == 1
+    assert _remaining(entry) == pytest.approx(458)
+    monkeypatch.setattr(UsageDialog, "exec", leave)
+    notice.review.click()
+    assert notice.review.text() == "Buchung ansehen …"
+    assert len(filaments.bookings()) == 1
+
+
 def test_explicit_book_is_idempotent_and_uses_language_independent_journal_values() -> None:
     entry = _spool()
     request = _request(entry)

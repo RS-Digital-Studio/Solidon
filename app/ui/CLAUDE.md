@@ -100,6 +100,10 @@ Beim Schließen zählen laufende und eingereihte Lagerhandlungen mit.
 Wartet der Druckdialog beim Schließen auf Arbeiter, sperrt er nur die
 Eingaben und Handlungen. Zustandszeile und Fortschritt behalten ihre normale
 Darstellung, bis der letzte Arbeiter beendet ist.
+Nichtbuchung wird nur am Knopf „Nicht buchen“ gemerkt: Die Ausgabe bleibt
+mit „Nicht gebucht — ansehen …“ erreichbar und wird bei erneutem Angebot
+nicht automatisch gebucht. Eine spätere ausdrückliche Buchung ersetzt diesen
+Zustand; Escape und Fensterschließen treffen keine neue Entscheidung.
 Der Buchungsstatus folgt dem ausgewählten Ausgabe-Fingerabdruck. Manuelle
 Korrekturen übergeben den gelesenen Vorgangsstand, damit ein älterer Dialog
 keine jüngere Aufteilung überschreibt. Der Auswahl-Export ordnet gespeicherte

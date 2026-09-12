@@ -5136,5 +5136,7 @@
   "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder nehmen Sie eine Schrift, die fett und kursiv mitbringt.": "« {font} » n'existe qu'en un seul style. Choisissez « Normal », ou prenez une police qui apporte le gras et l'italique.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "« {licence} » n'est aucune des licences autorisées.",
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "« {name} » n'est pas un nom de bloc valide — sont autorisés les minuscules, les chiffres et les tirets bas, en commençant par une lettre.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes.",
+  "Für diese Ausgabe ist keine weitere Filamentbuchung vorgemerkt.": "Aucune autre réservation de filament n’est prévue pour cette sortie.",
+  "Nicht gebucht — ansehen …": "Non enregistré — voir …"
 }

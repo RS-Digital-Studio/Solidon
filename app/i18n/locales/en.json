@@ -5136,5 +5136,7 @@
   "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder nehmen Sie eine Schrift, die fett und kursiv mitbringt.": "“{font}” comes in one style only. Choose “Regular”, or take a font that brings bold and italic along.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "“{licence}” is not one of the permitted licences.",
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "“{name}” is not a valid part name — allowed are lowercase letters, digits and underscores, beginning with a letter.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest.",
+  "Für diese Ausgabe ist keine weitere Filamentbuchung vorgemerkt.": "No further filament booking is planned for this output.",
+  "Nicht gebucht — ansehen …": "Not booked — review …"
 }

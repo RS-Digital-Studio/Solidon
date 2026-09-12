@@ -33,6 +33,7 @@ from app.core.filament_usage import UsageLine, UsageRequest, costs_for
 from app.core.knowledge import filaments
 from app.core.scene.hashing import digest
 from app.i18n import source_text, tr
+from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.filament_picker import NewFilamentDialog, hex_of, spool_label, swatch
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import RELEASE_RETRY_MS, Worker, WorkerLeash, weak_slot
@@ -182,6 +183,7 @@ class UsageDialog(QDialog):
     def __init__(self, request: UsageRequest, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.request = request
+        self.booking_declined = False
         self._lines = list(request.lines)
         self._manual: set[int] = set()
         self._new_operation_id = uuid4().hex
@@ -312,8 +314,7 @@ class UsageDialog(QDialog):
         )
         self.allow_unverified.toggled.connect(self._validate)
         layout.addWidget(self.allow_unverified)
-        self.state = QLabel("", self)
-        self.state.setWordWrap(True)
+        self.state = ErrorNotice(self)
         layout.addWidget(self.state)
         self.reload_button = QPushButton(tr("Lager neu laden"), self)
         self.reload_button.clicked.connect(self._load)
@@ -334,7 +335,7 @@ class UsageDialog(QDialog):
         make_primary(self.book_button)
         self.correct_button.clicked.connect(lambda: self._book(correct_manual=True))
         self.repeat_button.clicked.connect(self._repeat)
-        buttons.rejected.connect(self.reject)
+        buttons.rejected.connect(self._decline_booking)
         layout.addWidget(buttons)
         self.operation.currentIndexChanged.connect(self._operation_changed)
         self._load()
@@ -406,7 +407,9 @@ class UsageDialog(QDialog):
 
     def _rejected(self, problem: object) -> None:
         self._validate()
-        self.state.setText(str(problem))
+        self.state.set_error(
+            problem, {"retry": lambda _error: self._load()} if self._pending == "load" else {}
+        )
         self.state.show()
         self.reload_button.show()
 
@@ -761,6 +764,12 @@ class UsageDialog(QDialog):
         if self._pending != "book" or self._tasks.worker is None:
             super().reject()
 
+    def _decline_booking(self) -> None:
+        """Der benannte Knopf merkt die Absicht; Escape schließt ohne neue Entscheidung."""
+        if self._pending != "book" or self._tasks.worker is None:
+            self.booking_declined = True
+            self.reject()
+
     @override
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._pending == "book" and self._tasks.worker is not None:
@@ -857,7 +866,8 @@ class UsageNotice(QWidget):
         self.requests: dict[str, UsageRequest] = {}
         self._pending: dict[str, UsageRequest] = {}
         self._booked: set[str] = set()
-        self._problems: dict[str, str] = {}
+        self._declined: set[str] = set()
+        self._problems: dict[str, object] = {}
         self._active = ""
         self._dialogs: list[UsageDialog] = []
         self._tasks = _UsageTasks(self)
@@ -881,9 +891,7 @@ class UsageNotice(QWidget):
         row.addWidget(self.choice, 1)
         row.addWidget(self.review)
         layout.addLayout(row)
-        self.state = QLabel("", self)
-        self.state.setTextFormat(Qt.TextFormat.PlainText)
-        self.state.setWordWrap(True)
+        self.state = ErrorNotice(self)
         self.state.hide()
         layout.addWidget(self.state)
         self.hide()
@@ -907,9 +915,14 @@ class UsageNotice(QWidget):
             self.choice.setItemIcon(existing, swatch(hex_of(request.lines[0].slot.colour)))
         self.choice.setCurrentIndex(existing)
         self.show()
-        if auto_book and self.settings.inventory_booking_mode == "auto":
+        if (
+            auto_book
+            and self.settings.inventory_booking_mode == "auto"
+            and request.fingerprint not in self._declined
+        ):
             self._pending[request.fingerprint] = request
             self._start_pending()
+        self._sync_review()
 
     def _start_pending(self) -> None:
         if self._tasks.worker is not None or not self._pending:
@@ -926,18 +939,33 @@ class UsageNotice(QWidget):
     def _completed(self, result: object) -> None:
         self._active = ""
         if result is not None:
-            self._booked.add(cast(filaments.InventoryBooking, result).fingerprint)
+            key = cast(filaments.InventoryBooking, result).fingerprint
+            self._booked.add(key)
+            self._declined.discard(key)
             self.changed.emit()
         self._sync_review()
         self._start_pending()
 
     def _sync_review(self, _index: int = -1) -> None:
         """Die Handlung gehört zur ausgewählten Ausgabe, nicht zum letzten Arbeiterergebnis."""
-        problem = self._problems.get(self.choice.currentData(), "")
-        self.state.setText(problem)
-        self.state.setVisible(bool(problem))
-        self.review.setToolTip(problem)
-        self.review.setAccessibleDescription(problem)
+        problem = self._problems.get(self.choice.currentData())
+        declined = self.choice.currentData() in self._declined
+        state = (
+            problem_text(problem)
+            if problem is not None
+            else (
+                tr("Für diese Ausgabe ist keine weitere Filamentbuchung vorgemerkt.")
+                if declined
+                else ""
+            )
+        )
+        if problem is not None:
+            self.state.set_error(problem, {"correct_input": lambda _error: self._review()})
+        else:
+            self.state.setText(state)
+        self.state.setVisible(bool(state))
+        self.review.setToolTip(state)
+        self.review.setAccessibleDescription(state)
         busy = self._tasks.worker is not None
         self.review.setEnabled(not busy)
         self.review.setText(
@@ -946,12 +974,14 @@ class UsageNotice(QWidget):
             else (
                 tr("Buchung ansehen …")
                 if self.choice.currentData() in self._booked
+                else tr("Nicht gebucht — ansehen …")
+                if declined
                 else tr("Filament abziehen …")
             )
         )
 
     def _rejected(self, problem: object) -> None:
-        self._problems[self._active] = str(problem)
+        self._problems[self._active] = problem
         self._completed(None)
 
     def _review(self) -> None:
@@ -963,9 +993,15 @@ class UsageNotice(QWidget):
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 self._booked.add(request.fingerprint)
+                self._declined.discard(request.fingerprint)
                 self._problems.pop(request.fingerprint, None)
                 self._sync_review()
                 self.changed.emit()
+            elif dialog.booking_declined and request.fingerprint not in self._booked:
+                self._declined.add(request.fingerprint)
+                self._pending.pop(request.fingerprint, None)
+                self._problems.pop(request.fingerprint, None)
+                self._sync_review()
         finally:
             self._release_dialog(dialog)
 
