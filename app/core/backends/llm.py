@@ -1905,7 +1905,7 @@ class Speed:
 
     @property
     def prompt_minutes(self) -> float | None:
-        """Wie lange dieser Rechner braucht, bis die erste Antwort *beginnt*."""
+        """Geschätzte Einlesedauer für den zuletzt gemessenen Auftragsumfang."""
         if not self.tokens_per_second:
             return None
         return PROMPT_TOKENS / self.tokens_per_second / 60.0
@@ -1979,9 +1979,10 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
         return None
     return _(
         "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
-        "gemessene {rate} Token je Sekunde beim Einlesen. Der Auftrag dieser "
-        "Anwendung ist rund {tokens} Token lang, es dauert hier also etwa "
-        "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Das "
+        "gemessene {rate} Token je Sekunde beim Einlesen. Der zuletzt gemessene Auftrag "
+        "dieser Anwendung umfasst rund {tokens} Token; bei diesem Umfang dauert es "
+        "hier etwa {minutes} Minuten, bis eine Antwort überhaupt beginnt. Seitdem "
+        "ergänzte Werkzeuge können die Wartezeit verlängern. Das "
         "überschreitet Solidons Zehn-Minuten-Grenze; dieser vollständige "
         "Auftrag kann so nicht abgeschlossen werden. Für zügige Antworten braucht es eine "
         "geeignete "
