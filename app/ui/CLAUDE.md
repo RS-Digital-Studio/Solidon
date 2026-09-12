@@ -75,6 +75,9 @@ Ein nicht verfügbares gebundenes Profil bleibt mit Originalnamen als ungelöst
 sichtbar. Befüllen der Liste wählt kein anderes Profil. Ein ausdrücklich
 geändertes Herstellerprofil erhält die gewählte physische Spule; automatische
 Buchung prüft deren Eignung weiterhin gesondert.
+Für die ausdrückliche Wertübernahme hält der Druckdialog das gewählte
+`SlicerProfile` einschließlich seines Prusa-Abschnitts fest. Der Dateipfad
+allein beschreibt bei Herstellerbündeln noch kein bestimmtes Filament.
 
 ## Der Weg durch die Schicht
 

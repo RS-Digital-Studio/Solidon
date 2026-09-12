@@ -173,6 +173,22 @@ def _profile_roots(setup: SlicerSetup) -> tuple[Path, ...]:
     return slicer_profiles.profile_roots(setup.flavour, setup.executable)
 
 
+def profile_source(
+    chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileKind
+) -> Path | slicer_profiles.SlicerProfile | None:
+    """Einzeldatei oder vollständige Profilidentität einschließlich Prusa-Abschnitt."""
+    if not chosen:
+        return None
+    direct = Path(chosen)
+    if direct.is_file():
+        return direct
+    found = slicer_profiles.profile_by_name(setup.executable, setup.flavour, chosen, kind)
+    if found is not None and found.path.is_file():
+        return found
+    _log.warning("no %s profile named %r in this slicer", kind, chosen)
+    return None
+
+
 def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileKind) -> Path | None:
     """Die Datei zu einem Profil, gleich ob ein Name oder ein Pfad ankam.
 
@@ -188,29 +204,12 @@ def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileK
     geschriebene Prozessprofil hatte zweiundvierzig Schlüssel statt
     zweiundsechzig — ohne ``inherits``, ohne ``compatible_printers``. Genau
     die beiden, an denen die Orca-Familie die Verträglichkeit prüft.
+
+    Zum Lesen von Werten gilt :func:`profile_source`: Eine Prusa-Bündeldatei
+    allein benennt kein Profil; ihr Abschnitt muss dabei erhalten bleiben.
     """
-    if not chosen:
-        return None
-    direct = Path(chosen)
-    if direct.is_file():
-        return direct
-    # ``kind`` und nicht ``type_of``: das eine ist der Ordner, aus dem das
-    # Profil stammt, das andere sein ``type``-Feld — und das steht in den
-    # mitgelieferten Profilen der Orca-Familie durchweg leer.
-    #
-    # Gesucht wird ausdrücklich nach dieser Art. Ohne die Angabe gilt
-    # ``DEFAULT_KINDS``, und darin fehlen die Filamentprofile mit Absicht —
-    # sie vervielfachen den Bestand. Wer hier nach einem Filament fragte, bekam
-    # deshalb nie eines: die Schleife lief über Maschinen und Prozesse und
-    # endete in „no filament profile named ...". Nach einer Art zu fragen ist
-    # obendrein schneller als nach zweien.
-    for entry in slicer_profiles.find_profiles(setup.executable, setup.flavour, kinds=(kind,)):
-        if entry.name == chosen and entry.kind == kind:
-            found = Path(entry.path)
-            if found.is_file():
-                return found
-    _log.warning("no %s profile named %r in this slicer", kind, chosen)
-    return None
+    source = profile_source(chosen, setup, kind)
+    return source.path if isinstance(source, slicer_profiles.SlicerProfile) else source
 
 
 def machine_for(setup: SlicerSetup, profile: Profile) -> str:
@@ -930,7 +929,7 @@ def settings_for_slot(
             filament=defaults.filament,
         )
     if setup is not None and slot.material:
-        source = profile_file(slot.material, setup, "filament")
+        source = profile_source(slot.material, setup, "filament")
         if source is not None:
             for path, value in slicer_profiles.filament_values(
                 source, _profile_roots(setup)

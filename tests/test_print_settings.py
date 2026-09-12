@@ -2704,16 +2704,13 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
         encoding="utf-8",
     )
 
-    class Eintrag:
-        name = "0.20mm Standard"
-        kind = "process"
-        path = echte
+    entry = slicer_profiles.SlicerProfile(echte, "0.20mm Standard", "process")
 
     gefragt: list[object] = []
 
     def suche(_executable, _flavour, kinds=None):
         gefragt.append(kinds)
-        return [Eintrag()]
+        return [entry]
 
     monkeypatch.setattr(slicer_profiles, "find_profiles", suche)
     setup = handover.SlicerSetup(
@@ -2770,14 +2767,11 @@ def test_a_filament_profile_is_found_by_name_too(tmp_path, monkeypatch) -> None:
     datei = tmp_path / "Elegoo PETG PRO.json"
     datei.write_text(json.dumps({"name": "Elegoo PETG PRO"}), encoding="utf-8")
 
-    class Eintrag:
-        name = "Elegoo PETG PRO"
-        kind = "filament"
-        path = datei
+    entry = slicer_profiles.SlicerProfile(datei, "Elegoo PETG PRO", "filament")
 
     def suche(_executable, _flavour, kinds=None):
         # Genau wie im Bestand: ohne Nachfrage gibt es keine Filamentprofile.
-        return [Eintrag()] if kinds and "filament" in kinds else []
+        return [entry] if kinds and "filament" in kinds else []
 
     monkeypatch.setattr(slicer_profiles, "find_profiles", suche)
     setup = handover.SlicerSetup(
@@ -2809,12 +2803,9 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
         encoding="utf-8",
     )
 
-    class Eintrag:
-        name = "basis"
-        kind = "process"
-        path = geerbt
+    entry = slicer_profiles.SlicerProfile(geerbt, "basis", "process")
 
-    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [Eintrag()])
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [entry])
     monkeypatch.setattr(
         slicer_profiles, "resolve_values", lambda _, **__: {"wall_loops": "2", "bridge_angle": "45"}
     )
@@ -2991,15 +2982,12 @@ def test_without_a_chosen_printer_the_slicers_own_selection_counts(tmp_path, mon
     echte = tmp_path / "Elegoo Centauri Carbon 2 0.4 nozzle.json"
     echte.write_text("{}", encoding="utf-8")
 
-    class Eintrag:
-        name = "Elegoo Centauri Carbon 2 0.4 nozzle"
-        kind = "machine"
-        path = echte
+    entry = slicer_profiles.SlicerProfile(echte, "Elegoo Centauri Carbon 2 0.4 nozzle", "machine")
 
     monkeypatch.setattr(
         slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.4 nozzle"
     )
-    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [Eintrag()])
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [entry])
     monkeypatch.setattr(
         slicer_profiles,
         "resolve_values",

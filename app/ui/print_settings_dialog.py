@@ -3188,8 +3188,9 @@ class PrintSettingsDialog(QDialog):
         filament_side.addWidget(self.adopt_filament)
 
         self._filament_profile = ""
-        """Pfad des zugeordneten Filamentprofils — die eine Quelle für
-        Anzeige, Übergabe und Wertübernahme."""
+        """Dateipfad des zugeordneten Filamentprofils für die Übergabe."""
+        self._filament_source: slicer_profiles.SlicerProfile | None = None
+        """Die Wertübernahme erhält auch den Abschnitt eines Prusa-Bündels."""
         self._filament_title = ""
         """Wie dieses Profil heißt. Für die Anzeige und die Meldung danach."""
 
@@ -3824,6 +3825,7 @@ class PrintSettingsDialog(QDialog):
     def _remember_filament_profile(self, entry: slicer_profiles.SlicerProfile) -> None:
         """Das zugeordnete Profil festhalten, anzeigen und übernehmbar machen."""
         self._filament_profile = str(entry.path)
+        self._filament_source = entry
         self._filament_title = entry.title(tr("eigenes"))
         self.filament_shown.setText(self._filament_title)
         self.adopt_filament.setEnabled(True)
@@ -3842,6 +3844,7 @@ class PrintSettingsDialog(QDialog):
         (Regel 18), und der Grund steht am Zustand statt an der Handlung.
         """
         self._filament_profile = ""
+        self._filament_source = None
         self._filament_title = ""
         self.filament_shown.setText("")
         why = str(tr("Erst ein Filament, dann seine Werte."))
@@ -4161,7 +4164,8 @@ class PrintSettingsDialog(QDialog):
         chosen = self._filament_profile
         if not chosen:
             return
-        values = slicer_profiles.filament_values(Path(str(chosen)), self._profile_roots())
+        source = self._filament_source or Path(str(chosen))
+        values = slicer_profiles.filament_values(source, self._profile_roots())
         if not values:
             return
         settings = self.settings

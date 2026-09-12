@@ -116,6 +116,8 @@ def native_prusa(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "filament_diameter = 1.75\ntemperature = 210\n"
         "[filament:*fast*]\ntemperature = 220\nfilament_max_volumetric_speed = 15\n"
         "[filament:Prusament PLA]\ninherits = *common*; *fast*\nfilament_colour = #FFA500\n"
+        "[filament:Prusament PLA Silk]\ninherits = *common*\ntemperature = 217\n"
+        "filament_max_volumetric_speed = 5\n"
         "[print:0.20 SPEED]\nlayer_height = 0.2\n",
     )
     config = tmp_path / "config"
@@ -146,6 +148,37 @@ def test_prusa_bundle_and_user_delta_resolve_all_parents(native_prusa: Path) -> 
         "filament.diameter": pytest.approx(1.75),
         "filament.max_flow": pytest.approx(15),
     }
+
+
+@pytest.mark.parametrize(
+    ("name", "temperature", "max_flow"),
+    [("Prusament PLA", 225, 15), ("Prusament PLA Silk", 217, 5)],
+)
+def test_prusa_selected_filament_reaches_the_written_configuration(
+    native_prusa: Path, tmp_path: Path, name: str, temperature: int, max_flow: int
+) -> None:
+    """Die Ausgabe behält den gewählten Bündelabschnitt und den Vorrang eigener Profile."""
+    from app.core.export import handover
+    from app.core.knowledge import print_settings, profiles
+    from app.core.types import MaterialSlot
+
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    setup = handover.SlicerSetup(native_prusa, "prusa")
+    slot = MaterialSlot(0, "Spule", material=name, material_type="PLA")
+
+    config = handover.write_config(
+        print_settings.resolve(profile), profile, setup, tmp_path, (slot,)
+    )
+
+    values = dict(
+        line.split(" = ", 1)
+        for line in config.process.read_text(encoding="utf-8").splitlines()
+        if " = " in line
+    )
+    assert values["temperature"] == str(temperature)
+    assert values["filament_max_volumetric_speed"] == str(max_flow)
+    assert values["filament_density"] == "1.24"
+    assert config.written["temperature"] == str(temperature)
 
 
 def test_prusa_profiles_retain_section_and_inherited_machine_knowledge(native_prusa: Path) -> None:

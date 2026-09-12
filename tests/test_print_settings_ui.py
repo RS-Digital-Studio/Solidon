@@ -378,6 +378,38 @@ def test_adopting_an_own_filament_includes_its_installed_base(
     assert "Meine Spule" in dialog.state.text()
 
 
+def test_adopting_a_prusa_filament_keeps_the_selected_bundle_section(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Übernahmeknopf liest das gewählte Filament statt nur dessen gemeinsamer INI."""
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[filament:Prusament PLA]\nfilament_type = PLA\ntemperature = 210\n"
+        "[filament:Prusament PLA Silk]\ninherits = Prusament PLA\ntemperature = 217\n"
+        "filament_max_volumetric_speed = 5\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    chosen = sp.profile_by_name(executable, "prusa", "Prusament PLA Silk", "filament")
+    assert chosen is not None
+    dialog._slicer_path = executable
+    before = dialog.settings
+    dialog._remember_filament_profile(chosen)
+    assert dialog.settings == before, "das Zuordnen allein übernimmt keine Werte"
+
+    dialog.adopt_filament.click()
+
+    assert dialog.settings.temperature.nozzle == 217
+    assert dialog.settings.filament.max_flow == pytest.approx(5.0)
+    assert "Prusament PLA Silk" in dialog.state.text()
+    dialog._forget_filament_profile()
+    assert not dialog.adopt_filament.isEnabled()
+
+
 @pytest.fixture
 def dialog(qt_app: QApplication, session: Session) -> PrintSettingsDialog:
     return PrintSettingsDialog(session, UiSettings())

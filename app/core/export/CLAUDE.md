@@ -59,6 +59,10 @@ sind kein aktiver Bestand. Cura-Formeln werden nicht ausgeführt; solche Werte
 bleiben unbekannt, Materialwerte ohne Maschinenkontext kommen ausschließlich
 aus den allgemeinen XML-Feldern.
 
+Die Übergabe erhält diese Identität über `profile_source` bis zum Auslesen
+der Slotwerte. `profile_file` reduziert sie ausschließlich für Schnittstellen,
+die tatsächlich einen Dateipfad verlangen.
+
 `settings_for_slot` löst jede Spule gegen ihre eigene Materialart auf,
 berücksichtigt mit `setup` das vollständige Herstellerprofil und legt
 ausdrückliche Spulenwerte darüber. Gemeinsame Prozesswerte bleiben
