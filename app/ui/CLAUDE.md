@@ -678,6 +678,12 @@ gemeinsam sind, sagt `Pair.shared` im Kern. Ein Paarwechsel tauscht sie
 vollständig — was stehenbliebe, verspräche eine Wirkung, die die andere Hälfte
 nicht kennt.
 
+`Session.create_counterpart` übernimmt beide Hälften und hängt nach der
+Auswertung die Passung an dieselbe Transaktion. Erst danach läuft die
+gemeinsame Änderungsnachbereitung: Das Projekt gilt als ungespeichert, die
+automatische Sicherung erfasst das Paar, und die Auswertung prüft seine
+Passung mit. Ein Undo nimmt beide Hälften und die Passung zusammen zurück.
+
 **Der Menüeintrag beantwortet die Frage selbst**, statt sie nach dem Klick als
 Dialog zu stellen: Ohne zwei markierte Stellen an zwei Teilen ist er gesperrt
 und trägt den Grund. Beide Stellen — Riegel und Fehlerdialog für den Weg über

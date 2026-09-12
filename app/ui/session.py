@@ -31,6 +31,7 @@ from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
+from app.core.counterpart import CounterpartApplied, Pair, apply_counterpart, attach_fit
 from app.core.errors import (
     CANCEL,
     CANCEL_SPLIT,
@@ -1920,6 +1921,39 @@ class Session(QObject):
             raise refusal
         applied = apply_lid(self.project.document, object_id, params, self.profile, op=op)
         self._changed()
+        return applied
+
+    def create_counterpart(
+        self,
+        pair: Pair,
+        first_object: str,
+        second_object: str,
+        shared: Mapping[str, Any],
+        first_place: Mapping[str, Any],
+        second_place: Mapping[str, Any],
+    ) -> CounterpartApplied:
+        """Beide Gegenstücke samt Passung als eine ungespeicherte Änderung übernehmen."""
+        refusal = self.halt_in_the_way()
+        if refusal is not None:
+            raise refusal
+        applied = apply_counterpart(
+            self.project.document,
+            pair,
+            first_object,
+            second_object,
+            shared,
+            first_place,
+            second_place,
+        )
+        try:
+            # Erst die Auswertung liefert die Kennungen der erzeugten Merkmale.
+            # Die Passung gehört an dieselbe Transaktion wie die beiden Hälften.
+            result = self.evaluate_now()
+            attach_fit(self.project.document, applied, pair, result.scene)
+        finally:
+            # Auch wenn die Auswertung abbricht, stehen die Schritte schon im
+            # Dokument und müssen beim Schließen oder Sichern erhalten bleiben.
+            self._changed()
         return applied
 
     def preview_async(

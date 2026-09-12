@@ -7036,7 +7036,7 @@ class MainWindow(QMainWindow):
         der nächsten Änderung auseinander, und der Kunde liest sie hier
         nacheinander.
         """
-        from app.core.counterpart import apply_counterpart, attach_fit, drafts_for
+        from app.core.counterpart import drafts_for
         from app.ui.counterpart_dialog import CounterpartDialog
 
         chosen = self._counterpart_targets()
@@ -7100,8 +7100,7 @@ class MainWindow(QMainWindow):
             dialog.deleteLater()
 
         try:
-            applied = apply_counterpart(
-                self.session.project.document,
+            applied = self.session.create_counterpart(
                 pair,
                 first_object,
                 second_object,
@@ -7113,13 +7112,6 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return
 
-        # **Erst rechnen, dann die Passung.** Die Kennung eines erzeugten
-        # Merkmals entsteht bei der Auswertung; vorher gäbe es nur eine
-        # Vermutung, auf die ein ``FeatureRef`` zeigt (siehe ``counterpart``).
-        result = self.session.evaluate_now()
-        if result is not None:
-            attach_fit(self.session.project.document, applied, pair, result.scene)
-        self.session.projectChanged.emit()
         for finding in applied.findings:
             self.announce(str(finding.message))
 

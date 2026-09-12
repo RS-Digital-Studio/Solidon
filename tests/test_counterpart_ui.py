@@ -8,6 +8,8 @@ entstehen beide Hälften und ihre Passung in einem Schritt.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -137,6 +139,48 @@ def test_both_halves_and_their_fit_come_from_one_click(
         release = getattr(type(window), "release", None)
         if release is not None:
             release(window)
+        window.deleteLater()
+
+
+def test_a_counterpart_pair_marks_the_saved_project_for_recovery(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein angenommenes Paar gehört in Speichernachfrage und automatische Sicherung."""
+    from app.core.scene.project import autosave_path, load
+    from app.ui import counterpart_dialog as module
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        path = window.session.save_project(tmp_path / "counterparts.p3d")
+        assert not window.session.modified
+        window.object_tree.select_features(
+            ((first, _top_face(window, first)), (second, _top_face(window, second)))
+        )
+        QApplication.processEvents()
+        monkeypatch.setattr(
+            module.CounterpartDialog,
+            "exec",
+            lambda self: int(module.CounterpartDialog.DialogCode.Accepted),
+        )
+        before = len(window.session.project.document.ops)
+
+        window.action_counterpart()
+        assert window.session.wait_for_idle(30_000)
+
+        assert len(window.session.project.document.ops) == before + 2
+        assert window.session.modified, "das Paar muss eine Speichernachfrage auslösen"
+        window.session.autosave()
+        saved = load(autosave_path(path))
+        assert len(saved.document.ops) == before + 2
+        assert len(saved.document.fits) == 1, "die Sicherung enthält auch die Passung"
+        assert len(load(path).document.ops) == before, "die gespeicherte Datei blieb unverändert"
+        window.session.undo()
+        assert window.session.wait_for_idle(30_000)
+        assert len(window.session.project.document.ops) == before
+        assert not window.session.project.document.fits, "ein Undo nimmt das ganze Paar zurück"
+    finally:
+        window.release()
         window.deleteLater()
 
 
