@@ -10,6 +10,7 @@ import dataclasses
 import math
 from pathlib import Path
 
+import pytest
 import trimesh
 
 from app.core.geom.mesh import MeshData, read_mesh
@@ -72,6 +73,38 @@ def test_the_sleeve_answers_from_both_sides() -> None:
     assert from_inside == from_outside, (
         f"von innen {from_inside}, von außen {from_outside} — dasselbe Rohr"
     )
+
+
+@pytest.mark.parametrize("travel", [0.0, 6.0])
+@pytest.mark.parametrize("offset", [(0.5, 0.0), (0.8, 0.0), (0.0, 0.8), (0.48, 0.64)])
+def test_an_offset_cavity_reports_its_actual_thinnest_wall(
+    travel: float, offset: tuple[float, float]
+) -> None:
+    """Der äußere Kreis und das entfernteste Höhlungsende bestimmen die Wand."""
+    outer = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=192)
+    tool = trimesh.creation.cylinder(radius=4.0, height=30.0, sections=128)
+    if travel > 0.0:
+        tool.apply_translation((-travel / 2.0, 0.0, 0.0))
+        cap = trimesh.creation.cylinder(radius=4.0, height=30.0, sections=128)
+        cap.apply_translation((travel / 2.0, 0.0, 0.0))
+        tool = tool.union(cap).union(trimesh.creation.box(extents=(travel, 8.0, 30.0)))
+    tool.apply_translation((*offset, 0.0))
+    body = outer.difference(tool)
+    assert body.is_watertight
+    # Schräg im Raum: Der Versatz muss quer zur tatsächlichen Bohrachse liegen.
+    body.apply_transform(trimesh.transformations.rotation_matrix(0.7, (1.0, 2.0, 3.0)))
+    features = detect(MeshData.of(body))
+    cavity = next(f for f in features.values() if f.kind == ("slot" if travel else "hole"))
+    wall = next(f for f in features.values() if f.kind == "pin")
+    expected = 6.0 - max(math.hypot(offset[0] + side * travel / 2.0, offset[1]) for side in (-1, 1))
+
+    found = sleeve_at(cavity, features)
+
+    assert found is not None
+    assert found.thickness == pytest.approx(expected, abs=0.03)
+    assert sleeve_at(wall, features) == found
+    assert sleeves_of(features) == {cavity.id: found, wall.id: found}
+    assert thinnest_sleeve(features) == found
 
 
 def test_the_sleeve_uses_the_same_axis_tolerance_from_both_sides() -> None:

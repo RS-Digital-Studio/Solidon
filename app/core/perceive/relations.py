@@ -103,22 +103,26 @@ class Sleeve:
     an den Enden, und zwar um den halben Weg. Die Zahl gehört deshalb zum
     Rohr und nicht zur Höhlung allein — erst zusammen mit dem Außendurchmesser
     wird daraus eine Wandstärke."""
+    centreline_reach: float | None = None
+    """Weiteste Entfernung der Höhlungsmittellinie von der Mantelachse.
+
+    Beinhaltet den gemessenen Querversatz und beim Langloch die Richtung
+    seiner Enden. Ohne diesen Messwert gilt der zentrische Bezug."""
 
     @property
     def thickness(self) -> float:
         """Die Wand zwischen beiden, in Millimetern — an der dünnsten Stelle.
 
-        Der halbe Unterschied der Durchmesser, denn beide sind koaxial: Was
-        außen dazukommt, verteilt sich auf zwei Seiten.
-
-        **Und beim Langloch geht der halbe Weg ab.** Seine Enden sitzen um
-        ``travel / 2`` aus der Mitte, und dort ist die Wand am dünnsten:
+        Vom halben Unterschied der Durchmesser geht die weiteste Entfernung
+        der Höhlungsmittellinie zur Mantelachse ab. Bei einer zentrischen
+        Bohrung ist sie null, beim zentrischen Langloch der halbe Weg:
         Gemessen an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm stehen
         an den Flanken 6 mm und an den Enden 3. Wandstärke ist druckkritisch —
         die dickere der beiden Zahlen zu nennen wäre schlimmer als zu
         schweigen (RM-152).
         """
-        return (self.outer_diameter - self.bore_diameter) / 2.0 - self.bore_travel / 2.0
+        reach = self.bore_travel / 2.0 if self.centreline_reach is None else self.centreline_reach
+        return (self.outer_diameter - self.bore_diameter) / 2.0 - reach
 
 
 FeatureGroupEvidence = Literal[
@@ -268,12 +272,28 @@ def _sleeve_between(one: _Measured, other: _Measured) -> Sleeve | None:
     offset = wall.centre - bore.centre
     along = float(offset @ bore.axis)
     across = offset - along * bore.axis
-    if float(np.linalg.norm(across)) > bore.diameter / 2.0 * SINK_FIT_LIMIT:
+    reach = float(np.linalg.norm(across))
+    if reach > bore.diameter / 2.0 * SINK_FIT_LIMIT:
         return None
 
     share = _overlap(along, bore.depth, wall.depth)
     if share < SLEEVE_OVERLAP:
         return None
+    travel = float(bore.feature.params.get("travel") or 0.0)
+    if travel > EPS_GEOM:
+        raw_direction = bore.feature.params.get("direction")
+        if raw_direction is None:
+            if reach > EPS_GEOM:
+                return None
+            reach = travel / 2.0
+        else:
+            direction = np.asarray(raw_direction, dtype=float)
+            direction = direction - float(direction @ bore.axis) * bore.axis
+            length = float(np.linalg.norm(direction))
+            if length <= EPS_GEOM:
+                return None
+            end = direction * (travel / (2.0 * length))
+            reach = max(float(np.linalg.norm(across + end)), float(np.linalg.norm(across - end)))
     found = Sleeve(
         bore=bore.feature.id,
         wall=wall.feature.id,
@@ -283,7 +303,8 @@ def _sleeve_between(one: _Measured, other: _Measured) -> Sleeve | None:
         # **Der Weg gehört der Höhlung**, nicht dem Merkmal, das gerade gefragt
         # wurde: Von außen geklickt ist das Langloch der Kandidat, und eine
         # Bohrung trägt gar keinen.
-        bore_travel=float(bore.feature.params.get("travel") or 0.0),
+        bore_travel=travel,
+        centreline_reach=reach,
     )
     # **Ein Langloch, das länger ist als sein Mantel, hat keine Wand, sondern
     # eine offene Flanke.** Bei einer runden Bohrung fängt das schon der
