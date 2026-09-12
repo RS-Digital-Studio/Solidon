@@ -180,15 +180,57 @@ class FeatureActionGroup:
     uncertain: tuple[FeatureGroupUncertainty, ...] = ()
 
 
-def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve | None:
-    """Das Rohr, zu dem dieses Merkmal gehört — von welcher Seite man auch kommt.
+@dataclass(frozen=True, slots=True)
+class _Measured:
+    """Die fünf Angaben, aus denen ein Rohr entsteht — einmal gelesen.
 
-    **Beide Seiten, und das ist keine Bequemlichkeit.** Der Kunde klickt
-    entweder auf die Bohrung oder auf den Zapfen; eine Auskunft, die nur eine
-    der beiden Richtungen kennt, ist an der anderen Hälfte der Klicks stumm.
-    Gemessen am Besenhalter: ``hole_2`` Ø 34,00 und ``pin_1`` Ø 40,80 stehen
-    beide im Objektbaum, beide lassen sich anklicken, und beide ändern dieselbe
-    Wand von 3,40 mm.
+    ``axis_of`` und ``centre_of`` bauen je ein Numpy-Array. Wer sie für jedes
+    Paar neu ruft, zahlt sie quadratisch — und die Wandprüfung läuft nach
+    *jeder* Auswertung (RM-127). Gemessen am 12.09.2026, einmal gelesen gegen
+    je Paar gelesen:
+
+    ======================================  ========  =======
+    Körper                                  vorher    nachher
+    ======================================  ========  =======
+    500 Bohrungen, 5 Zapfen                  25,8 ms   1,7 ms
+    234 Merkmale, davon 200 Rundungen         2,3 ms   0,2 ms
+    500 Bohrungen, 500 koaxiale Zapfen      2087 ms    476 ms
+    ======================================  ========  =======
+
+    Die letzte Zeile ist ein gebauter Fall und kein gemessener Kunde — sie
+    steht hier als **Obergrenze**: Oberhalb von
+    ``scene.evaluate.FEATURE_LIMIT_COUNT`` (tausend) hängt die Auswertung gar
+    keine Merkmale mehr ein, und schlimmer als halb Hohlraum und halb Materie
+    wird die Paarung nicht. Was echte Modelle mitbringen, liegt zwei
+    Größenordnungen darunter: über die zwanzig Netze des Korpus gemessen sind
+    es höchstens **16** Merkmale.
+    """
+
+    feature: Feature
+    axis: Any
+    centre: Any
+    diameter: float
+    depth: float
+    inside: bool
+
+
+def _measured(feature: Feature) -> _Measured | None:
+    """``None``, wo die Zahlen für die Frage nicht reichen — ein Merkmal ohne
+    Achse, ohne Mitte, ohne Durchmesser oder ohne Tiefe. Geraten wird nichts
+    (Regel 21): Ohne Tiefe lässt sich die Überdeckung nicht messen, und ohne
+    sie wäre jede Senkung ein Rohr.
+    """
+    axis = axis_of(feature)
+    centre = centre_of(feature)
+    diameter = float(feature.params.get("diameter") or 0.0)
+    depth = float(feature.params.get("depth") or 0.0)
+    if axis is None or centre is None or diameter <= EPS_GEOM or depth <= EPS_GEOM:
+        return None
+    return _Measured(feature, axis, centre, diameter, depth, is_a_cavity(feature))
+
+
+def _sleeve_between(one: _Measured, other: _Measured) -> Sleeve | None:
+    """Die eine Regel, nach der aus zwei Merkmalen ein Rohr wird.
 
     Fünf Bedingungen, vier davon dieselben wie bei
     ``features.widening_at_the_mouth`` — mit Absicht, denn es ist dieselbe
@@ -204,92 +246,117 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
       über einer Bohrung ist koaxial, weiter und aus Materie — und umgibt sie
       trotzdem nicht.
 
-    ``None``, wo es keinen Partner gibt oder die Zahlen für die Frage nicht
-    reichen — ein Merkmal ohne Achse, ohne Mitte, ohne Durchmesser oder ohne
-    Tiefe. Nicht geraten wird hier so wenig wie sonst (Regel 21): Ohne Tiefe
-    lässt sich die Überdeckung nicht messen, und ohne sie wäre jede Senkung ein
-    Rohr.
+    **Die Reihenfolge der Prüfungen ist gemessen und nicht beliebig**: Der
+    Durchmesservergleich ist ein Fließkommavergleich und wirft die Hälfte aller
+    Paare weg, bevor die erste Matrixrechnung läuft.
     """
-    axis = axis_of(feature)
-    centre = centre_of(feature)
-    diameter = float(feature.params.get("diameter") or 0.0)
-    depth = float(feature.params.get("depth") or 0.0)
-    if axis is None or centre is None or diameter <= EPS_GEOM or depth <= EPS_GEOM:
+    if one.inside == other.inside:
         return None
-    inside = is_a_cavity(feature)
+    # Die Höhlung muss die engere sein. Andersherum steckt der Zapfen in der
+    # Bohrung, und das ist kein Rohr, sondern ein Stift in einem Loch — eine
+    # Passung, keine Wand.
+    if one.inside and other.diameter <= one.diameter:
+        return None
+    if not one.inside and other.diameter >= one.diameter:
+        return None
+    if abs(float(one.axis @ other.axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
+        return None
+    # Alle Lagewerte werden aus Sicht der Bohrung gerechnet. Sie ist bei beiden
+    # Aufrufrichtungen dasselbe Merkmal; die Achsen dürfen innerhalb der
+    # Erkennungsschwelle leicht voneinander abweichen, und dann würden zwei
+    # wechselnde Bezugsachsen sonst zwei verschiedene Überdeckungen liefern.
+    bore = one if one.inside else other
+    wall = other if one.inside else one
+    offset = wall.centre - bore.centre
+    along = float(offset @ bore.axis)
+    across = offset - along * bore.axis
+    if float(np.linalg.norm(across)) > bore.diameter / 2.0 * SINK_FIT_LIMIT:
+        return None
+
+    share = _overlap(along, bore.depth, wall.depth)
+    if share < SLEEVE_OVERLAP:
+        return None
+    found = Sleeve(
+        bore=bore.feature.id,
+        wall=wall.feature.id,
+        bore_diameter=bore.diameter,
+        outer_diameter=wall.diameter,
+        overlap=share,
+        # **Der Weg gehört der Höhlung**, nicht dem Merkmal, das gerade gefragt
+        # wurde: Von außen geklickt ist das Langloch der Kandidat, und eine
+        # Bohrung trägt gar keinen.
+        bore_travel=float(bore.feature.params.get("travel") or 0.0),
+    )
+    # **Ein Langloch, das länger ist als sein Mantel, hat keine Wand, sondern
+    # eine offene Flanke.** Bei einer runden Bohrung fängt das schon der
+    # Durchmesservergleich oben ab; beim Langloch entscheidet die Gesamtlänge,
+    # und die steht erst hier zur Verfügung.
+    return None if found.thickness <= EPS_GEOM else found
+
+
+def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve | None:
+    """Das Rohr, zu dem dieses Merkmal gehört — von welcher Seite man auch kommt.
+
+    **Beide Seiten, und das ist keine Bequemlichkeit.** Der Kunde klickt
+    entweder auf die Bohrung oder auf den Zapfen; eine Auskunft, die nur eine
+    der beiden Richtungen kennt, ist an der anderen Hälfte der Klicks stumm.
+    Gemessen am Besenhalter: ``hole_2`` Ø 34,00 und ``pin_1`` Ø 40,80 stehen
+    beide im Objektbaum, beide lassen sich anklicken, und beide ändern dieselbe
+    Wand von 3,40 mm.
+
+    Was ein Rohr ausmacht, steht in :func:`_sleeve_between`; hier steht nur,
+    dass alle Kandidaten gefragt werden. Wer dieselbe Frage für einen **ganzen
+    Körper** stellt, nimmt :func:`thinnest_sleeve` — dieselbe Regel, ein
+    Durchgang statt n.
+
+    ``None``, wo es keinen Partner gibt oder die Zahlen für die Frage nicht
+    reichen.
+    """
+    mine = _measured(feature)
+    if mine is None:
+        return None
     best: Sleeve | None = None
     for candidate in features.values():
         if candidate.id == feature.id:
             continue
-        if is_a_cavity(candidate) == inside:
+        theirs = _measured(candidate)
+        if theirs is None:
             continue
-        other_axis = axis_of(candidate)
-        other_centre = centre_of(candidate)
-        other_diameter = float(candidate.params.get("diameter") or 0.0)
-        other_depth = float(candidate.params.get("depth") or 0.0)
-        if other_axis is None or other_centre is None:
-            continue
-        if other_diameter <= EPS_GEOM or other_depth <= EPS_GEOM:
-            continue
-        # Die Höhlung muss die engere sein. Andersherum steckt der Zapfen in
-        # der Bohrung, und das ist kein Rohr, sondern ein Stift in einem Loch —
-        # eine Passung, keine Wand.
-        if inside and other_diameter <= diameter:
-            continue
-        if not inside and other_diameter >= diameter:
-            continue
-        if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
-            continue
-        # Alle Lagewerte werden aus Sicht der Bohrung gerechnet. Sie ist bei
-        # beiden Aufrufrichtungen dasselbe Merkmal; die Achsen dürfen innerhalb
-        # der Erkennungsschwelle leicht voneinander abweichen, und dann würden
-        # zwei wechselnde Bezugsachsen sonst zwei verschiedene Überdeckungen
-        # liefern.
-        bore_axis = axis if inside else other_axis
-        bore_centre = centre if inside else other_centre
-        wall_centre = other_centre if inside else centre
-        bore_depth = depth if inside else other_depth
-        wall_depth = other_depth if inside else depth
-        offset = wall_centre - bore_centre
-        along = float(offset @ bore_axis)
-        across = offset - along * bore_axis
-        bore_radius = (diameter if inside else other_diameter) / 2.0
-        across_limit = bore_radius * SINK_FIT_LIMIT
-        if float(np.linalg.norm(across)) > across_limit:
-            continue
-
-        share = _overlap(along, bore_depth, wall_depth)
-        if share < SLEEVE_OVERLAP:
-            continue
-        bore_diameter = diameter if inside else other_diameter
-        outer_diameter = other_diameter if inside else diameter
-        # **Der Weg gehört der Höhlung**, nicht dem Merkmal, das gerade gefragt
-        # wurde: Von außen geklickt ist das Langloch der Kandidat, und eine
-        # Bohrung trägt gar keinen.
-        hollow = feature if inside else candidate
-        found = Sleeve(
-            bore=feature.id if inside else candidate.id,
-            wall=candidate.id if inside else feature.id,
-            bore_diameter=bore_diameter,
-            outer_diameter=outer_diameter,
-            overlap=share,
-            bore_travel=float(hollow.params.get("travel") or 0.0),
-        )
-        # **Ein Langloch, das länger ist als sein Mantel, hat keine Wand,
-        # sondern eine offene Flanke.** Bei einer runden Bohrung fängt das
-        # schon der Durchmesservergleich oben ab; beim Langloch entscheidet die
-        # Gesamtlänge, und die steht erst hier zur Verfügung.
-        if found.thickness <= EPS_GEOM:
-            continue
+        found = _sleeve_between(mine, theirs)
         # **Die dünnste Wand gewinnt.** Stehen mehrere Hüllen um dieselbe
         # Bohrung — ein Rohr in einem Rohr —, ist die innerste diejenige, die
         # als Erste zu dünn wird. Eine beliebige davon zu nennen hieße, die
         # Aussage vom Zufall der Reihenfolge abhängig zu machen.
-        if best is None or found.thickness < best.thickness:
+        if found is not None and (best is None or found.thickness < best.thickness):
             best = found
 
     if best is not None:
         _log.debug("sleeve %s in %s: wall %.2f mm", best.bore, best.wall, best.thickness)
+    return best
+
+
+def thinnest_sleeve(features: Mapping[FeatureId, Feature]) -> Sleeve | None:
+    """Die dünnste Wand eines ganzen Körpers, in einem Durchgang (RM-127).
+
+    Dieselbe Regel wie :func:`sleeve_at` und dieselbe Funktion dahinter — der
+    Unterschied ist die Zahl der Fragen. Wer ``sleeve_at`` für jedes Merkmal
+    ruft, liest die vier Zahlen jedes Kandidaten n-mal; hier werden sie einmal
+    gelesen, und gepaart wird nur Hohlraum gegen Materie.
+
+    Gebraucht wird das, weil die Wandprüfung nach **jeder** Auswertung läuft
+    (``scene.evaluate.check_thin_walls``). Die Zahlen dazu stehen bei
+    :class:`_Measured`; der Kern davon ist, dass ein Körper mit fünfhundert
+    Bohrungen von 25,8 auf 1,7 Millisekunden fällt.
+    """
+    measured = [entry for entry in map(_measured, features.values()) if entry is not None]
+    hollow = [entry for entry in measured if entry.inside]
+    solid = [entry for entry in measured if not entry.inside]
+    best: Sleeve | None = None
+    for bore in hollow:
+        for wall in solid:
+            found = _sleeve_between(bore, wall)
+            if found is not None and (best is None or found.thickness < best.thickness):
+                best = found
     return best
 
 

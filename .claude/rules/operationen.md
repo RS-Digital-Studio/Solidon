@@ -270,6 +270,29 @@ geschlossen" steht im Präsens und beschreibt einen Zustand, den es nicht mehr
 gibt; als Hinweis wäre der Satz nicht milder, sondern falsch. Übrig bleibt der
 Satz des Schritts, der es behoben hat, und der erzählt die ganze Geschichte.
 
+**Und was aus einem Verhältnis entsteht, wird gar nicht erst je Schritt
+gefragt.** `SETTLED_BY` streicht nachträglich, was ein späterer Schritt behoben
+hat — das setzt voraus, dass es einen zweiten Befund gibt, der die Heilung
+ausspricht. Drei Fragen haben den nicht, weil niemand sie beantwortet: ob ein
+Körper auf dem Bett liegt, ob zwei am selben Ort stehen, und **was von der Wand
+übrig ist** (`check_placement`, `check_bodies_in_one_place`, `check_thin_walls`
+in `scene/evaluate.py`, RM-127). Sie laufen einmal, am fertigen Zustand, und
+genau deshalb tragen beide Reihenfolgen derselben zwei Änderungen denselben
+Bericht: Wer Ø 19 in einen Zylinder Ø 20 bohrt und den Mantel danach auf Ø 30
+vereinigt, hat zwischendurch 0,5 mm Wand und am Ende 5,5 — die Zwischenzahl ist
+keine Aussage über das Teil, das dasteht.
+
+Die Wand steht dabei in **keinem** Merkmal: `relations.thinnest_sleeve` rechnet
+sie aus einer Bohrung und dem Mantel um sie herum — dieselbe Regel wie
+`sleeve_at` am einzelnen Merkmal, in einem Durchgang über den Körper, weil sie
+nach jeder Auswertung läuft. Die Grenze ist
+`Profile.minimum_wall_thickness` und keine Zahl im Code (Regel 7) — ohne Profil
+gibt es keine Aussage. Wer eine vierte solche Frage baut, fragt zuerst, ob sie
+an einem Verhältnis hängt; wenn ja, gehört sie hierher und nicht in die
+Operation. Und die Warnungen **in** den Operationen bleiben, wo sie stehen:
+`hollow` spricht über den Wert, den jemand eingetragen hat, und der bleibt wahr,
+gleich was danach kommt.
+
 ## Eine grobe Vorauswahl darf nicht das Urteil sein
 
 `over_the_edge_along` fragte den Hüllquader: Ragt die Mündungsscheibe hinaus,

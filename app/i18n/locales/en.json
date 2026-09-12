@@ -4720,6 +4720,7 @@
   "Zweites Filament": "Second filament",
   "Zweites Merkmal als obj_2:pin_1.": "Second feature, written as obj_2:pin_1.",
   "Zwischen diesen beiden Umrissen entsteht kein Körper.": "No body forms between these two outlines.",
+  "Zwischen einer Bohrung und dem Material um sie herum bleibt weniger Wand stehen, als der Drucker legen kann. Vergrößern Sie das Außenmaß oder verkleinern Sie die Bohrung.": "Between a bore and the material around it, less wall remains than the printer can lay down. Increase the outer dimension or reduce the bore.",
   "Zwischen zwei Umrissen aufspannen": "Span between two outlines",
   "Zyklus": "Cycle",
   "Zylinder": "Cylinder",

@@ -37,7 +37,12 @@ from app.core.errors import (
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import for_process
 from app.core.log import get_logger
-from app.core.perceive.features import DETECTABLE_KINDS, detect, freeform_dropped
+from app.core.perceive.features import (
+    DETECTABLE_KINDS,
+    centre_of,
+    detect,
+    freeform_dropped,
+)
 from app.core.perceive.matching import (
     apply_mapping,
     fingerprint,
@@ -46,6 +51,7 @@ from app.core.perceive.matching import (
     question_for,
     resolve,
 )
+from app.core.perceive.relations import thinnest_sleeve
 from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, validate
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
@@ -699,6 +705,15 @@ def evaluate(
         stacked = check_bodies_in_one_place(scene)
         if stacked:
             findings.extend(stacked)
+            scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+    # Und die dritte Frage, die erst der Endstand beantwortet: Was ist von der
+    # Wand übrig? Sie steht in keinem Merkmal, sondern im Verhältnis zweier,
+    # und wer die Bohrung aufbohrt und danach außen wächst, hat am Ende eine
+    # gute (§17.3, RM-127).
+    if stopped_at is None and objects:
+        walls = check_thin_walls(scene)
+        if walls:
+            findings.extend(walls)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning(
@@ -2148,6 +2163,64 @@ def check_bodies_in_one_place(scene: Scene) -> list[Finding]:
                     "objects": ", ".join(names),
                     "plate": plate + 1,
                 },
+            )
+        )
+    return findings
+
+
+def check_thin_walls(scene: Scene) -> list[Finding]:
+    """Wände, die der Drucker nicht mehr legen kann — am **Endzustand** (RM-127).
+
+    **Die Wand steht in keinem Merkmal**, sie entsteht aus dem Verhältnis
+    zweier: Eine Bohrung nennt ihren Durchmesser, der Mantel den seinen, und
+    was dazwischen bleibt, rechnet `relations.sleeve_at`. Und sie entsteht aus
+    dem **letzten** Verhältnis: Wer die Bohrung aufbohrt und danach das
+    Außenmaß vergrößert, hat am Ende eine gute Wand — eine Warnung aus dem
+    ersten Schritt stünde dort als überholter Satz, und beide Reihenfolgen
+    derselben zwei Änderungen müssten denselben Bericht ergeben.
+
+    Deshalb hier und nicht in den Operationen, dieselbe Bauart und derselbe
+    Grund wie bei :func:`check_placement` und
+    :func:`check_bodies_in_one_place`: Erst der Endstand beantwortet die Frage.
+    Die Warnungen *in* den Operationen bleiben, wo sie stehen — `hollow`
+    spricht über den Wert, den jemand eingetragen hat, und der bleibt wahr,
+    gleich was danach kommt.
+
+    **Die Grenze kommt aus dem Profil** (Regel 7): `minimum_wall_thickness`
+    sind zwei Extrusionsbreiten, am Centauri 0,84 mm und an einer 0,8er Düse
+    das Doppelte. Ohne Profil gibt es keine Aussage — ein Aufrufer, der keinen
+    Drucker kennt, soll keinen erfinden.
+
+    **Gemeldet wird je Körper einmal**, und zwar die dünnste Stelle. Ein Rohr
+    in einem Rohr hat mehrere Wände; drei Zeilen über dasselbe Teil sind zwei
+    zu viel, und die innerste ist ohnehin die, die als Erste reißt.
+    """
+    profile = scene.profile
+    if profile is None:
+        return []
+    least = profile.minimum_wall_thickness
+    findings: list[Finding] = []
+    for object_id, entry in scene.objects.items():
+        thinnest = thinnest_sleeve(entry.features)
+        if thinnest is None or thinnest.thickness >= least - EPS_GEOM:
+            continue
+        bore = entry.features.get(thinnest.bore)
+        centre = centre_of(bore) if bore is not None else None
+        findings.append(
+            Finding(
+                code="perceive.thin_wall",
+                severity="warning",
+                message=_(
+                    "Zwischen einer Bohrung und dem Material um sie herum bleibt weniger "
+                    "Wand stehen, als der Drucker legen kann. Vergrößern Sie das Außenmaß "
+                    "oder verkleinern Sie die Bohrung."
+                ),
+                object_id=object_id,
+                feature_ids=(thinnest.bore, thinnest.wall),
+                values={"wall_mm": round(thinnest.thickness, 2), "least_mm": round(least, 2)},
+                location=None
+                if centre is None
+                else (float(centre[0]), float(centre[1]), float(centre[2])),
             )
         )
     return findings

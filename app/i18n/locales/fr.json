@@ -4720,6 +4720,7 @@
   "Zweites Filament": "Deuxième filament",
   "Zweites Merkmal als obj_2:pin_1.": "Deuxième caractéristique, sous la forme obj_2:pin_1.",
   "Zwischen diesen beiden Umrissen entsteht kein Körper.": "Aucun corps ne naît entre ces deux contours.",
+  "Zwischen einer Bohrung und dem Material um sie herum bleibt weniger Wand stehen, als der Drucker legen kann. Vergrößern Sie das Außenmaß oder verkleinern Sie die Bohrung.": "Entre un perçage et la matière qui l'entoure, il reste moins de paroi que l'imprimante ne peut en déposer. Augmentez la cote extérieure ou réduisez le perçage.",
   "Zwischen zwei Umrissen aufspannen": "Tendre entre deux contours",
   "Zyklus": "Cycle",
   "Zylinder": "Cylindre",

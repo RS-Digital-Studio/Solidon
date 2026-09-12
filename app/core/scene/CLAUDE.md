@@ -95,6 +95,24 @@ Eingangsanzahl aus dem Register, bevor Geometrie gerechnet wird.
 | `hashing.py` | Stabile Hashes: `operation_hash()`, `object_hash()`, `profile_key()` |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 
+**Drei Fragen beantwortet erst der Endstand**, und deshalb stehen sie in
+`evaluate.py` und in keiner Operation: `check_placement` (liegt der Körper auf
+dem Bett), `check_bodies_in_one_place` (zwei Körper am selben Ort) und
+`check_thin_walls` (was von der Wand übrig ist, RM-127). Ihnen allen ist
+dasselbe gemeinsam: Die Antwort hängt an einem **Verhältnis**, das ein
+späterer Schritt noch umdreht. Eine Wand steht in keinem Merkmal — sie
+entsteht zwischen einer Bohrung und dem Mantel um sie herum
+(`perceive.relations.thinnest_sleeve` — dieselbe Regel wie `sleeve_at`, aber
+in einem Durchgang über den ganzen Körper statt einem je Merkmal), und wer
+aufbohrt und danach außen wächst, hat am Ende eine gute. Die Grenze kommt aus `Profile.minimum_wall_thickness`
+(Regel 7); ohne Profil gibt es keine Aussage. Gemeldet wird je Körper einmal,
+die dünnste Stelle, mit beiden Merkmalen und dem Ort der Bohrung — damit der
+Klick im Prüfbericht irgendwohin führt (§2.7).
+
+Die Warnungen **in** den Operationen bleiben, wo sie stehen: `hollow` spricht
+über den Wert, den jemand eingetragen hat, und der bleibt wahr, gleich was
+danach kommt.
+
 **Bedeutung über der Geometrie**
 
 | Datei | Rolle |

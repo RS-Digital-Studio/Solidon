@@ -4368,3 +4368,143 @@ def test_the_exact_core_cuts_a_slot_through_the_operation(profile: Profile) -> N
     assert len(out.features) >= len(entry.features) - 1, (
         f"der Zug hat den Objektbaum geleert: {len(entry.features)} -> {len(out.features)}"
     )
+
+# --- die Wand am Endzustand (RM-127) --------------------------------------------------
+
+
+def _tube(inner: float, outer: float, height: float = 20.0) -> MeshData:
+    """Ein Rohr mit gemessener Wand — dieselbe Bauart wie in test_relations."""
+    import trimesh
+
+    return MeshData.of(
+        trimesh.creation.annulus(r_min=inner / 2.0, r_max=outer / 2.0, height=height, sections=96)
+    )
+
+
+def test_a_wall_too_thin_to_print_is_reported_at_the_end(profile: Profile) -> None:
+    """Die Wand wird am **Endzustand** gemessen, nicht je Schritt (RM-127).
+
+    Eine Bohrung und ihr Mantel tragen jeder eine Zahl; dass zwischen beiden
+    0,4 mm Material liegen, ergibt sich erst aus ihrem Verhältnis — und erst
+    aus dem **letzten**. Wer die Bohrung aufbohrt und danach das Außenmaß
+    vergrößert, hat am Ende eine gute Wand; eine Warnung aus dem ersten
+    Schritt stünde dort als überholter Satz.
+
+    Dieselbe Bauart wie `check_placement` und `check_bodies_in_one_place`, und
+    aus demselben Grund: Erst der Endstand beantwortet die Frage.
+    """
+    from app.core.scene.evaluate import check_thin_walls
+    from app.core.types import Scene
+
+    dünn = _tube(inner=19.0, outer=20.0)
+    entry = SceneObject(id="obj_1", name="Rohr", mesh=dünn, features=detect(dünn))
+    scene = Scene(objects={"obj_1": entry}, profile=profile)
+
+    findings = check_thin_walls(scene)
+
+    assert findings, "eine Wand von einem halben Millimeter bleibt unerwähnt"
+    assert findings[0].code == "perceive.thin_wall"
+    assert findings[0].severity == "warning"
+    assert findings[0].object_id == "obj_1", "ein Klick auf die Zeile muss irgendwohin führen"
+    assert set(findings[0].feature_ids) == {"hole_1", "pin_1"}, (
+        "die Wand steht zwischen zweien — der Befund nennt beide, sonst sucht der Kunde"
+    )
+    assert findings[0].location is not None, (
+        "ein Klick auf einen Befund bleibt nie folgenlos (§2.7): der Ort führt die Kamera hin"
+    )
+    assert float(findings[0].values["wall_mm"]) < 1.0
+    assert float(findings[0].values["least_mm"]) == pytest.approx(
+        profile.minimum_wall_thickness, abs=0.01
+    ), "die Grenze kommt aus dem Profil, nicht aus einer Zahl im Code (Regel 7)"
+
+
+def test_a_wall_that_carries_is_not_reported(profile: Profile) -> None:
+    """Die Gegenprobe — ohne sie wäre der Befund Lärm an jedem Rohr."""
+    from app.core.scene.evaluate import check_thin_walls
+    from app.core.types import Scene
+
+    dick = _tube(inner=16.0, outer=28.0)
+    entry = SceneObject(id="obj_1", name="Rohr", mesh=dick, features=detect(dick))
+    scene = Scene(objects={"obj_1": entry}, profile=profile)
+
+    assert check_thin_walls(scene) == []
+
+
+def _thin_wall_codes(document: Document, profile: Profile) -> list[str]:
+    """Die Wandbefunde eines gefahrenen Stapels — mehr braucht der Vergleich nicht."""
+    result = evaluate(document, profile)
+    assert result.complete, "der Stapel muss durchlaufen, sonst sagt der Bericht nichts"
+    return [
+        entry.code for entry in result.scene.report.findings if entry.code == "perceive.thin_wall"
+    ]
+
+
+def test_both_orders_of_the_same_two_changes_read_the_same(profile: Profile) -> None:
+    """Erst aufbohren, dann außen wachsen — oder umgekehrt (RM-127).
+
+    Die Abnahme des Punktes wörtlich, und sie hat zwei Hälften. Beide
+    Reihenfolgen führen zum selben Körper, also muss derselbe Bericht
+    dastehen; und die Warnung, die auf dem **Weg** dorthin einmal zutraf,
+    darf am Ende nicht mehr dastehen.
+
+    Der erste Stapel bohrt Ø 19 in einen Zylinder Ø 20 — nach diesem Schritt
+    bleiben 0,5 mm Wand, und eine Prüfung je Schritt schriebe das auf. Danach
+    wächst der Mantel auf Ø 30, und übrig sind 5,5 mm. Der zweite Stapel baut
+    denselben Körper in der anderen Reihenfolge und war nie dünn. Beide
+    schweigen.
+
+    **Der dritte Stapel ist der Beleg, dass überhaupt jemand hinsieht**: Er
+    endet dort, wo der erste zwischendurch war, und dort steht die Warnung.
+    Ohne ihn wäre der Vergleich zweier leerer Listen grün, gleich was die
+    Prüfung tut.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+
+    dick = Document(format_version=1, app_version="0.0.1")
+    History(dick).apply(
+        "Erst dünn, dann dick",
+        [
+            OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 20.0}),
+            OperationDraft(
+                op="drill_hole", inputs=("obj_1",), params={"diameter": 19.0, "x": 0.0, "y": 0.0}
+            ),
+            OperationDraft(op="create_cylinder", params={"diameter": 30.0, "height": 20.0}),
+            OperationDraft(op="union_objects", inputs=("obj_1", "obj_2")),
+        ],
+    )
+
+    andersherum = Document(format_version=1, app_version="0.0.1")
+    History(andersherum).apply(
+        "Erst dick, dann bohren",
+        [
+            OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 20.0}),
+            OperationDraft(op="create_cylinder", params={"diameter": 30.0, "height": 20.0}),
+            OperationDraft(op="union_objects", inputs=("obj_1", "obj_2")),
+            OperationDraft(
+                op="drill_hole", inputs=("obj_1",), params={"diameter": 19.0, "x": 0.0, "y": 0.0}
+            ),
+        ],
+    )
+
+    geblieben = Document(format_version=1, app_version="0.0.1")
+    History(geblieben).apply(
+        "Dünn geblieben",
+        [
+            OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 20.0}),
+            OperationDraft(
+                op="drill_hole", inputs=("obj_1",), params={"diameter": 19.0, "x": 0.0, "y": 0.0}
+            ),
+        ],
+    )
+
+    assert _thin_wall_codes(geblieben, profile) == ["perceive.thin_wall"], (
+        "eine Wand von einem halben Millimeter muss im Bericht stehen"
+    )
+    assert _thin_wall_codes(dick, profile) == [], (
+        "die Warnung galt dem Zwischenschritt und nicht dem Körper, der dasteht"
+    )
+    assert _thin_wall_codes(dick, profile) == _thin_wall_codes(andersherum, profile), (
+        "derselbe Körper, zwei Reihenfolgen, ein Bericht"
+    )

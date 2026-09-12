@@ -64,7 +64,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
 | [RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben](#rm-097) | Geometrie, Erkennung und Druckvorbereitung | Vier Stellen sind behoben; offen bleiben `NOISE_VOLUME` und `BRIDGE_FROM` am Profil — ein eigener Eingriff, kein kleiner Fix |
 | [RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen](#rm-109) | Geometrie, Erkennung und Druckvorbereitung | Mindestbreitenprüfung mit gleichem Befund gezielt beschleunigen |
-| [RM-127 — Wandstärke nach Änderungen am fertigen Modell prüfen](#rm-127) | Geometrie, Erkennung und Druckvorbereitung | Dünne Wände am Endzustand in beiden Änderungsreihenfolgen prüfen |
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Entscheiden, ob eine Verrundung ohne jede Operation in der Merkmalsliste stehen soll |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Organische und mechanische 200.000-Dreiecke-Fälle gegen eine Sekunde messen |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
@@ -680,10 +679,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-127"></a>
 
-- [ ] **RM-127 — Wandstärke nach Änderungen am fertigen Modell prüfen.** Druckkritisch dünne Wände
-  nach Geometrieänderungen am Endzustand prüfen. Abnahme: beide Reihenfolgen von
-  Außenmaß-/Bohrungsänderung erzeugen denselben Bericht; eine am Ende behobene Zwischenwarnung
-  verschwindet, eine unter der Profilgrenze verbleibende Wand wird verständlich gemeldet.
+- [x] **RM-127 — Wandstärke nach Änderungen am fertigen Modell prüfen.** Am 12.09.2026 gebaut.
+  `check_thin_walls` (`scene/evaluate.py`) misst am **Endzustand**, neben `check_placement` und
+  `check_bodies_in_one_place` und aus demselben Grund: Die Wand steht in keinem Merkmal, sie
+  entsteht zwischen einer Bohrung und dem Mantel um sie herum (`relations.sleeve_at`) — und aus
+  dem **letzten** Verhältnis. Wer Ø 19 in einen Zylinder Ø 20 bohrt, hat zwischendurch 0,5 mm
+  Wand; vereinigt er danach einen Mantel Ø 30, sind es 5,5. Eine Prüfung je Schritt schriebe die
+  Zwischenzahl auf, und die ist keine Aussage über das Teil, das dasteht.
+
+  Damit fallen beide Hälften der Abnahme zusammen: Die am Ende behobene Zwischenwarnung entsteht
+  gar nicht erst, und beide Reihenfolgen derselben zwei Änderungen tragen denselben Bericht — als
+  Folge und nicht als zweite Zusage.
+
+  **Die Grenze kommt aus dem Profil** (`Profile.minimum_wall_thickness`, zwei Extrusionsbreiten;
+  Regel 7). Ohne Profil gibt es keine Aussage. Gemeldet wird je Körper einmal — die dünnste
+  Stelle, denn ein Rohr im Rohr hat mehrere Wände und die innerste reißt zuerst —, mit beiden
+  Merkmalen und dem Ort der Bohrung, damit der Klick im Prüfbericht irgendwohin führt (§2.7).
+  Der Satz nennt die zwei Wege, die helfen, statt mit „zu dünn" zu enden.
+
+  **Und sie darf nichts kosten, denn sie läuft nach jeder Auswertung.** Der erste Anlauf fragte
+  `sleeve_at` je Merkmal; das liest Achse und Mitte jedes Kandidaten n-mal als Numpy-Array und
+  wächst quadratisch. Gemessen: 25,8 ms bei 500 Bohrungen, 2087 ms im gebauten Extremfall aus
+  500 Bohrungen und 500 koaxialen Zapfen. `relations.thinnest_sleeve` liest die Zahlen **einmal**
+  je Körper und paart nur Hohlraum gegen Materie; die Regel selbst steht dabei weiterhin an
+  genau einer Stelle (`_sleeve_between`), die beide Eingänge benutzen. Danach: **1,7 ms**,
+  **0,2 ms** bei 234 Merkmalen, 476 ms im Extremfall — der oberhalb von
+  `FEATURE_LIMIT_COUNT` ohnehin nicht entstehen kann und über den Korpus gemessen zwei
+  Größenordnungen neben der Wirklichkeit liegt (höchstens 16 Merkmale je Netz).
+
+  Nachweis: drei Fälle in `tests/test_prepare.py` — der gemeldete halbe Millimeter, die
+  tragende Wand, die nicht gemeldet wird, und die drei gefahrenen Stapel für die beiden
+  Reihenfolgen samt dem dünn gebliebenen als Beleg, dass überhaupt jemand hinsieht. Drei
+  Gegenproben, jede einzeln rot: ohne den Aufruf in der Auswertung, ohne den Vergleich gegen
+  die Profilgrenze und mit abgeschaltetem Befund. Der Umbau auf `thinnest_sleeve` ließ die
+  397 Fälle aus `test_relations`, `test_slot_features`, `test_digest_and_fits`, `test_prepare`
+  und `test_export` unverändert grün.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
 
