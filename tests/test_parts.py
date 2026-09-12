@@ -1192,6 +1192,30 @@ def feature_requirements(spec: PartSpec) -> tuple[FeatureRequirement, ...]:
     return spec.feature_requirements
 
 
+def test_parts_without_host_tools_declare_every_feature() -> None:
+    """Ohne Trägerwerkzeug gehört jedes Merkmal zum geprüften Bausteinkörper.
+
+    Ein host_cut darf zusätzliche Merkmale erst am Träger erzeugen; sie
+    werden nicht am eigenständigen Bausteinkörper verlangt.
+    """
+    for spec in PARTS.all():
+        if spec.host_cut is not None:
+            continue
+        assert set(spec.features) <= {entry.name for entry in spec.feature_requirements}, spec.name
+
+
+@pytest.mark.parametrize("depth", [0.0, 2.0])
+def test_the_screw_head_room_is_declared_exactly_when_it_is_built(depth: float) -> None:
+    """Eine zylindrische Kopfzone über null ist ein erlaubtes und gefordertes Merkmal."""
+    spec = PARTS.get("screw_hole")
+    values = dataclasses.asdict(spec.params(head_room=depth))
+    result = spec.fn(spec.params(head_room=depth))
+    declared = [entry for entry in spec.feature_requirements if entry.name == "head_room"]
+    assert len(declared) == 1
+    assert declared[0].applies(values) is (depth > 0.0)
+    assert ("head_room_1" in result.features) is (depth > 0.0)
+
+
 @pytest.mark.parametrize(
     "stage", ["mesh", "wall", "measurement", "intersection", "gap", "features", "feasible"]
 )

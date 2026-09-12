@@ -207,6 +207,7 @@ class ScrewHoleParams(BaseParams):
         FeatureRequirement("bore"),
         FeatureRequirement("countersink", when="countersink"),
         FeatureRequirement("washer", when="washer", unless="countersink"),
+        FeatureRequirement("head_room", unless="head_room", unless_equals=0.0),
     ),
     doc=_(
         "Durchgangsloch zum Verschrauben mit einer metrischen Schraube, auf Wunsch "
