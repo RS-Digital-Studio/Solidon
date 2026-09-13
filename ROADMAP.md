@@ -965,6 +965,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Keil mit `flank_overlap=0.0` **in** die Körperfläche und lässt an den Bohrungsrändern ~36 mm² Haut
   ohne Dicke stehen. Kernnetz + `repair.merge_vertices` + Dreiecke mit doppeltem Index streichen
   ergibt ein dichtes Netz bei unverändertem Volumen — die Geometrie stimmt, das Aufräumen fehlt.
+
+  **Dazu ein Flackern derselben Kette (Tag-Läufe von v0.4.1, 13.09.2026):**
+  `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` war auf dem Linux-Runner in
+  einem von vier Läufen rot — die Kugelhaube stimmte (jede Distanz 2,99 bis 3,0), ein einzelner
+  Punkt im Normalenkegel lag bei 6,526. Lokal zwölf von zwölf grün, macOS und Windows in jedem
+  Lauf grün. Ein Geometrietest, der flackert, verletzt Regel 9; die nicht strenge Marke auf Linux
+  hält den Bau nicht auf und verschweigt den Fall nicht. Abnahme: Ursache auf einem Linux messen
+  (Reihenfolge der Hüllendreiecke, Threading des Booleschen Kerns, Restdreieck der Flanke) und
+  den Test dreimal in Folge ohne Marke grün.
   Stufe 2 der Rückfallkette verschweißt nur die Eingänge (`boolean.py:292`).
 
   **Fix, zwei Stellen, im Scratchpad gegengemessen:** (1) In `boolean._kernel` vor
