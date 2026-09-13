@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
@@ -412,7 +413,19 @@ def test_adopting_a_prusa_filament_keeps_the_selected_bundle_section(
 
 @pytest.fixture
 def dialog(qt_app: QApplication, session: Session) -> PrintSettingsDialog:
-    return PrintSettingsDialog(session, UiSettings())
+    """Der Dialog im **fertigen** Zustand — Slicersuche abgewartet.
+
+    Seit dem 13.09.2026 läuft ``discover.find_programs`` in einem Arbeiter
+    (§2.8): Der Dialog erscheint sofort mit dem gemerkten Slicer, und was
+    installiert ist, kommt nach. Wer die Erhebung nicht abwartet, prüft den
+    Wartezustand — und ein Test, der danach ``_slicer_path`` von Hand setzt,
+    bekommt ihn von der nachgereichten Antwort wieder überschrieben. Dieselbe
+    Zusage wie ``wait_for_survey`` bei der Erstinbetriebnahme; den
+    Wartezustand selbst prüfen die Tests, die ihn meinen.
+    """
+    made = PrintSettingsDialog(session, UiSettings())
+    assert made.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    return made
 
 
 # --- Vollständigkeit ----------------------------------------------------------------
@@ -759,6 +772,10 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
 
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
     dialog = PrintSettingsDialog(session, UiSettings())
+    # Die Slicersuche läuft im Arbeiter: abwarten, sonst überschreibt ihre
+    # nachgereichte Antwort den Pfad darunter, und der Knopf ist aus dem
+    # falschen Grund grau.
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = Path("fake-slicer")
     dialog._show_slicer_state()
 
@@ -795,6 +812,7 @@ def test_slicing_greys_out_until_the_profiles_are_chosen(
     ist wörtlich derselbe Satz wie der Wächter in `_slice` (eine Quelle).
     """
     dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = Path("fake-orca")
     dialog._needs_profiles = True
     dialog._profiles_pending = True
@@ -2395,6 +2413,9 @@ def test_switching_the_slicer_empties_the_profile_choice(
     monkeypatch.setattr(discover, "find_programs", lambda *_args, **_kwargs: (engine,))
 
     dialog.recheck_slicer()
+    # Seit dem 13.09.2026 sucht auch dieser Weg im Arbeiter (§2.8): Der Aufruf
+    # kehrt sofort zurück, der Fund kommt nach.
+    assert dialog.wait_for_slicers(), "die zweite Suche kam nicht zurück"
 
     assert dialog.machine_choice.count() == 0, "kein Orca-Profil für CuraEngine"
     assert not dialog.machine_choice.isEnabled()
@@ -3102,6 +3123,263 @@ def test_switching_the_slicer_drops_the_result_of_the_old_one(
     assert not dialog.state.text(), "die Kennzahlen des alten Laufs standen noch da"
 
 
+# --- Die Slicersuche haelt den Dialog nicht auf (§2.8) ----------------------------
+
+
+def _slow_slicer_search(monkeypatch: pytest.MonkeyPatch, found: tuple[Path, ...] = ()):
+    """Eine Slicersuche, die wartet, bis der Test sie freigibt.
+
+    Der Rückgabewert nennt den Thread, in dem sie lief — denn das ist der
+    eigentliche Fund: ``discover.find_programs`` kostete auf einer Maschine mit
+    sechs Slicern 3,1 s warm und über 11 s kalt, und bis zum 13.09.2026 lief
+    das im Konstruktor des Dialogs, also im Qt-Hauptthread. Zehn Sekunden nach
+    dem Klick auf *Drucken* erschien gar nichts.
+    """
+    from app.core import discover
+
+    tor = threading.Event()
+    lief_in: list[str] = []
+
+    def langsam(_tool_id: str, _names: object) -> tuple[Path, ...]:
+        lief_in.append(threading.current_thread().name)
+        tor.wait(10.0)
+        return found
+
+    monkeypatch.setattr(discover, "find_programs", langsam)
+    return tor, lief_in
+
+
+def test_the_print_dialog_stands_before_the_slicer_search_comes_back(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog ist da, bevor irgendjemand nach Slicern gesucht hat (§2.8).
+
+    Gemessen am 13.09.2026 auf dieser Maschine: ``find_programs`` brauchte
+    3,1 s warm und 11,2 bis 13,3 s kalt, und der Aufruf stand im Konstruktor.
+    Wer *Drucken* klickte, sah das Fenster erst danach — über der Grenze von
+    zwei Sekunden aus ``.claude/rules/wartezeit.md``, und ohne Fortschritt,
+    ohne Abbruch, ohne irgendetwas.
+
+    Vier Zusagen, und die erste ist die, die den Fehler wirklich ausschließt:
+    Die Suche läuft **nicht im Hauptthread**. Die übrigen drei sind der
+    Wartezustand — kein Zustand ohne Erhebung, ein Grund an beiden Knöpfen
+    (Regel 18: Tooltip, Statuszeile, Bildschirmleser), und alles andere im
+    Dialog bleibt bedienbar.
+    """
+    tor, lief_in = _slow_slicer_search(monkeypatch)
+    try:
+        begonnen = time.perf_counter()
+        dialog = PrintSettingsDialog(session, UiSettings())
+        dialog.show()
+        qt_app.processEvents()
+        gebraucht = time.perf_counter() - begonnen
+
+        assert gebraucht < 2.0, f"der Dialog wartete {gebraucht:.1f} s auf die Suche"
+        assert lief_in, "die Suche lief gar nicht — dann prüft dieser Test nichts"
+        assert lief_in[0] != threading.main_thread().name, (
+            f"die Suche lief im Qt-Hauptthread ({lief_in[0]}) — genau das war der Fehler"
+        )
+
+        # Kein Zustand ohne Erhebung: nicht „Dafür fehlt ein Slicer", solange
+        # noch niemand nachgesehen hat.
+        assert "gesucht" in dialog.state.text(), dialog.state.text()
+        assert "fehlt ein Slicer" not in dialog.state.text()
+        assert not dialog.setup_button.isVisible(), (
+            "der Weg zu einem Slicer steht vor der Antwort — ein Angebot ohne Frage"
+        )
+        for knopf in (dialog.slice_button, dialog.open_button):
+            assert not knopf.isEnabled(), "während der Suche wird nicht geslicet"
+            grund = knopf.toolTip()
+            assert "gesucht" in grund, grund
+            assert knopf.statusTip() == grund, "Regel 18: der Grund steht in jedem Kanal"
+            assert knopf.accessibleDescription() == grund
+
+        # Und der Kunde darf währenddessen alles andere tun.
+        assert dialog._editors["layers.layer_height"].isEnabled()
+        assert dialog.quality.isEnabled()
+    finally:
+        tor.set()
+        dialog.wait_for_slicers()
+        dialog.release()
+
+
+def test_the_slicer_search_arrives_and_settles_the_choice(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Was die Suche findet, kommt über ihr Signal an — und wird die Wahl.
+
+    Die Gegenrichtung zum Test darüber: Der Dialog steht sofort, aber er bleibt
+    nicht leer. Die Wahl folgt derselben Regel wie früher im Konstruktor — der
+    gemerkte Slicer gewinnt, sonst der erste Fund —, und die Auswahlzeile
+    erscheint, weil es diesmal etwas zu wählen gibt (§2.4).
+    """
+    from app.core import discover
+
+    erster = tmp_path / "ElegooSlicer" / "elegoo-slicer.exe"
+    gemerkter = tmp_path / "PrusaSlicer" / "prusa-slicer.exe"
+    for datei in (erster, gemerkter):
+        datei.parent.mkdir(parents=True, exist_ok=True)
+        datei.write_text("", encoding="utf-8")
+    tor, _lief_in = _slow_slicer_search(monkeypatch, (erster, gemerkter))
+    discover.remember_path("slicer", str(gemerkter))
+    try:
+        dialog = PrintSettingsDialog(session, UiSettings())
+        qt_app.processEvents()
+        # Der gemerkte gilt schon vorläufig — er steht in der Konfiguration und
+        # kostet keinen Ordnerdurchgang.
+        assert dialog._slicer_path == gemerkter
+        assert dialog._slicers == (gemerkter,)
+        assert dialog._slicers_pending
+
+        tor.set()
+        assert dialog.wait_for_slicers(), "die Suche kam nicht zurück"
+
+        assert dialog._slicers == (erster, gemerkter), "die Liste kam nicht an"
+        assert dialog._slicer_path == gemerkter, "der gemerkte schlägt den ersten Fund"
+        assert dialog.slicer_choice.count() == 2, "die Auswahl wurde nicht gefüllt"
+        assert dialog.slicer_choice.currentData() == str(gemerkter)
+        assert not dialog._slicers_pending
+        assert "gesucht" not in dialog.state.text(), "der Wartezustand blieb stehen"
+    finally:
+        tor.set()
+        dialog.release()
+        # Der Merker liegt in der Konfiguration und überlebt den Test sonst —
+        # der nächste fände einen Slicer vor, den er nie gesetzt hat.
+        discover.remember_path("slicer", "")
+
+
+def test_a_second_slicer_search_replaces_the_answer_of_the_first(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``recheck_slicer`` während einer laufenden Suche: die alte Antwort zählt nicht.
+
+    Dasselbe Muster wie bei der Profilsuche (``_profile_worker = None``): Die
+    Halteleine hält den alten Arbeiter bis zu seinem Ende, sein Signal gehört
+    aber nicht mehr zur aktuellen Frage. Ohne diese Unterscheidung überschriebe
+    der Nachzügler genau das, wonach der Kunde gerade gefragt hat — er kommt
+    aus der Zeit **vor** der Installation und kann den neuen Slicer gar nicht
+    kennen.
+
+    Gefahren wird über die echten Signale und nicht über einen Direktaufruf des
+    Slots: Die Wache fragt ``sender()``, und ohne Absender gilt jede Antwort
+    als die eigene.
+    """
+    from app.core import discover
+
+    alt = tmp_path / "Alt" / "elegoo-slicer.exe"
+    neu = tmp_path / "Neu" / "prusa-slicer.exe"
+    for datei in (alt, neu):
+        datei.parent.mkdir(parents=True, exist_ok=True)
+        datei.write_text("", encoding="utf-8")
+
+    tore = [threading.Event(), threading.Event()]
+    funde: list[tuple[Path, ...]] = [(alt,), (neu,)]
+    zaehler = threading.Lock()
+    laeufe: list[int] = []
+
+    def langsam(_tool_id: str, _names: object) -> tuple[Path, ...]:
+        with zaehler:
+            nummer = min(len(laeufe), 1)
+            laeufe.append(nummer)
+        tore[nummer].wait(10.0)
+        return funde[nummer]
+
+    monkeypatch.setattr(discover, "find_programs", langsam)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    vorlaeufig = dialog._slicer_path
+    try:
+        erster = dialog._slicer_worker
+        assert erster is not None
+        bis = time.monotonic() + 5.0
+        while not laeufe and time.monotonic() < bis:
+            qt_app.processEvents()
+        assert laeufe, "die erste Suche lief nicht an"
+
+        dialog.recheck_slicer()
+        zweiter = dialog._slicer_worker
+        assert zweiter is not None and zweiter is not erster, "der zweite Start ersetzt nicht"
+
+        # Der veraltete antwortet zuerst — und darf nichts bewirken.
+        tore[0].set()
+        erster.wait(10_000)
+        qt_app.processEvents()
+
+        assert dialog._slicer_path == vorlaeufig, "die veraltete Suche hat die Wahl geschrieben"
+        assert alt not in dialog._slicers, "ihre Liste kam trotzdem an"
+        assert dialog._slicers_pending, "der Wartezustand endete mit dem falschen Lauf"
+
+        tore[1].set()
+        assert dialog.wait_for_slicers(), "die zweite Suche kam nicht zurück"
+
+        assert dialog._slicer_path == neu, "der Fund der aktuellen Suche fehlt"
+        assert dialog._slicers == (neu,)
+    finally:
+        for tor in tore:
+            tor.set()
+        dialog.release()
+
+
+def test_closing_during_the_slicer_search_leaves_no_worker_behind(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zumachen, während gesucht wird — kein Absturz, kein Zombie.
+
+    Die Suche hängt an keiner fremden Antwort, aber sie läuft in einem Thread,
+    und ein Thread, der sein Fenster überlebt, nimmt den Prozess mit
+    (:mod:`app.ui.leash`). ``release`` ist der Name, den die Aufräumhilfe der
+    Suite blind ruft — sie wartet über ``_settle``, und dort steht der neue
+    Arbeiter seit dem 13.09.2026 in derselben Liste wie seine vier Geschwister.
+    """
+    from app.ui import leash
+
+    tor, _lief_in = _slow_slicer_search(monkeypatch)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    qt_app.processEvents()
+    laeuft = dialog._slicer_worker
+    assert laeuft is not None and laeuft.isRunning(), "ohne laufenden Arbeiter prüft das nichts"
+    assert laeuft in leash.alive(), "der Arbeiter hängt nicht an der Halteleine"
+
+    dialog.reject()
+    tor.set()
+    dialog.release()
+
+    assert not laeuft.isRunning(), "der Arbeiter überlebte seinen Dialog"
+
+
+def test_closing_during_the_slicer_search_does_not_wait_for_it(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zumachen, während gesucht wird — und zwar sofort.
+
+    Der Arbeiter holte die Suche aus dem Konstruktor, und ``_settle`` holte
+    sie ans Ende zurück: Er stand in derselben Liste wie der Slicerlauf, der
+    den Arbeitsordner braucht, und ``done`` schob das Schließen auf, bis auch
+    er zurück war — bis zu 13 s mit gesperrten Knöpfen und „Wird geschlossen,
+    sobald …“, ausgerechnet für den Kunden, der gleich wieder zumacht.
+    Gefunden über den Weg *Filamente …* zum Filamentwähler
+    (``test_operation_ui``): Der Abschnitt ging nicht auf, weil ``finished``
+    erst nach der Suche kam. Der Test darüber bleibt wahr: Beim Abbau wartet
+    der Dialog weiterhin auf sie.
+    """
+    tor, _lief_in = _slow_slicer_search(monkeypatch)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    qt_app.processEvents()
+    laeuft = dialog._slicer_worker
+    assert laeuft is not None and laeuft.isRunning(), "ohne laufenden Arbeiter prüft das nichts"
+    fertig: list[int] = []
+    dialog.finished.connect(fertig.append)
+
+    dialog.reject()
+
+    assert fertig == [int(QDialog.DialogCode.Rejected)], "der Dialog ging nicht sofort zu"
+    assert dialog.isHidden(), "und sperrt das Fenster nicht mehr"
+    assert laeuft.isRunning(), "die Suche läuft weiter — sie hält nur nichts mehr auf"
+
+    tor.set()
+    dialog.release()
+    assert not laeuft.isRunning(), "beim Abbau wartet der Dialog trotzdem auf sie"
+
+
 def test_the_reason_for_the_grey_button_is_on_screen(
     dialog: PrintSettingsDialog, tmp_path: Path
 ) -> None:
@@ -3265,6 +3543,7 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     gepresst. Gemessen an der Kundenfahrt vom 30.08.2026 (Bild 2 gegen 1).
     """
     dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = tmp_path / "orca-slicer.exe"
     dialog.slicer_box.setVisible(True)
     dialog.resize(dialog.sizeHint())
@@ -3297,6 +3576,7 @@ def test_the_upper_fields_keep_their_height_when_the_dialog_cannot_grow(
     wie sie ihm dort ein kleinerer Bildschirm nimmt.
     """
     dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog._slicer_path = tmp_path / "orca-slicer.exe"
     dialog.slicer_box.setVisible(True)
     dialog.resize(dialog.sizeHint())
@@ -4730,7 +5010,11 @@ def _print_advice_dialog(qt_app, objects, *, settings=None):
     session.last_result = SimpleNamespace(
         scene=SimpleNamespace(objects={obj.id: obj for obj in objects})
     )
-    return PrintSettingsDialog(session, UiSettings())
+    made = PrintSettingsDialog(session, UiSettings())
+    # Wie die Fixture ``dialog``: Die Slicersuche läuft im Arbeiter, und ihre
+    # nachgereichte Antwort überschreibt sonst den Pfad, den der Aufrufer setzt.
+    assert made.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    return made
 
 
 def _print_advice_cube(name="Würfel", *, plate=0, slots=()):

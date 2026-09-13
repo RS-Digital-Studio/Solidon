@@ -27,7 +27,7 @@ from time import monotonic
 from typing import Any, Final, Literal, cast
 from uuid import uuid4
 
-from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -2269,6 +2269,39 @@ class _ProfileWorker(Worker):
             self.done.emit([])
 
 
+class _SlicerWorker(Worker):
+    """Nachsehen, welche Slicer installiert sind — ohne den Dialog aufzuhalten.
+
+    ``discover.find_programs`` geht PATH, Registry, Flatpak, die üblichen
+    Installationsordner und AppImages ab. Gemessen am 13.09.2026 auf dieser
+    Maschine mit sechs installierten Slicern: 3,1 s warm, 11,2 bis 13,3 s
+    kalt — der Löwenanteil in den Ordnerdurchgängen, wo ``scandir`` über
+    ``Programme`` läuft und für jeden Kandidaten ``is_file`` fragt.
+
+    Bis dahin stand das im **Konstruktor** des Dialogs, also im
+    Qt-Hauptthread: Wer auf *Drucken* klickte, sah zehn Sekunden lang gar
+    nichts (§2.8). Es steht jetzt hier, und der Dialog erscheint sofort mit
+    dem gemerkten Slicer; der Rest kommt nach.
+
+    **Ohne Cache, mit Absicht.** Ein Verzeichnis der einmal gefundenen
+    Programme wäre billiger und falsch: :meth:`PrintSettingsDialog.recheck_slicer`
+    ist genau für den Kunden da, der gerade einen installiert hat — Solidon
+    muss finden, was seit dem letzten Blick dazugekommen ist.
+    """
+
+    done = Signal(object)
+
+    def work(self) -> None:
+        try:
+            self.done.emit(discover.find_programs("slicer", tools.SLICERS))
+        except OSError as problem:
+            # Ein unlesbarer Ordner im Suchweg ist kein Grund, den Dialog zu
+            # verlieren — dann bleibt die Liste eben leer, und der Zustand
+            # darunter nennt den Weg zu den zusätzlichen Programmen.
+            _log.warning("could not search for slicers: %s", problem)
+            self.done.emit(())
+
+
 def _slicer_title(path: Path) -> str:
     """Ein Name, den ein Mensch wiedererkennt — der Installationsordner.
 
@@ -2351,6 +2384,13 @@ class PrintSettingsDialog(QDialog):
         self._advice_timer.timeout.connect(self._start_advice)
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
+        self._slicer_worker: _SlicerWorker | None = None
+        self._slicers: tuple[Path, ...] = ()
+        """Die installierten Slicer. Vor der Suche höchstens der gemerkte."""
+        self._slicers_pending = False
+        """Ob die Slicersuche noch läuft — solange sagt die Zustandszeile
+        „Die Slicer werden gesucht …" und nicht „Dafür fehlt ein Slicer":
+        kein Zustand ohne Erhebung."""
         self._stock_worker: _StockWorker | None = None
         self._stock_revision = 0
         self._stock_timer = QTimer(self)
@@ -2416,11 +2456,14 @@ class PrintSettingsDialog(QDialog):
         # würde, hatte sie danach im Dokument — und jede exportierte 3MF trug
         # sie mit, ohne Weg zurück.
         self._opened_with = self.settings
-        # Einmal suchen, dreimal gebraucht: die Suche geht über PATH,
-        # Registry und die üblichen Installationsorte und kostet eine halbe
-        # Sekunde — dreimal wäre die Hälfte der Zeit, die der Dialog zum
-        # Aufgehen braucht.
-        self._slicer_path = self._pick_slicer()
+        # **Der gemerkte Slicer gilt vorläufig, gesucht wird nebenher.** Die
+        # Suche geht über PATH, Registry und die üblichen Installationsorte
+        # und kostet auf einer Maschine mit mehreren Slicern Sekunden
+        # (:class:`_SlicerWorker`) — hier stand sie bis zum 13.09.2026 und
+        # damit im Qt-Hauptthread. Wer den gemerkten hat, arbeitet sofort
+        # weiter; wer keinen hat, sieht „Die Slicer werden gesucht …", bis
+        # :meth:`_slicers_found` antwortet.
+        self._slicer_path = self._remembered_slicer()
 
         layout = QVBoxLayout(self)
         # **Vor** dem Slicer-Abschnitt: Dessen Filamentzeilen fragen die
@@ -2446,6 +2489,12 @@ class PrintSettingsDialog(QDialog):
 
         self._load_into_editors()
         self._refresh_advice()
+        # **Erst die Suche anmelden, dann die Profile.** Beide Wege enden in
+        # :meth:`_show_slicer_state`, und die muss den Wartezustand schon
+        # kennen: Ohne gemerkten Slicer stünde sonst für einen Wimpernschlag
+        # „Dafür fehlt ein Slicer" da — eine Auskunft über eine Erhebung, die
+        # noch läuft.
+        self._start_slicer_search()
         self._start_profile_search()
         session.sceneChanged.connect(self._advice_scene_changed)
         session.projectChanged.connect(self._advice_scene_changed)
@@ -3387,8 +3436,14 @@ class PrintSettingsDialog(QDialog):
         self._needs_profiles = False
         self._profiles_pending = False
         found = self._slicer_path
+        # **Sichtbar, sobald ein Slicer gilt.** Diese Methode lief bis zum
+        # 13.09.2026 genau einmal je Dialog und immer mit dem fertigen Pfad.
+        # Seit die Suche nachgereicht wird, läuft sie zweimal — und der erste
+        # Lauf hat bei einem Kunden ohne gemerkten Slicer keinen. Ohne diese
+        # Zeile bliebe die Profilbox danach versteckt, obwohl ein Slicer
+        # gefunden wurde.
+        self.slicer_box.setVisible(found is not None)
         if found is None:
-            self.slicer_box.setVisible(False)
             self._show_slicer_state()
             return
         try:
@@ -4413,9 +4468,17 @@ class PrintSettingsDialog(QDialog):
         no_slicer = str(
             tr("Dafür fehlt ein Slicer — der Knopf Zusätzliche Programme richtet einen ein.")
         )
+        # **Kein Zustand ohne Erhebung** (§2.8). Solange der Arbeiter sucht,
+        # ist „Dafür fehlt ein Slicer" keine Auskunft, sondern eine Behauptung
+        # über etwas, das noch niemand nachgesehen hat — und der Kunde hat
+        # gerade erst geklickt. Dieselbe Bauart wie ``_profiles_pending`` in
+        # :meth:`_profile_gap` eine Ebene tiefer.
+        searching = str(tr("Die Slicer werden gesucht …")) if self._slicers_pending else ""
         reason = ""
         if not state.unlocked:
             reason = licence_lock_line(state)
+        elif searching:
+            reason = searching
         elif found is None:
             reason = no_slicer
         elif found is not None:
@@ -4438,6 +4501,8 @@ class PrintSettingsDialog(QDialog):
         open_reason = ""
         if not state.unlocked:
             open_reason = licence_lock_line(state)
+        elif searching:
+            open_reason = searching
         elif found is None:
             # Dieselbe Lücke wie oben, und sie war hier genauso still: Ohne
             # Slicer sperrt die Zeile unten auch diesen Knopf, und keiner der
@@ -4449,12 +4514,28 @@ class PrintSettingsDialog(QDialog):
         self.open_button.setToolTip(open_reason)
         self.open_button.setStatusTip(open_reason)
         self.open_button.setAccessibleDescription(open_reason)
-        self.setup_button.setVisible(found is None)
+        # **Der Weg zu einem Slicer erst, wenn keiner gefunden wurde.** „Jetzt
+        # einen einrichten" neben „Die Slicer werden gesucht …" wäre ein
+        # Angebot vor der Antwort — und der Kunde hat vielleicht längst einen.
+        self.setup_button.setVisible(found is None and not searching)
         self._mark_fields_this_slicer_ignores()
-        if found is None:
+        if searching:
+            # Der Wartezustand ist ein **Grund** und kein Ergebnis: Er gilt,
+            # solange er zutrifft, und wird vom Zweig ganz unten wieder
+            # geräumt, sobald die Suche antwortet.
+            self.state.setText(searching)
+            self._state_shows_reason = True
+        elif found is None:
             self.state.setText(
                 tr("Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem pflegen.")
             )
+            # **Das ist ein Zustand und kein Sperr-Grund**, auch wenn er
+            # daneben beide Knöpfe sperrt: Er gilt, bis ein Slicer da ist, und
+            # muss nicht vom Zweig unten geräumt werden. Der Merker steht seit
+            # dem 13.09.2026 hier, weil ihn der Wartezustand darüber gesetzt
+            # haben kann — sonst wischte der nächste Aufruf ein Ergebnis weg,
+            # obwohl zwischendurch nie ein Grund dastand.
+            self._state_shows_reason = False
         elif reason:
             # **Der Grund gehört auf den Bildschirm, nicht in einen Tooltip.**
             # Er stand bis hierhin nur an ``slice_button`` — und ein Tooltip
@@ -4484,24 +4565,132 @@ class PrintSettingsDialog(QDialog):
             self.state.setText("")
             self._state_shows_reason = False
 
-    def _pick_slicer(self) -> Path | None:
-        """Welcher Slicer gilt — der gemerkte, sonst der erste gefundene.
+    def _remembered_slicer(self) -> Path | None:
+        """Der gemerkte Slicer, ohne zu suchen — der Stand, mit dem der Dialog aufgeht.
 
-        Ein Rechner kann drei haben. Bis hierhin gewann der erste Treffer der
-        Suchreihenfolge, und wollte der nicht, war das eine Sackgasse: Der
-        Dialog bot keinen zweiten an, obwohl zwei danebenstanden.
+        Was der Kunde zuletzt gewählt hat, steht in der Konfiguration und ist
+        in Mikrosekunden da. Ihn vorläufig gelten zu lassen ist keine
+        Vermutung: Es ist dieselbe Antwort, die :meth:`_choose_slicer` gleich
+        geben wird, sofern die Datei noch existiert — und sie zu prüfen kostet
+        einen Dateisystemzugriff und nicht einen Durchgang durch
+        ``Programme``.
 
         **Ohne Widget**, weil das hier aus dem Konstruktor läuft und die
         Auswahlfelder erst danach entstehen — dieselbe Reihenfolgefalle, die
         die Bedingungsliste des Skizzeneditors schon einmal leer ließ. Das
         Füllen macht :meth:`_fill_slicer_choice` am Ende des Aufbaus.
         """
-        found = discover.find_programs("slicer", tools.SLICERS)
-        self._slicers = found
+        remembered = discover.remembered_path("slicer")
+        chosen = Path(remembered) if remembered else None
+        if chosen is not None and chosen.is_file():
+            self._slicers = (chosen,)
+            return chosen
+        self._slicers = ()
+        return None
+
+    def _choose_slicer(self, found: tuple[Path, ...]) -> Path | None:
+        """Welcher Slicer gilt — der gemerkte, sonst der erste gefundene.
+
+        Ein Rechner kann drei haben. Bis hierhin gewann der erste Treffer der
+        Suchreihenfolge, und wollte der nicht, war das eine Sackgasse: Der
+        Dialog bot keinen zweiten an, obwohl zwei danebenstanden.
+        """
         remembered = discover.remembered_path("slicer")
         return next((entry for entry in found if str(entry) == remembered), None) or (
             found[0] if found else None
         )
+
+    def _start_slicer_search(self) -> None:
+        """Nachsehen, welche Slicer da sind — im Arbeiter, nicht im Fenster.
+
+        Ein zweiter Start ersetzt einen laufenden: Die Halteleine hält den
+        alten bis zu seinem Ende, seine Antwort gehört aber nicht mehr zur
+        aktuellen Frage. Dasselbe Muster wie bei :meth:`_start_profile_search`,
+        und aus demselben Grund — ``recheck_slicer`` kann jederzeit kommen.
+        """
+        self._slicer_worker = None
+        self._slicers_pending = True
+        self._show_slicer_state()
+        worker = _SlicerWorker()
+        worker.done.connect(self._slicers_found)
+        # Ein Absturz darf nicht „wird gesucht …" stehen lassen: Der Satz
+        # behauptete dann für immer einen Vorgang, den es nicht mehr gibt.
+        worker.crashed.connect(self._slicers_failed)
+        worker.finished.connect(self._slicer_search_finished)
+        self._slicer_worker = worker
+        self._leash.start(worker)
+
+    def _slicers_found(self, found: tuple[Path, ...]) -> None:
+        """Die Suche ist zurück: Liste übernehmen, Wahl treffen, Zustand zeigen.
+
+        Die Wahl folgt derselben Regel wie vorher im Konstruktor — der
+        gemerkte gewinnt, sonst der erste Fund (:meth:`_choose_slicer`).
+        Ändert sie den vorläufigen Stand, geht es denselben Weg wie nach einer
+        Wahl von Hand (:meth:`_slicer_chosen`): Ergebnis vergessen,
+        Profilauswahl leeren, Profile neu durchsehen, Empfehlungen auffrischen.
+
+        **Gemerkt wird dabei nichts.** ``_slicer_chosen`` schreibt die Wahl
+        über ``discover.remember_path`` fest, weil sie eine Entscheidung ist;
+        was die Suchreihenfolge ergibt, ist keine.
+        """
+        if isinstance(self.sender(), _SlicerWorker) and self.sender() is not self._slicer_worker:
+            return
+        if self._settling:
+            return
+        self._slicers_pending = False
+        self._slicers = tuple(found)
+        before = self._slicer_path
+        self._slicer_path = self._choose_slicer(self._slicers)
+        self._fill_slicer_choice()
+        if self._slicer_path == before:
+            # Der gemerkte Slicer hat sich bestätigt: Seine Profilsuche läuft
+            # seit dem Aufbau, es fehlt nur noch die Knopffreigabe.
+            self._show_slicer_state()
+            return
+        self._forget_result()
+        self._clear_profile_choices()
+        self._show_slicer_state()
+        self._start_profile_search()
+        self._refresh_advice()
+
+    def _slicers_failed(self, detail: str) -> None:
+        """Die Suche kam nicht zurück — dann gilt, was der Dialog schon hatte.
+
+        Ein Slicer ist eine Zugabe: Die Einstellungen lassen sich ohne ihn
+        pflegen (§29). Was hier zählt, ist der Wartezustand — er muss weg,
+        sonst steht „Die Slicer werden gesucht …" für immer da.
+        """
+        if isinstance(self.sender(), _SlicerWorker) and self.sender() is not self._slicer_worker:
+            return
+        if self._settling:
+            return
+        _log.warning("slicer search crashed: %s", detail)
+        self._slicers_pending = False
+        self._show_slicer_state()
+
+    def _slicer_search_finished(self) -> None:
+        if isinstance(self.sender(), _SlicerWorker) and self.sender() is not self._slicer_worker:
+            return
+        # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
+        # das Loslassen übernimmt die Halteleine.
+        worker = self._slicer_worker
+        self._slicer_worker = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
+
+    def wait_for_slicers(self, timeout_ms: int = 30_000) -> bool:
+        """Auf die Slicersuche warten und ihre Antwort zustellen.
+
+        Für Tests und für jeden, der den fertigen Zustand braucht statt des
+        Wartezustands. Derselbe Vertrag wie bei ``wait_for_survey`` in der
+        Erstinbetriebnahme: Wer die Erhebung nicht abwartet, prüft den leeren
+        Zustand. Zurück kommt, ob die Suche fertig wurde.
+        """
+        worker = self._slicer_worker
+        if worker is not None and worker.isRunning():
+            worker.wait(timeout_ms)
+        QCoreApplication.processEvents()
+        return not self._slicers_pending
 
     def _fill_slicer_choice(self) -> None:
         """Die Auswahl füllen — sichtbar nur, wenn es etwas zu wählen gibt.
@@ -4553,16 +4742,17 @@ class PrintSettingsDialog(QDialog):
 
         Nach dem Besuch bei den zusätzlichen Programmen: Wer einen gerade
         installiert hat, soll nicht schließen und neu öffnen müssen.
+
+        **Derselbe Arbeiter wie beim Aufbau**, und deshalb kehrt der Aufruf
+        sofort zurück: Die Suche kostet Sekunden (:class:`_SlicerWorker`), und
+        ein Dialog, der nach dem Schließen der Programmliste einfriert, ist
+        derselbe Fehler wie einer, der gar nicht erst aufgeht (§2.8). Bis die
+        Antwort da ist, steht „Die Slicer werden gesucht …" in der
+        Zustandszeile; alles andere im Dialog bleibt bedienbar. Was dann
+        gefunden wird, übernimmt :meth:`_slicers_found`.
         """
         discover.forget_cache()
-        before = self._slicer_path
-        self._slicer_path = self._pick_slicer()
-        if self._slicer_path != before:
-            self._forget_result()
-        self._show_slicer_state()
-        if self._slicer_path is not None:
-            self.state.setText("")
-            self._start_profile_search()
+        self._start_slicer_search()
         self._refresh_advice()
 
     def _label(self, field: Field) -> QLabel:
@@ -5911,6 +6101,10 @@ class PrintSettingsDialog(QDialog):
         unbeachtet — mit laufendem Arbeiter.
         """
         self._settle(timeout_ms)
+        # ``_settle`` lässt die Slicersuche laufen (siehe dort); ein Thread,
+        # der den Prozess überlebt, nimmt ihn aber mit. Die Leine wartet auf
+        # alles, was sie hält — auch für einen längst geschlossenen Dialog.
+        self._leash.wait_all(timeout_ms)
 
     def _wait_without_blocking(self) -> None:
         """Den Dialog sichtbar behalten und den Arbeiter über die Ereignisschleife abholen."""
@@ -5968,7 +6162,23 @@ class PrintSettingsDialog(QDialog):
             self._advice_worker,
             *self._leash.pending(),
         )
-        workers = {id(worker): worker for worker in pending if worker is not None}
+        # **Die Slicersuche hält das Schließen nicht auf.** Sie liest nicht im
+        # Arbeitsordner, und ihre Antwort will nach ``_settling`` niemand mehr
+        # (``_slicers_found`` wirft sie weg). Mit ihr in dieser Liste stand der
+        # Dialog nach *Abbrechen* oder *Filamente …* bis zu 13 s mit gesperrten
+        # Knöpfen und „Wird geschlossen, sobald …" da — dieselbe Wartezeit,
+        # die der Arbeiter aus dem Konstruktor geholt hatte, nur ans Ende
+        # verlegt (gefunden am 13.09.2026 über den Weg *Filamente …* zum
+        # Filamentwähler: ``finished`` kam erst nach der Suche, und der
+        # Abschnitt ging nicht auf). Am Leben hält den Thread die Halteleine
+        # (``leash._alive``); beim Abbau wartet :meth:`wait_for_workers` auch
+        # auf ihn, und das Hauptfenster fragt vor dem Beenden über
+        # ``leash.wait_for_all`` nach jedem, den ein Dialog hinterlassen hat.
+        workers = {
+            id(worker): worker
+            for worker in pending
+            if worker is not None and not isinstance(worker, _SlicerWorker)
+        }
         deadline = monotonic() + max(timeout_ms, 0) / 1000.0
         for worker in workers.values():
             if not worker.isRunning():

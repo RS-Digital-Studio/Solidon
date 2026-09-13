@@ -142,6 +142,44 @@ Plattenwahl oder Schichtraster, wird der frühere Auftrag abgelöst. Beim
 Schließen bricht der Dialog seine Analyse kooperativ ab und hält ihre Arbeiter
 bis zum vollständigen Ende, bevor er selbst freigegeben wird.
 
+**Und die Suche nach den Slicern gehört dazu** (`_SlicerWorker`, 13.09.2026).
+`discover.find_programs("slicer", …)` geht PATH, Registry, Flatpak, die
+üblichen Installationsordner und AppImages ab; gemessen auf einer Maschine mit
+sechs installierten Slicern **3,1 s warm und 11,2 bis 13,3 s kalt**, davon der
+Löwenanteil in den Ordnerdurchgängen (`nt.scandir` über `Programme`, dazu rund
+51 000 `is_file`). Der Aufruf stand im **Konstruktor** des Dialogs — wer
+*Drucken* klickte, sah sekundenlang gar nichts. Nachher: 0,030 s bis zum
+Fenster, die Antwort kommt nach 2,6 s.
+
+Vier Dinge machen den Unterschied, und sie sind dieselben wie beim Abschnitt
+„Ein Dialog, der beim Öffnen nachsieht" weiter unten:
+
+* **Der gemerkte Slicer gilt vorläufig** (`_remembered_slicer`) — er steht in
+  der Konfiguration, und ihn zu prüfen kostet einen Dateisystemzugriff. Die
+  Profilsuche läuft damit sofort an, statt auf die Programmsuche zu warten.
+* **Kein Zustand ohne Erhebung.** Solange gesucht wird, steht „Die Slicer
+  werden gesucht …" in der Zustandszeile und als Grund an *Slicen* und *Im
+  Slicer öffnen* (Tooltip, Statuszeile, Bildschirmleser — Regel 18); **nicht**
+  „Dafür fehlt ein Slicer", und der Knopf *Zusätzliche Programme* bleibt weg.
+  Alles andere im Dialog ist währenddessen bedienbar.
+* **Kein Cache in `discover`.** `recheck_slicer` ist genau für den Kunden da,
+  der gerade einen installiert hat — Solidon muss finden, was seit dem letzten
+  Blick dazugekommen ist. Deshalb benutzt auch dieser Weg den Arbeiter und
+  kehrt sofort zurück.
+* **Ein zweiter Start ersetzt den ersten** (`_slicer_worker = None`, dieselbe
+  Bauart wie bei `_start_profile_search`). Der Nachzügler kommt aus der Zeit
+  *vor* der Installation und darf die Wahl nicht überschreiben.
+
+**Und sie hält das Schließen nicht auf.** `_settle` wartet auf die Arbeiter,
+die den Arbeitsordner brauchen; die Slicersuche braucht ihn nicht, und ihre
+Antwort will nach dem Schließen niemand mehr. Mit ihr in derselben Liste
+stand der Dialog nach *Abbrechen* oder *Filamente …* bis zu 13 s mit
+gesperrten Knöpfen da — dieselbe Wartezeit, nur ans Ende verlegt. Was bleibt:
+Die Leine hält den Thread, `release` wartet beim Abbau auf ihn, und das
+Hauptfenster fragt vor dem Beenden über `leash.wait_for_all` nach jedem
+Arbeiter, den ein weggeräumter Dialog hinterlassen hat — ein Thread, der den
+Prozess überlebt, nimmt ihn mit.
+
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
 
 **Niemals direkt von `QThread`.** Ein `run`, das eine Ausnahme durchlässt,
@@ -613,11 +651,19 @@ mehr, als sie halten kann.
 
 ### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
 
-Dreimal derselbe Fund an drei Stellen, jedes Mal gemessen: Die Liste der
+**Viermal** derselbe Fund an vier Stellen, jedes Mal gemessen: Die Liste der
 zusätzlichen Programme brauchte 2,97 Sekunden bis auf den Bildschirm, die
-Erstinbetriebnahme 1,88, der Chat-Dialog 2,98. Der Grund war jedes Mal
-dasselbe — im Konstruktor stand, was ein Programm sucht, eine Profildatei
+Erstinbetriebnahme 1,88, der Chat-Dialog 2,98 — und die Druckeinstellungen
+2,1 s warm, über 11 s kalt (13.09.2026, Abschnitt oben). Der Grund war jedes
+Mal dasselbe — im Konstruktor stand, was ein Programm sucht, eine Profildatei
 liest oder einen Port fragt.
+
+**Der vierte ist der Beleg dafür, dass drei Funde keine Regel sind.** Er stand
+drei Wochen nach den ersten dreien im Code, in einem Dialog, der zwei eigene
+Arbeiter führte, und niemand hat die dritte Stelle gesucht. Wer den Abschnitt
+hier liest, sucht in seinem Dialog **jeden** Konstruktoraufruf, der das
+Dateisystem, die Registry oder ein Netz anfasst — nicht den einen, den er
+schon kennt.
 
 Das gehört in einen Arbeiter (§38), und der Dialog zeigt sofort seine Fragen.
 Drei Dinge machen den Unterschied zwischen „geht auf" und „geht auf und lügt":

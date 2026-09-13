@@ -2999,6 +2999,43 @@ def test_the_window_wires_the_filament_shortcut_itself(
     assert not window.filaments.isHidden()
 
 
+def test_the_window_waits_for_the_search_of_a_closed_print_dialog(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit.
+
+    Der Druckdialog schließt, während seine Slicersuche läuft, und
+    ``action_print_settings`` räumt ihn weg — den Thread hält nur noch die
+    Leine. Das Hauptfenster muss ihn vor dem Beenden trotzdem finden: Bis
+    zum 13.09.2026 fragte es seine Felder und seine Kinder, und ein
+    weggeräumter Dialog ist keines von beiden.
+    """
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    assert window.wait_for_workers(2000) is True, "ohne ruhiges Fenster misst das nichts"
+    tor = threading.Event()
+
+    def langsam(_tool_id: str, _names: object) -> tuple[Path, ...]:
+        tor.wait(10.0)
+        return ()
+
+    monkeypatch.setattr(discover, "find_programs", langsam)
+    dialog = PrintSettingsDialog(window.session, window.settings, window)
+    laeuft = dialog._slicer_worker
+    assert laeuft is not None and laeuft.isRunning(), "ohne laufenden Arbeiter prüft das nichts"
+    dialog.reject()
+    dialog.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert window.wait_for_workers(0) is False, "das Fenster kennt den Thread nicht"
+    tor.set()
+    assert window.wait_for_workers(2000) is True
+    assert not laeuft.isRunning()
+
+
 def test_an_open_ended_field_is_not_treated_as_a_fine_one() -> None:
     """Eine Untergrenze sagt nichts über die Feinheit (Befund B36).
 
