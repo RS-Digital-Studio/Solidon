@@ -404,10 +404,10 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
 #: **Auf macOS kommt der Abbruch nicht sicher in einer Sekunde an.** Der Weg
 #: schließt den Socket aus dem wartenden Thread (``shutdown`` und ``detach``);
 #: Linux und Windows beenden damit das ``recv`` des Anfrage-Threads sofort. Auf
-#: dem macOS-Runner war das im ersten Tag-Lauf von v0.4.1 (13.09.2026) in drei
-#: von vier Stufen rot, im zweiten in zwei — ``keep_alive`` bestand dazwischen,
-#: nur die Stufe mit Verbindungsende hielt beide Male. Sporadisch also, und
-#: gemessen nur in der CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21).
+#: dem macOS-Runner war das in drei Tag-Läufen von v0.4.1 (13.09.2026) in drei,
+#: zwei und dann einer Stufe rot — jede der vier einmal, auch die mit
+#: Verbindungsende. Sporadisch also, in jeder Stufe, und gemessen nur in der
+#: CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21).
 #: Die Marke ist deshalb **nicht** streng — ein grüner Lauf ist dort kein
 #: Nachweis und ein roter kein neuer Fund. Was zählt, steht bei RM-104.
 _MAC_KEEPS_READING = pytest.mark.xfail(
@@ -423,7 +423,7 @@ _MAC_KEEPS_READING = pytest.mark.xfail(
     (
         pytest.param("before_headers", marks=_MAC_KEEPS_READING),
         pytest.param("http10", marks=_MAC_KEEPS_READING),
-        "connection_close",
+        pytest.param("connection_close", marks=_MAC_KEEPS_READING),
         pytest.param("keep_alive", marks=_MAC_KEEPS_READING),
     ),
 )

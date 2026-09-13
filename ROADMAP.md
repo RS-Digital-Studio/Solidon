@@ -397,9 +397,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   hier, und ein grüner Runner-Lauf gilt nicht als Nachweis:** Auf **macOS**
   kommt der Abbruch eines lokalen Ollama-Aufrufs nicht sicher in einer
   Sekunde an — der Weg schließt den Socket aus dem wartenden Thread
-  (`shutdown`, `detach`); im ersten Lauf waren drei von vier Stufen rot, im
-  zweiten zwei (`keep_alive` bestand dazwischen), nur die Stufe mit
-  Verbindungsende hielt beide Male (`test_backends.py`). Ein Umbau auf einen
+  (`shutdown`, `detach`); in drei Läufen waren drei, zwei und dann eine Stufe
+  rot — jede der vier einmal, auch die mit Verbindungsende
+  (`test_backends.py`). Ein Umbau auf einen
   Leser mit kurzem Socket-Timeout, der das Token selbst prüft, ist der
   naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** riss
   der Kindprozess des HiDPI-Grifftests bei `QT_SCALE_FACTOR=2` einmal mit

@@ -1433,6 +1433,12 @@ def test_the_language_hook_finds_the_interpreter_from_a_worktree() -> None:
     root = Path(common).parent
     candidates = [root / ".venv" / "Scripts" / "python.exe", root / ".venv" / "bin" / "python"]
     found = [path for path in candidates if path.exists()]
+    if not found and os.environ.get("CI"):
+        # Der Runner installiert ins Interpreterverzeichnis und hat keine
+        # `.venv`; die Ableitung ist dort nicht messbar (Tag-Lauf v0.4.1,
+        # Windows). Auf einer Arbeitsmaschine bleibt die fehlende Umgebung ein
+        # Fund — genau dort schaltete der Hook sich stumm ab.
+        pytest.skip("die CI hat keine .venv am Hauptklon; gemessen wird auf einer Arbeitsmaschine")
     assert found, f"unter {root} liegt keine Umgebung — der Hook fände dort keine"
     assert Path(sys.executable).resolve() == found[0].resolve(), (
         "Der Hook nähme einen anderen Interpreter als dieser Lauf: "
