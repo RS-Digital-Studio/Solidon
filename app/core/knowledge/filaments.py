@@ -14,6 +14,7 @@ import json
 import math
 import os
 import re
+import sys
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
@@ -24,7 +25,7 @@ from types import MappingProxyType
 from typing import Any, BinaryIO, Final, Literal
 from uuid import uuid4
 
-from app.core.errors import RETRY, FileWriteError, ValidationError
+from app.core.errors import CANCEL, RETRY, FileWriteError, InternalError, ValidationError
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_config_dir
 from app.i18n import _, sort_key
@@ -514,10 +515,22 @@ def _decode_inventory(data: Any) -> _Inventory:
 
 
 def _unreadable() -> ValidationError:
-    """Ein Lesefehler erklärt zugleich, warum Speichern gesperrt bleibt."""
+    """Ein Lesefehler erklärt zugleich, warum Speichern gesperrt bleibt.
+
+    **Der Vorschlag ist *Erneut versuchen* und nicht *Eingabe korrigieren*.**
+    Eine ``ValidationError`` bietet von sich aus das Korrigieren an — das gilt
+    einem Feld in einem Dialog, und hier gibt es keines: Was nicht stimmt, ist
+    eine Datei auf der Platte. Gemessen am 13.09.2026 an einer beschädigten
+    ``filaments.json``: Regal, Lagerfenster, Schnellwähler und der Wähler im
+    Operationsdialog reichen alle einen ``retry``-Handler an ihre Fehlerkarte,
+    und keiner davon bekam je einen Knopf, weil der Fehler die Handlung nicht
+    trug. Der Satz nennt den Weg (Sicherung zurückspielen); danach ist genau
+    dieser Knopf die Fortsetzung (Regel 17).
+    """
     return ValidationError(
         field="catalogue",
         constraint="unreadable",
+        suggestions=(RETRY, CANCEL),
         detail=_(
             "Das Filamentlager lässt sich nicht lesen. Die Datei bleibt unverändert. "
             "Stellen Sie eine Sicherung wieder her oder prüfen Sie die Datei filaments.json."
@@ -572,7 +585,18 @@ def _sorted(
 
 
 def _windows_file_api() -> Any:
-    """Die drei Windows-Dateiaufrufe mit zeigerbreiten Signaturen."""
+    """Die drei Windows-Dateiaufrufe mit zeigerbreiten Signaturen.
+
+    **Die Weiche heißt ``sys.platform`` und nicht ``os.name``.** Beide sagen
+    zur Laufzeit dasselbe; nur die erste versteht mypy als Plattformzweig.
+    Mit ``os.name`` prüfte es ``ctypes.WinDLL`` und ``msvcrt`` auch auf Linux
+    und macOS, wo es sie nicht gibt — und die CI war seit dem 10.09.2026 auf
+    jedem Push rot, während das Windows-Tor nichts davon sah.
+    """
+    if sys.platform != "win32":
+        raise InternalError(
+            detail=f"_windows_file_api was called on {sys.platform}, which has no kernel32"
+        )
     import ctypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -598,9 +622,35 @@ def _windows_file_api() -> Any:
     return kernel32
 
 
+#: Womit ein Dateisystem sagt, dass es ``FileRenameInfoEx`` nicht kennt.
+#:
+#: Die Umbenennung mit POSIX-Semantik gibt es auf NTFS und ReFS ab Windows 10
+#: 1709. Ein FAT32- oder exFAT-Datenträger, eine Netzfreigabe ohne diese
+#: SMB-Fähigkeit und ein älteres Windows lehnen denselben Aufruf ab — und der
+#: Katalog liegt unter ``%APPDATA%``, das in einer Firma auf eine Freigabe
+#: umgeleitet sein kann. Gemessen mit einer abweisenden Gegenstelle
+#: (``ERROR_INVALID_PARAMETER``): Jeder Schreibweg des Lagers endete in
+#: „Die Datei ließ sich nicht schreiben.: [WinError 87]", und gespeichert
+#: wurde nichts.
+_RENAME_WITHOUT_POSIX: Final = frozenset({1, 50, 87})
+
+
 def _replace_snapshot(source: Path, target: Path) -> None:
-    """Atomarer Austausch; offene Leser behalten ihren alten Stand auch auf Windows."""
-    if os.name != "nt":
+    """Atomarer Austausch; offene Leser behalten ihren alten Stand auch auf Windows.
+
+    **Und wo das Dateisystem den Weg nicht kennt, bleibt der gewöhnliche.**
+    ``source.replace(target)`` ist genau das, was hier bis zum 12.09.2026
+    stand. Er gibt eine Zusage auf: Solange ein anderer Griff die Zieldatei
+    hält, antwortet Windows mit ``ERROR_ACCESS_DENIED`` — gemessen am
+    13.09.2026 gegen einen offenen ``_open_snapshot``, und genau deshalb wird
+    der POSIX-Weg zuerst versucht. Das Fenster dafür ist klein
+    (:func:`read_snapshot` öffnet und schließt in einem Zug), und der
+    ``FileWriteError`` darüber trägt ``RETRY``. Ohne den Rückfall wäre ein
+    nicht unterstützter Aufruf dagegen kein engeres Fenster, sondern gar
+    keines: Auf FAT32, exFAT, einer Netzfreigabe ohne diese SMB-Fähigkeit und
+    auf Windows vor 1709 scheiterte **jeder** Schreibweg des Lagers.
+    """
+    if sys.platform != "win32":
         source.replace(target)
         return
     import ctypes
@@ -625,18 +675,24 @@ def _replace_snapshot(source: Path, target: Path) -> None:
     handle = kernel32.CreateFileW(str(source), 0x10000, 0x7, None, 3, 0, None)
     if handle in (None, ctypes.c_void_p(-1).value):
         raise ctypes.WinError(ctypes.get_last_error())
+    refused = 0
     try:
         if not kernel32.SetFileInformationByHandle(
             handle, 22, ctypes.byref(info), ctypes.sizeof(info)
         ):  # FileRenameInfoEx
-            raise ctypes.WinError(ctypes.get_last_error())
+            refused = ctypes.get_last_error()
     finally:
         kernel32.CloseHandle(handle)
+    if not refused:
+        return
+    if refused not in _RENAME_WITHOUT_POSIX:
+        raise ctypes.WinError(refused)
+    source.replace(target)
 
 
 def _open_snapshot(path: Path) -> BinaryIO:
     """Ein offener Leser darf den atomaren Austausch auch auf Windows nicht sperren."""
-    if os.name != "nt":
+    if sys.platform != "win32":
         return path.open("rb")
     import ctypes
     import msvcrt

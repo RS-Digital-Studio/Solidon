@@ -46,7 +46,7 @@ from functools import partial
 from typing import cast
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QSignalBlocker, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -957,6 +957,16 @@ class CatalogueWrites(QObject):
             not worker.isRunning() and worker.wait(0) for worker in self._leash.pending()
         )
 
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Wer eine ``WorkerLeash`` hält, hat ein ``release()`` (``wartezeit.md``).
+
+        Dieselbe Bauart wie am Filamentfeld darunter: Der fachliche Name bleibt
+        (:meth:`wait_for_workers` gibt einen Wahrheitswert zurück und steht im
+        Produktivcode), das gemeinsame Wort kommt dazu — sonst sammelt die
+        nächste Aufräum-Fixture wieder Namen.
+        """
+        self.wait_for_workers(timeout_ms)
+
 
 class FilamentField(QComboBox):
     """Der Wähler selbst. Sein Wert ist die Slotnummer — wie eh und je.
@@ -991,6 +1001,17 @@ class FilamentField(QComboBox):
         #: Filament …" abgebrochen wird (UI-24).
         self._last_position = -1
         self._retry_error: Callable[[], None] | None = None
+        #: Ein Lesefehler aus dem Aufbau, der noch keinen Empfänger hatte.
+        #:
+        #: :meth:`_fill` läuft im Konstruktor, und dort ist an ``choiceNotice``
+        #: und ``choiceProblem`` noch nichts angeschlossen — der Operationsdialog
+        #: verbindet sie erst danach. Gemessen am 13.09.2026 an einer
+        #: beschädigten ``filaments.json``: Der Hinweis unter dem Feld blieb
+        #: leer, der Knopf *Erneut versuchen* fehlte, und selbst die Kurzhilfe
+        #: war weg, weil der Dialog jedem Feld danach seinen ``doc``-Satz
+        #: schreibt. Die einzige Spur war eine graue Zeile in der zugeklappten
+        #: Liste. :meth:`showEvent` holt die Meldung deshalb nach.
+        self._unreported: AppError | None = None
         self._writes = CatalogueWrites(self)
         self._writes.completed.connect(self._entry_saved)
         self._writes.rejected.connect(self._write_failed)
@@ -1048,6 +1069,7 @@ class FilamentField(QComboBox):
                 self.count() - 1, problem_text(problem), Qt.ItemDataRole.AccessibleDescriptionRole
             )
             self.setToolTip(problem_text(problem))
+            self._unreported = problem
             self._show_problem(problem, weak_slot(self, FilamentField._reload))
         for filament in entries:
             identity = threemf.slot_identity(spool_slot(filament))
@@ -1290,11 +1312,23 @@ class FilamentField(QComboBox):
         if self._retry_error is not None:
             self._retry_error()
 
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        """Der Lesefehler aus dem Aufbau erreicht hier seine Empfänger.
+
+        Erst am gezeigten Feld sind Hinweiszeile und Fehlerknopf verbunden;
+        vorher ging die Meldung ins Leere (siehe :attr:`_unreported`).
+        """
+        super().showEvent(event)
+        problem = self._unreported
+        if problem is not None:
+            self._show_problem(problem, weak_slot(self, FilamentField._reload))
+
     def _reload(self) -> None:
         chosen = self.currentData()
         self.clear()
         if not self._fill(int(chosen) if isinstance(chosen, int) else 0):
             return
+        self._unreported = None
         self._retry_error = None
         self.choiceNotice.emit("")
 

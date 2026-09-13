@@ -634,8 +634,16 @@ def test_cancelled_search_cannot_finish_the_following_spool_write(
 
 
 def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: InventoryView) -> None:
-    """Eine beschädigte Datei zeigt den vorhandenen Sicherungsweg und bewahrt die letzte Ansicht."""
-    from app.core.errors import CORRECT_INPUT, ValidationError
+    """Eine beschädigte Datei zeigt den vorhandenen Sicherungsweg und bewahrt die letzte Ansicht.
+
+    **Und die Handlung ist ausführbar.** Hier stand ``CORRECT_INPUT`` als
+    Text — der Vorschlag einer ``ValidationError``, der einem Dialogfeld gilt
+    und den keine der vier Lageransichten ausführen kann. Eine kaputte Datei
+    hat kein Feld; was hilft, ist die Sicherung und danach *Erneut versuchen*.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.errors import RETRY, ValidationError
 
     entry = filaments.save(filaments.CatalogueFilament("Vorhanden", "#123456"))
     inventory.refresh()
@@ -643,12 +651,14 @@ def test_unreadable_inventory_keeps_the_recovery_explanation(inventory: Inventor
     filaments.catalogue_path().write_text('{"format_version": 1, "broken": true}', encoding="utf-8")
     with pytest.raises(ValidationError) as caught:
         filaments.catalogue()
+    assert RETRY in caught.value.suggestions, "der Lesefehler trägt seine eigene Handlung"
     inventory.refresh()
     assert inventory.message.text().startswith(str(caught.value))
     assert "Feld: catalogue" in inventory.message.text()
     assert "Bedingung: unreadable" in inventory.message.text()
-    assert str(CORRECT_INPUT.label) in inventory.message.text()
     assert "Sicherung" in inventory.message.text()
+    offered = [button.text() for button in inventory.message.findChildren(QPushButton)]
+    assert str(RETRY.label) in offered, f"kein ausführbarer Rückweg, nur {offered}"
     assert inventory._entries == saved and saved[0].identifier == entry.identifier
     assert not inventory.retry_button.isHidden()
 

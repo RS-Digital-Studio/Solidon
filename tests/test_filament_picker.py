@@ -702,6 +702,56 @@ def test_a_failed_catalogue_write_keeps_the_old_selection_and_can_be_retried(
     assert [entry.name for entry in filaments.catalogue()] == ["Neue Spule"]
 
 
+def test_a_picker_built_on_a_broken_inventory_says_so_where_it_is_shown(
+    qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Lesefehler aus dem Aufbau erreicht Hinweiszeile und Knopf des Dialogs.
+
+    ``_fill`` läuft im Konstruktor, und dort hängt an ``choiceNotice`` und
+    ``choiceProblem`` noch niemand: Der Operationsdialog verbindet sie erst
+    danach. Gemessen am 13.09.2026 blieb die Zeile unter dem Feld leer, der
+    Knopf fehlte, und selbst die Kurzhilfe war weg — der Dialog schreibt
+    jedem Feld anschließend seinen ``doc``-Satz. Übrig blieb eine graue
+    Zeile in der zugeklappten Liste (Regel 17).
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.errors import RETRY
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import OperationDialog
+
+    path = tmp_path / "filaments.json"
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: path)
+    filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
+    path.write_text("{kaputt", encoding="utf-8")
+
+    dialog = OperationDialog(REGISTRY.get("assign_slot"), {}, None)
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        notice = dialog._filament_notice
+        assert notice.isVisible(), "der Lesefehler stand nirgends im Dialog"
+        assert "nicht lesen" in notice.text()
+        offered = [button.text() for button in notice.findChildren(QPushButton)]
+        assert str(RETRY.label) in offered, f"kein ausführbarer Rückweg, nur {offered}"
+
+        path.unlink()
+        filaments.save(filaments.CatalogueFilament("Neu", "#223344"))
+        retry = next(
+            button
+            for button in notice.findChildren(QPushButton)
+            if button.text() == str(RETRY.label)
+        )
+        retry.click()
+        qt_app.processEvents()
+        assert notice.text() == "", "die gelöste Ursache stand weiter da"
+        picker = next(iter(dialog.findChildren(FilamentField)))
+        assert any("Neu" in picker.itemText(row) for row in range(picker.count()))
+    finally:
+        dialog.hide()
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize("kind", ["quick", "inventory", "panel", "usage"])
 def test_inventory_errors_keep_advice_and_retry_their_own_read(
     qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch, kind: str

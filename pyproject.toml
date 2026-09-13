@@ -324,6 +324,9 @@ module = [
   # Und beim Update: welches Paket dieser Rechner braucht, entscheidet
   # dieselbe Abfrage (§37.2).
   "app.core.updates",
+  # Das Filamentlager tauscht seine Datei auf Windows über kernel32 mit
+  # POSIX-Semantik aus und öffnet sie über msvcrt; beides gibt es nur dort.
+  "app.core.knowledge.filaments",
 ]
 warn_unreachable = false
 

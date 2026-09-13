@@ -840,6 +840,58 @@ def test_atomic_snapshot_replacement_handles_full_unicode_names(tmp_path: Path) 
         assert target.read_bytes() == b"new"
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="nur Windows kennt FileRenameInfoEx")
+def test_a_filesystem_without_posix_rename_still_saves_the_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wo die POSIX-Umbenennung abgewiesen wird, bleibt der gewöhnliche Austausch.
+
+    ``FileRenameInfoEx`` gibt es auf NTFS und ReFS ab Windows 10 1709; FAT32,
+    exFAT, eine Netzfreigabe ohne diese SMB-Fähigkeit und ein älteres Windows
+    antworten mit ``ERROR_INVALID_PARAMETER``. Der Katalog liegt unter
+    ``%APPDATA%``, und das kann in einer Firma auf eine Freigabe umgeleitet
+    sein. Ohne Rückfall endete dort **jeder** Schreibweg des Lagers in
+    „[WinError 87]", und gespeichert wurde nichts — gemessen mit dieser
+    Gegenstelle am 13.09.2026.
+
+    Was der Rückfall aufgibt, steht daneben: Der gewöhnliche Austausch
+    verlangt eine freie Zieldatei, und ein gleichzeitig offener Leser lässt
+    ihn mit ``ERROR_ACCESS_DENIED`` scheitern. Deshalb wird der POSIX-Weg
+    zuerst versucht — und deshalb prüft dieser Fall beides.
+    """
+    import ctypes
+
+    real = filaments._windows_file_api
+
+    class Refusing:
+        """Eine Gegenstelle, die genau diesen einen Aufruf nicht kennt."""
+
+        def __init__(self, inner: object) -> None:
+            self._inner = inner
+
+        def __getattr__(self, name: str) -> object:
+            if name != "SetFileInformationByHandle":
+                return getattr(self._inner, name)
+
+            def refuse(*_arguments: object) -> int:
+                ctypes.set_last_error(87)  # ERROR_INVALID_PARAMETER
+                return 0
+
+            return refuse
+
+    first = spool()
+    monkeypatch.setattr(filaments, "_windows_file_api", lambda: Refusing(real()))
+    second = filaments.save(filaments.CatalogueFilament("PLA Blau", "#2040d0"))
+
+    names = {entry.name for entry in filaments.catalogue()}
+    assert names == {"PETG Rot", "PLA Blau"}, "beide Spulen stehen in der Datei"
+    assert filaments.get(second.identifier) is not None
+    assert filaments.get(first.identifier) is not None
+
+    with filaments._open_snapshot(filaments.catalogue_path()), pytest.raises(FileWriteError):
+        filaments.save(filaments.CatalogueFilament("PLA Grün", "#20d040"))
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows schützt schreibgeschützte Zieldateien")
 def test_windows_readonly_inventory_preserves_previous_stock_and_journal() -> None:
     """Ein echter nativer Austauschfehler lässt die alte Datei vollständig erhalten."""

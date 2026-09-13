@@ -41,7 +41,15 @@ def screen(qt_app: QApplication) -> StartScreen:
 
 
 def test_inventory_card_shows_read_failure_and_recovers(qt_app, tmp_path, monkeypatch):
-    """Das erste Fenster zeigt beschädigten Bestand als Fehler und bleibt erreichbar."""
+    """Das erste Fenster zeigt beschädigten Bestand als Fehler und bleibt erreichbar.
+
+    **Und der Satz passt auf die Kachel.** Der ganze Fehler stand hier in der
+    Beschriftung: gemessen am 13.09.2026 brauchte er 250 Bildpunkte Höhe in
+    54 — Ursache und Sicherungsweg lagen unter der Kante, und einen Tooltip,
+    der sie noch getragen hätte, gab es nicht. Die Kachel sagt jetzt, **dass**
+    etwas nicht stimmt; **was**, steht in Kurzhilfe und Beschreibung
+    (Regel 17 und 18), und der Klick führt ins Lager mit seinem Knopf.
+    """
     from app.core.knowledge import filaments
     from app.ui.start_screen import InventoryStartCard
 
@@ -50,16 +58,29 @@ def test_inventory_card_shows_read_failure_and_recovers(qt_app, tmp_path, monkey
     filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
     before = path.read_bytes()
     card = InventoryStartCard()
+    card.show()
     assert "1 Spule" in card.caption.text()
     path.write_text("{kaputt", encoding="utf-8")
     card.refresh()
-    assert "Sicherung" in card.caption.text()
+    qt_app.processEvents()
+    assert "nicht lesbar" in card.caption.text()
+    assert "Sicherung" in card.toolTip()
+    assert "Sicherung" in card.accessibleDescription()
     assert card.accessibleName() == card.caption.text()
     assert card.isEnabled()
+    width = card.caption.width()
+    needed = card.caption.heightForWidth(width)
+    assert needed <= card.caption.height(), (
+        f"die Beschriftung braucht {needed} Bildpunkte in {card.caption.height()} — "
+        "der Fehler steht wieder ganz auf der Kachel"
+    )
     path.write_bytes(before)
     card.refresh()
     assert "1 Spule" in card.caption.text()
     assert "Sicherung" not in card.caption.text()
+    assert card.toolTip() == "", "die gelöste Ursache blieb als Kurzhilfe stehen"
+    card.hide()
+    card.deleteLater()
 
 
 def test_the_start_screen_fits_a_laptop_without_scrolling(qt_app: QApplication) -> None:

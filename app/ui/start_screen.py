@@ -705,9 +705,19 @@ class InventoryStartCard(QPushButton):
         try:
             entries = filaments.catalogue()
         except AppError as problem:
-            self.caption.setText(f"{tr('Filamentlager')} · {problem}")
-            self.setAccessibleName(self.caption.text())
-            self.setAccessibleDescription(tr("Spulen ansehen, anlegen und Bestand pflegen."))
+            # **Auf eine Kachel passt ein Satz, nicht der ganze Fehler.** Der
+            # vollständige Text stand hier in der Beschriftung und brauchte
+            # gemessene 250 Bildpunkte Höhe in 54 — Ursache und Rat lagen unter
+            # der Kante, und ein Tooltip, der sie noch trüge, gab es nicht.
+            # Die Kachel sagt jetzt, dass etwas nicht stimmt; der ganze Satz
+            # steht in Kurzhilfe und Beschreibung (Regel 17 und 18), und der
+            # Klick führt ins Lager, wo er mit seinen Knöpfen steht.
+            short = str(tr("Filamentlager · nicht lesbar"))
+            self.caption.setText(short)
+            self.caption.setToolTip(str(problem))
+            self.setToolTip(str(problem))
+            self.setAccessibleName(short)
+            self.setAccessibleDescription(str(problem))
             self.colours.clear()
             return
         text = (
@@ -716,6 +726,10 @@ class InventoryStartCard(QPushButton):
             else tr("Filamentlager · {count} Spulen")
         ).format(count=len(entries))
         self.caption.setText(text)
+        # Ein gelöstes Problem nimmt seine Kurzhilfe mit: Sonst behauptete sie
+        # beim nächsten Blick einen Fehler, den die Zeile darüber verneint.
+        self.caption.setToolTip("")
+        self.setToolTip("")
         self.setAccessibleName(text)
         self.setAccessibleDescription(tr("Spulen ansehen, anlegen und Bestand pflegen."))
         shown = entries[:3] or (filaments.CatalogueFilament("", "#808080"),)
