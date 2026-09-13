@@ -43,6 +43,7 @@ from app.core.geom.prepare import (
     slot_ends,
     slot_profile,
     slot_travel,
+    split_findings,
 )
 from app.core.geom.prepare_ops import DrillParams, bore_shape
 from app.core.geom.primitive_ops import PositionedPrimitiveParams, placement_transform
@@ -536,6 +537,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 body=as_mesh_data(body),
             )
         )
+    findings.extend(split_findings(body, solid))
     findings.extend(compensation_findings(params.diameter, cut, params.compensate))
     return OpResult(outputs=[_replaced(source, solid)], findings=findings)
 

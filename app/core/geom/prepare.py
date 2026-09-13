@@ -145,6 +145,17 @@ class HasBounds(Protocol):
     def bounds(self) -> BoundingBox: ...
 
 
+class HasComponents(Protocol):
+    """Was :func:`split_findings` von einem Körper braucht: seine Teilezahl.
+
+    Dieselbe Bauart wie :class:`HasBounds`, aus demselben Grund — ``MeshData``
+    und der exakte ``Solid`` tragen beide ``component_count``.
+    """
+
+    @property
+    def component_count(self) -> int: ...
+
+
 def over_the_edge(
     mesh: HasBounds,
     position: Vec3,
@@ -299,6 +310,31 @@ def over_the_edge_along(
     ]
 
 
+def split_findings(before: HasComponents, after: HasComponents) -> list[Finding]:
+    """Ein Schnitt, der den Körper zerlegt, sagt das — nicht nur „über die Kante".
+
+    Gemessen am 11.09.2026 und am 13.09.2026 nachgestellt: Ein Langloch von
+    100 mm durch einen 20-mm-Würfel ließ zwei Teile zurück, und der Bericht
+    sprach von einer offenen Flanke — die schlechtere Auskunft, nicht die
+    fehlende (Fund des Reviews). Die Teilezahl liegt an beiden Kernen vor,
+    und sie lügt nicht.
+    """
+    was, now = before.component_count, after.component_count
+    if now <= was:
+        return []
+    return [
+        Finding(
+            code="bore.splits_the_body",
+            severity="warning",
+            message=_(
+                "Die Bohrung schneidet den Körper ganz durch — er zerfällt in mehrere "
+                "Teile. Verkürzen Sie die Länge oder versetzen Sie die Bohrung."
+            ),
+            values={"count": now},
+        )
+    ]
+
+
 def resize_bore(
     mesh: MeshData,
     *,
@@ -399,6 +435,7 @@ def resize_bore(
         findings.append(nothing)
     unit_vector: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
     findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter, body=mesh))
+    findings.extend(split_findings(mesh, resized))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
         mesh=resized,
@@ -553,6 +590,7 @@ def slot_bore(
             angle_deg=angle_deg,
         )
     )
+    findings.extend(split_findings(mesh, slotted))
     return BoreResult(
         mesh=slotted,
         solver=outcome.solver,
@@ -1102,6 +1140,7 @@ def drill(
                 angle_deg=slot_angle,
             )
         )
+        findings.extend(split_findings(mesh, result))
         findings.extend(compensation_findings(diameter, cut_diameter, compensate))
         return BoreResult(result, outcome.solver, cut_diameter, findings)
     height = _through_length(mesh, axis) * 2.0 if through else depth
@@ -1156,6 +1195,7 @@ def drill(
     if nothing is not None:
         findings.append(nothing)
     findings.extend(over_the_edge(mesh, position, axis, cut_diameter, body=mesh))
+    findings.extend(split_findings(mesh, outcome.mesh))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
         mesh=outcome.mesh, solver=outcome.solver, diameter=cut_diameter, findings=findings

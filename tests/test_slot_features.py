@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -1361,6 +1362,91 @@ def test_pulling_twice_with_the_same_angle_lengthens_on_both_kernels(profile: Pr
         assert "slot_hole.crosses" not in codes, f"{entry.kind}: {codes}"
         longer = only_slot(as_mesh_data(second.mesh))
         assert float(longer.params["length"]) == pytest.approx(26.0, abs=0.1), entry.kind
+
+
+def _unit(values: Iterable[float]) -> tuple[float, float, float]:
+    """Die Achse eines Merkmals als Einheitsvektor, damit ein Skalarprodukt sie vergleicht."""
+    x, y, z = (float(value) for value in values)
+    length = math.sqrt(x * x + y * y + z * z)
+    return (x / length, y / length, z / length)
+
+
+def test_a_tilted_bore_keeps_its_axis_when_pulled_to_a_slot(profile: Profile) -> None:
+    """Ein Langloch an einer schrägen Bohrung folgt ihrer Achse, nicht der Z-Achse.
+
+    Alle Langlochtests zogen bis zum 13.09.2026 entlang plus Z — gemessen über
+    eine Mitschrift an ``slot_bore``: 138 Schnitte in acht Testdateien, keiner
+    gekippt (Fund des Reviews). Die *Erkennung* war gekippt geprüft, die
+    *Operation* nicht. Hier steht die Achse 17,5 Grad schräg, an beiden Kernen.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+
+    tilted = (0.3, 0.0, math.sqrt(1.0 - 0.09))
+    for entry in (_mesh_plate_with_a_bore(profile, tilted), _exact_plate_with_a_bore(tilted)):
+        bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+        along = _unit(entry.features[bore].params["axis"])
+        assert abs(sum(a * b for a, b in zip(along, tilted, strict=True))) == pytest.approx(
+            1.0, abs=0.01
+        ), f"{entry.kind}: die Bohrung liegt nicht auf der gebohrten Achse — {along}"
+
+        pulled = run_op(
+            "slot_hole", entry, profile, at_feature=bore, slot_length=20.0, slot_angle=0.0
+        )
+        slot = only_slot(as_mesh_data(pulled.mesh))
+        found = _unit(slot.params["axis"])
+        assert abs(sum(a * b for a, b in zip(found, tilted, strict=True))) == pytest.approx(
+            1.0, abs=0.01
+        ), f"{entry.kind}: das Langloch kippte auf {found}"
+        assert float(slot.params["length"]) == pytest.approx(20.0, abs=0.1), entry.kind
+
+
+def test_a_slot_that_cuts_the_body_in_two_says_so(profile: Profile) -> None:
+    """Zerfällt der Körper, steht das im Bericht — nicht nur „über die Kante".
+
+    Gemessen am 11.09.2026 und am 13.09.2026 nachgestellt: ein Langloch von
+    100 mm durch einen 20-mm-Würfel ließ zwei Teile zurück, und der einzige
+    Befund war ``bore.over_the_edge`` mit seiner offenen Flanke. Beide Kerne
+    kennen ihre Teilezahl; hier sagen beide dasselbe.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+
+    cube = SceneObject(
+        id="obj_1",
+        name="Würfel",
+        mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0))),
+    )
+    through: dict[str, object] = {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 10.0,
+        "axis": "z",
+        "diameter": 5.0,
+        "depth": 0.0,
+        "anchor": "mouth",
+    }
+    cut_through, findings = run_op_with_findings(
+        "drill_hole", cube, profile, slotted=True, slot_length=100.0, slot_angle=0.0, **through
+    )
+    codes = [finding.code for finding in findings]
+    assert as_mesh_data(cut_through.mesh).component_count == 2
+    assert "bore.splits_the_body" in codes, codes
+    split = next(finding for finding in findings if finding.code == "bore.splits_the_body")
+    assert split.values["count"] == 2
+
+    kept, findings = run_op_with_findings(
+        "drill_hole", cube, profile, slotted=True, slot_length=15.0, slot_angle=0.0, **through
+    )
+    assert as_mesh_data(kept.mesh).component_count == 1
+    assert "bore.splits_the_body" not in [finding.code for finding in findings]
+
+    # Der exakte Zwilling: 70 mm quer durch eine 60 mm breite Platte.
+    exact = _exact_plate_with_a_bore((0.0, 0.0, 1.0))
+    bore = next(name for name, feature in exact.features.items() if feature.kind == "hole")
+    halves, findings = run_op_with_findings(
+        "slot_hole", exact, profile, at_feature=bore, slot_length=70.0, slot_angle=90.0
+    )
+    assert halves.mesh.component_count == 2
+    assert "bore.splits_the_body" in [finding.code for finding in findings]
 
 
 def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:

@@ -377,6 +377,9 @@ _NOT_A_RANGE = frozenset(
         # Ein Klick neben die Fläche, eine Kante, die es nicht gibt: kein
         # Maß außerhalb einer Spanne, sondern ein Ort ohne Fläche.
         "surface_placement",
+        # Eine Bohrung mit verbundener Senkung ist eine andere Topologie,
+        # kein Zahlenwert außerhalb einer Spanne.
+        "slot_and_widening",
         # Eine erklärte Bedingung zwischen Parametern (``PartSpec.feasible``):
         # jeder Wert für sich ist erlaubt, nur nicht zusammen.
         "feasible",
@@ -385,7 +388,7 @@ _NOT_A_RANGE = frozenset(
         "recipe_dependencies",
         # Die Bahn eines Sweeps (RM-147 E3): Sie liegt in der Ebene des
         # Querschnitts statt senkrecht dazu, oder sie hat keinen Verlauf.
-        "path_plane", "no_path",
+        "path_plane", "path_start", "no_path",
         # Die zwei Zeichnungen eines Übergangs (RM-147 E2): eine liegt auf der
         # falschen Ebene, oder beide tragen verschieden viele Umrisse. Beides
         # ist eine Frage der Zeichnung und keine Zahl in einem Feld — „Ein Wert
@@ -419,7 +422,7 @@ _NOT_A_RANGE = frozenset(
         "known_pattern",
         "json_depth", "known_structure", "library_state", "missing_file", "missing_gathered",
         "missing_link",
-        "missing_payload",
+        "missing_payload", "checksum_missing",
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
         "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile",
         "no_repair_target", "no_section",

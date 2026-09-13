@@ -81,6 +81,7 @@ from app.core.geom.prepare import (
     slot_bore,
     slot_travel,
     split_at_plane,
+    split_findings,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.geom.transform import Axis, moved_body, place_on_bed, translation
@@ -3783,6 +3784,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 body=as_mesh_data(source.mesh),
             )
         )
+        findings.extend(split_findings(source.mesh, solid))
         exact_features = features_of(solid)
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den

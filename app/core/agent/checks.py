@@ -39,6 +39,9 @@ PASSED_THROUGH = (
     "fit.violated",
     "fit.missing_feature",
     "bore.over_the_edge",
+    # Dieselbe Sorte Fehler eine Stufe weiter: Das Werkzeug hat den Körper
+    # nicht gestreift, sondern zerlegt (Fund des Reviews, 13.09.2026).
+    "bore.splits_the_body",
     "boolean.without_effect",
 )
 
