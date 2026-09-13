@@ -14,6 +14,7 @@ import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
 from typing import Any, Final, get_args, get_type_hints
+from xml.etree import ElementTree as ET
 
 import pytest
 
@@ -2045,6 +2046,336 @@ def test_an_unknown_arrange_flag_falls_back_and_reports(
     assert any(entry.code == "slicer.arranged_itself" for entry in again.findings)
 
 
+@pytest.mark.parametrize(
+    ("program", "plate_count", "copied"),
+    [
+        ("CrealityPrint.exe", 1, True),
+        ("creality-print", 1, True),
+        ("CrealityPrint.exe", 0, False),
+        ("CrealityPrint.exe", 2, False),
+        ("bambu-studio.exe", 1, False),
+        ("orca-slicer.exe", 1, False),
+        ("elegoo-slicer.exe", 1, False),
+        ("prusa-slicer-console.exe", 1, False),
+    ],
+)
+def test_only_creality_cli_omits_a_proven_single_plate_without_losing_filaments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    program: str,
+    plate_count: int,
+    copied: bool,
+) -> None:
+    """Der echte CLI-Eingang erhält alles außer Crealitys abstürzendem Plattenblock."""
+    import trimesh
+
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    flavour = slicer_keys.flavour_of(program)
+    assert flavour is not None
+    setup = handover.SlicerSetup(executable=executable, flavour=flavour)
+    parts = [
+        threemf.AssemblyPart(
+            MeshData.of(trimesh.creation.box((12.0, 12.0, 3.0))),
+            name=name,
+            slots=(MaterialSlot(index=0, name=name, colour=colour, material_type=kind),),
+            plate=index if plate_count > 1 else 0,
+        )
+        for index, (name, colour, kind) in enumerate(
+            [
+                ("PLA Orange", (177 / 255, 99 / 255, 10 / 255), "PLA"),
+                ("PETG Weiß", (1.0, 1.0, 1.0), "PETG"),
+            ]
+        )
+    ]
+    slots = threemf.merge_slots(parts)
+    model = tmp_path / "Original.3mf"
+    model.write_bytes(
+        threemf.write_assembly(
+            parts,
+            project_settings=handover.project_settings(settings, profile, setup, slots=slots),
+        )
+    )
+    with zipfile.ZipFile(model) as container:
+        original = {entry.filename: container.read(entry) for entry in container.infolist()}
+    if plate_count == 0:
+        config = ET.fromstring(original[threemf.SETTINGS_PATH])
+        for plate in config.findall("plate"):
+            config.remove(plate)
+        original[threemf.SETTINGS_PATH] = ET.tostring(config)
+        with zipfile.ZipFile(model, "w") as container:
+            for name, payload in original.items():
+                container.writestr(name, payload)
+    original_bytes = model.read_bytes()
+    received: list[Path] = []
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        """Prüft die Datei an der Prozessgrenze, bevor der Arbeitsordner verschwindet."""
+        incoming = next(Path(argument) for argument in command if argument.endswith(".3mf"))
+        received.append(incoming)
+        assert (incoming != model) is copied
+        with zipfile.ZipFile(incoming) as container:
+            actual = {entry.filename: container.read(entry) for entry in container.infolist()}
+        if copied:
+            expected = ET.fromstring(original[threemf.SETTINGS_PATH])
+            expected.remove(expected.findall("plate")[0])
+            native = ET.fromstring(actual[threemf.SETTINGS_PATH])
+            assert ET.tostring(native) == ET.tostring(expected)
+            assert [
+                obj.find("metadata[@key='extruder']").get("value")
+                for obj in native.findall("object")
+            ] == ["1", "2"]
+            assert [
+                obj.find("metadata[@key='name']").get("value") for obj in native.findall("object")
+            ] == ["PLA Orange", "PETG Weiß"]
+            actual[threemf.SETTINGS_PATH] = original[threemf.SETTINGS_PATH]
+        assert actual == original, "Geometrie, Farben und übrige Beilagen bleiben vollständig"
+        assert b"#B1630A" in actual[threemf.MODEL_PATH]
+        assert b"#FFFFFF" in actual[threemf.MODEL_PATH]
+        (tmp_path / handover.OUTPUT_NAME).write_text(_TWO_TOOLS, encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    outcome = handover.slice_model(
+        model, settings, profile, setup, output_dir=tmp_path, slots=slots, expected_tools=(0, 1)
+    )
+    assert len(received) == 1
+    assert model.read_bytes() == original_bytes
+    assert outcome.metrics.used_tools == (0, 1)
+
+
+def _creality_tower_config(tmp_path: Path) -> handover.SlicerConfig:
+    """Die für die Turmplatzierung maßgeblichen Werte des K1-CFS-Herstellerprofils."""
+    machine = tmp_path / "machine.json"
+    machine.write_text(
+        json.dumps(
+            {
+                "name": "Creality K1_CFS-C 0.4 nozzle",
+                "type": "machine",
+                "printable_area": "0x0,220x0,220x220,0x220",
+                "prime_tower_position_type": "Middle Upper",
+            }
+        ),
+        encoding="utf-8",
+    )
+    process = tmp_path / "process.json"
+    process.write_text(
+        json.dumps(
+            {
+                "name": "Standard",
+                "type": "process",
+                "enable_prime_tower": "1",
+                "prime_tower_width": "180",
+                "wipe_tower_rotation_angle": "0",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return handover.SlicerConfig(process=process, machine=machine)
+
+
+@pytest.mark.parametrize(
+    ("mode", "unrotated", "rotated"),
+    [
+        ("Left Upper", (15, 185), (35, 25)),
+        ("Left Center", (15, 110), (35, 110)),
+        ("Left Below", (15, 15), (35, 15)),
+        ("Middle Upper", (20, 185), (110, 25)),
+        ("Middle Center", (20, 110), (110, 110)),
+        ("Middle Below", (20, 15), (110, 15)),
+        ("Right Upper", (25, 185), (205, 25)),
+        ("Right Center", (25, 110), (205, 110)),
+        ("Right Below", (25, 15), (205, 15)),
+    ],
+)
+@pytest.mark.parametrize("rotation", [0, 90])
+def test_creality_cli_uses_the_manufacturers_tower_modes(
+    tmp_path: Path, mode: str, unrotated: tuple[int, int], rotated: tuple[int, int], rotation: int
+) -> None:
+    """Die neun Herstellerpositionen gelten auch ohne dessen Fensterinitialisierung."""
+    config = _creality_tower_config(tmp_path)
+    process = json.loads(config.process.read_text(encoding="utf-8"))
+    process.update(prime_tower_position_type=mode, wipe_tower_rotation_angle=str(rotation))
+    config.process.write_text(json.dumps(process), encoding="utf-8")
+    setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
+
+    positioned = handover._creality_cli_tower_position(config, setup, ())
+
+    written = json.loads(config.process.read_text(encoding="utf-8"))
+    keys = ("wipe_tower_x", "wipe_tower_y")
+    assert [float(written[key][0]) for key in keys] == pytest.approx(
+        rotated if rotation else unrotated
+    )
+    assert {key: value for key, value in written.items() if key not in keys} == process
+    assert all(key in positioned.written for key in keys), "die Gegenprobe kennt die Sollposition"
+    assert handover.verify("; wipe_tower_x = 999\n", positioned.written)
+
+
+@pytest.mark.parametrize("origin", ["machine", "process", "project"])
+@pytest.mark.parametrize(
+    "coordinates",
+    [
+        {"wipe_tower_x": ["27.25"]},
+        {"wipe_tower_y": ["43.5"]},
+        {"wipe_tower_x": ["27.25"], "wipe_tower_y": ["43.5"]},
+    ],
+)
+def test_creality_cli_keeps_every_explicit_tower_coordinate(
+    tmp_path: Path, origin: str, coordinates: dict[str, list[str]]
+) -> None:
+    """Auch eine teilweise oder eingebettet gespeicherte manuelle Position wird nie ersetzt."""
+    from app.core.export.threemf import PROJECT_SETTINGS_PATH
+
+    config = _creality_tower_config(tmp_path)
+    models: tuple[Path, ...] = ()
+    if origin == "project":
+        model = tmp_path / "manual.3mf"
+        with zipfile.ZipFile(model, "w") as container:
+            container.writestr(PROJECT_SETTINGS_PATH, json.dumps(coordinates))
+        models = (model,)
+    else:
+        path = config.machine if origin == "machine" else config.process
+        assert path is not None
+        values = json.loads(path.read_text(encoding="utf-8"))
+        values.update(coordinates)
+        path.write_text(json.dumps(values), encoding="utf-8")
+    before = {path: path.read_bytes() for path in tmp_path.iterdir()}
+    setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
+
+    assert handover._creality_cli_tower_position(config, setup, models) is config
+    assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
+
+
+@pytest.mark.parametrize(
+    ("program", "values"),
+    [
+        ("bambu-studio.exe", {}),
+        ("orca-slicer.exe", {}),
+        ("elegoo-slicer.exe", {}),
+        ("CrealityPrint.exe", {"prime_tower_position_type": "Custom"}),
+        ("CrealityPrint.exe", {"enable_prime_tower": "0"}),
+        ("CrealityPrint.exe", {"wipe_tower_rotation_angle": "45"}),
+        ("CrealityPrint.exe", {"printable_area": "110x0,220x110,110x220,0x110"}),
+    ],
+)
+def test_creality_tower_initialization_leaves_other_or_unproven_cases_alone(
+    tmp_path: Path, program: str, values: dict[str, str]
+) -> None:
+    """Andere Slicer und unbelegte Platzierungsregeln behalten ihren Auftrag unverändert."""
+    config = _creality_tower_config(tmp_path)
+    process = json.loads(config.process.read_text(encoding="utf-8"))
+    process.update(values)
+    config.process.write_text(json.dumps(process), encoding="utf-8")
+    before = config.process.read_bytes()
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca")
+    assert handover._creality_cli_tower_position(config, setup, ()) is config
+    assert config.process.read_bytes() == before
+
+
+def test_creality_tower_uses_the_actual_shifted_bed_bounds(tmp_path: Path) -> None:
+    """Bettgröße und Ursprung stammen aus der Herstellerkontur, nie aus dem K1-Beispiel."""
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    machine = json.loads(config.machine.read_text(encoding="utf-8"))
+    machine["printable_area"] = ["10x20", "230x20", "230x260", "10x260"]
+    config.machine.write_text(json.dumps(machine), encoding="utf-8")
+    setup = handover.SlicerSetup(executable=Path("CrealityPrint.exe"), flavour="orca")
+    positioned = handover._creality_cli_tower_position(config, setup, ())
+    assert float(positioned.written["wipe_tower_x"]) == pytest.approx(30.0)
+    assert float(positioned.written["wipe_tower_y"]) == pytest.approx(225.0)
+
+
+@pytest.mark.parametrize(
+    ("slot_count", "used_tools", "expected_tools"),
+    [
+        (1, (0,), (0,)),
+        (1, (0,), ()),
+        (2, (1,), (1,)),
+        (2, (1,), ()),
+        (2, (0, 1), (0, 1)),
+        (2, (0, 1), ()),
+    ],
+)
+@pytest.mark.parametrize("explicit", [False, True])
+def test_creality_slice_initializes_the_tower_inside_the_manufacturers_bed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    slot_count: int,
+    used_tools: tuple[int, ...],
+    expected_tools: tuple[int, ...],
+    explicit: bool,
+) -> None:
+    """Nur der aktive Turm muss abgeleitete Koordinaten bestätigen, ausdrückliche immer."""
+    config = _creality_tower_config(tmp_path)
+    executable = tmp_path / "CrealityPrint.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(
+        executable=executable,
+        flavour="orca",
+        machine_profile=str(config.machine),
+        base_process=str(config.process),
+    )
+    profile = profiles.make_profile("creality-k1", "pla")
+    settings = print_settings.resolve(profile)
+    model = tmp_path / "probe.stl"
+    model.write_text("solid x\nendsolid x\n")
+    before = model.read_bytes()
+    captured: list[dict[str, object]] = []
+    original_write = handover.write_config
+
+    def write(*args: Any, **kwargs: Any) -> handover.SlicerConfig:
+        """Eine ausdrückliche Koordinate ist schon vor der CLI-Ableitung ein Sollwert."""
+        written = original_write(*args, **kwargs)
+        if not explicit:
+            return written
+        values = json.loads(written.process.read_text(encoding="utf-8"))
+        coordinates = {"wipe_tower_x": "20.0", "wipe_tower_y": "185.0"}
+        values.update({key: [value] for key, value in coordinates.items()})
+        written.process.write_text(json.dumps(values), encoding="utf-8")
+        return replace(written, written={**written.written, **coordinates})
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        """Prüft den Auftrag an der Prozessgrenze und schreibt einen kleinen Rücklauf."""
+        path = Path(command[command.index("--load-settings") + 1].split(";")[-1])
+        written = json.loads(path.read_text(encoding="utf-8"))
+        captured.append(written)
+        assert [float(value) for value in written["wipe_tower_x"]] == pytest.approx([20.0])
+        assert [float(value) for value in written["wipe_tower_y"]] == pytest.approx([185.0])
+        returned = "G90\nM82\n" + "".join(
+            f"T{tool}\nG1 X10 Y0 E1\nG1 Z0.2\nG1 X20 Y0 E2\n" for tool in used_tools
+        )
+        # Creality nullt den inaktiven Einfilament-Turm. Beim aktiven Turm
+        # oder einer ausdrücklichen Koordinate muss dieselbe Abweichung bleiben.
+        returned += "; wipe_tower_x = 0.000\n; wipe_tower_y = 0.000\n"
+        (tmp_path / "plate_1.gcode").write_text(returned, encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "write_config", write)
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    outcome = handover.slice_model(
+        model,
+        settings,
+        profile,
+        setup,
+        output_dir=tmp_path,
+        slots=_slots(slot_count),
+        expected_tools=expected_tools,
+    )
+    assert len(captured) == 1
+    assert model.read_bytes() == before
+    assert outcome.metrics.used_tools == used_tools
+    assert any(finding.code == "slicer.setting_ignored" for finding in outcome.findings) == (
+        explicit or len(used_tools) > 1
+    )
+    embedded = handover.project_settings(settings, profile, setup)
+    assert "wipe_tower_x" not in embedded and "wipe_tower_y" not in embedded
+
+
 def test_a_print_file_shorter_than_the_model_is_an_error() -> None:
     """CuraEngine schneidet unter ``z = 0`` wortlos ab (gemessen 30.08.2026:
     50 Schichten statt 100 bei einem zentriert importierten Würfel, Exit 0).
@@ -3396,6 +3727,32 @@ def test_a_manual_slot_type_wins_over_the_projects_base_filament(tmp_path: Path)
     assert embedded["nozzle_temperature"] == written["nozzle_temperature"]
 
 
+@pytest.mark.parametrize("shrink", [None, "99.5%"])
+def test_every_filament_has_shrink_compensation_without_replacing_the_manufacturer(
+    tmp_path: Path, shrink: str | None
+) -> None:
+    """Bambu indiziert die Schrumpfliste auch bei lokalen Spulen vollständig."""
+    base = _filament_profile(
+        tmp_path, "Haus PLA", **({"filament_shrink": [shrink]} if shrink else {})
+    )
+    profile = profiles.make_profile("bambu-a1", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(
+        executable=Path("bambu-studio.exe"), flavour="orca", base_filament=str(base)
+    )
+    slots = (
+        MaterialSlot(index=0, name="PLA Orange", material_type="PLA"),
+        MaterialSlot(index=1, name="PETG Weiß", material_type="PETG"),
+    )
+
+    config = handover.write_config(settings, profile, setup, tmp_path, slots)
+    written = [json.loads(path.read_text(encoding="utf-8")) for path in config.filaments]
+
+    assert [item["filament_shrink"] for item in written] == [[shrink or "100%"], ["100%"]]
+    embedded = handover.project_settings(settings, profile, setup, slots=slots)
+    assert embedded["filament_shrink"] == [shrink or "100%", "100%"]
+
+
 def test_local_spool_defaults_keep_process_and_explicit_spool_values() -> None:
     """Materialwechsel bewahrt den Prozess und ausdrücklich gewählte Gruppen."""
     from app.core.types import SlotOverride
@@ -4046,6 +4403,7 @@ def test_without_a_slicer_the_dialog_offers_a_way_to_one(
     monkeypatch.setattr(discover, "find_program", lambda *_args: None)
     monkeypatch.setattr(discover, "find_programs", lambda *_args: ())
     dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
 
     assert not dialog.slice_button.isEnabled(), "ohne Slicer gibt es nichts zu starten"
     assert not dialog.setup_button.isHidden(), "aber einen Weg zu einem"
@@ -4083,6 +4441,7 @@ def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path:
     from app.ui.settings import UiSettings
 
     dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
 
     box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     rot = MaterialSlot(index=0, name="Rot")
@@ -4130,6 +4489,7 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     monkeypatch.setattr(discover, "find_program", lambda *_args: None)
     monkeypatch.setattr(discover, "find_programs", lambda *_args: ())
     dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     assert not dialog.slice_button.isEnabled()
 
     program = tmp_path / "prusa-slicer.exe"
@@ -4138,6 +4498,7 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     monkeypatch.setattr(discover, "find_programs", lambda *_args: (program,))
 
     dialog.recheck_slicer()
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
 
     assert dialog.slice_button.isEnabled(), "jetzt gibt es einen"
     assert dialog.setup_button.isHidden(), "und nichts mehr zu holen"
@@ -4391,6 +4752,7 @@ def test_several_slicers_become_a_choice(
 
     monkeypatch.setattr(discover, "find_programs", lambda *_args: drei)
     dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     assert dialog.slicer_choice.count() == 3, "drei Slicer, drei Zeilen"
     assert [dialog.slicer_choice.itemText(i) for i in range(3)] == [
         "ElegooSlicer",
@@ -4401,6 +4763,7 @@ def test_several_slicers_become_a_choice(
 
     monkeypatch.setattr(discover, "find_programs", lambda *_args: drei[:1])
     einer = PrintSettingsDialog(Session(), UiSettings())
+    assert einer.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     assert einer.slicer_choice.count() == 1
     assert not einer.slicer_choice.isVisibleTo(einer), "bei einem gibt es nichts zu wählen"
 
@@ -4432,6 +4795,7 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     monkeypatch.setattr(discover, "remember_path", lambda _tool, value: gemerkt.append(value))
 
     dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle")
     dialog.process_choice.addItem("0.20mm Standard @Elegoo CC2 0.4 nozzle")
 

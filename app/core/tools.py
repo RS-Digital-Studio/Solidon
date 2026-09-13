@@ -165,6 +165,8 @@ SLICERS: Final = (
     "ElegooSlicer",
     "bambu-studio",
     "BambuStudio",
+    "CrealityPrint",
+    "creality-print",
     "SuperSlicer",
     "superslicer",
     # Cura vor seiner Oberfläche: neben ``UltiMaker-Cura.exe`` liegt

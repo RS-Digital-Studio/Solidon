@@ -129,6 +129,37 @@ def test_plural_search_keeps_separate_appimage_versions(
     assert plural("slicer", ("orcaslicer",)) == (first, second)
 
 
+@pytest.mark.parametrize(
+    "filename",
+    ("CrealityPrint.exe", "CrealityPrint", "creality-print"),
+)
+def test_creality_is_found_through_the_public_slicer_catalogue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_search: None,
+    filename: str,
+) -> None:
+    """Hersteller- und Versionsordner sind über denselben Katalog erreichbar wie andere Slicer."""
+    from app.core.export.slicer_keys import flavour_of
+    from app.core.tools import SLICERS
+
+    root = tmp_path / "programs"
+    creality = root / "Creality" / "Creality Print 7.2" / filename
+    prusa = root / "Prusa3D" / "PrusaSlicer" / "prusa-slicer"
+    for program in (creality, prusa):
+        program.parent.mkdir(parents=True)
+        program.touch()
+    monkeypatch.setattr(discover, "_install_roots", lambda: (root,))
+    monkeypatch.setattr(discover, "_SUFFIXES", (".exe", "") if filename.endswith(".exe") else ("",))
+
+    found = discover.unpatched_find_programs("slicer", SLICERS)
+
+    assert set(found) == {creality, prusa}
+    assert len(found) == 2
+    assert flavour_of(creality.name) == "orca"
+    assert discover.program_mark(creality.name) == "crealityprint"
+
+
 @pytest.mark.parametrize("kind", ("bundle", "host"))
 def test_plural_search_keeps_a_chosen_bundle_or_host_path(
     tmp_path: Path,

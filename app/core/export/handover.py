@@ -25,10 +25,12 @@ import re
 import subprocess
 import tempfile
 import time
+import zipfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
+from xml.etree import ElementTree as ET
 
 from app.core import activation, discover
 from app.core.errors import (
@@ -60,6 +62,7 @@ from app.core.export.slicer_keys import (
     takes_a_machine_profile,
     wants_bed_coordinates,
 )
+from app.core.ingest.threemf import SETTINGS_PATH
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
@@ -81,6 +84,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
+from app.core.units import is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -100,6 +104,10 @@ SLICER_OUTPUT_LIMIT: Final = 8 * 1024 * 1024
 #: Beim Behalten wird höchstens dieser Teil der Druckdatei zugleich gelesen.
 #: Die Blockgrenze ist zugleich ein natürlicher Punkt für den Abbruchtest.
 COPY_BLOCK_BYTES: Final = 1024 * 1024
+
+#: Crealitys GUI-Startpositionen, aus PartPlate.cpp/set_default_wipe_tower_pos_for_plate.
+CREALITY_TOWER_SIDE_OFFSET: Final = 15.0
+CREALITY_TOWER_TOP_OFFSET: Final = 35.0
 
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
@@ -1019,10 +1027,9 @@ def unreachable_overrides(
             code="slicer.overrides_unreachable",
             severity="warning",
             message=_(
-                "Dieser Slicer nimmt nur einen Satz Filamentwerte. Was für die "
-                "weiteren Filamente eingestellt ist, wird nicht gedruckt — dafür "
-                "braucht es einen Slicer der Orca-Familie, etwa OrcaSlicer oder "
-                "Bambu Studio."
+                "Diese Übergabe verwendet nur das erste Filament. Weitere Farben "
+                "und Materialien werden damit nicht gedruckt. Wählen Sie für die "
+                "Mehrfilament-Übergabe etwa OrcaSlicer oder Bambu Studio."
             ),
             values={"slots": len(affected), "slicer": setup.name},
         ),
@@ -1750,6 +1757,10 @@ def _orca_filament(
             else slicer_keys.filament_type(profile.material.id)
         ],
         "filament_is_support": ["0"],
+        # Neutraler Slicerstandard, bis eine Herstellerunterlage ihn ersetzt.
+        # Bambu indiziert diese Liste ohne Längenprüfung für jedes Filament;
+        # fehlt ein lokaler Slot darin, lehnt es den ganzen Auftrag ab (-100).
+        "filament_shrink": ["100%"],
     }
     # Über ``profile_file``, nicht über ``Path(...).is_file()``: hierher kommt
     # bevorzugt ein **Name** aus dem Bestand des Slicers, denn ein Pfad
@@ -2629,6 +2640,142 @@ def _readback_materials(
     )
 
 
+def _creality_cli_input(model: Path, target: Path, cancelled: CancelToken | None = None) -> Path:
+    """Entfernt nur die einzelne Plattenbeilage aus einer temporären CLI-Kopie.
+
+    Creality Print 7.2.2.5483 stürzt bei Mehrfilament-3MF mit diesem Block ab.
+    Ohne ihn bleiben Namen, Objektwerkzeuge, Farben und Platzierungen erhalten.
+    Mehrere Platten dürfen ihre Zuordnung keinesfalls verlieren; ohne genau
+    einen lesbaren Block geht deshalb die vollständige Originaldatei weiter.
+    """
+    if model.suffix.casefold() != ".3mf":
+        return model
+    try:
+        with zipfile.ZipFile(model) as source:
+            if source.namelist().count(SETTINGS_PATH) != 1:
+                return model
+            config = ET.fromstring(source.read(SETTINGS_PATH))
+            plates = config.findall("plate")
+            if config.tag != "config" or len(plates) != 1:
+                return model
+            config.remove(plates[0])
+            with zipfile.ZipFile(target, "w") as destination:
+                destination.comment = source.comment
+                for entry in source.infolist():
+                    if cancelled is not None:
+                        cancelled.raise_if_cancelled()
+                    if entry.filename == SETTINGS_PATH:
+                        destination.writestr(entry, ET.tostring(config, encoding="utf-8"))
+                        continue
+                    with source.open(entry) as reader, destination.open(entry, "w") as writer:
+                        while block := reader.read(COPY_BLOCK_BYTES):
+                            if cancelled is not None:
+                                cancelled.raise_if_cancelled()
+                            writer.write(block)
+    except zipfile.BadZipFile, ET.ParseError:
+        # Eine unlesbare Beilage belegt keine einzelne Platte. Der Slicer
+        # bekommt sie unverändert und behält seine eigene Fehlerdiagnose.
+        return model
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or target),
+            detail=str(problem.strerror or problem),
+        ) from problem
+    return target
+
+
+def _creality_cli_tower_position(
+    config: SlicerConfig, setup: SlicerSetup, models: Sequence[Path]
+) -> SlicerConfig:
+    """Initialisiert nur fehlende CLI-Turmkoordinaten nach dem Herstellerprofil.
+
+    Crealitys Fenster übersetzt den Platzierungsmodus in Projektkoordinaten;
+    das CLI lässt sonst 15/220 stehen, auch auf einem 220-mm-Bett. Übernommen
+    wird die Herstellerregel für rechteckige Betten und 0/90 Grad. Gespeicherte
+    Koordinaten gewinnen immer, auch aus einer eingebetteten 3MF-Konfiguration.
+    Die G-Code-Gegenprobe bleibt für tatsächliche Turmmaße und Sperrflächen nötig.
+    """
+    if (
+        setup.flavour != "orca"
+        or discover.program_mark(setup.executable.name) != "crealityprint"
+        or config.machine is None
+    ):
+        return config
+    coordinates = ("wipe_tower_x", "wipe_tower_y")
+    try:
+        process = json.loads(config.process.read_text(encoding="utf-8"))
+        machine = json.loads(config.machine.read_text(encoding="utf-8"))
+        if not isinstance(process, dict) or not isinstance(machine, dict):
+            return config
+        values = machine | process
+        if any(key in values for key in coordinates):
+            return config
+        for model in models:
+            if model.suffix.casefold() != ".3mf":
+                continue
+            with zipfile.ZipFile(model) as container:
+                if threemf.PROJECT_SETTINGS_PATH not in container.namelist():
+                    continue
+                embedded = json.loads(container.read(threemf.PROJECT_SETTINGS_PATH))
+                if not isinstance(embedded, dict) or any(key in embedded for key in coordinates):
+                    return config
+        horizontal, _, vertical = str(values.get("prime_tower_position_type", "")).partition(" ")
+        if horizontal not in {"Left", "Middle", "Right"} or vertical not in {
+            "Upper",
+            "Center",
+            "Below",
+        }:
+            return config
+        if str(values.get("enable_prime_tower", "0")) != "1":
+            return config
+        width = float(values.get("prime_tower_width", "0"))
+        rotation = float(values.get("wipe_tower_rotation_angle", "0")) % 360.0
+        if not math.isfinite(width) or width <= 0.0 or not math.isfinite(rotation):
+            return config
+        if not is_zero(rotation) and not is_close(rotation, 90.0):
+            return config
+        outline = values.get("printable_area", "")
+        if isinstance(outline, list) and all(isinstance(point, str) for point in outline):
+            outline = ",".join(outline)
+        if not isinstance(outline, str):
+            return config
+        area = _usable_area(gcode.analyze(f"; printable_area = {outline}\n").bed_outline)
+        if area is None:
+            return config
+        from shapely.geometry import box
+
+        if not area.equals(box(*area.bounds)):
+            return config
+        left, bottom, right, top = area.bounds
+        side = CREALITY_TOWER_SIDE_OFFSET
+        upper = CREALITY_TOWER_TOP_OFFSET
+        if is_zero(rotation):
+            xs = {
+                "Left": left + side,
+                "Middle": (left + right - width) / 2,
+                "Right": right - width - side,
+            }
+            ys = {"Upper": top - upper, "Center": (bottom + top) / 2, "Below": bottom + side}
+        else:
+            xs = {"Left": left + upper, "Middle": (left + right) / 2, "Right": right - side}
+            ys = {"Upper": top - width - side, "Center": (bottom + top) / 2, "Below": bottom + side}
+        placed = dict(zip(coordinates, (str(xs[horizontal]), str(ys[vertical])), strict=True))
+        process.update({key: [value] for key, value in placed.items()})
+        config.process.write_text(
+            json.dumps(process, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    except ValueError, TypeError, zipfile.BadZipFile:
+        # Ein unbekannter oder unlesbarer Auftrag belegt keine automatische
+        # Position. Seine ursprüngliche Slicerdiagnose bleibt maßgeblich.
+        return config
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or config.process),
+            detail=str(problem.strerror or problem),
+        ) from problem
+    return replace(config, written={**config.written, **placed})
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -2697,7 +2844,18 @@ def slice_model(
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
+        cli_models = (
+            [
+                _creality_cli_input(entry, workspace / f"model_{index}.3mf", cancelled)
+                for index, entry in enumerate(models)
+            ]
+            if setup.flavour == "orca"
+            and discover.program_mark(setup.executable.name) == "crealityprint"
+            else models
+        )
         config = write_config(settings, profile, setup, workspace, slots)
+        requested_values = config.written
+        config = _creality_cli_tower_position(config, setup, cli_models)
         densities, diameters = _readback_materials(config, settings, profile, setup, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
@@ -2720,7 +2878,7 @@ def slice_model(
         # nicht wieder zweimal läuft.
         wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
         completed = _run_slicer(
-            _command(setup, models, config, target, wanted_arrangement),
+            _command(setup, cli_models, config, target, wanted_arrangement),
             workspace,
             timeout,
             setup,
@@ -2748,7 +2906,7 @@ def slice_model(
             # auch so nichts schreibt, läuft in die Fehlerbehandlung darunter,
             # mit derselben Meldung wie bisher.
             completed = _run_slicer(
-                _command(setup, models, config, target, False),
+                _command(setup, cli_models, config, target, False),
                 workspace,
                 timeout,
                 setup,
@@ -2769,17 +2927,16 @@ def slice_model(
             # **Vor den Ausgabeprüfungen**, denn ein abgestürztes Programm
             # schreibt keinen Satz, an dem sie greifen könnten: Es fällt mitten
             # im Lauf um, und was dasteht, ist die letzte Zeile davor. Der
-            # Kunde bekäme sonst „Der Slicer hat keine Druckdatei geschrieben"
-            # und den Rat, sein Profil zu prüfen — dort ist nichts zu finden.
+            # Kunde bekäme sonst nur „Der Slicer hat keine Druckdatei geschrieben“.
+            # Der Prozessstatus belegt den Absturz, aber nicht dessen Ursache.
             if crashed(completed.returncode):
                 raise ExternalToolError(
                     tool=setup.name,
                     exit_code=completed.returncode,
                     detail=_(
-                        "Der Slicer ist abgestürzt, statt den Auftrag abzulehnen — die "
-                        "Ursache liegt bei ihm und nicht bei dieser Datei. Starten Sie ihn "
-                        "einmal von Hand: Ein Slicer, dessen Ersteinrichtung noch offen "
-                        "ist, bricht hier ab."
+                        "Der Slicer ist beim Verarbeiten der Übergabe abgestürzt. "
+                        "Öffnen Sie die Datei im Slicer und prüfen Sie Drucker- und "
+                        "Filamentprofile, oder wählen Sie einen anderen Slicer."
                     ),
                     values={"output": output},
                     # **Die Ursache wird nicht behauptet** (Regel 21): Gemessen
@@ -2872,7 +3029,11 @@ def slice_model(
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Version gelten mag oder nicht.
-        ignored = verify_settings(analysis.settings, config.written)
+        # Creality nullt die Koordinaten des inaktiven Einfilament-Turms.
+        # Nur die zusätzlich abgeleitete Position setzt mehrere tatsächlich
+        # benutzte Werkzeuge voraus; ausdrückliche Sollwerte bleiben vollständig.
+        written = config.written if len(metrics.used_tools) > 1 else requested_values
+        ignored = verify_settings(analysis.settings, written)
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.

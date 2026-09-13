@@ -95,6 +95,10 @@ ausdrückliche Spulenwerte darüber. Gemeinsame Prozesswerte bleiben
 erhalten. Schreiben, eingebettete 3MF-Einstellungen und Gegenprobe benutzen
 dieselbe Auflösung. Eine lokale Spule anderen Typs erbt keine Startsequenzen
 aus dem allgemeinen Filamentprofil des Projekts.
+Orca-Filamentprofile tragen je Spule `filament_shrink`: ohne Herstellerwert
+den neutralen Slicerstandard `100%`, vorhandene Herstellerwerte bleiben stehen.
+Die vollständige Liste ist auch für lokale Spulen nötig, da Bambu sie beim
+Schneiden ungeprüft je Filament indiziert.
 
 `SlicerConfig.written` hält die tatsächlich ausgegebenen Sollwerte, auch
 Listen je Werkzeug. Die G-Code-Gegenprobe vergleicht diese Werte vollständig
@@ -105,6 +109,26 @@ Beilage. Ein nicht unterstützter Mehrmaterialumfang wird auch ohne manuelle
 Spulenüberschreibungen vor der Übergabe benannt. Dabei zählt jede weitere
 Filamentidentität, auch bei gleichem Materialtyp und gleichen Druckwerten;
 mehrere Körper mit derselben Filamentidentität ergeben keine zusätzliche Spule.
+
+Creality Print bekommt im CLI eine temporäre 3MF-Kopie ohne den einzelnen
+`plate`-Block aus `Metadata/model_settings.config`: Dieser Block löst in
+7.2.2.5483 bei mehreren Filamenten einen Absturz aus. Nur eine nachweislich
+einzelne Platte darf so übergeben werden; mehrere oder unlesbare Plattenblöcke
+bleiben vollständig. Objektwerkzeuge, Namen, Farben, Geometrie und alle übrigen
+Beilagen bleiben erhalten. Die Originaldatei, der allgemeine Mehrplattenexport,
+das Öffnen im Slicerfenster und andere Slicer benutzen die vollständige Datei.
+
+Im selben CLI-Weg werden fehlende Reinigungsturmkoordinaten nach Crealitys
+Herstellermodus, Bettkontur und Turmbreite initialisiert. Das ersetzt die sonst
+fehlende Fensterinitialisierung für rechteckige Betten bei 0 oder 90 Grad.
+Explizite Koordinaten aus Maschinen-, Prozess- oder eingebetteten 3MF-Profilen
+bleiben erhalten, auch wenn nur eine Achse vorgegeben ist. Unbekannte Modi und
+andere Konturen oder Winkel werden nicht geraten. Die geschriebenen Koordinaten
+gehen bei tatsächlich mehreren im G-Code verwendeten Werkzeugen in die
+Einstellungsgegenprobe ein: Creality nullt den inaktiven Einfilament-Turm. Dabei
+zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen oder
+eine möglicherweise unbekannte Eingangsbelegung. Ausdrückliche Sollwerte werden
+immer verglichen; die Bauraumprüfung bleibt unverändert.
 
 ## Die vier Gegenproben nach dem Lauf
 
@@ -126,8 +150,8 @@ solche Druck eine verlorene Spule. Ohne `expected_tools` entfällt der
 Vergleich, und für Familien ohne Filamentprofile je Spule schweigt sie ganz —
 dort sagt `unreachable_overrides` dasselbe schon vor dem Lauf.
 
-`crashed` trennt den abgestürzten Slicer vom ablehnenden: Beide enden ohne
-Druckdatei, aber „prüfen Sie Ihr Profil" hilft bei einem Absturz niemandem.
+`crashed` unterscheidet einen Prozessabsturz von einer regulären Absage des
+Slicers, damit die Fehlermeldung den tatsächlichen Prozessausgang benennt.
 POSIX zählt Signale negativ, Windows meldet einen `NTSTATUS` mit Fehlerschwere
 und freiem reserviertem Bit 28. Als DWORD gelieferte eigene Fehlercodes wie
 Bambus `-100` bleiben reguläre Absagen, auch wenn ihre Zahl größer ausfällt.
