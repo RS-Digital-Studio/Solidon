@@ -27,7 +27,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma aresta escolhe-se agora na vista: primeiro clique o corpo, depois a aresta. O comprimento e os botões Arredondar e Chanfro ficam à direita. Antes era preciso reconhecê-la numa lista.
 - Num tubo, o bordo interior e o exterior arredondam-se ou chanfram-se em separado. Antes chamavam-se os dois da mesma forma, e a edição atingia um dos dois.
 - O ângulo de saída deixa a área de apoio intacta, mesmo que a peça não esteja à altura zero. Antes, uma peça elevada era também afunilada em baixo.
-- «Varrer ao longo de um percurso» começa com a secção certa e mantém as aberturas no contorno — um anel continua a ser um tubo, em vez de começar deformado e ficar maciço por dentro.
+- Varrer ao longo de um percurso começa com a secção certa e mantém as aberturas no contorno — um anel continua a ser um tubo, em vez de começar deformado e ficar maciço por dentro.
 - Um par de contrapeças inserido conta como alteração: é gravado com o projeto e perguntado ao fechar. Antes podia perder-se em silêncio.
 - O cadeado ao lado de uma medida fixada no editor de esboços é agora um símbolo desenhado com explicação. Nalguns computadores aparecia ali um quadradinho.
 
@@ -113,7 +113,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Mesa de impressão e entrega
 
 - Se um corpo feito de peças soltas — um letreiro, por exemplo — não cabe inteiro em nenhuma mesa, o relatório propõe separá-lo e orientá-lo logo: um clique e as peças ficam nas mesas.
-- «Abrir no slicer» entrega ao ElegooSlicer, Orca e Bambu Studio todas as mesas num único ficheiro — uma janela em vez de uma por mesa.
+- Abrir no slicer entrega ao ElegooSlicer, Orca e Bambu Studio todas as mesas num único ficheiro — uma janela em vez de uma por mesa.
 - Na separação, no letreiro e na textura o relatório indica o número na frase, onde antes estava um marcador entre chavetas.
 - Um letreiro ao qual atribuiu um filamento mantém-no ao ser separado em letras. Antes chegava ao slicer num segundo filamento cinzento, com o atribuído ao lado sem uso.
 - Com várias mesas, as peças chegam agora ao slicer onde ele tem as suas mesas: na grelha que ele próprio dispõe. Antes, as letras da terceira e quarta mesa ficavam ao lado de tudo.

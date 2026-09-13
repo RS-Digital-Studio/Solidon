@@ -28,7 +28,7 @@ dans `website/version.json`.
 - Une arête se choisit maintenant dans la vue : premier clic le corps, puis l'arête. Longueur et boutons Congé et Chanfrein sont à droite. Avant, il fallait la reconnaître dans une liste.
 - Sur un tube, le bord intérieur et le bord extérieur se raccordent ou se chanfreinent séparément. Avant, les deux portaient le même nom, et la modification touchait l'un des deux.
 - La dépouille laisse la face d'appui en place, même si la pièce ne repose pas à la hauteur zéro. Avant, une pièce surélevée était aussi amincie par le bas.
-- « Balayer le long d'un chemin » commence avec la bonne section et garde les ouvertures du contour — un anneau reste un tube, au lieu de partir déformé et de se remplir à l'intérieur.
+- Balayer le long d'un chemin commence avec la bonne section et garde les ouvertures du contour — un anneau reste un tube, au lieu de partir déformé et de se remplir à l'intérieur.
 - Une paire de contreparties insérée compte comme une modification : elle est enregistrée avec le projet et fait l'objet de la question à la fermeture. Avant, elle pouvait se perdre en silence.
 - Le cadenas à côté d'une cote fixée dans l'éditeur d'esquisse est maintenant un symbole dessiné avec une explication. Sur certains ordinateurs, il y avait là un petit carré.
 
@@ -114,7 +114,7 @@ dans `website/version.json`.
 ### Plateau et transmission
 
 - Si un corps fait de pièces détachées — un lettrage, par exemple — ne tient entier sur aucun plateau, le rapport propose de le séparer et de l'orienter : un clic, et les pièces sont sur les plateaux.
-- « Ouvrir dans le slicer » transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau.
+- Ouvrir dans le slicer transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau.
 - Pour la séparation, le lettrage et la texture, le rapport donne le nombre dans la phrase, là où un espace réservé entre accolades figurait avant.
 - Un lettrage auquel vous avez attribué un filament le garde quand il est séparé en lettres. Avant, il arrivait dans le slicer sur un second filament gris, celui attribué restant inutilisé à côté.
 - Avec plusieurs plateaux, les pièces arrivent dans le slicer là où il place ses plateaux : dans la grille qu'il dispose lui-même. Avant, les lettres du troisième et du quatrième restaient à côté.

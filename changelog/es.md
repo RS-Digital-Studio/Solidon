@@ -28,7 +28,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una arista se elige ahora en la vista: primer clic el cuerpo, después la arista. Longitud y los botones Redondear y Chaflán están a la derecha. Antes había que reconocerla en una lista.
 - En un tubo, el borde interior y el exterior se redondean o achaflanan por separado. Antes ambos se llamaban igual, y la edición afectaba a uno de los dos.
 - El ángulo de desmoldeo deja intacta la superficie de apoyo, aunque la pieza no esté a la altura cero. Antes, una pieza elevada se estrechaba también por abajo.
-- «Barrer a lo largo de una trayectoria» empieza con la sección correcta y conserva los huecos del contorno: un anillo sigue siendo un tubo, en vez de salir deformado al principio y macizo por dentro.
+- Barrer a lo largo de una trayectoria empieza con la sección correcta y conserva los huecos del contorno: un anillo sigue siendo un tubo, en vez de salir deformado al principio y macizo por dentro.
 - Un par de contrapiezas insertado cuenta como cambio: se guarda con el proyecto y se pregunta por él al cerrar. Antes podía perderse en silencio.
 - El candado junto a una medida fijada en el editor de bocetos es ahora un símbolo dibujado con explicación. En algunos equipos aparecía allí un cuadradito.
 
@@ -114,7 +114,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Cama de impresión y entrega
 
 - Si un cuerpo de piezas sueltas —un rótulo, por ejemplo— no cabe entero en ninguna cama, el informe ofrece separarlo y orientarlo enseguida: un clic y las piezas quedan en las placas.
-- «Abrir en el slicer» entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa.
+- Abrir en el slicer entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa.
 - En separación, rotulación y textura el informe indica la cifra en la frase, donde antes había un marcador entre llaves.
 - Un letrero al que asignó un filamento lo conserva al separarlo en letras. Antes llegaba al slicer en un segundo filamento gris, y el asignado quedaba al lado sin usar.
 - Con varias placas, las piezas llegan ahora al slicer donde él tiene sus placas: en la cuadrícula que él mismo dispone. Antes, las letras de la tercera y cuarta placa quedaban fuera de todo.

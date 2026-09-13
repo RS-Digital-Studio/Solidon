@@ -27,7 +27,7 @@ scrive in `website/version.json`.
 - Uno spigolo si sceglie ora nella vista: primo clic il corpo, poi lo spigolo. Lunghezza e i pulsanti Raccorda e Smusso stanno a destra. Prima bisognava riconoscerlo in un elenco.
 - Su un tubo, bordo interno e bordo esterno si raccordano o si smussano separatamente. Prima si chiamavano allo stesso modo, e la modifica colpiva uno dei due.
 - L'angolo di sformo lascia intatta la base d'appoggio, anche se il pezzo non sta a quota zero. Prima un pezzo sollevato veniva assottigliato anche in basso.
-- «Sweep lungo un percorso» parte con la sezione giusta e mantiene le aperture nel contorno: un anello resta un tubo, invece di partire deformato e riempirsi all'interno.
+- Sweep lungo un percorso parte con la sezione giusta e mantiene le aperture nel contorno: un anello resta un tubo, invece di partire deformato e riempirsi all'interno.
 - Una coppia di controparti inserita conta come modifica: viene salvata con il progetto e alla chiusura si chiede se salvarla. Prima poteva andare persa in silenzio.
 - Il lucchetto accanto a una quota fissata nell'editor di schizzi è ora un simbolo disegnato con spiegazione. Su qualche computer compariva lì un quadratino.
 
@@ -113,7 +113,7 @@ scrive in `website/version.json`.
 ### Piano di stampa e consegna
 
 - Se un corpo fatto di pezzi singoli — una scritta, per esempio — non entra intero in nessun piano, il rapporto propone di separarlo e orientarlo subito: un clic e i pezzi stanno sui piani.
-- «Apri nello slicer» consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano.
+- Apri nello slicer consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano.
 - Per separazione, scritta e texture il rapporto indica il numero nella frase, dove prima c'era un segnaposto tra parentesi graffe.
 - Una scritta a cui avete assegnato un filamento lo conserva quando viene separata in lettere. Prima arrivava nello slicer su un secondo filamento grigio, con quello assegnato accanto inutilizzato.
 - Con più piatti, le parti arrivano ora nello slicer dove lui tiene i suoi piatti: nella griglia che dispone da sé. Prima le lettere del terzo e del quarto piatto stavano accanto a tutto.

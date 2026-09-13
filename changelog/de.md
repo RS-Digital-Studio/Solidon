@@ -52,7 +52,7 @@ Nutzen da und sonst nichts.
 - Eine Kante wählen Sie jetzt im Bild: erster Klick der Körper, zweiter die Kante. Länge und die Knöpfe Verrunden und Fase stehen rechts. Vorher musste man sie in einer Liste wiedererkennen.
 - An einem Rohr lassen sich Innen- und Außenrand getrennt verrunden oder fasen. Vorher hießen beide gleich, und die Bearbeitung traf einen von beiden.
 - Die Formschräge lässt die Standfläche stehen, auch wenn das Teil nicht auf der Nullhöhe liegt. Vorher wurde ein angehobenes Teil unten mit verjüngt.
-- „Entlang einer Bahn führen“ beginnt mit dem richtigen Querschnitt und behält Öffnungen im Umriss — ein Ring bleibt ein Rohr, statt am Anfang verzerrt und innen voll zu werden.
+- Entlang einer Bahn führen beginnt mit dem richtigen Querschnitt und behält Öffnungen im Umriss — ein Ring bleibt ein Rohr, statt am Anfang verzerrt und innen voll zu werden.
 - Ein eingesetztes Gegenstück-Paar zählt als Änderung: Es wird mitgesichert und beim Schließen erfragt. Vorher konnte es stillschweigend verloren gehen.
 - Das Schloss neben einem festgesetzten Maß im Skizzeneditor ist jetzt ein gezeichnetes Symbol mit Erklärung. Auf manchem Rechner stand dort ein Kästchen.
 
@@ -138,7 +138,7 @@ Nutzen da und sonst nichts.
 ### Druckbett und Übergabe
 
 - Passt ein Körper aus losen Teilen — etwa ein Schriftzug — als Ganzes auf kein Bett, bietet der Prüfbericht an, ihn zu zerlegen und gleich auszurichten: ein Klick, und die Teile liegen auf den Platten.
-- „Im Slicer öffnen“ gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte.
+- Im Slicer öffnen gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte.
 - Der Prüfbericht nennt bei Zerlegung, Beschriftung und Textur die Zahl im Satz, wo vorher ein Platzhalter in Klammern stand.
 - Ein Schriftzug, dem Sie ein Filament zugewiesen haben, behält es beim Zerlegen in Buchstaben. Vorher kam er im Slicer auf einem zweiten, grauen Filament an, das zugewiesene lag daneben.
 - Mit mehreren Platten liegen die Teile im Slicer jetzt dort, wo er seine Platten hat: im Raster, wie er es selbst anlegt. Vorher standen die Buchstaben der dritten und vierten Platte neben allem.

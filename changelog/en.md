@@ -27,7 +27,7 @@ it into `website/version.json`.
 - You now pick an edge in the view: first click the body, then the edge. Its length and the Fillet and Chamfer buttons stand on the right. Before, you had to recognise it in a list.
 - On a pipe, the inner and the outer rim can be filleted or chamfered separately. Before, both had the same name, and the edit hit one of the two.
 - The draft angle leaves the footprint standing even when the part does not sit at zero height. Before, a raised part was tapered at the bottom as well.
-- “Sweep along a path” starts with the right cross-section and keeps openings in the outline — a ring stays a pipe instead of starting out distorted and turning solid inside.
+- Sweep along a path starts with the right cross-section and keeps openings in the outline — a ring stays a pipe instead of starting out distorted and turning solid inside.
 - An inserted pair of counterparts counts as a change: it is saved along and asked about when closing. Before, it could be lost in silence.
 - The padlock next to a fixed dimension in the sketch editor is now a drawn symbol with an explanation. On some computers a box stood there.
 
@@ -113,7 +113,7 @@ it into `website/version.json`.
 ### Print bed and handover
 
 - If a body made of loose parts — lettering, say — fits no bed as a whole, the report offers to split it and orient it right away: one click, and the parts lie on the plates.
-- “Open in slicer” hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate.
+- Open in slicer hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate.
 - For splitting, lettering and texture the report states the number in the sentence, where a placeholder in braces stood before.
 - Lettering you assigned a filament to keeps it when split into letters. Before, it arrived in the slicer on a second, grey filament, with the assigned one sitting unused beside it.
 - With several plates, the parts now land where the slicer keeps its plates: in the grid it lays out itself. Before, the letters of the third and fourth plate stood beside everything.

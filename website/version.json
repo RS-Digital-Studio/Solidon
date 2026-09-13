@@ -229,12 +229,12 @@
     ]
   },
   "notes_by_language": {
-    "de": "Das bisher größte Update. Neu ist vor allem: Aus Schritten im Verlauf wird ein eigener Baustein, den Sie wie jeden anderen einsetzen und mit dem Projekt weitergeben. Die Demo bleibt vollständig und ohne Schlüssel, bis zum 30.10.2026.",
-    "en": "The biggest update so far. Above all: steps from your history become a building block of your own, which you place like any other and pass on inside the project. The demo stays complete and needs no key, until 30 October 2026.",
-    "es": "La mayor actualización hasta ahora. Sobre todo: los pasos del historial se convierten en un bloque propio, que coloca como cualquier otro y comparte dentro del proyecto. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
-    "fr": "La plus grande mise à jour à ce jour. Surtout : les étapes de l’historique deviennent un bloc à vous, que vous posez comme un autre et transmettez avec le projet. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
-    "it": "L’aggiornamento più grande finora. Soprattutto: i passi della cronologia diventano un blocco tuo, che inserisci come ogni altro e trasmetti insieme al progetto. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
-    "pt": "A maior atualização até agora. Sobretudo: os passos do histórico tornam-se um bloco seu, que coloca como qualquer outro e partilha dentro do projeto. A demo continua completa e sem chave, até 30 de outubro de 2026."
+    "de": "Langlöcher, Verrunden und Fasen am eingelesenen Modell, acht Schriften für Beschriftungen, und alle Handlungen rechts an einem Ort. Die Mac-Pakete sind jetzt signiert. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
+    "en": "Slots, fillets and chamfers on imported models, eight fonts for labels, and every action in one place on the right. The Mac packages are now signed. The demo stays complete and needs no key, until 30 October 2026.",
+    "es": "Ranuras, redondeos y chaflanes en modelos importados, ocho fuentes para inscripciones y todas las acciones en un solo lugar, a la derecha. Los paquetes para Mac ya están firmados. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
+    "fr": "Trous oblongs, congés et chanfreins sur les modèles importés, huit polices pour les inscriptions, et toutes les actions au même endroit, à droite. Les paquets Mac sont désormais signés. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
+    "it": "Asole, raccordi e smussi sui modelli importati, otto caratteri per le scritte e tutte le azioni in un unico posto, a destra. I pacchetti per Mac sono ora firmati. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
+    "pt": "Rasgos, arredondamentos e chanfros em modelos importados, oito tipos de letra para inscrições e todas as ações num só lugar, à direita. Os pacotes para Mac estão agora assinados. A demo continua completa e sem chave, até 30 de outubro de 2026."
   },
   "groups": {
     "de": [
@@ -707,5 +707,6 @@
     ]
   },
   "changes_total": 62,
-  "signature": "a7c8e7a82c307309883470f5732ce4063da534c41fe351f7af2a9faffe36e1e073e2d6ee8c0a79162e6167a801e47680b4a4b88b2de02ab798a475a273d19103"
+  "signature": "623d7f436b7865dd5801b4569cfa38e82ada3bdc056692136f6e6268015fb0ce6d6ce1ccff1e8aa5639a41451c59bc4dcbe1fff1ae6ceb00f791b6452f716c0c",
+  "notes_version": "0.4.1"
 }
