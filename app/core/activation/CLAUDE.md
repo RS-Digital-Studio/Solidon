@@ -47,6 +47,14 @@ Datei von der Anlage an 0600. Auch bestehende Kaufcode-/Zertifikats-/
 Abmeldedateien erhalten beim Lesen diese privaten Rechte. Unter Windows
 gilt die vom Benutzerprofil geerbte Zugriffsliste.
 
+Das Verschärfen ist dabei der Nebenzweck und nie der Grund zu scheitern
+(`_make_private`): Wo `chmod` nicht greift — eine Datei, die nach einer
+Migration mit `sudo` root gehört, ein Heimatverzeichnis auf FAT oder einer
+CIFS-Freigabe —, bleiben Lesen und Schreiben unberührt. Die Ablage selbst legt
+`NamedTemporaryFile` ohnehin mit 0600 an; ein Ordner ohne setzbare Rechte
+kostet die Verschwiegenheit des Ordners und nicht die eines bezahlten
+Kaufcodes.
+
 ## Das Lizenzmanifest ist ein Artefakt je Arbeitsbaum
 
 `tools/build_licence_module.py` baut das Prüfmodul aus den Grenzdateien. Es

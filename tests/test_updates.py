@@ -1471,3 +1471,56 @@ def test_the_download_deadline_grows_with_the_package() -> None:
     assert small >= updates.DOWNLOAD_TIMEOUT_SECONDS
     assert large > 1500.0, "180 MB brauchen bei 100 KiB/s eine halbe Stunde"
     assert updates.download_deadline_seconds(None) > large, "unbekannt heißt: das größte Paket"
+
+
+def test_a_handle_whose_path_windows_will_not_name_is_an_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Sagt Windows den Pfad nicht, ist das ein Fehler und kein „weiter".
+
+    ``paths.opened_path`` gab bis zum 13.09.2026 ``None`` zurück, wenn schon
+    der erste ``GetFinalPathNameByHandleW`` null meldete — und ``None`` heißt
+    bei den Aufrufern „nicht prüfbar, also weiter": ``_cache_lock`` und die
+    Paketprüfung hängen ihre Sicherheitsfragen an ``opened is not None``. Der
+    zweite Aufruf warf schon; der erste ließ still durch (Fund des Reviews).
+    """
+    if os.name != "nt":
+        pytest.skip("GetFinalPathNameByHandleW gibt es nur unter Windows")
+    import ctypes
+    from types import SimpleNamespace
+
+    from app.core import paths
+
+    def refusing(handle: object, buffer: object, size: int, flags: int) -> int:
+        return 0
+
+    kernel32 = SimpleNamespace(GetFinalPathNameByHandleW=refusing)
+    fake = SimpleNamespace(
+        WinDLL=lambda *args, **options: kernel32,
+        c_void_p=ctypes.c_void_p,
+        c_wchar_p=ctypes.c_wchar_p,
+        c_uint32=ctypes.c_uint32,
+        create_unicode_buffer=ctypes.create_unicode_buffer,
+        get_last_error=lambda: 6,
+    )
+    monkeypatch.setattr(paths, "_windows_ctypes", fake)
+    with (tmp_path / "datei").open("wb") as stream, pytest.raises(OSError) as raised:
+        paths.opened_path(stream.fileno())
+    assert raised.value.errno == 6, "der Systemgrund reist mit"
+
+
+def test_a_lock_whose_path_cannot_be_checked_is_refused_with_advice(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Die Update-Sperre wird abgewiesen, nicht übergangen — mit Handlung (Regel 17)."""
+
+    def broken(descriptor: int) -> Path:
+        raise OSError(6, "Das Handle ist ungültig")
+
+    monkeypatch.setattr(updates, "opened_path", broken)
+    folder = tmp_path / "cache"
+    folder.mkdir()
+    with pytest.raises(FileWriteError) as raised, updates._cache_lock(folder):
+        pass  # pragma: no cover - die Sperre darf hier nie zustande kommen
+    assert raised.value.suggestions, "eine Absage ohne Weg hinaus"
+    assert "prüfen" in str(raised.value.detail)

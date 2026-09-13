@@ -334,19 +334,44 @@ def _places_complete() -> bool:
     return trial_path().is_file() and second_trial_path().is_file()
 
 
+def _make_private(path: Path, mode: int) -> None:
+    """Engt die Rechte ein, soweit das Dateisystem das zulässt.
+
+    **Die Verschärfung ist der Nebenzweck, nicht der Zweck** — und sie darf
+    deshalb nie der Grund sein, aus dem Lesen oder Schreiben scheitert. Es gibt
+    Ablageorte, auf denen ``chmod`` nicht greift: eine Datei, die nach einer
+    Migration mit ``sudo`` root gehört, ein Heimatverzeichnis auf FAT oder
+    einer CIFS-Freigabe ohne Rechteabbildung. Gemessen am 13.09.2026 mit einem
+    ``chmod``, das ``EPERM`` wirft: ``read_key`` gab ``None`` zurück, obwohl
+    die Datei unverändert und lesbar dalag — und ein bezahlter Kaufcode, der
+    unsichtbar wird, ist genau die falsche Richtung des Fehlers
+    (:func:`write_key`).
+
+    Unter Windows gilt die vom Benutzerprofil geerbte Zugriffsliste; dort gibt
+    es nichts zu setzen.
+    """
+    if os_name == "nt":
+        return
+    with suppress(OSError):
+        path.chmod(mode)
+
+
 def _read_private_text(path: Path) -> str:
     """Liest persönliche Ablagedaten; bestehende POSIX-Dateien werden dabei privat."""
-    if os_name != "nt":
-        path.parent.chmod(0o700)
-        path.chmod(0o600)
+    _make_private(path.parent, 0o700)
+    _make_private(path, 0o600)
     return path.read_text(encoding="utf-8").strip()
 
 
 def _write_place(path: Path, text: str) -> None:
     """Privat und atomar: erst vollständig synchronisieren, dann den Namen ersetzen."""
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if os_name != "nt":
-        path.parent.chmod(0o700)
+    # Die Datei selbst legt ``NamedTemporaryFile`` unabhängig davon mit 0600 an,
+    # und der Namenstausch behält diesen Modus. Ein Ordner, dessen Rechte sich
+    # nicht setzen lassen, kostet also die Verschwiegenheit des Ordners und
+    # nicht die der Ablage — den Schreibvorgang deshalb scheitern zu lassen,
+    # wäre der teurere Fehler.
+    _make_private(path.parent, 0o700)
     scratch: Path | None = None
     try:
         # NamedTemporaryFile legt mit 0600 an; kein offenes Zeitfenster und

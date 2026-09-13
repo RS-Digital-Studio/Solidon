@@ -281,7 +281,17 @@ def opened_path(descriptor: int) -> Path | None:
         handle = _windows_ctypes.c_void_p(_windows_msvcrt.get_osfhandle(descriptor))
         length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
         if not length:
-            return None
+            # **Auch der erste Aufruf wirft.** Bis zum 13.09.2026 gab er
+            # ``None`` zurück — und ``None`` heißt bei den Aufrufern „nicht
+            # prüfbar, also weiter" (siehe oben): ``updates`` schaltete damit
+            # seine drei Sicherheitsprüfungen ab, statt abzuweisen, obwohl
+            # Windows gerade gesagt hatte, dass es den Pfad nicht nennt
+            # (Fund des Reviews). Der zweite Aufruf darunter wirft seit dem
+            # 10.09.2026; der erste tut es jetzt aus demselben Grund.
+            raise OSError(
+                _windows_ctypes.get_last_error(),
+                "Windows hat den Pfad hinter dem Handle nicht genannt",
+            )
         buffer = _windows_ctypes.create_unicode_buffer(length + 1)
         written = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
         # **Der zweite Wert wird gegen die Puffergröße gehalten, nicht nur

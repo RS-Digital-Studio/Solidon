@@ -1006,7 +1006,13 @@ def _cache_lock(folder: Path) -> Any:
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise FileWriteError(detail=_("Die Update-Sperre ist keine gewöhnliche Datei."))
-        opened = _descriptor_path(descriptor)
+        try:
+            opened = _descriptor_path(descriptor)
+        except OSError as problem:
+            # Ein Handle, dessen Pfad das System nicht nennt, ist kein Grund
+            # weiterzumachen und keiner für einen nackten ``OSError`` (Regel
+            # 17): Der Kunde bekommt den Satz und den Weg (erneut, anderswo).
+            raise FileWriteError(detail=_("Die Update-Sperre ließ sich nicht prüfen.")) from problem
         expected_lock = folder.parent.resolve(strict=True) / lock_path.name
         if opened is not None and opened != expected_lock:
             raise FileWriteError(detail=_("Die Update-Sperre ist eine Verknüpfung."))

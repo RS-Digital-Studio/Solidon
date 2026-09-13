@@ -1228,3 +1228,37 @@ def test_reading_legacy_activation_files_restricts_their_posix_permissions(
         assert reader() == "legacy-value"
         assert path.stat().st_mode & 0o777 == 0o600
         assert path.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_a_place_that_refuses_chmod_keeps_its_licence_key(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein bezahlter Kaufcode bleibt lesbar, wo sich Rechte nicht setzen lassen.
+
+    Es gibt solche Ablageorte: eine Datei, die nach einer Migration mit ``sudo``
+    root gehört, ein Heimatverzeichnis auf FAT oder einer CIFS-Freigabe ohne
+    Rechteabbildung. Dort wirft ``chmod`` ``EPERM``, und die Verschärfung der
+    Rechte darf deshalb nie der Grund sein, aus dem das Lesen scheitert —
+    gemessen gab ``read_key`` sonst ``None`` zurück, während die Datei
+    unverändert und lesbar dalag.
+
+    Die POSIX-Lage wird nachgestellt, damit der Fall auch unter Windows gefahren
+    wird: Dort gäbe es den ``chmod``-Zweig sonst gar nicht zu sehen.
+    """
+    store.key_path().write_text("SOLIDON-BEZAHLTER-CODE", encoding="utf-8")
+    store.certificate_path().write_text("GERAETE-ZERTIFIKAT", encoding="utf-8")
+
+    def refuse(self: Path, mode: int, **kwargs: object) -> None:
+        raise PermissionError(1, "Operation not permitted", str(self))
+
+    monkeypatch.setattr(store, "os_name", "posix")
+    monkeypatch.setattr(Path, "chmod", refuse)
+
+    assert store.read_key() == "SOLIDON-BEZAHLTER-CODE"
+    assert store.read_certificate() == "GERAETE-ZERTIFIKAT"
+    # Und die andere Richtung: Eine Freischaltung, die sich nicht ablegen lässt,
+    # gilt nur für diese Sitzung (``write_key``) — auch dieser Verlust hängt
+    # nicht an einem Ordner, dessen Rechte unveränderlich sind. Die Datei selbst
+    # legt ``NamedTemporaryFile`` weiterhin mit 0600 an.
+    assert store.write_key("NEUER-CODE")
+    assert store.read_key() == "NEUER-CODE"
