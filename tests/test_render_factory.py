@@ -175,28 +175,25 @@ print("native canvas drawn and released")
     assert "native canvas drawn and released" in done.stdout
 
 
+#: **Unter Xvfb reißt der Kindprozess sporadisch** (Tag-Läufe von v0.4.1,
+#: 13.09.2026: erst bei 200 Prozent, im nächsten Lauf bei beiden grün, im
+#: übernächsten bei 100 Prozent — Geräteverhältnis gemeldet, dann Exit -11).
+#: Ob das der Softwarerenderer des Runners ist oder die Anwendung, sagt nur
+#: ein Linux mit Bildschirm; bis dahin steht der Fall bei RM-104, und die
+#: Marke ist nicht streng: Sie hält den Bau nicht auf und verschweigt den
+#: Fall nicht.
+_XVFB_TEARS = pytest.mark.xfail(
+    sys.platform.startswith("linux"),
+    strict=False,
+    raises=AssertionError,
+    reason="Linux/Xvfb: der Renderer-Kindprozess reißt sporadisch (RM-104)",
+)
+
+
 @pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
 @pytest.mark.parametrize(
     "scale",
-    [
-        1,
-        # **Unter Xvfb riss der Kindprozess bei 200 Prozent einmal** (Tag-Lauf
-        # v0.4.1, 13.09.2026: Geräteverhältnis 2.0 gemeldet, dann Exit -11; bei
-        # 100 Prozent grün) — und bestand im nächsten Lauf. Sporadisch also; ob
-        # das der Softwarerenderer des Runners ist oder die Anwendung, sagt nur
-        # ein Linux mit Bildschirm. Bis dahin steht der Fall bei RM-104, und die
-        # Marke ist nicht streng: Sie hält den Bau nicht auf und verschweigt den
-        # Fall nicht.
-        pytest.param(
-            2,
-            marks=pytest.mark.xfail(
-                sys.platform.startswith("linux"),
-                strict=False,
-                raises=AssertionError,
-                reason="Linux/Xvfb: Kindprozess reißt sporadisch bei QT_SCALE_FACTOR=2 (RM-104)",
-            ),
-        ),
-    ],
+    [pytest.param(1, marks=_XVFB_TEARS), pytest.param(2, marks=_XVFB_TEARS)],
 )
 def test_native_item_pick_slack_stays_constant_on_hidpi_screens(scale: int) -> None:
     """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar."""

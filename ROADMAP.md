@@ -81,6 +81,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
+| [RM-168 — Sackgassen sperren statt öffnen](#rm-168) | Bedienung und Darstellung | `_reason_locked` um Körpereigenschaften erweitern, damit vier Operationen ausgegraut mit Grund stehen statt einen Dialog ohne Bild zu öffnen |
+| [RM-169 — Vorschau für Farbe und Netz](#rm-169) | Bedienung und Darstellung | Farbvorschau im Bild und Drahtgitter über dem alten Netz — die Differenzansicht misst nur Volumen |
+| [RM-170 — Aushöhlen an generierten Körpern](#rm-170) | Geometrie, Erkennung und Druckvorbereitung | Boolesche Kette an `generated_figure.stl` in beiden Qualitäten diagnostizieren |
+| [RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen](#rm-171) | Bedienung und Darstellung | Entscheidung Robert — vier tote Zeilen im häufigsten Fall gegen „wer sie verschwinden sähe, suchte sie" |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -401,11 +405,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   rot — jede der vier einmal, auch die mit Verbindungsende
   (`test_backends.py`). Ein Umbau auf einen
   Leser mit kurzem Socket-Timeout, der das Token selbst prüft, ist der
-  naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** riss
-  der Kindprozess des HiDPI-Grifftests bei `QT_SCALE_FACTOR=2` einmal mit
-  Exit -11 und bestand im nächsten Lauf (`test_render_factory.py`, bei 1 beide
-  Male grün) — ob Softwarerenderer des Runners oder Anwendung, sagt nur ein
-  Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
+  naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** reißt
+  der Renderer-Kindprozess des HiDPI-Grifftests sporadisch mit Exit -11 —
+  erst bei `QT_SCALE_FACTOR=2`, dann bei beiden Werten grün, dann bei 1
+  (`test_render_factory.py`) — ob Softwarerenderer des Runners oder
+  Anwendung, sagt nur ein Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
   grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
   0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
 
@@ -999,6 +1003,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Sprachen; Test in `tests/test_prepare.py` neben den bestehenden Fügewegfällen. Der offene Körper
   (kein Innen) bleibt stumm wie bisher — dort gilt der `caveat` der Operation.
 
+<a id="rm-170"></a>
+
+- [ ] **RM-170 — Aushöhlen an generierten Körpern.** `geom.hollow.hollow` scheitert an
+  `tests/data/meshes/generated_figure.stl` (3372 Dreiecke, Weg 3) in **beiden** Qualitäten mit
+  `BooleanFailedError` („Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert"),
+  gemessen am 13.09.2026; die acht übrigen Korpuskörper gehen in 0,04 bis 0,34 s durch. Das Band
+  sagt es seither („Keine Vorschau: …"), aber der Kunde von Weg 3 kommt so nicht zu einer hohlen
+  Figur. Diagnose über `/geometry-review`: Eingangsnetz (wasserdicht? Selbstdurchdringung?),
+  Offset-Kavität, welche Stufe der Kette woran reißt. Abnahme: ein Geometrietest gegen diese Datei
+  mit Volumen vorher/nachher — oder ein Befund, der die Reparatur vorschlägt, bevor die Kette läuft.
+
 ## Bedienung und Darstellung
 <a id="rm-070"></a>
 
@@ -1099,6 +1114,39 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
+
+<a id="rm-168"></a>
+
+- [ ] **RM-168 — Sackgassen sperren statt öffnen.** Gemessen am 13.09.2026 über alle 110
+  Operationen (`konzepte/konzept-einfache-bedienung-2026-09.md`): *Offene Fläche schließen* an
+  einem geschlossenen Körper, *In Einzelteile zerlegen* an einem Stück, *Gitter füllen* an einem
+  massiven Körper und *Deckel erzeugen* ohne Öffnung öffnen einen Dialog, dessen Vorschau nur
+  „Keine Vorschau: …" sagen kann. Menü, Kontextmenü und Palette kennen `_reason_locked`, das
+  heute nach Auswahlart und Anzahl fragt — nicht nach Eigenschaften des Körpers. Fix: die Frage um
+  geschlossen/offen, ein Stück/mehrere, massiv/hohl und „Öffnung nach oben" erweitern, mit demselben
+  Satz an allen drei Orten. Abnahme: die vier Einträge stehen an einem sauberen Quader ausgegraut
+  mit Grund; `test_ui` prüft je Eintrag Sperre und Satz.
+
+<a id="rm-169"></a>
+
+- [ ] **RM-169 — Vorschau für Farbe und Netz.** Die Differenzansicht (§18.7) misst hinzugekommenes
+  und entferntes Volumen. Damit zeigen *Filament zuweisen*, *Filament auf eine Fläche*, *Filament
+  entfernen*, *Textur in Filamente umrechnen* sowie *Dreiecke verringern*, *Kanten verfeinern*,
+  *Dreiecke angleichen* und *Fläche unterteilen* nichts — seit dem 13.09.2026 sagt das Band „am
+  Volumen ändert sich nichts", aber die Handlung bleibt unsichtbar, bis sie übernommen ist. Fix in
+  zwei Hälften: eine Farbvorschau färbt die betroffenen Dreiecke im Bild (die Slotfarben kennt der
+  Viewport); eine Netzvorschau legt das neue Drahtgitter halbtransparent über das alte. Abnahme:
+  je Operation ein Offscreen-Test, der im Bild einen Aktor der Vorschau findet.
+
+<a id="rm-171"></a>
+
+- [ ] **RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen.** *Grundform hochziehen* nutzt
+  alle acht Felder der Vorderseite; vier davon (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für
+  Lochkreis und Lochraster und stehen bei einem Rechteck ausgegraut da. Die heutige Regel ist
+  begründet (`_couple_dependent_fields`: „wer sie verschwinden sähe, suchte sie"); ihr Preis sind
+  vier tote Zeilen im häufigsten Fall. Entscheidung Robert: ausblenden, solange die Bedingung nicht
+  gilt (die Zeile erscheint mit der Grundform), oder ausgrauen wie heute. Keine Messung — eine
+  Wahl.
 
 ## KI und Generatoren
 
