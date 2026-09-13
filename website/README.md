@@ -4,16 +4,17 @@ Statische Seiten, **keine externen Ressourcen beim Laden**. Der öffentliche,
 von `upload_website.py` ausgewählte Bestand wird unverändert hochgeladen; einen
 Build-Schritt gibt es nicht. Lokale Quellen unter `teile/` bleiben ausgenommen.
 Die Sperre greift nach jeder Auswahlart und vor dem ersten Serverzugriff. Der
-Unterstützungsknopf ist ein gewöhnlicher Verweis zu PayPal und lädt dort erst nach
-einem ausdrücklichen Klick die Zahlungsseite — kein PayPal-Skript, keine
-Schrift und kein Zählpixel sind in die Seite eingebunden.
+Unterstützungsknopf öffnet einen lokalen Dialog mit PayPal und GoFundMe zur
+Auswahl. Erst die gewöhnlichen Anbieterlinks darin öffnen die jeweilige externe
+Seite. Die Datenschutzerklärungen beider Anbieter sind direkt verlinkt; kein
+Anbieterskript, keine Schrift und kein Zählpixel sind in die Seite eingebunden.
 
 Der Hinweis unmittelbar am Knopf hält die rechtliche Grenze fest: keine
 Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf und
-keine steuerliche Bestätigung. `datenschutz.html` nennt PayPal als eigenständig
-Verantwortlichen, die übermittelten Transaktionsdaten und den Umgang mit
-wiederkehrenden Zahlungen. Diese Sätze gehören zum Zahlungsweg; sie werden nicht
-aus Platzgründen aus dem Download-Kasten entfernt.
+keine steuerliche Bestätigung. `datenschutz.html` erläutert die Datenverarbeitung
+bei Unterstützung über PayPal oder GoFundMe. Diese Hinweise gehören zum
+Unterstützungsweg; sie werden nicht aus Platzgründen entfernt. Alle sechs
+Startseiten führen dieselbe lokale Auswahl und dieselben Anbieterziele.
 
 Beide Skripte kommen von hier — kein CDN, keine Bibliothek, keine Schriftart
 von außen, kein Zählpixel. `site.js` markiert in der Funktionsseite den gerade

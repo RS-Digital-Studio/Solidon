@@ -703,7 +703,7 @@ def test_the_start_screen_offers_feedback_and_voluntary_support_as_two_action_ca
     assert screen.support_button.detail_label.text() == (
         "Hilft bei Veröffentlichung, Signierung, Tests und Website"
     )
-    assert screen.support_button.hint_label.text() == "PayPal erst im nächsten Schritt"
+    assert screen.support_button.hint_label.text() == "PayPal oder GoFundMe auswählen"
     for button in screen.secondary_actions:
         assert isinstance(button, QPushButton)
         assert button.objectName() == "startActionCard"

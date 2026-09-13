@@ -1,13 +1,13 @@
 # Allgemeine Geschäftsbedingungen
 
-Stand: 31. August 2026 · Fassung 1.6
+Stand: 13. September 2026 · Fassung 1.7
 
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
 
 **Solange nur die Demo-Version angeboten wird, greifen sie nicht.** Die Demo
 ist unentgeltlich; es gibt keine Bestellung und keinen Kaufpreis. Eine
-freiwillige Zahlung über den PayPal-Unterstützungsweg ist eine unentgeltliche
+freiwillige Zahlung über den PayPal-Unterstützungsweg oder GoFundMe ist eine unentgeltliche
 Zuwendung ohne Gegenleistung: Sie schaltet nichts frei, wird nicht auf einen
 späteren Kauf angerechnet und ist keine Bestellung einer Lizenz. RS Digital
 stellt dafür keine steuerliche Zuwendungsbestätigung aus; behandeln Sie die

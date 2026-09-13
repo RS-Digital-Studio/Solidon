@@ -1119,14 +1119,15 @@ def test_the_help_menu_offers_direct_support(
     assert shown == [f"{APP_NAME} unterstützen"]
 
 
-def test_the_support_dialog_opens_paypal_only_after_the_click(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("provider", ["paypal", "gofundme"])
+def test_the_support_dialog_opens_the_chosen_provider_only_after_the_click(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, provider: str
 ) -> None:
     """Der Dialog bleibt lokal; erst sein eindeutiger Knopf fragt nach draußen."""
     from PySide6.QtCore import QUrl
     from PySide6.QtWidgets import QLabel
 
-    from app.branding import DONATION_URL
+    from app.branding import DONATION_URL, GOFUNDME_URL
     from app.ui.dialogs import DonationDialog
 
     opened: list[str] = []
@@ -1141,6 +1142,7 @@ def test_the_support_dialog_opens_paypal_only_after_the_click(
     assert not opened
     assert "Standardbrowser" in dialog.browser_note.text()
     assert dialog.support_button.text() == "PayPal im Browser öffnen"
+    assert dialog.gofundme_button.text() == "GoFundMe im Browser öffnen"
     assert dialog.close_button.text() == "Schließen"
     text = "\n".join(label.text() for label in dialog.findChildren(QLabel))
     assert "keine Bestellung" in text
@@ -1148,36 +1150,45 @@ def test_the_support_dialog_opens_paypal_only_after_the_click(
     assert "keine zusätzlichen Funktionen" in text
     assert "Erst nach Ihrem Klick online" in text
 
-    dialog.support_button.click()
+    button, url = (
+        (dialog.support_button, DONATION_URL)
+        if provider == "paypal"
+        else (dialog.gofundme_button, GOFUNDME_URL)
+    )
+    button.click()
 
-    assert opened == [DONATION_URL]
+    assert opened == [url]
     dialog.reject()
+    assert opened == [url]
 
 
+@pytest.mark.parametrize("provider", ["paypal", "gofundme"])
 def test_a_blocked_payment_page_offers_a_copyable_way_out(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, provider: str
 ) -> None:
     """Ein fehlender Browser lässt niemanden mit einer Adresse zum Abtippen stehen."""
-    from app.branding import DONATION_URL
+    from app.branding import DONATION_URL, GOFUNDME_URL
     from app.ui.dialogs import DonationOpenErrorDialog, open_donation
 
-    copied: list[str] = []
+    url = DONATION_URL if provider == "paypal" else GOFUNDME_URL
     shown: list[DonationOpenErrorDialog] = []
     monkeypatch.setattr("app.ui.dialogs.QDesktopServices.openUrl", lambda _url: False)
-    monkeypatch.setattr("app.ui.dialogs.copy_donation_url", lambda: copied.append(DONATION_URL))
     monkeypatch.setattr(
         DonationOpenErrorDialog,
         "exec",
         lambda dialog: shown.append(dialog) or 0,
     )
 
-    assert not open_donation()
+    assert not open_donation(url=url)
     assert len(shown) == 1
     assert shown[0].copy_button.text() == "Zahlungslink kopieren"
 
-    shown[0].copy_button.click()
-
-    assert copied == [DONATION_URL]
+    previous_text = qt_app.clipboard().text()
+    try:
+        shown[0].copy_button.click()
+        assert qt_app.clipboard().text() == url
+    finally:
+        qt_app.clipboard().setText(previous_text)
 
 
 def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> None:

@@ -47,6 +47,7 @@ from app.branding import (
     APP_VERSION,
     COPYRIGHT,
     DONATION_URL,
+    GOFUNDME_URL,
     SECURITY_SUPPORT_UNTIL,
     SUPPORT_ADDRESS,
     WEBSITE_URL,
@@ -2310,19 +2311,20 @@ def open_website() -> None:
     QDesktopServices.openUrl(QUrl(WEBSITE_URL))
 
 
-def copy_donation_url() -> None:
+def copy_donation_url(url: str = DONATION_URL) -> None:
     """Legt den Zahlungslink für den manuellen Ausweichweg ab."""
-    QApplication.clipboard().setText(DONATION_URL)
+    QApplication.clipboard().setText(url)
 
 
 class DonationOpenErrorDialog(QMessageBox):
     """Der Browser-Ausfall endet mit einem kopierbaren Ausweg."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, url: str = DONATION_URL) -> None:
         super().__init__(parent)
+        self._url = url
         self.setIcon(QMessageBox.Icon.Warning)
-        self.setWindowTitle(tr("PayPal ließ sich nicht öffnen"))
-        self.setText(tr("Der Standardbrowser konnte die Zahlungsseite nicht öffnen."))
+        self.setWindowTitle(tr("Die Unterstützungsseite ließ sich nicht öffnen"))
+        self.setText(tr("Der Standardbrowser konnte die Unterstützungsseite nicht öffnen."))
         self.setInformativeText(
             tr(
                 "Kopieren Sie den Zahlungslink und öffnen Sie ihn selbst. "
@@ -2332,16 +2334,20 @@ class DonationOpenErrorDialog(QMessageBox):
         self.copy_button = self.addButton(
             tr("Zahlungslink kopieren"), QMessageBox.ButtonRole.ActionRole
         )
-        self.copy_button.clicked.connect(copy_donation_url)
+        self.copy_button.clicked.connect(self._copy_url)
         close_button = self.addButton(QMessageBox.StandardButton.Close)
         close_button.setText(tr("Schließen"))
 
+    def _copy_url(self) -> None:
+        """Kopiert genau den zuvor gewählten Unterstützungsweg."""
+        copy_donation_url(self._url)
 
-def open_donation(parent: QWidget | None = None) -> bool:
-    """Öffnet den PayPal-Zahlungsweg erst nach dem ausdrücklichen Klick."""
-    if QDesktopServices.openUrl(QUrl(DONATION_URL)):
+
+def open_donation(parent: QWidget | None = None, *, url: str = DONATION_URL) -> bool:
+    """Öffnet den gewählten Unterstützungsweg erst nach dem ausdrücklichen Klick."""
+    if QDesktopServices.openUrl(QUrl(url)):
         return True
-    DonationOpenErrorDialog(parent).exec()
+    DonationOpenErrorDialog(parent, url=url).exec()
     return False
 
 
@@ -2808,10 +2814,10 @@ class DonationDialog(QDialog):
 
         self.browser_note = QLabel(
             tr(
-                "PayPal verarbeitet Ihre Daten erst nach dem Klick. Dann öffnet sich die "
-                "Zahlungsseite von PayPal direkt in Ihrem Standardbrowser; die Website "
-                "von {app} wird nicht geöffnet."
-            ).format(app=APP_NAME),
+                "Wählen Sie PayPal oder GoFundMe. Erst Ihr Klick öffnet die Zahlungsseite "
+                "von PayPal oder die Kampagne auf GoFundMe in Ihrem Standardbrowser. "
+                "Dabei werden Daten an den gewählten Anbieter übertragen."
+            ),
             self,
         )
         self.browser_note.setWordWrap(True)
@@ -2850,15 +2856,21 @@ class DonationDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         self.close_button = buttons.button(QDialogButtonBox.StandardButton.Close)
         self.close_button.setText(tr("Schließen"))
+        self.close_button.setAutoDefault(False)
         self.support_button = buttons.addButton(
             tr("PayPal im Browser öffnen"), QDialogButtonBox.ButtonRole.ActionRole
         )
-        make_primary(self.support_button)
+        self.gofundme_button = buttons.addButton(
+            tr("GoFundMe im Browser öffnen"), QDialogButtonBox.ButtonRole.ActionRole
+        )
         payment_hint = self.browser_note.text()
-        self.support_button.setToolTip(payment_hint)
-        self.support_button.setStatusTip(payment_hint)
-        self.support_button.setAccessibleDescription(payment_hint)
+        for button in (self.support_button, self.gofundme_button):
+            button.setAutoDefault(False)
+            button.setToolTip(payment_hint)
+            button.setStatusTip(payment_hint)
+            button.setAccessibleDescription(payment_hint)
         self.support_button.clicked.connect(self._open_donation)
+        self.gofundme_button.clicked.connect(self._open_gofundme)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
@@ -2876,6 +2888,10 @@ class DonationDialog(QDialog):
 
     def _open_donation(self) -> None:
         open_donation(self)
+
+    def _open_gofundme(self) -> None:
+        """Öffnet die Kampagne über denselben Browser- und Fehlerweg."""
+        open_donation(self, url=GOFUNDME_URL)
 
 
 class AboutDialog(QDialog):

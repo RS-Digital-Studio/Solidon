@@ -856,7 +856,7 @@ class StartScreen(QWidget):
         # Zwei zusammengehörige Nebenwege unter den vier Einstiegen. Sie
         # erklären knapp, warum es sie gibt, und öffnen nur vorhandene lokale
         # Dialoge: Rückmeldung versendet erst nach der Vorschau,
-        # Unterstützung geht erst im folgenden Hinweis zu PayPal.
+        # Unterstützung führt erst nach der Anbieterwahl zu PayPal oder GoFundMe.
         feedback_detail = tr(
             "Eine Person entwickelt Solidon unabhängig. Was soll für Sie besser werden?"
         )
@@ -873,7 +873,7 @@ class StartScreen(QWidget):
         self.support_button = StartActionCard(
             tr("Solidon freiwillig unterstützen"),
             support_detail,
-            tr("PayPal erst im nächsten Schritt"),
+            tr("PayPal oder GoFundMe auswählen"),
             "support",
             self,
         )

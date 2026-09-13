@@ -72,6 +72,9 @@ def website_page_url(page: str, language: str) -> str:
 #: Zahlungsdialog; die Produktseite liegt nicht dazwischen.
 DONATION_URL: Final = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4"
 
+#: Die zusätzliche Unterstützungskampagne wird nur nach ausdrücklichem Klick geöffnet.
+GOFUNDME_URL: Final = "https://gofund.me/08c5f0edb"
+
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 

@@ -1,6 +1,6 @@
 # Datenschutzerklärung
 
-Stand: 12. September 2026
+Stand: 13. September 2026
 
 
 ## Diese Website
@@ -32,9 +32,20 @@ Wir erhalten von PayPal die für die Zahlung und ihre Abrechnung bereitgestellte
 Falls Sie bei PayPal eine wiederkehrende Zahlung wählen, lässt sie sich dort in den Profileinstellungen ändern oder beenden. Solidon3D führt kein Unterstützerkonto: Die Zahlung ist keine Bestellung, begründet keine Gegenleistung, schaltet nichts frei und wird nicht auf einen späteren Kauf angerechnet. RS Digital stellt dafür keine steuerliche Bestätigung aus; behandeln Sie die Zahlung nicht als steuerbegünstigt.
 
 
+## Freiwillige Unterstützung über GoFundMe
+
+Im lokalen Unterstützungsdialog der App können Sie außerdem *GoFundMe im Browser öffnen* wählen. Auf der Website führt *Mit GoFundMe unterstützen* im selben lokalen Hinweis zur [Solidon3D-Kampagne](https://gofund.me/08c5f0edb). Der Kurzlink leitet auf GoFundMe weiter. Vor diesem Klick wird keine Verbindung zu GoFundMe aufgebaut. Es sind keine GoFundMe-Inhalte oder Cookies eingebunden.
+
+GoFundMe verarbeitet auf seiner Plattform insbesondere Kontakt-, Geräte-, Zahlungs- und Transaktionsdaten in eigener Verantwortung. Für Nutzer im Europäischen Wirtschaftsraum mit einem Vertragsverhältnis zu GoFundMe Ireland ist GoFundMe Ireland Limited, 70 Sir John Rogerson Quay, Dublin 2, Irland, verantwortlich. Weitere Empfänger, Zahlungsabwicklung und mögliche Drittlandübermittlungen erläutert die [Datenschutzerklärung von GoFundMe](https://www.gofundme.com/c/privacy).
+
+Als Organisator kann RS Digital die von GoFundMe bereitgestellten Kontakt- und Zahlungsangaben erhalten, auch wenn die Unterstützung öffentlich als anonym angezeigt wird. Ich nutze diese Angaben zur Zuordnung, Abrechnung, gegebenenfalls Erstattung und für Rückfragen zur Zahlung sowie zur Erfüllung gesetzlicher Aufbewahrungspflichten. Rechtsgrundlagen sind Art. 6 Abs. 1 lit. b DSGVO für die veranlasste Zahlung und Art. 6 Abs. 1 lit. c DSGVO für die gesetzliche Aufbewahrung. Danach werden die Daten gelöscht. Namen und Kommentare können abhängig von Ihren Einstellungen auf GoFundMe öffentlich sichtbar sein.
+
+Auch diese Unterstützung ist keine Bestellung, begründet keine Gegenleistung, schaltet keine Funktionen frei und wird nicht auf einen späteren Kauf angerechnet. RS Digital stellt keine steuerliche Bestätigung aus.
+
+
 ## Der Kauf einer Lizenz
 
-**Solange nur die Demo-Version angeboten wird, findet nichts davon statt.** Es gibt keine Bestellung und keinen Kaufpreis. Die freiwillige PayPal-Unterstützung aus dem vorigen Abschnitt ist davon getrennt und keine Lizenzbestellung. Was in diesem Abschnitt steht, beschreibt den Verkauf, wie er ab dem Verkaufsstart ablaufen wird — es steht hier, weil es dann gelten wird.
+**Solange nur die Demo-Version angeboten wird, findet nichts davon statt.** Es gibt keine Bestellung und keinen Kaufpreis. Die freiwillige Unterstützung über PayPal oder GoFundMe aus den vorigen Abschnitten ist davon getrennt und keine Lizenzbestellung. Was in diesem Abschnitt steht, beschreibt den Verkauf, wie er ab dem Verkaufsstart ablaufen wird — es steht hier, weil es dann gelten wird.
 
 Der Kauf läuft dann nicht über diese Website, sondern über einen **Zahlungsdienstleister**. Welcher das ist, steht vor dem Kauf an dieser Stelle und im Bestellvorgang — mit Namen, Anschrift und seiner eigenen Datenschutzerklärung, aus der hervorgeht, welche Daten er erhebt. Tritt er als *Merchant of Record* auf, ist er für Bestellung und Zahlung **selbst Verantwortlicher**. Zahlungsdaten wie Kartennummern erreichen uns in keinem Fall und zu keinem Zeitpunkt.
 

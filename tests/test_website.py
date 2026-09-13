@@ -88,16 +88,17 @@ STAT = re.compile(r"<div><b>(\d+)</b><span>([^<]+)</span></div>")
 #: nicht dazu.
 LINK = re.compile(r'(?:src|href)="([^"]+)"')
 
-#: Die beiden absichtlichen Außenadressen stehen ausschließlich im lokalen
-#: PayPal-Hinweis. Beim Laden der Website und beim ersten Klick bleiben sie
-#: komplett außen vor; ein eingebundenes PayPal-Skript wäre keine gleichwertige
-#: Alternative, weil es jeden Besuch an den Zahlungsdienst meldete.
+#: Die Unterstützungsziele stehen ausschließlich im lokalen Hinweis. Beim
+#: Laden der Website und beim ersten Klick bleiben sie komplett außen vor;
+#: ein Anbieterskript würde dagegen schon den Besuch nach außen melden.
 PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4"
+GOFUNDME_DONATE_URL = "https://gofund.me/08c5f0edb"
 
 #: PayPal verarbeitet die Zahlungsdaten erst auf seiner eigenen Seite. Wer
 #: den Weg anbietet, muss dort trotzdem direkt zu den Einzelheiten führen —
 #: nicht zu einer Suchseite und nicht nur zum allgemeinen Hilfezentrum.
 PAYPAL_PRIVACY_URL = "https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE"
+GOFUNDME_PRIVACY_URL = "https://www.gofundme.com/c/privacy"
 
 #: Die Registergröße im Fließtext: eine Zahl, dahinter das Wort für Operation.
 #: Der Stamm trägt durch alle sechs Sprachen — Operationen, operations,
@@ -550,7 +551,9 @@ def test_the_page_loads_nothing_from_outside(page: str) -> None:
         if reference.startswith("http") and not reference.startswith("https://solidon3d.de")
     ]
     assert all(
-        reference in {PAYPAL_DONATE_URL, PAYPAL_PRIVACY_URL} for reference in external_hrefs
+        reference
+        in {PAYPAL_DONATE_URL, PAYPAL_PRIVACY_URL, GOFUNDME_DONATE_URL, GOFUNDME_PRIVACY_URL}
+        for reference in external_hrefs
     ), f"{page} verweist auf eine nicht freigegebene Außenadresse: {external_hrefs}"
     # Protokollrelativ, also ohne ``http`` im Text — die beiden Zeilen darüber
     # sehen davon nichts, und ein Zählpixel schreibt sich genau so.
@@ -947,21 +950,30 @@ def test_each_start_page_matches_the_demo_activation_policy(
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_each_start_page_uses_a_local_step_before_paypal(page: str) -> None:
-    """Jede Sprache zeigt vor PayPal denselben lokalen, freiwilligen Hinweis."""
+def test_each_start_page_uses_a_local_step_before_support_provider(page: str) -> None:
+    """Beide Anbieter werden in jeder Sprache erst im lokalen Dialog angeboten."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
     local_buttons = re.findall(
         r'<button class="donate-button" type="button" data-choice="support">', text
     )
     assert len(local_buttons) == 1, f"{page}: der lokale Unterstützen-Knopf fehlt"
-    dialog = text[text.index('<dialog class="auswahl donate-dialog"') :]
-    assert dialog.count(f'href="{PAYPAL_DONATE_URL}"') == 1
-    assert dialog.count(f'href="{PAYPAL_PRIVACY_URL}"') == 1
-    assert PAYPAL_DONATE_URL not in text[: text.index('<dialog class="auswahl donate-dialog"')]
-    assert not re.search(
-        rf'<(?:script|img|iframe|link)[^>]+(?:src|href)="{re.escape(PAYPAL_DONATE_URL)}"',
+    dialog = re.search(
+        r'<dialog class="auswahl donate-dialog" id="wahl-support"[^>]*>.*?</dialog>',
         text,
-    ), f"{page}: PayPal würde ohne den zweiten Klick geladen"
+        re.DOTALL,
+    )
+    assert dialog is not None, f"{page}: der lokale Unterstützungsdialog fehlt"
+    outside_dialog = text[: dialog.start()] + text[dialog.end() :]
+    for url in (
+        PAYPAL_DONATE_URL,
+        PAYPAL_PRIVACY_URL,
+        GOFUNDME_DONATE_URL,
+        GOFUNDME_PRIVACY_URL,
+    ):
+        assert dialog.group().count(f'href="{url}"') == 1, f"{page}: Anbieterlink fehlt: {url}"
+        assert url not in outside_dialog, f"{page}: Anbieterlink außerhalb des Dialogs: {url}"
+    for url in (PAYPAL_DONATE_URL, GOFUNDME_DONATE_URL):
+        assert f'<a class="btn" href="{url}" rel="noopener noreferrer">' in dialog.group()
 
 
 @pytest.mark.parametrize("page", START_PAGES)
@@ -1022,6 +1034,7 @@ def test_no_start_page_asks_for_money_in_its_hero(page: str) -> None:
         "erst begehren lassen, dann fragen"
     )
     assert PAYPAL_DONATE_URL not in hero, f"{page}: PayPal-Adresse im Aufmacher"
+    assert GOFUNDME_DONATE_URL not in hero, f"{page}: GoFundMe-Adresse im Aufmacher"
 
 
 def test_hero_keeps_its_picture_in_one_column() -> None:
@@ -1048,7 +1061,7 @@ def test_hero_keeps_its_picture_in_one_column() -> None:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_each_paypal_donation_says_what_it_does_not_buy(page: str) -> None:
+def test_each_support_choice_says_what_it_does_not_buy(page: str) -> None:
     """Freiwillig steht nicht nur im Konzept, sondern unmittelbar am Knopf."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
     start = text.index('<div class="donate">')
@@ -1073,6 +1086,19 @@ def test_the_privacy_page_names_paypal_before_any_payment() -> None:
     assert "schaltet nichts frei" in text
     assert "keine steuerliche Bestätigung" in text
     assert "Zuwendung" not in text
+
+
+@pytest.mark.parametrize("path", [WEBSITE.parent / "DATENSCHUTZ.md", WEBSITE / "datenschutz.html"])
+def test_the_privacy_notice_names_gofundme_before_any_payment(path: Path) -> None:
+    """Quelle und öffentliche Seite erklären denselben ausdrücklich gewählten Außenweg."""
+    text = path.read_text(encoding="utf-8")
+    plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
+
+    assert "Freiwillige Unterstützung über GoFundMe" in plain
+    assert GOFUNDME_DONATE_URL in text
+    assert GOFUNDME_PRIVACY_URL in text
+    assert "GoFundMe im Browser öffnen" in plain
+    assert "Vor diesem Klick wird keine Verbindung zu GoFundMe aufgebaut." in plain
 
 
 @pytest.mark.parametrize("page", START_PAGES)
