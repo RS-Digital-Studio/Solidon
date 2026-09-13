@@ -1112,7 +1112,7 @@ FIGURES: Final[tuple[Figure, ...]] = (
             "Das Fenster: oben die Werkzeugleiste, links Objekte, Parameter, Verlauf "
             "und Filamente untereinander, in der Mitte der Viewport mit dem Modell und "
             "darunter die Werkzeugzeile, daneben wahlweise Prüfbericht oder Chat und "
-            "ganz rechts über die volle Höhe das Fenster „Merkmal“, unten die "
+            "ganz rechts über die volle Höhe das Fenster „Auswahl“, unten die "
             "Statusleiste."
         ),
         caption=_("Vier Bereiche, keine Betriebsarten. Rechts lässt sich ganz ausblenden."),
@@ -1362,7 +1362,10 @@ FIGURES: Final[tuple[Figure, ...]] = (
             "Dieselbe Platte zweimal: links ohne Bohrung, rechts mit einem "
             "durchgehenden Loch von 8 mm."
         ),
-        caption=_("Beide Bilder rechnet dieselbe Operation, die auch im Menü steht."),
+        caption=_(
+            "Beide Bilder rechnet dieselbe Operation, die an einer gewählten Fläche "
+            "rechts in der Auswahl steht."
+        ),
         kind="rendered",
         build=_drilled,
     ),

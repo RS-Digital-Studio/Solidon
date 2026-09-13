@@ -2054,8 +2054,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     touches_features=True,
     deterministic=False,
     doc=_(
-        "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Zapfen, "
-        "Senkung, Verjüngung, Kuppel oder Pfanne."
+        "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Langloch, "
+        "Zapfen, Senkung, Verjüngung, Kuppel, Pfanne oder Lufteinschluss."
     ),
 )
 def move_feature(ctx: OpContext) -> OpResult:
@@ -2318,8 +2318,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     applies_to=list(DUPLICABLE_KINDS),
     deterministic=False,
     doc=_(
-        "Legt ein erkanntes Merkmal ein zweites Mal an: Bohrung, Zapfen, Senkung, "
-        "Verjüngung, Kuppel oder Pfanne."
+        "Legt ein erkanntes Merkmal ein zweites Mal an: Bohrung, Langloch, Zapfen, "
+        "Senkung, Verjüngung, Kuppel oder Pfanne."
     ),
 )
 def duplicate_feature(ctx: OpContext) -> OpResult:
@@ -2519,8 +2519,9 @@ class RemoveFeatureParams(BaseParams):
     touches_features=True,
     deterministic=False,
     doc=_(
-        "Entfernt ein erkanntes Merkmal: Bohrung, Zapfen, Senkung, Verjüngung, "
-        "Kuppel, Pfanne oder Rundung."
+        "Entfernt ein erkanntes Merkmal: Bohrung, Langloch, Zapfen, Senkung, "
+        "Verjüngung, Kuppel, Pfanne oder Rundung — und füllt einen Lufteinschluss "
+        "mit Material."
     ),
 )
 def remove_feature(ctx: OpContext) -> OpResult:
@@ -2702,7 +2703,10 @@ class RotateFeatureParams(BaseParams):
     applies_to=["hole", "pin", "cone", "slot"],
     touches_features=True,
     deterministic=False,
-    doc=_("Kippt ein erkanntes Merkmal um seine Mitte: Bohrung, Zapfen, Senkung oder Verjüngung."),
+    doc=_(
+        "Kippt ein erkanntes Merkmal um seine Mitte: Bohrung, Langloch, Zapfen, "
+        "Senkung oder Verjüngung."
+    ),
 )
 def rotate_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal kippen — dieselbe Maschine, eine Matrix dazwischen.
@@ -3111,7 +3115,10 @@ OPEN_BODY_DETAIL: Final = _(
     applies_to=["hole", "slot"],
     touches_features=True,
     deterministic=False,
-    doc=_("Ändert den Durchmesser einer erkannten Bohrung."),
+    doc=_(
+        "Ändert den Durchmesser einer erkannten Bohrung — an einem Langloch seine "
+        "Breite; der Weg der Schraube bleibt, die Enden wachsen mit."
+    ),
 )
 def resize_hole(ctx: OpContext) -> OpResult:
     """Der gemeinsame Kundenweg für STL-Netze und exakte STEP-Körper."""
@@ -3554,9 +3561,10 @@ SLOT_FEATURE_RENAMED: Final = _(
     touches_features=True,
     deterministic=False,
     doc=_(
-        "Zieht eine erkannte Bohrung zu einem Langloch auseinander. Der "
-        "Durchmesser bleibt, wie er gemessen wurde — eingetragen werden nur "
-        "Länge und Richtung."
+        "Zieht eine erkannte Bohrung zu einem Langloch auseinander — oder ein "
+        "Langloch länger. Der Durchmesser bleibt, wie er gemessen wurde; "
+        "eingetragen werden nur Länge und Richtung, und an einem Langloch steht "
+        "seine Richtung schon da."
     ),
 )
 def slot_hole(ctx: OpContext) -> OpResult:

@@ -120,13 +120,21 @@ def test_french_range_check_warns_for_any_failed_corner() -> None:
 
 
 def test_italian_sculpt_manual_names_the_actual_modify_menu() -> None:
-    """Cambia enthält die Booleschen Operationen, Modifica das Bearbeiten-Menü."""
+    """Die Formen-Seite nennt die Handlungen rechts, nicht mehr ein Menü.
+
+    Bis zum 11.09.2026 stand *Weich verschmelzen* im Menü *Ändern*, und die
+    italienische Fassung musste „Cambia" von „Modifica" (dem Bearbeiten-Menü)
+    auseinanderhalten. Seit die Handlungen einer Auswahl rechts im Fenster
+    stehen, gibt es das Menü nicht mehr — ein Text, der es noch nennt,
+    schickt den Kunden an eine Stelle, die es nicht gibt.
+    """
     catalog = read_catalog("it")
     body = next(
         value for key, value in catalog.items() if key.startswith("Manche Formen lassen sich")
     )
-    assert f"nel menu «{catalog['Ändern']}»" in body
+    assert f"nel menu «{catalog['Ändern']}»" not in body
     assert f"nel menu «{catalog['Bearbeiten']}»" not in body
+    assert f"*{catalog['Weich verschmelzen']}*" in body
     assert catalog["Dreiecke angleichen"] in body
 
 
