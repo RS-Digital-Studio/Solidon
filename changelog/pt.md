@@ -138,7 +138,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Chat e IA
 
 - Antes do primeiro pedido a um gerador de modelos, o Solidon diz que dados vão para lá.
-- Cancelar funciona também enquanto a resposta do modelo de linguagem ainda está a chegar.
 - Se outro processo ocupar a placa gráfica, o chat espera de forma visível em vez de ficar parado.
 
 ### Atualização, instalação e sistema

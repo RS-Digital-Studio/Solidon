@@ -138,7 +138,6 @@ scrive in `website/version.json`.
 ### Chat e IA
 
 - Prima della prima richiesta a un generatore di modelli, Solidon dice quali dati vi arrivano.
-- Annulla agisce anche mentre la risposta del modello linguistico sta ancora arrivando.
 - Se un altro processo occupa la scheda grafica, la chat aspetta in modo visibile invece di restare ferma.
 
 ### Aggiornamento, installazione e sistema

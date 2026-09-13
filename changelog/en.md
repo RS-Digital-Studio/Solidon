@@ -138,7 +138,6 @@ it into `website/version.json`.
 ### Chat and AI
 
 - Before the first request to a model generator, Solidon says which data goes there.
-- Cancel also works while the language model's answer is still arriving.
 - If another job occupies the graphics card, the chat waits visibly instead of standing still.
 
 ### Update, installation and system

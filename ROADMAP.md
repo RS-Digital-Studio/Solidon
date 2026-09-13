@@ -70,6 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Ausgang von `boolean._kernel` verschweißen und `edges.rounding_tool` mit `flank_overlap=BOOLEAN_OVERLAP`; Kundenweg-Test STL → Op → STL → Import |
+| [RM-167 — „Fügeweg prüfen“ schweigt bei freiem Weg](#rm-167) | Geometrie, Erkennung und Druckvorbereitung | Info-Befund `join.clear` mit Weg und Schrittzahl, damit der Prüfbericht die Antwort trägt |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -390,6 +391,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sichtbaren Pixeln, bedienbarem Fenster und sauberem Prozessabschluss; anschließend die
   Testabdeckung entsprechend nachziehen. Bereits reparierte Skizzen-/B-Rep-/Dialogbefunde bleiben
   abgeschlossen.
+
+  **Zwei Befunde aus dem Tag-Lauf v0.4.1 (13.09.2026), beide mit strenger
+  `xfail`-Marke im Test, damit der Bau läuft und der Fehler sichtbar bleibt:**
+  Auf **macOS** wirkt der Abbruch eines lokalen Ollama-Aufrufs nicht — der Weg
+  schließt den Socket aus dem wartenden Thread (`shutdown`, `detach`), und das
+  weckt dort das blockierte `recv` nicht; nur die Stufe, in der die Gegenstelle
+  selbst schließt, endet rechtzeitig (`test_backends.py`, drei von vier Stufen).
+  Ein Umbau auf einen Leser mit kurzem Socket-Timeout, der das Token selbst
+  prüft, ist der naheliegende Weg, gemessen wird er auf einem Mac. Auf
+  **Linux (Xvfb)** reißt der Kindprozess des HiDPI-Grifftests bei
+  `QT_SCALE_FACTOR=2` mit Exit -11 (`test_render_factory.py`, bei 1 grün) — ob
+  Softwarerenderer des Runners oder Anwendung, sagt nur ein Linux mit
+  Bildschirm. Der Changelog-Punkt zum Abbruch während der Antwort ist für
+  0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 
@@ -965,6 +980,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `test_prepare`, `test_features`, `test_slot_features`, `test_counterbore_transitions`,
   `test_radial_rounding`, `test_parts` (feste Dreieckszahlen), `test_export`, `test_difference`,
   `test_agent_suite`. Danach die Beispiel-STLs der Werkstattfilme neu exportieren.
+
+<a id="rm-167"></a>
+
+- [ ] **RM-167 — „Fügeweg prüfen“ schweigt bei freiem Weg.** Gesehen am 13.09.2026 beim
+  Werkstattfilm: Zwei Teile gewählt, *Fügeweg prüfen*, 24 mm entlang X — und der Prüfbericht
+  zeigt danach genau das, was vorher dastand (zwei Import-Hinweise). `prepare.check_join_path`
+  liefert bei freiem Weg eine leere Liste; nur `join.blocked` (Endlage überschneidet) und
+  `join.interference` (Vorbeidrücken) sind Befunde. Der Kunde hat eine Prüfung ausgelöst und
+  bekommt keine Antwort — er muss aus dem Fehlen eines Fehlers schließen, dass der Weg frei ist
+  (§2.7: Ein Ergebnis wird gesagt, nicht erschlossen).
+
+  Fix: ein Info-Befund `join.clear` mit Richtung, Weg und Schrittzahl („Der Fügeweg ist frei:
+  24 mm entlang X, 24 Schritte, keine Überschneidung."), samt Katalogeinträgen in allen sechs
+  Sprachen; Test in `tests/test_prepare.py` neben den bestehenden Fügewegfällen. Der offene Körper
+  (kein Innen) bleibt stumm wie bisher — dort gilt der `caveat` der Operation.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

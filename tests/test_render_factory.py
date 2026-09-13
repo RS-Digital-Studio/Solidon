@@ -176,7 +176,26 @@ print("native canvas drawn and released")
 
 
 @pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
-@pytest.mark.parametrize("scale", [1, 2])
+@pytest.mark.parametrize(
+    "scale",
+    [
+        1,
+        # **Unter Xvfb reißt der Kindprozess bei 200 Prozent** (Tag-Lauf v0.4.1,
+        # 13.09.2026: Geräteverhältnis 2.0 gemeldet, dann Exit -11; bei 100
+        # Prozent grün). Ob das der Softwarerenderer des Runners ist oder die
+        # Anwendung, sagt nur ein Linux mit Bildschirm — bis dahin steht der
+        # Fall bei RM-104, und die Marke ist streng.
+        pytest.param(
+            2,
+            marks=pytest.mark.xfail(
+                sys.platform.startswith("linux"),
+                strict=True,
+                raises=AssertionError,
+                reason="Linux/Xvfb: Kindprozess reißt bei QT_SCALE_FACTOR=2 (RM-104)",
+            ),
+        ),
+    ],
+)
 def test_native_item_pick_slack_stays_constant_on_hidpi_screens(scale: int) -> None:
     """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar."""
     platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")

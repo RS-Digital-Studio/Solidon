@@ -457,18 +457,31 @@ def test_two_separate_bores_are_not_a_slot(profile: Profile) -> None:
 
 
 def test_the_object_tree_names_a_slot_and_shows_both_measures(profile: Profile) -> None:
-    """Ein Merkmal ohne Namen steht als englische Kennung im Baum (Regel 20)."""
+    """Ein Merkmal ohne Namen steht als englische Kennung im Baum (Regel 20).
+
+    Das Komma kommt aus ``QLocale``, nicht aus der Sprache — ``labels.length``
+    fragt dieselbe Quelle wie die Eingabefelder. Ohne die Zeile prüfte der
+    Test die Sprache des Rechners: hier ein deutsches Windows, auf dem Runner
+    ein englisches, und dort stand „Ø5.00 mm × 20.00 mm" (Tag-Lauf v0.4.1).
+    """
+    from PySide6.QtCore import QLocale
+
     from app.i18n import set_language
     from app.ui import labels
 
-    set_language("de")
-    slot = only_slot(slotted(profile))
+    before = QLocale()
+    QLocale.setDefault(QLocale("de"))
+    try:
+        set_language("de")
+        slot = only_slot(slotted(profile))
 
-    assert "Langloch" in labels.feature_name(slot.id, slot)
-    measure = labels.feature_measure(slot)
-    assert "5,0" in measure and "20,0" in measure, (
-        f"Breite und Länge stehen beide da, gelesen wurde {measure!r}"
-    )
+        assert "Langloch" in labels.feature_name(slot.id, slot)
+        measure = labels.feature_measure(slot)
+        assert "5,0" in measure and "20,0" in measure, (
+            f"Breite und Länge stehen beide da, gelesen wurde {measure!r}"
+        )
+    finally:
+        QLocale.setDefault(before)
 
 
 def test_the_digest_tells_the_agent_where_a_slot_points(profile: Profile) -> None:

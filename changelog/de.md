@@ -163,7 +163,6 @@ Nutzen da und sonst nichts.
 ### Chat und KI
 
 - Vor der ersten Anfrage an einen Modell-Erzeuger sagt Solidon, welche Daten dorthin gehen.
-- Abbrechen wirkt auch, während die Antwort des Sprachmodells noch ankommt.
 - Belegt ein anderer Lauf die Grafikkarte, wartet der Chat sichtbar, statt still zu stehen.
 
 ### Update, Installation und System

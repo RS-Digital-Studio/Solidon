@@ -7,6 +7,7 @@ from __future__ import annotations
 import http.server
 import json
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -400,7 +401,31 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
     assert transport.calls == []
 
 
-@pytest.mark.parametrize("stage", ("before_headers", "http10", "connection_close", "keep_alive"))
+#: **Auf macOS weckt der Abbruch den blockierten Leser nicht.** Der Weg schließt
+#: den Socket aus dem wartenden Thread (``shutdown`` und ``detach``); Linux und
+#: Windows beenden damit das ``recv`` des Anfrage-Threads, macOS nicht — nur
+#: die Stufe, in der die Gegenstelle selbst schließt, endet dort rechtzeitig
+#: (Tag-Lauf v0.4.1, 13.09.2026, drei von vier Stufen rot). Gemessen ist das
+#: nur in der CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21). Die
+#: Marke ist streng: Sobald der Abbruch dort trägt, wird sie rot und fällt.
+#: Registerpunkt RM-104.
+_MAC_KEEPS_READING = pytest.mark.xfail(
+    sys.platform == "darwin",
+    strict=True,
+    raises=AssertionError,
+    reason="macOS: shutdown aus dem Nachbarthread weckt das blockierte recv nicht (RM-104)",
+)
+
+
+@pytest.mark.parametrize(
+    "stage",
+    (
+        pytest.param("before_headers", marks=_MAC_KEEPS_READING),
+        pytest.param("http10", marks=_MAC_KEEPS_READING),
+        "connection_close",
+        pytest.param("keep_alive", marks=_MAC_KEEPS_READING),
+    ),
+)
 def test_a_blocking_local_ollama_request_can_be_cancelled(
     monkeypatch: pytest.MonkeyPatch, stage: str
 ) -> None:

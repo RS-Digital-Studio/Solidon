@@ -139,7 +139,6 @@ dans `website/version.json`.
 ### Chat et IA
 
 - Avant la première requête à un générateur de modèles, Solidon dit quelles données y partent.
-- Annuler agit aussi pendant que la réponse du modèle de langage arrive encore.
 - Si un autre calcul occupe la carte graphique, le chat attend visiblement au lieu de rester figé.
 
 ### Mise à jour, installation et système

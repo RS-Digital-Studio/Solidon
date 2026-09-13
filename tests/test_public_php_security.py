@@ -1687,8 +1687,13 @@ def test_counter_storage_quotas_fail_closed_without_growth(tmp_path: Path, quota
     directory = tmp_path / "stats"
     directory.mkdir(mode=0o700)
     current = directory / f"{datetime.now(UTC):%Y-%m}.jsonl"
+    # **Privat, wie count.php es verlangt.** Die Rechteprüfung gilt nur auf
+    # POSIX; mit der Umask des Runners (0644) sagte der Zähler „nicht privat"
+    # und zählte gar nicht — der Test prüfte dann die Quote einer Datei, die
+    # er nie erreichte (Tag-Lauf v0.4.1, Ubuntu; lokal auf Windows unsichtbar).
     if quota == "month":
         current.write_bytes(b"")
+        _chmod_private(current)
         with current.open("r+b") as stream:
             stream.truncate(16 * 1024 * 1024)
         watched = [current]
@@ -1697,6 +1702,7 @@ def test_counter_storage_quotas_fail_closed_without_growth(tmp_path: Path, quota
         for month in ("2020-01", "2020-02", "2020-03", "2020-04"):
             path = directory / f"{month}.jsonl"
             path.write_bytes(b"")
+            _chmod_private(path)
             with path.open("r+b") as stream:
                 stream.truncate(16 * 1024 * 1024)
             watched.append(path)
