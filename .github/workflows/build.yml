@@ -931,6 +931,16 @@ jobs:
           security unlock-keychain -p "$password" "$keychain"
           security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          # **In die Suchliste, sonst sucht das Signierwerkzeug woanders.**
+          # `security find-identity` fragt den genannten Schlüsselbund; `codesign`
+          # und `productsign` suchen ihre Identität über die Suchliste des
+          # Nutzers, und `--keychain` engt die nur ein, statt sie zu ersetzen.
+          # Beim Bau von 0.4.1 (13.09.2026, Lauf 34771691630) stand die
+          # Identität deshalb sauber im Schlüsselbund („1 identity imported")
+          # und `codesign` antwortete auf ihren Fingerabdruck „no identity
+          # found". Apples Anleitung für Runner endet mit genau dieser Zeile;
+          # `delete-keychain` beim Aufräumen nimmt den Eintrag wieder heraus.
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           # Signiert wird mit dem Fingerabdruck aus dem Schlüsselbund, den
           # dieser Schritt gerade selbst angelegt hat — nicht mit einem
           # Zertifikatsnamen aus einem Geheimnis. Am 10.09.2026 ist der Bau von
@@ -1163,6 +1173,16 @@ jobs:
           security unlock-keychain -p "$password" "$keychain"
           security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/productsign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          # **In die Suchliste, sonst sucht das Signierwerkzeug woanders.**
+          # `security find-identity` fragt den genannten Schlüsselbund; `codesign`
+          # und `productsign` suchen ihre Identität über die Suchliste des
+          # Nutzers, und `--keychain` engt die nur ein, statt sie zu ersetzen.
+          # Beim Bau von 0.4.1 (13.09.2026, Lauf 34771691630) stand die
+          # Identität deshalb sauber im Schlüsselbund („1 identity imported")
+          # und `codesign` antwortete auf ihren Fingerabdruck „no identity
+          # found". Apples Anleitung für Runner endet mit genau dieser Zeile;
+          # `delete-keychain` beim Aufräumen nimmt den Eintrag wieder heraus.
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           # Wie bei der App der Fingerabdruck aus dem eigenen Schlüsselbund,
           # aber **ohne** `-p codesigning`: Eine Developer-ID-Installer-Identität
           # taucht unter dieser Richtlinie nicht auf, sie signiert Pakete und
