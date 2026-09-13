@@ -310,7 +310,10 @@ def _write_stubbornly(path: Path, payload: str | bytes) -> None:
             if isinstance(payload, bytes):
                 path.write_bytes(payload)
             else:
-                path.write_text(payload, encoding="utf-8")
+                # ``newline=""``: der ganze Baum steht auf ``\n``, und
+                # hochgeladen wird der Arbeitsbaum — siehe
+                # `stamp_assets.stamp_page`.
+                path.write_text(payload, encoding="utf-8", newline="")
         except OSError as error:
             last = error
             continue

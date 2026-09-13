@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any, Final
 from urllib.parse import unquote
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
 from app.core.knowledge import licences
 from tools.make_sbom import ARTIFACT_SBOM_NAME

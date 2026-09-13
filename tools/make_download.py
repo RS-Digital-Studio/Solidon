@@ -592,7 +592,15 @@ def write_size_span(text: str, packages: list[Package], page: str) -> str:
     # Prüfsumme erhoben. Hier stand ``package.path.stat().st_size``, und
     # ``Package`` hat kein ``path``: Der Lauf brach beim Schreiben der Seiten
     # ab, nachdem die Dateien bereits kopiert waren.
-    sizes = sorted(package.bytes_ // 1_000_000 for package in packages)
+    #
+    # **Gerundet wie im Kasten, nicht abgerundet.** Derselbe Lauf schrieb
+    # beides, und beide Male anders: ``Package.size`` rundet (``:.0f``), die
+    # Spanne hier schnitt ab. Auf der 0.4.0-Seite stand deshalb „zwischen 167
+    # und 283 MB", während der Kasten darüber „Windows 10/11 — 168 MB" und
+    # „AppImage — 284 MB" anbot — das größte angebotene Paket lag **außerhalb**
+    # der genannten Spanne. Zwei Rundungen für eine Zahl sind ein Widerspruch
+    # auf derselben Seite, gleich wie klein er ist.
+    sizes = sorted(round(package.bytes_ / 1_000_000) for package in packages)
     if not sizes:
         return text
     smallest, largest = str(sizes[0]), str(sizes[-1])
@@ -628,7 +636,9 @@ def write_pages(packages: list[Package]) -> None:
         if count != 1:
             raise SystemExit(f"{page}: der Dateikasten fehlt oder sieht anders aus.")
         updated = write_size_span(updated, packages, page)
-        p.write_text(updated, encoding="utf-8")
+        # ``newline=""``: der ganze Baum steht auf ``\n``, und hochgeladen wird
+        # der Arbeitsbaum — siehe `stamp_assets.stamp_page`.
+        p.write_text(updated, encoding="utf-8", newline="")
         print(f"  {page}")
 
 
@@ -979,7 +989,9 @@ def write_version(packages: list[Package]) -> None:
     # wäre schlimmer als weglassen — eine Datei mit einer Unterschrift, die
     # nicht trägt, sieht unterschrieben aus.
     data.pop("signature", None)
-    VERSION_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    VERSION_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline=""
+    )
     print(
         "  version.json: ohne Unterschrift geschrieben — vor dem Hochladen:\n"
         "    python tools/sign_version.py --private <datei>"

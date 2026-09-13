@@ -200,7 +200,16 @@ def stamp_page(page: Path, *, write: bool) -> tuple[int, int, list[str]]:
     stamped = LINK.sub(replace, text)
     stamped = SRCSET.sub(replace_srcset, stamped)
     if write and stamped != text:
-        page.write_text(stamped, encoding="utf-8")
+        # **Geschrieben wird mit ``\n``, wie im ganzen Baum** (`.gitattributes`:
+        # ``eol=lf``). Ohne ``newline=""`` öffnet ``write_text`` im Textmodus
+        # und macht unter Windows aus jedem Umbruch ein ``\r\n``: Die Seite
+        # wechselt beim Stempeln ihre Zeilenform, obwohl sich acht Zeichen
+        # ändern sollten. Hochgeladen wird der Arbeitsbaum und nicht der
+        # Git-Blob — der Server bekäme eine Seite in einer anderen Zeilenform
+        # als ihre 42 Nachbarn, und der Bytevergleich des nächsten Abgleichs
+        # meldete sie als abweichend. Im Diff sieht man nichts davon: Git
+        # glättet beim Einchecken still zurück.
+        page.write_text(stamped, encoding="utf-8", newline="")
     return fresh, same, missing
 
 

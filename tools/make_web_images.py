@@ -565,6 +565,9 @@ def take_transformation() -> tuple[Path, Path]:
                 down=25.0,
             ),
             encoding="utf-8",
+            # ``newline=""``: der ganze Baum steht auf ``\n``, und hochgeladen
+            # wird der Arbeitsbaum — siehe `stamp_assets.stamp_page`.
+            newline="",
         )
         written.append(target)
     return written[0], written[1]

@@ -102,7 +102,11 @@ def sign_file(seed: bytes) -> int:
         )
     data = json.loads(VERSION_FILE.read_text(encoding="utf-8"))
     data[SIGNATURE_FIELD] = sign(seed, signed_payload(data)).hex()
-    VERSION_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # ``newline=""``: der ganze Baum steht auf ``\n``, und hochgeladen wird der
+    # Arbeitsbaum — siehe `stamp_assets.stamp_page`.
+    VERSION_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline=""
+    )
     if not signature_ok(data):
         raise SystemExit("Die eben geschriebene Unterschrift trägt nicht — nichts hochladen.")
     print(f"  {VERSION_FILE.name}: unterschrieben, Version {data.get('version')}")

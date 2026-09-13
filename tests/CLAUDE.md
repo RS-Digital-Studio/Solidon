@@ -12,6 +12,17 @@ zurückgibt oder an einen Helfer übergibt. Nur die Verbindung des entsprechende
 Parameters zählt; ein verbundenes anderes Signal im Helfer deckt den Arbeiter
 nicht ab. Kleine positive und negative Quelltextfälle prüfen diese Grenze.
 
+Die Prüfserver aus `test_activation_server.py` und `test_public_php_security.py`
+beziehen ihre Befehlsbasis aus `php_probe.php_command()`.
+Benötigte Erweiterungen werden je Test benannt, bei vorhandenen lokalen
+Bibliotheken ausschließlich im Prüfprozess geladen und vor dem Serverstart
+tatsächlich geprüft. Die globale `php.ini` bleibt unverändert; eine fehlende
+Erweiterung behält die gemeinsame Skip-/CI-Fehlerregel.
+`test_website.py` unterscheidet freigegebene Außenlinks von eingebundenen
+Ressourcen und prüft diese Grenze mit Gegenfällen einschließlich Vorladen und
+Vorabverbindungen. Der Tageszähler der Aktivierung zählt neue Geräteplätze;
+abgewiesene und wiederholte Anfragen bleiben außerhalb dieses Zählers.
+
 `test_filament_inventory.py` prüft Migration und atomare Mehrspulenbuchungen
 einschließlich echter Prozesskonkurrenz. `test_filament_usage.py` verbindet
 Projektbindung, Ausgabeumfang und werkzeugweise Mengen. Die getrennten

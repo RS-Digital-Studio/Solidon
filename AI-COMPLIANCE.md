@@ -89,8 +89,9 @@ der zum ausgewählten Backend gehörende Abschnitt zugänglich angezeigt wurden.
 
 Gespeichert werden ausschließlich Version und Zeitpunkt der angezeigten
 Offenlegung, der gewählte Backend-Typ und die normalisierte Zieladresse.
-Der Erzeuger führt seinen eigenen Nachweis samt Datenumfangskennung; ein
-Chatnachweis ersetzt ihn nicht. Eine erneute Anzeige ist nötig,
+Der Erzeuger ist nicht von dieser Chatabnahme erfasst. Er führt seinen eigenen
+Nachweis samt Datenumfangskennung; ein Chatnachweis ersetzt ihn nicht.
+Eine erneute Anzeige ist nötig,
 wenn sich Datenarten, Empfänger, Zweck, Anbieterrolle oder Textversion ändern.
 Der Zustand ist kein Konto, wird nicht zu Telemetrie und reist nicht in einer
 Projektdatei. Ein Zurücksetzen in den Einstellungen ist möglich.

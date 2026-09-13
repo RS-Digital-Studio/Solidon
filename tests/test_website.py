@@ -100,6 +100,12 @@ GOFUNDME_DONATE_URL = "https://gofund.me/08c5f0edb"
 PAYPAL_PRIVACY_URL = "https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE"
 GOFUNDME_PRIVACY_URL = "https://www.gofundme.com/c/privacy"
 
+#: Der Sicherheitsmeldeweg verlinkt die zuständige Plattform als gewöhnlichen
+#: Anker. Auch diese freigegebene Adresse darf keine Ressource einbinden.
+ENISA_REPORTING_URL = (
+    "https://www.enisa.europa.eu/topics/product-security/single-reporting-platform-srp"
+)
+
 #: Die Registergröße im Fließtext: eine Zahl, dahinter das Wort für Operation.
 #: Der Stamm trägt durch alle sechs Sprachen — Operationen, operations,
 #: operaciones, opérations, operazioni, operações. Eine siebte Sprache ist
@@ -131,7 +137,8 @@ def test_activation_privacy_names_both_abuse_counters_without_claiming_plain_ip_
     assert "Tageszähler" in page
     assert "HMAC-Pseudonym" in page
     assert "höchstens 15 Minuten" in page
-    assert "gültig signierten Aktivierungsversuche" in privacy
+    assert "Zahl der neu vergebenen Geräteplätze" in privacy
+    assert "abgewiesene oder wiederholte Anfragen werden dabei nicht mitgezählt" in privacy
     assert "HMAC-Pseudonym der IP-Adresse" in privacy
     assert "höchstens 15 Minuten" in privacy
 
@@ -545,20 +552,90 @@ def test_the_page_loads_nothing_from_outside(page: str) -> None:
         )
         assert allowed, f"{page} bindet ein Skript ein, das nicht von hier kommt: {tag}"
     assert 'src="http' not in text
+    external_anchors = set(re.findall(r'<a\b[^>]*\bhref="([^"]+)"', text))
+    allowed_anchors = {
+        PAYPAL_DONATE_URL,
+        PAYPAL_PRIVACY_URL,
+        GOFUNDME_DONATE_URL,
+        GOFUNDME_PRIVACY_URL,
+    }
+    if Path(page).name == "security.html":
+        allowed_anchors.add(ENISA_REPORTING_URL)
     external_hrefs = [
         reference
         for reference in LINK.findall(text)
-        if reference.startswith("http") and not reference.startswith("https://solidon3d.de")
+        if reference.startswith("http")
+        and reference != "https://solidon3d.de"
+        and not reference.startswith("https://solidon3d.de/")
     ]
     assert all(
-        reference
-        in {PAYPAL_DONATE_URL, PAYPAL_PRIVACY_URL, GOFUNDME_DONATE_URL, GOFUNDME_PRIVACY_URL}
+        reference in allowed_anchors and reference in external_anchors
         for reference in external_hrefs
     ), f"{page} verweist auf eine nicht freigegebene Außenadresse: {external_hrefs}"
+    for tag, attributes in re.findall(r"<([\w-]+)\b([^>]*)>", text):
+        if tag.lower() == "a":
+            continue
+        assert not any(
+            reference.startswith(("http:", "https:", "//"))
+            and reference != "https://solidon3d.de"
+            and not reference.startswith("https://solidon3d.de/")
+            for reference in LINK.findall(attributes)
+        ), f"{page} bindet eine fremde Ressource ein: {tag} {attributes}"
     # Protokollrelativ, also ohne ``http`` im Text — die beiden Zeilen darüber
     # sehen davon nichts, und ein Zählpixel schreibt sich genau so.
     assert 'src="//' not in text, f"{page} lädt protokollrelativ von außen"
     assert 'href="//' not in text, f"{page} verweist protokollrelativ nach außen"
+
+
+@pytest.mark.parametrize(
+    "page, markup, allowed",
+    [
+        ("index.html", f'<a href="{GOFUNDME_DONATE_URL}">GoFundMe</a>', True),
+        ("index.html", f'<a href="{GOFUNDME_PRIVACY_URL}">Datenschutz</a>', True),
+        ("index.html", f'<script src="{GOFUNDME_DONATE_URL}"></script>', False),
+        (
+            "index.html",
+            f'<a href="{GOFUNDME_DONATE_URL}">GoFundMe</a>'
+            f'<link rel="prefetch" href="{GOFUNDME_DONATE_URL}">',
+            False,
+        ),
+        (
+            "index.html",
+            f'<a href="{GOFUNDME_PRIVACY_URL}">Datenschutz</a>'
+            f'<link rel="preconnect" href="{GOFUNDME_PRIVACY_URL}">',
+            False,
+        ),
+        ("security.html", f'<a href="{ENISA_REPORTING_URL}">ENISA</a>', True),
+        ("index.html", f'<a href="{ENISA_REPORTING_URL}">ENISA</a>', False),
+        ("security.html", f'<img src="{ENISA_REPORTING_URL}">', False),
+        ("security.html", f'<script src="{ENISA_REPORTING_URL}"></script>', False),
+        (
+            "security.html",
+            f'<a href="{ENISA_REPORTING_URL}">ENISA</a>'
+            f'<link rel="preconnect" href="{ENISA_REPORTING_URL}">',
+            False,
+        ),
+        (
+            "index.html",
+            f'<a href="{PAYPAL_PRIVACY_URL}">Datenschutz</a>'
+            f'<link rel="prefetch" href="{PAYPAL_PRIVACY_URL}">',
+            False,
+        ),
+        ("security.html", '<a href="https://solidon3d.de.fremd.invalid/">Fremd</a>', False),
+        ("security.html", '<img src="//fremd.invalid/pixel">', False),
+    ],
+)
+def test_allowed_external_links_never_allow_external_resources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, page: str, markup: str, allowed: bool
+) -> None:
+    """Eine Linkfreigabe darf denselben Server nicht im Hintergrund kontaktieren."""
+    monkeypatch.setattr(__name__ + ".WEBSITE", tmp_path)
+    (tmp_path / page).write_text(markup, encoding="utf-8")
+    if allowed:
+        test_the_page_loads_nothing_from_outside(page)
+    else:
+        with pytest.raises(AssertionError):
+            test_the_page_loads_nothing_from_outside(page)
 
 
 def test_no_self_arranging_grid_stops_shrinking_above_phone_width() -> None:
@@ -1415,8 +1492,11 @@ def test_the_technical_requirements_name_the_sizes_the_packages_have(page: str) 
     if not sizes:
         pytest.skip("version.json führt noch keine Pakete — vor dem Release ist das richtig")
 
-    # Geteilt wie tools/make_download.py es tut: durch 1 000 000, nicht 1024².
-    kleinstes, groesstes = min(sizes) // 1_000_000, max(sizes) // 1_000_000
+    # Gerechnet wie tools/make_download.py es tut: durch 1 000 000, nicht
+    # 1024², und **gerundet** wie der Download-Kasten daneben. Bis zum
+    # 13.09.2026 schnitt die Spanne ab, während der Kasten rundete: „zwischen
+    # 167 und 283 MB" über einem Kasten mit „168 MB" und „284 MB".
+    kleinstes, groesstes = round(min(sizes) / 1_000_000), round(max(sizes) / 1_000_000)
     text = (WEBSITE / page).read_text(encoding="utf-8")
 
     zeile = next((z for z in text.splitlines() if "750" in z and "<td>" in z), None)
@@ -1910,6 +1990,73 @@ def test_srcset_candidates_carry_individual_asset_stamps(tmp_path: Path) -> None
     assert f"dark.svg?v={stamp.stamp_of(dark)} 1x" in text
     assert f"dark.svg?v={stamp.stamp_of(dark)} 2x" in text
     assert f"light.svg?v={stamp.stamp_of(light)}" in text
+
+
+#: Was unter ``website/`` Text ist und Zeile für Zeile hochgeladen wird. Bilder,
+#: Filme und Schriften stehen nicht dabei — sie werden byteweise geschrieben.
+UPLOADED_TEXT_SUFFIXES = frozenset(
+    {".html", ".css", ".js", ".json", ".txt", ".xml", ".svg", ".php", ".htaccess"}
+)
+
+
+def _uploaded_text_files() -> list[Path]:
+    """Jede Textdatei des öffentlichen Baums, ohne die lokalen Projektquellen."""
+    return [
+        path
+        for path in sorted(WEBSITE.rglob("*"))
+        if path.is_file()
+        and "teile" not in path.relative_to(WEBSITE).parts
+        and (path.suffix.lower() in UPLOADED_TEXT_SUFFIXES or path.name == ".htaccess")
+    ]
+
+
+def test_a_generator_run_does_not_change_the_line_form_of_a_page(tmp_path: Path) -> None:
+    """Stempeln ändert acht Zeichen und nicht die Zeilenform der ganzen Datei.
+
+    ``Path.write_text`` öffnet ohne ``newline=""`` im Textmodus, und der macht
+    unter Windows aus jedem ``\\n`` ein ``\\r\\n``. Gemessen am 13.09.2026:
+    Ein einziger Lauf von ``tools/stamp_assets.py`` — eine geänderte Adresse in
+    ``offline-aktivierung.html`` — schrieb die Seite mit 113 CRLF zurück,
+    während die 42 Nachbarseiten auf ``\\n`` standen.
+
+    Im Diff sieht man davon nichts: ``.gitattributes`` trägt ``eol=lf``, Git
+    glättet beim Einchecken still zurück und meldet nur eine Warnung.
+    Hochgeladen wird aber der **Arbeitsbaum** — die Seite ginge in einer
+    anderen Zeilenform auf den Server als ihre Nachbarn, und der Bytevergleich
+    des nächsten Abgleichs meldete sie als offen, obwohl sie erledigt ist.
+    """
+    import tools.stamp_assets as stamp
+
+    asset = tmp_path / "style.css"
+    asset.write_text("body { color: red }", encoding="utf-8")
+    page = tmp_path / "seite.html"
+    page.write_bytes(b'<html>\n<head>\n<link href="style.css">\n</head>\n</html>\n')
+
+    fresh, _same, missing = stamp.stamp_page(page, write=True)
+
+    assert (fresh, missing) == (1, [])
+    raw = page.read_bytes()
+    assert f'href="style.css?v={stamp.stamp_of(asset)}"'.encode() in raw
+    assert b"\r\n" not in raw, "Der Stempellauf hat die Zeilenform der Seite gewechselt"
+
+
+def test_the_uploaded_tree_carries_one_line_form() -> None:
+    """Kein Wagenrücklauf im öffentlichen Baum — das ist die Gegenprobe am Ort.
+
+    Der Test daneben hält das Werkzeug fest, dieser das Ergebnis: Was hier
+    liegt, geht so auf den Server. Wird er rot, ist ein Erzeuger unter
+    ``tools/`` ohne ``newline=""`` gelaufen; ``git diff`` zeigt dann nichts
+    davon, weil Git die Datei beim Einchecken glättet.
+    """
+    mixed = [
+        f"{path.relative_to(WEBSITE).as_posix()} ({path.read_bytes().count(b'\r\n')} CRLF)"
+        for path in _uploaded_text_files()
+        if b"\r\n" in path.read_bytes()
+    ]
+    assert not mixed, (
+        "Diese Dateien stehen auf CRLF statt auf \\n — ein Erzeugerlauf ohne "
+        'newline="" hat sie umgeschrieben:\n' + "\n".join(mixed[:12])
+    )
 
 
 #: Tags, die ohne schließendes Gegenstück stehen dürfen (HTML-Leerelemente).

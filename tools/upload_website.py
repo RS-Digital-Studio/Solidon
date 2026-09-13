@@ -25,8 +25,10 @@ import argparse
 import ftplib
 import ipaddress
 import json
+import os
 import re
 import ssl
+import stat
 import subprocess
 import sys
 import urllib.error
@@ -56,6 +58,9 @@ from app.core.json_boundary import (  # noqa: E402 - Repositorypfad gilt erst ab
 )
 from app.core.log import redact_external  # noqa: E402 - Repositorypfad gilt erst ab hier
 from tools import asset_rights  # noqa: E402 - Repositorypfad gilt erst ab hier
+from tools.make_stats_access import (  # noqa: E402 - Repositorypfad gilt erst ab hier
+    write_private,
+)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -160,6 +165,35 @@ def _public_address(url: str) -> str:
     )
 
 
+def require_private_access_file() -> None:
+    """Der FTPS-Zugang trägt ein Passwort — also dieselben Rechte wie jedes Geheimnis.
+
+    ``make_stats_access.py`` und ``setup_activation_server.py`` schreiben ihre
+    privaten Dateien seit dem 12.09.2026 ausschließlich mit 0600 in einem
+    geschlossenen Ordner. Diese hier ist der Zwilling, der stehen geblieben
+    ist: ``write_text`` legte sie mit der Vorgabemaske an, unter POSIX also
+    0644, und danach trug Robert das FTPS-Passwort ein. Auf einem Rechner mit
+    mehreren Konten liest es dort jeder.
+
+    Kein Verweis und keine zweite Verknüpfung: Wer eine davon unterschieben
+    kann, bekommt das Passwort, ohne die Datei je zu besitzen.
+    """
+    if ACCESS_FILE.is_symlink():
+        raise SystemExit(
+            f"{ACCESS_FILE.name} ist ein Verweis. Den Verweis entfernen und den Zugang als "
+            "gewöhnliche Datei anlegen (tools/upload_website.py --vorlage)."
+        )
+    if os.name == "nt":
+        return
+    mode = ACCESS_FILE.stat()
+    if stat.S_IMODE(mode.st_mode) & 0o077 or mode.st_nlink != 1:
+        raise SystemExit(
+            f"{ACCESS_FILE.name} trägt das FTPS-Passwort und ist für andere Konten lesbar.\n"
+            f"  chmod 600 {ACCESS_FILE}\n"
+            "  Danach erneut starten; eine zweite Verknüpfung vorher entfernen."
+        )
+
+
 def read_access() -> dict[str, Any]:
     """Der Zugang, oder ein Satz, der sagt, wie er dorthin kommt."""
     if not ACCESS_FILE.is_file():
@@ -169,6 +203,7 @@ def read_access() -> dict[str, Any]:
             "danach das Passwort eintragen.\n"
             "  Sie ist in .gitignore und bleibt auf dieser Maschine."
         )
+    require_private_access_file()
     access = json.loads(ACCESS_FILE.read_text(encoding="utf-8"))
     missing = [key for key in TEMPLATE if not str(access.get(key, "")).strip()]
     if missing:
@@ -180,7 +215,10 @@ def write_template() -> int:
     if ACCESS_FILE.exists():
         print(f"{ACCESS_FILE.name} gibt es schon — sie wird nicht überschrieben.")
         return 1
-    ACCESS_FILE.write_text(json.dumps(TEMPLATE, ensure_ascii=False, indent=2) + "\n", "utf-8")
+    # Derselbe exklusive 0600-Schreiber wie für Statistik- und
+    # Aktivierungsgeheimnisse: Die Vorlage bekommt gleich die Rechte, die sie
+    # braucht, sobald das Passwort darin steht — und nicht erst danach.
+    write_private(ACCESS_FILE, json.dumps(TEMPLATE, ensure_ascii=False, indent=2) + "\n")
     print(f"{ACCESS_FILE.name} angelegt. Jetzt das Passwort eintragen.")
     print("Sie steht in .gitignore und wird nie mitcommittet.")
     return 0
@@ -229,6 +267,14 @@ def files_since(reference: str) -> list[Path]:
 
 #: Endungen, die nie auf den Webserver gehören — Zugangswerte, Datenbanken und
 #: die Zwischendateien der Freischaltung.
+#:
+#: **``.jsonl`` und ``.lock`` stehen dabei für den Zählspeicher.** Seine
+#: Monatsdateien tragen pseudonyme Nutzung; ``count.php`` legt sie heute
+#: ausschließlich neben ``httpdocs`` an und weist einen Ort im Dokumentenstamm
+#: ab. Das schützt den **neuen** Zustand — am Abend des 02.09.2026 lagen unter
+#: ``website/api/.stats`` vier echte Zählzeilen aus sieben Minuten, entstanden
+#: unter einer älteren Fassung (ROADMAP). Ein liegen gebliebener Ordner dieser
+#: Art wäre vom Abgleich mit hochgeladen worden.
 PRIVATE_ENDINGS: Final = (
     ".seed",
     ".key",
@@ -240,6 +286,8 @@ PRIVATE_ENDINGS: Final = (
     ".token",
     ".solidon-request",
     ".solidon-activation",
+    ".jsonl",
+    ".lock",
 )
 
 
@@ -288,8 +336,16 @@ def allowed_by_name(path: Path) -> bool:
     Tauschstelle.
     """
     relative = path.relative_to(LOCAL_ROOT)
+    # **Kein Punktordner.** Der Zählspeicher älterer Fassungen hieß
+    # ``api/.stats``, und darin liegen ``salt.json``,
+    # ``anmeldeversuche.json`` und ``rate.json`` — an der Endung nicht von
+    # ``version.json`` zu unterscheiden. Die Datei ``.htaccess`` steht an der
+    # obersten Ebene und bleibt erlaubt; gesperrt wird nur ein **Ordner**,
+    # dessen Name mit einem Punkt beginnt.
+    hidden_folder = any(part.startswith(".") for part in relative.parts[:-1])
     return (
         relative.parts[0] != "teile"
+        and not hidden_folder
         and relative.as_posix() not in RETIRED_SHARED_PATHS
         and path.suffix != ".md"
         and not path.name.lower().endswith(PRIVATE_ENDINGS)

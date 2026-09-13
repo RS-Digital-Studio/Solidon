@@ -388,14 +388,18 @@ def main() -> int:
             if name != target_name
         )
         target = WEBSITE / target_name
-        target.write_text(page(title, body_html(markdown, contract), others), encoding="utf-8")
+        # ``newline=""``: der ganze Baum steht auf ``\n``, und hochgeladen wird
+        # der Arbeitsbaum — siehe `stamp_assets.stamp_page`.
+        target.write_text(
+            page(title, body_html(markdown, contract), others), encoding="utf-8", newline=""
+        )
         marker = "  (Entwurf)" if draft_banner(markdown) else ""
         print(f"  {source_name} → website/{target_name}{marker}")
 
     # Der Installer zeigt den Lizenzvertrag, nicht die Urheberrechtsnotiz.
     licence_text = ROOT / "packaging" / "eula.txt"
     licence_text.write_text(
-        to_text((ROOT / "EULA.md").read_text(encoding="utf-8")), encoding="utf-8"
+        to_text((ROOT / "EULA.md").read_text(encoding="utf-8")), encoding="utf-8", newline=""
     )
     print(f"  EULA.md → packaging/{licence_text.name}")
     return 0

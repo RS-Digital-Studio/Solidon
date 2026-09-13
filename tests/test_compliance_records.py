@@ -51,7 +51,14 @@ RECORDS: dict[str, tuple[str, ...]] = {
         "Sie interagieren mit einem KI-System",
         "Interaktion mit einem KI-System",
         "vor dem ersten Chat-Aufruf",
-        "nicht von dieser Chatabnahme erfasst",
+        # Weg 3 bleibt eine **eigene** Modellgrenze, und genau das muss in der
+        # Akte stehen. Der Satz dafür hieß bis zum 12.09.2026 „nicht von
+        # dieser Chatabnahme erfasst"; seit a1113476 nennt die Akte stattdessen
+        # den erbrachten Teilnachweis. Die Zusage ist dieselbe, der Wortlaut
+        # nicht — und die Liste hier stand noch auf dem alten, was sie seither
+        # rot machte, ohne dass Pflichtinhalt fehlte.
+        "hat einen eigenen technischen",
+        "keine Gesamtfreigabe der Akte",
         "F-U6-4",
         "Anthropic",
         "Ollama",

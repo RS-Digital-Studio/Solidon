@@ -218,11 +218,11 @@ def write_faq() -> int:
         markup = faq_markup(updated, page_url(page))
         if not markup:
             if updated != text:
-                page.write_text(updated, encoding="utf-8")
+                page.write_text(updated, encoding="utf-8", newline="")
             continue
         updated = updated.replace("\n</head>", f"{markup}\n</head>", 1)
         if updated != text:
-            page.write_text(updated, encoding="utf-8")
+            page.write_text(updated, encoding="utf-8", newline="")
             written += 1
     return written
 
@@ -259,9 +259,12 @@ def llms() -> str:
 
 
 def main() -> int:
-    (WEBSITE / "robots.txt").write_text(robots(), encoding="utf-8")
-    (WEBSITE / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
-    (WEBSITE / "llms.txt").write_text(llms(), encoding="utf-8")
+    # ``newline=""`` an jeder Schreibstelle: Der ganze Baum steht auf ``\n``
+    # (`.gitattributes`), und hochgeladen wird der Arbeitsbaum. Ohne die
+    # Angabe schriebe Windows ``\r\n`` — siehe `stamp_assets.stamp_page`.
+    (WEBSITE / "robots.txt").write_text(robots(), encoding="utf-8", newline="")
+    (WEBSITE / "sitemap.xml").write_text(sitemap(), encoding="utf-8", newline="")
+    (WEBSITE / "llms.txt").write_text(llms(), encoding="utf-8", newline="")
     count = write_faq()
     listed = len(listed_pages())
     print(f"robots.txt, sitemap.xml ({listed} Seiten) und llms.txt geschrieben.")

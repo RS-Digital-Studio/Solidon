@@ -8,6 +8,9 @@ Unterstützungsknopf öffnet einen lokalen Dialog mit PayPal und GoFundMe zur
 Auswahl. Erst die gewöhnlichen Anbieterlinks darin öffnen die jeweilige externe
 Seite. Die Datenschutzerklärungen beider Anbieter sind direkt verlinkt; kein
 Anbieterskript, keine Schrift und kein Zählpixel sind in die Seite eingebunden.
+Die Sicherheitsseiten verlinken ebenso die ENISA-Meldeplattform ausschließlich
+als gewöhnlichen Anker. Die Freigabe einer Außenadresse erlaubt weder
+Ressourcen von dort noch Vorabverbindungen oder das Vorladen der Zielseite.
 
 Der Hinweis unmittelbar am Knopf hält die rechtliche Grenze fest: keine
 Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf und

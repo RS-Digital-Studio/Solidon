@@ -410,7 +410,9 @@ def write_pages() -> tuple[Path, ...]:
     for language in available_languages():
         target = path_for(language)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(render_page(language), encoding="utf-8")
+        # ``newline=""``: der ganze Baum steht auf ``\n``, und hochgeladen wird
+        # der Arbeitsbaum — siehe `stamp_assets.stamp_page`.
+        target.write_text(render_page(language), encoding="utf-8", newline="")
         written.append(target)
     return tuple(written)
 

@@ -126,6 +126,16 @@ Katalogbausteine, Text statt Sprecher und selbst erzeugtes Musikbett;
 `longform_video_en.json` und englische Projektmaße samt Formelverweisen.
 Die `.timeline.json` neben jedem MP4 enthält die tatsächlichen Einblendungszeiten
 für die YouTube-Kapitel) ·
+`make_workshop_videos.py` (STL-Tutorials über tatsächlich geöffnete Dateidialoge,
+Handlungen und Eingabefelder; ein Prozess je Thema und Sprache, isolierte
+Nutzerverzeichnisse vor dem App-Import. `--capture-only` bewahrt die Aufnahme,
+`--encode-only` kodiert einen vollständigen Beleg. Geometriebericht, Projekt,
+Schnittplan und saubere Viewportbilder liegen beim Film. Ein bereits über
+`exec()` geöffneter Kundendialog behält beim Filmen seine Modalität und
+Fensterflags; die Aufnahme darf ihn nur ausrichten) ·
+`make_workshop_shorts.py` (schneidet daraus über `short_shots.json` die
+Hochformatfassung samt Titelbild; übernimmt die belegten Zustände, prüft
+Textüberlauf und den fertigen MP4-Container) ·
 `make_showpiece.py` (das Schaustück der Website — ein
 Teil, das in einem Bild beantwortet, warum man das Programm haben will;
 gebaut über die Operations-API wie von einem Nutzer) ·
@@ -219,6 +229,24 @@ Projektquellordner vollständig aus; Bausteindateien werden ausschließlich
 lokal ausgetauscht und nie über die Website verteilt) · `make_stats_access.py` (schreibt den
 privaten Passwort-Hash ausschließlich nach `appdata/stats-access.php`, nie in
 den öffentlichen Website-Baum)
+
+Gesperrt bleibt außerdem jeder Ordner unter `website/`, dessen Name mit einem
+Punkt beginnt, sowie `.jsonl` und `.lock`: Dort lag der Zählspeicher älterer
+Fassungen, und seine `salt.json` ist an der Endung nicht von `version.json` zu
+unterscheiden. `.webserver.json` trägt das FTPS-Passwort und wird mit demselben
+exklusiven 0600-Schreiber angelegt wie die übrigen Geheimnisse; ein zu weit
+geöffneter oder verknüpfter Bestand hält den Lauf auf POSIX an, statt ihn
+stillschweigend zu benutzen.
+
+**Wer in den Website-Baum schreibt, schreibt mit `newline=""`.** Der Baum steht
+auf `\n` (`.gitattributes`: `eol=lf`), hochgeladen wird der Arbeitsbaum, und
+`Path.write_text` ohne diese Angabe macht unter Windows aus jedem Umbruch ein
+`\r\n`. Im Diff sieht man davon nichts — Git glättet beim Einchecken zurück —,
+aber der Server bekommt die Seite in einer anderen Zeilenform als ihre
+Nachbarn, und der nächste Bytevergleich meldet sie als offen. Betroffen sind
+`stamp_assets`, `make_seo`, `make_legal`, `make_changelog`, `make_download`,
+`make_manual`, `make_web_images` und `sign_version`;
+`tests/test_website.py` hält beides fest, das Werkzeug und den Baum.
 
 **Übersetzen** `build_slice_core.py` (Ebenenschnitt und Konturverkettung der
 Schichtanalyse)
