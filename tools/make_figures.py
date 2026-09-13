@@ -635,8 +635,15 @@ def take_all(app: QApplication, language: str) -> None:
             print_dialog.printer_choice.setItemText(
                 current_printer, SAMPLE_PRINTER.get(language, SAMPLE_PRINTER["de"])
             )
-        # Die Profilsuche läuft im Arbeiter; ein Bild mit „wird
-        # durchgesehen …" zeigte einen Moment, keinen Zustand.
+        # Die Slicersuche läuft seit dem 13.09.2026 im Arbeiter, und die
+        # Profilsuche folgt ihr; ein Bild mit „Die Slicer werden gesucht …"
+        # oder „wird durchgesehen …" zeigte einen Moment, keinen Zustand. Und
+        # wer sie nicht abwartet, beendet den Prozess mit laufendem Thread:
+        # ``release`` wartet zwei Sekunden, die kalte Suche braucht auf dieser
+        # Maschine elf bis dreizehn — gemessen am 13.09.2026 als Exit 127 nach
+        # neun fertigen Bildern.
+        if not print_dialog.wait_for_slicers():
+            raise SystemExit("Die Slicersuche des Druckdialogs kam nicht zurück.")
         for _ in range(100):
             if not print_dialog._profiles_pending:
                 break
