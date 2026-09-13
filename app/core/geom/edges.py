@@ -33,13 +33,20 @@ from typing import Any, Literal, Protocol
 
 import numpy as np
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHANGE_SELECTION,
+    CORRECT_INPUT,
+    REPAIR_AND_RETRY,
+    GeometryError,
+    ValidationError,
+)
 from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
-from app.core.types import Feature, Mesh, Quality, Vec3, is_a_cavity
+from app.core.types import CancelToken, Feature, Mesh, Quality, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG, weld_tolerance
 from app.i18n import _
 
@@ -498,6 +505,7 @@ def rounding_tool(
     min_steps: int = 0,
     extend_ends: bool = True,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> MeshData:
     """Der Körper, der aus einer Kante eine Rundung oder eine Fase macht.
 
@@ -561,12 +569,21 @@ def rounding_tool(
         if wedge is not None:
             pieces.append(wedge)
     if not pieces:
+        # **Und der Satz spricht nicht vom Maß.** Bis zum 13.09.2026 stand hier
+        # „Das Maß ist für diese Kante zu groß — wählen Sie ein kleineres", und
+        # das war in jedem Fall falsch, in dem er erschien: :func:`_wedge`
+        # scheitert am **Winkel** zwischen den zwei Flächen und nie an
+        # ``radius``. Gemessen am ``generated_figure`` des Korpus bekam
+        # derselbe Körper denselben Satz bei R = 0,001 wie bei R = 2,0. Ein
+        # kleinerer Radius versucht dasselbe noch einmal, und Regel 17 verlangt
+        # eine Handlung, die weiterführt.
         raise GeometryError(
             detail=_(
-                "Das Maß ist für diese Kante zu groß — sie hat keine Flächen, auf "
-                "denen die Bearbeitung Platz findet. Wählen Sie ein kleineres."
+                "An dieser Kante stoßen keine zwei Flächen unter einem Winkel "
+                "zusammen — das Netz ist dort gefaltet oder eben. Reparieren Sie "
+                "das Modell, oder wählen Sie eine andere Kante."
             ),
-            suggestions=(CORRECT_INPUT, CANCEL),
+            suggestions=(REPAIR_AND_RETRY, CHANGE_SELECTION, CANCEL),
             values={"radius": radius},
         )
     if len(pieces) == 1:
@@ -577,7 +594,7 @@ def rounding_tool(
     # Häute ohne Dicke stehen. Der Körper war danach wasserdicht und trug sein
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
-    return boolean("union", pieces, quality=quality).mesh
+    return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
 
 
 def _wedge(
@@ -783,6 +800,7 @@ def round_edges(
     keys: Sequence[str] = (),
     *,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Verrundet die gewählten Kanten eines Netzes — dieselbe Handlung wie
     ``brep.edit.fillet``, an einem Körper, der keine Topologie hat.
@@ -793,7 +811,9 @@ def round_edges(
     :data:`~app.core.units.MAX_FACET_SAG` von der Rundung abweicht, also
     genauso weit wie die Flächen, die der exakte Kern ausgibt.
     """
-    return _worked_edges(mesh, radius, choice, keys, rounded=True, quality=quality)
+    return _worked_edges(
+        mesh, radius, choice, keys, rounded=True, quality=quality, cancelled=cancelled
+    )
 
 
 def bevel_edges(
@@ -803,6 +823,7 @@ def bevel_edges(
     keys: Sequence[str] = (),
     *,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Fast die gewählten Kanten — dieselbe Handlung wie ``brep.edit.chamfer``.
 
@@ -810,7 +831,9 @@ def bevel_edges(
     exakten Kern. Am Netz ist die Fase der genauere der beiden Fälle: Sie ist
     eine Ebene, und eine Ebene hat ein Netz exakt — hier weicht nichts ab.
     """
-    return _worked_edges(mesh, distance, choice, keys, rounded=False, quality=quality)
+    return _worked_edges(
+        mesh, distance, choice, keys, rounded=False, quality=quality, cancelled=cancelled
+    )
 
 
 def _mixed_corner_region(size: float, *, rounded: bool) -> tuple[MeshData, MeshData]:
@@ -1005,8 +1028,53 @@ def _hull(points: np.ndarray) -> MeshData:
     return MeshData(trimesh.convex.convex_hull(points))
 
 
-def _corner_ball(radius: float) -> np.ndarray:
-    """Kugelknoten mit begrenzter Facettenabweichung auch im Dreiecksinneren."""
+def _corner_hull(points: np.ndarray, vertex: np.ndarray) -> MeshData | None:
+    """Die Eckhülle an ihrem Knoten — ``None``, wo die Punkte keinen Körper ergeben.
+
+    **Vier Punkte braucht ein Körper mindestens**, und die Rechnung darüber gibt
+    das nicht immer her: :func:`_chamfer_contacts` nimmt nur Flächen an, die
+    **genau zwei** der gewählten Kanten berühren, und :func:`_halfspace_vertices`
+    nur beschränkte Ecken.
+
+    Gemessen am 13.09.2026 an ``plate_countersunk.stl``, nur verschweißt und
+    nicht über ``ingest.normalise`` eingelesen: An acht Knoten der Senkungen
+    enden drei Züge, an denen **vier** verschiedene Flächen liegen — zwei
+    davon berühren nur eine Kante, also blieben zwei Kontaktpunkte übrig. Mit
+    dem Knoten sind das drei Punkte, und Qhull warf ``QH6214 … not enough
+    points(3) to construct initial simplex`` aus :func:`_hull` heraus. Die
+    Auswertung macht aus einer fremden Ausnahme einen ``InternalError``, und
+    der Kunde liest „Fehlerbericht" für eine gewöhnliche Handlung (Regel 17).
+
+    Ein Eckanschluss, den die Geometrie nicht hergibt, ist kein Programmfehler:
+    Die Flanken der Kantenwerkzeuge schneiden dort auch ohne ihn, genau wie an
+    jeder Ecke, an der nicht alle Kanten gewählt sind.
+    """
+    if len(points) < 4:
+        return None
+    return _hull(np.asarray(points, dtype=float) + vertex)
+
+
+def _ball(radius: float, *, turn_limit: bool = True) -> Any:
+    """Eine Kugel, deren Facetten :data:`MAX_FACET_SAG` auch innen einhalten.
+
+    **Die Unterteilung hängt am Radius**, wie bei :func:`_arc_steps` und aus
+    demselben Grund: Eine feste Zahl ist bei R = 0,5 Verschwendung und bei
+    R = 5 zu grob. Geprüft wird die Stützweite jeder Facette — der Abstand
+    ihrer Ebene von der Mitte —, denn sie ist die Abweichung, die im Druck
+    ankommt.
+
+    ``turn_limit`` nimmt zusätzlich :data:`MAX_FACET_ANGLE` dazu, und das ist
+    keine Feinheit, sondern eine Kostenfrage: Die Winkelgrenze erzwingt eine
+    Unterteilung mehr, also viermal so viele Facetten (an R = 0,5: 80 mit der
+    Sehnengrenze allein, 1280 mit beiden). Der **Eckanschluss** braucht sie —
+    dort ersetzt die Kugel die Flächen der angrenzenden Zylinder, und zwei
+    Auflösungen nebeneinander hinterlassen eine sichtbare Kante. Der **Wulst**
+    braucht sie nicht: Dort füllt die Kugel den Zwickel zwischen zwei
+    Zylindern, und der ist so breit wie der Knick des Zugs. Gemessen am Wulst
+    R = 0,5 über alle Kanten von ``plate_holes.stl``: 1,53 s und 228 278
+    Dreiecke mit der Winkelgrenze, 0,56 s und 53 970 ohne — bei derselben
+    Sehnenabweichung.
+    """
     import trimesh
 
     divisions = 0
@@ -1014,11 +1082,17 @@ def _corner_ball(radius: float) -> np.ndarray:
         ball = trimesh.creation.icosphere(subdivisions=divisions, radius=radius)
         supports = np.einsum("ij,ij->i", ball.triangles[:, 0], ball.face_normals)
         arcs = np.linalg.norm(np.diff(ball.vertices[ball.edges_unique], axis=1)[:, 0], axis=1)
-        if float(supports.min()) >= radius - MAX_FACET_SAG and float(arcs.max()) <= (
+        turns_enough = not turn_limit or float(arcs.max()) <= (
             2.0 * radius * math.sin(MAX_FACET_ANGLE / 2.0)
-        ):
-            return np.asarray(ball.vertices)
+        )
+        if float(supports.min()) >= radius - MAX_FACET_SAG and turns_enough:
+            return ball
         divisions += 1
+
+
+def _corner_ball(radius: float) -> np.ndarray:
+    """Die Ecken des Kugelknotens — der Körper dazu steht in :func:`_ball`."""
+    return np.asarray(_ball(radius).vertices)
 
 
 def _chamfer_contacts(
@@ -1056,6 +1130,7 @@ def _corner_tools(
     rounded: bool,
     ball_vertices: np.ndarray,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> tuple[BooleanKind, MeshData, list[BooleanOutcome]] | None:
     """Die Eckfläche verbindet die Flanken am ursprünglichen gemeinsamen Knoten.
 
@@ -1077,6 +1152,10 @@ def _corner_tools(
     kind: BooleanKind = "difference" if entry.convex else "union"
     if not rounded:
         contacts = _chamfer_contacts(star, normals, size, sign)
+        # Drei Kontaktpunkte und der Knoten sind das Wenigste, woraus eine
+        # Haube entsteht; darunter gibt es keine (siehe :func:`_corner_hull`).
+        if len(contacts) < 3:
+            return None
         cap = _hull(np.vstack([np.zeros(3), contacts])).raw
         offsets = np.einsum("ij,ij->i", cap.face_normals, cap.triangles[:, 0])
         beyond = offsets > EPS_GEOM
@@ -1087,7 +1166,8 @@ def _corner_tools(
             np.vstack([normals, cap.face_normals[beyond]]),
             np.concatenate([np.full(len(normals), overshoot), offsets[beyond]]),
         )
-        return kind, _hull(corners + vertex), []
+        capped = _corner_hull(corners, vertex)
+        return (kind, capped, []) if capped is not None else None
     centre = np.linalg.lstsq(normals, np.full(len(normals), -size), rcond=None)[0]
     if float(np.max(np.abs(normals @ centre + size))) > EPS_GEOM:
         # Mehr als drei Flächen haben nicht notwendig ein gemeinsames
@@ -1113,9 +1193,13 @@ def _corner_tools(
             np.concatenate([np.full(len(normals), EDGE_OVERSHOOT), cone @ centre]),
         )
         ball_points = ball_vertices + centre
-    local = _hull(corners + vertex)
-    ball = _hull(ball_points + vertex)
-    removed = boolean("difference", [local, ball], quality=quality, allow_empty=True)
+    local = _corner_hull(corners, vertex)
+    ball = _corner_hull(ball_points, vertex)
+    if local is None or ball is None:
+        return None
+    removed = boolean(
+        "difference", [local, ball], quality=quality, allow_empty=True, cancelled=cancelled
+    )
     return kind, removed.mesh, [removed]
 
 
@@ -1155,9 +1239,12 @@ def _check_corner_region(
     complement: bool,
     *,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Der örtliche Ersatz muss ausschließlich die drei gewählten Flächen treffen."""
-    clipped = boolean("intersection", [mesh, region], quality=quality, allow_empty=True)
+    clipped = boolean(
+        "intersection", [mesh, region], quality=quality, allow_empty=True, cancelled=cancelled
+    )
     local = (clipped.mesh.raw.triangles - frame[:3, 3]) @ frame[:3, :3]
     allowed = np.zeros(len(local), dtype=bool)
     for axis, levels in ((0, (-size, 0.0, size)), (1, (-size, 0.0, size)), (2, (-size, 0.0))):
@@ -1207,6 +1294,7 @@ def _worked_edges(
     *,
     rounded: bool,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen."""
     entries = edges_of(mesh)
@@ -1214,11 +1302,15 @@ def _worked_edges(
     groups = _selected_edge_groups(chosen)
     mixed = any(_mixed_corner_frame(star) is not None for star in _corner_stars(entries, chosen))
     if len(groups) == 1 or not mixed:
-        return _placed_edge_work(mesh, entries, chosen, size, rounded=rounded, quality=quality)
+        return _placed_edge_work(
+            mesh, entries, chosen, size, rounded=rounded, quality=quality, cancelled=cancelled
+        )
     runs: list[BooleanOutcome] = []
     body = mesh
     for group in groups:
-        result = _placed_edge_work(body, entries, group, size, rounded=rounded, quality=quality)
+        result = _placed_edge_work(
+            body, entries, group, size, rounded=rounded, quality=quality, cancelled=cancelled
+        )
         runs.append(result)
         body = result.mesh
     solver = deepest(run.solver for run in runs)
@@ -1234,6 +1326,7 @@ def _placed_edge_work(
     *,
     rounded: bool,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Rechnet eine unabhängige Auswahlgruppe mit ihrer unveränderten Ausgangstopologie."""
     frame = next(
@@ -1245,7 +1338,9 @@ def _placed_edge_work(
         None,
     )
     if frame is None:
-        return _edge_work(mesh, entries, chosen, size, rounded=rounded, quality=quality)
+        return _edge_work(
+            mesh, entries, chosen, size, rounded=rounded, quality=quality, cancelled=cancelled
+        )
     raw = mesh.raw.copy()
     delta = np.asarray(raw.vertices) - frame[:3, 3]
     local = delta @ frame[:3, :3]
@@ -1285,7 +1380,13 @@ def _placed_edge_work(
         if id(entry) in selected_ids:
             local_chosen.append(placed)
     result = _edge_work(
-        mesh.replacing(raw), local_entries, local_chosen, size, rounded=rounded, quality=quality
+        mesh.replacing(raw),
+        local_entries,
+        local_chosen,
+        size,
+        rounded=rounded,
+        quality=quality,
+        cancelled=cancelled,
     )
     world = result.mesh.raw.copy()
     world.apply_transform(frame)
@@ -1301,6 +1402,7 @@ def _edge_work(
     *,
     rounded: bool,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Der gemeinsame Weg von Verrundung und Fase.
 
@@ -1320,6 +1422,16 @@ def _edge_work(
     outer: list[MeshData] = []
     inner: list[MeshData] = []
     for entry in chosen:
+        # **Zwischen den Kanten gefragt und nicht in der inneren Schleife.**
+        # Ein Werkzeugkörper ist ein Aufruf in numpy und shapely und dort
+        # kooperativ nicht zu unterbrechen; die Kante davor ist die Stelle,
+        # an der ein Klick auf *Abbrechen* ankommt. Dieselbe Grenze wie in
+        # ``boolean.boolean`` zwischen den Rückfallstufen (§15.6). Gemessen
+        # an einer Lochplatte mit 60 Bohrungen: 2,7 s für die Fase über alle
+        # Kanten, 6,9 s für die Verrundung — beides über der Grenze, ab der
+        # eine Rechnung abbrechbar sein muss.
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         tool = rounding_tool(
             entry,
             size,
@@ -1327,13 +1439,21 @@ def _edge_work(
             min_steps=steps if id(entry) in refined_ids else 0,
             extend_ends=id(entry) not in refined_ids,
             quality=quality,
+            cancelled=cancelled,
         )
         (outer if entry.convex else inner).append(tool)
     runs: list[BooleanOutcome] = []
     ball_vertices = _corner_ball(size) if stars and rounded else np.empty((0, 3))
     for star in stars:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         prepared = _corner_tools(
-            star, size, rounded=rounded, ball_vertices=ball_vertices, quality=quality
+            star,
+            size,
+            rounded=rounded,
+            ball_vertices=ball_vertices,
+            quality=quality,
+            cancelled=cancelled,
         )
         if prepared is not None:
             kind, tool, preparation = prepared
@@ -1344,19 +1464,31 @@ def _edge_work(
     for _star, (frame, complement) in mixed:
         region, target = _mixed_corner_region(size, rounded=rounded)
         if complement:
-            reversed_target = boolean("difference", [region, target], quality=quality)
+            reversed_target = boolean(
+                "difference", [region, target], quality=quality, cancelled=cancelled
+            )
             runs.append(reversed_target)
             target = reversed_target.mesh
         target = _extend_corner_contacts(target, size)
         region.raw.apply_transform(frame)
         target.raw.apply_transform(frame)
-        runs.append(_check_corner_region(mesh, region, frame, size, complement, quality=quality))
+        runs.append(
+            _check_corner_region(
+                mesh, region, frame, size, complement, quality=quality, cancelled=cancelled
+            )
+        )
         regions.append(region)
         targets.append(target)
     if regions:
         clipped_inner = []
         for tool in inner:
-            clipped = boolean("difference", [tool, *regions], quality=quality, allow_empty=True)
+            clipped = boolean(
+                "difference",
+                [tool, *regions],
+                quality=quality,
+                allow_empty=True,
+                cancelled=cancelled,
+            )
             runs.append(clipped)
             if clipped.mesh.triangle_count:
                 clipped_inner.append(clipped.mesh)
@@ -1367,7 +1499,7 @@ def _edge_work(
     for kind, tools in (("difference", outer), ("union", inner)):
         if not tools:
             continue
-        outcome = boolean(kind, [body, *tools], quality=quality)
+        outcome = boolean(kind, [body, *tools], quality=quality, cancelled=cancelled)
         body = outcome.mesh
         runs.append(outcome)
     # Ohne Kante hätte ``wanted`` angehalten, und ``rounding_tool`` wirft,
@@ -1755,6 +1887,7 @@ def bead_edges(
     keys: Sequence[str] = (),
     *,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Legt einen Wulst auf die gewählten Kanten — eine runde Leiste.
 
@@ -1790,8 +1923,10 @@ def bead_edges(
     # löst die Überlappung, dafür ist sie da.
     tools: list[MeshData] = []
     for entry in chosen:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         tools.extend(_rod_along(entry, radius))
-    return boolean("union", [mesh, *tools], quality=quality)
+    return boolean("union", [mesh, *tools], quality=quality, cancelled=cancelled)
 
 
 def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
@@ -1800,6 +1935,17 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
     Die Kugeln sind kein Zierat: An einem Knick des Zugs stoßen zwei Zylinder
     unter einem Winkel aneinander und lassen außen einen Keil frei. Eine Kugel
     im Knoten füllt ihn, und zwar für jeden Winkel dieselbe.
+
+    **Und sie ist so fein wie der Stab daneben.** Hier stand eine feste
+    Unterteilung (``icosphere(subdivisions=1)``), deren Abweichung mit dem
+    Radius wächst — und an einem Knick **ist** die Kugel die Oberfläche.
+    Gemessen am Wulst auf der Oberkante eines verrundeten Quaders (27 Knicke),
+    als Einsenkung der Facetten gegenüber dem Sollstab: 0,097 mm bei R = 1,5
+    (der Vorgabe des Dialogs) und 0,328 mm bei R = 5 — erlaubt sind
+    :data:`~app.core.units.MAX_FACET_SAG` = 0,05, und 0,328 mm ist mehr als
+    eine Schichthöhe (Fund des Reviews, 13.09.2026). Mit :func:`_ball` sind es
+    0,026 und 0,046 mm. Die Unterteilung hängt am Radius, wie :func:`_ring_steps`
+    es für die Zylinder rechnet.
     """
     import trimesh
 
@@ -1813,10 +1959,15 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
         rod = trimesh.creation.cylinder(radius=radius, height=reach, sections=_ring_steps(radius))
         rod.apply_transform(_towards(along / reach, (first + second) / 2.0))
         parts.append(rod)
-    for point in points[1:-1] if len(points) > THROUGH else []:
-        ball = trimesh.creation.icosphere(subdivisions=1, radius=radius)
-        ball.apply_translation(point)
-        parts.append(ball)
+    knots = points[1:-1] if len(points) > THROUGH else np.empty((0, 3))
+    if len(knots):
+        # Einmal gebaut, je Knick kopiert: Die Unterteilung hängt am Radius
+        # und nicht am Knoten (siehe :func:`_ball`).
+        shape = _ball(radius, turn_limit=False)
+        for point in knots:
+            ball = shape.copy()
+            ball.apply_translation(point)
+            parts.append(ball)
     if not parts:
         raise GeometryError(
             detail=_(

@@ -650,11 +650,17 @@ def _buried(letters: Any, before: Any, after: Any, mode: str) -> Finding | None:
     return Finding(
         code="label.buried",
         severity="warning",
+        # **Und die zwei Zahlen sind Volumina, also heißt der Satz so.** Er
+        # sprach von „Buchstaben", und seit die Platzhalter gefüllt werden,
+        # stand beim Kunden „Von 120 mm³ Buchstaben stehen nur 3 mm³ über der
+        # Fläche" — zwei Maßangaben in einem Satz über eine Stückzahl (Fund
+        # des Reviews, 13.09.2026). Gezählt wird hier nichts: ``letters.volume``
+        # ist das Volumen der gesetzten Schrift, und das steht jetzt auch da.
         message=_(
-            "Die Schrift steckt im Körper: Von {expected} Buchstaben stehen nur {shown} "
-            "über der Fläche, der Rest liegt im Material und ist unsichtbar. Meist zeigt "
-            "die Richtung in den Körper hinein oder der Punkt liegt in ihm — klicken Sie "
-            "die Fläche an, dann trägt sie Ort und Richtung selbst ein.",
+            "Die Schrift steckt im Körper: Von {expected} gesetzter Schrift stehen nur "
+            "{shown} über der Fläche, der Rest liegt im Material und ist unsichtbar. "
+            "Meist zeigt die Richtung in den Körper hinein oder der Punkt liegt in ihm — "
+            "klicken Sie die Fläche an, dann trägt sie Ort und Richtung selbst ein.",
             expected=format_volume(expected),
             shown=format_volume(shown),
         ),

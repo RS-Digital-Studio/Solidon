@@ -117,6 +117,13 @@ Kanten- und Flächenoperationen reichen `ctx.quality` durch alle Teilschritte,
 auch Werkzeugvereinigung, Eckanschlüsse und Wiederherstellung einer Rundung.
 Kein innerer Booleschritt darf den Entwurf auf feine Qualität hochstufen.
 
+**Und `ctx.cancelled` geht denselben Weg.** *Verrunden*, *Fase*, *Wulst* und
+die *Formschräge* fragen das Token zwischen den Kanten beziehungsweise den
+Wänden und geben es an jeden Booleschritt weiter; innerhalb eines
+Werkzeugkörpers ist nichts zu unterbrechen, davor schon. Der Grund ist
+gemessen: Eine Lochplatte mit sechzig Bohrungen braucht 2,7 Sekunden für die
+Fase über alle Kanten und 6,9 für die Verrundung (§15.6).
+
 Die drei nativen Netzstufen übergeben `Mesh64` an Manifold und lesen dessen
 Status und Volumen vor der Rückvernetzung. Nullvolumen bei flächigem Kontakt
 wird als leeres Netz weitergegeben; erst `allow_empty` entscheidet, ob das
@@ -428,6 +435,9 @@ Nachbarflächen. Bei mehr als drei Flächen schließt deren ebene oder
 facettierte konvexe Hülle die Ecke. Diese Mesh-Kappe kann von OpenCASCADEs
 Splinekappe abweichen; Flankenabstände und Kontaktpunkte bleiben exakt.
 Die Eckwerkzeuge werden gemeinsam mit den Kantenwerkzeugen geschnitten.
+Ein Knoten, dessen Kontaktpunkte keinen Körper ergeben, bekommt **keine**
+Haube: Die Flanken schneiden dort auch ohne sie, und eine fremde Ausnahme aus
+der Hüllenrechnung wäre beim Kunden ein Programmfehler (`_corner_hull`).
 
 Der gemischte orthogonale Dreiflächenknoten verwendet einen örtlich
 begrenzten Ebenen- oder Torusübergang, auch in der komplementären Innenform.
@@ -476,6 +486,12 @@ zusammengelegt überlappen sie sich, und ein Körper mit doppelt belegtem Raum
 hat kein Volumen (24250 statt 24186). **Die Kehlnaht im Innenwinkel ist nicht
 die glatte Hohlkehle**: Die macht `round_edges` an einer konkaven Kante, und
 der Unterschied ist der Faktor zwischen 104,45 mm³ und 28,97.
+
+Zylinder **und** Kugel hängen dabei am Radius: `_ring_steps` für den Umlauf,
+`_ball` für den Knoten. Die Kugel des Wulstes hält nur die Sehnengrenze, die
+des Eckanschlusses zusätzlich die Winkelgrenze — dort ersetzt sie die Flächen
+der angrenzenden Zylinder, hier füllt sie nur deren Zwickel, und der
+Unterschied ist eine Unterteilung, also viermal so viele Dreiecke.
 
 **Messen und Schneiden**
 

@@ -30,7 +30,7 @@ from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryErr
 from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
-from app.core.types import Feature, Quality, Vec3
+from app.core.types import CancelToken, Feature, Quality, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -66,7 +66,12 @@ def face_normal(feature: Feature) -> Vec3:
 
 
 def push_face(
-    mesh: MeshData, feature: Feature, distance: float, *, quality: Quality = "fine"
+    mesh: MeshData,
+    feature: Feature,
+    distance: float,
+    *,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Versetzt **eine** Fläche entlang ihrer Normalen; die Nachbarwände wachsen mit.
 
@@ -87,7 +92,7 @@ def push_face(
         )
     tool = _prism_over(mesh, feature, distance)
     kind: BooleanKind = "union" if distance > 0.0 else "difference"
-    outcome = boolean(kind, [mesh, tool], quality=quality)
+    outcome = boolean(kind, [mesh, tool], quality=quality, cancelled=cancelled)
     if outcome.mesh.raw.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_(
@@ -233,7 +238,11 @@ def _border_edges(corners: np.ndarray) -> list[tuple[int, int]]:
 
 
 def draft_vertical(
-    mesh: MeshData, angle_deg: float, *, quality: Quality = "fine"
+    mesh: MeshData,
+    angle_deg: float,
+    *,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Stellt alle senkrechten Flächen um den Winkel an — die Formschräge.
 
@@ -262,13 +271,17 @@ def draft_vertical(
     bottom = mesh.bounds.minimum[2]
     tools: list[MeshData] = []
     for triangles, normal in upright:
+        # Zwischen den Wänden gefragt: Ein Keil entsteht in numpy und ist
+        # dort nicht zu unterbrechen (§15.6, wie in ``edges._edge_work``).
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
 
         def _wedge(points: np.ndarray, normal: np.ndarray = normal) -> np.ndarray:
             return -np.outer(np.maximum(points[:, 2] - bottom, 0.0) * slope, normal)
 
         tools.append(_prism_from(mesh, triangles, _wedge))
 
-    outcome = boolean("difference", [mesh, *tools], quality=quality)
+    outcome = boolean("difference", [mesh, *tools], quality=quality, cancelled=cancelled)
     if outcome.mesh.raw.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_("Mit diesem Winkel bleibt vom Körper nichts übrig — kleiner anstellen."),

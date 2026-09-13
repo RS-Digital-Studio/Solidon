@@ -239,6 +239,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         quality=ctx.quality,
+        cancelled=ctx.cancelled,
     )
     empty = _too_small_to_see(body, outcome.mesh, ctx.profile, kind="bead")
     conversion = []
@@ -277,7 +278,11 @@ def _worked(
 
     body = as_mesh_data(source.mesh)
     work = round_edges if rounded else bevel_edges
-    outcome = work(body, size, choice, keys, quality=ctx.quality)
+    # **Abbrechbar, weil es dauern kann.** Gemessen an einer Lochplatte mit
+    # 60 Bohrungen (7932 Dreiecke, 132 Kantenzüge): 2,7 s für die Fase über
+    # alle Kanten, 6,9 s für die Verrundung. Ohne das Token liefe der Klick
+    # auf *Abbrechen* ins Leere (§15.6).
+    outcome = work(body, size, choice, keys, quality=ctx.quality, cancelled=ctx.cancelled)
     empty = _too_small_to_see(
         body, outcome.mesh, ctx.profile, kind="fillet" if rounded else "chamfer"
     )

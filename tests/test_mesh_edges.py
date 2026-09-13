@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from itertools import product
+from itertools import pairwise, product
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -26,11 +27,13 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.errors import GeometryError
+from app.core.errors import GeometryError, OperationCancelled
 from app.core.geom.boolean import boolean
 from app.core.geom.edges import (
     MIN_ARC_STEPS,
     _arc_steps,
+    _corner_stars,
+    _rod_along,
     bead_edges,
     bevel_edges,
     edge_key,
@@ -43,7 +46,7 @@ from app.core.geom.edges import (
 from app.core.geom.edges import (
     wanted as wanted_edges,
 )
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.repair import remove_hollow_shells
 from app.core.knowledge import profiles
 from app.core.perceive.features import detect
@@ -54,6 +57,7 @@ from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 RADIUS = 10.0
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def block() -> MeshData:
@@ -368,6 +372,58 @@ def test_chamfers_close_the_selected_cube_corners(
         if not count:
             vertices = np.abs(vertices)
         assert np.max(vertices.sum(axis=1)) <= 24.0 + 1e-6
+
+
+def test_a_corner_without_enough_contacts_is_skipped_and_not_a_crash() -> None:
+    """Eine Ecke, die keine Haube hergibt, ist kein Programmfehler.
+
+    ``_chamfer_contacts`` nimmt nur Flächen an, die **genau zwei** der
+    gewählten Kanten berühren. An einem Knoten, an dem drei Züge enden und
+    vier verschiedene Flächen anliegen, bleiben davon zwei übrig — und aus
+    zwei Punkten und der Ecke baut Qhull keinen Körper: ``QH6214 … not enough
+    points(3) to construct initial simplex``. Die Ausnahme kam aus scipy,
+    ``evaluate`` machte daraus einen ``InternalError``, und der Kunde las
+    „Fehlerbericht" für ein gewöhnliches Teil (Fund des Reviews, 13.09.2026).
+
+    **Der Körper dazu ist nur verschweißt und nicht eingelesen.** Das ist
+    Absicht: Der Importweg (``ingest.normalise``) wirft an dieser Platte die
+    entarteten Dreiecke weg, und danach gibt es die acht dünnen Knoten nicht
+    mehr — gemessen 384 Dreiecke und 68 Züge vorher, 304 und 15 danach. Der
+    Fall bleibt trotzdem einer: ``MeshData`` sagt nichts über die Herkunft
+    zu, und eine fremde Ausnahme darf aus dem Kern nicht heraus (Regel 17).
+    """
+    payload = (MESHES / "plate_countersunk.stl").read_bytes()
+    body = read_mesh(payload, ".stl").raw.copy()
+    body.merge_vertices()
+    mesh = MeshData(body)
+    # **Eine Liste und nicht zwei.** ``_corner_stars`` vergleicht die gewählten
+    # Züge über ``id`` — zwei Aufrufe von ``edges_of`` geben gleiche Kanten und
+    # verschiedene Objekte, und die Auswahl wäre leer.
+    entries = edges_of(mesh)
+    stars = [
+        star for star in _corner_stars(entries, entries) if len(_chamfer_contacts_of(star, 0.2)) < 3
+    ]
+    assert stars, "ohne einen solchen Knoten prüft dieser Test nichts"
+
+    changed = bevel_edges(mesh, 0.2, "all", quality="draft").mesh
+
+    assert changed.volume < mesh.volume, "gefast wird trotzdem"
+
+
+def _chamfer_contacts_of(star: list[Any], size: float) -> np.ndarray:
+    """Die Kontaktpunkte eines Knotens — wie ``_corner_tools`` sie holt."""
+    from app.core.geom.edges import _chamfer_contacts, _distinct_vectors
+
+    entry, _end = star[0]
+    if any(other.convex != entry.convex for other, _ in star):
+        return np.empty((0, 3))
+    sign = 1.0 if entry.convex else -1.0
+    normals = _distinct_vectors(
+        [sign * np.asarray(normal) for other, tip in star for normal in other.normals[tip]]
+    )
+    if len(normals) < 3:
+        return np.empty((0, 3))
+    return _chamfer_contacts(star, normals, size, sign)
 
 
 def _assert_spherical_corner(
@@ -997,6 +1053,7 @@ def run(
     profile: Profile | None = None,
     *,
     quality: str = "fine",
+    cancelled: Any = None,
     **params: Any,
 ) -> OpResult:
     """Eine Operation so fahren, wie die Auswertung sie fährt."""
@@ -1012,9 +1069,58 @@ def run(
             seed=None,
             progress=lambda fraction, text: None,
             ask=lambda question, choices: choices[0],
-            cancelled=NeverCancelled(),
+            cancelled=cancelled if cancelled is not None else NeverCancelled(),
         )
     )
+
+
+class StopsAfterTheFirstEdge:
+    """Ein Abbruchtoken, das beim **zweiten** Fragen anhält.
+
+    Ein Token, das von Anfang an abgebrochen ist, wäre ein schwächerer Test:
+    Er bliebe grün, wenn die Frage nur einmal am Eingang stünde. Gesucht ist
+    die Frage **zwischen** den Kanten.
+    """
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.asked >= 2
+
+    def raise_if_cancelled(self) -> None:
+        self.asked += 1
+        if self.asked >= 2:
+            raise OperationCancelled
+
+
+@pytest.mark.parametrize(
+    "op,params",
+    [
+        ("fillet_edges", {"radius": 1.0, "edges": "all"}),
+        ("chamfer_edges", {"distance": 1.0, "edges": "all"}),
+        ("bead_edges", {"radius": 1.0, "edges": "all"}),
+    ],
+)
+def test_an_edge_operation_can_be_stopped_while_it_runs(op: str, params: dict[str, Any]) -> None:
+    """Der Klick auf *Abbrechen* muss bis in die Rechnung kommen (§15.6).
+
+    **Gemessen, warum das zählt:** Eine Lochplatte mit sechzig Bohrungen
+    (7932 Dreiecke, 132 Kantenzüge) braucht für *Fase, alle Kanten* 2,7
+    Sekunden und für *Verrunden* 6,9. Bis zum 13.09.2026 reichte keine der
+    drei Operationen ``ctx.cancelled`` weiter — der Knopf war da, und die
+    Rechnung lief bis zum Ende.
+
+    Geprüft wird am Register und nicht an ``edges.round_edges``: Die Lücke lag
+    in der Operation, nicht im Rechenweg.
+    """
+    token = StopsAfterTheFirstEdge()
+
+    with pytest.raises(OperationCancelled):
+        run(op, imported(), quality="draft", cancelled=token, **params)
+
+    assert token.asked == 2, "gefragt wird je Kante, nicht einmal am Eingang"
 
 
 @pytest.mark.parametrize(
@@ -1597,6 +1703,55 @@ def test_a_bead_along_a_bent_chain_has_no_gaps_at_the_bends() -> None:
     rod = 0.75 * math.pi * radius**2 * chain.length
     assert beaded.volume - before == pytest.approx(rod, rel=0.01), (
         "an den Knicken darf kein Material fehlen"
+    )
+
+
+def distance_to_chain(points: np.ndarray, chain: np.ndarray) -> np.ndarray:
+    """Der kleinste Abstand jedes Punktes zum Streckenzug.
+
+    Damit steht der **Sollstab** ohne Zutun der Umsetzung da: Er ist die Menge
+    aller Punkte, die vom Zug genau ``radius`` entfernt sind.
+    """
+    best = np.full(len(points), np.inf)
+    for first, second in pairwise(chain):
+        along = second - first
+        length = float(np.dot(along, along))
+        if length <= 0.0:
+            continue
+        share = np.clip(((points - first) @ along) / length, 0.0, 1.0)
+        best = np.minimum(best, np.linalg.norm(points - (first + share[:, None] * along), axis=1))
+    return best
+
+
+@pytest.mark.parametrize("radius", [1.5, 5.0])
+def test_no_bead_facet_sinks_deeper_into_the_rod_than_a_facet_may(radius: float) -> None:
+    """Am Knick ist die Kugel die Oberfläche — und hielt die Sehnengrenze nicht.
+
+    Die Zylinderstücke rechnet ``_ring_steps`` aus dem Radius; die Kugel im
+    Knick stand bis zum 13.09.2026 auf einer festen Unterteilung. Gemessen als
+    Einsenkung der Facetten gegenüber dem Sollstab, an der Oberkante eines
+    verrundeten Quaders mit siebenundzwanzig Knicken: **0,097 mm bei R = 1,5**
+    — der Vorgabe des Dialogs — und **0,328 mm bei R = 5**, wo
+    :data:`~app.core.units.MAX_FACET_SAG` 0,05 erlaubt. Die zweite Zahl ist
+    mehr als eine Schichthöhe.
+
+    Gemessen wird gegen den **Streckenzug** und nicht gegen die Kugel: So
+    beschreibt der Test die Sache und nicht ihre Umsetzung.
+    """
+    body = rounded_block()
+    chain = next(entry for entry in edges_of(body) if entry.middle[2] > 0.0)
+    points = np.asarray(chain.points, dtype=float)
+    assert len(points) > 20, "sonst prüft der Test keinen gebogenen Zug"
+
+    rod = boolean("union", _rod_along(chain, radius), quality="fine").mesh.raw
+
+    node = points[len(points) // 2]
+    centres = np.asarray(rod.triangles_center)
+    around = np.linalg.norm(centres - node, axis=1) < radius * 1.25
+    assert around.any(), "um den Knick liegt keine Facette — dann misst der Test nichts"
+    sunk = radius - distance_to_chain(centres[around], points)
+    assert float(sunk.max()) <= MAX_FACET_SAG, (
+        "die Facetten am Knick sinken tiefer in den Stab als eine Facette darf"
     )
 
 

@@ -16,7 +16,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.errors import GeometryError
+from app.core.errors import GeometryError, OperationCancelled
 from app.core.geom.boolean import boolean
 from app.core.geom.faces import draft_vertical, push_face
 from app.core.geom.mesh import MeshData
@@ -272,7 +272,14 @@ def test_both_kernels_push_the_same_single_face() -> None:
 # --- Als Operation, wie der Kunde sie fährt -----------------------------------
 
 
-def run(op: str, entry: SceneObject, profile: Profile | None = None, **params: Any) -> OpResult:
+def run(
+    op: str,
+    entry: SceneObject,
+    profile: Profile | None = None,
+    *,
+    cancelled: Any = None,
+    **params: Any,
+) -> OpResult:
     """Eine Operation so fahren, wie die Auswertung sie fährt."""
     load_operations()
     spec = REGISTRY.get(op)
@@ -286,9 +293,41 @@ def run(op: str, entry: SceneObject, profile: Profile | None = None, **params: A
             seed=None,
             progress=lambda fraction, text: None,
             ask=lambda question, choices: choices[0],
-            cancelled=NeverCancelled(),
+            cancelled=cancelled if cancelled is not None else NeverCancelled(),
         )
     )
+
+
+def test_the_draft_can_be_stopped_between_its_walls() -> None:
+    """Die Formschräge baut je Wand einen Keil — und fragt dazwischen (§15.6).
+
+    Dieselbe Lücke wie bei den Kantenoperationen (`test_mesh_edges.py`): Das
+    Token stand im ``OpContext`` und kam nirgends an. Der Quader hat vier
+    senkrechte Wände, also gibt es ein „dazwischen"; ein Token, das erst beim
+    zweiten Fragen anhält, unterscheidet das von einer Frage am Eingang.
+    """
+    token = StopsAfterTheFirstWall()
+
+    with pytest.raises(OperationCancelled):
+        run("draft_faces", imported(block()), angle=DRAFT, cancelled=token)
+
+    assert token.asked == 2, "gefragt wird je Wand, nicht einmal am Eingang"
+
+
+class StopsAfterTheFirstWall:
+    """Ein Abbruchtoken, das beim zweiten Fragen anhält."""
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.asked >= 2
+
+    def raise_if_cancelled(self) -> None:
+        self.asked += 1
+        if self.asked >= 2:
+            raise OperationCancelled
 
 
 def imported(mesh: MeshData) -> SceneObject:

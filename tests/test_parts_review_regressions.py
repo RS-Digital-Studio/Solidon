@@ -597,7 +597,9 @@ def test_cable_relief_builds_two_rails_behind_the_real_wall(profile):
             assert intersection.volume == pytest.approx(probe.volume, abs=EPS_GEOM * probe.raw.area)
         else:
             assert intersection.triangle_count == 0
-    assert REGISTRY.get("insert_cable_gland").cache_version == PARTS.get("cable_gland").version
+    # Der Einsetzpfad versioniert die Zielauflösung zusätzlich zum Baustein.
+    part_version = REGISTRY.get("insert_cable_gland").cache_version.partition(":")[0]
+    assert part_version == PARTS.get("cable_gland").version
 
 
 def test_cable_relief_rejects_a_gap_that_cannot_grip():

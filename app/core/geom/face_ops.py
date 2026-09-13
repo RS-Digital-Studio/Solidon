@@ -115,7 +115,7 @@ def push_face_op(ctx: OpContext) -> OpResult:
     body = as_mesh_data(source.mesh)
     if chosen is None:
         raise _no_face()
-    outcome = push_face(body, chosen, params.distance, quality=ctx.quality)
+    outcome = push_face(body, chosen, params.distance, quality=ctx.quality, cancelled=ctx.cancelled)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         solver=outcome.solver,
@@ -168,7 +168,9 @@ def draft_faces(ctx: OpContext) -> OpResult:
             ]
         )
 
-    outcome = draft_vertical(as_mesh_data(source.mesh), params.angle, quality=ctx.quality)
+    outcome = draft_vertical(
+        as_mesh_data(source.mesh), params.angle, quality=ctx.quality, cancelled=ctx.cancelled
+    )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         solver=outcome.solver,

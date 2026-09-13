@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -200,3 +201,43 @@ def test_a_radial_edit_stays_within_its_selected_angular_patch(kind: str, profil
     saved = min(pieces, key=lambda piece: float(piece.volume))
     assert saved.volume == pytest.approx(10.0, abs=0.001)
     assert saved.bounds == pytest.approx(np.array([[-0.5, -13.0, 3.5], [0.5, -12.0, 13.5]]))
+
+
+def test_the_radial_check_does_not_write_a_temporary_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Erkennung legt keine Datei an, und der Grund ist gemessen.
+
+    ``radial_cylinder`` fragt je benannter Verrundung eine konvexe Hülle ab.
+    Über ``scipy.spatial.ConvexHull`` kostet das eine **temporäre Datei** je
+    Aufruf — SciPy führt Qhulls Ausgabe über ``tempfile.mkstemp``. An der
+    Prüfplatte mit 64 Taschen sind das 256 Aufrufe; unter Windows standen
+    davon 4,597 s von 7,08 s der ganzen Erkennung in ``nt.open``, und
+    ``detect`` lag bei 3,6 bis 6,4 s gegen ein Budget von 2,5 s (§31).
+
+    **Die Zeitgrenze allein hätte das nie gefangen**, und das ist der Grund
+    für diesen Test: Auf einem Linux-Läufer kostet dieselbe Datei fast nichts,
+    der Leistungstest bleibt dort grün, und der Kunde unter Windows wartet.
+    Gezählt wird deshalb die Ursache und nicht die Uhr.
+
+    Die Gegenprobe steht daneben: Ohne die erkannte radiale Wand liefe der
+    teure Zweig gar nicht, und der Test maße nichts.
+    """
+    import tempfile
+
+    seen: list[str] = []
+    original = tempfile.mkstemp
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        seen.append("mkstemp")
+        return original(*args, **kwargs)
+
+    path = Path(__file__).parent / "data" / "meshes" / "open_cylinder_clip.stl"
+    mesh = MeshData.of(trimesh.load_mesh(path, process=True))
+    monkeypatch.setattr(tempfile, "mkstemp", counted)
+    found = detect(mesh)
+
+    inner = min(
+        (feature for feature in found.values() if feature.kind == "fillet"),
+        key=lambda feature: float(feature.params["radius"]),
+    )
+    assert inner.params.get("radial") is True, "ohne die radiale Wand misst dieser Test nichts"
+    assert not seen, f"die Erkennung legte {len(seen)} temporäre Dateien an"
