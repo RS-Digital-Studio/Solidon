@@ -415,7 +415,14 @@ jobs:
           $sbomPath = python -m tools.make_sbom --locate-artifact dist
           if ($LASTEXITCODE -ne 0) { throw "Die Endartefakt-SBOM fehlt oder ist mehrdeutig." }
           $artifactRoot = if ($IsMacOS) { Resolve-Path "dist/Solidon3D.app" } else { Resolve-Path "dist/Solidon3D" }
-          $noticePath = Join-Path $artifactRoot "THIRD-PARTY-NOTICES.md"
+          # **Auf macOS neben die ausführbare Datei, nicht in den Bundle-Root.**
+          # Die Anwendung liest die Beilage neben sich (`licences._notice_file`:
+          # `sys.executable.parent`), und das ist im Bundle `Contents/MacOS/` —
+          # im Root fand der Über-Dialog sie bei 0.4.0 nie. Und ein Bundle mit
+          # einer Datei neben `Contents/` lässt sich nicht signieren: Beim Bau
+          # von 0.4.1 (13.09.2026, Lauf 34775201037) hielt `codesign` genau
+          # daran an — „unsealed contents present in the bundle root".
+          $noticePath = if ($IsMacOS) { Join-Path $artifactRoot "Contents/MacOS/THIRD-PARTY-NOTICES.md" } else { Join-Path $artifactRoot "THIRD-PARTY-NOTICES.md" }
           python -m tools.make_licence_notices `
             --sbom $sbomPath `
             --output $noticePath `
