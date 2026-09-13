@@ -392,18 +392,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Testabdeckung entsprechend nachziehen. Bereits reparierte Skizzen-/B-Rep-/Dialogbefunde bleiben
   abgeschlossen.
 
-  **Zwei Befunde aus dem Tag-Lauf v0.4.1 (13.09.2026), beide mit strenger
-  `xfail`-Marke im Test, damit der Bau läuft und der Fehler sichtbar bleibt:**
-  Auf **macOS** wirkt der Abbruch eines lokalen Ollama-Aufrufs nicht — der Weg
-  schließt den Socket aus dem wartenden Thread (`shutdown`, `detach`), und das
-  weckt dort das blockierte `recv` nicht; nur die Stufe, in der die Gegenstelle
-  selbst schließt, endet rechtzeitig (`test_backends.py`, drei von vier Stufen).
-  Ein Umbau auf einen Leser mit kurzem Socket-Timeout, der das Token selbst
-  prüft, ist der naheliegende Weg, gemessen wird er auf einem Mac. Auf
-  **Linux (Xvfb)** reißt der Kindprozess des HiDPI-Grifftests bei
-  `QT_SCALE_FACTOR=2` mit Exit -11 (`test_render_factory.py`, bei 1 grün) — ob
-  Softwarerenderer des Runners oder Anwendung, sagt nur ein Linux mit
-  Bildschirm. Der Changelog-Punkt zum Abbruch während der Antwort ist für
+  **Zwei sporadische Befunde aus den Tag-Läufen von v0.4.1 (13.09.2026), beide
+  mit nicht strenger `xfail`-Marke im Test — der Bau läuft, der Fall steht
+  hier, und ein grüner Runner-Lauf gilt nicht als Nachweis:** Auf **macOS**
+  kommt der Abbruch eines lokalen Ollama-Aufrufs nicht sicher in einer
+  Sekunde an — der Weg schließt den Socket aus dem wartenden Thread
+  (`shutdown`, `detach`); im ersten Lauf waren drei von vier Stufen rot, im
+  zweiten zwei (`keep_alive` bestand dazwischen), nur die Stufe mit
+  Verbindungsende hielt beide Male (`test_backends.py`). Ein Umbau auf einen
+  Leser mit kurzem Socket-Timeout, der das Token selbst prüft, ist der
+  naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** riss
+  der Kindprozess des HiDPI-Grifftests bei `QT_SCALE_FACTOR=2` einmal mit
+  Exit -11 und bestand im nächsten Lauf (`test_render_factory.py`, bei 1 beide
+  Male grün) — ob Softwarerenderer des Runners oder Anwendung, sagt nur ein
+  Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
+  grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
   0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).

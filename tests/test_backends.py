@@ -401,19 +401,20 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
     assert transport.calls == []
 
 
-#: **Auf macOS weckt der Abbruch den blockierten Leser nicht.** Der Weg schließt
-#: den Socket aus dem wartenden Thread (``shutdown`` und ``detach``); Linux und
-#: Windows beenden damit das ``recv`` des Anfrage-Threads, macOS nicht — nur
-#: die Stufe, in der die Gegenstelle selbst schließt, endet dort rechtzeitig
-#: (Tag-Lauf v0.4.1, 13.09.2026, drei von vier Stufen rot). Gemessen ist das
-#: nur in der CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21). Die
-#: Marke ist streng: Sobald der Abbruch dort trägt, wird sie rot und fällt.
-#: Registerpunkt RM-104.
+#: **Auf macOS kommt der Abbruch nicht sicher in einer Sekunde an.** Der Weg
+#: schließt den Socket aus dem wartenden Thread (``shutdown`` und ``detach``);
+#: Linux und Windows beenden damit das ``recv`` des Anfrage-Threads sofort. Auf
+#: dem macOS-Runner war das im ersten Tag-Lauf von v0.4.1 (13.09.2026) in drei
+#: von vier Stufen rot, im zweiten in zwei — ``keep_alive`` bestand dazwischen,
+#: nur die Stufe mit Verbindungsende hielt beide Male. Sporadisch also, und
+#: gemessen nur in der CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21).
+#: Die Marke ist deshalb **nicht** streng — ein grüner Lauf ist dort kein
+#: Nachweis und ein roter kein neuer Fund. Was zählt, steht bei RM-104.
 _MAC_KEEPS_READING = pytest.mark.xfail(
     sys.platform == "darwin",
-    strict=True,
+    strict=False,
     raises=AssertionError,
-    reason="macOS: shutdown aus dem Nachbarthread weckt das blockierte recv nicht (RM-104)",
+    reason="macOS: der Abbruch weckt das blockierte recv nicht sicher in einer Sekunde (RM-104)",
 )
 
 

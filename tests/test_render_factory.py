@@ -180,18 +180,20 @@ print("native canvas drawn and released")
     "scale",
     [
         1,
-        # **Unter Xvfb reißt der Kindprozess bei 200 Prozent** (Tag-Lauf v0.4.1,
-        # 13.09.2026: Geräteverhältnis 2.0 gemeldet, dann Exit -11; bei 100
-        # Prozent grün). Ob das der Softwarerenderer des Runners ist oder die
-        # Anwendung, sagt nur ein Linux mit Bildschirm — bis dahin steht der
-        # Fall bei RM-104, und die Marke ist streng.
+        # **Unter Xvfb riss der Kindprozess bei 200 Prozent einmal** (Tag-Lauf
+        # v0.4.1, 13.09.2026: Geräteverhältnis 2.0 gemeldet, dann Exit -11; bei
+        # 100 Prozent grün) — und bestand im nächsten Lauf. Sporadisch also; ob
+        # das der Softwarerenderer des Runners ist oder die Anwendung, sagt nur
+        # ein Linux mit Bildschirm. Bis dahin steht der Fall bei RM-104, und die
+        # Marke ist nicht streng: Sie hält den Bau nicht auf und verschweigt den
+        # Fall nicht.
         pytest.param(
             2,
             marks=pytest.mark.xfail(
                 sys.platform.startswith("linux"),
-                strict=True,
+                strict=False,
                 raises=AssertionError,
-                reason="Linux/Xvfb: Kindprozess reißt bei QT_SCALE_FACTOR=2 (RM-104)",
+                reason="Linux/Xvfb: Kindprozess reißt sporadisch bei QT_SCALE_FACTOR=2 (RM-104)",
             ),
         ),
     ],
