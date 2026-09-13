@@ -389,6 +389,45 @@ def test_slot_preview_temporarily_hides_the_other_placement_controls(
     assert controller.active and len(session.project.document.ops) == before
 
 
+def test_the_surface_worker_gets_its_own_copy_of_the_mesh(flow: Any, monkeypatch: Any) -> None:
+    """Der Platzierungsarbeiter rechnet nicht auf dem Netz, das das Fenster liest.
+
+    **Dieselbe Zusage wie beim Szenenarbeiter** (``test_scene_worker_owns_its_
+    mesh_and_evicts_the_least_recently_used_display``): Solange der Arbeiter
+    rechnet, bleibt die Auswertung stehen, und der Hauptthread liest an
+    demselben ``MeshData`` weiter — Hüllquader beim Zeigerhalt, Dreiecke beim
+    Merkmalsfleck, Kanten beim Klick. ``prepare_surface`` füllt dabei im
+    Nebenthread dieselben trägen trimesh-Caches (Flächennormalen, Dreiecke,
+    Nachbarschaft), und die sind nicht threadsicher.
+
+    Geprüft wird die **Trennung**, nicht das Ergebnis: ein anderes Objekt und
+    kein geteilter Speicher. Ein Wettlauf lässt sich nicht als Zusicherung
+    schreiben; die Trennung, die ihn ausschließt, schon.
+    """
+    import app.core.scene.placement as module
+
+    controller, session, _viewport, _dialog = flow
+    object_id = controller.inputs_of()[0]
+    entry = session.last_result.scene.objects[object_id]
+    seen: list[Any] = []
+    actual = module.prepare_surface
+
+    def watched(mesh: Any, *args: Any, **kwargs: Any) -> Any:
+        seen.append(mesh)
+        return actual(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(module, "prepare_surface", watched)
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session)
+
+    assert seen, "der Arbeiter hat die Fläche gar nicht vorbereitet"
+    for mesh in seen:
+        assert mesh is not entry.mesh, "der Arbeiter rechnet auf dem Netz der Szene"
+        assert not np.shares_memory(mesh.raw.vertices, entry.mesh.raw.vertices)
+        assert not np.shares_memory(mesh.raw.faces, entry.mesh.raw.faces)
+
+
 def test_a_click_that_did_not_land_does_not_lock_the_next_one(flow: Any) -> None:
     """Ein verlorener Klick mauert den Platzierungsmodus nicht zu.
 
@@ -1426,7 +1465,12 @@ def _measures_in_the_view(window):
     from PySide6.QtWidgets import QApplication
 
     knopf = window.feature_panel._in_view
-    assert knopf.isVisibleTo(window.feature_panel), "an einer Bohrung steht der Knopf"
+    # ``isHidden`` und nicht ``isVisibleTo(panel)`` — wie an der Stelle weiter
+    # unten, die es seit je so hält: Die Knopfzeile wohnt seit dem 13.09.2026
+    # unter dem Rollbereich des Docks (``FeaturePanel.footer``) und ist damit
+    # kein Kind des Panels mehr; ``isVisibleTo`` liefe dann bis zum Fenster
+    # hinauf, und das wird offscreen nie gezeigt.
+    assert not knopf.isHidden(), "an einer Bohrung steht der Knopf"
     knopf.click()
     window.session.wait_for_idle()
     for _ in range(40):
@@ -2417,10 +2461,12 @@ def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
     try:
         panel = window.feature_panel
         _, _hole = _a_selected_hole(window)
-        assert not panel._cancel.isVisibleTo(panel), "ohne Maße im Bild kein Abbrechen"
+        # ``isHidden``: die Knopfzeile hängt unter dem Rollbereich des Docks
+        # und nicht mehr am Panel (13.09.2026, ``FeaturePanel.footer``).
+        assert panel._cancel.isHidden(), "ohne Maße im Bild kein Abbrechen"
         hole, flow = _a_pulled_slot(window)
-        assert panel._cancel.isVisibleTo(panel), "mit Maßen im Bild steht er unter Übernehmen"
-        assert panel._apply.isVisibleTo(panel)
+        assert not panel._cancel.isHidden(), "mit Maßen im Bild steht er unter Übernehmen"
+        assert not panel._apply.isHidden()
         steps = len(window.session.history.operations)
 
         panel._cancel.click()
@@ -2429,8 +2475,8 @@ def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
         assert not window.viewport.slot_drag_waits(), "der Zug ist verworfen"
         assert len(window.session.history.operations) == steps, "und gerechnet ist nichts"
         assert window.viewport._selected_feature == hole, "die Auswahl bleibt"
-        assert not panel._cancel.isVisibleTo(panel), "der Knopf geht mit den Maßen"
-        assert panel._in_view.isVisibleTo(panel), "der Weg zurück ins Bild steht"
+        assert panel._cancel.isHidden(), "der Knopf geht mit den Maßen"
+        assert not panel._in_view.isHidden(), "der Weg zurück ins Bild steht"
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()

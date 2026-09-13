@@ -234,6 +234,37 @@ def test_a_machine_without_a_graphics_adapter_gets_driver_and_loader_checks(
     assert viewport.unavailable_hint() == ""
 
 
+def test_the_notice_without_a_view_stands_where_the_cards_are_not(qt_app: QApplication) -> None:
+    """Ohne 3D-Ansicht ist dieser Satz die ganze Auskunft — also muss er sichtbar sein.
+
+    Die Karten der Überlagerung liegen über der Ansicht. Links oben
+    angeschlagen verschwand der Satz vollständig hinter der linken Karte: Im
+    Bildschirmfoto eines 1600 auf 1000 großen Fensters stand am Rand das Wort
+    „Die" und sonst nichts (gemessen am 13.09.2026). Gemessen wird die
+    Ausrichtung und nicht das Bild — welche Bildpunkte am Ende leuchten, sagt
+    offscreen ohnehin niemand.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    hinweise = [
+        label
+        for label in viewport.findChildren(QLabel)
+        if "3D-Ansicht" in label.text() or "3D view" in label.text()
+    ]
+
+    assert hinweise, "offscreen gibt es keinen Renderer — dann steht dort der Satz"
+    notice = hinweise[0]
+    assert notice.alignment() & Qt.AlignmentFlag.AlignHCenter, (
+        "am linken Rand liegt die linke Karte darüber"
+    )
+    assert notice.alignment() & Qt.AlignmentFlag.AlignVCenter
+    assert notice.wordWrap(), "ein langer Rat gehört umbrochen, nicht abgeschnitten"
+
+
 def test_renderer_release_is_idempotent(qt_app: QApplication) -> None:
     """Der native Renderer wird genau einmal und über eine Besitzstelle gelöst."""
     from app.ui.viewport import Viewport
@@ -6394,6 +6425,52 @@ def test_a_drag_previews_every_selected_body(qt_app: QApplication) -> None:
     )
 
 
+def test_the_body_follows_the_pointer_without_picking_again(qt_app: QApplication) -> None:
+    """Der Zug am Körper rechnet auf einer Ebene, statt je Bewegung zu picken.
+
+    **Gemessen am echten Fenster** (13.09.2026, ``drilled_v6.p3d``, Bild 1030
+    mal 710, ein Zug über 40 Ereignisse, drei Läufe): ``_plane_point`` rief
+    ``_world_at`` 34-mal je Zug, 3,27 ms je Zeigerereignis im Median und bis zu
+    72 ms im Höchstwert — ein Blick in den Kennungspuffer je Mausbewegung, für
+    eine Frage, die ein Schnitt von Sichtstrahl und Ebene beantwortet. Danach:
+    zwei Picks je Zug und 0,16 ms je Ereignis.
+
+    **Und der Pick beantwortete sie schlechter:** Er gab den Punkt auf der
+    getroffenen Oberfläche zurück. Über dem leeren Hintergrund traf er nichts,
+    und der Körper blieb stehen, während der Zeiger weiterlief — genau das
+    prüft die zweite Hälfte hier, mit einer Stelle, an der die Attrappe keinen
+    Treffer kennt.
+    """
+    from app.ui.viewport import Viewport
+
+    ergebnis = _scene_with_two_bodies()
+    fuehrend = next(iter(ergebnis.scene.objects))
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    renderer.widget = SimpleNamespace(setCursor=lambda cursor: None)
+    viewport.renderer = renderer
+    viewport.show_scene(ergebnis)
+    viewport.select(fuehrend)
+    assert viewport.begin_body_drag_at((0.0, 0.0, 5.0)), "der Zug begann gar nicht"
+
+    renderer.pick_calls.clear()
+    # Die Bildmitte ist der Weltursprung (``RecordingRenderer.display_to_world``),
+    # ein Bildpunkt sind ``1 / scale`` Millimeter.
+    breite, hoehe = renderer.view_size()
+    schritt = 20
+    viewport.continue_body_drag(breite // 2 + schritt, hoehe // 2)
+
+    versetzt = viewport._actors[fuehrend].position()[:2]
+    erwartet = schritt / renderer.scale
+    assert versetzt == pytest.approx((erwartet, 0.0)), (
+        f"der Körper folgte dem Zeiger nicht: {versetzt}"
+    )
+    assert not renderer.pick_calls, (
+        f"eine Mausbewegung des Zugs pickte erneut: {renderer.pick_calls}"
+    )
+
+
 def test_fitting_the_view_takes_every_selected_body(qt_app: QApplication) -> None:
     """Einpassen rahmt die ganze Auswahl, nicht den führenden Körper allein.
 
@@ -6620,6 +6697,52 @@ def test_a_grip_is_asked_before_a_running_placement(qt_app: QApplication) -> Non
     assert len(gezielt) == 1, "eine Bewegung ohne gegriffenen Pfeil gehört dem Zielen"
 
 
+def test_a_held_button_leaves_the_grips_out_of_the_way(qt_app: QApplication) -> None:
+    """Mit gedrückter Taste sucht kein Griff — das ist die Regel des Zeigers.
+
+    Ein Griff, der nicht selbst zieht, fragt bei jeder Bewegung ``pick_item``,
+    und das liest den Kennungspuffer. Während einer Kamerageste sagt die
+    Hervorhebung nichts: Wer dreht, will nicht wissen, was unter dem Zeiger
+    liegt (``_note_pointer`` hält die Merkmalssuche aus demselben Grund an).
+
+    **Gemessen am echten Fenster** (13.09.2026, ``drilled_v6.p3d``, Bild
+    1030 × 710, Drehgeste über 40 Ereignisse, Median aus drei Läufen): ohne
+    Griff 0,47 ms je Ereignis, mit Bewegungsgriff und Skalierwürfel 4,31 ms
+    bei 80 Pickaufrufen für 40 Bewegungen; danach 0,45 ms und kein einziger.
+
+    Der ziehende Griff bekommt seine Bewegungen weiterhin — sonst wäre aus
+    der Ersparnis eine Sperre geworden.
+    """
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    class _Griff:
+        def __init__(self, pressing: bool) -> None:
+            self.pressing = pressing
+            self.gefragt = 0
+
+        def handle(self, event: object) -> bool:
+            self.gefragt += 1
+            return self.pressing
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer(size=(800, 600))
+    griff = _Griff(pressing=False)
+    viewport._gizmo = griff  # type: ignore[assignment]
+
+    viewport._on_pointer(PointerEvent("move", 130, 110))
+    assert griff.gefragt == 1, "eine freie Bewegung hebt den Griff unter dem Zeiger hervor"
+
+    viewport._on_pointer(PointerEvent("move", 140, 120, buttons=frozenset({"right"})))
+    assert griff.gefragt == 1, "mit gedrückter Taste pickt der Griff nicht"
+
+    # Und der ziehende Griff bekommt jede Bewegung: Sonst bliebe der Zug am
+    # Pfeil beim ersten Bildpunkt stehen.
+    griff.pressing = True
+    viewport._on_pointer(PointerEvent("move", 150, 130, buttons=frozenset({"left"})))
+    assert griff.gefragt == 2, "wer zieht, sieht seine Bewegung"
+
+
 def test_every_grip_the_viewport_holds_stands_in_the_right_of_way() -> None:
     """Jeder Griff, den der Viewport führt, wird in ``_on_pointer`` gefragt.
 
@@ -6743,6 +6866,46 @@ def test_the_picker_is_warmed_up_before_the_first_gesture(qt_app: QApplication) 
     viewport.show_scene(None)
     qt_app.processEvents()
     assert len(renderer.pick_calls) == 1, "das Aufwärmen lief ein zweites Mal"
+
+
+def test_new_geometry_warms_the_picker_again(qt_app: QApplication) -> None:
+    """Neue Körper bringen neue Pipelines mit — und die zahlt nicht die erste Geste.
+
+    **Gemessen am echten Fenster** (13.09.2026, ``drilled_v6.p3d``, 990
+    Dreiecke, Aufwärmen beim Start gelaufen): Der erste ``pick_surface`` nach
+    dem Öffnen kostete trotzdem 36, 189 und 739 ms in drei ruhigen Läufen und
+    577 bis 1327 ms unter Fremdlast, jeder weitere unter 8 ms — wgpu baut den
+    Renderdurchgang für die Kennungen der **neuen** Objekte erneut auf.
+    Bezahlt hat ihn wieder die erste Geste, genau das, was das Aufwärmen
+    verhindern soll. Nach dem zweiten Aufwärmen sind es 3,21, 3,33 und
+    3,36 ms.
+
+    Geprüft wird auch hier der **Anschluss** und nicht die Zeit: Offscreen
+    gibt es keinen echten Renderer, und ein Doppel ist immer schnell. Die
+    Zusage ist, dass neue Geometrie ein Aufwärmen auslöst und ein zweiter
+    Aufbau derselben Auswertung keines.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+
+    viewport.show_scene(None)
+    qt_app.processEvents()
+    assert len(renderer.pick_calls) == 1, "der leere Aufbau wärmt auf"
+
+    result = _scene_with_two_bodies()
+    viewport.show_scene(result)
+    qt_app.processEvents()
+    assert len(renderer.pick_calls) == 2, "neue Körper wärmen den Picker erneut auf"
+
+    # **Dieselbe Auswertung noch einmal** — das ist jeder Themenwechsel, jede
+    # Auswahl und jeder Schritt der Schieber. Dort stehen dieselben Netze, und
+    # ein Pick je Schritt wäre ein zusätzlicher Renderdurchgang je Schritt.
+    viewport.show_scene(result)
+    qt_app.processEvents()
+    assert len(renderer.pick_calls) == 2, "derselbe Aufbau wärmt nicht noch einmal auf"
 
 
 @pytest.mark.parametrize("end", ["release", "focus"])

@@ -224,6 +224,29 @@ class QuietHost(QObject):
 UPWARD_FACE: Final = 0.7
 
 
+def for_a_worker(mesh: Any) -> Any:
+    """Eine eigene Kopie eines Szenennetzes für den Nebenthread.
+
+    **Dieselbe Entscheidung wie beim Szenenarbeiter** (``viewport._detached``,
+    12.09.2026): Solange der Arbeiter rechnet, bleibt die Auswertung stehen,
+    und der Hauptthread liest an **demselben** ``MeshData`` weiter — Hüllquader
+    beim Zeigerhalt, Dreiecke beim Merkmalsfleck, Kanten beim Klick.
+    ``prepare_surface``, ``seat_of`` und ``original_surface_hit`` füllen dabei
+    im Nebenthread dieselben trägen trimesh-Caches (Flächennormalen,
+    Dreiecke, Nachbarschaft). Der Cache ist nicht threadsicher.
+
+    Kopiert wird **hier**, im Hauptthread, und nicht im Arbeiter: Eine Kopie,
+    die selbst schon nebenläufig liest, verschöbe das Problem nur. Gemessen am
+    13.09.2026: 0,20 ms bei 3372 Dreiecken.
+
+    Ein exakter Körper gibt seine Anzeigetessellation ab — genau das tat der
+    Aufruf ``as_mesh_data(entry.mesh)`` vorher an dieser Stelle auch, nur eben
+    im falschen Thread.
+    """
+    source = as_mesh_data(mesh)
+    return source.replacing(source.raw.copy())
+
+
 def starts_by_itself(spec: OperationSpec) -> bool:
     """Ob dieser Dialog von selbst in die Platzierung geht.
 
@@ -1021,9 +1044,9 @@ class PlacementFlow(QObject):
             else None
         )
         self._surface_busy = True
+        mesh = for_a_worker(entry.mesh)
 
         def compute() -> Any:
-            mesh = as_mesh_data(entry.mesh)
             at, face = point, cell
             if face < 0 or clip_planes:
                 if ray is None:
@@ -1117,9 +1140,9 @@ class PlacementFlow(QObject):
         # sie doch woanders hinsetzen will, klickt; siehe
         # :attr:`_seated_at_feature`.
         self._seated_at_feature = True
+        mesh = for_a_worker(entry.mesh)
 
         def compute() -> Any:
-            mesh = as_mesh_data(entry.mesh)
             seat = placement.seat_of(mesh, feature, entry.features)
             if seat is None:
                 return None
@@ -1191,13 +1214,13 @@ class PlacementFlow(QObject):
         object_id = entry.id
         first = int(face.face_indices[0])
         features = entry.features
+        mesh = for_a_worker(entry.mesh)
 
         def compute() -> Any:
             from shapely.geometry import Point
 
             from app.core.sketch.planes import to_plane, to_world
 
-            mesh = as_mesh_data(entry.mesh)
             prepared = placement.prepare_surface(mesh, first, features)
             area = prepared.area
             middle = area.centroid

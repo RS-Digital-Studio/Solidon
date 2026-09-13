@@ -127,7 +127,7 @@ from app.ui.render.api import (
     hex_of,
 )
 from app.ui.render.edges import feature_edges
-from app.ui.render.gizmo import ARROW_SHARE, Gizmo
+from app.ui.render.gizmo import ARROW_SHARE, Gizmo, ray_plane_hit
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_handle import SlotHandle
@@ -4328,6 +4328,17 @@ class Viewport(QWidget):
             if hint := unavailable_hint():
                 notice.setText(f"{notice.text()} {hint}")
             notice.setWordWrap(True)
+            # **Mittig, sonst liest ihn niemand.** Die Karten der Überlagerung
+            # liegen über der Ansicht — links Objektbaum, Parameter und
+            # Verlauf, rechts Bericht und Auswahl. Links oben angeschlagen
+            # verschwand der Satz vollständig hinter der linken Karte; im
+            # Bildschirmfoto stand am Fensterrand das Wort „Die" und sonst
+            # nichts (gemessen am 13.09.2026, 1600 auf 1000). In der Mitte
+            # bleibt er in der freien Fläche zwischen den Karten stehen —
+            # und dort ist der einzige Ort, an dem diese Auskunft samt ihrem
+            # Rat (§2.7) überhaupt ankommt.
+            notice.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            notice.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
             self._layout.addWidget(notice)
             return
 
@@ -4532,7 +4543,19 @@ class Viewport(QWidget):
         Bild, nimmt aber nichts an, und jede Geste fällt durch zur Kamera.
         Genau das tat der Vorschaugriff bis zum 09.09.2026 (Befund Robert:
         „wenn ich verschieben will verschiebe ich nur die Scene").
+
+        **Mit gedrückter Taste sucht kein Griff.** Wer eine Taste hält, führt
+        die Kamera oder den Körper; die Hervorhebung unter dem Zeiger sagt
+        dabei nichts, und jeder Griff, der nicht selbst zieht, stellte dafür
+        einen eigenen ``pick_item`` — das ist ein Lesen des Kennungspuffers je
+        Griff und Ereignis. Gemessen am echten Fenster (13.09.2026,
+        ``drilled_v6.p3d``, Bild 1030 mal 710, Drehgeste über 40 Ereignisse):
+        ohne Griff 0,47 ms je Ereignis im Median, mit Bewegungsgriff und
+        Skalierwürfel 4,31 ms und 80 Pickaufrufe für 40 Bewegungen. Das ist
+        dieselbe Regel, die der Zeiger seit je befolgt (``_note_pointer``: „Ein
+        Zug an der Kamera stoppt die Suche ganz"), nur für die Griffe.
         """
+        held = event.kind == "move" and bool(event.buttons)
         for handle in (
             self._placement_grip,
             self._preview_gizmo,
@@ -4540,7 +4563,9 @@ class Viewport(QWidget):
             self._scale_handle,
             self._slot_handle,
         ):
-            if handle is not None and handle.handle(event):
+            if handle is None or (held and not handle.pressing):
+                continue
+            if handle.handle(event):
                 if (
                     event.kind == "release"
                     and handle is self._slot_handle
@@ -5565,6 +5590,14 @@ class Viewport(QWidget):
         # Wartezeit in den Moment, in dem der Kunde die Startfläche ansieht
         # oder eine Datei aussucht, statt in seine erste Geste am Modell.
         self._warm_the_picker()
+        # **Und neue Geometrie bringt neue Pipelines mit** — gemessen am
+        # 13.09.2026 am echten Fenster: Der leere Aufbau hatte aufgewärmt, und
+        # der erste Pick nach dem Öffnen von ``drilled_v6.p3d`` kostete
+        # trotzdem 715 ms (Median aus drei Läufen; danach unter 8 ms). Bezahlt
+        # hat ihn wieder die erste Geste. Gemerkt wird es hier, wo die vorige
+        # Auswertung noch steht; aufgewärmt am Ende, wo die neuen Aktoren
+        # stehen (:meth:`_warm_again_for_new_geometry`).
+        fresh_geometry = result is not None and result is not self._actor_scene
         for actor in self._actors.values():
             self.renderer.remove(actor)
         self._actors.clear()
@@ -5737,6 +5770,35 @@ class Viewport(QWidget):
         if restore_finding:
             self._draw_finding_mark()
         self._render_now()
+        if fresh_geometry:
+            self._warm_again_for_new_geometry()
+
+    def _warm_again_for_new_geometry(self) -> None:
+        """Nach neuen Körpern noch einmal aufwärmen (§2.8).
+
+        Der Aufruf am Anfang von :meth:`_apply_scene` fängt den Programmstart:
+        Dort ist die Szene leer, und der Pick baut den Renderdurchgang für die
+        Kennungen auf. **Für die Körper darin baut wgpu ihn erneut** — gemessen
+        am 13.09.2026 am echten Fenster, ``drilled_v6.p3d``, Aufwärmen beim
+        Start gelaufen: der erste ``pick_surface`` danach 36, 189 und 739 ms in
+        drei ruhigen Läufen, 577 bis 1327 ms in drei Läufen unter Fremdlast;
+        jeder weitere unter 8 ms. Die Spanne ist groß, weil der Treiber Teile
+        seiner Übersetzung wiederverwendet — **keiner** der Läufe lag in der
+        Nähe der zwei bis vier Millisekunden eines warmen Picks. Bezahlt hat
+        das die erste Geste des Kunden, genau das, was das Aufwärmen verhindern
+        soll; danach sind es 3,21, 3,33 und 3,36 ms.
+
+        **Nur bei neuer Geometrie**, nicht bei jedem Aufbau: ``show_scene``
+        läuft auch bei jedem Themenwechsel, jeder Auswahl und jedem Schritt der
+        Schieber für Explosion, Schnitt und Schicht. Dort stehen dieselben
+        Netze, und ein Pick je Schieberschritt wäre ein zusätzlicher
+        Renderdurchgang je Schritt.
+
+        Der Pick selbst liegt im nächsten Leerlauf (:meth:`_warm_the_picker`),
+        also nach diesem Bild und vor der nächsten Geste.
+        """
+        self._picker_warm = False
+        self._warm_the_picker()
 
     def _warm_the_picker(self) -> None:
         """Den ersten Pick vorziehen, damit die erste Geste ihn nicht bezahlt.
@@ -14130,9 +14192,42 @@ class Viewport(QWidget):
         self._queue_feature_label_layout()
 
     def _plane_point(self, x: int, y: int) -> tuple[float, float] | None:
-        """Wo der Zeiger auf der Bettebene steht, in Weltkoordinaten."""
-        point = self._world_at(x, y)
-        return self._plane_point_of(point) if point is not None else None
+        """Wo der Zeiger auf der Ebene des gegriffenen Punktes steht.
+
+        **Gerechnet und nicht gepickt** (13.09.2026). Hier stand
+        ``self._world_at(x, y)``, also ein Blick in den Kennungspuffer je
+        Mausbewegung — gemessen am echten Fenster (``drilled_v6.p3d``, Bild
+        1030 mal 710, ein Zug über 40 Ereignisse, drei Läufe): 34 Picks je Zug,
+        3,27 ms je Zeigerereignis im Median und bis zu 72 ms im Höchstwert.
+        Ein Schnitt von Sichtstrahl und Ebene kostet nichts und beantwortet
+        dieselbe Frage: danach zwei Picks je Zug (beim Drücken, wo sie
+        hingehören) und 0,16 ms je Ereignis.
+
+        **Und er beantwortet sie besser.** Der Pick gab den Punkt auf der
+        *getroffenen Oberfläche* zurück, und davon wurden x und y genommen —
+        die Ebene stand nur im Namen dieser Methode. Zwei Folgen hatte das,
+        beide sichtbar: Über dem leeren Hintergrund traf der Pick nichts, der
+        Körper blieb stehen und sprang weiter, sobald der Zeiger wieder über
+        etwas stand; und wo der Zeiger von einer hohen Fläche auf eine tiefe
+        rutschte, versprang er um den Unterschied der Perspektive.
+
+        Die Ebene ist die waagerechte durch den Punkt, an dem gegriffen wurde
+        (:attr:`_body_drag_from`) — dieselbe Zusage wie am Griff, dessen
+        Pfeile in der Ebene ihres Ansatzes ziehen. Ohne Zug gibt es keine
+        Ebene und nichts zu antworten.
+        """
+        anchor = self._body_drag_from
+        if anchor is None or self.renderer is None:
+            return None
+        near = self.renderer.display_to_world(x, y, 0.0)
+        far = self.renderer.display_to_world(x, y, 1.0)
+        if near is None or far is None:
+            return None
+        direction = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
+        hit = ray_plane_hit(near, direction, anchor, (0.0, 0.0, 1.0))
+        if hit is None:
+            return None
+        return self._plane_point_of((float(hit[0]), float(hit[1]), float(hit[2])))
 
     def _plane_point_of(self, point: Vec3) -> tuple[float, float] | None:
         """Die Bettkoordinaten eines Ansichtspunkts."""

@@ -1014,9 +1014,11 @@ das dasselbe, ab dem zweiten wandert der Bezug mit, während der Puffer bleibt
 tauscht, in entgegengesetzte Richtungen. `SlotHandle._built_seats` hält, wo sie
 gebaut wurden.
 
-**`SlotBar.active` ist der Zustand, nicht `isVisible()`.** Qt beantwortet die
-Sichtbarkeit falsch, solange nichts gezeigt wurde — offscreen also immer. Wer
-eine Bedingung daran hängt, prüft die Testumgebung statt der Sache.
+**Gefragt wird der Zustand und nie `isVisible()`.** Das galt schon der
+gefallenen Leiste (`SlotBar.active`) und gilt der Frage, die an ihre Stelle
+getreten ist: Qt beantwortet die Sichtbarkeit falsch, solange nichts gezeigt
+wurde — offscreen also immer. Wer eine Bedingung daran hängt, prüft die
+Prüfumgebung statt der Sache.
 
 ### Ein Griff steht vor allem, was über der Ansicht liegt (11.09.2026)
 
@@ -1030,6 +1032,26 @@ sobald eine Bohrung gewählt war und die Platzierung von selbst begann.
 
 Verschluckt wird dabei nichts: Ein Griff nimmt ein `move` nur, wenn er
 gedrückt gehalten wird, und ein `press` nur über einem getroffenen Pfeil.
+
+**Und mit gedrückter Taste wird er gar nicht erst gefragt** (13.09.2026). Wer
+eine Taste hält, führt die Kamera oder den Körper; die Hervorhebung unter dem
+Zeiger sagt dabei nichts — dieselbe Regel, die der Zeiger seit je befolgt („Ein
+Zug an der Kamera stoppt die Suche ganz"). Jeder Griff, der nicht selbst zieht,
+stellte dafür einen eigenen `pick_item`, und das liest den Kennungspuffer.
+Gemessen am echten Fenster (`drilled_v6.p3d`, Bild 1030 mal 710, Drehgeste über
+40 Ereignisse, Median aus drei Läufen):
+
+| | je Zeigerereignis | `pick_item` |
+|---|---|---|
+| ohne Griff | 0,47 ms | 0 |
+| mit Bewegungsgriff und Würfel | **4,31 ms** | 80 für 40 Bewegungen |
+| dieselbe Geste danach | 0,45 ms | 0 |
+
+`_on_pointer` überspringt dafür jeden Griff, der nicht `pressing` ist, sobald
+`event.buttons` belegt ist — der **ziehende** Griff bekommt seine Bewegungen
+weiter, sonst bliebe der Zug am Pfeil beim ersten Bildpunkt stehen
+(`tests/test_viewport_decisions.py::test_a_held_button_leaves_the_grips_out_of_the_way`).
+Freies Schweben ohne Taste hebt weiter hervor; dort ist die Suche die Auskunft.
 
 **Und die zweite Ebene ist Qt selbst.** Was als Widget über der Renderfläche
 liegt, bekommt die Zeigerereignisse vor jedem `PointerEvent` — die Vorfahrt
@@ -1422,9 +1444,11 @@ seines Zustands.
 Was davon als Regel bleibt:
 
 * **Wer ein Ereignis vor der Navigation braucht, bekommt es vor ihr.**
-  `Viewport._on_pointer` reicht jedes Ereignis erst an den Zeiger, dann an
-  Griff und Skalierwürfel, zuletzt an den Navigator — eine Vorfahrt an einer
-  Stelle statt dreier Beobachter am Interactor.
+  `Viewport._on_pointer` reicht jedes Ereignis erst an die Griffe, dann an eine
+  laufende Platzierung, dann an den Zeiger, zuletzt an den Navigator — eine
+  Vorfahrt an einer Stelle statt dreier Beobachter am Interactor. (Bis zum
+  10.09.2026 stand der Zeiger vorn; die heutige Reihenfolge und ihr Anlass
+  stehen unter „Ein Griff steht vor allem, was über der Ansicht liegt".)
 * **Ein Klick ist ein Klick, auch mit Zittern**, und ein Klick, der nichts
   wählt, lässt die Taste der Kamera (`tests/test_navigator.py`,
   `test_a_wobbly_click_stays_a_click` und
@@ -1542,6 +1566,19 @@ ein Vorbild haben.
   ausschließt, ist `pan` und ein *gezogenes* Werkzeug, nicht `pan` und ein
   Klick. Auf dem **gewählten** Körper führt links weiter das Teil (Robert,
   03.09.2026, gegen den Vorschlag, das dem Griff allein zu lassen).
+* **Und dieser Zug rechnet auf einer Ebene, er pickt nicht** (13.09.2026).
+  Gepickt wird zweimal: beim Drücken (liegt dort der gewählte Körper?) und
+  beim Zugbeginn (wo wurde gegriffen?). Jede Bewegung danach schneidet den
+  Sichtstrahl mit der waagerechten Ebene durch den gegriffenen Punkt
+  (`_plane_point` über `render.gizmo.ray_plane_hit`). Vorher stand dort ein
+  `_world_at` je Mausbewegung — gemessen am echten Fenster (`drilled_v6.p3d`,
+  Bild 1030 mal 710, ein Zug über 40 Ereignisse, drei Läufe): 34 Picks je Zug
+  und 3,27 ms je Ereignis im Median, danach zwei Picks und 0,16 ms. **Der Pick
+  beantwortete die Frage auch falsch:** Er gab den Punkt auf der getroffenen
+  *Oberfläche* zurück, und davon wurden x und y genommen — über dem leeren
+  Hintergrund traf er nichts (der Körper blieb stehen und sprang weiter,
+  sobald der Zeiger wieder über etwas stand), und beim Wechsel von einer hohen
+  auf eine tiefe Fläche versprang er um den Unterschied der Perspektive.
 * **Das Kippen ist eine eigene Rechnung, keine Bewegung des Renderers.**
   (Unter VTK gab es „nur nach oben und unten" im Trackball nicht, und
   `Rotate` dafür zu überschreiben hieße, am Zustand des Interactors zu
@@ -1636,9 +1673,30 @@ Einmal je Renderer (`_picker_warm`); die Pipeline bleibt danach stehen, auch
 über Szenenwechsel hinweg. Gemessen nach dem Umbau: die erste Geste kostet 46
 statt 511 ms.
 
+### Und neue Körper bringen neue Pipelines mit (13.09.2026)
+
+„Die Pipeline bleibt danach stehen" gilt für den Durchgang, nicht für die
+Objekte darin. **Gemessen am echten Fenster** (`drilled_v6.p3d`, 990 Dreiecke,
+Aufwärmen beim Start gelaufen): Der erste `pick_surface` nach dem Öffnen kostete
+36, 189 und 739 ms in drei ruhigen Läufen und 577 bis 1327 ms in drei Läufen
+unter Fremdlast; jeder weitere unter 8 ms. Die Spanne ist groß, weil der
+Treiber Teile seiner Übersetzung wiederverwendet — keiner der sechs Läufe lag
+in der Nähe eines warmen Picks. Bezahlt hat es wieder die erste Geste, und das
+war genau der Fehler, gegen den das Aufwärmen gebaut wurde.
+
+`_warm_again_for_new_geometry` am **Ende** von `_apply_scene` armiert
+`_picker_warm` neu, sobald die Auswertung eine andere ist als die, für die die
+Aktoren zuletzt gebaut wurden. Danach: 3,21, 3,33 und 3,36 ms.
+
+**Nur bei neuer Geometrie**, und die Bedingung trägt: `show_scene` läuft auch
+bei jedem Themenwechsel, jeder Auswahl und jedem Schritt der Schieber für
+Explosion, Schnitt und Schicht. Dort stehen dieselben Netze, und ein Pick je
+Schieberschritt wäre ein zusätzlicher Renderdurchgang je Schritt.
+
 **Geprüft wird der Anschluss, nicht die Zeit** — offscreen gibt es keinen
 echten Renderer, und ein Doppel ist immer schnell
-(`tests/test_viewport_decisions.py::test_the_picker_is_warmed_up_before_the_first_gesture`).
+(`tests/test_viewport_decisions.py::test_the_picker_is_warmed_up_before_the_first_gesture`
+und `::test_new_geometry_warms_the_picker_again`).
 Die Zahlen stehen im Prüfstand, nicht in der Suite.
 
 ## Der Drehpunkt ist, was in der Bildmitte steht (04.09.2026)

@@ -40,9 +40,11 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   `HEADLIGHT_GAIN` gleicht das auf rund 15 Prozent an das frühere Bild an,
   mehr geht mit einem Faktor nicht.
 * **Kein Interaktionsstil des Renderers.** Zeigergesten kommen als
-  `PointerEvent` beim Viewport an (`_on_pointer`), der sie erst dem Zeiger,
-  dann den Griffen und zuletzt dem Navigator gibt. Die Kamera führt der
-  Navigator über den Vertrag (`set_camera_pose`, `dolly`).
+  `PointerEvent` beim Viewport an (`_on_pointer`), der sie erst den Griffen,
+  dann einer laufenden Platzierung, dann dem Zeiger und zuletzt dem Navigator
+  gibt; mit gedrückter Taste überspringt er jeden Griff, der nicht selbst zieht
+  (die Regel und ihre Messung stehen in `.claude/rules/ansicht.md`). Die Kamera
+  führt der Navigator über den Vertrag (`set_camera_pose`, `dolly`).
   Außerhalb der Renderfläche empfangene Qt-Mausereignisse kommen über
   `deliver_pointer` in denselben Zeigerpfad; bedienbare Überlagerungen behalten
   ihre Ereignisse. Die Koordinatenumrechnung gehört weiterhin dem Renderer.
