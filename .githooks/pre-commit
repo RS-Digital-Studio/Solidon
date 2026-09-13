@@ -42,10 +42,20 @@ if ! printf '%s\n' "$gestaged" | grep -qE '^(app|tools)/.*\.py$'; then
   exit 0
 fi
 
-python=".venv/Scripts/python.exe"
-[ -x "$python" ] || python=".venv/bin/python"
+# **Die Umgebung liegt am Hauptklon, nicht am Arbeitsverzeichnis.** Die
+# Prüfläufe und die Agentensitzungen dieses Projekts arbeiten in
+# `git worktree`-Bäumen unter `.claude/worktrees/`; dort gibt es keine `.venv`,
+# und ein relativer Pfad fand sie nicht. Der Hook lief trotzdem — `hooksPath`
+# steht absolut —, meldete „keine .venv gefunden" und ließ jeden Commit durch.
+# Damit war die Sprachprüfung genau dort abgeschaltet, wo mehrere Sitzungen
+# nebeneinander committen (gemessen am 13.09.2026 in
+# `.claude/worktrees/agent-…`: `ls .venv` → nicht vorhanden,
+# `core.hooksPath` → `F:\3D Druck\.githooks`).
+wurzel=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+python="$wurzel/.venv/Scripts/python.exe"
+[ -x "$python" ] || python="$wurzel/.venv/bin/python"
 [ -x "$python" ] || {
-  echo "pre-commit: keine .venv gefunden, keine Sprachprüfung." >&2
+  echo "pre-commit: keine .venv unter $wurzel gefunden, keine Sprachprüfung." >&2
   exit 0
 }
 

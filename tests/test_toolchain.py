@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tomllib
@@ -675,6 +676,41 @@ def test_the_upload_tool_carries_no_password_of_its_own() -> None:
     assert "@" not in upload.TEMPLATE["host"], "kein Zugang in der Adresse"
 
 
+def test_the_web_access_file_is_written_and_read_as_a_private_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der FTPS-Zugang bekommt die Rechte eines Geheimnisses, nicht die der Maske.
+
+    ``make_stats_access.py`` und ``setup_activation_server.py`` legen ihre
+    privaten Dateien exklusiv mit 0600 an. ``.webserver.json`` war der
+    Zwilling, der stehen geblieben ist: ``write_text`` schrieb sie mit der
+    Vorgabemaske — unter POSIX 0644 —, und danach trug der Betreiber das
+    FTPS-Passwort ein. Geprüft wird beides, Anlegen und Lesen; auf Windows
+    gibt es keine POSIX-Rechte, dort bleibt die Verweisprüfung.
+    """
+    import tools.upload_website as upload
+
+    target = tmp_path / ".webserver.json"
+    monkeypatch.setattr(upload, "ACCESS_FILE", target)
+
+    assert upload.write_template() == 0
+    if os.name != "nt":
+        assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+    filled = dict(upload.TEMPLATE, password="geheim")
+    target.write_text(json.dumps(filled), encoding="utf-8")
+    if os.name != "nt":
+        target.chmod(0o600)
+        assert upload.read_access()["password"] == "geheim"
+        target.chmod(0o644)
+        with pytest.raises(SystemExit) as refused:
+            upload.read_access()
+        assert "chmod 600" in str(refused.value)
+        assert "geheim" not in str(refused.value), "die Absage nennt kein Passwort"
+    else:
+        assert upload.read_access()["password"] == "geheim"
+
+
 def test_only_files_below_the_website_go_up(tmp_path: Path) -> None:
     """Der Zielpfad wird aus dem lokalen abgeleitet — was daneben liegt, hat
     dort keinen abzuleiten, und ein geratener wäre schlimmer als eine Absage.
@@ -720,7 +756,30 @@ def test_developer_notes_stay_off_the_public_server() -> None:
     for name in private_projects:
         assert not upload.wanted(upload.LOCAL_ROOT / "teile" / name)
     assert not upload.wanted(upload.LOCAL_ROOT / "teile" / "erzeugungsnotiz.json")
+    # **Der Zählspeicher einer älteren Fassung.** ``count.php`` legt ihn heute
+    # neben ``httpdocs`` an und weist einen Ort im Dokumentenstamm ab — das
+    # schützt den neuen Zustand. Am Abend des 02.09.2026 lagen in
+    # ``website/api/.stats`` vier echte Zählzeilen aus sieben Minuten,
+    # entstanden unter der alten Fassung (ROADMAP). So ein liegen gebliebener
+    # Ordner trägt pseudonyme Nutzung und ging vom Abgleich mit hinauf: Weder
+    # ``.jsonl`` noch ``salt.json`` stand auf einer Sperrliste, und
+    # ``salt.json`` ist an der Endung nicht von ``version.json`` zu
+    # unterscheiden.
+    for leftover in (
+        "api/.stats/2026-09.jsonl",
+        "api/.stats/salt.json",
+        "api/.stats/rate.json",
+        "api/.stats/anmeldeversuche.json",
+        "api/.stats/quota.lock",
+        "api/.stats/rate.key",
+    ):
+        path = upload.LOCAL_ROOT / leftover
+        assert not upload.wanted(path), leftover
+        assert not upload.allowed_by_name(path), leftover
+
     assert upload.wanted(upload.LOCAL_ROOT / "index.html")
+    assert upload.wanted(upload.LOCAL_ROOT / "version.json")
+    assert upload.wanted(upload.LOCAL_ROOT / ".htaccess"), "die Serverregeln gehören hinauf"
     assert upload.wanted(upload.LOCAL_ROOT / "bilder" / "beleg.webp")
     for retired in (
         "api/shared.php",
@@ -1337,6 +1396,47 @@ def test_every_hook_is_executable_in_the_repository() -> None:
         f"Diese Hooks sind im Repository nicht ausführbar: {stumm}. "
         "Auf Linux und macOS überspringt Git sie wortlos. "
         "Zu beheben mit: git update-index --chmod=+x <pfad>"
+    )
+
+
+def test_the_language_hook_finds_the_interpreter_from_a_worktree() -> None:
+    """Der Sprachhook sucht seine Umgebung am Hauptklon, nicht am Arbeitsordner.
+
+    ``core.hooksPath`` steht absolut, der Hook läuft also auch in einem
+    ``git worktree`` — die Prüfläufe und die Agentensitzungen dieses Projekts
+    arbeiten ausschließlich dort. Eine ``.venv`` gibt es in einem Worktree
+    nicht, und mit dem relativen ``.venv/Scripts/python.exe`` fand der Hook
+    keine: Er meldete „keine .venv gefunden" und ließ jeden Commit durch.
+    Abgeschaltet war die Prüfung damit genau dort, wo mehrere Sitzungen
+    nebeneinander committen (gemessen am 13.09.2026).
+
+    Zwei Hälften: Jede Interpreterzuweisung im Skript muss am abgeleiteten
+    Hauptklon hängen, und die Ableitung selbst wird nachgefahren — sie muss
+    auf **die** Umgebung zeigen, aus der dieser Lauf kommt.
+    """
+    hook = (Path(__file__).parent.parent / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+    assignments = [line.strip() for line in hook.splitlines() if line.strip().startswith("python=")]
+    assert assignments, "der Hook wählt keinen Interpreter mehr"
+    relative = [line for line in assignments if not line.startswith('python="$wurzel/')]
+    assert not relative, (
+        "Ein relativer Interpreterpfad findet in einem Worktree keine Umgebung "
+        f"und schaltet die Sprachprüfung dort stumm ab: {relative}"
+    )
+
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=Path(__file__).parent.parent,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    root = Path(common).parent
+    candidates = [root / ".venv" / "Scripts" / "python.exe", root / ".venv" / "bin" / "python"]
+    found = [path for path in candidates if path.exists()]
+    assert found, f"unter {root} liegt keine Umgebung — der Hook fände dort keine"
+    assert Path(sys.executable).resolve() == found[0].resolve(), (
+        "Der Hook nähme einen anderen Interpreter als dieser Lauf: "
+        f"{found[0]} statt {sys.executable}"
     )
 
 

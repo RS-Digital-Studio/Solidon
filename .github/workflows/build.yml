@@ -747,6 +747,18 @@ jobs:
           # heute 6, und das Skript läuft unter beiden.
           if (-not $compiler) { $compiler = @('C:\Program Files (x86)\Inno Setup 7\ISCC.exe', 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1 }
           if (-not $compiler) { throw "Inno Setup (7 oder 6) fehlt auf dem GitHub-Runner." }
+          # **Welche Fassung gebaut hat, gehört ins Protokoll** (RM-055). Der
+          # Griff oben nimmt, was da ist — heute 6, morgen 7 —, und bisher stand
+          # nirgends, welche es war: weder ein Versionsaufruf vor dem Bau noch
+          # ein Eintrag in der Releaseakte. Gelesen wird die Dateiversion und
+          # nicht `ISCC` ohne Argumente: Der Aufruf gibt zwar den Banner aus,
+          # endet aber mit einem Nichtnull-Code, und ein Schritt mit
+          # `$LASTEXITCODE`-Prüfung daneben stürbe daran.
+          $innoVersion = (Get-Item -LiteralPath $compiler).VersionInfo.ProductVersion
+          Write-Host "Inno Setup: $compiler ($innoVersion)"
+          if ($env:GITHUB_STEP_SUMMARY) {
+            "Inno Setup: ``$compiler`` ($innoVersion)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          }
           $handoff = Get-Content -Raw -LiteralPath $env:SIGNING_HANDOFF | ConvertFrom-Json
           & $compiler "/DAppName=Solidon3D" "/DAppVersion=$($handoff.app_version)" "/DAppVendor=RS Digital" "/DAppId=de.rsdigital.solidon3d" "/DAppUrl=https://solidon3d.de/" "/DProjectSuffix=.p3d" "/DPartFileSuffix=.solidon-part" "/DPartFileMimeType=application/vnd.solidon.part+json" "/DSourceDir=$(Join-Path $env:SIGNING_ROOT 'dist/Solidon3D')" "/DOutputDir=$(Join-Path $env:SIGNING_ROOT 'dist')" "/DLicenseFile=$(Join-Path $env:SIGNING_ROOT 'packaging/eula.txt')" "/DSetupIconFile=$(Join-Path $env:SIGNING_ROOT 'packaging/solidon3d.ico')" (Join-Path $env:SIGNING_ROOT "packaging/solidon3d.iss")
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup konnte den Installer nicht bauen." }
