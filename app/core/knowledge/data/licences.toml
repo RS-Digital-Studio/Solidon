@@ -72,6 +72,8 @@
 #   lazy_loader               BSD-3       Abhängigkeit von scikit-image
 #   omegaconf                 BSD-3       Konfiguration im TripoSG-Quelltext
 #   antlr4-python3-runtime    BSD-3       Abhängigkeit von omegaconf, Version 4.9.3
+#   setuptools                MIT         Bau-Backend für ANTLR, nur wenn ComfyUI
+#                                         keines hat; Version 83.0.0
 #
 # Der Grund für die Version steht in ``comfy_setup.PACKAGES``: Die 4.13
 # serialisiert den Automaten anders, den ``omegaconf`` liest.

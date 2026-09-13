@@ -109,8 +109,16 @@ Spulen und Journal einer gemeinsamen Anzeige stammen aus derselben Momentaufnahm
 Eine erforderliche Migration wartet im Leser nicht auf eine fremde Sperre und
 meldet bei Konkurrenz den Wiederholungsweg. Auf Windows erlaubt der offene
 Dateigriff den Austausch; `FileRenameInfoEx` mit POSIX-Semantik erhält offene
-Leser am vollständigen alten Stand. Jeder Schreibweg verweigert das Überschreiben
-einer beschädigten oder neueren Datei.
+Leser am vollständigen alten Stand. Wo ein Dateisystem diesen Aufruf ablehnt —
+FAT32, exFAT, eine Netzfreigabe ohne diese SMB-Fähigkeit, Windows vor 1709 —
+tauscht `_replace_snapshot` gewöhnlich aus; dort verlangt der Austausch eine
+freie Zieldatei, und ein gleichzeitiger Leser ergibt einen wiederholbaren
+Schreibfehler statt eines dauerhaft gesperrten Lagers. Jeder Schreibweg
+verweigert das Überschreiben einer beschädigten oder neueren Datei. Ein
+Lesefehler trägt `RETRY` als Handlung und nicht den Vorschlag einer
+`ValidationError`: Zu korrigieren ist hier kein Feld in einem Dialog, sondern
+eine Datei — der Satz nennt die Sicherung, und danach ist genau der
+Wiederholungsknopf die Fortsetzung.
 
 `book` nimmt einen ganzen Vorgang an. Seine Kennung macht Zustellungen
 idempotent; ein gleicher Fingerabdruck mit neuer Vorgangskennung bedeutet

@@ -23,6 +23,7 @@ automatische Weg ertrinkt in Fehlalarmen, weil Fach- und Alltagssprache sich
 
 from __future__ import annotations
 
+import ast
 import html
 import json
 import re
@@ -246,6 +247,25 @@ WEG_MUSTER = re.compile(r"[A-ZÄÖÜ][\w \-äöüß]{1,28}(?: → [A-ZÄÖÜ][\w
 WEG_QUELLEN = ("app/core/manual.py", "app/core/tour.py")
 
 
+def _kundentexte(name: str) -> str:
+    """Die Zeichenketten einer Quelle — der Code dazwischen ist kein Kundentext.
+
+    Bis zum 13.09.2026 liefen die Muster über den rohen Quelltext, und
+    ``return (*INTRODUCTION, _spacemouse_page(), *knowledge_pages(), …)`` las
+    sich als kursiv ausgezeichnetes Bedienelement „INTRODUCTION,
+    _spacemouse_page(),“ (Fund des Reviews). Der Syntaxbaum kennt die
+    Zeichenketten, und umbrochene Literale fügt er selbst zusammen.
+    """
+    source = Path(name).read_text(encoding="utf-8")
+    if not name.endswith(".py"):
+        return re.sub(r'"\s*\n\s*"', "", source)
+    return "\n".join(
+        node.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    )
+
+
 def _ohne_zierat(text: str) -> str:
     """Ein Menütext, wie ihn ein Satz schreibt: ohne Mnemonic und Auslassung."""
     return text.replace("&", "").replace("…", "").replace("...", "").strip(" .")
@@ -342,9 +362,7 @@ def test_every_menu_path_in_the_texts_exists_in_the_menu_bar(
     funde = []
     geprüft = 0
     for name in WEG_QUELLEN:
-        text = Path(name).read_text(encoding="utf-8")
-        # Eine über mehrere Zeilen umbrochene Zeichenkette ist ein Satz.
-        text = re.sub(r'"\s*\n\s*"', "", text)
+        text = _kundentexte(name)
         for satz in sorted(set(WEG_MUSTER.findall(text))):
             geprüft += 1
             grund = _weg_urteil(satz.strip(), wege, leiste)
@@ -395,7 +413,7 @@ def test_every_control_the_texts_name_is_one_the_application_says() -> None:
 
     genannt: dict[str, set[str]] = {}
     for name in WEG_QUELLEN:
-        text = re.sub(r'"\s*\n\s*"', "", Path(name).read_text(encoding="utf-8"))
+        text = _kundentexte(name)
         for treffer in NAME_MUSTER.findall(text):
             genannt.setdefault(treffer.strip(), set()).add(Path(name).name)
 
