@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from app.core.activation import certificate, device, ed25519, key
-from tests.php_probe import missing_php, php_executable
+from tests.php_probe import php_command
 from tools.make_licence_keys import make_key
 from tools.setup_activation_server import main as setup_activation_server
 
@@ -96,25 +96,7 @@ class _MemoryKeyring:
 
 
 def _php_command(port: int) -> list[str]:
-    executable = php_executable("PHP fehlt; der Server-Integrationstest braucht PHP 7.4+")
-    command = [executable]
-    modules = subprocess.run(
-        [executable, "-m"], capture_output=True, text=True, check=False
-    ).stdout.lower()
-    if "sodium" not in modules or "pdo_sqlite" not in modules:
-        extension = Path(executable).parent / "ext"
-        sodium = extension / ("php_sodium.dll" if os.name == "nt" else "sodium.so")
-        sqlite = extension / ("php_pdo_sqlite.dll" if os.name == "nt" else "pdo_sqlite.so")
-        if not sodium.is_file() or not sqlite.is_file():
-            missing_php("PHP ist ohne sodium oder PDO_SQLITE installiert")
-        command += [
-            "-d",
-            f"extension_dir={extension}",
-            "-d",
-            f"extension={sodium.name}",
-            "-d",
-            f"extension={sqlite.name}",
-        ]
+    command = php_command("sodium", "pdo_sqlite")
     return [*command, "-S", f"127.0.0.1:{port}", "-t", "website"]
 
 
@@ -384,7 +366,7 @@ def test_health_limits_requests_before_reading_the_signing_key(tmp_path: Path) -
         "SOLIDON_ACTIVATION_DB": str(database),
         "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": ed25519.public_key(ACTIVATION_SEED).hex(),
     }
-    with _php_server(tmp_path, environment) as base:
+    with _php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
         for _attempt in range(60):
             status, answer = _get(f"{base}/activation-health.php")
             assert status == 200, answer

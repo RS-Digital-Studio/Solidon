@@ -35,19 +35,25 @@ const FALLBACK = 'https://solidon3d.de/#download';
  * Gelesen wird nur das Muster, nie der Name selbst: Was hier hereinkommt,
  * stammt aus der Adresszeile und wird weder in einen Pfad noch in eine
  * Ausgabe gesetzt.
+ *
+ * **Jedes Muster endet mit `$/D`.** Ohne den Modifikator erlaubt PCRE hinter
+ * dem `$` noch einen abschließenden Zeilenumbruch — `Solidon3D-Setup-1.0.exe`
+ * mit angehängtem `%0A` gälte dann als derselbe Name. Die Endpunkte unter
+ * `api/` sind am 12.09.2026 darauf umgestellt worden; dieser Ordner lag
+ * daneben und blieb stehen.
  */
 function plattform_zu(string $name): ?string
 {
-    if (preg_match('/^Solidon3D-Setup-[0-9]+(\.[0-9]+)*\.exe$/', $name) === 1) {
+    if (preg_match('/^Solidon3D-Setup-[0-9]+(\.[0-9]+)*\.exe$/D', $name) === 1) {
         return 'windows';
     }
-    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-x86_64\.flatpak$/', $name) === 1) {
+    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-x86_64\.flatpak$/D', $name) === 1) {
         return 'linux';
     }
-    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-macos-arm64\.pkg$/', $name) === 1) {
+    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-macos-arm64\.pkg$/D', $name) === 1) {
         return 'macos-arm64';
     }
-    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-macos-x86_64\.pkg$/', $name) === 1) {
+    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-macos-x86_64\.pkg$/D', $name) === 1) {
         return 'macos-x86_64';
     }
 
@@ -59,7 +65,7 @@ function plattform_zu(string $name): ?string
     // Erfolg aussieht: Der Kunde landet auf der Downloadauswahl und nicht im
     // Nichts. Gemessen am 04.09.2026 gegen den Server: Windows und beide Macs
     // fanden ihre neue Datei, diese eine nicht.
-    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-x86_64\.AppImage$/', $name) === 1) {
+    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-x86_64\.AppImage$/D', $name) === 1) {
         return 'appimage';
     }
 
@@ -81,7 +87,7 @@ function plattform_zu(string $name): ?string
 function appimage_ziel(array $manifest): ?string
 {
     $fassung = $manifest['version'] ?? null;
-    if (!is_string($fassung) || preg_match('/^[0-9]+(\.[0-9]+)*$/', $fassung) !== 1) {
+    if (!is_string($fassung) || preg_match('/^[0-9]+(\.[0-9]+)*$/D', $fassung) !== 1) {
         return null;
     }
     $name = 'Solidon3D-' . $fassung . '-x86_64.AppImage';

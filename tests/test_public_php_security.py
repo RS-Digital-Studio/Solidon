@@ -21,7 +21,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 import pytest
 
-from tests.php_probe import php_executable, php_extension
+from tests.php_probe import php_command, php_executable
 
 ROOT = Path(__file__).parent.parent
 API = ROOT / "website" / "api"
@@ -46,7 +46,7 @@ def _free_port() -> int:
 
 
 def _php_command(
-    php: str,
+    php: list[str],
     port: int,
     *,
     prepend: Path | None = None,
@@ -64,7 +64,7 @@ def _php_command(
     Tests rechnen damit.
     """
     command = [
-        php,
+        *php,
         "-d",
         "sendmail_path=/nonexistent/solidon-keine-post",
         "-d",
@@ -108,8 +108,9 @@ def _php_server(
     error_log: Path | None = None,
     ini: dict[str, str] | None = None,
     docroot: Path | None = None,
+    extensions: tuple[str, ...] = (),
 ) -> Iterator[str]:
-    php = php_executable("PHP fehlt; der Endpunkttest braucht PHP 7.4+")
+    php = php_command(*extensions)
     port = _free_port()
     environment = os.environ.copy()
     environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
@@ -1086,11 +1087,10 @@ def test_methods_are_bound_before_configuration_is_disclosed(
 def test_post_content_types_are_fail_closed(
     tmp_path: Path, endpoint: str, content_type: str
 ) -> None:
-    if endpoint in {"activation.php", "deactivation.php"}:
-        # Beide prüfen sodium vor dem Medientyp und antworten ohne es 503 —
-        # die Frage nach 415 lässt sich dann nicht stellen (`php_probe`).
-        php_extension("sodium")
-    with _php_server(tmp_path) as base:
+    extensions = (
+        ("sodium", "pdo_sqlite") if endpoint in {"activation.php", "deactivation.php"} else ()
+    )
+    with _php_server(tmp_path, extensions=extensions) as base:
         headers = {"Content-Type": content_type}
         if endpoint in {"count.php", "stats.php"}:
             headers["Origin"] = "https://solidon3d.de"
@@ -1343,7 +1343,6 @@ def test_counter_rejects_group_readable_quota_and_month_files(
 
 
 def test_activation_rate_key_never_depends_on_the_signing_seed(tmp_path: Path) -> None:
-    php_extension("sodium")
     database = tmp_path / "activation.sqlite"
     seed = tmp_path / "activation.seed"
     environment = {
@@ -1352,7 +1351,7 @@ def test_activation_rate_key_never_depends_on_the_signing_seed(tmp_path: Path) -
     }
     headers = {"Content-Type": "application/json"}
     rate_key = tmp_path / "activation-rate.json.key"
-    with _php_server(tmp_path, environment) as base:
+    with _php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
         status, _headers, answer = _request(
             f"{base}/activation.php", method="POST", data=b"{}", headers=headers
         )
@@ -1381,7 +1380,6 @@ def test_one_client_cannot_fill_the_global_request_budget(tmp_path: Path, endpoi
     """Abgewiesene IP-Anfragen zählen nicht weiter gegen alle anderen Nutzer."""
     from app.core.activation.ed25519 import public_key
 
-    php_extension("sodium")
     seed = bytes(range(32))
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(seed.hex(), encoding="ascii")
@@ -1409,7 +1407,8 @@ def test_one_client_cannot_fill_the_global_request_budget(tmp_path: Path, endpoi
     accepted_status = 400 if endpoint == "activation" else 502
     global_key = "issue:global" if endpoint == "activation" else "global"
     headers = {"Content-Type": content_type, "X-Test-Address": "192.0.2.1"}
-    with _php_server(tmp_path, environment, prepend=prepend) as base:
+    extensions = ("sodium", "pdo_sqlite") if endpoint == "activation" else ("mbstring",)
+    with _php_server(tmp_path, environment, prepend=prepend, extensions=extensions) as base:
         for _attempt in range(budget):
             status, _headers, answer = _request(
                 f"{base}/{endpoint}.php", method="POST", data=payload, headers=headers
@@ -1436,10 +1435,7 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     tmp_path: Path,
 ) -> None:
     """Kein Missbrauchszähler lässt eine offline erratbare IP-Kennung liegen."""
-    # activation.php bereinigt seinen Zähler erst hinter der sodium-Prüfung;
-    # ohne die Erweiterung bliebe der rohe Hash liegen, und der Test wäre rot
-    # über die Umgebung statt über den Endpunkt (`php_probe`).
-    php = php_extension("sodium")
+    php = php_executable()
 
     now = int(time.time())
     raw_ip_hash = hashlib.sha256(b"127.0.0.1").hexdigest()
@@ -1490,17 +1486,6 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     environment = {
         "SOLIDON_STATS_ACCESS_FILE": str(access_file),
     }
-    prepend = tmp_path / "php-test-extensions.php"
-    prepend.write_text(
-        "<?php\n"
-        "if (!function_exists('mb_strlen')) {\n"
-        "  function mb_strlen(string $value, ?string $encoding = null): int "
-        "{ return strlen($value); }\n"
-        "  function mb_substr(string $value, int $offset, ?int $length = null): string "
-        "{ return substr($value, $offset, $length); }\n"
-        "}\n",
-        encoding="utf-8",
-    )
     form_headers = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Origin": "https://solidon3d.de",
@@ -1516,7 +1501,9 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
         f"--{boundary}--\r\n"
     ).encode()
 
-    with _php_server(tmp_path, environment, prepend=prepend) as base:
+    with _php_server(
+        tmp_path, environment, extensions=("sodium", "pdo_sqlite", "mbstring")
+    ) as base:
         assert (
             _request(
                 f"{base}/count.php",
@@ -1901,7 +1888,6 @@ def test_private_php_state_rejects_symlinked_storage_paths(tmp_path: Path) -> No
 @pytest.mark.parametrize("link_kind", ["symlink", "hardlink"])
 def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path, link_kind: str) -> None:
     """Ratenstartwerte und Tageswert folgen keinem fremden Dateiverweis."""
-    php_extension("sodium")
     activation_target = tmp_path / "activation-secret-target"
     activation_target.write_text("unverändert", encoding="utf-8")
     support_target = tmp_path / "support-secret-target"
@@ -1923,17 +1909,6 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path, link_kind: 
     except OSError:
         pytest.skip("dieser Prüfstand darf keine Dateiverweise anlegen")
 
-    prepend = tmp_path / "php-test-mbstring.php"
-    prepend.write_text(
-        "<?php\n"
-        "if (!function_exists('mb_strlen')) {\n"
-        "  function mb_strlen(string $value, ?string $encoding = null): int "
-        "{ return strlen($value); }\n"
-        "  function mb_substr(string $value, int $offset, ?int $length = null): string "
-        "{ return substr($value, $offset, $length); }\n"
-        "}\n",
-        encoding="utf-8",
-    )
     boundary = "solidon-secret-test"
     support_body = (
         f"--{boundary}\r\n"
@@ -1944,7 +1919,7 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path, link_kind: 
         "idea\r\n"
         f"--{boundary}--\r\n"
     ).encode()
-    with _php_server(tmp_path, prepend=prepend) as base:
+    with _php_server(tmp_path, extensions=("sodium", "pdo_sqlite", "mbstring")) as base:
         activation_status = _request(
             f"{base}/activation.php",
             method="POST",
@@ -1969,7 +1944,7 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path, link_kind: 
 
     assert activation_status == support_status == 503
     assert activation_target.read_text(encoding="utf-8") == "unverändert"
-    assert count_status == 204
+    assert count_status == 503
     assert support_target.read_text(encoding="utf-8") == "unverändert"
     assert count_target.read_text(encoding="utf-8") == "unverändert"
     assert list(stats_dir.glob("*.jsonl")) == []
@@ -2391,6 +2366,13 @@ def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None
     Was sich keiner ausgelieferten Datei zuordnen lässt, geht zur
     Downloadauswahl: tar.gz und zip standen früher im Angebot und werden nicht
     mehr ausgeliefert.
+
+    **Und ein angehängter Zeilenumbruch ist ein anderer Name.** PCRE lässt
+    hinter ``$`` ohne den Modifikator ``D`` ein abschließendes ``\\n`` zu;
+    ``api/`` ist am 12.09.2026 darauf umgestellt worden, ``dl/veraltet.php``
+    lag daneben und blieb stehen. Die Wirkung wäre hier klein — der Name geht
+    weder in einen Pfad noch in eine Ausgabe —, aber eine Eingabeprüfung, die
+    zwei Zeichenketten für eine hält, ist keine.
     """
     with _php_server(tmp_path) as base:
         for name in (
@@ -2398,6 +2380,11 @@ def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None
             "Solidon3D-..%2F..%2Fetc%2Fpasswd",
             "Solidon3D-Setup-0.2.2.exe.evil",
             "Solidon3D-https:%2F%2Ffremde.example%2Fx.exe",
+            "Solidon3D-Setup-0.2.2.exe%0A",
+            "Solidon3D-0.2.2-x86_64.flatpak%0A",
+            "Solidon3D-0.1.1-macos-arm64.pkg%0A",
+            "Solidon3D-0.1.1-macos-x86_64.pkg%0A",
+            "Solidon3D-0.1.1-x86_64.AppImage%0A",
         ):
             status, target = _redirect_target(base, name)
             assert status == 302, f"{name}: {status}"
@@ -2541,13 +2528,13 @@ def test_the_test_server_never_lets_a_mail_out() -> None:
     echten Endpunkt, und der ruft ``mail()``. Mit einem eingerichteten
     Transport wäre sie beim Support angekommen. Der Prüfserver zeigt deshalb
     auf einen Transport, den es nicht gibt."""
-    command = _php_command("php", 1234)
+    command = _php_command(["php"], 1234)
 
     flags = " ".join(command)
     assert "sendmail_path=/nonexistent/" in flags
     assert "SMTP=127.0.0.1" in flags and "smtp_port=1" in flags
     assert command[-2:] == ["-t", "website"]
-    assert _php_command("php", 1, docroot=Path("anderswo"))[-1] == "anderswo"
+    assert _php_command(["php"], 1, docroot=Path("anderswo"))[-1] == "anderswo"
 
 
 @pytest.mark.parametrize("lost_temporary", [False, True])
@@ -2556,11 +2543,6 @@ def test_a_lost_upload_is_rejected_before_the_support_mail(
     lost_temporary: bool,
 ) -> None:
     """Auch nach erfolgreicher PHP-Annahme muss der wirkliche Anhang lesbar bleiben."""
-    # support.php misst Nachrichten- und Feldlängen mit mb_strlen; ohne mbstring
-    # antwortet PHP mit einem Fatal statt mit 400, und der Test fragte gar nicht
-    # nach dem Anhang. Wie bei sodium: lokal überspringen und sagen, was fehlt —
-    # in der CI, die die Erweiterung einrichtet, bleibt es ein roter Test.
-    php_extension("mbstring")
     prepend = tmp_path / "upload-lost.php"
     mutation = (
         "unlink($_FILES['anhang']['tmp_name']);"
@@ -2582,7 +2564,7 @@ def test_a_lost_upload_is_rejected_before_the_support_mail(
         "vollständiger Inhalt\r\n"
         f"--{boundary}--\r\n"
     ).encode()
-    with _php_server(tmp_path, prepend=prepend) as base:
+    with _php_server(tmp_path, prepend=prepend, extensions=("mbstring",)) as base:
         status, _headers, text = _request(
             f"{base}/support.php",
             method="POST",
@@ -2707,6 +2689,7 @@ def test_activation_configuration_has_private_diagnostics(
         tmp_path,
         {"SOLIDON_ACTIVATION_SEED_FILE": "relative.seed" if case == "relative" else str(path)},
         error_log=log,
+        extensions=("sodium", "pdo_sqlite"),
     ) as base:
         status, _headers, body = _request(f"{base}/activation-health.php")
         ready, message = check_activation.check(f"{base}/activation-health.php")
@@ -2758,7 +2741,7 @@ def test_activation_burst_limits_have_distinct_codes(tmp_path: Path, scope: str)
         state_file.write_text(json.dumps({"issue:global": [int(time.time())] * 3000}))
         _chmod_private(state_file)
     headers = {"Content-Type": "application/json"}
-    with _php_server(tmp_path) as base:
+    with _php_server(tmp_path, extensions=("sodium", "pdo_sqlite")) as base:
         if scope == "client":
             for _attempt in range(30):
                 status, _, _ = _request(

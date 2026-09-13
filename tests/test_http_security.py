@@ -231,6 +231,13 @@ class _LocalAnswer(_Body):
     def __init__(self, body: bytes, status: int = 200) -> None:
         super().__init__(body)
         self.status = status
+        self.closed = False
+
+    def __enter__(self) -> _LocalAnswer:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.closed = True
 
 
 class _LocalConnection:
@@ -239,15 +246,20 @@ class _LocalConnection:
     def __init__(self, answer: _LocalAnswer) -> None:
         self.answer = answer
         self.sock: Any = None
+        self.connected = False
+        self.closed = False
+
+    def connect(self) -> None:
+        self.connected = True
 
     def request(self, *_args: object, **_options: object) -> None:
-        return None
+        assert self.connected
 
     def getresponse(self) -> _LocalAnswer:
         return self.answer
 
     def close(self) -> None:
-        return None
+        self.closed = True
 
 
 class _NeverCancelled:
@@ -275,8 +287,10 @@ def test_the_cancelable_local_transport_rejects_an_oversized_body(
     connection = _LocalConnection(_LocalAnswer(b"x" * (llm.MAX_RESPONSE_BYTES + 1)))
     monkeypatch.setattr(llm.http.client, "HTTPConnection", lambda *_a, **_o: connection)
 
-    with pytest.raises(llm.BackendUnavailable):
+    with pytest.raises(llm.BackendUnavailable) as raised:
         llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, _NeverCancelled())
+    assert isinstance(raised.value.__cause__, ResponseTooLargeError)
+    assert connection.closed and connection.answer.closed
 
 
 def test_the_cancelable_local_transport_redacts_a_foreign_error_text(
@@ -300,6 +314,7 @@ def test_the_cancelable_local_transport_redacts_a_foreign_error_text(
     detail = str(raised.value.detail)
     assert "topsecret" not in detail
     assert len(detail) <= 500
+    assert connection.closed and antwort.closed
 
 
 class _ContextBody(_Body):

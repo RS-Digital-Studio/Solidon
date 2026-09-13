@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import NoReturn
 
 import pytest
@@ -36,32 +37,32 @@ def php_executable(reason: str = "PHP fehlt") -> str:
     return php
 
 
-def php_extension(name: str, reason: str = "") -> str:
-    """Der Pfad zu ``php``, wenn es die Erweiterung ``name`` lädt — sonst greift
-    :func:`missing_php`.
-
-    Dieselbe Trennung wie beim fehlenden PHP, eine Stufe tiefer: Auf Roberts
-    Rechner lag am 02.09.2026 ein PHP 8.4 **ohne php.ini**, das sodium und
-    pdo_sqlite nicht lädt. ``activation.php`` prüft sodium vor Rumpf und
-    Ratenbegrenzung und antwortet 503, und drei Tests, die erst *hinter* dieser
-    Prüfung ihre Frage stellen (Medientyp, Kennungen im Zähler), waren rot,
-    ohne dass am Endpunkt etwas falsch war — mit geladener Erweiterung 92 von
-    92 grün. Ein Test, der seine Frage nicht stellen kann, überspringt sich
-    und sagt, was ihm fehlt; in der Linux-CI, die die Erweiterungen ausdrücklich
-    einrichtet, bleibt das ein roter Test.
-    """
-    php = php_executable(reason or f"PHP fehlt; der Test braucht die Erweiterung {name}")
-    loaded = subprocess.run(
-        [php, "-r", f"exit(extension_loaded({name!r}) ? 0 : 1);"],
+def php_command(*extensions: str) -> list[str]:
+    """Lädt benötigte Erweiterungen nur im Prüfprozess, ohne eine php.ini zu ändern."""
+    executable = php_executable()
+    command = [executable]
+    if not extensions:
+        return command
+    modules = subprocess.run(
+        [executable, "-m"], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert modules.returncode == 0, "PHP kann seine Erweiterungen nicht auflisten"
+    loaded = set(modules.stdout.lower().splitlines())
+    for name in dict.fromkeys(extensions):
+        if name.lower() in loaded:
+            continue
+        filename = f"php_{name}.dll" if os.name == "nt" else f"{name}.so"
+        library = Path(executable).resolve().parent / "ext" / filename
+        if not library.is_file():
+            missing_php(f"PHP ist ohne die benötigte Erweiterung {name} installiert")
+        command.extend(["-d", f"extension={library}"])
+    required = " && ".join(f"extension_loaded({name!r})" for name in extensions)
+    probe = subprocess.run(
+        [*command, "-r", f"exit(({required}) ? 0 : 1);"],
         capture_output=True,
         text=True,
         timeout=30,
         check=False,
     )
-    if loaded.returncode != 0:
-        missing_php(
-            reason
-            or f"PHP lädt die Erweiterung {name} nicht — in der php.ini "
-            f"`extension={name}` eintragen (Windows: extension_dir auf ext/ zeigen lassen)"
-        )
-    return php
+    assert probe.returncode == 0, f"PHP kann benötigte Erweiterungen nicht laden: {extensions}"
+    return command
