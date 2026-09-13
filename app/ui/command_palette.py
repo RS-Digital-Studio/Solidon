@@ -477,11 +477,26 @@ class CommandPalette(QDialog):
         if self.list.count():
             # Vorgewählt ist der erste Eintrag, der auch ausführbar ist — Enter
             # auf einem ausgegrauten wäre ein Klick, der nichts tut.
+            #
+            # **Aber nur unter den gleich guten Treffern.** Gesucht wird auch in
+            # der Beschreibung, und die Sperre überspringt: Wer „Verrund" tippte
+            # und nichts gewählt hatte, bekam *Quader anlegen* vorgewählt — es
+            # steht in der Liste, weil sein Satz „Verrundungen" enthält, und war
+            # der erste Eintrag ohne Sperre. Enter legte einen Quader an
+            # (gemessen am 13.09.2026 am laufenden Fenster). Ein Klick, der
+            # nichts tut, ist ärgerlich; einer, der etwas anderes tut, ist
+            # schlimmer. Findet sich in der besten Güte nichts Ausführbares,
+            # bleibt die Wahl auf deren erstem Eintrag: Er sagt, was ihm fehlt.
+            best = rank(found[0], query) if found else 0
+            chosen_row = 0
             for row in range(self.list.count()):
                 item = self.list.item(row)
-                if item is not None and item.flags() & Qt.ItemFlag.ItemIsEnabled:
-                    self.list.setCurrentRow(row)
+                if item is None or rank(found[row], query) != best:
                     break
+                if item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                    chosen_row = row
+                    break
+            self.list.setCurrentRow(chosen_row)
         elif query.strip():
             # Eine leere Liste sagt nicht, ob nichts passt oder ob die Palette
             # kaputt ist. Der Eintrag ist nicht wählbar und trägt keine Daten —

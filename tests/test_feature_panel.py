@@ -290,6 +290,191 @@ def test_fieldless_remove_action_has_a_visible_working_button(qt_app: QApplicati
     assert seen and seen[0][0] == "remove_feature"
 
 
+def test_a_locked_panel_says_why_before_anyone_clicks(qt_app: QApplication) -> None:
+    """Hält die Kette an, nimmt das Merkmalfenster nichts mehr an — und sagt es.
+
+    Bis zum 13.09.2026 blieben Felder und beide Knöpfe aktiv, während Menü,
+    Werkzeugzeile und Befehlspalette längst mit Grund gesperrt waren; der
+    Versuch endete in einem modalen „Das hat so nicht funktioniert". Das ist
+    die Sackgasse aus Regel 19 — die Oberfläche konnte die Frage vorher
+    beantworten und tat es nicht.
+
+    Zwei Kodierungen (Regel 18): der graue Knopf **und** derselbe Satz als
+    sichtbare Zeile, dazu in Kurzhilfe und zugänglicher Beschreibung.
+    """
+    grund = "Die Kette hält an Schritt 2 (Bohrung setzen) an."
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
+
+    felder = [
+        widget
+        for widget in panel.findChildren(QWidget)
+        if isinstance(widget, LengthSpin | NumberSpin) and widget.isVisibleTo(panel)
+    ]
+    assert felder, "ohne Felder prüft dieser Test nichts"
+    assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt geht es"
+
+    panel.set_locked(grund)
+
+    assert not panel._apply.isEnabled(), "Übernehmen nimmt hinter einem Halt nichts an"
+    assert not panel._in_view.isEnabled(), "und der Weg ins Bild führt in dieselbe Absage"
+    gesperrt = [feld.accessibleName() for feld in felder if feld.isEnabled()]
+    assert not gesperrt, f"{len(gesperrt)} Felder nehmen weiter Zahlen an: {gesperrt}"
+    assert panel._apply.toolTip() == grund and panel._apply.statusTip() == grund
+    assert panel._lock_note.text() == grund, "der Grund steht als Zeile, nicht nur im Tooltip"
+    assert panel._lock_note.isVisibleTo(panel), "und er steht sichtbar da"
+
+    # **Und der Weg zurück braucht keine neue Auswahl.** Nach einem Strg+Z
+    # rechnet die Kette wieder; das Fenster meldet den leeren Grund, und die
+    # Knöpfe tragen wieder ihre eigene Auskunft statt der Absage von vorhin.
+    panel.set_locked("")
+
+    assert panel._apply.isEnabled() and panel._in_view.isEnabled()
+    assert all(feld.isEnabled() for feld in felder)
+    assert not panel._lock_note.isVisibleTo(panel)
+    assert panel._apply.toolTip() == panel._armed_title.text(), "wieder der Titel der Handlung"
+
+
+def test_a_locked_panel_stays_locked_when_the_next_feature_is_shown(
+    qt_app: QApplication,
+) -> None:
+    """Der Grund gilt der Kette, nicht der Auswahl.
+
+    Das Panel baut seine Zeilen bei jedem Merkmal neu auf. Eine Sperre, die
+    nur die gerade stehenden Widgets kennt, wäre nach dem nächsten Klick im
+    Objektbaum weg — und der Kunde stünde wieder vor bedienbaren Feldern
+    hinter einem Halt.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    available = features.detect(mesh)
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
+    panel.set_locked("Die Kette hält an Schritt 2 (Bohrung setzen) an.")
+
+    zweites = next(
+        (key, value)
+        for key, value in available.items()
+        if value.kind == "hole" and key != identifier
+    )
+    panel.show_feature(*zweites, features=available, mesh=mesh)
+
+    felder = [
+        widget
+        for widget in panel.findChildren(QWidget)
+        if isinstance(widget, LengthSpin | NumberSpin) and widget.isVisibleTo(panel)
+    ]
+    assert felder, "ohne Felder prüft dieser Test nichts"
+    assert not panel._apply.isEnabled(), "das neue Merkmal steht hinter demselben Halt"
+    assert not any(feld.isEnabled() for feld in felder)
+    assert panel._lock_note.isVisibleTo(panel)
+
+
+def test_the_return_key_in_a_field_does_what_the_button_below_does(
+    qt_app: QApplication,
+) -> None:
+    """Wer eine Zahl tippt und Enter drückt, meint den Schritt.
+
+    Gemessen am gebauten Fenster (13.09.2026): Durchmesser auf 6,0 gesetzt,
+    ``Return`` im Feld — der Verlauf blieb bei einem Schritt. Erst der Klick
+    auf *Übernehmen* schrieb ihn, und der stand an dieser Fensterhöhe unter
+    dem Rand (F1).
+
+    Geprüft wird über das echte Tastenereignis und nicht über die Methode
+    dahinter: Das Feld liegt hinter einem Ereignisfilter, und ob der greift,
+    sagt nur der Weg durch Qt.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    gesehen: list[tuple[str, dict[str, Any]]] = []
+    panel.operationRequested.connect(lambda op, werte: gesehen.append((op, werte)))
+    panel.show_feature(identifier, feature)
+
+    feld = next(
+        widget
+        for widget in panel.findChildren(LengthSpin)
+        if "Bohrung ändern" in widget.accessibleName() and "Durchmesser" in widget.accessibleName()
+    )
+    feld.set_value_mm(6.0)
+    QTest.keyClick(feld, Qt.Key.Key_Return)
+
+    assert len(gesehen) == 1, f"genau ein Schritt, nicht {len(gesehen)}"
+    op, werte = gesehen[0]
+    assert op == "resize_hole", "und zwar die Handlung des Feldes, in dem getippt wurde"
+    assert werte["diameter"] == pytest.approx(6.0)
+
+    # **Gesperrt tut sie nichts.** Eine Taste, die etwas anderes tut als der
+    # Knopf daneben, wäre schlimmer als eine, die schweigt.
+    panel.set_locked("Die Kette hält an Schritt 2 (Bohrung setzen) an.")
+    QTest.keyClick(feld, Qt.Key.Key_Return)
+    assert len(gesehen) == 1, "hinter einem Halt schreibt auch die Eingabetaste nichts"
+
+
+def test_the_tab_key_goes_down_the_panel_like_the_eye(qt_app: QApplication) -> None:
+    """Die Fokuskette folgt dem Layout, nicht der Entstehungsreihenfolge.
+
+    Die vier Halte unten — *Im Bild einstellen*, der Haken, *Übernehmen*,
+    *Abbrechen* — entstehen im Aufbau des Panels und liegen damit vor jedem
+    Feld, das ``show_feature`` später einfügt. Sie im Layout ans Ende zu hängen
+    verschiebt sie in der Fokuskette **nicht**: Gemessen am gebauten Fenster
+    an einer Bohrung mit drei gleichartigen Geschwistern kam *Im Bild
+    einstellen* mit der Tabulatortaste erst **nach** dem Haken, während es im
+    Layout davor steht — der Nachbartest darüber hält genau diese Anordnung
+    fest.
+
+    Gemessen an der Kette und an den Layoutplätzen, nicht an Bildpunkten: Was
+    das Auge sieht, sagt das Layout; offscreen wäre jede Höhe erfunden.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QLineEdit
+
+    # Ohne geladenes Register gibt es keinen Weg ins Bild, und ohne
+    # Geschwister keinen Haken — beides ist die Stelle, an der es klemmte.
+    load_operations()
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
+    panel.set_measuring(True)
+
+    unten = (panel._in_view, panel._every, panel._apply, panel._cancel)
+    for widget in unten:
+        assert widget.isVisibleTo(panel), f"{widget.accessibleName()} steht gar nicht da"
+
+    stops: list[QWidget] = []
+    node = panel.nextInFocusChain()
+    for _ in range(4000):
+        if node is panel:
+            break
+        if (
+            node.focusPolicy() != Qt.FocusPolicy.NoFocus
+            and node.isVisibleTo(panel)
+            and panel.isAncestorOf(node)
+            and not isinstance(node, QLineEdit)
+        ):
+            stops.append(node)
+        node = node.nextInFocusChain()
+    assert len(stops) > len(unten), "ohne Felder prüft dieser Test nichts"
+
+    # Die Kette ist ein Ring: gedreht wird auf den ersten Halt, der zu einer
+    # Handlung gehört — danach muss sie von oben nach unten laufen.
+    start = next(index for index, widget in enumerate(stops) if widget not in unten)
+    ordered = stops[start:] + stops[:start]
+    places = {widget: index for index, widget in enumerate(ordered)}
+    namen = [widget.accessibleName() or widget.text() for widget in ordered]
+    assert [places[widget] for widget in unten] == sorted(places[widget] for widget in unten), (
+        f"die vier unten kommen in anderer Reihenfolge als im Layout: {namen}"
+    )
+    assert min(places[widget] for widget in unten) > max(
+        places[widget] for widget in stops if widget not in unten
+    ), f"ein Feld kommt erst nach dem Knopf: {namen}"
+
+
 def test_focusing_a_field_names_the_action_above_apply(qt_app: QApplication) -> None:
     """Ein Fokuswechsel wählt die Handlung, ohne eine Maßänderung zu verlangen."""
     from PySide6.QtCore import QEvent
@@ -1601,6 +1786,11 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     Gemessen an den **Layoutplätzen**, nicht an Bildpunkten: Offscreen hat Qt
     keine Schrift, und jede Höhe wäre damit erfunden
     (`.claude/rules/ansicht.md`).
+
+    **Die fünf sitzen seit dem 13.09.2026 in einem eigenen Widget**
+    (``footer``), damit ein Träger sie aus dem Rollinhalt heben kann; ihre
+    Reihenfolge zueinander gilt dort weiter, und die Zeile als Ganzes steht
+    unter den Handlungen.
     """
     identifier, feature = a_hole()
     panel = FeaturePanel()
@@ -1613,16 +1803,19 @@ def test_the_one_button_stands_below_every_handling(qt_app: QApplication) -> Non
     plaetze = {rows.itemAt(index).widget(): index for index in range(rows.count())}
     zeilen = [plaetze[row] for row in panel._built if row in plaetze]
     assert zeilen, "ohne Zeilen prüft dieser Test nichts"
-    assert plaetze[panel._apply] > max(zeilen), "der Knopf steht über den Handlungen"
-    assert plaetze[panel._every] == plaetze[panel._apply] - 1, (
+    assert plaetze[panel.footer()] > max(zeilen), "die Knopfzeile steht über den Handlungen"
+
+    unten = panel.footer().layout()
+    assert unten is not None
+    ordnung = {unten.itemAt(index).widget(): index for index in range(unten.count())}
+    assert ordnung[panel._every] == ordnung[panel._apply] - 1, (
         "der Haken gehört unmittelbar über den Knopf"
     )
     # **Und der Weg ins Bild steht davor, nicht dazwischen** (11.09.2026): Der
     # Haken ändert den Umfang des Übernehmens, also gehört er an dessen Seite;
     # ein Knopf zwischen beiden machte aus „für alle" eine Frage, auf die zwei
     # Knöpfe antworten.
-    assert plaetze[panel._in_view] < plaetze[panel._every], "der Weg ins Bild steht davor"
-    assert plaetze[panel._in_view] > max(zeilen), "aber auch er gehört nach unten"
+    assert ordnung[panel._in_view] < ordnung[panel._every], "der Weg ins Bild steht davor"
 
 
 def test_the_all_alike_box_follows_the_armed_handling(qt_app: QApplication) -> None:

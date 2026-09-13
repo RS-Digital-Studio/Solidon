@@ -88,8 +88,10 @@ from app.ui.settings import UiSettings, load_settings
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, no_primary, set_level, set_role
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
-#: schlechter lesbar als ein Wort.
-umbruch = chr(10)
+#: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
+#: ``app/`` (Sprachregelung in ``AGENTS.md``); ``umbruch`` hieß er bis zum
+#: 13.09.2026, und `GERMAN_STEMS` fängt den Rückfall seither ab.
+newline = chr(10)
 
 #: Formelsymbole sind keine übersetzbaren Wörter. Als Namen statt als Literale
 #: in ``setText`` erkennt auch die Oberflächenprüfung, dass hier kein deutscher
@@ -2481,12 +2483,12 @@ def step_values_text(operation: Any) -> str:
     lines: list[str] = []
     for name, value in sorted(dict(operation.params).items()):
         text = str(value)
-        if umbruch in text:
+        if newline in text:
             lines.append(f"{name}:")
             lines.extend(f"    {line}" for line in text.splitlines())
         else:
             lines.append(f"{name} = {text}")
-    return umbruch.join(lines) if lines else tr("Dieser Schritt hat keine Werte.")
+    return newline.join(lines) if lines else tr("Dieser Schritt hat keine Werte.")
 
 
 def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:
@@ -3163,7 +3165,7 @@ def confirm_export(findings: Sequence[Finding], parent: QWidget | None = None) -
     lines = [f"· {finding.message}" for finding in findings[:EXPORT_LINES]]
     if len(findings) > EXPORT_LINES:
         lines.append(tr("Der Rest steht im Prüfbericht."))
-    box.setInformativeText(umbruch.join(lines))
+    box.setInformativeText(newline.join(lines))
     write = box.addButton(tr("Trotzdem exportieren"), QMessageBox.ButtonRole.AcceptRole)
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
     box.setDefaultButton(write)

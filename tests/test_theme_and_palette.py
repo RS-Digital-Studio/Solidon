@@ -1012,3 +1012,61 @@ view.close()
         timeout=60,
     )
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_enter_never_starts_a_command_that_only_the_description_matched(
+    qt_app: object,
+) -> None:
+    """Wer „Verrund" tippt, bekommt keinen Quader.
+
+    Gesucht wird auch in der Beschreibung, und die Vorauswahl übersprang jede
+    gesperrte Zeile: Ohne gewählten Körper sind *Verrunden*, *Wulst anlegen*
+    und *Bohrung setzen* gesperrt, und vorgewählt war *Quader anlegen* — in der
+    Liste allein deshalb, weil sein Satz „Verrundungen" enthält. Enter legte
+    einen Quader an (gemessen am 13.09.2026 am laufenden Fenster,
+    ``70-palette.png``).
+
+    Die Vorauswahl bleibt deshalb in der **besten Güte** (:func:`rank`): Findet
+    sich dort nichts Ausführbares, steht sie auf der ersten Zeile, die sagt,
+    was ihr fehlt — ein Enter, das nichts tut, statt eines, das etwas anderes
+    tut.
+    """
+    from app.core.registry.surfaces import PaletteEntry
+    from app.ui.command_palette import CommandPalette, rank
+
+    gesperrt = PaletteEntry(
+        name="fillet_edges",
+        title="Verrunden",
+        category="modify",
+        doc="Rundet die gewählten Kanten ab.",
+        available=False,
+        reason="Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum.",
+    )
+    frei = PaletteEntry(
+        name="create_box",
+        title="Quader anlegen",
+        category="create",
+        doc="Legt einen Quader an — an seine Kanten lassen sich später Verrundungen setzen.",
+    )
+    palette = CommandPalette([gesperrt, frei])
+    palette.search.setText("Verrund")
+
+    namen = [palette.list.item(i).data(0x0100) for i in range(palette.list.count())]
+    assert namen == ["fillet_edges", "create_box"], namen
+    assert rank(gesperrt, "verrund") < rank(frei, "verrund"), "der Titel wiegt schwerer"
+    assert palette.list.currentRow() == 0, "vorgewählt ist der beste Treffer, nicht der erste freie"
+
+    # Und die andere Hälfte der Zusage: Ist in der besten Güte etwas
+    # ausführbar, steht die Wahl darauf — ein Enter auf einer gesperrten Zeile
+    # täte sonst nichts.
+    zweiter = PaletteEntry(
+        name="fillet_edges_free",
+        title="Verrunden am Netz",
+        category="modify",
+        doc="Rundet die gewählten Kanten ab.",
+    )
+    palette = CommandPalette([gesperrt, zweiter, frei])
+    palette.search.setText("Verrund")
+    assert palette.list.currentRow() == 1, "der erste ausführbare Treffer gleicher Güte"
+    assert palette.chosen() == "fillet_edges_free"
+    palette.close()

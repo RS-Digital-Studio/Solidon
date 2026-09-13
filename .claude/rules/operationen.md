@@ -3,6 +3,10 @@ paths:
   - "app/core/geom/**/*.py"
   - "app/core/registry/**/*.py"
   - "app/core/scene/**/*.py"
+  # Und der exakte Kern, seit dieselbe Operation an beiden Kernen rechnet:
+  # Langloch, Versetzen, Verrunden und Fase stehen unten mit ihrem
+  # brep-Zweig, und wer nur dort arbeitet, bekam die Regel nicht zu sehen.
+  - "app/core/brep/**/*.py"
 ---
 
 # Regeln für Operationen
@@ -141,10 +145,12 @@ dahinter, ändert sich der **Text** nicht — die Auswertung gäbe das alte
 Ergebnis zurück. `resolve_params` hilft dabei nicht: Sie sieht die **oberste**
 Ebene eines Parametersatzes, und ein Sammelparameter steht dort als *ein* Wert.
 
-`NESTED_REFERENCES` in `scene/evaluate.py` ordnet jedem betroffenen `kind`
+`nested_references()` in `scene/evaluate.py` ordnet jedem betroffenen `kind`
 seinen Sammler zu — `sketch` → `sketch_parameter_references()`, `armature` →
 `pose_parameter_references()` —, und `_with_nested_context()` mischt die Werte
-in den Schlüssel. **Eine Zuordnung und keine Bedingung**, weil genau das schon
+in den Schlüssel. Eine Funktion und keine Konstante, denn `geom.pose` schließt
+als gewöhnlicher Import oben einen Kreis über `scene.expressions`; der Sammler
+der Pose kommt deshalb erst beim ersten Aufruf dazu. **Eine Zuordnung und keine Bedingung**, weil genau das schon
 einmal schiefging: `"sketch"` stand dort hart verdrahtet, die Pose kam später
 dazu und wurde übersehen — obwohl vier Stellen zusagten, dass ein Gelenkwinkel
 ein Projektparameter sein darf. Wer einen neuen Sammelparameter mit Ausdrücken
@@ -183,7 +189,7 @@ Register (`reads_other_bodies`). Ohne sie behielte ein zurückgeholter Körper
 seine Stelle, nachdem der Nachbar, dem er auswich, längst woanders steht.
 
 Wer eine neue Lesart aus `ctx.scene` baut, trägt sie hier ein — dieselbe
-Pflicht wie bei `NESTED_REFERENCES` darüber. Und die Frage davor lautet, ob
+Pflicht wie bei `nested_references()` darüber. Und die Frage davor lautet, ob
 ein *Parameter* das Gelesene benennt: Wenn ja, gehört sie zu den drei oben;
 wenn nein, ist sie eine Eigenschaft der Operation und gehört ins Register.
 
@@ -606,7 +612,7 @@ Zahl.
 
 `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`; **leer
 heißt „lass es, wo es ist"**, seit die drei Felder `optional` tragen — siehe
-„Eine Zahl, die nicht gesagt wurde" unten). Wer versetzt, schließt zuerst die alte Stelle —
+„Eine Zahl, die nicht gesagt wurde" oben unter *Parameter*). Wer versetzt, schließt zuerst die alte Stelle —
 am Netz über `prepare_ops._closed_at`, am exakten Körper über
 `brep.edit.fill_bore` — und schneidet an der neuen. Bis dahin lehnte der exakte
 Kern das mit einem Satz ab; die Absage ist gefallen, weil ihr Grund gefallen

@@ -868,3 +868,59 @@ def test_real_viewport_comparison_filter_is_released(
     assert filter_reference() is None
     QApplication.sendEvent(receiver, press)
     receiver.deleteLater()
+
+
+def test_a_right_click_leaves_no_menu_behind(qt_app: QApplication) -> None:
+    """Jeder Rechtsklick baut sein Kontextmenü neu — und räumt es wieder weg.
+
+    Das Menü entsteht als **Kind** seines Panels und lebte damit bis zum
+    Fenster: Gemessen am gebauten Fenster wuchs der Objektbaum um ein
+    ``QMenu`` je Rechtsklick (2 → 32 nach dreißig), und jedes hielt seine
+    Aktionen samt der Rückrufe daran. Über den echten Klickweg gemessen waren
+    es zehn von zehn; mit ``deleteLater`` bleibt höchstens das letzte, das
+    noch auf seine Löschrunde wartet.
+
+    Der Weg geht durch ``exec``, denn dort liegt der Fehler — die Sonde
+    schließt das aufgeklappte Menü über einen Zeitgeber, wie ein Kunde es mit
+    Escape täte.
+    """
+    import trimesh
+    from PySide6.QtCore import QPoint, QTimer
+    from PySide6.QtWidgets import QMenu
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    box = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Klotz", mesh=box)})
+    result = EvaluationResult(scene=scene, object_hashes={"obj_1": "abc"})
+
+    tree = ObjectTree()
+    try:
+        tree.resize(300, 400)
+        tree.show()
+        qt_app.processEvents()
+        tree.show_scene(result)
+        tree.select_object("obj_1")
+        qt_app.processEvents()
+        assert tree.context_menu() is not None, "ohne Menü prüft dieser Test nichts"
+
+        def close_popup() -> None:
+            popup = QApplication.activePopupWidget()
+            if popup is not None:
+                popup.close()
+
+        centre = tree.tree.visualItemRect(tree.tree.topLevelItem(0)).center()
+        before = len(tree.findChildren(QMenu))
+        for _ in range(10):
+            QTimer.singleShot(0, close_popup)
+            tree._on_context_menu(QPoint(centre.x(), centre.y()))
+            qt_app.processEvents()
+        qt_app.processEvents()
+        after = len(tree.findChildren(QMenu))
+        assert after <= before + 1, f"{after - before} Menüs blieben nach zehn Rechtsklicks liegen"
+    finally:
+        tree.hide()
+        tree.deleteLater()

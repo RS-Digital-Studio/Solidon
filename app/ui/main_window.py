@@ -253,7 +253,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import Worker, WorkerLeash, weak_slot
+from app.ui.leash import Worker, WorkerLeash, wait_for_all, weak_slot
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -2682,9 +2682,16 @@ class MainWindow(QMainWindow):
         self.spacemouse_help.setAccessibleName(tr("Hilfe zum Zugriff auf die 3D-Maus"))
         self.spacemouse_help.setVisible(False)
         help_menu = QMenu(self.spacemouse_help)
-        help_menu.addAction(
-            tr("Handbuch öffnen"), lambda: self.action_manual(manual.SPACEMOUSE_ACCESS)
-        )
+        # **Eine gebundene Methode und kein Lambda** (`wartezeit.md`): Der
+        # Eintrag gehört einem Menü, das Menü einem Knopf, der Knopf diesem
+        # Fenster — ein Lambda, das `self` fängt, schließt damit einen Ring
+        # über die C++-Grenze, und den bricht der Speicherbereiniger nicht mehr
+        # auf. Gemessen am 13.09.2026: Nach einem geöffneten Bausteinkatalog
+        # überlebten zehn von zehn Fenstern ihr Loslassen, und
+        # `gc.get_referrers` nannte genau diese Zeile
+        # (`tests/test_widget_lifetime.py::test_a_window_that_opened_a_dialog_
+        # still_lets_go`).
+        help_menu.addAction(tr("Handbuch öffnen"), self._open_spacemouse_help)
         help_menu.addAction(tr("Anleitung kopieren"), self._copy_spacemouse_help)
         self.spacemouse_help.setMenu(help_menu)
         self.spacemouse_help.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -3876,6 +3883,15 @@ class MainWindow(QMainWindow):
         # hier dieselbe Sperre wie für alle anderen schreibenden Aktionen.
         self.history_panel.remove_action.setEnabled(not locked and not gesturing)
         self.feature_panel.limit_fit(self._manual_fit_reason())
+        # **Und das Merkmalfenster hört denselben Grund.** Es war die eine
+        # Bedienstelle, an der der Halt nicht ankam: Felder und beide Knöpfe
+        # blieben aktiv, und der Versuch endete in einem modalen „Das hat so
+        # nicht funktioniert" (gemessen am gebauten Fenster, 13.09.2026) —
+        # eine Sackgasse hinter einem Klick, den die Oberfläche vorher
+        # hätte abraten können (Regel 19). Zurückgenommen wird sie von
+        # selbst: Nach einem Strg+Z rechnet die Kette wieder, `_update_actions`
+        # läuft mit dem neuen Ergebnis, und der Grund ist leer.
+        self.feature_panel.set_locked(halted or "")
 
         # **Gegenstücke brauchen zwei markierte Stellen an zwei Teilen** (E1).
         # Der Grund steht am Eintrag, statt hinterher als Dialog zu kommen: Ein
@@ -4606,6 +4622,16 @@ class MainWindow(QMainWindow):
         #: und der Weg dorthin führt durch einen Arbeiter. Ein Download hat
         #: keinen Pfad auf der Platte und bleibt deshalb draußen.
         self._pending_import: Path | None = None
+        #: Ob die laufende Wartezeit einem eingelesenen Modell gilt.
+        #:
+        #: Die Ladeanzeige deckt das ganze Fenster, und ihre Überschrift sagte
+        #: dabei „Projekt wird geladen …" — auch wenn der Kunde gerade eine STL
+        #: eingefügt hat (gemessen am 13.09.2026: 21 s lang die falsche
+        #: Auskunft, während die Statuszeile daneben „Modell einfügen" sagte).
+        #: **Nicht** ``_pending_import``: Das räumt ``_on_import_finished`` ab,
+        #: und die Anzeige steht danach weiter, solange ausgewertet und erkannt
+        #: wird. Zurückgesetzt wird deshalb erst, wenn die Anzeige endet.
+        self._loading_model = False
         self.session.importFailed.connect(self._on_import_failed)
         self.session.importFinished.connect(self._on_import_finished)
         self.session.failed.connect(self._on_error)
@@ -4780,6 +4806,7 @@ class MainWindow(QMainWindow):
                 # ``with``, und die Ladeanzeige mit ihrem Fortschritt übernimmt.
                 # Eine Fallunterscheidung braucht es dafür nicht.
                 self._pending_import = path
+                self._loading_model = True
                 with waiting():
                     self.session.import_model_async(path)
                 return
@@ -4884,6 +4911,7 @@ class MainWindow(QMainWindow):
         # die gehören nicht in den Hauptthread. Der Fehler kommt über
         # ``importFailed``, der Wartezeiger deckt den kurzen Weg.
         self._pending_import = Path(name)
+        self._loading_model = True
         with waiting():
             self.session.import_model_async(Path(name))
 
@@ -5376,6 +5404,15 @@ class MainWindow(QMainWindow):
             self.spacemouse_help.hide()
             self.announce(tr("3D-Maus verbunden."))
 
+    def _open_spacemouse_help(self) -> None:
+        """Das Handbuchkapitel zur Gerätefreigabe zeigen.
+
+        Als Methode und nicht als Lambda im Menüaufbau: Der feste Wert gehört
+        in eine Methode, sonst hält die Zelle des Lambdas das Fenster fest
+        (`wartezeit.md`, „Ein Rückruf an ein eigenes Kind hält schwach").
+        """
+        self.action_manual(manual.SPACEMOUSE_ACCESS)
+
     def _copy_spacemouse_help(self) -> None:
         """Die passende Anleitung kopieren; keine Geräteberechtigung selbst verändern."""
         QApplication.clipboard().setText(
@@ -5613,9 +5650,9 @@ class MainWindow(QMainWindow):
         # verlässt nichts das Gerät, anders als beim KI-Hinweis.
         self.filaments.return_to_print_button.hide()
         ensure_print_disclosure(self.settings, self)
-        # Der Wartezeiger bleibt für den Aufbau: die Suche nach dem Slicer im
-        # Konstruktor kostet eine knappe halbe Sekunde — unter der Grenze aus
-        # §2.8, aber nicht unter der, ab der ein Zeiger dazugehört.
+        # Der Wartezeiger bleibt für den Aufbau des Dialogs selbst; die Suche
+        # nach den Slicern läuft seit dem 13.09.2026 im Arbeiter
+        # (``_SlicerWorker``) und hält weder das Öffnen noch das Schließen auf.
         with waiting():
             dialog = PrintSettingsDialog(self.session, self.settings, self)
         dialog.sliced.connect(
@@ -9438,12 +9475,28 @@ class MainWindow(QMainWindow):
         scroller.setWidgetResizable(True)
         scroller.setFrameShape(QScrollArea.Shape.NoFrame)
 
+        # **Die Knopfzeile rollt nicht mit.** Gemessen am gebauten Fenster bei
+        # 1600 auf 1000 Punkten mit gewählter Bohrung (13.09.2026): Sichtfeld
+        # 877 Punkte, Inhalt 1579 — *Im Bild einstellen* lag bei y = 1015,
+        # *Übernehmen* bei y = 1062, also unter dem Rand. Wer eine Zahl tippte,
+        # musste erst rollen, um seinen Schritt abzuschließen. Sie steht
+        # deshalb **unter** dem Rollbereich, nicht darin; dieselbe Regel, die
+        # `oberflaeche.md` für die Karten schon kennt („Was unter der Liste
+        # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
+        # Weg hinaus, den die Karte anbietet").
+        column = QWidget(self)
+        stack = QVBoxLayout(column)
+        stack.setContentsMargins(0, 0, 0, 0)
+        stack.setSpacing(0)
+        stack.addWidget(scroller, 1)
+        stack.addWidget(self.feature_panel.footer())
+
         # „Auswahl", nicht „Merkmal": Das Fenster steht auch an einem
         # gewählten Körper, seit es dessen Handlungen trägt. Ein Titel, der
         # ein Merkmal verspricht, wäre dort die falsche Auskunft.
         self.feature_dock = _FeatureDock(tr("Auswahl"), self)
         self.feature_dock.setObjectName("featureDock")
-        self.feature_dock.setWidget(scroller)
+        self.feature_dock.setWidget(column)
         self.feature_dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
@@ -9495,6 +9548,14 @@ class MainWindow(QMainWindow):
         Bild arbeiten — mit den Maßen an der neuen Stelle und den Griffen
         (Konzept §4, Abnahme 1: „Maße stehen danach immer noch"; Robert,
         11.09.2026: „nach dem verschieben verschwindet das gizmo gleich")."""
+        self._feature_to_keep: str = ""
+        """Das Merkmal, dessen Auswahl den nächsten Schritt überleben soll.
+
+        Gesetzt bei **jedem** Übernehmen im Merkmalfenster, nicht nur bei
+        einem aus dem Bild heraus: Wer eine Bohrung zum Langloch zieht, hat
+        danach das Langloch bearbeitet und nicht den Körper. Getrennt von
+        :attr:`_measures_to_resume`, weil das zwei Zusagen sind — die eine
+        wählt wieder aus, die andere bringt die Maßlinien zurück."""
         self._resume_near: Vec3 | None = None
         """Wo das Merkmal nach dem Schritt liegen wird — für den Fall, dass es
         dabei seinen Namen wechselt (``hole_1`` wird ``slot_1``, zugesagt in
@@ -11136,6 +11197,10 @@ class MainWindow(QMainWindow):
         if menu is None:
             return
         menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
+        # Das Menü entsteht je Klick und bliebe sonst als Kind liegen — samt
+        # der Rückrufe an seinen Einträgen (`ObjectTree._on_context_menu`
+        # nennt die Messung).
+        menu.deleteLater()
 
     def _edge_menu(self) -> QMenu | None:
         """Das Menü zur gewählten **Kante** — oder ``None``, wenn keine da ist.
@@ -11825,13 +11890,23 @@ class MainWindow(QMainWindow):
         """
         self._end_changed_quiet_placement()
         flow = self._quiet_placement
+        # **Was man bearbeitet hat, bleibt gewählt** — auch ohne Maße im Bild.
+        # Ein Merkmal, das im Schritt seinen Namen wechselt (``hole_1`` wird
+        # ``slot_1``, zugesagt in ``SLOT_FEATURE_RENAMED``), findet der Baum
+        # nicht wieder: Nach *Zum Langloch ziehen* → Übernehmen stand
+        # „Langloch 1" im Baum, gewählt war der **Körper**, und das
+        # Merkmalfenster zeigte seinen Leerzustand (gemessen 13.09.2026). Der
+        # Weg dorthin gab es schon (:meth:`_reselect_the_renamed`), er hing
+        # nur an der laufenden Platzierung.
+        self._feature_to_keep = self.object_tree.selected_feature() or ""
+        self._resume_near = self._where_the_step_puts_it(params)
         if flow is not None and flow.active:
             # **Die Maße kommen nach dem Schritt wieder** — an demselben
             # Merkmal, sobald das Merkmalfenster es neu zeigt
             # (:meth:`_show_feature_fields`). Gemerkt wird hier, weil hier
-            # feststeht, dass jemand aus dem Bild heraus übernimmt.
-            self._measures_to_resume = self.object_tree.selected_feature() or ""
-            self._resume_near = self._where_the_step_puts_it(params)
+            # feststeht, dass jemand aus dem Bild heraus übernimmt; die
+            # **Auswahl** darüber gilt in jedem Fall.
+            self._measures_to_resume = self._feature_to_keep
         if flow is not None and flow.active and flow.spec_of().name == op:
             flow.accept()
             return
@@ -11889,7 +11964,11 @@ class MainWindow(QMainWindow):
         deshalb an der Stelle, die der Schritt genannt hat: ein Loch oder
         Langloch, dessen Mitte dort liegt.
         """
-        wanted, near = self._measures_to_resume, self._resume_near
+        wanted, near = self._feature_to_keep, self._resume_near
+        # Der Merker gilt **einer** Auswertung — der des Schritts, aus dem er
+        # kam. Stehen zu bleiben hieße, irgendwann später eine Auswahl zu
+        # setzen, die niemand mehr meint.
+        self._feature_to_keep = ""
         if not wanted or near is None or self.object_tree.selected_feature() is not None:
             return
         object_id = self.object_tree.selected()
@@ -11904,7 +11983,11 @@ class MainWindow(QMainWindow):
                 continue
             centre = [float(value) for value in feature.params["centre"]]
             if all(abs(a - b) <= tolerance for a, b in zip(centre, near, strict=True)):
-                self._measures_to_resume = name
+                # Nur wer aus dem Bild heraus übernommen hat, bekommt die Maße
+                # zurück; die **Auswahl** bekommt jeder (:meth:`_show_feature_
+                # fields` liest den einen, der Baum den anderen).
+                if self._measures_to_resume == wanted:
+                    self._measures_to_resume = name
                 self.object_tree.select_feature(object_id, name)
                 return
 
@@ -13929,6 +14012,7 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         if not busy or (result is not None and result.scene.objects):
             self.veil.end()
+            self._loading_model = False
             return
         # Ein Projekt ohne Ergebnis wird geladen; eines mit leerem Ergebnis
         # rechnet an etwas, das noch keinen Körper hat. Beim Laden eines
@@ -13937,8 +14021,20 @@ class MainWindow(QMainWindow):
         # gerenderte native Ansichtsfenster (loading.py, ``appeared``). Die
         # Verzögerung bleibt dem leeren Dokument, dessen Lauf in
         # Millisekunden fertig ist.
+        # **Und sie sagt, worauf gewartet wird.** „Projekt wird geladen …"
+        # stand auch über einer eingelesenen STL, während die Statuszeile
+        # daneben „Modell einfügen" meldete — zwei Auskünfte über denselben
+        # Vorgang. Der Wortlaut ist der, den das Handbuch nennt
+        # (``manual.py``: „eine Ladeanzeige mit „Modell wird gelesen““), und
+        # den der Fortschritt einer 3MF-Baugruppe ohnehin schon führt.
+        if result is not None:
+            headline = tr("Wird berechnet …")
+        elif self._loading_model:
+            headline = tr("Modell wird gelesen")
+        else:
+            headline = tr("Projekt wird geladen …")
         self.veil.begin(
-            tr("Projekt wird geladen …") if result is None else tr("Wird berechnet …"),
+            headline,
             at_once=result is None and bool(self.session.project.document.ops),
         )
 
@@ -15530,6 +15626,15 @@ class MainWindow(QMainWindow):
             install_dialogs_idle = dialog.wait_for_workers(remaining) and install_dialogs_idle
         remaining = max(0, int((deadline - time.monotonic()) * 1000))
         viewport_idle = self.viewport.wait_for_workers(remaining)
+        # **Und was kein Fenster mehr hat.** Der Druckdialog schließt, während
+        # seine Slicersuche noch läuft (``PrintSettingsDialog._settle``), und
+        # ``action_print_settings`` räumt ihn danach weg — den Thread hält
+        # dann nur noch die modulweite Leine. Wer hier allein die eigenen
+        # Felder und Kinder fragt, lässt ihn beim Beenden den Prozess
+        # überleben; ``wait_for_all`` kennt jeden Arbeiter, den irgendeine
+        # Leine gestartet hat, und nennt die, die die Frist reißen.
+        remaining = max(0, int((deadline - time.monotonic()) * 1000))
+        stubborn = wait_for_all(remaining)
         inventory_idle = all(
             notice.wait_for_workers(0) for notice in self.findChildren(UsageNotice)
         )
@@ -15548,6 +15653,7 @@ class MainWindow(QMainWindow):
             and install_dialogs_idle
             and viewport_idle
             and inventory_idle
+            and not stubborn
             and not any(worker.isRunning() for worker in unique.values())
         )
 

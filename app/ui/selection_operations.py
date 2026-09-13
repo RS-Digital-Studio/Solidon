@@ -64,15 +64,19 @@ jedem Körper; ohne eine erkannte sagt es das selbst (``feature_requirement``).
 
 QUICK_FEATURES: dict[str, tuple[str, ...]] = {
     "face": ("drill_hole", "sketch_pocket", "push_face"),
-    # ``resize_hole`` steht vorn und wird gleich wieder herausgefiltert — es
-    # hat oben ein Feld (:func:`_shown_as_fields`). Sichtbar bleiben drei:
-    # senken, zum Langloch ziehen, zumachen.
+    # ``resize_hole`` und ``slot_hole`` stehen vorn und werden gleich wieder
+    # herausgefiltert — beide haben oben ein Feld (:func:`_shown_as_fields`).
+    # Sichtbar bleiben **zwei**: senken und zumachen (gemessen 13.09.2026).
+    # Sie bleiben trotzdem in der Reihenfolge stehen: Nimmt der Kern eine der
+    # beiden aus ``ACTION_ORDER``, steht sie an der Stelle wieder da, an die
+    # sie gehört, statt hinten in der Suchliste.
     "hole": ("resize_hole", "countersink_hole", "slot_hole", "plug_hole"),
-    # **Ein Langloch trägt genau eine Handlung, und ohne diese Zeile keine.**
-    # Der Rückfall :data:`QUICK_FEATURE` bietet die drei generischen an; keine
-    # davon gilt an einem Langloch, und `quick_names` schneidet sie gegen das
-    # Register — die Karte bliebe leer, während im Register eine Operation
-    # steht, die genau dorthin gehört.
+    # **Am Langloch ist die Karte leer, und das ist die richtige Antwort.**
+    # Alle sechs Handlungen des Langlochs stehen oben als Felder, und was dort
+    # steht, bekommt hier keinen zweiten Knopf. Die Zeile hält die Stelle für
+    # den Fall frei, dass *Zum Langloch ziehen* je aufhört, ein Feld zu sein —
+    # der Rückfall :data:`QUICK_FEATURE` träfe an dieser Art nichts, denn
+    # `quick_names` schneidet ihn gegen das Register.
     "slot": ("slot_hole",),
     "cone": ("countersink_hole",),
     "edge_loop": ("repair",),

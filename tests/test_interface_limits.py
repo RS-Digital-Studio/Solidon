@@ -1414,7 +1414,13 @@ def test_a_part_of_the_users_own_never_reaches_the_menu_bar(
 #: Ein Menüweg, wie ihn Handbuch, Tour und Website schreiben: „Bearbeiten →
 #: Varianten erzeugen". Vor dem Pfeil ein einzelnes großgeschriebenes Wort,
 #: dahinter der Eintrag bis zum ersten Satzzeichen.
-MENU_PATH = re.compile(r"([A-ZÄÖÜ][a-zäöüß]+)\s*→\s*([A-ZÄÖÜ][^.,;:—<»\"\n]{2,40})")
+#:
+#: **Und das Wort steht für sich, es ist nicht die Hälfte eines anderen.** Ohne
+#: den Rückblick las das Muster „3D-Maus-Hilfe → Anleitung kopieren" als Weg im
+#: Menü *Hilfe* — der Knopf mit diesem Namen steht in der Statusleiste, und
+#: sein Menü gehört ihm. Ein Bindestrich davor heißt: Der Name ist länger als
+#: das, was hier steht.
+MENU_PATH = re.compile(r"(?<![\w-])([A-ZÄÖÜ][a-zäöüß]+)\s*→\s*([A-ZÄÖÜ][^.,;:—<»\"\n]{2,40})")
 
 #: Wo Menüwege stehen. Nicht die erzeugten Seiten — die kommen aus `manual.py`
 #: und würden denselben Fehler ein zweites Mal melden.
@@ -1519,6 +1525,22 @@ def test_every_menu_path_in_the_texts_leads_somewhere(window: MainWindow) -> Non
 
     assert checked >= 10, f"nur {checked} Menüwege gefunden — das Muster greift nicht mehr"
     assert not wrong, "Menüwege, die ins Leere zeigen:\n" + "\n".join(wrong)
+
+
+def test_a_hyphenated_name_is_not_a_menu_of_the_bar() -> None:
+    """Die Gegenprobe zum Muster: Es liest ganze Namen, keine Wortenden.
+
+    „3D-Maus-Hilfe" ist der Knopf in der Statusleiste, nicht das Menü *Hilfe*
+    — und „Anleitung kopieren" steht in seinem eigenen Menü. Ohne den
+    Rückblick meldete der Wächter daraus einen Menüweg ins Leere, also einen
+    Fund, den es nicht gibt. Geprüft werden beide Richtungen: Der echte Weg
+    muss weiter anschlagen, sonst ist der Wächter mit der Schärfung stumm
+    geworden.
+    """
+    hyphenated = MENU_PATH.search("Unter *3D-Maus-Hilfe → Anleitung kopieren* erhalten Sie …")
+    assert hyphenated is None, "ein Name mit Bindestrich ist kein Menü der Leiste"
+    real = MENU_PATH.search("Der Weg führt über *Bearbeiten → Varianten erzeugen*.")
+    assert real is not None and real.group(1) == "Bearbeiten", "ein echter Menüweg fällt nicht weg"
 
 
 # --- Gezählt wird, was zu sehen ist (27.08.2026) ------------------------------

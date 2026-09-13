@@ -34,6 +34,7 @@ from PySide6.QtGui import (
     QFont,
     QIcon,
     QImage,
+    QKeyEvent,
     QKeySequence,
     QPainter,
     QPen,
@@ -41,6 +42,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -2074,6 +2076,13 @@ class ObjectTree(QWidget):
         menu = self.context_menu()
         if menu is not None:
             menu.exec(self.tree.viewport().mapToGlobal(position))
+            # **Ein Menü je Rechtsklick, und keines bleibt liegen.** Es entsteht
+            # als Kind dieses Baums und lebte sonst bis zum Fenster: Gemessen
+            # am gebauten Fenster wuchsen dreißig Rechtsklicks auf dreißig
+            # zusätzliche ``QMenu``-Kinder, jedes mit seinen Aktionen und den
+            # Rückrufen daran. ``deleteLater`` und nicht ``setParent(None)`` —
+            # das machte daraus ein eigenes Fenster (RM-101).
+            menu.deleteLater()
 
     def _add_source_step(self, menu: QMenu) -> None:
         """„Diesen Schritt ändern" — der Weg vom Ergebnis zurück zum Schritt
@@ -2440,6 +2449,9 @@ class ParameterPanel(QWidget):
         menu = self.context_menu(position)
         if menu is not None:
             menu.exec(self.mapToGlobal(position))
+            # Wie im Objektbaum: Das Menü gehört diesem Klick und nicht dem
+            # Rest der Sitzung.
+            menu.deleteLater()
 
     def _remember_row(self, name: str, field: QWidget) -> None:
         """Beide Hälften der Zeile dem Parameter zuordnen.
@@ -3059,6 +3071,8 @@ class HistoryPanel(QWidget):
                 lambda _checked=False, chosen=single_op: self.bakeRequested.emit(chosen)
             )
         menu.exec(self.list.viewport().mapToGlobal(position))
+        # Wie im Objektbaum: Das Menü gehört diesem Klick.
+        menu.deleteLater()
 
 
 #: Ab wie vielen Befunden der Bericht seine Filterzeile zeigt.
@@ -3364,7 +3378,8 @@ class ReportPanel(QWidget):
                 # 12.09.2026: vier solche Knöpfe nach einem Befundwechsel,
                 # zwei davon sichtbar. Dasselbe Wissen steht seit dem
                 # Skizzeneditor zweimal im Code
-                # (``MainWindow._close_sketch``, ``SketchEditor.take_side_box``)
+                # (``MainWindow._close_sketch``,
+                # ``SketchEditor.take_constraint_list``)
                 # — hier stand es nicht.
                 #
                 # ``takeAt`` hat es schon aus dem Layout genommen; ``hide``
@@ -4060,9 +4075,14 @@ class ReportPanel(QWidget):
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
         picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))
-        if picked is None:
+        # Erst nachschlagen, dann wegräumen: Die gewählte Aktion gehört dem
+        # Menü, und ``deleteLater`` lässt ihr die Runde, in der sie gelesen
+        # wird. Wie im Objektbaum gehört das Menü diesem Klick.
+        action_id = chosen[picked].id if picked is not None else None
+        menu.deleteLater()
+        if action_id is None:
             return
-        self._run_action_for(item, chosen[picked].id)
+        self._run_action_for(item, action_id)
 
 
 class MeasurementLabel(QLabel):
@@ -4534,13 +4554,40 @@ class FeaturePanel(QWidget):
         # Schriftfarbe darauf (``on_highlight`` im Stylesheet); halbfett steht
         # daneben, damit die Bedeutung nicht allein an der Farbe hängt
         # (Regel 18).
-        self._every = QCheckBox("", self)
-        self._every.setVisible(False)
-        self._rows.addWidget(self._every)
-        self._armed_title = QLabel("", self)
+        #
+        # **Und sie steht nicht im Rollinhalt** (13.09.2026). Gemessen am
+        # gebauten Fenster bei 1600 auf 1000 Punkten an einer gewählten Bohrung: Das
+        # Sichtfeld des Rollbereichs war 877 Punkte hoch, sein Inhalt 1579 —
+        # *Im Bild einstellen* lag bei y = 1015, *Übernehmen* bei y = 1062,
+        # beide unter dem Rand. Wer im obersten Block eine Zahl tippte, sah
+        # keinen Knopf, der sie übernimmt. Die Zeile liegt deshalb in einem
+        # eigenen Widget, das der Träger **unter** den Rollbereich hängen kann
+        # (:meth:`footer`); wo niemand sie nimmt, bleibt sie unten im Panel.
+        self._footer = QWidget(self)
+        below = QVBoxLayout(self._footer)
+        below.setContentsMargins(0, 0, 0, 0)
+        below.setSpacing(TIGHT)
+        # Der Sperrgrund steht **über** allem, was er sperrt: Wer von unten
+        # nach oben liest, findet ihn am Knopf, der nicht geht (Regel 18 —
+        # die zweite Kodierung neben dem grauen Knopf ist dieser Satz).
+        self._lock_note = QLabel("", self._footer)
+        self._lock_note.setWordWrap(True)
+        self._lock_note.setVisible(False)
+        fit_wrapped(self._lock_note)
+        below.addWidget(self._lock_note)
+        self._locked = ""
+        """Warum Felder und Knöpfe gerade nichts annehmen — oder leer.
+
+        Gesetzt vom Fenster über :meth:`set_locked`, aus derselben Auskunft,
+        mit der es Menü, Werkzeugzeile und Befehlspalette sperrt."""
+        # **Die Reihenfolge ist eine Aussage:** Titel, der Weg ins Bild, der
+        # Haken, das Übernehmen, das Verwerfen. Der Haken gehört unmittelbar
+        # über den Knopf, dessen Umfang er ändert — ein Knopf dazwischen machte
+        # aus „für alle" eine Frage, auf die zwei Knöpfe antworten.
+        self._armed_title = QLabel("", self._footer)
         self._armed_title.setWordWrap(True)
         self._armed_title.hide()
-        self._rows.addWidget(self._armed_title)
+        below.addWidget(self._armed_title)
         # **Der Knopf heißt „Übernehmen"** (Robert, 10.09.2026: „als text
         # brauchen wir auch nur übernehmen"). Welche Handlung er meint, steht
         # über ihm — die Überschrift, deren Felder gerade angefasst wurden —
@@ -4553,23 +4600,27 @@ class FeaturePanel(QWidget):
         # Szene, wo sich die Stelle einstellen lässt. Bis zum 11.09.2026 tat
         # das der Übernehmen-Knopf selbst — und damit gab es an einer Bohrung
         # keinen Weg mehr, einfach zu übernehmen.
-        self._in_view = QPushButton(tr("Im Bild einstellen"), self)
+        self._in_view = QPushButton(tr("Im Bild einstellen"), self._footer)
         self._in_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._in_view.clicked.connect(self._show_armed_in_view)
         self._in_view.setVisible(False)
-        self._rows.addWidget(self._in_view)
-        self._apply = make_primary(QPushButton(tr("Übernehmen"), self))
+        below.addWidget(self._in_view)
+        self._every = QCheckBox("", self._footer)
+        self._every.setVisible(False)
+        below.addWidget(self._every)
+        self._apply = make_primary(QPushButton(tr("Übernehmen"), self._footer))
         self._apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
-        self._rows.addWidget(self._apply)
-        self._cancel = make_danger(QPushButton(tr("Abbrechen"), self))
+        below.addWidget(self._apply)
+        self._cancel = make_danger(QPushButton(tr("Abbrechen"), self._footer))
         self._cancel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
         self._cancel.setStatusTip(self._cancel.toolTip())
         self._cancel.clicked.connect(self.cancelRequested)
         self._cancel.setVisible(False)
-        self._rows.addWidget(self._cancel)
+        below.addWidget(self._cancel)
+        self._rows.addWidget(self._footer)
         self._measuring = False
         """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
         steht *Abbrechen* unter dem Übernehmen."""
@@ -4650,6 +4701,11 @@ class FeaturePanel(QWidget):
         self._into_view = None
         self._in_view_key = None
         self._armed_title.hide()
+        # Der Sperrgrund selbst **bleibt** (``_locked``) — die Kette hält ja
+        # weiter an —, nur seine Zeile geht: Über „Kein Merkmal gewählt …"
+        # stünde eine Absage auf eine Frage, die niemand gestellt hat. Der
+        # nächste Aufbau bringt sie zurück (:meth:`_settle_lock`).
+        self._lock_note.setVisible(False)
         self._every.setVisible(False)
         self._every.setChecked(False)
         self._empty.setVisible(True)
@@ -5023,6 +5079,65 @@ class FeaturePanel(QWidget):
                 note or tr("Speichert die Prüfbeziehung. Rückgängig entfernt sie wieder.")
             )
 
+    def set_locked(self, reason: str) -> None:
+        """Warum hier gerade nichts angenommen wird — oder leer für „es geht".
+
+        **Dasselbe Wort wie an Menü, Werkzeugzeile und Befehlspalette**
+        (`MainWindow._update_actions`). Hält die Kette an einem Schritt an,
+        nimmt die Sitzung keinen neuen dahinter an (§15.3); bis zum 13.09.2026
+        blieben Felder und Knöpfe hier trotzdem bedienbar, und der Versuch
+        endete in einem modalen „Das hat so nicht funktioniert" — die
+        Sackgasse, die Regel 19 meint. Der Grund steht jetzt **vorher** da.
+
+        Zwei Kodierungen, wie überall (Regel 18): die Knöpfe sind grau, und
+        derselbe Satz steht als Zeile darüber — dazu in Kurzhilfe,
+        Statuszeile und zugänglicher Beschreibung.
+        """
+        self._locked = reason
+        self._settle_lock()
+
+    def _settle_lock(self) -> None:
+        """Sperrt oder gibt frei, was der gemeldete Grund gerade zulässt.
+
+        Aufgerufen aus :meth:`set_locked` und am Ende jedes Aufbaus
+        (:meth:`_settle_apply`): Die Zeilen entstehen neu, der Grund bleibt —
+        wer ein anderes Merkmal anklickt, während die Kette hält, bekäme sonst
+        ein bedienbares Panel.
+
+        Der Passungsknopf gehört :meth:`limit_fit` und bleibt hier
+        unangetastet; zwei Stellen, die denselben Knopf schalten, gewinnen
+        abwechselnd.
+        """
+        reason = self._locked
+        for row in self._built:
+            for child in row.findChildren(QWidget):
+                if isinstance(child.property("handlingKey"), str):
+                    child.setEnabled(not reason)
+        for button in (self._in_view, self._apply, self._cancel):
+            button.setEnabled(not reason)
+        self._every.setEnabled(not reason)
+        self._lock_note.setText(reason)
+        # Ohne Zeilen gibt es nichts, was der Satz erklären könnte: Über dem
+        # leeren Zustand („Kein Merkmal gewählt …") stünde eine Absage auf
+        # eine Frage, die niemand gestellt hat.
+        self._lock_note.setVisible(bool(reason) and bool(self._built))
+        if reason:
+            for button in (self._in_view, self._apply, self._cancel):
+                button.setToolTip(reason)
+                button.setStatusTip(reason)
+                button.setAccessibleDescription(reason)
+            return
+        # **Der Weg zurück ohne Neuauswahl** (Robert, 11.09.2026, für die
+        # Installationsknöpfe: überholte Sperrgründe werden verworfen). Nach
+        # einem Strg+Z rechnet die Kette wieder, und dann tragen die Knöpfe
+        # wieder ihre eigene Auskunft statt der Absage von vorhin.
+        self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
+        self._cancel.setStatusTip(self._cancel.toolTip())
+        self._cancel.setAccessibleDescription(self._cancel.toolTip())
+        self._settle_in_view()
+        if self._armed is not None:
+            self._arm(self._armed)
+
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
 
@@ -5261,6 +5376,10 @@ class FeaturePanel(QWidget):
             button = QPushButton(str(action.title), box)
             button.setToolTip(_explained(action))
             button.clicked.connect(run)
+            # Derselbe Merker wie an den Feldern: Er sagt, wem dieses
+            # Bedienelement gehört — und damit auch, dass es mit ihnen gesperrt
+            # wird, solange die Kette anhält (:meth:`_settle_lock`).
+            button.setProperty("handlingKey", key)
             layout.addWidget(button)
         if self._armed is None:
             self._arm(key)
@@ -5330,25 +5449,97 @@ class FeaturePanel(QWidget):
         dot.setAccessibleName(str(tr("Erklärung zu {title}")).format(title=title.text()))
         dot.setVisible(True)
 
-    def _settle_apply(self) -> None:
-        """Schiebt den Knopf ans Ende, nachdem alle Zeilen stehen.
+    def _apply_stands(self) -> bool:
+        """Ob der Knopf unten gerade etwas anzubieten hat.
 
-        Er wird beim Aufbau des Panels **einmal** angelegt und liegt damit vor
-        den Zeilen, die ``show_feature`` und die anderen später einfügen —
-        sichtbar stand er dann ganz oben, über der Überschrift der Auswahl
-        (Robert, 10.09.2026: „ich hab doch gesagt der button soll unten sein
-        nicht ganz oben"). Ihn am Ende umzuhängen ist billiger als jede
-        Einfügestelle um eins zu verschieben und dabei eine zu vergessen.
+        **Nicht ``isVisibleTo(self)``**, seit die Knopfzeile beim Träger
+        wohnen darf (:meth:`footer`): Die Frage läuft dann die Elternkette bis
+        zum Fenster hinauf, und ein offscreen nie gezeigtes Fenster
+        beantwortet sie mit „nein" — der Abbrechen-Knopf blieb weg und die
+        Eingabetaste stumm. ``isHidden`` fragt genau das, was hier gemeint
+        ist: ob jemand ihn ausdrücklich weggenommen hat.
         """
-        # **Die Reihenfolge ist eine Aussage:** Titel, der Weg ins Bild, der
-        # Haken, das Übernehmen. Der Haken gehört unmittelbar über den Knopf,
-        # dessen Umfang er ändert — ein Knopf dazwischen machte aus „für alle"
-        # eine Frage, auf die zwei Knöpfe antworten.
-        for widget in (self._armed_title, self._in_view, self._every, self._apply, self._cancel):
-            self._rows.removeWidget(widget)
-            self._rows.insertWidget(self._rows.count() - 1, widget)
+        return not self._apply.isHidden()
+
+    def footer(self) -> QWidget:
+        """Die Knopfzeile — der Teil, der nicht mitrollen darf.
+
+        Titel, *Im Bild einstellen*, der Haken, *Übernehmen* und *Abbrechen*
+        in einem eigenen Widget. Wer das Panel in einen Rollbereich stellt,
+        nimmt sie sich hier und hängt sie **unter** ihn; dann steht sie bei
+        jeder Fensterhöhe da (:meth:`MainWindow._build_feature_dock`). Wer sie
+        nicht nimmt, findet sie unten im Panel, wo sie immer stand.
+        """
+        return self._footer
+
+    def _settle_apply(self) -> None:
+        """Schiebt die Knopfzeile ans Ende, nachdem alle Zeilen stehen.
+
+        Sie wird beim Aufbau des Panels **einmal** angelegt und liegt damit vor
+        den Zeilen, die ``show_feature`` und die anderen später einfügen —
+        sichtbar stand sie dann ganz oben, über der Überschrift der Auswahl
+        (Robert, 10.09.2026: „ich hab doch gesagt der button soll unten sein
+        nicht ganz oben"). Sie am Ende umzuhängen ist billiger als jede
+        Einfügestelle um eins zu verschieben und dabei eine zu vergessen.
+
+        **Und nur, solange sie dem Panel gehört.** Hat der Träger sie unter
+        den Rollbereich gehängt (:meth:`footer`), steht sie dort richtig; sie
+        zurückzuholen brächte sie genau in den Rollinhalt, aus dem sie heraus
+        soll.
+        """
+        if self._footer.parentWidget() is self:
+            self._rows.removeWidget(self._footer)
+            self._rows.insertWidget(self._rows.count() - 1, self._footer)
+        self._settle_tab_order()
         self._settle_in_view()
-        self._cancel.setVisible(self._measuring and self._apply.isVisibleTo(self))
+        self._cancel.setVisible(self._measuring and self._apply_stands())
+        self._settle_lock()
+
+    def _settle_tab_order(self) -> None:
+        """Die Tabulatortaste geht denselben Weg wie das Auge.
+
+        **Ein Widget im Layout zu verschieben verschiebt es nicht in der
+        Fokuskette.** Die folgt der Reihenfolge, in der die Widgets *entstanden*
+        sind, und die vier unten entstehen im Aufbau des Panels — also vor
+        jedem Feld, das ``show_feature`` später einfügt. Gemessen am gebauten
+        Fenster an einer gewählten Bohrung: Die erste Tabulatortaste landete
+        auf „Auf alle 4 gleichartigen anwenden", die zweite auf *Im Bild
+        einstellen*, die dritte auf *Übernehmen* — und erst die vierte im
+        obersten Zahlenfeld. Wer das Fenster mit der Tastatur bedient, kam
+        damit am Knopf vorbei, bevor er einen Wert gesehen hatte; und weil der
+        Knopf der zuletzt berührten Handlung gilt (:meth:`_arm`), hieß das
+        auch: Er meinte etwas anderes, als daneben stand.
+
+        ``setTabOrder`` hängt das zweite Widget hinter das erste, also wird die
+        Kette von hinten aufgezogen: letztes Feld → Weg ins Bild → Haken →
+        Übernehmen → Abbrechen. Unsichtbare und gesperrte Halte übergeht Qt von
+        selbst, der Haken braucht also keinen Sonderfall.
+        """
+        anchor = self._last_field()
+        chain = (self._in_view, self._every, self._apply, self._cancel)
+        if anchor is not None:
+            QWidget.setTabOrder(anchor, chain[0])
+        for first, second in pairwise(chain):
+            QWidget.setTabOrder(first, second)
+
+    def _last_field(self) -> QWidget | None:
+        """Das letzte Bedienelement über dem Knopf — der Anker der Kette.
+
+        Von hinten gesucht, weil die letzte gebaute Zeile auch die unterste
+        ist. Ein Strich (:meth:`_separate`) trägt nichts Bedienbares und wird
+        dabei übergangen; das Textfeld **in** einem Drehfeld ebenso — es ist
+        dessen Innenleben und kein eigener Halt.
+        """
+        for row in reversed(self._built):
+            stops = [
+                child
+                for child in row.findChildren(QWidget)
+                if child.focusPolicy() != Qt.FocusPolicy.NoFocus
+                and not isinstance(child, QLineEdit)
+            ]
+            if stops:
+                return stops[-1]
+        return None
 
     def _separate(self) -> None:
         """Zieht einen Strich vor die nächste Handlung — außer vor die erste.
@@ -5486,7 +5677,7 @@ class FeaturePanel(QWidget):
         Merkmalfenster weiß sonst nichts davon, es hält nur die Felder.
         """
         self._measuring = bool(active)
-        self._cancel.setVisible(self._measuring and self._apply.isVisibleTo(self))
+        self._cancel.setVisible(self._measuring and self._apply_stands())
 
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
@@ -5546,16 +5737,54 @@ class FeaturePanel(QWidget):
             editor.valueChanged.connect(report)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Schnittstelle
-        """Schon der Fokus benennt die Handlung, ohne ihren Wert zu ändern."""
+        """Schon der Fokus benennt die Handlung, ohne ihren Wert zu ändern.
+
+        **Und die Eingabetaste übernimmt sie** (13.09.2026). Wer eine Zahl
+        tippt und Enter drückt, meint den Schritt; gemessen am gebauten
+        Fenster blieb der Verlauf bei 1 Schritt, und erst der Klick auf
+        *Übernehmen* schrieb ihn — bei einem Knopf, der an dieser
+        Fensterhöhe gar nicht zu sehen war (:meth:`footer`).
+        """
         from app.ui.leash import stop_watching_the_dying
 
         if stop_watching_the_dying(self, watched, event):
             return False
+        key = watched.property("handlingKey")
         if event.type() == QEvent.Type.FocusIn:
-            key = watched.property("handlingKey")
             if isinstance(key, str):
                 self._arm(key)
+        elif (
+            event.type() == QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+            and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and isinstance(key, str)
+        ):
+            return self._apply_from_the_keyboard(watched, key)
         return super().eventFilter(watched, event)
+
+    def _apply_from_the_keyboard(self, watched: QObject, key: str) -> bool:
+        """Die Eingabetaste in einem Feld tut, was der Knopf darunter tut.
+
+        **Nur wenn er es täte:** Ist er gesperrt (die Kette hält an) oder gibt
+        es ihn gerade nicht, geschieht nichts — eine Taste, die etwas anderes
+        tut als der Knopf daneben, wäre schlimmer als eine, die schweigt.
+
+        Der getippte Text wird vorher **festgeschrieben**
+        (``interpretText``): Das Ereignis kommt hier an, bevor das Drehfeld es
+        sieht, und ohne das läse das Übernehmen die Zahl von vorhin.
+        ``watched`` ist dabei entweder das Drehfeld selbst oder sein inneres
+        Textfeld — beide tragen den Merker.
+        """
+        if not (self._apply.isEnabled() and self._apply_stands()):
+            return False
+        editor = watched if isinstance(watched, QWidget) else None
+        if isinstance(editor, QLineEdit):
+            editor = editor.parentWidget()
+        if isinstance(editor, QAbstractSpinBox):
+            editor.interpretText()
+        self._arm(key)
+        self._run_armed()
+        return True
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
         """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""

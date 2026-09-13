@@ -69,9 +69,9 @@ Elternteil trägt es bis zum Löschen.
 
 Dasselbe Wissen stand vorher zweimal als Kommentar im Code und einmal nicht:
 `MainWindow._close_sketch` nennt den Absturz („ein Fenster, das im selben
-Atemzug gelöscht wird"), `SketchEditor.take_side_box` die falsch aufgelösten
-Tastenkürzel („`plane:xy` statt `plane:xz`"), und `ReportPanel._show_offers`
-tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel.
+Atemzug gelöscht wird"), `SketchEditor.take_constraint_list` die falsch
+aufgelösten Tastenkürzel („`plane:xy` statt `plane:xz`"), und
+`ReportPanel._show_offers` tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel.
 
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
 Schritt an, zeigt das Bild den letzten vollständig gerechneten Zustand — und
@@ -95,6 +95,16 @@ operation ausführe"). Zwei Stellen halten das, und beide sind nötig:
   Erzeugen, Zeichnen, Formen, Skelett und der Filamentwähler — dieselbe
   Bauart wie die Lizenzsperre und die Gestensperre daneben. Die Werkzeugzeile
   bleibt frei: Messen, Analyse und Schichten lesen nur.
+* **Und das Merkmalfenster gehört dazu** (`FeaturePanel.set_locked`,
+  13.09.2026). Es war die eine Bedienstelle, an der der Halt nicht ankam:
+  Felder und beide Knöpfe blieben aktiv, und der Versuch endete in einem
+  modalen „Das hat so nicht funktioniert" — eine Sackgasse hinter einem Klick,
+  den die Oberfläche vorher hätte abraten können (Regel 19). Zwei Kodierungen
+  (Regel 18): graue Knöpfe **und** der Grund als sichtbare Zeile über ihnen,
+  dazu in Kurzhilfe, Statuszeile und zugänglicher Beschreibung. Die Sperre
+  überlebt den Neuaufbau der Zeilen — ein Klick auf ein anderes Merkmal hebt
+  sie nicht auf — und fällt nach einem Undo ohne Neuauswahl, weil
+  `_update_actions` mit dem neuen Ergebnis den leeren Grund meldet.
 
 Gemessen: Vorher standen nach dem Halt drei Schritte im Verlauf und einer im
 Bild; nachher keiner, und der erste Knopf der Absage („Stückzahl anpassen und
@@ -994,6 +1004,22 @@ beides — keinen leeren Namen, und keine zwei gleichen.
 Die allgemeine Frage dahinter, weil dieselbe Lücke an jedem neuen Ort mit
 Feldern entsteht: **Wo Felder stehen, tragen sie ihren Namen — und „wo" heißt
 jede Stelle, nicht die zwei, die man gerade im Kopf hat.**
+
+## Und die Tabulatortaste geht denselben Weg wie das Auge
+
+**Ein Widget im Layout zu verschieben verschiebt es nicht in der Fokuskette.**
+Die folgt der Reihenfolge, in der die Widgets **entstanden** sind; wer ein
+Bedienelement im Aufbau anlegt und später ans Ende hängt, hat es sichtbar unten
+und in der Kette oben. Im Merkmalfenster traf es *Im Bild einstellen*: Es steht
+über dem Haken „Auf alle N gleichartigen anwenden" und kam mit der
+Tabulatortaste **nach** ihm (gemessen am gebauten Fenster, 13.09.2026).
+
+Das Mittel ist `QWidget.setTabOrder`, von hinten aufgezogen — letztes Feld →
+die Halte unten in ihrer Layoutreihenfolge (`FeaturePanel._settle_tab_order`).
+Unsichtbare und gesperrte Halte übergeht Qt von selbst, ein Sonderfall für den
+Haken ist also keiner nötig. Geprüft wird die **Kette gegen das Layout** und
+nicht gegen Bildpunkte: Was das Auge sieht, sagt das Layout; offscreen wäre
+jede Höhe erfunden (`test_the_tab_key_goes_down_the_panel_like_the_eye`).
 
 ## Ein Nachweis gehört der Gruppe, nicht jeder Handlung
 

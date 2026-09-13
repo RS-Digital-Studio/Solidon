@@ -192,6 +192,7 @@ GERMAN_STEMS = (
     "sauber",
     "stufe",
     "tipp",
+    "umbruch",
     "umgebung",
     "vorher",
     "hoehe",

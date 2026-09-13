@@ -45,6 +45,12 @@ Daten. Neue Zustände sperren und entfernen alte Fehlerknöpfe. Während einer
 laufenden Buchung bleiben ihre Folgeaktionen gesperrt und ihr Hinweis lesbar.
 Lagerleser verwenden die gemeinsame nach Dateistempel erneuerte Momentaufnahme;
 Lesefehler bleiben auch in Vorwahl, Filamentpanel und Startkachel sichtbar.
+Ein Lesefehler aus dem **Aufbau** des Filamentfelds erreicht seine Empfänger
+erst beim Anzeigen (`FilamentField.showEvent`): `_fill` läuft im Konstruktor,
+und der Operationsdialog verbindet `choiceNotice` und `choiceProblem` danach.
+Die Startkachel zeigt dafür einen kurzen Satz und trägt Ursache und
+Sicherungsweg in Kurzhilfe und Beschreibung; der ganze Fehler passt nicht auf
+eine Kachel.
 Spulendetail und Buchungsvorschlag verbinden Spulen und Journal aus jeweils
 genau einem vollständigen Stand.
 
@@ -129,6 +135,16 @@ Buchung prüft deren Eignung weiterhin gesondert.
 Für die ausdrückliche Wertübernahme hält der Druckdialog das gewählte
 `SlicerProfile` einschließlich seines Prusa-Abschnitts fest. Der Dateipfad
 allein beschreibt bei Herstellerbündeln noch kein bestimmtes Filament.
+
+Der Dialog erscheint, bevor jemand nach Slicern gesucht hat: `_SlicerWorker`
+fragt `discover.find_programs` außerhalb des Qt-Hauptthreads, vorläufig gilt
+der gemerkte Pfad (`_remembered_slicer`), und `_slicers_found` übernimmt Liste
+und Wahl. `recheck_slicer` benutzt denselben Arbeiter; `wait_for_slicers()` ist
+der Weg, auf seine Antwort zu warten. Das Schließen wartet nicht auf sie
+(`_settle` lässt `_SlicerWorker` aus); den Thread hält die Leine, `release`
+wartet beim Abbau auf ihn, und `MainWindow.wait_for_workers` fragt über
+`leash.wait_for_all` auch nach dem, was ein weggeräumter Dialog hinterließ.
+Regel und Messung in `.claude/rules/wartezeit.md`.
 
 ## Der Weg durch die Schicht
 
@@ -318,6 +334,14 @@ und Richtung in die Felder unter *Zum Langloch ziehen*; erst das Übernehmen
 dort macht daraus die Operation. Die Eingabetaste an der Zugleiste ist der
 kurze Weg dorthin, Escape verwirft.
 
+**Und danach bleibt das Langloch gewählt.** Ein Übernehmen im Merkmalfenster
+merkt sich Merkmal und Stelle (`_feature_to_keep`, `_resume_near`);
+`_reselect_the_renamed` sucht nach der Auswertung an dieser Stelle, weil
+`hole_1` im Schritt zu `slot_1` wird und der Baum nur wiederherstellt, was es
+noch gibt. Getrennt von `_measures_to_resume`: Das eine wählt wieder aus, das
+andere bringt die Maßlinien zurück — und nur, wer aus dem Bild heraus
+übernommen hat, will beides.
+
 **Eine eigene Leiste unten hatte er bis zum 11.09.2026** (`slot_bar.py`), mit
 denselben zwei Zahlen und einem zweiten Übernehmen — zwei Bedienstellen über
 demselben Loch (Robert: „auch 2 mal übernehmen einmal unten und einmal
@@ -329,9 +353,24 @@ Erst ein Zug über die gemeinsame Klickschwelle beginnt eine Vorschau;
 Zurückziehen auf den Druckpunkt räumt sie wieder ab. Der Richtungsfang
 entspricht dem Drehring.
 Die Merkmalsfelder schalten schon beim Fokussieren ihre Handlung scharf;
-deren Titel steht über *Übernehmen*. Feldlose Handlungen haben einen eigenen
+deren Titel steht über *Übernehmen*. Die Eingabetaste in einem Feld übernimmt
+sie — dieselbe Handlung, die der Knopf meint, und nur solange er sie annimmt.
+Feldlose Handlungen haben einen eigenen
 Knopf. Bei Bausteinauswahl bleiben die Handlungen am erzeugenden Schritt;
 sein Entfernen nutzt die Folgeauskunft des Verlaufs (§19).
+
+**Die Knopfzeile wohnt beim Träger, nicht im Rollinhalt** (`FeaturePanel.footer`,
+13.09.2026). `MainWindow._build_feature_dock` hängt sie unter den Rollbereich;
+wer das Panel allein baut, findet sie unten in seinem Layout. Wegen dieses
+Umzugs beantwortet `isVisibleTo(panel)` an ihren Knöpfen nicht mehr, was sie
+soll — gefragt wird `isHidden()` (`_apply_stands`).
+
+`set_locked(grund)` sperrt Felder und beide Knöpfe und schreibt den Grund in
+eine sichtbare Zeile der Knopfzeile **und** in Kurzhilfe, Statuszeile und
+zugängliche Beschreibung (Regel 18). Gerufen wird sie aus `_update_actions`
+mit demselben `_halt_reason`, der Menü, Werkzeugzeile und Befehlspalette
+sperrt; sie überlebt den Neuaufbau der Zeilen und fällt nach einem Undo ohne
+Neuauswahl.
 
 Solange ein Langlochzug wartet (`slot_drag_waits`), blendet `PlacementFlow`
 seine Platzierungsfelder und Vorschau aus und nimmt keine Platzierungsklicks
@@ -533,6 +572,11 @@ angeforderte Platten- oder Explosionszustände greifen erst mit dem neuen Bild.
 Ansichtsarbeiter bekommen eigene Netzkopien für Schnitt und Dezimierung;
 bei exakten Körpern wird nur ihre Anzeigetessellation kopiert. Cachetreffer
 werden vor der Verdrängung als zuletzt verwendet markiert.
+Dieselbe Trennung gilt für die Platzierung: `placement_flow.for_a_worker`
+kopiert das Szenennetz **im Hauptthread**, bevor `prepare_surface`, `seat_of`
+oder `original_surface_hit` im Nebenthread darauf rechnen — sie füllen sonst
+dieselben trägen trimesh-Caches, an denen der Hauptthread währenddessen
+Hüllquader, Dreiecke und Kanten liest.
 Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
 deren sichtbare Körpermenge. Ihre Entscheidung wird bis zu einem Wechsel
 dieser beiden Eingaben behalten; Kamerabewegungen lösen keine erneute exakte
@@ -1007,7 +1051,14 @@ Darstellungsarten bleiben auch im Inhalt Fensterbefehle.
 
 Der Objektbaum wertet `customContextMenuRequested` in den bereits gelieferten
 Viewport-Koordinaten aus. Eine zweite Umrechnung verschiebt den Treffer um die
-Kopfzeilenhöhe. Text- und Zahlenfelder behalten normale Zeicheneingaben vor
+Kopfzeilenhöhe.
+
+**Ein Kontextmenü gehört seinem Klick.** Objektbaum, Parameterleiste, Verlauf,
+Prüfbericht und die Ansicht bauen es je Rechtsklick neu, als Kind ihres Panels
+— ohne `deleteLater()` nach dem `exec` bleibt jedes liegen, samt seiner
+Aktionen und der Rückrufe daran (gemessen: dreißig Rechtsklicks, dreißig
+zusätzliche `QMenu`-Kinder). Weggeräumt wird wie überall mit `hide`/
+`deleteLater` und nie über `setParent(None)`. Text- und Zahlenfelder behalten normale Zeicheneingaben vor
 fensterweiten Einzeltasten-Kürzeln; die Linux-Auslieferung verwendet dafür den
 geprüften X11-/Xwayland-Pfad.
 

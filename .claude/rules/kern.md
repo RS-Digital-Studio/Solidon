@@ -27,6 +27,27 @@ zusätzlich zu `AGENTS.md`.
 - Jede randomisierte Prozedur nimmt `ctx.seed` und trägt `deterministic=False`.
   Ohne beides ist sie falsch, auch wenn sie funktioniert.
 
+## `scipy.spatial.ConvexHull` gehört nicht in eine Schleife über Flecken
+
+Der Qhull-Wrapper legt **je Aufruf eine Temporärdatei** an (`tempfile.mkstemp`
+für den Meldungsstrom). Einmal je Körper ist das nichts; einmal je Fleck ist es
+eine Dateisystemoperation mitten in einer Geometrierechnung, und die kostet
+nicht das, was sie im Leerlauf kostet: An einer Platte mit 64 verrundeten
+Taschen rief `perceive.features.radial_cylinder` sie 256-mal je Erkennung —
+gemessen 0,30 ms allein, 60 ms im Lauf, zusammen 15,4 s in `nt.open` und
+`detect` bei 8382 statt 1272 ms (12.09.2026).
+
+Für eine ebene Hülle nimmt der Kern deshalb GEOS: `MultiPoint(punkte).convex_hull`.
+Gemessen an 73 Flecken des Korpus: gleiche Umrisse, gleiche Radien, gleiche
+Rundungsfehler, 1439,6 ms gegen 3,8 ms. Zwei Unterschiede gehören dazu — GEOS
+gibt bei entartetem Eingang eine Strecke oder einen Punkt zurück statt
+`QhullError` zu werfen, und sein Ring läuft andersherum. Die Punktmenge ist
+dieselbe; wer danach eine Ausgleichsrechnung anschließt, bekommt die letzten
+Bits einer Summe in anderer Reihenfolge.
+
+`geom/mesh.py` und `geom/orient.py` dürfen Qhull behalten: Sie fragen einmal je
+Körper.
+
 ## Fehler
 
 Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —

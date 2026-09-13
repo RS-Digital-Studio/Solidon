@@ -1129,6 +1129,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # eines neuen Wortes: Es steht schon in allen sechs Katalogen und sagt
     # dasselbe.
     "ignored": _("Übersprungen"),
+    # Die Kennung einer gewählten Kante und wie viele sie trifft
+    # (``geom.edges.selected``): Steht eine Kennung für zwei Kanten, hält die
+    # Operation an, und der Befund nennt beides.
+    "key": _("Kantenkennung"),
     "key_major": _("Schlüsselversion"),
     "kept": _("Beibehalten"),
     "kind": _("Art"),
@@ -1145,6 +1149,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "major": _("Hauptversion"),
     "machine": _("Maschine"),
     "margin": _("Randabstand"),
+    "matches": _("Treffer"),
     "material": _("Material"),
     "maximum": _("Höchstwert"),
     "measured": _("Gemessen"),

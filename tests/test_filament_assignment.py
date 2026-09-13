@@ -418,7 +418,12 @@ def test_embedded_picker_fits_the_narrow_selection_dock(qt_app: QApplication) ->
     )
     window.resizeDocks([window.feature_dock], [width], Qt.Orientation.Horizontal)
     QTest.qWait(100)
-    scroller = window.feature_dock.widget()
+    # Der Rollbereich liegt seit dem 13.09.2026 in einer Spalte, unter der die
+    # Knopfzeile des Merkmalfensters fest steht (`_build_feature_dock`); das
+    # Dock-Widget ist diese Spalte, der Rollbereich ihr erstes Kind.
+    column = window.feature_dock.widget()
+    assert column is not None
+    scroller = column.findChild(QScrollArea)
     assert isinstance(scroller, QScrollArea)
     assert scroller.horizontalScrollBar().maximum() == 0
     quick = window.quick_filament

@@ -3080,6 +3080,229 @@ def test_a_changed_number_in_the_panel_becomes_a_step(window: MainWindow) -> Non
     assert letzter.params["at_feature"] == hole, "und sie meint die angeklickte Bohrung"
 
 
+def _a_chosen_hole(window: MainWindow) -> tuple[str, str]:
+    """Eine eingelesene Platte mit gewählter Bohrung — der Ausgangspunkt von Weg 2."""
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    return object_id, hole
+
+
+def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainWindow) -> None:
+    """Der Weg, einen Schritt abzuschließen, steht nicht unter dem Fensterrand.
+
+    Gemessen am gebauten Fenster (13.09.2026, 1600 auf 1000 Punkten, gewählte
+    Bohrung): Sichtfeld des Rollbereichs 877 Punkte, Inhalt 1579 — *Im Bild
+    einstellen* lag bei y = 1015, *Übernehmen* bei y = 1062. Wer eine Zahl
+    tippte, musste erst rollen, um sie zu übernehmen.
+
+    Gemessen wird **gegen das Fenster rechts**, nicht in Bildschirmpunkten:
+    Die Frage ist, ob die Zeile im sichtbaren Bereich des Docks liegt.
+
+    **Und das Fenster wird dafür gezeigt.** Ungezeigt legt Qt seine Kinder
+    nicht aus: Das Dock maß 100 auf 84 Punkte, und alle vier Halte lagen auf
+    derselben Stelle — eine Messung, die auch mit der Knopfzeile im Rollinhalt
+    grün blieb (gemessen an der Gegenprobe). Offscreen erscheint dabei nichts
+    auf einem Bildschirm; ausgelegt wird trotzdem.
+    """
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QScrollArea
+
+    window.resize(1600, 700)
+    window.show()
+    QApplication.processEvents()
+    _a_chosen_hole(window)
+
+    dock = window.feature_dock
+    roller = dock.findChild(QScrollArea)
+    assert roller is not None
+    panel = window.feature_panel
+    panel.set_measuring(True)
+    # **Zweimal, und die zweite Runde trägt die Messung.** Die Zeilen entstehen
+    # in der ersten; ausgelegt werden sie erst danach, und vorher meldet das
+    # Panel 272 Punkte statt 764 — eine Zahl, gegen die jede Höhenaussage
+    # erfunden wäre.
+    for _ in range(3):
+        QApplication.processEvents()
+    # **Die Voraussetzung des Funds, und sie ist schärfer als „der Inhalt
+    # rollt".** Gerollt wird immer, sobald die Handlungsliste darunter steht;
+    # der Knopf verschwindet erst, wenn die **Zeilen des Merkmals** allein
+    # nicht mehr ins Sichtfeld passen. Gemessen: Panel 764 Punkte, Sichtfeld
+    # 486 — bei 1600 auf 700. Ohne diese Zeile bliebe der Test auch dann grün,
+    # wenn die Knopfzeile wieder mitrollte.
+    assert panel.height() > roller.viewport().height(), (
+        "passen die Zeilen ins Sichtfeld, prüft dieser Test nichts — "
+        f"{panel.height()} in {roller.viewport().height()}"
+    )
+    unten = [panel._in_view, panel._every, panel._apply, panel._cancel]
+    stehen = [halt for halt in unten if halt.isVisibleTo(dock)]
+    assert len(stehen) == len(unten), "an dieser Bohrung stehen alle vier"
+    draussen = [
+        f"{halt.accessibleName() or halt.text()} bei y={halt.mapTo(dock, QPoint(0, 0)).y()}"
+        for halt in stehen
+        if not dock.rect().contains(QRect(halt.mapTo(dock, QPoint(0, 0)), halt.size()))
+    ]
+    assert not draussen, f"unter dem Rand: {draussen} (Fenster {dock.height()} hoch)"
+
+    # **Die strukturelle Hälfte derselben Zusage.** Was im Rollinhalt liegt,
+    # kann hinausgerollt werden — gleich wie es in dieser Höhe gerade steht.
+    inhalt = roller.widget()
+    assert inhalt is not None and not inhalt.isAncestorOf(panel.footer()), (
+        "die Knopfzeile rollt mit"
+    )
+
+
+def test_the_return_key_in_a_feature_field_writes_exactly_one_step(window: MainWindow) -> None:
+    """Tippen, Enter, fertig — und genau ein Schritt im Verlauf.
+
+    Gemessen am gebauten Fenster (13.09.2026): Durchmesser gesetzt, ``Return``
+    im Feld, Verlauf 1 → 1. Der Knopf daneben tat es, und er stand an dieser
+    Fensterhöhe unter dem Rand.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import LengthSpin
+
+    object_id, hole = _a_chosen_hole(window)
+    panel = window.feature_panel
+    before = len(window.session.project.document.ops)
+    feld = next(
+        widget
+        for widget in panel.findChildren(LengthSpin)
+        if widget.isVisibleTo(panel)
+        and "Merkmal verschieben" in widget.accessibleName()
+        and widget.accessibleName().endswith("X")
+    )
+    feld.setFocus()
+    feld.set_value_mm(feld.value_mm() + 2.0)
+    QApplication.processEvents()
+
+    QTest.keyClick(feld, Qt.Key.Key_Return)
+    assert window.session.wait_for_idle(30_000)
+
+    schritte = window.session.project.document.ops
+    assert len(schritte) == before + 1, "genau ein Schritt, nicht keiner und nicht zwei"
+    assert schritte[-1].op == "move_feature"
+    assert schritte[-1].params["at_feature"] == hole
+    assert tuple(schritte[-1].inputs) == (object_id,)
+
+
+def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
+    window: MainWindow,
+) -> None:
+    """Der Halt erreicht auch das Merkmalfenster — und verlässt es von selbst.
+
+    Gemessen am gebauten Fenster (13.09.2026): Nach dem Halt waren
+    *Übernehmen*, *Im Bild einstellen* und alle vierzehn Zahlenfelder aktiv,
+    und der Versuch endete in einem modalen „Das hat so nicht funktioniert"
+    (Regel 19). Menü, Werkzeugzeile und Befehlspalette trugen den Grund
+    längst.
+
+    Der Rückweg gilt ohne Neuauswahl: Nach Strg+Z rechnet die Kette wieder,
+    und der Grund von vorhin ist keine Auskunft mehr.
+    """
+    from app.ui.labels import LengthSpin
+
+    object_id, _ = _a_chosen_hole(window)
+    panel = window.feature_panel
+    felder = [
+        widget
+        for widget in panel.findChildren(LengthSpin)
+        if widget.isVisibleTo(panel) and widget.property("handlingKey")
+    ]
+    assert felder, "ohne Felder prüft dieser Test nichts"
+    assert panel._apply.isEnabled(), "Voraussetzung: ohne Halt nimmt das Fenster Zahlen an"
+
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 5000.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.session.last_result.stopped_at is not None, "der Wert hält die Kette an"
+
+    grund = str(window._halt_reason() or "")
+    assert grund, "der Halt hat einen Grund"
+    assert not panel._apply.isEnabled(), "hinter einem Halt nimmt das Fenster nichts an"
+    assert not panel._in_view.isEnabled()
+    # Die Auswertung baut das Panel neu auf; die Felder von vorhin sind
+    # gelöscht, gefragt wird nach denen, die jetzt dastehen.
+    felder = [
+        widget
+        for widget in panel.findChildren(LengthSpin)
+        if widget.isVisibleTo(panel) and widget.property("handlingKey")
+    ]
+    assert felder, "nach dem Halt steht das Merkmal weiter im Fenster"
+    offen = [feld.accessibleName() for feld in felder if feld.isEnabled()]
+    assert not offen, f"{len(offen)} Felder nehmen weiter Zahlen an: {offen}"
+    assert panel._apply.toolTip() == grund, "der Grund steht am Knopf"
+    # Regel 18: nicht nur grau, sondern als Satz — und zwar sichtbar, nicht
+    # nur im Tooltip, den man erst suchen muss.
+    assert panel._lock_note.text() == grund
+    assert panel._lock_note.isVisibleTo(window.feature_dock)
+
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    assert window.session.last_result.stopped_at is None, "zurückgenommen rechnet sie wieder"
+    assert panel._apply.isEnabled(), "und das Fenster gibt ohne Neuauswahl wieder frei"
+    assert not panel._lock_note.isVisibleTo(window.feature_dock)
+    frei = [
+        widget
+        for widget in panel.findChildren(LengthSpin)
+        if widget.isVisibleTo(panel) and widget.property("handlingKey")
+    ]
+    assert frei and all(feld.isEnabled() for feld in frei)
+
+
+def test_the_slot_that_was_pulled_stays_selected_after_apply(window: MainWindow) -> None:
+    """Nach *Zum Langloch ziehen* → Übernehmen steht das Langloch im Fenster.
+
+    Gemessen am gebauten Fenster (13.09.2026): Im Baum stand „Langloch 1",
+    gewählt war der **Körper**, und das Merkmalfenster zeigte „Kein Merkmal
+    gewählt …". Wer weiterarbeiten wollte, klickte es neu an — obwohl das
+    Konzept (`konzept-merkmalbedienung-2026-09`, §4, Abnahme 1) das Gegenteil
+    verspricht.
+
+    Die Bohrung wechselt dabei ihren Namen (``hole_1`` wird ``slot_1``,
+    zugesagt in ``SLOT_FEATURE_RENAMED``), und der Baum stellt nur eine
+    Auswahl wieder her, deren Kennung es noch gibt. Gesucht wird deshalb an
+    der Stelle, die der Schritt genannt hat.
+    """
+    object_id, hole = _a_chosen_hole(window)
+    panel = window.feature_panel
+    before = len(window.session.project.document.ops)
+    assert panel.take_values("slot_hole", {"slot_length": 20.0, "slot_angle": 45.0}), (
+        "an einer Bohrung steht *Zum Langloch ziehen*"
+    )
+
+    panel._apply.click()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    schritte = window.session.project.document.ops
+    assert len(schritte) == before + 1 and schritte[-1].op == "slot_hole"
+    entry = window.session.last_result.scene.objects[object_id]
+    assert hole not in entry.features, "die Bohrung heißt jetzt anders — sonst prüft das nichts"
+    gewaehlt = window.object_tree.selected_feature()
+    assert gewaehlt is not None, "das entstandene Langloch bleibt gewählt"
+    assert entry.features[gewaehlt].kind == "slot"
+    assert panel.feature_id == gewaehlt, "und das Merkmalfenster zeigt es"
+
+
 def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -> None:
     """Roberts Wunsch vom 03.09.2026: „bei Doppelklick würde ich auch gerne die
     Größen usw. ändern können über einen Dialog."
@@ -5870,9 +6093,19 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
         # ``isHidden`` und nicht ``isVisible``: offscreen wird das Fenster nie
         # gezeigt, und dann meldet jedes Kind sich als unsichtbar — dieselbe
         # Unterscheidung, die der Test des Vorschaubandes trifft.
+        #
+        # **Und je Knopf noch einmal.** Ein ausgetauschter Knopf wird seit dem
+        # 12.09.2026 verborgen und zur Löschung vorgemerkt, statt elternlos
+        # gemacht zu werden (RM-101); bis die Ereignisschleife den Auftrag
+        # zustellt, hängt er weiter als Kind darunter — ``processEvents``
+        # liefert ``DeferredDelete`` nicht aus. Gezählt wird deshalb, was zu
+        # sehen wäre, und nicht, was noch am Elternteil hängt: Ohne den Filter
+        # stand hier nach zwei Befundwechseln dreimal „Auf das Bett setzen".
         QApplication.processEvents()
         row = report._offers
-        return [b.text() for b in row.findChildren(QPushButton)] if not row.isHidden() else []
+        if row.isHidden():
+            return []
+        return [b.text() for b in row.findChildren(QPushButton) if not b.isHidden()]
 
     assert offered() == [str(errors.PLACE_ON_BED.label)], (
         "die Vorauswahl zeigt die Handlung, bevor jemand klickt"
@@ -11477,6 +11710,27 @@ def test_the_veil_leaves_the_toolbar_reachable(window: MainWindow) -> None:
     window._on_busy(False)
 
 
+def test_the_veil_says_whether_a_model_or_a_project_is_coming(window: MainWindow) -> None:
+    """Die Überschrift über der leeren Ansicht sagt, worauf gewartet wird.
+
+    Wer eine STL einfügt, wartet nicht auf ein Projekt. Gemessen am
+    13.09.2026: einundzwanzig Sekunden „Projekt wird geladen …" quer über das
+    Fenster, während die Statuszeile daneben „Modell einfügen" meldete. Der
+    Merker überlebt dabei das Ende des Einlesens — ausgewertet und erkannt
+    wird danach noch, und die Anzeige steht so lange.
+    """
+    window._on_busy(True)
+    assert window.veil._headline == str(tr("Projekt wird geladen …"))
+    window._on_busy(False)
+
+    window._loading_model = True
+    window._on_busy(True)
+    assert window.veil._headline == str(tr("Modell wird gelesen"))
+
+    window._on_busy(False)
+    assert not window._loading_model, "das Ende der Anzeige räumt den Merker"
+
+
 def test_the_veil_can_be_cancelled(window: MainWindow) -> None:
     """Der Schleier gehört der Auswertung und hält keine parallele Aufgabe an."""
     split_worker = _RunningSplit()
@@ -15795,7 +16049,12 @@ def test_a_clicked_edge_reaches_the_selection_window(
         eintrag.title for eintrag in window.feature_panel._runs.values() if eintrag.title in knoepfe
     ]
     assert not uebrig, "und das Fenster überlebt sie nicht"
-    assert not window.feature_panel._apply.isVisible(), "der Knopf unten meint nichts mehr"
+    # ``isVisibleTo`` und nicht ``isVisible``: Offscreen wird kein Fenster je
+    # gezeigt, und die zweite Frage beantwortet Qt deshalb immer mit „nein" —
+    # eine Zusicherung, die nicht rot werden kann.
+    assert not window.feature_panel._apply.isVisibleTo(window.feature_panel), (
+        "der Knopf unten meint nichts mehr"
+    )
 
 
 def test_the_age_of_a_backup_follows_the_application_language(tmp_path: Path) -> None:
