@@ -20,9 +20,16 @@ scrive in `website/version.json`.
 ### Costruire e modificare
 
 - Raccordare e smussare funzionano ora anche su un modello importato: si sceglie uno spigolo nella vista e si indica raggio o larghezza. Prima servivano solo su un corpo disegnato da sé.
-- Anche scostare la faccia, l'angolo di sformo e il cordone funzionano su un modello importato, e lì si può pure modificare o togliere un raccordo riconosciuto.
+- Anche scostare la faccia e l'angolo di sformo funzionano su un modello importato, e lì si può pure modificare o togliere un raccordo riconosciuto.
 - Scostare la faccia muove la faccia su cui si è fatto clic. Su una scala gli altri gradini restano dove sono, invece di spostarsi tutti insieme.
 - Cerchio fori e griglia di fori sono forme a sé nel disegno, con le loro quote: numero, cerchio primitivo, diametro. Prima erano sei cerchi fatti a mano.
+- Novità: «Aggiungi cordone», un listello tondo lungo gli spigoli scelti — all'esterno come cordone, in un angolo interno come cordone d'angolo. Un corpo esatto diventa così una mesh.
+- Uno spigolo si sceglie ora nella vista: primo clic il corpo, poi lo spigolo. Lunghezza e i pulsanti Raccorda e Smusso stanno a destra. Prima bisognava riconoscerlo in un elenco.
+- Su un tubo, bordo interno e bordo esterno si raccordano o si smussano separatamente. Prima si chiamavano allo stesso modo, e la modifica colpiva uno dei due.
+- L'angolo di sformo lascia intatta la base d'appoggio, anche se il pezzo non sta a quota zero. Prima un pezzo sollevato veniva assottigliato anche in basso.
+- «Sweep lungo un percorso» parte con la sezione giusta e mantiene le aperture nel contorno: un anello resta un tubo, invece di partire deformato e riempirsi all'interno.
+- Una coppia di controparti inserita conta come modifica: viene salvata con il progetto e alla chiusura si chiede se salvarla. Prima poteva andare persa in silenzio.
+- Il lucchetto accanto a una quota fissata nell'editor di schizzi è ora un simbolo disegnato con spiegazione. Su qualche computer compariva lì un quadratino.
 
 ### Forare e posizionare
 
@@ -35,6 +42,9 @@ scrive in `website/version.json`.
 - Un foro o un'asola selezionati si regolano direttamente nella vista con «Imposta nella vista»: una maniglia per spostare e ruotare, pomelli per allungare, quote a bordi e centri.
 - Solo «Applica», a destra, ne fa un passo; Esc annulla. Un'asola allungata mostra la sua lunghezza e mantiene la sua forma quando la spostate con la maniglia.
 - Un campo di coordinata vuoto significa ora «lascia il foro dov'è». Così se ne può mettere uno al centro del pezzo, l'unico punto che prima non raggiungeva.
+- Un foro si sposta con «Modifica foro» ora anche sul corpo esatto — e sulla mesh si muove davvero. Se esce oltre il bordo, Solidon dice che non è più un foro.
+- La larghezza di un'asola si cambia con «Modifica foro». La corsa che una vite ha al suo interno resta.
+- Se un foro o un'asola attraversa il pezzo da parte a parte, tanto che si spezza in più pezzi, il rapporto lo dice — invece di dire solo che il foro sporge oltre il bordo.
 
 ### Riconoscimento
 
@@ -45,6 +55,10 @@ scrive in `website/version.json`.
 - Se tra un foro e la parete attorno resta meno materiale di quanto il vostro ne regga, il rapporto lo dice, misurato sul pezzo finito.
 - La mappa dei difetti della mesh segna ora anche le facce che si attraversano. Prima vedeva solo spigoli aperti e ramificati e dava un modello simile per sano.
 - L'analisi a strati di un pezzo finemente zigrinato richiede ora la metà del tempo; i punti segnalati restano gli stessi.
+- Se un ponte conta come troppo lungo dipende ora dal vostro ugello: due linee di un ugello da 0,4 sono 0,84 mm, non un millimetro tondo. Modifiche più piccole la chat non le segnala più.
+- Il riconoscimento delle filettature richiede solo una frazione della memoria e si può interrompere.
+- Se un corpo non si può dividere a causa di una mesh aperta, la riparazione sta come pulsante sul rilievo.
+- Se un taglio non si può richiudere, Solidon dice che il modello non è chiuso — e come proseguire — invece di indicare il taglio.
 
 ### Scrivere
 
@@ -56,6 +70,10 @@ scrive in `website/version.json`.
 ### Blocchi e accoppiamenti
 
 - Un blocco dal catalogo compare subito nella vista: sulla faccia selezionata o sopra il corpo, con quote e maniglia. Un clic lo posiziona altrove, «Applica» lo inserisce.
+- Se separate in pezzi distinti un corpo con un accoppiamento, Solidon chiede a quale pezzo si riferisca ora l'accoppiamento — invece di rimandarvi ad annullare i passi.
+- La boccola a inserimento M2,5 riceve il suo foro di montaggio secondo la scheda tecnica: 4,0 mm invece di 3,6. Un progetto più vecchio con questa boccola dice all'apertura che la misura è cambiata.
+- L'avviso su un braccio a scatto che si rompe tiene conto della direzione di stampa sfavorevole: un braccio che flette di traverso agli strati regge meno, e ora lo dice la frase.
+- Il generatore di varianti incide su ogni pezzo il suo valore sulla faccia superiore. Se un pezzo è troppo piccolo per un numero leggibile, il rapporto lo dice e indica l'ordine sul piatto.
 
 ### Vista e utilizzo
 
@@ -68,14 +86,29 @@ scrive in `website/version.json`.
 - Durante la misura la vista passa alla proiezione diritta e poi torna indietro. In prospettiva si mira accanto, tanto più quanto il tratto è lontano dal centro.
 - Chi guarda soltanto un modello non riceve più la domanda sul salvataggio alla chiusura. In compenso i file importati stanno ora sotto «Aperti di recente».
 - Se si spinge un corpo oltre il bordo del piano con la maniglia, Solidon lo riporta in un posto libero. Un valore digitato viene eseguito così come è stato immesso.
-- La scelta della lingua nelle impostazioni ha effetto subito. Le altre immissioni restano, e Annulla ripristina la lingua precedente.
+- La scelta della lingua nelle impostazioni ha effetto subito; le altre immissioni restano, Annulla ripristina la lingua. Vale anche nella prima configurazione, che un cambio non chiude più.
 - Dopo un quarto d'ora di lavoro Solidon chiede una volta per versione un riscontro. Si risponde o si chiude: in questa versione la domanda non torna.
 - Se il mouse 3D è bloccato, Solidon indica la via per abilitarlo invece di passarci sopra in silenzio.
+- La via verso la stampante nel menu si chiama «Preparare la stampa …» invece di «Impostazioni di stampa …». La finestra dietro è la stessa.
+- Il tasto Invio in un campo di misura a destra applica il passo, e il tasto Tab percorre i campi dall'alto in basso.
+- La palette dei comandi preseleziona la corrispondenza migliore, non la prima eseguibile. «Racc» e Invio prima creavano un parallelepipedo.
+- Se trascinate un corpo con il mouse, resta al puntatore anche sopra lo sfondo vuoto, invece di fermarsi e saltare non appena sotto torna a esserci qualcosa.
+- Anche dopo l'apertura di un progetto il primo clic nel modello non scatta più; la preparazione avviene appena i corpi sono al loro posto.
+- I movimenti fini della rotella — touchpad, mouse ad alta risoluzione — ora fanno zoom invece di andare persi.
+- Il volo con il tasto Ctrl premuto si ferma appena rilasciate il tasto. Prima la vista continuava a volare.
+- Con una scala dello schermo elevata centrate le maniglie con la stessa facilità che al 100 %.
+- Dopo un cambio di rilievo, i pulsanti del rapporto comparivano per un attimo come piccole finestre a sé. È finita.
+- Il contorno di strato di un pezzo sul secondo piatto sta su quel pezzo, non accanto al primo.
+- Nella schermata iniziale restano solo i menu che lì fanno qualcosa.
+- Un secondo blocco dello stesso tipo — un secondo coperchio a vite, per esempio — riceve un numero invece di chiamarsi come il primo.
 
 ### File ed esportazione
 
 - Prima di scrivere, l'esportazione mostra che cosa ha trovato il rapporto: una parete sottile, un accoppiamento violato. Decidete voi se il file nasce lo stesso.
 - Solidon ricorda cartella, formato e schema dei nomi per ogni progetto. Se nascono più file, il modello del nome sta nel campo e si può cambiare.
+- Durante la lettura di un modello l'avanzamento resta finché il modello c'è davvero, e l'indicazione dice «Lettura del modello» invece di «Caricamento del progetto». Annulla resta raggiungibile.
+- Una domanda già risposta su quale caratteristica intenda un passo resta risposta — anche dopo aver chiuso e riaperto il progetto.
+- Se il file collegato di un progetto non è raggiungibile, il progetto si salva e si apre lo stesso; il rapporto nomina l'origine. Se mancano i permessi, Solidon lo dice invece di dirlo danneggiato.
 
 ### Piano di stampa e consegna
 
@@ -87,6 +120,32 @@ scrive in `website/version.json`.
 - Se durante lo slicing resta una bobina inutilizzata, Solidon lo dice con il suo nome. Prima lo slicer segnalava successo e nella stampa mancava un filamento.
 - Se uno slicer si chiude di colpo, Solidon lo dice così. Prima si leggeva che non aveva scritto alcun file di stampa.
 - Creality Print viene riconosciuto come slicer ed è selezionabile nella finestra di stampa, con le sue stampanti, i processi e i filamenti.
+- La finestra di stampa si apre subito con lo slicer scelto l'ultima volta; la ricerca degli altri corre in secondo piano. Prima il clic su Stampa poteva non mostrare nulla per dieci secondi.
+- La scelta dello slicer mostra tutti i programmi installati — anche un secondo Flatpak o un secondo AppImage. Prima mancava il secondo di ogni posizione.
+- Un filamento da un pacchetto di produttore di PrusaSlicer arriva nella consegna con i propri valori, non con quelli del primo filamento del file.
+- Nella consegna come STL — a Cura, per esempio — Solidon dice che le impostazioni per pezzo non viaggiano, e nomina la proposta per l'intero piatto, invece di affermare che sono impostate.
+
+### Filamenti e magazzino
+
+- Il magazzino filamenti si può salvare anche su una chiavetta FAT32, un disco exFAT o una condivisione di rete. Prima lì ogni salvataggio falliva.
+- Se il magazzino non si può leggere, Solidon lo dice anche nel selettore del filamento, con il pulsante «Prova di nuovo» — invece di un elenco vuoto.
+- Il consumo rilevato dal file di stampa conta anche il materiale spinto senza percorso, e non conta due volte le ritrazioni. Se lo slicer scrive da sé la quantità nel file, vale ancora la sua cifra.
+- Chi allo scarico del consumo sceglie «Non registrare» non viene più interpellato per quell'uscita; resta raggiungibile sotto «Non registrato».
+- Se create una nuova bobina mentre scaricate il consumo, le bobine scelte, le quantità inserite e le ripartizioni restano.
+- L'albero degli oggetti mostra su corpo e faccia solo i filamenti che vi stanno davvero — una faccia con filamento proprio porta il suo, non l'elenco dell'intero corpo.
+- Annulla durante la ricerca dei profili di filamento agisce subito.
+
+### Chat e IA
+
+- Prima della prima richiesta a un generatore di modelli, Solidon dice quali dati vi arrivano.
+- Annulla agisce anche mentre la risposta del modello linguistico sta ancora arrivando.
+- Se un altro processo occupa la scheda grafica, la chat aspetta in modo visibile invece di restare ferma.
+
+### Aggiornamento, installazione e sistema
+
+- I pacchetti per Mac sono firmati e notarizzati. Il giro per «Privacy e sicurezza» → «Apri comunque» non serve più.
+- Sotto «Sostieni Solidon», accanto a PayPal si può ora scegliere GoFundMe; solo il vostro clic apre il browser, e senza browser l'indirizzo si può copiare.
+- Se il vostro codice d'acquisto sta su un'unità i cui permessi sui file non si possono impostare — FAT, condivisione di rete —, resta leggibile. Prima lì risultava assente.
 
 ## 0.4.0
 

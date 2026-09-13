@@ -21,9 +21,16 @@ dans `website/version.json`.
 ### Construire et modifier
 
 - Les congés et les chanfreins fonctionnent maintenant aussi sur un modèle importé : on choisit une arête dans la vue et on indique un rayon ou une largeur. Avant, il fallait un corps dessiné soi-même.
-- Décaler la face, la dépouille et le bourrelet fonctionnent eux aussi sur un modèle importé, et on peut y modifier ou retirer un arrondi reconnu.
+- Décaler la face et la dépouille fonctionnent eux aussi sur un modèle importé, et on peut y modifier ou retirer un arrondi reconnu.
 - Décaler la face déplace la face sur laquelle on a cliqué. Sur un escalier, les autres marches restent en place au lieu de bouger toutes ensemble.
 - Le cercle de perçage et la grille de trous sont des formes à part entière au dessin, avec leurs cotes : nombre, cercle primitif, diamètre. Avant, c'était six cercles à la main.
+- Nouveau : « Ajouter un bourrelet », une baguette ronde le long des arêtes choisies — bourrelet à l'extérieur, cordon d'angle dans un angle rentrant. Un corps exact devient alors un maillage.
+- Une arête se choisit maintenant dans la vue : premier clic le corps, puis l'arête. Longueur et boutons Congé et Chanfrein sont à droite. Avant, il fallait la reconnaître dans une liste.
+- Sur un tube, le bord intérieur et le bord extérieur se raccordent ou se chanfreinent séparément. Avant, les deux portaient le même nom, et la modification touchait l'un des deux.
+- La dépouille laisse la face d'appui en place, même si la pièce ne repose pas à la hauteur zéro. Avant, une pièce surélevée était aussi amincie par le bas.
+- « Balayer le long d'un chemin » commence avec la bonne section et garde les ouvertures du contour — un anneau reste un tube, au lieu de partir déformé et de se remplir à l'intérieur.
+- Une paire de contreparties insérée compte comme une modification : elle est enregistrée avec le projet et fait l'objet de la question à la fermeture. Avant, elle pouvait se perdre en silence.
+- Le cadenas à côté d'une cote fixée dans l'éditeur d'esquisse est maintenant un symbole dessiné avec une explication. Sur certains ordinateurs, il y avait là un petit carré.
 
 ### Percer et placer
 
@@ -36,6 +43,9 @@ dans `website/version.json`.
 - Un perçage ou un trou oblong sélectionné se règle directement dans la vue avec « Régler dans la vue » : une poignée pour déplacer et tourner, des boutons pour étirer, des cotes aux arêtes et centres.
 - Seul « Appliquer », à droite, en fait une étape ; Échap annule. Un trou oblong étiré affiche sa longueur et garde sa forme quand vous le déplacez par la poignée.
 - Un champ de coordonnée vide signifie désormais « laisse le trou où il est ». On peut ainsi en placer un au centre de la pièce, le seul endroit qu'il n'atteignait pas.
+- Un perçage se déplace avec « Modifier le trou » maintenant aussi sur le corps exact, et sur le maillage il bouge vraiment. S'il passe le bord, Solidon dit qu'il n'est plus un trou.
+- La largeur d'un trou oblong se modifie avec « Modifier le trou ». La course dont dispose la vis reste.
+- Si un perçage ou un trou oblong traverse la pièce de part en part, si bien qu'elle tombe en morceaux, le rapport le dit — et non seulement que le trou dépasse le bord.
 
 ### Reconnaissance
 
@@ -46,6 +56,10 @@ dans `website/version.json`.
 - S'il reste entre un perçage et la paroi autour de lui moins de matière que la vôtre n'en supporte, le rapport le dit, mesuré sur la pièce finie.
 - La carte des défauts de maillage marque aussi les faces qui se traversent. Avant, elle ne voyait que les arêtes ouvertes et ramifiées et déclarait un tel modèle sain.
 - L'analyse par couches d'une pièce finement moletée prend deux fois moins de temps ; les endroits signalés restent les mêmes.
+- Qu'un pont soit jugé trop long dépend maintenant de votre buse : deux lignes d'une buse de 0,4 font 0,84 mm, pas un millimètre rond. Les changements plus petits ne s'affichent plus en « +0,00 cm³ ».
+- La reconnaissance des filetages ne demande plus qu'une fraction de la mémoire et peut être interrompue.
+- Si un corps ne peut pas être séparé à cause d'un maillage ouvert, la réparation figure comme bouton sur le constat.
+- Si une coupe ne peut pas être refermée, Solidon dit que le modèle n'est pas fermé — et comment continuer — au lieu de montrer la coupe.
 
 ### Inscrire
 
@@ -57,6 +71,10 @@ dans `website/version.json`.
 ### Blocs et ajustements
 
 - Un bloc du catalogue apparaît aussitôt dans la vue : sur la face sélectionnée ou sur le dessus du corps, avec cotes et poignée. Un clic le place ailleurs, « Appliquer » l'insère.
+- Si vous séparez en pièces distinctes un corps portant un ajustement, Solidon demande quelle pièce l'ajustement vise désormais — au lieu de vous renvoyer à l'annulation des étapes.
+- L'insert M2,5 reçoit son trou de montage selon la fiche technique : 4,0 mm au lieu de 3,6. Un projet plus ancien avec cet insert dit à l'ouverture que la cote a changé.
+- L'avertissement sur un bras de clip qui casse tient compte du sens d'impression défavorable : un bras qui fléchit en travers des couches porte moins, et cela figure maintenant dans la phrase.
+- Le générateur de variantes grave sur chaque pièce sa valeur sur le dessus. Si une pièce est trop petite pour un nombre lisible, le rapport le dit et donne l'ordre sur le plateau.
 
 ### Vue et utilisation
 
@@ -69,14 +87,29 @@ dans `website/version.json`.
 - Pendant la mesure, la vue passe en projection droite et y revient ensuite. En perspective, on vise à côté, d'autant plus que le trait est loin du centre de l'image.
 - Qui se contente de regarder un modèle n'est plus interrogé sur l'enregistrement en fermant. En échange, les fichiers importés figurent sous « Ouverts récemment ».
 - Si l'on pousse un corps au-delà du bord du plateau avec la poignée, Solidon le ramène à une place libre. Une valeur saisie est exécutée telle quelle.
-- Le choix de la langue dans les réglages prend effet aussitôt. Les autres saisies restent en place, et Annuler rétablit la langue précédente.
+- Le choix de la langue dans les réglages prend effet aussitôt ; les autres saisies restent, Annuler rétablit la langue. Cela vaut aussi pour la première configuration, qu'un changement ne ferme plus.
 - Après un quart d'heure de travail, Solidon demande une fois par version votre retour. On répond ou on ferme : dans cette version, la question ne revient pas.
 - Si la souris 3D est bloquée, Solidon indique le chemin pour l'autoriser au lieu de l'ignorer en silence.
+- Le chemin vers l'imprimante s'appelle dans le menu « Préparer l'impression … » au lieu de « Réglages d'impression … ». La boîte de dialogue derrière est la même.
+- La touche Entrée dans un champ de cote à droite applique l'étape, et la touche Tab parcourt les champs de haut en bas.
+- La palette de commandes présélectionne la meilleure correspondance, et non la première exécutable. « Cong » puis Entrée créaient avant un pavé.
+- Si vous tirez un corps à la souris, il reste au pointeur même au-dessus du fond vide, au lieu de s'arrêter et de sauter dès que quelque chose se retrouve dessous.
+- Après l'ouverture d'un projet aussi, le premier clic dans le modèle ne saccade plus ; la préparation se fait dès que les corps sont en place.
+- Les mouvements fins de la molette — pavé tactile, souris haute résolution — zooment maintenant au lieu de se perdre.
+- Le vol avec la touche Ctrl enfoncée s'arrête dès que vous relâchez la touche. Avant, la vue continuait de voler.
+- À une mise à l'échelle élevée de l'écran, vous atteignez les poignées aussi facilement qu'à 100 %.
+- Après un changement de constat, des boutons du rapport apparaissaient un instant comme de petites fenêtres à part. C'est terminé.
+- Le contour de couche d'une pièce sur le second plateau se trouve sur cette pièce, pas à côté de la première.
+- Sur l'écran d'accueil ne restent que les menus qui y font quelque chose.
+- Un second bloc du même type — un second couvercle à vis, par exemple — reçoit un numéro au lieu de porter le nom du premier.
 
 ### Fichiers et export
 
 - Avant d'écrire, l'export montre ce que le rapport a trouvé : une paroi mince, un ajustement non respecté. C'est vous qui décidez si le fichier est écrit malgré tout.
 - Solidon retient le dossier, le format et le schéma de nom par projet. Si plusieurs fichiers sont écrits, le motif de nom figure dans le champ et se modifie.
+- À la lecture d'un modèle, la progression reste affichée jusqu'à ce qu'il soit vraiment là, et l'affichage dit « Lecture du modèle » au lieu de « Chargement du projet ». Annuler reste accessible.
+- Une question répondue sur la caractéristique que vise une étape reste répondue — même après la fermeture et la réouverture du projet.
+- Si le fichier lié d'un projet n'est pas accessible, le projet s'enregistre et s'ouvre quand même ; le rapport nomme la source. Si les droits manquent, Solidon le dit au lieu de le déclarer endommagé.
 
 ### Plateau et transmission
 
@@ -88,6 +121,32 @@ dans `website/version.json`.
 - S'il reste une bobine inutilisée au découpage, Solidon le dit avec son nom. Avant, le slicer annonçait une réussite et un filament manquait à l'impression.
 - Si un slicer se ferme brutalement, Solidon le dit tel quel. Avant, il était dit qu'aucun fichier n'avait été écrit.
 - Creality Print est reconnu comme slicer et se choisit dans la boîte d'impression, avec ses imprimantes, ses procédés et ses filaments.
+- La boîte d'impression s'ouvre aussitôt avec le slicer choisi en dernier ; la recherche des autres tourne en arrière-plan. Avant, le clic sur Imprimer pouvait ne rien montrer pendant dix secondes.
+- Le choix du slicer montre tous les programmes installés — un second Flatpak ou un second AppImage aussi. Avant, le second manquait à chaque emplacement.
+- Un filament d'un lot de fabricant PrusaSlicer arrive dans la transmission avec ses propres valeurs, pas avec celles du premier filament du fichier.
+- À la transmission en STL — vers Cura, par exemple — Solidon dit que les réglages par pièce ne voyagent pas, et donne la proposition pour tout le plateau, au lieu d'affirmer qu'ils sont appliqués.
+
+### Filaments et stock
+
+- Le stock de filament s'enregistre aussi sur une clé FAT32, un disque exFAT ou un partage réseau. Avant, chaque enregistrement y échouait.
+- Si le stock ne peut pas être lu, Solidon le dit aussi dans le sélecteur de filament, avec le bouton « Réessayer » — au lieu d'une liste vide.
+- La consommation mesurée dans le fichier d'impression compte aussi la matière poussée sans trajet, et ne compte pas les rétractions deux fois. Si le slicer écrit la quantité, son chiffre vaut.
+- Qui choisit « Ne pas enregistrer » au décompte n'est plus interrogé pour cette sortie ; elle reste accessible sous « Non enregistré ».
+- Si vous créez une nouvelle bobine au moment de décompter la consommation, les bobines choisies, les quantités saisies et les répartitions restent en place.
+- L'arbre des objets ne montre sur un corps et une face que les filaments qui s'y trouvent vraiment — une face avec son propre filament porte le sien, pas la liste de tout le corps.
+- Annuler pendant la recherche de profils de filament agit aussitôt.
+
+### Chat et IA
+
+- Avant la première requête à un générateur de modèles, Solidon dit quelles données y partent.
+- Annuler agit aussi pendant que la réponse du modèle de langage arrive encore.
+- Si un autre calcul occupe la carte graphique, le chat attend visiblement au lieu de rester figé.
+
+### Mise à jour, installation et système
+
+- Les paquets Mac sont signés et notarisés. Le détour par « Confidentialité et sécurité » → « Ouvrir quand même » disparaît.
+- Sous « Soutenir Solidon », GoFundMe est maintenant proposé à côté de PayPal ; seul votre clic ouvre le navigateur, et sans navigateur l'adresse se copie.
+- Si votre code d'achat se trouve sur un lecteur dont les droits de fichier ne peuvent pas être définis — FAT, partage réseau —, il reste lisible. Avant, il y passait pour absent.
 
 ## 0.4.0
 

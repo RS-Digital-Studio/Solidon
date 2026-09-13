@@ -45,9 +45,16 @@ Nutzen da und sonst nichts.
 ### Konstruieren und Ändern
 
 - Verrunden und Fasen greifen jetzt auch an einem eingelesenen Modell: Kante im Bild wählen, Radius oder Breite eingeben. Vorher ging das nur an einem Körper, den Sie selbst gezeichnet haben.
-- Fläche versetzen, Formschräge und Wulst arbeiten ebenfalls am eingelesenen Modell, und eine erkannte Rundung lässt sich dort jetzt ändern oder ganz wegnehmen.
+- Fläche versetzen und Formschräge arbeiten ebenfalls am eingelesenen Modell, und eine erkannte Rundung lässt sich dort jetzt ändern oder ganz wegnehmen.
 - Fläche versetzen bewegt die Fläche, auf die Sie geklickt haben. An einer Treppe bleiben die übrigen Stufen stehen, statt alle zugleich zu wandern.
 - Lochkreis und Lochraster sind beim Zeichnen eigene Grundformen mit eigenen Maßen — Anzahl, Teilkreis, Durchmesser. Vorher waren sechs Löcher sechs Kreise von Hand.
+- Neu ist „Wulst anlegen“: eine runde Leiste entlang der gewählten Kanten — außen als Wulst, in einem Innenwinkel als Kehlnaht. Ein exakter Körper wird dabei zum Netz; Rückgängig holt ihn zurück.
+- Eine Kante wählen Sie jetzt im Bild: erster Klick der Körper, zweiter die Kante. Länge und die Knöpfe Verrunden und Fase stehen rechts. Vorher musste man sie in einer Liste wiedererkennen.
+- An einem Rohr lassen sich Innen- und Außenrand getrennt verrunden oder fasen. Vorher hießen beide gleich, und die Bearbeitung traf einen von beiden.
+- Die Formschräge lässt die Standfläche stehen, auch wenn das Teil nicht auf der Nullhöhe liegt. Vorher wurde ein angehobenes Teil unten mit verjüngt.
+- „Entlang einer Bahn führen“ beginnt mit dem richtigen Querschnitt und behält Öffnungen im Umriss — ein Ring bleibt ein Rohr, statt am Anfang verzerrt und innen voll zu werden.
+- Ein eingesetztes Gegenstück-Paar zählt als Änderung: Es wird mitgesichert und beim Schließen erfragt. Vorher konnte es stillschweigend verloren gehen.
+- Das Schloss neben einem festgesetzten Maß im Skizzeneditor ist jetzt ein gezeichnetes Symbol mit Erklärung. Auf manchem Rechner stand dort ein Kästchen.
 
 ### Bohren und Platzieren
 
@@ -60,6 +67,9 @@ Nutzen da und sonst nichts.
 - Eine gewählte Bohrung oder ein Langloch stellen Sie mit „Im Bild einstellen“ direkt im Bild ein: ein Griff zum Versetzen und Drehen, Knöpfe zum Ziehen, Maßlinien zu Kanten und Mitten.
 - Erst „Übernehmen“ rechts macht daraus einen Schritt, Escape verwirft. Ein gezogenes Langloch zeigt dabei seine Länge und behält seine Form, wenn Sie es am Griff versetzen.
 - Ein leeres Koordinatenfeld heißt „lass das Loch, wo es ist“. Damit setzen Sie eines auch in die Mitte des Teils — vorher der einzige Ort, den es nicht erreichte.
+- Eine Bohrung versetzen Sie über „Bohrung ändern“ jetzt auch am exakten Körper — und am Netz wandert sie wirklich. Wandert sie über den Rand, sagt Solidon, dass sie kein Loch mehr ist.
+- Die Breite eines Langlochs ändern Sie mit „Bohrung ändern“. Der Weg, den die Schraube darin hat, bleibt.
+- Schneidet eine Bohrung oder ein Langloch das Teil ganz durch, sodass es in Stücke zerfällt, sagt der Prüfbericht das — statt nur, das Loch rage über die Kante.
 
 ### Erkennen
 
@@ -70,6 +80,10 @@ Nutzen da und sonst nichts.
 - Bleibt zwischen einer Bohrung und der Wand um sie herum weniger Material, als Ihr Werkstoff trägt, steht das im Prüfbericht — gemessen am fertigen Teil.
 - Die Netzfehlerkarte markiert jetzt auch Flächen, die einander durchdringen. Vorher sah sie nur offene und verzweigte Kanten und nannte ein solches Modell sauber.
 - Die Schichtanalyse eines fein geriffelten Teils braucht nur noch halb so lang; gemeldet werden dieselben Stellen wie vorher.
+- Ob eine Brücke als zu lang gilt, hängt jetzt von Ihrer Düse ab: Zwei Bahnen einer 0,4er-Düse sind 0,84 mm, nicht ein runder Millimeter. Kleinere Änderungen meldet der Chat nicht mehr als „+0,00 cm³“.
+- Die Gewindeerkennung braucht nur noch einen Bruchteil des Speichers und lässt sich abbrechen.
+- Lässt sich ein Körper wegen eines offenen Netzes nicht teilen, steht die Reparatur als Knopf am Befund.
+- Lässt sich ein Schnitt nicht deckeln, sagt Solidon, dass das Modell nicht geschlossen ist — und wie es weitergeht — statt auf den Schnitt zu zeigen.
 
 ### Beschriften
 
@@ -81,6 +95,10 @@ Nutzen da und sonst nichts.
 ### Bausteine und Passungen
 
 - Ein Baustein aus dem Katalog steht sofort im Bild: auf der gewählten Fläche oder oben auf dem Körper, mit Maßlinien und Griff. Ein Klick setzt ihn um, „Übernehmen“ fügt ihn ein.
+- Zerlegen Sie einen Körper mit einer Passung in Einzelteile, fragt Solidon, welches Teil die Passung jetzt meint — statt Sie zur Rücknahme der Schritte zu schicken.
+- Die Einpressbuchse M2,5 bekommt ihr Einbauloch nach Datenblatt: 4,0 mm statt 3,6. Ein älteres Projekt mit dieser Buchse sagt beim Öffnen, dass sich das Maß geändert hat.
+- Die Warnung vor einem brechenden Schnapparm rechnet mit der ungünstigen Druckrichtung: Ein Arm, der quer zu den Schichten biegt, trägt weniger, und das steht jetzt im Satz.
+- Der Variantengenerator graviert jedem Teil seinen Wert auf die Oberseite. Ist ein Teil zu klein für eine lesbare Zahl, sagt es der Prüfbericht und nennt die Reihenfolge auf der Platte.
 
 ### Ansicht und Bedienung
 
@@ -93,14 +111,29 @@ Nutzen da und sonst nichts.
 - Beim Messen schaltet die Ansicht auf gerade Projektion um und danach zurück. Perspektivisch zielt man daneben, je weiter die Strecke von der Bildmitte weg liegt.
 - Wer ein Modell nur ansieht, wird beim Schließen nicht mehr nach dem Speichern gefragt. Eingelesene Dateien stehen dafür jetzt unter „Zuletzt geöffnet“.
 - Schieben Sie einen Körper am Griff über den Rand des Druckbetts, holt Solidon ihn auf eine freie Stelle zurück. Ein getippter Wert wird ausgeführt, wie Sie ihn eingeben.
-- Die Sprachwahl im Einstellungsdialog wirkt sofort. Ihre übrigen Eingaben bleiben dabei stehen, und Abbrechen stellt die vorherige Sprache wieder her.
+- Die Sprachwahl im Einstellungsdialog wirkt sofort; Ihre übrigen Eingaben bleiben, Abbrechen stellt die Sprache zurück. Das gilt auch in der ersten Einrichtung, die ein Wechsel nicht mehr beendet.
 - Nach einer Viertelstunde Arbeit fragt Solidon einmal je Version nach Ihrer Rückmeldung. Antworten oder wegklicken — in dieser Version kommt die Frage dann nicht wieder.
 - Ist die 3D-Maus gesperrt, nennt Solidon den Weg zur Freigabe, statt sie stillschweigend zu übergehen.
+- Der Weg zum Drucker heißt im Menü „Drucken vorbereiten …“ statt „Druckeinstellungen …“. Der Dialog dahinter ist derselbe.
+- Die Eingabetaste in einem Maßfeld rechts übernimmt den Schritt, und die Tabulatortaste geht die Felder von oben nach unten durch.
+- Die Befehlspalette wählt den besten Treffer vor, nicht den ersten ausführbaren. „Verrund“ und Enter legten vorher einen Quader an.
+- Ziehen Sie einen Körper mit der Maus, bleibt er auch über dem leeren Hintergrund am Zeiger, statt stehen zu bleiben und zu springen, sobald wieder etwas darunter liegt.
+- Auch nach dem Öffnen eines Projekts ruckelt der erste Klick ins Modell nicht mehr; die Vorbereitung dafür läuft, sobald die Körper stehen.
+- Feine Radbewegungen — Touchpad, hochauflösende Maus — zoomen jetzt, statt verloren zu gehen.
+- Fliegen mit gehaltener Strg-Taste hört auf, sobald Sie die Taste loslassen. Vorher flog die Ansicht weiter.
+- Bei hoher Bildschirmskalierung treffen Sie die Griffe so leicht wie bei 100 %.
+- Nach einem Befundwechsel erschienen Knöpfe des Prüfberichts kurz als eigene kleine Fenster. Das ist vorbei.
+- Die Schichtkontur eines Teils auf der zweiten Platte liegt auf diesem Teil, nicht neben dem ersten.
+- Auf dem Startbildschirm stehen nur noch die Menüs, die dort etwas tun.
+- Ein zweiter Baustein derselben Art — etwa ein zweiter Drehdeckel — bekommt eine Nummer, statt wie der erste zu heißen.
 
 ### Dateien und Export
 
 - Vor dem Schreiben zeigt der Export, was der Prüfbericht gefunden hat — eine dünne Wand, eine verletzte Passung. Sie entscheiden, ob die Datei trotzdem entsteht.
 - Ordner, Format und Namensschema merkt sich Solidon je Projekt. Entstehen mehrere Dateien, steht das Namensmuster im Feld und lässt sich ändern.
+- Beim Einlesen eines Modells bleibt der Fortschritt stehen, bis das Modell wirklich da ist, und die Anzeige sagt „Modell wird gelesen“ statt „Projekt wird geladen“. Abbrechen bleibt erreichbar.
+- Eine beantwortete Rückfrage, welches Merkmal ein Schritt meint, bleibt beantwortet — auch nach dem Schließen und Wiederöffnen des Projekts.
+- Ist die verknüpfte Datei eines Projekts nicht erreichbar, lässt es sich trotzdem speichern und öffnen; der Prüfbericht nennt die Quelle. Fehlen Rechte, heißt es nicht mehr „beschädigt“.
 
 ### Druckbett und Übergabe
 
@@ -112,6 +145,32 @@ Nutzen da und sonst nichts.
 - Bleibt beim Slicen eine Spule ungenutzt, sagt Solidon es mit ihrem Namen. Vorher meldete der Slicer Erfolg, und im Druck fehlte ein Filament.
 - Stürzt ein Slicer ab, sagt Solidon das so. Vorher hieß es, er habe keine Druckdatei geschrieben.
 - Creality Print wird als Slicer erkannt und steht im Druckdialog zur Wahl, mit seinen Druckern, Prozessen und Filamenten.
+- Der Druckdialog öffnet sofort mit dem zuletzt gewählten Slicer; die Suche nach weiteren läuft im Hintergrund. Vorher konnte der Klick auf Drucken zehn Sekunden lang nichts zeigen.
+- Die Slicerauswahl zeigt alle installierten Programme — auch ein zweites Flatpak oder ein zweites AppImage. Vorher fehlte je Fundort das zweite.
+- Ein Filament aus einem PrusaSlicer-Herstellerbündel kommt mit seinen eigenen Werten in der Übergabe an, nicht mit denen des ersten Filaments der Datei.
+- Bei der Übergabe als STL — etwa an Cura — sagt Solidon, dass Einstellungen je Teil nicht mitreisen, und nennt den Vorschlag für die ganze Platte, statt zu behaupten, sie seien gesetzt.
+
+### Filamente und Lager
+
+- Das Filamentlager lässt sich auch auf einem FAT32-Stick, einer exFAT-Platte oder einer Netzfreigabe speichern. Vorher scheiterte dort jedes Speichern.
+- Lässt sich das Lager nicht lesen, sagt Solidon es auch im Filamentwähler, mit dem Knopf „Erneut versuchen“ — statt einer leeren Liste.
+- Der aus der Druckdatei gemessene Verbrauch zählt auch Material, das ohne Bahn gefördert wird, und rechnet Rückzüge nicht doppelt. Schreibt der Slicer die Menge selbst, gilt seine Zahl.
+- Wer beim Abbuchen „Nicht buchen“ wählt, wird für diese Ausgabe nicht erneut gefragt; sie bleibt unter „Nicht gebucht“ erreichbar.
+- Legen Sie im Buchungsdialog eine neue Spule an, bleiben gewählte Spulen, eingetragene Mengen und Aufteilungen stehen.
+- Der Objektbaum zeigt an Körper und Fläche nur die Filamente, die dort wirklich liegen — eine Fläche mit eigenem Filament trägt ihres, nicht die Liste des ganzen Körpers.
+- Abbrechen bei der Suche nach Filamentprofilen wirkt sofort.
+
+### Chat und KI
+
+- Vor der ersten Anfrage an einen Modell-Erzeuger sagt Solidon, welche Daten dorthin gehen.
+- Abbrechen wirkt auch, während die Antwort des Sprachmodells noch ankommt.
+- Belegt ein anderer Lauf die Grafikkarte, wartet der Chat sichtbar, statt still zu stehen.
+
+### Update, Installation und System
+
+- Die Mac-Pakete sind signiert und notarisiert. Der Umweg über „Datenschutz & Sicherheit“ → „Trotzdem öffnen“ entfällt.
+- Unter „Unterstützen“ steht neben PayPal jetzt GoFundMe zur Wahl; erst Ihr Klick öffnet den Browser, und ohne Browser lässt sich die Adresse kopieren.
+- Liegt Ihr Kaufcode auf einem Laufwerk, dessen Dateirechte sich nicht setzen lassen — FAT, Netzfreigabe —, bleibt er lesbar. Vorher galt er dort als nicht vorhanden.
 
 ## 0.4.0
 

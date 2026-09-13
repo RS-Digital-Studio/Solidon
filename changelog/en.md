@@ -20,9 +20,16 @@ it into `website/version.json`.
 ### Building and editing
 
 - Filleting and chamfering now work on an imported model too: pick an edge in the view, enter a radius or a width. Before, they only worked on a body you drew yourself.
-- Offset face, draft angle and bead also work on an imported model, and a recognised rounding can be changed or taken away there as well.
+- Offset face and draft angle also work on an imported model, and a recognised rounding can be changed or taken away there as well.
 - Offset face moves the face you clicked on. On a stair the other steps stay where they are instead of all moving at once.
 - Bolt circle and hole grid are shapes of their own when drawing, with their own sizes — count, pitch circle, diameter. Before, six holes were six circles by hand.
+- New is “Add bead”: a round strip along the selected edges — on the outside as a bead, in an inside corner as a fillet weld. An exact body becomes a mesh in the process; Undo brings it back.
+- You now pick an edge in the view: first click the body, then the edge. Its length and the Fillet and Chamfer buttons stand on the right. Before, you had to recognise it in a list.
+- On a pipe, the inner and the outer rim can be filleted or chamfered separately. Before, both had the same name, and the edit hit one of the two.
+- The draft angle leaves the footprint standing even when the part does not sit at zero height. Before, a raised part was tapered at the bottom as well.
+- “Sweep along a path” starts with the right cross-section and keeps openings in the outline — a ring stays a pipe instead of starting out distorted and turning solid inside.
+- An inserted pair of counterparts counts as a change: it is saved along and asked about when closing. Before, it could be lost in silence.
+- The padlock next to a fixed dimension in the sketch editor is now a drawn symbol with an explanation. On some computers a box stood there.
 
 ### Drilling and placing
 
@@ -35,6 +42,9 @@ it into `website/version.json`.
 - A selected hole or slot is set right in the view with “Set in the view”: a handle to move and turn it, knobs to pull it, dimension lines to edges and centres.
 - Only “Apply” on the right makes a step of it; Escape discards. A pulled slot shows its length meanwhile and keeps its shape when you move it at the handle.
 - An empty coordinate field now means “leave the hole where it is”. That lets you put one in the middle of the part — until now the one place it could not reach.
+- You now move a hole with “Change bore” on an exact body too — and on a mesh it really moves. If it moves past the edge, Solidon says it is no longer a hole.
+- You change the width of a slot with “Change bore”. The travel a screw has inside stays.
+- If a hole or a slot cuts right through the part so that it falls into pieces, the report says so — instead of only that the hole reaches past the edge.
 
 ### Recognition
 
@@ -45,6 +55,10 @@ it into `website/version.json`.
 - If less material is left between a hole and the wall around it than your material carries, the report says so — measured on the finished part.
 - The mesh defect map now also marks faces that run through each other. Before it saw only open and branching edges and called such a model sound.
 - The layer analysis of a finely knurled part now takes half the time; the places it reports are the same as before.
+- Whether a bridge counts as too long now depends on your nozzle: two lines from a 0.4 mm nozzle are 0.84 mm, not a round millimetre. Smaller changes are no longer reported by the chat as “+0.00 cm³”.
+- Thread recognition needs only a fraction of the memory and can be cancelled.
+- If a body cannot be split because of an open mesh, the repair stands as a button on the finding.
+- If a cut cannot be capped, Solidon says that the model is not closed — and how to go on — instead of pointing at the cut.
 
 ### Labelling
 
@@ -56,6 +70,10 @@ it into `website/version.json`.
 ### Building blocks and fits
 
 - A part from the catalogue appears in the view at once: on the selected face or on top of the body, with dimension lines and a handle. A click places it elsewhere, “Apply” inserts it.
+- If you split a body with a fit into separate parts, Solidon asks which part the fit now means — instead of sending you off to undo the steps.
+- The M2.5 press-fit insert gets its mounting hole as the data sheet says: 4.0 mm instead of 3.6. An older project with this insert says on opening that the size has changed.
+- The warning about a snap arm that breaks reckons with the unfavourable print direction: an arm that bends across the layers carries less, and that now stands in the sentence.
+- The variant generator engraves each part's value on its top face. If a part is too small for a legible number, the report says so and names the order on the plate.
 
 ### View and operation
 
@@ -68,14 +86,29 @@ it into `website/version.json`.
 - While measuring, the view switches to straight projection and back again afterwards. In perspective you aim beside the point, the further a line lies from the centre.
 - If you only look at a model, you are no longer asked about saving when you close it. Imported files now appear under “Recently opened” instead.
 - If you push a body past the edge of the print bed with the handle, Solidon brings it back to a free spot. A typed value is carried out as you entered it.
-- The language choice in the settings dialogue takes effect at once. Your other entries stay as they are, and Cancel restores the previous language.
+- The language choice in the settings dialogue takes effect at once; your other entries stay, Cancel restores the language. That also holds in the first setup, which a change no longer ends.
 - After a quarter of an hour of work Solidon asks once per version for your feedback. Answer it or click it away — in this version the question does not come back.
 - If the 3D mouse is blocked, Solidon names the way to release it instead of passing over it in silence.
+- The way to the printer is called “Prepare printing …” in the menu instead of “Print settings …”. The dialogue behind it is the same.
+- The Enter key in a dimension field on the right applies the step, and the Tab key walks through the fields from top to bottom.
+- The command palette preselects the best match, not the first one that can run. “Fille” and Enter used to create a box.
+- If you drag a body with the mouse, it stays at the pointer even over the empty background, instead of stopping and jumping as soon as something lies beneath it again.
+- After opening a project, too, the first click into the model no longer stutters; the preparation for it runs as soon as the bodies are in place.
+- Fine wheel movements — touchpad, high-resolution mouse — now zoom instead of being lost.
+- Flying with the Ctrl key held stops as soon as you release the key. Before, the view flew on.
+- At high display scaling you hit the handles as easily as at 100 %.
+- After a change of finding, buttons of the report briefly appeared as small windows of their own. That is over.
+- The layer outline of a part on the second plate lies on that part, not beside the first.
+- The start screen shows only the menus that do something there.
+- A second building block of the same kind — a second screw lid, say — gets a number instead of being named like the first.
 
 ### Files and export
 
 - Before writing, the export shows what the report found — a thin wall, a violated fit. You decide whether the file is written anyway.
 - Solidon remembers folder, format and naming scheme per project. If several files are written, the name pattern stands in the field and can be changed.
+- While a model is being read, the progress stays until the model is really there, and the display says “Reading model” instead of “Loading project”. Cancel stays reachable all that time.
+- An answered question about which feature a step means stays answered — even after closing and reopening the project.
+- If a project's linked file is not reachable, the project can still be saved and opened; the report names the source. If permissions are missing, Solidon says so instead of calling it damaged.
 
 ### Print bed and handover
 
@@ -87,6 +120,32 @@ it into `website/version.json`.
 - If a spool is left unused while slicing, Solidon says so by name. Before, the slicer reported success and a filament was missing in the print.
 - If a slicer crashes, Solidon says so. Before it said the slicer had written no print file.
 - Creality Print is recognised as a slicer and can be chosen in the print dialogue, with its printers, processes and filaments.
+- The print dialogue opens at once with the slicer chosen last; the search for others runs in the background. Before, a click on Print could show nothing for ten seconds.
+- The slicer selection shows every installed program — a second Flatpak or a second AppImage too. Before, the second one at each location was missing.
+- A filament from a PrusaSlicer vendor bundle arrives in the handover with its own values, not with those of the first filament in the file.
+- When handing over as STL — to Cura, say — Solidon says that settings per part do not travel along, and names the suggestion for the whole plate, instead of claiming they are set.
+
+### Filaments and stock
+
+- The filament stock can also be saved on a FAT32 stick, an exFAT drive or a network share. Before, every save failed there.
+- If the stock cannot be read, Solidon says so in the filament picker too, with the button “Try again” — instead of an empty list.
+- The consumption measured from the print file also counts material fed without a line, and does not count retractions twice. If the slicer writes the amount itself, its number holds.
+- If you choose “Do not record” when booking, you are not asked again for this output; it stays reachable under “Not booked”.
+- If you create a new spool in the booking dialogue, the selected spools, the entered amounts and the splits stay as they are.
+- The object tree shows on a body and a face only the filaments that really lie there — a face with its own filament carries its own, not the list of the whole body.
+- Cancel during the search for filament profiles takes effect at once.
+
+### Chat and AI
+
+- Before the first request to a model generator, Solidon says which data goes there.
+- Cancel also works while the language model's answer is still arriving.
+- If another job occupies the graphics card, the chat waits visibly instead of standing still.
+
+### Update, installation and system
+
+- The Mac packages are signed and notarised. The detour via “Privacy & Security” → “Open Anyway” is gone.
+- Under “Support Solidon”, GoFundMe is now on offer beside PayPal; only your click opens the browser, and without a browser the address can be copied.
+- If your purchase code lies on a drive whose file permissions cannot be set — FAT, network share — it stays readable. Before, it counted as not present there.
 
 ## 0.4.0
 

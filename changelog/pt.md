@@ -20,9 +20,16 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Construir e alterar
 
 - Arredondar e chanfrar funcionam agora também num modelo importado: escolhe-se uma aresta na vista e indica-se o raio ou a largura. Antes só funcionavam num corpo próprio.
-- Deslocar a face, o ângulo de saída e o cordão funcionam igualmente num modelo importado, e aí também se pode alterar ou retirar um arredondamento reconhecido.
+- Deslocar a face e o ângulo de saída funcionam igualmente num modelo importado, e aí também se pode alterar ou retirar um arredondamento reconhecido.
 - Deslocar a face move a face em que se clicou. Numa escada os restantes degraus ficam onde estão, em vez de se moverem todos ao mesmo tempo.
 - O círculo de furos e a grelha de furos são formas próprias no desenho, com as suas medidas: número, círculo primitivo e diâmetro. Antes eram seis círculos à mão.
+- Novidade: «Adicionar cordão», uma tira redonda ao longo das arestas escolhidas — por fora como cordão, num canto interior como cordão de canto. Um corpo exato passa assim a malha; Desfazer recupera-o.
+- Uma aresta escolhe-se agora na vista: primeiro clique o corpo, depois a aresta. O comprimento e os botões Arredondar e Chanfro ficam à direita. Antes era preciso reconhecê-la numa lista.
+- Num tubo, o bordo interior e o exterior arredondam-se ou chanfram-se em separado. Antes chamavam-se os dois da mesma forma, e a edição atingia um dos dois.
+- O ângulo de saída deixa a área de apoio intacta, mesmo que a peça não esteja à altura zero. Antes, uma peça elevada era também afunilada em baixo.
+- «Varrer ao longo de um percurso» começa com a secção certa e mantém as aberturas no contorno — um anel continua a ser um tubo, em vez de começar deformado e ficar maciço por dentro.
+- Um par de contrapeças inserido conta como alteração: é gravado com o projeto e perguntado ao fechar. Antes podia perder-se em silêncio.
+- O cadeado ao lado de uma medida fixada no editor de esboços é agora um símbolo desenhado com explicação. Nalguns computadores aparecia ali um quadradinho.
 
 ### Furar e posicionar
 
@@ -35,6 +42,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo ou um rasgo selecionado ajusta-se diretamente na vista com «Ajustar na vista»: uma pega para deslocar e rodar, botões para esticar, cotas a arestas e centros.
 - Só «Aplicar», à direita, faz disso um passo; Escape descarta. Um rasgo esticado mostra o seu comprimento e mantém a sua forma quando o desloca pela pega.
 - Um campo de coordenada vazio significa agora «deixa o furo onde está». Assim pode colocar-se um no centro da peça, o único sítio que antes não alcançava.
+- Um furo desloca-se com «Alterar furo» agora também no corpo exato — e na malha move-se mesmo. Se sair para lá da aresta, o Solidon diz que já não é um furo.
+- A largura de um rasgo altera-se com «Alterar furo». O curso que um parafuso tem lá dentro mantém-se.
+- Se um furo ou um rasgo atravessar a peça por completo, de modo que ela se desfaz em pedaços, o relatório di-lo — em vez de dizer apenas que o furo ultrapassa a aresta.
 
 ### Reconhecimento
 
@@ -45,6 +55,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se entre um furo e a parede à sua volta ficar menos material do que o seu aguenta, o relatório di-lo, medido na peça acabada.
 - O mapa de defeitos de malha marca agora também as faces que se atravessam. Antes via apenas arestas abertas e ramificadas e dava um modelo desses por são.
 - A análise por camadas de uma peça com serrilha fina demora agora metade do tempo; os pontos indicados são os mesmos.
+- Se uma ponte conta como demasiado longa depende agora do seu bico: duas linhas de um bico de 0,4 são 0,84 mm, não um milímetro redondo. Alterações mais pequenas o chat já não anuncia como «+0,00 cm³».
+- O reconhecimento de roscas precisa apenas de uma fração da memória e pode ser cancelado.
+- Se um corpo não puder ser separado por causa de uma malha aberta, a reparação fica como botão no achado.
+- Se um corte não puder ser tapado, o Solidon diz que o modelo não está fechado — e como continuar — em vez de apontar para o corte.
 
 ### Rotular
 
@@ -56,6 +70,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Blocos e ajustes
 
 - Um bloco do catálogo aparece logo na vista: na face selecionada ou em cima do corpo, com cotas e pega. Um clique coloca-o noutro sítio, «Aplicar» insere-o.
+- Se separar em peças distintas um corpo com um ajuste, o Solidon pergunta a que peça se refere agora o ajuste — em vez de o mandar desfazer os passos.
+- O casquilho de inserção M2,5 recebe o seu furo de montagem segundo a ficha técnica: 4,0 mm em vez de 3,6. Um projeto mais antigo com este casquilho avisa ao abrir que a medida mudou.
+- O aviso de um braço de encaixe que parte conta com a direção de impressão desfavorável: um braço que flete atravessado às camadas aguenta menos, e isso está agora na frase.
+- O gerador de variantes grava em cada peça o seu valor na face superior. Se uma peça for demasiado pequena para um número legível, o relatório di-lo e indica a ordem na mesa.
 
 ### Vista e utilização
 
@@ -68,14 +86,29 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao medir, a vista passa a projeção direita e volta depois. Em perspetiva aponta-se ao lado, tanto mais quanto o traço estiver longe do centro da imagem.
 - Quem apenas olha para um modelo já não recebe a pergunta sobre gravar ao fechar. Em troca, os ficheiros importados aparecem em «Abertos recentemente».
 - Se empurrar um corpo para além do bordo da mesa com a pega, o Solidon volta a colocá-lo num sítio livre. Um valor escrito é executado tal como foi introduzido.
-- A escolha do idioma nas definições faz efeito de imediato. As restantes entradas mantêm-se e Cancelar repõe o idioma anterior.
+- A escolha do idioma nas definições faz efeito de imediato; as restantes entradas mantêm-se e Cancelar repõe o idioma. Vale também na configuração inicial, que uma mudança já não termina.
 - Ao fim de um quarto de hora de trabalho, o Solidon pergunta uma vez por versão pelo seu comentário. Responder ou fechar: nesta versão a pergunta não volta.
 - Se o rato 3D estiver bloqueado, o Solidon indica o caminho para o libertar em vez de o ignorar em silêncio.
+- O caminho para a impressora chama-se no menu «Preparar a impressão …» em vez de «Definições de impressão …». A janela por trás é a mesma.
+- A tecla Enter num campo de medida à direita aplica o passo, e a tecla Tab percorre os campos de cima para baixo.
+- A paleta de comandos pré-seleciona a melhor correspondência, não a primeira executável. «Arred» e Enter criavam antes um paralelepípedo.
+- Se arrastar um corpo com o rato, ele fica no ponteiro mesmo sobre o fundo vazio, em vez de parar e saltar assim que volta a haver algo por baixo.
+- Também depois de abrir um projeto, o primeiro clique no modelo já não engasga; a preparação corre assim que os corpos estão no lugar.
+- Os movimentos finos da roda — touchpad, rato de alta resolução — fazem agora zoom em vez de se perderem.
+- Voar com a tecla Ctrl premida termina assim que a solta. Antes a vista continuava a voar.
+- Com uma escala de ecrã elevada acerta nas pegas com a mesma facilidade que a 100 %.
+- Depois de uma mudança de achado, os botões do relatório apareciam por instantes como pequenas janelas próprias. Isso acabou.
+- O contorno de camada de uma peça na segunda mesa fica sobre essa peça, não ao lado da primeira.
+- No ecrã inicial ficam apenas os menus que aí fazem alguma coisa.
+- Um segundo bloco do mesmo tipo — uma segunda tampa de rosca, por exemplo — recebe um número em vez de se chamar como o primeiro.
 
 ### Ficheiros e exportação
 
 - Antes de escrever, a exportação mostra o que o relatório encontrou: uma parede fina, um ajuste violado. É você que decide se o ficheiro é escrito à mesma.
 - O Solidon guarda pasta, formato e esquema de nomes por projeto. Se surgirem vários ficheiros, o padrão do nome fica no campo e pode ser alterado.
+- Ao ler um modelo, o progresso mantém-se até o modelo estar mesmo lá, e a indicação diz «A ler o modelo» em vez de «A carregar o projeto». Cancelar fica acessível todo esse tempo.
+- Uma pergunta respondida sobre que característica um passo quer dizer continua respondida — mesmo depois de fechar e voltar a abrir o projeto.
+- Se o ficheiro ligado de um projeto não estiver acessível, o projeto grava-se e abre-se na mesma; o relatório nomeia a origem. Se faltarem permissões, o Solidon di-lo em vez de o dar por danificado.
 
 ### Mesa de impressão e entrega
 
@@ -87,6 +120,32 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se ao fatiar ficar uma bobina por usar, o Solidon di-lo com o nome dela. Antes o slicer indicava êxito e na impressão faltava um filamento.
 - Se um slicer se fechar de repente, o Solidon di-lo assim. Antes dizia-se que não tinha escrito nenhum ficheiro de impressão.
 - O Creality Print é reconhecido como slicer e pode ser escolhido na janela de impressão, com as suas impressoras, processos e filamentos.
+- A janela de impressão abre logo com o slicer escolhido da última vez; a procura de outros corre em segundo plano. Antes, o clique em Imprimir podia não mostrar nada durante dez segundos.
+- A escolha do slicer mostra todos os programas instalados — também um segundo Flatpak ou um segundo AppImage. Antes faltava o segundo de cada local.
+- Um filamento de um pacote de fabricante do PrusaSlicer chega à entrega com os seus próprios valores, não com os do primeiro filamento do ficheiro.
+- Na entrega como STL — ao Cura, por exemplo — o Solidon diz que as definições por peça não viajam, e indica a proposta para a mesa inteira, em vez de afirmar que estão aplicadas.
+
+### Filamentos e armazém
+
+- O armazém de filamentos também pode ser gravado numa pen FAT32, num disco exFAT ou numa partilha de rede. Antes, aí falhava cada gravação.
+- Se o armazém não puder ser lido, o Solidon di-lo também no seletor de filamento, com o botão «Tentar de novo» — em vez de uma lista vazia.
+- O consumo medido no ficheiro de impressão conta também o material extrudido sem percurso e não conta as retrações duas vezes. Se o slicer escrever a quantidade, vale o número dele.
+- Quem ao descontar o consumo escolhe «Não registar» não volta a ser perguntado por essa saída; ela fica acessível em «Não registado».
+- Se criar uma bobina nova ao descontar o consumo, as bobinas escolhidas, as quantidades introduzidas e as repartições mantêm-se.
+- A árvore de objetos mostra no corpo e na face apenas os filamentos que lá estão mesmo — uma face com filamento próprio leva o seu, não a lista do corpo inteiro.
+- Cancelar durante a procura de perfis de filamento faz efeito de imediato.
+
+### Chat e IA
+
+- Antes do primeiro pedido a um gerador de modelos, o Solidon diz que dados vão para lá.
+- Cancelar funciona também enquanto a resposta do modelo de linguagem ainda está a chegar.
+- Se outro processo ocupar a placa gráfica, o chat espera de forma visível em vez de ficar parado.
+
+### Atualização, instalação e sistema
+
+- Os pacotes para Mac estão assinados e notarizados. O desvio por «Privacidade e Segurança» → «Abrir mesmo assim» deixa de ser preciso.
+- Em «Apoiar o Solidon» pode agora escolher-se GoFundMe ao lado do PayPal; só o seu clique abre o navegador, e sem navegador pode copiar-se o endereço.
+- Se o seu código de compra estiver numa unidade cujas permissões de ficheiro não se conseguem definir — FAT, partilha de rede —, continua legível. Antes, aí contava como inexistente.
 
 ## 0.4.0
 
