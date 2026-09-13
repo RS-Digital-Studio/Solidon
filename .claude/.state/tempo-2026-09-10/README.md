@@ -49,3 +49,21 @@ weil die Pipeline billig geworden wäre, sondern weil sie schon steht. Wer die
 ursprüngliche Zahl sehen will, nimmt den Aufruf in `_apply_scene` für einen
 Lauf heraus; wer prüfen will, ob die Behebung noch wirkt, liest genau diese
 3,2 ms als Beleg.
+
+## Die zweite Hälfte, gemessen am 13.09.2026
+
+Der Satz oben — „420 ms leer, danach 4,4 ms am geöffneten Modell" — gilt für den
+**zweiten** Pick am Modell und nicht für den ersten. `pick-nach-oeffnen.py`
+fragt fünf nacheinander, und die Antwort war auf beiden Ständen dieselbe: leer
+3,5 bis 8,3 ms, danach der erste am Modell **137, 290, 324, 389, 399, 455 und
+552 ms**, jeder weitere 0,4 bis 3,0 ms. Für die Materialien der neuen Körper
+baut wgpu eine eigene Pipeline; die leere Szene wärmt sie nicht mit.
+
+`_apply_scene` ruft das Aufwärmen deshalb zweimal, und `_picker_warm` gilt seither
+für den Inhalt der Szene statt für den Renderer. Nachher: 2,8 bis 3,8 ms.
+
+`speicher.py` daneben beantwortet die andere Frage dieses Ordners — ob die
+Bedienung Speicher liegen lässt. Zwanzig Auswahlwechsel, zwanzig Zeigerzyklen,
+zehn Projektwechsel: 157,5 MB durchweg, nach dem ersten Projektwechsel ein
+Plateau bei 186 MB und danach flach. Kein Leck; gemessen mit `tracemalloc`,
+weil `psutil` nicht zu den Abhängigkeiten gehört.

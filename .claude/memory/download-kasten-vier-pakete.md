@@ -1,6 +1,6 @@
 ---
 name: download-kasten-vier-pakete
-description: "Der Download-Kasten zeigt vier Pakete, nicht die acht aus dem Baulauf — Setup, Flatpak, beide macOS-.pkg. Seit 27.08.2026 erzwingt das Werkzeug es."
+description: "Der Download-Kasten zeigt die Plätze aus DELIVERED, nicht die acht aus dem Baulauf — seit 28.08.2026 fünf: Setup, AppImage, Flatpak, beide macOS-.pkg. Das Werkzeug erzwingt es."
 metadata: 
   node_type: memory
   type: feedback
@@ -8,10 +8,20 @@ metadata:
   modified: 2026-08-27T13:10:58.405Z
 ---
 
-Ein Baulauf liefert acht Dateien; angeboten werden **vier**:
-`Solidon3D-Setup-<v>.exe`, `<v>-x86_64.flatpak`, `<v>-macos-arm64.pkg`,
-`<v>-macos-x86_64.pkg`. Archiv, AppImage und die beiden `.zip` werden gebaut
-und geprüft, aber weder verlinkt noch hochgeladen.
+Ein Baulauf liefert acht Dateien; angeboten wird, was `DELIVERED` in
+`make_download.py` führt. **Seit dem 28.08.2026 sind es fünf** (der Dateiname
+dieser Notiz stammt vom Stand davor): `Solidon3D-Setup-<v>.exe`,
+`<v>-x86_64.AppImage`, `<v>-x86_64.flatpak`, `<v>-macos-arm64.pkg`,
+`<v>-macos-x86_64.pkg`. Archiv und die beiden `.zip` werden gebaut und
+geprüft, aber weder verlinkt noch hochgeladen.
+
+**Das AppImage ist der Sonderfall, und er hat zwei Seiten.** Es steht im
+Kasten und im `dl/`-Ordner, aber **nicht** in den `packages` von
+`version.json`: Ein AppImage aktualisiert sich nicht selbst, also hat es dort
+nichts zu suchen. Damit trägt es als einziges Paket keine Prüfsumme im
+Manifest — `verify_downloads()` liest seinen Link deshalb aus den
+`index.html`, und wo keine Größe bekannt ist, sagt der Lauf `OHNE MASS` statt
+„ok" ([[datei-ohne-manifest-hat-keinen-pruefer]]).
 
 **Why:** Wer vor der Wahl steht, will einen Knopf sehen, nicht drei, die
 dasselbe Programm enthalten. Am 22.08.2026 hatte ich alle acht eingetragen —
@@ -24,7 +34,7 @@ auf vier Dateien, die nie hochgeladen werden. Seither steht die Liste als
 zu viel ist ein toter Verweis, eine zu wenig lässt ein ganzes Zielsystem ohne
 Download. Eine Notiz, die zweimal überlesen wird, gehört ins Werkzeug.
 
-**How to apply:** `make_download.py` nur mit diesen vier Pfaden aufrufen.
+**How to apply:** `make_download.py` nur mit diesen fünf Pfaden aufrufen.
 Die Reihenfolge danach ist eine Folge, keine Empfehlung:
 
 1. Pakete **einzeln und zuerst** hochladen — mehrere am Stück reißen die

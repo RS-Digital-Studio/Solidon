@@ -240,7 +240,7 @@ Von oben nach unten:
    └─ CLAUDE.md (hier)   Befehle, Karte, Werkzeuge, Arbeitsweise
         └─ app/CLAUDE.md          die vier Schichten und ihre Richtung
              └─ app/core/CLAUDE.md         Verträge, OpContext, Unterpakete
-                  └─ app/core/geom/CLAUDE.md    die Rückfallkette, 31 Module
+                  └─ app/core/geom/CLAUDE.md    die Rückfallkette und ihre Module
         └─ tests/ tools/ website/ konzepte/ changelog/ packaging/
 ```
 
@@ -355,6 +355,11 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
   angefasst hat. `SOLIDON_KEIN_TOR=1` schaltet ihn ganz ab.
   Beides läuft nur, wenn `core.hooksPath` auf `.githooks` zeigt — `check_env`
   meldet es beim Sitzungsstart, und `tests/test_toolchain.py` prüft zusätzlich,
-  dass jeder Hook im Repository ausführbar ist.
+  dass jeder Hook im Repository ausführbar ist. Seinen Interpreter sucht der
+  Hook am **Hauptklon** (`git rev-parse --git-common-dir`) und nicht im
+  Arbeitsverzeichnis: In einem `git worktree` gibt es keine `.venv`, und mit
+  einem relativen Pfad meldete er „keine .venv gefunden" und ließ jeden Commit
+  durch — abgeschaltet also genau dort, wo mehrere Sitzungen nebeneinander
+  committen.
 - **Nach Pattern-Änderungen**: die betroffene Regel in `.claude/rules/`
   nachziehen, `ROADMAP.md` fortschreiben, Bauplan nur mit Ansage ändern.

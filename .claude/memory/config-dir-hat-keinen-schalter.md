@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 880d8f7a-c07e-4b8f-b374-5bef80997d00
-  modified: 2026-09-04T04:20:38.823Z
+  modified: 2026-09-12T22:18:00.809Z
 ---
 
 `app/core/paths.user_config_dir()` liest unter Windows **`APPDATA`** und sonst
@@ -30,3 +30,21 @@ und legt eine Kopie daneben. Und wer nur wissen will, ob ein Feld die Runde
 übersteht, prüft `UiSettings.__slots__` und `load_settings` im Code, statt es
 zu schreiben. Wenn es doch passiert: sofort und ungefragt wiederherstellen und
 sagen, was nicht mehr herstellbar war ([[beheben-statt-notieren]]).
+
+**Nachtrag 12.09.2026 — der Umweg über `paths.X = …` reicht nicht.** Dieselbe
+Falle ein zweites Mal, diesmal an der echten `filaments.json` (6 Spulen mit
+`{kaputt`, 7 Byte, überschrieben). Der Schreiber war eine Review-Sonde
+(`…/review/ui_print/probe2.py`), die es „richtig" machen wollte und **nicht**
+`APPDATA` setzte, sondern `paths.user_config_dir = lambda …: Path(room)` — und
+danach `filaments.catalogue_path().write_text("{kaputt")`. Es traf trotzdem
+Roberts echten Pfad. Grund: `filaments.py:29` bindet den Namen mit
+`from app.core.paths import … user_config_dir`, und `catalogue_path()` ruft
+diesen **lokal gebundenen** Namen, nicht `paths.user_config_dir`. Ein
+`from X import Y` macht `Y` zu einem eigenen Modulattribut; wer `X.Y` umbiegt,
+erreicht das verbrauchende Modul nicht. Also: die Funktion **im verbrauchenden
+Modul** umstellen (`filaments.catalogue_path = …`, so machen es probe4–9
+richtig) oder gleich `APPDATA` setzen — beides, wenn mehrere Module denselben
+Namen gebunden haben. Die App selbst verhielt sich korrekt: `_read()`
+überschreibt eine beschädigte Datei nie und meldet `catalogue/unreadable` mit
+Handlungsvorschlag (Regel 17). Behoben durch Umbenennen des Schrotts nach
+`filaments.json.kaputt-2026-09-12`; die gültige Datei war wieder da.

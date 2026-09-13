@@ -41,7 +41,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 ## Paket, Release, Website
 
 - [SBOM aus dem Artefakt](sbom-aus-dem-kundenartefakt.md) · [Lizenzmanifest neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) · [Signierung getrennt](signierung-ist-ein-eigener-vertrauensraum.md) — Paketinhalt, Lizenzen, Signatur.
-- [Download-Kasten](download-kasten-vier-pakete.md) · [Upload großer Dateien](website-upload-grosse-dateien.md) · [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — vier Pakete; ~1,8 MB/s; AppImage ohne Prüfer.
+- [Download-Kasten](download-kasten-vier-pakete.md) · [Upload großer Dateien](website-upload-grosse-dateien.md) · [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — fünf Pakete; ~1,8 MB/s; AppImage ohne Prüfer.
 - [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) · [Paketfix ≠ Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) · [Behoben, nie draußen](behobener-fehler-war-nie-draussen.md) — Paket sieht anderes; `git tag --contains`.
 - [Rechnung warnt](rechnung-warnt-sie-erlaubt-nicht.md) · [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — was weg soll, wird benannt; einmal über ein echtes Paket fahren.
 - [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) · [Zusage über die Umgebung](zusage-ueber-die-umgebung.md) · [Prüfstand nutzt Windows-Bordmittel](pruefstand-nutzt-windows-bordmittel.md) — Windows-Tor und Linux-CI sehen anderes; Git-bash ist keine sh, socketpair kein AF_UNIX.
@@ -57,6 +57,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Startfläche](startflaeche-braucht-breite-und-skalierung.md) · [Oberfläche von Hand](oberflaeche-von-hand-fahren.md) · [Klickweg](pruefstand-geht-den-weg-der-oberflaeche.md) · [Sonde baut wie die Anwendung](sonde-baut-das-fenster-wie-die-anwendung.md) — echte Plattform, Klickweg, Skalierung; Startweg über build_application, sonst misst man ein anderes Fenster.
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) · [Fehlertexte nur Titel](fehlertexte-nur-titel.md) · [Session.apply meldet](session-apply-meldet-statt-zu-werfen.md) — Titel, detail, Signal statt try.
 - [Ops am Stück](ops-reihendurchlauf-kundensicht.md) · [Register zählen](register-zaehlen-load-operations.md) · [Rezept ist der Fund](rezept-ist-der-fund-op-ist-die-ursache.md) — load_operations(); Prüfung in der Op.
+- [Arbeiter verlegt die Wartezeit](arbeiter-verlegt-die-wartezeit-ans-ende.md) — ein neuer Arbeiter hat zwei Enden; wer nur das Öffnen misst, findet die Wartezeit beim Schließen wieder.
 - [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — Klickketten bis zum Ende.
 - [Architektur-Sonde](architektur-sonde-type-checking.md) — TYPE_CHECKING ausschließen; Kernänderung = Suite.
 
@@ -89,6 +90,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) · [Schreibfehler auf Datei](schreibfehler-auf-eine-vorhandene-datei.md) · [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) · [Hintergrundlauf stirbt mit der Sitzung](hintergrundlauf-stirbt-mit-der-sitzung.md) — je Lauf ein Ordner; OSError 22/13; Blätter zuerst; lange Läufe abkoppeln.
 - [Suite abgekoppelt starten](suite-abgekoppelt-per-pwsh-start-process.md) — pwsh -File über Start-Process, Git-Bash mit vollem Pfad; nacktes `bash` in pwsh ist WSL und schreibt nichts.
 - [Zweite Sitzung im selben Baum](zweite-sitzung-im-selben-baum.md) — vor Kill und Torlauf prüfen, wem was gehört; wer während eines Tors schreibt, macht es wertlos.
+- [Parallele Reviewer kollidieren an den Rändern](parallele-reviewer-kollidieren-an-den-raendern.md) — Kataloge, Beschriftungen, Fehlerlisten, doppelte Funde; Patches in Reihenfolge übernehmen, danach die Querschnittstests nachfahren.
 
 ## Shell und Git
 

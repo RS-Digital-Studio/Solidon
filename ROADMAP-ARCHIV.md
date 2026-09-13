@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-12 | [Was vor 0.4.1 zugegangen ist (12.09.2026)](#was-vor-041-zugegangen-ist-12092026) |
 | 2026-09-11 | [Sieben Befunde aus Roberts Fenster am Schriftzug (11.09.2026)](#sieben-befunde-aus-roberts-fenster-am-schriftzug-11092026) |
 | 2026-09-11 | [Hinter einen Halt kam jeder neue Schritt (11.09.2026)](#hinter-einen-halt-kam-jeder-neue-schritt-11092026) |
 | 2026-09-11 | [Ein Ort für die Handlungen an einer Auswahl (11.09.2026)](#ein-ort-für-die-handlungen-an-einer-auswahl-11092026) |
@@ -8360,7 +8361,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-020 — `3D Drucker/` liegt nur auf einer Maschine | weiter offen → [RM-020](ROADMAP.md#rm-020) | Lokal geprüft: git -C '3D Drucker' remote -v liefert keinen Eintrag; letzter Commit ist inzwischen 0925604 (Besteckkorb kundenfertig und modular aufbereiten), git status --short umfasst 52 Zeilen. Die alten Angaben 5918740/83 Dateien/458 MB sind überholt. Kein Remote und keine Sicherung sind nicht dasselbe. |
 | RM-021 — Vier Stapel zeigen auf `session.py:1515` — die Stelle ist benannt, die Ursache nicht | weiter offen → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:5107–5129 belegt alte Abrisse sowie zwei grüne isolierte Läufe unter Python 3.14.7, fordert aber den zusammengeführten main-Lauf. app/ui/session.py:2452–2524 regelt release/wait_for_idle heute; tests/conftest.py:284,359,668 hält den Renderer-/Worker-Abbau. 8fcc9edc entfernte VTK-Rendering. Ohne neuen kompletten Gatebeleg wäre erledigt unzulässig. |
 | RM-022 — Verrundung und Fase gehen auf einem Netz nicht — Konzept liegt vor, Entscheidung offen | weiter offen → [RM-022](ROADMAP.md#rm-022) | konzepte/konzept-flaechenrueckgewinnung-2026-08.md und ROADMAP.md:5876–5921 enthalten eine Produktentscheidung, keinen freigegebenen Bauauftrag; 02914d5 erklärte den deaktivierten Einstieg. Bauplan §40 P12 fordert exakte B-Rep-Verrundung, nicht automatische Netzrekonstruktion. Keine neue Phase eigenmächtig freigegeben. |
-| RM-023 — Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel wechseln | weiter offen → [RM-023](ROADMAP.md#rm-023) | app/core/scene/evaluate.py:255-265,558: referenced_features nach ObjectId; unverändert einmal aufgebaut. |
+| RM-023 — Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel wechseln | weiter offen → [RM-023](#rm-023) | app/core/scene/evaluate.py:255-265,558: referenced_features nach ObjectId; unverändert einmal aufgebaut. |
 | RM-024 — Die Antwort der Zuordnung steht nirgends — die Mechanik steht, die Abnahme fehlt | weiter offen → [RM-024](ROADMAP.md#rm-024) | app/core/scene/evaluate.py:140,581,1410; tests/test_matching.py:275; historische Roadmap unterscheidet Einheitstests von noch fehlender Produktionsketten-Abnahme. tests/test_evaluation.py:611 erzwingt Mehrdeutigkeit inzwischen gezielt;1481/1530 sichern Aufschreiben. Alter fehlerhafter Testkörper ist also bereits ersetzt. |
 | RM-025 — Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | weiter offen → [RM-025](ROADMAP.md#rm-025) | Historische Durchsicht benennt ring_diameter und Radiusversatz; automatische Assertzählung verworfen. Keine vollständige dokumentierte Kennzahlenprüfung belegt. |
 | RM-026 — Parallelität und Schloss sind keine Alternativen — sie bedingen einander | überholt oder begründet entfallen | tools/gate_lock.py und aktuelle Prüf-Skills regeln den Lauf; body formuliert historische Messung und Reihenfolge, kein eigenständiges unerledigtes Abnahmekriterium. |
@@ -8376,7 +8377,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-036 — Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | weiter offen → [RM-036](ROADMAP.md#rm-036) | MoR-Anbieter und Vertrag laut Verkaufsplanung noch offen; kein konkreter Vertrag als geprüft belegt. Pauschale Aussagen über jeden Merchant of Record ersetzen. |
 | RM-037 — Die Eingabefelder unter Wayland nehmen keine Tastatur an | zusammengeführt → [RM-062](ROADMAP.md#rm-062) | Gleicher Kundenpfad wie RM-062 und RM-063; Register fordert weiter Feldnachweis, keine bestätigte Ursachenbehebung gefunden. |
 | RM-038 — Der Mailweg liefert prozentkodierten Text | weiter offen → [RM-038](ROADMAP.md#rm-038) | app/ui/support_dialog.py:807-844 direkter D-Bus-Portalaufruf, Klartext statt QUrl; Kundenfeldlauf nicht belegt. |
-| RM-039 — Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht | weiter offen → [RM-039](ROADMAP.md#rm-039) | app/core/geom/prepare.py:944-957: split.uncapped ohne suggestions und ohne Ursache; app/core/geom/autosplit.py:1028 referenziert denselben Vertrag. |
+| RM-039 — Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht | weiter offen → [RM-039](#rm-039) | app/core/geom/prepare.py:944-957: split.uncapped ohne suggestions und ohne Ursache; app/core/geom/autosplit.py:1028 referenziert denselben Vertrag. |
 | RM-040 — Der erste Kundenbericht aus 0.3.4 nennt keine Ursache | weiter offen → [RM-040](ROADMAP.md#rm-040) | 96da8fd0, app/core/scene/evaluate.py; vorhandener Bericht aus 0.3.4 nennt die Ursache noch nicht. Kein neuer Ursachenbeleg gefunden. |
 | RM-041 — Die Gitterfüllung kennt bei einem eingelesenen, entlüfteten Hohlkörper keinen Innenraum mehr | weiter offen → [RM-041](ROADMAP.md#rm-041) | app/core/geom/lattice.py:338-347,408: _cavity_mesh und no_cavity; Abnahmebericht G5 hält die Absage bewusst fest. |
 | RM-042 — Die Merkmalserkennung läuft bis eine Million Dreiecke | weiter offen → [RM-042](ROADMAP.md#rm-042) | app/core/scene/evaluate.py:94,1079; output/review/abnahme-2026-09-06/befunde-agenten.md K5. Neuere Teilmessung vom 07.09.2026: mechanisch203.776 Dreiecke0,791s; Freiform200k1,483s; keine1M-Messung. Die §31-Grenze ist weiterhin200k. |
@@ -8402,7 +8403,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-062 — Ob die Eingabemethode im Flatpak jetzt erreichbar ist | weiter offen → [RM-062](ROADMAP.md#rm-062) | RM-037/063 doppeln diesen Feldnachweis; packaging Berechtigungen, app/ui/qt_platform.py; native Wayland-Grenze RM-052. |
 | RM-063 — Ob der Start auf Wayland jetzt ohne Umwege geht | zusammengeführt → [RM-062](ROADMAP.md#rm-062) | Gleicher Linux-Kundenbericht und gleiche Umgebungsdiagnostik wie RM-037/RM-062. |
 | RM-064 — Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | weiter offen → [RM-064](ROADMAP.md#rm-064) | ca18e5a8,8c38d193; app/core/discover.py und Austauschordnerweg; bisher Einzelprüfungen, kein gesamter Feldweg belegt. |
-| RM-065 — CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen | weiter offen → [RM-065](ROADMAP.md#rm-065) | app/core/network.py, packaging/solidon3d.spec und Tests; historischer 0.3.4-Paketbefund ist keine aktuelle Mac-Laufabnahme. |
+| RM-065 — CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen | weiter offen → [RM-065](#rm-065) | app/core/network.py, packaging/solidon3d.spec und Tests; historischer 0.3.4-Paketbefund ist keine aktuelle Mac-Laufabnahme. |
 | RM-066 — Ab der nächsten Version kommen AppImage und Flatpak auf die Download-Seite | erledigt | git log 84a746e7; website/version.json und tools/make_download.py DELIVERED. |
 | RM-067 — `rtree` liegt auf Entwicklungsmaschinen als Überrest und macht vier Tests rot | überholt oder begründet entfallen | Lokal importlib.util.find_spec(rtree)=None; pyproject.toml ohne rtree; app/core/knowledge/licences.py:318-343 runtime_packages läuft deklarierte Abhängigkeiten ab; tests/test_licences.py:41 prüft diese Menge statt aller installierten Pakete. Fremde Maschinen wurden nicht als bereinigt behauptet. |
 | RM-068 — Prüfpunkt nächster CI-Bau | erledigt | Am08.09.lokal ohne Extraktion gelesene ZIP-Inhaltsverzeichnisse: dist/ci/solidon3d-windows-signing-input/windows-signing-input.zip enthält dist/Solidon3D/_internal/xxhash/_xxhash.cp314-win_amd64.pyd; dist/ci/solidon3d-macos-app-input-ARM64/Solidon3D-0.3.5-macos-arm64.zip enthält Solidon3D.app/Contents/Frameworks/xxhash/_xxhash.cpython-314-darwin.so; packaging/solidon3d.spec:229; tests/test_packaging.py:256. |
@@ -8410,7 +8411,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-070 — SpaceMouse-Anbindung: Konzept liegt vor | weiter offen → [RM-070](ROADMAP.md#rm-070) | app/ui/spacemouse.py DriverReader/default_reader; ROADMAP-Register aktueller als Konzeptbody; tests/data/spacemouse/compact-2026-09-02.jsonl; Windows 18.046 Berichte laut Geräteabnahme. |
 | RM-071 — Resin Stufe 1: entschieden und beratschlagt — bauen, als nächste Serie nach der Panels-Welle | weiter offen → [RM-071](ROADMAP.md#rm-071) | app/core/knowledge/data/printers.toml enthält keinen resin/process-Vertrag; Freigabe im Konzept und RM-071. Historische Zielversion 0.3.0 ist vorbei, Panels-Welle kein heutiger Termin. |
 | RM-072 — Die Zusagen aus der Antwort — versendet, damit scharf | weiter offen → [RM-072](ROADMAP.md#rm-072) | Versandzusage 30.08.2026 laut Roadmap; Windows und Mac-Anbindung inzwischen gebaut, Mac-Feldabnahme offen. Kein neuer Versandbeleg in dieser Leseprüfung. |
-| RM-073 — Roberts Produktentscheidung | weiter offen → [RM-073](ROADMAP.md#rm-073) | Produktentscheidung ist laut ursprünglichem Punkt offen. Die aktuelle Roadmapprüfung autorisiert keine Löschung historischer Releases. |
+| RM-073 — Roberts Produktentscheidung | weiter offen → [RM-073](#rm-073) | Produktentscheidung ist laut ursprünglichem Punkt offen. Die aktuelle Roadmapprüfung autorisiert keine Löschung historischer Releases. |
 | RM-074 — Die neun V-Pakete abarbeiten — je Paket Zahlen, Gegenproben und | weiter offen → [RM-074](ROADMAP.md#rm-074) | ROADMAP.before.md:13878–13886 führt V1–V9 als fertig; V6 nennt den Warnprojekt-Nachweis ausdrücklich als einzigen Anschluss. VTK-spezifische alte Belege ersetzen keine pygfx-Abnahme. |
 | RM-075 — Die dreizehn G-Pakete abarbeiten — je Paket Belegbild vorher und | erledigt | ROADMAP.before.md:14043ff: G1–G18 samt G13-Kleinserie erledigt oder begründet gegenstandslos. G6 enthält den fertigen Ruhezustands-Wächter 9ed68323, trotz veralteter Statuszelle. Der behauptete Ablaufdatum-Akzent wurde im G13/B26-Text widerlegt; neuere Filamenthöhen-Funde sind eigenständige Punkte. |
 | RM-076 — `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten — der einzige echte Reduzierer-Fehler des Dreierpakets | weiter offen → [RM-076](ROADMAP.md#rm-076) | app/core/geom/mesh_ops.py:121–160 übernimmt erfolgreich dezimierte Geometrie weiter ungeprüft; _simplification_findings meldet Schäden. Tests/test_subdivision.py:443ff prüft Meldung bei Dichtheitsverlust, nicht dessen Vermeidung. RM129 betrifft denselben Produktionsweg. |
@@ -8434,20 +8435,20 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-094 — LGPL-Quelltextnachweis im Bau | zusammengeführt → [RM-115](ROADMAP.md#rm-115) | build.yml:655/829/1218 erzeugt --write-evidence bereits; die Behauptung, kein Schritt erzeuge release-evidence.json, ist überholt. Der offene Rest ist die nicht blockierende Prüfung aus RM115. |
 | RM-095 — Löschlauf auf dem Server belegen | weiter offen → [RM-095](ROADMAP.md#rm-095) | PRIVACY-COMPLIANCE.md:153–156 hat Löschläufe, Berechtigungen und Scheduler/Ausfallalarm/Backup-Löschung weiter offen; :157 bestätigt nur die im Code erzwungene Frist. |
 | RM-096 — PHP-Endpunkte: kleine Härtungen | weiter offen → [RM-096](ROADMAP.md#rm-096) | website/api/activation_common.php:203 leitet die Wurzel weiterhin aus activation_seed() ab. Die sodium-, Fehlerstatus- und Testserver-Härtungen sind bereits vorhanden und werden aus dem Restauftrag entfernt. |
-| RM-097 — Kern: Restpunkte aus dem Review | weiter offen → [RM-097](ROADMAP.md#rm-097) | project.py:273 prüft leere/ungültige Prüfsummen bereits, :336 nennt bei OSError noch beschädigt. _fell_apart bleibt in label_ops.py:272 und texture_ops.py:490 doppelt. NOISE_VOLUME liegt inzwischen in geom/difference.py:31; BRIDGE_FROM/WIDTH_INTERESTING bleiben analysis.py:84/94. main_window.py:2659 nennt weiter Druckeinstellungen … . |
+| RM-097 — Kern: Restpunkte aus dem Review | weiter offen → [RM-097](#rm-097) | project.py:273 prüft leere/ungültige Prüfsummen bereits, :336 nennt bei OSError noch beschädigt. _fell_apart bleibt in label_ops.py:272 und texture_ops.py:490 doppelt. NOISE_VOLUME liegt inzwischen in geom/difference.py:31; BRIDGE_FROM/WIDTH_INTERESTING bleiben analysis.py:84/94. main_window.py:2659 nennt weiter Druckeinstellungen … . |
 | RM-098 — Regelwerk-Nachträge | weiter offen → [RM-098](ROADMAP.md#rm-098) | AGENTS.md/CLAUDE.md enthalten affected_tests je Schritt und das vollständige Tor vor dem Commit. .claude/rules/ enthält weiterhin keine auslieferung.md. Änderung von 22 harten Regeln oder Commit-Autorität bedarf einer ausdrücklichen Entscheidung, die dieser Dokumentabgleich nicht ersetzt. |
 | RM-099 — Konzeptordner aufräumen | weiter offen → [RM-099](ROADMAP.md#rm-099) | konzepte/README.md führt abgeschlossene und überholte Dokumente weiterhin im Stamm; konzepte/archiv existiert nicht. Veröffentlichungs-/Demo-Konzept widersprechen sich weiter bei Zuständigkeit und Status. |
 | RM-100 — Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | weiter offen → [RM-100](ROADMAP.md#rm-100) | tests/test_process.py:239 verwendet unverändert CREATE_NEW_PROCESS_GROUP / DETACHED_PROCESS. Kein aktueller sichtbarer Windows-Terminal-Nachweis vorhanden. |
-| RM-101 — Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | weiter offen → [RM-101](ROADMAP.md#rm-101) | Der Originalpunkt ist ein offscreen-Befund ohne gesicherte Herkunft; main_window, Befunddarstellung und Qt-Lebensdauer wurden seither mehrfach geändert. Ein neuer Live-Nachweis des konkreten Fokuswegs fehlt. |
-| RM-102 — Ein Datum steht in jeder Sprache auf Deutsch | weiter offen → [RM-102](ROADMAP.md#rm-102) | app/ui/main_window.py:13309 verwendet weiterhin written.strftime('%d.%m.%Y %H:%M'); der alte Zeilenverweis ist überholt, der Fehler nicht. |
+| RM-101 — Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | weiter offen → [RM-101](#rm-101) | Der Originalpunkt ist ein offscreen-Befund ohne gesicherte Herkunft; main_window, Befunddarstellung und Qt-Lebensdauer wurden seither mehrfach geändert. Ein neuer Live-Nachweis des konkreten Fokuswegs fehlt. |
+| RM-102 — Ein Datum steht in jeder Sprache auf Deutsch | weiter offen → [RM-102](#rm-102) | app/ui/main_window.py:13309 verwendet weiterhin written.strftime('%d.%m.%Y %H:%M'); der alte Zeilenverweis ist überholt, der Fehler nicht. |
 | RM-103 — 21 Kernfunktionen über 150 Zeilen | weiter offen → [RM-103](ROADMAP.md#rm-103) | Aktueller AST-Abgleich: evaluate 521 Zeilen, _with_features 580, project.save 176/load 174, range_check.check 244/native_groups_intersect 179. Die alte Liste ist veraltet; range_check._IntersectionCheck existiert bereits. Keine der Längen allein belegt einen Fehler. |
 | RM-104 — Fünf Befunde auf den beiden Macs, die niemand je gesehen hat | weiter offen → [RM-104](ROADMAP.md#rm-104) | build.yml:81 testet Windows, Linux und macOS ARM; :220 beschränkt die Fenstergruppe auf Windows. Der Paketjob :302 baut weiterhin beide Mac-Architekturen. 67e4be1d repariert B-Rep-Zylindernaht und geometrischen Determinismustest, aae3b7c4 ARM-Feldstauchung. Keine vollständige neue Unix-Abnahme vorhanden. |
 | RM-105 — Die CI prüft die Bausteinbereiche nicht mehr | überholt oder begründet entfallen | AGENTS.md, Checkliste neuer Baustein Punkt 5: Entscheidung vom 03.09.2026 entfernt den vollständigen automatischen Lauf; Prüflogik und gezielter Bereichsnachweis bleiben. Die ältere Forderung, ihn lokal oder in der CI wiederherzustellen, ist überholt. |
 | RM-106 — Dieselbe Projektdatei ist auf Windows und Linux nicht bitgleich | weiter offen → [RM-106](ROADMAP.md#rm-106) | project.py schreibt weiter ZIP_DEFLATED. Der Paketjob erzeugt Beispiele seit f58854ae nicht neu. Kein aktueller Windows-/Linux-Vergleich der entpackten Inhalte liegt vor; die zlib-Ursache bleibt Vermutung. |
 | RM-107 — Ein Worker stirbt auf Ubuntu am ersten Dialogaufbau — verdeckt, nicht behoben | weiter offen → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185 begrenzt die Alt-Fixture weiterhin auf test_print_settings_ui/test_install. Neuere Lebensdaueränderungen können den alten Auslöser beeinflussen; Isolierung oder ein einzelner grüner Windows-Lauf ist keine Linux-Ursachendiagnose. |
 | RM-108 — Der Schlüsseldialog wartet beim Sterben 2,3 s | weiter offen → [RM-108](ROADMAP.md#rm-108) | app/ui/dialogs.py:1415–1435 ruft weiterhin WorkerLeash.wait_all(); app/ui/leash.py:465–487 wartet pro laufendem Worker bis timeout_ms. Der alte Messwert 2,3 s wurde nicht neu erhoben, der blockierende Pfad besteht. |
-| RM-109 — Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der Preis der Rippenerkennung, und ein Teil davon ist sparbar | weiter offen → [RM-109](ROADMAP.md#rm-109) | app/core/slice/analysis.py:1153 ruft _survives_opening bei der Vorprüfung weiter auf. Die alte 4,3-s-Marke gehörte zu einer falschen Analyse; 7,0 s bleibt ein historischer Messwert, keine neue Leistungsaussage. |
-| RM-110 — Zwei Zwillinge lesen den Pfad eines offenen Handles | weiter offen → [RM-110](ROADMAP.md#rm-110) | app/core/scene/project.py:365 und app/core/updates.py:967 führen weiterhin zwei Implementierungen. Der Mac-F_GETPATH-Fehler ist bereits behoben; offen ist nur die gemeinsame Pflege. |
+| RM-109 — Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der Preis der Rippenerkennung, und ein Teil davon ist sparbar | weiter offen → [RM-109](#rm-109) | app/core/slice/analysis.py:1153 ruft _survives_opening bei der Vorprüfung weiter auf. Die alte 4,3-s-Marke gehörte zu einer falschen Analyse; 7,0 s bleibt ein historischer Messwert, keine neue Leistungsaussage. |
+| RM-110 — Zwei Zwillinge lesen den Pfad eines offenen Handles | weiter offen → [RM-110](#rm-110) | app/core/scene/project.py:365 und app/core/updates.py:967 führen weiterhin zwei Implementierungen. Der Mac-F_GETPATH-Fehler ist bereits behoben; offen ist nur die gemeinsame Pflege. |
 | RM-111 — Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien | zusammengeführt → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185–244 führt _DIALOG_MODULES und den eingeschränkten Sammellauf weiterhin. Derselbe verbliebene Diagnoseauftrag wie RM107. |
 | RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](ROADMAP.md#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
 | RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](ROADMAP.md#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
@@ -8456,18 +8457,18 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-116 — Vier Zählzeilen liegen im öffentlichen Baum | weiter offen → [RM-116](ROADMAP.md#rm-116) | Der Originalbefund stammt aus einer Serverprüfung vom 03.09.2026. Aktueller count.php/store_dir()-Pfad ist bereits geschützt; keine externe Löschung oder erneute Serverprüfung im Roadmap-Abgleich vorgenommen. |
 | RM-117 — Eine ausgelieferte Datei ohne Manifesteintrag hat keinen Prüfer | weiter offen → [RM-117](ROADMAP.md#rm-117) | tools/upload_website.py:584–599 promised_files liest weiterhin ausschließlich payload.packages.url/file; keine Seitenlinks. Manuelle Teilbyteprüfung von 0.3.0 ist keine dauerhafte vollständige Prüfsummenprüfung. |
 | RM-118 — Der Wayland-Punkt erreicht das Update-Fenster nicht | erledigt | Durch Elternagent verifiziert: cap_for_legacy_clients delegiert inzwischen an cap_groups; damit verschwinden späte Gruppen nicht mehr wegen linearer Abschneidung. |
-| RM-119 — Die Schnittebene folgt dem Plattenversatz nicht | weiter offen → [RM-119](ROADMAP.md#rm-119) | app/ui/viewport.py:5775–5806 schneidet das Szenennetz weiter vor dem Darstellungsversatz; der aktuelle pygfx-Szenenaufbau muss am Bild geprüft werden. Der alte reine Codebefund wurde nicht durch einen Live-Nachweis ersetzt. |
+| RM-119 — Die Schnittebene folgt dem Plattenversatz nicht | weiter offen → [RM-119](#rm-119) | app/ui/viewport.py:5775–5806 schneidet das Szenennetz weiter vor dem Darstellungsversatz; der aktuelle pygfx-Szenenaufbau muss am Bild geprüft werden. Der alte reine Codebefund wurde nicht durch einen Live-Nachweis ersetzt. |
 | RM-120 — Die übersetzte Schnitt-Erweiterung verliert eine Schicht | erledigt | 76838903 korrigiert in analysis.py die selbstberührende verkettete Kontur auf lose Segmente. tests/test_slice_core.py:292–323 nutzt dovetail_vertex_plane.ply, z=9,5 und vergleicht die gesamte slice_body-Schichtliste sowie Stützvolumen. Der exakt beschriebene Eckfall ist jetzt Korpus und Regressionstest. |
 | RM-121 — Zwanzig Dialoge fehlen dem Wächter noch | erledigt | Aktueller AST-Abgleich: tests/test_locked_says_why.py hat 35 BUILDERS. Alle 35 direkten QDialog-Klassen in app/ui sind erfasst, bis auf PrintSettingsDialog, dessen ursprünglicher eigener test_no_locked_button_in_this_dialog_stays_silent in test_print_settings_ui.py besteht. ManualWindow kommt zusätzlich als Builder vor. Die behaupteten zwanzig fehlenden Dialoge sind abgearbeitet. |
-| RM-122 — `MEMORY.md` wurde an einem Tag dreimal beschädigt | weiter offen → [RM-122](ROADMAP.md#rm-122) | tools/link_memory.py verknüpft Speicherorte, bietet aber keine gesperrte Indexzeilenänderung; entsprechendes Pflegewerkzeug in tools nicht gefunden. Der Auftrag betrifft .claude/memory/MEMORY.md, nicht den privaten Codex-Memory-Store. |
+| RM-122 — `MEMORY.md` wurde an einem Tag dreimal beschädigt | weiter offen → [RM-122](#rm-122) | tools/link_memory.py verknüpft Speicherorte, bietet aber keine gesperrte Indexzeilenänderung; entsprechendes Pflegewerkzeug in tools nicht gefunden. Der Auftrag betrifft .claude/memory/MEMORY.md, nicht den privaten Codex-Memory-Store. |
 | RM-123 — Der Punkt für den Changelog steht noch aus | erledigt | changelog/de.md:182: erster Klick Teil, zweiter Bohrung, Klick daneben Auswahl aufheben, Steuerung gilt durchgehend. Der ausstehende Satz ist damit nachgetragen. |
-| RM-124 — `show_build_volume` vergleicht seinen Stand nicht, und das kostet je Auswertung einen vollen Render | weiter offen → [RM-124](ROADMAP.md#rm-124) | app/ui/viewport.py:6019–6037 entfernt weiterhin alle Rahmenaktoren, zeichnet jedes Bett neu und ruft _draw(); main_window.py:11548 ruft show_build_volume. Der Rendererwechsel macht die alte Kostenzahl überholt, nicht den fehlenden Zustandsvergleich. |
+| RM-124 — `show_build_volume` vergleicht seinen Stand nicht, und das kostet je Auswertung einen vollen Render | weiter offen → [RM-124](#rm-124) | app/ui/viewport.py:6019–6037 entfernt weiterhin alle Rahmenaktoren, zeichnet jedes Bett neu und ruft _draw(); main_window.py:11548 ruft show_build_volume. Der Rendererwechsel macht die alte Kostenzahl überholt, nicht den fehlenden Zustandsvergleich. |
 | RM-125 — Das `pv.PolyData` jedes Körpers wird bei jedem Szenenaufbau neu gebaut | überholt oder begründet entfallen | 8fcc9edc entfernt den VTK-Renderer; der aktuelle Viewport verwendet pygfx. Ein Cache für nicht mehr verwendete PolyData würde keinen heutigen Kundenpfad verbessern. |
 | RM-126 — Zwei rote Tests sind Altlast und gehören keiner Änderung von heute | erledigt | 76838903 korrigiert den falschen Rangfolge-Sollwert in tests/test_autosplit.py anhand aller fertigen Halbschalen und behebt die verlorene Schnittschicht. THIRD-PARTY-NOTICES.md:18/1857 enthält hidapi; f19eb7bd erneuert die Lizenzbeilage. Der Commit 76838903 dokumentiert das vollständige Tor; hier nicht als neuer Testlauf ausgegeben. |
-| RM-127 — Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist | weiter offen → [RM-127](ROADMAP.md#rm-127) | app/core/geom/hollow.py:257 meldet nur den eigenen Aushöhlungsfall. In scene/evaluate.py wurde keine allgemeine Endzustandsprüfung für sleeve_at/wall_below_nozzle gefunden. Die von Robert verworfene bloße Änderungsmeldung wird nicht erneut beauftragt. |
+| RM-127 — Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist | weiter offen → [RM-127](#rm-127) | app/core/geom/hollow.py:257 meldet nur den eigenen Aushöhlungsfall. In scene/evaluate.py wurde keine allgemeine Endzustandsprüfung für sleeve_at/wall_below_nozzle gefunden. Die von Robert verworfene bloße Änderungsmeldung wird nicht erneut beauftragt. |
 | RM-128 — Zwanzig der 26 erkannten Merkmale des Besenhalters lassen sich nicht bearbeiten | weiter offen → [RM-128](ROADMAP.md#rm-128) | Aktuelle prepare_ops.py unterstützt gezielt bewegliche Bohrungen/Zapfen und verweist für Verrundungen auf andere Grenzen. Die historischen 20/26 wurden nach späteren Erkennungs-/Auswahländerungen nicht neu gemessen und sind kein aktueller Bestandszähler. |
 | RM-129 — Dezimieren kann die Dichtheit kosten | zusammengeführt → [RM-076](ROADMAP.md#rm-076) | app/core/geom/mesh_ops.py:121–160 hat weiterhin keinen topologiesichernden Nachlauf bei erfolgreicher fast_simplification. Das ist derselbe Reparaturauftrag wie RM076, ergänzt um den Mehrkomponentenfall. |
-| RM-130 — Ein reiner Import macht das Projekt „geändert" | weiter offen → [RM-130](ROADMAP.md#rm-130) | app/ui/session.py importiert weiter über die History; modified bleibt ein Vergleich des Dokumentzustands. Der aktuelle Dateiweg ist single-file und es gibt keinen gesondert belegten View-only-Status. |
+| RM-130 — Ein reiner Import macht das Projekt „geändert" | weiter offen → [RM-130](#rm-130) | app/ui/session.py importiert weiter über die History; modified bleibt ein Vergleich des Dokumentzustands. Der aktuelle Dateiweg ist single-file und es gibt keinen gesondert belegten View-only-Status. |
 | RM-131 — Siebzehn Teile eines Modells kosten siebzehn Vorgänge | weiter offen → [RM-131](ROADMAP.md#rm-131) | Roberts ausdrückliche Zurückstellung vom 04.09.2026 gilt. main_window.py:4448 verwendet getOpenFileName; Drop verarbeitet accepted_path; session.py:1335/1394 behandelt nur first_model besonders. Kein Auftrag zur sofortigen Erweiterung. |
 | RM-132 — Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel | weiter offen → [RM-132](ROADMAP.md#rm-132) | tests/test_performance.py enthält inzwischen beide zusätzlichen Fälle; :556 nennt 1,41 s synthetisch und 1,52 s organisch. Die Korpuslücke ist geschlossen, das strengere Ziel bleibt laut Punkt ausdrücklich offen. |
 | RM-133 — `rotate_feature` ändert das Volumen, und niemand sagt es | weiter offen → [RM-133](ROADMAP.md#rm-133) | prepare_ops.py:1912ff meldet inzwischen verlorenen Durchgang über _throughness_lost. Die allgemeine Volumenänderung ist weiter eine Bedienentscheidung, kein bestätigter Geometriefehler. |
@@ -14913,7 +14914,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
   Parameter — der Operations-Hash sieht nichts, und auf der Platte überlebt das
   Ergebnis (siehe unten).
 
-- **Historischer Befund RM-023 (weiter offen; aktuelle Aufgabe [RM-023](ROADMAP.md#rm-023)):** **Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel
+- **Historischer Befund RM-023 (weiter offen; aktuelle Aufgabe [RM-023](#rm-023)):** **Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel
       wechseln.** `referenced_features` in `evaluate` entsteht einmal je
       Auswertung und hängt Merkmale an die Objekt-ID aus dem Dokument — aber
       Kennungen entstehen und wechseln über den Stapel hinweg, und ein
@@ -19334,7 +19335,7 @@ Grund noch den Weg. Der Kunde nannte seine Projektdatei selbst
 - **Historischer Befund RM-038 (weiter offen; aktuelle Aufgabe [RM-038](ROADMAP.md#rm-038)):** **Der Mailweg liefert prozentkodierten Text.** Der `mailto`-Link trägt
   den ganzen Bericht; ein kurzer Text, der auf den abgelegten Ordner verweist,
   wäre der robustere Weg.
-- **Historischer Befund RM-039 (weiter offen; aktuelle Aufgabe [RM-039](ROADMAP.md#rm-039)):** **Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht.**
+- **Historischer Befund RM-039 (weiter offen; aktuelle Aufgabe [RM-039](#rm-039)):** **Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht.**
   `split.uncapped` nennt den Grund nicht — dass ein Netz mit tausenden offenen
   Kanten keine geschlossene Schnittfläche haben kann — und schlägt „Reparieren"
   nicht vor.
@@ -19403,7 +19404,7 @@ Register unter dieser Überschrift:
 - **Historischer Befund RM-042 (weiter offen; aktuelle Aufgabe [RM-042](ROADMAP.md#rm-042)):** **Die Merkmalserkennung läuft bis eine Million Dreiecke** — §31 bekommt
   die Zeile mit dem gemessenen Wert, oder die Grenze geht auf den Wert zurück,
   für den eine Messung existiert.
-- **Historischer Befund RM-043 (weiter offen; aktuelle Aufgabe [RM-043](ROADMAP.md#rm-043)):** **Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url`**
+- **Historischer Befund RM-043 (weiter offen; aktuelle Aufgabe [RM-043](#rm-043)):** **Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url`**
   — derselbe `DeadlineResponse` an den vier übrigen Aufrufern.
 - **Historischer Befund RM-044 (erledigt):** **Die Migration 19→20 rechnet mit lebendem Code** — eine eingecheckte
   v19-Beispieldatei mit Deckel; der Satz im Modul steht.
@@ -20780,7 +20781,7 @@ hindert; die drei behobenen stehen oben und hier.
   (`07858c4e`), während `constraints.txt` `pyinstaller==6.22.2` festnagelt.
   Gerade dessen Hooks entscheiden, was an Metadaten mitreist.
 
-- **Historischer Befund RM-065 (weiter offen; aktuelle Aufgabe [RM-065](ROADMAP.md#rm-065)):** **CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen.**
+- **Historischer Befund RM-065 (weiter offen; aktuelle Aufgabe [RM-065](#rm-065)):** **CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen.**
   Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`;
   auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des
   **Bauservers**, und die reist nicht mit. `app/core/network.py` setzt deshalb
@@ -22109,7 +22110,7 @@ nur auf die neueste. Alles Ältere ist entweder ein bewusstes
 Rollback-Archiv oder totes Gewicht — und was davon auch auf dem Server
 liegt, ist bisher nicht gezählt.
 
-- **Historischer Befund RM-073 (weiter offen; aktuelle Aufgabe [RM-073](ROADMAP.md#rm-073)):** **Roberts Produktentscheidung:** alte Pakete behalten oder auf
+- **Historischer Befund RM-073 (weiter offen; aktuelle Aufgabe [RM-073](#rm-073)):** **Roberts Produktentscheidung:** alte Pakete behalten oder auf
       die angebotene Fassung eindampfen. Falls eindampfen: erst den
       Serverbestand zählen, dann lokal und oben in einem Zug räumen —
       und die Reihenfolge-Regel des Veröffentlichens gilt auch hier
@@ -23272,12 +23273,12 @@ anderes ergibt** — der Punkt dazu bleibt unter P9.
 - **Historischer Befund RM-094 (zusammengeführt; aktuelle Aufgabe [RM-115](ROADMAP.md#rm-115)):** **LGPL-Quelltextnachweis im Bau.** Wartet auf `build.yml:594/1140/1511` verlangen `build/release-evidence.json` (Qt, OCCT, GEOS, AppImage-Runtime), kein Schritt erzeugt sie — klären, womit 0.3.0 gebaut wird, und die Erzeugung in den Workflow oder in `/erzeugen`.
 - **Historischer Befund RM-095 (weiter offen; aktuelle Aufgabe [RM-095](ROADMAP.md#rm-095)):** **Löschlauf auf dem Server belegen.** Wartet auf `cleanup_private_state.php` als geplante Aufgabe in Plesk mit den drei Pfaden, einen Lauf protokollieren, Häkchen in `PRIVACY-COMPLIANCE.md:156` — die Zusage „höchstens 62 Kalendertage" hängt nur daran.
 - **Historischer Befund RM-096 (weiter offen; aktuelle Aufgabe [RM-096](ROADMAP.md#rm-096)):** **PHP-Endpunkte: kleine Härtungen.** Wartet auf einen eigenen Rate-Key statt `activation_seed()` als Pseudonymwurzel (`activation_common.php:203`) — braucht eine neue Schlüsseldatei auf dem Server und einen Deploy-Schritt. Erledigt 02.09.2026: `activation.php`/`deactivation.php` prüfen die sodium-Erweiterung vor Rumpf und Ratenbegrenzung; `stats.php` antwortet bei nicht öffnbarem Zähler mit 503 statt mit einem vorgetäuschten „Zu viele Versuche"; die Test-Schlüssel aus der Umgebung gelten nur im eingebauten Testserver (`PHP_SAPI === 'cli-server'`); der Docblock von `support.php` nennt die 0700-Bedingung für `appdata/`. Referrer-Prüfung im Zähler und Rechteprüfung vor dem Laden der Zugangsdatei kamen schon mit dem ersten Commit.
-- **Historischer Befund RM-097 (weiter offen; aktuelle Aufgabe [RM-097](ROADMAP.md#rm-097)):** **Kern: Restpunkte aus dem Review.** Wartet auf `_read_linked_source` (falscher OSError-Text, `require_checksum` bei leerem Hash) — erst nötig, wenn der Verknüpfungsweg gebaut wird; „Deckel"/„Prüfstück" mit Zähler, damit zwei Prüfstücke in einer Szene unterscheidbar heißen; `_fell_apart` einmal statt zweimal (`label_ops.py`, `texture_ops.py`). Erledigt 02.09.2026: `MAX_ARCHIVE_UNPACKED_BYTES` ist das Doppelte der Einzelgrenze, `MAX_PROJECT_FILE_BYTES` folgt — zwei einzeln erlaubte Modelle sind zusammen wieder speicherbar. Aus den Durchsichten vom 02.09.: `NOISE_VOLUME` in `scene/compare` aus dem Profil statt 1e-3 mm³ (Faktor 35 zur Düse; Rezept in `boolean.py:506`, Aufrufer `ui/session.py`); `BRIDGE_FROM` und `WIDTH_INTERESTING` der Schichtanalyse als Parameter, sobald ein Aufrufer sie aus dem Profil füllt; `support_on_model` als Feld in `SliceResult`, damit der Durchgang einmal statt zweimal läuft; der Menüeintrag *Druckeinstellungen …* → *Drucken und slicen …* (Handbuch, Tour, sechs Kataloge).
+- **Historischer Befund RM-097 (weiter offen; aktuelle Aufgabe [RM-097](#rm-097)):** **Kern: Restpunkte aus dem Review.** Wartet auf `_read_linked_source` (falscher OSError-Text, `require_checksum` bei leerem Hash) — erst nötig, wenn der Verknüpfungsweg gebaut wird; „Deckel"/„Prüfstück" mit Zähler, damit zwei Prüfstücke in einer Szene unterscheidbar heißen; `_fell_apart` einmal statt zweimal (`label_ops.py`, `texture_ops.py`). Erledigt 02.09.2026: `MAX_ARCHIVE_UNPACKED_BYTES` ist das Doppelte der Einzelgrenze, `MAX_PROJECT_FILE_BYTES` folgt — zwei einzeln erlaubte Modelle sind zusammen wieder speicherbar. Aus den Durchsichten vom 02.09.: `NOISE_VOLUME` in `scene/compare` aus dem Profil statt 1e-3 mm³ (Faktor 35 zur Düse; Rezept in `boolean.py:506`, Aufrufer `ui/session.py`); `BRIDGE_FROM` und `WIDTH_INTERESTING` der Schichtanalyse als Parameter, sobald ein Aufrufer sie aus dem Profil füllt; `support_on_model` als Feld in `SliceResult`, damit der Durchgang einmal statt zweimal läuft; der Menüeintrag *Druckeinstellungen …* → *Drucken und slicen …* (Handbuch, Tour, sechs Kataloge).
 - **Historischer Befund RM-098 (weiter offen; aktuelle Aufgabe [RM-098](ROADMAP.md#rm-098)):** **Regelwerk-Nachträge.** Wartet auf Roberts Ansage für `AGENTS.md`/`CLAUDE.md`: Regel 5 und 8 als Haltungssätze ohne Testzusage, „nach jedem Schritt die vollständige Suite" zweistufig (erledigt 02.09.2026 auf Roberts Ansage: `tools/affected_tests.py` je Schritt, `/pruefen` vor dem Commit; `AGENTS.md`/`CLAUDE.md` zieht 3d-druck-7b nach), „Verzweigungen im Op-Stack" mit „in dieser Ausbaustufe (§41)", der Commit-Satz `CLAUDE.md:281` als „auf Ansage"; ohne Ansage: Wächter für Regel 2/6/10/19 in `tests/test_hard_rules.py` mit Gegenproben, die Suite-Fahrweise nur in `/pruefen` und `tests/CLAUDE.md`, die Fallteile von `tests.md`/`oberflaeche.md`/`ansicht.md` nach `.claude/memory/`, eine `.claude/rules/auslieferung.md` für `tools/` und `packaging/`, ein Regelnummern-Test wie `test_plan_references.py`, eine Frontmatter-`paths`-Prüfung.
 - **Historischer Befund RM-099 (weiter offen; aktuelle Aufgabe [RM-099](ROADMAP.md#rm-099)):** **Konzeptordner aufräumen.** Wartet auf `konzepte/archiv/` für die 21 abgearbeiteten Dokumente (13 066 Zeilen), eine Entscheidungsnotiz „Weg 3 — Lizenzkette", `konzept-demo-2026-10.md` §6 als überholt kennzeichnen, Zeilenverweise auf `ROADMAP.md` durch Anker ersetzen, die zwei Sitzungs-Bedienkonzepte unter `.claude/` archivieren.
 - [x] **Handbuch, SEO und Stempel vor dem Upload neu erzeugen.** Erledigt am 02.09.2026 (`f7bc5450`): `make_figures.py` je Sprache ein eigener Prozess (54 Bilder, keiner alt geblieben) → `make_web_images.py` je Sprache (24 Belege, die vier `weg*.png` bleiben Handarbeit) → `make_manual.py` (34 Abbildungen und ein PDF je Sprache) → `make_seo.py` → `stamp_assets.py`. Der Bilderlauf fand dabei den `TypeError` der Statuszeile im Skizzeneditor (`c7db2e20`) — die ersten 54 Bilder trugen ihn und wurden noch einmal erzeugt.
 - **Historischer Befund RM-100 (weiter offen; aktuelle Aufgabe [RM-100](ROADMAP.md#rm-100)):** **Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen.** Wartet auf eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess (`DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`), und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 2147942632 (0x800700e8) beim Start von …" (Robert, 02.09.2026, Bildschirmfoto). Der Test bleibt grün — das Jobobjekt schließt den Enkel wie verlangt —, das Fenster ist ein Nebeneffekt der Testumgebung, kein Verhalten der Anwendung. Zu prüfen: den Enkel ohne Konsole starten, und ob die Anwendung selbst (`detached_process_options`, `CREATE_NO_WINDOW`) auf so einer Maschine ein Fenster zeigt.
-- **Historischer Befund RM-101 (weiter offen; aktuelle Aufgabe [RM-101](ROADMAP.md#rm-101)):** **Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster.** Wartet auf die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt — der neue Transform-Test musste deshalb nach dem Laden erneut `activateWindow()` rufen (gemessen 02.09.2026). Den Knopf erst nach dem Einhängen zeigen; Kundenwirkung am echten Fenster prüfen (Fokus springt?).
+- **Historischer Befund RM-101 (weiter offen; aktuelle Aufgabe [RM-101](#rm-101)):** **Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster.** Wartet auf die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt — der neue Transform-Test musste deshalb nach dem Laden erneut `activateWindow()` rufen (gemessen 02.09.2026). Den Knopf erst nach dem Einhängen zeigen; Kundenwirkung am echten Fenster prüfen (Fokus springt?).
 
 ## Architektur-Durchsicht (02.09.2026)
 
@@ -23292,7 +23293,7 @@ unter `core`, kein `eval`, kein `random` ohne Startwert.
 - [x] **Behoben am 02.09.2026.** `app/i18n/catalog.py` holte seinen Logger aus `app.core.log` — die Schicht, die an nichts hängen soll, hing am Kern (`logging.getLogger` direkt, derselbe Name). Die drei TOML-Leser mit Regel-17-Fehler (`profiles`, `print_settings`, `calibration`) sind einer in `knowledge/tables.py`. `DeviceActivationRequired` und `DeviceDeactivationPending` trugen denselben `__init__`, um einen Vorgabetext zu setzen — `AppError.default_detail` ist jetzt das Muster neben `default_title`. `types.Millimetres` war ein Alias, den keine Signatur benutzte. `certificate.parse_deactivation`, der Python-Spiegel der PHP-Prüfung, hatte keinen Aufrufer und keinen Test — jetzt einen Rundweg und eine Manipulationsprobe. `session_board._common_dir` war eine Kopie aus `gate_lock`. Drei Wächter, die es vorher nicht gab: `test_layer_direction.py` (alle vier Pfeile der Schichtenkarte, auch träge und für Typen), `test_lazy_exports.py` (jeder `_EXPORTS`-Eintrag löst auf, steht in `__all__`, passt zum `TYPE_CHECKING`-Block), `test_affected_tests.py`. Und ein Werkzeug für Roberts Anweisung „nur die betroffenen Tests fahren": `tools/affected_tests.py` liest den Importgraphen rückwärts statt zu schätzen.
 - [x] **`geom/mesh.py` kannte `export/threemf.py`.** Erledigt 02.09.2026 auf Roberts Freigabe aller drei Punkte: Der Leser liegt in `ingest/threemf.py`, der Schreiber bleibt in `export/threemf.py` und holt sich die Containerkonstanten vom Leser; `geom.mesh.read_mesh` liest nur noch, was trimesh zu einem Körper macht (`TRIMESH_SUFFIXES`), und `ingest.loader.read_model` entscheidet, was eine Datei ist — 3MF als Baugruppe verschweißt. `READABLE_SUFFIXES` steht jetzt bei der Eingangsstufe; Kommandozeile, `run_model_suite` und zwölf Testdateien lesen dort. Kein Dateiformat, keine Migration, die Beispielprojekte bleiben gültig.
 - [x] **`backends/scripted.py` reiste im Kundenpaket.** Erledigt 02.09.2026 auf Roberts Freigabe: Das Modell mit vorgeschriebenen Antworten liegt jetzt als `tests/scripted_backend.py` neben `agent_cases.py` und `php_probe.py`; sieben Testdateien importieren es von dort, keine Anwendungsdatei hat es je gebraucht. `backends/CLAUDE.md` sagt, wo es hin ist.
-- **Historischer Befund RM-102 (weiter offen; aktuelle Aufgabe [RM-102](ROADMAP.md#rm-102)):** **Ein Datum steht in jeder Sprache auf Deutsch.** Wartet auf eine Zeile in `app/ui/main_window.py:11170`: `MainWindow._when()` gibt für eine Sicherung, die älter als 24 Stunden ist, `written.strftime("%d.%m.%Y %H:%M")` zurück — ein englischer Kunde liest im Wiederherstellungsdialog `02.09.2026 15:41` statt `9/2/2026 3:41 PM`. Der Rest derselben Funktion macht es richtig: „vor 4 Minuten" und „vor einer Stunde" gehen durch `tr()`, mit getrennten Formen für Einzahl und Mehrzahl. Der Fix ist `QLocale().toString(written, QLocale.FormatType.ShortFormat)` — dieselbe Quelle wie das Dezimaltrennzeichen in `labels.py`, und `QLocale()` ohne Argument folgt der App-Sprache. Einzige Stelle in `app/ui`, die ein Datum fest formatiert; gefunden am 02.09.2026 bei der Suche nach Locale-Abhängigkeiten, bewusst **nach** dem Release, weil der Dialog nur nach einem Absturz mit einer Sicherung von gestern erscheint (Entscheidung 3d-druck-7b und 3d-druck-85).
+- **Historischer Befund RM-102 (weiter offen; aktuelle Aufgabe [RM-102](#rm-102)):** **Ein Datum steht in jeder Sprache auf Deutsch.** Wartet auf eine Zeile in `app/ui/main_window.py:11170`: `MainWindow._when()` gibt für eine Sicherung, die älter als 24 Stunden ist, `written.strftime("%d.%m.%Y %H:%M")` zurück — ein englischer Kunde liest im Wiederherstellungsdialog `02.09.2026 15:41` statt `9/2/2026 3:41 PM`. Der Rest derselben Funktion macht es richtig: „vor 4 Minuten" und „vor einer Stunde" gehen durch `tr()`, mit getrennten Formen für Einzahl und Mehrzahl. Der Fix ist `QLocale().toString(written, QLocale.FormatType.ShortFormat)` — dieselbe Quelle wie das Dezimaltrennzeichen in `labels.py`, und `QLocale()` ohne Argument folgt der App-Sprache. Einzige Stelle in `app/ui`, die ein Datum fest formatiert; gefunden am 02.09.2026 bei der Suche nach Locale-Abhängigkeiten, bewusst **nach** dem Release, weil der Dialog nur nach einem Absturz mit einer Sicherung von gestern erscheint (Entscheidung 3d-druck-7b und 3d-druck-85).
 - **Historischer Befund RM-103 (weiter offen; aktuelle Aufgabe [RM-103](ROADMAP.md#rm-103)):** **21 Kernfunktionen über 150 Zeilen.** Wartet auf je einen eigenen Umbau mit Messung davor und danach. Erledigt 02.09.2026: `range_check.has_self_intersections` (806 Zeilen, acht innere Funktionen) ist die Klasse `_IntersectionCheck` mit Methoden — derselbe Algorithmus, gemessen alt gegen neu auf sieben Netzen (Quader, Icosphären mit 20 000 und 41 000 Flächen, zwei Bausteine): gleiche Befunde, gleiche Zeiten; dazu der Bereichstest `check_part(cable_gland)` (128 Ecken) im selben Prozess alt 58,9 s, neu 59,3 s, alt noch einmal 58,1 s — Befunde identisch, neu/alt 1,02 (3d-druck-a0 hatte den Verdacht, ihr Torlauf stehe wegen des Umbaus in `test_parts.py`; er stand vor dem Umbau genauso, eine Minute je Baustein ist der Bereichstest selbst). Die Restliste, absteigend: `evaluate._with_features` 520, `evaluate.evaluate` 472, `part_file._strict_shape` 332, `range_check.large_mesh_intersects` ist als Methode aufgegangen, `handover.slice_model` 231, `mounting.pegboard_hook` 229, `advise._from_geometry` 208, `range_check.check` 207, `loader.normalise` 196, `autosplit.split_to_fit` 193, `agent.tools.extra_tools` 193, `features.detect_edge_loops` 181, `project.save` 175, `advise.warnings_for` 169, `generate.into_project` 165, `project.load` 162, `manual.models_text` 159, `repair.repair` 158, `pins.plan_pins` 155. Keine davon ist falsch; die zwei aus `evaluate.py` sind das Herz der Auswertung und bekommen den Umbau zuerst, jeder mit `test_evaluation.py` und den vier Hauptwegen davor und danach.
 
 ## Der erste Vier-Plattform-Lauf seit dem 06.09.2026 (08.09.2026)
@@ -23519,7 +23520,7 @@ bleibt, steht hier mit Kästchen.
   zu einer Frist wartet, statt ihn abzubrechen. Beim Kunden dieselbe Lage,
   wenn er den Dialog schließt, während die Modellabfrage läuft. Messen, wer
   wartet (`WorkerLeash`?), und abbrechen statt warten.
-- **Historischer Befund RM-109 (weiter offen; aktuelle Aufgabe [RM-109](ROADMAP.md#rm-109)):** **Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der
+- **Historischer Befund RM-109 (weiter offen; aktuelle Aufgabe [RM-109](#rm-109)):** **Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der
   Preis der Rippenerkennung, und ein Teil davon ist sparbar.** `slice_knurl`
   riss im Tor dreimal gegen die Marke 4,3 s (6,96 / 6,92 / 7,42 s, unter
   Fremdlast wie unter Ruhe gleich). 3d-druck-85 hat den Verursacher
@@ -23564,7 +23565,7 @@ bleibt, steht hier mit Kästchen.
   Umgebung und `KILL_ON_JOB_CLOSE` — die Nachkommen sterben weiter mit dem
   Elternprozess. Bauplan §32 ist nachgezogen, zwei Tests halten die
   Abwesenheit fest.
-- **Historischer Befund RM-110 (weiter offen; aktuelle Aufgabe [RM-110](ROADMAP.md#rm-110)):** **Zwei Zwillinge lesen den Pfad eines offenen Handles.**
+- **Historischer Befund RM-110 (weiter offen; aktuelle Aufgabe [RM-110](#rm-110)):** **Zwei Zwillinge lesen den Pfad eines offenen Handles.**
   `scene.project._opened_file_path` und `updates._descriptor_path` tragen
   denselben Windows-Code (`GetFinalPathNameByHandleW`) und dieselbe
   POSIX-Schleife — und denselben Mac-Fehler: `/dev/fd/N` ist dort kein
@@ -23809,7 +23810,7 @@ passiert, nachdem man geklickt hat.
   (`_object_at_view`), also wird sie beim **Klick** gestellt und das Ergebnis
   gemerkt — `Measurement.object_ids` trägt je Punkt einen Körper, weil ein Maß
   zwei verbinden darf. Die Schnittebene geht weiterhin nicht mit.
-- **Historischer Befund RM-119 (weiter offen; aktuelle Aufgabe [RM-119](ROADMAP.md#rm-119)):** **Die Schnittebene folgt dem Plattenversatz nicht.** `_sectioned` schneidet
+- **Historischer Befund RM-119 (weiter offen; aktuelle Aufgabe [RM-119](#rm-119)):** **Die Schnittebene folgt dem Plattenversatz nicht.** `_sectioned` schneidet
   das Netz in Szenenkoordinaten, und erst danach addiert `show_scene` den
   Versatz aus `_view_offset` (`viewport.py` um Zeile 4611 und 4618). Für eine
   Höhenebene ist das richtig: In der Szene liegen die Platten übereinander,
@@ -24126,7 +24127,7 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
 
 ## Die geteilte Datei ohne Werkzeug (03.09.2026)
 
-- **Historischer Befund RM-122 (weiter offen; aktuelle Aufgabe [RM-122](ROADMAP.md#rm-122)):** **`MEMORY.md` wurde an einem Tag dreimal beschädigt.** Zweimal stand eine
+- **Historischer Befund RM-122 (weiter offen; aktuelle Aufgabe [RM-122](#rm-122)):** **`MEMORY.md` wurde an einem Tag dreimal beschädigt.** Zweimal stand eine
   Erinnerung fälschlich als gelöscht im Haupt-Index (Spur eines privaten
   Index), einmal verlor die Datei im Arbeitsbaum eine Zeile: Eine Sitzung las
   sie, änderte sie und schrieb sie zurück, und der Zeiger eines Commits, der
@@ -24487,7 +24488,7 @@ in der Regel-17-Prüfung auftauchen, obwohl sie nie geworfen wird). Was hier
 steht, ist der Rest: drei Punkte, die keine Aufräumarbeit sind, sondern eigene
 Pakete brauchen.
 
-- **Historischer Befund RM-124 (weiter offen; aktuelle Aufgabe [RM-124](ROADMAP.md#rm-124)):** **`show_build_volume` vergleicht seinen Stand nicht, und das kostet je
+- **Historischer Befund RM-124 (weiter offen; aktuelle Aufgabe [RM-124](#rm-124)):** **`show_build_volume` vergleicht seinen Stand nicht, und das kostet je
   Auswertung einen vollen Render.** Sie ist die einzige Ansichtsmethode in
   `app/ui/viewport.py` ohne Änderungsprüfung und endet auf `_draw()`; das Fenster
   ruft sie bei jeder Auswertung unbedingt (`main_window.py`), während
@@ -24679,7 +24680,7 @@ die alles andere erklärt:
   Handlungen laufen — nur ergibt „diesen Zapfen vergrößern" an einem Mast
   dasselbe wie „das Teil skalieren".
 
-- **Historischer Befund RM-127 (weiter offen; aktuelle Aufgabe [RM-127](ROADMAP.md#rm-127)):** **Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist.**
+- **Historischer Befund RM-127 (weiter offen; aktuelle Aufgabe [RM-127](#rm-127)):** **Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist.**
   Robert hat den ersten Entwurf verworfen, und die Begründung trägt: Ein Satz
   „du machst gerade eine Wand dünner" sagt dem Kunden, was er selbst getan hat,
   und er käme bei jeder Änderung an einem Rohr. **Niemand ändert eine
@@ -24720,7 +24721,7 @@ die alles andere erklärt:
   die kleinsten kollabieren zu offenen Resten — ungemessen, deshalb ein
   offener Punkt und keine Behauptung.
 
-- **Historischer Befund RM-130 (weiter offen; aktuelle Aufgabe [RM-130](ROADMAP.md#rm-130)):** **Ein reiner Import macht das Projekt „geändert".** Wer eine STL öffnet,
+- **Historischer Befund RM-130 (weiter offen; aktuelle Aufgabe [RM-130](#rm-130)):** **Ein reiner Import macht das Projekt „geändert".** Wer eine STL öffnet,
   ansieht und schließt, bekommt „Ungesicherte Änderungen — Speichern /
   Verwerfen / Abbrechen", obwohl er nichts geändert hat (gemessen an allen
   neunzehn Dateien: `session.modified` ist nach dem Import immer `True`).
@@ -26821,3 +26822,927 @@ eine Ebene voraussetzen; `applies_to` nennt beide nur bei `paint_slot` und
 `clear_filament`. Tests: `test_the_two_bows_of_a_d_are_curved_faces_outside_and_inside`,
 `test_a_constructed_part_leaves_no_curved_face_over`,
 `test_a_curved_face_carries_a_filament_field_like_a_flat_one`.
+
+## Was vor 0.4.1 zugegangen ist (12.09.2026)
+
+Zweiunddreißig Registerpunkte sind zwischen dem 10. und dem 12.09.2026
+zugegangen und standen danach abgehakt in der Arbeitsliste. Hier stehen sie mit
+ihrem vollständigen Nachweis — Messung, Test, Gegenprobe —, damit die
+Arbeitsliste wieder das führt, was sie führen soll: offene Arbeit. Bei
+`v0.4.0` trug sie keinen einzigen abgehakten Punkt.
+
+Die Reihenfolge ist die der Abschnitte, aus denen sie kommen. Verweise auf
+weiterhin offene Punkte zeigen nach `ROADMAP.md`; Verweise untereinander
+bleiben in dieser Datei.
+
+<a id="rm-065"></a>
+
+- [x] **RM-065 — TLS und Update-Prüfung auf einem Kunden-Mac bestätigen.** Der certifi-Rückfall und
+  die Vorrangregel für eine Firmen-CA sind gebaut; Paketinhalt allein genügt nicht, und deshalb
+  stand der Punkt offen, obwohl der Code seit dem 27.08.2026 stand.
+
+  **Abgenommen am 12.09.2026** (Robert: „die spacemaus und update auf dem mac funktionieren jetzt
+  problemlos"). Die Aktualisierungsprüfung läuft auf dem Mac durch; ein TLS-Grund aus dem Protokoll
+  wird damit nicht gebraucht.
+
+  Was der Nachweis **nicht** deckt und auch nie sollte: die Firmen-CA. Ihre Vorrangregel ist gebaut
+  und geprüft, aber ein Mac hinter einem abfangenden Firmenproxy stand nie zur Verfügung — das ist
+  keine offene Arbeit, sondern eine benannte Grenze des Nachweises.
+
+  [Bisheriger Befund](#der-erste-kundenbericht-aus-dem-feld-27082026).
+
+<a id="rm-161"></a>
+
+- [x] **RM-161 — Das Lizenzmanifest deckte zwei Grenzdateien nicht mehr.** Am 12.09.2026
+  behoben, und zwei Annahmen des Punktes haben sich dabei erledigt.
+
+  **Der Erzeuger läuft auf dieser Maschine**, ohne eine von Hand aktivierte Umgebung:
+  `python tools/build_licence_module.py` übersetzt die sieben Freischaltmodule und signiert
+  `packaging/build/licence.manifest` in einem Zug. Danach ist `tests/test_packaging.py`
+  vollständig grün (91 Fälle). Die Notiz über `vswhere` stammt von einer anderen Lage und gilt
+  hier nicht.
+
+  **Und das Manifest ist nicht eingecheckt** — `.gitignore` schließt `build/` aus. Damit ist
+  auch die offene Frage beantwortet: Der Test gehört **nicht** zur Marke `rendered`. Er
+  überspringt sich selbst, wenn kein gebautes Prüfmodul da ist („kein gebautes Prüfmodul —
+  nichts zu vergleichen"), ist auf einem frischen Klon also nie rot. Rot wird er genau dort, wo
+  er es soll: auf einer Maschine, auf der gebaut **und** danach eine Grenzdatei geändert wurde.
+  Das war hier der Fall, und zwar zweimal nacheinander durch eigene Arbeit an
+  `core/export/writer.py` (RM-140, RM-141). Ein `rendered` daran hätte genau diese Meldung
+  abgeschaltet.
+
+  Nicht gebaut wurde ein **Paket**: Dass eines ungesperrt startet, zeigt erst der nächste
+  Paketbau, und der gehört zu [RM-011](ROADMAP.md#rm-011) und [RM-055](ROADMAP.md#rm-055). Der Weg dorthin ist
+  gesperrt, falls jemand den Schritt vergisst — `packaging/solidon3d.spec` bricht ohne das
+  übersetzte Prüfmodul ab, `tools/make_installer.py` prüft das Manifest noch einmal, und
+  `/erzeugen` nennt den Lauf an seinem Platz.
+
+<a id="rm-023"></a>
+
+- [x] **RM-023 — Verweisfilter über wechselnde Objektkennungen hinweg prüfen.** Am 12.09.2026
+  gebaut. **Der Befund stand und war nachmessbar**: Zwei Klötze mit je einer Bohrung, eine
+  Passung auf die rechte, danach *In Einzelteile zerlegen*. Danach hieß die rechte Bohrung
+  `obj_3:hole_1`, die Passung zeigte weiter auf `obj_1:hole_2` — und statt der Frage aus §21.3
+  kam eine Sackgasse: „Die Schritte ab dort zurücknehmen und vor der Passung ausführen."
+
+  `orphans.lineage()` liest die Abstammung aus dem Stapel — `Operation.inputs` und `outputs`
+  bilden den DAG (§12) —, und die Kandidaten kommen aus allen Körpern, in deren Herkunft der
+  genannte steht. **Nicht aus allen überhaupt**: Zwei Platten tragen beide ein `hole_1`, und
+  eine Frage nach einem fremden Loch ist schlechter als keine. Hängen die Kandidaten an
+  mehreren Körpern, nennt jede Antwort ihren (`obj_3:hole_1`); sonst bleibt es bei der bloßen
+  Kennung, damit der Normalfall unverändert liest. Die Antwort trägt den Körper mit — ein
+  Umschreiben nur der Merkmalskennung zeigte weiter auf den falschen.
+
+  **Ein Operationsverweis bleibt bei seinem Körper**, und das ist die Darstellung und keine
+  Vorsicht: Ein `kind="feature"`-Parameter trägt nur die Kennung und wird gegen `inputs[0]`
+  aufgelöst. Eine Antwort auf ein anderes Objekt ließe sich dort nicht hinschreiben; sie
+  anzubieten hieße, eine Wahl zu stellen, die beim Übernehmen still verloren geht.
+
+  Nachweis: drei Fälle in `tests/test_orphans.py` — die Frage kommt und nennt beide Körper, ein
+  unbeteiligter Körper mit demselben Namen steht nicht zur Wahl, und ein Operationsverweis
+  bekommt keinen fremden. Drei Gegenproben, jede einzeln rot: ohne den Stammbaum, über alle
+  Körper, und ohne die Grenze für Operationsverweise. Die getrennte Paarbildung für die
+  Hervorhebung (`_candidate_pairs`) ist dabei entfallen — die Kandidaten **sind** jetzt Paare.
+
+  [Bisheriger Befund](#das-fundament-der-wahrnehmung-22082026).
+
+<a id="rm-039"></a>
+
+- [x] **RM-039 — Fehlende Schnittflächen an offenen Netzen verständlich erklären.** Der Satz
+  steht seit dem 10.09.2026, der **Knopf** seit dem 12.09.2026: `split.uncapped` trägt in
+  `FINDING_ACTIONS` jetzt *Reparieren und erneut versuchen* — dieselbe Handlung wie die
+  anderen „nicht geschlossen"-Befunde, weil es dieselbe Ursache ist. *Stellen zeigen* steht
+  nicht daneben: Der Befund trägt keinen Ort, und ein Knopf ins Leere ist schlechter als
+  keiner.
+
+  **Und der Knopf braucht seinen Körper.** Eine Berichtshandlung liest ihr Ziel aus dem Befund
+  und nicht aus der Auswahl; `split_at_plane` rechnet auf einem Netz und kennt keine
+  Kennungen, also verortet sie die Operation — dieselbe Aufteilung wie beim Aushöhlen.
+
+  Nachweis: zwei Fälle in `tests/test_autosplit.py` (die Handlung steht im Bericht, der Befund
+  nennt `obj_7`), Gegenprobe ohne die Verortung rot.
+
+<a id="rm-097"></a>
+
+- [x] **RM-097 — Verbleibende Kernbefunde des Reviews einzeln beheben.** **Alle sechs
+  Stellen sind am 12.09.2026 gefallen**, und eine davon war schon vorher weg:
+
+  * Der `OSError` beim Lesen einer verknüpften Quelle hieß „sie ist beschädigt" und
+    behauptete damit etwas über den **Inhalt**, wo das Betriebssystem über den **Zugriff**
+    gesprochen hat — fehlende Rechte, ein getrenntes Netzlaufwerk, ein Wechselmedium. Der
+    Satz nennt jetzt, was feststeht, und der Systemgrund reist als Wert mit. Die
+    `BadZipFile`-Stelle daneben bleibt: Dort ist „beschädigt" die Wahrheit.
+  * *Prüfstück* und *Drehdeckel* bekommen einen Zähler (`Scene.unused_name`). Zwei Objekte
+    mit demselben Namen sind im Baum eines; die Kopie macht es seit je anders. Der Zähler
+    beginnt bei zwei — der erste heißt, wie er heißt.
+  * **`_fell_apart` war längst entdoppelt**: Beide Fassungen tragen je *eine* Anweisung, den
+    Aufruf an `boolean.fell_apart`; was doppelt aussieht, sind die Docstrings, und die
+    beschreiben verschiedene Fälle (Schrift gegen Muster). Nachgemessen am Code, nicht
+    geglaubt.
+  * Der Menüeintrag heißt ***Drucken vorbereiten …*** statt *Druckeinstellungen …* — ein
+    Laie sucht den Weg zum Drucker nicht unter einem Wort für Einstellungen, und der Weg
+    dahinter ist der Slicer-Weg. Der Dialog behält seinen Namen: Der Eintrag nennt die
+    Handlung, der Dialog den Inhalt. Handbuch und Befehlspalette sind nachgezogen, die zwei
+    langen Handbuchtexte in allen fünf Sprachen umgeschlüsselt.
+
+  **Die zwei Zahlen sind am 12.09.2026 gefallen**, beide nach dem Muster von
+  `overhang_angle`: Die Schichtanalyse bleibt von Profilen entkoppelt und nimmt Zahlen, und
+  der Aufrufer, der einen Drucker kennt, gibt dessen Zahl herein.
+
+  * **`BRIDGE_FROM`** (`slice/analysis.py`) wird zu `bridge_from` — ein Parameter bis
+    `_bridge_width` hinunter, geprüft wie der Winkel daneben (Regel 17). Der runde Millimeter
+    begründete sich mit „zwei Bahnen einer 0,4er-Düse", und die sind **0,84**; genau das ist
+    `Profile.minimum_wall_thickness`. Hereingegeben wird sie an den vier Stellen, die den
+    Winkel schon aus `profiles.analysis_limits` holen — die Funktion liefert beide Grenzen in
+    einem Aufruf. Gemessen an zwei Pfeilern mit **1,0 mm Spalt** und einer Decke darüber: der
+    Centauri meldet **0,9 mm** Brücke, eine 0,8er Düse (1,68) schweigt zu Recht, und die alte
+    Codezahl schwieg für beide. Der Messwertspeicher des Druckdialogs trägt die Wand seither
+    im Schlüssel neben dem Winkel — sein Geometriekontext kennt die Materialien nicht, und ein
+    Ergebnis, das einen Materialwechsel überlebt, spräche über einen Drucker, den niemand mehr
+    gemeint hat.
+  * **`NOISE_VOLUME`** (`geom/difference.py`) bleibt als Untergrenze der **Rechnung** stehen
+    und ist nicht mehr die der **Änderung**: `Difference.noise_volume` kommt aus
+    `Profile.smallest_printable_volume`, dieselbe Grenze und dieselbe Begründung wie bei
+    `boolean.without_effect`. Die Szene bringt das Profil mit (`compare_scenes`). Gemessen an
+    einem Quader, der um zwei Zehntausendstel Millimeter wächst: **0,02 mm³**, mehr als das
+    Rauschen und ein Fünfzehntel dessen, was der Centauri überhaupt hinterlässt — die
+    Differenzansicht meldete das als Änderung, und im Chat stand „+0,00 cm³".
+
+  Nachweis: zwei Fälle in `tests/test_slice.py`, drei in `tests/test_difference.py` und der
+  Anschlusstest `test_the_layer_analysis_takes_both_limits_from_the_material` — nicht „der Kern
+  kann es", sondern „das Fenster tut es". Dazu die Attrappe in `test_print_settings_ui.py`, die
+  `bridge_from` ausdrücklich in ihrer Signatur führt und rot wird, wenn der Dialog die Zahl
+  nicht mehr hereingibt. Vier Gegenproben, jede einzeln rot: die Codezahl zurück in
+  `_bridge_width`, die Konstante zurück in `Difference.changed`, `compare_scenes` ohne
+  Weitergabe des Profils, und das Fenster ohne die eine Zeile.
+
+<a id="rm-109"></a>
+
+- [x] **RM-109 — Schichtanalyse der Rändelplatte gezielt beschleunigen.** Am 12.09.2026 gebaut.
+  **Die Vorprüfung war es nicht.** Der Punkt stand unter der Annahme, die vorgeschaltete Frage
+  „lohnt eine Messung überhaupt" koste die Zeit; gemessen kosteten die zweiunddreißig
+  Vorprüfungen der Platte zusammen **1,8 Millisekunden**. Die 4,24 Sekunden lagen in den beiden
+  Schichten, die tatsächlich gemessen wurden: Die Halbierung stellt je Schicht sieben Fragen,
+  und jede Frage pufferte alle 2 898 getrennten Konturen der Rändelzone auf einmal — 300
+  Millisekunden für eine Ja/Nein-Antwort.
+
+  `_survives_opening` beantwortet das Nein jetzt aus den Teilen. Der Flächenverlust ist eine
+  Summe über sie, und jeder Summand ist nicht negativ: Reißt schon der dünnste Teil das Budget,
+  steht die Antwort fest. Das **Ja** bleibt die ganze Form — berühren sich die Öffnungen zweier
+  Teile, zählt die geteilte Fläche in der Summe doppelt, der Teileweg unterschätzt den Verlust
+  also und taugt nur für die eine Richtung. `WIDTH_SCAN_PARTS = 64` deckelt, wie viel
+  vergebliche Arbeit davor anfallen darf; die Vorsortierung nach mittlerer Weite (vierfache
+  Fläche über dem Umfang) rechnet Fläche und Umfang aller Teile in einem Feld, weil sie einzeln
+  abgefragt 15 Millisekunden je Frage kosteten — mehr als die Puffer danach.
+
+  | Körper | vorher | nachher | kleinste Breite | Prüfsumme der Breiten |
+  |---|---|---|---|---|
+  | Rändelplatte (45 884 Dreiecke) | 6,98 s | **3,53 s** | 0,0277 mm | 60,0554 |
+  | Rippenplatte | 0,017 s | 0,019 s | 0,3043 mm | 56,0860 |
+  | Kugel | 0,072 s | 0,073 s | 2,0000 mm | 400,0000 |
+
+  Befunde überall gleich, Schicht für Schicht — die Prüfsumme ist die Summe aller gemeldeten
+  Breiten. `_survives_opening` fiel von 4,31 auf 0,86 Sekunden, von sechzig auf
+  vierundzwanzig Prozent des Laufs. Die beiden kleinen Körper verlieren einen Wimpernschlag an
+  die Vorsortierung; bei einer einzelnen Kontur steht sie gar nicht erst an.
+
+  Nachweis: vier Fälle in `tests/test_slice.py` — der Teileweg antwortet über einen Bereich von
+  Weiten wie die ganze Form, ein dünner Streifen unter zweihundert breiten wird weiter gefunden,
+  der Deckel gilt, und der dünnste Teil steht vorn. Vier Gegenproben, jede einzeln rot: ohne den
+  exakten Rückfall, ohne Rückfall und ohne Vorsortierung, ohne die Obergrenze, ohne die
+  Vorsortierung. **Der Beweis der Beschleunigung ist die Messung, nicht ein Test** — ein
+  Verhalten hat sich ja gerade nicht geändert; im Tor steht sie als Schranke von
+  `test_the_layer_analysis_survives_a_knurled_surface`, die von zwölf auf acht Sekunden
+  gezogen ist.
+
+  [Bisheriger Befund](#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+<a id="rm-127"></a>
+
+- [x] **RM-127 — Wandstärke nach Änderungen am fertigen Modell prüfen.** Am 12.09.2026 gebaut.
+  `check_thin_walls` (`scene/evaluate.py`) misst am **Endzustand**, neben `check_placement` und
+  `check_bodies_in_one_place` und aus demselben Grund: Die Wand steht in keinem Merkmal, sie
+  entsteht zwischen einer Bohrung und dem Mantel um sie herum (`relations.sleeve_at`) — und aus
+  dem **letzten** Verhältnis. Wer Ø 19 in einen Zylinder Ø 20 bohrt, hat zwischendurch 0,5 mm
+  Wand; vereinigt er danach einen Mantel Ø 30, sind es 5,5. Eine Prüfung je Schritt schriebe die
+  Zwischenzahl auf, und die ist keine Aussage über das Teil, das dasteht.
+
+  Damit fallen beide Hälften der Abnahme zusammen: Die am Ende behobene Zwischenwarnung entsteht
+  gar nicht erst, und beide Reihenfolgen derselben zwei Änderungen tragen denselben Bericht — als
+  Folge und nicht als zweite Zusage.
+
+  **Die Grenze kommt aus dem Profil** (`Profile.minimum_wall_thickness`, zwei Extrusionsbreiten;
+  Regel 7). Ohne Profil gibt es keine Aussage. Gemeldet wird je Körper einmal — die dünnste
+  Stelle, denn ein Rohr im Rohr hat mehrere Wände und die innerste reißt zuerst —, mit beiden
+  Merkmalen und dem Ort der Bohrung, damit der Klick im Prüfbericht irgendwohin führt (§2.7).
+  Der Satz nennt die zwei Wege, die helfen, statt mit „zu dünn" zu enden.
+
+  **Und sie darf nichts kosten, denn sie läuft nach jeder Auswertung.** Der erste Anlauf fragte
+  `sleeve_at` je Merkmal; das liest Achse und Mitte jedes Kandidaten n-mal als Numpy-Array und
+  wächst quadratisch. Gemessen: 25,8 ms bei 500 Bohrungen, 2087 ms im gebauten Extremfall aus
+  500 Bohrungen und 500 koaxialen Zapfen. `relations.thinnest_sleeve` liest die Zahlen **einmal**
+  je Körper und paart nur Hohlraum gegen Materie; die Regel selbst steht dabei weiterhin an
+  genau einer Stelle (`_sleeve_between`), die beide Eingänge benutzen. Danach: **1,7 ms**,
+  **0,2 ms** bei 234 Merkmalen, 476 ms im Extremfall — der oberhalb von
+  `FEATURE_LIMIT_COUNT` ohnehin nicht entstehen kann und über den Korpus gemessen zwei
+  Größenordnungen neben der Wirklichkeit liegt (höchstens 16 Merkmale je Netz).
+
+  Nachweis: drei Fälle in `tests/test_prepare.py` — der gemeldete halbe Millimeter, die
+  tragende Wand, die nicht gemeldet wird, und die drei gefahrenen Stapel für die beiden
+  Reihenfolgen samt dem dünn gebliebenen als Beleg, dass überhaupt jemand hinsieht. Drei
+  Gegenproben, jede einzeln rot: ohne den Aufruf in der Auswertung, ohne den Vergleich gegen
+  die Profilgrenze und mit abgeschaltetem Befund. Der Umbau auf `thinnest_sleeve` ließ die
+  397 Fälle aus `test_relations`, `test_slot_features`, `test_digest_and_fits`, `test_prepare`
+  und `test_export` unverändert grün.
+
+  [Bisheriger Befund](#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
+
+<a id="rm-140"></a>
+
+- [x] **RM-140 — Exportbefunde vor dem Schreiben sichtbar machen.** Am 12.09.2026 gebaut, in
+  zwei Hälften.
+
+  **Die Prüfung war unvollständig.** §29 zählt fünf Fragen auf; zwei davon stellte
+  `check_before_export` nie, und zwar aus demselben Grund: Sie stehen in keinem einzelnen Körper.
+  Eine verletzte Passung steht zwischen zwei Merkmalen, eine Wand unter der Mindeststärke
+  zwischen einer Bohrung und dem Mantel um sie herum — die Prüfung sah aber nur die **Auswahl**.
+  Sie nimmt jetzt die Szene entgegen und fragt `scene.fits.check` und `check_thin_walls`
+  (RM-127). Gefragt wird an der ganzen Szene, gemeldet über die Auswahl: Eine Passung, deren
+  zweite Hälfte zu Hause bleibt, muss trotzdem aufgelöst werden, sonst käme „Merkmal verloren"
+  zurück. Ohne Szene bleiben beide Fragen ungestellt (Regel 21) — die Kommandozeile und die
+  Übergabe an den Slicer reichen sie deshalb ebenfalls durch.
+
+  **Die Befunde kamen zu spät.** `_ExportWorker` prüfte und schrieb in einem Zug, mit einer
+  Begründung, die stimmte und die falsche Folgerung zog: Die Prüfung ist der lange Teil und
+  gehört nicht in den Hauptthread — daraus folgt nicht, dass sie mit dem Schreiben zusammen
+  laufen muss. Sein erster Lauf hört jetzt an der Prüfung auf, sobald etwas ab `warning`
+  dasteht; der Prüfbericht bekommt die Befunde und rückt nach vorn, `dialogs.confirm_export`
+  fragt, und ein Ja startet einen zweiten Lauf mit **demselben** Bericht statt einer zweiten
+  Prüfung. Weitergehen ist die Vorgabe — §29 sagt „Bericht, nicht Blockade" —, und ohne Befund
+  wird gar nicht gefragt: Ein Dialog, der „alles in Ordnung" sagt, ist ein Klick ohne Auskunft.
+
+  `export → scene` ist damit eine neue, **träge** Importkante und steht so in
+  `tests/test_core_package_direction.py` (jetzt 47 eifrige und 14 träge).
+
+  Nachweis: fünf Fälle in `tests/test_export.py` — dünne Wand und verletzte Passung vor der
+  Datei, keine erfundene Aussage ohne Szene, die Passung eines nicht exportierten Körpers bleibt
+  draußen, und ein übergebener Bericht wird nicht zweimal erhoben — dazu zwei in
+  `tests/test_ui.py`: Der Export fragt und schreibt beim Abbrechen nichts, ein sauberer fragt
+  nicht. Vier Gegenproben, jede einzeln rot: ohne die zwei neuen Prüfungen, ohne den Filter auf
+  die Auswahl, ohne den `checked`-Zweig und ohne die Frage im Arbeiter.
+
+  [Bauplan-Abgleich und Nachweis](#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-143"></a>
+
+- [x] **RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren.** Am
+  12.09.2026 gebaut. Bauplan §18.4 verspricht Durchdringungen; die Karte markierte offene und
+  verzweigte Kanten und fand keine — beides steht in der **Kantentabelle**, eine
+  Durchdringung ist dagegen **räumlich**: Zwei Wände, die einander schneiden, haben lauter
+  saubere Kanten mit je zwei Flächen, und die Tabelle sagt dazu nichts.
+
+  `repair.self_intersecting_faces` beantwortet die Frage in zwei Stufen — Sweep-and-Prune über
+  x, dann Segment gegen Dreieck (Möller-Trumbore) für beide Partner. Nachbarn zählen nicht,
+  und verglichen wird über die **Eckpunkte** statt über die Indizes: Ein eingelesenes STL
+  trägt dieselbe Ecke oft mehrfach.
+
+  **Die erste Fassung war zu langsam, und das Budget hat es gesagt**: 5,3 s an einer Kugel mit
+  20 480 Dreiecken, wo §18.4 drei nennt. Die Paarbildung läuft jetzt vektorisiert —
+  `searchsorted` liefert je Dreieck den zusammenhängenden Bereich seiner Partner, blockweise,
+  damit die Indexfelder den Speicher nicht sprengen. Gemessen: **474 ms** an derselben Kugel,
+  elfmal schneller. Dazu das Abbruchtoken zwischen den Blöcken und ein harter Deckel an der
+  Paarzahl.
+
+  Nachweis: `broken_selfint.stl` aus dem Korpus (zwei Quader, die durcheinanderlaufen) markiert
+  8 von 24 Dreiecken, ein Würfel keines; die Stufe heißt „Durchdringung" und steht als Wort in
+  der Legende (Regel 18), in allen fünf Sprachen. Gegenprobe ohne die Suche rot.
+
+<a id="rm-148"></a>
+
+- [x] **RM-148 — Zahlenparameter gegen NaN und Unendlich sichern.** **Erledigt, und zwar schon
+  am 09.09.2026** — der Punkt stand einen Tag zu lange offen. Commit `5a2802ac` („Ein
+  Grenzvergleich mit NaN sagt zweimal Nein, und der Wert läuft durch") fasst genau die zwei
+  Dateien an, die die Abnahme verlangt.
+
+  `math.isfinite` steht in `registry/params.py:314` — im `NUMBER_KINDS`-Zweig, **vor** der
+  Ganzzahlfrage, weil `float("nan").is_integer()` sonst „hier wird eine ganze Zahl erwartet"
+  ergäbe: wahr und irreführend. `NUMBER_KINDS` deckt `float`, `int` und `filament`; die
+  Ablehnung trägt `constraint="not_finite"` und den Satz „Der Wert ist keine endliche Zahl.
+  Tragen Sie eine Zahl ein." (Regel 17). Der Regressionstest steht in
+  `tests/test_params.py:118` über `nan`, `inf` und `-inf`, dazu die Gegenprobe
+  `test_the_bounds_alone_would_let_a_nan_through` — ohne sie wäre der Test auch dann grün,
+  wenn die Grenzen den Fall fingen — und `int(inf)` als eigener Überlauffall.
+
+  Nachgemessen am 10.09.2026 am Code und am Testlauf.
+
+<a id="rm-150"></a>
+
+- [x] **RM-150 — Langlöcher als Merkmal erkennen.** Am 10.09.2026 gebaut: `app/core/perceive/slots.py`
+  setzt ein Langloch aus den zwei Zylinderausschnitten zusammen, die die Einpassung als Verrundungen
+  ausweist. Entschieden wurde **gegen** die Provenienz und für die Geometrie — der häufigste Fall
+  ist ein eingelesenes Netz, in das jemand anders eine Nut geschnitten hat, und dort gibt es keinen
+  erzeugenden Schritt. Getragen wird die Unterscheidung topologisch: Beide Bögen hängen über einen
+  Mantel quer zur Achse zusammen, und alles darin ist entweder einer der Bögen oder eine ebene
+  Flanke im Abstand eines Radius von der Mittellinie. Die Merkmalsart `slot` trägt Breite, Länge,
+  Mittellinienweg, Achse, Richtung, Tiefe und Durchgang; Objektbaum, Steckbrief und
+  Merkmalspanel lesen sie, und `slot_hole` gilt jetzt auch an ihr (Titel dafür auf *Zum Langloch
+  ziehen* geändert — „Bohrung zum Langloch" stimmte an einem Langloch nicht mehr).
+  Nachweis: `tests/test_slot_features.py`, 17 Fälle, davon zwölf ohne die Erkennung rot.
+  **Nicht `test_slots.py`** — die gibt es auch, und sie behandelt etwas völlig anderes:
+  Material-Slots nach §20/§29. Im Deutschen heißt beides „Slot"; die neue Datei sagt das in
+  ihrem eigenen Kopf, damit niemand die falsche fährt. Die tragende
+  Gegenprobe ist eine Tasche mit vier verrundeten Ecken — gleiche Radien, parallele Achsen,
+  verbundener Mantel und trotzdem kein Langloch. Ein eingelesenes Modell wird an einer Nut aus
+  Quader und zwei Zylindern geprüft, nicht am eigenen Erzeuger.
+
+  **Der exakte Kern ist am 11.09.2026 nachgezogen.** Er beschreibt jede Topologiefläche für
+  sich, und ein Langloch hat vier: Im Objektbaum standen `fillet_1` und `fillet_2`, wo eine
+  Öffnung ist, und die Handlungen eines Langlochs standen an keiner von beiden (Robert: „auf
+  einem langloch 2 werden und nicht mehr wählbar"). `brep.features._slots_instead_of_half_bores`
+  fragt dieselbe Sache an der Topologie: zwei angeschnittene Zylinderflächen, gleicher Radius,
+  parallele Achse, beide ins Loch gewölbt, mit **genau zwei** gemeinsamen ebenen Nachbarn, die
+  ihrerseits an **beide** Bögen grenzen. Nachweis: sieben Fälle in `tests/test_brep.py`, davon
+  sieben ohne den Nachschritt rot; die Gegenproben — verrundete Tasche, rundum verrundeter
+  Quader — bleiben in beiden Läufen grün.
+
+<a id="rm-151"></a>
+
+- [x] **RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan.** Am 12.09.2026
+  behoben. Der Befund `perceive.freeform` sagte „Dieses Modell ist eine Freiform, etwa ein
+  Scan" — und das liest ein Kunde als Aussage über sein Teil, nicht über eine Zählung.
+  Roberts `garden-hose-holder.3mf` ist ein konstruierter Halter, dessen geschwungener Bogen
+  ihn mit 0,701 gegen die Schwelle 0,700 dorthin brachte.
+
+  Er nennt jetzt, **was gemessen wurde**: „Die Oberfläche dieses Modells ist überwiegend
+  gekrümmt. Kugeln, Ringe, Kegel und Verrundungen … sind an einer solchen Fläche keine
+  Merkmale und wurden weggelassen; Bohrungen, Zapfen und ebene Flächen bleiben." Die Zahl
+  bleibt darin (Regel 17), die Entscheidung darunter unverändert.
+
+  **Ein zweiter Zustand kommt nicht** — die vorab zu treffende Entscheidung. „Überwiegend
+  rund" neben „Freiform" kostete eine zweite Schwelle, und die Lücke zwischen Nozzle-Box
+  (59 Prozent) und Retro-Maus (77 Prozent) ist schmal; zwei Sätze, deren Grenze niemand
+  nachmisst, sind schlechter als einer, der wahr ist. Der Grund steht am Befund selbst.
+
+  Der Katalogschlüssel ist in allen fünf Sprachen getauscht, der alte hinaus. Nachweis: die
+  Zusicherung in `tests/test_evaluation.py` (kein „Scan" im Satz, „gekrümmt" darin), Gegenprobe
+  mit dem alten Wortlaut rot.
+
+<a id="rm-152"></a>
+
+- [x] **RM-152 — Die Wandstärke um ein Langloch messen.** Am 12.09.2026 gebaut. `Sleeve`
+  führt den Weg der Mittellinie mit (`bore_travel`), und `thickness` zieht seine Hälfte ab:
+  Die Enden eines Langlochs sitzen um `travel / 2` aus der Mitte, und dort ist die Wand am
+  dünnsten. Am Zapfen Ø 20 mit einem Langloch Ø 8 auf 14 mm — den Zahlen, an denen der Punkt
+  entstand — kommen **2,9996 mm** heraus statt der 6,0, die der halbe Durchmesserunterschied
+  ergab.
+
+  **Der Weg gehört der Höhlung**, nicht dem gefragten Merkmal: Von außen geklickt ist das
+  Langloch der Kandidat, und eine Bohrung trägt gar keinen. Und wo daraus keine positive Wand
+  mehr wird, ist es kein Rohr, sondern eine offene Flanke — bei der runden Bohrung fängt das
+  der Durchmesservergleich ab, beim Langloch erst die fertige Zahl.
+
+  `slot` stand in `is_a_cavity` bereits seit RM-153; der Kommentarblock darunter, der das
+  Gegenteil behauptete, ist gefallen. Nachweis: zwei Fälle in `tests/test_relations.py`
+  (Gegenprobe ohne die Wegkorrektur rot) und der Steckbriefsatz in
+  `tests/test_slot_features.py` — der Test, der dort das Schweigen festschrieb, ist von der
+  Zusage abgelöst, die an seine Stelle tritt.
+
+<a id="rm-153"></a>
+
+- [x] **RM-153 — Ein Langloch versetzen, drehen und verdoppeln.** Seit dem 10.09.2026 trägt ein
+  erkanntes Langloch im Merkmalsfenster eine Zeile mit seinen zwei Maßen und im Bild zwei Knöpfe,
+  an denen sich Länge und Richtung ziehen lassen. Was ihm fehlt, sind die vier übrigen Handlungen:
+  `move_feature`, `rotate_feature`, `duplicate_feature` und `remove_feature` führen `slot` nicht in
+  `applies_to`. Der frühere Grund im Werkzeugkörper ist im Review vom 11.09.2026 behoben:
+  `_feature_solid` bildet jetzt den vollständigen Langlochumriss ab. Die Freigabe und
+  Abnahme der vier allgemeinen Merkmalshandlungen stehen weiterhin aus. Der
+  Kunde sieht damit fünf ausgegraute Zeilen neben einer, die geht (Robert, 10.09.2026: „das gleiche
+  wäre zum bearbeiten dann von langlöchern und anderen operationen/merkmalen usw gut"). Was es
+  braucht, ist derselbe Werkzeugkörper, den `slot_bore` schon baut — aus Mitte, Achse, Durchmesser,
+  Länge und Richtung —, dazu die Frage, was *Verdoppeln* an einem Langloch versetzt (die Kopie
+  braucht dieselbe Richtung, nicht nur dieselbe Mitte). Abnahme: Ein Langloch lässt sich im Bild
+  versetzen und drehen, das Volumen des Ganzen bleibt dabei gleich, und die vier Zeilen im Panel
+  tragen ihre Werte statt eines Grundes. **Und dann fällt auch der Griff zusammen:**
+  `viewport.slot_handle_feature` gibt es getrennt von `gizmo_feature`, weil die zwei Mengen heute
+  auseinanderliegen — mit dieser Arbeit dürfen sie es wieder gemeinsam tun.
+
+  **Das Versetzen selbst ist seit dem 11.09.2026 draußen**, und zwar über einen anderen Weg als
+  hier beschrieben: `slot_hole` und `resize_hole` nehmen eine Stelle entgegen (`x/y/z`) und
+  schließen dabei die alte — am Netz über `_closed_at`, am exakten Körper über
+  `brep.edit.fill_bore`. Beide Kerne können es damit gleich gut. Was offen bleibt, sind die
+  **vier Handlungen** oben: `move_feature`, `rotate_feature`, `duplicate_feature` und
+  `remove_feature` führen `slot` weiterhin nicht in `applies_to`, und ihr Werkzeugkörper ist
+  weiter ein Zylinder.
+
+  **Abgeschlossen am Abend des 11.09.2026 — und die Ursache war keine Geometrie.** Der
+  Werkzeugkörper stand seit dem Morgen (`PARAMETRIC_KINDS`); was fehlte, war eine Antwort:
+  `types.is_a_cavity` kannte das Langloch nicht und hielt es für Materie. *Merkmal verschieben*
+  trug damit an der alten Stelle ab statt zu füllen und setzte an der neuen an statt zu
+  schneiden — in Luft und in vollem Material, das Volumen blieb gleich, das Merkmal wanderte im
+  Baum an eine Stelle ohne Loch. Mit `slot` als Hohlraum gehen Versetzen, Verdoppeln und
+  Entfernen an beiden Kernen; *Drehen* brauchte dazu die mitgedrehte Mittellinie
+  (`_with_turned_direction`, geschlossen mit der alten, gesetzt mit der neuen — sonst ein
+  Kreuz). Die Absage in `NOT_APPLICABLE` ist gefallen, `sleeve_at` schützt sich seitdem selbst
+  (RM-152 bleibt). Nachweis: `test_a_slot_takes_the_four_generic_actions`, alle vier am
+  Ergebnis gemessen; ohne den Hohlraum-Eintrag rot. **Und der Griff ist damit gemeinsam**: Das
+  Langloch steht in `movable_feature_kinds()`, Pfeile und Ringe hängen daran wie an einer
+  Bohrung — beide seit demselben Abend erst mit *Im Bild einstellen* (Entscheidung Robert). Was
+  bleibt, ist die **Breite**: RM-156.
+
+<a id="rm-156"></a>
+
+- [x] **RM-156 — Die Breite eines Langlochs ändern.** Am 12.09.2026 gebaut: *Bohrung ändern*
+  nimmt das Langloch an (`applies_to=["hole", "slot"]`), und der Durchmesser ist dort seine
+  **Breite**. Die Länge folgt aus dem gemessenen **Weg** plus der neuen Breite — Ø 6 auf 20
+  wird zu Ø 8 auf 22, genau die Abnahme. Gerechnet wird über den Weg und nicht über die
+  Länge: Er ist der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern verlöre,
+  bekäme ein anderes Bauteil.
+
+  **Gefüllt wird immer, auch ohne Versatz.** Beim Verbreitern deckt der neue Umriss den alten
+  mit ab; beim Verschmälern bliebe ohne das Füllen die alte Breite stehen, und das Maß im
+  Objektbaum wäre eine Behauptung über Material, das nicht mehr da ist. Die Zugabe entfällt
+  dabei — sie hält den Werkzeugkörper von der alten Bohrungswand fern, und die ist eben
+  zugegangen.
+
+  An **beiden Kernen** derselbe Weg: am Netz `_closed_at` + `prepare.slot_bore`, am exakten
+  Körper `edit.fill_bore` + `edit.slot_bore`. Die Rückzuordnung brauchte nichts Eigenes; die
+  Kennung bleibt in beiden Fällen. Die zwei Zeilen in `NOT_APPLICABLE_HERE`, die das als „noch
+  nicht gebaut" auswiesen, sind gefallen; `resize_feature` behält seine — es gilt Materie, und
+  ein Langloch ist ein Hohlraum.
+
+  Nachweis: zwei Fälle in `tests/test_slot_features.py` (breiter mit erhaltenem Weg, schmaler
+  mit mehr Material), einer in `tests/test_brep.py` und einer über `reason_against`. Gegenprobe
+  gefahren: alle vier rot ohne den Eintrag in `applies_to`.
+
+<a id="rm-154"></a>
+
+- [x] **RM-154 — „Nicht gesagt" von „null gemeint" unterscheiden.** Der Winkelfall war am
+  11.09.2026 behoben; der Rest am 12.09.2026. `ParamSpec.optional` erlaubt einer Zahl den
+  Wert `None`, und `x/y/z` von `slot_hole` und `resize_hole` tragen ihn. Damit lässt sich ein
+  Loch in die **Teilemitte** schieben — vorher der einzige Ort, den es nicht erreichte, und
+  ausgerechnet der häufigste, weil Solidon seine Grundkörper um den Ursprung legt.
+
+  Vier Stellen lösen es ein: `params._coerce` lässt `None` als Erstes durch (ein `None` hat
+  weder Art noch Grenzen), `json_schema` nimmt `"null"` in die Typliste, der Dialog setzt den
+  leeren Zustand einen Schritt unter den Mindestwert mit `setSpecialValueText`, und
+  `prepare_ops._named_place` beantwortet die Frage einmal für beide Operationen. Ohne die
+  dritte schöbe ein bloßes Bestätigen im Dialog jedes Loch in den Ursprung — das Drehfeld hat
+  immer eine Zahl.
+
+  **Wo die Null physisch unmöglich ist, braucht es das nicht** — eine Länge, ein Durchmesser,
+  eine Anzahl. Dort ist die Null schon eindeutig „nicht gesagt", und ein zweiter Mechanismus
+  daneben liefe mit dem ersten auseinander. Die Regel steht in `.claude/rules/operationen.md`
+  unter „Eine Zahl, die nicht gesagt wurde".
+
+  Nachweis: zwei Fälle in `tests/test_brep.py` (Loch in die Mitte, und die Gegenrichtung: wer
+  nichts sagt, versetzt nichts) und zwei in `tests/test_operation_ui.py` (das Feld startet
+  leer; eine getippte Null meint die Null). Gegenproben gefahren, alle vier rot ohne den Fix.
+
+<a id="rm-155"></a>
+
+- [x] **RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz.** Gemessen am
+  11.09.2026 über Ø 2 bis Ø 40 in beiden Qualitätsstufen: Liegt der Weg zwischen den
+  Bogenmitten unter rund **fünf Prozent** des Durchmessers, passt die Einpassung einen
+  Zylinder auf den Mantel und das Merkmal heißt **Bohrung**; in einem schmalen Streifen
+  darüber passt weder Zylinder noch Bogenpaar, und dann steht **gar kein** Merkmal da —
+  Ø 12 mit der Länge 12,5 ergab null Merkmale, Ø 20 mit 20,5 ebenso. Für die eigenen
+  Operationen ist der Streifen seit demselben Tag unerreichbar (`prepare.shortest_slot`
+  verlangt das Doppelte des gemessenen Abstands, und der Griff im Bild rastet dort). Ein
+  **eingelesenes** Modell kommt trotzdem dorthin: Wer ein STL mit einem so knappen Langloch
+  öffnet, findet an dieser Stelle nichts zum Anklicken. Der Fall ist selten — ein Langloch
+  mit einem halben Millimeter Weg hat keine Funktion —, aber er ist echt, und er ist der
+  einzige Rest des Fehlerbildes vom 11.09.2026. Was es bräuchte, ist ein Auffangweg in der
+  Einpassung: ein geschlossener gekrümmter Fleck, dessen Querschnitt ein Stadion ist, statt
+  des Umwegs über zwei eingepasste Verrundungen. Abnahme: Eine Platte mit einem Langloch
+  Ø 12 auf 12,5 mm öffnet, und im Objektbaum steht ein Langloch.
+
+  **Am 11.09.2026 gebaut**, genau so: `perceive.features.fit_stadium` passt einen
+  unklassifizierten Fleck als Prisma über einem Stadion ein — nach Zylinder und
+  Krümmungssplit, als dritte Runde —, und `slots.slots_from_stadiums` macht daraus dasselbe
+  Merkmal wie aus zwei Bögen. Gemessen über Ø 5 bis Ø 40: Der Streifen ist zu, ab dem Weg, an
+  dem der Zylinder nicht mehr passt, steht ein Langloch; darunter bleibt es eine Bohrung, und
+  das ist auf ein bis zwei Prozent des Durchmessers auch eine. Die Mittellinie kommt aus der
+  Richtung der größten Ausdehnung — die Hauptachse der Punktwolke zeigte bei Ø 40 mit 0,8 mm
+  Weg quer. Gegenproben: Sechs- und Achteck-Prisma, gestrecktes Sechseck, Tasche 12 × 8 mit
+  r = 3 — keines wird ein Langloch; an fünf Korpus- und Kundenmodellen kein verändertes
+  Merkmal, zehn bis zwanzig Prozent mehr Erkennungszeit. Nachweis: fünf Fälle in
+  `tests/test_slot_features.py`, vier davon ohne den Auffangweg rot.
+
+<a id="rm-160"></a>
+
+- [x] **RM-160 — Stückzahl-Nummern bei gleichem Volumen festnageln.** `split_bodies`
+  sortierte seine Teile nach Volumen, und bei Gleichstand entschied die Reihenfolge, in der
+  `face_components` sie liefert. Gemessen am 12.09.2026 an *Solidon3D*: Die beiden `o` sind
+  gleich groß, und bei 110 und 120 mm tauschten `obj_5` und `obj_6` ihre Nummer, bei 100, 130
+  und 150 nicht. Bei zwei gleichen Teilen ist das folgenlos — aber jeder spätere Schritt hängt
+  an der Objektkennung, und nach einer Parameteränderung griffe er am anderen Teil.
+
+  **Ein Zweitkriterium allein reichte nicht**, und das war der Lerngewinn: Der Gleichstand ist
+  keiner. Bei 110 mm standen `19559.4779178143` gegen `...142` — ein Zehntel Milliardstel von
+  19 559, fünf Größenordnungen unter der letzten Stelle einer doppelten Genauigkeit, also
+  Rauschen aus der Tessellierung. Sortiert wird deshalb nach dem **gerundeten Verhältnis zum
+  größten Teil** (`_SAME_SIZE = 9` Stellen — weit über dem Rauschen, weit unter den zehn
+  Prozent, die zwei wirklich verschiedene Buchstaben trennen), und erst bei Gleichstand
+  entscheidet die Mitte des Hüllquaders. Sie übersteht eine Größenänderung: Skalieren alle
+  Teile um denselben Faktor, bleibt ihre Ordnung. Die Sortierung selbst bleibt das Volumen —
+  sie entscheidet, welche Teile bei zu kleiner Stückzahl einzeln stehen.
+
+  Nachweis: Zuordnung Teil → Nummer über neun Schriftgrößen von 100 bis 200 mm verglichen,
+  **null Abweichungen** (vorher zwei Größen mit getauschten Nummern);
+  `test_split_bodies_numbers_equal_parts_by_where_they_sit` mit zwei Würfeln, deren Volumen
+  sich um ein Billionstel unterscheidet, in beiden Richtungen, dazu die Gegenrichtung mit
+  echtem Größenunterschied — ohne die Rundung rot.
+
+<a id="rm-159"></a>
+
+- [x] **RM-159 — Ein Handzug greift nach einer Parameteränderung ins Leere.** Robert am
+  12.09.2026: „wenn ich die Schriftgröße änder passt das Druckoptimal ausrichten nicht mehr".
+  An `Solidon3d.p3d` nachgemessen: Der Verlauf trug hinter *Druckoptimal ausrichten* ein
+  `translate_object` auf `obj_3` mit dx 101,36 / dy 76,16 mm. Ein Zug am Gizmo speichert einen
+  **Weg**, gemeint war ein **Platz** — solange sich davor nichts ändert, ist das dasselbe.
+  Bei Schriftgröße 130 ordnete Schritt 4 neu an, `obj_3` startete woanders, derselbe Weg wurde
+  trotzdem daraufgerechnet: 70,41 mm neben dem Bett. Aufräumen hieß, den Schritt im Verlauf zu
+  finden und zu löschen — ein Urteil, das der Kunde nicht fällen kann (Robert: „das ist aber zu
+  kompliziert für den Kunden, wie können wir das automatisieren?").
+
+  **Gebaut als Regel in der Operation und nicht in der Auswertung**, wie Bauplan §17.1 es
+  verlangt: `geom.prepare.back_onto_bed` liefert den XY-Versatz zurück auf die Druckfläche, und
+  `translate_object`, `rotate_object` und `scale_object` rufen ihn über den Parameter
+  `keep_on_bed`. **Die Vorgabe ist aus, und den Haken setzt der Zug am Griff**
+  (`MainWindow._on_transform_dragged`): Ein getippter Wert ist eine Ansage und wird
+  ausgeführt, ein Zug ist ein Zeigen. Zwei Fälle haben das erzwungen — das Galerieteil
+  *gehaeuse* schiebt seinen Deckel um 135 mm und graviert danach bei x = 135 (eine stille
+  Rückholung ließ „SOLIDON" in sieben lose Buchstaben fallen), und ein Kranz, der bewusst
+  über den Bauraum gelegt wird, soll das melden statt zurückzurücken. Erst zurückschieben — den
+  kürzesten Weg, den `placement_offset` ohnehin zuerst prüft —, bei belegtem Platz über
+  `arrange_on_bed` eine freie Stelle **auf derselben Platte**. Geprüft wird der Eingang, damit
+  ein geparkter Körper geparkt bleibt; bewegt wird nur in XY; die gemeldete Matrix trägt
+  Bewegung und Rückholung zusammen. Die drei Registereinträge tragen `reads_other_bodies=True`.
+
+  Nachweis: Roberts Projekt auf Schriftgröße 130 gerechnet — vorher `arrange.out_of_build_volume`
+  mit 70,41 mm, jetzt neun Körper auf zwei Platten, alle auf der Fläche, null Überschneidungen.
+  Sechs Fälle in `tests/test_transform.py`, Gegenprobe mit abgeschaltetem Haken drei davon rot;
+  `test_website` und `test_scene_ops` haben die Vorgabe entschieden. **Ein vorhandener Zug in
+  einer gespeicherten Datei trägt den Haken nicht** — dort wird er im Schritt gesetzt oder der
+  Zug einmal wiederholt; eine Migration rät nicht, welche `translate_object` aus einem Zug
+  stammt. **Bauplan §29 trägt die Regel** seit dem 12.09.2026 selbst — Zug gegen getippten
+  Wert, Rückholung nur waagerecht, geprüft am Eingang.
+
+<a id="rm-158"></a>
+
+- [x] **RM-158 — Plattenwähler überlappt den Druckernamen in der Kopfzeile.** Auf Roberts
+  Bildschirmfoto vom 11.09.2026 stand „Alle Platten" über „Elegoo Centauri Carbon 2", beide an
+  derselben x-Stelle. Nachgestellt am 11.09.2026 über den **Startweg der Anwendung** — nicht über
+  Skalierung oder Schrift, sondern über die Reihenfolge: Das Fenster wird 1280 breit gebaut
+  (Kopfzeile kompakt), bekommt dann seine gespeicherte Breite (breit, Wähler versteckt) und zeigt
+  den Wähler erst mit den Platten des Projekts. Die Spaltendehnung stand nur, wenn der Wähler beim
+  Anordnen sichtbar war, und ein `QGridLayout` gibt einer ungedehnten Spalte mit einem
+  `Ignored`-Widget null Breite, Mindestmaß hin oder her. `HeaderBar._stretch_the_plate_column`
+  bindet die Dehnung an die Sichtbarkeit; `_arrange` sperrt den Wiedereintritt aus dem eigenen
+  `activate()`. Abgenommen am echten Fenster über `build_application` mit Roberts Geometrie und
+  vier Platten (Bildschirmaufnahme: Wähler, Trennstrich, Drucker nebeneinander); Test
+  `test_the_plate_filter_never_lies_over_the_printer`, Gegenprobe rot.
+
+<a id="rm-157"></a>
+
+- [x] **RM-157 — Ein Ort für die Handlungen an einer Auswahl.** Am 11.09.2026 auf Roberts
+  Durchsicht hin umgebaut: Die Menüs *Objekt*, *Ändern* und *Vorbereiten* sind aus der Leiste
+  genommen — ihre Einträge standen rechts in der Karte der Handlungen ein zweites Mal
+  (`PANEL_CATEGORIES`, `in_the_menu_bar`); *Bausteine* ist ein Abschnitt von *Erzeugen* mit
+  Katalog, Gegenstücken und den zwei Deckeln ohne Kachel, die jetzt auch rechts an der Fläche
+  stehen. Die Aktionen bleiben am Fenster (Kürzel, Palette, Kürzelübersicht unter „Handlungen
+  rechts"), nackte Tasten nur an Baum und Ansicht. Das Kontextmenü an Körper und Merkmal trägt
+  keine Operationen mehr — nur Schritt, Skizze und Sichtbarkeit. Die Karte rechts faltet ihre
+  Gruppen als einklappbare Abschnitte, der Knopf *Bausteine* ist ein Hauptknopf. Der Wegweiser
+  des Chats sagt „Ort:" und nennt für eine Handlung rechts die Karte samt der Auswahl, die es
+  braucht (Prompt-Version 6); Handbuch und Tour nennen dieselben Orte. **Dazu die Bausteine im
+  Bild:** Ein Baustein aus dem Katalog sitzt sofort auf der gewählten oder der obersten Fläche,
+  mit Körper, Maßlinien, Feldern und Bewegungsgriff; ein Klick setzt um, der zweite übernimmt
+  (gemessen an allen 24 einsetzbaren; vorher stand mit gewähltem Körper nichts im Bild, und
+  *Übernehmen* schrieb einen roten Schritt). Regeln: `.claude/rules/oberflaeche.md`,
+  `.claude/rules/ansicht.md`.
+
+<a id="rm-101"></a>
+
+- [x] **RM-101 — Elternloser Handlungsknopf im Fensteraufbau.** Am 12.09.2026 reproduziert und
+  behoben. **Die Beobachtung war echt, und der Verdacht zeigte in die richtige Richtung — nur
+  eine Zeile daneben.** Am Code widerlegt war „elternlos **konstruiert**" (10.09.2026, und das
+  stimmt weiter: `_show_offers` baut jeden Knopf mit `self._offers` als Elternteil). Gefunden
+  wurde „elternlos **gemacht**": Beim Wegräumen der alten Knöpfe stand dort
+  `widget.setParent(None)`, und Qt kennt keinen elternlosen Zustand — ein Widget ohne
+  Elternteil **ist** ein Top-Level-Fenster.
+
+  Gemessen am Fenster mit einem echten Befund (zwei Körper übereinander,
+  `arrange.below_bed`): **vier** Knöpfe „Auf das Bett setzen" als eigene Fenster nach einem
+  Befundwechsel, **zwei davon sichtbar** — bis `deleteLater` die nächste Runde der
+  Ereignisschleife erreicht. Genau das hatte jemand gesehen.
+
+  Weggeräumt wird jetzt mit `hide()` und `deleteLater()`: `takeAt` nimmt das Widget aus dem
+  Layout, `hide` aus dem Bild, und der Elternteil trägt es bis zum Löschen. Dieselbe Stelle
+  gab es ein zweites Mal in `FeaturePanel.clear`.
+
+  **Das Wissen stand schon zweimal im Code und einmal nicht**: `MainWindow._close_sketch` nennt
+  den Absturz, `SketchEditor.take_side_box` die falsch aufgelösten Tastenkürzel — und der
+  Prüfbericht tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel; sie steht jetzt
+  in `.claude/rules/oberflaeche.md`.
+
+  Nachweis: `test_no_second_window_appears_along_the_way` in `tests/test_ui.py` geht den ganzen
+  Weg — aufbauen, zeigen, zwei Modelle öffnen, einen Befund mit Handlung erzeugen, die fünf
+  Werkzeuge auf und zu, ein Merkmal wählen und abwählen — und zählt den **Zuwachs** an
+  Top-Level-Fenstern; das Hauptfenster behält dabei den Fokus. Er war vor dem Fix rot, und
+  beide Gegenproben (Prüfbericht, Merkmalleiste) sind es einzeln ebenfalls.
+
+  [Bisheriger Befund](#review-vor-der-demo-030-02092026).
+
+<a id="rm-102"></a>
+
+- [x] **RM-102 — Datum im Wiederherstellungsdialog an die App-Sprache binden.** Erledigt am
+  10.09.2026. `MainWindow._when` gab den Rückfall über 24 Stunden als festes
+  `%d.%m.%Y %H:%M` aus — deutsche Reihenfolge in jedem Fenster, direkt neben den relativen
+  Angaben („vor einer Stunde"), die seit je über `tr()` mitwanderten. `labels.local_moment`
+  ist die Schwester zu `local_timestamp` für einen `datetime` und bindet das Datum an
+  `get_language()`.
+
+  **Ein Detail, das der Test gefunden hat und nicht das Lesen:** `ShortFormat` kürzt das Jahr
+  je nach Sprache auf zwei Ziffern — „05.03.26". Der Kunde hätte die Sprachbindung bekommen
+  und dafür zwei Ziffern verloren, ausgerechnet bei einer Sicherung, deren Alter die ganze
+  Entscheidung trägt. Geändert wird deshalb nur `yy` → `yyyy` im Muster; Reihenfolge, Trenner
+  und Uhrzeitform bleiben Sache der Sprache — dieselbe Bauart wie in `calendar_date`, die den
+  Wochentag herausnimmt.
+
+  Nachweis: `tests/test_ui.py::test_the_age_of_a_backup_follows_the_application_language` prüft
+  die **Sprachbindung** und keinen Wortlaut — zwei Sprachen müssen zwei Schreibweisen ergeben;
+  ein Vergleich gegen eine erwartete Zeichenkette prüfte nur, was QLocale in dieser Qt-Fassung
+  gerade tut. Gegenprobe gefahren: mit dem festen Muster schreiben beide Sprachen
+  „05.03.2026 14:30", und der Test sagt genau das.
+
+  [Bisheriger Befund](#architektur-durchsicht-02092026).
+
+<a id="rm-119"></a>
+
+- [x] **RM-119 — Schnittebene bei mehreren Druckplatten richtig darstellen.** Am 12.09.2026 am
+  Bild gemessen — und das Ergebnis ist ein anderes als der Code-Befund vom 04.09.2026 vermuten
+  ließ. Aufbau: zwei Bretter 200 auf 200, `arrange_bed` mit zwei Platten, Versatz 260 mm nach +X.
+
+  **Der Schnitt selbst ist richtig, und zwar als Entscheidung.** Eine Ebene bei x = 0 schneidet
+  beide Bretter in ihrer Mitte; im Bild stehen danach zwei aufgeschnittene Teile nebeneinander.
+  Genau das ist die Frage, für die ein Schnitt da ist — Wandstärke, Innenraum. Eine **Bild**ebene
+  wäre die schlechtere Antwort: Sie träfe immer nur eine Platte, und der Schieberweg müsste mit
+  jeder weiteren um eine Bettbreite wachsen. Er kommt aus den Körpergrenzen (`section_ranges`),
+  also aus der Szene — Schnitt und Bedienung stimmen damit überein, und wer das eine ändert,
+  ändert beides. Ein Test nagelt die Entscheidung fest; die Gegenprobe mit der Ebene im Bild ist
+  rot.
+
+  **Falsch lag die Marke daneben.** Die Schichtkonturen (§18.10) wurden in Szenenkoordinaten
+  gezeichnet, ohne den Ansichtsversatz: Das Brett auf Platte 2 steht im Bild bei x 160 bis 360,
+  seine Konturen lagen bei -100 bis 100 — quer über dem **anderen** Teil. Derselbe Fehler, den
+  der Kommentar an `_redraw_measurements` für die Maße als behoben beschreibt; die Rechnung war
+  gepflegt, die Liste derer, die sie benutzen, nicht. `Viewport.set_layer` nimmt jetzt den
+  Körper entgegen, dem die Schicht gehört, und `_layer_shift` gibt ihren Konturen denselben
+  Versatz wie Maßen, Merkmalsflächen und Fangmarke. Beim Blick auf eine einzelne Platte ist er
+  null, und die Konturen stehen wieder am Szenenort.
+
+  Nachweis: drei Fälle in `tests/test_ui.py`, drei Gegenproben einzeln rot (ohne den Versatz an
+  den Konturen, mit festem Plattenversatz, mit der Ebene im Bild statt in der Szene).
+
+  [Bisheriger Befund](#viewport-werkzeuge-aus-kundensicht-03092026).
+
+<a id="rm-124"></a>
+
+- [x] **RM-124 — Zusätzlichen Render durch show_build_volume messen.** Am 12.09.2026 gemessen
+  und behoben. **Die Messung bestätigt den Aufwand**, am eigenen Renderer ohne Fenster:
+
+  | Kulisse | vorher | nachher |
+  |---|---|---|
+  | ein Bett | 19,2 ms | **2,1 ms** |
+  | vier Betten | 71,3 ms | **2,5 ms** |
+
+  Das Fenster ruft `show_build_volume` bei **jeder** Auswertung — es weiß nicht, ob sich am
+  Bauraum etwas geändert hat, und die Ansicht wusste es auch nicht: Vier Aktoren je Platte
+  flogen weg und kamen identisch wieder, im Qt-Hauptthread. Die verbliebenen zwei Millisekunden
+  sind das Anfordern des Bildes und nicht der Aufbau.
+
+  `_bed_built` merkt sich, woraus die stehende Kulisse gebaut wurde: Renderer, Bauraum,
+  Plattenzahl und die beiden Bettfarben. Jedes davon hat seinen Grund — der **Renderer**, weil
+  ein Austausch dieselben Aktoren woanders braucht; die **Farben**, weil ein Themenwechsel sonst
+  ein fast schwarzes Bett auf hellem Grund stehen ließe. Was an vorhandenen Aktoren hängt, wird
+  weiterhin bei jedem Aufruf gesetzt: Bettsichtbarkeit und Zeichenebene über das neue
+  `_apply_bed_visibility`, die Deckkraft über `_apply_bed_transparency`. Vorher galt dort die
+  Reihenfolge „frisch gebaut, dann ausblenden"; die gibt es nicht mehr.
+
+  Nachweis: drei Fälle in `tests/test_plates.py`, drei Gegenproben einzeln rot (ohne den
+  Wächter, ohne die Farben im Zustand, ohne den Renderer im Zustand). **Die vierte ist grün
+  geblieben und steht deshalb hier**: Mit der alten, nur ausblendenden Sichtbarkeitsregel läuft
+  der dritte Test durch, weil `set_bed_visible` und das Ende des Zeichenmodus die Sichtbarkeit
+  selbst wiederherstellen — ein Ablauf, in dem die alte Regel falsch liegt, ließ sich nicht
+  konstruieren. Die Zusammenführung bleibt trotzdem, weil eine Stelle für eine Regel besser ist
+  als zwei; als Nachweis wird sie nicht ausgegeben.
+
+  [Bisheriger Befund](#was-eine-aufräum-durchsicht-offenließ-04092026).
+
+<a id="rm-130"></a>
+
+- [x] **RM-130 — Speicherhinweis nach reinem Import verständlich gestalten.** Am 12.09.2026
+  entschieden und gebaut. **Die Entscheidung ist Regel 19, andersherum gelesen**: Sie verbietet
+  die Nachfrage vor rücknehmbaren Handlungen, und ein eingelesenes Modell ist genau das — die
+  Datei liegt weiter auf der Platte. Wer eine STL öffnet, dreht und schließt, wird deshalb nicht
+  mehr gefragt. Was gefragt wird, ist nicht der Aufwand, sondern die **Reproduzierbarkeit**: Ein
+  63-MB-Container kostet vierzehn Sekunden, aber er kostet sie ein zweites Mal genauso; was er
+  nicht kostet, ist eine Entscheidung, die jemand noch einmal treffen müsste.
+
+  `ingest.plan.is_only_imported` zählt deshalb alles mit, was eine solche Entscheidung
+  festhält: jede Operation außer `load` und `load_step` (`load_outline` gehört ausdrücklich
+  nicht dazu — eine Zeichnung auf eine Höhe zu ziehen ist Konstruktion), jede Quelle, die nicht
+  aus einem Import stammt, Parameter, Passungen, Gesprächsbeiträge, Druckeinstellungen und jede
+  Transaktion mit `changes` — Drucker- und Materialwechsel stehen nicht im Stapel, sondern dort
+  (§15.5). `Session.only_imported` legt die fehlende Projektdatei dazu: Sobald es eine gibt,
+  geht es um Änderungen an etwas, das der Kunde pflegt.
+
+  **Zwei Dinge gehören dazu, sonst wäre es ein Verlust statt einer Erleichterung.** `modified`
+  bleibt unangetastet, damit die automatische Sicherung (§38) weiterläuft — ein Absturz nach
+  einem vierzehn Sekunden langen Import soll den Stand nicht kosten; das bewusste Schließen
+  räumt sie dabei selbst weg, sonst böte der nächste Start sie an. Und ein eingelesenes Modell
+  steht seither in **„Zuletzt geöffnet"**: Dort stand bisher nur, was als Projekt geöffnet
+  wurde, und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog. Die
+  Überschrift heißt „Zuletzt geöffnet" und nicht „Projekte" — sie stimmt also weiter.
+
+  Nachweis: vier Fälle in `tests/test_ingest.py` (darunter sieben Wege, aus einem Import ein
+  Dokument zu machen) und drei in `tests/test_ui.py`. Sieben Gegenproben, jede einzeln rot.
+  `test_closing_with_unsaved_changes_asks` legt jetzt ausdrücklich einen Quader an, bevor es
+  die Frage erwartet — ohne Arbeit gibt es keine mehr.
+
+  [Bisheriger Befund](#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
+
+<a id="rm-141"></a>
+
+- [x] **RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken.** Am
+  12.09.2026 gebaut. §29 sagt „Ordner, Format und Übergabeart werden je Projekt gemerkt" —
+  gemerkt war die Übergabeart, der Rest begann bei jedem Export wieder bei 3MF und dem
+  Projektstamm. Wer ein Modell für einen Dienstleister pflegt (STL) und daneben ein Gehäuse für
+  den eigenen Slicer (3MF), stellte jedes Mal beides neu ein.
+
+  **Drei Sachen werden gemerkt, und sie liegen an zwei Orten.** Format und Namensschema stehen
+  im Dokument (`export_format`, `export_scheme`, Formatversion 23 mit Migration und
+  `example_v23.p3d`): Sie gehören zum Teil, wie die Übergabeart daneben. Der **Ordner** steht in
+  `UiSettings.export_dirs`, geschlüsselt nach Projektpfad — ein absoluter Pfad gehört nicht in
+  eine Projektdatei (Regel 12), und derselbe Schnitt gilt für den Slicer-Pfad: Der zweite
+  Rechner hat einen anderen Ordner, aber dieselbe Gewohnheit. Ein Ordner, den es nicht mehr
+  gibt, wird beim Lesen übergangen; gedeckelt ist die Liste auf zwanzig Projekte.
+
+  **Der Kundenweg fürs Schema ist das Namensfeld selbst.** Entstehen mehrere Dateien, steht dort
+  nicht mehr `projekt.stl`, sondern `projekt_{object}_{index}von{count}.stl` — der Kunde sieht
+  die Platzhalter, stellt sie um, ergänzt eigenen Text oder wirft sie weg. Was mit Klammern
+  getippt wird, ist ein Muster; was ohne sie getippt wird, ist ein Name und überschreibt das
+  gemerkte Muster nicht. Ein eigener Dialog dafür wäre ein zweiter Schritt vor einer Handlung,
+  die ohnehin schon einen hat — und ins Datei-Menü passt kein dreizehnter Eintrag (zwölf sind
+  die Grenze, `tests/test_interface_limits.py`).
+
+  Dabei ist `default_scheme` aus `plan_export` herausgewachsen: Das Fenster zeigt jetzt dasselbe
+  Muster, nach dem der Kern benennt, und zwei Stellen, die es ausrechnen, wären zwei Antworten.
+
+  Nachweis: fünf Fälle in `tests/test_ui.py`, zwei in `tests/test_export.py`, drei in
+  `tests/test_project.py` (darunter die Zusicherung, dass **kein** Ordner in der Projektdatei
+  steht). Sieben Gegenproben, jede einzeln rot.
+
+  [Bauplan-Abgleich und Nachweis](#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-142"></a>
+
+- [x] **RM-142 — Verbindliche Projektion beim Messen einlösen.** Am 12.09.2026 gebaut. **Eine
+  Produktentscheidung war nicht nötig**, der Bauplan sagt es ohne Vorbehalt: „orthografisch ist
+  beim Messen Pflicht" (§18.1). Der Werkzeugweg setzte trotzdem nur den Messmodus; die
+  vorhandene Umschaltung gehörte dem Skizzeneditor.
+
+  **Die Maße waren dabei nie falsch** — sie kommen aus den Fangkoordinaten und nicht aus dem
+  Bild. Falsch war, worauf der Nutzer beim Setzen zielt: Perspektivisch erscheinen zwei gleich
+  lange Strecken verschieden lang, je weiter sie von der Bildmitte weg liegen, und genau dorthin
+  setzt man beim Messen Punkte. Dasselbe Argument steht seit dem Skizzeneditor im Code, nur an
+  der anderen Stelle.
+
+  `MainWindow._on_measure_mode` schaltet beim Betreten um und beim Verlassen zurück. Drei
+  Feinheiten gehören dazu, und jede hat ihren eigenen Fall: **nicht bei jedem Wechsel der
+  Messart** (von *Abstand* auf *Wandstärke* ist kein Verlassen — ein zweites Merken machte aus
+  dem Rückweg eine Einbahnstraße), **`settings.projection` bleibt unberührt** (Messen stellt
+  vorübergehend um, wie der Skizzeneditor; das Häkchen im Menü zieht dagegen mit, denn es sagt,
+  was gilt), und **eine ausdrückliche Wahl im Menü gewinnt** — wer währenddessen umschaltet,
+  bestimmt damit das Rückkehrziel, sonst spränge die Ansicht beim Schließen auf einen Zustand,
+  den er eine Minute vorher verworfen hat.
+
+  Nachweis: vier Fälle in `tests/test_ui.py`, vier Gegenproben einzeln rot (ohne die Umschaltung,
+  ohne den Rückweg, mit Merken bei jedem Wechsel, ohne die Menüwahl als Rückkehrziel).
+
+  [Bauplan-Abgleich und Nachweis](#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-043"></a>
+
+- [x] **RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen.** Erledigt am
+  10.09.2026. **Es waren zehn Stellen, nicht vier** — gezählt am Syntaxbaum, nicht geschätzt:
+  drei im Sprachbackend (`post_json`, `_get_json`, `pull_model`), eine im Mesh-Backend, dazu
+  Support, Update, Aktivierung und die drei Werkzeuge `check_activation`, `licence_admin` und
+  `upload_website`.
+
+  **Was gefehlt hat, in einem Satz:** `timeout` an `OpenerDirector.open()` ist ein Zeitlimit
+  **je Leseoperation**, keine Gesamtdauer. Gemessen an einer nachgestellten Gegenstelle, die
+  ihre Kopfzeilen byteweise mit 20 ms Pause schickt: Statuszeile und Kopfzeilen brauchten eine
+  volle Sekunde, das Zeitlimit stand auf **fünfzig Millisekunden**, und die Antwort kam mit
+  200 zurück. Kein einzelner Lesevorgang hatte das Limit verletzt.
+
+  `http.apply_header_deadline(opener, deadline)` hängt die Antwortklasse mit Frist in die
+  Handler eines fertigen Öffners. **Angesetzt wird am Öffner und nicht an dem, der ihn baut**:
+  Ein `deadline`-Argument an `discover.opener_for` hätte vierzehn Testattrappen gerissen, die
+  ihn mit genau einem Positionsargument ersetzen; ein Objekt ohne `handlers` bleibt hier
+  unangetastet. Der Öffner muss dem einzelnen Aufruf gehören — die Frist steckt in der
+  erzeugten Klasse, also trüge ein geteilter nach dem ersten Aufruf für immer dessen Frist.
+  Deshalb bauen `support`, `updates`, `licence_service` und die drei Werkzeuge ihren Öffner
+  jetzt je Aufruf.
+
+  **Ein Fehler auf dem Weg, und er gehört zum Nachweis:** Der erste Anlauf ersetzte
+  `support._SUPPORT_OPENER` durch einen lokal gebauten Öffner — und riss damit den Testzugang,
+  den eine Attrappe an dieser Konstante hatte. Der Aufruf ging danach an das **echte**
+  example.org und kam mit 405 zurück; ein zweiter Test wurde durch die offen gebliebene
+  Verbindung mit umgerissen. Was der Kern gewinnt, kann eine Attrappe verlieren: Wer einen
+  geteilten Öffner auflöst, sieht nach, wer ihn patcht.
+
+  Nachweis: `tests/test_http_security.py::test_an_opener_puts_its_headers_under_the_same_deadline`
+  fährt beide Fälle — mit Frist ein `ResponseDeadlineError` unter 0,30 s, ohne Frist die
+  gelungene Antwort nach über einer Sekunde. Dazu der Wächter
+  `tests/test_hard_rules.py::test_every_network_call_puts_its_headers_under_a_deadline`: Er
+  verlangt je Funktion mit einem `…open(request, timeout=…)` ein `apply_header_deadline`
+  daneben und zählt zuerst, wie viele Netzaufrufe er überhaupt findet — ein Verbotstest über
+  eine leere Menge wäre immer grün. **Gemessene Gegenprobe:** derselbe Lauf über `HEAD` nennt
+  zehn Stellen, über den Arbeitsbaum keine.
+
+  [Bisheriger Befund](#die-abnahme-des-gesamt-reviews-06092026).
+
+<a id="rm-110"></a>
+
+- [x] **RM-110 — Doppelten Leser offener Dateihandles zusammenführen.** Erledigt am
+  10.09.2026. Die Frage steht jetzt einmal, in `app.core.paths.opened_path`;
+  `scene/project._opened_file_path` und `updates._descriptor_path` sind dünne Hüllen darüber
+  und tragen nur noch ihren Fehlervertrag — die eine wirft, die andere gibt `None`.
+
+  **Die beiden Kopien waren nicht gleich, und das war der Grund, es zu tun.** Unter Windows
+  nennt `GetFinalPathNameByHandleW` beim zweiten Aufruf entweder die geschriebene Länge oder,
+  wenn der Puffer nicht reicht, die benötigte. Wächst der Pfad zwischen den beiden Aufrufen —
+  ein umbenannter Ordner darüber genügt —, kommt der zweite Fall. `project` prüfte
+  `written >= len(buffer)` und hielt an; `updates` prüfte nur gegen Null und rechnete mit
+  einer **abgeschnittenen** Zeichenkette weiter, als Antwort auf eine Sicherheitsfrage. Die
+  strengere Prüfung gilt jetzt für beide, ebenso die zwei POSIX-Kandidaten
+  (`/proc/self/fd` **und** `/dev/fd`), die vorher nur `project` kannte.
+
+  Gegen die Rückkehr des Zwillings steht
+  `tests/test_hard_rules.py::test_the_path_behind_an_open_handle_is_asked_in_exactly_one_place`:
+  Er zählt am Syntaxbaum die Dateien, die das System nach dem Pfad eines offenen Handles
+  fragen, und verlangt genau eine. **Gemessene Gegenprobe:** derselbe Lauf über `HEAD` nennt
+  zwei (`scene/project.py`, `updates.py`), über den Arbeitsbaum eine (`paths.py`). Die erste
+  Fassung des Wächters suchte den API-Namen als Text und meldete `updates.py` weiterhin — sie
+  hatte den Docstring gelesen, der dort seit der Zusammenführung erklärt, was die Datei
+  **nicht** mehr tut.
+
+  `F_GETPATH` mit genau 1024 Byte und der Wächter `test_no_fcntl_call_hands_over_more_than_python_takes`
+  bleiben unverändert gültig; er greift jetzt an der gemeinsamen Stelle. Nachweis: 647 Tests
+  aus `test_hard_rules`, `test_project`, `test_updates`, `test_ingest` und
+  `test_scene_findings` grün, ruff, `ruff format --check` und mypy für `win32`, `linux` und
+  `darwin` grün.
+
+  [Bisheriger Befund](#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+<a id="rm-122"></a>
+
+- [x] **RM-122 — Paralleles Einfügen in gemeinsame Dokumente absichern.** Erledigt am
+  10.09.2026: `tools/memory_index.py` fügt genau eine Zeile in `MEMORY.md` ein — unter einer
+  Sperrdatei daneben, mit dem Lesen **unter** der Sperre und einem Nachzählen vor dem
+  Schreiben. Geschrieben wird über eine Datei daneben und `Path.replace`, also hinterlässt
+  ein Abbruch den alten Index und keinen halben.
+
+  Alle drei Teile haben ihren eigenen Grund, und der dritte ist der, den man weglassen würde:
+  Die **Sperre** schützt vor der anderen Sitzung, das **Lesen unter ihr** vor dem Stand, der
+  zwischen Lesen und Sperren veraltet, und das **Nachzählen** vor einem Fehler dieses
+  Werkzeugs selbst — ein Muster, das zu viel trifft, ein Abschnitt, den es zweimal gibt.
+  Abgewiesen wird außerdem eine Zeile ohne `[Titel](datei.md)`: Sie stünde im Index und wäre
+  für `test_directory_docs` trotzdem kein Zeiger, und der meldete die Notiz dann als
+  unverzeichnet.
+
+  **Gemessene Gegenprobe**, mit zwei echten Prozessen und je zwanzig Einfügungen: Gegen eine
+  ungeschützte Fassung — lesen, kurz warten, schreiben — gingen in drei Läufen **20, 17 und 20
+  von 40** Einträgen verloren. Über das Werkzeug fehlte in denselben drei Läufen keiner.
+  Nachweis: `tests/test_memory_index.py`, sechs Fälle; `tests/test_directory_docs.py` bleibt
+  unverändert grün.
+
+  [Bisheriger Befund](#die-geteilte-datei-ohne-werkzeug-03092026).
+
+<a id="rm-073"></a>
+
+- [x] **RM-073 — Aufbewahrung alter Downloadpakete entscheiden.** **Entschieden am 10.09.2026
+  (Robert): Die abgelöste Fassung wird geräumt, sobald die neue oben liegt.** Beim Release von
+  0.4.0 so gefahren — `upload_website.py --alte-pakete` nennt zuerst, was keine angebotene Fassung
+  mehr bedient (die fünf 0.3.5-Dateien), und löscht erst mit `--wirklich`; die Bedingung dafür ist
+  eine `version.json` **vom Server**, die bereits die neue Fassung nennt.
+
+  Ein gelöschtes Paket bricht dabei keinen verschickten Link: `dl/veraltet.php` leitet einen alten
+  Namen auf die aktuelle Fassung **derselben Plattform** um (seit 03.09.2026). Gemessen nach dem
+  Räumen — `dl/Solidon3D-Setup-0.3.5.exe` antwortet mit 200 und liefert 167 669 422 Bytes, also die
+  0.4.0-Datei. **Der Statuscode ist hier die falsche Frage**; wer prüfen will, ob ein Paket wirklich
+  weg ist, vergleicht die Länge.
+
+  [Bisheriger Befund](#der-download-ordner-sammelt-jede-je-gebaute-fassung-30082026).
