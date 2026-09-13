@@ -17,6 +17,13 @@ it into `website/version.json`.
 
 ## 0.4.1
 
+### Building and editing
+
+- Filleting and chamfering now work on an imported model too: pick an edge in the view, enter a radius or a width. Before, they only worked on a body you drew yourself.
+- Offset face, draft angle and bead also work on an imported model, and a recognised rounding can be changed or taken away there as well.
+- Offset face moves the face you clicked on. On a stair the other steps stay where they are instead of all moving at once.
+- Bolt circle and hole grid are shapes of their own when drawing, with their own sizes — count, pitch circle, diameter. Before, six holes were six circles by hand.
+
 ### Drilling and placing
 
 - When you place a hole, one tick turns it into a slot: you enter length and direction, and the preview shows both.
@@ -27,11 +34,17 @@ it into `website/version.json`.
 - An existing slot can be pulled longer afterwards, and its direction stays where it was.
 - A selected hole or slot is set right in the view with “Set in the view”: a handle to move and turn it, knobs to pull it, dimension lines to edges and centres.
 - Only “Apply” on the right makes a step of it; Escape discards. A pulled slot shows its length meanwhile and keeps its shape when you move it at the handle.
+- An empty coordinate field now means “leave the hole where it is”. That lets you put one in the middle of the part — until now the one place it could not reach.
 
 ### Recognition
 
 - A countersink above a hole is now kept even on a part with round, sweeping surfaces — previously it was dropped there, and the hole and its countersink could no longer be moved together.
 - A cavity entirely inside the material, with no way out, appears in the object tree as an air pocket — with its volume. Previously it appeared as a hole that was not there.
+- On a strongly curved model Solidon now says what was measured instead of calling it a scan — and which features are left out on such a surface.
+- Feature recognition on large, organically shaped models has become about a quarter faster. What it finds is the same as before.
+- If less material is left between a hole and the wall around it than your material carries, the report says so — measured on the finished part.
+- The mesh defect map now also marks faces that run through each other. Before it saw only open and branching edges and called such a model sound.
+- The layer analysis of a finely knurled part now takes half the time; the places it reports are the same as before.
 
 ### Labelling
 
@@ -52,6 +65,17 @@ it into `website/version.json`.
 - The plate selector in the header sits beside the printer name instead of on top of it — even when the plates only arrive with the opened project.
 - The report folds identical messages into one line, with the count in brackets in front. Clicking it selects every affected part; an action asks which of them it should apply to.
 - The right-hand column with the report, chat and tour has become a little narrower; the space goes to the model.
+- While measuring, the view switches to straight projection and back again afterwards. In perspective you aim beside the point, the further a line lies from the centre.
+- If you only look at a model, you are no longer asked about saving when you close it. Imported files now appear under “Recently opened” instead.
+- If you push a body past the edge of the print bed with the handle, Solidon brings it back to a free spot. A typed value is carried out as you entered it.
+- The language choice in the settings dialogue takes effect at once. Your other entries stay as they are, and Cancel restores the previous language.
+- After a quarter of an hour of work Solidon asks once per version for your feedback. Answer it or click it away — in this version the question does not come back.
+- If the 3D mouse is blocked, Solidon names the way to release it instead of passing over it in silence.
+
+### Files and export
+
+- Before writing, the export shows what the report found — a thin wall, a violated fit. You decide whether the file is written anyway.
+- Solidon remembers folder, format and naming scheme per project. If several files are written, the name pattern stands in the field and can be changed.
 
 ### Print bed and handover
 
@@ -60,6 +84,9 @@ it into `website/version.json`.
 - For splitting, lettering and texture the report states the number in the sentence, where a placeholder in braces stood before.
 - Lettering you assigned a filament to keeps it when split into letters. Before, it arrived in the slicer on a second, grey filament, with the assigned one sitting unused beside it.
 - With several plates, the parts now land where the slicer keeps its plates: in the grid it lays out itself. Before, the letters of the third and fourth plate stood beside everything.
+- If a spool is left unused while slicing, Solidon says so by name. Before, the slicer reported success and a filament was missing in the print.
+- If a slicer crashes, Solidon says so. Before it said the slicer had written no print file.
+- Creality Print is recognised as a slicer and can be chosen in the print dialogue, with its printers, processes and filaments.
 
 ## 0.4.0
 

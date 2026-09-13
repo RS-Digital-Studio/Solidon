@@ -18,6 +18,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.4.1
 
+### Construir y modificar
+
+- Redondear y achaflanar funcionan ahora también en un modelo importado: se elige una arista en la vista y se indica el radio o la anchura. Antes solo servían en un cuerpo propio.
+- Desplazar cara, ángulo de desmoldeo y cordón funcionan igualmente en un modelo importado, y allí se puede además cambiar o quitar un redondeo reconocido.
+- Desplazar cara mueve la cara sobre la que se ha hecho clic. En una escalera los demás escalones se quedan donde están, en vez de desplazarse todos a la vez.
+- El círculo de agujeros y la rejilla de agujeros son formas propias al dibujar, con sus medidas: número, círculo primitivo y diámetro. Antes eran seis círculos a mano.
+
 ### Taladrar y colocar
 
 - Al colocar un taladro, una casilla lo convierte en ranura: usted indica la longitud y la dirección, y la vista previa muestra ambas.
@@ -28,11 +35,17 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una ranura existente se puede alargar después, y su dirección se mantiene donde estaba.
 - Un taladro o una ranura seleccionados se ajustan directamente en la vista con «Ajustar en la vista»: un asa para desplazar y girar, botones para estirar, cotas a bordes y centros.
 - Solo «Aplicar», a la derecha, lo convierte en un paso; Escape lo descarta. Una ranura estirada muestra su longitud y conserva su forma cuando la desplaza con el asa.
+- Un campo de coordenada vacío significa ahora «deja el taladro donde está». Así se puede colocar uno en el centro de la pieza, el único sitio al que antes no llegaba.
 
 ### Reconocimiento
 
 - Un avellanado sobre un taladro se conserva también en una pieza con superficies redondeadas y curvas: antes se perdía ahí, y el taladro y su avellanado ya no podían desplazarse juntos.
 - Una cavidad por completo dentro del material, sin salida, aparece en el árbol de objetos como bolsa de aire, con su volumen. Antes aparecía como un taladro que no existía.
+- En un modelo muy curvado, Solidon dice ahora qué se ha medido, en vez de llamarlo un escaneo, y qué características se omiten en una superficie así.
+- El reconocimiento de características en modelos grandes de forma orgánica es aproximadamente una cuarta parte más rápido. Encuentra lo mismo que antes.
+- Si entre un taladro y la pared que lo rodea queda menos material del que aguanta el suyo, el informe lo dice, medido en la pieza terminada.
+- El mapa de defectos de malla marca ahora también las caras que se atraviesan entre sí. Antes solo veía aristas abiertas y ramificadas y daba por sano un modelo así.
+- El análisis por capas de una pieza con moleteado fino tarda ahora la mitad; los puntos señalados son los mismos que antes.
 
 ### Rotular
 
@@ -53,6 +66,17 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El selector de placas de la cabecera está junto al nombre de la impresora, ya no encima — también cuando las placas llegan recién con el proyecto abierto.
 - El informe agrupa los mensajes iguales en una línea, con el número entre paréntesis delante. Un clic selecciona todas las piezas afectadas; una acción pregunta a cuáles aplicarse.
 - La columna derecha con informe, chat y recorrido es algo más estrecha; el espacio va al modelo.
+- Al medir, la vista pasa a proyección recta y vuelve después. En perspectiva se apunta al lado, cuanto más lejos está el tramo del centro de la imagen.
+- Quien solo mira un modelo ya no recibe la pregunta de guardar al cerrar. A cambio, los archivos importados aparecen en «Abiertos recientemente».
+- Si se empuja un cuerpo con el asa más allá del borde de la placa, Solidon lo devuelve a un sitio libre. Un valor escrito se ejecuta tal como se introduce.
+- La elección de idioma en el diálogo de ajustes tiene efecto de inmediato. Las demás entradas se conservan y Cancelar restablece el idioma anterior.
+- Tras un cuarto de hora de trabajo, Solidon pregunta una vez por versión por su comentario. Responderlo o cerrarlo: en esta versión la pregunta no vuelve.
+- Si el ratón 3D está bloqueado, Solidon indica el camino para habilitarlo en vez de pasarlo por alto en silencio.
+
+### Archivos y exportación
+
+- Antes de escribir, la exportación muestra lo que ha encontrado el informe: una pared delgada, un ajuste incumplido. Usted decide si el archivo se escribe igualmente.
+- Solidon recuerda carpeta, formato y esquema de nombres por proyecto. Si se generan varios archivos, el patrón de nombre está en el campo y se puede cambiar.
 
 ### Cama de impresión y entrega
 
@@ -61,6 +85,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En separación, rotulación y textura el informe indica la cifra en la frase, donde antes había un marcador entre llaves.
 - Un letrero al que asignó un filamento lo conserva al separarlo en letras. Antes llegaba al slicer en un segundo filamento gris, y el asignado quedaba al lado sin usar.
 - Con varias placas, las piezas llegan ahora al slicer donde él tiene sus placas: en la cuadrícula que él mismo dispone. Antes, las letras de la tercera y cuarta placa quedaban fuera de todo.
+- Si al laminar queda una bobina sin usar, Solidon lo dice con su nombre. Antes el slicer informaba de éxito y en la impresión faltaba un filamento.
+- Si un slicer se cierra de golpe, Solidon lo dice así. Antes se decía que no había escrito ningún archivo de impresión.
+- Creality Print se reconoce como slicer y se puede elegir en el diálogo de impresión, con sus impresoras, procesos y filamentos.
 
 ## 0.4.0
 

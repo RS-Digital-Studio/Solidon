@@ -18,6 +18,13 @@ dans `website/version.json`.
 
 ## 0.4.1
 
+### Construire et modifier
+
+- Les congés et les chanfreins fonctionnent maintenant aussi sur un modèle importé : on choisit une arête dans la vue et on indique un rayon ou une largeur. Avant, il fallait un corps dessiné soi-même.
+- Décaler la face, la dépouille et le bourrelet fonctionnent eux aussi sur un modèle importé, et on peut y modifier ou retirer un arrondi reconnu.
+- Décaler la face déplace la face sur laquelle on a cliqué. Sur un escalier, les autres marches restent en place au lieu de bouger toutes ensemble.
+- Le cercle de perçage et la grille de trous sont des formes à part entière au dessin, avec leurs cotes : nombre, cercle primitif, diamètre. Avant, c'était six cercles à la main.
+
 ### Percer et placer
 
 - Au moment de placer un perçage, une case en fait un trou oblong : vous saisissez la longueur et la direction, et l'aperçu montre les deux.
@@ -28,11 +35,17 @@ dans `website/version.json`.
 - Un trou oblong existant s'étire ensuite en longueur, et sa direction reste là où elle était.
 - Un perçage ou un trou oblong sélectionné se règle directement dans la vue avec « Régler dans la vue » : une poignée pour déplacer et tourner, des boutons pour étirer, des cotes aux arêtes et centres.
 - Seul « Appliquer », à droite, en fait une étape ; Échap annule. Un trou oblong étiré affiche sa longueur et garde sa forme quand vous le déplacez par la poignée.
+- Un champ de coordonnée vide signifie désormais « laisse le trou où il est ». On peut ainsi en placer un au centre de la pièce, le seul endroit qu'il n'atteignait pas.
 
 ### Reconnaissance
 
 - Un fraisage au-dessus d'un perçage est conservé même sur une pièce aux surfaces rondes et galbées. Auparavant il disparaissait, avec lui le déplacement commun des deux.
 - Une cavité entièrement dans la matière, sans issue, figure dans l'arborescence comme poche d'air, avec son volume. Auparavant, elle y figurait comme un perçage qui n'existait pas.
+- Sur un modèle très courbé, Solidon dit maintenant ce qui a été mesuré au lieu de parler d'un scan, et quelles formes sont laissées de côté sur une telle surface.
+- La reconnaissance des caractéristiques sur de grands modèles de forme organique est environ un quart plus rapide. Elle trouve la même chose qu'avant.
+- S'il reste entre un perçage et la paroi autour de lui moins de matière que la vôtre n'en supporte, le rapport le dit, mesuré sur la pièce finie.
+- La carte des défauts de maillage marque aussi les faces qui se traversent. Avant, elle ne voyait que les arêtes ouvertes et ramifiées et déclarait un tel modèle sain.
+- L'analyse par couches d'une pièce finement moletée prend deux fois moins de temps ; les endroits signalés restent les mêmes.
 
 ### Inscrire
 
@@ -53,6 +66,17 @@ dans `website/version.json`.
 - Le sélecteur de plateaux de l'en-tête se trouve à côté du nom de l'imprimante, plus par-dessus — même quand les plateaux n'arrivent qu'avec le projet ouvert.
 - Le rapport regroupe les messages identiques en une ligne, le nombre entre parenthèses devant. Un clic sélectionne toutes les pièces concernées ; une action demande auxquelles s'appliquer.
 - La colonne de droite avec le rapport, le chat et la visite est un peu plus étroite ; la place revient au modèle.
+- Pendant la mesure, la vue passe en projection droite et y revient ensuite. En perspective, on vise à côté, d'autant plus que le trait est loin du centre de l'image.
+- Qui se contente de regarder un modèle n'est plus interrogé sur l'enregistrement en fermant. En échange, les fichiers importés figurent sous « Ouverts récemment ».
+- Si l'on pousse un corps au-delà du bord du plateau avec la poignée, Solidon le ramène à une place libre. Une valeur saisie est exécutée telle quelle.
+- Le choix de la langue dans les réglages prend effet aussitôt. Les autres saisies restent en place, et Annuler rétablit la langue précédente.
+- Après un quart d'heure de travail, Solidon demande une fois par version votre retour. On répond ou on ferme : dans cette version, la question ne revient pas.
+- Si la souris 3D est bloquée, Solidon indique le chemin pour l'autoriser au lieu de l'ignorer en silence.
+
+### Fichiers et export
+
+- Avant d'écrire, l'export montre ce que le rapport a trouvé : une paroi mince, un ajustement non respecté. C'est vous qui décidez si le fichier est écrit malgré tout.
+- Solidon retient le dossier, le format et le schéma de nom par projet. Si plusieurs fichiers sont écrits, le motif de nom figure dans le champ et se modifie.
 
 ### Plateau et transmission
 
@@ -61,6 +85,9 @@ dans `website/version.json`.
 - Pour la séparation, le lettrage et la texture, le rapport donne le nombre dans la phrase, là où un espace réservé entre accolades figurait avant.
 - Un lettrage auquel vous avez attribué un filament le garde quand il est séparé en lettres. Avant, il arrivait dans le slicer sur un second filament gris, celui attribué restant inutilisé à côté.
 - Avec plusieurs plateaux, les pièces arrivent dans le slicer là où il place ses plateaux : dans la grille qu'il dispose lui-même. Avant, les lettres du troisième et du quatrième restaient à côté.
+- S'il reste une bobine inutilisée au découpage, Solidon le dit avec son nom. Avant, le slicer annonçait une réussite et un filament manquait à l'impression.
+- Si un slicer se ferme brutalement, Solidon le dit tel quel. Avant, il était dit qu'aucun fichier n'avait été écrit.
+- Creality Print est reconnu comme slicer et se choisit dans la boîte d'impression, avec ses imprimantes, ses procédés et ses filaments.
 
 ## 0.4.0
 

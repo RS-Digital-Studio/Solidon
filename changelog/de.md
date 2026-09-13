@@ -42,6 +42,13 @@ Nutzen da und sonst nichts.
 
 ## 0.4.1
 
+### Konstruieren und Ändern
+
+- Verrunden und Fasen greifen jetzt auch an einem eingelesenen Modell: Kante im Bild wählen, Radius oder Breite eingeben. Vorher ging das nur an einem Körper, den Sie selbst gezeichnet haben.
+- Fläche versetzen, Formschräge und Wulst arbeiten ebenfalls am eingelesenen Modell, und eine erkannte Rundung lässt sich dort jetzt ändern oder ganz wegnehmen.
+- Fläche versetzen bewegt die Fläche, auf die Sie geklickt haben. An einer Treppe bleiben die übrigen Stufen stehen, statt alle zugleich zu wandern.
+- Lochkreis und Lochraster sind beim Zeichnen eigene Grundformen mit eigenen Maßen — Anzahl, Teilkreis, Durchmesser. Vorher waren sechs Löcher sechs Kreise von Hand.
+
 ### Bohren und Platzieren
 
 - Beim Setzen einer Bohrung machen Sie daraus mit einem Haken ein Langloch: Sie geben Länge und Richtung ein, die Vorschau zeigt beides mit.
@@ -52,11 +59,17 @@ Nutzen da und sonst nichts.
 - Ein vorhandenes Langloch ziehen Sie nachträglich länger; seine Richtung bleibt dabei, wo sie war.
 - Eine gewählte Bohrung oder ein Langloch stellen Sie mit „Im Bild einstellen“ direkt im Bild ein: ein Griff zum Versetzen und Drehen, Knöpfe zum Ziehen, Maßlinien zu Kanten und Mitten.
 - Erst „Übernehmen“ rechts macht daraus einen Schritt, Escape verwirft. Ein gezogenes Langloch zeigt dabei seine Länge und behält seine Form, wenn Sie es am Griff versetzen.
+- Ein leeres Koordinatenfeld heißt „lass das Loch, wo es ist“. Damit setzen Sie eines auch in die Mitte des Teils — vorher der einzige Ort, den es nicht erreichte.
 
 ### Erkennen
 
 - Eine Senkung über einer Bohrung bleibt auch an einem Teil erhalten, das runde, geschwungene Flächen hat — vorher fiel sie dort weg, und Bohrung und Senkung ließen sich nicht mehr gemeinsam versetzen.
 - Ein Hohlraum ganz im Material, ohne Verbindung nach außen, steht als Lufteinschluss im Objektbaum — mit seinem Volumen. Vorher stand dort eine Bohrung, die es nicht gab.
+- Bei einem stark gekrümmten Modell sagt Solidon jetzt, was gemessen wurde, statt es einen Scan zu nennen — und welche Merkmale an einer solchen Fläche wegfallen.
+- Die Merkmalserkennung großer, organisch geformter Modelle ist rund ein Viertel schneller geworden. Erkannt wird dabei dasselbe wie vorher.
+- Bleibt zwischen einer Bohrung und der Wand um sie herum weniger Material, als Ihr Werkstoff trägt, steht das im Prüfbericht — gemessen am fertigen Teil.
+- Die Netzfehlerkarte markiert jetzt auch Flächen, die einander durchdringen. Vorher sah sie nur offene und verzweigte Kanten und nannte ein solches Modell sauber.
+- Die Schichtanalyse eines fein geriffelten Teils braucht nur noch halb so lang; gemeldet werden dieselben Stellen wie vorher.
 
 ### Beschriften
 
@@ -77,6 +90,17 @@ Nutzen da und sonst nichts.
 - Der Plattenwähler in der Kopfzeile steht neben dem Druckernamen, nicht mehr darüber — auch wenn die Platten erst mit dem geöffneten Projekt dazukommen.
 - Der Prüfbericht fasst gleiche Meldungen zu einer Zeile zusammen, die Zahl steht in Klammern davor. Ein Klick darauf wählt alle betroffenen Teile; eine Handlung fragt, für welche sie gelten soll.
 - Die rechte Spalte mit Prüfbericht, Chat und Tour ist etwas schmaler geworden; der Platz geht an das Modell.
+- Beim Messen schaltet die Ansicht auf gerade Projektion um und danach zurück. Perspektivisch zielt man daneben, je weiter die Strecke von der Bildmitte weg liegt.
+- Wer ein Modell nur ansieht, wird beim Schließen nicht mehr nach dem Speichern gefragt. Eingelesene Dateien stehen dafür jetzt unter „Zuletzt geöffnet“.
+- Schieben Sie einen Körper am Griff über den Rand des Druckbetts, holt Solidon ihn auf eine freie Stelle zurück. Ein getippter Wert wird ausgeführt, wie Sie ihn eingeben.
+- Die Sprachwahl im Einstellungsdialog wirkt sofort. Ihre übrigen Eingaben bleiben dabei stehen, und Abbrechen stellt die vorherige Sprache wieder her.
+- Nach einer Viertelstunde Arbeit fragt Solidon einmal je Version nach Ihrer Rückmeldung. Antworten oder wegklicken — in dieser Version kommt die Frage dann nicht wieder.
+- Ist die 3D-Maus gesperrt, nennt Solidon den Weg zur Freigabe, statt sie stillschweigend zu übergehen.
+
+### Dateien und Export
+
+- Vor dem Schreiben zeigt der Export, was der Prüfbericht gefunden hat — eine dünne Wand, eine verletzte Passung. Sie entscheiden, ob die Datei trotzdem entsteht.
+- Ordner, Format und Namensschema merkt sich Solidon je Projekt. Entstehen mehrere Dateien, steht das Namensmuster im Feld und lässt sich ändern.
 
 ### Druckbett und Übergabe
 
@@ -85,6 +109,9 @@ Nutzen da und sonst nichts.
 - Der Prüfbericht nennt bei Zerlegung, Beschriftung und Textur die Zahl im Satz, wo vorher ein Platzhalter in Klammern stand.
 - Ein Schriftzug, dem Sie ein Filament zugewiesen haben, behält es beim Zerlegen in Buchstaben. Vorher kam er im Slicer auf einem zweiten, grauen Filament an, das zugewiesene lag daneben.
 - Mit mehreren Platten liegen die Teile im Slicer jetzt dort, wo er seine Platten hat: im Raster, wie er es selbst anlegt. Vorher standen die Buchstaben der dritten und vierten Platte neben allem.
+- Bleibt beim Slicen eine Spule ungenutzt, sagt Solidon es mit ihrem Namen. Vorher meldete der Slicer Erfolg, und im Druck fehlte ein Filament.
+- Stürzt ein Slicer ab, sagt Solidon das so. Vorher hieß es, er habe keine Druckdatei geschrieben.
+- Creality Print wird als Slicer erkannt und steht im Druckdialog zur Wahl, mit seinen Druckern, Prozessen und Filamenten.
 
 ## 0.4.0
 

@@ -17,6 +17,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ## 0.4.1
 
+### Construir e alterar
+
+- Arredondar e chanfrar funcionam agora também num modelo importado: escolhe-se uma aresta na vista e indica-se o raio ou a largura. Antes só funcionavam num corpo próprio.
+- Deslocar a face, o ângulo de saída e o cordão funcionam igualmente num modelo importado, e aí também se pode alterar ou retirar um arredondamento reconhecido.
+- Deslocar a face move a face em que se clicou. Numa escada os restantes degraus ficam onde estão, em vez de se moverem todos ao mesmo tempo.
+- O círculo de furos e a grelha de furos são formas próprias no desenho, com as suas medidas: número, círculo primitivo e diâmetro. Antes eram seis círculos à mão.
+
 ### Furar e posicionar
 
 - Ao colocar um furo, uma caixa transforma-o num rasgo: indica o comprimento e a direção, e a pré-visualização mostra ambos.
@@ -27,11 +34,17 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um rasgo existente pode ser esticado depois, e a sua direção mantém-se onde estava.
 - Um furo ou um rasgo selecionado ajusta-se diretamente na vista com «Ajustar na vista»: uma pega para deslocar e rodar, botões para esticar, cotas a arestas e centros.
 - Só «Aplicar», à direita, faz disso um passo; Escape descarta. Um rasgo esticado mostra o seu comprimento e mantém a sua forma quando o desloca pela pega.
+- Um campo de coordenada vazio significa agora «deixa o furo onde está». Assim pode colocar-se um no centro da peça, o único sítio que antes não alcançava.
 
 ### Reconhecimento
 
 - Um escareado sobre um furo passa a manter-se também numa peça com superfícies redondas e curvas — antes perdia-se aí, e o furo e o seu escareado já não podiam ser deslocados em conjunto.
 - Uma cavidade inteiramente dentro do material, sem saída, aparece na árvore de objetos como bolsa de ar, com o seu volume. Antes aparecia como um furo que não existia.
+- Num modelo muito curvo, o Solidon diz agora o que foi medido em vez de lhe chamar uma digitalização, e que formas ficam de fora numa superfície dessas.
+- O reconhecimento de características em modelos grandes de forma orgânica é cerca de um quarto mais rápido. Encontra o mesmo que antes.
+- Se entre um furo e a parede à sua volta ficar menos material do que o seu aguenta, o relatório di-lo, medido na peça acabada.
+- O mapa de defeitos de malha marca agora também as faces que se atravessam. Antes via apenas arestas abertas e ramificadas e dava um modelo desses por são.
+- A análise por camadas de uma peça com serrilha fina demora agora metade do tempo; os pontos indicados são os mesmos.
 
 ### Rotular
 
@@ -52,6 +65,17 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O seletor de mesas no cabeçalho fica ao lado do nome da impressora, já não por cima — mesmo quando as mesas só chegam com o projeto aberto.
 - O relatório agrupa mensagens iguais numa linha, com o número entre parênteses à frente. Um clique seleciona todas as peças afetadas; uma ação pergunta a quais se aplica.
 - A coluna direita com relatório, chat e tour ficou um pouco mais estreita; o espaço vai para o modelo.
+- Ao medir, a vista passa a projeção direita e volta depois. Em perspetiva aponta-se ao lado, tanto mais quanto o traço estiver longe do centro da imagem.
+- Quem apenas olha para um modelo já não recebe a pergunta sobre gravar ao fechar. Em troca, os ficheiros importados aparecem em «Abertos recentemente».
+- Se empurrar um corpo para além do bordo da mesa com a pega, o Solidon volta a colocá-lo num sítio livre. Um valor escrito é executado tal como foi introduzido.
+- A escolha do idioma nas definições faz efeito de imediato. As restantes entradas mantêm-se e Cancelar repõe o idioma anterior.
+- Ao fim de um quarto de hora de trabalho, o Solidon pergunta uma vez por versão pelo seu comentário. Responder ou fechar: nesta versão a pergunta não volta.
+- Se o rato 3D estiver bloqueado, o Solidon indica o caminho para o libertar em vez de o ignorar em silêncio.
+
+### Ficheiros e exportação
+
+- Antes de escrever, a exportação mostra o que o relatório encontrou: uma parede fina, um ajuste violado. É você que decide se o ficheiro é escrito à mesma.
+- O Solidon guarda pasta, formato e esquema de nomes por projeto. Se surgirem vários ficheiros, o padrão do nome fica no campo e pode ser alterado.
 
 ### Mesa de impressão e entrega
 
@@ -60,6 +84,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Na separação, no letreiro e na textura o relatório indica o número na frase, onde antes estava um marcador entre chavetas.
 - Um letreiro ao qual atribuiu um filamento mantém-no ao ser separado em letras. Antes chegava ao slicer num segundo filamento cinzento, com o atribuído ao lado sem uso.
 - Com várias mesas, as peças chegam agora ao slicer onde ele tem as suas mesas: na grelha que ele próprio dispõe. Antes, as letras da terceira e quarta mesa ficavam ao lado de tudo.
+- Se ao fatiar ficar uma bobina por usar, o Solidon di-lo com o nome dela. Antes o slicer indicava êxito e na impressão faltava um filamento.
+- Se um slicer se fechar de repente, o Solidon di-lo assim. Antes dizia-se que não tinha escrito nenhum ficheiro de impressão.
+- O Creality Print é reconhecido como slicer e pode ser escolhido na janela de impressão, com as suas impressoras, processos e filamentos.
 
 ## 0.4.0
 

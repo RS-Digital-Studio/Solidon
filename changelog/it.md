@@ -17,6 +17,13 @@ scrive in `website/version.json`.
 
 ## 0.4.1
 
+### Costruire e modificare
+
+- Raccordare e smussare funzionano ora anche su un modello importato: si sceglie uno spigolo nella vista e si indica raggio o larghezza. Prima servivano solo su un corpo disegnato da sé.
+- Anche scostare la faccia, l'angolo di sformo e il cordone funzionano su un modello importato, e lì si può pure modificare o togliere un raccordo riconosciuto.
+- Scostare la faccia muove la faccia su cui si è fatto clic. Su una scala gli altri gradini restano dove sono, invece di spostarsi tutti insieme.
+- Cerchio fori e griglia di fori sono forme a sé nel disegno, con le loro quote: numero, cerchio primitivo, diametro. Prima erano sei cerchi fatti a mano.
+
 ### Forare e posizionare
 
 - Quando posizioni un foro, una casella lo trasforma in asola: indichi lunghezza e direzione, e l'anteprima le mostra entrambe.
@@ -27,11 +34,17 @@ scrive in `website/version.json`.
 - Un'asola esistente si allunga in seguito, e la sua direzione resta dov'era.
 - Un foro o un'asola selezionati si regolano direttamente nella vista con «Imposta nella vista»: una maniglia per spostare e ruotare, pomelli per allungare, quote a bordi e centri.
 - Solo «Applica», a destra, ne fa un passo; Esc annulla. Un'asola allungata mostra la sua lunghezza e mantiene la sua forma quando la spostate con la maniglia.
+- Un campo di coordinata vuoto significa ora «lascia il foro dov'è». Così se ne può mettere uno al centro del pezzo, l'unico punto che prima non raggiungeva.
 
 ### Riconoscimento
 
 - Una svasatura sopra un foro viene mantenuta anche su un pezzo con superfici tonde e sinuose: prima andava persa, e foro e svasatura non potevano più essere spostati insieme.
 - Una cavità interamente nel materiale, senza via d'uscita, compare nell'albero degli oggetti come sacca d'aria, con il suo volume. Prima compariva come un foro inesistente.
+- Su un modello molto curvo Solidon dice ora che cosa è stato misurato invece di chiamarlo una scansione, e quali forme su una superficie simile restano fuori.
+- Il riconoscimento delle caratteristiche su modelli grandi di forma organica è circa un quarto più rapido. Trova le stesse cose di prima.
+- Se tra un foro e la parete attorno resta meno materiale di quanto il vostro ne regga, il rapporto lo dice, misurato sul pezzo finito.
+- La mappa dei difetti della mesh segna ora anche le facce che si attraversano. Prima vedeva solo spigoli aperti e ramificati e dava un modello simile per sano.
+- L'analisi a strati di un pezzo finemente zigrinato richiede ora la metà del tempo; i punti segnalati restano gli stessi.
 
 ### Scrivere
 
@@ -52,6 +65,17 @@ scrive in `website/version.json`.
 - Il selettore dei piatti nell'intestazione sta accanto al nome della stampante, non più sopra — anche quando i piatti arrivano solo con il progetto aperto.
 - Il rapporto raggruppa i messaggi uguali in una riga, con il numero tra parentesi davanti. Un clic seleziona tutte le parti interessate; un'azione chiede a quali applicarsi.
 - La colonna destra con rapporto, chat e tour è un po' più stretta; lo spazio va al modello.
+- Durante la misura la vista passa alla proiezione diritta e poi torna indietro. In prospettiva si mira accanto, tanto più quanto il tratto è lontano dal centro.
+- Chi guarda soltanto un modello non riceve più la domanda sul salvataggio alla chiusura. In compenso i file importati stanno ora sotto «Aperti di recente».
+- Se si spinge un corpo oltre il bordo del piano con la maniglia, Solidon lo riporta in un posto libero. Un valore digitato viene eseguito così come è stato immesso.
+- La scelta della lingua nelle impostazioni ha effetto subito. Le altre immissioni restano, e Annulla ripristina la lingua precedente.
+- Dopo un quarto d'ora di lavoro Solidon chiede una volta per versione un riscontro. Si risponde o si chiude: in questa versione la domanda non torna.
+- Se il mouse 3D è bloccato, Solidon indica la via per abilitarlo invece di passarci sopra in silenzio.
+
+### File ed esportazione
+
+- Prima di scrivere, l'esportazione mostra che cosa ha trovato il rapporto: una parete sottile, un accoppiamento violato. Decidete voi se il file nasce lo stesso.
+- Solidon ricorda cartella, formato e schema dei nomi per ogni progetto. Se nascono più file, il modello del nome sta nel campo e si può cambiare.
 
 ### Piano di stampa e consegna
 
@@ -60,6 +84,9 @@ scrive in `website/version.json`.
 - Per separazione, scritta e texture il rapporto indica il numero nella frase, dove prima c'era un segnaposto tra parentesi graffe.
 - Una scritta a cui avete assegnato un filamento lo conserva quando viene separata in lettere. Prima arrivava nello slicer su un secondo filamento grigio, con quello assegnato accanto inutilizzato.
 - Con più piatti, le parti arrivano ora nello slicer dove lui tiene i suoi piatti: nella griglia che dispone da sé. Prima le lettere del terzo e del quarto piatto stavano accanto a tutto.
+- Se durante lo slicing resta una bobina inutilizzata, Solidon lo dice con il suo nome. Prima lo slicer segnalava successo e nella stampa mancava un filamento.
+- Se uno slicer si chiude di colpo, Solidon lo dice così. Prima si leggeva che non aveva scritto alcun file di stampa.
+- Creality Print viene riconosciuto come slicer ed è selezionabile nella finestra di stampa, con le sue stampanti, i processi e i filamenti.
 
 ## 0.4.0
 
