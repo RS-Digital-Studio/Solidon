@@ -323,7 +323,24 @@ def check(
             result.findings.append(_lost(reference, None))
             continue
 
-        choices = [_choice(pair, qualified=_spans_bodies(candidates)) for pair in candidates]
+        # **Eine Antwort je Kennung, wo der Körper nicht mitgeschrieben wird.**
+        # Beim leeren Objektnamen — der Skizzenebene, die „irgendwo in der
+        # Szene" heißt — legt `_rewrite` nur die Kennung zurück. Qualifizierte
+        # Zeilen wären dort zwei Wege zu demselben Ergebnis: An zwei Platten
+        # standen `obj_1:face_1` und `obj_2:face_1` zur Wahl, und beide
+        # schrieben `feature:face_1` (gemessen 13.09.2026). Eine Frage, deren
+        # Antworten sich nicht unterscheiden, ist keine Frage (Regel 21).
+        # **Hervorgehoben wird trotzdem jeder Fundort** — die Kennung gilt
+        # beiden Körpern, und die Ansicht muss beide zeigen.
+        qualified = bool(reference.ref.object_id) and _spans_bodies(candidates)
+        offered_pairs: list[tuple[ObjectId, FeatureId]] = []
+        choices: list[str] = []
+        for pair in candidates:
+            label = _choice(pair, qualified=qualified)
+            if label in choices:
+                continue
+            choices.append(label)
+            offered_pairs.append(pair)
         question, offered = question_for(reference, tuple(choices))
         if announce is not None:
             announce(tuple(candidates))
@@ -336,7 +353,7 @@ def check(
             if announce is not None:
                 announce(())
         if answer in choices:
-            chosen = candidates[choices.index(answer)]
+            chosen = offered_pairs[choices.index(answer)]
             _rewrite(document, reference, chosen)
             result.rewritten += 1
             result.findings.append(_rewritten_finding(reference, chosen))
@@ -423,6 +440,11 @@ def _choice(pair: tuple[ObjectId, FeatureId], *, qualified: bool) -> str:
     Zwei Zeilen „hole_1" sind keine Wahl, und ein ``obj_1:`` vor jeder Antwort
     wäre im Normalfall Lärm: Dort hängen alle Kandidaten ohnehin am selben
     Körper, und der steht in der Frage.
+
+    **Ob qualifiziert wird, entscheidet der Aufrufer**, und die zweite
+    Bedingung dort ist, ob die Antwort den Körper überhaupt mitnimmt: Ein
+    Verweis ohne Objektnamen schreibt nur die Kennung zurück (`_rewrite`),
+    und dann wären zwei qualifizierte Zeilen zwei Namen für dasselbe Ergebnis.
     """
     object_id, feature_id = pair
     return f"{object_id}:{feature_id}" if qualified else feature_id

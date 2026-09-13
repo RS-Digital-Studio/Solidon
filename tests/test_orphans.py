@@ -508,6 +508,48 @@ def test_a_declined_sketch_plane_stays_untouched(scene: Scene) -> None:
     assert result.findings and result.findings[0].code == "feature.orphaned"
 
 
+def test_a_lost_sketch_plane_offers_each_identifier_once(scene: Scene) -> None:
+    """Zwei Körper mit denselben Flächennamen ergeben keine doppelten Antworten.
+
+    Eine Skizzenebene ohne Objektnamen heißt „irgendwo in der Szene", und
+    ``_rewrite`` legt genau das zurück: ``feature:face_1``. Seit die
+    Kandidaten Paare sind (RM-023), standen an zwei Platten sechs Zeilen zur
+    Wahl — ``obj_1:face_1`` und ``obj_2:face_1`` nebeneinander, und beide
+    schrieben dasselbe. Gemessen am 13.09.2026; eine Frage, deren Antworten
+    sich nicht unterscheiden, ist keine Frage (Regel 21).
+
+    **Hervorgehoben werden trotzdem beide Fundorte**: Die Kennung gilt beiden
+    Körpern, und die Ansicht muss zeigen, was sie meint (§21.3).
+    """
+    from app.core.sketch.serialize import sketch_from_text
+
+    twin = replace(scene.objects["obj_1"], id="obj_2")
+    both = replace(scene, objects={"obj_1": scene.objects["obj_1"], "obj_2": twin})
+    faces = sorted(name for name, feature in twin.features.items() if feature.kind == "face")
+    assert len(faces) >= 2, "der Korpus muss mehrere Flächen tragen"
+
+    document = document_with_sketch("feature:face_99")
+    asked: list[list[str]] = []
+    highlighted: list[tuple[tuple[str, str], ...]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(list(choices))
+        return choices[0]
+
+    result = orphans.check(document, both, answer, announce=highlighted.append)
+
+    assert asked, "die Frage kommt"
+    offered = [choice for choice in asked[0] if choice != orphans.REMOVE_CHOICE]
+    assert offered == faces, f"je Kennung eine Antwort, ohne Körpernamen — {offered}"
+    assert len(offered) == len(set(offered))
+    rewritten = sketch_from_text(str(document.ops[0].params["sketch"]))
+    assert rewritten.plane == f"feature:{faces[0]}"
+    assert result.rewritten == 1
+    assert ("obj_1", faces[0]) in highlighted[0] and ("obj_2", faces[0]) in highlighted[0], (
+        "beide Fundorte leuchten"
+    )
+
+
 def test_a_resized_hole_keeps_its_name_and_raises_no_orphan(profile: Profile) -> None:
     """Weg 1: Wer eine erkannte Bohrung bewusst vergrößert, behält ihre Kennung.
 

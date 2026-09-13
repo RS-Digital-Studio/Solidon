@@ -576,10 +576,19 @@ def _fill_in(document: bytes, blocks: Sequence[tuple[str, bytes]]) -> bytes:
     """
     for mark, geometry in blocks:
         marker = f"<mesh>{mark}</mesh>".encode("ascii")
-        if document.count(marker) != 1:
+        found = document.count(marker)
+        if found != 1:
             # Ein Programmfehler, kein Bedienfehler — und einer, der den
             # Export-Arbeiter nicht abreißen darf (§33.1, Regel 17).
-            raise InternalError(values={"mark": mark, "count": document.count(marker)})
+            #
+            # **Die Marke selbst geht ins Protokoll, nicht in den Befund**
+            # (§33.2). Sie ist eine zufällige interne Kennung, für die es in
+            # `ui.labels._VALUE_NAMES` keine Beschriftung gibt und geben soll —
+            # ohne eine stünde der rohe Bezeichner im Tooltip des Kunden
+            # (Regel 20), und `tests/test_value_labels.py` hat genau das
+            # gefangen. Die Zahl, die etwas erklärt, ist die Trefferzahl.
+            _log.error("geometry placeholder %s appears %d time(s) in the document", mark, found)
+            raise InternalError(values={"count": found})
         document = document.replace(marker, b"<mesh>" + geometry + b"</mesh>", 1)
     return document
 

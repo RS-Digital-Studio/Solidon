@@ -2470,11 +2470,22 @@ def radial_cylinder(
     gute Einpassung genügt dafür nicht: Alle Ecken müssen denselben Kreis
     und alle Flächennormalen dieselbe Achse belegen. Zusätzliche Eckpunkte
     mitten auf vorhandenen Sehnen zählen als Unterteilung derselben Haut.
+
+    **Die konvexe Hülle kommt aus GEOS und nicht aus Qhull**, und der Grund
+    ist gemessen (Fund des Reviews, 13.09.2026): ``scipy.spatial.ConvexHull``
+    legt je Aufruf eine **temporäre Datei** an — SciPy führt Qhulls Ausgabe
+    über ``tempfile.mkstemp``. Diese Funktion läuft einmal je benannter
+    Verrundung; an der Prüfplatte mit 64 Taschen sind das 256 Aufrufe, und
+    unter Windows kosteten sie 4,60 s von 7,08 s der ganzen Erkennung, davon
+    4,597 s allein in ``nt.open``. ``detect`` lag damit bei 3,6 bis 6,4 s
+    gegen ein Budget von 2,5 s (§31). Derselbe Bogen über
+    ``MultiPoint(...).convex_hull``: 11 ms statt 1531 ms für 256 Hüllen, bei
+    Punkt für Punkt identischer Eckenmenge. Shapely ist ohnehin da — genau
+    diese Hülle baut auch ``scene.placement.mouth_outline``.
     """
-    from scipy.spatial import ConvexHull, QhullError
     from shapely import distance
     from shapely import points as planar_points
-    from shapely.geometry import Polygon
+    from shapely.geometry import MultiPoint, Polygon
 
     axis = np.asarray(fit.axis, dtype=float)
     if np.max(np.abs(np.asarray(body.face_normals)[patch] @ axis)) > ACROSS_THE_AXIS:
@@ -2483,17 +2494,16 @@ def radial_cylinder(
     points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[patch])]
     first, second = _plane_basis(axis)
     flat = np.column_stack(((points - centre) @ first, (points - centre) @ second))
-    try:
-        hull = ConvexHull(flat)
-    except QhullError:
+    # Weniger als drei Ecken oder eine Gerade ergeben keine Fläche — dieselbe
+    # Absage, die ``QhullError`` vorher trug.
+    hull = MultiPoint(flat).convex_hull
+    if hull.geom_type != "Polygon":
         return None
     tolerance = weld_tolerance(float(np.linalg.norm(body.extents)))
     # Nach mehreren Schnitten können Sehnenpunkte um Rundungsfehler außen
     # liegen und dadurch selbst Hull-Ecken werden. Nur numerisch kollineare
     # Unterteilungen fallen weg; derselbe Schweißabstand gilt am ganzen Netz.
-    outline = np.asarray(
-        Polygon(flat[hull.vertices]).simplify(tolerance).exterior.coords, dtype=float
-    )[:-1]
+    outline = np.asarray(hull.simplify(tolerance).exterior.coords, dtype=float)[:-1]
     circle, radius = _fit_circle(outline)
     if radius <= tolerance:
         return None

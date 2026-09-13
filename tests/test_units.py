@@ -200,3 +200,54 @@ def test_tiny_square_inches_show_a_bound_instead_of_zero() -> None:
     assert format_area(1e-9, "in") == "<0.00001 in²"
     assert format_area(-1e-9, "in") == ">-0.00001 in²"
     assert format_area(0.0, "in") == "0.00 in²"
+
+
+# --- Das Vorzeichen einer gemessenen Achse ---------------------------------------
+
+
+def signs_of(axis: tuple[float, float, float]) -> tuple[str, ...]:
+    """Die Vorzeichen, wie sie eine Datei schreibt — ``==`` sieht sie nicht.
+
+    ``-0.0 == 0.0`` ist wahr; ``json.dumps`` und jede Textform trennen die
+    beiden trotzdem. Gefragt ist genau diese Trennung.
+    """
+    return tuple(f"{value:.1f}" for value in axis)
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [
+        (1.0, -0.0, 0.0),
+        (0.0, -0.0, 1.0),
+        (-1.0, -0.0, 0.0),
+        (-0.0, -0.0, -1.0),
+    ],
+)
+def test_a_measured_axis_never_carries_a_negative_zero(axis: tuple[float, ...]) -> None:
+    """Die Zusage gilt in beiden Zweigen, nicht nur im gespiegelten.
+
+    Bis zum 13.09.2026 strich nur der gespiegelte Zweig die negative Null;
+    ``positive_axis((1.0, -0.0, 0.0))`` gab sie unverändert zurück. Zwei
+    Schlüssel, die dieselbe Achse meinen, standen damit als ``0.0`` und
+    ``-0.0`` nebeneinander — im Cache-Schlüssel und in der Projektdatei.
+    """
+    from app.core.units import positive_axis
+
+    found = positive_axis(axis)
+
+    assert "-0.0" not in signs_of(found), f"negative Null in {found}"
+    assert math.isclose(sum(abs(value) for value in found), sum(abs(value) for value in axis))
+
+
+def test_a_measured_axis_keeps_its_line_and_turns_the_leading_sign() -> None:
+    """Gespiegelt wird die ganze Achse, und zwar an der größten Komponente.
+
+    Nicht an der ersten Zahl: ``(-3 | 4 | 0)`` hat sein Maximum bei ``4``, und
+    das ist bereits positiv — die Achse bleibt, wie sie ist.
+    """
+    from app.core.units import positive_axis
+
+    assert positive_axis((-3.0, 4.0, 0.0)) == (-3.0, 4.0, 0.0)
+    assert positive_axis((3.0, -4.0, 0.0)) == (-3.0, 4.0, 0.0), "|−4| ist das Maximum"
+    assert positive_axis((-4.0, 3.0, 0.0)) == (4.0, -3.0, 0.0)
+    assert positive_axis((0.0, 0.0, -1.0)) == (0.0, 0.0, 1.0)

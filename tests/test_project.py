@@ -2530,7 +2530,16 @@ os._exit(42)
         text=True,
     )
     try:
-        deadline = time.monotonic() + 5.0
+        # **Die Frist gilt dem Hängen, nicht der Startdauer.** Ein frisches
+        # Python muss hier ``app.core.scene.project`` samt Abhängigkeiten
+        # importieren, und wie lange das dauert, hängt an allem, was sonst auf
+        # der Maschine läuft: gemessen 2,4 bis 3,1 s auf einem ruhigen Rechner,
+        # 1,54 s ohne Ausgabeumleitung — und **8,24 s**, wenn
+        # ``test_filament_inventory.py`` in derselben Sitzung vorher lief
+        # (13.09.2026, zweimal reproduziert). Fünf Sekunden waren damit keine
+        # Obergrenze für einen Hänger, sondern eine Wette auf die Startdauer;
+        # der Test war in der Datei grün und in der Suite rot.
+        deadline = time.monotonic() + 60.0
         while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
             time.sleep(0.01)
         assert ready.exists(), "der isolierte Prozess hat seine Sicherung belegt"

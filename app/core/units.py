@@ -368,11 +368,16 @@ def positive_axis(axis: Sequence[float]) -> tuple[float, float, float]:
     Nahezu gleiche Komponenten entscheiden nicht über Rundungsreste: Gewählt
     wird die **erste**, die das Maximum bis auf :data:`EPS_GEOM` erreicht.
     Eine negative Null kommt nicht zurück — sie schriebe sich als ``-0.000``
-    und trennte zwei Schlüssel, die dieselbe Achse meinen.
+    und trennte zwei Schlüssel, die dieselbe Achse meinen. **Auch dann nicht,
+    wenn gar nicht gespiegelt wird:** Die Zusage stand bis zum 13.09.2026 nur
+    im gespiegelten Zweig, und ``positive_axis((1.0, -0.0, 0.0))`` gab die
+    negative Null unverändert zurück. Eine halbe Zusage sieht aus wie eine
+    ganze — und ``json.dumps`` schreibt ``-0.0`` neben ``0.0``, wo der
+    Vergleich beide gleich nennt.
     """
     values = (float(axis[0]), float(axis[1]), float(axis[2]))
     largest = max(abs(value) for value in values)
     leading = next(index for index, value in enumerate(values) if abs(value) >= largest - EPS_GEOM)
-    if values[leading] < 0.0:
-        return (-values[0] + 0.0, -values[1] + 0.0, -values[2] + 0.0)
-    return values
+    sign = -1.0 if values[leading] < 0.0 else 1.0
+    # ``+ 0.0`` streicht die negative Null, ohne eine andere Zahl zu ändern.
+    return (sign * values[0] + 0.0, sign * values[1] + 0.0, sign * values[2] + 0.0)
