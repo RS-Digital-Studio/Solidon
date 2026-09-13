@@ -58,3 +58,15 @@ und besser fragt man die Eigenschaft statt die Plattform (`resolve()` gab den
 Pfad unverändert zurück → also kein Symlink → dann der Sonderweg), dann bleibt
 der Code auf jeder Plattform erreichbar. Vor jedem Commit an plattformnahem
 Code die drei Läufe fahren.
+
+**Nachtrag 13.09.2026 — die Gegenrichtung, drei Tage lang.** Seit dem
+10.09. war jeder Push auf `main` rot, und keines der drei Windows-Tore sah
+es: `filaments.py` prüfte `if os.name != "nt"` und griff dahinter auf
+`ctypes.WinDLL` und `msvcrt` zu. Zur Laufzeit dasselbe wie `sys.platform`,
+für mypy nicht — nur `sys.platform` gilt als Plattformzweig, `os.name`
+wird auf Linux und macOS als erreichbar geprüft, und dort gibt es die
+Attribute nicht. Zwei Griffe: `sys.platform != "win32"` als Weiche, und das
+Modul in die `warn_unreachable = false`-Liste in `pyproject.toml` neben
+`paths`, `discover` und `updates`. **Vor jedem Push, der einen Plattformzweig
+anfasst: `mypy --platform linux`** — und wer die CI-Liste liest und lauter
+Rot sieht, liest zuerst `gh run view --log-failed`, nicht die Commit-Titel.

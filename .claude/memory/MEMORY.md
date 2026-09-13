@@ -13,6 +13,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [.venv auf 3.14.7](lokale-umgebung-python-version.md) · [.venv verliert Dateien](venv-dateien-verschwinden.md) — seit 06.09.2026 3.14; RECORD nennt die fehlende Datei.
 - [Abgebrochener Lauf: Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) · [Wartebedingung](wartebedingung-kennt-nur-einen-zustand.md) — Prozesse ohne Eltern; die Elternkette lügt nach einem Tod, nur die eigene Ausgabedatei beweist etwas; `until !` mit Umlaut meldet sofort.
 - [Handbuch nur beim Paketbau](handbuch-nur-beim-paketbau.md) — test_wording ist zwischen Releases rot, kein Fund.
+- [Release-Weg 0.4.1 gemessen](release-weg-0-4-1-gemessen.md) — Fremdlast verdreifacht das Tor; make_figures wartet auf die Slicersuche; Bildmaße im HTML altern; Kaltimport im Leistungstest; Agent-Worktree von Hand.
 - [make_manual ohne --help](make-manual-kennt-kein-help.md) · [commit-msg verlangt Umlaute](commit-msg-hook-verlangt-echte-umlaute.md) — jedes Argument erzeugt alles; ASCII bricht den Commit.
 
 ## Roberts Vorgaben
@@ -23,7 +24,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Befund aus dem laufenden Fenster altert](befund-aus-dem-laufenden-fenster-altert.md) — sein Fenster trägt den Stand seines Starts; den Fall erst am HEAD nachstellen, dann bauen.
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen; Handbuch nur beim Paketbau, test_wording-Rot dazwischen ist kein Fund.
 - [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — jeder Commit geht hinaus, außer er sagt es; Merge, kein Rebase; bump_version.py.
-- [Changelog vor dem Versionssprung](changelog-vor-dem-versionssprung.md) — Abschnitt zuerst, auch für unfertige Arbeit; die Version hebt erst der Bau.
+- [Changelog vor dem Versionssprung](changelog-vor-dem-versionssprung.md) · [Wächter erst nach dem Sprung](changelog-waechter-nach-dem-versionssprung.md) — Abschnitt zuerst, auch für unfertige Arbeit; die Version hebt erst der Bau.
 - [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung entscheidet](weitergabe-die-handlung-entscheidet.md) — was frei ist, wird gemacht; nachgefragt wird nach der Grenze der Handlung, nicht nach dem Absender.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) — anhängen nur, wenn es für sich steht; zwölf Tag-Läufe, keine Ursache zweimal.
 - [Mehrsitzungs-Setup ist ausgebaut](mehrsitzungs-setup-ist-ausgebaut.md) — Brett, Schloss, Worktree-Weg und privater Index sind am 09.09.2026 gefallen; nicht erneut vorschlagen.
@@ -88,7 +89,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Rückbau kann scheitern](rueckbau-kann-scheitern.md) · [Schutz verliert Geschwister](schutz-verliert-ein-geschwister.md) · [Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) · [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — nach dem Fix.
 - [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) · [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) · [Schreibfehler auf Datei](schreibfehler-auf-eine-vorhandene-datei.md) · [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) · [Hintergrundlauf stirbt mit der Sitzung](hintergrundlauf-stirbt-mit-der-sitzung.md) — je Lauf ein Ordner; OSError 22/13; Blätter zuerst; lange Läufe abkoppeln.
-- [Suite abgekoppelt starten](suite-abgekoppelt-per-pwsh-start-process.md) — pwsh -File über Start-Process, Git-Bash mit vollem Pfad; nacktes `bash` in pwsh ist WSL und schreibt nichts.
+- [Suite abgekoppelt starten](suite-abgekoppelt-per-pwsh-start-process.md) · [$args als Parametername](powershell-args-als-parametername.md) — pwsh -File über Start-Process, Git-Bash mit vollem Pfad; nacktes `bash` in pwsh ist WSL und schreibt nichts.
 - [Zweite Sitzung im selben Baum](zweite-sitzung-im-selben-baum.md) — vor Kill und Torlauf prüfen, wem was gehört; wer während eines Tors schreibt, macht es wertlos.
 - [Parallele Reviewer kollidieren an den Rändern](parallele-reviewer-kollidieren-an-den-raendern.md) — Kataloge, Beschriftungen, Fehlerlisten, doppelte Funde; Patches in Reihenfolge übernehmen, danach die Querschnittstests nachfahren.
 
