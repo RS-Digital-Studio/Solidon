@@ -777,53 +777,118 @@ def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplicatio
     assert "gemeinsam verschoben" in text
 
 
-def test_a_shared_cavity_greys_out_what_would_fail_on_it() -> None:
+def _run_op(op: str, entry: Any, profile: Any, **params: object) -> Any:
+    """Eine Operation fahren, wie der Verlauf sie fährt — der kleine Bruder
+    von ``tests/test_prepare.py::_run_op``, ohne dessen Fragehaken."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def test_a_shared_cavity_greys_out_what_would_fail_on_it(profile: Any) -> None:
     """Gemessen am 14.09.2026 an ``plate_countersunk.stl``: *Drehen* und
     *Verdoppeln* an der Senkung und *Zum Langloch ziehen* an der gesenkten
     Bohrung öffneten eine Vorschau ohne Bild und hielten beim Übernehmen die
-    Kette an. Die Zeile sagt es jetzt vorher — mit dem Satz der Operation."""
-    from app.core.geom.prepare_ops import NO_OWN_BODY, SLOT_NEEDS_A_PLAIN_BORE
+    Kette an — und *Drehen* und *Verdoppeln* an der **Bohrung** liefen durch
+    und ließen die Senkung stehen (Stumpf unter der Senkung, gekippt oder
+    kopiert). Die Zeile sagt es jetzt vorher, mit dem Satz der Operation, und
+    die Operation sagt es beim Rechnen mit demselben Satz.
 
-    bore = Feature(
-        id="hole_1",
-        kind="hole",
-        provenance="detected",
-        params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 6.0, "depth": 10.0},
-    )
-    sink = Feature(
-        id="cone_1",
-        kind="cone",
-        provenance="detected",
-        params={
-            "centre": (0.0, 0.0, 5.0),
-            "axis": (0.0, 0.0, 1.0),
-            "diameter": 12.0,
-            "recess": True,
-        },
-    )
-    linked = {bore.id: bore, sink.id: sink}
-    chain = (bore, sink)
+    Am echten Netz, nicht an Merkmalen von Hand: Die Sperre kommt aus dem
+    Netz (``cavity_chain_state_at``), und dieselbe Bedingung
+    (``relations.cavity_is_shared``) entscheidet in Zeile und Operation — beide
+    werden hier an demselben Körper gefahren, damit keine sich lösen kann,
+    ohne dass es rot wird.
+    """
+    import trimesh
 
-    at_sink = {str(a.title): a for a in actions_for(sink, linked, cavity=chain)}
-    assert at_sink["Merkmal drehen"].op is None
-    assert str(at_sink["Merkmal drehen"].reason) == str(NO_OWN_BODY)
-    assert at_sink["Merkmal verdoppeln"].op is None
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare import countersink, drill
+    from app.core.geom.prepare_ops import NEEDS_A_PLAIN_BORE
+    from app.core.perceive.features import detect
+    from app.core.perceive.relations import cavity_chain_state_at
+    from app.core.types import SceneObject
+
+    # Dieselbe Platte wie in ``test_prepare``: 60 mal 40 mal 10, Bohrung Ø 8,
+    # Senkung Ø 16 — gebaut, damit die Erkennung Bohrung und Kegel sicher
+    # findet (die STL aus dem Korpus braucht dafür den Importweg).
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        plate, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    mesh = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    found = detect(mesh)
+    bore = next(f for f in found.values() if f.kind == "hole")
+    sink = next(f for f in found.values() if f.kind == "cone")
+    chain, touches_other = cavity_chain_state_at(bore, found, mesh)
+    assert chain is not None and {f.id for f in chain} == {bore.id, sink.id}, "die Voraussetzung"
+
+    # Wie das Fenster fragt: mit der Kette aus dem Netz.
+    at_sink = {
+        str(a.title): a
+        for a in actions_for(sink, found, mesh=mesh, cavity=chain, touches_other=touches_other)
+    }
+    at_bore = {
+        str(a.title): a
+        for a in actions_for(bore, found, mesh=mesh, cavity=chain, touches_other=touches_other)
+    }
+    for rows, feature in ((at_sink, sink), (at_bore, bore)):
+        for title in ("Merkmal drehen", "Merkmal verdoppeln"):
+            assert rows[title].op is None, (feature.kind, title)
+            assert str(rows[title].reason) == str(NEEDS_A_PLAIN_BORE), (feature.kind, title)
+    assert at_bore["Zum Langloch ziehen"].op is None
+    assert str(at_bore["Zum Langloch ziehen"].reason) == str(NEEDS_A_PLAIN_BORE)
     assert at_sink["Merkmal verschieben"].op == "move_feature", "die Kette wandert gemeinsam"
     assert at_sink["Merkmal ändern"].op == "resize_feature"
 
-    at_bore = {str(a.title): a for a in actions_for(bore, linked, cavity=chain)}
-    assert at_bore["Zum Langloch ziehen"].op is None
-    assert str(at_bore["Zum Langloch ziehen"].reason) == str(SLOT_NEEDS_A_PLAIN_BORE)
-    assert at_bore["Merkmal drehen"].op == "rotate_feature", "die Bohrung dreht ihre Kette"
-    assert at_bore["Merkmal verdoppeln"].op == "duplicate_feature"
+    # Ohne die zwei Schlüsselwörter fragt ``actions_for`` das Netz selbst —
+    # dieselbe Antwort (Review 14.09.2026: die Zusage hing am Aufrufer).
+    derived = {str(a.title): a for a in actions_for(bore, found, mesh=mesh)}
+    assert derived["Merkmal drehen"].op is None and derived["Zum Langloch ziehen"].op is None
 
-    # Ein berührter fremder Rand ohne Kette sperrt genauso.
-    touched = {str(a.title): a for a in actions_for(bore, linked, cavity=None, touches_other=True)}
-    assert touched["Zum Langloch ziehen"].op is None
+    # Ohne Netz keine Sperre: ``bore_and_widening_at`` schätzt, und eine
+    # Schätzung stellt keine Zeile grau, die die Operation liefe.
+    guessed = {str(a.title): a for a in actions_for(bore, found, cavity=chain)}
+    assert guessed["Merkmal drehen"].op == "rotate_feature"
 
-    # Und eine Bohrung für sich bleibt, wie sie war.
-    alone = {str(a.title): a for a in actions_for(bore, {bore.id: bore}, cavity=None)}
+    # Und die Operation selbst sagt mit demselben Satz ab — an der Bohrung wie
+    # an der Senkung, bei allen dreien.
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=found)
+    for op, params in (
+        ("rotate_feature", {"axis": "x", "angle": 30.0}),
+        ("duplicate_feature", {"x": 20.0, "y": 0.0, "z": 0.0}),
+    ):
+        for feature in (bore, sink):
+            with pytest.raises(ValidationError) as caught:
+                _run_op(op, entry, profile, at_feature=feature.id, **params)
+            assert str(caught.value.detail) == str(NEEDS_A_PLAIN_BORE), (op, feature.kind)
+    with pytest.raises(ValidationError) as caught:
+        _run_op("slot_hole", entry, profile, at_feature=bore.id, slot_length=12.0)
+    assert str(caught.value.detail) == str(NEEDS_A_PLAIN_BORE)
+
+    # Eine Bohrung für sich bleibt, wie sie war.
+    plain = bored
+    plain_found = detect(plain)
+    alone_bore = next(f for f in plain_found.values() if f.kind == "hole")
+    alone = {str(a.title): a for a in actions_for(alone_bore, plain_found, mesh=plain)}
     assert alone["Zum Langloch ziehen"].op == "slot_hole"
+    assert alone["Merkmal drehen"].op == "rotate_feature"
 
 
 @pytest.mark.parametrize("pick_widening", [False, True])

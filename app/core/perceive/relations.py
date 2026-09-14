@@ -571,6 +571,20 @@ def cavity_chain_at(
     return chain
 
 
+def cavity_is_shared(chain: tuple[Feature, ...] | None, touches_other: bool) -> bool:
+    """Ob ein Hohlraum anderen Abschnitten gehört — die eine Bedingung für alle.
+
+    Eine Kette heißt, das Merkmal ist ein Abschnitt von mehreren (eine Kette
+    hat immer mindestens zwei Glieder, :func:`_ordered_cavity`); ein berührter
+    fremder Rand heißt, die Nachbarschaft ist da und nur nicht eindeutig.
+    Beides zusammen entscheidet, ob *Zum Langloch ziehen*, *Merkmal drehen*
+    und *Merkmal verdoppeln* absagen und ob das Merkmalfenster ihre Zeile
+    vorher grau stellt. Bis zum 14.09.2026 stand die Bedingung an zwei
+    Stellen wörtlich gleich — und nichts wurde rot, wenn eine sich löste.
+    """
+    return touches_other or chain is not None
+
+
 def cavity_chain_state_at(
     feature: Feature, features: Mapping[FeatureId, Feature], mesh: MeshData
 ) -> tuple[tuple[Feature, ...] | None, bool]:

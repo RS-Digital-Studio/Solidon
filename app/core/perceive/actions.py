@@ -468,7 +468,14 @@ def actions_for(
                 )
             )
         elif fitting is not None and (
-            shared := _shares_its_cavity(fitting.name, feature, cavity, touches_other)
+            shared := _shares_its_cavity(
+                fitting.name,
+                feature,
+                features,
+                mesh=mesh,
+                cavity=cavity,
+                touches_other=touches_other,
+            )
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=shared))
         elif fitting is not None:
@@ -495,28 +502,56 @@ def actions_for(
     return actions
 
 
+#: Die Handlungen, die einen Hohlraum nur nehmen, wenn er dem Merkmal allein
+#: gehört — dieselbe Liste wie ``prepare_ops._needs_a_plain_bore`` und
+#: ``slot_hole``.
+_WANT_A_PLAIN_BORE: Final = ("slot_hole", "rotate_feature", "duplicate_feature")
+
+
 def _shares_its_cavity(
-    op: str, feature: Feature, cavity: tuple[Feature, ...] | None, touches_other: bool
+    op: str,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    *,
+    mesh: MeshData | None,
+    cavity: tuple[Feature, ...] | None,
+    touches_other: bool,
 ) -> TranslatableText | None:
-    """Warum diese Handlung an einem geteilten Hohlraum scheitern würde — oder ``None``.
+    """Warum diese Handlung an einem geteilten Hohlraum absagen würde — oder ``None``.
 
-    Dieselbe Bedingung wie in den Operationen selbst: *Zum Langloch ziehen*
-    weist eine Bohrung ab, deren Kette länger als eins ist oder die einen
-    fremden Rand berührt (``slot_hole``); *Drehen* und *Verdoppeln* an einer
-    Senkung finden keinen eigenen Werkzeugkörper (``_tool_for``, ``NO_OWN_BODY``).
-    Die Bohrung selbst dreht und verdoppelt ihre ganze Kette — dort bleibt die
-    Zeile offen.
+    Dieselbe Bedingung wie in den Operationen (``relations.cavity_is_shared``)
+    und derselbe Satz (``NEEDS_A_PLAIN_BORE``): *Zum Langloch ziehen*, *Drehen*
+    und *Verdoppeln* nehmen einen Hohlraum nur, wenn er dem Merkmal allein
+    gehört — an der Bohrung wie an ihrer Senkung. Gemessen am 14.09.2026:
+    *Drehen* an der Bohrung einer gesenkten Bohrung kippte nur den Stumpf
+    unter der Senkung, *Verdoppeln* setzte einen Stumpf ohne Senkung — die
+    Operationen sagen seither ab, und die Zeile sagt es vorher.
+
+    **Die Sperre kommt aus dem Netz, nie aus einer Schätzung.** Was der
+    Aufrufer aus ``cavity_chain_state_at`` mitbringt (``cavity``,
+    ``touches_other``), gilt; bringt er nichts mit, fragt die Funktion das
+    Netz selbst — dieselbe Zusage also auch für ``actions_for(feature,
+    features, mesh=mesh)`` ohne die zwei Schlüsselwörter. Ohne Netz gibt es
+    keine Sperre: ``bore_and_widening_at`` schätzt die Kette aus Parametern,
+    und eine Schätzung darf keine Zeile grau stellen, die die Operation liefe.
     """
-    chained = touches_other or (cavity is not None and len(cavity) > 1)
-    if not chained:
+    if op not in _WANT_A_PLAIN_BORE or feature.kind not in ("hole", "cone"):
         return None
-    from app.core.geom.prepare_ops import NO_OWN_BODY, SLOT_NEEDS_A_PLAIN_BORE
+    if touches_other:
+        shared = True
+    elif mesh is None or features is None:
+        return None
+    elif cavity is None:
+        from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
-    if op == "slot_hole":
-        return SLOT_NEEDS_A_PLAIN_BORE
-    if op in ("rotate_feature", "duplicate_feature") and feature.kind != "hole":
-        return NO_OWN_BODY
-    return None
+        shared = cavity_is_shared(*cavity_chain_state_at(feature, features, mesh))
+    else:
+        shared = bool(cavity)
+    if not shared:
+        return None
+    from app.core.geom.prepare_ops import NEEDS_A_PLAIN_BORE
+
+    return NEEDS_A_PLAIN_BORE
 
 
 def _note_for(

@@ -367,6 +367,18 @@ wenn beides verneint ist, gehört der Hohlraum ihm allein (`_stands_alone`).
 `feature_placement_geometry` traf diese Unterscheidung seit je; sie fehlte
 allein im Werkzeugbau.
 
+**Und die Bedingung steht einmal** (`relations.cavity_is_shared`), nicht
+zweimal wörtlich gleich in `slot_hole` und `perceive.actions` — bis zum
+14.09.2026 hätte sich eine Seite lösen können, ohne dass etwas rot wurde.
+Was einen geteilten Hohlraum **nicht** nehmen kann, sagt ab statt still ein
+Stück zu bearbeiten: *Merkmal drehen* an der Bohrung einer gesenkten Bohrung
+kippte nur den Stumpf unter der Senkung, *Merkmal verdoppeln* setzte einen
+Stumpf ohne Senkung (gemessen 14.09.2026, `_needs_a_plain_bore`). Beide sagen
+seither mit `NEEDS_A_PLAIN_BORE` ab — demselben Satz, den das Merkmalfenster
+an der Zeile zeigt —, und die Kette mitzunehmen wie `move_feature` steht als
+Vorschlag im Register: Sie braucht ein Werkzeug, das über beide Oberflächen
+hinausreicht.
+
 Die allgemeine Form, weil sie über diesen Fall hinausgeht: **Wer aus einer
 Zahl auf einen Sachverhalt schließt, schreibt dazu, unter welcher Bedingung
 der Schluss gilt — und prüft die Bedingung, nicht die Zahl.**

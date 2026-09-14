@@ -113,14 +113,18 @@ Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
 - **Jedes Feld trägt seinen heutigen gemessenen Wert** als Vorgabe. Eine
   Vorgabe, die nicht der gemessene Wert ist, wäre eine stille Änderung, sobald
   jemand auf Übernehmen drückt.
-- **Und was an einem geteilten Hohlraum scheitern würde, steht grau mit dem
-  Satz der Operation** (`_shares_its_cavity`): *Drehen* und *Verdoppeln* an
-  einer Senkung (`prepare_ops.NO_OWN_BODY`), *Zum Langloch ziehen* an einer
-  gesenkten Bohrung (`prepare_ops.SLOT_NEEDS_A_PLAIN_BORE`). Die Kette und
-  die Berührung eines fremden Rands kommen vom Aufrufer
-  (`cavity`, `touches_other` — `relations.cavity_chain_state_at`); gemessen am
-  14.09.2026 hielten alle drei beim Übernehmen die Kette an, nach einer
-  Vorschau ohne Bild.
+- **Und was an einem geteilten Hohlraum absagen würde, steht grau mit dem
+  Satz der Operation** (`_shares_its_cavity`): *Zum Langloch ziehen*,
+  *Merkmal drehen* und *Merkmal verdoppeln* an einer Bohrung mit Senkung — an
+  der Bohrung wie an der Senkung, mit `prepare_ops.NEEDS_A_PLAIN_BORE`, dem
+  Satz, mit dem die drei Operationen selbst absagen. Die Bedingung ist eine
+  (`relations.cavity_is_shared`): eine Kette oder ein berührter fremder Rand.
+  Was der Aufrufer aus `cavity_chain_state_at` mitbringt, gilt; bringt er nur
+  ein Netz mit, fragt `actions_for` es selbst — und ohne Netz gibt es keine
+  Sperre, denn `bore_and_widening_at` schätzt aus Parametern, und eine
+  Schätzung stellt keine Zeile grau. Gemessen am 14.09.2026: An der Senkung
+  hielten alle drei beim Übernehmen die Kette an, an der Bohrung liefen
+  *Drehen* und *Verdoppeln* durch und ließen die Senkung stehen.
 
 Die Oberfläche fragt die Merkmalsart **nicht** — sie rendert die Liste. Sonst
 führt sie dieselbe Tabelle ein zweites Mal.

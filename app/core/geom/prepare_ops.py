@@ -822,10 +822,37 @@ def _stands_alone(mesh: MeshData, feature: Feature, features: Mapping[str, Featu
     ``[hole_1, cone_1]`` und berührter Rand, nach ihrem Entfernen keine Kette
     und kein berührter Rand.
     """
-    from app.core.perceive.relations import cavity_chain_state_at
+    from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
-    chain, touches_other = cavity_chain_state_at(feature, features, mesh)
-    return chain is None and not touches_other
+    return not cavity_is_shared(*cavity_chain_state_at(feature, features, mesh))
+
+
+def _needs_a_plain_bore(feature: Feature, stands_alone: bool, op: str) -> None:
+    """*Drehen* und *Verdoppeln* nehmen einen Hohlraum nur, wenn er dem Merkmal
+    allein gehört — sonst sagen sie ab, mit demselben Satz wie das Fenster.
+
+    Gemessen am 14.09.2026 an einer gesenkten Bohrung Ø 8 mit Senkung Ø 16 in
+    einer 10-mm-Platte, die Bohrung gewählt: *Drehen* um 30° kippte nur den
+    Stumpf unter der Senkung (Mitte z = -2, ``no_longer_through``), die Senkung
+    blieb senkrecht stehen; *Verdoppeln* setzte einen Stumpf ohne Senkung. Beides
+    lief ohne Absage durch — ein stilles Falschergebnis, wo Regel 21 eine
+    Ansage verlangt. Die Kette **mitzunehmen**, wie ``move_feature`` es tut,
+    braucht ein Werkzeug, das über beide Oberflächen hinausreicht (gedreht um
+    die Bohrungsmitte endete der exakte Hohlraum 0,9 mm unter der Decke); das
+    steht als Vorschlag im Register. Bis dahin gilt: erst die Senkung
+    entfernen, dann drehen oder verdoppeln — und das sagt das Merkmalfenster
+    schon an der Zeile (``perceive.actions``).
+    """
+    if stands_alone or feature.kind not in ("hole", "cone"):
+        return
+    raise ValidationError(
+        field="at_feature",
+        constraint="shared_cavity",
+        value=feature.id,
+        detail=NEEDS_A_PLAIN_BORE,
+        values={"feature": feature.id, "op": op},
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
 
 
 def _body_from_faces(
@@ -2018,24 +2045,29 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #:
 #: ``move_feature`` fängt die erkannte Kette aus Bohrung und Senkungen vor
 #: ``_tool_for`` ab und versetzt ihren gemeinsamen Hohlraum. Dieser Satz
-#: bleibt für die anderen Handlungen und für Netze, auf denen die Beziehung
-#: nicht eindeutig erkannt werden kann. Dort trägt weiter nur der gemessene
-#: Weg über Zahlen: ein Stopfen mit dem Durchmesser der Senkung über die volle
-#: Wandstärke schließt beides in einem Zug.
-#: Warum *Zum Langloch ziehen* an einer Bohrung mit Senkung nichts tut. Das
-#: Merkmalfenster sagt es an der Zeile (``perceive.actions``), bevor jemand
-#: klickt — derselbe Satz wie hier beim Rechnen.
-SLOT_NEEDS_A_PLAIN_BORE: Final = _(
-    "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. "
-    "Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung."
-)
-
+#: bleibt für Netze, auf denen die Beziehung nicht eindeutig erkannt werden
+#: kann, und für die Handlungen, die keinen eigenen Werkzeugkörper finden.
+#: Dort trägt weiter nur der gemessene Weg über Zahlen: ein Stopfen mit dem
+#: Durchmesser der Senkung über die volle Wandstärke schließt beides in einem
+#: Zug.
 NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
     "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Eine einzelne "
     "Bearbeitung würde die Bohrung darunter mit verschließen. Verschließen Sie beides in einem "
     "Zug: „Bohrung verschließen“ ohne Merkmal, mit dem Durchmesser der Senkung "
     "und der vollen Wandstärke — danach setzen Sie es an der neuen Stelle neu."
+)
+
+#: Warum *Zum Langloch ziehen*, *Merkmal drehen* und *Merkmal verdoppeln* an
+#: einem geteilten Hohlraum absagen — an der Bohrung wie an ihrer Senkung
+#: (``_needs_a_plain_bore``, ``slot_hole``). Das Merkmalfenster sagt es an der
+#: Zeile (``perceive.actions``), bevor jemand klickt — derselbe Satz wie hier
+#: beim Rechnen. Der Weg, den er nennt, führt zum Ziel: Ohne Senkung ist die
+#: Bohrung ein Hohlraum für sich, und der lässt sich ziehen, drehen und
+#: verdoppeln; die Senkung kommt danach wieder darauf.
+NEEDS_A_PLAIN_BORE: Final = _(
+    "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. "
+    "Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung."
 )
 
 #: Und warum ein **Einschluss** dieselbe Stelle trifft, aber aus anderem Grund.
@@ -2379,14 +2411,13 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
 
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
+    stands_alone = _stands_alone(body, feature, source.features)
+    _needs_a_plain_bore(feature, stands_alone, "duplicate_feature")
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
     placed = boolean(
         change,
-        [
-            body,
-            _tool_for(body, feature, target, alone=_stands_alone(body, feature, source.features)),
-        ],
+        [body, _tool_for(body, feature, target, alone=stands_alone)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -2763,6 +2794,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     spun = _with_turned_direction(feature, params.axis, params.angle)
     cavity = is_a_cavity(feature)
     stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
+    _needs_a_plain_bore(feature, stands_alone, "rotate_feature")
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         as_mesh_data(source.mesh),
@@ -3589,7 +3621,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     params = cast(SlotHoleParams, ctx.params)
     source = ctx.inputs[0]
     feature = _chosen_bore(source, params.at_feature, op="slot_hole")
-    from app.core.perceive.relations import cavity_chain_state_at
+    from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
     body = as_mesh_data(source.mesh)
     neighbours = source.features
@@ -3608,13 +3640,12 @@ def slot_hole(ctx: OpContext) -> OpResult:
         ]
         if len(matching) == 1:
             selected = matching[0]
-    chain, touches_other = cavity_chain_state_at(selected, neighbours, body)
-    if touches_other or (chain is not None and len(chain) > 1):
+    if cavity_is_shared(*cavity_chain_state_at(selected, neighbours, body)):
         raise ValidationError(
             field="at_feature",
             constraint="slot_and_widening",
             value=feature.id,
-            detail=SLOT_NEEDS_A_PLAIN_BORE,
+            detail=NEEDS_A_PLAIN_BORE,
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,

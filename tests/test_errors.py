@@ -380,6 +380,8 @@ _NOT_A_RANGE = frozenset(
         # Eine Bohrung mit verbundener Senkung ist eine andere Topologie,
         # kein Zahlenwert außerhalb einer Spanne.
         "slot_and_widening",
+        # Dieselbe Topologie an *Drehen* und *Verdoppeln* (``_needs_a_plain_bore``).
+        "shared_cavity",
         # Eine erklärte Bedingung zwischen Parametern (``PartSpec.feasible``):
         # jeder Wert für sich ist erlaubt, nur nicht zusammen.
         "feasible",

@@ -38,7 +38,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade.
 - Atribuir um filamento já mostra a cor na pré-visualização; igualar e subdividir triângulos mostram a nova malha com as suas arestas. A barra de espaço traz o antes.
 - Escavar uma peça com furos na casca diz agora que a casca é o problema e oferece «Reparar e tentar de novo» — em vez de avisar que nenhum cálculo funcionou.
-- No elemento escolhido aparece a cinzento o que ali só poderia falhar — «Rodar» num escareado, por exemplo — com o motivo. E a pré-visualização diz se ao aplicar virá uma pergunta.
+- No elemento escolhido aparece a cinzento o que ali só poderia falhar — «Rodar elemento» num furo escareado, por exemplo — com o motivo. E a pré-visualização diz se ao aplicar virá uma pergunta.
 - Um campo que nada faz com a forma base escolhida já não aparece a cinzento no diálogo — surge com a forma que precisa dele. Um retângulo mostra à frente quatro campos em vez de oito.
 
 ## 0.4.1

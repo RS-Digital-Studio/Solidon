@@ -27892,6 +27892,21 @@ Schritt an, der nichts ändert (alle *Verschieben*- und *Ändern*-Zeilen) — ke
 Undo-Schritt ohne Wirkung. Fläche, Randring und Ring tragen im Fenster keine Handlungen; ihre
 Wege sind Kontextmenü und Menü.
 
+**Review am selben Tag, nachgezogen (sieben Funde).** Der tragende: *Merkmal drehen* und
+*Merkmal verdoppeln* an der **Bohrung** einer gesenkten Bohrung liefen durch — gemessen an der
+Platte aus `test_prepare` (Ø 8, Senkung Ø 16, 10 mm): *Drehen* um 30° kippte nur den Stumpf unter
+der Senkung (Mitte z = -2, `no_longer_through`), die Senkung blieb senkrecht stehen; *Verdoppeln*
+setzte einen Stumpf ohne Senkung. Der Docstring von `_shares_its_cavity` behauptete, die Bohrung
+drehe ihre Kette mit — der Code tat es nie. Seither sagen beide an einem geteilten Hohlraum ab
+(`_needs_a_plain_bore`, an Bohrung wie Senkung) mit `NEEDS_A_PLAIN_BORE`, dem Satz, den *Zum
+Langloch ziehen* schon trug; die Kette mitzunehmen steht als RM-172 im Register. Dazu: Die
+Bedingung „Kette oder berührter Rand" steht einmal (`relations.cavity_is_shared`) statt zweimal
+wörtlich; `actions_for` fragt das Netz selbst, wenn der Aufrufer nur ein Netz mitbringt, und ohne
+Netz sperrt nichts (die Schätzung aus `bore_and_widening_at` stellte Zeilen grau); der
+`#:`-Block von `NO_OWN_BODY` hing nach dem Umbenennen an `SLOT_NEEDS_A_PLAIN_BORE`; der Changelog
+zitierte „Drehen" statt „Merkmal drehen". Nachweis: `test_a_shared_cavity_greys_out_what_would_fail_on_it`
+fährt Zeile und Operation an derselben Platte.
+
 ## Ein freier Fügeweg wird gesagt (14.09.2026)
 
 Ein Punkt aus dem Werkstattfilm vom 13.09.2026, abgeschlossen am 14.09.2026.
