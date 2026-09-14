@@ -26,6 +26,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
+| 2026-09-15 | [Die Suite öffnet kein Fenster (15.09.2026)](#die-suite-öffnet-kein-fenster-15092026) |
 | 2026-09-15 | [Die Verhaltensabnahme der kompakten Schemata (15.09.2026)](#die-verhaltensabnahme-der-kompakten-schemata-15092026) |
 | 2026-09-14 | [Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)](#die-sollwerte-der-geometrietests-haben-ihre-herkunft-14092026) |
 | 2026-09-14 | [Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)](#die-prompt-grundlast-ist-gemessen-und-das-fenster-ist-voll-14092026) |
@@ -8448,7 +8449,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-097 — Kern: Restpunkte aus dem Review | weiter offen → [RM-097](#rm-097) | project.py:273 prüft leere/ungültige Prüfsummen bereits, :336 nennt bei OSError noch beschädigt. _fell_apart bleibt in label_ops.py:272 und texture_ops.py:490 doppelt. NOISE_VOLUME liegt inzwischen in geom/difference.py:31; BRIDGE_FROM/WIDTH_INTERESTING bleiben analysis.py:84/94. main_window.py:2659 nennt weiter Druckeinstellungen … . |
 | RM-098 — Regelwerk-Nachträge | weiter offen → [RM-098](ROADMAP.md#rm-098) | AGENTS.md/CLAUDE.md enthalten affected_tests je Schritt und das vollständige Tor vor dem Commit. .claude/rules/ enthält weiterhin keine auslieferung.md. Änderung von 22 harten Regeln oder Commit-Autorität bedarf einer ausdrücklichen Entscheidung, die dieser Dokumentabgleich nicht ersetzt. |
 | RM-099 — Konzeptordner aufräumen | weiter offen → [RM-099](ROADMAP.md#rm-099) | konzepte/README.md führt abgeschlossene und überholte Dokumente weiterhin im Stamm; konzepte/archiv existiert nicht. Veröffentlichungs-/Demo-Konzept widersprechen sich weiter bei Zuständigkeit und Status. |
-| RM-100 — Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | weiter offen → [RM-100](ROADMAP.md#rm-100) | tests/test_process.py:239 verwendet unverändert CREATE_NEW_PROCESS_GROUP / DETACHED_PROCESS. Kein aktueller sichtbarer Windows-Terminal-Nachweis vorhanden. |
+| RM-100 — Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | abgeschlossen 15.09.2026 → [Nachweis](#rm-100) | tests/test_process.py:239 verwendet unverändert CREATE_NEW_PROCESS_GROUP / DETACHED_PROCESS. Kein aktueller sichtbarer Windows-Terminal-Nachweis vorhanden. |
 | RM-101 — Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | weiter offen → [RM-101](#rm-101) | Der Originalpunkt ist ein offscreen-Befund ohne gesicherte Herkunft; main_window, Befunddarstellung und Qt-Lebensdauer wurden seither mehrfach geändert. Ein neuer Live-Nachweis des konkreten Fokuswegs fehlt. |
 | RM-102 — Ein Datum steht in jeder Sprache auf Deutsch | weiter offen → [RM-102](#rm-102) | app/ui/main_window.py:13309 verwendet weiterhin written.strftime('%d.%m.%Y %H:%M'); der alte Zeilenverweis ist überholt, der Fehler nicht. |
 | RM-103 — 21 Kernfunktionen über 150 Zeilen | weiter offen → [RM-103](ROADMAP.md#rm-103) | Aktueller AST-Abgleich: evaluate 521 Zeilen, _with_features 580, project.save 176/load 174, range_check.check 244/native_groups_intersect 179. Die alte Liste ist veraltet; range_check._IntersectionCheck existiert bereits. Keine der Längen allein belegt einen Fehler. |
@@ -23287,7 +23288,7 @@ anderes ergibt** — der Punkt dazu bleibt unter P9.
 - **Historischer Befund RM-098 (weiter offen; aktuelle Aufgabe [RM-098](ROADMAP.md#rm-098)):** **Regelwerk-Nachträge.** Wartet auf Roberts Ansage für `AGENTS.md`/`CLAUDE.md`: Regel 5 und 8 als Haltungssätze ohne Testzusage, „nach jedem Schritt die vollständige Suite" zweistufig (erledigt 02.09.2026 auf Roberts Ansage: `tools/affected_tests.py` je Schritt, `/pruefen` vor dem Commit; `AGENTS.md`/`CLAUDE.md` zieht 3d-druck-7b nach), „Verzweigungen im Op-Stack" mit „in dieser Ausbaustufe (§41)", der Commit-Satz `CLAUDE.md:281` als „auf Ansage"; ohne Ansage: Wächter für Regel 2/6/10/19 in `tests/test_hard_rules.py` mit Gegenproben, die Suite-Fahrweise nur in `/pruefen` und `tests/CLAUDE.md`, die Fallteile von `tests.md`/`oberflaeche.md`/`ansicht.md` nach `.claude/memory/`, eine `.claude/rules/auslieferung.md` für `tools/` und `packaging/`, ein Regelnummern-Test wie `test_plan_references.py`, eine Frontmatter-`paths`-Prüfung.
 - **Historischer Befund RM-099 (weiter offen; aktuelle Aufgabe [RM-099](ROADMAP.md#rm-099)):** **Konzeptordner aufräumen.** Wartet auf `konzepte/archiv/` für die 21 abgearbeiteten Dokumente (13 066 Zeilen), eine Entscheidungsnotiz „Weg 3 — Lizenzkette", `konzept-demo-2026-10.md` §6 als überholt kennzeichnen, Zeilenverweise auf `ROADMAP.md` durch Anker ersetzen, die zwei Sitzungs-Bedienkonzepte unter `.claude/` archivieren.
 - [x] **Handbuch, SEO und Stempel vor dem Upload neu erzeugen.** Erledigt am 02.09.2026 (`f7bc5450`): `make_figures.py` je Sprache ein eigener Prozess (54 Bilder, keiner alt geblieben) → `make_web_images.py` je Sprache (24 Belege, die vier `weg*.png` bleiben Handarbeit) → `make_manual.py` (34 Abbildungen und ein PDF je Sprache) → `make_seo.py` → `stamp_assets.py`. Der Bilderlauf fand dabei den `TypeError` der Statuszeile im Skizzeneditor (`c7db2e20`) — die ersten 54 Bilder trugen ihn und wurden noch einmal erzeugt.
-- **Historischer Befund RM-100 (weiter offen; aktuelle Aufgabe [RM-100](ROADMAP.md#rm-100)):** **Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen.** Wartet auf eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess (`DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`), und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 2147942632 (0x800700e8) beim Start von …" (Robert, 02.09.2026, Bildschirmfoto). Der Test bleibt grün — das Jobobjekt schließt den Enkel wie verlangt —, das Fenster ist ein Nebeneffekt der Testumgebung, kein Verhalten der Anwendung. Zu prüfen: den Enkel ohne Konsole starten, und ob die Anwendung selbst (`detached_process_options`, `CREATE_NO_WINDOW`) auf so einer Maschine ein Fenster zeigt.
+- **Historischer Befund RM-100 (abgeschlossen 15.09.2026, [Nachweis](#rm-100)):** **Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen.** Wartet auf eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess (`DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`), und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 2147942632 (0x800700e8) beim Start von …" (Robert, 02.09.2026, Bildschirmfoto). Der Test bleibt grün — das Jobobjekt schließt den Enkel wie verlangt —, das Fenster ist ein Nebeneffekt der Testumgebung, kein Verhalten der Anwendung. Zu prüfen: den Enkel ohne Konsole starten, und ob die Anwendung selbst (`detached_process_options`, `CREATE_NO_WINDOW`) auf so einer Maschine ein Fenster zeigt.
 - **Historischer Befund RM-101 (weiter offen; aktuelle Aufgabe [RM-101](#rm-101)):** **Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster.** Wartet auf die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt — der neue Transform-Test musste deshalb nach dem Laden erneut `activateWindow()` rufen (gemessen 02.09.2026). Den Knopf erst nach dem Einhängen zeigen; Kundenwirkung am echten Fenster prüfen (Fokus springt?).
 
 ## Architektur-Durchsicht (02.09.2026)
@@ -28390,3 +28391,32 @@ Ein Punkt vom 30.08.2026, abgeschlossen am 15.09.2026 mit den zwei Suiteläufen 
   Verschlechterung: Die Kürzung ist eingebaut (`af48f498`), der Wächtertest hält sie am
   Register. Die Tokenmessung ist seit dem 14.09. aktuell (`PROMPT_TOKENS`, RM-054) und wird
   mit der eingebauten Fassung auf ruhiger Karte nachgezogen.
+
+## Die Suite öffnet kein Fenster (15.09.2026)
+
+Ein Punkt aus dem Review vor der Demo 0.3.0 (02.09.2026), abgeschlossen am 15.09.2026 — mit
+einem Zähler statt mit Augen.
+
+<a id="rm-100"></a>
+
+- [x] **RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden.** Am 02.09.2026
+  ließ die Suite auf Roberts Rechner ein Fenster mit „Fehler 2147942632 (0x800700e8)"
+  aufgehen (Bildschirmfoto); der Test blieb grün, das Fenster war ein Nebeneffekt der
+  Konsolenzuweisung. Am 10.09. bekam der Prozesstest seine Startflaggen aus dem Produktivweg
+  (`CREATE_NO_WINDOW` kam mit, `0x208` → `0x8000208`), und offen blieb „die Sichtprüfung, die
+  kein Test leisten kann".
+
+  **Sie kann es doch** (14.09.2026): `tools/count_new_windows.py` fragt Windows vor und
+  während eines Befehls zwanzigmal je Sekunde nach seinen sichtbaren Hauptfenstern und meldet
+  jedes, das dazukommt, mit Klasse, Titel und Prozess — auch eines, das nach einer Sekunde
+  wieder weg ist. Um den Prozesstest gefahren, aus einer von Windows Terminal 1.24 gehosteten
+  Konsole (Standardhost „Windows entscheidet", Windows 11 26200), direkt und unter pytest, mit
+  und ohne die Flagge: kein Fenster, und die Marke des losgelösten Enkels blieb jedes Mal aus.
+
+  **Und um die ganze geteilte Suite** (15.09.2026, 01:03 bis 01:54, aus demselben
+  Terminalhost, während nebenan nur der Ollama-Suitelauf lief): `neue sichtbare Fenster: 0`,
+  `davon Konsolenfenster: 0` über 51 Minuten und jeden Fensterprozess des Tors. Die 48 roten
+  Tests dieses Laufs gehören anderen Baustellen — Handbuch zwischen zwei Releases, fremde
+  ungestagete Arbeit an Fenster und Katalogen, Renderer-Tests bei belegter Grafikkarte — und
+  keiner davon öffnet ein Fenster. Der Docstring des Prozesstests trägt die Messung; das
+  Werkzeug bleibt in `tools/` für den nächsten, der ein Fenster sieht.
