@@ -283,7 +283,7 @@ def hidden_from_the_menu() -> frozenset[str]:
     return frozenset(MENU_TWINS) | variant_members()
 
 
-def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
+def matches(entry: PaletteEntry, query: str, *, stem: bool = False, any_word: bool = False) -> bool:
     """Teilstring-Suche über Titel, Name und Dokumentation.
 
     Gefaltet (siehe :func:`fold`), damit „aushoehlen" das Aushöhlen findet —
@@ -322,11 +322,30 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
     """
     if not query:
         return entry.name not in hidden_from_the_menu()
+    if any_word:
+        return word_hits(entry, query) > 0
     haystack = fold(f"{entry.title} {entry.name} {entry.doc} {synonyms_for(entry.name)}")
     parts = fold(query).split()
     if not stem:
         return all(part in haystack for part in parts)
     return all(stem_of(part) in haystack for part in parts if len(part) >= STEM_LENGTH)
+
+
+def word_hits(entry: PaletteEntry, query: str) -> int:
+    """Wie viele Wörter der Anfrage diesen Eintrag treffen — ganz oder am Stamm.
+
+    Die dritte Runde der Suche (siehe ``CommandPalette._refilter``): Wer
+    „ecke abrunden" tippt, meint das *Verrunden*, und „abrunden" allein fand
+    es — beide Wörter zusammen fanden nichts, weil :func:`matches` alle
+    verlangt (Bedienweg-Durchsicht 14.09.2026: sieben von 71 Kundenwörtern
+    leer, darunter „zu viele dreiecke" und „gerade stellen"). Gezählt und
+    nicht nur gefragt, damit die Liste nach Trefferzahl sortiert werden kann.
+    """
+    haystack = fold(f"{entry.title} {entry.name} {entry.doc} {synonyms_for(entry.name)}")
+    return sum(
+        part in haystack or (len(part) >= STEM_LENGTH and stem_of(part) in haystack)
+        for part in fold(query).split()
+    )
 
 
 #: Wie weit die Tastenspalte vom rechten Rand einrückt.
@@ -436,6 +455,18 @@ class CommandPalette(QDialog):
         found = [entry for entry in self._entries if matches(entry, query)]
         if not found and query.strip():
             found = [entry for entry in self._entries if matches(entry, query, stem=True)]
+        # **Und eine dritte für mehrwortige Fragen.** „ecke abrunden" fand
+        # nichts, obwohl „abrunden" das *Verrunden* findet; „zu viele
+        # dreiecke" nichts, obwohl „dreiecke" auf *Dreiecke verringern* führt
+        # (Bedienweg-Durchsicht 14.09.2026, sieben von 71 Kundenwörtern
+        # leer). Erst wenn kein Eintrag auf alle Wörter passt, genügt eines —
+        # sortiert nach Trefferzahl und mit einer Zeile darüber, die das sagt:
+        # Eine Liste, die stillschweigend weniger prüft, sieht aus wie eine
+        # genaue.
+        loosened = False
+        if not found and len(query.split()) > 1:
+            found = [entry for entry in self._entries if matches(entry, query, any_word=True)]
+            loosened = bool(found)
         # Stabil nach Güte: Titel vor Name vor Beschreibung, und innerhalb
         # derselben Güte bleibt die Reihenfolge aus ``applies_to`` stehen.
         #
@@ -453,7 +484,23 @@ class CommandPalette(QDialog):
         # ``doc``-Satz als zweite Zeile, so wie der gesperrte Fall seinen Grund
         # (Review 02.09.2026).
         twins = MENU_TWINS.keys() | MENU_TWINS.values()
-        found.sort(key=lambda entry: (rank(entry, query), entry.name in hidden_names))
+        found.sort(
+            key=lambda entry: (
+                -word_hits(entry, query) if loosened else 0,
+                rank(entry, query),
+                entry.name in hidden_names,
+            )
+        )
+        offset = 0
+        if loosened:
+            # Nicht wählbar und ohne Daten, wie die leere Antwort unten:
+            # ``chosen()`` gibt darüber None zurück, die Vorauswahl übergeht sie.
+            heading = QListWidgetItem(
+                tr("Kein Befehl passt auf alle Wörter — das Folgende passt auf einzelne.")
+            )
+            heading.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(heading)
+            offset = 1
         for entry in found:
             label = str(entry.title)
             if entry.shortcut:
@@ -488,10 +535,10 @@ class CommandPalette(QDialog):
             # schlimmer. Findet sich in der besten Güte nichts Ausführbares,
             # bleibt die Wahl auf deren erstem Eintrag: Er sagt, was ihm fehlt.
             best = rank(found[0], query) if found else 0
-            chosen_row = 0
-            for row in range(self.list.count()):
+            chosen_row = offset
+            for row in range(offset, self.list.count()):
                 item = self.list.item(row)
-                if item is None or rank(found[row], query) != best:
+                if item is None or rank(found[row - offset], query) != best:
                     break
                 if item.flags() & Qt.ItemFlag.ItemIsEnabled:
                     chosen_row = row

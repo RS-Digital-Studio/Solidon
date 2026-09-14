@@ -27874,6 +27874,17 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     `test_reading_an_stl_is_not_a_finding`,
     `test_an_stl_import_greets_without_a_finding_about_reading_it`,
     `test_the_export_offers_its_folder`.
+  - **Die Palette antwortete auf „ecke abrunden" mit einer leeren Liste** (B13), obwohl „abrunden"
+    das *Verrunden* findet: `matches` verlangte alle Wörter (64 von 71 Kundenwörtern fanden
+    etwas, sieben nichts — „zu viele dreiecke", „gerade stellen", „wanddicke"). Eine dritte Runde
+    nach der Stammrunde: Passt kein Eintrag auf alle Wörter, genügt eines (`word_hits`), sortiert
+    nach Trefferzahl, mit der Zeile „Kein Befehl passt auf alle Wörter — das Folgende passt auf
+    einzelne." darüber — nicht wählbar, die Vorauswahl übergeht sie. Wer ein Wort tippt, das
+    ganz passt, sieht sie nicht. Nachweis: `test_a_question_of_several_words_still_finds_something`.
+  - **Und die Tour des ersten Wegs zählt nach** (Folge von B16): Ihr letzter Schritt nannte „drei
+    Hinweise", darunter die verschweißten Punkte; seit das Lesen einer STL kein Befund mehr ist,
+    sind es zwei, und der Satz sagt es — `test_the_first_tour_describes_the_report_it_really_gets`
+    hat die Zahl festgehalten, genau wofür er gebaut war.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 

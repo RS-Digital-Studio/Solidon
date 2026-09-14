@@ -255,11 +255,13 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # Bericht dieses Beispiels sagt „An diesem Netz war nichts zu
                 # reparieren". Wer als Erstes einen Widerspruch zwischen
                 # Anleitung und Anwendung liest, glaubt danach keiner von
-                # beiden. Genannt wird deshalb, was dasteht: drei Hinweise,
+                # beiden. Genannt wird deshalb, was dasteht: zwei Hinweise,
                 # keine Warnung. ``tests/test_tour.py`` hält die Zahl fest.
+                # **Zwei seit dem 14.09.2026, nicht drei**: „Doppelte Punkte
+                # wurden verschweißt" war das Lesen einer STL und ist kein
+                # Befund mehr (``ingest.loader.normalise``, ``weld_is_reading``).
                 text=_(
-                    "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: "
-                    "doppelte Punkte, die beim Einlesen verschweißt wurden, "
+                    "Rechts steht der Prüfbericht — hier zwei Hinweise und keine Warnung: "
                     '„nichts zu reparieren" für '
                     "dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen "
                     "ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung."

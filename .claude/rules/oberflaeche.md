@@ -426,7 +426,13 @@ Bewegen-Leiste — geht in den Schritt des Bausteins
 (`MainWindow._move_the_part`); und der Griff hängt an **jedem** seiner
 Merkmale, auch an denen ohne eigene Operation (`Viewport.moves_as_a_part`).
 Wer eine neue Geste an einem Merkmal baut, fragt zuerst, ob es aus einem
-Baustein kam.
+Baustein kam. **Und die Drehachse ist die des Bausteins, nie die des
+angefassten Merkmals**: An einem benannten Sitz (`at_feature`) gibt das
+Sitzmerkmal die Richtung (`direction_of`, dieselbe Funktion wie im Kern), mit
+freier Richtung rechnet die Rundreise `placement_transform` →
+`placement_values_of`, und was keins von beidem hat, dreht nur um sein Feld
+*Achse* — jede andere Achse bekommt einen Satz mit dem Weg, nicht eine stille
+Drehung um die falsche.
 
 **Eine Anzahl ist keine Länge.** `count`, `steps`, `holes` sind ganze Zahlen
 ohne Einheit; als Längenfeld hießen sie im Merkmalfenster „2,00 mm", in Zoll
@@ -1064,6 +1070,15 @@ dort wird „ä" zu „ae", weil jemand „aushoehlen" tippt; beim Sortieren zä
 wie „a" (DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" steht.
 Zwei Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
+
+**Und die Suche antwortet in drei Runden, jede nur bei Bedarf.** Genau
+passend, dann am Wortstamm („bohren" → *Bohrung setzen*), und für eine
+mehrwortige Frage zuletzt: **irgendeines** der Wörter, nach Trefferzahl
+sortiert, mit einer Zeile darüber, die das sagt („Kein Befehl passt auf alle
+Wörter — das Folgende passt auf einzelne."). „ecke abrunden" gab eine leere
+Liste, während „abrunden" das *Verrunden* fand (Bedienweg-Durchsicht
+14.09.2026, sieben von 71 Kundenwörtern leer). Eine Liste, die
+stillschweigend weniger prüft, sähe aus wie eine genaue — deshalb die Zeile.
 
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 

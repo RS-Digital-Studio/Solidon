@@ -6152,6 +6152,12 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
     choose("arrange.below_bed")
     assert offered() == [str(errors.PLACE_ON_BED.label)]
 
+    # Ein Hinweis ohne Handlung — seit dem 14.09.2026 nicht mehr aus dem
+    # STL-Import (das Verschweißen einer STL ist Lesen, kein Befund), also
+    # ausdrücklich hinzugelegt: Geprüft wird die Knopfzeile, nicht der Import.
+    report.add_findings(
+        [Finding(code="ingest.welded", severity="info", message="Doppelte Punkte verschweißt.")]
+    )
     choose("ingest.welded")
     assert offered() == [], "ein Hinweis ohne Handlung bekommt keinen Knopf"
 
@@ -15579,6 +15585,31 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert all(chr(10) in row for row in both), both
 
 
+def test_a_question_of_several_words_still_finds_something(window: MainWindow) -> None:
+    """„ecke abrunden" gab eine leere Liste, obwohl „abrunden" das *Verrunden*
+    findet — die Suche verlangte alle Wörter, und die Leerantwort bot keinen
+    Weg (Bedienweg-Durchsicht 14.09.2026: sieben von 71 Kundenwörtern leer).
+    Erst wenn nichts auf alle passt, genügt eines; die Zeile darüber sagt es,
+    und wer ein Wort tippt, das ganz passt, sieht sie nicht.
+    """
+    from app.ui.command_palette import CommandPalette
+
+    heading = str(tr("Kein Befehl passt auf alle Wörter — das Folgende passt auf einzelne."))
+    palette = CommandPalette(parent=window)
+
+    palette._refilter("ecke abrunden")
+    rows = [palette.list.item(row) for row in range(palette.list.count())]
+    assert rows and rows[0].text() == heading, [row.text() for row in rows[:3]]
+    assert not rows[0].flags() & Qt.ItemFlag.ItemIsSelectable, "die Überschrift ist kein Befehl"
+    names = [row.data(Qt.ItemDataRole.UserRole) for row in rows[1:]]
+    assert "fillet_edges" in names, names
+    assert palette.list.currentRow() >= 1, "vorausgewählt ist ein Befehl, nicht die Überschrift"
+
+    palette._refilter("abrunden")
+    assert palette.list.item(0).text() != heading, "ein Wort, das ganz passt, braucht keine"
+    assert palette.list.item(0).data(Qt.ItemDataRole.UserRole) == "fillet_edges"
+
+
 def test_the_build_plate_hides_in_one_step(window: MainWindow) -> None:
     """Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die Druckplatte auszublenden".
 
@@ -17093,3 +17124,196 @@ def test_a_preview_without_the_coarse_callback_stays_exact(
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 500)
     session.preview_scene([draft])
     assert asked == [], "ohne Rückruf wird nicht einmal gefragt"
+
+
+def test_a_check_says_where_its_result_is_instead_of_naming_the_volume(
+    window: MainWindow,
+) -> None:
+    """„Am Volumen ändert sich nichts" ist über einer Prüfung ein Füllsatz.
+
+    *Überschneidungen prüfen* und *Fügeweg prüfen* ändern **nie** etwas; ihr
+    Ergebnis sind die Befunde. Wer den allgemeinen Satz liest, sucht danach im
+    Bild nach einem Ergebnis, das im Prüfbericht steht. *Objekt umbenennen*
+    ändert dagegen sehr wohl etwas — nur nicht die Form.
+
+    Welche Lage gilt, sagt das Register und keine Namensliste im Fenster
+    (``OperationSpec.unchanged_effect``); das Fenster übersetzt sie in einen
+    Satz.
+    """
+    leer = dataclasses.make_dataclass("Leer", [("changed", bool)])(False)
+    banner = window.viewport.banner
+
+    window._preview_effect = REGISTRY.get("check_collisions").unchanged_effect
+    window._show_preview(leer)
+    assert banner.note.text() == tr("Prüfung — das Ergebnis steht im Prüfbericht, nicht im Bild")
+
+    # Der Merker gilt genau einer Vorschau — die nächste bekommt den
+    # allgemeinen Satz zurück.
+    window._show_preview(leer)
+    assert banner.note.text() == tr("Vorschau — am Volumen ändert sich nichts")
+
+    window._preview_effect = REGISTRY.get("rename_object").unchanged_effect
+    window._show_preview(leer)
+    assert banner.note.text() == tr("Vorschau — der Name ändert sich, die Form nicht")
+
+    # Und ein Grund aus dem Kern räumt ihn ebenfalls weg.
+    window._preview_effect = REGISTRY.get("check_join_path").unchanged_effect
+    window._preview_explained("Diese Ebene teilt das Objekt nicht.")
+    assert window._preview_effect == ""
+    window._clear_preview()
+
+
+def test_every_operation_without_a_geometry_outcome_is_declared_in_the_register() -> None:
+    """Die Tabelle nennt Operationen, also müssen es welche sein.
+
+    Ein Tippfehler darin wäre still: Das Band fiele auf den allgemeinen Satz
+    zurück, und niemand bemerkte es.
+    """
+    from app.core.registry.registry import UNCHANGED_EFFECT
+
+    unknown = sorted(name for name in UNCHANGED_EFFECT if not REGISTRY.has(name))
+    assert unknown == [], f"keine Operationen: {unknown}"
+    assert {name for name, lage in UNCHANGED_EFFECT.items() if lage == "report"} == {
+        "check_collisions",
+        "check_join_path",
+    }, "die beiden Prüfwerkzeuge geben ihre Eingänge unverändert zurück"
+
+
+def test_an_empty_preview_repeats_what_the_step_itself_reported() -> None:
+    """Über einer leeren Differenz ist jeder Befund besser als der Füllsatz.
+
+    *Dreiecke verringern* mit einem Ziel über der vorhandenen Zahl tut nichts
+    und meldet ``mesh.already_below_target`` — Stufe ``info``, und die kam bis
+    zum 14.09.2026 nicht ins Band: Dort stand „am Volumen ändert sich nichts",
+    also die Beobachtung statt des Grundes. Dieselben Geschwister:
+    ``repair.nothing_to_do``, ``mesh.not_simplified``, ``sculpt.empty``.
+
+    Warnung und Fehler behalten den Vortritt — ein Schritt kann beides melden.
+    """
+    from app.ui.session import _warning_of
+
+    def result_with(*findings: Finding) -> Any:
+        report = dataclasses.make_dataclass("Bericht", [("findings", list)])(list(findings))
+        scene = dataclasses.make_dataclass("Szene", [("report", object)])(report)
+        return dataclasses.make_dataclass("Ergebnis", [("scene", object)])(scene)
+
+    hinweis = Finding(
+        code="mesh.already_below_target",
+        severity="info",
+        message="Der Körper hat schon weniger Dreiecke als das Ziel.",
+        op_id=2,
+    )
+    warnung = Finding(
+        code="mesh.not_simplified",
+        severity="warning",
+        message="Das Netz ließ sich nicht weiter vereinfachen.",
+        op_id=2,
+    )
+    fremd = Finding(code="ingest.not_watertight", severity="warning", message="Offen.", op_id=1)
+
+    assert _warning_of(result_with(hinweis), (2,)) == str(hinweis.message)
+    assert _warning_of(result_with(hinweis, warnung), (2,)) == str(warnung.message)
+    assert _warning_of(result_with(fremd, hinweis), (2,)) == str(hinweis.message), (
+        "ein Befund eines fremden Schritts gehört nicht in dieses Band"
+    )
+    assert _warning_of(result_with(fremd), (2,)) == ""
+
+
+def test_the_band_of_an_empty_preview_carries_that_sentence(window: MainWindow) -> None:
+    """Und der Satz kommt im Fenster an, nicht nur in der Sitzung.
+
+    *Reparieren* an einem heilen Quader ändert nichts und sagt, warum.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    body = next(iter(result.scene.objects))
+
+    _scene, difference, reason = window.session._preview_outcome(
+        [OperationDraft(op="repair", params={}, inputs=(body,))]
+    )
+    assert difference is not None and not difference.changed, "ein heiles Netz ändert sich nicht"
+    assert reason, "der Schritt meldet, warum nichts geschah"
+
+    window._preview_explained(reason)
+    assert window.viewport.banner.note.text() == tr("Keine Vorschau: {reason}").format(
+        reason=reason
+    )
+    assert window.viewport.banner.note.text() != tr("Vorschau — am Volumen ändert sich nichts")
+    window._clear_preview()
+
+
+def test_the_preview_reads_the_advice_the_core_already_carries() -> None:
+    """Die Kennung kommt aus den Vorschlägen der Ausnahme, nicht aus dem Satz.
+
+    Zwei Wege führen zum Band, und beide müssen sie tragen: die Ausnahme, die
+    aus der Rechnung fliegt (:func:`_advice_of`), und der Befund, an dem die
+    Kette anhält (:func:`_stop_advice`). *Abbrechen* ist kein Rat und trägt
+    ``primary`` nicht — eine Ausnahme ohne empfohlene Handlung nennt keine.
+    """
+    from app.core.errors import CANCEL, GeometryError, NotManifoldError
+    from app.i18n import TranslatableText
+    from app.ui.session import _advice_of
+
+    nicht_dicht = NotManifoldError(
+        detail=TranslatableText("Erst reparieren."),
+        open_edges=3,
+    )
+    assert _advice_of(nicht_dicht) == "repair_and_retry"
+    ging_nicht = GeometryError(TranslatableText("Ging nicht."), suggestions=(CANCEL,))
+    assert _advice_of(ging_nicht) == "", "Abbrechen ist kein Rat"
+
+
+class _DialogWithHook:
+    """Ein Dialogdoppel, das ``block_apply`` trägt — wie der echte."""
+
+    def __init__(self) -> None:
+        self.blocked: list[str | None] = []
+
+    def block_apply(self, reason: str | None) -> None:
+        self.blocked.append(reason)
+
+
+class _DialogWithoutHook:
+    """Und eines ohne ihn: Die Sperre darf daran nicht scheitern."""
+
+
+def test_a_reason_that_asks_for_a_repair_first_greys_out_apply(window: MainWindow) -> None:
+    """Das Band sagte „Erst reparieren, dann aushöhlen" — und *Übernehmen*
+    blieb anklickbar.
+
+    Drei Klicks später stand derselbe Satz im Prüfbericht, dazu ein
+    angehaltener Schritt im Verlauf (Regel 19). Trägt der Grund eine Handlung,
+    die vor das Übernehmen gehört, sperrt das Fenster den Knopf mit genau
+    diesem Satz.
+    """
+    doppel = _DialogWithHook()
+    window._op_dialog = cast(Any, doppel)
+    satz = "Der Körper ist nicht geschlossen — erst reparieren, dann aushöhlen."
+
+    window._preview_advised("repair_and_retry")
+    window._preview_explained(satz)
+    assert doppel.blocked == [satz]
+    assert window._preview_action == "", "die Handlung gilt genau einem Grund"
+
+    # Und das nächste Bild gibt ihn wieder frei.
+    gezeigt = dataclasses.make_dataclass("Gezeigt", [("changed", bool), ("entries", dict)])(
+        True, {}
+    )
+    window._show_preview(gezeigt)
+    assert doppel.blocked[-1] is None
+
+    # Eine Handlung, die im offenen Dialog stattfindet, sperrt nichts: Beim
+    # Tippen entstehen ungültige Zwischenstände.
+    window._preview_advised("correct_input")
+    window._preview_explained("Ein Wert liegt außerhalb des zulässigen Bereichs.")
+    assert doppel.blocked[-1] is None
+
+    # Ein Dialog ohne den Haken und gar kein Dialog laufen unverändert weiter.
+    window._op_dialog = cast(Any, _DialogWithoutHook())
+    window._preview_advised("repair_and_retry")
+    window._preview_explained(satz)
+    window._op_dialog = None
+    window._preview_advised("repair_and_retry")
+    window._preview_explained(satz)
