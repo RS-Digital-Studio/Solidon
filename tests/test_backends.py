@@ -344,7 +344,12 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
 
     _url, _headers, payload = transport.calls[0]
     assert payload["options"]["num_ctx"] == OLLAMA_CONTEXT_TOKENS
-    assert OLLAMA_CONTEXT_TOKENS >= 25361, "so viel brauchen die Werkzeuge allein"
+    # Gegen die gemessene Nutzlast, nicht gegen eine Zahl von damals: Ein
+    # Prompt über dem Fenster wird von Ollama vorn abgeschnitten — und vorn
+    # steht der Auftrag. Am 14.09.2026 sind es 31 465 von 32 768 (RM-054).
+    from app.core.backends.llm import PROMPT_TOKENS
+
+    assert OLLAMA_CONTEXT_TOKENS > PROMPT_TOKENS, "so viel brauchen die Werkzeuge allein"
 
 
 def test_the_local_model_stays_loaded_between_two_steps() -> None:

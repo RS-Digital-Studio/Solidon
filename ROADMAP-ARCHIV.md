@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)](#die-prompt-grundlast-ist-gemessen-und-das-fenster-ist-voll-14092026) |
 | 2026-09-14 | [Die Orientierungssuche hat ihre Abnahme (14.09.2026)](#die-orientierungssuche-hat-ihre-abnahme-14092026) |
 | 2026-09-14 | [Das Regelwerk hat seine Wächter (14.09.2026)](#das-regelwerk-hat-seine-wächter-14092026) |
 | 2026-09-14 | [Der Schlüsseldialog schließt sofort (14.09.2026)](#der-schlüsseldialog-schließt-sofort-14092026) |
@@ -28094,3 +28095,26 @@ Ein Restvertrag aus dem Bauplan-Abgleich vom 08.09.2026, abgeschlossen am 14.09.
   Kandidaten, die keinen prüfte. Seither misst er einen gekippten organischen Körper mit 218
   Hüllnormalen, von denen die Vorauswahl neun schneidet, und verlangt `tried > 1`: 0,27 bis 0,36 s
   gegen das Ziel aus §31.
+
+## Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)
+
+Ein Punkt aus dem Gesamtreview vom 05.09.2026, abgeschlossen am 14.09.2026 — und er hinterlässt
+einen neuen: RM-173.
+
+<a id="rm-054"></a>
+
+- [x] **RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen.** Zwei Zahlen standen
+  auseinander: `PROMPT_TOOL_COUNT` auf 121 (zweimal vom Wächter nachgezogen), `PROMPT_TOKENS` auf
+  28 281 aus der Messung von 119 Werkzeugen am 09.09.; die Tokenzahl wurde ausdrücklich nicht
+  fortgeschrieben, weil eine hochgerechnete Messung keine ist.
+
+  **Gemessen am 14.09.2026** mit `tools/measure_local_model.py --model qwen3:14b --runs 3`, RTX
+  4080, vollständig im VRAM: **31 465 Token** bei 121 Werkzeugen, 22,9 s kalt, warm 2,3 bis
+  2,4 s (Promptcache). `PROMPT_TOKENS` trägt die Zahl mit Modell, Schema und Datum;
+  `test_backends` prüft das Fenster seither gegen die gemessene Nutzlast statt gegen 25 361 von
+  damals, und die Wartezeit im Schlüsseldialog rechnet mit derselben Zahl (`test_chat_ui`
+  rechnet sie aus `PROMPT_TOKENS`, nicht aus einer Behauptung).
+
+  **Was die Messung außerdem sagt, steht als RM-173 im Register:** 96,0 % des Fensters, 1 303
+  Token Rest, und mit `num_ctx` 40 960 läuft das Modell von der Karte (`ollama ps`: 16 GB,
+  `10 %/90 % CPU/GPU`).

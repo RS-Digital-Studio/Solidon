@@ -83,10 +83,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Suite mit festgehaltenem aktuellem Modell und vergleichbarer Referenz messen |
-| [RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen](#rm-054) | KI und Generatoren | 121 Werkzeuge, aber 28.281 Token aus der Messung von 119 — die Zahl gegen den heutigen Bestand neu messen |
 | [RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen](#rm-069) | KI und Generatoren | Vergleichbare Suitequoten vor und nach der Schema-Verdichtung nachweisen |
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warm-/Kaltstart, Antwortqualität und Schemakürzungen gemeinsam messen |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
+| [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | 31 465 von 32 768 Token für Auftrag und Werkzeuge, 1 303 bleiben; das Fenster lässt sich auf der Karte nicht heben — das Schema muss kürzer werden, und ein Wächter muss den Überlauf melden |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -1168,23 +1168,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-konzepte-nachrecherchiert-19082026).
 
-<a id="rm-054"></a>
-
-- [ ] **RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen.** **Die zwei Zahlen
-  stehen inzwischen auseinander, und das ist der Punkt** (nachgemessen 13.09.2026):
-  `PROMPT_TOOL_COUNT` steht auf **121** — gezählt am Register sind es 110 Operationen und elf
-  Zusatzwerkzeuge —, `PROMPT_TOKENS` steht unverändert auf 28.281 und ist die Messung von
-  **119** Werkzeugen gegen qwen3:14b (`e71cd2ca`, 09.09.2026). Der Wächter in
-  `tests/test_agent.py` hat seither zweimal angeschlagen und beide Male nur die Werkzeugzahl
-  nachziehen lassen; die Tokenzahl wird ausdrücklich nicht fortgeschrieben, weil eine
-  hochgerechnete Messung keine ist. Sie ist damit eine **Untergrenze**, und genau das hält den
-  Punkt offen. Die 114 und die 22.856 vom 03.09.2026 sind drei Messungen alt. Mit
-  `tools/measure_local_model.py` gegen das dafür festgehaltene lokale Modell `prompt_eval_count`
-  erfassen und Zahlen samt Modell/Schema/Datum nachziehen. Abnahme: die angezeigte Wartezeit und
-  Budgetrechnung beruhen auf derselben gemessenen Nutzlast.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#was-der-gesamtreview-liegen-ließ-05092026).
-
 <a id="rm-069"></a>
 
 - [ ] **RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen.** Die frühere
@@ -1216,6 +1199,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   keine Geometrieänderung und keine Scheintransaktion.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-173"></a>
+
+- [ ] **RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus.** Gemessen am
+  14.09.2026 beim Abschluss von RM-054: Auftrag und die 121 kompakten Werkzeugschemata kosten
+  **31 465 Token**, das Fenster hat 32 768 (`OLLAMA_CONTEXT_TOKENS`) — 96,0 %. Für Steckbrief,
+  Prüfbericht, Verlauf und die Frage selbst bleiben 1 303 Token, und Ollama schneidet einen
+  Prompt über dem Fenster **vorn** ab: Das Erste, was fehlte, wäre der Auftrag — und niemand
+  sähe es (Regel 21 in ihrer stillsten Form; am 03.09. fiel die Bausteinquote aus genau diesem
+  Grund von 3/3 auf 0/3, siehe `test_backends`). Seit dem 08.09. sind es 3 184 Token mehr bei
+  zwei Werkzeugen mehr; jede weitere Operation kostet in dieser Größenordnung.
+
+  **Das Fenster lässt sich auf der Karte nicht heben:** Mit `num_ctx` 40 960 meldet `ollama ps`
+  für qwen3:14b 16 GB und `10 %/90 % CPU/GPU` — das Modell läuft von der RTX 4080 über, und der
+  Prozessorweg ist 72-mal langsamer (Messreihe vom 31.08.). Eine Auswahl, die Operationen
+  aussortiert, wäre eine Betriebsart mit anderem Namen und ist ausgeschlossen (`AGENTS.md`).
+  Bleibt: **weniger Text je Werkzeug.** Kandidaten, jeder zu messen: die `doc`-Sätze der
+  Parameter im kompakten Schema noch einmal kürzen oder in den Systemprompt heben, wo sie
+  einmal statt je Werkzeug stehen (das Muster von `objects` und den sechs Platzierungsangaben,
+  das am 31.08. 4 520 Token brachte); Enumerationen und Vorgabewerte nur dort ausschreiben, wo
+  das Modell sie ohne Beispiel verfehlt; die `caveat`-Zeile nur bei Operationen, deren Grenze
+  im Register steht.
+
+  **Und ein Wächter, der den Überlauf sagt statt schweigt:** Vor dem Absenden die Nutzlast
+  gegen `OLLAMA_CONTEXT_TOKENS` rechnen (die Zählung liefert `prompt_eval_count` des ersten
+  Zugs; eine Näherung aus der Zeichenzahl reicht als Vorwarnung) und im Chat melden, wenn
+  Steckbrief oder Verlauf gekürzt werden mussten — nicht still einen halben Auftrag schicken.
+
+  Abnahme: `tools/measure_local_model.py` unter 85 % des Fensters mit vollem Werkzeugbestand,
+  die Agenten-Suite vorher und nachher ohne Quotenverlust (§39), und ein Test, der einen zu
+  langen Prompt als Befund im Chat zeigt.
 
 ## Tests und Entwicklungswerkzeuge
 

@@ -1868,7 +1868,19 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Fensters allein für Auftrag und Werkzeuge bleibt für Szenensteckbrief,
 #: Prüfbericht und Chatverlauf weniger als ein Viertel. Die nächsten
 #: Operationen kosten den Chat nicht mehr Wartezeit, sondern Platz.
-PROMPT_TOKENS: Final = 28281
+#:
+#: **Am 14.09.2026 mit 121 Werkzeugen gemessen: 31 465 Token** (RM-054;
+#: ``tools/measure_local_model.py``, qwen3:14b, RTX 4080, vollständig im
+#: VRAM — 22,9 s kalt, warm 2,3 bis 2,4 s in drei Zügen). Das sind **96,0 %**
+#: des Fensters; für Steckbrief, Prüfbericht, Verlauf und die Frage selbst
+#: bleiben 1 303 Token. Und das Fenster lässt sich auf dieser Karte nicht
+#: heben: Mit ``num_ctx`` 40 960 meldet ``ollama ps`` 16 GB und
+#: ``10 %/90 % CPU/GPU`` — das Modell läuft über, und der Prozessorweg ist
+#: laut derselben Messreihe 72-mal langsamer. Der Platz muss aus dem Schema
+#: kommen (RM-173). Die zwei Zahlen davor — 121 Werkzeuge, 28 281 Token von
+#: 119 — standen fünf Tage auseinander; der Wächter hatte zweimal nur die
+#: Werkzeugzahl nachziehen lassen, weil eine hochgerechnete Messung keine ist.
+PROMPT_TOKENS: Final = 31465
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
