@@ -1,6 +1,6 @@
 ---
 name: ollama-verwirft-schema-felder
-description: "Ollama parst Werkzeugschemata in eine feste Struktur und verwirft pattern, minimum, maximum, default vor dem Rendern — was das lokale Modell sieht, sind Name, Beschreibung, Typ, Enum, Items; und einen zu langen Prompt kürzt es still auf die Hälfte (14.09.2026)"
+description: "Ollama parst Werkzeugschemata in eine feste Struktur und verwirft pattern, minimum, maximum, default vor dem Rendern — was das lokale Modell sieht, sind Name, Beschreibung, Typ, Enum, Items; einen zu langen Prompt kürzt es still auf die Hälfte, und reicht Prompt plus Antwort über das Fenster, schiebt llama.cpp den Kontext ohne ein Zeichen in der Antwort (14.09.2026)"
 metadata: 
   node_type: memory
   type: reference
@@ -36,3 +36,18 @@ nicht die Zeichenzahl. Bei jedem Ollama-Weg `prompt_eval_count` gegen
 `PROMPT_TOKENS` halten — `BackendPromptTruncated` tut das im Backend. Siehe
 [[pruefjob-nur-beim-tag-hat-nie-gemessen]] und
 [[messwerkzeug-misst-sich-selbst]].
+
+**Nachtrag 14.09.2026, abends — die zweite Gestalt.** Im Ollama-Serverlog
+(`%LOCALAPPDATA%\Ollama\server.log`) des Suitelaufs: `stop processing:
+n_tokens = 16765, truncated = 1` — der zweite Schritt eines Zugs begann mit
+32 300 Token und erzeugte 847; llama.cpp schiebt den Kontext, sobald der
+nächste Token das Fenster erreicht, behält `n_keep` vorn und verwirft die
+Hälfte des Rests. Die API-Antwort trägt nichts davon: `done_reason: stop`,
+`prompt_eval_count` zählt den ganzen Prompt (auch den gepufferten Teil).
+Erkennbar nur an `prompt_eval_count + eval_count >= num_ctx` —
+`BackendContextShifted` prüft genau das. Im Basislauf der Suite waren 16
+von 45 Schritten so geschoben. Und: `llama-server started in 146 seconds`
+unter Fremdlast (drei Torläufe nebenan) — der Modellstart, nicht der Prompt,
+kostet nach jedem entladenen Zug die Minuten; ruhig sind es Sekunden. Wer
+Ollama-Zeiten misst, liest die `[GIN]`-Zeilen und die `print_timing`-Zeilen
+im Log, sie trennen Laden, Prompt und Antwort.
