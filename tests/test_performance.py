@@ -866,13 +866,34 @@ def test_the_wall_thickness_map_stays_under_the_bound() -> None:
 
 
 def test_the_orientation_search_over_two_hundred_candidates() -> None:
-    """§31: unter 20 Sekunden, unterbrechbar. Hier etwa 16, und dorthin kam
-    sie, indem sie Arbeit unterlässt, die niemand liest: die Suche nimmt eine
-    Zahl aus jedem Schnitt, fragt also nach ``detail="support"``, und die
-    Strukturbreiten bleiben weg.
+    """§31: 200 betrachtete Kandidaten unter 20 Sekunden, unterbrechbar.
+
+    **Der Körper muss die Suche zwingen, zu suchen.** Bis zum 14.09.2026 stand
+    hier die flach liegende `plate_holes.stl`: Die Ausgangslage war schon die
+    beste, ``settled`` beendete die Suche nach dem ersten Schnitt, und der
+    Test maß 42 ms bei ``tried == 1`` — eine Zusicherung über 200 Kandidaten,
+    die keinen einzigen prüfte, und der Docstring sprach noch von „etwa 16
+    Sekunden" aus der Zeit vor der Vorauswahl (RM-139). Der gekippte,
+    gestreckte organische Körper liefert 218 Hüllnormalen, von denen die
+    Vorauswahl neun wirklich schneidet; ``tried > 1`` hält fest, dass die
+    Uhr über einer Suche lief und nicht über einem Ausstieg. Gemessen am
+    14.09.2026: 0,23 s allein — dorthin kam sie, indem sie Arbeit
+    unterlässt, die niemand liest: eine Zahl je Schnitt (``detail="support"``),
+    und nur die Finalisten werden geschnitten.
     """
-    mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
-    taken = measure("orient_200", lambda: search(mesh, count=200, layer_height=0.4))
+    from app.core.geom.orient import candidates
+
+    trimesh = deferred.trimesh
+    raw = trimesh.creation.icosphere(subdivisions=3, radius=12)
+    raw.apply_scale((1.0, 0.7, 1.5))  # type: ignore[no-untyped-call]
+    raw.apply_transform(trimesh.transformations.rotation_matrix(0.7, (1.0, 0.3, 0.0)))
+    mesh = MeshData.of(raw)
+    assert len(candidates(mesh, hull_limit=200)) >= 200, "sonst betrachtet der Test keine 200"
+    outcome: list[Any] = []
+    taken = measure(
+        "orient_200_tilted", lambda: outcome.append(search(mesh, count=200, layer_height=0.4))
+    )
+    assert outcome[0].tried > 1, "die Uhr lief über einem Ausstieg, nicht über der Suche"
     assert taken < 20.0, "the §31 target, and it holds"
 
 

@@ -65,7 +65,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | 1,400 auf 1,004 s gebracht; offen ist die Entscheidung zwischen Stapelumbau der Einpassungen und einem neu gefassten Ziel |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
-| [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen sind gebaut; es fehlt die Messung gegen die vollständige Kandidatenliste |
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
@@ -749,23 +748,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   geänderten mitgelieferten und eigenen Baustein öffnen, einen verfügbaren Altstand oder den
   aktuellen Stand ausdrücklich wählen und reproduzierbare Maße erhalten. Ein nicht verfügbarer
   Altstand wird als notwendige Migration erklärt; fremder Quelltext reist weiterhin nicht mit.
-
-  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
-
-<a id="rm-139"></a>
-
-- [~] **RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten.**
-  **Der Satz „ist noch nicht eingelöst" stimmt seit einiger Zeit nicht mehr** (nachgemessen
-  10.09.2026): `geom/orient.candidates()` baut die konvexe Hülle über sortierte Punkte, ordnet
-  ihre Flächen nach Größe und nimmt die Normalen daraus; `slice/orientation.py` ruft sie als
-  `face_candidates` und mischt sie mit der Ausgangsrichtung. `sample_directions` mit
-  Zufallsgenerator gibt es noch als Funktion, sie steht aber nicht mehr im Kandidatenweg —
-  `seed` ist dort ausdrücklich nur noch Kompatibilität.
-
-  Offen bleibt damit **nur die Abnahme**, und die verlangt eine Messung: gleiche Eingaben ergeben gleiche Kandidaten und Lage; Vorfilter und Finalisten werden
-  an mechanischen und organischen Körpern gegen die vollständige Kandidatenliste geprüft.
-  Standfläche, Schwerpunkt und Haftung bleiben berücksichtigt; 200 betrachtete Kandidaten
-  erfüllen das 20-Sekunden- und Abbruchziel. RM-078 misst einen anderen, konkreten Ladefall.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
 

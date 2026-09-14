@@ -512,3 +512,35 @@ def test_a_ball_never_stands_no_matter_how_coarse_the_search_is(profile: Profile
 
     assert found.best.first_layer_area < profile.smallest_first_layer
     assert "orient.no_footing" in {finding.code for finding in found.findings}
+
+
+@pytest.mark.parametrize("organic", [False, True])
+def test_the_same_body_gets_the_same_pose_twice(organic: bool, profile: Profile) -> None:
+    """Gleiche Eingaben, gleiche Kandidaten, gleiche Lage — die Abnahme von RM-139.
+
+    Die Kandidaten kommen aus der konvexen Hülle über sortierte Punkte, die
+    Abtastung mit Zufallsrichtungen steht nicht mehr im Weg, und der Sieger
+    hängt nicht an der Reihenfolge des Feldes. Jedes davon hat seinen Test;
+    hier steht der Satz, den alle drei zusammen versprechen: Zwei Läufe über
+    denselben Körper geben dieselbe Richtung, dieselbe Matrix und dieselben
+    Zahlen — an einer Platte mit Bohrungen wie an einem organischen Körper
+    (Regel 9 greift nicht, weil es keinen Zufall gibt; deshalb auch kein
+    ``seed``).
+    """
+    import numpy as np
+
+    if organic:
+        raw = trimesh.creation.icosphere(subdivisions=1, radius=12)
+        raw.apply_scale((1.0, 0.7, 1.5))
+        mesh = MeshData.of(raw)
+    else:
+        mesh = corpus("plate_holes.stl")
+
+    first = search(mesh, profile=profile, count=80)
+    second = search(mesh, profile=profile, count=80)
+
+    assert first.best.direction == second.best.direction
+    assert first.best.support_volume == second.best.support_volume
+    assert first.tried == second.tried
+    assert np.array_equal(first.transform, second.transform)
+    assert np.array_equal(first.mesh.raw.vertices, second.mesh.raw.vertices)

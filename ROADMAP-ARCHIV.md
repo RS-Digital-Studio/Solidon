@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Die Orientierungssuche hat ihre Abnahme (14.09.2026)](#die-orientierungssuche-hat-ihre-abnahme-14092026) |
 | 2026-09-14 | [Das Regelwerk hat seine Wächter (14.09.2026)](#das-regelwerk-hat-seine-wächter-14092026) |
 | 2026-09-14 | [Der Schlüsseldialog schließt sofort (14.09.2026)](#der-schlüsseldialog-schließt-sofort-14092026) |
 | 2026-09-14 | [Ein freier Fügeweg wird gesagt (14.09.2026)](#ein-freier-fügeweg-wird-gesagt-14092026) |
@@ -28057,3 +28058,39 @@ Ein Punkt aus dem Review vor der Demo (02.09.2026), abgeschlossen am 14.09.2026.
 
   Nachweis: die beiden Wächter grün mit Gegenprobe (ein Muster ins Leere und eine Regel 23 fallen
   auf), `test_directory_docs` grün.
+
+## Die Orientierungssuche hat ihre Abnahme (14.09.2026)
+
+Ein Restvertrag aus dem Bauplan-Abgleich vom 08.09.2026, abgeschlossen am 14.09.2026.
+
+<a id="rm-139"></a>
+
+- [x] **RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten.**
+  `geom/orient.candidates()` baut die konvexe Hülle über sortierte Punkte, ordnet ihre Flächen
+  nach Größe und nimmt die Normalen; `slice/orientation.search` mischt sie mit Achsen, großen
+  Körperflächen und der Ausgangsrichtung. Zufallsrichtungen stehen nicht mehr im Kandidatenweg,
+  `seed` ist Kompatibilität. Am 10.09.2026 stand „offen bleibt nur die Abnahme, und die verlangt
+  eine Messung".
+
+  **Die Messung stand schon — als Tests, nur nicht als Satz** (nachgemessen 14.09.2026,
+  `tests/test_orientation_search.py` und `tests/test_orient.py`, 56 grün): Kandidaten
+  deterministisch (`test_geometric_candidates_include_new_convex_hull_normals`), Vorfilter und
+  Finalisten gegen die vollständig geschnittene Kandidatenliste an der Platte mit Bohrungen und an
+  einem gestreckten organischen Körper (`test_shortlist_matches_the_fully_sliced_geometric_
+  candidates`, Gewinner innerhalb fünf Prozent des Besten der vollen Liste, höchstens
+  `FINALISTS + 1` Schnitte), Standfläche vor Stützvolumen und ein Schwerpunkt außerhalb der
+  Standfläche (`test_a_pose_that_cannot_stand_is_still_ruled_out_first`,
+  `test_a_large_footing_does_not_hide_a_centre_of_mass_outside_it`), Haftung als Grenze aus dem
+  Profil (`test_search_passes_the_profile_footing_limit_to_the_final_choice`), Abbruch vor, in
+  und nach dem Schnitt (`test_the_search_can_be_cancelled` und die vier Kürzungstests), und die
+  Reihenfolge des Feldes entscheidet nichts (`test_the_winner_does_not_depend_on_the_order_of_
+  the_field`). Dazu am selben Tag der Satz, den alle zusammen versprechen:
+  `test_the_same_body_gets_the_same_pose_twice` — zwei Läufe über denselben Körper geben dieselbe
+  Richtung, Matrix und Zahlen, mechanisch wie organisch.
+
+  **200 Kandidaten unter 20 Sekunden:** `test_the_orientation_search_over_two_hundred_candidates`
+  (`orient_200`, `tests/test_performance.py`), gemessen am 14.09.2026: Bis dahin maß der Test die flach liegende `plate_holes.stl`, an der die
+  Suche nach dem ersten Schnitt fertig war — 42 ms bei `tried == 1`, eine Zusicherung über 200
+  Kandidaten, die keinen prüfte. Seither misst er einen gekippten organischen Körper mit 218
+  Hüllnormalen, von denen die Vorauswahl neun schneidet, und verlangt `tried > 1`: 0,27 bis 0,36 s
+  gegen das Ziel aus §31.
