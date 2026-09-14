@@ -106,6 +106,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
 | [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Der Website-Fehlalarm ist behoben; offen bleibt der rote Vorwarnlauf gegen die neuesten Abhängigkeiten |
 | [RM-162 — Der Hinweistext der Fassung reiste unverändert mit](#rm-162) | Veröffentlichung, Betrieb und Vertrieb | Der Riegel steht; die sechs Sätze für 0.4.1 stehen bereit und werden beim Bau eingetragen |
+| [RM-176 — GitHub Actions nimmt seit dem 14.09. keinen Lauf mehr an](#rm-176) | Veröffentlichung, Betrieb und Vertrieb | „recent account payments have failed or your spending limit needs to be increased" — Zahlung oder Ausgabenlimit unter *Billing & plans* richten; bis dahin läuft kein Tor, kein Paket, keine Mac-Signierung |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf belegen — die Pflicht gilt seit dem 11.09.2026 |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
@@ -1671,6 +1672,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   Abnahme: Der Satz im Update-Fenster von 0.4.1 nennt, was in 0.4.1 neu ist, `notes_version`
   steht auf `0.4.1`, und `tools/sign_version.py --check` bestätigt die Unterschrift.
+
+<a id="rm-176"></a>
+
+- [ ] **RM-176 — GitHub Actions nimmt seit dem 14.09. keinen Lauf mehr an.** Gefunden am
+  14.09.2026 um 19:30 beim Blick auf RM-149: Jeder Lauf von `Bauen` seit `34803524986`
+  (03:42 UTC, der erste Push nach dem grünen Release-Lauf 0.4.1 um 00:51 UTC) endet nach drei
+  bis sechs Sekunden rot, ohne dass ein Job startet. Die Anmerkung von GitHub: *„The job was
+  not started because recent account payments have failed or your spending limit needs to be
+  increased. Please check the 'Billing & plans' section in your settings."* Gezählt: 60 rote
+  Läufe in Folge, darunter jeder Commit dieses Tages — die Suite auf Ubuntu, der Vorwarnlauf,
+  die Pakete, die Releaseakten und die Mac-Signierung sind seither **ungefahren**, nicht rot.
+  Lokal ist das Tor davon unberührt; was fehlt, ist der Nachweis auf Linux und macOS und der
+  Weg zu einem signierten Mac-Paket (RM-001, RM-051, RM-104 hängen daran).
+
+  Das kann nur Robert richten: unter *Settings → Billing & plans* die fehlgeschlagene Zahlung
+  nachholen oder das Ausgabenlimit für Actions heben. Abnahme: `gh run list` zeigt einen
+  gestarteten Lauf mit Jobs, und der nächste Push fährt die Suite durch.
 
 ## Kundenrückmeldungen
 
