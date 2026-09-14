@@ -561,6 +561,26 @@ def test_a_corner_is_two_lines_meeting_at_the_same_spot() -> None:
     assert edit.corner_at(lonely, edit.flat_points(lonely), 1) is None, "eine Linie ist keine Ecke"
 
 
+def test_a_construction_line_makes_no_corner() -> None:
+    """Eine Hilfslinie, die auf ein Linienende trifft, ist kein Eckenschenkel.
+
+    Sie ist ``kind == "line"`` mit ``construction``; als Schenkel gezählt
+    würde sie gekürzt und der Bogen entstünde ohne Kennzeichen — eine
+    Profilkante aus Hilfsgeometrie (Fund des Reviews vom 14.09.2026).
+    """
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((10.0, 0.0), (10.0, 10.0)), construction=True),
+        ),
+    )
+    points = edit.flat_points(sketch)
+    assert edit.corner_at(sketch, points, 1) is None, "ein Ende und eine Hilfslinie: keine Ecke"
+    with pytest.raises(ValidationError):
+        edit.fillet(sketch, points, 1, 2.0)
+
+
 def test_a_fillet_replaces_the_corner_with_a_tangent_arc() -> None:
     """Radius 5 an der rechten oberen Ecke: Beide Linien enden fünf Millimeter
     vor der Ecke, der Bogen sitzt um (35 | 15) und läuft von (40 | 15) nach
@@ -580,7 +600,10 @@ def test_a_fillet_replaces_the_corner_with_a_tangent_arc() -> None:
     assert kinds.count("coincident") == 5, "die Ecke ist weg, zwei Bogenenden sind dazu"
     assert kinds.count("perpendicular") == 2, "die Tangente als Senkrechte zum Radiusstrahl"
     assert kinds.count("radius") == 1
-    assert (SketchConstraint("coincident", (3, 4)), rounded.constraints) and not any(
+    assert any(
+        entry.kind == "coincident" and set(entry.targets) == {3, 4} for entry in box().constraints
+    ), "vorher gab es die Eckdeckung — sonst prüft die nächste Zeile nichts"
+    assert not any(
         entry.kind == "coincident" and set(entry.targets) == {3, 4} for entry in rounded.constraints
     ), "die alte Eckdeckung ist gelöst"
 
@@ -614,12 +637,21 @@ def test_a_fillet_solves_determined_and_survives_a_drag() -> None:
 
 def test_a_fillet_names_the_largest_radius_that_fits() -> None:
     """Zwanzig Millimeter ist die kurze Seite: Ein Radius von 30 passt nicht,
-    und die Absage nennt die Zahl, die noch passt (Regel 17)."""
+    und die Absage nennt die Grenze (Regel 17).
+
+    **Die Grenze selbst passt nicht** — bei Radius 20 bliebe eine Linie ohne
+    Länge —, und deshalb sagt der Satz „kleiner als 20", nicht „höchstens
+    20": Wer die genannte Zahl eintippte, bekam dieselbe Absage noch einmal
+    (Fund des Reviews vom 14.09.2026). Knapp darunter geht es.
+    """
     sketch = box()
     with pytest.raises(ValidationError) as caught:
         edit.fillet(sketch, edit.flat_points(sketch), 3, 30.0)
     assert caught.value.values["most"] == "20"
     assert "20" in str(caught.value.detail)
+    with pytest.raises(ValidationError):
+        edit.fillet(sketch, edit.flat_points(sketch), 3, 20.0)
+    assert len(edit.fillet(sketch, edit.flat_points(sketch), 3, 19.99).elements) == 5
     # ``maximum`` ist eine Bereichsgrenze, und nur die trägt den Titel „außerhalb
     # des zulässigen Bereichs"; ein unbekannter Wert bekäme den vagen Satz.
     assert caught.value.constraint == "maximum"
@@ -654,6 +686,9 @@ def test_a_chamfer_cuts_the_corner_with_a_straight_edge() -> None:
     assert caught.value.values["most"] == "20"
     assert caught.value.constraint == "maximum"
     assert caught.value.title is ValidationError.default_title
+    with pytest.raises(ValidationError):
+        edit.chamfer(sketch, edit.flat_points(sketch), 3, 20.0)
+    assert len(edit.chamfer(sketch, edit.flat_points(sketch), 3, 19.99).elements) == 5
 
 
 def test_breaking_needs_a_corner() -> None:

@@ -109,8 +109,11 @@ def quick_survey(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     from app.ui import dialogs as module
 
+    tool = module.tools.by_id("ollama")
+    assert tool is not None
+    absent = module.tools.ToolState(tool, None, False)
     monkeypatch.setattr(
-        module._Look, "work", lambda worker: worker.done.emit(module.ChatState("", None, ()))
+        module._Look, "work", lambda worker: worker.done.emit(module.ChatState("", absent, ()))
     )
 
 
@@ -584,8 +587,6 @@ def test_closing_the_key_dialog_does_not_wait_for_the_model_survey(
         )
 
     monkeypatch.setattr(module._Look, "work", slow_look)
-    shown: list[object] = []
-    monkeypatch.setattr(module.KeyDialog, "_show_state", lambda self, found: shown.append(found))
 
     dialog = module.KeyDialog(settings=UiSettings())
     worker = dialog._look
@@ -603,7 +604,11 @@ def test_closing_the_key_dialog_does_not_wait_for_the_model_survey(
         assert worker.wait(5000)
         for _ in range(5):
             qt_app.processEvents()
-        assert shown == [], "die Antwort einer losgelassenen Erhebung erreicht den Dialog nicht"
+        # Die Wirkung des echten Slots, nicht ein Lambda an seiner Stelle —
+        # ``_show_state`` setzt ``state`` und schreibt „Probe" in die Erklärung.
+        assert not hasattr(dialog, "state") and "Probe" not in dialog.explanation.text(), (
+            "die Antwort einer losgelassenen Erhebung erreicht den Dialog nicht"
+        )
         assert leash.wait_for_all() == ()
         for _ in range(5):
             qt_app.processEvents()
@@ -611,6 +616,53 @@ def test_closing_the_key_dialog_does_not_wait_for_the_model_survey(
     finally:
         release.set()
         worker.wait(5000)
+        dialog.release(5000)
+        dialog.deleteLater()
+
+
+def test_a_queued_answer_of_a_finished_survey_does_not_reach_the_closed_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Rennen hinter dem Loslassen: Der Thread ist zu Ende, sein ``done``
+    liegt noch in Qts Schlange (Fund des Reviews vom 14.09.2026).
+
+    Die Signale sind threadübergreifend und damit eingereiht, und ein
+    eingereihtes Signal wird zugestellt, gleich was danach getrennt wird —
+    gemessen: Auch mit dem Trennen vor der ``isRunning``-Frage kam die
+    Antwort an. ``isRunning`` sagt schon nein, und das eingereihte ``done``
+    erreichte ``_show_state`` — beim Download ``_pull_done``, das ``look()``
+    ruft und auf dem geschlossenen Dialog den nächsten Arbeiter startet.
+    Deshalb fragt jeder Ergebnis-Slot zuerst, ob der Dialog losgelassen ist.
+    """
+    from app.core.backends import keys
+    from app.ui import dialogs as module
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    tool = module.tools.by_id("ollama")
+    assert tool is not None
+    monkeypatch.setattr(
+        module._Look,
+        "work",
+        lambda worker: worker.done.emit(
+            module.ChatState("Probe", module.tools.ToolState(tool, None, True), ("model-x",))
+        ),
+    )
+
+    dialog = module.KeyDialog(settings=UiSettings())
+    worker = dialog._look
+    assert worker is not None
+    try:
+        # Der Thread ist zu Ende — ohne ``processEvents`` liegt sein ``done``
+        # noch in der Schlange. Genau jetzt wird geschlossen.
+        assert worker.wait(5000)
+        assert not worker.isRunning()
+        dialog.reject()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert not hasattr(dialog, "state") and "Probe" not in dialog.explanation.text(), (
+            "die eingereihte Antwort erreicht den geschlossenen Dialog nicht"
+        )
+    finally:
         dialog.release(5000)
         dialog.deleteLater()
 

@@ -190,11 +190,18 @@ Schließen — *Speichern*, *Abbrechen*, Esc, Fensterkreuz — über `done`, und
 `_let_go` tut je Arbeiter drei Dinge in dieser Reihenfolge: das Feld auf
 `None`, die Ergebnissignale (`done`, `step`, `crashed`) ganz und jede
 Verbindung zum Dialog (`worker.disconnect(self)`) trennen, den Thread an
-`retire` geben. **Die Zutat ist das Trennen:** Der Download hängt über
+`retire` geben — und davor setzt es `_let_go_of_workers`. **Die Zutat ist
+das Trennen, und das Trennen allein reicht nicht.** Der Download hängt über
 `weak_slot` an `_pull_done`, und das ist kein Slot des Dialogs, den Qt beim
 Löschen selbst trennte — ohne den Schritt liefe `_pull_done` nach dem
 Schließen weiter, riefe `look()` und startete auf einem geschlossenen Dialog
-den nächsten Arbeiter. Der Download wird dabei abgebrochen (Ollama setzt
+den nächsten Arbeiter. Und ein Signal, das beim Trennen schon in Qts Schlange
+liegt, wird trotzdem zugestellt: Ein Arbeiter, der gerade zu Ende ging,
+meldet `isRunning` nein, sein `done` ist eingereiht, und es kam an — gemessen
+mit dem Trennen vor und nach der `isRunning`-Frage (Fund des Reviews vom
+14.09.2026). Deshalb fragt jeder Ergebnis-Slot des Dialogs zuerst nach dem
+Flag; der Test dazu schließt den Dialog genau zwischen Threadende und
+Zustellung. Der Download wird dabei abgebrochen (Ollama setzt
 beim nächsten Klick fort); Erhebung und Probe laufen aus, eine HTTP-Frage
 bricht niemand ab. `release()` wartet weiter — das ist der Weg der Suite und
 des Fensterendes. Nachweis:

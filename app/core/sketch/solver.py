@@ -2,9 +2,11 @@
 
 Kleinste Quadrate auf scipy — BSD und bereits in der Freigabeliste; SolveSpace
 und py-slvs sind GPL und darum keine Option (Regel 15). Deterministisch: der
-Startzustand sind die Punkte der Skizze selbst, Zufall kommt nicht vor, und
-derselbe Aufruf liefert dieselbe Lösung (Regel 9 greift nicht — es gibt keinen
-Startwert, weil es keine Streuung gibt).
+Startzustand sind die Punkte der Skizze selbst — oder, im Zugmodus
+(``dragged``, ``start``), der zuletzt gelöste Stand mit den gezogenen Punkten
+am Zeiger —, Zufall kommt nicht vor, und derselbe Aufruf liefert dieselbe
+Lösung (Regel 9 greift nicht — es gibt keinen Startwert, weil es keine
+Streuung gibt).
 
 Jede Bedingung bringt ihre Residuen **und ihre analytische Ableitung** mit.
 Das ist kein Luxus: mit numerischer Differenzenbildung kostet die Jacobimatrix

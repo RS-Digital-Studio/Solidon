@@ -837,6 +837,10 @@ class KeyDialog(QDialog):
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Prüf-Arbeiter, bis Qt mit ihm durch ist —
         das Warum steht in :mod:`app.ui.leash`."""
+        self._let_go_of_workers = False
+        """Ob :meth:`_let_go` gelaufen ist. Danach nimmt kein Ergebnis-Slot
+        mehr etwas an — auch nicht das Signal, das beim Trennen schon in
+        Qts Schlange lag."""
 
         state = {
             "keychain": tr("Ein Schlüssel liegt im Schlüsselbund."),
@@ -955,10 +959,21 @@ class KeyDialog(QDialog):
         ``_pull_done``, und das ist kein Slot dieses Objekts, den Qt beim
         Löschen selbst trennte. Ohne diesen Schritt liefe ``_pull_done``
         nach dem Schließen weiter, riefe ``look()`` und startete auf einem
-        geschlossenen Dialog den nächsten Arbeiter. Zuletzt hält die Leine
-        den Thread, bis ``isRunning`` nein sagt — modulweit, also auch dann
-        noch, wenn dieser Dialog längst weggeräumt ist; das Fensterende
-        wartet über ``leash.wait_for_all`` auf ihn.
+        geschlossenen Dialog den nächsten Arbeiter. **Und Trennen allein
+        reicht nicht:** Die Signale sind threadübergreifend und damit
+        eingereiht — ein Arbeiter, der gerade zu Ende ging, meldet
+        ``isRunning`` schon nein, während sein ``done`` schon in Qts
+        Schlange liegt, und ein eingereihtes Signal wird zugestellt, gleich
+        was danach getrennt wurde (gemessen am 14.09.2026: erst mit dem
+        Trennen vor der ``isRunning``-Frage, dann ohne — beide Male kam die
+        Antwort an). Deshalb setzt diese Methode ``_let_go_of_workers``, und
+        jeder Ergebnis-Slot fragt zuerst danach. Zuletzt hält die Leine den Thread,
+        bis ``isRunning`` nein sagt — modulweit, also auch dann noch, wenn
+        dieser Dialog längst weggeräumt ist; das Fensterende wartet über
+        ``leash.wait_for_all`` auf ihn. Gehalten wird er seit ``start``;
+        ``retire`` ist hier die Absicherung für einen Arbeiter, den jemand
+        künftig ohne ``start`` einhängt, und steigt für einen gehaltenen
+        sofort aus.
 
         Der Download wird dabei **abgebrochen**, nicht weitergefahren: Neun
         Gigabyte ohne Balken und ohne Knopf wären die Sackgasse aus §2.8;
@@ -966,6 +981,7 @@ class KeyDialog(QDialog):
         holen* setzt fort. Die Erhebung und die Probe laufen aus — eine
         HTTP-Frage bricht niemand ab.
         """
+        self._let_go_of_workers = True
         for name in ("_look", "_starter", "_pull", "_probe"):
             worker = getattr(self, name)
             setattr(self, name, None)
@@ -973,18 +989,19 @@ class KeyDialog(QDialog):
                 continue
             if isinstance(worker, _PullWorker):
                 worker.cancel()
-            if not worker.isRunning():
-                continue
             for signal_name in ("done", "step", "crashed"):
                 signal = getattr(worker, signal_name, None)
                 if signal is not None:
                     with suppress(RuntimeError):
                         signal.disconnect()
             worker.disconnect(self)
-            self._leash.retire(worker)
+            if worker.isRunning():
+                self._leash.retire(worker)
 
     def _show_state(self, found: object) -> None:
         """Die Antworten eintragen."""
+        if self._let_go_of_workers:
+            return
         assert isinstance(found, ChatState)
         self.state = found
         text = self.explanation.text().split("\n\n", 1)
@@ -1181,6 +1198,8 @@ class KeyDialog(QDialog):
         self._leash.start(worker)
 
     def _started(self, running: bool) -> None:
+        if self._let_go_of_workers:
+            return
         self.service_button.setEnabled(True)
         self.look()
         if running:
@@ -1300,6 +1319,8 @@ class KeyDialog(QDialog):
 
     def _pull_step(self, status: str, share: float) -> None:
         """Ollamas Zustandszeile, und der Anteil, wenn es einen gibt."""
+        if self._let_go_of_workers:
+            return
         if share < 0.0:
             self.pull_progress.setRange(0, 0)
         else:
@@ -1309,6 +1330,8 @@ class KeyDialog(QDialog):
         self.probe_result.setText(f"{status}{percent}")
 
     def _pull_done(self, model: str, problem: object) -> None:
+        if self._let_go_of_workers:
+            return
         self.model_field.setEnabled(True)
         self.pull_progress.setVisible(False)
         self.pull_button.setText(tr("Modell holen"))
@@ -1339,6 +1362,8 @@ class KeyDialog(QDialog):
         Ausnahme durchlässt, sendet sein Ergebnissignal nie.
         """
         _log.warning("chat setup worker crashed: %s", detail)
+        if self._let_go_of_workers:
+            return
         self.pull_progress.setVisible(False)
         self.pull_button.setText(tr("Modell holen"))
         self.model_field.setEnabled(True)
@@ -1408,6 +1433,8 @@ class KeyDialog(QDialog):
         self._leash.start(worker)
 
     def _probe_done(self, usable: object, speed: object) -> None:
+        if self._let_go_of_workers:
+            return
         self.probe_button.setEnabled(True)
         if usable is None:
             self._show_probe_result(

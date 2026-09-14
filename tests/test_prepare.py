@@ -3703,8 +3703,10 @@ def test_a_clear_join_path_is_said_not_inferred() -> None:
     rueckwaerts = check_join_path(MeshData.of(zapfen), empfaenger, (0.0, 0.0, -1.0), 5.0)
     assert rueckwaerts and rueckwaerts[0].code == "join.clear", rueckwaerts
     assert rueckwaerts[0].values["axis"] == "-Z", rueckwaerts[0].values
-    # Schräg von oben hinein — die Rinne ist oben offen, also frei.
-    schraeg = check_join_path(MeshData.of(zapfen), empfaenger, (1.0, 0.0, -1.0), 5.0)
+    # Schräg von oben hinein — die Rinne ist oben offen, also frei. Die
+    # Y-Komponente ist ein negatives Rechenrauschen: Es schreibt sich als
+    # „0.00", nicht als „-0.00" (Fund des Reviews vom 14.09.2026).
+    schraeg = check_join_path(MeshData.of(zapfen), empfaenger, (1.0, -1e-9, -1.0), 5.0)
     assert schraeg and schraeg[0].code == "join.clear", schraeg
     assert schraeg[0].values["axis"] == "(0.71 | 0.00 | -0.71)", schraeg[0].values
 

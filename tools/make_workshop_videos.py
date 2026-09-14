@@ -1844,12 +1844,15 @@ def story_counterparts(tutorial: Tutorial, paths: list[Path]) -> None:
         hint_de="Beide Teile wählen, rechts „Fügeweg prüfen“.",
         hint_en="Select both parts, choose “Check insertion path” on the right.",
     )
+    # Seit RM-167 sagt der Bericht den freien Weg selbst (Befund
+    # ``join.clear``); die Aufnahmen vom 13.09.2026 tragen noch den Satz
+    # „Der Prüfbericht bleibt leer" und bleiben so.
     tutorial.add(
-        "Der Prüfbericht bleibt leer",
-        "The report stays empty",
-        "0 Fehler, 0 Warnungen: Nichts stößt an. Ein Problem stünde hier rechts oben als Befund. "
-        "Beim Drucken zählt dann noch das Material.",
-        "0 errors, 0 warnings: nothing collides. A problem would show up here at the top right. "
+        "Der Prüfbericht sagt es",
+        "The report says so",
+        "Rechts oben steht der Befund: Der Fügeweg ist frei, 24 mm entlang X, keine "
+        "Überschneidung. Beim Drucken zählt dann noch das Material.",
+        "The finding is at the top right: the insertion path is clear, 24 mm along X, no overlap. "
         "When printing, the material still matters.",
         9.0,
         target=tutorial.window.report,

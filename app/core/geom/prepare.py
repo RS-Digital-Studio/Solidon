@@ -2648,11 +2648,15 @@ def _axis_name(way: np.ndarray) -> str:
     genannt, statt auf die nächste Achse gerundet zu werden.
     """
     for axis, normal in AXIS_NORMALS.items():
-        if np.allclose(way, normal, atol=EPS_GEOM):
+        # ``rtol=0.0``: Sonst trägt ``allclose`` numpys Vorgabe von 1e-5 mit,
+        # und die Schranke wäre nicht EPS_GEOM, sondern EPS_GEOM plus 1e-5.
+        if np.allclose(way, normal, rtol=0.0, atol=EPS_GEOM):
             return axis.upper()
-        if np.allclose(way, -np.asarray(normal), atol=EPS_GEOM):
+        if np.allclose(way, -np.asarray(normal), rtol=0.0, atol=EPS_GEOM):
             return f"-{axis.upper()}"
-    return "(" + " | ".join(f"{float(value):.2f}" for value in way) + ")"
+    # ``round`` vor dem ``+ 0.0``: Eine Komponente von -1e-9 schriebe sich
+    # sonst als „-0.00" — dieselbe Regel wie in ``units.format_length``.
+    return "(" + " | ".join(f"{round(float(value), 2) + 0.0:.2f}" for value in way) + ")"
 
 
 def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool | None:

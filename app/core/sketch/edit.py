@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from app.core.errors import ValidationError, require_positive
-from app.core.sketch.profile import _flat_curve
+from app.core.sketch.profile import _JOIN_TOL, _flat_curve
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
 from app.i18n import _
 
@@ -619,8 +619,9 @@ class Corner:
 
 #: Wie nah zwei Endpunkte beieinanderliegen dürfen, um als eine Ecke zu
 #: gelten — die Deckungstoleranz der Profilbildung, nicht die Zeichenauflösung:
-#: Ein Umriss schließt sich in ``profile`` auf dieselbe Weite.
-_CORNER_TOL = 1e-4
+#: Ein Umriss schließt sich in ``profile`` auf dieselbe Weite, und die Zahl
+#: steht deshalb dort und nicht ein zweites Mal hier.
+_CORNER_TOL = _JOIN_TOL
 
 
 def corner_at(sketch: Sketch, points: Sequence[Point2], flat: int) -> Corner | None:
@@ -630,7 +631,11 @@ def corner_at(sketch: Sketch, points: Sequence[Point2], flat: int) -> Corner | N
     gespeicherten: Zwei Linienenden bilden eine Ecke, wenn sie am selben Ort
     liegen, gleich ob eine Deckung sie dorthin gezogen hat oder ein Klick.
     Genau zwei Linien müssen es sein — drei Linien an einem Punkt haben keine
-    eindeutige Ecke, ein Bogen an einer Linie ist schon rund.
+    eindeutige Ecke, ein Bogen an einer Linie ist schon rund. **Und eine
+    Hilfslinie zählt nicht:** Sie ist ``kind == "line"`` mit
+    ``construction``, und aus ihr würde sonst ein Bogen oder eine Schräge
+    ohne das Kennzeichen — eine Profilkante, die ``regions_of`` mitnimmt
+    (Fund des Reviews vom 14.09.2026).
     """
     if not 0 <= flat < len(points):
         return None
@@ -638,7 +643,7 @@ def corner_at(sketch: Sketch, points: Sequence[Point2], flat: int) -> Corner | N
     offsets = offsets_of(sketch)
     ends: list[tuple[int, int]] = []
     for index, element in enumerate(sketch.elements):
-        if element.kind != "line":
+        if element.kind != "line" or element.construction:
             continue
         begin = offsets[index]
         for local in (0, 1):
@@ -747,7 +752,7 @@ def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -
         raise ValidationError(
             "radius",
             _(
-                "Der Radius ist zu groß für diese Ecke — höchstens {most} passen hinein.",
+                "Der Radius ist zu groß für diese Ecke — er muss kleiner sein als {most}.",
                 most=_written(room * math.tan(theta / 2.0)),
             ),
             value=radius,
@@ -826,7 +831,7 @@ def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float
         raise ValidationError(
             "distance",
             _(
-                "Die Fase ist zu groß für diese Ecke — höchstens {most} passen hinein.",
+                "Die Fase ist zu groß für diese Ecke — sie muss kleiner sein als {most}.",
                 most=_written(room),
             ),
             value=distance,

@@ -27904,7 +27904,10 @@ Ein Punkt aus dem Werkstattfilm vom 13.09.2026, abgeschlossen am 14.09.2026.
   eine leere Liste; nur `join.blocked` und `join.interference` waren Befunde. Der Kunde hatte eine
   Prüfung ausgelöst und musste aus dem Fehlen eines Fehlers schließen, dass der Weg frei ist
   (§2.7). Das Tutorial `gegenstuecke` sagt seit dem 13.09. deshalb „Der Prüfbericht bleibt leer"
-  statt „Der Weg ist frei" — die Videos sind terminiert und bleiben so.
+  statt „Der Weg ist frei" — die Videos sind terminiert und bleiben so. Der **Generator** sagt
+  seit dem Review vom 14.09. den Befund („Rechts oben steht der Befund: Der Fügeweg ist frei
+  …"), damit die nächste Aufnahme nicht dem Produkt widerspricht; die Fassung vom 13.09. gilt nur
+  für die veröffentlichten Videos.
 
   **Gebaut am 14.09.2026.** Bei freier Endlage und freiem Weg kommt ein Info-Befund `join.clear`
   zurück: „Der Fügeweg ist frei: 24.00 mm entlang X, in 24 Schritten keine Überschneidung." Die
@@ -27937,7 +27940,12 @@ Ein Punkt aus der CI-Durchsicht vom 02.09.2026, abgeschlossen am 14.09.2026.
   Erhebung, die 10 s braucht; nachher unter 0,5 s. Alles Schließen läuft über `KeyDialog.done`,
   und `_let_go` löst je Arbeiter in dieser Reihenfolge: Feld auf `None`, Ergebnissignale und jede
   Verbindung zum Dialog getrennt (`worker.disconnect(self)` — der Download hängt über `weak_slot`
-  an `_pull_done`, das Qt beim Löschen nicht selbst trennte), Thread an `retire`. Der Download
+  an `_pull_done`, das Qt beim Löschen nicht selbst trennte), Thread an `retire`. Das Review vom
+  selben Tag fand das Rennen dahinter: Ein Signal, das beim Trennen schon in Qts Schlange liegt,
+  wird trotzdem zugestellt — gemessen, auch mit dem Trennen vor der `isRunning`-Frage. Seither
+  setzt `_let_go` ein Flag, jeder Ergebnis-Slot fragt zuerst danach, und
+  `test_a_queued_answer_of_a_finished_survey_does_not_reach_the_closed_dialog` schließt den Dialog
+  genau zwischen Threadende und Zustellung. Der Download
   wird abgebrochen (Ollama setzt beim nächsten Klick fort), Erhebung und Probe laufen aus; die
   modulweite Leine hält den Thread, bis `isRunning` nein sagt, und das Fensterende wartet über
   `leash.wait_for_all`. `release()` bleibt der wartende Weg der Suite. Die Abbauzeit der fünf
