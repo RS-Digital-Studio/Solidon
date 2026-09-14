@@ -19,6 +19,14 @@ from app.i18n import TranslatableText, _, sort_key
 
 FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 
+#: Zustände, die eine Operation vom Körper verlangen kann (``requires_body``).
+#: ``open`` heißt nicht wasserdicht, ``parts`` mehr als ein zusammenhängendes
+#: Stück, ``cavity`` ein Hohlraum — als Merkmal ``void`` erkannt oder von
+#: *Aushöhlen* eingetragen. Was hier nicht steht, prüft die Operation selbst
+#: beim Rechnen; die Oberfläche fragt nur nach diesen dreien, weil sie sich
+#: ohne Rechnung beantworten lassen.
+BODY_REQUIREMENTS: Final[tuple[str, ...]] = ("open", "parts", "cavity")
+
 #: Kategorien aus dem Operationskatalog (§25). Sie ordnen das Menü.
 #: Der Katalog aus §25, in der Reihenfolge, in der er im Menü erscheint. Vier
 #: davon halten keine Operationen und werden es auch nicht: Parameter und
@@ -457,6 +465,18 @@ class OperationSpec:
     Deklariert statt in der Oberfläche aufgezählt, denn eine Liste in der
     Oberfläche wäre beim nächsten Zuwachs des exakten Kerns unvollständig —
     und dieselbe Auskunft braucht auch der Agent (§10, Leitprinzip 3)."""
+    requires_body: str = ""
+    """Was der Körper mitbringen muss, damit die Operation überhaupt etwas
+    tun kann — einer der Werte aus :data:`BODY_REQUIREMENTS`, oder leer.
+
+    Die Schwester von ``requires_kind``, eine Frage weiter: Nicht die Bauart
+    (Netz oder exakt), sondern der Zustand. *Offene Fläche schließen* braucht
+    eine offene Fläche, *In Einzelteile zerlegen* mehrere Teile, *Gitter
+    füllen* einen Hohlraum. Gemessen am 13.09.2026 über alle Dialoge: Ohne
+    die Angabe öffneten die drei an einem sauberen Quader einen Dialog,
+    dessen Vorschau nur „Keine Vorschau: …" sagen konnte — die Sackgasse aus
+    Regel 19, ein Fenster später. Mit ihr steht der Eintrag ausgegraut da,
+    mit demselben Satz, den die Operation beim Übernehmen sagte."""
     whole_scene: bool = False
     """Arbeitet auf allen Objekten zugleich — siehe :attr:`takes_whole_scene`."""
     reads_other_bodies: bool = False
@@ -607,6 +627,11 @@ class Registry:
                 detail=f"{spec.name!r} applies to unknown feature kinds {unknown}",
                 values={"op": spec.name, "known": list(FEATURE_KINDS)},
             )
+        if spec.requires_body and spec.requires_body not in BODY_REQUIREMENTS:
+            raise InternalError(
+                detail=f"{spec.name!r} requires an unknown body state {spec.requires_body!r}",
+                values={"op": spec.name, "known": list(BODY_REQUIREMENTS)},
+            )
         if spec.consumes < VARIABLE or spec.produces < VARIABLE or spec.minimum_inputs < 0:
             raise InternalError(
                 detail=f"{spec.name!r} declares a negative object count",
@@ -710,6 +735,7 @@ def register_op(
     produces: int = 1,
     applies_to: Iterable[str] = (),
     requires_kind: str = "",
+    requires_body: str = "",
     whole_scene: bool = False,
     reads_other_bodies: bool = False,
     produces_from: str | None = None,
@@ -741,6 +767,7 @@ def register_op(
                 produces=produces,
                 applies_to=tuple(applies_to),
                 requires_kind=requires_kind,
+                requires_body=requires_body,
                 whole_scene=whole_scene,
                 reads_other_bodies=reads_other_bodies,
                 produces_from=produces_from,

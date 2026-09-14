@@ -31,6 +31,9 @@ scrive in `website/version.json`.
 - Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.
 - Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.
 - «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.
+- Uno strumento che su questo pezzo non può fare nulla appare grigio e dice perché — «Chiudi superficie aperta» su un pezzo chiuso, «Dividi in parti» su un pezzo solo, «Reticolo» senza cavità.
+- Assegnare un filamento mostra il colore già nell'anteprima; uniformare e suddividere i triangoli mostrano la nuova mesh con i suoi spigoli. La barra spaziatrice riporta il prima.
+- Svuotare un pezzo con buchi nel guscio dice ora che il guscio è il problema e offre «Ripara e riprova» — invece di segnalare che nessun calcolo ha funzionato.
 
 ## 0.4.1
 

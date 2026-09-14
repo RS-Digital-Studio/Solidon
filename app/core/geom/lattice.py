@@ -307,6 +307,14 @@ class LatticeParams(BaseParams):
     )
 
 
+#: Warum *Gitter füllen* ohne Hohlraum nichts tut — derselbe Satz im Menü
+#: (``requires_body="cavity"``, ``labels.body_requirement``) wie beim Rechnen.
+NO_CAVITY: Final = _(
+    "Der Innenraum lässt sich nicht eindeutig bestimmen. Den Körper mit "
+    "Aushöhlen vorbereiten oder ein Modell mit geschlossener Innenfläche wählen."
+)
+
+
 @register_op(
     name="lattice_fill",
     title=_("Gitter füllen"),
@@ -314,6 +322,7 @@ class LatticeParams(BaseParams):
     params=LatticeParams,
     consumes=1,
     produces=1,
+    requires_body="cavity",
     doc=_(
         "Füllt den Hohlraum eines ausgehöhlten Körpers mit einer Gitterstruktur "
         "als echte Geometrie. Sie reist im 3MF mit und ist dieselbe, egal wer "
@@ -339,10 +348,7 @@ def lattice_fill(ctx: OpContext) -> OpResult:
     if cavity is None:
         raise ValidationError(
             "structure",
-            _(
-                "Der Innenraum lässt sich nicht eindeutig bestimmen. Den Körper mit "
-                "Aushöhlen vorbereiten oder ein Modell mit geschlossener Innenfläche wählen."
-            ),
+            NO_CAVITY,
             value=params.structure,
             constraint="no_cavity",
             suggestions=[replace(CORRECT_INPUT, label=_("Erst aushöhlen"))],

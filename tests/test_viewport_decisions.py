@@ -6211,6 +6211,90 @@ def _scene_with_two_bodies() -> Any:
     )
 
 
+def test_a_recoloured_preview_covers_the_body_in_its_new_colours(qt_app: QApplication) -> None:
+    """RM-169: *Filament zuweisen* ändert keinen Eckpunkt. Die Differenz trug
+    nichts, das Bild blieb die alte Farbe. Jetzt liegt der Körper danach in
+    seinen Slotfarben über dem davor — und der davor ist verborgen, denn zwei
+    Flächen am selben Ort flimmern."""
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    result = _scene_with_two_bodies()
+    viewport.show_scene(result)
+    body = result.scene.objects["obj_1"]
+    painted = SceneObject(
+        id="obj_1",
+        name="Halter",
+        mesh=MeshData(body.mesh.raw, slots=(1,) * len(body.mesh.raw.faces)),
+        material_slots=[MaterialSlot(index=1, name="Rot", colour=(1.0, 0.0, 0.0))],
+    )
+    difference = SceneDifference(
+        entries={"obj_1": Difference(object_id="obj_1", recoloured=painted)}
+    )
+
+    viewport.show_difference(difference)
+
+    assert not viewport._actors["obj_1"].visible(), "der Körper davor ist verborgen"
+    assert viewport._actors["obj_2"].visible(), "der andere bleibt, wie er war"
+    drawn = [entry for kind, entry in renderer.drawn if entry["name"] == "preview:obj_1"]
+    assert len(drawn) == 1, renderer.names()
+    colours = drawn[0]["cell_colours"]
+    assert colours is not None and colours.colormap is not None
+    assert "#ff0000" in [str(colour).lower() for colour in colours.colormap], (
+        "die Vorschau zeigt die Farbe, die übernommen wird"
+    )
+    assert not drawn[0]["style"].show_edges
+
+    viewport.hold_before(True)
+    assert viewport._actors["obj_1"].visible(), "die Leertaste holt das Vorher — den Körper selbst"
+    viewport.hold_before(False)
+    assert not viewport._actors["obj_1"].visible()
+
+    viewport.show_difference(None)
+    assert viewport._actors["obj_1"].visible(), "mit der Vorschau geht die Decke"
+    assert not viewport._covered
+
+
+def test_a_reshaped_preview_shows_the_new_triangles_as_edges(qt_app: QApplication) -> None:
+    """RM-169: Neue Dreiecke bei gleichem Volumen — der Körper danach liegt
+    mit seinen Kanten in der Farbe von „Hinzugekommen" über dem davor."""
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.ui.palette import DIFF_PALETTES
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    result = _scene_with_two_bodies()
+    viewport.show_scene(result)
+    finer = MeshData(result.scene.objects["obj_1"].mesh.raw.subdivide())
+    difference = SceneDifference(
+        entries={"obj_1": Difference(object_id="obj_1", retriangulated=finer)}
+    )
+
+    viewport.show_difference(difference)
+
+    assert not viewport._actors["obj_1"].visible()
+    drawn = [entry for kind, entry in renderer.drawn if entry["name"] == "preview:obj_1"]
+    assert len(drawn) == 1
+    style = drawn[0]["style"]
+    assert style.show_edges and style.edge_colour == DIFF_PALETTES["blue_orange"].added.colour
+    assert not style.pickable, "eine Vorschau ist kein Klickziel"
+    faces = renderer.meshes[-1][1]
+    assert len(faces) == finer.triangle_count, "gezeichnet wird das Netz danach"
+
+    viewport.show_scene(result)
+    assert not viewport._actors["obj_1"].visible(), (
+        "ein Szenenaufbau mit stehender Vorschau deckt den neuen Aktor wieder ab"
+    )
+    viewport.show_difference(None)
+    assert viewport._actors["obj_1"].visible()
+
+
 def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication) -> None:
     """Was der Zug bewegt, trägt auch die Auswahlfarbe.
 

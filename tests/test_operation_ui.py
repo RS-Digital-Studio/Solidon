@@ -1083,6 +1083,130 @@ def test_the_same_operations_are_available_on_an_exact_body(window: MainWindow) 
         assert window._op_actions[name].isEnabled(), name
 
 
+def test_the_register_says_what_a_body_must_bring() -> None:
+    """RM-168: Die Voraussetzung steht an der Operation, nicht in einer Liste
+    der Oberfläche — und nur mit einem Wert, den das Register kennt."""
+    from app.core.registry.registry import BODY_REQUIREMENTS
+
+    declared = {spec.name: spec.requires_body for spec in REGISTRY.all() if spec.requires_body}
+    assert declared == {"thicken": "open", "split_bodies": "parts", "lattice_fill": "cavity"}
+    assert set(declared.values()) <= set(BODY_REQUIREMENTS)
+
+
+def test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say(
+    window: MainWindow,
+) -> None:
+    """Gemessen am 13.09.2026 über alle Dialoge: An einem sauberen Körper
+    öffneten *Offene Fläche schließen*, *In Einzelteile zerlegen* und *Gitter
+    füllen* einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen
+    konnte. Jetzt steht der Eintrag ausgegraut da — mit demselben Satz."""
+    from app.core.geom.lattice import NO_CAVITY
+    from app.core.geom.mesh_ops import ALREADY_CLOSED
+    from app.core.geom.prepare_ops import ONE_PIECE
+
+    select(window)
+    window._update_actions()
+
+    for name, sentence in (
+        ("thicken", ALREADY_CLOSED),
+        ("split_bodies", ONE_PIECE),
+        ("lattice_fill", NO_CAVITY),
+    ):
+        action = window._op_actions[name]
+        assert not action.isEnabled(), name
+        assert str(sentence) in action.toolTip(), name
+
+
+def test_the_body_state_lock_lifts_where_the_body_brings_what_is_asked(
+    qt_app: QApplication,
+) -> None:
+    """Die Gegenprobe zu jeder der drei Sperren — sonst bewiese der Test nur,
+    dass drei Einträge grau sind."""
+    # Offen: die Fläche schließen geht, zerlegen und füllen nicht.
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(MESHES / "broken_open.stl")
+    window.session.wait_for_idle()
+    select(window)
+    window._update_actions()
+    assert window._op_actions["thicken"].isEnabled()
+    assert not window._op_actions["split_bodies"].isEnabled()
+
+    # Ausgehöhlt: der Hohlraum ist da, das Gitter darf hinein — und die zwei
+    # Schalen sind zwei Stücke.
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.apply(
+        "Aushöhlen",
+        [OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0, "vents": 0})],
+    )
+    window.session.wait_for_idle()
+    select(window)
+    window._update_actions()
+    assert window._op_actions["lattice_fill"].isEnabled()
+    assert window._op_actions["split_bodies"].isEnabled()
+    assert not window._op_actions["thicken"].isEnabled()
+
+
+def test_body_facts_are_measured_once_per_body_and_evaluation(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``face_components`` kostet an 1,3 Millionen Dreiecken 2,3 s, und
+    ``_update_actions`` läuft bei jeder Auswahl. Gerechnet wird je Körper und
+    Auswertung einmal; eine neue Auswertung rechnet neu."""
+    from app.ui import labels
+
+    calls: list[int] = []
+    original = labels.face_components
+
+    def counted(mesh: Any) -> Any:
+        calls.append(1)
+        return original(mesh)
+
+    monkeypatch.setattr(labels, "face_components", counted)
+    # Das Öffnen hat den Körper schon gewählt und gemessen — mit der echten
+    # Funktion. Gezählt wird ab hier, also ohne diese Antwort.
+    window._body_facts = (-1, {})
+    select(window)
+    window._update_actions()
+    window._update_actions()
+    window.object_tree.select_object(None)
+    select(window)
+    window._update_actions()
+    assert len(calls) == 1, "dieselbe Auswertung, derselbe Körper — eine Rechnung"
+
+    window.session.history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 5.0})],
+    )
+    window.session.evaluate_now()
+    select(window)
+    window._update_actions()
+    assert len(calls) == 2, "eine neue Auswertung ist ein neuer Körper"
+
+
+def test_a_huge_body_is_not_measured_for_the_menu() -> None:
+    """Über der Grenze bleibt der Zustand unbekannt — und unbekannt sperrt nie."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+    from app.ui.labels import BODY_FACTS_LIMIT, body_facts, body_requirement
+
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    big = trimesh.Trimesh(
+        vertices=np.asarray(box.vertices),
+        faces=np.tile(np.asarray(box.faces), (BODY_FACTS_LIMIT // 12 + 1, 1)),
+        process=False,
+    )
+    entry = SceneObject(id="obj_1", name="Groß", mesh=MeshData.of(big))
+    facts = body_facts(entry)
+    assert facts.closed is None and facts.pieces is None and facts.cavity is None
+    for name in ("thicken", "split_bodies", "lattice_fill"):
+        assert body_requirement(REGISTRY.get(name), facts) is None, name
+
+
 def test_the_register_says_which_operations_need_an_exact_body() -> None:
     """Die Auskunft steht im Register, nicht in einer Liste in der Oberfläche
     — sonst fehlt die nächste Operation des exakten Kerns darin.

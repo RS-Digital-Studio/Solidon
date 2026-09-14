@@ -79,7 +79,13 @@ Ein altes allein am Körper gespeichertes Material wird vor dem teilweisen
 Färben oder Entfernen über `slots_for_object` in explizite Definitionen
 übernommen. Vollständige Abwahl leert auch dieses alte Materialfeld.
 Die Differenzansicht überspringt ausschließlich identische Netzarrays,
-keine bloß gleichen Hüllquader und Volumina.
+keine bloß gleichen Hüllquader und Volumina. Und identische Netzarrays mit
+anderen Farben überspringt sie nicht mehr (RM-169): `Difference.recoloured`
+trägt dann den Körper danach, `Difference.retriangulated` den Körper danach,
+wenn die Dreiecke sich ändern und das Volumen unter dem bleibt, was der
+Drucker hinterlässt — `compare_scenes` setzt beides, die Ansicht zeichnet den
+Körper danach über den davor (`Viewport._cover_body`). `SceneDifference.changed`
+bleibt die Volumenfrage; `reshaped` und `recoloured` sind die zwei anderen.
 
 Eine mitgeführte exakte `MeshData.cavity` folgt in `transform.apply` derselben
 Matrix wie der Körper. Änderungen der Topologie verwerfen die Auskunft,

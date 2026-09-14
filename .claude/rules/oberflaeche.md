@@ -1033,6 +1033,14 @@ Vorschau: Diese Ebene teilt das Objekt nicht."), sagt bei leerer Differenz
 gerechnet …" (§2.8). Ein leeres Bild ohne Satz sieht aus wie „nichts ändert
 sich" — und das ist die eine Rückmeldung, die nie stimmt.
 
+**Und der Satz kommt, wo es geht, vor den Dialog.** Elf der Dialoge ohne
+Bild konnten am gewählten Körper nie etwas tun; drei davon sagen es seit dem
+14.09.2026 am Menüeintrag (`requires_body`, `operationen.md`): *Offene Fläche
+schließen* an einem geschlossenen, *In Einzelteile zerlegen* an einem Stück,
+*Gitter füllen* ohne Hohlraum. Die übrigen — *Deckel erzeugen* ohne Öffnung,
+*Teilen* auf einer Ebene, die nichts trifft — hängen an einer Zahl oder einer
+Fläche, die erst im Dialog entschieden wird; dort trägt das Band den Satz.
+
 ## Und die Tabulatortaste geht denselben Weg wie das Auge
 
 **Ein Widget im Layout zu verschieben verschiebt es nicht in der Fokuskette.**

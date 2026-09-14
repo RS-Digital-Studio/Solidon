@@ -1,7 +1,7 @@
 # Einfach für Kunden — was die Vorschau verschweigt und was die einfachen Werkzeuge anders machen
 
-> **Stand:** 13.09.2026 — Messung, Recherche, vier Änderungen gebaut, der Rest
-> als Register. **Anlass:** Robert am 13.09.2026: „bei vielen operationen
+> **Stand:** 14.09.2026 — Messung, Recherche, sieben Änderungen gebaut;
+> offen bleibt eine Entscheidung (RM-171). **Anlass:** Robert am 13.09.2026: „bei vielen operationen
 > fehlen noch vorschau, bei aushöhlen reagiert die checkbox zum öffnen ab und
 > zu nicht, viele operationen sind auch recht umständlich, die ganze app soll
 > einfach für kunden sein" — und: „recherchiere auch mal wie man es ganz
@@ -10,7 +10,8 @@
 > aktuellen stand aber optimiert", kein Umbau der Bedienzone
 > (`konzept-befehlsband-2026-08.md`). Alles hier ist Optimierung am Bestand.
 > Offene Arbeit steht ausschließlich im Register von `ROADMAP.md`
-> (RM-168 bis RM-171).
+> (RM-171); RM-168 bis RM-170 sind am 14.09.2026 zugegangen und stehen mit
+> ihrem Nachweis im Archiv.
 
 ## §1 Gemessen, nicht gefühlt
 
@@ -77,7 +78,7 @@ Bett (gemessen: Quader 0 bis 20 mm), die Ebene lag also auf seiner Unterseite
 und teilte nichts. Wer teilen will, will fast immer die Mitte.
 
 Vorderseiten: Das Register hält die Grenze von acht Feldern
-(`test_ui_limits`), und *Grundform hochziehen* nutzt sie ganz — vier der acht
+(`tests/test_interface_limits.py`), und *Grundform hochziehen* nutzt sie ganz — vier der acht
 (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für Lochkreis und Lochraster und
 stehen bei einem Rechteck ausgegraut da. Das ist eine dokumentierte
 Entscheidung (`_couple_dependent_fields`: „wer sie verschwinden sähe, suchte
@@ -138,24 +139,27 @@ bei einem Klick in die Zeilenmitte und auf die Beschriftung
 (`probe_hollow_toggle`: Klickfläche vorher 14 × 14, nachher 241 × 14 plus
 264 × 14 Beschriftung).
 
-## §4 Was offen bleibt — und im Register steht
+## §4 Gebaut am 14.09.2026 — und was offen bleibt
 
-- **RM-168** — Sackgassen sperren statt öffnen: `_reason_locked` um
-  Körpereigenschaften erweitern (geschlossen/offen, ein Stück/mehrere,
-  massiv/hohl, Öffnung nach oben), damit *Offene Fläche schließen*, *In
-  Einzelteile zerlegen*, *Gitter füllen* und *Deckel erzeugen* ausgegraut mit
-  Grund stehen, wo sie nur scheitern können.
-- **RM-169** — Vorschau für Farbe und Netz: Die Differenzansicht misst Volumen;
-  Filament zuweisen, Textur in Filamente, Dreiecke verringern und Angleichen
-  zeigen deshalb nichts. Eine Farbvorschau färbt die Fläche im Bild, eine
-  Netzvorschau legt das neue Drahtgitter über das alte.
-- **RM-170** — Aushöhlen an generierten Körpern: Die Boolesche Kette scheitert
-  an `generated_figure.stl` in beiden Qualitäten; das Band sagt es jetzt, aber
-  der Kunde von Weg 3 kommt so nicht zu einer hohlen Figur.
+Robert am 14.09.2026: „dann leg los, das grundlegende konzept sollte aber
+nicht geändert werden". Drei der vier Punkte sind Optimierung am Bestand und
+gebaut; der vierte ist eine Entscheidung und bleibt seine.
+
+| Was | Wo | Nachweis |
+|---|---|---|
+| **RM-168** Sackgassen sperren: `requires_body` im Register, `body_requirement` im Menü — derselbe Satz wie beim Rechnen, unbekannt sperrt nie | `registry.py`, `labels.body_facts`, `main_window._body_facts_of_selection` | `test_the_register_says_what_a_body_must_bring`, `test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say`, Gegenprobe und Zählung der Rechnungen daneben |
+| **RM-169** Vorschau für Farbe und Netz: `Difference.recoloured` und `retriangulated`, der Körper danach liegt über dem davor | `difference.py`, `Viewport._cover_body` | `test_a_recolouring_is_a_preview_without_volume`, `test_a_recoloured_preview_covers_the_body_in_its_new_colours`, `test_a_reshaped_preview_shows_the_new_triangles_as_edges` |
+| **RM-170** Aushöhlen an der generierten Figur: nicht die Kette, die offene Hülle ist der Grund — `NotManifoldError` mit „Reparieren und erneut versuchen" | `hollow.py` | `test_hollowing_an_open_hull_names_the_hull_and_offers_repair` |
+
+*Deckel erzeugen* ohne Öffnung bleibt beim Band: Ob eine Öffnung nach oben
+zeigt, entscheidet sich an der gewählten Fläche und nicht am Körper — das
+Menü kann es vor dem Dialog nicht wissen.
+
 - **RM-171** — Abhängige Felder vorn: entscheiden, ob sie bei nicht erfüllter
   Bedingung ausgeblendet statt ausgegraut werden (Entscheidung Robert; die
   heutige Regel ist begründet, der Preis sind vier tote Zeilen im häufigsten
-  Fall).
+  Fall). Nicht angefasst — „das grundlegende Konzept" schließt eine
+  dokumentierte Bedienregel ein.
 
 ## Quellen
 

@@ -5235,6 +5235,11 @@ def _where_it_sits(body: Any) -> tuple[float, float, float]:
     return (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
+#: Warum *In Einzelteile zerlegen* an einem Stück nichts tut — derselbe Satz
+#: im Menü (``requires_body="parts"``, ``labels.body_requirement``).
+ONE_PIECE: Final = _("Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.")
+
+
 @register_op(
     name="split_bodies",
     title=_("In Einzelteile zerlegen"),
@@ -5243,6 +5248,7 @@ def _where_it_sits(body: Any) -> tuple[float, float, float]:
     consumes=1,
     produces=VARIABLE,
     produces_from="count",
+    requires_body="parts",
     doc=_(
         "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen "
         "besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht "
@@ -5277,7 +5283,7 @@ def split_bodies(ctx: OpContext) -> OpResult:
         raise ValidationError(
             field="count",
             detail=(
-                _("Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.")
+                ONE_PIECE
                 if found <= 1
                 # **Ohne Platzhalter.** Ein Fehlertext wird nirgends
                 # nachformatiert — `show_details` zeigt ihn, wie er ist, und

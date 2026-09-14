@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import manifold3d
 import numpy as np
@@ -1090,6 +1090,17 @@ class ThickenParams(BaseParams):
     )
 
 
+#: Warum *Offene Fläche schließen* an einem geschlossenen Körper nichts tut.
+#: Als Konstante, weil das Menü denselben Satz sagt, bevor jemand klickt
+#: (``requires_body="open"``, ``labels.body_requirement``) — zwei Fassungen
+#: derselben Auskunft liefen auseinander.
+ALREADY_CLOSED: Final = _(
+    "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre "
+    "keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker "
+    "macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an."
+)
+
+
 @register_op(
     name="thicken",
     title=_("Offene Fläche schließen"),
@@ -1097,6 +1108,7 @@ class ThickenParams(BaseParams):
     params=ThickenParams,
     consumes=1,
     produces=1,
+    requires_body="open",
     doc=_(
         "Gibt einer offenen Fläche eine Wand und macht sie damit zu einem Körper. "
         "Der Weg für ein Netz, das als Fläche ankommt statt als Volumen."
@@ -1127,11 +1139,7 @@ def thicken(ctx: OpContext) -> OpResult:
         # über sieben Minuten, dreimal hintereinander gelegt.
         raise ValidationError(
             "thickness",
-            _(
-                "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre "
-                "keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker "
-                "macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an."
-            ),
+            ALREADY_CLOSED,
             value=params.thickness,
             constraint="already_solid",
             suggestions=[

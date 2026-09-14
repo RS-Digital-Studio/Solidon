@@ -25,9 +25,10 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS
+from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError, NotManifoldError
 from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData
+from app.core.geom.repair import open_edge_count
 from app.core.log import get_logger
 from app.core.types import (
     CancelToken,
@@ -119,8 +120,31 @@ def hollow(
 
     before = mesh.volume
     _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
-    outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
-    enclosed = boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
+    try:
+        outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
+        enclosed = boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
+    except BooleanFailedError as failure:
+        # **Eine offene Hülle ist der Grund, nicht die Kette** (RM-170). An
+        # ``generated_figure.stl`` — Weg 3, nach dem Import nicht wasserdicht,
+        # 18 offene Kanten — scheiterten alle Stufen, und die Meldung sagte
+        # „Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis
+        # geliefert". Wahr, aber ohne den Weg: Nach *Reparieren* geht das
+        # Aushöhlen an derselben Figur in 0,16 s durch (gemessen 14.09.2026).
+        # Der Satz nennt jetzt die Hülle, und die Handlung „Reparieren und
+        # erneut versuchen" steht wie bei jedem Geometriefehler dabei —
+        # auch im Band der Vorschau, wo man die Zahl noch ändern kann.
+        #
+        # Vorher geprüft wird nicht: Die Kette kommt an mancher offenen Stelle
+        # durch, und eine Absage vor dem Versuch nähme ihr genau diese Fälle.
+        if not mesh.is_watertight:
+            raise NotManifoldError(
+                detail=_(
+                    "Der Körper ist nicht geschlossen — ein Hohlraum braucht eine "
+                    "dichte Hülle. Erst reparieren, dann aushöhlen."
+                ),
+                open_edges=open_edge_count(mesh),
+            ) from failure
+        raise
     body = outcome.mesh
     findings = [*outcome.findings, *enclosed.findings]
     stages: list[SolverInfo | None] = [outcome.solver, enclosed.solver]

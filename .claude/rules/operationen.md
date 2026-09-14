@@ -40,6 +40,21 @@ dem ausgefüllten Dialog abzulehnen (Regel 19). Der gute Satz im Kern bleibt —
 er ist die zweite Hürde, nicht die erste. Eine Aufzählung in der Oberfläche
 wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
 
+**Und was der Körper mitbringen muss, steht daneben: `requires_body`.**
+Nicht die Bauart, sondern der Zustand — `"open"` (nicht wasserdicht),
+`"parts"` (mehr als ein Stück), `"cavity"` (ein Hohlraum, als `void` erkannt
+oder von *Aushöhlen* eingetragen). Drei Operationen tragen es: *Offene Fläche
+schließen*, *In Einzelteile zerlegen*, *Gitter füllen*. Gemessen am
+13.09.2026 über alle Dialoge: Ohne die Angabe öffneten sie an einem sauberen
+Quader einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen konnte.
+`labels.body_requirement` liest die Angabe und sagt am Eintrag **denselben
+Satz**, den die Operation beim Rechnen wirft — die Sätze stehen deshalb als
+Konstanten in ihren Modulen (`mesh_ops.ALREADY_CLOSED`, `prepare_ops.ONE_PIECE`,
+`lattice.NO_CAVITY`) und nicht zweimal. Was der Körper hat, misst
+`labels.body_facts` einmal je Körper und Auswertung; über
+`BODY_FACTS_LIMIT` Dreiecken bleibt der Zustand unbekannt, und unbekannt
+sperrt nie. `test_the_register_says_what_a_body_must_bring` hält die drei fest.
+
 **Aber die Frage davor lautet, ob es die Beschränkung überhaupt braucht.**
 `requires_kind="brep"` ist richtig, wo ein Netz die Sache nicht hergibt — eine
 Formschräge auf einer benannten Fläche, ein Schalenkörper, STEP. Es ist

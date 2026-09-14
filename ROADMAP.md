@@ -80,9 +80,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
-| [RM-168 — Sackgassen sperren statt öffnen](#rm-168) | Bedienung und Darstellung | `_reason_locked` um Körpereigenschaften erweitern, damit vier Operationen ausgegraut mit Grund stehen statt einen Dialog ohne Bild zu öffnen |
-| [RM-169 — Vorschau für Farbe und Netz](#rm-169) | Bedienung und Darstellung | Farbvorschau im Bild und Drahtgitter über dem alten Netz — die Differenzansicht misst nur Volumen |
-| [RM-170 — Aushöhlen an generierten Körpern](#rm-170) | Geometrie, Erkennung und Druckvorbereitung | Boolesche Kette an `generated_figure.stl` in beiden Qualitäten diagnostizieren |
 | [RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen](#rm-171) | Bedienung und Darstellung | Entscheidung Robert — vier tote Zeilen im häufigsten Fall gegen „wer sie verschwinden sähe, suchte sie" |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -1007,17 +1004,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `test_radial_rounding`, `test_parts` (feste Dreieckszahlen), `test_export`, `test_difference`,
   `test_agent_suite`. Danach die Beispiel-STLs der Werkstattfilme neu exportieren.
 
-<a id="rm-170"></a>
-
-- [ ] **RM-170 — Aushöhlen an generierten Körpern.** `geom.hollow.hollow` scheitert an
-  `tests/data/meshes/generated_figure.stl` (3372 Dreiecke, Weg 3) in **beiden** Qualitäten mit
-  `BooleanFailedError` („Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert"),
-  gemessen am 13.09.2026; die acht übrigen Korpuskörper gehen in 0,04 bis 0,34 s durch. Das Band
-  sagt es seither („Keine Vorschau: …"), aber der Kunde von Weg 3 kommt so nicht zu einer hohlen
-  Figur. Diagnose über `/geometry-review`: Eingangsnetz (wasserdicht? Selbstdurchdringung?),
-  Offset-Kavität, welche Stufe der Kette woran reißt. Abnahme: ein Geometrietest gegen diese Datei
-  mit Volumen vorher/nachher — oder ein Befund, der die Reparatur vorschlägt, bevor die Kette läuft.
-
 ## Bedienung und Darstellung
 <a id="rm-070"></a>
 
@@ -1118,29 +1104,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
-
-<a id="rm-168"></a>
-
-- [ ] **RM-168 — Sackgassen sperren statt öffnen.** Gemessen am 13.09.2026 über alle 110
-  Operationen (`konzepte/konzept-einfache-bedienung-2026-09.md`): *Offene Fläche schließen* an
-  einem geschlossenen Körper, *In Einzelteile zerlegen* an einem Stück, *Gitter füllen* an einem
-  massiven Körper und *Deckel erzeugen* ohne Öffnung öffnen einen Dialog, dessen Vorschau nur
-  „Keine Vorschau: …" sagen kann. Menü, Kontextmenü und Palette kennen `_reason_locked`, das
-  heute nach Auswahlart und Anzahl fragt — nicht nach Eigenschaften des Körpers. Fix: die Frage um
-  geschlossen/offen, ein Stück/mehrere, massiv/hohl und „Öffnung nach oben" erweitern, mit demselben
-  Satz an allen drei Orten. Abnahme: die vier Einträge stehen an einem sauberen Quader ausgegraut
-  mit Grund; `test_ui` prüft je Eintrag Sperre und Satz.
-
-<a id="rm-169"></a>
-
-- [ ] **RM-169 — Vorschau für Farbe und Netz.** Die Differenzansicht (§18.7) misst hinzugekommenes
-  und entferntes Volumen. Damit zeigen *Filament zuweisen*, *Filament auf eine Fläche*, *Filament
-  entfernen*, *Textur in Filamente umrechnen* sowie *Dreiecke verringern*, *Kanten verfeinern*,
-  *Dreiecke angleichen* und *Fläche unterteilen* nichts — seit dem 13.09.2026 sagt das Band „am
-  Volumen ändert sich nichts", aber die Handlung bleibt unsichtbar, bis sie übernommen ist. Fix in
-  zwei Hälften: eine Farbvorschau färbt die betroffenen Dreiecke im Bild (die Slotfarben kennt der
-  Viewport); eine Netzvorschau legt das neue Drahtgitter halbtransparent über das alte. Abnahme:
-  je Operation ein Offscreen-Test, der im Bild einen Aktor der Vorschau findet.
 
 <a id="rm-171"></a>
 

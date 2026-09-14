@@ -9901,6 +9901,17 @@ def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow
     assert banner.note.text() == tr("Vorschau — am Volumen ändert sich nichts")
     assert banner.hint.text() == "", "ohne Unterschied gibt es kein Vorher zu halten"
 
+    # RM-169: Wo die Zahl „nichts" sagt und das Bild etwas zeigt, sagt das
+    # Band, was — und das Vorher lohnt sich wieder.
+    quiet = dataclasses.make_dataclass(
+        "Netz", [("changed", bool), ("reshaped", bool), ("recoloured", bool)]
+    )
+    window._show_preview(quiet(False, True, False))
+    assert banner.note.text() == tr("Vorschau — das Netz ändert sich, das Volumen nicht")
+    assert banner.hint.text() == tr("Leertaste halten: vorher")
+    window._show_preview(quiet(False, False, True))
+    assert banner.note.text() == tr("Vorschau — nur die Farbe ändert sich")
+
     window._show_preview(dataclasses.make_dataclass("Voll", [("changed", bool)])(True))
     assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
 

@@ -66,6 +66,22 @@ class Difference:
     #: wo einer bekannt ist; sonst bleibt es beim Vernetzungsrauschen (siehe
     #: :data:`NOISE_VOLUME`).
     noise_volume: float = NOISE_VOLUME
+    retriangulated: MeshData | None = None
+    """Der Körper danach, wenn seine Dreiecke sich ändern und sein Volumen
+    nicht — *Dreiecke verringern*, *Angleichen*, *Unterteilen*, *Glätten*
+    unterhalb dessen, was der Drucker hinterlässt (RM-169).
+
+    Die Ansicht misst Volumen, und diese Operationen haben keines: Bis zum
+    14.09.2026 blieb ihre Vorschau leer, und das Band sagte „am Volumen ändert
+    sich nichts" — wahr, und für den, der die Dreiecke sehen wollte, keine
+    Antwort. Die Ansicht legt den Körper danach mit seinen Kanten über den
+    davor."""
+    recoloured: SceneObject | None = None
+    """Der Körper danach, wenn nur seine Farben sich ändern — *Filament
+    zuweisen*, *auf eine Fläche*, *entfernen*, *Textur umrechnen* (RM-169).
+
+    Die Geometrie ist dieselbe, ``compare`` fände nichts; die Ansicht zeichnet
+    den Körper mit den neuen Slotfarben über den alten."""
 
     @property
     def changed(self) -> bool:
@@ -93,6 +109,16 @@ class SceneDifference:
     @property
     def removed_volume(self) -> float:
         return sum(entry.removed_volume for entry in self.entries.values())
+
+    @property
+    def reshaped(self) -> bool:
+        """Ob ein Körper neue Dreiecke bei gleichem Volumen bekommt."""
+        return any(entry.retriangulated is not None for entry in self.entries.values())
+
+    @property
+    def recoloured(self) -> bool:
+        """Ob ein Körper nur andere Farben bekommt."""
+        return any(entry.recoloured is not None for entry in self.entries.values())
 
 
 def compare(
@@ -178,11 +204,31 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
             # Zusage — sie fehlt dann, statt den Zug abzubrechen.
             continue
         if _same_geometry(first, second):
+            # **Dieselben Dreiecke, andere Farben — auch das ist eine Vorschau.**
+            # Die vier Filament-Operationen ändern keinen Eckpunkt; hier stand
+            # ``continue``, und im Bild blieb die alte Farbe, bis übernommen war.
+            if not _same_colouring(earlier, entry):
+                result.entries[object_id] = Difference(
+                    object_id=object_id, recoloured=entry, noise_volume=_noise(profile)
+                )
             continue
         difference = compare(first, second, quality=quality, profile=profile)
         difference.object_id = object_id
+        if not difference.changed:
+            # Neue Dreiecke, gleiches Volumen: Die Zahl sagt „nichts", das
+            # Netz sagt etwas — und darum geht es bei diesen Operationen.
+            difference.retriangulated = second
         result.entries[object_id] = difference
     return result
+
+
+def _same_colouring(earlier: SceneObject, entry: SceneObject) -> bool:
+    """Ob zwei Körper dieselben Farben tragen — Slot je Dreieck und die
+    Slotliste mit ihren Farben. Beides muss gleich sein; eine umgefärbte
+    Liste bei gleicher Zuordnung ist genauso eine Änderung wie umgekehrt."""
+    return tuple(getattr(earlier.mesh, "slots", ())) == tuple(
+        getattr(entry.mesh, "slots", ())
+    ) and list(earlier.material_slots) == list(entry.material_slots)
 
 
 def _whole_body(

@@ -56,6 +56,9 @@ Nutzen da und sonst nichts.
 - Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.
 - Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.
 - „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.
+- Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum.
+- Filament zuweisen zeigt die Farbe schon in der Vorschau; Dreiecke angleichen und Unterteilen zeigen das neue Netz mit seinen Kanten. Die Leertaste holt das Vorher.
+- Aushöhlen an einem Teil mit Löchern in der Hülle sagt jetzt, dass die Hülle das Problem ist, und bietet „Reparieren und erneut versuchen“ an — statt zu melden, kein Rechenweg habe funktioniert.
 
 ## 0.4.1
 

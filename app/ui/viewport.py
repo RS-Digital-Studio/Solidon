@@ -4229,6 +4229,10 @@ class Viewport(QWidget):
         self._layer_rebuild.timeout.connect(self._rebuild_layer)
         self._difference: Any | None = None
         self._difference_actors: list[Any] = []
+        self._covered: set[ObjectId] = set()
+        """Körper, deren eigener Aktor gerade unter einer Vorschau verborgen
+        ist — neue Dreiecke oder neue Farben liegen deckungsgleich darüber, und
+        zwei Flächen am selben Ort flimmern (RM-169)."""
         self._difference_held = False
         """Ob die Vorschau gerade weggehalten wird, um das Vorher zu sehen."""
         self._diff_palette: DiffPalette = "blue_orange"
@@ -10198,6 +10202,14 @@ class Viewport(QWidget):
         for actor in self._difference_actors:
             self.renderer.remove(actor)
         self._difference_actors.clear()
+        # Erst wieder zeigen, was eine Vorschau verdeckt hat — auch auf dem
+        # Weg hinaus (Dialog zu, Leertaste gehalten): Das Vorher ist der
+        # Körper selbst.
+        for object_id in self._covered:
+            covered = self._actors.get(object_id)
+            if covered is not None:
+                covered.set_visible(True)
+        self._covered.clear()
         if self._difference is None or self._difference_held:
             return
 
@@ -10223,7 +10235,76 @@ class Viewport(QWidget):
             self._add_body(
                 entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.65, shift
             )
+            # **Neue Dreiecke bei gleichem Volumen: der Körper danach mit
+            # seinen Kanten** (RM-169). Die Kanten tragen die Farbe von
+            # „Hinzugekommen" — das Muster ist die zweite Kodierung (Regel 18),
+            # das Band die dritte. Der Körper darunter wird verborgen: Zwei
+            # Flächen am selben Ort flimmern, und flimmern sagt nichts.
+            retriangulated = getattr(entry, "retriangulated", None)
+            if retriangulated is not None:
+                self._cover_body(
+                    entry.object_id,
+                    retriangulated,
+                    shift,
+                    SurfaceStyle(
+                        colour=self._object_colour,
+                        show_edges=True,
+                        edge_colour=colours.added.colour,
+                        smooth=self._shading == "smooth",
+                        backface_colour=BACKFACE_COLOUR,
+                        pickable=False,
+                    ),
+                    None,
+                )
+            # **Neue Farben bei gleichen Dreiecken: der Körper danach in
+            # seinen Farben** — dieselbe Slotauflösung wie beim Aufbau der
+            # Szene, damit die Vorschau die Farbe zeigt, die übernommen wird.
+            recoloured = getattr(entry, "recoloured", None)
+            if recoloured is not None:
+                painted = getattr(recoloured, "mesh", None)
+                raw = getattr(painted, "raw", None)
+                if raw is not None and len(raw.faces):
+                    self._cover_body(
+                        entry.object_id,
+                        painted,
+                        shift,
+                        SurfaceStyle(
+                            colour=self._object_colour,
+                            smooth=self._shading == "smooth",
+                            backface_colour=BACKFACE_COLOUR,
+                            pickable=False,
+                        ),
+                        self._slot_colours(painted, recoloured, len(raw.faces)),
+                    )
         self.set_preview_gizmo(self._preview_gizmo_wanted)
+
+    def _cover_body(
+        self, object_id: ObjectId, mesh: Any, shift: Any, style: SurfaceStyle, cell_colours: Any
+    ) -> None:
+        """Legt den Körper danach an die Stelle des Körpers davor.
+
+        Der eigene Aktor wird verborgen und in ``_covered`` gemerkt;
+        :meth:`_redraw_difference` zeigt ihn wieder, bevor es neu zeichnet, und
+        damit auch, wenn die Vorschau geht oder die Leertaste das Vorher holt.
+        """
+        if self.renderer is None:
+            return
+        import numpy as np
+
+        own = self._actors.get(object_id)
+        if own is not None:
+            own.set_visible(False)
+            self._covered.add(object_id)
+        raw = mesh.raw
+        self._difference_actors.append(
+            self.renderer.add_surface(
+                np.asarray(raw.vertices, dtype=float) + shift,
+                np.asarray(raw.faces, dtype=np.int64),
+                name=f"preview:{object_id}",
+                style=style,
+                cell_colours=cell_colours,
+            )
+        )
 
     def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
         if self.renderer is None or mesh is None or not len(mesh.raw.faces):

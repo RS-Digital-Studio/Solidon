@@ -237,7 +237,10 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
+    BodyFacts,
     LengthSpin,
+    body_facts,
+    body_requirement,
     circle_measure,
     demo_line,
     display_unit,
@@ -1867,6 +1870,10 @@ class MainWindow(QMainWindow):
         self._preview_busy.timeout.connect(self._say_preview_busy)
         self._preview_reason = ""
         """Der Satz, mit dem die letzte Vorschau ausblieb — leer, wenn sie kam."""
+        self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
+        """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
+        gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
+        Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
         self._preview_shown = False
         """Ob dieses Fenster eine Vorschau ins Bild gelegt hat, die es
         zurückzunehmen hat.
@@ -4270,10 +4277,46 @@ class MainWindow(QMainWindow):
         reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
         if reason is not None:
             return reason
-        # Und zuletzt das Merkmal: Eine Operation, deren Pflichtfeld eine
-        # Bohrung benennt, ist auf einem Körper ohne Bohrung eine Sackgasse —
-        # der Dialog öffnete mit leerer Pflicht-Auswahl (Regel 19).
-        return feature_requirement(spec, self._feature_kinds_of_selection())
+        # Und das Merkmal: Eine Operation, deren Pflichtfeld eine Bohrung
+        # benennt, ist auf einem Körper ohne Bohrung eine Sackgasse — der
+        # Dialog öffnete mit leerer Pflicht-Auswahl (Regel 19).
+        reason = feature_requirement(spec, self._feature_kinds_of_selection())
+        if reason is not None:
+            return reason
+        # Und zuletzt der Zustand des Körpers (RM-168): *Offene Fläche
+        # schließen* an einem geschlossenen, *Zerlegen* an einem Stück, *Gitter
+        # füllen* ohne Hohlraum — jede öffnete bis zum 14.09.2026 einen Dialog,
+        # dessen Vorschau nur „Keine Vorschau: …" sagen konnte. Gefragt wird
+        # nur, wo das Register etwas verlangt, denn die Antwort kostet an
+        # einem großen Netz Rechenzeit.
+        if not spec.requires_body:
+            return None
+        return body_requirement(spec, self._body_facts_of_selection())
+
+    def _body_facts_of_selection(self) -> BodyFacts | None:
+        """Die Fakten des gewählten Körpers — einmal je Körper und Auswertung.
+
+        Der Schlüssel ist die Generation des Ergebnisses: Eine neue Auswertung
+        macht aus jedem Körper einen neuen, und die alten Antworten fallen mit
+        ihr. Innerhalb einer Generation fragt ``_update_actions`` bei jeder
+        Auswahl neu, und ``face_components`` soll dann nicht jedes Mal laufen.
+        """
+        result = self.session.last_result
+        chosen = self.object_tree.selected()
+        if result is None or chosen is None:
+            return None
+        entry = result.scene.objects.get(chosen)
+        if entry is None:
+            return None
+        generation, known = self._body_facts
+        if generation != self.session.result_generation:
+            known = {}
+            self._body_facts = (self.session.result_generation, known)
+        facts = known.get(chosen)
+        if facts is None:
+            facts = body_facts(entry)
+            known[chosen] = facts
+        return facts
 
     def _halt_reason(self) -> str | None:
         """Warum gerade kein neuer Schritt geht: Die Kette hält an (§15.3).
@@ -13138,14 +13181,23 @@ class MainWindow(QMainWindow):
         # Umbenennen, jede Netzoperation, die Dreiecke tauscht und kein
         # Volumen —, und keiner sagte, dass es nichts zu sehen gibt.
         empty = difference is None or not getattr(difference, "changed", True)
-        self.viewport.mark_preview(
-            tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
-            if partial
-            else tr("Vorschau — am Volumen ändert sich nichts")
-            if empty
-            else tr("Vorschau — noch nicht übernommen"),
-            "" if empty else tr("Leertaste halten: vorher"),
-        )
+        # Und zwei Lagen, in denen die Zahl „nichts" sagt und das Bild etwas
+        # zeigt (RM-169): neue Dreiecke bei gleichem Volumen, neue Farben bei
+        # gleichen Dreiecken. Der Körper danach liegt dann über dem davor.
+        reshaped = bool(getattr(difference, "reshaped", False))
+        recoloured = bool(getattr(difference, "recoloured", False))
+        shown = not empty or reshaped or recoloured
+        if partial:
+            note = tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
+        elif reshaped:
+            note = tr("Vorschau — das Netz ändert sich, das Volumen nicht")
+        elif recoloured:
+            note = tr("Vorschau — nur die Farbe ändert sich")
+        elif empty:
+            note = tr("Vorschau — am Volumen ändert sich nichts")
+        else:
+            note = tr("Vorschau — noch nicht übernommen")
+        self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
 
     def _preview_explained(self, reason: str) -> None:
         """Warum es keine Vorschau gibt — der Satz aus dem Kern, im Band.

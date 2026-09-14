@@ -31,6 +31,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.
 - Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.
 - «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.
+- Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade.
+- Atribuir um filamento já mostra a cor na pré-visualização; igualar e subdividir triângulos mostram a nova malha com as suas arestas. A barra de espaço traz o antes.
+- Escavar uma peça com furos na casca diz agora que a casca é o problema e oferece «Reparar e tentar de novo» — em vez de avisar que nenhum cálculo funcionou.
 
 ## 0.4.1
 

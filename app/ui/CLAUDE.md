@@ -891,6 +891,23 @@ bricht um und `place()` deckelt die Breite am Bild — ein Grund aus dem Kern
 ist länger als eine Zeile. Die Regel dazu steht in `oberflaeche.md` („Ein
 Haken in einer Formularzeile antwortet auf der ganzen Zeile").
 
+**Und wo die Zahl „nichts" sagt, zeigt das Bild trotzdem etwas** (RM-169):
+Trägt ein Eintrag der Differenz `retriangulated` oder `recoloured`, verbirgt
+`Viewport._cover_body` den eigenen Aktor des Körpers (`_covered`) und legt den
+Körper danach an seine Stelle — mit Kanten in der Farbe von „Hinzugekommen"
+bei neuen Dreiecken, mit seinen Slotfarben (`_slot_colours`, dieselbe
+Auflösung wie beim Szenenaufbau) bei neuen Farben. `_redraw_difference` zeigt
+Verborgenes zuerst wieder, also auch beim Halten der Leertaste und beim
+Schließen. Das Band sagt „das Netz ändert sich, das Volumen nicht" oder „nur
+die Farbe ändert sich".
+
+**Und was ein Körper mitbringen muss, fragt das Menü vorher** (RM-168):
+`_reason_locked` fragt als letzte Stufe `labels.body_requirement` mit den
+Fakten aus `_body_facts_of_selection` — geschlossen, Stücke, Hohlraum, einmal
+je Körper und Auswertung gerechnet (`_body_facts`, Schlüssel ist
+`result_generation`). Die Angabe steht im Register (`requires_body`), die
+Regel in `operationen.md`.
+
 Ein `InstallDialog` lässt eine begonnene Installation beim Schließen
 geordnet auslaufen und zeigt diesen Zustand. Er beendet nur das Warten auf
 einen gestarteten Fremddienst; den Dienst selbst besitzt Solidon nicht.

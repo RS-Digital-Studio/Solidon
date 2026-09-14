@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Collection, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Final, Literal
 
@@ -20,9 +21,10 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSlider, QSt
 from app.core import figures
 from app.core.activation import Activation
 from app.core.errors import AppError
+from app.core.geom.mesh import MeshData, face_components
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import group_title as group_title
-from app.core.types import Feature, FeatureId
+from app.core.types import Feature, FeatureId, SceneObject
 from app.core.units import (
     DEGREE_UNIT,
     LengthUnit,
@@ -1542,6 +1544,97 @@ def feature_requirement(spec: Any, feature_kinds: Collection[str]) -> str | None
     if "hole" in wanted:
         return str(tr("Dafür braucht es eine erkannte Bohrung am gewählten Teil."))
     return str(tr("Dafür braucht es ein erkanntes Merkmal am gewählten Teil."))
+
+
+#: Bis zu wie vielen Dreiecken die Körperfakten fürs Menü gerechnet werden.
+#: ``face_components`` kostet 2,3 s an 1,3 Millionen Dreiecken (gemessen
+#: 14.09.2026, ``dense_1m.stl``) — bei jedem Klick auf den Körper, denn die
+#: Menüs fragen bei jeder Auswahl neu. Bis hierher bleibt es unter 0,2 s
+#: (§2.8: darunter ist nichts anzuzeigen); darüber gilt der Zustand als
+#: unbekannt, der Eintrag bleibt frei, und der Dialog sagt es im Band.
+BODY_FACTS_LIMIT: Final = 100_000
+
+
+@dataclass(frozen=True, slots=True)
+class BodyFacts:
+    """Was ein Körper mitbringt — die drei Fragen aus ``requires_body``.
+
+    ``None`` heißt „nicht gerechnet": ein Netz über :data:`BODY_FACTS_LIMIT`
+    oder ein exakter Körper, dessen Tessellation hier niemand anstoßen will.
+    Unbekannt sperrt nie — Raten wäre schlechter als Anbieten.
+    """
+
+    closed: bool | None
+    pieces: int | None
+    cavity: bool | None
+
+
+def body_facts(entry: SceneObject) -> BodyFacts:
+    """Die Fakten eines Körpers, so billig wie möglich.
+
+    **Der Hohlraum kommt aus den Merkmalen**, nicht aus einer Rechnung: Die
+    Wahrnehmung erkennt einen eingeschlossenen Innenraum als ``void``, und
+    *Aushöhlen* trägt seine Kavität am Netz ein — beides liegt nach der
+    Auswertung schon da. ``raw.split`` wäre der dritte Weg und kostet an
+    1,3 Millionen Dreiecken hundert Sekunden; den geht nur die Operation
+    selbst, beim Rechnen.
+
+    ``is_watertight`` liegt nach dem ersten Mal im Cache von trimesh, die
+    Komponenten nicht — deshalb die Grenze, und deshalb hält das Fenster die
+    Antwort je Körper und Auswertung fest, statt sie bei jedem Menüaufbau zu
+    wiederholen.
+    """
+    hollow = any(feature.kind == "void" for feature in entry.features.values())
+    mesh = entry.mesh
+    if not isinstance(mesh, MeshData):
+        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
+    hollow = hollow or mesh.cavity is not None
+    if mesh.triangle_count > BODY_FACTS_LIMIT:
+        return BodyFacts(closed=None, pieces=None, cavity=True if hollow else None)
+    pieces = len(face_components(mesh.raw))
+    # **Ohne Hohlraum ist nur, was aus einem Stück besteht.** Eine Innenschale
+    # ist eine zweite Komponente; wo es zwei gibt und die Wahrnehmung keinen
+    # Einschluss gemeldet hat, kann sie ihn auch übersehen haben (offene
+    # Außenhülle, verkehrter Umlaufsinn) — dann entscheidet die Operation.
+    return BodyFacts(
+        closed=bool(mesh.raw.is_watertight),
+        pieces=pieces,
+        cavity=True if hollow else (False if pieces <= 1 else None),
+    )
+
+
+def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
+    """Warum diese Operation an diesem Körper nichts tun kann — oder ``None``.
+
+    Die dritte Schwester neben :func:`kind_requirement` und
+    :func:`feature_requirement`: Nicht die Bauart, nicht das Merkmal, sondern
+    der Zustand. Gemessen am 13.09.2026 über alle Dialoge: *Offene Fläche
+    schließen* am geschlossenen Quader, *In Einzelteile zerlegen* an einem
+    Stück und *Gitter füllen* am massiven Körper öffneten einen Dialog, dessen
+    Vorschau nur „Keine Vorschau: …" sagen konnte — die Sackgasse aus Regel
+    19, ein Fenster später. Hier steht der Satz, den die Operation beim
+    Rechnen sagt, vor dem Klick am Eintrag.
+
+    Was die Operation verlangt, sagt ``requires_body`` im Register; was der
+    Körper hat, sagen die ``facts``. Fehlt eines von beiden oder ist es
+    unbekannt, wird nicht gesperrt.
+    """
+    wanted = getattr(spec, "requires_body", "")
+    if not wanted or facts is None:
+        return None
+    if wanted == "open" and facts.closed is True:
+        from app.core.geom.mesh_ops import ALREADY_CLOSED
+
+        return str(ALREADY_CLOSED)
+    if wanted == "parts" and facts.pieces is not None and facts.pieces <= 1:
+        from app.core.geom.prepare_ops import ONE_PIECE
+
+        return str(ONE_PIECE)
+    if wanted == "cavity" and facts.cavity is False:
+        from app.core.geom.lattice import NO_CAVITY
+
+        return str(NO_CAVITY)
+    return None
 
 
 def by_title(entries: Mapping[str, Any]) -> list[tuple[str, Any]]:

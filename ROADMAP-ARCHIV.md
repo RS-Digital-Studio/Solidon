@@ -26,6 +26,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-14 | [Ein freier Fügeweg wird gesagt (14.09.2026)](#ein-freier-fügeweg-wird-gesagt-14092026) |
+| 2026-09-14 | [Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)](#drei-sackgassen-und-zwei-stumme-vorschauen-14092026) |
 | 2026-09-12 | [Was vor 0.4.1 zugegangen ist (12.09.2026)](#was-vor-041-zugegangen-ist-12092026) |
 | 2026-09-11 | [Sieben Befunde aus Roberts Fenster am Schriftzug (11.09.2026)](#sieben-befunde-aus-roberts-fenster-am-schriftzug-11092026) |
 | 2026-09-11 | [Hinter einen Halt kam jeder neue Schritt (11.09.2026)](#hinter-einen-halt-kam-jeder-neue-schritt-11092026) |
@@ -27747,6 +27748,90 @@ bleiben in dieser Datei.
   weg ist, vergleicht die Länge.
 
   [Bisheriger Befund](#der-download-ordner-sammelt-jede-je-gebaute-fassung-30082026).
+
+
+## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
+
+Aus der Sonde über alle 110 Operationen vom 13.09.2026
+(`konzepte/konzept-einfache-bedienung-2026-09.md`): Drei Registerpunkte, am
+14.09.2026 gebaut, mit Roberts Auftrag „dann leg los, das grundlegende
+konzept sollte aber nicht geändert werden" — und alle drei sind Optimierung am
+Bestand. Der vierte Punkt aus derselben Sonde, RM-171, ist eine Entscheidung
+und steht weiter in `ROADMAP.md`.
+
+<a id="rm-168"></a>
+
+- [x] **RM-168 — Sackgassen sperren statt öffnen.** Gemessen am 13.09.2026: *Offene Fläche
+  schließen* an einem geschlossenen Körper, *In Einzelteile zerlegen* an einem Stück und *Gitter
+  füllen* an einem massiven Körper öffneten einen Dialog, dessen Vorschau nur „Keine Vorschau: …"
+  sagen konnte — die Sackgasse aus Regel 19, ein Fenster später.
+
+  **Gebaut am 14.09.2026.** Die Voraussetzung steht im Register (`requires_body`: `open`, `parts`,
+  `cavity`; `registry._check` weist jeden anderen Wert ab), der Satz am Eintrag ist **derselbe**,
+  den die Operation beim Rechnen wirft — die drei Sätze stehen als Konstanten in ihren Modulen
+  (`mesh_ops.ALREADY_CLOSED`, `prepare_ops.ONE_PIECE`, `lattice.NO_CAVITY`) und werden von
+  `labels.body_requirement` gelesen. Was der Körper hat, misst `labels.body_facts`: wasserdicht,
+  Stücke (`face_components`), Hohlraum (Merkmal `void` oder `MeshData.cavity`). Gemessen an
+  fünf Lagen — Würfel, ausgehöhlter Würfel, `two_components.stl`, `broken_open.stl`, exakter
+  Quader — sperrt jede Lage genau die Einträge, die dort scheitern würden.
+
+  **Zwei Grenzen, beide begründet.** `face_components` kostet 2,3 s an 1,3 Millionen Dreiecken
+  (`dense_1m.stl`), und `_update_actions` fragt bei jeder Auswahl; die Antwort wird je Körper und
+  Auswertung einmal gerechnet (`MainWindow._body_facts_of_selection`, Schlüssel
+  `result_generation`) und über `BODY_FACTS_LIMIT = 100 000` Dreiecken gar nicht — unbekannt
+  sperrt nie, dort trägt das Band den Satz. Und *Deckel erzeugen* bleibt beim Band: Ob eine
+  Öffnung nach oben zeigt, entscheidet sich an der gewählten Fläche, nicht am Körper.
+
+  Nachweis: `tests/test_operation_ui.py` — `test_the_register_says_what_a_body_must_bring`,
+  `test_a_dead_end_is_greyed_out_with_the_sentence_the_operation_would_say`, die Gegenprobe
+  `test_the_body_state_lock_lifts_where_the_body_brings_what_is_asked`, die Zählung
+  `test_body_facts_are_measured_once_per_body_and_evaluation` und
+  `test_a_huge_body_is_not_measured_for_the_menu`.
+
+<a id="rm-169"></a>
+
+- [x] **RM-169 — Vorschau für Farbe und Netz.** Die Differenzansicht misst Volumen; *Filament
+  zuweisen*, *auf eine Fläche*, *entfernen* und *Dreiecke angleichen*, *Unterteilen*, *Verfeinern*
+  zeigten deshalb nichts, und das Band sagte seit dem 13.09.2026 „am Volumen ändert sich nichts".
+
+  **Gebaut am 14.09.2026.** `compare_scenes` trägt zwei neue Auskünfte: `Difference.recoloured`
+  (dieselben Dreiecke, andere Slotzuordnung oder Slotfarben — vorher ein stilles `continue`) und
+  `Difference.retriangulated` (andere Dreiecke, Volumen unter dem, was der Drucker hinterlässt).
+  Die Ansicht legt den Körper danach an die Stelle des Körpers davor (`Viewport._cover_body`):
+  mit Kanten in der Farbe von „Hinzugekommen" bei neuen Dreiecken, mit seinen Slotfarben bei neuen
+  Farben — dieselbe Auflösung wie beim Szenenaufbau (`_slot_colours`). Der eigene Aktor wird
+  dabei verborgen (`_covered`), denn zwei Flächen am selben Ort flimmern; `_redraw_difference`
+  zeigt ihn wieder, bevor es neu zeichnet — also auch beim Halten der Leertaste und beim
+  Schließen. Das Band sagt „das Netz ändert sich, das Volumen nicht" oder „nur die Farbe ändert
+  sich", das Vorher lohnt sich wieder. Gemessen an der Sonde: die drei Filament-Operationen und
+  drei Netzoperationen tragen jetzt ihren eigenen Satz; *Textur in Filamente* ohne Textur und
+  *Dreiecke verringern* am Zwölfeck bleiben zu Recht bei „am Volumen ändert sich nichts".
+
+  Nachweis: `tests/test_difference.py` — `test_a_recolouring_is_a_preview_without_volume`,
+  `test_new_triangles_at_the_same_volume_are_a_preview`; `tests/test_viewport_decisions.py` —
+  `test_a_recoloured_preview_covers_the_body_in_its_new_colours`,
+  `test_a_reshaped_preview_shows_the_new_triangles_as_edges`; die Bandtexte in
+  `tests/test_ui.py::test_the_banner_names_the_reason_and_the_empty_difference`.
+
+<a id="rm-170"></a>
+
+- [x] **RM-170 — Aushöhlen an generierten Körpern.** `hollow` scheiterte an
+  `generated_figure.stl` in beiden Qualitäten mit „Auch die letzte Rückfallstufe hat kein
+  brauchbares Ergebnis geliefert" — wahr, aber ohne den Weg.
+
+  **Diagnose am 14.09.2026, über den echten Importweg:** Die Figur ist nach `load` nicht
+  wasserdicht (`ingest.not_watertight`, 18 offene Kanten, zwei Stücke). Nach *Reparieren*
+  (`repair.holes_filled`: 18 von 18 geschlossen) geht das Aushöhlen an derselben Figur in 0,16 s
+  durch, −2519 mm³. Der Grund war nie die Kette, sondern die Hülle. `hollow` fängt den
+  `BooleanFailedError` deshalb ab und wirft an einer offenen Hülle einen `NotManifoldError`:
+  „Der Körper ist nicht geschlossen — ein Hohlraum braucht eine dichte Hülle. Erst reparieren,
+  dann aushöhlen." — mit `open_edges` und der Handlung *Reparieren und erneut versuchen*, die die
+  Oberfläche seit je kennt (`repair_and_retry`). Im Band der Vorschau steht derselbe Satz, bevor
+  jemand klickt. **Vorher geprüft wird nicht**: Die Kette kommt an mancher offenen Stelle durch,
+  und eine Absage vor dem Versuch nähme ihr genau diese Fälle.
+
+  Nachweis: `tests/test_missing_ops.py::test_hollowing_an_open_hull_names_the_hull_and_offers_repair`
+  — Fehler, Satz, Handlung, Ursache in der Kette, und die Reparatur, nach der es geht.
 
 ## Ein freier Fügeweg wird gesagt (14.09.2026)
 

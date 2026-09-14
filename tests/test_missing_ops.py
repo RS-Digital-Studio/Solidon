@@ -390,6 +390,31 @@ def test_hollowing_without_a_vent_is_possible_and_says_nothing_extra(profile: Pr
     assert "hollow.no_vent" not in {finding.code for finding in result.findings}
 
 
+def test_hollowing_an_open_hull_names_the_hull_and_offers_repair(profile: Profile) -> None:
+    """RM-170: An der generierten Figur (Weg 3, nach dem Import nicht
+    wasserdicht) scheiterten alle Stufen der Kette, und die Meldung sagte
+    „Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert" —
+    wahr, aber ohne den Weg. Nach *Reparieren* geht dieselbe Figur durch.
+    Also nennt der Fehler die Hülle und bietet die Reparatur an (Regel 17)."""
+    from app.core.errors import REPAIR_AND_RETRY, NotManifoldError
+    from app.core.geom.repair import repair
+
+    figure = normalise(read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm").mesh
+    assert not figure.is_watertight, "die Voraussetzung des Falls"
+
+    with pytest.raises(NotManifoldError) as caught:
+        hollow(figure, 2.0)
+    assert "nicht geschlossen" in str(caught.value.detail)
+    assert caught.value.open_edges > 0
+    assert REPAIR_AND_RETRY in caught.value.suggestions
+    assert caught.value.__cause__ is not None, "die Kette bleibt die Ursache"
+
+    mended = repair(figure).mesh
+    assert mended.is_watertight
+    hollowed = hollow(mended, 2.0)
+    assert hollowed.mesh.volume < mended.volume, "nach der Reparatur wird ausgehöhlt"
+
+
 def test_an_opened_body_is_a_tin(profile: Profile) -> None:
     """§25: der Weg von der Aushöhlung zur Dose ist ein Schalter, kein Umweg.
 

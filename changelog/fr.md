@@ -32,6 +32,9 @@ dans `website/version.json`.
 - Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.
 - Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.
 - « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.
+- Un outil qui ne peut rien faire sur cette pièce apparaît grisé et dit pourquoi — « Fermer une surface ouverte » sur une pièce fermée, « Séparer en pièces » sur une seule, « Treillis » sans cavité.
+- Attribuer un filament montre déjà la couleur dans l'aperçu ; égaliser et subdiviser les triangles montrent le nouveau maillage avec ses arêtes. La barre d'espace ramène l'avant.
+- Évider une pièce dont l'enveloppe est trouée dit maintenant que l'enveloppe est le problème et propose « Réparer et réessayer » — au lieu de signaler qu'aucun calcul n'a abouti.
 
 ## 0.4.1
 

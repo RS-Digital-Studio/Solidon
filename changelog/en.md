@@ -31,6 +31,9 @@ it into `website/version.json`.
 - A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.
 - When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.
 - “Split” starts in the middle of the part instead of at its underside. The number stays editable.
+- A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity.
+- Assigning a filament shows the colour in the preview already; remeshing and subdividing show the new mesh with its edges. The space bar brings back the before.
+- Hollowing a part with holes in its hull now says that the hull is the problem and offers “Repair and retry” — instead of reporting that no computation path worked.
 
 ## 0.4.1
 

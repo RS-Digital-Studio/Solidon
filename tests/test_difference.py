@@ -116,6 +116,50 @@ def test_new_and_gone_objects_are_named() -> None:
     assert difference.changed
 
 
+def test_a_recolouring_is_a_preview_without_volume() -> None:
+    """RM-169: *Filament zuweisen* ändert keinen Eckpunkt — ``compare_scenes``
+    übersprang den Körper, und im Bild blieb die alte Farbe, bis übernommen
+    war. Jetzt trägt der Eintrag den Körper danach; die Ansicht zeichnet ihn
+    mit seinen Farben, das Volumen bleibt null."""
+    from app.core.types import MaterialSlot
+
+    plain = cube(20.0)
+    painted = MeshData.of(plain.raw, slots=(1,) * len(plain.raw.faces))
+    before = scene_with(obj_1=plain)
+    after = scene_with(obj_1=painted)
+    after.objects["obj_1"].material_slots = [
+        MaterialSlot(index=1, name="Rot", colour=(1.0, 0.0, 0.0))
+    ]
+
+    difference = compare_scenes(before, after)
+
+    assert set(difference.entries) == {"obj_1"}
+    assert not difference.changed, "kein Volumen kommt dazu oder fällt weg"
+    assert difference.recoloured
+    assert difference.entries["obj_1"].recoloured is after.objects["obj_1"]
+    assert difference.entries["obj_1"].retriangulated is None
+
+    # Dieselben Farben sind keine Änderung — sonst zeichnete jede Vorschau
+    # jeden Körper noch einmal.
+    assert not compare_scenes(after, after).entries
+
+
+def test_new_triangles_at_the_same_volume_are_a_preview() -> None:
+    """RM-169: *Dreiecke angleichen* und *Fläche unterteilen* tauschen jedes
+    Dreieck und kein Volumen — die Zahl sagt „nichts", das Netz sagt etwas.
+    Der Eintrag trägt den Körper danach, und die Ansicht zeigt seine Kanten."""
+    plain = cube(20.0)
+    finer = MeshData.of(plain.raw.subdivide())
+    assert finer.triangle_count > plain.triangle_count, "die Voraussetzung des Falls"
+
+    difference = compare_scenes(scene_with(obj_1=plain), scene_with(obj_1=finer))
+
+    assert not difference.changed
+    assert difference.reshaped
+    assert difference.entries["obj_1"].retriangulated is finer
+    assert not difference.recoloured
+
+
 def test_a_scene_that_did_not_change_says_so() -> None:
     before = scene_with(obj_1=plate())
     after = scene_with(obj_1=plate())

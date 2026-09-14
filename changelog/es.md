@@ -32,6 +32,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.
 - Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.
 - «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.
+- Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco.
+- Asignar un filamento ya muestra el color en la vista previa; igualar y subdividir triángulos muestran la nueva malla con sus aristas. La barra espaciadora devuelve el antes.
+- Ahuecar una pieza con agujeros en la envolvente dice ahora que la envolvente es el problema y ofrece «Reparar y reintentar» — en vez de avisar de que ningún cálculo funcionó.
 
 ## 0.4.1
 
