@@ -107,6 +107,8 @@ from app.ui.icons import OVERSAMPLING, icon, icon_name_for
 from app.ui.labels import (
     LengthSpin,
     NumberSpin,
+    RowCheckBox,
+    caption_toggles,
     choice_label,
     choice_note,
     compact_length,
@@ -5255,6 +5257,8 @@ class FeaturePanel(QWidget):
                 label.setBuddy(editor)
                 editor.setAccessibleName(f"{action.title} — {field.label}")
                 form.addRow(label, editor)
+                if isinstance(editor, QCheckBox):
+                    caption_toggles(label, editor)
             layout.addLayout(form)
 
         # **Der Haken steht nur da, wo es Geschwister gibt.** „Auf alle 1
@@ -5790,7 +5794,7 @@ class FeaturePanel(QWidget):
         """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""
         kind = str(field.kind)
         if kind == "bool":
-            check = QCheckBox("", parent)
+            check = RowCheckBox(parent)
             check.setChecked(bool(field.value))
             return check
         if kind == "choice":

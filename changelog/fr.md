@@ -16,6 +16,14 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.4.2
+
+### Vue et utilisation
+
+- Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.
+- Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.
+- « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.
+
 ## 0.4.1
 
 ### Construire et modifier

@@ -15,6 +15,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.4.2
+
+### Vista e utilização
+
+- Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.
+- Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.
+- «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.
+
 ## 0.4.1
 
 ### Construir e alterar

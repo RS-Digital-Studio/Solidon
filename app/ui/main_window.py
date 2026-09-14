@@ -1856,6 +1856,17 @@ class MainWindow(QMainWindow):
         self._feature_preview.setInterval(300)
         self._feature_preview.timeout.connect(self._preview_feature_change)
         self._feature_pending: tuple[str, dict[str, Any]] | None = None
+        # **Und sie sagt, dass sie rechnet** (§2.8: bis 0,2 s nichts, danach
+        # eine Rückmeldung). Ein Aushöhlen über einem großen Netz braucht
+        # Sekunden; solange stand das alte Bild unter dem alten Band, und ein
+        # Haken, dessen Wirkung erst nach drei Sekunden kommt, sieht aus wie
+        # einer, der nicht reagiert.
+        self._preview_busy = QTimer(self)
+        self._preview_busy.setSingleShot(True)
+        self._preview_busy.setInterval(200)
+        self._preview_busy.timeout.connect(self._say_preview_busy)
+        self._preview_reason = ""
+        """Der Satz, mit dem die letzte Vorschau ausblieb — leer, wenn sie kam."""
         self._preview_shown = False
         """Ob dieses Fenster eine Vorschau ins Bild gelegt hat, die es
         zurückzunehmen hat.
@@ -11864,13 +11875,22 @@ class MainWindow(QMainWindow):
         # Vorschau ging noch den alten Weg.
         step = self.feature_panel.shown_part_step()
         if step is not None:
-            self.session.preview_async(self._show_preview, change_op=step, change_values=params)
+            self._preview_busy.start()
+            self.session.preview_async(
+                self._show_preview,
+                change_op=step,
+                change_values=params,
+                explained=self._preview_explained,
+            )
             return
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op):
             return
+        self._preview_busy.start()
         self.session.preview_async(
-            self._show_preview, [OperationDraft(op=op, inputs=(selected,), params=params)]
+            self._show_preview,
+            [OperationDraft(op=op, inputs=(selected,), params=params)],
+            explained=self._preview_explained,
         )
 
     def _apply_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
@@ -12307,6 +12327,7 @@ class MainWindow(QMainWindow):
 
         values = dict(self._from_selection(spec, chosen[0] if chosen else None))
         values.update(self._spacing_for(spec))
+        values.update(self._plane_through(spec, chosen[0] if chosen else None))
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
         # Was der Dialog über seinen Bezug sagt — leer, solange genau so viel
@@ -13037,12 +13058,18 @@ class MainWindow(QMainWindow):
             if placement_flow is not None and placement_flow.active:
                 return
             entered = dialog.values()
+            self._preview_busy.start()
             if change_op is not None:
                 self.session.preview_async(
-                    self._show_preview, change_op=change_op, change_values=entered
+                    self._show_preview,
+                    change_op=change_op,
+                    change_values=entered,
+                    explained=self._preview_explained,
                 )
             else:
-                self.session.preview_async(self._show_preview, drafts_of(entered))
+                self.session.preview_async(
+                    self._show_preview, drafts_of(entered), explained=self._preview_explained
+                )
 
         timer.timeout.connect(request)
         dialog.valuesChanged.connect(lambda: timer.start())
@@ -13088,18 +13115,54 @@ class MainWindow(QMainWindow):
         # Ab hier hat dieses Fenster etwas im Bild, das ihm gehört — auch
         # wenn ``difference`` leer ist: Das Band unten setzt es trotzdem.
         self._preview_shown = True
+        self._preview_busy.stop()
+        if difference is None and self._preview_reason:
+            # Der Grund kam schon an (``_preview_explained``) und steht im
+            # Band; ``None`` dahinter sagt nichts, was das Band nicht sagt.
+            self._preview_reason = ""
+            self.viewport.show_difference(None)
+            return
+        self._preview_reason = ""
         self.viewport.show_difference(difference)
         partial = any(
             finding.code == "difference.incomplete"
             for entry in getattr(difference, "entries", {}).values()
             for finding in entry.findings
         )
+        # **Eine leere Differenz heißt es auch.** Bis zum 13.09.2026 stand
+        # über einem unveränderten Bild dasselbe Band wie über einer Bohrung:
+        # „Vorschau — noch nicht übernommen". Gemessen über alle Dialoge waren
+        # es siebzehn — Verschieben auf null, Skalieren auf eins, Filament,
+        # Umbenennen, jede Netzoperation, die Dreiecke tauscht und kein
+        # Volumen —, und keiner sagte, dass es nichts zu sehen gibt.
+        empty = difference is None or not getattr(difference, "changed", True)
         self.viewport.mark_preview(
             tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
             if partial
+            else tr("Vorschau — am Volumen ändert sich nichts")
+            if empty
             else tr("Vorschau — noch nicht übernommen"),
-            tr("Leertaste halten: vorher"),
+            "" if empty else tr("Leertaste halten: vorher"),
         )
+
+    def _preview_explained(self, reason: str) -> None:
+        """Warum es keine Vorschau gibt — der Satz aus dem Kern, im Band.
+
+        Er wartete bis zum Übernehmen: *Teilen* auf der Vorgabelage sagte
+        nichts, bis der Knopf gedrückt war, und dann „Diese Ebene teilt das
+        Objekt nicht". Der Satz gehört an die Stelle, an der man die Zahl
+        noch ändern kann (§2.7: ein Fehler ist ein Vorschlag, und der kommt
+        vor der Handlung, nicht danach).
+        """
+        self._preview_shown = True
+        self._preview_busy.stop()
+        self._preview_reason = reason
+        self.viewport.show_difference(None)
+        self.viewport.mark_preview(tr("Keine Vorschau: {reason}").format(reason=reason), "")
+
+    def _say_preview_busy(self) -> None:
+        """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8)."""
+        self.viewport.mark_preview(tr("Vorschau wird gerechnet …"), "")
 
     def _clear_preview(self) -> None:
         """Die Vorschau geht — Rechnung und Bild —, ein wartender
@@ -13110,6 +13173,8 @@ class MainWindow(QMainWindow):
         ruft sie ebenfalls.
         """
         self._preview_shown = False
+        self._preview_busy.stop()
+        self._preview_reason = ""
         self.session.cancel_preview()
         pending = self._proposal.difference if self._proposal is not None else None
         self.viewport.show_difference(pending)
@@ -13440,6 +13505,33 @@ class MainWindow(QMainWindow):
             (entry.default for entry in spec.params.spec() if entry.name == "spacing"), 0.0
         )
         return {"spacing": max(float(default or 0.0), needed)}
+
+    def _plane_through(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+        """Eine Schnittebene beginnt in der Mitte des Körpers, nicht bei null.
+
+        *Teilen* öffnete mit ``position=0``, und ein Körper steht auf dem Bett
+        — die Ebene lag also auf seiner Unterseite, teilte nichts, und der
+        Dialog sagte dazu bis zum 13.09.2026 kein Wort (gemessen am Quader
+        0 bis 20 mm: Vorschau leer, Übernehmen „Diese Ebene teilt das Objekt
+        nicht"). Wer teilen will, will meist die Mitte; die Zahl bleibt im
+        Feld und lässt sich ändern.
+
+        Gefragt wird nach den Feldern ``axis`` und ``position``, nicht nach dem
+        Namen — heute ist *Teilen* die einzige Operation mit beiden.
+        """
+        names = {entry.name for entry in spec.params.spec()}
+        if not {"axis", "position"} <= names or selected is None:
+            return {}
+        result = self.session.last_result
+        entry = result.scene.objects.get(selected) if result is not None else None
+        if entry is None:
+            return {}
+        axis = next(
+            (str(field.default) for field in spec.params.spec() if field.name == "axis"), "z"
+        )
+        index = "xyz".index(axis) if axis in "xyz" else 2
+        bounds = entry.mesh.bounds
+        return {"position": (bounds.minimum[index] + bounds.maximum[index]) / 2.0}
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Was das angeklickte Merkmal darüber sagt, wohin diese Operation

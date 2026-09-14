@@ -15,6 +15,14 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.4.2
+
+### View and operation
+
+- A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.
+- When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.
+- “Split” starts in the middle of the part instead of at its underside. The number stays editable.
+
 ## 0.4.1
 
 ### Building and editing

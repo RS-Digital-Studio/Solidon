@@ -352,6 +352,9 @@ class _PreviewWorker(Worker):
     """
 
     done = Signal(int, object)
+    #: Warum es keine Vorschau gibt — der Satz aus dem Kern, den der Dialog
+    #: sonst erst beim Übernehmen zu sehen bekäme.
+    explained = Signal(int, str)
 
     def __init__(
         self, session: Session, generation: int, compute: Any, cancel: CancelSignal
@@ -364,19 +367,57 @@ class _PreviewWorker(Worker):
 
     def work(self) -> None:
         try:
-            _scene, difference = self._compute()
-        except AppError, OperationCancelled:
+            _scene, difference, reason = self._compute()
+        except OperationCancelled:
+            self.done.emit(self._generation, None)
+        except AppError as error:
             # Beim Tippen entstehen ungültige Zwischenstände; der echte
             # Fehler kommt beim Anwenden als Vorschlag (§2.7). Die Vorschau
-            # zeigt dann schlicht nichts Neues.
+            # zeigt dann nichts Neues — **sagt aber, warum** (13.09.2026):
+            # Gemessen über alle Operationsdialoge standen elf mit leerem Bild
+            # und dem Band „Vorschau — noch nicht übernommen" da, und der
+            # Grund — „Diese Ebene teilt das Objekt nicht", „Der Körper ist
+            # auf dieser Höhe massiv" — wartete bis zum Übernehmen.
+            self.explained.emit(self._generation, _reason_of(error))
             self.done.emit(self._generation, None)
         else:
+            if reason:
+                self.explained.emit(self._generation, reason)
             self.done.emit(self._generation, difference)
 
     def release_finished_references(self) -> None:
         """Vorschaukontext nach Ergebnis und Fertigsignal lösen."""
         del self._session, self._compute
         super().release_finished_references()
+
+
+def _reason_of(error: AppError) -> str:
+    """Der Satz, der den Fehler erklärt — das Detail, wo es eines gibt.
+
+    Dieselbe Regel wie ``evaluate._finding_from``: Der Titel nennt die Art
+    („Ein Wert liegt außerhalb des zulässigen Bereichs"), das übersetzte
+    Detail den Grund. Eine blanke Zeichenkette als Detail ist eine Notiz für
+    das Protokoll und kein Satz für den Kunden.
+    """
+    detail = error.detail
+    if isinstance(detail, TranslatableText):
+        return str(detail)
+    return str(error.title)
+
+
+def _stop_reason(result: EvaluationResult) -> str:
+    """Warum die Kette anhielt — der Befund, der den Halt trägt.
+
+    Alle Stellen, die ``stopped_at`` setzen, hängen vorher einen Befund mit
+    dieser ``op_id`` an (``evaluate._why_it_stopped`` liest ihn fürs
+    Protokoll). Hier derselbe Befund für das Band über der Vorschau.
+    """
+    if result.stopped_at is None:
+        return ""
+    blamed = [
+        finding for finding in result.scene.report.findings if finding.op_id == result.stopped_at
+    ]
+    return str(blamed[-1].message) if blamed else ""
 
 
 class _SplitWorker(Worker):
@@ -1978,12 +2019,15 @@ class Session(QObject):
         *,
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
+        explained: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
         Eine neuere Anfrage ersetzt die wartende — gerechnet wird beides,
         gezeigt nur das Jüngste. ``then`` bekommt die ``SceneDifference``
-        oder ``None``, wenn es nichts zu zeigen gibt.
+        oder ``None``, wenn es nichts zu zeigen gibt. ``explained`` bekommt
+        davor den Grund als Satz, wenn es einen gibt — ein Fehler der
+        Operation oder der Befund, an dem die Kette anhielt.
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -1995,8 +2039,8 @@ class Session(QObject):
         # niemand mehr sehen will.
         cancel = CancelSignal()
 
-        def compute() -> tuple[Any, SceneDifference | None]:
-            return self.preview_scene(
+        def compute() -> tuple[Any, SceneDifference | None, str]:
+            return self._preview_outcome(
                 list(drafts or []),
                 change_op=change_op,
                 change_values=change_values,
@@ -2008,6 +2052,10 @@ class Session(QObject):
         self.cancel_previews()
         worker = _PreviewWorker(self, generation, compute, cancel)
         worker.done.connect(lambda stamp, difference: self._preview_done(stamp, difference, then))
+        if explained is not None:
+            worker.explained.connect(
+                lambda stamp, reason: self._preview_done(stamp, reason, explained)
+            )
         # Die Vorschau hat keinen Fehlerpfad — sie ist eine Zugabe (§18.7). Was
         # hier schiefgeht, gehört ins Protokoll und sonst nirgendwohin: ein
         # Fehlerdialog über einer Vorschau wäre lauter als die Sache.
@@ -2023,7 +2071,7 @@ class Session(QObject):
         ihren Nachfolger. Die Sitzung hält den Arbeiter auch nach Dialogende;
         das Ergebnis trägt niemals eine Änderung am Dokument.
         """
-        worker = _PreviewWorker(self, 0, lambda: (None, compute()), CancelSignal())
+        worker = _PreviewWorker(self, 0, lambda: (None, compute(), ""), CancelSignal())
         # Die PySide-Kontextüberladung ist in den Stubs nicht erfasst. Der
         # Empfänger bindet sämtliche Rückrufe an den Thread der Sitzung.
         worker.done.connect(lambda _stamp, value: then(value), self)  # type: ignore[arg-type]
@@ -2475,6 +2523,27 @@ class Session(QObject):
         statt mitten ins Tippen ein Fenster zu stellen — was eine Frage
         braucht, hat keine stille Vorschau.
         """
+        scene, difference, _reason = self._preview_outcome(
+            drafts,
+            origin=origin,
+            ask=ask,
+            change_op=change_op,
+            change_values=change_values,
+            cancelled=cancelled,
+        )
+        return scene, difference
+
+    def _preview_outcome(
+        self,
+        drafts: list[OperationDraft],
+        *,
+        origin: Origin | None = None,
+        ask: Any = None,
+        change_op: int | None = None,
+        change_values: dict[str, Any] | None = None,
+        cancelled: Any = None,
+    ) -> tuple[Any, SceneDifference | None, str]:
+        """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt."""
         import copy
 
         before = self.last_result.scene if self.last_result else None
@@ -2502,9 +2571,9 @@ class Session(QObject):
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
             # sähe aus wie „keine Änderung", und das wäre gelogen.
-            return result.scene, None
+            return result.scene, None, _stop_reason(result)
         difference = compare_scenes(before, result.scene) if before is not None else None
-        return result.scene, difference
+        return result.scene, difference, ""
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:
         """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5).

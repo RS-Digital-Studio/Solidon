@@ -16,6 +16,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.4.2
+
+### Vista y manejo
+
+- Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.
+- Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.
+- «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.
+
 ## 0.4.1
 
 ### Construir y modificar

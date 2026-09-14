@@ -9827,6 +9827,129 @@ def test_rapid_previews_never_orphan_a_worker(session: Session) -> None:
     assert not session._previews, "kein Arbeiter bleibt zurück"
 
 
+def test_a_preview_that_cannot_be_says_why(session: Session) -> None:
+    """Ein leeres Bild ohne Satz sah aus wie „nichts ändert sich".
+
+    Gemessen am 13.09.2026 über alle Operationsdialoge: Elf öffneten mit
+    leerem Bild und dem Band „Vorschau — noch nicht übernommen", und der Grund
+    — „Diese Ebene teilt das Objekt nicht", „Der Körper ist auf dieser Höhe
+    massiv" — kam erst beim Übernehmen. Der Satz gehört an die Stelle, an der
+    man die Zahl noch ändern kann (§2.7).
+
+    Beide Wege: Die Kette hält an einem Befund an (Teilen auf der
+    Unterseite), oder die Operation wirft (Bohrung mit negativem Durchmesser).
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    reasons: list[str] = []
+    shown: list[object] = []
+    session.preview_async(
+        shown.append,
+        [OperationDraft(op="split_pinned", inputs=("obj_1",), params={"position": 0.0})],
+        explained=reasons.append,
+    )
+    session.wait_for_idle()
+    assert shown == [None], "eine angehaltene Kette ist keine Vorschau"
+    assert reasons == [tr("Diese Ebene teilt das Objekt nicht.")], "der Befund des Halts"
+
+    reasons.clear()
+    session.preview_async(
+        shown.append,
+        [OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": -1.0})],
+        explained=reasons.append,
+    )
+    session.wait_for_idle()
+    assert len(reasons) == 1 and reasons[0], "auch ein geworfener Fehler nennt seinen Satz"
+
+    reasons.clear()
+    session.preview_async(
+        shown.append,
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+            )
+        ],
+        explained=reasons.append,
+    )
+    session.wait_for_idle()
+    assert not reasons, "eine Vorschau, die kommt, braucht keinen Grund"
+
+
+def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow) -> None:
+    """Drei Zustände, drei Sätze — und nicht derselbe über allen.
+
+    Vor dem 13.09.2026 stand „Vorschau — noch nicht übernommen" über einer
+    Bohrung, über einem Verschieben um null und über einem Teilen, das nichts
+    teilt. Nur der erste Satz war wahr.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    banner = window.viewport.banner
+
+    window._preview_explained("Diese Ebene teilt das Objekt nicht.")
+    assert "Diese Ebene teilt das Objekt nicht." in banner.note.text()
+    assert banner.note.text().startswith(tr("Keine Vorschau: {reason}").format(reason=""))
+    assert window.viewport.difference is None
+    # Das ``None`` des Arbeiters kommt nach dem Grund und lässt ihn stehen.
+    window._show_preview(None)
+    assert "Diese Ebene teilt das Objekt nicht." in banner.note.text()
+
+    window._show_preview(dataclasses.make_dataclass("Leer", [("changed", bool)])(False))
+    assert banner.note.text() == tr("Vorschau — am Volumen ändert sich nichts")
+    assert banner.hint.text() == "", "ohne Unterschied gibt es kein Vorher zu halten"
+
+    window._show_preview(dataclasses.make_dataclass("Voll", [("changed", bool)])(True))
+    assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
+
+    window._clear_preview()
+    assert banner.isHidden()
+
+
+def test_a_slow_preview_says_it_is_computing(window: MainWindow) -> None:
+    """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8).
+
+    Ein Aushöhlen über einem großen Netz braucht Sekunden; solange stand das
+    alte Bild unter dem alten Band, und ein Haken, dessen Wirkung erst nach
+    drei Sekunden kommt, sah aus wie einer, der nicht reagiert.
+    """
+    from PySide6.QtTest import QTest
+
+    banner = window.viewport.banner
+    window._preview_busy.start()
+    QTest.qWait(300)
+    assert banner.note.text() == tr("Vorschau wird gerechnet …")
+
+    # Das Ergebnis löst die Ansage ab — und ein Ergebnis vor Ablauf der
+    # Frist verhindert sie ganz.
+    window._show_preview(dataclasses.make_dataclass("Voll", [("changed", bool)])(True))
+    assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
+    window._preview_busy.start()
+    window._show_preview(dataclasses.make_dataclass("Voll", [("changed", bool)])(True))
+    QTest.qWait(300)
+    assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
+    window._clear_preview()
+
+
+def test_splitting_starts_in_the_middle_of_the_body(window: MainWindow) -> None:
+    """*Teilen* öffnete mit ``position=0`` — auf der Unterseite eines Körpers,
+    der auf dem Bett steht. Die Ebene teilte nichts, und der Dialog sagte
+    nichts. Jetzt beginnt sie in der Mitte; die Zahl bleibt änderbar."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.object_tree.select_object("obj_1")
+
+    window.run_operation(REGISTRY.get("split_pinned"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog.values()["position"] == pytest.approx(10.0), "Mitte von 0 bis 20"
+    finally:
+        dialog.reject()
+
+
 # --- die Tour durch ein Beispiel (§37.2) ------------------------------------------
 
 

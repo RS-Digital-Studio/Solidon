@@ -2837,6 +2837,10 @@ class PreviewBanner(QFrame):
         layout.setSpacing(ROOMY)
 
         self.note = QLabel("", self)
+        # Der Satz kann ein Grund aus dem Kern sein („Dieser Körper ist schon
+        # geschlossen — eine zweite Haut darüber wäre …"), und der ist länger
+        # als das Bild breit. Er bricht um, statt hinauszulaufen.
+        self.note.setWordWrap(True)
         self.legend = QLabel("", self)
         self.hint = QLabel("", self)
         self.hint.setObjectName("previewHint")
@@ -2890,7 +2894,6 @@ class PreviewBanner(QFrame):
         self.legend.setStyleSheet("")
         self.hint.setText(hint)
         self.show()
-        self.adjustSize()
         self.place()
 
     def place(self) -> None:
@@ -2904,6 +2907,14 @@ class PreviewBanner(QFrame):
         parent = self.parentWidget()
         if parent is None:
             return
+        # Nicht breiter als das Bild: Erst die Grenze, dann die Größe — sonst
+        # misst ``adjustSize`` den Satz in einer Zeile, und das Band steht
+        # über beide Ränder hinaus. Bei jeder Größenänderung neu, denn das
+        # Fenster wird auch schmaler.
+        available = parent.width() - 2 * ROOMY
+        if available > 0:
+            self.setMaximumWidth(available)
+        self.adjustSize()
         self.move(max((parent.width() - self.width()) // 2, 0), BANNER_TOP)
         self.raise_()
 

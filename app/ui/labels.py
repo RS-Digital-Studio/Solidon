@@ -13,9 +13,9 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import date, datetime
 from typing import Any, Final, Literal
 
-from PySide6.QtCore import QDate, QDateTime, QLocale, QObject, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QShowEvent, QValidator
-from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
+from PySide6.QtCore import QDate, QDateTime, QEvent, QLocale, QObject, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QMouseEvent, QShowEvent, QValidator
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
 
 from app.core import figures
 from app.core.activation import Activation
@@ -573,6 +573,60 @@ class LengthSpin(NumberSpin):
         # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
         # Einheitentabelle (§11.1).
         self.setSuffix(f" {self._unit}")
+
+
+class RowCheckBox(QCheckBox):
+    """Ein Haken ohne eigenen Text, der auf seiner ganzen Zeile antwortet.
+
+    Ein ``QCheckBox`` ohne Text nimmt nur Klicks auf sein Kästchen an — Qt
+    prüft in ``hitButton`` gegen Kästchen und Text, und ohne Text bleibt das
+    Kästchen. In einer Formularzeile füllt das Feld aber die ganze Spalte:
+    Gemessen am 13.09.2026 im Aushöhlen-Dialog waren 14 mal 14 Bildpunkte in
+    einem Feld von 241 mal 14 heiß, alles rechts davon tot. Wer die Zeile
+    traf und nicht das Kästchen, sah nichts geschehen (Robert: „bei Aushöhlen
+    reagiert die Checkbox zum Öffnen ab und zu nicht").
+
+    Hier antwortet das ganze Feld. Die Beschriftung links davon hängt
+    :func:`caption_toggles` dazu — zusammen ist die Zeile so breit anklickbar
+    wie die Zahlenfelder darüber und darunter.
+    """
+
+    def hitButton(self, pos: Any) -> bool:  # noqa: N802 — Qt-Name
+        return self.rect().contains(pos)
+
+
+class _CaptionToggles(QObject):
+    """Ein Klick auf die Beschriftung schaltet den Haken daneben."""
+
+    def __init__(self, box: QCheckBox, caption: QWidget) -> None:
+        super().__init__(caption)
+        self._box = box
+        self._pressed = False
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+        if isinstance(event, QMouseEvent) and event.button() == Qt.MouseButton.LeftButton:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                self._pressed = True
+            elif event.type() == QEvent.Type.MouseButtonRelease:
+                pressed, self._pressed = self._pressed, False
+                # Der Weg über ``click`` und nicht über ``toggle``: Ein
+                # gesperrter Haken bleibt gesperrt, und ``clicked`` kommt mit.
+                if pressed and self._box.isEnabled():
+                    self._box.click()
+                    return True
+        return super().eventFilter(watched, event)
+
+
+def caption_toggles(caption: QWidget | None, box: QCheckBox) -> None:
+    """Macht die Beschriftung einer Hakenzeile anklickbar.
+
+    ``None`` ist erlaubt — ``QFormLayout.labelForField`` gibt es für Zeilen
+    über beide Spalten zurück, und die haben keine Beschriftung.
+    """
+    if caption is None:
+        return
+    caption.installEventFilter(_CaptionToggles(box, caption))
+    caption.setCursor(Qt.CursorShape.PointingHandCursor)
 
 
 def length(value_mm: float, unit: LengthUnit | None = None, with_unit: bool = True) -> str:

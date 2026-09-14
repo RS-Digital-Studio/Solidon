@@ -876,6 +876,21 @@ ihnen an und den Zahlen nicht. `_clear_preview` steht im `finally` — die
 Vorschau gehört dem Dialog und geht mit ihm, gleich ob übernommen oder
 abgebrochen.
 
+**Und das Band über dem Bild sagt, was die Vorschau nicht zeigen kann.**
+`Session.preview_async` nimmt neben `then` einen zweiten Rückruf
+`explained`: Wirft die Operation, oder hält die Kette an einem Befund an,
+kommt vor dem `None` der Satz aus dem Kern — `_PreviewWorker.explained`,
+gelesen von `_reason_of` (das übersetzte Detail, sonst der Titel) und
+`_stop_reason` (der Befund mit der `op_id` des Halts, derselbe, den
+`evaluate._why_it_stopped` fürs Protokoll liest). `MainWindow._preview_explained`
+legt ihn ins Band („Keine Vorschau: …"), `_preview_reason` merkt ihn, damit
+das folgende `_show_preview(None)` ihn stehen lässt. Eine Differenz ohne
+`changed` heißt „am Volumen ändert sich nichts", und `_preview_busy` sagt
+nach 0,2 s ohne Ergebnis „wird gerechnet …" (§2.8). `PreviewBanner.note`
+bricht um und `place()` deckelt die Breite am Bild — ein Grund aus dem Kern
+ist länger als eine Zeile. Die Regel dazu steht in `oberflaeche.md` („Ein
+Haken in einer Formularzeile antwortet auf der ganzen Zeile").
+
 Ein `InstallDialog` lässt eine begonnene Installation beim Schließen
 geordnet auslaufen und zeigt diesen Zustand. Er beendet nur das Warten auf
 einen gestarteten Fremddienst; den Dienst selbst besitzt Solidon nicht.

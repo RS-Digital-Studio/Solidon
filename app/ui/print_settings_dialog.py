@@ -103,7 +103,9 @@ from app.ui.filament_usage import UsageNotice
 from app.ui.header import filament_names
 from app.ui.labels import (
     NumberSpin,
+    RowCheckBox,
     by_title,
+    caption_toggles,
     choice_label,
     colour_name,
     explain_choices,
@@ -1175,7 +1177,7 @@ def _make_setting_editor(
     """
     editor: QWidget
     if field.kind == "bool":
-        editor = QCheckBox(parent)
+        editor = RowCheckBox(parent)
         editor.toggled.connect(changed)
     elif field.kind == "int":
         spin = QSpinBox(parent)
@@ -1369,6 +1371,8 @@ class FilamentOverrideDialog(QDialog):
                     label.setToolTip(note)
                     label.setStatusTip(note)
                 form.addRow(label, editor)
+                if isinstance(editor, QCheckBox):
+                    caption_toggles(label, editor)
             box_layout.addWidget(body)
             box.toggled.connect(body.setVisible)
             box.toggled.connect(self._fit_depth)
@@ -2821,7 +2825,7 @@ class PrintSettingsDialog(QDialog):
         form.setContentsMargins(0, 0, 0, 0)
         for field in FIELDS:
             if field.front:
-                form.addRow(self._label(field), self._editor(field))
+                self._add_row(form, field)
         box = collapsible(tr("Das Wichtigste"), inner)
         self.front_toggle = _toggle_of(box)
         return box
@@ -3026,7 +3030,7 @@ class PrintSettingsDialog(QDialog):
             form = QFormLayout(page)
             for field in FIELDS:
                 if field.group == group and not field.front:
-                    form.addRow(self._label(field), self._editor(field))
+                    self._add_row(form, field)
             area = QScrollArea(self.tabs)
             area.setWidget(page)
             area.setWidgetResizable(True)
@@ -4755,6 +4759,13 @@ class PrintSettingsDialog(QDialog):
         self._start_slicer_search()
         self._refresh_advice()
 
+    def _add_row(self, form: QFormLayout, field: Field) -> None:
+        """Beschriftung und Feld in eine Zeile — bei einem Haken antwortet beides."""
+        label, editor = self._label(field), self._editor(field)
+        form.addRow(label, editor)
+        if isinstance(editor, QCheckBox):
+            caption_toggles(label, editor)
+
     def _label(self, field: Field) -> QLabel:
         """Die Beschriftung der Zeile — mit demselben Satz wie das Feld daneben.
 
@@ -4800,7 +4811,8 @@ class PrintSettingsDialog(QDialog):
 
         Haken bleiben ungedeckelt: Bei ihnen ist die breite Fläche kein
         gedehnter Kasten, sondern ein größeres Ziel — zu sehen ist ohnehin nur
-        das Kästchen.
+        das Kästchen. Ein Ziel ist sie erst als :class:`RowCheckBox`: Ein
+        ``QCheckBox`` ohne Text nahm nur das Kästchen selbst an.
         """
         editor = _make_setting_editor(field, self, self._editor_changed)
         self._editors[field.path] = editor

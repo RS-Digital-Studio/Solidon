@@ -15,6 +15,14 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.4.2
+
+### Vista e utilizzo
+
+- Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.
+- Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.
+- «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.
+
 ## 0.4.1
 
 ### Costruire e modificare

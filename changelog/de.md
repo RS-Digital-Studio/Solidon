@@ -40,6 +40,14 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.4.2
+
+### Ansicht und Bedienung
+
+- Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.
+- Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.
+- „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.
+
 ## 0.4.1
 
 ### Konstruieren und Ändern

@@ -3622,7 +3622,9 @@ def test_a_preview_from_the_dialog_is_dropped_at_a_document_change(window: MainW
     type(window.viewport).mark_preview = merken
     try:
         window._show_preview(None)
-        assert gezeigt[-1] == str(tr("Vorschau — noch nicht übernommen"))
+        # Ein ``None`` ohne Grund heißt seit dem 13.09.2026 „nichts zu sehen"
+        # und nicht mehr „noch nicht übernommen" — das Band steht trotzdem.
+        assert gezeigt[-1] == str(tr("Vorschau — am Volumen ändert sich nichts"))
         assert window._feature_pending is None, (
             "die Vorbedingung des Falls: der Merkposten des Merkmalspanels ist leer"
         )
@@ -3802,3 +3804,70 @@ def test_a_zero_typed_into_an_optional_field_means_zero(qt_app: QApplication) ->
         assert dialog.values()["z"] is None, "was niemand angefasst hat, bleibt ungesagt"
     finally:
         dialog.deleteLater()
+
+
+def test_a_checkbox_row_answers_on_its_whole_width(qt_app: QApplication) -> None:
+    """Robert, 13.09.2026: „bei Aushöhlen reagiert die Checkbox zum Öffnen ab
+    und zu nicht".
+
+    Gemessen: Ein ``QCheckBox`` ohne Text nahm nur sein Kästchen an — 14 mal
+    14 Bildpunkte in einem Feld von 241 mal 14; ein Klick auf die Mitte des
+    Feldes und einer auf die Beschriftung „Oben öffnen" taten nichts. Jetzt
+    antwortet die Zeile so breit wie die Zahlenfelder darüber.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QCheckBox
+
+    dialog = OperationDialog(REGISTRY.get("hollow_object"), {"obj_1": "Körper"})
+    dialog.show()
+    try:
+        box = dialog._editors["open_top"]
+        assert isinstance(box, QCheckBox)
+        caption = dialog._rows["open_top"].labelForField(box)
+        assert isinstance(caption, QLabel) and caption.text() == "Oben öffnen"
+        toggles: list[bool] = []
+        box.toggled.connect(toggles.append)
+        assert not box.isChecked()
+
+        # Mitte des Feldes — weit rechts vom Kästchen.
+        QTest.mouseClick(
+            box, Qt.MouseButton.LeftButton, pos=QPoint(box.width() - 4, box.height() // 2)
+        )
+        assert box.isChecked(), "die Zeile rechts vom Kästchen ist tot"
+
+        # Die Beschriftung links.
+        QTest.mouseClick(caption, Qt.MouseButton.LeftButton)
+        assert not box.isChecked(), "die Beschriftung schaltet nicht"
+        assert toggles == [True, False], (
+            "jeder Klick genau ein Umschalten — die Vorschau hängt daran"
+        )
+        assert caption.cursor().shape() == Qt.CursorShape.PointingHandCursor
+
+        # Ein gesperrter Haken bleibt gesperrt, auch über die Beschriftung.
+        box.setEnabled(False)
+        QTest.mouseClick(caption, Qt.MouseButton.LeftButton)
+        assert toggles == [True, False]
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
+
+
+def test_every_bool_row_in_the_register_is_a_row_checkbox(qt_app: QApplication) -> None:
+    """Der Fehler hat Zwillinge: jede ``bool``-Zeile jedes Dialogs, nicht nur
+    die eine im Aushöhlen."""
+    from app.ui.labels import RowCheckBox
+
+    plain: list[str] = []
+    for spec in REGISTRY.all():
+        bools = [entry.name for entry in spec.params.spec() if entry.kind == "bool"]
+        if not bools:
+            continue
+        dialog = OperationDialog(spec, {})
+        try:
+            for name in bools:
+                if not isinstance(dialog._editors[name], RowCheckBox):
+                    plain.append(f"{spec.name}.{name}")
+        finally:
+            dialog.deleteLater()
+    assert not plain, plain

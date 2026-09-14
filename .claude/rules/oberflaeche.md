@@ -1005,6 +1005,34 @@ Die allgemeine Frage dahinter, weil dieselbe Lücke an jedem neuen Ort mit
 Feldern entsteht: **Wo Felder stehen, tragen sie ihren Namen — und „wo" heißt
 jede Stelle, nicht die zwei, die man gerade im Kopf hat.**
 
+## Ein Haken in einer Formularzeile antwortet auf der ganzen Zeile
+
+`QCheckBox` ohne Text nimmt nur Klicks auf sein Kästchen an — Qt prüft in
+`hitButton` gegen Kästchen und Text, und ohne Text bleibt das Kästchen. In
+einer Formularzeile füllt das Feld aber die ganze Spalte: **14 × 14
+Bildpunkte waren heiß in einem Feld von 241 × 14** (Aushöhlen, „Oben öffnen",
+gemessen 13.09.2026), und die Beschriftung links davon tat nichts. Für den
+Kunden hieß das „die Checkbox reagiert ab und zu nicht" — je nachdem, wo der
+Klick landete.
+
+Also: In einer Formularzeile ist ein Haken ein `labels.RowCheckBox` (das
+ganze Feld trifft), und seine Beschriftung bekommt `labels.caption_toggles`
+(ein Klick auf das Wort schaltet). Vier Bauorte hatten den nackten
+`QCheckBox`: Operationsdialog, Merkmalfenster, Druckeinstellungen (zweimal).
+`tests/test_operation_ui.py` prüft die Klickfläche an einer echten Zeile und
+die Bauart über alle `bool`-Parameter des Registers.
+
+**Und was eine Vorschau nicht zeigen kann, sagt sie.** Über drei Lagen stand
+dasselbe Band „Vorschau — noch nicht übernommen": über einer Bohrung, über
+einem Verschieben um null und über einem Teilen, das nichts teilt. Nur beim
+ersten war es wahr (gemessen am 13.09.2026 über alle 110 Operationen: 62
+mit Bild, 17 mit leerer Differenz, 11 ohne Differenz). Seither trägt das Band
+den Grund aus dem Kern (`Session.preview_async(explained=…)`, „Keine
+Vorschau: Diese Ebene teilt das Objekt nicht."), sagt bei leerer Differenz
+„am Volumen ändert sich nichts" und nach 0,2 s ohne Ergebnis „wird
+gerechnet …" (§2.8). Ein leeres Bild ohne Satz sieht aus wie „nichts ändert
+sich" — und das ist die eine Rückmeldung, die nie stimmt.
+
 ## Und die Tabulatortaste geht denselben Weg wie das Auge
 
 **Ein Widget im Layout zu verschieben verschiebt es nicht in der Fokuskette.**

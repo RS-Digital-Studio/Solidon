@@ -51,6 +51,8 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.labels import (
     NumberSpin,
+    RowCheckBox,
+    caption_toggles,
     choice_label,
     circle_measure,
     display_unit,
@@ -1449,6 +1451,8 @@ class OperationDialog(QDialog):
                 # es gab und die niemand fand. ``labelForField`` holt das Label,
                 # das ``addRow`` aus der Zeichenkette gebaut hat.
                 _explain(editor, target.labelForField(editor), str(entry.doc))
+            if isinstance(editor, QCheckBox):
+                caption_toggles(target.labelForField(editor), editor)
             if isinstance(editor, ValueField) and editor.circle_toggle is not None:
                 caption = target.labelForField(editor)
                 if isinstance(caption, QLabel):
@@ -1957,7 +1961,8 @@ class OperationDialog(QDialog):
         if entry.kind == "edges":
             return EdgeSetField(self._edges, str(start or ""), self)
         if entry.kind == "bool":
-            editor = QCheckBox(self)
+            # Die ganze Zeile antwortet, nicht nur das Kästchen (``RowCheckBox``).
+            editor = RowCheckBox(self)
             editor.setChecked(bool(start))
             return editor
         if entry.kind == "material":
@@ -2291,6 +2296,8 @@ class OperationDialog(QDialog):
                     form.addRow(str(entry.title), editor)
                 self._rows[entry.name] = form
                 _explain(editor, form.labelForField(editor), str(entry.doc or ""))
+                if isinstance(editor, QCheckBox):
+                    caption_toggles(form.labelForField(editor), editor)
                 if isinstance(editor, ValueField) and editor.circle_toggle is not None:
                     caption = form.labelForField(editor)
                     if isinstance(caption, QLabel):

@@ -1671,10 +1671,13 @@ def test_the_live_preview_of_a_part_changes_its_step(qt_app: QApplication) -> No
 
     gerufen: list[dict[str, Any]] = []
     panel = SimpleNamespace(shown_part_step=lambda: 5)
+    erklaert = object()
     fenster = SimpleNamespace(
         _feature_pending=("insert_keyhole", {"size": "M5"}),
         feature_panel=panel,
         _show_preview=object(),
+        _preview_explained=erklaert,
+        _preview_busy=SimpleNamespace(start=lambda: None),
         object_tree=SimpleNamespace(selected=lambda: "obj_1"),
         session=SimpleNamespace(
             preview_async=lambda then, drafts=None, **rest: gerufen.append(
@@ -1684,7 +1687,9 @@ def test_the_live_preview_of_a_part_changes_its_step(qt_app: QApplication) -> No
     )
 
     MainWindow._preview_feature_change(fenster)
-    assert gerufen == [{"drafts": None, "change_op": 5, "change_values": {"size": "M5"}}], gerufen
+    assert gerufen == [
+        {"drafts": None, "change_op": 5, "change_values": {"size": "M5"}, "explained": erklaert}
+    ], gerufen
 
     # Und ohne Baustein bleibt es beim Entwurf neben der Szene.
     gerufen.clear()
