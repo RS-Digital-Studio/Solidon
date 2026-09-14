@@ -162,6 +162,16 @@ ausdrücklich allein will, nimmt `-m rendered`.
 daraus, nicht gegen selbst erzeugte Ergebnisse. Das Millionen-Dreieck-Modell
 liegt nicht im Repository — es wird bei Bedarf erzeugt.
 
+**Ein Sollwert trägt seine Herkunft.** Er kommt aus der Konstruktion im selben
+Test (`cylinder(radius=2.6)` → Ø 5,2), aus dem Korpus (`data/README.md` nennt
+die Maße) oder aus einer Formel im Assert (`24000.0 - math.pi * 9.0 * 20.0`).
+Eine Zahl, die aus einem Lauf abgeschrieben ist, trägt ihre Herleitung als
+Kommentar daneben — oder sie ist ein Determinismusnachweis und der Test sagt
+das. Der Grund ist vom 22.08.2026: Die Krümmungskarte rechnete bei **jeder**
+Netzfeinheit genau zwei Drittel des wahren Radius, und ein Test, der zwei
+Vernetzungen gegeneinander hält, wäre grün geblieben. Gefunden hat es der
+Sollwert r = 5 (RM-025, Durchsicht aller Geometrie-Sollwerte am 14.09.2026).
+
 ## Beim Schreiben
 
 Deutsche Docstrings sind in `tests/` üblich und in Ordnung; die Sprachprüfung

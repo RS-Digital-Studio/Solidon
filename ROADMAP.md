@@ -88,7 +88,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Der Wächter steht (`BackendPromptTruncated`); die Kürzung auf 28 440 Token liegt gemessen vor und wartet auf die Agenten-Suite vorher/nachher, weil sie im Fünf-Fälle-Check einen Fall kippt |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
-| [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Flagge gesetzt; offen ist die Sichtprüfung unter Windows Terminal |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -1285,15 +1284,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stand. Einen externen Upload erst aus dieser Entscheidung ableiten.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#vier-wege-von-hand-während-die-suite-grün-war-23082026).
-
-<a id="rm-025"></a>
-
-- [ ] **RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern.** Krümmung,
-  Durchmesser, Volumen und Achsen gezielt gegen analytische Größen oder unabhängige Rechnungen
-  prüfen. Abnahme: Für jede geprüfte Kennzahl ist die Herkunft des Sollwerts dokumentiert; reine
-  Wiederholungsprüfungen gelten nur als Determinismusnachweis.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
 
 <a id="rm-099"></a>
 

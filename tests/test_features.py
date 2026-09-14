@@ -1395,6 +1395,7 @@ def test_a_cone_that_sticks_out_is_not_a_recess() -> None:
 
     assert len(cones) == 1
     assert cones[0].params["recess"] is False
+    # Öffnungswinkel des Kegels aus Radius 6 und Höhe 10: 2 · atan(6/10) = 61,93°.
     assert cones[0].params["angle"] == pytest.approx(61.9, abs=1.5)
 
 
@@ -1423,6 +1424,7 @@ def test_the_normals_decide_the_shape_and_not_the_residual() -> None:
     cone = fit_cone(body, patch)
 
     assert cylinder is not None and cylinder.good, "this is the trap: the cylinder looks perfect"
+    # Halbwinkel aus Radius 6 und Höhe 10: atan(6/10) = 30,96°.
     assert cone is not None and cone.half_angle == pytest.approx(30.9, abs=1.0)
 
 

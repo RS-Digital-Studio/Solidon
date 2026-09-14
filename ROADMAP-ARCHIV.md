@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)](#die-sollwerte-der-geometrietests-haben-ihre-herkunft-14092026) |
 | 2026-09-14 | [Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)](#die-prompt-grundlast-ist-gemessen-und-das-fenster-ist-voll-14092026) |
 | 2026-09-14 | [Die Orientierungssuche hat ihre Abnahme (14.09.2026)](#die-orientierungssuche-hat-ihre-abnahme-14092026) |
 | 2026-09-14 | [Das Regelwerk hat seine Wächter (14.09.2026)](#das-regelwerk-hat-seine-wächter-14092026) |
@@ -8370,7 +8371,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-022 — Verrundung und Fase gehen auf einem Netz nicht — Konzept liegt vor, Entscheidung offen | weiter offen → [RM-022](ROADMAP.md#rm-022) | konzepte/konzept-flaechenrueckgewinnung-2026-08.md und ROADMAP.md:5876–5921 enthalten eine Produktentscheidung, keinen freigegebenen Bauauftrag; 02914d5 erklärte den deaktivierten Einstieg. Bauplan §40 P12 fordert exakte B-Rep-Verrundung, nicht automatische Netzrekonstruktion. Keine neue Phase eigenmächtig freigegeben. |
 | RM-023 — Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel wechseln | weiter offen → [RM-023](#rm-023) | app/core/scene/evaluate.py:255-265,558: referenced_features nach ObjectId; unverändert einmal aufgebaut. |
 | RM-024 — Die Antwort der Zuordnung steht nirgends — die Mechanik steht, die Abnahme fehlt | weiter offen → [RM-024](ROADMAP.md#rm-024) | app/core/scene/evaluate.py:140,581,1410; tests/test_matching.py:275; historische Roadmap unterscheidet Einheitstests von noch fehlender Produktionsketten-Abnahme. tests/test_evaluation.py:611 erzwingt Mehrdeutigkeit inzwischen gezielt;1481/1530 sichern Aufschreiben. Alter fehlerhafter Testkörper ist also bereits ersetzt. |
-| RM-025 — Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | weiter offen → [RM-025](ROADMAP.md#rm-025) | Historische Durchsicht benennt ring_diameter und Radiusversatz; automatische Assertzählung verworfen. Keine vollständige dokumentierte Kennzahlenprüfung belegt. |
+| RM-025 — Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | abgeschlossen 14.09.2026 → [Nachweis](#rm-025) | Historische Durchsicht benennt ring_diameter und Radiusversatz; automatische Assertzählung verworfen. Keine vollständige dokumentierte Kennzahlenprüfung belegt. |
 | RM-026 — Parallelität und Schloss sind keine Alternativen — sie bedingen einander | überholt oder begründet entfallen | tools/gate_lock.py und aktuelle Prüf-Skills regeln den Lauf; body formuliert historische Messung und Reihenfolge, kein eigenständiges unerledigtes Abnahmekriterium. |
 | RM-027 — Der Haupt-Index altert, und `git status` lügt für alle anderen mit | weiter offen → [RM-027](ROADMAP.md#rm-027) | Nachcheck08.09.: .claude/skills/liefern/SKILL.md Abschnitt Umfang und Nachweis sowie Ergebniskontrolle verbietet Nachziehen auch eigener Pfade; references/git-fehlerfaelle.md markiert alte Reset-/Nachzug-Anweisungen als historisch. output/setup-audit-2026-09-08/BERICHT.md:22 und letzter ROADMAP-Abschnitt bestätigen nur den erfolgreichen privaten Commit bei bytegleichem gemeinsamen Index. Das lässt den gemeinsamen Index absichtlich auf seinem alten Stand. .githooks/pre-commit:25-51 prüft Sprache und überspringt Commitumfang ohne app/tools-Python; keine Prüfung auf privatem Index/GIT_INDEX_FILE, Herkunft oder veraltete gemeinsame Indexstände vorhanden. Damit sichere private Lieferung nachgewiesen, allgemeiner Schutz eines gewöhnlichen Commits nicht implementiert/abgenommen. |
 | RM-028 — Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | überholt oder begründet entfallen | CLAUDE.md und .claude/rules/tests.md tragen heutige Prüfregeln; tools/to_main.py vorhanden. Body sammelt gelöste Fälle und doppelt den Indexpunkt; keine weitere klar begrenzte Umsetzung. |
@@ -15562,7 +15563,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 
       **Offen sind die 26**, und sie verteilen sich über alle Gebiete.
 
-- **Historischer Befund RM-025 (weiter offen; aktuelle Aufgabe [RM-025](ROADMAP.md#rm-025)):** **Ein Test, der nur seine eigene Konsistenz misst, sieht keinen
+- **Historischer Befund RM-025 (abgeschlossen 14.09.2026, [Nachweis](#rm-025)):** **Ein Test, der nur seine eigene Konsistenz misst, sieht keinen
       systematischen Versatz.** Zweimal an einem Tag gefunden, beide Male
       hätte die naheliegende Prüfung geschwiegen:
 
@@ -27857,22 +27858,6 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     enden. Nachweise: `test_an_alignment_target_is_never_left_empty`,
     `test_aligning_is_grey_until_a_second_body_carries_a_feature`,
     `test_the_window_can_block_apply_with_a_reason`.
-  - **Ein Befund ohne Weg, ein Hinweis ohne Anlass, eine Datei, die niemand findet** (B10, B16,
-    B14). „Das Modell besteht aus mehreren Teilen." trug keine Handlung, während die Nachbarzeile
-    „sehr kleine Einzelteile" ihren Knopf hatte — `SPLIT_BODIES` in `FINDING_ACTIONS` bietet
-    *In Einzelteile zerlegen* am Befund an, ein Angebot und keine Ausführung (ein Schild mit
-    losen Buchstaben soll zusammenbleiben). „Doppelte Punkte wurden verschweißt." stand als erste
-    Zeile jedes sauberen STL-Imports, sechs von sechs Modellen, ohne Handlung: Eine STL speichert
-    jedes Dreieck mit eigenen Ecken, sie zu verschweißen ist Lesen — `normalise(weld_is_reading=
-    True)` schweigt darüber und verschweißt weiter; bei OBJ, PLY und 3MF bleibt der Befund, denn
-    dort sind doppelte Punkte eine Eigenschaft der Datei. Ein sauberer STL-Import beginnt seither
-    mit „Keine Befunde" und der Kennzahlzeile. Und „Exportiert: dose.3mf" war alles, was nach dem
-    Export dastand — alle vier Wege enden hier: *Ordner zeigen* steht neben der Meldung, solange
-    sie steht, und öffnet den Ordner über `QDesktopServices` (Qt kennt die Plattform und im
-    Flatpak das Portal). Nachweise: `test_a_model_of_several_parts_offers_to_split_it`,
-    `test_reading_an_stl_is_not_a_finding`,
-    `test_an_stl_import_greets_without_a_finding_about_reading_it`,
-    `test_the_export_offers_its_folder`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
@@ -28210,3 +28195,50 @@ einen neuen: RM-173.
   **Was die Messung außerdem sagt, steht als RM-173 im Register:** 96,0 % des Fensters, 1 303
   Token Rest, und mit `num_ctx` 40 960 läuft das Modell von der Karte (`ollama ps`: 16 GB,
   `10 %/90 % CPU/GPU`).
+
+## Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)
+
+Ein Punkt aus dem Fundament der Wahrnehmung vom 22.08.2026, von Hand durchgesehen und
+abgeschlossen am 14.09.2026.
+
+<a id="rm-025"></a>
+
+- [x] **RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern.** Die Frage vom
+  22.08. lautete: Prüft ein Test gegen einen Wert von außen — ein Sollmaß, eine Formel, eine
+  andere Rechnung — oder nur dagegen, dass zweimal dasselbe herauskommt? Automatisch war sie
+  nicht zu stellen (`assert volume == pytest.approx(31276.892)` sieht wie ein Sollwert aus, ob
+  die Zahl hergeleitet oder abgeschrieben ist, steht nirgends im Code); also von Hand, je
+  Kennzahl, am 14.09.2026.
+
+  **Durchgesehen:** alle 44 Zahlen-Zusicherungen in `test_features.py` (Durchmesser, Tiefe,
+  Winkel, Mittelpunkte, Achsen der Bohrungen, Zapfen, Kegel, Kugeln, Tori, Verrundungen), die
+  29 in `test_slot_features.py` (Breite, Länge, Weg, Tiefe, Richtung der Langlöcher), die 14 in
+  `test_maps.py` (Wandstärke, Überhang, **Krümmung**, Stützhöhe), die 18 in
+  `test_geometry_review_regressions.py` und alle **155 Volumen-Zusicherungen** der Suite über
+  26 Dateien (`grep "volume.*approx("`). Ergebnis: Jeder Sollwert kommt aus der Konstruktion
+  im selben Test (`cylinder(radius=2.6)` → Ø 5,2; `box(extents=(40, 30, 20))` minus
+  `math.pi * 9.0 * 20.0`), aus dem Korpus, dessen Maße `tests/data/README.md` und
+  `make_corpus.py` tragen, oder aus einer Formel im Assert selbst
+  (`2.0 * math.pi * 12.5 * 40.0`, `3.0 * math.sqrt(3.0) / 2.0 * 100.0 * 3.0`). Die
+  Krümmungskarte prüft den Radius 5 der Verrundung bei 32 und bei 128 Segmenten gegen den
+  Entwurfswert, nicht gegeneinander — genau die Prüfung, die den Zwei-Drittel-Versatz vom
+  22.08. gefunden hatte.
+
+  **Vier Zahlen standen ohne Herleitung im Code, alle vier sind hergeleitet und tragen sie
+  jetzt als Kommentar:** 61,9° und 30,9° in `test_features.py` (Öffnungs- und Halbwinkel des
+  Kegels aus Radius 6 und Höhe 10, `2 · atan(0,6)`), 23 845,4867 in `test_brep.py` (Quader
+  40 × 30 × 20 minus vier Kantenrundungen R 3: `24 000 − 20 · (36 − 9π)`), 7 064 in
+  `test_mesh_edges.py` (Würfel 20 mit Fase 3 an zwölf Kanten:
+  `20³ − 6 · 3² · 20 + 16/3 · 3³`). Drei weitere sind als Messung gekennzeichnet und sagen,
+  warum sie vom analytischen Wert abweichen: 15,94 statt 16 (`sphere_socket`, die Icosphere
+  ist einbeschrieben), 448,5 statt 452,4 (Kuppe r = 6, Tesselierung der Vorlage), 31 277,193
+  (`example_v24`, mit der Rechnung der 0,3 mm³ gegen den alten Wert). Eine bleibt eine
+  **Wiederholungsprüfung mit Absicht:** `test_prepare.py` hält 15,07 mm³ für die Senkung an der
+  fernen Mündung fest — analytisch wären es 15,38 (Kegelstumpf 4,2 → 3 über 1,2 mm minus
+  Bohrzylinder), gemessen 15,068; die zwei Prozent liegen in Polygon und Kompensation, und der
+  Test sagt selbst, dass er die Suche bis `z = 10` prüft und nicht das Maß.
+
+  Was daraus für neue Tests gilt, steht seither in `.claude/rules/tests.md` beim Korpus: Ein
+  Sollwert trägt seine Herkunft — Konstruktion, Korpus oder Formel; eine Zahl, die aus einem
+  Lauf abgeschrieben ist, trägt ihre Herleitung als Kommentar, oder sie ist ein
+  Determinismusnachweis und der Test sagt das.

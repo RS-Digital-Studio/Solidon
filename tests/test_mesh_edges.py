@@ -799,6 +799,8 @@ def test_a_warm_edge_cache_recomputes_the_corner_surface(operation: str) -> None
             changed, np.asarray((7.0, 7.0, 7.0)), lambda points: (points >= 7.0 - 1e-7).all(axis=1)
         )
     else:
+        # Würfel 20 mit Fase 3 an allen zwölf Kanten: 20^3 - 6 * 3^2 * 20 + 16/3 * 3^3
+        # = 8000 - 1080 + 144 (die zwölf Prismen, an den acht Ecken dreifach überlappt).
         assert changed.volume == pytest.approx(7064.0, abs=1e-5)
 
 

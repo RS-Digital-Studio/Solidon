@@ -677,6 +677,8 @@ def test_a_step_file_becomes_a_scene_object(profile: Profile, tmp_path: Path) ->
     assert result.complete
     entry = result.scene.objects["obj_1"]
     assert entry.kind == "brep"
+    # Quader 40 x 30 x 20 minus vier Kantenrundungen R 3 über die Höhe 20:
+    # 24 000 - 20 * (36 - 9 pi) = 23 845,487.
     assert entry.mesh.volume == pytest.approx(23845.4867, rel=1e-6)
 
 
