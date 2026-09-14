@@ -34,8 +34,13 @@ Bauart des Codes war eine Zuordnung nach Familie
 **How to apply:** Bei einem nativen Riss nach einem Commit den Worktree
 gegen den letzten grünen Stand bisektieren — Datei, Gruppe, Zeile —, und die
 **Importzeilen als eigene Kandidaten** fahren, nicht nur den Code darunter.
-`QMouseEvent` in `app/ui/labels.py` ist tabu (`test_labels_do_not_import_the_
-mouse_event_type` hält es über den Syntaxbaum fest); ein Filter fragt
-`event.type()` und liest `button()` über `getattr`. Siehe
+`QMouseEvent` in `app/ui/labels.py` ist tabu; der Wächter
+`test_labels_do_not_name_the_mouse_event_type` in
+`tests/test_language_rules.py` hält es über den Syntaxbaum fest, in jeder
+Schreibweise. Ein Filter fragt `event.type()` und liest `button()` über
+`getattr`. **Die Reichweite ist der Prozess, nicht das Symbol:**
+`app/ui/viewport.py` importiert und benutzt `QMouseEvent` und reißt nicht —
+die Bisektion gilt für diese Datei in dieser Modulmenge, nicht für den Namen
+an sich. Siehe
 [[zweite-sitzung-im-selben-baum]] für den Worktree-Weg und
 [[waechter-lesen-kommentare-mit]] dafür, warum der Wächter den Baum liest.

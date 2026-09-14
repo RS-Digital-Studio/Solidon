@@ -77,12 +77,13 @@ Bett (gemessen: Quader 0 bis 20 mm), die Ebene lag also auf seiner Unterseite
 und teilte nichts. Wer teilen will, will fast immer die Mitte.
 
 Vorderseiten: Das Register hält die Grenze von acht Feldern
-(`tests/test_interface_limits.py`), und *Grundform hochziehen* nutzt sie ganz — vier der acht
+(`tests/test_interface_limits.py`), und *Grundform hochziehen* nutzte sie ganz — vier der acht
 (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für Lochkreis und Lochraster und
-stehen bei einem Rechteck ausgegraut da. Das ist eine dokumentierte
+standen bei einem Rechteck ausgegraut da. Das war eine dokumentierte
 Entscheidung (`_couple_dependent_fields`: „wer sie verschwinden sähe, suchte
 sie") und kein Versehen — aber für einen Kunden, der ein Rechteck hochzieht,
-sind es vier Zeilen, die nichts bedeuten.
+waren es vier Zeilen, die nichts bedeuten. Seit dem 14.09.2026 verschwinden
+sie, bis die Grundform sie braucht (§4, RM-171).
 
 ## §2 Was die einfachen Werkzeuge anders machen
 
@@ -138,11 +139,12 @@ bei einem Klick in die Zeilenmitte und auf die Beschriftung
 (`probe_hollow_toggle`: Klickfläche vorher 14 × 14, nachher 241 × 14 plus
 264 × 14 Beschriftung).
 
-## §4 Gebaut am 14.09.2026 — und was offen bleibt
+## §4 Gebaut am 14.09.2026
 
 Robert am 14.09.2026: „dann leg los, das grundlegende konzept sollte aber
-nicht geändert werden". Drei der vier Punkte sind Optimierung am Bestand und
-gebaut; der vierte ist eine Entscheidung und bleibt seine.
+nicht geändert werden". Drei der vier Punkte waren Optimierung am Bestand;
+der vierte war eine Entscheidung, und Robert traf sie am selben Tag
+(„Ausblenden"). Alle vier sind gebaut.
 
 | Was | Wo | Nachweis |
 |---|---|---|

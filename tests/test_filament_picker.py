@@ -1474,30 +1474,8 @@ def test_full_body_offers_named_replacement_and_cancel_keeps_selection(
     assert body_field.currentData() == 0
 
 
-def test_labels_do_not_import_the_mouse_event_type() -> None:
-    """Ein ungenutzter Import riss diese Datei — deterministisch, 0xc0000374.
-
-    Bisektiert am 14.09.2026 in einem Scratch-Baum bis auf eine Zeile:
-    ``from PySide6.QtGui import QMouseEvent`` in ``app/ui/labels.py``, und
-    zwar ohne dass jemand den Namen benutzte; ``QCheckBox`` und ``QEvent``
-    daneben waren unschuldig. Der Riss kam im ``gc.collect`` des Teardowns
-    von ``test_broken_inventory_keeps_project_choice_and_reports_error``.
-    Ein Ereignisfilter fragt seither den Typ und liest ``button()`` ab.
-
-    Über den Syntaxbaum, nicht über den Text: Der Kommentar in ``labels.py``
-    nennt den Namen, und ein Wächter, der Kommentare mitliest, wäre rot.
-    """
-    import ast
-    from pathlib import Path
-
-    source = Path(__file__).parent.parent / "app" / "ui" / "labels.py"
-    tree = ast.parse(source.read_text(encoding="utf-8"))
-    imported = {
-        alias.name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.module == "PySide6.QtGui"
-        for alias in node.names
-    }
-    assert "QMouseEvent" not in imported, (
-        "labels.py importiert QMouseEvent — siehe RowCheckBox.eventFilter"
-    )
+# Der Wächter gegen ``QMouseEvent`` in ``app/ui/labels.py`` — der ungenutzte
+# Import riss diese Datei am 14.09.2026 deterministisch mit 0xc0000374 —
+# steht in ``tests/test_language_rules.py``
+# (``test_labels_do_not_name_the_mouse_event_type``): Er braucht kein Qt,
+# und diese Datei läuft vor jedem Commit an ``app/``.

@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -1451,7 +1451,7 @@ class OperationDialog(QDialog):
                 # es gab und die niemand fand. ``labelForField`` holt das Label,
                 # das ``addRow`` aus der Zeichenkette gebaut hat.
                 _explain(editor, target.labelForField(editor), str(entry.doc))
-            if isinstance(editor, QCheckBox):
+            if isinstance(editor, RowCheckBox):
                 caption_toggles(target.labelForField(editor), editor)
             if isinstance(editor, ValueField) and editor.circle_toggle is not None:
                 caption = target.labelForField(editor)
@@ -1598,6 +1598,11 @@ class OperationDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+        self._refit = QTimer(self)
+        """Zieht die Höhe nach, wenn eine Zeile mit ihrer Bedingung kommt oder
+        geht — einen Ereignisumlauf später, siehe ``_resize_to_content``."""
+        self._refit.setSingleShot(True)
+        self._refit.timeout.connect(self._resize_to_content)
         self._couple_dependent_fields()
         self._hide_legacy_feature_field()
         self._follow_source_pending()
@@ -1689,8 +1694,9 @@ class OperationDialog(QDialog):
         Hälfte seiner Vorderseite. Die Zeile erscheint mit der Grundform, die
         sie braucht, und nicht heimlich — gesucht wird sie also dort, wo sie
         entsteht. Gesperrt bleibt sie zusätzlich, damit ein verborgenes Feld
-        nie den Fokus bekommt, und der Satz, warum sie fehlt, bleibt an ihr —
-        für den Moment, in dem sie wiederkommt.
+        nie den Fokus bekommt. Der Satz, warum sie fehlt, steht an ihr, aber
+        solange sie fort ist, sieht ihn niemand; mit der Bedingung kommt der
+        eigene Satz des Feldes zurück.
         """
         # **Aus dem Schema, nicht aus einer Tabelle daneben.** Die Angabe stand
         # als ``DEPENDENT_FIELDS`` hier im Modul und war mit einem Eintrag
@@ -1699,11 +1705,20 @@ class OperationDialog(QDialog):
         # Parameter — dort steht sie jetzt (``ParamSpec.depends_on``), und
         # Handbuch und Agent lesen dieselbe Quelle.
         schema = self.spec.params.spec()
+        # Das Altfeld ``at_feature`` neben einem Mehrfachwähler blendet
+        # ``_hide_legacy_feature_field`` für immer aus — eine zweite Stelle,
+        # die dieselbe Sichtbarkeit setzt, holte es mit seiner Bedingung
+        # zurück. Heute trägt keines der Altfelder ein ``depends_on``; die
+        # Ausnahme steht hier, damit das so bleiben darf.
+        legacy = (
+            "at_feature" if isinstance(self._editors.get("at_features"), FeatureSetField) else ""
+        )
         rules = [
             entry
             for entry in schema
             if entry.depends_on is not None
             and entry.name in self._editors
+            and entry.name != legacy
             and entry.depends_on[0] in self._editors
         ]
         if not rules:
@@ -1736,11 +1751,16 @@ class OperationDialog(QDialog):
                 else:
                     explanation = _why_inactive(titles[inactive[0]], inactive[1][0])
                 _explain(editor, label, explanation)
-            # Eine Zeile weniger ist ein kürzerer Dialog — und eine mehr darf
-            # nicht unter den Knöpfen liegen. Nur wenn sich etwas bewegt hat:
-            # ``follow`` läuft bei jedem Tastendruck.
+            # Eine Zeile weniger ist ein kürzerer Dialog, eine mehr ein
+            # längerer. Nur wenn sich etwas bewegt hat: ``follow`` läuft bei
+            # jedem Tastendruck. Und nicht über ``adjustSize`` — das deckelt
+            # bei zwei Dritteln der Bildschirmhöhe und kappte eine aufgeklappte
+            # Rückseite (gemessen 14.09.2026, *Bohrung setzen* offscreen bei
+            # 800 Punkten Höhe: aufgeklappt 552, *Langloch* an 582, wieder
+            # aus 533 — neunzehn Punkte unter dem Inhalt). Und einen
+            # Ereignisumlauf später, nicht sofort: siehe ``_resize_to_content``.
             if changed and self.isVisible():
-                self.adjustSize()
+                self._refit.start(0)
 
         self.valuesChanged.connect(follow)
         self._couplings.append(follow)
@@ -2200,7 +2220,10 @@ class OperationDialog(QDialog):
         findet (§2.4).
         """
         editor = self._editors.get(name)
-        if editor is None:
+        if editor is None or editor.isHidden():
+            # Eine Zeile, deren Bedingung nicht gilt, ist fort und gesperrt
+            # (``_couple_dependent_fields``); ``setFocus`` täte dort nichts,
+            # und ein „erledigt" dafür wäre gelogen.
             return False
         entry = next((item for item in self.spec.params.spec() if item.name == name), None)
         if entry is not None and (entry.kind in ("feature", "features") or entry.targets_feature):
@@ -2318,7 +2341,7 @@ class OperationDialog(QDialog):
                     form.addRow(str(entry.title), editor)
                 self._rows[entry.name] = form
                 _explain(editor, form.labelForField(editor), str(entry.doc or ""))
-                if isinstance(editor, QCheckBox):
+                if isinstance(editor, RowCheckBox):
                     caption_toggles(form.labelForField(editor), editor)
                 if isinstance(editor, ValueField) and editor.circle_toggle is not None:
                     caption = form.labelForField(editor)
@@ -2408,11 +2431,28 @@ class OperationDialog(QDialog):
         # Bei einem Gewinde blieben deshalb die hinteren Felder unter den
         # Aktionsknöpfen liegen. Der geöffnete Bereich bekommt seine echte
         # Inhaltshöhe, bis höchstens an den sichtbaren Bildschirmrand.
+        self._resize_to_content(at_least=self.height())
+
+    def _resize_to_content(self, at_least: int = 0) -> None:
+        """Die Höhe auf den Inhalt setzen — bis an den sichtbaren Bildschirmrand.
+
+        Der Weg an ``adjustSize`` vorbei, das bei zwei Dritteln der
+        Bildschirmhöhe deckelt. Zwei Stellen brauchen ihn: das Aufklappen der
+        Rückseite (``_unfold_advanced``) und eine Zeile, die mit ihrer
+        Bedingung kommt oder geht (``_couple_dependent_fields``, über den
+        Zeitgeber ``_refit``). ``at_least`` hält eine Höhe, die der Dialog
+        schon hat — beim Aufklappen wird nichts kleiner.
+
+        **Die Kopplung ruft ihn einen Ereignisumlauf später.** Sofort gemessen
+        zählte der Größenwunsch die eben versteckten Zeilen der Rückseite noch
+        mit (14.09.2026, *Bohrung setzen*: *Langloch* an — 610 gesetzt, 523
+        Inhalt); erst nach der zugestellten Layout-Anfrage stimmt er.
+        """
         layout = self.layout()
         if layout is None:
             return
         layout.activate()
-        wanted = max(self.height(), layout.sizeHint().height())
+        wanted = max(at_least, layout.sizeHint().height())
         screen = self.screen()
         if screen is not None:
             wanted = min(wanted, screen.availableGeometry().height() - 48)

@@ -5260,7 +5260,7 @@ class FeaturePanel(QWidget):
                 label.setBuddy(editor)
                 editor.setAccessibleName(f"{action.title} — {field.label}")
                 form.addRow(label, editor)
-                if isinstance(editor, QCheckBox):
+                if isinstance(editor, RowCheckBox):
                     caption_toggles(label, editor)
             layout.addLayout(form)
 

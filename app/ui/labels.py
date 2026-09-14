@@ -593,6 +593,10 @@ class RowCheckBox(QCheckBox):
     wie die Zahlenfelder darüber und darunter.
     """
 
+    #: Ob die Beschriftung gerade gedrückt ist — gesetzt beim Druck, gelesen
+    #: und gelöscht beim Loslassen.
+    _caption_pressed: bool = False
+
     def hitButton(self, pos: Any) -> bool:  # noqa: N802 — Qt-Name
         return self.rect().contains(pos)
 
@@ -616,35 +620,49 @@ class RowCheckBox(QCheckBox):
         # grün, plus ``QMouseEvent`` rot. Gefragt wird deshalb der Ereignistyp,
         # und die Taste liest ``button()`` ab, das nur Mausereignisse tragen.
         kind = event.type()
-        if kind in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
+        # Der Doppelklick zählt als Druck: Qt schickt Druck, Loslassen,
+        # Doppelklick, Loslassen — das Kästchen schaltet dabei zweimal, und
+        # die Beschriftung soll nicht auf ihrer Hälfte anders antworten.
+        presses = (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick)
+        if kind in (*presses, QEvent.Type.MouseButtonRelease):
             button = getattr(event, "button", None)
             if button is None or button() != Qt.MouseButton.LeftButton:
                 return super().eventFilter(watched, event)
-            if kind == QEvent.Type.MouseButtonPress:
+            if kind in presses:
                 self._caption_pressed = True
             else:
-                pressed = getattr(self, "_caption_pressed", False)
+                pressed = self._caption_pressed
                 self._caption_pressed = False
+                # Losgelassen wird über der Beschriftung — wer mit gehaltener
+                # Taste hinausfährt, hat es sich anders überlegt, wie am
+                # Kästchen selbst (``hitButton``) und an jedem Knopf von Qt.
+                position = getattr(event, "position", None)
+                inside = (
+                    position is not None
+                    and isinstance(watched, QWidget)
+                    and watched.rect().contains(position().toPoint())
+                )
                 # Der Weg über ``click`` und nicht über ``toggle``: Ein
                 # gesperrter Haken bleibt gesperrt, und ``clicked`` kommt mit.
-                if pressed and self.isEnabled():
+                if pressed and inside and self.isEnabled():
                     self.click()
                     return True
         return super().eventFilter(watched, event)
 
 
-def caption_toggles(caption: QWidget | None, box: QCheckBox) -> None:
+def caption_toggles(caption: QWidget | None, box: RowCheckBox) -> None:
     """Macht die Beschriftung einer Hakenzeile anklickbar.
 
     ``None`` ist erlaubt — ``QFormLayout.labelForField`` gibt es für Zeilen
     über beide Spalten zurück, und die haben keine Beschriftung. Der Filter
-    ist der Haken selbst (:class:`RowCheckBox`); ein nackter ``QCheckBox``
-    bekommt nur den Zeiger, denn er kennt den Filter nicht.
+    ist der Haken selbst, deshalb nimmt die Signatur nur :class:`RowCheckBox`:
+    Ein nackter ``QCheckBox`` bekäme den Zeigefinger, ohne dass ein Klick auf
+    das Wort etwas täte — und mypy fängt die Stelle, die ihn das nächste Mal
+    so baut.
     """
     if caption is None:
         return
-    if isinstance(box, RowCheckBox):
-        caption.installEventFilter(box)
+    caption.installEventFilter(box)
     caption.setCursor(Qt.CursorShape.PointingHandCursor)
 
 

@@ -1371,7 +1371,7 @@ class FilamentOverrideDialog(QDialog):
                     label.setToolTip(note)
                     label.setStatusTip(note)
                 form.addRow(label, editor)
-                if isinstance(editor, QCheckBox):
+                if isinstance(editor, RowCheckBox):
                     caption_toggles(label, editor)
             box_layout.addWidget(body)
             box.toggled.connect(body.setVisible)
@@ -4763,7 +4763,7 @@ class PrintSettingsDialog(QDialog):
         """Beschriftung und Feld in eine Zeile — bei einem Haken antwortet beides."""
         label, editor = self._label(field), self._editor(field)
         form.addRow(label, editor)
-        if isinstance(editor, QCheckBox):
+        if isinstance(editor, RowCheckBox):
             caption_toggles(label, editor)
 
     def _label(self, field: Field) -> QLabel:

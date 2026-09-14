@@ -528,3 +528,38 @@ def test_field_docstrings_are_german(path: Path) -> None:
         if len(text) >= 25 and reads_as_english(text)
     ]
     assert not offenders, "englische Feld-Docstrings:" + chr(10) + chr(10).join(offenders)
+
+
+def test_labels_do_not_name_the_mouse_event_type() -> None:
+    """Ein ungenutzter Import riss ``tests/test_filament_picker.py`` —
+    deterministisch, 0xc0000374 im ``gc.collect`` des Teardowns.
+
+    Bisektiert am 14.09.2026 in einem Scratch-Baum bis auf eine Zeile:
+    ``from PySide6.QtGui import QMouseEvent`` in ``app/ui/labels.py``, und
+    zwar ohne dass jemand den Namen benutzte; ``QCheckBox`` und ``QEvent``
+    daneben waren unschuldig. Ein Ereignisfilter fragt seither den Typ und
+    liest ``button()`` über ``getattr`` ab.
+
+    Die Reichweite ist der Prozess, nicht das Symbol: ``app/ui/viewport.py``
+    importiert und benutzt ``QMouseEvent`` und reißt nicht. Gehalten wird
+    deshalb genau diese eine Datei — in jeder Schreibweise, als Import, als
+    Name und als Attribut über ``QtGui``, und über den Syntaxbaum statt über
+    den Text, denn der Kommentar in ``labels.py`` nennt den Namen. Hier und
+    nicht in der Fensterdatei, weil der Wächter kein Qt braucht und diese
+    Datei vor jedem Commit an ``app/`` läuft (``.githooks/pre-commit``).
+    """
+    source = PACKAGE_DIR / "ui" / "labels.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    named = [
+        f"Zeile {node.lineno}"
+        for node in ast.walk(tree)
+        if (isinstance(node, ast.Name) and node.id == "QMouseEvent")
+        or (isinstance(node, ast.Attribute) and node.attr == "QMouseEvent")
+        or (
+            isinstance(node, (ast.Import, ast.ImportFrom))
+            and any(alias.name == "QMouseEvent" for alias in node.names)
+        )
+    ]
+    assert not named, "labels.py nennt QMouseEvent — siehe RowCheckBox.eventFilter: " + ", ".join(
+        named
+    )

@@ -879,17 +879,18 @@ Variante nicht kennt, und tauscht die Beschreibung. Die Werte beim Anwenden zu
 filtern genügt nicht — was stehen bleibt, verspricht eine Wirkung.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
-**Ein Feld ohne Wirkung sagt es.** Eine Nummer kleiner als der Umschalter:
-*Fläche* in „Relief auflegen" gilt nur, solange *Auflegen* auf „Auf eine
-Fläche" steht, und die Operation übergeht den Wert sonst wortlos. Solche
-Abhängigkeiten stehen in `DEPENDENT_FIELDS` (`app/ui/op_dialog.py`), nicht als
-Sonderfall im Aufbau. Das Feld wird **grau und begründet**, nicht unsichtbar —
-verschwinden darf nur, was die gewählte Variante gar nicht kennt; wer eine
-Zeile vermisst, sucht sie.
+**Ein Feld ohne Wirkung steht nicht da.** Eine Nummer kleiner als der
+Umschalter: *Fläche* in „Relief auflegen" gilt nur, solange *Auflegen* auf
+„Auf eine Fläche" steht, und die Operation übergeht den Wert sonst wortlos.
+Die Zeile verschwindet, bis die Bedingung gilt, und bleibt dahinter gesperrt
+und begründet — die Entscheidung vom 14.09.2026 (RM-171) steht oben unter
+„Und was gerade nichts tut, steht nicht da". Bis dahin stand sie grau da, mit
+dem Argument „wer eine Zeile vermisst, sucht sie"; der Preis waren vier tote
+Zeilen im häufigsten Fall.
 
 **Die Angabe steht am Parameter** (`ParamSpec.depends_on`), nicht in einer
 Tabelle der Oberfläche: Dieselbe Auskunft brauchen vier Oberflächen. Der Dialog
-graut aus und begründet, das Handbuch schreibt die Bedingung in die
+blendet aus, sperrt und begründet, das Handbuch schreibt die Bedingung in die
 Parametertabelle, der Agent bekommt sie in der Werkzeugbeschreibung, die
 Kommandozeile liest dasselbe `json_schema`.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
@@ -1029,7 +1030,8 @@ Klick landete.
 
 Also: In einer Formularzeile ist ein Haken ein `labels.RowCheckBox` (das
 ganze Feld trifft), und seine Beschriftung bekommt `labels.caption_toggles`
-(ein Klick auf das Wort schaltet). Vier Bauorte hatten den nackten
+(ein Klick auf das Wort schaltet; wer mit gehaltener Taste hinausfährt und
+daneben loslässt, schaltet nichts — wie am Kästchen selbst). Vier Bauorte hatten den nackten
 `QCheckBox`: Operationsdialog, Merkmalfenster, Druckeinstellungen (zweimal).
 `tests/test_operation_ui.py` prüft die Klickfläche an einer echten Zeile und
 die Bauart über alle `bool`-Parameter des Registers.
@@ -1042,9 +1044,13 @@ und `tests/test_filament_picker.py` riss danach deterministisch mit
 einem Scratch-Worktree bis auf **eine Zeile**: der ungenutzte Import allein
 reißt; `QCheckBox` und `QEvent` daneben nicht. Ein PySide-Riss in der
 Typregistrierung, kein Fehler im eigenen Code — und trotzdem unsere Regel:
-Ein Ereignisfilter fragt `event.type()` und liest `button()` über `getattr`;
-`test_labels_do_not_import_the_mouse_event_type` hält es über den Syntaxbaum
-fest.
+Ein Ereignisfilter fragt `event.type()` und liest `button()` über `getattr`.
+Die Reichweite der Lehre ist der Prozess, nicht das Symbol: `viewport.py`
+importiert und benutzt `QMouseEvent` und reißt nicht. Gehalten wird deshalb
+genau diese eine Datei, in jeder Schreibweise:
+`test_labels_do_not_name_the_mouse_event_type` in
+`tests/test_language_rules.py` liest den Syntaxbaum — Import, Name, Attribut —
+und läuft vor jedem Commit an `app/`.
 
 **Und was eine Vorschau nicht zeigen kann, sagt sie.** Über drei Lagen stand
 dasselbe Band „Vorschau — noch nicht übernommen": über einer Bohrung, über

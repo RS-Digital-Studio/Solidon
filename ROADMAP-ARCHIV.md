@@ -27757,8 +27757,8 @@ Aus der Sonde über alle 110 Operationen vom 13.09.2026
 (`konzepte/konzept-einfache-bedienung-2026-09.md`): Drei Registerpunkte, am
 14.09.2026 gebaut, mit Roberts Auftrag „dann leg los, das grundlegende
 konzept sollte aber nicht geändert werden" — und alle drei sind Optimierung am
-Bestand. Der vierte Punkt aus derselben Sonde, RM-171, ist eine Entscheidung
-und steht weiter in `ROADMAP.md`.
+Bestand. Der vierte Punkt aus derselben Sonde, RM-171, war eine Entscheidung;
+Robert traf sie am selben Tag („Ausblenden"), und sie steht unten bei den dreien.
 
 <a id="rm-168"></a>
 
@@ -27834,6 +27834,37 @@ und steht weiter in `ROADMAP.md`.
   Nachweis: `tests/test_missing_ops.py::test_hollowing_an_open_hull_names_the_hull_and_offers_repair`
   — Fehler, Satz, Handlung, Ursache in der Kette, und die Reparatur, nach der es geht.
 
+<a id="rm-171"></a>
+
+- [x] **RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen.** *Grundform hochziehen* nutzte
+  alle acht Felder der Vorderseite; vier davon (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für
+  Lochkreis und Lochraster und standen bei einem Rechteck ausgegraut da — die Hälfte der
+  Vorderseite ohne Wirkung. Die alte Regel („wer sie verschwinden sähe, suchte sie") war
+  begründet; die Wahl war Roberts.
+
+  **Entschieden am 14.09.2026: ausblenden** („Ausblenden"). `_couple_dependent_fields` nimmt eine
+  Zeile, deren `depends_on` nicht gilt, aus dem Formular (`setRowVisible`) und bringt sie mit der
+  Bedingung wieder; gesperrt und begründet bleibt sie dahinter, damit ein verborgenes Feld nie den
+  Fokus bekommt. Der Dialog wächst und schrumpft mit den Zeilen — nur wenn sich eine bewegt hat,
+  denn die Kopplung läuft bei jedem Tastendruck. Gemessen: Ein Rechteck zeigt vorn Grundform,
+  Länge, Breite, Höhe; ein Lochraster Grundform, Länge, Höhe, Spalten, Zeilen, Loch-Ø.
+
+  Nachweis: `tests/test_operation_ui.py::test_a_rectangle_shows_only_the_rows_a_rectangle_has`
+  und `test_a_field_without_effect_says_why` (Relief: die Fläche kommt mit „Auf eine Fläche").
+
+  **Review am selben Tag, nachgezogen:** `adjustSize` deckelte den Dialog bei zwei Dritteln der
+  Bildschirmhöhe und kappte eine aufgeklappte Rückseite (*Bohrung setzen*, offscreen 800 hoch:
+  aufgeklappt 552, *Langloch* an und wieder aus 533 — neunzehn Punkte unter dem Inhalt). Die Höhe
+  folgt jetzt dem Inhalt über `_resize_to_content`, einen Ereignisumlauf nach dem Umschalten, weil
+  der Größenwunsch die eben versteckten Zeilen der Rückseite sonst noch mitzählt (gemessen 552 /
+  523 / 552). Dazu am Haken: Loslassen neben der Beschriftung schaltet nicht, ein Doppelklick
+  schaltet auf Wort und Kästchen gleich oft (je zweimal), `caption_toggles` nimmt nur noch
+  `RowCheckBox`, `focus_field` meldet für eine verborgene Zeile kein „erledigt", und der Wächter
+  gegen `QMouseEvent` steht in `tests/test_language_rules.py`
+  (`test_labels_do_not_name_the_mouse_event_type`), wo er vor jedem Commit läuft und jede
+  Schreibweise fängt — `viewport.py` importiert dasselbe Symbol und reißt nicht, die Lehre gilt
+  der einen Datei. Nachweis: `test_a_checkbox_row_answers_on_its_whole_width`.
+
 ### Dieselbe Sonde am Merkmalfenster (14.09.2026)
 
 Nach den Dialogen der zweite Bedienort: je Merkmalsart des Korpus jede Handlung des
@@ -27860,24 +27891,6 @@ Was die Sonde sonst zeigte und was bleibt: Ein Übernehmen mit unveränderten We
 Schritt an, der nichts ändert (alle *Verschieben*- und *Ändern*-Zeilen) — kein Fehler, ein
 Undo-Schritt ohne Wirkung. Fläche, Randring und Ring tragen im Fenster keine Handlungen; ihre
 Wege sind Kontextmenü und Menü.
-
-<a id="rm-171"></a>
-
-- [x] **RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen.** *Grundform hochziehen* nutzte
-  alle acht Felder der Vorderseite; vier davon (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für
-  Lochkreis und Lochraster und standen bei einem Rechteck ausgegraut da — die Hälfte der
-  Vorderseite ohne Wirkung. Die alte Regel („wer sie verschwinden sähe, suchte sie") war
-  begründet; die Wahl war Roberts.
-
-  **Entschieden am 14.09.2026: ausblenden** („Ausblenden"). `_couple_dependent_fields` nimmt eine
-  Zeile, deren `depends_on` nicht gilt, aus dem Formular (`setRowVisible`) und bringt sie mit der
-  Bedingung wieder; gesperrt und begründet bleibt sie dahinter, damit ein verborgenes Feld nie den
-  Fokus bekommt. Der Dialog wächst und schrumpft mit den Zeilen — nur wenn sich eine bewegt hat,
-  denn die Kopplung läuft bei jedem Tastendruck. Gemessen: Ein Rechteck zeigt vorn Grundform,
-  Länge, Breite, Höhe; ein Lochraster Grundform, Länge, Höhe, Spalten, Zeilen, Loch-Ø.
-
-  Nachweis: `tests/test_operation_ui.py::test_a_rectangle_shows_only_the_rows_a_rectangle_has`
-  und `test_a_field_without_effect_says_why` (Relief: die Fläche kommt mit „Auf eine Fläche").
 
 ## Ein freier Fügeweg wird gesagt (14.09.2026)
 

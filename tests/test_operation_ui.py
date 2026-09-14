@@ -1584,6 +1584,9 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     editor = dialog._editors["at_feature"]
     label = dialog._rows["at_feature"].labelForField(editor)
     assert not editor.isEnabled(), "von oben aufgelegt braucht keine Fläche"
+    # Der Grund steht am Feld; sichtbar ist er nicht, solange die Zeile fort
+    # ist. Die Zusicherung gilt dem Satz, den die Zeile beim Wiederkommen
+    # gegen ihren eigenen tauscht — unten.
     assert "Auflegen" in editor.toolTip(), f"ohne Grund: {editor.toolTip()!r}"
     assert editor.isHidden() and label is not None and label.isHidden(), "die Zeile ist fort"
 
@@ -1614,18 +1617,25 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(window: MainWindow) -> 
             if dialog._rows[name] is dialog._front and not editor.isHidden()
         ]
         assert front == ["shape", "length", "width", "height"], front
+        # Fort heißt nicht weg: Die Operation bekommt jeden Wert, auch den
+        # der versteckten Zeilen — und der Verlauf öffnet den Schritt damit.
+        hidden = {"count", "columns", "rows", "hole_diameter", "corners"}
+        assert hidden <= set(dialog.values()), "die versteckten Zeilen liefern weiter"
+        assert all(dialog._editors[name].isHidden() for name in hidden), "und sie sind fort"
 
         shape = dialog._editors["shape"]
         assert isinstance(shape, QComboBox)
         tall_before = dialog.height()
         shape.setCurrentIndex(shape.findData("hole_grid"))
+        # Die Höhe zieht einen Ereignisumlauf später nach (``_refit``).
+        QApplication.processEvents()
         front = [
             name
             for name, editor in dialog._editors.items()
             if dialog._rows[name] is dialog._front and not editor.isHidden()
         ]
         # Die Breite geht: Ein Lochraster hat keine — dafür kommen seine drei.
-        assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"]
+        assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"], front
         assert dialog.height() > tall_before, "der Dialog wächst mit seinen Zeilen"
     finally:
         dialog.reject()
@@ -4006,10 +4016,35 @@ def test_a_checkbox_row_answers_on_its_whole_width(qt_app: QApplication) -> None
         )
         assert caption.cursor().shape() == Qt.CursorShape.PointingHandCursor
 
+        # Gedrückt auf der Beschriftung, losgelassen daneben: kein Klick —
+        # wie am Kästchen selbst und an jedem Knopf von Qt.
+        QTest.mousePress(caption, Qt.MouseButton.LeftButton)
+        QTest.mouseRelease(caption, Qt.MouseButton.LeftButton, pos=QPoint(-10, -10))
+        assert toggles == [True, False], "wer hinausfährt, hat es sich anders überlegt"
+
         # Ein gesperrter Haken bleibt gesperrt, auch über die Beschriftung.
         box.setEnabled(False)
         QTest.mouseClick(caption, Qt.MouseButton.LeftButton)
         assert toggles == [True, False]
+
+        # Ein Doppelklick schaltet auf beiden Hälften der Zeile gleich oft —
+        # das Kästchen zählt ihn als zweiten Druck, die Beschriftung also auch.
+        # Die echte Folge ist Druck, Loslassen, Doppelklick, Loslassen;
+        # ``QTest.mouseDClick`` allein schickt am Widget nur das dritte
+        # Ereignis, und danach schaltet nicht einmal das Kästchen.
+        def double_click(target: QWidget, at: QPoint) -> int:
+            before = len(toggles)
+            QTest.mousePress(target, Qt.MouseButton.LeftButton, pos=at)
+            QTest.mouseRelease(target, Qt.MouseButton.LeftButton, pos=at)
+            QTest.mouseDClick(target, Qt.MouseButton.LeftButton, pos=at)
+            QTest.mouseRelease(target, Qt.MouseButton.LeftButton, pos=at)
+            return len(toggles) - before
+
+        box.setEnabled(True)
+        on_box = double_click(box, QPoint(box.width() - 4, box.height() // 2))
+        assert on_box == 2, "das Kästchen schaltet beim Doppelklick zweimal"
+        on_caption = double_click(caption, QPoint(caption.width() // 2, caption.height() // 2))
+        assert on_caption == on_box, "die Beschriftung antwortet wie das Kästchen"
     finally:
         dialog.reject()
         dialog.deleteLater()
