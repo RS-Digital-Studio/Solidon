@@ -735,7 +735,7 @@ braucht und nicht das Register:
 
 Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
 Die Werkzeugzeile hat sieben von acht Plätzen belegt, seit das Bemalen mit dem
-Punkt-Radius-Pinsel fiel — Färben läuft über das Kontextmenü am Merkmal. Der
+Punkt-Radius-Pinsel fiel — Färben läuft über das Auswahlfenster am Merkmal. Der
 achte Platz ist keine Einladung: Eine Funktion, die eine Leiste will,
 verdrängt eine andere, oder sie ist keine wert (`MAX_TOOLS` in
 `tests/test_interface_limits.py`).
@@ -840,7 +840,7 @@ und hat sie eine Kachel im Katalog.**
 
 **Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.** `drill_hole`
 und `drill_brep_hole` tragen denselben Titel; die Menüleiste legt das Paar über
-`MENU_TWINS` zusammen, und das Kontextmenü am Merkmal muss dieselbe
+`MENU_TWINS` zusammen, und das Auswahlfenster am Merkmal muss dieselbe
 Zusammenlegung kennen. **Dieselbe Frage, zwei Rechnungen** — genau der Grund,
 aus dem die Menütiefe in den Kern gewandert ist.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
@@ -1043,7 +1043,7 @@ bekommt:
 
 | Weg | Ort an der Oberfläche |
 |---|---|
-| Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
+| Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
 | Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
 | Weg 3 — generieren | Chat und Generierungsdialog |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das, bevor man klickt), Menü *Ändern* |

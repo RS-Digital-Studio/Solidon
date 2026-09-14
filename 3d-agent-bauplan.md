@@ -202,8 +202,12 @@ Leere oder zugeklappte Bereiche geben ihren Platz frei.
 
 - **Befehlspalette** über eine Taste: alles aus dem Register per Suche
   erreichbar, mit Kürzel daneben — so lernt man die Kürzel nebenbei.
-- **Kontextmenü am Feature**: Klick auf eine Bohrung bietet genau die Ops an,
-  die auf Bohrungen anwendbar sind. Der kürzeste Weg vom Sehen zum Tun.
+- **Auswahlfenster am Merkmal**: Klick auf eine Bohrung bietet genau die Ops
+  an, die auf Bohrungen anwendbar sind — rechts im Auswahlfenster, das nach
+  dem Klick offen bleibt, nicht in einem Menü, das zufällt. Der kürzeste Weg
+  vom Sehen zum Tun. Der Rechtsklick führt keine Operation aus; er zeigt, was
+  es nur dort gibt: den Schritt, aus dem die Stelle stammt, das Zeichnen auf
+  dieser Fläche, das Ausblenden des Körpers.
 - **Bausteinkatalog mit Vorschaubildern** statt einer Namensliste. Eine
   Bibliothek, die man nicht sieht, existiert für den Nutzer nicht.
 - **Der Chat ist auch ein Suchfeld.** „Wie mache ich das Loch größer?"
@@ -659,7 +663,7 @@ Eine Operation wird genau einmal deklariert; alles Weitere wird erzeugt.
     reversible=True,
     consumes=1,
     produces=1,
-    applies_to=["hole"],  # steuert das Kontextmenü am Feature
+    applies_to=["hole"],  # steuert das Auswahlfenster am Merkmal
     touches_features=True,
     deterministic=False,  # Boolesche Rückfallkette kann Jitter benötigen
     doc=_("Ändert den Durchmesser einer erkannten Bohrung."),
@@ -670,7 +674,7 @@ def resize_hole(ctx: OpContext) -> OpResult: ...
 | Ausgabe | Woraus |
 |---|---|
 | Menüeintrag und Dialog | `title`, `category`, Parameterschema |
-| Kontextmenü am Feature | `applies_to` |
+| Auswahlfenster am Merkmal | `applies_to` |
 | Befehlspalette und Kürzel | `title`, `doc`, `shortcut` |
 | Kommandozeilen-Befehl | `name`, Parameterschema |
 | Tool-Schema für den Agenten | `name`, `doc`, JSON-Schema aus `params` |
@@ -1165,8 +1169,8 @@ Erkannte Merkmale tragen übersetzte, verständliche Namen und Maße, etwa
 „Bohrung 3 · Ø4,2 mm“ oder „Oberseite“. Technische Kennungen bleiben für
 Referenzen und Rückverfolgung erhalten, sind aber kein Ersatz für den
 sichtbaren Namen. Merkmale werden beim Überfahren hervorgehoben und beim
-Anklicken ausgewählt; sie dienen als Referenz im Chat und öffnen ein
-Kontextmenü mit den passenden Ops (§10, `applies_to`).
+Anklicken ausgewählt; sie dienen als Referenz im Chat, und rechts im
+Auswahlfenster stehen die passenden Ops (§10, `applies_to`).
 
 Diese Brücke zwischen Maus und Sprache ist die wichtigste Einzelfunktion der
 Anwendung: Der Nutzer muss keine Feature-Namen kennen, er zeigt hin.
@@ -1179,9 +1183,11 @@ einen Klick, nicht zwei; ein anderer Körper fängt von vorn an. Escape geht ein
 Stufe zurück.
 
 **Der Rechtsklick geht nicht gestuft**, und das folgt aus der Zusage darüber:
-Wenn das Kontextmenü am Merkmal der Ort für Weg 1 ist — indem man auf die
-Stelle zeigt, die stört —, dann darf es nicht an einer Vorbedingung hängen, die
-niemand kennt. Er trifft immer das Genaueste unter dem Zeiger.
+Wer auf die Stelle zeigt, die stört, darf nicht an einer Vorbedingung hängen,
+die niemand kennt. Er trifft immer das Genaueste unter dem Zeiger — und führt
+keine Operation aus: Die stehen im Auswahlfenster, sobald die Stelle gewählt
+ist. Das Menü zeigt, was es nur dort gibt — den Schritt, aus dem die Stelle
+stammt, das Zeichnen auf dieser Fläche, das Ausblenden des Körpers.
 
 **Solange ein Operationsdialog nach einem Merkmal fragt, gibt es keine Stufen.**
 Ein Klick ist dann eine Antwort und keine Navigation.

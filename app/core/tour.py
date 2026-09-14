@@ -307,8 +307,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="tree",
                 text=_(
                     "Setzen Sie selbst einen Baustein: den Halter im Objektbaum "
-                    "anklicken, dann mit der rechten Maustaste *Baustein "
-                    "einsetzen* — der Katalog zeigt jeden mit Bild."
+                    "anklicken, dann rechts im Auswahlfenster *Bausteine* — der "
+                    "Katalog zeigt jeden mit Bild."
                 ),
                 done=_parts_inserted(4),
             ),
@@ -347,8 +347,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="viewport",
                 text=_(
                     "Maße entstehen danach als eigene Schritte, nicht durch Vermessen "
-                    "des Netzes: klicken Sie eine Fläche an, dann "
-                    "Rechtsklick → Bohrung setzen."
+                    "des Netzes: klicken Sie eine Fläche an, dann rechts im "
+                    "Auswahlfenster *Bohrung setzen*."
                 ),
                 done=_op_present("drill_hole"),
             ),

@@ -1389,7 +1389,7 @@ class FilamentPanel(QWidget):
     * **Im Projekt** — was die Körper tragen, mit Farbe, Name und der Zahl
       der Körper. Die Zeile öffnet nur Druckwerte dieser Spule. Farbe oder
       Zuordnung zu ändern hieße dagegen, Geometrie außerhalb einer Operation
-      anzufassen (Regel 2); der Weg dorthin ist das Kontextmenü am Merkmal,
+      anzufassen (Regel 2); der Weg dorthin ist das Auswahlfenster am Merkmal,
       und der Hinweis unter der Liste sagt es.
     * **Im Regal** — die Vorwahl (:mod:`app.core.knowledge.filaments`), also
       die Spulen, die wirklich dastehen. Sie gehört keinem Projekt, hängt an
@@ -1659,7 +1659,7 @@ class FilamentPanel(QWidget):
                 item.setToolTip(
                     tr(
                         "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
-                        "über das Kontextmenü am Merkmal."
+                        "rechts im Auswahlfenster, sobald er gewählt ist."
                     )
                 )
                 self.list.addItem(item)

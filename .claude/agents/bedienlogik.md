@@ -82,7 +82,7 @@ Ablauf wird daran gemessen, ob er einen der vier verlängert oder verkürzt.
 Schritt für Schritt, in der Reihenfolge, in der der Nutzer ihn erlebt. Je
 Schritt: **was er sieht**, **was er tut**, **was daraufhin passiert**. Dazu:
 
-- **Der Einstieg**: Wie findet er das überhaupt? Kontextmenü am Feature,
+- **Der Einstieg**: Wie findet er das überhaupt? Auswahlfenster am Merkmal,
   Befehlspalette, Katalog mit Vorschaubild, Chat als Suchfeld — eine Funktion,
   die man nicht findet, existiert nicht.
 - **Die Vorgaben**: Was steht schon richtig da, wenn der Dialog aufgeht? Vorn

@@ -27916,6 +27916,24 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     ist eine Frage an beide Stellen und gehört zu RM-084; *Rasterweite* als Feldname hinter der
     Klappe erklärt sich am Satz daneben. Die Regel dazu steht in `oberflaeche.md` („Ein Wort,
     das nur ein Konstrukteur kennt …"); Nachweis der beiden Richtungen: `test_translations`.
+  - **Roberts Entscheidungen zu den zwei offenen Fragen** (14.09.2026): (1) den Bauplan
+    nachziehen — §2.6 nannte das *Kontextmenü am Feature* als kürzesten Weg vom Sehen zum Tun,
+    die Anwendung führt die Operationen seit dem 11.09.2026 im Auswahlfenster; (2) *Quader
+    anlegen* und die anderen Grundkörper bieten ihre Maße als Projektparameter an; (3) danach
+    RM-172. Die Einheiten dazu folgen hier.
+  - **Der Bauplan nannte ein Menü, das keine Operation mehr ausführt** (Entscheidung 1). §2.6
+    („Kontextmenü am Feature"), die Registertabelle in §10, §18.5 („öffnen ein Kontextmenü mit
+    den passenden Ops") und die Zusage zum Rechtsklick sagen jetzt, was das Handbuch seit dem
+    11.09.2026 sagt: Die Operationen stehen rechts im Auswahlfenster, das nach dem Klick offen
+    bleibt; der Rechtsklick zeigt, was es nur dort gibt — den Schritt, aus dem die Stelle
+    stammt, das Zeichnen auf der Fläche, das Ausblenden des Körpers. Mitgezogen sind zwei
+    Tourtexte, die dem Neuling noch „mit der rechten Maustaste *Baustein einsetzen*" und
+    „Rechtsklick → Bohrung setzen" vorgaben — beide führten ins Leere, denn weder der Objektbaum
+    noch die Ansicht haben diese Einträge im Menü (der Baum trägt ein `catalogRequested`, das
+    nichts sendet) —, der Tooltip im Filamentlager („über das Kontextmenü am Merkmal"), die
+    Weg-1-Zeile und zwei Sätze in `oberflaeche.md`, der bedienlogik-Agent und der Skill
+    `neue-op` samt erzeugten Spiegeln. Drei Schlüssel neu, drei hinaus. Nachweis:
+    `test_plan_references`, `test_tour`, `test_translations`, `test_agent_mirror`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
