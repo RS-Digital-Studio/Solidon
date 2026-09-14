@@ -76,3 +76,14 @@ Urheber. Es war Roberts **Codex-Sitzung**, die Funde ihres eigenen Reviews
 behob. Codex erscheint in `ListAgents` nicht; die einzige Spur ist
 `git status`. Wer fremde Änderungen sieht, die keine gelistete Sitzung hält,
 fragt Robert, bevor er einen Agenten verdächtigt oder die Datei anfasst.
+
+**Nachtrag 14.09.2026 — der Hunk-Zähler misst einen Zeitpunkt.** Ich hatte
+`ROADMAP.md` auf Hunks geprüft (zwei, beide meine), dann die Commit-Nachricht
+geschrieben, den Index gefüllt — und dazwischen schrieb 3d-druck-66 ihren
+RM-079-Block hinein. Der ging in 48114114 unter meinem Namen hinaus. Die
+Prüfung war richtig und trotzdem wertlos, weil zwischen ihr und dem
+`update-index` Minuten lagen. Geteilte Dateien — und `ROADMAP.md`,
+`ROADMAP-ARCHIV.md`, die Kataloge, `changelog/*.md` sind in einem Baum mit
+zwei Sitzungen **immer** geteilt — gehen deshalb nur noch als Blob aus HEAD
+plus eigener Ersetzung in den Index, nie aus dem Arbeitsbaum, auch wenn der
+Zähler gerade „nur meine" sagt.
