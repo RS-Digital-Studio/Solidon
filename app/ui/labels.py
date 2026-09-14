@@ -591,11 +591,39 @@ class RowCheckBox(QCheckBox):
     Hier antwortet das ganze Feld. Die Beschriftung links davon hängt
     :func:`caption_toggles` dazu — zusammen ist die Zeile so breit anklickbar
     wie die Zahlenfelder darüber und darunter.
+
+    **Und so hoch.** Gemessen am 14.09.2026 auf der echten Plattform mit dem
+    Stylesheet der Anwendung: Die Zahlenfelder des Aushöhlen-Dialogs sind 31
+    Punkte hoch, der Haken ohne Text 12 — ein Klick acht Punkte über oder
+    unter seiner Mitte traf nichts (``childAt``: „nichts"), obwohl er in der
+    Zeile lag, die der Kunde meinte. Das ist der Rest von „ab und zu": nicht
+    die Breite, die Höhe. Der Haken meldet deshalb die Höhe eines
+    Eingabefelds unter dem geltenden Stil (:meth:`sizeHint`), gemessen an
+    einem Drehfeld statt geraten; das Kästchen zeichnet der Stil mittig.
     """
 
     #: Ob die Beschriftung gerade gedrückt ist — gesetzt beim Druck, gelesen
     #: und gelöscht beim Loslassen.
     _caption_pressed: bool = False
+    #: Die gemessene Höhe eines Eingabefelds — je Haken einmal, bis der Stil
+    #: wechselt.
+    _field_height: int | None = None
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        base = super().sizeHint()
+        height = self._field_height
+        if height is None:
+            height = self._field_height = input_field_height(self)
+        return QSize(base.width(), max(base.height(), height))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        base = super().minimumSizeHint()
+        return QSize(base.width(), max(base.height(), self.sizeHint().height()))
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
+        if event.type() in (QEvent.Type.StyleChange, QEvent.Type.FontChange):
+            self._field_height = None
+        super().changeEvent(event)
 
     def hitButton(self, pos: Any) -> bool:  # noqa: N802 — Qt-Name
         return self.rect().contains(pos)
@@ -648,6 +676,23 @@ class RowCheckBox(QCheckBox):
                     self.click()
                     return True
         return super().eventFilter(watched, event)
+
+
+def input_field_height(reference: QWidget) -> int:
+    """Die Höhe, die ein Eingabefeld unter dem geltenden Stil bekommt.
+
+    Gemessen an einem Zahlenfeld der Anwendung (:class:`NumberSpin`), das
+    kurz als Kind des fragenden Widgets entsteht und gleich wieder geht —
+    nicht aus Padding und Rahmen des Stylesheets nachgerechnet, denn die
+    Summe hängt an der Schrift und am Stil, und eine nachgerechnete Zahl
+    stimmt genau einmal.
+    """
+    probe = NumberSpin(reference)
+    probe.hide()
+    probe.ensurePolished()
+    height = int(probe.sizeHint().height())
+    probe.deleteLater()
+    return height
 
 
 def caption_toggles(caption: QWidget | None, box: RowCheckBox) -> None:

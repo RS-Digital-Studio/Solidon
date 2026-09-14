@@ -4035,6 +4035,14 @@ def test_a_checkbox_row_answers_on_its_whole_width(qt_app: QApplication) -> None
         box.toggled.connect(toggles.append)
         assert not box.isChecked()
 
+        # **Und so hoch wie die Zahlenfelder daneben.** Gemessen am 14.09.2026
+        # auf der echten Plattform mit Stylesheet: Zahlenfeld 31 Punkte, Haken
+        # 12 — ein Klick acht Punkte über oder unter der Zeile traf nichts.
+        QApplication.processEvents()
+        wall = dialog._editors["wall"]
+        assert box.height() >= wall.height() - 2, (box.height(), wall.height())
+        assert box.sizeHint().height() >= wall.sizeHint().height() - 2
+
         # Mitte des Feldes — weit rechts vom Kästchen.
         QTest.mouseClick(
             box, Qt.MouseButton.LeftButton, pos=QPoint(box.width() - 4, box.height() // 2)

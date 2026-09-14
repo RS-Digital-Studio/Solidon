@@ -62,6 +62,14 @@ Ein Klick in die Mitte des Feldes tat nichts, ein Klick auf „Oben öffnen"
 links davon auch nicht. Vier Stellen bauten den Haken so: Operationsdialog,
 Merkmalfenster, Druckeinstellungen (zweimal).
 
+Dazu die Höhe, gemessen erst am 14.09.2026 auf der echten Plattform mit dem
+Stylesheet der Anwendung (offscreen gibt es keines): Die Zahlenfelder des
+Aushöhlen-Dialogs sind **31 Punkte** hoch, der Haken ohne Text war **12** —
+ein Klick acht Punkte über oder unter seiner Mitte traf nichts, obwohl er in
+der Zeile lag. Seither meldet `RowCheckBox` die Höhe eines Eingabefelds; die
+Sonde (`probe_hollow_rows`, `childAt` von −14 bis +14 Punkten) trifft an
+jeder Stelle den Haken.
+
 Dazu kam die stillere Hälfte: Zwischen Klick und neuem Bild liegen 300 ms
 Entprellung plus die Rechnung — an einem großen Netz Sekunden —, und solange
 stand das alte Bild unter dem alten Band. Ein Haken, dessen Wirkung nach drei

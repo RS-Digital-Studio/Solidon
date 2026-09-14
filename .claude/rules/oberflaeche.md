@@ -1036,6 +1036,19 @@ daneben loslässt, schaltet nichts — wie am Kästchen selbst). Vier Bauorte ha
 `tests/test_operation_ui.py` prüft die Klickfläche an einer echten Zeile und
 die Bauart über alle `bool`-Parameter des Registers.
 
+**Und die Zeile ist so hoch wie ihre Nachbarn.** Die Breite war die eine
+Hälfte von „ab und zu"; die andere zeigte sich erst auf der echten Plattform
+mit dem Stylesheet (14.09.2026): Die Zahlenfelder des Aushöhlen-Dialogs sind
+31 Punkte hoch, der Haken ohne Text war 12 — `childAt` acht Punkte über oder
+unter seiner Mitte: „nichts". Wer nach Augenmaß in die Zeile klickte, traf in
+zwei von drei Fällen ins Leere. `RowCheckBox.sizeHint` meldet deshalb die
+Höhe eines Eingabefelds unter dem geltenden Stil (`labels.input_field_height`,
+an einem Drehfeld gemessen statt aus Padding und Rahmen nachgerechnet); das
+Kästchen zeichnet der Stil mittig. Offscreen sieht man den Unterschied nicht —
+dort gibt es kein Stylesheet und keine Schrift (siehe „Die Suite fährt ohne
+Stylesheet" in `tests.md`); die Sonde dazu fährt auf der echten Plattform mit
+`WA_DontShowOnScreen`.
+
 **Der Filter ist der Haken selbst, und `labels.py` importiert kein
 `QMouseEvent`.** Die erste Fassung hängte ein eigenes `QObject` als Filter an
 die Beschriftung und importierte `QMouseEvent` für den `isinstance`-Test —

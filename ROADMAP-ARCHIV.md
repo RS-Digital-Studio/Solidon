@@ -29,6 +29,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | 2026-09-14 | [Der Schlüsseldialog schließt sofort (14.09.2026)](#der-schlüsseldialog-schließt-sofort-14092026) |
 | 2026-09-14 | [Ein freier Fügeweg wird gesagt (14.09.2026)](#ein-freier-fügeweg-wird-gesagt-14092026) |
 | 2026-09-14 | [Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)](#drei-sackgassen-und-zwei-stumme-vorschauen-14092026) |
+| 2026-09-14 | [Einfach für Neulinge — die zweite Durchsicht (14.09.2026)](#einfach-für-neulinge--die-zweite-durchsicht-14092026) |
 | 2026-09-12 | [Was vor 0.4.1 zugegangen ist (12.09.2026)](#was-vor-041-zugegangen-ist-12092026) |
 | 2026-09-11 | [Sieben Befunde aus Roberts Fenster am Schriftzug (11.09.2026)](#sieben-befunde-aus-roberts-fenster-am-schriftzug-11092026) |
 | 2026-09-11 | [Hinter einen Halt kam jeder neue Schritt (11.09.2026)](#hinter-einen-halt-kam-jeder-neue-schritt-11092026) |
@@ -27751,6 +27752,33 @@ bleiben in dieser Datei.
 
   [Bisheriger Befund](#der-download-ordner-sammelt-jede-je-gebaute-fassung-30082026).
 
+
+## Einfach für Neulinge — die zweite Durchsicht (14.09.2026)
+
+Robert am 14.09.2026, denselben Auftrag noch einmal: „bei vielen Operationen fehlen noch
+Vorschau, bei Aushöhlen reagiert die Checkbox zum Öffnen ab und zu nicht, viele Operationen sind
+auch recht umständlich, die ganze App soll einfach für Kunden sein — das nochmal alles sauber
+durchgehen … mach es perfekt, und einfach für Neulinge, die kein CAD können, wie die ganze App
+schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinnerung.
+
+- **Die Vorschau, noch einmal über alle 110 Operationen** (Sonde vom 13.09., ein Prozess je
+  Kategorie): 79 Dialoge mit Vorschau, 9 ohne — alle neun mit einem Satz im Band, der den Grund
+  nennt —, 7 brauchen Quelle oder Editor, 5 haben keinen Dialog. Kein stummer Dialog mehr. Die
+  Sitzung 3d-druck-66 fährt dieselbe Sonde mit Szenen für die sieben übersprungenen und baut die
+  grobe Vorschaustufe; Vorschau und Band liegen seither dort.
+
+- **Der Haken, die zweite Hälfte von „ab und zu".** Am 13.09. war es die Breite (14 mal 14 in
+  einem Feld von 241 mal 14). Auf der echten Plattform mit dem Stylesheet der Anwendung, das
+  offscreen niemand sieht, zeigte sich die Höhe: Die Zahlenfelder des Aushöhlen-Dialogs sind 31
+  Punkte hoch, der Haken ohne Text war 12 — `childAt` acht Punkte über oder unter seiner Mitte:
+  „nichts". Wer nach Augenmaß in die Zeile klickte, traf in zwei von drei Fällen ins Leere.
+  `RowCheckBox.sizeHint` meldet seither die Höhe eines Eingabefelds unter dem geltenden Stil
+  (`labels.input_field_height`, an einem Drehfeld gemessen); gemessen danach: 261 mal 31, und
+  `childAt` trifft von −14 bis +14 Punkten den Haken. Auf der echten Plattform kippt der Haken
+  an Indikator, Zeilenmitte, Beschriftung links und Mitte; die Vorschau folgt an einem kleinen
+  Körper nach 0,4 s, an 2704 Dreiecken nach 0,4 bis 0,9 s, das Band sagt „wird gerechnet …"
+  dazwischen. Nachweis: `test_a_checkbox_row_answers_on_its_whole_width` (Höhe gegen das
+  Nachbarfeld), Sonde `probe_hollow_rows` und `probe_hollow_toggle2` auf der echten Plattform.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
