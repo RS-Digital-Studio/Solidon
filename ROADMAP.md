@@ -82,8 +82,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Suite mit festgehaltenem aktuellem Modell und vergleichbarer Referenz messen |
-| [RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen](#rm-069) | KI und Generatoren | Vergleichbare Suitequoten vor und nach der Schema-Verdichtung nachweisen |
-| [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warm-/Kaltstart, Antwortqualität und Schemakürzungen gemeinsam messen |
+| [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Quote und Kürzung sind gemessen (RM-173); offen sind Latenz auf ruhiger Karte, der Lauf ohne Denkblock und die gestufte Werkzeugauswahl als Entscheidung |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Zwei Wächter stehen, die Kürzung ist drin (Suite 20/39 → 24/39); offen sind der dritte Lauf ohne Denkblock, die Neumessung von `PROMPT_TOKENS` auf ruhiger Karte und drei Entscheidungen von Robert |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
@@ -1177,17 +1176,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-konzepte-nachrecherchiert-19082026).
 
-<a id="rm-069"></a>
-
-- [ ] **RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen.** Die frühere
-  Tokenmessung erreichte 24.161→19.641; der Umbau ist gebaut. Offen bleiben zwei vergleichbare
-  Agenten-Suite-Läufe vor und nach der Verdichtung mit demselben erreichbaren Modell und denselben
-  Referenzanfragen. Abnahme: Quote und Fehlfälle beider Läufe dokumentiert, keine ungeklärte
-  Verschlechterung. Zugang wird über die Anwendung oder Umgebung eingerichtet; heutige Tokenmessung
-  separat aktualisieren.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-chat-kontext-ist-nach-einem-objekt-zu-drei-vierteln-voll-30082026).
-
 <a id="rm-081"></a>
 
 - [ ] **RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen.** Die lokale Modellserie
@@ -1195,6 +1183,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Werkzeugschema erfassen, weitere Schemakürzungen gegen dieselben Referenzanfragen prüfen und die
   gestufte Werkzeugauswahl als Bedienentscheidung vorbereiten. Abnahme: Quote und Latenz aus
   demselben ruhigen Lauf samt GPU-Zustand; keine Qualitätsverschlechterung durch Kürzungen.
+
+  **Stand 15.09.2026, aus RM-173:** Die Quote ist zweimal gemessen (20/39 → 24/39 mit der
+  Kürzung), und die Kürzung hat nicht geschadet — aber unter Fremdlast, mit Modellstarts
+  zwischen 56 und 314 s, also ohne brauchbare Latenz. Ruhig gemessen (14.09., RM-054/RM-173):
+  22,9 s kalt und 2,3 s warm für den vollen Prompt, 18,7 s kalt für den gekürzten. Was
+  bleibt: ein ruhiger Lauf für Latenz und GPU-Zustand, das Ergebnis des Laufs ohne Denkblock
+  (484 und 847 Token Ausgabe je Schritt sind zum größten Teil Denkblock, bei 33 Token/s eine
+  halbe Minute), und die gestufte Werkzeugauswahl — die bleibt, was `AGENTS.md` sagt: eine
+  Auswahl, die Operationen aussortiert, wäre eine Betriebsart mit anderem Namen, und ob es
+  eine geben soll, entscheidet Robert.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#ollama-bis-zum-anschlag-31082026).
 

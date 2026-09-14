@@ -26,6 +26,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
+| 2026-09-15 | [Die Verhaltensabnahme der kompakten Schemata (15.09.2026)](#die-verhaltensabnahme-der-kompakten-schemata-15092026) |
 | 2026-09-14 | [Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)](#die-sollwerte-der-geometrietests-haben-ihre-herkunft-14092026) |
 | 2026-09-14 | [Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)](#die-prompt-grundlast-ist-gemessen-und-das-fenster-ist-voll-14092026) |
 | 2026-09-14 | [Die Orientierungssuche hat ihre Abnahme (14.09.2026)](#die-orientierungssuche-hat-ihre-abnahme-14092026) |
@@ -8416,7 +8417,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-066 — Ab der nächsten Version kommen AppImage und Flatpak auf die Download-Seite | erledigt | git log 84a746e7; website/version.json und tools/make_download.py DELIVERED. |
 | RM-067 — `rtree` liegt auf Entwicklungsmaschinen als Überrest und macht vier Tests rot | überholt oder begründet entfallen | Lokal importlib.util.find_spec(rtree)=None; pyproject.toml ohne rtree; app/core/knowledge/licences.py:318-343 runtime_packages läuft deklarierte Abhängigkeiten ab; tests/test_licences.py:41 prüft diese Menge statt aller installierten Pakete. Fremde Maschinen wurden nicht als bereinigt behauptet. |
 | RM-068 — Prüfpunkt nächster CI-Bau | erledigt | Am08.09.lokal ohne Extraktion gelesene ZIP-Inhaltsverzeichnisse: dist/ci/solidon3d-windows-signing-input/windows-signing-input.zip enthält dist/Solidon3D/_internal/xxhash/_xxhash.cp314-win_amd64.pyd; dist/ci/solidon3d-macos-app-input-ARM64/Solidon3D-0.3.5-macos-arm64.zip enthält Solidon3D.app/Contents/Frameworks/xxhash/_xxhash.cpython-314-darwin.so; packaging/solidon3d.spec:229; tests/test_packaging.py:256. |
-| RM-069 — Die Grundlast senken | weiter offen → [RM-069](ROADMAP.md#rm-069) | ROADMAP-Register RM-069 nennt allein Verhaltensabnahme; 68d01a75/31af16a3 gebaut; frühere Suite mangels Modellzugang Exit2, kein Ersatz durch Ollama-Zeitüberschreitungen. |
+| RM-069 — Die Grundlast senken | abgeschlossen 15.09.2026 → [Nachweis](#rm-069) | ROADMAP-Register RM-069 nennt allein Verhaltensabnahme; 68d01a75/31af16a3 gebaut; frühere Suite mangels Modellzugang Exit2, kein Ersatz durch Ollama-Zeitüberschreitungen. |
 | RM-070 — SpaceMouse-Anbindung: Konzept liegt vor | weiter offen → [RM-070](ROADMAP.md#rm-070) | app/ui/spacemouse.py DriverReader/default_reader; ROADMAP-Register aktueller als Konzeptbody; tests/data/spacemouse/compact-2026-09-02.jsonl; Windows 18.046 Berichte laut Geräteabnahme. |
 | RM-071 — Resin Stufe 1: entschieden und beratschlagt — bauen, als nächste Serie nach der Panels-Welle | weiter offen → [RM-071](ROADMAP.md#rm-071) | app/core/knowledge/data/printers.toml enthält keinen resin/process-Vertrag; Freigabe im Konzept und RM-071. Historische Zielversion 0.3.0 ist vorbei, Panels-Welle kein heutiger Termin. |
 | RM-072 — Die Zusagen aus der Antwort — versendet, damit scharf | weiter offen → [RM-072](ROADMAP.md#rm-072) | Versandzusage 30.08.2026 laut Roadmap; Windows und Mac-Anbindung inzwischen gebaut, Mac-Feldabnahme offen. Kein neuer Versandbeleg in dieser Leseprüfung. |
@@ -21877,7 +21878,7 @@ selbst liefert).
       widerlegt: Das Fenster trägt ~14–15 Züge, und die Stellschraube
       ist die **Grundlast** (Werkzeugschemata, Systemprompt,
       Regelsammlung), nicht der Steckbrief.
-- **Historischer Befund RM-069 (weiter offen; aktuelle Aufgabe [RM-069](ROADMAP.md#rm-069)):** **Die Grundlast senken** — kompakte Werkzeugschemata zuerst
+- **Historischer Befund RM-069 (abgeschlossen 15.09.2026, [Nachweis](#rm-069)):** **Die Grundlast senken** — kompakte Werkzeugschemata zuerst
       (Empfehlung der Freigabe, 30.08.2026: Grundlast vor
       Kürzungsstrategie, denn sie wirkt auf jeden Zug ab dem ersten);
       eine Kürzungsstrategie ab Zug ~12 bleibt die Rückfallebene.
@@ -28368,3 +28369,24 @@ ausgehöhlt, die Vorderseite offen — und ein Deckel davor.
   Material weg als die nach unten. Wer die Wand auf den Rasterschritt genau will, misst hier.
 
   [Bisheriger Befund](#review-vor-der-demo-030-02092026).
+
+## Die Verhaltensabnahme der kompakten Schemata (15.09.2026)
+
+Ein Punkt vom 30.08.2026, abgeschlossen am 15.09.2026 mit den zwei Suiteläufen aus RM-173.
+
+<a id="rm-069"></a>
+
+- [x] **RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen.** Verlangt waren
+  zwei vergleichbare Suiteläufe vor und nach der Verdichtung. **Das „Vorher" gibt es auf dem
+  lokalen Weg nicht:** Das volle Schema (258 KB, gemessen 14.09.2026) passte nie in das
+  Fenster von 32 768 Token; Ollama kürzte es still auf die Hälfte, und ein Lauf damit misst
+  eine Trunkierung, nicht ein Schema — genau das hatte `tools/check_local_model.py` über
+  Wochen getan (RM-173). Gegen ein gehostetes Modell kostet die Suite Geld und ist seit dem
+  19.08.2026 nicht freigegeben (RM-016). Was sich messen lässt, ist gemessen: zwei kompakte
+  Fassungen gegeneinander, dasselbe Modell (qwen3:14b), dieselben 39 Anfragen, derselbe
+  Worktree und dieselbe Fremdlast in der Nacht auf den 15.09.2026 — Basis 31 465 Token
+  **20/39** gut, schemagültig 50 %, Baustein 1/13; gekürzt auf 28 440 Token **24/39**, 72 %,
+  7/13; die zwei gekippten Fälle stehen mit Namen bei RM-173. Keine ungeklärte
+  Verschlechterung: Die Kürzung ist eingebaut (`af48f498`), der Wächtertest hält sie am
+  Register. Die Tokenmessung ist seit dem 14.09. aktuell (`PROMPT_TOKENS`, RM-054) und wird
+  mit der eingebauten Fassung auf ruhiger Karte nachgezogen.
