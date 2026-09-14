@@ -4,8 +4,8 @@ Abgleich vom **08.09.2026** gegen Bauplan §40, Quelltext, Tests, Paketmetadaten
 und Git-Verlauf, **nachgeführt am 10.09.2026** — jeder offene Punkt einmal am
 heutigen Code nachgemessen; was dabei erledigt, überholt oder falsch
 beschrieben war, steht am Punkt. Der lokale Veröffentlichungsstand ist
-**0.4.0** (`website/version.json`, seit dem 10.09.2026; die Mac-Pakete gingen
-unsigniert hinaus, siehe RM-001). Die früheren Durchsichten und Messreihen stehen im
+**0.4.1** (`website/version.json`, seit dem 14.09.2026; die Mac-Pakete sind
+signiert und notarisiert, das Windows-Setup nicht, siehe RM-001). Die früheren Durchsichten und Messreihen stehen im
 [Archiv](ROADMAP-ARCHIV.md); dessen
 [Abgleichstabelle](ROADMAP-ARCHIV.md#abgleich-der-gesamten-roadmap-mit-dem-bestand-08092026)
 erklärt für jeden vorher offenen Punkt, ob er bleibt, erledigt, überholt oder
@@ -37,7 +37,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Die Identität kommt jetzt aus dem Schlüsselbund; offen bleiben `MACOS_SIGNING_MODE` zurück auf `notarized` und ein Bau, der es belegt |
+| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt (signiert, notarisiert, gestapelt); offen bleibt Windows — Certum-Zugang und `sign_release.py` einmal fahren |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
@@ -309,11 +309,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Notarisierung aus — die kleinere Stufe, um die Kette einmal ohne Apples Gegenstelle zu
   sehen.
 
-  **Was offen bleibt, ist nicht Code:** `MACOS_SIGNING_MODE` steht als Repository-Variable auf
-  `unsigned` und gehört vor dem Bau von 0.4.1 zurück auf `notarized`. Sie steht in keinem
-  Repository-Text, nur in den Einstellungen; wer sie vergisst, liefert eine zweite unsignierte
-  Fassung aus, ohne dass ein Lauf rot wird. Erst ein Bau mit `notarized` belegt, dass die
-  Reparatur trägt.
+  **Belegt am 14.09.2026 mit 0.4.1** (Lauf 34785006709, Tag `v0.4.1` = 1a357e1a,
+  `MACOS_SIGNING_MODE` = `notarized`): Beide Architekturen signiert, bei Apple notarisiert
+  (arm64 `aab4b062-…`, Accepted), gestapelt, `spctl --assess` sagt „Notarized Developer ID",
+  Installer mit `productsign` signiert und notarisiert, beide Mac-Releaseakten grün. Der Weg
+  brauchte drei Reparaturen hinter dem Fingerabdruck: den Schlüsselbund in die **Suchliste**
+  (`security list-keychains -d user -s`, sonst „no identity found" bei gefundener Identität),
+  die Lizenzbeilage **aus dem Bundle-Root** nach `Contents/MacOS/` („unsealed contents present
+  in the bundle root" — und dort liest die Anwendung sie ohnehin), und einen zweiten Anlauf des
+  x86_64-Jobs, weil Apples Notarisierung über eine Stunde „In Progress" blieb und eine
+  Statusabfrage mit HTTP-Timeout riss (`gh run rerun --failed` desselben Laufs). Die Variable
+  bleibt auf `notarized`.
+
+  **Windows bleibt offen:** Auf der Arbeitsmaschine liegen weder ein Certum-Zertifikat noch
+  SimplySign Desktop; `tools/sign_release.py` war noch nie gefahren, und 0.4.1 ging wie 0.4.0
+  mit unsigniertem Setup hinaus. Abnahme für Windows: Zugang einrichten, den Signiereingang von
+  Lauf 34785006709 (oder dem nächsten Tag) lokal signieren und das signierte Setup hochladen.
 
   **Nebenbefund, gehört zu RM-084:** Die FAQ begründet die fehlende Notarisierung an zwei
   Stellen mit „sobald das Apple-Konto steht" (`website/index.html`). Das Konto und alle acht
