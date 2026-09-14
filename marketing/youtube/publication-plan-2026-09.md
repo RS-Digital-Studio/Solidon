@@ -4,6 +4,9 @@ Stand: 5. September 2026. Termine sind in YouTube Studio gespeichert und anhand
 der Oberfläche geprüft, nicht nur vorgeschlagen. Alle Zeiten: Europe/Berlin,
 im September MESZ / GMT+0200. Je Thema erscheinen Deutsch und Englisch gleichzeitig.
 
+Fortsetzung ab dem 15.09.2026 — fünf STL-Tutorials mit Shorts, alle zwanzig am
+13.09.2026 terminiert: [workshop-2026-09.md](workshop-2026-09.md), Abschnitt „Stand".
+
 ## Langvideos
 
 | Thema | Deutsch | Englisch | Termin / Status |

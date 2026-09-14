@@ -613,7 +613,8 @@ class Tutorial:
             raise RuntimeError(f"Der Knopf unten nennt {panel._armed}, erwartet {key}.")
         button = panel._apply
         self.add(title_de, title_en, detail_de, detail_en, 9.0, target=button)
-        self.detail_shot(panel, "card")
+        # Für den Short nur die Handlungsgruppe (Überschrift und Felder), nicht die ganze Karte.
+        self.detail_shot(editor_for(steps[0][0]).parentWidget(), "card")
         button.click()
         # Der Beleg nennt Handlung und Werte — „Übernehmen" allein wäre mehrdeutig.
         self.checked(
@@ -1844,11 +1845,11 @@ def story_counterparts(tutorial: Tutorial, paths: list[Path]) -> None:
         hint_en="Select both parts, choose “Check insertion path” on the right.",
     )
     tutorial.add(
-        "Der Prüfbericht",
-        "The report",
-        "Rechts oben steht das Ergebnis: Der Weg ist frei. "
+        "Der Prüfbericht bleibt leer",
+        "The report stays empty",
+        "0 Fehler, 0 Warnungen: Nichts stößt an. Ein Problem stünde hier rechts oben als Befund. "
         "Beim Drucken zählt dann noch das Material.",
-        "The result is at the top right: the path is clear. "
+        "0 errors, 0 warnings: nothing collides. A problem would show up here at the top right. "
         "When printing, the material still matters.",
         9.0,
         target=tutorial.window.report,

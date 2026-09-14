@@ -86,6 +86,20 @@ def _model_image(path: Path) -> QImage:
     )
 
 
+def _usable_detail(folder: Path, detail_path: str | None) -> QImage | None:
+    """Ein Bedienelement nur zeigen, wenn es im Telefonformat lesbar bleibt.
+
+    Die ganze Merkmalskarte (schmal und hoch) oder die Bewegen-Leiste (breit
+    und flach) schrumpfen im 850 x 530-Feld auf unlesbare Größe; dann ist das
+    Modell groß der bessere Short.
+    """
+    if not detail_path:
+        return None
+    picture = _image(folder / detail_path)
+    ratio = picture.width() / max(1, picture.height())
+    return picture if 0.6 <= ratio <= 4.0 else None
+
+
 def _save(image: QImage, target: Path) -> None:
     """Ein misslungenes Schreiben als Fehler melden."""
     if not image.save(str(target)):
@@ -113,14 +127,13 @@ def _short_frame(
         _text(painter, QRectF(64, 164, 850, 192), shot["title"], 58, bold=True)
         _text(painter, QRectF(64, 376, 850, 140), shot["detail"], 34, colour=MUTED)
         model = _model_image(folder / shot["viewport_path"])
-        detail_path = shot.get("detail_path")
-        model_rect = QRectF(64, 548, 850, 420 if detail_path else 930)
+        detail = _usable_detail(folder, shot.get("detail_path"))
+        model_rect = QRectF(64, 548, 850, 420 if detail is not None else 930)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#22272e"))
         painter.drawRoundedRect(model_rect, 18, 18)
         _fit_image(painter, model, model_rect.adjusted(8, 8, -8, -8))
-        if detail_path:
-            detail = _image(folder / detail_path)
+        if detail is not None:
             _fit_image(painter, detail, QRectF(64, 1000, 850, 530))
         _text(
             painter,

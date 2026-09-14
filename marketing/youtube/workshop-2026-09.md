@@ -99,5 +99,34 @@ Beispiel-STLs werden nach dem Fix neu exportiert.
 
 ## Stand
 
-Wird am Ende der Produktion fortgeschrieben: Aufnahmen, Kodierung, Prüfer,
-Upload und Terminierung je Datei.
+13.09.2026: Alle zwanzig Dateien sind aufgenommen, kodiert, vom Prüfer
+abgenommen (20/20, `production-status.json`) und im YouTube Studio des Kanals
+Solidon3D hochgeladen und terminiert. Sichtbarkeit „Geplant", Zeitzone
+Europe/Berlin (GMT+0200); die Kennungen stehen auch in
+[workshop-2026-09-copy.json](workshop-2026-09-copy.json) unter `youtube`.
+
+| Termin | Thema | Deutsch | Englisch |
+|---|---|---|---|
+| 15.09.2026, 12:00 | Tutorial `bohrung-anpassen` | [OnUbdoI1YC0](https://youtu.be/OnUbdoI1YC0) | [FM1pPvrZZsw](https://youtu.be/FM1pPvrZZsw) |
+| 16.09.2026, 18:00 | Short `bohrung-anpassen` | [-leBJmhdN30](https://youtube.com/shorts/-leBJmhdN30) | [y6m3KCd_L_o](https://youtube.com/shorts/y6m3KCd_L_o) |
+| 17.09.2026, 12:00 | Tutorial `stl-varianten` | [CXlCAj0aBn4](https://youtu.be/CXlCAj0aBn4) | [1L3HyDscorY](https://youtu.be/1L3HyDscorY) |
+| 18.09.2026, 18:00 | Short `stl-varianten` | [qRPYPTuId24](https://youtube.com/shorts/qRPYPTuId24) | [qdYjLeW0c6w](https://youtube.com/shorts/qdYjLeW0c6w) |
+| 19.09.2026, 12:00 | Tutorial `langloch` | [WmxIqxm25e8](https://youtu.be/WmxIqxm25e8) | [rPFXvbmTDNo](https://youtu.be/rPFXvbmTDNo) |
+| 20.09.2026, 18:00 | Short `langloch` | [PTh2JGc-dWk](https://youtube.com/shorts/PTh2JGc-dWk) | [yhGHWTftAtA](https://youtube.com/shorts/yhGHWTftAtA) |
+| 21.09.2026, 12:00 | Tutorial `stl-kanten` | [qp_fEbsEPns](https://youtu.be/qp_fEbsEPns) | [w82aomXiBdg](https://youtu.be/w82aomXiBdg) |
+| 22.09.2026, 18:00 | Short `stl-kanten` | [vdjoGMgdst0](https://youtube.com/shorts/vdjoGMgdst0) | [aTkUtLzYyrw](https://youtube.com/shorts/aTkUtLzYyrw) |
+| 23.09.2026, 12:00 | Tutorial `gegenstuecke` | [s9PHIx4Jd00](https://youtu.be/s9PHIx4Jd00) | [17bsD2XhEJk](https://youtu.be/17bsD2XhEJk) |
+| 24.09.2026, 18:00 | Short `gegenstuecke` | [5OuouH9JDz0](https://youtube.com/shorts/5OuouH9JDz0) | [snureno6po4](https://youtube.com/shorts/snureno6po4) |
+
+Je Tutorial gesetzt: Titelbild aus dem Produktionsordner, Titel, Beschreibung
+mit Kapiteln aus `*.upload.txt`, Tags, „nicht für Kinder", Videosprache,
+Playlist der Sprache. Je Short zusätzlich der Link zum Tutorial in der
+Beschreibung und als „Ähnliches Video" das öffentliche Montagehalter-Tutorial
+derselben Sprache; das eigene Tutorial war beim Hochladen selbst noch geplant.
+Nach dem 15.09. lässt sich die Verknüpfung auf das eigene Tutorial umstellen.
+Die Sprachquerverweise (`cross_language_line`) sind nicht eingetragen, weil
+die Kennungen erst beim Hochladen entstanden; sie können nach der
+Veröffentlichung nachgetragen werden.
+
+Nicht Teil dieser Produktion: das Archiv der Beispiel-STLs wartet auf den Fix
+zu RM-166 (Abschnitt oben); die Kanalseite selbst ist unverändert.
