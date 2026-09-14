@@ -21,6 +21,7 @@ braucht.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from typing import NoReturn
 
 import numpy as np
 
@@ -124,27 +125,7 @@ def hollow(
         outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
         enclosed = boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
     except BooleanFailedError as failure:
-        # **Eine offene Hülle ist der Grund, nicht die Kette** (RM-170). An
-        # ``generated_figure.stl`` — Weg 3, nach dem Import nicht wasserdicht,
-        # 18 offene Kanten — scheiterten alle Stufen, und die Meldung sagte
-        # „Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis
-        # geliefert". Wahr, aber ohne den Weg: Nach *Reparieren* geht das
-        # Aushöhlen an derselben Figur in 0,16 s durch (gemessen 14.09.2026).
-        # Der Satz nennt jetzt die Hülle, und die Handlung „Reparieren und
-        # erneut versuchen" steht wie bei jedem Geometriefehler dabei —
-        # auch im Band der Vorschau, wo man die Zahl noch ändern kann.
-        #
-        # Vorher geprüft wird nicht: Die Kette kommt an mancher offenen Stelle
-        # durch, und eine Absage vor dem Versuch nähme ihr genau diese Fälle.
-        if not mesh.is_watertight:
-            raise NotManifoldError(
-                detail=_(
-                    "Der Körper ist nicht geschlossen — ein Hohlraum braucht eine "
-                    "dichte Hülle. Erst reparieren, dann aushöhlen."
-                ),
-                open_edges=open_edge_count(mesh),
-            ) from failure
-        raise
+        _the_hull_or_the_chain(mesh, failure)
     body = outcome.mesh
     findings = [*outcome.findings, *enclosed.findings]
     stages: list[SolverInfo | None] = [outcome.solver, enclosed.solver]
@@ -164,7 +145,10 @@ def hollow(
                 )
             )
         else:
-            opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            try:
+                opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
+            except BooleanFailedError as failure:
+                _the_hull_or_the_chain(mesh, failure)
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
@@ -174,9 +158,12 @@ def hollow(
     # kein Schutz vor der durchsackenden Decke, sondern ein Loch im Boden.
     if vents > 0 and not open_top:
         _step(progress, cancelled, 0.8, _("Entlüftungen bohren"))
-        body, placed, drilled = _vent(
-            body, cavity, vent_diameter, vents, quality, progress, cancelled
-        )
+        try:
+            body, placed, drilled = _vent(
+                body, cavity, vent_diameter, vents, quality, progress, cancelled
+            )
+        except BooleanFailedError as failure:
+            _the_hull_or_the_chain(mesh, failure)
         stages.extend(drilled)
         if not placed:
             findings.append(
@@ -449,6 +436,36 @@ def _step(
         cancelled.raise_if_cancelled()
     if progress is not None:
         progress(fraction, str(text))
+
+
+def _the_hull_or_the_chain(mesh: MeshData, failure: BooleanFailedError) -> NoReturn:
+    """Warum eine Boolesche des Aushöhlens riss: die offene Hülle, oder die Kette.
+
+    **Eine offene Hülle ist der Grund, nicht die Kette** (RM-170). An
+    ``generated_figure.stl`` — Weg 3, nach dem Import nicht wasserdicht, 18
+    offene Kanten — scheiterten alle Stufen, und die Meldung sagte „Auch die
+    letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert". Wahr, aber
+    ohne den Weg: Nach *Reparieren* geht das Aushöhlen an derselben Figur in
+    0,16 s durch (gemessen 14.09.2026). Der Satz nennt die Hülle, und die
+    Handlung „Reparieren und erneut versuchen" steht wie bei jedem
+    Geometriefehler dabei — auch im Band der Vorschau, wo man die Zahl noch
+    ändern kann.
+
+    **An allen drei Booleschen**, nicht nur an den ersten zwei: Die Kette kommt
+    an mancher offenen Stelle durch, und dann reißt erst der Deckelschnitt oder
+    die Entlüftung — an demselben nicht geschlossenen Körper, mit derselben
+    Ursache (Review 14.09.2026). Vorher geprüft wird nicht: Eine Absage vor
+    dem Versuch nähme der Kette genau die Fälle, die sie schafft.
+    """
+    if not mesh.is_watertight:
+        raise NotManifoldError(
+            detail=_(
+                "Der Körper ist nicht geschlossen — ein Hohlraum braucht eine "
+                "dichte Hülle. Erst reparieren, dann aushöhlen."
+            ),
+            open_edges=open_edge_count(mesh),
+        ) from failure
+    raise failure
 
 
 def _vent(

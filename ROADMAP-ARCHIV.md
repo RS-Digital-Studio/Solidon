@@ -27815,6 +27815,29 @@ Robert traf sie am selben Tag („Ausblenden"), und sie steht unten bei den drei
   `test_a_reshaped_preview_shows_the_new_triangles_as_edges`; die Bandtexte in
   `tests/test_ui.py::test_the_banner_names_the_reason_and_the_empty_difference`.
 
+  **Review am selben Tag, nachgezogen (sieben Funde).** Der tragende: Der Deckel war nicht
+  anklickbar — `pickable=False`, der eigene Aktor verborgen, und `_world_at` suchte nur unter
+  `_actors`. Unter einer stehenden Farbvorschau traf damit der **zweite** Klick von *Filament
+  auf eine Fläche* nichts und löschte die Auswahl; genau der Bedienweg, den RM-169 bedienen
+  wollte. Jetzt steht der Deckel in `_cover_actors`, `_world_at` sucht ihn mit, und seine
+  Dreiecksnummer gilt nur bei gleichen Dreiecken (Farbe), nicht bei neuen (Netz). Dazu geht er
+  denselben Weg wie der Körper in `_apply_scene` (`_sectioned`, Opazität und Kanten der
+  Darstellungsart über `_body_opacity`, Slotfarben), liegt nicht auf ausgeblendeten Körpern
+  oder fremden Platten (`_in_view`), nicht unter einer Analysekarte und nicht über
+  `DISPLAY_DECIMATION_ABOVE` — dort trägt das Band den Satz. `compare_scenes` setzt
+  `retriangulated` nicht mehr, wenn die Differenz unvollständig ist (`difference.incomplete`):
+  Zwei gescheiterte Schnitte sind kein „gleiches Volumen", und `reshaped` hätte die Warnung der
+  Operation im Band unterdrückt. Die Körpersperre (RM-168) fragt den Körper, den die Operation
+  bekäme (`_first_chosen`: Klickreihenfolge wie `inputs_for`, nicht Baumreihenfolge — bei einer
+  Mehrfachauswahl liefen beide auseinander; `_feature_kinds_of_selection` hatte denselben Bruch).
+  `hollow` nennt die offene Hülle an allen drei Booleschen (`_the_hull_or_the_chain`), nicht nur an
+  den ersten zwei. Und die Grenze `BODY_FACTS_LIMIT` trägt eine gemessene Zahl statt einer
+  Fortschreibung: 34 ms an 81 920 Dreiecken in einem Stück, 91 ms an 100 000 in 36 163 Stücken.
+  Nachweis: `test_a_reshaped_preview_shows_the_new_triangles_as_edges` (Pick durch den Deckel),
+  `test_a_cover_follows_the_picture_it_lies_on`, `test_an_incomplete_difference_is_not_a_reshaped_preview`,
+  `test_the_body_state_lock_asks_the_body_the_operation_would_get`,
+  `test_the_hull_is_named_at_every_boolean_of_the_hollowing`.
+
 <a id="rm-170"></a>
 
 - [x] **RM-170 — Aushöhlen an generierten Körpern.** `hollow` scheiterte an

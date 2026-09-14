@@ -86,6 +86,9 @@ wenn die Dreiecke sich ändern und das Volumen unter dem bleibt, was der
 Drucker hinterlässt — `compare_scenes` setzt beides, die Ansicht zeichnet den
 Körper danach über den davor (`Viewport._cover_body`). `SceneDifference.changed`
 bleibt die Volumenfrage; `reshaped` und `recoloured` sind die zwei anderen.
+Eine unvollständige Differenz (`difference.incomplete`, ein Schnitt ist
+gescheitert) trägt kein `retriangulated`: Zwei Volumina von null sind dann
+keine Aussage über das Volumen.
 
 Eine mitgeführte exakte `MeshData.cavity` folgt in `transform.apply` derselben
 Matrix wie der Körper. Änderungen der Topologie verwerfen die Auskunft,

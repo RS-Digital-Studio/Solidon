@@ -896,10 +896,20 @@ Trägt ein Eintrag der Differenz `retriangulated` oder `recoloured`, verbirgt
 `Viewport._cover_body` den eigenen Aktor des Körpers (`_covered`) und legt den
 Körper danach an seine Stelle — mit Kanten in der Farbe von „Hinzugekommen"
 bei neuen Dreiecken, mit seinen Slotfarben (`_slot_colours`, dieselbe
-Auflösung wie beim Szenenaufbau) bei neuen Farben. `_redraw_difference` zeigt
-Verborgenes zuerst wieder, also auch beim Halten der Leertaste und beim
-Schließen. Das Band sagt „das Netz ändert sich, das Volumen nicht" oder „nur
-die Farbe ändert sich". Zwei weitere Gründe reisen über `explained`: die
+Auflösung wie beim Szenenaufbau) bei neuen Farben. **Der Deckel ist der Körper
+fürs Zeigen** (`_cover_actors`): `_world_at` sucht ihn mit, denn der eigene
+Aktor ist verborgen, und ein Klick, der nur `_actors` fragte, traf unter der
+Farbvorschau nichts — *Filament auf eine Fläche* bekommt seine zweite Fläche
+über genau diesen Klick. Seine Dreiecksnummer gilt bei gleichen Dreiecken
+(Farbe), bei neuen nicht. Er geht denselben Weg wie der Körper in
+`_apply_scene` — Schnittebene, Opazität und Kanten der Darstellungsart
+(`_body_opacity`) — und liegt nicht auf einem ausgeblendeten Körper oder
+einer fremden Platte (`_in_view`), nicht unter einer Analysekarte und nicht
+über `DISPLAY_DECIMATION_ABOVE`; dort trägt das Band den Satz.
+`_redraw_difference` zeigt Verborgenes zuerst wieder, also auch beim Halten
+der Leertaste und beim Schließen. Das Band sagt „das Netz ändert sich, das
+Volumen nicht" oder „nur die Farbe ändert sich". Zwei weitere Gründe reisen
+über `explained`: die
 erste **Warnung** der vorgeschauten Schritte, wenn die Differenz leer bleibt
 (`Session._warning_of` — *Textur in Filamente* ohne Farbinformation), und die
 **Rückfrage**, an der die stille Vorschau anhält (`_QuestionPending` aus
@@ -910,8 +920,9 @@ standen bis zum 14.09.2026 als „am Volumen ändert sich nichts" im Band.
 `_reason_locked` fragt als letzte Stufe `labels.body_requirement` mit den
 Fakten aus `_body_facts_of_selection` — geschlossen, Stücke, Hohlraum, einmal
 je Körper und Auswertung gerechnet (`_body_facts`, Schlüssel ist
-`result_generation`). Die Angabe steht im Register (`requires_body`), die
-Regel in `operationen.md`.
+`result_generation`), am Körper, den die Operation bekäme (`_first_chosen`:
+Klickreihenfolge wie `inputs_for`, nicht Baumreihenfolge). Die Angabe steht
+im Register (`requires_body`), die Regel in `operationen.md`.
 
 Ein `InstallDialog` lässt eine begonnene Installation beim Schließen
 geordnet auslaufen und zeigt diesen Zustand. Er beendet nur das Warten auf

@@ -4293,6 +4293,13 @@ class MainWindow(QMainWindow):
             return None
         return body_requirement(spec, self._body_facts_of_selection())
 
+    def _first_chosen(self) -> ObjectId | None:
+        """Der Körper, den eine Operation mit einem Eingang bekäme: der zuerst
+        angeklickte — dieselbe Quelle wie ``inputs_for`` (``selected_objects``,
+        Klickreihenfolge), nicht ``selected()`` in Baumreihenfolge."""
+        chosen = self.object_tree.selected_objects()
+        return chosen[0] if chosen else None
+
     def _body_facts_of_selection(self) -> BodyFacts | None:
         """Die Fakten des gewählten Körpers — einmal je Körper und Auswertung.
 
@@ -4300,9 +4307,17 @@ class MainWindow(QMainWindow):
         macht aus jedem Körper einen neuen, und die alten Antworten fallen mit
         ihr. Innerhalb einer Generation fragt ``_update_actions`` bei jeder
         Auswahl neu, und ``face_components`` soll dann nicht jedes Mal laufen.
+
+        **Gefragt wird der Körper, den die Operation bekäme** — der zuerst
+        angeklickte (``selected_objects``, Klickreihenfolge), nicht der erste
+        in Baumreihenfolge (``selected``). Bei einer Mehrfachauswahl liefen
+        beide auseinander: die offene Fläche zuerst und den Quader danach
+        angeklickt, stand *Offene Fläche schließen* grau mit „schon
+        geschlossen", obwohl ``inputs_for`` die Fläche genommen hätte
+        (Review 14.09.2026).
         """
         result = self.session.last_result
-        chosen = self.object_tree.selected()
+        chosen = self._first_chosen()
         if result is None or chosen is None:
             return None
         entry = result.scene.objects.get(chosen)
@@ -4347,9 +4362,10 @@ class MainWindow(QMainWindow):
 
         Dieselbe Erhebung wie :meth:`_feature_names`, nur auf die Frage des
         Sperr-Grunds verengt: nicht *welche* Bohrung, sondern *ob* eine da ist.
+        Am Körper, den die Operation bekäme (:meth:`_first_chosen`).
         """
         result = self.session.last_result
-        chosen = self.object_tree.selected()
+        chosen = self._first_chosen()
         if result is None or chosen is None:
             return frozenset()
         entry = result.scene.objects.get(chosen)

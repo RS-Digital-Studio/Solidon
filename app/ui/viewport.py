@@ -4233,6 +4233,12 @@ class Viewport(QWidget):
         """Körper, deren eigener Aktor gerade unter einer Vorschau verborgen
         ist — neue Dreiecke oder neue Farben liegen deckungsgleich darüber, und
         zwei Flächen am selben Ort flimmern (RM-169)."""
+        self._cover_actors: dict[ObjectId, tuple[Any, bool]] = {}
+        """Der Deckel je verborgenem Körper, und ob seine Dreiecke die des
+        Körpers sind. Er **ist** der Körper fürs Zeigen: Ein Klick, der nur
+        unter ``_actors`` sucht, träfe unter einer Farbvorschau nichts mehr —
+        und *Filament auf eine Fläche* bekommt seine zweite Fläche über genau
+        diesen Klick (Review 14.09.2026)."""
         self._difference_held = False
         """Ob die Vorschau gerade weggehalten wird, um das Vorher zu sehen."""
         self._diff_palette: DiffPalette = "blue_orange"
@@ -5688,9 +5694,7 @@ class Viewport(QWidget):
         import numpy as np
 
         mode = DISPLAY_MODES[self._mode]
-        opacity = float(mode["opacity"])
-        if self._sketch_frame is not None:
-            opacity = min(opacity, SKETCH_CONTEXT_OPACITY)
+        opacity = self._body_opacity()
         for object_id, entry in result.scene.objects.items():
             if not self._in_view(object_id, entry):
                 continue
@@ -10210,6 +10214,7 @@ class Viewport(QWidget):
             if covered is not None:
                 covered.set_visible(True)
         self._covered.clear()
+        self._cover_actors.clear()
         if self._difference is None or self._difference_held:
             return
 
@@ -10235,6 +10240,18 @@ class Viewport(QWidget):
             self._add_body(
                 entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.65, shift
             )
+            # **Ein Deckel liegt nur auf einem Körper, der im Bild ist** —
+            # nicht auf einem ausgeblendeten (§18.8) oder einem auf einer
+            # anderen Platte; die Vorschau hebt den Filter des Bildes nicht auf
+            # (Review 14.09.2026). Und nicht unter einer Analysekarte: Die
+            # Karte ist dann das Bild, und ihre Werte gelten je Dreieck des
+            # Originals — unter einem Deckel wären sie fort.
+            if (
+                scene_entry is None
+                or not self._in_view(entry.object_id, scene_entry)
+                or self._map is not None
+            ):
+                continue
             # **Neue Dreiecke bei gleichem Volumen: der Körper danach mit
             # seinen Kanten** (RM-169). Die Kanten tragen die Farbe von
             # „Hinzugekommen" — das Muster ist die zweite Kodierung (Regel 18),
@@ -10242,20 +10259,7 @@ class Viewport(QWidget):
             # Flächen am selben Ort flimmern, und flimmern sagt nichts.
             retriangulated = getattr(entry, "retriangulated", None)
             if retriangulated is not None:
-                self._cover_body(
-                    entry.object_id,
-                    retriangulated,
-                    shift,
-                    SurfaceStyle(
-                        colour=self._object_colour,
-                        show_edges=True,
-                        edge_colour=colours.added.colour,
-                        smooth=self._shading == "smooth",
-                        backface_colour=BACKFACE_COLOUR,
-                        pickable=False,
-                    ),
-                    None,
-                )
+                self._cover_body(entry.object_id, retriangulated, shift, colours.added.colour)
             # **Neue Farben bei gleichen Dreiecken: der Körper danach in
             # seinen Farben** — dieselbe Slotauflösung wie beim Aufbau der
             # Szene, damit die Vorschau die Farbe zeigt, die übernommen wird.
@@ -10264,47 +10268,84 @@ class Viewport(QWidget):
                 painted = getattr(recoloured, "mesh", None)
                 raw = getattr(painted, "raw", None)
                 if raw is not None and len(raw.faces):
-                    self._cover_body(
-                        entry.object_id,
-                        painted,
-                        shift,
-                        SurfaceStyle(
-                            colour=self._object_colour,
-                            smooth=self._shading == "smooth",
-                            backface_colour=BACKFACE_COLOUR,
-                            pickable=False,
-                        ),
-                        self._slot_colours(painted, recoloured, len(raw.faces)),
-                    )
+                    self._cover_body(entry.object_id, painted, shift, None, painted_as=recoloured)
         self.set_preview_gizmo(self._preview_gizmo_wanted)
 
     def _cover_body(
-        self, object_id: ObjectId, mesh: Any, shift: Any, style: SurfaceStyle, cell_colours: Any
+        self,
+        object_id: ObjectId,
+        mesh: Any,
+        shift: Any,
+        edge_colour: str | None,
+        *,
+        painted_as: Any = None,
     ) -> None:
         """Legt den Körper danach an die Stelle des Körpers davor.
 
         Der eigene Aktor wird verborgen und in ``_covered`` gemerkt;
         :meth:`_redraw_difference` zeigt ihn wieder, bevor es neu zeichnet, und
         damit auch, wenn die Vorschau geht oder die Leertaste das Vorher holt.
+
+        **Der Deckel geht denselben Weg wie der Körper in** :meth:`_apply_scene`
+        — Schnittebene, Darstellungsart mit ihrer Opazität, Slotfarben aus
+        derselben Auflösung. Die erste Fassung zeichnete ``mesh.raw`` roh und
+        undurchsichtig: Unter einer stehenden Vorschau war der Schnitt fort,
+        die transparente Darstellung auch (Review 14.09.2026). Nur ein Netz
+        über der Dezimiergrenze wird nicht gedeckt — ``add_surface`` läuft im
+        Hauptthread, bei jedem Vorschaudurchlauf, und die Szene hat für so ein
+        Netz einen eigenen Arbeiter; das Band sagt dann, was sich ändert.
+
+        ``edge_colour`` zeichnet die Kanten (neue Dreiecke), ``painted_as``
+        gibt die Slotfarben des Körpers danach (neue Farben). Der Deckel ist
+        anklickbar und steht in ``_cover_actors``: Für :meth:`_world_at` ist
+        er der Körper, und seine Dreiecksnummern gelten nur, wenn sie die des
+        Körpers sind — bei neuen Dreiecken nicht.
         """
-        if self.renderer is None:
+        if self.renderer is None or mesh.triangle_count > DISPLAY_DECIMATION_ABOVE:
             return
         import numpy as np
 
+        shown = self._sectioned(mesh)
+        raw = getattr(shown, "raw", None)
+        if raw is None or not len(raw.faces):
+            return
         own = self._actors.get(object_id)
         if own is not None:
             own.set_visible(False)
             self._covered.add(object_id)
-        raw = mesh.raw
-        self._difference_actors.append(
-            self.renderer.add_surface(
-                np.asarray(raw.vertices, dtype=float) + shift,
-                np.asarray(raw.faces, dtype=np.int64),
-                name=f"preview:{object_id}",
-                style=style,
-                cell_colours=cell_colours,
-            )
+        mode = DISPLAY_MODES[self._mode]
+        cell_colours = (
+            self._slot_colours(shown, painted_as, len(raw.faces))
+            if painted_as is not None
+            else None
         )
+        item = self.renderer.add_surface(
+            np.asarray(raw.vertices, dtype=float) + shift,
+            np.asarray(raw.faces, dtype=np.int64),
+            name=f"preview:{object_id}",
+            style=SurfaceStyle(
+                colour=self._object_colour,
+                opacity=self._body_opacity(),
+                wireframe=mode["style"] == "wireframe",
+                show_edges=edge_colour is not None or bool(mode["show_edges"]),
+                edge_colour=edge_colour,
+                smooth=self._shading == "smooth",
+                backface_colour=BACKFACE_COLOUR,
+                pickable=True,
+            ),
+            cell_colours=cell_colours,
+        )
+        self._difference_actors.append(item)
+        self._cover_actors[object_id] = (item, edge_colour is None and shown is mesh)
+
+    def _body_opacity(self) -> float:
+        """Die Opazität eines Körpers in der gewählten Darstellungsart — im
+        Skizzenkontext höchstens die des Hintergrunds. Dieselbe Zahl für die
+        Szene und für einen Deckel der Vorschau."""
+        opacity = float(DISPLAY_MODES[self._mode]["opacity"])
+        if self._sketch_frame is not None:
+            opacity = min(opacity, SKETCH_CONTEXT_OPACITY)
+        return opacity
 
     def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
         if self.renderer is None or mesh is None or not len(mesh.raw.faces):
@@ -13605,13 +13646,27 @@ class Viewport(QWidget):
         self._selection_hit = None
         if self.renderer is None:
             return None
-        hit = self.renderer.pick_surface(
-            x, y, among=list(self._actors.values()) or None, tolerance=PICK_TOLERANCE
-        )
+        # **Ein Deckel der Vorschau ist der Körper fürs Zeigen.** Unter einer
+        # Farb- oder Netzvorschau ist der eigene Aktor verborgen, und ein
+        # verborgener Aktor wird nicht gepickt — der zweite Klick von
+        # *Filament auf eine Fläche* traf dann nichts und löschte die Auswahl
+        # (Review 14.09.2026). Die Dreiecksnummer des Deckels gilt nur, wenn
+        # seine Dreiecke die des Körpers sind.
+        covers = {
+            id(item): (object_id, cells_match)
+            for object_id, (item, cells_match) in self._cover_actors.items()
+        }
+        among = [*self._actors.values(), *(item for item, _cells in self._cover_actors.values())]
+        hit = self.renderer.pick_surface(x, y, among=among or None, tolerance=PICK_TOLERANCE)
         if hit is not None and self._result is not None:
+            cell = hit.cell
             object_id = next(
                 (key for key, actor in self._actors.items() if actor is hit.item), None
             )
+            if object_id is None and id(hit.item) in covers:
+                object_id, cells_match = covers[id(hit.item)]
+                if not cells_match:
+                    cell = -1
             entry = self._result.scene.objects.get(object_id) if object_id else None
             if entry is not None and object_id is not None:
                 shift = self._shown_offset(entry, self._result)
@@ -13620,7 +13675,7 @@ class Viewport(QWidget):
                     float(hit.point[1] - shift[1]),
                     float(hit.point[2] - shift[2]),
                 )
-                self._selection_hit = _SelectionHit(object_id, scene_point, hit.point, hit.cell)
+                self._selection_hit = _SelectionHit(object_id, scene_point, hit.point, cell)
         return hit.point if hit is not None else None
 
     # --- den gewählten Körper direkt ziehen (§18.11) ---------------------------

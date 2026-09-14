@@ -1584,9 +1584,11 @@ def feature_requirement(spec: Any, feature_kinds: Collection[str]) -> str | None
 #: Bis zu wie vielen Dreiecken die Körperfakten fürs Menü gerechnet werden.
 #: ``face_components`` kostet 2,3 s an 1,3 Millionen Dreiecken (gemessen
 #: 14.09.2026, ``dense_1m.stl``) — bei jedem Klick auf den Körper, denn die
-#: Menüs fragen bei jeder Auswahl neu. Bis hierher bleibt es unter 0,2 s
-#: (§2.8: darunter ist nichts anzuzeigen); darüber gilt der Zustand als
-#: unbekannt, der Eintrag bleibt frei, und der Dialog sagt es im Band.
+#: Menüs fragen bei jeder Auswahl neu. An der Grenze gemessen (14.09.2026):
+#: 34 ms an 81 920 Dreiecken in einem Stück, 91 ms an 100 000 Dreiecken in
+#: 36 163 Stücken — unter den 0,2 s, ab denen §2.8 eine Anzeige verlangt.
+#: Darüber gilt der Zustand als unbekannt, der Eintrag bleibt frei, und der
+#: Dialog sagt es im Band.
 BODY_FACTS_LIMIT: Final = 100_000
 
 

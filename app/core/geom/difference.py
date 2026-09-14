@@ -214,9 +214,16 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
             continue
         difference = compare(first, second, quality=quality, profile=profile)
         difference.object_id = object_id
-        if not difference.changed:
-            # Neue Dreiecke, gleiches Volumen: Die Zahl sagt „nichts", das
-            # Netz sagt etwas — und darum geht es bei diesen Operationen.
+        # Neue Dreiecke, gleiches Volumen: Die Zahl sagt „nichts", das Netz
+        # sagt etwas — und darum geht es bei diesen Operationen. **Aber nur,
+        # wenn die Zahl gerechnet wurde.** Scheitert ``_cut`` in beiden
+        # Richtungen, sind beide Volumina null, ``changed`` ist falsch, und der
+        # Eintrag behauptete „neue Dreiecke, gleiches Volumen", wo über das
+        # Volumen nichts bekannt ist — und ``reshaped`` unterdrückte dazu die
+        # Warnung der Operation im Band (Review 14.09.2026). Eine
+        # unvollständige Differenz bleibt, was sie ist: unvollständig.
+        incomplete = any(finding.code == "difference.incomplete" for finding in difference.findings)
+        if not difference.changed and not incomplete:
             difference.retriangulated = second
         result.entries[object_id] = difference
     return result

@@ -415,6 +415,90 @@ def test_hollowing_an_open_hull_names_the_hull_and_offers_repair(profile: Profil
     assert hollowed.mesh.volume < mended.volume, "nach der Reparatur wird ausgehöhlt"
 
 
+def test_the_hull_is_named_at_every_boolean_of_the_hollowing(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review 14.09.2026: Die Kette kommt an mancher offenen Stelle durch, und
+    dann reißt erst der Deckelschnitt oder die Entlüftung — an demselben nicht
+    geschlossenen Körper. Dort stand wieder „Auch die letzte Rückfallstufe …";
+    jetzt an allen drei Booleschen derselbe Satz (``_the_hull_or_the_chain``),
+    und an einer dichten Hülle bleibt die Kette der Grund.
+
+    Drei Zusicherungen: der Helfer selbst an offener und dichter Hülle; der
+    Weg über die Entlüftung an der offenen Figur aus dem Korpus, die ersten
+    zwei Booleschen bestanden; und über den Syntaxbaum, dass jede Boolesche
+    und der Entlüftungsaufruf in ``hollow`` unter diesem Helfer stehen — die
+    erste Fassung fing nur die ersten zwei.
+    """
+    import ast
+    import inspect
+
+    from app.core.errors import BooleanFailedError, NotManifoldError
+    from app.core.geom import hollow as module
+    from app.core.geom.boolean import BooleanOutcome
+
+    failure = BooleanFailedError(detail="Kette")
+    box = trimesh.creation.box(extents=(30.0, 30.0, 30.0))
+    open_box = MeshData.of(
+        trimesh.Trimesh(vertices=box.vertices, faces=box.faces[:-1], process=False)
+    )
+    assert not open_box.is_watertight, "die Voraussetzung des Falls"
+    with pytest.raises(NotManifoldError) as caught:
+        module._the_hull_or_the_chain(open_box, failure)
+    assert "nicht geschlossen" in str(caught.value.detail)
+    assert caught.value.open_edges > 0 and caught.value.__cause__ is failure
+    with pytest.raises(BooleanFailedError) as chain:
+        module._the_hull_or_the_chain(MeshData.of(box), failure)
+    assert chain.value is failure, "an einer dichten Hülle bleibt die Kette der Grund"
+
+    # Der Weg: Hohlraum und Einschluss bestehen, die Entlüftung reißt.
+    figure = normalise(read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm").mesh
+    assert not figure.is_watertight
+
+    def passes(kind: str, meshes: list[MeshData], **kwargs: object) -> BooleanOutcome:
+        return BooleanOutcome(mesh=meshes[0], solver=None)
+
+    def rips(*args: object, **kwargs: object) -> object:
+        raise failure
+
+    monkeypatch.setattr(module, "boolean", passes)
+    monkeypatch.setattr(module, "_vent", rips)
+    with pytest.raises(NotManifoldError) as at_the_vent:
+        hollow(figure, 2.0, vents=1)
+    assert at_the_vent.value.__cause__ is failure
+
+    # Und jede Boolesche des Aushöhlens steht unter dem Helfer — der
+    # Deckelschnitt eingeschlossen, den kein Netz aus dem Korpus erreicht.
+    tree = ast.parse(inspect.getsource(module.hollow))
+    guarded: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        handled = any(
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "_the_hull_or_the_chain"
+            for handler in node.handlers
+            for call in ast.walk(handler)
+        )
+        if handled:
+            guarded.extend(
+                call.func.id
+                for call in ast.walk(ast.Module(body=node.body, type_ignores=[]))
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+            )
+    every_call = [
+        call.func.id
+        for call in ast.walk(tree)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id in ("boolean", "_vent")
+    ]
+    assert every_call, "hollow ruft die Kette — sonst prüft dieser Test nichts"
+    assert guarded.count("boolean") == every_call.count("boolean") == 3, (guarded, every_call)
+    assert guarded.count("_vent") == every_call.count("_vent") == 1
+
+
 def test_an_opened_body_is_a_tin(profile: Profile) -> None:
     """§25: der Weg von der Aushöhlung zur Dose ist ein Schalter, kein Umweg.
 

@@ -1185,6 +1185,39 @@ def test_body_facts_are_measured_once_per_body_and_evaluation(
     assert len(calls) == 2, "eine neue Auswertung ist ein neuer Körper"
 
 
+def test_the_body_state_lock_asks_the_body_the_operation_would_get(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review 14.09.2026: ``inputs_for`` nimmt den zuerst angeklickten Körper
+    (``selected_objects``, Klickreihenfolge); die Sperre fragte ``selected()``
+    in Baumreihenfolge. Die offene Fläche zuerst und den Quader danach
+    angeklickt, stand *Offene Fläche schließen* grau mit „schon geschlossen",
+    obwohl die Operation die Fläche genommen hätte."""
+    from app.ui.labels import BodyFacts
+
+    asked: list[str] = []
+
+    def facts_of(entry: Any) -> Any:
+        asked.append(entry.id)
+        return BodyFacts(closed=True, pieces=1, cavity=False)
+
+    monkeypatch.setattr("app.ui.main_window.body_facts", facts_of)
+    monkeypatch.setattr(window.object_tree, "selected", lambda: "obj_1")
+    monkeypatch.setattr(window.object_tree, "selected_objects", lambda: ("obj_2", "obj_1"))
+    result = window.session.last_result
+    assert result is not None
+    import dataclasses
+
+    result.scene.objects["obj_2"] = dataclasses.replace(result.scene.objects["obj_1"], id="obj_2")
+    window._body_facts = (-1, {})
+
+    window._body_facts_of_selection()
+    assert asked == ["obj_2"], "gefragt wird der Körper, der zuerst angeklickt wurde"
+    assert window._first_chosen() == "obj_2"
+    kinds = window._feature_kinds_of_selection()
+    assert kinds == frozenset(f.kind for f in result.scene.objects["obj_2"].features.values())
+
+
 def test_a_huge_body_is_not_measured_for_the_menu() -> None:
     """Über der Grenze bleibt der Zustand unbekannt — und unbekannt sperrt nie."""
     import numpy as np

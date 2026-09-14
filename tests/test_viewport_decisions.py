@@ -6283,9 +6283,22 @@ def test_a_reshaped_preview_shows_the_new_triangles_as_edges(qt_app: QApplicatio
     assert len(drawn) == 1
     style = drawn[0]["style"]
     assert style.show_edges and style.edge_colour == DIFF_PALETTES["blue_orange"].added.colour
-    assert not style.pickable, "eine Vorschau ist kein Klickziel"
     faces = renderer.meshes[-1][1]
     assert len(faces) == finer.triangle_count, "gezeichnet wird das Netz danach"
+
+    # **Der Deckel ist der Körper fürs Zeigen** (Review 14.09.2026): Ein Klick
+    # sucht unter den Körperaktoren, und der eigene ist verborgen — ohne den
+    # Deckel in der Suche traf der zweite Klick von *Filament auf eine Fläche*
+    # nichts. Neue Dreiecke tragen aber keine Dreiecksnummer des Körpers.
+    assert style.pickable, "der Deckel nimmt den Klick für den Körper an"
+    cover = renderer.item_of("preview:obj_1")
+    renderer.picks[(100, 100)] = Pick((1.0, 2.0, 3.0), cover, 7)
+    assert viewport._world_at(100, 100) == (1.0, 2.0, 3.0)
+    assert viewport._selection_hit is not None
+    assert viewport._selection_hit.object_id == "obj_1"
+    assert viewport._selection_hit.cell == -1, "fremde Dreiecke, keine Dreiecksnummer"
+    among = renderer.pick_calls[-1][2]
+    assert among is not None and cover in among and viewport._actors["obj_2"] in among
 
     viewport.show_scene(result)
     assert not viewport._actors["obj_1"].visible(), (
@@ -6293,6 +6306,59 @@ def test_a_reshaped_preview_shows_the_new_triangles_as_edges(qt_app: QApplicatio
     )
     viewport.show_difference(None)
     assert viewport._actors["obj_1"].visible()
+    assert not viewport._cover_actors, "mit der Vorschau geht auch das Klickziel"
+
+
+def test_a_cover_follows_the_picture_it_lies_on(qt_app: QApplication) -> None:
+    """Review 14.09.2026: Der Deckel zeichnete ``mesh.raw`` roh und
+    undurchsichtig — unter einer stehenden Vorschau war die transparente
+    Darstellung fort, und er legte sich auch über einen ausgeblendeten Körper
+    (§18.8) und unter eine Analysekarte. Jetzt geht er denselben Weg wie der
+    Körper in ``_apply_scene``."""
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.viewport import DISPLAY_MODES, Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    result = _scene_with_two_bodies()
+    viewport.set_display_mode("transparent")
+    viewport.show_scene(result)
+    body = result.scene.objects["obj_1"]
+    painted = SceneObject(
+        id="obj_1",
+        name="Halter",
+        mesh=MeshData(body.mesh.raw, slots=(1,) * len(body.mesh.raw.faces)),
+        material_slots=[MaterialSlot(index=1, name="Rot", colour=(1.0, 0.0, 0.0))],
+    )
+    difference = SceneDifference(
+        entries={"obj_1": Difference(object_id="obj_1", recoloured=painted)}
+    )
+
+    viewport.show_difference(difference)
+    drawn = [entry for kind, entry in renderer.drawn if entry["name"] == "preview:obj_1"]
+    assert len(drawn) == 1
+    assert drawn[0]["style"].opacity == DISPLAY_MODES["transparent"]["opacity"], (
+        "der Deckel trägt die Opazität der Darstellungsart"
+    )
+    # Gleiche Dreiecke: Die Dreiecksnummer des Deckels ist die des Körpers.
+    cover = renderer.item_of("preview:obj_1")
+    renderer.picks[(100, 100)] = Pick((1.0, 2.0, 3.0), cover, 7)
+    viewport._world_at(100, 100)
+    assert viewport._selection_hit is not None and viewport._selection_hit.cell == 7
+
+    # Ein ausgeblendeter Körper bekommt keinen Deckel — die Vorschau hebt den
+    # Filter des Bildes nicht auf.
+    viewport.show_difference(None)
+    viewport.set_hidden(frozenset({"obj_1"}))
+    covers_before = renderer.names().count("preview:obj_1")
+    viewport.show_difference(difference)
+    assert renderer.names().count("preview:obj_1") == covers_before, (
+        "kein Deckel über einem ausgeblendeten Körper"
+    )
+    assert not viewport._cover_actors
+    viewport.set_hidden(frozenset())
 
 
 def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication) -> None:

@@ -160,6 +160,28 @@ def test_new_triangles_at_the_same_volume_are_a_preview() -> None:
     assert not difference.recoloured
 
 
+def test_an_incomplete_difference_is_not_a_reshaped_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review 14.09.2026: Scheitert ``_cut`` in beiden Richtungen, sind beide
+    Volumina null und ``changed`` ist falsch — der Eintrag behauptete dann
+    „neue Dreiecke, gleiches Volumen", wo über das Volumen nichts bekannt ist,
+    und ``reshaped`` unterdrückte die Warnung der Operation im Band."""
+    from app.core.geom import difference as module
+
+    monkeypatch.setattr(module, "_cut", lambda before, after, quality: None)
+    plain = cube(20.0)
+    finer = MeshData.of(plain.raw.subdivide())
+
+    difference = compare_scenes(scene_with(obj_1=plain), scene_with(obj_1=finer))
+
+    entry = difference.entries["obj_1"]
+    assert "difference.incomplete" in {finding.code for finding in entry.findings}
+    assert not difference.changed
+    assert entry.retriangulated is None, "unvollständig bleibt unvollständig"
+    assert not difference.reshaped
+
+
 def test_a_scene_that_did_not_change_says_so() -> None:
     before = scene_with(obj_1=plate())
     after = scene_with(obj_1=plate())
