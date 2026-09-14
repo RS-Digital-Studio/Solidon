@@ -1274,6 +1274,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   20 311 — **ausgeschlossen**, weil bei *Bohrung* `x`, `y`, `z` hinten liegen und das Modell
   dann kein Loch mehr setzen könnte.
 
+  **Die zweite Gestalt der Kürzung, aus dem Protokoll des Suitelaufs (14.09.2026, 19:30):**
+  Der erste Schritt eines Zugs endete bei 32 680 von 32 768 Token; der zweite begann mit
+  32 300, erzeugte 847 — und llama.cpp schrieb `stop processing: n_tokens = 16765, truncated =
+  1`: Kontext geschoben, die Mitte des Auftrags verworfen, die Antwort auf dem Rest gerechnet.
+  Die Antwort trägt kein Zeichen davon; `prompt_eval_count` zählt den ganzen Prompt, und der
+  erste Wächter sieht nichts. Mit dem heutigen Prompt bleiben nach dem ersten Schritt rund
+  600 Token — jede denkende Antwort ist länger. **Der zweite Wächter** rechnet deshalb Eingabe
+  plus Ausgabe gegen das Fenster (`BackendContextShifted`, mit Test); die Kürzung auf 28 440
+  ist damit keine Kür mehr, sondern das, was den zweiten Schritt wieder in das Fenster bringt.
+  Dazu gehört die Frage, ob qwen3 im Chat denken soll: 484 und 847 Token Ausgabe je Schritt
+  sind zum größten Teil Denkblock, bei 33 Token/s eine halbe Minute je Schritt — `think:
+  false` ist eine Anfrageoption, und ob die Quote es überlebt, sagt die Suite (nach den zwei
+  laufenden Läufen).
+
+  Und was das Protokoll außerdem sagt: `llama-server started in 146.25 seconds` — der
+  Modellstart, nicht der Prompt, kostet nach jedem entladenen Zug die Minuten, sobald der
+  Rechner unter Last steht (die Suite lief neben den Torläufen dreier anderer Sitzungen);
+  ruhig gemessen waren es 18,7 s für alles. Das Warmhalten zwischen den Zügen — 16 s je Zug
+  gespart, entladen erst vor einem Weg-3-Lauf — bleibt eine Entscheidung für Robert, weil
+  der Vertrag aus dem Absturz vom 01.09. lautet: nach dem Zug entladen.
+
 ## Tests und Entwicklungswerkzeuge
 
 <a id="rm-020"></a>

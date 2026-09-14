@@ -636,6 +636,50 @@ class BackendPromptTruncated(ExternalToolError):
         )
 
 
+class BackendContextShifted(ExternalToolError):
+    """Auftrag und Antwort zusammen waren länger als das Fenster — und Ollama
+    hat während der Antwort die Mitte des Auftrags verworfen.
+
+    Die zweite Gestalt derselben Kürzung, gefunden am 14.09.2026 im Protokoll
+    des laufenden Suitelaufs: Der erste Schritt eines Zugs endete bei 32 680
+    von 32 768 Token, der zweite begann mit 32 300 und erzeugte 847 —
+    ``stop processing: n_tokens = 16765, truncated = 1``. llama.cpp schiebt
+    dann den Kontext: Es behält ``n_keep`` Token vorn, verwirft die Hälfte des
+    Rests und rechnet weiter, und die Antwort steht auf einem Auftrag, den es
+    so nicht mehr gab. Die Antwort trägt kein Zeichen davon — ``done_reason``
+    sagt ``stop``, ``prompt_eval_count`` zählt den ganzen Prompt.
+
+    Erkannt wird es an der Summe: Was Ollama an Eingabe und Ausgabe zählt,
+    passt zusammen in das Fenster, oder es ist geschoben worden. Dieselbe
+    Abhilfe wie bei :class:`BackendPromptTruncated`: mehr Fenster, oder ein
+    gehostetes Modell — kein Fehlerbericht.
+    """
+
+    default_title = _("Die Antwort des Sprachmodells passte nicht mehr in sein Fenster.")
+
+    def __init__(self, counted: int = 0, window: int = 0, provider: str = "") -> None:
+        self.provider = provider
+        values: dict[str, Any] = {}
+        if counted:
+            values["counted"] = counted
+        if window:
+            values["window"] = window
+        if provider:
+            values["provider"] = provider
+        super().__init__(
+            detail=_(
+                "Auftrag und Antwort zusammen waren länger als das Fenster des "
+                "lokalen Modells. Ollama verwirft dann während der Antwort die "
+                "Mitte des Auftrags und rechnet mit dem Rest weiter — die Antwort "
+                "beruht auf einem Auftrag, den es so nicht mehr gab. Wählen Sie in "
+                "den Einstellungen ein Modell mit größerem Fenster oder ein "
+                "gehostetes."
+            ),
+            values=values,
+            suggestions=(OPEN_SETTINGS, CANCEL),
+        )
+
+
 class BackendTooSlow(ExternalToolError):
     """Das Modell hat gerechnet und war nicht rechtzeitig fertig.
 
@@ -1359,6 +1403,18 @@ class OllamaBackend:
                     window=OLLAMA_CONTEXT_TOKENS,
                     provider=self.id,
                 )
+        # **Und das Fenster kann auch während der Antwort reißen.** Passen
+        # Eingabe und Ausgabe zusammen nicht hinein, hat llama.cpp den Kontext
+        # geschoben und die Mitte des Auftrags verworfen — ohne ein Zeichen in
+        # der Antwort (:class:`BackendContextShifted`). llama.cpp schiebt,
+        # sobald der nächste Token das Fenster **erreichte** — die Summe darf
+        # also nur darunter liegen. Nur bei gezählter Eingabe: Eine Antwort
+        # ohne Zählung ist ungemessen, nicht geschoben.
+        total = reply.input_tokens + reply.output_tokens
+        if reply.input_tokens and total >= OLLAMA_CONTEXT_TOKENS:
+            raise BackendContextShifted(
+                counted=total, window=OLLAMA_CONTEXT_TOKENS, provider=self.id
+            )
         return reply
 
 

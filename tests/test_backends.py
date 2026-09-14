@@ -1938,3 +1938,49 @@ def test_a_prompt_that_ollama_cut_in_silence_is_said_and_not_answered() -> None:
         .complete([Message(role="user", content="Halter")], tools=tools)
         .wants_tools
     )
+
+
+def test_an_answer_that_pushed_the_task_out_of_the_window_is_said_and_not_answered() -> None:
+    """Die zweite Gestalt der stillen Kürzung: das Fenster reißt während der Antwort.
+
+    Aus dem Protokoll des Suitelaufs vom 14.09.2026: Der zweite Schritt eines
+    Zugs begann mit 32 300 Token und erzeugte 847 — ``stop processing:
+    n_tokens = 16765, truncated = 1``. llama.cpp hatte den Kontext geschoben
+    und die Mitte des Auftrags verworfen; die Antwort trug kein Zeichen davon,
+    ``done_reason`` sagte ``stop``. Erkannt wird es an der Summe aus Eingabe
+    und Ausgabe gegen das Fenster — und gesagt statt als Vorschlag
+    weitergereicht (Regel 17, Regel 21).
+    """
+    window = llm.OLLAMA_CONTEXT_TOKENS
+    shifted = {**ollama_answer(), "prompt_eval_count": 32300, "eval_count": 847}
+    assert window < 32300 + 847, "sonst prüft der Test nicht den Fall aus dem Protokoll"
+
+    with pytest.raises(llm.BackendContextShifted) as caught:
+        OllamaBackend(transport=Recorder(shifted)).complete(
+            [Message(role="user", content="Halter")]
+        )
+    assert caught.value.values["counted"] == 32300 + 847
+    assert caught.value.values["window"] == window
+    assert caught.value.suggestions, "ein Fehler ohne Ausweg ist keiner (Regel 17)"
+
+    # Die Gegenproben: der erste Schritt desselben Zugs — 32 197 plus 484 —
+    # blieb 88 Token unter dem Fenster und ist eine ganze Antwort; genau das
+    # Fenster zu erreichen ist schon ein Schub (llama.cpp schiebt, bevor der
+    # Token entsteht, der es voll machte); und ohne gezählte Eingabe ist
+    # nichts gemessen, also auch nichts geschoben.
+    whole = {**ollama_answer(), "prompt_eval_count": 32197, "eval_count": 484}
+    exact = {**ollama_answer(), "prompt_eval_count": window - 10, "eval_count": 10}
+    with pytest.raises(llm.BackendContextShifted):
+        OllamaBackend(transport=Recorder(exact)).complete([Message(role="user", content="Halter")])
+    assert (
+        OllamaBackend(transport=Recorder(whole))
+        .complete([Message(role="user", content="Halter")])
+        .output_tokens
+        == 484
+    )
+    unmeasured = {**ollama_answer(), "prompt_eval_count": 0, "eval_count": window + 1}
+    assert (
+        OllamaBackend(transport=Recorder(unmeasured))
+        .complete([Message(role="user", content="Halter")])
+        .wants_tools
+    )
