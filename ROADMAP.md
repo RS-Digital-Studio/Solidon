@@ -85,7 +85,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen](#rm-069) | KI und Generatoren | Vergleichbare Suitequoten vor und nach der Schema-Verdichtung nachweisen |
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warm-/Kaltstart, Antwortqualität und Schemakürzungen gemeinsam messen |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
-| [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Der Wächter steht (`BackendPromptTruncated`); die Kürzung auf 28 440 Token liegt gemessen vor und wartet auf die Agenten-Suite vorher/nachher, weil sie im Fünf-Fälle-Check einen Fall kippt |
+| [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Zwei Wächter stehen, die Kürzung ist drin (Suite 20/39 → 24/39); offen sind der dritte Lauf ohne Denkblock, die Neumessung von `PROMPT_TOKENS` auf ruhiger Karte und drei Entscheidungen von Robert |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Der Prozesstest öffnet gemessen kein Fenster (`tools/count_new_windows.py`); offen ist derselbe Zähler um die ganze geteilte Suite auf ruhiger Maschine |
@@ -1284,6 +1284,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ruhig gemessen waren es 18,7 s für alles. Das Warmhalten zwischen den Zügen — 16 s je Zug
   gespart, entladen erst vor einem Weg-3-Lauf — bleibt eine Entscheidung für Robert, weil
   der Vertrag aus dem Absturz vom 01.09. lautet: nach dem Zug entladen.
+
+  **Das Suiteergebnis (Nacht auf den 15.09.2026), beide Läufe im Worktree unter derselben
+  Fremdlast:** Basis `e4856ff6` (31 465 Token) **20/39** gut beantwortet, gefragt 3/3,
+  schemagültig im ersten Versuch 74/148 = 50 %, Baustein statt eigener Geometrie 1/13,
+  Hauptmaße als Parameter 2/3, 3,1 Schritte im Mittel — 3 h 24 min. Mit der Kürzung
+  (28 440 Token, endgültige Fassung: `play` und die vier Geschwisterachsen ohne Feldtext,
+  Zahlenfelder als Zahl, Konventionen und Bindung einmal im Prompt) **24/39**, gefragt 2/3,
+  schemagültig 117/162 = 72 %, Baustein 7/13, Hauptmaße 1/3, 3,3 Schritte — 2 h 43 min.
+  Was kippte: *Mach das Teil dünner* fragte in der Basis nach dem Wert und riet mit der
+  Kürzung (`fit_to_size`, `scale_object`, zweimal `hollow_object`) — dieselbe Kippstelle wie
+  beim Zurücknehmen im Fünf-Fälle-Check; und *Wo finde ich das Aushöhlen* lief in der Basis in
+  den ersten Wächter (Ollama kürzte 32 881 auf 16 386) und führte mit der Kürzung das Aushöhlen
+  aus, statt den Ort zu nennen. Beides steht gegen vier Fälle mehr, 22 Punkte Schemagültigkeit
+  und sechs Bausteine, die vorher eigene Geometrie waren. **Die Kürzung ist drin**, mit dem
+  Wächtertest, der `CONVENTION_SENTENCES` am Register hält und jedes Feld ohne Text im Prompt
+  wiederfindet. Ohne Bewertung bleibt die Zeit: Unter Fremdlast schwankte allein der
+  Modellstart zwischen 56 und 314 s je Zug, beide Läufe hatten je zwei Zeitüberschreitungen.
+
+  **Offen:** der dritte Lauf ohne Denkblock (`think: false`, läuft seit 00:40); die Neumessung
+  von `PROMPT_TOKENS` mit `tools/measure_local_model.py` auf ruhiger Karte — die 31 465 im
+  Code sind seit der Kürzung eine Obergrenze und als solche benannt; und drei Entscheidungen
+  von Robert: Denkmodus, Warmhalten, Flächenliste im Steckbrief (die 111 Merkmale von
+  *Drucker kalibrieren* sind 36 Flächenzeilen je Körper; die zwölf größten plus Zähler wären
+  die Hälfte des Steckbriefs).
 
 ## Tests und Entwicklungswerkzeuge
 

@@ -1822,6 +1822,59 @@ def test_where_a_part_sits_is_explained_where_the_model_reads_it() -> None:
             )
 
 
+def test_what_the_compact_schema_takes_from_a_field_the_prompt_says() -> None:
+    """RM-173: Was ein Feld im kompakten Schema verliert, sagt der Prompt einmal.
+
+    ``_without_convention_text`` nimmt zwei Sorten Feldtext weg: den Satz an
+    ``play``, der in zwanzig Werkzeugen wörtlich gleich steht, und die vier
+    Achsen, deren Text nur auf ihr Geschwisterfeld zeigt („— siehe Position
+    X"). Beides steht dafür in ``_CONVENTIONS_HINT``. Zwei Dinge hält der
+    Test zusammen: **Jeder Satz in ``CONVENTION_SENTENCES`` trifft das
+    Register** — ein Hinweis auf einen Satz, den kein Feld mehr trägt, wäre
+    ein Satz über nichts (so standen dort am 14.09.2026 zwei Einträge für
+    ``name`` und ``angle``, die auf kein Feld passten). Und **jedes Feld, das
+    kompakt ohne Text steht, wird im kompakten Prompt beim Namen genannt** —
+    auch die Platzierungsangaben der Bausteine, die vorher schon so reisten.
+
+    Der Test prüft Deckung, nicht Wortlaut: Die Namen kommen aus dem Schema,
+    und das gilt in jeder Sprache.
+    """
+    from app.core.agent.prompt import system_prompt
+    from app.core.agent.tools import CONVENTION_SENTENCES, operation_tools
+
+    voll = {entry["name"]: entry for entry in operation_tools()}
+    kurz = {entry["name"]: entry for entry in operation_tools(compact=True)}
+    prompt = system_prompt(compact=True)
+
+    for feld, satz in CONVENTION_SENTENCES.items():
+        traeger = [
+            name
+            for name, entry in voll.items()
+            if str(entry["input_schema"]["properties"].get(feld, {}).get("description", ""))
+            .split(" [", 1)[0]
+            .strip()
+            == satz
+        ]
+        assert len(traeger) >= 2, (
+            f'„{satz}" steht an {feld} in {len(traeger)} Werkzeugen — '
+            "ein Satz, der sich nicht wiederholt, gehört an sein Feld, nicht in den Prompt"
+        )
+        assert all(
+            "description" not in kurz[name]["input_schema"]["properties"][feld] for name in traeger
+        )
+
+    ohne_hinweis: list[str] = []
+    for name, lang in voll.items():
+        for feld, spec in lang["input_schema"]["properties"].items():
+            knapp = kurz[name]["input_schema"]["properties"][feld]
+            if "description" in spec and "description" not in knapp and f"``{feld}``" not in prompt:
+                ohne_hinweis.append(f"{name}.{feld}")
+    assert not ohne_hinweis, (
+        f"{len(ohne_hinweis)} Felder stehen kompakt ohne Text, und der Prompt nennt sie "
+        f"nicht: {ohne_hinweis[:5]}"
+    )
+
+
 # --- Zurücknehmen sagt, was es mitnimmt (Review 25.08.2026, Regel 16) --------------
 
 

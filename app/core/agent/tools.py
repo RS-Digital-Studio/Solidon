@@ -124,6 +124,45 @@ def _caveat_tail(spec: OperationSpec) -> str:
     return f"\n\n{line}" if line else ""
 
 
+#: Was ein Geschwisterverweis im Parametertext ist: „— siehe Position X",
+#: „— siehe Normale X". Der Satz sagt nur, dass für dieses Feld gilt, was am
+#: Nachbarn steht — und das sagt der kompakte Systemprompt einmal für die
+#: vier Felder, die er beim Namen nennt (``prompt._CONVENTIONS_HINT``).
+_SIBLING_REFERENCE: Final = " — siehe "
+_SIBLING_FIELDS: Final = frozenset({"y", "z", "ny", "nz"})
+
+#: Der Satz, der in zwanzig Werkzeugen wörtlich gleich steht und deshalb
+#: einmal im Systemprompt steht. Geprüft wird der Text ohne Einheit;
+#: ``tests/test_agent.py`` hält die Liste am Register — ein Satz, den kein
+#: Feld mehr trägt, stünde sonst als Hinweis auf nichts im Prompt.
+CONVENTION_SENTENCES: Final[dict[str, str]] = {
+    "play": "Null heißt: Wert aus dem kalibrierten Materialprofil.",
+}
+
+
+def _plain_number(field: dict[str, Any]) -> dict[str, Any]:
+    """Ein bindbares Feld als Zahl — die Bindung erklärt der Systemprompt."""
+    kind = field.get("type")
+    if not isinstance(kind, list) or "string" not in kind or len(kind) < 2:
+        return field
+    if not ({"number", "integer"} & set(kind)):
+        return field
+    kept = [entry for entry in kind if entry != "string"]
+    return {**field, "type": kept[0] if len(kept) == 1 else kept}
+
+
+def _without_convention_text(name: str, field: dict[str, Any]) -> dict[str, Any]:
+    """Der Text eines Felds, das nur eine Konvention wiederholt, fällt weg."""
+    text = str(field.get("description", ""))
+    if not text:
+        return field
+    bare = text.split(" [", 1)[0].strip()
+    sibling = name in _SIBLING_FIELDS and _SIBLING_REFERENCE in text
+    if sibling or CONVENTION_SENTENCES.get(name) == bare:
+        return {key: value for key, value in field.items() if key != "description"}
+    return field
+
+
 def _without_binding_pattern(field: dict[str, Any]) -> dict[str, Any]:
     """Ein Feld ohne den Bindungs-Regex — auch in seinem ``anyOf``.
 
@@ -268,20 +307,31 @@ def operation_tools(
 
         # **Die Bindung eines Zahlenfelds steht im Systemprompt — und das
         # lokale Modell hat sie vorher nie gesehen.** Jedes bindbare Feld trug
-        # ``"pattern": "^(?:@[A-Za-z_][A-Za-z0-9_]*|=.+)$"``, 618-mal derselbe
-        # Regex, 29 664 Zeichen. Gemessen am 14.09.2026 (RM-173): Ollama parst
-        # die Werkzeuge in eine feste Struktur und verwirft ``pattern``,
+        # ``"pattern": "^(?:@[A-Za-z_][A-Za-z0-9_]*|=.+)$"`` und den Typ
+        # ``["number", "string"]``. Gemessen am 14.09.2026 (RM-173): Ollama
+        # parst die Werkzeuge in eine feste Struktur und verwirft ``pattern``,
         # ``minimum``, ``maximum`` und ``default`` vor dem Rendern — ohne den
-        # Regex 31 539 Token statt 31 465 (die Differenz ist der neue Satz im
-        # Prompt), ohne Grenzen und Vorgaben dieselbe Zahl. Das Modell bekam
-        # also einen Typ „Zahl oder Text" und keinen Satz, was der Text sein
-        # dürfte; ``@laenge`` war ihm nie erklärt. Seither sagt
-        # ``_BINDING_HINT`` es einmal, und der Regex fällt hier weg, weil er
-        # nirgends ankam. Das volle Schema behält ihn: Ein gehostetes Modell
-        # liest ihn wirklich.
+        # Regex 31 539 Token statt 31 465, ohne Grenzen und Vorgaben dieselbe
+        # Zahl. Das Modell bekam also einen Typ „Zahl oder Text" und keinen
+        # Satz, was der Text sein dürfte. Seither sagt ``_BINDING_HINT`` es
+        # einmal, das Feld ist eine Zahl (1 425 Token weniger), und der Regex
+        # fällt weg, weil er nirgends ankam. Das volle Schema behält beides:
+        # Ein gehostetes Modell liest den Regex wirklich.
         if compact:
             properties = {
-                name: _without_binding_pattern(field) for name, field in properties.items()
+                name: _plain_number(_without_binding_pattern(field))
+                for name, field in properties.items()
+            }
+            # **Konventionen stehen einmal im Prompt, nicht je Werkzeug.** Die
+            # Bausteinplatzierung stand schon dort; dieselbe Regel gilt für
+            # die vier Achsen, deren Text nur auf ihr Geschwisterfeld zeigt
+            # („Weitere Achse des Orts — siehe Position X", 70 Felder), und
+            # für den Satz an ``play``, der in zwanzig Werkzeugen gleich ist.
+            # Gemessen mit beidem: 28 440 statt 31 539 Token. Die eigenen
+            # Sätze von ``x`` und ``nx`` bleiben, denn dort heißt ``x`` beim
+            # Verschieben etwas anderes als beim Bohren.
+            properties = {
+                name: _without_convention_text(name, field) for name, field in properties.items()
             }
 
         parameters["properties"] = properties

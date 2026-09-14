@@ -122,6 +122,15 @@ vorangestelltem = (``=@laenge/2``). Das gilt für jedes Werkzeug und steht dort
 nicht noch einmal.
 """
 
+#: Was in jedem Werkzeug gleich heißt — nur für das kompakte Schema, das
+#: diese Sätze nicht mehr je Feld trägt (RM-173, ``tools._without_convention_text``).
+_CONVENTIONS_HINT = """
+Was in jedem Werkzeug gleich heißt, steht dort nicht noch einmal: ``y`` und
+``z`` sind die weiteren Achsen zu dem, was an ``x`` steht, ``ny`` und ``nz``
+die weiteren zu ``nx``; ``play`` ist das Spiel einer Passung in Millimetern,
+und null heißt Wert aus dem kalibrierten Materialprofil.
+"""
+
 #: Der Hinweis auf den Ort — nur für Schemata, die ihn auch tragen.
 #:
 #: §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der Beschreibung
@@ -159,6 +168,7 @@ def system_prompt(rule_set: rules.RuleSet | None = None, *, compact: bool = Fals
     # schweigt; beides ist schlechter als die Wahrheit.
     if compact:
         parts.append(_BINDING_HINT.strip())
+        parts.append(_CONVENTIONS_HINT.strip())
     else:
         parts.append(_MENU_HINT.strip())
     return "\n\n".join(parts)
