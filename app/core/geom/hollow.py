@@ -89,6 +89,7 @@ def hollow(
     vents: int = 1,
     vent_diameter: float = VENT_DIAMETER,
     open_top: bool = False,
+    open_towards: Vec3 | None = None,
     quality: Quality = "fine",
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
@@ -100,9 +101,20 @@ def hollow(
     das Ergebnis eine Dose statt eines geschlossenen Körpers, und *Deckel
     erzeugen* findet die Öffnung, die es verlangt — der Weg dorthin führte
     sonst über zwei Zylinder und eine Differenz.
+
+    ``open_towards`` öffnet stattdessen in **diese** Richtung (RM-087): die
+    Vorderseite eines Puppenhauses, die Seite eines Regals. Eine Achsrichtung
+    als Vektor — das Raster ist achsparallel, und die Öffnung ist der letzte
+    Querschnitt des Hohlraums in dieser Richtung, durchgezogen bis über den
+    Rand. Gesetzt schlägt es ``open_top``; beides ist dieselbe Sache mit
+    anderer Richtung, und eine offene Seite braucht so wenig eine
+    Entlüftung wie eine offene Decke.
     """
     if wall <= EPS_GEOM:
         raise ValueError("a wall thickness has to be positive")
+    direction: Vec3 | None = open_towards if open_towards is not None else None
+    if direction is None and open_top:
+        direction = (0.0, 0.0, 1.0)
 
     # §15.6: Aushöhlen rastert einen ganzen Körper und fährt danach bis zu sechs
     # Boolesche Schnitte. Das dauert an einem gescannten Teil Minuten, und bis
@@ -130,8 +142,8 @@ def hollow(
     findings = [*outcome.findings, *enclosed.findings]
     stages: list[SolverInfo | None] = [outcome.solver, enclosed.solver]
 
-    if open_top and field is not None:
-        opening = _mouth(field[0])
+    if direction is not None and field is not None:
+        opening = _mouth(field[0], direction)
         tool = _meshed(opening, field[1], field[2], mesh) if opening is not None else None
         if tool is None:
             findings.append(
@@ -139,8 +151,8 @@ def hollow(
                     code="hollow.no_opening",
                     severity="warning",
                     message=_(
-                        "Die Decke ließ sich nicht öffnen — der Hohlraum reicht "
-                        "nicht bis unter die Oberseite."
+                        "Die Öffnung ließ sich nicht schneiden — der Hohlraum reicht "
+                        "nicht bis unter die Wand, die geöffnet werden soll."
                     ),
                 )
             )
@@ -156,7 +168,7 @@ def hollow(
     placed: tuple[Vec3, ...] = ()
     # Eine offene Dose ist ihre eigene Entlüftung. Ein Loch im Boden wäre dort
     # kein Schutz vor der durchsackenden Decke, sondern ein Loch im Boden.
-    if vents > 0 and not open_top:
+    if vents > 0 and direction is None:
         _step(progress, cancelled, 0.8, _("Entlüftungen bohren"))
         try:
             body, placed, drilled = _vent(
@@ -195,6 +207,9 @@ def hollow(
                 "tolerance_mm": round(pitch / 2.0, 3),
                 "removed_cm3": round(removed / 1000.0, 1),
                 "vents": len(placed),
+                # Wohin geöffnet wurde, als Wort — „+z" für die Decke, „-y"
+                # für die Vorderseite. Ohne Öffnung steht dort nichts.
+                "opening": _direction_name(direction) if direction is not None else "",
             },
         )
     )
@@ -406,26 +421,44 @@ def _meshed(matrix: np.ndarray, origin: Vec3, pitch: float, like: MeshData) -> M
     return like.replacing(body) if len(body.faces) else None
 
 
-def _mouth(matrix: np.ndarray) -> np.ndarray | None:
-    """Das Raster der Öffnung: der oberste Querschnitt des Hohlraums, nach oben
-    durchgezogen.
+def _mouth(matrix: np.ndarray, direction: Vec3 = (0.0, 0.0, 1.0)) -> np.ndarray | None:
+    """Das Raster der Öffnung: der äußerste Querschnitt des Hohlraums in
+    ``direction``, in dieser Richtung durchgezogen.
 
-    Der oberste und nicht die Vereinigung aller — eine Dose soll ihre Decke
+    Der äußerste und nicht die Vereinigung aller — eine Dose soll ihre Decke
     verlieren, nicht ihre Schulter. Wo der Hohlraum nach oben zuläuft, wird die
     Öffnung entsprechend enger; das ist bei einer Kugel wenig sinnvoll und bei
     allem, was wie ein Behälter aussieht, genau richtig.
 
-    Nach oben bis an den Rand des Rasters, und der liegt eine Zelle über dem
-    Körper (``solid_field`` legt ihn dort hin). Damit ragt das Werkzeug hinaus,
-    statt eine Fläche mit dem Deckel zu teilen (§39).
+    Bis an den Rand des Rasters, und der liegt ringsum eine Zelle außerhalb
+    des Körpers (``solid_field`` legt ihn dort hin). Damit ragt das Werkzeug
+    hinaus, statt eine Fläche mit dem Deckel zu teilen (§39).
+
+    Die Richtung ist eine der sechs Achsrichtungen; welche, entscheidet die
+    betragsgrößte Komponente. Gerechnet wird auf einer **Sicht** des Rasters,
+    deren letzte Achse die Öffnungsrichtung ist — ``moveaxis`` und das
+    Umdrehen kopieren nichts, und die Schreibzugriffe landen im Ergebnis.
     """
-    levels = np.flatnonzero(matrix.any(axis=(0, 1)))
+    axis = int(np.argmax(np.abs(np.asarray(direction, dtype=float))))
+    forward = float(direction[axis]) > 0.0
+    seen = np.moveaxis(matrix, axis, -1)
+    opening = np.zeros_like(matrix)
+    written = np.moveaxis(opening, axis, -1)
+    if not forward:
+        seen = seen[..., ::-1]
+        written = written[..., ::-1]
+    levels = np.flatnonzero(seen.any(axis=(0, 1)))
     if not len(levels):
         return None
     top = int(levels[-1])
-    opening = np.zeros_like(matrix)
-    opening[:, :, top:] = matrix[:, :, top][:, :, None]
+    written[..., top:] = seen[..., top][..., None]
     return opening if opening.any() else None
+
+
+def _direction_name(direction: Vec3) -> str:
+    """``+z``, ``-y`` — die Achsrichtung als kurzes Wort für den Bericht."""
+    axis = int(np.argmax(np.abs(np.asarray(direction, dtype=float))))
+    return ("+" if float(direction[axis]) > 0.0 else "-") + "xyz"[axis]
 
 
 def _step(

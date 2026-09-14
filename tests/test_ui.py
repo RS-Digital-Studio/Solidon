@@ -10066,7 +10066,9 @@ def test_aligning_is_grey_until_a_second_body_carries_a_feature(window: MainWind
 def test_a_lid_is_offered_only_at_an_opening_that_faces_up(window: MainWindow) -> None:
     """*Deckel erzeugen* und *Drehdeckel erzeugen* standen an jeder Fläche einer
     massiven Platte bedienbar da und konnten nur scheitern — „auf dieser
-    Höhe massiv" an der Oberseite, „zeigt nicht nach oben" an der Seite —,
+    Höhe massiv" an der Oberseite, „zeigt nicht nach oben" an der Seite (seit
+    RM-087 auch dort „massiv": Ein Deckel darf seitlich liegen, dahinter ist
+    aber nichts offen) —,
     während *Offene Fläche schließen* daneben seit RM-168 grau war
     (Bedienweg-Durchsicht 14.09.2026). Die Karte kennt die Fläche, wenn sie
     den Knopf zeigt; sie fragt ``lid.reason_against`` und trägt denselben
@@ -10099,7 +10101,10 @@ def test_a_lid_is_offered_only_at_an_opening_that_faces_up(window: MainWindow) -
 
     for name in ("create_lid", "screw_lid"):
         assert "massiv" in (reason_at(plate, top, 1, name) or ""), name
-        assert "nach oben" in (reason_at(plate, side, 1, name) or ""), name
+        # Seit RM-087 darf ein Deckel auch an einer Seite liegen — an einer
+        # massiven Platte ist die Seite darum aus demselben Grund grau wie
+        # die Oberseite: Dahinter ist nichts offen.
+        assert "massiv" in (reason_at(plate, side, 1, name) or ""), name
 
     assert window.session.apply(
         "Quader",
@@ -10130,7 +10135,9 @@ def test_a_lid_is_offered_only_at_an_opening_that_faces_up(window: MainWindow) -
     rim, floor = upward[0][1], upward[1][1]
     for name in ("create_lid", "screw_lid"):
         assert reason_at(hollow, rim, 2, name) is None, f"{name} an der Öffnung bleibt frei"
-        assert "massiv" in (reason_at(hollow, floor, 2, name) or ""), f"{name} am Boden"
+        # Seit RM-087 nennt der Boden die Ursache statt des Symptoms: Er liegt
+        # innen — vorher hieß es „massiv", weil der Schnitt darunter Wand traf.
+        assert "Inneren" in (reason_at(hollow, floor, 2, name) or ""), f"{name} am Boden"
 
 
 def test_decimating_and_remeshing_start_from_the_body(window: MainWindow) -> None:

@@ -218,8 +218,15 @@ das ganze Register.
 
 **Wandungen**
 
-`hollow.py` (Aushöhlen — mit den Entlüftungen, die es druckbar machen) ·
-`lid.py` (ein Deckel für eine Öffnung)
+`hollow.py` (Aushöhlen — mit den Entlüftungen, die es druckbar machen; die
+Öffnung liegt oben oder an der gewählten Seite: `open_towards` ist eine
+Achsrichtung, `_mouth` zieht den äußersten Querschnitt des Hohlraums in dieser
+Richtung durch, und die Operation leitet sie aus der Normalen der Fläche in
+`open_at` ab, RM-087) ·
+`lid.py` (ein Deckel für eine Öffnung — auch vor einer Seitenöffnung:
+`opening_frame` nimmt jede achsparallele **Außen**fläche, `create_lid` dreht den
+Körper mit `upright_normal` nach oben, baut wie immer und dreht Deckel und
+Merkmale zurück; die Hohlraumdecke liegt innen und wird abgewiesen)
 
 **Druckvorbereitung**
 

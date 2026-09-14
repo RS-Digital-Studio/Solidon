@@ -1309,6 +1309,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "objects": _("Objekte"),
     "op": _("Operation"),
     "open_edges": _("Offene Kanten"),
+    "opening": _("Öffnung"),
     "operation": _("Operation"),
     "operations": _("Operationen"),
     "output": _("Ausgabe"),

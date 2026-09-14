@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
 | 2026-09-14 | [Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)](#die-sollwerte-der-geometrietests-haben-ihre-herkunft-14092026) |
 | 2026-09-14 | [Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)](#die-prompt-grundlast-ist-gemessen-und-das-fenster-ist-voll-14092026) |
 | 2026-09-14 | [Die Orientierungssuche hat ihre Abnahme (14.09.2026)](#die-orientierungssuche-hat-ihre-abnahme-14092026) |
@@ -27845,7 +27846,10 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     und über derselben Dreiecksgrenze wie die Körperfakten gar nicht. Gemessen: an der Platte oben
     „massiv", seitlich „nach oben"; an der Öffnung einer ausgehöhlten Dose frei — und am Boden
     ihres Hohlraums, der auch nach oben zeigt, wieder „massiv". Nachweis:
-    `test_a_lid_is_offered_only_at_an_opening_that_faces_up`.
+    `test_a_lid_is_offered_only_at_an_opening_that_faces_up`. Seit RM-087 (Deckel auch vor einer
+    Seitenöffnung) fragt `reason_against` über `opening_frame`: An der massiven Platte heißt es
+    auch seitlich „massiv", am Boden des Hohlraums „liegt im Inneren" — die Ursache statt des
+    Symptoms —, und die Seite einer seitlich geöffneten Dose ist frei.
   - **`obj_2:hole_1` im Band** (B3). *An Merkmal ausrichten* öffnete mit dem Ziel auf
     „— keines —", das Band antwortete mit dem Formatfehler des Kerns, und der Knopf war bedienbar.
     Das Ziel ist seither Pflicht (`required=True` bei `targets_feature`): Der Wähler beginnt auf
@@ -28296,3 +28300,53 @@ abgeschlossen am 14.09.2026.
   Sollwert trägt seine Herkunft — Konstruktion, Korpus oder Formel; eine Zahl, die aus einem
   Lauf abgeschrieben ist, trägt ihre Herleitung als Kommentar, oder sie ist ein
   Determinismusnachweis und der Test sagt das.
+
+## Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)
+
+Roberts Beispiel vom 02.09.2026, abgeschlossen am 14.09.2026: ein Puppenhaus, Räume
+ausgehöhlt, die Vorderseite offen — und ein Deckel davor.
+
+<a id="rm-087"></a>
+
+- [x] **RM-087 — Aushöhlen mit wählbarer offener Seite planen.** *Oben öffnen* nahm nur die
+  Decke; der Weg zur offenen Seite war Aushöhlen plus eine Tasche oder ein Schnitt durch die
+  Wand. Der Wunsch aus dem Review vor der Demo 0.3.0 war „Öffnen an: <Fläche>“ als
+  Merkmalsparameter, und *Deckel erzeugen* findet die Öffnung dann wie bisher.
+
+  **Die Öffnung:** `HollowParams.open_at` ist ein Ziel wie `up_to` an der Skizze
+  (`targets_feature=True`): Eine angeklickte **Fläche** trägt sich über `values_for` selbst ein,
+  eine Bohrung nicht — an einer Bohrung lässt sich nichts öffnen. Die Operation leitet aus der
+  Flächennormale die Achsrichtung ab (`_opening_direction`, `dominant_axis`), und `hollow`
+  öffnet in `open_towards`: `_mouth` rechnet auf einer Sicht des Rasters, deren letzte Achse
+  die Öffnungsrichtung ist, und zieht den äußersten Querschnitt des Hohlraums bis über den
+  Rand — dieselbe Zeile für alle sechs Richtungen, `open_top` ist seither `(0, 0, 1)` und
+  bitgleich mit vorher. Vier Absagen, jede mit Feld, Grund und Handlung (Regel 17): fremder
+  Körper, unbekannte Fläche, kein Flächenmerkmal, schräge Fläche (das Raster ist achsparallel,
+  und eine Öffnung entlang einer schrägen Fläche wäre eine andere, als der Klick versprach).
+  Der Bericht nennt die Richtung (`hollow.done` trägt `opening`, „-y“ für vorn).
+
+  **Der Deckel davor:** `create_lid` nimmt jede achsparallele **Außen**fläche
+  (`opening_frame`). Gebaut wird immer nach oben: `upright_normal` — dieselbe Drehung wie beim
+  Trennen — richtet den Körper so, dass die gewählte Fläche nach oben zeigt, Platte und Kragen
+  entstehen wie eh und je, und die Transponierte dreht Deckel, Kragen- und Hohlraummerkmal
+  zurück vor die Öffnung (`moved_features`). Das Außen-Kriterium hält die Falle, die
+  `plane_of` für die Decke kannte, in jeder Richtung: Die Innenseite der Rückwand zeigt nach
+  vorn wie die Öffnung, ist die größte Fläche in dieser Richtung, und wer sie nähme, setzte den
+  Deckel mitten ins Haus — sie wird abgewiesen (`not_outside`).
+
+  **Gemessen** (`tests/test_hollow_opening.py`, 19 grün): Öffnung in jeder der sechs Richtungen
+  am Schnitt einen Millimeter hinter der Wand — Ring an der Öffnung, volle Fläche gegenüber,
+  wasserdicht; das Puppenhaus 120 × 80 × 90 vorn offen, Decke und Rückwand zu, mit
+  `obj_1:face_n` wie mit der nackten Kennung dasselbe Volumen; die vier Absagen; der Deckel
+  vor der Vorderseite (y von −42,4 bis −36 bei einer Wand an −40: Platte 2,4 davor, Kragen 4
+  dahinter), rechts und unten ebenso, Kragennormale gleich der Richtung, oben unverändert.
+  Zwei Mutationen gegengeprüft — das Umdrehen der Sicht für negative Richtungen entfernt (acht
+  rot), die Rückdrehung des Deckels entfernt (drei rot).
+
+  **Eine Beobachtung am Raster, nicht behoben:** Der Hohlraum eines Quaders von 30 mm Höhe
+  reicht im Raster von z = −12 bis 11 statt ±12 — die obere Wand ist eine Zelle dicker als
+  die untere, weil `solid_field` die Ebene genau auf der Oberseite leer schneidet. Das war vor
+  RM-087 so und betrifft die Decke gleichermaßen; die Öffnung nach oben nimmt darum 1 mm mehr
+  Material weg als die nach unten. Wer die Wand auf den Rasterschritt genau will, misst hier.
+
+  [Bisheriger Befund](#review-vor-der-demo-030-02092026).

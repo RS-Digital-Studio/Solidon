@@ -410,7 +410,9 @@ def test_the_ceiling_of_a_cavity_is_not_an_opening(profile: Profile) -> None:
     with pytest.raises(ValidationError) as problem:
         make_lid(entry, profile, collar=4.0, at_feature=ceiling.id)
 
-    assert problem.value.constraint == "not_upright"
+    # Seit RM-087 darf ein Deckel auch nach unten zeigen — was die Innendecke
+    # ausschließt, ist nicht mehr ihre Richtung, sondern dass sie innen liegt.
+    assert problem.value.constraint == "not_outside"
 
 
 def test_a_chosen_rim_decides_the_height(profile: Profile) -> None:

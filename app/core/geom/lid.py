@@ -21,6 +21,7 @@ from typing import Any, cast
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
+from app.core.geom.autosplit import upright_normal
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
@@ -28,7 +29,7 @@ from app.core.knowledge.parts.shapes import RIDGE_SHARE, moved, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.scene.placement import faces_up
+from app.core.scene.placement import dominant_axis, faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import (
     BaseParams,
@@ -40,6 +41,8 @@ from app.core.types import (
     Quality,
     SceneObject,
     SolverInfo,
+    Vec3,
+    vec3_or_none,
 )
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -299,19 +302,106 @@ def reason_against(source: SceneObject, name: str) -> str | None:
     Platte (Bedienweg-Durchsicht): beide an jeder Fläche bedienbar, und jeder
     Klick endete in „Der Körper ist auf dieser Höhe massiv" oder „Diese Fläche
     zeigt nicht nach oben" — während *Offene Fläche schließen* daneben seit
-    RM-168 grau stand. Zwei Fragen in der Reihenfolge der Operation: Zeigt
-    die Fläche nach oben (:func:`plane_of`), und ist der Körper darunter
-    offen (:func:`opening`, ein Schnitt knapp unter dem Rand)? Wer die zweite
-    an einem großen Netz nicht bezahlen will, fragt vorher nach der
-    Dreieckszahl — das Fenster tut es über dieselbe Grenze wie bei den
-    Körperfakten (``labels.BODY_FACTS_LIMIT``).
+    RM-168 grau stand. Zwei Fragen in der Reihenfolge der Operation: Liegt
+    die Fläche außen und zeigt sie nach einer Achse (:func:`opening_frame` —
+    seit RM-087 auch eine Seite, nicht nur die Decke), und ist der Körper
+    dahinter offen (:func:`opening`, ein Schnitt knapp unter dem Rand, im
+    aufgerichteten Raum wie beim Bauen)? Wer die zweite an einem großen Netz
+    nicht bezahlen will, fragt vorher nach der Dreieckszahl — das Fenster tut
+    es über dieselbe Grenze wie bei den Körperfakten
+    (``labels.BODY_FACTS_LIMIT``).
     """
     try:
-        z = plane_of(source, name, 0.0)
-        opening(as_mesh_data(source.mesh), z - BELOW_RIM)
+        z, direction = opening_frame(source, name, 0.0)
+        mesh = as_mesh_data(source.mesh)
+        if direction != _UP:
+            mesh = mesh.replacing(mesh.raw.copy().apply_transform(upright_normal(direction)))
+        opening(mesh, z - BELOW_RIM)
     except ValidationError as refused:
         return str(refused.detail) if refused.detail is not None else str(refused.title)
     return None
+
+
+#: Die Öffnung nach oben — die Richtung, in der ein Deckel schon immer lag.
+_UP: Vec3 = (0.0, 0.0, 1.0)
+
+
+def opening_frame(source: SceneObject, name: str, stated: float) -> tuple[float, Vec3]:
+    """Wo die Öffnung liegt und wohin sie zeigt (RM-087).
+
+    Das Gegenstück zu :func:`plane_of` für einen Deckel, der nicht nur oben
+    liegt: Ein Puppenhaus, vorn ausgehöhlt, bekommt seine Front als Deckel.
+    Zurück kommt die Höhe der Öffnung **im aufgerichteten Raum** — dem, in dem
+    die gewählte Fläche nach oben zeigt — und die Richtung selbst. Ohne
+    Fläche gilt, was immer galt: die Zahl oder die Oberkante, nach oben.
+
+    Angenommen wird jede Fläche, die nach einer Achse zeigt und **außen**
+    liegt. Die Decke eines Hohlraums zeigt nach unten und liegt innen; als
+    Öffnung genommen setzte sie den Deckel mitten in die Box (siehe
+    :func:`plane_of`). Das Außen-Kriterium hält den Fall in jeder Richtung
+    fest: Die Mitte der Fläche liegt am Rand des Hüllquaders in ihrer
+    Normalenrichtung. Eine schräge Fläche wird abgewiesen — der Schnitt durch
+    die Wand ist ein Ebenenschnitt, und ein Deckel auf einer geraden Seite ist
+    das, was der Klick versprochen hat.
+    """
+    if not name:
+        return plane_of(source, name, stated), _UP
+    feature = _face_named(source, name)
+    normal = vec3_or_none(feature.params.get("normal"))
+    axis = dominant_axis(normal) if normal is not None else None
+    if normal is None or axis is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Diese Fläche ist schräg. Ein Deckel liegt auf einer geraden Seite — "
+                "wählen Sie eine Fläche, die nach einer Achse zeigt."
+            ),
+            value=name,
+            constraint="not_axis_aligned",
+        )
+    index = "xyz".index(axis)
+    sign = 1.0 if normal[index] > 0.0 else -1.0
+    direction = [0.0, 0.0, 0.0]
+    direction[index] = sign
+    centre = vec3_or_none(feature.params.get("centre")) or (0.0, 0.0, 0.0)
+    bounds = source.mesh.bounds
+    edge = bounds.maximum[index] if sign > 0.0 else bounds.minimum[index]
+    # Die Toleranz ist die des Netzes, nicht der Anzeige: Eine Fläche, deren
+    # Mitte einen Rasterschritt hinter dem Rand liegt, ist die Decke eines
+    # ausgehöhlten Hohlraums und keine Außenseite.
+    if abs(float(centre[index]) - float(edge)) > BELOW_RIM:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Diese Fläche liegt im Inneren — eine Öffnung für einen Deckel "
+                "liegt außen am Körper."
+            ),
+            value=name,
+            constraint="not_outside",
+        )
+    return sign * float(centre[index]), (direction[0], direction[1], direction[2])
+
+
+def _face_named(source: SceneObject, name: str) -> Feature:
+    """Die Fläche dieses Namens an diesem Körper — oder die Absage, warum nicht."""
+    feature = source.features.get(name)
+    if feature is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
+            value=name,
+            constraint="unknown_feature",
+            values={"known": ", ".join(sorted(source.features))},
+        )
+    if feature.kind != "face":
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Ein Deckel braucht eine Fläche, kein anderes Merkmal."),
+            value=name,
+            constraint="not_a_face",
+            values={"kind": feature.kind},
+        )
+    return feature
 
 
 def build(
@@ -448,7 +538,18 @@ def create_lid(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    z = plane_of(source, params.at_feature, params.z)
+    # **Gebaut wird immer nach oben** — auch für eine Seitenöffnung (RM-087).
+    # Der Körper wird so gedreht, dass die gewählte Fläche nach oben zeigt,
+    # der Deckel entsteht wie eh und je, und am Ende dreht dieselbe Matrix
+    # ihn zurück vor die Öffnung. Eine zweite Bauweise für Seitendeckel wäre
+    # eine zweite Stelle, an der der Kragen sein Spiel bekommt.
+    z, direction = opening_frame(source, params.at_feature, params.z)
+    # Dieselbe Drehung wie beim Trennen (``upright_normal``): Für die Decke
+    # die Einheit, sonst eine Drehung, deren Transponierte zurückführt.
+    turn = upright_normal(direction)
+    turned_back = turn.T
+    if direction != _UP:
+        mesh = mesh.replacing(mesh.raw.copy().apply_transform(turn))
     outline, cavities = opening(mesh, z - BELOW_RIM)
 
     clearance = params.clearance
@@ -473,6 +574,21 @@ def create_lid(ctx: OpContext) -> OpResult:
     )
 
     _log.info("lid over %d cavities at z=%.2f, clearance %.2f", len(cavities), z, clearance)
+    cavity_features = _with_cavity(source, cavities, z)
+    collar_features = _collar_feature(cavities, z, params.collar, clearance)
+    if direction != _UP:
+        # Träge, weil ``geom`` die Wahrnehmung nicht eifrig laden darf
+        # (Paketrichtung, ``test_core_package_direction``).
+        from app.core.perceive.matching import moved_features
+
+        body = body.replacing(body.raw.copy().apply_transform(turned_back))
+        # Nur das neue Merkmal wird zurückgedreht — die übrigen des Gehäuses
+        # haben den aufgerichteten Raum nie gesehen.
+        cavity_features = {
+            **source.features,
+            **moved_features({CAVITY_FEATURE: cavity_features[CAVITY_FEATURE]}, _rows(turned_back)),
+        }
+        collar_features = moved_features(collar_features, _rows(turned_back))
     # Das Gehäuse bleibt der erste Ausgang: eine Op mit consumes=1 ersetzt im
     # Stapel ihre Eingabe durch ihre Ausgaben — mit nur dem Deckel als Ausgang
     # fraß „Deckel erzeugen" das Gehäuse. Die Op-Tests riefen die Funktion
@@ -480,7 +596,7 @@ def create_lid(ctx: OpContext) -> OpResult:
     return OpResult(
         solver=solver,
         outputs=[
-            dataclasses.replace(source, features=_with_cavity(source, cavities, z)),
+            dataclasses.replace(source, features=cavity_features),
             SceneObject(
                 id="",
                 # **Kein Quellname und kein `.translate()`.** Beides war
@@ -495,7 +611,7 @@ def create_lid(ctx: OpContext) -> OpResult:
                 name=params.name or _("Deckel"),
                 mesh=body,
                 material=source.material,
-                features=_collar_feature(cavities, z, params.collar, clearance),
+                features=collar_features,
             ),
         ],
         findings=[
@@ -507,10 +623,25 @@ def create_lid(ctx: OpContext) -> OpResult:
                     "cavities": len(cavities),
                     "clearance_mm": round(clearance, 3),
                     "z_mm": round(z, 2),
+                    # Wohin die Öffnung zeigt, als Wort — „+z" ist die Decke,
+                    # „-y" die Vorderseite eines Puppenhauses.
+                    "opening": _direction_name(direction),
                 },
             )
         ],
     )
+
+
+def _rows(matrix: Any) -> Any:
+    """Eine 4x4-Matrix als verschachtelte Tupel — die Form, die ``moved_features``
+    als ``Transform`` liest."""
+    return tuple(tuple(float(value) for value in row) for row in matrix)
+
+
+def _direction_name(direction: Vec3) -> str:
+    """``+z``, ``-y`` — die Achsrichtung als kurzes Wort für den Bericht."""
+    index = max(range(3), key=lambda axis: abs(float(direction[axis])))
+    return ("+" if float(direction[index]) > 0.0 else "-") + "xyz"[index]
 
 
 # --- Der Drehdeckel --------------------------------------------------------------
@@ -693,7 +824,15 @@ def screw_lid(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    z = plane_of(source, params.at_feature, params.z)
+    # Dieselbe Drehung wie beim eingeschobenen Deckel (RM-087): Der Hals
+    # wächst immer nach oben, und zurück vor die Seitenöffnung dreht ihn die
+    # Transponierte. Die Kappe steht am Ursprung und dreht nicht mit — sie ist
+    # ein eigenes Teil, und wo sie liegt, entscheidet das Anordnen.
+    z, direction = opening_frame(source, params.at_feature, params.z)
+    turn = upright_normal(direction)
+    turned_back = turn.T
+    if direction != _UP:
+        mesh = mesh.replacing(mesh.raw.copy().apply_transform(turn))
     outline, cavities = opening(mesh, z - BELOW_RIM)
 
     clearance = params.clearance
@@ -774,13 +913,19 @@ def screw_lid(ctx: OpContext) -> OpResult:
     )
 
     _log.info("screw lid: neck %.2f, pitch %.2f, clearance %.2f", major, params.pitch, clearance)
+    neck_features = {NECK_THREAD_FEATURE: neck_thread}
+    if direction != _UP:
+        from app.core.perceive.matching import moved_features
+
+        threaded = threaded.replacing(threaded.raw.copy().apply_transform(turned_back))
+        neck_features = moved_features(neck_features, _rows(turned_back))
     return OpResult(
         solver=solver,
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=threaded,
-                features={NECK_THREAD_FEATURE: neck_thread},
+                features=neck_features,
             ),
             SceneObject(
                 id="",

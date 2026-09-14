@@ -104,6 +104,7 @@ from app.core.types import (
     SolverInfo,
     Vec3,
     is_a_cavity,
+    vec3_or_none,
 )
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length, is_close, is_zero
 from app.i18n import TranslatableText, _
@@ -4806,6 +4807,21 @@ class HollowParams(BaseParams):
             "eine Dose, und *Deckel erzeugen* findet die Öffnung, die es braucht."
         ),
     )
+    open_at: str = param(
+        title=_("Öffnen an Fläche"),
+        default="",
+        # **Ein Ziel, kein Ort** — dieselbe Bauart wie ``up_to`` an der
+        # Skizze: Eine angeklickte Fläche trägt sich ein (``values_for`` tut
+        # das nur für Flächen), und der Dialog bietet die Flächen der Szene
+        # mit Namen an. Ein ``kind="feature"`` hätte auch eine Bohrung
+        # eingetragen, und an einer Bohrung lässt sich nichts öffnen.
+        targets_feature=True,
+        doc=_(
+            "Statt oben: die Seite, an der der Hohlraum offen bleibt — die "
+            "Vorderseite eines Puppenhauses etwa. Eine angeklickte Fläche trägt "
+            "sich selbst ein und gilt vor „Oben öffnen“."
+        ),
+    )
     vents: int = param(
         title=_("Entlüftungen"),
         default=1,
@@ -4855,6 +4871,7 @@ def hollow_object(ctx: OpContext) -> OpResult:
         vents=params.vents,
         vent_diameter=params.vent_diameter,
         open_top=params.open_top,
+        open_towards=_opening_direction(source, params.open_at),
         quality=ctx.quality,
         progress=ctx.progress,
         cancelled=ctx.cancelled,
@@ -4879,6 +4896,72 @@ def hollow_object(ctx: OpContext) -> OpResult:
             if entry is not None
         ],
     )
+
+
+def _opening_direction(source: SceneObject, open_at: str) -> Vec3 | None:
+    """Die Achsrichtung, in die *Aushöhlen* an dieser Fläche öffnet (RM-087).
+
+    Leer heißt: keine Fläche gewählt, es gilt der Haken *Oben öffnen*. Die
+    Fläche muss zu **diesem** Körper gehören — ein Rezept, das die Vorderseite
+    eines anderen Teils nennt, öffnet hier nichts —, sie muss eine Fläche sein
+    und nach einer Achse zeigen: Das Raster des Aushöhlens ist achsparallel,
+    und eine Öffnung entlang einer schrägen Fläche wäre eine andere, als der
+    Klick versprochen hat. Jede Absage nennt, was stattdessen geht (Regel 17).
+    """
+    if not open_at:
+        return None
+    from app.core.scene.placement import dominant_axis
+    from app.core.sketch.planes import feature_plane_parts
+
+    object_id, feature_id = feature_plane_parts(f"feature:{open_at}")
+    if object_id and object_id != source.id:
+        raise ValidationError(
+            field="open_at",
+            detail=_(
+                "Diese Fläche gehört zu einem anderen Körper — geöffnet wird "
+                "an einer Fläche des Körpers, der ausgehöhlt wird."
+            ),
+            value=open_at,
+            constraint="foreign_feature",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    feature = source.features.get(feature_id)
+    if feature is None:
+        raise ValidationError(
+            field="open_at",
+            detail=_("Diese Fläche gibt es an diesem Objekt nicht mehr."),
+            value=open_at,
+            constraint="unknown_feature",
+            values={"known": ", ".join(sorted(source.features))},
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if feature.kind != "face":
+        raise ValidationError(
+            field="open_at",
+            detail=_("Geöffnet wird an einer Fläche — dieses Merkmal ist keine."),
+            value=open_at,
+            constraint="not_a_face",
+            values={"kind": feature.kind},
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    normal = vec3_or_none(feature.params.get("normal"))
+    axis = dominant_axis(normal) if normal is not None else None
+    if normal is None or axis is None:
+        raise ValidationError(
+            field="open_at",
+            detail=_(
+                "Diese Fläche ist schräg. Geöffnet wird entlang einer Achse — "
+                "wählen Sie eine gerade Seite, oder öffnen Sie oben."
+            ),
+            value=open_at,
+            constraint="not_axis_aligned",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    index = "xyz".index(axis)
+    sign = 1.0 if normal[index] > 0.0 else -1.0
+    direction = [0.0, 0.0, 0.0]
+    direction[index] = sign
+    return (direction[0], direction[1], direction[2])
 
 
 @op_params
