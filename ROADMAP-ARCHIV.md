@@ -27860,6 +27860,24 @@ Schritt an, der nichts ändert (alle *Verschieben*- und *Ändern*-Zeilen) — ke
 Undo-Schritt ohne Wirkung. Fläche, Randring und Ring tragen im Fenster keine Handlungen; ihre
 Wege sind Kontextmenü und Menü.
 
+<a id="rm-171"></a>
+
+- [x] **RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen.** *Grundform hochziehen* nutzte
+  alle acht Felder der Vorderseite; vier davon (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für
+  Lochkreis und Lochraster und standen bei einem Rechteck ausgegraut da — die Hälfte der
+  Vorderseite ohne Wirkung. Die alte Regel („wer sie verschwinden sähe, suchte sie") war
+  begründet; die Wahl war Roberts.
+
+  **Entschieden am 14.09.2026: ausblenden** („Ausblenden"). `_couple_dependent_fields` nimmt eine
+  Zeile, deren `depends_on` nicht gilt, aus dem Formular (`setRowVisible`) und bringt sie mit der
+  Bedingung wieder; gesperrt und begründet bleibt sie dahinter, damit ein verborgenes Feld nie den
+  Fokus bekommt. Der Dialog wächst und schrumpft mit den Zeilen — nur wenn sich eine bewegt hat,
+  denn die Kopplung läuft bei jedem Tastendruck. Gemessen: Ein Rechteck zeigt vorn Grundform,
+  Länge, Breite, Höhe; ein Lochraster Grundform, Länge, Höhe, Spalten, Zeilen, Loch-Ø.
+
+  Nachweis: `tests/test_operation_ui.py::test_a_rectangle_shows_only_the_rows_a_rectangle_has`
+  und `test_a_field_without_effect_says_why` (Relief: die Fläche kommt mit „Auf eine Fläche").
+
 ## Ein freier Fügeweg wird gesagt (14.09.2026)
 
 Ein Punkt aus dem Werkstattfilm vom 13.09.2026, abgeschlossen am 14.09.2026.

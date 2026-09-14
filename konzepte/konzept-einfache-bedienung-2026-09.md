@@ -1,7 +1,7 @@
 # Einfach für Kunden — was die Vorschau verschweigt und was die einfachen Werkzeuge anders machen
 
-> **Stand:** 14.09.2026 — Messung, Recherche, sieben Änderungen gebaut;
-> offen bleibt eine Entscheidung (RM-171). **Anlass:** Robert am 13.09.2026: „bei vielen operationen
+> **Stand:** 14.09.2026 — Messung, Recherche, acht Änderungen gebaut;
+> nichts mehr offen. **Anlass:** Robert am 13.09.2026: „bei vielen operationen
 > fehlen noch vorschau, bei aushöhlen reagiert die checkbox zum öffnen ab und
 > zu nicht, viele operationen sind auch recht umständlich, die ganze app soll
 > einfach für kunden sein" — und: „recherchiere auch mal wie man es ganz
@@ -9,9 +9,8 @@
 > **Rahmen:** Roberts Entscheidung vom 29.08.2026 gilt weiter — „eher den
 > aktuellen stand aber optimiert", kein Umbau der Bedienzone
 > (`konzept-befehlsband-2026-08.md`). Alles hier ist Optimierung am Bestand.
-> Offene Arbeit steht ausschließlich im Register von `ROADMAP.md`
-> (RM-171); RM-168 bis RM-170 sind am 14.09.2026 zugegangen und stehen mit
-> ihrem Nachweis im Archiv.
+> RM-168 bis RM-171 sind am 14.09.2026 zugegangen und stehen mit ihrem
+> Nachweis im Archiv; dieses Dokument führt keine offene Arbeit mehr.
 
 ## §1 Gemessen, nicht gefühlt
 
@@ -155,11 +154,10 @@ gebaut; der vierte ist eine Entscheidung und bleibt seine.
 zeigt, entscheidet sich an der gewählten Fläche und nicht am Körper — das
 Menü kann es vor dem Dialog nicht wissen.
 
-- **RM-171** — Abhängige Felder vorn: entscheiden, ob sie bei nicht erfüllter
-  Bedingung ausgeblendet statt ausgegraut werden (Entscheidung Robert; die
-  heutige Regel ist begründet, der Preis sind vier tote Zeilen im häufigsten
-  Fall). Nicht angefasst — „das grundlegende Konzept" schließt eine
-  dokumentierte Bedienregel ein.
+- **RM-171** — Abhängige Felder vorn: Robert hat entschieden („Ausblenden",
+  14.09.2026). Eine Zeile, deren Bedingung nicht gilt, verschwindet und kommt
+  mit ihr wieder; ein Rechteck zeigt vorn vier Felder statt acht. Nachweis
+  `test_a_rectangle_shows_only_the_rows_a_rectangle_has`.
 
 ## Quellen
 

@@ -555,6 +555,18 @@ Toleranzen, Auflösungen, Rückfallverhalten. Die Vorgaben kommen aus dem
 Drucker- und Materialprofil. **Eine gute Vorgabe ist mehr wert als eine gute
 Einstellmöglichkeit.**
 
+**Und was gerade nichts tut, steht nicht da.** Ein Feld mit `depends_on`,
+dessen Bedingung nicht gilt, verschwindet aus dem Dialog und kommt mit ihr
+wieder (`OperationDialog._couple_dependent_fields`; Entscheidung Robert,
+14.09.2026, RM-171). Bis dahin blieb es grau stehen, mit dem Satz, woran es
+liegt — begründet mit „wer es verschwinden sähe, suchte es". Der Preis stand in
+der Sonde vom 13.09.: *Grundform hochziehen* trug bei einem Rechteck vier tote
+Zeilen vorn, die Hälfte seiner Vorderseite. Die Zeile erscheint mit der
+Grundform, die sie braucht, und nicht heimlich. Gesperrt und begründet bleibt
+sie dahinter, damit kein verborgenes Feld den Fokus bekommt; der Dialog wächst
+und schrumpft mit (`adjustSize`, nur wenn sich eine Zeile bewegt hat).
+`test_a_rectangle_shows_only_the_rows_a_rectangle_has` hält die vier fest.
+
 **Was entscheidet, was später überhaupt geht, gehört nach vorn.** Der
 Umschalter der zwei Rechenkerne stand hinten, zugeklappt — und an ihm hängen
 sieben Operationen: Fase, Verrundung, Formschräge, Fläche versetzen, exaktes
@@ -1021,6 +1033,18 @@ ganze Feld trifft), und seine Beschriftung bekommt `labels.caption_toggles`
 `QCheckBox`: Operationsdialog, Merkmalfenster, Druckeinstellungen (zweimal).
 `tests/test_operation_ui.py` prüft die Klickfläche an einer echten Zeile und
 die Bauart über alle `bool`-Parameter des Registers.
+
+**Der Filter ist der Haken selbst, und `labels.py` importiert kein
+`QMouseEvent`.** Die erste Fassung hängte ein eigenes `QObject` als Filter an
+die Beschriftung und importierte `QMouseEvent` für den `isinstance`-Test —
+und `tests/test_filament_picker.py` riss danach deterministisch mit
+`0xc0000374` im `gc.collect` des Teardowns. Bisektiert am 14.09.2026 in
+einem Scratch-Worktree bis auf **eine Zeile**: der ungenutzte Import allein
+reißt; `QCheckBox` und `QEvent` daneben nicht. Ein PySide-Riss in der
+Typregistrierung, kein Fehler im eigenen Code — und trotzdem unsere Regel:
+Ein Ereignisfilter fragt `event.type()` und liest `button()` über `getattr`;
+`test_labels_do_not_import_the_mouse_event_type` hält es über den Syntaxbaum
+fest.
 
 **Und was eine Vorschau nicht zeigen kann, sagt sie.** Über drei Lagen stand
 dasselbe Band „Vorschau — noch nicht übernommen": über einer Bohrung, über

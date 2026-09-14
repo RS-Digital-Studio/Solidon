@@ -39,6 +39,7 @@ scrive in `website/version.json`.
 - Assegnare un filamento mostra il colore già nell'anteprima; uniformare e suddividere i triangoli mostrano la nuova mesh con i suoi spigoli. La barra spaziatrice riporta il prima.
 - Svuotare un pezzo con buchi nel guscio dice ora che il guscio è il problema e offre «Ripara e riprova» — invece di segnalare che nessun calcolo ha funzionato.
 - Sull'elemento scelto appare in grigio ciò che lì potrebbe solo fallire — «Ruota» su una svasatura, per esempio — con il motivo. E l'anteprima dice se all'applicazione arriverà una domanda.
+- Un campo che non fa nulla con la forma base scelta non appare più grigio nella finestra — appare con la forma che ne ha bisogno. Un rettangolo mostra davanti quattro campi invece di otto.
 
 ## 0.4.1
 

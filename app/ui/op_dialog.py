@@ -1671,7 +1671,7 @@ class OperationDialog(QDialog):
         super().reject()
 
     def _couple_dependent_fields(self) -> None:
-        """Ein Feld ohne Wirkung steht nicht bedienbar da (§2.6).
+        """Ein Feld ohne Wirkung steht nicht da (§2.4, §2.6).
 
         „Relief auflegen" ist der Fall: *Fläche* wirkt nur, solange *Auflegen*
         auf „Auf eine Fläche" steht — bei „Von oben" bleibt ein ausgefülltes
@@ -1679,8 +1679,18 @@ class OperationDialog(QDialog):
         Dasselbe Versprechen, das ``switch_variant`` bei den Zwillingen
         einlöst, nur eine Nummer kleiner: dort verschwindet die Zeile, weil die
         andere Variante sie gar nicht kennt; hier gehört sie zur Operation und
-        ist nur gerade wirkungslos. Sie wird deshalb grau und sagt, woran es
-        liegt, statt zu verschwinden — wer sie verschwinden sähe, suchte sie.
+        ist nur gerade wirkungslos.
+
+        **Sie verschwindet — Entscheidung Robert, 14.09.2026 (RM-171).** Bis
+        dahin blieb sie grau stehen und sagte, woran es liegt, mit dem
+        Argument „wer sie verschwinden sähe, suchte sie". Der Preis stand in
+        der Sonde vom 13.09.: *Grundform hochziehen* trug bei einem Rechteck
+        vier tote Zeilen vorn (Löcher, Spalten, Zeilen, Loch-Ø), also die
+        Hälfte seiner Vorderseite. Die Zeile erscheint mit der Grundform, die
+        sie braucht, und nicht heimlich — gesucht wird sie also dort, wo sie
+        entsteht. Gesperrt bleibt sie zusätzlich, damit ein verborgenes Feld
+        nie den Fokus bekommt, und der Satz, warum sie fehlt, bleibt an ihr —
+        für den Moment, in dem sie wiederkommt.
         """
         # **Aus dem Schema, nicht aus einer Tabelle daneben.** Die Angabe stand
         # als ``DEPENDENT_FIELDS`` hier im Modul und war mit einem Eintrag
@@ -1701,8 +1711,11 @@ class OperationDialog(QDialog):
         titles = {entry.name: str(entry.title) for entry in self.spec.params.spec()}
         docs = {entry.name: str(entry.doc or "") for entry in self.spec.params.spec()}
 
+        shown: dict[str, bool] = {}
+
         def follow() -> None:
             entered = self.values()
+            changed = False
             for entry in rules:
                 editor = self._editors[entry.name]
                 inactive = inactive_dependency(entry, schema, entered)
@@ -1711,6 +1724,10 @@ class OperationDialog(QDialog):
                 label = self._rows[entry.name].labelForField(editor)
                 if label is not None:
                     label.setEnabled(active)
+                if shown.get(entry.name) is not active:
+                    self._rows[entry.name].setRowVisible(editor, active)
+                    shown[entry.name] = active
+                    changed = True
                 # Beide Hälften sagen dasselbe — bei einer ausgegrauten Zeile
                 # ist der Grund die Auskunft, die zählt, und ausgerechnet dort
                 # zeigt man eher auf die Beschriftung als in das gesperrte Feld.
@@ -1719,6 +1736,11 @@ class OperationDialog(QDialog):
                 else:
                     explanation = _why_inactive(titles[inactive[0]], inactive[1][0])
                 _explain(editor, label, explanation)
+            # Eine Zeile weniger ist ein kürzerer Dialog — und eine mehr darf
+            # nicht unter den Knöpfen liegen. Nur wenn sich etwas bewegt hat:
+            # ``follow`` läuft bei jedem Tastendruck.
+            if changed and self.isVisible():
+                self.adjustSize()
 
         self.valuesChanged.connect(follow)
         self._couplings.append(follow)

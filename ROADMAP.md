@@ -80,7 +80,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
-| [RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen](#rm-171) | Bedienung und Darstellung | Entscheidung Robert — vier tote Zeilen im häufigsten Fall gegen „wer sie verschwinden sähe, suchte sie" |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -1117,16 +1116,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
-
-<a id="rm-171"></a>
-
-- [ ] **RM-171 — Abhängige Felder vorn: ausblenden oder ausgrauen.** *Grundform hochziehen* nutzt
-  alle acht Felder der Vorderseite; vier davon (Löcher, Spalten, Zeilen, Loch-Ø) gelten nur für
-  Lochkreis und Lochraster und stehen bei einem Rechteck ausgegraut da. Die heutige Regel ist
-  begründet (`_couple_dependent_fields`: „wer sie verschwinden sähe, suchte sie"); ihr Preis sind
-  vier tote Zeilen im häufigsten Fall. Entscheidung Robert: ausblenden, solange die Bedingung nicht
-  gilt (die Zeile erscheint mit der Grundform), oder ausgrauen wie heute. Keine Messung — eine
-  Wahl.
 
 ## KI und Generatoren
 

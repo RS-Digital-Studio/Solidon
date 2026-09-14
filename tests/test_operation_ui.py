@@ -1574,15 +1574,18 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     """*Fläche* wirkt nur, solange *Auflegen* auf „Auf eine Fläche" steht.
 
     Bei jeder anderen Art übergeht die Operation den Wert wortlos — im Dialog
-    stand er weiter bedienbar da und versprach eine Wirkung. Grau und mit
-    Grund statt weg: eine Zeile, die verschwindet, sucht man (§2.6).
+    stand er weiter bedienbar da und versprach eine Wirkung. Seit dem
+    14.09.2026 (RM-171, Entscheidung Robert) verschwindet die Zeile, bis die
+    Bedingung gilt; gesperrt und begründet bleibt sie dahinter.
     """
     spec = REGISTRY.get("displace_image")
     dialog = OperationDialog(spec, {}, window, features={"face_1": "Fläche 1"})
 
     editor = dialog._editors["at_feature"]
+    label = dialog._rows["at_feature"].labelForField(editor)
     assert not editor.isEnabled(), "von oben aufgelegt braucht keine Fläche"
     assert "Auflegen" in editor.toolTip(), f"ohne Grund: {editor.toolTip()!r}"
+    assert editor.isHidden() and label is not None and label.isHidden(), "die Zeile ist fort"
 
     from PySide6.QtWidgets import QComboBox
 
@@ -1591,7 +1594,42 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     projection.setCurrentIndex(projection.findData("face"))
 
     assert editor.isEnabled()
+    assert not editor.isHidden() and not label.isHidden(), "mit der Bedingung kommt sie wieder"
     assert str(spec.params.spec()[3].doc) == editor.toolTip(), "und der eigene Satz kommt zurück"
+
+
+def test_a_rectangle_shows_only_the_rows_a_rectangle_has(window: MainWindow) -> None:
+    """RM-171: *Grundform hochziehen* trug bei einem Rechteck vier tote Zeilen
+    vorn — Löcher, Spalten, Zeilen, Loch-Ø gelten nur für Lochkreis und
+    Lochraster. Jetzt stehen vorn die vier Felder eines Rechtecks, und die
+    übrigen erscheinen mit der Grundform, die sie braucht."""
+    from PySide6.QtWidgets import QComboBox
+
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {}, window)
+    dialog.show()
+    try:
+        front = [
+            name
+            for name, editor in dialog._editors.items()
+            if dialog._rows[name] is dialog._front and not editor.isHidden()
+        ]
+        assert front == ["shape", "length", "width", "height"], front
+
+        shape = dialog._editors["shape"]
+        assert isinstance(shape, QComboBox)
+        tall_before = dialog.height()
+        shape.setCurrentIndex(shape.findData("hole_grid"))
+        front = [
+            name
+            for name, editor in dialog._editors.items()
+            if dialog._rows[name] is dialog._front and not editor.isHidden()
+        ]
+        # Die Breite geht: Ein Lochraster hat keine — dafür kommen seine drei.
+        assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"]
+        assert dialog.height() > tall_before, "der Dialog wächst mit seinen Zeilen"
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
 
 
 def test_the_fillet_lets_a_single_edge_be_ticked(window: MainWindow) -> None:

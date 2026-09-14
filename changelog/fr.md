@@ -40,6 +40,7 @@ dans `website/version.json`.
 - Attribuer un filament montre déjà la couleur dans l'aperçu ; égaliser et subdiviser les triangles montrent le nouveau maillage avec ses arêtes. La barre d'espace ramène l'avant.
 - Évider une pièce dont l'enveloppe est trouée dit maintenant que l'enveloppe est le problème et propose « Réparer et réessayer » — au lieu de signaler qu'aucun calcul n'a abouti.
 - Sur l'élément choisi, ce qui ne pourrait qu'échouer y apparaît grisé — « Pivoter » sur une fraisure, par exemple — avec la raison. Et l'aperçu dit quand une question viendra à l'application.
+- Un champ sans effet pour la forme de base choisie n'apparaît plus grisé dans le dialogue — il apparaît avec la forme qui en a besoin. Un rectangle montre quatre champs devant au lieu de huit.
 
 ## 0.4.1
 

@@ -40,6 +40,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Asignar un filamento ya muestra el color en la vista previa; igualar y subdividir triángulos muestran la nueva malla con sus aristas. La barra espaciadora devuelve el antes.
 - Ahuecar una pieza con agujeros en la envolvente dice ahora que la envolvente es el problema y ofrece «Reparar y reintentar» — en vez de avisar de que ningún cálculo funcionó.
 - En el rasgo elegido aparece en gris lo que solo podría fallar ahí — «Girar» en un avellanado, por ejemplo —, con el motivo. Y la vista previa avisa si al aplicar vendrá una pregunta.
+- Un campo que no hace nada con la forma base elegida ya no aparece en gris en el diálogo — aparece con la forma que lo necesita. Un rectángulo muestra delante cuatro campos en vez de ocho.
 
 ## 0.4.1
 

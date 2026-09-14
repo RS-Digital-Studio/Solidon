@@ -15,7 +15,7 @@ from datetime import date, datetime
 from typing import Any, Final, Literal
 
 from PySide6.QtCore import QDate, QDateTime, QEvent, QLocale, QObject, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QMouseEvent, QShowEvent, QValidator
+from PySide6.QtGui import QColor, QShowEvent, QValidator
 from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
 
 from app.core import figures
@@ -596,25 +596,39 @@ class RowCheckBox(QCheckBox):
     def hitButton(self, pos: Any) -> bool:  # noqa: N802 — Qt-Name
         return self.rect().contains(pos)
 
-
-class _CaptionToggles(QObject):
-    """Ein Klick auf die Beschriftung schaltet den Haken daneben."""
-
-    def __init__(self, box: QCheckBox, caption: QWidget) -> None:
-        super().__init__(caption)
-        self._box = box
-        self._pressed = False
-
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        if isinstance(event, QMouseEvent) and event.button() == Qt.MouseButton.LeftButton:
-            if event.type() == QEvent.Type.MouseButtonPress:
-                self._pressed = True
-            elif event.type() == QEvent.Type.MouseButtonRelease:
-                pressed, self._pressed = self._pressed, False
+        """Ein Klick auf die Beschriftung schaltet den Haken.
+
+        **Der Haken selbst ist der Filter, kein eigenes Objekt daneben.** Die
+        erste Fassung hängte einen ``QObject``-Filter als Kind an die
+        Beschriftung; beim Einsammeln eines losgelassenen Dialogs riss der
+        Prozess mit ``0xc0000374`` (Heap-Korruption) in ``gc.collect`` —
+        deterministisch, `tests/test_filament_picker.py`, bisektiert auf den
+        Commit, der ihn einführte (14.09.2026). Ein Widget im Formular hat
+        eine Lebensdauer, die Qt und Python gleich sehen; ein Python-Objekt
+        mit C++-Elternteil und einer überschriebenen Virtuellen hat zwei.
+        """
+        # **Ohne ``QMouseEvent`` im Modul.** Der Import allein — ungenutzt —
+        # riss ``tests/test_filament_picker.py`` deterministisch mit
+        # ``0xc0000374`` im ``gc.collect`` des Teardowns; bisektiert am
+        # 14.09.2026 bis auf diese eine Zeile, gegen ``99b51979`` in einem
+        # Scratch-Baum: pur grün, plus ``QCheckBox`` grün, plus ``QEvent``
+        # grün, plus ``QMouseEvent`` rot. Gefragt wird deshalb der Ereignistyp,
+        # und die Taste liest ``button()`` ab, das nur Mausereignisse tragen.
+        kind = event.type()
+        if kind in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
+            button = getattr(event, "button", None)
+            if button is None or button() != Qt.MouseButton.LeftButton:
+                return super().eventFilter(watched, event)
+            if kind == QEvent.Type.MouseButtonPress:
+                self._caption_pressed = True
+            else:
+                pressed = getattr(self, "_caption_pressed", False)
+                self._caption_pressed = False
                 # Der Weg über ``click`` und nicht über ``toggle``: Ein
                 # gesperrter Haken bleibt gesperrt, und ``clicked`` kommt mit.
-                if pressed and self._box.isEnabled():
-                    self._box.click()
+                if pressed and self.isEnabled():
+                    self.click()
                     return True
         return super().eventFilter(watched, event)
 
@@ -623,11 +637,14 @@ def caption_toggles(caption: QWidget | None, box: QCheckBox) -> None:
     """Macht die Beschriftung einer Hakenzeile anklickbar.
 
     ``None`` ist erlaubt — ``QFormLayout.labelForField`` gibt es für Zeilen
-    über beide Spalten zurück, und die haben keine Beschriftung.
+    über beide Spalten zurück, und die haben keine Beschriftung. Der Filter
+    ist der Haken selbst (:class:`RowCheckBox`); ein nackter ``QCheckBox``
+    bekommt nur den Zeiger, denn er kennt den Filter nicht.
     """
     if caption is None:
         return
-    caption.installEventFilter(_CaptionToggles(box, caption))
+    if isinstance(box, RowCheckBox):
+        caption.installEventFilter(box)
     caption.setCursor(Qt.CursorShape.PointingHandCursor)
 
 

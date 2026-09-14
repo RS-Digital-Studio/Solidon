@@ -64,6 +64,7 @@ Nutzen da und sonst nichts.
 - Filament zuweisen zeigt die Farbe schon in der Vorschau; Dreiecke angleichen und Unterteilen zeigen das neue Netz mit seinen Kanten. Die Leertaste holt das Vorher.
 - Aushöhlen an einem Teil mit Löchern in der Hülle sagt jetzt, dass die Hülle das Problem ist, und bietet „Reparieren und erneut versuchen“ an — statt zu melden, kein Rechenweg habe funktioniert.
 - Am gewählten Merkmal steht grau, was dort nur scheitern könnte — etwa „Drehen“ an einer Senkung —, mit dem Grund. Und die Vorschau sagt, wenn erst beim Übernehmen eine Frage kommt.
+- Ein Feld, das bei der gewählten Grundform nichts tut, steht nicht mehr grau im Dialog — es erscheint mit der Grundform, die es braucht. Ein Rechteck zeigt vorn vier Felder statt acht.
 
 ## 0.4.1
 
