@@ -4736,12 +4736,13 @@ class FeaturePanel(QWidget):
         from app.core.perceive.actions import actions_for
 
         cavity: tuple[Feature, ...] = ()
+        touches_other = False
         if features is not None:
-            cavity = (
-                relations.cavity_chain_at(feature, features, mesh)
-                if mesh is not None
-                else relations.bore_and_widening_at(feature, features)
-            ) or ()
+            if mesh is not None:
+                chain, touches_other = relations.cavity_chain_state_at(feature, features, mesh)
+                cavity = chain or ()
+            else:
+                cavity = relations.bore_and_widening_at(feature, features) or ()
         self.clear()
         self._feature_id = feature_id
         self._empty.setVisible(False)
@@ -4812,7 +4813,9 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, note)
             self._built.append(note)
 
-        actions = actions_for(feature, features, mesh=mesh, cavity=cavity)
+        actions = actions_for(
+            feature, features, mesh=mesh, cavity=cavity, touches_other=touches_other
+        )
         if features is not None and mesh is not None:
             self._groups = {
                 group.action: group

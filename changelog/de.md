@@ -59,6 +59,7 @@ Nutzen da und sonst nichts.
 - Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum.
 - Filament zuweisen zeigt die Farbe schon in der Vorschau; Dreiecke angleichen und Unterteilen zeigen das neue Netz mit seinen Kanten. Die Leertaste holt das Vorher.
 - Aushöhlen an einem Teil mit Löchern in der Hülle sagt jetzt, dass die Hülle das Problem ist, und bietet „Reparieren und erneut versuchen“ an — statt zu melden, kein Rechenweg habe funktioniert.
+- Am gewählten Merkmal steht grau, was dort nur scheitern könnte — etwa „Drehen“ an einer Senkung —, mit dem Grund. Und die Vorschau sagt, wenn erst beim Übernehmen eine Frage kommt.
 
 ## 0.4.1
 

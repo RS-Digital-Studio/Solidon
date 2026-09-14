@@ -899,7 +899,12 @@ bei neuen Dreiecken, mit seinen Slotfarben (`_slot_colours`, dieselbe
 Auflösung wie beim Szenenaufbau) bei neuen Farben. `_redraw_difference` zeigt
 Verborgenes zuerst wieder, also auch beim Halten der Leertaste und beim
 Schließen. Das Band sagt „das Netz ändert sich, das Volumen nicht" oder „nur
-die Farbe ändert sich".
+die Farbe ändert sich". Zwei weitere Gründe reisen über `explained`: die
+erste **Warnung** der vorgeschauten Schritte, wenn die Differenz leer bleibt
+(`Session._warning_of` — *Textur in Filamente* ohne Farbinformation), und die
+**Rückfrage**, an der die stille Vorschau anhält (`_QuestionPending` aus
+`_no_questions` — *Merkmal entfernen* an einer gesenkten Bohrung). Beide
+standen bis zum 14.09.2026 als „am Volumen ändert sich nichts" im Band.
 
 **Und was ein Körper mitbringen muss, fragt das Menü vorher** (RM-168):
 `_reason_locked` fragt als letzte Stufe `labels.body_requirement` mit den

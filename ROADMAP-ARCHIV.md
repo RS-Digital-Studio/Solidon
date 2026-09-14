@@ -27833,6 +27833,33 @@ und steht weiter in `ROADMAP.md`.
   Nachweis: `tests/test_missing_ops.py::test_hollowing_an_open_hull_names_the_hull_and_offers_repair`
   — Fehler, Satz, Handlung, Ursache in der Kette, und die Reparatur, nach der es geht.
 
+### Dieselbe Sonde am Merkmalfenster (14.09.2026)
+
+Nach den Dialogen der zweite Bedienort: je Merkmalsart des Korpus jede Handlung des
+Merkmalfensters, Vorschau mit den gemessenen Werten und Übernehmen — sieben Körper, neun Arten,
+33 Handlungen (`probe_feature_panel.py`, ein Prozess je Datei). Drei Befunde, alle an
+`plate_countersunk.stl`, alle behoben:
+
+- **Drei Zeilen, die nur scheitern konnten.** *Merkmal drehen* und *Merkmal verdoppeln* an der
+  Senkung und *Zum Langloch ziehen* an der gesenkten Bohrung: Vorschau ohne Bild, beim Übernehmen
+  hielt die Kette an (`NO_OWN_BODY`, `slot_and_widening`). `actions_for` trägt sie jetzt mit
+  `op=None` und dem Satz der Operation (`_shares_its_cavity`); das Fenster gibt dafür Kette und
+  Randberührung aus `cavity_chain_state_at` mit. Die Bohrung selbst dreht und verdoppelt ihre
+  Kette weiter. Nachweis: `test_a_shared_cavity_greys_out_what_would_fail_on_it`.
+- **Eine Rückfrage sah aus wie „nichts".** *Merkmal entfernen* an der gesenkten Bohrung fragt beim
+  Übernehmen, ob die Senkung mitgeht; die stille Vorschau hält dort an, und das Band sagte „am
+  Volumen ändert sich nichts". Jetzt: „Eine Rückfrage steht an — sie kommt beim Übernehmen"
+  (`_QuestionPending`). Nachweis: `test_a_preview_that_stops_at_a_question_says_so`.
+- **Eine Warnung sah aus wie „nichts".** *Textur in Filamente* an einem Körper ohne
+  Farbinformation läuft durch, ändert nichts und meldet es als Befund — der stand im Prüfbericht,
+  nicht im Band. `Session._warning_of` reicht die erste Warnung der vorgeschauten Schritte weiter,
+  wenn die Differenz leer bleibt. Nachweis in `test_a_preview_that_cannot_be_says_why`.
+
+Was die Sonde sonst zeigte und was bleibt: Ein Übernehmen mit unveränderten Werten legt einen
+Schritt an, der nichts ändert (alle *Verschieben*- und *Ändern*-Zeilen) — kein Fehler, ein
+Undo-Schritt ohne Wirkung. Fläche, Randring und Ring tragen im Fenster keine Handlungen; ihre
+Wege sind Kontextmenü und Menü.
+
 ## Ein freier Fügeweg wird gesagt (14.09.2026)
 
 Ein Punkt aus dem Werkstattfilm vom 13.09.2026, abgeschlossen am 14.09.2026.

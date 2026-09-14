@@ -424,6 +424,7 @@ def actions_for(
     *,
     mesh: MeshData | None = None,
     cavity: tuple[Feature, ...] | None = None,
+    touches_other: bool = False,
 ) -> list[FeatureAction]:
     """Was sich an diesem Merkmal tun lässt — und was nicht, mit Grund.
 
@@ -433,6 +434,14 @@ def actions_for(
     Radius zeigt, lässt den Kunden raten, ob der Rest fehlt oder vergessen
     wurde. Mit ``mesh`` folgt der Hinweis aufs gemeinsame Versetzen der echten
     Randringkette; ohne bleibt die bisherige Paar-Auskunft für ältere Aufrufer.
+
+    ``cavity`` und ``touches_other`` sagen, ob das Merkmal seinen Hohlraum mit
+    anderen teilt (``relations.cavity_chain_state_at``). Dann tragen die
+    Handlungen, die daran scheitern würden, ``op=None`` und den Satz, den die
+    Operation beim Rechnen sagt — gemessen am 14.09.2026 an
+    ``plate_countersunk.stl``: *Drehen* und *Verdoppeln* an der Senkung und
+    *Zum Langloch ziehen* an der gesenkten Bohrung öffneten eine Vorschau ohne
+    Bild und hielten beim Übernehmen die Kette an.
     """
     actions: list[FeatureAction] = []
     for candidates in ACTION_ORDER:
@@ -458,6 +467,10 @@ def actions_for(
                     ),
                 )
             )
+        elif fitting is not None and (
+            shared := _shares_its_cavity(fitting.name, feature, cavity, touches_other)
+        ):
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=shared))
         elif fitting is not None:
             actions.append(
                 FeatureAction(
@@ -480,6 +493,30 @@ def actions_for(
                 )
             )
     return actions
+
+
+def _shares_its_cavity(
+    op: str, feature: Feature, cavity: tuple[Feature, ...] | None, touches_other: bool
+) -> TranslatableText | None:
+    """Warum diese Handlung an einem geteilten Hohlraum scheitern würde — oder ``None``.
+
+    Dieselbe Bedingung wie in den Operationen selbst: *Zum Langloch ziehen*
+    weist eine Bohrung ab, deren Kette länger als eins ist oder die einen
+    fremden Rand berührt (``slot_hole``); *Drehen* und *Verdoppeln* an einer
+    Senkung finden keinen eigenen Werkzeugkörper (``_tool_for``, ``NO_OWN_BODY``).
+    Die Bohrung selbst dreht und verdoppelt ihre ganze Kette — dort bleibt die
+    Zeile offen.
+    """
+    chained = touches_other or (cavity is not None and len(cavity) > 1)
+    if not chained:
+        return None
+    from app.core.geom.prepare_ops import NO_OWN_BODY, SLOT_NEEDS_A_PLAIN_BORE
+
+    if op == "slot_hole":
+        return SLOT_NEEDS_A_PLAIN_BORE
+    if op in ("rotate_feature", "duplicate_feature") and feature.kind != "hole":
+        return NO_OWN_BODY
+    return None
 
 
 def _note_for(

@@ -113,6 +113,14 @@ Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
 - **Jedes Feld trägt seinen heutigen gemessenen Wert** als Vorgabe. Eine
   Vorgabe, die nicht der gemessene Wert ist, wäre eine stille Änderung, sobald
   jemand auf Übernehmen drückt.
+- **Und was an einem geteilten Hohlraum scheitern würde, steht grau mit dem
+  Satz der Operation** (`_shares_its_cavity`): *Drehen* und *Verdoppeln* an
+  einer Senkung (`prepare_ops.NO_OWN_BODY`), *Zum Langloch ziehen* an einer
+  gesenkten Bohrung (`prepare_ops.SLOT_NEEDS_A_PLAIN_BORE`). Die Kette und
+  die Berührung eines fremden Rands kommen vom Aufrufer
+  (`cavity`, `touches_other` — `relations.cavity_chain_state_at`); gemessen am
+  14.09.2026 hielten alle drei beim Übernehmen die Kette an, nach einer
+  Vorschau ohne Bild.
 
 Die Oberfläche fragt die Merkmalsart **nicht** — sie rendert die Liste. Sonst
 führt sie dieselbe Tabelle ein zweites Mal.

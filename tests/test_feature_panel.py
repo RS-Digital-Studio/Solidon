@@ -777,6 +777,55 @@ def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplicatio
     assert "gemeinsam verschoben" in text
 
 
+def test_a_shared_cavity_greys_out_what_would_fail_on_it() -> None:
+    """Gemessen am 14.09.2026 an ``plate_countersunk.stl``: *Drehen* und
+    *Verdoppeln* an der Senkung und *Zum Langloch ziehen* an der gesenkten
+    Bohrung öffneten eine Vorschau ohne Bild und hielten beim Übernehmen die
+    Kette an. Die Zeile sagt es jetzt vorher — mit dem Satz der Operation."""
+    from app.core.geom.prepare_ops import NO_OWN_BODY, SLOT_NEEDS_A_PLAIN_BORE
+
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 6.0, "depth": 10.0},
+    )
+    sink = Feature(
+        id="cone_1",
+        kind="cone",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 5.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 12.0,
+            "recess": True,
+        },
+    )
+    linked = {bore.id: bore, sink.id: sink}
+    chain = (bore, sink)
+
+    at_sink = {str(a.title): a for a in actions_for(sink, linked, cavity=chain)}
+    assert at_sink["Merkmal drehen"].op is None
+    assert str(at_sink["Merkmal drehen"].reason) == str(NO_OWN_BODY)
+    assert at_sink["Merkmal verdoppeln"].op is None
+    assert at_sink["Merkmal verschieben"].op == "move_feature", "die Kette wandert gemeinsam"
+    assert at_sink["Merkmal ändern"].op == "resize_feature"
+
+    at_bore = {str(a.title): a for a in actions_for(bore, linked, cavity=chain)}
+    assert at_bore["Zum Langloch ziehen"].op is None
+    assert str(at_bore["Zum Langloch ziehen"].reason) == str(SLOT_NEEDS_A_PLAIN_BORE)
+    assert at_bore["Merkmal drehen"].op == "rotate_feature", "die Bohrung dreht ihre Kette"
+    assert at_bore["Merkmal verdoppeln"].op == "duplicate_feature"
+
+    # Ein berührter fremder Rand ohne Kette sperrt genauso.
+    touched = {str(a.title): a for a in actions_for(bore, linked, cavity=None, touches_other=True)}
+    assert touched["Zum Langloch ziehen"].op is None
+
+    # Und eine Bohrung für sich bleibt, wie sie war.
+    alone = {str(a.title): a for a in actions_for(bore, {bore.id: bore}, cavity=None)}
+    assert alone["Zum Langloch ziehen"].op == "slot_hole"
+
+
 @pytest.mark.parametrize("pick_widening", [False, True])
 def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, pick_widening: bool
@@ -826,11 +875,17 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
 
     from app.core.perceive import relations
 
-    def chain_at(selected: Feature, available: object, mesh: MeshData) -> tuple[Feature, ...]:
+    def chain_at(
+        selected: Feature, available: object, mesh: MeshData
+    ) -> tuple[tuple[Feature, ...], bool]:
         asked.append((selected, available, mesh))
-        return bore, transition, counterbore
+        return (bore, transition, counterbore), False
 
-    monkeypatch.setattr(relations, "cavity_chain_at", chain_at)
+    # Seit dem 14.09.2026 fragt das Fenster die Kette **und** die Berührung
+    # eines fremden Rands in einem Zug (``cavity_chain_state_at``): Beides
+    # braucht ``actions_for``, um zu sagen, was an einem geteilten Hohlraum
+    # scheitern würde.
+    monkeypatch.setattr(relations, "cavity_chain_state_at", chain_at)
     panel = FeaturePanel()
 
     selected = counterbore if pick_widening else bore

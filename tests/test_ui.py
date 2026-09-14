@@ -9877,6 +9877,41 @@ def test_a_preview_that_cannot_be_says_why(session: Session) -> None:
     session.wait_for_idle()
     assert not reasons, "eine Vorschau, die kommt, braucht keinen Grund"
 
+    # Und eine leere Vorschau mit einer Warnung sagt die Warnung: *Textur in
+    # Filamente* an einem Körper ohne Farbinformation läuft durch, ändert
+    # nichts und meldet als Befund, warum.
+    reasons.clear()
+    session.preview_async(
+        shown.append,
+        [OperationDraft(op="slots_from_texture", inputs=("obj_1",), params={})],
+        explained=reasons.append,
+    )
+    session.wait_for_idle()
+    assert reasons == [tr("Dieses Objekt trägt keine Farbinformation.")]
+
+
+def test_a_preview_that_stops_at_a_question_says_so(session: Session) -> None:
+    """*Merkmal entfernen* an einer gesenkten Bohrung fragt, ob die Senkung
+    mitgeht. Die stille Vorschau fragt nicht — und sagte bis zum 14.09.2026
+    „am Volumen ändert sich nichts". Nichts hatte sich geändert; es war
+    noch nichts entschieden."""
+    session.import_model(MESHES / "plate_countersunk.stl")
+    session.wait_for_idle()
+    result = session.evaluate_now()
+    entry = result.scene.objects["obj_1"]
+    hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
+
+    reasons: list[str] = []
+    shown: list[object] = []
+    session.preview_async(
+        shown.append,
+        [OperationDraft(op="remove_feature", inputs=("obj_1",), params={"at_feature": hole})],
+        explained=reasons.append,
+    )
+    session.wait_for_idle()
+    assert shown == [None]
+    assert reasons == [tr("Eine Rückfrage steht an — sie kommt beim Übernehmen.")]
+
 
 def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow) -> None:
     """Drei Zustände, drei Sätze — und nicht derselbe über allen.

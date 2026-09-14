@@ -34,6 +34,7 @@ it into `website/version.json`.
 - A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity.
 - Assigning a filament shows the colour in the preview already; remeshing and subdividing show the new mesh with its edges. The space bar brings back the before.
 - Hollowing a part with holes in its hull now says that the hull is the problem and offers “Repair and retry” — instead of reporting that no computation path worked.
+- At the selected feature, what could only fail there is greyed out — “Rotate” on a countersink, say — with the reason. And the preview says when a question will come on apply.
 
 ## 0.4.1
 

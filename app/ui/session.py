@@ -89,6 +89,7 @@ from app.core.types import (
     FeatureId,
     Finding,
     Fit,
+    OpId,
     Origin,
     Parameter,
     PrintSettings,
@@ -368,6 +369,12 @@ class _PreviewWorker(Worker):
     def work(self) -> None:
         try:
             _scene, difference, reason = self._compute()
+        except _QuestionPending:
+            self.explained.emit(
+                self._generation,
+                str(_("Eine Rückfrage steht an — sie kommt beim Übernehmen.")),
+            )
+            self.done.emit(self._generation, None)
         except OperationCancelled:
             self.done.emit(self._generation, None)
         except AppError as error:
@@ -403,6 +410,18 @@ def _reason_of(error: AppError) -> str:
     if isinstance(detail, TranslatableText):
         return str(detail)
     return str(error.title)
+
+
+def _warning_of(result: EvaluationResult, previewed: tuple[OpId, ...]) -> str:
+    """Die erste Warnung, die die vorgeschauten Schritte selbst gemeldet haben.
+
+    Nur Warnungen und Fehler: Ein Info-Befund („Ausgehöhlt. Die Wandstärke
+    stimmt …") ist eine Zusage und kein Grund, warum nichts zu sehen ist.
+    """
+    for finding in result.scene.report.findings:
+        if finding.op_id in previewed and finding.severity in ("warning", "error"):
+            return str(finding.message)
+    return ""
 
 
 def _stop_reason(result: EvaluationResult) -> str:
@@ -473,12 +492,21 @@ class _SplitWorker(Worker):
         super().release_finished_references()
 
 
+class _QuestionPending(OperationCancelled):
+    """Die stille Vorschau ist an einer Rückfrage stehengeblieben.
+
+    Ein eigener Typ, damit das Band es sagen kann: Bis zum 14.09.2026 kam
+    dort „am Volumen ändert sich nichts" — gemessen an *Merkmal entfernen*
+    an einer gesenkten Bohrung, wo die Auswertung fragt, ob die Senkung
+    mitgeht. Nichts hatte sich geändert; es war noch nichts entschieden."""
+
+
 def _no_questions(question: str, choices: list[str]) -> str:
     """Die ask-Funktion der stillen Vorschau: sie fragt nicht, sie hält an.
 
     Eine Rückfrage mitten im Tippen wäre ein Fenster über einem Fenster —
     was eine Antwort braucht, bekommt sie beim Anwenden über den echten Weg."""
-    raise OperationCancelled
+    raise _QuestionPending
 
 
 def _unresolvable(parameters: Mapping[str, Parameter]) -> AppError | None:
@@ -2550,8 +2578,12 @@ class Session(QObject):
         working = copy.deepcopy(self.project.document)
         if change_op is not None:
             History(working).change_params(change_op, dict(change_values or {}))
+            previewed: tuple[OpId, ...] = (change_op,)
         else:
-            History(working).apply(_("Vorschau"), drafts, origin=origin or Origin(by="user"))
+            transaction = History(working).apply(
+                _("Vorschau"), drafts, origin=origin or Origin(by="user")
+            )
+            previewed = tuple(transaction.ops)
         result = evaluate(
             working,
             self.profile,
@@ -2573,6 +2605,15 @@ class Session(QObject):
             # sähe aus wie „keine Änderung", und das wäre gelogen.
             return result.scene, None, _stop_reason(result)
         difference = compare_scenes(before, result.scene) if before is not None else None
+        # **Eine leere Vorschau mit einer Warnung ist keine leere Vorschau.**
+        # *Textur in Filamente* an einem Körper ohne Farbinformation läuft
+        # durch, ändert nichts und meldet als Befund, warum — und der Befund
+        # stand im Prüfbericht, das Band sagte „am Volumen ändert sich nichts".
+        # Der Satz gehört ins Band, solange die Zahl noch zu ändern ist.
+        if difference is not None and not (
+            difference.changed or difference.reshaped or difference.recoloured
+        ):
+            return result.scene, difference, _warning_of(result, previewed)
         return result.scene, difference, ""
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:

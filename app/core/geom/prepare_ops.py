@@ -1057,7 +1057,7 @@ def _chain_plug(
 
     „Verschließen Sie beides in einem Zug: ein Stopfen mit dem Durchmesser der
     Senkung über die volle Wandstärke" steht seit dem 04.09.2026 in
-    :data:`_NO_OWN_BODY`, und ``test_the_way_out_of_a_countersink_is_the_one_
+    :data:`NO_OWN_BODY`, und ``test_the_way_out_of_a_countersink_is_the_one_
     the_message_names`` misst ihn: 24 000,000 mm³, wasserdicht, kein Merkmal
     übrig. Was der Kunde von Hand tun sollte, tut die Operation jetzt selbst.
 
@@ -1198,7 +1198,7 @@ def _section_closed(
     senkung entfernen will geht das nicht, also es soll dann nur die senkung
     weg, die Bohrung aber bleiben." Gefragt hat der Kern das längst
     (:func:`_asked_about_sections`); für den Abschnitt allein gab es bis dahin
-    keinen Weg, sondern die Absage :data:`_NO_OWN_BODY`.
+    keinen Weg, sondern die Absage :data:`NO_OWN_BODY`.
 
     **Zuerst zu, dann wieder auf** — und diese Reihenfolge ist nicht Geschmack,
     sondern gemessen. Der Abschnitt hat einen eigenen Körper: Die Kegelfläche
@@ -1224,7 +1224,7 @@ def _section_closed(
     zwischen zwei Kopien eine Scheibe Material stehen.
 
     ``None`` heißt: Dieser Abschnitt gibt keinen eigenen Körper her; dann gilt
-    :data:`_NO_OWN_BODY` wie bisher.
+    :data:`NO_OWN_BODY` wie bisher.
     """
     filled = _cavity_plug(mesh, chain, quality=quality, seed=seed, cancelled=cancelled)
     if filled is None:
@@ -1554,7 +1554,7 @@ def _tool_for(
 
     Baut sich der Körper nicht sicher, endet der Aufruf mit einem Satz, der
     den **heutigen** Grund nennt und nicht den von gestern — siehe
-    :data:`_NO_OWN_BODY`.
+    :data:`NO_OWN_BODY`.
     """
     # Beim Versetzen zählt der vorhandene Sehnenzug, nicht der Radius durch
     # die Dreiecksmitten. Sonst schrumpft eine fremd tessellierte Bohrung.
@@ -1571,7 +1571,7 @@ def _tool_for(
     if built is None:
         raise ValidationError(
             field="at_feature",
-            detail=_NO_OWN_BODY,
+            detail=NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
         )
@@ -1708,13 +1708,13 @@ def _feature_mount(
         )[2]
     if feature.kind not in PARAMETRIC_KINDS:
         # **Ein Einschluss scheitert hier aus einem anderen Grund**, und
-        # :data:`_NO_OWN_BODY` benennt ihn falsch: „Dieses Merkmal geht in ein
+        # :data:`NO_OWN_BODY` benennt ihn falsch: „Dieses Merkmal geht in ein
         # anderes über — eine Senkung über einer Bohrung etwa". Ein Hohlraum
         # ohne Weg nach außen geht in gar nichts über; er hat nur keine
         # Mündung, an der die Platzierung ihn im Bild aufsetzen könnte. Der
         # Weg bleibt trotzdem offen — über die Zahlen im Dialog (gemessen
         # 10.09.2026: Volumen auf 0,000000 mm³ genau erhalten).
-        detail = _NO_MOUTH_TO_GRIP if feature.kind == "void" else _NO_OWN_BODY
+        detail = _NO_MOUTH_TO_GRIP if feature.kind == "void" else NO_OWN_BODY
         raise ValidationError(field="at_feature", detail=detail, constraint="not_movable")
     # Parametrische Altmerkmale können ohne Dreieckszuordnung vorliegen. Die
     # Materialseite ihrer beiden Enden entscheidet auch bei einem Zapfen an
@@ -1731,7 +1731,7 @@ def _feature_mount(
     signed = np.einsum("ij,ij->i", ends - closest, np.asarray(mesh.raw.face_normals)[faces])
     inside = signed < -EPS_GEOM
     if inside.all():
-        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+        raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
     if inside[1] and not inside[0]:
         outward = -outward
     origin = centre + outward * depth / 2.0 * (1.0 if is_a_cavity(feature) else -1.0)
@@ -1751,14 +1751,14 @@ def feature_placement_geometry(
     body = as_mesh_data(source.mesh)
     chain, touches_other = cavity_chain_state_at(feature, source.features, body)
     if chain is None and touches_other:
-        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+        raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
     centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
     related = chain or (feature,)
     built = (
         _paired_cavity_body(body, *chain) if chain else _tool_for(body, feature, centre, alone=True)
     )
     if built is None:
-        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+        raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
     frame = _feature_mount(body, feature, related, built)
     rotation = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
     to_local = np.eye(4)
@@ -2022,7 +2022,15 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #: nicht eindeutig erkannt werden kann. Dort trägt weiter nur der gemessene
 #: Weg über Zahlen: ein Stopfen mit dem Durchmesser der Senkung über die volle
 #: Wandstärke schließt beides in einem Zug.
-_NO_OWN_BODY: Final = _(
+#: Warum *Zum Langloch ziehen* an einer Bohrung mit Senkung nichts tut. Das
+#: Merkmalfenster sagt es an der Zeile (``perceive.actions``), bevor jemand
+#: klickt — derselbe Satz wie hier beim Rechnen.
+SLOT_NEEDS_A_PLAIN_BORE: Final = _(
+    "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. "
+    "Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung."
+)
+
+NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
     "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Eine einzelne "
     "Bearbeitung würde die Bohrung darunter mit verschließen. Verschließen Sie beides in einem "
@@ -2112,7 +2120,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     if chain is None and touches_other:
         raise ValidationError(
             field="at_feature",
-            detail=_NO_OWN_BODY,
+            detail=NO_OWN_BODY,
             values={"feature": feature.id},
             constraint="not_movable",
         )
@@ -2124,7 +2132,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         if cavity_body is None:
             raise ValidationError(
                 field="at_feature",
-                detail=_NO_OWN_BODY,
+                detail=NO_OWN_BODY,
                 values={"feature": feature.id, "bore": bore.id, "widening": widening.id},
                 constraint="not_movable",
             )
@@ -2570,7 +2578,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
         if filled is None:
             raise ValidationError(
                 field="at_feature",
-                detail=_NO_OWN_BODY,
+                detail=NO_OWN_BODY,
                 values={"feature": feature.id},
                 constraint="not_movable",
             )
@@ -2599,7 +2607,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
         if section is None:
             raise ValidationError(
                 field="at_feature",
-                detail=_NO_OWN_BODY,
+                detail=NO_OWN_BODY,
                 values={"feature": feature.id},
                 constraint="not_movable",
             )
@@ -3606,10 +3614,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             field="at_feature",
             constraint="slot_and_widening",
             value=feature.id,
-            detail=_(
-                "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. "
-                "Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung."
-            ),
+            detail=SLOT_NEEDS_A_PLAIN_BORE,
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,

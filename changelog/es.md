@@ -35,6 +35,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco.
 - Asignar un filamento ya muestra el color en la vista previa; igualar y subdividir triángulos muestran la nueva malla con sus aristas. La barra espaciadora devuelve el antes.
 - Ahuecar una pieza con agujeros en la envolvente dice ahora que la envolvente es el problema y ofrece «Reparar y reintentar» — en vez de avisar de que ningún cálculo funcionó.
+- En el rasgo elegido aparece en gris lo que solo podría fallar ahí — «Girar» en un avellanado, por ejemplo —, con el motivo. Y la vista previa avisa si al aplicar vendrá una pregunta.
 
 ## 0.4.1
 

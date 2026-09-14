@@ -7186,6 +7186,9 @@ class MainWindow(QMainWindow):
         preview.setInterval(300)
 
         def show_pair() -> None:
+            # Derselbe Weg wie beim Operationsdialog — mit dem Grund im Band,
+            # wenn es keine Vorschau gibt, und der Ansage, wenn sie dauert.
+            self._preview_busy.start()
             self.session.preview_async(
                 self._show_preview,
                 drafts_for(
@@ -7196,6 +7199,7 @@ class MainWindow(QMainWindow):
                     {"at_feature": first_feature},
                     {"at_feature": second_feature},
                 ),
+                explained=self._preview_explained,
             )
 
         preview.timeout.connect(show_pair)
@@ -13161,11 +13165,17 @@ class MainWindow(QMainWindow):
         # wenn ``difference`` leer ist: Das Band unten setzt es trotzdem.
         self._preview_shown = True
         self._preview_busy.stop()
-        if difference is None and self._preview_reason:
+        nothing_to_show = difference is None or not (
+            getattr(difference, "changed", True)
+            or getattr(difference, "reshaped", False)
+            or getattr(difference, "recoloured", False)
+        )
+        if nothing_to_show and self._preview_reason:
             # Der Grund kam schon an (``_preview_explained``) und steht im
-            # Band; ``None`` dahinter sagt nichts, was das Band nicht sagt.
+            # Band; was dahinter kommt — ``None`` oder eine leere Differenz —
+            # sagt nichts, was das Band nicht sagt.
             self._preview_reason = ""
-            self.viewport.show_difference(None)
+            self.viewport.show_difference(difference)
             return
         self._preview_reason = ""
         self.viewport.show_difference(difference)

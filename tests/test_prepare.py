@@ -2380,7 +2380,7 @@ def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Prof
     (vgl. ``test_the_plate_advice_carries_a_way_to_follow_it``).
     """
     from app.core.errors import UserError
-    from app.core.geom.prepare_ops import _NO_OWN_BODY
+    from app.core.geom.prepare_ops import NO_OWN_BODY
 
     plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
     bored = drill(
@@ -2428,7 +2428,7 @@ def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Prof
         name for name, found in detect(closed.mesh).items() if found.kind in ("hole", "cone")
     ], "danach ist weder Bohrung noch Senkung übrig"
 
-    assert "Bohrung verschließen" in str(_NO_OWN_BODY), (
+    assert "Bohrung verschließen" in str(NO_OWN_BODY), (
         "der Satz muss den Weg nennen, den dieser Test misst"
     )
 
