@@ -27858,6 +27858,22 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     enden. Nachweise: `test_an_alignment_target_is_never_left_empty`,
     `test_aligning_is_grey_until_a_second_body_carries_a_feature`,
     `test_the_window_can_block_apply_with_a_reason`.
+  - **Ein Befund ohne Weg, ein Hinweis ohne Anlass, eine Datei, die niemand findet** (B10, B16,
+    B14). „Das Modell besteht aus mehreren Teilen." trug keine Handlung, während die Nachbarzeile
+    „sehr kleine Einzelteile" ihren Knopf hatte — `SPLIT_BODIES` in `FINDING_ACTIONS` bietet
+    *In Einzelteile zerlegen* am Befund an, ein Angebot und keine Ausführung (ein Schild mit
+    losen Buchstaben soll zusammenbleiben). „Doppelte Punkte wurden verschweißt." stand als erste
+    Zeile jedes sauberen STL-Imports, sechs von sechs Modellen, ohne Handlung: Eine STL speichert
+    jedes Dreieck mit eigenen Ecken, sie zu verschweißen ist Lesen — `normalise(weld_is_reading=
+    True)` schweigt darüber und verschweißt weiter; bei OBJ, PLY und 3MF bleibt der Befund, denn
+    dort sind doppelte Punkte eine Eigenschaft der Datei. Ein sauberer STL-Import beginnt seither
+    mit „Keine Befunde" und der Kennzahlzeile. Und „Exportiert: dose.3mf" war alles, was nach dem
+    Export dastand — alle vier Wege enden hier: *Ordner zeigen* steht neben der Meldung, solange
+    sie steht, und öffnet den Ordner über `QDesktopServices` (Qt kennt die Plattform und im
+    Flatpak das Portal). Nachweise: `test_a_model_of_several_parts_offers_to_split_it`,
+    `test_reading_an_stl_is_not_a_finding`,
+    `test_an_stl_import_greets_without_a_finding_about_reading_it`,
+    `test_the_export_offers_its_folder`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
