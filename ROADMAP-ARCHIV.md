@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Ein freier Fügeweg wird gesagt (14.09.2026)](#ein-freier-fügeweg-wird-gesagt-14092026) |
 | 2026-09-12 | [Was vor 0.4.1 zugegangen ist (12.09.2026)](#was-vor-041-zugegangen-ist-12092026) |
 | 2026-09-11 | [Sieben Befunde aus Roberts Fenster am Schriftzug (11.09.2026)](#sieben-befunde-aus-roberts-fenster-am-schriftzug-11092026) |
 | 2026-09-11 | [Hinter einen Halt kam jeder neue Schritt (11.09.2026)](#hinter-einen-halt-kam-jeder-neue-schritt-11092026) |
@@ -27746,3 +27747,32 @@ bleiben in dieser Datei.
   weg ist, vergleicht die Länge.
 
   [Bisheriger Befund](#der-download-ordner-sammelt-jede-je-gebaute-fassung-30082026).
+
+## Ein freier Fügeweg wird gesagt (14.09.2026)
+
+Ein Punkt aus dem Werkstattfilm vom 13.09.2026, abgeschlossen am 14.09.2026.
+
+<a id="rm-167"></a>
+
+- [x] **RM-167 — „Fügeweg prüfen“ schweigt bei freiem Weg.** Gesehen am 13.09.2026 beim
+  Werkstattfilm: Zwei Teile gewählt, *Fügeweg prüfen*, 24 mm entlang X — und der Prüfbericht
+  zeigte danach genau das, was vorher dastand. `prepare.check_join_path` lieferte bei freiem Weg
+  eine leere Liste; nur `join.blocked` und `join.interference` waren Befunde. Der Kunde hatte eine
+  Prüfung ausgelöst und musste aus dem Fehlen eines Fehlers schließen, dass der Weg frei ist
+  (§2.7). Das Tutorial `gegenstuecke` sagt seit dem 13.09. deshalb „Der Prüfbericht bleibt leer"
+  statt „Der Weg ist frei" — die Videos sind terminiert und bleiben so.
+
+  **Gebaut am 14.09.2026.** Bei freier Endlage und freiem Weg kommt ein Info-Befund `join.clear`
+  zurück: „Der Fügeweg ist frei: 24.00 mm entlang X, in 24 Schritten keine Überschneidung." Die
+  Werte tragen `length_mm`, `axis` und `steps`; die Richtung nennt `prepare._axis_name` als
+  Achse (`X`, `-Z`) und einen freien Vektor mit seinen Komponenten, statt ihn auf die nächste
+  Achse zu runden. Der Befund kommt **nur** bei freiem Weg — wo die Teile sich vorbeidrücken
+  müssen, bleibt die Rastung die Antwort. Der offene Körper bleibt stumm, dort gilt der `caveat`
+  der Operation. `steps` bekam seine Beschriftung „Schritte" in `labels._VALUE_NAMES`; der Satz
+  steht in fünf Katalogen.
+
+  Nachweis: `tests/test_prepare.py` — `test_a_clear_join_path_is_said_not_inferred` (Achse,
+  Gegenachse, freier Vektor, offener Körper) und der Rinnentest
+  `test_two_parts_that_only_fit_in_the_end_are_not_the_same_as_two_that_get_there`, der den
+  freien Weg jetzt als `join.clear` verlangt statt als leere Liste; `test_value_labels` und
+  `test_translations` grün.

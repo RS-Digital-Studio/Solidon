@@ -3637,7 +3637,7 @@ def test_two_parts_that_only_fit_in_the_end_are_not_the_same_as_two_that_get_the
     mit_boden.apply_translation((-18.0, 0.0, 0.0))
     befunde = check_join_path(MeshData.of(mit_boden), empfaenger, (1.0, 0.0, 0.0), 25.0)
     codes = {finding.code for finding in befunde}
-    assert not codes, "vor der Mündung stehend berührt er noch nichts"
+    assert codes == {"join.clear"}, "vor der Mündung berührt er noch nichts — und das wird gesagt"
 
     # Und jetzt in Einbaulage: 18 mm hineingeschoben. Die Böden stoßen.
     steckt = _u_profile(18.0, 39.6)
@@ -3661,9 +3661,59 @@ def test_two_parts_that_only_fit_in_the_end_are_not_the_same_as_two_that_get_the
         ]
     )
     frei = check_join_path(MeshData.of(ohne_boden), empfaenger, (1.0, 0.0, 0.0), 25.0)
-    assert "join.blocked" not in {finding.code for finding in frei}, (
+    assert {finding.code for finding in frei} == {"join.clear"}, (
         "ohne eigenen Boden ist der Weg frei — sonst prüft der Test seine eigene Ablehnung"
     )
+
+
+def test_a_clear_join_path_is_said_not_inferred() -> None:
+    """Ein freier Weg ist eine Antwort, kein Schweigen (RM-167, §2.7).
+
+    Gesehen am 13.09.2026 beim Werkstattfilm: Zwei Teile gewählt, *Fügeweg
+    prüfen*, 24 mm entlang X — und der Prüfbericht zeigte danach genau das,
+    was vorher dastand. Der Kunde hatte eine Prüfung ausgelöst und musste aus
+    dem Fehlen eines Fehlers schließen, dass der Weg frei ist.
+
+    Der Befund trägt, was geprüft wurde: Strecke, Richtung und Schrittzahl.
+    Die Richtung steht als Achse, wie die Operation sie anbietet — auch
+    entgegengesetzt —, ein freier Vektor mit seinen Komponenten. Und er kommt
+    **nur** bei freiem Weg: Wo die Teile sich vorbeidrücken müssen, ist die
+    Rastung die Antwort, nicht „frei".
+    """
+    from app.core.geom.prepare import check_join_path
+
+    empfaenger = MeshData.of(_u_profile(60.0, 44.0))
+    zapfen = trimesh.boolean.union(
+        [
+            _moved(trimesh.creation.box(extents=(18.0, 2.0, 25.0)), (9.0, side * 18.8, 14.5))
+            for side in (+1.0, -1.0)
+        ]
+    )
+    befunde = check_join_path(MeshData.of(zapfen), empfaenger, (1.0, 0.0, 0.0), 24.0, steps=12)
+    assert [finding.code for finding in befunde] == ["join.clear"], befunde
+    frei = befunde[0]
+    assert frei.severity == "info", "eine Antwort, keine Warnung"
+    assert frei.values == {"length_mm": 24.0, "axis": "X", "steps": 12}, frei.values
+    assert "24" in str(frei.message) and "X" in str(frei.message), (
+        "Strecke und Richtung stehen im Satz, nicht nur im Tooltip"
+    )
+
+    # Entgegen der Achse und als freier Vektor: Die Richtung wird so genannt,
+    # wie sie gefahren wurde, nicht auf die nächste Achse gerundet.
+    rueckwaerts = check_join_path(MeshData.of(zapfen), empfaenger, (0.0, 0.0, -1.0), 5.0)
+    assert rueckwaerts and rueckwaerts[0].code == "join.clear", rueckwaerts
+    assert rueckwaerts[0].values["axis"] == "-Z", rueckwaerts[0].values
+    # Schräg von oben hinein — die Rinne ist oben offen, also frei.
+    schraeg = check_join_path(MeshData.of(zapfen), empfaenger, (1.0, 0.0, -1.0), 5.0)
+    assert schraeg and schraeg[0].code == "join.clear", schraeg
+    assert schraeg[0].values["axis"] == "(0.71 | 0.00 | -0.71)", schraeg[0].values
+
+    # Ein offener Körper bleibt stumm — dort gilt der Vorbehalt der Operation,
+    # und ein „frei" über einen Körper ohne Innen wäre erfunden.
+    offen = zapfen.copy()
+    offen.update_faces(np.arange(len(offen.faces)) != 0)
+    assert not offen.is_watertight
+    assert check_join_path(MeshData.of(offen), empfaenger, (1.0, 0.0, 0.0), 24.0) == []
 
 
 def _moved(body: trimesh.Trimesh, offset: tuple[float, float, float]) -> trimesh.Trimesh:

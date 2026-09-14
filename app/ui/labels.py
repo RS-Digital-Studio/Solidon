@@ -1289,6 +1289,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "speed_field": _("Geschwindigkeitsfeld"),
     "stages": _("Stufen"),
     "status": _("Zustand"),
+    "steps": _("Schritte"),
     "stress": _("Biegespannung"),
     "strokes": _("Striche"),
     "suffix": _("Endung"),

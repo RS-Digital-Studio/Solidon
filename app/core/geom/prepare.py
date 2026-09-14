@@ -44,7 +44,7 @@ from app.core.geom.boolean import (
 )
 from app.core.geom.measure import surface_gap
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated, ray_hit_distances
-from app.core.geom.section import SectionPlane, cut
+from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.types import (
@@ -2563,8 +2563,16 @@ def check_join_path(
     Kennwerte. Die Zahl steht im Befund, damit sie jemand gegen die
     Federrechnung halten kann.
 
+    **Und ein freier Weg wird gesagt, nicht erschlossen** (§2.7). Bis zum
+    13.09.2026 kam bei freiem Weg eine leere Liste zurück, und der
+    Prüfbericht zeigte nach *Fügeweg prüfen* genau das, was vorher dastand —
+    der Kunde hatte eine Prüfung ausgelöst und musste aus dem Fehlen eines
+    Fehlers schließen, dass der Weg frei ist. ``join.clear`` nennt Strecke,
+    Richtung und Schrittzahl, damit die Antwort im Bericht steht.
+
     Offene Körper haben kein Innen: Wo :func:`shared_volume` nichts entscheiden
-    kann, bleibt die Prüfung stumm, statt eine Zahl zu erfinden.
+    kann, bleibt die Prüfung stumm, statt eine Zahl zu erfinden — dort gilt
+    der ``caveat`` der Operation.
     """
     if not (moving.is_watertight and fixed.is_watertight):
         return []
@@ -2613,7 +2621,38 @@ def check_join_path(
                 values={"shared": format_volume(worst), "at": round(worst_at, 2)},
             )
         )
+    else:
+        axis = _axis_name(way)
+        findings.append(
+            Finding(
+                code="join.clear",
+                severity="info",
+                message=_(
+                    "Der Fügeweg ist frei: {length} entlang {axis}, in {steps} Schritten "
+                    "keine Überschneidung.",
+                    length=format_length(distance),
+                    axis=axis,
+                    steps=steps,
+                ),
+                values={"length_mm": distance, "axis": axis, "steps": steps},
+            )
+        )
     return findings
+
+
+def _axis_name(way: np.ndarray) -> str:
+    """Eine Richtung, wie der Kunde sie liest: ``X``, ``-Z`` — oder der Vektor.
+
+    Die Operation schiebt immer entlang einer Hauptachse, und so steht es im
+    Befund. Ein freier Vektor aus dem Kern wird mit seinen Komponenten
+    genannt, statt auf die nächste Achse gerundet zu werden.
+    """
+    for axis, normal in AXIS_NORMALS.items():
+        if np.allclose(way, normal, atol=EPS_GEOM):
+            return axis.upper()
+        if np.allclose(way, -np.asarray(normal), atol=EPS_GEOM):
+            return f"-{axis.upper()}"
+    return "(" + " | ".join(f"{float(value):.2f}" for value in way) + ")"
 
 
 def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool | None:

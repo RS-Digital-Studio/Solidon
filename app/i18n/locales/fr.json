@@ -858,6 +858,7 @@
   "Der Fehlerbericht liegt hier": "Le rapport d'erreur se trouve ici",
   "Der Fehlerbericht ließ sich nicht ablegen": "Le rapport d'erreur n'a pas pu être déposé",
   "Der Fuß wird mitgedruckt.": "Le pied est imprimé avec la pièce.",
+  "Der Fügeweg ist frei: {length} entlang {axis}, in {steps} Schritten keine Überschneidung.": "Le chemin d’insertion est libre : {length} le long de {axis}, aucun chevauchement en {steps} pas.",
   "Der Generator hat den Auftrag abgebrochen.": "Le générateur a abandonné la tâche.",
   "Der Generator rechnet seit einer Stunde an diesem Auftrag. Solidon beendet das Warten. Ältere ComfyUI-Server können den Auftrag noch zu Ende rechnen.": "Le générateur travaille sur cette tâche depuis une heure. Solidon cesse d’attendre. Les anciens serveurs ComfyUI peuvent continuer à traiter la tâche.",
   "Der Gerätename ist unvollständig.": "Le nom de l’appareil est incomplet.",

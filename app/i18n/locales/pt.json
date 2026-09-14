@@ -858,6 +858,7 @@
   "Der Fehlerbericht liegt hier": "O relatório de erro está aqui",
   "Der Fehlerbericht ließ sich nicht ablegen": "O relatório de erro não se conseguiu guardar",
   "Der Fuß wird mitgedruckt.": "O pé é impresso com a peça.",
+  "Der Fügeweg ist frei: {length} entlang {axis}, in {steps} Schritten keine Überschneidung.": "O caminho de inserção está livre: {length} ao longo de {axis}, sem sobreposição em {steps} passos.",
   "Der Generator hat den Auftrag abgebrochen.": "O gerador abandonou a tarefa.",
   "Der Generator rechnet seit einer Stunde an diesem Auftrag. Solidon beendet das Warten. Ältere ComfyUI-Server können den Auftrag noch zu Ende rechnen.": "O gerador trabalha nesta tarefa há uma hora. O Solidon deixa de esperar. Os servidores ComfyUI mais antigos podem continuar a processar a tarefa.",
   "Der Gerätename ist unvollständig.": "O nome do dispositivo está incompleto.",

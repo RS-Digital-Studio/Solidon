@@ -858,6 +858,7 @@
   "Der Fehlerbericht liegt hier": "Il rapporto d'errore si trova qui",
   "Der Fehlerbericht ließ sich nicht ablegen": "Il rapporto d'errore non si è potuto salvare",
   "Der Fuß wird mitgedruckt.": "Il piedino viene stampato insieme.",
+  "Der Fügeweg ist frei: {length} entlang {axis}, in {steps} Schritten keine Überschneidung.": "Il percorso di inserimento è libero: {length} lungo {axis}, nessuna sovrapposizione in {steps} passi.",
   "Der Generator hat den Auftrag abgebrochen.": "Il generatore ha abbandonato l’incarico.",
   "Der Generator rechnet seit einer Stunde an diesem Auftrag. Solidon beendet das Warten. Ältere ComfyUI-Server können den Auftrag noch zu Ende rechnen.": "Il generatore lavora a questo incarico da un’ora. Solidon smette di attendere. I server ComfyUI meno recenti possono continuare a elaborare l’incarico.",
   "Der Gerätename ist unvollständig.": "Il nome del dispositivo è incompleto.",

@@ -858,6 +858,7 @@
   "Der Fehlerbericht liegt hier": "The error report is here",
   "Der Fehlerbericht ließ sich nicht ablegen": "The error report could not be stored",
   "Der Fuß wird mitgedruckt.": "The foot is printed with the part.",
+  "Der Fügeweg ist frei: {length} entlang {axis}, in {steps} Schritten keine Überschneidung.": "The insertion path is clear: {length} along {axis}, no overlap in {steps} steps.",
   "Der Generator hat den Auftrag abgebrochen.": "The generator gave up on the job.",
   "Der Generator rechnet seit einer Stunde an diesem Auftrag. Solidon beendet das Warten. Ältere ComfyUI-Server können den Auftrag noch zu Ende rechnen.": "The generator has been working on this job for an hour. Solidon stops waiting. Older ComfyUI servers may continue processing the job.",
   "Der Gerätename ist unvollständig.": "The device name is incomplete.",
