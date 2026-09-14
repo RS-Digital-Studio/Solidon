@@ -480,6 +480,38 @@ def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplic
     assert dialog.values()["depth"] == pytest.approx(4.0)
 
 
+def test_a_direction_from_the_click_stays_behind_the_flap(qt_app: QApplication) -> None:
+    """Die Normale der angeklickten Fläche entscheidet nichts, was vorn stünde.
+
+    Gemessen am 14.09.2026 an *Bohrung setzen* mit zugeklappter Klappe: An der
+    Oberseite stand *Normale Z* vorn, an der linken Seite *Achse* und *Normale
+    X*, an der Vorderseite *Achse* und *Normale Y* — je nachdem, welche
+    Komponente des Klicks ungleich null war. Ein Neuling kennt das Wort nicht,
+    sieht eine von drei Zahlen und kann den Dialog nicht lernen, weil er bei
+    jeder Bohrung anders aussieht. Vorn stehen die Zahlen, die man ändert
+    (§2.4): die Position. Richtung und Achse bleiben hinten — und gelten
+    trotzdem.
+    """
+    spec = REGISTRY.get("drill_hole")
+    faces = {
+        "top": {"x": 5.0, "y": 6.0, "z": 10.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
+        "left": {"x": -20.0, "y": 6.0, "z": 4.0, "nx": -1.0, "ny": 0.0, "nz": 0.0, "axis": "x"},
+        "front": {"x": 5.0, "y": -15.0, "z": 4.0, "nx": 0.0, "ny": -1.0, "nz": 0.0, "axis": "y"},
+    }
+    fronts: dict[str, frozenset[str]] = {}
+    for face, given in faces.items():
+        dialog = OperationDialog(spec, [], None, values=given)
+        front = frozenset(name for name, form in dialog._rows.items() if form is dialog._front)
+        assert not front & {"nx", "ny", "nz", "axis"}, f"{face}: {sorted(front)}"
+        assert {"x", "y", "z"} <= front, f"{face}: die Position bleibt vorn"
+        values = dialog.values()
+        for name in ("nx", "ny", "nz"):
+            assert values[name] == pytest.approx(given[name]), f"{face}: {name} gilt weiter"
+        assert values["axis"] == given.get("axis", "z")
+        fronts[face] = front
+    assert len(set(fronts.values())) == 1, f"der Dialog sieht an jeder Fläche gleich aus: {fronts}"
+
+
 def test_no_required_parameter_hides_behind_the_advanced_box() -> None:
     """Ein Pflichtfeld hinter der Klappe ist eine stille Wahl (Regel 21).
 

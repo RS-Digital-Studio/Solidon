@@ -17,7 +17,7 @@ gefiltert. Beides beantwortet :func:`quick_names`.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import override
+from typing import Final, override
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QResizeEvent
@@ -101,6 +101,28 @@ Stellen zu finden.
 
 QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature")
 """Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
+
+
+#: Bis zu so vielen sichtbaren Handlungen beginnt eine Gruppe offen; darüber
+#: zugeklappt. Es ist dieselbe Zahl wie ``MAX_SUBMENU_ENTRIES`` in
+#: ``tests/test_interface_limits.py``, und der Test hält beide zusammen: Die
+#: vier Operationsmenüs sind am 11.09.2026 in diese Karte gewandert, und
+#: mitgewandert war die Zahl der Einträge, nicht die Grenze — an einem
+#: gewählten Körper standen 42 Knöpfe offen da, 24 davon unter „Ändern"
+#: (Durchsicht 14.09.2026). Ein Klick mehr für den, der tief greift; ein
+#: überschaubares Bild für den, der zum ersten Mal hinsieht. Wer eine Gruppe
+#: von Hand auf- oder zuklappt, behält das über Auswahlwechsel hinweg.
+OPEN_UP_TO: Final = 12
+
+#: Handlungen, die der Filament-Schnellwähler über dieser Liste trägt
+#: (``filament_assignment.QuickFilamentPicker``, vom Fenster an zweiter Stelle
+#: in diese Karte gehängt). *Filament entfernen* stand zweimal in derselben
+#: Karte: oben am Wähler, gesperrt mit Grund, solange nichts zugewiesen ist —
+#: darunter als Operation, bedienbar (Durchsicht 14.09.2026). Derselbe Text
+#: mit entgegengesetzter Aussage. Was oben stehen kann, steht nicht auch
+#: darunter — dieselbe Regel wie bei den Hauptaktionen und bei
+#: :func:`_shown_as_fields`.
+PICKER_HANDLES: Final = frozenset({"clear_filament"})
 
 
 def _shown_as_fields() -> frozenset[str]:
@@ -302,6 +324,13 @@ class SelectionOperationsPanel(QWidget):
         self._query = ""
         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
         vergessen."""
+        self._folded_by_hand: set[str] = set()
+        """Die Gruppen, deren Klappe jemand selbst bewegt hat.
+
+        Für sie gilt die Regel aus :data:`OPEN_UP_TO` nicht mehr: Wer „Ändern"
+        aufgeklappt hat, will es nach dem nächsten Klick auf einen Körper nicht
+        wieder zu vorfinden. ``clicked`` feuert nur bei einer Geste, nicht bei
+        ``setChecked`` — das ist genau die Unterscheidung."""
         self._feature_kind: str | None = None
         """Die Art des gewählten Merkmals, leer auf der Körperstufe.
 
@@ -380,6 +409,9 @@ class SelectionOperationsPanel(QWidget):
             section.setParent(content)
             toggle = section.findChild(QToolButton, "sectionHeading")
             assert toggle is not None
+            toggle.clicked.connect(
+                weak_slot(self, SelectionOperationsPanel._folded_by_a_click, title)
+            )
             content_layout.addWidget(section)
             self._groups[title] = (section, toggle, tuple(buttons))
         content_layout.addStretch(1)
@@ -672,21 +704,31 @@ class SelectionOperationsPanel(QWidget):
             self._query = query
         wanted = self._query.strip().casefold()
         for title, (section, toggle, buttons) in self._groups.items():
-            visible = False
+            shown = 0
             for button in buttons:
                 label = str(button.property("operationTitle") or button.text())
                 match = not wanted or wanted in f"{title} {label}".casefold()
                 fits = self._fits_the_level(str(button.property("operationName")))
                 button.setVisible(match and fits)
-                visible = visible or (match and fits)
-            section.setVisible(visible)
-            if wanted and visible and not toggle.isChecked():
+                shown += match and fits
+            section.setVisible(shown > 0)
+            if wanted and shown and not toggle.isChecked():
                 # Ein Treffer öffnet seine Gruppe: Wer sucht, will sehen, was
                 # er gefunden hat — nicht erst aufklappen.
                 toggle.setChecked(True)
+            elif not wanted and title not in self._folded_by_hand:
+                # Ohne Suchtext gilt die Grenze (:data:`OPEN_UP_TO`): Was ein
+                # Menü nicht mehr zeigte, beginnt hier zugeklappt — an einem
+                # Körper „Ändern" mit 24, an einer Fläche dieselbe Gruppe mit
+                # zweien offen. Gerechnet wird an der Stufe, nicht am Bestand.
+                toggle.setChecked(shown <= OPEN_UP_TO)
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._wrap_labels()
+
+    def _folded_by_a_click(self, title: str) -> None:
+        """Eine von Hand bewegte Klappe bleibt, wie sie ist (:data:`OPEN_UP_TO`)."""
+        self._folded_by_hand.add(title)
 
     def _fits_the_level(self, name: str) -> bool:
         """Ob diese Handlung zur Stufe der aktuellen Auswahl gehört (Konzept C).
@@ -713,6 +755,8 @@ class SelectionOperationsPanel(QWidget):
         ``face`` und für nichts sonst). Beide Orte lesen jetzt dieselbe Auskunft
         aus dem Register.
         """
+        if name in PICKER_HANDLES:
+            return False
         if self._feature_kind:
             if name in _shown_as_fields():
                 return False

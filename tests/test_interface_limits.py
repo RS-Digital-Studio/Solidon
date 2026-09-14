@@ -32,6 +32,7 @@ from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QWidgetAction
 
 from app.ui.main_window import MENU_GROUPS, MainWindow
+from app.ui.selection_operations import OPEN_UP_TO, SelectionOperationsPanel
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import shortcut_for
@@ -365,6 +366,43 @@ def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:
         f"Diese Menüs zeigen mehr als {MAX_SUBMENU_ENTRIES} Zeilen: {over}. "
         "Eine Zwischenebene (wie die Bausteingruppen) oder eine Kategorie "
         "weniger — Bauplan §25 und MENU_GROUPS sind die Stellen dafür."
+    )
+
+
+def test_the_selection_card_keeps_the_menu_limit_on_its_open_groups(
+    qt_app: QApplication,
+) -> None:
+    """Die Grenze der Menüs gilt auch dort, wohin die Menüs gezogen sind.
+
+    Die Operationsmenüs *Objekt*, *Ändern* und *Vorbereiten* sind am 11.09.2026
+    in die Auswahlkarte gewandert; `test_no_menu_becomes_a_list_to_search`
+    misst seither eine Leiste, in der sie nicht mehr stehen. Gemessen am
+    14.09.2026: 42 offene Knöpfe an einem gewählten Körper, 24 in einer
+    Gruppe. Eine offene Gruppe zeigt seither höchstens so viele wie ein Menü;
+    was darüber liegt, beginnt zugeklappt (``OPEN_UP_TO`` in
+    ``selection_operations.py``, dieselbe Zahl wie hier).
+    """
+    assert OPEN_UP_TO == MAX_SUBMENU_ENTRIES, "zwei Grenzen für dieselbe Frage"
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, lambda _name: (True, ""))
+    panel.show()
+    qt_app.processEvents()
+
+    over: dict[str, int] = {}
+    folded = 0
+    for title, (_section, toggle, buttons) in panel._groups.items():
+        listed = sum(not button.isHidden() for button in buttons)
+        if not listed:
+            continue
+        if not toggle.isChecked():
+            folded += 1
+            continue
+        if listed > MAX_SUBMENU_ENTRIES:
+            over[title] = listed
+    assert folded, "ohne eine zugeklappte Gruppe misst der Test eine leere Karte"
+    assert not over, (
+        f"Diese Gruppen zeigen offen mehr als {MAX_SUBMENU_ENTRIES} Handlungen: {over}. "
+        "OPEN_UP_TO in selection_operations.py klappt sie zu."
     )
 
 

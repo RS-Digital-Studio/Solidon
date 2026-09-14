@@ -11135,6 +11135,14 @@ def test_the_question_button_carries_the_answer(qt_app: QApplication) -> None:
     assert dialog._accept.text() == "Keinen", "und sie folgt der Auswahl"
     assert dialog.chosen() == "Keinen"
 
+    # **Und er trägt das Wort, das der Kunde liest, nicht den Wert dahinter.**
+    # Die Einheitenfrage zeigt „Zoll (in)" in der Liste; auf dem Knopf stand
+    # „in" — im deutschen Fenster kein Wort (Durchsicht 14.09.2026).
+    units = AskDialog("In welcher Einheit ist das Modell?", ["mm", "cm", "in"])
+    units.list.setCurrentRow(2)
+    assert units._accept.text() == "Zoll (in)", "der Knopf sagt, was die Zeile sagt"
+    assert units.chosen() == "in", "der Kern bekommt weiter das Kürzel"
+
 
 def test_the_generator_dialog_puts_the_seed_out_of_the_way(qt_app: QApplication) -> None:
     """§2.4: vorn die zwei Werte, die man ändert.

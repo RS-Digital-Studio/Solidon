@@ -148,13 +148,16 @@ class AskDialog(QDialog):
         layout.addWidget(buttons)
 
     def _name_the_choice(self) -> None:
-        """Was gewählt ist, steht auf dem Knopf.
+        """Was gewählt ist, steht auf dem Knopf — mit dem Wort, das der Kunde liest.
 
-        Ohne Auswahl bleibt es bei „OK": ein leerer Knopf wäre schlimmer als
-        ein nichtssagender.
+        Der Knopf trug den **Wert** der Zeile: Bei der Einheitenfrage stand
+        „in" darauf, während die Liste daneben „Zoll (in)" sagte — derselbe
+        Fehler, den die Liste am 02.09.2026 losgeworden war, eine Zeile tiefer
+        (Durchsicht 14.09.2026). Ohne Auswahl bleibt es bei „OK": ein leerer
+        Knopf wäre schlimmer als ein nichtssagender.
         """
-        chosen = self.chosen()
-        self._accept.setText(chosen or tr("OK"))
+        item = self.list.currentItem()
+        self._accept.setText(item.text() if item is not None else tr("OK"))
 
     def chosen(self) -> str | None:
         item = self.list.currentItem()

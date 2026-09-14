@@ -346,6 +346,20 @@ gescheitert ist:
   Objektverwaltung ist, nicht weil sie die konstruktive Hauptsache wäre. Die
   Booleschen, der Grund für diese Fläche, fielen heraus. Ein Kürzel als
   Häufigkeitssignal hilft dort nicht: *Löschen* und *Umbenennen* tragen eines.
+* **Eine Gruppe über der Menügrenze beginnt zugeklappt** (`OPEN_UP_TO`,
+  dieselben zwölf wie `MAX_SUBMENU_ENTRIES`; `test_interface_limits` hält
+  beide zusammen). Die vier Operationsmenüs sind am 11.09.2026 in diese Karte
+  gewandert, und mitgewandert war die Zahl der Einträge, nicht die Grenze: An
+  einem gewählten Körper — dem Zustand nach jedem Import — standen 42 Knöpfe
+  offen, 24 davon unter „Ändern" (Durchsicht 14.09.2026). Gerechnet wird an
+  der Stufe, nicht am Bestand: Dieselbe Gruppe hat an einer Fläche zwei
+  Einträge und steht dort offen. Wer eine Klappe selbst bewegt, behält das
+  über Auswahlwechsel hinweg (`clicked`, nicht `toggled` — nur die Geste
+  zählt); ein Suchtreffer öffnet weiter.
+* **Und was der Filament-Schnellwähler über der Liste trägt, steht nicht auch
+  darin** (`PICKER_HANDLES`). *Filament entfernen* stand zweimal in derselben
+  Karte — oben gesperrt mit Grund, solange nichts zugewiesen ist, unten
+  bedienbar: derselbe Text mit entgegengesetzter Aussage.
 
 **Was das Merkmalsfenster darüber als Feld zeigt, bekommt in der Karte keinen
 zweiten Knopf.** Beide liegen im selben Fenster übereinander, und an einer
@@ -554,6 +568,16 @@ Jeder Dialog hat eine kurze Vorderseite und einen aufklappbaren Bereich
 Toleranzen, Auflösungen, Rückfallverhalten. Die Vorgaben kommen aus dem
 Drucker- und Materialprofil. **Eine gute Vorgabe ist mehr wert als eine gute
 Einstellmöglichkeit.**
+
+**Ein vorbelegter Wert kommt nach vorn — außer er ist eine Richtung.** Der
+Dialog holt, was gerade entschieden wurde, vor die Klappe: die angeklickte
+Fläche, die vorgewählte Position (§18.5, `decided` in `op_dialog.py`). Der
+Klick trägt aber auch die Normale der Fläche ein, drei Zahlen, von denen je
+nach Fläche eine ungleich null ist — und die stand dann vorn: *Normale Z* an
+der Oberseite, *Achse* und *Normale X* an der linken, ein Dialog, der bei
+jeder Bohrung anders aussah (Durchsicht 14.09.2026). Eine Vektorkomponente
+tippt niemand von Hand. `direction_fields` (die Normale aus
+`normal_fields_of`, dazu `axis`) bleibt hinten; der Wert gilt trotzdem.
 
 **Und was gerade nichts tut, steht nicht da.** Ein Feld mit `depends_on`,
 dessen Bedingung nicht gilt, verschwindet aus dem Dialog und kommt mit ihr

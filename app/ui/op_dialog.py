@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 from app.core import expressions
 from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line, inactive_dependency
+from app.core.registry.surfaces import normal_fields_of
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
@@ -1271,6 +1272,17 @@ class FeatureSetField(QWidget):
         self._changed()
 
 
+def direction_fields(spec: OperationSpec) -> frozenset[str]:
+    """Die Felder, die die Richtung des Werkzeugs tragen: Normale und Achse.
+
+    Die Namen der Normalen kennt das Register (:func:`normal_fields_of` — ein
+    Rezept mit eigenem ``nx`` nennt sie ``surface_nx`` …); ``axis`` ist der
+    Rückfall, den die Operation nimmt, solange die drei null sind. Der Dialog
+    fragt hier, welche vorbelegten Werte er **nicht** nach vorn holt.
+    """
+    return frozenset(normal_fields_of(spec)) | {"axis"}
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -1409,6 +1421,7 @@ class OperationDialog(QDialog):
         self._advanced_form = advanced
         self._rows: dict[str, QFormLayout] = {}
         """Welches Formular das Feld trägt; ein Variantenwechsel ersetzt sein Schema."""
+        direction = direction_fields(spec)
         for entry in spec.params.spec():
             editor = self._editor_for(entry, names, given.get(entry.name))
             self._editors[entry.name] = editor
@@ -1435,7 +1448,21 @@ class OperationDialog(QDialog):
             # entsteht (``test_the_pose_grid_stands_in_front``). Ein erster
             # Versuch schob rohe Sammelwerte pauschal nach hinten und trennte
             # damit genau diese zwei.
-            decided = entry.name in given and given[entry.name] != entry.default
+            #
+            # **Und eine Richtung ist keine Entscheidung, die man nachbessert.**
+            # Der Klick auf eine Fläche trägt ihre Normale ein — drei Zahlen,
+            # von denen nur die ungleich null „entschieden" aussah: An der
+            # Oberseite stand *Normale Z* vorn, an der linken Seite *Achse*
+            # und *Normale X*, und der meistbenutzte Dialog sah bei jeder
+            # Bohrung anders aus (Durchsicht 14.09.2026). Eine Komponente
+            # eines Vektors tippt niemand von Hand, und ihre zwei Geschwister
+            # blieben hinten. Richtung und Achse bleiben, wo das Schema sie
+            # hinlegt; der Wert gilt trotzdem.
+            decided = (
+                entry.name in given
+                and given[entry.name] != entry.default
+                and entry.name not in direction
+            )
             target = (
                 front
                 if entry.placement == "front" or isinstance(editor, ArmatureField) or decided

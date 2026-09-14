@@ -27782,6 +27782,39 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
   dazwischen. Nachweis: `test_a_checkbox_row_answers_on_its_whole_width` (Höhe gegen das
   Nachbarfeld), Sonde `probe_hollow_rows` und `probe_hollow_toggle2` auf der echten Plattform.
 
+- **Die Bedienweg-Durchsicht** (bedienlogik-Agent, rund dreißig Sonden durch das echte Fenster
+  am HEAD ac2e8109, alle vier Wege Klick für Klick, gemessen und nicht gelesen) lieferte 17
+  Befunde und zwei Entscheidungen für Robert (§2.6 Kontextmenü am Merkmal — nachziehen oder
+  Brücke; ob *Quader anlegen* seine drei Maße als Projektparameter anbieten soll). Gebaut werden
+  sie in Einheiten, je Fund Messung, Fix, Test und Gegenprobe:
+
+  - **Der Bohrdialog sah an jeder Fläche anders aus** (B1). Mit zugeklappter Klappe stand an der
+    Oberseite *Normale Z* vorn, an der linken Seite *Achse* und *Normale X*, an der Vorderseite
+    *Achse* und *Normale Y*: `decided` in `op_dialog.py` holte jeden vorbelegten Wert nach vorn,
+    der von seiner Vorgabe abwich — und der Klick auf eine Fläche trägt ihre Normale ein, drei
+    Zahlen, von denen je nach Fläche eine ungleich null ist. 44 Operationen führen diese Felder.
+    `direction_fields` (die Normale aus `normal_fields_of`, dazu `axis`) bleibt seither hinten;
+    die Vorderseite von *Bohrung setzen* heißt an jeder Fläche Durchmesser · Position X · Y · Z ·
+    Langloch. Nachweis: `test_a_direction_from_the_click_stays_behind_the_flap`.
+  - **Der Knopf der Einheitenrückfrage trug den Kernschlüssel** (B6). Die Liste sagte „Zoll (in)"
+    (behoben am 02.09.2026), der Knopf darunter „in" — `_name_the_choice` las `chosen()`, den
+    Wert, nicht den Text der Zeile. Nachweis: `test_the_question_button_carries_the_answer`.
+  - **42 Knöpfe direkt nach dem Import** (B4). Die vier Operationsmenüs sind am 11.09.2026 in die
+    Auswahlkarte gewandert; mitgewandert waren die Einträge, nicht die Grenze —
+    `MAX_SUBMENU_ENTRIES` (zwölf) maß eine Leiste, in der sie nicht mehr standen. An einem
+    gewählten Körper standen Objekt 6, Vorbereiten 6 und Ändern 24 offen. `OPEN_UP_TO` in
+    `selection_operations.py` trägt dieselbe Zahl, ein Test hält beide zusammen: Eine Gruppe über
+    der Grenze beginnt zugeklappt, gerechnet an der Stufe — an einer Fläche hat dieselbe Gruppe
+    zwei Einträge und steht offen; wer sie von Hand bewegt, behält das über Auswahlwechsel.
+    Nachweise: `test_a_group_over_the_menu_limit_starts_folded_unless_opened_by_hand`,
+    `test_the_selection_card_keeps_the_menu_limit_on_its_open_groups`.
+  - **Zwei Knöpfe „Filament entfernen" in derselben Karte** (B7), einer gesperrt mit Grund (der
+    Schnellwähler, solange nichts zugewiesen ist), einer bedienbar (die Operation
+    `clear_filament` unter „Vorbereiten"). `PICKER_HANDLES` nimmt die Operation aus der Liste —
+    was oben stehen kann, steht nicht auch darunter, dieselbe Regel wie bei den Hauptaktionen und
+    den Feldern des Merkmalfensters. Nachweis:
+    `test_the_picker_above_the_list_shows_its_handling_no_second_time`.
+
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
 Aus der Sonde über alle 110 Operationen vom 13.09.2026

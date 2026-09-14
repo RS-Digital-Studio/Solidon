@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from app.core.bootstrap import load_operations
 from app.core.perceive.actions import ACTION_ORDER
 from app.core.registry import REGISTRY, catalogue_operations, needed_inputs
 from app.ui.selection_operations import (
+    OPEN_UP_TO,
+    PICKER_HANDLES,
     QUICK_BODIES,
     QUICK_BODY,
     QUICK_FEATURES,
@@ -418,7 +423,11 @@ def test_every_group_folds_and_a_search_hit_unfolds_it(qt_app: QApplication) -> 
     assert panel._groups, "sonst prüft dieser Test nichts"
     folded: dict[str, list] = {}
     for title, (section, toggle, buttons) in panel._groups.items():
-        assert toggle.isCheckable() and toggle.isChecked(), f"{title} beginnt offen"
+        assert toggle.isCheckable(), title
+        # Offen beginnt, was ein Menü noch zeigte; was darüber liegt, beginnt
+        # zu (``OPEN_UP_TO``, eigener Test unten).
+        listed = sum(not button.isHidden() for button in buttons)
+        assert toggle.isChecked() == (listed <= OPEN_UP_TO), f"{title}: {listed} Einträge"
         shown = [button for button in buttons if button.isVisibleTo(panel)]
         if not shown:
             continue
@@ -436,6 +445,90 @@ def test_every_group_folds_and_a_search_hit_unfolds_it(qt_app: QApplication) -> 
     qt_app.processEvents()
     assert toggle.isChecked(), f"ein Treffer öffnet {title}"
     assert wanted.isVisibleTo(panel), "und der Treffer steht da"
+
+
+def test_a_group_over_the_menu_limit_starts_folded_unless_opened_by_hand(
+    qt_app: QApplication,
+) -> None:
+    """Was ein Menü nicht mehr zeigte, beginnt in der Karte zugeklappt.
+
+    Die vier Operationsmenüs sind am 11.09.2026 hierher gewandert, weil 69
+    gesperrte Zeilen Lärm waren — mitgewandert war die Zahl der Einträge, nicht
+    die Grenze: An einem gewählten Körper standen 42 Knöpfe offen da, 24 davon
+    unter „Ändern", und das ist der Zustand direkt nach jedem Import
+    (Durchsicht 14.09.2026). Die Grenze ist die der Menüs (zwölf), gerechnet an
+    der Stufe: Dieselbe Gruppe hat an einer Fläche zwei Einträge und steht dort
+    offen. Und wer sie selbst aufklappt, findet sie nach dem nächsten Klick auf
+    einen Körper nicht wieder zu — die Regel gilt nur, solange niemand
+    entschieden hat.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1))
+    panel.show()
+    qt_app.processEvents()
+
+    def listed(title: str) -> int:
+        return sum(not button.isHidden() for button in panel._groups[title][2])
+
+    big = [title for title in panel._groups if listed(title) > OPEN_UP_TO]
+    assert big, "ohne eine Gruppe über der Grenze prüft der Test nichts"
+    for title, (_section, toggle, _buttons) in panel._groups.items():
+        if listed(title):
+            assert toggle.isChecked() == (listed(title) <= OPEN_UP_TO), title
+
+    title = big[0]
+    toggle = panel._groups[title][1]
+    panel.set_context(1, _availability(1), feature_kind="face")
+    qt_app.processEvents()
+    assert listed(title) <= OPEN_UP_TO, f"{title} hat an einer Fläche weniger Einträge"
+    assert toggle.isChecked(), f"{title} steht an der Fläche offen"
+
+    panel.set_context(1, _availability(1))
+    qt_app.processEvents()
+    assert not toggle.isChecked(), f"{title} ist am Körper wieder zu"
+
+    toggle.click()
+    qt_app.processEvents()
+    assert toggle.isChecked(), "von Hand geöffnet"
+    panel.set_context(1, _availability(1), feature_kind="face")
+    panel.set_context(1, _availability(1))
+    qt_app.processEvents()
+    assert toggle.isChecked(), "und das bleibt über den Stufenwechsel hinweg"
+
+
+def test_the_picker_above_the_list_shows_its_handling_no_second_time(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Filament entfernen* steht einmal in der Karte — am Wähler, nicht darunter.
+
+    Der Schnellwähler hängt an zweiter Stelle in derselben Karte und trägt den
+    Knopf mit Grund (gesperrt, solange nichts zugewiesen ist); die Operation
+    darunter stand mit demselben Text bedienbar da (Durchsicht 14.09.2026).
+    Zwei gleiche Knöpfe mit entgegengesetzter Aussage. Geprüft wird beides:
+    dass der Wähler die Handlung wirklich trägt, und dass die Liste sie an
+    Körper und Fläche nicht mehr zeigt.
+    """
+    from app.core.knowledge import filaments
+    from app.ui.filament_assignment import QuickFilamentPicker
+
+    load_operations()
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    picker = QuickFilamentPicker()
+    try:
+        texts = {button.text() for button in picker.findChildren(QPushButton)}
+        assert PICKER_HANDLES, "ohne Eintrag prüft der Test nichts"
+        for name in PICKER_HANDLES:
+            assert str(REGISTRY.get(name).title) in texts, f"{name} trägt der Wähler nicht"
+    finally:
+        picker.close()
+
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    for kind in ("", "face"):
+        panel.set_context(1, _availability(1), feature_kind=kind)
+        qt_app.processEvents()
+        listed = {name for name in PICKER_HANDLES if not panel._buttons[name].isHidden()}
+        assert not listed, f"{kind or 'Körper'}: {sorted(listed)} stehen ein zweites Mal"
 
 
 def test_no_action_stands_twice_in_the_selection_window(qt_app: QApplication) -> None:
