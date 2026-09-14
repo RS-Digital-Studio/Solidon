@@ -91,6 +91,30 @@ def test_the_download_remembers_the_model_that_was_actually_requested(
 
 
 @pytest.fixture
+def quick_survey(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Schlüsseldialog fragt beim Aufbau Ollama — hier antwortet die Frage sofort.
+
+    ``_Look`` sucht das Werkzeug und stellt die HTTP-Frage nach den
+    installierten Modellen, auf einem Rechner ohne laufendes Ollama bis zum
+    Timeout: gemessen 2,4 bis 6,5 s **je Teardown**, denn die Aufräumfixture
+    wartet auf den Arbeiter — bei fünf Dialogtests, die an der Erhebung
+    nichts prüfen, eine halbe Minute Umgebung und keine Aussage. Die
+    Attrappe liefert den Zustand einer Maschine ohne Dienst: kein Ollama,
+    keine Modelle, kein Satz dazu.
+
+    **Benannt, nicht ``autouse``:** Vier Tests dieser Datei mocken unterhalb
+    von ``work`` — den Dienstzustand, die Modellliste, einen ganzen Server —
+    und brauchen die echte Kette darüber; eine Attrappe für alle machte sie
+    blind. Wer sie will, nennt sie.
+    """
+    from app.ui import dialogs as module
+
+    monkeypatch.setattr(
+        module._Look, "work", lambda worker: worker.done.emit(module.ChatState("", None, ()))
+    )
+
+
+@pytest.fixture
 def window(qt_app: QApplication) -> MainWindow:
     made = MainWindow(Session(), UiSettings())
     made.open_path(MESHES / "plate_holes.stl")
@@ -522,8 +546,79 @@ def test_the_applied_bar_does_not_survive_a_new_project(window: MainWindow) -> N
     assert not window.chat.decision.isVisibleTo(window.chat)
 
 
-def test_the_key_dialog_never_shows_a_stored_key(
+def test_closing_the_key_dialog_does_not_wait_for_the_model_survey(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Schließen reagiert sofort, die ausstehende Antwort wird verworfen, der
+    Arbeiter lebt an der Leine bis zu seinem Ende (RM-108).
+
+    Der Dialog startet beim Aufbau eine Erhebung — Werkzeugsuche und die
+    HTTP-Frage nach den installierten Modellen, gemessen 2,7 s, bei einem
+    hängenden Ollama „Sekunden bis Minuten". Wer ihn währenddessen zumachte,
+    wartete: ``reject`` rief ``wait_for_look`` mit dreißig Sekunden Frist,
+    ``closeEvent`` die Leine mit zwei je Arbeiter. Ein Dialog, der beim
+    Schließen steht, ist eingefroren und sagt es nicht (§2.8).
+
+    Drei Zusicherungen, und nur zusammen sind sie die Abnahme: Das Schließen
+    kommt in weniger als einer halben Sekunde zurück, obwohl der Arbeiter noch
+    hängt; die Antwort, die er danach liefert, erreicht keinen Slot des
+    Dialogs mehr; und die modulweite Leine hält ihn, bis ``isRunning`` nein
+    sagt — erst dann ist er aus ``leash.alive()`` verschwunden.
+    """
+    import time
+    from threading import Event
+
+    from app.core.backends import keys
+    from app.ui import dialogs as module
+    from app.ui import leash
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    release = Event()
+    tool = module.tools.by_id("ollama")
+    assert tool is not None
+
+    def slow_look(worker: module._Look) -> None:
+        assert release.wait(10)
+        worker.done.emit(
+            module.ChatState("Probe", module.tools.ToolState(tool, None, True), ("model-x",))
+        )
+
+    monkeypatch.setattr(module._Look, "work", slow_look)
+    shown: list[object] = []
+    monkeypatch.setattr(module.KeyDialog, "_show_state", lambda self, found: shown.append(found))
+
+    dialog = module.KeyDialog(settings=UiSettings())
+    worker = dialog._look
+    assert worker is not None and worker.isRunning(), "sonst misst dieser Test nichts"
+    try:
+        started = time.perf_counter()
+        dialog.reject()
+        took = time.perf_counter() - started
+        assert took < 0.5, f"das Schließen wartete {took:.2f} s auf die Erhebung"
+        assert worker.isRunning(), "der Arbeiter lebt weiter — eine HTTP-Frage bricht niemand ab"
+        assert worker in leash.alive(), "und die Leine hält ihn, sonst stirbt der Prozess an ihm"
+        assert dialog._look is None, "der Dialog hat ihn losgelassen"
+
+        release.set()
+        assert worker.wait(5000)
+        for _ in range(5):
+            qt_app.processEvents()
+        assert shown == [], "die Antwort einer losgelassenen Erhebung erreicht den Dialog nicht"
+        assert leash.wait_for_all() == ()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert worker not in leash.alive(), "ausgelaufen heißt losgelassen"
+    finally:
+        release.set()
+        worker.wait(5000)
+        dialog.release(5000)
+        dialog.deleteLater()
+
+
+def test_the_key_dialog_never_shows_a_stored_key(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
 ) -> None:
     """§27: der Schlüssel lebt im Schlüsselbund. Ein Dialog, der ihn
     zurückspiegelte, brächte ihn auf den Bildschirm, in einen Screenshot, in
@@ -540,7 +635,9 @@ def test_the_key_dialog_never_shows_a_stored_key(
 
 
 def test_the_key_dialog_names_the_state(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
 ) -> None:
     from PySide6.QtWidgets import QLabel
 
@@ -559,7 +656,9 @@ def test_the_key_dialog_names_the_state(
 
 
 def test_the_key_dialog_offers_the_local_model_too(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
 ) -> None:
     """§27 nennt zwei Wege zum Sprachmodell. Bisher stand hier nur einer, und
     das lokale Modell ließ sich überhaupt nicht einstellen.
@@ -578,7 +677,9 @@ def test_the_key_dialog_offers_the_local_model_too(
 
 
 def test_the_key_dialog_separates_cloud_and_local_paths(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
 ) -> None:
     """Ohne KI-Vorwissen sind ein Passwortfeld und ein Modellname keine Wahl.
 
@@ -620,7 +721,9 @@ def test_the_key_dialog_separates_cloud_and_local_paths(
 
 
 def test_the_key_dialog_remembers_the_model_without_a_key(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
 ) -> None:
     """Wer nur das Modell wechselt, hat keinen Schlüssel einzutragen — und der
     Dialog darf seine Eingabe darüber nicht wegwerfen.

@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Der Schlüsseldialog schließt sofort (14.09.2026)](#der-schlüsseldialog-schließt-sofort-14092026) |
 | 2026-09-14 | [Ein freier Fügeweg wird gesagt (14.09.2026)](#ein-freier-fügeweg-wird-gesagt-14092026) |
 | 2026-09-14 | [Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)](#drei-sackgassen-und-zwei-stumme-vorschauen-14092026) |
 | 2026-09-12 | [Was vor 0.4.1 zugegangen ist (12.09.2026)](#was-vor-041-zugegangen-ist-12092026) |
@@ -27906,3 +27907,32 @@ Ein Punkt aus dem Werkstattfilm vom 13.09.2026, abgeschlossen am 14.09.2026.
   `test_two_parts_that_only_fit_in_the_end_are_not_the_same_as_two_that_get_there`, der den
   freien Weg jetzt als `join.clear` verlangt statt als leere Liste; `test_value_labels` und
   `test_translations` grün.
+
+## Der Schlüsseldialog schließt sofort (14.09.2026)
+
+Ein Punkt aus der CI-Durchsicht vom 02.09.2026, abgeschlossen am 14.09.2026.
+
+<a id="rm-108"></a>
+
+- [x] **RM-108 — Abbauzeit des Schlüsseldialogs messen und begrenzen.** Der Dialog startet beim
+  Aufbau eine Erhebung (Werkzeugsuche und die HTTP-Frage nach den installierten Modellen,
+  gemessen 2,7 s) und auf Klick eine Modellprobe, die „Sekunden bis Minuten" dauert. `reject` rief
+  `wait_for_look` mit dreißig Sekunden Frist, `closeEvent` die Leine mit zwei je Arbeiter — wer
+  den Dialog während der Abfrage zumachte, wartete.
+
+  **Gemessen und gebaut am 14.09.2026.** Vorher: 10,1 s Stillstand nach *Abbrechen* bei einer
+  Erhebung, die 10 s braucht; nachher unter 0,5 s. Alles Schließen läuft über `KeyDialog.done`,
+  und `_let_go` löst je Arbeiter in dieser Reihenfolge: Feld auf `None`, Ergebnissignale und jede
+  Verbindung zum Dialog getrennt (`worker.disconnect(self)` — der Download hängt über `weak_slot`
+  an `_pull_done`, das Qt beim Löschen nicht selbst trennte), Thread an `retire`. Der Download
+  wird abgebrochen (Ollama setzt beim nächsten Klick fort), Erhebung und Probe laufen aus; die
+  modulweite Leine hält den Thread, bis `isRunning` nein sagt, und das Fensterende wartet über
+  `leash.wait_for_all`. `release()` bleibt der wartende Weg der Suite. Die Abbauzeit der fünf
+  Dialogtests, die an der Erhebung nichts prüfen (2,4 bis 6,5 s je Teardown, die HTTP-Frist),
+  nimmt die Fixture `quick_survey`; vier Tests, die unterhalb von `_Look.work` mocken, behalten
+  die echte Kette.
+
+  Nachweis: `tests/test_chat_ui.py::test_closing_the_key_dialog_does_not_wait_for_the_model_survey`
+  (Schließen unter 0,5 s, Arbeiter läuft weiter und steht in `leash.alive()`, die Antwort
+  erreicht keinen Slot, `wait_for_all` leer nach dem Auslaufen; ohne `_let_go` rot). Regel in
+  `wartezeit.md`.

@@ -180,6 +180,28 @@ Hauptfenster fragt vor dem Beenden über `leash.wait_for_all` nach jedem
 Arbeiter, den ein weggeräumter Dialog hinterlassen hat — ein Thread, der den
 Prozess überlebt, nimmt ihn mit.
 
+**Dasselbe Muster am Schlüsseldialog, mit einer Zutat** (RM-108, 14.09.2026).
+`KeyDialog` startet beim Aufbau die Erhebung (Werkzeugsuche, HTTP-Frage an
+Ollama — 2,7 s, bei hängendem Dienst länger) und auf Klick die Modellprobe
+(„Sekunden bis Minuten"). `reject` wartete dreißig Sekunden auf die
+Erhebung, `closeEvent` zwei je Arbeiter: gemessen 10 s Stillstand nach
+*Abbrechen* bei einer Erhebung, die 10 s braucht. Seither läuft alles
+Schließen — *Speichern*, *Abbrechen*, Esc, Fensterkreuz — über `done`, und
+`_let_go` tut je Arbeiter drei Dinge in dieser Reihenfolge: das Feld auf
+`None`, die Ergebnissignale (`done`, `step`, `crashed`) ganz und jede
+Verbindung zum Dialog (`worker.disconnect(self)`) trennen, den Thread an
+`retire` geben. **Die Zutat ist das Trennen:** Der Download hängt über
+`weak_slot` an `_pull_done`, und das ist kein Slot des Dialogs, den Qt beim
+Löschen selbst trennte — ohne den Schritt liefe `_pull_done` nach dem
+Schließen weiter, riefe `look()` und startete auf einem geschlossenen Dialog
+den nächsten Arbeiter. Der Download wird dabei abgebrochen (Ollama setzt
+beim nächsten Klick fort); Erhebung und Probe laufen aus, eine HTTP-Frage
+bricht niemand ab. `release()` wartet weiter — das ist der Weg der Suite und
+des Fensterendes. Nachweis:
+`tests/test_chat_ui.py::test_closing_the_key_dialog_does_not_wait_for_the_model_survey`;
+die fünf Dialogtests, die an der Erhebung nichts prüfen, nehmen dort die
+Fixture `quick_survey`, sonst zahlt jeder Teardown die HTTP-Frist.
+
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
 
 **Niemals direkt von `QThread`.** Ein `run`, das eine Ausnahme durchlässt,

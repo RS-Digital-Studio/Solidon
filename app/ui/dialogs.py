@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -911,17 +912,76 @@ class KeyDialog(QDialog):
         self._leash.start(worker)
 
     def wait_for_look(self, milliseconds: int = 30_000) -> bool:
-        """Auf die Erhebung warten. Beim Schließen und in Tests."""
+        """Auf die Erhebung warten. In Tests — das Schließen wartet nicht mehr."""
         worker = self._look
         return worker.wait(milliseconds) if worker is not None else True
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
 
-        Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
+        **Das ist der Weg der Suite und des Fensterendes, und der wartet** —
+        anders als :meth:`done`. Ein Thread, der den Prozess überlebt, nimmt
+        ihn mit; hier wird deshalb auf jeden Arbeiter gewartet, den die Leine
+        noch hält, mit der Frist, die der Aufrufer nennt. Warum der Name,
+        warum die eigene Frist: :mod:`app.ui.leash`.
         """
         self.wait_for_look()
         self._leash.wait_all(timeout_ms)
+
+    def done(self, result: int) -> None:
+        """Schließen wartet auf keinen Arbeiter — es lässt ihn los (RM-108).
+
+        ``done`` ist die eine Stelle, an der *Speichern*, *Abbrechen*, Esc und
+        das Fensterkreuz zusammenkommen (``QDialog::closeEvent`` ruft
+        ``reject``). Bis zum 14.09.2026 wartete ``reject`` hier dreißig
+        Sekunden auf die Erhebung und ``closeEvent`` zwei je Arbeiter — bei
+        einer Modellprobe, die „Sekunden bis Minuten" dauert und an einer
+        HTTP-Antwort hängt, stand der Dialog nach dem Klick auf *Abbrechen*
+        einfach da. Gemessen: 10 s bei einer Erhebung, die 10 s braucht.
+        Ein Fenster, das beim Schließen wartet, ist eingefroren und sagt es
+        nicht (§2.8).
+        """
+        self._let_go()
+        super().done(result)
+
+    def _let_go(self) -> None:
+        """Die laufenden Arbeiter loslassen: Antwort verworfen, Leine hält.
+
+        Drei Dinge je Arbeiter, und die Reihenfolge ist der Punkt. Erst geht
+        das Feld auf ``None`` — ab jetzt gilt „es läuft keiner". Dann werden
+        die Ergebnissignale von allem getrennt, was sie erreichen könnten:
+        ``done``, ``step`` und ``crashed`` ganz, und jede Verbindung zu
+        diesem Dialog obendrein — der Download hängt über ``weak_slot`` an
+        ``_pull_done``, und das ist kein Slot dieses Objekts, den Qt beim
+        Löschen selbst trennte. Ohne diesen Schritt liefe ``_pull_done``
+        nach dem Schließen weiter, riefe ``look()`` und startete auf einem
+        geschlossenen Dialog den nächsten Arbeiter. Zuletzt hält die Leine
+        den Thread, bis ``isRunning`` nein sagt — modulweit, also auch dann
+        noch, wenn dieser Dialog längst weggeräumt ist; das Fensterende
+        wartet über ``leash.wait_for_all`` auf ihn.
+
+        Der Download wird dabei **abgebrochen**, nicht weitergefahren: Neun
+        Gigabyte ohne Balken und ohne Knopf wären die Sackgasse aus §2.8;
+        Ollama behält, was geladen ist, und der nächste Klick auf *Modell
+        holen* setzt fort. Die Erhebung und die Probe laufen aus — eine
+        HTTP-Frage bricht niemand ab.
+        """
+        for name in ("_look", "_starter", "_pull", "_probe"):
+            worker = getattr(self, name)
+            setattr(self, name, None)
+            if worker is None:
+                continue
+            if isinstance(worker, _PullWorker):
+                worker.cancel()
+            if not worker.isRunning():
+                continue
+            for signal_name in ("done", "step", "crashed"):
+                signal = getattr(worker, signal_name, None)
+                if signal is not None:
+                    with suppress(RuntimeError):
+                        signal.disconnect()
+            worker.disconnect(self)
+            self._leash.retire(worker)
 
     def _show_state(self, found: object) -> None:
         """Die Antworten eintragen."""
@@ -932,10 +992,6 @@ class KeyDialog(QDialog):
         self.explanation.setText(f"{self._key_state} {found.answers}\n\n{rest}")
         self._show_service(found.service)
         self._fill_models(found.installed)
-
-    def reject(self) -> None:
-        self.wait_for_look()
-        super().reject()
 
     def _cloud_model_section(self) -> QWidget:
         """Der gehostete Weg, klar vom lokalen Modell getrennt.
@@ -1496,7 +1552,7 @@ class KeyDialog(QDialog):
         self.accept()
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
-        """Kein Arbeiter überlebt seinen Dialog.
+        """Kein Arbeiter überlebt seinen Dialog — aber keiner hält ihn auf.
 
         **Über die Halteleine, nicht mit eigenem Warten.** Hier stand
         ``self._probe.wait()`` ohne Grenze, und die Probe dauert laut ihrem
@@ -1508,13 +1564,12 @@ class KeyDialog(QDialog):
         Referenz auf, und wäre das Warten je vorzeitig zurückgekommen, hätte der
         Speicherbereiniger das QThread-Objekt unter dem laufenden Thread
         weggeräumt — die Zugriffsverletzung, gegen die es die Leine gibt.
-        ``retire`` tut beides richtig: Es hält ihn, und ``wait_all`` wartet mit
-        Frist und schreibt auf, wenn sie reißt.
+        ``retire`` hält ihn. Gewartet wird hier seit dem 14.09.2026 gar nicht
+        mehr (RM-108): ``wait_all`` mit zwei Sekunden je Arbeiter war die
+        kleine Schwester derselben Wartefrist, und ein sichtbarer Dialog kommt
+        von hier ohnehin über ``reject`` zu :meth:`done`.
         """
-        if self._probe is not None:
-            probe, self._probe = self._probe, None
-            self._leash.retire(probe)
-        self._leash.wait_all()
+        self._let_go()
         super().closeEvent(event)
 
 
