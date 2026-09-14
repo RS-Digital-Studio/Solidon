@@ -89,7 +89,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Der Wächter steht (`BackendPromptTruncated`); die Kürzung auf 28 440 Token liegt gemessen vor und wartet auf die Agenten-Suite vorher/nachher, weil sie im Fünf-Fälle-Check einen Fall kippt |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
-| [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Flagge gesetzt; offen ist die Sichtprüfung unter Windows Terminal |
+| [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Der Prozesstest öffnet gemessen kein Fenster (`tools/count_new_windows.py`); offen ist derselbe Zähler um die ganze geteilte Suite auf ruhiger Maschine |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-106 — Plattformunterschiede der Projektdateien dem richtigen Ursprung zuordnen](#rm-106) | Tests und Entwicklungswerkzeuge | Archiv- und Inhaltshashes nach gleichem Erzeugerlauf vergleichen |
 | [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Besitz und ACL einer tatsächlich nutzereigenen Runner-Datei belegen |
@@ -1313,11 +1313,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   unverändert. Eine Testfassung, die dieselben Flaggen selbst zusammensetzt, kann vom echten
   Startweg abweichen — diese kann es nicht mehr.
 
-  **Offen bleibt die Sichtprüfung**, und die kann kein Test leisten: Ob unter Windows Terminal
-  als Standardhost wirklich kein Fenster mehr aufgeht, sieht nur jemand, der zusieht. Der Test
-  war die ganze Zeit grün — das Fenster war ein Nebeneffekt der Konsolenzuweisung und nicht
-  der Prozessgruppe, die er prüft. Abnahme: Prozessbaum wird zuverlässig geschlossen, kein
-  neues Terminalfenster erscheint und die Anwendung verhält sich ebenso.
+  **Die Sichtprüfung ist eine Messung** (14.09.2026): Windows führt seine sichtbaren
+  Hauptfenster, und `tools/count_new_windows.py` fragt sie vor einem Befehl und während des
+  Befehls zwanzigmal je Sekunde ab — jedes Fenster, das dazukommt, steht danach mit Klasse,
+  Titel und Prozess in der Ausgabe, auch eines, das nach einer Sekunde wieder weg ist. Damit
+  gefahren, aus einer von Windows Terminal 1.24 gehosteten Konsole (Standardhost „Windows
+  entscheidet", Windows 11 26200), direkt und unter pytest, je einmal mit und ohne
+  `CREATE_NO_WINDOW`: **kein neues Konsolenfenster**, und die Marke des losgelösten Enkels
+  blieb jedes Mal aus. Der Befund vom 02.09. (Roberts Bildschirmfoto) ist damit am
+  Prozesstest auf dieser Maschine nicht mehr nachzustellen; die Flagge bleibt, weil sie der
+  Produktivweg ist. Der Docstring des Tests sagt beides.
+
+  **Offen ist ein Lauf**, keine Entscheidung: derselben Zähler um die ganze geteilte Suite
+  (`python tools/count_new_windows.py -- bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`)
+  auf ruhiger Maschine — das Fenster vom 02.09. stand in der Suite, und ob es aus diesem Test
+  oder einem anderen kam, sagt erst der Zähler über alle. Abnahme: kein neues Konsolenfenster
+  über den ganzen Lauf; dann ist der Punkt zu.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 

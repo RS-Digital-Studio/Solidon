@@ -240,13 +240,23 @@ def test_a_windows_child_cannot_escape_into_a_detached_process_group(tmp_path: P
     Mal.** Ausgeschrieben waren es nur ``CREATE_NEW_PROCESS_GROUP`` und
     ``DETACHED_PROCESS`` — die Anwendung startet losgelöste Prozesse aber immer
     zusätzlich mit ``CREATE_NO_WINDOW`` (``detached_process_options`` hat
-    ``no_window=True`` als Vorgabe). Ohne diese dritte Flagge öffnet der
-    Testenkel unter Windows Terminal ein sichtbares Fenster mit „Fehler
-    2147942632 (0x800700e8)"; der Test blieb dabei grün, denn das Fenster ist
-    ein Nebeneffekt der Konsolenzuweisung und nicht der Prozessgruppe.
+    ``no_window=True`` als Vorgabe). Ohne diese dritte Flagge öffnete der
+    Testenkel am 10.09.2026 unter Windows Terminal ein sichtbares Fenster mit
+    „Fehler 2147942632 (0x800700e8)"; der Test blieb dabei grün, denn das
+    Fenster ist ein Nebeneffekt der Konsolenzuweisung und nicht der
+    Prozessgruppe.
 
     Eine Testfassung, die dieselben Flaggen selbst zusammensetzt, kann vom
     echten Startweg abweichen — diese hier kann es nicht mehr.
+
+    **Gemessen statt zugesehen (14.09.2026, RM-100):** Ein Fensterzähler über
+    ``EnumWindows`` (zwanzig Abtastungen je Sekunde) um genau diese
+    Enkelkette, gefahren aus einer von Windows Terminal 1.24 gehosteten
+    Konsole auf Windows 11 26200, direkt und unter pytest — kein neues
+    Fenster, weder mit noch ohne ``CREATE_NO_WINDOW``, und die Marke des
+    Enkels blieb beide Male aus. Die Flagge bleibt trotzdem: Sie ist der
+    Produktivweg, und der Befund vom 10.09. ist eine Beobachtung, die eine
+    andere Terminal- oder Delegationslage getroffen haben kann.
     """
     marker = tmp_path / "entkommener-windows-nachkomme"
     child = f"import time; from pathlib import Path; time.sleep(1); Path({str(marker)!r}).touch()"

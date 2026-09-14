@@ -90,6 +90,9 @@ Konstanten) ·
 Importgraphen über `app/`, `tools/` und `tests/`, dazu die Baumleser und die
 Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
 `--run`; die Fenstertrennung kommt von `list_windowed_tests`) ·
+`count_new_windows.py` (welche Fenster während eines Befehls aufgehen — Klasse,
+Titel, Prozess; die Sichtprüfung aus RM-100 als Messung, zwanzig Abtastungen je
+Sekunde über `EnumWindows`, Exit 1 bei einem neuen Konsolenfenster) ·
 `window_bench.py` (Beispiel im **echten** Fenster öffnen und die Wartezeit in
 Posten zerlegen — misst, was offscreen unsichtbar ist: Renderer und
 Aktoraufbau, danach Arbeitsspeicher, `--drag-frames` Kamerastellungen je mit
