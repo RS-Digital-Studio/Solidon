@@ -104,7 +104,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
-| [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Der Website-Fehlalarm ist behoben; offen bleibt der rote Vorwarnlauf gegen die neuesten Abhängigkeiten |
+| [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Beide Funde sind zugeordnet und behoben; offen bleibt nur der Abgleich gegen den Server beim nächsten Upload |
 | [RM-162 — Der Hinweistext der Fassung reiste unverändert mit](#rm-162) | Veröffentlichung, Betrieb und Vertrieb | Der Riegel steht; die sechs Sätze für 0.4.1 stehen bereit und werden beim Bau eingetragen |
 | [RM-176 — GitHub Actions nimmt seit dem 14.09. keinen Lauf mehr an](#rm-176) | Veröffentlichung, Betrieb und Vertrieb | „recent account payments have failed or your spending limit needs to be increased" — Zahlung oder Ausgabenlimit unter *Billing & plans* richten; bis dahin läuft kein Tor, kein Paket, keine Mac-Signierung |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf belegen — die Pflicht gilt seit dem 11.09.2026 |
@@ -1517,13 +1517,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 - [ ] **RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen.** Beide am 10.09.2026
   gemessen, keiner blockiert eine Auslieferung.
 
-  **Der Vorwarnlauf ist rot.** „Neueste Versionen" fährt ohne `constraints.txt` gegen die
-  jeweils neuesten Abhängigkeiten und scheitert an genau einem Test:
-  `test_chat_ui.py::test_a_short_chat_scrolls_its_content_without_covering_the_input[320-576-True]`.
-  Ausgeliefert wird mit gepinnten Versionen, und die Suite ist dort dreimal grün — dafür gibt
-  es den Lauf: Eine neuere Fassung ändert das Scrollverhalten des Chats bei kleiner
-  Fensterhöhe. Abnahme: Ursache benannt und entweder behoben oder die Grenze in
-  `pyproject.toml` mit Begründung eingetragen.
+  **Der Vorwarnlauf war rot — und es war keine Version** (zugeordnet 14.09.2026). „Neueste
+  Versionen" fährt ohne `constraints.txt` und scheiterte an
+  `test_chat_ui.py::test_a_short_chat_scrolls_its_content_without_covering_the_input[320-576-True]`
+  mit `assert (0 > 0) is True`. Das Protokoll des Laufs `34461828229` (10.09.) sagt, was sich
+  bewegt hatte: **nichts, was Qt berührt** — PySide6 6.11.2 in beiden Jobs, fünf Pakete
+  (contourpy, fonttools, matplotlib, pypdf, ruff) sogar älter als die heutigen Pins. Was sich
+  unterschied, war das **Runner-Abbild**: der grüne Suite-Job lief auf `ubuntu-24.04`
+  20260831.293.1, der rote Vorwarnlauf auf 20260907.300.1, mit anderen Schriften; der Hinweis
+  brach eine Zeile kürzer um, der Inhalt passte bei 320 × 576 hinein, und ein Rollbalken, der
+  nichts zu rollen hat, stand auf null. Lokal beträgt der Rollweg dort 82 Pixel — eine Zeile
+  Schrift. Behoben im Test: Ob gerollt werden muss, wird gemessen (Inhalt höher als sein
+  Fenster) statt für drei Fenstergrößen behauptet; das kleinste Fenster (416) muss weiterhin
+  rollen, sonst prüfte der Test nichts. Keine Grenze in `pyproject.toml`, denn es gab keine
+  Version zu begrenzen. Ob der Vorwarnlauf damit grün ist, sagt der nächste, der startet —
+  seit dem 14.09. nimmt GitHub keinen an (RM-176).
 
   **Der Website-Abgleich meldete sechs Dateien, die nicht abweichen — behoben am 10.09.2026.**
   Die Ursache lag nicht im Vergleich, sondern in der **Adresse**: `website/.htaccess`

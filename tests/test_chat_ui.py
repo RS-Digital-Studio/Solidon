@@ -2014,14 +2014,24 @@ def test_the_empty_chat_greets_instead_of_showing_a_dark_box(qt_app: QApplicatio
         panel.deleteLater()
 
 
-@pytest.mark.parametrize(
-    ("width", "height", "needs_scroll"),
-    ((320, 416, True), (268, 544, True), (320, 576, True)),
-)
+@pytest.mark.parametrize(("width", "height"), ((320, 416), (268, 544), (320, 576)))
 def test_a_short_chat_scrolls_its_content_without_covering_the_input(
-    qt_app: QApplication, width: int, height: int, needs_scroll: bool
+    qt_app: QApplication, width: int, height: int
 ) -> None:
-    """Hinweis und Beispiele bleiben erreichbar; die Eingabe bleibt fest darunter."""
+    """Hinweis und Beispiele bleiben erreichbar; die Eingabe bleibt fest darunter.
+
+    **Ob gerollt werden muss, wird gemessen, nicht behauptet.** Bis zum
+    14.09.2026 stand hier für alle drei Fenster ``needs_scroll=True`` — und
+    der Vorwarnlauf der CI (RM-149) war bei 320 × 576 rot, während dieselbe
+    Datei im Suite-Job grün blieb: gleiche PySide6, gleiche Pakete, aber ein
+    anderes Runner-Abbild (20260907 gegen 20260831), dessen Schriften den
+    Hinweis um eine Zeile kürzer umbrachen. Der Inhalt passte hinein, und
+    ein Rollbalken, der nichts zu rollen hat, ist kein Fehler. Gemessen wird
+    deshalb, ob der Inhalt höher ist als sein Fenster — und dann muss der
+    Rollbalken das sagen. Dass die Prüfung überhaupt rollt, hält das
+    kleinste Fenster: 416 Pixel reichen für Hinweis, Beispiele und Eingabe
+    auf keiner Schrift.
+    """
     from PySide6.QtCore import QRect
 
     from app.ui.chat import ChatPanel
@@ -2038,6 +2048,9 @@ def test_a_short_chat_scrolls_its_content_without_covering_the_input(
     panel.show()
     qt_app.processEvents()
 
+    needs_scroll = panel.content_viewport.height() > panel.content_scroll.viewport().height()
+    if height <= 416:
+        assert needs_scroll, "das kleinste Fenster muss rollen, sonst prüft der Test nichts"
     assert (panel.content_scroll.verticalScrollBar().maximum() > 0) is needs_scroll
     assert panel.content_scroll.horizontalScrollBar().maximum() == 0
     assert panel.content_viewport.width() <= panel.content_scroll.viewport().width()
