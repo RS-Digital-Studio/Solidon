@@ -222,7 +222,7 @@ Die Rückfallkette (§17.2) hat fünf Stufen, und die erreichte Stufe gehört in
 | Stufe | Verfahren | Vermerk |
 |---|---|---|
 | 1 | direkt | `direct` |
-| 2 | verschweißen, Toleranz erhöhen, erneut | `welded` |
+| 2 | verschweißen, entnadeln — ohne ein dichtes Netz aufzureißen —, erneut | `welded` |
 | 3 | minimale Störung der Eingangsgeometrie | `jittered` (+ Startwert) |
 | 4 | voxelbasiert rechnen, zurück vernetzen | `voxel` |
 | 5 | Abbruch mit Befund und Handlungsvorschlag | — |
@@ -493,9 +493,25 @@ mit ihr keine Trägerfläche und kein Maß im Bild.
 einmal** — `prepare.FEATURE_OVERLAP`. Sie stand am 10.09.2026 zweimal da, mit
 demselben Wert und dem Vermerk „dieselbe Zahl, derselbe Grund"; genau diese
 Form hat `BOOLEAN_OVERLAP` schon einmal gekostet. Ihr Grund ist außerdem nicht
-mehr die Koplanarität — die rechnet `manifold3d` robust, gemessen 27.08.2026 —,
-sondern der **Tangentialkontakt**: Ein Langlochkörper ohne Zugabe legte sich
-entlang zweier Linien an die alte Bohrungswand.
+mehr die Koplanarität — die rechnet `manifold3d` robust, gemessen 27.08.2026,
+**an exakt koplanarer float64-Geometrie** —, sondern der **Tangentialkontakt**:
+Ein Langlochkörper ohne Zugabe legte sich entlang zweier Linien an die alte
+Bohrungswand.
+
+**An einem eingelesenen Netz ist „koplanar" nur fast koplanar** (RM-166,
+14.09.2026). Eine STL trägt float32, und ein Fasenkeil, dessen Flanke exakt in
+der Körperfläche steht, ließ dort Haut ohne Dicke stehen — per Index dicht,
+nach der nächsten STL-Runde nicht mehr. `edges.rounding_tool` gibt abziehenden
+Keilen deshalb `BOOLEAN_OVERLAP` als Flankenüberstand; und weil sich die
+Keilstücke eines Bohrkreises damit zu einem Werkzeug mit Nadeln an den
+Stoßstellen vereinigen, hat Stufe 2 der Rückfallkette seither dieselbe
+Zusicherung wie der Import: Entnadeln reißt kein dichtes Netz auf
+(`boolean._welded_input`). Die Ausgabe des Kerns wird außerdem so verschweißt,
+wie jeder Slicer sie verschweißen wird (`boolean._tidied`) — Eckpunktpaare
+unter der Schweißtoleranz und Dreiecke mit doppeltem Index fallen weg, und
+übernommen wird das nur bei unverändertem Volumen und dichtem Netz. Der
+Kundenweg STL → Operation → STL → Import steht als Test in
+`tests/test_export.py`.
 
 **Und sie gilt dem ersten Zug** (11.09.2026). An einem Langloch, das schon
 eines ist, gibt es diese Wand nicht mehr — die Flanken des Werkzeugs liegen

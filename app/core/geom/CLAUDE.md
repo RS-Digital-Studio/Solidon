@@ -106,7 +106,7 @@ Normalweg:
 | Stufe | Was sie tut | Vermerk |
 |---|---|---|
 | 1 | direkt durch den Kern | `direct` |
-| 2 | verschweißen, aufräumen, erneut | `welded` |
+| 2 | verschweißen, entnadeln — ohne ein dichtes Netz aufzureißen —, erneut | `welded` |
 | 3 | die Eingangsgeometrie minimal stören | `jittered` |
 | 4 | auf Voxeln rechnen, neu vernetzen | `voxel` |
 | 5 | aufgeben — mit Befund und Weg nach vorn | — |
@@ -118,6 +118,13 @@ stillschweigend**. In Entwurfsqualität endet die Kette nach Stufe 2, damit das
 Iterieren schnell bleibt (§31).
 
 `tests/test_boolean.py` erzwingt jede Stufe einzeln.
+
+**Dicht per Index ist noch nicht dicht.** `_kernel` verschweißt seine Ausgabe
+so, wie jeder Slicer sie verschweißen wird (`_tidied`): Eckpunktpaare unter der
+Schweißtoleranz und Dreiecke mit doppeltem Index fallen weg — übernommen nur,
+wenn Netz und Volumen es überstehen. Warum, steht an der Funktion und in
+`operationen.md` (RM-166); der Kundenweg STL → Operation → STL → Import ist
+`test_export.py::test_a_mesh_op_result_on_an_stl_survives_the_weld`.
 
 Kanten- und Flächenoperationen reichen `ctx.quality` durch alle Teilschritte,
 auch Werkzeugvereinigung, Eckanschlüsse und Wiederherstellung einer Rundung.

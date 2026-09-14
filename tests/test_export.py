@@ -2343,3 +2343,113 @@ def test_a_body_named_like_the_geometry_mark_still_exports() -> None:
     assert 'name="[SOLIDON-MESH-2]"' in model
     assert "SOLIDON-MESH-" not in model.replace("[SOLIDON-MESH-2]", "")
     assert model.count("<vertex ") == 8
+
+
+# --- Der Kundenweg STL → Operation → STL → Import (RM-166) --------------------
+
+
+def _drilled_plate_after_an_stl_round(profile: Profile) -> MeshData:
+    """Die Platte der Werkstattfilme: 100 x 55 x 8 mit zwei 6-mm-Bohrungen —
+    einmal durch eine STL geschickt, damit sie in float32 ankommt wie beim
+    Kunden."""
+    from app.core.geom.prepare import drill
+
+    plate = MeshData.of(trimesh.creation.box(extents=(100.0, 55.0, 8.0)))
+    for x in (-28.0, 28.0):
+        plate = drill(
+            plate,
+            position=(x, 0.0, 4.0),
+            axis="z",
+            diameter=6.0,
+            depth=0.0,
+            profile=profile,
+            compensate=False,
+        ).mesh
+    return normalise(read_model(plate.to_stl(), ".stl"), "mm").mesh
+
+
+def _run_registered(name: str, entry: SceneObject, profile: Profile, **params):
+    """Derselbe registrierte Aufruf wie im Dialog."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext
+
+    load_operations()
+    spec = REGISTRY.get(name)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=1,
+            progress=lambda *_: None,
+            ask=lambda _, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+@pytest.mark.parametrize("source", ["plate_holes.stl", "gebohrte Platte"])
+@pytest.mark.parametrize(
+    "operation", ["resize_hole", "move_feature", "fillet_edges", "chamfer_edges"]
+)
+def test_a_mesh_op_result_on_an_stl_survives_the_weld(
+    operation: str, source: str, profile: Profile
+) -> None:
+    """Was Solidon exportiert, muss der nächste Import — und jeder Slicer — als
+    geschlossen lesen (RM-166).
+
+    Gefunden am 13.09.2026 beim Prüfen der Werkstattfilme: Nach *Bohrung
+    ändern*, *Merkmal verschieben* und *Fase anbringen* an einer **eingelesenen**
+    STL war das Ergebnis per Index dicht, nach dem Verschweißen nicht mehr —
+    Solidons eigener Import derselben Datei meldete „Das Modell ist nicht
+    geschlossen". Zwei Ursachen: ``manifold3d`` ließ auf dem alten Bohrkreis
+    Eckpunktpaare unter der Schweißtoleranz und Sliver stehen (jetzt räumt
+    ``boolean._tidied`` auf), und der abziehende Keil der Fase stand mit seinen
+    Flanken **in** der fast koplanaren Körperfläche und ließ Haut ohne Dicke
+    zurück (jetzt ``BOOLEAN_OVERLAP`` in ``edges.rounding_tool``).
+
+    Zwei Quellen, weil sie verschiedene Fehler zeigen: Am Korpus
+    ``plate_holes.stl`` rissen die Bohrungsoperationen, an der gebohrten
+    Platte der Filme zusätzlich die Fase über die Bohrungsränder. Der Weg ist
+    der des Kunden — ``read_model`` + ``normalise``, Operation über das
+    Register, ``to_stl()``, wieder ``read_model`` + ``normalise`` — und die
+    Zusicherung ist die von ``repair()``: dicht, Volumen unverändert.
+    """
+    from app.core.perceive.features import detect
+
+    if source == "plate_holes.stl":
+        plate = normalise(read_model((MESHES / source).read_bytes(), ".stl"), "mm").mesh
+    else:
+        plate = _drilled_plate_after_an_stl_round(profile)
+    assert plate.is_watertight
+    entry = SceneObject("obj_1", "Platte", plate, features=detect(plate))
+    hole = next(feature for feature in entry.features.values() if feature.kind == "hole")
+    cx, cy, cz = hole.params["centre"]
+    params = {
+        "resize_hole": {"at_feature": hole.id, "diameter": 9.0, "compensate": False, "x": cx + 4.0},
+        "move_feature": {"at_feature": hole.id, "x": cx + 6.0, "y": cy, "z": cz},
+        "fillet_edges": {"radius": 3.0, "edges": "vertical"},
+        "chamfer_edges": {"distance": 0.8, "edges": "top"},
+    }[operation]
+
+    result = _run_registered(operation, entry, profile, **params)
+    made = result.outputs[0].mesh
+    assert made.is_watertight, "per Index dicht ist die Voraussetzung, nicht der Befund"
+
+    back = normalise(read_model(made.to_stl(), ".stl"), "mm")
+    codes = {finding.code for finding in back.findings}
+    assert back.mesh.is_watertight, f"nach der STL-Runde nicht mehr geschlossen — {sorted(codes)}"
+    assert "ingest.not_watertight" not in codes and "ingest.degenerate_removed" not in codes, codes
+    assert back.mesh.raw.volume == pytest.approx(made.raw.volume, abs=1e-3), (
+        "das Verschweißen ändert das Volumen nicht"
+    )
+    if operation == "move_feature":
+        assert made.raw.volume == pytest.approx(plate.raw.volume, abs=1e-3), (
+            "ein verschobenes Loch nimmt nichts weg und legt nichts dazu"
+        )
+    else:
+        assert made.raw.volume < plate.raw.volume, "die drei anderen tragen ab"

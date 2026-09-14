@@ -27,6 +27,10 @@ dans `website/version.json`.
 - Quand une contrainte retient un point, la ligne dit laquelle — et qu'un clic droit sur le point la retire. Avant, le point restait muet.
 - Fixe veut dire fixe : un point fixé ne suit plus le déplacement. Les lignes exactement horizontales ou verticales le restent, même si vous déplacez un coin ensuite.
 
+### Construire et modifier
+
+- Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.
+
 ### Vue et utilisation
 
 - Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.

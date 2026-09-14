@@ -11,6 +11,7 @@ import math
 import warnings
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -869,3 +870,54 @@ def test_the_voxel_grid_of_a_difference_spans_only_the_body_that_shrinks() -> No
 
     assert result is not None
     assert result.volume == pytest.approx(near.volume, rel=0.05), "das ferne Werkzeug trifft nichts"
+
+
+def _needled_cube(size: float = 10.0) -> trimesh.Trimesh:
+    """Ein dichter Würfel, in dessen Deckfläche eine Nadel sitzt.
+
+    Das erste Dreieck ``[a, b, c]`` wird zu ``[a, p, c]``, ``[p, b, c]`` und
+    ``[a, b, p]`` — ``p`` liegt in der Fläche, eine Zehntel-Mikrometer neben der
+    Kante ``ab``. Das dritte Dreieck hat drei verschiedene Ecken, keine Höhe und
+    ist an ``ab`` der einzige Nachbar des Dreiecks von nebenan: Wer es
+    streicht, reißt dort ein Loch.
+    """
+    box = trimesh.creation.box(extents=(size, size, size))
+    faces = box.faces.tolist()
+    a, b, c = faces[0]
+    va, vb, vc = box.vertices[[a, b, c]]
+    inward = (vc - (va + vb) / 2.0) / float(np.linalg.norm(vc - (va + vb) / 2.0))
+    p = (va + vb) / 2.0 + inward * 1e-7
+    vertices = np.vstack([box.vertices, p])
+    q = len(vertices) - 1
+    faces = [[a, q, c], [q, b, c], [a, b, q], *faces[1:]]
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def test_the_welded_stage_keeps_a_needle_that_holds_a_closed_tool_together() -> None:
+    """Stufe 2 entnadelt die Eingänge — und macht dabei kein dichtes Netz auf (RM-166).
+
+    Dieselbe Zusicherung wie beim Import und in ``repair()``. Der Fall kam
+    mit dem Überstand der Fasenkeile: Zwölf Keilstücke um einen Bohrkreis
+    vereinigen sich zu einem Werkzeug mit Nadeln an den Stoßstellen, roh
+    dicht; die Stufe strich die Nadeln, und ``_kernel`` wies das Werkzeug als
+    „nicht positiv geschlossen" ab — an einer nur verschweißten Platte lief
+    die Kette bis in die Voxel, und in der Vorschau brach sie ab.
+    """
+    from app.core.geom.boolean import _welded_input
+    from app.core.geom.repair import remove_degenerate_faces
+
+    tool = MeshData.of(_needled_cube())
+    assert tool.is_watertight, "die Nadel hält das Werkzeug zusammen"
+    stripped, dropped = remove_degenerate_faces(tool)
+    assert dropped == 1 and not stripped.is_watertight, (
+        "ohne diese Voraussetzung prüft der Test nichts: das Streichen muss reißen"
+    )
+
+    kept = _welded_input(tool)
+    assert kept.is_watertight, "die Stufe lässt die Nadel stehen, statt das Netz aufzureißen"
+
+    body = MeshData.of(trimesh.creation.box(extents=(30.0, 30.0, 30.0)))
+    outcome = boolean("difference", [body, tool], stages=("welded",))
+    assert outcome.solver.strategy == "welded"
+    assert outcome.mesh.is_watertight
+    assert outcome.mesh.raw.volume == pytest.approx(27000.0 - 1000.0, abs=1e-6)

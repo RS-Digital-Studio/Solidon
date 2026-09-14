@@ -26,6 +26,10 @@ scrive in `website/version.json`.
 - Se un vincolo trattiene un punto, la riga dice quale — e che un clic destro sul punto lo rimuove. Prima il punto restava fermo senza spiegazione.
 - Fisso vuol dire fisso: un punto fissato non segue più il trascinamento. Le linee esattamente orizzontali o verticali restano tali, anche se dopo trascini un angolo.
 
+### Costruire e modificare
+
+- Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.
+
 ### Vista e utilizzo
 
 - Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.

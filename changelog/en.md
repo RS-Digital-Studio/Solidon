@@ -26,6 +26,10 @@ it into `website/version.json`.
 - When a constraint holds a point in place, the line says which one — and that a right-click on the point releases it. Before, the point just stood still.
 - Fixed means fixed: a fixed point no longer follows a drag. Lines that lie exactly level or upright stay that way, even when you drag a corner later.
 
+### Building and editing
+
+- An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.
+
 ### View and operation
 
 - A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.

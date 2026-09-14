@@ -26,6 +26,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma restrição segura um ponto, a linha diz qual — e que um clique direito no ponto a retira. Antes, o ponto ficava parado sem explicação.
 - Fixo quer dizer fixo: um ponto fixado já não segue o arrasto. As linhas exatamente horizontais ou verticais mantêm-se assim, mesmo que depois arraste um canto.
 
+### Construir e alterar
+
+- Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.
+
 ### Vista e utilização
 
 - Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.

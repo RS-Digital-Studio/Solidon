@@ -41,7 +41,7 @@ from app.core.errors import (
     GeometryError,
     ValidationError,
 )
-from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean, deepest
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
@@ -552,6 +552,18 @@ def rounding_tool(
         )
 
     points = np.asarray(entry.points, dtype=float)
+    subtracted = entry.convex and extend_ends
+    # **Ein abziehender Keil steht mit seinen Kontaktflanken in der Luft, nicht
+    # in der Körperfläche.** Mit ``flank_overlap=0.0`` lag die Flanke exakt
+    # auf der Fläche, die sie abträgt — koplanar, und ``manifold3d`` rechnet
+    # das in float64 sauber. Kommt der Körper aber aus einer STL (float32),
+    # sind Fläche und Flanke nur fast koplanar, und die Differenz ließ an den
+    # Bohrungsrändern einer gefasten Platte ~36 mm² Haut ohne Dicke stehen:
+    # per Index dicht, nach der nächsten STL-Runde nicht mehr (RM-166,
+    # 13.09.2026). Um ``BOOLEAN_OVERLAP`` nach außen gerückt bleibt die
+    # Schnittkurve dieselbe, nur die Flanken schneiden Luft. ``EPS_GEOM`` war
+    # dafür zu wenig — 499 Eckpunktpaare unter der Schweißtoleranz.
+    flank_overlap = BOOLEAN_OVERLAP if subtracted else (0.0 if extend_ends else EPS_GEOM)
     pieces: list[MeshData] = []
     for index, (first, second) in enumerate(entry.normals):
         wedge = _wedge(
@@ -562,9 +574,9 @@ def rounding_tool(
             radius,
             entry.convex,
             rounded,
-            subtracted=entry.convex and extend_ends,
+            subtracted=subtracted,
             min_steps=min_steps,
-            flank_overlap=0.0 if extend_ends else EPS_GEOM,
+            flank_overlap=flank_overlap,
         )
         if wedge is not None:
             pieces.append(wedge)

@@ -69,7 +69,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
 | [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
-| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Ausgang von `boolean._kernel` verschweißen und `edges.rounding_tool` mit `flank_overlap=BOOLEAN_OVERLAP`; Kundenweg-Test STL → Op → STL → Import |
+| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -956,55 +956,55 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Absturz erfahren zu lassen.
 
 <a id="rm-166"></a>
-
-- [ ] **RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld.** Gefunden am
-  13.09.2026 beim Prüfen der Werkstattfilme: Die exportierte STL nach `resize_hole` (versetzt),
-  `move_feature`, `fillet_edges` und `chamfer_edges` gegen ein **eingelesenes** STL ist per Index
-  dicht, nach dem Verschweißen aber nicht mehr — Solidons eigener Import derselben Datei meldet
-  „Das Modell ist nicht geschlossen" (`ingest.not_watertight`, bei `resize_hole` dazu
-  `degenerate_removed`); jeder Slicer verschweißt genauso. Dieselbe Platte in float64 gebaut
-  bleibt durch alle vier Operationen sauber; nach einer STL-Runde (float32) nicht mehr. Am Korpus
-  `tests/data/meshes/plate_holes.stl` dasselbe Bild.
-
-  Gemessen (Diagnoseskripte lagen im Sitzungs-Scratchpad; Zahlen im Punkt): `prepare_ops._closed_at`
-  kappt den Stopfen exakt auf die Mündungen, die Vereinigung lässt auf dem alten Bohrkreis zehn
-  Eckpunktpaare unter `weld_tolerance` und 25 Sliver-Dreiecke zurück; `edges.rounding_tool` baut den
-  Keil mit `flank_overlap=0.0` **in** die Körperfläche und lässt an den Bohrungsrändern ~36 mm² Haut
-  ohne Dicke stehen. Kernnetz + `repair.merge_vertices` + Dreiecke mit doppeltem Index streichen
-  ergibt ein dichtes Netz bei unverändertem Volumen — die Geometrie stimmt, das Aufräumen fehlt.
-
-  **Dazu ein Flackern derselben Kette (Tag-Läufe von v0.4.1, 13.09.2026):**
-  `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` war auf dem Linux-Runner in
-  einem von vier Läufen rot — die Kugelhaube stimmte (jede Distanz 2,99 bis 3,0), ein einzelner
-  Punkt im Normalenkegel lag bei 6,526. Lokal zwölf von zwölf grün, macOS und Windows in jedem
-  Lauf grün. Ein Geometrietest, der flackert, verletzt Regel 9; die nicht strenge Marke auf Linux
-  hält den Bau nicht auf und verschweigt den Fall nicht. Abnahme: Ursache auf einem Linux messen
-  (Reihenfolge der Hüllendreiecke, Threading des Booleschen Kerns, Restdreieck der Flanke) und
-  den Test dreimal in Folge ohne Marke grün.
-  Stufe 2 der Rückfallkette verschweißt nur die Eingänge (`boolean.py:292`).
-
-  **Fix, zwei Stellen, im Scratchpad gegengemessen:** (1) In `boolean._kernel` vor
-  `like.replacing(...)` die Ausgabe mit `weld_digits(weld_tolerance(diagonal))` verschweißen,
-  Dreiecke mit wiederholtem Index streichen, unreferenzierte Ecken entfernen — **nur übernehmen,
-  wenn** `is_watertight` bleibt und das Volumen sich nicht ändert (dieselbe Zusicherung wie
-  `repair()`), sonst die rohe Ausgabe. (2) `edges.rounding_tool` (Zeile 567):
-  `flank_overlap=BOOLEAN_OVERLAP` statt `0.0` für abziehende Keile; Schnittkurve identisch, nur die
-  Kontaktflanken rücken in die Luft. Danach alle vier Operationen nach Export+Import geschlossen,
-  Volumen unverändert. Nicht tragfähig: `flank_overlap=EPS_GEOM` (499 Paare unter Toleranz) und
-  Manifold-`simplify` (vernetzt ebene Flächen neu, lässt ~25 mm² Haut). Die Aussage „manifold3d
-  rechnet koplanare Flächen robust" (`BOOLEAN_OVERLAP`-Docstring, `operationen.md`) gilt nur für
-  exakt koplanare float64-Geometrie.
-
-  Abnahme: neuer Test in `tests/test_export.py`, parametrisiert über die vier Operationen —
-  `plate_holes.stl` über `read_model`+`normalise` laden, Operation über `REGISTRY`, `to_stl()` →
-  `read_model`+`normalise` → dicht, ohne `ingest.not_watertight`/`degenerate_removed`, Volumen wie
-  vor dem Fix (31069,708 / 31322,350 / 31217,928 / 31249,398 mm³), Fläche ohne Haut. Kandidaten
-  zum Nachfahren: `test_boolean`, `test_mesh_edges`, `test_geometry_review_regressions`,
-  `test_prepare`, `test_features`, `test_slot_features`, `test_counterbore_transitions`,
-  `test_radial_rounding`, `test_parts` (feste Dreieckszahlen), `test_export`, `test_difference`,
-  `test_agent_suite`. Danach die Beispiel-STLs der Werkstattfilme neu exportieren.
-
-## Bedienung und Darstellung
+    
+    - [~] **RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld.** Gefunden am
+      13.09.2026 beim Prüfen der Werkstattfilme: Die exportierte STL nach `resize_hole` (versetzt),
+      `move_feature`, `fillet_edges` und `chamfer_edges` gegen ein **eingelesenes** STL war per Index
+      dicht, nach dem Verschweißen aber nicht mehr — Solidons eigener Import derselben Datei meldete
+      „Das Modell ist nicht geschlossen" (`ingest.not_watertight`, bei `resize_hole` dazu
+      `degenerate_removed`); jeder Slicer verschweißt genauso. Dieselbe Platte in float64 gebaut
+      blieb durch alle vier Operationen sauber; nach einer STL-Runde (float32) nicht mehr.
+    
+      **Der Weld ist behoben (14.09.2026), an zwei Stellen und mit einer dritten, die die zweite
+      nach sich zog.** (1) `boolean._tidied` verschweißt die Kernausgabe mit der Schweißtoleranz der
+      Diagonale, streicht Dreiecke mit doppeltem Index und unreferenzierte Ecken — übernommen nur,
+      wenn das Netz dicht bleibt und das Volumen sich nicht ändert (die Zusicherung von `repair()`).
+      (2) `edges.rounding_tool` gibt abziehenden Keilen `flank_overlap=BOOLEAN_OVERLAP`: Die
+      Schnittkurve bleibt, die Flanken schneiden Luft statt der fast koplanaren Körperfläche. (3) Mit
+      dem Überstand vereinigen sich die zwölf Keilstücke eines Bohrkreises zu einem Werkzeug mit
+      Nadeln an den Stoßstellen — roh dicht, und Stufe 2 der Rückfallkette strich sie und riss das
+      Werkzeug auf: An `plate_countersunk.stl` (nur verschweißt, dünne Knoten) lief die Kette bis in
+      die Voxel, in der Vorschau brach sie ab. `boolean._welded_input` hat seither dieselbe
+      Zusicherung wie der Import: Entnadeln reißt kein dichtes Netz auf.
+    
+      Gemessen nach dem Fix, Korpus `plate_holes.stl` und die gebohrte Filmplatte (100 x 55 x 8,
+      zwei 6-mm-Bohrungen, über eine STL-Runde): alle vier Operationen nach Export und Import
+      geschlossen, Volumen unverändert (Korpus 30982,096 / 31322,350 / 31257,969 / 31217,928 mm³),
+      die Fase ohne die 29 mm² Haut an den Bohrungsrändern. Was der Import an Nadeln mit drei
+      verschiedenen Ecken noch findet, hält er (`ingest.degenerate_kept`) — sie zu streichen risse
+      Löcher, und `manifold.simplify` vernetzt ebene Flächen neu. Nachweis:
+      `tests/test_export.py::test_a_mesh_op_result_on_an_stl_survives_the_weld` (vier Operationen
+      mal zwei Quellen; ohne `_tidied` vier rot, ohne den Überstand die Fase rot) und
+      `tests/test_boolean.py::test_the_welded_stage_keeps_a_needle_that_holds_a_closed_tool_together`
+      (ohne die Zusicherung rot). Docstring von `BOOLEAN_OVERLAP`, `operationen.md` und
+      `geom/CLAUDE.md` sagen seither, dass „robust" nur für exakt koplanare float64-Geometrie gilt.
+    
+      **Offen bleiben zwei Dinge, beide außerhalb dieses Rechners.** Das **Flackern derselben Kette
+      auf dem Linux-Runner** (Tag-Läufe von v0.4.1, 13.09.2026):
+      `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` war dort in einem von vier
+      Läufen rot — die Kugelhaube stimmte (jede Distanz 2,99 bis 3,0), ein einzelner Punkt im
+      Normalenkegel lag bei 6,526. Lokal zwölf von zwölf grün, macOS und Windows in jedem Lauf grün.
+      Ein Geometrietest, der flackert, verletzt Regel 9; die nicht strenge Marke auf Linux hält den
+      Bau nicht auf und verschweigt den Fall nicht. Abnahme: Ursache auf einem Linux messen
+      (Reihenfolge der Hüllendreiecke, Threading des Booleschen Kerns, Restdreieck der Flanke) und
+      den Test dreimal in Folge ohne Marke grün — mit dem Weld-Fix noch einmal von vorn, denn
+      `_tidied` ändert die Dreiecksfolge der Ausgabe. Und das **Beispielarchiv der Werkstattfilme**
+      (`marketing/video/workshop-2026-09/build_examples.py`, nicht im Repository): Die beigelegten
+      STLs stammen aus den Aufnahmen vom 13.09. und tragen den alten Fehler; sie neu zu erzeugen
+      heißt, die Aufnahmen mit dem gefixten Code zu fahren und das ZIP neu zu verpacken — ein
+      Produktionsschritt, der zusammen mit der nächsten Filmrunde läuft.
+    
+    ## Bedienung und Darstellung
 <a id="rm-070"></a>
 
 - [~] **RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen.** HID-Anbindung und

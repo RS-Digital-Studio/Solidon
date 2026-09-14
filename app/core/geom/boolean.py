@@ -34,7 +34,7 @@ from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
 from app.core.types import CancelToken, Finding, Profile, Quality, SolverInfo, SolverStage
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_close, weld_digits, weld_tolerance
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -97,6 +97,14 @@ MAX_VOXEL_CELLS: Final = 50_000_000
 #: trotzdem: Die Rückfallkette hat Stufen unterhalb von ``manifold3d``, und
 #: eine Zugabe, die nachweislich nichts kostet, ist billiger als die Frage, ob
 #: eine davon sie doch braucht.
+#:
+#: **„Robust" gilt für exakt koplanare float64-Geometrie** (gemessen
+#: 13.09.2026, RM-166). Kommt der Körper aus einer STL, liegt seine Fläche in
+#: float32, und ein Werkzeug, dessen Flanke exakt in dieser Fläche steht, ist
+#: nur *fast* koplanar: Die Differenz ließ an den Bohrungsrändern einer
+#: gefasten Platte Haut ohne Dicke stehen — per Index dicht, nach der nächsten
+#: STL-Runde nicht mehr. ``edges.rounding_tool`` rückt die Flanken abziehender
+#: Keile deshalb um diese Zugabe in die Luft; ``EPS_GEOM`` war dafür zu wenig.
 #:
 #: **Der kleinere Wert gewinnt, weil er gebunden ist.** In
 #: ``knowledge/parts/ops.py`` ist dieselbe Zahl die Schwelle, an der ein
@@ -289,12 +297,36 @@ def _run_stage(
     if stage == "direct":
         return _kernel(kind, [mesh.raw for mesh in meshes], meshes[0])
     if stage == "welded":
-        cleaned = [remove_degenerate_faces(merge_vertices(mesh)[0])[0] for mesh in meshes]
+        cleaned = [_welded_input(mesh) for mesh in meshes]
         return _kernel(kind, [mesh.raw for mesh in cleaned], meshes[0])
     if stage == "jittered":
         disturbed = [_jitter(mesh, seed, index) for index, mesh in enumerate(meshes)]
         return _kernel(kind, [mesh.raw for mesh in disturbed], meshes[0])
     return _voxel(kind, meshes)
+
+
+def _welded_input(mesh: MeshData) -> MeshData:
+    """Stufe 2 an einem Eingang: verschweißt und entnadelt — ohne ein dichtes
+    Netz dabei aufzureißen.
+
+    Dieselbe Zusicherung wie beim Import (``ingest.degenerate_kept``) und in
+    ``repair()``: In einem geschlossenen Netz ist jedes Dreieck an zwei Kanten
+    der einzige Nachbar; wer eines streicht, reißt genau dort ein Loch — auch
+    wenn es keine Fläche hat. Die Stufe hatte diese Zusicherung nicht, und der
+    Fall kam mit RM-166 (14.09.2026): Ein Fasenwerkzeug aus zwölf Keilstücken
+    um einen Bohrkreis, deren Flanken um ``BOOLEAN_OVERLAP`` überstehen, trägt
+    an den Stoßstellen Nadeln — roh dicht, nach dem Entnadeln nicht mehr, und
+    ``_kernel`` wies das Werkzeug als „nicht positiv geschlossen" ab. An einer
+    nur verschweißten Platte mit dünnen Knoten (``plate_countersunk.stl``) war
+    das die Stufe, die trug, und die Kette lief bis in die Voxel.
+    """
+    welded, _removed = merge_vertices(mesh)
+    if mesh.is_watertight and not welded.is_watertight:
+        welded = mesh
+    cleaned, _dropped = remove_degenerate_faces(welded)
+    if welded.is_watertight and not cleaned.is_watertight:
+        return welded
+    return cleaned
 
 
 def _native_contact(body: Any, volume: float) -> bool:
@@ -373,15 +405,71 @@ def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) ->
         vertex_offset += len(vertices[-1])
     # Die Schalen bleiben orientiert nebeneinander: Eine native Vereinigung
     # würde negative Innenschalen als eigenständige Körper behandeln und füllen.
-    return like.replacing(
-        trimesh.Trimesh(
-            # Die Ausgabe besitzt ihre Puffer: Nachfolgende Netzoperationen
-            # dürfen nicht am schreibgeschützten Speicher des Kerns hängen.
-            vertices=np.concatenate(vertices) if len(vertices) > 1 else vertices[0],
-            faces=np.concatenate(faces) if len(faces) > 1 else faces[0],
-            process=False,
-        )
+    built = trimesh.Trimesh(
+        # Die Ausgabe besitzt ihre Puffer: Nachfolgende Netzoperationen
+        # dürfen nicht am schreibgeschützten Speicher des Kerns hängen.
+        vertices=np.concatenate(vertices) if len(vertices) > 1 else vertices[0],
+        faces=np.concatenate(faces) if len(faces) > 1 else faces[0],
+        process=False,
     )
+    return like.replacing(_tidied(built))
+
+
+def _tidied(body: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Die Kernausgabe so verschweißt, wie jeder Slicer sie verschweißen wird.
+
+    ``manifold3d`` liefert ein Netz, das **per Index** dicht ist — und an
+    Nähten zwischen fast koplanaren Flächen Eckpunktpaare unter der
+    Schweißtoleranz und Sliver-Dreiecke stehen lässt. Gemessen am 13.09.2026
+    (RM-166): Nach *Bohrung ändern* und *Merkmal verschieben* an einer
+    eingelesenen STL blieben auf dem alten Bohrkreis zehn solcher Paare und
+    25 Sliver. Per Index dicht, in Solidon dicht — und nach der ersten
+    STL-Runde in float32 nicht mehr: Solidons eigener Import derselben Datei
+    meldete „Das Modell ist nicht geschlossen", und jeder Slicer verschweißt
+    genauso.
+
+    Verschweißt wird mit derselben Toleranz wie beim Import
+    (``weld_tolerance`` der Diagonale); Dreiecke, die dabei einen Eckpunkt
+    doppelt bekommen, fallen weg, unreferenzierte Ecken danach. **Übernommen
+    wird das nur, wenn es die Zusicherung von ``repair()`` hält**: Das Netz
+    bleibt dicht und das Volumen ändert sich nicht. Nahe Punkte können zu zwei
+    getrennten Schalen gehören, und sie zusammenzulegen dürfte deren Kanten
+    nicht aufreißen — dann bleibt die rohe Ausgabe. Was hier **nicht**
+    passiert: Nadeln mit drei verschiedenen Ecken streichen — das reißt
+    Löcher, und ``manifold.simplify`` vernetzt ebene Flächen neu und ließ
+    gemessen 25 mm² Haut stehen.
+
+    **„Unverändert" heißt ``EPS_GEOM`` absolut** — dieselbe Schwelle wie
+    ``repair.unify_normals``. Die weitere Schranke „Oberfläche mal Toleranz"
+    war hergeleitet und trotzdem falsch: Sie ist eine Obergrenze dessen, was
+    ein Weld bewegen *kann*, keine Zusicherung dessen, was er bewegen *darf*.
+    Gemessen am 14.09.2026: Sie ließ eine dünne Verschneidung von 0,004 mm³
+    auf 0,0009 verschweißen und verschob Fasenvolumina an gemischten Ecken um
+    2,5·10⁻⁵ — acht Tests, die mit ``EPS_GEOM`` grün sind. Ein Weld, der mehr
+    als Rechenrauschen bewegt, hat eine dünne Stelle getroffen, und dann
+    bleibt die rohe Ausgabe.
+    """
+    if len(body.faces) == 0 or not body.is_watertight:
+        return body
+    volume = float(body.volume)
+    candidate = body.copy()
+    diagonal = float(np.linalg.norm(candidate.extents))
+    tolerance = weld_tolerance(diagonal)
+    candidate.merge_vertices(digits_vertex=weld_digits(tolerance))
+    corners = candidate.faces
+    distinct = (
+        (corners[:, 0] != corners[:, 1])
+        & (corners[:, 1] != corners[:, 2])
+        & (corners[:, 0] != corners[:, 2])
+    )
+    if not np.all(distinct):
+        candidate.update_faces(distinct)
+    candidate.remove_unreferenced_vertices()
+    if len(candidate.vertices) == len(body.vertices) and len(candidate.faces) == len(body.faces):
+        return body
+    if candidate.is_watertight and is_close(float(candidate.volume), volume):
+        return candidate
+    return body
 
 
 def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:

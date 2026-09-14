@@ -27,6 +27,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una restricción sujeta un punto, la línea dice cuál — y que un clic derecho en el punto la suelta. Antes el punto se quedaba quieto sin más.
 - Fijo significa fijo: un punto fijado ya no sigue el arrastre. Las líneas exactamente horizontales o verticales se mantienen así, aunque después arrastre una esquina.
 
+### Construir y modificar
+
+- Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.
+
 ### Vista y manejo
 
 - Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.

@@ -51,6 +51,10 @@ Nutzen da und sonst nichts.
 - Hält eine Bedingung einen Punkt fest, sagt die Zeile, welche — und dass ein Rechtsklick auf den Punkt sie löst. Vorher blieb der Punkt stumm stehen.
 - Fest heißt fest: Ein festgesetzter Punkt folgt keinem Zug mehr. Linien, die genau waagerecht oder senkrecht liegen, bleiben es, auch wenn Sie später an einer Ecke ziehen.
 
+### Konstruieren und Ändern
+
+- Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.
+
 ### Ansicht und Bedienung
 
 - Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.
