@@ -55,3 +55,25 @@ jede der Fallen oben hat einen eigenen Umlauf gekostet.
 `make_figures` prüfen, Changelog-Wächter vor dem Versionssprung von Hand
 zählen ([[changelog-waechter-nach-dem-versionssprung]]), Leistungsmarken
 kalt/warm sondieren statt zu glauben.
+
+**Nachtrag 14.09.2026 — der Tag brauchte acht Läufe, und jeder fand die
+nächste Schicht.** Die Reihenfolge, damit sie beim nächsten Mal in einem
+Lauf steht: (1) `version.json` trägt bis `make_download` den veröffentlichten
+Stand — ein `notes_version` neben einer älteren `version` lässt den
+Upload-Validator und damit die Suite abbrechen. (2) Tests, die ein Komma
+erwarten, setzen die `QLocale` selbst (`qt_app` tut es, freie Tests nicht).
+(3) Testdateien für PHP-Zähler mit `_chmod_private` — der Runner hat Umask
+0644, `count.php` verlangt 0600. (4) Der Hook-Test verlangt eine `.venv` am
+Hauptklon, die der Runner nicht hat. (5) Zwei sporadische Plattformfälle
+(macOS Ollama-Abbruch, Xvfb-Renderer) und ein flackernder Geometrietest
+(Tetraederecke, Linux) tragen nicht strenge `xfail`-Marken, Abnahme im
+Register — eine **strenge** Marke macht einen grünen Lauf rot. (6) Der
+Signierschlüsselbund gehört in die **Suchliste** (`security list-keychains
+-d user -s`); `find-identity` sieht ihn auch ohne, `codesign` nicht.
+(7) Nichts neben `Contents/` im Bundle — die Lizenzbeilage lag dort und
+gehört nach `Contents/MacOS/`, wo die Anwendung sie liest. (8) Apples
+Notarisierung kann über eine Stunde „In Progress" bleiben und dann eine
+Statusabfrage mit Timeout reißen; `gh run rerun <lauf> --failed` fährt nur
+den Signierjob erneut, ohne neuen Tag. Ein Tag, der kein Paket erzeugt hat,
+wird gelöscht und neu gesetzt (`git push origin :refs/tags/v…`); jeder
+Tag-Push startet auch einen main-Lauf, der sich abbrechen lässt.
