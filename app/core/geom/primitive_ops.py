@@ -51,7 +51,7 @@ _ANCHORS = ("centre", "corner")
 _POSITION_X_DOC = _("Verschiebt den bisherigen Bezugspunkt des Körpers entlang X.")
 _POSITION_MORE_DOC = _("Weitere Achse des Orts — siehe Position X.")
 _NORMAL_X_DOC = _("Richtung der lokalen Z-Achse. 0/0/0 behält die bisherige Ausrichtung nach oben.")
-_NORMAL_MORE_DOC = _("Weitere Achse der Richtung — siehe Normale X.")
+_NORMAL_MORE_DOC = _("Weitere Achse der Richtung — siehe Richtung X.")
 _ANGLE_DOC = _(
     "Dreht den Körper um seine eigene Hochachse. Die Richtung sagt, wohin er "
     "zeigt; dieser Winkel, wie er dabei herumsteht."
@@ -204,19 +204,19 @@ class PositionedPrimitiveParams(BaseParams):
         doc=_POSITION_MORE_DOC,
     )
     nx: float = param(
-        title=_("Normale X"),
+        title=_("Richtung X"),
         default=0.0,
         placement="advanced",
         doc=_NORMAL_X_DOC,
     )
     ny: float = param(
-        title=_("Normale Y"),
+        title=_("Richtung Y"),
         default=0.0,
         placement="advanced",
         doc=_NORMAL_MORE_DOC,
     )
     nz: float = param(
-        title=_("Normale Z"),
+        title=_("Richtung Z"),
         default=0.0,
         placement="advanced",
         doc=_NORMAL_MORE_DOC,

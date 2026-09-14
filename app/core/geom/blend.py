@@ -347,8 +347,8 @@ def blend_union(ctx: OpContext) -> OpResult:
             code="blend.rastered",
             severity="info",
             message=_(
-                "Der Übergang wurde auf einem Raster gerechnet — Kanten unter der "
-                "Rasterweite sind dabei weicher geworden."
+                "Der Übergang wurde auf einem Raster gerechnet — Kanten, die feiner "
+                "sind als das Raster, sind dabei weicher geworden."
             ),
             object_id=ctx.inputs[0].id,
             values={"grid_mm": round(grid, 3), "radius_mm": round(params.radius, 3)},

@@ -651,7 +651,7 @@ def _findings_for(stage: SolverStage) -> list[Finding]:
         Finding(
             code="boolean.voxel",
             severity="warning",
-            message=_("Über die Voxelstufe gelöst — die Maße sind gerundet."),
+            message=_("Auf einem Raster gelöst — die Maße sind gerundet."),
         )
     ]
 

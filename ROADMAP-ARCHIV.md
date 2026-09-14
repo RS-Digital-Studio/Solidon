@@ -27893,6 +27893,25 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     Werkzeug, und `test_every_example_carries_the_parts_version_of_the_library` hält die Zahl an
     der Bibliothek fest — wer sie hebt, baut die Beispiele neu, sonst wird der Lauf rot statt der
     erste Eindruck alt.
+  - **Zehn Fachwörter, wo ein Neuling liest** (B11). Die Durchsicht zählte, was *nicht* vorkommt
+    — Manifold, B-Rep, Tessellation, Mesh, Vertex, Fillet, Chamfer, Bounding Box, kein einziges
+    in einem Oberflächentext — und zehn, die es tun. Getauscht: *Normale X/Y/Z* und
+    *Normalenrichtung X/Y/Z* (44 Operationen, bei *Bohrung setzen* vorn) → **Richtung X/Y/Z**,
+    derselbe Schlüssel wie bei *Fläche versetzen*; *Normalen vereinheitlichen* (Fortschritt bei
+    jedem Import, Haken in *Modell einfügen* und *Reparieren*) → **Außenseiten angleichen**;
+    *wasserdicht* in der Kennzahlzeile des Prüfberichts → **geschlossen** (die Mehrzahl hieß
+    längst „1/2 geschlossen"); „bevor es boolesch weitergeht" (Netz beim Formen oder Unterteilen
+    aufgegangen) → **bevor es mit Vereinigen oder Abziehen weitergeht**; „Über die Voxelstufe
+    gelöst" → **Auf einem Raster gelöst**; „Facetten inklusive" an der flachen Schattierung →
+    **jede Kante sichtbar**; „Kanten unter der Rasterweite" → **Kanten, die feiner sind als das
+    Raster**; *deterministisch* in der Handbuchreferenz → **ohne Zufall**. Siebzehn alte
+    Schlüssel sind aus den fünf Katalogen hinaus, zwölf neue drin. Bleibt und ist begründet:
+    *Slot {number}* im 3MF-Weg liegt bei 3d-druck-89 (RM-084); *Extrusionsbreite* an der
+    Wandstärkenleiter bleibt, weil das Handbuch-Glossar genau dieses Wort definiert („wie breit
+    eine gelegte Bahn wird") — es gegen *Bahnbreite* der Druckeinstellungen zu vereinheitlichen
+    ist eine Frage an beide Stellen und gehört zu RM-084; *Rasterweite* als Feldname hinter der
+    Klappe erklärt sich am Satz daneben. Die Regel dazu steht in `oberflaeche.md` („Ein Wort,
+    das nur ein Konstrukteur kennt …"); Nachweis der beiden Richtungen: `test_translations`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 

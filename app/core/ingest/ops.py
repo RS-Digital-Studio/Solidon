@@ -115,7 +115,7 @@ class LoadParams(BaseParams):
         doc=_("Dreiecke ohne Fläche. Sie stören jede spätere Rechnung und tragen nichts."),
     )
     unify_normals: bool = param(
-        title=_("Normalen vereinheitlichen"),
+        title=_("Außenseiten angleichen"),
         default=True,
         placement="advanced",
         doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder fehlen."),

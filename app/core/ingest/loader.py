@@ -947,7 +947,7 @@ def normalise(
 
     # 4 — Normalen und Orientierung.
     if unify_normals and len(body.faces):
-        progress(0.6, str(_("Normalen vereinheitlichen")))
+        progress(0.6, str(_("Außenseiten angleichen")))
         was_volume = float(body.volume)
         trimesh.repair.fix_winding(body)
         if body.is_watertight:

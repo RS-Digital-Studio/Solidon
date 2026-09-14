@@ -263,7 +263,7 @@ class DrillParams(BaseParams):
         title=_("Achse"), default="z", choices=_AXES, doc=_ALONG, placement="advanced"
     )
     nx: float = param(
-        title=_("Normale X"),
+        title=_("Richtung X"),
         default=0.0,
         placement="advanced",
         doc=_(
@@ -272,16 +272,16 @@ class DrillParams(BaseParams):
         ),
     )
     ny: float = param(
-        title=_("Normale Y"),
+        title=_("Richtung Y"),
         default=0.0,
         placement="advanced",
-        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+        doc=_("Weitere Achse der Richtung — siehe Richtung X."),
     )
     nz: float = param(
-        title=_("Normale Z"),
+        title=_("Richtung Z"),
         default=0.0,
         placement="advanced",
-        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+        doc=_("Weitere Achse der Richtung — siehe Richtung X."),
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -1933,7 +1933,7 @@ class FeaturePlacementParams(BaseParams):
     """Freie Zielrichtung; ein Nullvektor bewahrt die bisherige reine Verschiebung."""
 
     nx: float = param(
-        title=_("Normale X"),
+        title=_("Richtung X"),
         default=0.0,
         placement="advanced",
         doc=_(
@@ -1941,16 +1941,16 @@ class FeaturePlacementParams(BaseParams):
         ),
     )
     ny: float = param(
-        title=_("Normale Y"),
+        title=_("Richtung Y"),
         default=0.0,
         placement="advanced",
-        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+        doc=_("Weitere Achse der Richtung — siehe Richtung X."),
     )
     nz: float = param(
-        title=_("Normale Z"),
+        title=_("Richtung Z"),
         default=0.0,
         placement="advanced",
-        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+        doc=_("Weitere Achse der Richtung — siehe Richtung X."),
     )
 
 

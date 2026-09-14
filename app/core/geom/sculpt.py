@@ -615,7 +615,7 @@ def _sculpting_findings(
                 severity="warning",
                 message=_(
                     "Das Netz ist beim Formen aufgegangen. Reparieren, bevor es "
-                    "boolesch weitergeht."
+                    "mit Vereinigen oder Abziehen weitergeht."
                 ),
                 object_id=object_id,
             )

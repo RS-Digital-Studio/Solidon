@@ -3995,7 +3995,7 @@ class ReportPanel(QWidget):
         tight = sum(1 for mesh in meshes if mesh.is_watertight)
         # Das Wort steht neben dem Zeichen, nicht statt seiner (Regel 18).
         closed = (
-            tr("wasserdicht")
+            tr("geschlossen")
             if tight == len(meshes)
             else f"{tight}/{len(meshes)} {tr('geschlossen')}"
         )

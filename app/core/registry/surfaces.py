@@ -680,7 +680,7 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 f"{f'≥ {spec.minimum_inputs}' if spec.consumes == VARIABLE else spec.consumes} → "
                 f"{'…' if spec.produces == VARIABLE else spec.produces}",
                 str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),
-                str(_("deterministisch") if spec.deterministic else _("mit Startwert")),
+                str(_("ohne Zufall") if spec.deterministic else _("mit Startwert")),
             ]
             if spec.shortcut:
                 facts.append(f"{_('Kürzel')} `{spec.shortcut}`")

@@ -186,6 +186,25 @@ Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
 Stapelabzug im Nutzerdialog.
 
+**Ein Wort, das nur ein Konstrukteur kennt, steht nicht dort, wo ein Neuling es
+lesen muss.** Gemessen am 14.09.2026 über alle Oberflächentexte
+(Bedienweg-Durchsicht): *Manifold*, *B-Rep*, *Tessellation*, *Vertex*, *Fillet*
+kamen nicht vor — zehn andere schon, und sie sind getauscht: **Richtung**
+statt Normale (44 Operationen führten *Normale X/Y/Z*, bei *Bohrung setzen*
+auf der Vorderseite), **Außenseiten angleichen** statt Normalen
+vereinheitlichen (der Fortschrittsschritt bei jedem Import), **geschlossen**
+statt wasserdicht (in der Mehrzahl hieß dieselbe Eigenschaft längst „1/2
+geschlossen"), **auf einem Raster** statt Voxelstufe, **Vereinigen oder
+Abziehen** statt boolesch, **jede Kante sichtbar** statt Facetten, **ohne
+Zufall** statt deterministisch. Was bleibt, bleibt begründet: *Slot* im
+3MF-Weg gehört zum Format und liegt bei RM-084; *Extrusionsbreite* an der
+Wandstärkenleiter bleibt, weil das Handbuch-Glossar genau dieses Wort
+definiert — es mit *Bahnbreite* der Druckeinstellungen zu vereinheitlichen
+gehört ebenfalls zu RM-084; *Rasterweite* als Feldname hinter der Klappe
+erklärt sich am Satz daneben. Wer einen neuen Text schreibt, sucht das Wort, das der Kunde in
+seinem Slicer liest — und `test_translations` findet den alten Schlüssel, der
+dann hinausmuss.
+
 **Ein Text, der eine Grenze beschreibt, altert mit der Grenze.** Für einen
 einzigen solchen Satz waren es drei Stellen im Code, zweimal fünf Kataloge,
 eine Website-Seite und der Vertragstext.

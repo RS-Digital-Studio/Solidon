@@ -3481,7 +3481,7 @@ def test_the_report_says_where_you_stand_not_only_what_to_do(qt_app: QApplicatio
 
         assert panel.facts.isVisible() or panel.facts.text()
         text = panel.facts.text()
-        assert tr("wasserdicht") in text
+        assert tr("geschlossen") in text
         # Ein Wuerfel mit 20 mm Kante ist 8 Kubikzentimeter — die Zahl kommt aus
         # dem Netz, nicht aus
         # dem Test: eine abgeschriebene Konstante prüfte nur sich selbst.

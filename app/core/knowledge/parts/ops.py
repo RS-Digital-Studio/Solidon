@@ -118,7 +118,7 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
         "nx",
         "float",
         param(
-            title=_("Normalenrichtung X"),
+            title=_("Richtung X"),
             default=0.0,
             placement="advanced",
             doc=_(
@@ -130,20 +130,20 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
         "ny",
         "float",
         param(
-            title=_("Normalenrichtung Y"),
+            title=_("Richtung Y"),
             default=0.0,
             placement="advanced",
-            doc=_("Zweite Komponente der Oberflächenrichtung — siehe Normalenrichtung X."),
+            doc=_("Zweite Komponente der Oberflächenrichtung — siehe Richtung X."),
         ),
     ),
     (
         "nz",
         "float",
         param(
-            title=_("Normalenrichtung Z"),
+            title=_("Richtung Z"),
             default=0.0,
             placement="advanced",
-            doc=_("Dritte Komponente der Oberflächenrichtung — siehe Normalenrichtung X."),
+            doc=_("Dritte Komponente der Oberflächenrichtung — siehe Richtung X."),
         ),
     ),
     (

@@ -217,7 +217,7 @@ _FACING = _(
     "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie "
     "von selbst; von Hand ist 0/0/1 nach oben."
 )
-_FACING_MORE = _("Weitere Achse der Richtung — siehe Normale X.")
+_FACING_MORE = _("Weitere Achse der Richtung — siehe Richtung X.")
 _SIZE = _("Höhe der Großbuchstaben. Unter drei Millimetern verliert der Druck die Form.")
 _FONT = _("Alle acht liegen bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
 _STYLE = _(
@@ -569,9 +569,9 @@ class LabelParams(BaseParams):
     z: float = param(
         title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
     )
-    nx: float = param(title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING)
-    ny: float = param(title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
-    nz: float = param(title=_("Normale Z"), default=1.0, placement="advanced", doc=_FACING_MORE)
+    nx: float = param(title=_("Richtung X"), default=0.0, placement="advanced", doc=_FACING)
+    ny: float = param(title=_("Richtung Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    nz: float = param(title=_("Richtung Z"), default=1.0, placement="advanced", doc=_FACING_MORE)
     angle: float = param(
         title=_("Drehung"),
         default=0.0,
@@ -876,9 +876,9 @@ class LabelBodyParams(BaseParams):
     z: float = param(
         title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
     )
-    nx: float = param(title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING)
-    ny: float = param(title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
-    nz: float = param(title=_("Normale Z"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    nx: float = param(title=_("Richtung X"), default=0.0, placement="advanced", doc=_FACING)
+    ny: float = param(title=_("Richtung Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    nz: float = param(title=_("Richtung Z"), default=0.0, placement="advanced", doc=_FACING_MORE)
     angle: float = param(
         title=_("Drehung"),
         default=0.0,

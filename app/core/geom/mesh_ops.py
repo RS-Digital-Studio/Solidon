@@ -757,7 +757,8 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 severity="warning",
                 message=_(
                     "Das Netz ist beim Unterteilen aufgegangen — es ist nicht mehr "
-                    "geschlossen. Reparieren, bevor es boolesch weitergeht."
+                    "geschlossen. Reparieren, bevor es mit Vereinigen oder Abziehen "
+                    "weitergeht."
                 ),
                 object_id=source.id,
                 values={"components": after.component_count},

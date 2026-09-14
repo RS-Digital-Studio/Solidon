@@ -3373,7 +3373,7 @@ class MainWindow(QMainWindow):
             (
                 "flat",
                 tr("Flache Schattierung"),
-                tr("Jedes Dreieck für sich — die wahre Form, Facetten inklusive."),
+                tr("Jedes Dreieck für sich — die wahre Form, jede Kante sichtbar."),
             ),
             (
                 "smooth",
