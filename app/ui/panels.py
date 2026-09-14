@@ -81,6 +81,7 @@ from app.core.errors import (
     DECIMATE_MESH,
     EXPORT_AS_MESH,
     PLACE_ON_BED,
+    RELEASE_PROTECTION,
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
     SCALE_TO_FIT,
@@ -355,6 +356,10 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # wo Bauraum oder Suchgrenze die Antwort verändern können.
     "split.no_plane": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
     "split.cut_failed": (SPLIT_ALONG_LINE, SHOW_DETAILS),
+    # Die Sperre hat jede Ebene gefressen (RM-080). Der erste Weg ist, sie
+    # wieder zu öffnen — der Kunde hat die Suche selbst eingeschränkt —, der
+    # zweite die gezeichnete Linie, die an einer Sperre vorbeiführen kann.
+    "split.blocked_by_protection": (RELEASE_PROTECTION, SPLIT_ALONG_LINE, SHOW_DETAILS),
     # **Der Satz nennt den Rückweg, und hier steht er als Knopf** (RM-039).
     # „Reparieren Sie es und teilen Sie danach erneut" stand im Befund, seine
     # Geschwister darüber trugen Handlungen, und dieser trug keine — ein Satz
@@ -4524,6 +4529,13 @@ class FeaturePanel(QWidget):
     loszuwerden. Seine Merkmale einzeln zu entfernen ließe die übrigen
     stehen; ein Schlüsselloch ohne seinen Schlitz ist ein Loch."""
     fitRequested = Signal(str, object)
+    protectionToggled = Signal(str, bool)
+    """Dieses Merkmal als Sichtfläche sperren oder freigeben (§22.3, RM-080).
+
+    **Keine Operation und kein ``operationRequested``**: Die Sperre schreibt
+    nichts in den Verlauf, sie sagt der Trennebenensuche, wo keine Naht hin
+    darf, und sie steht im Dokument. Wer sie über den Operationsweg schickte,
+    legte einen Schritt an, den es nicht gibt."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -4720,11 +4732,14 @@ class FeaturePanel(QWidget):
         features: Mapping[str, Feature] | None = None,
         mesh: MeshData | None = None,
         alone: bool = False,
+        protected: bool = False,
     ) -> None:
         """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern.
 
         ``alone`` sagt, dass dieser Körper der einzige im Projekt ist: Dann gibt
         es kein Gegenstück, und der Satz über die Passung entfällt.
+        ``protected`` ist der heutige Stand des Umschalters *Vor Trennnähten
+        schützen* — aus dem Dokument, nicht aus dem Bild.
 
         Gleichartige Merkmale werden je Handlung durch den Kern belegt:
         Eine Maßänderung braucht andere Übereinstimmungen als das Versetzen
@@ -4859,7 +4874,43 @@ class FeaturePanel(QWidget):
             catalog.clicked.connect(lambda _checked=False: self.catalogRequested.emit())
             self._rows.insertWidget(self._rows.count() - 1, catalog)
             self._built.append(catalog)
+        self._build_protection(feature_id, feature, protected)
         self._settle_apply()
+
+    def _build_protection(self, feature_id: str, feature: Feature, protected: bool) -> None:
+        """Der Umschalter *Vor Trennnähten schützen* — die eine Kundengeste der
+        Trennen-Serie (T8): „Diese Fläche soll schön bleiben."
+
+        **Unten, nach den Handlungen**, weil er keine ist: Die Zeilen darüber
+        ändern das Teil, dieser Haken sagt der Suche von *Automatisch teilen*,
+        wo sie nicht schneiden darf. Ob das Merkmal sich sperren lässt und was
+        auf dem Haken steht, sagt der Kern (:func:`protection_of`); ein Merkmal
+        ohne Fläche bekommt den Haken grau und den Satz, warum.
+        """
+        from app.core.perceive.actions import protection_of
+
+        self._separate()
+        protection = protection_of(feature)
+        toggle = QCheckBox(str(protection.title), self)
+        toggle.setObjectName("protection-toggle")
+        toggle.setAccessibleName(str(protection.title))
+        toggle.setChecked(protected)
+        toggle.setEnabled(protection.possible)
+        toggle.setStatusTip(str(protection.explanation))
+        toggle.setToolTip(str(protection.explanation))
+        toggle.setAccessibleDescription(str(protection.explanation))
+        toggle.toggled.connect(lambda on: self.protectionToggled.emit(feature_id, bool(on)))
+        self._rows.insertWidget(self._rows.count() - 1, toggle)
+        self._built.append(toggle)
+        if not protection.possible:
+            self.show_note(str(protection.explanation))
+
+    def protection_toggle(self) -> QCheckBox | None:
+        """Der Umschalter des gezeigten Merkmals, oder ``None`` ohne Merkmal."""
+        for widget in self._built:
+            if isinstance(widget, QCheckBox) and widget.objectName() == "protection-toggle":
+                return widget
+        return None
 
     def show_part(self, operation: Any, spec: Any, *, title: str = "") -> None:
         """Was sich an diesem **Baustein** ändern lässt — an seinem Schritt.
@@ -5538,9 +5589,12 @@ class FeaturePanel(QWidget):
         dessen Innenleben und kein eigener Halt.
         """
         for row in reversed(self._built):
+            # Die Zeile selbst zählt mit: Der Umschalter *Vor Trennnähten
+            # schützen* und der Katalogknopf stehen ohne Kasten in der Liste,
+            # und ``findChildren`` sieht ein Widget nie als sein eigenes Kind.
             stops = [
                 child
-                for child in row.findChildren(QWidget)
+                for child in (row, *row.findChildren(QWidget))
                 if child.focusPolicy() != Qt.FocusPolicy.NoFocus
                 and not isinstance(child, QLineEdit)
             ]

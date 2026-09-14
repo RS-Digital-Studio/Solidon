@@ -1957,6 +1957,10 @@ def capture(
         chat=[],
         fits=[],
         print_settings=None,
+        # Eine Sichtflächensperre ist eine Aussage über ein Teil im Projekt,
+        # nicht über den Baustein — und sie nennt Körper, die es im
+        # eingelesenen Rezept unter diesem Namen nicht gibt.
+        protected={},
     )
     recipe = Recipe(
         name=name,

@@ -1708,6 +1708,29 @@ class Document:
     „die Vorgabe, passend zur Zahl der Teile und Platten"; gemerkt wird nur,
     was jemand ausdrücklich getippt hat.
     """
+    protected: dict[ObjectId, tuple[FeatureId, ...]] = field(default_factory=dict)
+    """Welche Merkmale je Körper als Sichtflächen gesperrt sind (§22.3, RM-080).
+
+    „Diese Fläche soll schön bleiben": Die Trennebenensuche von *Automatisch
+    teilen* legt keine Naht durch ein gesperrtes Merkmal. **Im Dokument und
+    nicht in der Ansicht**, weil eine Sichtfläche eine Aussage über das Teil
+    ist und nicht über die Sitzung — als Ansichtszustand war sie nach dem
+    Schließen weg, und der Kunde erfuhr es an dem Schnitt, der durch die
+    Fläche ging, die er schützen wollte (Entscheidung 31.08.2026).
+
+    Gespeichert werden **Merkmalkennungen**, keine Dreiecke und keine Punkte:
+    Kennungen sind stabil über Auswertungen hinweg (§21), Dreiecksnummern
+    nicht, und die Punktwolke rechnet die Suche einmal beim Start aus dem
+    ausgewerteten Netz (:func:`app.core.split.protected_patches`). Ein
+    Eintrag zu einem Körper, den es gerade nicht gibt — gelöscht, noch nicht
+    wieder hergestellt —, bleibt stehen: Ein Undo bringt den Körper zurück,
+    und seine Sperre soll dann noch da sein.
+
+    Keine Operation und keine Transaktion, aus demselben Grund wie die
+    Druckeinstellungen: Es entsteht keine Geometrie und es ändert sich keine.
+    Der Umschalter am Merkmal ist sein eigener Rückweg. Seit Format v24 in der
+    Datei.
+    """
     highest_transaction: int = 0
     """Die höchste je vergebene Transaktionsnummer — mit ``highest_op`` und
     ``highest_object`` die Wasserlinie der Nummernvergabe (§15.4).

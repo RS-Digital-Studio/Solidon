@@ -430,11 +430,11 @@ def test_cancellation_during_plane_search_starts_no_final_cut(
 ) -> None:
     signal = CancelSignal()
 
-    def find_and_cancel(*_args: object, **_kwargs: object) -> autosplit.Candidate:
+    def find_and_cancel(*_args: object, **_kwargs: object) -> autosplit.PlaneSearch:
         signal.cancel()
-        return autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0)
+        return autosplit.PlaneSearch(autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0))
 
-    monkeypatch.setattr(autosplit, "find_plane", find_and_cancel)
+    monkeypatch.setattr(autosplit, "search_plane", find_and_cancel)
     monkeypatch.setattr(
         autosplit,
         "_cut_in_two",
@@ -457,8 +457,10 @@ def test_cancellation_after_the_final_cut_starts_no_pin_plan(
 
     monkeypatch.setattr(
         autosplit,
-        "find_plane",
-        lambda *_args, **_kwargs: autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0),
+        "search_plane",
+        lambda *_args, **_kwargs: autosplit.PlaneSearch(
+            autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0)
+        ),
     )
     monkeypatch.setattr(autosplit, "_cut_in_two", cut_and_cancel)
     monkeypatch.setattr(autosplit, "_pin_allowance", lambda *_args, **_kwargs: 0.0)
@@ -522,8 +524,10 @@ def test_split_stops_after_final_connector_planning(
     monkeypatch.setattr(pins, "plan_pins", plan_and_cancel_final)
     monkeypatch.setattr(
         autosplit,
-        "find_plane",
-        lambda *_args, **_kwargs: autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0),
+        "search_plane",
+        lambda *_args, **_kwargs: autosplit.PlaneSearch(
+            autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0)
+        ),
     )
 
     with pytest.raises(OperationCancelled):
@@ -927,6 +931,103 @@ def test_the_second_opinion_obeys_the_guard(
     assert not (-14.0 < candidate.position < 14.0), (
         f"die Naht liegt bei {candidate.position:.1f} und damit in der Sperre — "
         "die zweite Meinung hat sie umgangen"
+    )
+
+
+def test_the_search_counts_what_the_guard_cost(profile: Profile) -> None:
+    """Die Suche sagt, wie viele Ebenen die Sperre gefressen hat (RM-080).
+
+    Zwei Antworten sehen sonst gleich aus: „nichts gefunden" und „nichts
+    gefunden, weil alles gesperrt war". Nur die zweite hat den Ausweg
+    *Sperren aufheben*, also muss die Suche sie unterscheiden können.
+    """
+    whole = bar()
+
+    free = autosplit.search_plane(whole, profile)
+    assert free.candidate is not None and free.blocked == 0, "ohne Sperre kostet nichts"
+
+    everything = autosplit.search_plane(whole, profile, protect=[shield(-200.0, 200.0)])
+    assert everything.candidate is None
+    assert everything.blocked > 0, "jede Ebene mit Fläche ist an der Sperre gescheitert"
+
+    seam = free.candidate.position
+    narrow = autosplit.search_plane(whole, profile, protect=[shield(seam - 6.0, seam + 6.0)])
+    assert narrow.candidate is not None
+    assert 0 < narrow.blocked < everything.blocked, "eine schmale Sperre kostet weniger als alles"
+
+
+def test_a_guard_over_everything_is_named_as_the_reason(profile: Profile) -> None:
+    """Bleibt neben der Sperre nichts, heißt der Befund nicht „keine Ebene".
+
+    ``split.no_plane`` rät zur gezeichneten Linie; wer aber selbst alles
+    gesperrt hat, braucht zuerst den anderen Weg — die Sperre aufheben. Der
+    eigene Befund trägt die Zahl der gesperrten Ebenen und bekommt im
+    Prüfbericht *Sperren aufheben und erneut teilen* als ersten Knopf.
+    """
+    from app.ui.panels import FINDING_ACTIONS
+
+    outcome = autosplit.split_to_fit(bar(), profile, pins=0, protect=[shield(-200.0, 200.0)])
+
+    codes = [finding.code for finding in outcome.findings]
+    assert "split.blocked_by_protection" in codes, codes
+    assert "split.no_plane" not in codes, "die Sperre ist der Grund, nicht das Teil"
+    blocked = next(f for f in outcome.findings if f.code == "split.blocked_by_protection")
+    assert int(blocked.values["blocked_planes"]) > 0
+    assert not outcome.divided
+    handlungen = FINDING_ACTIONS.get("split.blocked_by_protection")
+    assert handlungen, "der Befund führt im Prüfbericht zu keiner Handlung"
+    assert handlungen[0].id == "release_protection", [a.id for a in handlungen]
+
+
+def test_the_plan_names_the_body_on_every_search_finding(profile: Profile) -> None:
+    """Berichtshandlungen lesen ihren Körper aus dem Befund, nie aus der Auswahl.
+
+    Die Suche rechnet auf einem Netz und kennt keine Kennungen; ``plan_split``
+    kennt sie. Ohne die Kennung hätte *Sperren aufheben* kein Ziel.
+    """
+    plan = plan_split(bar(), "obj_9", profile, pins=0, protect=[shield(-200.0, 200.0)])
+
+    assert plan.outcome.findings, "ohne Befund prüft dieser Test nichts"
+    assert all(finding.object_id == "obj_9" for finding in plan.outcome.findings), [
+        (finding.code, finding.object_id) for finding in plan.outcome.findings
+    ]
+
+
+def test_protected_patches_come_from_the_feature_triangles() -> None:
+    """Aus den Kennungen des Dokuments werden die Punktwolken der Suche.
+
+    Zwei Zusicherungen: Die Wolke besteht aus genau den Ecken der Dreiecke des
+    Merkmals, und eine Kennung, die der Körper nicht trägt, ergibt keine Wolke
+    und keinen Fehler — was nicht da ist, kann keine Naht zerteilen.
+    """
+    from app.core.split import protected_patches
+    from app.core.types import Feature, SceneObject
+
+    mesh = bar()
+    top = [index for index, normal in enumerate(mesh.raw.face_normals) if normal[2] > 0.9]
+    assert top, "der Balken hat eine Oberseite"
+    entry = SceneObject(
+        id="obj_1",
+        name="Balken",
+        mesh=mesh,
+        features={
+            "face_top": Feature(
+                id="face_top",
+                kind="face",
+                provenance="detected",
+                params={},
+                face_indices=tuple(top),
+            ),
+            "edge_1": Feature(id="edge_1", kind="edge_loop", provenance="detected", params={}),
+        },
+    )
+
+    patches = protected_patches(entry, ("face_top", "edge_1", "hole_99"))
+
+    assert len(patches) == 1, "nur das Merkmal mit Dreiecken ergibt eine Wolke"
+    assert len(patches[0]) == 3 * len(top)
+    assert np.allclose(patches[0][:, 2], mesh.raw.vertices[:, 2].max()), (
+        "die Wolke der Oberseite liegt ganz oben"
     )
 
 

@@ -1572,6 +1572,10 @@ def test_unknown_nested_fields_are_rejected(
         ("transactions", False),
         ("chat", ""),
         ("print_settings", {}),
+        # Eine Sichtflächensperre ist eine Aussage über ein Teil im Projekt
+        # und nennt Körper, die es im Rezept unter diesem Namen nicht gibt
+        # (RM-080). Leer ist sie erlaubt — so schreibt ``document_to_data``.
+        ("protected", {"obj_1": ["face_1"]}),
         ("range_report", []),
         ("range_failures", {}),
     ),
@@ -1602,7 +1606,7 @@ def test_softly_coerced_nested_fields_are_rejected(
             "parameter_translatable": "title_translatable",
         }[location]
         parameter[key] = value
-    elif location in {"fits", "transactions", "chat", "print_settings"}:
+    elif location in {"fits", "transactions", "chat", "print_settings", "protected"}:
         data["document"][location] = value
     elif location == "range_report":
         data["range_report"] = value

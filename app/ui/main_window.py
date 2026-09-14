@@ -1892,6 +1892,9 @@ class MainWindow(QMainWindow):
         self._preview_busy.timeout.connect(self._say_preview_busy)
         self._preview_reason = ""
         """Der Satz, mit dem die letzte Vorschau ausblieb — leer, wenn sie kam."""
+        self._split_protected = 0
+        """Wie viele Merkmale beim letzten Start von *Automatisch teilen*
+        gesperrt waren — für die Ansage danach; der Körper ist dann verbraucht."""
         self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
         self._lid_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
         """Warum an einer gewählten Fläche kein Deckel entsteht — je Merkmal und
@@ -1922,6 +1925,10 @@ class MainWindow(QMainWindow):
         # Transaktion — ein Strg+Z nimmt sie zurück (§15.4, Regel 19).
         self.feature_panel.stepChangeRequested.connect(self._change_part_step)
         self.feature_panel.stepRemoveRequested.connect(self._remove_part_step)
+        # **Die eine Kundengeste der Trennen-Serie** (T8, RM-080): „Diese
+        # Fläche soll schön bleiben." Kein Operationsweg — die Sperre steht im
+        # Dokument und wirkt in der Suche, nicht im Verlauf.
+        self.feature_panel.protectionToggled.connect(self._toggle_protection)
 
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
@@ -5312,6 +5319,7 @@ class MainWindow(QMainWindow):
         # Kandidatenebene und dauert an einem großen Körper Sekunden bis
         # Minuten — §2.8 verlangt dafür Fortschritt und Abbrechen, kein
         # eingefrorenes Fenster mit Ankündigung.
+        self._split_protected = len(self.session.protected_features(object_id))
         self.session.split_async(object_id, self._split_done)
 
     def _split_done(self, applied: Any) -> None:
@@ -5320,9 +5328,56 @@ class MainWindow(QMainWindow):
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
         self._queue_split_reveal(applied.object_ids)
+        said = f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
+        if self._split_protected:
+            # Die zweite Kodierung der Sperre (Regel 18): Die Schraffur sagt
+            # es im Bild, die Statuszeile sagt es in Worten — und zwar an der
+            # Stelle, an der die Sperre gewirkt hat.
+            said += " · " + tr("{count} geschützte Stellen gemieden").format(
+                count=self._split_protected
+            )
+        self.announce(said)
+
+    def _toggle_protection(self, feature_id: str, on: bool) -> None:
+        """*Vor Trennnähten schützen* am gewählten Merkmal (§22.3, RM-080).
+
+        Der Körper kommt aus der Auswahl, weil der Umschalter zu ihr gehört —
+        er steht im Auswahlfenster unter dem Merkmal, das gerade gezeigt wird.
+        Das Dokument führt den Stand, das Bild folgt über ``projectChanged``
+        (:meth:`_on_project`); ein Undo gibt es nicht, der Haken ist sein
+        eigener Rückweg.
+        """
+        object_id = self.object_tree.selected()
+        if not object_id:
+            return
+        if not self.session.set_protected(object_id, feature_id, on):
+            return
         self.announce(
-            f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
+            tr("Geschützt — „Automatisch teilen“ legt hier keine Naht.")
+            if on
+            else tr("Freigegeben — hier darf wieder getrennt werden.")
         )
+
+    def _release_protection_after_error(self, error: AppError) -> None:
+        """*Sperren aufheben und erneut teilen* am Befund, dass neben den
+        geschützten Flächen keine Trennebene bleibt (``split.blocked_by_protection``).
+
+        Der Körper steht im Befund, nie in der Auswahl (dieselbe Regel wie bei
+        :meth:`_repair_after_error`). Aufgehoben werden **alle** Sperren dieses
+        Körpers — die Suche hat gesagt, dass neben ihnen nichts bleibt, und
+        welche davon die eine zu viel war, weiß sie nicht. Wer nur eine
+        freigeben will, tut es am Merkmal selbst; Strg+Z gibt es hier nicht,
+        der Haken am Merkmal ist der Rückweg.
+        """
+        object_id = error.object_id
+        if object_id is None:
+            return
+        released = self.session.release_protection(object_id)
+        if not released:
+            self.announce(tr("An diesem Körper ist nichts gesperrt."))
+            return
+        self.announce(tr("{count} Sperren aufgehoben.").format(count=released))
+        self.action_auto_split(object_id)
 
     def bake_sculpt(self, op_id: int) -> None:
         """Den Stand einer Formsitzung festschreiben — mit Nachfrage.
@@ -7780,7 +7835,12 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if feature_id else None
         if feature is None:
             return str(entry.name)
-        return f"{entry.name} · {feature_label(feature_id or '', feature)}"
+        label = f"{entry.name} · {feature_label(feature_id or '', feature)}"
+        if feature_id in self.session.protected_features(object_id):
+            # Die Schraffur im Bild ist eine Farbe; das Wort daneben ist die
+            # zweite Kodierung (Regel 18).
+            label += f" · {tr('geschützt')}"
+        return label
 
     def _selected_face_plane(self) -> str:
         """Die gewählte Fläche als Zeichenebene — leer, wenn keine gewählt ist.
@@ -11592,6 +11652,7 @@ class MainWindow(QMainWindow):
             features=entry.features,
             mesh=as_mesh_data(entry.mesh),
             alone=result is not None and len(result.scene.objects) == 1,
+            protected=feature_id in self.session.protected_features(entry.id),
         )
         self.feature_dock.reveal()
         resume = self._measures_to_resume == feature_id
@@ -13906,6 +13967,7 @@ class MainWindow(QMainWindow):
         self.report.show_result(result, self.session.project.document)
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
+        self.viewport.show_protected(self.session.project.document.protected)
         self.viewport.show_scene(result)
         self._reveal_split_result(result)
         self.history_panel.show_document(
@@ -14007,6 +14069,9 @@ class MainWindow(QMainWindow):
         # Dokument nicht und löst ``projectChanged`` deshalb nicht aus.
         self._drop_feature_preview()
         document = self.session.project.document
+        # Die Sperren kommen aus dem Dokument ins Bild — beim Öffnen, nach
+        # einem Undo und nach jedem Umschalten derselbe Weg (RM-080).
+        self.viewport.show_protected(document.protected)
         produced = frozenset(output for operation in document.ops for output in operation.outputs)
         if self._pending_split_reveal and not self._pending_split_reveal.issubset(produced):
             self._pending_split_reveal = frozenset()
@@ -14474,6 +14539,7 @@ class MainWindow(QMainWindow):
             # eben nur die Notlösung für Kennungen, die niemand einlösen kann.
             "cancel_split": lambda _error: self.session.cancel_split(),
             "repair_and_retry": self._repair_after_error,
+            "release_protection": self._release_protection_after_error,
             "remove_small_parts": self._remove_small_parts,
             "split_model": self._split_after_error,
             "split_and_retry": self._split_and_retry_after_error,

@@ -801,3 +801,51 @@ def edge_actions(key: str) -> list[FeatureAction]:
             )
         )
     return actions
+
+
+# --- Sichtflächen (§22.3, RM-080) ----------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Protection:
+    """Ob sich dieses Merkmal als Sichtfläche sperren lässt — und wie das heißt.
+
+    Die Sperre ist keine Operation: Sie schreibt nichts in den Verlauf,
+    sondern sagt der Trennebenensuche von *Automatisch teilen*, wo keine Naht
+    hin darf. Das Panel zeigt sie als Umschalter, und was auf dem Umschalter
+    steht, kommt von hier — aus demselben Grund wie die Handlungen darüber:
+    „Eine Naht meidet, was Dreiecke hat" ist eine Aussage über Geometrie.
+    """
+
+    possible: bool
+    title: TranslatableText | str
+    explanation: TranslatableText | str
+
+
+def protection_of(feature: Feature) -> Protection:
+    """Was der Umschalter *Vor Trennnähten schützen* an diesem Merkmal sagt.
+
+    Sperren lässt sich, was Dreiecke trägt: Die Suche vergleicht Ebenen gegen
+    die Punkte der Fläche (:func:`app.core.geom.autosplit.cuts_through`), und
+    ein Merkmal ohne Dreiecke — eine Kante aus dem exakten Kern, ein
+    erzeugtes Merkmal, das die Erkennung nicht wiedergefunden hat — hat
+    nichts, woran eine Ebene scheitern könnte. Der Umschalter fehlt dann
+    nicht still: Er steht mit dem Satz da, warum er nichts täte.
+    """
+    if not feature.face_indices:
+        return Protection(
+            False,
+            _("Vor Trennnähten schützen"),
+            _(
+                "Dieses Merkmal trägt keine Fläche, an der eine Trennebene scheitern "
+                "könnte — geschützt wird, was Dreiecke hat."
+            ),
+        )
+    return Protection(
+        True,
+        _("Vor Trennnähten schützen"),
+        _(
+            "„Automatisch teilen“ legt keine Naht durch diese Stelle. Die Sperre wird "
+            "mit dem Projekt gespeichert; das Bild zeigt sie schraffiert."
+        ),
+    )

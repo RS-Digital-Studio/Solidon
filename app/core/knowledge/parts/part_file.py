@@ -730,6 +730,10 @@ class PartFileIO:
                 # sie hier zu verbieten hieße aber, ein gültiges Dokument
                 # abzulehnen, und das wäre die falsche Stelle dafür.
                 "export",
+                # Und seit Formatversion 24 die gesperrten Sichtflächen
+                # (RM-080) — aus demselben Grund: Ein Rezept trägt den
+                # Dokumentausschnitt, wie er geschrieben wird.
+                "protected",
             },
             "document",
         )
@@ -794,6 +798,11 @@ class PartFileIO:
             raise self._recipe_error(
                 _("Eine Bausteindatei darf keine Druckeinstellungen mitführen."),
                 field="document.print_settings",
+            )
+        if document.get("protected"):
+            raise self._recipe_error(
+                _("Eine Bausteindatei darf keine gesperrten Sichtflächen mitführen."),
+                field="document.protected",
             )
 
         parameters = document.get("parameters", {})

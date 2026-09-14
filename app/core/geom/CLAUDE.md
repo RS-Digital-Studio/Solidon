@@ -226,7 +226,10 @@ das ganze Register.
 `prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Anordnen, Kollisionen,
 §18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; nach einer
 billigen Naht-Vorauswahl entscheidet das interne Stützvolumen der fertig
-verstifteten Hälften, §22.3) ·
+verstifteten Hälften, §22.3; `search_plane` sagt neben der Ebene, wie viele
+Ebenen an einer gesperrten Sichtfläche gescheitert sind — daran unterscheidet
+`split_to_fit` „keine Ebene" von „keine Ebene neben der Sperre",
+`split.blocked_by_protection`) ·
 `pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
 Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 `orient.py`

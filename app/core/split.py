@@ -37,11 +37,47 @@ from app.core.types import (
     Origin,
     Profile,
     ProgressFn,
+    SceneObject,
     TransactionId,
 )
 from app.i18n import _
 
 _log = get_logger(__name__)
+
+
+def protected_patches(entry: SceneObject, feature_ids: Iterable[FeatureId]) -> list[Any]:
+    """Die Punktwolken der gesperrten Merkmale — die Eingabe der Nahtsuche (§22.3).
+
+    Das Dokument hält **Kennungen** (:attr:`Document.protected`), die Suche
+    will **Punkte**: ``split_to_fit`` teilt mehrfach, und jedes Teilstück ist
+    ein neues Netz mit neuer Nummerierung — ein Verweis über Dreiecksindizes
+    zeigte nach dem ersten Schnitt ins Leere. Umgerechnet wird deshalb hier,
+    einmal beim Suchen, am ausgewerteten Netz des Körpers.
+
+    Eine Kennung, die dieser Körper gerade nicht trägt — das Merkmal ist
+    nach einer Operation nicht wiedererkannt worden —, ergibt keine Wolke und
+    keinen Fehler: Was nicht da ist, kann keine Naht zerteilen. Die
+    Dreiecksnummern eines Merkmals gelten für das Netz, an dem es erkannt
+    wurde; ein Körper ohne Netz (der exakte Kern erkennt keine Merkmale) hat
+    deshalb auch keine Wolken.
+    """
+    import numpy as np
+
+    raw = getattr(entry.mesh, "raw", None)
+    if raw is None:
+        return []
+    points = np.asarray(raw.vertices, dtype=float)
+    triangles = np.asarray(raw.faces, dtype=np.int64)
+    patches: list[Any] = []
+    for feature_id in feature_ids:
+        feature = entry.features.get(feature_id)
+        if feature is None:
+            continue
+        chosen = [index for index in feature.face_indices if 0 <= index < len(triangles)]
+        if not chosen:
+            continue
+        patches.append(points[triangles[np.asarray(chosen, dtype=np.int64)].ravel()])
+    return patches
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +149,15 @@ def plan_split(
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    # **Die Befunde der Suche nennen ihren Körper.** Die Geometriefunktion
+    # rechnet auf einem Netz und kennt keine Kennungen; hier ist sie bekannt.
+    # Ohne sie hätte *Sperren aufheben* am Befund „neben den geschützten
+    # Flächen bleibt keine Trennebene" kein Ziel — eine Berichtshandlung
+    # liest ihren Körper aus dem Befund, nie aus der Auswahl.
+    outcome.findings[:] = [
+        replace(finding, object_id=object_id) if finding.object_id is None else finding
+        for finding in outcome.findings
+    ]
     drafts = [
         OperationDraft(
             op="split_pinned",

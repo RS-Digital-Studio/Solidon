@@ -333,7 +333,7 @@ def split_to_fit(
         # steht. Die Zahl geht in das Suchfenster (damit der Schnitt Raum für den
         # Stift lässt) und in die Reserve der Kinder.
         allowance = _pin_allowance(part, axis, profile, pins, cancelled=cancelled)
-        candidate = find_plane(
+        search = search_plane(
             part,
             profile,
             axis=axis,
@@ -358,15 +358,34 @@ def split_to_fit(
         )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        candidate = search.candidate
         if candidate is None:
+            oversize_mm = round(max(oversize(part, profile, allowance=reserve)), 1)
+            if search.blocked:
+                # **Nicht „keine Ebene", sondern „keine Ebene neben der
+                # Sperre".** Ohne diese Unterscheidung bekäme der Kunde den
+                # Rat, die Linie selbst zu zeichnen — dabei hat er die Suche
+                # gerade selbst eingeschränkt, und der nächste Weg ist, eine
+                # Sperre wieder freizugeben (Regel 17: der Ausweg, der
+                # tatsächlich hilft, steht vorn).
+                outcome.findings.append(
+                    Finding(
+                        code="split.blocked_by_protection",
+                        severity="warning",
+                        message=_(
+                            "Neben den geschützten Flächen bleibt für dieses Teil keine "
+                            "Trennebene übrig."
+                        ),
+                        values={"oversize_mm": oversize_mm, "blocked_planes": search.blocked},
+                    )
+                )
+                return finish()
             outcome.findings.append(
                 Finding(
                     code="split.no_plane",
                     severity="warning",
                     message=_("Für dieses Teil war keine brauchbare Trennebene zu finden."),
-                    values={
-                        "oversize_mm": round(max(oversize(part, profile, allowance=reserve)), 1)
-                    },
+                    values={"oversize_mm": oversize_mm},
                 )
             )
             return finish()
@@ -543,6 +562,19 @@ def cuts_through(plane: SectionPlane, protect: Sequence[Any]) -> bool:
     return False
 
 
+@dataclass(frozen=True, slots=True)
+class PlaneSearch:
+    """Was die Suche nach einer Trennebene ergeben hat — und was sie verworfen hat."""
+
+    candidate: Candidate | None
+    blocked: int = 0
+    """Wie viele Ebenen mit Schnittfläche allein an einer gesperrten
+    Sichtfläche gescheitert sind (§22.3). Null, wenn nichts gesperrt war oder
+    keine Sperre eine Ebene getroffen hat. Die Zahl unterscheidet zwei
+    Antworten, die sonst gleich aussehen: „nichts gefunden" und „nichts
+    gefunden, weil alles gesperrt war" — die zweite hat einen anderen Ausweg."""
+
+
 def find_plane(
     mesh: MeshData,
     profile: Profile,
@@ -558,6 +590,41 @@ def find_plane(
     progress: ProgressFn | None = None,
 ) -> Candidate | None:
     """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
+
+    Die Hülle um :func:`search_plane` für alle, die nur die Ebene wollen —
+    die Suche selbst sagt daneben, ob eine Sperre im Weg stand.
+    """
+    return search_plane(
+        mesh,
+        profile,
+        axis=axis,
+        allowance=allowance,
+        samples=samples,
+        protect=protect,
+        cancelled=cancelled,
+        support_planes=support_planes,
+        support_orientations=support_orientations,
+        connector_count=connector_count,
+        progress=progress,
+    ).candidate
+
+
+def search_plane(
+    mesh: MeshData,
+    profile: Profile,
+    *,
+    axis: Axis | None = None,
+    allowance: float = 0.0,
+    samples: int = SAMPLES,
+    protect: Sequence[Any] = (),
+    cancelled: CancelToken | None = None,
+    support_planes: int = SUPPORT_PLANE_CANDIDATES,
+    support_orientations: int = SUPPORT_ORIENTATION_CANDIDATES,
+    connector_count: int | None = None,
+    progress: ProgressFn | None = None,
+) -> PlaneSearch:
+    """Die beste Trennebene für diesen Körper — samt der Auskunft, was die
+    Sperre gekostet hat.
 
     Nur Ebenen zählen, die das Stück wirklich passender machen. Eine schöne
     Naht, die beide Hälften zu groß lässt, ist keine Antwort.
@@ -583,7 +650,7 @@ def find_plane(
     if axis is None:
         axis = _axis_to_cut(mesh, profile)
     if axis is None:
-        return None
+        return PlaneSearch(None)
     if connector_count is None:
         from app.core.geom.pins import PIN_COUNT
 
@@ -594,24 +661,31 @@ def find_plane(
 
     window = _window(mesh, profile, axis, allowance)
     positions = np.linspace(window[0], window[1], samples)
-    candidates = [
-        entry
-        for entry in _judge(mesh, axis, positions, cancelled=cancelled)
-        if entry.area > EPS_GEOM and not cuts_through(entry.plane, protect)
-    ]
+    candidates: list[Candidate] = []
+    blocked = 0
+    for entry in _judge(mesh, axis, positions, cancelled=cancelled):
+        if entry.area <= EPS_GEOM:
+            continue
+        if cuts_through(entry.plane, protect):
+            blocked += 1
+            continue
+        candidates.append(entry)
     if progress is not None:
         progress(0.25, str(_("Die Trennebenen werden gesucht …")))
     best = min(candidates, key=_candidate_order) if candidates else None
     if best is not None and best.score <= HINT_THRESHOLD:
-        return _best_by_support(
-            mesh,
-            profile,
-            candidates,
-            plane_candidates=support_planes,
-            orientation_candidates=support_orientations,
-            connector_count=connector_count,
-            cancelled=cancelled,
-            progress=progress,
+        return PlaneSearch(
+            _best_by_support(
+                mesh,
+                profile,
+                candidates,
+                plane_candidates=support_planes,
+                orientation_candidates=support_orientations,
+                connector_count=connector_count,
+                cancelled=cancelled,
+                progress=progress,
+            ),
+            blocked,
         )
 
     # Nichts Überzeugendes unter den abgetasteten Ebenen: die Zerlegung
@@ -627,19 +701,23 @@ def find_plane(
         # zwar genau dann, wenn die abgetasteten Ebenen alle mittelmäßig
         # sind, also im schwierigen Fall.
         hinted = None
+        blocked += 1
     if hinted is not None:
         candidates.append(hinted)
     if not candidates:
-        return None
-    return _best_by_support(
-        mesh,
-        profile,
-        candidates,
-        plane_candidates=support_planes,
-        orientation_candidates=support_orientations,
-        connector_count=connector_count,
-        cancelled=cancelled,
-        progress=progress,
+        return PlaneSearch(None, blocked)
+    return PlaneSearch(
+        _best_by_support(
+            mesh,
+            profile,
+            candidates,
+            plane_candidates=support_planes,
+            orientation_candidates=support_orientations,
+            connector_count=connector_count,
+            cancelled=cancelled,
+            progress=progress,
+        ),
+        blocked,
     )
 
 

@@ -1344,6 +1344,7 @@ def test_selecting_a_feature_passes_its_mesh_to_the_action_panel(
         features: Any = None,
         mesh: MeshData | None = None,
         alone: bool = False,
+        protected: bool = False,
     ) -> None:
         received.append((feature_id, feature, alike, features, mesh))
 

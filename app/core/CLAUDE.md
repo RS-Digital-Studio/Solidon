@@ -77,7 +77,9 @@ Versionen im selben Ordner.
 
 **Abläufe, die mehrere Operationen bündeln:**
 
-`lid_flow.py` (Deckel erzeugen) · `split.py` (Auto Split als eine Transaktion)
+`lid_flow.py` (Deckel erzeugen) · `split.py` (Auto Split als eine Transaktion;
+`protected_patches` macht aus den Merkmalkennungen in `Document.protected` die
+Punktwolken, gegen die die Suche ihre Ebenen prüft, §22.3)
 · `generate.py` (Weg 3: Text oder Bild zu einem Körper) · `counterpart.py`
 (beide Hälften einer Verbindung auf zwei Körpern)
 

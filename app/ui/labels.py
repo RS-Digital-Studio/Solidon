@@ -1179,6 +1179,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "axis": _("Achse"),
     "b": _("Zweites"),
     "before": _("Vorher"),
+    "blocked_planes": _("Gesperrte Ebenen"),
     "code": _("Fehlerkennung"),
     "board": _("Lochwand"),
     "bones": _("Knochen"),

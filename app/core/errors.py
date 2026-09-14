@@ -96,6 +96,13 @@ RECOUNT_AND_RETRY = Action(
     "recount_and_retry", _("Stückzahl anpassen und erneut versuchen"), primary=True
 )
 SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
+#: Wenn *Automatisch teilen* neben den gesperrten Sichtflächen keine Naht
+#: mehr findet (§22.3, RM-080): Die Sperren dieses Körpers aufheben — der
+#: Ausweg, der die Suche wieder öffnet. Vorn, weil der Kunde die Suche selbst
+#: eingeschränkt hat; die gezeichnete Linie steht daneben als der andere Weg.
+RELEASE_PROTECTION = Action(
+    "release_protection", _("Sperren aufheben und erneut teilen"), primary=True
+)
 PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)
 ARRANGE_ON_BED = Action("arrange_on_bed", _("Auf dem Bett anordnen"), primary=True)
 CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))

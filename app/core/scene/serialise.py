@@ -25,6 +25,7 @@ from app.core.types import (
     Document,
     DocumentChange,
     DocumentState,
+    FeatureId,
     FeatureRef,
     FilamentSettings,
     Finding,
@@ -32,6 +33,7 @@ from app.core.types import (
     InfillSettings,
     IngestInfo,
     LayerSettings,
+    ObjectId,
     Operation,
     Origin,
     Parameter,
@@ -938,7 +940,34 @@ def document_to_data(document: Document) -> dict[str, Any]:
         # eine Projektdatei (Regel 12), er steht in den Einstellungen des
         # Geräts.
         "export": {"format": document.export_format, "scheme": document.export_scheme},
+        # Die gesperrten Sichtflächen je Körper (§22.3, RM-080) — als
+        # Merkmalkennungen, weil nur die eine Auswertung überleben. Sortiert
+        # und ohne leere Körper, damit dieselbe Sperre dieselbe Datei ergibt.
+        "protected": {
+            object_id: sorted(feature_ids)
+            for object_id, feature_ids in sorted(document.protected.items())
+            if feature_ids
+        },
     }
+
+
+def _protected_from_data(stored: Any) -> dict[ObjectId, tuple[FeatureId, ...]]:
+    """Die Sichtflächen aus der Datei — nur, was wirklich Kennungen sind.
+
+    Eine fremde oder beschädigte Datei darf hier keine Zahl oder verschachtelte
+    Struktur unterbringen: Was keine Zeichenkette ist, wird überlesen, und ein
+    Körper ohne Kennungen taucht gar nicht auf.
+    """
+    if not isinstance(stored, dict):
+        return {}
+    result: dict[ObjectId, tuple[FeatureId, ...]] = {}
+    for object_id, feature_ids in stored.items():
+        if not isinstance(object_id, str) or not isinstance(feature_ids, list):
+            continue
+        kept = tuple(sorted({entry for entry in feature_ids if isinstance(entry, str)}))
+        if kept:
+            result[object_id] = kept
+    return result
 
 
 def document_from_data(data: dict[str, Any]) -> Document:
@@ -978,4 +1007,5 @@ def document_from_data(data: dict[str, Any]) -> Document:
         if isinstance(exported := data.get("export"), dict)
         else "",
         export_scheme=str(exported.get("scheme", "")) if isinstance(exported, dict) else "",
+        protected=_protected_from_data(data.get("protected")),
     )

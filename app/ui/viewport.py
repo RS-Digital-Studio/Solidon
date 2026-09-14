@@ -16,7 +16,7 @@ import math
 import os
 import sys
 import weakref
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from itertools import pairwise, product
 from typing import Any, Final, Literal, NamedTuple
@@ -8340,6 +8340,27 @@ class Viewport(QWidget):
             marked.discard(feature_id)
         if not marked:
             self._protected.pop(object_id, None)
+        self._redraw_features()
+        self._draw()
+
+    def show_protected(self, protected: Mapping[ObjectId, Iterable[FeatureId]]) -> None:
+        """Den Stand der Sperren aus dem Dokument übernehmen (§22.3, RM-080).
+
+        Das Dokument ist die Wahrheit, das Bild zeigt sie: Beim Öffnen einer
+        Datei, nach einem Undo und nach jedem Umschalten kommt der ganze Stand
+        von dort, statt dass die Ansicht ihren eigenen führt — sonst zeigte
+        sie nach dem Öffnen eine leere Fläche über einer Sperre, die die Suche
+        gleich beachten wird. Gezeichnet wird nur, wenn sich etwas geändert
+        hat.
+        """
+        wanted = {
+            object_id: set(feature_ids)
+            for object_id, feature_ids in protected.items()
+            if feature_ids
+        }
+        if wanted == self._protected:
+            return
+        self._protected = wanted
         self._redraw_features()
         self._draw()
 

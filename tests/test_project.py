@@ -2608,3 +2608,58 @@ def test_a_file_from_before_the_export_memory_opens_without_one() -> None:
 
     assert project.document.format_version == FORMAT_VERSION
     assert (project.document.export_format, project.document.export_scheme) == ("", "")
+
+
+# --- was ein Projekt über seine Sichtflächen weiß (RM-080) ---------------------------
+
+
+def test_protected_faces_survive_saving_and_reopening(tmp_path: Path) -> None:
+    """Die Sperre gehört ins Dokument, nicht in die Ansicht (Entscheid 31.08.2026).
+
+    Als Ansichtszustand war sie nach dem Schließen weg, und der Kunde erfuhr es
+    an dem Schnitt, der durch die Fläche ging, die er schützen wollte.
+    """
+    project = new_project("generic-220", "pla")
+    project.document.protected = {"obj_1": ("face_3", "face_1"), "obj_2": ()}
+
+    save(project, tmp_path / "halter.p3d")
+    wieder = load(tmp_path / "halter.p3d")
+
+    assert wieder.document.protected == {"obj_1": ("face_1", "face_3")}, (
+        "sortiert, und ein Körper ohne Sperre steht nicht in der Datei"
+    )
+
+
+def test_a_file_from_before_the_protection_opens_without_one() -> None:
+    """23 → 24: Eine ältere Datei hat keine Sperren, und das heißt „wie bisher".
+
+    *Automatisch teilen* darf überall schneiden — so, wie es diese Datei immer
+    getan hat.
+    """
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v23.p3d")
+
+    assert project.document.format_version == FORMAT_VERSION
+    assert project.document.protected == {}
+
+
+def test_the_v24_example_carries_its_protection() -> None:
+    """Die eingecheckte Datei der Version 24 trägt, was der Schritt hinzufügt."""
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v24.p3d")
+
+    assert project.document.protected == {"obj_1": ("face_1", "face_3")}
+
+
+def test_foreign_protection_entries_are_ignored_not_trusted() -> None:
+    """Eine fremde Datei darf hier keine Zahl und keine Struktur unterbringen.
+
+    Was keine Zeichenkette ist, wird überlesen; ein Körper ohne gültige
+    Kennung taucht gar nicht auf.
+    """
+    from app.core.scene.serialise import _protected_from_data
+
+    assert _protected_from_data(None) == {}
+    assert _protected_from_data(["face_1"]) == {}
+    assert _protected_from_data({"obj_1": "face_1"}) == {}
+    assert _protected_from_data({"obj_1": [1, None, "face_2", {"a": 1}, "face_2"]}) == {
+        "obj_1": ("face_2",)
+    }

@@ -34,6 +34,19 @@ Modell für einen Dienstleister bleibt STL. Der **Ordner** steht in
 beim Slicer-Pfad neben der Übergabeart: Der zweite Rechner hat einen anderen
 Ordner, aber dieselbe Gewohnheit.
 
+**Und die Sichtflächensperre ist der Fall, an dem sich „Dokument oder Ansicht"
+entscheidet** (RM-080, Version 24). „Diese Fläche soll schön bleiben" ist eine
+Aussage über das Teil, nicht über die Sitzung: Als Ansichtszustand war die
+Markierung nach dem Schließen weg, und der Kunde erfuhr es an dem Schnitt, der
+durch die Fläche ging, die er schützen wollte. `Document.protected` hält je
+Körper die **Merkmalkennungen** — keine Dreiecke, keine Punkte, denn nur die
+Kennungen überleben eine Auswertung (§21); die Punktwolke für die Suche rechnet
+`split.protected_patches` einmal beim Start. Kein Verlaufsschritt, wie bei den
+Druckeinstellungen: Es entsteht keine Geometrie, der Umschalter ist sein
+eigener Rückweg. Ein Rezept trägt keine Sperren (`part_file` weist sie ab) —
+sie nennen Körper, die es im eingelesenen Baustein unter diesem Namen nicht
+gibt.
+
 ## Transaktionstitel
 
 Seit Version 6 trägt ein Titel aus dem Code `title_translatable`: `title` ist

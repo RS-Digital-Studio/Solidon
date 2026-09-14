@@ -1084,6 +1084,56 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
     assert gerufen == [True], "der Knopf öffnet den Katalog"
 
 
+def test_a_face_offers_the_seam_protection_toggle(qt_app: QApplication) -> None:
+    """T8, §22.3: „Diese Fläche soll schön bleiben" — als Haken unter den Handlungen.
+
+    Der Haken ist keine Operation und geht darum nicht über
+    ``operationRequested``: Er meldet Merkmal und Stand, und was das Dokument
+    daraus macht, entscheidet die Sitzung. Der heutige Stand kommt von außen
+    — aus dem Dokument, nicht aus dem Bild.
+    """
+    identifier, feature = a_face()
+    panel = FeaturePanel()
+    gemeldet: list[tuple[str, bool]] = []
+    panel.protectionToggled.connect(lambda key, on: gemeldet.append((key, on)))
+
+    panel.show_feature(identifier, feature)
+    haken = panel.protection_toggle()
+    assert haken is not None and haken.isEnabled() and not haken.isChecked()
+    assert haken.accessibleName() == "Vor Trennnähten schützen"
+    assert haken.toolTip(), "der Haken sagt, was er tut"
+
+    haken.setChecked(True)
+    assert gemeldet == [(identifier, True)]
+
+    panel.show_feature(identifier, feature, protected=True)
+    wieder = panel.protection_toggle()
+    assert wieder is not None and wieder.isChecked(), "der Stand kommt aus dem Dokument"
+    assert gemeldet == [(identifier, True)], "der Aufbau meldet keine Geste"
+
+
+def test_a_feature_without_triangles_says_why_it_cannot_be_protected(
+    qt_app: QApplication,
+) -> None:
+    """Ein Merkmal ohne Fläche bekommt den Haken grau — und den Satz dazu.
+
+    Geschützt wird, was Dreiecke hat: Die Suche vergleicht Ebenen gegen
+    Punkte. Der Haken fehlt nicht still (Regel 17 dem Geist nach).
+    """
+    feature = Feature(id="edge_1", kind="edge_loop", provenance="detected", params={})
+    panel = FeaturePanel()
+    panel.show_feature("edge_1", feature)
+
+    haken = panel.protection_toggle()
+    assert haken is not None and not haken.isEnabled()
+    saetze = [
+        widget.text()
+        for widget in panel._built
+        if isinstance(widget, QLabel) and "Dreiecke" in widget.text()
+    ]
+    assert saetze, "der Grund steht als Satz da"
+
+
 def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> None:
     """„Auf alle 1 anwenden" wäre eine Frage ohne Unterschied."""
     identifier, feature = a_hole()

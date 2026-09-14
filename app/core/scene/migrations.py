@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 23
+FORMAT_VERSION: Final = 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -573,6 +573,18 @@ def _remember_the_export(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_protected_faces(data: dict[str, Any]) -> dict[str, Any]:
+    """23 → 24: Gesperrte Sichtflächen stehen im Dokument (§22.3, RM-080).
+
+    Eine ältere Datei hat keine Sperren, und ein leeres Wörterbuch sagt genau
+    das: *Automatisch teilen* darf überall schneiden — so, wie es diese Datei
+    immer getan hat. Bis zu diesem Schritt lebte die Markierung nur in der
+    Ansicht und ging mit dem Schließen verloren.
+    """
+    data.setdefault("protected", {})
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -597,6 +609,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=20, to_version=21, apply=_add_spool_bindings),
     Step(from_version=21, to_version=22, apply=_add_slot_profile_bindings),
     Step(from_version=22, to_version=23, apply=_remember_the_export),
+    Step(from_version=23, to_version=24, apply=_add_protected_faces),
 )
 
 

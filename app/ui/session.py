@@ -82,7 +82,14 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.split import SplitApplied, apply_line_split, apply_planned, apply_split, plan_split
+from app.core.split import (
+    SplitApplied,
+    apply_line_split,
+    apply_planned,
+    apply_split,
+    plan_split,
+    protected_patches,
+)
 from app.core.types import (
     DocumentChange,
     Feature,
@@ -459,12 +466,17 @@ class _SplitWorker(Worker):
         object_id: str,
         profile: Profile,
         features: Mapping[FeatureId, Feature],
+        protect: Sequence[Any] = (),
     ) -> None:
         super().__init__()
         self._mesh = mesh
         self._object_id = object_id
         self._profile = profile
         self._features = dict(features)
+        #: Die Punktwolken der gesperrten Sichtflächen (§22.3) — fertig
+        #: gerechnet, bevor der Faden startet: Sie kommen aus dem ausgewerteten
+        #: Körper, und der gehört dem Hauptthread.
+        self._protect = tuple(protect)
         #: Ein eigenes Token, wie bei der Vorschau: Die Suche kann Minuten
         #: laufen, und wer sie abbricht, will nicht auf sie warten.
         self.cancel = CancelSignal()
@@ -476,6 +488,7 @@ class _SplitWorker(Worker):
                 self._object_id,
                 self._profile,
                 features=self._features,
+                protect=self._protect,
                 cancelled=self.cancel,
                 progress=self.progressed.emit,
             )
@@ -488,7 +501,7 @@ class _SplitWorker(Worker):
 
     def release_finished_references(self) -> None:
         """Große Suchdaten nach der vollständig zugestellten Antwort lösen."""
-        del self._mesh, self._profile, self._features
+        del self._mesh, self._profile, self._features, self._protect
         super().release_finished_references()
 
 
@@ -1557,6 +1570,53 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
 
+    def protected_features(self, object_id: str) -> tuple[FeatureId, ...]:
+        """Welche Merkmale dieses Körpers als Sichtflächen gesperrt sind (§22.3)."""
+        return self.project.document.protected.get(object_id, ())
+
+    def set_protected(self, object_id: str, feature_id: str, on: bool) -> bool:
+        """Ein Merkmal vor Trennnähten schützen oder wieder freigeben (RM-080).
+
+        Dieselbe Bauart wie :meth:`set_print_settings` und aus demselben
+        Grund: keine Operation, keine Transaktion — es entsteht keine
+        Geometrie. Das Projekt gilt danach als geändert, damit die Sperre
+        nicht beim nächsten Schließen verloren geht; die Ansicht holt sich den
+        Stand über ``projectChanged``. Der Umschalter ist sein eigener Rückweg.
+
+        Gibt zurück, ob sich etwas geändert hat — ein zweites „schützen" an
+        derselben Fläche schreibt nichts und markiert nichts als geändert.
+        """
+        document = self.project.document
+        marked = set(document.protected.get(object_id, ()))
+        if on == (feature_id in marked):
+            return False
+        if on:
+            marked.add(feature_id)
+        else:
+            marked.discard(feature_id)
+        if marked:
+            document.protected[object_id] = tuple(sorted(marked))
+        else:
+            document.protected.pop(object_id, None)
+        self._dirty = True
+        self.projectChanged.emit()
+        return True
+
+    def release_protection(self, object_id: str) -> int:
+        """Alle Sperren dieses Körpers aufheben — der Ausweg, wenn neben ihnen
+        keine Trennebene bleibt (``split.blocked_by_protection``).
+
+        Gibt zurück, wie viele Merkmale frei geworden sind; null heißt, es
+        war nichts gesperrt, und dann ändert sich auch nichts am Dokument.
+        """
+        document = self.project.document
+        released = document.protected.pop(object_id, ())
+        if not released:
+            return 0
+        self._dirty = True
+        self.projectChanged.emit()
+        return len(released)
+
     def set_export_choice(self, export_format: str, scheme: str | None = None) -> None:
         """Was dieses Projekt beim nächsten Export vorschlägt (§29, RM-141).
 
@@ -2213,7 +2273,17 @@ class Session(QObject):
         object_profile = profiles.for_object(self.profile, entry)
         self._split_discarded = False
         self._split_cancel_confirmed = False
-        worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, object_profile, entry.features)
+        # **Die Sperren gehen mit — hier, und nirgends sonst.** Bis zum
+        # 14.09.2026 kannte der Kern ``protect`` und die Ansicht die
+        # Markierung, aber kein Aufrufer reichte das eine an das andere: Eine
+        # geschützte Fläche war ein Bild ohne Wirkung (RM-080).
+        worker = _SplitWorker(
+            as_mesh_data(entry.mesh),
+            object_id,
+            object_profile,
+            entry.features,
+            protect=protected_patches(entry, self.protected_features(object_id)),
+        )
         # Jeder Empfänger bekommt den Absender mit: Was ein überlebender
         # Arbeiter eines früheren Starts noch meldet, zählt nicht mehr.
         worker.done.connect(

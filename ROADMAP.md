@@ -58,7 +58,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-076 — Topologieverlust beim Reduzieren von Eule und Spiderman beheben](#rm-076) | Geometrie, Erkennung und Druckvorbereitung | Eule und Spiderman mit Zielreihe und Topologievergleich reproduzieren |
 | [RM-077 — Reduzierungsziel bei Körpern mit Durchbrüchen erreichen](#rm-077) | Geometrie, Erkennung und Druckvorbereitung | Zielreihen an Körpern mit Durchbrüchen gegen den vorhandenen Rückfall messen |
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
-| [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Geschützte Flächen an die Ebenensuche hängen und im Dokument speichern; schräge Ebenen, Symmetrie, Schaustück |
+| [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Die Sichtflächen-Sperre ist zu Ende gebaut; offen bleiben schräge Ebenen, Symmetrie, globale Schnittfolgen und das Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
 | [RM-087 — Aushöhlen mit wählbarer offener Seite planen](#rm-087) | Geometrie, Erkennung und Druckvorbereitung | Wählbare Öffnungsfläche am Puppenhaus-Fall umsetzen |
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Die Verrundung hat ihre zwei Operationen; offen bleiben `face` und `edge_loop` in der Liste |
@@ -628,13 +628,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-080"></a>
 
-- [~] **RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen.** **Geschützte
-  Sichtflächen sind halb gebaut** (nachgemessen 10.09.2026): Der Kern kennt `protect` samt
-  Auswertung, und der Viewport kann sie markieren und anzeigen. Was fehlt, sind die zwei Enden
-  dazwischen — **kein Aufrufer reicht die geschützten Flächen an die Schnittebenensuche
-  weiter**, und die Markierung ist ausdrücklich sitzungsgebunden: Sie steht in keinem Feld des
-  Dokuments und übersteht kein Speichern. Ein Kunde, der Flächen schützt und die Datei
-  schließt, hat seine Arbeit verloren.
+- [~] **RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen.** **Die
+  Sichtflächen-Sperre (T8) ist seit dem 14.09.2026 zu Ende gebaut.** Bis dahin war sie halb: Der
+  Kern kannte `protect` samt Auswertung, der Viewport konnte markieren und anzeigen — aber kein
+  Aufrufer reichte das eine an das andere, und die Markierung lebte nur in der Ansicht. Ein
+  Kunde, der Flächen schützte und die Datei schloss, hatte seine Arbeit verloren.
+
+  Was jetzt steht, an vier Enden: **Die Geste** ist ein Haken unter den Handlungen im
+  Merkmalfenster, *Vor Trennnähten schützen* (`FeaturePanel.protectionToggled`,
+  `perceive.actions.protection_of` sagt, ob ein Merkmal sich sperren lässt — geschützt wird, was
+  Dreiecke hat). Kein Kontextmenü-Eintrag, und das mit Absicht: Robert hat am 11.09.2026 die
+  Operationen aus dem Rechtsklick genommen („zwei Orte für dieselbe Liste sind einer zu viel");
+  der Archivpunkt, der ihn noch vorsah, ist damit überholt. **Das Dokument** trägt die Sperre als
+  Merkmalkennungen (`Document.protected`, Formatversion 24, `example_v24.p3d`), kein
+  Verlaufsschritt — wie die Druckeinstellungen: Es entsteht keine Geometrie, der Haken ist sein
+  eigener Rückweg; das Bild folgt dem Dokument über `Viewport.show_protected`, die Statuszeile
+  hängt „geschützt" an (Regel 18). **Die Suche** bekommt die Punktwolken in
+  `Session.split_async` über `split.protected_patches` — die eine Stelle, an der gelesen wird.
+  **Und das Ende ohne Ebene** heißt nicht mehr „keine Ebene": `search_plane` zählt, was die
+  Sperre gefressen hat, und `split_to_fit` meldet `split.blocked_by_protection` mit *Sperren
+  aufheben und erneut teilen* als erstem Knopf (`RELEASE_PROTECTION`), *An gezeichneter Linie
+  trennen* daneben — die drei Wege, die der Archivpunkt verlangte. Gemessen in
+  `tests/test_protection_ui.py` (Haken → Dokument → Bild → Statuszeile; speichern und
+  wiederöffnen; die Wolke kommt bei `plan_split` an; der Knopf am Befund hebt auf und teilt
+  erneut) und `tests/test_autosplit.py` (Zähler, Befund, Körper am Befund, Wolken aus den
+  Dreiecken); zwei Mutationen gegengeprüft — Draht zur Suche entfernt, Bildabgleich entfernt —,
+  beide rot.
 
   Unverändert offen: schräge automatische Ebenen (die Suche bleibt achsparallel), Symmetrie,
   globale Schnittfolgen und das Schaustück. Abnahme je Teil: Korpus, Determinismus, Abbruch und
