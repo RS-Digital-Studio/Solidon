@@ -470,17 +470,23 @@ def _place(centre: object) -> str:
 
 
 def _rounded(value: float) -> str:
-    """Eine Null bleibt eine Null.
+    """Eine Null bleibt eine Null, und mehr als die Anzeige sieht auch der Agent nicht.
 
     Die Mittelpunkte kommen aus einer Rechnung, und ein zentrierter Quader
     landet dabei nicht auf 0, sondern auf -1.11022e-16. Für den Steckbrief ist
     das schädlich: der Agent liest ihn als Text und nimmt eine
     Zehn-hoch-minus-sechzehn für einen Wert, der etwas bedeutet — er ist
-    darauf angewiesen, dass dasteht, was gemeint ist. Ein Zehntausendstel
-    Millimeter unterschreitet jede Fertigungstoleranz, die dieses Gerät
-    einhalten kann; darunter ist es Rechenrauschen.
+    darauf angewiesen, dass dasteht, was gemeint ist.
+
+    **Gerundet wird auf die Anzeigegenauigkeit** (``EPS_DISPLAY``, ein
+    Hundertstel), dieselbe wie im Fenster: ``(-47.1762, -8.59804, 4.99227)``
+    sagt dem Modell nichts, was ``(-47.18, -8.6, 4.99)`` nicht sagt — und
+    qwen3 zählt jede Ziffer als eigenes Token. Im Beispiel *Drucker
+    kalibrieren* (111 Merkmale) fallen so 286 von 1 896 Ziffern weg
+    (RM-173, 14.09.2026). Der Steckbrief ist Anzeige (Regel 6); gerechnet
+    wird mit ihm nicht.
     """
-    return f"{0.0 if abs(value) < 1e-4 else value:g}"
+    return f"{round_display(value):g}"
 
 
 def _axis_name(vector: tuple[float, float, float]) -> str:

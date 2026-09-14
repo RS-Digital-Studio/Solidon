@@ -866,6 +866,9 @@ def test_a_zero_in_the_digest_reads_as_zero() -> None:
     assert _place((-1.11022e-16, 4.14329e-17, 10.0)) == ", bei (0, 0, 10)"
     # Was oberhalb des Rauschens liegt, bleibt unangetastet.
     assert _place((0.5, -15.0, 10.0)) == ", bei (0.5, -15, 10)"
+    # Und mehr als die Anzeige sieht auch der Agent nicht (RM-173): qwen3
+    # zählt jede Ziffer als Token, und ein Zehntausendstel sagt ihm nichts.
+    assert _place((-47.1762, -8.59804, 4.99227)) == ", bei (-47.18, -8.6, 4.99)"
 
 
 def test_no_feature_kind_falls_back_to_its_english_key() -> None:
