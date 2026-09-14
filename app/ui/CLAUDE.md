@@ -197,6 +197,14 @@ bevor es jemand wusste:
   damit einen Weg, den das Fenster nicht mehr geht — fünf Tests in
   `test_ui.py` hingen daran (03.09.2026).
 
+**Und oberhalb von 150 000 Dreiecken rechnet sie grob.** `Session._preview_outcome`
+legt dann eine `decimate_mesh`-Operation auf 50 000 Dreiecke vor die
+Entwurfsschritte — in der Dokumentkopie, die die Vorschau ohnehin anlegt, und
+für beide Seiten der Differenz dieselbe (`_coarse_before`). Der Weg meldet
+sich über `_PreviewWorker.coarse` ans Fenster (`MainWindow._preview_coarse`),
+und das Band sagt „Grobe Vorschau". Schranke, Ziel, Messreihen und die zwei
+Wege, die absichtlich genau bleiben, stehen in `.claude/rules/wartezeit.md`.
+
   Einleseplan und Auswertung teilen sich `busy` und `busyChanged`. Erst die
   zugestellten Endsignale beider Arbeiter beenden den Fortschritt; weder die
   leere Startauswertung noch ein Importfehler dürfen den noch laufenden
@@ -395,6 +403,21 @@ Maßlinien zeigen die Stelle des Lochs, und die ist dieselbe, gleich ob man
 gerade den Durchmesser oder die Länge ansieht; an der scharfen Handlung
 aufgehängt verschwände der Knopf, sobald jemand ein Feld von *Merkmal drehen*
 anfasst.
+
+**Unter den Handlungen steht ein Haken, der keine ist: *Vor Trennnähten
+schützen*** (`FeaturePanel.protectionToggled`, RM-080). „Diese Fläche soll
+schön bleiben" — die eine Kundengeste der Trennen-Serie. Der Haken schreibt
+keinen Schritt: `Session.set_protected` trägt die Merkmalkennung in
+`Document.protected` ein, markiert das Projekt als geändert und meldet
+`projectChanged`; `MainWindow._on_project` gibt den Stand über
+`Viewport.show_protected` ins Bild (Tönung und Schraffur, Farbrolle
+`protected`), und `selection_label` hängt „geschützt" an — die zweite Kodierung
+(Regel 18). Ob sich ein Merkmal sperren lässt und was auf dem Haken steht,
+sagt der Kern (`perceive.actions.protection_of`): geschützt wird, was
+Dreiecke hat. Gelesen wird die Sperre genau einmal, in `Session.split_async`,
+als Punktwolken für `plan_split`; bleibt neben ihr keine Ebene, trägt der
+Befund `split.blocked_by_protection` den Knopf *Sperren aufheben und erneut
+teilen* (`_release_protection_after_error`, Körper aus dem Befund).
 
 **Und die Platzierung trägt dabei kein Fenster** (`QuietHost`, 11.09.2026).
 Bis dahin startete sie von selbst und hing an einem Operationsdialog, der
@@ -695,7 +718,7 @@ zum Schnittkörper, mit gemeinsamer Platzierung und gemeinsamem Abbau.
 
 | Datei | Besonderheit |
 |---|---|
-| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen |
+| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe |
 | `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29) |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
@@ -984,6 +1007,34 @@ viel: Dort stand „Wählen Sie genau zwei aus", wo jemand gerade ein Ding
 angeklickt hatte. `_common_part_step` fragt, ob die **ganze** Auswahl aus
 einem Schritt stammt — eine Bohrung des Schlüssellochs und eine fremde
 daneben sind zwei Dinge und kein Baustein.
+
+**Und im Bild gilt es auch** (14.09.2026). Ein Zug am Griff eines
+Bausteinmerkmals — `featureMoved`, `featureTurned`, der Körpergriff über
+`transformDragged` und die Bewegen-Leiste — läuft zuerst durch
+`MainWindow._move_the_part`: Versatz auf `x`/`y`/`z` des Schritts, Drehung
+um den eigenen Anker über die Rundreise `placement_transform` →
+`placement_values_of` (dieselbe wie am Griff der Vorschau eines
+Grundkörpers), an einem benannten `at_feature` nur um dessen Achse. Bis
+dahin wurde daraus ein `move_feature` auf die Tasche des Schlüssellochs,
+und der Schlitz blieb stehen. Damit der Griff auch an einer Verrundung oder
+einem Gewinde hängt, die für sich keine Operation tragen, fragt
+`Viewport.gizmo_feature` das Fenster über `moves_as_a_part` — eine
+schwache Frage, keine gebundene Methode (`wartezeit.md`). Was während des
+Zugs im Bild wandert, ist weiter die Marke des einen Merkmals (RM-174).
+
+**Ein Baustein bleibt gewählt, wenn *Maße ändern* seine Merkmale tauscht.**
+`_change_part_step` merkt den Schritt (`_part_to_keep`), und
+`_reselect_the_part` wählt nach der Auswertung eines seiner Merkmale, wenn
+der Baum das angeklickte nicht mehr fand — sonst stand rechts das leere
+Fenster.
+
+**Und ein Baustein für Bohrungen sitzt in der gewählten Bohrung.**
+`PlacementFlow._begin_on_a_face` fragt vor der Fläche `_hole_to_seat_in`:
+Trägt der Dialog eine Bohrung als `at_feature` und gehört der Baustein in
+Bohrungen (`PartSpec.at_hole`), liefert `placement.seat_of` die Mündung —
+der Weg von *Bohrung ändern* —, der Satz sagt „Sitzt in der Bohrung", Griff
+und Klick gelten wie auf der Fläche. Ein Schraubenloch folgt der Bohrung
+nicht.
 
 **Und was das Merkmalsfenster darüber schon als Feld zeigt, steht hier gar
 nicht.** `_shown_as_fields()` liest `perceive.actions.ACTION_ORDER` — dieselbe

@@ -989,6 +989,13 @@ class AlignParams(BaseParams):
     target: str = param(
         title=_("Ziel"),
         default="",
+        # **Pflicht, trotz Vorgabe.** Ohne Ziel lehnt die Operation unten ab —
+        # bis zum 14.09.2026 stand ihr Wähler trotzdem auf „— keines —", und
+        # das Band antwortete mit dem Formatfehler („obj_2:hole_1"), einer
+        # Zeichenkette, die in keiner Oberfläche vorkommt (Bedienweg-
+        # Durchsicht). Die Vorgabe bleibt der leere Wert, den ein Klick
+        # ersetzt (§21.3); eine Vorgabe macht ein Feld nicht optional.
+        required=True,
         # Ein Merkmal als **Ziel** auf einem fremden Körper: Der Cache-Schlüssel
         # muss dessen Hash kennen, sonst bleibt der ausgerichtete Körper an der
         # alten Lage, wenn das Ziel verschoben wird — der Schlüssel sah nur
@@ -1025,6 +1032,22 @@ def align_to_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(AlignParams, ctx.params)
     source = ctx.inputs[0]
+    if not params.target.strip():
+        # **Noch nichts gewählt ist keine falsche Schreibweise.** Der Satz
+        # darunter erklärt die Schreibweise ``obj_2:hole_1`` — richtig für
+        # die Kommandozeile und für eine von Hand bearbeitete Datei, falsch
+        # für den, der den Dialog gerade geöffnet hat: Gemessen am 14.09.2026
+        # stand er im Band über der Vorschau, sobald das Fenster aufging.
+        # Zwei Lagen, zwei Sätze (Regel 17).
+        raise AppError(
+            _("Zu dieser Handlung gehört ein zweites Merkmal."),
+            detail=_("Wählen Sie das Merkmal, an dem ausgerichtet werden soll."),
+            values={"target": params.target},
+            suggestions=(
+                Action(id="pick_feature", label=_("Wählen Sie das Merkmal im Objektbaum aus.")),
+            ),
+        )
+
     reference = FeatureRef.parse(params.target) if ":" in params.target else None
     if reference is None:
         raise AppError(

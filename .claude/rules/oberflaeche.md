@@ -1144,9 +1144,16 @@ sich" — und das ist die eine Rückmeldung, die nie stimmt.
 Bild konnten am gewählten Körper nie etwas tun; drei davon sagen es seit dem
 14.09.2026 am Menüeintrag (`requires_body`, `operationen.md`): *Offene Fläche
 schließen* an einem geschlossenen, *In Einzelteile zerlegen* an einem Stück,
-*Gitter füllen* ohne Hohlraum. Die übrigen — *Deckel erzeugen* ohne Öffnung,
-*Teilen* auf einer Ebene, die nichts trifft — hängen an einer Zahl oder einer
-Fläche, die erst im Dialog entschieden wird; dort trägt das Band den Satz.
+*Gitter füllen* ohne Hohlraum. *Deckel erzeugen* und *Drehdeckel erzeugen*
+fragen seit der Bedienweg-Durchsicht die **gewählte Fläche**
+(`lid.reason_against`, im Fenster einmal je Merkmal und Auswertung gerechnet,
+unter derselben Dreiecksgrenze wie die Körperfakten): An einer massiven Platte
+standen sie an jeder Fläche bedienbar und konnten nur scheitern. Ebenso *An
+Merkmal ausrichten*, dessen Ziel ein zweiter Körper mit Merkmal ist
+(`_NEEDS_TARGET`; das Ziel ist seither Pflicht, und der Dialog sperrt mit
+demselben Satz, wenn die Liste leer ist). Was bleibt, ist *Teilen* auf einer
+Ebene, die nichts trifft — das hängt an einer Zahl, die erst im Dialog
+entschieden wird; dort trägt das Band den Satz.
 
 ## Und die Tabulatortaste geht denselben Weg wie das Auge
 

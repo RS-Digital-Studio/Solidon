@@ -28,7 +28,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QMenu, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QMenu, QWidget
 
 from app.core import bootstrap
 from app.core.errors import ValidationError
@@ -3066,6 +3066,68 @@ def test_a_required_feature_offers_no_empty_choice(qt_app: QApplication) -> None
     assert "insert_screw_hole" in optional, "ein Baustein ohne Merkmal geht an den Ursprung"
 
 
+def test_an_alignment_target_is_never_left_empty(qt_app: QApplication) -> None:
+    """*An Merkmal ausrichten* öffnete mit dem Ziel auf „— keines —" — und das
+    Band antwortete mit dem Formatfehler des Kerns („obj_2:hole_1"), einer
+    Zeichenkette, die in keiner Oberfläche vorkommt; der Knopf war dabei
+    bedienbar und führte sicher in den Fehler (Bedienweg-Durchsicht
+    14.09.2026). Das Ziel ist Pflicht: Der Wähler beginnt auf dem ersten
+    Merkmal eines anderen Körpers, und ohne ein solches ist der Knopf grau
+    und sagt warum.
+    """
+    spec = REGISTRY.get("align_to_feature")
+    target = next(entry for entry in spec.params.spec() if entry.name == "target")
+    assert target.required and target.targets_feature, "sonst prüft dieser Test nichts"
+
+    dialog = OperationDialog(
+        spec,
+        [],
+        None,
+        features={"hole_1": "Bohrung 1"},
+        target_features={"obj_2:hole_1": "Klotz · Bohrung 1"},
+    )
+    combo = dialog._editors["target"]
+    assert isinstance(combo, QComboBox)
+    assert [combo.itemText(i) for i in range(combo.count())] == ["Klotz · Bohrung 1"]
+    assert dialog.values()["target"] == "obj_2:hole_1", "das erste Ziel steht vorausgewählt"
+    assert dialog._accept_button.isEnabled()
+
+    alone = OperationDialog(spec, [], None, features={"hole_1": "Bohrung 1"}, target_features={})
+    assert not alone._accept_button.isEnabled(), "ohne Ziel kein Übernehmen"
+    wanted = tr("Dafür braucht es ein Merkmal an einem zweiten Körper.")
+    assert alone._accept_button.toolTip() == wanted
+    seen: list[bool] = []
+    alone.accepted.connect(lambda: seen.append(True))
+    alone.accept()
+    assert not seen, "auch die Eingabetaste führt nicht vorbei"
+
+
+def test_the_window_can_block_apply_with_a_reason(qt_app: QApplication) -> None:
+    """Ein Grund aus dem Band sperrt den Knopf, statt drei Klicks später im
+    Prüfbericht zu enden (Absprache mit 3d-druck-66, 14.09.2026): *Aushöhlen*
+    an der offenen Figur sagte „Erst reparieren, dann aushöhlen" — und blieb
+    anklickbar. ``block_apply`` trägt den Satz an Knopf, Statuszeile und
+    Bildschirmleser (Regel 18); ``None`` gibt wieder frei.
+    """
+    spec = REGISTRY.get("hollow_object")
+    dialog = OperationDialog(spec, [], None)
+    button = dialog._accept_button
+    assert button.isEnabled(), "sonst prüft dieser Test nichts"
+
+    dialog.block_apply("Der Körper ist nicht geschlossen — erst reparieren, dann aushöhlen.")
+    assert not button.isEnabled()
+    assert button.toolTip() == "Der Körper ist nicht geschlossen — erst reparieren, dann aushöhlen."
+    assert button.statusTip() == button.toolTip() == button.accessibleDescription()
+    seen: list[bool] = []
+    dialog.accepted.connect(lambda: seen.append(True))
+    dialog.accept()
+    assert not seen, "gesperrt heißt auch für die Eingabetaste gesperrt"
+
+    dialog.block_apply(None)
+    assert button.isEnabled()
+    assert button.toolTip() == ""
+
+
 def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None:
     """Keine Merkmalsart darf im Baum ihre Kennung zeigen.
 
@@ -4141,3 +4203,55 @@ def test_every_bool_row_in_the_register_is_a_row_checkbox(qt_app: QApplication) 
         finally:
             dialog.deleteLater()
     assert not plain, plain
+
+
+def test_aligning_without_a_target_invites_instead_of_teaching_syntax(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """*An Merkmal ausrichten* erklärte beim Öffnen die Schreibweise.
+
+    Gemessen am 14.09.2026 über alle 110 Dialoge: Sobald das Fenster aufging,
+    stand im Band „Keine Vorschau: Ein Ziel besteht aus dem Objekt und dem
+    Merkmal, getrennt durch einen Doppelpunkt — etwa obj_2:hole_1." Der Satz
+    ist richtig für die Kommandozeile und für eine von Hand bearbeitete
+    Projektdatei; für den, der gerade erst wählen soll, ist er eine Lektion
+    statt einer Aufforderung (Regel 17).
+
+    Beide Sätze bleiben — je einer für seine Lage.
+    """
+    from app.core.registry import REGISTRY as REGISTER
+
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(feature for feature in entry.features.values() if feature.kind == "hole")
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole.id)
+
+    window.run_operation(REGISTER.get("align_to_feature"))
+    dialog = window._op_dialog
+    assert dialog is not None, "ohne Dialog prüft dieser Test nichts"
+    try:
+        assert dialog.values().get("target", "") == "", "die Vorgabelage ist ein leeres Ziel"
+        for _ in range(200):
+            qt_app.processEvents()
+            if window._preview_shown:
+                break
+        assert window.viewport.banner.note.text() == tr("Keine Vorschau: {reason}").format(
+            reason=tr("Wählen Sie das Merkmal, an dem ausgerichtet werden soll.")
+        )
+    finally:
+        dialog.reject()
+
+    # Und die krumme Schreibweise behält ihren eigenen Satz — den liest die
+    # Kommandozeile, und dort ist er die Antwort auf die richtige Frage.
+    _scene, _difference, reason = window.session._preview_outcome(
+        [
+            OperationDraft(
+                op="align_to_feature",
+                params={"feature": hole.id, "target": "obj_2"},
+                inputs=(object_id,),
+            )
+        ]
+    )
+    assert "Doppelpunkt" in reason, reason

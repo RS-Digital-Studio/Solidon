@@ -290,6 +290,30 @@ def plane_of(source: SceneObject, name: str, stated: float) -> float:
     return float(centre[2])
 
 
+def reason_against(source: SceneObject, name: str) -> str | None:
+    """Warum an dieser Fläche kein Deckel entsteht — oder ``None``.
+
+    Derselbe Satz, den *Deckel erzeugen* und *Drehdeckel erzeugen* beim
+    Rechnen werfen, nur **vor** dem Klick: Die Auswahlkarte fragt hier, bevor
+    sie die zwei Knöpfe freigibt. Gemessen am 14.09.2026 an einer massiven
+    Platte (Bedienweg-Durchsicht): beide an jeder Fläche bedienbar, und jeder
+    Klick endete in „Der Körper ist auf dieser Höhe massiv" oder „Diese Fläche
+    zeigt nicht nach oben" — während *Offene Fläche schließen* daneben seit
+    RM-168 grau stand. Zwei Fragen in der Reihenfolge der Operation: Zeigt
+    die Fläche nach oben (:func:`plane_of`), und ist der Körper darunter
+    offen (:func:`opening`, ein Schnitt knapp unter dem Rand)? Wer die zweite
+    an einem großen Netz nicht bezahlen will, fragt vorher nach der
+    Dreieckszahl — das Fenster tut es über dieselbe Grenze wie bei den
+    Körperfakten (``labels.BODY_FACTS_LIMIT``).
+    """
+    try:
+        z = plane_of(source, name, 0.0)
+        opening(as_mesh_data(source.mesh), z - BELOW_RIM)
+    except ValidationError as refused:
+        return str(refused.detail) if refused.detail is not None else str(refused.title)
+    return None
+
+
 def build(
     outline: Any,
     cavities: list[Any],

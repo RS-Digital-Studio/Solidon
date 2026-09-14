@@ -55,6 +55,15 @@ Konstanten in ihren Modulen (`mesh_ops.ALREADY_CLOSED`, `prepare_ops.ONE_PIECE`,
 `BODY_FACTS_LIMIT` Dreiecken bleibt der Zustand unbekannt, und unbekannt
 sperrt nie. `test_the_register_says_what_a_body_must_bring` hält die drei fest.
 
+**Und wo der Zustand an der Fläche hängt, fragt das Fenster die Operation
+selbst.** Ein Deckel braucht eine Öffnung nach oben — das ist keine
+Körpertatsache, sondern eine der gewählten Fläche, und die ist bekannt, wenn
+die Karte den Knopf zeigt. `lid.reason_against(source, name)` gibt den Satz
+zurück, den `create_lid` beim Rechnen würfe (`plane_of` und `opening`, ohne
+zu werfen); `MainWindow._lid_reason` fragt ihn für `LID_OPS` einmal je Merkmal
+und Auswertung. Gemessen am 14.09.2026: Beide Deckel standen an jeder Fläche
+einer massiven Platte bedienbar da (Bedienweg-Durchsicht).
+
 **Aber die Frage davor lautet, ob es die Beschränkung überhaupt braucht.**
 `requires_kind="brep"` ist richtig, wo ein Netz die Sache nicht hergibt — eine
 Formschräge auf einer benannten Fläche, ein Schalenkörper, STEP. Es ist
@@ -140,6 +149,17 @@ Vier Stellen lösen es ein, und jede ist nötig:
 Und die Gegenrichtung gehört zur Zusage: Genannt ist eine Stelle, sobald
 **eine** der drei Achsen eine Zahl trägt. Wer eine Achse nennt, beschreibt
 einen Ort und keine Verschiebung.
+
+**Die ungenannten Achsen behalten dabei den gemessenen Wert** (14.09.2026).
+Sie fielen auf null zurück, und damit sagte ein `x=20` aus Chat,
+Kommandozeile oder Agent zweierlei: „setz das Loch auf x = 20" und „setz es
+in y und z auf null". An einer mittig gelegten Platte sprang das Loch damit in
+die Mitte des Teils, während das Feld daneben zusagt, eine leere Achse bleibe,
+wo sie ist. Der Dialog merkte davon nichts — er belegt alle drei Felder mit der
+gemessenen Mitte vor, dort ist keine Achse je ungenannt; der Fehler traf allein
+die Wege, für die `optional` überhaupt gebaut wurde. **Ein Vorgabewert im
+Dialog ist keine Prüfung des Kerns**, und ein Feld, das die Lücke immer füllt,
+verbirgt sie.
 
 ### Sammelparameter (`kind` in `sketch`, `strokes`, `armature`)
 
@@ -706,6 +726,49 @@ Durchgehende Bohrungen erhalten im Änderungsweg eine Schneidtiefe über den
 gesamten Zielkörper. Beim allgemeinen Versetzen und Duplizieren einer
 Mesh-Bohrung entsteht das Werkzeug aus ihren tatsächlichen Wandflächen,
 damit ein fremder Sehnenzug weder schrumpft noch beim Füllen zurückbleibt.
+
+## Menütiefe: gefaltet wird hinten, nicht beim Größten (27.08.2026)
+
+`surfaces.folded_groups` entscheidet, welche Gruppe ein Untermenü bekommt,
+damit ein Menü in die Grenze aus §2.6 passt. Genügt **eine** Gruppe, fällt die
+**hinterste** aus `MENU_GROUPS` — die Leiste ordnet von häufig nach
+vorbereitend, und wer falten muss, faltet hinten. Erst wenn keine allein
+genügt, entscheidet die Größe; sonst käme die Rechnung nicht voran.
+
+**Vorher entschied allein die Größe, und das war am Flächenklick die falsche
+Frage.** Nach dem Falten von „Bausteine" fehlt dort genau **eine** Zeile, und
+die größte der übrigen ist „Ändern" — mit der Bohrung darin, also genau dem
+Eintrag, dessen zweiter Klick den Umbau des Kontextmenüs ausgelöst hat.
+Gemessen am gebauten Fenster stand „Filament auf eine Fläche" nach der Faltung
+im Untermenü von „Vorbereiten", unter einem Wort, unter dem niemand Farbe
+sucht. Entscheidung Robert, 27.08.2026: Die häufige Geste bleibt oben, das
+Seltenere wandert — dafür gibt es `keep`.
+
+**Die Zahlen dazu wandern mit dem Register.** Am 27.08.2026 waren es
+einunddreißig Operationen — 22 Bausteine, 5 Ändern, 2 Erzeugen, 2 Vorbereiten —
+und drei feste Zeilen darüber; „Bausteine" sparte einundzwanzig Zeilen und
+genügte trotzdem nicht. Im Menü *Ändern* trugen die Kategorien bei einer Grenze
+von zwölf 9, 9, 4, 4, 3, 3 und 1 Zeilen, zusammen 33: **vier** mussten falten,
+dann waren es elf, und *Bohrungen*, *Oberfläche* und *Reparatur* blieben direkte
+Zeilen. Dieselben Zahlen standen im Docstring schon einmal als „19 Operationen,
+davon 10 Bausteine" — das stimmte einmal und lag mit jedem neuen Baustein
+weiter daneben. **Wer die Rechnung anfasst, misst sie neu, statt die Tabelle zu
+glauben.**
+
+**Die Rechnung kommt ohne Qt aus, und das ist keine Stilfrage.** Gemessen am
+24.08.2026: Jeder Test, der über die `window`-Fixture ein `MainWindow` baut,
+hebt die Abrissquote der **ganzen** Testdatei — von zwei Abrissen in neun
+Läufen auf zwei in drei. Eine Frage, die eine Funktion über Namen und Zahlen
+beantworten kann, bekommt kein Fenster.
+
+**Und ein Menüweg in einem Text ist ein Messwert, kein Beispiel.** Die
+Werkzeugbeschreibungen des Agenten nannten Gruppe und Titel ohne die
+Kategorie-Ebene, und das traf **72 von 77** Operationen: Der Chat schickte den
+Kunden nach „Ändern → Fase anbringen", während der Eintrag unter „Ändern →
+Formgebung → Fase anbringen" steht. `menu_path` baut die Ebenen seither aus
+denselben Daten wie die Leiste. Wer die Menütiefe ändert, sucht die Wege, die
+als Zeichenketten in Docstrings, Katalogen und Tests stehen — beim letzten Mal
+waren es fünf, vier davon in `tests/test_agent_suite.py`.
 
 ## Szene: Platzierung, Kennungen, Cache, Projektdatei
 

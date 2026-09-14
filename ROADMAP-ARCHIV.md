@@ -27834,6 +27834,29 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     `test_the_explosion_tool_stays_in_the_strip_and_says_it_needs_two_bodies`,
     `test_a_single_tool_greys_with_its_reason_and_closes_when_open`,
     `test_a_bar_never_shows_itself_past_its_switch` (umgebaut).
+  - **Zwei Deckel, die nur scheitern konnten** (B2). An `plate_holes.stl` — einer massiven Platte —
+    standen *Deckel erzeugen* und *Drehdeckel erzeugen* an jeder Fläche bedienbar da; jeder Klick
+    endete in „Der Körper ist auf dieser Höhe massiv" oder „Diese Fläche zeigt nicht nach oben",
+    während *Offene Fläche schließen* daneben seit RM-168 grau stand. Das Konzept hatte die
+    Ausnahme begründet („das Menü kann es vor dem Dialog nicht wissen") — aber die Karte kennt die
+    Fläche, wenn sie den Knopf zeigt. `lid.reason_against` gibt den Satz der Operation zurück, ohne
+    zu werfen; `MainWindow._lid_reason` fragt ihn für `LID_OPS` einmal je Merkmal und Auswertung
+    und über derselben Dreiecksgrenze wie die Körperfakten gar nicht. Gemessen: an der Platte oben
+    „massiv", seitlich „nach oben"; an der Öffnung einer ausgehöhlten Dose frei — und am Boden
+    ihres Hohlraums, der auch nach oben zeigt, wieder „massiv". Nachweis:
+    `test_a_lid_is_offered_only_at_an_opening_that_faces_up`.
+  - **`obj_2:hole_1` im Band** (B3). *An Merkmal ausrichten* öffnete mit dem Ziel auf
+    „— keines —", das Band antwortete mit dem Formatfehler des Kerns, und der Knopf war bedienbar.
+    Das Ziel ist seither Pflicht (`required=True` bei `targets_feature`): Der Wähler beginnt auf
+    dem ersten Merkmal eines anderen Körpers, die Vorschau zeigt die Ausrichtung sofort. Ohne
+    zweiten Körper mit Merkmal steht der Knopf in der Karte grau („Dafür braucht es ein Merkmal an
+    einem zweiten Körper.", `_NEEDS_TARGET`), und der Dialog sperrt über Palette und Kürzel mit
+    demselben Satz (`_target_missing`). Dazu, auf Bitte von 3d-druck-66, `OperationDialog.block_apply`
+    — ein Sperrgrund von außen für das Band: Trägt der Grund einer ausgebliebenen Vorschau eine
+    Handlung, bleibt „Übernehmen" grau mit dem Satz, statt drei Klicks später im Prüfbericht zu
+    enden. Nachweise: `test_an_alignment_target_is_never_left_empty`,
+    `test_aligning_is_grey_until_a_second_body_carries_a_feature`,
+    `test_the_window_can_block_apply_with_a_reason`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 

@@ -1625,6 +1625,8 @@ class OperationDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+        self._blocked_reason: str | None = None
+        """Ein Sperrgrund von außen — siehe :meth:`block_apply`."""
         self._refit = QTimer(self)
         """Zieht die Höhe nach, wenn eine Zeile mit ihrer Bedingung kommt oder
         geht — einen Ereignisumlauf später, siehe ``_resize_to_content``."""
@@ -1658,6 +1660,18 @@ class OperationDialog(QDialog):
             isinstance(editor, EdgeSetField) and not editor.valid
             for editor in self._editors.values()
         )
+        # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
+        # *An Merkmal ausrichten* am einzigen Körper hat keinen zweiten, dessen
+        # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
+        # führte sicher in den Formatfehler des Kerns („obj_2:hole_1"). Das
+        # Fenster sagt es vorher am Knopf (``_NEEDS_TARGET``); hier steht
+        # dieselbe Auskunft für den Weg über Palette und Kürzel.
+        no_target = self._target_missing()
+        # Und was das Fenster von außen sperrt: Ein Grund aus dem Band, der
+        # eine Handlung trägt („Erst reparieren, dann aushöhlen"), sperrt den
+        # Knopf, statt drei Schritte später im Prüfbericht zu enden
+        # (:meth:`block_apply`, gerufen aus ``MainWindow._preview_explained``).
+        blocked = self._blocked_reason
         reason = (
             tr("Datei wird gelesen …")
             if source_pending
@@ -1667,8 +1681,10 @@ class OperationDialog(QDialog):
                 else (tr("Flächen markieren oder den ganzen Körper wählen.") if incomplete else "")
             )
             or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
+            or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
+            or (blocked or "")
         )
-        incomplete = incomplete or no_edge
+        incomplete = incomplete or no_edge or no_target or blocked is not None
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
         button.setStatusTip(reason)
@@ -1686,7 +1702,34 @@ class OperationDialog(QDialog):
             for editor in self._editors.values()
         ):
             return
+        if self._target_missing() or self._blocked_reason is not None:
+            return
         super().accept()
+
+    def block_apply(self, reason: str | None) -> None:
+        """Den Übernehmen-Knopf von außen sperren — mit Grund — oder freigeben.
+
+        Für das Band über dem Bild: Trägt der Grund einer ausgebliebenen
+        Vorschau eine Handlung („Der Körper ist nicht geschlossen — erst
+        reparieren, dann aushöhlen"), bleibt der Knopf grau mit diesem Satz
+        in Kurzhilfe, Statuszeile und zugänglicher Beschreibung (Regel 18),
+        bis das nächste Bild ``None`` bringt. Bis zum 14.09.2026 blieb er
+        anklickbar; wer klickte, bekam einen angehaltenen Schritt im Verlauf
+        und den Knopf drei Klicks später im Prüfbericht (Bedienweg-
+        Durchsicht, Absprache mit 3d-druck-66).
+        """
+        self._blocked_reason = reason
+        self._follow_source_pending()
+
+    def _target_missing(self) -> bool:
+        """Ob ein Pflicht-Ziel (``targets_feature``) keinen Eintrag hat."""
+        for entry in self.spec.params.spec():
+            if not (entry.targets_feature and entry.required):
+                continue
+            editor = self._editors.get(entry.name)
+            if isinstance(editor, QComboBox) and not editor.currentData():
+                return True
+        return False
 
     def _hide_legacy_feature_field(self) -> None:
         """Alte Einzelwerte reisen über denselben sichtbaren Mehrfachwähler weiter."""

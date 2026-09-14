@@ -1,7 +1,10 @@
 # Einfach für Kunden — was die Vorschau verschweigt und was die einfachen Werkzeuge anders machen
 
-> **Stand:** 14.09.2026 — Messung, Recherche, acht Änderungen gebaut;
-> nichts mehr offen. **Anlass:** Robert am 13.09.2026: „bei vielen operationen
+> **Stand:** 14.09.2026 — Messung, Recherche, zehn Änderungen gebaut.
+> Die Nachmessung über alle 110 Operationen (§1.1a) und die grobe
+> Vorschaustufe (§1.1b) kamen am selben Tag dazu; was daraus noch offen ist,
+> gehört ins Register von `ROADMAP.md` und steht hier nur als Befund.
+> **Anlass:** Robert am 13.09.2026: „bei vielen operationen
 > fehlen noch vorschau, bei aushöhlen reagiert die checkbox zum öffnen ab und
 > zu nicht, viele operationen sind auch recht umständlich, die ganze app soll
 > einfach für kunden sein" — und: „recherchiere auch mal wie man es ganz
@@ -10,7 +13,7 @@
 > aktuellen stand aber optimiert", kein Umbau der Bedienzone
 > (`konzept-befehlsband-2026-08.md`). Alles hier ist Optimierung am Bestand.
 > RM-168 bis RM-171 sind am 14.09.2026 zugegangen und stehen mit ihrem
-> Nachweis im Archiv; dieses Dokument führt keine offene Arbeit mehr.
+> Nachweis im Archiv.
 
 ## §1 Gemessen, nicht gefühlt
 
@@ -52,6 +55,71 @@ und Ausrichten an einem Körper, der schon liegt.
 
 **Der Befund:** Drei verschiedene Lagen trugen denselben Satz. Nur bei der
 ersten war er wahr.
+
+### §1.1a Nachgemessen am 14.09.2026 — alle 110, keine ausgelassen
+
+Dieselbe Sonde, neu gebaut (sie lag im Scratchpad einer Sitzung, die es nicht
+mehr gibt), diesmal mit einer passenden Szene und den nötigen Werten für die
+fünfzehn, die am 13.09. ohne Messung blieben: ein Schriftzug mit Text, ein
+Körper aus zwei losen Stücken für *In Einzelteile zerlegen*, eine Platte mit
+Verrundung für *Merkmal ändern*, ein ausgehöhlter Quader für *Gitter füllen*,
+ein exakter Quader für die vier Operationen des zweiten Kerns, ein Ziel
+`obj:merkmal` für *An Merkmal ausrichten*.
+
+**Eine Falle steckte im Messweg selbst**, und sie hätte den ganzen Lauf
+wertlos gemacht: Python legt den **Skriptordner** auf `sys.path`, nicht das
+Arbeitsverzeichnis. Eine Sonde, die im Scratchpad liegt und aus dem Worktree
+gestartet wird, lädt deshalb das `app`-Paket über die editierbare
+Installation — also den Hauptbaum, an dem gerade drei andere Sitzungen
+schreiben. Der erste Lauf meldete prompt einen `AttributeError` auf ein
+Attribut, das es im Worktree nirgends gibt. Seither setzt die Sonde
+`PROBE_ROOT` an den Anfang des Suchpfads.
+
+| Zustand beim Öffnen mit Vorgaben | 13.09. | 14.09. |
+|---|---:|---:|
+| Vorschau im Bild | 62 | **89** |
+| Differenz leer, mit eigenem Satz | 17 | 11 |
+| Kein Bild, mit Grund im Band | 11 | 5 |
+| Kein Dialog (läuft sofort) | 5 | 5 |
+| Nicht gemessen | 15 | **0** |
+
+Die fünf ohne Bild tragen alle einen Satz, und keiner davon ist ein Fehler
+der Anwendung: *STEP laden*, *Zeichnung hochziehen* und *Relief auflegen*
+brauchen eine Quelle, die im Projekt noch nicht liegt; *Deckel erzeugen* und
+*Drehdeckel erzeugen* brauchen eine Öffnung, die nach oben zeigt (§3, so
+entschieden). Die elf mit leerer Differenz sind ehrlich leer: Verschieben um
+null, Skalieren auf eins, Umbenennen, Material, die beiden Prüfoperationen,
+*Flächenbearbeitung beenden*, *Bohrung ändern* auf ihren gemessenen
+Durchmesser.
+
+Zwei Befunde blieben, und beide sind behoben:
+
+| Was | Wo | Nachweis |
+|---|---|---|
+| *An gezeichneter Linie trennen* öffnete auf der Ebene z = 0 — derselbe Fehler wie bei *Teilen* am 13.09., nur in der Schreibweise mit `normal_x/y/z` statt `axis` | `MainWindow._plane_through` | `test_a_drawn_split_line_starts_in_the_middle_of_the_body` |
+| *An Merkmal ausrichten* erklärte beim Öffnen die Schreibweise `obj_2:hole_1`, statt zu bitten, das zweite Merkmal zu wählen | `geom/ops.py::align_to_feature` — zwei Sätze je Lage, der alte bleibt für die Kommandozeile | `test_aligning_without_a_target_invites_instead_of_teaching_syntax` |
+
+**Was bleibt, mit Zahl:** Vier Operationen sagen „am Volumen ändert sich
+nichts", wo sie genauer sein könnten — *Überschneidungen prüfen* und
+*Fügeweg prüfen* ändern nie etwas, ihr Ergebnis ist der Prüfbericht;
+*Dreiecke verringern* unterhalb der schon erreichten Dreieckszahl und
+*Stellung geben* ohne Skelett tun gar nichts. Alle vier bräuchten eine Angabe
+im Register oder einen Befund aus der Operation; beides liegt jenseits der
+Oberfläche und ist offen.
+
+### §1.1b Die Vorschau großer Netze — grob statt langsam
+
+Gemessen am 14.09.2026 über `Session._preview_outcome`, Bohrung Ø 5,
+Entwurfsqualität, warmer Cache: 20 480 Dreiecke 0,16 s, 81 920 0,63 s,
+327 680 2,16 s, 813 600 6,19 s. Die Reihe ist linear, und die Sekunde aus
+§2.8 fällt bei rund 150 000.
+
+Oberhalb davon rechnet die Vorschau auf einer verkleinerten Kopie (50 000
+Dreiecke) — beide Seiten der Differenz durch dieselbe Verkleinerung, sonst
+misst sie den Unterschied der Verkleinerung statt den der Änderung. Das Band
+sagt „Grobe Vorschau", und zwar vor „am Volumen ändert sich nichts". Nachher:
+327 680 Dreiecke 0,52 s, 813 600 Dreiecke 0,41 s je Zahl im Dialog. Die
+Regel mit allen Messreihen steht in `.claude/rules/wartezeit.md`.
 
 ### §1.2 „Ab und zu" ist eine Fläche von 14 mal 14 Bildpunkten
 
@@ -160,9 +228,12 @@ der vierte war eine Entscheidung, und Robert traf sie am selben Tag
 | **RM-169** Vorschau für Farbe und Netz: `Difference.recoloured` und `retriangulated`, der Körper danach liegt über dem davor | `difference.py`, `Viewport._cover_body` | `test_a_recolouring_is_a_preview_without_volume`, `test_a_recoloured_preview_covers_the_body_in_its_new_colours`, `test_a_reshaped_preview_shows_the_new_triangles_as_edges` |
 | **RM-170** Aushöhlen an der generierten Figur: nicht die Kette, die offene Hülle ist der Grund — `NotManifoldError` mit „Reparieren und erneut versuchen" | `hollow.py` | `test_hollowing_an_open_hull_names_the_hull_and_offers_repair` |
 
-*Deckel erzeugen* ohne Öffnung bleibt beim Band: Ob eine Öffnung nach oben
-zeigt, entscheidet sich an der gewählten Fläche und nicht am Körper — das
-Menü kann es vor dem Dialog nicht wissen.
+*Deckel erzeugen* ohne Öffnung fragt seit der Bedienweg-Durchsicht vom
+14.09.2026 die gewählte Fläche (`lid.reason_against`, `MainWindow._lid_reason`):
+Die Karte kennt sie, wenn sie den Knopf zeigt, und der häufigere Grund — „auf
+dieser Höhe massiv" — ist ohnehin einer des Körpers. Der Satz oben („das
+Menü kann es nicht wissen") galt der Menüleiste, und die trägt die zwei
+Deckel nicht mehr.
 
 - **RM-171** — Abhängige Felder vorn: Robert hat entschieden („Ausblenden",
   14.09.2026). Eine Zeile, deren Bedingung nicht gilt, verschwindet und kommt

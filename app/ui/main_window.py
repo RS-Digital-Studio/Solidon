@@ -340,6 +340,7 @@ AUTOSAVE_INTERVAL_MS = 120_000
 _NEEDS_SELECTION = _("Bitte zuerst ein Objekt auswählen.")
 _NEEDS_BODY = _("Dafür braucht es einen Körper in der Szene.")
 _NEEDS_TWO_BODIES = _("Dafür braucht es zwei Körper in der Szene.")
+_NEEDS_TARGET = _("Dafür braucht es ein Merkmal an einem zweiten Körper.")
 
 #: Die Kantenlänge, mit der *Dreiecke angleichen* beginnt: ein Fünfzigstel
 #: der längsten Kante des Hüllquaders. Eine feste Zahl trifft entweder das
@@ -353,6 +354,11 @@ EDGE_SHARE: Final = 50
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
 FLASH_MS = 1200
+
+
+def _wants_a_target(spec: OperationSpec) -> bool:
+    """Ob die Operation ein Pflicht-Ziel auf einem fremden Körper verlangt."""
+    return any(entry.targets_feature and entry.required for entry in spec.params.spec())
 
 
 def _target_feature_names(result: EvaluationResult | None) -> dict[str, str]:
@@ -1887,6 +1893,10 @@ class MainWindow(QMainWindow):
         self._preview_reason = ""
         """Der Satz, mit dem die letzte Vorschau ausblieb — leer, wenn sie kam."""
         self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
+        self._lid_reasons: tuple[int, dict[tuple[ObjectId, str], str | None]] = (-1, {})
+        """Warum an einer gewählten Fläche kein Deckel entsteht — je Merkmal und
+        Auswertung einmal gerechnet, denn die Antwort kostet einen Schnitt
+        (:meth:`_lid_reason`)."""
         """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
         Operationen danach; gerechnet wird je Körper und Auswertung einmal."""
@@ -4307,6 +4317,23 @@ class MainWindow(QMainWindow):
         reason = feature_requirement(spec, self._feature_kinds_of_selection())
         if reason is not None:
             return reason
+        # Und das Ziel auf einem anderen Körper (Bedienweg-Durchsicht
+        # 14.09.2026): *An Merkmal ausrichten* stand an einer Bohrung des
+        # einzigen Körpers bedienbar da, sein Zielfeld war leer, und das Band
+        # antwortete mit dem Formatfehler des Kerns („obj_2:hole_1"). Ein
+        # Ziel gibt es erst, wenn ein zweiter Körper ein Merkmal trägt.
+        if _wants_a_target(spec) and not self._has_a_target_elsewhere():
+            return str(_NEEDS_TARGET)
+        # Und die Fläche für einen Deckel: *Deckel erzeugen* und *Drehdeckel
+        # erzeugen* standen an jeder Fläche eines massiven Körpers bedienbar
+        # da und konnten nur scheitern, während *Offene Fläche schließen*
+        # daneben seit RM-168 grau war. Ob eine Fläche nach oben zeigt und ob
+        # der Körper darunter offen ist, weiß ``lid`` — und die Fläche ist
+        # bekannt, wenn die Karte den Knopf zeigt.
+        if spec.name in LID_OPS:
+            reason = self._lid_reason()
+            if reason is not None:
+                return reason
         # Und zuletzt der Zustand des Körpers (RM-168): *Offene Fläche
         # schließen* an einem geschlossenen, *Zerlegen* an einem Stück, *Gitter
         # füllen* ohne Hohlraum — jede öffnete bis zum 14.09.2026 einen Dialog,
@@ -4356,6 +4383,51 @@ class MainWindow(QMainWindow):
             facts = body_facts(entry)
             known[chosen] = facts
         return facts
+
+    def _has_a_target_elsewhere(self) -> bool:
+        """Ob ein anderer Körper als der gewählte ein Merkmal trägt."""
+        result = self.session.last_result
+        chosen = self._first_chosen()
+        if result is None:
+            return False
+        return any(
+            bool(entry.features)
+            for object_id, entry in result.scene.objects.items()
+            if object_id != chosen
+        )
+
+    def _lid_reason(self) -> str | None:
+        """Warum an der gewählten Fläche kein Deckel entsteht — oder ``None``.
+
+        Derselbe Satz, den die Operation beim Rechnen würfe
+        (``lid.reason_against``), einmal je Merkmal und Auswertung gerechnet
+        wie die Körperfakten: Die zweite Frage kostet einen Schnitt durch das
+        Netz. Ohne gewählte Fläche, an einem Körper über
+        ``BODY_FACTS_LIMIT`` oder an einem exakten Körper bleibt die Antwort
+        offen, und offen sperrt nie — dieselbe Regel wie bei
+        :func:`labels.body_requirement`.
+        """
+        result = self.session.last_result
+        chosen = self._first_chosen()
+        feature = self.object_tree.selected_feature()
+        if result is None or chosen is None or not feature:
+            return None
+        entry = result.scene.objects.get(chosen)
+        if entry is None or feature not in entry.features:
+            return None
+        facts = self._body_facts_of_selection()
+        if facts is None or facts.closed is None:
+            return None
+        generation, known = self._lid_reasons
+        if generation != self.session.result_generation:
+            known = {}
+            self._lid_reasons = (self.session.result_generation, known)
+        key = (chosen, feature)
+        if key not in known:
+            from app.core.geom.lid import reason_against
+
+            known[key] = reason_against(entry, feature)
+        return known[key]
 
     def _halt_reason(self) -> str | None:
         """Warum gerade kein neuer Schritt geht: Die Kette hält an (§15.3).

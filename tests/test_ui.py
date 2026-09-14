@@ -10026,6 +10026,107 @@ def test_splitting_starts_in_the_middle_of_the_body(window: MainWindow) -> None:
         dialog.reject()
 
 
+def test_aligning_is_grey_until_a_second_body_carries_a_feature(window: MainWindow) -> None:
+    """Am einzigen Körper stand *An Merkmal ausrichten* bedienbar da — mit
+    leerem Ziel und einem Band, das den Formatfehler des Kerns zeigte
+    (Bedienweg-Durchsicht 14.09.2026). Ein Ziel gibt es erst, wenn ein zweiter
+    Körper ein Merkmal trägt; bis dahin sagt der Knopf das.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(fid for fid, feature in entry.features.items() if feature.kind == "hole")
+    spec = REGISTRY.get("align_to_feature")
+    wanted = str(tr("Dafür braucht es ein Merkmal an einem zweiten Körper."))
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    kinds = window.object_tree.kinds_of_selection()
+    assert window._reason_locked(spec, kinds, 1, 1) == wanted
+
+    assert window.session.apply(
+        str(REGISTRY.get("duplicate_object").title),
+        [OperationDraft(op="duplicate_object", inputs=(object_id,))],
+    )
+    window.session.wait_for_idle()
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    kinds = window.object_tree.kinds_of_selection()
+    assert window._reason_locked(spec, kinds, 2, 1) is None, "mit einem zweiten Körper geht es"
+
+
+def test_a_lid_is_offered_only_at_an_opening_that_faces_up(window: MainWindow) -> None:
+    """*Deckel erzeugen* und *Drehdeckel erzeugen* standen an jeder Fläche einer
+    massiven Platte bedienbar da und konnten nur scheitern — „auf dieser
+    Höhe massiv" an der Oberseite, „zeigt nicht nach oben" an der Seite —,
+    während *Offene Fläche schließen* daneben seit RM-168 grau war
+    (Bedienweg-Durchsicht 14.09.2026). Die Karte kennt die Fläche, wenn sie
+    den Knopf zeigt; sie fragt ``lid.reason_against`` und trägt denselben
+    Satz. An der Öffnung einer ausgehöhlten Dose bleibt der Knopf frei.
+    """
+    from app.core.scene.placement import faces_up
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    plate, entry = next(iter(result.scene.objects.items()))
+    top = next(
+        fid
+        for fid, feature in entry.features.items()
+        if feature.kind == "face" and faces_up(feature)
+    )
+    side = next(
+        fid
+        for fid, feature in entry.features.items()
+        if feature.kind == "face" and not faces_up(feature)
+    )
+
+    def reason_at(object_id: str, face: str, objects: int, name: str) -> str | None:
+        window.object_tree.select_object(object_id)
+        window.object_tree.select_feature(object_id, face)
+        return window._reason_locked(
+            REGISTRY.get(name), window.object_tree.kinds_of_selection(), objects, 1
+        )
+
+    for name in ("create_lid", "screw_lid"):
+        assert "massiv" in (reason_at(plate, top, 1, name) or ""), name
+        assert "nach oben" in (reason_at(plate, side, 1, name) or ""), name
+
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 30.0})],
+    )
+    window.session.wait_for_idle()
+    box = window.session.project.document.ops[-1].outputs[0]
+    assert window.session.apply(
+        "Aushöhlen",
+        [OperationDraft(op="hollow_object", inputs=(box,), params={"wall": 3.0, "open_top": True})],
+    )
+    window.session.wait_for_idle()
+    hollow = window.session.project.document.ops[-1].outputs[0]
+    result = window.session.last_result
+    assert result is not None
+    # Zwei Flächen zeigen nach oben: der Rand und der Boden des Hohlraums.
+    # Am Rand liegt die Öffnung, unter dem Boden ist die Dose massiv — und
+    # genau das sagt die Karte an beiden.
+    upward = sorted(
+        (
+            (float(feature.params.get("centre", (0.0, 0.0, 0.0))[2]), fid)
+            for fid, feature in result.scene.objects[hollow].features.items()
+            if feature.kind == "face" and faces_up(feature)
+        ),
+        reverse=True,
+    )
+    assert len(upward) == 2, upward
+    rim, floor = upward[0][1], upward[1][1]
+    for name in ("create_lid", "screw_lid"):
+        assert reason_at(hollow, rim, 2, name) is None, f"{name} an der Öffnung bleibt frei"
+        assert "massiv" in (reason_at(hollow, floor, 2, name) or ""), f"{name} am Boden"
+
+
 def test_decimating_and_remeshing_start_from_the_body(window: MainWindow) -> None:
     """Die Vorgabe trifft den Körper, nicht den Ursprung — auch bei Dreiecken.
 
