@@ -93,7 +93,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-106 — Plattformunterschiede der Projektdateien dem richtigen Ursprung zuordnen](#rm-106) | Tests und Entwicklungswerkzeuge | Archiv- und Inhaltshashes nach gleichem Erzeugerlauf vergleichen |
 | [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Besitz und ACL einer tatsächlich nutzereigenen Runner-Datei belegen |
-| [RM-134 — Zusammenführung duplizierter Testhilfen entscheiden](#rm-134) | Tests und Entwicklungswerkzeuge | Umfang der Zusammenführung belegter Testhilfen entscheiden |
+| [RM-134 — Zusammenführung duplizierter Testhilfen entscheiden](#rm-134) | Tests und Entwicklungswerkzeuge | Gemessen am 14.09.: 28 wortgleiche Gruppen, 13 davon über Dateien hinweg — Robert entscheidet, ob die sechs großen zusammenrücken |
 | [RM-137 — Sitzungsende im tatsächlichen Editorbetrieb abnehmen](#rm-137) | Tests und Entwicklungswerkzeuge | Echtes SessionEnd und Freigabe des Sitzungsgebiets nach Neustart beobachten |
 | [RM-165 — Über `mushroom.stl` in der Wurzel entscheiden](#rm-165) | Tests und Entwicklungswerkzeuge | Robert entscheidet, ob die unbenutzte Datei bleibt oder geht |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
@@ -1375,6 +1375,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Freigabe gemeinsame Verträge klären und die betroffenen Hilfen an einem Pflegeort führen. Abnahme:
   gleiche fachliche Testfälle ohne doppelte Pflege; eine vollständige Testdurchsicht bleibt eine
   eigene Umfangsentscheidung.
+
+  **Der aktuelle Messwert** (`tools/twin_scan.py tests --frage 2 --frage 3`, 14.09.2026, 272 Dateien,
+  11 421 Funktionen): **28 wortgleiche Gruppen** ab drei Anweisungen, davon 13 über Dateien hinweg
+  und 15 innerhalb einer Datei; dazu 11 strukturgleiche ab fünf. Groß sind sechs: `window`
+  (`test_header`/`test_overlay`, 9 Anweisungen), `with_a_body` (`test_pose_session`/
+  `test_sculpt_session`, 8), `project` (`test_agent`, `test_agent_suite`, `test_licence_boundary`,
+  `test_parts`, 5), `on_the_bore_wall` (`test_analysis_ui`/`test_selection`, 5), `_placed`
+  (`test_cone_fit_quality`/`test_torus_fit_quality`, 5) und `counted` (fünf Dateien, 3). Der Rest
+  sind Drei- und Vierzeiler, die ein gemeinsamer Ort nicht kürzer machte. Entscheidung: die sechs
+  nach `tests/helpers/` (oder `conftest.py`-Fixtures) — oder nichts, weil jede Datei für sich
+  lesbar bleiben soll.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#doppelte-stellen-und-zwillinge-gemessen-07092026).
 
