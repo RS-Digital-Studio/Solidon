@@ -1194,6 +1194,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Auswahl, die Operationen aussortiert, wäre eine Betriebsart mit anderem Namen, und ob es
   eine geben soll, entscheidet Robert.
 
+  **Warum der Modellstart Minuten kostet — beobachtet am 15.09.2026, 00:53 bis 01:00, alle
+  vier Sekunden `nvidia-smi` und der Arbeitssatz von `llama-server`:** Nach dem Entladen
+  belegt der Desktop 1,6 GB der 16 GB (dwm 945 MB, Claude 200, Explorer 185, Chrome). Die
+  Gewichte (8,6 GB) sind in acht Sekunden auf der Karte; dann kriecht die Belegung von 10,4 auf
+  15,7 GB mit etwa 60 MB/s — zweieinhalb Minuten, ein Kern beschäftigt, Platte und Grafikkarte
+  im Leerlauf. Das ist der KV-Cache (5 120 MiB bei 32 768 Token in f16) und die Rechenpuffer,
+  angelegt am Rand des Speichers: `ollama ps` meldet 14,4 GB für das Modell, frei waren 14,7,
+  und der Windows-Treiber lagert beim Anlegen jeder weiteren Fläche aus und um. Am Nachmittag,
+  mit weniger auf dem Desktop, kostete derselbe Start Sekunden (18,7 s kalt für alles). Die
+  Zahl ist also keine Eigenschaft des Modells, sondern des Abstands zur Kante — und jede
+  Sitzung mit `keep_alive: 0` zahlt sie je Zug neu.
+
+  Zwei Hebel, beide eine Entscheidung: **Warmhalten zwischen den Zügen** (siehe RM-173) — und
+  der **KV-Cache in `q8_0`**: Ollama nimmt das nur als Umgebungsvariable des Dienstes
+  (`OLLAMA_KV_CACHE_TYPE=q8_0` mit `OLLAMA_FLASH_ATTENTION=1`), halbiert damit die 5 GB, und
+  mit 3,2 GB bei 40 960 Token passte sogar das volle Trainingsfenster von qwen3 auf die Karte
+  (8,6 + 3,2 + Puffer ≈ 12,5 GB) — ein Viertel mehr Platz für RM-173. Solidon kann die
+  Variable nicht setzen, aber messen, ob sie gesetzt ist: Die vorhandene Probe
+  (`model_state`, Karte gegen Prozessor) sagt nach einem Ladeversuch mit 40 960, ob das Modell
+  ganz im VRAM liegt. Ein Fenster, das sich nach dieser Probe richtet, statt fest 32 768 zu
+  nehmen, ist der Vorschlag; gebaut wird er auf Roberts Wort.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#ollama-bis-zum-anschlag-31082026).
 
 <a id="rm-144"></a>
