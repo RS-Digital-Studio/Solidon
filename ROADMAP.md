@@ -968,55 +968,55 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Absturz erfahren zu lassen.
 
 <a id="rm-166"></a>
-    
-    - [~] **RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld.** Gefunden am
-      13.09.2026 beim Prüfen der Werkstattfilme: Die exportierte STL nach `resize_hole` (versetzt),
-      `move_feature`, `fillet_edges` und `chamfer_edges` gegen ein **eingelesenes** STL war per Index
-      dicht, nach dem Verschweißen aber nicht mehr — Solidons eigener Import derselben Datei meldete
-      „Das Modell ist nicht geschlossen" (`ingest.not_watertight`, bei `resize_hole` dazu
-      `degenerate_removed`); jeder Slicer verschweißt genauso. Dieselbe Platte in float64 gebaut
-      blieb durch alle vier Operationen sauber; nach einer STL-Runde (float32) nicht mehr.
-    
-      **Der Weld ist behoben (14.09.2026), an zwei Stellen und mit einer dritten, die die zweite
-      nach sich zog.** (1) `boolean._tidied` verschweißt die Kernausgabe mit der Schweißtoleranz der
-      Diagonale, streicht Dreiecke mit doppeltem Index und unreferenzierte Ecken — übernommen nur,
-      wenn das Netz dicht bleibt und das Volumen sich nicht ändert (die Zusicherung von `repair()`).
-      (2) `edges.rounding_tool` gibt abziehenden Keilen `flank_overlap=BOOLEAN_OVERLAP`: Die
-      Schnittkurve bleibt, die Flanken schneiden Luft statt der fast koplanaren Körperfläche. (3) Mit
-      dem Überstand vereinigen sich die zwölf Keilstücke eines Bohrkreises zu einem Werkzeug mit
-      Nadeln an den Stoßstellen — roh dicht, und Stufe 2 der Rückfallkette strich sie und riss das
-      Werkzeug auf: An `plate_countersunk.stl` (nur verschweißt, dünne Knoten) lief die Kette bis in
-      die Voxel, in der Vorschau brach sie ab. `boolean._welded_input` hat seither dieselbe
-      Zusicherung wie der Import: Entnadeln reißt kein dichtes Netz auf.
-    
-      Gemessen nach dem Fix, Korpus `plate_holes.stl` und die gebohrte Filmplatte (100 x 55 x 8,
-      zwei 6-mm-Bohrungen, über eine STL-Runde): alle vier Operationen nach Export und Import
-      geschlossen, Volumen unverändert (Korpus 30982,096 / 31322,350 / 31257,969 / 31217,928 mm³),
-      die Fase ohne die 29 mm² Haut an den Bohrungsrändern. Was der Import an Nadeln mit drei
-      verschiedenen Ecken noch findet, hält er (`ingest.degenerate_kept`) — sie zu streichen risse
-      Löcher, und `manifold.simplify` vernetzt ebene Flächen neu. Nachweis:
-      `tests/test_export.py::test_a_mesh_op_result_on_an_stl_survives_the_weld` (vier Operationen
-      mal zwei Quellen; ohne `_tidied` vier rot, ohne den Überstand die Fase rot) und
-      `tests/test_boolean.py::test_the_welded_stage_keeps_a_needle_that_holds_a_closed_tool_together`
-      (ohne die Zusicherung rot). Docstring von `BOOLEAN_OVERLAP`, `operationen.md` und
-      `geom/CLAUDE.md` sagen seither, dass „robust" nur für exakt koplanare float64-Geometrie gilt.
-    
-      **Offen bleiben zwei Dinge, beide außerhalb dieses Rechners.** Das **Flackern derselben Kette
-      auf dem Linux-Runner** (Tag-Läufe von v0.4.1, 13.09.2026):
-      `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` war dort in einem von vier
-      Läufen rot — die Kugelhaube stimmte (jede Distanz 2,99 bis 3,0), ein einzelner Punkt im
-      Normalenkegel lag bei 6,526. Lokal zwölf von zwölf grün, macOS und Windows in jedem Lauf grün.
-      Ein Geometrietest, der flackert, verletzt Regel 9; die nicht strenge Marke auf Linux hält den
-      Bau nicht auf und verschweigt den Fall nicht. Abnahme: Ursache auf einem Linux messen
-      (Reihenfolge der Hüllendreiecke, Threading des Booleschen Kerns, Restdreieck der Flanke) und
-      den Test dreimal in Folge ohne Marke grün — mit dem Weld-Fix noch einmal von vorn, denn
-      `_tidied` ändert die Dreiecksfolge der Ausgabe. Und das **Beispielarchiv der Werkstattfilme**
-      (`marketing/video/workshop-2026-09/build_examples.py`, nicht im Repository): Die beigelegten
-      STLs stammen aus den Aufnahmen vom 13.09. und tragen den alten Fehler; sie neu zu erzeugen
-      heißt, die Aufnahmen mit dem gefixten Code zu fahren und das ZIP neu zu verpacken — ein
-      Produktionsschritt, der zusammen mit der nächsten Filmrunde läuft.
-    
-    ## Bedienung und Darstellung
+
+- [~] **RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld.** Gefunden am
+  13.09.2026 beim Prüfen der Werkstattfilme: Die exportierte STL nach `resize_hole` (versetzt),
+  `move_feature`, `fillet_edges` und `chamfer_edges` gegen ein **eingelesenes** STL war per Index
+  dicht, nach dem Verschweißen aber nicht mehr — Solidons eigener Import derselben Datei meldete
+  „Das Modell ist nicht geschlossen" (`ingest.not_watertight`, bei `resize_hole` dazu
+  `degenerate_removed`); jeder Slicer verschweißt genauso. Dieselbe Platte in float64 gebaut
+  blieb durch alle vier Operationen sauber; nach einer STL-Runde (float32) nicht mehr.
+
+  **Der Weld ist behoben (14.09.2026), an zwei Stellen und mit einer dritten, die die zweite
+  nach sich zog.** (1) `boolean._tidied` verschweißt die Kernausgabe mit der Schweißtoleranz der
+  Diagonale, streicht Dreiecke mit doppeltem Index und unreferenzierte Ecken — übernommen nur,
+  wenn das Netz dicht bleibt und das Volumen sich nicht ändert (die Zusicherung von `repair()`).
+  (2) `edges.rounding_tool` gibt abziehenden Keilen `flank_overlap=BOOLEAN_OVERLAP`: Die
+  Schnittkurve bleibt, die Flanken schneiden Luft statt der fast koplanaren Körperfläche. (3) Mit
+  dem Überstand vereinigen sich die zwölf Keilstücke eines Bohrkreises zu einem Werkzeug mit
+  Nadeln an den Stoßstellen — roh dicht, und Stufe 2 der Rückfallkette strich sie und riss das
+  Werkzeug auf: An `plate_countersunk.stl` (nur verschweißt, dünne Knoten) lief die Kette bis in
+  die Voxel, in der Vorschau brach sie ab. `boolean._welded_input` hat seither dieselbe
+  Zusicherung wie der Import: Entnadeln reißt kein dichtes Netz auf.
+
+  Gemessen nach dem Fix, Korpus `plate_holes.stl` und die gebohrte Filmplatte (100 x 55 x 8,
+  zwei 6-mm-Bohrungen, über eine STL-Runde): alle vier Operationen nach Export und Import
+  geschlossen, Volumen unverändert (Korpus 30982,096 / 31322,350 / 31257,969 / 31217,928 mm³),
+  die Fase ohne die 29 mm² Haut an den Bohrungsrändern. Was der Import an Nadeln mit drei
+  verschiedenen Ecken noch findet, hält er (`ingest.degenerate_kept`) — sie zu streichen risse
+  Löcher, und `manifold.simplify` vernetzt ebene Flächen neu. Nachweis:
+  `tests/test_export.py::test_a_mesh_op_result_on_an_stl_survives_the_weld` (vier Operationen
+  mal zwei Quellen; ohne `_tidied` vier rot, ohne den Überstand die Fase rot) und
+  `tests/test_boolean.py::test_the_welded_stage_keeps_a_needle_that_holds_a_closed_tool_together`
+  (ohne die Zusicherung rot). Docstring von `BOOLEAN_OVERLAP`, `operationen.md` und
+  `geom/CLAUDE.md` sagen seither, dass „robust" nur für exakt koplanare float64-Geometrie gilt.
+
+  **Offen bleiben zwei Dinge, beide außerhalb dieses Rechners.** Das **Flackern derselben Kette
+  auf dem Linux-Runner** (Tag-Läufe von v0.4.1, 13.09.2026):
+  `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` war dort in einem von vier
+  Läufen rot — die Kugelhaube stimmte (jede Distanz 2,99 bis 3,0), ein einzelner Punkt im
+  Normalenkegel lag bei 6,526. Lokal zwölf von zwölf grün, macOS und Windows in jedem Lauf grün.
+  Ein Geometrietest, der flackert, verletzt Regel 9; die nicht strenge Marke auf Linux hält den
+  Bau nicht auf und verschweigt den Fall nicht. Abnahme: Ursache auf einem Linux messen
+  (Reihenfolge der Hüllendreiecke, Threading des Booleschen Kerns, Restdreieck der Flanke) und
+  den Test dreimal in Folge ohne Marke grün — mit dem Weld-Fix noch einmal von vorn, denn
+  `_tidied` ändert die Dreiecksfolge der Ausgabe. Und das **Beispielarchiv der Werkstattfilme**
+  (`marketing/video/workshop-2026-09/build_examples.py`, nicht im Repository): Die beigelegten
+  STLs stammen aus den Aufnahmen vom 13.09. und tragen den alten Fehler; sie neu zu erzeugen
+  heißt, die Aufnahmen mit dem gefixten Code zu fahren und das ZIP neu zu verpacken — ein
+  Produktionsschritt, der zusammen mit der nächsten Filmrunde läuft.
+
+## Bedienung und Darstellung
 <a id="rm-070"></a>
 
 - [~] **RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen.** HID-Anbindung und
