@@ -782,13 +782,25 @@ def normalise(
     unit: LengthUnit,
     *,
     weld: bool = True,
+    weld_is_reading: bool = False,
     remove_degenerate: bool = True,
     unify_normals: bool = True,
     place_on_bed: bool = False,
     centre: bool = False,
     progress: ProgressFn = _silent,
 ) -> IngestResult:
-    """Führt die sechs Schritte aus und meldet, was sie getan haben."""
+    """Führt die sechs Schritte aus und meldet, was sie getan haben.
+
+    ``weld_is_reading`` sagt, dass das Verschweißen zum **Lesen** des Formats
+    gehört und kein Befund ist: Eine STL speichert jedes Dreieck mit eigenen
+    Ecken, also wird bei jeder STL verschweißt — „Doppelte Punkte wurden
+    verschweißt." stand damit als erste Zeile jedes sauberen Imports im
+    Prüfbericht, ohne Handlung und ohne Folge (sechs von sechs Modellen,
+    Bedienweg-Durchsicht 14.09.2026). Verschweißt wird weiter, und
+    ``info.welded`` sagt es; bei einem Format mit Punktliste (OBJ, PLY, 3MF)
+    bleibt der Befund, denn dort sind doppelte Punkte eine Eigenschaft der
+    Datei.
+    """
     findings: list[Finding] = []
     body: trimesh.Trimesh = mesh.raw.copy()
     # Die Filamentzuweisung je Dreieck reist mit — entlang derselben Masken,
@@ -853,7 +865,7 @@ def normalise(
                     values={"tolerance": format_length(tolerance)},
                 )
             )
-        elif welded:
+        elif welded and not weld_is_reading:
             findings.append(
                 Finding(
                     code="ingest.welded",

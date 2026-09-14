@@ -265,6 +265,22 @@ def test_degenerate_triangles_are_removed_and_reported() -> None:
     assert "ingest.degenerate_removed" in {finding.code for finding in result.findings}
 
 
+def test_reading_an_stl_is_not_a_finding() -> None:
+    """„Doppelte Punkte wurden verschweißt." stand bei jedem sauberen STL-Import
+    als erste Zeile des Prüfberichts — sechs von sechs Modellen, ohne Handlung
+    (Bedienweg-Durchsicht 14.09.2026). Eine STL speichert jedes Dreieck mit
+    eigenen Ecken; sie zu verschweißen ist Lesen, keine Reparatur. Bei einem
+    Format mit Punktliste bleibt der Befund: Dort sind doppelte Punkte eine
+    Eigenschaft der Datei.
+    """
+    read = normalise(mesh_of("cube_clean.stl"), "mm", weld_is_reading=True)
+    assert read.info.welded and read.mesh.vertex_count == 8, "verschweißt wird weiter"
+    assert "ingest.welded" not in {finding.code for finding in read.findings}
+
+    listed = normalise(mesh_of("cube_clean.stl"), "mm")
+    assert "ingest.welded" in {finding.code for finding in listed.findings}
+
+
 def test_an_open_model_is_reported_not_repaired() -> None:
     result = normalise(mesh_of("broken_open.stl"), "mm")
     assert not result.mesh.is_watertight

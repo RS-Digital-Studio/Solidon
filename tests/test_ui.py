@@ -10170,6 +10170,76 @@ def test_decimating_and_remeshing_start_from_the_body(window: MainWindow) -> Non
         dialog.reject()
 
 
+def test_a_model_of_several_parts_offers_to_split_it(window: MainWindow) -> None:
+    """„Das Modell besteht aus mehreren Teilen." bot nichts an, während die
+    Nachbarzeile „sehr kleine Einzelteile" ihren Knopf trug — und *In
+    Einzelteile zerlegen* stand in der Karte unter 24 Handlungen
+    (Bedienweg-Durchsicht 14.09.2026). Ein Angebot, keine Ausführung: Der
+    Klick ist ein Schritt im Verlauf, und Strg+Z nimmt ihn zurück.
+    """
+    from app.ui.panels import actions_for, as_error
+
+    window.open_path(MESHES / "two_components.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    several = next(
+        (f for f in result.scene.report.findings if f.code == "ingest.multiple_components"), None
+    )
+    assert several is not None, "dieses Modell soll den Befund auslösen"
+
+    handlers = window.error_handlers()
+    offered = [action.id for action in actions_for(several) if action.id in handlers]
+    assert offered == ["split_bodies"], f"der Befund bietet {offered} an"
+    before = len(result.scene.objects)
+    handlers["split_bodies"](as_error(several))
+    window.session.wait_for_idle()
+    after = window.session.last_result
+    assert after is not None
+    assert len(after.scene.objects) > before, "der Knopf zerlegt wirklich"
+
+
+def test_an_stl_import_greets_without_a_finding_about_reading_it(window: MainWindow) -> None:
+    """Der Prüfbericht eines sauberen Modells begann mit „Doppelte Punkte wurden
+    verschweißt." — bei jedem STL-Import, ohne Handlung, das Erste, was ein
+    Neuling liest (Bedienweg-Durchsicht 14.09.2026). Das Verschweißen einer
+    STL ist Lesen; gemeldet wird es nicht mehr, getan weiterhin.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "ingest.welded" not in codes, codes
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.vertex_count == 8, "verschweißt wird weiter"
+
+
+def test_the_export_offers_its_folder(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach dem Export stand „Exportiert: dose.3mf" in der Statuszeile und sonst
+    nichts; alle vier Wege enden hier, und kein Knopf führte zum Ordner
+    (Bedienweg-Durchsicht 14.09.2026). *Ordner zeigen* steht neben der
+    Meldung, solange sie steht, und öffnet den Ordner über Qt — dieselbe
+    Stelle auf allen drei Plattformen.
+    """
+    import app.ui.main_window as module
+
+    opened: list[str] = []
+    monkeypatch.setattr(
+        module.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True
+    )
+    window._export_done([tmp_path / "dose.3mf"], [])
+    assert not window.reveal_export.isHidden(), "der Knopf steht neben der Meldung"
+    assert window.reveal_export.toolTip() == str(tmp_path)
+    window.reveal_export.click()
+    assert [Path(entry) for entry in opened] == [tmp_path]
+
+    window.announce("etwas anderes")
+    assert window.reveal_export.isHidden(), "eine neue Ankündigung nimmt ihn mit"
+
+
 # --- die Tour durch ein Beispiel (§37.2) ------------------------------------------
 
 

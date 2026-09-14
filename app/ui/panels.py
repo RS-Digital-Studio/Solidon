@@ -90,6 +90,7 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SPLIT_ALONG_LINE,
+    SPLIT_BODIES,
     SPLIT_MODEL,
     Action,
     AppError,
@@ -415,6 +416,11 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Gemessen am Korpus: zwei von zwanzig Modellen, beide Male eine
     # Warnung ohne Weg.
     "ingest.small_components": (REMOVE_SMALL_PARTS,),
+    # **Ein Befund, dessen Handlung nebenan stand.** „Das Modell besteht aus
+    # mehreren Teilen." trug nichts, während im selben Bericht „sehr kleine
+    # Einzelteile" den Knopf hatte — und *In Einzelteile zerlegen* stand in
+    # der Karte unter 24 Handlungen (Bedienweg-Durchsicht 14.09.2026).
+    "ingest.multiple_components": (SPLIT_BODIES,),
     # **Der Ausweg stand im Text des einen Befunds und das Ziel im anderen.**
     # Ein fein vernetztes Modell meldet sich zweimal: ``ingest.very_large``
     # nennt „Dreiecke verringern" beim Namen, trägt aber keine Objektkennung —

@@ -241,6 +241,9 @@ def load(ctx: OpContext) -> OpResult:
             part.mesh,
             unit,
             weld=params.weld,
+            # Eine STL trägt jedes Dreieck mit eigenen Ecken — sie zu
+            # verschweißen ist Lesen, kein Befund (siehe ``normalise``).
+            weld_is_reading=suffix.lower() == ".stl",
             remove_degenerate=params.remove_degenerate,
             unify_normals=params.unify_normals,
             # Jeden Körper für sich auf Z = 0 abzusetzen nähme einem Gehäuse den

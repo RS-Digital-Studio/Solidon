@@ -101,6 +101,17 @@ Vertices verschweißen, entartete Dreiecke entfernen, Normalen vereinheitlichen,
 Komponenten zählen (Kleinstteile **melden** statt still löschen), Lage
 ermitteln und Aufsetzen anbieten — nicht erzwingen.
 
+**Was zum Lesen eines Formats gehört, ist kein Befund.** Eine STL speichert
+jedes Dreieck mit eigenen Ecken; sie zu verschweißen ist Lesen, keine
+Reparatur — und „Doppelte Punkte wurden verschweißt." stand als erste Zeile
+jedes sauberen STL-Imports im Prüfbericht, ohne Handlung (Bedienweg-Durchsicht
+14.09.2026). `normalise(weld_is_reading=True)` verschweißt weiter und schweigt
+darüber; `import_model` setzt es an der Endung. Bei OBJ, PLY und 3MF bleibt
+der Befund: Dort sind doppelte Punkte eine Eigenschaft der Datei. Und „Das
+Modell besteht aus mehreren Teilen." trägt seither die Handlung, die es
+nahelegt (`SPLIT_BODIES`, `panels.FINDING_ACTIONS`) — ein Angebot, keine
+Ausführung.
+
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar
 und änderbar bleiben.
 

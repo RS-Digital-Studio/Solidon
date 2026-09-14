@@ -165,6 +165,14 @@ OPEN_IN_BROWSER = Action("open_in_browser", _("Seite im Browser öffnen"))
 #: ist schlimmer als keiner, und ein Klickweg-Test hätte es nicht
 #: gefangen: Die Operation läuft ja.
 REMOVE_SMALL_PARTS = Action("remove_small_parts", _("Kleine Teile entfernen"), primary=True)
+#: Ein Modell aus mehreren Teilen in seine Teile zerlegen — derselbe Weg, den
+#: *In Einzelteile zerlegen* in der Karte geht, nur am Befund, der es sagt.
+#: „Das Modell besteht aus mehreren Teilen." bot bis zum 14.09.2026 nichts
+#: an, während die Nachbarzeile „sehr kleine Einzelteile" ihren Knopf trug
+#: (Bedienweg-Durchsicht). Ein Angebot, keine Ausführung: Ein Schild mit
+#: losen Buchstaben soll zusammenbleiben, und Regel 19 deckt den Klick —
+#: Strg+Z nimmt ihn zurück.
+SPLIT_BODIES = Action("split_bodies", _("In Einzelteile zerlegen"))
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
 #: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der

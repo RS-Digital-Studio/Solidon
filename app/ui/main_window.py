@@ -2748,6 +2748,19 @@ class MainWindow(QMainWindow):
         self.spacemouse_help.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.spacemouse.deviceOpened.connect(self._spacemouse_opened)
         bar.addPermanentWidget(self.spacemouse_help)
+        # **Nach dem Export weiß der Kunde, wo seine Datei liegt.** Die
+        # Statuszeile sagte „Exportiert: dose.3mf" und sonst nichts — alle
+        # vier Wege enden hier, und kein Knopf führte zum Ordner
+        # (Bedienweg-Durchsicht 14.09.2026). Sichtbar nur, solange die
+        # Ankündigung steht; die nächste nimmt ihn mit (:meth:`announce`).
+        self.reveal_export = QToolButton(self)
+        self.reveal_export.setAutoRaise(True)
+        self.reveal_export.setText(tr("Ordner zeigen"))
+        self.reveal_export.setAccessibleName(tr("Ordner zeigen"))
+        self.reveal_export.setVisible(False)
+        self.reveal_export.clicked.connect(self._reveal_export_folder)
+        self._export_folder: Path | None = None
+        bar.addPermanentWidget(self.reveal_export)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -6453,6 +6466,21 @@ class MainWindow(QMainWindow):
             if len(written) == 1
             else f"{tr('Exportiert')}: {len(written)} {tr('Dateien')} → {written[0].parent}"
         )
+        self._export_folder = written[0].parent
+        self.reveal_export.setToolTip(str(self._export_folder))
+        self.reveal_export.setStatusTip(str(self._export_folder))
+        self.reveal_export.setVisible(True)
+
+    def _reveal_export_folder(self) -> None:
+        """Den Ordner der zuletzt exportierten Datei im Dateiverwalter öffnen.
+
+        Über ``QDesktopServices`` und nicht über ``explorer``, ``open`` oder
+        ``xdg-open``: Qt kennt die Plattform und im Flatpak das Portal, und ein
+        Ordner ist auf allen dreien dasselbe Ziel (`kern.md`: „Was auf einer
+        Plattform gilt, ist keine Zusage").
+        """
+        if self._export_folder is not None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._export_folder)))
 
     def _export_failed(self, error: AppError) -> None:
         """Der Fehlerdialog gehört in den Hauptthread, nicht in den Arbeiter.
@@ -14217,6 +14245,10 @@ class MainWindow(QMainWindow):
         sich nur darüber und gibt sie danach wieder frei.
         """
         self._announcement = text
+        # Eine neue Ankündigung räumt den Ordner-Knopf des Exports ab; der
+        # Export stellt ihn nach seiner eigenen wieder hin.
+        if hasattr(self, "reveal_export"):
+            self.reveal_export.setVisible(False)
         if self._active_progress_owner() is None:
             self.status_message.setText(text)
         else:
@@ -14541,6 +14573,7 @@ class MainWindow(QMainWindow):
             "repair_and_retry": self._repair_after_error,
             "release_protection": self._release_protection_after_error,
             "remove_small_parts": self._remove_small_parts,
+            "split_bodies": self._split_into_bodies_after_error,
             "split_model": self._split_after_error,
             "split_and_retry": self._split_and_retry_after_error,
             "recount_and_retry": self._recount_after_error,
@@ -14848,6 +14881,41 @@ class MainWindow(QMainWindow):
                     op="repair",
                     inputs=(object_id,),
                     params={"small_components": True},
+                )
+            ],
+        )
+
+    def _split_into_bodies_after_error(self, error: AppError) -> None:
+        """Ein Modell aus mehreren Teilen zerlegen — der Knopf am Befund, der es sagt.
+
+        Dieselbe Operation wie *In Einzelteile zerlegen* in der Karte, nur dort,
+        wo der Kunde gerade liest, dass es mehrere Teile sind (Bedienweg-
+        Durchsicht 14.09.2026). Kein Bestätigungsdialog (Regel 19): Die
+        Handlung ist ein Schritt im Verlauf, und Strg+Z nimmt sie zurück.
+        """
+        object_id = self._object_of(error)
+        # Die Stückzahl kommt aus dem Befund (``values["components"]``): Die
+        # Operation plant ihre Ausgänge daraus (``produces_from="count"``) —
+        # ohne sie käme ein einziger zurück, und der Knopf täte nichts.
+        try:
+            count = int(str(error.values.get("components", "")))
+        except ValueError:
+            return
+        if object_id is None or count < 2:
+            return
+        # **Mit Splittern**, denn der Befund zählt sie mit: ``_count_components``
+        # nennt jede Zusammenhangskomponente, ``_loose_parts`` ließe ohne
+        # ``keep_tiny`` weg, was unter einem Prozent des größten Teils liegt —
+        # an ``two_components.stl`` sagte der Bericht „mehrere Teile" und die
+        # Zerlegung „ein Stück". Wer hier klickt, bekommt die Teile, die der
+        # Bericht genannt hat; die Splitter nimmt *Kleine Teile entfernen*.
+        self.session.apply(
+            REGISTRY.get("split_bodies").title,
+            [
+                OperationDraft(
+                    op="split_bodies",
+                    inputs=(object_id,),
+                    params={"count": count, "keep_tiny": True},
                 )
             ],
         )

@@ -33,6 +33,14 @@ Blockade zu werden, die §29 ausdrücklich nicht will:
   Körpernamen und dem Klick, der hinführt; der Dialog zeigt die ersten Sätze
   und verweist für den Rest dorthin.
 
+**Und danach weiß der Kunde, wo die Datei liegt.** „Exportiert: dose.3mf" in
+der Statuszeile war alles — alle vier Wege enden hier, und kein Knopf führte
+zum Ordner (Bedienweg-Durchsicht 14.09.2026). *Ordner zeigen* steht daneben,
+solange die Ankündigung steht (`announce` nimmt ihn mit der nächsten mit), und
+öffnet den Ordner über `QDesktopServices` — Qt kennt die Plattform und im
+Flatpak das Portal; ein `explorer /select` wäre eine Zusage für eine von
+dreien.
+
 **Und dieselbe Regel andersherum: Wer nur hinsieht, wird nicht gefragt**
 (RM-130). Eine STL öffnen, drehen, schließen — dabei entsteht nichts, was es
 nicht schon gäbe. Bis zum 12.09.2026 kam trotzdem „Ungesicherte Änderungen",
