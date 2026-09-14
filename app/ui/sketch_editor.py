@@ -2040,7 +2040,7 @@ class SketchCanvas(QWidget):
             return str(
                 tr(
                     "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter "
-                    '„Bedingungen" lösen, um frei zu ziehen.'
+                    '„Bedingungen“ lösen, um frei zu ziehen.'
                 )
             )
         return str(

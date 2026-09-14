@@ -2713,7 +2713,7 @@
   "Herstellerprofil, aus dem der Slicer die Druckwerte dieser Spule übernimmt.": "Profil du fabricant dont le slicer reprend les valeurs d'impression de cette bobine.",
   "Herunterladen und installieren": "Télécharger et installer",
   "Hier fehlen zwei unabhängige Bezugskanten. Wählen Sie eine ebene Fläche oder setzen Sie den Punkt direkt.": "Deux arêtes de référence indépendantes manquent ici. Choisir une surface plane ou placer le point directement.",
-  "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter „Bedingungen\" lösen, um frei zu ziehen.": "Une contrainte sur un point voisin retient ici — la retirer dans l'onglet « Contraintes » pour déplacer librement.",
+  "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter „Bedingungen“ lösen, um frei zu ziehen.": "Une contrainte sur un point voisin retient ici — la retirer dans l'onglet « Contraintes » pour déplacer librement.",
   "Hier hält {names} — Rechtsklick auf den Punkt löst die Bedingung, dann folgt er frei.": "{names} retient ici — un clic droit sur le point retire la contrainte, puis il suit librement.",
   "Hier ist nichts importiert: der Halter besteht aus drei benannten Maßen und Bausteinen aus der Bibliothek.": "Ici, rien n'est importé : le support se compose de trois cotes nommées et de blocs de la bibliothèque.",
   "Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.": "Impossible de mesurer l'épaisseur de paroi ici — cliquez sur une paroi.",

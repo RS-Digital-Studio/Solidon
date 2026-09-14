@@ -2713,7 +2713,7 @@
   "Herstellerprofil, aus dem der Slicer die Druckwerte dieser Spule übernimmt.": "Manufacturer profile from which the slicer takes this spool's print values.",
   "Herunterladen und installieren": "Download and install",
   "Hier fehlen zwei unabhängige Bezugskanten. Wählen Sie eine ebene Fläche oder setzen Sie den Punkt direkt.": "Two independent reference edges are missing here. Choose a flat surface or place the point directly.",
-  "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter „Bedingungen\" lösen, um frei zu ziehen.": "A constraint on a neighbouring point holds here — release it in the \"Constraints\" tab to drag freely.",
+  "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter „Bedingungen“ lösen, um frei zu ziehen.": "A constraint on a neighbouring point holds here — release it in the “Constraints” tab to drag freely.",
   "Hier hält {names} — Rechtsklick auf den Punkt löst die Bedingung, dann folgt er frei.": "{names} holds here — right-click the point to release the constraint, then it follows freely.",
   "Hier ist nichts importiert: der Halter besteht aus drei benannten Maßen und Bausteinen aus der Bibliothek.": "Nothing here is imported: the bracket consists of three named dimensions and parts from the library.",
   "Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.": "No wall thickness could be measured here — click on a wall.",

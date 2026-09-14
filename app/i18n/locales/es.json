@@ -2713,7 +2713,7 @@
   "Herstellerprofil, aus dem der Slicer die Druckwerte dieser Spule übernimmt.": "Perfil del fabricante del que el slicer toma los valores de impresión de esta bobina.",
   "Herunterladen und installieren": "Descargar e instalar",
   "Hier fehlen zwei unabhängige Bezugskanten. Wählen Sie eine ebene Fläche oder setzen Sie den Punkt direkt.": "Aquí faltan dos aristas de referencia independientes. Elegir una superficie plana o colocar el punto directamente.",
-  "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter „Bedingungen\" lösen, um frei zu ziehen.": "Aquí sujeta una restricción de un punto vecino: suéltela en la pestaña «Restricciones» para arrastrar libremente.",
+  "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter „Bedingungen“ lösen, um frei zu ziehen.": "Aquí sujeta una restricción de un punto vecino: suéltela en la pestaña «Restricciones» para arrastrar libremente.",
   "Hier hält {names} — Rechtsklick auf den Punkt löst die Bedingung, dann folgt er frei.": "Aquí sujeta {names}: un clic derecho en el punto suelta la restricción y entonces sigue libremente.",
   "Hier ist nichts importiert: der Halter besteht aus drei benannten Maßen und Bausteinen aus der Bibliothek.": "Aquí no hay nada importado: el soporte se compone de tres cotas con nombre y de bloques de la biblioteca.",
   "Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.": "Aquí no se pudo medir el espesor de pared — haga clic en una pared.",
