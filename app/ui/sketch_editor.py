@@ -101,6 +101,11 @@ SNAP_PX = 8.0
 #: Trefferabstand für Linien und Ränder, in Pixeln.
 PICK_PX = 5.0
 
+#: Wie weit ein Doppelklick neben der Mitte einer Maßkarte liegen darf, in
+#: Bildpunkten. Eine Karte ist rund vierzig Bildpunkte breit; gemessen wird
+#: gegen ihre Mitte, also die halbe Breite und etwas Luft.
+MEASURE_PICK_PX = 24.0
+
 #: Halbe Armlänge des Fangkreuzes am Zeiger, in Pixeln. Kleiner als der
 #: Fangradius: es zeigt einen Ort, es greift nicht.
 SNAP_MARK_PX = 5.0
@@ -140,6 +145,20 @@ EMPTY = Sketch(plane="plane:xy", elements=())
 #: ein Klick landete vorher auf -29,75 mm. Wer feiner braucht, stellt die
 #: Weite um; wer gar nicht fangen will, nimmt den Haken weg.
 DEFAULT_SNAP_MM = 1.0
+
+#: Womit Verrunden und Fase anfangen, in Millimetern — bevor jemand eine
+#: Zahl getippt hat.
+#:
+#: Zwei Millimeter Rundung und ein Millimeter Fase: das Maß, mit dem man an
+#: einem Druckteil eine Kante bricht, damit sie sich nicht in die Hand
+#: drückt. Groß genug, um im Bild zu sehen, was entstanden ist; klein genug,
+#: um an fast jeder gezeichneten Ecke Platz zu haben. Wer einmal tippt, hat
+#: danach seine eigene Vorgabe (``SketchCanvas.corner_values``).
+DEFAULT_FILLET_MM = 2.0
+DEFAULT_CHAMFER_MM = 1.0
+
+#: Die Werkzeuge, die an einer Ecke ansetzen statt an einem Rasterpunkt.
+CORNER_TOOLS: tuple[str, ...] = ("fillet", "chamfer")
 
 #: Die feinste Weite, die sich eintippen lässt.
 #:
@@ -490,6 +509,60 @@ def _decimals_for(step: float) -> int:
     return 1 if step >= 0.1 else 2
 
 
+#: Wie schräg ein Zeiger noch stehen darf, damit ein **getipptes** Maß die
+#: Waagerechte oder Senkrechte meint, in Grad.
+#:
+#: Beim Klicken gibt es diese Frage nicht: Der Rasterfang legt beide Enden
+#: auf eine Zeile, oder er tut es nicht. Beim Tippen kommt die Richtung aus
+#: der rohen Zeigerlage, und eine Hand hält keine 0,0 Grad — gemessen stand
+#: eine „waagerechte" Linie von 30 mm danach bei 29,98 zu 1,1. Fünf Grad
+#: sind der Bereich, in dem niemand eine Schräge meint; wer eine will,
+#: zeigt deutlicher.
+AXIS_SNAP_DEGREES = 5.0
+
+
+def _axis_constraint(
+    begin: int, first: tuple[float, float], second: tuple[float, float]
+) -> SketchConstraint | None:
+    """Waagerecht oder senkrecht, wenn eine Linie **genau** so liegt.
+
+    Genau, und nicht ungefähr: Gefangen auf das Raster ist eine Linie
+    entweder auf einer Zeile oder nicht, und wer ohne Fang einen Millimeter
+    Steigung auf vierzig zeichnet, meint ihn. Eine Linie ohne Länge bekommt
+    nichts — an ihr ist keine Richtung.
+    """
+    dx, dy = second[0] - first[0], second[1] - first[1]
+    if abs(dy) <= EPS_DISPLAY < abs(dx):
+        return SketchConstraint("horizontal", (begin, begin + 1))
+    if abs(dx) <= EPS_DISPLAY < abs(dy):
+        return SketchConstraint("vertical", (begin, begin + 1))
+    return None
+
+
+def _snapped_direction(dx: float, dy: float) -> tuple[float, float]:
+    """Die Zeigerrichtung, auf die Achse gezogen, wenn sie nah genug liegt.
+
+    Für das getippte Maß (:meth:`SketchCanvas.place_measured`): Die Länge
+    kommt aus dem Feld, die Richtung aus der Hand, und die Hand zittert.
+    Innerhalb von :data:`AXIS_SNAP_DEGREES` wird daraus die reine Achse —
+    und :func:`_axis_constraint` findet die Linie danach genau liegend vor.
+    """
+    span = math.hypot(dx, dy)
+    if span <= EPS_DISPLAY:
+        return (1.0, 0.0)
+    angle = math.degrees(math.atan2(dy, dx))
+    for axis_angle, direction in (
+        (0.0, (1.0, 0.0)),
+        (90.0, (0.0, 1.0)),
+        (180.0, (-1.0, 0.0)),
+        (-180.0, (-1.0, 0.0)),
+        (-90.0, (0.0, -1.0)),
+    ):
+        if abs(angle - axis_angle) <= AXIS_SNAP_DEGREES:
+            return direction
+    return (dx / span, dy / span)
+
+
 def _located(sketch: Sketch, flat: int) -> tuple[int, int]:
     """Elementindex und lokaler Punktindex zu einem flachen Index."""
     offsets = edit.offsets_of(sketch)
@@ -534,6 +607,13 @@ class SketchCanvas(QWidget):
     measuringChanged = Signal(float)
     """Das Maß des angefangenen Elements, oder 0 — das Feld in der Leiste
     folgt ihm, solange gezeichnet wird (E19)."""
+
+    measureEditRequested = Signal(int)
+    """Ein Doppelklick auf eine Maßkarte — der Index der Bedingung.
+
+    Der Dialog dafür gehört dem Panel (:meth:`SketchPanel.change_constraint_value`),
+    denn er fragt nach einem Ausdruck mit Projektparametern; die Fläche kennt
+    nur die Karte, die getroffen wurde."""
 
     pointerChanged = Signal(float, float)
     """Wohin ein Klick gerade fiele, in Millimetern.
@@ -744,6 +824,15 @@ class SketchCanvas(QWidget):
         self._snap_mark: tuple[float, float] | None = None
         """Der Rasterpunkt unter dem Zeiger, solange ein Werkzeug gewählt
         ist — gemerkt, damit nicht jede Mausbewegung neu zeichnet."""
+        self._corner_hover: int | None = None
+        """Die Ecke unter dem Zeiger, solange Verrunden oder Fase läuft — der
+        flache Index eines Punkts, an dem zwei Linien zusammentreffen."""
+        self.corner_values: dict[str, float] = {
+            "fillet": DEFAULT_FILLET_MM,
+            "chamfer": DEFAULT_CHAMFER_MM,
+        }
+        """Radius und Fasenmaß, wie zuletzt getippt — die Vorgabe für die
+        nächste Ecke. Fusion merkt sich den Radius genauso."""
 
     def set_bed(self, size: tuple[float, float] | None) -> None:
         """Die Grundfläche des Bauraums, gegen die gezeichnet wird.
@@ -808,6 +897,12 @@ class SketchCanvas(QWidget):
         während der Klick den Punkt bei 20,25 nahm — derselbe Fehler, nur
         andersherum.
         """
+        if self.tool in CORNER_TOOLS:
+            # Verrunden und Fase landen auf einer Ecke oder nirgends — ein
+            # Rasterpunkt daneben wäre ein Ziel, das der Klick nicht nimmt.
+            if self._corner_hover is not None:
+                return self.points()[self._corner_hover]
+            return self._pointer
         if self._dragging is None:
             hit, target = self._placement_target()
             if hit is not None or self.tool != "select":
@@ -841,7 +936,15 @@ class SketchCanvas(QWidget):
         Vorschau als dieselben Skizzenelemente nach außen gelangen, aus denen
         auch die feste Zeichnung entsteht. Sie bleibt eine Vorschau und ändert
         weder Dokument noch Rückgängig-Verlauf (Regel 2).
+
+        Verrunden und Fase zeigen ihre Vorschau an der **Ecke unter dem
+        Zeiger**, ohne ersten Klick: der Bogen oder die Schräge, wie sie beim
+        Klick entstünde. Passt das Maß nicht an die Ecke, gibt es keine —
+        und die Zeile sagt, warum (:meth:`drawing_hint`).
         """
+        if self.tool in CORNER_TOOLS:
+            broken = self._broken_corner()
+            return () if broken is None else (broken.elements[-1],)
         if not self._pending_world:
             return ()
         target = self._placement_target()[1]
@@ -879,11 +982,19 @@ class SketchCanvas(QWidget):
         Abstand neben ihrer Strecke. So bleibt sie bei jedem Zoom gleich gut
         lesbar und verdeckt die Kante nicht, deren Wert sie erklärt.
         """
+        return tuple((place, label) for _index, place, label in self._measure_cards())
+
+    def _measure_cards(self) -> tuple[tuple[int, tuple[float, float], str], ...]:
+        """Jede Maßkarte mit dem Index ihrer Bedingung — die eine Quelle für
+        die Anzeige und für den Doppelklick darauf."""
         points = self.points()
-        annotations: list[tuple[tuple[float, float], str]] = []
+        cards: list[tuple[int, tuple[float, float], str]] = []
         gap = MEASURE_GAP / max(self._snap_scale(), EPS_DISPLAY)
-        for entry in self.sketch.constraints:
-            if entry.kind not in ("distance", "reference", "diameter") or len(entry.targets) != 2:
+        for index, entry in enumerate(self.sketch.constraints):
+            if (
+                entry.kind not in ("distance", "reference", "diameter", "radius")
+                or len(entry.targets) != 2
+            ):
                 continue
             first, second = entry.targets
             if min(first, second) < 0 or max(first, second) >= len(points):
@@ -892,15 +1003,21 @@ class SketchCanvas(QWidget):
             bx, by = points[second]
             dx, dy = bx - ax, by - ay
             span = math.hypot(dx, dy)
-            if entry.kind == "diameter":
+            if entry.kind in ("diameter", "radius"):
                 # Ein bemaßter Kreis trug bis zum 02.09.2026 keine Karte — sein
                 # Maß stand nur in der Bedingungsliste. Die Karte sitzt außen
-                # am Randpunkt und sagt Ø oder R, je nach Umschalter.
+                # am Randpunkt und sagt Ø oder R, je nach Umschalter. Der
+                # Radius einer Rundung steht als R daneben, so wie er
+                # gespeichert ist.
                 outward = (dx / span, dy / span) if span > EPS_DISPLAY else (1.0, 0.0)
                 place = (bx + outward[0] * gap, by + outward[1] * gap)
-                label = circle_label(entry.value)
+                label = (
+                    circle_label(entry.value)
+                    if entry.kind == "diameter"
+                    else f"R {readable_measure(entry.value)}"
+                )
                 if label:
-                    annotations.append((place, label))
+                    cards.append((index, place, label))
                 continue
             normal = (-dy / span, dx / span) if span > EPS_DISPLAY else (0.0, 1.0)
             place = (
@@ -909,8 +1026,26 @@ class SketchCanvas(QWidget):
             )
             label = measure_label(entry, points)
             if label:
-                annotations.append((place, label))
-        return tuple(annotations)
+                cards.append((index, place, label))
+        return tuple(cards)
+
+    def measure_at(self, point: tuple[float, float]) -> int | None:
+        """Die Bedingung, deren Maßkarte an dieser Stelle der Ebene steht.
+
+        Gemessen in Bildpunkten (:data:`MEASURE_PICK_PX`) gegen die Stelle,
+        an der die Karte gezeichnet wird — dieselbe Rechnung wie für die
+        Anzeige, sonst träfe der Doppelklick neben dem, was man sieht.
+        ``None``, wenn dort keine Karte ist oder das Maß keinen Wert trägt.
+        """
+        reach = MEASURE_PICK_PX / self._snap_scale()
+        best: tuple[float, int] | None = None
+        for index, place, _label in self._measure_cards():
+            if not self.sketch.constraints[index].value:
+                continue
+            distance = math.hypot(place[0] - point[0], place[1] - point[1])
+            if distance <= reach and (best is None or distance < best[0]):
+                best = (distance, index)
+        return best[1] if best is not None else None
 
     def axis_names(self) -> tuple[str, str]:
         """Wie die waagerechte und die senkrechte Achse hier heißen (§30.1).
@@ -1201,7 +1336,18 @@ class SketchCanvas(QWidget):
         self.tool = tool
         self._pending.clear()
         self._pending_world.clear()
+        self._corner_hover = None
         self._reset_measure_entry()
+        # Das Maßfeld heißt, was es an diesem Werkzeug misst — für den
+        # Bildschirmleser, der das Feld sonst nur als „Maß" kennt.
+        if tool == "fillet":
+            self.measure_field.setAccessibleName(tr("Radius"))
+        elif tool == "chamfer":
+            self.measure_field.setAccessibleName(tr("Fasenmaß"))
+        elif tool == "circle":
+            self._name_circle_button()
+        else:
+            self.measure_field.setAccessibleName(tr("Maß"))
         # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
         # ob ein Zeichenwerkzeug lief oder nicht — und ein Werkzeug, dessen
         # Zustand man nur am gedrückten Knopf sieht, ist bei achtunddreißig
@@ -1211,6 +1357,45 @@ class SketchCanvas(QWidget):
         # nach dem ersten Klick.
         self.statusChanged.emit(self.status_text())
         self.update()
+
+    def _broken_corner(self) -> Sketch | None:
+        """Die Skizze, wie sie nach dem Klick an der Ecke unter dem Zeiger
+        aussähe — oder ``None``, wenn dort keine Ecke ist oder das Maß nicht
+        passt. Die Vorschau und der Klick lesen dieselbe Rechnung."""
+        if self.tool not in CORNER_TOOLS or self._corner_hover is None:
+            return None
+        try:
+            return self._corner_broken_at(self._corner_hover)
+        except AppError:
+            return None
+
+    def _corner_broken_at(self, flat: int) -> Sketch:
+        """Verrunden oder Fase an dieser Ecke, mit dem gemerkten Maß."""
+        value = self.corner_values[self.tool]
+        if self.tool == "fillet":
+            return edit.fillet(self.sketch, self.points(), flat, value)
+        return edit.chamfer(self.sketch, self.points(), flat, value)
+
+    def break_corner(self, flat: int) -> bool:
+        """Die Ecke an ``flat`` brechen — Verrunden oder Fase, je nach Werkzeug.
+
+        ``True``, wenn etwas entstanden ist. Sonst sagt die Zeile, was fehlt:
+        keine Ecke aus zwei Linien, oder ein Maß, das nicht hineinpasst — mit
+        dem größten, das noch passt (Regel 17).
+        """
+        if self.tool not in CORNER_TOOLS:
+            return False
+        try:
+            changed = self._corner_broken_at(flat)
+        except AppError as error:
+            self.statusChanged.emit(str(error.detail or error.title))
+            return False
+        self.selection.clear()
+        self._corner_hover = None
+        self._apply(changed)
+        self.selectionChanged.emit()
+        self.measuringChanged.emit(0.0)
+        return True
 
     def points(self) -> list[tuple[float, float]]:
         """Die gelösten Koordinaten — oder die gezeichneten, solange der
@@ -1339,6 +1524,14 @@ class SketchCanvas(QWidget):
         if chosen:
             return chosen
         if drawing:
+            # **Und wie man das Werkzeug wieder loswird**, sobald eine Zeichnung
+            # steht: Das Rechteck bleibt nach dem zweiten Klick in der Hand, wie
+            # in jedem CAD — und wer dann eine Ecke greifen will, setzt mit dem
+            # Klick ein zweites Rechteck (Robert, 13.09.2026: „punkt verschieben
+            # geht nicht"). Ziehen geht nur mit dem Auswahlwerkzeug, und der
+            # Weg dorthin ist eine Taste, die hier steht.
+            if self.sketch.elements and self.tool != "select":
+                return tr("{hint} Esc wechselt zum Auswählen und Ziehen.").format(hint=drawing)
             return drawing
         if self.solved is None:
             # **Der Satz nennt den Knopf, den es gibt.** Vorher stand hier
@@ -1445,6 +1638,8 @@ class SketchCanvas(QWidget):
             return tr("Auf die Hälfte klicken, die wegfallen soll.")
         if self.tool == "extend":
             return tr("Auf die Hälfte klicken, die wachsen soll.")
+        if self.tool in CORNER_TOOLS:
+            return self._corner_hint()
         if self.tool == "point":
             # Beide Hälften in einem Satz: das Werkzeug bleibt nach dem Klick
             # stehen, und wer einen vorhandenen Punkt greifen will, muss nicht
@@ -1479,6 +1674,33 @@ class SketchCanvas(QWidget):
                 return tr("Bogen: der nächste Klick setzt das Ende.")
             return tr("Bogen: erster Klick setzt den Anfang.")
         return ""
+
+    def _corner_hint(self) -> str:
+        """Die Zeile für Verrunden und Fase — je nachdem, was unter dem
+        Zeiger liegt.
+
+        Drei Lagen: keine Ecke (was eine ist, steht dabei), eine Ecke mit
+        passendem Maß (der Klick bricht sie, das Feld ändert das Maß), und
+        eine Ecke, in die das Maß nicht passt — dann sagt der Kern, wie groß
+        es höchstens sein darf, und die Zeile gibt es weiter (Regel 17).
+        """
+        rounding = self.tool == "fillet"
+        if self._corner_hover is None:
+            if rounding:
+                return tr("Verrunden: auf eine Ecke klicken, an der zwei Linien zusammentreffen.")
+            return tr("Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen.")
+        try:
+            self._corner_broken_at(self._corner_hover)
+        except AppError as error:
+            return str(error.detail or error.title)
+        shown = length(self.corner_values[self.tool])
+        if rounding:
+            return tr(
+                "Verrunden: Klick rundet die Ecke mit Radius {value} — tippen ändert ihn."
+            ).format(value=shown)
+        return tr("Fase: Klick bricht die Ecke um {value} — tippen ändert das Maß.").format(
+            value=shown
+        )
 
     # --- Bearbeitung (auch für Tests) ---------------------------------------------
 
@@ -1685,32 +1907,41 @@ class SketchCanvas(QWidget):
         beim Ziehen genau diese Auswahl und verschiebt nicht überraschend die
         jeweils andere Hälfte ihrer Linien.
         """
-        moved: dict[int, set[int]] = {}
+        offsets = edit.offsets_of(self.sketch)
+        current = self.points()
+        dragged: dict[int, tuple[float, float]] = {}
         for kind, targets in self.selection:
             if not targets:
                 continue
             element_index, local = _located(self.sketch, targets[0])
+            begin = offsets[element_index]
             locals_ = (
                 {local}
                 if kind == "point"
                 else set(range(len(self.sketch.elements[element_index].points)))
             )
-            moved.setdefault(element_index, set()).update(locals_)
-        if not moved:
-            return
-        elements = list(self.sketch.elements)
-        for element_index, locals_ in moved.items():
-            element = elements[element_index]
-            points = list(element.points)
             for local in locals_:
-                x, y = points[local]
-                points[local] = (x + dx, y + dy)
-            elements[element_index] = replace(element, points=tuple(points))
-        self.sketch = replace(self.sketch, elements=tuple(elements))
-        self._resolve()
+                x, y = current[begin + local]
+                dragged[begin + local] = (x + dx, y + dy)
+        if not dragged:
+            return
+        self._drag_solve(dragged)
 
     def move_point(self, flat: int, x: float, y: float) -> None:
-        """Verschiebt einen Punkt und lässt den Solver den Rest ziehen."""
+        """Verschiebt einen Punkt und lässt den Solver den Rest ziehen.
+
+        **Der Punkt steht am Zeiger, die Nachbarn folgen** — das rechnet der
+        Zugmodus des Lösers (:func:`solve_sketch` mit ``dragged``). Vorher
+        wurde nur die gespeicherte Koordinate getauscht und neu gelöst, und
+        der Löser fand die *nächste* Lösung von dort aus: Bei einem Rechteck
+        kam die Ecke auf einem Viertel des Wegs an (gemessen 13.09.2026,
+        Robert: „punkt verschieben geht nicht").
+
+        **Die Mitte eines Kreises oder Bogens nimmt ihren Rand mit.** Der
+        Randpunkt ist der Träger des Radius; die Mitte allein zu ziehen
+        machte aus einem Verschieben ein Aufziehen. Der Rand selbst zieht
+        dagegen nur den Radius — so ist es in jedem CAD.
+        """
         if self._dragging == flat and not self._dragging_remembered:
             # Erst die wirkliche Bewegung ist ein Dokumentschritt. Das steht
             # hier statt nur im Mausereignis, damit Zeichenfläche, Viewport
@@ -1719,15 +1950,105 @@ class SketchCanvas(QWidget):
             self._dragging_remembered = True
         element_index, local = _located(self.sketch, flat)
         element = self.sketch.elements[element_index]
-        points = list(element.points)
-        points[local] = (x, y)
+        current = self.points()
+        dragged: dict[int, tuple[float, float]] = {flat: (x, y)}
+        if element.kind in ("circle", "arc") and local == 0:
+            dx, dy = x - current[flat][0], y - current[flat][1]
+            for step in range(1, len(element.points)):
+                other = flat + step
+                dragged[other] = (current[other][0] + dx, current[other][1] + dy)
+        self._drag_solve(dragged)
+
+    def _drag_solve(self, dragged: Mapping[int, tuple[float, float]]) -> None:
+        """Ein Schritt eines Zugs: lösen, zurückschreiben, sagen, was hält.
+
+        Das Ergebnis wird **vollständig** in die Skizze geschrieben — jeder
+        Punkt, nicht nur der gezogene. Damit beginnt der nächste Schritt dort,
+        wo dieser aufgehört hat, und die gespeicherte Zeichnung ist stets die
+        gelöste: Ein ``fixed`` heftet an die gespeicherte Koordinate, und
+        die wandert damit nie unter der Hand eines Zugs — genau das ließ
+        vorher ein ganzes Rechteck samt seinem Festpunkt davonschwimmen,
+        sobald jemand an einer Linie zog.
+
+        Ein Widerspruch in der Skizze lässt alles stehen, wie es war (§15.3),
+        und die Zeile nennt ihn weiter. Ein Zug, den eine Bedingung
+        zurückhält, sagt das ebenfalls — stumm bliebe nur die Frage, warum
+        der Punkt nicht folgt (Regel 17).
+        """
+        try:
+            solved = solve_sketch(self.sketch, self._params, dragged=dragged, start=self.points())
+        except SketchConflictError as error:
+            self.conflict = str(error.detail or error.title)
+            self.conflict_pair = (error.first, error.second)
+            self.statusChanged.emit(self.status_text())
+            return
+        except AppError as error:
+            self.conflict = str(error.detail or error.title)
+            self.statusChanged.emit(self.status_text())
+            return
+        # ``+ 0.0`` macht aus dem ``-0.0`` des Lösers eine Null, die in der
+        # Zeile nicht als „-0,00" erscheint.
+        solved_points = [
+            (x + 0.0, y + 0.0) for element in solved.elements for x, y in element.points
+        ]
         elements = list(self.sketch.elements)
-        # ``replace`` statt Neubau: Ein neu gebautes Element fiele auf
-        # ``construction=False`` zurück, und eine nachgezogene Mittellinie
-        # würde zur Profilkante (§30.1).
-        elements[element_index] = replace(element, points=tuple(points))
+        offsets = edit.offsets_of(self.sketch)
+        for index, element in enumerate(elements):
+            begin = offsets[index]
+            # ``replace`` statt Neubau: Ein neu gebautes Element fiele auf
+            # ``construction=False`` zurück, und eine nachgezogene Mittellinie
+            # würde zur Profilkante (§30.1).
+            elements[index] = replace(
+                element, points=tuple(solved_points[begin : begin + len(element.points)])
+            )
         self.sketch = replace(self.sketch, elements=tuple(elements))
-        self._resolve()
+        self.solved = solved
+        self.conflict = ""
+        self.conflict_pair = None
+        self.outline = self._outline_state()
+        self.sketchChanged.emit()
+        held = self._holding(dragged, solved_points)
+        self.statusChanged.emit(held or self.status_text())
+        self.update()
+
+    def _holding(
+        self, dragged: Mapping[int, tuple[float, float]], solved: Sequence[tuple[float, float]]
+    ) -> str:
+        """Der Satz, wenn ein Zug nicht dort ankam, wo der Zeiger war.
+
+        Genannt werden die Bedingungen an den gezogenen Punkten — nach Art,
+        ohne Dopplung —, und der Weg, sie zu lösen. Ein Punkt, der nur halb
+        folgt, sieht ohne diesen Satz aus wie ein verschluckter Klick.
+        """
+        short = [
+            flat
+            for flat, target in dragged.items()
+            if math.hypot(solved[flat][0] - target[0], solved[flat][1] - target[1]) > EPS_DISPLAY
+        ]
+        if not short:
+            return ""
+        kinds: list[str] = []
+        for flat in short:
+            for at in self.constraints_at(flat):
+                label = _constraint_label(self.sketch.constraints[at].kind)
+                if label not in kinds:
+                    kinds.append(label)
+        if not kinds:
+            # Gehalten wird über Nachbarn, an denen die eigene Bedingung
+            # hängt — ein Rechteckpunkt gegenüber dem festen. Der Satz nennt
+            # dann den Weg, nicht eine Bedingung, die am Punkt nicht steht.
+            return str(
+                tr(
+                    "Hier hält eine Bedingung an einem Nachbarpunkt — im Reiter "
+                    '„Bedingungen" lösen, um frei zu ziehen.'
+                )
+            )
+        return str(
+            tr(
+                "Hier hält {names} — Rechtsklick auf den Punkt löst die Bedingung, "
+                "dann folgt er frei."
+            ).format(names=", ".join(kinds))
+        )
 
     # --- Auswahl ------------------------------------------------------------------
 
@@ -2148,6 +2469,23 @@ class SketchCanvas(QWidget):
         # keiner liegt, fällt der Klick auf die Rasterweite.
         snapped, world = self._placement_target(position)
 
+        # Verrunden und Fase meinen eine Ecke, keinen Ort: Getroffen ist ein
+        # Punkt, an dem zwei Linien zusammentreffen, oder nichts — dann sagt
+        # die Zeile, was eine Ecke ist.
+        if self.tool in CORNER_TOOLS:
+            corner = (
+                snapped
+                if snapped is not None
+                and edit.corner_at(self.sketch, self.points(), snapped) is not None
+                else None
+            )
+            if corner is None:
+                self._corner_hover = None
+                self.statusChanged.emit(self._corner_hint())
+                return
+            self.break_corner(corner)
+            return
+
         # Ein Klick auf einen Punkt greift ihn, statt einen zweiten daraufzu-
         # setzen. Der bekam vorher einen vierten genau auf den mittleren —
         # deckungsgleich, unsichtbar —, und um den ersten zu bewegen, musste
@@ -2245,6 +2583,12 @@ class SketchCanvas(QWidget):
             for local, snapped_flat in enumerate(self._pending)
             if snapped_flat >= 0 and local in seats
         )
+        # **Eine Linie, die genau waagerecht oder senkrecht liegt, bleibt
+        # es.** Der Rasterfang legt beide Enden auf dieselbe Zeile oder
+        # Spalte, und wer das tut, meint es; ohne die Bedingung verzog der
+        # nächste Zug an einer Ecke das eben gezeichnete Rechteck aus Linien
+        # zum Parallelogramm. Fusion setzt sie beim Zeichnen ebenso.
+        aligned = _axis_constraint(begin, points[0], points[1]) if self.tool == "line" else None
         kept = self._pending_world[-1]
         self._pending.clear()
         self._pending_world.clear()
@@ -2252,7 +2596,11 @@ class SketchCanvas(QWidget):
             replace(
                 self.sketch,
                 elements=(*self.sketch.elements, element),
-                constraints=(*self.sketch.constraints, *snapped_pairs),
+                constraints=(
+                    *self.sketch.constraints,
+                    *snapped_pairs,
+                    *((aligned,) if aligned is not None else ()),
+                ),
             )
         )
         if self.tool == "line":
@@ -2453,7 +2801,13 @@ class SketchCanvas(QWidget):
 
         Null heißt: es ist nichts angefangen, für das ein Maß gilt. Die
         Leiste schaltet ihr Feld danach.
+
+        Bei Verrunden und Fase ist es das gemerkte Maß, sobald eine Ecke
+        unter dem Zeiger liegt — dort gibt es keinen ersten Klick, der etwas
+        anfängt; die Ecke ist das Angefangene.
         """
+        if self.tool in CORNER_TOOLS:
+            return self.corner_values[self.tool] if self._corner_hover is not None else 0.0
         if len(self._pending_world) != 1 or self.tool not in (
             "line",
             "circle",
@@ -2499,7 +2853,21 @@ class SketchCanvas(QWidget):
         bleibt als Bedingung stehen, nicht nur als Koordinate: sonst wandert
         die Linie beim nächsten Solverlauf, und die eingetippte Zahl wäre eine
         Angabe gewesen, die nichts hält.
+
+        Bei Verrunden und Fase ist die getippte Zahl das neue Maß — und die
+        Eingabetaste bricht die Ecke unter dem Zeiger damit. Steht der Zeiger
+        auf keiner, bleibt das Maß gemerkt und die Zeile sagt, was fehlt.
         """
+        if self.tool in CORNER_TOOLS:
+            if value <= 0.0:
+                self.statusChanged.emit(self._corner_hint())
+                return
+            self.corner_values[self.tool] = value
+            if self._corner_hover is not None and self.break_corner(self._corner_hover):
+                return
+            self.statusChanged.emit(self._corner_hint())
+            self.update()
+            return
         if (
             value <= 0.0
             or len(self._pending_world) != 1
@@ -2532,8 +2900,11 @@ class SketchCanvas(QWidget):
             value = circle_stored(value)
         reach = value / 2.0 if measured_kind == "diameter" else value
         # Ohne Richtung nach rechts: eine Länge ohne Richtung ist keine Linie,
-        # und die Waagerechte ist die Antwort, die niemanden überrascht.
-        direction = (dx / span, dy / span) if span > EPS_DISPLAY else (1.0, 0.0)
+        # und die Waagerechte ist die Antwort, die niemanden überrascht. Nah
+        # an einer Achse gilt die Achse (:data:`AXIS_SNAP_DEGREES`) — eine
+        # Hand hält keine 0,0 Grad, und wer 30 tippt, will 30 waagerecht und
+        # nicht 29,98 zu 1,1.
+        direction = _snapped_direction(dx, dy) if span > EPS_DISPLAY else (1.0, 0.0)
         second = (first[0] + direction[0] * reach, first[1] + direction[1] * reach)
 
         begin = len(edit.flat_points(self.sketch))
@@ -2548,15 +2919,27 @@ class SketchCanvas(QWidget):
             (begin, begin + 1),
             value=f"{value:.9f}",
         )
+        aligned = _axis_constraint(begin, first, second) if self.tool == "line" else None
         self._pending.clear()
         self._pending_world.clear()
         self._apply(
             replace(
                 self.sketch,
                 elements=(*self.sketch.elements, element),
-                constraints=(*self.sketch.constraints, *snapped, measured),
+                constraints=(
+                    *self.sketch.constraints,
+                    *snapped,
+                    measured,
+                    *((aligned,) if aligned is not None else ()),
+                ),
             )
         )
+        # Der Linienzug geht weiter, wie nach einem Klick: Das getippte Ende
+        # ist der Anfang der nächsten Linie. Vorher endete der Zug hier, und
+        # wer einen Umriss aus getippten Maßen zog, fing nach jeder Zahl neu an.
+        if self.tool == "line":
+            self._pending.append(begin + 1)
+            self._pending_world.append(second)
         self.measuringChanged.emit(0.0)
 
     def place_second_measured(self, value: float) -> None:
@@ -2576,7 +2959,19 @@ class SketchCanvas(QWidget):
         self._finish_rectangle(self._rectangle_measures[0], value, across, upward)
 
     def _finish_rectangle(self, width: float, height: float, across: float, upward: float) -> None:
-        """Baut das Rechteck aus zwei Maßen, Richtung und gefangenen Ecken."""
+        """Baut das Rechteck aus zwei Maßen, Richtung und gefangenen Ecken.
+
+        **Gezeichnet heißt frei, getippt heißt bemaßt.** Die Grundform aus
+        :func:`shapes.rectangle` bringt einen Festpunkt und beide Maße mit —
+        richtig für Dialog und Agenten, die eine bestimmte Skizze wollen
+        (§30.1), und falsch für ein Rechteck, das jemand mit zwei Klicks
+        aufzieht: Es war damit starr, keine Ecke ließ sich ziehen, und die
+        Zeile sagte „Bestimmt" über etwas, das nie jemand bemaßt hatte
+        (Robert, 13.09.2026: „rechteck maße anpassen geht nicht"). Fusion
+        setzt beim Klicken nur waagerecht, senkrecht und Deckung; ein Maß
+        entsteht dort, wo man es tippt. Hier ebenso: Der Festpunkt fällt
+        immer, ein Maß bleibt nur für die Seite, deren Zahl im Feld stand.
+        """
         first = self._pending_world[0]
         opposite = (first[0] + across * width, first[1] + upward * height)
         centre = (
@@ -2589,6 +2984,21 @@ class SketchCanvas(QWidget):
             tuple(range(len(rectangle.elements))),
             centre[0],
             centre[1],
+        )
+        typed_width = self._rectangle_measures[0] is not None
+        typed_height = self._rectangle_measures[1] is not None
+        rectangle = replace(
+            rectangle,
+            constraints=tuple(
+                constraint
+                for constraint in rectangle.constraints
+                if constraint.kind != "fixed"
+                and (
+                    constraint.kind != "distance"
+                    or (constraint.targets == (0, 1) and typed_width)
+                    or (constraint.targets == (2, 3) and typed_height)
+                )
+            ),
         )
         points = edit.flat_points(rectangle)
 
@@ -2603,16 +3013,6 @@ class SketchCanvas(QWidget):
             joins.append((self._pending[0], nearest_local(first)))
         if len(self._pending) > 1 and self._pending[1] >= 0:
             joins.append((self._pending[1], nearest_local(opposite)))
-        if joins:
-            # Der gefangene Punkt verankert die Form. Die feste erste Ecke
-            # daneben wäre eine zweite, unsichtbare Ortsvorgabe und ließe die
-            # Deckung beim späteren Verschieben in einen Konflikt laufen.
-            rectangle = replace(
-                rectangle,
-                constraints=tuple(
-                    constraint for constraint in rectangle.constraints if constraint.kind != "fixed"
-                ),
-            )
         self._pending.clear()
         self._pending_world.clear()
         self._reset_measure_entry()
@@ -2734,13 +3134,28 @@ class SketchCanvas(QWidget):
         # Wo der Zeiger steht, entscheidet die **Richtung** eines eingetippten
         # Maßes: die Länge kommt aus dem Feld, wohin es geht aus der Hand.
         self._pointer = self._to_world(position)
-        self.pointerChanged.emit(*self.pointer_target())
         # Was ein Klick greifen würde — einmal gesucht und an beide gegeben:
         # das Aufleuchten braucht den Punkt, die Fangmarke braucht nur zu
         # wissen, dass es einen gibt. Zweimal zu suchen hieße, bei jeder
         # Mausbewegung zweimal über alle Punkte zu laufen.
         target_hit = self._hit_point(position) if self._dragging is None else None
-        under = target_hit if self.tool in ("select", "point") else None
+        # Verrunden und Fase greifen nur Ecken: Ein Punkt, an dem keine zwei
+        # Linien zusammentreffen, leuchtet dort nicht auf — er verspräche
+        # sonst einen Klick, der nichts tut. Vor ``pointerChanged``, weil
+        # :meth:`pointer_target` die Ecke kennen muss.
+        corner_changed = False
+        if self.tool in CORNER_TOOLS:
+            corner = (
+                target_hit
+                if target_hit is not None
+                and edit.corner_at(self.sketch, self.points(), target_hit) is not None
+                else None
+            )
+            corner_changed = corner != self._corner_hover
+            self._corner_hover = corner
+            target_hit = corner
+        self.pointerChanged.emit(*self.pointer_target())
+        under = target_hit if self.tool in ("select", "point", *CORNER_TOOLS) else None
         # Getrennt ausgewertet und nicht mit ``or`` verkettet: eine
         # Kurzschluss-Oder ließe das Zweite ungeprüft, sobald das Erste
         # zutrifft.
@@ -2759,6 +3174,12 @@ class SketchCanvas(QWidget):
             self._shift_selection(position)
         elif self._pending_world:
             self.measuringChanged.emit(self.pending_measure())
+            self.update()
+        elif corner_changed:
+            # Das Maßfeld kommt an die Ecke und geht mit ihr; die Zeile sagt,
+            # was der Klick dort tut — oder warum das Maß nicht passt.
+            self.measuringChanged.emit(self.pending_measure())
+            self.statusChanged.emit(self.status_text())
             self.update()
         elif moved or hovered:
             self.update()
@@ -2840,10 +3261,13 @@ class SketchCanvas(QWidget):
         für die überfahrene Bedingung in der Liste. Sie hier zu lesen hieße, die
         Fangmarke von der Maus über einer Liste abhängig zu machen.
         """
-        if over_point:
+        if over_point or self.tool in ("select", *CORNER_TOOLS):
+            # Beim Auswählen entsteht nichts, und Verrunden wie Fase meinen
+            # eine Ecke, keinen Rasterpunkt — eine Marke dazwischen verspräche
+            # einen Klick, der dort nichts tut.
             mark = None
         else:
-            mark = self.snapped(self._pointer) if self.snapping and self.tool != "select" else None
+            mark = self.snapped(self._pointer) if self.snapping else None
         if mark == self._snap_mark:
             return False
         self._snap_mark = mark
@@ -2934,11 +3358,32 @@ class SketchCanvas(QWidget):
         super().keyPressEvent(event)
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
-        """Doppelklick schließt den Spline — derselbe Griff wie in jedem CAD."""
-        if self.tool == "spline":
-            self.finish_spline()
+        """Doppelklick schließt den Spline — derselbe Griff wie in jedem CAD.
+
+        Und auf einer Maßkarte öffnet er das Maß (:meth:`double_click_on_plane`).
+        """
+        if self.double_click_on_plane(self._to_world(QPointF(event.position()))):
             return
         super().mouseDoubleClickEvent(event)
+
+    def double_click_on_plane(self, point: tuple[float, float]) -> bool:
+        """Ein Doppelklick an dieser Stelle der Ebene — ``True``, wenn er etwas
+        getan hat.
+
+        Zwei Dinge, in dieser Reihenfolge: Ein begonnener Spline wird
+        geschlossen; sonst öffnet eine getroffene Maßkarte ihr Maß — der
+        Griff, den jeder Fusion-Kunde sucht, und der bis zum 13.09.2026 nur in
+        der Bedingungsliste am rechten Rand lag (Robert: „rechteck maße
+        anpassen geht nicht").
+        """
+        if self.tool == "spline" and self._pending_world:
+            self.finish_spline()
+            return True
+        index = self.measure_at(point)
+        if index is None:
+            return False
+        self.measureEditRequested.emit(index)
+        return True
 
     def _context_menu(self, event: Any) -> None:
         """Bedingungen am Ort der Auswahl — §30.1 nennt das Kontextmenü
@@ -3072,7 +3517,22 @@ class SketchCanvas(QWidget):
             return
         across, up = dialog.point()
         self._remember()
+        # **Getippte Koordinaten gewinnen auch gegen *Fest*.** Ein Zug lässt
+        # einen festen Punkt stehen (der Anker ist die gespeicherte
+        # Koordinate); wer die Zahl eintippt, meint genau diesen Ort. Der
+        # Anker wandert deshalb zuerst, dann rechnet der Zug wie sonst.
+        self._anchor(flat, across, up)
         self.move_point(flat, across, up)
+
+    def _anchor(self, flat: int, x: float, y: float) -> None:
+        """Die gespeicherte Koordinate eines Punkts setzen — ohne zu lösen."""
+        element_index, local = _located(self.sketch, flat)
+        element = self.sketch.elements[element_index]
+        points = list(element.points)
+        points[local] = (x, y)
+        elements = list(self.sketch.elements)
+        elements[element_index] = replace(element, points=tuple(points))
+        self.sketch = replace(self.sketch, elements=tuple(elements))
 
     # --- Zeichnen -------------------------------------------------------------------
 
@@ -3750,6 +4210,8 @@ def tool_instruction(name: str) -> str:
         "spline": tr("Kurve: klicken, so oft es die Form braucht."),
         "trim": tr("Auf die Hälfte klicken, die wegfallen soll."),
         "extend": tr("Auf die Hälfte klicken, die wachsen soll."),
+        "fillet": tr("Verrunden: auf eine Ecke klicken, an der zwei Linien zusammentreffen."),
+        "chamfer": tr("Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen."),
         "rectangle": tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke."),
     }[name]
 
@@ -3770,6 +4232,10 @@ TOOL_KEYS: dict[str, str] = {
     "point": "P",
     "spline": "S",
     "trim": "T",
+    # Verrunden liegt in Fusion auf F, auch in der Skizze; die Fase hat dort
+    # kein Kürzel — K wie Kante brechen, denn F ist vergeben und C der Kreis.
+    "fillet": "F",
+    "chamfer": "K",
 }
 
 #: Die Größe, die die Zeichenfläche im Viewport-Modus behält, in Bildpunkten.
@@ -3975,6 +4441,8 @@ class SketchPanel(QWidget):
             ("spline", tr("Kurve")),
             ("trim", tr("Trimmen")),
             ("extend", tr("Verlängern")),
+            ("fillet", tr("Verrunden")),
+            ("chamfer", tr("Fase")),
         ):
             button = QToolButton(self)
             key = TOOL_KEYS.get(name, "")
@@ -4546,6 +5014,9 @@ class SketchPanel(QWidget):
         self.canvas.sketchChanged.connect(self._refresh_plane_role)
         self.canvas.selectionChanged.connect(self._refresh_buttons)
         self.canvas.statusChanged.connect(weak_slot(self, SketchPanel._show_status, forward=True))
+        # Der Doppelklick auf eine Maßkarte öffnet dasselbe Fenster wie der
+        # auf die Zeile in der Bedingungsliste — ein Weg, zwei Griffe.
+        self.canvas.measureEditRequested.connect(self.change_constraint_value)
         self.constraint_list.installEventFilter(self)
         self._install_shortcuts()
 
@@ -4889,8 +5360,21 @@ class SketchPanel(QWidget):
         Aktion → Rückruf → Panel —, und deshalb hat ihn die statische Suche
         nicht gesehen: Sie prüfte, ob der Sender ein Kind von ``self`` ist, und
         ``action`` ist das Kind eines Menüs, das einem Knopf gehört.
+
+        **Ohne Festpunkt.** Die Grundformen bringen einen mit, weil Dialog
+        und Agent eine bestimmte Skizze brauchen (§30.1); im Editor macht er
+        die Form unverschiebbar — und wohin ein Rechteck aus dem Menü gehört,
+        weiß erst, wer es gezogen hat. Die Maße bleiben: Sie stehen im
+        Menüeintrag, und wer 40 mal 20 wählt, meint 40 mal 20. Geändert werden
+        sie per Doppelklick auf die Maßkarte.
         """
-        self.canvas.insert_shape(make())
+        made = make()
+        self.canvas.insert_shape(
+            replace(
+                made,
+                constraints=tuple(entry for entry in made.constraints if entry.kind != "fixed"),
+            )
+        )
 
     def _mirror_selected(self, axis: str) -> None:
         """Das Gewählte an einer Achse spiegeln — derselbe Weg über ein Menü."""

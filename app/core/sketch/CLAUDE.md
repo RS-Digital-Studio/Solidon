@@ -29,11 +29,11 @@ Grundebene oder auf einer Fläche des Modells.
 
 | Datei | Rolle |
 |---|---|
-| `solver.py` | Der 2D-Löser |
+| `solver.py` | Der 2D-Löser — und sein Zugmodus (`dragged`, `start`) |
 | `profile.py` | Vom gelösten Element zum geschlossenen Umriss |
 | `shapes.py` | Die Grundformen und die zwei Lochbilder (Ausgabestufe eins) |
 | `planes.py` | Wo eine Skizze liegt |
-| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln |
+| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — und an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`) |
 | `ops.py` | Die Operationen der Kategorie „Skizze" |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
@@ -64,6 +64,33 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
   ein widersprüchliches meldet `SketchConflictError` mit Handlungsvorschlag.
   Gezeichnete Skizzen geben verbleibende Freiheitsgrade mit dem Ergebnis der
   Operation zurück. Vorgegebene Grundformen erzeugen diesen Hinweis nicht.
+- **Der Zug ist ein eigener Modus des Lösers** (`solve_sketch(..., dragged=,
+  start=)`, 13.09.2026). Ohne ihn beginnt der Löser bei den gespeicherten
+  Punkten und findet die *nächste* Lösung — beim Ziehen die falsche: Ein
+  Rechteckpunkt, um zwanzig Millimeter gezogen, kam bei fünf an, weil die
+  Deckung mit dem Nachbarn hälftig ausgeglichen wurde. Mit `dragged` stehen
+  die gezogenen Punkte am Zeiger und alles andere folgt mit der kleinsten
+  Bewegung ab `start`, dem zuletzt gelösten Stand. **Zwei Stufen**: erst
+  werden die gezogenen Koordinaten aus dem System genommen (exakt — ein auf
+  das Raster gefangener Punkt landet auf der Rasterzahl); lassen die
+  Bedingungen den Ort nicht zu, rechnet die zweite Stufe sie als zähe
+  Variablen mit (`DRAG_STIFFNESS`, ein Zwanzigstel wie in SolveSpace) — ein
+  Punkt auf einer Waagerechten folgt seitlich, einer am festen Maß läuft auf
+  seinem Kreis, ein `fixed` hält. Gemessen: 2 ms je Zugschritt am Rechteck;
+  bei nichtlinearen Bedingungen (Radius, Senkrechte) driftet ein einzelner
+  Sprung um zehn Millimeter im Nullraum um 2·10⁻⁴ mm, fünfzig Schritte à
+  0,2 mm bleiben unter 10⁻⁸ — die Maus zieht in Schritten, und so prüft es
+  `tests/test_sketch_edit.py`.
+- **Eine Rundung trägt ihre Tangente als Senkrechte** (`edit.fillet`). Die
+  Tangentenbedingung misst den Abstand der Mitte zur Geraden gegen den
+  Radius; an einem Bogenende, das per Deckung *auf* der Linie liegt, ist das
+  ein doppelter Nullpunkt — die Ableitung nach dem Ende ist null, die
+  Jacobimatrix singulär, und die Rangprüfung meldete „legt fest, was schon
+  festliegt" über eine bestimmte Skizze. `perpendicular` zwischen Linie und
+  Radiusstrahl zum Berührpunkt sagt dasselbe mit einer Ableitung, die trägt.
+  Die Fase hält nur ihre Länge als Maß; ihr Winkel bleibt ein Freiheitsgrad,
+  weil „gleich weit von einer Ecke, die es nicht mehr gibt" keine Bedingung
+  der Liste ist und eine neue Art ein Dateiformat wäre.
 - **Flächenrahmen übernehmen die orientierte Merkmalsnormale.** Die Mitte
   des Hüllquaders entscheidet keine Innen-/Außenrichtung, insbesondere an
   Innenböden und konkaven Körpern. Eine blinde Tasche endet in beiden Kernen

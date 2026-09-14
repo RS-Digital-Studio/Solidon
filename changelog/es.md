@@ -18,6 +18,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.4.2
 
+### Dibujo
+
+- Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.
+- Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion.
+- Las formas del menú se pueden desplazar; las cotas de la entrada del menú se mantienen. Para cambiar una cota en la vista, haga doble clic en su tarjeta.
+- Redondear y chaflán en el editor de bocetos: señalar una esquina, escribir el radio o la medida, hacer clic. El redondeo sigue en su esquina al arrastrar; el chaflán crea un borde inclinado.
+- Si una restricción sujeta un punto, la línea dice cuál — y que un clic derecho en el punto la suelta. Antes el punto se quedaba quieto sin más.
+- Fijo significa fijo: un punto fijado ya no sigue el arrastre. Las líneas exactamente horizontales o verticales se mantienen así, aunque después arrastre una esquina.
+
 ### Vista y manejo
 
 - Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.

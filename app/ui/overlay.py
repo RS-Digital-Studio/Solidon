@@ -800,13 +800,10 @@ class OverlayHost(QWidget):
         # Die Werkzeugzeile sitzt mittig unten und ist so breit, wie sie sein
         # muss — nicht so breit wie das Fenster.
         if self.bottom.isVisibleTo(self):
-            size = self.bottom.sizeHint()
-            wanted = min(size.width(), width - 2 * MARGIN)
+            wanted, tall = self._bottom_size(width)
             self._move(
                 self.bottom,
-                QRect(
-                    (width - wanted) // 2, height - size.height() - MARGIN, wanted, size.height()
-                ),
+                QRect((width - wanted) // 2, height - tall - MARGIN, wanted, tall),
                 moving,
             )
 
@@ -935,4 +932,25 @@ class OverlayHost(QWidget):
         """Wie viel Höhe die Werkzeugzeile unten für sich braucht."""
         if self.bottom is None or not self.bottom.isVisibleTo(self):
             return 0
-        return self.bottom.sizeHint().height() + MARGIN
+        return self._bottom_size(self.width())[1] + MARGIN
+
+    def _bottom_size(self, width: int) -> tuple[int, int]:
+        """Breite und Höhe der unteren Karte bei dieser Fensterbreite.
+
+        **Die Höhe gilt für die Breite, die die Karte bekommt.** Ein
+        umbrechender Satz — die Statuszeile des Skizzenmodus — meldet in
+        ``sizeHint()`` die Höhe seiner Wunschbreite; zugeteilt bekommt die
+        Karte aber höchstens die Fensterbreite, und darin bricht der Satz auf
+        zwei Zeilen, von denen die zweite hinter der Zeile darunter verschwand
+        (gemessen am gebauten Fenster, 13.09.2026: „Geschlossen · Noch 4 Maße
+        fehlen …" endete mitten im Wort). ``heightForWidth`` fragt die Höhe
+        für die Breite, die es wirklich gibt; eine Karte ohne umbrechenden
+        Inhalt antwortet darauf mit minus eins und behält ihren Wunsch.
+        """
+        assert self.bottom is not None
+        size = self.bottom.sizeHint()
+        wanted = min(size.width(), width - 2 * MARGIN)
+        tall = size.height()
+        if self.bottom.hasHeightForWidth():
+            tall = max(tall, self.bottom.heightForWidth(wanted))
+        return wanted, tall

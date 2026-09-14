@@ -101,6 +101,19 @@ class _Equation:
     grad: _GradientFn
 
 
+#: Wie zäh ein gezogener Punkt im **weichen** Zug ist, als Maßstab seiner
+#: Koordinaten (``x_scale`` in scipy — die Rechnung läuft in ``x / scale``).
+#:
+#: Der weiche Zug kommt nur zum Zug, wenn der harte nicht geht: Der gezogene
+#: Punkt soll dann so nah wie möglich am Zeiger bleiben, und die übrigen
+#: Punkte nehmen die Bewegung auf. Ein Zwanzigstel heißt: Ihn um einen
+#: Millimeter zu verrücken kostet den Löser so viel wie zwanzig Millimeter an
+#: jedem anderen — die Zahl, mit der SolveSpace seine gezogenen Parameter
+#: gewichtet, und gemessen genügt sie: Wo die Bedingungen einen Weg lassen,
+#: bleibt der Punkt am Zeiger; wo sie ihn festhalten, kehrt er zurück, ohne
+#: die Nachbarn mitzunehmen.
+DRAG_STIFFNESS: Final[float] = 1.0 / 20.0
+
 #: So groß darf die **dichte** Jacobimatrix werden, die die Rangprüfung nach
 #: dem Lösen braucht (Zeilen mal 2 Punkte mal 8 Byte). 256 MiB sind rund 4000
 #: Bedingungen über 4000 Punkten — das Zwanzigfache des §31-Korpus. Eine
@@ -486,12 +499,29 @@ def _build_equations(
 
 
 def _solve(
-    equations: Sequence[_Equation], start: np.ndarray
+    equations: Sequence[_Equation],
+    start: np.ndarray,
+    *,
+    pinned: Sequence[int] = (),
+    stiff: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Ein Lauf des Lösers: Koordinaten, Residuen, Jacobimatrix an der Lösung."""
+    """Ein Lauf des Lösers: Koordinaten, Residuen, Jacobimatrix an der Lösung.
+
+    ``pinned`` nennt Punkte, die ein Zug gerade hält (:func:`solve_sketch`).
+    Ohne ``stiff`` sind sie **Konstanten**: Ihre Koordinaten stehen in
+    ``start`` und verlassen das Gleichungssystem — der Löser rechnet nur die
+    übrigen, und der gezogene Punkt landet exakt dort, wo der Zeiger ist. Mit
+    ``stiff`` bleiben sie Variablen, nur zähe (:data:`DRAG_STIFFNESS`): Das
+    ist der Rückfall, wenn die Bedingungen den Zeigerort nicht zulassen.
+    """
     flat = start.reshape(-1)
     total_rows = sum(equation.rows for equation in equations)
     points = flat.size // 2
+    held = np.zeros(flat.size, dtype=bool)
+    if pinned and not stiff:
+        for point in pinned:
+            held[2 * point : 2 * point + 2] = True
+    free = ~held
 
     def fun(x: np.ndarray) -> np.ndarray:
         pts = x.reshape(-1, 2)
@@ -527,14 +557,41 @@ def _solve(
 
     if not equations:
         return flat, np.zeros(0), np.zeros((0, flat.size))
+    if not free.any():
+        # Alles hängt am Zeiger: Es gibt nichts zu rechnen, nur zu prüfen, ob
+        # die Bedingungen an dieser Stelle noch gelten.
+        return flat, fun(flat), jac(flat)
+
+    # Die gehaltenen Koordinaten werden vor dem Lösen aus dem System genommen:
+    # ``fun`` und ``sparse_jac`` sehen weiter alle Punkte, der Löser nur die
+    # freien Spalten. So bleibt jede Gleichung, wie sie ist.
+    full = flat.copy()
+
+    def widened(z: np.ndarray) -> np.ndarray:
+        full[free] = z
+        return full
+
+    def free_fun(z: np.ndarray) -> np.ndarray:
+        return fun(widened(z))
+
+    def free_jac(z: np.ndarray) -> csr_matrix:
+        return sparse_jac(widened(z))[:, free]
+
+    scale: float | np.ndarray = 1.0
+    if pinned and stiff:
+        scale = np.ones(flat.size)
+        for point in pinned:
+            scale[2 * point : 2 * point + 2] = DRAG_STIFFNESS
+
     # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
     # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
     result = least_squares(
-        fun,
-        flat,
-        jac=sparse_jac,
+        free_fun,
+        flat[free],
+        jac=free_jac,
         method="trf",
         tr_solver="lsmr",
+        x_scale=scale,
         # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
         # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
         # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
@@ -547,10 +604,11 @@ def _solve(
         ftol=1e-10,
         gtol=1e-10,
     )
+    solution = widened(np.asarray(result.x, dtype=float)).copy()
     return (
-        np.asarray(result.x, dtype=float),
+        solution,
         np.asarray(result.fun, dtype=float),
-        jac(np.asarray(result.x, dtype=float)),
+        jac(solution),
     )
 
 
@@ -639,19 +697,73 @@ def _redundant_pair(
     return 0, 0
 
 
-def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> SolvedSketch:
+def solve_sketch(
+    sketch: Sketch,
+    params: Mapping[str, float] | None = None,
+    *,
+    dragged: Mapping[int, Point2] | None = None,
+    start: Sequence[Point2] | None = None,
+) -> SolvedSketch:
     """Löst eine Skizze deterministisch gegen ihre Bedingungen (§30.1).
 
     Maße werden über die Parametergrammatik (§13) gegen ``params`` aufgelöst.
     Unterbestimmt liefert ein Ergebnis und zählt die Freiheitsgrade;
     überbestimmt oder widersprüchlich wirft :class:`SketchConflictError`
-    mit dem kollidierenden Paar."""
+    mit dem kollidierenden Paar.
+
+    **Der Zug** (``dragged``): flache Punktindizes mit dem Ort, an dem der
+    Zeiger sie haben will. Ohne ihn beginnt der Löser bei den gespeicherten
+    Punkten und findet die **nächste** Lösung — und die ist beim Ziehen die
+    falsche: Ein Rechteckpunkt, den jemand um zwanzig Millimeter zog, kam
+    bei fünf an, weil die Deckung mit seinem Nachbarn hälftig ausgeglichen
+    wurde statt den Nachbarn nachzuziehen (gemessen 13.09.2026, Robert:
+    „punkt verschieben geht nicht"). Mit ``dragged`` gilt, was jedes CAD
+    tut: Der gezogene Punkt **steht am Zeiger**, alles andere folgt ihm mit
+    der kleinsten Bewegung — gerechnet ab ``start``, dem zuletzt gelösten
+    Stand, damit die übrige Zeichnung nicht bei jedem Mausereignis zu ihrer
+    gespeicherten Lage zurückspringt.
+
+    Zwei Stufen, weil eine nicht reicht: Erst werden die gezogenen Punkte
+    **festgesetzt** und nur die übrigen gerechnet — exakt, und deshalb landet
+    ein auf das Raster gefangener Punkt auf der Rasterzahl und nicht ein
+    Vierhundertstel daneben. Lassen die Bedingungen den Ort nicht zu (ein
+    fester Nachbar, ein Maß, eine Waagerechte), rechnet die zweite Stufe die
+    gezogenen Punkte als zähe Variablen (:data:`DRAG_STIFFNESS`) mit: Sie
+    rutschen so weit, wie die Bedingungen erlauben — ein Punkt auf einer
+    Waagerechten folgt dem Zeiger seitlich und bleibt in der Höhe, ein Punkt
+    an einem festen Maß läuft auf seinem Kreis. Was die Bedingungen ganz
+    festhalten, kehrt zurück, und die Nachbarn bleiben, wo sie waren.
+
+    Ein ``fixed`` hält dabei auch gegen den Zug: Es heftet an die
+    gespeicherte Koordinate, und die ändert ein Zug nicht — wer den Punkt
+    woandershin will, löst die Bedingung oder tippt Koordinaten."""
     values = params or {}
     equations, anchors = _build_equations(sketch, values)
     variables = anchors.size
 
     if not sketch.elements:
         return SolvedSketch(elements=(), free_dof=0, max_residual=0.0)
+
+    pinned: list[int] = []
+    if dragged:
+        points_total = anchors.shape[0]
+        for point in dragged:
+            if not 0 <= point < points_total:
+                raise ValidationError(
+                    field="dragged",
+                    detail=_("Der gezogene Punkt gehört nicht zu dieser Skizze."),
+                    value=point,
+                    constraint="unknown_target",
+                )
+            pinned.append(point)
+        begin = np.asarray(anchors, dtype=float)
+        if start is not None and len(start) == points_total:
+            begin = np.asarray(list(start), dtype=float).reshape(-1, 2)
+        begin = begin.copy()
+        for point, target in dragged.items():
+            begin[point] = (float(target[0]), float(target[1]))
+    else:
+        begin = anchors
 
     # Vor der ersten Allokation: Der Löser rechnet dünn besetzt, die
     # Rangprüfung danach braucht die Matrix dicht — und die wächst mit
@@ -674,8 +786,16 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
                 "limit": MAX_JACOBIAN_BYTES,
             },
         )
-    solution, residuals, jacobian = _solve(equations, anchors)
+    solution, residuals, jacobian = _solve(equations, begin, pinned=pinned)
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
+    if pinned and max_residual > _TOL:
+        # Der Zeigerort ist mit den Bedingungen nicht zu haben — zweite Stufe:
+        # Die gezogenen Punkte rutschen so weit, wie es geht, und nur so weit
+        # (siehe den Docstring). Ihr Rest wird danach wie jeder andere
+        # geprüft: Was hier noch übrig bleibt, war schon vor dem Zug ein
+        # Widerspruch der Skizze selbst.
+        solution, residuals, jacobian = _solve(equations, begin, pinned=pinned, stiff=True)
+        max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     rank = int(np.linalg.matrix_rank(jacobian)) if residuals.size else 0
     counted_rank = _rank_with_circle_gauges(sketch, solution, jacobian, rank, variables)
     blocks = _row_blocks(equations)

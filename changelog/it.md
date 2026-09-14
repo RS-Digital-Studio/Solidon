@@ -17,6 +17,15 @@ scrive in `website/version.json`.
 
 ## 0.4.2
 
+### Disegno
+
+- Un punto trascinato resta sotto il puntatore e i vicini lo seguono: un angolo del rettangolo porta con sé i due lati, una linea allunga la forma. Prima l'angolo arrivava solo a metà strada.
+- Un rettangolo fatto con i clic è libero: nessun punto fisso, nessuna quota finché non la digiti. Una larghezza o altezza digitata resta come quota, come in Fusion.
+- Le forme del menu si possono spostare; le quote della voce di menu restano. Per cambiare una quota nella vista, fai doppio clic sulla sua scheda.
+- Raccordo e smusso nell'editor di schizzi: indica un angolo, digita il raggio o la quota, fai clic. Il raccordo resta al suo angolo quando trascini, lo smusso crea uno spigolo inclinato.
+- Se un vincolo trattiene un punto, la riga dice quale — e che un clic destro sul punto lo rimuove. Prima il punto restava fermo senza spiegazione.
+- Fisso vuol dire fisso: un punto fissato non segue più il trascinamento. Le linee esattamente orizzontali o verticali restano tali, anche se dopo trascini un angolo.
+
 ### Vista e utilizzo
 
 - Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.

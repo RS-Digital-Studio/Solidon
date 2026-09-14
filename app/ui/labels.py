@@ -1212,6 +1212,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "minutes": _("Minuten"),
     "missed": _("Nicht getroffene Züge"),
     "missing": _("Fehlt"),
+    "most": _("Höchstmaß"),
     "moved": _("Größte Bewegung"),
     "name": _("Name"),
     "neck": _("Hals"),

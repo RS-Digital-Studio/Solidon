@@ -4,6 +4,7 @@ Zahl, Konflikte mit benanntem Paar, Maße über die Parametergrammatik."""
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from itertools import pairwise
 
 import numpy as np
@@ -11,7 +12,7 @@ import pytest
 
 from app.core.brep.kernel import available as brep_available
 from app.core.errors import AppError, SketchConflictError, ValidationError
-from app.core.sketch import solve_sketch
+from app.core.sketch import edit, solve_sketch
 from app.core.sketch.planes import (
     axis_hit,
     frame_for_plane,
@@ -1637,3 +1638,161 @@ def test_the_sparse_jacobian_matches_the_dense_one() -> None:
 
     assert jacobian.shape == (total_rows, anchors.size)
     assert np.allclose(jacobian, dense.reshape(total_rows, anchors.size))
+
+
+# --- Der Zugmodus des Lösers ----------------------------------------------------------
+
+
+def _drawn_box() -> Sketch:
+    """Ein Rechteck aus vier Linien mit Deckung, waagerecht und senkrecht —
+    ohne Maße und ohne Festpunkt, so wie der Editor es zeichnet."""
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (40.0, 0.0))),
+            SketchElement("line", ((40.0, 0.0), (40.0, 20.0))),
+            SketchElement("line", ((40.0, 20.0), (0.0, 20.0))),
+            SketchElement("line", ((0.0, 20.0), (0.0, 0.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+        ),
+    )
+
+
+def _flat(solved: SolvedSketch) -> list[tuple[float, float]]:
+    return [point for element in solved.elements for point in element.points]
+
+
+def test_a_dragged_point_lands_on_the_pointer_and_the_neighbours_follow() -> None:
+    """Der Fund vom 13.09.2026: Die Ecke (40 | 20) nach (60 | 30) gezogen kam
+    bei (45 | 22,5) an — der Löser fand die *nächste* Lösung und glich die
+    Deckung hälftig aus. Mit ``dragged`` steht die Ecke am Zeiger, und das
+    Rechteck wird 60 mal 30."""
+    sketch = _drawn_box()
+    before = list(edit.flat_points(sketch))
+
+    solved = solve_sketch(sketch, dragged={3: (60.0, 30.0)}, start=before)
+
+    points = _flat(solved)
+    assert points[3] == pytest.approx((60.0, 30.0)), "die Ecke steht exakt am Zeiger"
+    assert points[4] == pytest.approx((60.0, 30.0)), "ihr Deckungspartner auch"
+    assert points[1] == pytest.approx((60.0, 0.0)), "die rechte Seite ist mitgegangen"
+    assert points[5] == pytest.approx((0.0, 30.0)), "die obere auch"
+    assert points[0] == pytest.approx((0.0, 0.0)), "die gegenüberliegende Ecke blieb"
+    assert solved.free_dof == 4
+
+
+def test_a_dragged_line_stretches_the_box_instead_of_moving_it() -> None:
+    """Beide Enden der unteren Linie um zehn nach unten: Die Senkrechten
+    werden länger, die obere Linie bleibt, wo sie war."""
+    sketch = _drawn_box()
+    before = list(edit.flat_points(sketch))
+
+    solved = solve_sketch(sketch, dragged={0: (0.0, -10.0), 1: (40.0, -10.0)}, start=before)
+
+    points = _flat(solved)
+    assert points[0] == pytest.approx((0.0, -10.0))
+    assert points[1] == pytest.approx((40.0, -10.0))
+    assert points[3] == pytest.approx((40.0, 20.0)), "die obere Kante steht"
+    assert points[5] == pytest.approx((0.0, 20.0))
+
+
+def test_a_measured_box_moves_as_a_whole_and_a_fixed_one_not_at_all() -> None:
+    """Mit beiden Maßen, aber ohne Festpunkt, ist ein Zug an der Ecke eine
+    Verschiebung des Ganzen. Mit Festpunkt geht nichts — und die Nachbarn
+    bleiben trotzdem, wo sie waren: Der Zug reißt nichts halb mit."""
+    from app.core.sketch import shapes
+
+    measured = shapes.rectangle(40.0, 20.0)
+    free = replace(
+        measured, constraints=tuple(c for c in measured.constraints if c.kind != "fixed")
+    )
+    before = list(edit.flat_points(free))
+    moved = _flat(solve_sketch(free, dragged={3: (30.0, 20.0)}, start=before))
+    for (bx, by), (ax, ay) in zip(before, moved, strict=True):
+        assert (ax, ay) == pytest.approx((bx + 10.0, by + 10.0)), "verschoben, nicht verzogen"
+
+    nailed = _flat(solve_sketch(measured, dragged={3: (30.0, 20.0)}, start=before))
+    for (bx, by), (ax, ay) in zip(before, nailed, strict=True):
+        assert (ax, ay) == pytest.approx((bx, by), abs=1e-6), "der Festpunkt hält alles"
+
+
+def test_a_point_held_by_a_constraint_slides_as_far_as_it_may() -> None:
+    """Die zweite Stufe des Zugs: Ein Punkt auf einer Waagerechten folgt dem
+    Zeiger seitlich und bleibt in der Höhe; ein Punkt an einem festen Maß
+    läuft auf seinem Kreis. Fusion tut dasselbe."""
+    horizontal = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (30.0, 0.0))),),
+        constraints=(SketchConstraint("fixed", (0,)), SketchConstraint("horizontal", (0, 1))),
+    )
+    slid = _flat(
+        solve_sketch(horizontal, dragged={1: (50.0, 12.0)}, start=[(0.0, 0.0), (30.0, 0.0)])
+    )
+    assert slid[1] == pytest.approx((50.0, 0.0))
+
+    measured = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (30.0, 0.0))),),
+        constraints=(SketchConstraint("fixed", (0,)), SketchConstraint("distance", (0, 1), "30")),
+    )
+    turned = _flat(
+        solve_sketch(measured, dragged={1: (30.0, 30.0)}, start=[(0.0, 0.0), (30.0, 0.0)])
+    )
+    assert turned[1] == pytest.approx((30.0 / math.sqrt(2.0), 30.0 / math.sqrt(2.0)))
+    assert turned[0] == pytest.approx((0.0, 0.0)), "der feste Anfang bleibt"
+
+
+def test_a_fixed_point_does_not_follow_the_drag() -> None:
+    """*Fest* heftet an die gespeicherte Koordinate, und die ändert ein Zug
+    nicht — der Punkt bleibt, und die Zeile des Editors sagt, warum."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (30.0, 0.0))),),
+        constraints=(SketchConstraint("fixed", (1,)),),
+    )
+    points = _flat(solve_sketch(sketch, dragged={1: (50.0, 12.0)}, start=[(0.0, 0.0), (30.0, 0.0)]))
+    assert points[1] == pytest.approx((30.0, 0.0), abs=1e-6)
+    assert points[0] == pytest.approx((0.0, 0.0), abs=1e-6)
+
+
+def test_a_circle_rim_drags_the_radius_and_the_centre_drags_the_circle() -> None:
+    circle = Sketch(
+        plane="plane:xy", elements=(SketchElement("circle", ((0.0, 0.0), (10.0, 0.0))),)
+    )
+    start = [(0.0, 0.0), (10.0, 0.0)]
+
+    wider = _flat(solve_sketch(circle, dragged={1: (15.0, 0.0)}, start=start))
+    assert wider == [pytest.approx((0.0, 0.0)), pytest.approx((15.0, 0.0))]
+
+    moved = _flat(solve_sketch(circle, dragged={0: (5.0, 5.0), 1: (15.0, 5.0)}, start=start))
+    assert moved == [pytest.approx((5.0, 5.0)), pytest.approx((15.0, 5.0))]
+
+
+def test_a_dragged_point_outside_the_sketch_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        solve_sketch(_drawn_box(), dragged={99: (0.0, 0.0)})
+
+
+def test_a_drag_keeps_a_contradiction_a_contradiction() -> None:
+    """Was vor dem Zug ein Widerspruch war, bleibt einer — die zweite Stufe
+    heilt nichts, sie rutscht nur."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (30.0, 0.0))),),
+        constraints=(
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("fixed", (1,)),
+            SketchConstraint("distance", (0, 1), "40"),
+        ),
+    )
+    with pytest.raises(SketchConflictError):
+        solve_sketch(sketch, dragged={1: (40.0, 0.0)}, start=[(0.0, 0.0), (30.0, 0.0)])

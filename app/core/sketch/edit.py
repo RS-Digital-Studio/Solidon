@@ -1,8 +1,12 @@
-"""Skizzen ändern: Trimmen, Verlängern, Versetzen, Spiegeln (Bauplan §30.1).
+"""Skizzen ändern: Trimmen, Verlängern, Versetzen, Spiegeln, Verrunden, Fase
+(Bauplan §30.1).
 
-Die vier Werkzeuge, ohne die jede Kontur Handarbeit ist, die nicht aus einer
+Die Werkzeuge, ohne die jede Kontur Handarbeit ist, die nicht aus einer
 Grundform kommt. Fusion hat sie in einer eigenen Gruppe; Solidon hatte sie
-gar nicht — man konnte zeichnen und bemaßen, aber nichts kürzen.
+gar nicht — man konnte zeichnen und bemaßen, aber nichts kürzen. Verrunden
+und Fase kamen am 13.09.2026 dazu (Robert: „schräge kanten kann man auch
+nicht machen"): Beide brechen eine Ecke aus zwei Linien, das eine mit einem
+tangentialen Bogen, das andere mit einer Schräge.
 
 **Hier und nicht in der Oberfläche.** Jede dieser Handlungen rechnet
 Schnittpunkte und Abstände; das ist Geometrie, und Geometrie rechnet der Kern
@@ -19,9 +23,10 @@ from __future__ import annotations
 
 import itertools
 import math
-from dataclasses import replace
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 
-from app.core.errors import ValidationError
+from app.core.errors import ValidationError, require_positive
 from app.core.sketch.profile import _flat_curve
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
 from app.i18n import _
@@ -593,6 +598,260 @@ def arc_through(start: Point2, end: Point2, via: Point2) -> tuple[Point2, Point2
     if sweep_via > sweep_end:
         return (centre, end, start)
     return (centre, start, end)
+
+
+# --- Ecken: Verrunden und Fase ---------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Corner:
+    """Zwei Linien, die sich an einem Punkt treffen — und wo genau.
+
+    ``first`` und ``second`` sind je ``(Elementindex, lokaler Punkt)``: der
+    lokale Punkt ist das Ende, das in der Ecke liegt (0 oder 1). ``spot`` ist
+    die Ecke selbst in gelösten Koordinaten.
+    """
+
+    first: tuple[int, int]
+    second: tuple[int, int]
+    spot: Point2
+
+
+#: Wie nah zwei Endpunkte beieinanderliegen dürfen, um als eine Ecke zu
+#: gelten — die Deckungstoleranz der Profilbildung, nicht die Zeichenauflösung:
+#: Ein Umriss schließt sich in ``profile`` auf dieselbe Weite.
+_CORNER_TOL = 1e-4
+
+
+def corner_at(sketch: Sketch, points: Sequence[Point2], flat: int) -> Corner | None:
+    """Die Ecke aus zwei Linien an diesem Punkt — oder keine.
+
+    Gesucht wird über die **gelösten** Punkte (``points``), nicht die
+    gespeicherten: Zwei Linienenden bilden eine Ecke, wenn sie am selben Ort
+    liegen, gleich ob eine Deckung sie dorthin gezogen hat oder ein Klick.
+    Genau zwei Linien müssen es sein — drei Linien an einem Punkt haben keine
+    eindeutige Ecke, ein Bogen an einer Linie ist schon rund.
+    """
+    if not 0 <= flat < len(points):
+        return None
+    spot = points[flat]
+    offsets = offsets_of(sketch)
+    ends: list[tuple[int, int]] = []
+    for index, element in enumerate(sketch.elements):
+        if element.kind != "line":
+            continue
+        begin = offsets[index]
+        for local in (0, 1):
+            if math.dist(points[begin + local], spot) <= _CORNER_TOL:
+                ends.append((index, local))
+    if len(ends) != 2 or ends[0][0] == ends[1][0]:
+        return None
+    return Corner(ends[0], ends[1], spot)
+
+
+def _corner_directions(
+    sketch: Sketch, points: Sequence[Point2], corner: Corner
+) -> tuple[tuple[float, float], tuple[float, float], float, float]:
+    """Einheitsrichtungen von der Ecke weg entlang beider Linien, und wie
+    lang die Linien sind."""
+    offsets = offsets_of(sketch)
+    away: list[tuple[float, float]] = []
+    lengths: list[float] = []
+    for index, local in (corner.first, corner.second):
+        begin = offsets[index]
+        far = points[begin + (1 - local)]
+        dx, dy = far[0] - corner.spot[0], far[1] - corner.spot[1]
+        length = math.hypot(dx, dy)
+        if length <= EPS_SKETCH:
+            raise ValidationError(
+                "element",
+                _("Eine der beiden Linien hat keine Länge — an ihr gibt es keine Ecke."),
+            )
+        away.append((dx / length, dy / length))
+        lengths.append(length)
+    return away[0], away[1], lengths[0], lengths[1]
+
+
+def _corner_angle(u: tuple[float, float], v: tuple[float, float]) -> float:
+    """Der Winkel zwischen den beiden Schenkeln, im offenen Bereich (0, π)."""
+    dot = max(-1.0, min(1.0, u[0] * v[0] + u[1] * v[1]))
+    theta = math.acos(dot)
+    if theta <= 1e-6 or theta >= math.pi - 1e-6:
+        raise ValidationError(
+            "element",
+            _("Die beiden Linien liegen auf einer Geraden — dort gibt es keine Ecke zu brechen."),
+        )
+    return theta
+
+
+def _shortened(
+    sketch: Sketch, corner: Corner, first_to: Point2, second_to: Point2
+) -> tuple[SketchElement, ...]:
+    """Beide Linien mit dem Eckende auf die neuen Punkte gesetzt."""
+    elements = list(sketch.elements)
+    for (index, local), spot in ((corner.first, first_to), (corner.second, second_to)):
+        element = elements[index]
+        moved = list(element.points)
+        moved[local] = spot
+        elements[index] = replace(element, points=tuple(moved))
+    return tuple(elements)
+
+
+def _without_corner_joint(
+    sketch: Sketch, first_flat: int, second_flat: int
+) -> tuple[SketchConstraint, ...]:
+    """Die Bedingungen ohne die Deckung, die beide Eckenden verband."""
+    joint = {first_flat, second_flat}
+    return tuple(
+        entry
+        for entry in sketch.constraints
+        if not (entry.kind == "coincident" and set(entry.targets) == joint)
+    )
+
+
+def fillet(sketch: Sketch, points: Sequence[Point2], flat: int, radius: float) -> Sketch:
+    """Bricht die Ecke an ``flat`` mit einem Bogen vom Radius ``radius``.
+
+    Beide Linien werden bis zum Berührpunkt gekürzt, dazwischen liegt ein
+    Bogen, der beide tangential berührt — und das bleibt so: Deckung an
+    beiden Enden, der Radius als Maß, und die Tangente an jeder Linie als
+    **Senkrecht** zwischen der Linie und dem Radiusstrahl zu ihrem
+    Berührpunkt. Ein verrundetes Rechteck lässt sich danach an jeder Ecke
+    ziehen, und die Rundung läuft mit statt zu zerreißen.
+
+    **Warum nicht die Tangentenbedingung selbst:** Sie misst den Abstand der
+    Mitte zur Geraden gegen den Radius, und an einem Bogenende, das per
+    Deckung *auf* der Linie liegt, ist das ein doppelter Nullpunkt — die
+    Ableitung nach dem Ende ist dort null, die Jacobimatrix singulär, und der
+    Löser meldete „legt fest, was schon festliegt" über eine Skizze, die
+    genau bestimmt war (gemessen 13.09.2026). Die Senkrechte sagt dasselbe
+    mit einer Ableitung, die trägt.
+
+    Der Radius muss zur Ecke passen: Der Berührpunkt liegt ``r / tan(θ/2)``
+    von der Ecke entfernt, und wenn das weiter ist als eine der Linien lang,
+    gibt es die Rundung dort nicht — die Meldung nennt den größten Radius,
+    der noch passt.
+    """
+    require_positive("radius", radius)
+    corner = corner_at(sketch, points, flat)
+    if corner is None:
+        raise ValidationError(
+            "element",
+            _("Hier treffen sich keine zwei Linien — Verrunden braucht eine Ecke aus zwei Linien."),
+        )
+    u, v, length_u, length_v = _corner_directions(sketch, points, corner)
+    theta = _corner_angle(u, v)
+    reach = radius / math.tan(theta / 2.0)
+    room = min(length_u, length_v)
+    if reach >= room - EPS_SKETCH:
+        raise ValidationError(
+            "radius",
+            _(
+                "Der Radius ist zu groß für diese Ecke — höchstens {most} passen hinein.",
+                most=_written(room * math.tan(theta / 2.0)),
+            ),
+            value=radius,
+            constraint="max",
+            values={"most": _written(room * math.tan(theta / 2.0))},
+        )
+    cx, cy = corner.spot
+    touch_u: Point2 = (cx + u[0] * reach, cy + u[1] * reach)
+    touch_v: Point2 = (cx + v[0] * reach, cy + v[1] * reach)
+    bisector = (u[0] + v[0], u[1] + v[1])
+    bisector_length = math.hypot(*bisector)
+    bisector = (bisector[0] / bisector_length, bisector[1] / bisector_length)
+    centre: Point2 = (
+        cx + bisector[0] * radius / math.sin(theta / 2.0),
+        cy + bisector[1] * radius / math.sin(theta / 2.0),
+    )
+    # Die Wölbung zeigt zur Ecke hin: der Punkt des Kreises, der ihr am
+    # nächsten liegt. Damit läuft der Bogen auf der kurzen Seite.
+    via: Point2 = (centre[0] - bisector[0] * radius, centre[1] - bisector[1] * radius)
+    stored = arc_through(touch_u, touch_v, via)
+    if stored is None:
+        raise ValidationError(
+            "radius",
+            _("Aus diesem Radius wird an dieser Ecke kein Bogen."),
+            value=radius,
+        )
+
+    offsets = offsets_of(sketch)
+    first_flat = offsets[corner.first[0]] + corner.first[1]
+    second_flat = offsets[corner.second[0]] + corner.second[1]
+    first_line = (offsets[corner.first[0]], offsets[corner.first[0]] + 1)
+    second_line = (offsets[corner.second[0]], offsets[corner.second[0]] + 1)
+    arc_begin = len(points)
+    arc_centre, arc_start, arc_end = arc_begin, arc_begin + 1, arc_begin + 2
+    # ``arc_through`` darf Anfang und Ende tauschen — welches Ende an welcher
+    # Linie sitzt, sagt der Ort.
+    start_at_u = math.dist(stored[1], touch_u) <= math.dist(stored[2], touch_u)
+    end_of_u = arc_start if start_at_u else arc_end
+    end_of_v = arc_end if start_at_u else arc_start
+
+    elements = _shortened(sketch, corner, touch_u, touch_v)
+    arc = SketchElement("arc", stored)
+    constraints = (
+        *_without_corner_joint(sketch, first_flat, second_flat),
+        SketchConstraint("coincident", (first_flat, end_of_u)),
+        SketchConstraint("coincident", (second_flat, end_of_v)),
+        SketchConstraint("perpendicular", (*first_line, arc_centre, end_of_u)),
+        SketchConstraint("perpendicular", (*second_line, arc_centre, end_of_v)),
+        SketchConstraint("radius", (arc_centre, arc_start), _written(radius)),
+    )
+    return replace(sketch, elements=(*elements, arc), constraints=constraints)
+
+
+def chamfer(sketch: Sketch, points: Sequence[Point2], flat: int, distance: float) -> Sketch:
+    """Bricht die Ecke an ``flat`` mit einer Schräge, ``distance`` von der
+    Ecke entfernt auf beiden Linien.
+
+    Beide Linien werden um das Maß gekürzt, dazwischen liegt eine gerade
+    Kante — die Fase. Sie bleibt an beiden Enden verbunden und trägt ihre
+    Länge als Maß; ihr Winkel bleibt frei, denn ein Maß für „gleich weit von
+    einer Ecke, die es nicht mehr gibt" kennt die Bedingungsliste nicht.
+    Gezogen wird ein gefastes Rechteck damit weiter als Ganzes, und wer die
+    Fase schräger will, zieht an ihrem Ende.
+    """
+    require_positive("distance", distance)
+    corner = corner_at(sketch, points, flat)
+    if corner is None:
+        raise ValidationError(
+            "element",
+            _("Hier treffen sich keine zwei Linien — eine Fase braucht eine Ecke aus zwei Linien."),
+        )
+    u, v, length_u, length_v = _corner_directions(sketch, points, corner)
+    _corner_angle(u, v)
+    room = min(length_u, length_v)
+    if distance >= room - EPS_SKETCH:
+        raise ValidationError(
+            "distance",
+            _(
+                "Die Fase ist zu groß für diese Ecke — höchstens {most} passen hinein.",
+                most=_written(room),
+            ),
+            value=distance,
+            constraint="max",
+            values={"most": _written(room)},
+        )
+    cx, cy = corner.spot
+    cut_u: Point2 = (cx + u[0] * distance, cy + u[1] * distance)
+    cut_v: Point2 = (cx + v[0] * distance, cy + v[1] * distance)
+
+    offsets = offsets_of(sketch)
+    first_flat = offsets[corner.first[0]] + corner.first[1]
+    second_flat = offsets[corner.second[0]] + corner.second[1]
+    edge_begin = len(points)
+    elements = _shortened(sketch, corner, cut_u, cut_v)
+    edge = SketchElement("line", (cut_u, cut_v))
+    constraints = (
+        *_without_corner_joint(sketch, first_flat, second_flat),
+        SketchConstraint("coincident", (first_flat, edge_begin)),
+        SketchConstraint("coincident", (second_flat, edge_begin + 1)),
+        SketchConstraint(
+            "distance", (edge_begin, edge_begin + 1), _written(math.dist(cut_u, cut_v))
+        ),
+    )
+    return replace(sketch, elements=(*elements, edge), constraints=constraints)
 
 
 #: Die Bedingungsarten, die ein Maß tragen und deshalb mitskaliert werden

@@ -509,3 +509,155 @@ def test_projecting_beside_the_body_says_so() -> None:
 
     with pytest.raises(ValidationError):
         edit.project(empty, box)
+
+
+# --- Verrunden und Fase -----------------------------------------------------------
+
+
+def box() -> Sketch:
+    """Ein Rechteck aus vier Linien mit Deckung, waagerecht und senkrecht —
+    ohne Maße und ohne Festpunkt, so wie der Editor es zeichnet."""
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (40.0, 0.0))),
+            SketchElement(kind="line", points=((40.0, 0.0), (40.0, 20.0))),
+            SketchElement(kind="line", points=((40.0, 20.0), (0.0, 20.0))),
+            SketchElement(kind="line", points=((0.0, 20.0), (0.0, 0.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+        ),
+    )
+
+
+def test_a_corner_is_two_lines_meeting_at_the_same_spot() -> None:
+    """Gesucht wird über die gelösten Punkte, nicht über die Deckung: Beide
+    Enden liegen am selben Ort, und das reicht. Ein Punkt mitten auf einer
+    Linie ist keine Ecke, und ein Bogenende auch nicht."""
+    sketch = box()
+    points = edit.flat_points(sketch)
+
+    corner = edit.corner_at(sketch, points, 3)
+    assert corner is not None
+    assert corner.spot == (40.0, 20.0)
+    assert {corner.first[0], corner.second[0]} == {1, 2}
+
+    # Dieselbe Ecke, über den anderen der zwei deckungsgleichen Punkte.
+    assert edit.corner_at(sketch, points, 4) == corner
+    assert edit.corner_at(sketch, points, 99) is None
+
+    lonely = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),),
+    )
+    assert edit.corner_at(lonely, edit.flat_points(lonely), 1) is None, "eine Linie ist keine Ecke"
+
+
+def test_a_fillet_replaces_the_corner_with_a_tangent_arc() -> None:
+    """Radius 5 an der rechten oberen Ecke: Beide Linien enden fünf Millimeter
+    vor der Ecke, der Bogen sitzt um (35 | 15) und läuft von (40 | 15) nach
+    (35 | 20). Die Zahlen stehen ausgerechnet da — ein Vorzeichenfehler
+    setzte die Mitte außerhalb."""
+    sketch = box()
+    rounded = edit.fillet(sketch, edit.flat_points(sketch), 3, 5.0)
+
+    assert len(rounded.elements) == 5
+    assert rounded.elements[1].points == ((40.0, 0.0), (40.0, 15.0))
+    assert rounded.elements[2].points[0] == pytest.approx((35.0, 20.0))
+    arc = rounded.elements[4]
+    assert arc.kind == "arc"
+    assert flat(arc.points) == pytest.approx(flat(((35.0, 15.0), (40.0, 15.0), (35.0, 20.0))))
+
+    kinds = [entry.kind for entry in rounded.constraints]
+    assert kinds.count("coincident") == 5, "die Ecke ist weg, zwei Bogenenden sind dazu"
+    assert kinds.count("perpendicular") == 2, "die Tangente als Senkrechte zum Radiusstrahl"
+    assert kinds.count("radius") == 1
+    assert (SketchConstraint("coincident", (3, 4)), rounded.constraints) and not any(
+        entry.kind == "coincident" and set(entry.targets) == {3, 4} for entry in rounded.constraints
+    ), "die alte Eckdeckung ist gelöst"
+
+
+def test_a_fillet_solves_determined_and_survives_a_drag() -> None:
+    """Der Beleg dafür, dass die Bedingungen tragen: Der Löser nimmt die
+    verrundete Skizze ohne Widerspruch an, zählt dieselben vier freien Grade
+    wie vorher — und wer danach an einer Ecke zieht, nimmt die Rundung mit,
+    statt sie zu zerreißen."""
+    from app.core.sketch.profile import regions_of
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = box()
+    rounded = edit.fillet(sketch, edit.flat_points(sketch), 3, 5.0)
+    solved = solve_sketch(rounded)
+    assert solved.free_dof == 4, "Lage und zwei Seiten bleiben frei, die Rundung nicht"
+    assert len(regions_of(solved)) == 1, "und der Umriss ist geschlossen"
+
+    # Gezogen wird in kleinen Schritten, wie die Maus es tut: Ein einziger
+    # Sprung um zehn Millimeter lässt die nichtlinearen Bedingungen (Radius,
+    # Senkrechte) beim Gauß-Newton-Schritt um 2·10⁻⁴ mm im Nullraum driften;
+    # fünfzig Schritte à 0,2 mm bleiben unter 10⁻⁸ — gemessen 13.09.2026.
+    points = [point for element in solved.elements for point in element.points]
+    for step in range(1, 51):
+        dragged = solve_sketch(rounded, dragged={5: (0.0, 20.0 + 0.2 * step)}, start=points)
+        points = [point for element in dragged.elements for point in element.points]
+    assert points[8] == pytest.approx((35.0, 25.0), abs=1e-6), "die Bogenmitte ist mitgewandert"
+    assert math.dist(points[8], points[9]) == pytest.approx(5.0), "und der Radius hält"
+    assert points[1] == pytest.approx((40.0, 0.0), abs=1e-6), "die andere Seite blieb stehen"
+
+
+def test_a_fillet_names_the_largest_radius_that_fits() -> None:
+    """Zwanzig Millimeter ist die kurze Seite: Ein Radius von 30 passt nicht,
+    und die Absage nennt die Zahl, die noch passt (Regel 17)."""
+    sketch = box()
+    with pytest.raises(ValidationError) as caught:
+        edit.fillet(sketch, edit.flat_points(sketch), 3, 30.0)
+    assert caught.value.values["most"] == "20"
+    assert "20" in str(caught.value.detail)
+
+    with pytest.raises(ValidationError):
+        edit.fillet(sketch, edit.flat_points(sketch), 3, 0.0)
+
+
+def test_a_chamfer_cuts_the_corner_with_a_straight_edge() -> None:
+    """Fase 5: beide Linien um fünf gekürzt, dazwischen die Schräge mit ihrer
+    Länge als Maß — 5·√2 an der rechten Ecke."""
+    from app.core.sketch.profile import regions_of
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = box()
+    cut = edit.chamfer(sketch, edit.flat_points(sketch), 3, 5.0)
+
+    assert len(cut.elements) == 5
+    edge = cut.elements[4]
+    assert edge.kind == "line"
+    assert flat(edge.points) == pytest.approx(flat(((40.0, 15.0), (35.0, 20.0))))
+    measure = [entry for entry in cut.constraints if entry.kind == "distance"]
+    assert len(measure) == 1
+    assert float(measure[0].value) == pytest.approx(5.0 * math.sqrt(2.0), abs=1e-5)
+
+    solved = solve_sketch(cut)
+    assert len(regions_of(solved)) == 1, "der Umriss bleibt geschlossen"
+
+    with pytest.raises(ValidationError) as caught:
+        edit.chamfer(sketch, edit.flat_points(sketch), 3, 25.0)
+    assert caught.value.values["most"] == "20"
+
+
+def test_breaking_needs_a_corner() -> None:
+    """Ein Punkt, an dem keine zwei Linien enden, ist keine Ecke — beide
+    Werkzeuge sagen das, statt still nichts zu tun."""
+    lonely = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),),
+    )
+    with pytest.raises(ValidationError):
+        edit.fillet(lonely, edit.flat_points(lonely), 1, 1.0)
+    with pytest.raises(ValidationError):
+        edit.chamfer(lonely, edit.flat_points(lonely), 1, 1.0)

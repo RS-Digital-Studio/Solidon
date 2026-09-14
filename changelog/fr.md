@@ -18,6 +18,15 @@ dans `website/version.json`.
 
 ## 0.4.2
 
+### Dessin
+
+- Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.
+- Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion.
+- Les formes du menu se déplacent ; les cotes de l'entrée du menu restent. Pour modifier une cote dans la vue, double-cliquez sur sa carte.
+- Congé et chanfrein dans l'éditeur d'esquisse : viser un coin, saisir un rayon ou une cote, cliquer. L'arrondi reste à son coin quand vous déplacez, le chanfrein crée une arête inclinée.
+- Quand une contrainte retient un point, la ligne dit laquelle — et qu'un clic droit sur le point la retire. Avant, le point restait muet.
+- Fixe veut dire fixe : un point fixé ne suit plus le déplacement. Les lignes exactement horizontales ou verticales le restent, même si vous déplacez un coin ensuite.
+
 ### Vue et utilisation
 
 - Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.

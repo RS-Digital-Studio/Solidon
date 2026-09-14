@@ -42,6 +42,15 @@ Nutzen da und sonst nichts.
 
 ## 0.4.2
 
+### Zeichnen
+
+- Ein gezogener Punkt bleibt am Zeiger, und die Nachbarn folgen: Eine Ecke des Rechtecks zieht die beiden Seiten mit, eine Linie streckt die Form. Vorher kam die Ecke nur ein Stück weit.
+- Ein geklicktes Rechteck ist frei: kein Festpunkt, keine Maße, solange Sie keine tippen. Eine getippte Breite oder Höhe bleibt als Maß stehen — so wie in Fusion.
+- Formen aus dem Menü lassen sich verschieben; die Maße aus dem Menüeintrag bleiben. Ein Maß im Bild ändern Sie per Doppelklick auf seine Karte.
+- Verrunden und Fase im Skizzeneditor: auf eine Ecke zeigen, Radius oder Maß tippen, klicken. Die Rundung bleibt beim Ziehen an ihrer Ecke, die Fase macht eine schräge Kante.
+- Hält eine Bedingung einen Punkt fest, sagt die Zeile, welche — und dass ein Rechtsklick auf den Punkt sie löst. Vorher blieb der Punkt stumm stehen.
+- Fest heißt fest: Ein festgesetzter Punkt folgt keinem Zug mehr. Linien, die genau waagerecht oder senkrecht liegen, bleiben es, auch wenn Sie später an einer Ecke ziehen.
+
 ### Ansicht und Bedienung
 
 - Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.

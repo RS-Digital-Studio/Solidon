@@ -11,6 +11,7 @@ das Zeichnen.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -109,7 +110,9 @@ def test_placing_snaps_to_an_existing_point(qt_app: QApplication) -> None:
 
     assert len(canvas.sketch.elements) == 2
     kinds = [entry.kind for entry in canvas.sketch.constraints]
-    assert kinds == ["coincident"], "der Fang wird eine Deckung"
+    # Die Linie steht genau senkrecht, also bleibt sie es (seit 13.09.2026):
+    # Deckung **und** Senkrecht, beides aus demselben Klickzug.
+    assert kinds == ["coincident", "vertical"], "der Fang wird eine Deckung"
 
     canvas.undo()
     assert len(canvas.sketch.elements) == 1, "ein Rückgängig nimmt den ganzen Klickzug"
@@ -2018,7 +2021,10 @@ def test_the_snap_still_joins_a_line_to_a_point(qt_app: QApplication) -> None:
     canvas.place(canvas._to_screen(0.05, 0.0))
     canvas.place(canvas._to_screen(30.0, 0.0))
 
-    assert [entry.kind for entry in canvas.sketch.constraints] == ["coincident"]
+    kinds = [entry.kind for entry in canvas.sketch.constraints]
+    assert "coincident" in kinds
+    # Und weil die Linie genau waagerecht liegt, bleibt sie es (13.09.2026).
+    assert kinds == ["coincident", "horizontal"]
 
 
 def test_the_pointer_says_whether_it_draws_or_selects(qt_app: QApplication) -> None:
@@ -2454,7 +2460,12 @@ def test_a_selection_can_be_moved_in_one_go(qt_app: QApplication) -> None:
     zeigen, wohin sie zeigten: die Elemente behalten ihren Platz in der Liste.
     """
     canvas = SketchCanvas()
-    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    made = shapes.rectangle(40.0, 20.0)
+    # Ohne den Festpunkt der Grundform — genau so fügt das Formenmenü sie
+    # seit dem 13.09.2026 ein; ein fester Punkt hält den Zug, siehe unten.
+    canvas.insert_shape(
+        replace(made, constraints=tuple(c for c in made.constraints if c.kind != "fixed"))
+    )
     before = canvas.points()
     canvas.selection.clear()
     for index in range(len(canvas.sketch.elements)):
@@ -2467,6 +2478,31 @@ def test_a_selection_can_be_moved_in_one_go(qt_app: QApplication) -> None:
     for (bx, by), (ax, ay) in zip(before, after, strict=True):
         assert ax == pytest.approx(bx + 10.0), "die Form ist nicht mitgekommen"
         assert ay == pytest.approx(by + 5.0)
+
+
+def test_a_fixed_point_holds_the_selection_and_says_so(qt_app: QApplication) -> None:
+    """*Fest* heißt fest — auch gegen den Zug, wie in jedem CAD.
+
+    Bis zum 13.09.2026 wanderte der Anker eines festen Punkts mit der
+    gespeicherten Koordinate, und ein Zug an der Linie nahm das ganze
+    Rechteck samt Festpunkt mit. Seither hält er; und weil ein Zug, der
+    stumm nichts tut, aussieht wie ein verschluckter Klick, nennt die Zeile
+    die Bedingung und den Weg, sie zu lösen (Regel 17).
+    """
+    canvas = SketchCanvas()
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    before = canvas.points()
+    heard: list[str] = []
+    canvas.statusChanged.connect(heard.append)
+    canvas.selection.clear()
+    canvas._select(("line", (0, 1)), False)
+
+    canvas.move_selected(10.0, 5.0)
+
+    for (bx, by), (ax, ay) in zip(before, canvas.points(), strict=True):
+        assert (ax, ay) == pytest.approx((bx, by), abs=1e-6), "der Festpunkt hält die Form"
+    assert any("Fest" in text for text in heard), "und die Zeile sagt, was hält"
+    assert any("löst" in text for text in heard), "samt dem Weg, es zu lösen"
 
 
 def test_moving_nothing_says_what_is_missing(qt_app: QApplication) -> None:
@@ -5107,17 +5143,17 @@ def test_a_contradiction_freezes_the_sketch_until_it_is_loosened(
 ) -> None:
     """Der ganze Weg, den Robert nicht zurückgehen konnte.
 
-    **Und die Sperre ist nicht die, nach der es aussieht.** Ein einzelner
-    festgenagelter Punkt lässt sich sehr wohl ziehen — gemessen: ``move_point``
-    setzt ihn, und *Fest* hält ihn danach an der neuen Stelle. Was die Skizze
-    anhält, ist der **Widerspruch**: Solange einer besteht, bleibt die letzte
-    gültige Lage stehen, und keine Geste bewegt mehr etwas. Genau dorthin
-    führten die Dubletten, weil ein zweiter Druck auf *Fest* die Skizze
-    überbestimmte, statt die Bedingung zurückzunehmen.
+    Was die Skizze anhält, ist der **Widerspruch**: Solange einer besteht,
+    bleibt die letzte gültige Lage stehen, und keine Geste bewegt mehr etwas.
+    Genau dorthin führten die Dubletten, weil ein zweiter Druck auf *Fest*
+    die Skizze überbestimmte, statt die Bedingung zurückzunehmen.
 
     Der Ausweg ist deshalb, eine Bedingung zu lösen — und dass es dafür einen
     sichtbaren Weg gibt, ist der eigentliche Fix (§2.1: eine Sackgasse hat
-    einen Ausgang).
+    einen Ausgang). Gelöst wird hier das *Fest* am gezogenen Punkt: Seit dem
+    13.09.2026 hält es auch gegen den Zug, und ein Punkt, der am Maß hängt,
+    läuft danach auf seinem Kreis — er folgt, so weit die Bedingungen
+    lassen.
     """
     canvas = SketchCanvas()
     canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
@@ -5132,11 +5168,13 @@ def test_a_contradiction_freezes_the_sketch_until_it_is_loosened(
 
     hanging = canvas.constraints_at(1)
     assert hanging, "was an dem Punkt hängt, ist auffindbar — das trägt das Menü"
-    canvas.remove_constraint(hanging[-1])
+    nailed = next(at for at in hanging if canvas.sketch.constraints[at].kind == "fixed")
+    canvas.remove_constraint(nailed)
     assert not canvas.conflict, "eine Bedingung zu lösen heilt die Skizze"
 
     canvas.move_point(1, 50.0, 0.0)
     assert canvas.points() != before, "und danach folgt der Punkt wieder"
+    assert canvas.points()[1] == pytest.approx((40.0, 0.0)), "so weit, wie das Maß lässt"
 
 
 def test_the_constraint_list_offers_removal_on_a_right_click(qt_app: QApplication) -> None:
@@ -6720,4 +6758,262 @@ def test_delete_in_the_constraint_list_removes_the_constraint_not_the_line(
         assert len(canvas.sketch.constraints) == 0, "nur die Bedingung ist weg"
     finally:
         panel.close()
+        panel.deleteLater()
+
+
+# --- Ziehen, Grundformen, Ecken und Maße (13.09.2026) ------------------------------
+
+
+def _clicked_box(canvas: SketchCanvas) -> None:
+    """Ein Rechteck mit zwei Klicks, wie der Kunde es zieht."""
+    canvas.set_tool("rectangle")
+    canvas.set_snapping(True, 1.0)
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((40.0, 20.0))
+    canvas.set_tool("select")
+
+
+def test_a_clicked_rectangle_is_free_and_its_corner_follows_the_pointer(
+    qt_app: QApplication,
+) -> None:
+    """Roberts Meldung vom 13.09.2026, nachgestellt: „rechteck maße anpassen
+    geht nicht, punkt verschieben geht nicht".
+
+    Gemessen davor: Das geklickte Rechteck trug Festpunkt und beide Maße,
+    null Freiheitsgrade, und die gezogene Ecke bewegte sich nicht. Jetzt
+    bringt es nur Deckung, Waagerecht und Senkrecht mit — wie in Fusion —,
+    und die Ecke landet dort, wo der Zeiger sie hinzieht; die Nachbarn
+    folgen, das Rechteck wird 60 mal 30.
+    """
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+
+    kinds = sorted(entry.kind for entry in canvas.sketch.constraints)
+    assert "fixed" not in kinds and "distance" not in kinds, "gezeichnet heißt frei"
+    assert canvas.solved is not None and canvas.solved.free_dof == 4
+
+    assert canvas.can_drag_on_plane((40.0, 20.0))
+    assert canvas.begin_drag_on_plane((40.0, 20.0))
+    canvas.drag_on_plane((60.0, 30.0))
+    canvas.end_drag_on_plane()
+
+    points = canvas.points()
+    assert points[3] == pytest.approx((60.0, 30.0)), "die Ecke steht am Zeiger"
+    assert points[1] == pytest.approx((60.0, 0.0)) and points[5] == pytest.approx((0.0, 30.0))
+    assert points[0] == pytest.approx((0.0, 0.0)), "die Gegenecke blieb"
+    assert canvas.sketch.elements[1].points[1] == pytest.approx((60.0, 30.0)), (
+        "und die gespeicherte Zeichnung ist die gelöste"
+    )
+    canvas.undo()
+    assert canvas.points()[3] == pytest.approx((40.0, 20.0)), "ein Rückgängig nimmt den Zug"
+
+
+def test_a_typed_rectangle_keeps_only_the_typed_measure(qt_app: QApplication) -> None:
+    """Getippt heißt bemaßt: Die Breite aus dem Feld bleibt als Maß, die
+    geklickte Höhe nicht — und ein Festpunkt entsteht auch dann nicht."""
+    canvas = SketchCanvas()
+    canvas.set_tool("rectangle")
+    canvas.set_snapping(True, 1.0)
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.hover_on_plane((30.0, 10.0))
+    canvas.place_measured(50.0)
+    canvas.place_second_measured(25.0)
+
+    measures = [entry for entry in canvas.sketch.constraints if entry.kind == "distance"]
+    assert len(measures) == 2, "beide getippt, beide bemaßt"
+    assert not any(entry.kind == "fixed" for entry in canvas.sketch.constraints)
+    assert canvas.solved is not None and canvas.solved.free_dof == 2, "nur die Lage bleibt frei"
+
+
+def test_dragging_a_line_stretches_the_box(qt_app: QApplication) -> None:
+    """„linie schieben geht nicht" — vorher wanderte das ganze Rechteck samt
+    Festpunkt. Jetzt geht die untere Kante nach unten, die Senkrechten werden
+    länger, die obere Kante bleibt."""
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+
+    assert canvas.begin_drag_on_plane((20.0, 0.0))
+    canvas.drag_on_plane((20.0, -10.0))
+    canvas.end_drag_on_plane()
+
+    points = canvas.points()
+    assert points[0] == pytest.approx((0.0, -10.0)) and points[1] == pytest.approx((40.0, -10.0))
+    assert points[3] == pytest.approx((40.0, 20.0)), "die obere Kante steht"
+
+
+def test_a_shape_from_the_menu_comes_without_a_fixed_point(qt_app: QApplication) -> None:
+    """Das Formenmenü fügt bemaßt, aber frei ein: Wohin ein Rechteck aus dem
+    Menü gehört, weiß erst, wer es gezogen hat."""
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        panel._insert_made(lambda: shapes.rectangle(40.0, 20.0))
+        kinds = [entry.kind for entry in panel.canvas.sketch.constraints]
+        assert "fixed" not in kinds
+        assert kinds.count("distance") == 2, "die Maße aus dem Menüeintrag bleiben"
+        assert panel.canvas.solved is not None and panel.canvas.solved.free_dof == 2
+    finally:
+        panel.deleteLater()
+
+
+def test_a_line_that_lies_exactly_level_stays_level(qt_app: QApplication) -> None:
+    """Zwei Klicks auf derselben Rasterzeile meinen waagerecht — die Bedingung
+    kommt mit, und ein späterer Zug an der Ecke verzieht die Linie nicht
+    schräg. Eine Linie mit Steigung bekommt nichts."""
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas.set_snapping(True, 1.0)
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((30.0, 0.0))
+    canvas.place_on_plane((30.0, 20.0))
+    canvas.place_on_plane((45.0, 35.0))
+
+    kinds = [entry.kind for entry in canvas.sketch.constraints]
+    assert kinds.count("horizontal") == 1
+    assert kinds.count("vertical") == 1
+    assert kinds.count("coincident") == 2, "der Linienzug hängt zusammen"
+
+
+def test_a_typed_length_snaps_to_the_axis_and_continues_the_chain(
+    qt_app: QApplication,
+) -> None:
+    """Der Zeiger steht fast waagerecht — eine Hand hält keine 0,0 Grad —,
+    und 30 getippt wird eine waagerechte Linie von genau 30. Danach hängt die
+    nächste Linie am Ende, wie nach einem Klick."""
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas.set_snapping(False)
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.hover_on_plane((29.5, 1.2))
+    canvas.place_measured(30.0)
+
+    line = canvas.sketch.elements[0]
+    assert line.points[1] == pytest.approx((30.0, 0.0))
+    kinds = [entry.kind for entry in canvas.sketch.constraints]
+    assert "horizontal" in kinds and "distance" in kinds
+    assert canvas.pending_elements(), "der Zug geht am getippten Ende weiter"
+    assert canvas._pending == [1]
+
+
+def test_the_fillet_tool_rounds_a_corner_on_click(qt_app: QApplication) -> None:
+    """Verrunden im Editor: Zeiger auf die Ecke — Vorschau des Bogens und das
+    Maßfeld mit dem Radius; Klick — Bogen, gekürzte Linien, Radius als Maß,
+    ein Rückgängig-Schritt."""
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+    canvas.set_tool("fillet")
+    assert canvas.pending_measure() == 0.0, "ohne Ecke unter dem Zeiger kein Maß"
+
+    canvas.hover_on_plane((40.0, 20.0))
+    assert canvas._corner_hover in (3, 4)
+    assert canvas.pending_measure() == pytest.approx(2.0), "der Radius steht im Feld"
+    preview = canvas.pending_elements()
+    assert len(preview) == 1 and preview[0].kind == "arc", "die Vorschau ist der Bogen"
+    assert "Verrunden" in canvas.status_text() and "2,00" in canvas.status_text()
+
+    canvas.place_on_plane((40.0, 20.0))
+
+    assert canvas.sketch.elements[-1].kind == "arc"
+    kinds = [entry.kind for entry in canvas.sketch.constraints]
+    assert kinds.count("radius") == 1
+    assert canvas.solved is not None and canvas.solved.free_dof == 4
+    assert not canvas.conflict
+    canvas.undo()
+    assert len(canvas.sketch.elements) == 4, "ein Schritt, ein Rückgängig"
+
+
+def test_a_typed_radius_rounds_the_corner_under_the_pointer(qt_app: QApplication) -> None:
+    """Die erste Ziffer beginnt die Eingabe, die Eingabetaste bricht die Ecke
+    mit der getippten Zahl — und die Zahl bleibt die Vorgabe für die nächste."""
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+    canvas.set_tool("fillet")
+    canvas.hover_on_plane((40.0, 20.0))
+
+    canvas.place_measured(5.0)
+
+    arc = canvas.sketch.elements[-1]
+    assert arc.kind == "arc"
+    assert canvas.corner_values["fillet"] == 5.0
+    radius = next(entry for entry in canvas.sketch.constraints if entry.kind == "radius")
+    assert float(radius.value) == pytest.approx(5.0)
+
+
+def test_the_chamfer_tool_cuts_a_corner_and_a_slanted_edge_appears(
+    qt_app: QApplication,
+) -> None:
+    """„schräge kanten kann man auch nicht machen" — die Fase ist der kürzeste
+    Weg dorthin: Klick auf die Ecke, und zwischen den gekürzten Linien liegt
+    die Schräge."""
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+    canvas.set_tool("chamfer")
+    canvas.hover_on_plane((40.0, 20.0))
+    canvas.place_measured(4.0)
+
+    edge = canvas.sketch.elements[-1]
+    assert edge.kind == "line"
+    (ax, ay), (bx, by) = edge.points
+    assert abs(bx - ax) > 0.0 and abs(by - ay) > 0.0, "schräg, nicht achsparallel"
+    assert canvas.outline, "und der Umriss ist weiter geschlossen"
+
+
+def test_a_click_beside_a_corner_says_what_a_corner_is(qt_app: QApplication) -> None:
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+    canvas.set_tool("fillet")
+    heard: list[str] = []
+    canvas.statusChanged.connect(heard.append)
+
+    canvas.place_on_plane((20.0, 10.0))
+
+    assert len(canvas.sketch.elements) == 4, "nichts entstanden"
+    assert any("Ecke" in text for text in heard)
+
+
+def test_a_radius_that_does_not_fit_is_named_before_the_click(qt_app: QApplication) -> None:
+    """Die Zeile nennt den größten Radius, der passt — bevor jemand klickt."""
+    canvas = SketchCanvas()
+    _clicked_box(canvas)
+    canvas.set_tool("fillet")
+    canvas.corner_values["fillet"] = 30.0
+    canvas.hover_on_plane((40.0, 20.0))
+
+    assert canvas.pending_elements() == (), "keine Vorschau für etwas, das nicht geht"
+    assert "20" in canvas.status_text()
+
+
+def test_a_double_click_on_a_measure_card_opens_its_value(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Griff, den jeder Fusion-Kunde sucht: Doppelklick auf das Maß im
+    Bild, Zahl ändern, fertig. Bis zum 13.09.2026 gab es ihn nur in der
+    Bedingungsliste am rechten Rand."""
+    from PySide6.QtWidgets import QInputDialog
+
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        panel._insert_made(lambda: shapes.rectangle(40.0, 20.0))
+        canvas = panel.canvas
+        cards = canvas._measure_cards()
+        assert len(cards) == 2
+        index, place, _label = cards[0]
+        assert canvas.measure_at(place) == index
+        assert canvas.measure_at((place[0] + 500.0, place[1])) is None
+
+        asked: list[str] = []
+
+        def answer(*_args: object, **_kwargs: object) -> tuple[str, bool]:
+            asked.append("asked")
+            return ("55", True)
+
+        monkeypatch.setattr(QInputDialog, "getText", staticmethod(answer))
+        assert canvas.double_click_on_plane(place)
+        assert asked == ["asked"]
+        assert canvas.sketch.constraints[index].value == "55"
+        assert not canvas.double_click_on_plane((place[0] + 500.0, place[1]))
+    finally:
         panel.deleteLater()

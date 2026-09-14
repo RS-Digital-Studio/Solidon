@@ -155,6 +155,8 @@ def _drawing_keys() -> list[tuple[str, str, str]]:
         "point": _("Punkt"),
         "spline": _("Kurve"),
         "trim": _("Trimmen"),
+        "fillet": _("Verrunden"),
+        "chamfer": _("Fase"),
         "rectangle": _("Rechteck"),
         "distance": _("Abstand"),
         "offset": _("Versetzen"),

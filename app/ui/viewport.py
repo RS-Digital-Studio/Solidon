@@ -3818,7 +3818,7 @@ class Viewport(QWidget):
         #: eigenen Empfänger (``mouseDoubleClickEvent``, ``keyPressEvent``)
         #: bekommen deshalb nie ein Ereignis. Der Hinweis in der Leiste
         #: versprach beides trotzdem (Z4).
-        self._sketch_finish_stroke: Callable[[], bool] | None = None
+        self._sketch_finish_stroke: Callable[[tuple[float, float] | None], bool] | None = None
         """Die Ebene, auf die ein Klick gerade zielt — oder nichts.
 
         Sie ist der Modusschalter des Skizzenmodus in der Ansicht: Solange
@@ -12164,15 +12164,24 @@ class Viewport(QWidget):
             # Die Empfänger sitzen im Zeichenbereich, und der ist hier
             # unsichtbar. Der Rückruf entscheidet selbst, ob gerade etwas
             # abzuschließen ist — sonst fällt das Ereignis durch wie zuvor.
+            #
+            # **Der Doppelklick bringt seine Stelle mit.** Auf einer Maßkarte
+            # öffnet er das Maß, und wo die Karte liegt, weiß der Canvas nur in
+            # Millimetern der Ebene — der Sichtstrahl durch die Klickstelle
+            # sagt sie ihm. Die Eingabetaste hat keine Stelle.
             if self._sketch_finish_stroke is not None and kind in (
                 QEvent.Type.MouseButtonDblClick,
                 QEvent.Type.KeyPress,
             ):
-                closing = kind == QEvent.Type.MouseButtonDblClick or event.key() in (
-                    Qt.Key.Key_Return,
-                    Qt.Key.Key_Enter,
-                )
-                if closing and self._sketch_finish_stroke():
+                spot: tuple[float, float] | None = None
+                if kind == QEvent.Type.MouseButtonDblClick:
+                    closing = True
+                    ratio = self._device_ratio()
+                    at = event.position()
+                    spot = self._sketch_hit(int(at.x() * ratio), int(at.y() * ratio))
+                else:
+                    closing = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+                if closing and self._sketch_finish_stroke(spot):
                     return True
 
         if (
@@ -14319,16 +14328,21 @@ class Viewport(QWidget):
         self._sketch_measure_pending = pending
         self._sketch_measure_begin = begin
 
-    def set_sketch_stroke(self, finish: Callable[[], bool] | None) -> None:
-        """Verdrahtet den Abschluss eines begonnenen Zugs (Z4).
+    def set_sketch_stroke(
+        self, finish: Callable[[tuple[float, float] | None], bool] | None
+    ) -> None:
+        """Verdrahtet den Abschluss eines begonnenen Zugs (Z4) — und den
+        Doppelklick auf eine Maßkarte.
 
         Wie :meth:`set_sketch_entry`: Das Fenster setzt den Rückruf beim
         Betreten des Modus und löst ihn beim Verlassen, damit hier keine
         Referenz auf ein gestorbenes Panel liegen bleibt.
 
-        Der Rückruf sagt selbst, ob er zuständig war — nur dann wird das
-        Ereignis geschluckt. Eine Eingabetaste, die keinen Zug abschließt,
-        gehört weiterhin dem, der sie sonst bekäme.
+        Der Rückruf bekommt die Stelle auf der Zeichenebene, bei einem
+        Doppelklick — die Eingabetaste hat keine und gibt ``None`` — und sagt
+        selbst, ob er zuständig war; nur dann wird das Ereignis geschluckt.
+        Eine Eingabetaste, die keinen Zug abschließt, gehört weiterhin dem,
+        der sie sonst bekäme.
         """
         self._sketch_finish_stroke = finish
 

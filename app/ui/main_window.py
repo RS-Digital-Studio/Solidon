@@ -8037,25 +8037,27 @@ class MainWindow(QMainWindow):
         if not panel.choose_plane(plane):
             self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
 
-    def _finish_sketch_stroke(self) -> bool:
+    def _finish_sketch_stroke(self, spot: tuple[float, float] | None) -> bool:
         """Einen begonnenen Zug abschließen — Doppelklick oder Eingabetaste (Z4).
+        Und ein Doppelklick auf eine Maßkarte öffnet ihr Maß.
 
-        **Gibt zurück, ob es etwas abzuschließen gab.** Nur dann schluckt der
+        **Gibt zurück, ob es etwas zu tun gab.** Nur dann schluckt der
         Ereignisfilter der Ansicht das Ereignis; eine Eingabetaste, die keinen
         Zug beendet, gehört weiter dem, der sie sonst bekäme — dem Maßfeld
         etwa, oder dem Fenster.
 
-        Gefragt wird an derselben Stelle, an der auch der Hinweis entsteht:
-        Werkzeug „Kurve" und ein begonnener Zug. ``pending_elements`` ist die
-        öffentliche Auskunft darüber — dieselbe, aus der die Vorschau im Bild
-        entsteht; leer heißt, es ist noch kein Punkt gesetzt. Ein Spline unter
-        zwei Punkten wird von ``finish_spline`` selbst verworfen, das ist dort
-        begründet und bleibt dort.
+        ``spot`` ist die Stelle des Doppelklicks auf der Zeichenebene, ``None``
+        bei der Eingabetaste. Beides entscheidet der Canvas
+        (:meth:`SketchCanvas.double_click_on_plane`): erst der Spline, dann
+        die Karte — dieselbe Reihenfolge wie auf der Zeichenfläche selbst, mit
+        derselben Methode.
         """
         panel = self._sketch_panel
-        if panel is None or panel.canvas.tool != "spline":
+        if panel is None:
             return False
-        if not panel.canvas.pending_elements():
+        if spot is not None:
+            return panel.canvas.double_click_on_plane(spot)
+        if panel.canvas.tool != "spline" or not panel.canvas.pending_elements():
             return False
         panel.canvas.finish_spline()
         return True

@@ -304,6 +304,17 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M4 12h8" /><path d="M12 12h5" stroke-dasharray="2.5 2" />'
         '<path d="M16 8.5 20 12l-4 3.5" /><path d="M20.5 6v12" />'
     ),
+    # Verrunden: eine Ecke, deren Spitze ein Bogen ersetzt — die Spitze
+    # bleibt gestrichelt stehen, damit man sieht, was weggefallen ist.
+    "sketch_fillet": (
+        '<path d="M4.5 19.5V11a6.5 6.5 0 0 1 6.5-6.5h8.5" />'
+        '<path d="M4.5 11V4.5H11" stroke-dasharray="2.5 2" opacity="0.65" />'
+    ),
+    # Fase: dieselbe Ecke, nur mit einer Schräge statt eines Bogens.
+    "sketch_chamfer": (
+        '<path d="M4.5 19.5V11l6.5-6.5h8.5" />'
+        '<path d="M4.5 11V4.5H11" stroke-dasharray="2.5 2" opacity="0.65" />'
+    ),
     # Versatz: dieselbe Kontur ein zweites Mal daneben.
     "sketch_offset": (
         '<path d="M4 16.5 9 7h6l5 9.5" /><path d="M7 19.5 11 12h2l4 7.5" stroke-dasharray="3 2" />'

@@ -17,6 +17,15 @@ it into `website/version.json`.
 
 ## 0.4.2
 
+### Drawing
+
+- A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.
+- A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion.
+- Shapes from the menu can be moved; the dimensions from the menu entry stay. To change a dimension in the view, double-click its card.
+- Fillet and chamfer in the sketch editor: point at a corner, type a radius or a size, click. The rounding stays at its corner when you drag, the chamfer makes a slanted edge.
+- When a constraint holds a point in place, the line says which one — and that a right-click on the point releases it. Before, the point just stood still.
+- Fixed means fixed: a fixed point no longer follows a drag. Lines that lie exactly level or upright stay that way, even when you drag a corner later.
+
 ### View and operation
 
 - A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.

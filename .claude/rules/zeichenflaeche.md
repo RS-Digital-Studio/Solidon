@@ -500,8 +500,8 @@ wer es nicht kennt, wusste danach, was er anklicken muss, und immer noch nicht,
 wozu. Der Satz steht am Knopf, im Kontextmenü, in der Meldung nach einem Kürzel
 **und** an jedem Eintrag der Bedingungsliste — vier Stellen, eine Quelle.
 
-**Verschieben ist ein eigener Griff, kein Punkt-für-Punkt.** `edit.move`
-schiebt die Auswahl an Ort und Stelle — verschoben, nicht kopiert wie
+**Verschieben ist ein eigener Griff, kein Punkt-für-Punkt.** `move_selected`
+zieht alle Punkte der Auswahl gemeinsam — verschoben, nicht kopiert wie
 `offset` und `mirror` daneben, also behalten die Elemente ihren Platz in der
 Liste und jede Bedingung zeigt weiter auf dieselbe Stelle. Vorher gab es nur
 `move_point`: bei einem Rechteck vier Züge, von denen die ersten drei die Form
@@ -511,6 +511,127 @@ Schwelle säße die Form nach jedem Auswahlklick ein Zehntelmillimeter daneben.
 Der Undo-Punkt entsteht beim ersten wirklichen Zug und nur einmal; `move_selected`
 merkt nicht, sonst stünden im Rückgängig so viele Schritte, wie die Maus
 Meldungen geschickt hat.
+
+## Ein gezogener Punkt steht am Zeiger (13.09.2026)
+
+Robert: „rechteck bzw grundformen maße anpassen geht nicht, linie schieben
+geht nicht, punkt verschieben geht nicht". Gemessen waren es drei Fehler in
+einem, und keiner war ein Fehler des Mausweges:
+
+| | vorher |
+|---|---|
+| Rechteck mit zwei Klicks | trug `fixed` und beide Maße — null Freiheitsgrade, starr |
+| Ecke eines freien Rechtecks von (40 \| 20) nach (60 \| 30) | landete bei (45 \| 22,5): ein Viertel des Wegs |
+| Linie eines Rechtecks ziehen | das **ganze** Rechteck wanderte, samt Festpunkt |
+
+Der zweite ist der Kern. `move_point` tauschte nur die gespeicherte Koordinate
+und ließ den Löser neu rechnen — und der fand von dort aus die **nächste**
+Lösung: Die Deckung mit dem Nachbarn wurde hälftig ausgeglichen statt den
+Nachbarn nachzuziehen. Der dritte ist dieselbe Schwäche andersherum: `fixed`
+heftet an die gespeicherte Koordinate, und die wanderte unter der Hand mit.
+
+**Der Löser hat seitdem einen Zugmodus** (`solve_sketch(..., dragged=, start=)`,
+Regel und Messung in `app/core/sketch/CLAUDE.md`): Gezogene Punkte werden
+festgesetzt, alles andere folgt mit der kleinsten Bewegung ab dem zuletzt
+gelösten Stand; lassen die Bedingungen den Ort nicht zu, rutscht der Punkt so
+weit, wie sie erlauben. Vier Dinge hängen in der Zeichenfläche daran:
+
+* **`_drag_solve` schreibt das Ergebnis vollständig zurück** — jeden Punkt,
+  nicht nur den gezogenen. Die gespeicherte Zeichnung ist damit stets die
+  gelöste, der nächste Mausschritt beginnt dort, wo dieser aufgehört hat, und
+  ein `fixed`-Anker wandert nie mehr unter einem Zug. Ein `-0.0` des Lösers
+  wird dabei zur Null; sonst stünde „-0,00" in der Zeile.
+* **Fest heißt fest, auch gegen die Hand.** Ein Zug am festen Punkt lässt ihn
+  stehen — wie in Fusion. Der Testfall, der das Gegenteil festhielt
+  („ein festgenagelter Punkt lässt sich sehr wohl ziehen — gemessen"), war
+  eine Beobachtung, keine Entscheidung; er beschrieb die Anker-Schwäche.
+  Getippte Koordinaten (`edit_point`) gewinnen weiter: Sie setzen erst den
+  Anker (`_anchor`), dann rechnet der Zug.
+* **Die Mitte eines Kreises oder Bogens nimmt ihren Rand mit** (`move_point`).
+  Der Randpunkt trägt den Radius; die Mitte allein zu ziehen machte aus einem
+  Verschieben ein Aufziehen. Der Rand selbst zieht nur den Radius.
+* **Was hält, wird gesagt** (`_holding`). Kommt ein Punkt nicht dort an, wo
+  der Zeiger war, nennt die Zeile die Bedingungen an ihm und den Weg, sie zu
+  lösen — Rechtsklick auf den Punkt. Ein Punkt, der nur halb folgt, sieht
+  sonst aus wie ein verschluckter Klick (Regel 17).
+
+**Gezeichnet heißt frei, getippt heißt bemaßt.** `_finish_rectangle` streift
+den Festpunkt immer und lässt ein Maß nur für die Seite stehen, deren Zahl im
+Feld stand; `_insert_made` streift ihn auch an den Formen des Menüs, deren
+Maße bleiben (sie stehen im Menüeintrag). `shapes.rectangle` selbst bleibt
+bestimmt — Dialog und Agent brauchen das (§30.1). Die Zeile sagt seither
+ehrlich „Noch 4 Maße fehlen" über ein Rechteck, das niemand bemaßt hat.
+
+**Eine Linie, die genau waagerecht oder senkrecht liegt, bleibt es**
+(`_axis_constraint`, im Klick- und im Tippweg). Genau, nicht ungefähr: Der
+Rasterfang legt beide Enden auf eine Zeile oder nicht, und wer ohne Fang einen
+Millimeter Steigung zeichnet, meint ihn. Beim **getippten** Maß kommt die
+Richtung dagegen aus der Hand, und die hält keine 0,0 Grad —
+`_snapped_direction` zieht sie innerhalb von `AXIS_SNAP_DEGREES` auf die
+Achse. Und der getippte Linienzug geht danach weiter, wie nach einem Klick;
+vorher fing er nach jeder Zahl neu an.
+
+**Und die Zeile nennt den Weg zum Auswahlwerkzeug.** Das Rechteck bleibt nach
+dem zweiten Klick in der Hand, wie in jedem CAD — und wer dann eine Ecke
+greifen will, setzt ein zweites. Sobald etwas gezeichnet ist, hängt
+`status_text` an jeden Werkzeughinweis „Esc wechselt zum Auswählen und
+Ziehen." Ziehen geht nur mit dem Auswahlwerkzeug, und der Weg dorthin war eine
+Taste, die nirgends stand.
+
+## Verrunden und Fase an einer Ecke (13.09.2026)
+
+Robert: „schräge kanten kann man auch nicht machen." Zwei Werkzeuge
+(`CORNER_TOOLS`, F und K), beide gerechnet im Kern (`edit.fillet`,
+`edit.chamfer`, `edit.corner_at`) und beide mit derselben Geste: **Zeiger auf
+eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
+über die gelösten Punkte, nicht über die Deckung.
+
+* **Die Vorschau hängt an der Ecke unter dem Zeiger, nicht an einem ersten
+  Klick** (`_corner_hover`, gesetzt in `note_pointer` **vor** `pointerChanged`,
+  weil `pointer_target` sie kennen muss). `pending_elements` gibt den Bogen
+  oder die Schräge zurück, die der Klick setzen würde; `pending_measure` das
+  gemerkte Maß (`corner_values`, Vorgabe `DEFAULT_FILLET_MM` und
+  `DEFAULT_CHAMFER_MM`). Damit erscheint das Maßfeld an der Ecke, die erste
+  Ziffer beginnt die Eingabe, und die Eingabetaste bricht die Ecke mit der
+  getippten Zahl — die danach die Vorgabe für die nächste ist, wie in Fusion.
+* **Passt das Maß nicht, sagt die Zeile, welches passt.** Der Kern rechnet
+  den größten Radius beziehungsweise das größte Fasenmaß der Ecke aus und
+  nennt es in der Absage; `_corner_hint` gibt den Satz weiter, und die
+  Vorschau bleibt weg (Regel 17).
+* **Die Fangmarke weicht, das Aufleuchten bleibt.** Ein Rasterpunkt neben
+  der Ecke wäre ein Ziel, das der Klick nicht nimmt (`_note_snap_mark`,
+  `pointer_target`); die Ecke selbst leuchtet wie beim Auswählen.
+* **Die Tangente ist eine Senkrechte.** Warum die Rundung `perpendicular`
+  zwischen Linie und Radiusstrahl trägt und nicht `tangent`, steht am Kern
+  (`edit.fillet`): Am Bogenende, das per Deckung auf der Linie liegt, ist die
+  Tangentenbedingung ein doppelter Nullpunkt, und der Löser meldete
+  „legt fest, was schon festliegt" über eine Skizze, die bestimmt war.
+* **Die Fase bleibt einen Grad frei.** Ihre Länge steht als Maß, ihr Winkel
+  nicht — ein Maß für „gleich weit von einer Ecke, die es nicht mehr gibt"
+  kennt die Bedingungsliste nicht, und eine neue Bedingungsart wäre ein
+  Dateiformat. Die Zeile sagt es ehrlich („Noch ein Maß fehlt").
+
+## Ein Doppelklick auf die Maßkarte öffnet das Maß (13.09.2026)
+
+Der Griff, den jeder Fusion-Kunde sucht, lag bis dahin allein in der
+Bedingungsliste am rechten Rand. `_measure_cards` ist die **eine** Quelle für
+Anzeige und Treffer — dieselbe Rechnung, die die Karte legt, sagt auch, ob
+der Doppelklick sie trifft (`measure_at`, `MEASURE_PICK_PX` gegen die
+Kartenmitte). Die Zeichenfläche meldet `measureEditRequested`, das Panel
+öffnet denselben Dialog wie bei der Zeile in der Liste.
+
+**Und im Viewport bringt der Doppelklick seine Stelle mit.** Der Rückruf an
+`set_sketch_stroke` bekommt den Schnitt des Sichtstrahls mit der
+Zeichenebene (`None` bei der Eingabetaste); `MainWindow._finish_sketch_stroke`
+fragt `double_click_on_plane` — erst der Spline, dann die Karte, dieselbe
+Reihenfolge wie auf der Zeichenfläche selbst.
+
+**Die untere Karte misst ihre Höhe für die Breite, die sie bekommt**
+(`OverlayHost._bottom_size`). Ein umbrechender Satz — die Statuszeile mit dem
+Esc-Hinweis — meldet in `sizeHint()` die Höhe seiner Wunschbreite; zugeteilt
+bekommt die Karte höchstens die Fensterbreite. `heightForWidth` fragt die
+richtige Höhe; eine Karte ohne umbrechenden Inhalt antwortet mit minus eins
+und behält ihren Wunsch.
 
 **Was auf einer Taste liegt, steht auch im Kontextmenü.** Löschen lag allein
 auf Entf, und in der Werkzeugleiste steht es nicht — wer die Taste nicht rät,
