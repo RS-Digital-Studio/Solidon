@@ -141,7 +141,7 @@
       "name": "Gira su un Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sì, per Apple Silicon e per Intel come versioni separate — un pacchetto compilato su arm64 non parte su un Mac Intel, e questo riguarda ogni macchina precedente al 2020. Notarizzato presso Apple non è ancora, e macOS non apre con un doppio clic un pacchetto di installazione senza questa verifica: segnala di non poter verificare che il file sia privo di malware e offre «Sposta nel Cestino» come primo pulsante. Lì scegli «Fine» e autorizza poi il pacchetto in Impostazioni di Sistema, in «Privacy e Sicurezza», con «Apri comunque». La notarizzazione arriva non appena l'account Apple è pronto."
+        "text": "Sì, per Apple Silicon e per Intel come versioni separate — un pacchetto compilato su arm64 non parte su un Mac Intel, e questo riguarda ogni macchina precedente al 2020. Dalla versione 0.4.1 i pacchetti sono notarizzati presso Apple e si aprono con un doppio clic. Una versione precedente segnala che macOS non può verificare che il file sia privo di malware e offre «Sposta nel Cestino» come primo pulsante: lì scegli «Fine» e autorizza poi il pacchetto in Impostazioni di Sistema, in «Privacy e Sicurezza», con «Apri comunque»."
       }
     },
     {
@@ -313,10 +313,10 @@
             prima che venga proposta.</p>
               <div class="tabs" data-tabs data-tabs-label="Sistema operativo">
                 <div data-tab="Windows" data-release-show hidden>
-                  <p class="pruefhinweis">Windows mostra un avviso azzurro per un'applicazione nuova e non ancora firmata: <i>Ulteriori informazioni</i> → <i>Esegui comunque</i>. La firma arriverà appena il certificato sarà pronto.</p>
+                  <p class="pruefhinweis">Windows mostra un avviso azzurro per un’applicazione nuova e non ancora firmata: <i>Ulteriori informazioni</i> → <i>Esegui comunque</i>. Con <i>Smart App Control</i> attivo, Windows 11 non avvia affatto il programma, perché ammette allora solo applicazioni firmate — e chi lo disattiva in <i>Sicurezza di Windows</i> → <i>Controllo delle app e del browser</i> non può riattivarlo senza reinstallare Windows. La firma arriverà appena il certificato sarà pronto.</p>
                 </div>
                 <div data-tab="macOS" data-release-show hidden>
-                  <p class="pruefhinweis"><b>macOS.</b> I pacchetti attuali non sono ancora stati autenticati da Apple. Se macOS blocca l’installazione o il primo avvio, autorizzalo una volta in <i>Impostazioni di Sistema</i> → <i>Privacy e sicurezza</i> → <i>Apri comunque</i>.</p>
+                  <p class="pruefhinweis"><b>macOS.</b> Dalla versione 0.4.1 i pacchetti sono notarizzati da Apple: installazione e primo avvio non chiedono conferma. Se macOS blocca una versione precedente, autorizzala una volta in <i>Impostazioni di Sistema</i> → <i>Privacy e sicurezza</i> → <i>Apri comunque</i>.</p>
                 </div>
                 <div data-tab="Linux" data-release-show hidden>
                   <p class="pruefhinweis"><b>Linux.</b> Un Flatpak non si installa con un doppio clic, ma dal terminale: <code>flatpak install ./Solidon3D-*.flatpak</code> nella cartella in cui l'hai scaricato. Poi Solidon3D compare nel menu delle applicazioni. L’AppImage invece è un unico file e non si installa — le serve solo il permesso di essere eseguita: <code>chmod +x Solidon3D-*.AppImage</code>, oppure tasto destro, Proprietà, «Consenti esecuzione» nel gestore di file. Dopo di che un doppio clic la apre.</p>
@@ -749,13 +749,11 @@
     <div class="wrap">
       <h2>Requisiti di sistema</h2>
       <table class="req">
-        <tr><td>Sistema operativo</td><td>Windows 10 (1809 o successivo)/11 (x64), macOS 13 o
-        successivo, oppure Linux (x64, X11/Xwayland) — sul Mac in versioni separate per Apple
-        Silicon e Intel. La versione Mac non è ancora notarizzata presso
-        Apple: macOS non apre il pacchetto di installazione con un doppio
-        clic. Nell'avviso scegli «Fine» — non «Sposta nel Cestino» — e
-        autorizza poi il pacchetto in Impostazioni di Sistema, in «Privacy e
-        Sicurezza», con «Apri comunque».</td></tr>
+        <tr><td>Sistema operativo</td><td>Windows 10 (1809 o successivo)/11 (x64), macOS 13 o successivo, oppure
+        Linux (x64, X11/Xwayland) — sul Mac in versioni separate per Apple
+        Silicon e Intel, notarizzate presso Apple dalla versione 0.4.1. Windows
+        11 con Smart App Control attivo avvia solo applicazioni firmate; la
+        firma per Windows deve ancora arrivare.</td></tr>
         <tr><td>Spazio su disco</td><td>circa 750 MB installata, download
         tra 170 e 286 MB a seconda del sistema</td></tr>
         <tr><td>Uso di base</td><td>8 GB di RAM e una scheda grafica con
@@ -884,14 +882,13 @@
           <summary>Gira su un Mac?</summary>
           <p>Sì, per Apple Silicon e per Intel come versioni separate — un
           pacchetto compilato su arm64 non parte su un Mac Intel, e questo
-          riguarda ogni macchina precedente al 2020. Notarizzato presso
-          Apple non è ancora, e macOS non apre con un doppio clic un
-          pacchetto di installazione senza questa verifica: segnala di non
-          poter verificare che il file sia privo di malware e offre «Sposta
-          nel Cestino» come primo pulsante. Lì scegli «Fine» e autorizza poi
-          il pacchetto in Impostazioni di Sistema, in «Privacy e Sicurezza»,
-          con «Apri comunque». La notarizzazione arriva non appena l'account
-          Apple è pronto.</p>
+          riguarda ogni macchina precedente al 2020. Dalla versione 0.4.1 i
+          pacchetti sono notarizzati presso Apple e si aprono con un doppio
+          clic. Una versione precedente segnala che macOS non può verificare che
+          il file sia privo di malware e offre «Sposta nel Cestino» come primo
+          pulsante: lì scegli «Fine» e autorizza poi il pacchetto in
+          Impostazioni di Sistema, in «Privacy e Sicurezza», con «Apri
+          comunque».</p>
         </details>
         <details>
           <summary>Come installo il Flatpak su Linux?</summary>

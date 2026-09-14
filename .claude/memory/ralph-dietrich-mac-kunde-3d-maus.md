@@ -1,6 +1,6 @@
 ---
 name: ralph-dietrich-mac-kunde-3d-maus
-description: "Ralph W. Dietrich — Zahntechniker auf dem Mac, Anlass der 3D-Maus; sein Mac-Bericht vom 05.09.2026 ist die offene Feldbestätigung für Treiberweg und Update-Erkennung"
+description: "Ralph W. Dietrich — Zahntechniker auf dem Mac, Anlass der 3D-Maus; sein Mac-Bericht vom 05.09.2026 ist die offene Feldbestätigung für Treiberweg und Update-Erkennung; am 14.09.2026 meldete er Windows 11 mit Smart App Control (Solidon startet nicht, Signatur fehlt)"
 metadata: 
   node_type: memory
   type: project
@@ -27,3 +27,13 @@ answer". Sein Kiefer-Scan zeigte außerdem 281 erfundene Rundformen im Objektbau
 Freiformen weg und meldet es als Befund — Zapfen und Standfläche bleiben.
 Kontaktdaten stehen in Roberts Mail, nicht hier. Verwandt:
 [[alexander-schneider-kunde-und-mac-tester]].
+
+**Nachtrag 14.09.2026 — er hat auch Windows 11.** Ralph meldete um 08:43, dass
+Windows 11 seit dem aktuellen Update Solidon3D nicht startet, solange *Smart
+App Control* eingeschaltet ist; er hat es ausgeschaltet („Systemeinstellung →
+Smart App Control → Aus"). Der Grund ist RM-001: Das Windows-Setup ist nicht
+signiert, und Smart App Control lässt nur signierte Anwendungen zu. Das
+Abschalten ist ein Preis, den die Website seither nennt (es lässt sich ohne
+Neuinstallation von Windows nicht wieder einschalten); die Antwort ist die
+Windows-Signierung, nicht der Workaround. Dazu sein Hinweis auf den Defender,
+der VLC beim Start ausbremst — nicht gemessen, nur gehört.

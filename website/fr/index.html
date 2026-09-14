@@ -141,7 +141,7 @@
       "name": "Ça tourne sur Mac ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d'avant 2020. Il n'est pas encore notarié chez Apple, et macOS n'ouvre pas d'un double-clic un paquet d'installation sans cette vérification : il signale qu'il ne peut pas vérifier que le fichier est exempt de logiciel malveillant et propose « Placer dans la corbeille » comme premier bouton. Y choisir « Terminé », puis autoriser le paquet dans les Réglages Système, sous « Confidentialité et sécurité », avec « Ouvrir quand même ». La notarisation viendra dès que le compte Apple sera en place."
+        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d’avant 2020. Depuis la version 0.4.1, les paquets sont notariés chez Apple et s’ouvrent d’un double-clic. Une version plus ancienne signale que macOS ne peut pas vérifier que le fichier est exempt de logiciel malveillant et propose « Placer dans la corbeille » comme premier bouton : y choisir « Terminé », puis autoriser le paquet dans les Réglages Système, sous « Confidentialité et sécurité », avec « Ouvrir quand même »."
       }
     },
     {
@@ -313,10 +313,10 @@
             contractuelles seront publiés avant sa commercialisation.</p>
               <div class="tabs" data-tabs data-tabs-label="Système d’exploitation">
                 <div data-tab="Windows" data-release-show hidden>
-                  <p class="pruefhinweis">Windows affiche un avis bleu pour une application nouvelle et encore non signée : <i>Informations complémentaires</i> → <i>Exécuter quand même</i>. La signature suivra dès que le certificat sera en place.</p>
+                  <p class="pruefhinweis">Windows affiche un avis bleu pour une application nouvelle et encore non signée : <i>Informations complémentaires</i> → <i>Exécuter quand même</i>. Avec <i>Smart App Control</i> activé, Windows 11 ne lance pas le programme du tout, car il n’admet alors que des applications signées — et qui le désactive dans <i>Sécurité Windows</i> → <i>Contrôle des applications et du navigateur</i> ne peut plus le réactiver sans réinstaller Windows. La signature suivra dès que le certificat sera en place.</p>
                 </div>
                 <div data-tab="macOS" data-release-show hidden>
-                  <p class="pruefhinweis"><b>macOS.</b> Les paquets actuels ne sont pas encore notariés par Apple. Si macOS bloque l’installation ou le premier lancement, autorisez-le une fois dans <i>Réglages Système</i> → <i>Confidentialité et sécurité</i> → <i>Ouvrir quand même</i>.</p>
+                  <p class="pruefhinweis"><b>macOS.</b> Depuis la version 0.4.1, les paquets sont notariés par Apple : l’installation et le premier lancement se font sans demande. Si macOS bloque une version plus ancienne, autorisez-la une fois dans <i>Réglages Système</i> → <i>Confidentialité et sécurité</i> → <i>Ouvrir quand même</i>.</p>
                 </div>
                 <div data-tab="Linux" data-release-show hidden>
                   <p class="pruefhinweis"><b>Linux.</b> Un Flatpak ne s'installe pas par double-clic, mais depuis un terminal&nbsp;: <code>flatpak install ./Solidon3D-*.flatpak</code> dans le dossier où vous l'avez téléchargé. Solidon3D apparaît ensuite dans le menu des applications. L’AppImage, elle, est un fichier unique et ne s’installe pas&nbsp;: il lui faut seulement le droit de s’exécuter, <code>chmod +x Solidon3D-*.AppImage</code>, ou clic droit, Propriétés, «&nbsp;Autoriser l’exécution&nbsp;» dans le gestionnaire de fichiers. Un double-clic l’ouvre ensuite.</p>
@@ -756,15 +756,11 @@
     <div class="wrap">
       <h2>Configuration requise</h2>
       <table class="req">
-        <tr><td>Système d'exploitation</td><td>Windows 10 (1809 ou ultérieur)/11 (x64),
-        macOS 13 ou plus récent, ou Linux (x64, X11/Xwayland) — sur Mac, en versions séparées
-        pour Apple Silicon et Intel. La version Mac n'est pas encore
-        notariée chez Apple&nbsp;: macOS n'ouvre pas le paquet
-        d'installation d'un double-clic. Dans l'avertissement, choisir
-        «&nbsp;Terminé&nbsp;» — et non «&nbsp;Placer dans la
-        corbeille&nbsp;» — puis autoriser le paquet dans les Réglages
-        Système, sous «&nbsp;Confidentialité et sécurité&nbsp;», avec
-        «&nbsp;Ouvrir quand même&nbsp;».</td></tr>
+        <tr><td>Système d'exploitation</td><td>Windows 10 (1809 ou ultérieur)/11 (x64), macOS 13 ou plus récent, ou
+        Linux (x64, X11/Xwayland) — sur Mac, en versions séparées pour Apple
+        Silicon et Intel, notariées chez Apple depuis la version 0.4.1. Windows
+        11 avec Smart App Control activé ne lance que des applications
+        signées&nbsp;; la signature Windows reste à venir.</td></tr>
         <tr><td>Espace disque</td><td>environ 750&nbsp;Mo installés,
         téléchargement entre 170 et 286&nbsp;Mo selon le système</td></tr>
         <tr><td>Usage de base</td><td>8&nbsp;Go de RAM et une carte
@@ -900,18 +896,16 @@
         </details>
         <details>
           <summary>Ça tourne sur Mac&nbsp;?</summary>
-          <p>Oui, en versions séparées pour Apple Silicon et pour Intel — un
-          paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela
-          concerne toute machine d'avant 2020. Il n'est pas encore notarié
-          chez Apple, et macOS n'ouvre pas d'un double-clic un paquet
-          d'installation sans cette vérification&nbsp;: il signale qu'il ne
-          peut pas vérifier que le fichier est exempt de logiciel
-          malveillant et propose «&nbsp;Placer dans la corbeille&nbsp;»
-          comme premier bouton. Y choisir «&nbsp;Terminé&nbsp;», puis
-          autoriser le paquet dans les Réglages Système, sous
-          «&nbsp;Confidentialité et sécurité&nbsp;», avec «&nbsp;Ouvrir
-          quand même&nbsp;». La notarisation viendra dès que le compte Apple
-          sera en place.</p>
+          <p>Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet
+          compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne
+          toute machine d’avant 2020. Depuis la version 0.4.1, les paquets sont
+          notariés chez Apple et s’ouvrent d’un double-clic. Une version plus
+          ancienne signale que macOS ne peut pas vérifier que le fichier est
+          exempt de logiciel malveillant et propose «&nbsp;Placer dans la
+          corbeille&nbsp;» comme premier bouton&nbsp;: y choisir
+          «&nbsp;Terminé&nbsp;», puis autoriser le paquet dans les Réglages
+          Système, sous «&nbsp;Confidentialité et sécurité&nbsp;», avec
+          «&nbsp;Ouvrir quand même&nbsp;».</p>
         </details>
         <details>
           <summary>Comment installer le Flatpak sous Linux&nbsp;?</summary>

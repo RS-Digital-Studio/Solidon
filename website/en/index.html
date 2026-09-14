@@ -144,7 +144,7 @@
       "name": "Does it run on a Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes, as separate builds for Apple Silicon and Intel — a package built on arm64 will not start on an Intel Mac, and that covers every machine made before 2020. It is not yet notarised with Apple, and macOS will not open an installer package without that check on a double-click: it reports that it cannot verify the file is free of malware and offers “Move to Trash” as the first button. Choose “Done” there, then release the package in System Settings under “Privacy & Security” with “Open Anyway”. Notarisation follows once the Apple account is in place."
+        "text": "Yes, as separate builds for Apple Silicon and Intel — a package built on arm64 will not start on an Intel Mac, and that covers every machine made before 2020. From version 0.4.1 the packages are notarised with Apple and open on a double-click. An older version reports that macOS cannot verify the file is free of malware and offers “Move to Trash” as the first button: choose “Done” there, then release the package in System Settings under “Privacy & Security” with “Open Anyway”."
       }
     },
     {
@@ -314,10 +314,10 @@
             is offered.</p>
               <div class="tabs" data-tabs data-tabs-label="Operating system">
                 <div data-tab="Windows" data-release-show hidden>
-                  <p class="pruefhinweis">Windows shows a blue notice for a new, as yet unsigned application: <i>More info</i> → <i>Run anyway</i>. Signing follows as soon as the certificate is in place.</p>
+                  <p class="pruefhinweis">Windows shows a blue notice for a new, as yet unsigned application: <i>More info</i> → <i>Run anyway</i>. With <i>Smart App Control</i> switched on, Windows 11 will not start the program at all, because it then allows signed applications only — and whoever switches it off under <i>Windows Security</i> → <i>App &amp; browser control</i> cannot switch it back on without reinstalling Windows. Signing follows as soon as the certificate is in place.</p>
                 </div>
                 <div data-tab="macOS" data-release-show hidden>
-                  <p class="pruefhinweis"><b>macOS.</b> The current packages have not yet been notarized by Apple. If macOS blocks installation or the first launch, allow it once under <i>System Settings</i> → <i>Privacy &amp; Security</i> → <i>Open Anyway</i>.</p>
+                  <p class="pruefhinweis"><b>macOS.</b> From version 0.4.1 the packages are notarised with Apple: installation and first launch run without a prompt. If macOS blocks an older version, allow it once under <i>System Settings</i> → <i>Privacy &amp; Security</i> → <i>Open Anyway</i>.</p>
                 </div>
                 <div data-tab="Linux" data-release-show hidden>
                   <p class="pruefhinweis"><b>Linux.</b> A Flatpak is not installed by double-clicking but from a terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> in the folder you downloaded to. Solidon3D then appears in your application menu. The AppImage, by contrast, is a single file and needs no installation — only permission to run: <code>chmod +x Solidon3D-*.AppImage</code>, or right-click, Properties, “Allow executing” in your file manager. A double-click opens it after that.</p>
@@ -740,12 +740,11 @@
     <div class="wrap">
       <h2>System requirements</h2>
       <table class="req">
-        <tr><td>Operating system</td><td>Windows 10 (1809 or later)/11 (x64), macOS 13 or
-        later, or Linux (x64, X11/Xwayland) — on the Mac as separate builds for Apple Silicon and
-        Intel. The Mac build is not yet notarised with Apple: macOS will not
-        open the installer package on a double-click. Choose “Done” in the
-        warning — not “Move to Trash” — then release the package in System
-        Settings under “Privacy &amp; Security” with “Open Anyway”.</td></tr>
+        <tr><td>Operating system</td><td>Windows 10 (1809 or later)/11 (x64), macOS 13 or later, or Linux (x64,
+        X11/Xwayland) — on the Mac as separate builds for Apple Silicon and
+        Intel, notarised with Apple from version 0.4.1. Windows 11 with Smart
+        App Control switched on starts signed applications only; Windows signing
+        is still to come.</td></tr>
         <tr><td>Disk space</td><td>about 750 MB installed, download between
         170 and 286 MB depending on your system</td></tr>
         <tr><td>Basic use</td><td>8 GB of RAM and graphics supporting
@@ -869,15 +868,13 @@
         </details>
         <details>
           <summary>Does it run on a Mac?</summary>
-          <p>Yes, as separate builds for Apple Silicon and Intel — a package
-          built on arm64 will not start on an Intel Mac, and that covers every
-          machine made before 2020. It is not yet notarised with Apple, and
-          macOS will not open an installer package without that check on a
-          double-click: it reports that it cannot verify the file is free of
-          malware and offers “Move to Trash” as the first button. Choose
-          “Done” there, then release the package in System Settings under
-          “Privacy &amp; Security” with “Open Anyway”. Notarisation follows
-          once the Apple account is in place.</p>
+          <p>Yes, as separate builds for Apple Silicon and Intel — a package built
+          on arm64 will not start on an Intel Mac, and that covers every machine
+          made before 2020. From version 0.4.1 the packages are notarised with
+          Apple and open on a double-click. An older version reports that macOS
+          cannot verify the file is free of malware and offers “Move to Trash”
+          as the first button: choose “Done” there, then release the package in
+          System Settings under “Privacy &amp; Security” with “Open Anyway”.</p>
         </details>
         <details>
           <summary>How do I install the Flatpak on Linux?</summary>

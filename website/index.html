@@ -144,7 +144,7 @@
       "name": "Läuft das auf einem Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Bei Apple notarisiert ist es noch nicht, und macOS öffnet ein Installationspaket ohne diese Prüfung nicht per Doppelklick: Es meldet, es könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an. Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben. Notarisierung kommt, sobald das Apple-Konto steht."
+        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Ab Version 0.4.1 sind die Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben."
       }
     },
     {
@@ -319,10 +319,10 @@
           tatsächlichen Angebot veröffentlicht.</p>
             <div class="tabs" data-tabs data-tabs-label="Betriebssystem">
               <div data-tab="Windows" data-release-show hidden>
-                <p class="pruefhinweis">Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Die Signierung kommt, sobald das Zertifikat steht.</p>
+                <p class="pruefhinweis">Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Ist unter Windows 11 <i>Smart App Control</i> eingeschaltet, startet das Programm gar nicht, weil Windows dann nur signierte Anwendungen zulässt — und wer es unter <i>Windows-Sicherheit</i> → <i>App- &amp; Browsersteuerung</i> ausschaltet, bekommt es ohne Neuinstallation von Windows nicht zurück. Die Signierung kommt, sobald das Zertifikat steht.</p>
               </div>
               <div data-tab="macOS" data-release-show hidden>
-                <p class="pruefhinweis"><b>macOS.</b> Die aktuellen Pakete sind noch nicht von Apple notarisiert. Wenn macOS die Installation oder den ersten Start blockiert, unter <i>Systemeinstellungen</i> → <i>Datenschutz &amp; Sicherheit</i> mit <i>Trotzdem öffnen</i> einmalig freigeben.</p>
+                <p class="pruefhinweis"><b>macOS.</b> Die Pakete sind ab Version 0.4.1 von Apple notarisiert: Installation und erster Start laufen ohne Rückfrage. Blockiert macOS eine ältere Version, unter <i>Systemeinstellungen</i> → <i>Datenschutz &amp; Sicherheit</i> mit <i>Trotzdem öffnen</i> einmalig freigeben.</p>
               </div>
               <div data-tab="Linux" data-release-show hidden>
                 <p class="pruefhinweis"><b>Linux.</b> Ein Flatpak wird nicht per Doppelklick installiert, sondern im Terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> in dem Ordner, in den du geladen hast. Danach steht Solidon3D im Startmenü. Das AppImage dagegen ist eine einzelne Datei und braucht keine Installation — nur das Recht, zu laufen: <code>chmod +x Solidon3D-*.AppImage</code>, oder im Dateimanager Rechtsklick, Eigenschaften, „Ausführen erlauben“. Dann öffnet ein Doppelklick es.</p>
@@ -773,13 +773,11 @@
     <div class="wrap">
       <h2>Systemvoraussetzungen</h2>
       <table class="req">
-        <tr><td>Betriebssystem</td><td>Windows 10 (ab 1809)/11 (x64), macOS 13 oder
-        neuer, oder Linux (x64, X11/Xwayland) — auf dem Mac für Apple Silicon und Intel getrennt.
-        Die Mac-Version ist noch nicht bei Apple notarisiert: macOS öffnet das
-        Installationspaket deshalb nicht per Doppelklick. Im Hinweis „Fertig“
-        wählen — nicht „In den Papierkorb“ — und das Paket danach in den
-        Systemeinstellungen unter „Datenschutz &amp; Sicherheit“ mit „Trotzdem
-        öffnen“ freigeben.</td></tr>
+        <tr><td>Betriebssystem</td><td>Windows 10 (ab 1809)/11 (x64), macOS 13 oder neuer, oder Linux (x64,
+        X11/Xwayland) — auf dem Mac für Apple Silicon und Intel getrennt, ab
+        Version 0.4.1 bei Apple notarisiert. Windows 11 mit eingeschaltetem
+        Smart App Control startet nur signierte Anwendungen; die
+        Windows-Signierung steht noch aus.</td></tr>
         <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download je
         nach System zwischen 170 und 286 MB</td></tr>
         <tr><td>Grundbetrieb</td><td>8 GB Arbeitsspeicher und eine
@@ -910,14 +908,12 @@
           <summary>Läuft das auf einem Mac?</summary>
           <p>Ja, für Apple Silicon und für Intel als getrennte Versionen — ein
           Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht,
-          und das betrifft jedes Gerät vor 2020. Bei Apple notarisiert ist es
-          noch nicht, und macOS öffnet ein Installationspaket ohne diese
-          Prüfung nicht per Doppelklick: Es meldet, es könne die Datei nicht
-          auf Schadsoftware prüfen, und bietet als ersten Knopf „In den
-          Papierkorb“ an. Dort „Fertig“ wählen und das Paket in den
-          Systemeinstellungen unter „Datenschutz &amp; Sicherheit“ mit
-          „Trotzdem öffnen“ freigeben. Notarisierung kommt, sobald das
-          Apple-Konto steht.</p>
+          und das betrifft jedes Gerät vor 2020. Ab Version 0.4.1 sind die
+          Pakete bei Apple notarisiert und öffnen per Doppelklick. Eine ältere
+          Version meldet, macOS könne die Datei nicht auf Schadsoftware prüfen,
+          und bietet als ersten Knopf „In den Papierkorb“ an: Dort „Fertig“
+          wählen und das Paket in den Systemeinstellungen unter „Datenschutz
+          &amp; Sicherheit“ mit „Trotzdem öffnen“ freigeben.</p>
         </details>
         <details>
           <summary>Wie installiere ich das Flatpak unter Linux?</summary>

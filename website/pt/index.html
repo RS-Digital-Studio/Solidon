@@ -141,7 +141,7 @@
       "name": "Corre num Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sim, em versões separadas para Apple Silicon e para Intel — um pacote compilado em arm64 não arranca num Mac com Intel, e isso abrange qualquer máquina anterior a 2020. Notarizado junto da Apple ainda não está, e o macOS não abre com duplo clique um pacote de instalação sem essa verificação: avisa que não consegue verificar se o ficheiro está livre de software malicioso e oferece «Mover para o Lixo» como primeiro botão. Aí escolher «Concluído» e autorizar depois o pacote nas Definições do Sistema, em «Privacidade e Segurança», com «Abrir mesmo assim». A notarização vem assim que a conta Apple estiver de pé."
+        "text": "Sim, em versões separadas para Apple Silicon e para Intel — um pacote compilado em arm64 não arranca num Mac com Intel, e isso abrange qualquer máquina anterior a 2020. A partir da versão 0.4.1 os pacotes estão notarizados junto da Apple e abrem com duplo clique. Uma versão anterior avisa que o macOS não consegue verificar se o ficheiro está livre de software malicioso e oferece «Mover para o Lixo» como primeiro botão: aí escolher «Concluído» e autorizar depois o pacote nas Definições do Sistema, em «Privacidade e Segurança», com «Abrir mesmo assim»."
       }
     },
     {
@@ -312,10 +312,10 @@
             antes de ser disponibilizada.</p>
               <div class="tabs" data-tabs data-tabs-label="Sistema operativo">
                 <div data-tab="Windows" data-release-show hidden>
-                  <p class="pruefhinweis">O Windows mostra um aviso azul numa aplicação nova e ainda não assinada: <i>Mais informações</i> → <i>Executar mesmo assim</i>. A assinatura chega assim que o certificado estiver pronto.</p>
+                  <p class="pruefhinweis">O Windows mostra um aviso azul numa aplicação nova e ainda não assinada: <i>Mais informações</i> → <i>Executar mesmo assim</i>. Com o <i>Smart App Control</i> ligado, o Windows 11 não inicia o programa de todo, porque então só admite aplicações assinadas — e quem o desliga em <i>Segurança do Windows</i> → <i>Controlo de aplicações e do browser</i> não o consegue voltar a ligar sem reinstalar o Windows. A assinatura chega assim que o certificado estiver pronto.</p>
                 </div>
                 <div data-tab="macOS" data-release-show hidden>
-                  <p class="pruefhinweis"><b>macOS.</b> Os pacotes atuais ainda não foram autenticados pela Apple. Se o macOS bloquear a instalação ou o primeiro arranque, autorize-o uma vez em <i>Definições do Sistema</i> → <i>Privacidade e Segurança</i> → <i>Abrir mesmo assim</i>.</p>
+                  <p class="pruefhinweis"><b>macOS.</b> A partir da versão 0.4.1 os pacotes estão notarizados pela Apple: a instalação e o primeiro arranque não pedem confirmação. Se o macOS bloquear uma versão anterior, autorize-a uma vez em <i>Definições do Sistema</i> → <i>Privacidade e Segurança</i> → <i>Abrir mesmo assim</i>.</p>
                 </div>
                 <div data-tab="Linux" data-release-show hidden>
                   <p class="pruefhinweis"><b>Linux.</b> Um Flatpak não se instala com duplo clique, mas no terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> na pasta onde o transferiu. Depois o Solidon3D aparece no menu de aplicações. A AppImage, essa, é um ficheiro único e não se instala — só precisa de permissão para correr: <code>chmod +x Solidon3D-*.AppImage</code>, ou clique com o botão direito, Propriedades, «Permitir execução» no gestor de ficheiros. Depois disso um duplo clique abre-a.</p>
@@ -748,13 +748,11 @@
     <div class="wrap">
       <h2>Requisitos de sistema</h2>
       <table class="req">
-        <tr><td>Sistema operativo</td><td>Windows 10 (1809 ou posterior)/11 (x64), macOS 13
-        ou mais recente, ou Linux (x64, X11/Xwayland) — no Mac, em versões separadas para Apple
-        Silicon e Intel. A versão para Mac ainda não está notarizada junto
-        da Apple: o macOS não abre o pacote de instalação com duplo clique.
-        No aviso, escolher «Concluído» — não «Mover para o Lixo» — e
-        autorizar depois o pacote nas Definições do Sistema, em «Privacidade
-        e Segurança», com «Abrir mesmo assim».</td></tr>
+        <tr><td>Sistema operativo</td><td>Windows 10 (1809 ou posterior)/11 (x64), macOS 13 ou mais recente, ou
+        Linux (x64, X11/Xwayland) — no Mac, em versões separadas para Apple
+        Silicon e Intel, notarizadas junto da Apple a partir da versão 0.4.1. O
+        Windows 11 com o Smart App Control ligado só inicia aplicações
+        assinadas; a assinatura para Windows ainda está por vir.</td></tr>
         <tr><td>Espaço em disco</td><td>cerca de 750 MB instalado,
         transferência entre 170 e 286 MB, conforme o sistema</td></tr>
         <tr><td>Uso básico</td><td>8 GB de RAM e uma gráfica compatível com
@@ -881,16 +879,15 @@
         </details>
         <details>
           <summary>Corre num Mac?</summary>
-          <p>Sim, em versões separadas para Apple Silicon e para Intel — um
-          pacote compilado em arm64 não arranca num Mac com Intel, e isso
-          abrange qualquer máquina anterior a 2020. Notarizado junto da
-          Apple ainda não está, e o macOS não abre com duplo clique um
-          pacote de instalação sem essa verificação: avisa que não consegue
-          verificar se o ficheiro está livre de software malicioso e oferece
-          «Mover para o Lixo» como primeiro botão. Aí escolher «Concluído» e
-          autorizar depois o pacote nas Definições do Sistema, em
-          «Privacidade e Segurança», com «Abrir mesmo assim». A notarização
-          vem assim que a conta Apple estiver de pé.</p>
+          <p>Sim, em versões separadas para Apple Silicon e para Intel — um pacote
+          compilado em arm64 não arranca num Mac com Intel, e isso abrange
+          qualquer máquina anterior a 2020. A partir da versão 0.4.1 os pacotes
+          estão notarizados junto da Apple e abrem com duplo clique. Uma versão
+          anterior avisa que o macOS não consegue verificar se o ficheiro está
+          livre de software malicioso e oferece «Mover para o Lixo» como
+          primeiro botão: aí escolher «Concluído» e autorizar depois o pacote
+          nas Definições do Sistema, em «Privacidade e Segurança», com «Abrir
+          mesmo assim».</p>
         </details>
         <details>
           <summary>Como instalo o Flatpak no Linux?</summary>

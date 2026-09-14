@@ -37,7 +37,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt (signiert, notarisiert, gestapelt); offen bleibt Windows — Certum-Zugang und `sign_release.py` einmal fahren |
+| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt; Windows ist seit dem 14.09. ein Kundenbefund — mit Smart App Control startet Solidon auf Windows 11 nicht, Certum-Zugang und `sign_release.py` einmal fahren |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
@@ -322,9 +322,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   mit unsigniertem Setup hinaus. Abnahme für Windows: Zugang einrichten, den Signiereingang von
   Lauf 34785006709 (oder dem nächsten Tag) lokal signieren und das signierte Setup hochladen.
 
-  **Nebenbefund, gehört zu RM-084:** Die FAQ begründet die fehlende Notarisierung an zwei
-  Stellen mit „sobald das Apple-Konto steht" (`website/index.html`). Das Konto und alle acht
-  Geheimnisse stehen längst; blockiert hat allein der Identitätsname.
+  **Und Windows ist seit dem 14.09.2026 ein Kundenbefund.** Ralph Dietrich, 08:43: „Jetzt
+  fängt WIN11 auch mit dem Käse an — ich muss Smart App Control deaktivieren, damit Solidon3D
+  startet." Smart App Control (Windows 11) lässt nur signierte Anwendungen zu; das unsignierte
+  Setup startet damit gar nicht, und der blaue SmartScreen-Hinweis mit *Trotzdem ausführen*
+  kommt nicht mehr zum Zug. Sein Workaround — Smart App Control ausschalten — hat einen Preis,
+  den ein Kunde kennen muss: Es lässt sich ohne Neuinstallation von Windows nicht wieder
+  einschalten. Die Website nennt seither beides (Prüfhinweis, Systemvoraussetzungen, sechs
+  Sprachen); die Antwort bleibt die Signierung.
+
+  **Der Nebenbefund zur FAQ ist behoben (14.09.2026):** Die Website sagte an vier Stellen je
+  Sprache, die Mac-Version sei „noch nicht notarisiert" und die Notarisierung komme, „sobald das
+  Apple-Konto steht" — vier Tage nachdem 0.4.1 notarisiert im Download-Kasten lag. Prüfhinweis,
+  Systemvoraussetzungen und die FAQ „Läuft das auf einem Mac?" sagen jetzt, dass die Pakete ab
+  0.4.1 notarisiert sind; der Weg über *Trotzdem öffnen* bleibt für eine ältere Version stehen.
+  `make_seo.py` hat die FAQ-Auszeichnung nachgezogen. Hochgeladen wird die Website erst mit
+  dem nächsten Lauf von `upload_website.py` — bis dahin steht der alte Text online.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
 
