@@ -112,6 +112,16 @@ Vorschlag ändert.
 """
 
 
+#: Was ein Zahlenfeld annimmt — nur für das kompakte Schema, das den
+#: Regex an jedem Feld weglässt (RM-173, siehe ``tools._without_binding_pattern``).
+#: Das volle Schema trägt ihn selbst; dort stünde der Satz doppelt.
+_BINDING_HINT = """
+Jedes Zahlenfeld nimmt drei Formen an: eine Zahl, den Namen eines
+Projektparameters mit vorangestelltem @ (``@laenge``) oder eine Formel mit
+vorangestelltem = (``=@laenge/2``). Das gilt für jedes Werkzeug und steht dort
+nicht noch einmal.
+"""
+
 #: Der Hinweis auf den Ort — nur für Schemata, die ihn auch tragen.
 #:
 #: §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der Beschreibung
@@ -147,6 +157,8 @@ def system_prompt(rule_set: rules.RuleSet | None = None, *, compact: bool = Fals
     # kompakte bekommt Ollama. Ein Modell, das einer Zusage des Prompts
     # folgt, die seine Werkzeuge nicht einlösen, erfindet den Ort oder
     # schweigt; beides ist schlechter als die Wahrheit.
-    if not compact:
+    if compact:
+        parts.append(_BINDING_HINT.strip())
+    else:
         parts.append(_MENU_HINT.strip())
     return "\n\n".join(parts)

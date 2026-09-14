@@ -583,6 +583,59 @@ class BackendAnswerUnreadable(ExternalToolError):
         )
 
 
+class BackendPromptTruncated(ExternalToolError):
+    """Der Auftrag passte nicht in das Fenster des lokalen Modells — und Ollama
+    hat ihn still gekürzt.
+
+    **Gemessen am 14.09.2026:** Ein Prompt von 4 098 Token gegen ein Fenster
+    von 2 048 kam mit ``prompt_eval_count`` 1 026 zurück — keine Meldung,
+    kein ``done_reason``, nur die halbe Zahl. Ollama behält den Anfang bis
+    ``n_keep`` und die zweite Hälfte des Rests; was in der Mitte steht, ist
+    weg. Bei Solidon steht dort der Auftrag mit seinen Werkzeugen, und eine
+    Antwort auf einen halben Auftrag sieht aus wie eine ganze — die
+    Bausteinquote fiel am 03.09. aus genau diesem Grund von 3/3 auf 0/3, und
+    niemand sah warum.
+
+    Erkannt wird es an der Zahl, die Ollama meldet: Die Werkzeuge allein
+    kosten :data:`PROMPT_TOKENS`; meldet eine Antwort deutlich weniger
+    (:data:`PROMPT_TRUNCATION_FLOOR`), obwohl die Werkzeuge mitgeschickt
+    wurden, ist gekürzt worden. Ein ``ExternalToolError`` und kein
+    Programmfehler: Die Abhilfe ist ein Modell mit größerem Fenster oder ein
+    gehostetes — kein Fehlerbericht.
+    """
+
+    default_title = _("Der Auftrag passte nicht in das Fenster des Sprachmodells.")
+
+    def __init__(
+        self, counted: int = 0, expected: int = 0, window: int = 0, provider: str = ""
+    ) -> None:
+        # Die Zahlen stehen in ``values`` und nicht im Satz — einen
+        # Fehlertext aus dem Kern formatiert niemand nach. Ohne Zahlen (die
+        # nackte Ausnahme aus ``test_errors``) bleiben sie weg.
+        self.provider = provider
+        values: dict[str, Any] = {}
+        if counted:
+            values["counted"] = counted
+        if expected:
+            values["expected"] = expected
+        if window:
+            values["window"] = window
+        if provider:
+            values["provider"] = provider
+        super().__init__(
+            detail=_(
+                "Das lokale Modell hat den Auftrag samt Werkzeugen nicht ganz "
+                "bekommen: Es hat weniger Text verarbeitet, als die Werkzeuge "
+                "allein brauchen — Ollama kürzt still, was nicht in das Fenster "
+                "passt, und die Antwort beruht dann auf einem halben Auftrag. "
+                "Wählen Sie in den Einstellungen ein Modell mit größerem Fenster "
+                "oder ein gehostetes."
+            ),
+            values=values,
+            suggestions=(OPEN_SETTINGS, CANCEL),
+        )
+
+
 class BackendTooSlow(ExternalToolError):
     """Das Modell hat gerechnet und war nicht rechtzeitig fertig.
 
@@ -1293,7 +1346,26 @@ class OllamaBackend:
             error.values.setdefault("provider", self.id)
             raise
         self.on_gpu = _ran_on_gpu(answer)
-        return _from_ollama(answer, self.model)
+        reply = _from_ollama(answer, self.model)
+        # Nur bei einem Werkzeugsatz, der der gemessenen Last nahekommt: Der
+        # Agent schickt alle; eine Probe mit zwei Werkzeugen kostet weniger als
+        # der Durchschnitt je Werkzeug, und die Erwartung wäre geraten.
+        if len(tools) * 2 >= PROMPT_TOOL_COUNT:
+            expected = _tools_cost(len(tools))
+            if 0 < reply.input_tokens < expected * PROMPT_TRUNCATION_FLOOR:
+                raise BackendPromptTruncated(
+                    counted=reply.input_tokens,
+                    expected=expected,
+                    window=OLLAMA_CONTEXT_TOKENS,
+                    provider=self.id,
+                )
+        return reply
+
+
+def _tools_cost(count: int) -> int:
+    """Was ``count`` Werkzeuge nach der Messung von :data:`PROMPT_TOKENS`
+    kosten — anteilig, denn Tests und Proben schicken nicht alle."""
+    return round(PROMPT_TOKENS * count / PROMPT_TOOL_COUNT)
 
 
 def _ran_on_gpu(answer: dict[str, Any]) -> bool | None:
@@ -1895,6 +1967,15 @@ PROMPT_TOKENS: Final = 31465
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 PROMPT_TOOL_COUNT: Final = 121
+
+#: Unter diesem Anteil der gemessenen Werkzeuglast gilt eine Antwort als
+#: vorn gekürzt (:class:`BackendPromptTruncated`). Die Schwelle hat Luft nach
+#: beiden Seiten, und beide sind gemessen: Ollama kürzt einen zu langen
+#: Prompt auf etwa die Hälfte (1 026 von 2 048 am 14.09.2026), und ein Modell
+#: mit anderem Tokenizer zählt denselben Text um zehn bis zwanzig Prozent
+#: anders — :data:`PROMPT_TOKENS` stammt von qwen3:14b. Sechzig Prozent
+#: trennen die halbe Zahl von der anders gezählten.
+PROMPT_TRUNCATION_FLOOR: Final = 0.6
 
 
 @dataclass(frozen=True, slots=True)

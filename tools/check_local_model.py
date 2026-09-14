@@ -56,7 +56,13 @@ CASES: tuple[tuple[str, str], ...] = (
 def check(model: str) -> bool:
     """Ein Modell durch alle Fälle. ``True``, wenn jeder Aufruf saß."""
     backend = OllamaBackend(model=model)
-    schemas = tool_schemas()
+    # **Kompakt, wie die Anwendung es Ollama schickt** (``session.py``:
+    # ``compact = backend.id == "ollama"``). Mit dem vollen Schema (258 KB)
+    # passte der Prompt nie in das Fenster von 32 768 Token, Ollama kürzte
+    # ihn still, und dieses Werkzeug maß über Wochen ein halbes Schema —
+    # aufgefallen am 14.09.2026, als ``BackendPromptTruncated`` zum ersten
+    # Mal anschlug (RM-173).
+    schemas = tool_schemas(compact=True)
     structured = 0
     hits = 0
     times: list[float] = []
@@ -134,7 +140,7 @@ def main() -> int:
     # Modell traf mit den damals sieben Zusatzschemata fünf von fünf und fiel
     # mit dem vollständigen Register in Fließtext.
     load_operations()
-    schemas = tool_schemas()
+    schemas = tool_schemas(compact=True)
     print(f"Werkzeuge: {len(schemas)} ({len(json.dumps(schemas)) // 1024} KB Schema)\n")
     good = [model for model in chosen if check(model)]
 

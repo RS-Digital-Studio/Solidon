@@ -1889,3 +1889,52 @@ def test_the_content_type_is_no_secret_and_travels_over_plain_http(
     with pytest.raises(BackendUnavailable):
         llm.post_json("http://127.0.0.1:11434/api/chat", {"Authorization": "Bearer x"}, {})
     assert len(opened) == 1, "ein Zugangswert reist über blankes HTTP weiter nicht"
+
+
+def test_a_prompt_that_ollama_cut_in_silence_is_said_and_not_answered() -> None:
+    """Ollama kürzt einen Prompt über dem Fenster, ohne es zu sagen (RM-173).
+
+    Gemessen am 14.09.2026: 4 098 Token gegen ein Fenster von 2 048 kamen als
+    ``prompt_eval_count`` 1 026 zurück — kein Hinweis, kein ``done_reason``.
+    Bei Solidon stünde in der Lücke der Auftrag; die Antwort auf einen halben
+    Auftrag sieht aus wie eine ganze. Erkannt wird es an der Zahl: Die
+    Werkzeuge allein kosten ``PROMPT_TOKENS``, und wer mit allen Werkzeugen
+    fragt und weniger als sechzig Prozent davon zurückgemeldet bekommt, hat
+    eine gekürzte Antwort — die wird als Fehler mit Ausweg gesagt (Regel 17,
+    Regel 21), nicht als Vorschlag weitergereicht.
+    """
+    from app.core.backends.llm import PROMPT_TOKENS, PROMPT_TOOL_COUNT
+
+    tools = [{"name": f"tool_{index}", "input_schema": {}} for index in range(PROMPT_TOOL_COUNT)]
+    half = {**ollama_answer(), "prompt_eval_count": PROMPT_TOKENS // 2}
+    backend = OllamaBackend(transport=Recorder(half))
+
+    with pytest.raises(llm.BackendPromptTruncated) as caught:
+        backend.complete([Message(role="user", content="Halter")], tools=tools)
+    assert caught.value.values["counted"] == PROMPT_TOKENS // 2
+    assert caught.value.values["expected"] == PROMPT_TOKENS
+    assert caught.value.values["window"] == llm.OLLAMA_CONTEXT_TOKENS
+    assert caught.value.suggestions, "ein Fehler ohne Ausweg ist keiner (Regel 17)"
+
+    # Die Gegenproben: Ohne Werkzeuge gibt es keine Erwartung; mit wenigen
+    # Werkzeugen (unter der Hälfte des Registers) kostet eines weniger als der
+    # Durchschnitt, und die Erwartung wäre geraten — keine Prüfung; und eine
+    # Antwort ohne Zählung (0) ist ungemessen, nicht gekürzt.
+    assert (
+        OllamaBackend(transport=Recorder(half))
+        .complete([Message(role="user", content="Halter")])
+        .input_tokens
+        == PROMPT_TOKENS // 2
+    )
+    few = {**ollama_answer(), "prompt_eval_count": 90}
+    assert (
+        OllamaBackend(transport=Recorder(few))
+        .complete([Message(role="user", content="Halter")], tools=tools[:2])
+        .wants_tools
+    )
+    silent = {**ollama_answer(), "prompt_eval_count": 0}
+    assert (
+        OllamaBackend(transport=Recorder(silent))
+        .complete([Message(role="user", content="Halter")], tools=tools)
+        .wants_tools
+    )

@@ -124,6 +124,31 @@ def _caveat_tail(spec: OperationSpec) -> str:
     return f"\n\n{line}" if line else ""
 
 
+def _without_binding_pattern(field: dict[str, Any]) -> dict[str, Any]:
+    """Ein Feld ohne den Bindungs-Regex — auch in seinem ``anyOf``.
+
+    Ein bindbares Feld mit Auswahl trägt ``anyOf: [{enum}, {string, pattern}]``;
+    ohne den Regex bleibt der Zeichenkettenzweig leer und fällt weg, und ein
+    ``anyOf`` mit einem Eintrag ist der Eintrag selbst.
+    """
+    if "pattern" not in field and "anyOf" not in field:
+        return field
+    trimmed = {key: value for key, value in field.items() if key != "pattern"}
+    choices = trimmed.get("anyOf")
+    if isinstance(choices, list):
+        kept = [
+            {key: value for key, value in entry.items() if key != "pattern"}
+            for entry in choices
+            if isinstance(entry, dict) and set(entry) - {"type", "pattern"}
+        ]
+        if len(kept) == 1:
+            trimmed = {**trimmed, **kept[0]}
+            del trimmed["anyOf"]
+        else:
+            trimmed["anyOf"] = kept
+    return trimmed
+
+
 def _shortened(text: str, tail: str) -> str:
     """Der erste Satz des Fließtextes, danach ``tail`` unverändert.
 
@@ -240,6 +265,24 @@ def operation_tools(
                 properties[name] = {
                     key: value for key, value in properties[name].items() if key != "description"
                 }
+
+        # **Die Bindung eines Zahlenfelds steht im Systemprompt — und das
+        # lokale Modell hat sie vorher nie gesehen.** Jedes bindbare Feld trug
+        # ``"pattern": "^(?:@[A-Za-z_][A-Za-z0-9_]*|=.+)$"``, 618-mal derselbe
+        # Regex, 29 664 Zeichen. Gemessen am 14.09.2026 (RM-173): Ollama parst
+        # die Werkzeuge in eine feste Struktur und verwirft ``pattern``,
+        # ``minimum``, ``maximum`` und ``default`` vor dem Rendern — ohne den
+        # Regex 31 539 Token statt 31 465 (die Differenz ist der neue Satz im
+        # Prompt), ohne Grenzen und Vorgaben dieselbe Zahl. Das Modell bekam
+        # also einen Typ „Zahl oder Text" und keinen Satz, was der Text sein
+        # dürfte; ``@laenge`` war ihm nie erklärt. Seither sagt
+        # ``_BINDING_HINT`` es einmal, und der Regex fällt hier weg, weil er
+        # nirgends ankam. Das volle Schema behält ihn: Ein gehostetes Modell
+        # liest ihn wirklich.
+        if compact:
+            properties = {
+                name: _without_binding_pattern(field) for name, field in properties.items()
+            }
 
         parameters["properties"] = properties
         # §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der
