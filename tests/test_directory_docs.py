@@ -181,3 +181,89 @@ def test_every_reference_in_a_map_points_at_a_section_that_exists() -> None:
         f"  §{section} ({len(places)}x) — {places[0]}"
         for section, places in sorted(missing.items())
     )
+
+
+# --- Die Regeldateien: wohin sie zeigen, und worauf sie sich berufen ------------
+
+RULES = ROOT / ".claude" / "rules"
+AGENTS = ROOT / "AGENTS.md"
+
+#: Ein Ziel im ``paths:``-Frontmatter einer Regeldatei: ``  - "app/core/**/*.py"``.
+RULE_PATH = re.compile(r'^\s+-\s+"([^"]+)"\s*$')
+#: Ein Verweis auf eine harte Regel: ``Regel 17``, ``(Regel 21)``.
+RULE_NUMBER = re.compile(r"\bRegel (\d+)\b")
+#: Eine nummerierte harte Regel in ``AGENTS.md``: ``17. **Jede Ausnahme …``.
+HARD_RULE = re.compile(r"^(\d+)\. \*\*")
+
+
+def rule_files() -> list[Path]:
+    return sorted(RULES.glob("*.md"))
+
+
+def frontmatter_paths(rule: Path) -> list[str]:
+    """Die Ziele aus dem ``paths:``-Block am Kopf — leer, wenn es keinen gibt."""
+    lines = rule.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+    found: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        hit = RULE_PATH.match(line)
+        if hit:
+            found.append(hit.group(1))
+    return found
+
+
+def hard_rule_numbers() -> set[int]:
+    """Die Nummern der harten Regeln, gelesen aus ``AGENTS.md`` selbst."""
+    return {
+        int(hit.group(1))
+        for line in AGENTS.read_text(encoding="utf-8").splitlines()
+        if (hit := HARD_RULE.match(line))
+    }
+
+
+def test_every_rule_file_points_at_files_that_exist() -> None:
+    """Eine Regel lädt über ihr ``paths:``-Frontmatter — zeigt ein Muster ins
+    Leere, lädt sie nie, und niemand merkt es (RM-098).
+
+    Am 10.09.2026 war das von Hand nachgezählt: 13 Dateien, 36 Ziele, alle
+    vorhanden. Ein Zustand ohne Wächter ist ein Zustand auf Zeit — die nächste
+    Umbenennung eines Moduls lässt seine Regel still verwaisen.
+    """
+    files = rule_files()
+    assert len(files) >= 13, f"nur {len(files)} Regeldateien — prüft das noch etwas?"
+    astray: list[str] = []
+    for rule in files:
+        targets = frontmatter_paths(rule)
+        assert targets, f"{rule.name} trägt kein paths:-Frontmatter"
+        for target in targets:
+            if not any(ROOT.glob(target)):
+                astray.append(f"{rule.name}: {target}")
+    assert not astray, "paths:-Ziele ohne Datei:\n" + "\n".join(f"  {entry}" for entry in astray)
+
+
+def test_every_rule_number_in_the_rules_names_a_hard_rule() -> None:
+    """„Regel 17" in einer Regeldatei meint eine der harten Regeln aus
+    ``AGENTS.md`` — eine Nummer, die es dort nicht gibt, ist ein Verweis ins
+    Leere, und den liest niemand nach (RM-098).
+
+    Die Karten (``CLAUDE.md``) zählen mit: Auch sie berufen sich auf Regeln.
+    """
+    known = hard_rule_numbers()
+    assert len(known) >= 22 and known == set(range(1, max(known) + 1)), (
+        f"AGENTS.md nummeriert die harten Regeln nicht lückenlos: {sorted(known)}"
+    )
+    used: dict[int, list[str]] = defaultdict(list)
+    for path in [*rule_files(), *maps()]:
+        relative = path.relative_to(ROOT).as_posix()
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for hit in RULE_NUMBER.finditer(line):
+                used[int(hit.group(1))].append(f"{relative}:{number}")
+    assert len(used) > 10, f"nur {len(used)} Regelnummern gefunden — das Muster greift nicht"
+    unknown = {number: places for number, places in used.items() if number not in known}
+    assert not unknown, "Regelnummern, die AGENTS.md nicht kennt:\n" + "\n".join(
+        f"  Regel {number} ({len(places)}x) — {places[0]}"
+        for number, places in sorted(unknown.items())
+    )

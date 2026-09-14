@@ -249,16 +249,17 @@ Dazu die Regeldateien, die quer dazu greifen: `kern.md` deckt ganz
 `dateiformat.md` `ingest/`, `export/` und `scene/project*.py`. In `app/ui/`
 sind es vier, nach dem, was man anfasst: `oberflaeche.md` immer, dazu
 `ansicht.md` beim Viewport, `wartezeit.md` bei allem, was rechnen lässt, und
-`zeichenflaeche.md` beim Skizzeneditor.
+`zeichenflaeche.md` beim Skizzeneditor. Für `tools/`, `packaging/` und die
+Workflows gilt `auslieferung.md` — Version, Lizenz, Signierung, die
+verteilte Menge.
 
 **Wohin etwas gehört**, in einem Satz: Ändert sich der Code, ändert sich die
 Karte; ändert sich eine Entscheidung, ändert sich die Regel. Datums-Marker,
 Phasenberichte und Verifikations-Stände gehören in **keines** von beiden — sie
 stehen in `ROADMAP.md`, `ROADMAP-ARCHIV.md` und der Git-History.
 
-Vier Verzeichnisse haben **keine** eigene Regeldatei und nur eine Karte:
-`app/cli/`, `tools/`, `website/` und `packaging/`. Für sie gilt `AGENTS.md`
-unmittelbar.
+Zwei Verzeichnisse haben **keine** eigene Regeldatei und nur eine Karte:
+`app/cli/` und `website/`. Für sie gilt `AGENTS.md` unmittelbar.
 
 **Eine Falle beim Schreiben einer Karte:** `ruff format` formatiert
 Python-Blöcke **innerhalb** von Markdown mit. Ein ```` ```python ````-Block mit

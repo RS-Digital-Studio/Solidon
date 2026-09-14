@@ -47,62 +47,25 @@ als zusammenhängende Kette erkannt; Merkmale werden mit ihren verwandten
 Formen und Kennungen versetzt oder kopiert. Kreisfacetten benötigen belegte
 Rundungsmerkmale, während echte regelmäßige Vielecke Bezugskanten behalten.
 
-## Die Fahrweise — nicht `pytest -q` am Stück
+## Die Fahrweise steht einmal — in `CLAUDE.md`
 
-`test_widget_lifetime.py` ordnet `installEventFilter(self)` seiner umgebenden
-Klasse zu und prüft deren eigenen `eventFilter` auf den Abmeldegriff. Ein
-anderer Filter in derselben Datei erfüllt diesen Vertrag nicht.
+Wie die Suite gefahren wird — ein Prozess je Fensterdatei, der Rest in einem
+Zug, die Leistungstests eigens, `/pruefen` als Tor vor dem Commit und
+`tools/affected_tests.py` je Schritt — steht mit Befehlen und den drei Fallen
+beim Lesen des Ergebnisses im Abschnitt **Befehle** von `CLAUDE.md` im
+Projekt-Root. Bis zum 14.09.2026 stand derselbe Text hier ein zweites Mal,
+und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
-Der ganze Lauf in einem Prozess kommt seit dem 16.08.2026 nicht mehr durch:
-rund 22 Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile.
-Die Suite baut über siebenhundert Fenster mit Ansicht nacheinander auf, und
-irgendwann reißt eine Grenze.
+Was nur diese Datei weiß:
 
-Gefahren wird sie wie in der CI — **ein Prozess je Fensterdatei**, alles
-übrige in einem Zug:
-
-```bash
-bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
-```
-
-Die Leistungstests lässt der geteilte Lauf mit `-m "not performance"`
-ausdrücklich aus, also zusätzlich:
-
-```bash
-.venv/Scripts/python.exe -m pytest -q -m performance
-```
-
-Am einfachsten: **`/pruefen`** — der Skill fährt beides plus ruff, `ruff
-format --check` und mypy.
-
-**Und zwar in zwei Stufen** (Robert, 02.09.2026: „Tests das Nötigste"):
-
-| Wann | Was | Womit |
-|---|---|---|
-| nach jedem Schritt | die Testdateien, die die Änderung berührt | `.venv\Scripts\python.exe tools/affected_tests.py --run` |
-| vor dem Commit | das volle Tor | `/pruefen` |
-
-`affected_tests.py` liest den Importgraphen rückwärts — mittelbare
-Importeure, Baumleser wie `test_language_rules`, Tests, die eine geänderte
-Textdatei beim Namen nennen — und teilt Fensterdateien in eigene Prozesse.
-Ohne Argumente nimmt es alle ungestageten Änderungen im Baum; wer nur
-bestimmte meint, nennt sie. Meldet es
-„das ist die Suite" (eine Änderung an `i18n`, `types.py`, `errors.py` oder
-`log.py`), ist das Tor das Nötigste.
-
-## Drei Fallen beim Lesen des Ergebnisses
-
-- **Auf den Exit-Code sehen, nicht auf eine Schlusszeile — und ihn nicht
-  durch eine Pipeline lesen.** `… | tail -30` meldet den Status von `tail`,
-  und `tail` gelingt immer. Dasselbe gilt für ein `echo` als letzten Befehl.
-  Sicher ist: **Ausgabe in eine Datei, danach lesen.**
-- **Jeder Nichtnull-Exit bleibt ein Fehllauf**, auch nach „passed" oder
-  vollständigen Fortschrittszeichen. Das gilt ebenfalls für Exit 5 und
-  fehlerhafte Sammlungen.
-- **Halbierung dient der Diagnose.** Erfolgreiche kleinere Teilstücke löschen
-  den ursprünglichen Prozessabbruch nicht; der Gesamtlauf endet mit Exit 1.
-  `test_suite_script.py` prüft das mit echten Shell-Prozessausgängen und
-  simulierten pytest-Aufrufen, einschließlich 256 gezählter Fehler.
+- `test_widget_lifetime.py` ordnet `installEventFilter(self)` seiner
+  umgebenden Klasse zu und prüft deren eigenen `eventFilter` auf den
+  Abmeldegriff. Ein anderer Filter in derselben Datei erfüllt diesen Vertrag
+  nicht.
+- `test_suite_script.py` prüft die Halbierung des geteilten Laufs mit echten
+  Shell-Prozessausgängen und simulierten pytest-Aufrufen, einschließlich 256
+  gezählter Fehler: Erfolgreiche kleinere Teilstücke löschen den
+  ursprünglichen Prozessabbruch nicht, der Gesamtlauf endet mit Exit 1.
 
 ## Was wo geprüft wird
 

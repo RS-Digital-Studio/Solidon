@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Das Regelwerk hat seine Wächter (14.09.2026)](#das-regelwerk-hat-seine-wächter-14092026) |
 | 2026-09-14 | [Der Schlüsseldialog schließt sofort (14.09.2026)](#der-schlüsseldialog-schließt-sofort-14092026) |
 | 2026-09-14 | [Ein freier Fügeweg wird gesagt (14.09.2026)](#ein-freier-fügeweg-wird-gesagt-14092026) |
 | 2026-09-14 | [Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)](#drei-sackgassen-und-zwei-stumme-vorschauen-14092026) |
@@ -27972,3 +27973,36 @@ Ein Punkt aus der CI-Durchsicht vom 02.09.2026, abgeschlossen am 14.09.2026.
   (Schließen unter 0,5 s, Arbeiter läuft weiter und steht in `leash.alive()`, die Antwort
   erreicht keinen Slot, `wait_for_all` leer nach dem Auslaufen; ohne `_let_go` rot). Regel in
   `wartezeit.md`.
+
+## Das Regelwerk hat seine Wächter (14.09.2026)
+
+Ein Punkt aus dem Review vor der Demo (02.09.2026), abgeschlossen am 14.09.2026.
+
+<a id="rm-098"></a>
+
+- [x] **RM-098 — Restliche Regelwerk-Nachträge abgleichen.** Am 10.09.2026 war von Hand
+  nachgezählt: 13 Regeldateien, alle mit `paths:`, jedes Ziel vorhanden, jede genannte Regelnummer
+  in `AGENTS.md`. Ein Zustand ohne Wächter ist ein Zustand auf Zeit, und drei Dinge fehlten.
+
+  **Erledigt am 14.09.2026.** (1) Zwei Wächter in `tests/test_directory_docs.py`:
+  `test_every_rule_file_points_at_files_that_exist` liest das `paths:`-Frontmatter jeder
+  Regeldatei und verlangt für jedes Muster mindestens eine Datei (14 Dateien, 41 Ziele);
+  `test_every_rule_number_in_the_rules_names_a_hard_rule` liest jedes „Regel N" in Regeldateien
+  und Karten gegen die Nummerierung in `AGENTS.md` selbst (17 verschiedene Nummern in Gebrauch,
+  alle bekannt, 1–22 lückenlos). Beide halten den Stand, sie stellen ihn nicht her. (2)
+  `.claude/rules/auslieferung.md` für `tools/`, `packaging/` und die Workflows — die
+  Entscheidungen zu Version, Changelog vor dem Sprung, Lizenz und Stückliste aus dem Artefakt,
+  Signierung als eigener Vertrauensraum, verteilte gegen geprüfte Menge und erzeugten Dateien,
+  bis dahin verstreut in Karten, Erinnerungen und Commit-Meldungen; `CLAUDE.md` nennt sie und
+  führt nur noch `app/cli/` und `website/` ohne Regeldatei. (3) Die Suite-Anleitung steht einmal:
+  `tests/CLAUDE.md` wiederholte den Befehlsblock und die drei Fallen aus `CLAUDE.md` wörtlich und
+  verweist jetzt; `AGENTS.md` trägt das Prinzip, `tests.md` die Regeln — das war schon so.
+
+  **Die 0,01-mm-Überlappung in `rules.toml` bleibt, mit Beleg in beide Richtungen.** Gemessen am
+  27.08.2026 kostet die Zugabe an exakt koplanarer float64-Geometrie nichts (`BOOLEAN_OVERLAP`);
+  gemessen am 13./14.09.2026 (RM-166) lässt ein Werkzeug ohne Zugabe an einem eingelesenen Netz
+  Haut ohne Dicke stehen — die Regel für den Agenten sagt also Richtiges, keine inhaltliche
+  Änderung, keine Version, keine Suiteläufe.
+
+  Nachweis: die beiden Wächter grün mit Gegenprobe (ein Muster ins Leere und eine Regel 23 fallen
+  auf), `test_directory_docs` grün.

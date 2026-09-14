@@ -90,7 +90,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
-| [RM-098 — Restliche Regelwerk-Nachträge abgleichen](#rm-098) | Tests und Entwicklungswerkzeuge | Wächter für `paths:` und Regelnummern, `auslieferung.md`, und die vierfache Suite-Anleitung |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Flagge gesetzt; offen ist die Sichtprüfung unter Windows Terminal |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -1065,10 +1064,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-079"></a>
 
-- [ ] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website
+- [x] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website
   als gemeinsame Regel überprüfen und verbleibende überlange Absätze begrenzen. Abnahme:
   tatsächliche Zeilenlängen in allen sechs Sprachen bei schmalen und breiten Fenstern; Karten und
   Spalten dürfen nicht durch eine pauschale Regel unnötig schmal werden.
+
+  **Gemessen und behoben am 14.09.2026.** Drei Sonden in QtWebEngine
+  (`.claude/.state/rm-079-website-320-2026-09-14/`) haben alle 42 Seiten bei 320 Punkt Breite
+  geladen. `body { overflow: clip }` verhinderte das Rollen und verschluckte stumm, was nicht
+  passte: vier deutsche Überschriften mit einem Wort breiter als der Schirm („Allgemeine
+  Geschäftsbedingungen“ 79 Punkt über dem Rahmen, „Datenschutzerklärung“ 59,
+  „Widerrufsbelehrung“ und „Systemvoraussetzungen“ je 23) und die Sprachliste, die bei 320 bis
+  479 Punkt bei −21 begann, weil sie mit `right: 0` am links stehenden Griff hing. Behoben in
+  `website/style.css`: Überschriften trennen nach Sprache (`hyphens: auto`, unter 40rem dazu
+  `overflow-wrap: anywhere`), die Sprachliste öffnet unter 30rem nach rechts. Nachher: keine
+  Überschrift über ihrem Kasten, die Liste bei 320 Punkt zwischen 78 und 230, auf jeder Seite
+  `scrollWidth` gleich `clientWidth`; breite Fenster unverändert (bei 1000 Punkt bliebe `left: 0`
+  acht Punkt vor dem Rand, deshalb gilt die Regel nur unter 30rem). Die übrigen Sprachen haben
+  keine so langen Wörter. `tests/test_website.py` 388 grün nach `tools/stamp_assets.py`.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-zeilen-laufen-zu-lang-31082026).
 
@@ -1242,30 +1255,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Wiederholungsprüfungen gelten nur als Determinismusnachweis.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
-
-<a id="rm-098"></a>
-
-- [ ] **RM-098 — Restliche Regelwerk-Nachträge abgleichen.** Die noch offenen Regelwerk-Nachträge
-  gezielt entscheiden beziehungsweise prüfen: testbare Reichweite harter Regeln, Abgrenzung von
-  Arbeitsverfahren und Fallgeschichte sowie passende Regeln für Auslieferungsdateien. Auch den
-  Geltungsbereich der pauschalen 0,01-mm-Überlappung in `rules.toml` gegen konkrete Boolesche
-  Fälle prüfen; eine inhaltliche Änderung braucht Version und vergleichbare Modell-Suiteläufe
-  nach Bauplan §39. Abnahme: jede Prüfbehauptung hat einen passenden Wächter; keine doppelte
-  Suite-Anleitung. Die zweistufige Testfahrweise ist bereits umgesetzt.
-
-  **Zwei Teile sind erledigt und fallen aus dem Auftrag** (nachgeprüft 10.09.2026): Alle 13
-  Dateien in `.claude/rules/` tragen ein `paths:`-Frontmatter, und **jedes** der 36 darin
-  genannten Ziele existiert; die verwendeten Regelnummern sind 1, 2, 3, 7, 11–19, 21 und 22 —
-  alle gibt es in `AGENTS.md`, keine zeigt ins Leere.
-
-  **Was daran offen bleibt, ist ein Wächter für genau diesen Zustand**: Es gibt heute keinen
-  Test über die `paths:`-Frontmatter und keinen über die Regelnummern; `test_agent_mirror.py`
-  prüft nur `.claude/agents/`. Ein Zustand ohne Wächter ist ein Zustand auf Zeit. Dazu die
-  fehlende `auslieferung.md` für `tools/` und `packaging/` und die vierfach stehende
-  Suite-Anleitung (`AGENTS.md`, `CLAUDE.md`, `.claude/rules/tests.md`, `tests/CLAUDE.md`) —
-  von vier Fassungen desselben Satzes veraltet immer eine.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
 <a id="rm-099"></a>
 
