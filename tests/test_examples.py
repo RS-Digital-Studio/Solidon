@@ -487,6 +487,31 @@ def test_the_split_example_does_not_ask_for_work_it_already_did(profile: Profile
     assert "arrange.off_the_plate" not in export_codes, export_codes
 
 
+def test_every_example_carries_the_parts_version_of_the_library() -> None:
+    """„Eigenes Teil bauen" begrüßte mit „Seit dem Speichern haben sich benutzte
+    Bausteine geändert." — die zweite der vier Einstiegskacheln, und der erste
+    Satz rechts betraf einen Vorgang, den es aus Kundensicht nie gab
+    (Bedienweg-Durchsicht 14.09.2026). Die elf Beispiele standen auf
+    ``parts_version`` 14 bis 16, die Bibliothek auf 18: ``tools/make_examples.py``
+    stand in keiner Werkzeugtabelle, und keine Prüfung las die Zahl —
+    ``…greets_the_customer_with_a_warning`` zählt nur Warnungen, und dieser
+    Satz ist ein Hinweis. Wer die Bibliothek hebt, baut die Beispiele neu
+    (`/erzeugen`); sonst altert der erste Eindruck still.
+    """
+    from app.core.knowledge.parts.registry import LIBRARY_VERSION
+
+    stale = [
+        f"{entry.id}: {project.document.parts_version}"
+        for entry in examples.EXAMPLES
+        for project in (load(examples.directory() / entry.filename),)
+        if project.document.parts_version != LIBRARY_VERSION
+    ]
+    assert not stale, (
+        f"Beispiele hinter der Bausteinbibliothek {LIBRARY_VERSION}: {stale} — "
+        "neu erzeugen: python tools/make_examples.py"
+    )
+
+
 def test_every_example_can_still_be_built() -> None:
     """Nicht die eingecheckte Datei prüfen, sondern das Werkzeug, das sie macht.
 

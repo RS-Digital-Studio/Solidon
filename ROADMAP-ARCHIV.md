@@ -27885,6 +27885,14 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     Hinweise", darunter die verschweißten Punkte; seit das Lesen einer STL kein Befund mehr ist,
     sind es zwei, und der Satz sagt es — `test_the_first_tour_describes_the_report_it_really_gets`
     hat die Zahl festgehalten, genau wofür er gebaut war.
+  - **„Eigenes Teil bauen" begrüßte mit einer Warnung** (B5): „Seit dem Speichern haben sich
+    benutzte Bausteine geändert." — die elf Beispiele standen auf `parts_version` 14 bis 16, die
+    Bibliothek auf 18. `tools/make_examples.py` stand in keiner Werkzeugtabelle, und keine Prüfung
+    las die Zahl: `…greets_the_customer_with_a_warning` zählt Warnungen, der Satz ist ein Hinweis.
+    Die Beispiele sind neu gebaut (alle elf auf 18, Vorschaubilder mit), `/erzeugen` führt das
+    Werkzeug, und `test_every_example_carries_the_parts_version_of_the_library` hält die Zahl an
+    der Bibliothek fest — wer sie hebt, baut die Beispiele neu, sonst wird der Lauf rot statt der
+    erste Eindruck alt.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
