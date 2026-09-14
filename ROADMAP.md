@@ -86,7 +86,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen](#rm-069) | KI und Generatoren | Vergleichbare Suitequoten vor und nach der Schema-Verdichtung nachweisen |
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warm-/Kaltstart, Antwortqualität und Schemakürzungen gemeinsam messen |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
-| [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | 31 465 von 32 768 Token für Auftrag und Werkzeuge, 1 303 bleiben; das Fenster lässt sich auf der Karte nicht heben — das Schema muss kürzer werden, und ein Wächter muss den Überlauf melden |
+| [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Der Wächter steht (`BackendPromptTruncated`); die Kürzung auf 28 440 Token liegt gemessen vor und wartet auf die Agenten-Suite vorher/nachher, weil sie im Fünf-Fälle-Check einen Fall kippt |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -1230,6 +1230,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abnahme: `tools/measure_local_model.py` unter 85 % des Fensters mit vollem Werkzeugbestand,
   die Agenten-Suite vorher und nachher ohne Quotenverlust (§39), und ein Test, der einen zu
   langen Prompt als Befund im Chat zeigt.
+
+  **Stand vom Abend des 14.09.2026.** Der Wächter steht (`e4856ff6`): Ollama kürzt einen Prompt
+  über dem Fenster still auf etwa die Hälfte (4 098 Token gegen 2 048 kamen als 1 026 zurück),
+  und `OllamaBackend` wirft seither `BackendPromptTruncated`, wenn eine Antwort mit vollem
+  Werkzeugsatz weniger als sechzig Prozent der gemessenen Werkzeuglast meldet. Beim ersten Lauf
+  fand er `tools/check_local_model.py`, das über Wochen das volle Schema geschickt und ein
+  halbiertes gemessen hatte. **Was Ollama sieht, ist gemessen:** `pattern`, `minimum`,
+  `maximum` und `default` verwirft es vor dem Rendern — der Bindungs-Regex an 618 Feldern kam
+  nie an, das Modell wusste nie, dass ein Feld `@name` nimmt; das sagt jetzt der kompakte
+  Systemprompt. Ein echter Zug mit **einer** Platte kostet 32 132 Token (98,1 %).
+
+  Die Anteile: Parameterbeschreibungen 11,7k, Gerüst aus Namen und Typen 12,4k,
+  Werkzeugbeschreibungen 4,7k, Systemprompt 1,4k, Enums 1,2k. Gemessene Kürzungen ohne
+  Fähigkeitsverlust: Konventionstexte einmal im Prompt statt je Feld („— siehe Position X",
+  `name`, `play`, `angle`; die eigenen Sätze von `x` und `nx` bleiben) und Zahlenfelder als
+  `number` statt `["number", "string"]` — zusammen **28 440 Token** (86,8 %, Kaltstart 18,7 s
+  statt 22,9). Im Fünf-Fälle-Check kippt das „Nimm die letzte Änderung zurück" von
+  `undo_transaction` zu `ask_user`, deterministisch, und zwar bei jeder der beiden Kürzungen
+  allein — eine Kippstelle des Modells, keine verlorene Information. Deshalb läuft die
+  Agenten-Suite (39 Fälle) am Abend zweimal im Worktree: Basis `e4856ff6` und dieselbe mit
+  Kürzung; der Commit folgt dem Ergebnis. Weitere gemessene Wege, beide eine Entscheidung:
+  Rückseitenparameter (`placement="advanced"`, 550 von 884) ohne Text 25 797 Token; ganz weg
+  20 311 — **ausgeschlossen**, weil bei *Bohrung* `x`, `y`, `z` hinten liegen und das Modell
+  dann kein Loch mehr setzen könnte.
 
 ## Tests und Entwicklungswerkzeuge
 
