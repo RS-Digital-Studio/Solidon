@@ -409,6 +409,24 @@ legt ihn über die Werte, die im Schritt stehen (`_change_part_step`); wer
 beim Verschieben den Rest mit Vorgaben überschriebe, setzte die
 Schraubengröße zurück, und das fiele erst beim nächsten Öffnen auf.
 
+**Und der Griff im Bild hält sich an dieselbe Regel.** Sie galt bis zum
+14.09.2026 nur für die Felder rechts: Der Zug am Griff der Tasche wurde ein
+`move_feature` auf die Tasche — der Schlitz blieb bei (10 | 13) stehen, zehn
+Verrundungen verloren ihre Erkennung, und der Verlauf trug einen zweiten
+Schritt. Jeder Zug an einem Bausteinmerkmal — Griff, Körpergriff,
+Bewegen-Leiste — geht in den Schritt des Bausteins
+(`MainWindow._move_the_part`); und der Griff hängt an **jedem** seiner
+Merkmale, auch an denen ohne eigene Operation (`Viewport.moves_as_a_part`).
+Wer eine neue Geste an einem Merkmal baut, fragt zuerst, ob es aus einem
+Baustein kam.
+
+**Eine Anzahl ist keine Länge.** `count`, `steps`, `holes` sind ganze Zahlen
+ohne Einheit; als Längenfeld hießen sie im Merkmalfenster „2,00 mm", in Zoll
+„0,08 in", und gingen als `4.0` in den Schritt. `perceive.actions._kind_of`
+nennt `int` deshalb `count`, das Fenster baut dafür ein Ganzzahlfeld, und was
+zurückgeht, ist `int`. Wer eine neue Feldart in `ActionField.kind` einführt,
+baut sie an beiden Enden — im Kern benannt, im Fenster gebaut und eingesammelt.
+
 **Und eine Beschriftung, die nicht in ihre Spalte passt, bricht um.** Zwei
 Fehler steckten in demselben Bild („Bohru…ndern", Robert, 09.09.2026): Die
 Zweierspalte maß die **Summe** beider Wunschbreiten, teilt den Platz aber
@@ -578,6 +596,19 @@ der Oberseite, *Achse* und *Normale X* an der linken, ein Dialog, der bei
 jeder Bohrung anders aussah (Durchsicht 14.09.2026). Eine Vektorkomponente
 tippt niemand von Hand. `direction_fields` (die Normale aus
 `normal_fields_of`, dazu `axis`) bleibt hinten; der Wert gilt trotzdem.
+
+**Die Vorgabe trifft den Körper, nicht den Ursprung.** *Teilen* beginnt in
+der Mitte des gewählten Körpers (`_plane_through`, 13.09.2026), *Dreiecke
+verringern* bei der Hälfte seiner Dreiecke und *Dreiecke angleichen* bei einem
+Fünfzigstel seiner längsten Kante (`_measured_from_body`, `EDGE_SHARE`,
+14.09.2026). Feste Zahlen trafen entweder das große Teil oder das kleine:
+50 000 Dreiecke an einer Platte mit wenigen hundert ließen das Band „am
+Volumen ändert sich nichts" sagen, und 1,0 mm waren an 200 mm grob und an
+5 mm zerstörerisch. Gefragt wird nach den **Feldern** (`axis`/`position`,
+`triangles`, `edge` in Millimetern), nicht nach dem Namen der Operation; die
+Zahl bleibt im Feld und lässt sich ändern. *Druckplatten* bleibt bei seinem
+Höchstwert: Das Feld steht hinter der Klappe und ist eine Obergrenze, keine
+erwartete Zahl.
 
 **Und was gerade nichts tut, steht nicht da.** Ein Feld mit `depends_on`,
 dessen Bedingung nicht gilt, verschwindet aus dem Dialog und kommt mit ihr
@@ -810,6 +841,15 @@ bleibt beschriftet: sieben Umschalter, die mit dem Zustand wechseln, und für
 Grenze — ``MAX_TOOLS`` in ``test_interface_limits.py``, wo der Kommentar den
 Unterschied ebenfalls führt.) Regel 18 verlangt eine zweite
 Kodierung neben der **Farbe**, nicht eine Beschriftung neben jedem Zeichen.
+
+**Und keiner der sieben verschwindet.** Die Explosionsansicht braucht zwei
+Körper; bis zum 14.09.2026 nahm `set_available` ihren Umschalter mit dem
+ersten Körper aus der Zeile und stellte ihn mit dem zweiten wieder hin — auf
+der leeren Szene stand er grau neben den anderen sechs. Eine Zeile, die sich
+beim Laden einer Datei umbaut, wirkt unzuverlässig (Bedienweg-Durchsicht).
+`ToolStrip.set_tool_usable` graut ihn wie `set_usable` die übrigen, mit dem
+Grund am Knopf („Dafür braucht es zwei Körper in der Szene."); `_update_actions`
+fragt ihn **nach** der Freigabe aller, weil die jeden Knopf wieder öffnet.
 
 Wo das Wort vom Knopf verschwindet, muss es an drei Stellen weiterstehen: am
 `QAction` (Barrierefreiheitsbaum), im Tooltip und im `statusTip`. Den Satz

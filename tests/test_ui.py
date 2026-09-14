@@ -3537,18 +3537,48 @@ def test_a_bar_never_shows_itself_past_its_switch(window: MainWindow) -> None:
     strip = window.tools
     assert not window.explode_bar.isVisibleTo(strip), "ohne Knopfdruck bleibt sie zu"
 
-    window.tools.set_available("explode", True)
+    window.tools.set_tool_usable("explode", True)
     window.tools.activate("explode")
     for _ in range(10):
         qt_app.processEvents()
     assert window.explode_bar.isVisibleTo(strip), "mit Knopfdruck geht sie auf"
 
-    # Und fällt das Werkzeug weg, geht sie mit.
-    window.tools.set_available("explode", False)
+    # Und wird das Werkzeug grau, geht sie mit — der Knopf bleibt stehen und
+    # sagt, was ihm fehlt (bis zum 14.09.2026 verschwand er).
+    reason = str(tr("Dafür braucht es zwei Körper in der Szene."))
+    window.tools.set_tool_usable("explode", False, reason)
     for _ in range(10):
         qt_app.processEvents()
     assert not window.explode_bar.isVisibleTo(strip)
     assert window.tools.active() is None
+    button = window.tools._buttons["explode"]
+    assert not button.isHidden() and not button.isEnabled(), "grau, nicht weg"
+    assert button.toolTip() == reason
+
+
+def test_the_explosion_tool_stays_in_the_strip_and_says_it_needs_two_bodies(
+    window: MainWindow,
+) -> None:
+    """Sieben Werkzeuge in der leeren Szene, sechs mit einem Körper, sieben mit
+    zweien — die Zeile baute sich beim Laden einer Datei um (Bedienweg-
+    Durchsicht 14.09.2026). Sachlich richtig, denn eine Explosionsansicht
+    braucht zwei Körper; falsch war, es nicht zu sagen. Jetzt bleibt der
+    Knopf und trägt den Grund, wie die sechs anderen ihren.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    button = window.tools._buttons["explode"]
+    assert not button.isHidden(), "der Knopf bleibt in der Zeile"
+    assert not button.isEnabled(), "mit einem Körper gibt es nichts auseinanderzuziehen"
+    assert button.toolTip() == str(tr("Dafür braucht es zwei Körper in der Szene."))
+
+    assert window.session.apply(
+        str(REGISTRY.get("duplicate_object").title),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",))],
+    )
+    window.session.wait_for_idle()
+    assert button.isEnabled(), "mit zwei Körpern geht die Explosionsansicht"
+    assert button.toolTip() != str(tr("Dafür braucht es zwei Körper in der Szene."))
 
 
 def test_the_report_puts_the_heavy_findings_first(qt_app: QApplication) -> None:
@@ -9992,6 +10022,49 @@ def test_splitting_starts_in_the_middle_of_the_body(window: MainWindow) -> None:
     assert dialog is not None
     try:
         assert dialog.values()["position"] == pytest.approx(10.0), "Mitte von 0 bis 20"
+    finally:
+        dialog.reject()
+
+
+def test_decimating_and_remeshing_start_from_the_body(window: MainWindow) -> None:
+    """Die Vorgabe trifft den Körper, nicht den Ursprung — auch bei Dreiecken.
+
+    *Dreiecke verringern* stand auf 50 000: An einer Platte mit wenigen
+    hundert Dreiecken sagte das Band „am Volumen ändert sich nichts", und der
+    Knopf, den der Prüfbericht bei zu feinen Netzen anbietet, tat an einem
+    normalen Modell nichts. *Dreiecke angleichen* stand auf 1,0 mm, gleich
+    wie groß das Teil (Bedienweg-Durchsicht 14.09.2026). Gemessen an
+    ``post_with_fillet.stl``: 2704 Dreiecke, 60 mm lang.
+    """
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui.main_window import EDGE_SHARE
+
+    window.open_path(MESHES / "post_with_fillet.stl")
+    window.session.wait_for_idle()
+    window.object_tree.select_object("obj_1")
+    result = window.session.last_result
+    assert result is not None
+    body = result.scene.objects["obj_1"].mesh
+    count = body.triangle_count
+    assert count > 2 * DECIMATE_FLOOR, "sonst deckt die Untergrenze die Hälfte zu"
+    longest = max(
+        float(high - low)
+        for low, high in zip(body.bounds.minimum, body.bounds.maximum, strict=True)
+    )
+
+    window.run_operation(REGISTRY.get("decimate_mesh"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog.values()["triangles"] == count // 2, "die Hälfte der gemessenen"
+    finally:
+        dialog.reject()
+
+    window.run_operation(REGISTRY.get("remesh_uniform"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog.values()["edge"] == pytest.approx(longest / EDGE_SHARE)
     finally:
         dialog.reject()
 
@@ -16672,3 +16745,180 @@ def test_no_second_window_appears_along_the_way(window: MainWindow) -> None:
     grown = {name for name in _top_level_names() - before if not name.startswith("MainWindow(")}
     assert not grown, f"es ist ein fremdes Fenster aufgegangen: {sorted(grown)}"
     assert QApplication.activeWindow() is window, "und der Fokus liegt weiter beim Hauptfenster"
+
+
+# --- die grobe Vorschaustufe (§2.8) -----------------------------------------------
+
+
+def test_a_drawn_split_line_starts_in_the_middle_of_the_body(window: MainWindow) -> None:
+    """*An gezeichneter Linie trennen* öffnete auf der Ebene z = 0.
+
+    Derselbe Fehler wie bei *Teilen*, nur in der anderen Schreibweise: Die
+    Operation beschreibt ihre Ebene über ``normal_x/y/z`` statt über ``axis``,
+    und ``_plane_through`` fragte nach ``axis``. Gemessen am 14.09.2026 über
+    alle 110 Dialoge stand über ihr „Keine Vorschau: Diese Ebene teilt das
+    Objekt nicht" — der Körper steht auf dem Bett, die Vorgabeebene liegt
+    unter ihm.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.object_tree.select_object("obj_1")
+
+    window.run_operation(REGISTRY.get("split_line"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog.values()["position"] == pytest.approx(10.0), "Mitte von 0 bis 20"
+    finally:
+        dialog.reject()
+
+
+def test_a_coarse_preview_says_so_before_it_says_nothing_changed(window: MainWindow) -> None:
+    """Das Band nennt die grobe Stufe — und zwar vor der leeren Differenz.
+
+    Auf einem vergröberten Netz ist „am Volumen ändert sich nichts" keine
+    Zusage: Was dort fehlt, kann an der Vergröberung liegen.
+    """
+    leer = dataclasses.make_dataclass("Leer", [("changed", bool)])(False)
+    banner = window.viewport.banner
+
+    window._preview_coarse(400_000)
+    assert window._preview_coarse_at == 400_000
+    window._show_preview(leer)
+    assert banner.note.text() == tr("Grobe Vorschau — beim Übernehmen wird genau gerechnet")
+
+    # Und der Merker gilt genau einer Vorschau, nicht der nächsten.
+    window._show_preview(leer)
+    assert banner.note.text() == tr("Vorschau — am Volumen ändert sich nichts")
+
+    # Ein Grund aus dem Kern räumt ihn ebenfalls weg.
+    window._preview_coarse(400_000)
+    window._preview_explained("Diese Ebene teilt das Objekt nicht.")
+    assert window._preview_coarse_at == 0
+    window._clear_preview()
+
+
+def test_an_incomplete_coarse_preview_is_called_incomplete(window: MainWindow) -> None:
+    """„Grob" darf „unvollständig" nicht verdecken.
+
+    Eine Differenz, in der nur eine Richtung gerechnet werden konnte, trägt
+    ``difference.incomplete``; dieser Vorbehalt steht über dem der groben
+    Stufe, weil er über dasselbe Bild mehr sagt.
+    """
+    finding = dataclasses.make_dataclass("Befund", [("code", str)])("difference.incomplete")
+    entry = dataclasses.make_dataclass("Eintrag", [("findings", list)])([finding])
+    halb = dataclasses.make_dataclass("Halb", [("changed", bool), ("entries", dict)])(
+        True, {"obj_1": entry}
+    )
+
+    window._preview_coarse(400_000)
+    window._show_preview(halb)
+    assert window.viewport.banner.note.text() == tr(
+        "Vorschau unvollständig — beim Übernehmen wird genau gerechnet"
+    )
+    window._clear_preview()
+
+
+def test_only_a_big_body_is_reduced_for_the_preview(session: Session) -> None:
+    """Die Schranke ist eine Dreieckszahl, und unter ihr geschieht nichts.
+
+    Gemessen (14.09.2026, Kugel, Bohrung Ø 5, Entwurfsqualität): 20 480
+    Dreiecke 0,16 s, 81 920 0,63 s, 327 680 2,16 s. Die Sekunde aus §2.8
+    fällt bei rund 150 000 — dort steht ``COARSE_PREVIEW_ABOVE``.
+    """
+    from app.ui.session import COARSE_PREVIEW_ABOVE, COARSE_PREVIEW_TARGET, _coarse_drafts
+
+    session.import_model(MESHES / "cube_clean.stl")
+    result = session.evaluate_now()
+    assert _coarse_drafts(result.scene) == [], "ein Quader wird nicht vergröbert"
+
+    class Grob:
+        triangle_count = COARSE_PREVIEW_ABOVE + 1
+
+    class Fein:
+        triangle_count = COARSE_PREVIEW_ABOVE
+
+    holder = dataclasses.make_dataclass("Traeger", [("mesh", object)])
+    scene = dataclasses.make_dataclass("Szene", [("objects", dict)])(
+        {"obj_1": holder(Grob()), "obj_2": holder(Fein())}
+    )
+    drafts = _coarse_drafts(scene)
+    assert [draft.inputs for draft in drafts] == [("obj_1",)], "genau einer liegt darüber"
+    assert drafts[0].op == "decimate_mesh"
+    assert drafts[0].params == {"triangles": COARSE_PREVIEW_TARGET}
+
+
+def test_a_coarse_preview_measures_the_same_change_as_the_exact_one(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die grobe Stufe rechnet beide Seiten auf demselben groben Netz.
+
+    Getrennt verkleinert liefen ``davor`` und ``danach`` überall um
+    Bruchteile eines Millimeters auseinander, und die Differenz war dieser
+    Unterschied statt der Änderung — gemessen an einer Kugel aus 81 920
+    Dreiecken 16,7 mm³ Material, das niemand angefasst hat, und zehn bis
+    fünfzig Sekunden Rechnung dafür.
+
+    Die Schranke wird für den Test heruntergesetzt: Ein Netz von 150 000
+    Dreiecken in die Suite zu legen hieße, Sekunden je Lauf für eine Zahl
+    auszugeben, die auch an einem Ellipsoid aus 1 280 Dreiecken stimmt — und
+    krumm muss er sein, denn an einer ebenen Fläche ist das Verkleinern
+    verlustfrei und die Frage gar nicht gestellt.
+    """
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+
+    session.import_model(MESHES / "near_sphere_ellipsoid.stl", unit="mm")
+    session.evaluate_now()
+    body = next(iter(session.last_result.scene.objects))
+    draft = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+
+    _scene, exact, _reason = session._preview_outcome([draft])
+    assert exact is not None and exact.removed_volume > 0.0
+
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    seen: list[int] = []
+    _scene, coarse, _reason = session._preview_outcome([draft], coarsened=seen.append)
+    assert seen and seen[0] > 0, "gemeldet wird die Dreieckszahl davor"
+    assert coarse is not None
+    assert coarse.removed_volume == pytest.approx(exact.removed_volume, rel=0.05)
+    assert coarse.added_volume <= exact.removed_volume * 0.05, (
+        "aus zwei getrennt verkleinerten Netzen käme hier Material, das niemand angefasst hat"
+    )
+
+
+def test_a_preview_without_the_coarse_callback_stays_exact(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer die grobe Stufe nicht anfordert, bekommt die genaue Rechnung.
+
+    Der Agentenvorschlag geht diesen Weg (``preview_scene``): Er antwortet
+    ohnehin nicht in Millisekunden, und sein Bild steht, bis jemand es
+    annimmt oder verwirft.
+    """
+    from app.ui import session as session_module
+
+    session.import_model(MESHES / "near_sphere_ellipsoid.stl", unit="mm")
+    session.evaluate_now()
+    body = next(iter(session.last_result.scene.objects))
+    draft = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+    asked: list[object] = []
+    original = session_module._coarse_drafts
+
+    def watched(scene: object) -> list[OperationDraft]:
+        asked.append(scene)
+        return original(scene)
+
+    monkeypatch.setattr(session_module, "_coarse_drafts", watched)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 500)
+    session.preview_scene([draft])
+    assert asked == [], "ohne Rückruf wird nicht einmal gefragt"

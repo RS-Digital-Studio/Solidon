@@ -352,31 +352,49 @@ class ToolStrip(QWidget):
 
         self.toolChanged.emit(key)
 
-    def set_available(self, key: str, available: bool) -> None:
-        """Ein Werkzeug anbieten oder verbergen.
+    def set_tool_usable(self, key: str, usable: bool, reason: str = "") -> None:
+        """Ein einzelnes Werkzeug anbieten oder ausgrauen — mit dem Grund im Hinweis.
 
-        Nicht jedes Werkzeug ist immer sinnvoll: die Explosionsansicht braucht
-        zwei Körper, sonst zieht sie nichts auseinander. Der Umschalter
-        verschwindet dann — und mit ihm, falls es gerade offen war, seine
-        Leiste.
+        Die Explosionsansicht braucht zwei Körper, sonst zieht sie nichts
+        auseinander. Bis zum 14.09.2026 **verschwand** ihr Umschalter dann:
+        Auf der leeren Szene stand er grau neben den anderen sechs, mit dem
+        ersten Körper war er weg, mit dem zweiten wieder da — eine Zeile, die
+        sich beim Laden einer Datei umbaut, wirkt unzuverlässig
+        (Bedienweg-Durchsicht). Seither gilt ihm dieselbe Regel wie den
+        übrigen in :meth:`set_usable`: grau, und der Grund steht am Knopf.
 
-        Der Weg führt bewusst hierher und nicht an der Leiste vorbei: Wer sie
-        selbst sichtbar macht, hat zwei Stellen, die dasselbe steuern, und die
-        gewinnen abwechselnd. Genau daran lag die Leiste über den Umschaltern.
+        Ein offenes Werkzeug wird dabei geschlossen. Der Weg führt weiter
+        hierher und nicht an der Leiste vorbei: Wer sie selbst sichtbar
+        macht, hat zwei Stellen, die dasselbe steuern, und die gewinnen
+        abwechselnd. Genau daran lag die Leiste einmal über den Umschaltern.
         """
         if key not in self._tools:
             return
-        self._buttons[key].setVisible(available)
-        if not available and self._active == key:
+        self._hint_of(key, usable, reason)
+        if not usable and self._active == key:
             self.activate(None)
+
+    def _hint_of(self, key: str, usable: bool, reason: str) -> None:
+        """Knopf freigeben oder ausgrauen; der Hinweis trägt Kürzel oder Grund.
+
+        Der Tooltip trägt im Normalfall das Kürzel; ihn beim Ausgrauen gegen
+        den Grund zu tauschen ist richtig, ihn danach ohne Kürzel
+        zurückzugeben wäre es nicht.
+        """
+        tool = self._tools[key]
+        button = self._buttons[key]
+        button.setEnabled(usable)
+        label = f"{tool.title}  ({tool.shortcut})" if tool.shortcut else str(tool.title)
+        button.setToolTip(label if usable else reason)
 
     def set_usable(self, usable: bool, reason: str = "") -> None:
         """Alle Werkzeuge anbieten oder ausgrauen — mit dem Grund im Hinweis.
 
         Ausgegraut und nicht ausgeblendet: Ein Werkzeug, das verschwindet,
-        wenn nichts da ist, lässt den Nutzer suchen, wo nichts fehlt; das
-        macht ``set_available`` nur für die Explosionsansicht, die bei einem
-        einzigen Körper nichts zu zeigen *hätte*.
+        wenn nichts da ist, lässt den Nutzer suchen, wo nichts fehlt. Auch für
+        die Explosionsansicht, die bei einem einzigen Körper nichts zu zeigen
+        hätte — sie verschwand bis zum 14.09.2026 und wird seither über
+        :meth:`set_tool_usable` grau wie die anderen.
 
         Gebraucht wird das für die leere Szene. Die Menüs graut ``_update_actions``
         vorbildlich aus — im selben Zustand sind alle vierunddreißig Einträge
@@ -387,14 +405,8 @@ class ToolStrip(QWidget):
         Ein offenes Werkzeug wird dabei geschlossen: Was nicht mehr geht,
         bleibt nicht offen stehen.
         """
-        for key, button in self._buttons.items():
-            tool = self._tools[key]
-            button.setEnabled(usable)
-            # Der Tooltip trägt im Normalfall das Kürzel; ihn beim Ausgrauen
-            # gegen den Grund zu tauschen ist richtig, ihn danach ohne Kürzel
-            # zurückzugeben wäre es nicht.
-            label = f"{tool.title}  ({tool.shortcut})" if tool.shortcut else str(tool.title)
-            button.setToolTip(label if usable else reason)
+        for key in self._buttons:
+            self._hint_of(key, usable, reason)
         if not usable and self._active is not None:
             self.activate(None)
 

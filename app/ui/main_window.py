@@ -339,6 +339,15 @@ AUTOSAVE_INTERVAL_MS = 120_000
 #: sieht der Einsammler nicht.
 _NEEDS_SELECTION = _("Bitte zuerst ein Objekt auswählen.")
 _NEEDS_BODY = _("Dafür braucht es einen Körper in der Szene.")
+_NEEDS_TWO_BODIES = _("Dafür braucht es zwei Körper in der Szene.")
+
+#: Die Kantenlänge, mit der *Dreiecke angleichen* beginnt: ein Fünfzigstel
+#: der längsten Kante des Hüllquaders. Eine feste Zahl trifft entweder das
+#: große Teil oder das kleine — 1,0 mm war an 200 mm grob und an 5 mm
+#: zerstörerisch (Bedienweg-Durchsicht 14.09.2026). Der Bruch ist eine
+#: Vorgabe, keine Empfehlung: An 60 mm sind es 1,2 mm, und wer später
+#: formt, dreht am Feld.
+EDGE_SHARE: Final = 50
 
 #: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
@@ -434,6 +443,13 @@ MAP_CACHE_KEPT: Final = 8
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
 #: (§14, §15.1).
 LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
+
+
+def _within(field: Any, value: float) -> float:
+    """Der Wert in den Grenzen des Feldes — eine Vorgabe außerhalb wäre keine."""
+    low = field.minimum if field.minimum is not None else value
+    high = field.maximum if field.maximum is not None else value
+    return min(max(value, low), high)
 
 
 def _filter_for(label: str, suffixes: tuple[str, ...]) -> str:
@@ -3957,6 +3973,14 @@ class MainWindow(QMainWindow):
             objects > 0 and not gesturing,
             str(_NEEDS_BODY),
         )
+        # Die Explosionsansicht braucht zwei Körper, und sie sagt das an
+        # ihrem Knopf. Bis zum 14.09.2026 verschwand sie mit dem ersten
+        # Körper aus der Zeile und stand auf der leeren Szene grau da wie
+        # alle anderen: eine Zeile, die sich beim Laden einer Datei umbaut,
+        # wirkt unzuverlässig (Bedienweg-Durchsicht). Nach ``set_usable``,
+        # weil das jeden Knopf wieder freigibt.
+        if objects > 0 and not gesturing:
+            self.tools.set_tool_usable("explode", objects > 1, str(_NEEDS_TWO_BODIES))
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
         # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
@@ -12393,6 +12417,7 @@ class MainWindow(QMainWindow):
         values = dict(self._from_selection(spec, chosen[0] if chosen else None))
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None))
+        values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
         # Was der Dialog über seinen Bezug sagt — leer, solange genau so viel
@@ -13613,6 +13638,42 @@ class MainWindow(QMainWindow):
         bounds = entry.mesh.bounds
         return {"position": (bounds.minimum[index] + bounds.maximum[index]) / 2.0}
 
+    def _measured_from_body(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+        """Zwei Vorgaben, die am gewählten Körper gemessen sind statt fest zu stehen.
+
+        Dieselbe Bauart wie die Mitte in :meth:`_plane_through`, aus demselben
+        Grund (Bedienweg-Durchsicht 14.09.2026). *Dreiecke verringern* stand
+        auf 50 000: An einer Platte mit wenigen hundert Dreiecken sagte das
+        Band „am Volumen ändert sich nichts", und der Knopf, den der
+        Prüfbericht bei zu feinen Netzen anbietet, tat an einem normalen
+        Modell nichts — vorgegeben wird die Hälfte der gemessenen Dreiecke,
+        nie unter der Untergrenze der Operation. *Dreiecke angleichen* stand
+        auf 1,0 mm, gleich wie groß das Teil — vorgegeben wird ein
+        Fünfzigstel der längsten Kante des Hüllquaders (:data:`EDGE_SHARE`),
+        in den Grenzen des Feldes.
+
+        Gefragt wird nach den Feldern, nicht nach dem Namen: ``triangles``
+        (*Dreiecke verringern*) und ``edge`` in Millimetern (*Dreiecke
+        angleichen*, das Vergröbern und das Unterteilen einer Fläche).
+        """
+        result = self.session.last_result
+        entry = result.scene.objects.get(selected) if result is not None and selected else None
+        if entry is None:
+            return {}
+        fields = {field.name: field for field in spec.params.spec()}
+        values: dict[str, Any] = {}
+        triangles = getattr(entry.mesh, "triangle_count", 0)
+        if "triangles" in fields and triangles:
+            values["triangles"] = int(_within(fields["triangles"], triangles // 2))
+        if "edge" in fields and fields["edge"].unit == "mm":
+            bounds = entry.mesh.bounds
+            longest = max(
+                float(high - low) for low, high in zip(bounds.minimum, bounds.maximum, strict=True)
+            )
+            if longest > 0.0:
+                values["edge"] = _within(fields["edge"], longest / EDGE_SHARE)
+        return values
+
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Was das angeklickte Merkmal darüber sagt, wohin diese Operation
         gehört (§18.5).
@@ -13766,7 +13827,10 @@ class MainWindow(QMainWindow):
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
         # unter einem Werkzeug, das Teile auseinanderzieht.
         self.header.show_plates(max(plates, default=0) + 1)
-        self.tools.set_available("explode", self.explode_bar.show_for(len(result.scene.objects)))
+        # Die Leiste bereitet sich vor und setzt ihren Schieber zurück, wenn es
+        # nichts auseinanderzuziehen gibt; ob ihr Knopf geht, sagt
+        # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
+        self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)

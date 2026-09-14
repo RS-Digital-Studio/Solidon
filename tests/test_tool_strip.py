@@ -103,6 +103,32 @@ def test_the_list_of_tools_is_complete(window: MainWindow) -> None:
     )
 
 
+def test_a_single_tool_greys_with_its_reason_and_closes_when_open(window: MainWindow) -> None:
+    """Ein Werkzeug, das gerade nicht geht, bleibt in der Zeile und sagt warum.
+
+    ``set_usable`` tut das für alle sieben; ``set_tool_usable`` für eines —
+    die Explosionsansicht, deren Knopf bis zum 14.09.2026 stattdessen
+    verschwand. Grau mit Grund, offen wird geschlossen, und freigegeben trägt
+    der Hinweis wieder Titel und Kürzel.
+    """
+    strip = window.tools
+    button = strip._buttons["explode"]
+    reason = "Dafür braucht es zwei Körper in der Szene."
+
+    strip.set_tool_usable("explode", True)
+    strip.activate("explode")
+    assert strip.active() == "explode"
+    strip.set_tool_usable("explode", False, reason)
+    assert strip.active() is None, "was nicht mehr geht, bleibt nicht offen"
+    assert not button.isHidden() and not button.isEnabled()
+    assert button.toolTip() == reason
+
+    strip.set_tool_usable("explode", True)
+    assert button.isEnabled()
+    assert str(strip.tools()["explode"].title) in button.toolTip(), "Titel und Kürzel zurück"
+    assert reason not in button.toolTip()
+
+
 @pytest.mark.parametrize("key", TOOLS)
 def test_no_tool_opens_without_saying_anything(window: MainWindow, key: str) -> None:
     """Jedes Werkzeug zeigt beim Öffnen entweder Bedienung oder einen Grund.

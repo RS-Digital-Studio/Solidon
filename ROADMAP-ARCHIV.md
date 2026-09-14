@@ -27814,6 +27814,26 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     was oben stehen kann, steht nicht auch darunter, dieselbe Regel wie bei den Hauptaktionen und
     den Feldern des Merkmalfensters. Nachweis:
     `test_the_picker_above_the_list_shows_its_handling_no_second_time`.
+  - **Vorgaben, die den Körper verfehlten** (B9). *Dreiecke verringern* stand auf 50 000 — an
+    einer Platte mit wenigen hundert Dreiecken sagte das Band „am Volumen ändert sich nichts",
+    und der Knopf, den der Prüfbericht bei zu feinen Netzen anbietet, tat an einem normalen
+    Modell nichts; *Dreiecke angleichen* stand auf 1,0 mm, gleich wie groß das Teil.
+    `MainWindow._measured_from_body` gibt seither die Hälfte der gemessenen Dreiecke (nie unter
+    `DECIMATE_FLOOR`) und ein Fünfzigstel der längsten Hüllquaderkante (`EDGE_SHARE`) vor —
+    dieselbe Bauart wie die Mitte für *Teilen*; gemessen an `post_with_fillet.stl`: 2704
+    Dreiecke → 1352, 60 mm → 1,2 mm. *Auf dem Bett anordnen* mit `plates = 12` bleibt: Das Feld
+    steht hinter der Klappe und ist eine Obergrenze („Passt nicht alles auf eine Platte, wandert
+    der Rest auf die nächste"), keine erwartete Zahl — eine Eins dort meldete bei losen Teilen
+    einen Überlauf, den niemand wollte. Nachweis: `test_decimating_and_remeshing_start_from_the_body`.
+  - **Das Werkzeug *Explosion* verschwand mit dem ersten Körper** (B15): sieben Umschalter in
+    der leeren Szene (alle grau, alle mit „Dafür braucht es einen Körper in der Szene."), sechs
+    mit einem Körper, sieben mit zweien. `ToolStrip.set_available` ist gefallen;
+    `set_tool_usable` graut den einen Knopf mit dem Grund „Dafür braucht es zwei Körper in der
+    Szene." — dieselbe Regel wie für die sechs anderen (`set_usable`), und `_update_actions`
+    fragt sie nach der Freigabe aller. Nachweise:
+    `test_the_explosion_tool_stays_in_the_strip_and_says_it_needs_two_bodies`,
+    `test_a_single_tool_greys_with_its_reason_and_closes_when_open`,
+    `test_a_bar_never_shows_itself_past_its_switch` (umgebaut).
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
