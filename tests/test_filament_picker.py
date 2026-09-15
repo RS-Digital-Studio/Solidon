@@ -470,7 +470,7 @@ def test_a_used_filament_separates_colour_from_print_values(
 
     assert benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "Druckwerte müssen erreichbar sein"
     assert regal.flags() & Qt.ItemFlag.ItemIsSelectable, "das Regal lässt sich bedienen"
-    assert "Kontextmenü" in benutzt.toolTip(), "die Farbzuweisung bleibt an der Operation"
+    assert "Auswahlfenster" in benutzt.toolTip(), "die Farbzuweisung bleibt an der Operation"
     panel.list.setCurrentItem(benutzt)
     assert panel.settings_button.isEnabled(), "die sichtbare Handlung folgt der Auswahl"
 

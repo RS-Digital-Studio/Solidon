@@ -1007,7 +1007,13 @@ def test_the_tool_strip_greys_out_on_an_empty_scene(window: MainWindow) -> None:
 
 
 def test_the_tool_strip_comes_back_with_a_body(window: MainWindow) -> None:
-    """Sobald ein Körper da ist, geht die Zeile wieder auf."""
+    """Sobald ein Körper da ist, geht die Zeile wieder auf.
+
+    Bis auf die Explosionsansicht: Die braucht zwei Körper und bleibt seit dem
+    14.09.2026 mit genau diesem Satz in der Zeile stehen, statt zu
+    verschwinden (der Explosionstest in ``test_tool_strip.py``). Ein Körper ist
+    einer zu wenig — ein grauer Knopf mit Grund, kein Fehler.
+    """
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._update_actions()
@@ -1017,7 +1023,13 @@ def test_the_tool_strip_comes_back_with_a_body(window: MainWindow) -> None:
         for child in window.tools.findChildren(QToolButton)
         if child.text() in window.tools.tool_titles().values()
     ]
-    assert all(button.isEnabled() for button in buttons)
+    explosion = window.tools.tool_titles()["explode"]
+    for button in buttons:
+        if button.text() == explosion:
+            assert not button.isEnabled(), "die Explosionsansicht braucht zwei Körper"
+            assert "Körper" in button.toolTip(), "und sagt es am Knopf"
+        else:
+            assert button.isEnabled(), f"{button.text()} steht am Körper gesperrt"
 
 
 def test_what_creates_a_body_lives_under_creating() -> None:

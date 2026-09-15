@@ -3920,10 +3920,18 @@ def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
     Befunde kommen nach — die G-Code-Gegenprobe, die Kollisionsprüfung. Wer
     inzwischen selbst eine Zeile gewählt hat, behält sie; eine Vorauswahl, die
     sich über eine getroffene Wahl legt, wäre schlimmer als gar keine.
+
+    Das Modell kommt zweimal: Das erste liegt seit dem 03.09.2026 aufgesetzt
+    und mittig, und seit dem 14.09.2026 begrüßt eine STL ohne den Befund über
+    das Verschweißen — der Bericht wäre leer, und eine Wahl gäbe es nicht.
+    Das zweite landet unter der Platte und bringt den Befund.
     """
     window.open_path(MESHES / "block_with_rounded_edge.stl")
     window.session.wait_for_idle()
+    window.open_path(MESHES / "block_with_rounded_edge.stl")
+    window.session.wait_for_idle()
     window._on_scene(window.session.evaluate_now())
+    assert window.report.list.count(), "ohne Befund prüft dieser Test nichts"
 
     window.report.list.setCurrentRow(0)
     standing = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole).code
@@ -14371,6 +14379,13 @@ def test_the_three_slicer_handles_stand_where_a_body_is_chosen(window: MainWindo
     der Karte, als eigene Knöpfe, und dazu als Werkzeug *Bewegen* in der
     Werkzeugzeile mit dem Griff im Bild. Gezählt wird an den gebauten Knöpfen,
     nicht an ``operations_for_object()``.
+
+    **Seit dem 14.09.2026 beginnt ihre Gruppe zugeklappt**: *Ändern* zählt am
+    Körper mehr Einträge, als ein Menü zeigen darf, und ``OPEN_UP_TO`` klappt
+    eine solche Gruppe zu (``test_interface_limits.
+    test_the_selection_card_keeps_the_menu_limit_on_its_open_groups``). Die
+    drei stehen deshalb einen Klick auf die Kopfzeile entfernt — nicht zwei
+    Klicks tief in einem Menü, und der Griff im Bild bleibt ohnehin.
     """
     window.session.import_model(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -14383,7 +14398,14 @@ def test_the_three_slicer_handles_stand_where_a_body_is_chosen(window: MainWindo
     panel = window.selection_operations
     for name in ("translate_object", "rotate_object", "scale_object"):
         button = panel._buttons[name]
-        assert button.isVisibleTo(panel), f"{name} steht am gewählten Körper nicht rechts"
+        _section, toggle, _buttons = next(
+            group for group in panel._groups.values() if button in group[2]
+        )
+        assert not button.isHidden(), f"{name} steht am gewählten Körper nicht rechts"
+        if not toggle.isChecked():
+            toggle.click()
+            QApplication.processEvents()
+        assert button.isVisibleTo(panel), f"{name} steht auch offen nicht in der Karte"
         assert button.isEnabled(), f"{name} ist am gewählten Körper gesperrt"
     assert any(str(tool.title) == tr("Bewegen") for tool in window.tools.tools().values()), (
         "und das Werkzeug *Bewegen* steht in der Werkzeugzeile"
