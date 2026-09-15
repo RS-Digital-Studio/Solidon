@@ -548,7 +548,23 @@ einmal — zwei gleichlautende Sätze über dasselbe Loch sagen nichts Zweites.
 **An beiden Kernen:** Der exakte Zweig von `slot_hole` stellte die Frage bis
 zum 11.09.2026 als einziger nicht — eine Bohrung neun Millimeter vor der
 Kante, auf 20 gezogen, meldete am Netz `bore.over_the_edge` und am exakten
-Körper nichts (Fund des Reviews).
+Körper nichts (Fund des Reviews). **Und an allen Wegen, die eine Bohrung
+neu setzen:** *Versetzen* und *Verdoppeln* schwiegen bis zum 15.09.2026 — die
+Fahne eines Minigolf-Satzes gewann beim Versetzen um 2 mm 8,5 Prozent
+Volumen, weil der Pfropfen die ganze Bohrung füllte und das Messer nur noch
+teilweise traf. `prepare_ops._edge_findings` fragt je Abschnitt des gesetzten
+Hohlraums am gefüllten Körper vor dem Schnitt — an der neuen Mitte, an den
+beiden Enden eines Langlochs und an den **Austritten** der Achse aus dem
+Hüllquader — und meldet höchstens einmal. Angeschlossen sind alle sechs Wege:
+Versetzen und Verdoppeln einzeln, als Kette und frei platziert mit Normale,
+Drehen einzeln und als Kette, und Ändern (das Review fand die letzten drei
+stumm). An einem Austritt fragt `prepare.mouth_over_the_edge` nur den halben
+Radius hinter der Mündung: Eine um 60° gedrehte Bohrung steckt in der Mitte
+tief im Material und reißt 2,3 mm hinter ihrem unteren Austritt trotzdem auf
+— über die ganze Länge gefragt, wie `_flank_is_open` es tut, hieße das
+geschlossen (`test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
+`test_every_way_that_sets_a_bore_anew_asks_about_the_edge`,
+`test_a_widened_countersink_over_the_edge_says_so`).
 
 **Der Winkel zählt gegen den Rahmen, den er bekommt — und die zwei Wege
 bekommen verschiedene.** `drill_hole` baut ihn aus der Normalen der

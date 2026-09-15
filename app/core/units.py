@@ -65,6 +65,17 @@ MAX_FACET_ANGLE: Final[float] = 0.3
 #: nicht als Kante zurückrechnen konnte.
 UPRIGHT_TO_AXIS: Final[float] = 0.1
 
+#: Wie genau eine Ebene einen Bogen **tangential** fortsetzen muss, damit sie als
+#: eine seiner beiden Kantenflächen gilt: Am gemeinsamen Rand darf die radiale
+#: Richtung des Bogens höchstens rund 26° von der Normalen der Ebene abweichen
+#: (Skalarprodukt ≥ 0,9). Grob genug für den Sehnenzug eines fremden Netzes,
+#: dessen letzte Facette bis zu ``MAX_FACET_ANGLE`` schräg steht, und eng
+#: genug für zwei Ebenen, die einen Bogen im spitzen Winkel schneiden (die
+#: Gleise einer Modellscheune, 15.09.2026). Eine eigene Zahl, nicht
+#: ``UPRIGHT_TO_AXIS``: Die misst eine Normale gegen die Achse, dies misst sie
+#: gegen den Radius.
+TANGENT_TO_THE_ARC: Final[float] = 0.9
+
 # --- Einheiten -------------------------------------------------------------------
 
 LengthUnit = Literal["mm", "cm", "m", "in"]

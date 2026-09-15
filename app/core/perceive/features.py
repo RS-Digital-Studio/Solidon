@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final, NamedTuple
@@ -35,6 +35,7 @@ from app.core.perceive.slots import ACROSS_THE_AXIS, slots_instead_of_half_bores
 from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
+    TANGENT_TO_THE_ARC,
     UPRIGHT_TO_AXIS,
     positive_axis,
     weld_digits,
@@ -2275,6 +2276,13 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     # Modellen aus dem Netz: 32 Absagen „lässt sich innerhalb ihrer Ränder
     # nicht versetzen" erst nach dem Klick; mit dem Kennzeichen stellt das
     # Panel die Zeile vorher grau.
+    radials = [radial_cylinder(body, fitted, patch) for fitted, patch in big]
+    # Ein Durchlauf über die Nachbarschaft für alle runden Wände zusammen, nicht
+    # einer je Wand: Am Hemmungsrad sind es 531 Verrundungen, und jede einzeln
+    # gefragt hieße 531 Gänge über ``face_adjacency``.
+    tangent = tangent_walls(
+        body, [(patch, radial) for (_fitted, patch), radial in zip(big, radials, strict=True)]
+    )
     return [
         Feature(
             id=f"fillet_{number}",
@@ -2289,16 +2297,13 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
                 "recess": fit.inward,
                 "residual": round(fit.residual, 4),
                 **({"radial": True} if radial is not None else {}),
-                **(
-                    {"tangent": True}
-                    if radial is not None and blends_into_its_neighbours(body, patch, radial)
-                    else {}
-                ),
+                **({"tangent": True} if radial is not None and blends else {}),
             },
             face_indices=tuple(patch),
         )
-        for number, (fitted, patch) in enumerate(big, start=1)
-        for radial in (radial_cylinder(body, fitted, patch),)
+        for number, ((fitted, patch), radial, blends) in enumerate(
+            zip(big, radials, tangent, strict=True), start=1
+        )
         for fit in (radial or fitted,)
     ]
 
@@ -2315,32 +2320,64 @@ def blends_into_its_neighbours(
     an die Wand anschließt, hat ihre Normale **in** radialer Richtung und
     würde aus ihrer Ebene geschoben; ``radial_rounding`` sagt dort ab.
     Dieselbe Schwelle wie für die Ebenen neben einer Kante
-    (:data:`UPRIGHT_TO_AXIS`).
+    (:data:`UPRIGHT_TO_AXIS`). Für eine Wand allein; die Erkennung fragt alle
+    Wände eines Körpers zusammen (:func:`tangent_walls`).
     """
-    member = np.zeros(len(body.faces), dtype=bool)
-    member[list(patch)] = True
+    return tangent_walls(body, [(patch, fit)])[0]
+
+
+def tangent_walls(
+    body: trimesh.Trimesh, walls: Sequence[tuple[Sequence[int], CylinderFit | None]]
+) -> list[bool]:
+    """Je runder Wand, ob sie tangential in eine Nachbarfläche übergeht — in
+    **einem** Gang über die Nachbarschaft des Körpers.
+
+    Ein Feld nennt zu jedem Dreieck seine Wand; jede Nachbarschaftskante, deren
+    Seiten verschiedenen Wänden gehören (oder eine keiner), liefert ein
+    Randdreieck mit der Wand, an die es grenzt. Dann wird je Wand gerechnet,
+    was :func:`blends_into_its_neighbours` beschreibt. Eine Wand ohne
+    Einpassung (``None``) ist nie tangential.
+    """
+    verdict = [False] * len(walls)
+    if not walls:
+        return verdict
     adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
     if not len(adjacency):
-        return False
-    inside_a = member[adjacency[:, 0]]
-    inside_b = member[adjacency[:, 1]]
+        return verdict
+    owner = np.full(len(body.faces), -1, dtype=np.int64)
+    for index, (patch, _fit) in enumerate(walls):
+        owner[list(patch)] = index
+    left, right = owner[adjacency[:, 0]], owner[adjacency[:, 1]]
+    across = left != right
+    # Je Randkante: die Wand auf der einen Seite, das fremde Dreieck auf der anderen.
+    walls_of = np.concatenate((left[across & (left >= 0)], right[across & (right >= 0)]))
     outside = np.concatenate(
-        (adjacency[inside_a & ~inside_b, 1], adjacency[inside_b & ~inside_a, 0])
+        (adjacency[across & (left >= 0), 1], adjacency[across & (right >= 0), 0])
     )
     if not len(outside):
-        return False
-    axis = np.asarray(fit.axis, dtype=float)
-    relative = np.asarray(body.triangles_center, dtype=float)[outside] - np.asarray(
-        fit.centre, dtype=float
-    )
-    radial = relative - np.outer(relative @ axis, axis)
-    lengths = np.linalg.norm(radial, axis=1)
-    steady = lengths > EPS_GEOM
-    if not np.any(steady):
-        return False
-    radial = radial[steady] / lengths[steady, None]
-    normals = np.asarray(body.face_normals, dtype=float)[outside][steady]
-    return bool(np.any(np.abs(np.einsum("ij,ij->i", normals, radial)) > UPRIGHT_TO_AXIS))
+        return verdict
+    middles = np.asarray(body.triangles_center, dtype=float)[outside]
+    normals = np.asarray(body.face_normals, dtype=float)[outside]
+    order = np.argsort(walls_of, kind="stable")
+    walls_of, middles, normals = walls_of[order], middles[order], normals[order]
+    starts = np.searchsorted(walls_of, np.arange(len(walls)), side="left")
+    ends = np.searchsorted(walls_of, np.arange(len(walls)), side="right")
+    for index, (_patch, fit) in enumerate(walls):
+        if fit is None or ends[index] <= starts[index]:
+            continue
+        axis = np.asarray(fit.axis, dtype=float)
+        relative = middles[starts[index] : ends[index]] - np.asarray(fit.centre, dtype=float)
+        radial = relative - np.outer(relative @ axis, axis)
+        lengths = np.linalg.norm(radial, axis=1)
+        steady = lengths > EPS_GEOM
+        if not np.any(steady):
+            continue
+        radial = radial[steady] / lengths[steady, None]
+        facing = normals[starts[index] : ends[index]][steady]
+        verdict[index] = bool(
+            np.any(np.abs(np.einsum("ij,ij->i", facing, radial)) > UPRIGHT_TO_AXIS)
+        )
+    return verdict
 
 
 def face_mask(mesh: MeshData, faces: Sequence[Feature]) -> np.ndarray:
@@ -2435,7 +2472,7 @@ def planes_beside(
                     face_normals[outside][steady],
                 )
             )
-            if bool(np.any(grazing < 1.0 - UPRIGHT_TO_AXIS)):
+            if bool(np.any(grazing < TANGENT_TO_THE_ARC)):
                 return None
     centres = np.asarray(body.triangles_center, dtype=float)
     planes: list[tuple[np.ndarray, np.ndarray]] = []
@@ -2620,24 +2657,38 @@ def _partial_cones_folded(
             names.append(identifier)
     adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
 
+    # Ein Gang über die Nachbarschaft für alle Kegelstücke: Je Randkante die
+    # Nummer des Stücks auf der einen und der Besitzer des Dreiecks auf der
+    # anderen Seite — gezählt je Stück und Nachbar, denn ein Stück zwischen
+    # zwei Langlöchern gehört zu dem, mit dem es mehr Kanten teilt, nicht zum
+    # alphabetisch ersten.
+    piece = np.full(len(body.faces), -1, dtype=np.int64)
+    for index, (_identifier, feature) in enumerate(partial):
+        piece[list(feature.face_indices)] = index
+    left, right = piece[adjacency[:, 0]], piece[adjacency[:, 1]]
+    from_left = (left >= 0) & (right < 0)
+    from_right = (right >= 0) & (left < 0)
+    pieces_of = np.concatenate((left[from_left], right[from_right]))
+    beside = np.concatenate((adjacency[from_left, 1], adjacency[from_right, 0]))
+    shared: list[Counter[FeatureId]] = [Counter() for _ in partial]
+    for index, neighbour in zip(pieces_of.tolist(), owner[beside].tolist(), strict=True):
+        if neighbour >= 0:
+            shared[index][names[neighbour]] += 1
+
     kept = dict(found)
     grown: dict[FeatureId, set[int]] = {}
-    for identifier, feature in partial:
-        member = np.zeros(len(body.faces), dtype=bool)
-        member[list(feature.face_indices)] = True
-        inside_a = member[adjacency[:, 0]]
-        inside_b = member[adjacency[:, 1]]
-        outside = np.concatenate(
-            (adjacency[inside_a & ~inside_b, 1], adjacency[inside_b & ~inside_a, 0])
-        )
-        neighbours = {names[index] for index in owner[outside].tolist() if index >= 0}
-        slots = sorted(name for name in neighbours if found[name].kind == "slot")
+    for index, (identifier, feature) in enumerate(partial):
+        neighbours = shared[index]
+        slots = [name for name in neighbours if found[name].kind == "slot"]
         if slots:
-            grown.setdefault(slots[0], set()).update(int(face) for face in feature.face_indices)
+            closest = max(slots, key=lambda name: (neighbours[name], name))
+            grown.setdefault(closest, set()).update(int(face) for face in feature.face_indices)
             del kept[identifier]
         elif not any(found[name].kind == "hole" for name in neighbours):
             kept[identifier] = replace(feature, params={**feature.params, "partial": True})
     for name, faces in grown.items():
+        # Nur die Flächen wachsen; Länge, Tiefe und Durchgang des Langlochs
+        # bleiben bewusst die Nennmaße ohne die Fase.
         slot = kept[name]
         kept[name] = replace(slot, face_indices=tuple(sorted({*slot.face_indices, *faces})))
     return kept
@@ -3442,10 +3493,15 @@ def _patch_extent(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> float:
 
 
 #: Wie viele Punkte je Ring und welche Ringe :func:`_is_through` in der Mündung
-#: einer Bohrung abfragt — innerhalb der Sehnen des Mantels, damit die eigene
-#: Wand nie „über" einem Punkt liegt.
+#: einer Bohrung abfragt. Die Ringe liegen innerhalb der Sehnen des Mantels,
+#: damit die eigene Wand nie „über" einem Punkt liegt — und innerhalb des
+#: Kerns eines groben Gewindes: Bei Tr 10x3 ist der Kern 0,65 des
+#: Nenndurchmessers, bei metrischen Regelgewinden 0,82 bis 0,90; ein Ring bei
+#: 0,75 läge auf der Flanke, und eine durchgehende Gewindebohrung hieße
+#: Sackloch. Der Becherboden mit einer Bohrung Ø 8 in Ø 116, der diese Ringe
+#: veranlasst hat, liegt bei 0,07 und wird von beiden getroffen.
 THROUGH_SAMPLES: Final = 8
-THROUGH_RINGS: Final = (0.4, 0.75)
+THROUGH_RINGS: Final = (0.3, 0.6)
 
 
 def _is_through(

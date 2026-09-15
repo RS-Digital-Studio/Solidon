@@ -92,7 +92,23 @@ class MeshData:
 
     @property
     def component_count(self) -> int:
-        return len(face_components(self.raw))
+        """Die Zahl der zusammenhängenden Teile — einmal gezählt je Netz.
+
+        Der Zusammenhangslauf kostet einen Gang über alle Dreiecke, und die
+        Auswertung fragt ihn je merkmalsberührendem Schritt zweimal
+        (``evaluate._split_findings``). Abgelegt wird die Zahl im Cache des
+        Netzes selbst, der mit dessen Geometrie verfällt — ein eigenes Feld
+        gibt es an dieser eingefrorenen Klasse nicht.
+        """
+        cache = getattr(self.raw, "_cache", None)
+        if cache is not None:
+            cache.verify()
+            if "solidon_component_count" in cache:
+                return int(cache["solidon_component_count"])
+        count = len(face_components(self.raw))
+        if cache is not None:
+            cache["solidon_component_count"] = count
+        return count
 
     @property
     def slot_indices(self) -> tuple[int, ...]:

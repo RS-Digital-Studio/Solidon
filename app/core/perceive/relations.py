@@ -522,7 +522,7 @@ def _coaxial(first: Feature, second: Feature) -> bool:
     return radius > EPS_GEOM and lateral <= radius * SINK_FIT_LIMIT
 
 
-def _boundary_rings(
+def boundary_rings(
     body: trimesh.Trimesh, feature: Feature
 ) -> list[frozenset[tuple[int, int]]] | None:
     """Geschlossene Randringe in der echten, gemeinsam verschweißten Topologie."""
@@ -643,7 +643,7 @@ def _cavity_links(
     touching: set[FeatureId] = set()
     with body._cache:
         for identifier, candidate in candidates.items():
-            rings = _boundary_rings(body, candidate)
+            rings = boundary_rings(body, candidate)
             if rings is None or candidate.id != identifier:
                 invalid.add(identifier)
                 continue
@@ -737,7 +737,7 @@ def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple
     owners: dict[frozenset[tuple[int, int]], list[FeatureId]] = {}
     indices: set[int] = set()
     for identifier, feature in candidates.items():
-        rings = _boundary_rings(body, feature)
+        rings = boundary_rings(body, feature)
         if rings is None:
             return ()
         indices.update(feature.face_indices)

@@ -402,9 +402,25 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Bohrung, in deren Zylinder Material steht — die Innenwand eines Rades mit
   Speichen, ein Topf mit Zapfen (`prepare_ops.hole_is_clear`,
   `HOLE_IS_NOT_EMPTY`): An ihr steht jede Zeile grau, denn ihr Werkzeug wäre
-  ein voller Zylinder. Alle Sätze sind die der Operation; die Kette wird je
-  `actions_for` einmal gefragt und speist auch die Sperre an *Zum Langloch
-  ziehen*.
+  ein voller Zylinder — gefragt **vor** der Kette, denn `_tool_for` fragt es
+  an jeder Bohrung, auch an einer mit Fase am Mund. Alle Sätze sind die der
+  Operation; die Kette wird je `actions_for` einmal gefragt und speist auch
+  die Sperre an *Zum Langloch ziehen*. Und `fillet_blocked` liest dieselbe
+  Flächenmenge wie `edges._around`: die Ebenen frisch aus `detect_faces`,
+  nicht die `face`-Einträge des Baums — ein Langloch verschluckt die, und an
+  einer Freiform gibt es keine.
+- **Die runden Wände werden zusammen gefragt** (`tangent_walls`): ein Gang
+  über `face_adjacency` für alle Verrundungen eines Körpers, nicht einer je
+  Wand (531 am Hemmungsrad); `blends_into_its_neighbours` bleibt der Weg für
+  eine einzelne. `_partial_cones_folded` zählt die Nachbarn seiner Kegelstücke
+  im selben Muster und gibt ein Stück dem Langloch, mit dem es die meisten
+  Kanten teilt, nicht dem alphabetisch ersten. Zwei Winkel, zwei Namen:
+  `UPRIGHT_TO_AXIS` misst eine Normale gegen die Achse, `TANGENT_TO_THE_ARC`
+  gegen den Radius (`planes_beside`). Durch eine Bohrung sieht man hindurch,
+  wenn Achse und zwei Ringe bei 0,3 und 0,6 des Radius frei sind
+  (`THROUGH_RINGS`) — innerhalb der Sehnen des Mantels und innerhalb des
+  Kerns eines groben Gewindes. `relations.boundary_rings` ist öffentlich, weil
+  `geom` es braucht.
 - **Eine Wendel ist keine Grundform, und sie verschluckt die, die man auf ihr
   findet.** `helix.py` misst sie am Netz statt an den Einpassungen: scharfe
   Kanten zu Zügen verbinden, je Zug die Steigung über die Konzentration von

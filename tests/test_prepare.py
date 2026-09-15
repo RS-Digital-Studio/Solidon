@@ -5429,3 +5429,102 @@ def test_removing_a_pin_leaves_no_splinters_between_the_facets(
     smallest = min(float(abs(piece.volume)) for piece in pieces)
     assert smallest > 0.01, f"Splitter von {smallest:.4f} mm³ zwischen den Facetten"
     assert len(pieces) <= 2
+
+
+def test_moving_or_duplicating_a_bore_over_the_edge_says_so(profile: Profile) -> None:
+    """Die Fahne des Minigolf-Satzes (15.09.2026): 2 mm zur Seite versetzt, plus
+    8,5 Prozent Volumen, kein Wort im Bericht. *Bohren* und *Zum Langloch ziehen*
+    melden eine Bohrung über der Kante seit dem 09.09.; *Versetzen* und
+    *Verdoppeln* setzen eine Bohrung genauso an eine neue Stelle und sagen es jetzt
+    mit demselben Befund — und nur dann."""
+    entry, hole = _block_with_a_bore(profile)
+    centre = entry.features[hole].params["centre"]
+    # Der Quader reicht bis x = 30, die Bohrung Ø 8 bei x = 28 ragt zwei Millimeter hinaus.
+    moved = _run_op(
+        "move_feature", entry, profile, at_feature=hole, x=28.0, y=centre[1], z=centre[2]
+    )
+    assert "bore.over_the_edge" in [finding.code for finding in moved.findings]
+    inside = _run_op(
+        "move_feature", entry, profile, at_feature=hole, x=0.0, y=centre[1], z=centre[2]
+    )
+    assert "bore.over_the_edge" not in [finding.code for finding in inside.findings]
+
+    doubled = _run_op(
+        "duplicate_feature", entry, profile, at_feature=hole, x=28.0, y=centre[1], z=centre[2]
+    )
+    assert "bore.over_the_edge" in [finding.code for finding in doubled.findings]
+    apart = _run_op(
+        "duplicate_feature", entry, profile, at_feature=hole, x=10.0, y=centre[1], z=centre[2]
+    )
+    assert "bore.over_the_edge" not in [finding.code for finding in apart.findings]
+
+
+def test_a_moved_countersink_over_the_edge_is_reported_once(profile: Profile) -> None:
+    """Die Senkung ist weiter als ihre Bohrung: Sie ragt zuerst hinaus. Gefragt
+    wird je Abschnitt der Kette, gemeldet höchstens einmal."""
+    entry, bore, countersink = _plate_with_a_countersunk_bore()
+    wide = float(entry.features[countersink].params["diameter"])
+    narrow = float(entry.features[bore].params["diameter"])
+    assert wide - narrow > 2.0, "sonst ragt die Bohrung mit der Senkung hinaus"
+    centre = entry.features[bore].params["centre"]
+    edge = float(entry.mesh.bounds.maximum[0])
+    target_x = edge - wide / 2.0 + 1.0
+    moved = _run_op(
+        "move_feature", entry, profile, at_feature=bore, x=target_x, y=centre[1], z=centre[2]
+    )
+    codes = [finding.code for finding in moved.findings]
+    assert codes.count("bore.over_the_edge") == 1, codes
+
+
+def test_every_way_that_sets_a_bore_anew_asks_about_the_edge(profile: Profile) -> None:
+    """Der Kantenbefund kannte nach dem ersten Einbau drei stumme Wege (Fund des
+    Reviews, 15.09.2026): die freie Platzierung mit Normale aus dem Viewport,
+    das Drehen und das Ändern. Eine gekippte Bohrung tritt seitlich aus, ein
+    größerer Durchmesser läuft über die Kante — derselbe Befund, dieselbe
+    Frage, einmal."""
+    entry, hole = _block_with_a_bore(profile)
+    centre = entry.features[hole].params["centre"]
+
+    # Frei platziert, mit Normale: Ø 8 bei x = 28 an einem Quader bis x = 30.
+    oriented = _run_op(
+        "move_feature",
+        entry,
+        profile,
+        at_feature=hole,
+        x=28.0,
+        y=centre[1],
+        z=centre[2],
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+    )
+    assert [f.code for f in oriented.findings].count("bore.over_the_edge") == 1
+
+    # Gedreht: um 60° um Y tritt die Bohrung bei x = -15 aus der Seite bei x = -30.
+    turned = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="y", angle=60.0)
+    assert "bore.over_the_edge" in [f.code for f in turned.findings]
+    upright = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="y", angle=5.0)
+    assert "bore.over_the_edge" not in [f.code for f in upright.findings]
+
+
+def test_a_widened_countersink_over_the_edge_says_so(profile: Profile) -> None:
+    """*Merkmal ändern* an einer Senkung ohne Bohrung darunter: Ein Durchmesser,
+    der über die Kante reicht, wird gemeldet — an derselben Mitte, an der der
+    alte noch Material hatte."""
+    from app.core.geom.boolean import boolean
+
+    plate = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    sink = trimesh.creation.revolve([[0.0, 6.0], [1.0, 6.0], [5.0, 10.5], [0.0, 10.5]], sections=64)
+    sink.apply_translation((15.0, 0.0, 0.0))
+    mesh = boolean("difference", [MeshData.of(plate), MeshData.of(sink)]).mesh
+    features = detect(mesh)
+    cone = next(name for name, found in features.items() if found.kind == "cone")
+    assert features[cone].params.get("recess"), "sonst prüft dieser Test keine Senkung"
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=features)
+
+    # Die Platte reicht bis x = 20; Ø 12 an x = 15 ragt einen Millimeter hinaus.
+    widened = _run_op("resize_feature", entry, profile, at_feature=cone, diameter=12.0)
+    assert "bore.over_the_edge" in [f.code for f in widened.findings]
+    modest = _run_op("resize_feature", entry, profile, at_feature=cone, diameter=8.0)
+    assert "bore.over_the_edge" not in [f.code for f in modest.findings]

@@ -630,6 +630,14 @@ def no_own_body(
       minus 49 Prozent Volumen). Hier steht jede Zeile grau, nicht nur die
       Körperhandlungen.
     """
+    if feature.kind == "hole" and mesh is not None and feature.face_indices:
+        # **Vor der Kette gefragt**, denn ``_tool_for`` fragt es an jeder
+        # Bohrung: Eine Radinnenwand mit Speichen, an deren Mündung eine Fase
+        # erkannt wurde, ist eine Kette — und trotzdem keine Bohrung.
+        from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_is_clear
+
+        if not hole_is_clear(mesh, feature):
+            return HOLE_IS_NOT_EMPTY
     if feature.kind not in ("hole", "cone", "sphere") or cavity:
         return None
     if touches_other and feature.kind != "sphere":
@@ -702,9 +710,14 @@ def fillet_blocked(
     if not isinstance(axis, list | tuple) or len(axis) != 3:
         return None
     from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
-    from app.core.perceive.features import face_mask, replaces_an_edge
+    from app.core.perceive.features import detect_faces, face_mask, replaces_an_edge
 
-    planar = face_mask(mesh, [entry for entry in features.values() if entry.kind == "face"])
+    # **Dieselbe Flächenmenge wie die Operation** (``edges._around``): die
+    # Ebenen frisch am Netz, nicht die ``face``-Einträge des Baums. Die
+    # verschluckt ein Langloch (``SWALLOWED_BY_A_SLOT``), und an einer
+    # Freiform stehen gar keine — das Panel hätte dort grau gestellt, was die
+    # Operation rechnet.
+    planar = face_mask(mesh, detect_faces(mesh))
     centre = feature.params.get("centre")
     if replaces_an_edge(
         mesh.raw,

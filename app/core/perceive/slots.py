@@ -1033,10 +1033,11 @@ def _shells_for(
         # waren es 221 verschiedene Achsen für 531 Bögen, und für jede liefen
         # Mantelstücke und Flutungen neu, obwohl 221-mal dieselbe Maske
         # herauskam. Alles hier hängt nur an ihr; zwei Achsen mit derselben
-        # Maske bekommen deshalb denselben Eintrag. Die Schlüssel kollidieren
-        # nicht: eine Achse hat 24 Bytes, eine Maske eines je Fläche.
+        # Maske bekommen deshalb denselben Eintrag. Damit ein Maskenschlüssel
+        # nie wie ein Achsenschlüssel aussieht, trägt er eine Marke vorn — ein
+        # Netz mit genau 24 Dreiecken ist nichts Seltenes.
         crossing = np.abs(normals @ axis) <= ACROSS_THE_AXIS
-        mask_key = crossing.tobytes()
+        mask_key = b"mask:" + crossing.tobytes()
         ready = cache.get(mask_key)
         if ready is None:
             across = crossing.tolist()

@@ -223,13 +223,7 @@ def _flank_is_open(body: MeshData, position: Vec3, unit: Any, radius: float) -> 
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return True
     axis = np.asarray(unit, dtype=float)
-    # Zwei Vektoren quer zur Achse — der Kranz liegt in ihrer Ebene.
-    helper = np.array([0.0, 0.0, 1.0]) if abs(float(axis[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
-    first = np.cross(axis, helper)
-    first /= float(np.linalg.norm(first))
-    second = np.cross(axis, first)
-    angles = np.linspace(0.0, 2.0 * math.pi, _RIM_POINTS, endpoint=False)
-    rim = radius * (np.cos(angles)[:, None] * first + np.sin(angles)[:, None] * second)
+    rim = _rim_around(axis, radius)
     step = reach / _RIM_STEPS
     depths = np.concatenate(
         (np.arange(1, _RIM_STEPS + 1) * step, np.arange(1, _RIM_STEPS + 1) * -step)
@@ -281,6 +275,68 @@ def over_the_edge_along(
         return []
     unit = vector / length
     radius = diameter / 2.0
+    over = _axes_over(mesh, position, unit, radius)
+    if not over:
+        return []
+    if body is not None and not _flank_is_open(body, position, unit, radius):
+        return []
+    return [_edge_finding(diameter, over)]
+
+
+def mouth_over_the_edge(
+    body: MeshData, position: Vec3, inward: Vec3, diameter: float
+) -> list[Finding]:
+    """Ob eine **Mündung** an dieser Stelle aufreißt — die Frage für den Austritt
+    einer gekippten Bohrung.
+
+    :func:`over_the_edge_along` fragt die ganze Länge und ist zufrieden, wenn
+    der Kranz **irgendwo** ringsum im Material liegt; eine um 60° gedrehte
+    Bohrung durch eine 20 mm starke Platte steckt in der Mitte tief im
+    Material und tritt unten trotzdem 2,3 mm neben der Platte aus (Fund des
+    Reviews, 15.09.2026). Hier zählt nur der Abschnitt **unmittelbar hinter der
+    Mündung**, bis einen halben Radius tief: Liegt der Kranz dort an keiner
+    Tiefe vollständig im Material, ist die Flanke an dieser Mündung offen. Eine
+    gerade Bohrung in eine ebene oder gewölbte Fläche hat den Kranz nach einem
+    halben Radius rundum im Material und meldet nichts — die um 60° gedrehte
+    Bohrung nicht: Ihre Wand tritt bis 2,3 mm hinter dem Austritt aus der
+    Seitenfläche, und ab drei Millimetern läge sie wieder ringsum im Material,
+    was :func:`_flank_is_open` über die ganze Länge zufriedenstellte.
+
+    ``inward`` zeigt von der Mündung in den Körper.
+    """
+    vector = np.asarray(inward, dtype=float)
+    length = float(np.linalg.norm(vector))
+    radius = diameter / 2.0
+    if length <= EPS_GEOM or radius <= EPS_GEOM:
+        return []
+    unit = vector / length
+    over = _axes_over(body, position, unit, radius)
+    if not over:
+        return []
+    from app.core.geom.mesh import on_surface
+
+    rim = _rim_around(unit, radius)
+    depths = radius * np.asarray(_MOUTH_DEPTHS, dtype=float)
+    samples = np.asarray(position, dtype=float) + rim[None, :, :] + depths[:, None, None] * unit
+    flat = samples.reshape(-1, 3)
+    closest, _distance, triangle = on_surface(body.raw, flat)
+    normals = np.asarray(body.raw.face_normals)[triangle]
+    outward = np.einsum("ij,ij->i", flat - closest, normals)
+    inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)
+    if bool(inside.all(axis=1).any()):
+        return []
+    return [_edge_finding(diameter, over)]
+
+
+#: An welchen Tiefen hinter einer Mündung :func:`mouth_over_the_edge` den Kranz
+#: abfragt — in Vielfachen des Radius, bis einen halben Radius tief. Tiefer
+#: gefragt wäre die Antwort die von :func:`_flank_is_open`: irgendwo ringsum
+#: Material, also geschlossen — auch an einer Mündung, die aufgerissen ist.
+_MOUTH_DEPTHS: Final = (0.25, 0.5)
+
+
+def _axes_over(mesh: HasBounds, position: Vec3, unit: Any, radius: float) -> list[str]:
+    """Die Achsen, entlang derer die Mündungsscheibe über den Hüllquader ragt."""
     lower, upper = mesh.bounds.minimum, mesh.bounds.maximum
     over: list[str] = []
     for index, name in enumerate("xyz"):
@@ -293,21 +349,31 @@ def over_the_edge_along(
         )
         if outside:
             over.append(name)
-    if not over:
-        return []
-    if body is not None and not _flank_is_open(body, position, unit, radius):
-        return []
-    return [
-        Finding(
-            code="bore.over_the_edge",
-            severity="warning",
-            message=_(
-                "Die Bohrung ragt seitlich über den Körper hinaus — sie trägt nur "
-                "teilweise ab und lässt eine offene Flanke zurück."
-            ),
-            values={"axes": ", ".join(over), "diameter": format_length(diameter)},
-        )
-    ]
+    return over
+
+
+def _rim_around(unit: Any, radius: float) -> np.ndarray:
+    """Ein Kranz von :data:`_RIM_POINTS` Punkten auf dem Umfang quer zur Achse."""
+    axis = np.asarray(unit, dtype=float)
+    helper = np.array([0.0, 0.0, 1.0]) if abs(float(axis[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
+    first = np.cross(axis, helper)
+    first /= float(np.linalg.norm(first))
+    second = np.cross(axis, first)
+    angles = np.linspace(0.0, 2.0 * math.pi, _RIM_POINTS, endpoint=False)
+    return np.asarray(radius * (np.cos(angles)[:, None] * first + np.sin(angles)[:, None] * second))
+
+
+def _edge_finding(diameter: float, over: list[str]) -> Finding:
+    """Der eine Satz für eine Bohrung über der Kante — von jeder Stelle gleich."""
+    return Finding(
+        code="bore.over_the_edge",
+        severity="warning",
+        message=_(
+            "Die Bohrung ragt seitlich über den Körper hinaus — sie trägt nur "
+            "teilweise ab und lässt eine offene Flanke zurück."
+        ),
+        values={"axes": ", ".join(over), "diameter": format_length(diameter)},
+    )
 
 
 def split_findings(before: HasComponents, after: HasComponents) -> list[Finding]:

@@ -29024,7 +29024,37 @@ leere Bohrung bleibt eine. Und derselbe Becher zeigte einen zweiten Fehler: Übe
 Topfs Ø 116 lag kein Dreieck, weil im Boden eine Bohrung Ø 8 sitzt — `_is_through` sah hindurch
 und hielt den Topf für durchgehend. Die Prüfung fragt jetzt die Achse und zwei Ringe in der
 Mündung (`THROUGH_RINGS`); ein Boden mit Loch ist ein Boden
-(`test_a_pocket_over_a_small_hole_in_its_floor_is_not_through`).
+(`test_a_pocket_over_a_small_hole_in_its_floor_is_not_through`). Was nach dem Nachlauf
+blieb, war ehrlich, aber stumm: Die Fahne desselben Satzes gewann beim Versetzen um 2 mm
+8,5 Prozent Volumen, weil die Bohrung über die Kante wanderte — *Zum Langloch ziehen* hätte
+`bore.over_the_edge` gemeldet, *Versetzen* nicht. Auf Roberts Auftrag melden *Versetzen* und
+*Verdoppeln* den Befund jetzt genauso (`prepare_ops._edge_findings`, je Abschnitt der Kette,
+höchstens einmal; Tests `test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
+`test_a_moved_countersink_over_the_edge_is_reported_once`).
+
+**Review der Kernänderungen des Tages (15.09.2026, nachmittags, `solidon3d-review`):** 16
+Funde, drei als Fehler. Alle umgesetzt:
+- Der Kantenbefund fehlte an drei Wegen — freie Platzierung mit Normale, Drehen, Ändern — und
+  an Langlöchern; er steht jetzt an allen sechs, an den Enden eines Langlochs und an den
+  Austritten der Achse (`_axis_exits`, `prepare.mouth_over_the_edge`: der halbe Radius hinter
+  der Mündung, denn `_flank_is_open` über die ganze Länge hielt die um 60° gedrehte Bohrung
+  für geschlossen, obwohl sie 2,3 mm hinter dem Austritt aufreißt).
+- Panel und Operation lasen zwei Flächenmengen: `fillet_blocked` nimmt jetzt `detect_faces`
+  wie `edges._around`.
+- `_rooted` rechnete seine Boolesche ohne Qualität, Startwert und Abbruch; `_tool_for` reicht
+  alle drei durch, fragt `hole_is_clear` vor dem Flächenkörper, gibt ihm den Kragen aus
+  `_past_the_mouths` mit und nennt `CHANGE_SELECTION` als Handlung. Die Kettenkopie beim
+  Verdoppeln nimmt denselben Körper statt des Werkzeugs aus Kennzahlen.
+- `no_own_body` fragt die Materialprüfung vor der Kette; `hole_is_clear` gibt dem Boden
+  `FEATURE_OVERLAP` statt zehn Nanometern; `THROUGH_RINGS` liegen bei 0,3 und 0,6 (im Kern
+  eines Trapezgewindes); `_without_cavities` nennt seine Proben; `UPRIGHT_TO_AXIS` und
+  `TANGENT_TO_THE_ARC` sind zwei Zahlen; `tangent_walls` fragt alle runden Wände in einem Gang,
+  `_partial_cones_folded` seine Nachbarn ebenso und wählt das Langloch nach gemeinsamen Kanten;
+  `MeshData.component_count` merkt sich die Zahl; `boundary_rings` ist öffentlich; der
+  Maskenschlüssel trägt eine Marke.
+- Offen geblieben und bewusst: `agent.components_grew` und `feature.body_split` melden an
+  einem Agentenvorschlag denselben Zerfall zweimal — einmal für den Agenten, einmal für den
+  Bericht; zusammenzulegen wäre eine Entscheidung über den Agentenpfad.
 
 ## Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)
 

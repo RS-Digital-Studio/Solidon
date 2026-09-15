@@ -64,7 +64,26 @@ mehreren Tiefen in beide Achsrichtungen; liegt er an einer davon vollständig
 im Material, reißt dort nichts auf. Innen und außen trennt `mesh.on_surface`
 über die Normale des nächsten Dreiecks — nicht `trimesh.contains` (führt durch
 `rtree`) und nicht `ray_hit_distances` (Kantentreffer zählen mehrfach, die
-Parität trägt nicht).
+Parität trägt nicht). Dieselbe Frage stellen seit dem 15.09.2026 alle Wege,
+die eine Bohrung neu setzen — Versetzen, Verdoppeln, Drehen, Ändern, frei
+platziert oder als Kette (`prepare_ops._edge_findings`): je Abschnitt des
+gesetzten Hohlraums am gefüllten Körper vor dem Schnitt, an der Mitte, an den
+Enden eines Langlochs und an den Austritten der Achse aus dem Hüllquader
+(`_axis_exits`); dort fragt `prepare.mouth_over_the_edge` nur den halben
+Radius hinter der Mündung, denn eine gekippte Bohrung reißt kurz hinter ihrem
+Austritt auf und steckt weiter innen wieder im Material. Gemeldet wird
+höchstens einmal — die Fahne eines Minigolf-Satzes gewann beim Versetzen um
+2 mm 8,5 Prozent Volumen, und der Bericht schwieg.
+
+**Was aus dem Review vom 15.09.2026 sonst noch hier steht:** `_rooted` und
+`_tool_for` reichen Qualität, Startwert und Abbruchmarke an ihre Boolesche
+durch (`_placing_tool`, `_closed_at`); `_tool_for` fragt `hole_is_clear` vor
+dem Flächenkörper und gibt dem Flächenkörper einer Bohrung den Kragen aus
+`_past_the_mouths` mit — den nimmt seither auch die Kettenkopie beim
+Verdoppeln statt des Werkzeugs aus Kennzahlen. `hole_is_clear` lässt dem
+Sacklochboden `FEATURE_OVERLAP` Spiel, nicht zehn Nanometer, und
+`_without_cavities` nennt seine neun Achsproben (`_CAVITY_AXIS_SAMPLES`).
+`MeshData.component_count` merkt sich seine Zahl im Cache des Netzes.
 
 Merkmalswerkzeuge verwenden die gemessene Tiefe unabhängig vom Durchmesser.
 `_tool_for` erhält bei Bohrungen den tatsächlichen Sehnenzug ihrer Wandflächen.
