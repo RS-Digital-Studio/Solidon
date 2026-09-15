@@ -30,8 +30,11 @@ python -c "from app.core.bootstrap import load_operations; load_operations(); fr
 
 ## Geometrie
 
-Alle Dateien erzeugt `make_corpus.py` — selbst erzeugte Geometrie, keine
-fremden Lizenzen. Neu erzeugen nur, wenn eine Datei sich ändern muss:
+Die STL-Dateien erzeugt `make_corpus.py`, die analytischen
+`recognition_*.npz` erzeugt `make_recognition_corpus.py` — selbst erzeugte
+Geometrie, keine fremden Lizenzen. Die NPZ enthalten ausschließlich Zahlenfelder;
+sie sind keine Kopien der privat geprüften Kundendateien.
+Neu erzeugen nur, wenn eine Datei sich ändern muss:
 
 ```
 python tests/data/make_corpus.py
@@ -39,6 +42,11 @@ python tests/data/make_corpus.py
 
 | Datei | Inhalt | Erwartung | Test |
 |---|---|---|---|
+| `meshes/recognition_spice_base.npz` | Eigener Ring Ø40/32,8 × 3,4 mm mit drei radialen Mulden R1,1 | Keine Stadionöffnung; Kreisfit bleibt bei Verschiebung um 100 Millionen Millimeter Ø32,8; zwölf lokale Instanzen behalten ihre Merkmalsflächen | `test_recognition_regressions.py` |
+| `meshes/recognition_waterfall.npz` | Eigene Wand 60 × 12 × 30 mm mit unterer Lippe 60 × 28 × 3 mm | Die Außenwand bei y=−6 bleibt außen, obwohl die Lippe weiter vorn liegt | `test_recognition_regressions.py` |
+| `meshes/recognition_bayonet_lid.npz` | Eigene Scheibe Ø80 × 3 mm mit drei Quadern 6 × 3,8 mm auf der Oberseite | Drei ebene Kontaktflächen à 22,8 mm² bei z=3,5 trotz großer Scheibe | `test_recognition_regressions.py` |
+| `meshes/recognition_bayonet_cage.npz` | Eigene Schachtel 80 × 80 × 20 mm mit 4-mm-Wänden und drei 5-mm-Tunneln | Je drei Böden und Dächer à 20 mm² bei z=8/12 bleiben auswählbar | `test_recognition_regressions.py` |
+| `meshes/recognition_short_thread.npz` | Eigene geschlossene Radialwendeln: außen Ø34 über vier Windungen, innen Ø34,9 über drei; Steigung 3,5 mm, Gangtiefe 1,4 mm; beide Netze in getrennten Zahlenfeldern | Je ein richtig gerichtetes Gewinde mit gemessener Steigung und Durchmesser, auch schräg gedreht und verschoben | `test_recognition_regressions.py` |
 | `meshes/cube_clean.stl` | Würfel 20 mm, in Millimeter gespeichert | 12 Dreiecke, roh 36 Punkte, nach dem Verschweißen 8 Punkte und wasserdicht, Volumen 8000 mm³; Einheit **eindeutig mm**, keine Rückfrage | `test_ingest.py` |
 | `meshes/dense_cylinder.stl` | Zylinder Ø 5 × 40 mm mit 360 Mantelsegmenten und dicht triangulierten Kappen | 1440 Dreiecke, wasserdicht, eine Komponente; „Dreiecke verringern“ erreicht aus 1152 als Ziel ein geschlossenes Ergebnis innerhalb der vorhandenen Abweichungsgrenze, auch wenn der erste Vereinfacher keine einzige Kante zusammenzieht | `test_subdivision.py` |
 | `meshes/bracket_inch.stl` | Platte 4 × 2 × 0,25 **Zoll** | Einheit **mehrdeutig** (cm/in) → Rückfrage; mit `in` → 101,6 × 50,8 × 6,35 mm | `test_ingest.py` |

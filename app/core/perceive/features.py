@@ -84,9 +84,6 @@ ROUND_WALL_TOLERANCE = 0.01
 #: werden.
 MIN_PATCH_FACES = 6
 
-#: Flächen unter diesem Anteil der größten werden nicht eigens gemeldet.
-MIN_FACE_SHARE = 0.02
-
 #: Ab welchem Anteil an der größten Fläche ein ebener Fleck **auch dann** eine
 #: Fläche ist, wenn er eine Rundung berührt.
 #:
@@ -1449,7 +1446,10 @@ def _fitted(
                 check_cancelled()
             if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
                 tori.append((ring, patch))
-                return True
+                # Ein algebraisch passender Ring ist erst mit passenden Normalen
+                # ein Treffer. Sonst muss die Nachtrennung seine Zylinderwand
+                # noch finden können. Der Kandidat bleibt für die Freiformauskunft.
+                return _torus_is_recognisable(body, ring, patch)
             return False
 
         patches = _connected_patches(body, curved)
@@ -1496,6 +1496,9 @@ def _fitted(
             # Liste ist Absicht, kein ``any`` mit Kurzschluss.
             classified = [classify(piece) for piece in pieces] if len(pieces) > 1 else []
             if any(classified):
+                # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
+                # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
+                tori[:] = [entry for entry in tori if entry[1] is not patch]
                 continue
             # **Dritte Runde, für den Mantel eines knapp aufgezogenen
             # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß ist,
@@ -1507,6 +1510,7 @@ def _fitted(
             stadium = fit_stadium(body, patch)
             if stadium is not None and stadium.good and stadium.inward:
                 stadiums.append((stadium, patch))
+                tori[:] = [entry for entry in tori if entry[1] is not patch]
 
         if check_cancelled is not None:
             check_cancelled()
@@ -1602,6 +1606,7 @@ def detect_holes(
         and not _too_small_to_make(entry[0].radius * 2.0)
         and not _a_sliver(mesh.raw, entry[1])
     ]
+    through_bounds = _ThroughBounds(body)
     return [
         Feature(
             id=f"hole_{number}",
@@ -1612,7 +1617,7 @@ def detect_holes(
                 "axis": fit.axis,
                 "centre": fit.centre,
                 "depth": round(_patch_extent(body, patch, fit.axis), 4),
-                "through": _is_through(mesh, fit, cones, patch),
+                "through": _is_through(mesh, fit, cones, patch, bounds=through_bounds),
                 "residual": round(fit.residual, 4),
             },
             face_indices=tuple(patch),
@@ -2714,16 +2719,13 @@ def _curved_faces(body: trimesh.Trimesh) -> set[int]:
 def _large_facet_faces(
     body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
 ) -> set[int]:
-    """Dreiecke, die zu einem ebenen Fleck gehören, der groß genug für eine
-    eigene Fläche ist.
+    """Ebene Flecken von den Streifen einer gekrümmten Haut unterscheiden.
 
-    Zwei Wege sich zu qualifizieren, und der zweite ist keine Zierde. Die
-    Fläche allein wird gegen die größte Fläche des Körpers gemessen, und auf
-    einer Platte mit einem Stift darauf ist die Stiftoberseite unter zwei
-    Prozent der Platte — sie zählte also als gekrümmt, schloss sich der
-    Stiftwand an, und die Zylinder-Einpassung über Wand-plus-Deckel kam als gar
-    nichts heraus. Ein Fleck aus vielen koplanaren Dreiecken ist eine Fläche,
-    egal welche Größe er neben dem Rest des Teils hat.
+    Scharf begrenzte Flächen zählen ab der absoluten Erkennungsauflösung.
+    Eine größere Bodenplatte darf kleine Nocken oder Drehwegdächer nicht
+    unterdrücken. Viele koplanare Dreiecke oder eine breite Ebene qualifizieren
+    sich auch neben einer Rundung; der vollständige Mantelnachweis schützt
+    weiterhin vor bloß unterteilten Zylinderstreifen.
     """
     if check_cancelled is not None:
         check_cancelled()
@@ -2731,9 +2733,8 @@ def _large_facet_faces(
     if not facets:
         return set()
     areas = [float(body.area_faces[facet].sum()) for facet in facets]
-    limit = max(areas) * MIN_FACE_SHARE
-    # Ein Mantelstreifen eines Zylinders ist groß genug für diese Schwelle und
-    # trotzdem keine eigene Fläche — die Naht zu seinen Nachbarn sagt es. Der
+    # Ein Mantelstreifen eines Zylinders ist groß genug für eine Fläche und
+    # trotzdem keine eigene Ebene — die Naht zu seinen Nachbarn sagt es. Der
     # zweite Weg bleibt davon unberührt: ein Fleck aus vielen koplanaren
     # Dreiecken ist eine Fläche, auch wenn er auf einer Rundung sitzt.
     curved = _curved_faces(body)
@@ -2764,7 +2765,7 @@ def _large_facet_faces(
         for facet, area in zip(facets, areas, strict=True)
         if len(facet) >= MIN_FLAT_FACES
         or area >= broad
-        or (area >= limit and not any(int(index) in curved for index in facet))
+        or (area >= MIN_FACE_AREA and not any(int(index) in curved for index in facet))
         for index in facet
     }
     # Viele Dreiecke machen aus einem Mantelstreifen noch keine eigenständige
@@ -3037,6 +3038,10 @@ def fit_stadium(
     to_the_arc = np.hypot(np.abs(along) - travel / 2.0, across)
     distance = np.where(over_the_line, np.abs(np.abs(across) - radius), np.abs(to_the_arc - radius))
     residual = float(np.mean(distance) / radius)
+    # Der Mittelwert darf örtliche Rastmulden nicht zu einem Stadion glätten.
+    # Auch dessen schlechteste Ecke muss die zugesagte Kontur einhalten.
+    if float(distance.max()) > radius * STADIUM_TOLERANCE:
+        return None
 
     depth_along = corners @ axis
     depth = float(depth_along.max() - depth_along.min())
@@ -3469,12 +3474,16 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
     """Algebraische Kreiseinpassung (Kåsa): linear, stabil genug für ein
     gebohrtes Loch.
     """
-    matrix = np.column_stack([points[:, 0], points[:, 1], np.ones(len(points))])
-    target = points[:, 0] ** 2 + points[:, 1] ** 2
+    # Die Quadrate gehören in den lokalen Maßrahmen. Weltkoordinaten machen
+    # dieselbe Kreisform je Plattenposition unterschiedlich schlecht bedingt.
+    origin = points.mean(axis=0)
+    local = points - origin
+    matrix = np.column_stack([local[:, 0], local[:, 1], np.ones(len(points))])
+    target = local[:, 0] ** 2 + local[:, 1] ** 2
     solution, *_ = np.linalg.lstsq(matrix, target, rcond=None)
     centre = np.array([solution[0] / 2.0, solution[1] / 2.0])
     radius = math.sqrt(max(solution[2] + centre @ centre, 0.0))
-    return centre, radius
+    return centre + origin, radius
 
 
 def _axial_span(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
@@ -3504,11 +3513,69 @@ THROUGH_SAMPLES: Final = 8
 THROUGH_RINGS: Final = (0.3, 0.6)
 
 
+class _ThroughBounds:
+    """Dreiecksgrenzen für alle Bohrungen eines unveränderlichen Körpers.
+
+    Bei exakten Koordinatenachsen ist die Projektion nur eine Koordinate mit
+    Vorzeichen. Eine konstante Subtraktion erhält deren Reihenfolge, deshalb
+    dürfen Minima und Maxima vorgezogen werden. Kein neuer Rundungsweg und
+    keine größere Toleranz: Die nachfolgende Prüfung sieht dieselben Kandidaten.
+    Schiefe Achsen gehen vollständig durch den bisherigen Weg.
+    """
+
+    def __init__(self, body: trimesh.Trimesh) -> None:
+        """Grenzen erst bei der ersten exakt achsenparallelen Bohrung aufbauen."""
+        self._body = body
+        self._limits: tuple[np.ndarray, np.ndarray] | None = None
+
+    def candidates(
+        self,
+        axis: np.ndarray,
+        basis_u: np.ndarray,
+        basis_v: np.ndarray,
+        fit: CylinderFit,
+        patch: Sequence[int] | None,
+    ) -> np.ndarray | None:
+        """Nur Dreiecke im bisherigen Achsabschnitt und Mündungsquadrat auswählen."""
+        directions: list[tuple[int, bool]] = []
+        for direction in (axis, basis_u, basis_v):
+            index = int(np.argmax(np.abs(direction)))
+            exact = np.zeros(3)
+            exact[index] = np.copysign(1.0, direction[index])
+            # Identität für eine Rechenabkürzung, keine geometrische Nähe:
+            # Auch eine noch so kleine Neigung muss den vollständigen Weg nehmen.
+            if not np.array_equal(direction, exact):
+                return None
+            directions.append((index, bool(np.signbit(direction[index]))))
+
+        if self._limits is None:
+            corners = np.asarray(self._body.triangles, dtype=float)
+            self._limits = corners.min(axis=1), corners.max(axis=1)
+        minimum, maximum = self._limits
+        keep = np.ones(len(minimum), dtype=bool)
+        for number, (index, reverse) in enumerate(directions):
+            if number == 0 and patch is None:
+                continue
+            low = minimum[:, index] - fit.centre[index]
+            high = maximum[:, index] - fit.centre[index]
+            if reverse:
+                low, high = -high, -low
+            if number == 0 and patch is not None:
+                start, end = _axial_span(self._body, list(patch), fit.axis)
+                offset = float(np.asarray(fit.centre) @ axis)
+                keep &= (low <= end - offset + EPS_GEOM) & (high >= start - offset - EPS_GEOM)
+            else:
+                keep &= (low <= fit.radius) & (high >= -fit.radius)
+        return keep
+
+
 def _is_through(
     mesh: MeshData,
     fit: CylinderFit,
     cones: Cones | None = None,
     patch: Sequence[int] | None = None,
+    *,
+    bounds: _ThroughBounds | None = None,
 ) -> bool:
     """Eine Bohrung ist durchgehend, wenn man durch sie hindurchsieht.
 
@@ -3556,7 +3623,12 @@ def _is_through(
     axis = np.asarray(fit.axis, dtype=float)
     centre = np.asarray(fit.centre, dtype=float)
     basis_u, basis_v = _plane_basis(axis)
-    corners = np.asarray(mesh.raw.triangles, dtype=float) - centre
+    corners = np.asarray(mesh.raw.triangles, dtype=float)
+    if bounds is not None:
+        candidates = bounds.candidates(axis, basis_u, basis_v, fit, patch)
+        if candidates is not None:
+            corners = corners[candidates]
+    corners = corners - centre
 
     if patch is not None:
         along = corners @ axis
@@ -3918,7 +3990,6 @@ def detect_faces(
         return []
 
     areas = [float(body.area_faces[facet].sum()) for facet in facets]
-    largest = max(areas)
     # Dieselbe Schwelle, die die Bohrungserkennung benutzt — ein Fleck ist also
     # entweder eine Fläche oder Teil einer gekrümmten Oberfläche, nie beides,
     # nie keines. Was auf einer Rundung sitzt, wird dort als Zylinder gemeldet
@@ -3930,9 +4001,14 @@ def detect_faces(
     entries = [
         (facet, area, _facet_centre(body, facet))
         for facet, area in zip(facets, areas, strict=True)
-        if area >= largest * MIN_FACE_SHARE
-        and area >= MIN_FACE_AREA
+        if area >= MIN_FACE_AREA
         and all(int(index) in planar for index in facet)
+        and bool(
+            np.all(
+                np.asarray(body.face_normals)[facet] @ body.face_normals[int(facet[0])]
+                >= math.cos(math.radians(EPS_ANGLE))
+            )
+        )
     ]
     # **Bei gleicher Fläche entscheiden die Eckennummern der Fläche.**
     # Die sechs Flächen eines Würfels sind exakt gleich groß; sortiert allein
@@ -3958,27 +4034,45 @@ def detect_faces(
     # entschiede wieder diese Stelle.
     entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
 
-    # **Innen oder außen — entschieden hier, wo alle Flächen bekannt sind.**
-    # Die Innenwand einer ausgehöhlten Dose zeigt in dieselbe Richtung wie die
-    # gegenüberliegende Außenwand, und benannt nach der Normalen hießen beide
-    # „Rückseite" (Handbuchbild vom 02.09.2026: viermal derselbe Name, nur die
-    # Fläche in mm² unterschied sie). Innen ist eine Fläche, wenn eine andere
-    # mit gleicher Richtung in dieser Richtung weiter außen liegt. Die
-    # Aufrufer von ``feature_name`` lesen das nur noch.
-    normals = [np.asarray(body.face_normals[facet[0]], dtype=float) for facet, _a, _c in entries]
-    centres = [np.asarray(centre, dtype=float) for _f, _a, centre in entries]
+    # Eine parallele Fläche zählt nur auf derselben Schale und über dem
+    # örtlichen Flächenmittelpunkt. Ihre äußere Kontur schließt eine Öffnung
+    # mit ein: Der Boden einer Dose liegt unter deren Rand, obwohl durch die
+    # Öffnung nach oben freie Sicht besteht. Eine seitlich versetzte Lippe
+    # oder ein zweiter Körper belegt dagegen keine Innenlage.
+    from shapely.geometry import MultiPoint, Point
+
+    normals = np.asarray([body.face_normals[facet[0]] for facet, _a, _c in entries], dtype=float)
+    centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
+    shell = np.empty(len(body.faces), dtype=np.intp)
+    for number, component in enumerate(face_components(body)):
+        shell[component] = number
+    entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
+    projections: dict[int, tuple[Any, np.ndarray, np.ndarray]] = {}
     inner_flags: list[bool] = []
     for index, (normal, centre) in enumerate(zip(normals, centres, strict=True)):
         if check_cancelled is not None:
             check_cancelled()
-        inner_flags.append(
-            any(
-                other != index
-                and float(np.dot(normals[other], normal)) > PARALLEL_FACE_COSINE
-                and float(np.dot(centres[other] - centre, normal)) > EPS_GEOM
-                for other in range(len(entries))
-            )
+        candidates = np.flatnonzero(
+            (entry_shells == entry_shells[index])
+            & (normals @ normal > PARALLEL_FACE_COSINE)
+            & ((centres - centre) @ normal > EPS_GEOM)
         )
+        inner = False
+        for other in candidates:
+            if int(other) not in projections:
+                basis_u, basis_v = _plane_basis(normals[other])
+                corners = (
+                    np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[entries[other][0]])]
+                    - centres[other]
+                )
+                footprint = MultiPoint(np.column_stack((corners @ basis_u, corners @ basis_v)))
+                projections[int(other)] = (footprint.convex_hull, basis_u, basis_v)
+            outline, basis_u, basis_v = projections[int(other)]
+            offset = centre - centres[other]
+            if outline.covers(Point(float(offset @ basis_u), float(offset @ basis_v))):
+                inner = True
+                break
+        inner_flags.append(inner)
 
     features: list[Feature] = []
     for number, ((facet, area, centre), normal, inner) in enumerate(
@@ -4019,9 +4113,9 @@ def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> l
     zwei Bögen einer 3 zwei Seiten bleiben und nicht an ihrer scharfen Kante
     eine werden. Gemessen am Korpus (28 Netze, `tests/data/meshes`): keine
     einzige gerundete Seite auf Platten, Bohrungen, Stiften, Kugeln, Ringen
-    und verrundeten Klötzen — alles dort ist beansprucht. Am D zwei, am o
-    eine (der Mantel; innen ist es ein Langloch), an der S zwei, an der 3
-    vier.
+    und verrundeten Klötzen — alles dort ist beansprucht. Die ovale Öffnung
+    eines o bleibt ebenfalls eine gerundete Seite; ein ähnlicher mittlerer
+    Rückstand macht daraus noch kein Langloch.
 
     ``inner`` sagt, ob der Fleck hohl ist — wie die Innenwand eines D — und
     kommt aus der Konvexität seiner Nähte, nicht aus einem Vergleich mit
@@ -4071,7 +4165,12 @@ def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> l
         weights = areas[patch]
         normals = np.asarray(body.face_normals, dtype=float)[patch]
         mean = (normals * weights[:, None]).sum(axis=0) / max(float(weights.sum()), EPS_GEOM)
-        inside = np.isin(adjacency[:, 0], patch) & np.isin(adjacency[:, 1], patch)
+        # Koplanare Diagonalen im Mantel haben keine Krümmungsrichtung.
+        # Mitgezählt stimmten sie an einer hohlen Rundwand genau halb gegen
+        # die konkaven Nähte und machten deren Innenseite zur Außenseite.
+        inside = (
+            np.isin(adjacency[:, 0], patch) & np.isin(adjacency[:, 1], patch) & (angles > EPS_ANGLE)
+        )
         seams = convex[inside]
         inner = bool(len(seams)) and float(np.count_nonzero(~seams)) > len(seams) / 2.0
         centre = _facet_centre(body, patch)

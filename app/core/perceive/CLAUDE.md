@@ -25,6 +25,25 @@ Zylinder- und Stadionfits legen ihr Achsvorzeichen gemeinsam über
 `units.positive_axis` fest; nahe Betragsgleichheit folgt derselben Regel wie
 im exakten Kern.
 
+Kreisfits zentrieren ihre Punktmenge vor den quadratischen Termen, damit
+eine Translation weder Kondition noch Formentscheidung verändert. Ein
+Stadion muss auch seine schlechteste Konturecke innerhalb der Formtoleranz
+halten; örtliche Mulden werden nicht über den mittleren Fehler geglättet.
+
+Scharf begrenzte ebene Funktionsflächen hängen an der absoluten
+Erkennungsauflösung, nicht an der größten Fläche des Körpers. Vor der
+Veröffentlichung müssen ihre Normalen tatsächlich koplanar sein. `inner`
+verlangt dieselbe Schale und eine örtlich darüberliegende parallele
+Außenkontur; eine versetzte Lippe oder ein fremdes Teil genügt nicht.
+An Rundflächen bestimmen nur gekrümmte Nähte die Innenlage, keine ebenen
+Dreiecksdiagonalen.
+
+`helix._resolved_helix` prüft kurze breite Gewinde zusätzlich an einzelnen
+zusammenhängenden Kammkanten. Planare Abschlussnormalen ergänzen die
+Hauptachsen; konstantes Radiusband, mindestens zwei volle Umläufe,
+punktweise Wendelabweichung und Gangtiefe müssen gemeinsam passen. Die
+bisherige Spektrumsprüfung bleibt für lange Gewinde erhalten.
+
 Geschlossene Langlöcher beziehen ihre Breite aus dem Abstand der geprüften
 ebenen Flanken. Die Bogenanpassung erkennt die Form, ihr an Dreiecksschwerpunkten
 gemessener Radius verkürzt jedoch das Maß beim wiederholten Bearbeiten.
@@ -83,12 +102,18 @@ Bohrung aus die Senkung, `features._shapes_on_a_freeform` fragt umgekehrt, ob
 eine Rundform an einer Bohrung hängt und damit keine Erfindung ist. `axis_of`
 und `centre_of` sind aus demselben Grund mitgewandert.
 
-`cavity_chain_at` verbindet koaxiale Bohrungs- und Kegelflächen über
+`cavity_chain_at` verbindet achsengleiche Bohrungs- und Kegelflächen über
 vollständig gemeinsame geschlossene Randringe des aktuellen Netzes. Eine
 zusammenhängende ebene Ringschulter darf dazwischenliegen, wenn genau ihre
 beiden vollständigen Randringe zu den Abschnitten gehören. `cavity_surface_indices`
 liefert der Bearbeitung dieselben belegten Schulterflächen zusätzlich zu den
-Merkmalsflächen; ein Abstand oder eine nur ähnliche Achse ersetzt sie nicht. Eine
+Merkmalsflächen; ein Abstand oder eine nur ähnliche Achse ersetzt sie nicht.
+Ein vollständiger gemeinsamer Rand belegt den Anschluss auch dann, wenn
+unabhängige Fits an schrägen Mündungen unterschiedliche Achswinkel liefern.
+Die räumliche Prüfung beider Achslinien bleibt bestehen. Eine Ringschulter
+muss eben sein und zwei vollständig belegte Ringe tragen; ihre Ebene darf
+schräg zur Achse liegen. Glatte kleine Übergangsflächen gehören nur dazu,
+wenn danach weiterhin genau zwei geschlossene äußere Ringe übrig bleiben. Eine
 eindeutige Kette beginnt am engsten Bohrungszylinder; doppelte Randbelegung,
 Verzweigung, Zyklus oder ein uneindeutiger Anfang liefern keine Auskunft.
 `cavity_chains` bildet die Ringe einmal für den ganzen Objektbaum. Die alten
@@ -276,6 +301,14 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Stück ist nie größer als sein Fleck, die Antwort ändert sich also nicht — an
   einer verrauschten Freiform sind es 1 650 von 120 610 Flecken.
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
+- **Bohrungen teilen ihre Durchgangsvorarbeit.** `detect_holes` hält
+  `_ThroughBounds` nur für seinen aktuellen, unveränderlichen Körper. Die
+  Dreiecksgrenzen entstehen erst bei der ersten exakt achsenparallelen Bohrung.
+  Achse und Querbasis müssen identisch zu vorzeichenbehafteten Koordinatenachsen
+  sein; eine nur annähernd parallele Richtung benutzt vollständig den bisherigen
+  Weg. Die Vorauswahl verwendet dieselben Abschnitts- und Mündungsgrenzen,
+  danach folgt die unveränderte Ring-/Dreiecksprüfung. Sie ändert keine Toleranz,
+  Merkmalskennung oder historische Zuordnung und erzeugt keinen persistenten Cache.
 - **Ein Hohlraum ohne Weg nach außen ist keine Bohrung.** `detect_voids` findet
   geschlossene Innenschalen über vier Tore — dichtes Netz, einheitlicher
   Umlaufsinn, mehr als eine Komponente, und die Schale liegt im Material der

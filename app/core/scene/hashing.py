@@ -18,6 +18,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from app.core.scene import cache
 from app.core.types import Operation, Profile, Quality
 
 if TYPE_CHECKING:
@@ -84,6 +85,7 @@ def operation_hash(
 ) -> str:
     """Die Identität eines gerechneten Ergebnisses."""
     return digest(
+        cache.CACHE_FORMAT_VERSION,
         operation.op,
         params,
         list(input_hashes),

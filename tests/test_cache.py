@@ -271,6 +271,93 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
+def test_old_recognition_results_are_not_read_from_disk(tmp_path: Path) -> None:
+    """Auch ein vorhandener Eintrag der letzten Erkennungsversion ist veraltet."""
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("recognition", result())
+    index = disk._folder("recognition") / "objects.json"
+    historical = json.loads(index.read_text(encoding="utf-8"))
+    historical["format_version"] = 5
+    index.write_text(json.dumps(historical), encoding="utf-8")
+
+    assert disk.get("recognition") is None
+
+
+@pytest.mark.parametrize("reopen", [False, True], ids=["memory", "disk"])
+def test_recognition_revision_recomputes_a_warm_project_cache(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch, reopen: bool
+) -> None:
+    """Neue Auskünfte entwerten beide Cacheebenen, nie die gespeicherten Operationen."""
+    from copy import deepcopy
+
+    import numpy as np
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene import cache as cache_module
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    corpus = Path(__file__).parent / "data" / "meshes" / "recognition_bayonet_lid.npz"
+    with np.load(corpus) as data:
+        mesh = trimesh.Trimesh(vertices=data["vertices"], faces=data["faces"], process=False)
+    project.sources["src_1"] = mesh.export(file_type="stl")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/lid.stl", sha256=""
+    )
+    History(project.document).apply(
+        "Laden und verschieben",
+        [
+            OperationDraft(
+                op="load",
+                params={"source": "src_1", "unit": "mm", "coordinates": "legacy_raw"},
+            ),
+            OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 12.0}),
+        ],
+    )
+    operations = deepcopy(project.document.ops)
+    sources = ProjectSources(project)
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    cache = ResultCache(disk=disk)
+    with monkeypatch.context() as historical:
+        historical.setattr(cache_module, "CACHE_FORMAT_VERSION", 5)
+        before = evaluate(project.document, profile, sources=sources, cache=cache)
+        assert before.complete
+        assert len(cache) == 2
+    if reopen:
+        cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path))
+    misses_before = cache.statistics.misses
+
+    after = evaluate(project.document, profile, sources=sources, cache=cache)
+
+    assert after.complete
+    assert cache.statistics.misses - misses_before == 2
+    assert cache.statistics.hits == cache.statistics.disk_hits == 0
+    assert project.document.ops == operations
+    for name, entry in after.scene.objects.items():
+        earlier = before.scene.objects[name]
+        assert np.array_equal(entry.mesh.raw.vertices, earlier.mesh.raw.vertices)
+        assert np.array_equal(entry.mesh.raw.faces, earlier.mesh.raw.faces)
+        contacts = [
+            feature
+            for feature in entry.features.values()
+            if feature.kind == "face"
+            and abs(feature.params["area"] - 22.8) < 1e-4
+            and np.allclose(feature.params["normal"], (0.0, 0.0, 1.0))
+        ]
+        assert len(contacts) == 3
+
+    again = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert again.complete
+    assert cache.statistics.hits == 2
+    assert cache.statistics.misses - misses_before == 2
+    assert again.scene.objects["obj_1"].features == after.scene.objects["obj_1"].features
+
+
 def test_the_disk_cache_keeps_findings_solver_and_transform(tmp_path: Path) -> None:
     """Die drei Beifänge gehören zum Ergebnis wie die Körper selbst.
 

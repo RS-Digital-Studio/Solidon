@@ -60,7 +60,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: exakte Blindböden, Gewinde und eindeutige Innen-/Außenrollen für Passungen.
 #: Merkmalsänderungen wie zusammengefasste Langlochwände und radial bearbeitbare
 #: Zylinderwände verlangen auch für bereits gespeicherte Ergebnisse neue Auskunft.
-CACHE_FORMAT_VERSION: Final = 5
+#: Ebenso lokale Flächenrollen, kleine Funktionsflächen und aufgelöste kurze Gewinde.
+#: Derselbe Stand geht in den Operationshash ein und entwertet die Speicherebene.
+CACHE_FORMAT_VERSION: Final = 6
 
 
 @dataclass(frozen=True, slots=True)

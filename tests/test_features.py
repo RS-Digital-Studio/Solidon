@@ -1127,6 +1127,21 @@ def test_a_fillet_no_longer_swallows_the_post_it_sits_on() -> None:
     assert tori[0].params["tube_diameter"] == pytest.approx(6.0, abs=0.05)
 
 
+@pytest.mark.parametrize("sections", [64, 126])
+def test_a_shallow_blind_bore_survives_a_dense_rounded_entrance(sections: int) -> None:
+    """Ein unsicherer Torusfit darf die dahinterliegende Bohrungswand nicht verschlucken."""
+    from tests.data.make_corpus import rounded_magnet_bore
+
+    body = rounded_magnet_bore(sections)
+    assert body.is_volume
+    found = detect(MeshData.of(body))
+    holes = [feature for feature in found.values() if feature.kind == "hole"]
+    assert len(holes) == 1, [(feature.kind, feature.params) for feature in found.values()]
+    assert holes[0].params["diameter"] == pytest.approx(9.0, abs=0.02)
+    assert not holes[0].params["through"]
+    assert holes[0].params["depth"] == pytest.approx(1.3, abs=0.02)
+
+
 def test_a_rounded_edge_keeps_its_own_radius() -> None:
     """Der Fehlbefund, der schlimmer war als ein fehlender Befund.
 
@@ -3384,11 +3399,17 @@ def test_the_two_bows_of_a_d_are_curved_faces_outside_and_inside() -> None:
 
 
 def test_the_curved_faces_of_a_letter_count_its_bows() -> None:
-    """Ein o hat einen Mantel (innen ist es ein Langloch), eine 3 zwei Bögen
-    außen und zwei innen — und ein I hat keinen: lauter Ebenen."""
+    """Ein o hat zwei ovale Mäntel, eine 3 zwei Bögen außen und zwei innen.
+
+    Die o-Öffnung liegt an ihrer schlechtesten Stelle 0,447 mm neben einem
+    Stadion mit Radius 8,334 mm. Ihr kleiner mittlerer Fehler belegte früher
+    fälschlich ein Langloch. Ein I hat dagegen nur ebene Seiten.
+    """
     found = detect(_letter("o"))
-    assert [f.kind for f in found.values() if f.kind == "curved_face"] == ["curved_face"]
-    assert "slot" in {f.kind for f in found.values()}, "die Öffnung des o bleibt ein Langloch"
+    curves = [f for f in found.values() if f.kind == "curved_face"]
+    assert len(curves) == 2
+    assert sorted(bool(f.params["inner"]) for f in curves) == [False, True]
+    assert "slot" not in {f.kind for f in found.values()}, "die ovale Öffnung ist kein Stadion"
 
     found = detect(_letter("3"))
     inner_flags = sorted(bool(f.params["inner"]) for f in found.values() if f.kind == "curved_face")

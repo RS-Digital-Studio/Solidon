@@ -52,10 +52,10 @@ Kunden ein Gewinde, wo keines ist.
 Gemessen über fünf Größen, drei Längen und beide Richtungen, dazu der
 Referenzkorpus, eine Kundendatei und neunzehn weitere Kundenmodelle
 (3d-druck-11, 04.09.2026, bis 1,2 Millionen Dreiecke): **sechzehn von neunzehn
-Gewinden gefunden, null Fehlalarme.** Was nicht gefunden wird, sind Gewinde
-unter etwa sieben Windungen — bei fünf Millimetern Länge überwiegt der Auslauf,
-und die Steigung ist nicht mehr abzulesen. Lieber nichts sagen als das Falsche
-(§21).
+Gewinden gefunden, null Fehlalarme.** Kurze breite Gewinde bekommen zusätzlich
+einen Nachweis an einzeln verfolgten Kammkanten. Zwei vollständige Umläufe,
+konstanter Radius, eine punktweise belegte Wendel und die Gangtiefe müssen
+zusammenpassen; ein unklarer Auslauf bleibt ohne Gewindeauskunft (§21).
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ from numpy.typing import NDArray
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.units import EPS_GEOM, positive_axis
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, positive_axis
 
 _log = get_logger(__name__)
 
@@ -150,6 +150,11 @@ HARMONIC_SHARE: Final = 0.70
 #: 5-mm-Bolzen bei 1,5.
 MIN_TURNS: Final = 5.0
 
+#: Ein einzeln verfolgter Kamm darf kürzer sein als das gemischte Spektrum.
+#: Zwei vollständige Wiederholungen und höchstens eine Facettenabweichung
+#: von der Wendel sind hier gemeinsam nötig; die Spektrumsgrenze bleibt bestehen.
+MIN_RESOLVED_TURNS: Final = 2.0
+
 #: In welchem Vielfachen der Steigung die Rille unter dem Kamm liegen darf.
 #:
 #: Ein metrisches Regelgewinde hat 0,54 · Steigung Gangtiefe — das ist die
@@ -206,10 +211,13 @@ def find_helices(
     if len(body.faces) < MIN_CHAIN_EDGES:
         return []
     found: list[Helix] = []
-    for chain in _sharp_chains(body, check_cancelled=check_cancelled):
+    for edges in _sharp_chain_edges(body, check_cancelled=check_cancelled):
         if check_cancelled is not None:
             check_cancelled()
+        chain = np.asarray(body.vertices[edges].mean(axis=1), dtype=float)
         helix = _helix_of(body, chain, check_cancelled=check_cancelled)
+        if helix is None:
+            helix = _resolved_helix(body, edges, check_cancelled=check_cancelled)
         if helix is not None:
             found.append(helix)
     if check_cancelled is not None:
@@ -230,6 +238,16 @@ def _sharp_chains(
     200 auf 200 fand die Achse aus allen scharfen Kanten die falsche Steigung,
     aus dem Zug allein die richtige (0,80 mm, Schärfe 15,8).
     """
+    return [
+        np.asarray(body.vertices[edges].mean(axis=1), dtype=float)
+        for edges in _sharp_chain_edges(body, check_cancelled=check_cancelled)
+    ]
+
+
+def _sharp_chain_edges(
+    body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
+) -> list[NDArray[np.int64]]:
+    """Bewahrt die Kantenverbindungen, damit ein Kamm einzeln verfolgbar bleibt."""
     angles = np.degrees(body.face_adjacency_angles)
     edges = body.face_adjacency_edges[angles > SHARP_EDGE_LIMIT]
     if check_cancelled is not None:
@@ -240,14 +258,163 @@ def _sharp_chains(
         edges, node_count=len(body.vertices)
     )
     belongs = labels[edges[:, 0]]
-    chains: list[NDArray[np.float64]] = []
+    chains: list[NDArray[np.int64]] = []
     for label in np.unique(belongs):
         if check_cancelled is not None:
             check_cancelled()
         mine = belongs == label
         if int(mine.sum()) >= MIN_CHAIN_EDGES:
-            chains.append(np.asarray(body.vertices[edges[mine]].mean(axis=1), dtype=float))
+            chains.append(np.asarray(edges[mine], dtype=np.int64))
     return chains
+
+
+def _resolved_helix(
+    body: trimesh.Trimesh,
+    edges: NDArray[np.int64],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Helix | None:
+    """Belegt kurze Wendelzüge getrennt von Grund, zweiter Flanke und Auslauf.
+
+    Bei einem breiten kurzen Gewinde zeigt die längste Hauptachse quer zur
+    Wendel. Die Normalen der drei größten angrenzenden Ebenen ergänzen deshalb
+    die drei Hauptachsen. Jede Richtung muss danach einen zylindrischen Kamm,
+    eine zusammenhängende Wendel und deren echte Gangtiefe nachweisen.
+    """
+    from app.core.perceive.features import _fit_circle, _plane_basis
+
+    vertex_ids = np.unique(edges)
+    points = np.asarray(body.vertices[vertex_ids], dtype=float)
+    origin = points.mean(axis=0)
+    local = points - origin
+    _, _, principal = np.linalg.svd(local, full_matrices=False)
+    candidates = list(principal)
+    touching = np.zeros(len(body.vertices), dtype=bool)
+    touching[vertex_ids] = True
+    added = 0
+    for index in np.argsort(body.facets_area)[::-1]:
+        facet = body.facets[index]
+        if not touching[np.asarray(body.faces)[facet]].any():
+            continue
+        normal = np.asarray(body.facets_normal[index], dtype=float)
+        if any(abs(float(normal @ other)) > 1.0 - EPS_GEOM for other in candidates):
+            continue
+        candidates.append(normal)
+        added += 1
+        if added >= 3:
+            break
+
+    best: Helix | None = None
+    for candidate in candidates:
+        if check_cancelled is not None:
+            check_cancelled()
+        axis = np.asarray(positive_axis(tuple(float(value) for value in candidate)), dtype=float)
+        first, second = _plane_basis(axis)
+        flat = np.column_stack((local @ first, local @ second))
+        initial, _ = _fit_circle(flat)
+        distances = np.linalg.norm(flat - initial, axis=1)
+        mean_radius = float(distances.mean())
+        if mean_radius <= EPS_GEOM or float(distances.std()) / mean_radius > CREST_SPREAD_LIMIT:
+            continue
+        for quantile in (0.1, 0.9):
+            centre_2d = initial.copy()
+            # Vier lokale Ausgleichsschritte lösen die beiden Radiusbänder.
+            # Die spätere Wendelprüfung entscheidet, ob die Näherung genügt.
+            for _ in range(4):
+                distances = np.linalg.norm(flat - centre_2d, axis=1)
+                selected = abs(distances - np.quantile(distances, quantile)) <= MAX_FACET_SAG
+                if int(selected.sum()) < 3:
+                    break
+                centre_2d, radius = _fit_circle(flat[selected])
+            else:
+                centre = origin + first * centre_2d[0] + second * centre_2d[1]
+                result = _resolved_crest(
+                    body, edges, centre, axis, radius, check_cancelled=check_cancelled
+                )
+                if result is not None and (best is None or result.length > best.length):
+                    best = result
+    return best
+
+
+def _resolved_crest(
+    body: trimesh.Trimesh,
+    edges: NDArray[np.int64],
+    centre: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    radius: float,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Helix | None:
+    """Prüft zusammenhängende scharfe Kanten auf konstanten Radius und Steigung."""
+    relative = np.asarray(body.vertices, dtype=float) - centre
+    along = relative @ axis
+    across = relative - np.outer(along, axis)
+    radii = np.linalg.norm(across, axis=1)
+    edge_across = across[edges]
+    angle = np.arctan2(
+        np.cross(edge_across[:, 0], edge_across[:, 1]) @ axis,
+        np.einsum("ij,ij->i", edge_across[:, 0], edge_across[:, 1]),
+    )
+    rise = along[edges[:, 1]] - along[edges[:, 0]]
+    on_crest = (
+        (abs(radii[edges] - radius) <= MAX_FACET_SAG).all(axis=1)
+        & (abs(angle) > EPS_GEOM)
+        & (rise * angle > EPS_GEOM)
+    )
+    kept = edges[on_crest]
+    if len(kept) < MIN_CHAIN_EDGES:
+        return None
+    groups = trimesh.graph.connected_components(
+        kept, nodes=np.unique(kept), min_len=MIN_CHAIN_EDGES, engine="scipy"
+    )
+    best: Helix | None = None
+    for indices in groups:
+        if check_cancelled is not None:
+            check_cancelled()
+        points = relative[indices]
+        heights = along[indices]
+        pitch, concentration, sharpness = _best_pitch(
+            points, axis, heights, check_cancelled=check_cancelled
+        )
+        low, high = float(heights.min()), float(heights.max())
+        if (high - low) / pitch < MIN_RESOLVED_TURNS or sharpness < MIN_SHARPNESS:
+            continue
+        # Die mittlere Konzentration allein ließe örtliche Abweichungen zu.
+        # Der Rest jedes Punkts muss auf derselben Wendel liegen.
+        from app.core.perceive.features import _plane_basis
+
+        first, second = _plane_basis(axis)
+        theta = np.arctan2(points @ second, points @ first)
+        phase = heights * (2.0 * math.pi / pitch) - theta
+        mean_phase = math.atan2(float(np.sin(phase).mean()), float(np.cos(phase).mean()))
+        error = np.abs(np.angle(np.exp(1j * (phase - mean_phase)))) * pitch / (2.0 * math.pi)
+        if concentration < MIN_CONCENTRATION or float(error.max()) > MAX_FACET_SAG:
+            continue
+        chain_radii = radii[np.unique(edges)]
+        internal = not _material_outside(body, centre, axis, low, high, chain_radii, pitch)
+        inner, outer = np.quantile(chain_radii, (0.1, 0.9))
+        depth = float(outer - inner)
+        if depth < GROOVE_RANGE[0] * pitch - EPS_GEOM or depth > GROOVE_RANGE[1] * pitch + EPS_GEOM:
+            continue
+        crest = float(inner if internal else outer)
+        midpoint = centre + axis * (low + high) / 2.0
+        result = Helix(
+            axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+            centre=(float(midpoint[0]), float(midpoint[1]), float(midpoint[2])),
+            pitch=pitch,
+            crest_radius=crest,
+            depth=depth,
+            length=high - low,
+            turns=(high - low) / pitch,
+            sharpness=sharpness,
+            internal=internal,
+            face_indices=_faces_in(
+                body, centre, axis, low - pitch, high + pitch, crest, depth, internal
+            ),
+        )
+        if best is None or result.length > best.length:
+            best = result
+    return best
 
 
 def _helix_of(

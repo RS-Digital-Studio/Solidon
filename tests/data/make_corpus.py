@@ -32,6 +32,20 @@ def cube_clean() -> None:
     write(trimesh.creation.box(extents=(20.0, 20.0, 20.0)), "cube_clean.stl")
 
 
+def rounded_magnet_bore(sections: int = 126) -> trimesh.Trimesh:
+    """Eigener Prüfkörper: Sackloch Ø9, Tiefe 1,5 mit gerundetem Eintritt R0,2."""
+    angles = np.linspace(np.pi, np.pi * 1.5, 31)
+    contour = [
+        (0.0, 1.5),
+        (4.5, 1.5),
+        *((4.7 + 0.2 * np.cos(angle), 0.2 + 0.2 * np.sin(angle)) for angle in angles),
+        (13.0, 0.0),
+        (13.0, 5.0),
+        (0.0, 5.0),
+    ]
+    return trimesh.creation.revolve(contour, sections=sections)
+
+
 def dense_cylinder() -> None:
     """Ein dicht facettierter Zylinder, dessen Kappen den ersten
     Vereinfacher festhalten.

@@ -35,9 +35,11 @@ from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.actions import ACTION_ORDER, feature_value_source
 from app.core.perceive.features import (
+    CURVATURE_LIMIT,
     EPS_ANGLE,
     SINK_AXIS_LIMIT,
     SINK_FIT_LIMIT,
+    _large_facet_faces,
     _one_body,
     axis_of,
     centre_of,
@@ -502,10 +504,25 @@ def bore_and_widening_at(
 def _coaxial(first: Feature, second: Feature) -> bool:
     """Dieselbe Achslinie mit den bereits geltenden Einpassungsschranken."""
     axis, other_axis = axis_of(first), axis_of(second)
+    return (
+        axis is not None
+        and other_axis is not None
+        and abs(float(axis @ other_axis)) >= math.cos(math.radians(SINK_AXIS_LIMIT))
+        and _axis_lines_agree(first, second)
+    )
+
+
+def _axis_lines_agree(first: Feature, second: Feature) -> bool:
+    """Die gemessenen Lagen passen beiderseits zum selben Hohlraum.
+
+    Ein vollständig geteilter Rand beweist die Verbindung unabhängig vom
+    Winkel zweier Fits. Gerade ungleich unterteilte, schräge Kegelränder
+    verschieben die geschätzte Achse. Die Lageprüfung bleibt erhalten: Eine
+    veraltete Merkmalsmitte neben dem Hohlraum ist keine brauchbare Zuordnung.
+    """
+    axis, other_axis = axis_of(first), axis_of(second)
     centre, other_centre = centre_of(first), centre_of(second)
     if axis is None or other_axis is None or centre is None or other_centre is None:
-        return False
-    if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
         return False
     radius = (
         min(
@@ -664,7 +681,7 @@ def _cavity_links(
         first, second = adjacent
         if (
             second in graph[first]
-            or not _coaxial(candidates[first], candidates[second])
+            or not _axis_lines_agree(candidates[first], candidates[second])
             or not set(candidates[first].face_indices).isdisjoint(candidates[second].face_indices)
         ):
             invalid.update(adjacent)
@@ -714,9 +731,11 @@ def _shoulder_connections(
             continue
         adjacent = [identifier for ring in rings for identifier in owners[ring]]
         # Eine seitliche Fläche ist kein Absatz quer durch eine Bohrung.
+        # Ein schräger, vollständig belegter Ring bleibt dagegen eine Schulter;
+        # deren Neigung muss nicht mit den geschätzten Zylinderachsen übereinstimmen.
         if any(
             (axis := axis_of(candidates[identifier])) is None
-            or abs(float(np.dot(axis, normal))) < math.cos(math.radians(SINK_AXIS_LIMIT))
+            or abs(float(np.dot(axis, normal))) <= EPS_GEOM
             for identifier in adjacent
         ):
             continue
@@ -735,21 +754,72 @@ def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple
     body = _one_body(mesh).raw
     candidates = {feature.id: feature for feature in features}
     owners: dict[frozenset[tuple[int, int]], list[FeatureId]] = {}
-    indices: set[int] = set()
+    indices = {index for feature in candidates.values() for index in feature.face_indices}
+    if not indices or min(indices) < 0 or max(indices) >= len(body.faces):
+        return ()
+    indices = _blended_cavity_faces(body, candidates, indices)
     for identifier, feature in candidates.items():
         rings = boundary_rings(body, feature)
         if rings is None:
-            return ()
-        indices.update(feature.face_indices)
+            # Eine Krümmungstrennung kann einzelne Randdreiecke zurücklassen.
+            # Der vollständige, belegte Übergang besitzt trotzdem saubere Ringe.
+            complete = _face_boundary_rings(body, np.asarray(sorted(indices), dtype=np.int64))
+            if complete is None or len(complete) != 2:
+                return ()
+            continue
         for ring in rings:
             owners.setdefault(ring, []).append(identifier)
     for adjacent, faces in _shoulder_connections(body, owners, candidates):
         if len(adjacent) != 2 or len(set(adjacent)) != 2:
             continue
         first, second = (candidates[identifier] for identifier in adjacent)
-        if _coaxial(first, second) and set(first.face_indices).isdisjoint(second.face_indices):
+        if _axis_lines_agree(first, second) and set(first.face_indices).isdisjoint(
+            second.face_indices
+        ):
             indices.update(faces)
     return tuple(sorted(indices))
+
+
+def _blended_cavity_faces(
+    body: trimesh.Trimesh, candidates: Mapping[FeatureId, Feature], indices: set[int]
+) -> set[int]:
+    """Tangentiale Innenübergänge bis zu den beiden äußeren Randringen ergänzen.
+
+    Ein kleiner gerundeter Eintritt hat häufig kein eigenes Merkmal. Seine
+    Fläche gehört trotzdem zur Bohrung: Sie ist glatt verbunden, zeigt zur
+    selben Achse und endet gemeinsam mit der Wand in zwei vollständigen Ringen.
+    Ebene Böden und Außenseiten bleiben außerhalb dieses Flächenausschnitts.
+    """
+    bore = next((feature for feature in candidates.values() if feature.kind == "hole"), None)
+    if bore is None or (axis := axis_of(bore)) is None or (centre := centre_of(bore)) is None:
+        return indices
+    allowed = np.ones(len(body.faces), dtype=bool)
+    allowed[list(_large_facet_faces(body))] = False
+    allowed[list(indices)] = True
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    if not len(pairs):
+        return indices
+    smooth = np.degrees(np.asarray(body.face_adjacency_angles)) < CURVATURE_LIMIT
+    pairs = pairs[smooth & allowed[pairs[:, 0]] & allowed[pairs[:, 1]]]
+    if not len(pairs):
+        return indices
+    labels = trimesh.graph.connected_component_labels(  # type: ignore[no-untyped-call]
+        pairs, node_count=len(body.faces)
+    )
+    expanded = np.flatnonzero(np.isin(labels, labels[list(indices)]))
+    extra = np.asarray([index for index in expanded if index not in indices], dtype=np.int64)
+    if not len(extra):
+        return indices
+    towards = np.asarray(centre) - np.asarray(body.triangles_center)[extra]
+    direction = np.asarray(axis)
+    towards -= np.outer(towards @ direction, direction)
+    inward = np.einsum("ij,ij->i", towards, np.asarray(body.face_normals)[extra])
+    if bool(np.any(inward < -EPS_GEOM)):
+        return indices
+    rings = _face_boundary_rings(body, expanded)
+    if rings is None or len(rings) != 2:
+        return indices
+    return {int(index) for index in expanded}
 
 
 def _ordered_cavity(
@@ -797,7 +867,7 @@ def _ordered_cavity(
 
 _Comparison = Literal["same", "different", "unavailable"]
 _POSE_PARAMETERS = frozenset({"axis", "centre", "normal", "position"})
-_DIAGNOSTIC_PARAMETERS = frozenset({"residual"})
+_DIAGNOSTIC_PARAMETERS = frozenset({"residual", "local_search_radius"})
 
 
 @dataclass(frozen=True)
