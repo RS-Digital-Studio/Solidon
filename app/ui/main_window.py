@@ -13892,10 +13892,15 @@ class MainWindow(QMainWindow):
         self._preview_shown = True
         self._preview_busy.stop()
         self._preview_action = ""
+        has_result = any(
+            getattr(entry, "result", None) is not None
+            for entry in getattr(difference, "entries", {}).values()
+        )
         nothing_to_show = difference is None or not (
             getattr(difference, "changed", True)
             or getattr(difference, "reshaped", False)
             or getattr(difference, "recoloured", False)
+            or has_result
         )
         if nothing_to_show and self._preview_reason:
             # Der Grund kam schon an (``_preview_explained``) und steht im
@@ -13928,7 +13933,7 @@ class MainWindow(QMainWindow):
         # gleichen Dreiecken. Der Körper danach liegt dann über dem davor.
         reshaped = bool(getattr(difference, "reshaped", False))
         recoloured = bool(getattr(difference, "recoloured", False))
-        shown = not empty or reshaped or recoloured
+        shown = not empty or reshaped or recoloured or has_result
         if partial:
             note = tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
         elif self._preview_coarse_at:
@@ -13957,6 +13962,13 @@ class MainWindow(QMainWindow):
             note = tr("Vorschau — noch nicht übernommen")
         self._preview_coarse_at = 0
         self._preview_effect = ""
+        warnings = dict.fromkeys(
+            str(finding.message)
+            for finding in getattr(difference, "findings", ())
+            if finding.severity in ("warning", "error")
+        )
+        if warnings:
+            note = "\n".join((note, *warnings))
         self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
 
     def _preview_coarse(self, triangles: int) -> None:

@@ -955,6 +955,11 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
     assert asked == [(selected, linked, body)], (
         "das Panel reicht Netz und Merkmale genau einmal durch"
     )
+    heading = next(widget for widget in panel._built if isinstance(widget, QLabel))
+    if pick_widening:
+        assert "mit Stufen" not in heading.text()
+    else:
+        assert "Bohrung 1 mit Stufen und Senkung" in heading.text()
     if pick_widening:
         explanations = [widget.text() for widget in panel._built if isinstance(widget, QLabel)]
         assert any("Aufweitung misst 11,00 mm" in text for text in explanations)

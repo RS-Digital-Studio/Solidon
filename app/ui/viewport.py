@@ -66,6 +66,7 @@ from app.core.geom.transform import (
 from app.core.log import get_logger
 from app.core.perceive.features import CURVATURE_LIMIT
 from app.core.perceive.maps import AnalysisMap
+from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.sketch.planes import axis_hit, image_normal, ray_hit, to_plane, to_world
@@ -77,6 +78,7 @@ from app.core.types import (
     ObjectId,
     PlaneFrame,
     Profile,
+    SceneObject,
     Vec3,
 )
 from app.core.units import (
@@ -3449,7 +3451,7 @@ class _SceneMeshWorker(Worker):
     def __init__(
         self,
         generation: int,
-        result: EvaluationResult,
+        result: Any,
         tasks: Sequence[tuple[ObjectId, Any, DisplayKey | None]],
         plane: SectionPlane | None,
         second: SectionPlane | None,
@@ -4246,6 +4248,7 @@ class Viewport(QWidget):
         """
         self._feature_patch: Any | None = None
         self._feature_patches: dict[ObjectId, Item] = {}
+        self._feature_outlines: dict[ObjectId, Item] = {}
         self._protected_patch: Any | None = None
         self._protected_hatch: Any | None = None
         # Welche Flächen als Sichtflächen gesperrt sind (§22.3), je Körper.
@@ -4283,6 +4286,16 @@ class Viewport(QWidget):
         # losgelassenen Viewports ihr `del` samt `gc.collect()`, so keiner.
         self._layer_rebuild.timeout.connect(self._rebuild_layer)
         self._difference: Any | None = None
+        self._difference_generation = 0
+        self._difference_worker: _SceneMeshWorker | None = None
+        self._difference_key: Any = None
+        self._difference_meshes: dict[str, Any] | None = None
+        self._difference_display_cache: dict[str, Any] = {}
+        self._difference_pending = False
+        self._difference_failed = False
+        self._difference_uncapped = False
+        self._preview_note = ""
+        self._preview_hint = ""
         self._difference_actors: list[Any] = []
         self._covered: set[ObjectId] = set()
         """Körper, deren eigener Aktor gerade unter einer Vorschau verborgen
@@ -5545,8 +5558,10 @@ class Viewport(QWidget):
         # fertigen Auftrag nicht mehr; nur eine neue Generation macht auch
         # seinen bereits eingereihten Rückruf zuverlässig ungültig.
         self._scene_generation += 1
+        self._difference_generation += 1
         workers = (
             self._scene_worker,
+            self._difference_worker,
             *self._scene_leash.pending(),
         )
         unique = {id(worker): worker for worker in workers if worker is not None}
@@ -5848,6 +5863,7 @@ class Viewport(QWidget):
         # nächsten Auswertung noch einer gefärbt, und ``_selected_bounds``
         # rahmte wieder einen einzigen.
         self.select(self._selected, more=self._selected_more)
+        self._redraw_difference()
         self._redraw_features()
         self._redraw_layer()
         # **Und alles andere, was durch ``_view_offset`` geht.** Dessen
@@ -5861,7 +5877,6 @@ class Viewport(QWidget):
         # Rechnung, nicht ihr Auslöser. Beide räumen selbst ab und kehren bei
         # leerem Zustand zurück, kosten hier also nichts.
         self._redraw_measurements()
-        self._redraw_difference()
         # Ob ein Körper unter der Platte liegt, entscheidet sich mit jeder
         # Auswertung neu — und die Platte steht schon, seit der Drucker
         # gewählt wurde.
@@ -6398,6 +6413,9 @@ class Viewport(QWidget):
     def _in_pick_view(self, object_id: ObjectId, entry: Any) -> bool:
         """Das letzte aufgebaute Bild bleibt maßgeblich, auch nach einem Arbeiterfehler."""
         if self._actor_scene is not None and self._actor_scene is self._result:
+            cover = self._cover_actors.get(object_id)
+            if cover is not None:
+                return bool(cover[0].visible())
             actor = self._actors.get(object_id)
             return actor is not None and actor.visible()
         return self._in_view(object_id, entry)
@@ -6573,7 +6591,10 @@ class Viewport(QWidget):
         3d-druck-d4 am 03.09.2026.
         """
         requested = (object_id, *more)
-        dropped_refs = bool(self._selected_feature_refs) and (
+        has_features = bool(
+            self._selected_feature_refs or self._selected_features or self._selected_feature
+        )
+        dropped_refs = has_features and (
             object_id != self._selected
             or any(owner not in requested for owner, _feature_id in self._selected_feature_refs)
         )
@@ -8507,6 +8528,19 @@ class Viewport(QWidget):
         entry = self._result.scene.objects.get(self._selected)
         return dict(entry.features) if entry is not None else {}
 
+    def _shown_feature_body(self, entry: SceneObject) -> SceneObject:
+        """Kontur und Etikett gehören zur gerade gezeigten Vorschaugeometrie."""
+        if (
+            self._selection_marking_hidden()
+            and self._difference is not None
+            and entry.id in self._cover_actors
+        ):
+            difference = self._difference.entries.get(entry.id)
+            result = getattr(difference, "result", None)
+            if isinstance(result, SceneObject):
+                return result
+        return entry
+
     def _redraw_features(self) -> None:
         if self.renderer is None:
             return
@@ -8560,6 +8594,10 @@ class Viewport(QWidget):
             entry = self._result.scene.objects.get(object_id) if self._result is not None else None
             if entry is None or not self._in_pick_view(object_id, entry):
                 continue
+            entry = self._shown_feature_body(entry)
+            if feature_id not in entry.features:
+                continue
+            feature = entry.features[feature_id]
             explicit = (object_id, feature_id) in selected_refs or (object_id, feature_id) == (
                 self._hovered_object,
                 self._hovered_feature,
@@ -8628,6 +8666,7 @@ class Viewport(QWidget):
             self._feature_label_data
             or self._feature_patch is not None
             or self._feature_patches
+            or self._feature_outlines
             or self._hover_patch is not None
         ) and not self._feature_layout_timer.isActive():
             self._feature_layout_timer.start(0)
@@ -8648,6 +8687,7 @@ class Viewport(QWidget):
             (
                 *self._feature_label_owners,
                 *self._feature_patches,
+                *self._feature_outlines,
                 self._selected,
                 self._hovered_object,
             )
@@ -8664,6 +8704,7 @@ class Viewport(QWidget):
             ),
             id(self._feature_patch),
             tuple((owner, id(patch)) for owner, patch in self._feature_patches.items()),
+            tuple((owner, id(outline)) for owner, outline in self._feature_outlines.items()),
             id(self._hover_patch),
             id(self._edge_patch),
         )
@@ -8688,6 +8729,7 @@ class Viewport(QWidget):
         patches: list[tuple[Item | None, ObjectId | None]] = [
             (patch, owner) for owner, patch in self._feature_patches.items()
         ]
+        patches.extend((outline, owner) for owner, outline in self._feature_outlines.items())
         if self._feature_patch is not None and self._selected not in self._feature_patches:
             patches.append((self._feature_patch, self._selected))
         patches.append((self._hover_patch, self._hovered_object))
@@ -9176,7 +9218,10 @@ class Viewport(QWidget):
             self.renderer.remove(self._feature_patch)
         self._feature_patches.clear()
         self._feature_patch = None
-        if self._selection_marking_hidden() or self._result is None:
+        for outline in self._feature_outlines.values():
+            self.renderer.remove(outline)
+        self._feature_outlines.clear()
+        if self._result is None:
             return
 
         import numpy as np
@@ -9186,16 +9231,38 @@ class Viewport(QWidget):
             selected.setdefault(object_id, []).append(feature_id)
         for object_id, feature_ids in selected.items():
             entry = self._result.scene.objects.get(object_id)
+            if entry is None or not self._in_pick_view(object_id, entry):
+                continue
+            entry = self._shown_feature_body(entry)
+            feature_ids = [key for key in feature_ids if key in entry.features]
+            mesh = as_mesh_data(entry.mesh)
             raw = getattr(entry.mesh, "raw", None) if entry is not None else None
             if entry is None or raw is None:
                 continue
+            members = dict.fromkeys(feature_ids)
+            for feature_id in feature_ids:
+                feature = entry.features.get(feature_id)
+                if feature is not None and feature.kind in ("hole", "cone"):
+                    chain = cavity_chain_at(feature, entry.features, mesh)
+                    if chain is not None:
+                        members.update(dict.fromkeys(part.id for part in chain))
             highlighted = tuple(
                 dict.fromkeys(
                     index
-                    for feature_id in feature_ids
-                    for index in self._face_indices(object_id, feature_id)
+                    for feature_id in members
+                    if (feature := entry.features.get(feature_id)) is not None
+                    for index in feature.face_indices
+                    if 0 <= index < len(raw.faces)
                 )
             )
+            if members and all(
+                key in entry.features and entry.features[key].kind in ("hole", "cone")
+                for key in members
+            ):
+                highlighted = (
+                    cavity_surface_indices(mesh, (entry.features[key] for key in members))
+                    or highlighted
+                )
             if not highlighted:
                 continue
             chosen = np.asarray(highlighted, dtype=np.int64)
@@ -9204,12 +9271,28 @@ class Viewport(QWidget):
             )
             if not len(corners):
                 continue
+            # Linien tragen ihren Tiefenversatz in Bildpunkten im Renderer.
+            # Ihre Weltkontur bleibt deshalb am tatsächlichen Merkmalrand.
+            rim = self._lifted_corners(raw, chosen, 0.0, self._shown_offset(entry, self._result))
+            vertices, inverse = np.unique(rim, axis=0, return_inverse=True)
+            boundary = feature_edges(vertices, inverse.reshape(-1, 3), 180.0)
+            if len(boundary):
+                self._feature_outlines[object_id] = self.renderer.add_lines(
+                    boundary,
+                    name=f"feature-outline:{object_id}",
+                    colour=SELECTED_COLOUR,
+                    width=SELECTED_EDGE_WIDTH,
+                )
+            if self._selection_marking_hidden():
+                continue
             features = [
                 feature
                 for feature_id in feature_ids
                 if (feature := entry.features.get(feature_id)) is not None
             ]
-            hole_surface = bool(features) and all(feature.kind == "hole" for feature in features)
+            hole_surface = bool(features) and all(
+                feature.kind in ("hole", "cone") for feature in features
+            )
             style = (
                 SurfaceStyle(
                     colour=SELECTED_COLOUR,
@@ -10260,13 +10343,17 @@ class Viewport(QWidget):
         Transparenz und in der Legende des Chat-Panels — die Ansicht bleibt also
         ohne Farbsehen lesbar.
         """
+        if difference is not self._difference:
+            self._cancel_difference_preparation()
+            self._difference_key = None
+            self._difference_display_cache.clear()
         self._difference = difference
         # Die Differenz besitzt die Modellfarben, solange sie sichtbar ist.
         # Auswahl und Hover bleiben in Baum, Text und Zeiger erhalten, färben
         # aber nicht über „hinzugefügt/entfernt" hinweg.
+        self._redraw_difference()
         self._apply_selection_colour()
         self._redraw_features()
-        self._redraw_difference()
         if self.renderer is not None:
             self._draw()
 
@@ -10284,8 +10371,9 @@ class Viewport(QWidget):
         from PySide6.QtWidgets import QApplication
 
         application = QApplication.instance()
+        self._preview_note, self._preview_hint = note, hint
         if note:
-            self.banner.show_preview(note, self._diff_palette, hint)
+            self._refresh_preview_banner()
             if application is not None and not self._comparing:
                 application.installEventFilter(self._compare)
                 self._comparing = True
@@ -10295,6 +10383,130 @@ class Viewport(QWidget):
             if application is not None and self._comparing:
                 application.removeEventFilter(self._compare)
                 self._comparing = False
+
+    def _refresh_preview_banner(self) -> None:
+        """Rechenzustand und sichtbares Bild benennen, ohne den Operationshinweis zu verlieren."""
+        note = self._preview_note
+        if self._difference_pending:
+            note = tr("Vorschau wird aufbereitet — sichtbar ist noch das Modell davor.")
+        elif self._difference_failed:
+            note = tr(
+                "Vorschau nicht verfügbar — ändern Sie einen Wert, um sie erneut zu berechnen."
+            )
+        elif self._difference is not None:
+            if self._difference_display_cache:
+                note = "\n".join(
+                    filter(
+                        None,
+                        (note, tr("Darstellung vereinfacht — die Modellmaße bleiben erhalten.")),
+                    )
+                )
+            if self._difference_uncapped:
+                note = "\n".join(
+                    filter(None, (note, tr("Der Ansichtsschnitt ist stellenweise offen.")))
+                )
+        if note:
+            self.banner.show_preview(note, self._diff_palette, self._preview_hint)
+            self.banner.legend.setVisible(
+                not self._difference_pending and not self._difference_failed
+            )
+        else:
+            self.banner.hide()
+
+    def _cancel_difference_preparation(self) -> None:
+        """Auch bereits eingereihte Antworten des vorigen Vorschauauftrags verwerfen."""
+        self._difference_generation += 1
+        previous = self._difference_worker
+        if previous is not None:
+            previous.cancel()
+            self._scene_leash.retire(previous)
+            self._difference_worker = None
+        self._difference_meshes = None
+        self._difference_pending = False
+        self._difference_failed = False
+        self._difference_uncapped = False
+
+    def _prepare_difference(self) -> bool:
+        """Alle Vorschaukörper gemeinsam aufbereiten; nur die jüngste Ansicht darf erscheinen."""
+        assert self._difference is not None
+        sources: dict[str, Any] = {}
+        for entry in self._difference.entries.values():
+            original = self._result.scene.objects.get(entry.object_id) if self._result else None
+            if original is not None and not self._in_view(entry.object_id, original):
+                continue
+            for role in ("added", "removed", "retriangulated", "result", "recoloured"):
+                body = getattr(entry, role, None)
+                if body is None or (role not in ("added", "removed") and self._map is not None):
+                    continue
+                mesh = body.mesh if role in ("result", "recoloured") else body
+                sources[f"{role}:{entry.object_id}"] = as_mesh_data(mesh)
+        plane, second = self._section_planes()
+        key = (id(self._difference), plane, second, tuple(sources))
+        if key == self._difference_key:
+            return self._difference_meshes is not None
+        self._cancel_difference_preparation()
+        self._difference_key = key
+        tasks: list[tuple[ObjectId, Any, DisplayKey | None]] = []
+        heavy = plane is not None
+        for name, source in sources.items():
+            mesh = self._difference_display_cache.get(name, source)
+            cache_key = None
+            if source.triangle_count > DISPLAY_DECIMATION_ABOVE and mesh is source:
+                cache_key = _display_key(name, source, "")
+                heavy = True
+            if cache_key is not None or plane is not None:
+                mesh = _detached(mesh)
+            tasks.append((name, mesh, cache_key))
+        if not heavy:
+            self._difference_meshes = {name: mesh for name, mesh, _key in tasks}
+            self._refresh_preview_banner()
+            return True
+        self._difference_pending = True
+        generation = self._difference_generation
+        worker = _SceneMeshWorker(generation, self._difference, tasks, plane, second)
+        self._difference_worker = worker
+        worker.done.connect(self._difference_ready)
+        worker.crashed.connect(
+            weak_slot(self, Viewport._difference_crashed, generation, forward=True)
+        )
+        worker.finished.connect(
+            weak_slot(self, lambda view, done: view._difference_worker_done(done), worker)
+        )
+        self._scene_leash.start(worker)
+        self._refresh_preview_banner()
+        return False
+
+    def _difference_ready(self, generation: int, difference: Any, prepared: _PreparedScene) -> None:
+        """Vorbereitete Netze übernehmen, ohne Dokument oder Auswahlkennungen zu verändern."""
+        if generation != self._difference_generation or difference is not self._difference:
+            return
+        self._difference_pending = False
+        self._difference_meshes = prepared.meshes
+        self._difference_uncapped = prepared.uncapped
+        self._difference_display_cache.update(
+            {key[0]: mesh for key, mesh in prepared.cached.items()}
+        )
+        self._redraw_difference()
+        self._apply_selection_colour()
+        self._redraw_features()
+        self._refresh_preview_banner()
+        if self.renderer is not None:
+            self._draw()
+
+    def _difference_crashed(self, generation: int, detail: str) -> None:
+        """Das Original sichtbar lassen und einen erneuten Vorschauversuch anbieten."""
+        if generation != self._difference_generation:
+            return
+        self._difference_pending = False
+        self._difference_failed = True
+        _log.warning("preview preparation: %s", detail)
+        self._refresh_preview_banner()
+
+    def _difference_worker_done(self, worker: _SceneMeshWorker) -> None:
+        """Den ausgelaufenen Vorschauaufbereiter identitätssicher freigeben."""
+        if self._difference_worker is worker:
+            self._difference_worker = None
+        self._scene_leash.hold_until_done(worker)
 
     def hold_before(self, held: bool) -> None:
         """Blendet die Vorschau weg, solange jemand den Vergleich hält.
@@ -10334,10 +10546,14 @@ class Viewport(QWidget):
         for object_id in self._covered:
             covered = self._actors.get(object_id)
             if covered is not None:
-                covered.set_visible(True)
+                entry = self._result.scene.objects.get(object_id) if self._result else None
+                covered.set_visible(entry is not None and self._in_view(object_id, entry))
         self._covered.clear()
         self._cover_actors.clear()
         if self._difference is None or self._difference_held:
+            self._refresh_preview_banner()
+            return
+        if not self._prepare_difference():
             return
 
         import numpy as np
@@ -10351,6 +10567,8 @@ class Viewport(QWidget):
                 if self._result is not None
                 else None
             )
+            if scene_entry is not None and not self._in_view(entry.object_id, scene_entry):
+                continue
             shift = (
                 np.asarray(self._view_offset(scene_entry, self._result), dtype=float)
                 if scene_entry is not None and self._result is not None
@@ -10360,7 +10578,7 @@ class Viewport(QWidget):
                 entry.added, colours.added.colour, f"added:{entry.object_id}", 0.95, shift
             )
             self._add_body(
-                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.65, shift
+                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.18, shift
             )
             # **Ein Deckel liegt nur auf einem Körper, der im Bild ist** —
             # nicht auf einem ausgeblendeten (§18.8) oder einem auf einer
@@ -10381,7 +10599,21 @@ class Viewport(QWidget):
             # Flächen am selben Ort flimmern, und flimmern sagt nichts.
             retriangulated = getattr(entry, "retriangulated", None)
             if retriangulated is not None:
-                self._cover_body(entry.object_id, retriangulated, shift, colours.added.colour)
+                self._cover_body(
+                    entry.object_id,
+                    retriangulated,
+                    shift,
+                    colours.added.colour,
+                    role="retriangulated",
+                )
+            elif (result := getattr(entry, "result", None)) is not None:
+                self._cover_body(
+                    entry.object_id,
+                    as_mesh_data(result.mesh),
+                    shift,
+                    None,
+                    painted_as=result,
+                )
             # **Neue Farben bei gleichen Dreiecken: der Körper danach in
             # seinen Farben** — dieselbe Slotauflösung wie beim Aufbau der
             # Szene, damit die Vorschau die Farbe zeigt, die übernommen wird.
@@ -10390,7 +10622,15 @@ class Viewport(QWidget):
                 painted = getattr(recoloured, "mesh", None)
                 raw = getattr(painted, "raw", None)
                 if raw is not None and len(raw.faces):
-                    self._cover_body(entry.object_id, painted, shift, None, painted_as=recoloured)
+                    self._cover_body(
+                        entry.object_id,
+                        painted,
+                        shift,
+                        None,
+                        painted_as=recoloured,
+                        same_faces=True,
+                        role="recoloured",
+                    )
         self.set_preview_gizmo(self._preview_gizmo_wanted)
 
     def _cover_body(
@@ -10401,6 +10641,8 @@ class Viewport(QWidget):
         edge_colour: str | None,
         *,
         painted_as: Any = None,
+        same_faces: bool = False,
+        role: str = "result",
     ) -> None:
         """Legt den Körper danach an die Stelle des Körpers davor.
 
@@ -10412,10 +10654,8 @@ class Viewport(QWidget):
         — Schnittebene, Darstellungsart mit ihrer Opazität, Slotfarben aus
         derselben Auflösung. Die erste Fassung zeichnete ``mesh.raw`` roh und
         undurchsichtig: Unter einer stehenden Vorschau war der Schnitt fort,
-        die transparente Darstellung auch (Review 14.09.2026). Nur ein Netz
-        über der Dezimiergrenze wird nicht gedeckt — ``add_surface`` läuft im
-        Hauptthread, bei jedem Vorschaudurchlauf, und die Szene hat für so ein
-        Netz einen eigenen Arbeiter; das Band sagt dann, was sich ändert.
+        die transparente Darstellung auch (Review 14.09.2026). Große Netze
+        und Ansichtsschnitte werden gemeinsam im Arbeiter vorbereitet.
 
         ``edge_colour`` zeichnet die Kanten (neue Dreiecke), ``painted_as``
         gibt die Slotfarben des Körpers danach (neue Farben). Der Deckel ist
@@ -10423,11 +10663,11 @@ class Viewport(QWidget):
         er der Körper, und seine Dreiecksnummern gelten nur, wenn sie die des
         Körpers sind — bei neuen Dreiecken nicht.
         """
-        if self.renderer is None or mesh.triangle_count > DISPLAY_DECIMATION_ABOVE:
+        if self.renderer is None or self._difference_meshes is None:
             return
         import numpy as np
 
-        shown = self._sectioned(mesh)
+        shown = self._difference_meshes.get(f"{role}:{object_id}")
         raw = getattr(shown, "raw", None)
         if raw is None or not len(raw.faces):
             return
@@ -10458,7 +10698,7 @@ class Viewport(QWidget):
             cell_colours=cell_colours,
         )
         self._difference_actors.append(item)
-        self._cover_actors[object_id] = (item, edge_colour is None and shown is mesh)
+        self._cover_actors[object_id] = (item, same_faces and shown is mesh)
 
     def _body_opacity(self) -> float:
         """Die Opazität eines Körpers in der gewählten Darstellungsart — im
@@ -10470,6 +10710,8 @@ class Viewport(QWidget):
         return opacity
 
     def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
+        if self._difference_meshes is not None:
+            mesh = self._difference_meshes.get(name)
         if self.renderer is None or mesh is None or not len(mesh.raw.faces):
             return
         import numpy as np
@@ -10488,9 +10730,7 @@ class Viewport(QWidget):
         """Blau/Orange, Rot/Grün oder Graustufen — die Wahl aus §19.1."""
         self._diff_palette = palette
         self._redraw_difference()
-        if not self.banner.isHidden():
-            # Die Legende erklärt Farben; die haben sich gerade geändert.
-            self.banner.show_preview(self.banner.note.text(), palette, self.banner.hint.text())
+        self._refresh_preview_banner()
         if self.renderer is not None:
             self._draw()
 

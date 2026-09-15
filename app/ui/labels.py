@@ -825,6 +825,8 @@ def colour_name(value: str) -> str:
 #: zweite Ebene.
 _CHOICE_NAMES: dict[str, TranslatableText] = {
     "whole_face": _("Gesamte Fläche"),
+    "keep": _("Nur Bohrungsdurchmesser"),
+    "follow": _("Senkung und Stufen mitnehmen"),
     "legacy_raw": _("Unveränderte Quellachsen"),
     "gltf": _("glTF: Y nach oben"),
     "clearance": _("Spielpassung"),
@@ -989,6 +991,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
     "whole_face": _("Füllt die gewählte ebene Fläche bis zum Rand; Bohrungen bleiben frei."),
+    "keep": _("Außenmaße und Lage der vorhandenen Senkung und Stufen bleiben erhalten."),
+    "follow": _(
+        "Einführbreite, Senkungswinkel und Stufentiefen bleiben erhalten; "
+        "die Durchmesser ändern sich gemeinsam."
+    ),
     "legacy_raw": _("Behält die Achsen der Quelldatei bei, wie in älteren Projekten."),
     "gltf": _("Richtet GLB und GLTF von Y-oben auf Solidons Z-oben aus."),
     "clearance": _("Prüft das Spiel zwischen Öffnung und Gegenstück anhand ihrer Materialien."),
@@ -1858,6 +1865,22 @@ _SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = (
 _AXIS_ALIGNED = 0.9
 
 
+def cavity_name(feature_id: FeatureId, feature: Feature, cavity: Sequence[Feature] = ()) -> str:
+    """Den belegten Zusammenhang schon an der obersten Bohrungszeile nennen."""
+    name = feature_name(feature_id, feature)
+    if not cavity or cavity[0].id != feature_id or feature.kind != "hole":
+        return name
+    stepped = sum(member.kind == "hole" for member in cavity) > 1
+    countersunk = any(member.kind == "cone" for member in cavity)
+    if stepped and countersunk:
+        return tr("{feature} mit Stufen und Senkung").format(feature=name)
+    if stepped:
+        return tr("{feature} mit Stufen").format(feature=name)
+    if countersunk:
+        return tr("{feature} mit Senkung").format(feature=name)
+    return name
+
+
 def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     """Wie das Merkmal heißt, wenn man es jemandem zeigt.
 
@@ -1888,7 +1911,8 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
             return tr("Gerundete Seite innen")
         return tr("Gerundete Seite")
     if feature.kind == "hole":
-        return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
+        name = tr("Sackbohrung") if feature.params.get("through") is False else tr("Bohrung")
+        return f"{name} {feature_id.rsplit('_', 1)[-1]}"
     # **Mit Nummer, wie die Bohrung.** Ein Teil trägt selten eine Bohrung und
     # oft vier; dasselbe gilt für Langlöcher, und ohne die Nummer stünden im
     # Objektbaum vier Zeilen „Langloch" untereinander.

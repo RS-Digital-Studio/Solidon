@@ -25,6 +25,12 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
 
 ## Festlegungen, die der Viewport voraussetzt
 
+* **Deckende Körper reflektieren schwach und breit.** Der neutrale
+  Phong-Anteil macht die Form auch bei schwarzer Filamentfarbe lesbar.
+  `SurfaceStyle.specular` überschreibt ihn einschließlich ausdrücklich null;
+  unbeleuchtete und durchscheinende Hilfsflächen behalten ihre Farbdarstellung.
+  Quelldaten, Materialslots und exportierte Farben ändern sich dadurch nicht.
+
 * **Bildpunkte zählen wie Qt** — Ursprung oben links, y nach unten, in
   Gerätepixeln; `world_to_display`, `display_to_world` und die Picks rechnen
   so. pygfx zählt von sich aus wie Qt, nur in logischen Bildpunkten — der

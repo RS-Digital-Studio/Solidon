@@ -1390,3 +1390,37 @@ selbst. Zwei Fallen, beide gemessen:
 Die Suite baut über siebenhundert Fenster mit Ansicht nacheinander auf und
 reißt am Stück ab. Fensterdateien werden **je Prozess einzeln** gefahren —
 siehe `CLAUDE.md` im Wurzelverzeichnis.
+
+## Geometrische Vorschau und Merkmalsauswahl
+
+Die geometrische Vorschau zeigt den vollständigen Nachherkörper aus
+`Difference.result`. Hinzugefügtes und entferntes Material erklärt die
+Änderung zusätzlich; eine gescheiterte Differenzrechnung darf das vorhandene
+Ergebnis nicht verbergen. Neu vernetzte Vorschaukörper liefern beim Picking
+keine Dreiecksnummer aus dem Originalnetz.
+
+Große Vorschaukörper und alle Ansichtsschnitte werden gemeinsam durch den
+Ansichtsarbeiter auf eigenen Netzkopien vorbereitet. Währenddessen zeigt das
+Band ausdrücklich das Vorhermodell an; erst die fertige aktuelle Generation
+ersetzt Geometrie, Konturen und Etiketten. Abbruch und Fensterabbau verwerfen
+auch bereits eingereihte Antworten. Dezimierte Netze bleiben ausschließlich
+in der Ansicht und werden beim Vorhervergleich wiederverwendet.
+
+Merkmalskontur und Etikett lesen den gerade gezeigten Körper. Entfernte
+Kettenglieder erhalten keine alte Markierung über dem neuen Ergebnis.
+Bohrung, Senkung und belegte tangentiale Eintrittsflächen teilen eine Kontur;
+deren Tiefenversatz kommt in Bildpunkten aus dem Renderer. Beim
+Vorher-Vergleich kehren Geometrie, Maße und Markierung gemeinsam zurück.
+
+Der Objektbaum und die Auswahlüberschrift nennen bei der Hauptbohrung schon
+die belegten Stufen und Senkungen (`labels.cavity_name`). Untergeordnete
+Abschnitte behalten ihre eigenen Namen und Kennungen. Dieselbe Kettenauskunft
+steuert Gruppierung, Beschriftung und Auswahl; ein Verwendungszweck wie
+„Magnettasche“ wird aus einer bloßen Sackbohrung nicht abgeleitet.
+Ein belegtes `through=False` heißt bereits im Baum und am Merkmal
+„Sackbohrung“; ohne diesen Nachweis bleibt die neutrale Bezeichnung „Bohrung“.
+
+`Session._preview_outcome` trägt Befunde ausschließlich der vorgeschauten
+Schritte in `SceneDifference.findings`. Warnungen bleiben neben einer
+erfolgreichen Ergebnisvorschau sichtbar. Der getrennte Absageweg bleibt
+Vorschauen vorbehalten, die tatsächlich kein Ergebnis liefern.

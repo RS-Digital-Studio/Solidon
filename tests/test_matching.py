@@ -1120,6 +1120,17 @@ def test_the_measured_diameter_is_said_out_loud() -> None:
     assert not choices, "wo eine Größe passt, gibt es nichts zu fragen"
 
 
+def test_a_blind_bore_is_not_described_as_a_through_hole() -> None:
+    """Ein passender Durchmesser belegt keinen Durchgang und keinen Einsatzzweck."""
+    feature = clicked_bore(9.0)
+    feature.params["through"] = False
+    text, choices = bore_advice(9.0, feature=feature, ask=False)
+    assert "Sackbohrung" in text
+    assert "Durchgangsloch" not in text
+    assert "9" in text and "M8" in text
+    assert not choices
+
+
 def test_no_bore_falls_between_the_two_answers() -> None:
     """Kein toter Bereich: Jede Bohrung bekommt eine Größe **oder** eine Frage.
 

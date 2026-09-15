@@ -14,12 +14,14 @@ sich nicht rechnen ließ, sagt das, statt eine leere Ansicht zu zeigen, die wie
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import cast
 
 import numpy as np
 
+from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError
-from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.boolean import _signed_volume, boolean
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components
 from app.core.log import get_logger
 from app.core.types import (
     Finding,
@@ -82,6 +84,12 @@ class Difference:
 
     Die Geometrie ist dieselbe, ``compare`` fände nichts; die Ansicht zeichnet
     den Körper mit den neuen Slotfarben über den alten."""
+    result: SceneObject | None = None
+    """Der vollständige Nachherkörper bei einer Geometrieänderung.
+
+    Er bleibt auch bei unvollständigem Volumenvergleich verfügbar. Die
+    Differenzfarben erklären den Abtrag, dieser Körper zeigt das Ergebnis.
+    """
 
     @property
     def changed(self) -> bool:
@@ -95,6 +103,8 @@ class SceneDifference:
     entries: dict[ObjectId, Difference] = field(default_factory=dict)
     created: tuple[ObjectId, ...] = ()
     deleted: tuple[ObjectId, ...] = ()
+    #: Befunde der vorgeschauten Schritte; ältere Befunde gehören zum Dokument.
+    findings: tuple[Finding, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -136,15 +146,16 @@ def compare(
     der keinen Drucker kennt, soll keinen erfinden.
     """
     entry = Difference(object_id="", noise_volume=_noise(profile))
-    added = _cut(after, before, quality)
-    removed = _cut(before, after, quality)
+    first, second, common = _comparison_parts(before, after)
+    added = _cut_parts(second, first, common, quality)
+    removed = _cut_parts(first, second, common, quality)
 
     if added is not None:
         entry.added, entry.added_volume = added[0], max(added[0].volume, 0.0)
-        entry.solvers = (*entry.solvers, added[1])
+        entry.solvers = (*entry.solvers, *added[1])
     if removed is not None:
         entry.removed, entry.removed_volume = removed[0], max(removed[0].volume, 0.0)
-        entry.solvers = (*entry.solvers, removed[1])
+        entry.solvers = (*entry.solvers, *removed[1])
 
     if added is None or removed is None:
         entry.findings.append(
@@ -155,6 +166,124 @@ def compare(
             )
         )
     return entry
+
+
+def _comparison_parts(
+    before: MeshData, after: MeshData
+) -> tuple[list[MeshData], list[MeshData], list[MeshData]]:
+    """Unveränderte positive Schalen aus beiden Operanden herausnehmen.
+
+    Der gemeinsame Anteil C wird aus beiden Operanden ausgeklammert.
+    C verschwindet deshalb aus der ersten Rechnung, bleibt aber als Maske
+    erhalten. Negative Innenschalen bleiben mit ihrem vollständigen Körper
+    zusammen; sie sind keine separat zu vereinigenden Materialstücke.
+    """
+    groups = [face_components(mesh.raw) for mesh in (before, after)]
+    if all(len(group) <= 1 for group in groups):
+        return [before], [after], []
+    parts = [
+        [
+            MeshData.of(cast(trimesh.Trimesh, mesh.raw.submesh([faces], append=True, repair=False)))
+            for faces in group
+        ]
+        for mesh, group in zip((before, after), groups, strict=True)
+    ]
+    if any(
+        not part.is_watertight or not part.raw.is_winding_consistent or part.volume <= 0.0
+        for side in parts
+        for part in side
+    ):
+        return [before], [after], []
+    first, second = parts
+    candidates: dict[int, list[int]] = {}
+    for index, part in enumerate(second):
+        candidates.setdefault(part.triangle_count, []).append(index)
+    common: list[MeshData] = []
+    changed: list[MeshData] = []
+    for part in first:
+        for index in candidates.get(part.triangle_count, []):
+            other = second[index]
+            # Nur Float64-Rechenrauschen ist gleich, kein Fertigungsspiel.
+            roundoff = (
+                8
+                * np.finfo(np.float64).eps
+                * max(
+                    float(np.max(np.abs(part.raw.vertices))),
+                    float(np.max(np.abs(other.raw.vertices))),
+                    np.finfo(np.float64).tiny,
+                )
+            )
+            if not np.allclose(part.raw.bounds, other.raw.bounds, rtol=0, atol=roundoff):
+                continue
+            if _same_component(part, other, roundoff):
+                common.append(part)
+                candidates[part.triangle_count].remove(index)
+                break
+        else:
+            changed.append(part)
+    if not common:
+        return [before], [after], []
+    remaining = {index for indices in candidates.values() for index in indices}
+    return changed, [part for index, part in enumerate(second) if index in remaining], common
+
+
+def _same_component(first: MeshData, second: MeshData, roundoff: float) -> bool:
+    """Eindeutige Eckenzuordnung und dieselben Dreiecke trotz neuer Indizes prüfen."""
+    from scipy.spatial import cKDTree
+
+    if first.vertex_count != second.vertex_count:
+        return False
+    distances, indices = cKDTree(first.raw.vertices).query(second.raw.vertices)
+    if np.any(distances > roundoff) or len(np.unique(indices)) != len(indices):
+        return False
+    left = np.sort(np.asarray(first.raw.faces), axis=1)
+    right = np.sort(indices[np.asarray(second.raw.faces)], axis=1)
+    return bool(np.array_equal(left[np.lexsort(left.T[::-1])], right[np.lexsort(right.T[::-1])]))
+
+
+def _cut_parts(
+    keep: list[MeshData], subtract: list[MeshData], common: list[MeshData], quality: Quality
+) -> tuple[MeshData, tuple[SolverInfo, ...]] | None:
+    """Nur geändertes Material vergleichen und gemeinsame Überdeckungen abziehen."""
+    if not keep:
+        return MeshData.of(trimesh.Trimesh()), ()
+    solvers: list[SolverInfo] = []
+    try:
+        operands = []
+        for parts in (keep, subtract):
+            if not parts:
+                continue
+            if len(parts) == 1:
+                operands.append(parts[0])
+            else:
+                outcome = boolean("union", parts, quality=quality)
+                operands.append(outcome.mesh)
+                solvers.append(outcome.solver)
+        mesh = operands[0]
+        if len(operands) == 2:
+            cut = _cut(operands[0], operands[1], quality)
+            if cut is None:
+                return None
+            mesh, solver = cut
+            solvers.append(solver)
+        for mask in common:
+            if not mesh.triangle_count:
+                break
+            if np.any(mesh.raw.bounds[1] <= mask.raw.bounds[0]) or np.any(
+                mask.raw.bounds[1] <= mesh.raw.bounds[0]
+            ):
+                continue
+            cut = _cut(mesh, mask, quality)
+            if cut is None:
+                return None
+            mesh, solver = cut
+            solvers.append(solver)
+        return mesh, tuple(solvers)
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:
+        _log.warning("component difference could not be computed: %s", problem)
+        return None
 
 
 def _noise(profile: Profile | None) -> float:
@@ -214,6 +343,7 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
             continue
         difference = compare(first, second, quality=quality, profile=profile)
         difference.object_id = object_id
+        difference.result = entry
         # Neue Dreiecke, gleiches Volumen: Die Zahl sagt „nichts", das Netz
         # sagt etwas — und darum geht es bei diesen Operationen. **Aber nur,
         # wenn die Zahl gerechnet wurde.** Scheitert ``_cut`` in beiden
@@ -322,4 +452,35 @@ def _cut(
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten
         _log.warning("difference could not be computed: %s", problem)
         return None
-    return outcome.mesh, outcome.solver
+    return _without_contact_shells(outcome.mesh), outcome.solver
+
+
+def _without_contact_shells(mesh: MeshData) -> MeshData:
+    """Reine Float64-Kontaktreste vor weiteren Maskenschnitten entfernen.
+
+    Auch eine Nullhülle kann durch Rundung ein kleines orientiertes Integral
+    tragen. Wie im nativen Booleschen Kern gilt gamma(8) mal Koordinatengröße
+    mal Oberfläche; negative Innenschalen mit echtem Volumen bleiben erhalten.
+    """
+    groups = face_components(mesh.raw)
+    if len(groups) <= 1:
+        return mesh
+    kept = []
+    relative_error = 8 * np.finfo(np.float64).eps
+    for faces in groups:
+        part = cast(trimesh.Trimesh, mesh.raw.submesh([faces], append=True, repair=False))
+        roundoff = (
+            relative_error
+            / (1 - relative_error)
+            * float(np.max(np.abs(part.vertices)))
+            * float(part.area)
+        )
+        if abs(_signed_volume(part)) > roundoff:
+            kept.append(faces)
+    if len(kept) == len(groups):
+        return mesh
+    return mesh.replacing(
+        cast(trimesh.Trimesh, mesh.raw.submesh([np.concatenate(kept)], append=True, repair=False))
+        if kept
+        else trimesh.Trimesh()
+    )

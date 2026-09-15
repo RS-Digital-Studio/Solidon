@@ -122,6 +122,15 @@ Eine unvollständige Differenz (`difference.incomplete`, ein Schnitt ist
 gescheitert) trägt kein `retriangulated`: Zwei Volumina von null sind dann
 keine Aussage über das Volumen.
 
+`Difference.result` bewahrt den vollständigen Nachherkörper auch dann, wenn
+der zusätzliche Volumenvergleich unvollständig ist. Bei überlappenden
+positiven Schalen werden geometrisch identische Komponenten vor dem
+Vergleich abgezogen; negative Innenschalen bleiben mit ihrem Körper
+verbunden. Reine Kontaktschalen innerhalb des Float64-Rechenfehlers zählen
+nicht als entferntes Material. Echte Änderungen hinter aufgesetzter Schrift
+bleiben Teil des Vergleichs. `SceneDifference.findings` trägt daneben die
+Befunde der vorgeschauten Schritte, nicht die Vorgeschichte des Imports.
+
 Eine mitgeführte exakte `MeshData.cavity` folgt in `transform.apply` derselben
 Matrix wie der Körper. Änderungen der Topologie verwerfen die Auskunft,
 solange ihre Gültigkeit nicht eigens hergestellt wird.

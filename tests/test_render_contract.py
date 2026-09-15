@@ -542,6 +542,26 @@ def test_the_headlight_brightens_the_faces_that_look_at_the_camera(
     assert lit > dim + 60, (dim, lit)
 
 
+def test_black_lit_surfaces_still_show_their_shape(renderer: Renderer) -> None:
+    """Auch schwarzes Filament reflektiert Licht; seine drei Flächen bleiben lesbar."""
+    vertices, faces = cube()
+    item = renderer.add_surface(vertices, faces, name="black", style=SurfaceStyle(colour="#000000"))
+    renderer.set_camera_pose(CameraPose((60.0, -80.0, 50.0), (10.0, 10.0, 10.0), (0.0, 0.0, 1.0)))
+    renderer.reset_camera((0.0, 20.0, 0.0, 20.0, 0.0, 20.0))
+    picture = renderer.screenshot()
+    samples = []
+    for centre in ((10.0, 0.0, 10.0), (20.0, 10.0, 10.0), (10.0, 10.0, 20.0)):
+        x, y, _depth = renderer.world_to_display(centre)
+        samples.append(float(np.mean(picture[round(y), round(x)])))
+    assert min(samples) > COLOUR_SLACK, samples
+    assert max(samples) - min(samples) > 10, samples
+    renderer.remove(item)
+    renderer.add_surface(
+        vertices, faces, name="unlit-black", style=SurfaceStyle(colour="#000000", lighting=False)
+    )
+    assert same(renderer.screenshot()[150, 200], (0, 0, 0))
+
+
 def test_polylines_chain_exactly_the_points_they_are_told_to(renderer: Renderer) -> None:
     """Eine Skizzenkurve ist eine Kette, ein Raster sind Paare — `polylines`
     sagt je Kette, wie viele Punkte sie hat, und dazwischen wird nichts

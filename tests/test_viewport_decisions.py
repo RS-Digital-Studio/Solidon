@@ -46,6 +46,7 @@ from __future__ import annotations
 import gc
 import math
 import threading
+import time
 import weakref
 from types import SimpleNamespace
 from typing import Any, cast
@@ -65,6 +66,214 @@ from app.ui.render.api import CameraPose, Pick
 from app.ui.theme import THEMES, viewport_colours
 from app.ui.viewport import PLATE_GAP
 from tests.render_fakes import BrokenDriverRenderer, RecordingItem, RecordingRenderer
+
+
+def _finish_difference(viewport: Any, app: QApplication) -> None:
+    """Die native Ergebniszustellung mit laufender Python-Ereignisschleife abwarten."""
+    deadline = time.monotonic() + 10.0
+    while viewport._difference_pending and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert not viewport._difference_pending
+
+
+@pytest.mark.parametrize("section", [False, True])
+def test_large_preview_prepares_the_complete_result_and_changes_outside_qt(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, section: bool
+) -> None:
+    """Auch große Vorschauen zeigen das ganze Ergebnis und schneiden alle Überlagerungen."""
+    from dataclasses import replace
+
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.core.geom.section import SectionPlane
+    from app.ui import viewport as module
+
+    view = module.Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    original = _scene_with_two_holes()
+    view.show_scene(original)
+    source = MeshData(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    result = replace(original.scene.objects["obj_1"], mesh=source)
+    added = MeshData(trimesh.creation.box(extents=(5.0, 5.0, 10.0)))
+    removed = MeshData(trimesh.creation.box(extents=(3.0, 3.0, 10.0)))
+    entered, release = threading.Event(), threading.Event()
+    calls: list[tuple[int, Any]] = []
+
+    def prepare(mesh: Any, _target: int) -> Any:
+        calls.append((threading.get_ident(), mesh))
+        entered.set()
+        assert release.wait(5)
+        return mesh
+
+    monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
+    monkeypatch.setattr(module, "decimate", prepare)
+    if section:
+        view._section = SectionPlane.along("z", 0.0)
+    difference = SceneDifference(
+        entries={"obj_1": Difference("obj_1", added=added, removed=removed, result=result)}
+    )
+    try:
+        view.show_difference(difference)
+        view.mark_preview("Vorschau")
+        assert entered.wait(1), "die vollständige Vorschau wurde nicht vorbereitet"
+        assert view._actors["obj_1"].visible()
+        assert not view._cover_actors
+        assert "aufbereitet" in view.banner.note.text()
+        assert (
+            view._shown_feature_body(original.scene.objects["obj_1"])
+            is original.scene.objects["obj_1"]
+        )
+        release.set()
+        _finish_difference(view, qt_app)
+        assert not view._actors["obj_1"].visible()
+        assert "preview:obj_1" in renderer.names()
+        assert len(calls) == 3
+        assert all(thread != threading.get_ident() for thread, _mesh in calls)
+        for _thread, mesh in calls:
+            assert all(
+                not np.shares_memory(mesh.raw.vertices, original_mesh.raw.vertices)
+                for original_mesh in (source, added, removed)
+            )
+        if section:
+            assert all(vertices[:, 2].max() <= 1e-9 for vertices, _faces in renderer.meshes[-3:])
+        assert view._shown_feature_body(original.scene.objects["obj_1"]) is result
+        count = len(calls)
+        view.hold_before(True)
+        assert view._actors["obj_1"].visible()
+        view.hold_before(False)
+        assert len(calls) == count, "Vergleichen löst keine neue Dezimierung aus"
+        view.show_difference(None)
+        assert view._actors["obj_1"].visible()
+    finally:
+        release.set()
+        view.release()
+        view.renderer = None
+        view.deleteLater()
+
+
+def test_a_cancelled_large_preview_cannot_restore_its_geometry(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein bereits eingereihtes Arbeiterergebnis bleibt nach Abbruch ungültig."""
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.ui import viewport as module
+
+    view = module.Viewport()
+    view.renderer = RecordingRenderer()
+    original = _scene_with_two_holes()
+    view.show_scene(original)
+    monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
+    monkeypatch.setattr(module, "decimate", lambda mesh, _target: mesh)
+    difference = SceneDifference(
+        entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
+    )
+    try:
+        view.show_difference(difference)
+        worker = view._difference_worker
+        assert worker is not None and worker.wait(2_000)
+        view.show_difference(None)
+        qt_app.processEvents()
+        assert view.difference is None
+        assert not view._cover_actors
+        assert view._actors["obj_1"].visible()
+    finally:
+        view.release()
+        view.renderer = None
+        view.deleteLater()
+
+
+def test_large_preview_failure_keeps_the_original_and_the_next_value_recovers(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Aufbereitungsfehler bleibt sichtbar, ohne ein späteres gültiges Ergebnis zu sperren."""
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.ui import viewport as module
+
+    view = module.Viewport()
+    view.renderer = RecordingRenderer()
+    original = _scene_with_two_holes()
+    view.show_scene(original)
+    monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
+
+    def fail(_mesh: Any, _target: int) -> Any:
+        raise RuntimeError("kontrollierter Aufbereitungsfehler")
+
+    monkeypatch.setattr(module, "decimate", fail)
+    try:
+        view.show_difference(
+            SceneDifference(
+                entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
+            )
+        )
+        _finish_difference(view, qt_app)
+        assert view._difference_failed
+        assert "erneut" in view.banner.note.text()
+        assert not view._cover_actors
+        assert view._actors["obj_1"].visible()
+        monkeypatch.setattr(module, "decimate", lambda mesh, _target: mesh)
+        view.show_difference(
+            SceneDifference(
+                entries={"obj_1": Difference("obj_1", result=original.scene.objects["obj_1"])}
+            )
+        )
+        _finish_difference(view, qt_app)
+        assert not view._difference_failed
+        assert "obj_1" in view._cover_actors
+        assert not view._actors["obj_1"].visible()
+    finally:
+        view.release()
+        view.renderer = None
+        view.deleteLater()
+
+
+def test_a_new_preview_wins_even_when_the_previous_preparation_finishes_last(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Langsame alte Geometrie darf neuere Maße und Auswahl nicht überschreiben."""
+    from dataclasses import replace
+
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.ui import viewport as module
+
+    view = module.Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    original = _scene_with_two_holes()
+    view.show_scene(original)
+    body = original.scene.objects["obj_1"]
+    entered, release = threading.Event(), threading.Event()
+    calls = 0
+
+    def prepare(mesh: Any, _target: int) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            assert release.wait(5)
+        return mesh
+
+    monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 1)
+    monkeypatch.setattr(module, "decimate", prepare)
+    try:
+        view.show_difference(SceneDifference(entries={"obj_1": Difference("obj_1", result=body)}))
+        assert entered.wait(1)
+        newer = replace(body, mesh=MeshData(trimesh.creation.box(extents=(70, 40, 10))))
+        newest = SceneDifference(entries={"obj_1": Difference("obj_1", result=newer)})
+        view.show_difference(newest)
+        _finish_difference(view, qt_app)
+        release.set()
+        assert view.wait_for_workers(2_000)
+        qt_app.processEvents()
+        assert view.difference is newest
+        assert view._shown_feature_body(body) is newer
+        assert np.ptp(renderer.meshes[-1][0][:, 0]) == pytest.approx(70.0)
+    finally:
+        release.set()
+        view.release()
+        view.renderer = None
+        view.deleteLater()
+
 
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
 
@@ -6209,6 +6418,127 @@ def _scene_with_two_bodies() -> Any:
             }
         )
     )
+
+
+def test_a_volume_preview_shows_the_result_and_does_not_reuse_its_face_numbers(
+    qt_app: QApplication,
+) -> None:
+    """Ein verkleinerter Körper ersetzt das Vorher und trägt keine alten Dreiecksnummern."""
+    from dataclasses import replace
+
+    from app.core.geom.difference import compare_scenes
+    from app.core.types import Scene
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    result = _scene_with_two_bodies()
+    viewport.show_scene(result)
+    changed = MeshData(trimesh.creation.box(extents=(10.0, 20.0, 10.0)))
+    after = Scene(objects={**result.scene.objects})
+    after.objects["obj_1"] = replace(result.scene.objects["obj_1"], mesh=changed)
+    viewport.show_difference(compare_scenes(result.scene, after))
+
+    assert not viewport._actors["obj_1"].visible()
+    assert viewport._actors["obj_2"].visible()
+    cover = renderer.item_of("preview:obj_1")
+    assert np.ptp(cover.points, axis=0) == pytest.approx((10.0, 20.0, 10.0))
+    renderer.picks[(100, 100)] = Pick((1.0, 2.0, 3.0), cover, 7)
+    viewport._world_at(100, 100)
+    assert viewport._selection_hit is not None and viewport._selection_hit.cell == -1
+    assert renderer.style_of("removed:obj_1").opacity < 0.3
+
+    viewport.hold_before(True)
+    assert viewport._actors["obj_1"].visible()
+    assert not viewport._cover_actors
+    viewport.hold_before(False)
+    assert not viewport._actors["obj_1"].visible()
+    viewport.show_difference(None)
+    assert viewport._actors["obj_1"].visible()
+
+
+def test_a_hidden_body_does_not_reappear_as_a_volume_difference(qt_app: QApplication) -> None:
+    """Der Sichtbarkeitsfilter gilt auch für hinzugefügtes und entferntes Material."""
+    from dataclasses import replace
+
+    from app.core.geom.difference import compare_scenes
+    from app.core.types import Scene
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    before = _scene_with_two_bodies()
+    viewport.show_scene(before)
+    viewport.set_hidden(frozenset({"obj_1"}))
+    after = Scene(objects=dict(before.scene.objects))
+    after.objects["obj_1"] = replace(
+        after.objects["obj_1"], mesh=MeshData(trimesh.creation.box(extents=(10.0, 20.0, 10.0)))
+    )
+    viewport.show_difference(compare_scenes(before.scene, after))
+    assert not any(name in renderer.names() for name in ("removed:obj_1", "added:obj_1"))
+    assert "obj_1" not in viewport._actors or not viewport._actors["obj_1"].visible()
+
+
+def test_the_selected_feature_keeps_its_outline_during_a_preview(qt_app: QApplication) -> None:
+    """Die Vorschaufarbe verdeckt die Auswahlfläche, aber nicht ihren eindeutigen Rand."""
+    from app.core.geom.difference import SceneDifference
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
+    viewport.select("obj_1")
+    viewport.select_feature("hole_2")
+    viewport.show_difference(SceneDifference())
+
+    assert not viewport._feature_patches
+    outline = renderer.item_of("feature-outline:obj_1")
+    assert len(outline.points) > 0
+    viewport._actors["obj_1"].set_position((10.0, 20.0, 30.0))
+    viewport._sync_feature_preview()
+    assert outline.position() == (10.0, 20.0, 30.0)
+    viewport.select(None)
+    assert not viewport._feature_outlines
+
+
+def test_preview_labels_and_contours_follow_only_the_surviving_features(
+    qt_app: QApplication,
+) -> None:
+    """Eine entfernte Senkung zieht die Markierung nicht zurück auf das Vorhernetz."""
+    from dataclasses import replace
+
+    from app.core.geom.difference import compare_scenes
+    from app.core.types import Scene
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    before = _with_faces(_scene_with_two_holes(), "hole_2", (0, 1))
+    viewport.show_scene(before)
+    viewport.select("obj_1")
+    viewport.select_features(("hole_1", "hole_2"))
+    body = before.scene.objects["obj_1"]
+    enlarged = body.mesh.raw.copy()
+    enlarged.apply_scale((2.0, 1.0, 1.0))
+    feature = replace(
+        body.features["hole_2"], params={**body.features["hole_2"].params, "diameter": 16.0}
+    )
+    after = Scene(
+        objects={"obj_1": replace(body, mesh=MeshData(enlarged), features={"hole_2": feature})}
+    )
+    viewport.show_difference(compare_scenes(before.scene, after))
+    assert len(viewport._feature_label_data) == 1
+    assert "16" in viewport._feature_label_data[0][1]
+    contour = renderer.item_of("feature-outline:obj_1")
+    assert np.ptp(contour.points[:, 0]) == pytest.approx(80.0)
+    viewport.hold_before(True)
+    assert len(viewport._feature_label_data) == 2
+    contour = renderer.item_of("feature-outline:obj_1")
+    assert np.ptp(contour.points[:, 0]) == pytest.approx(40.0)
 
 
 def test_a_recoloured_preview_covers_the_body_in_its_new_colours(qt_app: QApplication) -> None:

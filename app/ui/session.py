@@ -2945,6 +2945,10 @@ class Session(QObject):
             coarsened(_triangles_of(before))
             before = coarse_before
         difference = compare_scenes(before, result.scene) if before is not None else None
+        if difference is not None:
+            difference.findings = tuple(
+                finding for finding in result.scene.report.findings if finding.op_id in previewed
+            )
         # **Eine leere Vorschau mit einer Warnung ist keine leere Vorschau.**
         # *Textur in Filamente* an einem Körper ohne Farbinformation läuft
         # durch, ändert nichts und meldet als Befund, warum — und der Befund

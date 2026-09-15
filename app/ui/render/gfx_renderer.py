@@ -81,6 +81,11 @@ HEADLIGHT_GAIN = 2.0
 #: verlangt, bekommt er als Eigenleuchten.
 AMBIENT_INTENSITY = 0.0
 
+#: Breite, schwache Reflexion macht auch schwarzes Filament räumlich lesbar.
+#: Diese Darstellung ändert weder die gespeicherte Farbe noch den Export.
+SURFACE_SPECULAR = 0.4
+SURFACE_SHININESS = 6.0
+
 #: Der Lichtsatz, den VTKs ``vtkLightKit`` aufstellt und den PyVista dem
 #: Viewport mitgab — je Licht Anteil an der Schlüsselstärke 0,75, Höhe und
 #: Seite in Grad gegen die Blickrichtung (Höhe nach oben, Seite nach rechts).
@@ -896,10 +901,13 @@ class GfxRenderer(Renderer):
         common["alpha_mode"] = "solid" if style.force_opaque else _alpha_mode(opacity)
         if not style.lighting:
             return gfx.MeshBasicMaterial(**common)
-        material = gfx.MeshPhongMaterial(**common)
-        # Ohne Glanz, wie VTKs Vorgabe (``Specular = 0``); pygfx glänzte sonst
-        # von sich aus mit #494949.
-        grey = max(0.0, min(1.0, float(style.specular or 0.0)))
+        material = gfx.MeshPhongMaterial(**common, shininess=SURFACE_SHININESS)
+        # Durchscheinende Hilfskörper erklären ihre Farbe und den Durchblick.
+        # Der neutrale Glanz gehört zur deckenden Körperdarstellung.
+        default_specular = SURFACE_SPECULAR if opacity >= 1.0 and style.ambient is None else 0.0
+        grey = max(
+            0.0, min(1.0, float(default_specular if style.specular is None else style.specular))
+        )
         material.specular = (grey, grey, grey, 1.0)
         if style.ambient is not None:
             red, green, blue = rgb(colour)

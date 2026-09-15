@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -83,6 +84,62 @@ def test_the_solver_stage_is_kept(profile: Profile) -> None:
 
     assert difference.solvers
     assert difference.solvers[0].strategy in ("direct", "welded", "jittered", "voxel")
+
+
+def test_unchanged_overlapping_letters_do_not_appear_as_removed_material() -> None:
+    """Ein Loch ändert sich; sechs unverschnitten aufliegende Marken bleiben gleich."""
+    from app.core.geom.boolean import boolean
+
+    meshes = []
+    for radius in (2.0, 4.0):
+        stock = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 10.0)))
+        tool = trimesh.creation.cylinder(radius=radius, height=12.0, sections=96)
+        tool.apply_translation((-10.0, 0.0, 0.0))
+        drilled = boolean("difference", [stock, MeshData.of(tool)], quality="fine").mesh
+        marks = []
+        for x in (4.0, 10.0, 16.0):
+            for y in (-8.0, 8.0):
+                mark = trimesh.creation.annulus(r_min=1.0, r_max=2.0, height=2.0, sections=32)
+                # Eine Hälfte liegt im Grundkörper. Nach einer booleschen
+                # Operation dürfen reine Rundungsreste keine Schriftflecken erzeugen.
+                mark.apply_translation((x, y, 5.0))
+                if radius > 3.0:
+                    mark.vertices = np.nextafter(mark.vertices, np.inf)
+                marks.append(mark)
+        meshes.append(MeshData.of(trimesh.util.concatenate([drilled.raw, *marks])))
+    result = compare(*meshes)
+    assert not result.findings
+    assert result.added_volume < result.noise_volume
+    expected = 0.5 * 96 * np.sin(2.0 * np.pi / 96) * (4.0**2 - 2.0**2) * 10.0
+    assert result.removed_volume == pytest.approx(expected, abs=1e-5)
+    assert result.removed is not None
+    assert result.removed.bounds.maximum[0] < -5.0
+
+
+def test_unchanged_overlap_still_masks_material_removed_from_another_shell() -> None:
+    """Gemeinsames Material bleibt auch dort erhalten, wo ein anderer Körper schrumpft."""
+    first = trimesh.creation.box(extents=(20, 20, 20))
+    second = trimesh.creation.box(extents=(10, 20, 20))
+    shield = trimesh.creation.box(extents=(4, 20, 20))
+    shield.apply_translation((8, 0, 0))
+    before = MeshData.of(trimesh.util.concatenate([first, shield]))
+    after = MeshData.of(trimesh.util.concatenate([second, shield]))
+    result = compare(before, after)
+    # Linker Streifen 5 mm, rechter Streifen nur 1 mm; der Schild hält 4 mm.
+    assert not result.findings
+    assert result.removed_volume == pytest.approx((5 + 1) * 20 * 20)
+    assert result.added_volume < result.noise_volume
+
+
+def test_negative_inner_shell_stays_a_cavity_in_the_comparison() -> None:
+    """Eine negative Innenschale wird nie als positive Komponente vereinigt."""
+    inside = trimesh.creation.box(extents=(10, 10, 10))
+    inside.invert()
+    hollow = MeshData.of(trimesh.util.concatenate([cube().raw, inside]))
+    result = compare(hollow, cube())
+    assert not result.findings
+    assert result.added_volume == pytest.approx(10**3)
+    assert result.removed_volume < result.noise_volume
 
 
 # --- whole scenes -----------------------------------------------------------------
@@ -187,6 +244,27 @@ def test_a_scene_that_did_not_change_says_so() -> None:
     after = scene_with(obj_1=plate())
 
     assert not compare_scenes(before, after).changed
+
+
+def test_a_changed_scene_keeps_the_complete_result_for_the_preview() -> None:
+    """Auch die entfernte Bohrungswand muss im dargestellten Körper verschwinden."""
+    before = scene_with(obj_1=cube(20.0))
+    after = scene_with(obj_1=cube(16.0))
+    entry = compare_scenes(before, after).entries["obj_1"]
+    assert entry.result is after.objects["obj_1"]
+
+
+def test_a_failed_volume_comparison_still_keeps_the_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein nicht berechenbarer Vergleich darf den Nachherkörper nicht verstecken."""
+    from app.core.geom import difference as module
+
+    monkeypatch.setattr(module, "_cut", lambda before, after, quality: None)
+    after = scene_with(obj_1=cube(16.0))
+    entry = compare_scenes(scene_with(obj_1=cube(20.0)), after).entries["obj_1"]
+    assert entry.result is after.objects["obj_1"]
+    assert "difference.incomplete" in {finding.code for finding in entry.findings}
 
 
 def test_an_exact_body_shows_its_difference_too() -> None:

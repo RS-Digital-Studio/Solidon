@@ -112,6 +112,7 @@ from app.ui.labels import (
     NumberSpin,
     RowCheckBox,
     caption_toggles,
+    cavity_name,
     choice_label,
     choice_note,
     compact_length,
@@ -1363,10 +1364,16 @@ class ObjectTree(QWidget):
             for chain in chains:
                 for parent, nested in pairwise(chain):
                     under[nested.id] = parent.id
+            cavity_names = {
+                chain[0].id: cavity_name(chain[0].id, chain[0], chain) for chain in chains
+            }
             alike: dict[tuple[str, str], int] = {}
             for other_id, other in entry.features.items():
                 if other_id not in under and _part_group(other.created_by, document) is None:
-                    group_key = (feature_name(other_id, other), feature_measure(other))
+                    group_key = (
+                        cavity_names.get(other_id, feature_name(other_id, other)),
+                        feature_measure(other),
+                    )
                     alike[group_key] = alike.get(group_key, 0) + 1
             made: dict[str, QTreeWidgetItem] = {}
             waiting: list[tuple[str, QTreeWidgetItem]] = []
@@ -1375,11 +1382,16 @@ class ObjectTree(QWidget):
                 # links und rechts der Typ („hole", „face") — links war damit
                 # abgeschnitten, was rechts gefehlt hat.
                 child = QTreeWidgetItem(
-                    [feature_name(feature_id, feature), feature_measure(feature)]
+                    [
+                        cavity_names.get(feature_id, feature_name(feature_id, feature)),
+                        feature_measure(feature),
+                    ]
                 )
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 tip = _feature_tip(feature_id, feature, document)
+                if feature_id in cavity_names:
+                    tip = f"{cavity_names[feature_id]}\n{tip}"
                 # An beiden Spalten, wie der Regelsatz es für Zeilen verlangt:
                 # Wer eine Zeile nicht versteht, zeigt auf das unverständliche
                 # Wort und nicht auf die Zahl daneben.
@@ -4769,7 +4781,9 @@ class FeaturePanel(QWidget):
         self._feature_id = feature_id
         self._empty.setVisible(False)
 
-        heading = QLabel(f"{feature_name(feature_id, feature)}  ·  {feature_measure(feature)}")
+        heading = QLabel(
+            f"{cavity_name(feature_id, feature, cavity)}  ·  {feature_measure(feature)}"
+        )
         heading.setWordWrap(True)
         fit_wrapped(heading)
         set_level(heading, "section")
@@ -5864,7 +5878,8 @@ class FeaturePanel(QWidget):
         if kind == "choice":
             combo = QComboBox(parent)
             for value, text in field.choices or ():
-                combo.addItem(str(text), value)
+                combo.addItem(choice_label(str(text)), value)
+            explain_choices(combo)
             index = combo.findData(field.value)
             if index >= 0:
                 combo.setCurrentIndex(index)

@@ -15954,6 +15954,15 @@ def test_feature_roof_counts_only_its_own_cavity_children(qt_app, monkeypatch, s
     obj = SceneObject(id="part", name="Teil", mesh=mesh, features=features)
     tree.show_scene(EvaluationResult(Scene(objects={obj.id: obj})))
     top = tree.tree.topLevelItem(0)
+    bore = chains[0][0]
+    bore_row = next(
+        top.child(index)
+        for index in range(top.childCount())
+        if top.child(index).data(1, Qt.ItemDataRole.UserRole) == bore.id
+    )
+    assert bore_row.text(0) == f"{feature_name(bore.id, bore)} mit Senkung"
+    assert bore_row.child(0).data(1, Qt.ItemDataRole.UserRole) == nested
+    assert "mit Senkung" in bore_row.data(0, Qt.ItemDataRole.AccessibleDescriptionRole)
     roofs = [
         top.child(index)
         for index in range(top.childCount())

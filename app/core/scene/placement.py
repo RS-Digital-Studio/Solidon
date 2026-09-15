@@ -186,6 +186,10 @@ def bore_advice(
         # nur „das Durchgangsloch für" zu übersetzen bekommt, weiß nicht, was
         # danach steht — und in mancher Sprache steht es davor.
         said = tr("Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.")
+        if feature is not None and feature.params.get("through") is False:
+            said = tr(
+                "Diese Sackbohrung misst {measure} mm. Ihr Durchmesser bietet Platz für {screw}."
+            )
         return said.replace("{measure}", measured).replace("{screw}", size), []
     if not ask:
         from app.core.knowledge import standards
