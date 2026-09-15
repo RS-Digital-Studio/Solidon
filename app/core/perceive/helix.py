@@ -297,6 +297,9 @@ def _resolved_helix(
         if not touching[np.asarray(body.faces)[facet]].any():
             continue
         normal = np.asarray(body.facets_normal[index], dtype=float)
+        # Flächenlose Nachbardreiecke können eine Facette ohne Richtung bilden.
+        if float(np.linalg.norm(normal)) <= EPS_GEOM:
+            continue
         if any(abs(float(normal @ other)) > 1.0 - EPS_GEOM for other in candidates):
             continue
         candidates.append(normal)

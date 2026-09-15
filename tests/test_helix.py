@@ -141,6 +141,30 @@ def test_the_helix_counterexamples_are_present() -> None:
     assert {path.name for path in CORPUS} >= REQUIRED_CORPUS
 
 
+def test_degenerate_facets_do_not_supply_a_helix_axis() -> None:
+    """Zwei flächenlose Nachbardreiecke tragen keine gültige Abschlussnormale.
+
+    Trimesh fasst sie trotzdem als Facette zusammen. Der kurze Gewindeprüfer
+    darf deren Nullvektor weder als Achse verwenden noch ein Gewinde erfinden.
+    """
+    from app.core.perceive.helix import _resolved_helix
+
+    body = trimesh.Trimesh(
+        vertices=[[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0], [0, 1, 0]],
+        faces=[[0, 1, 2], [1, 3, 2], [0, 4, 1]],
+        process=False,
+    )
+    edges = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]], dtype=np.int64)
+    assert len(body.facets) == 1
+    np.testing.assert_array_equal(body.facets_normal, [[0.0, 0.0, 0.0]])
+    before = body.vertices.copy(), body.faces.copy()
+
+    assert _resolved_helix(body, edges) is None
+
+    np.testing.assert_array_equal(body.vertices, before[0])
+    np.testing.assert_array_equal(body.faces, before[1])
+
+
 def test_pitch_search_keeps_its_workspace_bounded() -> None:
     """Eine analytische Wendel braucht keine Matrix über alle Steigungen.
 
