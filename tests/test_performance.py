@@ -1592,3 +1592,64 @@ def test_matching_eight_hundred_features_stays_responsive() -> None:
 
     assert len(result[0].mapping) == 800, "a fast wrong assignment proves nothing"
     assert taken < 3.0, "the previous Python loops took 6.4 seconds here"
+
+
+def notched_plate(count: int) -> MeshData:
+    """Eine Platte mit ``count`` halbrunden Kerben rund um den Rand.
+
+    **Der Körper, an dem die Langlochsuche zwei Minuten brauchte** — nicht
+    viele Taschen, sondern viele Bögen auf **einem** Mantelstück: An einem
+    Hemmungsrad mit 531 Verrundungen (15.09.2026) grenzten 140 Hohlkehlen der
+    Zahnfüße an denselben Umfang, die Vorprüfung ließ jedes Paar durch, und für
+    jedes lief die Flutung über den ganzen Umfang neu — 122 von 124 Sekunden.
+    Hier stehen die Kerben in den vier Seitenwänden, und die sind ein Mantel.
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+
+    body = MeshData.of(trimesh.creation.box(extents=(120.0, 120.0, 8.0)))
+    per_side = max(1, count // 4)
+    step = 100.0 / per_side
+    for side in range(4):
+        for index in range(per_side):
+            along = -50.0 + step * (index + 0.5)
+            tool = trimesh.creation.cylinder(radius=2.0, height=12.0, sections=24)
+            if side == 0:
+                tool.apply_translation((along, 60.0, 0.0))
+            elif side == 1:
+                tool.apply_translation((along, -60.0, 0.0))
+            elif side == 2:
+                tool.apply_translation((60.0, along, 0.0))
+            else:
+                tool.apply_translation((-60.0, along, 0.0))
+            body = boolean("difference", [body, MeshData.of(tool)]).mesh
+    return body
+
+
+def test_many_arcs_on_one_shell_do_not_flood_it_per_pair() -> None:
+    """§31: Die Langlochsuche rechnet je Bogen, nicht je Paar.
+
+    Hundert Kerben in den Seitenwänden einer Platte: hundert Innenbögen auf
+    einer Achse an einem Mantel, 4 950 Paare. Vor dem 15.09.2026 lief für jedes
+    Paar der Tiefenlauf über den ganzen Mantel und die Flankensuche durch den
+    Cache von trimesh — am Hemmungsrad 124 s. Seither hängen Flutung, Flanken
+    und Stadionfit am Bogen (``slots._Reach``): 4 s dort, bitgleiche Merkmale.
+    """
+    from app.core.perceive.features import _fitted, _one_body
+    from app.core.perceive.slots import find_slots
+
+    mesh = _one_body(notched_plate(100))
+    fitted = _fitted(mesh)
+    inward = [entry for entry in fitted.fillets if getattr(entry[0], "inward", False)]
+    assert len(inward) >= 100, (
+        f"ohne viele Bögen an einem Mantel misst dieser Test nichts (hier {len(inward)})"
+    )
+
+    found: list[Any] = []
+    taken = measure(
+        "find_slots_notched_rim", lambda: found.append(find_slots(mesh, fitted.fillets))
+    )
+
+    assert found == [[]], "hundert Kerben sind kein Langloch"
+    assert taken < 2.5, "die Suche darf nicht wieder je Paar über den Mantel laufen"

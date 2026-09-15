@@ -626,6 +626,12 @@ def evaluate(
             prepared_objects[object_id] = _with_feature_reservations(
                 prepared_objects[object_id], inherited_feature_ids, active_feature_ids
             )
+            if spec.touches_features and index < len(operation.inputs):
+                findings.extend(
+                    _split_findings(
+                        objects.get(operation.inputs[index]), prepared_objects[object_id], operation
+                    )
+                )
             prepared_hashes[object_id] = object_hash(
                 key,
                 index,
@@ -2069,6 +2075,48 @@ def _missing_inputs(
             },
         )
     return None
+
+
+MESSAGE_BODY_SPLIT: Final = _(
+    "Der Körper zerfällt nach diesem Schritt in lose Teile. Strg+Z nimmt ihn zurück."
+)
+
+
+def _split_findings(
+    before: SceneObject | None, after: SceneObject, operation: Operation
+) -> list[Finding]:
+    """Ein Körper, der nach einer Merkmalsänderung in Teile zerfällt, sagt es.
+
+    **Gemessen an 34 Modellen aus dem Netz (15.09.2026):** *Merkmal entfernen*
+    an einem Zapfen Ø 11,3 — dem ganzen unteren Teil eines Uhrenrads — ließ
+    50 Komponenten zurück, *Merkmal versetzen* an einer Bohrung nahe der Wand
+    zwei, und beide Läufe endeten „vollständig", mit dichtem Netz und ohne
+    einen Satz im Prüfbericht. Ein Körper, der auseinanderfällt, ist kein
+    Fehler der Operation, aber selten das, was jemand wollte: Beim Drucken
+    liegen die Teile lose auf dem Bett. Deshalb steht es als Warnung dort, wo
+    der Kunde hinsieht — und der Weg zurück gleich dabei.
+
+    Gezählt werden die zusammenhängenden Teile vor und nach dem Schritt; ein
+    Körper, der schon vorher aus mehreren bestand, meldet erst, wenn es mehr
+    werden. Die exakten Körper kennen die Zahl nicht — dort bleibt es still.
+    """
+    if before is None:
+        return []
+    were = getattr(before.mesh, "component_count", None)
+    are = getattr(after.mesh, "component_count", None)
+    if not isinstance(were, int) or not isinstance(are, int) or are <= were:
+        return []
+    return [
+        Finding(
+            code="feature.body_split",
+            severity="warning",
+            message=MESSAGE_BODY_SPLIT,
+            object_id=after.id,
+            op_id=operation.id,
+            values={"before": were, "after": are, "op": operation.op},
+            source="internal",
+        )
+    ]
 
 
 def _object_count_finding(operation: Operation, produced: int) -> Finding:

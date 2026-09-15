@@ -221,6 +221,24 @@ ROUND_WALL_HAS_NO_PLACE: Final = _(
     "sie folgt ihm. Was an ihr geht, ist ihr Radius über „Merkmal ändern“."
 )
 
+#: Warum an einer Kegelfläche keine Körperhandlung geht: Ein Kegelstück unter
+#: dem vollen Umlauf, das zu keinem Langloch und keiner Bohrung gehört, hat
+#: keinen ebenen Rand, aus dem ``_body_from_faces`` ein Werkzeug baute — jede
+#: Operation sagte ab, 280 Mal im Lauf über 34 Netzmodelle (15.09.2026).
+CONE_PIECE_HAS_NO_BODY: Final = _(
+    "Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt "
+    "sich nicht allein bearbeiten."
+)
+
+#: Warum an einer runden Wand, die tangential in ihre Nachbarn übergeht, auch
+#: der Radius nicht geht — der Umrissbogen eines Uhrenankers zum Beispiel:
+#: Radial verschoben schöbe er seine Flanken aus ihrer Ebene, und
+#: ``radial_rounding`` sagt genau das ab. Dasselbe Wort in Panel und Operation.
+WALL_BLENDS_INTO_ITS_NEIGHBOURS: Final = _(
+    "Diese runde Wand geht ohne Kante in ihre Nachbarn über; ihr Radius lässt "
+    "sich nicht allein ändern. Zeichnen Sie die Kontur neu."
+)
+
 #: Woher ein Parameter seinen **heutigen** Wert nimmt.
 #:
 #: Der Schlüssel ist der Parametername der Operation, der Wert sagt, welche
@@ -471,6 +489,24 @@ def actions_for(
     Bild und hielten beim Übernehmen die Kette an.
     """
     actions: list[FeatureAction] = []
+    edge_blocked = fillet_blocked(feature, features, mesh)
+    piece_blocked = cone_piece_blocked(feature)
+    # **Die Kette einmal gefragt, für alle Zeilen.** Was der Aufrufer mitbringt,
+    # gilt; sonst fragt das Netz — und dieselbe Antwort speist die Sperre am
+    # geteilten Hohlraum (*Zum Langloch ziehen*) und die am Merkmal ohne
+    # eigenen Körper (:func:`no_own_body`).
+    if (
+        cavity is None
+        and not touches_other
+        and mesh is not None
+        and features is not None
+        and feature.kind in ("hole", "cone")
+    ):
+        from app.core.perceive.relations import cavity_chain_state_at
+
+        chain, touches_other = cavity_chain_state_at(feature, features, mesh)
+        cavity = chain if chain is not None else ()
+    own_body_blocked = no_own_body(feature, cavity, touches_other, mesh)
     for candidates in ACTION_ORDER:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
         if not known:
@@ -478,7 +514,19 @@ def actions_for(
             # des Panels — sie fehlt, und die Oberfläche bietet sie nicht an.
             continue
         fitting = next((spec for spec in known if feature.kind in spec.applies_to), None)
-        if (
+        if fitting is not None and piece_blocked is not None:
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=piece_blocked))
+        elif (
+            fitting is not None
+            and own_body_blocked is not None
+            and fitting.name in _NEED_AN_OWN_BODY
+        ):
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=own_body_blocked))
+        elif fitting is not None and edge_blocked is not None and fitting.name in _EDGE_OPS:
+            # Was die Operation an dieser Rundung ablehnen würde, steht grau —
+            # mit ihrem Satz (:func:`fillet_blocked`).
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=edge_blocked))
+        elif (
             fitting is not None
             and fitting.name == "remove_feature"
             and feature.kind == "fillet"
@@ -533,6 +581,120 @@ def actions_for(
                 )
             )
     return actions
+
+
+#: Die zwei Handlungen an einer Rundung, die eine Kante unter ihr brauchen
+#: oder eine Wand, die sich radial versetzen lässt.
+_EDGE_OPS: Final = ("remove_feature", "resize_feature")
+
+#: Die Handlungen, die einen Hohlraum als eigenen Körper bauen müssen — und an
+#: einem Merkmal absagen, das ohne klare Kette in einen fremden Rand übergeht
+#: (``prepare_ops.NO_OWN_BODY``: ``feature_placement_geometry``,
+#: ``_stands_alone``, ``_closed_at``).
+_NEED_AN_OWN_BODY: Final = (
+    "move_feature",
+    "duplicate_feature",
+    "rotate_feature",
+    "remove_feature",
+    "resize_feature",
+)
+
+
+def no_own_body(
+    feature: Feature,
+    cavity: tuple[Feature, ...] | None,
+    touches_other: bool,
+    mesh: MeshData | None = None,
+) -> TranslatableText | None:
+    """Warum Versetzen, Verdoppeln, Drehen, Entfernen und Ändern an diesem
+    Merkmal absagen würden — oder ``None``.
+
+    Zwei Gründe, beide aus der Operation und mit ihrem Satz:
+
+    * Eine Bohrung oder Senkung, die einen **fremden Rand berührt, ohne dass
+      daraus eine eindeutige Kette wird** (``cavity_chain_state_at`` liefert
+      keine Kette und ``touches_other``): Aus ihren Flächen entsteht kein
+      Werkzeug, und mitnehmen lässt sich nichts, was nicht benannt ist
+      (``NO_OWN_BODY``).
+    * Ein Kegel oder eine Kuppel, aus deren Flächen **kein Körper** entsteht
+      — der Rand hat zu viele Ringe oder liegt in keiner Ebene
+      (``prepare_ops.has_own_body``, ``NO_BODY_FROM_FACES``): ein Kegelstumpf
+      mit einer Querbohrung durch den Mantel, an einem Uhrenteil fünfmal nach
+      dem Klick (15.09.2026). Nur mit Netz, denn die Ringe stehen im Netz.
+    """
+    if feature.kind not in ("hole", "cone", "sphere") or cavity:
+        return None
+    if touches_other and feature.kind != "sphere":
+        from app.core.geom.prepare_ops import NO_OWN_BODY
+
+        return NO_OWN_BODY
+    if feature.kind == "hole" or mesh is None or not feature.face_indices:
+        return None
+    from app.core.geom.prepare_ops import NO_BODY_FROM_FACES, has_own_body
+
+    if has_own_body(mesh, feature, alone=not touches_other):
+        return None
+    return NO_BODY_FROM_FACES
+
+
+def cone_piece_blocked(feature: Feature) -> TranslatableText | None:
+    """Warum an einer Kegelfläche jede Körperhandlung absagen würde — oder ``None``.
+
+    Die Erkennung kennzeichnet ein Kegelstück ohne eigenen Körper mit
+    ``partial`` (``features._partial_cones_folded``); Panel und
+    ``prepare_ops._movable_feature`` lesen dasselbe Kennzeichen und sagen
+    denselben Satz.
+    """
+    if feature.kind == "cone" and feature.params.get("partial", False):
+        return CONE_PIECE_HAS_NO_BODY
+    return None
+
+
+def fillet_blocked(
+    feature: Feature, features: Mapping[FeatureId, Feature] | None, mesh: MeshData | None
+) -> TranslatableText | None:
+    """Warum *Entfernen* und *Radius ändern* an dieser Rundung absagen würden —
+    oder ``None``.
+
+    Zwei Gründe, beide aus der Operation und mit ihrem Satz:
+
+    * Eine Rundung, die **keine Kante ersetzt** — quer zu ihrer Achse nicht
+      genau zwei ebene Flächen neben sich —, lässt sich nicht auf eine Kante
+      zurückrechnen (``edges.sharp_corner``, :func:`features.replaces_an_edge`).
+      Der Umrissbogen eines Uhrenankers, die Rundung zwischen Klotz und
+      Zylinder: 50 von 52 Versuchen an 34 Modellen aus dem Netz endeten so,
+      nach dem Klick (15.09.2026).
+    * Eine runde Wand, die **tangential in ihre Nachbarn übergeht**
+      (``tangent`` aus der Erkennung), lässt sich nicht radial versetzen
+      (``edges.radial_rounding``).
+
+    **Nur mit Netz**, wie die Sperre am geteilten Hohlraum: Ohne Netz ist
+    die Frage nach den Nachbarn nicht zu beantworten, und eine Vermutung
+    stellt keine Zeile grau.
+    """
+    if feature.kind != "fillet":
+        return None
+    if feature.params.get("radial", False):
+        return WALL_BLENDS_INTO_ITS_NEIGHBOURS if feature.params.get("tangent") else None
+    if mesh is None or features is None or not feature.face_indices:
+        return None
+    axis = feature.params.get("axis")
+    if not isinstance(axis, list | tuple) or len(axis) != 3:
+        return None
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+    from app.core.perceive.features import face_mask, replaces_an_edge
+
+    planar = face_mask(mesh, [entry for entry in features.values() if entry.kind == "face"])
+    centre = feature.params.get("centre")
+    if replaces_an_edge(
+        mesh.raw,
+        feature.face_indices,
+        [float(v) for v in axis],
+        planar,
+        centre=[float(v) for v in centre] if isinstance(centre, list | tuple) else None,
+    ):
+        return None
+    return NOT_BETWEEN_TWO_PLANES
 
 
 #: Die Handlungen, die einen Hohlraum nur nehmen, wenn er dem Merkmal allein

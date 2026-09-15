@@ -68,6 +68,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
+| [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
@@ -1017,6 +1018,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   STLs stammen aus den Aufnahmen vom 13.09. und tragen den alten Fehler; sie neu zu erzeugen
   heißt, die Aufnahmen mit dem gefixten Code zu fahren und das ZIP neu zu verpacken — ein
   Produktionsschritt, der zusammen mit der nächsten Filmrunde läuft.
+
+<a id="rm-181"></a>
+
+- [ ] **RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen.** Die
+  Langlochsuche ist am 15.09.2026 auf Bogen statt Paar umgebaut (`slots._Reach`): Hemmungsrad 06
+  von 124 s auf 4 s, Hemmungsrad 04 von 126 s auf 9 s — die 9 s sind 38 503 Paare mit je einer
+  Flankenprüfung über 6 460 Ecken, reine NumPy-Aufrufkosten, kein Lauf über das Netz mehr. Was
+  bleibt: `actions_for(feature, features, mesh=mesh)` kostet mit Netz 0,14 bis 0,17 s je Merkmal
+  (die Randringkette wird je Aufruf gebildet, `cavity_chain_state_at`); das Panel ruft es einmal
+  je Klick, eine Liste über alle 244 Merkmale des Organizer-Rahmens braucht 32 s. Und die
+  3MF-Baugruppe der 19 Uhrenteile lud vor dem Umbau in 179 s, danach in 24 s — 19 Körper mit
+  358 000 Dreiecken, jeder einzeln erkannt; §31 nennt für die Erkennung eine Sekunde je Körper
+  der genannten Größe, und die größten drei liegen darüber. Abnahme: `actions_for` mit Netz
+  unter 50 ms je Merkmal oder mit geteilter Ringbildung je Körper; die drei teuersten Körper der
+  Baugruppe einzeln gegen §31 gestellt.
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

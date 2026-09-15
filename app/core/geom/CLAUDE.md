@@ -446,7 +446,13 @@ genannten Kanten, hält der ganze Bearbeitungsschritt an; die noch vorhandenen
 Kanten werden nicht als stillschweigende Teilauswahl behandelt.
 
 `edges.radial_rounding` bearbeitet positiv belegte Zylinderwände innerhalb
-ihrer eigenen Randkurven. Die ausgewählten Knoten skalieren radial samt
+ihrer eigenen Randkurven. Ob eine Rundung überhaupt eine Kante ersetzt, fragt
+`edges._around` bei der Erkennung nach (`perceive.features.planes_beside`),
+mit der gemeinsamen Schwelle `units.UPRIGHT_TO_AXIS`; der Absagesatz
+`edges.NOT_BETWEEN_TWO_PLANES` steht auch in der grauen Zeile des
+Merkmalspanels. Ein konvexes Setzwerkzeug aus den Flächen (Kegel, Kuppel)
+bekommt in `prepare_ops._placing_tool` einen Sockel in die Grundfläche und
+spart die Hohlräume aus, die durch es laufen. Die ausgewählten Knoten skalieren radial samt
 Sehnenunterteilungen; angrenzende Flächen müssen in ihren bisherigen Ebenen
 bleiben. Ein geschlossener Zwischenkörper zwischen
 alter und neuer Haut prüft boolesch auf fremdes Material und Wandverlust.

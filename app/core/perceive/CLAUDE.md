@@ -147,7 +147,28 @@ Satz (`actions.ROUND_WALL_HAS_NO_PLACE`). Ob die Ecken auf einem Kreis
 liegen, prüft `radial_cylinder` gegen `ROUND_WALL_TOLERANCE` (10 µm) und
 nicht allein gegen die Schweißtoleranz: Die ist für Solidons eigene Netze
 bemessen, und eine eingelesene Wand liegt Mikrometer neben ihrem Kreis
-(Float32 der STL, Toleranz des fremden Kerns).
+(Float32 der STL, Toleranz des fremden Kerns). **Und das Panel fragt die
+Bedingung der Operation, bevor es eine Zeile anbietet** (`fillet_blocked`,
+seit dem 15.09.2026): Eine Verrundung, die quer zu ihrer Achse nicht an
+genau zwei erkannte ebene Flächen grenzt, lässt sich nicht auf eine Kante
+zurückrechnen — `features.replaces_an_edge` stellt die Frage, dieselbe, die
+`geom/edges.py` in `sharp_corner` stellt (`planes_beside`, gemeinsam
+gelesen), und die Zeile trägt den Satz der Operation
+(`edges.NOT_BETWEEN_TWO_PLANES`). Der Umrissbogen eines Uhrenankers, die
+Rundung zwischen Klotz und Zylinder: 50 von 52 Versuchen an 34 Modellen aus
+dem Netz endeten vorher erst nach dem Klick mit diesem Satz. Zwei Ebenen
+zählen nur, wenn sie den Bogen **tangential** fortsetzen (`planes_beside`
+mit `centre`): An den Gleisen einer Modellscheune trafen zwei Ebenen eine
+Hohlkehle schräg, *Entfernen* rechnete daraus eine Kante, die es nicht gibt,
+und trug 2,7 Prozent des Volumens ab, ohne die Hohlkehle zu treffen. Der
+Name bleibt Verrundung — eine Rundung zwischen einer Ebene und einem
+Zylindermantel ist eine verrundete Kante, auch wenn keine zwei Ebenen unter
+ihr liegen. Eine
+runde Wand sagt dazu, ob sie **tangential** in ihre Nachbarn übergeht
+(`tangent`, `blends_into_its_neighbours`): Radial versetzt schöbe sie deren
+Flanken aus ihrer Ebene, `radial_rounding` sagt dort ab, und beide Zeilen
+tragen `actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS` — auch `_drop_the_fillet`
+und `_reshape_the_fillet` sagen mit diesem Satz ab.
 
 Bei grob facettierten Langlöchern dürfen abgelehnte Bogenpaare über den
 gesamten zusammenhängenden Mantel als Stadion belegt werden. Die Richtung
@@ -341,7 +362,45 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   der Fleckenbildung oft in Stücken; `_merged_cylinders`, `_merged_cones`
   und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von
   der Größe des Ausschnitts unabhängig ist: beim Zylinder der
-  Achsabschnitt, beim Kegel die **Spitze**, beim Ring der Mittelpunkt.
+  Achsabschnitt, beim Kegel die **Spitze**, beim Ring der Mittelpunkt. Beim
+  Zylinder darf der gemeinsame Fit nicht schlechter streuen als seine Teile
+  — **oder** der neue Fleck liegt nachweislich auf der vorhandenen Wand
+  (`_lies_on_the_cylinder`, im Vertrag von `CYLINDER_SPREAD`): Ein Fit über
+  mehr Punkte streut immer etwas mehr, und an einer Bohrung Ø 30 blieb der
+  vierte Bogen sonst draußen (zwei Hohlkehlen R 15 statt einer Bohrung,
+  Kennung verloren; `REMONTOIRE ESCAPEMENT-12`, 15.09.2026).
+- **Die Langlochsuche rechnet je Bogen, nicht je Paar** (`slots._Reach`).
+  Flutung, Flankenecken und Stadionfit hängen an Bogen und Achse; die Maske
+  einer Achse ist ihr Schlüssel, nicht allein die gerundete Achse. Am
+  Hemmungsrad mit 531 Verrundungen: 124 s → 4 s bei bitgleichen Merkmalen
+  über 102 Körper. Der Stadionfit über den ganzen Mantel darf die Breite
+  nicht unter das Maß der Bögen drücken — sonst stand „Langloch 0,01 auf
+  97 mm" im Baum eines Organizer-Rahmens. **Und die Flanken gehen im
+  Langloch auf**: `face` steht in `SWALLOWED_BY_A_SLOT`, denn was
+  vollständig im Mantel liegt, ist eine Wand des Lochs und keine Fläche für
+  sich (der Boden eines Sacklochs liegt nicht im Mantel und bleibt).
+- **Ein Kegelstück gehört zum Langloch, zur Bohrung — oder es ist eine
+  Kegelfläche** (`_partial_cones_folded`, `span_about`). Ein Kegel unter
+  `FULL_TURN_SPAN` ist kein voller Kegel, wie ein Zylinder darunter kein
+  Zapfen ist. Grenzt er an den Mantel eines Langlochs, ist er dessen
+  Mündungsfase und geht darin auf; grenzt er an eine Bohrung, bleibt er die
+  Senkung einer angeschnittenen Bohrung; sonst bleibt er als **Kegelfläche**
+  im Baum (`partial`, Objektbaum und Steckbrief sagen das Wort), und jede
+  Körperhandlung steht grau mit `actions.CONE_PIECE_HAS_NO_BODY` —
+  `prepare_ops._movable_feature` sagt denselben Satz. Weglassen ging nicht:
+  Die Blütenblätter eines Gewindeprüfers sind Kegel von 259 Grad, und ohne
+  sie hielt die Freiformprobe vier Körper eines Minigolf-Satzes für Figuren.
+  Der Anlass: 126 „Senkungen 90° Ø 5,80" an 33 Langlöchern eines
+  Organizer-Rahmens, an denen jede Operation absagte (`_body_from_faces`
+  findet an einem Teilkegel keinen ebenen Rand).
+- **Und was sonst keinen eigenen Körper hat, steht grau, bevor die Operation
+  es sagt** (`actions.no_own_body`): eine Bohrung oder Senkung, die einen
+  fremden Rand berührt, ohne dass daraus eine Kette wird
+  (`prepare_ops.NO_OWN_BODY`), und ein Kegel oder eine Kuppel, aus deren
+  Flächen kein Körper entsteht — drei Randringe, ein Kegelstumpf mit
+  Querbohrung (`prepare_ops.has_own_body`, `NO_BODY_FROM_FACES`). Beide Sätze
+  sind die der Operation; die Kette wird je `actions_for` einmal gefragt und
+  speist auch die Sperre an *Zum Langloch ziehen*.
 - **Eine Wendel ist keine Grundform, und sie verschluckt die, die man auf ihr
   findet.** `helix.py` misst sie am Netz statt an den Einpassungen: scharfe
   Kanten zu Zügen verbinden, je Zug die Steigung über die Konzentration von

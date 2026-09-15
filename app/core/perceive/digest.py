@@ -371,7 +371,12 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         # ist eine Senkung für eine Senkkopfschraube, „118 Grad" der Boden
         # einer gebohrten Sackbohrung. Und ob er eine Mulde ist oder ein
         # aufgesetzter Kegel, entscheidet, was man mit ihm tun kann.
-        shape = tr("Senkung") if params.get("recess") else tr("Verjüngung")
+        # Ein Kegelstück ohne eigenen Körper heißt Kegelfläche — der Agent soll
+        # daran keine Senkung suchen, die sich ändern ließe.
+        if params.get("partial"):
+            shape = tr("Kegelfläche")
+        else:
+            shape = tr("Senkung") if params.get("recess") else tr("Verjüngung")
         axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
         return (
             f"{feature_id}  {shape} {float(params.get('angle', 0.0)):.0f}°, "

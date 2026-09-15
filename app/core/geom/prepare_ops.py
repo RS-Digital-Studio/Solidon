@@ -1489,7 +1489,12 @@ def _closed_at(
     Luft.
     """
     tool = _tool_for(mesh, feature, centre, alone=alone)
-    if cavity and feature.kind == "hole":
+    # **Und für den Zapfen gilt dasselbe wie für die Bohrung**, nur andersherum:
+    # Beim Abtragen muss das Werkzeug das Vieleck des Zapfens umschreiben,
+    # sonst bleiben zwischen seinen Facetten und denen des Werkzeugs Splitter
+    # stehen. Gemessen an der Nabe eines Uhrenrads (Ø 11,3, 48 Segmente, gegen
+    # 64 des Werkzeugs; 15.09.2026): 48 Reste von 0,003 mm³, einer je Facette.
+    if feature.kind in ("hole", "pin"):
         # Der Innenkreis des Stopfens muss alle ursprünglichen Eckpunkte
         # einschließen, auch wenn deren Tessellierung eine andere Teilung hat.
         radius = _bore_number(feature, "diameter") / 2.0
@@ -1550,6 +1555,7 @@ def _tool_for(
     axis: Vec3 | None = None,
     *,
     alone: bool = False,
+    rooted: bool = False,
 ) -> MeshData:
     """Der Werkzeugkörper dieses Merkmals, an ``centre`` gesetzt.
 
@@ -1558,6 +1564,12 @@ def _tool_for(
     Merkmale aus ihren Kennzahlen; übrige Formen kommen aus
     :func:`_feature_body`. Der Körper wird anschließend verschoben, gedreht
     und skaliert.
+
+    ``rooted`` gibt einem **konvexen** Körper aus den Flächen einen Sockel um
+    :data:`FEATURE_OVERLAP` in seine Grundfläche (:func:`_rooted`) — für das
+    Werkzeug, das an der neuen Stelle **vereinigt** wird. Das Werkzeug, das
+    an der alten Stelle **abträgt**, bekommt ihn nicht: Es schnitte sonst eine
+    Schicht aus der Grundfläche.
 
     Baut sich der Körper nicht sicher, endet der Aufruf mit einem Satz, der
     den **heutigen** Grund nennt und nicht den von gestern — siehe
@@ -1578,10 +1590,12 @@ def _tool_for(
     if built is None:
         raise ValidationError(
             field="at_feature",
-            detail=NO_OWN_BODY,
+            detail=NO_BODY_FROM_FACES if alone else NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
         )
+    if rooted and not is_a_cavity(feature):
+        built = _rooted(mesh, feature, built)
 
     measured = [float(value) for value in feature.params["centre"]]
     matrix = np.eye(4)
@@ -1600,6 +1614,191 @@ def _tool_for(
     body.apply_transform(matrix)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
+
+
+def _placing_tool(
+    ctx: OpContext,
+    body: MeshData,
+    source: SceneObject,
+    feature: Feature,
+    centre: Vec3,
+    cavity: bool,
+    *,
+    scale: float = 1.0,
+    axis: Vec3 | None = None,
+    alone: bool = True,
+) -> MeshData:
+    """Das Werkzeug, das ein Merkmal an seiner (neuen) Stelle setzt.
+
+    Ein Hohlraum wird ausgeschnitten, wie gemessen. Ein konvexes Merkmal wird
+    vereinigt — mit Sockel in die Grundfläche (:func:`_rooted`) und ohne die
+    Hohlräume, die durch es laufen (:func:`_without_cavities`). Beides gilt
+    nur dem **Setzen**; das Abtragen an der alten Stelle geht über
+    :func:`_closed_at`.
+    """
+    tool = _tool_for(body, feature, centre, scale=scale, axis=axis, alone=alone, rooted=not cavity)
+    if cavity:
+        return tool
+    return _without_cavities(
+        tool,
+        source.features,
+        feature.id,
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+
+def _ring_in_order(ring: Iterable[tuple[int, int]]) -> list[int]:
+    """Die Ecken eines geschlossenen Randrings in Laufrichtung."""
+    neighbours: dict[int, list[int]] = {}
+    for a, b in ring:
+        neighbours.setdefault(a, []).append(b)
+        neighbours.setdefault(b, []).append(a)
+    if not neighbours:
+        return []
+    first = min(neighbours)
+    ordered = [first]
+    previous, current = -1, first
+    while len(ordered) <= len(neighbours):
+        following = next((value for value in neighbours[current] if value != previous), None)
+        if following is None or following == first:
+            break
+        ordered.append(following)
+        previous, current = current, following
+    return ordered
+
+
+def _rooted(mesh: MeshData, feature: Feature, built: MeshData) -> MeshData:
+    """Ein konvexer Körper aus den Flächen reicht in seine Grundfläche hinein.
+
+    **Gemessen am 15.09.2026 an einem Uhrenteil:** *Merkmal ändern* an einem
+    kegeligen Zapfen (90°, Ø 10 auf einer Platte) ließ zwei Komponenten
+    zurück — Lauf vollständig, Netz dicht. Der Deckel des gemessenen
+    Kegelstumpfs (:func:`_body_from_faces`) liegt **genau** in der
+    Grundfläche, und die Vereinigung traf eine zusammenfallende Fläche (§39):
+    zwei Schalen, die einander berühren. Bohrung und Zapfen bekommen ihren
+    Überstand in :func:`_feature_solid`; die Formen aus den Flächen bekamen
+    keinen.
+
+    Der Sockel ist ein Prisma über dem Ring, der auf der Grundfläche liegt
+    (:func:`_feature_mount` findet sie: der Materialrand liegt **außerhalb**
+    des Rings), um :data:`FEATURE_OVERLAP` in das Material verschoben — nicht
+    der ganze Körper verschoben, denn das machte einen aufgeweiteten Kegel
+    breiter. Findet sich kein solcher Ring, bleibt der Körper, wie er war.
+    """
+    from app.core.perceive.relations import _boundary_rings
+
+    try:
+        frame = _feature_mount(mesh, feature, (feature,), built)
+    except ValidationError:
+        return built
+    normal = np.asarray(frame.normal, dtype=float)
+    origin = np.asarray(frame.origin, dtype=float)
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    for ring in _boundary_rings(mesh.raw, feature) or []:
+        ordered = _ring_in_order(ring)
+        if len(ordered) < 3:
+            continue
+        points = vertices[ordered]
+        if float(np.max(np.abs((points - origin) @ normal))) > FLAT_RIM * len(points) ** 0.5:
+            continue
+        shifted = points - normal * FEATURE_OVERLAP
+        count = len(points)
+        index = np.arange(count)
+        following = (index + 1) % count
+        top_hub, bottom_hub = 2 * count, 2 * count + 1
+        prism = trimesh.Trimesh(
+            vertices=np.vstack(
+                (points, shifted, points.mean(axis=0)[None], shifted.mean(axis=0)[None])
+            ),
+            faces=np.vstack(
+                (
+                    np.column_stack((index, following, following + count)),
+                    np.column_stack((index, following + count, index + count)),
+                    np.column_stack((index, following, np.full(count, top_hub))),
+                    np.column_stack((index + count, following + count, np.full(count, bottom_hub))),
+                )
+            ),
+            process=True,
+        )
+        trimesh.repair.fix_normals(prism)  # type: ignore[no-untyped-call]
+        if not prism.is_watertight or prism.volume <= EPS_GEOM:
+            return built
+        return boolean("union", [built, MeshData.of(prism)]).mesh
+    return built
+
+
+def _without_cavities(
+    tool: MeshData,
+    features: Mapping[str, Feature],
+    skip: str,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData:
+    """Die Hohlräume, die durch ein konvexes Werkzeug laufen, bleiben offen.
+
+    Ein Zapfen oder Kegel, der an seiner neuen Stelle vereinigt wird, ist
+    massiv — und eine Bohrung, die durch ihn läuft, wäre danach zu. Gemessen
+    am selben Uhrenteil wie in :func:`_rooted`: Die Bohrung Ø 2 durch Platte
+    und Kegel war nach *Merkmal ändern* ein Sackloch. Jede Bohrung und jedes
+    Langloch, dessen Achse das Werkzeug trifft, wird deshalb aus dem Werkzeug
+    herausgeschnitten, bevor es vereinigt wird — mit seinem gemessenen Maß
+    (``oversize=0``), damit kein zweites, um die Zugabe weiteres Loch entsteht.
+    """
+    from app.core.geom.mesh import on_surface
+
+    if not tool.raw.is_watertight:
+        return tool
+    for identifier, other in features.items():
+        if identifier == skip or other.kind not in ("hole", "slot"):
+            continue
+        centre = other.params.get("centre")
+        direction = other.params.get("axis")
+        if not isinstance(centre, list | tuple) or not isinstance(direction, list | tuple):
+            continue
+        axis = np.asarray(direction, dtype=float)
+        length = float(np.linalg.norm(axis))
+        if length <= EPS_GEOM:
+            continue
+        axis /= length
+        middle = np.asarray(centre, dtype=float)
+        reach = float(other.params.get("depth", 0.0) or other.params.get("diameter", 0.0))
+        samples = middle + np.linspace(-0.5, 0.5, 9)[:, None] * reach * axis
+        # Innen heißt: der nächste Punkt der Werkzeughaut liegt in Richtung
+        # ihrer Normale — derselbe Weg wie in :func:`_feature_mount`, ohne
+        # einen Strahlenschnitt, der eine weitere Abhängigkeit bräuchte.
+        closest, _distances, faces = on_surface(tool.raw, samples)
+        signed = np.einsum("ij,ij->i", samples - closest, np.asarray(tool.raw.face_normals)[faces])
+        if not bool(np.any(signed < -EPS_GEOM)):
+            continue
+        # **Durch das Werkzeug, nicht um es herum.** Ein Zapfen, der in einer
+        # großen Bohrung steht (Hemmungsrad 06: Zapfen Ø 9 in der Bohrung
+        # Ø 22), hat deren Achse ebenfalls in sich — die Bohrung läuft aber
+        # nicht durch ihn, sie umschließt ihn, und der Schneider nähme das
+        # ganze Werkzeug mit: „Von dem Körper bleibt nichts übrig."
+        relative = np.asarray(tool.raw.vertices, dtype=float) - middle
+        along = relative @ axis
+        radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+        if float(other.params.get("diameter", 0.0)) / 2.0 >= float(radial.max()):
+            continue
+        # Der Schneider reicht über das ganze Werkzeug entlang der Achse — nicht
+        # nur über die gemessene Tiefe des Hohlraums: Ein Kegel, der größer
+        # wird, wird auch höher, und ein Schneider von gestern ließe oben eine
+        # Haut stehen (gemessen 0,05 mm, und die Bohrung war ein Sackloch).
+        low, high = float(along.min()), float(along.max())
+        mid = middle + axis * (low + high) / 2.0
+        cutter = _feature_solid(
+            dataclasses.replace(other, params={**other.params, "depth": high - low}),
+            (float(mid[0]), float(mid[1]), float(mid[2])),
+            oversize=0.0,
+        )
+        tool = boolean(
+            "difference", [tool, cutter], quality=quality, seed=seed, cancelled=cancelled
+        ).mesh
+    return tool
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -1762,7 +1961,9 @@ def feature_placement_geometry(
     centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
     related = chain or (feature,)
     built = (
-        _paired_cavity_body(body, *chain) if chain else _tool_for(body, feature, centre, alone=True)
+        _paired_cavity_body(body, *chain)
+        if chain
+        else _tool_for(body, feature, centre, alone=True, rooted=True)
     )
     if built is None:
         raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
@@ -1850,8 +2051,18 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
         body, closed_solver = closed.mesh, closed.solver
         findings.extend(closed.findings)
     kind: BooleanKind = "difference" if geometry.cavity else "union"
+    placing = MeshData.of(tool)
+    if not geometry.cavity:
+        placing = _without_cavities(
+            placing,
+            source.features,
+            feature.id,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
     placed = boolean(
-        kind, [body, MeshData.of(tool)], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        kind, [body, placing], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
     )
     findings.extend(placed.findings)
     if duplicate:
@@ -1992,7 +2203,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
     Der Satz dazu kommt aus derselben Tabelle, aus der das Panel seine
     ausgegraute Zeile beschriftet — ``perceive.actions.reason_against``.
     """
-    from app.core.perceive.actions import reason_against
+    from app.core.perceive.actions import cone_piece_blocked, reason_against
 
     feature = source.features.get(name)
     if feature is None:
@@ -2003,7 +2214,9 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
             constraint="unknown_feature",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
-    against = reason_against(op, feature.kind)
+    # Ein Kegelstück ohne eigenen Körper: derselbe Satz wie im Panel, bevor
+    # ``_body_from_faces`` an seinem Rand scheitert.
+    against = cone_piece_blocked(feature) or reason_against(op, feature.kind)
     if against is None:
         return feature
     raise ValidationError(
@@ -2031,12 +2244,27 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #: Durchmesser der Senkung über die volle Wandstärke schließt beides in einem
 #: Zug.
 NO_OWN_BODY: Final = _(
-    "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
-    "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Eine einzelne "
-    "Bearbeitung würde die Bohrung darunter mit verschließen. Verschließen Sie beides in einem "
-    "Zug: „Bohrung verschließen“ ohne Merkmal, mit dem Durchmesser der Senkung "
-    "und der vollen Wandstärke — danach setzen Sie es an der neuen Stelle neu."
+    "Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre "
+    "Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen "
+    "Sie es dann neu."
 )
+
+#: Warum ein Kegel oder eine Kuppel aus ihren Flächen kein Werkzeug hergibt: Der
+#: Rand hat mehr Ringe als ein einzelnes Merkmal oder liegt in keiner Ebene
+#: (``_body_from_faces``) — ein Kegelstumpf mit einer Querbohrung durch seinen
+#: Mantel etwa (Uhrenteil 16, 15.09.2026). Der Satz steht in der Operation und
+#: in der grauen Zeile des Panels (``perceive.actions.no_own_body``).
+NO_BODY_FROM_FACES: Final = _(
+    "Aus den Flächen dieses Merkmals entsteht kein eigener Körper; sein Rand ist "
+    "nicht eindeutig. Ändern Sie den Schritt, aus dem es stammt."
+)
+
+
+def has_own_body(mesh: MeshData, feature: Feature, *, alone: bool) -> bool:
+    """Ob aus den Flächen dieses Merkmals ein Körper entsteht — die Frage, die
+    :func:`_tool_for` stellt, für das Panel vorab beantwortet."""
+    return _feature_body(mesh, feature, alone=alone) is not None
+
 
 #: Warum *Zum Langloch ziehen* an einem geteilten Hohlraum absagt — an der
 #: Bohrung wie an ihrer Senkung (``slot_hole``). Das Merkmalfenster sagt es an
@@ -2209,7 +2437,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
             "difference" if cavity else "union",
-            [closed.mesh, _tool_for(body, feature, target, alone=True)],
+            [closed.mesh, _placing_tool(ctx, body, source, feature, target, cavity)],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
@@ -2428,7 +2656,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     change: BooleanKind = "difference" if cavity else "union"
     placed = boolean(
         change,
-        [body, _tool_for(body, feature, target, alone=True)],
+        [body, _placing_tool(ctx, body, source, feature, target, cavity)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -2925,7 +3153,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _tool_for(body, spun, centre, axis=turned_axis, alone=True)],
+        [closed.mesh, _placing_tool(ctx, body, source, spun, centre, cavity, axis=turned_axis)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -3383,7 +3611,16 @@ def resize_feature(ctx: OpContext) -> OpResult:
         "difference" if cavity else "union",
         [
             closed.mesh,
-            _tool_for(as_mesh_data(source.mesh), feature, centre, scale=scale, alone=stands_alone),
+            _placing_tool(
+                ctx,
+                as_mesh_data(source.mesh),
+                source,
+                feature,
+                centre,
+                cavity,
+                scale=scale,
+                alone=stands_alone,
+            ),
         ],
         quality=ctx.quality,
         seed=ctx.seed,
@@ -6835,6 +7072,10 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
     Und wieder zwei Kerne: Der exakte nimmt die Rundungsfläche als Ding
     (``BRepAlgoAPI_Defeaturing``), das Netz legt den Zwickel dazu.
     """
+    if source.features[name].params.get("tangent", False):
+        from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS
+
+        raise GeometryError(WALL_BLENDS_INTO_ITS_NEIGHBOURS, suggestions=(CORRECT_INPUT, CANCEL))
     if source.features[name].params.get("radial", False):
         raise GeometryError(
             _(
@@ -6870,6 +7111,10 @@ def _reshape_the_fillet(
                 )
             ],
         )
+    if source.features[name].params.get("tangent", False):
+        from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS
+
+        raise GeometryError(WALL_BLENDS_INTO_ITS_NEIGHBOURS, suggestions=(CORRECT_INPUT, CANCEL))
     if source.kind == "brep":
         return _exact_fillet(ctx, source, name, radius)
     from app.core.geom.edges import reround

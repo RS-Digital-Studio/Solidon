@@ -88,7 +88,9 @@ def test_slot_shell_has_a_boundary_for_sloping_walls(angle, expected) -> None:
     body = trimesh.creation.box(extents=(20.0, 10.0, 2.0))
     body.vertices[:, 1] += body.vertices[:, 2] * math.tan(math.radians(angle))
     graph = _neighbourhood(body.face_adjacency, len(body.faces))
-    mask, _labels, _touched = _shells_for(body.face_normals, np.array((0.0, 0.0, 1.0)), graph, {})
+    mask, _labels, _touched, _reached = _shells_for(
+        body.face_normals, np.array((0.0, 0.0, 1.0)), graph, {}
+    )
     sloped = np.flatnonzero(np.abs(body.face_normals[:, 1]) > 0.9)
     assert len(sloped) == 4
     assert all(mask[index] is expected for index in sloped)
@@ -1787,3 +1789,22 @@ def test_the_panel_no_longer_says_the_width_is_unbuilt() -> None:
 
     assert ("slot", "resize_hole") not in NOT_APPLICABLE_HERE
     assert reason_against("resize_hole", "slot") is None, "die Operation nimmt das Langloch an"
+
+
+def test_the_flanks_of_a_slot_are_no_faces_of_their_own(profile: Profile) -> None:
+    """Am Drehteil eines Minigolf-Satzes (152 000 Dreiecke, 15.09.2026) standen die
+    zwei ebenen Flanken eines Langlochs je einmal als Fläche und einmal als Teil
+    des Langlochs im Baum. Was vollständig im Mantel liegt, gehört dem Langloch;
+    Deckel, Boden und die vier Seiten der Platte bleiben Flächen."""
+    body = _one_body(slotted(profile, diameter=6.0, slot_length=30.0))
+    found = detect(body)
+    slot = next(feature for feature in found.values() if feature.kind == "slot")
+    inside = set(slot.face_indices)
+
+    swallowed = [
+        name
+        for name, feature in found.items()
+        if feature.kind == "face" and set(feature.face_indices) <= inside
+    ]
+    assert not swallowed, swallowed
+    assert sum(feature.kind == "face" for feature in found.values()) >= 6

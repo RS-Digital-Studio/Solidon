@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
@@ -76,14 +76,56 @@ ACROSS_THE_AXIS: float = math.cos(math.radians(89.0))
 #: Übergang zwischen Bogen und Flanke abtastet.
 _FLANK_TOLERANCE: float = 0.02
 
-#: Was je Achse einmal gerechnet wird: die Quermaske, die Mantelstücke und
-#: der Speicher, welcher Bogen an welches Stück grenzt.
+#: Was je Achse einmal gerechnet wird: die Quermaske, die Mantelstücke, der
+#: Speicher, welcher Bogen an welches Stück grenzt — und je Bogen der von ihm
+#: aus geflutete Mantel samt den Ecken seiner Flankenflächen
+#: (:class:`_Reach`).
 #:
-#: **Die drei gehören zusammen und nicht nebeneinander.** Die Nummern in
-#: den Mantelstücken bedeuten für eine andere Achse etwas anderes; ein
+#: **Alle gehören zusammen und nicht nebeneinander.** Die Nummern in den
+#: Mantelstücken bedeuten für eine andere Achse etwas anderes; ein
 #: Bogenspeicher daneben gab einem Paar die Etiketten einer fremden Achse
-#: zurück und verlor dabei ein echtes Langloch.
-_Shells = tuple[list[bool], list[int], dict[int, frozenset[int]]]
+#: zurück und verlor dabei ein echtes Langloch. Dasselbe gilt für die Flutung:
+#: Sie läuft über die Quermaske, und die hängt an der Achse.
+_Shells = tuple[list[bool], list[int], dict[int, frozenset[int]], dict[int, "_Reach"]]
+
+
+@dataclass(frozen=True, slots=True)
+class _Reach:
+    """Was ein Bogen an seiner Achse erreicht — einmal gerechnet, für jedes Paar gelesen.
+
+    **Der Grund ist gemessen, und er ist der Unterschied zwischen zwei Minuten
+    und zwei Sekunden.** An einem Hemmungsrad mit 531 Verrundungen
+    (``REMONTOIRE ESCAPEMENT-06``, 19 870 Dreiecke, 15.09.2026) stehen 140
+    Hohlkehlen der Zahnfüße auf **einer** Achse und grenzen an **ein**
+    Mantelstück: den ganzen Umfang des Rades, 6 460 querstehende Flächen. Die
+    Vorprüfung :func:`_shares_a_shell` ließ deshalb jedes der 9 751 Paare
+    durch, und für jedes lief :func:`_connected_shell` denselben Umfang neu ab
+    — 63 Millionen Nachbarschaftsbesuche, 62 Sekunden. Danach suchte
+    ``max(..., key=lambda face: body.area_faces[face])`` die größte Flanke, je
+    Paar über dieselben 6 460 Flächen und je Fläche durch den Cache von
+    trimesh: weitere 35 Sekunden. Der Stadionfit über denselben Mantel kam
+    hinzu. Zusammen 122 von 124 Sekunden der ganzen Erkennung.
+
+    Nichts davon hängt am **Paar**. Die Flutung von einem Bogen aus über die
+    querstehenden Flächen ist dieselbe, gleich welcher zweite Bogen gefragt
+    wird; die Flanken ohne den ersten Bogen sind es ebenso. Was dem Paar
+    gehört, ist allein der zweite Bogen — und der wird je Paar herausgenommen,
+    nicht der Rest je Paar neu gebaut.
+    """
+
+    faces: set[int]
+    """Der Mantel, der von diesem Bogen aus über querstehende Flächen erreichbar
+    ist, den Bogen selbst eingeschlossen. **Geteilt, nicht kopiert** — wer ihn
+    bekommt, liest ihn und ändert ihn nicht."""
+    rest: np.ndarray
+    """Die Flächen des Mantels ohne den Bogen, sortiert — die Flanken, aus
+    Sicht dieses Bogens."""
+    corners: np.ndarray
+    """Die Ecken dieser Flächen, je Fläche drei Zeilen, in der Reihenfolge von
+    ``rest``."""
+    stadiums: dict[int, Any] = field(default_factory=dict)
+    """Der Stadionfit über den ganzen Mantel, je gewählter Leitflanke einmal —
+    der Fit liest den Mantel und die Richtung dieser Flanke, sonst nichts."""
 
 
 #: Welche Arten ein Langloch verschluckt, wenn eines gefunden wird.
@@ -94,12 +136,15 @@ _Shells = tuple[list[bool], list[int], dict[int, frozenset[int]]]
 #: zwei Bögen sind der Regelfall; ein feines Netz kann daneben eine Kuppe oder
 #: einen Kegelstumpf einpassen, und auch der gehört zum Loch.
 #:
-#: ``face`` steht bewusst nicht dabei. Der **Boden** eines Sacklangloch ist
-#: eine echte Fläche, und seine Normale zeigt entlang der Achse — er liegt gar
-#: nicht im Mantel und bliebe ohnehin stehen. Ihn aufzunehmen hieße nur, eine
-#: Ausnahme zu formulieren, die nie greift.
+#: ``face`` steht seit dem 15.09.2026 dabei, und zwar für die **Flanken**: Am
+#: Drehteil eines Minigolf-Satzes (152 000 Dreiecke) standen die zwei ebenen
+#: Flanken eines Langlochs je einmal als Fläche und einmal als Teil des
+#: Langlochs im Baum — ein Klick auf die Flanke bot *Bohren* an einer Wand, die
+#: dem Langloch gehört. Der **Boden** eines Sacklangloch bleibt eine Fläche,
+#: ohne Ausnahme im Text: Seine Normale zeigt entlang der Achse, er liegt gar
+#: nicht im Mantel, und verschluckt wird nur, was vollständig im Mantel liegt.
 SWALLOWED_BY_A_SLOT: Final[frozenset[str]] = frozenset(
-    {"hole", "pin", "cone", "sphere", "torus", "fillet"}
+    {"hole", "pin", "cone", "sphere", "torus", "fillet", "face"}
 )
 
 
@@ -482,6 +527,10 @@ def find_slots(
     neighbours = np.asarray(body.face_adjacency, dtype=int)
     if not len(neighbours):
         return []
+    # Flächeninhalte und Ecken einmal aus dem Cache von trimesh, nicht je Paar
+    # und schon gar nicht je Fläche — siehe :class:`_Reach`.
+    areas = np.asarray(body.area_faces, dtype=float)
+    triangles = np.asarray(body.triangles, dtype=float)
     # **Die Nachbarschaft wird einmal gebaut und nicht je Paar.** Sie hing im
     # ersten Anlauf in :func:`_connected_shell` und wurde damit für jedes Paar
     # neu aus der Kantenliste zusammengesetzt — eine Python-Schleife über
@@ -510,7 +559,15 @@ def find_slots(
             if candidates[second][0] in taken:
                 continue
             slot = _slot_from(
-                body, normals, graph, masks, candidates[first], candidates[second], axes
+                body,
+                normals,
+                areas,
+                triangles,
+                graph,
+                masks,
+                candidates[first],
+                candidates[second],
+                axes,
             )
             if slot is not None:
                 found.append(slot)
@@ -552,6 +609,8 @@ def _adjacent_rows(graph: tuple[np.ndarray, np.ndarray], faces: np.ndarray) -> n
 def _slot_from(
     body: Any,
     normals: np.ndarray,
+    areas: np.ndarray,
+    triangles: np.ndarray,
     graph: tuple[np.ndarray, np.ndarray],
     masks: dict[bytes, _Shells],
     first: tuple[int, CylinderFit, list[int]],
@@ -561,7 +620,8 @@ def _slot_from(
     """Ob diese zwei Zylinderausschnitte ein Langloch sind — und welches.
 
     ``masks`` sammelt je Achse, was nur an ihr hängt — siehe
-    :func:`_shells_for`.
+    :func:`_shells_for` und :class:`_Reach`. ``areas`` und ``triangles`` sind
+    die Felder des ganzen Netzes, einmal geholt.
     """
     index_a, fit_a, patch_a = first
     index_b, fit_b, patch_b = second
@@ -585,7 +645,7 @@ def _slot_from(
 
     # Getrennte Mantelstücke scheiden vor der Richtungsrechnung aus. Die
     # topologische Antwort hängt nur an der Achse, nicht an der Mittellinie.
-    across_mask, labels, touched = _shells_for(normals, axis, graph, masks)
+    across_mask, labels, touched, reached = _shells_for(normals, axis, graph, masks)
     if not _shares_a_shell(labels, graph, (index_a, patch_a), (index_b, patch_b), touched):
         return None
 
@@ -601,30 +661,82 @@ def _slot_from(
     direction = sideways / travel
     across = np.cross(axis, direction)
 
-    faces = _connected_shell(across_mask, graph, patch_a, patch_b)
+    own = reached.get(index_a)
+    if own is None:
+        own = _reach_of(across_mask, graph, patch_a, triangles)
+        reached[index_a] = own
+    faces = _connected_shell(across_mask, graph, patch_a, patch_b, reach=own)
     if faces is None:
         return None
+    # Die Flanken aus Sicht dieses Paars: der geflutete Mantel ohne beide
+    # Bögen. Ist der Mantel der gespeicherte, fehlt darin nur noch der zweite
+    # Bogen, und der wird herausgenommen statt der Rest neu gesammelt.
+    goal = np.fromiter((int(face) for face in patch_b), dtype=np.int64, count=len(patch_b))
+    shared_reach = faces is own.faces
+    if shared_reach:
+        kept = ~np.isin(own.rest, goal, assume_unique=True)
+        flank_indices = own.rest[kept]
+        flank_corners = own.corners[np.repeat(kept, 3)]
+    else:
+        arcs = set(patch_a) | set(patch_b)
+        flank_indices = np.fromiter(
+            sorted(face for face in faces if face not in arcs), dtype=np.int64
+        )
+        flank_corners = triangles[flank_indices].reshape(-1, 3)
 
     centre = (centre_a + centre_b) / 2.0
-    if not _flanks_are_flat(body, faces, set(patch_a) | set(patch_b), centre, across, radius):
+    if not _corners_are_flanks(flank_corners, centre, across, radius):
         # Grobe Bogenflecken können Tangentenstücke mittragen und ihre
         # Nachbarn noch Bogenreste. Dann gilt der vorhandene Formnachweis
         # für den ganzen Mantel; die Fitgrenze wird nicht aufgeweitet.
-        from app.core.perceive.features import fit_stadium
+        from app.core.perceive.features import STADIUM_TOLERANCE, fit_stadium
 
-        flank_faces = faces - set(patch_a) - set(patch_b)
-        if not flank_faces:
+        if not len(flank_indices):
             return None
-        flank = max(flank_faces, key=lambda face: float(body.area_faces[face]))
+        flank = int(flank_indices[int(np.argmax(areas[flank_indices]))])
         along_flank = _unit(np.cross(axis, normals[flank]))
         if along_flank is None:
             return None
-        stadium = fit_stadium(
-            body,
-            sorted(faces),
-            direction_hint=(float(along_flank[0]), float(along_flank[1]), float(along_flank[2])),
-        )
+        # **Die Leitrichtung zeigt von Bogen zu Bogen, gleich welche Flanke sie
+        # liefert.** Zwei Flanken haben entgegengesetzte Normalen, und bei
+        # gleich großen Dreiecken entschied bisher die Reihenfolge einer Menge,
+        # welche zuerst kam — und damit das Vorzeichen der Langlochrichtung.
+        # Die Richtung von der ersten zur zweiten Bogenmitte ist dieselbe
+        # Auskunft, die der glatte Weg oben gibt; hier gilt sie auch.
+        if float(along_flank @ direction) < 0.0:
+            along_flank = -along_flank
+        # Derselbe Mantel und dieselbe Leitflanke ergeben denselben Fit — je
+        # Bogen und Flanke einmal gerechnet, nicht je Paar (:class:`_Reach`).
+        # **Auch die Absage wird gemerkt:** ``None`` ist am Hemmungsrad die
+        # Regel, und ein Speicher, der ``None`` für „nicht gerechnet" hält,
+        # rechnete 19 397 von 19 397 Fits neu — 27 s statt 2.
+        if shared_reach and flank in own.stadiums:
+            stadium = own.stadiums[flank]
+        else:
+            stadium = fit_stadium(
+                body,
+                sorted(faces),
+                direction_hint=(
+                    float(along_flank[0]),
+                    float(along_flank[1]),
+                    float(along_flank[2]),
+                ),
+            )
+            if shared_reach:
+                own.stadiums[flank] = stadium
         if stadium is None or not stadium.good or not stadium.inward:
+            return None
+        # **Der Fit über den ganzen Mantel darf die Breite nicht unter das
+        # Maß der Bögen drücken.** Er ist hier, weil die Bögen grob sind und
+        # ihre Flanken deshalb nicht glatt aussehen — nicht, weil eine andere
+        # Form gesucht wäre. Gemessen am Rahmen eines Schreibtisch-Organizers
+        # (MakerWorld, 15.09.2026): zwei Bögen an den Enden einer 97 mm
+        # langen, fast ebenen Wand, und der Stadionfit fand ein Stadion mit
+        # Radius 0,003 mm — im Objektbaum stand „Langloch 0,01 auf 97,17 mm“.
+        # Der Rückstand des Fits ist auf seinen Radius bezogen; ein Radius,
+        # der um mehr als diese Toleranz unter dem der Bögen liegt,
+        # beschreibt nicht dasselbe Loch.
+        if stadium.radius < radius * (1.0 - STADIUM_TOLERANCE):
             return None
         centre = np.asarray(stadium.centre, dtype=float)
         axis = np.asarray(stadium.axis, dtype=float)
@@ -635,12 +747,10 @@ def _slot_from(
         # Die Zylinderanpassung misst Dreiecksschwerpunkte, also innerhalb des
         # Kreisbogens. Die Breite tragen dagegen die bereits geprüften ebenen
         # Flanken: Ihr Abstand bleibt auch nach erneutem Schneiden derselbe.
-        flank_indices = sorted(faces - set(patch_a) - set(patch_b))
-        flank_points = np.asarray(body.triangles, dtype=float)[flank_indices].reshape(-1, 3)
-        flank_distances = (flank_points - centre) @ across
+        flank_distances = (flank_corners - centre) @ across
         diameter = float(np.ptp(flank_distances))
 
-    corners = np.asarray(body.triangles, dtype=float)[list(faces)].reshape(-1, 3) - centre
+    corners = triangles[list(faces)].reshape(-1, 3) - centre
     along_axis = corners @ axis
     depth = float(along_axis.max() - along_axis.min())
     if depth <= EPS_GEOM:
@@ -669,11 +779,48 @@ def _unit(vector: Any) -> np.ndarray | None:
     return value / length
 
 
+def _reach_of(
+    across: list[bool],
+    graph: tuple[np.ndarray, np.ndarray],
+    patch: Sequence[int],
+    triangles: np.ndarray,
+) -> _Reach:
+    """Was ein Bogen an dieser Achse erreicht — die Hälfte der Paarprüfung, die
+    nicht am Paar hängt (:class:`_Reach`)."""
+    own = {int(face) for face in patch}
+    faces = _flooded(across, graph, own, own, set(own))
+    rest = np.fromiter(sorted(faces - own), dtype=np.int64)
+    corners = triangles[rest].reshape(-1, 3) if len(rest) else np.empty((0, 3), dtype=float)
+    return _Reach(faces=faces, rest=rest, corners=corners)
+
+
+def _flooded(
+    across: list[bool],
+    graph: tuple[np.ndarray, np.ndarray],
+    seeds: set[int],
+    allowed: set[int],
+    seen: set[int],
+) -> set[int]:
+    """Der Tiefenlauf über querstehende Flächen und ``allowed``, von ``seeds``
+    aus, in ``seen`` hinein — der eine Lauf, den beide Aufrufer teilen."""
+    starts, targets = graph
+    stack = list(seeds)
+    while stack:
+        face = stack.pop()
+        for neighbour in targets[starts[face] : starts[face + 1]].tolist():
+            if neighbour not in seen and (across[neighbour] or neighbour in allowed):
+                seen.add(neighbour)
+                stack.append(neighbour)
+    return seen
+
+
 def _connected_shell(
     across: list[bool],
     graph: tuple[np.ndarray, np.ndarray],
     patch_a: Sequence[int],
     patch_b: Sequence[int],
+    *,
+    reach: _Reach | None = None,
 ) -> set[int] | None:
     """Der Mantel, der beide Bögen verbindet — oder nichts.
 
@@ -691,18 +838,37 @@ def _connected_shell(
     außen, weil sie **allein an der Achse hängt** und nicht am Paar; alle
     Bögen eines Langlochs teilen sie. Was diesem Paar gehört, sind die zwei
     Bogenflecken, und die stehen als Menge daneben statt in einer Kopie.
+
+    ``reach`` ist die Flutung vom ersten Bogen aus, wenn sie schon einmal
+    gelaufen ist (:class:`_Reach`). **Die Antwort ist dieselbe, und zwar
+    genau:** Der Lauf darf querstehende Flächen und die zwei Bögen betreten.
+    Alles, was er ohne den zweiten Bogen erreicht, steht in ``reach``; liegt
+    der zweite Bogen vollständig darin, kann von ihm aus nichts Neues
+    erreichbar sein — seine querstehenden Nachbarn stehen schon darin, und
+    andere darf der Lauf nur betreten, wenn sie zu einem der Bögen gehören.
+    Dann ist die Antwort ``reach.faces`` selbst, **geteilt und nicht
+    kopiert**. Liegt er nicht vollständig darin, läuft der Rest von den
+    Bogenflächen aus weiter, die an ``reach`` grenzen — genau die, über die der
+    ursprüngliche Lauf ihn als Erstes betreten hätte.
     """
     starts, targets = graph
-    arcs = {int(face) for face in patch_a} | {int(face) for face in patch_b}
+    own_a = {int(face) for face in patch_a}
     goal = {int(face) for face in patch_b}
-    seen: set[int] = {int(face) for face in patch_a}
-    stack = list(seen)
-    while stack:
-        face = stack.pop()
-        for neighbour in targets[starts[face] : starts[face + 1]].tolist():
-            if neighbour not in seen and (across[neighbour] or neighbour in arcs):
-                seen.add(neighbour)
-                stack.append(neighbour)
+    if reach is None:
+        seen = _flooded(across, graph, own_a, own_a | goal, set(own_a))
+        return seen if goal <= seen else None
+    base = reach.faces
+    if goal <= base:
+        return base
+    seeds = {
+        face
+        for face in goal
+        if face in base
+        or any(neighbour in base for neighbour in targets[starts[face] : starts[face + 1]].tolist())
+    }
+    if not seeds:
+        return None
+    seen = _flooded(across, graph, seeds, own_a | goal, set(base) | seeds)
     return seen if goal <= seen else None
 
 
@@ -861,8 +1027,21 @@ def _shells_for(
     key = np.round(np.ascontiguousarray(axis, dtype=float), 9).tobytes()
     ready = cache.get(key)
     if ready is None:
-        across = (np.abs(normals @ axis) <= ACROSS_THE_AXIS).tolist()
-        ready = (across, _shell_labels(across, graph), {})
+        # **Und hinter der Achse steht die Maske selbst als Schlüssel.** An
+        # einer eingelesenen STL streuen die Bogenachsen nicht im letzten Bit,
+        # sondern in der sechsten Stelle — am Hemmungsrad aus :class:`_Reach`
+        # waren es 221 verschiedene Achsen für 531 Bögen, und für jede liefen
+        # Mantelstücke und Flutungen neu, obwohl 221-mal dieselbe Maske
+        # herauskam. Alles hier hängt nur an ihr; zwei Achsen mit derselben
+        # Maske bekommen deshalb denselben Eintrag. Die Schlüssel kollidieren
+        # nicht: eine Achse hat 24 Bytes, eine Maske eines je Fläche.
+        crossing = np.abs(normals @ axis) <= ACROSS_THE_AXIS
+        mask_key = crossing.tobytes()
+        ready = cache.get(mask_key)
+        if ready is None:
+            across = crossing.tolist()
+            ready = (across, _shell_labels(across, graph), {}, {})
+            cache[mask_key] = ready
         cache[key] = ready
     return ready
 
@@ -885,8 +1064,18 @@ def _flanks_are_flat(
     rest = [face for face in faces if face not in arcs]
     if not rest:
         return False
-    corners = np.asarray(body.triangles, dtype=float)[rest].reshape(-1, 3) - centre
-    distance = np.abs(corners @ across)
+    corners = np.asarray(body.triangles, dtype=float)[rest].reshape(-1, 3)
+    return _corners_are_flanks(corners, centre, across, radius)
+
+
+def _corners_are_flanks(
+    corners: np.ndarray, centre: np.ndarray, across: np.ndarray, radius: float
+) -> bool:
+    """Dieselbe Frage wie :func:`_flanks_are_flat`, an den schon gesammelten
+    Ecken der Flanken — leer heißt: keine Flanke, also nein."""
+    if not len(corners):
+        return False
+    distance = np.abs((corners - centre) @ across)
     return bool(np.all(np.abs(distance - radius) <= _FLANK_TOLERANCE * radius))
 
 

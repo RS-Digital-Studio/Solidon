@@ -5259,3 +5259,173 @@ def test_both_orders_of_the_same_two_changes_read_the_same(profile: Profile) -> 
     assert _thin_wall_codes(dick, profile) == _thin_wall_codes(andersherum, profile), (
         "derselbe Körper, zwei Reihenfolgen, ein Bericht"
     )
+
+
+def loaded_from_bytes(document: Document, payload: bytes, name: str):
+    """Wie :func:`loaded`, nur mit einem Körper aus dem Test statt aus dem Korpus."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(id="src_1", kind="import", path=f"sources/{name}", sha256="")
+    project.sources["src_1"] = payload
+    history = History(document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    return project, history
+
+
+def _two_blocks_on_a_pin() -> bytes:
+    """Zwei Klötze, die nur ein Zapfen Ø 6 verbindet."""
+    left = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    left.apply_translation((-15.0, 0.0, 5.0))
+    right = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    right.apply_translation((15.0, 0.0, 5.0))
+    bridge = trimesh.creation.cylinder(radius=3.0, height=12.0, sections=48)
+    bridge.apply_transform(rotation("y", 90.0))
+    bridge.apply_translation((0.0, 0.0, 5.0))
+    body = trimesh.boolean.union([left, right, bridge])
+    return bytes(body.export(file_type="stl"))
+
+
+def test_a_body_that_falls_apart_after_a_feature_step_says_so(
+    document: Document, profile: Profile
+) -> None:
+    """*Merkmal entfernen* an einem Zapfen, der der Körper selbst war, ließ 50 Teile
+    zurück — Lauf vollständig, Netz dicht, kein Satz im Bericht (Uhrenteil,
+    15.09.2026). Die Auswertung zählt die Teile vor und nach jedem Schritt an
+    Merkmalen und warnt, mit dem Rückweg im Satz."""
+    project, history = loaded_from_bytes(document, _two_blocks_on_a_pin(), "bridge.stl")
+    before = evaluate(document, profile, sources=ProjectSources(project))
+    entry = before.scene.objects["obj_1"]
+    pin = next(feature for feature in entry.features.values() if feature.kind == "pin")
+    assert entry.mesh.component_count == 1
+
+    history.apply(
+        _("Merkmal entfernen"),
+        [
+            OperationDraft(
+                op="remove_feature",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"at_feature": pin.id, "sections": "single"},
+            )
+        ],
+    )
+    after = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert after.complete
+    assert after.scene.objects["obj_1"].mesh.component_count == 2
+    split = [
+        finding for finding in after.scene.report.findings if finding.code == "feature.body_split"
+    ]
+    assert len(split) == 1
+    assert split[0].severity == "warning"
+    assert split[0].values["before"] == 1 and split[0].values["after"] == 2
+    assert split[0].object_id == "obj_1"
+
+
+def _plate_with_a_conical_boss_and_a_bore() -> MeshData:
+    """Platte 30 × 30 × 6, darauf ein Kegelstumpf Ø 10 auf Ø 6, 2 mm hoch, und eine
+    Bohrung Ø 2 durch beides."""
+    from app.core.geom.boolean import boolean
+
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 6.0))
+    plate.apply_translation((0.0, 0.0, 3.0))
+    boss = trimesh.creation.revolve([[0.0, 6.0], [5.0, 6.0], [3.0, 8.0], [0.0, 8.0]], sections=64)
+    bore = trimesh.creation.cylinder(radius=1.0, height=20.0, sections=36)
+    bore.apply_translation((0.0, 0.0, 4.0))
+    body = boolean("union", [MeshData.of(plate), MeshData.of(boss)]).mesh
+    return boolean("difference", [body, MeshData.of(bore)]).mesh
+
+
+def test_resizing_a_conical_boss_keeps_one_body_and_the_bore_through_it(
+    profile: Profile,
+) -> None:
+    """*Merkmal ändern* an einem kegeligen Zapfen ließ zwei Komponenten zurück und
+    machte die Bohrung durch ihn zum Sackloch (Uhrenteil, 15.09.2026): Das
+    Werkzeug aus den Flächen saß genau auf der Grundfläche und war massiv. Es
+    wurzelt jetzt im Material und spart die Hohlräume aus, die durch es laufen."""
+    mesh = _plate_with_a_conical_boss_and_a_bore()
+    features = detect(mesh)
+    cone = next(feature for feature in features.values() if feature.kind == "cone")
+    assert not cone.params.get("recess"), "ohne konvexen Kegel misst dieser Test nichts"
+    bore = next(feature for feature in features.values() if feature.kind == "hole")
+    assert bore.params["through"] is True
+    from app.core.scene.cancel import NeverCancelled
+
+    source = SceneObject(id="obj_1", name="Kegel", mesh=mesh, features=features)
+    spec = REGISTRY.get("resize_feature")
+
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(at_feature=cone.id, diameter=11.0),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda _value, _message: None,
+            ask=lambda _question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    changed = result.outputs[0].mesh
+    assert changed.is_watertight
+    assert changed.component_count == 1, "Sockel und Grundfläche sind ein Körper"
+    assert changed.volume > mesh.volume
+    fresh = detect(as_mesh_data(changed))
+    bores = [feature for feature in fresh.values() if feature.kind == "hole"]
+    assert len(bores) == 1 and bores[0].params["through"] is True, (
+        "die Bohrung läuft weiter durch den Kegel"
+    )
+    grown = next(feature for feature in fresh.values() if feature.kind == "cone")
+    assert float(grown.params["diameter"]) == pytest.approx(11.0, abs=0.1)
+
+
+def _hub_with_a_chamfer_above_the_pin() -> bytes:
+    """Eine Nabe aus 48 Segmenten: Fuß, Zapfen Ø 11,3, 45-Grad-Fase, Hals."""
+    body = trimesh.creation.revolve(
+        [
+            [0.0, 0.0],
+            [3.65, 0.0],
+            [5.65, 2.0],
+            [5.65, 6.6],
+            [4.5, 7.75],
+            [4.5, 14.2],
+            [0.0, 14.2],
+        ],
+        sections=48,
+    )
+    return bytes(body.export(file_type="stl"))
+
+
+def test_removing_a_pin_leaves_no_splinters_between_the_facets(
+    document: Document, profile: Profile
+) -> None:
+    """An der Nabe eines Uhrenrads (48 Segmente gegen 64 des Werkzeugs) blieben 48
+    Reste von 0,003 mm³ stehen, einer je Facette (15.09.2026). Das Abtragwerkzeug
+    umschreibt das Vieleck des Zapfens wie der Stopfen das der Bohrung."""
+    project, history = loaded_from_bytes(document, _hub_with_a_chamfer_above_the_pin(), "hub.stl")
+    before = evaluate(document, profile, sources=ProjectSources(project))
+    entry = before.scene.objects["obj_1"]
+    pins = [feature for feature in entry.features.values() if feature.kind == "pin"]
+    assert pins, "ohne Zapfen misst dieser Test nichts"
+    pin = max(pins, key=lambda feature: float(feature.params["diameter"]))
+
+    history.apply(
+        _("Merkmal entfernen"),
+        [
+            OperationDraft(
+                op="remove_feature",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"at_feature": pin.id, "sections": "single"},
+            )
+        ],
+    )
+    after = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert after.complete
+    pieces = after.scene.objects["obj_1"].mesh.raw.split(only_watertight=False)
+    smallest = min(float(abs(piece.volume)) for piece in pieces)
+    assert smallest > 0.01, f"Splitter von {smallest:.4f} mm³ zwischen den Facetten"
+    assert len(pieces) <= 2

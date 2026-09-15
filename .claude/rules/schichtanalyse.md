@@ -553,4 +553,61 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
 * **Eine runde Wand heißt runde Wand.** Ein Zylinderausschnitt über 180 Grad
   (`radial`) gehört zu keiner Kante; Objektbaum und Steckbrief sagen „Runde
   Wand", das Panel begründet die grauen Zeilen mit
-  `actions.ROUND_WALL_HAS_NO_PLACE` statt mit der Kante.
+  `actions.ROUND_WALL_HAS_NO_PLACE` statt mit der Kante. Geht die Wand
+  tangential in ihre Nachbarn über (`tangent`,
+  `features.blends_into_its_neighbours`), ist auch der Radius nicht für sich
+  zu ändern — Panel und Operation sagen es mit demselben Satz
+  (`actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS`).
+* **Das Panel bietet an einer Verrundung nur an, was die Operation hält.**
+  `actions.fillet_blocked` stellt die Frage der Bearbeitung vorher: Grenzt
+  der Bogen quer zu seiner Achse nicht an genau zwei ebene Flächen
+  (`features.replaces_an_edge`, von `geom/edges.py` in `sharp_corner`
+  gelesen) — oder treffen die zwei Ebenen den Bogen schräg statt tangential
+  —, stehen *Entfernen* und *Radius ändern* grau mit
+  `edges.NOT_BETWEEN_TWO_PLANES`, und `sharp_corner` sagt dasselbe. Zwei
+  Ebenen, die einen Bogen nur schneiden, ergaben an einem Modellgleis eine
+  Kante, die es nicht gibt, und ein stilles Falschergebnis. Vorher versprach das Panel an 50 von 52
+  Bögen aus 34 Netzmodellen, was die Operation nach dem Klick ablehnte
+  (15.09.2026). Der Name bleibt Verrundung.
+* **Das Panel bietet nur an, wofür die Operation einen Körper baut.**
+  `actions.no_own_body` fragt vorher, was `prepare_ops._tool_for` fragt: Eine
+  Bohrung oder Senkung mit berührtem fremdem Rand ohne Kette trägt
+  `NO_OWN_BODY`, ein Kegel oder eine Kuppel ohne Körper aus den Flächen
+  (`has_own_body`) trägt `NO_BODY_FROM_FACES` — an Versetzen, Verdoppeln,
+  Drehen, Entfernen und Ändern. Kundentexte kurz: zwei Sätze, der Rückweg im
+  zweiten.
+* **Ein Kegel unter dem vollen Umlauf ist keine Senkung und keine
+  Verjüngung.** Er gehört zum Langloch, an dessen Mantel er grenzt
+  (Mündungsfase, geht darin auf), oder zur Bohrung daneben (Senkung einer
+  angeschnittenen Bohrung, bleibt); sonst heißt er Kegelfläche (`partial`)
+  und trägt keine Körperhandlung — Panel und `_movable_feature` sagen es mit
+  `actions.CONE_PIECE_HAS_NO_BODY` (`features._partial_cones_folded`). Er
+  bleibt im Bestand, weil die Freiformprobe an den erkannten Formen zählt.
+  126 „Senkungen" an 33 Langlöchern eines Rahmens waren der Anlass.
+* **Ein Fleck auf der vorhandenen Wand gehört zu ihr.** Zwei Zylinderflecken
+  werden zusammengeführt, wenn der gemeinsame Fit nicht schlechter streut
+  als seine Teile — oder wenn der neue Fleck im Vertrag von
+  `CYLINDER_SPREAD` auf dem schon eingepassten Zylinder liegt
+  (`features._lies_on_the_cylinder`). Sonst bleibt der vierte Bogen einer
+  Bohrung draußen, weil ein Fit über mehr Punkte immer etwas mehr streut.
+* **Die Langlochsuche rechnet je Bogen, nicht je Paar.** Flutung, Flanken
+  und Stadionfit hängen an Bogen und Achse (`slots._Reach`), und die Maske
+  einer Achse ist ihr Schlüssel, nicht die gerundete Achse allein. Ein
+  Stadionfit über den ganzen Mantel darf die Breite nicht unter das Maß der
+  Bögen drücken (`STADIUM_TOLERANCE`) — sonst stand ein „Langloch 0,01 auf
+  97 mm" im Baum.
+* **Ein Körper, der nach einer Merkmalsänderung zerfällt, sagt es.** Die
+  Auswertung zählt die Teile vor und nach jeder Operation mit
+  `touches_features` und meldet mehr Teile als Warnung
+  (`feature.body_split`, `evaluate._split_findings`) — der Rückweg steht im
+  Satz. Gemessen: *Merkmal entfernen* an einem Zapfen, der der Körper selbst
+  war, ließ 50 Teile zurück, und der Bericht schwieg.
+* **Ein konvexes Werkzeug aus den Flächen wurzelt in seiner Grundfläche und
+  spart die Hohlräume aus, die durch es laufen** (`prepare_ops._rooted`,
+  `_without_cavities`, gebündelt in `_placing_tool`). Kegel und Kuppel
+  kommen aus `_feature_body`, ihr Deckel lag genau in der Grundfläche — die
+  Vereinigung ließ zwei Schalen, und eine Bohrung durch den Kegel war danach
+  ein Sackloch. Der Sockel gilt nur dem Setzen; das Abtragen an der alten
+  Stelle bekommt ihn nicht. Und das Abtragwerkzeug eines Zapfens umschreibt
+  sein Vieleck wie der Stopfen einer Bohrung (`_closed_at`), sonst bleiben
+  Splitter zwischen den Facetten (48 Reste von 0,003 mm³ an einer Nabe).

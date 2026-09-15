@@ -29,7 +29,7 @@ import itertools
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import Any, Final, Literal, Protocol
 
 import numpy as np
 
@@ -47,7 +47,12 @@ from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
 from app.core.types import CancelToken, Feature, Mesh, Quality, Vec3, is_a_cavity
-from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG, weld_tolerance
+from app.core.units import (
+    EPS_GEOM,
+    MAX_FACET_ANGLE,
+    MAX_FACET_SAG,
+    weld_tolerance,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -491,10 +496,6 @@ MIN_ARC_STEPS = 4
 #: weil es um die Längsrichtung eines Zugs geht und nicht um ein Maß, das
 #: der Kunde wiederfinden soll.
 EDGE_OVERSHOOT = 0.01
-
-#: Wie weit die Normale einer Nachbarfläche aus der Senkrechten zur
-#: Rundungsachse kippen darf und noch als deren Nachbar gilt.
-UPRIGHT_TO_AXIS = 0.1
 
 
 def rounding_tool(
@@ -1548,6 +1549,15 @@ class SharpCorner:
     convex: bool
 
 
+#: Warum eine Rundung ohne zwei ebene Nachbarflächen keine Kante zurückgibt —
+#: der Satz der Operation, den auch das Merkmalspanel in die graue Zeile
+#: schreibt (``perceive.actions``).
+NOT_BETWEEN_TWO_PLANES: Final = _(
+    "Diese Rundung grenzt nicht an zwei ebene Flächen — sie lässt sich "
+    "nicht auf eine Kante zurückführen. Verrunden Sie stattdessen neu."
+)
+
+
 def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
     """Rechnet aus einer erkannten Rundung die Kante zurück, die sie ersetzt hat.
 
@@ -1568,15 +1578,9 @@ def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
         )
     axis = np.asarray(feature.params["axis"], dtype=float)
     axis = axis / float(np.linalg.norm(axis))
-    normals, neighbours = _around(mesh, triangles, axis)
+    normals, neighbours = _around(mesh, triangles, axis, feature.params.get("centre"))
     if len(normals) != THROUGH:
-        raise GeometryError(
-            detail=_(
-                "Diese Rundung grenzt nicht an zwei ebene Flächen — sie lässt sich "
-                "nicht auf eine Kante zurückführen. Verrunden Sie stattdessen neu."
-            ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
     first, second = normals[0], normals[1]
     line, point = _plane_cut(first, neighbours[0], second, neighbours[1])
 
@@ -1612,7 +1616,7 @@ def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
 
 
 def _around(
-    mesh: MeshData, triangles: list[int], axis: np.ndarray
+    mesh: MeshData, triangles: list[int], axis: np.ndarray, centre: Any = None
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Die Normalen der angrenzenden Flächen und je ein Punkt darauf.
 
@@ -1622,32 +1626,27 @@ def _around(
     sind parallel" zurück. Gesucht sind die Flächen, zwischen denen die
     Rundung *liegt*, und die stehen senkrecht auf ihrer Achse.
     """
-    own = set(triangles)
-    from app.core.perceive.features import detect_faces
+    from app.core.perceive.features import detect_faces, face_mask, planes_beside
 
     # Eine Mantelfacette besitzt ebenfalls eine Normale, aber keine ebene
     # Nachbarfläche. Dieselbe Flächenerkennung wie beim Anklicken belegt die
     # Ebene; sonst würde deren lokale Tangente eine falsche Kante erzeugen.
-    planar = {index for feature in detect_faces(mesh) for index in feature.face_indices}
-    raw = mesh.raw
-    face_normals = np.asarray(raw.face_normals, dtype=float)
-    centres = np.asarray(raw.triangles_center, dtype=float)
-    normals: list[np.ndarray] = []
-    places: list[np.ndarray] = []
-    for a, b in np.asarray(raw.face_adjacency, dtype=np.int64).tolist():
-        outside = b if a in own and b not in own else a if b in own and a not in own else None
-        if outside is None:
-            continue
-        normal = face_normals[outside]
-        if abs(float(np.dot(normal, axis))) > UPRIGHT_TO_AXIS:
-            continue
-        if outside not in planar:
-            return [], []
-        if any(float(np.dot(normal, seen)) > 1.0 - EPS_GEOM for seen in normals):
-            continue
-        normals.append(normal)
-        places.append(centres[outside])
-    return normals, places
+    # **Die Frage selbst steht bei der Erkennung** (``planes_beside``): Sie
+    # entscheidet dort, ob ein Bogen als Kante oder als Wand in den Baum kommt,
+    # und hier, ob sich die Kante zurückrechnen lässt — eine Frage, eine
+    # Antwort, sonst verspricht der Baum, was die Bearbeitung nicht hält.
+    beside = planes_beside(
+        mesh.raw,
+        triangles,
+        axis,
+        face_mask(mesh, detect_faces(mesh)),
+        centre=None
+        if not isinstance(centre, list | tuple) or len(centre) != 3
+        else np.asarray(centre, dtype=float),
+    )
+    if beside is None:
+        return [], []
+    return [normal for normal, _place in beside], [place for _normal, place in beside]
 
 
 def _plane_cut(

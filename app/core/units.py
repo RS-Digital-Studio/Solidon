@@ -56,6 +56,15 @@ MAX_FACET_SAG: Final[float] = 0.05
 #: sieht man.
 MAX_FACET_ANGLE: Final[float] = 0.3
 
+#: Wie weit die Normale einer Nachbarfläche aus der Senkrechten zur Achse einer
+#: Rundung kippen darf und noch als die Fläche gilt, zwischen denen sie liegt.
+#: Deckel und Boden einer Rundung an einer senkrechten Kante liegen entlang der
+#: Achse und sind nicht gemeint. Erkennung (``perceive.features``) und
+#: Bearbeitung (``geom.edges``) lesen dieselbe Zahl — bis zum 15.09.2026 stand
+#: sie allein bei der Bearbeitung, und die Erkennung nannte Kante, was jene
+#: nicht als Kante zurückrechnen konnte.
+UPRIGHT_TO_AXIS: Final[float] = 0.1
+
 # --- Einheiten -------------------------------------------------------------------
 
 LengthUnit = Literal["mm", "cm", "m", "in"]

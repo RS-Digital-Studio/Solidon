@@ -33,7 +33,13 @@ from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
 from app.core.perceive.slots import ACROSS_THE_AXIS, slots_instead_of_half_bores
 from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
-from app.core.units import EPS_GEOM, positive_axis, weld_digits, weld_tolerance
+from app.core.units import (
+    EPS_GEOM,
+    UPRIGHT_TO_AXIS,
+    positive_axis,
+    weld_digits,
+    weld_tolerance,
+)
 
 _log = get_logger(__name__)
 
@@ -570,6 +576,11 @@ SINK_AXIS_LIMIT = 2.0
 #: sechs bis fünfzehn Grad, und mehr als das darf die Schwelle nicht fordern.
 FULL_TURN_SPAN = 300.0
 
+#: Eine Kante hat zwei Seiten. Eine Rundung, die genau an zwei ebene Flächen
+#: quer zu ihrer Achse grenzt, ersetzt die Kante zwischen ihnen; jede andere
+#: Nachbarschaft macht sie zur Wand.
+SIDES_OF_AN_EDGE: Final = 2
+
 #: Ab wie vielen koaxialen Zylindern gleichen Durchmessers ein Stapel als
 #: Gewinde gilt und nicht als Zapfen.
 #:
@@ -964,6 +975,9 @@ def detect(
         # schöben es Richtung Freiform. Hier gehen sie weg, weil sie zu einem
         # Einschluss gehören — nicht, weil das Modell eine Figur wäre.
         found = _voids_instead_of_phantom_bores(found, detect_voids(mesh))
+        if check_cancelled is not None:
+            check_cancelled()
+        found = _partial_cones_folded(mesh, found)
         if check_cancelled is not None:
             check_cancelled()
         found, left_out = _shapes_on_a_freeform(
@@ -1690,17 +1704,53 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
             # samt zwei weiteren Fehlbefunden daneben. Der neue Fit darf
             # deshalb **nicht schlechter streuen** als der schlechtere der
             # beiden, aus denen er entsteht.
+            #
+            # **Oder der neue Fleck liegt nachweislich auf dem Zylinder, der
+            # schon da ist.** Die Regel darüber ist für die Frage gebaut, ob
+            # zwei Flecken überhaupt dieselbe Fläche sind; sie sieht nicht,
+            # dass ein Fit über mehr Punkte immer ein wenig mehr streut. An
+            # einem Uhrenteil (``REMONTOIRE ESCAPEMENT-12``, 15.09.2026) kam
+            # eine Bohrung Ø 30 nach dem Ändern einer **anderen** Bohrung in
+            # vier Bögen zurück: drei fanden zusammen (226°), der vierte lag
+            # mit 0,003 mm auf demselben Kreis, hob die Streuung aber von
+            # 0,00076 auf 0,00114 Facettenbreiten — und blieb draußen. Im Baum
+            # standen zwei Hohlkehlen R 15 statt einer Bohrung, und die
+            # Kennung ``hole_5`` ging verloren. Liegt der Fleck innerhalb des
+            # Fitvertrags (:data:`CYLINDER_SPREAD`) auf der vorhandenen
+            # Wand, beschreibt er sie — dann trägt die Streuung des
+            # gemeinsamen Fits nichts mehr zur Frage bei.
             if (
                 again is not None
                 and again.good
                 and _fits_in_the_body(mesh, again)
-                and again.spread <= max(fit.spread, other.spread) + EPS_GEOM
+                and (
+                    again.spread <= max(fit.spread, other.spread) + EPS_GEOM
+                    or _lies_on_the_cylinder(body, other, patch)
+                )
             ):
                 merged[index] = (again, together)
                 break
         else:
             merged.append((fit, patch))
     return merged
+
+
+def _lies_on_the_cylinder(body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]) -> bool:
+    """Ob die Schwerpunkte dieses Flecks auf dem Zylinder ``fit`` liegen.
+
+    Gemessen wie :attr:`CylinderFit.spread`: der mittlere Abstand vom
+    Zylinder, bezogen auf die Facettenbreite des Flecks — und mit derselben
+    Grenze (:data:`CYLINDER_SPREAD`). Eine Wand, die den Vertrag des Fits
+    erfüllt, ohne dass er für sie gerechnet wurde, ist dieselbe Wand.
+    """
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+    axis = np.asarray(fit.axis, dtype=float)
+    relative = centres - np.asarray(fit.centre, dtype=float)
+    distances = np.linalg.norm(relative - np.outer(relative @ axis, axis), axis=1)
+    width = float(np.sqrt(np.mean(body.area_faces[patch]) * 2.0))
+    if width <= EPS_GEOM:
+        return False
+    return float(np.mean(np.abs(distances - fit.radius)) / width) <= CYLINDER_SPREAD
 
 
 def _split_off_fillets(body: trimesh.Trimesh, found: Cylinders) -> tuple[Cylinders, Fillets]:
@@ -1930,10 +1980,19 @@ def angular_span(body: trimesh.Trimesh, fit: CylinderFit | ConeFit, patch: list[
     Spanne von kleinstem zu größtem Winkel taugten nicht — beide sind bei einem
     Fleck, der die Nahtstelle bei ±180 Grad überschreitet, bedeutungslos.
     """
-    axis = np.asarray(fit.axis, dtype=float)
-    centre = np.asarray(fit.centre, dtype=float)
+    return span_about(
+        body, np.asarray(fit.axis, dtype=float), np.asarray(fit.centre, dtype=float), patch
+    )
+
+
+def span_about(
+    body: trimesh.Trimesh, axis: np.ndarray, centre: np.ndarray, patch: Sequence[int]
+) -> float:
+    """Dasselbe wie :func:`angular_span`, an Achse und Mitte statt am Fit —
+    für ein fertiges Merkmal, das seinen Fit nicht mehr trägt."""
     basis_u, basis_v = _plane_basis(axis)
-    points = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float) - centre
+    chosen = np.asarray(body.faces)[np.asarray(list(patch), dtype=np.int64)]
+    points = np.asarray(body.vertices, dtype=float)[np.unique(chosen)] - centre
     angles = np.sort(np.arctan2(points @ basis_v, points @ basis_u))
     if len(angles) < 3:
         return 0.0
@@ -2208,6 +2267,14 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     # Die Begründung ist wörtlich die von :data:`MIN_CYLINDER_DIAMETER` — was
     # für kein Werkzeug groß genug ist, ist auch keine Verrundung.
     big = _fillets_worth_naming(mesh, found)
+    # **Eine runde Wand sagt dazu, ob sie in ihre Nachbarn übergeht**
+    # (``tangent``): Ihr Radius lässt sich nur ändern, wenn jede angrenzende
+    # Fläche dabei in ihrer Ebene bleibt — Deckel, Boden und radial stehende
+    # Wände tun das, eine tangential anschließende Flanke nicht
+    # (:func:`blends_into_its_neighbours`). Gemessen am 15.09.2026 an sieben
+    # Modellen aus dem Netz: 32 Absagen „lässt sich innerhalb ihrer Ränder
+    # nicht versetzen" erst nach dem Klick; mit dem Kennzeichen stellt das
+    # Panel die Zeile vorher grau.
     return [
         Feature(
             id=f"fillet_{number}",
@@ -2222,6 +2289,11 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
                 "recess": fit.inward,
                 "residual": round(fit.residual, 4),
                 **({"radial": True} if radial is not None else {}),
+                **(
+                    {"tangent": True}
+                    if radial is not None and blends_into_its_neighbours(body, patch, radial)
+                    else {}
+                ),
             },
             face_indices=tuple(patch),
         )
@@ -2229,6 +2301,172 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
         for radial in (radial_cylinder(body, fitted, patch),)
         for fit in (radial or fitted,)
     ]
+
+
+def blends_into_its_neighbours(
+    body: trimesh.Trimesh, patch: Sequence[int], fit: CylinderFit
+) -> bool:
+    """Ob eine runde Wand tangential in eine Nachbarfläche übergeht.
+
+    Eine radiale Verschiebung der Wand bewegt ihre Randecken radial. Eine
+    Nachbarfläche bleibt dabei in ihrer Ebene, wenn ihre Normale quer zur
+    radialen Richtung steht — Deckel und Boden (Normale entlang der Achse)
+    ebenso wie eine radial stehende Lückenwand. Eine Flanke, die tangential
+    an die Wand anschließt, hat ihre Normale **in** radialer Richtung und
+    würde aus ihrer Ebene geschoben; ``radial_rounding`` sagt dort ab.
+    Dieselbe Schwelle wie für die Ebenen neben einer Kante
+    (:data:`UPRIGHT_TO_AXIS`).
+    """
+    member = np.zeros(len(body.faces), dtype=bool)
+    member[list(patch)] = True
+    adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
+    if not len(adjacency):
+        return False
+    inside_a = member[adjacency[:, 0]]
+    inside_b = member[adjacency[:, 1]]
+    outside = np.concatenate(
+        (adjacency[inside_a & ~inside_b, 1], adjacency[inside_b & ~inside_a, 0])
+    )
+    if not len(outside):
+        return False
+    axis = np.asarray(fit.axis, dtype=float)
+    relative = np.asarray(body.triangles_center, dtype=float)[outside] - np.asarray(
+        fit.centre, dtype=float
+    )
+    radial = relative - np.outer(relative @ axis, axis)
+    lengths = np.linalg.norm(radial, axis=1)
+    steady = lengths > EPS_GEOM
+    if not np.any(steady):
+        return False
+    radial = radial[steady] / lengths[steady, None]
+    normals = np.asarray(body.face_normals, dtype=float)[outside][steady]
+    return bool(np.any(np.abs(np.einsum("ij,ij->i", normals, radial)) > UPRIGHT_TO_AXIS))
+
+
+def face_mask(mesh: MeshData, faces: Sequence[Feature]) -> np.ndarray:
+    """Je Dreieck, ob es zu einer erkannten ebenen Fläche gehört."""
+    mask = np.zeros(len(mesh.raw.faces), dtype=bool)
+    for feature in faces:
+        if feature.face_indices:
+            mask[list(feature.face_indices)] = True
+    return mask
+
+
+def planes_beside(
+    body: trimesh.Trimesh,
+    patch: Sequence[int],
+    axis: np.ndarray,
+    planar_faces: np.ndarray,
+    *,
+    centre: np.ndarray | None = None,
+) -> list[tuple[np.ndarray, np.ndarray]] | None:
+    """Die ebenen Nachbarflächen quer zur Achse eines Bogens — je Ebene ihre
+    Normale und ein Punkt darauf.
+
+    Mit ``centre`` — der Achsenmitte des Bogens — müssen die Ebenen den Bogen
+    außerdem **tangential** fortsetzen: Am gemeinsamen Rand zeigt die radiale
+    Richtung des Bogens in die Normale der Ebene. Ein Bogen, der zwei Ebenen
+    schräg trifft, ersetzt keine Kante zwischen ihnen. Gemessen am 15.09.2026
+    an den Gleisen einer Modellscheune: eine Hohlkehle R 28 zwischen zwei
+    Bögen und zwei Ebenen, die sie nicht berühren — *Entfernen* rechnete aus
+    den beiden Ebenen eine Kante, die es nicht gibt, trug 2,7 Prozent des
+    Volumens ab, und die Hohlkehle stand danach unverändert im Baum.
+
+    **Nur die quer zur Achse.** Eine Rundung an einer senkrechten Kante grenzt
+    auch an Deckel und Boden, und die beiden sind einander entgegengesetzt:
+    Der erste Anlauf der Bearbeitung nahm sie als das gesuchte Paar und bekam
+    „diese Flächen sind parallel" zurück. Gesucht sind die Flächen, zwischen
+    denen die Rundung *liegt*, und die stehen senkrecht auf ihrer Achse
+    (:data:`UPRIGHT_TO_AXIS`).
+
+    ``None``, sobald eine quer stehende Nachbarfläche **nicht** eben ist: Eine
+    Mantelfacette besitzt ebenfalls eine Normale, aber keine Ebene, und ihre
+    lokale Tangente ergäbe eine falsche Kante. Eben heißt, was die
+    Flächenerkennung als Fläche ausweist (:func:`face_mask`).
+
+    **Eine Frage, zwei Leser:** ``geom/edges.py`` stellt sie, bevor es die
+    Kante unter einer Rundung zurückrechnet, und ``perceive/actions.py``,
+    bevor es *Entfernen* und *Radius ändern* an einer Rundung anbietet.
+    Gemessen am 15.09.2026 über 34 Modelle aus dem Netz: An 50 von 52
+    Umrissbögen (Uhrenanker, Laschen, Aussparungen) bot das Panel an, was die
+    Operation dann mit „grenzt nicht an zwei ebene Flächen" ablehnte. Der
+    Name bleibt — eine Verrundung zwischen einer Ebene und einem
+    Zylindermantel ist eine verrundete Kante, auch wenn sie sich nicht auf
+    zwei Ebenen zurückführen lässt —, die Zeile wird vorher grau.
+    """
+    member = np.zeros(len(body.faces), dtype=bool)
+    member[list(patch)] = True
+    adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
+    if not len(adjacency):
+        return []
+    inside_a = member[adjacency[:, 0]]
+    inside_b = member[adjacency[:, 1]]
+    crossing_rows = np.concatenate(
+        (np.flatnonzero(inside_a & ~inside_b), np.flatnonzero(inside_b & ~inside_a))
+    )
+    outside = np.concatenate(
+        (adjacency[inside_a & ~inside_b, 1], adjacency[inside_b & ~inside_a, 0])
+    )
+    if not len(outside):
+        return []
+    face_normals = np.asarray(body.face_normals, dtype=float)
+    across = np.abs(face_normals[outside] @ axis) <= UPRIGHT_TO_AXIS
+    outside = outside[across]
+    crossing_rows = crossing_rows[across]
+    if not len(outside):
+        return []
+    if not bool(np.all(planar_faces[outside])):
+        return None
+    if centre is not None:
+        # Der gemeinsame Rand jeder Nachbarfläche: Zeigt die radiale Richtung
+        # des Bogens dort nicht in die Normale der Ebene, setzt die Ebene den
+        # Bogen nicht tangential fort — und darunter liegt keine Kante.
+        edges = np.asarray(body.face_adjacency_edges, dtype=np.int64)[crossing_rows]
+        vertices = np.asarray(body.vertices, dtype=float)
+        middles = (vertices[edges[:, 0]] + vertices[edges[:, 1]]) / 2.0 - centre
+        radial = middles - np.outer(middles @ axis, axis)
+        lengths = np.linalg.norm(radial, axis=1)
+        steady = lengths > EPS_GEOM
+        if np.any(steady):
+            grazing = np.abs(
+                np.einsum(
+                    "ij,ij->i",
+                    radial[steady] / lengths[steady, None],
+                    face_normals[outside][steady],
+                )
+            )
+            if bool(np.any(grazing < 1.0 - UPRIGHT_TO_AXIS)):
+                return None
+    centres = np.asarray(body.triangles_center, dtype=float)
+    planes: list[tuple[np.ndarray, np.ndarray]] = []
+    # Die Reihenfolge der Nachbarschaftsliste bleibt, damit die Bearbeitung
+    # dieselbe erste und zweite Ebene sieht wie bisher.
+    for face in outside.tolist():
+        normal = face_normals[face]
+        if any(float(np.dot(normal, seen)) > 1.0 - EPS_GEOM for seen, _place in planes):
+            continue
+        planes.append((normal, centres[face]))
+    return planes
+
+
+def replaces_an_edge(
+    body: trimesh.Trimesh,
+    patch: Sequence[int],
+    axis: Sequence[float],
+    planar_faces: np.ndarray,
+    *,
+    centre: Sequence[float] | None = None,
+) -> bool:
+    """Ob dieser Bogen die Kante zwischen genau zwei Ebenen ersetzt — die ihn
+    tangential fortsetzen, wenn seine Mitte bekannt ist."""
+    beside = planes_beside(
+        body,
+        patch,
+        np.asarray(axis, dtype=float),
+        planar_faces,
+        centre=None if centre is None else np.asarray(centre, dtype=float),
+    )
+    return beside is not None and len(beside) == SIDES_OF_AN_EDGE
 
 
 def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feature]:
@@ -2311,6 +2549,98 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
         )
         for number, (fit, patch) in enumerate(big, start=1)
     ]
+
+
+def _partial_cones_folded(
+    mesh: MeshData, found: Mapping[FeatureId, Feature]
+) -> dict[FeatureId, Feature]:
+    """Kegelstücke unter dem vollen Umlauf: zum Langloch, zur Bohrung — oder Fase.
+
+    **Der Fall, der die Regel gebraucht hat:** Der Rahmen eines
+    Schreibtisch-Organizers (MakerWorld, 15.09.2026) trägt 33 Langlöcher mit
+    gefaster Mündung, und die Erkennung machte daraus **126 „Senkung 90°
+    Ø 5,80"** — je Langloch vier Halbkegel von 180 Grad, an beiden Enden und
+    beiden Seiten. Die Fächer desselben Modells zeigten Viertelkegel an ihren
+    Kastenecken als „Verjüngung 96°", ein Hemmungsrad fünf „Verjüngungen 12°"
+    mit zehn Dreiecken auf Zahnflanken. Und an jedem davon sagten Ändern,
+    Versetzen, Drehen, Verdoppeln und Entfernen ab: Der Rand eines Teilkegels
+    liegt in keiner Ebene, aus ihm wird kein Körper (``_body_from_faces``) —
+    280 Abbrüche im Lauf, während das Panel jede Zeile anbot.
+
+    Ein Kegel unter :data:`FULL_TURN_SPAN` ist eine **Fase an einer Kante**, so
+    wie ein Zylinder darunter eine Verrundung ist (:func:`_split_off_fillets`) —
+    dieselbe Grenze, aus demselben Grund. Wem er gehört, sagt die
+    Nachbarschaft:
+
+    * grenzt er an den Mantel eines **Langlochs**, ist er dessen Mündungsfase
+      und geht im Langloch auf — so wie die Bögen der Enden;
+    * grenzt er an eine **Bohrung**, bleibt er, was er war: die Senkung einer
+      Bohrung, die eine Kante oder ein zweites Merkmal angeschnitten hat, und
+      die Kette (``relations.cavity_chain_at``) nimmt ihn mit;
+    * sonst bleibt er als Auskunft im Baum — als **Kegelfläche** (``partial``),
+      ohne Körperhandlungen: Ein Stück Kegel hat keinen ebenen Rand, aus dem
+      ein Werkzeug entstünde, und das Panel sagt es vorher
+      (``actions.CONE_PIECE_HAS_NO_BODY``). Wegzulassen war er nicht: Die
+      Blütenblätter eines Gewindeprüfers sind Kegel von 259 Grad, und ohne sie
+      im Bestand hielt die Freiformprobe vier Körper eines Minigolf-Satzes für
+      Figuren und nahm ihnen 23 Ringe gleich mit (gemessen 15.09.2026).
+
+    Ein voller Kegel bleibt unberührt. Die dokumentierte Zusage, dass
+    Teilbogenkegel die Normalenprobe nicht am Vollumfang scheitern lassen
+    (``_cone_is_recognisable``), gilt weiter: Sie entscheidet, ob ein Fleck ein
+    Kegel ist; hier entscheidet sich, wem er gehört.
+    """
+    body = mesh.raw
+    cones = [
+        (identifier, feature)
+        for identifier, feature in found.items()
+        if feature.kind == "cone" and feature.face_indices
+    ]
+    if not cones:
+        return dict(found)
+    partial = [
+        (identifier, feature)
+        for identifier, feature in cones
+        if span_about(
+            body,
+            np.asarray(feature.params["axis"], dtype=float),
+            np.asarray(feature.params["centre"], dtype=float),
+            feature.face_indices,
+        )
+        < FULL_TURN_SPAN
+    ]
+    if not partial:
+        return dict(found)
+
+    owner = np.full(len(body.faces), -1, dtype=np.int64)
+    names: list[FeatureId] = []
+    for identifier, feature in found.items():
+        if feature.kind in ("slot", "hole") and feature.face_indices:
+            owner[list(feature.face_indices)] = len(names)
+            names.append(identifier)
+    adjacency = np.asarray(body.face_adjacency, dtype=np.int64)
+
+    kept = dict(found)
+    grown: dict[FeatureId, set[int]] = {}
+    for identifier, feature in partial:
+        member = np.zeros(len(body.faces), dtype=bool)
+        member[list(feature.face_indices)] = True
+        inside_a = member[adjacency[:, 0]]
+        inside_b = member[adjacency[:, 1]]
+        outside = np.concatenate(
+            (adjacency[inside_a & ~inside_b, 1], adjacency[inside_b & ~inside_a, 0])
+        )
+        neighbours = {names[index] for index in owner[outside].tolist() if index >= 0}
+        slots = sorted(name for name in neighbours if found[name].kind == "slot")
+        if slots:
+            grown.setdefault(slots[0], set()).update(int(face) for face in feature.face_indices)
+            del kept[identifier]
+        elif not any(found[name].kind == "hole" for name in neighbours):
+            kept[identifier] = replace(feature, params={**feature.params, "partial": True})
+    for name, faces in grown.items():
+        slot = kept[name]
+        kept[name] = replace(slot, face_indices=tuple(sorted({*slot.face_indices, *faces})))
+    return kept
 
 
 def _curved_faces(body: trimesh.Trimesh) -> set[int]:

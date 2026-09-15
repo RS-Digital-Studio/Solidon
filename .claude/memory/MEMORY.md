@@ -7,7 +7,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) · [Release-Schlüssel](release-schluessel-fuer-version-json.md) — gehören in den Passwortmanager; ohne Release-Schlüssel kein Update.
 - [MSVC bei VS 18](msvc-erkennung-vs18.md) · [Inno Setup 7](inno-setup-7-nicht-ueber-winget.md) · [Installer-Probe](installer-probe-nicht-mit-fenster.md) — vcvars64.bat; signiert aus dem GitHub-Release; Robert klickt durch.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) · [PHP lokal](php-lokal-fuer-die-gegenstelle.md) · [Website im Browser](website-im-browser-pruefen.md) — netcup-Stamm je Domain; support.php lokal; QtWebEngine.
-- [Fusion ist da](zeichnen-an-fusion-orientieren.md) · [Slicer sind da](slicer-lokal-zum-gegenmessen.md) · [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) · [Downloads als 3MF-Korpus](downloads-ordner-als-3mf-korpus.md) — Vergleichswerkzeuge lokal; sechzehn echte 3MF für den Leser, seit 15.09.2026 nicht mehr im Ordner.
+- [Fusion ist da](zeichnen-an-fusion-orientieren.md) · [Slicer sind da](slicer-lokal-zum-gegenmessen.md) · [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) · [Downloads als Korpus](downloads-ordner-als-3mf-korpus.md) — Vergleichswerkzeuge lokal; der Downloads-Ordner des Rechners als Kundenkorpus (34 STL/3MF am 15.09.), die Sonden dazu eingecheckt unter `.claude/.state/merkmale-durchsicht-2026-09-15/`.
 - [ComfyUI](comfyui-installation-d-ai.md) · [Eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) · [Ollama-Werkzeuge](ollama-werkzeugaufrufe-modellwahl.md) · [Ollama verwirft Schemafelder](ollama-verwirft-schema-felder.md) · [Agenten-Suite](agenten-suite-lauf-praxis.md) — D:\AI; VRAM serialisieren; num_ctx; nur Name/Text/Typ/Enum kommen an, zu lang wird still halbiert, und Prompt plus Antwort über dem Fenster schiebt still (Serverlog lesen); ~1,5 h.
 - [Config-Dir ohne Schalter](config-dir-hat-keinen-schalter.md) · [Scratchpad nicht dauerhaft](scratchpad-ist-nicht-dauerhaft.md) · [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — Sonden treffen Roberts echte Daten.
 - [.venv auf 3.14.7](lokale-umgebung-python-version.md) · [.venv verliert Dateien](venv-dateien-verschwinden.md) — seit 06.09.2026 3.14; RECORD nennt die fehlende Datei.
@@ -18,6 +18,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 
 ## Roberts Vorgaben
 
+- [Kurze Texte in der App](kurze-texte-in-der-app.md) — ein bis zwei kurze Sätze je Kundentext, der Rückweg dabei; jeden angefassten Text kürzen.
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) · [Fehlerzählung](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) · [Version statt Fassung](kundentexte-sagen-version.md) · [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — Kundentexte.
 - [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) · [Plattformen gleich](plattformen-funktionieren-gleich.md) — alte Karten kein Kriterium; was Windows kann, können Mac und Linux.
 - [Beheben statt notieren](beheben-statt-notieren.md) · [Durchsicht je Version](durchsicht-je-version.md) · [Härtung trifft Altes](haertung-trifft-alten-zustand.md) — Fund → Messung → Fix → Test; „offen" am Code nachmessen.

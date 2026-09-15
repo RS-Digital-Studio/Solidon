@@ -3500,3 +3500,361 @@ def test_a_patch_search_without_a_single_neighbour_returns_each_triangle() -> No
     faces = list(range(len(body.faces)))
 
     assert features_module._connected_patches(body, faces) == [[index] for index in faces]
+
+
+# --- Lehren aus 34 Modellen aus dem Netz (15.09.2026) -----------------------------
+
+
+def _mantle_split_by_angle(body: trimesh.Trimesh, cut: float) -> tuple[list[int], list[int]]:
+    """Der Mantel eines Zylinders um Z, geteilt in einen kleinen Bogen bis ``cut`` Grad
+    und den Rest."""
+    normals = np.asarray(body.face_normals)
+    centres = np.asarray(body.triangles_center)
+    mantle = [index for index in range(len(body.faces)) if abs(normals[index][2]) < 0.5]
+    angles = np.degrees(np.arctan2(centres[mantle, 1], centres[mantle, 0])) % 360.0
+    small = [face for face, angle in zip(mantle, angles, strict=True) if angle < cut]
+    big = [face for face, angle in zip(mantle, angles, strict=True) if angle >= cut]
+    return small, big
+
+
+def _with_small_arc_scaled(
+    body: trimesh.Trimesh, small: list[int], factor: float
+) -> trimesh.Trimesh:
+    """Die Ecken des kleinen Bogens radial um ``factor`` versetzt — ein zweiter
+    Zylinder derselben Achse, oder derselbe mit etwas Rauschen."""
+    vertices = np.array(body.vertices, dtype=float)
+    chosen = np.unique(np.asarray(body.faces)[small])
+    vertices[chosen, :2] *= factor
+    return trimesh.Trimesh(vertices, body.faces, process=False)
+
+
+def test_a_patch_on_the_same_cylinder_joins_it_even_when_the_fit_spreads_more() -> None:
+    """Gemessen an einem Uhrenteil (15.09.2026): Eine Bohrung Ø 30 kam nach dem
+    Ändern einer anderen Bohrung in vier Bögen zurück; drei fanden zusammen, der
+    vierte lag mit 0,003 mm auf demselben Kreis und hob die Streuung des
+    gemeinsamen Fits über die seiner Teile — im Baum standen zwei Hohlkehlen R 15
+    statt einer Bohrung. Ein Fleck, der im Vertrag des Fits auf der vorhandenen
+    Wand liegt, gehört zu ihr."""
+    from app.core.perceive.features import (
+        _lies_on_the_cylinder,
+        _merged_cylinders,
+        _same_cylinder,
+        angular_span,
+        fit_cylinder,
+    )
+
+    body = trimesh.creation.cylinder(radius=15.0, height=4.0, sections=72)
+    small, big = _mantle_split_by_angle(body, 45.0)
+    body = _with_small_arc_scaled(body, small, 1.0 + 1e-4)
+    mesh = MeshData.of(body)
+    first, second = fit_cylinder(body, big), fit_cylinder(body, small)
+    assert first is not None and second is not None
+    assert _same_cylinder(body, (first, big), (second, small))
+    together = fit_cylinder(body, big + small)
+    assert together is not None
+    assert together.spread > max(first.spread, second.spread), (
+        "ohne die gewachsene Streuung misst dieser Test nichts"
+    )
+    assert _lies_on_the_cylinder(body, first, small)
+
+    merged = _merged_cylinders(body, mesh, [(first, big), (second, small)])
+
+    assert len(merged) == 1, "zwei Stücke derselben Wand sind ein Zylinder"
+    assert angular_span(body, merged[0][0], merged[0][1]) > 300.0
+
+
+def test_a_patch_on_a_different_cylinder_stays_apart() -> None:
+    """Die Gegenprobe zur Regel darüber: Fünf Prozent Radius liegen innerhalb der
+    Toleranz von ``_same_cylinder`` und trotzdem nicht auf der Wand."""
+    from app.core.perceive.features import (
+        _lies_on_the_cylinder,
+        _merged_cylinders,
+        _same_cylinder,
+        fit_cylinder,
+    )
+
+    body = trimesh.creation.cylinder(radius=15.0, height=4.0, sections=72)
+    small, big = _mantle_split_by_angle(body, 45.0)
+    body = _with_small_arc_scaled(body, small, 1.05)
+    first, second = fit_cylinder(body, big), fit_cylinder(body, small)
+    assert first is not None and second is not None
+    assert _same_cylinder(body, (first, big), (second, small)), (
+        "ohne eine Paarung, die die Vorprüfung besteht, misst dieser Test nichts"
+    )
+
+    assert not _lies_on_the_cylinder(body, first, small)
+    assert len(_merged_cylinders(body, MeshData.of(body), [(first, big), (second, small)])) == 2
+
+
+def _plate_with_a_chamfered_slot() -> MeshData:
+    """Eine Platte mit Langloch Ø 6 × 26, dessen Mündung eine 45-Grad-Fase trägt."""
+    from shapely.geometry import LineString
+
+    from app.core.geom.boolean import boolean
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
+    outline = LineString([(-10.0, 0.0), (10.0, 0.0)]).buffer(3.0, quad_segs=16)
+    cutter = trimesh.creation.extrude_polygon(outline, height=20.0)
+    cutter.apply_translation((0.0, 0.0, -10.0))
+    lower = np.asarray(outline.exterior.coords, dtype=float)
+    upper = np.asarray(outline.buffer(1.5, quad_segs=16).exterior.coords, dtype=float)
+    chamfer = trimesh.convex.convex_hull(  # type: ignore[no-untyped-call]
+        np.vstack(
+            (
+                np.column_stack((lower, np.full(len(lower), 3.0))),
+                np.column_stack((upper, np.full(len(upper), 4.5))),
+            )
+        )
+    )
+    body = boolean("difference", [plate, MeshData.of(cutter)]).mesh
+    return boolean("difference", [body, MeshData.of(chamfer)]).mesh
+
+
+def test_the_chamfer_at_a_slot_mouth_belongs_to_the_slot() -> None:
+    """Am Rahmen eines Schreibtisch-Organizers (MakerWorld, 15.09.2026) wurden aus
+    33 gefasten Langlöchern 126 „Senkungen 90°" — je Langloch vier Halbkegel, an
+    denen jede Operation absagte. Ein Kegelstück am Mantel eines Langlochs ist
+    dessen Mündungsfase und geht darin auf."""
+    mesh = _plate_with_a_chamfered_slot()
+    found = detect(mesh)
+
+    kinds = {
+        kind: sum(feature.kind == kind for feature in found.values()) for kind in ("slot", "cone")
+    }
+    assert kinds == {"slot": 1, "cone": 0}, kinds
+    slot = next(feature for feature in found.values() if feature.kind == "slot")
+    normals = np.asarray(mesh.raw.face_normals)[list(slot.face_indices)]
+    tilted = np.abs(normals[:, 2])
+    assert np.any((tilted > 0.6) & (tilted < 0.8)), (
+        "die Halbkegel der Fase stehen im Langloch, nicht daneben"
+    )
+
+
+def _plate_with_a_notch_below_half_a_turn() -> MeshData:
+    """Ein Bogen von rund 130 Grad in der Kante einer Platte, dessen Enden in zwei
+    konvexe Bögen übergehen — wie der Umriss eines Uhrenankers: kein Rand, an dem
+    eine offene Bohrung mündet, und keine zwei Ebenen, die eine Kante ergäben."""
+    from shapely.geometry import Point, box
+
+    outline = box(-20.0, -10.0, 20.0, 10.0).difference(Point(0.0, 12.0).buffer(5.0, quad_segs=24))
+    for side in (-1.0, 1.0):
+        outline = outline.union(Point(side * 4.58, 10.0).buffer(3.0, quad_segs=16))
+    return MeshData.of(trimesh.creation.extrude_polygon(outline, height=6.0))
+
+
+def test_the_panel_greys_what_a_fillet_without_two_planes_cannot_do() -> None:
+    """50 von 52 Versuchen an Umrissbögen aus 34 Netzmodellen endeten nach dem Klick
+    mit „grenzt nicht an zwei ebene Flächen" (15.09.2026). Das Panel stellt die
+    Frage der Operation vorher — mit ihrem Satz."""
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES
+    from app.core.perceive.actions import fillet_blocked
+
+    mesh = _plate_with_a_notch_below_half_a_turn()
+    found = detect(mesh)
+    arc = next(
+        feature
+        for feature in found.values()
+        if feature.kind == "fillet" and feature.params.get("recess")
+    )
+    assert arc.params.get("radial") is None, "unter 180 Grad ist der Bogen keine runde Wand"
+
+    assert fillet_blocked(arc, found, mesh) is NOT_BETWEEN_TWO_PLANES
+    from app.core.registry import REGISTRY
+
+    titles = {str(REGISTRY.get(name).title) for name in ("remove_feature", "resize_feature")}
+    greyed = {
+        str(row.title): row.reason
+        for row in actions_for(arc, found, mesh=mesh)
+        if str(row.title) in titles
+    }
+    assert len(greyed) == 2 and all(
+        reason is NOT_BETWEEN_TWO_PLANES for reason in greyed.values()
+    ), greyed
+    assert fillet_blocked(arc, found, None) is None, "ohne Netz keine Vermutung"
+
+
+def test_an_edge_fillet_between_two_planes_keeps_its_rows() -> None:
+    """Die Gegenprobe: eine echte verrundete Quaderkante bleibt bedienbar."""
+    from app.core.geom.edges import round_edges
+    from app.core.perceive.actions import fillet_blocked
+
+    body = round_edges(
+        MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))), 3.0, "vertical"
+    ).mesh
+    found = detect(body)
+    edge = next(feature for feature in found.values() if feature.kind == "fillet")
+
+    assert fillet_blocked(edge, found, body) is None
+    from app.core.registry import REGISTRY
+
+    offered = {str(row.title): row.op for row in actions_for(edge, found, mesh=body)}
+    assert offered[str(REGISTRY.get("remove_feature").title)] == "remove_feature"
+    assert offered[str(REGISTRY.get("resize_feature").title)] == "resize_feature"
+
+
+def _tab_with_a_round_end() -> MeshData:
+    """Eine Lasche: ein Rechteck, dessen Ende ein Halbkreis ist — die runde Wand geht
+    tangential in die beiden Flanken über."""
+    from shapely.geometry import LineString
+
+    outline = LineString([(0.0, 0.0), (0.0, -20.0)]).buffer(6.0, quad_segs=24)
+    body = trimesh.creation.extrude_polygon(outline, height=4.0)
+    return MeshData.of(body)
+
+
+def test_a_round_wall_that_blends_into_its_flanks_says_so_before_the_click() -> None:
+    """Der Umrissbogen eines Uhrenankers geht tangential in seine Flanken über; radial
+    versetzt schöbe er sie aus ihrer Ebene, und ``radial_rounding`` sagte erst nach
+    dem Klick ab — 32 Mal in sieben Modellen (15.09.2026). Die Erkennung sagt es
+    vorher, Panel und Operation mit demselben Satz."""
+    from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS
+
+    mesh = _tab_with_a_round_end()
+    found = detect(mesh)
+    walls = [feature for feature in found.values() if feature.kind == "fillet"]
+    assert walls, "ohne runde Wand misst dieser Test nichts"
+    wall = walls[0]
+    assert wall.params.get("radial") is True
+    assert wall.params.get("tangent") is True
+
+    from app.core.registry import REGISTRY
+
+    rows = {str(row.title): row for row in actions_for(wall, found, mesh=mesh)}
+    for name in ("remove_feature", "resize_feature"):
+        row = rows[str(REGISTRY.get(name).title)]
+        assert row.op is None and row.reason is WALL_BLENDS_INTO_ITS_NEIGHBOURS, (name, row)
+
+
+def _plate_with_half_a_cone() -> MeshData:
+    """Ein Kegelstumpf auf einer Platte, beide durch die Kegelachse halbiert: ein
+    Kegelstück von 180 Grad, das zu keinem Langloch und keiner Bohrung gehört."""
+    from app.core.geom.boolean import boolean
+
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 6.0))
+    plate.apply_translation((0.0, 0.0, 3.0))
+    boss = trimesh.creation.revolve([[0.0, 6.0], [6.0, 6.0], [3.0, 9.0], [0.0, 9.0]], sections=64)
+    body = boolean("union", [MeshData.of(plate), MeshData.of(boss)]).mesh
+    knife = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    knife.apply_translation((0.0, -20.0, 0.0))
+    return boolean("difference", [body, MeshData.of(knife)]).mesh
+
+
+def test_a_cone_piece_stays_in_the_tree_as_a_conical_face_without_body_actions() -> None:
+    """Die Blütenblätter eines Gewindeprüfers sind Kegel von 259 Grad, die
+    Kastenecken eines Organizers Viertelkegel: keine Senkung, keine Verjüngung,
+    aber auch nichts, was verschwinden dürfte — ohne sie hielt die Freiformprobe
+    vier Körper für Figuren. Ein Kegelstück bleibt als Kegelfläche im Baum, und
+    jede Körperhandlung steht grau mit dem Satz, den auch die Operation sagt."""
+    from app.core.perceive.actions import CONE_PIECE_HAS_NO_BODY, cone_piece_blocked
+    from app.core.perceive.digest import _feature_line
+
+    mesh = _plate_with_half_a_cone()
+    found = detect(mesh)
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert len(cones) == 1, [feature.id for feature in cones]
+    piece = cones[0]
+    assert piece.params.get("partial") is True
+    assert cone_piece_blocked(piece) is CONE_PIECE_HAS_NO_BODY
+    assert "Kegelfläche" in _feature_line(piece.id, piece)
+
+    rows = actions_for(piece, found, mesh=mesh)
+    offered = [row for row in rows if row.op is not None]
+    assert not offered, [str(row.title) for row in offered]
+    # Jede Zeile, deren Operation einen Kegel annähme, trägt den Satz; die Zeile
+    # *Zum Langloch ziehen* gilt keinem Kegel und behält ihren eigenen.
+    with_the_sentence = [row for row in rows if row.reason is CONE_PIECE_HAS_NO_BODY]
+    assert len(with_the_sentence) >= 5, [str(row.reason)[:40] for row in rows]
+
+
+def test_a_cone_piece_is_refused_by_the_operation_with_the_same_sentence() -> None:
+    """Chat und Kommandozeile kommen am Panel vorbei — die Operation sagt dasselbe."""
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare_ops import _movable_feature
+    from app.core.perceive.actions import CONE_PIECE_HAS_NO_BODY
+    from app.core.types import SceneObject
+
+    mesh = _plate_with_half_a_cone()
+    found = detect(mesh)
+    piece = next(feature for feature in found.values() if feature.kind == "cone")
+    source = SceneObject(id="obj_1", name="Halbkegel", mesh=mesh, features=found)
+
+    with pytest.raises(ValidationError) as problem:
+        _movable_feature(source, piece.id, "move_feature")
+    assert problem.value.detail is CONE_PIECE_HAS_NO_BODY
+
+
+def _plate_with_a_cross_bored_boss() -> MeshData:
+    """Ein Kegelstumpf auf einer Platte mit einer Querbohrung durch seinen Mantel:
+    drei Randringe, kein Körper aus den Flächen."""
+    from app.core.geom.boolean import boolean
+
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 6.0))
+    plate.apply_translation((0.0, 0.0, 3.0))
+    boss = trimesh.creation.revolve([[0.0, 6.0], [6.0, 6.0], [4.5, 10.0], [0.0, 10.0]], sections=64)
+    body = boolean("union", [MeshData.of(plate), MeshData.of(boss)]).mesh
+    across = trimesh.creation.cylinder(radius=1.0, height=30.0, sections=32)
+    across.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (0.0, 1.0, 0.0)))
+    across.apply_translation((0.0, 0.0, 8.0))
+    return boolean("difference", [body, MeshData.of(across)]).mesh
+
+
+def test_a_cone_without_a_body_of_its_own_is_greyed_with_the_sentence_of_the_operation() -> None:
+    """Uhrenteil 16 (15.09.2026): fünf Absagen nach dem Klick an einem Kegel, dessen
+    Rand drei Ringe hat — das Panel bot jede Zeile an. Es fragt jetzt vorher, was
+    ``_tool_for`` fragt, und schreibt denselben Satz."""
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare_ops import NO_BODY_FROM_FACES, _tool_for
+    from app.core.perceive.actions import no_own_body
+
+    mesh = _plate_with_a_cross_bored_boss()
+    found = detect(mesh)
+    cone = next(feature for feature in found.values() if feature.kind == "cone")
+    assert not cone.params.get("recess") and not cone.params.get("partial")
+
+    assert no_own_body(cone, (), False, mesh) is NO_BODY_FROM_FACES
+    greyed = {str(row.title): row for row in actions_for(cone, found, mesh=mesh)}
+    assert all(row.op is None for row in greyed.values()), [
+        title for title, row in greyed.items() if row.op is not None
+    ]
+    with pytest.raises(ValidationError) as problem:
+        _tool_for(mesh, cone, tuple(float(v) for v in cone.params["centre"]), alone=True)
+    assert problem.value.detail is NO_BODY_FROM_FACES
+
+
+def _block_with_a_round_bottomed_v() -> MeshData:
+    """Ein Klotz mit einer flachen V-Nut (Flanken unter 17 Grad), an deren Grund
+    ein Kreis sitzt, der die Flanken schräg schneidet: ein Bogen von rund 156 Grad
+    zwischen zwei Ebenen, die ihn nicht tangential fortsetzen."""
+    from shapely.geometry import Point, Polygon, box
+
+    outline = (
+        box(0.0, 0.0, 40.0, 20.0)
+        .difference(Polygon([(20.0, 15.0), (36.67, 20.0), (3.33, 20.0)]))
+        .difference(Point(20.0, 17.0).buffer(4.0, quad_segs=24))
+    )
+    return MeshData.of(trimesh.creation.extrude_polygon(outline, height=10.0))
+
+
+def test_two_planes_that_cut_the_arc_obliquely_are_no_edge_under_it() -> None:
+    """An den Gleisen einer Modellscheune (15.09.2026) rechnete *Entfernen* aus zwei
+    Ebenen neben einer Hohlkehle eine Kante, die es nicht gibt, trug 2,7 Prozent
+    des Volumens ab und ließ die Hohlkehle stehen. Zwei Ebenen neben einem Bogen
+    sind nur dann seine Kante, wenn sie ihn tangential fortsetzen — das prüfen
+    Panel und Operation jetzt gleich."""
+    from app.core.errors import GeometryError
+    from app.core.geom.edges import NOT_BETWEEN_TWO_PLANES, sharp_corner
+    from app.core.perceive.actions import fillet_blocked
+
+    mesh = _block_with_a_round_bottomed_v()
+    found = detect(mesh)
+    arc = next(
+        feature
+        for feature in found.values()
+        if feature.kind == "fillet" and feature.params.get("recess")
+    )
+    assert arc.params.get("radial") is None, "unter 180 Grad ist der Bogen keine runde Wand"
+
+    assert fillet_blocked(arc, found, mesh) is NOT_BETWEEN_TWO_PLANES
+    with pytest.raises(GeometryError) as problem:
+        sharp_corner(mesh, arc)
+    assert problem.value.detail is NOT_BETWEEN_TWO_PLANES

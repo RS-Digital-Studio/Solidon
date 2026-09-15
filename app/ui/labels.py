@@ -1894,6 +1894,11 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     if feature.kind == "slot":
         return f"{tr('Langloch')} {feature_id.rsplit('_', 1)[-1]}"
     if feature.kind == "cone":
+        # Ein Kegelstück unter dem vollen Umlauf, das zu keinem Langloch und
+        # keiner Bohrung gehört, ist eine Kegelfläche — dasselbe Wort wie im
+        # Steckbrief (``perceive/digest.py``).
+        if feature.params.get("partial"):
+            return tr("Kegelfläche")
         return tr("Senkung") if feature.params.get("recess") else tr("Verjüngung")
     # Dieselbe Trennung wie beim Kegel, und deshalb dieselbe Frage: hinein oder
     # heraus. Eine ausgehöhlte Kugel ist eine Pfanne (Kugelgelenk,

@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-15 | [Vierunddreißig Modelle aus dem Netz: Erkennung, Bearbeitung, Leistung (15.09.2026)](#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026) |
 | 2026-09-15 | [Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)](#drehen-und-verdoppeln-nehmen-die-hohlraumkette-mit-15092026) |
 | 2026-09-15 | [Ein gedrehtes Langloch ist eines (15.09.2026)](#ein-gedrehtes-langloch-ist-eines-15092026) |
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
@@ -28811,6 +28812,191 @@ Gefahren je Prozess: test_slot_features, test_analysis_ui, test_surface_placemen
 test_slot_handle, test_viewport_decisions, test_feature_panel, test_ui (Langloch); dazu
 test_prepare, test_translations, test_language_rules, test_history, test_scene_ops in einem Zug;
 ruff, Format, mypy an den geänderten Dateien.
+
+## Vierunddreißig Modelle aus dem Netz: Erkennung, Bearbeitung, Leistung (15.09.2026)
+
+Roberts Auftrag: alle STL und 3MF aus dem Downloads-Ordner einzeln laden, Merkmale prüfen —
+sinnvoll, richtig erkannt, mehrere für eines? —, jede Operation daran fahren, dann optimieren
+und verifizieren. Der Korpus: 34 Dateien, 19 STL der Uhrenteile „REMONTOIRE ESCAPEMENT" und
+ihre 3MF-Baugruppe, ein Kartenmischer (77 Körper, 1,3 Mio. Dreiecke), ein Minigolf-Satz
+(34 Körper, 1,7 Mio.), ein Schreibtisch-Organizer (17), eine Scheune 1:24 (89), Besenhalter,
+Handtuchhalter, Waschmaschine, Gewindeprüfer, Stifthalter. Insgesamt 343 Körper, 6,4 Mio.
+Dreiecke, 14 000 Merkmale — jeder über den Kundenweg: Projekt, `load`, Auswertung, dann
+`actions_for` je Merkmal und bis zu zwei Merkmale je Art durch jede Operation, die das Panel
+anbietet, mit Undo dazwischen (Skripte im Sitzungs-Scratchpad; das Muster steht in der
+Erinnerung `downloads-ordner-als-3mf-korpus`).
+
+**Gefunden und behoben am selben Tag:**
+
+* **Die Langlochsuche flutete je Bogenpaar denselben Mantel.** Hemmungsrad 06 (19 870 Dreiecke,
+  531 Verrundungen): 140 Hohlkehlen der Zahnfüße auf einer Achse, ein Mantelstück von 6 460
+  Flächen, 9 751 Paare — 63 Millionen Nachbarschaftsbesuche, dazu `max(..., key=lambda:
+  body.area_faces[face])` je Paar über dieselben Flächen durch den trimesh-Cache. 122 von 124 s
+  der Erkennung. Seither rechnet `slots._Reach` Flutung, Flankenecken und Stadionfit je Bogen
+  und Achse, die Maske einer Achse ist ihr Schlüssel (221 Achsen, eine Maske): **124 s → 4 s**,
+  Hemmungsrad 04 **126 s → 9 s** (nach dem Merken auch abgelehnter Stadionfits), die Baugruppe der 19 Uhrenteile von 179 s auf 24 s. Über 102 Körper
+  bitgleiche Merkmale; einziger Unterschied das Vorzeichen der Langlochrichtung an fünf grob
+  facettierten Langlöchern, das vorher die Reihenfolge einer Menge entschied und jetzt von Bogen
+  zu Bogen zeigt.
+* **Ein Stadion mit Radius 0,003 mm.** Am Organizer-Rahmen stand „Langloch 0,01 × 97,17 mm":
+  zwei Bögen an den Enden einer fast ebenen Wand, der Stadionfit über den ganzen Mantel fand ein
+  entartetes Stadion und niemand fragte, ob sein Radius zu den Bögen passt. Jetzt darf der Fit
+  die Breite nicht unter das Maß der Bögen drücken (`STADIUM_TOLERANCE`).
+* **Zwei Hohlkehlen R 15 statt einer Bohrung Ø 30.** Uhrenteil 12: Nach dem Ändern einer
+  *anderen* Bohrung kam die große in vier Bögen zurück; drei fanden zusammen, der vierte lag mit
+  0,003 mm auf demselben Kreis und hob die Streuung des gemeinsamen Fits von 0,00076 auf 0,00114
+  — über der Regel „nicht schlechter als die Teile", `hole_5` und `pin_3` verloren. Ein Fleck,
+  der im Vertrag von `CYLINDER_SPREAD` auf der vorhandenen Wand liegt, gehört jetzt zu ihr
+  (`_lies_on_the_cylinder`). Im Vergleichslauf: elf Verrundungen weniger, eine Bohrung und ein
+  Zapfen mehr — jeweils Stücke, die zusammengehörten.
+* **Das Panel bot an, was die Operation ablehnte — an 50 von 52 Verrundungen.** *Radius ändern*
+  und *Entfernen* an Umrissbögen (Anker, Laschen, Aussparungen) endeten mit „grenzt nicht an
+  zwei ebene Flächen". Eine Wand ist seither, was keine Kante ersetzt: Die Erkennung stellt die
+  Frage der Bearbeitung selbst (`planes_beside`, `replaces_an_edge`, gemeinsame Schwelle
+  `units.UPRIGHT_TO_AXIS`), und ein Bogen ohne zwei Ebenen neben sich heißt „Runde Wand", auch
+  unter 180 Grad; `radial_rounding` nimmt ihn dann in jeder Länge an. Im Vergleichslauf trugen
+  1 432 Bögen mehr das Kennzeichen — die Zahnfüße und -köpfe der Hemmungsräder fast vollständig,
+  denn Zahnflanken sind keine Ebenen.
+* **Ein Körper zerfiel, und der Bericht schwieg.** *Entfernen* am Zapfen Ø 11,3 einer Nabe:
+  50 Komponenten; *Versetzen* einer Bohrung nahe der Wand: zwei; 30 solche Läufe im Korpus, alle
+  „vollständig", alle dicht. Jetzt zählt die Auswertung nach jeder Operation mit
+  `touches_features` die Teile und warnt (`feature.body_split`), mit Strg+Z im Satz.
+
+**Gefunden, ins Register getragen — und am selben Tag gebaut** (Robert: „hoffe du arbeitest
+dann auch alle Punkte ab"): Kegelstücke als Senkung (RM-177), das Werkzeug konvexer Kegel auf
+der Grundfläche (RM-178), der Zapfen, der der Körper ist (RM-179), Langlochflanken als
+Flächen (RM-180), *Radius ändern* an Wänden mit tangentialen Nachbarn (RM-182). Die Punkte
+stehen unten als erledigt. Offen bleibt RM-181 mit den Restlaufzeiten.
+
+**Was die Bearbeitung danach hält (zweiter Lauf über sieben Modelle, 270 Operationen):** Die
+71 + 71 Absagen „grenzt nicht an zwei ebene Flächen" stehen als graue Zeilen vor dem Klick;
+die 280 Absagen an Kegelstücken sind fort, weil es die Kegelstücke nicht mehr gibt (Frame: 0
+Senkungen statt 126, 33 Langlöcher mit ihrer Fase); 30 Läufe, die den Körper zerfallen ließen,
+tragen jetzt die Warnung; *Kegel ändern* am Uhrenteil 09 liefert einen Körper und lässt die
+Bohrung durch. Was bleibt, sind ehrliche Absagen mit Satz — und Bohrungen, Langlöcher und
+Zapfen, deren Kennungen jeden Schritt überleben.
+
+**Was gut aussah:** Bohrungen — 30 von 30 *Bohrung ändern* in beide Richtungen mit dem Sollmaß
+auf 0,03 mm, 16 von 16 *Entfernen*, 12 von 12 *Zum Langloch ziehen* an freistehenden Bohrungen,
+Kennungen erhalten; Gewindeprüfer daisy m1–m10 je eine Bohrung, ein Kegel; der Kartenmischer
+mit 640 Kugeln (Kugelkette der Riemen) und 62 Zapfen ohne Freiformfehlurteil; alle 343 Körper
+dicht geladen, keine Ausnahme, kein Abbruch, kein Einheitenrätsel. Was die Wendelsuche an
+Uhrenteilen erkennt, war nicht Gegenstand — kein Modell trug ein Gewinde.
+
+**Was der Korpus für die Bausteinbibliothek hergibt** (Ideen, keine Aufträge — Robert
+fragte danach): ein *Bajonettverschluss* (Siebhalter: Nut unter einem Kragen mit drei Lücken,
+Ring mit drei Nasen — Winkel, Nasentiefe und Spiel als Parameter); ein *Langloch mit
+Mündungsfase* als Option am Langloch, denn der Organizer-Rahmen trägt 33 davon und die Fase ist
+das, was das Werkzeug heute beim Ändern verliert; ein *Stapelverbinder* aus konvexem Kegel und
+Kegelmulde (Ø 9 / 96° gegen Ø 3,8 / 90°), wie die Fächer des Organizers ihn zum Aufeinandersetzen
+tragen; eine *Kugelkette* als Riemen (Kartenmischer: 16 Kugeln je Glied); ein *Gewindeprüfer*
+als Platte mit Bohrungen M1 bis M10 samt Beschriftung (daisy); und die *Kehle als Riemenrille*
+(Waschmaschine: fünf Ringe an einer Welle). Die Uhrenteile — Hemmungsräder, Anker, Federhaus —
+sind Konstruktionen, keine Bausteine.
+
+**Zahlen zum Weiterrechnen:** Laden samt Erkennung je Körper unter 1 s bis 20 000 Dreiecke,
+1,5–4 s um 100 000–240 000 (Handtuchhalter 96 000: 1,75 s; Besenhalter 239 000: 4,1 s;
+Waschmaschine 180 000: 2,8 s), Kartenmischer 1,3 Mio. in 15,6 s, Minigolf 1,7 Mio. in 22,9 s.
+Spitzen kamen ausschließlich aus vielen Verrundungen auf einer Achse (Langlochsuche), nie aus
+der Dreieckszahl. Kein Körper lief in `perceive.too_large`.
+
+<a id="rm-177"></a>
+
+- [x] **RM-177 — Kegelstücke unter vollem Umlauf heißen Senkung oder Verjüngung.** Gezählt am
+  15.09.2026 über 34 Modelle aus dem Netz (Uhrenteile, Organizer, Halter, Kartenmischer):
+  Der Rahmen eines Schreibtisch-Organizers trägt 33 Langlöcher mit gefaster Mündung, und die
+  Erkennung macht daraus **126 „Senkung 90° Ø 5,80"** — je Langloch vier Halbkegel (180 Grad,
+  22 Dreiecke), an beiden Enden und beiden Seiten. Die Fächer desselben Modells zeigen
+  Viertelkegel (90 und 102 Grad, 10 Dreiecke) an ihren Kastenecken als „Verjüngung 96°", ein
+  Hemmungsrad fünf „Verjüngungen 12°" mit zehn Dreiecken auf Zahnflanken. Ein Kegelstück ist
+  eine Fase an einer nicht runden Kante, keine Senkung — für den Zylinder trennt
+  `_split_off_fillets` genau das (Zapfen gegen Verrundung an `FULL_TURN_SPAN`), für den Kegel
+  gibt es kein Gegenstück. Und die Bearbeitung hält, was der Name nicht hält: An **allen** diesen
+  Kegeln sagen Ändern, Versetzen, Drehen, Verdoppeln und Entfernen mit `NO_OWN_BODY` ab (der Rand
+  eines Teilkegels liegt in keiner Ebene, 280 Abbrüche im Lauf), während das Panel jede Zeile
+  anbietet. Die dokumentierte Entscheidung, Teilbogenkegel zu behalten („die Randkegel einer
+  mehrteiligen Bohrung bleiben erhalten", `_cone_is_recognisable`), steht dagegen; deshalb keine
+  stille Änderung. Robert entscheidet zwischen drei Wegen: die Halbkegel an einem Langloch dem
+  Langloch zuschlagen (Mündungsfase als Parameter, wie die Kette an der Bohrung), Kegelstücke als
+  eigene Auskunft ohne Körperhandlungen führen (analog `radial` an der Wand, mit eigenem Satz im
+  Panel), oder Kegel unter `FULL_TURN_SPAN` gar nicht veröffentlichen. Abnahme: Am Rahmen stehen
+  33 Langlöcher und keine 126 Senkungen; jede Zeile, die das Panel an einem Kegel anbietet, führt
+  die Operation auch aus (`test_the_operation_refuses_exactly_what_the_panel_greys_out` um den
+  Umlauf erweitert).
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+  **Erledigt am 15.09.2026** (`features._partial_cones_folded`, `span_about`): Ein Kegel unter `FULL_TURN_SPAN` geht im Langloch auf, an dessen Mantel er grenzt, bleibt an einer Bohrung die Senkung, und heißt sonst **Kegelfläche** (`partial`) — im Baum sichtbar, aber jede Körperhandlung grau mit `actions.CONE_PIECE_HAS_NO_BODY`, und `_movable_feature` sagt denselben Satz. Frame: 0 Senkungen statt 126, die Fasen stehen in den 33 Langlöchern. Der erste Anlauf ließ die übrigen Kegelstücke weg; das nahm den Blütenblättern eines Gewindeprüfers ihre Kegel von 259 Grad und kippte vier Körper eines Minigolf-Satzes in die Freiformprobe (23 Ringe fort) — deshalb bleiben sie als Auskunft. Tests `test_the_chamfer_at_a_slot_mouth_belongs_to_the_slot`, `test_a_cone_piece_stays_in_the_tree_as_a_conical_face_without_body_actions`, `test_a_cone_piece_is_refused_by_the_operation_with_the_same_sentence`.
+<a id="rm-178"></a>
+
+- [x] **RM-178 — Ändern und Versetzen konvexer Kegel und Kugeln lässt das Werkzeug auf der
+  Grundfläche stehen.** *Merkmal ändern* an einem kegeligen Zapfen (Uhrenteil 09, Kegel 90° Ø 10
+  auf einer Platte, mit Bohrung Ø 2 durch beide) machte aus dem Körper zwei Komponenten und aus
+  der Durchgangsbohrung ein Sackloch — Lauf vollständig, Netz dicht. Der Grund steht in
+  `_tool_for`: Kegel, Kugel und Ring sind nicht in `PARAMETRIC_KINDS`, ihr Werkzeug kommt aus
+  `_feature_body` — der gemessene Kegelstumpf, mit einem Deckel geschlossen. Der Deckel liegt
+  **genau** in der Grundfläche, die Vereinigung trifft eine zusammenfallende Fläche (§39) und
+  lässt zwei Schalen; und der Stumpf ist massiv, also verschließt er, was koaxial durch ihn
+  lief. Bohrung und Zapfen bekommen ihren Überstand in `_feature_solid`; die drei Formen aus den
+  Flächen bekommen keinen. Abnahme: Das Werkzeug eines konvexen Merkmals aus `_feature_body`
+  reicht um `FEATURE_OVERLAP` in die Grundfläche, der Körper bleibt eine Komponente, und ein
+  Hohlraum, der durch das Merkmal läuft, wird danach wieder ausgeschnitten oder die Operation
+  nennt ihn (Kette, wie an der gesenkten Bohrung).
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+  **Erledigt am 15.09.2026** (`prepare_ops._rooted`, `_without_cavities`, `_placing_tool`): Das Setzwerkzeug eines konvexen Merkmals aus den Flächen bekommt ein Prisma über seinem Grundring um `FEATURE_OVERLAP` ins Material, und jede Bohrung oder jedes Langloch, dessen Achse das Werkzeug trifft, wird über dessen ganze Höhe herausgeschnitten. Uhrenteil 09: eine Komponente statt zwei, Bohrung Ø 2 bleibt Durchgang — bei Ändern, Versetzen, Verdoppeln und Drehen. Test `test_resizing_a_conical_boss_keeps_one_body_and_the_bore_through_it`. Der Sockel gilt nur dem Setzen; das Abtragen an der alten Stelle bekommt ihn nicht.
+<a id="rm-179"></a>
+
+- [x] **RM-179 — Ein Zylinder, der der Körper selbst ist, heißt Zapfen.** Uhrenteil 08 ist eine
+  Nabe Ø 11,3 mit Verzahnung obenauf; die Erkennung nennt den Mantel Ø 11,3 „Zapfen", und
+  *Merkmal entfernen* trägt ihn ab: 50 Komponenten, 48 davon Splitter von 0,003 mm³, das
+  Volumen halbiert. Dasselbe an zwölf weiteren Zapfen der Uhrenteile (Versetzen 1 → 25, Drehen
+  1 → 7, Ändern 1 → 4). Seit dem 15.09.2026 steht das als Warnung im Prüfbericht
+  (`feature.body_split`, mit Strg+Z als Rückweg); offen bleiben zwei Fragen. Erstens die
+  Splitter: Das Abtragwerkzeug ist um `FEATURE_OVERLAP` weiter als der Zapfen, an einem
+  Mantel, der die Außenhaut **ist**, bleiben trotzdem Reste an der Fase darüber — messen, ob
+  der Überstand am Ende des Werkzeugs fehlt. Zweitens die Erkennung: Ein Mantel, dessen
+  Durchmesser der Breite des Körpers entspricht und an den der Rest des Teils angewachsen ist,
+  ist nach §14 nichts, womit man eine Bohrung paart. Abnahme: Entfernen hinterlässt keine
+  Splitter unter der Erkennungsauflösung, und entweder trägt die Nabe keinen Zapfen oder die
+  Handlungen daran sagen vorher, dass das Teil zerfällt.
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+  **Erledigt am 15.09.2026, soweit es die Geometrie betrifft** (`_closed_at`): Das Abtragwerkzeug eines Zapfens umschreibt sein Vieleck wie der Stopfen das der Bohrung — Nabe: zwei Komponenten statt 50, kein Rest unter 0,01 mm³ (Test `test_removing_a_pin_leaves_no_splinters_between_the_facets`). Die Warnung `feature.body_split` sagt das Zerfallen (Test `test_a_body_that_falls_apart_after_a_feature_step_says_so`). Die Erkennung nennt die Nabe weiter Zapfen — und das mit Absicht: Ein voller Mantel mit Zapfenmaßen ist einer, und ob ihn jemand paart oder abträgt, entscheidet der Kunde; die Folge steht im Bericht.
+<a id="rm-180"></a>
+
+- [x] **RM-180 — Die Flanken eines Langlochs stehen zusätzlich als Flächen im Baum.** Am
+  Drehteil eines Minigolf-Satzes („Dönen 1", 152 000 Dreiecke) gehören 48 Dreiecke von
+  `face_5` und 48 von `face_6` vollständig zu `slot_1` — die beiden ebenen Flanken des
+  Langlochs, je einmal als Fläche und einmal als Teil des Langlochs. `SWALLOWED_BY_A_SLOT`
+  lässt `face` bewusst aus, mit dem Boden eines Sacklochs als Grund; der liegt aber gar nicht im
+  Mantel, die Flanken schon. Ein Klick auf die Flanke bietet *Bohren* und *Fläche
+  verschieben* an einer Wand, die dem Langloch gehört. Abnahme: Flächen, deren Dreiecke
+  vollständig im Mantel eines Langlochs liegen, gehen im Langloch auf; der Boden bleibt eine
+  Fläche (Test an `plate_slots.stl` mit Sackloch).
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+  **Erledigt am 15.09.2026** (`slots.SWALLOWED_BY_A_SLOT` um `face`): Was vollständig im Mantel liegt, gehört dem Langloch; Deckel, Boden und Seiten bleiben. Dönen 1: keine Fläche mehr im Langloch. Test `test_the_flanks_of_a_slot_are_no_faces_of_their_own`.
+<a id="rm-182"></a>
+
+- [x] **RM-182 — Radius ändern an einer runden Wand mit tangentialen Nachbarn sagt ab, das Panel
+  bietet es an.** Seit dem 15.09.2026 heißt jeder Zylinderausschnitt ohne zwei Ebenen neben sich
+  „Runde Wand", und das Panel bietet daran *Radius ändern* an (`radial_rounding`). Die Operation
+  versetzt die Haut radial und verlangt, dass jede angrenzende Fläche in ihrer Ebene bleibt —
+  am Nutboden eines Bajonetts stimmt das (die Lückenwände stehen radial), am Umrissbogen eines
+  Uhrenankers nicht: Seine Nachbarn sind tangentiale Flanken, die radiale Verschiebung schiebt
+  sie aus ihrer Ebene, und die Operation sagt ab: „Diese Zylinderfläche lässt sich innerhalb
+  ihrer Ränder nicht versetzen." Gezählt im Lauf über sieben Modelle: 32 solche Absagen, ehrlich
+  im Satz, aber erst nach dem Klick. Abnahme: Das Panel stellt die Zeile grau, wenn die Wand
+  tangentiale Nachbarn hat (dieselbe Prüfung wie `plane_error` in `radial_rounding`, einmal an
+  der Erkennung), oder die Operation zieht die Nachbarflanken mit — Robert entscheidet.
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+  **Erledigt am 15.09.2026** (`features.blends_into_its_neighbours`, Kennzeichen `tangent`, `actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS`): Die Erkennung sagt an einer runden Wand, ob sie tangential in ihre Nachbarn übergeht; Panel, `_reshape_the_fillet` und `_drop_the_fillet` sagen es mit demselben kurzen Satz vor dem Klick. Und dieselbe Bauart für Verrundungen ohne zwei Ebenen: `actions.fillet_blocked` fragt `features.replaces_an_edge`, die graue Zeile trägt `edges.NOT_BETWEEN_TWO_PLANES`. Tests `test_a_round_wall_that_blends_into_its_flanks_says_so_before_the_click`, `test_the_panel_greys_what_a_fillet_without_two_planes_cannot_do`. Und die Folge, die der vollständige Operationslauf danach zeigte: An den Gleisen der Modellscheune (1:24) hatten zwei Ebenen neben einer Hohlkehle R 28 die Prüfung bestanden, ohne den Bogen tangential fortzusetzen — *Entfernen* rechnete aus ihnen eine Kante, die es nicht gibt, trug 2,7 Prozent des Volumens ab und ließ die Hohlkehle stehen, still. Seither verlangt `planes_beside` mit der Bogenmitte die Tangente (`test_two_planes_that_cut_the_arc_obliquely_are_no_edge_under_it`); Panel und `sharp_corner` sagen an so einem Bogen beide ab.
 
 ## Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)
 
