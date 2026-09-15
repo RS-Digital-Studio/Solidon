@@ -141,10 +141,15 @@ def _error_from(answer: dict[str, object]) -> ActivationServiceError:
     """Übersetzt stabile Serverkennungen; Serverprosa gelangt nie ungeprüft in die UI."""
     code = str(answer.get("code", ""))
     if code == "device_limit":
+        # Ohne Zahl, und das ist Absicht: Wie viele Plätze eine Lizenz hat,
+        # hängt an ihrer Art (``key.DEVICE_LIMITS`` — privat einer, gewerblich
+        # zwei). Der Dienst nennt die Zahl in seiner eigenen Prosa, und die
+        # gelangt nie in die Oberfläche; eine hier fest eingetragene Zahl wäre
+        # für die andere Art falsch.
         detail = _(
-            "Der Lizenzschlüssel ist bereits auf einem anderen Rechner aktiviert. "
-            "Deaktivieren Sie ihn dort oder wenden Sie sich bei einem Geräteverlust "
-            "an den Support."
+            "Für diesen Lizenzschlüssel sind bereits alle Geräteplätze belegt. "
+            "Deaktivieren Sie einen davon in Solidon auf dem Rechner, der ihn nicht "
+            "mehr braucht, oder wenden Sie sich bei einem Geräteverlust an den Support."
         )
     elif code == "wrong_major":
         detail = _("Der Lizenzschlüssel gilt für eine andere Hauptversion von Solidon.")

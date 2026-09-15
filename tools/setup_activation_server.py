@@ -72,8 +72,25 @@ def _initialise_database(target: Path) -> None:
                 deactivated_at TEXT NULL,
                 FOREIGN KEY(licence_digest) REFERENCES licences(digest)
             );
-            CREATE UNIQUE INDEX IF NOT EXISTS one_active_device
-                ON activations(licence_digest) WHERE deactivated_at IS NULL;
+            -- Bis zum 15.09.2026 stand hier ein Index über `licence_digest`
+            -- allein: genau ein aktiver Platz je Lizenz, erzwungen von der
+            -- Datenbank. Die gewerbliche Lizenz hat zwei
+            -- (`key.DEVICE_LIMITS`), und der alte Index ließ den zweiten
+            -- Platz als Serverfehler scheitern — die Zählung in
+            -- `activation_issue` hätte ihn erlaubt.
+            --
+            -- **Der Drop ist die Migration.** Eine Datenbank, die schon läuft,
+            -- trägt den alten Index weiter, und ein erneuter Setup-Lauf mit
+            -- `IF NOT EXISTS` würde ihn nicht anfassen: Der Dienst muss
+            -- aktualisiert werden, bevor der erste gewerbliche Schlüssel
+            -- ausgegeben wird.
+            DROP INDEX IF EXISTS one_active_device;
+            -- Was weiter gilt: Dasselbe Gerät belegt nie zwei Plätze
+            -- derselben Lizenz. Die Obergrenze je Art zählt
+            -- `activation_issue` innerhalb seiner BEGIN-IMMEDIATE-Transaktion.
+            CREATE UNIQUE INDEX IF NOT EXISTS one_active_entry_per_device
+                ON activations(licence_digest, device_public)
+                WHERE deactivated_at IS NULL;
             CREATE TABLE IF NOT EXISTS activation_attempts (
                 licence_digest TEXT NOT NULL,
                 day TEXT NOT NULL,

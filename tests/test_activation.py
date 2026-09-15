@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from app.core import activation
-from app.core.activation import ed25519, integrity, key, store
+from app.core.activation import certificate, ed25519, integrity, key, store
 from app.core.errors import DeviceActivationRequired, InstallationDamaged, LicenceRequired
 from tools.make_licence_keys import main as make_licence_keys
 from tools.make_licence_keys import make_key, public_key, sign
@@ -189,6 +189,108 @@ def test_a_signed_key_reads_back_exactly() -> None:
     assert key.parse(text, public_key=TEST_PUBLIC, major=MAJOR) == licence
 
 
+# --- Die Lizenzart, und warum Format 1 bleibt ------------------------------------
+
+
+def test_a_new_key_is_issued_in_the_current_format() -> None:
+    """Neu ausgegeben wird Format 2 — die Art steht darin, auch die private."""
+    text = make_key(TEST_SEED, a_licence())
+    assert text.startswith("SOLIDON3D-2-")
+    read = key.parse(text, public_key=TEST_PUBLIC, major=MAJOR)
+    assert read.format_version == 2
+    assert read.kind is key.LicenceKind.PRIVATE
+
+
+def test_a_commercial_key_reads_back_as_commercial() -> None:
+    """Die gewerbliche Art übersteht Signieren und Lesen."""
+    licence = a_licence(kind=key.LicenceKind.COMMERCIAL)
+    read = key.parse(make_key(TEST_SEED, licence), public_key=TEST_PUBLIC, major=MAJOR)
+    assert read.kind is key.LicenceKind.COMMERCIAL
+    assert read == licence
+
+
+def test_a_format_one_key_still_opens_and_counts_as_private() -> None:
+    """Ein Bestandsschlüssel gilt weiter, und er ist eine private Lizenz.
+
+    Das ist kein Nebenfall: Format 1 kennt keine Artangabe, und genau das war
+    beim Ausstellen seine Bedeutung.
+    """
+    legacy = a_licence(format_version=1)
+    text = make_key(TEST_SEED, legacy)
+    assert text.startswith("SOLIDON3D-1-")
+    read = key.parse(text, public_key=TEST_PUBLIC, major=MAJOR)
+    assert read.kind is key.LicenceKind.PRIVATE
+    assert read.format_version == 1
+    assert read.order == legacy.order
+    assert read.holder == legacy.holder
+    assert read.purchased_on == legacy.purchased_on
+
+
+def test_a_format_one_key_keeps_the_digest_the_server_computed() -> None:
+    """Die tragende Invariante des ganzen Umbaus.
+
+    ``licence_digest`` hasht die Nutzlast aus ``encode``. Schriebe ``encode``
+    einen gelesenen Bestandsschlüssel im neuen Format, käme ein anderer Digest
+    heraus als der, den der Aktivierungsserver aus demselben Schlüsseltext
+    bildet — und das bereits ausgestellte Zertifikat wäre wertlos.
+    """
+    legacy = a_licence(format_version=1)
+    original = key.encode(legacy)
+    read = key.parse(make_key(TEST_SEED, legacy), public_key=TEST_PUBLIC, major=MAJOR)
+    assert key.encode(read) == original
+    assert certificate.licence_digest(read) == certificate.licence_digest(legacy)
+
+
+def test_format_one_refuses_to_carry_a_commercial_licence() -> None:
+    """Es gibt kein Feld dafür, also wird es nicht stillschweigend privat."""
+    with pytest.raises(ValueError, match="format 1"):
+        key.encode(a_licence(format_version=1, kind=key.LicenceKind.COMMERCIAL))
+
+
+def test_a_rewritten_head_does_not_yield_a_half_read_key() -> None:
+    """Der Kopf ist unsigniert — widerspricht er der Nutzlast, ist es keiner."""
+    text = make_key(TEST_SEED, a_licence(kind=key.LicenceKind.COMMERCIAL))
+    forged = text.replace("SOLIDON3D-2-", "SOLIDON3D-1-", 1)
+    with pytest.raises(key.LicenceKeyError):
+        key.parse(forged, public_key=TEST_PUBLIC, major=MAJOR)
+
+
+def test_an_unknown_licence_kind_is_refused_and_says_what_helps() -> None:
+    """Ein Schlüssel aus der Zukunft wird abgelehnt, nicht geraten (Regel 21).
+
+    Eine Bildungs- oder Mehrplatzlizenz, deren Bedingungen diese Version nicht
+    kennt, als „privat" zu lesen wäre schlimmer als sie abzulehnen.
+    """
+    payload = bytearray(key.encode(a_licence(kind=key.LicenceKind.COMMERCIAL)))
+    payload[4] = 7
+    text = key.format_key(bytes(payload), sign(TEST_SEED, bytes(payload)))
+    with pytest.raises(key.LicenceKeyError) as raised:
+        key.parse(text, public_key=TEST_PUBLIC, major=MAJOR)
+    assert raised.value.suggestions, "eine Ablehnung ohne Ausweg ist eine Sackgasse"
+
+
+def test_the_php_service_knows_the_same_formats_and_kinds() -> None:
+    """Zwei Parser, ein Layout — sonst aktiviert ein neuer Schlüssel nirgends.
+
+    Der eigentliche Vergleich läuft in ``test_activation_server.py`` gegen ein
+    echtes PHP. Diese Prüfung braucht keines und fällt deshalb auch auf einer
+    Maschine ohne PHP auf, wo jener Test übersprungen wird.
+    """
+    service = Path(__file__).resolve().parent.parent / "website/api/activation_common.php"
+    source = service.read_text(encoding="utf-8")
+    formats = ", ".join(str(version) for version in key.READABLE_VERSIONS)
+    kinds = ", ".join(str(int(kind)) for kind in key.LicenceKind)
+    limits = ", ".join(f"{int(kind)} => {places}" for kind, places in key.DEVICE_LIMITS.items())
+    assert f"const ACTIVATION_LICENCE_FORMATS = [{formats}];" in source
+    assert f"const ACTIVATION_LICENCE_KINDS = [{kinds}];" in source
+    assert f"const ACTIVATION_LICENCE_KIND_PRIVATE = {int(key.LicenceKind.PRIVATE)};" in source
+    # Die Platzgrenze steht zweimal, und sie ist die einzige Zahl, die der
+    # Dienst aus der Lizenzart ableitet. Laufen die beiden auseinander,
+    # verspricht die Oberfläche etwas, das der Server nicht gibt.
+    assert f"const ACTIVATION_DEVICE_LIMITS = [{limits}];" in source
+    assert key.DEVICE_LIMITS.keys() == set(key.LicenceKind), "jede Art braucht ihre Platzzahl"
+
+
 def test_the_sale_pool_cannot_accidentally_become_activation_free(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -197,13 +299,15 @@ def test_the_sale_pool_cannot_accidentally_become_activation_free(
     private.write_text(TEST_SEED.hex(), encoding="ascii")
 
     with pytest.raises(SystemExit):
-        make_licence_keys(["--private", str(private), "--count", "2"])
+        make_licence_keys(["--private", str(private), "--kind", "private", "--count", "2"])
 
     assert (
         make_licence_keys(
             [
                 "--private",
                 str(private),
+                "--kind",
+                "private",
                 "--archive",
                 str(tmp_path / "licences.jsonl"),
                 "--count",
@@ -227,13 +331,25 @@ def test_a_legacy_key_requires_an_explicit_single_order(
 
     with pytest.raises(SystemExit):
         make_licence_keys(
-            ["--private", str(private), "--count", "2", "--legacy", "--order", "ALT-1"]
+            [
+                "--private",
+                str(private),
+                "--kind",
+                "private",
+                "--count",
+                "2",
+                "--legacy",
+                "--order",
+                "ALT-1",
+            ]
         )
     assert (
         make_licence_keys(
             [
                 "--private",
                 str(private),
+                "--kind",
+                "private",
                 "--archive",
                 str(tmp_path / "licences.jsonl"),
                 "--legacy",
@@ -258,6 +374,8 @@ def test_legacy_never_disables_activation_on_or_after_the_sale_start(tmp_path: P
             [
                 "--private",
                 str(private),
+                "--kind",
+                "private",
                 "--archive",
                 str(tmp_path / "licences.jsonl"),
                 "--legacy",
@@ -282,6 +400,8 @@ def test_issued_keys_reach_the_private_archive_before_stdout(
             [
                 "--private",
                 str(private),
+                "--kind",
+                "private",
                 "--archive",
                 str(archive),
                 "--count",
@@ -315,6 +435,8 @@ def test_a_damaged_existing_archive_stops_the_next_issuance(
             [
                 "--private",
                 str(private),
+                "--kind",
+                "private",
                 "--archive",
                 str(archive),
                 "--order",
@@ -335,6 +457,8 @@ def test_a_damaged_existing_archive_stops_the_next_issuance(
             [
                 "--private",
                 str(private),
+                "--kind",
+                "private",
                 "--archive",
                 str(archive),
                 "--order",
@@ -1262,3 +1386,103 @@ def test_a_place_that_refuses_chmod_keeps_its_licence_key(
     # legt ``NamedTemporaryFile`` weiterhin mit 0600 an.
     assert store.write_key("NEUER-CODE")
     assert store.read_key() == "NEUER-CODE"
+
+
+# --- Der Vorrat kennt zwei Töpfe -------------------------------------------
+
+
+def _pool(tmp_path: Path, *arguments: str) -> int:
+    """Ruft das Vorratswerkzeug mit Schlüsseldatei und Archiv in ``tmp_path``."""
+    private = tmp_path / "licence.seed"
+    if not private.exists():
+        private.write_text(TEST_SEED.hex(), encoding="ascii")
+    return make_licence_keys(
+        [
+            "--private",
+            str(private),
+            "--archive",
+            str(tmp_path / "licences.jsonl"),
+            "--purchased-on",
+            "2026-11-01",
+            *arguments,
+        ]
+    )
+
+
+def test_the_pool_refuses_to_guess_the_licence_kind(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ohne ``--kind`` wird nichts ausgestellt, und die Meldung sagt warum.
+
+    Die Art steht signiert im Schlüssel und ist danach nicht zu ändern. Ein
+    Vorgabewert hieße, dass ein vergessener Schalter einen Vorrat der falschen
+    Sorte erzeugt — und das fällt erst beim Käufer auf (Regel 21).
+    """
+    with pytest.raises(SystemExit):
+        _pool(tmp_path, "--count", "1")
+    assert "--kind" in capsys.readouterr().err, "die Ablehnung nennt den fehlenden Schalter"
+    assert not (tmp_path / "licences.jsonl").exists(), "nichts wird vor der Ablehnung geschrieben"
+
+
+def test_a_commercial_pool_is_recognisable_by_its_order_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Die Bestellkennung trägt die Sorte — im Archiv, in der Mail, im Support."""
+    assert _pool(tmp_path, "--kind", "commercial", "--count", "2", "--start", "7000") == 0
+    printed = capsys.readouterr().out.strip().splitlines()
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "licences.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [record["order"] for record in records] == ["POOL-C-7000", "POOL-C-7001"]
+    assert all(record["kind"] == "commercial" for record in records)
+    for text in printed:
+        licence = key.parse(text, public_key=TEST_PUBLIC, major=MAJOR)
+        assert licence.kind is key.LicenceKind.COMMERCIAL
+
+
+def test_a_private_pool_keeps_its_plain_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Und die private Sorte trägt keine Marke — sonst wäre jede Kennung neu."""
+    assert _pool(tmp_path, "--kind", "private", "--count", "1", "--start", "7000") == 0
+    printed = capsys.readouterr().out.strip().splitlines()[-1]
+    assert key.parse(printed, public_key=TEST_PUBLIC, major=MAJOR).kind is key.LicenceKind.PRIVATE
+    record = json.loads((tmp_path / "licences.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert record["order"] == "POOL-7000"
+    assert record["kind"] == "private"
+
+
+def test_an_archive_record_that_contradicts_its_own_key_stops_the_next_issuance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Die Art im Satz ist redundant — also wird sie geprüft, nicht geglaubt.
+
+    Dasselbe tut das Archiv längst mit Bestellkennung, Käufer und Kaufdatum:
+    Ein Satz, der etwas anderes behauptet als sein eigener Schlüssel, ist
+    beschädigt und hält den nächsten Vorratslauf an.
+    """
+    assert _pool(tmp_path, "--kind", "commercial", "--count", "1") == 0
+    capsys.readouterr()
+    archive = tmp_path / "licences.jsonl"
+    record = json.loads(archive.read_text(encoding="utf-8").splitlines()[0])
+    record["kind"] = "private"
+    archive.write_text(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n", "utf-8")
+
+    assert _pool(tmp_path, "--kind", "commercial", "--count", "1") == 1
+    assert "beschädigt" in capsys.readouterr().out
+
+
+def test_an_archive_record_from_format_one_still_reads_as_private(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein Satz von vor dem 15.09.2026 nennt keine Art und blockiert nichts."""
+    assert _pool(tmp_path, "--kind", "private", "--count", "1") == 0
+    capsys.readouterr()
+    archive = tmp_path / "licences.jsonl"
+    record = json.loads(archive.read_text(encoding="utf-8").splitlines()[0])
+    del record["kind"]
+    record["format"] = 1
+    archive.write_text(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n", "utf-8")
+
+    assert _pool(tmp_path, "--kind", "private", "--count", "1") == 0, capsys.readouterr().out

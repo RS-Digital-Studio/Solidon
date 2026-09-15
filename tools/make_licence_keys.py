@@ -40,16 +40,38 @@ import sys
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.activation import DEVICE_ACTIVATION_FROM, ed25519
 from app.core.activation import key as licence_key
-from app.core.activation.key import Licence, current_major, encode, format_key
-from tools.licence_archive import archive_lock
+from app.core.activation.key import (
+    Licence,
+    LicenceKind,
+    current_major,
+    encode,
+    format_key,
+)
+from tools.licence_archive import (
+    ARCHIVE_FORMAT,
+    READABLE_ARCHIVE_FORMATS,
+    archive_lock,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
-ARCHIVE_FORMAT = 1
+
+#: Wie die Lizenzart auf der Kommandozeile heißt und was im Archiv steht.
+#: Englisch wie die übrigen Schalter dieses Werkzeugs und wie der Aufzählungstyp.
+KIND_NAMES: Final[dict[str, LicenceKind]] = {
+    "private": LicenceKind.PRIVATE,
+    "commercial": LicenceKind.COMMERCIAL,
+}
+
+#: Was die Bestellkennung eines gewerblichen Vorrats vor der Nummer trägt.
+#: Damit ist an der Kennung allein zu sehen, aus welchem Topf ein Schlüssel
+#: kam — im Archiv, in der Bestellmail und in einer Supportanfrage.
+COMMERCIAL_MARK: Final = "C"
 
 
 def _clamped_scalar(seed: bytes) -> tuple[int, bytes]:
@@ -114,7 +136,7 @@ def _existing_archive(path: Path, signer_public: bytes) -> list[dict[str, object
             record = json.loads(line)
         except (TypeError, ValueError) as problem:
             raise ValueError(f"Schlüsselarchiv, Zeile {number}, ist kein JSON") from problem
-        if not isinstance(record, dict) or record.get("format") != ARCHIVE_FORMAT:
+        if not isinstance(record, dict) or record.get("format") not in READABLE_ARCHIVE_FORMATS:
             raise ValueError(f"Schlüsselarchiv, Zeile {number}, hat das falsche Format")
         try:
             licence_text = record["key"]
@@ -125,6 +147,9 @@ def _existing_archive(path: Path, signer_public: bytes) -> list[dict[str, object
             holder = record["holder"]
             transaction = record.get("transaction", "")
             archived_at = record["archived_at"]
+            # Ein Satz aus Format 1 nennt keine Art; sein Schlüssel ist ein
+            # Format-1-Schlüssel, und der ist privat.
+            kind_name = record.get("kind", "private")
             if (
                 not isinstance(licence_text, str)
                 or not isinstance(digest, str)
@@ -136,6 +161,7 @@ def _existing_archive(path: Path, signer_public: bytes) -> list[dict[str, object
                 or not isinstance(transaction, str)
                 or not isinstance(archived_at, str)
                 or not archived_at
+                or kind_name not in KIND_NAMES
             ):
                 raise ValueError("metadata")
             licence = licence_key.parse(
@@ -149,6 +175,7 @@ def _existing_archive(path: Path, signer_public: bytes) -> list[dict[str, object
                 or purchased_on != licence.purchased_on.isoformat()
                 or order != licence.order
                 or holder != licence.holder
+                or KIND_NAMES[kind_name] is not licence.kind
                 or transaction != " ".join(transaction.split()).strip()
                 or len(transaction) > 128
             ):
@@ -187,6 +214,7 @@ def _archive_records(
                     "purchased_on": licence.purchased_on.isoformat(),
                     "order": licence.order,
                     "holder": licence.holder,
+                    "kind": licence.kind.name.lower(),
                     "transaction": "",
                     "archived_at": now,
                 }
@@ -237,6 +265,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="privates JSONL-Schlüsselarchiv außerhalb des Repositorys",
     )
+    parser.add_argument(
+        "--kind",
+        choices=sorted(KIND_NAMES),
+        help="Lizenzart: private oder commercial — Pflicht, weil sie im Schlüssel steht",
+    )
     parser.add_argument("--order", default="", help="Bestellkennung")
     parser.add_argument("--holder", default="", help="auf wen der Schlüssel lautet")
     parser.add_argument("--count", type=int, default=1, help="wie viele Schlüssel")
@@ -265,6 +298,15 @@ def main(argv: list[str] | None = None) -> int:
         return _new_keypair()
     if arguments.private is None:
         parser.error("--private oder --new-keypair")
+    # Nicht vorbelegt und nicht geraten: Die Art steht signiert im Schlüssel
+    # und ist nach dem Ausstellen nicht mehr zu ändern. Ein Vorgabewert
+    # hieße, dass ein vergessener Schalter einen Vorrat der falschen Sorte
+    # erzeugt — und das fällt erst beim Käufer auf (Regel 21).
+    if arguments.kind is None:
+        parser.error(
+            "--kind private oder --kind commercial — die Art steht im Schlüssel "
+            "und wird nicht geraten"
+        )
     if arguments.purchased_on < DEVICE_ACTIVATION_FROM and not arguments.legacy:
         parser.error(
             f"{arguments.purchased_on} liegt vor der Geräteaktivierung ab "
@@ -296,14 +338,18 @@ def main(argv: list[str] | None = None) -> int:
     # dieselben Schlüssel, und zwei Käufer bekamen denselben. Ohne --start
     # würfelt jeder Lauf seinen eigenen Namensraum.
     first = arguments.start if arguments.start is not None else None
-    prefix = f"POOL-{secrets.token_hex(3).upper()}" if first is None else "POOL"
+    kind = KIND_NAMES[arguments.kind]
+    # „POOL-C-…" für gewerblich: An der Bestellkennung allein ist damit zu
+    # sehen, aus welchem Topf ein Schlüssel kam.
+    pool = "POOL" if kind is LicenceKind.PRIVATE else f"POOL-{COMMERCIAL_MARK}"
+    prefix = f"{pool}-{secrets.token_hex(3).upper()}" if first is None else pool
     made: set[str] = set()
     generated: list[tuple[Licence, str]] = []
     for number in range(arguments.count):
         if arguments.order:
             order = arguments.order
         elif first is not None:
-            order = f"POOL-{first + number:04d}"
+            order = f"{pool}-{first + number:04d}"
         else:
             order = f"{prefix}-{number + 1:04d}"
         licence = Licence(
@@ -311,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
             purchased_on=arguments.purchased_on,
             order=order,
             holder=arguments.holder,
+            kind=kind,
         )
         licence_text = make_key(seed, licence)
         if licence_text in made:

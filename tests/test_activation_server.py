@@ -76,7 +76,7 @@ def test_setup_prepares_the_complete_database(tmp_path: Path) -> None:
         "activations",
         "activation_attempts",
         "operator_events",
-        "one_active_device",
+        "one_active_entry_per_device",
     } <= objects
     assert len(bytes.fromhex(operator_token.read_text(encoding="ascii").strip())) == 32
 
@@ -635,3 +635,168 @@ def test_setup_failed_secret_write_keeps_only_the_previous_complete_value(
         assert list(target.parent.iterdir()) == [target]
     else:
         assert not list(target.parent.iterdir())
+
+
+def test_php_reads_both_key_formats_to_the_same_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Parser, ein Layout — und der Bestandsschlüssel bleibt gültig.
+
+    Das Layout der Nutzlast steht zweimal: in ``app/core/activation/key.py``
+    und in ``website/api/activation_common.php``. Laufen sie auseinander,
+    aktiviert kein Schlüssel mehr — und beim Bestandsschlüssel (Format 1, ohne
+    Lizenzart) fällt das erst beim Kunden auf, weil kein neu erzeugter Schlüssel
+    ihn berührt.
+
+    Geprüft wird über die Kennung der Anforderung: Sie ist
+    ``sha256(gerätepublic + licence_digest)[:32]``, und der Dienst bildet den
+    Digest aus **seiner** Zerlegung. Passt sie, hat PHP byteweise dasselbe
+    gelesen wie Python.
+    """
+    licence_public = ed25519.public_key(LICENCE_SEED)
+    activation_public = ed25519.public_key(ACTIVATION_SEED)
+    monkeypatch.setattr(key, "PUBLIC_KEY", licence_public)
+    monkeypatch.setattr(certificate, "ACTIVATION_PUBLIC_KEY", activation_public)
+
+    legacy = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 1),
+        order="ALT-0001",
+        holder="bestand@beispiel.de",
+        format_version=1,
+    )
+    commercial = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 11, 1),
+        order="POOL-C-0001",
+        holder="werkstatt@beispiel.de",
+        kind=key.LicenceKind.COMMERCIAL,
+    )
+    assert make_key(LICENCE_SEED, legacy).startswith("SOLIDON3D-1-")
+    assert make_key(LICENCE_SEED, commercial).startswith("SOLIDON3D-2-")
+
+    seed_file = tmp_path / "activation.seed"
+    seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed_file.chmod(0o600)
+    port = _free_port()
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "SOLIDON_ACTIVATION_SEED_FILE": str(seed_file),
+            "SOLIDON_ACTIVATION_DB": str(tmp_path / "activation.sqlite"),
+            "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": activation_public.hex(),
+            "SOLIDON_ACTIVATION_TEST_LICENCE_PUBLIC_KEY": licence_public.hex(),
+            "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+        }
+    )
+    process = subprocess.Popen(
+        _php_command(port),
+        cwd=Path(__file__).parent.parent,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    url = f"http://127.0.0.1:{port}/api/activation.php"
+    try:
+        for licence in (legacy, commercial):
+            # Je Formatfall ein eigenes Gerät: Der Dienst führt genau einen
+            # Platz je Lizenz, und zwei Lizenzen sind hier zwei Lizenzen.
+            # Der Schlüsselbund wird **einmal** gebaut und dann gebunden — ein
+            # ``lambda: _MemoryKeyring()`` gäbe jedem Aufruf einen neuen und
+            # damit ein anderes Gerät mitten in derselben Anforderung.
+            keyring = _MemoryKeyring()
+            monkeypatch.setattr(device, "_load_keyring", lambda bound=keyring: bound)
+            licence_text = make_key(LICENCE_SEED, licence)
+            request_text = certificate.create_request(licence_text, "Prüfrechner")
+            for _attempt in range(50):
+                try:
+                    status, answer = _post(url, request_text)
+                    break
+                except URLError:
+                    time.sleep(0.05)
+            else:
+                pytest.fail("der lokale PHP-Aktivierungsdienst ist nicht gestartet")
+            assert status == 200, f"Format {licence.format_version} abgelehnt: {answer}"
+            issued = certificate.parse_certificate(
+                answer,
+                licence,
+                device.ensure_public_key(),
+                activation_public_key=activation_public,
+            )
+            assert issued.licence_digest == certificate.licence_digest(licence), (
+                f"PHP und Python lesen Format {licence.format_version} verschieden"
+            )
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+
+def test_php_gives_the_commercial_licence_a_second_device_and_no_third(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der eine Unterschied im Programm: gewerblich zwei Plätze, privat einer.
+
+    Er sperrt nichts, er gibt etwas dazu (Entscheidung Robert, 15.09.2026) —
+    im Betrieb stehen Arbeitsplatz und Notebook nebeneinander. Die Grenze
+    kommt aus der **signierten** Lizenzart; ein Client kann sie nicht
+    behaupten.
+    """
+    licence_public = ed25519.public_key(LICENCE_SEED)
+    activation_public = ed25519.public_key(ACTIVATION_SEED)
+    monkeypatch.setattr(key, "PUBLIC_KEY", licence_public)
+    monkeypatch.setattr(certificate, "ACTIVATION_PUBLIC_KEY", activation_public)
+
+    seed_file = tmp_path / "activation.seed"
+    seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed_file.chmod(0o600)
+    port = _free_port()
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "SOLIDON_ACTIVATION_SEED_FILE": str(seed_file),
+            "SOLIDON_ACTIVATION_DB": str(tmp_path / "activation.sqlite"),
+            "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": activation_public.hex(),
+            "SOLIDON_ACTIVATION_TEST_LICENCE_PUBLIC_KEY": licence_public.hex(),
+            "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+        }
+    )
+    process = subprocess.Popen(
+        _php_command(port),
+        cwd=Path(__file__).parent.parent,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    url = f"http://127.0.0.1:{port}/api/activation.php"
+
+    def activate(licence: key.Licence, device_name: str) -> tuple[int, str]:
+        """Ein frisches Gerät fordert einen Platz für diese Lizenz an."""
+        keyring = _MemoryKeyring()
+        monkeypatch.setattr(device, "_load_keyring", lambda bound=keyring: bound)
+        request_text = certificate.create_request(make_key(LICENCE_SEED, licence), device_name)
+        for _attempt in range(50):
+            try:
+                return _post(url, request_text)
+            except URLError:
+                time.sleep(0.05)
+        pytest.fail("der lokale PHP-Aktivierungsdienst ist nicht gestartet")
+
+    try:
+        for kind, places in key.DEVICE_LIMITS.items():
+            licence = key.Licence(
+                major=key.current_major(),
+                purchased_on=date(2026, 11, 1),
+                order=f"POOL-{kind.name}-0001",
+                holder="werkstatt@beispiel.de",
+                kind=kind,
+            )
+            for number in range(places):
+                status, answer = activate(licence, f"Rechner {number + 1}")
+                assert status == 200, f"{kind.name}: Platz {number + 1} von {places}: {answer}"
+            # Und einer mehr als erlaubt wird abgewiesen, mit stabiler Kennung.
+            status, answer = activate(licence, "Einer zu viel")
+            assert status == 409, f"{kind.name}: der {places + 1}. Platz wurde vergeben"
+            assert json.loads(answer)["code"] == "device_limit", answer
+    finally:
+        process.terminate()
+        process.wait(timeout=10)

@@ -15379,7 +15379,7 @@ def test_the_key_field_shows_a_whole_key(qt_app: QApplication) -> None:
     """
     from PySide6.QtCore import Qt
 
-    from app.core.activation.key import format_key
+    from app.core.activation.key import FORMAT_VERSION, format_key
     from app.ui.dialogs import ActivationDialog
     from app.ui.style import apply_style
     from app.ui.theme import apply_theme
@@ -15392,7 +15392,9 @@ def test_the_key_field_shows_a_whole_key(qt_app: QApplication) -> None:
     apply_style(QApplication.instance(), "dark")
     dialog = ActivationDialog()
     try:
-        dialog.field.setPlainText(format_key(b"x" * 64, b"y" * 64))
+        # Mit lesbarer Formatnummer vorn: ``format_key`` lehnt eine Nutzlast ab,
+        # die nicht mit einer beginnt, und die Länge bleibt dieselbe.
+        dialog.field.setPlainText(format_key(bytes([FORMAT_VERSION]) + b"x" * 63, b"y" * 64))
         dialog.resize(dialog.sizeHint())
         dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         dialog.show()

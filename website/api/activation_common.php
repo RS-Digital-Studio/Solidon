@@ -20,6 +20,23 @@ if (PHP_VERSION_ID < 80100) {
 }
 
 const ACTIVATION_DOCUMENT_FORMAT = 1;
+/**
+ * Welche Kaufcode-Formate gelesen werden — Spiegel von
+ * `key.READABLE_VERSIONS`. Format 1 kennt keine Lizenzart, Format 2 trägt sie
+ * als Byte hinter dem Kaufdatum. Ältere Formate werden nie entfernt, solange
+ * ein ausgegebener Schlüssel sie tragen kann.
+ */
+const ACTIVATION_LICENCE_FORMATS = [1, 2];
+/** Die Lizenzart, die ein Schlüssel ohne Artangabe hat — Spiegel von `LicenceKind.PRIVATE`. */
+const ACTIVATION_LICENCE_KIND_PRIVATE = 1;
+/** Alle bekannten Lizenzarten: privat und gewerblich. */
+const ACTIVATION_LICENCE_KINDS = [1, 2];
+/**
+ * Wie viele Rechner je Lizenzart gleichzeitig freigeschaltet sein dürfen —
+ * Spiegel von `key.DEVICE_LIMITS`. Die gewerbliche Lizenz gibt einen Platz
+ * dazu; sie sperrt nichts.
+ */
+const ACTIVATION_DEVICE_LIMITS = [1 => 1, 2 => 2];
 const ACTIVATION_REQUEST_KIND = 'activation-request';
 const ACTIVATION_CERTIFICATE_KIND = 'activation-certificate';
 const DEACTIVATION_REQUEST_KIND = 'deactivation-request';
@@ -553,9 +570,24 @@ function activation_base32_decode(string $text): string
 function activation_licence(string $text): array
 {
     $upper = strtoupper(trim($text));
-    $prefix = 'SOLIDON3D-1-';
-    if (substr($upper, 0, strlen($prefix)) !== $prefix) {
-        throw new ActivationFailure('Der Lizenzschlüssel beginnt nicht mit SOLIDON3D-1-.');
+    // Zwei Formate: 1 ohne Lizenzart (jeder Schlüssel darin ist eine private
+    // Lizenz), 2 mit einem Artbyte hinter dem Kaufdatum. Beide bleiben lesbar,
+    // solange ein Bestandsschlüssel im Umlauf sein kann. Dasselbe Layout steht
+    // in `app/core/activation/key.py` — wer das eine ändert, ändert das andere.
+    $prefix = '';
+    $headVersion = 0;
+    foreach (ACTIVATION_LICENCE_FORMATS as $version) {
+        $candidate = 'SOLIDON3D-' . $version . '-';
+        if (substr($upper, 0, strlen($candidate)) === $candidate) {
+            $prefix = $candidate;
+            $headVersion = $version;
+            break;
+        }
+    }
+    if ($headVersion === 0) {
+        throw new ActivationFailure(
+            'Der Lizenzschlüssel beginnt nicht mit SOLIDON3D- und einer Formatnummer.'
+        );
     }
     $body = '';
     foreach (str_split(substr($upper, strlen($prefix))) as $character) {
@@ -580,10 +612,37 @@ function activation_licence(string $text): array
         || !sodium_crypto_sign_verify_detached($signature, $payload, $public)) {
         throw new ActivationFailure('Die Signatur des Lizenzschlüssels passt nicht.');
     }
-    if (strlen($payload) < 6 || ord($payload[0]) !== 1) {
+    // Der Kopf ist unsigniert, das erste Nutzlastbyte nicht. Beide müssen
+    // dieselbe Formatnummer nennen: Ein umgeschriebener Kopf ändert die
+    // Bedeutung des Schlüssels nicht, darf aber auch nicht zu einem halb
+    // gelesenen führen.
+    $version = strlen($payload) > 0 ? ord($payload[0]) : 0;
+    if (!in_array($version, ACTIVATION_LICENCE_FORMATS, true) || $version !== $headVersion) {
         throw new ActivationFailure('Der Lizenzschlüssel hat das falsche Format.');
     }
-    $orderEnd = 5 + ord($payload[4]);
+    // Wo die Längenangabe der Bestellkennung steht: hinter dem Kaufdatum in
+    // Format 1, hinter der Lizenzart in Format 2.
+    $orderLengthAt = $version === 1 ? 4 : 5;
+    if (strlen($payload) < $orderLengthAt + 2) {
+        throw new ActivationFailure('Der Lizenzschlüssel ist unvollständig.');
+    }
+    // Der Dienst leitet aus der Art keine Rechte ab — er führt sie mit. Eine
+    // Art, die er nicht kennt, lehnt er trotzdem ab: Ein Client, der sie
+    // ebenfalls nicht kennt, könnte mit dem Zertifikat nichts anfangen, und
+    // der eine Geräteplatz wäre verbraucht.
+    $kind = ACTIVATION_LICENCE_KIND_PRIVATE;
+    if ($version >= 2) {
+        $kind = ord($payload[4]);
+        if (!in_array($kind, ACTIVATION_LICENCE_KINDS, true)) {
+            throw new ActivationFailure(
+                'Der Lizenzschlüssel gilt für eine Lizenzart, die dieser Dienst nicht kennt.',
+                409,
+                'unknown_kind'
+            );
+        }
+    }
+    $orderStart = $orderLengthAt + 1;
+    $orderEnd = $orderStart + ord($payload[$orderLengthAt]);
     if (strlen($payload) < $orderEnd + 1) {
         throw new ActivationFailure('Der Lizenzschlüssel ist unvollständig.');
     }
@@ -600,7 +659,12 @@ function activation_licence(string $text): array
             'wrong_major'
         );
     }
-    return ['payload' => $payload, 'digest' => hash('sha256', $payload)];
+    return [
+        'payload' => $payload,
+        'digest' => hash('sha256', $payload),
+        'format' => $version,
+        'licence_kind' => $kind,
+    ];
 }
 
 /** Liest und prüft das äußere Dokument. */
@@ -684,6 +748,7 @@ function activation_request(string $raw): array
         'device_public' => $public,
         'device_name' => $name,
         'request_id' => $requestId,
+        'licence_kind' => $licence['licence_kind'],
     ];
 }
 
@@ -783,9 +848,20 @@ function activation_create_schema(PDO $database): void
         . 'device_name TEXT NOT NULL, activated_on TEXT NOT NULL, deactivated_at TEXT NULL, '
         . 'FOREIGN KEY(licence_digest) REFERENCES licences(digest))'
     );
+    // Bis zum 15.09.2026 stand hier ein Index über `licence_digest` allein:
+    // genau ein aktiver Platz je Lizenz, erzwungen von der Datenbank. Die
+    // gewerbliche Lizenz hat zwei (`ACTIVATION_DEVICE_LIMITS`), und der alte
+    // Index ließ deren zweiten Platz als Serverfehler scheitern, obwohl die
+    // Zählung in `activation_issue` ihn erlaubt hätte.
+    //
+    // **Der Drop ist die Migration**, und er steht hier statt nur im
+    // Einrichtungswerkzeug: Eine laufende Datenbank trägt den alten Index
+    // weiter, und `IF NOT EXISTS` fasst ihn nicht an.
+    $database->exec('DROP INDEX IF EXISTS one_active_device');
+    // Was weiter gilt: Dasselbe Gerät belegt nie zwei Plätze derselben Lizenz.
     $database->exec(
-        'CREATE UNIQUE INDEX IF NOT EXISTS one_active_device '
-        . 'ON activations(licence_digest) WHERE deactivated_at IS NULL'
+        'CREATE UNIQUE INDEX IF NOT EXISTS one_active_entry_per_device '
+        . 'ON activations(licence_digest, device_public) WHERE deactivated_at IS NULL'
     );
     $database->exec(
         'CREATE TABLE IF NOT EXISTS activation_attempts ('
@@ -930,7 +1006,7 @@ function activation_consume_rate(PDO $database, string $digest): void
     $update->execute([$digest, $day]);
 }
 
-/** Vergibt idempotent den einzigen aktiven Geräteplatz und signiert ihn. */
+/** Vergibt idempotent einen Geräteplatz im Rahmen der Lizenzart und signiert ihn. */
 function activation_issue(array $request): string
 {
     $database = activation_database();
@@ -947,19 +1023,39 @@ function activation_issue(array $request): string
         if (($licence->fetch()['status'] ?? '') !== 'active') {
             throw new ActivationFailure('Dieser Lizenzschlüssel ist gesperrt.', 403, 'licence_blocked');
         }
-        $current = $database->prepare(
+        // Zuerst: Ist **dieses** Gerät schon aktiv? Dann ist die Anforderung eine
+        // Wiederholung und bekommt denselben Platz zurück — Webhooks und
+        // Klicks kommen doppelt, und ein zweiter Platz je Zustellung wäre ein
+        // verschenkter.
+        $mine = $database->prepare(
             'SELECT id, device_public, device_name, activated_on FROM activations '
-            . 'WHERE licence_digest = ? AND deactivated_at IS NULL'
+            . 'WHERE licence_digest = ? AND device_public = ? AND deactivated_at IS NULL'
         );
-        $current->execute([$request['digest']]);
-        $active = $current->fetch();
-        if ($active !== false && !hash_equals((string) $active['device_public'], $deviceHex)) {
-            throw new ActivationFailure(
-                'Der Lizenzschlüssel ist bereits auf einem anderen Rechner aktiviert. '
-                . 'Deaktivieren Sie ihn dort oder wenden Sie sich bei einem Geräteverlust an den Support.',
-                409,
-                'device_limit'
+        $mine->execute([$request['digest'], $deviceHex]);
+        $active = $mine->fetch();
+        if ($active === false) {
+            // Erst dann wird gezählt. Die Grenze kommt aus der Lizenzart, und
+            // die steht signiert im Schlüssel — der Client kann sie nicht
+            // behaupten.
+            $taken = $database->prepare(
+                'SELECT COUNT(*) FROM activations '
+                . 'WHERE licence_digest = ? AND deactivated_at IS NULL'
             );
+            $taken->execute([$request['digest']]);
+            $limit = ACTIVATION_DEVICE_LIMITS[$request['licence_kind']] ?? 1;
+            if ((int) $taken->fetchColumn() >= $limit) {
+                throw new ActivationFailure(
+                    $limit === 1
+                        ? 'Der Lizenzschlüssel ist bereits auf einem anderen Rechner aktiviert. '
+                            . 'Deaktivieren Sie ihn dort oder wenden Sie sich bei einem '
+                            . 'Geräteverlust an den Support.'
+                        : 'Für diesen Lizenzschlüssel sind bereits alle ' . $limit
+                            . ' Geräteplätze belegt. Deaktivieren Sie einen davon in Solidon '
+                            . 'oder wenden Sie sich bei einem Geräteverlust an den Support.',
+                    409,
+                    'device_limit'
+                );
+            }
         }
         if ($active === false) {
             activation_consume_rate($database, $request['digest']);

@@ -1,8 +1,13 @@
-"""Gemeinsame Dateisperre für das private Lizenzarchiv.
+"""Gemeinsames über das private Lizenzarchiv: Dateisperre und Satzformat.
 
 Generator und Support-Oberfläche schreiben dieselbe JSONL-Datei. Ein
 atomisches Ersetzen schützt nur vor halben Dateien; ohne gemeinsame Sperre
 könnten zwei vollständige Schreibvorgänge einander trotzdem verlieren.
+
+Das Satzformat steht ebenfalls hier und nicht zweimal daneben. Bis zum
+15.09.2026 trugen beide Werkzeuge ihr eigenes ``ARCHIVE_FORMAT = 1`` — gleich
+geschrieben und unabhängig änderbar, also die nächste Gelegenheit, ein Archiv
+zu schreiben, das das andere Werkzeug nicht mehr liest.
 """
 
 from __future__ import annotations
@@ -14,7 +19,15 @@ import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Final
+
+#: Satzformat des privaten Archivs, in dem **geschrieben** wird. 2 seit dem
+#: 15.09.2026: Der Satz trägt seitdem die Lizenzart.
+ARCHIVE_FORMAT: Final = 2
+
+#: Welche Satzformate **gelesen** werden. Ein Satz aus Format 1 nennt keine
+#: Art, und sein Schlüssel ist ein Format-1-Schlüssel — beides heißt privat.
+READABLE_ARCHIVE_FORMATS: Final = (1, 2)
 
 
 class ArchiveBusyError(OSError):

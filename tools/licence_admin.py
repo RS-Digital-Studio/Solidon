@@ -55,7 +55,11 @@ from app.core.http import (
 )
 from app.core.json_boundary import loads as load_json
 from app.core.log import redact_external
-from tools.licence_archive import ArchiveBusyError, archive_lock
+from tools.licence_archive import (
+    READABLE_ARCHIVE_FORMATS,
+    ArchiveBusyError,
+    archive_lock,
+)
 
 if os.name == "nt":
     import ctypes
@@ -63,7 +67,6 @@ if os.name == "nt":
 
 DEFAULT_ENDPOINT: Final = "https://solidon3d.de/api/operator.php"
 TOKEN_PATTERN: Final = re.compile(r"[0-9a-f]{64}")
-ARCHIVE_FORMAT: Final = 1
 OPERATOR_TIMEOUT_SECONDS: Final = 10.0
 MAX_OPERATOR_RESPONSE_BYTES: Final = 256 * 1024
 MAX_TOKEN_FILE_BYTES: Final = 256
@@ -310,6 +313,9 @@ class SupportLicence:
     order: str
     holder: str
     transaction: str = ""
+    kind: key.LicenceKind | None = None
+    """Privat oder gewerblich; ``None``, wenn nur der Digest vorliegt und
+    kein Schlüssel zum Zerlegen da war."""
 
     @property
     def masked_key(self) -> str:
@@ -334,6 +340,7 @@ def _record_from_key(
         order=licence.order,
         holder=licence.holder,
         transaction=transaction,
+        kind=licence.kind,
     )
 
 
@@ -351,7 +358,7 @@ def load_archive(path: Path) -> list[SupportLicence]:
     for number, line in enumerate(lines, start=1):
         try:
             raw = json.loads(line)
-            if not isinstance(raw, dict) or raw.get("format") != ARCHIVE_FORMAT:
+            if not isinstance(raw, dict) or raw.get("format") not in READABLE_ARCHIVE_FORMATS:
                 raise ValueError("format")
             licence_text = raw["key"]
             major = raw["major"]
@@ -1313,17 +1320,30 @@ class SupportWindow:
         self.status_badge.configure(text=badge[0], style=badge[1])
         holder = self.current.holder or ("unpersonalisiert")
         order = self.current.order or ("nicht im Archiv")
+        # Die Art wird benannt, auch die private: Fehlte die Zeile bei
+        # privaten Lizenzen, wäre ihr Fehlen die Aussage — und die liest
+        # sich im Supportfall wie „unbekannt".
+        kinds = {
+            key.LicenceKind.PRIVATE: ("privat"),
+            key.LicenceKind.COMMERCIAL: ("gewerblich"),
+        }
+        kind = (
+            kinds.get(self.current.kind, ("Art unbekannt"))
+            if self.current.kind
+            else ("Art unbekannt")
+        )
         transaction = self.current.transaction or ("noch nicht zugeordnet")
         created = licence.get("created_at") or ("noch nie aktiviert")
         self.summary.set(
             (
                 "Kunde: {holder}\nKauf: MoR {transaction} · Bestellung {order}\n"
-                "Lizenz: {key}\nErster Serverkontakt: {created}"
+                "Lizenz: {key} · {kind}\nErster Serverkontakt: {created}"
             ).format(
                 transaction=transaction,
                 order=order,
                 holder=holder,
                 created=created,
+                kind=kind,
                 key=self.current.masked_key or ("nur Digest vorhanden"),
             )
         )

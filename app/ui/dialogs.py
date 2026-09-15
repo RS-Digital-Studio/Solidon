@@ -1830,7 +1830,10 @@ class ActivationDialog(QDialog):
         set_level(introduction, "caption")
 
         self.field = QPlainTextEdit(self)
-        self.field.setPlaceholderText(tr("SOLIDON3D-1-…"))
+        # Ohne Formatnummer: Angenommen werden beide (Format 1 sind die
+        # Bestandsschlüssel, Format 2 nennt zusätzlich die Lizenzart), und
+        # ein Platzhalter, der nur eines nennt, sieht wie eine Bedingung aus.
+        self.field.setPlaceholderText(tr("SOLIDON3D-…"))
         # **Die Höhe folgt dem Schlüssel, sie stand fest auf 90.** Ein
         # Lizenzschlüssel ist einzeilig und **242 Zeichen** lang; bei der
         # Feldbreite von 558 Punkten sind das sieben umbrochene Zeilen à 14,
@@ -3163,8 +3166,17 @@ def _licence_line() -> str:
     if state.deactivation_pending:
         return deactivation_pending_line()
     if state.licensed and state.licence is not None:
-        return tr("Lizenziert für {holder} (Bestellung {order}).").format(
+        # Die Lizenzart wird benannt, auch die private: Stünde sie nur bei
+        # „gewerblich" da, wäre ihr Fehlen die Aussage — und genau das muss ein
+        # gewerblicher Arbeitsplatz hier belegen können, ohne die Bestellmail
+        # zu suchen (Regel 18: keine Bedeutung allein über die Abwesenheit).
+        kinds = {
+            activation.LicenceKind.PRIVATE: tr("private Lizenz"),
+            activation.LicenceKind.COMMERCIAL: tr("gewerbliche Lizenz"),
+        }
+        return tr("Lizenziert für {holder} — {kind} (Bestellung {order}).").format(
             holder=state.licence.holder or tr("diesen Rechner"),
+            kind=kinds[state.licence.kind],
             order=state.licence.order,
         )
     if state.in_demo:
