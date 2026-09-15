@@ -196,6 +196,36 @@ def test_all_section_planes_filter_original_hits_without_inventing_caps():
     assert side is not None and side[1] == pytest.approx((20.0, 0.0, 0.0))
 
 
+def test_original_ray_preserves_face_ids_across_blocks_and_can_be_cancelled(monkeypatch):
+    from app.core.errors import OperationCancelled
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 8.0)))
+    expected = placement.original_surface_hit(mesh, (13.0, 8.0, 20.0), (0.0, 0.0, -1.0))
+    monkeypatch.setattr(placement, "PICK_TRIANGLE_BLOCK", 3)
+    checks = []
+    actual = placement.original_surface_hit(
+        mesh,
+        (13.0, 8.0, 20.0),
+        (0.0, 0.0, -1.0),
+        check_cancelled=lambda: checks.append(True),
+    )
+    assert actual is not None and expected is not None
+    assert actual[0] == expected[0]
+    assert actual[1] == pytest.approx(expected[1])
+    assert len(checks) >= 4
+
+    def stop():
+        raise OperationCancelled()
+
+    with pytest.raises(OperationCancelled):
+        placement.original_surface_hit(
+            mesh,
+            (13.0, 8.0, 20.0),
+            (0.0, 0.0, -1.0),
+            check_cancelled=stop,
+        )
+
+
 def test_editing_distances_cannot_put_the_point_into_a_cutout():
     from shapely.geometry import Polygon
 

@@ -262,6 +262,7 @@ from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import Worker, WorkerLeash, wait_for_all, weak_slot
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
+from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, SketchUseDialog
@@ -1707,6 +1708,7 @@ class MainWindow(QMainWindow):
         """Der offene Operationsdialog. Er sperrt das Fenster nicht mehr, also
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
         verschwindet mit dem Verlassen der Funktion."""
+        self._local_features: LocalRecognitionFlow | None = None
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
@@ -3869,7 +3871,9 @@ class MainWindow(QMainWindow):
         in einem Rohdialog: die Operation lief, veränderte nichts und
         hinterließ einen leeren Schritt im Verlauf.
         """
-        if _has_sketch_param(spec):
+        if spec.name == "detect_region":
+            self.local_features().arm()
+        elif _has_sketch_param(spec):
             self.start_sketch(spec.name)
         elif _has_armature_param(spec):
             self.start_armature()
@@ -3877,6 +3881,12 @@ class MainWindow(QMainWindow):
             self.start_sculpt()
         else:
             self.run_operation(spec)
+
+    def local_features(self) -> LocalRecognitionFlow:
+        """Der gemeinsame Ablauf für lokale Auswahl aus Menü, Palette und Bild."""
+        if self._local_features is None:
+            self._local_features = LocalRecognitionFlow(self)
+        return self._local_features
 
     #: Kürzel, die eine Taste ohne Zusatztaste sind und deshalb nur dort
     #: gelten dürfen, wo eine Objektauswahl sichtbar ist.
@@ -4389,6 +4399,14 @@ class MainWindow(QMainWindow):
         halted = self._halt_reason()
         if halted is not None:
             return halted
+        if spec.name == "detect_region":
+            result = self.session.last_result
+            if result is not None and any(
+                entry.kind == "mesh" and self.viewport._in_view(identifier, entry)
+                for identifier, entry in result.scene.objects.items()
+            ):
+                return None
+            return tr("Wählen Sie eine sichtbare Oberfläche eines Dreiecksnetzes.")
         if spec.takes_whole_scene:
             if objects <= 0:
                 return str(_NEEDS_BODY)
@@ -8081,6 +8099,9 @@ class MainWindow(QMainWindow):
         Auswahl, und wer dort arbeitet, meint mit Escape die aktuelle Handlung
         statt einer Ebene darunter. Verworfen wird dabei nichts Gerechnetes.
         """
+        if self._local_features is not None and self._local_features.active:
+            self._local_features.invalidate()
+            return
         if self.session.split_running:
             # Die lange Suche ist die oberste laufende Handlung. Erst sie
             # anhalten; die Auswahl darunter bleibt stehen und zeigt weiter,
@@ -11906,6 +11927,13 @@ class MainWindow(QMainWindow):
         Seiten bekannt sind.
         """
         menu = self._edge_menu() or self.object_tree.context_menu()
+        hit = self.viewport.placement_hit(x, y)
+        result = self.session.last_result
+        entry = result.scene.objects.get(hit[0]) if result is not None and hit is not None else None
+        if hit is not None and entry is not None and entry.kind == "mesh" and not self.session.busy:
+            menu = menu or QMenu(self)
+            local = menu.addAction(str(REGISTRY.get("detect_region").title))
+            local.triggered.connect(partial(self.local_features().begin, hit))
         if menu is None:
             return
         menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
@@ -13045,6 +13073,11 @@ class MainWindow(QMainWindow):
         # der erste Feinstellwert einer dieser Operationen den kurzen Weg
         # zugemacht — *Merkmal entfernen* bekam mit ``sections`` genau einen
         # und öffnete daraufhin einen Dialog, wo vorher ein Klick genügte.
+        if spec.name == "detect_region":
+            self.local_features().arm()
+            return
+        if self._local_features is not None:
+            self._local_features.invalidate()
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
             feature_id = self.object_tree.selected_feature()
@@ -13846,6 +13879,8 @@ class MainWindow(QMainWindow):
         das übernimmt jetzt diese Stelle, denn zwei Vorschauen um denselben
         Viewport wären eine Frage ohne Antwort.
         """
+        if self._local_features is not None:
+            self._local_features.invalidate()
         previous = self._op_dialog
         if previous is not None:
             previous.reject()
@@ -16881,6 +16916,8 @@ class MainWindow(QMainWindow):
         """
         from app.ui.outline_dialog import OutlineDialog
 
+        if self._local_features is not None:
+            self._local_features.release(timeout_ms)
         for outline_dialog in self.findChildren(OutlineDialog):
             outline_dialog.reject()
         from app.ui.organizer_dialog import OrganizerDialog

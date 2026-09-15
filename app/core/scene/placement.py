@@ -25,7 +25,7 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
@@ -1269,6 +1269,10 @@ def surface_values(
     return values
 
 
+#: Arbeitsbudget der Originalauswahl; keine geometrische Auflösungsgrenze.
+PICK_TRIANGLE_BLOCK: Final = 65_536
+
+
 def original_surface_hit(
     mesh: MeshData,
     origin: Vec3,
@@ -1277,30 +1281,41 @@ def original_surface_hit(
     clip_origin: Vec3 | None = None,
     clip_normal: Vec3 | None = None,
     clip_planes: Sequence[SectionPlane] = (),
+    check_cancelled: Callable[[], None] | None = None,
 ) -> tuple[int, Vec3] | None:
     """Den Sichtstrahl am Originalnetz schneiden; LOD-Zellen liefern keine Modellkoordinaten."""
-    from app.core.geom.mesh import on_surface, ray_hit_distances
+    from app.core.geom.mesh import ray_hits
 
     vector = np.asarray(direction, dtype=np.float64)
     length = float(np.linalg.norm(vector))
     if not np.isfinite(origin).all() or not np.isfinite(vector).all() or length <= EPS_GEOM:
         return None
     vector /= length
-    distances = ray_hit_distances(mesh.raw.triangles, np.asarray(origin, dtype=np.float64), vector)
-    points = np.asarray(origin) + distances[:, None] * vector
-    if clip_origin is not None and clip_normal is not None:
-        visible = (points - clip_origin) @ np.asarray(clip_normal) >= -EPS_GEOM
-        distances, points = distances[visible], points[visible]
-    for plane in clip_planes:
-        # SectionPlane entfernt ihre positive Seite; mehrere Ebenen sind
-        # eine Schnittmenge sichtbarer Halbebenen. Kappen entstehen hier nie.
-        visible = (points - plane.origin) @ np.asarray(plane.normal) <= EPS_GEOM
-        distances, points = distances[visible], points[visible]
-    if not len(distances):
-        return None
-    point = points[int(np.argmin(distances))]
-    closest, _, faces = on_surface(mesh.raw, point.reshape(1, 3))
-    return int(faces[0]), _vec(closest[0])
+    eye = np.asarray(origin, dtype=np.float64)
+    vertices, faces = np.asarray(mesh.raw.vertices), np.asarray(mesh.raw.faces)
+    nearest = float("inf")
+    selected: tuple[int, Vec3] | None = None
+    for start in range(0, len(faces), PICK_TRIANGLE_BLOCK):
+        if check_cancelled is not None:
+            check_cancelled()
+        triangles = vertices[faces[start : start + PICK_TRIANGLE_BLOCK]]
+        distances, indices = ray_hits(triangles, eye, vector)
+        points = eye + distances[:, None] * vector
+        visible = distances < nearest
+        if clip_origin is not None and clip_normal is not None:
+            visible &= (points - clip_origin) @ np.asarray(clip_normal) >= -EPS_GEOM
+        for plane in clip_planes:
+            # SectionPlane entfernt ihre positive Seite; mehrere Ebenen sind
+            # eine Schnittmenge sichtbarer Halbebenen. Kappen entstehen hier nie.
+            visible &= (points - plane.origin) @ np.asarray(plane.normal) <= EPS_GEOM
+        distances, indices, points = distances[visible], indices[visible], points[visible]
+        if len(distances):
+            closest = int(np.argmin(distances))
+            nearest = float(distances[closest])
+            selected = (start + int(indices[closest]), _vec(points[closest]))
+    if check_cancelled is not None:
+        check_cancelled()
+    return selected
 
 
 def placement_tool(

@@ -549,6 +549,17 @@ def ray_hit_distances(
     für Innen/Außen über die **Parität** der Durchdringungen taugt diese
     Funktion deshalb nicht.
     """
+    return ray_hits(triangles, origin, direction)[0]
+
+
+def ray_hits(
+    triangles: np.ndarray, origin: np.ndarray, direction: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Positive Strahlparameter mit den zugehörigen ursprünglichen Dreiecksnummern.
+
+    Teilmengen verwenden lokale Nummern; der Aufrufer führt seinen Blockbeginn
+    hinzu. Kanten können mehrere Treffer tragen, wie bei ``ray_hit_distances``.
+    """
     triangles = np.asarray(triangles, dtype=float)
     origin = np.asarray(origin, dtype=float).reshape(3)
     direction = np.asarray(direction, dtype=float).reshape(3)
@@ -566,7 +577,7 @@ def ray_hit_distances(
     v = np.dot(q, direction) / safe
     t = np.einsum("ij,ij->i", edge_two, q) / safe
     inside = ~parallel & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1.0 + 1e-9) & (t > 0.0)
-    return np.asarray(t[inside], dtype=float)
+    return np.asarray(t[inside], dtype=float), np.flatnonzero(inside)
 
 
 def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:

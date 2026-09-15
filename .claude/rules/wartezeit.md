@@ -7,6 +7,8 @@ paths:
   - "app/ui/main_window.py"
   - "app/ui/outline_dialog.py"
   - "app/ui/organizer_dialog.py"
+  - "app/ui/local_recognition.py"
+  - "app/ui/local_recognition_flow.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit

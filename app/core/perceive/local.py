@@ -386,12 +386,53 @@ def _recognise_region(
     )
 
 
-def _inside_radius(body: Any, feature: Feature, point: np.ndarray, radius: float) -> bool:
+def _inside_radius(
+    body: Any,
+    feature: Feature,
+    point: np.ndarray,
+    radius: float,
+    check: Callable[[], None] | None = None,
+) -> bool:
     """Alle belegten Flächenpunkte liegen im freigegebenen Suchumfang."""
-    vertices = np.asarray(body.vertices)[
-        np.unique(np.asarray(body.faces)[list(feature.face_indices)])
-    ]
-    return bool(np.all(np.linalg.norm(vertices - point, axis=1) <= radius + EPS_GEOM))
+    vertices, faces = np.asarray(body.vertices), np.asarray(body.faces)
+    limit = radius + EPS_GEOM
+    # Ein einziger ferner Originalpunkt widerlegt bereits den vollständigen
+    # Einschluss. Große bekannte Außenmäntel brauchen dafür keine Punktwolke.
+    if feature.face_indices:
+        delta = vertices[faces[feature.face_indices[0], 0]] - point
+        if np.any(np.abs(delta) > limit):
+            return False
+    for start in range(0, len(feature.face_indices), SCAN_BLOCK):
+        _check(check)
+        indices = feature.face_indices[start : start + SCAN_BLOCK]
+        points = vertices[np.unique(faces[list(indices)])]
+        delta = points - point
+        if np.any(np.abs(delta) > limit) or not np.all(np.linalg.norm(delta, axis=1) <= limit):
+            return False
+    return True
+
+
+def features_in_region(
+    mesh: MeshData,
+    features: Mapping[FeatureId, Feature],
+    point: Vec3,
+    *,
+    radius: float,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[FeatureId, ...]:
+    """Vorhandene vollständige Originalflächen auswählen, ohne erneut zu erkennen."""
+    place = np.asarray(point, dtype=float)
+    chosen = []
+    for name, feature in features.items():
+        _check(check_cancelled)
+        if (
+            feature.face_indices
+            and feature.recognised
+            and _inside_radius(mesh.raw, feature, place, radius, check_cancelled)
+        ):
+            chosen.append(name)
+    _check(check_cancelled)
+    return tuple(chosen)
 
 
 def transformed_searches(

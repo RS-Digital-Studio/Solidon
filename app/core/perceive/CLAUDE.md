@@ -103,6 +103,13 @@ laufen über `ctx.ask`. Der Schritt ändert keine Geometrie und erhält
 vorhandene IDs, Provenienz und Erzeuger. Erkennung plus Bearbeitung können
 dadurch gemeinsam in einer Transaktion gespeichert und zurückgenommen werden.
 
+`features_in_region` begrenzt die lokale Auswahlliste anhand sämtlicher
+belegter Originalflächenpunkte. Früher erkannte ferne Merkmale bleiben in der
+Szene, erscheinen aber nicht als Treffer der aktuellen Suchkugel. Die Prüfung
+verwendet dieselbe Umfangsgrenze wie die Erkennung, verwirft ferne Kandidaten
+an ihren Originalpunkten früh und bleibt auch innerhalb großer Flächen
+blockweise abbrechbar. Sie führt keine zweite Erkennung aus.
+
 `detect_known` misst bekannte Merkmale nach einer Operation am großen Netz
 erneut. `local_search_radius` ist ein belegter diagnostischer Suchumfang um
 die Merkmalsmitte, kein Nutzermaß. `transformed_searches` nimmt ihn über den

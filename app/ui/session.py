@@ -2298,6 +2298,7 @@ class Session(QObject):
         explained: Any = None,
         coarse: Any = None,
         advised: Any = None,
+        failed: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -2311,6 +2312,8 @@ class Session(QObject):
         ``advised`` bekommt vor dem Satz die Kennung der vorrangigen Handlung,
         die der Fehler dazu trägt — ``repair_and_retry`` und seinesgleichen
         nennen einen Schritt, der vor das Übernehmen gehört.
+        ``failed`` meldet einen unerwarteten Arbeiterfehler an den aktuellen
+        Editor, damit dessen Übernahme gesperrt bleibt und ein Hinweis erscheint.
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -2361,10 +2364,11 @@ class Session(QObject):
             )
         if advised is not None:
             worker.advised.connect(lambda stamp, action: self._preview_done(stamp, action, advised))
-        # Die Vorschau hat keinen Fehlerpfad — sie ist eine Zugabe (§18.7). Was
-        # hier schiefgeht, gehört ins Protokoll und sonst nirgendwohin: ein
-        # Fehlerdialog über einer Vorschau wäre lauter als die Sache.
+        # Technische Einzelheiten gehören ins Protokoll. Ein abhängiger Editor
+        # kann seine Freigabe zurücknehmen und den Hinweis direkt am Feld zeigen.
         worker.crashed.connect(lambda detail: _log.warning("preview crashed: %s", detail))
+        if failed is not None:
+            worker.crashed.connect(lambda detail: self._preview_done(generation, detail, failed))
         worker.finished.connect(lambda done=worker: self._preview_finished(done))
         self._previews.append(worker)
         self._leash.start(worker)

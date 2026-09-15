@@ -4296,6 +4296,7 @@ class Viewport(QWidget):
         self._difference_failed = False
         self._difference_uncapped = False
         self._preview_note = ""
+        self._preview_changes = True
         self._preview_hint = ""
         self._difference_actors: list[Any] = []
         self._covered: set[ObjectId] = set()
@@ -10362,24 +10363,28 @@ class Viewport(QWidget):
     def difference(self) -> Any | None:
         return self._difference
 
-    def mark_preview(self, note: str, hint: str = "") -> None:
+    def mark_preview(self, note: str, hint: str = "", *, changes: bool = True) -> None:
         """Sagt im Bild, dass die gezeigte Änderung noch nicht übernommen ist.
 
         Leerer Text nimmt das Band wieder weg. Der Text kommt von außen: der
         Viewport weiß nicht, ob er eine Operation vorführt oder einen
         Agentenvorschlag, und beides heißt etwas anderes.
+        Reine Erkennung zeigt nur den Hinweis, ohne Abtragslegende oder Vergleich.
         """
         from PySide6.QtWidgets import QApplication
 
         application = QApplication.instance()
         self._preview_note, self._preview_hint = note, hint
+        self._preview_changes = changes
         if note:
             self._refresh_preview_banner()
+        else:
+            self.banner.hide()
+        if note and changes:
             if application is not None and not self._comparing:
                 application.installEventFilter(self._compare)
                 self._comparing = True
         else:
-            self.banner.hide()
             self.hold_before(False)
             if application is not None and self._comparing:
                 application.removeEventFilter(self._compare)
@@ -10409,7 +10414,9 @@ class Viewport(QWidget):
         if note:
             self.banner.show_preview(note, self._diff_palette, self._preview_hint)
             self.banner.legend.setVisible(
-                not self._difference_pending and not self._difference_failed
+                self._preview_changes
+                and not self._difference_pending
+                and not self._difference_failed
             )
         else:
             self.banner.hide()

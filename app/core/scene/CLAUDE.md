@@ -13,6 +13,11 @@ Die Nachbarschaft exakter Originalkanten nutzt den privaten Trimesh-Cache
 als Beschleunigung. Fehlt dessen Lese- oder Schreibschnittstelle, bleibt
 dieselbe Berechnung ohne Cache verfügbar; echte Spalten bleiben offen.
 
+`placement.original_surface_hit` prüft Originaldreiecke blockweise und
+abbrechbar. `geom.mesh.ray_hits` liefert Abstand und Dreiecksindex gemeinsam;
+ein zusätzlicher räumlicher Suchindex ist dafür unnötig. Der nächste zulässige
+Treffer berücksichtigt alle aktiven Schnittebenen und behält seine Originalkennung.
+
 Spulenbindungen in `PrintSettings` speichern die vollständige Druckfilament-
 Identität und eine lokale Kennung, niemals Pfade. `slot_profiles` bleibt eine
 Folge von Slicer-Profilnamen. Die Migration ergänzt leere Bindungen; sie rät

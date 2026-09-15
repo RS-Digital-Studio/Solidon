@@ -10,7 +10,7 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 |---|---|
 | `oberflaeche.md` | jeder Datei hier — Texte, Zahlen, Grenzen, Barrierefreiheit |
 | `ansicht.md` | `viewport.py`, `overlay.py`, `cursors.py` und den Leisten |
-| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `organizer_dialog.py` |
+| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `organizer_dialog.py`, `local_recognition.py`, `local_recognition_flow.py` |
 | `zeichenflaeche.md` | `sketch_editor.py` |
 
 Hier steht die Karte, dort das Gesetz.
@@ -48,6 +48,19 @@ dieselbe Geometrie. Das gilt auch beim Wechsel eines vorhandenen Musters,
 wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
+
+`local_recognition.py` erkundet einen festen Dokument-, Profil- und Quellenstand
+im Arbeiter. LOD-Strahlen werden am Original aufgelöst, auch die möglichen
+Merkmalhandlungen entstehen dort. Radiuswechsel entwerten Auswahl und Freigabe
+sofort; nur die jüngste Generation wird angezeigt. Originaltreffer und beantwortete
+Mehrdeutigkeit reisen im Erkennungsauftrag mit. Erkennung und Bearbeitung teilen
+Vorschau und Übernahme; `preview_revision` schützt auch die Fehlerfreigabe.
+`local_recognition_flow.py` hält die Erkundung ausschließlich in der temporären
+Ansicht. Erst die Dialogannahme schreibt eine gemeinsame `Session.apply`-Transaktion.
+Abbruch und Projektwechsel säubern Vorschau, Auswahlgriff und Rückfragen;
+`release()` wartet auf den gesonderten Arbeiterabbau.
+Die reine Auswahl verwendet `mark_preview(..., changes=False)`: Der Hinweis
+bleibt sichtbar, Änderungslegende und Vorhervergleich erscheinen erst beim Bearbeiten.
 
 Beim Einpassen der Kamera zählt der sichtbare Körperumfang einschließlich
 Platten- und Explosionsversatz. Ausgeblendete Körper und andere Einzelplatten

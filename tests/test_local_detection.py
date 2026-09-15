@@ -66,6 +66,58 @@ def bore_seed(mesh: MeshData) -> tuple[int, tuple[float, ...], tuple[float, ...]
     )
 
 
+@pytest.mark.parametrize(
+    ("point", "radius"),
+    [((0, 0, 17.5), 8), ((0, 0, 10), 101), ((200, 0, 17.5), 8)],
+)
+def test_region_filter_preserves_the_original_all_points_boundary(monkeypatch, point, radius):
+    """Blockweise Umfangsprüfung liefert dieselbe Menge wie alle Originalpunkte auf einmal."""
+    from app.core.perceive import local
+    from app.core.perceive.features import detect
+    from app.core.units import EPS_GEOM
+
+    mesh = blind_cylinder()
+    features = detect(mesh)
+    expected = tuple(
+        name
+        for name, feature in features.items()
+        if np.all(
+            np.linalg.norm(
+                mesh.raw.vertices[mesh.raw.faces[list(feature.face_indices)]] - point,
+                axis=2,
+            )
+            <= radius + EPS_GEOM
+        )
+    )
+    monkeypatch.setattr(local, "SCAN_BLOCK", 3)
+    assert local.features_in_region(mesh, features, point, radius=radius) == expected
+
+
+def test_region_filter_can_cancel_between_original_face_blocks(monkeypatch):
+    """Ein einziger großer bekannter Fleck hält den Abbruch nicht bis zum Ende auf."""
+    from app.core.errors import OperationCancelled
+    from app.core.perceive import local
+    from app.core.perceive.features import detect
+
+    mesh = blind_cylinder()
+    features = detect(mesh)
+    mantle = next(feature for feature in features.values() if feature.kind == "pin")
+    assert len(mantle.face_indices) > 200
+    monkeypatch.setattr(local, "SCAN_BLOCK", 16)
+    checks = []
+
+    def stop():
+        checks.append(True)
+        if len(checks) == 3:
+            raise OperationCancelled
+
+    with pytest.raises(OperationCancelled):
+        local.features_in_region(
+            mesh, {mantle.id: mantle}, (0, 0, 0), radius=200, check_cancelled=stop
+        )
+    assert len(checks) == 3
+
+
 def test_large_blind_bore_is_complete_and_uses_original_indices() -> None:
     """Über einer Million Dreiecken bleibt Ø6/Tiefe5 ein echtes Sackloch."""
     from app.core.perceive.local import detect_local
