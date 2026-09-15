@@ -39,6 +39,7 @@ dans `website/version.json`.
 - Ouvrir deux fois le même fichier donne deux noms distincts : « support » et « support 2 ». Avant, les deux corps portaient le même nom, dans l'arbre comme dans le rapport.
 - Les messages qui renvoient aux valeurs à droite nomment la fenêtre telle qu'elle s'appelle : Sélection. Avant, ils disaient « panneau des caractéristiques ».
 - « Réduire les triangles » le dit quand une pièce a déjà moins de triangles que le nombre saisi : il n'y a alors rien à réduire. Avant, elle restait telle quelle, sans un mot.
+- « Donner une pose » sans squelette indique que les os se créent dans l'éditeur de squelette — deux clics par os. Avant, l'étape ne déplaçait rien, en silence.
 
 ### Vue et utilisation
 

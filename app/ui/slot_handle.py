@@ -421,7 +421,7 @@ class SlotHandle:
                 return True
             if math.hypot(
                 event.x - self._press_point[0], event.y - self._press_point[1]
-            ) <= CLICK_SLACK or (
+            ) <= CLICK_SLACK * self._renderer.device_ratio() or (
                 is_close(self.length, self._start_length)
                 and is_close(self.angle, self._start_angle)
             ):
@@ -507,7 +507,7 @@ class SlotHandle:
         """
         if not self._dragged and (
             math.hypot(event.x - self._press_point[0], event.y - self._press_point[1])
-            <= CLICK_SLACK
+            <= CLICK_SLACK * self._renderer.device_ratio()
         ):
             return
         ray = self._ray(event)

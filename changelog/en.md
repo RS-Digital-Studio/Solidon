@@ -49,6 +49,7 @@ it into `website/version.json`.
 - Hollowing a part with holes in its hull now says that the hull is the problem and offers “Repair and retry” — instead of reporting that no computation path worked.
 - At the selected feature, what could only fail there is greyed out — “Turn feature” on a countersunk bore, say — with the reason. And the preview says when a question will come on apply.
 - A field that does nothing for the chosen base shape is no longer greyed out in the dialog — it appears with the shape that needs it. A rectangle shows four fields up front instead of eight.
+- At 150 or 200 per cent screen scaling, snapping, handles and marks reach as far as at 100 per cent again. The pull handle is full size, and a slightly wobbly click stays a click.
 - On a large model the preview arrives in under a second instead of several: Solidon computes it more coarsely and writes “Coarse preview” into the picture. Applying is still exact.
 - “Split along a drawn line” starts in the middle of the part instead of at its underside — like “Split”. Before, the preview only showed that the plane cuts nothing.
 - “Align to feature” now asks you to pick the second feature instead of explaining a notation to you.

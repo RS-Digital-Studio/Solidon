@@ -38,6 +38,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Abrir o mesmo ficheiro duas vezes dá dois nomes distinguíveis: «suporte» e «suporte 2». Antes ambos os corpos tinham o mesmo nome, na árvore e no relatório.
 - As mensagens que remetem para os valores à direita nomeiam a janela como ela se chama: Seleção. Antes diziam «painel de características».
 - «Reduzir triângulos» avisa quando uma peça já tem menos triângulos do que o número indicado: então não há nada a reduzir. Antes ficava como estava, sem uma palavra.
+- «Dar uma pose» sem esqueleto avisa que os ossos nascem no editor de esqueleto — dois cliques por osso. Antes o passo não movia nada, em silêncio.
 
 ### Vista e utilização
 

@@ -14,7 +14,7 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
 | Datei | Rolle |
 |---|---|
 | `api.py` | Der Vertrag: `Renderer`, `Item`, `LabelsItem`, die Stile (`SurfaceStyle`, `CellColours`, `LabelStyle`, `AxesMarkerStyle`), `CameraPose`, `PointerEvent`, `Pick`. Farben als Hexwert (`rgb`, `hex_of`). Was der Viewport, der Skizzeneditor, die Griffe und die Werkzeuge vom Bild wissen, wissen sie von hier |
-| `factory.py` | Die eine Baustelle: `make_renderer()` baut den Renderer — mit Qt-Widget unter einem Elternfenster oder ohne Fenster für Agentenbilder und Tests —, und `available()` fragt **vor** dem Aufbau den wgpu-Adapter, weil ein Renderer ohne Adapter nicht höflich stirbt, sondern mit dem Prozess. Viewport, seine Bildaufnahme (`snapshots.py`) und der Fensterprüfstand gehen hindurch; keine Einstellung in der Oberfläche, die Entscheidung fällt einmal, im Code |
+| `factory.py` | Die eine Baustelle: `make_renderer()` baut den Renderer — mit Qt-Widget unter einem Elternfenster oder ohne Fenster für Agentenbilder und Tests —, und `available()` fragt **vor** dem Aufbau den wgpu-Adapter, weil ein Renderer ohne Adapter nicht höflich stirbt, sondern mit dem Prozess. Die Frage kostet Zeit und fällt deshalb **einmal je Prozess**: `probe()` stellt sie beim Anwendungsstart in einem Arbeiter, `available()` findet die Antwort vor oder wartet mit Frist (`ADAPTER_TIMEOUT_SECONDS`) auf eine laufende — Zahlen und Begründung in `.claude/rules/ansicht.md`. Viewport, seine Bildaufnahme (`snapshots.py`) und der Fensterprüfstand gehen hindurch; keine Einstellung in der Oberfläche, die Entscheidung fällt einmal, im Code |
 | `gfx_renderer.py` | pygfx über wgpu (Vulkan, DX12, Metal): Netze als `gfx.Mesh` mit Flächenfarben, Körperkanten als Drahtgitter-Mesh über derselben Geometrie (`depth_compare="<="`, keine Kantenliste auf der CPU — die kostete am 3,15-Millionen-Dreiecke-Baum 5,8 s und 114 MB je Aufbau), Linien mit NaN-Brüchen, Punkte, Text im Bildraum mit einem Feld dahinter. Picking aus dem Bildpuffer mit genauem Sichtstrahlpunkt, wiederverwendetem Pickdurchgang und gebündelter Treffertoleranz. Durchscheinendes gewichtet gemischt (`weighted_blend`, reihenfolgeunabhängig), `force_opaque` über `solid`, der Lichtsatz `LIGHT_KIT`, das Achsenkreuz als zweites Teilbild mit eigener orthografischer Kamera. Qt-Einbettung über `rendercanvas.qt.QRenderWidget` als eigene Grafikfläche (`present_method="screen"`); ohne Fenster über `rendercanvas.offscreen` |
 | `gfx_occlusion.py` | Umgebungsverdeckung in zwei pygfx-`EffectPass`-Durchgängen: rekonstruiert Kamerapunkte aus Tiefe und inverser Projektion, tastet acht Richtungen in vier Abständen mit festem Bildortversatz ab und glättet den Verdeckungsfaktor tiefen- und normalengeführt. Radius und Bias in Millimetern. Nur der Faktor wird auf die ursprüngliche Farbe multipliziert; Farbkanten, Alpha, Tiefe und Picks bleiben erhalten. Der Renderer schattiert deckende Flächen und zeichnet erst danach Durchscheinendes, Linien, Beschriftungen und Achsen |
 | `gfx_lines.py` | Eigene pygfx-Linienmaterialien gegen koplanare Rasterlücken. Der Vertexshader versetzt nur die Rastertiefe um einen Bildpunkt im Kameraraum; frühe Tiefenprüfung, Verdeckung und ursprüngliche Weltkoordinaten bleiben bestehen |
@@ -30,6 +30,19 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
   so. pygfx zählt von sich aus wie Qt, nur in logischen Bildpunkten — der
   Renderer rechnet mit dem Geräteverhältnis um. (VTK zählte von unten, und
   `_flip` rechnete an der Grenze; das ist mit ihm gegangen.)
+
+  **Und er nennt das Verhältnis: `device_ratio()`** — Gerätepixel je
+  Logikpunkt, am Widget gefragt, ohne Fenster 1,0. Es steht am Vertrag mit
+  einer Vorgabe und nicht als `abstractmethod`, damit jedes Doppel es erbt.
+  Wer es braucht: der `Navigator` (er gibt es an `is_click` weiter, damit die
+  Funktion eine reine Rechnung bleibt) und der Viewport
+  (`_device_ratio`, `_device_pixels`). Die Regel dazu — jede Bildpunktzahl
+  der Oberfläche ist ein **Logikpunkt**, umgerechnet an der Vergleichsstelle —
+  steht in `.claude/rules/ansicht.md`.
+
+  **Punktgrößen und Linienbreiten gehören nicht dazu.** Was als `size=` oder
+  `width=` hereinkommt, ist eine logische Bildpunktzahl, und pygfx rechnet sie
+  selbst in Gerätepixel um. Wer sie vorher multipliziert, verdoppelt sie.
 * **Der Lichtsatz ist `LIGHT_KIT`** — Schlüssellicht 50° über und 10° rechts
   der Kamera (0,75), Fülllicht von unten (0,25), zwei Rücklichter (0,21), dazu
   das Frontlicht; `set_headlight` stellt nur das Frontlicht, und die
@@ -174,6 +187,11 @@ aus. `tests/test_render_factory.py` hält fest, dass `factory.available()`
 das vorher sagt; in der CI ist ein fehlender Adapter ein Fehler. Ein eigener
 Prozess prüft dort zusätzlich den nativen Qt-Fensterweg und die vollständige
 Freigabe seines Renderers.
+
+`tests/test_render_factory.py` hält daneben fest, dass die Adapterfrage einmal je
+Prozess fällt, dass ein zweiter Aufrufer auf eine laufende wartet statt eine zweite
+zu stellen, dass eine Frist sie beendet — und dass `app/ui/app.py` sie wirklich
+vorzieht.
 
 `tests/test_render_gfx_regressions.py` ergänzt die Fehlerpfade aus dem
 Vergleich echter Importmodelle: unpickbare Vorderflächen, laufende Linien-

@@ -74,6 +74,7 @@ Nutzen da und sonst nichts.
 - Aushöhlen an einem Teil mit Löchern in der Hülle sagt jetzt, dass die Hülle das Problem ist, und bietet „Reparieren und erneut versuchen“ an — statt zu melden, kein Rechenweg habe funktioniert.
 - Am gewählten Merkmal steht grau, was dort nur scheitern könnte — etwa „Merkmal drehen“ an einer gesenkten Bohrung —, mit dem Grund. Und die Vorschau sagt, wenn erst beim Übernehmen eine Frage kommt.
 - Ein Feld, das bei der gewählten Grundform nichts tut, steht nicht mehr grau im Dialog — es erscheint mit der Grundform, die es braucht. Ein Rechteck zeigt vorn vier Felder statt acht.
+- Bei 150 oder 200 Prozent Bildschirmskalierung greifen Fang, Griffe und Marken wieder so weit wie bei 100 Prozent. Der Ziehgriff steht in voller Größe, und ein leicht wackliger Klick bleibt ein Klick.
 - An einem großen Modell kommt die Vorschau in unter einer Sekunde statt in mehreren: Solidon rechnet sie gröber und schreibt „Grobe Vorschau“ ins Bild. Übernommen wird weiterhin genau.
 - „An gezeichneter Linie trennen“ beginnt in der Mitte des Teils statt auf seiner Unterseite — wie „Teilen“. Vorher zeigte die Vorschau nur, dass die Ebene nichts trennt.
 - „An Merkmal ausrichten“ bittet Sie jetzt, das zweite Merkmal zu wählen, statt Ihnen eine Schreibweise zu erklären.

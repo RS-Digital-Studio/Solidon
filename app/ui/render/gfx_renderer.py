@@ -648,7 +648,7 @@ class GfxLabels(GfxItem, LabelsItem):
             world = matrix[:3, :3] @ anchor.astype(float) + matrix[:3, 3]
             # pygfx bemisst Text und Linienstärke in logischen Bildpunkten;
             # der gemeinsame Renderer-Vertrag projiziert in Gerätepixel.
-            per_pixel = renderer._world_per_pixel_at(world, right) * renderer._ratio()
+            per_pixel = renderer._world_per_pixel_at(world, right) * renderer.device_ratio()
             low, high = label._solidon_label_bounds
             text_centre = (low + high) / 2.0
             width = max(float(high[0] - low[0]), 1.0) + 2.0 * float(style.margin)
@@ -801,7 +801,7 @@ class GfxRenderer(Renderer):
     ) -> None:
         from PySide6.QtCore import Qt
 
-        ratio = self._ratio()
+        ratio = self.device_ratio()
         position = event.position()
         modifiers = event.modifiers()
         buttons = event.buttons()
@@ -833,7 +833,8 @@ class GfxRenderer(Renderer):
         for listener in list(self._listeners.values()):
             listener(event)
 
-    def _ratio(self) -> float:
+    def device_ratio(self) -> float:
+        """Gerätepixel je Logikpunkt — am Widget gefragt, ohne Fenster 1,0."""
         if self.widget is not None:
             return float(self.widget.devicePixelRatioF()) or 1.0
         return 1.0
@@ -1385,7 +1386,7 @@ class GfxRenderer(Renderer):
     def _info_at(self, x: float, y: float) -> dict[str, Any]:
         if min(self.view_size()) <= 0:
             return {}
-        ratio = self._ratio()
+        ratio = self.device_ratio()
         return dict(self._renderer.get_pick_info((float(x) / ratio, float(y) / ratio)))
 
     def _item_of(self, info: dict[str, Any]) -> GfxItem | None:
@@ -1530,7 +1531,7 @@ class GfxRenderer(Renderer):
             found = self._item_of(self._info_at(x, y))
             if found is not None:
                 return found
-            return self._item_of(self._info_near(x, y, PICK_SLACK_PIXELS * self._ratio()))
+            return self._item_of(self._info_near(x, y, PICK_SLACK_PIXELS * self.device_ratio()))
         finally:
             self._restore(restore)
 

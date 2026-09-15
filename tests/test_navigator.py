@@ -548,3 +548,54 @@ def test_where_nothing_is_chosen_the_camera_keeps_the_button(
     navigator.handle(release(160, 250))
     phases = [call[1] for call in log.calls if call[0] == "body"]
     assert phases == ["ready"], f"nach einem abgelehnten Zug darf kein move kommen: {phases}"
+
+
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
+def test_the_same_wobble_in_logical_points_stays_a_click_at_any_scaling(
+    scene: tuple[_FlatRenderer, _Log], ratio: float
+) -> None:
+    """Acht Logikpunkte Wackeln sind ein Klick — auf jedem Bildschirm.
+
+    Der Zeiger kommt in **Gerätepixeln** an: Bei 200 Prozent Skalierung sind
+    acht Logikpunkte sechzehn davon, und gegen ``CLICK_SLACK`` gehalten war das
+    ein Zug. Wer auf einem solchen Bildschirm ein Merkmal anklickte, bewegte
+    stattdessen den Körper — dieselbe Meldung wie am 23.08.2026, nur diesmal
+    nicht am Wert der Schwelle, sondern an ihrer Einheit.
+
+    Gefahren wird über den Navigator und nicht über :func:`is_click`: Dass die
+    Funktion mit einem Faktor rechnen *kann*, sagt nichts darüber, ob der
+    Aufrufer ihn mitgibt.
+    """
+    renderer, _quiet = scene
+    renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
+    log = _Log(body=True)
+    navigator = Navigator(renderer, "solidon", log.callbacks())
+    wobble = (round(100 + 8 * ratio), round(200 + 6 * ratio))
+    navigator.handle(press(100, 200))
+    navigator.handle(move(*wobble))
+    navigator.handle(release(*wobble))
+    assert "pick" in log.kinds(), f"acht Logikpunkte Wackeln bleiben ein Klick: {log.calls}"
+    phases = [call[1] for call in log.calls if call[0] == "body"]
+    assert "start" not in phases, f"aus dem Wackeln wurde ein Zug: {log.calls}"
+
+
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
+def test_a_real_drag_stays_a_drag_at_any_scaling(
+    scene: tuple[_FlatRenderer, _Log], ratio: float
+) -> None:
+    """Die Gegenprobe: Dreißig Logikpunkte sind überall ein Zug.
+
+    Ohne sie bestünde der Test darüber auch eine Schwelle, die einfach
+    unendlich groß geworden wäre.
+    """
+    renderer, _quiet = scene
+    renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
+    log = _Log(body=True)
+    navigator = Navigator(renderer, "solidon", log.callbacks())
+    away = (round(100 + 30 * ratio), 200)
+    navigator.handle(press(100, 200))
+    navigator.handle(move(*away))
+    navigator.handle(release(*away))
+    assert "pick" not in log.kinds(), f"dreißig Logikpunkte sind ein Zug: {log.calls}"
+    phases = [call[1] for call in log.calls if call[0] == "body"]
+    assert "start" in phases, f"und der Zug beginnt: {log.calls}"

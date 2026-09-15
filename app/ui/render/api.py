@@ -384,6 +384,23 @@ class Renderer(ABC):
     def view_size(self) -> tuple[int, int]:
         """Breite und Höhe des Bildes in Gerätepixeln."""
 
+    def device_ratio(self) -> float:
+        """Gerätepixel je Logikpunkt des Fensters.
+
+        **Der Umrechnungsfaktor für jede Zahl in Bildpunkten.** Zeiger,
+        Projektion und Pickpuffer rechnen in Gerätepixeln (:meth:`view_size`,
+        :meth:`world_to_display`); die Trefferflächen, Fangweiten und
+        Zugschwellen der Oberfläche stehen in **Logikpunkten**, denn das ist
+        die Größe, die ein Mensch am Bildschirm sieht. Wer eine solche Zahl mit
+        einem Bildpunkt vergleicht, multipliziert sie vorher hiermit.
+
+        Ohne Fenster — offscreen, in Tests, bei Agentenbildern — ist es 1,0
+        und keine Umrechnung. Deshalb steht hier eine Vorgabe und kein
+        ``abstractmethod``: Ein Renderer ohne Bildschirm hat kein anderes
+        Verhältnis zu melden.
+        """
+        return 1.0
+
     @abstractmethod
     def world_to_display(self, point: Vec3) -> tuple[float, float, float]:
         """Bildpunkt (Qt-Zählung) und Tiefe (0 nah, 1 fern) eines Weltpunkts."""

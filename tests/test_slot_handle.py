@@ -1031,3 +1031,31 @@ def test_the_knobs_stay_on_the_outline_across_two_drags() -> None:
                 )
     finally:
         handle.remove()
+
+
+@pytest.mark.parametrize("ratio", [1.0, 2.0])
+def test_eight_logical_points_of_wobble_stay_a_click_at_any_scaling(
+    qt_app: object, ratio: float
+) -> None:
+    """Auch auf einem Bildschirm mit 200 Prozent Skalierung ist Antippen kein Zug.
+
+    ``CLICK_SLACK`` steht in Logikpunkten, die Zeigerpunkte kommen in
+    Gerätepixeln — acht Logikpunkte Wackeln sind dort sechzehn davon, und ohne
+    Umrechnung meldete der Griff dafür eine Länge, die niemand gezogen hat.
+    Dieselbe Falle wie in :func:`app.ui.render.navigator.is_click`, und
+    derselbe Faktor behebt sie.
+    """
+    renderer = RecordingRenderer(size=(800, 600))
+    renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
+    taken: list[tuple[float, float]] = []
+    handle = a_handle(renderer, taken)
+
+    seat = renderer.world_to_display((BORE / 2.0, 0.0, 5.0))
+    renderer.item_picks[(round(seat[0]), round(seat[1]))] = handle.knobs[0]
+    wobble = (round(seat[0] + 8.0 * ratio), round(seat[1]))
+    handle.handle(PointerEvent("move", int(seat[0]), int(seat[1])))
+    handle.handle(PointerEvent("press", int(seat[0]), int(seat[1]), button="left"))
+    handle.handle(PointerEvent("move", *wobble, buttons=frozenset({"left"})))
+    handle.handle(PointerEvent("release", *wobble, button="left"))
+
+    assert not taken, f"acht Logikpunkte Wackeln sind kein Zug (Verhältnis {ratio}): {taken}"

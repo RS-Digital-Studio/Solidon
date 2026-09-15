@@ -74,6 +74,11 @@ DOLLY_BASE: Final = 1.1
 #: Wert, ab dem Qt selbst ein Drücken als Ziehen liest, und damit derselbe, den
 #: jedes andere Fenster auf dem Bildschirm benutzt. Als Konstante und nicht
 #: über Qt abgefragt, damit :func:`is_click` eine reine Rechnung bleibt.
+#:
+#: **In Logikpunkten**, wie Qts eigene Zugschwelle und wie jede Bildpunktzahl
+#: der Oberfläche. Die Zeigerpunkte, gegen die sie steht, sind Gerätepixel —
+#: umgerechnet wird beim Vergleich mit dem Faktor der Ansicht
+#: (:meth:`Renderer.device_ratio`, siehe ``ansicht.md``).
 CLICK_SLACK: Final = 10
 
 #: Was eine Maustaste in einem Schema an der Kamera tut.
@@ -151,16 +156,25 @@ def navigation_action(scheme: NavigationScheme, button: MouseButton, shift: bool
     return _NAVIGATION[scheme][(button, shift)]
 
 
-def is_click(start: tuple[int, int] | None, end: tuple[int, int]) -> bool:
+def is_click(start: tuple[int, int] | None, end: tuple[int, int], ratio: float = 1.0) -> bool:
     """Ob zwischen Drücken und Loslassen genug stillgestanden wurde.
 
     Eine Rechnung über zwei Punkte; ein Test dafür soll kein Fenster bauen
     müssen. Ohne Anfang gab es keinen Druck, den dieses Loslassen beendet —
     dann zählt es nicht.
+
+    **``ratio`` kommt vom Aufrufer, nicht von Qt.** Die beiden Punkte sind
+    Gerätepixel, :data:`CLICK_SLACK` sind Logikpunkte; wer mit welchem
+    Verhältnis rechnet, weiß der :class:`Navigator` über den Renderer. Hier
+    eine Fensterfrage zu stellen machte aus einer reinen Rechnung eine, die
+    ohne Bildschirm nicht prüfbar wäre — und ohne den Faktor endete bei 200
+    Prozent Skalierung jeder Klick schon nach fünf Logikpunkten Wackeln als
+    Zug.
     """
     if start is None:
         return False
-    return abs(end[0] - start[0]) <= CLICK_SLACK and abs(end[1] - start[1]) <= CLICK_SLACK
+    slack = CLICK_SLACK * ratio
+    return abs(end[0] - start[0]) <= slack and abs(end[1] - start[1]) <= slack
 
 
 def turntable_camera(
@@ -403,7 +417,7 @@ class Navigator:
             return
         if self._ready_to_drag or self._dragging_body:
             if not self._dragging_body:
-                if is_click(self._left_at, now):
+                if is_click(self._left_at, now, self._renderer.device_ratio()):
                     # Noch im Klickbereich — hier passiert nichts, damit
                     # ein Klick keinen Verlaufsschritt hinterlässt.
                     return
@@ -460,7 +474,7 @@ class Navigator:
                 # Die Züge sind schon beim Drücken und Ziehen gesetzt — der
                 # Klickpfad malte denselben Punkt ein zweites Mal.
                 return
-            if is_click(started, now):
+            if is_click(started, now, self._renderer.device_ratio()):
                 self._calls.on_pick(event.x, event.y, event.shift or event.ctrl)
         elif event.button == "middle":
             self._end()
@@ -469,7 +483,7 @@ class Navigator:
             started, self._right_at = self._right_at, None
             # Ein Zug hat die Kamera bewegt und meint sie; ein Klick meint das,
             # worauf er zeigt.
-            if is_click(started, now):
+            if is_click(started, now, self._renderer.device_ratio()):
                 self._calls.on_context(event.x, event.y)
 
     # --- die Kamerabewegungen -------------------------------------------------------

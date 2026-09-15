@@ -7319,3 +7319,143 @@ def test_feature_patch_clipping_uses_the_core_without_changing_the_source(
         assert np.array_equal(corners, original)
     finally:
         viewport.deleteLater()
+
+
+#: Gerätepixel je Millimeter, mit denen die Proben zur Bildschirmskalierung
+#: rechnen. Bei 200 Prozent zeigt dasselbe Bild dieselbe Zahl **Logikpunkte**
+#: je Millimeter und damit doppelt so viele Gerätepixel — genau das macht
+#: ``_scaled_sketch_view`` nach.
+DEVICE_PIXELS_PER_MM = 4.0
+
+
+def _scaled_sketch_view(ratio: float) -> tuple[Any, float]:
+    """Eine Zeichenansicht auf einem Bildschirm mit diesem Geräteverhältnis.
+
+    Der Zeiger kommt in Gerätepixeln herein und ``_display_of`` antwortet in
+    Gerätepixeln — beides stellt diese Ansicht nach, indem der Maßstab mit dem
+    Verhältnis mitwächst. Zurück kommen die Ansicht und ihr Maßstab.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+    from tests.render_fakes import RecordingRenderer
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
+    viewport.renderer = renderer
+    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
+    viewport._sketch_curves = flat_curves()
+    per_mm = DEVICE_PIXELS_PER_MM * ratio
+    viewport.pixels_per_mm = lambda _frame: per_mm  # type: ignore[method-assign]
+    viewport.pixels_per_mm_upright = lambda _frame: per_mm  # type: ignore[method-assign]
+    # Das Rechteck liegt in der XY-Ebene; im Bild wird x nach rechts und die
+    # Normale (z) nach oben. So steht der Ziehgriff als senkrechte Strecke da.
+    viewport._display_of = lambda point: (  # type: ignore[method-assign]
+        float(point[0]) * per_mm,
+        float(point[2]) * per_mm,
+    )
+    viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0), (0.1, 1000.0))
+    viewport.pull_height_at = lambda base, x, y: 10.0  # type: ignore[method-assign]
+    return viewport, per_mm
+
+
+@pytest.mark.parametrize("ratio", [1.0, 2.0])
+def test_the_outline_grip_reaches_as_far_in_logical_points_at_any_scaling(
+    qt_app: QApplication, ratio: float
+) -> None:
+    """Sechs Logikpunkte neben dem Umriss greift er, sechzehn nicht — überall.
+
+    ``grip_reach`` antwortet in Gerätepixeln, :data:`CURSOR_PIXELS` sind
+    Logikpunkte. Ohne Umrechnung reichte der Griff auf einem Bildschirm mit 200
+    Prozent Skalierung nur noch fünf Logikpunkte weit: dieselbe Zahl, die halbe
+    sichtbare Handbreit.
+
+    Gemessen über :meth:`Viewport._resting_role` — die Entscheidung, die der
+    Kunde als Zeigerform sieht — und nicht an der Rechnung darunter.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport, per_mm = _scaled_sketch_view(ratio)
+    assert isinstance(viewport, Viewport)
+    try:
+        # Weit weg vom Griff in der Mitte des Rechtecks: Hier entscheidet
+        # allein der Abstand zum Umriss.
+        beside = round(5.0 * per_mm)
+        viewport._hover_at = (beside, round(6.0 * ratio))
+        assert viewport._resting_role() == "move", (
+            f"sechs Logikpunkte neben dem Umriss hält der Griff (Verhältnis {ratio})"
+        )
+        viewport._hover_at = (beside, round(16.0 * ratio))
+        assert viewport._resting_role() == "draw", (
+            f"sechzehn Logikpunkte daneben nicht mehr (Verhältnis {ratio})"
+        )
+    finally:
+        viewport.deleteLater()
+
+
+@pytest.mark.parametrize("ratio", [1.0, 2.0])
+def test_the_pull_handle_keeps_its_size_and_its_hit_zone_at_any_scaling(
+    qt_app: QApplication, ratio: float
+) -> None:
+    """Der Ziehgriff steht 38 Logikpunkte hoch und hält 14 weit — überall.
+
+    Beide Zahlen gingen bei 200 Prozent Skalierung auf die Hälfte: die Länge,
+    weil sie durch einen Maßstab in Gerätepixeln geteilt wurde, die Trefferzone,
+    weil sie gegen einen Abstand in Gerätepixeln stand. Ein Stummel mit einem
+    halben Ring darum ist genau das, wogegen
+    :meth:`Viewport.pixels_per_mm_upright` einmal gebaut wurde.
+    """
+    from app.ui.viewport import PULL_HANDLE_PIXELS, PULL_HIT_PIXELS
+
+    viewport, per_mm = _scaled_sketch_view(ratio)
+    try:
+        inward, outward = viewport._pull_handle_segments()[0]
+        half = abs(float(outward[2]) - float(inward[2])) / 2.0 * per_mm / ratio
+        assert half == pytest.approx(PULL_HANDLE_PIXELS), (
+            f"der sichtbare Griff misst {half} Logikpunkte (Verhältnis {ratio})"
+        )
+
+        tip = viewport._display_of(outward)
+        limit = viewport._device_pixels(PULL_HIT_PIXELS)
+        near = viewport.pull_handle_reach(round(tip[0] + 10.0 * ratio), round(tip[1]))
+        far = viewport.pull_handle_reach(round(tip[0] + 20.0 * ratio), round(tip[1]))
+        assert near <= limit, f"zehn Logikpunkte neben der Spitze hält er (Verhältnis {ratio})"
+        assert far > limit, f"zwanzig nicht mehr (Verhältnis {ratio})"
+    finally:
+        viewport.deleteLater()
+
+
+@pytest.mark.parametrize("ratio", [1.0, 2.0])
+def test_the_drawn_sketch_marks_keep_their_size_at_any_scaling(
+    qt_app: QApplication, ratio: float
+) -> None:
+    """Fangmarke und Achsenbuchstabe stehen so groß und so weit wie bei 100 %.
+
+    Beide werden in Millimetern gezeichnet, und der Weg dorthin führt durch
+    einen Maßstab in Gerätepixeln. Ohne Umrechnung schrumpfte das Kreuz bei 200
+    Prozent auf zehn Gerätepixel — fünf sichtbare Logikpunkte, und das ist die
+    Größe, bei der die Marke beim ersten Anlauf schon einmal unauffindbar war.
+    """
+    from app.ui.viewport import AXIS_LABEL_PIXELS, CURSOR_PIXELS
+
+    viewport, per_mm = _scaled_sketch_view(ratio)
+    try:
+        assert viewport._set_sketch_cursor((10.0, 5.0)), "die Marke entsteht"
+        corners = np.asarray(viewport.renderer.item_of("sketch_cursor").points, dtype=float)
+        half = (float(corners[:, 0].max()) - float(corners[:, 0].min())) / 2.0
+        assert half * per_mm / ratio == pytest.approx(CURSOR_PIXELS), (
+            f"die halbe Marke misst {half * per_mm / ratio} Logikpunkte (Verhältnis {ratio})"
+        )
+
+        viewport.show_sketch(
+            flat_curves(), viewport._sketch_frame, 10.0, 60.0, axis_names=("X", "Y")
+        )
+        placed = np.asarray(
+            viewport.renderer.item_of("sketch_axis_x_label").points, dtype=float
+        ).reshape(-1, 3)
+        away = float(placed[0][0]) * per_mm / ratio
+        assert away == pytest.approx(AXIS_LABEL_PIXELS), (
+            f"der Achsenbuchstabe steht {away} Logikpunkte vom Ursprung (Verhältnis {ratio})"
+        )
+    finally:
+        viewport.deleteLater()

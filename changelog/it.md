@@ -38,6 +38,7 @@ scrive in `website/version.json`.
 - Aprire due volte lo stesso file dà due nomi distinguibili: « supporto » e « supporto 2 ». Prima i due corpi si chiamavano uguali, nell'albero e nel rapporto.
 - I messaggi che rimandano ai valori a destra chiamano la finestra come si chiama: Selezione. Prima dicevano « pannello delle caratteristiche ».
 - « Ridurre i triangoli » lo dice quando un pezzo ha già meno triangoli del numero indicato: allora non c'è nulla da ridurre. Prima restava com'era, senza una parola.
+- « Dai una posa » senza scheletro segnala che le ossa nascono nell'editor dello scheletro: due clic per osso. Prima il passo non muoveva nulla, in silenzio.
 
 ### Vista e utilizzo
 

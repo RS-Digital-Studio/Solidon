@@ -39,6 +39,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Abrir el mismo archivo dos veces da dos nombres distinguibles: «soporte» y «soporte 2». Antes ambos cuerpos se llamaban igual, en el árbol y en el informe.
 - Los mensajes que remiten a los valores de la derecha nombran la ventana como se llama: Selección. Antes decían «panel de características», y así no se llama ninguna ventana.
 - «Reducir triángulos» avisa cuando una pieza ya tiene menos triángulos que la cantidad indicada: entonces no hay nada que reducir. Antes se quedaba igual, sin una palabra.
+- «Dar una postura» sin esqueleto avisa de que los huesos se crean en el editor de esqueleto: dos clics por hueso. Antes el paso no movía nada, en silencio.
 
 ### Vista y manejo
 
