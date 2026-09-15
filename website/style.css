@@ -434,6 +434,16 @@ nav.lang a.cta:hover {
 
 @media (max-width: 30rem) {
   nav.lang .hide-tiny { display: none; }
+  /* **Die Sprachliste öffnet nach rechts, weil der Griff links steht.**
+     Bis 30rem sitzt die Navigation am linken Rand (gemessen bei 320 bis
+     479 Punkt: Griff „DE“ bei 78 bis 131), und `right: 0` hängte die
+     9.5rem breite Liste an seine rechte Kante — sie begann bei −21 und
+     die ersten Buchstaben fehlten. Dieselbe Regel wie beim Menü darüber
+     (`.menu-panel`): Ein Aufklapper öffnet zur Seite, auf der Platz ist.
+     Ab 481 Punkt steht die Navigation rechts, und dort bleibt `right: 0`
+     richtig; mit `left: 0` läge die Liste bei 1000 Punkt acht Punkt vor
+     dem Rand. */
+  nav.lang details.langs ul { left: 0; right: auto; }
 }
 
 /* ── Aufmacher ─────────────────────────────────────────────────────────── */
@@ -1538,6 +1548,21 @@ section h2 {
    gemeint. Wo es fehlt, bricht die Überschrift wie bisher — ein Zuwachs,
    kein Erfordernis. */
 :is(h1, h2, h3) { text-wrap: balance; }
+
+/* **Ein Wort, das breiter ist als der Schirm, wird getrennt statt
+   abgeschnitten.** `body { overflow: clip }` verhindert das Wegwischen —
+   und verschluckt damit stumm, was nicht passt: „Allgemeine
+   Geschäftsbedingungen“ stand bei 320 Punkt 79 Punkt über dem Rahmen,
+   „Datenschutzerklärung“ 59, „Widerrufsbelehrung“ und
+   „Systemvoraussetzungen“ je 23 (gemessen in QtWebEngine, RM-079). Die
+   Trennung folgt der Sprache der Seite (`lang`); wo der Browser kein
+   Wörterbuch hat, bricht `overflow-wrap: anywhere` — nur unter 40rem, denn
+   an breiten Schirmen passt jedes Wort, und die Regel soll dort keine
+   Mindestbreite im Raster verändern. */
+:is(h1, h2, h3) { hyphens: auto; }
+@media (max-width: 40rem) {
+  :is(h1, h2, h3) { overflow-wrap: anywhere; }
+}
 
 /* Eine Unterseite führt ihre Überschrift als h1 dort, wo die Startseite eine
    h2 hätte — eine Stufe größer, sonst gleich. Ohne diese Regel bliebe sie auf
