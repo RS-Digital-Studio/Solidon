@@ -6420,6 +6420,50 @@ def _scene_with_two_bodies() -> Any:
     )
 
 
+@pytest.mark.parametrize("mixed", [False, True])
+def test_difference_colours_remain_visible_over_the_result_surface(
+    qt_app: QApplication,
+    mixed: bool,
+) -> None:
+    """Ein aufgebrachtes Muster bleibt als hinzugefügtes Material sichtbar."""
+    from dataclasses import replace
+
+    from app.core.geom.difference import compare_scenes
+    from app.core.types import Scene
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    before = _scene_with_two_bodies()
+    viewport.show_scene(before)
+    extended = trimesh.creation.box(extents=(15.0 if mixed else 20.0, 20.0, 15.0))
+    extended.apply_translation((0.0, 0.0, 2.5))
+    after = Scene(objects=dict(before.scene.objects))
+    after.objects["obj_1"] = replace(after.objects["obj_1"], mesh=MeshData(extended))
+    difference = compare_scenes(before.scene, after)
+    assert difference.entries["obj_1"].result is not None
+    viewport.show_difference(difference)
+
+    assert not viewport._actors["obj_1"].visible()
+    assert "added:obj_1" in renderer.names()
+    assert "preview:obj_1" in renderer.names()
+    assert renderer.style_of("added:obj_1").coplanar_overlay
+    assert not renderer.style_of("preview:obj_1").coplanar_overlay
+    if mixed:
+        assert renderer.style_of("removed:obj_1").coplanar_overlay
+    added = renderer.item_of("added:obj_1")
+    viewport.hold_before(True)
+    assert added in renderer.removed
+    assert viewport._actors["obj_1"].visible()
+    viewport.hold_before(False)
+    added = renderer.item_of("added:obj_1")
+    assert added not in renderer.removed
+    viewport.show_difference(None)
+    assert added in renderer.removed
+    assert viewport._actors["obj_1"].visible()
+
+
 def test_a_volume_preview_shows_the_result_and_does_not_reuse_its_face_numbers(
     qt_app: QApplication,
 ) -> None:

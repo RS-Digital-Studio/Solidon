@@ -480,6 +480,64 @@ def test_coplanar_line_has_no_depth_fighting_and_stays_hidden_behind_a_body(
     assert np.count_nonzero(covered.sum(axis=2) == 0) == 0, "a hidden edge must stay hidden"
 
 
+@pytest.mark.parametrize("lighting", [False, True])
+@pytest.mark.parametrize("opacity", [0.95, 1.0])
+def test_coplanar_surface_stays_visible_but_obeys_occlusion_after_camera_turns(
+    renderer: GfxRenderer, lighting: bool, opacity: float
+) -> None:
+    """Koplanare Markierungen bleiben sichtbar, ohne durch Vorderkörper zu scheinen."""
+    renderer.set_background("#777777")
+    renderer.add_surface(
+        *plate(0, 40), name="floor", style=SurfaceStyle(colour="#ffffff", lighting=False)
+    )
+    points, triangles = plate(0, 24)
+    points += np.array([8.0, 8.0, 0.0])
+    marking = renderer.add_surface(
+        points,
+        triangles,
+        name="marking",
+        style=SurfaceStyle(
+            colour="#0000ff",
+            opacity=opacity,
+            lighting=lighting,
+            ambient=1.0,
+            coplanar_overlay=True,
+        ),
+    )
+    cover_points, cover_triangles = cube(40)
+    cover_points[:, 2] = 1.0 + cover_points[:, 2] / 40.0
+    cover = renderer.add_surface(
+        cover_points,
+        cover_triangles,
+        name="cover",
+        style=SurfaceStyle(colour="#ffffff", lighting=False),
+    )
+    samples = [(float(x), float(y), 0.0) for x in range(10, 31, 2) for y in range(10, 31, 2)]
+    for parallel in (True, False):
+        renderer.set_parallel_projection(parallel)
+        for position in ((20, 20, 100), (65, -55, 60), (-40, 60, 70)):
+            cover.set_visible(False)
+            renderer.set_camera_pose(CameraPose(position, (20, 20, 0), (0, 1, 0)))
+            renderer.reset_camera((0, 40, 0, 40, 0, 2))
+            image = renderer.screenshot()
+            pixels = [renderer.world_to_display(point) for point in samples]
+            colours = np.array([image[int(y), int(x)] for x, y, _depth in pixels], dtype=int)
+            assert np.all(colours[:, 2] > colours[:, :2].max(axis=1) + 80), (
+                "every interior pixel of a coplanar marking must remain blue"
+            )
+            x, y, _depth = renderer.world_to_display((20, 20, 0))
+            hit = renderer.pick_surface(x, y, among=[marking])
+            assert hit is not None and hit.item is marking
+            assert hit.point[2] == pytest.approx(0.0, abs=1e-10)
+            cover.set_visible(True)
+            covered = renderer.screenshot().astype(int)
+            assert not np.any(covered[:, :, 2] > covered[:, :, :2].max(axis=2) + 80), (
+                "the marking must stay hidden behind the foreground body"
+            )
+    assert marking.bounds() == pytest.approx((8, 32, 8, 32, 0, 0))
+    np.testing.assert_array_equal(marking.objects[0].geometry.positions.data, points)
+
+
 def test_label_field_uses_glyph_width_and_keeps_the_anchor_dot_free(renderer: GfxRenderer) -> None:
     style = LabelStyle(
         text_colour="#00ff00",

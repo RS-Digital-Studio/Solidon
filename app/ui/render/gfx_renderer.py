@@ -886,6 +886,15 @@ class GfxRenderer(Renderer):
 
     def _material(self, style: SurfaceStyle, colour: Colour, opacity: float, side: str) -> Any:
         gfx = self._gfx
+        basic = gfx.MeshBasicMaterial
+        phong = gfx.MeshPhongMaterial
+        if style.coplanar_overlay:
+            from app.ui.render.gfx_surfaces import (
+                CoplanarMeshBasicMaterial,
+                CoplanarMeshPhongMaterial,
+            )
+
+            basic, phong = CoplanarMeshBasicMaterial, CoplanarMeshPhongMaterial
         common: dict[str, Any] = {
             "color": colour,
             "opacity": float(opacity),
@@ -900,8 +909,8 @@ class GfxRenderer(Renderer):
             common["render_queue"] = OVERLAY_QUEUE
         common["alpha_mode"] = "solid" if style.force_opaque else _alpha_mode(opacity)
         if not style.lighting:
-            return gfx.MeshBasicMaterial(**common)
-        material = gfx.MeshPhongMaterial(**common, shininess=SURFACE_SHININESS)
+            return basic(**common)
+        material = phong(**common, shininess=SURFACE_SHININESS)
         # Durchscheinende Hilfskörper erklären ihre Farbe und den Durchblick.
         # Der neutrale Glanz gehört zur deckenden Körperdarstellung.
         default_specular = SURFACE_SPECULAR if opacity >= 1.0 and style.ambient is None else 0.0

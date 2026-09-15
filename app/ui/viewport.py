@@ -10723,7 +10723,7 @@ class Viewport(QWidget):
                 np.asarray(raw.vertices, dtype=float) + shift,
                 np.asarray(raw.faces, dtype=np.int64),
                 name=name,
-                style=SurfaceStyle(colour=colour, opacity=opacity),
+                style=SurfaceStyle(colour=colour, opacity=opacity, coplanar_overlay=True),
             )
         )
 

@@ -40,10 +40,12 @@ Schnellaktionen und Operationsgruppen. Die Filamentzuweisung bietet
 „Entfernen“ nur bei belegter Auswahl. Vorübergehend gesperrte Eingabefelder
 behalten ihre Werte und Rückmeldung während einer laufenden Auswertung.
 
-Bei reinem Hinzufügen zeigen Original und Differenz gemeinsam das Ergebnis.
-Ein deckungsgleicher zusätzlicher Nachherkörper würde die farbige Markierung
-der hinzugefügten Textur verdecken. Abtrag und unvollständige Vergleiche
-behalten ihre vollständige Ergebnisvorschau.
+Die Vorschau zeigt den vollständigen Ergebniskörper und die farbigen
+Differenzvolumen. Deren `coplanar_overlay` verhindert, dass eine deckungsgleiche
+Ergebnisfläche die Änderungsmarkierung verdeckt. Der Rasterversatz erhält
+Verdeckung und Weltkoordinaten; Vorschau, Dokument und Export teilen weiter
+dieselbe Geometrie. Das gilt auch beim Wechsel eines vorhandenen Musters,
+wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 

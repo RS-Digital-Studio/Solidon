@@ -77,6 +77,10 @@ class SurfaceStyle:
     heraus, ``keep_in_front`` zieht ihn im Tiefenpuffer nach vorn (Maßlinien,
     Fangmarken: eine Marke, die im Material verschwindet, sagt nichts über
     die Stelle, die sie meint).
+    ``coplanar_overlay`` rückt nur die Rastertiefe einer Flächenmarkierung
+    geringfügig zur Kamera. Sie liegt dadurch sichtbar auf derselben Fläche,
+    bleibt aber hinter davorliegenden Körpern verborgen. Weltpunkte und
+    Pickkoordinaten bleiben unverändert.
     """
 
     colour: Colour = "#b9c4d0"
@@ -96,6 +100,7 @@ class SurfaceStyle:
     force_opaque: bool = False
     keep_in_front: bool = False
     cull_backfaces: bool = False
+    coplanar_overlay: bool = False
 
 
 @dataclass(frozen=True)
