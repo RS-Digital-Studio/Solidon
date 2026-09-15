@@ -41,6 +41,13 @@ scrive in `website/version.json`.
 - Sull'elemento scelto appare in grigio ciò che lì potrebbe solo fallire — «Ruota elemento» su un foro svasato, per esempio — con il motivo. E l'anteprima dice se all'applicazione arriverà una domanda.
 - Un campo che non fa nulla con la forma base scelta non appare più grigio nella finestra — appare con la forma che ne ha bisogno. Un rettangolo mostra davanti quattro campi invece di otto.
 
+### File ed esportazione
+
+- Un 3MF dallo slicer ora si apre anche quando i colori non si leggono senza ambiguità: il modello arriva in un solo colore e il rapporto dice perché. Prima il file restava chiuso.
+- Le facce dipinte in Bambu Studio, Orca ed Elegoo arrivano esattamente come dipinte, anche dove un colore attraversa un triangolo. Prima contava come «ambiguo».
+- Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.
+- Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer.
+
 ## 0.4.1
 
 ### Costruire e modificare

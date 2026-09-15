@@ -159,7 +159,13 @@ def load(ctx: OpContext) -> OpResult:
         # scan_assembly zählt streamend, in beschränktem Speicher.
         check_limits(len(payload), threemf.scan_assembly(payload)[1])
     stem = Path(source.path).stem
-    parts = threemf.read_objects(payload) if suffix.lower() == ".3mf" else []
+    # Der Leser sagt, was er nicht übernehmen konnte oder entschieden hat —
+    # Farben, die einfarbig wurden, ein übersprungenes Hilfsteil, eine
+    # abgezogene Aussparung. Das gehört in den Prüfbericht, nicht ins
+    # Protokoll: Der Kunde soll sehen, warum sein Modell anders aussieht als
+    # im Slicer, und was er dagegen tun kann.
+    findings: list[Finding] = []
+    parts = threemf.read_objects(payload, findings) if suffix.lower() == ".3mf" else []
     if not parts:
         mesh = read_model(payload, suffix)
         mesh, slots = _colour_groups(payload, suffix, mesh)
@@ -206,7 +212,6 @@ def load(ctx: OpContext) -> OpResult:
     # steht, geht weiter vor: Wer die Einheit von Hand setzt, korrigiert auch
     # eine Datei, die sich irrt.
     stated = _stated_unit(payload, suffix) if params.unit == "auto" else None
-    findings: list[Finding] = []
     if stated is not None:
         declared, unit, factor = stated
         # Nicht aufgeschrieben: Die Datei sagt es beim nächsten Mal wieder, und
@@ -278,7 +283,17 @@ def load(ctx: OpContext) -> OpResult:
                 values={"parts": len(parts), "file": stem},
             )
         )
-    return OpResult(outputs=outputs, findings=findings, answered=answered)
+    # Träge wie im Leser: Ohne Aussparung braucht das Laden den Rechenkern
+    # nicht, und eine Voxelstufe an einem Körper macht das Ergebnis der
+    # Operation zu einem Voxelergebnis (§17.2).
+    from app.core.geom.boolean import deepest
+
+    return OpResult(
+        outputs=outputs,
+        solver=deepest(part.solver for part in parts),
+        findings=findings,
+        answered=answered,
+    )
 
 
 def _named(findings: Sequence[Finding], name: str) -> list[Finding]:

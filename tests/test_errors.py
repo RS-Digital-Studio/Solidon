@@ -369,8 +369,13 @@ _NOT_A_RANGE = frozenset(
         # gibt. Beides sind Einträge in zwei kurzen Listen — es gibt kein Feld,
         # in dem eine Zahl zu klein wäre.
         "missing_font", "missing_style",
-        # Fremde Materialcodierung beziehungsweise fehlender Messkontext.
-        "unsupported_material_semantics", "calibration_process",
+        # Fehlender Messkontext. (Die fremde Materialcodierung einer 3MF stand
+        # hier bis zum 14.09.2026 daneben — seither ist sie kein Abbruch mehr,
+        # sondern ein Befund: Der Körper kommt einfarbig.)
+        "calibration_process",
+        # Eine 3MF aus nichts als Hilfsteilen oder Aussparungen des Slicers:
+        # kein Feld, das jemand korrigieren könnte, sondern eine andere Datei.
+        "no_printable_part",
         # Die Ausgabe überschreitet eine Formatkapazität; kein Zahlenfeld
         # lässt sich korrigieren. Der Rückweg teilt die Ausgabe auf.
         "native_filament_limit",

@@ -41,6 +41,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No elemento escolhido aparece a cinzento o que ali só poderia falhar — «Rodar elemento» num furo escareado, por exemplo — com o motivo. E a pré-visualização diz se ao aplicar virá uma pergunta.
 - Um campo que nada faz com a forma base escolhida já não aparece a cinzento no diálogo — surge com a forma que precisa dele. Um retângulo mostra à frente quatro campos em vez de oito.
 
+### Ficheiros e exportação
+
+- Um 3MF do slicer abre agora mesmo quando as cores não se leem sem ambiguidade: o modelo chega numa só cor e o relatório diz porquê. Antes, o ficheiro ficava fechado.
+- As faces pintadas no Bambu Studio, Orca e Elegoo chegam exatamente como foram pintadas — mesmo onde uma cor atravessa um triângulo. Antes, isso contava como «ambíguo».
+- Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.
+- Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer.
+
 ## 0.4.1
 
 ### Construir e alterar

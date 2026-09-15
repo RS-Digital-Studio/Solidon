@@ -66,6 +66,13 @@ Nutzen da und sonst nichts.
 - Am gewählten Merkmal steht grau, was dort nur scheitern könnte — etwa „Merkmal drehen“ an einer gesenkten Bohrung —, mit dem Grund. Und die Vorschau sagt, wenn erst beim Übernehmen eine Frage kommt.
 - Ein Feld, das bei der gewählten Grundform nichts tut, steht nicht mehr grau im Dialog — es erscheint mit der Grundform, die es braucht. Ein Rechteck zeigt vorn vier Felder statt acht.
 
+### Dateien und Export
+
+- Eine 3MF aus dem Slicer öffnet jetzt auch dann, wenn die Farben nicht eindeutig lesbar sind: Das Modell kommt einfarbig an, und der Prüfbericht sagt, warum. Vorher blieb die Datei ganz zu.
+- Bemalte Flächen aus Bambu Studio, Orca und Elegoo kommen genau so an, wie sie gemalt wurden — auch wenn die Farbe mitten durch ein Dreieck läuft. Vorher galt das als „nicht eindeutig“.
+- Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.
+- Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer.
+
 ## 0.4.1
 
 ### Konstruieren und Ändern

@@ -41,6 +41,13 @@ it into `website/version.json`.
 - At the selected feature, what could only fail there is greyed out — “Turn feature” on a countersunk bore, say — with the reason. And the preview says when a question will come on apply.
 - A field that does nothing for the chosen base shape is no longer greyed out in the dialog — it appears with the shape that needs it. A rectangle shows four fields up front instead of eight.
 
+### Files and export
+
+- A 3MF from the slicer now opens even when its colours cannot be read unambiguously: the model arrives in one colour, and the report says why. Before, the file stayed closed.
+- Painted faces from Bambu Studio, Orca and Elegoo arrive exactly as painted — even where a colour runs through the middle of a triangle. Before, that counted as “ambiguous”.
+- A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.
+- Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer.
+
 ## 0.4.1
 
 ### Building and editing

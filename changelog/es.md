@@ -42,6 +42,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el rasgo elegido aparece en gris lo que solo podría fallar ahí — «Girar elemento» en un taladro avellanado, por ejemplo — con el motivo. Y la vista previa avisa si al aplicar vendrá una pregunta.
 - Un campo que no hace nada con la forma base elegida ya no aparece en gris en el diálogo — aparece con la forma que lo necesita. Un rectángulo muestra delante cuatro campos en vez de ocho.
 
+### Archivos y exportación
+
+- Un 3MF del slicer ahora se abre aunque sus colores no se puedan leer sin ambigüedad: el modelo llega en un solo color y el informe dice por qué. Antes, el archivo no se abría.
+- Las caras pintadas en Bambu Studio, Orca y Elegoo llegan exactamente como se pintaron, incluso cuando un color atraviesa un triángulo. Antes eso contaba como «ambiguo».
+- Un relieve de texto del slicer de Elegoo o de Bambu Studio en el archivo detenía la importación. Ahora el archivo se abre.
+- Los modificadores y bloqueadores de soportes del slicer ya no aparecen como cuerpos, y un hueco («pieza negativa») se resta, como en el slicer.
+
 ## 0.4.1
 
 ### Construir y modificar

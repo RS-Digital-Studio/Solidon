@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Eine 3MF von MakerWorld ging nicht auf (14.09.2026)](#eine-3mf-von-makerworld-ging-nicht-auf-14092026) |
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
 | 2026-09-15 | [Die Suite öffnet kein Fenster (15.09.2026)](#die-suite-öffnet-kein-fenster-15092026) |
 | 2026-09-15 | [Die Verhaltensabnahme der kompakten Schemata (15.09.2026)](#die-verhaltensabnahme-der-kompakten-schemata-15092026) |
@@ -28452,3 +28453,109 @@ einem Zähler statt mit Augen.
   ungestagete Arbeit an Fenster und Katalogen, Renderer-Tests bei belegter Grafikkarte — und
   keiner davon öffnet ein Fenster. Der Docstring des Prozesstests trägt die Messung; das
   Werkzeug bleibt in `tools/` für den nächsten, der ein Fenster sieht.
+
+## Eine 3MF von MakerWorld ging nicht auf (14.09.2026)
+
+Vorgang S-20260914-e4b6d7, Art bug, 0.4.1 auf Windows 11, Sprache de, keine
+Rückadresse. Der Kunde nennt ein Modell von MakerWorld („double mechanical
+light switch", 559209, Profil 478363) und dreimal dieselbe Zeile im
+Protokoll: `op.load.ValidationError: Die Werkzeug- oder Flächenfarben dieser
+3MF lassen sich nicht eindeutig übernehmen.` Der Grund stand als Wert im
+Fehler, nicht in der Protokollzeile — und die Datei selbst ist nicht dabei.
+
+**Gemessen am Downloads-Ordner dieser Maschine statt an der Kundendatei:**
+sechzehn 3MF aus MakerWorld und vom Elegoo-Slicer, und der Leser wies vier
+davon zurück. Zwei Ursachen, beide über einem vollständigen Netz:
+
+- **Drei Dateien:** `model_settings.config` trägt ein SVG-Relief als
+  `<slic3rpe:shape …/>`, ohne den Präfix je zu deklarieren. Bambu Studio und
+  der Elegoo-Slicer lesen die Datei mit einem Parser ohne Namensräume;
+  `ET.fromstring` warf „unbound prefix", und daran hing der ganze Import.
+  Seither liest `_slicer_config` die Datei mit Expat ohne
+  Namensraumauflösung — so, wie der Slicer sie liest.
+- **Eine Datei (chufang.3mf, 5,5 Millionen Dreiecke, 744 429
+  Bemalungscodes):** echte Teilflächenbemalung. Der Leser kannte nur ganze
+  Dreiecke und nannte alles andere „nicht eindeutig". Das Format ist der
+  Bitstrom von `TriangleSelector::serialize` (nachgelesen in Bambu Studios
+  Quelltext, nicht erraten): je Hexziffer ein Knoten, die Zeichenkette
+  rückwärts, Kinder in umgekehrter Reihenfolge, Teilung an Kantenmitten mit
+  festem Eckenmuster. `_decode_paint` liest ihn — alle 744 429 Codes gingen
+  exakt auf —, und `_refine` teilt die Dreiecke wie der Slicer, Mittelpunkte
+  über beide Seiten einer Kante geteilt, T-Stöße zu ungeteilten Nachbarn im
+  zweiten Durchgang geschlossen. Acht bemalte Körper kommen dicht und
+  zweifarbig an; 0,6 s von 20 s Gesamtzeit.
+
+**Und die Entscheidung dahinter (Robert, 14.09.2026: „zur Not soll das
+Filament halt einfarbig bleiben"):** Kein Farbproblem hält den Import mehr
+an. Was sich an Werkzeug- oder Flächenangaben nicht lesen lässt, ist eine
+Auskunft (`_MaterialError`) und kein `ValidationError`: Der Körper kommt
+einfarbig, der Grund steht mit demselben Rat als Befund
+`ingest.colours_dropped` im Prüfbericht — je Körper, eine unlesbare Palette
+als `ingest.palette_dropped` für alle. Dazu die Teile, die ein Slicer außer
+druckbaren in ein Objekt legt und die bisher ebenfalls alles anhielten:
+Modifikator, Stützblocker und Stützverstärker werden übersprungen
+(`ingest.helper_skipped`), eine Aussparung (`negative_part`) wird von jedem
+druckbaren Teil ihres Objekts abgezogen (`ingest.negative_carved`, über die
+Rückfallkette; trifft sie ein Teil nicht, bleibt es still). Der Zählweg
+trifft dieselbe Entscheidung wie der Leser.
+
+Nachgewiesen in `tests/test_threemf_native_materials.py` (53 Fälle): der
+Dekoder gegen den Baum des Slicers, eine Seite, drei Seiten, drei echte Codes
+aus chufang.3mf mit Flächenanteilen aus dem Baum als Sollwert, Nachbarn
+verschiedener Tiefe dicht, das Relief ohne Namensraum, jeder Fehlergrund als
+Befund statt Abbruch, ein Objektproblem trifft nur sein Objekt, Hilfsteile
+kein Körper, Aussparung abgezogen (Volumen 1 − 0,25 · 0,5 · 0,5), Aussparung
+trifft nur das Teil, das sie erreicht, und der Anschluss durch die
+`load`-Operation bis in den Prüfbericht. Sechs Mutationen — T-Stöße aus,
+Kinder vorwärts, Hilfsteile als Körper, Aussparung nicht abgezogen,
+Objektproblem trifft alle, Befunde nicht weitergereicht — machen je einen bis
+sechs Tests rot. Alle sechzehn Dateien des Downloads-Ordners lesen, Zählweg
+und Leser stimmen überein.
+
+Zwei Funde aus dem eigenen Review, beide vor dem Commit: Sind alle Kanten von
+beiden Seiten geteilt, bleibt kein T-Stoß, die leere Liste hatte die Form
+`(0,)` statt `(0, 3)`, und `vstack` riss (gemessen an einer Box, alle zwölf
+Dreiecke dreifach). Und eine Datei aus nichts als Aussparungen gab eine leere
+Liste zurück — für `load` das Zeichen „keine lesbare 3MF", worauf der
+allgemeine Leser die Aussparung als Körper geladen hätte, neben dem Befund,
+sie sei nicht geladen; jetzt eine Absage `no_printable_part` mit Ausweg.
+
+**Das Review (solidon3d-review, 14.09.2026) fand zwölf Punkte, alle
+übernommen.** Drei schwere: Der Zählweg zählte nur `normal_part`, der Leser
+übersprang nur, was er kannte — eine unbekannte Art wäre geladen und nicht
+gezählt worden, und `evaluate.object_count` hätte die Auswertung angehalten
+(jetzt ein Prädikat `_is_body` für beide, Unbekanntes wird Körper mit
+Befund). Die Rückfallstufe der Aussparung ging verloren — Stufe 4 vernetzt
+den Körper neu und lief stillschweigend (jetzt `Part.solver`, die tiefste an
+der `load`-Operation, die Befunde der Kette im Bericht). Und ein
+gescheiterter Abzug trug den Ausweg des Rechenkerns nicht (jetzt
+`suggestions` aus `BooleanFailedError`). Dazu: der Rat „im Slicer nach
+Filamenten aufteilen" kam als `suggestions` nie an, weil der Prüfbericht nur
+Handlungen mit Handler zeigt — er steht jetzt im Satz; `troubles` lag unter
+der Objekt-ID von PrusaSlicer und wurde unter dem Build-Objekt gesucht; ein
+Prusa-Bereich, der kein Modellteil ist, bekommt seinen eigenen Satz
+(`ingest.foreign_volume`), denn „Farben nicht gelesen" verschwieg, dass der
+Bereich als Material im Körper steckt; ein Bemalungscode mit tausend Ebenen
+riss als `RecursionError` (jetzt `MAX_PAINT_DEPTH`, einfarbig mit Befund);
+`read()` fing die Palettenprüfung nicht; `HELPER_KINDS` und `HELPER_TITLES`
+waren zwei Listen; eine Aussparung, die nichts trifft, schwieg; die
+T-Stoß-Suche baute ihre Schlüssel über alle Dreiecke (an der Importgrenze ein
+halbes Gigabyte je Zwischenfeld — jetzt nur über Kandidaten); und die
+Expat-Meldung stand als Kundentext im Bericht.
+
+**Die Kinderreihenfolge ist unabhängig belegt**, nicht nur nachgelesen:
+Echte Bemalung ist flächig, die richtige Konvention hat also die kürzeste
+Grenze zwischen verschiedenfarbigen Dreiecken. An chufang.3mf gemessen (acht
+bemalte Körper, Summe der Kantenlängen mit Slotwechsel): **452 mm mit 29 027
+Kanten wie im Code, 2769 mm mit 99 505 Kanten mit den Kindern in
+Stromreihenfolge** — sechsmal länger. Der Reviewer maß dieselbe Richtung mit
+eigenem Zählweg (257 gegen 1359 mm, dazu die Ecken-Rotationen um eins und
+zwei mit 1214 bis 1301 mm). Zwei Messungen, fünf Alternativen, alle vier-
+bis sechsmal schlechter.
+
+**Was offen bleibt:** Die Kundendatei selbst ist nicht gemessen. MakerWorld
+gibt sie nur angemeldet heraus; wer sie holt, legt sie in den
+Downloads-Ordner und fährt `read_objects` darüber — die zwei gemessenen
+Ursachen decken, was der Bericht hergibt, nicht mehr. Und keine Datei des
+Korpus trägt einen anderen `subtype` als `normal_part`: Hilfsteile und
+Aussparungen sind ausschließlich synthetisch belegt.

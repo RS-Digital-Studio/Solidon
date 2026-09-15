@@ -42,6 +42,13 @@ dans `website/version.json`.
 - Sur l'élément choisi, ce qui ne pourrait qu'échouer y apparaît grisé — « Faire pivoter l'élément » sur un perçage fraisé — avec la raison. Et l'aperçu annonce une question à venir à l'application.
 - Un champ sans effet pour la forme de base choisie n'apparaît plus grisé dans le dialogue — il apparaît avec la forme qui en a besoin. Un rectangle montre quatre champs devant au lieu de huit.
 
+### Fichiers et export
+
+- Un 3MF issu du slicer s’ouvre désormais même si ses couleurs ne se lisent pas sans ambiguïté : le modèle arrive en une seule couleur, et le rapport dit pourquoi. Avant, le fichier restait fermé.
+- Les faces peintes dans Bambu Studio, Orca et Elegoo arrivent exactement telles qu’elles ont été peintes — même lorsqu’une couleur traverse un triangle. Avant, cela comptait comme « ambigu ».
+- Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.
+- Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer.
+
 ## 0.4.1
 
 ### Construire et modifier

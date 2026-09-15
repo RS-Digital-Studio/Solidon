@@ -29,14 +29,22 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Final
 from xml.etree import ElementTree as ET
+from xml.parsers import expat
 
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, SPLIT_BY_FILAMENT, Action, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHOOSE_ANOTHER_FILE,
+    PROGRAMMING_ERRORS,
+    Action,
+    AppError,
+    ValidationError,
+)
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.types import MaterialSlot, ProgressFn
+from app.core.types import Finding, MaterialSlot, ProgressFn, SolverInfo
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -68,28 +76,123 @@ DEFAULT_COLOUR = (0.72, 0.72, 0.72)
 
 @dataclass(slots=True)
 class _NativeMaterials:
-    """Werkzeuge der Slicer; Part-IDs gelten jeweils nur in ihrem Objekt."""
+    """Werkzeuge der Slicer; Part-IDs gelten jeweils nur in ihrem Objekt.
+
+    ``troubles`` nennt je Objekt, was sich an seinen Werkzeugangaben nicht
+    lesen ließ — das Objekt kommt dann einfarbig, die anderen behalten ihre
+    Farben.
+    """
 
     palette: tuple[MaterialSlot, ...] = ()
     objects: dict[str, int] = field(default_factory=dict)
     parts: dict[tuple[str, str], int] = field(default_factory=dict)
     volumes: dict[str, list[tuple[int, int, int]]] = field(default_factory=dict)
+    troubles: dict[str, _MaterialError] = field(default_factory=dict)
 
 
-def _unsupported_materials(reason: TranslatableText | str) -> ValidationError:
-    """Keine Teilflächen oder mehrdeutigen Werkzeugangaben still verlieren."""
-    return ValidationError(
-        field="file",
-        detail=_(
-            "Die Werkzeug- oder Flächenfarben dieser 3MF lassen sich nicht eindeutig übernehmen."
-        ),
-        constraint="unsupported_material_semantics",
-        values={"reason": reason},
-        suggestions=(
-            SPLIT_BY_FILAMENT,
-            CANCEL,
-        ),
-    )
+class _MaterialError(Exception):
+    """Werkzeug- oder Flächenfarben, die sich nicht eindeutig lesen lassen.
+
+    Bis zum 14.09.2026 war das ein ``ValidationError`` mit dem Rat, die Datei
+    im Slicer nach Filamenten aufzuteilen — und er hielt den **ganzen Import**
+    an, über einem Netz, das vollständig war. So bekam ein Kunde ein Modell
+    von MakerWorld nicht auf (Support-Vorgang S-20260914-e4b6d7). Seither ist
+    es eine Auskunft: Der Körper wird geladen, einfarbig wenn es sein muss,
+    und der Grund steht mit demselben Rat als Befund im Prüfbericht
+    (Entscheidung Robert, 14.09.2026: „zur Not soll das Filament halt
+    einfarbig bleiben").
+    """
+
+    def __init__(self, reason: TranslatableText | str) -> None:
+        super().__init__(str(reason))
+        self.reason = reason
+
+
+class _ForeignVolumeError(_MaterialError):
+    """Ein Dreiecksbereich von PrusaSlicer, der kein Modellteil ist.
+
+    Ein anderer Satz als „Farben nicht gelesen": Der Bereich — ein
+    Modifikator, eine Aussparung — liegt im selben Netz wie der Körper und
+    kommt als dessen Material an. Das soll der Kunde erfahren, nicht nur,
+    dass die Farben fehlen (Regel 21).
+    """
+
+    def __init__(self, kind: str) -> None:
+        super().__init__(
+            _(
+                "Der Bereich „{kind}“ ist kein druckbares Modellteil und liegt im selben Netz",
+                kind=kind,
+            )
+        )
+        self.kind = kind
+
+
+def _unsupported_materials(reason: TranslatableText | str) -> _MaterialError:
+    """Keine Werkzeug- oder Flächenangabe still verlieren — der Grund reist mit."""
+    return _MaterialError(reason)
+
+
+#: Was ein Slicer außer druckbaren Teilen in ein Objekt legt. Die Namen sind
+#: die aus ``model_settings.config`` (Bambu Studio, Orca, Elegoo).
+NEGATIVE_KIND: Final = "negative_part"
+HELPER_TITLES: Final = {
+    "modifier_part": _("Modifikator"),
+    "support_blocker": _("Stützblocker"),
+    "support_enforcer": _("Stützverstärker"),
+}
+#: Aus derselben Tabelle wie die Namen, damit eine vierte Art nicht in der
+#: einen Liste steht und in der anderen fehlt — das wäre ein ``KeyError`` an
+#: einer Kundendatei.
+HELPER_KINDS: Final[frozenset[str]] = frozenset(HELPER_TITLES)
+
+
+def _is_body(kind: str) -> bool:
+    """Was der Leser zu einem Körper macht — und der Zählweg mitzählt (§11).
+
+    Eine Art, die keiner der beiden kennt, ist ein Körper: Sie wird geladen
+    **und** gezählt, und der Leser sagt, dass er sie nicht kennt. Zwei
+    Stellen mit je eigener Liste liefen hier auseinander — der Zählweg
+    zählte nur ``normal_part``, der Leser übersprang nur, was er kannte, und
+    eine neue Slicer-Art hätte die Auswertung mit ``evaluate.object_count``
+    angehalten (Review, 14.09.2026).
+    """
+    return kind != NEGATIVE_KIND and kind not in HELPER_KINDS
+
+
+#: Tiefer teilt kein Slicer: Der längste Code eines Korpus von 744 429 hat
+#: 253 Ziffern, rund neun Ebenen. Ohne Grenze reißt ein Code mit tausend
+#: Ebenen den Import als ``RecursionError`` — ein Dateiproblem im Gewand
+#: eines Programmfehlers (§32: eine Grenze sagt etwas, sie hängt nicht).
+MAX_PAINT_DEPTH: Final = 64
+
+
+def _slicer_config(payload: bytes) -> ET.Element:
+    """Eine Slicer-Konfiguration (``model_settings.config``,
+    ``Slic3r_PE_model.config``) als Baum — **ohne Namensräume**.
+
+    Bambu Studio und der Elegoo-Slicer schreiben ein SVG-Relief als
+    ``<slic3rpe:shape …/>`` in diese Datei und deklarieren den Präfix
+    nirgends; sie lesen sie selbst mit einem Parser, der von Namensräumen
+    nichts weiß. ``ET.fromstring`` weiß davon und wirft „unbound prefix" —
+    und daran hing der ganze Import, an einer Zeile Metadaten über einem
+    vollständigen Netz (drei von sechzehn Dateien eines Downloads-Ordners,
+    Support-Vorgang vom 14.09.2026).
+
+    Expat ohne Trennzeichen für Namensräume liest die Datei so, wie der
+    Slicer sie liest: Ein Präfix bleibt Teil des Namens. Die Tags, die hier
+    gesucht werden — ``object``, ``part``, ``volume``, ``metadata`` — tragen
+    ohnehin keinen.
+    """
+    builder = ET.TreeBuilder()
+    parser = expat.ParserCreate()
+    parser.StartElementHandler = builder.start
+    parser.EndElementHandler = builder.end
+    parser.CharacterDataHandler = builder.data
+    try:
+        parser.Parse(payload, True)
+    except expat.ExpatError as problem:
+        raise ET.ParseError(str(problem)) from problem
+    return builder.close()
 
 
 def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeMaterials:
@@ -103,7 +206,10 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
             if isinstance(parsed, dict):
                 values = parsed
         except (ValueError, UnicodeError) as problem:
-            raise _unsupported_materials(str(problem)) from problem
+            _log.warning("3MF project settings are not readable: %s", problem)
+            raise _unsupported_materials(
+                _("Die Projekteinstellungen der Datei sind nicht lesbar")
+            ) from problem
     elif "Metadata/Slic3r_PE.config" in names:
         for line in container.read("Metadata/Slic3r_PE.config").decode("utf-8-sig").splitlines():
             key, separator, value = line.lstrip("; ").partition(" = ")
@@ -136,37 +242,56 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
         if path not in names:
             continue
         try:
-            config = ET.fromstring(container.read(path))
+            config = _slicer_config(container.read(path))
         except ET.ParseError as problem:
-            raise _unsupported_materials(str(problem)) from problem
+            _log.warning("3MF slicer configuration %s is not readable: %s", path, problem)
+            raise _unsupported_materials(
+                _("Die Slicer-Konfiguration der Datei ist nicht lesbar")
+            ) from problem
         for obj in config.findall("object"):
             identifier = obj.get("id", "")
-            tool = _native_tool(obj)
-            if tool is not None:
-                if identifier in result.objects and result.objects[identifier] != tool:
-                    raise _unsupported_materials(
-                        _("Widersprüchliche Werkzeugzuordnungen für dasselbe Objekt")
-                    )
-                result.objects[identifier] = tool
-            for part in obj.findall("part"):
-                if part.get("subtype", "normal_part") != "normal_part":
-                    raise _unsupported_materials(_("Teilbereich ist kein druckbares Modellteil"))
-                part_tool = _native_tool(part)
-                if part_tool is not None:
-                    result.parts[identifier, part.get("id", "")] = part_tool
-            for volume in obj.findall("volume"):
-                kind = volume.find("metadata[@key='volume_type']")
-                if kind is not None and kind.get("value") != "ModelPart":
-                    raise _unsupported_materials(_("Volumenbereich ist kein druckbares Modellteil"))
-                volume_tool = _native_tool(volume)
-                if volume_tool is not None:
-                    try:
-                        first = int(volume.get("firstid", ""))
-                        last = int(volume.get("lastid", ""))
-                    except ValueError as problem:
-                        raise _unsupported_materials(_("Ungültiger Dreiecksbereich")) from problem
-                    result.volumes.setdefault(identifier, []).append((first, last, volume_tool))
+            try:
+                _object_tools(obj, identifier, result)
+            except _MaterialError as problem:
+                result.troubles[identifier] = problem
     return result
+
+
+def _object_tools(obj: ET.Element, identifier: str, result: _NativeMaterials) -> None:
+    """Die Werkzeugangaben eines Objekts: das Objekt selbst, seine Teile, bei
+    PrusaSlicer seine Dreiecksbereiche.
+
+    Ein Teil, das kein druckbares Modellteil ist, hat hier kein Werkzeug —
+    was es ist, liest :func:`_settings`, und :func:`read_objects` entscheidet,
+    ob es übersprungen oder abgezogen wird. Ein Dreiecksbereich, der keines
+    ist, bleibt dagegen ein Problem dieses Objekts: Seine Dreiecke liegen im
+    selben Netz, und ohne sie herauszunehmen wäre jede Farbe daran geraten.
+    """
+    tool = _native_tool(obj)
+    if tool is not None:
+        if identifier in result.objects and result.objects[identifier] != tool:
+            raise _unsupported_materials(
+                _("Widersprüchliche Werkzeugzuordnungen für dasselbe Objekt")
+            )
+        result.objects[identifier] = tool
+    for part in obj.findall("part"):
+        if part.get("subtype", "normal_part") != "normal_part":
+            continue
+        part_tool = _native_tool(part)
+        if part_tool is not None:
+            result.parts[identifier, part.get("id", "")] = part_tool
+    for volume in obj.findall("volume"):
+        kind = volume.find("metadata[@key='volume_type']")
+        if kind is not None and kind.get("value") != "ModelPart":
+            raise _ForeignVolumeError(kind.get("value") or "")
+        volume_tool = _native_tool(volume)
+        if volume_tool is not None:
+            try:
+                first = int(volume.get("firstid", ""))
+                last = int(volume.get("lastid", ""))
+            except ValueError as problem:
+                raise _unsupported_materials(_("Ungültiger Dreiecksbereich")) from problem
+            result.volumes.setdefault(identifier, []).append((first, last, volume_tool))
 
 
 def _native_tool(node: ET.Element) -> int | None:
@@ -187,33 +312,97 @@ def _native_tool(node: ET.Element) -> int | None:
     return next(iter(found), None)
 
 
-def _paint_tool(value: str) -> int | None:
-    """Ganzdreieck: C erweitert ab Zustand 3, FC ab Zustand 18.
+@dataclass(frozen=True, slots=True)
+class _PaintLeaf:
+    """Ein Dreieck — oder Teildreieck —, das ganz einem Zustand gehört.
 
-    Die rechte Hexziffer enthält die Teilungsbits. Die erweiterte Farbnummer
-    braucht höchstens drei Ziffern; echte Teilflächen werden hier nicht geraten.
+    Zustand 0 erbt das Werkzeug des Körpers, Zustand *n* ab 1 ist Filament *n*.
     """
-    if len(value) not in (1, 2, 3):
-        raise _unsupported_materials(
-            _("Teilflächenbemalung oder nicht unterstützte Flächenzuordnung")
-        )
+
+    state: int
+
+
+@dataclass(frozen=True, slots=True)
+class _PaintSplit:
+    """Ein Dreieck, das der Slicer beim Bemalen geteilt hat.
+
+    ``sides`` zählt die halbierten Seiten (1 bis 3), ``special`` die Ecke, ab
+    der der Slicer die Ecken abzählt — bei einer Seite liegt die geteilte
+    gegenüber, bei zweien die **behaltene**. ``children`` stehen in der
+    Reihenfolge, in der der Slicer sie anlegt; die Geometrie dazu baut
+    :func:`_refine`.
+    """
+
+    sides: int
+    special: int
+    children: tuple[_PaintNode, ...]
+
+
+_PaintNode = _PaintLeaf | _PaintSplit
+
+
+def _decode_paint(code: str) -> _PaintNode:
+    """Der Bemalungscode eines Dreiecks als Baum.
+
+    Das Format ist der Bitstrom von ``TriangleSelector::serialize`` aus
+    PrusaSlicer, Bambu Studio und Orca — nachgelesen, nicht erraten, und an
+    744 429 Codes einer Datei von MakerWorld gemessen: jeder ging exakt auf.
+    Vier Bit je Knoten, als eine Hexziffer; **die Zeichenkette steht
+    rückwärts**, das letzte Zeichen ist der erste Knoten. In den unteren
+    zwei Bit die Zahl der geteilten Seiten. Null heißt Blatt: dann tragen die
+    oberen zwei Bit den Zustand, und ``11`` kündigt eine erweiterte Nummer an
+    — die nächste Ziffer plus 3, jede ``F`` davor zählt 15 dazu (so kommen
+    Bambus Filamente 17 bis 32 heraus). Sonst nennen die oberen zwei Bit die
+    besondere Ecke, und es folgen ``sides + 1`` Kinder, **in umgekehrter
+    Reihenfolge**.
+
+    Ein Code, der vor dem letzten Knoten endet oder Ziffern übrig lässt, ist
+    keiner: Er wird zurückgewiesen statt zur Hälfte gelesen.
+    """
     try:
-        digits = [int(char, 16) for char in value]
+        nibbles = [int(char, 16) for char in reversed(code)]
     except ValueError as problem:
         raise _unsupported_materials(_("Ungültige Flächenbemalung")) from problem
-    if len(digits) == 1 and digits[0] in (0, 4, 8):
-        state = digits[0] >> 2
-    elif len(digits) == 2 and digits[-1] == 12 and digits[0] < 15:
-        state = digits[0] + 3
-    elif len(digits) == 3 and digits[1:] == [15, 12]:
-        state = digits[0] + 18
-    else:
-        raise _unsupported_materials(
-            _("Teilflächenbemalung oder nicht unterstützte Flächenzuordnung")
+    position = 0
+
+    def next_nibble() -> int:
+        nonlocal position
+        if position >= len(nibbles):
+            raise _unsupported_materials(_("Unvollständige oder überzählige Flächenbemalung"))
+        value = nibbles[position]
+        position += 1
+        return value
+
+    def node(depth: int = 0) -> _PaintNode:
+        if depth > MAX_PAINT_DEPTH:
+            raise _unsupported_materials(_("Flächenbemalung zu tief verschachtelt"))
+        head = next_nibble()
+        sides = head & 0b11
+        if sides == 0:
+            if head & 0b1100 != 0b1100:
+                return _PaintLeaf(head >> 2)
+            state = 3
+            while (extra := next_nibble()) == 0b1111:
+                state += 15
+            return _PaintLeaf(state + extra)
+        children: list[_PaintNode | None] = [None] * (sides + 1)
+        for index in range(sides, -1, -1):
+            children[index] = node(depth + 1)
+        return _PaintSplit(
+            sides, head >> 2, tuple(child for child in children if child is not None)
         )
-    if state > NATIVE_TOOL_LIMIT:
+
+    tree = node()
+    if position != len(nibbles):
+        raise _unsupported_materials(_("Unvollständige oder überzählige Flächenbemalung"))
+    return tree
+
+
+def _leaf_tool(leaf: _PaintLeaf) -> int | None:
+    """Das Werkzeug eines Blatts, ab null gezählt — ``None`` erbt."""
+    if leaf.state > NATIVE_TOOL_LIMIT:
         raise _unsupported_materials(_("Nicht unterstützte Filamentnummer"))
-    return state - 1 if state else None
+    return leaf.state - 1 if leaf.state else None
 
 
 #: Wie tief eine Komponente andere Komponenten referenzieren darf. Das Format
@@ -346,11 +535,22 @@ def read(payload: bytes, faces: int) -> Groups | None:
     Gruppe, nicht unsere Nummerierung — ein Körper, dessen einzige Farbe Slot 3
     war, kommt also als Slot 0 zurück, mit Namen und Farbe unversehrt.
     """
-    leaves = _leaves(payload)
+    leaves = _leaves(payload, [])
     if len(leaves) == 1:
-        native = _native_groups_of(leaves[0])
-        if native is not None:
-            return native if len(native.slots) == faces else None
+        try:
+            native = _native_tools_of(leaves[0])
+            if native is not None:
+                if native.splits:
+                    # Der Körper kam über den allgemeinen Leser und trägt die
+                    # Dreiecke der Datei; die Teilung der Bemalung kennt er
+                    # nicht.
+                    _log.info("3MF paint splits triangles — no groups for a body read as one")
+                    return None
+                assigned = _groups_from(native.tools, native.palette)
+                return assigned if len(assigned.slots) == faces else None
+        except _MaterialError as problem:
+            _log.info("3MF native colours not read: %s", problem)
+            return None
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
             model = ET.fromstring(container.read(MODEL_PATH))
@@ -395,11 +595,20 @@ class Part:
     name: str
     mesh: MeshData
     slots: tuple[MaterialSlot, ...] = field(default_factory=tuple)
+    solver: SolverInfo | None = None
+    """Wie eine Aussparung abgezogen wurde (§17.2) — ``None``, wenn keine da
+    war. Die ``load``-Operation meldet die tiefste Stufe aller Körper."""
 
 
-def read_objects(payload: bytes) -> list[Part]:
+def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[Part]:
     """Jeder Körper, den der Build platziert, jeder dort, wohin die Datei ihn
     setzt.
+
+    ``findings`` nimmt auf, was der Leser nicht übernehmen konnte oder
+    stillschweigend entschieden hätte: Farben, die einfarbig wurden, ein
+    Hilfsteil des Slicers, das keine Geometrie ist, eine Aussparung, die
+    abgezogen wurde. Wer die Liste nicht mitgibt, bekommt die Körper trotzdem
+    — die Auskunft steht dann nur im Protokoll.
 
     Eine leere Liste heißt: das ist keine 3MF, die sich hier lesen lässt — der
     Aufrufer fällt auf den allgemeinen Loader zurück, statt für eine Datei eine
@@ -413,26 +622,293 @@ def read_objects(payload: bytes) -> list[Part]:
     braucht, für sein eigenes Material je Körper (§12) und seine eigene
     Platte (§25).
     """
-    parts: list[Part] = []
-    for leaf in _leaves(payload):
+    # Träge, aus demselben Grund wie in ``_carved``: Ohne Aussparung braucht
+    # der Leser den Rechenkern nicht.
+    from app.core.geom.boolean import deepest
+
+    noted = findings if findings is not None else []
+    leaves = _leaves(payload, noted)
+
+    # Aussparungen zuerst, je Objekt gesammelt: Sie gehören zu jedem
+    # druckbaren Teil desselben Objekts, und die Reihenfolge der Blätter
+    # sagt nicht, welches zuerst kommt.
+    cutters: dict[str, list[tuple[str, trimesh.Trimesh]]] = {}
+    for leaf in leaves:
+        if leaf.kind != NEGATIVE_KIND:
+            continue
         body = _mesh_from(leaf.node)
         if body is None:
             continue
         moved = body.raw.copy()
         moved.apply_transform(leaf.transform)
+        cutters.setdefault(leaf.owner, []).append((leaf.name, moved))
+    carved: set[str] = set()
 
-        groups = _native_groups_of(leaf)
+    parts: list[Part] = []
+    skipped = 0
+    effective: set[tuple[str, str]] = set()
+    for leaf in leaves:
+        if leaf.kind == NEGATIVE_KIND:
+            continue
+        if not _is_body(leaf.kind):
+            skipped += 1
+            _log.info("3MF part %r is a slicer %s — not a body", leaf.name, leaf.kind)
+            noted.append(
+                Finding(
+                    code="ingest.helper_skipped",
+                    severity="info",
+                    message=_(
+                        "„{name}“ ist ein Hilfsteil des Slicers ({kind}) und keine Geometrie "
+                        "des Drucks — es wurde nicht geladen.",
+                        name=leaf.name,
+                        kind=HELPER_TITLES[leaf.kind],
+                    ),
+                    values={"name": leaf.name, "kind": HELPER_TITLES[leaf.kind]},
+                )
+            )
+            continue
+        if leaf.kind != "normal_part":
+            _log.info(
+                "3MF part %r has the unknown kind %s — loaded as a body", leaf.name, leaf.kind
+            )
+            noted.append(
+                Finding(
+                    code="ingest.unknown_part_kind",
+                    severity="info",
+                    message=_(
+                        "„{name}“ ist ein Teil der Art „{kind}“, die Solidon nicht kennt — es "
+                        "wurde als Körper geladen.",
+                        name=leaf.name,
+                        kind=leaf.kind,
+                    ),
+                    values={"name": leaf.name, "kind": leaf.kind},
+                )
+            )
+        body = _mesh_from(leaf.node)
+        if body is None:
+            continue
+        raw = body.raw
+        groups: Groups | None = None
+        try:
+            native = _native_tools_of(leaf)
+            if native is not None:
+                tools = native.tools
+                if native.splits:
+                    # Erst teilen, dann bewegen: Die Mittelpunkte sind in
+                    # jeder Lage dieselben, und die Kopie unten nimmt das
+                    # Netz, das die Bemalung tragen kann.
+                    raw, tools = _refine(raw, tools, native.splits, leaf.name)
+                groups = _groups_from(tools, native.palette)
+        except _ForeignVolumeError as problem:
+            _log.warning("3MF body %r carries a %s volume: %s", leaf.name, problem.kind, problem)
+            raw = body.raw
+            noted.append(
+                Finding(
+                    code="ingest.foreign_volume",
+                    severity="warning",
+                    message=_(
+                        "„{name}“ trägt einen Bereich, den der Slicer als „{kind}“ führt — er "
+                        "ist als Material des Körpers geladen, und die Farben wurden nicht "
+                        "übernommen.",
+                        name=leaf.name,
+                        kind=problem.kind,
+                    ),
+                    values={"name": leaf.name, "kind": problem.kind},
+                )
+            )
+        except _MaterialError as problem:
+            _log.warning("3MF body %r keeps one colour: %s", leaf.name, problem)
+            raw = body.raw
+            noted.append(_colours_dropped(leaf.name, problem.reason))
         if groups is None:
             groups = _groups_of(leaf.node, leaf.palette, leaf.pid, leaf.pindex)
+        moved = raw.copy()
+        moved.apply_transform(leaf.transform)
         mesh = (
             MeshData(raw=moved, slots=groups.slots) if groups is not None else body.replacing(moved)
         )
+        solver: SolverInfo | None = None
+        for cutter_name, cutter in cutters.get(leaf.owner, ()):
+            mesh, cut, touched = _carved(mesh, leaf.name, cutter_name, cutter, noted)
+            carved.add(leaf.owner)
+            if touched:
+                effective.add((leaf.owner, cutter_name))
+            if cut is not None:
+                solver = deepest((solver, cut))
         parts.append(
-            Part(name=leaf.name, mesh=mesh, slots=tuple(groups.materials) if groups else ())
+            Part(
+                name=leaf.name,
+                mesh=mesh,
+                slots=tuple(groups.materials) if groups else (),
+                solver=solver,
+            )
         )
 
+    for owner, tools_of in cutters.items():
+        for cutter_name, _cutter in tools_of:
+            if owner in carved and (owner, cutter_name) not in effective:
+                # Ein Objekt hat druckbare Teile, und die Aussparung trifft
+                # keines: Im Slicer schneidet sie dort ebenso wenig. Gesagt
+                # wird es trotzdem — es ist die eine Stelle, an der der
+                # Leser sonst schweigend entschiede (Regel 21).
+                noted.append(
+                    Finding(
+                        code="ingest.negative_without_effect",
+                        severity="info",
+                        message=_(
+                            "Die Aussparung „{cutter}“ trifft keinen Körper — sie hat keine "
+                            "Wirkung.",
+                            cutter=cutter_name,
+                        ),
+                        values={"cutter": cutter_name},
+                    )
+                )
+            if owner in carved:
+                continue
+            noted.append(
+                Finding(
+                    code="ingest.negative_orphaned",
+                    severity="warning",
+                    message=_(
+                        "Die Aussparung „{name}“ gehört zu keinem druckbaren Körper und wurde "
+                        "nicht geladen.",
+                        name=cutter_name,
+                    ),
+                    values={"name": cutter_name},
+                )
+            )
+
+    if not parts and (cutters or skipped):
+        # **Nicht leer zurückgeben.** Eine leere Liste heißt für den Aufrufer
+        # „keine 3MF, die sich hier lesen lässt", und er fällt auf den
+        # allgemeinen Leser zurück — der kennt keine Teilarten und lüde die
+        # Aussparung als Körper, neben dem Befund, sie sei nicht geladen.
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Die Datei enthält nur Hilfsteile oder Aussparungen des Slicers und keinen "
+                "druckbaren Körper."
+            ),
+            constraint="no_printable_part",
+            values={"skipped": skipped + sum(len(entries) for entries in cutters.values())},
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+        )
     _log.info("read %d part(s) from a 3MF build", len(parts))
     return _numbered(parts)
+
+
+def _colours_dropped(name: str, reason: TranslatableText | str) -> Finding:
+    """Der Befund, der aus dem früheren Abbruch wurde: derselbe Grund,
+    derselbe Rat — nur dass der Körper jetzt da ist.
+
+    **Der Rat steht im Satz, nicht in ``suggestions``.** Der Prüfbericht
+    zeigt nur Handlungen, für die das Fenster einen Handler hat
+    (``panels.actions_for_document`` … ``if action.id in handlers``), und
+    für „im Slicer nach Filamenten aufteilen" gibt es keinen — den Text
+    zum Lesen kennt nur der Fehlerdialog (``dialogs.unhandled_advice``). Als
+    Vorschlag angehängt kam der Rat also nie an (Review, 14.09.2026).
+    """
+    return Finding(
+        code="ingest.colours_dropped",
+        severity="warning",
+        message=_(
+            "Die Farben von „{name}“ wurden nicht übernommen: {reason}. Der Körper ist "
+            "einfarbig geladen — im Slicer nach Filamenten in einzelne Körper aufgeteilt und "
+            "neu exportiert kommen die Farben mit.",
+            name=name,
+            reason=reason,
+        ),
+        values={"name": name, "reason": reason},
+    )
+
+
+def _carved(
+    mesh: MeshData, name: str, cutter_name: str, cutter: trimesh.Trimesh, noted: list[Finding]
+) -> tuple[MeshData, SolverInfo | None, bool]:
+    """Zieht eine Aussparung des Slicers vom Körper ab — wie der Slicer es
+    beim Slicen täte, und wie die Datei den Körper zeigt. Zurück kommt das
+    Netz, die Stufe, die es gerechnet hat (``None``, wenn nichts geschnitten
+    wurde), und ob die Aussparung diesen Körper überhaupt berührt hat — ein
+    gescheiterter Schnitt hat ihn berührt, ein wirkungsloser nicht.
+
+    Ein ``negative_part`` ist keine eigene Geometrie des Drucks, sondern eine
+    Anweisung an das Objekt daneben: Bambu Studio und Orca rechnen die
+    Differenz beim Slicen. Als eigener Körper geladen stünde er als Klotz im
+    Modell, weggelassen fehlte das Loch. Gerechnet wird über die Rückfallkette
+    des Kerns; scheitert sie, bleibt der Körper, wie er war, und der Befund
+    sagt es — die Körperzahl steht nämlich fest, bevor irgendetwas gerechnet
+    ist (:func:`_scan`), und ein Werkzeug, das als Ersatz auftauchte, brächte
+    sie durcheinander.
+    """
+    # Erst hier geholt: ``boolean`` zieht ``manifold3d`` nach, und der
+    # Leser soll ohne Rechenkern importierbar bleiben, solange keine Datei
+    # eine Aussparung trägt.
+    from app.core.geom.boolean import boolean, without_effect
+
+    try:
+        outcome = boolean("difference", [mesh, MeshData.of(cutter)], allow_empty=True)
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # Kerne scheitern auf kerneigene Arten
+        _log.warning(
+            "3MF negative part %r could not be cut from %r: %s", cutter_name, name, problem
+        )
+        # Der Ausweg des Rechenkerns reist mit: ``BooleanFailedError`` sagt,
+        # ob Maße oder Netz das Problem sind, und der Prüfbericht zeigt seine
+        # Handlungen (Regel 17).
+        noted.append(
+            Finding(
+                code="ingest.negative_kept_out",
+                severity="warning",
+                message=_(
+                    "Die Aussparung „{cutter}“ ließ sich nicht von „{name}“ abziehen — der "
+                    "Körper ist ohne sie geladen.",
+                    cutter=cutter_name,
+                    name=name,
+                ),
+                values={"cutter": cutter_name, "name": name, "detail": str(problem)},
+                suggestions=tuple(problem.suggestions) if isinstance(problem, AppError) else (),
+            )
+        )
+        return mesh, None, True
+    if outcome.mesh.triangle_count == 0:
+        _log.warning("3MF negative part %r covers all of %r — not cut", cutter_name, name)
+        noted.append(
+            Finding(
+                code="ingest.negative_kept_out",
+                severity="warning",
+                message=_(
+                    "Die Aussparung „{cutter}“ deckt „{name}“ ganz — sie wurde nicht abgezogen.",
+                    cutter=cutter_name,
+                    name=name,
+                ),
+                values={"cutter": cutter_name, "name": name},
+            )
+        )
+        return mesh, None, True
+    if without_effect(mesh, outcome.mesh, "difference") is not None:
+        # Ein Objekt aus mehreren Teilen: Die Aussparung gilt allen, trifft
+        # aber nur eines. Die anderen behalten ihr Netz, wie es ankam — und
+        # bekommen keinen Befund über einen Schnitt, der keiner war.
+        _log.info("3MF negative part %r does not touch %r", cutter_name, name)
+        return mesh, None, False
+    # Die Befunde der Kette kommen mit — „verschweißt", „verwackelt", „auf
+    # dem Raster" — und die Stufe steht am Befund: Stufe 4 vernetzt den
+    # ganzen Körper neu, und das läuft nie stillschweigend (§17.2).
+    noted.extend(outcome.findings)
+    noted.append(
+        Finding(
+            code="ingest.negative_carved",
+            severity="info",
+            message=_(
+                "Die Aussparung „{cutter}“ wurde von „{name}“ abgezogen.",
+                cutter=cutter_name,
+                name=name,
+            ),
+            values={"cutter": cutter_name, "name": name, "solver": outcome.solver.strategy},
+        )
+    )
+    return outcome.mesh, outcome.solver, True
 
 
 #: Wie der 3MF-Kern seine Einheiten nennt. Sechs Namen, und zwei davon kann
@@ -651,7 +1127,9 @@ def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int
                 progress(index / (len(geometry) + 1), str(_("Modell wird gelesen")))
                 models[entry], found = _model_without_geometry(container, entry)
                 triangles += found
-            titles = _titles(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else {}
+            settings = (
+                _settings(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else _Settings()
+            )
     except (KeyError, zipfile.BadZipFile, ET.ParseError) as problem:
         _log.info("3MF could not be scanned as an assembly: %s", problem)
         return 0, 0
@@ -678,8 +1156,8 @@ def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int
             _matrix(item.get("transform")),
             catalog,
             without_palette,
-            titles,
-            item.get("name") or titles.get(identifier, ""),
+            settings,
+            item.get("name") or settings.titles.get(identifier, ""),
             0,
             budget,
         ):
@@ -688,7 +1166,12 @@ def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int
             # Objekt-ID zu viel, die Auswertung hielt mit
             # ``evaluate.object_count`` an, und aus einer Datei mit einem
             # lesbaren Körper wurde ein Import, der gar nichts einlas.
-            if _carries_geometry(leaf.node):
+            #
+            # Dasselbe für die Teile, aus denen der Leser keinen Körper macht:
+            # Ein Hilfsteil wird übersprungen, eine Aussparung abgezogen.
+            if not _is_body(leaf.kind):
+                _log.info("3MF part %r is a slicer %s — not counted", leaf.name, leaf.kind)
+            elif _carries_geometry(leaf.node):
                 bodies += 1
             else:
                 _log.warning("3MF body %r has no geometry — not counted", leaf.name)
@@ -740,63 +1223,253 @@ class _Leaf:
     native: _NativeMaterials | None = None
     tool: int | None = None
     volumes: tuple[tuple[int, int, int], ...] = ()
+    owner: str = ""
+    """Das Objekt des Builds, zu dem dieses Blatt gehört — die Klammer, in
+    der eine Aussparung ihre Körper findet."""
+    identifier: str = ""
+    """Die eigene Objekt-ID des Blatts. PrusaSlicer notiert seine
+    Werkzeuge unter ihr, nicht unter dem Build-Objekt darüber."""
+    kind: str = "normal_part"
+    """Was der Slicer aus dem Teil macht: ein druckbares Teil, eine
+    Aussparung (:data:`NEGATIVE_KIND`) oder ein Hilfsteil
+    (:data:`HELPER_KINDS`)."""
 
 
-def _native_groups_of(leaf: _Leaf) -> Groups | None:
-    """Werkzeug je ganzem Dreieck, lokale Slots mit der nativen Palette."""
+@dataclass(frozen=True, slots=True)
+class _NativeAssignment:
+    """Was die Slicer-Metadaten einem Körper zuweisen: ein Werkzeug je
+    Dreieck der Datei, dazu die Dreiecke, die der Slicer beim Bemalen
+    geteilt hat — für die steht in ``tools`` das Werkzeug, das ihre erbenden
+    Teile bekommen, und in ``splits`` der Baum, den :func:`_refine` in
+    Geometrie übersetzt.
+    """
+
+    tools: list[int]
+    splits: dict[int, _PaintSplit]
+    palette: tuple[MaterialSlot, ...]
+
+
+def _native_tools_of(leaf: _Leaf) -> _NativeAssignment | None:
+    """Werkzeug je Dreieck aus Objekt, Teil, Prusa-Bereich und Bemalung —
+    oder ``None``, wenn die Datei zu diesem Körper nichts davon sagt.
+    """
     if leaf.native is None:
         return None
+    # Unter beiden Kennungen, wie ``volumes`` und ``parts`` daneben: Bambu
+    # und Orca führen das Build-Objekt, PrusaSlicer das Mesh-Objekt selbst
+    # — und in einer Datei, die beides trennt, lag das Problem unter der
+    # einen und wurde unter der anderen gesucht (Review, 14.09.2026).
+    for key in (leaf.owner, leaf.identifier):
+        if key in leaf.native.troubles:
+            raise leaf.native.troubles[key]
     triangles = leaf.node.findall(f".//{{{CORE_NAMESPACE}}}triangle")
-    painted = any(
-        face.get("paint_color") or face.get(f"{{{PRUSA_NAMESPACE}}}mmu_segmentation")
-        for face in triangles
-    )
-    if not painted and leaf.tool is None and not leaf.volumes:
-        return None
-    tools = [leaf.tool] * len(triangles)
-    covered: set[int] = set()
-    for first, last, tool in leaf.volumes:
-        if first < 0 or last < first or last >= len(triangles):
-            raise _unsupported_materials(_("Dreiecksbereich liegt außerhalb des Netzes"))
-        for index in range(first, last + 1):
-            if index in covered:
-                raise _unsupported_materials(_("Überlappende Dreiecksbereiche"))
-            covered.add(index)
-            tools[index] = tool
-    for index, face in enumerate(triangles):
-        codes = {
+    stated: list[tuple[str, ...]] = [
+        tuple(
             code
             for code in (
                 face.get("paint_color"),
                 face.get(f"{{{PRUSA_NAMESPACE}}}mmu_segmentation"),
             )
             if code
-        }
-        assigned = {_paint_tool(code) for code in codes}
-        if len(assigned) > 1:
+        )
+        for face in triangles
+    ]
+    if not any(stated) and leaf.tool is None and not leaf.volumes:
+        return None
+    base: list[int | None] = [leaf.tool] * len(triangles)
+    covered: set[int] = set()
+    for first, last, range_tool in leaf.volumes:
+        if first < 0 or last < first or last >= len(triangles):
+            raise _unsupported_materials(_("Dreiecksbereich liegt außerhalb des Netzes"))
+        for index in range(first, last + 1):
+            if index in covered:
+                raise _unsupported_materials(_("Überlappende Dreiecksbereiche"))
+            covered.add(index)
+            base[index] = range_tool
+    # Ein Code je Dreieck, aber nur wenige verschiedene: 744 429 bemalte
+    # Dreiecke einer Datei trugen 3 126 verschiedene Codes, und 739 168 davon
+    # denselben. Dekodiert wird deshalb je Code, nicht je Dreieck.
+    trees: dict[str, _PaintNode] = {}
+    tools: list[int] = []
+    splits: dict[int, _PaintSplit] = {}
+    for index, codes in enumerate(stated):
+        tool: int | None = base[index]
+        nodes: list[_PaintNode] = []
+        for code in codes:
+            if code not in trees:
+                trees[code] = _decode_paint(code)
+            nodes.append(trees[code])
+        if len(set(nodes)) > 1:
             raise _unsupported_materials(_("Widersprüchliche Farbzuordnungen auf derselben Fläche"))
-        painted_tool = next(iter(assigned), None)
-        if painted_tool is not None:
-            tools[index] = painted_tool
-        if tools[index] is None:
-            # Native Slicer geben einem nicht zugewiesenen Objekt Werkzeug 1.
-            tools[index] = 0
-    palette = leaf.native.palette
-    if any(tool is None or tool < 0 or tool >= len(palette) for tool in tools):
+        if nodes:
+            node = nodes[0]
+            if isinstance(node, _PaintSplit):
+                splits[index] = node
+            else:
+                painted = _leaf_tool(node)
+                if painted is not None:
+                    tool = painted
+        # Native Slicer geben einem nicht zugewiesenen Objekt Werkzeug 1.
+        tools.append(0 if tool is None else tool)
+    return _NativeAssignment(tools, splits, leaf.native.palette)
+
+
+def _groups_from(tools: list[int], palette: tuple[MaterialSlot, ...]) -> Groups:
+    """Lokale Slots aus Werkzeugnummern: benutzt wird numeriert ab null, die
+    Palette liefert Namen und Farben.
+    """
+    if any(tool < 0 or tool >= len(palette) for tool in tools):
         raise _unsupported_materials(_("Werkzeugnummer außerhalb der Filamentpalette"))
-    used = sorted({int(tool) for tool in tools if tool is not None})
+    used = sorted(set(tools))
     order = {tool: index for index, tool in enumerate(used)}
     return Groups(
-        slots=tuple(order[int(tool)] for tool in tools if tool is not None),
+        slots=tuple(order[tool] for tool in tools),
         materials=tuple(
             dataclasses.replace(palette[tool], index=index) for index, tool in enumerate(used)
         ),
     )
 
 
-def _leaves(payload: bytes) -> list[_Leaf]:
+def _refine(
+    mesh: trimesh.Trimesh, tools: list[int], splits: dict[int, _PaintSplit], name: str
+) -> tuple[trimesh.Trimesh, list[int]]:
+    """Teilt die bemalten Dreiecke so, wie der Slicer sie geteilt hat, und
+    gibt jedem Teil sein Werkzeug.
+
+    Der Slicer halbiert Seiten an ihrer Mitte und hängt an jedes Kind
+    dieselbe Regel — die Geometrie ändert sich dabei nicht, nur ihre
+    Zerlegung. Die Eckenmuster der drei Fälle stehen in
+    ``TriangleSelector::perform_split``, und sie stehen hier genauso:
+
+    * eine Seite: die gegenüber der besonderen Ecke, zwei Kinder
+    * zwei Seiten: die **behaltene** liegt gegenüber, drei Kinder
+    * drei Seiten: vier Kinder, das vierte in der Mitte
+
+    **Ein Mittelpunkt gehört beiden Seiten einer Kante.** Er wird über die
+    beiden Endpunkte gefunden, nicht neu gesetzt — sonst läge er zweimal im
+    Netz, und ``manifold3d`` sähe eine offene Kante. Und wo nur eine Seite
+    geteilt wurde, kennt die andere den Punkt nicht: Ein T-Stoß, den der
+    Slicer beim Slicen selbst schließt (``get_facets_strict``). Hier schließt
+    ihn der zweite Durchgang: Jedes Dreieck, auf dessen Kante ein bekannter
+    Mittelpunkt liegt, wird dort geteilt, bis keiner mehr übrig ist. Beide
+    Hälften tragen das Werkzeug des Ganzen; der Körper bleibt so dicht, wie
+    er ankam.
+    """
+    vertices = np.asarray(mesh.vertices, dtype=np.float64)
+    faces = np.asarray(mesh.faces, dtype=np.int64)
+    points: list[np.ndarray] = []
+    midpoints: dict[tuple[int, int], int] = {}
+
+    def point(index: int) -> np.ndarray:
+        if index < len(vertices):
+            return np.asarray(vertices[index])
+        return points[index - len(vertices)]
+
+    def midpoint(first: int, second: int) -> int:
+        key = (first, second) if first < second else (second, first)
+        found = midpoints.get(key)
+        if found is None:
+            found = len(vertices) + len(points)
+            points.append((point(first) + point(second)) / 2.0)
+            midpoints[key] = found
+        return found
+
+    split_faces: list[tuple[int, int, int]] = []
+    split_tools: list[int] = []
+
+    def expand(corners: tuple[int, int, int], node: _PaintNode, inherited: int) -> None:
+        if isinstance(node, _PaintLeaf):
+            split_faces.append(corners)
+            painted = _leaf_tool(node)
+            split_tools.append(inherited if painted is None else painted)
+            return
+        if node.special > 2:
+            raise _unsupported_materials(_("Ungültige Flächenbemalung"))
+        a, b, c = (corners[(node.special + offset) % 3] for offset in range(3))
+        pieces: tuple[tuple[int, int, int], ...]
+        if node.sides == 1:
+            middle = midpoint(c, b)
+            pieces = ((a, b, middle), (middle, c, a))
+        elif node.sides == 2:
+            ab, ca = midpoint(b, a), midpoint(a, c)
+            pieces = ((a, ab, ca), (ab, b, ca), (b, c, ca))
+        else:
+            ab, bc, ca = midpoint(b, a), midpoint(c, b), midpoint(a, c)
+            pieces = ((a, ab, ca), (ab, b, bc), (bc, c, ca), (ab, bc, ca))
+        for piece, child in zip(pieces, node.children, strict=True):
+            expand(piece, child, inherited)
+
+    for index, tree in splits.items():
+        a, b, c = (int(corner) for corner in faces[index])
+        expand((a, b, c), tree, tools[index])
+
+    kept = np.ones(len(faces), dtype=bool)
+    kept[list(splits)] = False
+    all_faces = np.vstack([faces[kept], np.array(split_faces, dtype=np.int64).reshape(-1, 3)])
+    all_tools = np.concatenate([np.asarray(tools, dtype=np.int64)[kept], split_tools])
+
+    # Der zweite Durchgang: Kanten mit einem bekannten Mittelpunkt. Erst
+    # die Kandidaten — Dreiecke, die eine Ecke einer geteilten Kante tragen,
+    # über ein Bool-Feld je Ecke —, dann die Schlüssel nur für sie: Ein
+    # Schlüsselfeld über alle Dreiecke kostete an der Importgrenze ein
+    # halbes Gigabyte je Zwischenfeld, für ein paar Tausend Treffer.
+    total = len(vertices) + len(points)
+    edge_keys = np.array(list(midpoints), dtype=np.int64).reshape(-1, 2)
+    at_split_edge = np.zeros(total, dtype=bool)
+    at_split_edge[edge_keys.ravel()] = True
+    candidates = np.flatnonzero(at_split_edge[all_faces].any(axis=1))
+    known = edge_keys[:, 0] * total + edge_keys[:, 1]
+    corners = all_faces[candidates]
+    ends = np.roll(corners, -1, axis=1)
+    keys = np.minimum(corners, ends) * total + np.maximum(corners, ends)
+    touched = np.zeros(len(all_faces), dtype=bool)
+    touched[candidates[np.isin(keys, known).any(axis=1)]] = True
+
+    closed_faces: list[tuple[int, int, int]] = []
+    closed_tools: list[int] = []
+    for face, tool in zip(all_faces[touched], all_tools[touched], strict=True):
+        stack = [(int(face[0]), int(face[1]), int(face[2]))]
+        while stack:
+            a, b, c = stack.pop()
+            for first, second, third in ((a, b, c), (b, c, a), (c, a, b)):
+                middle = midpoints.get((first, second) if first < second else (second, first))
+                if middle is not None:
+                    stack.append((first, middle, third))
+                    stack.append((middle, second, third))
+                    break
+            else:
+                closed_faces.append((a, b, c))
+                closed_tools.append(int(tool))
+
+    # ``reshape``, weil eine leere Liste sonst die Form ``(0,)`` hätte und
+    # ``vstack`` daran reißt — und leer ist sie, sobald der Slicer jede
+    # Kante von beiden Seiten geteilt hat (gemessen: alle zwölf Dreiecke
+    # einer Box dreifach, kein T-Stoß übrig).
+    final_faces = np.vstack(
+        [all_faces[~touched], np.array(closed_faces, dtype=np.int64).reshape(-1, 3)]
+    )
+    final_tools = [int(tool) for tool in all_tools[~touched]] + closed_tools
+    _log.info(
+        "3MF body %r: %d painted triangle(s) split into %d, %d T-joint(s) closed, %d triangles",
+        name,
+        len(splits),
+        len(split_faces),
+        len(closed_faces) - int(touched.sum()),
+        len(final_faces),
+    )
+    return trimesh.Trimesh(
+        vertices=np.vstack([vertices, np.array(points, dtype=np.float64)]),
+        faces=final_faces,
+        process=False,
+    ), final_tools
+
+
+def _leaves(payload: bytes, noted: list[Finding]) -> list[_Leaf]:
     """Läuft den Build ab und sammelt jedes Mesh, das er erreicht, der Reihe
     nach.
+
+    ``noted`` bekommt den Befund, wenn die Filamentpalette der Datei nicht
+    lesbar ist — dann kommen alle Körper ohne native Farben, aber sie kommen.
     """
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
@@ -807,8 +1480,30 @@ def _leaves(payload: bytes) -> list[_Leaf]:
             for entry in sorted(names):
                 if entry.startswith("3D/Objects/") and entry.endswith(".model"):
                     models[entry] = ET.fromstring(container.read(entry))
-            titles = _titles(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else {}
-            native = _native_materials(container, models[MODEL_PATH])
+            settings = (
+                _settings(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else _Settings()
+            )
+            native: _NativeMaterials | None
+            try:
+                native = _native_materials(container, models[MODEL_PATH])
+            except _MaterialError as problem:
+                _log.warning("3MF filament palette not read, bodies keep one colour: %s", problem)
+                native = None
+                noted.append(
+                    Finding(
+                        code="ingest.palette_dropped",
+                        severity="warning",
+                        # Der Rat im Satz, aus demselben Grund wie bei
+                        # ``_colours_dropped``.
+                        message=_(
+                            "Die Filamentpalette dieser 3MF ließ sich nicht lesen: {reason}. "
+                            "Die Körper sind einfarbig geladen — im Slicer nach Filamenten in "
+                            "einzelne Körper aufgeteilt und neu exportiert kommen die Farben mit.",
+                            reason=problem.reason,
+                        ),
+                        values={"reason": problem.reason},
+                    )
+                )
     except (KeyError, zipfile.BadZipFile, ET.ParseError) as problem:
         _log.info("3MF could not be read as an assembly: %s", problem)
         return []
@@ -834,8 +1529,8 @@ def _leaves(payload: bytes) -> list[_Leaf]:
                 _matrix(item.get("transform")),
                 catalog,
                 materials,
-                titles,
-                item.get("name") or titles.get(identifier, ""),
+                settings,
+                item.get("name") or settings.titles.get(identifier, ""),
                 0,
                 budget,
                 native=native,
@@ -865,27 +1560,46 @@ def _numbered(parts: list[Part]) -> list[Part]:
     return result
 
 
-def _titles(payload: bytes) -> dict[str, str]:
-    """Namen, die der Slicer notiert hat, nach Objekt und nach Part-ID.
+@dataclass(frozen=True, slots=True)
+class _Settings:
+    """Was ``model_settings.config`` über die Teile sagt: ihre Namen und
+    ihre Art.
+    """
+
+    titles: dict[str, str] = field(default_factory=dict)
+    """Nach Objekt- und nach Part-ID."""
+    kinds: dict[tuple[str, str], str] = field(default_factory=dict)
+    """``(Objekt, Part) → subtype`` — nur, wo der Slicer einen nennt."""
+
+
+def _settings(payload: bytes) -> _Settings:
+    """Namen und Arten, die der Slicer notiert hat.
 
     Eine Part-ID ist das, was eine Komponente benennt — das Blatt bekommt also
     den Namen der Datei, die es einmal war, und das ist der Name, den jemand
-    gewählt hat.
+    gewählt hat. Die Art (``subtype``) sagt, ob es überhaupt ein druckbares
+    Teil ist; sie gilt je Objekt, denn dieselbe Part-ID kann in zwei
+    Objekten zweierlei sein.
     """
     try:
-        config = ET.fromstring(payload)
+        config = _slicer_config(payload)
     except ET.ParseError:
-        return {}
+        return _Settings()
 
-    found: dict[str, str] = {}
+    found = _Settings()
     for node in [*config.findall(".//object"), *config.findall(".//part")]:
         identifier = node.get("id")
         if identifier is None:
             continue
         for entry in node.findall("metadata"):
             if entry.get("key") == "name" and entry.get("value"):
-                found[identifier] = _without_suffix(str(entry.get("value")))
+                found.titles[identifier] = _without_suffix(str(entry.get("value")))
                 break
+    for obj in config.findall("object"):
+        for part in obj.findall("part"):
+            kind = part.get("subtype")
+            if kind and kind != "normal_part":
+                found.kinds[obj.get("id", ""), part.get("id", "")] = kind
     return found
 
 
@@ -906,7 +1620,7 @@ def _parts_of(
     transform: np.ndarray,
     catalog: dict[str, dict[str, ET.Element]],
     materials: dict[str, dict[str, list[tuple[str, tuple[float, float, float]]]]],
-    titles: dict[str, str],
+    settings: _Settings,
     inherited: str,
     depth: int,
     budget: _Budget,
@@ -939,14 +1653,17 @@ def _parts_of(
 
     name = (
         entry.get("name")
-        or titles.get(identifier)
+        or settings.titles.get(identifier)
         or inherited
         or str(_("Körper {number}", number=identifier))
     )
-    if native is not None:
-        if not owner:
-            owner = identifier
+    # Der Eigentümer ist das Objekt, das der Build nennt — die Klammer, in
+    # der Part-IDs, Werkzeuge und Aussparungen gelten.
+    if not owner:
+        owner = identifier
+        if native is not None:
             tool = native.objects.get(identifier, tool)
+    if native is not None:
         tool = native.parts.get((owner, identifier), tool)
     mesh_node = entry.find(f"{{{CORE_NAMESPACE}}}mesh")
     if mesh_node is not None:
@@ -962,6 +1679,9 @@ def _parts_of(
                 native=native,
                 tool=tool,
                 volumes=tuple(native.volumes.get(identifier, ())) if native else (),
+                owner=owner,
+                identifier=identifier,
+                kind=settings.kinds.get((owner, identifier), "normal_part"),
             )
         ]
 
@@ -982,7 +1702,7 @@ def _parts_of(
                 transform @ _matrix(component.get("transform")),
                 catalog,
                 materials,
-                titles,
+                settings,
                 name,
                 depth + 1,
                 budget,
