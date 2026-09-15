@@ -4223,9 +4223,18 @@ def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:
 
     Im Tooltip und nicht in der Zeile: die trägt schon Kennzahlen, und der
     Bericht ist die Ansicht, die ruhig bleiben muss.
+
+    **Mit einem Netz, das einen Befund trägt.** Die Platte der Fixture ist
+    seit dem 14.09.2026 ohne einen — das Verschweißen doppelter Punkte beim
+    Lesen ist kein Befund mehr (B16) —, und ein Test über eine leere Liste
+    prüft nichts. `broken_open.stl` meldet beim Einlesen, dass es nicht
+    geschlossen ist, mit der Nummer des Schritts.
     """
     from PySide6.QtCore import Qt
 
+    window.session.import_model(MESHES / "broken_open.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
     report = window.report
     listed = [
         report.list.item(row)

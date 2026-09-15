@@ -1163,6 +1163,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "previous": _("Bisher"),
     "recipe": _("Rezept"),
     "second": _("Zweite Bedingung"),
+    # ``ingest.threemf``: was eine 3MF an Hilfsteilen und Aussparungen des
+    # Slicers überging, bevor kein druckbarer Körper blieb.
+    "skipped": _("Übersprungen"),
     "sliced": _("Mit Schichtanalyse geprüft"),
     "solver": _("Rechenstufe"),
     "stopped_at": _("Angehalten bei Schritt"),
@@ -1203,6 +1206,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "count": _("Anzahl"),
     "counted": _("Verarbeitet"),
     "cut": _("Schnitt"),
+    # ``ingest.threemf``: der Negativkörper aus dem Slicer, der keinen Körper trifft.
+    "cutter": _("Aussparung"),
     "cycle": _("Zyklus"),
     "dependencies": _("Begleitdateien"),
     "dependency": _("Begleitdatei"),
