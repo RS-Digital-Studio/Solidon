@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 
 ### Costruire e modificare
 
+- Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.
 - Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.
 
 ### Vista e utilizzo

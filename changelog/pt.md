@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Construir e alterar
 
+- Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.
 - Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.
 
 ### Vista e utilização

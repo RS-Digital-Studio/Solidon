@@ -276,7 +276,10 @@ Durchmessers zu einer passenden Langlochsenkung machen.
 und die Felder sind `optional`, weil die Null an einer Koordinate die Mitte des
 Teils ist). Wer versetzt, schließt zuerst die
 alte Stelle — am Netz über `_closed_at`, am exakten Körper über
-`brep.edit.fill_bore` — und schneidet an der neuen. **Geschnitten und nicht
+`brep.edit.fill_bore` — und schneidet an der neuen. **Wer dreht, ebenso**
+(`_slot_turned`, seit dem 15.09.2026): Ein Langloch in neuer Richtung war bis
+dahin ein zweites quer über dem ersten, mit Warnung — jetzt ist es ein
+gedrehtes, und `slot_hole.turned` sagt den Winkel. **Geschnitten und nicht
 geändert**: `resize_bore` verglich dort die zwei Durchmesser, fand sie gleich
 und gab den Körper unverändert zurück; gemessen am 10.09.2026 blieb das Loch
 bei (−20 | −10) und der Befund sagte „Die Bohrung hat bereits diesen

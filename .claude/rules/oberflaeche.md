@@ -453,6 +453,13 @@ freier Richtung rechnet die Rundreise `placement_transform` →
 *Achse* — jede andere Achse bekommt einen Satz mit dem Weg, nicht eine stille
 Drehung um die falsche.
 
+**Und ein Langloch aus einem Schritt gehört dazu.** Es ist kein Baustein, aber
+dieselbe Regel: Hat `slot_hole` es gezogen, ändert *Übernehmen* diesen Schritt
+(`_change_slot_step`) und legt keinen zweiten obenauf — der schnitt bis zum
+15.09.2026 quer über das erste (Robert: „habe ich 2 langlöcher"). Wer eine
+weitere Operation baut, die ein Merkmal aus ihrem eigenen früheren Schritt
+noch einmal anfasst, fragt zuerst `created_by`.
+
 **Eine Anzahl ist keine Länge.** `count`, `steps`, `holes` sind ganze Zahlen
 ohne Einheit; als Längenfeld hießen sie im Merkmalfenster „2,00 mm", in Zoll
 „0,08 in", und gingen als `4.0` in den Schritt. `perceive.actions._kind_of`

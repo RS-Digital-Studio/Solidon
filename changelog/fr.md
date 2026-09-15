@@ -29,6 +29,7 @@ dans `website/version.json`.
 
 ### Construire et modifier
 
+- Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.
 - Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.
 
 ### Vue et utilisation

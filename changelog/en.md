@@ -28,6 +28,7 @@ it into `website/version.json`.
 
 ### Building and editing
 
+- Turning a slot turns it — instead of cutting a second one across it. And editing a slot you pulled yourself changes that step; the history gets no second one.
 - An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.
 
 ### View and operation

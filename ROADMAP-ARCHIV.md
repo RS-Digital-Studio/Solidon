@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-15 | [Ein gedrehtes Langloch ist eines (15.09.2026)](#ein-gedrehtes-langloch-ist-eines-15092026) |
 | 2026-09-14 | [Bausteine: Vorschau, Griff und Werte — die Sonde über alle 27 (14.09.2026)](#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026) |
 | 2026-09-14 | [Eine 3MF von MakerWorld ging nicht auf (14.09.2026)](#eine-3mf-von-makerworld-ging-nicht-auf-14092026) |
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
@@ -28654,3 +28655,40 @@ chosen`, `test_a_chosen_finding_survives_a_second_report` und `test_selected_bod
 operations_in_the_window_on_the_right`, in test_analysis_ui `test_a_finding_says_which_step_
 reported_it` — Arbeit der Nachbarsitzungen desselben Tages. Ruff, Format, mypy an den geänderten
 Dateien.
+
+## Ein gedrehtes Langloch ist eines (15.09.2026)
+
+Robert: „wenn ich ein langloch auswähle, auf im modell bearbeiten über den viewport bearbeite und
+das langloch drehe und übernehmen klicke habe ich 2 langlöcher". Nachgestellt an `plate_holes.stl`
+(`probe_slot_turn.py`): Bohrung → Langloch 18 mm ist Schritt 2; das Langloch gewählt, die
+gemessene Länge 18,02 und der Winkel 45 über *Übernehmen* — Schritt 3, ein zweites `slot_hole`
+quer über das erste, 397 mm³ mehr abgetragen, kein Langloch mehr erkannt („Formdetail nicht mehr
+wiederzuerkennen"). Der Kern wusste das seit dem 10.09.2026 und sagte es als Warnung
+(`slot_hole.crosses`) — richtig gerechnet, und trotzdem das Gegenteil dessen, was der Ring am Griff
+verspricht.
+
+Zwei Änderungen, an zwei Enden:
+
+- **Der Kern dreht, statt zu kreuzen.** `slot_hole` behandelt eine andere Richtung wie eine andere
+  Stelle: Die alte Öffnung wird geschlossen (`_closed_at` am Netz, `fill_bore` mit Länge und Winkel
+  am exakten Körper), dann die neue geschnitten. `_slot_across_a_slot` heißt `_slot_turned`, der
+  Befund `slot_hole.turned` (info) sagt den Winkel und den Weg zurück; das Kreuz gibt es nicht
+  mehr, und `slot_hole.feature_lost` hat damit keinen der zwei gemessenen Wege mehr — der Befund
+  bleibt für den Fall, den keiner erzeugt. Nachweis: `test_turning_a_slot_closes_its_old_direction`,
+  `test_a_turned_slot_does_not_borrow_its_neighbour`,
+  `test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any` (beide Kerne, zwei Langlöcher
+  nebeneinander, das gedrehte behält Namen und Stelle).
+- **Das Fenster ändert den Schritt.** Ein Langloch, das ein `slot_hole`-Schritt gezogen hat, trägt
+  ihn als `created_by`; *Übernehmen* und der Zug an den Langlochknöpfen gehen seither über
+  `MainWindow._change_slot_step` in **diesen** Schritt (§21.2, dieselbe Regel wie beim Baustein),
+  der rechnet von der Bohrung aus neu — ein Schritt im Verlauf, ein Langloch im Bild. Geschrieben
+  wird nur, was sich gegenüber dem gemessenen Wert geändert hat: Das Fenster belegt die Felder mit
+  18,02 für ein Langloch von 18,00, und wer das ungesehen zurückschriebe, ließe das Loch mit jedem
+  Übernehmen um zwei Hundertstel wachsen. Ein erkanntes Langloch aus einer Datei hat keinen Schritt
+  und geht weiter als neuer Schritt an den Kern — der dort die alte Richtung selbst schließt.
+  Nachweis: `test_turning_a_slot_from_a_step_changes_that_step`.
+
+Gefahren je Prozess: test_slot_features, test_analysis_ui, test_surface_placement_ui,
+test_slot_handle, test_viewport_decisions, test_feature_panel, test_ui (Langloch); dazu
+test_prepare, test_translations, test_language_rules, test_history, test_scene_ops in einem Zug;
+ruff, Format, mypy an den geänderten Dateien.

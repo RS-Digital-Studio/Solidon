@@ -554,19 +554,36 @@ def test_pulling_an_existing_slot_keeps_its_direction(profile: Profile) -> None:
     assert parallel == pytest.approx(1.0, abs=1e-6), "dieselbe Richtung wie vorher"
 
 
-def test_pulling_a_slot_across_itself_says_what_it_makes(profile: Profile) -> None:
-    """Ein Kreuz ist richtig gerechnet und meistens nicht gemeint."""
+def test_turning_a_slot_closes_its_old_direction(profile: Profile) -> None:
+    """Ein Langloch in neuer Richtung ist ein gedrehtes Langloch — kein Kreuz.
+
+    Bis zum 15.09.2026 schnitt der Zug mit anderem Winkel ein zweites Langloch
+    quer über das erste; die Warnung ``slot_hole.crosses`` sagte es, und das
+    Ergebnis war trotzdem das Gegenteil dessen, was der Ring am Griff
+    verspricht (Robert: „habe ich 2 langlöcher"). Jetzt schließt die Operation
+    die alte Öffnung, wie beim Versetzen, und schneidet die neue.
+    """
     entry = a_slotted_plate(profile)
     slot = next(name for name, f in entry.features.items() if f.kind == "slot")
+    before = entry.features[slot].params["direction"]
 
-    _output, findings = run_op_with_findings(
+    output, findings = run_op_with_findings(
         "slot_hole", entry, profile, at_feature=slot, slot_length=24.0, slot_angle=90.0
     )
 
+    found = detect(as_mesh_data(output.mesh))
+    kinds = [feature.kind for feature in found.values()]
+    assert kinds.count("slot") == 1, f"genau ein Langloch, kein Kreuz: {kinds}"
+    turned = next(feature for feature in found.values() if feature.kind == "slot")
+    across = abs(sum(a * b for a, b in zip(before, turned.params["direction"], strict=True)))
+    assert across == pytest.approx(0.0, abs=1e-3), "und es liegt quer zur alten Richtung"
+    assert float(turned.params["length"]) == pytest.approx(24.0, abs=0.1)
+
     codes = {finding.code for finding in findings}
-    assert "slot_hole.crosses" in codes
+    assert "slot_hole.turned" in codes, "die Drehung sagt sich an"
+    assert "slot_hole.crosses" not in codes
     assert "slot_hole.feature_renamed" not in codes, (
-        "aus einem Langloch wird kein Langloch — es wird länger"
+        "aus einem Langloch wird kein Langloch — es wird gedreht"
     )
 
 
@@ -957,15 +974,19 @@ def test_a_slot_that_is_no_longer_one_says_so(
 ) -> None:
     """Ein Merkmal, das verschwindet, verschwindet nicht schweigend (Regel 17).
 
-    Zwei Wege führen dahin, und beide sind gemessen (11.09.2026): Wer über den
-    Rand des Körpers zieht, bekommt einen offenen Schlitz und danach eine bis
-    drei Verrundungen; wer quer über das eigene Langloch zieht, ein Kreuz und
-    vier. Beides ist gültige Geometrie — der Schnitt stimmt, das Teil ist
-    brauchbar —, und beides ist kein Langloch mehr. Im Objektbaum standen
-    danach Verrundungen, die Auswahl zeigte ins Leere, und gesagt wurde nichts
-    (Robert: „auf einem langloch 2 werden und nicht mehr wählbar").
+    Zwei Wege führten dahin, beide gemessen (11.09.2026): Wer über den Rand
+    des Körpers zieht, bekam einen offenen Schlitz und danach eine bis drei
+    Verrundungen; wer quer über das eigene Langloch zieht, ein Kreuz und vier.
+    Im Objektbaum standen danach Verrundungen, die Auswahl zeigte ins Leere,
+    und gesagt wurde nichts (Robert: „auf einem langloch 2 werden und nicht
+    mehr wählbar").
 
-    Der Befund sagt beides und nennt den Rückweg über Strg+Z.
+    **Beide Wege sind seither keine Verluste mehr**: Über den Rand bleibt ein
+    offenes Langloch erkennbar, und ein Zug quer über sich selbst **dreht** das
+    Langloch seit dem 15.09.2026, statt es zu kreuzen (Robert: „habe ich 2
+    langlöcher"). Der Befund ``slot_hole.feature_lost`` bleibt für den Fall,
+    den keiner der beiden mehr erzeugt — und hier steht, dass er hier nicht
+    kommt.
     """
     mesh = drill(
         plate(),
@@ -993,19 +1014,16 @@ def test_a_slot_that_is_no_longer_one_says_so(
     )
 
     codes = [entry.code for entry in findings]
+    assert "slot_hole.feature_lost" not in codes, f"{kind}: {codes}"
+    slots = [feature for feature in pulled.features.values() if feature.kind == "slot"]
+    assert len(slots) == 1, f"{kind}: genau ein Langloch, gefunden {codes}"
     if kind == "über den Rand":
-        assert "slot_hole.feature_lost" not in codes
-        assert any(
-            feature.kind == "slot" and feature.params.get("open")
-            for feature in pulled.features.values()
-        )
+        assert slots[0].params.get("open"), "ein offenes Langloch bleibt erkennbar"
         return
-    assert "slot_hole.feature_lost" in codes, f"{kind}: gesagt wird es, gefunden: {codes}"
-    lost = next(entry for entry in findings if entry.code == "slot_hole.feature_lost")
-    assert lost.severity == "warning"
-    assert not any(feature.kind == "slot" for feature in pulled.features.values()), (
-        f"{kind}: und ein Langloch ist wirklich keines mehr"
-    )
+    assert "slot_hole.turned" in codes, f"{kind}: die Drehung sagt sich an"
+    before = started.features[chosen].params["direction"]
+    across = abs(sum(a * b for a, b in zip(before, slots[0].params["direction"], strict=True)))
+    assert across == pytest.approx(0.0, abs=1e-3), "und das eine liegt quer zur alten Richtung"
 
 
 def test_the_same_word_comes_from_the_exact_kernel(profile: Profile) -> None:
@@ -1066,17 +1084,18 @@ def _two_slots_side_by_side(profile: Profile) -> tuple[SceneObject, str, str]:
     return entry, lower, upper
 
 
-def test_a_lost_slot_does_not_borrow_its_neighbour(profile: Profile) -> None:
-    """Verschwindet das gezogene Langloch, bekommt kein anderes seinen Namen.
+def test_a_turned_slot_does_not_borrow_its_neighbour(profile: Profile) -> None:
+    """Das gedrehte Langloch behält seinen Namen — und das daneben seinen.
 
     ``match`` nimmt ein Merkmal an, solange Lage und Durchmesser unter seiner
     Schwelle liegen — acht Prozent der Modelldiagonale, an dieser Platte
     sechzehn Millimeter. Zwei Langlöcher zwölf Millimeter auseinander, das
-    obere quer über sich selbst gezogen: Es wird ein Kreuz und bleibt, wo es
-    war. Ohne Nachprüfung träfe die Zuordnung das **untere** (gemessen: Kosten
-    0,75 unter der Schwelle 1,0), das bekäme die Kennung des oberen, und der
-    Befund bliebe aus (Fund des Reviews, 11.09.2026). Zwei Fehler aus einem
-    Treffer, der keiner ist.
+    obere quer über sich selbst gezogen: Bis zum 15.09.2026 wurde es ein Kreuz
+    und war verloren, und ohne Nachprüfung träfe die Zuordnung das **untere**
+    (gemessen: Kosten 0,75 unter der Schwelle 1,0), das bekäme die Kennung des
+    oberen (Fund des Reviews, 11.09.2026). Seit die Drehung die alte Richtung
+    schließt, steht das obere gedreht an seiner Stelle — und die Zuordnung muss
+    genau dieses treffen, nicht das Nachbarloch.
     """
     entry, lower, upper = _two_slots_side_by_side(profile)
 
@@ -1086,19 +1105,29 @@ def test_a_lost_slot_does_not_borrow_its_neighbour(profile: Profile) -> None:
     )
 
     codes = [found.code for found in findings]
-    assert "slot_hole.feature_lost" in codes, codes
-    # Das untere Langloch heißt weiter, wie es hieß, und liegt, wo es lag.
-    remaining = [name for name, feature in pulled.features.items() if feature.kind == "slot"]
-    assert remaining == [lower], remaining
+    assert "slot_hole.feature_lost" not in codes, codes
+    assert "slot_hole.turned" in codes, codes
+    remaining = sorted(name for name, feature in pulled.features.items() if feature.kind == "slot")
+    assert remaining == sorted([lower, upper]), remaining
+    # Das untere heißt weiter, wie es hieß, und liegt, wo es lag …
     assert float(pulled.features[lower].params["centre"][1]) == pytest.approx(-6.0, abs=0.05)
+    # … und das obere liegt gedreht an seiner alten Mitte.
+    turned = pulled.features[upper]
+    assert float(turned.params["centre"][1]) == pytest.approx(6.0, abs=0.05)
+    assert abs(float(turned.params["direction"][1])) == pytest.approx(1.0, abs=1e-3), (
+        "es liegt jetzt längs Y"
+    )
 
 
 def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profile) -> None:
-    """Am exakten Körper steht ein zweites Langloch — und das gezogene ist fort.
+    """Am exakten Körper steht ein zweites Langloch — und das gezogene dreht sich.
 
     Hier stand ``any(kind == "slot")``: Ein zweites Langloch im Körper, und die
     Ansage blieb aus, obwohl aus dem gezogenen ein Kreuz geworden war (Fund des
-    Reviews, 11.09.2026).
+    Reviews, 11.09.2026). Seit dem 15.09.2026 gibt es das Kreuz nicht mehr —
+    der exakte Kern schließt die alte Richtung wie das Netz (``fill_bore`` mit
+    Länge und Winkel) —, und gesucht wird weiter **das eine** Langloch: das
+    gedrehte an seiner Stelle, nicht irgendeines.
     """
     pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
     from app.core.brep import edit
@@ -1124,12 +1153,21 @@ def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profil
         key=lambda name: float(entry.features[name].params["centre"][1]),
     )
 
-    _output, findings = run_op_with_findings(
+    output, findings = run_op_with_findings(
         "slot_hole", entry, profile, at_feature=upper, slot_length=16.0, slot_angle=90.0
     )
 
     codes = [found.code for found in findings]
-    assert "slot_hole.feature_lost" in codes, codes
+    assert "slot_hole.feature_lost" not in codes, codes
+    assert "slot_hole.turned" in codes, codes
+    found = features_of(output.mesh)
+    slots = {name: feature for name, feature in found.items() if feature.kind == "slot"}
+    assert len(slots) == 2, sorted(slots)
+    turned = max(slots.values(), key=lambda feature: float(feature.params["centre"][1]))
+    assert float(turned.params["centre"][1]) == pytest.approx(6.0, abs=0.05)
+    assert abs(float(turned.params["direction"][1])) == pytest.approx(1.0, abs=1e-3), (
+        "das obere liegt jetzt längs Y"
+    )
 
 
 # --- RM-155: der Mantel aus einem Stück ------------------------------------------------
@@ -1253,6 +1291,85 @@ def test_a_stretched_hexagon_is_not_a_stadium() -> None:
     kinds = [feature.kind for feature in detect(mesh).values()]
 
     assert "slot" not in kinds, kinds
+
+
+def a_bore_with_three_lugs(
+    diameter: float = 57.4, lug_depth: float = 1.42, lug_width_deg: float = 25.0
+) -> MeshData:
+    """Die Bohrung eines Bajonettrings: drei Nasen mit Anlaufschrägen in der Wand.
+
+    Nachgebaut nach dem Ring eines Kunden (Siebhalter, 15.09.2026): Bohrung
+    Ø 57,4 durch einen Block, darin drei Nasen 1,42 mm nach innen, je 25 Grad
+    breit und um 120 Grad versetzt, kürzer als die Wand und an beiden Enden
+    über acht Grad angeschrägt — so gleitet der Gegenring hinein. Die Schrägen
+    sind der Punkt: Sie verbinden Nasenkamm und Wand ohne Knick zu **einem**
+    Fleck, auf den kein Zylinder passt.
+    """
+    block = MeshData.of(trimesh.creation.box(extents=(90.0, 90.0, 10.0)))
+    bore = trimesh.creation.cylinder(radius=diameter / 2.0, height=20.0, sections=360)
+    ring = boolean("difference", [block, MeshData.of(bore)]).mesh
+    wall = diameter / 2.0
+    crest = wall - lug_depth
+    ramp_deg = 8.0
+    lugs: list[MeshData] = []
+    for start in (47.5, 167.5, 287.5):
+        inner: list[tuple[float, float]] = []
+        for step in range(int(lug_width_deg + 2 * ramp_deg) + 1):
+            offset = step - (lug_width_deg / 2.0 + ramp_deg)
+            outside = max(0.0, abs(offset) - lug_width_deg / 2.0)
+            radius = crest + lug_depth * min(1.0, outside / ramp_deg)
+            angle = math.radians(start + offset)
+            inner.append((radius * math.cos(angle), radius * math.sin(angle)))
+        outer = [
+            ((wall + 1.0) * math.cos(math.radians(start + offset)), (wall + 1.0) * math.sin(math.radians(start + offset)))
+            for offset in (lug_width_deg / 2.0 + ramp_deg, -(lug_width_deg / 2.0 + ramp_deg))
+        ]
+        lug = trimesh.creation.extrude_polygon(Polygon(inner + outer), height=3.0)
+        lug.apply_translation((0.0, 0.0, -1.5))
+        lugs.append(MeshData.of(lug))
+    return boolean("union", [ring, *lugs]).mesh
+
+
+def test_a_bore_with_three_lugs_is_a_bore_and_no_slot() -> None:
+    """Ein Kreis, den der Zylinderfit ablehnt, wird kein Langloch mit Weg null.
+
+    Gemessen am Ring eines Kunden (15.09.2026): Die Wand Ø 57,4 mit drei
+    Nasen fiel am Zylinderfit durch (Streuung 0,186 gegen 0,02), und die
+    Langlochsuche belegte danach den ganzen Mantel als Stadion — Weg
+    0,00005 mm, Rückstand 0,0077, angenommen. Im Objektbaum stand „Langloch
+    Ø 57,39 auf 57,39 mm" mit sechs Handlungen, und jede davon hätte die
+    Nasen still weggeschnitten. Ein Weg innerhalb der Toleranz des Fits
+    ist keine Messung (§41); die Wand ist eine Bohrung, die Nasen sind, was
+    sie sind.
+    """
+    found = detect(a_bore_with_three_lugs())
+
+    kinds = [feature.kind for feature in found.values()]
+    assert "slot" not in kinds, kinds
+    holes = [feature for feature in found.values() if feature.kind == "hole"]
+    assert len(holes) == 1, kinds
+    assert float(holes[0].params["diameter"]) == pytest.approx(57.4, abs=0.05)
+
+
+def test_a_stadium_within_its_own_tolerance_is_a_circle() -> None:
+    """Die Zusicherung an der Zahl: Unter zwei Prozent des Radius gibt es keinen Weg."""
+    from app.core.perceive.features import STADIUM_TOLERANCE, StadiumFit
+
+    def stadium(travel: float) -> StadiumFit:
+        return StadiumFit(
+            axis=(0.0, 0.0, 1.0),
+            centre=(0.0, 0.0, 0.0),
+            direction=(1.0, 0.0, 0.0),
+            radius=10.0,
+            travel=travel,
+            depth=5.0,
+            residual=0.001,
+            inward=True,
+        )
+
+    assert not stadium(0.0001).good
+    assert not stadium(10.0 * STADIUM_TOLERANCE).good
+    assert stadium(10.0 * STADIUM_TOLERANCE * 1.5).good
 
 
 def test_a_small_pocket_with_rounded_corners_is_still_not_a_slot() -> None:
@@ -1568,11 +1685,12 @@ def test_a_slot_length_beyond_the_body_is_refused_when_drilling_too(profile: Pro
     ("angle", "says_so"),
     [(0.4, False), (1.0, True), (179.0, True), (180.4, False), (90.0, True)],
 )
-def test_the_crossing_warning_starts_at_half_a_degree(angle: float, says_so: bool) -> None:
+def test_the_turning_notice_starts_at_half_a_degree(angle: float, says_so: bool) -> None:
     """``SLOT_ACROSS_LIMIT`` ist als gemessen dokumentiert (0,5 Grad) und wurde
-    bis zum 11.09.2026 nur bei 90 Grad gefahren.
+    bis zum 11.09.2026 nur bei 90 Grad gefahren. Seit dem 15.09.2026 kündigt
+    dieselbe Grenze kein Kreuz mehr an, sondern die Drehung.
     """
-    from app.core.geom.prepare_ops import _slot_across_a_slot
+    from app.core.geom.prepare_ops import _slot_turned as _slot_across_a_slot
 
     slot = Feature(
         id="slot_1",

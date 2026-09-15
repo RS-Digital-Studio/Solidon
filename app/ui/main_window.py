@@ -10064,10 +10064,75 @@ class MainWindow(QMainWindow):
         # (Robert: „wenn ich das langloch zieh, fehlen die Maße zu den kanten",
         # „werte im dialog und in der rechten merkmalleiste doppelt").
         self._drop_stale_measures()
+        if op == "slot_hole" and self._change_slot_step(feature_id, params):
+            return
         draft = OperationDraft(
             op=op, inputs=(selected,), params={"at_feature": feature_id, **params}
         )
         self.session.apply(REGISTRY.get(op).title, [draft])
+
+    def _change_slot_step(self, feature_id: str, params: Mapping[str, Any]) -> bool:
+        """Ein Langloch, das ein Schritt gezogen hat, ändert **diesen** Schritt.
+
+        Dieselbe Regel wie beim Baustein (:meth:`_change_part_step`, §21.2):
+        Was aus einem Schritt kam, meint den Schritt. Bis zum 15.09.2026 legte
+        jedes Übernehmen an einem Langloch einen weiteren ``slot_hole``-Schritt
+        obenauf — beim Drehen schnitt der ein zweites Langloch quer über das
+        erste (Robert: „habe ich 2 langlöcher"). Jetzt bekommt der Schritt, der
+        das Langloch aus der Bohrung gezogen hat, den neuen Winkel, die neue
+        Länge oder die neue Stelle, und rechnet von der Bohrung aus neu — ein
+        Langloch, kein Kreuz, und kein Schritt mehr im Verlauf.
+
+        **Geschrieben wird nur, was sich geändert hat.** Das Merkmalfenster
+        belegt die Felder mit den **gemessenen** Werten, und die tragen die
+        Toleranz des Schnitts (18,00 eingetragen, 18,02 gemessen); wer sie
+        ungesehen zurückschriebe, ließe das Loch mit jedem Übernehmen um zwei
+        Hundertstel wachsen. Ein Feld, das noch auf seinem Messwert steht, hat
+        niemand angefasst — es bleibt, was im Schritt steht.
+
+        Gibt zurück, ob der Schritt geändert wurde; ``False`` heißt: kein
+        Schritt (ein erkanntes Langloch aus einer Datei), der Aufrufer legt
+        einen neuen an — und der Kern schließt dort die alte Richtung selbst.
+        """
+        from app.core.geom.prepare_ops import slot_angle_of
+
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        feature = entry.features.get(feature_id) if entry is not None else None
+        if feature is None or feature.kind != "slot":
+            return False
+        step = next(
+            (
+                entry
+                for entry in self.session.project.document.ops
+                if entry.id == getattr(feature, "created_by", None) and entry.op == "slot_hole"
+            ),
+            None,
+        )
+        if step is None:
+            return False
+        axis = feature.params.get("axis")
+        centre = feature.params.get("centre")
+        if axis is None or centre is None:
+            return False
+        measured: dict[str, float] = {
+            "slot_length": float(feature.params.get("length") or 0.0),
+            "slot_angle": slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2]))),
+            "x": float(centre[0]),
+            "y": float(centre[1]),
+            "z": float(centre[2]),
+        }
+        changed: dict[str, Any] = {}
+        for name, was in measured.items():
+            value = params.get(name)
+            if isinstance(value, int | float) and abs(float(value) - was) > EPS_DISPLAY:
+                changed[name] = float(value)
+        if not changed:
+            self.announce(tr("Das Langloch steht schon so, wie es eingetragen ist."))
+            return True
+        self.session.change_params(int(step.id), changed)
+        return True
 
     def _on_face_dragged(self, feature_id: str, distance: float) -> None:
         """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
@@ -12594,6 +12659,12 @@ class MainWindow(QMainWindow):
             self.announce(_needs_objects(0))
             return
         self._drop_feature_preview()
+        # **Ein Langloch aus einem Schritt ändert den Schritt** — derselbe
+        # Vorrang wie in :meth:`_feature_step`, für den Weg über die Felder
+        # rechts und die stille Platzierung.
+        feature_id = str(params.get("at_feature") or "")
+        if op == "slot_hole" and feature_id and self._change_slot_step(feature_id, params):
+            return
         draft = OperationDraft(op=op, inputs=(object_id,), params=dict(params))
         self.session.apply(REGISTRY.get(op).title, [draft])
 

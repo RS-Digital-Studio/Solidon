@@ -311,6 +311,14 @@ liest sie im Quelltext gegen die Griff-Felder des Aufbaus. Der Griff wird nach j
 Neuzeichnen der Vorschau frisch angehängt; er rechnet gegen die Matrix seines
 Ziels beim Anhängen, und die Vorschau kommt bei jeder Wertänderung neu.
 
+**Ein Langloch aus einem Schritt ändert diesen Schritt** (15.09.2026). Hat ein
+`slot_hole`-Schritt das Langloch gezogen (`Feature.created_by`), gehen
+*Übernehmen* im Merkmalfenster, die stille Platzierung und der Zug an den
+Langlochknöpfen über `MainWindow._change_slot_step` in **diesen** Schritt —
+kein zweiter im Verlauf, kein Kreuz im Bild. Geschrieben wird nur, was vom
+gemessenen Wert abweicht; die Felder tragen die Toleranz des Schnitts. Ein
+erkanntes Langloch ohne Schritt geht weiter als neuer Schritt an den Kern.
+
 **Ein Loch hat eine Länge, und die ist eine Geste.** `slot_handle.py` hängt
 zwei Knöpfe an ein gewähltes Loch (`hole` oder `slot` — welche Arten, sagt
 `slot_feature_kinds()` aus dem `applies_to` von *Zum Langloch ziehen*), gezogen

@@ -3618,6 +3618,13 @@ def slot_hole(ctx: OpContext) -> OpResult:
     und seine Breite stehen im Merkmal wie bei einer Bohrung; was dazukommt,
     ist die Richtung, in der es schon liegt — und die wird zur Vorgabe, damit
     ein Zug an der Länge es nicht quer stellt.
+
+    **Und eine andere Richtung dreht es, statt es zu kreuzen** (Robert,
+    15.09.2026: „habe ich 2 langlöcher"). Bis dahin schnitt der Zug mit
+    neuem Winkel ein zweites Langloch quer über das erste — richtig gerechnet,
+    mit einer Warnung, und trotzdem das Gegenteil dessen, was der Ring am
+    Griff verspricht. Jetzt geht ein gedrehtes Langloch denselben Weg wie ein
+    versetztes: Die alte Öffnung wird geschlossen, die neue geschnitten.
     """
     params = cast(SlotHoleParams, ctx.params)
     source = ctx.inputs[0]
@@ -3735,16 +3742,20 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 values={"feature": feature.id, "length_mm": params.slot_length},
             )
         )
-    crossing = _slot_across_a_slot(feature, axis, angle)
-    if crossing is not None:
-        said.append(crossing)
+    turning = _slot_turned(feature, axis, angle)
+    if turning is not None:
+        said.append(turning)
 
     # **Wer versetzt, schließt die alte Stelle** — sonst steht die Bohrung noch
     # da und daneben ein Langloch (gemessen 10.09.2026: `hole_1` und `slot_1`
     # im selben Körper). Dieselbe Paarung wie bei *Merkmal verschieben*: an der
     # alten Stelle das Gegenteil des Merkmals, an der neuen das Merkmal selbst.
+    # **Und wer dreht, ebenso**: Ein Langloch in neuer Richtung über dem alten
+    # war ein Kreuz (gemessen 15.09.2026 an der Platte: 397 mm³ mehr abgetragen,
+    # kein Langloch mehr erkannt). Geschlossen wird die Öffnung, wie sie liegt.
     measured = _bore_vector(feature, "centre")
     moved = not all(is_close(a, b) for a, b in zip(centre, measured, strict=True))
+    closes_the_old = moved or turning is not None
     # **Die Zugabe gilt dem ersten Zug.** Sie hält den Langlochkörper von der
     # runden Bohrungswand fern, an die er sich sonst entlang zweier Linien
     # legte (:data:`prepare.FEATURE_OVERLAP`). An einem Langloch, das schon
@@ -3768,7 +3779,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 values={"object": source.id},
             )
         started = source.mesh
-        if moved:
+        if closes_the_old:
             # Bis zum 10.09.2026 stand hier eine Absage: „Am exakten Körper
             # lässt sich ein Loch noch nicht versetzen." Sie hatte einen
             # Grund — der Kern konnte kein Loch füllen —, und der ist mit
@@ -3874,7 +3885,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # bei derselben Zeile in `resize_hole`.
     exact_depth = _mesh_bore_depth(body, feature, axis, depth)
     filled: list[Finding] = []
-    if moved:
+    if closes_the_old:
         closing = _closed_at(
             body,
             feature,
@@ -4055,21 +4066,22 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
 SLOT_ACROSS_LIMIT: Final = 0.5
 
 
-def _slot_across_a_slot(
+def _slot_turned(
     feature: Feature, axis: tuple[float, float, float], angle: float
 ) -> Finding | None:
-    """Sagt es, wenn der Zug nicht in Richtung des vorhandenen Langlochs geht.
+    """Sagt es, wenn der Zug das vorhandene Langloch in eine andere Richtung dreht.
 
     **Gefunden am gefahrenen Weg und nicht im Code** (10.09.2026): Ein
     bestehendes Langloch mit 90 Grad noch einmal gezogen ergab ein Kreuz, im
-    Objektbaum standen danach vier Hohlkehlen, und gesagt hatte es niemand. Das
-    Ergebnis ist richtig gerechnet — nur wollte es kaum jemand, und wer es
-    wollte, hört den Satz einmal und überliest ihn.
+    Objektbaum standen danach vier Hohlkehlen, und gesagt hatte es niemand.
+    Der Befund hieß deshalb ``slot_hole.crosses`` und warnte vor dem Kreuz.
 
-    Der Satz spricht deshalb nicht vom Kreuz: Bei einem Grad Unterschied
-    entsteht keines, und trotzdem ist die Öffnung danach keine gerade mehr
-    (gemessen, siehe :data:`SLOT_ACROSS_LIMIT`). Er nennt den Winkel und den
-    Weg zurück, und beides stimmt bei einem Grad wie bei neunzig.
+    **Seit dem 15.09.2026 gibt es das Kreuz nicht mehr** (Robert: „habe ich 2
+    langlöcher"): Die Operation schließt die alte Richtung, bevor sie die neue
+    schneidet — derselbe Weg wie beim Versetzen. Was bleibt, ist die Auskunft:
+    Das Loch liegt jetzt anders, und wer nur verlängern wollte, sieht hier,
+    woran es lag. Ab einem halben Grad (:data:`SLOT_ACROSS_LIMIT`, das ist die
+    Rundung von :func:`slot_angle_of`), denn darunter ist es dieselbe Richtung.
     """
     if feature.kind != "slot":
         return None
@@ -4080,12 +4092,12 @@ def _slot_across_a_slot(
     if min(turned, abs(180.0 - turned)) <= SLOT_ACROSS_LIMIT:
         return None
     return Finding(
-        code="slot_hole.crosses",
-        severity="warning",
+        code="slot_hole.turned",
+        severity="info",
         message=_(
-            "Das neue Langloch steht {angle:.1f} Grad gegen das vorhandene. "
-            "Beide zusammen sind keine gerade Öffnung mehr; wollten Sie es nur "
-            "verlängern, lassen Sie die Richtung auf null.",
+            "Das Langloch liegt jetzt {angle:.1f} Grad anders als vorher; die alte "
+            "Richtung ist geschlossen. Wollten Sie es nur verlängern, lassen Sie "
+            "die Richtung, wie sie stand.",
             angle=turned,
         ),
         feature_ids=(feature.id,),

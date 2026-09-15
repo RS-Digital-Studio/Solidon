@@ -4776,6 +4776,112 @@ def test_a_part_without_a_direction_turns_only_where_the_step_can_follow() -> No
     assert values is None and why == "direction"
 
 
+def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> None:
+    """Ein Langloch, das ein Schritt gezogen hat, dreht sich über diesen Schritt.
+
+    Bohrung → Langloch ist ein ``slot_hole``-Schritt; das Langloch trägt ihn
+    als ``created_by``. Wer es danach dreht und übernimmt, bekam bis zum
+    15.09.2026 einen **zweiten** Schritt obenauf, und der schnitt quer über das
+    erste — „habe ich 2 langlöcher" (Robert). Jetzt bekommt der erste Schritt
+    den Winkel (§21.2, dieselbe Regel wie beim Baustein), rechnet von der
+    Bohrung aus neu, und im Verlauf steht weiter ein Schritt.
+
+    **Nur Geändertes geht in den Schritt.** Das Fenster belegt die Felder mit
+    den gemessenen Werten (18,02 für ein Langloch von 18,00); ein Feld, das
+    darauf stehen blieb, hat niemand angefasst und wächst das Loch nicht.
+    """
+    from app.core.geom.prepare_ops import slot_angle_of
+    from app.core.scene import OperationDraft
+
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    centre = tuple(float(value) for value in entry.features[hole].params["centre"])
+    window.session.apply(
+        "Zum Langloch ziehen",
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=(object_id,),
+                params={
+                    "at_feature": hole,
+                    "slot_length": 18.0,
+                    "slot_angle": 0.0,
+                    "x": centre[0],
+                    "y": centre[1],
+                    "z": centre[2],
+                },
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = window.session.project.document.ops[-1]
+    assert step.op == "slot_hole"
+    steps = len(window.session.project.document.ops)
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+    slot_id, slot = next(
+        (name, feature)
+        for name, feature in result.scene.objects[object_id].features.items()
+        if feature.kind == "slot"
+    )
+    assert slot.created_by == step.id
+    measured = float(slot.params["length"])
+    axis = tuple(float(value) for value in slot.params["axis"])
+    where = tuple(float(value) for value in slot.params["centre"])
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, slot_id)
+    for _ in range(40):
+        QApplication.processEvents()
+    # Was das Merkmalfenster beim Übernehmen schickt: die gemessene Länge, die
+    # gemessene Mitte — und den neuen Winkel.
+    window._apply_from_feature_panel(
+        "slot_hole",
+        {
+            "at_feature": slot_id,
+            "slot_length": measured,
+            "slot_angle": 45.0,
+            "x": where[0],
+            "y": where[1],
+            "z": where[2],
+        },
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+
+    ops = window.session.project.document.ops
+    assert len(ops) == steps, "kein zweiter Schritt"
+    turned = next(entry for entry in ops if entry.id == step.id)
+    assert turned.params["slot_angle"] == pytest.approx(45.0)
+    assert turned.params["slot_length"] == pytest.approx(18.0), (
+        "die unveränderte, gemessene Länge geht nicht in den Schritt"
+    )
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+    kinds = [feature.kind for feature in result.scene.objects[object_id].features.values()]
+    assert kinds.count("slot") == 1, f"ein Langloch, kein Kreuz: {kinds}"
+    after = next(
+        feature
+        for feature in result.scene.objects[object_id].features.values()
+        if feature.kind == "slot"
+    )
+    assert slot_angle_of(after, axis) == pytest.approx(45.0, abs=0.5)
+
+    # Und der Zug an den Langlochknöpfen geht denselben Weg.
+    window._on_slot_dragged(slot_id, 22.0, 45.0)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    assert len(window.session.project.document.ops) == steps
+    longer = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
+    assert longer.params["slot_length"] == pytest.approx(22.0)
+
+
 def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWindow) -> None:
     """Nach *Maße ändern* ist der Baustein noch gewählt — auch mit anderen Merkmalen.
 

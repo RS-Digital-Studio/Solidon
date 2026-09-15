@@ -53,6 +53,7 @@ Nutzen da und sonst nichts.
 
 ### Konstruieren und Ändern
 
+- Ein Langloch drehen dreht es — statt ein zweites quer darüber zu schneiden. Und wer ein Langloch bearbeitet, das er selbst gezogen hat, ändert diesen Schritt; der Verlauf bekommt keinen zweiten.
 - Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.
 
 ### Ansicht und Bedienung

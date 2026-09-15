@@ -2138,6 +2138,286 @@ def test_turning_a_feature_is_registered_completely() -> None:
     assert fields["at_feature"].required and fields["at_feature"].placement == "front"
 
 
+def _countersunk_plate(profile: Profile) -> tuple[SceneObject, str, str]:
+    """Die Platte aus RM-172: 60 × 40 × 10, Bohrung Ø 8 durch, Senkung Ø 16 (90°).
+
+    Gebaut über die Operationen, damit die Erkennung Bohrung und Kegel sicher
+    findet; die Kette daraus ist ``[hole, cone]`` (``cavity_chain_state_at``).
+    """
+    from app.core.geom.prepare import countersink
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        plate, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    bore = next(name for name, found in entry.features.items() if found.kind == "hole")
+    cone = next(name for name, found in entry.features.items() if found.kind == "cone")
+    chain, _touching = cavity_chain_state_at(entry.features[bore], entry.features, sunk)
+    assert chain is not None and [f.id for f in chain] == [bore, cone], "die Voraussetzung"
+    return entry, bore, cone
+
+
+def _material_along(mesh: MeshData, centre: Vec3, axis: Vec3, diameter: float) -> float:
+    """Was im Schlauch einer Bohrung an Material steht — null, wenn sie durchgeht."""
+    column = trimesh.creation.cylinder(radius=diameter / 2.0 - 0.1, height=200.0, sections=48)
+    column.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            [0.0, 0.0, 1.0], np.asarray(axis, dtype=float)
+        )
+    )
+    column.apply_translation(np.asarray(centre, dtype=float))
+    inside = boolean(
+        "intersection", [mesh, MeshData.of(column)], quality="fine", seed=7, allow_empty=True
+    ).mesh
+    return 0.0 if len(inside.raw.faces) == 0 else float(inside.volume)
+
+
+@pytest.mark.parametrize("picked", ["hole", "cone"])
+def test_turning_a_countersunk_bore_takes_its_sink_along(profile: Profile, picked: str) -> None:
+    """RM-172: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
+    gekippten, durchgehenden Bohrung — und die Erkennung findet beide mit
+    derselben Achse.
+
+    Gemessen am 14.09.2026 vor dem Umbau: *Drehen* an der Bohrung kippte nur den
+    Stumpf unter der Senkung (Mitte z = -2, ``no_longer_through``), die Senkung
+    blieb senkrecht stehen; danach sagte die Operation einen Tag lang ab. Der
+    exakte Hohlraum reicht dafür nicht: gedreht um die Bohrungsmitte lag seine
+    Decke 0,9 mm unter der Platte. Das Werkzeug braucht Überstand an beiden
+    Enden — die Bohrung über ihre Mündung hinaus, die Senkung als größerer
+    Kegel nach oben (``_chain_tool``).
+
+    An der Bohrung **und** an der Senkung gewählt: Gedreht wird um die Mitte des
+    gewählten Abschnitts, und beide Male gehen beide Abschnitte mit.
+    """
+    entry, bore, cone = _countersunk_plate(profile)
+    before = float(as_mesh_data(entry.mesh).volume)
+
+    turned = _run_op(
+        "rotate_feature",
+        entry,
+        profile,
+        at_feature=bore if picked == "hole" else cone,
+        axis="x",
+        angle=30.0,
+    )
+    out = turned.outputs[0]
+    body = as_mesh_data(out.mesh)
+    assert body.raw.is_watertight and len(body.raw.split()) == 1
+    assert float(body.volume) < before - 100.0, "die gekippte Senkung trägt sichtbar ab"
+    assert not [f for f in turned.findings if f.code.endswith("no_longer_through")], (
+        "die Bohrung geht nach dem Kippen weiter durch"
+    )
+
+    # Beide Abschnitte tragen die gedrehte Achse — dieselbe.
+    wanted = (0.0, -math.sin(math.radians(30.0)), math.cos(math.radians(30.0)))
+    for name in (bore, cone):
+        axis = tuple(float(v) for v in out.features[name].params["axis"])
+        assert abs(float(np.dot(axis, wanted))) == pytest.approx(1.0, abs=1e-6), (name, axis)
+    # Gedreht um die Mitte des gewählten Abschnitts: die bleibt, wo sie war.
+    pivot = entry.features[bore if picked == "hole" else cone].params["centre"]
+    kept = out.features[bore if picked == "hole" else cone].params["centre"]
+    assert tuple(float(v) for v in kept) == pytest.approx(tuple(float(v) for v in pivot), abs=1e-6)
+    assert out.features[bore].params["through"] is True
+
+    # Und die Erkennung sieht es genauso: Bohrung und Senkung, eine Achse.
+    found = detect(body)
+    holes = [f for f in found.values() if f.kind == "hole"]
+    cones = [f for f in found.values() if f.kind == "cone"]
+    assert len(holes) == 1 and len(cones) == 1, [(f.id, f.kind) for f in found.values()]
+    for f in (*holes, *cones):
+        axis = tuple(float(v) for v in f.params["axis"])
+        assert abs(float(np.dot(axis, wanted))) == pytest.approx(1.0, abs=1e-3), (f.id, axis)
+    assert float(holes[0].params["diameter"]) == pytest.approx(8.0, abs=0.05)
+    assert holes[0].params["through"] is True
+    assert _material_along(body, holes[0].params["centre"], wanted, 8.0) < 0.5, (
+        "im Schlauch der gekippten Bohrung steht Material"
+    )
+
+
+def test_duplicating_a_countersunk_bore_copies_its_sink(profile: Profile) -> None:
+    """RM-172: Verdoppeln setzt Bohrung **und** Senkung — mit eigenen Kennungen,
+    das Original unverändert.
+
+    Gemessen am 14.09.2026 vor dem Umbau: die Bohrung gewählt, kopiert wurde ein
+    Stumpf ohne Senkung. Das Werkzeug ist jetzt der ganze Hohlraum
+    (``_cavity_tool``), verschoben um den Weg der gewählten Mitte.
+    """
+    entry, bore, cone = _countersunk_plate(profile)
+    before = float(as_mesh_data(entry.mesh).volume)
+    cavity = 24000.0 - before
+
+    doubled = _run_op("duplicate_feature", entry, profile, at_feature=bore, x=20.0, y=0.0, z=-2.0)
+    out = doubled.outputs[0]
+    body = as_mesh_data(out.mesh)
+    assert body.raw.is_watertight
+    assert float(body.volume) == pytest.approx(before - cavity, abs=2.0), (
+        "die Kopie trägt so viel ab wie das Original"
+    )
+    assert not [f for f in doubled.findings if f.code.endswith("no_longer_through")]
+
+    copies = {name: f for name, f in out.features.items() if name not in entry.features}
+    assert sorted(f.kind for f in copies.values()) == ["cone", "hole"], list(copies)
+    assert set(copies) == {"hole_2", "cone_2"}, list(copies)
+    for name in (bore, cone):
+        assert out.features[name] == entry.features[name], "das Original bleibt, wie es war"
+    new_bore = copies["hole_2"]
+    assert tuple(float(v) for v in new_bore.params["centre"]) == pytest.approx(
+        (20.0, 0.0, -2.0), abs=0.01
+    )
+    assert float(copies["cone_2"].params["centre"][0]) == pytest.approx(20.0, abs=0.01)
+    assert set(out.reserved_feature_ids) >= {bore, cone, "hole_2", "cone_2"}
+
+    found = detect(body)
+    assert sum(f.kind == "hole" for f in found.values()) == 2
+    assert sum(f.kind == "cone" for f in found.values()) == 2
+    assert _material_along(body, (20.0, 0.0, -2.0), (0.0, 0.0, 1.0), 8.0) < 0.5
+
+
+def _countersunk_plate(profile: Profile) -> tuple[SceneObject, str, str]:
+    """Die Platte aus RM-172: 60 × 40 × 10, Bohrung Ø 8 durch, Senkung Ø 16 (90°).
+
+    Gebaut über die Operationen, damit die Erkennung Bohrung und Kegel sicher
+    findet; die Kette daraus ist ``[hole, cone]`` (``cavity_chain_state_at``).
+    """
+    from app.core.geom.prepare import countersink
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        plate, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    bore = next(name for name, found in entry.features.items() if found.kind == "hole")
+    cone = next(name for name, found in entry.features.items() if found.kind == "cone")
+    chain, _touching = cavity_chain_state_at(entry.features[bore], entry.features, sunk)
+    assert chain is not None and [f.id for f in chain] == [bore, cone], "die Voraussetzung"
+    return entry, bore, cone
+
+
+def _material_along(mesh: MeshData, centre: Vec3, axis: Vec3, diameter: float) -> float:
+    """Was im Schlauch einer Bohrung an Material steht — null, wenn sie durchgeht."""
+    column = trimesh.creation.cylinder(radius=diameter / 2.0 - 0.1, height=200.0, sections=48)
+    column.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            [0.0, 0.0, 1.0], np.asarray(axis, dtype=float)
+        )
+    )
+    column.apply_translation(np.asarray(centre, dtype=float))
+    inside = boolean(
+        "intersection", [mesh, MeshData.of(column)], quality="fine", seed=7, allow_empty=True
+    ).mesh
+    return 0.0 if len(inside.raw.faces) == 0 else float(inside.volume)
+
+
+@pytest.mark.parametrize("picked", ["hole", "cone"])
+def test_turning_a_countersunk_bore_takes_its_sink_along(profile: Profile, picked: str) -> None:
+    """RM-172: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
+    gekippten, durchgehenden Bohrung — und die Erkennung findet beide mit
+    derselben Achse.
+
+    Gemessen am 14.09.2026 vor dem Umbau: *Drehen* an der Bohrung kippte nur den
+    Stumpf unter der Senkung (Mitte z = -2, ``no_longer_through``), die Senkung
+    blieb senkrecht stehen; danach sagte die Operation einen Tag lang ab. Der
+    exakte Hohlraum reicht dafür nicht: gedreht um die Bohrungsmitte lag seine
+    Decke 0,9 mm unter der Platte. Das Werkzeug braucht Überstand an beiden
+    Enden — die Bohrung über ihre Mündung hinaus, die Senkung als größerer
+    Kegel nach oben (``_chain_tool``).
+
+    An der Bohrung **und** an der Senkung gewählt: Gedreht wird um die Mitte des
+    gewählten Abschnitts, und beide Male gehen beide Abschnitte mit.
+    """
+    entry, bore, cone = _countersunk_plate(profile)
+    before = float(as_mesh_data(entry.mesh).volume)
+
+    turned = _run_op(
+        "rotate_feature",
+        entry,
+        profile,
+        at_feature=bore if picked == "hole" else cone,
+        axis="x",
+        angle=30.0,
+    )
+    out = turned.outputs[0]
+    body = as_mesh_data(out.mesh)
+    assert body.raw.is_watertight and len(body.raw.split()) == 1
+    assert float(body.volume) < before - 100.0, "die gekippte Senkung trägt sichtbar ab"
+    assert not [f for f in turned.findings if f.code.endswith("no_longer_through")], (
+        "die Bohrung geht nach dem Kippen weiter durch"
+    )
+
+    # Beide Abschnitte tragen die gedrehte Achse — dieselbe.
+    wanted = (0.0, -math.sin(math.radians(30.0)), math.cos(math.radians(30.0)))
+    for name in (bore, cone):
+        axis = tuple(float(v) for v in out.features[name].params["axis"])
+        assert abs(float(np.dot(axis, wanted))) == pytest.approx(1.0, abs=1e-6), (name, axis)
+    # Gedreht um die Mitte des gewählten Abschnitts: die bleibt, wo sie war.
+    pivot = entry.features[bore if picked == "hole" else cone].params["centre"]
+    kept = out.features[bore if picked == "hole" else cone].params["centre"]
+    assert tuple(float(v) for v in kept) == pytest.approx(tuple(float(v) for v in pivot), abs=1e-6)
+    assert out.features[bore].params["through"] is True
+
+    # Und die Erkennung sieht es genauso: Bohrung und Senkung, eine Achse.
+    found = detect(body)
+    holes = [f for f in found.values() if f.kind == "hole"]
+    cones = [f for f in found.values() if f.kind == "cone"]
+    assert len(holes) == 1 and len(cones) == 1, [(f.id, f.kind) for f in found.values()]
+    for f in (*holes, *cones):
+        axis = tuple(float(v) for v in f.params["axis"])
+        assert abs(float(np.dot(axis, wanted))) == pytest.approx(1.0, abs=1e-3), (f.id, axis)
+    assert float(holes[0].params["diameter"]) == pytest.approx(8.0, abs=0.05)
+    assert holes[0].params["through"] is True
+    assert _material_along(body, holes[0].params["centre"], wanted, 8.0) < 0.5, (
+        "im Schlauch der gekippten Bohrung steht Material"
+    )
+
+
+def test_duplicating_a_countersunk_bore_copies_its_sink(profile: Profile) -> None:
+    """RM-172: Verdoppeln setzt Bohrung **und** Senkung — mit eigenen Kennungen,
+    das Original unverändert.
+
+    Gemessen am 14.09.2026 vor dem Umbau: die Bohrung gewählt, kopiert wurde ein
+    Stumpf ohne Senkung. Das Werkzeug ist jetzt der ganze Hohlraum
+    (``_cavity_tool``), verschoben um den Weg der gewählten Mitte.
+    """
+    entry, bore, cone = _countersunk_plate(profile)
+    before = float(as_mesh_data(entry.mesh).volume)
+    cavity = 24000.0 - before
+
+    doubled = _run_op("duplicate_feature", entry, profile, at_feature=bore, x=20.0, y=0.0, z=-2.0)
+    out = doubled.outputs[0]
+    body = as_mesh_data(out.mesh)
+    assert body.raw.is_watertight
+    assert float(body.volume) == pytest.approx(before - cavity, abs=2.0), (
+        "die Kopie trägt so viel ab wie das Original"
+    )
+    assert not [f for f in doubled.findings if f.code.endswith("no_longer_through")]
+
+    copies = {name: f for name, f in out.features.items() if name not in entry.features}
+    assert sorted(f.kind for f in copies.values()) == ["cone", "hole"], list(copies)
+    assert set(copies) == {"hole_2", "cone_2"}, list(copies)
+    for name in (bore, cone):
+        assert out.features[name] == entry.features[name], "das Original bleibt, wie es war"
+    new_bore = copies["hole_2"]
+    assert tuple(float(v) for v in new_bore.params["centre"]) == pytest.approx(
+        (20.0, 0.0, -2.0), abs=0.01
+    )
+    assert float(copies["cone_2"].params["centre"][0]) == pytest.approx(20.0, abs=0.01)
+    assert set(out.reserved_feature_ids) >= {bore, cone, "hole_2", "cone_2"}
+
+    found = detect(body)
+    assert sum(f.kind == "hole" for f in found.values()) == 2
+    assert sum(f.kind == "cone" for f in found.values()) == 2
+    assert _material_along(body, (20.0, 0.0, -2.0), (0.0, 0.0, 1.0), 8.0) < 0.5
+
+
 def test_a_recognised_pin_can_be_resized(profile: Profile) -> None:
     """Der vierte Ausgang derselben Maschine: abtragen, größer wieder ansetzen.
 

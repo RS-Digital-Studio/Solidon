@@ -29,6 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Construir y modificar
 
+- Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.
 - Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.
 
 ### Vista y manejo
