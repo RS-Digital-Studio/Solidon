@@ -10791,7 +10791,7 @@ def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
         window.finish_sketch(keep=False)
 
 
-def test_the_sketch_use_dialog_preselects_extruding() -> None:
+def test_the_sketch_use_dialog_preselects_extruding(qt_app: QApplication) -> None:
     """Vorausgewählt **und** oben steht der Normalfall.
 
     Die Liste kam aus dem Register, und damit stand „Entlang eines Bogens
@@ -10806,11 +10806,13 @@ def test_the_sketch_use_dialog_preselects_extruding() -> None:
     (am Bild geprüft), und der Normalfall steht an erster Stelle. Die übrigen
     folgen nach Titel — eine Reihenfolge, die niemanden überrascht.
     """
+    from app.core.bootstrap import load_operations
     from app.ui.op_dialog import SketchUseDialog
 
+    load_operations()
     dialog = SketchUseDialog()
     assert dialog.chosen() == "sketch_extrude"
-    assert dialog._list.count() == 5
+    assert dialog._list.count() == 6
     assert dialog._list.item(0).data(Qt.ItemDataRole.UserRole) == "sketch_extrude"
     assert dialog.minimumHeight() >= 400, (
         f"der Dialog öffnet {dialog.minimumHeight()} Punkte hoch — dann sieht man zwei von fünf"
@@ -10850,7 +10852,7 @@ def test_a_free_sketch_asks_what_it_becomes(
     assert window_module is not None
 
 
-def test_the_sketch_use_dialog_lists_the_five_kinds(window: MainWindow) -> None:
+def test_the_sketch_use_dialog_lists_the_six_kinds(window: MainWindow) -> None:
     from app.ui.op_dialog import SketchUseDialog
 
     dialog = SketchUseDialog(window)
@@ -10864,6 +10866,7 @@ def test_the_sketch_use_dialog_lists_the_five_kinds(window: MainWindow) -> None:
         "sketch_revolve",
         "sketch_loft",
         "sketch_sweep",
+        "field_cut",
     }
     assert dialog.chosen() in names, "eine Vorauswahl steht, Eingabe genügt"
 

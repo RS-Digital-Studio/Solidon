@@ -4504,7 +4504,7 @@ def test_one_outline_keeps_the_explicit_choice_with_extrusion_preselected(
 
     def reject(dialog: SketchUseDialog) -> QDialog.DialogCode:
         offered.append(dialog.chosen())
-        assert dialog._list.count() == 5
+        assert dialog._list.count() == 6
         return QDialog.DialogCode.Rejected
 
     monkeypatch.setattr(SketchUseDialog, "exec", reject)

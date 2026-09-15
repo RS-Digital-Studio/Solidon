@@ -9056,6 +9056,9 @@ class MainWindow(QMainWindow):
         if panel is None:
             return
         text = panel.sketch_text()
+        # Nach dem Abbau kennt die Ansicht weder Kontur noch Zeichenrahmen.
+        # Der darunter eindeutig gefundene Körper reist deshalb mit dem Text.
+        on_body = self._body_under_the_outline() if keep and text and not target else ""
         if not keep:
             # **Verworfen heißt nicht vernichtet.** Escape war die teuerste
             # Taste des Programms: eine halbe Stunde Zeichnung, ein Tastendruck,
@@ -9146,7 +9149,7 @@ class MainWindow(QMainWindow):
                 # Freies Zeichnen (Weg 2): erst jetzt fällt die Entscheidung,
                 # was aus der Skizze wird — mit der fertigen Zeichnung vor
                 # Augen statt vorab aus fünf Menüeinträgen.
-                self._offer_sketch_use(text)
+                self._offer_sketch_use(text, on_body=on_body)
 
     # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
 
@@ -9663,9 +9666,8 @@ class MainWindow(QMainWindow):
         eigene Methode wie der Nachbar darüber."""
         self.start_armature()
 
-    def _offer_sketch_use(self, text: str) -> None:
-        """Was soll aus der Skizze werden? — die fünf Arten, mit der
-        Zeichnung vor Augen.
+    def _offer_sketch_use(self, text: str, *, on_body: str = "") -> None:
+        """Die möglichen Operationen mit der fertigen Zeichnung vor Augen wählen.
 
         Abbrechen wirft nichts weg: es geht zurück in den Skizzenmodus, die
         Zeichnung bleibt. Ein „Abbrechen", das gezeichnete Arbeit vernichtet,
@@ -9678,20 +9680,21 @@ class MainWindow(QMainWindow):
         # benutzt: erst der ausgewählte, dann der unter dem Umriss. Der zweite
         # Teil ist der wichtige, denn in Fusion wählt man vor dem Abtragen
         # keinen Körper aus (Robert, 30.08.2026).
-        chosen_body = self.object_tree.selected() or self._body_under_the_outline()
+        chosen_body = self.object_tree.selected() or on_body or self._body_under_the_outline()
         result = self.session.last_result
         entry = result.scene.objects.get(chosen_body) if result and chosen_body else None
         dialog = SketchUseDialog(self, on_body=str(entry.name) if entry else "")
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen():
             name = dialog.chosen()
+            spec = REGISTRY.get(name)
             # **Gefunden heißt noch nicht gewählt** — dieselbe Falle wie beim
             # Ziehgriff: ``run_operation`` nimmt seine Eingänge aus dem
             # Objektbaum, und ein nur gefundener Körper käme dort nie an. Die
             # Operation liefe ohne Eingang und meldete einen fehlenden Körper,
             # obwohl er unter der Zeichnung liegt.
-            if name == POCKET_OP and chosen_body and not self.object_tree.selected_objects():
+            if needed_inputs(spec) == 1 and chosen_body and not self.object_tree.selected_objects():
                 self.object_tree.select_object(chosen_body)
-            self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
+            self.run_operation(spec, given={_sketch_param(name): text})
             return
         self.start_sketch("", text)
 

@@ -49,6 +49,12 @@ wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 
+Freies Zeichnen bewahrt den eindeutig gefundenen Zielkörper vor dem Abbau
+des Zeichenpanels. Die anschließende Operationswahl liest `needed_inputs`:
+Schnittwerkzeuge erklären einen fehlenden Körper und übernehmen einen bereits
+gefundenen Körper in dieselbe Auswahl wie andere Operationswege.
+Die Liste bricht Beschreibungen bei Größenänderungen um und scrollt nur senkrecht.
+
 `local_recognition.py` erkundet einen festen Dokument-, Profil- und Quellenstand
 im Arbeiter. LOD-Strahlen werden am Original aufgelöst, auch die möglichen
 Merkmalhandlungen entstehen dort. Radiuswechsel entwerten Auswahl und Freigabe

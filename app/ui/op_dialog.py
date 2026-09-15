@@ -2849,7 +2849,7 @@ class SketchUseDialog(QDialog):
 
     Der Zeichnen-Knopf der Werkzeugzeile startet den Skizzenmodus ohne
     festgelegte Operation — die Entscheidung fällt hier, mit der fertigen
-    Zeichnung vor Augen, statt vorab aus fünf Menüeinträgen. Die Liste kommt
+        Zeichnung vor Augen, statt vorab aus Menüeinträgen. Die Liste kommt
     aus dem Register: eine neue Skizzen-Op taucht von selbst auf.
     """
 
@@ -2867,23 +2867,19 @@ class SketchUseDialog(QDialog):
         (``_apply_sketch_pull``: nach außen aufbauen, nach innen schneiden).
         Hier ist keine Richtung bekannt, wohl aber der Körper — deshalb er.
         """
-        from app.core.registry import REGISTRY, menu_tree
+        from app.core.registry import REGISTRY, menu_tree, needed_inputs
 
         super().__init__(parent)
         self.setWindowTitle(tr("Was soll daraus werden?"))
-        # **Höhe, nicht nur Breite.** Ohne sie nahm das Layout seine kleinste:
-        # 246 Bildpunkte, und darin standen zwei der fünf Erzeugungsarten — die
-        # dritte mitten im Satz abgeschnitten, ohne sichtbare Bildlaufleiste.
-        # Das ist der Dialog, in dem Weg 2 entschieden wird; wer hier scrollen
-        # muss, um überhaupt zu erfahren, dass es fünf gibt, entscheidet
-        # zwischen zwei.
-        #
-        # Jeder Eintrag ist zwei Zeilen hoch (Titel und Beschreibung), und die
-        # Beschreibung bricht um — 440 tragen alle fünf, am Bild geprüft.
+        # Titel und Beschreibung müssen gemeinsam sichtbar sein. Die Breite
+        # begrenzt den Umbruch, die Höhe trägt auch die Feldschnittwahl.
         self.setMinimumSize(380, 440)
+        self.resize(520, 640)
 
         self._list = QListWidget(self)
         self._list.setWordWrap(True)
+        self._list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
         # **Der Normalfall steht oben.** Die Reihenfolge kam aus dem Menübaum,
         # und dort stand „Entlang eines Bogens führen" zuerst: Wer den Dialog
@@ -2900,6 +2896,12 @@ class SketchUseDialog(QDialog):
         for spec in entries:
             item = QListWidgetItem(f"{spec.title}\n    {spec.doc}")
             item.setData(Qt.ItemDataRole.UserRole, spec.name)
+            if needed_inputs(spec) and not on_body:
+                reason = tr("Zeichnen Sie auf einem Körper, um ihn zu schneiden.")
+                item.setText(f"{spec.title}\n    {reason}")
+                item.setToolTip(reason)
+                item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, reason)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
             self._list.addItem(item)
         self._preselect(wanted)
         # Ohne gebundenen Wert und trotzdem ein Ring: ``self`` steckt in der
@@ -2976,4 +2978,8 @@ class SketchUseDialog(QDialog):
     def chosen(self) -> str:
         """Der Name der gewählten Skizzen-Operation, oder leer."""
         item = self._list.currentItem()
-        return str(item.data(Qt.ItemDataRole.UserRole)) if item else ""
+        return (
+            str(item.data(Qt.ItemDataRole.UserRole))
+            if item and item.flags() & Qt.ItemFlag.ItemIsEnabled
+            else ""
+        )
