@@ -255,6 +255,66 @@ Test, der nur `_cursor_role` prüft, wäre auch dann grün, wenn im Fenster nie
 ein Zeiger ankommt. `tests/test_cursors.py` hält deshalb eine Attrappe mit
 genau der einen Methode, die benutzt wird.
 
+## Eine Zahl in Bildpunkten ist ein Logikpunkt (14.09.2026)
+
+Die Ansicht führt ein Dutzend Zahlen in Bildpunkten: Trefferflächen, Fangweiten,
+Zugschwellen, gezeichnete Größen. **Sie alle stehen in Logikpunkten** — das ist
+die Größe, die ein Mensch vor dem Bildschirm sieht, und die einzige, über die
+sich reden lässt („der Griff ist achtunddreißig Bildpunkte lang").
+
+Alles, womit sie verglichen werden, ist dagegen ein **Gerätepixel**: Der Zeiger
+kommt so herein (der Qt-Adapter in `gfx_renderer` multipliziert
+`event.position()` mit dem Geräteverhältnis), `world_to_display` antwortet so
+(`view_size` ist die physische Größe), und der Pickpuffer liegt in derselben
+Auflösung. Auf einem Bildschirm mit 100 Prozent Skalierung fällt beides
+zusammen, und deshalb fällt der Fehler dort nicht auf.
+
+**Umgerechnet wird an der Vergleichsstelle, mit dem Faktor der Ansicht** —
+`Renderer.device_ratio()` am Vertrag, `Viewport._device_ratio()` und
+`Viewport._device_pixels(logisch)` in der Ansicht. Die Gegenrichtung — jedes
+Ereignis und jede Projektion in Logikpunkte zu übersetzen — wäre dieselbe
+Rechnung an 119 statt an elf Stellen und stünde quer zum Vertrag („Bildpunkte
+zählen wie Qt, in Gerätepixeln").
+
+Gemessen am 14.09.2026, dieselbe Geste in Logikpunkten bei 100 und bei 200
+Prozent:
+
+| Konstante | gemessen über | bei 100 % | bei 200 % |
+|---|---|---|---|
+| `CLICK_SLACK` | den Navigator, Klick gegen Zug | 10,5 | **5,2** |
+| `CURSOR_PIXELS` am Umriss | `_resting_role` über `grip_reach` | 10,5 | **5,2** |
+| `CURSOR_PIXELS` als Marke | die gezeichnete Marke | 10,0 | **5,0** |
+| `SNAP_MARK_PIXELS` | die Armlänge über `_pixels_per_mm_at` | 13,0 | **6,5** |
+| `PULL_HANDLE_PIXELS` | die Grifflänge im Bild | 38,0 | **19,0** |
+| `PULL_HIT_PIXELS` | `pull_handle_reach` neben der Spitze | 17,4 | **8,7** |
+| `AXIS_LABEL_PIXELS` | den gezeichneten Buchstaben | 64,0 | **32,0** |
+
+Die halben Punkte sind die Auflösung der Sonde (sie tastet in Zehnteln), die
+17,4 beim Griff der Abstand zur **Strecke** und nicht zur Spitze. Gemessen
+wird durch die Entscheidung des Prüflings: Eine Sonde, die die Vergleichszeile
+nachbaut, meldet nach dem Fix dieselben Zahlen wie davor — sie misst dann sich
+selbst.
+
+Vier Zahlen waren schon vorher richtig und bleiben das Vorbild:
+`MEASURE_SNAP_PIXELS`, `EDGE_REACH_PIXELS`, `PICK_SLACK_PIXELS` und das
+`SNAP_PIXELS` der Platzierung rechnen seit je mit dem Verhältnis.
+
+**Zwei Zahlen dürfen es ausdrücklich nicht** — `SNAP_DOT_PIXELS` und
+`SKETCH_POINT_PIXELS`. Sie gehen als Punktgröße an den Renderer, und pygfx
+rechnet Punktgrößen und Linienbreiten **selbst** von logischen Bildpunkten in
+Gerätepixel um (`l2p` in seinem Shader). Wer sie hier multiplizierte,
+verdoppelte sie bei 200 Prozent. Dieselbe Grenze gilt für jede `width=` und
+jede `size=` am Vertrag.
+
+**`is_click` bleibt eine reine Rechnung.** Der Faktor kommt als Argument vom
+`Navigator`, der den Renderer kennt; eine Qt-Frage in der Funktion machte sie
+ohne Bildschirm unprüfbar. Der Langlochgriff (`slot_handle.py`) vergleicht
+gegen dieselbe Konstante und rechnet genauso um.
+
+Gemessen in `tests/test_navigator.py`, `tests/test_viewport_decisions.py` und
+`tests/test_slot_handle.py`: dieselbe Geste in Logikpunkten führt bei 1,0, 1,5
+und 2,0 zur selben Entscheidung.
+
 ## Was im Skizzenmodus in dieser Datei steht
 
 `viewport.py` trägt einen guten Teil des Skizzenmodus, und **seine Regeln
@@ -309,7 +369,9 @@ synchron durch den Baum zurück und setzt `_selected`, also muss die Stufe
 **vor** dem Senden gelesen werden.
 
 **Der Zeiger stellt dieselbe Frage mit derselben Rechnung**
-(`_would_pick_feature` → `_click_target`). Das ist die schon bekannte Regel bei
+(`_look_under_pointer` → `_click_target`; dieselbe Frage als eigene Auskunft
+steht in `_would_pick_feature`, gerufen wird sie heute nur aus einem Test).
+Das ist die schon bekannte Regel bei
 `_resting_role`, einen Schritt weiter: Ein Zeiger, der die Merkmalsform über
 einer Bohrung zeigt, während der Klick den Körper wählt, verspricht etwas, das
 nicht eintritt. So wird die Stufe zugleich sichtbar, ohne dass ein Satz darüber
@@ -380,10 +442,34 @@ weiter zu brechen.** Der Quader ist großzügiger als die Kante, und das ist
 hier richtig: Ein Vorfilter darf zu viel durchlassen, nie zu wenig — genauer
 trennt der Bildabstand danach.
 
-**Was daran offen ist:** der Zeiger. Er fragt heute nur nach dem Merkmal
-(`_would_pick_feature`), nicht nach der Kante — über einer Kante verspricht er
-damit die Fläche. Das ist genau die Sorte Lücke, vor der der Absatz darüber
-warnt, und sie steht im Register.
+**Der Zeiger stellt dieselbe Frage** (seit 10.09.2026): `_look_under_pointer`
+fragt `_edge_under`, und das sind wörtlich die Bedingungen von `_edge_click` —
+Stufe, Körper unter dem Zeiger, Kante im Bild. Die Rolle bleibt dabei
+`feature`, und das ist Absicht: Eine Kante ist die zweite Stufe wie ein
+Merkmal, derselbe Handgriff hat dasselbe Bild. Ein eigener Kantenzeiger würde
+einen Unterschied behaupten, den die Bedienung nicht macht.
+
+**Und rechts meint die Kante ohne Vorbedingung** (14.09.2026). Der Rechtsklick
+ging zwar zuerst zur Kante, stellte die Stufenfrage aber fest mit
+`direct=False` — auf einem noch nicht gewählten Körper zeigte er also das Menü
+der Fläche darunter, auf dem gewählten das der Kante. Damit hing die Zusage aus
+§18.5 wieder an einer Vorbedingung, die niemand kennt; `_edge_click` nimmt
+`direct` jetzt entgegen, wie `_click_target` daneben.
+
+Zwei Dinge hängen mit daran, und beide waren falsch:
+
+* **Der Körper wird angesagt, bevor die Kante gesetzt wird** — dieselbe
+  Reihenfolge wie in `_select_at`, und aus demselben Grund: Die zwei
+  Handlungen an der Kante holen ihren Eingang aus dem Objektbaum. Ohne die
+  Ansage leuchtete nach einem direkten Klick die Linie, und *Verrunden*
+  daneben fände nichts, woran es ansetzen könnte. Auf dem gestuften Weg
+  kostet das nichts: Dort ist der Körper längst gewählt.
+* **Gesucht wird im Bild, also mit dem Punkt aus dem Bild.** Der Rechtsklick
+  rechnete ihn vorher in die Szene zurück (`_from_view`) und gab ihn so an
+  `_edge_click` weiter — auf Platte 2 suchte er die Kante damit eine
+  Bettbreite neben dem gezeichneten Körper und fand keine. Nur die Körper-
+  und Merkmalssuche darunter fragt die Szene; für die Kante ist der Bildpunkt
+  der richtige, genau wie beim Linksklick.
 
 ### Ein Merkmal hat eine Reichweite
 
@@ -1101,6 +1187,16 @@ eine Bohrung, das Merkmalsfenster zeigte sechs Felder, und im Bild stand
 nichts). §2.6 verspricht, dass am Merkmal alles direkt steht; der Würfel bleibt
 dabei weg, und die Bedingung dafür ist dieselbe wie eh und je.
 
+**An einer Fläche geht der Zug bis in den Verlauf durch** (Anschluss geprüft
+am 14.09.2026): `gizmo_feature` sagt, wo der Griff sitzt, `gizmo_target`, was
+er tut, `_face_seat` setzt ihn auf Mitte und Normale **dieser** Fläche, und
+`faceDragged` meldet ihre Kennung — nicht mehr ihre Normale. Das Fenster macht
+daraus `push_face` mit `face=<Kennung>`; die Richtungsfelder `nx/ny/nz` bleiben
+nur für gespeicherte Schritte stehen. Vorher trug der Schritt die Richtung, und
+die Operation bewegte jede Fläche, die dorthin zeigt — an einer Treppe alle
+Stufen zugleich. **Die vier Stücke waren einzeln geprüft und die Kette nicht**
+(`test_the_handle_of_a_chosen_face_pushes_that_face` fährt sie am Stück).
+
 ## Was die Ansicht sich merkt (03.09.2026)
 
 **Darstellung (massiv, mit Kanten, Drahtgitter, transparent), Schattierung
@@ -1698,6 +1794,51 @@ echten Renderer, und ein Doppel ist immer schnell
 (`tests/test_viewport_decisions.py::test_the_picker_is_warmed_up_before_the_first_gesture`
 und `::test_new_geometry_warms_the_picker_again`).
 Die Zahlen stehen im Prüfstand, nicht in der Suite.
+
+## Der Adapter wird einmal gefragt, und nicht im Hauptthread (14.09.2026)
+
+`factory.available()` fragt vor jedem Viewport nach einem wgpu-Adapter, weil
+ein Renderer ohne Adapter nicht höflich stirbt, sondern mit dem Prozess. Die
+Frage kostet — gemessen am 14.09.2026 auf Windows 11 mit einer RTX 4080 unter
+Fremdlast aus vier Agenten, je Zeile der Median aus drei Prozessen:
+
+| | Zeit |
+|---|---|
+| erste Adapterfrage im Prozess | **1071 ms** (0,76 bis 1,12 s) |
+| jede weitere im selben Prozess | 269 bis 315 ms |
+| `available()` heute, Hauptthread, gefolgt von `make_renderer` | 763 + 668 = **1431 ms** |
+| dieselbe Frage nach einer Frage im Nebenthread | 376 ms |
+| Nebenthread fragt, Hauptthread baut nur noch | 0 + **661 ms** |
+
+Auf Roberts Maschine waren es 5 bis 7,8 s im guten Fall und unter Last
+Minuten. Das Startbudget ist drei Sekunden (§31).
+
+Drei Dinge folgen daraus, und alle drei stehen in `app/ui/render/factory.py`:
+
+* **Die Antwort bleibt liegen.** Sie gilt für die Maschine, nicht für das
+  Fenster; der Sprachwechsel baut einen zweiten Viewport, und der fragte
+  bisher neu.
+* **Gefragt wird nebenan.** `app.ui.app.main` startet `_AdapterProbe` an der
+  Leine, bevor das Register geladen wird — die Zeit vergeht, während
+  Einstellungen, Erscheinungsbild und Fenster entstehen. Der wgpu-Instanzzeiger
+  ist prozessweit; gemessen baute und zeichnete der Renderer im Hauptthread
+  unverändert, nachdem ein Nebenthread ihn aufgebaut hatte.
+* **Und mit Frist.** `ADAPTER_TIMEOUT_SECONDS` (20 s, rund das
+  Zweieinhalbfache des schlechtesten *guten* Falls) begrenzt das Warten auf
+  eine **laufende** Frage. Danach meldet sich die Ansicht mit dem Satz ab, den
+  sie für einen fehlenden Adapter ohnehin hat (§27) — sie nörgelt nicht, und
+  sie hält das Fenster nicht minutenlang. Wo niemand vorgearbeitet hat (Suite,
+  Kommandozeile), wird wie bisher gewartet: Ein Test, der wegen Maschinenlast
+  überspringt, wäre schlechter als ein Test, der eine Sekunde braucht.
+
+**Zwei Fragen zugleich sind eine zu viel.** wgpu legt seine Instanz
+prozessweit und ohne Sperre an (`_helpers.get_wgpu_instance`). `probe()` und
+`available()` teilen sich deshalb eine Bedingungsvariable: Wer ankommt,
+während gefragt wird, wartet auf die Antwort, statt eine zweite zu stellen.
+
+Nachweis: `tests/test_render_factory.py` — gemerkte Antwort, Warten statt
+Zweitfrage, Frist, und der Anschluss in `app/ui/app.py` am Quelltext (dieselbe
+Bauart wie `test_cursors` für den Zeiger-Wächter).
 
 ## Der Drehpunkt ist, was in der Bildmitte steht (04.09.2026)
 

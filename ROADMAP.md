@@ -64,20 +64,20 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | 1,400 auf 1,004 s gebracht; offen ist die Entscheidung zwischen Stapelumbau der Einpassungen und einem neu gefassten Ziel |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
-| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen — offen bleiben Zeiger und Rechtsklick an der Kante, die Anbindung des Flächengriffs an die gewählte Fläche und fünf zugesagte Kundenwege |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Die ganze Kanten- und Flächenarbeit greift an beiden Kernen; Zeiger, Rechtsklick und Flächengriff sind eingelöst und gemessen — offen bleiben fünf zugesagte Kundenwege |
 | [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-172 — Drehen und Verdoppeln nehmen die Hohlraumkette mit](#rm-172) | Geometrie, Erkennung und Druckvorbereitung | Vorschlag an Robert — heute sagen beide an einer gesenkten Bohrung ab; die Kette mitzunehmen braucht ein Werkzeug über beide Oberflächen hinaus |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
-| [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
 | [RM-088 — Verständlichkeit für Laien im Regelwerk verankern](#rm-088) | Bedienung und Darstellung | Verständlichkeitsregel und begründete Ausnahmen entscheiden |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
+| [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Robert sagt den Nachtrag an; sechs Sätze liegen im Bericht W2 |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -822,11 +822,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   derselben Farbe darauf. `highlighted_object()` gibt jetzt `None`, solange eine Kante gewählt
   ist, und der Fall steht als Zusicherung in `tests/test_selection.py`.
 
-  **Offen bleibt der Zeiger:** Über einer Kante zeigt er weiter die Merkmalsform, weil
-  `_would_pick_feature` nur nach dem Merkmal fragt. Ein Zeiger, der etwas anderes verspricht
-  als der Klick tut, ist genau die Lücke, die `.claude/rules/ansicht.md` an dieser Stelle
-  benennt. Ebenso offen: der **Rechtsklick** auf eine Kante — das Kontextmenü meint dort
-  weiter das Merkmal darunter.
+  **Zeiger und Rechtsklick sind seit dem 10.09.2026 nachgezogen**, der Rechtsklick seit dem
+  14.09.2026 ohne Vorbedingung. Der Zeiger fragt über `_edge_under` wörtlich die Bedingungen
+  des Klicks und behält dabei die Merkmalsform — eine Kante ist die zweite Stufe wie ein
+  Merkmal, derselbe Handgriff hat dasselbe Bild; ein eigener Kantenzeiger behauptete einen
+  Unterschied, den die Bedienung nicht macht. Der Rechtsklick ging zur Kante, stellte die
+  Stufenfrage aber fest mit `direct=False`: Auf einem **noch nicht gewählten** Körper zeigte
+  er weiter das Menü der Fläche darunter, auf dem gewählten das der Kante — die Zusage aus
+  §18.5 hing damit an einer Vorbedingung, die niemand kennt. `_edge_click` nimmt `direct`
+  jetzt entgegen wie `_click_target` daneben, sagt den Körper vor der Kante an (sonst hätte
+  *Verrunden* keinen Eingang) und bekommt den Punkt aus dem **Bild**: Zurückgerechnet suchte
+  der Rechtsklick die Kante auf Platte 2 eine Bettbreite neben dem gezeichneten Körper und
+  fand keine. Zwei Zusicherungen in `tests/test_selection.py`, beide Mutationen gegengeprüft.
+
+  **Und der Flächengriff hängt an der gewählten Fläche** — gemessen am 14.09.2026, nicht
+  gebaut: `gizmo_feature` setzt ihn auf Mitte und Normale des gewählten Merkmals,
+  `faceDragged` meldet dessen Kennung, und der Verlauf trägt `push_face` mit `face=<Kennung>`.
+  Die vier Stücke waren einzeln geprüft und die Kette nicht;
+  `test_the_handle_of_a_chosen_face_pushes_that_face` fährt sie jetzt am Stück (Fläche wählen,
+  Sitz prüfen, ziehen, Schritt lesen), beide Enden mutiert.
 
   **Und seit dem 10.09.2026 greifen Verrunden und Fase auch am Netz.** Das ist der zweite
   Teil derselben Entscheidung Roberts — „alles soll immer bearbeitbar sein, egal ob
@@ -1129,6 +1143,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
+
+<a id="rm-175"></a>
+
+- [ ] **RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen.**
+  Seit dem 14.09.2026 kennt der Löser fünfzehn Bedingungsarten statt zwölf (`angle` in
+  Grad, `equal` für Länge oder Radius, `midpoint`), „konzentrisch" ist bewusst keine Art,
+  und der Editor zeichnet Vieleck und Langloch aus zwei Klicks — frei gezeichnet, bemaßt
+  getippt. §30.1 nennt noch die zwölf Arten; der Bauplan wird nur mit Ansage geändert.
+  Abnahme: sechs Sätze nachtragen (Liste der Arten, Wertebereich des Winkelmaßes 0 bis 180
+  Grad und Speicherung in Grad, „konzentrisch" als Oberflächenname, die zwei Werkzeuge,
+  die Regel „gezeichnet heißt frei, getippt heißt bemaßt" samt Ausnahme für Felder der
+  Leiste, und nach §16.2 der Satz, dass eine neue Bedingungsart `format_version` nicht
+  erhöht). Der Wortlaut steht im Paketbericht W2 der Sitzung vom 14.09.2026.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026).
 
 ## KI und Generatoren
 

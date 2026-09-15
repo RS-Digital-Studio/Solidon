@@ -2159,8 +2159,8 @@ def test_the_pointer_over_an_edge_promises_what_the_click_does(qt_app: QApplicat
 def test_a_right_click_on_an_edge_means_the_edge(qt_app: QApplication) -> None:
     """Rechts und links meinen an derselben Stelle dasselbe.
 
-    Der Rechtsklick waehlte bis zum 10.09.2026 das Merkmal unter der Kante und
-    zeigte dessen Menü — während der Linksklick daneben laengst die Kante
+    Der Rechtsklick wählte bis zum 10.09.2026 das Merkmal unter der Kante und
+    zeigte dessen Menü — während der Linksklick daneben längst die Kante
     nimmt. Zwei Tasten, eine Stelle, zwei Antworten.
     """
     view = Viewport()
@@ -2177,3 +2177,236 @@ def test_a_right_click_on_an_edge_means_the_edge(qt_app: QApplication) -> None:
 
     assert view.highlighted_edge() == ("block", oben), "der Rechtsklick nimmt die Kante"
     assert gemeldet == [(360, 300)], "und das Menü geht trotzdem auf"
+
+
+@pytest.mark.skipif(
+    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
+    reason="OpenCASCADE is an optional dependency",
+)
+def test_a_right_click_on_an_edge_means_it_before_the_body_is_chosen(
+    qt_app: QApplication,
+) -> None:
+    """Auch der **erste** Rechtsklick meint die Kante — er hat keine Stufen.
+
+    Der Test darüber setzt den Körper vorher auf „gewählt", und genau darauf
+    stand die Zusage: ``_edge_click`` stellte die Stufenfrage fest mit
+    ``direct=False``, also nahm der Rechtsklick auf einen noch nicht gewählten
+    Körper die Fläche darunter und zeigte deren Menü. Für den Linksklick ist
+    das richtig (§18.5 — erst der Körper, dann das Darunterliegende); der
+    Rechtsklick meint immer das Genaueste, sonst hinge die Zusage an einer
+    Vorbedingung, die niemand kennt.
+
+    **Und der Körper wird dabei mit angesagt.** Die zwei Handlungen an der
+    Kante holen ihren Eingang aus dem Objektbaum (``_apply_from_feature_panel``
+    und ``run_operation``); ohne die Ansage leuchtete die Linie, und der
+    Menüeintrag darüber fände nichts, woran er ansetzen könnte.
+    """
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    _solid, oben = _exact_block(view)
+    an_der_kante = (-20.0, 0.0, 20.0)
+    renderer.picks[(360, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    angesagt: list[tuple[str, bool]] = []
+    view.objectPicked.connect(lambda body, add: angesagt.append((body, add)))
+    gemeldet: list[tuple[int, int]] = []
+    view.contextMenuAt.connect(lambda x, y: gemeldet.append((x, y)))
+
+    assert view._selected is None, "die Lage dieses Tests ist: noch nichts gewählt"
+    view._on_right_click(360, 300)
+
+    assert view.highlighted_edge() == ("block", oben), (
+        "der Rechtsklick meint das Genaueste — auch beim ersten Mal"
+    )
+    assert view._selected_feature is None, "und nicht die Fläche, an der die Kante liegt"
+    assert angesagt == [("block", False)], (
+        f"der Körper muss mitkommen, sonst hat die Kantenhandlung keinen Eingang: {angesagt}"
+    )
+    assert gemeldet == [(360, 300)], "und das Menü geht auf"
+
+
+@pytest.mark.skipif(
+    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
+    reason="OpenCASCADE is an optional dependency",
+)
+def test_a_right_click_finds_the_edge_where_the_body_is_drawn(qt_app: QApplication) -> None:
+    """Auf Platte 2 trifft der Rechtsklick dieselbe Kante wie der linke.
+
+    Der Linksklick gibt ``_edge_click`` den Punkt aus dem **Bild** — dort
+    liegen die Kanten, samt Versatz der Ansicht (§18.8, §25). Der Rechtsklick
+    rechnete ihn vorher in die Szene zurück und suchte die Kante damit an einer
+    Stelle, an der dieser Körper nicht gezeichnet ist: eine Bettbreite daneben,
+    wo meistens gar nichts liegt. Die Kantenauswahl fiel dort still aus, und
+    das Menü bot wieder das Merkmal an — derselbe Fehler, den derselbe Klick
+    schon einmal beim Körper hatte.
+    """
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    _solid, oben = _exact_block(view)
+    an_der_kante = (-20.0, 0.0, 20.0)
+    # Derselbe Körper, aber auf der zweiten Platte — so, wie
+    # ``show_build_volume`` die Ansicht hinterlässt (§25).
+    auf_platte_zwei = dataclasses.replace(view._result.scene.objects["block"], plate=1)
+    # **Die Lage vor dem Aufbau**: Die Aktoren bekommen ihren Versatz beim
+    # Zeichnen (``_actor_offsets``), und danach gesetzt bliebe er null — dann
+    # läge der Körper im Bild doch wieder an seinem Szenenort.
+    view._beds_drawn = 2
+    view._plate = -1
+    view._bed_extent = (220.0, 220.0)
+    view.show_scene(EvaluationResult(scene=Scene(objects={"block": auf_platte_zwei})))
+    view._selected = "block"
+    versetzt = view.view_point_of(an_der_kante, "block")
+    assert versetzt[0] > an_der_kante[0] + 200.0, "ohne Bettversatz prüft der Fall nichts"
+    # Dort, wo die Kante im **Bild** liegt — eine Bettbreite neben ihrem Ort
+    # in der Szene.
+    im_bild = renderer.world_to_display(versetzt)
+    x, y = int(im_bild[0]), int(im_bild[1])
+    renderer.picks[(x, y)] = Pick(versetzt, view._actors["block"], 0)
+
+    view._on_right_click(x, y)
+
+    assert view.highlighted_edge() == ("block", oben), (
+        "der Rechtsklick sucht die Kante dort, wo der Körper gezeichnet ist"
+    )
+
+
+def test_the_handle_of_a_chosen_face_pushes_that_face(window: MainWindow) -> None:
+    """Von der gewählten Fläche bis in den Verlauf — der ganze Weg am Stück.
+
+    Vier Stücke, und jedes war für sich geprüft: Die Auswahl kommt am Griff
+    an (``gizmo_target``), der Griff sitzt am Merkmal (``_face_seat``), der Zug
+    meldet die Kennung (``faceDragged``), und ``push_face`` nimmt seit dem
+    10.09.2026 eine Fläche statt einer Richtung. Ob ein Kunde, der eine Fläche
+    anklickt und am Griff zieht, am Ende **diese** Fläche im Verlauf stehen
+    hat, sagte keines davon — die Zusage hing an vier Enden ohne Mitte.
+
+    Gemessen wird an der Platte des Korpus, nicht an einem gebauten Merkmal:
+    Was hier zählt, muss das sein, was die Anwendung erzeugt.
+    """
+    import numpy as np
+
+    view = window.viewport
+    view.renderer = _DepthRenderer()
+    view.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    oben = next(
+        (fid, f)
+        for fid, f in entry.features.items()
+        if f.kind == "face"
+        and f.params.get("normal") is not None
+        and float(f.params["normal"][2]) > 0.9
+    )
+    face_id, feature = oben
+    window.object_tree.select_object("obj_1")
+    view.select_feature(face_id)
+
+    ziel = view.gizmo_target()
+    assert ziel is not None and ziel.id == face_id, (
+        f"der Griff muss die gewählte Fläche meinen, er meint {ziel}"
+    )
+    assert view._face_seat is not None, "ohne Sitz steht der Griff in der Mitte des Hüllquaders"
+    sitz, normale, _reichweite = view._face_seat
+    assert sitz == pytest.approx(tuple(float(wert) for wert in feature.params["centre"])), (
+        f"der Griff sitzt bei {sitz} statt auf der Fläche {feature.params['centre']}"
+    )
+    assert normale == pytest.approx((0.0, 0.0, 1.0)), (
+        f"und zieht entlang ihrer Normalen, nicht {normale}"
+    )
+
+    gezogen: list[tuple[str, float]] = []
+    view.faceDragged.connect(lambda fid, weg: gezogen.append((fid, weg)))
+    matrix = np.eye(4)
+    matrix[:3, 3] = np.asarray(normale, dtype=float) * 2.0
+    view._on_gizmo_released(matrix)
+
+    assert gezogen and gezogen[-1][0] == face_id, (
+        f"der Zug muss die Fläche nennen, er nennt {gezogen}"
+    )
+    assert gezogen[-1][1] == pytest.approx(2.0), f"und den Weg entlang ihr: {gezogen[-1][1]}"
+
+    window.session.wait_for_idle()
+    letzter = window.session.project.document.ops[-1]
+    assert letzter.op == "push_face", f"der Verlauf trägt {letzter.op}"
+    assert letzter.params.get("face") == face_id, (
+        f"und nennt die angefasste Fläche — er nennt {letzter.params}"
+    )
+
+
+@pytest.mark.skipif(
+    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
+    reason="OpenCASCADE is an optional dependency",
+)
+def test_a_right_click_on_an_edge_opens_the_edge_menu(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kundenweg am Stück: rechts auf eine Kante, und das Menü ist ihres.
+
+    Die zwei Tests darüber messen die **Auswahl**; ob das Menü daneben von ihr
+    erfährt, sagt keiner von beiden. ``_edge_menu`` liest
+    ``highlighted_edge()``, und die stand beim ersten Rechtsklick auf einen
+    noch nicht gewählten Körper auf ``None`` — angeboten wurden dann die
+    Handlungen der Fläche darunter.
+
+    Das Menü wird nicht wirklich aufgeklappt: ``exec`` ist modal, und ein Test
+    hinge an einem Fenster, das niemand sieht (dasselbe Vorgehen wie in
+    ``tests/test_locked_says_why.py``).
+    """
+    from app.core.perceive.actions import edge_actions
+    from app.core.scene.history import OperationDraft
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.apply(
+            "Quader",
+            [OperationDraft(op="create_brep_box", inputs=(), params={})],
+        )
+        window.session.wait_for_idle()
+        result = window.session.last_result
+        (object_id,) = list(result.scene.objects)
+        entry = result.scene.objects[object_id]
+        view = window.viewport
+        renderer = _DepthRenderer()
+        view.renderer = renderer
+        view.show_scene(result)
+
+        from app.core.brep import edit as brep_edit
+
+        kanten = list(brep_edit.edges_of(entry.mesh))
+        obere = max(kanten, key=lambda info: (info.middle[2], -info.middle[0]))
+        key = brep_edit.edge_key(obere)
+        stelle = (float(obere.middle[0]), float(obere.middle[1]), float(obere.middle[2]))
+        im_bild = renderer.world_to_display(stelle)
+        x, y = int(im_bild[0]), int(im_bild[1])
+        renderer.picks[(x, y)] = Pick(stelle, view._actors[object_id], 0)
+
+        gezeigt: list[list[str]] = []
+        gebaut = window._edge_menu
+
+        def merken() -> Any:
+            menu = gebaut()
+            if menu is not None:
+                gezeigt.append([action.text() for action in menu.actions()])
+                menu.close()
+            return None
+
+        monkeypatch.setattr(window, "_edge_menu", merken)
+        # **Auch der Rückfall darf nicht aufklappen.** ``_on_viewport_context_menu``
+        # nimmt das Baummenü, wenn keine Kante da ist — und ``exec`` darauf
+        # hinge genauso. Bleibt es leer, ist ein leeres ``gezeigt`` zugleich
+        # die Aussage „das Menü war nicht das der Kante".
+        monkeypatch.setattr(window.object_tree, "context_menu", lambda: None)
+        assert window.object_tree.selected() is None, "die Lage ist: noch nichts gewählt"
+
+        view._on_right_click(x, y)
+
+        erwartet = [str(action.title) for action in edge_actions(key) if action.op is not None]
+        assert erwartet, "der Kern nennt an dieser Kante keine Handlung — dann prüft das nichts"
+        assert gezeigt == [erwartet], (
+            f"das Menü muss die Handlungen der Kante tragen: {erwartet}, es trägt {gezeigt}"
+        )
+        assert window.object_tree.selected() == object_id, (
+            "und der Körper ist gewählt — sonst hat die Handlung keinen Eingang"
+        )
+    finally:
+        window.wait_for_workers()

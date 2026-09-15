@@ -571,6 +571,11 @@ MOST_GRID_LINES = 200
 #: Zehn und nicht acht: Der Fangradius der Zeichenfläche ist acht Bildpunkte,
 #: und eine Marke, die genau so groß ist wie der Bereich, in dem sie fängt,
 #: sieht aus wie seine Berandung. Etwas größer ist sie ein Zeichen.
+#:
+#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
+#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
+#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
+#: (Regel in ``ansicht.md``).
 CURSOR_PIXELS = 10.0
 
 #: Wie weit ein Messklick von einer Ecke oder Kante entfernt sein darf, um
@@ -598,12 +603,22 @@ MEASURE_SNAP_PIXELS = 16.0
 #: wächst, ist keine Marke mehr. Am gerenderten Fenster gemessen: Weltmaß
 #: entlang der Achsen war in der isometrischen Ansicht auf ein Drittel
 #: verkürzt und im Bild kaum zu finden.
+#:
+#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
+#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
+#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
+#: (Regel in ``ansicht.md``).
 SNAP_MARK_PIXELS = {"vertex": 13.0, "edge": 9.0, "free": 5.0}
 
 #: Wie dick der Punkt in der Mitte der Marke ist, je Fangart.
 #:
 #: Das Kreuz sagt „hier", der Punkt sagt „genau hier" — ohne ihn zeigt die
 #: Marke auf ihren eigenen Schnittpunkt, und den muss das Auge erst bilden.
+#:
+#: **Ohne Umrechnung**, anders als die Trefferflächen daneben: Die Zahl
+#: geht als Punktgröße an den Renderer, und pygfx rechnet Punktgrößen in
+#: logischen Bildpunkten selbst in Gerätepixel um. Wer sie hier mit dem
+#: Geräteverhältnis multiplizierte, verdoppelte sie bei 200 Prozent.
 SNAP_DOT_PIXELS = {"vertex": 9.0, "edge": 7.0, "free": 5.0}
 
 
@@ -724,6 +739,11 @@ PULL_HANDLE_STRETCH = 6.0
 #: Er bleibt beim Zoomen gleich groß wie ein Werkzeuggriff. Achtunddreißig
 #: Bildpunkte sind lang genug, dass Pfeilspitze und Kreuz nicht im Umriss
 #: verschwinden, aber kurz genug, um neben einem kleinen Profil zu bleiben.
+#:
+#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
+#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
+#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
+#: (Regel in ``ansicht.md``).
 PULL_HANDLE_PIXELS = 38.0
 
 #: Greifweite des ausdrücklichen Pfeil-/Kreuzgriffs in Bildpunkten.
@@ -732,6 +752,11 @@ PULL_HANDLE_PIXELS = 38.0
 #: Bildpunkte geben ihm eine fehlertolerante Trefferfläche, ohne die
 #: Zeichnung daneben mitzunehmen. Der Umriss selbst behält die engere
 #: Fangweite von :data:`CURSOR_PIXELS`.
+#:
+#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
+#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
+#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
+#: (Regel in ``ansicht.md``).
 PULL_HIT_PIXELS = 14.0
 
 #: Wie weit die Vorschau einer Schnittebene über den Körper hinausragt.
@@ -842,6 +867,11 @@ MEASURE_GAP = 14
 #: Zehn, also so groß wie die halbe Diagonale der Marke. Verwechseln kann man
 #: die beiden trotzdem nicht: Der Punkt ist eine gefüllte Kugel, die Marke ein
 #: Kreuz aus zwei Strichen — zwei Formen und nicht zwei Farben (Regel 18).
+#:
+#: **Ohne Umrechnung**, anders als die Trefferflächen daneben: Die Zahl
+#: geht als Punktgröße an den Renderer, und pygfx rechnet Punktgrößen in
+#: logischen Bildpunkten selbst in Gerätepixel um. Wer sie hier mit dem
+#: Geräteverhältnis multiplizierte, verdoppelte sie bei 200 Prozent.
 SKETCH_POINT_PIXELS = 10
 
 #: Abstand der Achsenbuchstaben vom Ursprung, in Bildpunkten.
@@ -849,6 +879,11 @@ SKETCH_POINT_PIXELS = 10
 #: Die Rasterausdehnung reicht weit über den sichtbaren Ausschnitt; ein
 #: Buchstabe am Linienende läge deshalb meist außerhalb des Bildes. Nahe am
 #: Ursprung bleibt er bei jedem Zoom sichtbar, ohne den Nullring zu verdecken.
+#:
+#: **Bildpunkte heißt hier Logikpunkte** — die Größe, die ein Mensch am
+#: Bildschirm sieht. Zeiger und Projektion antworten in Gerätepixeln;
+#: umgerechnet wird beim Vergleich, über :meth:`Viewport._device_pixels`
+#: (Regel in ``ansicht.md``).
 AXIS_LABEL_PIXELS = 64.0
 
 #: Deckkraft des bestehenden Körpers während des Zeichnens.
@@ -4688,11 +4723,36 @@ class Viewport(QWidget):
         return hit.object_id, hit.scene_point, cell, ray
 
     def _device_ratio(self) -> float:
-        """Gerätepixel je Logikpunkt des Fensters — 1,0 ohne Bild."""
-        widget = getattr(self.renderer, "widget", None) if self.renderer is not None else None
-        if widget is None:
+        """Gerätepixel je Logikpunkt des Fensters — 1,0 ohne Bild.
+
+        **Die eine Umrechnung der Ansicht.** Jede Trefferfläche, Fangweite und
+        Zugschwelle hier steht in Logikpunkten — das ist die Größe, die ein
+        Mensch am Bildschirm sieht —, und jeder Bildpunkt, mit dem sie
+        verglichen wird, ist ein Gerätepixel: Der Zeiger kommt so herein
+        (``gfx_renderer`` multipliziert ``event.position()``) und
+        ``world_to_display`` antwortet so (``view_size`` ist die physische
+        Größe). Ohne diesen Faktor trennt bei 200 Prozent Skalierung der Zug
+        nach der halben Strecke, der Fang greift halb so weit und ein Griff ist
+        halb so groß zu treffen. Die Regel steht in ``ansicht.md``.
+
+        Gefragt wird der Renderer (:meth:`Renderer.device_ratio`) und nicht
+        sein Widget: Ohne Fenster gibt es keines, und ein Doppel im Test soll
+        ein Verhältnis melden können, ohne ein Qt-Widget zu bauen.
+        """
+        if self.renderer is None:
             return 1.0
-        return float(widget.devicePixelRatioF()) or 1.0
+        return self.renderer.device_ratio()
+
+    def _device_pixels(self, logical: float) -> float:
+        """Eine Zahl in Logikpunkten als Gerätepixel dieser Ansicht.
+
+        Der kurze Weg über :meth:`_device_ratio` für die Stelle, an der eine
+        Trefferfläche, eine Fangweite oder eine gezeichnete Größe auf einen
+        Bildpunkt trifft. Er steht hier, damit die Umrechnung im Aufrufer als
+        eine benannte Sache erscheint und nicht als eine Multiplikation, die
+        man beim nächsten Mal vergisst.
+        """
+        return logical * self._device_ratio()
 
     def _settle_sketch_view(self, *, draw: bool = True) -> str | None:
         """Eine nahe Hauptansicht einrasten und ihren Namen melden.
@@ -7261,7 +7321,9 @@ class Viewport(QWidget):
                 ready_to_pull = self._pull_is_offered()
                 # Der ausdrückliche Pfeil/Kreuz-Griff gewinnt immer. So kann
                 # seine sichtbare Fläche nicht in einen Kamerazug fallen.
-                if ready_to_pull and self.pull_handle_reach(x, y) <= PULL_HIT_PIXELS:
+                if ready_to_pull and self.pull_handle_reach(x, y) <= self._device_pixels(
+                    PULL_HIT_PIXELS
+                ):
                     return "move"
                 # Danach vorhandene Geometrie: Im Auswahlwerkzeug bedeutet
                 # ein Griff auf Linie oder Punkt bearbeiten, nicht die Kamera
@@ -7273,7 +7335,7 @@ class Viewport(QWidget):
                     and self._sketch_edit_ready(hit)
                 ):
                     return "move"
-                if ready_to_pull and self.grip_reach(x, y) <= CURSOR_PIXELS:
+                if ready_to_pull and self.grip_reach(x, y) <= self._device_pixels(CURSOR_PIXELS):
                     return "move"
             # **Ganz vorn, wie im Klick selbst.** Im Skizzenmodus meint jeder
             # Klick eine Stelle auf der Ebene; ein Zeiger, der daneben ein
@@ -7720,7 +7782,9 @@ class Viewport(QWidget):
         scale = self._pixels_per_mm_at(found.point)
         if across is None or upward is None or scale is None:
             return
-        arm = SNAP_MARK_PIXELS.get(found.kind, SNAP_MARK_PIXELS["free"]) / scale
+        arm = (
+            self._device_pixels(SNAP_MARK_PIXELS.get(found.kind, SNAP_MARK_PIXELS["free"])) / scale
+        )
         for index, direction in enumerate((across, upward)):
             step = direction * arm
             self._snap_actors.append(
@@ -10055,7 +10119,9 @@ class Viewport(QWidget):
         # nackte Fläche.
         return object_id, self._feature_at(point)
 
-    def _edge_click(self, x: int, y: int, point: Vec3, *, add: bool = False) -> bool:
+    def _edge_click(
+        self, x: int, y: int, point: Vec3, *, add: bool = False, direct: bool = False
+    ) -> bool:
         """Ob dieser Klick eine bearbeitbare Kante gewählt hat.
 
         Vier Bedingungen, und jede hat ihren Grund:
@@ -10070,13 +10136,26 @@ class Viewport(QWidget):
           einen Körper meint den Körper — auch dann, wenn er zufällig neben
           einer Kante landet. ``add`` geht dorthin mit und wird nicht
           festgeschrieben; genau diese zweite Rechnung sollte
-          :meth:`_goes_deeper` verhindern.
+          :meth:`_goes_deeper` verhindern. **``direct`` überspringt die
+          Stufe**, und zwar für dieselbe Taste wie beim Merkmal: Der
+          Rechtsklick meint immer das Genaueste (:meth:`_on_right_click`).
+          Fest auf ``False`` gesetzt hing die Kante am Rechtsklick an einer
+          Vorbedingung, die niemand kennt — auf einem noch nicht gewählten
+          Körper zeigte er das Menü der Fläche darunter.
         * **Nicht, solange ein Dialog nach einem Merkmal fragt**
           (:meth:`set_direct_picking`). Dort ist ein Klick eine Antwort, und
           die Frage lautete nicht „welche Kante".
         * **Der Körper unter dem Zeiger.** Die Kanten gehören ihm; die eines
           Nachbarn zu treffen, weil sie im Bild dahinter liegt, wäre eine
           Auswahl, die niemand gemeint hat.
+
+        **Der Körper wird angesagt, bevor die Kante gesetzt wird** — dieselbe
+        Reihenfolge und derselbe Grund wie in :meth:`_select_at`: Eine Kante
+        gehört einem Körper, und die zwei Handlungen an ihr holen ihren
+        Eingang aus dem Objektbaum. Ohne die Ansage leuchtete nach einem
+        direkten Klick die Linie, und *Verrunden* daneben fände nichts, woran
+        es ansetzen könnte. Auf dem gestuften Weg kostet das nichts: Dort ist
+        der Körper längst gewählt, sonst käme der Klick gar nicht hierher.
         """
         if add or self._direct_picking:
             return False
@@ -10087,11 +10166,13 @@ class Viewport(QWidget):
         # gemessen an einem Quader mit `set_explosion(0.5)`: anderthalb
         # Millimeter Versatz genügten, und der Klick wählte den Körper.
         object_id = self._object_at_view(point)
-        if object_id is None or not self._goes_deeper(object_id, direct=False, add=add):
+        if object_id is None or not self._goes_deeper(object_id, direct=direct, add=add):
             return False
         key = self._edge_at(x, y, object_id, behind=point)
         if key is None:
             return False
+        if object_id != self._selected:
+            self.objectPicked.emit(object_id, False)
         self.select_edge(object_id, key)
         self.edgePicked.emit(object_id, key)
         return True
@@ -12925,7 +13006,9 @@ class Viewport(QWidget):
             # waagerechte X-Achse. Buchstaben ergänzen die Farben (Regel 18).
             add_segments((layers.axes[0],), self._axis_y_colour, 2, 0.92, "sketch_axis_y")
             add_segments((layers.axes[1],), self._axis_x_colour, 2, 0.92, "sketch_axis_x")
-            label_distance = AXIS_LABEL_PIXELS / max(self.pixels_per_mm(frame), EPS_GEOM)
+            label_distance = self._device_pixels(AXIS_LABEL_PIXELS) / max(
+                self.pixels_per_mm(frame), EPS_GEOM
+            )
             if axis_names[0]:
                 add_label(
                     to_world(frame, (label_distance, 0.0)),
@@ -13110,7 +13193,9 @@ class Viewport(QWidget):
         if self._cursor_at == (point, scale):
             return False
         self._cursor_at = (point, scale)
-        segments = sketch_cursor(frame, point, CURSOR_PIXELS / max(scale, EPS_GEOM))
+        segments = sketch_cursor(
+            frame, point, self._device_pixels(CURSOR_PIXELS) / max(scale, EPS_GEOM)
+        )
         if not segments:
             return False
 
@@ -13597,7 +13682,18 @@ class Viewport(QWidget):
         # der Linksklick längst die Kante nimmt. Zwei Tasten, dieselbe Stelle,
         # zwei verschiedene Antworten: Das ist die Sorte Unterschied, die
         # niemand als Absicht liest.
-        if not self._edge_click(x, y, self._from_view(point)):
+        #
+        # **Und zwar mit ``direct``, wie das Merkmal daneben.** Ohne das galt
+        # die Zusage nur, wenn der Körper schon gewählt war — der erste
+        # Rechtsklick auf eine Kante zeigte das Menü der Fläche darunter, der
+        # zweite das der Kante.
+        #
+        # **Der Punkt aus dem Bild und nicht aus der Szene.** Die Kanten
+        # liegen dort, wo der Körper gezeichnet ist (:meth:`_edge_at`, §18.8,
+        # §25); zurückgerechnet suchte der Rechtsklick sie auf Platte 2 eine
+        # Bettbreite daneben und fand keine. Nur die Körper- und
+        # Merkmalssuche darunter fragt die Szene.
+        if not self._edge_click(x, y, point, direct=True):
             self._select_at(self._from_view(point), direct=True)
         self.contextMenuAt.emit(x, y)
 
@@ -13953,10 +14049,10 @@ class Viewport(QWidget):
         # Faktor 1/sin(10°) = 5,76 — aufgerundet sechs, damit die Grenze erst
         # jenseits des Einrastens greift und nicht davor.
         least = max(flat, EPS_GEOM) / PULL_HANDLE_STRETCH
-        size = PULL_HANDLE_PIXELS / max(upright, least, EPS_GEOM)
+        size = self._device_pixels(PULL_HANDLE_PIXELS) / max(upright, least, EPS_GEOM)
         # **Quer bleibt quer.** Flügel und Kreuz liegen in der Ebene und
         # werden nicht verkürzt; mitgestreckt verdeckten sie das Profil.
-        across = PULL_HANDLE_PIXELS / max(flat, EPS_GEOM)
+        across = self._device_pixels(PULL_HANDLE_PIXELS) / max(flat, EPS_GEOM)
         return pull_handle(self._sketch_frame, self._sketch_curves, size, across)
 
     def _pull_is_offered(self) -> bool:
@@ -14009,7 +14105,9 @@ class Viewport(QWidget):
 
     def _pull_handle_base(self, x: int, y: int) -> tuple[float, float] | None:
         """Der Fuß des Griffs, wenn Pfeil oder Kreuz getroffen wurden."""
-        if self._sketch_frame is None or self.pull_handle_reach(x, y) > PULL_HIT_PIXELS:
+        if self._sketch_frame is None or self.pull_handle_reach(x, y) > self._device_pixels(
+            PULL_HIT_PIXELS
+        ):
             return None
         handle = self._pull_handle_segments()
         if not handle:
@@ -14052,8 +14150,8 @@ class Viewport(QWidget):
         """
         if self._sketch_frame is None or self._sketch_pull_offer is None:
             return False
-        on_outline = self.grip_reach(x, y) <= CURSOR_PIXELS
-        on_handle = self.pull_handle_reach(x, y) <= PULL_HIT_PIXELS
+        on_outline = self.grip_reach(x, y) <= self._device_pixels(CURSOR_PIXELS)
+        on_handle = self.pull_handle_reach(x, y) <= self._device_pixels(PULL_HIT_PIXELS)
         if not on_outline and not on_handle:
             return False
         base = self.pull_base_at(x, y)
@@ -14733,9 +14831,9 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
                 # Der gezeichnete Pfeil und das Kreuz sind der ausdrückliche
                 # Höhen-Griff. Sie haben Vorrang vor jeder Kurve, die im Bild
                 # zufällig darunterliegt, und vor der Kameranavigation.
-                if found.pull_handle_reach(x, y) <= PULL_HIT_PIXELS and found.sketch_pull_ready(
-                    x, y
-                ):
+                if found.pull_handle_reach(x, y) <= found._device_pixels(
+                    PULL_HIT_PIXELS
+                ) and found.sketch_pull_ready(x, y):
                     found._sketch_gesture = "pull"
                     return True
                 point = found._sketch_hit(x, y)
