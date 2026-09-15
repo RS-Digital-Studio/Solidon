@@ -1199,11 +1199,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Gewichte (8,6 GB) sind in acht Sekunden auf der Karte; dann kriecht die Belegung von 10,4 auf
   15,7 GB mit etwa 60 MB/s — zweieinhalb Minuten, ein Kern beschäftigt, Platte und Grafikkarte
   im Leerlauf. Das ist der KV-Cache (5 120 MiB bei 32 768 Token in f16) und die Rechenpuffer,
-  angelegt am Rand des Speichers: `ollama ps` meldet 14,4 GB für das Modell, frei waren 14,7,
-  und der Windows-Treiber lagert beim Anlegen jeder weiteren Fläche aus und um. Am Nachmittag,
-  mit weniger auf dem Desktop, kostete derselbe Start Sekunden (18,7 s kalt für alles). Die
-  Zahl ist also keine Eigenschaft des Modells, sondern des Abstands zur Kante — und jede
-  Sitzung mit `keep_alive: 0` zahlt sie je Zug neu.
+  angelegt am Rand des Speichers: `ollama ps` meldet 14,4 GB für das Modell, frei waren 14,7.
+  **Die Kante ist es aber nicht** — das sagte um 03:07 dieselbe Messung mit leerem Desktop
+  (1,4 GB belegt): 188 s Kaltstart, und `llama3.1:8b` mit 7 GB Luft brauchte für 4 GB KV-Cache
+  23 s gegen 4,4 s bei 4 096 Token; `qwen3:14b` mit 4 096 Token 26 s, mit 32 768 Token 188 s.
+  Die Zeit hängt an der **Größe des KV-Caches**, nicht am freien Speicher, und sie hat einen
+  Anfang: Bis 17:55 lud dasselbe Modell mit demselben Fenster in **3 bis 4,5 s** (elf Starts
+  im Serverlog), um 17:58 waren es 83 s, seither nie unter 40 — die Zeit, zu der die
+  Torläufe der anderen Sitzungen mit ihren Fenster- und Renderer-Tests begannen. Der
+  Grafiktreiber lagert seither bei jeder großen Zuweisung um, und zwar Stunden nach dem
+  letzten Test noch. Was das zurücksetzt, ist nicht gemessen — ein Neustart ist die Probe,
+  und die gehört Robert. Bis dahin gilt: Latenz nur nach frischem Start und **vor** einem
+  Torlauf messen; die 22,9 s vom Nachmittag sind der Bezugswert, und jede Sitzung mit
+  `keep_alive: 0` zahlt den Start je Zug neu.
 
   Zwei Hebel, beide eine Entscheidung: **Warmhalten zwischen den Zügen** (siehe RM-173) — und
   der **KV-Cache in `q8_0`**: Ollama nimmt das nur als Umgebungsvariable des Dienstes
@@ -1321,12 +1329,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   wiederfindet. Ohne Bewertung bleibt die Zeit: Unter Fremdlast schwankte allein der
   Modellstart zwischen 56 und 314 s je Zug, beide Läufe hatten je zwei Zeitüberschreitungen.
 
-  **Offen:** der dritte Lauf ohne Denkblock (`think: false`, läuft seit 00:40); die Neumessung
-  von `PROMPT_TOKENS` mit `tools/measure_local_model.py` auf ruhiger Karte — die 31 465 im
-  Code sind seit der Kürzung eine Obergrenze und als solche benannt; und drei Entscheidungen
-  von Robert: Denkmodus, Warmhalten, Flächenliste im Steckbrief (die 111 Merkmale von
-  *Drucker kalibrieren* sind 36 Flächenzeilen je Körper; die zwölf größten plus Zähler wären
-  die Hälfte des Steckbriefs).
+  **Der dritte Lauf, dieselbe Kürzung ohne Denkblock** (`think: false` in jeder Anfrage,
+  00:40 bis 03:10): **23/39** gut, gefragt 2/3, schemagültig 95/132 = 72 %, Baustein 5/13,
+  Hauptmaße 3/3, 3,6 Schritte — keine Zeitüberschreitung, 37 statt 45 ungültige Aufrufe. Die
+  Quote ist dieselbe wie mit Denkblock (ein Fall, im Rauschen); was sich ändert, ist die Zeit:
+  Der zweite Schritt eines Zugs antwortet in 0,7 bis 1,5 s statt 7 bis 36 s, der erste erzeugt
+  rund 100 statt 400 bis 850 Token — je Zug eine halbe Minute Modellzeit weniger, und der
+  Kontextschub aus dem Denkblock entfällt. **Der Vorschlag:** `think: false` an jedes Modell
+  schicken, dessen `/api/show` die Fähigkeit `thinking` nennt (Ollama lehnt die Option bei
+  anderen ab). Das ist eine Verhaltensänderung des lokalen Chats, keine Kürzung — Robert
+  entscheidet; gebaut ist es ein Nachmittag mit Test.
+
+  **`PROMPT_TOKENS` ist gemessen:** 28 616 Token für die eingebaute Fassung (03:07, drei warme
+  Züge 2,3 bis 7,1 s), 87,3 % des Fensters, 4 152 Token Rest. Der Kaltstart derselben Messung
+  — 188 s — steht bei RM-081, denn er ist keine Eigenschaft des Prompts.
+
+  **Offen sind Entscheidungen, keine Messungen:** Denkmodus (oben), Warmhalten zwischen den
+  Zügen (RM-081), Flächenliste im Steckbrief (die 111 Merkmale von *Drucker kalibrieren* sind
+  36 Flächenzeilen je Körper; die zwölf größten plus Zähler wären die Hälfte des Steckbriefs)
+  und der KV-Cache in `q8_0` am Dienst, der das Fenster auf 40 960 heben könnte (RM-081).
 
 ## Tests und Entwicklungswerkzeuge
 

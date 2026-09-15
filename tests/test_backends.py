@@ -346,7 +346,8 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     assert payload["options"]["num_ctx"] == OLLAMA_CONTEXT_TOKENS
     # Gegen die gemessene Nutzlast, nicht gegen eine Zahl von damals: Ein
     # Prompt über dem Fenster wird von Ollama vorn abgeschnitten — und vorn
-    # steht der Auftrag. Am 14.09.2026 sind es 31 465 von 32 768 (RM-054).
+    # steht der Auftrag. Am 14.09.2026 waren es 31 465 von 32 768 (RM-054), seit
+    # der Kürzung vom 15.09. sind es 28 616 (RM-173).
     from app.core.backends.llm import PROMPT_TOKENS
 
     assert OLLAMA_CONTEXT_TOKENS > PROMPT_TOKENS, "so viel brauchen die Werkzeuge allein"

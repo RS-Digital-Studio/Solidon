@@ -2009,13 +2009,16 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: 119 — standen fünf Tage auseinander; der Wächter hatte zweimal nur die
 #: Werkzeugzahl nachziehen lassen, weil eine hochgerechnete Messung keine ist.
 #:
-#: **Seit der Kürzung des kompakten Schemas (15.09.2026, RM-173) ist die Zahl
-#: eine Obergrenze:** Eine Vorfassung derselben Kürzung maß 28 440, die
-#: eingebaute Fassung ist noch nicht auf ruhiger Karte gemessen. Für die
-#: Wächter ist das die sichere Richtung — ein gekürzter Prompt wird an einer
-#: zu hohen Erwartung eher erkannt, nicht übersehen —, und die Wartezeit im
-#: Schlüsseldialog überschätzt um ein Zehntel, bis die Messung nachgezogen ist.
-PROMPT_TOKENS: Final = 31465
+#: **Mit der Kürzung des kompakten Schemas (RM-173) am 15.09.2026 neu gemessen:
+#: 28 616 Token** — dieselben 121 Werkzeuge, dasselbe Werkzeug, dieselbe Karte,
+#: drei warme Züge mit 2,3 bis 7,1 s. `play` und die vier Geschwisterachsen
+#: ohne Feldtext, Zahlenfelder als Zahl, Konventionen und Bindung einmal im
+#: Prompt: 87,3 % des Fensters statt 96,0 %, 4 152 Token Rest statt 1 303. Der
+#: Kaltstart derselben Messung — 188 s — ist keine Eigenschaft des Prompts:
+#: Der Modellstart kriecht seit den Torläufen dreier Sitzungen am Abend beim
+#: Anlegen des KV-Caches (RM-081); die 22,9 s vom Nachmittag bleiben der
+#: Bezugswert.
+PROMPT_TOKENS: Final = 28616
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
