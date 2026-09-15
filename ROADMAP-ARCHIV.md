@@ -26,6 +26,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-15 | [Vierunddreißig Modelle aus dem Netz: Erkennung, Bearbeitung, Leistung (15.09.2026)](#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026) |
+| 2026-09-15 | [GitHub Actions nahm keinen Lauf an, das Repository war privat (15.09.2026)](#github-actions-nahm-keinen-lauf-an-das-repository-war-privat-15092026) |
 | 2026-09-15 | [Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)](#drehen-und-verdoppeln-nehmen-die-hohlraumkette-mit-15092026) |
 | 2026-09-15 | [Ein gedrehtes Langloch ist eines (15.09.2026)](#ein-gedrehtes-langloch-ist-eines-15092026) |
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
@@ -29055,6 +29056,28 @@ Funde, drei als Fehler. Alle umgesetzt:
 - Offen geblieben und bewusst: `agent.components_grew` und `feature.body_split` melden an
   einem Agentenvorschlag denselben Zerfall zweimal — einmal für den Agenten, einmal für den
   Bericht; zusammenzulegen wäre eine Entscheidung über den Agentenpfad.
+
+## GitHub Actions nahm keinen Lauf an, das Repository war privat (15.09.2026)
+
+<a id="rm-176"></a>
+
+- [x] **RM-176 — GitHub Actions nimmt seit dem 14.09. keinen Lauf mehr an.** Gefunden am
+  14.09.2026 um 19:30: Jeder Lauf von `Bauen` seit `34803524986` endete nach drei bis sechs
+  Sekunden rot, ohne dass ein Job startete — 60 Läufe in Folge, die Suite auf Ubuntu, der
+  Vorwarnlauf, Pakete, Releaseakten und Mac-Signierung **ungefahren**, nicht rot. GitHub sagte
+  dazu: *„The job was not started because recent account payments have failed or your spending
+  limit needs to be increased."*
+
+  **Erledigt am 15.09.2026, ohne Änderung an Zahlung oder Limit** (Robert): Das Repository ist
+  zwischen zwei Bauten **privat** geschaltet und nur für den Bau öffentlich. Private Minuten sind
+  gezählt, und das Konto trägt dafür kein Guthaben — der Satz von GitHub meint das Limit für
+  private Läufe, nicht eine fehlgeschlagene Zahlung. Der Kommentar in `build.yml` („seit der
+  Umbenennung öffentlich, die Standard-Runner kosten nichts") galt damit nur am Bautag. Folge
+  für jeden Push zwischen den Bauten: Die Suite auf Ubuntu läuft dort nicht; der Nachweis kommt
+  aus dem lokalen Tor, und Linux, macOS und die Mac-Signierung bekommen ihren Nachweis mit dem
+  nächsten Bau. Abnahme: Am 15.09.2026 nimmt GitHub Läufe an (Robert), und `v0.4.2` startet den
+  Bau mit voller Matrix.
+
 
 ## Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)
 
