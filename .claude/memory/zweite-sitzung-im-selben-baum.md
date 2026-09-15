@@ -87,3 +87,14 @@ Prüfung war richtig und trotzdem wertlos, weil zwischen ihr und dem
 zwei Sitzungen **immer** geteilt — gehen deshalb nur noch als Blob aus HEAD
 plus eigener Ersetzung in den Index, nie aus dem Arbeitsbaum, auch wenn der
 Zähler gerade „nur meine" sagt.
+
+**Zweiter Nachtrag 14.09.2026 — auch der HEAD-Blob misst einen Zeitpunkt.**
+Der Blob für `ROADMAP-ARCHIV.md` war aus HEAD gelesen, aber zehn Minuten vor
+dem Commit; dazwischen kam b5501330f von 3d-druck-66 mit sechzehn Zeilen in
+derselben Datei, und aec58ad2 hat sie wieder herausgenommen — der
+`--stat` zeigte 18 Löschungen, wo zwei meine waren, und das war der einzige
+Hinweis. Wiederhergestellt in 4491fea9. Regel: `git show HEAD:<datei>`,
+Ersetzung, `hash-object`, `update-index`, Prüfung `HEAD == H` und `commit`
+stehen in **einer** Befehlskette; ein vorbereiteter Blob ist beim Commit
+schon alt. Und vor dem Commit `git diff --cached --numstat HEAD` lesen: Jede
+Löschung, die nicht meine ist, ist fremde Arbeit.
