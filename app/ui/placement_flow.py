@@ -1480,10 +1480,18 @@ class PlacementFlow(QObject):
         if placed["axis"] in values:
             values[placed["axis"]] = "z"
         profile = for_object(self.session.profile, source)
-        key = repr((spec.name, values, profile, id(source.mesh) if source is not None else None))
+        parameters = dict(self.session.project.document.parameters)
+        key = repr(
+            (
+                spec.name,
+                values,
+                parameters,
+                profile,
+                id(source.mesh) if source is not None else None,
+            )
+        )
         if key == self._tool_key and self._tool_context is not None:
             return
-        parameters = dict(self.session.project.document.parameters)
         epoch = self._epoch
         self._tool_busy = True
         self._tool_again = False
@@ -1491,8 +1499,11 @@ class PlacementFlow(QObject):
         self.redraw()
 
         def compute() -> Any:
-            entered = expressions.resolve_params(values, expressions.resolve(parameters))
-            return placement.prepare_tool(spec, entered, profile, source=source, feature=feature)
+            resolved = expressions.resolve(parameters)
+            entered = expressions.resolve_params(values, resolved)
+            return placement.prepare_tool(
+                spec, entered, profile, source=source, feature=feature, parameters=resolved
+            )
 
         def done(context: placement.PlacementTool | None) -> None:
             if not isValid(self) or self._disposed:

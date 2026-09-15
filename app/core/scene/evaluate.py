@@ -63,6 +63,7 @@ from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
 from app.core.scene.orphans import feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
+from app.core.scene.parameter_usage import ParameterUse, parameter_uses
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
     AskFn,
@@ -102,6 +103,7 @@ _log = get_logger(__name__)
 #: Die Topologie entscheidet mit: auf 990 000 reduziert bleibt es bei 123 Sekunden.
 #: §31 bleibt das Leistungsziel; dieses Budget begrenzt die zugelassenen Netze.
 FEATURE_LIMIT_TRIANGLES = 1_000_000
+
 
 #: Und darüber läuft die **Zuordnung** nicht — dieselbe Bremse, die andere
 #: Größe.
@@ -170,6 +172,9 @@ class EvaluationResult:
     Auswertung erneut gestellt, und mit einem Cache, der länger lebt als eine
     Sitzung, irgendwann gar nicht mehr. Der Aufrufer muss sie also schreiben,
     nicht nur können."""
+    parameter_usage: Mapping[str, tuple[ParameterUse, ...]] | None = None
+    """Verwendungen im aktuellen Stapel; None bedeutet noch nicht zuverlässig erhoben."""
+    parameter_usage_error: AppError | None = None
 
     @property
     def complete(self) -> bool:
@@ -199,6 +204,37 @@ def evaluate(
     sources: SourceAccess | None = None,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt."""
+    result = _evaluate(
+        document,
+        profile,
+        quality=quality,
+        progress=progress,
+        ask=ask,
+        cancelled=cancelled,
+        cache=cache,
+        registry=registry,
+        sources=sources,
+    )
+    try:
+        usage = parameter_uses(document, registry) if document.parameters else {}
+    except AppError as error:
+        return dataclasses.replace(result, parameter_usage_error=error.with_traceback(None))
+    return dataclasses.replace(result, parameter_usage=usage)
+
+
+def _evaluate(
+    document: Document,
+    profile: Profile,
+    *,
+    quality: Quality,
+    progress: ProgressFn,
+    ask: Any,
+    cancelled: CancelToken | None,
+    cache: ResultCache | None,
+    registry: Registry | None,
+    sources: SourceAccess | None,
+) -> EvaluationResult:
+    """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     profile = for_process(profile, document.print_settings)
     source = registry or REGISTRY
     token = cancelled or NeverCancelled()
@@ -396,6 +432,14 @@ def evaluate(
             # hält an und meldet ihn (§15.3), sie fliegt nicht auf. Vor dem
             # 22.08.2026 stand hier kein Fang, weil der Schlüssel nichts
             # nachschlug, was fehlen konnte.
+            from app.core.knowledge.profiles import material
+
+            material_profiles = {
+                name: dataclasses.replace(profile, material=material(getattr(params, name)))
+                if getattr(params, name)
+                else profile
+                for name in spec.material_params
+            }
             key = operation_hash(
                 operation,
                 _with_nested_context(
@@ -411,6 +455,7 @@ def evaluate(
                 profile,
                 quality,
                 implementation_version=spec.cache_version,
+                material_profiles=material_profiles,
             )
         except AppError as error:
             findings.append(_finding_from(error, operation))
@@ -1714,7 +1759,7 @@ def _with_features(
 #: Bedingung, damit der nächste Sammelparameter eine Zeile ist und keine
 #: Suche.
 @cache
-def nested_references() -> dict[str, Callable[[str], frozenset[str]]]:
+def nested_references(*, strict: bool = False) -> dict[str, Callable[[str], frozenset[str]]]:
     """Die Zuordnung selbst — **träge**, weil sie sonst einen Import-Kreis schließt.
 
     ``geom.pose`` braucht den Ausdrucksauswerter und importiert dafür
@@ -1728,12 +1773,15 @@ def nested_references() -> dict[str, Callable[[str], frozenset[str]]]:
     geladen, bevor ``geom.pose`` dran ist. Der Kreis fällt nur auf, wenn ein
     Modul als **erstes** kommt — was ``tests/test_core_isolation.py`` seit
     diesem Fund für jedes einzeln durchspielt.
+
+    Die Verwendungsabfrage fordert ``strict`` an: Ein beschädigter Sammelwert
+    bedeutet dort unbekannte Verwendung und darf nicht leer zurückkommen.
     """
     from app.core.geom.pose import pose_parameter_references
 
     return {
-        "sketch": sketch_parameter_references,
-        "armature": pose_parameter_references,
+        "sketch": partial(sketch_parameter_references, strict=strict),
+        "armature": partial(pose_parameter_references, strict=strict),
     }
 
 

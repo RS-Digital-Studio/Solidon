@@ -84,6 +84,11 @@ Löschtitel lesen die Operationstitel aus dem Register ihrer `History`.
 Die einzelnen Namen bleiben verschachtelte übersetzbare Werte, auch beim
 Speichern und Wiederöffnen. Erst die Anzeige löst die gewählte Sprache auf.
 
+Historische Ladeschritte behalten `coordinates="legacy_raw"`: Die Migration
+schreibt den bisherigen Koordinatenvertrag auch in gespeicherte
+`edited_ops`-Fassungen. Dadurch ändern weder Öffnen noch Undo alte
+GLB-/GLTF-Quellen. Ausdrücklich gespeicherte Einheiten bleiben unverändert.
+
 Historische Farbschritte mit Punkt und Radius bleiben unverändert erhalten.
 Die Auswertung hält mit `evaluate.legacy_point_paint` an diesem Schritt an
 und bietet seine rohen Werte sowie den Verlauf an. Die alten Felder werden
@@ -117,7 +122,23 @@ Erneute Erreichbarkeit entfernt den alten Verknüpfungshinweis.
 | `evaluate.py` | Die Auswertung (§15.1) |
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, im Speicher und auf der Platte |
 | `hashing.py` | Stabile Hashes: `operation_hash()`, `object_hash()`, `profile_key()` |
+| `parameter_usage.py` | Direkte und abgeleitete Projektparameterverwendungen je Operationsfeld (§13) |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
+
+`evaluate()` ergänzt jedes Ergebnis um `parameter_usage`: belegte direkte
+und abgeleitete Leser im aktuellen Operationsstapel. Die Geometrieauswertung
+bleibt in `_evaluate()`. Ein Fehler der Verwendungsabfrage erhält ihr Ergebnis
+und steht separat in `parameter_usage_error`; `None` darf nicht als leere
+Verwendungsliste ausgegeben werden. Skizzen und Stellungen
+teilen die strengen Sammler aus `nested_references(strict=True)`. Reine Parameterketten ohne
+lesenden Schritt bleiben ungenutzt. Diese Auskunft wird nicht ins Projekt
+geschrieben und ändert weder Parameterwerte noch Netzgeometrie.
+
+Zusätzliche Materialrollen einer Operation stehen in `material_params` am
+Registereintrag. Der Cache berücksichtigt deren vollständige geometrisch
+relevante Profile mit dem aktuellen Druckprozess, einschließlich Kalibrierung.
+Eine geänderte Einlagenpassung darf deshalb trotz gleicher Profilkennung
+kein Ergebnis einer früheren Kalibrierung laden.
 
 **Drei Fragen beantwortet erst der Endstand**, und deshalb stehen sie in
 `evaluate.py` und in keiner Operation: `check_placement` (liegt der Körper auf
@@ -184,6 +205,19 @@ Ergebnisse im Speicher- und Dateicache. Die Version beschreibt den geladenen
 Code beziehungsweise die registrierten Rezeptdaten, nicht eine inzwischen
 anderweitig geänderte Datei.
 
+`CACHE_FORMAT_VERSION` versieht auch den Operationshash mit dem Stand der
+Geometrie- und Merkmalsauskunft. Eine geänderte Erkennung entwertet damit
+Speicher- und Platteneinträge gemeinsam. Dokumentwerte und gespeicherte
+Operationen bleiben dabei unverändert; die Cacheversion ist kein Projektformat.
+
+`parameter_uses` beginnt bei den Feldern des aktuellen Operationsstapels und
+folgt deren Projektparametern durch die Ausdrucksabhängigkeiten. Jeder
+Parameter erhält seine direkten und abgeleiteten Fundstellen mit Schritt
+und Feld; reine Referenzketten ohne lesende Operation bleiben ungenutzt.
+Skizzen und Stellungen verwenden `nested_references(strict=True)`. Dessen
+Sammler parsen ihren Text einmal und reichen unlesbare Inhalte als Fehler
+weiter: Ohne verlässliche Auskunft darf keine Leeranzeige „ungenutzt“ behaupten.
+
 Lineare und kreisförmige Muster bewegen Kopien über `moved_body`. Eine starre
 Bewegung erhält einen exakten Körper; die Kopie bleibt anschließend im
 B-Rep-Kern bearbeitbar.
@@ -228,3 +262,7 @@ regulären Undo-Vertrag. Eindeutige alte Deckelpaare erhalten dort die jeweils
 gültige Schrittkennung; belegte flache Deckel ohne jemals gespeicherte
 Beziehung erhalten eine bedingte Passung aus `lid_flow.fit_for_lid`.
 Ausdrücklich entfernte Passungen werden dadurch nicht neu angelegt.
+
+`placement.prepare_tool` und `placement_tool` reichen aufgelöste Projektmaße
+an Bausteine mit `kind="sketch"` weiter. Die Zeichnung bleibt ein gespeicherter
+Ausdruck; nur der vorübergehende Bau erhält Zahlenwerte.

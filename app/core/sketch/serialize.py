@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
 from app.core.errors import ValidationError
-from app.core.expressions import references
+from app.core.expressions import evaluate, references
 from app.core.types import (
     Point2,
     Sketch,
@@ -146,14 +148,16 @@ def sketch_from_text(text: str) -> Sketch:
     return Sketch(plane=plane, elements=tuple(elements), constraints=tuple(constraints))
 
 
-def sketch_parameter_references(text: str) -> frozenset[str]:
+def sketch_parameter_references(text: str, *, strict: bool = False) -> frozenset[str]:
     """Projektparameter, die die Maße der Skizze lesen (§13).
 
     Die Auswertung mischt ihre Werte in den Cache-Schlüssel der Op:
     Maßausdrücke stehen im Skizzentext und sind für ``resolve_params``
     unsichtbar — ohne die Werte bliebe nach einer Parameteränderung das alte
     Ergebnis im Cache stehen (§15). Ein unlesbarer Text hat keine
-    Abhängigkeiten; er scheitert beim Lauf der Op mit seiner eigenen Meldung."""
+    Abhängigkeiten; er scheitert beim Lauf der Op mit seiner eigenen Meldung.
+    ``strict`` reicht diesen Fehler sofort weiter: Eine Verwendungsabfrage darf
+    einen unlesbaren Wert nicht mit einem unbenutzten Parameter verwechseln."""
     found: set[str] = set()
     try:
         sketch = sketch_from_text(text)
@@ -161,8 +165,28 @@ def sketch_parameter_references(text: str) -> frozenset[str]:
             if constraint.value:
                 found |= references(constraint.value)
     except ValidationError:
+        if strict:
+            raise
         return frozenset()
     return frozenset(found)
+
+
+def resolve_sketch_values(text: str, parameters: Mapping[str, float] | None = None) -> str:
+    """Löst Maßausdrücke für einen Bau ohne eigenen Projektkontext temporär auf.
+
+    Punkte, Ebene und Bedingungsarten bleiben stehen: Die Geometrie löst
+    weiterhin ``solve_sketch``. Der gespeicherte Text wird nicht verändert.
+    Fehlende Namen gehen an den normalen Ausdrucksfehler, niemals an Null.
+    """
+    sketch = sketch_from_text(text)
+    values = parameters if parameters is not None else {}
+    constraints = tuple(
+        replace(constraint, value=repr(evaluate(constraint.value, values)))
+        if constraint.value
+        else constraint
+        for constraint in sketch.constraints
+    )
+    return sketch_to_text(replace(sketch, constraints=constraints))
 
 
 def _known_plane(plane: str) -> bool:

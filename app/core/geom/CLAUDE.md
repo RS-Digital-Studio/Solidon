@@ -264,6 +264,13 @@ Schritt. Das Ergebnis folgt vollständig aus den Parametern, was das Fenster
 währenddessen zeigt, ist Vorschau. `tests/test_gesture_ops.py` prüft das über
 das ganze Register.
 
+`pose_parameter_references(strict=True)` meldet unlesbare Stellungswerte
+sofort. Die Verwendungsabfrage kann damit unbekannte Abhängigkeiten von
+unbenutzten Maßen unterscheiden. Skelettlisten enthalten Koordinaten und
+keine Projektmaße; nur die Winkelwerte der Stellung sammeln Referenzen.
+Der Standardvertrag bleibt für den Cache erhalten: Die Operation meldet
+beschädigte Texte bei ihrer Auswertung.
+
 **Wandungen**
 
 `hollow.py` (Aushöhlen — mit den Entlüftungen, die es druckbar machen; die

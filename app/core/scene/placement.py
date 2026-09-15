@@ -1310,9 +1310,12 @@ def placement_tool(
     *,
     source: SceneObject | None = None,
     feature: Feature | None = None,
+    parameters: Mapping[str, float] | None = None,
 ) -> MeshData:
     """Der wirkliche lokale Werkzeugkörper; ausschließlich für die temporäre Vorschau."""
-    return prepare_tool(spec, entered_values, profile, source=source, feature=feature).mesh
+    return prepare_tool(
+        spec, entered_values, profile, source=source, feature=feature, parameters=parameters
+    ).mesh
 
 
 def prepare_tool(
@@ -1322,6 +1325,7 @@ def prepare_tool(
     *,
     source: SceneObject | None = None,
     feature: Feature | None = None,
+    parameters: Mapping[str, float] | None = None,
 ) -> PlacementTool:
     """Werkzeug und Merkmalsbezug einmal im Worker berechnen und gemeinsam aufbewahren."""
     if spec.name in {"move_feature", "duplicate_feature"}:
@@ -1339,7 +1343,11 @@ def prepare_tool(
     part = part_of(spec.name)
     if part is not None:
         primary, addition = placement_tools(
-            part, entered_values, for_object(profile, source), standalone=spec.consumes == 0
+            part,
+            entered_values,
+            for_object(profile, source),
+            standalone=spec.consumes == 0,
+            parameters=parameters,
         )
         return PlacementTool(primary, addition=addition)
     return PlacementTool(_creation_tool(spec, entered_values, profile, source=source))

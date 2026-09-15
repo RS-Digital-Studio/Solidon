@@ -1424,3 +1424,18 @@ Ein belegtes `through=False` heißt bereits im Baum und am Merkmal
 Schritte in `SceneDifference.findings`. Warnungen bleiben neben einer
 erfolgreichen Ergebnisvorschau sichtbar. Der getrennte Absageweg bleibt
 Vorschauen vorbehalten, die tatsächlich kein Ergebnis liefern.
+
+## Gebundene Projektmaße
+
+Die Parameterleiste liest Verwendungsdaten aus dem aktuellen
+`EvaluationResult`, ohne Skizzen im Qt-Hauptthread zu parsen. Ungenutzte Maße
+tragen einen sichtbaren Text und erklären den Ausdruck im Operationsfeld.
+Benutzte Maße nennen ihre lesenden Schritte. Während der Auswertung und bei
+einer unklaren Abfrage bleibt die Aussage unbekannt; alte Ergebnisse dürfen
+keinen gerade geänderten Parameter als ungenutzt bezeichnen.
+
+Die Platzierungsvorschau nimmt die Projektparameter in ihren Werkzeugschlüssel
+auf. Der Arbeiter löst abhängige Maße einmal auf und reicht sie sowohl an
+gewöhnliche Operationswerte als auch an eingebettete Bausteinskizzen weiter.
+Gleichbleibender Skizzentext darf nach einer Maßänderung kein altes Werkzeug
+sichtbar lassen.

@@ -303,7 +303,7 @@ def pose_text(angles: Mapping[str, Sequence[float | str]]) -> str:
     )
 
 
-def pose_parameter_references(text: str) -> frozenset[str]:
+def pose_parameter_references(text: str, *, strict: bool = False) -> frozenset[str]:
     """Projektparameter, die die Winkel dieser Stellung lesen (§13, §15).
 
     Das Gegenstück zu :func:`app.core.sketch.serialize.sketch_parameter_references`
@@ -314,24 +314,41 @@ def pose_parameter_references(text: str) -> frozenset[str]:
     Funktion bliebe nach einer Parameteränderung das alte Ergebnis im Cache:
     der Arm bliebe gebeugt, während die Zahl daneben schon die neue ist.
 
-    Ein unlesbarer Text hat keine Abhängigkeiten; er scheitert beim Lauf der
-    Operation mit seiner eigenen Meldung.
+    Ein unlesbarer Text hat standardmäßig keine Abhängigkeiten; er scheitert
+    beim Lauf der Operation mit seiner eigenen Meldung. ``strict`` reicht
+    diesen Fehler sofort weiter, damit er nicht als „ungenutzt“ gezählt wird.
 
     **Auch das Skelett kommt hier vorbei**, denn beide Felder von
     ``PoseParams`` tragen ``kind="armature"``. Sein Text ist eine JSON-*Liste*
-    statt eines Objekts, ``.values()`` gibt es darauf nicht, und der Fang
-    darunter macht daraus ein leeres Ergebnis — richtig, denn ein Knochen ist
-    eine Koordinate und kein Maß, das jemand an einen Parameter hängt. Es
-    steht hier, weil ein stiller ``AttributeError`` als Entwurf aussieht und
-    nicht als Entscheidung.
+    statt eines Objekts und trägt keine Parametermaße: Ein Knochen ist eine
+    Koordinate. Die Liste wird ausdrücklich als Skelett erkannt, nicht erst
+    am fehlenden ``.values()``. Das gilt auch bei strenger Verwendungsprüfung.
     """
     found: set[str] = set()
     try:
-        for values in json.loads(text or "{}").values():
+        payload = json.loads(text.strip() or "{}")
+        if isinstance(payload, list):
+            return frozenset()
+        for values in payload.values():
+            if strict:
+                # Dieselbe Zahlenlesart wie bei der Stellung, ohne Auswertung
+                # der Ausdrücke oder eine zweite JSON-Runde.
+                as_vec3([0.0 if is_expression(angle) else angle for angle in values])
             for angle in values:
                 if is_expression(angle):
                     found |= references(angle)
-    except ValueError, TypeError, AttributeError:
+    except (ValueError, TypeError, AttributeError, IndexError, RecursionError) as problem:
+        if strict:
+            raise ValidationError(
+                title=_("Diese Stellung lässt sich nicht lesen."),
+                field="pose",
+                detail=_(
+                    "Je Knochen drei Winkel: der Knochenname auf eine Liste aus drei "
+                    "Zahlen, etwa [0, 30, 0]."
+                ),
+                value=text,
+                constraint="unreadable",
+            ) from problem
         return frozenset()
     return frozenset(found)
 

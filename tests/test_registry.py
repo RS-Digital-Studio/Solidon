@@ -34,6 +34,27 @@ class ScatterParams(BaseParams):
     count: int = param(title=_("Anzahl"), default=3, minimum=1)
 
 
+@pytest.mark.parametrize("fields", [("missing",), ("diameter",), ("liner", "liner")])
+def test_material_dependencies_name_distinct_material_fields(fields: tuple[str, ...]) -> None:
+    """Eine falsch deklarierte Profilabhängigkeit darf keine Cachezusage vortäuschen."""
+
+    @op_params
+    class MaterialParams(BaseParams):
+        liner: str = param(title=_("Material"), kind="material", default="")
+        diameter: float = param(title=_("Durchmesser"), default=5.0)
+
+    with pytest.raises(InternalError, match="material profile parameters"):
+        register_op(
+            name="material_probe",
+            title=_("Prüfkörper"),
+            category="primitive",
+            params=MaterialParams,
+            consumes=0,
+            material_params=fields,
+            registry=Registry(),
+        )(lambda ctx: OpResult(outputs=[]))
+
+
 @pytest.fixture
 def registry() -> Registry:
     """Ein eigenes Register, damit Tests nie von der Ladereihenfolge abhängen."""

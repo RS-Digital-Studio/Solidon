@@ -82,6 +82,7 @@ def operation_hash(
     quality: Quality,
     *,
     implementation_version: str = "",
+    material_profiles: Mapping[str, Profile] | None = None,
 ) -> str:
     """Die Identität eines gerechneten Ergebnisses."""
     return digest(
@@ -93,6 +94,11 @@ def operation_hash(
         quality,
         operation.seed,
         implementation_version,
+        *(
+            [{name: profile_key(value) for name, value in material_profiles.items()}]
+            if material_profiles
+            else []
+        ),
     )
 
 

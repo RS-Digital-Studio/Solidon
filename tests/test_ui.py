@@ -150,6 +150,36 @@ def test_derived_parameter_labels_follow_the_evaluated_expression(window: MainWi
     assert labels == ["20,00"]
 
 
+def test_unused_parameters_become_bound_only_after_a_step_reads_them(window: MainWindow) -> None:
+    """Die Leiste benennt wirkungslose Maße und erneuert die Auskunft nach Undo/Redo."""
+    from PySide6.QtWidgets import QLabel
+
+    session = window.session
+    assert session.add_parameter(Parameter(name="width", value=30.0))
+    assert session.wait_for_idle()
+
+    def labels() -> list[QLabel]:
+        return [
+            label
+            for label in window.parameters.findChildren(QLabel)
+            if label.text().startswith("width")
+        ]
+
+    assert len(labels()) == 1
+    assert "Nicht verwendet" in labels()[0].text()
+    assert "=@width" in labels()[0].accessibleDescription()
+    assert session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@width"})])
+    assert session.wait_for_idle()
+    assert labels()[0].text() == "width"
+    assert "Operation 1" in labels()[0].toolTip() and "Breite" in labels()[0].toolTip()
+    session.undo()
+    assert session.wait_for_idle()
+    assert "Nicht verwendet" in labels()[0].text()
+    session.redo()
+    assert session.wait_for_idle()
+    assert labels()[0].text() == "width"
+
+
 @pytest.mark.parametrize(
     "change,fail", [("selection", False), ("project", False), ("project", True), ("cancel", False)]
 )

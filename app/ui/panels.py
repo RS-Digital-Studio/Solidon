@@ -2560,10 +2560,51 @@ class ParameterPanel(QWidget):
         details.clicked.connect(self._details_clicked)
         layout.addWidget(details)
         self._detail_buttons[name] = details
-        self._form.addRow(title, row)
+        label = QLabel(title, self)
+        uses = self._usage_result.parameter_usage if self._usage_result is not None else None
+        if uses is not None and name in uses and not uses[name]:
+            label.setText(f"{title}\n{tr('Nicht verwendet')}")
+        label.setWordWrap(True)
+        fit_wrapped(label)
+        note = self._usage_note(name)
+        label.setToolTip(note)
+        label.setAccessibleDescription(note)
+        row.setToolTip(note)
+        self._form.addRow(label, row)
         self._remember_row(name, row)
 
-    def show_document(self, document: Document) -> None:
+    def _usage_note(self, name: str) -> str:
+        """Belegte Operationsfelder nennen; eine ausstehende Prüfung urteilt nicht."""
+        result = self._usage_result
+        if result is not None and result.parameter_usage_error is not None:
+            return tr("Verwendung unklar — prüfen Sie die Ausdrücke im Projekt.")
+        if result is None or result.parameter_usage is None:
+            return tr("Die Verwendung wird mit dem Modell geprüft.")
+        uses = result.parameter_usage.get(name)
+        if uses is None:
+            return tr("Die Verwendung wird mit dem Modell geprüft.")
+        if not uses:
+            return tr(
+                "Dieses Maß wird von keiner Operation verwendet. Öffnen Sie einen Schritt "
+                "im Verlauf und tragen Sie =@{name} in das passende Maßfeld ein."
+            ).format(name=name)
+        lines = []
+        for use in uses[:8]:
+            operation = self._usage_operations[use.op_id]
+            spec = REGISTRY.get(operation.op)
+            field = next(entry for entry in spec.params.spec() if entry.name == use.field)
+            lines.append(
+                tr("Operation {number}: {operation} — {field}").format(
+                    number=use.op_id, operation=spec.title, field=field.title
+                )
+            )
+        if len(uses) > 8:
+            lines.append(tr("Weitere Verwendungen: {count}").format(count=len(uses) - 8))
+        return "\n".join(lines)
+
+    def show_document(self, document: Document, result: EvaluationResult | None = None) -> None:
+        self._usage_result = result
+        self._usage_operations = {operation.id: operation for operation in document.ops}
         while self._form.rowCount():
             self._form.removeRow(0)
         self._editors.clear()

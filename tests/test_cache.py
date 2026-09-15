@@ -119,6 +119,26 @@ def test_reading_an_entry_keeps_it_alive() -> None:
     assert cache.get("b") is None
 
 
+def test_secondary_material_calibration_and_role_are_part_of_the_hash(profile: Profile) -> None:
+    """Eine geänderte Einlagenkalibrierung darf kein Ergebnis der alten Passung laden."""
+    operation = Operation(id=1, op="material_pair")
+    softer = dataclasses.replace(
+        profile, material=dataclasses.replace(profile.material, id="liner")
+    )
+    changed = dataclasses.replace(
+        softer,
+        material=dataclasses.replace(softer.material, clearance=softer.material.clearance + 0.1),
+    )
+
+    def key(profiles: dict[str, Profile] | None = None) -> str:
+        return operation_hash(operation, {}, [], profile, "fine", material_profiles=profiles)
+
+    assert key() == key({})
+    assert key({"liner": softer}) != key({"liner": changed})
+    assert key({"liner": softer}) != key({"clamp": softer})
+    assert key({"liner": softer, "clamp": profile}) == key({"clamp": profile, "liner": softer})
+
+
 def test_the_hash_covers_everything_a_result_depends_on(profile: Profile) -> None:
     operation = Operation(id=1, op="resize_object", inputs=("obj_1",), outputs=("obj_1",))
     base = operation_hash(operation, {"size": 5.0}, ["h1"], profile, "fine")

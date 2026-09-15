@@ -14576,6 +14576,7 @@ class MainWindow(QMainWindow):
             self._pending_scene = None
 
     def _show_scene(self, result: EvaluationResult) -> None:
+        self._refresh_parameters()
         # Neue Geometrie heißt: jede Karte und jeder Schnitt sind veraltet.
         self._cancel_map_worker()
         self._map_cache.clear()
@@ -14759,7 +14760,7 @@ class MainWindow(QMainWindow):
         # unmöglich.
         if document.ops and self.stack.currentWidget() is self.start_screen:
             self._show_start_screen(False)
-        self.parameters.show_document(document)
+        self._refresh_parameters()
         # **Mit der Halt-Marke**, und die fehlte hier. ``_show_scene`` reicht
         # ``result.stopped_at`` weiter, dieser Weg nicht — und ``save_project``
         # meldet einen Dokumentwechsel **ohne** nachfolgende Auswertung. Ein
@@ -15924,6 +15925,11 @@ class MainWindow(QMainWindow):
             return
         self.session.edit_parameter(name, dialog.parameter())
 
+    def _refresh_parameters(self) -> None:
+        """Verwendungsdaten gelten nur dem fertig ausgewerteten aktuellen Dokument."""
+        result = self.session.last_result if self.session.result_current else None
+        self.parameters.show_document(self.session.project.document, result)
+
     def _on_parameter_edited(self, name: str, value: float) -> None:
         """An einer Zahl zu drehen ist eine Transaktion, dann eine frische
         Auswertung (§13, §15.5).
@@ -15936,7 +15942,7 @@ class MainWindow(QMainWindow):
         if self.session.history.discardable and not confirm_discard(
             self.session.history.discardable, self._discarded_names(), self
         ):
-            self.parameters.show_document(self.session.project.document)
+            self._refresh_parameters()
             return
         self.session.change_parameter(name, value)
 
@@ -15951,7 +15957,7 @@ class MainWindow(QMainWindow):
         if self.session.history.discardable and not confirm_discard(
             self.session.history.discardable, self._discarded_names(), self
         ):
-            self.parameters.show_document(self.session.project.document)
+            self._refresh_parameters()
             return
         existing = self.session.project.document.parameters.get(name)
         if existing is None:

@@ -32,6 +32,65 @@ from tests.conftest import FakeMesh
 RUNS: dict[str, int] = {}
 
 
+def test_secondary_material_profile_recalibrates_a_cached_operation(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch bei unveränderten Profilkennungen liest der echte Auswertungsweg neue Maße."""
+    from app.core.knowledge import profiles
+
+    @op_params
+    class MaterialParams(BaseParams):
+        liner: str = param(title=_("Material"), kind="material", default="liner")
+
+    registry = Registry()
+    secondary = dataclasses.replace(profile.material, id="liner", clearance=0.25)
+    original_material = profiles.material
+    monkeypatch.setattr(
+        profiles, "material", lambda name: secondary if name == "liner" else original_material(name)
+    )
+    runs = []
+
+    @register_op(
+        name="material_probe",
+        title=_("Prüfkörper"),
+        category="primitive",
+        params=MaterialParams,
+        consumes=0,
+        material_params=("liner",),
+        registry=registry,
+    )
+    def make(ctx: OpContext) -> OpResult:
+        runs.append(ctx.params.liner)
+        return OpResult(
+            outputs=[
+                SceneObject(
+                    id="",
+                    name="Probe",
+                    mesh=_mesh(10 + profiles.material(ctx.params.liner).clearance),
+                )
+            ]
+        )
+
+    history = History(document, registry=registry)
+    history.apply("Materialprobe", [OperationDraft(op="material_probe")])
+    cache = ResultCache()
+    first = evaluate(document, profile, registry=registry, cache=cache)
+    repeated = evaluate(document, profile, registry=registry, cache=cache)
+    assert first.complete and repeated.complete
+    assert runs == ["liner"]
+    secondary = dataclasses.replace(secondary, clearance=0.4)
+    changed = evaluate(document, profile, registry=registry, cache=cache)
+    assert changed.complete
+    assert runs == ["liner", "liner"]
+    assert first.object_hashes != changed.object_hashes
+    assert first.scene.objects["obj_1"].mesh.bounds.size[0] == pytest.approx(10.25)
+    assert changed.scene.objects["obj_1"].mesh.bounds.size[0] == pytest.approx(10.4)
+    history.change_params(document.ops[0].id, {"liner": "missing-material"})
+    missing = evaluate(document, profile, registry=registry, cache=cache)
+    assert missing.stopped_at == document.ops[0].id
+    assert runs == ["liner", "liner"]
+
+
 def test_failed_result_matching_keeps_every_input(
     document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:

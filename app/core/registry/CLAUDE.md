@@ -21,6 +21,18 @@ Die Regeln stehen in `.claude/rules/operationen.md`.
 **Eine Quelle, sechs Oberflächen.** Eine Liste, die woanders gepflegt wird,
 driftet ab — deshalb gibt es keine.
 
+`ParamKind="contours"` bleibt im Kern Text mit einer JSON-Liste von
+Profilkennungen. Er gehört zu `TEXT_KINDS`, nicht zu `GATHERED_KINDS`: Agent
+und Projekt dürfen die Auswahl als Daten mitführen, die Oberfläche zeigt
+dafür einen Konturwähler. Koordinaten oder ausführbare Inhalte kommen nicht
+hinzu.
+
+`OperationSpec.material_params` benennt zusätzliche `kind="material"`-Felder,
+deren Profile eine Operation fachlich auswertet. Die Auswertung hasht ihre
+Kalibrierung je Materialrolle mit dem aktuellen Druckprozess. Fehlende Profile
+halten am betroffenen Schritt an; ein leeres Feld verwendet das Projektprofil.
+Eine Materialkennung allein ist keine ausreichende Cacheabhängigkeit.
+
 ## Die Karte
 
 | Datei | Rolle |

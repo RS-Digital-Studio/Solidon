@@ -47,6 +47,19 @@ genau das, solange das Ergebnis vollständig aus den Parametern folgt.
 Das ist dasselbe Muster wie bei `geom/sculpt.py` und `geom/pose.py`. Wer es
 bricht, bricht die Reproduzierbarkeit der Auswertung.
 
+`sketch_parameter_references(strict=True)` reicht unlesbare Skizzen und
+Maßausdrücke weiter, damit die Verwendungsabfrage ein beschädigtes Maß nicht
+als unbenutzt ausweist. Ohne `strict` bleibt der Cachevertrag erhalten:
+Die Operation meldet den Fehler bei ihrer Auswertung.
+
+`resolve_sketch_values(text, parameters)` löst ausschließlich die Maßwerte
+der Bedingungen in einer temporären Kopie auf. Damit kann ein Baustein ohne
+eigenen Szenenkontext dieselbe Zeichnung bauen wie die Platzierungsvorschau.
+Punkte, Ebene und Bedingungsarten bleiben unverändert; die Geometrie löst
+weiterhin `solve_sketch`. Fehlende Projektmaße bleiben Ausdrucksfehler. Der
+gespeicherte Originaltext und seine Cache-/Verwendungsabhängigkeiten bleiben
+erhalten.
+
 ## Grenzen
 
 - **Fünfzehn Bedingungsarten, und „konzentrisch" ist keine davon.** Zwei

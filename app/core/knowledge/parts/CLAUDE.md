@@ -51,6 +51,18 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `user.py` | Eigene Bausteine aus dem Nutzerverzeichnis |
 | `check.py` | Was gesagt werden muss, wenn ein Projekt geöffnet wird (§24.4) |
 
+## Gezeichnete Maße im Baustein
+
+`ops._built_part(..., parameters=...)` ist der gemeinsame Bauweg für
+Operation und Platzierung. Er löst `kind="sketch"`-Maßausdrücke in einer
+temporären Wertkopie auf, bevor der unveränderte `PartFn` oder
+`build_with_profile` sie erhält. Die Op übergibt die aufgelösten
+`ctx.scene.parameters`; `placement_tool` und `placement_tools` nehmen
+denselben optionalen Kontext. Der gespeicherte Skizzentext bleibt erhalten.
+Ohne benötigten Kontext entsteht ein erklärter Ausdrucksfehler, kein
+ersatzweises Nullmaß. Die ursprünglichen Maßreferenzen bleiben für Cache
+und Verwendungsanzeige sichtbar.
+
 ## Der Weg zurück: ein Rezept als Entwurf
 
 `recipe.draft(recipe)` ist der Gegenweg zu `capture`: Der Ausschnitt wird

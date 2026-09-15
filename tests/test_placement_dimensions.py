@@ -510,6 +510,52 @@ def test_the_mouth_outline_marks_the_spot_instead_of_the_whole_cylinder(
         viewport.close()
 
 
+def test_placement_refreshes_when_only_a_nested_project_measure_changes(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gleicher Skizzentext darf nach einer Parameteränderung keinen alten Werkzeugcache lesen."""
+    import time
+
+    from app.core.types import Parameter
+    from app.ui import placement_flow
+
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    calls = []
+
+    def prepare(_spec, _values, _profile, *, parameters, **_kwargs):
+        calls.append(dict(parameters))
+        return PlacementTool(MeshData(trimesh.creation.box((parameters["span"], 5, 4))))
+
+    def request():
+        flow._request_tool()
+        until = time.monotonic() + 5.0
+        while flow._tool_busy and time.monotonic() < until:
+            qt_app.processEvents()
+            time.sleep(0.005)
+        assert not flow._tool_busy
+        assert flow._tool_context is not None
+
+    monkeypatch.setattr(placement_flow.placement, "prepare_tool", prepare)
+    try:
+        session.project.document.parameters = {
+            "base": Parameter("base", 30),
+            "span": Parameter("span", 0, expression="=@base*2"),
+        }
+        request()
+        assert flow._tool_context.mesh.bounds.size == pytest.approx((60, 5, 4))
+        request()
+        assert len(calls) == 1
+        session.project.document.parameters["base"] = Parameter("base", 40)
+        request()
+        assert flow._tool_context.mesh.bounds.size == pytest.approx((80, 5, 4))
+        assert [call["span"] for call in calls] == [60, 80]
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
 def _layout(
     qt_app: QApplication, size: tuple[int, int], scale: float, corner: str, *, with_zones=False
 ):

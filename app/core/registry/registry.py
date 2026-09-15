@@ -579,6 +579,12 @@ class OperationSpec:
     deterministic: bool = True
     cache_version: str = ""
     """Identität der geladenen Umsetzung, insbesondere des verwendeten Bausteinrezepts."""
+    material_params: tuple[str, ...] = ()
+    """Materialfelder, deren zusätzliche Profile Geometrie oder Befunde beeinflussen.
+
+    Die Auswertung nimmt deren Kalibrierung mit dem aktuellen Druckprozess
+    in den Cache-Schlüssel auf. Ein leeres Feld verwendet das Projektprofil.
+    """
     shortcut: str | None = None
     icon: str = ""
     """Name des Symbols, unter dem die Oberfläche es findet (``app/ui/icons.py``).
@@ -662,6 +668,14 @@ class Registry:
             raise InternalError(
                 detail=f"{spec.name!r} needs a parameter set derived from BaseParams",
                 values={"op": spec.name},
+            )
+        material_fields = {entry.name for entry in spec.params.spec() if entry.kind == "material"}
+        if len(set(spec.material_params)) != len(spec.material_params) or any(
+            name not in material_fields for name in spec.material_params
+        ):
+            raise InternalError(
+                detail=f"{spec.name!r} declares duplicate or unknown material profile parameters",
+                values={"op": spec.name, "fields": spec.material_params},
             )
         unknown = [kind for kind in spec.applies_to if kind not in FEATURE_KINDS]
         if unknown:
@@ -785,6 +799,7 @@ def register_op(
     touches_features: bool = False,
     deterministic: bool = True,
     cache_version: str = "",
+    material_params: Iterable[str] = (),
     shortcut: str | None = None,
     icon: str = "",
     doc: TranslatableText | str = "",
@@ -817,6 +832,7 @@ def register_op(
                 touches_features=touches_features,
                 deterministic=deterministic,
                 cache_version=cache_version,
+                material_params=tuple(material_params),
                 shortcut=shortcut,
                 icon=icon,
                 doc=doc,

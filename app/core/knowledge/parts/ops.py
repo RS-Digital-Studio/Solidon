@@ -25,6 +25,7 @@ from collections.abc import Container, Iterable, Mapping
 from typing import Any, Final, cast
 
 from app.core.errors import Action, AppError, ValidationError
+from app.core.expressions import resolve as resolve_parameters
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -478,7 +479,13 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         registry=registry,
     )
     def run(ctx: OpContext) -> OpResult:
-        part_params, produced = _built_part(spec, ctx.params, ctx.profile, ctx.quality)
+        part_params, produced = _built_part(
+            spec,
+            ctx.params,
+            ctx.profile,
+            ctx.quality,
+            parameters=resolve_parameters(ctx.scene.parameters),
+        )
         direction = _free_direction(ctx.params)
         placed = _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
         features = _placed_features(
@@ -754,7 +761,13 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
     profile = for_object(ctx.profile, source) if ctx.profile is not None else None
-    part_params, produced = _built_part(spec, ctx.params, profile, ctx.quality)
+    part_params, produced = _built_part(
+        spec,
+        ctx.params,
+        profile,
+        ctx.quality,
+        parameters=resolve_parameters(ctx.scene.parameters),
+    )
     built = as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
     flat = _lying_flat(spec, ctx.params, direction)
@@ -1001,9 +1014,17 @@ def _built_part(
     params: BaseParams,
     profile: Profile | None,
     quality: Quality,
+    *,
+    parameters: Mapping[str, float] | None = None,
 ) -> tuple[BaseParams, PartResult]:
     """Vorschau und Operation bauen dieselben Maße mit demselben Materialprofil."""
-    part_params = spec.params(**_part_values(spec, params, profile))
+    values = _part_values(spec, params, profile)
+    for field in spec.params.spec():
+        if field.kind == "sketch" and values.get(field.name):
+            from app.core.sketch.serialize import resolve_sketch_values
+
+            values[field.name] = resolve_sketch_values(values[field.name], parameters)
+    part_params = spec.params(**values)
     if spec.build_with_profile is not None:
         produced = spec.build_with_profile(part_params, profile, quality)
     else:
@@ -1011,13 +1032,24 @@ def _built_part(
     return part_params, produced
 
 
-def placement_tool(spec: PartSpec, values: Mapping[str, Any], profile: Profile) -> MeshData:
+def placement_tool(
+    spec: PartSpec,
+    values: Mapping[str, Any],
+    profile: Profile,
+    *,
+    parameters: Mapping[str, float] | None = None,
+) -> MeshData:
     """Der Hauptkörper der Platzierung; Begleitgeometrie liefert placement_tools."""
-    return placement_tools(spec, values, profile)[0]
+    return placement_tools(spec, values, profile, parameters=parameters)[0]
 
 
 def placement_tools(
-    spec: PartSpec, values: Mapping[str, Any], profile: Profile, *, standalone: bool = False
+    spec: PartSpec,
+    values: Mapping[str, Any],
+    profile: Profile,
+    *,
+    standalone: bool = False,
+    parameters: Mapping[str, float] | None = None,
 ) -> tuple[MeshData, MeshData | None]:
     """Der wirkliche Baustein lokal an einer Oberfläche, vor deren Rahmenmatrix.
 
@@ -1038,7 +1070,7 @@ def placement_tools(
     )
     local.update(zip(normal_fields(schema), (0.0, 0.0, 1.0), strict=True))
     params = validate(schema, local)
-    part_params, produced = _built_part(spec, params, profile, "fine")
+    part_params, produced = _built_part(spec, params, profile, "fine", parameters=parameters)
     mesh = as_mesh_data(produced.mesh)
     subtractive = cuts(spec, params)
     sink = 0.0 if standalone or subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
