@@ -1,0 +1,64 @@
+{
+  "motif": "fields",
+  "size": [
+    1200,
+    800
+  ],
+  "seed": 20260915,
+  "models": [
+    {
+      "name": "hexagonal-field",
+      "volume_mm3": 33641.655938621254,
+      "bounds_mm": [
+        120.0,
+        86.0,
+        4.0
+      ],
+      "triangles": 1692,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        0,
+        0,
+        0
+      ],
+      "features": {}
+    }
+  ],
+  "operations": [
+    {
+      "operation": "create_box",
+      "parameters": {
+        "width": 120,
+        "depth": 86,
+        "height": 4
+      },
+      "solver": null,
+      "findings": []
+    },
+    {
+      "operation": "field_cut",
+      "parameters": {
+        "region_sketch": "{\"plane\": \"plane:xy\", \"elements\": [{\"kind\": \"line\", \"points\": [[-56.0, -39.0], [56.0, -39.0]]}, {\"kind\": \"line\", \"points\": [[56.0, -39.0], [56.0, 39.0]]}, {\"kind\": \"line\", \"points\": [[56.0, 39.0], [-56.0, 39.0]]}, {\"kind\": \"line\", \"points\": [[-56.0, 39.0], [-56.0, -39.0]]}], \"constraints\": [{\"kind\": \"coincident\", \"targets\": [1, 2]}, {\"kind\": \"coincident\", \"targets\": [3, 4]}, {\"kind\": \"coincident\", \"targets\": [5, 6]}, {\"kind\": \"coincident\", \"targets\": [7, 0]}, {\"kind\": \"horizontal\", \"targets\": [0, 1]}, {\"kind\": \"vertical\", \"targets\": [2, 3]}, {\"kind\": \"horizontal\", \"targets\": [4, 5]}, {\"kind\": \"vertical\", \"targets\": [6, 7]}, {\"kind\": \"distance\", \"targets\": [0, 1], \"value\": \"112.000000000\"}, {\"kind\": \"distance\", \"targets\": [2, 3], \"value\": \"78.000000000\"}, {\"kind\": \"fixed\", \"targets\": [0]}]}",
+        "exclusion_sketch": "{\"plane\": \"plane:xy\", \"elements\": [{\"kind\": \"circle\", \"points\": [[0.0, 0.0], [14.0, 0.0]]}], \"constraints\": [{\"kind\": \"distance\", \"targets\": [0, 1], \"value\": \"14.000000000\"}, {\"kind\": \"fixed\", \"targets\": [0]}]}",
+        "shape": "hexagon",
+        "diameter": 7,
+        "spacing": 10,
+        "pattern": "staggered",
+        "margin": 2,
+        "web": 1,
+        "through": true
+      },
+      "solver": "direct",
+      "findings": []
+    }
+  ],
+  "camera": {
+    "direction": [
+      0.15,
+      -1.0,
+      1.25
+    ],
+    "parallel": true
+  }
+}

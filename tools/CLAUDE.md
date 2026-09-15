@@ -145,6 +145,11 @@ gebaut über die Operations-API wie von einem Nutzer) ·
 `make_gallery.py` (die Galeriebilder des Beweis-Teils: ein Teil groß, im
 Viewport mit Licht und Schatten, Karten weggeschnitten — **nicht** über die
 flache Projektion, die für Katalogvorschauen reicht und für Qualität nicht) ·
+`make_feature_images.py` (textfreie Funktionsbilder aus registrierten Operationen:
+ein Motiv je nativem Prozess, eigene Konfigurationsverzeichnisse, derselbe
+pygfx-Renderer wie im Viewport. `--output` nennt zuerst einen Prüfungsordner;
+WebP und JSON-Geometriebeleg entstehen gemeinsam. Erst nach Sichtprüfung wird
+das WebP unter `website/bilder/feature-*.webp` übernommen; der Beleg bleibt intern) ·
 `stamp_assets.py` (**läuft als Letztes**, siehe unten)
 
 `site_nav.py` erzeugt die Wege aus einem sprachneutralen Pfadschema und liest

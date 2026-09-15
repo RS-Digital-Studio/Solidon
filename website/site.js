@@ -18,7 +18,7 @@
   "use strict";
   try {
 
-    const list = document.querySelector("nav.toc");
+    const list = document.querySelector("nav.feature-topics, nav.toc");
     if (!list || !("IntersectionObserver" in window)) return;
 
     /* Zu jedem Block sein Listeneintrag. Fehlt das Ziel, fällt der Eintrag

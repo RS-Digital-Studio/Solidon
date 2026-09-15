@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Funktionen: STL bearbeiten, Druckbarkeit prüfen — Solidon3D</title>
-<meta name="description" content="Alle Funktionen von Solidon3D mit Bildern: erkannte Merkmale ändern, KI-Agent, Zeichnen mit Bedingungen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split.">
+<meta name="description" content="Solidon3D im Überblick: STL und STEP bearbeiten, zeichnen, formen, Reliefs und Gitter bauen, Passungen prüfen und drucken. Mit Beispielen und Bildern.">
 <link rel="canonical" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
@@ -18,14 +18,14 @@
 <meta property="og:locale" content="de_DE">
 <meta property="og:url" content="https://solidon3d.de/funktionen.html">
 <meta property="og:title" content="Funktionen: STL bearbeiten, Druckbarkeit prüfen — Solidon3D">
-<meta property="og:description" content="Alle Funktionen von Solidon3D mit Bildern: erkannte Merkmale ändern, KI-Agent, Zeichnen mit Bedingungen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split.">
+<meta property="og:description" content="Solidon3D im Überblick: STL und STEP bearbeiten, zeichnen, formen, Reliefs und Gitter bauen, Passungen prüfen und drucken. Mit Beispielen und Bildern.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/catalog.png">
 <meta property="og:image:alt" content="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, dazu Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger und Wandhalter, jeder mit Vorschau und seinen Maßen">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=62ec25e6">
+<link rel="stylesheet" href="style.css?v=aece7d33">
 </head>
 <body>
 <a class="skip" href="#content">Zum Inhalt springen</a>
@@ -72,7 +72,7 @@
       <div class="hero">
         <div class="hero-text">
           <h1>Was Solidon3D kann</h1>
-          <p class="lead">Jede Funktion mit einem Bild aus der laufenden Anwendung oder einer Zeichnung, die genau zeigt, was sie tut. Wer lieber zuerst den Preis wissen will: <a href="/#preis">Demo und Preis</a>.</p>
+          <p class="lead">Vom ersten Umriss bis zum passenden Druckteil: Hier findest du die Werkzeuge nach ihrem Nutzen, mit Beispielen und Bildern. Entdecke auch die <a href="#entwicklung">weiteren Möglichkeiten für dein Teil</a>. <a href="/#demo">Zur kostenlosen Demo</a>.</p>
         </div>
 
         <div class="shot">
@@ -89,144 +89,20 @@
   <section id="uebersicht" class="tint">
     <div class="wrap">
       <h2>Der Überblick</h2>
-      <nav class="toc" aria-label="Der Überblick">
-        <ol>
-          <li><a href="#ki-agent">KI-Agent</a></li>
-          <li><a href="#skizzen-mit-zwaengen">Zeichnen mit Bedingungen</a></li>
-          <li><a href="#pruefbericht">Prüfbericht</a></li>
-          <li><a href="#merkmale">Merkmale</a></li>
-          <li><a href="#greifen">Anfassen statt eintippen</a></li>
-          <li><a href="#parametrisch">Parametrisch</a></li>
-          <li><a href="#bausteine">Bausteine</a></li>
-          <li><a href="#eigene-bausteine">Eigene Bausteine</a></li>
-          <li><a href="#oberflaechen">Oberflächen</a></li>
-          <li><a href="#schichtanalyse">Schichtanalyse</a></li>
-          <li><a href="#auto-split">Trennen und Auto-Split</a></li>
-          <li><a href="#jede-zahl-eine-formel">Jede Zahl eine Formel</a></li>
-          <li><a href="#erster-start">Erster Start</a></li>
-          <li><a href="#drin">Was sonst noch drinsteckt</a></li>
-        </ol>
+      <nav class="feature-topics" aria-label="Der Überblick">
+        <a href="#merkmale">Modell ändern</a>
+        <a href="#skizzen-mit-zwaengen">Eigenes Teil bauen</a>
+        <a href="#oberflaechen">Oberflächen gestalten</a>
+        <a href="#pruefbericht">Druck vorbereiten</a>
+        <a href="#drin">Alle Werkzeuge</a>
+        <a href="#entwicklung">Weitere Möglichkeiten</a>
       </nav>
     </div>
   </section>
 
   <section id="funktionen">
     <div class="wrap">
-      <div class="showcase" id="ki-agent">
-        <div>
-          <span class="kicker">KI-Agent</span>
-          <h3>Ein Satz im Chat, ein Vorschlag, ein Undo</h3>
-          <p>Der Agent bedient dieselben Operationen wie die Menüs — es gibt
-          keine Abkürzung an der Geometrie vorbei. Jeder Vorschlag zeigt,
-          was er tun wird, bevor er es tut, und wird als Ganzes übernommen:
-          genau eine Transaktion, die ein einziges Undo vollständig
-          zurücknimmt.</p>
-          <p class="note">Die Geometrie rechnet Code, nie das Sprachmodell.
-          <b>Jedes Maß im Vorschlag ist exakt — nichts ist „ungefähr
-          generiert“.</b></p>
-          <p class="note">Und das ist gemessen, nicht versprochen: eine Suite
-          aus <b>39 Referenzanfragen</b> läuft vor und nach jeder Änderung an
-          der Regelsammlung des Agenten.
-          Stand 08.08.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
-          Cloud: 28 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
-          ersten Versuch gültig — und jede mehrdeutige Anfrage endete in
-          einer Rückfrage statt in einer Vermutung.</p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 290" role="img"
-               aria-label="Eine Zeichnung: in ein Chatfeld schreibt sich „Senke die vier Schrauben — M4, bündig.“; der Agent antwortet mit einem Vorschlag aus drei Operationen, im Querschnitt daneben weitet sich die Bohrung auf 4,5 Millimeter und bekommt einen 90-Grad-Senkkegel, darunter steht: übernommen — eine Transaktion, ein Undo nimmt alles zurück.">
-            <text class="ink" x="24" y="30" font-weight="600">Ein Satz — drei Operationen</text>
-
-            <text class="dim" x="24" y="64">Du</text>
-            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
-            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Senke die vier Schrauben — M4, bündig.</text>
-
-            <g class="anim fig-chat-card">
-              <text class="dim" x="24" y="110">Agent</text>
-              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
-              <text class="value" x="90" y="112">Vorschlag — 3 Operationen</text>
-            </g>
-            <g class="anim fig-chat-op-1">
-              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="136" font-size="12">Bohrung anpassen: ø 4,2 → 4,5 mm</text>
-            </g>
-            <g class="anim fig-chat-op-2">
-              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="160" font-size="12">Senkung 90°, ø 8,6 mm — bündig</text>
-            </g>
-            <g class="anim fig-chat-op-3">
-              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="184" font-size="12">Auf alle vier Bohrungen übertragen</text>
-            </g>
-
-            <text class="dim" x="380" y="64">Querschnitt</text>
-            <rect class="body" x="380" y="96" width="150" height="53"/>
-            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
-            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
-            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
-            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
-            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
-
-            <g class="anim fig-chat-done">
-              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
-              <text class="ink" x="48" y="258" font-size="12">Übernommen — eine Transaktion. Ein Undo nimmt alles zurück.</text>
-            </g>
-          </svg>
-          <figcaption>Der Vorschlag ändert nichts, bis er übernommen ist — und dann als Ganzes.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip" id="skizzen-mit-zwaengen">
-        <div>
-          <span class="kicker">Zeichnen mit Bedingungen</span>
-          <h3>Zeichnen, bemaßen — und jedes Maß darf ein Parameter sein</h3>
-          <p>Linie, Kreis, Bogen, Kurve und fertige Umrisse wie Langloch,
-          Lochkreis oder Lochraster. Zehn Bedingungen halten die Zeichnung
-          zusammen — waagerecht, rechtwinklig, tangential, symmetrisch,
-          Abstand —, und unten steht jederzeit, was noch frei ist. Was aus dem
-          Umriss wird, entscheidest du erst danach: extrudieren, als Tasche
-          einschneiden, drehen, entlang eines Bogens führen oder zwischen zwei
-          Umrissen aufspannen.</p>
-          <p class="note">Der Umriss bleibt eine exakte Kurve.
-          <b>Ein gezeichneter Kreis wird ein runder Zylinder, kein Vieleck mit
-          vielen Ecken.</b></p>
-          <p>Das Raster zeigt, wonach gefangen wird, und seine Weite lässt
-          sich eintippen. Das Maß steht am Zeiger, die Leiste darunter nennt
-          die Fläche, auf der gerade gezeichnet wird. Eine Hilfslinie bleibt
-          eine Hilfslinie — auch nach Trimmen, Verlängern, Versetzen und
-          Spiegeln.</p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="bilder/beleg-skizze.png?v=e3d8b01f"><img src="bilder/beleg-skizze.png?v=e3d8b01f" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht selbst, über dem Modell liegt das Raster mit einem bemaßten Rechteck und einem Kreis; unten die schwebende Leiste mit Zeichenwerkzeugen, Rasterweite, der Zeile „Zeichenebene: Fläche an Schild — 2247 mm²“ und den Bedingungsknöpfen; rechts der Reiter „Bedingungen“ mit den dreizehn Bedingungen der Zeichnung"></a>
-          </div>
-          <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="pruefbericht">
-        <div>
-          <span class="kicker">Prüfbericht</span>
-          <h3>Du erfährst vor dem Druck, was schiefgehen wird</h3>
-          <p>Jede geöffnete Datei bekommt einen Bericht: offene Stellen,
-          falsch orientierte Dreiecke, Wände unter zwei Extrusionsbahnen,
-          fehlende Einheiten. Sortiert nach Fehler, Warnung und Hinweis —
-          und jeder Eintrag springt im Modell an die Stelle, die er
-          meint.</p>
-          <p class="note">Jeder Befund trägt einen Handlungsvorschlag.
-          <b>Ein Fehler endet hier nie mit „fehlgeschlagen“.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="handbuch/de/report.png?v=a258f559"><img src="handbuch/de/report.png?v=a258f559" width="620" height="430" loading="lazy" decoding="async"
-                 alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“"></a>
-          </div>
-          <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="merkmale">
+      <div class="showcase" id="merkmale" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Merkmale</span>
           <h3>In einer fremden STL ist die Bohrung wieder eine Bohrung</h3>
@@ -255,13 +131,14 @@
           trägt jede Handlung. Versetzen, verdoppeln und entfernen gelten für
           Bohrung, Zapfen, Senkung sowie Kuppel und Pfanne; drehen für alle
           außer der Kugelfläche — die hat keine Lage, die sich drehen ließe. Für
-          Verrundung und Kehle gibt es diese Operationen noch nicht.
-          <b>Das Fenster sagt es dort mit dem Grund, statt ein graues Feld zu
-          zeigen.</b></p>
+          unterstützte Verrundungen lässt sich der Radius ändern oder die
+          Rundung entfernen. Kehlen und fließende Übergänge bleiben davon
+          ausgenommen. <b>Welche Handlung an der gewählten Stelle möglich ist,
+          zeigt Solidon3D mit ihrer Begründung.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="Eine Zeichnung des Merkmalsfensters: oben steht „Bohrung — Ø 5,19 mm“ und darunter der Satz „das Durchgangsloch für M5“; es folgen Felder für Durchmesser, Tiefe und Ort, dann die Knöpfe Versetzen, Drehen, Verdoppeln und Entfernen. Für Verrundung steht statt eines Knopfes der Satz, dass es die Operation noch nicht gibt.">
+               aria-label="Eine Zeichnung des Merkmalsfensters: oben steht „Bohrung — Ø 5,19 mm“ und darunter der Satz „das Durchgangsloch für M5“; es folgen Felder für Durchmesser, Tiefe und Ort, dann die Knöpfe Versetzen, Drehen, Verdoppeln und Entfernen. An einer geeigneten Verrundung lässt sich der Radius ändern.">
             <text class="ink" x="24" y="30" font-weight="600">Merkmal</text>
 
             <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
@@ -293,7 +170,7 @@
             <text class="ink" x="245" y="241" font-size="11" text-anchor="middle">Entfernen</text>
 
             <text class="dim" x="24" y="278">Verrundung</text>
-            <text class="dim" x="24" y="294">Radius ändern — dafür gibt es noch keine Operation.</text>
+            <text class="dim" x="24" y="294">Radius ändern, wenn die Rundung dafür geeignet ist.</text>
 
             <text class="dim" x="320" y="42">Im Bild</text>
             <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
@@ -368,6 +245,36 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="skizzen-mit-zwaengen" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+        <div>
+          <span class="kicker">Zeichnen mit Bedingungen</span>
+          <h3>Zeichnen, bemaßen — und jedes Maß darf ein Parameter sein</h3>
+          <p>Linie, Kreis, Bogen, Kurve und fertige Umrisse wie Langloch,
+          Lochkreis oder Lochraster. Bedingungen halten die Zeichnung
+          zusammen — waagerecht, rechtwinklig, tangential, symmetrisch,
+          Abstand, Winkel, gleiche Länge und Mittelpunkt —, und unten steht
+          jederzeit, was noch frei ist. Was aus dem
+          Umriss wird, entscheidest du erst danach: extrudieren, als Tasche
+          einschneiden, drehen, entlang eines Bogens führen oder zwischen zwei
+          Umrissen aufspannen.</p>
+          <p class="note">Der Umriss bleibt eine exakte Kurve.
+          <b>Ein gezeichneter Kreis wird ein runder Zylinder, kein Vieleck mit
+          vielen Ecken.</b></p>
+          <p>Das Raster zeigt, wonach gefangen wird, und seine Weite lässt
+          sich eintippen. Das Maß steht am Zeiger, die Leiste darunter nennt
+          die Fläche, auf der gerade gezeichnet wird. Eine Hilfslinie bleibt
+          eine Hilfslinie — auch nach Trimmen, Verlängern, Versetzen und
+          Spiegeln.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="bilder/beleg-skizze.png?v=e3d8b01f"><img src="bilder/beleg-skizze.png?v=e3d8b01f" width="2560" height="1392" loading="lazy" decoding="async"
+                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht selbst, über dem Modell liegt das Raster mit einem bemaßten Rechteck und einem Kreis; unten die schwebende Leiste mit Zeichenwerkzeugen, Rasterweite, der Zeile „Zeichenebene: Fläche an Schild — 2247 mm²“ und den Bedingungsknöpfen; rechts der Reiter „Bedingungen“ mit den dreizehn Bedingungen der Zeichnung"></a>
+          </div>
+          <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="parametrisch">
         <div>
           <span class="kicker">Parametrisch</span>
@@ -414,7 +321,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="bausteine">
+      <div class="showcase" id="bausteine" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Bausteine</span>
           <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
@@ -478,7 +385,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="oberflaechen">
+      <div class="showcase" id="oberflaechen" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Oberflächen</span>
           <h3>Acht Muster, und alle davon druckbar geprüft</h3>
@@ -490,6 +397,12 @@
           Maschine überhaupt entsteht: <b>Stege schmaler als die Düse und
           Prägungen flacher als eine Schicht werden abgewiesen</b>, nicht
           gerechnet.</p>
+          <p>Auch ein Graustufenbild kann zur fühlbaren Oberfläche werden:
+          <b>Relief auflegen</b> übersetzt helle und dunkle Stellen in Höhe.
+          <b>Gitter füllen</b> füllt den Hohlraum eines ausgehöhlten Körpers
+          mit einem räumlichen Gitter – mit wählbarer Struktur, Zellgröße und
+          Stegstärke. Die Gittergeometrie
+          reist im exportierten Modell mit.</p>
         </div>
         <figure class="shot">
           <picture>
@@ -498,6 +411,27 @@
                  alt="Acht Musterkacheln in zwei Reihen: Rippe als parallele Streifen, Welle als wellige Streifen, Rändel gerade und gekreuzt als schräge Streifen beziehungsweise Rauten, Wabe als Sechsecke, Noppen als Punktraster, Voronoi als unregelmäßige Zellen und Rauschen als verstreute Flecken.">
           </picture>
           <figcaption>Dieselben Umrisse, die danach gedruckt werden — die Vorschau ist gerechnet, nicht gemalt.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="pruefbericht">
+        <div>
+          <span class="kicker">Prüfbericht</span>
+          <h3>Du erfährst vor dem Druck, was schiefgehen wird</h3>
+          <p>Jede geöffnete Datei bekommt einen Bericht: offene Stellen,
+          falsch orientierte Dreiecke, Wände unter zwei Extrusionsbahnen,
+          fehlende Einheiten. Sortiert nach Fehler, Warnung und Hinweis —
+          und jeder Eintrag springt im Modell an die Stelle, die er
+          meint.</p>
+          <p class="note">Jeder Befund trägt einen Handlungsvorschlag.
+          <b>Ein Fehler endet hier nie mit „fehlgeschlagen“.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="handbuch/de/report.png?v=a258f559"><img src="handbuch/de/report.png?v=a258f559" width="620" height="430" loading="lazy" decoding="async"
+                 alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“"></a>
+          </div>
+          <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
         </figure>
       </div>
 
@@ -548,7 +482,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="auto-split">
+      <div class="showcase" id="auto-split" data-operations="split_bodies split_line split_pinned">
         <div>
           <span class="kicker">Trennen und Auto-Split</span>
           <h3>Zu groß fürs Bett ist kein Grund mehr, es zu lassen</h3>
@@ -638,13 +572,78 @@
         </figure>
       </div>
 
+      <div class="showcase" id="ki-agent">
+        <div>
+          <span class="kicker">KI-Agent</span>
+          <h3>Ein Satz im Chat, ein Vorschlag, ein Undo</h3>
+          <p>Der Agent bedient dieselben Operationen wie die Menüs — es gibt
+          keine Abkürzung an der Geometrie vorbei. Jeder Vorschlag zeigt,
+          was er tun wird, bevor er es tut, und wird als Ganzes übernommen:
+          genau eine Transaktion, die ein einziges Undo vollständig
+          zurücknimmt.</p>
+          <p class="note">Die Geometrie rechnet Code, nie das Sprachmodell.
+          <b>Jedes Maß im Vorschlag ist exakt — nichts ist „ungefähr
+          generiert“.</b></p>
+          <p class="note">Und das ist gemessen, nicht versprochen: eine Suite
+          aus <b>39 Referenzanfragen</b> läuft vor und nach jeder Änderung an
+          der Regelsammlung des Agenten.
+          Stand 08.08.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
+          Cloud: 28 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
+          ersten Versuch gültig — und jede mehrdeutige Anfrage endete in
+          einer Rückfrage statt in einer Vermutung.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Eine Zeichnung: in ein Chatfeld schreibt sich „Senke die vier Schrauben — M4, bündig.“; der Agent antwortet mit einem Vorschlag aus drei Operationen, im Querschnitt daneben weitet sich die Bohrung auf 4,5 Millimeter und bekommt einen 90-Grad-Senkkegel, darunter steht: übernommen — eine Transaktion, ein Undo nimmt alles zurück.">
+            <text class="ink" x="24" y="30" font-weight="600">Ein Satz — drei Operationen</text>
+
+            <text class="dim" x="24" y="64">Du</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Senke die vier Schrauben — M4, bündig.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agent</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Vorschlag — 3 Operationen</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Bohrung anpassen: ø 4,2 → 4,5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Senkung 90°, ø 8,6 mm — bündig</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Auf alle vier Bohrungen übertragen</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Querschnitt</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Übernommen — eine Transaktion. Ein Undo nimmt alles zurück.</text>
+            </g>
+          </svg>
+          <figcaption>Der Vorschlag ändert nichts, bis er übernommen ist — und dann als Ganzes.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase" id="erster-start">
         <div>
           <span class="kicker">Erster Start</span>
           <h3>Du fängst nicht bei null an</h3>
-          <p>Zehn fertige Beispielprojekte liegen bei — eines je Weg, dazu Skizzieren, Bausteine, zweifarbige Beschriftung, Kalibrierung,
-          Druckvorbereitung und eine Dose mit Deckel, an der alles
-          zusammenkommt. Jedes ist ein echtes Projekt mit Verlauf, nicht ein
+          <p>Elf fertige Beispielprojekte liegen bei — für die vier Wege,
+          Skizzieren, Bausteine, zweifarbige Beschriftung, Kalibrierung,
+          Druckvorbereitung sowie eine Dose mit Deckel und den Materialwechsel
+          einer Passung. Jedes ist ein echtes Projekt mit Verlauf, nicht ein
           Bild in einem Handbuch.</p>
           <p class="note">Und ein Handbuch, das die ersten fünfzehn Minuten
           erklärt — <b>in derselben Sprache wie die Oberfläche.</b></p>
@@ -654,8 +653,8 @@
             <a href="bilder/beleg-start.png?v=6f25a887"><img src="bilder/beleg-start.png?v=6f25a887" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="Der Startbildschirm: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter vier Beispielprojekte — je eins pro Weg — mit Vorschaubild und Beschreibung, darunter der zugeklappte Abschnitt „Was kann das noch?“"></a>
           </div>
-          <figcaption>Der Startbildschirm mit vier der zehn Beispiele — die
-          übrigen sechs liegen hinter „Was kann das noch?“.</figcaption>
+          <figcaption>Vier der elf Beispiele führen die Hauptwege vor; weitere
+          Projekte zeigen einzelne Werkzeuge und ihre Anwendung.</figcaption>
         </figure>
       </div>
     </div>
@@ -663,40 +662,188 @@
 
   <section id="drin">
     <div class="wrap">
-      <h2>Was sonst noch drinsteckt</h2>
-      <ul class="features">
-        <li><b>Exakte Kanten.</b> Flächen und Kanten bleiben einzeln bearbeitbar — für Fasen,
-        Verrundungen und ein STEP, das den Rückweg
-        übersteht.</li>
-        <li><b>Tempo.</b> Dieselben Rechnungen laufen bis zum Sechzigfachen
-        schneller als zu Beginn — und die Fortschrittsanzeige bleibt stehen,
-        bis wirklich fertig gerechnet ist.</li>
-        <li><b>Zwei Farben ohne zweites Programm.</b> Beschriftung erhaben,
-        vertieft oder als Farbwechsel in einer 3MF-Datei.</li>
-        <li><b>Übergabe an deinen Slicer.</b> Direkt, mit den passenden
-        Einstellungen, oder als Datei in seinem Fenster geöffnet — und sein
-        G-Code kommt zur Gegenprobe zurück.</li>
-        <li><b>Kalibrieren statt raten.</b> Toleranzleiter, Wandstärkenleiter
-        und Überhangfächer auf einer Platte; die gemessenen Werte gehen ins
-        Materialprofil.</li>
-        <li><b>Reparaturkette für fremde Dateien.</b> Löcher schließen,
-        Normalen richten, entartete Dreiecke und Splitter entfernen — bevor
-        irgendetwas gerechnet wird.</li>
-        <li><b>Messen, Schneiden, Explosion.</b> Werkzeuge in der Ansicht,
-        ohne die Geometrie anzufassen.</li>
-        <li><b>Die Ansicht fliegt.</b> Links ziehen verschiebt, rechts dreht,
+      <h2>Weitere Werkzeuge für dein Teil</h2>
+      <div class="tool-grid">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+          <summary>Grundkörper zusammensetzen</summary>
+          <div class="tool-content"><p>Quader,
+        Zylinder, Kugel, Kegel und Ring anlegen, vereinigen, voneinander
+        abziehen oder ihre Schnittmenge behalten. Eine Bohrung setzt du direkt
+        auf die gewählte Fläche.
+        Eine Bohrung mit Senkung oder zylindrischer Aufweitung entsteht in einem
+        Schritt; Durchmesser, Tiefe und Übergangswinkel sind einstellbar.</p></div>
+        </details>
+        <details class="tool-card" id="anordnen" data-operations="align_to_feature duplicate_object fit_to_size mirror_object pattern rotate_object scale_object translate_object">
+          <summary>Auf Maß und an die richtige Stelle</summary>
+          <div class="tool-content"><p>Verschieben, drehen, spiegeln, skalieren oder die größte Kante auf ein
+        Zielmaß bringen. Kopien entstehen einzeln, in einer Reihe oder im
+        Kreis; Flächen und Bohrungen lassen sich aufeinander ausrichten.</p></div>
+        </details>
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+          <summary>Kanten und Wände bearbeiten</summary>
+          <div class="tool-content"><p>Verrunden, Fasen, Wülste, ebene Flächen versetzen und Formschrägen
+        anstellen funktionieren an geeigneten STL-Netzen und exakten Körpern.
+        Eine Formschräge neigt die Wand beispielsweise für eine leichter
+        entformbare Form. STEP bleibt für exakte Körper verfügbar.</p></div>
+        </details>
+        <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
+          <summary>Gehäuse und passende Deckel</summary>
+          <div class="tool-content"><p>Körper auf die
+        gewünschte Wandstärke aushöhlen, bei Bedarf mit Entlüftung, oder eine
+        offene Fläche verdicken. Aus einer geeigneten Öffnung entsteht ein
+        passender Deckel. <b>Drehdeckel erzeugen</b> ergänzt einen Gewindehals
+        und den passenden Schraubdeckel – mit Spiel aus dem Materialprofil.</p></div>
+        </details>
+        <details class="tool-card" id="formen" data-operations="blend_union pose_armature sculpt_strokes subdivide_surface">
+          <summary>Organisch formen und Figuren bewegen</summary>
+          <div class="tool-content"><p>Grundkörper weich verschmelzen, Flächen unterteilen und mit Pinseln
+        aufbauen, abtragen oder glätten. Der Formvorgang bleibt änderbar.
+        Mit einem Skelett lässt sich einer Figur eine andere Stellung geben.</p></div>
+        </details>
+        <details class="tool-card" id="filamente" data-operations="assign_slot clear_filament create_label label_text paint_slot set_material slots_from_texture">
+          <summary>Beschriften und mehrfarbig vorbereiten</summary>
+          <div class="tool-content"><p>Text erhaben, vertieft oder als eigenen Körper aufbringen. Filamente
+        ganzen Teilen oder einzelnen Flächen zuweisen, vorhandene Texturfarben
+        in Filamente umrechnen und als farbige 3MF ausgeben. Drucker,
+        Filamentzuweisungen und passende Profile bleiben im Projekt verbunden;
+        deinen Filamentbestand verwaltest du projektübergreifend.</p></div>
+        </details>
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+          <summary>Platte belegen und Druck prüfen</summary>
+          <div class="tool-content"><p>Teile aufs Bett setzen, günstig ausrichten, auf der Platte anordnen
+        und auf Überschneidungen prüfen. Die direkte Slicer-Übergabe nimmt
+        passende Einstellungen mit; eingelesener G-Code liefert anschließend
+        die Gegenprobe mit eigener, erkennbarer Herkunft.</p></div>
+        </details>
+        <details class="tool-card" id="kalibrieren" data-operations="check_join_path compensate_first_layer create_fit_ladder create_overhang_fan create_wall_ladder test_piece">
+          <summary>Passungen mit deinem Drucker abstimmen</summary>
+          <div class="tool-content"><p>Toleranzleiter, Wandstärkenleiter und Überhangfächer drucken und die
+        Messwerte ins Materialprofil übernehmen. Ein kleines Prüfstück spart
+        Material; der Elefantenfuß-Ausgleich nimmt eine zu breite erste Lage
+        am Modell zurück. Der Fügeweg zeigt, ob sich Teile zusammenstecken lassen.</p></div>
+        </details>
+        <details class="tool-card" id="netzpflege" data-operations="decimate_mesh remesh_mesh remesh_uniform repair smooth_mesh">
+          <summary>Fremde Netze aufbereiten</summary>
+          <div class="tool-content"><p>Offene Stellen
+        schließen, Außenseiten angleichen und problematische Dreiecke
+        bereinigen. Dreiecke lassen sich verringern, verfeinern oder
+        gleichmäßiger verteilen; Glätten beruhigt eine unebene Oberfläche.</p></div>
+        </details>
+        <details class="tool-card" id="dateien" data-operations="delete_object load load_outline load_step rename_object">
+          <summary>Modelle und Zeichnungen weiterverwenden</summary>
+          <div class="tool-content"><p>STL, 3MF, OBJ, PLY, OFF, GLB/glTF und STEP öffnen. SVG- und
+        DXF-Umrisse werden zu Körpern. Exportiert werden STL, 3MF, OBJ, PLY,
+        GLB und – bei exakten Körpern – STEP. Projekte speichern mehrere
+        Objekte, ihre Namen, Parameter, Passungen und den änderbaren Verlauf.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Messen, Schneiden, Explosion</summary>
+          <div class="tool-content"><p>Werkzeuge in der Ansicht,
+        ohne die Geometrie anzufassen.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Die Ansicht fliegt</summary>
+          <div class="tool-content"><p>Links ziehen verschiebt, rechts dreht,
         das gedrückte Mausrad kippt — und mit W, A, S, D bewegst du dich durch
         den Raum wie in einem Spiel. Wer eine andere Steuerung gewohnt ist,
         stellt Cura, die Slicer von Bambu und Prusa, das CAD oder Blender
-        ein.</li>
-        <li><b>KI lokal oder mit eigenem Schlüssel.</b> Ollama auf dem
+        ein.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>KI lokal oder mit eigenem Schlüssel</summary>
+          <div class="tool-content"><p>Ollama auf dem
         eigenen Rechner oder ein API-Schlüssel — und ohne beides läuft
-        alles außer dem Chat.</li>
-        <li><b>Fernsteuerbar über MCP — auch aus Claude Code.</b> Ein
+        alles außer dem Chat.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Fernsteuerbar über MCP — auch aus Claude Code</summary>
+          <div class="tool-content"><p>Ein
         zweites Programm ruft dieselben Operationen auf wie die Menüs:
         standardmäßig aus, nur auf dem eigenen Rechner, und jeder
-        Fernaufruf ist eine Transaktion, die ein Undo zurücknimmt.</li>
-      </ul>
+        Fernaufruf ist eine Transaktion, die ein Undo zurücknimmt.</p></div>
+        </details>
+      </div>
+      <p>Die einzelnen Felder, Vorgaben und Grenzen stehen in der
+      <a href="/handbuch.html#ref-scene">vollständigen Operationsreferenz</a>.
+      Sie wird für jede veröffentlichte Version aus demselben Register wie
+      die Anwendung erzeugt.</p>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="tint">
+    <div class="wrap">
+      <h2>Mehr Möglichkeiten für dein Teil</h2>
+      <p class="lead">Bohrungen gemeinsam mit ihrer Senkung ändern, Organizer passend aufteilen und Lochfelder mit Rand gestalten. Die Maße lassen sich später weiter anpassen.</p>
+      <div class="showcase" id="bohrung-senkung">
+        <div>
+          <span class="kicker">Bohrung und Senkung</span>
+          <h3>Das Loch wird größer. Der Einlauf passt mit.</h3>
+          <p>Eine erkannte Bohrung hat oft mehr als einen Durchmesser:
+          oben eine Senkung, darunter eine Stufe oder einen zweiten Abschnitt.
+          Beim Ändern entscheidest du, was zusammengehört.</p>
+          <p><b>Senkung und Stufen mitnehmen</b> passt die zugehörigen
+          Durchmesser gemeinsam an. Einführbreite, Senkwinkel und Stufentiefen
+          bleiben erhalten. <b>Nur Bohrungsdurchmesser</b> lässt die Außenmaße
+          und Lage der Senkung und Stufen stehen.</p>
+          <p class="note">Auch beim Versetzen oder Kopieren werden erkannte,
+          zusammengehörige Abschnitte gemeinsam bearbeitet.
+          <b>Ein Schritt im Verlauf – ein Rückgängig.</b> Unsichere Zuordnungen
+          werden benannt, bevor gerechnet wird.</p>
+        </div>
+        <div>
+          <figure class="shot">
+            <img class="feature-model" src="bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="Links die ursprüngliche Senkbohrung, rechts gemeinsam vergrößerte Bohrung und Senkung. Die Außenmaße des Teils bleiben gleich.">
+            <figcaption>Links die ursprüngliche Senkbohrung, rechts gemeinsam vergrößerte Bohrung und Senkung. Die Außenmaße des Teils bleiben gleich.</figcaption>
+          </figure>
+          <details class="feature-diagram"><summary>Querschnitt ansehen</summary>
+            <figure class="shot"><svg class="figure" viewBox="0 0 560 260" role="img"
+               aria-label="Schematischer Querschnitt: Links eine Bohrung mit Senkung, rechts eine breitere Bohrung. Die Senkung wächst mit, ihr Winkel und ihre Einführbreite bleiben gleich.">
+            <text class="ink" x="30" y="32" font-size="17">Vorher</text>
+            <text class="ink" x="320" y="32" font-size="17">Gemeinsam geändert</text>
+            <path class="body" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M245 135H285M274 124L285 135L274 146"/>
+            <text class="dim" x="30" y="242" font-size="14">Bohrung mit Senkung</text>
+            <text class="dim" x="320" y="242" font-size="14">Einlauf bleibt passend</text>
+          </svg><figcaption>Schematische Darstellung: Der gewählte Änderungsmodus
+          bestimmt, welche Maße mitgehen.</figcaption></figure>
+          </details>
+        </div>
+      </div>
+      <div class="feature-card-grid">
+        <article class="feature-card" id="organizer" data-operations="create_organizer create_organizer_divider create_organizer_foot create_organizer_rim create_organizer_tray insert_organizer_divider insert_organizer_foot insert_organizer_rim insert_organizer_tray">
+          <img src="bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organizer mit sechs Fächern und unterschiedlich hohen Trennwänden.">
+          <div class="feature-card-copy"><h3>Organizer passend zum Inhalt</h3><p>Fächer in
+        der Vorschau teilen, Außenmaße oder freie Fachmaße vorgeben und
+        Trennwandhöhen einzeln ändern. Projektparameter halten zusammengehörige
+        Maße gleich. Wanne, Rand, Trennwand und Steckfuß gibt es auch als Bausteine.</p></div>
+        </article>
+        <article class="feature-card" id="lochfelder" data-operations="field_cut">
+          <img src="bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Platte mit durchgehenden Sechsecköffnungen, geschlossenem Rand und ausgesparter runder Mitte.">
+          <div class="feature-card-copy"><h3>Lochfelder mit Rand</h3><p>Runde Löcher, Langlöcher oder Waben in einem gezeichneten Bereich
+        verteilen. Randbreite, Abstand und ausgesparte Zonen bestimmen das
+        Feld; seine Maße bleiben später änderbar.</p></div>
+        </article>
+        <article class="feature-card" id="textur-bearbeiten">
+          <img src="bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Drei Modellplatten mit Rändel, Wabenmuster und parallelen Rippen als echter Geometrie.">
+          <div class="feature-card-copy"><h3>Ein Muster später weiterbearbeiten</h3><p>Eine aufgebrachte Textur im Merkmalsfenster auswählen und ihre Werte
+        ändern. Mit <b>Gesamte Fläche</b> füllt das Muster die gewählte ebene
+        Fläche bis zum Rand und lässt Bohrungen frei. Die Änderung siehst du
+        am Ergebniskörper.</p></div>
+        </article>
+      </div>
+      <div class="feature-card-grid feature-notes">
+        <article class="feature-card" id="konturauswahl">
+          <div class="feature-card-copy"><h3>Aus der Zeichnung nur das Gewünschte bauen</h3><p>SVG oder DXF öffnen, die geschlossenen Konturen in der Vorschau wählen
+        und daraus Körper erzeugen. Innenkonturen bleiben Aussparungen;
+        einzelne Formen lassen sich vor der Übernahme prüfen.</p></div>
+        </article>
+        <article class="feature-card" id="lokale-erkennung" data-operations="detect_region">
+          <div class="feature-card-copy"><h3>Große Modelle gezielt untersuchen</h3><p>Eine Stelle am Originalmodell wählen und dort nach vollständigen
+        Merkmalen suchen. Die Erkennung arbeitet in einem begrenzten Bereich;
+        das Modell muss dafür nicht vereinfacht werden.</p></div>
+        </article>
+      </div>
     </div>
   </section>
 
@@ -731,7 +878,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

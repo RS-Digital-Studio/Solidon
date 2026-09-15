@@ -1,0 +1,143 @@
+{
+  "motif": "textures",
+  "size": [
+    1200,
+    800
+  ],
+  "seed": 20260915,
+  "models": [
+    {
+      "name": "knurl_diamond",
+      "volume_mm3": 11034.12867965644,
+      "bounds_mm": [
+        42.0,
+        48.0,
+        6.2
+      ],
+      "triangles": 2248,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        -51,
+        0,
+        0
+      ],
+      "features": {}
+    },
+    {
+      "name": "hexagon",
+      "volume_mm3": 11114.191480662083,
+      "bounds_mm": [
+        42.0,
+        48.0,
+        6.2
+      ],
+      "triangles": 1982,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        0,
+        0,
+        0
+      ],
+      "features": {}
+    },
+    {
+      "name": "rib",
+      "volume_mm3": 10994.734790200137,
+      "bounds_mm": [
+        42.0,
+        48.0,
+        6.2
+      ],
+      "triangles": 140,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        51,
+        0,
+        0
+      ],
+      "features": {}
+    }
+  ],
+  "operations": [
+    {
+      "operation": "create_box",
+      "parameters": {
+        "width": 42,
+        "depth": 48,
+        "height": 5
+      },
+      "solver": null,
+      "findings": []
+    },
+    {
+      "operation": "apply_texture",
+      "parameters": {
+        "pattern": "knurl_diamond",
+        "width": 37,
+        "height": 43,
+        "pitch": 5,
+        "depth": 1.2,
+        "z": 5.0
+      },
+      "solver": "direct",
+      "findings": []
+    },
+    {
+      "operation": "create_box",
+      "parameters": {
+        "width": 42,
+        "depth": 48,
+        "height": 5
+      },
+      "solver": null,
+      "findings": []
+    },
+    {
+      "operation": "apply_texture",
+      "parameters": {
+        "pattern": "hexagon",
+        "width": 37,
+        "height": 43,
+        "pitch": 5,
+        "depth": 1.2,
+        "z": 5.0
+      },
+      "solver": "direct",
+      "findings": []
+    },
+    {
+      "operation": "create_box",
+      "parameters": {
+        "width": 42,
+        "depth": 48,
+        "height": 5
+      },
+      "solver": null,
+      "findings": []
+    },
+    {
+      "operation": "apply_texture",
+      "parameters": {
+        "pattern": "rib",
+        "width": 37,
+        "height": 43,
+        "pitch": 5,
+        "depth": 1.2,
+        "z": 5.0
+      },
+      "solver": "direct",
+      "findings": []
+    }
+  ],
+  "camera": {
+    "direction": [
+      0.15,
+      -1.0,
+      1.25
+    ],
+    "parallel": true
+  }
+}

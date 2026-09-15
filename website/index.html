@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=62ec25e6">
+<link rel="stylesheet" href="style.css?v=aece7d33">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -96,7 +96,7 @@
       "name": "Kann ich eine Bohrung in einer fertigen STL verschieben?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja. Bohrungen, Zapfen, Senkungen, Kuppeln und Pfannen werden beim Öffnen als benannte Merkmale erkannt; im Merkmalsfenster stehen ihre gemessenen Werte, und eine geänderte Zahl ist die Operation. Versetzen, verdoppeln und entfernen gelten für jede dieser Arten, drehen für alle außer der Kugelfläche. Für Verrundungen und Kehlen gibt es diese Operationen noch nicht — das Fenster sagt es dort mit dem Grund."
+        "text": "Ja. Bohrungen, Zapfen, Senkungen, Kuppeln und Pfannen werden beim Öffnen als benannte Merkmale erkannt; im Merkmalsfenster stehen ihre gemessenen Werte, und eine geänderte Zahl ist die Operation. Versetzen, verdoppeln und entfernen gelten für jede dieser Arten, drehen für alle außer der Kugelfläche. An unterstützten Verrundungen lässt sich der Radius ändern oder die Rundung entfernen. Welche Handlung möglich ist, zeigt Solidon3D an der gewählten Stelle; Kehlen und fließende Übergänge bleiben davon ausgenommen."
       }
     },
     {
@@ -362,7 +362,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>110</b><span>Operationen im Register</span></div>
+        <div><b>110</b><span>Operationen in der Downloadversion</span></div>
         <div><b>27</b><span>geprüfte Bausteine</span></div>
         <div><b>51</b><span>Normteilmaße hinterlegt</span></div>
         <div><b>16</b><span>Druckerprofile ab Werk</span></div>
@@ -630,8 +630,7 @@
         aus <b>39 Referenzanfragen</b> läuft vor und nach jeder Änderung an der
         Regelsammlung des Agenten.</li>
         <li><b>Die angeklickte Fläche zählt.</b> Bohrung, Baustein oder
-        Skizze entstehen dort, wo gezeigt wurde — vorher kostete jede
-        Operation an einer Fläche zwei Klicks. Im Menü einer Fläche stehen
+        Skizze entstehen dort, wo gezeigt wurde. Bohrung und Senkung legst du in einem Schritt an. Im Menü einer Fläche stehen
         jetzt auch Wandhalter, Rippe, Nutfeder, Rastnase, Schnappverbindung
         und Filmscharnier.</li>
         <li><b>Das erkannte Merkmal lässt sich anfassen.</b> Bohrung anklicken,
@@ -654,11 +653,45 @@
         <li><b>Schichtanalyse ohne Slicer.</b> Überhänge, Inseln, Brückenweiten
         und Stützvolumen; die Orientierungssuche schlägt die Lage vor, die am
         wenigsten davon erzeugt.</li>
-        <li><b>Zeichnen mit Bedingungen.</b> Zehn davon halten die Zeichnung
-        zusammen, und der Umriss bleibt eine exakte Kurve — ein
+        <li><b>Zeichnen mit Bedingungen.</b> Abstände, Winkel, gleiche Längen
+        und Mittelpunkte halten die Zeichnung zusammen. Der Umriss bleibt
+        eine exakte Kurve — ein
         Kreis wird ein Zylinder, kein Vieleck.</li>
+        <li><b>Mehr aus deinem Modell machen.</b> Reliefs aus Bildern,
+        räumliche Gitter, Formschrägen, passende Deckel und mehrfarbige
+        Beschriftung gehören ebenfalls dazu.
+        <a href="/funktionen.html#drin">Weitere Werkzeuge ansehen</a>.</li>
       </ul>
       <a class="btn ghost" href="/funktionen.html">Alle Funktionen ansehen</a>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="feature-preview tint">
+    <div class="wrap">
+      <h2>Mehr Möglichkeiten für dein Teil</h2>
+      <p class="lead">Bohrungen gemeinsam mit ihrer Senkung ändern, Organizer passend aufteilen und Lochfelder mit Rand gestalten. Die Maße lassen sich später weiter anpassen.</p>
+      <div class="feature-card-grid">
+        <article class="feature-card">
+          <img src="bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="Links die ursprüngliche Senkbohrung, rechts gemeinsam vergrößerte Bohrung und Senkung. Die Außenmaße des Teils bleiben gleich.">
+          <div class="feature-card-copy"><h3><a href="/funktionen.html#bohrung-senkung">Das Loch wird größer. Der Einlauf passt mit.</a></h3><p>Eine erkannte Bohrung hat oft mehr als einen Durchmesser:
+          oben eine Senkung, darunter eine Stufe oder einen zweiten Abschnitt.
+          Beim Ändern entscheidest du, was zusammengehört.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organizer mit sechs Fächern und unterschiedlich hohen Trennwänden.">
+          <div class="feature-card-copy"><h3><a href="/funktionen.html#organizer">Organizer passend zum Inhalt</a></h3><p>Fächer in
+        der Vorschau teilen, Außenmaße oder freie Fachmaße vorgeben und
+        Trennwandhöhen einzeln ändern. Projektparameter halten zusammengehörige
+        Maße gleich. Wanne, Rand, Trennwand und Steckfuß gibt es auch als Bausteine.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Platte mit durchgehenden Sechsecköffnungen, geschlossenem Rand und ausgesparter runder Mitte.">
+          <div class="feature-card-copy"><h3><a href="/funktionen.html#lochfelder">Lochfelder mit Rand</a></h3><p>Runde Löcher, Langlöcher oder Waben in einem gezeichneten Bereich
+        verteilen. Randbreite, Abstand und ausgesparte Zonen bestimmen das
+        Feld; seine Maße bleiben später änderbar.</p></div>
+        </article>
+      </div>
+      <a class="btn ghost" href="/funktionen.html#entwicklung">Alle Beispiele im Detail</a>
     </div>
   </section>
 
@@ -862,8 +895,10 @@
           Öffnen als benannte Merkmale erkannt; im Merkmalsfenster stehen ihre
           gemessenen Werte, und eine geänderte Zahl ist die Operation.
           Versetzen, verdoppeln und entfernen gelten für jede dieser Arten,
-          drehen für alle außer der Kugelfläche. Für Verrundungen und Kehlen gibt es diese
-          Operationen noch nicht — das Fenster sagt es dort mit dem Grund.</p>
+          drehen für alle außer der Kugelfläche. An unterstützten Verrundungen
+          lässt sich der Radius ändern oder die Rundung entfernen. Welche
+          Handlung möglich ist, zeigt Solidon3D an der gewählten Stelle;
+          Kehlen und fließende Übergänge bleiben davon ausgenommen.</p>
         </details>
         <details>
           <summary>Muss ich eine KI benutzen?</summary>
@@ -981,7 +1016,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

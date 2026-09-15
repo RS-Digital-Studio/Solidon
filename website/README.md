@@ -44,7 +44,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 |---|---|
 | `index.html` | Startseite deutsch |
 | `en/index.html` | Startseite englisch |
-| `funktionen.html`, `en/features.html` | Funktionsseite — die zwölf Blöcke mit Bildern, dazu die Sprungliste |
+| `funktionen.html`, `<sprache>/features.html` | Funktionsseite — sechs Einstiege nach Kundenaufgabe, bebilderte Beispiele und aufklappbare Werkzeuggruppen |
 | `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
 | `changelog.html`, `<sprache>/changelog.html` | Versionsverlauf mit Auswahl — erzeugt von `tools/make_changelog.py` aus derselben Quelle wie das App-Fenster |
 | `site.js` | Markiert Sprungliste und Changelog-Auswahl und zählt im Download-Kasten die Zeit bis zur Demo |

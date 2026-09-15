@@ -1,0 +1,486 @@
+{
+  "motif": "organizer",
+  "size": [
+    1200,
+    800
+  ],
+  "seed": 20260915,
+  "models": [
+    {
+      "name": "organizer",
+      "volume_mm3": 148081.0795054614,
+      "bounds_mm": [
+        160.0,
+        110.0,
+        48.0
+      ],
+      "triangles": 294,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        0,
+        0,
+        0
+      ],
+      "features": {
+        "organizer_base": {
+          "kind": "face",
+          "params": {
+            "area": 17543.7725,
+            "centre": [
+              0,
+              0,
+              0
+            ],
+            "normal": [
+              0,
+              0,
+              -1
+            ]
+          }
+        },
+        "rows/1/columns/1/cell/floor": {
+          "kind": "face",
+          "params": {
+            "area": 2491.3333,
+            "centre": [
+              -52.33333333333333,
+              -26.75,
+              3.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "organizer_role": "floor",
+            "organizer_id": "rows/1/columns/1/cell",
+            "width": 49.333333333333336,
+            "depth": 50.5,
+            "radius": 0.0,
+            "opening_depth": 45.0
+          }
+        },
+        "rows/1/columns/2/cell/floor": {
+          "kind": "face",
+          "params": {
+            "area": 2491.3333,
+            "centre": [
+              3.552713678800501e-15,
+              -26.75,
+              3.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "organizer_role": "floor",
+            "organizer_id": "rows/1/columns/2/cell",
+            "width": 49.333333333333336,
+            "depth": 50.5,
+            "radius": 0.0,
+            "opening_depth": 45.0
+          }
+        },
+        "rows/1/columns/3/cell/floor": {
+          "kind": "face",
+          "params": {
+            "area": 2491.3333,
+            "centre": [
+              52.33333333333334,
+              -26.75,
+              3.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "organizer_role": "floor",
+            "organizer_id": "rows/1/columns/3/cell",
+            "width": 49.333333333333336,
+            "depth": 50.5,
+            "radius": 0.0,
+            "opening_depth": 45.0
+          }
+        },
+        "rows/2/columns/1/cell/floor": {
+          "kind": "face",
+          "params": {
+            "area": 2491.3333,
+            "centre": [
+              -52.33333333333333,
+              26.75,
+              3.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "organizer_role": "floor",
+            "organizer_id": "rows/2/columns/1/cell",
+            "width": 49.333333333333336,
+            "depth": 50.5,
+            "radius": 0.0,
+            "opening_depth": 45.0
+          }
+        },
+        "rows/2/columns/2/cell/floor": {
+          "kind": "face",
+          "params": {
+            "area": 2491.3333,
+            "centre": [
+              3.552713678800501e-15,
+              26.75,
+              3.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "organizer_role": "floor",
+            "organizer_id": "rows/2/columns/2/cell",
+            "width": 49.333333333333336,
+            "depth": 50.5,
+            "radius": 0.0,
+            "opening_depth": 45.0
+          }
+        },
+        "rows/2/columns/3/cell/floor": {
+          "kind": "face",
+          "params": {
+            "area": 2491.3333,
+            "centre": [
+              52.33333333333334,
+              26.75,
+              3.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "organizer_role": "floor",
+            "organizer_id": "rows/2/columns/3/cell",
+            "width": 49.333333333333336,
+            "depth": 50.5,
+            "radius": 0.0,
+            "opening_depth": 45.0
+          }
+        },
+        "rows/1/columns/wall_1/top": {
+          "kind": "face",
+          "params": {
+            "area": 151.5,
+            "centre": [
+              -26.166666666666664,
+              -26.75000000000003,
+              22.0
+            ],
+            "normal": [
+              0,
+              0,
+              1
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/1/columns/wall_1",
+            "height_above_floor": 19.0
+          }
+        },
+        "rows/1/columns/wall_1/side_a": {
+          "kind": "face",
+          "params": {
+            "area": 959.5,
+            "centre": [
+              -27.666666666666664,
+              -26.750000000000014,
+              12.5
+            ],
+            "normal": [
+              -1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/1/columns/wall_1",
+            "height_above_floor": 19.0
+          }
+        },
+        "rows/1/columns/wall_1/side_b": {
+          "kind": "face",
+          "params": {
+            "area": 959.5,
+            "centre": [
+              -24.666666666666664,
+              -26.75,
+              12.5
+            ],
+            "normal": [
+              1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/1/columns/wall_1",
+            "height_above_floor": 19.0
+          }
+        },
+        "rows/1/columns/wall_2/top": {
+          "kind": "face",
+          "params": {
+            "area": 151.5,
+            "centre": [
+              26.16666666666667,
+              -26.75,
+              34.0
+            ],
+            "normal": [
+              0,
+              0,
+              1
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/1/columns/wall_2",
+            "height_above_floor": 31.0
+          }
+        },
+        "rows/1/columns/wall_2/side_a": {
+          "kind": "face",
+          "params": {
+            "area": 1565.5,
+            "centre": [
+              24.66666666666667,
+              -26.75,
+              15.5
+            ],
+            "normal": [
+              -1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/1/columns/wall_2",
+            "height_above_floor": 31.0
+          }
+        },
+        "rows/1/columns/wall_2/side_b": {
+          "kind": "face",
+          "params": {
+            "area": 1565.5,
+            "centre": [
+              27.66666666666667,
+              -26.75,
+              15.5
+            ],
+            "normal": [
+              1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/1/columns/wall_2",
+            "height_above_floor": 31.0
+          }
+        },
+        "rows/wall_1/top": {
+          "kind": "face",
+          "params": {
+            "area": 462.0,
+            "centre": [
+              0.0,
+              0.0,
+              28.0
+            ],
+            "normal": [
+              0,
+              0,
+              1
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/wall_1",
+            "height_above_floor": 25.0
+          }
+        },
+        "rows/wall_1/side_a": {
+          "kind": "face",
+          "params": {
+            "area": 3718.0,
+            "centre": [
+              -52.33333333333333,
+              -1.5,
+              12.5
+            ],
+            "normal": [
+              0,
+              -1,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/wall_1",
+            "height_above_floor": 25.0
+          }
+        },
+        "rows/wall_1/side_b": {
+          "kind": "face",
+          "params": {
+            "area": 3718.0,
+            "centre": [
+              -52.33333333333333,
+              1.5,
+              12.5
+            ],
+            "normal": [
+              0,
+              1,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/wall_1",
+            "height_above_floor": 25.0
+          }
+        },
+        "rows/2/columns/wall_1/top": {
+          "kind": "face",
+          "params": {
+            "area": 151.5,
+            "centre": [
+              -26.166666666666664,
+              26.74999999999997,
+              22.0
+            ],
+            "normal": [
+              0,
+              0,
+              1
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/2/columns/wall_1",
+            "height_above_floor": 19.0
+          }
+        },
+        "rows/2/columns/wall_1/side_a": {
+          "kind": "face",
+          "params": {
+            "area": 959.5,
+            "centre": [
+              -27.666666666666664,
+              26.749999999999986,
+              12.5
+            ],
+            "normal": [
+              -1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/2/columns/wall_1",
+            "height_above_floor": 19.0
+          }
+        },
+        "rows/2/columns/wall_1/side_b": {
+          "kind": "face",
+          "params": {
+            "area": 959.5,
+            "centre": [
+              -24.666666666666664,
+              26.75,
+              12.5
+            ],
+            "normal": [
+              1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/2/columns/wall_1",
+            "height_above_floor": 19.0
+          }
+        },
+        "rows/2/columns/wall_2/top": {
+          "kind": "face",
+          "params": {
+            "area": 151.5,
+            "centre": [
+              26.16666666666667,
+              26.75,
+              34.0
+            ],
+            "normal": [
+              0,
+              0,
+              1
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/2/columns/wall_2",
+            "height_above_floor": 31.0
+          }
+        },
+        "rows/2/columns/wall_2/side_a": {
+          "kind": "face",
+          "params": {
+            "area": 1565.5,
+            "centre": [
+              24.66666666666667,
+              26.75,
+              15.5
+            ],
+            "normal": [
+              -1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/2/columns/wall_2",
+            "height_above_floor": 31.0
+          }
+        },
+        "rows/2/columns/wall_2/side_b": {
+          "kind": "face",
+          "params": {
+            "area": 1565.5,
+            "centre": [
+              27.66666666666667,
+              26.75,
+              15.5
+            ],
+            "normal": [
+              1,
+              0,
+              0
+            ],
+            "organizer_role": "divider",
+            "organizer_id": "rows/2/columns/wall_2",
+            "height_above_floor": 31.0
+          }
+        }
+      }
+    }
+  ],
+  "operations": [
+    {
+      "operation": "create_organizer",
+      "parameters": {
+        "width": 160,
+        "depth": 110,
+        "height": 48,
+        "wall": 3,
+        "floor": 3,
+        "radius": 8,
+        "layout": "{\"basis\":\"outer\",\"layout\":{\"axis\":\"y\",\"child\":{\"axis\":\"x\",\"child\":{\"depth\":40,\"id\":\"cell\",\"kind\":\"cell\",\"radius\":0,\"width\":50},\"count\":3,\"heights\":{\"1\":22.0,\"2\":34.0},\"id\":\"columns\",\"kind\":\"repeat\",\"opening_radius\":0.0,\"wall\":3},\"count\":2,\"heights\":{\"1\":28.0},\"id\":\"rows\",\"kind\":\"repeat\",\"opening_radius\":0.0,\"wall\":3},\"version\":1}"
+      },
+      "solver": "direct",
+      "findings": []
+    }
+  ],
+  "camera": {
+    "direction": [
+      0.7,
+      -1.0,
+      1.05
+    ],
+    "parallel": true
+  }
+}

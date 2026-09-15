@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -93,7 +93,7 @@
       "name": "Posso spostare un foro in un STL già finito?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono riconosciuti come caratteristiche con un nome; la finestra delle caratteristiche mostra i loro valori misurati, e cambiare un numero è l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di questi tipi; ruotare, per tutti tranne la superficie sferica. Per raccordi e gole queste operazioni non esistono ancora, e la finestra lo dice sul posto, con il motivo."
+        "text": "Sì. All'apertura, fori, perni, svasature, cupole e sedi vengono riconosciuti come caratteristiche con un nome; la finestra delle caratteristiche mostra i loro valori misurati, e cambiare un numero è l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi supportati puoi cambiare il raggio o rimuovere il raccordo. Solidon3D mostra quali azioni sono disponibili nel punto selezionato; gole e transizioni fluide restano escluse."
       }
     },
     {
@@ -356,7 +356,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>110</b><span>operazioni nel registro</span></div>
+        <div><b>110</b><span>operazioni nella versione scaricabile</span></div>
         <div><b>27</b><span>blocchi verificati</span></div>
         <div><b>51</b><span>misure normalizzate in tabella</span></div>
         <div><b>16</b><span>profili di stampante di serie</span></div>
@@ -603,8 +603,7 @@
         misurato: una suite di <b>39 richieste di riferimento</b> gira prima
         e dopo ogni modifica alla regolamentazione dell'agente.</li>
         <li><b>La faccia cliccata conta.</b> Un foro, un blocco o uno
-        schizzo si posano dove hai indicato — prima ogni operazione su una
-        faccia costava due clic. Il menu contestuale di una faccia offre ora
+        schizzo si posano dove hai indicato. Crea un foro con la sua svasatura in un solo passo. Il menu contestuale di una faccia offre ora
         anche supporto a parete, nervatura, linguetta e scanalatura, dente di
         scatto, aggancio a scatto e cerniera a film.</li>
         <li><b>La caratteristica riconosciuta si lascia afferrare.</b> Clicca un
@@ -629,11 +628,44 @@
         <li><b>Analisi degli strati senza slicer.</b> Sbalzi, isole, campate
         dei ponti e volume dei supporti; la ricerca dell'orientamento propone
         la posizione che ne genera di meno.</li>
-        <li><b>Schizzi con vincoli.</b> Dieci vincoli tengono insieme il
-        disegno, e il contorno resta una curva esatta — un
-        cerchio diventa un cilindro, non un poligono.</li>
+        <li><b>Schizzi con vincoli.</b> Distanze, angoli, lunghezze uguali e punti medi tengono
+        insieme il disegno. Il contorno resta una curva esatta — un cerchio diventa
+        un cilindro, non un poligono.</li>
+        <li><b>Ottenere di più dal tuo modello.</b> Sono inclusi anche rilievi da immagini,
+        reticoli spaziali, angoli di sformo, coperchi su misura e scritte
+        multicolore. <a href="/it/features.html#inside">Scopri altri strumenti</a>.</li>
       </ul>
       <a class="btn ghost" href="/it/features.html">Guarda tutte le funzioni</a>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="feature-preview tint">
+    <div class="wrap">
+      <h2>Più possibilità per il tuo pezzo</h2>
+      <p class="lead">Modifica i fori insieme alle svasature, suddividi gli organizer su misura e crea campi di fori con un bordo. Puoi regolare nuovamente le dimensioni in seguito.</p>
+      <div class="feature-card-grid">
+        <article class="feature-card">
+          <img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="A sinistra il foro svasato originale; a destra il foro e la svasatura ingranditi insieme. Le dimensioni esterne del pezzo restano invariate.">
+          <div class="feature-card-copy"><h3><a href="/it/features.html#bohrung-senkung">Il foro cresce. L’imbocco si adatta.</a></h3><p>Un foro riconosciuto ha spesso più di un diametro: una svasatura in alto, poi un
+          gradino o un secondo tratto sotto. Durante la modifica decidi quali tratti
+          vanno insieme.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organizer con sei scomparti e divisori di altezze diverse.">
+          <div class="feature-card-copy"><h3><a href="/it/features.html#organizer">Un organizer adatto al contenuto</a></h3><p>Dividi gli scomparti nell’anteprima, imposta
+        le misure esterne o le misure libere dei vani e modifica singolarmente
+        l’altezza dei divisori. I parametri del progetto mantengono uguali le misure
+        collegate. Vaschetta, bordo, divisorio e piedino a innesto sono disponibili
+        anche come blocchi.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Piastra con aperture esagonali passanti, bordo pieno e zona circolare centrale non forata.">
+          <div class="feature-card-copy"><h3><a href="/it/features.html#lochfelder">Campi di fori con bordo</a></h3><p>Distribuisci fori rotondi, asole o celle a nido d’ape
+        in un’area disegnata. La larghezza del bordo, la spaziatura e le zone escluse
+        definiscono il campo; le sue misure restano modificabili in seguito.</p></div>
+        </article>
+      </div>
+      <a class="btn ghost" href="/it/features.html#entwicklung">Scopri gli esempi in dettaglio</a>
     </div>
   </section>
 
@@ -838,9 +870,7 @@
           riconosciuti come caratteristiche con un nome; la finestra delle
           caratteristiche mostra i loro valori misurati, e cambiare un numero è
           l'operazione. Spostare, duplicare e rimuovere valgono per ognuno di
-          questi tipi; ruotare, per tutti tranne la superficie sferica. Per raccordi e gole queste
-          operazioni non esistono ancora, e la finestra lo dice sul posto, con il
-          motivo.</p>
+          questi tipi; ruotare, per tutti tranne la superficie sferica. Nei raccordi supportati puoi cambiare il raggio o rimuovere il raccordo. Solidon3D mostra quali azioni sono disponibili nel punto selezionato; gole e transizioni fluide restano escluse.</p>
         </details>
         <details>
           <summary>Devo usare un'IA?</summary>
@@ -959,7 +989,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

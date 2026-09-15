@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Funções: editar STL e verificar a imprimibilidade — Solidon3D</title>
-<meta name="description" content="Todas as funções do Solidon3D com imagens: alterar características reconhecidas, agente de IA, esboços com restrições, relatório de verificação, análise de camadas, blocos.">
+<meta name="description" content="Solidon3D em resumo: editar STL e STEP, desenhar, esculpir, criar relevos e treliças, verificar ajustes e preparar impressões. Com exemplos e imagens.">
 <link rel="canonical" href="https://solidon3d.de/pt/features.html">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
@@ -20,14 +20,14 @@
 <meta property="og:locale:alternate" content="en_GB">
 <meta property="og:url" content="https://solidon3d.de/pt/features.html">
 <meta property="og:title" content="Funções: editar STL e verificar a imprimibilidade — Solidon3D">
-<meta property="og:description" content="Todas as funções do Solidon3D com imagens: alterar características reconhecidas, agente de IA, esboços com restrições, relatório de verificação, análise de camadas, blocos.">
+<meta property="og:description" content="Solidon3D em resumo: editar STL e STEP, desenhar, esculpir, criar relevos e treliças, verificar ajustes e preparar impressões. Com exemplos e imagens.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/pt/catalog.png">
 <meta property="og:image:alt" content="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, além de pé, suspensão em buraco de fechadura, alojamento de íman, gancho para painel perfurado e suporte de parede, cada um com pré-visualização e medidas">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 </head>
 <body>
 <a class="skip" href="#content">Ir para o conteúdo</a>
@@ -74,7 +74,7 @@
       <div class="hero">
         <div class="hero-text">
         <h1>O que o Solidon3D faz</h1>
-        <p class="lead">Cada função com uma imagem da aplicação em funcionamento ou um desenho que mostra exatamente o que faz. Quem preferir saber primeiro o preço: <a href="/pt/#pricing">demo e preço</a>.</p>
+        <p class="lead">Do primeiro contorno à peça que encaixa: conheça as ferramentas pela sua utilidade, com exemplos e imagens. Descubra <a href="#entwicklung">mais possibilidades para a sua peça</a>. <a href="/pt/#demo">Experimentar a demo gratuita</a>.</p>
         </div>
 
         <div class="shot">
@@ -93,143 +93,20 @@
   <section id="uebersicht" class="tint">
     <div class="wrap">
       <h2>Num relance</h2>
-      <nav class="toc" aria-label="Num relance">
-        <ol>
-          <li><a href="#ai-agent">Agente de IA</a></li>
-          <li><a href="#sketches-with-constraints">Esboços com restrições</a></li>
-          <li><a href="#inspection-report">Relatório de verificação</a></li>
-          <li><a href="#recognised-features">Características</a></li>
-          <li><a href="#direct-handles">Pegar em vez de escrever</a></li>
-          <li><a href="#parametric">Paramétrico</a></li>
-          <li><a href="#building-blocks">Blocos</a></li>
-          <li><a href="#your-own-blocks">Blocos próprios</a></li>
-          <li><a href="#surfaces">Superfícies</a></li>
-          <li><a href="#layer-analysis">Análise de camadas</a></li>
-          <li><a href="#auto-split">Separar e dividir automaticamente</a></li>
-          <li><a href="#every-number-a-formula">Cada número uma fórmula</a></li>
-          <li><a href="#first-launch">Primeiro arranque</a></li>
-          <li><a href="#inside">O que mais está lá dentro</a></li>
-        </ol>
+      <nav class="feature-topics" aria-label="Num relance">
+        <a href="#recognised-features">Alterar um modelo</a>
+        <a href="#sketches-with-constraints">Criar a sua peça</a>
+        <a href="#surfaces">Criar superfícies</a>
+        <a href="#inspection-report">Preparar a impressão</a>
+        <a href="#inside">Todas as ferramentas</a>
+        <a href="#entwicklung">Mais possibilidades</a>
       </nav>
     </div>
   </section>
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="ai-agent">
-        <div>
-          <span class="kicker">Agente de IA</span>
-          <h3>Uma frase no chat, uma proposta, um Desfazer</h3>
-          <p>O agente usa as mesmas operações que os menus — não há atalho
-          por fora da geometria. Cada proposta mostra o que vai fazer antes
-          de o fazer, e é aplicada como um todo: exatamente uma transação,
-          que um único Desfazer retira por completo.</p>
-          <p class="note">A geometria é calculada por código, nunca pelo
-          modelo de linguagem. <b>Cada cota na proposta é exata — nada é
-          «gerado por alto».</b></p>
-          <p class="note">E isso é medido, não prometido: uma suite de
-          <b>39 pedidos de referência</b> corre antes e depois de cada
-          alteração ao conjunto de regras do agente. À data de 08/08/2026,
-          com um modelo local de 14 mil milhões
-          de parâmetros e sem nuvem nenhuma: 28 de 39 bem respondidos, 98 %
-          das chamadas de ferramentas válidas à primeira tentativa — e cada
-          pedido ambíguo terminou numa pergunta de volta, não numa
-          suposição.</p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 290" role="img"
-               aria-label="Um desenho: num campo de chat escreve-se «Escareia os quatro parafusos — M4, à face.»; o agente responde com uma proposta de três operações, na secção ao lado o furo alarga para 4,5 milímetros e recebe um cone de escareamento de 90 graus, e por baixo lê-se: aplicado — uma transação, um Desfazer retira tudo.">
-            <text class="ink" x="24" y="30" font-weight="600">Uma frase — três operações</text>
-
-            <text class="dim" x="24" y="64">Você</text>
-            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
-            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Escareia os quatro parafusos — M4, à face.</text>
-
-            <g class="anim fig-chat-card">
-              <text class="dim" x="24" y="110">Agente</text>
-              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
-              <text class="value" x="90" y="112">Proposta — 3 operações</text>
-            </g>
-            <g class="anim fig-chat-op-1">
-              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="136" font-size="12">Ajustar o furo: ø 4,2 → 4,5 mm</text>
-            </g>
-            <g class="anim fig-chat-op-2">
-              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="160" font-size="12">Escareamento 90°, ø 8,6 mm — à face</text>
-            </g>
-            <g class="anim fig-chat-op-3">
-              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="184" font-size="12">Aplicar aos quatro furos</text>
-            </g>
-
-            <text class="dim" x="380" y="64">Secção</text>
-            <rect class="body" x="380" y="96" width="150" height="53"/>
-            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
-            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
-            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
-            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
-            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
-
-            <g class="anim fig-chat-done">
-              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
-              <text class="ink" x="48" y="258" font-size="12">Aplicado — uma transação. Um Desfazer retira tudo.</text>
-            </g>
-          </svg>
-          <figcaption>A proposta não muda nada até ser aplicada — e então como um todo.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip" id="sketches-with-constraints">
-        <div>
-          <span class="kicker">Esboços com restrições</span>
-          <h3>Desenhar, cotar — e cada cota pode ser um parâmetro</h3>
-          <p>Linha, círculo, arco, curva e contornos prontos como furo
-          oblongo, círculo de furos ou matriz de furos. Dez restrições
-          seguram o desenho — horizontal, perpendicular, tangente, simétrico,
-          distância —, e em baixo está sempre escrito o que ainda anda solto.
-          O que o contorno vai ser, decide-se só depois: extrudir, cortar
-          como bolsa, gerar por revolução, conduzir ao longo de um arco ou
-          estender entre dois contornos.</p>
-          <p class="note">O contorno mantém-se uma curva exata.
-          <b>Um círculo desenhado torna-se um cilindro redondo, não um
-          polígono com muitos cantos.</b></p>
-          <p>A grelha mostra a que é que o imantado se agarra, e o seu passo
-          pode ser escrito. A cota fica junto ao ponteiro, e a barra por
-          baixo diz a face em que se está a desenhar. Uma linha auxiliar
-          continua auxiliar — mesmo depois de aparar, prolongar, deslocar e
-          espelhar.</p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../bilder/beleg-skizze-pt.png?v=7725dfe5"><img src="../bilder/beleg-skizze-pt.png?v=7725dfe5" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha «Plano de desenho: face em Letreiro — 2247 mm²» e os botões de restrição; à direita, o separador com as treze restrições do desenho"></a>
-          </div>
-          <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="inspection-report">
-        <div>
-          <span class="kicker">Relatório de verificação</span>
-          <h3>Fica a saber antes da impressão o que vai correr mal</h3>
-          <p>Cada ficheiro aberto recebe um relatório: zonas abertas,
-          triângulos mal orientados, paredes abaixo de duas larguras de
-          extrusão, unidades em falta. Ordenado por erros, avisos e notas —
-          e cada entrada salta no modelo para o sítio de que fala.</p>
-          <p class="note">Cada achado traz uma sugestão de ação.
-          <b>Aqui, um erro nunca acaba em «falhou».</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../handbuch/pt/report.png?v=6f95c8ae"><img src="../handbuch/pt/report.png?v=6f95c8ae" width="620" height="430" loading="lazy" decoding="async"
-                 alt="O relatório de verificação: zero erros, dois avisos e duas notas, entre eles «O modelo está aberto em três sítios» e «Uma parede é mais fina do que duas larguras de extrusão»"></a>
-          </div>
-          <figcaption>O relatório de verificação de um ficheiro alheio importado.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="recognised-features">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Características</span>
           <h3>Num STL alheio, um furo volta a ser um furo</h3>
@@ -255,17 +132,17 @@
           que um desfazer retira em conjunto. Duas características marcadas
           indicam a sua distância — no espaço e por eixo, sem ferramenta de
           medição.</p>
-          <p class="note" data-kinds="hole,pin,cone,sphere">Nem todos os tipos
-          suportam todas as ações. Mover, duplicar e remover valem para furos,
-          pinos, escareados, cúpulas e sedes; rodar, para todos menos a
-          superfície esférica — não tem uma orientação que se possa rodar. Para
-          arredondamentos e golas estas operações ainda não existem.
-          <b>A janela di-lo ali mesmo, com o motivo, em vez de mostrar um campo
-          cinzento.</b></p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Nem todos os tipos suportam todas as ações. Mover, duplicar e remover valem para
+          furos, pinos, escareados, cúpulas e sedes; rodar, para todos menos a
+          superfície esférica — não tem uma orientação que se possa rodar. Nos
+          arredondamentos compatíveis é possível alterar o raio ou remover o
+          arredondamento. As golas e as transições suaves continuam excluídas. <b>O
+          Solidon3D explica quais as ações disponíveis no ponto escolhido e
+          porquê.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="Um desenho da janela de características: em cima lê-se «Furo — Ø 5,19 mm» e por baixo a frase «o furo de passagem para M5»; seguem-se campos de diâmetro, profundidade e posição, e os botões Mover, Rodar, Duplicar e Remover. Para o arredondamento, em vez de um botão há uma frase a dizer que a operação ainda não existe.">
+               aria-label="Desenho da janela de características: em cima lê-se «Furo — Ø 5,19 mm» e por baixo «o furo de passagem para M5»; seguem-se campos para diâmetro, profundidade e posição, e os botões Mover, Rodar, Duplicar e Remover. Num arredondamento compatível é possível alterar o raio.">
             <text class="ink" x="24" y="30" font-weight="600">Característica</text>
 
             <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
@@ -297,7 +174,7 @@
             <text class="ink" x="240" y="241" font-size="11" text-anchor="middle">Remover</text>
 
             <text class="dim" x="24" y="278">Arredondamento</text>
-            <text class="dim" x="24" y="294">Alterar o raio: para isso ainda não há operação.</text>
+            <text class="dim" x="24" y="294">Alterar o raio se o arredondamento permitir.</text>
 
             <text class="dim" x="320" y="42">Na imagem</text>
             <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
@@ -372,6 +249,35 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+        <div>
+          <span class="kicker">Esboços com restrições</span>
+          <h3>Desenhar, cotar — e cada cota pode ser um parâmetro</h3>
+          <p>Linha, círculo, arco, curva e contornos prontos como furo oblongo, círculo de furos
+          ou matriz de furos. As restrições seguram o desenho — horizontal,
+          perpendicular, tangente, simétrico, distância, ângulo, comprimento igual e
+          ponto médio — e em baixo está sempre escrito o que ainda está livre. O que
+          o contorno vai ser, decide-se só depois: extrudir, cortar como bolsa, gerar
+          por revolução, conduzir ao longo de um arco ou estender entre dois
+          contornos.</p>
+          <p class="note">O contorno mantém-se uma curva exata.
+          <b>Um círculo desenhado torna-se um cilindro redondo, não um
+          polígono com muitos cantos.</b></p>
+          <p>A grelha mostra a que é que o imantado se agarra, e o seu passo
+          pode ser escrito. A cota fica junto ao ponteiro, e a barra por
+          baixo diz a face em que se está a desenhar. Uma linha auxiliar
+          continua auxiliar — mesmo depois de aparar, prolongar, deslocar e
+          espelhar.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-skizze-pt.png?v=7725dfe5"><img src="../bilder/beleg-skizze-pt.png?v=7725dfe5" width="2560" height="1392" loading="lazy" decoding="async"
+                 alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha «Plano de desenho: face em Letreiro — 2247 mm²» e os botões de restrição; à direita, o separador com as treze restrições do desenho"></a>
+          </div>
+          <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="parametric">
         <div>
           <span class="kicker">Paramétrico</span>
@@ -418,7 +324,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks">
+      <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocos</span>
           <h3>Um alojamento de porca em quatro cliques, não em quatro meias horas</h3>
@@ -482,7 +388,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="surfaces">
+      <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Superfícies</span>
           <h3>Oito padrões, todos verificados quanto à imprimibilidade</h3>
@@ -494,6 +400,11 @@
           sequer nasce nesta máquina? <b>Barras mais estreitas do que o bico
           e relevos mais rasos do que uma camada são recusados</b>, não
           calculados.</p>
+          <p>Uma imagem em tons de cinzento também pode tornar-se uma superfície percetível ao
+          toque: <b>Aplicar relevo</b> traduz as zonas claras e escuras em altura.
+          <b>Preencher com grelha</b> cria uma treliça espacial na cavidade de um
+          sólido esvaziado, com estrutura, tamanho de célula e espessura das barras à
+          escolha. A geometria da treliça acompanha o modelo exportado.</p>
         </div>
         <figure class="shot">
           <picture>
@@ -502,6 +413,26 @@
                  alt="Oito mosaicos de padrão em duas filas: nervura como riscas paralelas, onda como riscas onduladas, moletado reto e cruzado como riscas oblíquas e losangos, favo de mel como hexágonos, covinhas como grelha de pontos, Voronoi como células irregulares e ruído como manchas dispersas.">
           </picture>
           <figcaption>Os mesmos contornos que depois são impressos — a pré-visualização é calculada, não pintada.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="inspection-report">
+        <div>
+          <span class="kicker">Relatório de verificação</span>
+          <h3>Fica a saber antes da impressão o que vai correr mal</h3>
+          <p>Cada ficheiro aberto recebe um relatório: zonas abertas,
+          triângulos mal orientados, paredes abaixo de duas larguras de
+          extrusão, unidades em falta. Ordenado por erros, avisos e notas —
+          e cada entrada salta no modelo para o sítio de que fala.</p>
+          <p class="note">Cada achado traz uma sugestão de ação.
+          <b>Aqui, um erro nunca acaba em «falhou».</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/pt/report.png?v=6f95c8ae"><img src="../handbuch/pt/report.png?v=6f95c8ae" width="620" height="430" loading="lazy" decoding="async"
+                 alt="O relatório de verificação: zero erros, dois avisos e duas notas, entre eles «O modelo está aberto em três sítios» e «Uma parede é mais fina do que duas larguras de extrusão»"></a>
+          </div>
+          <figcaption>O relatório de verificação de um ficheiro alheio importado.</figcaption>
         </figure>
       </div>
 
@@ -551,7 +482,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="auto-split">
+      <div class="showcase" id="auto-split" data-operations="split_bodies split_line split_pinned">
         <div>
           <span class="kicker">Separar e dividir automaticamente</span>
           <h3>Grande demais para a mesa já não é razão para desistir</h3>
@@ -640,12 +571,77 @@
         </figure>
       </div>
 
+      <div class="showcase" id="ai-agent">
+        <div>
+          <span class="kicker">Agente de IA</span>
+          <h3>Uma frase no chat, uma proposta, um Desfazer</h3>
+          <p>O agente usa as mesmas operações que os menus — não há atalho
+          por fora da geometria. Cada proposta mostra o que vai fazer antes
+          de o fazer, e é aplicada como um todo: exatamente uma transação,
+          que um único Desfazer retira por completo.</p>
+          <p class="note">A geometria é calculada por código, nunca pelo
+          modelo de linguagem. <b>Cada cota na proposta é exata — nada é
+          «gerado por alto».</b></p>
+          <p class="note">E isso é medido, não prometido: uma suite de
+          <b>39 pedidos de referência</b> corre antes e depois de cada
+          alteração ao conjunto de regras do agente. À data de 08/08/2026,
+          com um modelo local de 14 mil milhões
+          de parâmetros e sem nuvem nenhuma: 28 de 39 bem respondidos, 98 %
+          das chamadas de ferramentas válidas à primeira tentativa — e cada
+          pedido ambíguo terminou numa pergunta de volta, não numa
+          suposição.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Um desenho: num campo de chat escreve-se «Escareia os quatro parafusos — M4, à face.»; o agente responde com uma proposta de três operações, na secção ao lado o furo alarga para 4,5 milímetros e recebe um cone de escareamento de 90 graus, e por baixo lê-se: aplicado — uma transação, um Desfazer retira tudo.">
+            <text class="ink" x="24" y="30" font-weight="600">Uma frase — três operações</text>
+
+            <text class="dim" x="24" y="64">Você</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Escareia os quatro parafusos — M4, à face.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agente</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Proposta — 3 operações</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Ajustar o furo: ø 4,2 → 4,5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Escareamento 90°, ø 8,6 mm — à face</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Aplicar aos quatro furos</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Secção</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Aplicado — uma transação. Um Desfazer retira tudo.</text>
+            </g>
+          </svg>
+          <figcaption>A proposta não muda nada até ser aplicada — e então como um todo.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase" id="first-launch">
         <div>
           <span class="kicker">Primeiro arranque</span>
           <h3>Não começa do zero</h3>
-          <p>Vêm incluídos dez projetos de exemplo prontos — um por caminho, mais esboços, blocos, inscrição a duas cores, calibração, preparação da
-          impressão e uma caixa com tampa onde tudo se junta. Cada um é um
+          <p>Vêm incluídos onze projetos de exemplo prontos — para os quatro caminhos, esboços,
+          blocos, inscrição a duas cores, calibração e preparação da impressão, mais
+          uma caixa com tampa e a mudança de material de um ajuste. Cada um é um
           projeto a sério com histórico, não uma imagem num manual.</p>
           <p class="note">E um manual que explica os primeiros quinze minutos
           — <b>na mesma língua que a interface.</b></p>
@@ -655,8 +651,8 @@
             <a href="../bilder/beleg-start-pt.png?v=abb9e8c9"><img src="../bilder/beleg-start-pt.png?v=abb9e8c9" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="O ecrã inicial: uma área de largar para modelos e projetos, os botões «Novo projeto» e «Abrir projeto», e por baixo quatro projetos de exemplo — um por caminho — com imagem de pré-visualização e descrição, e por baixo disso a secção recolhida «Que mais há?»"></a>
           </div>
-          <figcaption>O ecrã inicial com quatro dos dez exemplos — os
-          outros seis estão atrás de «Que mais há?».</figcaption>
+          <figcaption>Quatro dos onze exemplos apresentam os caminhos principais; outros projetos mostram
+          ferramentas específicas e a sua utilização.</figcaption>
         </figure>
       </div>
     </div>
@@ -664,38 +660,188 @@
 
   <section id="inside">
     <div class="wrap">
-      <h2>O que mais está lá dentro</h2>
-      <ul class="features">
-        <li><b>Arestas exatas.</b> As faces e arestas continuam editáveis individualmente —
-        para chanfros, arredondamentos e STEP de ida e
-        volta.</li>
-        <li><b>Velocidade.</b> Os mesmos cálculos correm até sessenta vezes
-        mais depressa do que no início — e o indicador de progresso fica
-        parado até o resultado estar mesmo pronto.</li>
-        <li><b>Duas cores sem segundo programa.</b> Inscrição em relevo,
-        gravada ou como mudança de cor num único ficheiro 3MF.</li>
-        <li><b>Entrega ao seu slicer.</b> Direta, com as definições certas,
-        ou aberta como ficheiro na janela dele — e o G-Code dele volta como
-        contraprova.</li>
-        <li><b>Calibrar em vez de adivinhar.</b> Escada de tolerâncias, escada
-        de espessuras de parede e leque de saliências numa só placa; os
-        valores medidos entram no perfil de material.</li>
-        <li><b>Cadeia de reparação para ficheiros alheios.</b> Fechar buracos,
-        endireitar as normais, remover triângulos degenerados e estilhaços —
-        antes de se calcular o que quer que seja.</li>
-        <li><b>Medir, seccionar, explodir.</b> Ferramentas na vista, sem tocar
-        na geometria.</li>
-        <li><b>A vista voa.</b> O botão esquerdo desloca, o direito roda, a roda
+      <h2>Mais ferramentas para a sua peça</h2>
+      <div class="tool-grid">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+          <summary>Combinar sólidos básicos</summary>
+          <div class="tool-content"><p>Criar paralelepípedos, cilindros, esferas, cones e
+        anéis, uni-los, subtraí-los ou conservar a sua interseção. Colocar um furo
+        diretamente na face escolhida.
+        Criar um furo com escareado ou alargamento cilíndrico num só passo, com
+        diâmetro, profundidade e ângulo de transição ajustáveis.</p></div>
+        </details>
+        <details class="tool-card" id="anordnen" data-operations="align_to_feature duplicate_object fit_to_size mirror_object pattern rotate_object scale_object translate_object">
+          <summary>A medida e a posição certas</summary>
+          <div class="tool-content"><p>Mover, rodar, espelhar, escalar ou ajustar a
+        maior dimensão a uma medida pretendida. Criar cópias individuais, em linha ou
+        em círculo; alinhar faces e furos entre si.</p></div>
+        </details>
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+          <summary>Editar arestas e paredes</summary>
+          <div class="tool-content"><p>Arredondamentos, chanfros, rebordos, deslocações de
+        faces planas e ângulos de saída funcionam em malhas STL e sólidos exatos
+        compatíveis. Um ângulo de saída inclina uma parede, por exemplo para
+        facilitar a desmoldagem. STEP continua disponível para sólidos exatos.</p></div>
+        </details>
+        <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
+          <summary>Caixas e tampas à medida</summary>
+          <div class="tool-content"><p>Esvaziar um sólido à espessura de parede desejada,
+        com ventilação se necessário, ou dar espessura a uma superfície aberta. Uma
+        abertura adequada dá origem a uma tampa correspondente. <b>Criar tampa de
+        rosca</b> acrescenta um gargalo roscado e a tampa correspondente, com a folga
+        do perfil de material.</p></div>
+        </details>
+        <details class="tool-card" id="formen" data-operations="blend_union pose_armature sculpt_strokes subdivide_surface">
+          <summary>Esculpir formas e mudar a pose de figuras</summary>
+          <div class="tool-content"><p>Fundir sólidos básicos suavemente,
+        subdividir superfícies e usar pincéis para acrescentar, retirar ou alisar
+        material. O passo de escultura continua editável. Um esqueleto permite dar
+        outra pose a uma figura.</p></div>
+        </details>
+        <details class="tool-card" id="filamente" data-operations="assign_slot clear_filament create_label label_text paint_slot set_material slots_from_texture">
+          <summary>Inscrever texto e preparar várias cores</summary>
+          <div class="tool-content"><p>Aplicar texto em relevo, rebaixado ou
+        como sólido separado. Atribuir filamentos a peças inteiras ou faces
+        individuais, converter cores de texturas existentes em filamentos e exportar
+        um 3MF a cores. A impressora, as atribuições de filamentos e os perfis
+        adequados ficam ligados no projeto; o stock de filamentos é gerido entre
+        todos os projetos.</p></div>
+        </details>
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+          <summary>Organizar a placa e verificar a impressão</summary>
+          <div class="tool-content"><p>Assentar peças na cama, encontrar
+        uma orientação favorável, distribuí-las na placa e verificar sobreposições. A
+        passagem direta para o fatiador inclui as definições adequadas; o G-code
+        importado permite depois uma contraprova com a sua origem claramente
+        identificada.</p></div>
+        </details>
+        <details class="tool-card" id="kalibrieren" data-operations="check_join_path compensate_first_layer create_fit_ladder create_overhang_fan create_wall_ladder test_piece">
+          <summary>Afinar os ajustes à sua impressora</summary>
+          <div class="tool-content"><p>Imprimir uma escala de tolerâncias, uma
+        escala de espessuras de parede e um leque de saliências, e incorporar as
+        medições no perfil de material. Uma pequena peça de ensaio poupa material; a
+        compensação do pé de elefante reduz no modelo uma primeira camada demasiado
+        larga. O percurso de montagem verifica se as peças podem ser encaixadas.</p></div>
+        </details>
+        <details class="tool-card" id="netzpflege" data-operations="decimate_mesh remesh_mesh remesh_uniform repair smooth_mesh">
+          <summary>Preparar malhas importadas</summary>
+          <div class="tool-content"><p>Fechar zonas abertas, uniformizar a orientação das
+        faces exteriores e corrigir triângulos problemáticos. Reduzir, refinar ou
+        distribuir os triângulos de forma mais uniforme; o alisamento suaviza uma
+        superfície irregular.</p></div>
+        </details>
+        <details class="tool-card" id="dateien" data-operations="delete_object load load_outline load_step rename_object">
+          <summary>Reutilizar modelos e desenhos</summary>
+          <div class="tool-content"><p>Abrir STL, 3MF, OBJ, PLY, OFF, GLB/glTF e STEP.
+        Os contornos SVG e DXF tornam-se sólidos. Exportar STL, 3MF, OBJ, PLY, GLB e,
+        para sólidos exatos, STEP. Os projetos guardam vários objetos, os seus nomes,
+        parâmetros, ajustes e o histórico editável.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Medir, seccionar, explodir</summary>
+          <div class="tool-content"><p>Ferramentas na vista, sem tocar
+        na geometria.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>A vista voa</summary>
+          <div class="tool-content"><p>O botão esquerdo desloca, o direito roda, a roda
         premida inclina — e com W, A, S, D anda pelo espaço como num jogo. Quem
         está habituado a outra coisa escolhe Cura, os slicers da Bambu e da
-        Prusa, o CAD ou Blender.</li>
-        <li><b>IA local ou com chave própria.</b> Ollama no próprio computador
-        ou uma chave de API — e sem ambos funciona tudo menos o chat.</li>
-        <li><b>Comandável à distância por MCP — também a partir do Claude
-        Code.</b> Um segundo programa chama as mesmas operações que os menus:
+        Prusa, o CAD ou Blender.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>IA local ou com chave própria</summary>
+          <div class="tool-content"><p>Ollama no próprio computador
+        ou uma chave de API — e sem ambos funciona tudo menos o chat.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Comandável à distância por MCP — também a partir do Claude
+        Code</summary>
+          <div class="tool-content"><p>Um segundo programa chama as mesmas operações que os menus:
         desligado por predefinição, só no próprio computador, e cada chamada
-        remota é uma transação que um Desfazer retira.</li>
-      </ul>
+        remota é uma transação que um Desfazer retira.</p></div>
+        </details>
+      </div>
+      <p>Os campos, valores predefinidos e limites estão na <a
+      href="/pt/manual.html#ref-scene">referência completa das operações</a>. É
+      gerada para cada versão publicada a partir do mesmo registo que a aplicação.</p>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="tint">
+    <div class="wrap">
+      <h2>Mais possibilidades para a sua peça</h2>
+      <p class="lead">Altere os furos em conjunto com os escareados, divida os organizadores à medida e crie campos de furos com margem. Pode voltar a ajustar as dimensões mais tarde.</p>
+      <div class="showcase" id="bohrung-senkung">
+        <div>
+          <span class="kicker">Furo e escareado</span>
+          <h3>O furo cresce. A entrada acompanha.</h3>
+          <p>Um furo reconhecido tem frequentemente mais de um diâmetro: um escareado em cima,
+          depois um degrau ou uma segunda secção por baixo. Ao editar, decide quais
+          as secções que pertencem ao mesmo conjunto.</p>
+          <p><b>Incluir escareado e degraus</b> ajusta os respetivos diâmetros em conjunto. A
+          largura de entrada, o ângulo do escareado e as profundidades dos degraus
+          mantêm-se. <b>Apenas o diâmetro do furo</b> conserva as dimensões exteriores
+          e a posição do escareado e dos degraus.</p>
+          <p class="note">Ao mover ou copiar, as secções reconhecidas como pertencentes ao mesmo conjunto
+          também são editadas em conjunto. <b>Um passo no histórico — um
+          desfazer.</b> As associações incertas são explicadas antes do cálculo.</p>
+        </div>
+        <div>
+          <figure class="shot">
+            <img class="feature-model" src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À esquerda, o furo escareado original; à direita, o furo e o escareado aumentados em conjunto. As dimensões exteriores da peça mantêm-se.">
+            <figcaption>À esquerda, o furo escareado original; à direita, o furo e o escareado aumentados em conjunto. As dimensões exteriores da peça mantêm-se.</figcaption>
+          </figure>
+          <details class="feature-diagram"><summary>Ver o corte transversal</summary>
+            <figure class="shot"><svg class="figure" viewBox="0 0 560 260" role="img"
+               aria-label="Corte esquemático: à esquerda, um furo escareado; à direita, um furo mais largo. O escareado cresce com ele, mantendo o ângulo e a largura de entrada.">
+            <text class="ink" x="30" y="32" font-size="17">Antes</text>
+            <text class="ink" x="320" y="32" font-size="17">Alteração conjunta</text>
+            <path class="body" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M245 135H285M274 124L285 135L274 146"/>
+            <text class="dim" x="30" y="242" font-size="14">Furo escareado</text>
+            <text class="dim" x="320" y="242" font-size="14">A entrada acompanha</text>
+          </svg><figcaption>Esquema: o modo de edição escolhido determina quais as medidas que mudam em conjunto.</figcaption></figure>
+          </details>
+        </div>
+      </div>
+      <div class="feature-card-grid">
+        <article class="feature-card" id="organizer" data-operations="create_organizer create_organizer_divider create_organizer_foot create_organizer_rim create_organizer_tray insert_organizer_divider insert_organizer_foot insert_organizer_rim insert_organizer_tray">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organizador com seis compartimentos e divisórias de alturas diferentes.">
+          <div class="feature-card-copy"><h3>Um organizador à medida do conteúdo</h3><p>Dividir compartimentos na
+        pré-visualização, definir as medidas exteriores ou as medidas livres das
+        divisões e alterar individualmente a altura dos separadores. Os parâmetros do
+        projeto mantêm iguais as medidas relacionadas. Tabuleiro, bordo, separador e
+        pé de encaixe também existem como blocos.</p></div>
+        </article>
+        <article class="feature-card" id="lochfelder" data-operations="field_cut">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Placa com aberturas hexagonais passantes, margem fechada e uma zona circular central sem perfurações.">
+          <div class="feature-card-copy"><h3>Campos de furos com margem</h3><p>Distribuir furos redondos, rasgos ou células em
+        favo numa área desenhada. A largura da margem, o espaçamento e as zonas
+        excluídas definem o campo; as suas medidas continuam editáveis mais tarde.</p></div>
+        </article>
+        <article class="feature-card" id="textur-bearbeiten">
+          <img src="../bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Três placas com recartilhado, padrão de favo de mel e nervuras paralelas como geometria real.">
+          <div class="feature-card-copy"><h3>Voltar a editar um padrão mais tarde</h3><p>Selecionar uma textura aplicada na
+        janela de características e alterar os seus valores. <b>Face inteira</b>
+        preenche a face plana escolhida até ao bordo e deixa os furos livres. O
+        sólido resultante mostra a alteração.</p></div>
+        </article>
+      </div>
+      <div class="feature-card-grid feature-notes">
+        <article class="feature-card" id="konturauswahl">
+          <div class="feature-card-copy"><h3>Construir apenas as formas pretendidas do desenho</h3><p>Abrir SVG ou DXF, escolher
+        os contornos fechados na pré-visualização e criar sólidos a partir deles. Os
+        contornos interiores continuam a ser aberturas; cada forma pode ser examinada
+        antes de ser aplicada.</p></div>
+        </article>
+        <article class="feature-card" id="lokale-erkennung" data-operations="detect_region">
+          <div class="feature-card-copy"><h3>Examinar modelos grandes no sítio certo</h3><p>Escolher um ponto no modelo original
+        e procurar aí características completas. O reconhecimento trabalha numa área
+        limitada; não é necessário simplificar o modelo.</p></div>
+        </article>
+      </div>
     </div>
   </section>
 
@@ -731,7 +877,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

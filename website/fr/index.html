@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -93,7 +93,7 @@
       "name": "Puis-je déplacer un perçage dans un STL déjà terminé ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui. À l'ouverture, perçages, tenons, fraisures, dômes et cuvettes sont reconnus comme caractéristiques nommées ; la fenêtre des caractéristiques affiche leurs valeurs mesurées, et changer un nombre, c'est l'opération. Déplacer, dupliquer et supprimer valent pour chacun de ces types ; pivoter, pour tous sauf la face sphérique. Pour les congés et les gorges, ces opérations n'existent pas encore, et la fenêtre le dit sur place, avec la raison."
+        "text": "Oui. À l'ouverture, perçages, tenons, fraisures, dômes et cuvettes sont reconnus comme caractéristiques nommées ; la fenêtre des caractéristiques affiche leurs valeurs mesurées, et changer un nombre, c'est l'opération. Déplacer, dupliquer et supprimer valent pour chacun de ces types ; pivoter, pour tous sauf la face sphérique. Les congés compatibles permettent de modifier leur rayon ou de les supprimer. Solidon3D indique les actions possibles à l’endroit sélectionné ; les gorges et les transitions progressives restent exclues."
       }
     },
     {
@@ -356,7 +356,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>110</b><span>opérations au registre</span></div>
+        <div><b>110</b><span>opérations dans la version téléchargeable</span></div>
         <div><b>27</b><span>blocs testés</span></div>
         <div><b>51</b><span>cotes de pièces normalisées</span></div>
         <div><b>16</b><span>profils d'imprimante fournis</span></div>
@@ -608,8 +608,7 @@
         tourne avant et après chaque modification du corpus de règles de
         l'agent.</li>
         <li><b>La face cliquée compte.</b> Un perçage, un bloc ou une
-        esquisse se posent là où vous avez pointé — chaque opération sur une
-        face coûtait auparavant deux clics. Le menu contextuel d'une face
+        esquisse se posent là où vous avez pointé. Vous créez un perçage et sa fraisure en une seule étape. Le menu contextuel d'une face
         propose désormais aussi support mural, nervure, languette et
         rainure, ergot d'encliquetage, clip d'encliquetage et
         charnière-film.</li>
@@ -636,10 +635,46 @@
         <li><b>L'analyse des couches sans slicer.</b> Surplombs, îlots,
         portées de pont et volume de support&nbsp;; la recherche
         d'orientation propose la position qui en produit le moins.</li>
-        <li><b>Des esquisses sous contraintes.</b> Dix contraintes tiennent
-        le dessin, et le contour reste une courbe exacte — un cercle devient un cylindre, pas un polygone.</li>
+        <li><b>Des esquisses sous contraintes.</b> Distances, angles, longueurs égales et milieux
+        tiennent le dessin. Le contour reste une courbe exacte — un cercle devient un
+        cylindre, pas un polygone.</li>
+        <li><b>Aller plus loin avec votre modèle.</b> Reliefs à partir d’images, treillis
+        spatiaux, dépouilles, couvercles adaptés et inscriptions multicolores sont
+        aussi inclus. <a href="/fr/features.html#inside">Découvrir les autres
+        outils</a>.</li>
       </ul>
       <a class="btn ghost" href="/fr/features.html">Voir toutes les fonctions</a>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="feature-preview tint">
+    <div class="wrap">
+      <h2>Plus de possibilités pour votre pièce</h2>
+      <p class="lead">Modifiez les perçages avec leurs fraisures, divisez les organiseurs sur mesure et créez des champs de trous avec une bordure. Vous pouvez ensuite ajuster à nouveau les dimensions.</p>
+      <div class="feature-card-grid">
+        <article class="feature-card">
+          <img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À gauche, le perçage fraisé d’origine ; à droite, le perçage et la fraisure agrandis ensemble. Les dimensions extérieures de la pièce restent identiques.">
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#bohrung-senkung">Le trou s’agrandit. Son entrée s’adapte.</a></h3><p>Un perçage reconnu comporte souvent plusieurs diamètres : une fraisure en haut, puis
+          un épaulement ou une seconde section en dessous. Lors de la modification,
+          vous choisissez les sections qui vont ensemble.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organisateur à six compartiments et cloisons de différentes hauteurs.">
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#organizer">Un organiseur adapté à son contenu</a></h3><p>Diviser les compartiments dans l’aperçu,
+        définir les dimensions extérieures ou les dimensions libres des cases et
+        modifier séparément la hauteur des cloisons. Les paramètres du projet gardent
+        égales les dimensions liées. Bac, bord, cloison et pied emboîtable existent
+        aussi comme blocs.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Plaque avec ouvertures hexagonales traversantes, bord plein et zone circulaire centrale préservée.">
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#lochfelder">Des champs de trous avec une bordure</a></h3><p>Répartir des trous ronds, des trous
+        oblongs ou des alvéoles dans une zone dessinée. La largeur de bordure,
+        l’espacement et les zones exclues définissent le champ ; ses dimensions
+        restent modifiables par la suite.</p></div>
+        </article>
+      </div>
+      <a class="btn ghost" href="/fr/features.html#entwicklung">Découvrir les exemples en détail</a>
     </div>
   </section>
 
@@ -848,9 +883,7 @@
           sont reconnus comme caractéristiques nommées&nbsp;; la fenêtre des
           caractéristiques affiche leurs valeurs mesurées, et changer un nombre,
           c'est l'opération. Déplacer, dupliquer et supprimer valent pour chacun
-          de ces types&nbsp;; pivoter, pour tous sauf la face sphérique. Pour les congés et les
-          gorges, ces opérations n'existent pas encore, et la fenêtre le dit sur
-          place, avec la raison.</p>
+          de ces types&nbsp;; pivoter, pour tous sauf la face sphérique. Les congés compatibles permettent de modifier leur rayon ou de les supprimer. Solidon3D indique les actions possibles à l’endroit sélectionné ; les gorges et les transitions progressives restent exclues.</p>
         </details>
         <details>
           <summary>Suis-je obligé d'utiliser une IA&nbsp;?</summary>
@@ -975,7 +1008,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

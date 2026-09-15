@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -93,7 +93,7 @@
       "name": "¿Puedo mover un taladro en un STL ya terminado?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sí. Al abrir el archivo, taladros, espigas, avellanados, cúpulas y cuencas se reconocen como características con nombre; la ventana de características muestra sus valores medidos, y cambiar un número es la operación. Mover, duplicar y quitar valen para cada uno de estos tipos; girar, para todos salvo la superficie esférica. Para redondeos y gargantas estas operaciones aún no existen, y la ventana lo dice ahí mismo con el motivo."
+        "text": "Sí. Al abrir el archivo, taladros, espigas, avellanados, cúpulas y cuencas se reconocen como características con nombre; la ventana de características muestra sus valores medidos, y cambiar un número es la operación. Mover, duplicar y quitar valen para cada uno de estos tipos; girar, para todos salvo la superficie esférica. En los redondeos compatibles puedes cambiar el radio o quitar el redondeo. Solidon3D muestra qué acciones están disponibles en el punto elegido; las gargantas y las transiciones suaves quedan excluidas."
       }
     },
     {
@@ -355,7 +355,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>110</b><span>operaciones en el registro</span></div>
+        <div><b>110</b><span>operaciones en la versión descargable</span></div>
         <div><b>27</b><span>bloques probados</span></div>
         <div><b>51</b><span>medidas de piezas normalizadas</span></div>
         <div><b>16</b><span>perfiles de impresora de fábrica</span></div>
@@ -604,8 +604,7 @@
         ejecuta antes y después de cada cambio en el conjunto de reglas del
         agente.</li>
         <li><b>La cara en la que haces clic es la que cuenta.</b> Un taladro,
-        un bloque o un boceto aparecen donde has señalado — antes, cada
-        operación sobre una cara costaba dos clics. El menú contextual de una
+        un bloque o un boceto aparecen donde has señalado. Crea un taladro con su avellanado en un solo paso. El menú contextual de una
         cara ofrece ahora también soporte de pared, nervadura, lengüeta y
         ranura, pestaña de retención, unión de encaje y bisagra de
         película.</li>
@@ -631,11 +630,44 @@
         <li><b>Análisis de capas sin slicer.</b> Voladizos, islas, luces de
         puente y volumen de soportes; la búsqueda de orientación propone la
         posición que menos genera de todo ello.</li>
-        <li><b>Bocetos con restricciones.</b> Diez restricciones mantienen
-        unido el dibujo, y el contorno sigue siendo una curva exacta — un círculo se convierte en un cilindro, no en un
-        polígono.</li>
+        <li><b>Bocetos con restricciones.</b> Distancias, ángulos, longitudes iguales y puntos
+        medios mantienen unido el dibujo. El contorno sigue siendo una curva exacta —
+        un círculo se convierte en un cilindro, no en un polígono.</li>
+        <li><b>Sacar más partido a tu modelo.</b> También incluye relieves a partir de imágenes,
+        retículas espaciales, ángulos de desmoldeo, tapas a juego y rotulación
+        multicolor. <a href="/es/features.html#inside">Ver más herramientas</a>.</li>
       </ul>
       <a class="btn ghost" href="/es/features.html">Ver todas las funciones</a>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="feature-preview tint">
+    <div class="wrap">
+      <h2>Más posibilidades para tu pieza</h2>
+      <p class="lead">Modifica los agujeros junto con sus avellanados, distribuye los compartimentos del organizador a medida y crea campos de agujeros con borde. Puedes volver a ajustar las dimensiones después.</p>
+      <div class="feature-card-grid">
+        <article class="feature-card">
+          <img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="A la izquierda, el agujero avellanado original; a la derecha, el agujero y el avellanado ampliados juntos. Las dimensiones exteriores de la pieza no cambian.">
+          <div class="feature-card-copy"><h3><a href="/es/features.html#bohrung-senkung">El agujero crece. La entrada se adapta.</a></h3><p>Un taladro reconocido suele tener más de un diámetro: un avellanado arriba y, debajo,
+          un escalón o un segundo tramo. Al editarlo, decides qué partes van juntas.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organizador con seis compartimentos y separadores de distintas alturas.">
+          <div class="feature-card-copy"><h3><a href="/es/features.html#organizer">Un organizador a medida del contenido</a></h3><p>Divide compartimentos en la vista
+        previa, define las medidas exteriores o las medidas libres de cada
+        compartimento y cambia por separado la altura de los separadores. Los
+        parámetros del proyecto mantienen iguales las medidas relacionadas. Bandeja,
+        borde, separador y pie encajable también están disponibles como bloques.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Placa con aberturas hexagonales pasantes, borde cerrado y una zona circular central sin perforar.">
+          <div class="feature-card-copy"><h3><a href="/es/features.html#lochfelder">Campos de agujeros con borde</a></h3><p>Distribuye agujeros redondos, ranuras o celdas
+        de panal dentro de una zona dibujada. El ancho del borde, la separación y las
+        zonas excluidas definen el campo; sus medidas siguen siendo editables
+        después.</p></div>
+        </article>
+      </div>
+      <a class="btn ghost" href="/es/features.html#entwicklung">Ver los ejemplos en detalle</a>
     </div>
   </section>
 
@@ -841,8 +873,7 @@
           cuencas se reconocen como características con nombre; la ventana de
           características muestra sus valores medidos, y cambiar un número es la
           operación. Mover, duplicar y quitar valen para cada uno de estos tipos;
-          girar, para todos salvo la superficie esférica. Para redondeos y gargantas estas operaciones aún no
-          existen, y la ventana lo dice ahí mismo con el motivo.</p>
+          girar, para todos salvo la superficie esférica. En los redondeos compatibles puedes cambiar el radio o quitar el redondeo. Solidon3D muestra qué acciones están disponibles en el punto elegido; las gargantas y las transiciones suaves quedan excluidas.</p>
         </details>
         <details>
           <summary>¿Tengo que usar una IA?</summary>
@@ -965,7 +996,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

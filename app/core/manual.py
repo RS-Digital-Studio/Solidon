@@ -649,7 +649,20 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "unter der Ansicht führt eine Karte *Merkmale*: Sie färbt den Körper "
             "danach ein, was die Erkennung aus ihm gemacht hat — das ist der "
             "schnellste Weg zu sehen, ob sie die Stelle gefunden hat, die man "
-            "meint, bevor man auf sie klickt."
+            "meint, bevor man auf sie klickt.\n\n"
+            "**Bohrung und Einlauf gemeinsam ändern.** Wählen Sie die Bohrung und öffnen Sie "
+            "*Bohrung ändern*. Mit *Senkung und Stufen mitnehmen* ändern sich die Durchmesser "
+            "gemeinsam; Einführbreite, Senkungswinkel und Stufentiefen bleiben erhalten. *Nur "
+            "Bohrungsdurchmesser* lässt Außenmaße und Lage der vorhandenen Senkung und Stufen "
+            "stehen. Prüfen Sie die Vorschau und klicken Sie auf *Übernehmen*. Ein `Strg+Z` "
+            "nimmt die Änderung zurück.\n\n**Eine Stelle gezielt erkennen.** Fehlt ein Merkmal "
+            "an einem großen Netz, klicken Sie mit der rechten Maustaste auf die sichtbare "
+            "Oberfläche und wählen *Merkmale an dieser Stelle erkennen*. Vergrößern Sie bei "
+            "Bedarf den Radius, bis das gesuchte Merkmal vollständig erfasst ist. Wählen Sie "
+            "es in der Liste und öffnen Sie über *Merkmal bearbeiten …* die passende Handlung."
+            " Nach der Vorschau übernimmt Solidon Erkennung und Bearbeitung zusammen; ein "
+            "`Strg+Z` nimmt beides zurück. *Nur Merkmale übernehmen* speichert stattdessen "
+            "allein die Erkennung, *Abbrechen* verwirft die Vorschau."
         ),
     ),
     Page(
@@ -894,7 +907,14 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "bleibt, wie er war.\n\n"
             "Gezeichnete Rundungen bleiben auch beim Vergrößern wirklich rund: "
             "Ein Kreis wird ein runder Zylinder und kein Vieleck mit vielen "
-            "Ecken."
+            "Ecken.\n\n"
+            "**Eine vorhandene Zeichnung verwenden.** Ziehen Sie eine SVG- oder DXF-Datei ins "
+            "Fenster. Unter *Zeichnung hochziehen* wählen Sie die Konturen in der Liste oder "
+            "direkt im Vorschaubild; *Alle gültigen* markiert alle verwendbaren Flächen. "
+            "Innenringe bleiben Löcher. Stellen Sie Höhe und Breite ein und prüfen Sie die "
+            "Ergebnisvorschau. Nicht verwendbare Konturen bleiben mit einer Begründung "
+            "sichtbar. Später öffnen Sie den Schritt im Verlauf erneut: *Konturen wählen …* "
+            "ändert die Auswahl, Höhe und Breite stehen im Operationsdialog."
         ),
     ),
     Page(
@@ -1217,7 +1237,16 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Passung dazwischen ein und legt alles in **einen** Schritt — ein "
             "Strg+Z nimmt es zusammen zurück. Drei Paare kennt es: Passstift "
             "und Passbohrung, gedruckte Schraube und Mutter, Einpressbuchse "
-            "und Durchgangsloch."
+            "und Durchgangsloch.\n\n"
+            "**Einen Organizer aufteilen.** Öffnen Sie *Erzeugen → Grundformen → Organizer "
+            "anlegen*, geben Sie die Maße ein und wählen Sie *Fächer aufteilen …*. Entscheiden"
+            " Sie zwischen *Außenmaße festhalten* und *Lichte Fachmaße festhalten*: Soll die "
+            "Schublade passen oder der Inhalt? Wählen Sie ein Fach oder eine Trennwand in der "
+            "Draufsicht oder im Baum. Fachmaße und einzelne Wandhöhen lassen sich dort ändern;"
+            " die Ergebnisvorschau rechnet mit. *Aufteilung übernehmen* bringt Sie zum "
+            "Operationsdialog zurück, *Übernehmen* legt das Teil an. Im Verlauf lässt sich "
+            "dieselbe Aufteilung später wieder öffnen. Wanne, Trennwand, Rand und Steckfuß "
+            "gibt es außerdem einzeln als Organizer-Bausteine."
         ),
     ),
     Page(
@@ -1817,7 +1846,13 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "dasselbe wie die Füllung des Slicers: diese hier gehört zum "
             "Modell, reist mit der Datei und lässt sich messen. Die Wandstärke "
             "der Struktur wird gegen die Düse geprüft, so wie bei der "
-            "Textur."
+            "Textur.\n\n"
+            "**Ein vorhandenes Muster ändern.** Klicken Sie auf die texturierte Stelle am "
+            "Körper. *Textur ändern* rechts öffnet die Werte des vorhandenen Schritts: Muster,"
+            " Teilung, Tiefe und Drehung, je nach Aufbringung auch Breite und Höhe. Die "
+            "Vorschau zeigt die Änderung, *Übernehmen* aktualisiert diesen Schritt. Passen "
+            "mehrere Texturschritte zur Auswahl, wählen Sie zuerst den gemeinten. Ein `Strg+Z`"
+            " stellt die vorherigen Werte wieder her."
         ),
     ),
     Page(

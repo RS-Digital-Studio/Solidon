@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Features: edit STL files, check printability — Solidon3D</title>
-<meta name="description" content="Every Solidon3D feature with pictures: edit recognised features, AI agent, constrained sketches, inspection report, layer analysis, building blocks, auto split.">
+<meta name="description" content="Solidon3D at a glance: edit STL and STEP, sketch, sculpt, build reliefs and lattices, check fits and prepare prints. With examples and images.">
 <link rel="canonical" href="https://solidon3d.de/en/features.html">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
@@ -18,14 +18,14 @@
 <meta property="og:locale" content="en_GB">
 <meta property="og:url" content="https://solidon3d.de/en/features.html">
 <meta property="og:title" content="Features: edit STL files, check printability — Solidon3D">
-<meta property="og:description" content="Every Solidon3D feature with pictures: edit recognised features, AI agent, constrained sketches, inspection report, layer analysis, building blocks, auto split.">
+<meta property="og:description" content="Solidon3D at a glance: edit STL and STEP, sketch, sculpt, build reliefs and lattices, check fits and prepare prints. With examples and images.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/en/catalog.png">
 <meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 </head>
 <body>
 <a class="skip" href="#content">Skip to content</a>
@@ -72,7 +72,7 @@
       <div class="hero">
         <div class="hero-text">
         <h1>What Solidon3D does</h1>
-        <p class="lead">Every feature with a screenshot from the running application or a drawing that shows exactly what it does. If you would rather know the price first: <a href="/en/#pricing">demo and price</a>.</p>
+        <p class="lead">From the first outline to a part that fits: explore the tools by what they help you do, with examples and images. Discover <a href="#entwicklung">more possibilities for your part</a>. <a href="/en/#demo">Try the free demo</a>.</p>
         </div>
 
         <div class="shot">
@@ -91,140 +91,20 @@
   <section id="uebersicht" class="tint">
     <div class="wrap">
       <h2>At a glance</h2>
-      <nav class="toc" aria-label="At a glance">
-        <ol>
-          <li><a href="#ai-agent">AI agent</a></li>
-          <li><a href="#sketches-with-constraints">Sketches with constraints</a></li>
-          <li><a href="#inspection-report">Inspection report</a></li>
-          <li><a href="#recognised-features">Features</a></li>
-          <li><a href="#direct-handles">Grab it, don’t type it</a></li>
-          <li><a href="#parametric">Parametric</a></li>
-          <li><a href="#building-blocks">Building blocks</a></li>
-          <li><a href="#your-own-blocks">Your own blocks</a></li>
-          <li><a href="#surfaces">Surfaces</a></li>
-          <li><a href="#layer-analysis">Layer analysis</a></li>
-          <li><a href="#auto-split">Split and auto split</a></li>
-          <li><a href="#every-number-a-formula">Every number a formula</a></li>
-          <li><a href="#first-launch">First launch</a></li>
-          <li><a href="#inside">What else is inside</a></li>
-        </ol>
+      <nav class="feature-topics" aria-label="At a glance">
+        <a href="#recognised-features">Edit a model</a>
+        <a href="#sketches-with-constraints">Build your own part</a>
+        <a href="#surfaces">Design surfaces</a>
+        <a href="#inspection-report">Prepare for printing</a>
+        <a href="#inside">All tools</a>
+        <a href="#entwicklung">More possibilities</a>
       </nav>
     </div>
   </section>
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="ai-agent">
-        <div>
-          <span class="kicker">AI agent</span>
-          <h3>One sentence in the chat, one proposal, one undo</h3>
-          <p>The agent drives the same operations as the menus — there is
-          no shortcut past the geometry. Every proposal shows what it will
-          do before it does it, and is applied as a whole: exactly one
-          transaction, taken back completely by a single undo.</p>
-          <p class="note">Geometry is computed by code, never by the language
-          model. <b>Every dimension in a proposal is exact — nothing is
-          “roughly generated”.</b></p>
-          <p class="note">And that is measured, not promised: a suite of
-          <b>39 reference requests</b> runs before and after every change to
-          the agent's rule set. As of 2026-08-08, with a local 14-billion-parameter model
-          and no cloud at all: 28 of 39 answered well, 98 % of tool calls
-          valid on the first attempt — and every ambiguous request ended in
-          a question back, not in a guess.</p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 290" role="img"
-               aria-label="A drawing: “Countersink the four screws — M4, flush.” types itself into a chat field; the agent answers with a proposal of three operations, in the cross-section next to it the hole widens to 4.5 millimetres and receives a 90 degree countersink, and below it says: applied — one transaction, a single undo takes it all back.">
-            <text class="ink" x="24" y="30" font-weight="600">One sentence — three operations</text>
-
-            <text class="dim" x="24" y="64">You</text>
-            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
-            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Countersink the four screws — M4, flush.</text>
-
-            <g class="anim fig-chat-card">
-              <text class="dim" x="24" y="110">Agent</text>
-              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
-              <text class="value" x="90" y="112">Proposal — 3 operations</text>
-            </g>
-            <g class="anim fig-chat-op-1">
-              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="136" font-size="12">Adjust hole: ø 4.2 → 4.5 mm</text>
-            </g>
-            <g class="anim fig-chat-op-2">
-              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="160" font-size="12">Countersink 90°, ø 8.6 mm — flush</text>
-            </g>
-            <g class="anim fig-chat-op-3">
-              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="184" font-size="12">Applied to all four holes</text>
-            </g>
-
-            <text class="dim" x="380" y="64">Cross-section</text>
-            <rect class="body" x="380" y="96" width="150" height="53"/>
-            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
-            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
-            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
-            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4.2 mm</text>
-            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4.5 mm</text>
-
-            <g class="anim fig-chat-done">
-              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
-              <text class="ink" x="48" y="258" font-size="12">Applied — one transaction. A single undo takes it all back.</text>
-            </g>
-          </svg>
-          <figcaption>The proposal changes nothing until it is applied — and then as a whole.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip" id="sketches-with-constraints">
-        <div>
-          <span class="kicker">Sketches with constraints</span>
-          <h3>Draw it, dimension it — and every measure may be a parameter</h3>
-          <p>Line, circle, arc, curve, plus finished outlines like slot, bolt
-          circle or hole grid. Ten constraints hold the drawing together —
-          horizontal, perpendicular, tangent, symmetric, distance —, and the
-          bottom line always says what is still free. What becomes of the
-          outline is up to you afterwards: extrude it, cut it in as a pocket,
-          revolve it, sweep it along a bend or span it between two
-          outlines.</p>
-          <p class="note">The outline stays an exact curve. <b>A drawn circle becomes a round cylinder, not a polygon
-          with many corners.</b></p>
-          <p>The grid shows what snapping is measured against, and its
-          spacing can be typed in. The dimension sits at the pointer, and the
-          bar below names the face you are drawing on. A construction line
-          stays a construction line — even after trim, extend, offset and
-          mirror.</p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../bilder/beleg-skizze-en.png?v=277df35f"><img src="../bilder/beleg-skizze-en.png?v=277df35f" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Sign — 2247 mm²” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing"></a>
-          </div>
-          <figcaption>You draw in the view — on the face you clicked.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="inspection-report">
-        <div>
-          <span class="kicker">Inspection report</span>
-          <h3>You learn what will go wrong before you print</h3>
-          <p>Every file you open gets a report: open shells, inverted
-          triangles, walls under two extrusion widths, missing units. Sorted
-          into errors, warnings and hints — and every entry jumps to the
-          place in the model it is talking about.</p>
-          <p class="note">Every finding carries something you can do about it.
-          <b>An error never ends in “failed” here.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../handbuch/en/report.png?v=02a6d7cb"><img src="../handbuch/en/report.png?v=02a6d7cb" width="620" height="430" loading="lazy" decoding="async"
-                 alt="The inspection report: zero errors, two warnings and two hints, among them “The model is open in three places” and “A wall is thinner than two extrusion widths”"></a>
-          </div>
-          <figcaption>The report for an imported third-party file.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="recognised-features">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Features</span>
           <h3>In someone else’s STL, a hole is a hole again</h3>
@@ -249,17 +129,16 @@
           go, as a single action that one undo takes back together. Two
           selected features state the distance between them — in space and per
           axis, with no measuring tool.</p>
-          <p class="note" data-kinds="hole,pin,cone,sphere">Not every kind
-          carries every action. Moving, duplicating and removing apply to
-          holes, pegs, countersinks, domes and sockets; turning to all but the
-          spherical face — it has no orientation that could be turned. For
-          fillets and coves these operations do not exist yet.
-          <b>The window says so on the spot, with the reason, instead of
-          showing a greyed-out field.</b></p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Not every kind carries every action. Moving, duplicating and removing apply to holes,
+          pegs, countersinks, domes and sockets; turning to all but the spherical
+          face — it has no orientation that could be turned. Supported fillets can
+          have their radius changed or be removed. Coves and smooth transitions
+          remain excluded. <b>Solidon3D explains which actions are available at the
+          selected location and why.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="A drawing of the feature window: at the top it reads “Hole — Ø 5.19 mm” with the line “the clearance hole for M5” below it; then fields for diameter, depth and position, and the buttons Move, Turn, Duplicate and Remove. For a fillet, instead of a button there is a sentence saying the operation does not exist yet.">
+               aria-label="A drawing of the feature window: at the top it reads “Hole — Ø 5.19 mm” with the line “the clearance hole for M5” below it; then fields for diameter, depth and position, and the buttons Move, Turn, Duplicate and Remove. A suitable fillet can have its radius changed.">
             <text class="ink" x="24" y="30" font-weight="600">Feature</text>
 
             <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
@@ -291,7 +170,7 @@
             <text class="ink" x="235" y="241" font-size="11" text-anchor="middle">Remove</text>
 
             <text class="dim" x="24" y="278">Fillet</text>
-            <text class="dim" x="24" y="294">Change radius — no operation for this one yet.</text>
+            <text class="dim" x="24" y="294">Change radius where the fillet supports it.</text>
 
             <text class="dim" x="320" y="42">In the view</text>
             <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
@@ -366,6 +245,33 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+        <div>
+          <span class="kicker">Sketches with constraints</span>
+          <h3>Draw it, dimension it — and every measure may be a parameter</h3>
+          <p>Line, circle, arc, curve, plus finished outlines like slot, bolt circle or hole grid.
+          Constraints hold the drawing together — horizontal, perpendicular, tangent,
+          symmetric, distance, angle, equal length and midpoint — and the bottom line
+          always says what is still free. What becomes of the outline is up to you
+          afterwards: extrude it, cut it in as a pocket, revolve it, sweep it along a
+          bend or span it between two outlines.</p>
+          <p class="note">The outline stays an exact curve. <b>A drawn circle becomes a round cylinder, not a polygon
+          with many corners.</b></p>
+          <p>The grid shows what snapping is measured against, and its
+          spacing can be typed in. The dimension sits at the pointer, and the
+          bar below names the face you are drawing on. A construction line
+          stays a construction line — even after trim, extend, offset and
+          mirror.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-skizze-en.png?v=277df35f"><img src="../bilder/beleg-skizze-en.png?v=277df35f" width="2560" height="1392" loading="lazy" decoding="async"
+                 alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Sign — 2247 mm²” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing"></a>
+          </div>
+          <figcaption>You draw in the view — on the face you clicked.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="parametric">
         <div>
           <span class="kicker">Parametric</span>
@@ -411,7 +317,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks">
+      <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Building blocks</span>
           <h3>A nut pocket in four clicks instead of four half-hours</h3>
@@ -473,7 +379,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="surfaces">
+      <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Surfaces</span>
           <h3>Eight patterns, every one checked for printability</h3>
@@ -485,6 +391,11 @@
           whether the pattern can exist on this machine at all: <b>ridges
           narrower than the nozzle and embossings shallower than one layer are
           refused</b>, not computed.</p>
+          <p>A greyscale image can also become a surface you can feel: <b>Apply relief</b>
+          translates light and dark areas into height. <b>Fill with lattice</b>
+          creates a spatial lattice in the cavity of a hollowed solid, with a choice
+          of structure, cell size and strut thickness. The lattice geometry is
+          included in the exported model.</p>
         </div>
         <figure class="shot">
           <picture>
@@ -493,6 +404,26 @@
                  alt="Eight pattern tiles in two rows: rib as parallel stripes, wave as wavy stripes, straight and diamond knurl as slanted stripes and diamonds respectively, honeycomb as hexagons, dimples as a grid of dots, Voronoi as irregular cells and noise as scattered patches.">
           </picture>
           <figcaption>The very outlines that get printed — the preview is computed, not drawn by hand.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="inspection-report">
+        <div>
+          <span class="kicker">Inspection report</span>
+          <h3>You learn what will go wrong before you print</h3>
+          <p>Every file you open gets a report: open shells, inverted
+          triangles, walls under two extrusion widths, missing units. Sorted
+          into errors, warnings and hints — and every entry jumps to the
+          place in the model it is talking about.</p>
+          <p class="note">Every finding carries something you can do about it.
+          <b>An error never ends in “failed” here.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/en/report.png?v=02a6d7cb"><img src="../handbuch/en/report.png?v=02a6d7cb" width="620" height="430" loading="lazy" decoding="async"
+                 alt="The inspection report: zero errors, two warnings and two hints, among them “The model is open in three places” and “A wall is thinner than two extrusion widths”"></a>
+          </div>
+          <figcaption>The report for an imported third-party file.</figcaption>
         </figure>
       </div>
 
@@ -542,7 +473,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="auto-split">
+      <div class="showcase" id="auto-split" data-operations="split_bodies split_line split_pinned">
         <div>
           <span class="kicker">Split and auto split</span>
           <h3>Too big for the bed is no longer a reason to skip it</h3>
@@ -630,13 +561,76 @@
         </figure>
       </div>
 
+      <div class="showcase" id="ai-agent">
+        <div>
+          <span class="kicker">AI agent</span>
+          <h3>One sentence in the chat, one proposal, one undo</h3>
+          <p>The agent drives the same operations as the menus — there is
+          no shortcut past the geometry. Every proposal shows what it will
+          do before it does it, and is applied as a whole: exactly one
+          transaction, taken back completely by a single undo.</p>
+          <p class="note">Geometry is computed by code, never by the language
+          model. <b>Every dimension in a proposal is exact — nothing is
+          “roughly generated”.</b></p>
+          <p class="note">And that is measured, not promised: a suite of
+          <b>39 reference requests</b> runs before and after every change to
+          the agent's rule set. As of 2026-08-08, with a local 14-billion-parameter model
+          and no cloud at all: 28 of 39 answered well, 98 % of tool calls
+          valid on the first attempt — and every ambiguous request ended in
+          a question back, not in a guess.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="A drawing: “Countersink the four screws — M4, flush.” types itself into a chat field; the agent answers with a proposal of three operations, in the cross-section next to it the hole widens to 4.5 millimetres and receives a 90 degree countersink, and below it says: applied — one transaction, a single undo takes it all back.">
+            <text class="ink" x="24" y="30" font-weight="600">One sentence — three operations</text>
+
+            <text class="dim" x="24" y="64">You</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Countersink the four screws — M4, flush.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agent</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Proposal — 3 operations</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Adjust hole: ø 4.2 → 4.5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Countersink 90°, ø 8.6 mm — flush</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Applied to all four holes</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Cross-section</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4.2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4.5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Applied — one transaction. A single undo takes it all back.</text>
+            </g>
+          </svg>
+          <figcaption>The proposal changes nothing until it is applied — and then as a whole.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase" id="first-launch">
         <div>
           <span class="kicker">First launch</span>
           <h3>You don't start from nothing</h3>
-          <p>Ten finished example projects are included — one per way, plus sketching, building blocks, two-colour labelling, calibration, print
-          preparation and a box with a lid where it all comes together. Each
-          is a real project with a history, not a picture in a manual.</p>
+          <p>Eleven finished example projects are included — for the four ways, sketching,
+          building blocks, two-colour labelling, calibration and print preparation,
+          plus a box with a lid and changing the material of a fit. Each is a real
+          project with a history, not a picture in a manual.</p>
           <p class="note">And a manual that covers the first fifteen minutes —
           <b>in the same language as the interface.</b></p>
         </div>
@@ -645,8 +639,8 @@
             <a href="../bilder/beleg-start-en.png?v=c302ae19"><img src="../bilder/beleg-start-en.png?v=c302ae19" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="The start screen: a drop area for models and projects, the buttons “New project” and “Open project”, and below them four example projects — one per way — with a preview image and a description, and below that the collapsed section “What else is there?”"></a>
           </div>
-          <figcaption>The start screen with four of the ten examples — the
-          other six sit behind “What else is there?”.</figcaption>
+          <figcaption>Four of the eleven examples introduce the main ways; further projects demonstrate
+          individual tools and how to use them.</figcaption>
         </figure>
       </div>
     </div>
@@ -654,38 +648,180 @@
 
   <section id="inside">
     <div class="wrap">
-      <h2>What else is inside</h2>
-      <ul class="features">
-        <li><b>Exact edges.</b> Faces and edges stay individually editable — for chamfers,
-        fillets and round-trip STEP.</li>
-        <li><b>Speed.</b> The same computations now run up to sixty times
-        faster than at the start — and the progress display stays put until
-        the result is actually done.</li>
-        <li><b>Two colours without a second program.</b> Labels raised,
-        recessed, or as a colour change in a single 3MF file.</li>
-        <li><b>Hand-over to your slicer.</b> Directly, with the matching
-        settings, or opened as a file in its window — and its G-code comes
-        back as a cross-check.</li>
-        <li><b>Calibrate instead of guess.</b> Tolerance ladder, wall
-        thickness ladder and overhang fan on one plate; the measured values
-        go into the material profile.</li>
-        <li><b>A repair chain for foreign files.</b> Close holes, fix normals,
-        remove degenerate triangles and stray fragments — before anything is
-        computed.</li>
-        <li><b>Measure, section, explode.</b> Tools in the view that never
-        touch the geometry.</li>
-        <li><b>The view flies.</b> Drag with the left button to pan, the right
+      <h2>More tools for your part</h2>
+      <div class="tool-grid">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+          <summary>Combine basic solids</summary>
+          <div class="tool-content"><p>Create boxes, cylinders, spheres, cones and rings, join
+        or subtract them, or keep their intersection. Place a hole directly on the
+        selected face.
+        Create a hole with a countersink or cylindrical counterbore in one step, with
+        adjustable diameter, depth and transition angle.</p></div>
+        </details>
+        <details class="tool-card" id="anordnen" data-operations="align_to_feature duplicate_object fit_to_size mirror_object pattern rotate_object scale_object translate_object">
+          <summary>The right size and position</summary>
+          <div class="tool-content"><p>Move, rotate, mirror, scale or set the largest
+        dimension to a target size. Make individual copies, rows or circular
+        patterns; align faces and holes with one another.</p></div>
+        </details>
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+          <summary>Edit edges and walls</summary>
+          <div class="tool-content"><p>Fillets, chamfers, beads, moving flat faces and adding
+        draft angles work on suitable STL meshes and exact solids. A draft angle
+        tilts a wall, for example to make a mould easier to release. STEP remains
+        available for exact solids.</p></div>
+        </details>
+        <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
+          <summary>Housings and matching lids</summary>
+          <div class="tool-content"><p>Hollow a solid to the wall thickness you want,
+        with a vent if needed, or thicken an open surface. Create a matching lid from
+        a suitable opening. <b>Create screw lid</b> adds a threaded neck and a
+        matching screw lid, with clearance from the material profile.</p></div>
+        </details>
+        <details class="tool-card" id="formen" data-operations="blend_union pose_armature sculpt_strokes subdivide_surface">
+          <summary>Sculpt shapes and pose figures</summary>
+          <div class="tool-content"><p>Blend basic solids smoothly, subdivide
+        surfaces and use brushes to add, remove or smooth material. The sculpting
+        step remains editable. An armature lets you give a figure a different pose.</p></div>
+        </details>
+        <details class="tool-card" id="filamente" data-operations="assign_slot clear_filament create_label label_text paint_slot set_material slots_from_texture">
+          <summary>Add labels and prepare multiple colours</summary>
+          <div class="tool-content"><p>Apply text raised, recessed or as a
+        separate solid. Assign filaments to whole parts or individual faces, convert
+        existing texture colours into filaments and export a coloured 3MF. The
+        printer, filament assignments and matching profiles stay linked in the
+        project; your filament stock is managed across projects.</p></div>
+        </details>
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+          <summary>Arrange the plate and check the print</summary>
+          <div class="tool-content"><p>Place parts on the bed, find a suitable
+        orientation, arrange them on the plate and check for overlaps. Direct slicer
+        hand-over includes matching settings; imported G-code then provides a
+        cross-check with its own clearly identified source.</p></div>
+        </details>
+        <details class="tool-card" id="kalibrieren" data-operations="check_join_path compensate_first_layer create_fit_ladder create_overhang_fan create_wall_ladder test_piece">
+          <summary>Tune fits to your printer</summary>
+          <div class="tool-content"><p>Print a tolerance ladder, wall thickness ladder and
+        overhang fan, then add the measurements to the material profile. A small test
+        piece saves material; elephant-foot compensation reduces an overly wide first
+        layer on the model. The joining path checks whether parts can be assembled.</p></div>
+        </details>
+        <details class="tool-card" id="netzpflege" data-operations="decimate_mesh remesh_mesh remesh_uniform repair smooth_mesh">
+          <summary>Prepare imported meshes</summary>
+          <div class="tool-content"><p>Close open areas, align outward-facing surfaces and
+        clean up problematic triangles. Reduce, refine or redistribute triangles more
+        evenly; smoothing evens out a rough surface.</p></div>
+        </details>
+        <details class="tool-card" id="dateien" data-operations="delete_object load load_outline load_step rename_object">
+          <summary>Reuse models and drawings</summary>
+          <div class="tool-content"><p>Open STL, 3MF, OBJ, PLY, OFF, GLB/glTF and STEP.
+        SVG and DXF outlines become solids. Export STL, 3MF, OBJ, PLY, GLB and, for
+        exact solids, STEP. Projects store multiple objects, their names, parameters,
+        fits and editable history.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Measure, section, explode</summary>
+          <div class="tool-content"><p>Tools in the view that never
+        touch the geometry.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>The view flies</summary>
+          <div class="tool-content"><p>Drag with the left button to pan, the right
         one to orbit, the pressed wheel to tilt — and W, A, S, D move you
         through the space like in a game. Used to something else? Set Cura, the
-        Bambu and Prusa slicers, CAD or Blender.</li>
-        <li><b>AI local or with your own key.</b> Ollama on your own
+        Bambu and Prusa slicers, CAD or Blender.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>AI local or with your own key</summary>
+          <div class="tool-content"><p>Ollama on your own
         machine or an API key — and without either, everything except the
-        chat keeps working.</li>
-        <li><b>Remote-controllable via MCP — including from Claude Code.</b>
-        A second program calls the same operations as the menus: off by
+        chat keeps working.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Remote-controllable via MCP — including from Claude Code</summary>
+          <div class="tool-content"><p>A second program calls the same operations as the menus: off by
         default, your own machine only, and every remote call is one
-        transaction that a single undo takes back.</li>
-      </ul>
+        transaction that a single undo takes back.</p></div>
+        </details>
+      </div>
+      <p>Individual fields, defaults and limits are listed in the <a
+      href="/en/manual.html#ref-scene">complete operation reference</a>. It is
+      generated for each released version from the same registry as the application.</p>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="tint">
+    <div class="wrap">
+      <h2>More possibilities for your part</h2>
+      <p class="lead">Edit holes together with their countersinks, divide organisers to fit and create hole fields with a border. You can adjust the dimensions again later.</p>
+      <div class="showcase" id="bohrung-senkung">
+        <div>
+          <span class="kicker">Hole and countersink</span>
+          <h3>The hole grows. The entrance follows.</h3>
+          <p>A recognised hole often has more than one diameter: a countersink at the top, then a
+          step or a second section below. When editing, you decide which sections
+          belong together.</p>
+          <p><b>Include countersink and steps</b> adjusts their diameters together. The entrance
+          width, countersink angle and step depths stay the same. <b>Hole diameter
+          only</b> leaves the outer dimensions and position of the countersink and
+          steps unchanged.</p>
+          <p class="note">Recognised sections that belong together are also edited together when moving or
+          copying. <b>One history step — one undo.</b> Uncertain associations are
+          explained before computation starts.</p>
+        </div>
+        <div>
+          <figure class="shot">
+            <img class="feature-model" src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="The original countersunk hole on the left; the hole and countersink enlarged together on the right. The outer dimensions of the part stay the same.">
+            <figcaption>The original countersunk hole on the left; the hole and countersink enlarged together on the right. The outer dimensions of the part stay the same.</figcaption>
+          </figure>
+          <details class="feature-diagram"><summary>View the cross-section</summary>
+            <figure class="shot"><svg class="figure" viewBox="0 0 560 260" role="img"
+               aria-label="Schematic cross-section: a countersunk hole on the left and a wider hole on the right. The countersink grows with it while its angle and entrance width stay the same.">
+            <text class="ink" x="30" y="32" font-size="17">Before</text>
+            <text class="ink" x="320" y="32" font-size="17">Changed together</text>
+            <path class="body" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M245 135H285M274 124L285 135L274 146"/>
+            <text class="dim" x="30" y="242" font-size="14">Countersunk hole</text>
+            <text class="dim" x="320" y="242" font-size="14">Entrance still fits</text>
+          </svg><figcaption>Schematic illustration: the selected edit mode determines which dimensions change
+          together.</figcaption></figure>
+          </details>
+        </div>
+      </div>
+      <div class="feature-card-grid">
+        <article class="feature-card" id="organizer" data-operations="create_organizer create_organizer_divider create_organizer_foot create_organizer_rim create_organizer_tray insert_organizer_divider insert_organizer_foot insert_organizer_rim insert_organizer_tray">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organiser with six compartments and dividers of different heights.">
+          <div class="feature-card-copy"><h3>An organiser that fits its contents</h3><p>Divide compartments in the preview,
+        specify outer dimensions or clear compartment sizes and change divider
+        heights individually. Project parameters keep related dimensions equal. Tray,
+        rim, divider and plug-in foot are also available as building blocks.</p></div>
+        </article>
+        <article class="feature-card" id="lochfelder" data-operations="field_cut">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Plate with through hexagonal openings, a solid border and a circular area left clear in the centre.">
+          <div class="feature-card-copy"><h3>Hole fields with a border</h3><p>Distribute round holes, slots or honeycomb cells
+        within a drawn area. Border width, spacing and excluded zones define the
+        field; its dimensions remain editable later.</p></div>
+        </article>
+        <article class="feature-card" id="textur-bearbeiten">
+          <img src="../bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Three model plates with knurling, a honeycomb pattern and parallel ribs made from real geometry.">
+          <div class="feature-card-copy"><h3>Edit a pattern later</h3><p>Select an applied texture in the feature window and
+        change its values. <b>Entire face</b> fills the selected flat face to the
+        edge and leaves holes open. The resulting solid shows the change.</p></div>
+        </article>
+      </div>
+      <div class="feature-card-grid feature-notes">
+        <article class="feature-card" id="konturauswahl">
+          <div class="feature-card-copy"><h3>Build only the shapes you want from a drawing</h3><p>Open SVG or DXF, select closed
+        outlines in the preview and create solids from them. Inner outlines remain
+        cut-outs; inspect individual shapes before applying them.</p></div>
+        </article>
+        <article class="feature-card" id="lokale-erkennung" data-operations="detect_region">
+          <div class="feature-card-copy"><h3>Inspect large models where it matters</h3><p>Choose a location on the original model
+        and search there for complete features. Recognition works within a limited
+        area; the model does not need to be simplified.</p></div>
+        </article>
+      </div>
     </div>
   </section>
 
@@ -720,7 +856,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

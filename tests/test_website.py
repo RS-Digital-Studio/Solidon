@@ -1,20 +1,14 @@
-"""Die Startseite behauptet Zahlen — diese Datei prüft, dass sie stimmen.
+"""Prüft Website-Zusagen, Sprachgleichheit und die Abdeckung der Funktionen.
 
-Auf `website/index.html` steht eine Leiste mit sechs Kennzahlen: wie viele
-Operationen im Register stehen, wie viele Bausteine es gibt, wie viele
-Normteilmaße hinterlegt sind, wie viele Druckerprofile mitkommen und wie
-viele Beispielprojekte beiliegen. Sie sind aus den Quellen abgelesen und
-werden falsch, sobald eine Operation dazukommt — eine falsche Zahl auf einer
-Verkaufsseite ist kein Schönheitsfehler.
+Operations- und Bausteinzahlen beschreiben die angebotene Downloadversion.
+Ihre Referenz wird beim Paketbau aus dem Register erzeugt; ihr Versionsstempel
+muss zur Downloadliste passen. Die Seiten werden zusammen mit der Demo
+veröffentlicht und dürfen im Arbeitsbaum bereits deren neue Funktionen zeigen.
 
-Geprüft wird außerdem, dass beide Sprachversionen dieselben Zahlen führen und
-dass jede eingebundene Datei existiert.
-
-Dieselbe Zahl steht ein zweites Mal im Fließtext — auf der Funktionsseite und
-in den häufigen Fragen. Die Leiste allein zu prüfen reichte nicht: sie stand
-längst auf 85, während der Satz daneben 83 behauptete und die englische
-Version 84. Was im Text steht, wird darum über **alle** Seiten geprüft, auch
-über die, die diese Datei sonst nicht kennt.
+Die Funktionsseiten ordnen ihre Beschreibungen über ``data-operations`` den
+registrierten Operationen zu. Jede veröffentlichte Operation muss vorkommen,
+und alle Sprachen müssen dieselben Gruppen führen.
+Eine Quelltextprüfung ersetzt nicht die Prüfung der verständlichen Erklärung.
 """
 
 from __future__ import annotations
@@ -31,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.knowledge.parts.registry import PARTS
 from app.core.registry import REGISTRY
 
 WEBSITE = Path(__file__).resolve().parent.parent / "website"
@@ -157,12 +150,31 @@ def _loaded() -> None:
     load_operations()
 
 
-def test_the_number_of_operations_on_the_page_matches_the_registry() -> None:
-    assert _stats("index.html")[0] == len(REGISTRY.all())
+def _published_operations() -> frozenset[str]:
+    """Liest die Registerreferenz des veröffentlichten Pakets, nicht dessen Nachfolger."""
+    manual = (WEBSITE / "handbuch.html").read_text(encoding="utf-8")
+    names = re.findall(r"<h4>[^<]*\(<code>([a-z0-9_]+)</code>\)</h4>", manual)
+    assert names, "Die veröffentlichte Operationsreferenz fehlt."
+    assert len(names) == len(set(names)), "Doppelte Operation in der Referenz."
+    return frozenset(names)
 
 
-def test_the_number_of_building_blocks_on_the_page_matches_the_library() -> None:
-    assert _stats("index.html")[1] == len(PARTS.all())
+def test_the_published_reference_belongs_to_the_offered_download() -> None:
+    """Eine alte Referenz darf keine Zahlen für ein neueres Paket bestätigen."""
+    version = json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))["version"]
+    manual = (WEBSITE / "handbuch.html").read_text(encoding="utf-8")
+    assert f'<p class="imprint">Version {version}<br>' in manual
+
+
+def test_the_number_of_operations_matches_the_published_reference() -> None:
+    assert _stats("index.html")[0] == len(_published_operations())
+
+
+def test_the_number_of_building_blocks_matches_the_published_reference() -> None:
+    # Jede mitgelieferte Bibliotheksvorlage erhält eine insert_-Operation.
+    assert _stats("index.html")[1] == sum(
+        name.startswith("insert_") for name in _published_operations()
+    )
 
 
 def test_the_number_of_standard_part_sizes_on_the_page_matches_the_table() -> None:
@@ -224,14 +236,14 @@ def test_no_page_names_a_different_number_of_operations_in_its_text() -> None:
     Fehlt eine Sprache noch, prüft der Lauf sie eben nicht — er wird nicht rot,
     weil jemand sie noch nicht eingecheckt hat.
     """
-    expected = len(REGISTRY.all())
+    expected = len(_published_operations())
     wrong = []
     for page in sorted([*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")]):
         prose = INLINE_SVG.sub("", page.read_text(encoding="utf-8"))
         for found in OPERATION_COUNT.finditer(prose):
             if int(found.group(1)) != expected:
                 wrong.append(f"{page.relative_to(WEBSITE).as_posix()}: „{found.group(0)}“")
-    assert not wrong, f"das Register führt {expected} Operationen, die Seiten sagen {wrong}"
+    assert not wrong, f"das angebotene Paket führt {expected} Operationen, die Seiten sagen {wrong}"
 
 
 @pytest.mark.parametrize("page", ALL_PAGES)
@@ -2380,6 +2392,52 @@ def test_no_delivered_page_is_an_island() -> None:
 #: maschinenlesbar in der Seite und nicht nur als Prosa — sechs Sprachen mit
 #: sechs Aufzählungen fände keine Suche wieder.
 KINDS_PROMISED = re.compile(r'data-kinds="([a-z_,]+)"')
+
+
+class _FeatureDescriptions(HTMLParser):
+    """Sammelt die zugeordneten Beschreibungsgruppen für die nächste Veröffentlichung."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.groups: set[frozenset[str]] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        names = values.get("data-operations")
+        if names is not None:
+            assert values.get("id"), "Eine Funktionsgruppe braucht eine verlinkbare Stelle."
+            group = frozenset(names.split())
+            assert group, "Eine Funktionsgruppe darf nicht leer sein."
+            assert group not in self.groups, "Doppelte Funktionsgruppe."
+            self.groups.add(group)
+
+
+def _feature_descriptions(page: Path) -> set[frozenset[str]]:
+    """Liest die Zuordnung aus der beschriebenen Seite selbst."""
+    parser = _FeatureDescriptions()
+    parser.feed(page.read_text(encoding="utf-8"))
+    return parser.groups
+
+
+def test_every_published_operation_has_a_feature_description() -> None:
+    """Neue Paketfunktionen dürfen nicht nur die Zählung auf der Website erhöhen."""
+    published = _published_operations()
+    groups = _feature_descriptions(WEBSITE / "funktionen.html")
+    described = set().union(*groups)
+    assert published <= described, f"Keine Funktionsbeschreibung: {sorted(published - described)}"
+
+
+def test_feature_descriptions_only_offer_implemented_operations() -> None:
+    """Für die nächste Demo beschriebene Werkzeuge müssen bereits implementiert sein."""
+    registered = {spec.name for spec in REGISTRY.all()}
+    groups = _feature_descriptions(WEBSITE / "funktionen.html")
+    for names in groups:
+        assert names <= registered, f"Unbekannte Operation: {sorted(names - registered)}"
+
+
+@pytest.mark.parametrize("page", sorted(WEBSITE.glob("*/features.html")))
+def test_all_languages_describe_the_same_functions(page: Path) -> None:
+    assert _feature_descriptions(page) == _feature_descriptions(WEBSITE / "funktionen.html")
 
 
 def test_the_pages_promise_only_feature_kinds_that_carry_the_action() -> None:

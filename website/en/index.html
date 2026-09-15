@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -96,7 +96,7 @@
       "name": "Can I move a hole in a finished STL?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. Holes, pegs, countersinks, domes and sockets are recognised as named features when the file opens; the feature window shows their measured values, and changing a number is the operation. Moving, duplicating and removing apply to each of these kinds, turning to all but the spherical face. For fillets and coves these operations do not exist yet — the window says so on the spot, with the reason."
+        "text": "Yes. Holes, pegs, countersinks, domes and sockets are recognised as named features when the file opens; the feature window shows their measured values, and changing a number is the operation. Moving, duplicating and removing apply to each of these kinds, turning to all but the spherical face. Supported fillets can have their radius changed or be removed. Solidon3D shows which actions are available at the selected location; coves and smooth transitions remain excluded."
       }
     },
     {
@@ -357,7 +357,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>110</b><span>operations in the registry</span></div>
+        <div><b>110</b><span>operations in the download version</span></div>
         <div><b>27</b><span>tested building blocks</span></div>
         <div><b>51</b><span>standard part sizes</span></div>
         <div><b>16</b><span>printer profiles included</span></div>
@@ -598,8 +598,7 @@
         suite of <b>39 reference requests</b> runs before and after every change
         to the agent's rule set.</li>
         <li><b>The face you click is the one that counts.</b> A hole, block
-        or sketch lands where you pointed — every operation on a face used
-        to cost two clicks. A face's context menu now also offers wall
+        or sketch lands where you pointed. Create a hole and its countersink in one step. A face's context menu now also offers wall
         mount, rib, tongue and groove, snap tab, snap fit and living
         hinge.</li>
         <li><b>A recognised feature can be grabbed.</b> Click a hole, drag the
@@ -622,11 +621,40 @@
         <li><b>Layer analysis without a slicer.</b> Overhangs, islands, bridge
         spans and support volume; the orientation search suggests the pose that
         produces the least of it.</li>
-        <li><b>Constrained sketches.</b> Ten constraints hold the drawing
-        together, and the outline stays an exact curve — a
-        circle becomes a cylinder, not a polygon.</li>
+        <li><b>Constrained sketches.</b> Distances, angles, equal lengths and midpoints hold the
+        drawing together. The outline stays an exact curve — a circle becomes a
+        cylinder, not a polygon.</li>
+        <li><b>Do more with your model.</b> Reliefs from images, spatial lattices, draft angles,
+        matching lids and multicolour labels are included too. <a
+        href="/en/features.html#inside">Explore more tools</a>.</li>
       </ul>
       <a class="btn ghost" href="/en/features.html">See all features</a>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="feature-preview tint">
+    <div class="wrap">
+      <h2>More possibilities for your part</h2>
+      <p class="lead">Edit holes together with their countersinks, divide organisers to fit and create hole fields with a border. You can adjust the dimensions again later.</p>
+      <div class="feature-card-grid">
+        <article class="feature-card"><img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="The original countersunk hole on the left; the hole and countersink enlarged together on the right. The outer dimensions of the part stay the same."><div class="feature-card-copy"><h3><a href="/en/features.html#bohrung-senkung">The hole grows. The entrance follows.</a></h3><p>A recognised hole often has more than one diameter: a countersink at the top, then a
+          step or a second section below. When editing, you decide which sections
+          belong together.</p></div></article>
+<article class="feature-card">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organiser with six compartments and dividers of different heights.">
+          <div class="feature-card-copy"><h3><a href="/en/features.html#organizer">An organiser that fits its contents</a></h3><p>Divide compartments in the preview,
+        specify outer dimensions or clear compartment sizes and change divider
+        heights individually. Project parameters keep related dimensions equal. Tray,
+        rim, divider and plug-in foot are also available as building blocks.</p></div>
+        </article>
+<article class="feature-card">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Plate with through hexagonal openings, a solid border and a circular area left clear in the centre.">
+          <div class="feature-card-copy"><h3><a href="/en/features.html#lochfelder">Hole fields with a border</a></h3><p>Distribute round holes, slots or honeycomb cells
+        within a drawn area. Border width, spacing and excluded zones define the
+        field; its dimensions remain editable later.</p></div>
+        </article>
+      </div>
+      <a class="btn ghost" href="/en/features.html#entwicklung">Explore the examples in detail</a>
     </div>
   </section>
 
@@ -825,8 +853,7 @@
           as named features when the file opens; the feature window shows their
           measured values, and changing a number is the operation. Moving,
           duplicating and removing apply to each of these kinds, turning to all
-          but the spherical face. For fillets and coves these operations do not exist yet — the
-          window says so on the spot, with the reason.</p>
+          but the spherical face. Supported fillets can have their radius changed or be removed. Solidon3D shows which actions are available at the selected location; coves and smooth transitions remain excluded.</p>
         </details>
         <details>
           <summary>Do I have to use AI?</summary>
@@ -941,7 +968,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

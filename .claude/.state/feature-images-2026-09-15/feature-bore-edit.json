@@ -1,0 +1,270 @@
+{
+  "motif": "bore-edit",
+  "size": [
+    1200,
+    800
+  ],
+  "seed": 20260915,
+  "models": [
+    {
+      "name": "before",
+      "volume_mm3": 17877.718862532558,
+      "bounds_mm": [
+        50.0,
+        42.0,
+        9.0
+      ],
+      "triangles": 304,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        -33,
+        0,
+        0
+      ],
+      "features": {
+        "hole_1": {
+          "kind": "hole",
+          "params": {
+            "diameter": 9.981,
+            "axis": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "centre": [
+              -7.077671781985373e-16,
+              -1.1613978229935398e-16,
+              2.4999999999999996
+            ],
+            "depth": 5.0,
+            "through": true,
+            "residual": 0.0
+          }
+        },
+        "cone_1": {
+          "kind": "cone",
+          "params": {
+            "diameter": 18.0,
+            "angle": 89.877,
+            "axis": [
+              0.0,
+              -0.0,
+              1.0
+            ],
+            "centre": [
+              -2.1126430579599154e-16,
+              -1.487136193449908e-17,
+              9.0
+            ],
+            "recess": true,
+            "residual": 0.0003
+          }
+        },
+        "face_1": {
+          "kind": "face",
+          "params": {
+            "area": 2021.6843,
+            "normal": [
+              0.0,
+              -0.0,
+              -1.0
+            ],
+            "centre": [
+              1.9681803684347566e-16,
+              2.811686240621081e-16,
+              0.0
+            ],
+            "inner": false
+          }
+        },
+        "face_2": {
+          "kind": "face",
+          "params": {
+            "area": 1846.2571,
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "centre": [
+              3.232788671484e-16,
+              6.927404296037144e-16,
+              9.0
+            ],
+            "inner": false
+          }
+        },
+        "face_3": {
+          "kind": "face",
+          "params": {
+            "area": 450.0,
+            "normal": [
+              0.0,
+              -1.0,
+              0.0
+            ],
+            "centre": [
+              0.0,
+              -21.0,
+              4.5
+            ],
+            "inner": false
+          }
+        },
+        "face_4": {
+          "kind": "face",
+          "params": {
+            "area": 450.0,
+            "normal": [
+              -0.0,
+              1.0,
+              0.0
+            ],
+            "centre": [
+              0.0,
+              21.0,
+              4.5
+            ],
+            "inner": false
+          }
+        },
+        "face_5": {
+          "kind": "face",
+          "params": {
+            "area": 378.0,
+            "normal": [
+              -1.0,
+              0.0,
+              0.0
+            ],
+            "centre": [
+              -25.0,
+              0.0,
+              4.5
+            ],
+            "inner": false
+          }
+        },
+        "face_6": {
+          "kind": "face",
+          "params": {
+            "area": 378.0,
+            "normal": [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            "centre": [
+              25.0,
+              0.0,
+              4.5
+            ],
+            "inner": false
+          }
+        }
+      }
+    },
+    {
+      "name": "after",
+      "volume_mm3": 16099.639488077797,
+      "bounds_mm": [
+        50.0,
+        42.0,
+        9.0
+      ],
+      "triangles": 304,
+      "watertight": true,
+      "components": 1,
+      "display_offset_mm": [
+        33,
+        0,
+        0
+      ],
+      "features": {
+        "hole_1": {
+          "kind": "hole",
+          "params": {
+            "diameter": 18.0,
+            "axis": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "centre": [
+              -7.077671781985373e-16,
+              -1.1613978229935398e-16,
+              2.5000000000000013
+            ],
+            "depth": 5.0,
+            "through": true,
+            "residual": 0.0
+          }
+        },
+        "cone_1": {
+          "kind": "cone",
+          "params": {
+            "diameter": 25.9828,
+            "angle": 89.877,
+            "axis": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "centre": [
+              -7.077671781985373e-16,
+              -1.1613978229935398e-16,
+              9.000000000000002
+            ],
+            "recess": true,
+            "residual": 0.0003
+          }
+        }
+      }
+    }
+  ],
+  "operations": [
+    {
+      "operation": "create_box",
+      "parameters": {
+        "width": 50,
+        "depth": 42,
+        "height": 9
+      },
+      "solver": null,
+      "findings": []
+    },
+    {
+      "operation": "drill_hole",
+      "parameters": {
+        "diameter": 10,
+        "widening_diameter": 18,
+        "widening_depth": 0,
+        "transition_angle": 90,
+        "z": 9.0,
+        "compensate": false
+      },
+      "solver": "direct",
+      "findings": []
+    },
+    {
+      "operation": "resize_hole",
+      "parameters": {
+        "at_feature": "hole_1",
+        "diameter": 18,
+        "entrance_mode": "follow",
+        "compensate": false
+      },
+      "solver": "direct",
+      "findings": []
+    }
+  ],
+  "camera": {
+    "direction": [
+      0.15,
+      -1.0,
+      1.25
+    ],
+    "parallel": true
+  }
+}

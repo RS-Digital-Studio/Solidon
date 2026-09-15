@@ -17,6 +17,7 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 | `robots.txt`, `sitemap.xml`, `llms.txt` | `tools/make_seo.py` |
 | `icon.svg` | `tools/make_icon.py` |
 | `bilder/beleg-*.png` | `tools/make_web_images.py` |
+| `bilder/feature-*.webp` | `tools/make_feature_images.py`, ein nativer Prozess je Motiv |
 | `bilder/weg{1,2,3,4}-*.(mp4|png|webm)` | `tools/make_video.py` |
 | `dl/` | `tools/make_download.py` |
 
@@ -109,6 +110,29 @@ Umbenennung bleibt der alte Name genau dort stehen, wo niemand ihn findet.
 Wer umbenennt, sucht auch nach Teilstücken.
 
 ## Prüfen
+
+Die Startseite erklärt den Nutzen mit eigenständig verständlichen Beispielen.
+Die Funktionsseite vertieft nach Kundenaufgaben; zusätzliche Werkzeuggruppen
+stehen in nativen `details`-Elementen. Bilder zeigen echte Operationsergebnisse,
+ohne eingebrannte Sprache. Überschriften, Alternativtexte und Beschreibungen
+werden in allen sechs Fassungen gepflegt. Bildbelege und
+Geometriemesswerte bleiben außerhalb des öffentlichen Website-Ordners.
+
+Die Funktionsseite ordnet Beschreibungsgruppen über `data-operations` den
+Operationsnamen zu. Alle Sprachfassungen führen dieselben Gruppen. Jede
+veröffentlichte Operation muss beschrieben sein. Die überarbeiteten Seiten
+gehen gemeinsam mit der nächsten Demo online: Neue, bereits implementierte
+Funktionen werden deshalb als normaler Funktionsumfang beschrieben, ohne
+Entwicklungsvorbehalte. Vor dem gemeinsamen Upload müssen Paket, Handbuch,
+Funktionsumfang und Downloadangaben zusammenpassen. Die neue Website wird
+nicht vorab allein veröffentlicht. Der bestehende Anker `#entwicklung` bleibt
+für alte Sprunglinks erhalten; seine Beschriftung nennt den Kundennutzen.
+
+Operations- und Bausteinzahlen beziehen sich auf die angebotene Downloadversion.
+Die beim Paketbau erzeugte Handbuchreferenz ist dafür der Registerbeleg; ihr
+Versionsstempel muss zu `version.json` passen. Der laufende Entwicklungsstand
+darf diese Zahlen nicht vorzeitig erhöhen. Die Zuordnung prüft Vollständigkeit
+und Sprachgleichheit, die redaktionelle Prüfung weiterhin Inhalt und Nutzen.
 
 `tests/test_website.py` ist der Wächter über allem hier: tote Verweise,
 Inhaltsstempel, Paketgrößen, „nichts von außen", die Sprachfassungen. Er läuft

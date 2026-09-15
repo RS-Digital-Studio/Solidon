@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fonctions : modifier un STL, vérifier l'impression — Solidon3D</title>
-<meta name="description" content="Toutes les fonctions de Solidon3D en images&nbsp;: modifier les caractéristiques reconnues, agent IA, esquisses sous contraintes, rapport de contrôle, analyse des couches, blocs.">
+<meta name="description" content="Solidon3D en bref : modifier des STL et STEP, dessiner, sculpter, créer reliefs et treillis, vérifier les ajustements et préparer l’impression. Avec des exemples et des images.">
 <link rel="canonical" href="https://solidon3d.de/fr/features.html">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
@@ -18,14 +18,14 @@
 <meta property="og:locale" content="fr_FR">
 <meta property="og:url" content="https://solidon3d.de/fr/features.html">
 <meta property="og:title" content="Fonctions : modifier un STL, vérifier l'impression — Solidon3D">
-<meta property="og:description" content="Toutes les fonctions de Solidon3D en images&nbsp;: modifier les caractéristiques reconnues, agent IA, esquisses sous contraintes, rapport de contrôle, analyse des couches, blocs.">
+<meta property="og:description" content="Solidon3D en bref : modifier des STL et STEP, dessiner, sculpter, créer reliefs et treillis, vérifier les ajustements et préparer l’impression. Avec des exemples et des images.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/fr/catalog.png">
 <meta property="og:image:alt" content="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, ainsi que pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé et support mural, chacun avec un aperçu et ses cotes">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 </head>
 <body>
 <a class="skip" href="#content">Aller au contenu</a>
@@ -72,7 +72,7 @@
       <div class="hero">
         <div class="hero-text">
         <h1>Ce que Solidon3D sait faire</h1>
-        <p class="lead">Chaque fonction avec une capture de l'application en marche ou un dessin qui montre exactement ce qu'elle fait. Pour connaître d'abord le prix&nbsp;: <a href="/fr/#pricing">démo et prix</a>.</p>
+        <p class="lead">Du premier contour à la pièce qui s’ajuste : découvrez les outils selon leur utilité, avec des exemples et des images. Découvrez <a href="#entwicklung">plus de possibilités pour votre pièce</a>. <a href="/fr/#demo">Essayer la démo gratuite</a>.</p>
         </div>
 
         <div class="shot">
@@ -91,145 +91,20 @@
   <section id="uebersicht" class="tint">
     <div class="wrap">
       <h2>En un coup d'œil</h2>
-      <nav class="toc" aria-label="En un coup d'œil">
-        <ol>
-          <li><a href="#ai-agent">Agent IA</a></li>
-          <li><a href="#sketches-with-constraints">Esquisses sous contraintes</a></li>
-          <li><a href="#inspection-report">Rapport de contrôle</a></li>
-          <li><a href="#recognised-features">Caractéristiques</a></li>
-          <li><a href="#direct-handles">Saisir plutôt que taper</a></li>
-          <li><a href="#parametric">Paramétrique</a></li>
-          <li><a href="#building-blocks">Blocs</a></li>
-          <li><a href="#your-own-blocks">Vos propres blocs</a></li>
-          <li><a href="#surfaces">Surfaces</a></li>
-          <li><a href="#layer-analysis">Analyse des couches</a></li>
-          <li><a href="#auto-split">Découpe et découpe automatique</a></li>
-          <li><a href="#every-number-a-formula">Chaque chiffre une formule</a></li>
-          <li><a href="#first-launch">Premier lancement</a></li>
-          <li><a href="#inside">Ce qu'il y a encore dedans</a></li>
-        </ol>
+      <nav class="feature-topics" aria-label="En un coup d'œil">
+        <a href="#recognised-features">Modifier un modèle</a>
+        <a href="#sketches-with-constraints">Créer votre propre pièce</a>
+        <a href="#surfaces">Créer des surfaces</a>
+        <a href="#inspection-report">Préparer l’impression</a>
+        <a href="#inside">Tous les outils</a>
+        <a href="#entwicklung">Plus de possibilités</a>
       </nav>
     </div>
   </section>
 
   <section id="features">
     <div class="wrap">
-      <div class="showcase" id="ai-agent">
-        <div>
-          <span class="kicker">Agent IA</span>
-          <h3>Une phrase dans le chat, une proposition, un Annuler</h3>
-          <p>L'agent manie les mêmes opérations que les menus — il n'existe
-          aucun raccourci qui contourne la géométrie. Chaque proposition
-          montre ce qu'elle va faire avant de le faire, et s'applique d'un
-          bloc&nbsp;: exactement une transaction, qu'un seul Annuler retire
-          entièrement.</p>
-          <p class="note">La géométrie est calculée par du code, jamais par
-          le modèle de langage. <b>Chaque cote d'une proposition est exacte —
-          rien n'est «&nbsp;généré à peu près&nbsp;».</b></p>
-          <p class="note">Et c'est mesuré, pas promis&nbsp;: une suite de
-          <b>39 requêtes de référence</b> tourne avant et après chaque
-          modification du corpus de règles de l'agent. Au 8&nbsp;août 2026,
-          avec un modèle local de
-          14 milliards de paramètres, sans aucun cloud&nbsp;: 28 réponses
-          correctes sur 39, 98&nbsp;% d'appels d'outils valides du premier
-          coup — et chaque demande ambiguë s'est terminée par une question en
-          retour, pas par une supposition.</p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 290" role="img"
-               aria-label="Un dessin&nbsp;: «&nbsp;Fraise les quatre vis — M4, affleurant.&nbsp;» s'écrit dans un champ de chat&nbsp;; l'agent répond par une proposition de trois opérations, dans la coupe à côté le perçage s'élargit à 4,5 millimètres et reçoit une fraisure à 90 degrés, et en dessous il est écrit&nbsp;: appliqué — une transaction, un Annuler retire tout.">
-            <text class="ink" x="24" y="30" font-weight="600">Une phrase — trois opérations</text>
-
-            <text class="dim" x="24" y="64">Vous</text>
-            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
-            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Fraise les quatre vis — M4, affleurant.</text>
-
-            <g class="anim fig-chat-card">
-              <text class="dim" x="24" y="110">Agent</text>
-              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
-              <text class="value" x="90" y="112">Proposition — 3 opérations</text>
-            </g>
-            <g class="anim fig-chat-op-1">
-              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="136" font-size="12">Ajuster le perçage&nbsp;: ø 4,2 → 4,5 mm</text>
-            </g>
-            <g class="anim fig-chat-op-2">
-              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="160" font-size="12">Fraisure 90°, ø 8,6 mm — affleurant</text>
-            </g>
-            <g class="anim fig-chat-op-3">
-              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="184" font-size="12">Reporté sur les quatre perçages</text>
-            </g>
-
-            <text class="dim" x="380" y="64">Coupe</text>
-            <rect class="body" x="380" y="96" width="150" height="53"/>
-            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
-            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
-            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
-            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
-            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
-
-            <g class="anim fig-chat-done">
-              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
-              <text class="ink" x="48" y="258" font-size="12">Appliqué — une transaction. Un Annuler retire tout.</text>
-            </g>
-          </svg>
-          <figcaption>La proposition ne change rien tant qu'elle n'est pas appliquée — et alors d'un bloc.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip" id="sketches-with-constraints">
-        <div>
-          <span class="kicker">Esquisses sous contraintes</span>
-          <h3>Dessiner, coter — et chaque cote peut être un paramètre</h3>
-          <p>Ligne, cercle, arc, courbe et des contours tout faits comme le
-          trou oblong, le cercle de perçage ou la grille de trous. Dix
-          contraintes tiennent le dessin — horizontal, perpendiculaire,
-          tangent, symétrique, distance —, et en bas s'affiche à tout moment
-          ce qui reste libre. Ce que devient le contour, vous le décidez
-          après&nbsp;: l'extruder, l'entailler en poche, le mettre en
-          révolution, le mener le long d'un arc ou le tendre entre deux
-          contours.</p>
-          <p class="note">Le contour reste une courbe exacte. <b>Un cercle dessiné devient un cylindre rond, pas un
-          polygone à beaucoup de sommets.</b></p>
-          <p>La grille montre à quoi l'aimantation se mesure, et son pas se
-          saisit au clavier. La cote se tient près du pointeur, et la barre
-          du dessous nomme la face sur laquelle on dessine. Une ligne de
-          construction reste une ligne de construction — même après
-          ajustage, prolongement, décalage et symétrie.</p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../bilder/beleg-skizze-fr.png?v=a90bb779"><img src="../bilder/beleg-skizze-fr.png?v=a90bb779" width="2560" height="1392" loading="lazy" decoding="async"
-                 alt="Le mode esquisse dans la fenêtre principale&nbsp;: on dessine dans la vue elle-même, la grille recouvre le modèle avec un rectangle coté et un cercle&nbsp;; en bas, la barre flottante avec les outils de dessin, le pas de la grille, la ligne «&nbsp;Plan de dessin&nbsp;: face sur Enseigne — 2247&nbsp;mm²&nbsp;» et les boutons de contraintes&nbsp;; à droite, l'onglet avec les treize contraintes du dessin"></a>
-          </div>
-          <figcaption>On dessine dans la vue — sur la face que l'on a cliquée.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="inspection-report">
-        <div>
-          <span class="kicker">Rapport de contrôle</span>
-          <h3>Vous savez avant d'imprimer ce qui va mal tourner</h3>
-          <p>Chaque fichier ouvert reçoit un rapport&nbsp;: zones ouvertes,
-          triangles mal orientés, parois sous deux cordons d'extrusion,
-          unités manquantes. Classé en erreurs, avertissements et remarques —
-          et chaque entrée saute dans le modèle à l'endroit dont elle
-          parle.</p>
-          <p class="note">Chaque constat porte une action proposée.
-          <b>Ici, une erreur ne se termine jamais par «&nbsp;échec&nbsp;».</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <a href="../handbuch/fr/report.png?v=ed4f73b3"><img src="../handbuch/fr/report.png?v=ed4f73b3" width="620" height="430" loading="lazy" decoding="async"
-                 alt="Le rapport de contrôle&nbsp;: zéro erreur, deux avertissements et deux remarques, dont «&nbsp;Le modèle est ouvert à trois endroits&nbsp;» et «&nbsp;Une paroi est plus mince que deux cordons d'extrusion&nbsp;»"></a>
-          </div>
-          <figcaption>Le rapport de contrôle d'un fichier tiers importé.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase" id="recognised-features">
+      <div class="showcase" id="recognised-features" data-operations="countersink_hole duplicate_feature move_feature plug_hole remove_feature resize_feature resize_hole rotate_feature slot_hole">
         <div>
           <span class="kicker">Caractéristiques</span>
           <h3>Dans un STL étranger, un perçage redevient un perçage</h3>
@@ -256,18 +131,17 @@
           seul geste, comme une action unique qu’une annulation reprend d’un
           bloc. Deux caractéristiques marquées indiquent leur distance — dans
           l’espace et par axe, sans outil de mesure.</p>
-          <p class="note" data-kinds="hole,pin,cone,sphere">Tous les types ne
-          portent pas toutes les actions. Déplacer, dupliquer et supprimer
-          valent pour les perçages, tenons, fraisures, dômes et cuvettes&nbsp;;
-          pivoter, pour tous sauf la face sphérique — elle n’a pas
-          d’orientation que l’on pourrait faire pivoter. Pour les congés et les
-          gorges, ces opérations n’existent pas encore.
-          <b>La fenêtre le dit sur place, avec la raison, au lieu d’afficher un
-          champ grisé.</b></p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Tous les types ne portent pas toutes les actions. Déplacer, dupliquer et supprimer
+          valent pour les perçages, tenons, fraisures, dômes et cuvettes ; pivoter,
+          pour tous sauf la face sphérique — elle n’a pas d’orientation que l’on
+          pourrait faire pivoter. Les congés compatibles permettent de modifier leur
+          rayon ou de les supprimer. Les gorges et les transitions progressives
+          restent exclues. <b>Solidon3D explique quelles actions sont possibles à
+          l’endroit sélectionné et pourquoi.</b></p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 300" role="img"
-               aria-label="Un dessin de la fenêtre des caractéristiques : en haut « Perçage — Ø 5,19 mm » puis la phrase « le trou de passage pour M5 » ; suivent les champs diamètre, profondeur et position, et les boutons Déplacer, Pivoter, Dupliquer et Supprimer. Pour le congé, à la place d’un bouton, une phrase indique que l’opération n’existe pas encore.">
+               aria-label="Dessin de la fenêtre des caractéristiques : en haut, « Perçage — Ø 5,19 mm » et, en dessous, « le trou de passage pour M5 » ; puis des champs de diamètre, profondeur et position, et les boutons Déplacer, Pivoter, Dupliquer et Supprimer. Le rayon d’un congé compatible peut être modifié.">
             <text class="ink" x="24" y="30" font-weight="600">Caractéristique</text>
 
             <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
@@ -299,7 +173,7 @@
             <text class="ink" x="257" y="241" font-size="11" text-anchor="middle">Supprimer</text>
 
             <text class="dim" x="24" y="278">Congé</text>
-            <text class="dim" x="24" y="294">Changer le rayon : pas encore d’opération pour cela.</text>
+            <text class="dim" x="24" y="294">Modifier le rayon si le congé le permet.</text>
 
             <text class="dim" x="320" y="42">Dans l’image</text>
             <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
@@ -375,6 +249,34 @@
         </figure>
       </div>
 
+      <div class="showcase flip" id="sketches-with-constraints" data-operations="sketch_extrude sketch_loft sketch_pocket sketch_revolve sketch_sweep">
+        <div>
+          <span class="kicker">Esquisses sous contraintes</span>
+          <h3>Dessiner, coter — et chaque cote peut être un paramètre</h3>
+          <p>Ligne, cercle, arc, courbe et contours tout faits comme le trou oblong, le cercle de
+          perçage ou la grille de trous. Les contraintes tiennent le dessin —
+          horizontal, perpendiculaire, tangent, symétrique, distance, angle, longueur
+          égale et milieu — et, en bas, s’affiche à tout moment ce qui reste libre.
+          Ce que devient le contour, vous le décidez après : l’extruder, l’entailler
+          en poche, le mettre en révolution, le mener le long d’un arc ou le tendre
+          entre deux contours.</p>
+          <p class="note">Le contour reste une courbe exacte. <b>Un cercle dessiné devient un cylindre rond, pas un
+          polygone à beaucoup de sommets.</b></p>
+          <p>La grille montre à quoi l'aimantation se mesure, et son pas se
+          saisit au clavier. La cote se tient près du pointeur, et la barre
+          du dessous nomme la face sur laquelle on dessine. Une ligne de
+          construction reste une ligne de construction — même après
+          ajustage, prolongement, décalage et symétrie.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-skizze-fr.png?v=a90bb779"><img src="../bilder/beleg-skizze-fr.png?v=a90bb779" width="2560" height="1392" loading="lazy" decoding="async"
+                 alt="Le mode esquisse dans la fenêtre principale&nbsp;: on dessine dans la vue elle-même, la grille recouvre le modèle avec un rectangle coté et un cercle&nbsp;; en bas, la barre flottante avec les outils de dessin, le pas de la grille, la ligne «&nbsp;Plan de dessin&nbsp;: face sur Enseigne — 2247&nbsp;mm²&nbsp;» et les boutons de contraintes&nbsp;; à droite, l'onglet avec les treize contraintes du dessin"></a>
+          </div>
+          <figcaption>On dessine dans la vue — sur la face que l'on a cliquée.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip" id="parametric">
         <div>
           <span class="kicker">Paramétrique</span>
@@ -422,7 +324,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks">
+      <div class="showcase" id="building-blocks" data-operations="insert_barrel_hinge insert_bearing_seat insert_cable_clip insert_cable_gland insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_keyhole insert_latch insert_living_hinge insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocs</span>
           <h3>Un piège à écrou en quatre clics au lieu de quatre demi-heures</h3>
@@ -486,7 +388,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="surfaces">
+      <div class="showcase" id="surfaces" data-operations="apply_texture displace_image lattice_fill">
         <div>
           <span class="kicker">Surfaces</span>
           <h3>Huit motifs, tous vérifiés imprimables</h3>
@@ -498,6 +400,12 @@
           motif peut seulement exister sur cette machine&nbsp;: <b>les crêtes
           plus fines que la buse et les reliefs moins hauts qu'une couche
           sont refusés</b>, pas calculés.</p>
+          <p>Une image en niveaux de gris peut aussi devenir une surface perceptible au toucher :
+          <b>Appliquer un relief</b> traduit les zones claires et sombres en hauteur.
+          <b>Remplir de treillis</b> crée un treillis spatial dans la cavité d’un
+          solide évidé, avec un choix de structure, de taille de cellule et
+          d’épaisseur des barreaux. La géométrie du treillis accompagne le modèle
+          exporté.</p>
         </div>
         <figure class="shot">
           <picture>
@@ -506,6 +414,27 @@
                  alt="Huit tuiles de motifs sur deux rangées&nbsp;: la nervure en bandes parallèles, l'onde en bandes ondulées, le moletage droit et croisé en bandes obliques et en losanges, le nid d'abeille en hexagones, les picots en trame de points, le Voronoi en cellules irrégulières et le bruit en taches éparses.">
           </picture>
           <figcaption>Les mêmes contours que ceux qui s'imprimeront — l'aperçu est calculé, pas peint.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="inspection-report">
+        <div>
+          <span class="kicker">Rapport de contrôle</span>
+          <h3>Vous savez avant d'imprimer ce qui va mal tourner</h3>
+          <p>Chaque fichier ouvert reçoit un rapport&nbsp;: zones ouvertes,
+          triangles mal orientés, parois sous deux cordons d'extrusion,
+          unités manquantes. Classé en erreurs, avertissements et remarques —
+          et chaque entrée saute dans le modèle à l'endroit dont elle
+          parle.</p>
+          <p class="note">Chaque constat porte une action proposée.
+          <b>Ici, une erreur ne se termine jamais par «&nbsp;échec&nbsp;».</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/fr/report.png?v=ed4f73b3"><img src="../handbuch/fr/report.png?v=ed4f73b3" width="620" height="430" loading="lazy" decoding="async"
+                 alt="Le rapport de contrôle&nbsp;: zéro erreur, deux avertissements et deux remarques, dont «&nbsp;Le modèle est ouvert à trois endroits&nbsp;» et «&nbsp;Une paroi est plus mince que deux cordons d'extrusion&nbsp;»"></a>
+          </div>
+          <figcaption>Le rapport de contrôle d'un fichier tiers importé.</figcaption>
         </figure>
       </div>
 
@@ -555,7 +484,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="auto-split">
+      <div class="showcase" id="auto-split" data-operations="split_bodies split_line split_pinned">
         <div>
           <span class="kicker">Découpe et découpe automatique</span>
           <h3>Trop grand pour le plateau n'est plus une raison d'y renoncer</h3>
@@ -645,13 +574,79 @@
         </figure>
       </div>
 
+      <div class="showcase" id="ai-agent">
+        <div>
+          <span class="kicker">Agent IA</span>
+          <h3>Une phrase dans le chat, une proposition, un Annuler</h3>
+          <p>L'agent manie les mêmes opérations que les menus — il n'existe
+          aucun raccourci qui contourne la géométrie. Chaque proposition
+          montre ce qu'elle va faire avant de le faire, et s'applique d'un
+          bloc&nbsp;: exactement une transaction, qu'un seul Annuler retire
+          entièrement.</p>
+          <p class="note">La géométrie est calculée par du code, jamais par
+          le modèle de langage. <b>Chaque cote d'une proposition est exacte —
+          rien n'est «&nbsp;généré à peu près&nbsp;».</b></p>
+          <p class="note">Et c'est mesuré, pas promis&nbsp;: une suite de
+          <b>39 requêtes de référence</b> tourne avant et après chaque
+          modification du corpus de règles de l'agent. Au 8&nbsp;août 2026,
+          avec un modèle local de
+          14 milliards de paramètres, sans aucun cloud&nbsp;: 28 réponses
+          correctes sur 39, 98&nbsp;% d'appels d'outils valides du premier
+          coup — et chaque demande ambiguë s'est terminée par une question en
+          retour, pas par une supposition.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Un dessin&nbsp;: «&nbsp;Fraise les quatre vis — M4, affleurant.&nbsp;» s'écrit dans un champ de chat&nbsp;; l'agent répond par une proposition de trois opérations, dans la coupe à côté le perçage s'élargit à 4,5 millimètres et reçoit une fraisure à 90 degrés, et en dessous il est écrit&nbsp;: appliqué — une transaction, un Annuler retire tout.">
+            <text class="ink" x="24" y="30" font-weight="600">Une phrase — trois opérations</text>
+
+            <text class="dim" x="24" y="64">Vous</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Fraise les quatre vis — M4, affleurant.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agent</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Proposition — 3 opérations</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Ajuster le perçage&nbsp;: ø 4,2 → 4,5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Fraisure 90°, ø 8,6 mm — affleurant</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Reporté sur les quatre perçages</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Coupe</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Appliqué — une transaction. Un Annuler retire tout.</text>
+            </g>
+          </svg>
+          <figcaption>La proposition ne change rien tant qu'elle n'est pas appliquée — et alors d'un bloc.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase" id="first-launch">
         <div>
           <span class="kicker">Premier lancement</span>
           <h3>Vous ne partez pas de zéro</h3>
-          <p>Dix projets d'exemple finis sont fournis — un par voie, plus l'esquisse, les blocs, l'inscription en deux couleurs, le calibrage, la
-          préparation de l'impression et une boîte à couvercle où tout se
-          rejoint. Chacun est un vrai projet avec son historique, pas une
+          <p>Onze projets d’exemple sont fournis — pour les quatre voies, l’esquisse, les blocs,
+          l’inscription en deux couleurs, le calibrage et la préparation de
+          l’impression, ainsi qu’une boîte à couvercle et le changement de matériau
+          d’un ajustement. Chacun est un vrai projet avec son historique, pas une
           image dans un manuel.</p>
           <p class="note">Et un manuel qui explique les quinze premières
           minutes — <b>dans la même langue que l'interface.</b></p>
@@ -661,8 +656,8 @@
             <a href="../bilder/beleg-start-fr.png?v=d0227844"><img src="../bilder/beleg-start-fr.png?v=d0227844" width="2560" height="1392" loading="lazy" decoding="async"
                  alt="L'écran de démarrage&nbsp;: une zone de dépôt pour modèles et projets, les boutons «&nbsp;Nouveau projet&nbsp;» et «&nbsp;Ouvrir un projet&nbsp;», et en dessous quatre projets d'exemple — un par voie — avec aperçu et description, et en dessous la section repliée «&nbsp;Quoi d'autre&nbsp;?&nbsp;»"></a>
           </div>
-          <figcaption>L'écran de démarrage avec quatre des dix exemples — les
-          six autres se trouvent derrière «&nbsp;Quoi d'autre&nbsp;?&nbsp;».</figcaption>
+          <figcaption>Quatre des onze exemples présentent les voies principales ; les autres projets
+          montrent des outils particuliers et leur utilisation.</figcaption>
         </figure>
       </div>
     </div>
@@ -670,41 +665,195 @@
 
   <section id="inside">
     <div class="wrap">
-      <h2>Ce qu'il y a encore dedans</h2>
-      <ul class="features">
-        <li><b>Des arêtes exactes.</b> Les faces et les arêtes restent modifiables séparément —
-        pour les chanfreins, les congés et un STEP qui fait
-        l'aller-retour.</li>
-        <li><b>Vitesse.</b> Les mêmes calculs tournent jusqu'à soixante fois
-        plus vite qu'au début — et l'indicateur de progression ne bouge pas
-        tant que le résultat n'est pas vraiment terminé.</li>
-        <li><b>Deux couleurs sans deuxième logiciel.</b> Inscription en
-        relief, en creux ou en changement de couleur dans un seul fichier
-        3MF.</li>
-        <li><b>La remise à votre slicer.</b> Directe, avec les bons réglages,
-        ou ouverte comme fichier dans sa fenêtre — et son G-Code revient en
-        contre-épreuve.</li>
-        <li><b>Calibrer au lieu de deviner.</b> Échelle de tolérances,
-        échelle d'épaisseurs de paroi et éventail de surplombs sur un seul
-        plateau&nbsp;; les valeurs mesurées vont dans le profil de
-        matériau.</li>
-        <li><b>Une chaîne de réparation pour les fichiers venus d'ailleurs.</b>
-        Fermer les trous, redresser les normales, supprimer les triangles
-        dégénérés et les éclats — avant le moindre calcul.</li>
-        <li><b>Mesure, coupe, vue éclatée.</b> Des outils dans la vue qui ne
-        touchent jamais la géométrie.</li>
-        <li><b>La vue vole.</b> Le bouton gauche déplace, le droit fait pivoter,
+      <h2>D’autres outils pour votre pièce</h2>
+      <div class="tool-grid">
+        <details class="tool-card" id="grundkoerper" data-operations="create_box create_brep_box create_brep_cylinder create_cone create_cylinder create_sphere create_torus drill_brep_hole drill_hole intersect_objects subtract_objects union_objects">
+          <summary>Assembler des solides simples</summary>
+          <div class="tool-content"><p>Créer des pavés, cylindres, sphères, cônes et
+        anneaux, les unir, les soustraire ou conserver leur intersection. Placer un
+        perçage directement sur la face choisie.
+        Créer un perçage avec fraisure ou lamage cylindrique en une seule étape, avec
+        diamètre, profondeur et angle de transition réglables.</p></div>
+        </details>
+        <details class="tool-card" id="anordnen" data-operations="align_to_feature duplicate_object fit_to_size mirror_object pattern rotate_object scale_object translate_object">
+          <summary>Les bonnes dimensions, au bon endroit</summary>
+          <div class="tool-content"><p>Déplacer, pivoter, symétriser, mettre à
+        l’échelle ou ramener la plus grande dimension à une valeur cible. Créer des
+        copies individuelles, en ligne ou en cercle ; aligner des faces et des
+        perçages entre eux.</p></div>
+        </details>
+        <details class="tool-card" id="kanten-flaechen" data-operations="bead_edges brep_to_mesh chamfer_edges draft_faces fillet_edges push_face">
+          <summary>Modifier les arêtes et les parois</summary>
+          <div class="tool-content"><p>Congés, chanfreins, bourrelets, déplacement
+        de faces planes et dépouilles fonctionnent sur les maillages STL et les
+        solides exacts compatibles. Une dépouille incline une paroi, par exemple pour
+        faciliter le démoulage. STEP reste disponible pour les solides exacts.</p></div>
+        </details>
+        <details class="tool-card" id="gehaeuse" data-operations="create_lid hollow_object screw_lid shell_exact thicken thread_exact">
+          <summary>Des boîtiers et des couvercles adaptés</summary>
+          <div class="tool-content"><p>Évider un solide à l’épaisseur de
+        paroi souhaitée, avec une mise à l’air si nécessaire, ou épaissir une surface
+        ouverte. Une ouverture adaptée donne un couvercle assorti. <b>Créer un
+        couvercle vissé</b> ajoute un col fileté et le couvercle correspondant, avec
+        le jeu du profil de matériau.</p></div>
+        </details>
+        <details class="tool-card" id="formen" data-operations="blend_union pose_armature sculpt_strokes subdivide_surface">
+          <summary>Sculpter des formes et changer la pose des figurines</summary>
+          <div class="tool-content"><p>Fusionner doucement des
+        solides simples, subdiviser les surfaces et utiliser des pinceaux pour
+        ajouter, enlever ou lisser la matière. L’étape de sculpture reste modifiable.
+        Un squelette permet de donner une autre pose à une figurine.</p></div>
+        </details>
+        <details class="tool-card" id="filamente" data-operations="assign_slot clear_filament create_label label_text paint_slot set_material slots_from_texture">
+          <summary>Inscrire du texte et préparer plusieurs couleurs</summary>
+          <div class="tool-content"><p>Appliquer du texte en
+        relief, en creux ou comme solide distinct. Affecter des filaments à des
+        pièces entières ou à des faces, convertir les couleurs des textures
+        existantes en filaments et exporter un 3MF en couleur. L’imprimante, les
+        affectations de filaments et les profils adaptés restent liés dans le projet
+        ; le stock de filaments est géré pour l’ensemble des projets.</p></div>
+        </details>
+        <details class="tool-card" id="druckvorbereitung" data-operations="arrange_bed check_collisions orient_for_print place_on_bed">
+          <summary>Disposer le plateau et vérifier l’impression</summary>
+          <div class="tool-content"><p>Poser les pièces sur le lit,
+        trouver une orientation favorable, les répartir sur le plateau et vérifier
+        les chevauchements. L’envoi direct au trancheur emporte les réglages adaptés
+        ; le G-code importé fournit ensuite une contre-vérification dont l’origine
+        reste clairement indiquée.</p></div>
+        </details>
+        <details class="tool-card" id="kalibrieren" data-operations="check_join_path compensate_first_layer create_fit_ladder create_overhang_fan create_wall_ladder test_piece">
+          <summary>Adapter les ajustements à votre imprimante</summary>
+          <div class="tool-content"><p>Imprimer une échelle de
+        tolérances, une échelle d’épaisseurs de paroi et un éventail de surplombs,
+        puis reporter les mesures dans le profil de matériau. Une petite éprouvette
+        économise de la matière ; la compensation du pied d’éléphant réduit sur le
+        modèle une première couche trop large. Le trajet d’assemblage vérifie si les
+        pièces peuvent s’emboîter.</p></div>
+        </details>
+        <details class="tool-card" id="netzpflege" data-operations="decimate_mesh remesh_mesh remesh_uniform repair smooth_mesh">
+          <summary>Préparer les maillages importés</summary>
+          <div class="tool-content"><p>Fermer les zones ouvertes, harmoniser
+        l’orientation des faces extérieures et corriger les triangles problématiques.
+        Réduire, affiner ou répartir les triangles plus régulièrement ; le lissage
+        adoucit une surface irrégulière.</p></div>
+        </details>
+        <details class="tool-card" id="dateien" data-operations="delete_object load load_outline load_step rename_object">
+          <summary>Réutiliser modèles et dessins</summary>
+          <div class="tool-content"><p>Ouvrir STL, 3MF, OBJ, PLY, OFF, GLB/glTF et
+        STEP. Les contours SVG et DXF deviennent des solides. Exporter STL, 3MF, OBJ,
+        PLY, GLB et, pour les solides exacts, STEP. Les projets conservent plusieurs
+        objets, leurs noms, paramètres, ajustements et historique modifiable.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Mesure, coupe, vue éclatée</summary>
+          <div class="tool-content"><p>Des outils dans la vue qui ne
+        touchent jamais la géométrie.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>La vue vole</summary>
+          <div class="tool-content"><p>Le bouton gauche déplace, le droit fait pivoter,
         la molette enfoncée bascule — et W, A, S, D vous font traverser
         l'espace comme dans un jeu. Habitué à autre chose&nbsp;? Réglez Cura,
-        les slicers de Bambu et Prusa, la CAO ou Blender.</li>
-        <li><b>L'IA en local ou avec votre propre clé.</b> Ollama sur votre
+        les slicers de Bambu et Prusa, la CAO ou Blender.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>L'IA en local ou avec votre propre clé</summary>
+          <div class="tool-content"><p>Ollama sur votre
         machine ou une clé API — et sans l'un ni l'autre, tout fonctionne,
-        sauf le chat.</li>
-        <li><b>Pilotable à distance via MCP — y compris depuis Claude Code.</b>
-        Un deuxième programme appelle les mêmes opérations que les
+        sauf le chat.</p></div>
+        </details>
+        <details class="tool-card">
+          <summary>Pilotable à distance via MCP — y compris depuis Claude Code</summary>
+          <div class="tool-content"><p>Un deuxième programme appelle les mêmes opérations que les
         menus&nbsp;: désactivé par défaut, sur votre machine seulement, et
-        chaque appel distant est une transaction qu'un Annuler retire.</li>
-      </ul>
+        chaque appel distant est une transaction qu'un Annuler retire.</p></div>
+        </details>
+      </div>
+      <p>Les champs, valeurs par défaut et limites figurent dans la <a
+      href="/fr/manual.html#ref-scene">référence complète des opérations</a>. Elle
+      est générée pour chaque version publiée à partir du même registre que
+      l’application.</p>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="tint">
+    <div class="wrap">
+      <h2>Plus de possibilités pour votre pièce</h2>
+      <p class="lead">Modifiez les perçages avec leurs fraisures, divisez les organiseurs sur mesure et créez des champs de trous avec une bordure. Vous pouvez ensuite ajuster à nouveau les dimensions.</p>
+      <div class="showcase" id="bohrung-senkung">
+        <div>
+          <span class="kicker">Perçage et fraisure</span>
+          <h3>Le trou s’agrandit. Son entrée s’adapte.</h3>
+          <p>Un perçage reconnu comporte souvent plusieurs diamètres : une fraisure en haut, puis
+          un épaulement ou une seconde section en dessous. Lors de la modification,
+          vous choisissez les sections qui vont ensemble.</p>
+          <p><b>Inclure la fraisure et les épaulements</b> ajuste ensemble leurs diamètres. La
+          largeur d’entrée, l’angle de fraisure et les profondeurs des épaulements
+          sont conservés. <b>Diamètre du trou uniquement</b> laisse inchangées les
+          dimensions extérieures et la position de la fraisure et des épaulements.</p>
+          <p class="note">Les sections reconnues comme appartenant au même perçage sont aussi modifiées
+          ensemble lors d’un déplacement ou d’une copie. <b>Une étape dans
+          l’historique — une annulation.</b> Les associations incertaines sont
+          signalées avant le calcul.</p>
+        </div>
+        <div>
+          <figure class="shot">
+            <img class="feature-model" src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À gauche, le perçage fraisé d’origine ; à droite, le perçage et la fraisure agrandis ensemble. Les dimensions extérieures de la pièce restent identiques.">
+            <figcaption>À gauche, le perçage fraisé d’origine ; à droite, le perçage et la fraisure agrandis ensemble. Les dimensions extérieures de la pièce restent identiques.</figcaption>
+          </figure>
+          <details class="feature-diagram"><summary>Voir la coupe</summary>
+            <figure class="shot"><svg class="figure" viewBox="0 0 560 260" role="img"
+               aria-label="Coupe schématique : à gauche, un perçage fraisé ; à droite, un perçage plus large. La fraisure s’agrandit avec lui, tout en conservant son angle et sa largeur d’entrée.">
+            <text class="ink" x="30" y="32" font-size="17">Avant</text>
+            <text class="ink" x="320" y="32" font-size="17">Modification conjointe</text>
+            <path class="body" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M30 65H95L120 90V210H30Z M155 65H220V210H130V90Z M320 65H370L395 90V210H320Z M450 65H500V210H425V90Z"/>
+            <path class="hot-stroke" d="M245 135H285M274 124L285 135L274 146"/>
+            <text class="dim" x="30" y="242" font-size="14">Perçage fraisé</text>
+            <text class="dim" x="320" y="242" font-size="14">L’entrée reste adaptée</text>
+          </svg><figcaption>Schéma : le mode de modification choisi détermine les dimensions qui évoluent
+          ensemble.</figcaption></figure>
+          </details>
+        </div>
+      </div>
+      <div class="feature-card-grid">
+        <article class="feature-card" id="organizer" data-operations="create_organizer create_organizer_divider create_organizer_foot create_organizer_rim create_organizer_tray insert_organizer_divider insert_organizer_foot insert_organizer_rim insert_organizer_tray">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organisateur à six compartiments et cloisons de différentes hauteurs.">
+          <div class="feature-card-copy"><h3>Un organiseur adapté à son contenu</h3><p>Diviser les compartiments dans l’aperçu,
+        définir les dimensions extérieures ou les dimensions libres des cases et
+        modifier séparément la hauteur des cloisons. Les paramètres du projet gardent
+        égales les dimensions liées. Bac, bord, cloison et pied emboîtable existent
+        aussi comme blocs.</p></div>
+        </article>
+        <article class="feature-card" id="lochfelder" data-operations="field_cut">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Plaque avec ouvertures hexagonales traversantes, bord plein et zone circulaire centrale préservée.">
+          <div class="feature-card-copy"><h3>Des champs de trous avec une bordure</h3><p>Répartir des trous ronds, des trous
+        oblongs ou des alvéoles dans une zone dessinée. La largeur de bordure,
+        l’espacement et les zones exclues définissent le champ ; ses dimensions
+        restent modifiables par la suite.</p></div>
+        </article>
+        <article class="feature-card" id="textur-bearbeiten">
+          <img src="../bilder/feature-textures.webp?v=f88988e1" width="1200" height="800" loading="lazy" decoding="async" alt="Trois plaques avec moletage, motif en nid d’abeilles et nervures parallèles formés par une géométrie réelle.">
+          <div class="feature-card-copy"><h3>Reprendre un motif plus tard</h3><p>Sélectionner une texture appliquée dans la
+        fenêtre des caractéristiques et modifier ses valeurs. <b>Face entière</b>
+        couvre la face plane choisie jusqu’au bord et laisse les perçages libres. Le
+        solide obtenu montre la modification.</p></div>
+        </article>
+      </div>
+      <div class="feature-card-grid feature-notes">
+        <article class="feature-card" id="konturauswahl">
+          <div class="feature-card-copy"><h3>Ne construire que les formes voulues du dessin</h3><p>Ouvrir un SVG ou un DXF,
+        choisir les contours fermés dans l’aperçu et en créer des solides. Les
+        contours intérieurs restent des évidements ; chaque forme peut être examinée
+        avant validation.</p></div>
+        </article>
+        <article class="feature-card" id="lokale-erkennung" data-operations="detect_region">
+          <div class="feature-card-copy"><h3>Examiner les grands modèles à l’endroit utile</h3><p>Choisir un endroit sur le
+        modèle original et y rechercher des caractéristiques complètes. La
+        reconnaissance travaille dans une zone limitée ; il n’est pas nécessaire de
+        simplifier le modèle.</p></div>
+        </article>
+      </div>
     </div>
   </section>
 
@@ -740,7 +889,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

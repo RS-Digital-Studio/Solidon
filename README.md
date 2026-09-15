@@ -8,11 +8,13 @@ LLM-Agent steuert denselben Operations-API fern, den auch die Menüs benutzen.
 **Geometrie rechnet Code, nie das Modell.** Nach der einmaligen
 Gerätefreischaltung bleibt Solidon ohne Netz und ohne Konto vollständig
 nutzbar; ein Arbeitsrechner ohne Netz wird per Anfrage- und Antwortdatei über
-ein zweites Gerät aktiviert. Ohne KI bleibt nur der Chat aus.
+ein zweites Gerät aktiviert. Konstruktion, Bearbeitung und Druckvorbereitung
+funktionieren ohne KI. Für den Chat und die Erzeugung aus Text oder Bild
+werden die jeweils eingerichteten Modelle benötigt.
 
 Projektdateien tragen die Endung `.p3d`.
 
-## Version 0.3.0 — die öffentliche Demo
+## Die öffentliche Demo
 
 Die aktuelle Version ist eine **Demo**: vollständig, unentgeltlich, ohne
 Schlüssel und ohne Konto, **befristet bis zum 30. Oktober 2026**. Danach
@@ -31,24 +33,45 @@ Der gepflegte 14-Tage-Pfad bleibt im Code,
 aber nur ein späterer neuer Bau mit gesetztem `TRIAL_FROM` kann ihn anbieten.
 Das Konzept dahinter steht in `konzepte/konzept-demo-2026-10.md`.
 
+Die veröffentlichte Fassung steht auf der [Downloadseite](https://solidon3d.de/).
+Dieses Repository enthält zusätzlich den folgenden Entwicklungsstand nach
+der Veröffentlichung von **0.4.2 am 15. September 2026**. Diese Ergänzungen
+sind noch nicht Teil dieses Downloads:
+
+* **Bohrung samt Einlauf ändern:** Bei einer eindeutig erkannten Verbindung
+  können Senkung, Aufweitung oder gerundeter Einlauf dem neuen Durchmesser
+  folgen. Mehrdeutige Übergänge werden benannt, bevor Material geändert wird.
+* **Organizer konstruieren:** Fächer maßlich koppeln und Trennwände einzeln
+  auswählen und ändern; das gespeicherte Layout bleibt nachträglich bearbeitbar.
+* **SVG- und DXF-Konturen auswählen:** Vor dem Erzeugen in der Vorschau wählen,
+  welche geschlossenen Umrisse zum Teil gehören sollen.
+* **Oberflächenmuster weiterbearbeiten:** Eine gewählte Fläche bis zum Rand
+  mit Rändel, Waben oder Rippen versehen, Bohrungen aussparen und die Textur
+  anschließend über ihre Merkmalskarte ändern.
+* **Öffnungsfelder zeichnen:** Runde Löcher, Langlöcher oder Waben innerhalb
+  eines gezeichneten Bereichs verteilen, mit festem Rand und ausgesparten Zonen.
+* **Merkmale örtlich suchen:** An großen Netzen die Erkennung auf den
+  ausgewählten Bereich begrenzen.
+
 ## Was Solidon nicht ist
 
 Damit niemand das Falsche erwartet:
 
-* **Kein CAD-Ersatz.** Es gibt Skizzen mit Zwangsbedingungen und einen exakten
-  Kern für Verrundungen, Fasen und STEP — aber keine Historie aus
-  parametrischen Features im Sinne von Fusion oder SolidWorks, und keine
-  Baugruppenverwaltung. Der Hauptweg bleibt der Operationsstack auf Netzen;
-  der exakte Kern ist der zweite Weg daneben, nicht der Ersatz für ein
-  CAD-Programm.
+* **Kein vollständiger Ersatz für ein CAD-System.** Skizzen mit Bedingungen,
+  benannte Maße und ein exakter Kern ermöglichen eigene Konstruktionen.
+  Eine eingelesene STL erhält dadurch keine ursprüngliche CAD-Historie;
+  es gibt auch keine Baugruppenverwaltung mit Gelenken und Bewegungen.
+  Verrundungen und Fasen funktionieren sowohl an geeigneten erkannten
+  Netzkanten als auch an exakten Körpern.
 * **Keine Passungen aus erzeugten Meshes.** Was ein Bildmodell erzeugt, ist eine
   Oberfläche, keine Konstruktion. Bohrungen und Passungen entstehen danach als
   eigene Operationen — nicht dadurch, dass man das erzeugte Netz vermisst.
 * **Kein Slicer.** Die eingebaute Schichtanalyse sucht und bewertet; die
   Druckdatei kommt weiter aus dem Slicer. Beide Zahlenwelten bleiben getrennt
   ausgewiesen (§22.5).
-* **Keine Cloud.** Kein Konto, keine Telemetrie, keine Projektablage im Netz.
-  Ein Sprachmodell wird nur gefragt, wenn ein Schlüssel hinterlegt ist.
+* **Keine Cloud-Ablage von Projekten.** Kein Konto, keine Telemetrie, keine
+  Projektablage im Netz. Der Chat verwendet den ausdrücklich eingerichteten
+  Onlinedienst oder ein lokales Modell über Ollama.
 
 **Support** läuft über einen Kanal: **support@solidon3d.de**. Unter *Hilfe →
 Rückmeldung senden* geht ein Vorschlag, ein Fehler oder eine Frage direkt aus
@@ -90,9 +113,10 @@ frei formen.
 ersten fünfzehn Minuten, das Fenster, das Zeichnen, Verlauf, Parameter,
 Toleranzen, Bausteine, den Chat und ein Wörterbuch — dazu je eine erzeugte
 Seite pro Kategorie des Registers, mit jeder Operation, jedem Wert und jedem
-Bereich. Die zweite Hälfte kommt aus demselben Register wie die Menüs — sie
-kann nicht veralten, und eine neue Operation kann nicht dazukommen, ohne dort
-aufzutauchen. Gesucht wird über den Text, nicht nur über die Überschriften.
+Bereich. Die zweite Hälfte kommt aus demselben Register wie die
+Bedienelemente. Im Programm werden neue Operationen dadurch automatisch
+aufgeführt; die Website-Fassung wird beim Release neu erzeugt und geprüft.
+Gesucht wird über den Text, nicht nur über die Überschriften.
 Abbildungen gehören dazu; keine davon wird von Hand gepflegt.
 
 **Hilfe → Solidon3D unterstützen** öffnet zunächst nur einen lokalen Dialog.
@@ -168,8 +192,8 @@ Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und
 das **Flatpak** der Weg in die Software-Verwaltung mit Aktualisierung und
 Sandbox. Gebaut werden sie von `tools/make_linux_packages.py`, das die Werte aus
 `app/branding.py` liest und daraus Menüeintrag, Flatpak-Manifest und
-AppStream-Beschreibung schreibt. Ausgeliefert werden ab der nächsten Version
-AppImage und Flatpak; das Archiv bleibt ein Bauartefakt.
+AppStream-Beschreibung schreibt. Ausgeliefert werden AppImage und Flatpak;
+das Archiv bleibt ein Bauartefakt.
 
 ```
 python tools/make_linux_packages.py --files    # nur die Beschreibungen
@@ -210,8 +234,9 @@ passende Grafik, startet es ohne 3D-Ansicht statt abzubrechen;
 
 ## Sprachmodell für den Chat
 
-Der Chat braucht ein Modell; alles andere in Solidon kommt ohne aus. Der
-Schlüssel wird über **Bearbeiten → Chat einrichten** im Schlüsselbund
+Der Chat braucht ein Sprachmodell. Manuelle Konstruktion, Bearbeitung und
+Druckvorbereitung kommen ohne aus. Der Schlüssel wird über
+**Bearbeiten → Chat einrichten** im Schlüsselbund
 des Systems abgelegt und reist nie mit der Projektdatei mit. Auf einem
 Bauserver geht auch die Umgebungsvariable `SOLIDON3D_LLM_KEY`.
 
@@ -227,8 +252,8 @@ nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
 Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
 
 Entscheidend ist dabei, wie viele Werkzeuge im Spiel sind. Der Agent bietet
-alle 95 registrierten Operationen und elf Analyse- und Dialogwerkzeuge an —
-106 Schemata, für Ollama kompakt rund 105 KB. Daran fallen kleinere Modelle,
+die registrierten Operationen sowie Analyse- und Dialogwerkzeuge an.
+An dieser umfangreichen Werkzeugauswahl scheitern kleinere Modelle,
 die mit einer Handvoll noch alles treffen. Vorgabe ist darum `qwen3:14b`;
 `llama3.1:8b` ist schneller und kleiner, gibt unter der vollen Last aber die
 Mehrzahl der Aufrufe als Text aus.
@@ -313,24 +338,24 @@ Programme bleiben für das, wo sie wirklich besser sind.
 
 | Aufgabe | In Solidon | Sonst üblich |
 |---|---|---|
-| Text und Logo auf einer Fläche | **Beschriftung → Text aufbringen** | OpenSCAD, Blender |
-| Logo oder Umriss als Körper | **Import → Zeichnung extrudieren** (SVG, DXF) | Inkscape + Blender |
-| Fasen und Verrundungen | **Boolesch → Verrunden / Fase** (exakt, §30) | CAD-Programm |
-| Erzeugtes Netz brauchbar machen | **Netz → Dezimieren, Glätten, Neu vernetzen** | MeshLab |
-| Material sparen | **Druckvorbereitung → Aushöhlen** mit Entlüftung | Slicer-Infill oder Handarbeit |
-| Linkes und rechtes Teil | **Transformation → Spiegeln** | zweite Konstruktion |
+| Text auf einer Fläche | **Fläche wählen → rechts Text aufbringen** | OpenSCAD, Blender |
+| Logo oder Umriss als Körper | **Datei → Modell einfügen** (SVG, DXF) | Inkscape + Blender |
+| Fasen und Verrundungen | **Kante wählen → rechts Verrunden / Fase anbringen** — am Netz oder exakten Körper | CAD-Programm |
+| Erzeugtes Netz brauchbar machen | **Teil wählen → rechts Dezimieren, Glätten, Neu vernetzen** | MeshLab |
+| Material sparen | **Teil wählen → rechts Aushöhlen** mit Entlüftung | Slicer-Infill oder Handarbeit |
+| Linkes und rechtes Teil | **Teil wählen → rechts Spiegeln** | zweite Konstruktion |
 | Erste Schicht maßhaltig | **Elefantenfuß ausgleichen** aus dem Materialprofil | Slicer-Einstellung, projektfern |
 | Toleranz messen statt raten | **Varianten erzeugen** (§28.3) | mehrere Exporte von Hand |
-| Eine Passung prüfen, ohne das Teil zu drucken | **Druckvorbereitung → Prüfstück erzeugen** | von Hand nachmodellieren |
+| Eine Passung prüfen, ohne das Teil zu drucken | **Teil wählen → rechts Prüfstück erzeugen** | von Hand nachmodellieren |
 | Zweifarbige Beschriftung | **Text aufbringen** mit eigenem Filament, oder **Schriftzug als Körper** | zwei Konstruktionen |
-| Deckel zu einer vorhandenen Schachtel | **Bausteine → Deckel erzeugen** | Hohlraum abmessen und neu zeichnen |
-| Schraubdeckel für ein Glas oder eine Dose | **Bausteine → Drehdeckel erzeugen** | Gewindepaar von Hand konstruieren |
+| Deckel zu einer vorhandenen Schachtel | **Erzeugen → Bausteine → Deckel erzeugen** | Hohlraum abmessen und neu zeichnen |
+| Schraubdeckel für ein Glas oder eine Dose | **Erzeugen → Bausteine → Drehdeckel erzeugen** | Gewindepaar von Hand konstruieren |
 | Zehn Stück auf die Platte | **Objekt duplizieren** mit Anzahl | zehnmal kopieren, Stückzahl im Dateinamen |
-| 3MF-Baugruppe aus dem Slicer öffnen | **Import** — die Teile kommen einzeln an | pro Teil eine STL exportieren |
+| 3MF-Baugruppe aus dem Slicer öffnen | **Datei → Modell einfügen** — die Teile kommen einzeln an | pro Teil eine STL exportieren |
 | Etwas an eine angeklickte Fläche setzen | **Fläche wählen, Operation aufrufen** — Ort und Achse sind eingetragen | Koordinaten ablesen und eintippen |
 | Eine vorhandene Bohrung in STL oder STEP ändern | **Bohrung anklicken → Bohrung ändern** — nur den neuen Durchmesser eintragen | Stopfen bauen, neu bohren oder CAD-Historie rekonstruieren |
-| Eine Bohrung zwei Millimeter versetzen | **Doppelklick auf den Schritt im Verlauf** | zurücknehmen und neu bohren |
-| Dichtung aus TPU im PETG-Gehäuse | **Druckvorbereitung → Material festlegen** | zwei Projekte |
+| Eine erkannte Bohrung zwei Millimeter versetzen | **Bohrung wählen → rechts Position ändern**; spätere Änderungen auch im Verlauf | zurücknehmen und neu bohren |
+| Dichtung aus TPU im PETG-Gehäuse | **Körper wählen → rechts Material festlegen** | zwei Projekte |
 
 Der Text kommt als Schriftumriss, nicht als Bild — die Kanten bleiben in jeder
 Größe sauber, und DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich
@@ -363,10 +388,13 @@ Draußen bleibt, was draußen besser ist: der **Slicer** schreibt die Druckdatei
 
 ## Exakte Körper (B-Rep) und STEP
 
-Neben dem Netz-Kern steht ein zweiter mit echten Kanten (§30). Er kommt ins
-Spiel, wenn eine STEP-Datei geladen wird oder ein exakter Quader bzw. Zylinder
-angelegt wird — und er ist die Voraussetzung für **Verrunden** und **Fase
-anbringen**: auf einem Netz wäre beides die Näherung einer Näherung.
+Neben dem Netz-Kern steht ein zweiter mit mathematisch beschriebenen Flächen
+und Kanten (§30). Er kommt ins Spiel, wenn eine STEP-Datei geladen oder ein
+exakter Körper angelegt wird. **Verrunden** und **Fase anbringen** arbeiten
+seit 0.4.1 auch an geeigneten Kanten eingelesener Netze. Auf einem Netz
+besteht eine Rundung aus kurzen geraden Abschnitten; ein exakter Körper
+behält den mathematischen Bogen. Die Auswahl erfolgt in beiden Fällen im
+Bild, Radius oder Breite werden rechts eingegeben.
 
 Der Objektbaum kennzeichnet exakte Körper. **In ein Netz umwandeln** geht
 jederzeit, der Rückweg nicht — ein Netz hat seine Kanten verloren. Der Schritt
@@ -421,8 +449,8 @@ Filamentkatalog darf beliebig viele Spulen führen. Je Objekt bleiben höchstens
 acht gleichzeitig benutzte Filamente möglich, entsprechend dem 3MF- und
 Druckerweg.
 
-Zugewiesen wird über **Farbe → Teil färben** für den ganzen Körper oder
-**Farbe → Fläche färben** für die erkannte Fläche unter dem Zeiger. Die
+Zugewiesen wird nach Auswahl des Körpers oder einer erkannten Fläche über
+die Filamentauswahl rechts im Fenster. Die
 Flächengrenze kommt aus der Merkmalserkennung und wandert bei späteren
 Maßänderungen mit; es gibt keinen punktfesten Pinsel und keinen Radius mehr.
 Aus der Textur eines erzeugten Modells kann **Textur in Filamente umrechnen**

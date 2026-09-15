@@ -19,7 +19,7 @@ als letzten bereits eingeplanten Short-Tag.
 | 16.09.2026 | Short DE + EN | STL passt fast? Löcher ändern, Teil behalten | `bohrung-anpassen` |
 | 17.09.2026 | Tutorial DE + EN | Eine Zahl ändern, beide Löcher folgen (benannte Maße) | `stl-varianten` |
 | 18.09.2026 | Short DE + EN | Eine STL, zwei Zahlen, neue Variante | `stl-varianten` |
-| 19.09.2026 | Tutorial DE + EN | Vorschau: aus einem Loch wird ein Langloch | `langloch` |
+| 19.09.2026 | Tutorial DE + EN | Aus einem Loch wird ein Langloch | `langloch` |
 | 20.09.2026 | Short DE + EN | Schraube soll verstellbar sein? Loch zum Langloch | `langloch` |
 | 21.09.2026 | Tutorial DE + EN | Kanten abrunden und anfasen, direkt am fertigen Modell | `stl-kanten` |
 | 22.09.2026 | Short DE + EN | Scharfe Kanten an der STL? Abrunden statt neu zeichnen | `stl-kanten` |
@@ -62,16 +62,21 @@ Titel, Beschreibungen und Tags stehen in
 [workshop-2026-09-copy.json](workshop-2026-09-copy.json). Sie sind für
 Neueinsteiger geschrieben: zuerst das Problem („Löcher passen nicht?"), dann
 die Lösung, „STL bearbeiten" / „edit STL" als Suchwort vorn, Demo-Link,
-Hinweis auf die Einsteiger-Playlist, Vorschau-Hinweis auf 0.4.1, drei
+Hinweis auf die Einsteiger-Playlist, Aufnahmeherkunft und Verfügbarkeit, drei
 Hashtags, zehn bis zwölf Tags. Keine Fremdmarken in Titeln oder Tags.
 Kapitel ergänzt der Prüfer aus den wirklich aufgenommenen Zeitpunkten.
 
 ## Versionsbezug
 
-Am 13.09.2026 lieferte die öffentliche `https://solidon3d.de/version.json`
-Version 0.4.0. Der Arbeitsstand enthält 0.4.1 einschließlich der neu
-gruppierten Handlungskarte. Deshalb sind die Aufnahmen als Entwicklungsvorschau
-auf 0.4.1 gekennzeichnet. Ein Release-Termin wird nicht versprochen.
+Die Filme wurden am 13.09.2026 mit einem Entwicklungsstand von 0.4.1
+aufgenommen. Öffentlich war damals 0.4.0; deshalb trugen die ursprünglichen
+Texte den Zusatz „Vorschau“. Diese Aufnahmeherkunft bleibt erhalten.
+
+Seit dem 15.09.2026 ist **0.4.2 veröffentlicht**. Die gezeigten Funktionen,
+einschließlich Langloch, Verrunden und Fase an eingelesenen Netzen, sind darin
+verfügbar. Die lokalen Titel und Beschreibungen sind entsprechend aktualisiert.
+Das ändert keine Aufnahme und keinen bereits in YouTube Studio gespeicherten
+Text; die dortige Übernahme dieser Textfassung steht noch aus.
 
 ## Dateien und Abnahme
 
@@ -86,16 +91,17 @@ der gezeigte Modellzustand geprüft ist und die MP4 Bildgröße, Bildrate, Tonsp
 und Dauer erfüllt. Erstellung und YouTube-Veröffentlichung bleiben getrennte
 Angaben.
 
-## Offener Produktbefund aus dieser Produktion
+## Ergebnis-STLs und Beispielarchiv
 
-Die Ergebnis-STLs nach `resize_hole`/`move_feature` und nach
-`fillet_edges`/`chamfer_edges` gegen ein eingelesenes STL sind per Index
-geschlossen, nach dem Verschweißen (Slicer, eigener Import) aber nicht mehr —
-Solidon meldet beim Wiederöffnen „Das Modell ist nicht geschlossen". Diagnose
-und Fixvorschlag (zwei Stellen: Ausgang von `boolean._kernel` verschweißen,
-`edges.rounding_tool` mit `flank_overlap=BOOLEAN_OVERLAP`) stehen im Register
-von `ROADMAP.md`. Im Film ist davon nichts zu sehen; die beigelegten
-Beispiel-STLs werden nach dem Fix neu exportiert.
+Die bei der Produktion gefundenen offenen Nähte nach Bohrungsänderung,
+Merkmalverschiebung, Verrunden und Fase an eingelesenen STLs sind in 0.4.2
+behoben. Export und erneuter Import werden für diesen Kundenweg geprüft;
+der Nachweis und die verbleibenden Aufgaben stehen unter
+[RM-166](../../ROADMAP.md#rm-166).
+
+Das Beispielarchiv der Werkstattfilme ist davon getrennt: Seine erneute
+Erzeugung und Prüfung stehen weiterhin aus. Die Filmaufnahmen bleiben
+unverändert.
 
 ## Stand
 
@@ -128,5 +134,5 @@ Die Sprachquerverweise (`cross_language_line`) sind nicht eingetragen, weil
 die Kennungen erst beim Hochladen entstanden; sie können nach der
 Veröffentlichung nachgetragen werden.
 
-Nicht Teil dieser Produktion: das Archiv der Beispiel-STLs wartet auf den Fix
-zu RM-166 (Abschnitt oben); die Kanalseite selbst ist unverändert.
+Nicht Teil dieser Produktion: die erneute Erzeugung und Prüfung des Archivs
+der Beispiel-STLs zu RM-166 (Abschnitt oben); die Kanalseite selbst ist unverändert.

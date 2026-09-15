@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=62ec25e6">
+<link rel="stylesheet" href="../style.css?v=aece7d33">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -93,7 +93,7 @@
       "name": "Posso mover um furo num STL já terminado?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sim. Ao abrir, furos, pinos, escareados, cúpulas e sedes são reconhecidos como características com nome; a janela de características mostra os seus valores medidos, e alterar um número é a operação. Mover, duplicar e remover valem para cada um destes tipos; rodar, para todos menos a superfície esférica. Para arredondamentos e golas estas operações ainda não existem, e a janela di-lo ali mesmo, com o motivo."
+        "text": "Sim. Ao abrir, furos, pinos, escareados, cúpulas e sedes são reconhecidos como características com nome; a janela de características mostra os seus valores medidos, e alterar um número é a operação. Mover, duplicar e remover valem para cada um destes tipos; rodar, para todos menos a superfície esférica. Nos arredondamentos compatíveis é possível alterar o raio ou remover o arredondamento. O Solidon3D mostra quais as ações disponíveis no ponto escolhido; as golas e as transições suaves continuam excluídas."
       }
     },
     {
@@ -355,7 +355,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>110</b><span>operações no registo</span></div>
+        <div><b>110</b><span>operações na versão para transferência</span></div>
         <div><b>27</b><span>blocos verificados</span></div>
         <div><b>51</b><span>medidas de peças normalizadas</span></div>
         <div><b>16</b><span>perfis de impressora de fábrica</span></div>
@@ -602,8 +602,7 @@
         antes e depois de cada alteração ao conjunto de regras do
         agente.</li>
         <li><b>A face em que clica é que conta.</b> Um furo, um bloco ou um
-        esboço aparecem onde apontou — antes, cada operação numa face
-        custava dois cliques. O menu de contexto de uma face oferece agora
+        esboço aparecem onde apontou. Crie um furo com o respetivo escareado num só passo. O menu de contexto de uma face oferece agora
         também suporte de parede, nervura, lingueta e ranhura, lingueta de
         encaixe, ligação de encaixe e dobradiça de filme.</li>
         <li><b>A característica reconhecida deixa-se agarrar.</b> Clique num
@@ -626,10 +625,44 @@
         <li><b>Análise de camadas sem slicer.</b> Saliências, ilhas, vãos de
         ponte e volume de suporte; a procura de orientação propõe a posição
         que menos disso gera.</li>
-        <li><b>Esboços com restrições.</b> Dez restrições seguram o desenho, e o contorno mantém-se uma curva exata — um círculo
+        <li><b>Esboços com restrições.</b> Distâncias, ângulos, comprimentos iguais e pontos
+        médios seguram o desenho. O contorno mantém-se uma curva exata — um círculo
         torna-se um cilindro, não um polígono.</li>
+        <li><b>Fazer mais com o seu modelo.</b> Também inclui relevos a partir de imagens,
+        treliças espaciais, ângulos de saída, tampas à medida e inscrições
+        multicoloridas. <a href="/pt/features.html#inside">Ver mais ferramentas</a>.</li>
       </ul>
       <a class="btn ghost" href="/pt/features.html">Ver todas as funções</a>
+    </div>
+  </section>
+
+  <section id="entwicklung" class="feature-preview tint">
+    <div class="wrap">
+      <h2>Mais possibilidades para a sua peça</h2>
+      <p class="lead">Altere os furos em conjunto com os escareados, divida os organizadores à medida e crie campos de furos com margem. Pode voltar a ajustar as dimensões mais tarde.</p>
+      <div class="feature-card-grid">
+        <article class="feature-card">
+          <img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À esquerda, o furo escareado original; à direita, o furo e o escareado aumentados em conjunto. As dimensões exteriores da peça mantêm-se.">
+          <div class="feature-card-copy"><h3><a href="/pt/features.html#bohrung-senkung">O furo cresce. A entrada acompanha.</a></h3><p>Um furo reconhecido tem frequentemente mais de um diâmetro: um escareado em cima,
+          depois um degrau ou uma segunda secção por baixo. Ao editar, decide quais
+          as secções que pertencem ao mesmo conjunto.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organizador com seis compartimentos e divisórias de alturas diferentes.">
+          <div class="feature-card-copy"><h3><a href="/pt/features.html#organizer">Um organizador à medida do conteúdo</a></h3><p>Dividir compartimentos na
+        pré-visualização, definir as medidas exteriores ou as medidas livres das
+        divisões e alterar individualmente a altura dos separadores. Os parâmetros do
+        projeto mantêm iguais as medidas relacionadas. Tabuleiro, bordo, separador e
+        pé de encaixe também existem como blocos.</p></div>
+        </article>
+        <article class="feature-card">
+          <img src="../bilder/feature-fields.webp?v=188a8822" width="1200" height="800" loading="lazy" decoding="async" alt="Placa com aberturas hexagonais passantes, margem fechada e uma zona circular central sem perfurações.">
+          <div class="feature-card-copy"><h3><a href="/pt/features.html#lochfelder">Campos de furos com margem</a></h3><p>Distribuir furos redondos, rasgos ou células em
+        favo numa área desenhada. A largura da margem, o espaçamento e as zonas
+        excluídas definem o campo; as suas medidas continuam editáveis mais tarde.</p></div>
+        </article>
+      </div>
+      <a class="btn ghost" href="/pt/features.html#entwicklung">Ver os exemplos em detalhe</a>
     </div>
   </section>
 
@@ -836,8 +869,7 @@
           reconhecidos como características com nome; a janela de características
           mostra os seus valores medidos, e alterar um número é a operação.
           Mover, duplicar e remover valem para cada um destes tipos; rodar, para
-          todos menos a superfície esférica. Para arredondamentos e golas estas operações ainda não
-          existem, e a janela di-lo ali mesmo, com o motivo.</p>
+          todos menos a superfície esférica. Nos arredondamentos compatíveis é possível alterar o raio ou remover o arredondamento. O Solidon3D mostra quais as ações disponíveis no ponto escolhido; as golas e as transições suaves continuam excluídas.</p>
         </details>
         <details>
           <summary>Tenho de usar uma IA?</summary>
@@ -958,7 +990,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=ddb82aae" defer></script>
+<script src="/site.js?v=174df3cf" defer></script>
 
 </body>
 </html>

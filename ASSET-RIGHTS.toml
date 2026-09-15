@@ -286,6 +286,21 @@ platforms = ["web"]
 status = "cleared"
 
 [[asset]]
+pattern = "website/bilder/feature-*.webp"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Textfreie Renderings eigener parametrischer Funktionsbeispiele"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_feature_images.py"
+inputs = ["registrierte Solidon-Operationen", "eigene parametrisierte Grundformen", "Solidon-Renderer"]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_feature_images.py", "tools/CLAUDE.md", "LICENSE"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
 pattern = "website/bilder/galerie-*.webp"
 art = "image"
 creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
