@@ -1707,6 +1707,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und am angebotenen Einstieg prüfen. Abnahme: dokumentierte Entscheidungen und geprüfte Verträge/Sprachfassungen;
   bereits berichtigte Widerrufszitate und EULA-Sanktionsklausel nicht erneut beauftragen.
 
+  **Zwei Fragen kommen aus der Website-Durchsicht vom 15.09.2026 dazu**, beide erst zum Verkauf
+  fällig und beide keine Textkorrektur, sondern eine Einordnung:
+
+  1. **Sprache der Rechtstexte beim Verkauf ins Ausland.** `tools/make_legal.py` erzeugt EULA,
+     AGB, Widerruf und Datenschutz **nur auf Deutsch** (`DOCUMENTS`), und die fünf
+     fremdsprachigen Startseiten verlinken genau diese deutschen Fassungen; den Hinweis auf die
+     Vertragssprache trägt der Erzeuger selbst (`LANGUAGE_NOTE`). Für die unentgeltliche Demo
+     ohne Bestellung ist das vertretbar — ob es für einen Verkauf an Verbraucher in Spanien,
+     Frankreich, Italien oder Portugal trägt, ist die offene Frage (Informationspflichten nach
+     Art. 246a EGBGB „klar und verständlich"). AGB und Widerruf sind auf den fremdsprachigen
+     Seiten heute **nicht** verlinkt, und das ist richtig, solange nichts angeboten wird
+     (`test_legal.SALE_LINKS`).
+  2. **Ist die Aktivierung eine automatisierte Entscheidung nach Art. 22 DSGVO?** Der Dienst
+     entscheidet ohne menschliches Zutun über Sperrstatus, Geräteplatzgrenze und die fünf
+     Aktivierungen je Kalendertag; eine Ablehnung verhindert die Nutzung gekaufter Software, hat
+     also Wirkung. Die Datenschutzerklärung beschreibt den Vorgang vollständig, ordnet ihn aber
+     nicht ein — Art. 13 Abs. 2 f verlangt die Information nur, wenn Art. 22 greift. Gegen
+     Art. 22 spricht, dass keine persönlichen Aspekte bewertet werden (kein Profiling); dafür
+     spricht die Rechtswirkung. Ein Satz „automatisierte Entscheidungen nach Art. 22 finden nicht
+     statt" wäre die einfache Auflösung, wenn die Einordnung das hergibt.
+
+  **Was die Durchsicht dagegen nicht gefunden hat**, und das gehört zum Ergebnis: Impressum nach
+  § 5 DDG vollständig (bis auf die USt-IdNr. aus RM-030), § 36 VSBG korrekt, **kein veralteter
+  Verweis auf die 2025 abgeschaltete EU-Streitbeilegungsplattform**, Widerrufsbelehrung mit
+  Muster-Formular und richtig zitiertem § 356 Abs. 6 Nr. 2 BGB, dreizehn der Pflichtangaben aus
+  Art. 13 DSGVO belegt, und **kein Cookie-Banner nötig** — gemessen, nicht behauptet: keine
+  `document.cookie`, kein `localStorage`, keine externe Ressource auf irgendeiner Seite, damit
+  greift § 25 TDDDG nicht. Der Hinweis auf den Widerruf einer Einwilligung fehlt zu Recht, weil
+  keine Verarbeitung auf einer Einwilligung beruht.
+
+  **Und eine Spannung zum Vormerken:** Die Startseite sagt unter „Kein Team" zu, es gebe „keine
+  Hotline, keine Antwort um drei Uhr nachts". Die gewerbliche Lizenz sagt seit dem 15.09.2026
+  eine Antwort binnen zwei Werktagen zu. Beides verträgt sich, aber wenn die Preise auf die Seite
+  kommen, gehört dieser Absatz mitgelesen.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
 <a id="rm-095"></a>

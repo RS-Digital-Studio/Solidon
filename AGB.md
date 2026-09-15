@@ -97,11 +97,11 @@ Alle Preise sind Endpreise. Ob und in welcher Höhe Umsatzsteuer ausgewiesen
 wird, ergibt sich aus der Bestellübersicht und der Rechnung.
 
 **Es gilt der Preis, der im Bestellvorgang angezeigt wird.** Die private und
-die gewerbliche Lizenz werden zu unterschiedlichen Preisen angeboten; die
-jeweils gültigen Preise stehen auf <https://solidon3d.de>. Preisänderungen für
-künftige Bestellungen bleiben vorbehalten und berühren eine bereits erworbene
-Lizenz nicht: Sie behält ihren gezahlten Preis und die eingeschlossenen
-Punktversionen.
+die gewerbliche Lizenz werden zu unterschiedlichen Preisen angeboten; diese
+werden vor dem Angebot auf <https://solidon3d.de> veröffentlicht.
+Preisänderungen für künftige Bestellungen bleiben vorbehalten und berühren eine
+bereits erworbene Lizenz nicht: Sie behält ihren gezahlten Preis und die
+eingeschlossenen Punktversionen.
 
 **Die Zahlung wird über einen Zahlungsdienstleister abgewickelt. Welcher das
 ist, erfahren Sie vor dem Absenden der Bestellung** — mit Namen, Anschrift und
