@@ -230,6 +230,21 @@ Abnahme gehört eine vom echten Zähler geschriebene Zeile jeder Art und ein
 anschließender erfolgreicher Wartungslauf. Ein lokaler Test belegt dabei
 weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
 
+`api/stats.php` wertet diese Zeilen in vier Blöcken aus, die dem Weg eines
+Kunden folgen: **Jetzt** (rollend bis heute, 7 und 30 Tage, mit der
+Veränderung zum gleich langen Zeitraum davor — über die Monatsgrenze hinweg,
+und ohne Vergleich, wo die Löschfrist die Daten nicht so weit zurückreichen
+lässt), **Reichweite** (Aufrufe, Besuche, Herkunft und Sprache je Besuch mit
+Download-Spalte, Seiten mit Anteil, ungelesene Seiten aus `sitemap.xml`,
+Einstieg und Ausstieg, Tiefe und Dauer, Uhrzeit und Wochentag),
+**Konversion** (Besuche mit Download, Direktdownloads ohne Seitenaufruf,
+Version mal Zielsystem, die Seite vor dem Download, die Dateien im Ordner) und
+**Nutzung** (Update-Prüfungen je Version und je Tag, Anteil der aktuellen
+Version aus `version.json`). Alles davon entsteht aus den fünf Feldern einer
+Zählzeile; ein Besuch ist ein Tageskennzeichen an einem Tag und endet um
+Mitternacht. `?format=json` liefert dieselbe Auswertung hinter derselben
+Anmeldung als JSON.
+
 Erreicht die Statistik ihre Monats- oder Gesamtquote, schreibt der Zähler
 keine weitere Zeile und nennt die betroffene Grenze im privaten PHP-Log.
 Seitenzählpunkte melden einen Speicherfehler mit HTTP 503; nur ein tatsächlich

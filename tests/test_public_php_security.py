@@ -12,7 +12,7 @@ import socket
 import subprocess
 import time
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -2066,7 +2066,9 @@ def test_update_version_chart_keeps_even_small_counts_visible(tmp_path: Path) ->
     with _php_server(tmp_path, environment) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
     assert status == 200 and "</html>" in page
-    updates = page.split("<h2>Update-Prüfungen</h2>")[1].split("<h2>Downloads</h2>")[0]
+    # Seit dem Umbau in vier Blöcke (15.09.2026) steht die Versionstabelle im
+    # Block „Nutzung" hinter den Downloads; der Anker ist ihre Überschrift.
+    updates = page.split('<h3 id="versionen">Versionen</h3>')[1].split("</table>")[0]
     bars = re.findall(r'<span class="balken" style="width:\s*(\d+)%">', updates)
     assert bars == ["100", "1"], "Beide positiven Werte brauchen einen sichtbaren Balken"
 
@@ -2118,11 +2120,232 @@ def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path)
         assert (tmp_path / "stats" / "salt.json").exists()
         status, _headers, page = _request(f"{base}/stats.php", headers=stats_headers)
         assert status == 200 and "</html>" in page
-        updates = page.split("<h2>Update-Prüfungen</h2>")[1].split("<h2>Downloads</h2>")[0]
+        updates = page.split('<h2 id="nutzung">Nutzung</h2>')[1].split('<h2 id="methode">')[0]
         assert '<th class="n">Prüfungen</th>' in updates
         assert "Installationen" not in updates
         assert "Installationen (Tag mal Kennzeichen)" not in page
         assert re.search(r"0\.4\.0</td>\s*<td class=\"n\">2</td>", updates)
+
+
+def _display_today() -> datetime:
+    """Der heutige Tag in der Anzeigezone von stats.php, um 12:00 UTC.
+
+    Windows-Python hat ohne ``tzdata`` keine Zonen; PHP kennt sie. 12:00 UTC
+    liegt in Europe/Berlin immer am selben Kalendertag, also stimmt der Tag
+    der so gebauten Zeitstempel mit dem überein, den die Seite „heute" nennt.
+    """
+    result = subprocess.run(
+        [
+            php_executable(),
+            "-r",
+            "require $argv[1]; echo (new DateTimeImmutable('now', new DateTimeZone(DAY_ZONE)))"
+            "->format('Y-m-d');",
+            str(API / "day_zone.php"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    year, month, day = (int(part) for part in result.stdout.strip().split("-"))
+    return datetime(year, month, day, 12, 0, tzinfo=UTC)
+
+
+def _stats_row(when: datetime, kind: str, value: str, referrer: str = "", mark: str = "") -> dict:
+    return {
+        "t": when.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+        "k": kind,
+        "v": value,
+        "r": referrer,
+        "u": mark,
+    }
+
+
+def _write_stats_rows(stats: Path, rows: list[dict]) -> None:
+    """Legt jede Zeile in die Monatsdatei ihres UTC-Monats — wie count.php."""
+    by_month: dict[str, list[str]] = {}
+    for row in sorted(rows, key=lambda row: row["t"]):
+        by_month.setdefault(row["t"][:7], []).append(json.dumps(row, separators=(",", ":")))
+    for month, lines in by_month.items():
+        path = stats / f"{month}.jsonl"
+        path.write_text("\n".join(lines) + "\n", encoding="ascii")
+        _chmod_private(path)
+
+
+def _stats_sample(anchor: datetime) -> list[dict]:
+    """Zwei Tage Zählzeilen: Besuche mit und ohne Download, Direktlink,
+    Herkunft, drei Sprachen und drei Versionen — an ``anchor`` und dem Tag davor."""
+    day = timedelta(days=1)
+    minute = timedelta(minutes=1)
+    return [
+        # Ein Besuch von reddit liest drei Seiten und lädt; einer liest nur;
+        # ein Direktdownload ohne Seite; zwei Update-Prüfungen.
+        _stats_row(anchor, "p", "/", "reddit.com", "aaaa0001"),
+        _stats_row(anchor + 2 * minute, "p", "/funktionen.html", "", "aaaa0001"),
+        _stats_row(anchor + 5 * minute, "p", "/handbuch.html", "", "aaaa0001"),
+        _stats_row(anchor + 6 * minute, "d", "Solidon3D-Setup-0.4.1.exe", "", "aaaa0001"),
+        _stats_row(anchor + 10 * minute, "p", "/en/", "news.ycombinator.com", "aaaa0002"),
+        _stats_row(anchor + 30 * minute, "d", "Solidon3D-0.4.1-x86_64.AppImage", "", "aaaa0003"),
+        _stats_row(anchor + 40 * minute, "u", "0.4.1"),
+        _stats_row(anchor + 41 * minute, "u", "0.4.0"),
+        # Der Tag davor: drei Besuche, einer lädt das Mac-Paket nach einer Seite.
+        _stats_row(anchor - day, "p", "/", "", "bbbb0001"),
+        _stats_row(anchor - day + minute, "p", "/en/features.html", "", "bbbb0002"),
+        _stats_row(
+            anchor - day + 3 * minute, "d", "Solidon3D-0.4.1-macos-arm64.pkg", "", "bbbb0002"
+        ),
+        _stats_row(anchor - day + 20 * minute, "p", "/es/", "google.com", "bbbb0003"),
+        _stats_row(anchor - day + 50 * minute, "u", "0.4.1"),
+    ]
+
+
+def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) -> None:
+    """Der Block „Jetzt" rechnet rollend bis heute über die Monatsgrenze hinweg
+    und vergleicht nur, wo die Daten den Zeitraum davor ganz abdecken."""
+    today = _display_today()
+    day = timedelta(days=1)
+    minute = timedelta(minutes=1)
+    rows = _stats_sample(today)
+    # Das Vergleichsfenster: acht bis dreizehn Tage zurück je ein Besuch mit
+    # einer Seite und einer Update-Prüfung, einmal ein Download dazu.
+    for days_ago in range(8, 14):
+        rows.append(_stats_row(today - days_ago * day, "p", "/", "", f"dddd{days_ago:04d}"))
+        rows.append(_stats_row(today - days_ago * day + minute, "u", "0.4.0"))
+    rows.append(
+        _stats_row(today - 9 * day + 5 * minute, "d", "Solidon3D-Setup-0.4.0.exe", "", "dddd0009")
+    )
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_stats_rows(stats, rows)
+    environment, headers = _stats_test_access(tmp_path)
+    with _php_server(tmp_path, environment) as base:
+        status, _headers, page = _request(f"{base}/stats.php", headers=headers)
+        json_status, json_headers, body = _request(f"{base}/stats.php?format=json", headers=headers)
+        anonymous_status, _anonymous_headers, _anonymous = _request(f"{base}/stats.php?format=json")
+
+    assert status == 200 and "</html>" in page
+    assert json_status == 200 and json_headers["Content-Type"].startswith("application/json")
+    assert anonymous_status == 401, "die JSON-Ausgabe liegt hinter derselben Anmeldung"
+    report = json.loads(body)
+
+    assert report["now"]["today"] == {"p": 4, "d": 2, "u": 2, "visits": 3}
+    week, month = report["now"]["windows"]
+    assert (week["days"], week["now"], week["before"]) == (
+        7,
+        {"p": 7, "d": 3, "u": 3, "visits": 6},
+        {"p": 6, "d": 1, "u": 6, "visits": 6},
+    )
+    # Dreißig Tage ohne Vergleich: Die Daten reichen nicht sechzig Tage zurück,
+    # und eine Veränderung gegen einen halb vorhandenen Zeitraum wäre gelogen.
+    assert (month["days"], month["before"]) == (30, None)
+    now_block = page.split('<h2 id="jetzt">')[1].split('<h2 id="reichweite">')[0]
+    assert "+17 %" in now_block and "±0 %" in now_block  # 6 → 7 Aufrufe, 6 → 6 Besuche
+    assert "vorher 0" not in now_block
+    assert now_block.count("Kein Vergleich") == 4, "je Spalte ein Strich mit Grund"
+
+
+def test_stats_derives_conversion_sources_and_pages_from_the_five_fields(
+    tmp_path: Path,
+) -> None:
+    """Die Blöcke Reichweite, Konversion und Nutzung rechnen alles aus den fünf
+    Feldern einer Zählzeile; gespeichert wird für keine Zahl ein Feld mehr.
+    Die Zahlen kommen über die JSON-Ausgabe, die Blöcke und ihre Reihenfolge
+    aus dem HTML."""
+    month = _utc_month(0)
+    anchor = datetime.fromisoformat(f"{month}-13T12:00:00+00:00")
+    docroot = _temporary_docroot(tmp_path)
+    for name in ("Solidon3D-Setup-0.4.1.exe", "Solidon3D-0.4.1-macos-x86_64.pkg"):
+        (docroot / "dl" / name).write_bytes(b"kein echtes Paket")
+    (docroot / "version.json").write_text('{"version": "0.4.1"}', encoding="ascii")
+    (docroot / "sitemap.xml").write_text(
+        "<urlset>"
+        + "".join(
+            f"<loc>https://solidon3d.de{path}</loc>"
+            for path in ("/", "/funktionen.html", "/handbuch.html", "/en/", "/es/", "/fr/", "/pt/")
+        )
+        + "</urlset>",
+        encoding="ascii",
+    )
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_stats_rows(stats, _stats_sample(anchor))
+    environment, headers = _stats_test_access(tmp_path)
+    with _php_server(tmp_path, environment, docroot=docroot) as base:
+        status, _headers, page = _request(f"{base}/stats.php?m={month}", headers=headers)
+        json_status, _json_headers, body = _request(
+            f"{base}/stats.php?m={month}&format=json", headers=headers
+        )
+    assert status == 200 and "</html>" in page and json_status == 200
+    report = json.loads(body)
+    reach, conversion, usage = report["reach"], report["conversion"], report["usage"]
+
+    # Die Blöcke in der Reihenfolge des Trichters — „Woher" nicht mehr am Ende.
+    anchors = [
+        'id="jetzt"',
+        'id="reichweite"',
+        "<h3>Woher</h3>",
+        'id="konversion"',
+        'id="nutzung"',
+        'id="methode"',
+    ]
+    positions = [page.index(anchor) for anchor in anchors]
+    assert positions == sorted(positions), anchors
+
+    # Reichweite: je Besuch gezählt, Herkunft und Sprache mit Download-Spalte.
+    assert (reach["pages"], reach["visits"], reach["pages_per_visit"]) == (7, 6, 1.2)
+    assert reach["median_duration_seconds"] == 240  # 360 und 120 Sekunden
+    assert reach["sources"]["reddit.com"] == {
+        "visits": 1,
+        "pages": 3,
+        "downloaded": 1,
+        "downloads": 1,
+    }
+    assert reach["direct"] == {"visits": 3, "pages": 2, "downloaded": 2, "downloads": 2}
+    assert reach["languages"]["en"] == {"visits": 2, "pages": 2, "downloaded": 1, "downloads": 1}
+    assert reach["without_page"] == {"visits": 1, "pages": 0, "downloaded": 1, "downloads": 1}
+    assert reach["unread"] == ["/fr/", "/pt/"]
+    assert reach["entry_pages"][0] == {"name": "/", "count": 2}
+    assert {"name": "/handbuch.html", "count": 1} in reach["exit_pages"]
+    assert reach["depth"] == {"1 Seite": 4, "2 bis 3": 1, "4 bis 9": 0, "10 und mehr": 0}
+
+    # Konversion: ein Besuch zählt einmal, Direktlinks stehen gesondert.
+    assert (conversion["downloads"], conversion["visits_with_download"]) == (3, 3)
+    assert conversion["visits_with_download_percent"] == 50.0
+    assert conversion["downloads_without_page"] == 1
+    assert conversion["matrix"] == [
+        {
+            "version": "0.4.1",
+            "cells": {"Windows": 1, "Linux": 1, "macOS (Apple Silicon)": 1, "macOS (Intel)": 0},
+            "total": 3,
+        }
+    ]
+    assert conversion["page_before_download"] == [
+        {"name": "/en/features.html", "count": 1},
+        {"name": "/handbuch.html", "count": 1},
+        {"name": "", "count": 1},
+    ]
+
+    # Nutzung: Anteil der aktuellen Version aus version.json, Versionen je Tag.
+    assert (usage["updates"], usage["release"], usage["release_share_percent"]) == (
+        3,
+        "0.4.1",
+        66.7,
+    )
+    assert usage["version_columns"] == ["0.4.1", "0.4.0"]
+    assert usage["versions_per_day"][-1] == {
+        "day": f"{month}-13",
+        "cells": {"0.4.1": 1, "0.4.0": 1},
+        "other": 0,
+        "total": 2,
+    }
+
+    # Dieselben Zahlen im HTML: Matrix, Seite vor dem Download, ungelesene Seiten.
+    cells = "".join(f'<td class="n">{count}</td>' for count in (1, 1, 1, 0))
+    assert re.search(r"<td>0\.4\.1</td>\s*" + re.escape(cells), page)
+    before = page.split("<h3>Seite vor dem Download</h3>")[1].split("</table>")[0]
+    assert "ohne Seitenaufruf" in before and "/handbuch.html" in before
+    assert "<li>/fr/</li>" in page and "<li>/pt/</li>" in page and "<li>/es/</li>" not in page
+    assert "Installation" not in page.split('id="nutzung"')[1], "kein Rückschluss auf Rechner"
 
 
 def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:
@@ -2650,11 +2873,19 @@ def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
         "<?php\ndeclare(strict_types=1);\n"
         + constants
         + "\n"
-        + _php_function(source, "entries")
-        + "\n"
-        + _php_function(source, "visitors_per_day")
-        + "\n"
-        + _php_function(source, "month_totals")
+        # Seit dem Umbau in vier Blöcke (15.09.2026) rechnet month_totals über
+        # die Besuche und den Tageszähler; die Probe nimmt dieselbe Kette mit.
+        + "\n".join(
+            _php_function(source, name)
+            for name in (
+                "entries",
+                "month_rows",
+                "visits_of",
+                "per_day",
+                "window_sum",
+                "month_totals",
+            )
+        )
         + "\necho json_encode(month_totals($argv[1], '2026-08'));\n",
         encoding="utf-8",
     )
