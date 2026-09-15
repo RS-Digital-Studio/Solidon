@@ -4897,6 +4897,8 @@ class MainWindow(QMainWindow):
         self._loading_model = False
         self.session.importFailed.connect(self._on_import_failed)
         self.session.importFinished.connect(self._on_import_finished)
+        self.session.choose_outline = True
+        self.session.outlineImportRequested.connect(self._choose_outline_import)
         self.session.failed.connect(self._on_error)
         # Gebundene Methode, kein Lambda: Der Sender ist ein Kind dieses
         # Fensters, und ein Lambda schlösse den Ring aus `.claude/rules`.
@@ -5078,6 +5080,68 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return
         self._show_start_screen(False)
+
+    def _choose_outline_import(self, plan: Any, source_id: str, generation: int) -> None:
+        """Zeichnungen vor ihrem ersten Schritt mit sichtbarer Konturwahl öffnen."""
+        self._open_outline_dialog(
+            {**plan.draft.params, "source": source_id},
+            partial(self.session.finish_outline_import, source_id, generation),
+        )
+
+    def _open_outline_dialog(
+        self,
+        values: Mapping[str, Any],
+        answered: Callable[[dict[str, Any] | None], None],
+        parent: QWidget | None = None,
+        *,
+        selection_only: bool = False,
+    ) -> None:
+        """Eine Konturantwort gilt nur ihrer Quelle und dem noch offenen Projekt."""
+        from app.ui.outline_dialog import OutlineDialog
+
+        project = self.session.project
+        source_id = str(values.get("source", ""))
+        source = project.document.sources.get(source_id)
+        if source is None:
+            self.announce(tr("Wählen Sie zuerst eine Zeichnung als Quelle."))
+            answered(None)
+            return
+        try:
+            dialog = OutlineDialog(
+                project.sources[source_id],
+                Path(source.path).suffix,
+                parent or self,
+                dict(values),
+                selection_only=selection_only,
+            )
+        except AppError as error:
+            show_error(error, self)
+            answered(None)
+            return
+
+        def project_changed() -> None:
+            if self.session.project is not project:
+                dialog.reject()
+
+        completed = False
+
+        def finished(code: int) -> None:
+            nonlocal completed
+            if completed:
+                return
+            completed = True
+            self.session.projectChanged.disconnect(project_changed)
+            result = (
+                dialog.values()
+                if code == QDialog.DialogCode.Accepted and self.session.project is project
+                else None
+            )
+            answered(result)
+            dialog.deleteLater()
+
+        self.session.projectChanged.connect(project_changed)
+        dialog.finished.connect(finished)
+        dialog.open()
 
     def action_save(self) -> None:
         if self.session.path is None:
@@ -13762,6 +13826,8 @@ class MainWindow(QMainWindow):
         if previous is not None:
             previous.reject()
 
+        self._wire_outline_choice(dialog)
+
         project = self.session.project
 
         def project_changed() -> None:
@@ -13789,6 +13855,30 @@ class MainWindow(QMainWindow):
         # ein verschluckter erster.
         self.viewport.set_direct_picking(True)
         dialog.show()
+
+    def _wire_outline_choice(self, dialog: OperationDialog) -> None:
+        """Das Konturfeld benutzt dieselbe Auswahl wie der erste Zeichnungsimport."""
+        from app.core import expressions
+        from app.ui.outline_dialog import ContourField
+
+        field = dialog._editors.get("contours")
+        if not isinstance(field, ContourField):
+            return
+
+        def choose() -> None:
+            try:
+                values = expressions.resolve_params(dialog.values(), self._parameter_values())
+            except AppError as error:
+                show_error(error, dialog)
+                return
+
+            def answered(result: dict[str, Any] | None) -> None:
+                if result is not None and isValid(field):
+                    field.set_value(result["contours"])
+
+            self._open_outline_dialog(values, answered, dialog, selection_only=True)
+
+        field.choiceRequested.connect(choose)
 
     def _wire_preview(
         self,
@@ -16709,6 +16799,10 @@ class MainWindow(QMainWindow):
         die Liste hier geschrieben wurde — nur ohne Zeile, weil niemand mehr
         da war, die zu schreiben.
         """
+        from app.ui.outline_dialog import OutlineDialog
+
+        for outline_dialog in self.findChildren(OutlineDialog):
+            outline_dialog.reject()
         self.session.cancel()
         session_idle = self.session.wait_for_idle(timeout_ms)
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie

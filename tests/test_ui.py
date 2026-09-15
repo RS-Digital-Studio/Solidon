@@ -486,6 +486,131 @@ def test_a_fresh_session_has_an_empty_project(session: Session) -> None:
     assert not session.modified
 
 
+def test_outline_import_waits_for_the_shown_contours(
+    window: MainWindow, qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Auswahl, Vorschau, Übernahme und Rücknahme benutzen dieselben Konturen."""
+    from app.ui.outline_dialog import OutlineDialog
+    from tests.test_outline_dialog import _until
+    from tests.test_outline_profiles import SOURCE
+
+    path = tmp_path / "contours.svg"
+    path.write_bytes(SOURCE)
+    window.open_path(path)
+    dialog = window.findChild(OutlineDialog)
+    assert dialog is not None
+    assert not window.session.history.operations
+    _until(qt_app, lambda: dialog.accept_button.isEnabled())
+    dialog.profiles.item(1).setCheckState(Qt.CheckState.Unchecked)
+    _until(qt_app, lambda: dialog.accept_button.isEnabled())
+    expected = dialog.result_preview
+    chosen = dialog.values()
+    assert expected is not None and expected.contours == 1
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    operations = window.session.history.operations
+    assert len(operations) == 1 and operations[0].op == "load_outline"
+    assert operations[0].params["contours"] == chosen["contours"]
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.volume == pytest.approx(expected.mesh.volume)
+    assert body.mesh.bounds.size == pytest.approx(expected.mesh.bounds.size)
+    window.session.undo()
+    assert window.session.wait_for_idle()
+    assert not window.session.history.operations
+    window.session.redo()
+    assert window.session.wait_for_idle()
+    assert window.session.history.operations[0].params["contours"] == chosen["contours"]
+
+
+def test_cancelling_outline_import_drops_only_its_pending_source(
+    window: MainWindow, qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Abbrechen hinterlässt weder eine Operation noch eine eingebettete Dateiwaise."""
+    from app.ui.outline_dialog import OutlineDialog
+    from tests.test_outline_profiles import SOURCE
+
+    path = tmp_path / "cancel.svg"
+    path.write_bytes(SOURCE)
+    window.open_path(path)
+    dialog = window.findChild(OutlineDialog)
+    assert dialog is not None
+    assert window.session.project.document.sources
+    dialog.reject()
+    assert not window.session.history.operations
+    assert not window.session.project.document.sources
+    assert not window.session.project.sources
+    assert not window.session._outline_imports
+    assert window._pending_import is None
+
+
+def test_stale_outline_answer_cannot_apply_to_another_project(session: Session) -> None:
+    """Die gleiche Quellenkennung im neuen Projekt gehört nicht zur alten Antwort."""
+    from app.core.knowledge.profiles import DEFAULT_MATERIAL, DEFAULT_PRINTER
+    from tests.test_outline_profiles import SOURCE
+
+    session.choose_outline = True
+    requests = []
+    session.outlineImportRequested.connect(lambda *args: requests.append(args))
+    session.import_payload_async("first.svg", SOURCE)
+    _plan, source_id, generation = requests[-1]
+    session.start_new(DEFAULT_PRINTER, DEFAULT_MATERIAL)
+    session.import_payload_async("second.svg", SOURCE)
+    source = session.project.document.sources[source_id]
+    session.finish_outline_import(source_id, generation, None)
+    assert session.project.document.sources[source_id] is source
+    assert not session.history.operations
+    session.finish_outline_import(requests[-1][1], requests[-1][2], None)
+
+
+def test_editing_outline_contours_keeps_bound_dimensions(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Der Auswahlknopf im echten Verlaufsdialog erhält die Ausdrücke seiner Maße."""
+    from PySide6.QtTest import QTest
+
+    from app.ui.outline_dialog import ContourField, OutlineDialog
+    from tests.test_outline_dialog import _until
+    from tests.test_outline_profiles import SOURCE
+
+    session = window.session
+    assert session.add_parameter(Parameter(name="thickness", value=4.0))
+    assert session.wait_for_idle()
+    assert session.add_parameter(Parameter(name="span", value=80.0))
+    assert session.wait_for_idle()
+    assert session.import_payload("profile.svg", SOURCE)
+    assert session.wait_for_idle()
+    step = session.history.operations[-1]
+    assert session.change_params(step.id, {"height": "=@thickness", "width": "=@span"})
+    assert session.wait_for_idle()
+    window.edit_operation(step.id)
+    operation_dialog = window._op_dialog
+    assert operation_dialog is not None
+    field = operation_dialog._editors["contours"]
+    assert isinstance(field, ContourField)
+    QTest.mouseClick(field.button, Qt.MouseButton.LeftButton)
+    picker = operation_dialog.findChild(OutlineDialog)
+    assert picker is not None
+    _until(qt_app, lambda: picker.accept_button.isEnabled())
+    assert picker.values()["height"] == pytest.approx(4.0)
+    assert picker.values()["width"] == pytest.approx(80.0)
+    assert not picker._fields["height"].isEnabled()
+    picker.profiles.item(1).setCheckState(Qt.CheckState.Unchecked)
+    _until(qt_app, lambda: picker.accept_button.isEnabled())
+    chosen = picker.values()["contours"]
+    picker.accept()
+    assert operation_dialog.values()["height"] == "=@thickness"
+    assert operation_dialog.values()["width"] == "=@span"
+    assert field.value() == chosen
+    operation_dialog.accept()
+    assert session.wait_for_idle()
+    updated = session.history.operation(step.id)
+    assert updated.params["height"] == "=@thickness"
+    assert updated.params["width"] == "=@span"
+    assert updated.params["contours"] == chosen
+
+
 def test_importing_a_model_goes_through_the_stack(session: Session) -> None:
     session.import_model(MESHES / "cube_clean.stl")
     session.wait_for_idle()

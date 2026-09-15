@@ -1439,3 +1439,31 @@ auf. Der Arbeiter löst abhängige Maße einmal auf und reicht sie sowohl an
 gewöhnliche Operationswerte als auch an eingebettete Bausteinskizzen weiter.
 Gleichbleibender Skizzentext darf nach einer Maßänderung kein altes Werkzeug
 sichtbar lassen.
+
+## Konturwahl bei Zeichnungen
+
+`outline_dialog.py` zeigt SVG-/DXF-Profile als nummerierte Zeichnung und
+Checkboxliste neben ihrer berechneten Extrusion. Innenringe bleiben am Profil;
+nicht extrudierbare Profile bleiben mit Begründung sichtbar. Einlesen,
+Profilprüfung, Zeichenpfade und Ergebnisprojektion laufen im Arbeiter.
+`values()` liefert ausschließlich `load_outline`-Werte: Konturkennungen als
+JSON-Liste, Höhe und Zielbreite. Erst eine zur aktuellen Auswahl passende
+Vorschau gibt Übernehmen frei. Je Dialog rechnet höchstens ein Arbeiter;
+Änderungen merken nur den letzten Auftrag vor. `release()` verwirft späte
+Antworten und wartet über die gemeinsame Leine auf das Threadende.
+
+`ContourField` zeigt Anzahl und Wahlknopf statt des gespeicherten JSON-Texts.
+Das Schema nennt dafür `kind="contours"`; `OperationDialog` liest `value()`
+und verbindet Änderungs- und Gültigkeitssignal wie bei den anderen Wählern.
+Beim erneuten Wählen sperrt `OutlineDialog(selection_only=True)` seine Maße:
+Nur die Konturauswahl fließt zurück, bestehende Maßausdrücke bleiben erhalten.
+In der Konturliste stehen Haken und ausdrücklicher Status neben dem Bild;
+der Zeilenfokus übermalt den Haken nicht. Nebenknöpfe erhalten keinen
+automatischen Default, der feste Hauptknopf bleibt `make_primary`.
+
+Das Hauptfenster schaltet `Session.choose_outline` für seine asynchronen
+Importwege ein. `outlineImportRequested` hält vor dem ersten Schritt an;
+`finish_outline_import` prüft die Projektgeneration und übernimmt die Antwort
+genau einmal. Abbrechen räumt die eingebettete Quelle auf. Menü, Dateidialog,
+Drag-and-drop und Download teilen diesen Weg. Der synchrone Sitzungsimport
+behält seinen ausdrücklichen Auftrag ohne interaktive Zwischenwahl.

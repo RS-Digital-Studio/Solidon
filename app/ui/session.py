@@ -48,7 +48,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.loader import read_bounded_payload, read_local_payload
-from app.core.ingest.plan import import_plan, is_only_imported, names_in_use
+from app.core.ingest.plan import ImportPlan, import_plan, is_only_imported, names_in_use
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
@@ -735,6 +735,8 @@ class Session(QObject):
 
     Die Auswertung läuft danach noch; dieses Signal sagt nur, dass Plan und
     Stapel fertig sind und das Fenster seinen Wartezustand auflösen darf."""
+    outlineImportRequested = Signal(object, str, int)
+    """Eine Zeichnung wartet auf Konturen und Höhe: Plan, Quelle, Projektgeneration."""
     evaluationCancelled = Signal()
     """Ein Mensch hat die Auswertung angehalten (§2.8).
 
@@ -757,6 +759,9 @@ class Session(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self.choose_outline = False
+        """Das Hauptfenster beantwortet Zeichnungsimporte vor dem ersten Schritt."""
+        self._outline_imports: dict[tuple[int, str], ImportPlan] = {}
         self.project: Project = new_project(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
         self.history = History(self.project.document)
         self.cache = disk_backed_cache()
@@ -2022,6 +2027,29 @@ class Session(QObject):
             self._drop_source(source_id)
             self.importFinished.emit(False)
             return
+        if self.choose_outline and plan.draft.op == "load_outline":
+            stamp = self._project_generation
+            self._outline_imports[stamp, source_id] = plan
+            self.outlineImportRequested.emit(plan, source_id, stamp)
+            return
+        self._apply_import_plan(plan, source_id)
+
+    def finish_outline_import(
+        self, source_id: str, generation: int, values: Mapping[str, Any] | None
+    ) -> None:
+        """Die Konturwahl genau einmal übernehmen oder ihre eingebettete Quelle verwerfen."""
+        plan = self._outline_imports.pop((generation, source_id), None)
+        if plan is None or self._stale_import(source_id, generation):
+            return
+        if values is None:
+            self._drop_source(source_id)
+            self.importFinished.emit(False)
+            return
+        draft = dataclasses.replace(plan.draft, params={**plan.draft.params, **values})
+        self._apply_import_plan(dataclasses.replace(plan, draft=draft), source_id)
+
+    def _apply_import_plan(self, plan: ImportPlan, source_id: str) -> None:
+        """Den fertig gewählten Import anwenden; abgewiesene Quellen reisen nicht mit."""
         try:
             accepted = self.apply(plan.title, [plan.draft], raise_on_error=True)
         except AppError as error:

@@ -5,6 +5,7 @@ paths:
   - "app/ui/leash.py"
   - "app/ui/splash.py"
   - "app/ui/main_window.py"
+  - "app/ui/outline_dialog.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit

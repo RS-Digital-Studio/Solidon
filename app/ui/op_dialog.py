@@ -61,6 +61,7 @@ from app.ui.labels import (
     set_circle_measure,
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.outline_dialog import ContourField
 from app.ui.panels import align_forms
 from app.ui.style import TIGHT, make_primary, set_level
 
@@ -1698,6 +1699,10 @@ class OperationDialog(QDialog):
             isinstance(editor, EdgeSetField) and not editor.valid
             for editor in self._editors.values()
         )
+        no_contour = any(
+            isinstance(editor, ContourField) and not editor.valid
+            for editor in self._editors.values()
+        )
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
         # *An Merkmal ausrichten* am einzigen Körper hat keinen zweiten, dessen
         # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
@@ -1720,11 +1725,19 @@ class OperationDialog(QDialog):
                 else (tr("Flächen markieren oder den ganzen Körper wählen.") if incomplete else "")
             )
             or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
+            or (tr("Wählen Sie mindestens eine gültige Kontur.") if no_contour else "")
             or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (blocked or "")
         )
-        incomplete = incomplete or no_edge or no_target or no_texture_face or blocked is not None
+        incomplete = (
+            incomplete
+            or no_edge
+            or no_contour
+            or no_target
+            or no_texture_face
+            or blocked is not None
+        )
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
         button.setStatusTip(reason)
@@ -1738,7 +1751,7 @@ class OperationDialog(QDialog):
         ):
             return
         if any(
-            isinstance(editor, (FeatureSetField, EdgeSetField)) and not editor.valid
+            isinstance(editor, (FeatureSetField, EdgeSetField, ContourField)) and not editor.valid
             for editor in self._editors.values()
         ):
             return
@@ -2113,6 +2126,9 @@ class OperationDialog(QDialog):
         if isinstance(editor, FeatureSetField | EdgeSetField):
             editor.changed.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
+        elif isinstance(editor, ContourField):
+            editor.valueChanged.connect(self.valuesChanged)
+            editor.validityChanged.connect(self._follow_source_pending)
         elif isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
             editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, QCheckBox):
@@ -2131,6 +2147,8 @@ class OperationDialog(QDialog):
         ist.
         """
         start = entry.default if given is None else given
+        if entry.kind == "contours":
+            return ContourField(start, self)
         if entry.kind == "features":
             return FeatureSetField(self._features, tuple(start or ()), self)
         if entry.kind == "edges":
@@ -2668,7 +2686,7 @@ class OperationDialog(QDialog):
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, FeatureSetField | EdgeSetField):
+            if isinstance(editor, FeatureSetField | EdgeSetField | ContourField):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, MaterialField):
                 # Vor dem Combo-Zweig: Der macht ``str(currentData())``
