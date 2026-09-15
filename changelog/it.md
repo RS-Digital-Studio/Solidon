@@ -30,8 +30,12 @@ scrive in `website/version.json`.
 - Fisso vuol dire fisso: un punto fissato non segue più il trascinamento. Le linee esattamente orizzontali o verticali restano tali, anche se dopo trascini un angolo.
 
 ### Costruire e modificare
+- Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.
 
 - Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.
+- Se nella chat indichi un solo asse — « foro a x = 20 » —, il foro si sposta solo lì. Prima negli altri due assi saltava a zero.
+- Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh.
+- Aprire due volte lo stesso file dà due nomi distinguibili: « supporto » e « supporto 2 ». Prima i due corpi si chiamavano uguali, nell'albero e nel rapporto.
 - I messaggi che rimandano ai valori a destra chiamano la finestra come si chiama: Selezione. Prima dicevano « pannello delle caratteristiche ».
 - « Ridurre i triangoli » lo dice quando un pezzo ha già meno triangoli del numero indicato: allora non c'è nulla da ridurre. Prima restava com'era, senza una parola.
 

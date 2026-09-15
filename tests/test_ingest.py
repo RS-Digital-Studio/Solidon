@@ -696,6 +696,61 @@ def test_load_puts_a_named_object_into_the_scene(profile: Profile) -> None:
     assert body.created_by == 1
 
 
+def test_the_same_file_twice_gives_two_names_that_can_be_told_apart(
+    profile: Profile,
+) -> None:
+    """Zweimal dieselbe STL ergibt zwei Körper — und zwei Namen.
+
+    Der gewöhnliche Weg zu zwei gleichen Teilen ist, dieselbe Datei zweimal
+    einzulesen. Im Objektbaum standen danach zwei Zeilen „plate_holes", und im
+    Prüfbericht zweimal derselbe Satz mit demselben Namen dahinter: kein Weg,
+    beim Lesen zu erkennen, welcher Körper gemeint ist. Der zweite heißt
+    deshalb „plate_holes 2" — dieselbe Nummerierung, die *In Einzelteile
+    zerlegen* seinen Teilen gibt.
+
+    Der Bericht bündelt gleiche Meldungen seit 0.4.1, hier aber **nicht**, und
+    das ist richtig: In seinen Gruppenschlüssel geht der Schritt ein, und zwei
+    Importe sind zwei Schritte (``panels._bundled``). Zwei Zeilen zu zwei
+    Schritten sind die Wahrheit — sie müssen nur sagen, zu welchem Körper sie
+    gehören, und genau das tut der Name.
+    """
+    from app.core.ingest.plan import names_in_use
+
+    project = new_project("centauri-carbon-2", "petg")
+    payload = (MESHES / "plate_holes.stl").read_bytes()
+    for nummer in (1, 2):
+        source_id = f"src_{nummer}"
+        project.document.sources[source_id] = Source(
+            id=source_id, kind="import", path="sources/plate_holes.stl", sha256=""
+        )
+        project.sources[source_id] = payload
+        plan = import_plan(
+            source_id,
+            "plate_holes.stl",
+            payload,
+            "mm",
+            taken=names_in_use(project.document),
+        )
+        History(project.document).apply(plan.title, [plan.draft])
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, f"gestoppt bei op {result.stopped_at}"
+    namen = [entry.name for entry in result.scene.objects.values()]
+    assert namen == ["plate_holes", "plate_holes 2"], namen
+
+    # **Und der Bericht nennt beide unterscheidbar.** Die Zeile des Fensters
+    # setzt den Namen des Körpers hinter den Satz (``panels._line_for``); was
+    # sie dafür liest, ist genau diese Zuordnung.
+    zu_namen = result.object_names
+    beteiligt = {
+        zu_namen.get(str(finding.object_id))
+        for finding in result.scene.report.findings
+        if finding.object_id is not None
+    }
+    assert {"plate_holes", "plate_holes 2"} <= beteiligt, beteiligt
+
+
 def test_load_asks_when_the_unit_is_ambiguous(profile: Profile) -> None:
     project = project_with("bracket_inch.stl")
     history = History(project.document)

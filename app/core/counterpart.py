@@ -286,7 +286,7 @@ def attach_fit(
                 message=_(
                     "Der Verlauf hat sich seit dem Einsetzen geändert. Die Passung wurde "
                     "nicht nachgetragen. Prüfen Sie die beiden Hälften im aktuellen Modell "
-                    "und tragen Sie die Passung bei Bedarf im Merkmalfenster ein."
+                    "und tragen Sie die Passung bei Bedarf im Auswahlfenster ein."
                 ),
                 values={"pair": pair.key},
             )
@@ -307,7 +307,7 @@ def attach_fit(
                 message=_(
                     "Die beiden Hälften stehen, eine Passung dazwischen gibt es "
                     "nicht: Eines der Merkmale ist unter seinem Namen nicht zu "
-                    "finden. Sie lässt sich im Merkmalfenster nachtragen."
+                    "finden. Sie lässt sich im Auswahlfenster nachtragen."
                 ),
                 values={"pair": pair.key},
             )

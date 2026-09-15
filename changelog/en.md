@@ -32,6 +32,10 @@ it into `website/version.json`.
 ### Building and editing
 
 - An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.
+- Name just one axis in the chat — “bore to x = 20” — and the hole moves only there. Before, it jumped to zero on the other two axes.
+- Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh.
+- Opening the same file twice gives two names you can tell apart: “holder” and “holder 2”. Before, both bodies were called the same, in the tree as in the check report.
+- Messages pointing to the values on the right now name the window the way it is named: Selection. Before they said “feature panel”, and no window is called that.
 - “Reduce triangles” says so when a part already has fewer triangles than the number you entered — there is nothing to reduce then. Before, it simply stayed as it was.
 - “Set a pose” without an armature says that the bones are made in the skeleton editor — two clicks per bone. Before, the step silently moved nothing.
 

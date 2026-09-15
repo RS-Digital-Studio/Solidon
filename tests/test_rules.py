@@ -45,6 +45,52 @@ def test_the_change_log_is_kept_with_the_rules() -> None:
         assert change.date and change.reason
 
 
+#: Was der Lader aus einem ``[[rules]]``-Eintrag liest (:func:`rules.load`).
+#: ``title_<sprache>``/``text_<sprache>`` kommen über das Präfix dazu.
+RULE_FIELDS = frozenset({"id", "title", "text", "applies_to"})
+
+#: Dasselbe für einen Eintrag des Änderungsverlaufs.
+CHANGE_FIELDS = frozenset({"version", "date", "reason", "suite_before", "suite_after"})
+
+
+def test_no_field_of_the_rule_set_goes_unread() -> None:
+    """Ein Feld, das niemand liest, ist keine Regel, sondern ein Kommentar.
+
+    ``measurement_note`` stand bis zum 14.09.2026 an der Änderung auf Version 4
+    und sagte etwas Wichtiges — dass die beiden Suite-Angaben daneben nicht
+    gemessen sind. Gelesen hat es kein Zweig: nicht der Lader, nicht der
+    Systemprompt, nicht der Prüfbericht. Es stand damit als Zusage da, die
+    nirgends ankommt; sein Inhalt ist jetzt Teil von ``reason``, das §39 ohnehin
+    verlangt.
+
+    **Die Alternative wäre eine neue Zusage gewesen** — ein Feld an die Regel
+    hängen und irgendwo ausgeben —, und die trägt niemand, solange niemand
+    danach gefragt hat (Regel 21). Der Test hält beides fest: Wer ein Feld
+    einführt, führt es im Lader mit ein.
+    """
+    import tomllib
+
+    with (Path(rules.__file__).parent / "data" / "rules.toml").open("rb") as stream:
+        table = tomllib.load(stream)
+
+    assert set(table) == {"version", "rules", "changes"}, sorted(table)
+
+    unread: list[str] = []
+    for entry in table["rules"]:
+        for key in entry:
+            if key in RULE_FIELDS or key.startswith(("title_", "text_")):
+                continue
+            unread.append(f"{entry.get('id', '?')}.{key}")
+    for entry in table["changes"]:
+        unread.extend(
+            f"changes[{entry.get('version', '?')}].{key}"
+            for key in entry
+            if key not in CHANGE_FIELDS
+        )
+
+    assert not unread, "Felder, die niemand liest: " + ", ".join(unread)
+
+
 def test_rules_can_be_asked_for_by_topic() -> None:
     geometry = rules.load().for_topic("geometry")
 

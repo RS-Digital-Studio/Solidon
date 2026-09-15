@@ -33,7 +33,7 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
 from app.core.ingest.loader import detect_unit, read_local_payload, read_model
-from app.core.ingest.plan import import_plan
+from app.core.ingest.plan import import_plan, names_in_use
 from app.core.knowledge import profiles
 from app.core.log import configure
 from app.core.paths import installed_language, user_config_dir
@@ -408,7 +408,12 @@ def command_import(args: argparse.Namespace) -> int:
     # bevor irgendetwas ausgewertet ist, und die Operation trägt die
     # Entscheidung danach selbst.
     first_model = not project.document.ops
-    plan = import_plan(source_id, incoming.name, payload, args.unit, first_model=first_model)
+    # Und derselbe freie Name wie im Fenster: Zweimal dieselbe Datei ergibt
+    # zwei Körper, die sich im Baum auseinanderhalten lassen.
+    taken = names_in_use(project.document)
+    plan = import_plan(
+        source_id, incoming.name, payload, args.unit, first_model=first_model, taken=taken
+    )
     if plan.asks_unit:
         plan = import_plan(
             source_id,
@@ -416,6 +421,7 @@ def command_import(args: argparse.Namespace) -> int:
             payload,
             _chosen_unit(payload, incoming, args.unit),
             first_model=first_model,
+            taken=taken,
         )
     history = History(project.document)
     history.apply(plan.title, [plan.draft])

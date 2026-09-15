@@ -425,3 +425,43 @@ def test_every_control_the_texts_name_is_one_the_application_says() -> None:
         if "→" not in name and not _kennt_die_anwendung(name, texte)
     ]
     assert not funde, f"{len(funde)} Namen sagt die Anwendung nicht:\n" + "\n".join(funde)
+
+
+#: Ein Fenstername aus einem Kundentext, den kein Fenster trägt — und der
+#: Name, unter dem der Kunde es wirklich findet.
+#:
+#: Kuratiert wie :data:`ABGELEGT`: Es gibt keinen Weg, aus einem deutschen
+#: Wort abzuleiten, ob ein Fenster so heißt. Wer einen Namen ablegt, trägt
+#: ihn hier ein.
+FENSTER_HEISST_ANDERS: tuple[tuple[str, str, str], ...] = (
+    (
+        "Merkmalfenster",
+        "Auswahlfenster",
+        "Das Dock heißt seit dem 07.09.2026 „Auswahl“ (ein Ort für die "
+        "Auswahl), und das Handbuch nennt es Auswahlfenster. Fünf Sätze "
+        "schickten den Kunden bis zum 14.09.2026 an ein Fenster, dessen Name "
+        "nirgends im Fenster steht.",
+    ),
+)
+
+
+def test_no_customer_text_names_a_window_the_application_does_not_have() -> None:
+    """Ein Satz, der einen Ort nennt, nennt ihn so, wie er dort steht.
+
+    Geprüft wird über die **Katalogschlüssel**, also über jeden Text, den
+    ``tr()`` je gesehen hat: Meldungen des Fensters, Befunde des Kerns und das
+    Handbuch stehen darin gleichermaßen. Ein Docstring darf den alten Begriff
+    behalten — er beschreibt den Code und schickt niemanden irgendwohin.
+    """
+    quelle = set(json.loads(Path("app/i18n/locales/en.json").read_text(encoding="utf-8")))
+    assert len(quelle) > 500, f"nur {len(quelle)} Katalogschlüssel — dann prüft das nichts"
+
+    for falsch, richtig, grund in FENSTER_HEISST_ANDERS:
+        treffer = sorted(key for key in quelle if falsch in key)
+        assert not treffer, f"{len(treffer)} Texte sagen „{falsch}“. {grund}\n" + "\n".join(treffer)
+        # Und die Gegenrichtung: Der richtige Name muss einer sein, den die
+        # Anwendung selbst sagt — sonst tauscht dieser Test einen falschen
+        # Ort gegen einen zweiten falschen.
+        assert any(richtig in key for key in quelle), (
+            f"„{richtig}“ steht in keinem Kundentext — dann ist es kein Ort, sondern eine Idee"
+        )

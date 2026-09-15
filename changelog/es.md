@@ -31,8 +31,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Fijo significa fijo: un punto fijado ya no sigue el arrastre. Las líneas exactamente horizontales o verticales se mantienen así, aunque después arrastre una esquina.
 
 ### Construir y modificar
+- Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.
 
 - Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.
+- Si en el chat nombra solo un eje — «taladro a x = 20» —, el agujero se mueve solo ahí. Antes saltaba a cero en los otros dos ejes.
+- Redondear avisa de antemano que un cuerpo exacto admite un radio menor que una malla, y qué ayuda entonces: un radio menor o seguir trabajando sobre la malla.
+- Abrir el mismo archivo dos veces da dos nombres distinguibles: «soporte» y «soporte 2». Antes ambos cuerpos se llamaban igual, en el árbol y en el informe.
 - Los mensajes que remiten a los valores de la derecha nombran la ventana como se llama: Selección. Antes decían «panel de características», y así no se llama ninguna ventana.
 - «Reducir triángulos» avisa cuando una pieza ya tiene menos triángulos que la cantidad indicada: entonces no hay nada que reducir. Antes se quedaba igual, sin una palabra.
 

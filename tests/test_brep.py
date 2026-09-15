@@ -267,6 +267,42 @@ def test_a_selection_that_matches_nothing_says_so() -> None:
         edit.fillet(edit.cylinder(10.0, 20.0), 1.0, "vertical")
 
 
+def test_the_same_radius_gets_two_answers_and_the_caveat_says_so() -> None:
+    """Derselbe Radius, zwei Antworten — und der Kunde erfährt es vorher.
+
+    Gemessen am 14.09.2026 an einem Hohlkasten 40 x 30 x 20 mit 3 mm Wand
+    (offen nach oben): Über **alle** Kanten nimmt das Netz einen Radius von
+    2 mm an und gibt einen dichten Einteiler zurück; der exakte Kern sagt
+    denselben Radius ab, weil OpenCASCADE daraus einen ungültigen Solid baut.
+    Eine Operation, die an beiden Kernen rechnet und an einem davon früher
+    aufhört, muss das sagen — sonst liest der Kunde „Der Radius ist für diese
+    Kanten zu groß." an einem Teil, das er am Netz gerade noch gerundet hat.
+
+    Der Ausweg im Satz heißt, wie er im Menü heißt: Deshalb steht der Titel
+    von ``brep_to_mesh`` hier und keine Umschreibung.
+    """
+    from app.core.geom.edges import round_edges
+    from app.core.geom.mesh import MeshData
+
+    aussen = edit.box(40.0, 30.0, 20.0)
+    innen = edit.moved(edit.box(34.0, 24.0, 20.0), (3.0, 3.0, 3.0))
+    kasten = edit.boolean("difference", [aussen, innen])
+
+    with pytest.raises(GeometryError):
+        edit.fillet(kasten, 2.0, "all")
+
+    netz = MeshData.of(tessellate(kasten.shape, 0.05).raw)
+    gerundet = round_edges(netz, 2.0, "all", quality="draft")
+    assert gerundet.mesh.is_watertight, "am Netz kommt derselbe Radius durch"
+    assert gerundet.mesh.volume < netz.volume, "und er trägt Material ab"
+
+    grenze = str(REGISTRY.get("fillet_edges").caveat)
+    assert "3 mm" in grenze and "2 mm" in grenze, f"die gemessene Grenze fehlt: {grenze}"
+    assert str(REGISTRY.get("brep_to_mesh").title) in grenze, (
+        f"der Ausweg heißt, wie er im Menü heißt: {grenze}"
+    )
+
+
 # --- which edges ----------------------------------------------------------------
 
 

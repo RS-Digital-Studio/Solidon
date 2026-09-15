@@ -1136,6 +1136,30 @@ def test_the_message_table_stands_on_its_own_imports() -> None:
     assert done.returncode == 0, done.stdout + done.stderr
 
 
+def test_the_manual_names_a_face_the_way_the_labels_do() -> None:
+    """Was der Kunde im Objektbaum liest, steht auch im Handbuch.
+
+    Das Handbuch sagte „Oben“, „Vorn“, „Rechts“; die Beschriftung
+    (``labels._SIDES``) sagt „Oberseite“, „Vorderseite“, „Rechte Seite“. Wer
+    nach der Seite sucht, die im Handbuch steht, findet sie im Fenster nicht —
+    und die Richtung ist die einzige Auskunft, die ein Flächenname überhaupt
+    gibt. Das Fenster hat recht: Der Kunde liest die Beschriftung öfter als
+    das Handbuch.
+
+    Gefragt werden die Beschriftungen selbst und keine Kopie: Wer sie umbenennt,
+    macht diesen Test rot und findet dabei den Absatz, der nachziehen muss.
+    """
+    from app.ui import labels
+
+    text = manual.as_markdown()
+    for positiv, negativ in labels._SIDES:
+        assert str(positiv) in text or str(negativ) in text, (
+            f"weder „{positiv}“ noch „{negativ}“ steht im Handbuch"
+        )
+    innen = str(tr("{side} innen")).format(side=str(labels._SIDES[2][0]))
+    assert innen in text, f"„{innen}“ — der Name der Innenwand steht nicht im Handbuch"
+
+
 def test_an_operation_with_a_limit_says_when_not_to_use_it() -> None:
     """Ein Vorbehalt an jeder Operation wäre keiner mehr. An den fünf mit einer
     echten Grenze steht er — und er steht getrennt vom doc-Satz, sonst liest er

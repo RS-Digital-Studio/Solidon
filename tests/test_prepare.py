@@ -1707,6 +1707,103 @@ def test_a_bore_moved_over_the_edge_does_not_borrow_its_neighbour(profile: Profi
     assert remaining[0].params["centre"][1] == pytest.approx(bores[lower].params["centre"][1])
 
 
+def test_a_half_named_place_leaves_the_other_axes_where_they_were(profile: Profile) -> None:
+    """Wer nur ``x`` nennt, verschiebt nur in x (RM-154).
+
+    Über Chat, Kommandozeile und Agenten kommt eine Stelle selten vollständig:
+    „setz die Bohrung auf x = 20" nennt eine Achse, und die beiden anderen
+    bleiben leer. Bis zum 14.09.2026 füllte ``_named_place`` sie mit null —
+    das Loch sprang damit auf die Mittelebene der Platte, obwohl das Feld
+    daneben zusagt, eine leere Achse bleibe, wo sie ist.
+
+    Gemessen an einer mittig gelegten Platte, weil dort der Sprung am meisten
+    kostet: Der Quader liegt um den Ursprung, also ist (0 | 0 | 0) nicht der
+    Rand, sondern die Mitte des Teils. Die Bohrung sitzt bei y = 30; ohne die
+    Berichtigung kommt sie bei y = 0 heraus, mitten im Material.
+    """
+    from app.core.perceive.features import detect
+    from app.core.scene.cancel import NeverCancelled
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 10.0)))
+    mesh = drill(
+        mesh, profile=profile, position=(0.0, 30.0, 5.0), axis="z", diameter=6.0, compensate=False
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bores = {name: found for name, found in entry.features.items() if found.kind == "hole"}
+    assert len(bores) == 1, "ohne genau eine erkannte Bohrung prüft dieser Test nichts"
+    bore = next(iter(bores))
+    gemessen = bores[bore].params["centre"]
+    assert gemessen[1] == pytest.approx(30.0, abs=0.1), gemessen
+
+    spec = REGISTRY.get("resize_hole")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(
+                at_feature=bore, diameter=6.0, compensate=False, x=20.0, y=None, z=None
+            ),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, options: options[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    versetzt = [found for found in detect(result.outputs[0].mesh).values() if found.kind == "hole"]
+    assert len(versetzt) == 1, "aus einer Bohrung wird eine, nicht zwei"
+    mitte = versetzt[0].params["centre"]
+    assert mitte[0] == pytest.approx(20.0, abs=0.1), f"die genannte Achse wandert: {mitte}"
+    assert mitte[1] == pytest.approx(gemessen[1], abs=0.1), (
+        f"die ungenannte Achse bleibt, wo sie gemessen wurde: {mitte}"
+    )
+    assert mitte[2] == pytest.approx(gemessen[2], abs=0.1), f"und die dritte ebenso: {mitte}"
+
+
+def test_the_dialog_names_all_three_axes_and_gets_exactly_them(profile: Profile) -> None:
+    """Die Gegenprobe: Der Weg über den Dialog ändert sich nicht.
+
+    Er belegt alle drei Felder mit der gemessenen Mitte vor; dort ist keine
+    Achse je ungenannt, und eine genannte Null bleibt eine Null. Ohne diesen
+    Test wäre die Berichtigung darüber auch dann grün, wenn eine ausdrücklich
+    genannte Null stillschweigend durch den Messwert ersetzt würde.
+    """
+    from app.core.perceive.features import detect
+    from app.core.scene.cancel import NeverCancelled
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 10.0)))
+    mesh = drill(
+        mesh, profile=profile, position=(0.0, 30.0, 5.0), axis="z", diameter=6.0, compensate=False
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bore = next(name for name, found in entry.features.items() if found.kind == "hole")
+
+    spec = REGISTRY.get("resize_hole")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(
+                at_feature=bore, diameter=6.0, compensate=False, x=20.0, y=0.0, z=0.0
+            ),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, options: options[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    versetzt = [found for found in detect(result.outputs[0].mesh).values() if found.kind == "hole"]
+    assert len(versetzt) == 1
+    mitte = versetzt[0].params["centre"]
+    assert mitte[0] == pytest.approx(20.0, abs=0.1), mitte
+    assert mitte[1] == pytest.approx(0.0, abs=0.1), f"eine genannte Null ist eine Stelle: {mitte}"
+
+
 def test_scaling_below_what_the_printer_leaves_says_so(
     document: Document, profile: Profile
 ) -> None:

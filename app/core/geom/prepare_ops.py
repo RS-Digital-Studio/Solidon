@@ -3177,7 +3177,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # Hier stand ``not all(is_zero(value) for value in placed)``, und damit ließ
     # sich das Loch in jede Stelle versetzen außer in den Ursprung — an einer
     # mittig gelegten Platte also ausgerechnet in die Mitte des Teils.
-    centre = _named_place(params.x, params.y, params.z) or measured_centre
+    centre = _named_place(params.x, params.y, params.z, measured_centre) or measured_centre
     named_a_place = centre is not measured_centre
     # **Versetzt ist erst, wer wirklich woanders landet.** Wer die heutige
     # Mitte noch einmal einträgt, nennt eine Stelle und wechselt keine; das
@@ -3661,7 +3661,8 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Antwort — ein Langloch wanderte in die Ecke des Bauraums, weil niemand
     # eine Stelle genannt hat. Der Ursprung als *gewollte* Zielmitte ist der
     # seltenere Fall, und für ihn steht ein Tausendstel daneben.
-    centre = _named_place(params.x, params.y, params.z) or _bore_vector(feature, "centre")
+    measured = _bore_vector(feature, "centre")
+    centre = _named_place(params.x, params.y, params.z, measured) or measured
     axis = _bore_vector(feature, "axis")
     diameter = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
@@ -3743,7 +3744,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # da und daneben ein Langloch (gemessen 10.09.2026: `hole_1` und `slot_1`
     # im selben Körper). Dieselbe Paarung wie bei *Merkmal verschieben*: an der
     # alten Stelle das Gegenteil des Merkmals, an der neuen das Merkmal selbst.
-    measured = _bore_vector(feature, "centre")
     moved = not all(is_close(a, b) for a, b in zip(centre, measured, strict=True))
     # **Die Zugabe gilt dem ersten Zug.** Sie hält den Langlochkörper von der
     # runden Bohrungswand fern, an die er sich sonst entlang zweier Linien
@@ -4179,7 +4179,7 @@ def _chosen_bore(source: SceneObject, name: str, *, op: str = "") -> Feature:
     return feature
 
 
-def _named_place(x: float | None, y: float | None, z: float | None) -> Vec3 | None:
+def _named_place(x: float | None, y: float | None, z: float | None, measured: Vec3) -> Vec3 | None:
     """Die genannte Stelle — oder nichts, wenn keine genannt wurde (RM-154).
 
     **Drei Nullen waren einmal die Antwort auf beides.** ``x/y/z`` lasen sich
@@ -4190,12 +4190,23 @@ def _named_place(x: float | None, y: float | None, z: float | None) -> Vec3 | No
 
     Seit die drei Felder ``optional`` tragen, steht „nicht gesagt" als ``None``
     da. Genannt ist eine Stelle, sobald **eine** der drei Achsen eine Zahl
-    trägt; die übrigen fallen auf null zurück, denn wer eine Achse nennt,
-    beschreibt einen Ort und keine Verschiebung.
+    trägt — wer eine Achse nennt, beschreibt einen Ort und keine Verschiebung.
+
+    **Eine ungenannte Achse behält dabei ihren gemessenen Wert.** Sie fiel bis
+    zum 14.09.2026 auf null zurück, und damit sagte ein ``x=20`` aus Chat,
+    Kommandozeile oder Agent zweierlei: „setz das Loch auf x = 20" und „setz es
+    in y und z auf null". An einer mittig gelegten Platte sprang es damit in
+    die Mitte des Teils, während das Feld daneben zusagt, eine leere Achse
+    bleibe, wo sie ist. Der Dialog merkte davon nichts — er belegt alle drei
+    Felder mit der gemessenen Mitte vor, dort ist keine Achse je ungenannt.
     """
     if x is None and y is None and z is None:
         return None
-    return (float(x or 0.0), float(y or 0.0), float(z or 0.0))
+    return (
+        float(measured[0] if x is None else x),
+        float(measured[1] if y is None else y),
+        float(measured[2] if z is None else z),
+    )
 
 
 def _bore_vector(feature: Feature, name: str) -> tuple[float, float, float]:

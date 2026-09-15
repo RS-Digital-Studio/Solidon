@@ -18,6 +18,7 @@ laden" gegen „Modell laden" ist Teil derselben Entscheidung.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -67,6 +68,66 @@ class ImportPlan:
     """
 
 
+#: Die Operationen, deren ``name``-Parameter im Objektbaum landet.
+_NAMING_OPS: Final[frozenset[str]] = frozenset({"load", "load_step", "load_outline"})
+
+
+def names_in_use(document: Document) -> tuple[str, ...]:
+    """Die Objektnamen, die die Schritte dieses Stapels schon vergeben haben.
+
+    **Gefragt wird der Stapel und nicht die ausgewertete Szene** — dieselbe
+    Entscheidung wie bei ``first_model`` unten: Er steht fest, bevor gerechnet
+    wird, und was daraus folgt, landet in den Parametern der Operation statt
+    in einem Zustand, den die nächste Auswertung anders vorfindet (§15.1).
+
+    Genommen wird, was je vergeben wurde, auch ein weggetauschter Name: Wer
+    umbenennt, gibt seinen alten Namen nicht wieder frei. Das ist die sichere
+    Richtung — eine Nummer zu viel ist ein ungewöhnlicher Name, eine zu wenig
+    sind zwei Körper, die im Baum gleich heißen.
+
+    Eine 3MF-Baugruppe bringt ihre Namen aus der Datei mit; die stehen in
+    keinem Parameter und deshalb auch nicht hier.
+    """
+    used: list[str] = []
+    for operation in document.ops:
+        chosen = str(operation.params.get("name", "") or "")
+        if operation.op == "rename_object":
+            if chosen:
+                used.append(chosen)
+            continue
+        if operation.op not in _NAMING_OPS:
+            continue
+        if chosen:
+            used.append(chosen)
+            continue
+        source = document.sources.get(str(operation.params.get("source", "")))
+        if source is not None:
+            used.append(Path(source.path).stem)
+    return tuple(used)
+
+
+def _own_name(file_name: str, taken: Sequence[str]) -> dict[str, str]:
+    """Der Name für diesen Import — nummeriert, wenn der Dateiname schon steht.
+
+    Dieselbe Datei zweimal einzulesen ist der gewöhnliche Weg zu zwei gleichen
+    Teilen, und der Objektbaum trug danach zweimal „plate_holes": im Baum nicht
+    auseinanderzuhalten, im Prüfbericht zweimal derselbe Satz. Der zweite heißt
+    deshalb „plate_holes 2" — dieselbe Nummerierung, die ``split_model`` seinen
+    Teilen gibt.
+
+    Ist der Name frei, steht **kein** Parameter im Entwurf: Ein leerer Name
+    heißt „nimm den Dateinamen", und ihn hineinzuschreiben hieße, dieselbe
+    Auskunft zweimal zu führen.
+    """
+    stem = Path(file_name).stem
+    if stem not in taken:
+        return {}
+    number = 2
+    while f"{stem} {number}" in taken:
+        number += 1
+    return {"name": f"{stem} {number}"}
+
+
 def _silent_plan(fraction: float, text: str) -> None:
     """Der Vorgabewert: Wer keinen Fortschritt will, bekommt keinen.
 
@@ -83,6 +144,7 @@ def import_plan(
     unit: str = "auto",
     *,
     first_model: bool = False,
+    taken: Sequence[str] = (),
     progress: ProgressFn = _silent_plan,
 ) -> ImportPlan:
     """Der Einleseweg für eine Datei, entschieden an ihrer Endung.
@@ -105,6 +167,11 @@ def import_plan(
     daran, was sonst noch in der Szene steht, und dieselbe Datei käme beim
     nächsten Öffnen anders herein (§15.1).
 
+    ``taken`` sind die Namen, die in diesem Stapel schon vergeben sind
+    (:func:`names_in_use`). Trägt einer davon den Dateinamen, bekommt dieser
+    Körper eine Nummer dahinter — sonst stünden nach zweimal derselben Datei
+    zwei gleichnamige Körper im Baum und zweimal derselbe Satz im Prüfbericht.
+
     ``payload`` wird nur für die 3MF-Baugruppe gebraucht: Wie viele Körper eine
     Datei hält, entscheidet sich **vor** der Operation, weil der Stapel die
     Objekt-IDs vergibt, bevor irgendetwas läuft (§11). Gezählt wird ohne eine
@@ -122,16 +189,17 @@ def import_plan(
     # Dokument und wandert beim Speichern in die Projektdatei — auch wenn
     # der Leser danach nichts damit anfangen kann.
     check_readable(payload, suffix)
+    own_name = _own_name(name, taken)
     if brep_step.is_step(suffix):
         return ImportPlan(
             title=_TITLES["load_step"],
-            draft=OperationDraft(op="load_step", params={"source": source_id}),
+            draft=OperationDraft(op="load_step", params={"source": source_id, **own_name}),
             asks_unit=False,
         )
     if is_outline(suffix):
         return ImportPlan(
             title=_TITLES["load_outline"],
-            draft=OperationDraft(op="load_outline", params={"source": source_id}),
+            draft=OperationDraft(op="load_outline", params={"source": source_id, **own_name}),
             asks_unit=False,
         )
     parts = 1
@@ -164,6 +232,10 @@ def import_plan(
             params={
                 "source": source_id,
                 "unit": unit,
+                # **Nur am einzelnen Körper.** Eine Baugruppe trägt die Namen
+                # ihrer Teile in der Datei, und ``load`` nimmt den Parameter
+                # dort gar nicht an — er wäre ein Name für dreißig Körper.
+                **(own_name if parts == 1 else {}),
                 **({"place_on_bed": True, "centre": True} if first_model else {}),
             },
             produces=max(parts, 1),

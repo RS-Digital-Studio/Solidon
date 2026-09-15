@@ -31,8 +31,12 @@ dans `website/version.json`.
 - Fixe veut dire fixe : un point fixé ne suit plus le déplacement. Les lignes exactement horizontales ou verticales le restent, même si vous déplacez un coin ensuite.
 
 ### Construire et modifier
+- Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.
 
 - Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.
+- Si vous ne nommez qu'un axe dans le chat — « perçage à x = 20 » —, le trou ne bouge que là. Avant, il retombait à zéro sur les deux autres axes.
+- Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage.
+- Ouvrir deux fois le même fichier donne deux noms distincts : « support » et « support 2 ». Avant, les deux corps portaient le même nom, dans l'arbre comme dans le rapport.
 - Les messages qui renvoient aux valeurs à droite nomment la fenêtre telle qu'elle s'appelle : Sélection. Avant, ils disaient « panneau des caractéristiques ».
 - « Réduire les triangles » le dit quand une pièce a déjà moins de triangles que le nombre saisi : il n'y a alors rien à réduire. Avant, elle restait telle quelle, sans un mot.
 

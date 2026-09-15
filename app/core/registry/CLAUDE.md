@@ -39,6 +39,22 @@ Drei Funktionen in `surfaces.py`, und sie bauen aufeinander auf:
 | `folded_groups(größen, …, rank=…)` | Welche dieser Posten müssen ein Untermenü bekommen, damit der Rest in die Grenze passt? |
 | `folded_categories(kategorie)` | Dasselbe für die Kategorien **einer Menügruppe** — die Antwort, die `menu_path` und `_build_menus` benutzen |
 
+**Gefaltet wird nur so weit, bis der Rest passt** — und nur, was etwas
+spart: Eine Gruppe mit einem einzigen Eintrag bekommt kein Untermenü, denn es
+spart keine Zeile und kostet einen Klick; die einzige Gruppe eines Menüs faltet
+nie, sonst bestünde das Menü aus einem Untermenü, das heißt wie der Klick davor.
+`fixed` sind Zeilen, die mitzählen und nicht faltbar sind — im Bausteinmenü die
+Einträge ohne Baustein der Bibliothek. `keep` nennt die Gruppen, die **zuletzt**
+an die Reihe kommen, weil sie die Geste tragen, für die man überhaupt geklickt
+hat; genannt werden sie über die **Kategorie** und nie über den übersetzten
+Titel. `rank` ordnet, wen es zuerst trifft — ohne Angabe die Reihenfolge der
+Menüleiste (`menu_rank`). **Warum dabei der Rang vor der Größe geht**, steht
+mit seiner Messung in `.claude/rules/operationen.md`.
+
+**Und die Rechnung kommt ohne Qt aus.** Sie nimmt Namen und Zeilenzahlen
+entgegen und ist damit ohne ein einziges Fenster prüfbar; warum das hier keine
+Stilfrage ist, steht in derselben Regel.
+
 **Eine Rechnung, zwei Oberflächen.** `folded_groups` lag bis zum 27.08.2026 in
 `app/ui/panels.py` — der Kern konnte sie von dort nicht fragen (§8) und hatte
 deshalb ein eigenes, gröberes Modell: alles flach oder **jede** Kategorie eine

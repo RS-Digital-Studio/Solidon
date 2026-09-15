@@ -57,6 +57,10 @@ Nutzen da und sonst nichts.
 ### Konstruieren und Ändern
 
 - Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.
+- Nennen Sie im Chat nur eine Achse — „Bohrung auf x = 20“ —, wandert das Loch nur dort. Vorher sprang es in den beiden anderen Achsen auf null.
+- Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz.
+- Dieselbe Datei zweimal geöffnet ergibt zwei unterscheidbare Namen: „halter“ und „halter 2“. Vorher hießen beide Körper gleich, im Baum wie im Prüfbericht.
+- Meldungen, die auf die Werte rechts verweisen, nennen das Fenster so, wie es heißt: Auswahl. Vorher stand dort „Merkmalfenster“, und so heißt kein Fenster.
 - „Dreiecke verringern“ sagt es, wenn ein Teil schon weniger Dreiecke hat als die eingetragene Zahl — dann gibt es nichts zu verringern. Vorher blieb es stumm, wie es war.
 - „Stellung geben“ ohne Skelett meldet, dass die Knochen im Skeletteditor entstehen — zwei Klicks je Knochen. Vorher bewegte der Schritt stumm nichts.
 

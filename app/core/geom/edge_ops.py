@@ -116,7 +116,11 @@ class FilletParams(BaseParams):
     caveat=_(
         "An einem Netz besteht die Rundung aus geraden Stücken statt aus einer "
         "Kurve. Sie weichen um weniger ab, als eine Düse auflöst; wer eine echte "
-        "Kurve braucht, arbeitet an einem exakten Körper weiter."
+        "Kurve braucht, arbeitet an einem exakten Körper weiter. Dort ist der "
+        "Radius enger begrenzt: An einem Kasten mit 3 mm Wand nimmt das Netz über "
+        "alle Kanten noch 2 mm an, der exakte Körper lehnt denselben Radius ab. "
+        "Dann hilft ein kleinerer Radius oder „Flächenbearbeitung beenden“, um am "
+        "Netz zu runden."
     ),
 )
 def fillet_edges(ctx: OpContext) -> OpResult:

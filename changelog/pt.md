@@ -30,8 +30,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Fixo quer dizer fixo: um ponto fixado já não segue o arrasto. As linhas exatamente horizontais ou verticais mantêm-se assim, mesmo que depois arraste um canto.
 
 ### Construir e alterar
+- Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.
 
 - Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.
+- Se no chat indicar só um eixo — «furo em x = 20» —, o furo desloca-se apenas aí. Antes saltava para zero nos outros dois eixos.
+- Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha.
+- Abrir o mesmo ficheiro duas vezes dá dois nomes distinguíveis: «suporte» e «suporte 2». Antes ambos os corpos tinham o mesmo nome, na árvore e no relatório.
 - As mensagens que remetem para os valores à direita nomeiam a janela como ela se chama: Seleção. Antes diziam «painel de características».
 - «Reduzir triângulos» avisa quando uma peça já tem menos triângulos do que o número indicado: então não há nada a reduzir. Antes ficava como estava, sem uma palavra.
 
