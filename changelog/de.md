@@ -62,19 +62,27 @@ Nutzen da und sonst nichts.
 - Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz.
 - Dieselbe Datei zweimal geöffnet ergibt zwei unterscheidbare Namen: „halter“ und „halter 2“. Vorher hießen beide Körper gleich, im Baum wie im Prüfbericht.
 - Meldungen, die auf die Werte rechts verweisen, nennen das Fenster so, wie es heißt: Auswahl. Vorher stand dort „Merkmalfenster“, und so heißt kein Fenster.
-- „Dreiecke verringern“ sagt es, wenn ein Teil schon weniger Dreiecke hat als die eingetragene Zahl — dann gibt es nichts zu verringern. Vorher blieb es stumm, wie es war.
-- „Stellung geben“ ohne Skelett meldet, dass die Knochen im Skeletteditor entstehen — zwei Klicks je Knochen. Vorher bewegte der Schritt stumm nichts.
+- Der Schritt „Dreiecke verringern“ sagt es, wenn ein Teil schon weniger Dreiecke hat als die eingetragene Zahl — dann gibt es nichts zu verringern. Vorher blieb es stumm, wie es war.
+- Der Schritt „Stellung geben“ ohne Skelett meldet, dass die Knochen im Skeletteditor entstehen — zwei Klicks je Knochen. Vorher bewegte der Schritt stumm nichts.
+- Eine Bohrung, die Sie versetzen, drehen, verdoppeln oder ändern, sagt es, wenn sie dabei über die Kante des Teils gerät — wie beim Bohren. Vorher stand nur das Ergebnis im Bild.
+- Versetzen und Verdoppeln einer Bohrung mit Senkung lassen das Volumen des Teils unverändert. Vorher fehlte danach bis zu ein Kubikmillimeter.
+- Zerfällt ein Teil durch einen Schritt in lose Stücke, steht es im Prüfbericht — mit dem Weg zurück über Strg+Z.
 
 ### Erkennen
 
 - Eine runde Wand — das Ende einer Lasche, der Boden einer Nut — heißt jetzt so. Vorher stand dort „Verrundung“ mit einer Kante, die es nicht gibt. Der Radius lässt sich ändern.
 - Eine Bohrung mit Nasen in der Wand, etwa der Ring eines Bajonettverschlusses, ist eine Bohrung. Vorher stand dort ein Langloch so lang wie breit, und jede Handlung hätte die Nasen entfernt.
+- Ein Langloch mit Fase am Rand ist ein Langloch; die Fase gehört dazu. Vorher standen an einem Rahmen 126 einzelne Senkungen im Baum.
+- Eine Kerbe oder das runde Ende einer Lasche ist keine Bohrung mehr, und zwei Stücke derselben runden Wand stehen als eines im Baum.
+- Ein Stück Kegel ohne eigenen Rand heißt Kegelfläche. Es lässt sich ansehen, aber nicht allein bearbeiten — und das steht an jeder Zeile.
+- Die Innenwand eines Rades mit Speichen ist keine Bohrung, und ein Becher mit einem Loch im Boden ist kein Durchgang. Vorher schnitt „Versetzen“ dort die Speichen weg.
+- Große Modelle werden bis zu dreißigmal schneller erkannt: Ein Uhrenteil mit 500 Bögen brauchte zwei Minuten, jetzt vier Sekunden.
 
 ### Ansicht und Bedienung
 
 - Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.
 - Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.
-- „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.
+- Der Schritt „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.
 - Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum.
 - Filament zuweisen zeigt die Farbe schon in der Vorschau; Dreiecke angleichen und Unterteilen zeigen das neue Netz mit seinen Kanten. Die Leertaste holt das Vorher.
 - Aushöhlen an einem Teil mit Löchern in der Hülle sagt jetzt, dass die Hülle das Problem ist, und bietet „Reparieren und erneut versuchen“ an — statt zu melden, kein Rechenweg habe funktioniert.
@@ -82,9 +90,10 @@ Nutzen da und sonst nichts.
 - Ein Feld, das bei der gewählten Grundform nichts tut, steht nicht mehr grau im Dialog — es erscheint mit der Grundform, die es braucht. Ein Rechteck zeigt vorn vier Felder statt acht.
 - Bei 150 oder 200 Prozent Bildschirmskalierung greifen Fang, Griffe und Marken wieder so weit wie bei 100 Prozent. Der Ziehgriff steht in voller Größe, und ein leicht wackliger Klick bleibt ein Klick.
 - An einem großen Modell kommt die Vorschau in unter einer Sekunde statt in mehreren: Solidon rechnet sie gröber und schreibt „Grobe Vorschau“ ins Bild. Übernommen wird weiterhin genau.
-- „An gezeichneter Linie trennen“ beginnt in der Mitte des Teils statt auf seiner Unterseite — wie „Teilen“. Vorher zeigte die Vorschau nur, dass die Ebene nichts trennt.
-- „An Merkmal ausrichten“ bittet Sie jetzt, das zweite Merkmal zu wählen, statt Ihnen eine Schreibweise zu erklären.
+- Der Schritt „An gezeichneter Linie trennen“ beginnt in der Mitte des Teils statt auf seiner Unterseite — wie „Teilen“. Vorher zeigte die Vorschau nur, dass die Ebene nichts trennt.
+- Der Schritt „An Merkmal ausrichten“ bittet Sie jetzt, das zweite Merkmal zu wählen, statt Ihnen eine Schreibweise zu erklären.
 - Der Start wartet nicht mehr auf die Grafikkarte: Sie wird gesucht, während das Fenster entsteht. Auf Rechnern, die lange dafür brauchten, stand das Programm dabei sekundenlang still.
+- Was an einem Merkmal nicht geht, steht grau mit dem Grund — demselben Satz, den die Operation nach dem Klick gesagt hätte. Die Sätze sind kürzer geworden.
 
 ### Dateien und Export
 

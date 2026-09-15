@@ -38,19 +38,27 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Redondear avisa de antemano que un cuerpo exacto admite un radio menor que una malla, y qué ayuda entonces: un radio menor o seguir trabajando sobre la malla.
 - Abrir el mismo archivo dos veces da dos nombres distinguibles: «soporte» y «soporte 2». Antes ambos cuerpos se llamaban igual, en el árbol y en el informe.
 - Los mensajes que remiten a los valores de la derecha nombran la ventana como se llama: Selección. Antes decían «panel de características», y así no se llama ninguna ventana.
-- «Reducir triángulos» avisa cuando una pieza ya tiene menos triángulos que la cantidad indicada: entonces no hay nada que reducir. Antes se quedaba igual, sin una palabra.
-- «Dar una postura» sin esqueleto avisa de que los huesos se crean en el editor de esqueleto: dos clics por hueso. Antes el paso no movía nada, en silencio.
+- El paso «Reducir triángulos» avisa cuando una pieza ya tiene menos triángulos que la cantidad indicada: entonces no hay nada que reducir. Antes se quedaba igual, sin una palabra.
+- El paso «Dar una postura» sin esqueleto avisa de que los huesos se crean en el editor de esqueleto: dos clics por hueso. Antes el paso no movía nada, en silencio.
+- Un taladro que desplace, gire, duplique o modifique lo indica cuando con ello sobrepasa el borde de la pieza — como al taladrar. Antes solo se veía el resultado en la imagen.
+- Desplazar y duplicar un taladro con avellanado dejan el volumen de la pieza sin cambios. Antes faltaba después hasta un milímetro cúbico.
+- Si un paso divide una pieza en trozos sueltos, el informe lo dice — con el camino de vuelta mediante Ctrl+Z.
 
 ### Reconocimiento
 
 - Una pared curva —el extremo de una pestaña, el fondo de una ranura— ahora se llama así. Antes ponía «Redondeo» con una arista que no existe. El radio se puede cambiar.
 - Un agujero con resaltes en la pared, como el anillo de un cierre de bayoneta, es un agujero. Antes aparecía como un agujero alargado tan largo como ancho, y cualquier acción quitaba los resaltes.
+- Una ranura con chaflán en el borde es una ranura; el chaflán forma parte de ella. Antes, en un marco aparecían 126 avellanados sueltos en el árbol.
+- Una muesca o el extremo redondo de una lengüeta ya no es un taladro, y dos trozos de la misma pared redonda aparecen como uno en el árbol.
+- Un trozo de cono sin borde propio se llama cara cónica. Se puede examinar, pero no editar por sí solo — y así lo dice cada fila.
+- La pared interior de una rueda con radios no es un taladro, y un vaso con un agujero en el fondo no es un paso. Antes, «Desplazar» cortaba allí los radios.
+- Los modelos grandes se reconocen hasta treinta veces más rápido: una pieza de relojería con 500 arcos tardaba dos minutos, ahora cuatro segundos.
 
 ### Vista y manejo
 
 - Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.
 - Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.
-- «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.
+- El paso «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.
 - Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco.
 - Asignar un filamento ya muestra el color en la vista previa; igualar y subdividir triángulos muestran la nueva malla con sus aristas. La barra espaciadora devuelve el antes.
 - Ahuecar una pieza con agujeros en la envolvente dice ahora que la envolvente es el problema y ofrece «Reparar y reintentar» — en vez de avisar de que ningún cálculo funcionó.
@@ -58,9 +66,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un campo que no hace nada con la forma base elegida ya no aparece en gris en el diálogo — aparece con la forma que lo necesita. Un rectángulo muestra delante cuatro campos en vez de ocho.
 - Con la pantalla al 150 o 200 por ciento, el ajuste, los tiradores y las marcas alcanzan lo mismo que al 100 por ciento. El tirador sale a tamaño completo y un clic tembloroso sigue siendo un clic.
 - En un modelo grande la vista previa llega en menos de un segundo en vez de varios: Solidon la calcula de forma más basta y escribe «Vista previa aproximada». Aplicar sigue siendo exacto.
-- «Separar por una línea dibujada» empieza en el centro de la pieza y no en su cara inferior, como «Dividir». Antes la vista previa solo mostraba que el plano no separa nada.
-- «Alinear con una característica» le pide ahora que elija la segunda característica en lugar de explicarle una notación.
+- El paso «Separar por una línea dibujada» empieza en el centro de la pieza y no en su cara inferior, como «Dividir». Antes la vista previa solo mostraba que el plano no separa nada.
+- El paso «Alinear con una característica» le pide ahora que elija la segunda característica en lugar de explicarle una notación.
 - El arranque ya no espera a la tarjeta gráfica: se busca mientras se construye la ventana. En equipos que tardaban en encontrarla, el programa se quedaba parado unos segundos.
+- Lo que no es posible en un detalle aparece en gris con el motivo — la misma frase que la operación habría dicho tras el clic. Las frases son ahora más cortas.
 
 ### Archivos y exportación
 

@@ -37,19 +37,27 @@ scrive in `website/version.json`.
 - Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh.
 - Aprire due volte lo stesso file dà due nomi distinguibili: « supporto » e « supporto 2 ». Prima i due corpi si chiamavano uguali, nell'albero e nel rapporto.
 - I messaggi che rimandano ai valori a destra chiamano la finestra come si chiama: Selezione. Prima dicevano « pannello delle caratteristiche ».
-- « Ridurre i triangoli » lo dice quando un pezzo ha già meno triangoli del numero indicato: allora non c'è nulla da ridurre. Prima restava com'era, senza una parola.
-- « Dai una posa » senza scheletro segnala che le ossa nascono nell'editor dello scheletro: due clic per osso. Prima il passo non muoveva nulla, in silenzio.
+- Il passo « Ridurre i triangoli » lo dice quando un pezzo ha già meno triangoli del numero indicato: allora non c'è nulla da ridurre. Prima restava com'era, senza una parola.
+- Il passo « Dai una posa » senza scheletro segnala che le ossa nascono nell'editor dello scheletro: due clic per osso. Prima il passo non muoveva nulla, in silenzio.
+- Un foro che sposta, ruota, duplica o modifica lo segnala se così sporge oltre il bordo del pezzo — come nella foratura. Prima si vedeva solo il risultato nell’immagine.
+- Spostare e duplicare un foro con svasatura lasciano invariato il volume del pezzo. Prima mancava poi fino a un millimetro cubo.
+- Se un passaggio spezza un pezzo in parti staccate, il rapporto lo dice — con la via del ritorno tramite Ctrl+Z.
 
 ### Riconoscimento
 
 - Una parete curva — l’estremità di una linguetta, il fondo di una scanalatura — ora si chiama così. Prima c’era «Raccordo» con uno spigolo che non esiste. Il raggio si può cambiare.
 - Un foro con nasi nella parete, come l’anello di una chiusura a baionetta, è un foro. Prima compariva come un’asola lunga quanto larga, e ogni azione avrebbe tolto i nasi.
+- Un’asola con il bordo smussato è un’asola; lo smusso ne fa parte. Prima un telaio mostrava 126 svasature separate nell’albero.
+- Una tacca o l’estremità arrotondata di una linguetta non è più un foro, e due pezzi della stessa parete rotonda compaiono come uno solo nell’albero.
+- Un pezzo di cono senza un bordo proprio si chiama faccia conica. Si può esaminare, ma non modificare da solo — e ogni riga lo dice.
+- La parete interna di una ruota a raggi non è un foro, e un bicchiere con un buco sul fondo non è un passaggio. Prima «Sposta» tagliava lì i raggi.
+- I modelli grandi vengono riconosciuti fino a trenta volte più in fretta: un pezzo di orologeria con 500 archi richiedeva due minuti, ora quattro secondi.
 
 ### Vista e utilizzo
 
 - Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.
 - Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.
-- «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.
+- Il passo «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.
 - Uno strumento che su questo pezzo non può fare nulla appare grigio e dice perché — «Chiudi superficie aperta» su un pezzo chiuso, «Dividi in parti» su un pezzo solo, «Reticolo» senza cavità.
 - Assegnare un filamento mostra il colore già nell'anteprima; uniformare e suddividere i triangoli mostrano la nuova mesh con i suoi spigoli. La barra spaziatrice riporta il prima.
 - Svuotare un pezzo con buchi nel guscio dice ora che il guscio è il problema e offre «Ripara e riprova» — invece di segnalare che nessun calcolo ha funzionato.
@@ -57,9 +65,10 @@ scrive in `website/version.json`.
 - Un campo che non fa nulla con la forma base scelta non appare più grigio nella finestra — appare con la forma che ne ha bisogno. Un rettangolo mostra davanti quattro campi invece di otto.
 - Con lo schermo al 150 o 200 per cento, aggancio, maniglie e segni arrivano di nuovo lontano come al 100 per cento. La maniglia è a grandezza piena e un clic tremolante resta un clic.
 - Su un modello grande l'anteprima arriva in meno di un secondo invece che in diversi: Solidon la calcola più grossolanamente e scrive «Anteprima grossolana». Applicare resta esatto.
-- «Separare lungo una linea disegnata» parte dal centro del pezzo e non dalla sua faccia inferiore, come «Dividere». Prima l'anteprima mostrava soltanto che il piano non separa nulla.
-- «Allineare a una caratteristica» ti chiede ora di scegliere la seconda caratteristica invece di spiegarti una notazione.
+- Il passo «Separare lungo una linea disegnata» parte dal centro del pezzo e non dalla sua faccia inferiore, come «Dividere». Prima l'anteprima mostrava soltanto che il piano non separa nulla.
+- Il passo «Allineare a una caratteristica» ti chiede ora di scegliere la seconda caratteristica invece di spiegarti una notazione.
 - L'avvio non aspetta più la scheda grafica: viene cercata mentre la finestra si costruisce. Su macchine che ci mettevano molto, il programma restava fermo per secondi.
+- Ciò che non è possibile su una caratteristica compare in grigio con il motivo — la stessa frase che l’operazione avrebbe detto dopo il clic. Le frasi sono diventate più brevi.
 
 ### File ed esportazione
 

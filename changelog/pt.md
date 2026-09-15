@@ -37,19 +37,27 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha.
 - Abrir o mesmo ficheiro duas vezes dá dois nomes distinguíveis: «suporte» e «suporte 2». Antes ambos os corpos tinham o mesmo nome, na árvore e no relatório.
 - As mensagens que remetem para os valores à direita nomeiam a janela como ela se chama: Seleção. Antes diziam «painel de características».
-- «Reduzir triângulos» avisa quando uma peça já tem menos triângulos do que o número indicado: então não há nada a reduzir. Antes ficava como estava, sem uma palavra.
-- «Dar uma pose» sem esqueleto avisa que os ossos nascem no editor de esqueleto — dois cliques por osso. Antes o passo não movia nada, em silêncio.
+- O passo «Reduzir triângulos» avisa quando uma peça já tem menos triângulos do que o número indicado: então não há nada a reduzir. Antes ficava como estava, sem uma palavra.
+- O passo «Dar uma pose» sem esqueleto avisa que os ossos nascem no editor de esqueleto — dois cliques por osso. Antes o passo não movia nada, em silêncio.
+- Um furo que desloque, rode, duplique ou altere avisa quando com isso ultrapassa o bordo da peça — como ao furar. Antes só se via o resultado na imagem.
+- Deslocar e duplicar um furo com escareado deixam o volume da peça inalterado. Antes faltava depois até um milímetro cúbico.
+- Se um passo parte uma peça em pedaços soltos, o relatório diz-o — com o caminho de volta por Ctrl+Z.
 
 ### Reconhecimento
 
 - Uma parede curva — a ponta de uma patilha, o fundo de uma ranhura — chama-se agora assim. Antes dizia «Arredondamento» com uma aresta que não existe. O raio pode ser alterado.
 - Um furo com saliências na parede, como o anel de um fecho de baioneta, é um furo. Antes aparecia como um furo oblongo tão comprido quanto largo, e qualquer ação removia as saliências.
+- Uma ranhura com chanfro no bordo é uma ranhura; o chanfro faz parte dela. Antes, uma moldura mostrava 126 escareados avulsos na árvore.
+- Um entalhe ou a ponta redonda de uma lingueta já não é um furo, e dois pedaços da mesma parede redonda aparecem como um só na árvore.
+- Um pedaço de cone sem bordo próprio chama-se face cónica. Pode ver-se, mas não editar-se isoladamente — e cada linha o diz.
+- A parede interior de uma roda com raios não é um furo, e um copo com um buraco no fundo não é uma passagem. Antes, «Deslocar» cortava ali os raios.
+- Os modelos grandes são reconhecidos até trinta vezes mais depressa: uma peça de relojoaria com 500 arcos demorava dois minutos, agora quatro segundos.
 
 ### Vista e utilização
 
 - Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.
 - Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.
-- «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.
+- O passo «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.
 - Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade.
 - Atribuir um filamento já mostra a cor na pré-visualização; igualar e subdividir triângulos mostram a nova malha com as suas arestas. A barra de espaço traz o antes.
 - Escavar uma peça com furos na casca diz agora que a casca é o problema e oferece «Reparar e tentar de novo» — em vez de avisar que nenhum cálculo funcionou.
@@ -57,9 +65,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um campo que nada faz com a forma base escolhida já não aparece a cinzento no diálogo — surge com a forma que precisa dele. Um retângulo mostra à frente quatro campos em vez de oito.
 - Com o ecrã a 150 ou 200 por cento, o encaixe, as pegas e as marcas alcançam o mesmo que a 100 por cento. A pega fica em tamanho completo e um clique trémulo continua a ser um clique.
 - Num modelo grande a pré-visualização chega em menos de um segundo em vez de vários: o Solidon calcula-a de forma mais grosseira e escreve «Pré-visualização aproximada». Aplicar continua exato.
-- «Separar por uma linha desenhada» começa no meio da peça e não na sua face inferior, como «Dividir». Antes a pré-visualização mostrava apenas que o plano não separa nada.
-- «Alinhar por uma característica» pede-lhe agora que escolha a segunda característica em vez de lhe explicar uma notação.
+- O passo «Separar por uma linha desenhada» começa no meio da peça e não na sua face inferior, como «Dividir». Antes a pré-visualização mostrava apenas que o plano não separa nada.
+- O passo «Alinhar por uma característica» pede-lhe agora que escolha a segunda característica em vez de lhe explicar uma notação.
 - O arranque já não espera pela placa gráfica: é procurada enquanto a janela é construída. Em máquinas que demoravam, o programa ficava parado durante segundos.
+- O que não é possível numa característica aparece a cinzento com o motivo — a mesma frase que a operação teria dito depois do clique. As frases ficaram mais curtas.
 
 ### Ficheiros e exportação
 

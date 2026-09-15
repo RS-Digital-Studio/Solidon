@@ -38,19 +38,27 @@ dans `website/version.json`.
 - Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage.
 - Ouvrir deux fois le même fichier donne deux noms distincts : « support » et « support 2 ». Avant, les deux corps portaient le même nom, dans l'arbre comme dans le rapport.
 - Les messages qui renvoient aux valeurs à droite nomment la fenêtre telle qu'elle s'appelle : Sélection. Avant, ils disaient « panneau des caractéristiques ».
-- « Réduire les triangles » le dit quand une pièce a déjà moins de triangles que le nombre saisi : il n'y a alors rien à réduire. Avant, elle restait telle quelle, sans un mot.
-- « Donner une pose » sans squelette indique que les os se créent dans l'éditeur de squelette — deux clics par os. Avant, l'étape ne déplaçait rien, en silence.
+- L’étape « Réduire les triangles » le dit quand une pièce a déjà moins de triangles que le nombre saisi : il n'y a alors rien à réduire. Avant, elle restait telle quelle, sans un mot.
+- L’étape « Donner une pose » sans squelette indique que les os se créent dans l'éditeur de squelette — deux clics par os. Avant, l'étape ne déplaçait rien, en silence.
+- Un trou que vous déplacez, tournez, dupliquez ou modifiez le signale s’il déborde alors du bord de la pièce — comme au perçage. Avant, seul le résultat apparaissait dans l’image.
+- Déplacer et dupliquer un trou avec lamage laissent le volume de la pièce inchangé. Avant, il manquait ensuite jusqu’à un millimètre cube.
+- Si une étape casse une pièce en morceaux détachés, le rapport le dit — avec le retour par Ctrl+Z.
 
 ### Reconnaissance
 
 - Une paroi courbe — le bout d’une patte, le fond d’une rainure — s’appelle désormais ainsi. Avant, il y avait « Congé » avec une arête qui n’existe pas. Le rayon se modifie.
 - Un perçage avec des ergots dans sa paroi, comme la bague d’une fermeture à baïonnette, est un perçage. Avant, c’était un trou oblong aussi long que large, et chaque action aurait ôté les ergots.
+- Une rainure au bord chanfreiné est une rainure ; le chanfrein en fait partie. Avant, un cadre affichait 126 lamages isolés dans l’arbre.
+- Une encoche ou l’extrémité ronde d’une languette n’est plus un trou, et deux morceaux de la même paroi ronde n’en font plus qu’un dans l’arbre.
+- Un morceau de cône sans bord propre s’appelle face conique. On peut l’examiner, mais pas le modifier seul — et chaque ligne le dit.
+- La paroi intérieure d’une roue à rayons n’est pas un trou, et un gobelet percé au fond n’est pas un passage. Avant, « Déplacer » y coupait les rayons.
+- Les grands modèles sont reconnus jusqu’à trente fois plus vite : une pièce d’horlogerie à 500 arcs prenait deux minutes, maintenant quatre secondes.
 
 ### Vue et utilisation
 
 - Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.
 - Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.
-- « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.
+- L’étape « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.
 - Un outil qui ne peut rien faire sur cette pièce apparaît grisé et dit pourquoi — « Fermer une surface ouverte » sur une pièce fermée, « Séparer en pièces » sur une seule, « Treillis » sans cavité.
 - Attribuer un filament montre déjà la couleur dans l'aperçu ; égaliser et subdiviser les triangles montrent le nouveau maillage avec ses arêtes. La barre d'espace ramène l'avant.
 - Évider une pièce dont l'enveloppe est trouée dit maintenant que l'enveloppe est le problème et propose « Réparer et réessayer » — au lieu de signaler qu'aucun calcul n'a abouti.
@@ -58,9 +66,10 @@ dans `website/version.json`.
 - Un champ sans effet pour la forme de base choisie n'apparaît plus grisé dans le dialogue — il apparaît avec la forme qui en a besoin. Un rectangle montre quatre champs devant au lieu de huit.
 - À 150 ou 200 pour cent de mise à l'échelle, l'aimantation, les poignées et les repères portent de nouveau comme à 100 pour cent. La poignée est en taille réelle et un clic tremblant reste un clic.
 - Sur un grand modèle, l'aperçu arrive en moins d'une seconde au lieu de plusieurs : Solidon le calcule plus grossièrement et écrit « Aperçu grossier ». L'application reste exacte.
-- « Séparer selon une ligne dessinée » commence au milieu de la pièce et non sous elle, comme « Séparer ». Auparavant, l'aperçu montrait seulement que le plan ne sépare rien.
-- « Aligner sur une caractéristique » vous demande maintenant de choisir la deuxième caractéristique au lieu de vous expliquer une notation.
+- L’étape « Séparer selon une ligne dessinée » commence au milieu de la pièce et non sous elle, comme « Séparer ». Auparavant, l'aperçu montrait seulement que le plan ne sépare rien.
+- L’étape « Aligner sur une caractéristique » vous demande maintenant de choisir la deuxième caractéristique au lieu de vous expliquer une notation.
 - Le démarrage n'attend plus la carte graphique : elle est recherchée pendant que la fenêtre se construit. Sur les machines qui mettaient longtemps, le programme restait figé plusieurs secondes.
+- Ce qui n’est pas possible sur un élément apparaît en gris avec la raison — la phrase même que l’opération aurait dite après le clic. Les phrases sont devenues plus courtes.
 
 ### Fichiers et export
 

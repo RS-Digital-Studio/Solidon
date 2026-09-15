@@ -37,19 +37,27 @@ it into `website/version.json`.
 - Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh.
 - Opening the same file twice gives two names you can tell apart: “holder” and “holder 2”. Before, both bodies were called the same, in the tree as in the check report.
 - Messages pointing to the values on the right now name the window the way it is named: Selection. Before they said “feature panel”, and no window is called that.
-- “Reduce triangles” says so when a part already has fewer triangles than the number you entered — there is nothing to reduce then. Before, it simply stayed as it was.
-- “Set a pose” without an armature says that the bones are made in the skeleton editor — two clicks per bone. Before, the step silently moved nothing.
+- The step “Reduce triangles” says so when a part already has fewer triangles than the number you entered — there is nothing to reduce then. Before, it simply stayed as it was.
+- The step “Set a pose” without an armature says that the bones are made in the skeleton editor — two clicks per bone. Before, the step silently moved nothing.
+- A hole you move, rotate, duplicate or change says so when it runs over the edge of the part — as drilling does. Before, only the result showed in the picture.
+- Moving and duplicating a hole with a countersink leave the part’s volume unchanged. Before, up to a cubic millimetre went missing.
+- If a step breaks a part into loose pieces, the report says so — with the way back via Ctrl+Z.
 
 ### Recognition
 
 - A curved wall — the end of a tab, the floor of a groove — is now called that. Before, it said “Fillet” with an edge that does not exist. Its radius can be changed.
 - A bore with lugs in its wall, such as the ring of a bayonet mount, is a bore. Before, it appeared as a slot as long as it was wide, and every action would have removed the lugs.
+- A slot with a chamfered rim is a slot; the chamfer belongs to it. Before, one frame listed 126 separate countersinks in the tree.
+- A notch or the round end of a tab is no longer a hole, and two pieces of the same round wall appear as one in the tree.
+- A piece of cone without a rim of its own is called a conical face. It can be inspected but not edited alone — and every row says so.
+- The inner wall of a wheel with spokes is not a hole, and a cup with a hole in its floor is not a through passage. Before, “Move” cut the spokes away there.
+- Large models are recognised up to thirty times faster: a clockwork part with 500 arcs took two minutes, now four seconds.
 
 ### View and operation
 
 - A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.
 - When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.
-- “Split” starts in the middle of the part instead of at its underside. The number stays editable.
+- The step “Split” starts in the middle of the part instead of at its underside. The number stays editable.
 - A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity.
 - Assigning a filament shows the colour in the preview already; remeshing and subdividing show the new mesh with its edges. The space bar brings back the before.
 - Hollowing a part with holes in its hull now says that the hull is the problem and offers “Repair and retry” — instead of reporting that no computation path worked.
@@ -57,9 +65,10 @@ it into `website/version.json`.
 - A field that does nothing for the chosen base shape is no longer greyed out in the dialog — it appears with the shape that needs it. A rectangle shows four fields up front instead of eight.
 - At 150 or 200 per cent screen scaling, snapping, handles and marks reach as far as at 100 per cent again. The pull handle is full size, and a slightly wobbly click stays a click.
 - On a large model the preview arrives in under a second instead of several: Solidon computes it more coarsely and writes “Coarse preview” into the picture. Applying is still exact.
-- “Split along a drawn line” starts in the middle of the part instead of at its underside — like “Split”. Before, the preview only showed that the plane cuts nothing.
-- “Align to feature” now asks you to pick the second feature instead of explaining a notation to you.
+- The step “Split along a drawn line” starts in the middle of the part instead of at its underside — like “Split”. Before, the preview only showed that the plane cuts nothing.
+- The step “Align to feature” now asks you to pick the second feature instead of explaining a notation to you.
 - Startup no longer waits for the graphics card: it is looked up while the window is being built. On machines that took a long time over it, the program stood still for seconds.
+- What cannot be done at a feature appears greyed with the reason — the same sentence the operation would have said after the click. The sentences have become shorter.
 
 ### Files and export
 
