@@ -19,12 +19,15 @@ ohne die Leitung auskommen, die gerade nicht wollte.
 from __future__ import annotations
 
 import traceback
+from contextlib import suppress
+from copy import deepcopy
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Final
 from uuid import uuid4
 
 from PySide6.QtCore import SLOT, QBuffer, QIODevice, QRect, Qt, QUrl, Signal, Slot
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QImage
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -65,6 +68,8 @@ from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
 if TYPE_CHECKING:
     from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusPendingCallWatcher
+
+    from app.core.scene.project import Project
 
 _log = get_logger(__name__)
 
@@ -173,18 +178,20 @@ def _paint_viewports(picture: Any, widget: QWidget) -> None:
 def window_shot(widget: QWidget | None) -> bytes:
     """Ein Bildschirmfoto des Fensters als PNG.
 
-    ``grab`` und nicht der ganze Bildschirm: Was neben Solidon offen ist,
-    geht den Support nichts an, und wer ein Bild seines Desktops verschickt,
-    verschickt mehr, als er zeigen wollte.
-
-    Was ``grab`` nicht sieht, holt :func:`_paint_viewports` nach — die 3D-
-    Ansicht ist ein natives Fenster und bliebe sonst leer. Beides zusammen
-    ergibt das Bild, das der Kunde vor sich hat, und nichts darüber hinaus.
+    Das sichtbare Fenster wird aus seinen vorhandenen Bildpunkten aufgenommen,
+    ohne ein möglicherweise fehlerhaftes Modell erneut zu rendern. Angefragt
+    wird nur dieses Fenster, niemals der gesamte Bildschirm. Ohne native
+    Aufnahme bleibt der bisherige Qt-/Viewport-Weg als Rückfall erhalten.
     """
     if widget is None:
         return b""
-    picture = widget.grab().toImage()
-    _paint_viewports(picture, widget)
+    picture = QImage()
+    screen = widget.screen()
+    if widget.isVisible() and screen is not None:
+        picture = screen.grabWindow(int(widget.winId())).toImage()
+    if picture.isNull():
+        picture = widget.grab().toImage()
+        _paint_viewports(picture, widget)
     if picture.width() > MAX_SHOT_WIDTH:
         picture = picture.scaledToWidth(MAX_SHOT_WIDTH, Qt.TransformationMode.SmoothTransformation)
     buffer = QBuffer()
@@ -195,7 +202,7 @@ def window_shot(widget: QWidget | None) -> bytes:
     return bytes(buffer.data().data())
 
 
-def session_bytes(session: Any, folder: Path) -> bytes:
+def session_bytes(project: Project, folder: Path) -> bytes:
     """Die laufende Sitzung als Projektcontainer.
 
     Der Container ist der Verlauf: Operationsstapel, Parameter, Passungen,
@@ -207,18 +214,53 @@ def session_bytes(session: Any, folder: Path) -> bytes:
     from app.core.scene.project import save
 
     target = folder / "sitzung.p3d"
-    save(session.project, target)
+    save(project, target)
     return target.read_bytes()
 
 
 def log_tail() -> bytes:
     """Das Ende des Protokolls. Es hat den Rechner nie verlassen, und jetzt
     nur, weil jemand es selbst angehängt hat (§33.2)."""
-    source = log_path()
-    if not source.is_file():
-        return b""
-    lines = source.read_text(encoding="utf-8", errors="replace").splitlines()[-LOG_LINES:]
-    return "\n".join(lines).encode("utf-8")
+    return reports.log_tail(log_path())
+
+
+def _project_note(project: Project | None) -> str:
+    """Eigene Bausteine gehören zur Beschreibung desselben gespeicherten Stands."""
+    note = tr("Modell, Operationsstapel und Chat-Verlauf")
+    if project is None:
+        return note
+    try:
+        from app.core.knowledge.parts import check as part_check
+
+        findings = part_check.check_outgoing(project.document)
+    except (AppError, OSError) as problem:
+        _log.warning("outgoing check failed: %s", problem)
+        return note
+    parts = ", ".join(
+        str(finding.values.get("parts", "")) for finding in findings if finding.values
+    )
+    return f"{note} — {tr('Braucht eigene Bausteine')}: {parts}" if parts else note
+
+
+class _SessionWorker(Worker):
+    """Speichert eine eigene Projektkopie, ohne Sitzung oder Oberfläche anzufassen.
+
+    Die Containerdatei wird atomar geschrieben; der Schreiber hat keinen
+    Abbruchpunkt. Beim Schließen läuft diese lokale Vorbereitung aus, ihre
+    Antwort wird verworfen und die Leine hält den Arbeiter bis zum Ende.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, project: Project) -> None:
+        super().__init__()
+        self.project = project
+
+    def work(self) -> None:
+        folder = ensure_dir(user_data_dir() / reports.REPORT_DIRNAME)
+        with TemporaryDirectory(prefix="sitzung-", dir=folder) as temporary:
+            data = session_bytes(self.project, Path(temporary))
+        self.done.emit(support.Attachment("sitzung.p3d", data, _project_note(self.project)))
 
 
 class _SendWorker(Worker):
@@ -286,6 +328,10 @@ class SupportDialog(QDialog):
         self._sender = sender
         self._shot = screenshot if screenshot is not None else b""
         self._session_data: bytes | None = None
+        self._session_description = ""
+        self._session_worker: _SessionWorker | None = None
+        self._log_data: bytes | None = None
+        self._closed = False
         self._worker: _SendWorker | None = None
         self._leash = WorkerLeash(self)
         self.receipt: Receipt | None = None
@@ -488,11 +534,20 @@ class SupportDialog(QDialog):
                 support.Attachment("bildschirmfoto.png", self._shot, tr("Das Fenster von Solidon"))
             )
         if self.with_session.isChecked():
-            data = self._session_container()
+            data = self._session_data
             if data:
-                found.append(support.Attachment("sitzung.p3d", data, self._session_note()))
+                found.append(support.Attachment("sitzung.p3d", data, self._session_description))
         if self.with_log.isChecked():
-            data = log_tail()
+            if self._log_data is None:
+                try:
+                    self._log_data = log_tail()
+                except OSError as problem:
+                    _log.warning("log could not be attached: %s", problem)
+                    self.state.setText(
+                        tr("Das Protokoll ließ sich nicht anhängen — der Rest geht trotzdem.")
+                    )
+                    self._log_data = b""
+            data = self._log_data
             if data:
                 found.append(support.Attachment("protokoll.txt", data, tr("Die letzten Zeilen")))
         return found
@@ -516,45 +571,62 @@ class SupportDialog(QDialog):
         sie, und der abgelegte Ordner nimmt denselben Text. Ein Ort, alle drei
         Wege hinaus.
         """
-        note = tr("Modell, Operationsstapel und Chat-Verlauf")
-        if self._session is None:
-            return note
-        try:
-            from app.core.knowledge.parts import check as part_check
+        return _project_note(self._session.project if self._session is not None else None)
 
-            findings = part_check.check_outgoing(self._session.project.document)
-        except (AppError, OSError) as problem:
-            # Dieselbe Haltung wie beim Anhang selbst: Was sich nicht sagen
-            # lässt, nimmt der Rückmeldung nicht den Sinn.
-            _log.warning("outgoing check failed: %s", problem)
-            return note
-        parts = ", ".join(
-            str(finding.values.get("parts", "")) for finding in findings if finding.values
-        )
-        return f"{note} — {tr('Braucht eigene Bausteine')}: {parts}" if parts else note
-
-    def _session_container(self) -> bytes:
-        """Die Sitzung, einmal gespeichert und dann behalten.
+    def _prepare_session(self) -> None:
+        """Den gewählten Anhang im Hintergrund einmal erstellen und behalten.
 
         Zweimal speichern hieße, den Container zwischen Vorschau und Versand
         neu zu schreiben — und dann stünde in der Vorschau eine andere Größe
         als in der Sendung.
         """
-        if self._session_data is not None:
-            return self._session_data
-        if self._session is None:
-            self._session_data = b""
-            return self._session_data
-        try:
-            folder = ensure_dir(user_data_dir() / reports.REPORT_DIRNAME)
-            self._session_data = session_bytes(self._session, folder)
-        except (AppError, OSError) as problem:
-            # Eine Sitzung, die sich nicht speichern lässt, nimmt der
-            # Rückmeldung nicht den Sinn — sie nimmt ihr einen Anhang.
-            _log.warning("session could not be attached: %s", problem)
+        if (
+            self._closed
+            or not self.with_session.isChecked()
+            or self._session_data is not None
+            or self._session_worker is not None
+            or self._session is None
+        ):
+            return
+        from app.core.scene.project import Project
+
+        source = self._session.project
+        # save() aktualisiert Metadaten und Befunde. Nur die unveränderlichen
+        # Quelldatei-Bytes werden geteilt; der Dokumentstand gehört dem Arbeiter.
+        project = Project(
+            document=deepcopy(source.document),
+            sources=dict(source.sources),
+            report=deepcopy(source.report),
+            thumbnail=source.thumbnail,
+        )
+        worker = _SessionWorker(project)
+        worker.done.connect(self._session_prepared)
+        worker.crashed.connect(self._session_failed)
+        self._session_worker = worker
+        self._leash.start(worker)
+
+    def _session_pending(self) -> bool:
+        return bool(self.with_session.isChecked() and self._session_worker is not None)
+
+    def _session_prepared(self, attachment: object) -> None:
+        """Nur der noch offene Dialog übernimmt die fertigen, vorher sichtbaren Bytes."""
+        if self._closed or self.sender() is not self._session_worker:
+            return
+        assert isinstance(attachment, support.Attachment)
+        self._session_data = attachment.data
+        self._session_description = attachment.description
+        self._session_worker = None
+        self._refresh()
+
+    def _session_failed(self, detail: str) -> None:
+        if self._closed or self.sender() is not self._session_worker:
+            return
+        _log.warning("session could not be attached: %s", detail)
+        self._session_data = b""
+        self._session_worker = None
+        self._refresh()
+        if self.with_session.isChecked() and self._worker is None:
             self.state.setText(tr("Die Sitzung ließ sich nicht anhängen — der Rest geht trotzdem."))
-            self._session_data = b""
-        return self._session_data
 
     def add_crash(self, detail: str) -> None:
         """Ein zweiter Programmfehler, während dieser Bericht schon offen steht.
@@ -585,6 +657,18 @@ class SupportDialog(QDialog):
 
     def _refresh(self) -> None:
         """Vorschau und Größen nachziehen — nach jedem Kästchen."""
+        if self._closed:
+            return
+        self._prepare_session()
+        pending = self._session_pending()
+        waiting = tr("Sitzung wird vorbereitet …")
+        if pending:
+            self.state.setText(waiting)
+        elif self.state.text() == waiting:
+            self.state.clear()
+        self.progress.setVisible(pending or self._worker is not None)
+        self.save_folder.setEnabled(not pending and self._worker is None)
+        self.by_mail.setEnabled(not pending and self._worker is None)
         ticket = self.ticket()
         lines = [ticket.as_text()]
         # „Vorher sieht er, was mitgeht" galt nicht fürs vorangekreuzte
@@ -612,7 +696,7 @@ class SupportDialog(QDialog):
         Absturz trägt der Bericht sich selbst, und ein gesperrter Knopf wäre
         dort die Sackgasse hinter dem Programmfehler.
         """
-        running = self._worker is not None and self._worker.isRunning()
+        running = self._worker is not None or self._session_pending()
         # Der Bogen baut seinen Text aus Bewertung, Antworten und dem freien
         # Nachtrag. Die Felder sind ausdrücklich optional; „optional" heißt
         # aber nicht, dass eine einzelne Antwort im unsichtbaren Teil des
@@ -625,6 +709,11 @@ class SupportDialog(QDialog):
 
     def _start(self) -> None:
         """Der eine Knopf, an dem der Versand hängt."""
+        if self._closed or self._worker is not None or self._session_pending():
+            return
+        self._refresh()
+        if self._session_pending():
+            return
         ticket = self.ticket()
         try:
             support.check(ticket)
@@ -694,6 +783,8 @@ class SupportDialog(QDialog):
         if worker is not None:
             self._leash.hold_until_done(worker)
         self._update_send()
+        self.save_folder.setEnabled(not self._session_pending())
+        self.by_mail.setEnabled(not self._session_pending())
 
     # --- Die Wege ohne Netz -----------------------------------------------------
 
@@ -768,10 +859,16 @@ class SupportDialog(QDialog):
 
     def _write_folder(self) -> bool:
         """Denselben Inhalt als Ordner ablegen — der Weg von vorher."""
+        if self._session_pending():
+            return False
         ticket = self.ticket()
         written: Path | None = None
         try:
-            written = reports.write(self.report())
+            report = self.report()
+            # Der Dialog hat die angezeigten Protokollbytes bereits behalten.
+            # Auch ein damals leeres Protokoll darf nicht unbemerkt nachwachsen.
+            report.include_log = False
+            written = reports.write(report)
             for entry in ticket.attachments:
                 (written / entry.name).write_bytes(entry.data)
         except AppError as problem:
@@ -974,3 +1071,14 @@ class SupportDialog(QDialog):
         if worker is not None and worker.isRunning():
             worker.wait(DIALOG_WAIT_MS)
         super().reject()
+
+    def done(self, result: int) -> None:
+        """Eine noch laufende Anhangsvorbereitung hält das Schließen nicht auf."""
+        self._closed = True
+        worker, self._session_worker = self._session_worker, None
+        if worker is not None:
+            for signal in (worker.done, worker.crashed):
+                with suppress(RuntimeError):
+                    signal.disconnect()
+            self._leash.retire(worker)
+        super().done(result)

@@ -15,10 +15,117 @@ from urllib.error import HTTPError
 
 import pytest
 
+from app.core import report as report_module
 from app.core import support
 from app.core.errors import AppError, UserError
 from app.core.support import Attachment, Ticket
 from tests.php_probe import php_executable
+
+# --- derselbe begrenzte Protokollausschnitt für Vorschau, Versand und Ordner -----------
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (b"", ""),
+        ("Größe geprüft\r\nLetzte Zeile\r\n".encode(), "Größe geprüft\nLetzte Zeile"),
+        ("Größe geprüft\nLetzte Zeile".encode(), "Größe geprüft\nLetzte Zeile"),
+        (b"erste\n\nletzte\n", "erste\n\nletzte"),
+        (b"kaputt: \xff\r\nlesbar\r\n", "kaputt: \ufffd\nlesbar"),
+    ],
+)
+def test_log_tail_preserves_text_and_normalises_line_endings(tmp_path, payload, expected):
+    """Umlaute, Leerzeilen und beschädigte Bytes behalten denselben Textvertrag."""
+    source = tmp_path / "solidon.log"
+    source.write_bytes(payload)
+    assert report_module.log_tail(source).decode("utf-8") == expected
+
+
+def test_log_tail_uses_the_default_path_and_accepts_a_missing_file(tmp_path, monkeypatch):
+    source = tmp_path / "solidon.log"
+    monkeypatch.setattr(report_module, "log_path", lambda: source)
+    assert report_module.log_tail() == b""
+    source.write_bytes(b"letzte Zeile\n")
+    assert report_module.log_tail() == b"letzte Zeile"
+
+
+@pytest.mark.parametrize("oversized_line", [False, True])
+def test_log_tail_bounds_the_bytes_actually_read(tmp_path, monkeypatch, oversized_line):
+    """Die Zusage gilt den gelesenen Bytes, nicht einer zufällig schnellen SSD."""
+    source = tmp_path / "solidon.log"
+    if oversized_line:
+        tail = "Erste vollständige Zeile\r\nLetzte vollständige Zeile\r\n"
+        payload = ("ä" * report_module.LOG_TAIL_MAX_BYTES + "\r\n" + tail).encode()
+    else:
+        lines = [f"Teil {index}: Größe geprüft" for index in range(20_000)]
+        payload = ("\r\n".join(lines) + "\r\n").encode()
+        tail = "\n".join(lines[-report_module.LOG_LINES :])
+    source.write_bytes(payload)
+    sizes = []
+    original_open = Path.open
+
+    class MeasuredReader:
+        def __init__(self, wrapped):
+            self.wrapped = wrapped
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return self.wrapped.__exit__(*args)
+
+        def seek(self, *args):
+            return self.wrapped.seek(*args)
+
+        def read(self, size=-1):
+            assert 0 < size <= report_module.LOG_TAIL_CHUNK_BYTES
+            data = self.wrapped.read(size)
+            sizes.append(len(data))
+            return data
+
+    def measured_open(path, *args, **kwargs):
+        wrapped = original_open(path, *args, **kwargs)
+        return MeasuredReader(wrapped) if path == source and args == ("rb",) else wrapped
+
+    monkeypatch.setattr(Path, "open", measured_open)
+    result = report_module.log_tail(source).decode("utf-8")
+    assert 0 < sum(sizes) <= report_module.LOG_TAIL_MAX_BYTES
+    assert sum(sizes) < len(payload)
+    if oversized_line:
+        assert sum(sizes) == report_module.LOG_TAIL_MAX_BYTES
+        assert "gekürzt" in result.splitlines()[0]
+        assert result.splitlines()[1:] == tail.splitlines()
+        assert "\ufffd" not in result
+    else:
+        assert result == tail
+        assert sum(sizes) < len(tail.encode()) + 2 * report_module.LOG_TAIL_CHUNK_BYTES
+
+
+def test_log_tail_marks_a_single_oversized_damaged_line(tmp_path):
+    """Eine unvollständige Riesenzeile wird nicht als vollständiger Befund ausgegeben."""
+    source = tmp_path / "solidon.log"
+    source.write_bytes(b"\xff" * (report_module.LOG_TAIL_MAX_BYTES + 1))
+    result = report_module.log_tail(source).decode("utf-8")
+    assert len(result.splitlines()) == 1
+    assert "gekürzt" in result
+    assert "\ufffd" not in result
+
+
+def test_log_tail_discards_the_partial_first_line_without_losing_recent_lines(tmp_path):
+    """Auch beim Abbruch nach genügend Zeilen ist der erste Blockanfang keine Zeile."""
+    source = tmp_path / "solidon.log"
+    lines = [f"Prüfung {index}: vollständig" for index in range(report_module.LOG_LINES)]
+    source.write_bytes(("ä" * report_module.LOG_TAIL_MAX_BYTES + "\n" + "\n".join(lines)).encode())
+    assert report_module.log_tail(source).decode("utf-8") == "\n".join(lines)
+
+
+def test_the_saved_log_uses_the_same_tail_bytes(tmp_path, monkeypatch):
+    """Der Ordnerweg darf weder das ganze Protokoll noch einen anderen Ausschnitt lesen."""
+    payload = "Ein begrenzter Ausschnitt mit Umlauten: äöü".encode()
+    monkeypatch.setattr(report_module, "log_tail", lambda: payload)
+    report_module._copy_log(tmp_path)
+    assert (tmp_path / "protokoll.txt").read_bytes() == payload
+
 
 # --- was in der Sendung steht ---------------------------------------------------------
 

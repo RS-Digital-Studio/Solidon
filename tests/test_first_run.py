@@ -1277,6 +1277,183 @@ def test_the_screenshot_is_only_attached_when_it_is_ticked(qt_app: QApplication)
     assert all(entry.name != "bildschirmfoto.png" for entry in dialog.ticket().attachments)
 
 
+def test_support_captures_existing_window_pixels_without_rendering_again(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ein defektes Modell wird für die Rückmeldung nicht erneut gezeichnet."""
+    from types import SimpleNamespace
+
+    from PySide6.QtGui import QColor, QImage, QPixmap
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui import support_dialog
+
+    window = QWidget()
+    picture = QPixmap(96, 48)
+    picture.fill(QColor("#123456"))
+    captures: list[int] = []
+    screen = SimpleNamespace(grabWindow=lambda handle: captures.append(handle) or picture)
+    monkeypatch.setattr(window, "screen", lambda: screen)
+    monkeypatch.setattr(window, "isVisible", lambda: True)
+    monkeypatch.setattr(
+        support_dialog, "_paint_viewports", lambda *args: pytest.fail("unexpected render")
+    )
+    try:
+        result = QImage.fromData(support_dialog.window_shot(window))
+        assert captures == [int(window.winId())]
+        assert result.size() == picture.size()
+        assert result.pixelColor(10, 10) == QColor("#123456")
+    finally:
+        window.close()
+
+
+def test_support_keeps_the_previewed_log_for_sending(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein wachsendes Fehlerprotokoll wird nicht bei jeder Eingabe neu eingelesen."""
+    from app.ui import support_dialog
+
+    reads: list[bool] = []
+    sent: list[bytes] = []
+    monkeypatch.setattr(
+        support_dialog, "log_tail", lambda: reads.append(True) or b"Previewed error line"
+    )
+    dialog = SupportDialog(
+        message="Fehler",
+        sender=lambda url, content_type, body: sent.append(body) or {"ok": True},
+    )
+    try:
+        assert "Previewed error line" in dialog.preview.toPlainText()
+        monkeypatch.setattr(support_dialog, "log_tail", lambda: pytest.fail("log read twice"))
+        dialog.with_log.setChecked(False)
+        dialog.with_log.setChecked(True)
+        dialog.message.setPlainText("Neue Beschreibung")
+        dialog._start()
+        assert dialog._worker is not None
+        assert dialog._worker.wait(5000)
+        qt_app.processEvents()
+        assert reads == [True]
+        assert sent and b"Previewed error line" in sent[0]
+        assert b"Neue Beschreibung" in sent[0]
+    finally:
+        dialog.release()
+        dialog.close()
+
+
+@pytest.mark.parametrize("finish", ["ready", "untick", "close", "failure"])
+def test_preparing_a_support_session_keeps_the_dialog_responsive(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, finish: str
+) -> None:
+    """Langsames Speichern blockiert weder Eingaben noch Abwahl oder Abbrechen."""
+    from threading import Event
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtTest import QTest
+
+    from app.ui import support_dialog
+
+    entered, proceed = Event(), Event()
+    session = Session()
+    original_version = session.project.document.app_version
+    original_sources = dict(session.project.sources)
+    sent: list[bytes] = []
+    saves: list[object] = []
+
+    def save_snapshot(project: Any, folder: Path) -> bytes:
+        saves.append(project)
+        entered.set()
+        assert proceed.wait(5), "test must release the attachment worker"
+        project.document.app_version = "snapshot-only"
+        project.sources.clear()
+        if finish == "failure":
+            raise OSError("Sitzung nicht lesbar")
+        return b"prepared-project-bytes"
+
+    monkeypatch.setattr(support_dialog, "session_bytes", save_snapshot)
+    monkeypatch.setattr(support_dialog, "user_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(support_dialog, "log_tail", lambda: b"")
+    dialog = SupportDialog(
+        session=session,
+        message="Fehler",
+        sender=lambda url, content_type, body: sent.append(body) or {"ok": True},
+    )
+    worker = None
+    try:
+        dialog.show()
+        dialog.with_session.setChecked(True)
+        worker = dialog._session_worker
+        assert worker is not None and entered.wait(2)
+        assert not dialog.send.isEnabled()
+        assert not dialog.save_folder.isEnabled()
+        assert "vorbereitet" in dialog.state.text()
+        ticks: list[bool] = []
+        QTimer.singleShot(0, lambda: ticks.append(True))
+        QTest.keyClicks(dialog.message, " Zusatz")
+        QTest.qWait(10)
+        assert ticks and "Zusatz" in dialog.message.toPlainText()
+        assert not proceed.is_set() and worker.isRunning()
+        if finish == "untick":
+            dialog.with_session.setChecked(False)
+            assert dialog.send.isEnabled()
+        elif finish == "close":
+            dialog.reject()
+            assert not dialog.isVisible() and worker.isRunning()
+        proceed.set()
+        assert worker.wait(5000)
+        qt_app.processEvents()
+        assert saves[0] is not session.project
+        assert session.project.document.app_version == original_version
+        assert session.project.sources == original_sources
+        if finish == "close":
+            assert dialog._session_data is None
+            assert not sent
+            return
+        assert dialog.send.isEnabled() and dialog.save_folder.isEnabled()
+        if finish == "ready":
+            assert "sitzung.p3d" in dialog.preview.toPlainText()
+        elif finish == "failure":
+            assert "Rest geht trotzdem" in dialog.state.text()
+        dialog._start()
+        assert dialog._worker is not None
+        assert dialog._worker.wait(5000)
+        qt_app.processEvents()
+        assert sent
+        assert (b"prepared-project-bytes" in sent[0]) == (finish == "ready")
+        assert len(saves) == 1
+    finally:
+        proceed.set()
+        if worker is not None:
+            worker.wait(5000)
+        dialog.release()
+        dialog.close()
+
+
+@pytest.mark.parametrize("previewed", [b"", b"Already shown"])
+def test_a_saved_support_folder_contains_only_the_previewed_log(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, previewed: bytes
+) -> None:
+    """Auch ein beim Öffnen leeres Protokoll wächst nicht ungesehen im Bericht nach."""
+    from app.ui import support_dialog
+
+    source = tmp_path / "growing.log"
+    source.write_bytes(previewed)
+    monkeypatch.setattr(support_dialog, "log_path", lambda: source)
+    monkeypatch.setattr(reports, "log_path", lambda: source)
+    monkeypatch.setattr(reports, "user_data_dir", lambda: tmp_path)
+    dialog = SupportDialog(message="Fehler")
+    try:
+        source.write_bytes(b"New unseen private lines")
+        assert dialog._write_folder()
+        assert dialog.written is not None
+        saved = dialog.written / "protokoll.txt"
+        if previewed:
+            assert saved.read_bytes() == previewed
+        else:
+            assert not saved.exists()
+    finally:
+        dialog.close()
+
+
 def test_a_dialog_without_a_screenshot_does_not_offer_one(qt_app: QApplication) -> None:
     dialog = SupportDialog(message="x")
 

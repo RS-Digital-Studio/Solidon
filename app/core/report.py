@@ -27,7 +27,7 @@ from typing import Final
 from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
 from app.core.log import get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
-from app.i18n import get_language, tr
+from app.i18n import _, get_language, tr
 
 _log = get_logger(__name__)
 
@@ -38,6 +38,10 @@ REPORT_DIRNAME = "reports"
 #: Wie viel Protokoll mitreist. Die letzten paar hundert Zeilen tragen den
 #: Lauf, der scheiterte; der Rest ist gestern.
 LOG_LINES = 400
+
+#: Auch eine einzelne beschädigte Protokollzeile darf den Bericht nicht aufblähen.
+LOG_TAIL_MAX_BYTES: Final = 1024 * 1024
+LOG_TAIL_CHUNK_BYTES: Final = 16 * 1024
 
 #: Große Projektcontainer werden beim Anhängen nicht als zweite vollständige
 #: Bytefolge im Speicher gehalten.
@@ -257,11 +261,48 @@ def write(report: ErrorReport, project: Path | None = None, directory: Path | No
     return target
 
 
-def _copy_log(target: Path) -> None:
-    """Das Ende des Protokolls. Es hat den Rechner nie zuvor verlassen, und
-    jetzt nur, weil jemand es selbst angehängt hat (§33.2)."""
-    source = log_path()
+def log_tail(source: Path | None = None) -> bytes:
+    """Liest nur die letzten Zeilen, mit einer festen Grenze auch bei kaputten Zeilen."""
+    source = source if source is not None else log_path()
     if not source.is_file():
-        return
-    lines = source.read_text(encoding="utf-8", errors="replace").splitlines()[-LOG_LINES:]
-    (target / "protokoll.txt").write_text("\n".join(lines), encoding="utf-8")
+        return b""
+    chunks: list[bytes] = []
+    line_breaks = 0
+    required_breaks = LOG_LINES + 1
+    budget = LOG_TAIL_MAX_BYTES
+    try:
+        with source.open("rb", buffering=0) as stream:
+            position = stream.seek(0, 2)
+            while position and budget and line_breaks < required_breaks:
+                size = min(position, budget, LOG_TAIL_CHUNK_BYTES)
+                position -= size
+                stream.seek(position)
+                chunk = stream.read(size)
+                if not chunks:
+                    required_breaks = LOG_LINES + int(chunk.endswith(b"\n"))
+                chunks.append(chunk)
+                line_breaks += chunk.count(b"\n")
+                budget -= size
+    except FileNotFoundError:
+        return b""
+    data = b"".join(reversed(chunks))
+    if position:
+        # Die erste Zeile begann vor dem Ausschnitt; auch ein angeschnittenes
+        # UTF-8-Zeichen wird so nie als vollständige Protokollzeile ausgegeben.
+        data = data.partition(b"\n")[2]
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    truncated = position > 0 and not budget and len(lines) < LOG_LINES
+    lines = lines[-LOG_LINES:]
+    if truncated:
+        lines.insert(
+            0,
+            str(_("Das Protokoll wurde gekürzt, weil die letzten Zeilen zu groß sind.")),
+        )
+    return "\n".join(lines).encode("utf-8")
+
+
+def _copy_log(target: Path) -> None:
+    """Ordnerbericht und Versand enthalten denselben begrenzten Protokollausschnitt."""
+    data = log_tail()
+    if data:
+        (target / "protokoll.txt").write_bytes(data)

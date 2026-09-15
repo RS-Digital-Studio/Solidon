@@ -294,15 +294,25 @@ Vier Zusagen, alle vier tragend:
   samt Anhängen und Gesamtgröße, bevor gesendet wird.
 * **Das Bildschirmfoto entsteht vor dem Dialog.** Eine Sekunde später zeigt es
   den Dialog statt dessen, was darunter schiefging — `window_shot(self)` steht
-  deshalb im Fenster und nicht im Dialog. `grab()` und nicht der Bildschirm:
-  was daneben offen ist, geht den Support nichts an.
+  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird über
+  `screen().grabWindow(winId())` aus vorhandenen Bildpunkten aufgenommen,
+  ohne das möglicherweise defekte Modell erneut zu rendern. Nur wenn diese
+  Aufnahme leer bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen
+  wird ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
 * **Der abgelegte Ordner ist ein Weg, kein Notausgang.** *Bericht ablegen*
   steht dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden*
   erscheint erst, wenn ein Versand scheiterte — ein zweiter Weg neben einem
   Knopf, der gerade funktioniert, liest sich wie eine Warnung.
 
-Die Sitzung wird für den Anhang **einmal** gespeichert und behalten: zweimal
-hieße, dass die Vorschau eine andere Größe nennt als die Sendung trägt.
+Die Sitzung wird für den Anhang **einmal** im Arbeiter gespeichert und behalten:
+zweimal hieße, dass die Vorschau eine andere Größe nennt als die Sendung trägt.
+Der Arbeiter besitzt eine Kopie von Dokument und Bericht sowie eine eigene
+Quellzuordnung; unveränderliche Datei-Bytes dürfen geteilt werden. Bis der
+gewählte Anhang fertig ist, zeigt der Dialog die Vorbereitung und sperrt den
+Versand. Abwahl und Schließen bleiben möglich; geschlossene Dialoge verwerfen
+späte Antworten. Auch die Protokollbytes werden einmal behalten und für
+Vorschau, Versand und Ablage identisch verwendet. `report.log_tail()` liest
+rückwärts höchstens 1 MiB für die letzten 400 Zeilen, nie das gesamte Protokoll.
 
 ## Fenster
 
