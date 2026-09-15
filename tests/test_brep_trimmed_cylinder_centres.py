@@ -65,6 +65,102 @@ def _only_hole(solid: Solid) -> Feature:
     return holes[0]
 
 
+@pytest.mark.parametrize("recess", [False, True])
+@pytest.mark.parametrize("normal_index", [0, 1])
+def test_full_cylinder_material_side_includes_the_surface_handedness(
+    recess: bool, normal_index: int
+) -> None:
+    """Eine geometrisch gleiche Rundwand bleibt trotz anderer Parametrisierung innen/außen."""
+    import json
+    from dataclasses import replace
+    from pathlib import Path
+
+    from app.core.brep import profiles
+    from app.core.sketch import shapes
+    from app.core.sketch.planes import frame_of
+    from app.core.sketch.profile import profile_of
+    from app.core.sketch.solver import solve_sketch
+
+    case = json.loads(
+        (Path(__file__).parent / "data/brep_cylinder_orientation.json").read_text(encoding="utf-8")
+    )
+    normal = tuple(case["normals"][normal_index])
+    bottom = 0.0 if normal_index == 0 else case["stock"][2]
+    frame = replace(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, bottom)), normal=normal)
+    tool = profiles.extrude(
+        profile_of(solve_sketch(shapes.circle(case["diameter"]))), case["depth"], frame=frame
+    )
+    body = edit.boolean("difference", [edit.box(*case["stock"]), tool]) if recess else tool
+    expected_volume = math.pi * (case["diameter"] / 2.0) ** 2 * case["depth"]
+    if recess:
+        expected_volume = math.prod(case["stock"]) - expected_volume
+    assert body.is_closed and body.is_watertight
+    assert body.volume == pytest.approx(expected_volume, abs=EPS_GEOM)
+    curved = [feature for feature in features_of(body).values() if feature.kind != "face"]
+    assert len(curved) == 1
+    assert curved[0].kind == ("hole" if recess else "pin")
+    assert curved[0].params["diameter"] == pytest.approx(case["diameter"], abs=EPS_GEOM)
+    assert curved[0].params["depth"] == pytest.approx(case["depth"], abs=EPS_GEOM)
+    if recess:
+        assert curved[0].params["through"] is False
+
+
+@pytest.mark.parametrize("recess", [False, True])
+@pytest.mark.parametrize("mirrored", [False, True])
+@pytest.mark.parametrize("widening", [False, True])
+def test_a_cones_material_side_survives_an_indirect_surface_frame(
+    recess: bool, mirrored: bool, widening: bool
+) -> None:
+    """Spiegelung ändert die Parametrisierung, nicht Senkung oder massiven Kegel."""
+    import json
+    from pathlib import Path
+
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.GeomAbs import GeomAbs_Cone
+    from OCP.TopAbs import TopAbs_IN
+
+    case = json.loads(
+        (Path(__file__).parent / "data/brep_cylinder_orientation.json").read_text(encoding="utf-8")
+    )
+    cone = case["cone"]
+    radii = cone["radii"] if widening else list(reversed(cone["radii"]))
+    height = cone["height"]
+    bottom = case["stock"][2] - height
+    tool = BRepPrimAPI_MakeCone(
+        gp_Ax2(gp_Pnt(0.0, 0.0, bottom), gp_Dir(0.0, 0.0, 1.0)), *radii, height
+    ).Shape()
+    if mirrored:
+        transform = gp_Trsf()
+        transform.SetMirror(gp_Ax2(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(*cone["mirror_normal"])))
+        tool = BRepBuilderAPI_Transform(tool, transform, True).Shape()
+    solid = Solid(tool)
+    if recess:
+        solid = edit.boolean("difference", [edit.box(*case["stock"]), solid])
+    volume = math.pi * height / 3.0 * (radii[0] ** 2 + radii[0] * radii[1] + radii[1] ** 2)
+    expected_volume = math.prod(case["stock"]) - volume if recess else volume
+    assert solid.is_closed and solid.is_watertight
+    assert solid.volume == pytest.approx(expected_volume, abs=EPS_GEOM)
+
+    classifier = BRepClass3d_SolidClassifier(solid.shape)
+    classifier.Perform(gp_Pnt(0.0, 0.0, bottom + height / 2.0), EPS_GEOM)
+    assert (classifier.State() == TopAbs_IN) is not recess
+    curved = [
+        BRepAdaptor_Surface(face)
+        for face in solid.faces()
+        if BRepAdaptor_Surface(face).GetType() == GeomAbs_Cone
+    ]
+    assert len(curved) == 1
+    assert curved[0].Cone().Position().Direct() is not mirrored
+    features = [feature for feature in features_of(solid).values() if feature.kind == "cone"]
+    assert len(features) == 1
+    assert features[0].params["recess"] is recess
+    assert features[0].params["diameter"] == pytest.approx(2.0 * max(radii), abs=EPS_GEOM)
+    assert features[0].params["angle"] == pytest.approx(
+        math.degrees(2.0 * math.atan(abs(radii[1] - radii[0]) / height)), abs=EPS_GEOM
+    )
+
+
 def test_a_trimmed_cylinder_uses_its_axis_and_v_span_for_the_centre() -> None:
     """Der Flächenschwerpunkt wandert zur längeren Seite des schrägen Keils.
 

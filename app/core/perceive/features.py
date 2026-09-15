@@ -2717,7 +2717,11 @@ def _curved_faces(body: trimesh.Trimesh) -> set[int]:
 
 
 def _large_facet_faces(
-    body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
+    body: trimesh.Trimesh,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+    requested: set[int] | None = None,
+    check_patch_size: Callable[[int], None] | None = None,
 ) -> set[int]:
     """Ebene Flecken von den Streifen einer gekrümmten Haut unterscheiden.
 
@@ -2787,7 +2791,7 @@ def _large_facet_faces(
         and (_a_sliver(body, list(facet)) or any(int(face) in curved for face in facet))
         for index in facet
     }
-    if not recoverable:
+    if not recoverable or (requested is not None and requested.isdisjoint(recoverable)):
         return planar
     protected = planar - recoverable
     candidates = [index for index in range(len(body.faces)) if index not in protected]
@@ -2795,7 +2799,15 @@ def _large_facet_faces(
     for patch in _connected_patches(body, candidates):
         if check_cancelled is not None:
             check_cancelled()
-        if len(patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch) or _a_sliver(body, patch):
+        if (
+            len(patch) < MIN_PATCH_FACES
+            or recoverable.isdisjoint(patch)
+            or (requested is not None and requested.isdisjoint(patch))
+        ):
+            continue
+        if check_patch_size is not None:
+            check_patch_size(len(patch))
+        if _a_sliver(body, patch):
             continue
         cone = fit_cone(body, patch)
         fit: CylinderFit | ConeFit | None
@@ -3977,13 +3989,14 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
 # --- Flächen ---------------------------------------------------------------------
 
 
-def detect_faces(
+def _planar_face_entries(
     mesh: MeshData,
     *,
     planar: set[int] | None = None,
     check_cancelled: Callable[[], None] | None = None,
-) -> list[Feature]:
-    """Koplanare Flecken: Normale, Fläche, Mittelpunkt (§21.1)."""
+    all_facets: bool = False,
+) -> list[tuple[np.ndarray, float, np.ndarray]]:
+    """Dieselben belegten Ebenen für vollständige Erkennung und lokale Rollenprüfung."""
     body = mesh.raw
     facets = list(body.facets)
     if not facets:
@@ -3994,15 +4007,15 @@ def detect_faces(
     # entweder eine Fläche oder Teil einer gekrümmten Oberfläche, nie beides,
     # nie keines. Was auf einer Rundung sitzt, wird dort als Zylinder gemeldet
     # und hier nicht noch einmal als achtundvierzig Rechtecke.
-    if planar is None:
+    if planar is None and not all_facets:
         planar = _large_facet_faces(body, check_cancelled=check_cancelled)
     if check_cancelled is not None:
         check_cancelled()
-    entries = [
+    return [
         (facet, area, _facet_centre(body, facet))
         for facet, area in zip(facets, areas, strict=True)
         if area >= MIN_FACE_AREA
-        and all(int(index) in planar for index in facet)
+        and (planar is None or all(int(index) in planar for index in facet))
         and bool(
             np.all(
                 np.asarray(body.face_normals)[facet] @ body.face_normals[int(facet[0])]
@@ -4010,6 +4023,17 @@ def detect_faces(
             )
         )
     ]
+
+
+def detect_faces(
+    mesh: MeshData,
+    *,
+    planar: set[int] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
+    """Koplanare Flecken: Normale, Fläche, Mittelpunkt (§21.1)."""
+    body = mesh.raw
+    entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)
     # **Bei gleicher Fläche entscheiden die Eckennummern der Fläche.**
     # Die sechs Flächen eines Würfels sind exakt gleich groß; sortiert allein
     # nach Fläche hing es an der Reihenfolge der Dreiecke im Netz, welche davon
@@ -4034,6 +4058,71 @@ def detect_faces(
     # entschiede wieder diese Stelle.
     entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
 
+    features: list[Feature] = []
+    for number, (facet, area, centre) in enumerate(entries, start=1):
+        normal = body.face_normals[facet[0]]
+        features.append(
+            Feature(
+                id=f"face_{number}",
+                kind="face",
+                provenance="detected",
+                params={
+                    "area": round(area, 4),
+                    "normal": (float(normal[0]), float(normal[1]), float(normal[2])),
+                    "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
+                },
+                face_indices=tuple(int(index) for index in facet),
+            )
+        )
+    roles = _face_roles(mesh, features, entries, check_cancelled)
+    return [
+        replace(feature, params={**feature.params, "inner": roles[feature.id]})
+        for feature in features
+    ]
+
+
+def face_roles(
+    mesh: MeshData,
+    features: Sequence[Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+    check_patch_size: Callable[[int], None] | None = None,
+) -> dict[FeatureId, bool]:
+    """Nur angefragte Ebenen anhand räumlich passender Originalfacetten einordnen."""
+    if not features:
+        return {}
+    entries = _planar_face_entries(mesh, check_cancelled=check_cancelled, all_facets=True)
+    accepted: dict[int, bool] = {}
+
+    def eligible(facet: np.ndarray) -> bool:
+        """Nur ein räumlich passender Beleg benötigt die aufwendige Mantelgegenprobe."""
+        first = int(facet[0])
+        if first not in accepted:
+            requested = {int(index) for index in facet}
+            planar = _large_facet_faces(
+                mesh.raw,
+                check_cancelled=check_cancelled,
+                requested=requested,
+                check_patch_size=check_patch_size,
+            )
+            accepted[first] = requested <= planar
+        return accepted[first]
+
+    return _face_roles(mesh, features, entries, check_cancelled, eligible)
+
+
+def _face_roles(
+    mesh: MeshData,
+    features: Sequence[Feature],
+    entries: Sequence[tuple[np.ndarray, float, np.ndarray]],
+    check_cancelled: Callable[[], None] | None,
+    eligible: Callable[[np.ndarray], bool] | None = None,
+) -> dict[FeatureId, bool]:
+    """Eine gemeinsame Innenregel; der Suchradius begrenzt keine räumlichen Belege."""
+    if not entries or not features:
+        return {feature.id: False for feature in features}
+    body = mesh.raw
+
     # Eine parallele Fläche zählt nur auf derselben Schale und über dem
     # örtlichen Flächenmittelpunkt. Ihre äußere Kontur schließt eine Öffnung
     # mit ein: Der Boden einer Dose liegt unter deren Rand, obwohl durch die
@@ -4048,12 +4137,14 @@ def detect_faces(
         shell[component] = number
     entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
     projections: dict[int, tuple[Any, np.ndarray, np.ndarray]] = {}
-    inner_flags: list[bool] = []
-    for index, (normal, centre) in enumerate(zip(normals, centres, strict=True)):
+    roles: dict[FeatureId, bool] = {}
+    for feature in features:
         if check_cancelled is not None:
             check_cancelled()
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        centre = np.asarray(feature.params["centre"], dtype=float)
         candidates = np.flatnonzero(
-            (entry_shells == entry_shells[index])
+            (entry_shells == shell[feature.face_indices[0]])
             & (normals @ normal > PARALLEL_FACE_COSINE)
             & ((centres - centre) @ normal > EPS_GEOM)
         )
@@ -4062,37 +4153,22 @@ def detect_faces(
             if int(other) not in projections:
                 basis_u, basis_v = _plane_basis(normals[other])
                 corners = (
-                    np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[entries[other][0]])]
+                    np.asarray(body.vertices)[
+                        np.unique(np.asarray(body.faces)[entries[int(other)][0]])
+                    ]
                     - centres[other]
                 )
                 footprint = MultiPoint(np.column_stack((corners @ basis_u, corners @ basis_v)))
                 projections[int(other)] = (footprint.convex_hull, basis_u, basis_v)
             outline, basis_u, basis_v = projections[int(other)]
             offset = centre - centres[other]
-            if outline.covers(Point(float(offset @ basis_u), float(offset @ basis_v))):
+            if outline.covers(Point(float(offset @ basis_u), float(offset @ basis_v))) and (
+                eligible is None or eligible(entries[int(other)][0])
+            ):
                 inner = True
                 break
-        inner_flags.append(inner)
-
-    features: list[Feature] = []
-    for number, ((facet, area, centre), normal, inner) in enumerate(
-        zip(entries, normals, inner_flags, strict=True), start=1
-    ):
-        features.append(
-            Feature(
-                id=f"face_{number}",
-                kind="face",
-                provenance="detected",
-                params={
-                    "area": round(area, 4),
-                    "normal": (float(normal[0]), float(normal[1]), float(normal[2])),
-                    "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
-                    "inner": inner,
-                },
-                face_indices=tuple(int(index) for index in facet),
-            )
-        )
-    return features
+        roles[feature.id] = inner
+    return roles
 
 
 def detect_curved_faces(mesh: MeshData, found: Mapping[FeatureId, Feature]) -> list[Feature]:

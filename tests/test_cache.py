@@ -291,21 +291,29 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
-def test_old_recognition_results_are_not_read_from_disk(tmp_path: Path) -> None:
+@pytest.mark.parametrize("previous_version", [5, 6])
+def test_old_recognition_results_are_not_read_from_disk(
+    tmp_path: Path, previous_version: int
+) -> None:
     """Auch ein vorhandener Eintrag der letzten Erkennungsversion ist veraltet."""
     disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
     disk.put("recognition", result())
     index = disk._folder("recognition") / "objects.json"
     historical = json.loads(index.read_text(encoding="utf-8"))
-    historical["format_version"] = 5
+    historical["format_version"] = previous_version
     index.write_text(json.dumps(historical), encoding="utf-8")
 
     assert disk.get("recognition") is None
 
 
 @pytest.mark.parametrize("reopen", [False, True], ids=["memory", "disk"])
+@pytest.mark.parametrize("previous_version", [5, 6])
 def test_recognition_revision_recomputes_a_warm_project_cache(
-    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch, reopen: bool
+    tmp_path: Path,
+    profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+    reopen: bool,
+    previous_version: int,
 ) -> None:
     """Neue Auskünfte entwerten beide Cacheebenen, nie die gespeicherten Operationen."""
     from copy import deepcopy
@@ -344,7 +352,7 @@ def test_recognition_revision_recomputes_a_warm_project_cache(
     disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
     cache = ResultCache(disk=disk)
     with monkeypatch.context() as historical:
-        historical.setattr(cache_module, "CACHE_FORMAT_VERSION", 5)
+        historical.setattr(cache_module, "CACHE_FORMAT_VERSION", previous_version)
         before = evaluate(project.document, profile, sources=sources, cache=cache)
         assert before.complete
         assert len(cache) == 2

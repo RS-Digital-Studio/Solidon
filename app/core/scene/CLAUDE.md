@@ -236,7 +236,9 @@ erneut versuchen — und `split_and_retry` daneben, dasselbe Muster mit *In
 Einzelteile zerlegen* statt der Reparatur, beide über `_retried_after`),
 `project.py` und `migrations.py` (keine absoluten Pfade, kein Code, die
 fünf Schritte eines Formatwechsels). Die Dreiecksgrenze der
-Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `evaluate.py`.
+Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `perceive/local.py`;
+`evaluate.py` exportiert den bisherigen Namen weiter. Oberhalb der Grenze
+prüft `detect_known` bereits belegte Merkmale örtlich am vollständigen Netz.
 
 Bedingte Passungen speichern `when_positive=(operation_id, parameter_name)`.
 Ihre Prüfung verlangt das zugehörige Dokument; fehlt es beim Aufruf, ist

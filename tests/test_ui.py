@@ -17577,6 +17577,46 @@ def test_the_band_of_an_empty_preview_carries_that_sentence(window: MainWindow) 
     window._clear_preview()
 
 
+def test_a_changed_preview_keeps_its_warning_and_its_result(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Eine geöffnete Nachbarbohrung wird vor dem Übernehmen sichtbar benannt."""
+    from tests.test_bore_mouth_resize import _two_bores
+
+    mesh, _features, _hole = _two_bores(7.5)
+    source = tmp_path / "neighbour.stl"
+    mesh.raw.export(source)
+    window.open_path(source)
+    assert window.session.wait_for_idle()
+    before = window.session.last_result
+    assert before is not None
+    body = next(iter(before.scene.objects.values()))
+    hole = min(
+        (feature for feature in body.features.values() if feature.kind == "hole"),
+        key=lambda feature: feature.params["centre"][0],
+    )
+    _scene, difference, reason = window.session._preview_outcome(
+        [
+            OperationDraft(
+                op="resize_hole",
+                params={"at_feature": hole.id, "diameter": 10.0, "compensate": False},
+                inputs=(body.id,),
+            )
+        ]
+    )
+    assert difference is not None and difference.changed
+    assert reason == "", "ein geändertes Ergebnis darf nicht als ausgebliebenes Bild gelten"
+    warnings = [finding for finding in difference.findings if finding.severity == "warning"]
+    conflict = next(finding for finding in warnings if finding.code == "bore.neighbour_opened")
+    assert all(finding.op_id != 1 for finding in difference.findings)
+    window._show_preview(difference)
+    assert str(conflict.message) in window.viewport.banner.note.text()
+    assert window.viewport.banner.hint.text() == tr("Leertaste halten: vorher")
+    assert window.viewport._difference is difference
+    assert window.session.last_result is before
+    window._clear_preview()
+
+
 def test_the_preview_reads_the_advice_the_core_already_carries() -> None:
     """Die Kennung kommt aus den Vorschlägen der Ausnahme, nicht aus dem Satz.
 

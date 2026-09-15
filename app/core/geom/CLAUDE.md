@@ -27,11 +27,65 @@ und die Vereinigung lässt dort zwei Flächen nebeneinander stehen.
 Ob der zweite Randring eines einzelnen Abschnitts ein Übergang oder sein Boden
 ist, beantwortet `_stands_alone` an derselben Kette und nicht die Ringzahl:
 Nach dem Verschließen der Bohrung bleiben es zwei Ringe, und die Senkung
-gehört sich dann selbst. Größenänderungen bleiben einzelne
-Abschnitte und melden die übrigen; bei mehrteiligen Ketten wird keine
-unvollständige automatische Änderung einer einzelnen Senkung vorgeschlagen.
+gehört sich dann selbst. Der Umfang `entrance_mode="keep"` ändert einen
+Abschnitt und meldet die übrigen; `follow` nimmt den belegten Einlauf mit.
+Eine unvollständige Änderung einer einzelnen Senkung bleibt ausgeschlossen.
 Die geprüfte Eigenständigkeit erreicht Werkzeugbau und Verschluss auch beim
 Versetzen, Verdoppeln und der freien Platzierung samt ihrer Vorschau.
+
+`resize_hole` erhält mit `keep` beim Verkleinern Lage und Außenmaß der anderen Abschnitte.
+Eine entstehende Ringschulter gehört anschließend weiter zur erkannten Kette.
+Bei belegten Randebenen schließt `_section_closed(extend_inner=False)` zuerst
+den gewählten Abschnitt und stellt die übrigen in ihren bisherigen Grenzen
+wieder her; danach schneidet `resize_bore` den neuen Durchmesser. Dadurch
+entstehen am quantisierten Sacklochboden keine nahezu koplanaren Füllhäute.
+Das Entfernen eines Abschnitts behält dagegen `extend_inner=True`, damit
+innere Abschnitte ihren Weg durch den gefüllten Abschnitt nach außen behalten.
+
+`_bore_end_planes` misst vollständige Randringe am ursprünglichen Netz.
+Der Schnitt reicht bis zur äußersten Mündung der zugehörigen Kette, auch bei
+einer schrägen Senkung oder einem tangentialen Rundungsübergang. Offene
+Mündungen erhalten die vorhandene Werkzeugzugabe; Böden und geschlossene
+Stufen behalten ihre Ebene. Die Wiedererkennung vergleicht verschobene
+axiale Mittelpunkte am ursprünglichen Wandintervall; sie ändert dafür nur
+den Vergleichspunkt, nicht die gemessene Ergebnisgeometrie.
+Nachbarbefunde messen den Abstand des tatsächlichen Schnittwerkzeugs zu
+den geschlossenen benachbarten Hohlräumen. Hüllquader dienen nur zur Vorauswahl;
+eine bestehende dünne Wand wird nur bei weiterer Verschlechterung gemeldet.
+
+`bore_entrance` prüft für Operation und Handlungsvorgabe denselben gemeinsamen
+Einlauf. Eine bereits geprüfte Kettenauskunft wird über `cavity` und
+`touches_other` weitergegeben; `()` belegt, dass kein gemeinsamer Einlauf
+existiert. Der Schema-Standard bleibt `keep`; eine belegte neue Merkmalsaktion
+belegt `follow` vor. Dort erhalten alle radialen Profile denselben Zuwachs,
+Senkungswinkel und axiale Stufenlagen bleiben. Die radiale Einführbreite ist
+im Normalquerschnitt auf Höhe der Mündungsebene definiert; die Schnittkurve
+auf einer schrägen Außenfläche folgt daraus. Echte Ringschultern bleiben
+radiale Stufen. Eine schräge gemeinsame Kegel-/Zylinderkante wird dagegen
+durch den kreisrunden Hals des neuen Kegels ersetzt, ohne künstliche Schulter.
+
+Beide Kerne schneiden dieselben Profile an denselben Randebenen. Der exakte
+Füllkörper bildet das alte Profil nach, damit er keine tieferen Nachbarlöcher
+unter der weiten Senkung füllt. Hinterschnitte, Verzweigungen, doppelte Ränder,
+versetzte Stufen und ungeklärte Profile nennen die vorhandene `keep`-Wahl.
+Ein einzelner Zylinder behandelt beide Umfänge gleich. Eine gleichzeitige
+Lageänderung mit Einlauf nennt den separaten Weg über `move_feature`.
+
+Nach geometrisch bestätigter Zuordnung erhält `_with_nominal_bore` bekannte
+Operationsmaße, damit der Fit an Dreiecksmitten Durchmesser und Senkungswinkel
+nicht bei jeder Folgeänderung verkleinert. Alle Wandpunkte müssen das aus
+der Werkzeugunterteilung abgeleitete Sehnenband einhalten; `voxel` und
+`jittered` behaupten keine so bestätigten Nominalmaße. Bei Kegeln bleibt der
+äußere Durchmesser das wirkliche maximale Maß der beschnittenen Mündung.
+
+Die Nachprüfung einer Bohrungsänderung verwendet oberhalb der gemeinsamen
+Grenze `perceive.local.FEATURE_LIMIT_TRIANGLES` die örtliche Suche
+`detect_known`. Beim gemeinsamen Einlauf umfasst sie alle neu konstruierten
+Abschnitte; der erforderliche Suchradius entsteht aus dem vollständig
+gekappten Werkzeug. Das ist ein geometrisch belegter Umfang, keine größere
+Erkennungstoleranz. Der Sollbeschreiber einer schrägen Senkung liegt wie der
+Erkennungsbefund am äußersten Kegel-/Ebenenschnitt. Die Nominalprüfung kann
+mit `sections` die tatsächliche Kreisunterteilung des Erzeugers übernehmen.
 
 **Und eine Kette geht als Ganzes** (RM-172, 15.09.2026): `move_feature`,
 `_rotate_cavity_chain` und `_duplicate_cavity_chain` nehmen Bohrung und

@@ -45,11 +45,30 @@ Planare Merkmalsnormalen folgen der Orientierung der B-Rep-Fläche:
 `TopAbs_REVERSED` kehrt die Trägerebenennormale um. Damit verwenden
 Auswahlrahmen, Taschen und Ziehen dieselbe nach außen gerichtete Normale.
 
+Zylindrische Innenwände und Zapfen unterscheiden sich durch die gemeinsame
+Wirkung von Flächenorientierung und Händigkeit (`Cylinder.Position().Direct()`).
+Auch ein gültiges Kreisprisma kann einen indirekten Zylinder tragen;
+`TopAbs_REVERSED` allein ist deshalb kein Nachweis für eine Bohrung.
+
 Die exakte Bohrung verwendet das Material des Zielkörpers über einen trägen
 `knowledge.profiles.for_object`-Import. Freie Normalen, Aufweitungen und
 Übergänge übernehmen das validierte Profil aus `geom.prepare.drill_outline`;
 `edit.bore_profile` rotiert es analytisch. Mesh und B-Rep teilen damit Maße
 und Mündungsbezug, ohne exakte Kreise zu tessellieren.
+
+`revolved_bore_tool` und `clipped_bore_tool` bauen das gemeinsame Werkzeug
+für eine Bohrungsänderung mit Einlauf. Der Schnitt an den tatsächlichen
+Randebenen erfolgt über analytische Halbräume; auch schräge Mündungen und
+Böden bleiben exakt. Beim vorherigen Schließen wird das alte radiale Profil
+verwendet. Ein Zylinder mit dem größten Senkungsradius würde tiefer liegende
+Nachbarhohlräume füllen, die nie zum gewählten Einlauf gehörten.
+
+`features._describe` beschreibt analytische Kegel über `GeomAbs_Cone`.
+Die V-Grenzen bestimmen den wirklich weitesten axialen Umfang; Achse und
+Mittelpunkt liegen auf der Kegelachse. Flächenorientierung und
+`Cone.Position().Direct()` unterscheiden gemeinsam die Senkung vom massiven
+Kegel, auch nach einer Spiegelung. Eine unvollständige U-Spanne markiert `partial`.
+Durchmesser und Winkel bleiben Werte des exakten Körpers ohne Anzeigerundung.
 
 **Ein Langloch ist vier Flächen und ein Merkmal.** `features._slots_instead_of_half_bores`
 setzt sie nach dem Beschreiben wieder zusammen — die einzige Ausnahme von „eine

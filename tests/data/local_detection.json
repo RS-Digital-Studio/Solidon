@@ -1,0 +1,13 @@
+{
+  "source": "Eigenständig konstruierter regelmäßiger Zylinder mit Sackbohrung, Solidon-Testkorpus",
+  "outer_radius": 100.0,
+  "height": 20.0,
+  "bore_radius": 3.0,
+  "bore_depth": 5.0,
+  "sections": 1024,
+  "outer_levels": 512,
+  "expected_triangles": 1054720,
+  "point": [2.999971762966393, 0.009203827973725727, 17.5],
+  "normal": [-0.9999952938095762, -0.003067956762965976, 0.0],
+  "radius": 8.0
+}

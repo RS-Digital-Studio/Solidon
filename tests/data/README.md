@@ -42,6 +42,7 @@ python tests/data/make_corpus.py
 
 | Datei | Inhalt | Erwartung | Test |
 |---|---|---|---|
+| `local_detection.json` | Eigene analytische Beschreibung eines Zylinders Ø200 × 20 mm mit Sackbohrung Ø6, Tiefe 5 mm; dichte Variante mit 1.054.720 Dreiecken | Vollständige Bohrungswand mit 2048 Originaldreiecken, echter Blindboden; begrenzte Suchräume, Skalierung, gespeicherte Erkennung plus Änderung, warmes und kaltes Replay sowie Undo/Redo behalten Maße und Zuordnung | `test_local_detection.py` |
 | `meshes/recognition_spice_base.npz` | Eigener Ring Ø40/32,8 × 3,4 mm mit drei radialen Mulden R1,1 | Keine Stadionöffnung; Kreisfit bleibt bei Verschiebung um 100 Millionen Millimeter Ø32,8; zwölf lokale Instanzen behalten ihre Merkmalsflächen | `test_recognition_regressions.py` |
 | `meshes/recognition_waterfall.npz` | Eigene Wand 60 × 12 × 30 mm mit unterer Lippe 60 × 28 × 3 mm | Die Außenwand bei y=−6 bleibt außen, obwohl die Lippe weiter vorn liegt | `test_recognition_regressions.py` |
 | `meshes/recognition_bayonet_lid.npz` | Eigene Scheibe Ø80 × 3 mm mit drei Quadern 6 × 3,8 mm auf der Oberseite | Drei ebene Kontaktflächen à 22,8 mm² bei z=3,5 trotz großer Scheibe | `test_recognition_regressions.py` |

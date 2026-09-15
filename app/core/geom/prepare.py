@@ -83,6 +83,8 @@ class BoreResult:
     diameter: float
     """Der wirklich geschnittene Durchmesser, samt Materialkompensation."""
     findings: list[Finding]
+    cutting_tool: MeshData | None = None
+    """Das tatsächliche Werkzeug für die Prüfung benachbarter Hohlräume."""
 
 
 def bore_geometry_error(value: str | None = None) -> ValidationError:
@@ -414,14 +416,16 @@ def resize_bore(
     compensate: bool = False,
     quality: Quality = "fine",
     seed: int | None = None,
+    end_planes: tuple[SectionPlane, ...] = (),
 ) -> BoreResult:
     """Ändert eine erkannte zylindrische Bohrung in genau einem Booleschritt.
 
-    Größer heißt: einen weiteren Zylinder abtragen. Kleiner heißt nicht
-    „Stopfen und danach neu bohren", sondern einen Ring in die vorhandene
-    Bohrung einsetzen. Damit bleiben Mittelpunkt, freie Achse und Tiefe aus
-    dem erkannten Merkmal die einzige Geometriequelle; der Kunde trägt nur den
-    neuen Durchmesser ein.
+    Größer heißt: einen weiteren Zylinder abtragen. Ein kleinerer Durchmesser
+    erzeugt hier einen Füllring. Der Operationsweg darf einen topologisch
+    belegten Hohlraum zuvor schließen und mit ``previous_diameter=0`` neu
+    schneiden. Das vermeidet nahezu koplanare Füllflächen am Sacklochboden.
+    Mittelpunkt, freie Achse und Tiefe kommen aus dem erkannten Merkmal;
+    ``end_planes`` begrenzen den Werkzeugkörper an seinen wirklichen Rändern.
 
     ``compensate`` steht hier absichtlich auf ``False``. Der Ausgangswert im
     Dialog ist ein **gemessenes** Maß und kein Nenndurchmesser. Wer ihn
@@ -475,16 +479,33 @@ def resize_bore(
         )
         kind = "difference"
     else:
-        # Der Außenrand greift um dieselbe zentrale Überlappung ins Material,
-        # die alle Booleschen Bohrwerkzeuge benutzen. Ohne sie berührte der
-        # Ring die alte Bohrungswand nur und die Vereinigung wäre undefiniert.
+        # Das umschriebene Vieleck erreicht auch bei großen Bohrungen die
+        # alte Wand. Die zentrale Überlappung allein deckt seine Sehnenlücke
+        # nicht für jeden Radius und jede fremde Winkelunterteilung ab.
         tool = trimesh.creation.annulus(
             r_min=cut_diameter / 2.0,
-            r_max=previous_diameter / 2.0 + BOOLEAN_OVERLAP,
+            r_max=previous_diameter / (2.0 * math.cos(math.pi / BORE_SECTIONS)) + BOOLEAN_OVERLAP,
             height=height,
             sections=BORE_SECTIONS,
         )
         kind = "union"
+    if end_planes:
+        # Die beiden Randebenen begrenzen jeden Umfangspunkt einzeln. Eine
+        # senkrechte Werkzeugkappe auf Höhe des höchsten alten Randpunkts
+        # ließe beim Vergrößern einer schrägen Mündung eine Materiallippe
+        # stehen. An einem Sacklochboden bleibt die gemessene Ebene erhalten.
+        vertices = np.asarray(tool.vertices, dtype=float).copy()
+        upper = vertices[:, 2] > 0.0
+        for plane in end_planes:
+            normal = to_world[:3, :3].T @ np.asarray(plane.normal, dtype=float)
+            if abs(float(normal[2])) <= EPS_GEOM:
+                raise bore_geometry_error()
+            position_in_bore = plane.position - float(np.dot(plane.normal, position))
+            selected = upper if normal[2] > 0.0 else ~upper
+            vertices[selected, 2] = (
+                position_in_bore - vertices[selected, :2] @ normal[:2]
+            ) / normal[2]
+        tool.vertices = vertices
     # Im Koordinatensystem der Bohrung rechnen. Ein schräger Zylinder ist
     # geometrisch nicht schwieriger als ein senkrechter, numerisch aber schon:
     # an der gedrehten Korpusplatte zerlegte der direkte Mesh-Kern 97 Grad der
@@ -503,11 +524,14 @@ def resize_bore(
     findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter, body=mesh))
     findings.extend(split_findings(mesh, resized))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
+    world_tool = tool.copy()
+    world_tool.apply_transform(to_world)
     return BoreResult(
         mesh=resized,
         solver=outcome.solver,
         diameter=cut_diameter,
         findings=findings,
+        cutting_tool=MeshData.of(world_tool) if grows else None,
     )
 
 

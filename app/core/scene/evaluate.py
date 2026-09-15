@@ -46,6 +46,7 @@ from app.core.perceive.features import (
     detect,
     freeform_dropped,
 )
+from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.matching import (
     apply_mapping,
     fingerprint,
@@ -95,15 +96,6 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
 from app.i18n import TranslatableText, _, source_text
 
 _log = get_logger(__name__)
-
-#: Feine Kundennetze werden unverändert erkannt: Schlauchhalter und Figur mit
-#: rund 400 000 beziehungsweise 900 000 Dreiecken benötigen kalt 7 bis 13 Sekunden,
-#: aus dem Cache unter 50 Millisekunden. Die Schranke bleibt: ein Schiff mit
-#: 1,22 Millionen Dreiecken benötigt 157 Sekunden und deutlich mehr Speicher.
-#: Die Topologie entscheidet mit: auf 990 000 reduziert bleibt es bei 123 Sekunden.
-#: §31 bleibt das Leistungsziel; dieses Budget begrenzt die zugelassenen Netze.
-FEATURE_LIMIT_TRIANGLES = 1_000_000
-
 
 #: Und darüber läuft die **Zuordnung** nicht — dieselbe Bremse, die andere
 #: Größe.
@@ -604,15 +596,13 @@ def _evaluate(
             if was_kind is None and operation.inputs:
                 was_kind = kind_before.get(operation.inputs[0])
             if was_kind == "brep" and kind_after == "mesh":
+                from app.core.brep.ops import CONVERTED_NOTICE
+
                 findings.append(
                     Finding(
                         code="evaluate.exact_became_mesh",
                         severity="info",
-                        message=_(
-                            "Die einzeln bearbeitbaren Flächen und Kanten wurden in feste "
-                            "Dreiecke umgewandelt. Verrundung, Fase und Taschen aus Skizzen "
-                            "stehen danach nicht mehr zur Verfügung."
-                        ),
+                        message=CONVERTED_NOTICE,
                         values={"op": operation.op, "object": object_id},
                         object_id=object_id,
                         op_id=operation.id,
@@ -1187,7 +1177,10 @@ def _with_features(
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
         return entry
-    if mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:
+    local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
+    if local_only:
+        from app.core.perceive.local import detect_known, rigid_transform, transformed_searches
+
         findings.append(
             Finding(
                 code="perceive.too_large",
@@ -1198,7 +1191,8 @@ def _with_features(
                 values={"triangles": mesh.triangle_count, "limit": FEATURE_LIMIT_TRIANGLES},
             )
         )
-        return entry
+        if not previous and not entry.features:
+            return entry
 
     # Merkmale, die ein Baustein mitgebracht hat, werden nicht neu erkannt —
     # sie wurden beim Bauen benannt (§24.1), und eine Neuerkennung benennte
@@ -1266,12 +1260,41 @@ def _with_features(
                     (0.0, 0.0, 0.0, 1.0),
                 )
         if rigid_shift is not None:
-            declared = moved_features(declared, rigid_shift)
+            declared = (
+                transformed_searches(declared, rigid_shift)
+                if local_only
+                else moved_features(declared, rigid_shift)
+            )
 
     watch.raise_if_cancelled()
     if say is not None:
         say(str(_("Merkmale erkennen")))
-    detected = detect(mesh, check_cancelled=watch.raise_if_cancelled)
+    if local_only:
+        query_previous = previous
+        query_outputs = entry.features
+        if transform is not None:
+            query_previous = transformed_searches(previous, transform)
+            query_outputs = transformed_searches(entry.features, transform)
+        elif previous_bounds is not None and _same_size(previous_bounds, mesh.bounds):
+            shift = tuple(
+                now - old
+                for now, old in zip(mesh.bounds.centre, previous_bounds.centre, strict=True)
+            )
+            local_movement: Transform = (
+                (1.0, 0.0, 0.0, shift[0]),
+                (0.0, 1.0, 0.0, shift[1]),
+                (0.0, 0.0, 1.0, shift[2]),
+                (0.0, 0.0, 0.0, 1.0),
+            )
+            query_previous = moved_features(previous, local_movement)
+            query_outputs = moved_features(entry.features, local_movement)
+        detected = detect_known(
+            mesh,
+            {**query_previous, **query_outputs},
+            check_cancelled=watch.raise_if_cancelled,
+        )
+    else:
+        detected = detect(mesh, check_cancelled=watch.raise_if_cancelled)
     watch.raise_if_cancelled()
 
     # **Was auf einer Freiform weggelassen wurde, steht hier, nicht nirgends.**
@@ -1371,7 +1394,18 @@ def _with_features(
         declared = {
             name: feature
             for name, feature in declared.items()
-            if not (name in blind and feature.params.get("open"))
+            if not (
+                name in blind
+                and (
+                    feature.params.get("open")
+                    or (
+                        local_only
+                        and transform is not None
+                        and not rigid_transform(transform)
+                        and feature.recognised
+                    )
+                )
+            )
         }
         # **Der Name bleibt, die aktuelle Oberfläche geht mit.** Ein Baustein
         # kennt Ort und Maß seiner Bohrung, aber nicht die Dreiecksnummern des
@@ -1385,9 +1419,20 @@ def _with_features(
             for old_name, new_name in seen.mapping.items()
             if new_name in detected
         }
+        visible_scopes = {
+            old_name: {"local_search_radius": detected[new_name].params["local_search_radius"]}
+            for old_name, new_name in seen.mapping.items()
+            if local_only
+            and new_name in detected
+            and "local_search_radius" in detected[new_name].params
+        }
         declared = {
             name: (
-                dataclasses.replace(feature, face_indices=visible_faces[name])
+                dataclasses.replace(
+                    feature,
+                    face_indices=visible_faces[name],
+                    params={**feature.params, **visible_scopes.get(name, {})},
+                )
                 if name in visible_faces
                 else feature
             )
@@ -1430,7 +1475,11 @@ def _with_features(
     # anderer Körper. Die Operation weiß, was sie gedreht hat — also werden die
     # alten Merkmale erst mitgenommen und dann verglichen (§21.2).
     if transform is not None:
-        previous = moved_features(previous, transform)
+        previous = (
+            transformed_searches(previous, transform)
+            if local_only
+            else moved_features(previous, transform)
+        )
 
     # **Ein erzeugtes Merkmal, das die Operation nicht selbst wieder ausgibt,
     # wird mitgenommen — nicht vergessen.** Hier stand bis zum 22.08.2026, dass
@@ -1606,7 +1655,10 @@ def _with_features(
     arranged_rigidly = operation.op == "arrange_bed" and moved and previous_bounds is not None
     for old_id in matched.orphaned:
         old_feature = previous.get(old_id)
-        if (transform is not None or arranged_rigidly) and old_feature is not None:
+        if (
+            (transform is not None and (not local_only or rigid_transform(transform)))
+            or arranged_rigidly
+        ) and old_feature is not None:
             if arranged_rigidly and previous_bounds is not None:
                 shift = tuple(
                     now - before for now, before in zip(centre, previous_bounds.centre, strict=True)

@@ -28,6 +28,7 @@ from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
 from app.core.geom.edges import named_edges as edges_named
 from app.core.geom.edges import wanted as edges_wanted
+from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.types import PlaneFrame, Point2, Transform, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
@@ -619,6 +620,11 @@ def bore(
 
 def bore_profile(solid: Solid, outline: list[Point2], frame: PlaneFrame) -> Solid:
     """Schneidet das gemeinsame Bohrungsprofil als exakten Rotationskörper."""
+    return boolean("difference", [solid, revolved_bore_tool(outline, frame)])
+
+
+def revolved_bore_tool(outline: list[Point2], frame: PlaneFrame) -> Solid:
+    """Das gemeinsame radiale Bohrungsprofil als exakter Werkzeugkörper."""
     require()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeRevol
@@ -652,7 +658,31 @@ def bore_profile(solid: Solid, outline: list[Point2], frame: PlaneFrame) -> Soli
             detail=_("Aus diesen Bohrungsmaßen entsteht kein geschlossener Schneidkörper."),
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    return boolean("difference", [solid, Solid(tool.Shape())])
+    return Solid(tool.Shape())
+
+
+def clipped_bore_tool(solid: Solid, planes: Sequence[SectionPlane]) -> Solid:
+    """Begrenzt ein Bohrwerkzeug an den wirklichen Mündungs- und Bodenebenen."""
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+
+    for plane in planes:
+        origin = plane.origin
+        normal = plane.normal
+        face = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(*origin), gp_Dir(*normal))).Face()
+        inside = gp_Pnt(*(origin[i] - normal[i] for i in range(3)))
+        half = BRepPrimAPI_MakeHalfSpace(face, inside).Solid()
+        builder = boolean_builder("intersection", solid.shape, half)
+        builder.Build()
+        if not builder.IsDone():
+            raise GeometryError(
+                detail=_("Das Bohrwerkzeug konnte nicht an seinem Rand begrenzt werden."),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        solid = solid.replacing(builder.Shape())
+    return solid
 
 
 def slot_bore(

@@ -1,0 +1,12 @@
+{
+  "description": "Eigene analytische Reproduktion: Vollzylinder aus einem Kreisprofil mit beiden Extrusionsrichtungen, als Zapfen und als Sackloch.",
+  "stock": [20.0, 20.0, 20.0],
+  "diameter": 2.0,
+  "depth": 4.0,
+  "normals": [[0.0, 0.0, 1.0], [0.0, 0.0, -1.0]],
+  "cone": {
+    "radii": [2.0, 4.0],
+    "height": 4.0,
+    "mirror_normal": [1.0, 0.0, 0.0]
+  }
+}

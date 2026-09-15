@@ -76,8 +76,43 @@ relations.py  ──> „diese zwei gehören zusammen" — und was daraus folgt
 matching.py   ──> derselbe Name auch nach der nächsten Operation
 digest.py     ──> der Steckbrief: was der Agent zu sehen bekommt
 maps.py       ──> Analysekarten für die Ansicht (Überhang, Wandstärke …)
-actions.py    ──> „was kann ich damit tun" — und warum nicht, wo nichts geht
+actions.py    ──> „was kann ich damit tun“ — und warum nicht, wo nichts geht
+local.py      ──> vollständige Merkmale in einer begrenzten Umgebung des Originalnetzes
+ops.py        ──> gespeicherter Erkennungsauftrag `detect_region`
 ```
+
+## Lokale Erkennung großer Netze
+
+`local.detect_local(mesh, point, normal=..., radius=..., seed_faces=...)`
+prüft einen Originaltreffer und veröffentlicht nur vollständig belegte
+Merkmalsflächen mit globalen Dreiecksnummern. Ein Ausschnitt erzeugt keine
+Randöffnung des Originals. Eine glatte Fortsetzung über den Suchrand sperrt
+den ganzen betroffenen Fleck; Hohlraumketten benötigen alle Abschnitte,
+vollständige Anschlussringe und unbeschädigte Boden-/Mündungskanten.
+Die Innenrolle einer Ebene kommt aus räumlich passenden Originalfacetten,
+auch wenn der belegende Rand außerhalb der Suchkugel liegt. Nur ein
+tatsächlich passender Beleg darf einen vollständigen Mantelfit auslösen.
+Das Flächenbudget begrenzt diese Fits ebenso wie den Ausschnitt; es ändert
+keine Erkennungstoleranz. Überschreitung oder fehlender Abschluss liefern
+einen Handlungsvorschlag, keine Teilgeometrie.
+
+`detect_region` speichert Punkt, Normale, Radius und den optionalen
+Originaltreffer als gewöhnliche Operation. Die Auswahl einer gemeinsam
+triangulierten Fläche ist eindeutig; getrennte übereinanderliegende Flächen
+laufen über `ctx.ask`. Der Schritt ändert keine Geometrie und erhält
+vorhandene IDs, Provenienz und Erzeuger. Erkennung plus Bearbeitung können
+dadurch gemeinsam in einer Transaktion gespeichert und zurückgenommen werden.
+
+`detect_known` misst bekannte Merkmale nach einer Operation am großen Netz
+erneut. `local_search_radius` ist ein belegter diagnostischer Suchumfang um
+die Merkmalsmitte, kein Nutzermaß. `transformed_searches` nimmt ihn über den
+größten Dehnungsfaktor der Operation konservativ mit; Flächengröße allein
+bestimmt keinen Radius. Maße werden nur bei nachgewiesen erhaltener Form
+transformiert. Eine anisotrope Skalierung darf aus einer Ellipse keine
+ungeprüfte runde Bohrung machen. Die anschließende Zuordnung bleibt bei den
+bestehenden ID-, Mehrdeutigkeits- und Erzeugerverträgen. Cachekompatibilität
+läuft über den bestehenden Versionsschlüssel der Auswertung, ohne Migration
+von Dokumentgeometrie oder alten Operationsparametern.
 
 ## Zwei Fragen, zwei Dateien
 
@@ -524,6 +559,9 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Kette, `None` fordert die Ermittlung an. Freie Normalenkomponenten bleiben
   im vollständigen Platzierungsdialog; die Schnellbearbeitung bietet dafür
   ihre eigene Drehhandlung.
+  `resize_hole` belegt bei einem von `geom.prepare_ops.bore_entrance` bestätigten
+  Einlauf den gespeicherten Umfang `follow` vor. Ohne eindeutigen Einlauf
+  bleibt der Schema-Standard `keep`; die Operation prüft dieselben Grenzen.
 - **Was nach allen Einpassungen an gerundeter Haut übrig bleibt, ist eine
   gerundete Seite** (`detect_curved_faces`, Art `curved_face`). Der Bogen
   eines D, der Mantel eines o, die Schwünge einer S: kein Zylinder, keine

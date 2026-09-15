@@ -26,7 +26,7 @@ selbst.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Final
 
 from app.core.registry import REGISTRY
@@ -556,12 +556,28 @@ def actions_for(
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=shared))
         elif fitting is not None:
+            fields = _fields_of(fitting, feature)
+            if fitting.name == "resize_hole" and mesh is not None and features is not None:
+                from app.core.errors import ValidationError
+                from app.core.geom.prepare_ops import bore_entrance
+
+                try:
+                    entrance = bore_entrance(
+                        mesh, feature, features, cavity=cavity, touches_other=touches_other
+                    )
+                except ValidationError:
+                    entrance = None
+                if entrance is not None:
+                    fields = tuple(
+                        replace(entry, value="follow") if entry.name == "entrance_mode" else entry
+                        for entry in fields
+                    )
             actions.append(
                 FeatureAction(
                     title=fitting.title,
                     op=fitting.name,
                     note=_note_for(fitting.name, feature, features, mesh=mesh, cavity=cavity),
-                    fields=_fields_of(fitting, feature),
+                    fields=fields,
                 )
             )
         elif feature.kind == "fillet" and feature.params.get("radial", False):

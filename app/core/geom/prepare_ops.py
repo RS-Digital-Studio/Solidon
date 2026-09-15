@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import lru_cache
-from typing import Any, Final, cast
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -108,7 +108,15 @@ from app.core.types import (
     is_a_cavity,
     vec3_or_none,
 )
-from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length, is_close, is_zero
+from app.core.units import (
+    DEGREE_UNIT,
+    EPS_DISPLAY,
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    format_length,
+    is_close,
+    is_zero,
+)
 from app.i18n import TranslatableText, _
 
 _AXES = tuple(AXIS_NORMALS)
@@ -1200,6 +1208,7 @@ def _section_closed(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    extend_inner: bool = True,
 ) -> BooleanOutcome | None:
     """**Einen** Abschnitt eines Hohlraums schließen — der Rest bleibt offen.
 
@@ -1231,6 +1240,11 @@ def _section_closed(
     der Querschnitt stimmt mit dem überein, was darunter liegt. Fortgesetzt
     wird in so vielen Schritten, wie seine eigene Länge verlangt — sonst bliebe
     zwischen zwei Kopien eine Scheibe Material stehen.
+
+    Beim Größenändern setzt ``extend_inner=False`` die übrigen Abschnitte nur
+    in ihren bisherigen Grenzen zurück. Die neue Bohrung liefert ihren eigenen
+    Weg zur Mündung; ein breiterer innerer Kegel darf unter einer schmaleren
+    Plansenkung als Hinterschnitt erhalten bleiben.
 
     ``None`` heißt: Dieser Abschnitt gibt keinen eigenen Körper her; dann gilt
     :data:`NO_OWN_BODY` wie bisher.
@@ -1269,7 +1283,7 @@ def _section_closed(
     for entry, tool in zip(keep, tools, strict=True):
         span = float(np.ptp(np.asarray(tool.raw.vertices) @ axis))
         steps = 0
-        if any(entry.id == section.id for section in inner):
+        if extend_inner and any(entry.id == section.id for section in inner):
             steps = max(1, math.ceil(reach / span)) if span > EPS_GEOM else 1
         for step in range(steps + 1):
             moved = tool.raw.copy()
@@ -2468,6 +2482,13 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
         & (along < high - slack)
         & (radial < radius * (1.0 - _CLEARANCE_MARGIN))
     )
+    planes = _bore_end_planes(mesh, feature, {feature.id: feature}, grows=False)
+    if planes:
+        inside = radial < radius * (1.0 - _CLEARANCE_MARGIN)
+        for plane in planes:
+            inside &= (
+                np.asarray(raw.triangles_center) @ np.asarray(plane.normal) < plane.position - slack
+            )
     if feature.face_indices:
         own = np.asarray(feature.face_indices, dtype=np.int64)
         inside[own[own < len(inside)]] = False
@@ -3578,6 +3599,19 @@ def _cone_past_a_tilted_face(
     return max(0.0, min(needed, at_most))
 
 
+def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]) -> bool:
+    """Vor dem gesamten Rand liegt Luft; ein Sacklochboden bleibt geschlossen."""
+    from app.core.geom.mesh import on_surface
+
+    inward = edge.mean(axis=0) - edge
+    inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
+    probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
+    closest, _, at = on_surface(mesh.raw, probes)
+    body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
+    return bool(np.all(signed > EPS_GEOM))
+
+
 def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
     """Der exakte Hohlraumkörper, an seinen Mündungen um ``FEATURE_OVERLAP``
     über die Oberfläche hinaus verlängert — das Werkzeug für die Differenz (§39).
@@ -3605,13 +3639,10 @@ def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
     15.09.2026). Kommt kein geschlossener Körper heraus, bleibt das Werkzeug
     der unveränderte Hohlraum.
     """
-    from app.core.geom.mesh import on_surface
-
     raw = cavity.raw
     points = np.asarray(raw.vertices, dtype=np.float64)
     faces = np.asarray(raw.faces, dtype=np.int64).copy()
     normals = np.asarray(raw.face_normals, dtype=np.float64)
-    body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
     added: list[NDArray[np.float64]] = [points]
     collars: list[NDArray[np.int64]] = []
     next_index = len(points)
@@ -3622,7 +3653,6 @@ def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
         cap = faces[facet]
         normal = normals[int(facet[0])]
         members = np.unique(cap)
-        hub = points[members].mean(axis=0)
         directed = np.vstack([cap[:, [0, 1]], cap[:, [1, 2]], cap[:, [2, 0]]])
         _, inverse, counts = np.unique(
             np.sort(directed, axis=1), axis=0, return_inverse=True, return_counts=True
@@ -3632,13 +3662,7 @@ def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
             continue
         # Die Probe: je Randpunkt ein wenig zur Mitte und um die Zugabe vor den
         # Deckel — erst wenn dort überall Luft ist, ist der Deckel eine Mündung.
-        edge = points[rim[:, 0]]
-        inward = hub - edge
-        inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
-        probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
-        closest, _, at = on_surface(mesh.raw, probes)
-        signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
-        if not bool(np.all(signed > EPS_GEOM)):
+        if not _mouth_is_open(mesh, points[rim[:, 0]], normal):
             continue
         lifted = np.full(int(members.max()) + 1, -1, dtype=np.int64)
         lifted[members] = np.arange(next_index, next_index + len(members))
@@ -3989,6 +4013,16 @@ class ResizeHoleParams(BaseParams):
             "die Bohrung trägt sie ein."
         ),
     )
+    entrance_mode: Literal["keep", "follow"] = param(
+        title=_("Änderungsumfang"),
+        default="keep",
+        choices=("keep", "follow"),
+        placement="front",
+        doc=_(
+            "Nur den Bohrungsdurchmesser ändern oder den eindeutigen Einlauf mitnehmen. "
+            "Beim Mitnehmen bleiben Einführbreite, Senkungswinkel und Stufentiefen erhalten."
+        ),
+    )
     x: float | None = param(
         title=_("X"),
         default=None,
@@ -4051,7 +4085,7 @@ OPEN_BODY_DETAIL: Final = _(
 
 @register_op(
     name="resize_hole",
-    cache_version="4",
+    cache_version="6",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -4101,6 +4135,19 @@ def resize_hole(ctx: OpContext) -> OpResult:
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
     if is_close(cut, previous) and not moved_hole:
         return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
+    if params.entrance_mode == "follow":
+        entrance = bore_entrance(source.mesh, feature, source.features)
+        if entrance is not None:
+            if moved_hole:
+                raise ValidationError(
+                    field="entrance_mode",
+                    detail=_(
+                        "Ändern Sie zuerst den Durchmesser mit Einlauf. Verschieben Sie "
+                        "das Merkmal danach über „Merkmal verschieben“."
+                    ),
+                    suggestions=(CORRECT_INPUT, CANCEL),
+                )
+            return _resize_bore_entrance(ctx, feature, entrance, cut)
     # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
     # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
     # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
@@ -4251,6 +4298,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
+    original_body = body
     # **Die Tiefe wird am Original gemessen, nicht am gestopften Körper.**
     # `_mesh_bore_depth` liest die Dreiecke, die `feature.face_indices`
     # benennt, und die gelten für das Netz, in dem das Merkmal erkannt wurde.
@@ -4261,6 +4309,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     # an dieser Stelle beantwortbar, und danach ist sie es nicht mehr.
     exact_depth = _mesh_bore_depth(body, feature, axis, depth)
     closed_first: list[Finding] = []
+    closing_solver: SolverInfo | None = None
     # **Ein Langloch geht immer zu, bevor es neu geschnitten wird** (RM-156) —
     # auch ohne Versatz. Beim Verbreitern deckte der neue Umriss den alten mit
     # ab; beim Verschmälern bliebe die alte Breite stehen, und das Maß im
@@ -4279,6 +4328,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         )
         body = closing.mesh
         closed_first = list(closing.findings)
+        closing_solver = closing.solver
     if feature.kind == "slot":
         # **Das Langloch wird neu geschnitten, mit der neuen Breite und der
         # Länge, die aus seinem Weg folgt** (RM-156). Die Zugabe entfällt: Sie
@@ -4326,11 +4376,35 @@ def resize_hole(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
         )
     else:
+        from app.core.perceive.relations import cavity_chain_at
+
+        end_planes = _bore_end_planes(original_body, feature, source.features, grows=True)
+        rebuilt = cut < previous and bool(end_planes)
+        if rebuilt:
+            # Ein Ring trifft am quantisierten Sacklochboden fast koplanare
+            # Dreiecke und erzeugt dort numerische Haut. Der vorhandene
+            # Abschnittsweg stellt zunächst die übrigen Flächen wieder her;
+            # anschließend bekommt die neue Bohrung ihre eigene saubere Wand.
+            chain = cavity_chain_at(feature, source.features, original_body) or (feature,)
+            section_closing = _section_closed(
+                original_body,
+                chain,
+                feature,
+                quality=ctx.quality,
+                seed=ctx.seed,
+                cancelled=ctx.cancelled,
+                extend_inner=False,
+            )
+            if section_closing is None:
+                raise bore_geometry_error(feature.id)
+            body = section_closing.mesh
+            closed_first = list(section_closing.findings)
+            closing_solver = section_closing.solver
         result = resize_bore(
             body,
             position=centre,
             direction=axis,
-            previous_diameter=previous,
+            previous_diameter=0.0 if rebuilt else previous,
             diameter=params.diameter,
             depth=exact_depth,
             through=through,
@@ -4338,6 +4412,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             compensate=params.compensate,
             quality=ctx.quality,
             seed=ctx.seed,
+            end_planes=end_planes,
         )
     if result.solver is None:
         return OpResult(outputs=[source], findings=result.findings)
@@ -4350,8 +4425,16 @@ def resize_hole(ctx: OpContext) -> OpResult:
         compensation_findings(params.diameter, cut, params.compensate) if moved_hole else []
     )
     resized_feature = _recognised_resized_feature(
-        result.mesh, looked_for, cut if moved_hole else result.diameter
+        result.mesh,
+        looked_for,
+        cut if moved_hole else result.diameter,
+        original=original_body if not moved_hole and feature.kind == "hole" else None,
+        check_cancelled=ctx.cancelled.raise_if_cancelled,
     )
+    if resized_feature is not None and result.solver.strategy in ("direct", "welded"):
+        resized_feature = _with_nominal_bore(
+            result.mesh, resized_feature, looked_for, cut if moved_hole else result.diameter
+        )
     carried = {
         name: entry
         for name, entry in source.features.items()
@@ -4365,11 +4448,13 @@ def resize_hole(ctx: OpContext) -> OpResult:
     )
     findings = [*closed_first, *result.findings, *moved_findings]
     findings.extend(_widening_findings(source, feature, params.diameter))
+    if result.cutting_tool is not None and cut > previous:
+        findings.extend(_neighbour_bore_findings(source, feature, result.cutting_tool, ctx))
     if resized_feature is None:
         findings.append(_bore_no_longer_a_feature(feature, result.diameter))
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features=features)],
-        solver=result.solver,
+        solver=deepest([closing_solver, result.solver]),
         findings=findings,
     )
 
@@ -4863,6 +4948,88 @@ def slot_hole(ctx: OpContext) -> OpResult:
     )
 
 
+def _neighbour_bore_findings(
+    source: SceneObject, feature: Feature, tool: MeshData, ctx: OpContext
+) -> list[Finding]:
+    """Nur eine durch diese Vergrößerung geschwächte Nachbarwand melden.
+
+    Der Hüllquader sortiert entfernte Kandidaten aus. Den Abstand bestimmen
+    die echten, an ihren Endringen geschlossenen Hohlräume und das tatsächlich
+    verwendete Werkzeug. So werden weder schräge Achsen noch unterschiedliche
+    Tiefen zu einem bloßen Abstand im Grundriss vereinfacht.
+    """
+    from app.core.geom.measure import surface_gap
+    from app.core.perceive.relations import cavity_chains
+
+    mesh = as_mesh_data(source.mesh)
+    chains = cavity_chains(source.features, mesh)
+    grouped = {section.id: chain for chain in chains for section in chain}
+    own = grouped.get(feature.id, (feature,))
+    old = _paired_cavity_body(mesh, *own)
+    if old is None:
+        return []
+    seen = {section.id for section in own}
+    threshold = ctx.profile.minimum_wall_thickness
+    tool_bounds = np.asarray(tool.raw.bounds)
+    findings = []
+    for candidate in source.features.values():
+        if (
+            candidate.id in seen
+            or candidate.kind not in {"hole", "cone"}
+            or not is_a_cavity(candidate)
+        ):
+            continue
+        ctx.cancelled.raise_if_cancelled()
+        neighbours = grouped.get(candidate.id, (candidate,))
+        seen.update(section.id for section in neighbours)
+        indices = tuple(index for section in neighbours for index in section.face_indices)
+        if not indices or min(indices) < 0 or max(indices) >= len(mesh.raw.faces):
+            continue
+        points = np.asarray(mesh.raw.vertices)[np.unique(np.asarray(mesh.raw.faces)[list(indices)])]
+        bounds = np.stack((points.min(axis=0), points.max(axis=0)))
+        separation = np.maximum(
+            np.maximum(bounds[0] - tool_bounds[1], tool_bounds[0] - bounds[1]), 0.0
+        )
+        if float(np.linalg.norm(separation)) >= threshold:
+            continue
+        other = _paired_cavity_body(mesh, *neighbours)
+        if other is None:
+            continue
+        after_gap = surface_gap(tool, other, threshold)
+        if after_gap is None or after_gap >= threshold - EPS_GEOM:
+            continue
+        before_gap = surface_gap(old, other, threshold)
+        if before_gap is None or before_gap <= after_gap + EPS_GEOM:
+            continue
+        opened = after_gap <= EPS_GEOM
+        neighbour = neighbours[0]
+        findings.append(
+            Finding(
+                code="bore.neighbour_opened" if opened else "bore.neighbour_wall_thin",
+                severity="warning",
+                message=(
+                    _(
+                        "Diese Vergrößerung verbindet die Bohrung mit einem benachbarten "
+                        "Hohlraum. Wählen Sie einen kleineren Durchmesser, um die Trennwand "
+                        "zu erhalten."
+                    )
+                    if opened
+                    else _(
+                        "Durch diese Vergrößerung bleiben zum benachbarten Hohlraum nur "
+                        "{thickness:.2f} mm Wand. Das Materialprofil verlangt mindestens "
+                        "{minimum:.2f} mm. Wählen Sie einen kleineren Durchmesser.",
+                        thickness=after_gap,
+                        minimum=threshold,
+                    )
+                ),
+                feature_ids=(feature.id, neighbour.id),
+                values={"thickness": after_gap, "minimum": threshold, "previous": before_gap},
+                suggestions=(CORRECT_INPUT,),
+            )
+        )
+    return findings
+
+
 def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -> list[Finding]:
     """Sagt es, wenn über der geänderten Bohrung eine Senkung sitzt.
 
@@ -5151,6 +5318,436 @@ def _bore_number(feature: Feature, name: str) -> float:
     return float(value)
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class _EntranceSection:
+    """Nominales radiales Profil und die wirklichen Grenzen eines Abschnitts."""
+
+    feature: Feature
+    lower: SectionPlane
+    upper: SectionPlane
+    start: float
+    end: float
+    inner_radius: float
+    outer_radius: float
+    shoulder: bool = False
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _BoreEntrance:
+    """Eine eindeutige, nach außen weiter werdende Bohrungsfolge."""
+
+    chain: tuple[Feature, ...]
+    origin: Vec3
+    axis: Vec3
+    sections: tuple[_EntranceSection, ...]
+
+
+def _entrance_error() -> ValidationError:
+    """Ein gekoppelter Umfang braucht einen belegbaren Eintritt."""
+    return ValidationError(
+        field="entrance_mode",
+        detail=_(
+            "Dieser Einlauf lässt sich nicht eindeutig gemeinsam ändern. Wählen Sie "
+            "„Nur Bohrungsdurchmesser“ und bearbeiten Sie weitere Abschnitte einzeln."
+        ),
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
+def bore_entrance(
+    body: Mesh,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature],
+    *,
+    cavity: tuple[Feature, ...] | None = None,
+    touches_other: bool = False,
+) -> _BoreEntrance | None:
+    """Liest denselben belegten Änderungsumfang für Operation und Handlungsvorgabe.
+
+    Ein einzelner Zylinder hat keinen Einlauf, den er mitnehmen müsste.
+    Doppelte Ränder, Hinterschnitte und unbestimmte Profile geben dagegen
+    keine stillschweigende Erlaubnis zum Ändern nur eines Abschnitts.
+    Eine mitgebrachte Kettenauskunft gilt auch hier; die leere Folge belegt
+    einen einzelnen Hohlraum und verhindert eine zweite Topologieabfrage.
+    """
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    mesh = as_mesh_data(body)
+    chain, touches = (
+        cavity_chain_state_at(feature, features, mesh)
+        if cavity is None and not touches_other
+        else (cavity or None, touches_other)
+    )
+    if feature.kind != "hole" or (chain is None and touches):
+        raise _entrance_error()
+    if chain is None:
+        return None
+    if chain[0].id != feature.id:
+        raise _entrance_error()
+    welded = mesh.raw.copy()
+    welded.merge_vertices()
+    origin = _bore_vector(feature, "centre")
+    direction = np.asarray(_bore_vector(feature, "axis"), dtype=float)
+    direction /= np.linalg.norm(direction)
+    if float((np.asarray(chain[-1].params["centre"]) - origin) @ direction) < 0.0:
+        direction = -direction
+    axis: Vec3 = (float(direction[0]), float(direction[1]), float(direction[2]))
+    sections: list[_EntranceSection] = []
+    exact_axes = all("residual" not in entry.params for entry in chain)
+    for entry in chain:
+        shoulder = False
+        if exact_axes or entry.kind == "hole":
+            entry_axis = np.asarray(_feature_direction(entry), dtype=float)
+            centre_offset = np.asarray(entry.params["centre"], dtype=float) - origin
+            lateral = np.linalg.norm(centre_offset - float(centre_offset @ direction) * direction)
+            tolerance = EPS_GEOM if exact_axes else MAX_FACET_SAG
+            if float(lateral) > tolerance or (
+                exact_axes and float(np.linalg.norm(np.cross(direction, entry_axis))) > EPS_GEOM
+            ):
+                raise _entrance_error()
+        planes = _bore_end_planes(mesh, entry, features, grows=False)
+        if len(planes) != 2 or entry.params.get("partial", False):
+            raise _entrance_error()
+        if any(abs(float(np.dot(plane.normal, direction))) <= EPS_GEOM for plane in planes):
+            raise _entrance_error()
+        ends = sorted(
+            (
+                (plane.position - float(np.dot(plane.normal, origin)))
+                / float(np.dot(plane.normal, direction)),
+                plane,
+            )
+            for plane in planes
+        )
+        (start, lower), (end, upper) = ends
+        if end <= start + EPS_GEOM:
+            raise _entrance_error()
+        if float(np.dot(lower.normal, direction)) > 0.0:
+            lower = lower.flipped()
+        if float(np.dot(upper.normal, direction)) < 0.0:
+            upper = upper.flipped()
+        if sections and abs(start - sections[-1].end) > FLAT_RIM:
+            raise _entrance_error()
+        if entry.kind == "hole":
+            inner = outer = float(entry.params["diameter"]) / 2.0
+            if sections and inner < sections[-1].outer_radius - MAX_FACET_SAG:
+                raise _entrance_error()
+        elif entry.kind == "cone" and sections and sections[-1].feature.kind == "hole":
+            angle = float(entry.params.get("angle", 0.0))
+            if not EPS_GEOM < angle < 180.0 - EPS_GEOM:
+                raise _entrance_error()
+            inner = sections[-1].outer_radius
+            slope = math.tan(math.radians(angle / 2.0))
+            previous_indices = welded.faces[sections[-1].feature.face_indices, :]
+            indices = welded.faces[entry.face_indices, :]
+            shoulder = not bool(np.intersect1d(previous_indices, indices).size)
+            if shoulder:
+                # Eine vollständige Ringschulter ist eine echte radiale Stufe.
+                # Ihre Kegelkante liegt nicht auf dem Radius des inneren Schafts.
+                points = np.asarray(welded.vertices[np.unique(indices)]) - origin
+                along = points @ direction
+                radii = np.linalg.norm(points - np.outer(along, direction), axis=1)
+                inner = float(np.max(radii - (along - start) * slope))
+                if inner < sections[-1].outer_radius - MAX_FACET_SAG:
+                    raise _entrance_error()
+            outer = inner + (end - start) * slope
+        else:
+            raise _entrance_error()
+        sections.append(_EntranceSection(entry, lower, upper, start, end, inner, outer, shoulder))
+    return _BoreEntrance(chain, origin, axis, tuple(sections))
+
+
+def _entrance_tools(
+    entrance: _BoreEntrance, diameter: float, reach: float, *, filling: bool = False
+) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
+    """Beide Kerne erhalten dieselben Radien, Profile und Randebenen."""
+    first, last = entrance.sections[0], entrance.sections[-1]
+    delta = diameter / 2.0 - first.inner_radius
+    # Der Schaft öffnet auch den Hals unter einer schräg beschnittenen Senkung.
+    members = [dataclasses.replace(first, upper=last.upper, end=last.end), *entrance.sections[1:]]
+    tools: list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]] = []
+    for index, section in enumerate(members):
+        radius = section.inner_radius + delta
+        lower = section.lower
+        upper = section.upper
+        if not filling and (index == 0 or index == len(members) - 1):
+            upper = dataclasses.replace(upper, position=upper.position + FEATURE_OVERLAP)
+        if section.feature.kind == "cone":
+            slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
+            start = section.start - radius / slope
+            end = section.end + reach
+            outer = radius + (end - section.start) * slope
+            outline = [(0.0, start), (outer, end), (0.0, end), (0.0, start)]
+            # Der Kegel beginnt im vorherigen Zylinder. Dessen Boden begrenzt
+            # ihn, während der gemeinsame kreisrunde Hals ohne Ringstufe bleibt.
+            if not section.shoulder:
+                lower = entrance.sections[index - 1].lower
+        else:
+            start, end = section.start - reach, section.end + reach
+            outline = [(0.0, start), (radius, start), (radius, end), (0.0, end), (0.0, start)]
+        if radius <= EPS_GEOM:
+            raise _entrance_error()
+        tools.append((outline, (lower, upper)))
+    return tools
+
+
+def _entrance_mesh_tool(
+    entrance: _BoreEntrance, diameter: float, reach: float, ctx: OpContext
+) -> BooleanOutcome:
+    """Die gemeinsame Profilfolge mit der vorhandenen Netz-Rückfallkette schneiden."""
+    from app.core.geom.section import cut
+    from app.core.sketch.planes import frame_of
+
+    frame = frame_of(entrance.axis, entrance.origin)
+    rotation = np.asarray([frame.x_axis, frame.y_axis, frame.normal]).T
+    tools = []
+    for outline, planes in _entrance_tools(entrance, diameter, reach):
+        ctx.cancelled.raise_if_cancelled()
+        raw = trimesh.creation.revolve(outline, sections=BORE_SECTIONS)
+        raw.vertices = np.asarray(raw.vertices) @ rotation.T + entrance.origin
+        tool = MeshData.of(raw)
+        for plane in planes:
+            tool = cut(tool, plane).mesh
+        if not tool.is_watertight or tool.volume <= EPS_GEOM:
+            raise _entrance_error()
+        tools.append(tool)
+    return boolean("union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+
+
+def _resize_bore_entrance(
+    ctx: OpContext, feature: Feature, entrance: _BoreEntrance, diameter: float
+) -> OpResult:
+    """Schaft und nach außen eindeutigen Einlauf als eine Änderung neu schneiden."""
+    source = ctx.inputs[0]
+    original = as_mesh_data(source.mesh)
+    reach = original.bounds.diagonal
+    ctx.cancelled.raise_if_cancelled()
+    stages: list[SolverInfo | None] = []
+    findings: list[Finding] = []
+    delta = diameter - float(feature.params["diameter"])
+    targets: dict[FeatureId, Feature] = {}
+    found: Mapping[FeatureId, Feature]
+    for section in entrance.sections:
+        old = section.feature
+        height = (section.start + section.end) / 2.0 if old.kind == "hole" else section.end
+        outer_radius = section.outer_radius + delta / 2.0
+        if old.kind == "cone":
+            # Der Erkenner beschreibt einen schräg begrenzten Kegel am
+            # weitesten Rand, nicht am Achsenschnitt seiner Mündungsebene.
+            # Beide Stellen liegen auf derselben analytischen Kegelfläche.
+            normal = np.asarray(section.upper.normal)
+            axis = np.asarray(entrance.axis)
+            tilt = float(np.linalg.norm(np.cross(normal, axis)))
+            slope = math.tan(math.radians(float(old.params["angle"]) / 2.0))
+            denominator = float(normal @ axis) - tilt * slope
+            if denominator <= EPS_GEOM:
+                raise _entrance_error()
+            shift = tilt * outer_radius / denominator
+            height += shift
+            outer_radius += shift * slope
+        centre = np.asarray(entrance.origin) + height * np.asarray(entrance.axis)
+        targets[old.id] = dataclasses.replace(
+            old,
+            params={
+                **old.params,
+                "axis": entrance.axis,
+                "centre": tuple(float(v) for v in centre),
+                "diameter": outer_radius * 2.0,
+            },
+        )
+    if source.kind == "brep":
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+        from app.core.brep.kernel import Solid
+        from app.core.sketch.planes import frame_of
+
+        if not isinstance(source.mesh, Solid):
+            raise InternalError(detail="a scene object marked as brep does not carry a Solid")
+        frame = frame_of(entrance.axis, entrance.origin)
+        exact_tools = [
+            edit.clipped_bore_tool(edit.revolved_bore_tool(outline, frame), planes)
+            for outline, planes in _entrance_tools(entrance, diameter, reach)
+        ]
+        tool_solid = edit.boolean("union", exact_tools)
+        previous = entrance.sections[0].inner_radius * 2.0
+        fill_tools = [
+            edit.clipped_bore_tool(edit.revolved_bore_tool(outline, frame), planes)
+            for outline, planes in _entrance_tools(entrance, previous, reach, filling=True)
+        ]
+        filled = edit.boolean("union", fill_tools)
+        filled_body = edit.boolean("union", [source.mesh, filled])
+        exact_changed = edit.boolean("difference", [filled_body, tool_solid])
+        if not exact_changed.is_closed:
+            raise GeometryError(detail=OPEN_BODY_DETAIL, suggestions=(CORRECT_INPUT, CANCEL))
+        changed: Mesh = exact_changed
+        found = features_of(exact_changed)
+        tool = as_mesh_data(tool_solid)
+        before_cut = as_mesh_data(filled_body)
+    else:
+        tool_outcome = _entrance_mesh_tool(entrance, diameter, reach, ctx)
+        tool = tool_outcome.mesh
+        # Ein kurzer Senkungsabschnitt allein enthält nicht den Abschluss
+        # seines langen Schafts. Das bereits vollständig konstruierte und
+        # an den echten Mündungen begrenzte Werkzeug belegt den gemeinsamen
+        # Suchumfang. Eine beliebige Sammlung alter Merkmale tut das nicht.
+        points = np.asarray(tool.raw.vertices)
+        targets = {
+            name: dataclasses.replace(
+                target,
+                params={
+                    **target.params,
+                    "local_search_radius": max(
+                        float(target.params.get("local_search_radius") or 0.0),
+                        float(
+                            np.linalg.norm(
+                                points - np.asarray(target.params["centre"]), axis=1
+                            ).max()
+                        ),
+                    ),
+                },
+            )
+            for name, target in targets.items()
+        }
+        plug = _cavity_plug(
+            original, entrance.chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        )
+        if plug is None:
+            raise _entrance_error()
+        filled_mesh = boolean(
+            "union", [original, plug], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        )
+        cut_mesh = boolean(
+            "difference",
+            [filled_mesh.mesh, tool],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        changed = cut_mesh.mesh
+        before_cut = filled_mesh.mesh
+        stages.extend((tool_outcome.solver, filled_mesh.solver, cut_mesh.solver))
+        findings.extend((*tool_outcome.findings, *filled_mesh.findings, *cut_mesh.findings))
+        found = _detect_resized_bores(
+            cut_mesh.mesh, targets, check_cancelled=ctx.cancelled.raise_if_cancelled
+        )
+    # Jeder Abschnitt wird an der neuen echten Geometrie wiedergefunden.
+    # Die Bohrungsmitte darf durch eine schräge Mündung axial wandern.
+    changed_ids = {entry.id for entry in entrance.chain}
+    preserved = {
+        name: entry
+        for name, entry in source.features.items()
+        if entry.provenance == "generated" and name not in changed_ids
+    }
+    for target in targets.values():
+        expected = float(target.params["diameter"])
+        recognised = _recognised_resized_feature(
+            as_mesh_data(changed), target, expected, original=original, known=found
+        )
+        if recognised is not None:
+            solver = deepest(stages)
+            if solver is None or solver.strategy in ("direct", "welded"):
+                recognised = _with_nominal_bore(as_mesh_data(changed), recognised, target, expected)
+            preserved[target.id] = dataclasses.replace(recognised, id=target.id)
+        elif target.id == feature.id:
+            findings.append(_bore_no_longer_a_feature(feature, diameter))
+    findings.extend(_neighbour_bore_findings(source, feature, tool, ctx))
+    findings.extend(_entrance_edge_findings(before_cut, entrance, diameter))
+    findings.extend(split_findings(original, as_mesh_data(changed)))
+    params = cast(ResizeHoleParams, ctx.params)
+    findings.extend(compensation_findings(params.diameter, diameter, params.compensate))
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=changed, features=preserved)],
+        findings=findings,
+        solver=deepest(stages),
+    )
+
+
+def _entrance_edge_findings(
+    body: MeshData, entrance: _BoreEntrance, diameter: float
+) -> list[Finding]:
+    """Die belegten Abschnittsenden prüfen, nicht Austritte aus der Gesamthülle.
+
+    Ein höherer Nachbarkörper macht aus einer kurzen schrägen Sackbohrung
+    keinen Durchgang bis zu seiner Oberkante. Die tatsächlichen Randebenen
+    begrenzen hier bereits alle Profile und damit auch die Flankenprüfung.
+    """
+    axis = np.asarray(entrance.axis)
+    delta = diameter / 2.0 - entrance.sections[0].inner_radius
+    for section in entrance.sections:
+        for height, radius, sign in (
+            (section.start, section.inner_radius, 1.0),
+            (section.end, section.outer_radius, -1.0),
+        ):
+            centre = np.asarray(entrance.origin) + height * axis
+            found = mouth_over_the_edge(
+                body,
+                cast(Vec3, tuple(float(v) for v in centre)),
+                cast(Vec3, tuple(float(v) for v in sign * axis)),
+                (radius + delta) * 2.0,
+            )
+            if found:
+                return found
+    return []
+
+
+def _bore_end_planes(
+    mesh: MeshData,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature],
+    *,
+    grows: bool,
+) -> tuple[SectionPlane, ...]:
+    """Die echten Endringe begrenzen das Werkzeug bis zur äußeren Mündung.
+
+    ``grows`` bestimmt den Umfang des abziehenden Werkzeugs: durch die weiteren
+    Senkungsabschnitte bis zum äußeren Rand. Das gilt auch für den Neuschnitt
+    nach dem Verschließen einer zu verkleinernden Bohrung. Ein Füllring darf
+    nur die bisherigen Abschnittsgrenzen verwenden. Eine Luftprobe verlängert
+    ausschließlich offene Mündungen; Böden und Schultern bleiben.
+    """
+    from app.core.perceive.relations import (
+        boundary_rings,
+        cavity_chain_at,
+        cavity_surface_indices,
+    )
+
+    scope: tuple[Feature, ...] = (feature,)
+    chain = cavity_chain_at(feature, features, mesh) if grows else None
+    if chain is not None:
+        start = next(index for index, section in enumerate(chain) if section.id == feature.id)
+        scope = chain[start:]
+    indices = cavity_surface_indices(mesh, scope) if grows else feature.face_indices
+    # Auch unverschweißte STL-Dreiecke teilen geometrisch dieselben Ränder.
+    # Verschweißen ändert hier weder Flächenreihenfolge noch Eingangsmodell.
+    body = mesh.raw.copy()
+    body.merge_vertices()
+    rings = boundary_rings(body, dataclasses.replace(feature, face_indices=tuple(indices)))
+    if rings is None or len(rings) != 2:
+        return ()
+    points = np.asarray(body.vertices, dtype=np.float64)
+    ends = [points[sorted({vertex for edge in ring for vertex in edge})] for ring in rings]
+    axis = np.asarray(_feature_direction(feature), dtype=np.float64)
+    ends.sort(key=lambda ring: float(ring.mean(axis=0) @ axis))
+    planes = []
+    for index, edge in enumerate(ends):
+        hub = edge.mean(axis=0)
+        _left, spread, directions = np.linalg.svd(edge - hub, full_matrices=False)
+        if float(spread[-1]) > FLAT_RIM * len(edge) ** 0.5:
+            return ()
+        normal = directions[-1]
+        if float(normal @ axis) * (1.0 if index else -1.0) < 0.0:
+            normal = -normal
+        if abs(float(normal @ axis)) <= EPS_GEOM:
+            return ()
+        overlap = FEATURE_OVERLAP if grows and _mouth_is_open(mesh, edge, normal) else 0.0
+        planes.append(
+            SectionPlane(
+                normal=(float(normal[0]), float(normal[1]), float(normal[2])),
+                position=float(hub @ normal) + overlap,
+            )
+        )
+    return tuple(planes)
+
+
 def _mesh_bore_depth(
     mesh: MeshData,
     feature: Feature,
@@ -5164,16 +5761,22 @@ def _mesh_bore_depth(
     Zehntausendstel verkürzter Ring kann ein Sackloch bei der nächsten
     Erkennung fälschlich als durchgehend erscheinen lassen.
     """
+    span = _mesh_bore_span(mesh, feature, axis)
+    return span[1] - span[0] if span is not None else fallback
+
+
+def _mesh_bore_span(mesh: MeshData, feature: Feature, axis: Vec3) -> tuple[float, float] | None:
+    """Die beiden axialen Grenzen einer tatsächlich belegten Merkmalsfläche."""
     raw = mesh.raw
     valid = [index for index in feature.face_indices if 0 <= index < len(raw.faces)]
     length = math.sqrt(sum(value * value for value in axis))
     if not valid or length <= EPS_GEOM:
-        return fallback
+        return None
     unit = tuple(value / length for value in axis)
     vertices = raw.vertices[raw.faces[valid].reshape(-1)]
     along = vertices[:, 0] * unit[0] + vertices[:, 1] * unit[1] + vertices[:, 2] * unit[2]
-    span = float(along.max() - along.min())
-    return span if math.isfinite(span) and span > EPS_GEOM else fallback
+    lower, upper = float(along.min()), float(along.max())
+    return (lower, upper) if math.isfinite(upper - lower) and upper - lower > EPS_GEOM else None
 
 
 def _unchanged_bore(diameter: float) -> Finding:
@@ -5248,8 +5851,29 @@ def _bore_match_id(
     )
 
 
+def _detect_resized_bores(
+    mesh: MeshData,
+    expected: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Mapping[FeatureId, Feature]:
+    """Große Netze nur um die geometrisch erwarteten neuen Merkmale untersuchen."""
+    from app.core.perceive.features import detect
+    from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES, detect_known
+
+    if mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:
+        return detect_known(mesh, expected, check_cancelled=check_cancelled)
+    return detect(mesh, check_cancelled=check_cancelled)
+
+
 def _recognised_resized_feature(
-    mesh: MeshData, feature: Feature, diameter: float
+    mesh: MeshData,
+    feature: Feature,
+    diameter: float,
+    *,
+    original: MeshData | None = None,
+    known: Mapping[FeatureId, Feature] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> Feature | None:
     """Findet die eben erzeugte Wand und hängt den bestehenden Namen daran.
 
@@ -5272,11 +5896,40 @@ def _recognised_resized_feature(
     Der Aufrufer behält den Körper und meldet, dass das Merkmal fort ist —
     das ist die Wahrheit über die Lage und nicht über das Programm.
     """
-    from app.core.perceive.features import detect
-
-    detected = detect(mesh)
     expected = _expected_bore(feature, diameter)
-    found_id = _bore_match_id(detected, expected, mesh.bounds.centre, mesh.bounds.diagonal)
+    detected = (
+        _detect_resized_bores(mesh, {expected.id: expected}, check_cancelled=check_cancelled)
+        if known is None
+        else known
+    )
+    comparison = detected
+    if original is not None:
+        # Der größere Kreis trifft eine schräge Mündung an anderer Höhe. Nur
+        # die axiale Mitte darf sich deshalb beim Ändern an derselben Stelle
+        # bewegen. Der alte Mittelpunkt muss weiterhin in der tatsächlichen
+        # Längenausdehnung liegen; ein getrenntes koaxiales Sackloch scheidet aus.
+        axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
+        axis /= np.linalg.norm(axis)
+        centre = np.asarray(_bore_vector(expected, "centre"), dtype=float)
+        direction: Vec3 = (float(axis[0]), float(axis[1]), float(axis[2]))
+        old_span = _mesh_bore_span(original, feature, direction)
+        middle = (old_span[0] + old_span[1]) / 2.0 if old_span is not None else float(centre @ axis)
+        comparison = {}
+        for identifier, candidate in detected.items():
+            if candidate.kind != expected.kind:
+                continue
+            span = _mesh_bore_span(mesh, candidate, direction)
+            if span is None or not span[0] - EPS_GEOM <= middle <= span[1] + EPS_GEOM:
+                continue
+            params = dict(candidate.params)
+            for name in ("centre", "arc_centre"):
+                if name in params:
+                    point = np.asarray(params[name], dtype=float)
+                    params[name] = tuple(
+                        float(v) for v in point - float((point - centre) @ axis) * axis
+                    )
+            comparison[identifier] = dataclasses.replace(candidate, params=params)
+    found_id = _bore_match_id(comparison, expected, mesh.bounds.centre, mesh.bounds.diagonal)
     if found_id is None:
         return None
     # **Und die Zuordnung wird nachgeprüft** — derselbe Fund wie an
@@ -5286,7 +5939,7 @@ def _recognised_resized_feature(
     # von da an die Kennung der versetzten, und ``resize_hole.feature_lost``
     # blieb aus (gemessen 11.09.2026 an zwei Ø-4-Bohrungen bei y = 46 und 54,
     # die obere auf 59,5 versetzt: `hole_2` stand danach bei 46).
-    if not _sits_at(detected[found_id], expected, mesh.bounds.diagonal):
+    if not _sits_at(comparison[found_id], expected, mesh.bounds.diagonal):
         return None
     return dataclasses.replace(
         detected[found_id],
@@ -5294,6 +5947,51 @@ def _recognised_resized_feature(
         provenance="generated",
         created_by=None,
     )
+
+
+def _with_nominal_bore(
+    mesh: MeshData,
+    found: Feature,
+    expected: Feature,
+    diameter: float,
+    *,
+    sections: int = BORE_SECTIONS,
+) -> Feature:
+    """Bekannte Operationsmaße bleiben erhalten, wenn die tatsächliche Wand sie trägt.
+
+    Der Zylinderfit misst Dreiecksschwerpunkte innerhalb des Umkreises. Diese
+    Messung darf den gesetzten Durchmesser nicht beim nächsten Ändern ersetzen.
+    Geprüft werden alle zugeordneten Wandpunkte gegen Kreis beziehungsweise
+    Kegel und die aus der Werkzeugunterteilung folgende Sehnenabweichung.
+    """
+    from app.core.units import weld_tolerance
+
+    if found.kind not in ("hole", "cone") or not found.face_indices:
+        return found
+    axis = np.asarray(_feature_direction(expected), dtype=float)
+    axis /= np.linalg.norm(axis)
+    origin = np.asarray(expected.params["centre"], dtype=float)
+    points = np.asarray(mesh.raw.vertices[np.unique(mesh.raw.faces[found.face_indices, :])])
+    relative = points - origin
+    along = relative @ axis
+    radii = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    wanted = np.full(len(points), diameter / 2.0)
+    if found.kind == "cone":
+        wanted += along * math.tan(math.radians(float(expected.params["angle"]) / 2.0))
+    tolerance = weld_tolerance(mesh.bounds.diagonal)
+    if np.any(radii > wanted + tolerance) or np.any(
+        radii < wanted * math.cos(math.pi / sections) - tolerance
+    ):
+        return found
+    params = dict(found.params)
+    centre = np.asarray(params["centre"])
+    params["centre"] = tuple(float(v) for v in origin + float((centre - origin) @ axis) * axis)
+    params["axis"] = tuple(float(v) for v in axis)
+    if found.kind == "hole":
+        params["diameter"] = diameter
+    else:
+        params["angle"] = expected.params["angle"]
+    return dataclasses.replace(found, params=params)
 
 
 def _sits_at(candidate: Feature, expected: Feature, diagonal: float) -> bool:

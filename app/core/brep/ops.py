@@ -660,9 +660,9 @@ class ToMeshParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Macht aus den einzeln bearbeitbaren Flächen feste Dreiecke. Danach lassen "
-        "sich einzelne Kanten nicht mehr fasen oder verrunden; Rückgängig stellt "
-        "den vorherigen Zustand wieder her."
+        "Wandelt die exakte Geometrie in ein Dreiecksnetz um. Weitere Bearbeitungen "
+        "wie Fasen und Verrundungen rechnen am Netz. Rückgängig stellt den exakten "
+        "Körper wieder her."
     ),
 )
 def brep_to_mesh(ctx: OpContext) -> OpResult:
@@ -684,15 +684,18 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
     )
 
 
+CONVERTED_NOTICE = _(
+    "Die exakten Flächen und Kanten sind jetzt feste Dreiecke. Weitere "
+    "Bearbeitungen rechnen am Netz. Rückgängig stellt den exakten Körper wieder her."
+)
+
+
 def converted_finding(source: SceneObject, mesh: MeshData) -> Finding:
     """Eine beabsichtigte Vernetzung benennt den Verlust der exakten Geometrie."""
     return Finding(
         code="brep.converted",
         severity="info",
-        message=_(
-            "Die exakten Flächen und Kanten sind jetzt feste Dreiecke. Weitere "
-            "Bearbeitungen rechnen am Netz. Rückgängig stellt den exakten Körper wieder her."
-        ),
+        message=CONVERTED_NOTICE,
         object_id=source.id,
         values={"triangles": mesh.triangle_count},
     )

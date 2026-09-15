@@ -488,7 +488,7 @@ def _describe(
     """Was diese Fläche ist, im Vokabular von §21."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.BRepGProp import BRepGProp
-    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere
+    from OCP.GeomAbs import GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere
     from OCP.GProp import GProp_GProps
     from OCP.TopAbs import TopAbs_REVERSED
 
@@ -521,12 +521,11 @@ def _describe(
         first_v = float(surface.FirstVParameter())
         last_v = float(surface.LastVParameter())
         depth = abs(last_v - first_v)
-        # Loch oder Zapfen — das entscheidet, auf welcher Seite das Material
-        # liegt, und das steht in der Orientierung der Fläche. Ohne diese
-        # Unterscheidung war jeder Rundstab eine Bohrung: ein Ø-8-Zapfen aus
-        # Fusion kam in Solidon als „hole, diameter 8.0, depth 40" an, und
-        # dasselbe galt für jede Säule und jeden Dom.
-        hollow = face.Orientation() == TopAbs_REVERSED
+        # Innen und außen ergeben sich gemeinsam aus Flächenorientierung
+        # und Händigkeit der Parametrisierung. Ein Kreisprisma kann auch
+        # einen indirekten Zylinder tragen: REVERSED allein vertauscht dann
+        # die Bohrung mit dem massiven Zapfen.
+        hollow = (face.Orientation() == TopAbs_REVERSED) == cylinder.Position().Direct()
 
         # **Ein Ausschnitt ist eine Verrundung, kein verworfener Rest.** Wer
         # weniger als eine volle Umdrehung abdeckt, war bis hierher nichts —
@@ -553,7 +552,7 @@ def _describe(
                 "centre": middle,
                 "axis": _oriented(axis),
                 "length": round(depth, 4),
-                "recess": (hollow == cylinder.Position().Direct())
+                "recess": hollow
                 if turn >= math.pi - EPS_GEOM
                 else not _axis_in_material(inside, cylinder, centre),
                 **({"radial": True} if turn >= math.pi - EPS_GEOM else {}),
@@ -590,6 +589,32 @@ def _describe(
                 neighbours, face, cylinder, first_v - reach, last_v + reach, tolerance
             )
         return "hole" if hollow else "pin", params
+
+    if kind == GeomAbs_Cone:
+        cone = surface.Cone()
+        angle = float(cone.SemiAngle())
+        first, last = float(surface.FirstVParameter()), float(surface.LastVParameter())
+        wide_v = last if angle > 0.0 else first
+        radius = float(cone.RefRadius()) + wide_v * math.sin(angle)
+        axis = cone.Axis().Direction()
+        location = cone.Location()
+        along = wide_v * math.cos(angle)
+        direction = 1.0 if angle > 0.0 else -1.0
+        turn = abs(surface.LastUParameter() - surface.FirstUParameter())
+        return "cone", {
+            "diameter": 2.0 * radius,
+            "angle": math.degrees(abs(angle)) * 2.0,
+            "axis": (direction * axis.X(), direction * axis.Y(), direction * axis.Z()),
+            "centre": (
+                location.X() + along * axis.X(),
+                location.Y() + along * axis.Y(),
+                location.Z() + along * axis.Z(),
+            ),
+            # Spiegelung kehrt auch am Kegel die Flächenparametrisierung um;
+            # die Materialseite folgt beiden Orientierungen gemeinsam.
+            "recess": (face.Orientation() == TopAbs_REVERSED) == cone.Position().Direct(),
+            **({"partial": True} if turn < FULL_TURN * math.tau else {}),
+        }
 
     if kind == GeomAbs_Sphere:
         ball = surface.Sphere()
