@@ -48,6 +48,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.
 - Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer.
 
+### Blocos e ajustes
+
+- Um bloco para furos — inserto térmico, alojamento de porca, assento de rolamento, rosca, parafuso — assenta logo no furo escolhido, em vez de no centro da face.
+- Ao arrastar um bloco pela pega na vista, move-se o bloco inteiro, mesmo agarrado por uma aresta do furo de fechadura. Antes só se deslocava essa característica.
+- Ganchos e furos de um bloco aparecem à direita como quantidade, e não como «2,00 mm». E depois de «Alterar medidas» o bloco continua selecionado, mesmo com outras características.
+
 ## 0.4.1
 
 ### Construir e alterar

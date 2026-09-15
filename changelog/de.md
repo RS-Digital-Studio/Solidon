@@ -73,6 +73,12 @@ Nutzen da und sonst nichts.
 - Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.
 - Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer.
 
+### Bausteine und Passungen
+
+- Ein Baustein für Bohrungen — Einpressbuchse, Mutternfalle, Lagersitz, Gewinde, Schraube — sitzt sofort in der Bohrung, die Sie gewählt haben, statt auf der Mitte der Fläche.
+- Ziehen Sie einen Baustein am Griff im Bild, bewegt sich der ganze Baustein — auch an einer Kante des Schlüssellochs. Vorher wanderte nur das eine Merkmal, der Rest blieb stehen.
+- Haken und Löcher eines Bausteins stehen rechts als Anzahl — nicht mehr als „2,00 mm“. Und nach „Maße ändern“ bleibt der Baustein gewählt, auch wenn er danach andere Merkmale trägt.
+
 ## 0.4.1
 
 ### Konstruieren und Ändern

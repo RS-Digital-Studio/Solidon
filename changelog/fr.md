@@ -49,6 +49,12 @@ dans `website/version.json`.
 - Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.
 - Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer.
 
+### Blocs et ajustements
+
+- Un bloc destiné à un perçage — insert thermique, logement d’écrou, siège de roulement, filetage, vis — se pose directement dans le perçage choisi, et non au centre de la face.
+- Faites glisser un bloc par sa poignée dans la vue et c’est tout le bloc qui bouge, même saisi par un bord du trou de serrure. Avant, seule cette caractéristique se déplaçait.
+- Crochets et trous d’un bloc apparaissent à droite comme un nombre, non plus comme « 2,00 mm ». Après « Modifier les cotes », le bloc reste sélectionné, même avec d’autres caractéristiques.
+
 ## 0.4.1
 
 ### Construire et modifier

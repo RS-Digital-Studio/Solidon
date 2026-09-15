@@ -1385,14 +1385,22 @@ class Session(QObject):
         self._changed()
         return True
 
-    def change_params(self, op_id: int, params: dict[str, Any]) -> None:
-        """Andere Parameter für eine Operation, die schon im Stapel steht (§15.4)."""
+    def change_params(self, op_id: int, params: dict[str, Any]) -> bool:
+        """Andere Parameter für eine Operation, die schon im Stapel steht (§15.4).
+
+        Gibt zurück, ob die Änderung im Dokument steht — der Verlauf lehnt
+        ab (abgelaufene Demo, ungültiger Wert, geänderte Objektzahl), und die
+        Absage kommt über ``failed``. Wer sich etwas für die folgende
+        Auswertung merkt, tut es nur bei ``True``: Nach einer Absage kommt
+        keine, und der Merker träfe die nächste beliebige.
+        """
         try:
             self.history.change_params(op_id, params)
         except AppError as error:
             self.failed.emit(error)
-            return
+            return False
         self._changed()
+        return True
 
     def removal_closure(self, op_ids: Sequence[int]) -> tuple[int, ...]:
         """Gewählte und davon abhängige Schritte für die Nachfrage bestimmen."""

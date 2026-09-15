@@ -48,6 +48,12 @@ scrive in `website/version.json`.
 - Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.
 - Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer.
 
+### Blocchi e accoppiamenti
+
+- Un blocco per fori — inserto a caldo, sede per dado, sede per cuscinetto, filettatura, vite — si posa subito nel foro scelto, invece che al centro della faccia.
+- Trascinando un blocco con la maniglia nella vista si sposta l’intero blocco, anche afferrandolo a un bordo del foro a serratura. Prima si spostava solo quella caratteristica.
+- Ganci e fori di un blocco compaiono a destra come numero, non più come «2,00 mm». E dopo «Modifica misure» il blocco resta selezionato, anche con altre caratteristiche.
+
 ## 0.4.1
 
 ### Costruire e modificare

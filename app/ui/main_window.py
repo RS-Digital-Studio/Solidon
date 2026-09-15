@@ -12,10 +12,12 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import inspect
+import math
 import re
 import sys
 import time
 import traceback
+import weakref
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from copy import copy, deepcopy
@@ -133,7 +135,7 @@ from app.core.geom.section import SectionPlane, plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.knowledge import calibration, filaments, print_settings, profiles
-from app.core.knowledge.parts.ops import creation_name
+from app.core.knowledge.parts.ops import creation_name, direction_of, part_of
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -199,7 +201,7 @@ from app.core.types import (
     Stroke,
     Vec3,
 )
-from app.core.units import EPS_GEOM, is_close, match_tolerance
+from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import _, format_decimal, tr
 from app.ui import first_run
 from app.ui.ai_disclosure import (
@@ -451,6 +453,30 @@ MAP_CACHE_KEPT: Final = 8
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
 #: (§14, §15.1).
 LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
+
+#: Ab welchem Kosinus der Ring des Griffs um die eigene Achse eines Bausteins
+#: dreht — ein Grad. Es ist kein Erkennungsmaß wie ``PARALLEL_FACE_COSINE``
+#: (acht Grad, für Flächen, die einander gegenüberliegen), sondern die Frage,
+#: ob der Kunde diese Achse gemeint hat; wer den Ring um Z zieht, während der
+#: Baustein auf einer um fünf Grad geneigten Fläche sitzt, meint Z.
+TURNS_ABOUT_ITS_AXIS: Final = math.cos(math.radians(1.0))
+
+
+def _asks_for_the_part(window: MainWindow) -> Callable[[Feature], bool]:
+    """Die Frage der Ansicht, ob ein Merkmal aus einem Baustein kam — schwach gestellt.
+
+    Die Ansicht ist ein Kind des Fensters, und eine gebundene Methode an ihr
+    hielte das Fenster für immer (``wartezeit.md``, „Ein Rückruf an ein eigenes
+    Kind hält schwach"). Was sie bekommt, hält nur einen schwachen Verweis;
+    nach dem Fenster antwortet sie mit Nein.
+    """
+    ref = weakref.ref(window)
+
+    def asks(feature: Feature) -> bool:
+        found = ref()
+        return found is not None and found.part_step_of(feature) is not None
+
+    return asks
 
 
 def _within(field: Any, value: float) -> float:
@@ -2016,6 +2042,7 @@ class MainWindow(QMainWindow):
         # einen Schritt und rechnet nichts nach (§18.11).
         self.viewport.featureMoved.connect(self._on_feature_moved)
         self.viewport.featureTurned.connect(self._on_feature_turned)
+        self.viewport.moves_as_a_part = _asks_for_the_part(self)
         self.viewport.featureMoveProposed.connect(self._on_feature_move_proposed)
         self.viewport.featureTurnProposed.connect(self._on_feature_turn_proposed)
         self.viewport.slotDragged.connect(self._on_slot_dragged)
@@ -9840,6 +9867,17 @@ class MainWindow(QMainWindow):
         danach das Langloch bearbeitet und nicht den Körper. Getrennt von
         :attr:`_measures_to_resume`, weil das zwei Zusagen sind — die eine
         wählt wieder aus, die andere bringt die Maßlinien zurück."""
+        self._part_to_keep: int | None = None
+        """Der Bausteinschritt, dessen Auswahl seine eigene Änderung überleben soll.
+
+        Ein Baustein wählt sich über eines seiner Merkmale, und *Maße ändern*
+        tauscht die oft aus: Ein anderer Stift, eine andere Kabelgröße, und die
+        Verrundung, die angeklickt war, gibt es unter ihrem Namen nicht mehr.
+        Der Baum stellt nur wieder her, was es noch gibt — danach stand rechts
+        das leere Fenster, und für die nächste Zahl war der Baustein neu zu
+        suchen (gemessen an Scharnier, Kabeldurchführung und Steckverbinder,
+        Sonde vom 14.09.2026). Der Schritt bleibt derselbe; gewählt wird
+        danach eines seiner Merkmale (:meth:`_reselect_the_part`)."""
         self._resume_near: Vec3 | None = None
         """Wo das Merkmal nach dem Schritt liegen wird — für den Fall, dass es
         dabei seinen Namen wechselt (``hole_1`` wird ``slot_1``, zugesagt in
@@ -9868,11 +9906,45 @@ class MainWindow(QMainWindow):
         weder umgerechnet noch nachgeprüft; ein zweiter Fang an dieser Stelle
         wäre eine zweite Meinung über denselben Zug.
         """
+        # **Ein Bausteinmerkmal zieht den Baustein mit** — die Zielmitte wird
+        # dafür wieder zum Versatz, denn der Schritt trägt seinen eigenen
+        # Anker und nicht die Mitte dieses einen Merkmals.
+        was = self._feature_centre(feature_id)
+        if was is not None and self._move_the_part(
+            (
+                float(centre[0]) - was[0],
+                float(centre[1]) - was[1],
+                float(centre[2]) - was[2],
+            ),
+            None,
+            0.0,
+            feature_id=feature_id,
+        ):
+            return
         self._feature_step(
             "move_feature",
             feature_id,
             {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])},
         )
+
+    def _feature_centre(self, feature_id: str) -> Vec3 | None:
+        """Die Mitte des Merkmals am gewählten Körper — oder ``None``.
+
+        Jede Art, die ein Baustein erzeugt (``knowledge/parts/build.py``), und
+        jede erkannte (``perceive/features.py``) trägt ``centre``; die Ansicht
+        rechnet das Ziel eines Zugs ohnehin daraus (``_emit_feature_drag``),
+        und ``gizmo_feature`` hängt ohne Mitte keinen Griff an. Kommt eine Art
+        ohne Mitte dazu, fällt :meth:`_on_feature_moved` hier auf
+        ``move_feature`` zurück — dann gehört sie zuerst in einen Test.
+        """
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        feature = entry.features.get(feature_id) if entry is not None else None
+        centre = feature.params.get("centre") if feature is not None else None
+        if centre is None or len(centre) != 3:
+            return None
+        return (float(centre[0]), float(centre[1]), float(centre[2]))
 
     def _on_feature_move_proposed(self, feature_id: str, centre: Any) -> None:
         """Ein Zug am Griff schlägt eine Mitte vor — die Felder rechts nehmen sie.
@@ -9913,6 +9985,8 @@ class MainWindow(QMainWindow):
     def _on_feature_turned(self, feature_id: str, axis: str, angle: float) -> None:
         """Ein Zug am Ring hat ein Merkmal gekippt — mit dem **gerasteten**
         Winkel, also dem, der während des Zugs am Zeiger stand."""
+        if self._move_the_part(None, axis, float(angle), feature_id=feature_id):
+            return
         self._feature_step("rotate_feature", feature_id, {"axis": axis, "angle": float(angle)})
 
     def _on_slot_proposed(self, feature_id: str, length: float, angle: float) -> None:
@@ -10182,10 +10256,206 @@ class MainWindow(QMainWindow):
             "pivot_z": float(centre[2]),
         }
 
+    def _move_the_part(
+        self,
+        offset: Vec3 | None,
+        axis: str | None,
+        angle: float,
+        *,
+        feature_id: str | None = None,
+    ) -> bool:
+        """Ein Zug an einem Bausteinmerkmal versetzt den **Baustein** — seinen Schritt.
+
+        Ein Schlüsselloch besteht aus zwölf Merkmalen, und wer eines davon
+        anfasst, meint das Schlüsselloch (`oberflaeche.md`, „Ein Merkmal aus
+        einem Baustein meint den Baustein"). Bis zum 14.09.2026 galt das für
+        die Felder rechts und nicht für den Griff im Bild: Der Zug wurde ein
+        ``move_feature`` auf die runde Tasche, die Tasche wanderte, der Schlitz
+        blieb stehen, und zehn Verrundungen verloren ihre Erkennung — gemessen
+        an der Sonde über alle Bausteine. Dasselbe Feld, dieselbe Handlung wie
+        *Baustein verschieben* im Merkmalfenster: Die Werte gehen in den
+        Schritt (:meth:`_change_part_step`), nicht in einen zweiten.
+
+        **Verschoben wird als Versatz, gedreht um den eigenen Ankerpunkt.** Die
+        Lage eines Bausteins steht als Ort, Richtung und Winkel im Schritt; ein
+        Zug am Ring ist eine Drehung im Raum, und welche drei Zahlen danach
+        gelten, rechnet die Umkehrung von ``placement_transform`` — dieselbe
+        Rundreise wie beim Griff an der Vorschau eines Grundkörpers
+        (``placement_flow._dragged_in_preview``). Gedreht wird um den Ort des
+        Bausteins und nicht um die Mitte der Auswahl: Der Anker ist die Stelle
+        auf der Fläche, und die soll bleiben.
+
+        Ein Baustein an einem **benannten Merkmal** (``at_feature`` aus dem
+        Agenten oder einer älteren Datei) trägt seine Richtung nicht in den
+        Feldern; dort lässt sich nur um diese Achse drehen — jede andere
+        Drehung sagt, was stattdessen geht (Regel 17). Gibt zurück, ob der Zug
+        hier verbraucht wurde.
+
+        ``feature_id`` nennt das gezogene Merkmal, wo die Ansicht es mitschickt
+        (``featureMoved``, ``featureTurned``); sonst gilt die Auswahl im Baum —
+        der Weg der Bewegen-Leiste und des Körpergriffs.
+        """
+        turns = axis is not None and abs(angle) > EPS_DISPLAY
+        if offset is None and not turns:
+            return False
+        if feature_id is None:
+            feature_id = self.object_tree.selected_feature()
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        if feature_id is None or object_id is None or result is None:
+            return False
+        entry = result.scene.objects.get(object_id)
+        feature = entry.features.get(feature_id) if entry is not None else None
+        if feature is None:
+            return False
+        part = self.part_step_of(feature)
+        if part is None:
+            return False
+        operation, spec = part
+        names = {parameter.name for parameter in spec.params.spec()}
+        if not {"x", "y", "z"} <= names:
+            return False
+        values: dict[str, Any] = {}
+        current = dict(operation.params)
+        # **Ein gebundener Wert wird nicht überschrieben.** Steht an einer
+        # Achse ein Parameterausdruck (``=@abstand``), hat jemand die Lage an
+        # den Parameter gehängt; ein Zug, der die Zahl darüberschriebe, löste
+        # die Bindung still. Der Satz nennt den Weg (Regel 17).
+        bound = [
+            name
+            for name in ("x", "y", "z", "nx", "ny", "nz", "angle")
+            if isinstance(current.get(name), str)
+        ]
+        if bound:
+            self.announce(
+                tr(
+                    "Die Lage dieses Bausteins ist an einen Projektparameter gebunden "
+                    "({fields}). Ändern Sie den Parameter, oder lösen Sie die Bindung im "
+                    "Schritt."
+                ).format(fields=", ".join(bound))
+            )
+            return True
+        if offset is not None:
+            for name, delta in zip(("x", "y", "z"), offset, strict=True):
+                values[name] = float(current.get(name) or 0.0) + float(delta)
+        if turns and axis is not None:
+            # **Die Achse kommt vom Sitzmerkmal**, nicht vom gezogenen: Ein
+            # Baustein an ``hole_1`` dreht um die Achse von ``hole_1``, auch
+            # wenn jemand seine Verrundung angefasst hat (Fund des Reviews,
+            # 14.09.2026 — vorher gab die Verrundung ihre eigene Achse her).
+            at_feature = str(current.get("at_feature") or "")
+            seat = entry.features.get(at_feature) if entry is not None and at_feature else None
+            turned, refused = self._part_turned(spec, {**current, **values}, axis, angle, seat)
+            if turned is None:
+                self.announce(
+                    tr(
+                        "Dieser Baustein sitzt an „{feature}“ und dreht sich nur um dessen "
+                        "Achse. Frei drehen lässt er sich, wenn er über eine Fläche gesetzt "
+                        "ist: aus dem Katalog neu auf die Fläche, oder im Schritt „An "
+                        "Merkmal“ leeren und die Normalenrichtung eintragen."
+                    ).format(feature=at_feature)
+                    if refused == "seat"
+                    else tr(
+                        "Dieser Baustein hat keine Richtung von einer Fläche und dreht sich "
+                        "nur um seine Achse ({axis}). Klicken Sie die Fläche an, an die er "
+                        "kommt: Sie gibt ihm die Richtung — oder tragen Sie sie im Schritt "
+                        "unter Normalenrichtung ein."
+                    ).format(axis=str(current.get("axis") or "z").upper())
+                )
+                return True
+            values.update(turned)
+        if values:
+            self._change_part_step(int(operation.id), values)
+        return True
+
+    @staticmethod
+    def _part_turned(
+        spec: OperationSpec,
+        current: Mapping[str, Any],
+        axis: str,
+        angle: float,
+        seat: Feature | None,
+    ) -> tuple[dict[str, Any] | None, str]:
+        """Ort, Richtung und Winkel eines Bausteins nach einer Drehung um ``axis``.
+
+        Drei Lagen, und jede folgt dem Zweig, den ``knowledge/parts/ops._matrix``
+        für denselben Schritt nimmt:
+
+        * **Freie Richtung** (``nx/ny/nz`` gesetzt, kein ``at_feature``): Die
+          Lage ist eine Matrix (``placement_transform``), die Drehung liegt
+          darüber, und die Umkehrung gibt die drei Werte zurück — exakt, weil
+          ``_matrix`` dort ``frame_of`` und ``rotation("z", angle)`` genauso
+          zusammensetzt. Ohne Richtung gilt dasselbe, wenn der Baustein kein
+          Oben hat und die Achse Z ist: ``frame_of(+Z)`` ist die Einheit, und
+          der Achsenzweig von ``_matrix`` rechnet dieselbe Matrix. Für X und Y
+          nicht (die Rahmen unterscheiden sich, gemessen), und bei ``keeps_up``
+          nicht (der freie Zweig dreht um 180 Grad mehr).
+        * **Am benannten Merkmal** (``at_feature``): Die Richtung ist die des
+          Sitzmerkmals (:func:`direction_of`, dieselbe Funktion wie in
+          ``_anchor``), und ``angle`` dreht um genau sie — nur der Ring um
+          diese Achse trägt.
+        * **Sonst** dreht ``angle`` um das Feld *Achse*.
+
+        Zurück kommen die Werte und ein leerer Grund — oder ``None`` und der
+        Grund: ``"seat"`` (an einem Merkmal, andere Achse gemeint) oder
+        ``"direction"`` (ohne freie Richtung, andere Achse gemeint).
+        """
+        import numpy as np
+
+        from app.core.geom.primitive_ops import placement_transform, placement_values_of
+        from app.core.geom.transform import AXIS_VECTORS, rotation
+
+        if not {"nx", "ny", "nz", "angle"} <= {parameter.name for parameter in spec.params.spec()}:
+            return None, "direction"
+        at_feature = str(current.get("at_feature") or "")
+        direction = tuple(float(current.get(name) or 0.0) for name in ("nx", "ny", "nz"))
+        part = part_of(spec.name)
+        keeps_up = bool(part is not None and part.keeps_up)
+        axis_field = str(current.get("axis") or "z")
+        free = any(abs(value) > EPS_GEOM for value in direction)
+        if not at_feature and (free or (not keeps_up and axis_field == "z")):
+            try:
+                before = np.asarray(
+                    placement_transform(cast(Any, spec.params(**current))), dtype=float
+                )
+            except AppError, TypeError, ValueError:
+                return None, "direction"
+            pivot = (float(before[0, 3]), float(before[1, 3]), float(before[2, 3]))
+            after = rotation(cast(Any, axis), float(angle), about=pivot) @ before
+            turned = placement_values_of(after)
+            return {
+                name: float(turned[name]) for name in ("x", "y", "z", "nx", "ny", "nz", "angle")
+            }, ""
+        along: Vec3 | None
+        if at_feature:
+            along = direction_of(seat) if seat is not None else None
+            if along is None:
+                return None, "seat"
+        else:
+            along = AXIS_VECTORS.get(cast(Any, axis_field))
+            if along is None:
+                return None, "direction"
+        facing = float(np.asarray(AXIS_VECTORS[cast(Any, axis)], dtype=float) @ np.asarray(along))
+        if abs(facing) < TURNS_ABOUT_ITS_AXIS:
+            return None, "seat" if at_feature else "direction"
+        return {
+            "angle": float(current.get("angle") or 0.0)
+            + float(angle) * (1.0 if facing > 0 else -1.0)
+        }, ""
+
     def _on_transform_dragged(self, steps: Any) -> None:
         """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
         (§18.11, §15.5).
         """
+        # **Erst der Baustein.** Ein Merkmal, das aus einem Baustein kam, meint
+        # den Baustein — der Zug geht in dessen Schritt, nicht in ein
+        # ``move_feature`` auf eine seiner Hälften.
+        if self._move_the_part(
+            steps.offset if steps.moves else None,
+            steps.axis if steps.turns else None,
+            float(steps.angle) if steps.turns else 0.0,
+        ):
+            return
         drafts: list[OperationDraft] = []
         if steps.moves:
             # Derselbe Vorrang wie bei den getippten Werten: Was gewählt ist,
@@ -11779,7 +12049,12 @@ class MainWindow(QMainWindow):
         operation = next((entry for entry in document.ops if entry.id == step), None)
         if operation is None:
             return
-        self.session.change_params(step, {**operation.params, **params})
+        # Der Merker erst, wenn die Änderung steht: Lehnt der Verlauf ab
+        # (abgelaufene Demo, ungültiger Wert), kommt keine Auswertung, und ein
+        # stehender Merker zöge die Auswahl bei der nächsten beliebigen auf
+        # diesen Baustein (Fund des Reviews, 14.09.2026).
+        if self.session.change_params(step, {**operation.params, **params}):
+            self._part_to_keep = int(step)
 
     def _remove_part_step(self, step: int) -> None:
         """Den Bausteinschritt mit derselben Folgeauskunft wie im Verlauf löschen."""
@@ -12263,6 +12538,7 @@ class MainWindow(QMainWindow):
         # kam. Stehen zu bleiben hieße, irgendwann später eine Auswahl zu
         # setzen, die niemand mehr meint.
         self._feature_to_keep = ""
+        self._reselect_the_part(result)
         if not wanted or near is None or self.object_tree.selected_feature() is not None:
             return
         object_id = self.object_tree.selected()
@@ -12284,6 +12560,25 @@ class MainWindow(QMainWindow):
                     self._measures_to_resume = name
                 self.object_tree.select_feature(object_id, name)
                 return
+
+    def _reselect_the_part(self, result: EvaluationResult) -> None:
+        """Ein Baustein, dessen Maße sich geändert haben, bleibt gewählt.
+
+        Gilt der Auswertung des Schritts, den :meth:`_change_part_step`
+        geschrieben hat — danach fällt der Merker. Hat der Baum die Auswahl
+        selbst wiederhergestellt (das angeklickte Merkmal gibt es noch), bleibt
+        sie; sonst wird das erste Merkmal gewählt, das dieser Schritt erzeugt
+        hat, und das Merkmalfenster zeigt den Baustein wieder.
+        """
+        step, self._part_to_keep = self._part_to_keep, None
+        if step is None or self.object_tree.selected_features():
+            return
+        for object_id, entry in result.scene.objects.items():
+            for name, feature in entry.features.items():
+                if getattr(feature, "created_by", None) == step:
+                    self.object_tree.select_object(object_id)
+                    self.object_tree.select_feature(object_id, name)
+                    return
 
     def _apply_placed_feature(self, op: str, params: Mapping[str, Any]) -> None:
         """Der Schritt selbst — von der Handlung rechts oder aus der Platzierung.
@@ -14879,6 +15174,23 @@ class MainWindow(QMainWindow):
         (:func:`_needs_objects`), damit nicht zwei Stellen verschieden
         erklären, was dasselbe ist.
         """
+        # **Erst der Baustein, dann das Merkmal, dann der Körper.** Ein Wert
+        # an einem Bausteinmerkmal geht in den Schritt des Bausteins
+        # (:meth:`_move_the_part`) — derselbe Weg wie beim Zug am Griff.
+        if op in {"translate_object", "rotate_object"} and self._move_the_part(
+            (
+                float(params.get("dx", 0.0)),
+                float(params.get("dy", 0.0)),
+                float(params.get("dz", 0.0)),
+            )
+            if op == "translate_object"
+            else None,
+            # Ohne ``str``: Eine fehlende Achse bliebe sonst als „None" stehen
+            # und käme am ``is not None`` vorbei bis in ``AXIS_VECTORS``.
+            params.get("axis") if op == "rotate_object" else None,
+            float(params.get("angle", 0.0)) if op == "rotate_object" else 0.0,
+        ):
+            return
         # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026). Steht die
         # Auswahl auf einer Bohrung und gibt es die Merkmalsoperation, gilt der
         # Zug ihr — sonst wie bisher dem ganzen Teil.

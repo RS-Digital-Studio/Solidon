@@ -78,6 +78,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
+| [RM-174 — Der Geist beim Zug an einem Bausteinmerkmal zeigt nur dieses Merkmal](#rm-174) | Bedienung und Darstellung | Der Zug bewegt den ganzen Baustein; während des Zugs wandert im Bild nur die Marke des angefassten Merkmals — der Rest folgt erst beim Loslassen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -1129,6 +1130,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
+
+<a id="rm-174"></a>
+
+- [ ] **RM-174 — Der Geist beim Zug an einem Bausteinmerkmal zeigt nur dieses Merkmal.** Seit dem
+  14.09.2026 versetzt der Griff an einem Merkmal, das aus einem Baustein kam, den ganzen Baustein
+  (`MainWindow._move_the_part`): Die Tasche eines Schlüssellochs nimmt Schlitz und zehn
+  Verrundungen mit, der Schritt behält seine Kennung. Während des Zugs zeigt die Ansicht aber
+  weiter, was sie für jedes Merkmal zeigt — die Marke des angefassten Merkmals wandert, der
+  blasse Geist steht an seiner Ausgangsstelle (`Viewport._show_ghost`, `_feature_shape`), und
+  die übrigen elf Merkmale rücken erst beim Loslassen nach. Für eine Bohrung ist das die ganze
+  Wahrheit, für einen Baustein die Hälfte. Abnahme: Während des Zugs wandert der Umriss des
+  ganzen Bausteins (die Dreiecke seiner Merkmale, oder der Werkzeugkörper aus
+  `placement_tools` an der neuen Stelle), und ein Zug neben die Fläche zeigt schon vor dem
+  Loslassen, dass er dort nicht landet.
+
+  [Befund](ROADMAP-ARCHIV.md#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026).
+
+<a id="rm-175"></a>
+
+- [ ] **RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen.**
+  Seit dem 14.09.2026 kennt der Löser fünfzehn Bedingungsarten statt zwölf (`angle` in
+  Grad, `equal` für Länge oder Radius, `midpoint`), „konzentrisch" ist bewusst keine Art,
+  und der Editor zeichnet Vieleck und Langloch aus zwei Klicks — frei gezeichnet, bemaßt
+  getippt. §30.1 nennt noch die zwölf Arten; der Bauplan wird nur mit Ansage geändert.
+  Abnahme: sechs Sätze nachtragen (Liste der Arten, Wertebereich des Winkelmaßes 0 bis 180
+  Grad und Speicherung in Grad, „konzentrisch" als Oberflächenname, die zwei Werkzeuge,
+  die Regel „gezeichnet heißt frei, getippt heißt bemaßt" samt Ausnahme für Felder der
+  Leiste, und nach §16.2 der Satz, dass eine neue Bedingungsart `format_version` nicht
+  erhöht). Der Wortlaut steht im Paketbericht W2 der Sitzung vom 14.09.2026.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026).
 
 ## KI und Generatoren
 

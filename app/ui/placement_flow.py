@@ -1207,12 +1207,23 @@ class PlacementFlow(QObject):
 
         if part_of(self.spec_of().name) is None:
             return
+        # **Eine gewählte Bohrung geht vor der Fläche.** Vier Bausteine werden
+        # *in* eine Bohrung gesetzt — Einpressbuchse, Mutternfalle, Lagersitz,
+        # Gewinde —, und die gedruckte Schraube nirgends sonst. Wer eine
+        # Bohrung anklickte und einen davon wählte, bekam ihn bis zum
+        # 14.09.2026 trotzdem auf die Mitte der Deckfläche gesetzt, und
+        # ``at_feature`` war dabei stumm geräumt: ``_face_to_seat_on`` fragt
+        # nur nach Flächen, und eine Bohrung ist keine (gemessen an allen fünf
+        # mit gewählter ``hole_1``, Sonde vom 14.09.2026). Die Fläche ohne
+        # Klick liefert für ein Loch ``placement.seat_of`` — derselbe Weg, den
+        # *Bohrung ändern* an einem vorhandenen Loch geht.
+        hole = self._hole_to_seat_in(entry)
         face = self._face_to_seat_on(entry)
-        if face is None or not face.face_indices:
+        if hole is None and (face is None or not face.face_indices):
             return
         stamp = self._serial
         object_id = entry.id
-        first = int(face.face_indices[0])
+        first = int(face.face_indices[0]) if face is not None and face.face_indices else -1
         features = entry.features
         mesh = for_a_worker(entry.mesh)
 
@@ -1221,6 +1232,15 @@ class PlacementFlow(QObject):
 
             from app.core.sketch.planes import to_plane, to_world
 
+            if hole is not None:
+                seated = placement.seat_of(mesh, hole, features)
+                if seated is not None:
+                    prepared, mouth = seated
+                    return prepared, placement.at_point(prepared, mouth), True
+            # Ohne Trägerfläche an der Mündung (ein Loch in einer gewölbten
+            # Wand) bleibt es bei der Fläche — der Rückfall, kein Fehler.
+            if face is None or first < 0:
+                return None
             prepared = placement.prepare_surface(mesh, first, features)
             area = prepared.area
             middle = area.centroid
@@ -1231,14 +1251,14 @@ class PlacementFlow(QObject):
             if area.contains(Point(flat)):
                 middle = Point(flat)
             seat = to_world(prepared.frame, (float(middle.x), float(middle.y)))
-            return prepared, placement.at_point(prepared, seat)
+            return prepared, placement.at_point(prepared, seat), False
 
         def done(value: Any) -> None:
             if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
                 return
             if value is None or self._surface is not None:
                 return
-            self._prepared, self._surface = value
+            self._prepared, self._surface, in_the_hole = value
             self._centre_id = ""
             self._prepared_mesh = entry.mesh
             self._patch_faces = frozenset(self._surface.face_indices)
@@ -1251,6 +1271,11 @@ class PlacementFlow(QObject):
             # Griff verschiebt, der Klick setzt um — und übernimmt nicht.
             self._note.setText(
                 tr(
+                    "Sitzt in der Bohrung · Griff: verschieben · Klick: umsetzen · "
+                    "Übernehmen: ausführen · Esc: zurück"
+                )
+                if in_the_hole
+                else tr(
                     "Sitzt auf der Fläche · Griff: verschieben · Klick: umsetzen · "
                     "Übernehmen: ausführen · Esc: zurück"
                 )
@@ -1262,6 +1287,23 @@ class PlacementFlow(QObject):
             return
 
         self.session.placement_async(compute, done, failed)
+
+    def _hole_to_seat_in(self, entry: SceneObject) -> Feature | None:
+        """Die Bohrung, in die ein Baustein von selbst gesetzt wird — sonst ``None``.
+
+        Nur, wenn der Baustein in Bohrungen gehört (``PartSpec.at_hole``) und
+        der Dialog eine als ``at_feature`` trägt: die angeklickte. Ein
+        Schraubenloch auf eine Bohrung zu setzen ergäbe ein Loch im Loch, dort
+        bleibt es bei der Fläche.
+        """
+        from app.core.knowledge.parts.ops import part_of
+
+        part = part_of(self.spec_of().name)
+        if part is None or not part.at_hole:
+            return None
+        wanted = str(self.dialog.values().get("at_feature") or "")
+        chosen = entry.features.get(wanted)
+        return chosen if chosen is not None and chosen.kind == "hole" else None
 
     def _face_to_seat_on(self, entry: SceneObject) -> Feature | None:
         """Die Fläche, auf die ein Baustein von selbst gesetzt wird.

@@ -800,13 +800,15 @@ def _run_op(op: str, entry: Any, profile: Any, **params: object) -> Any:
 
 
 def test_a_shared_cavity_greys_out_what_would_fail_on_it(profile: Any) -> None:
-    """Gemessen am 14.09.2026 an ``plate_countersunk.stl``: *Drehen* und
-    *Verdoppeln* an der Senkung und *Zum Langloch ziehen* an der gesenkten
-    Bohrung öffneten eine Vorschau ohne Bild und hielten beim Übernehmen die
-    Kette an — und *Drehen* und *Verdoppeln* an der **Bohrung** liefen durch
-    und ließen die Senkung stehen (Stumpf unter der Senkung, gekippt oder
-    kopiert). Die Zeile sagt es jetzt vorher, mit dem Satz der Operation, und
-    die Operation sagt es beim Rechnen mit demselben Satz.
+    """Gemessen am 14.09.2026 an ``plate_countersunk.stl``: *Zum Langloch
+    ziehen* an der gesenkten Bohrung öffnete eine Vorschau ohne Bild und hielt
+    beim Übernehmen die Kette an. Die Zeile sagt es jetzt vorher, mit dem Satz
+    der Operation, und die Operation sagt es beim Rechnen mit demselben Satz.
+
+    *Drehen* und *Verdoppeln* standen einen Tag lang mit auf der Liste — sie
+    hatten an der **Bohrung** nur den Stumpf unter der Senkung gekippt oder
+    kopiert. Seit dem 15.09.2026 nehmen sie die Kette mit (RM-172, gemessen in
+    ``test_prepare``), und die Zeile bleibt an Bohrung und Senkung bedienbar.
 
     Am echten Netz, nicht an Merkmalen von Hand: Die Sperre kommt aus dem
     Netz (``cavity_chain_state_at``), und dieselbe Bedingung
@@ -849,9 +851,11 @@ def test_a_shared_cavity_greys_out_what_would_fail_on_it(profile: Any) -> None:
         for a in actions_for(bore, found, mesh=mesh, cavity=chain, touches_other=touches_other)
     }
     for rows, feature in ((at_sink, sink), (at_bore, bore)):
-        for title in ("Merkmal drehen", "Merkmal verdoppeln"):
-            assert rows[title].op is None, (feature.kind, title)
-            assert str(rows[title].reason) == str(NEEDS_A_PLAIN_BORE), (feature.kind, title)
+        for title, op in (
+            ("Merkmal drehen", "rotate_feature"),
+            ("Merkmal verdoppeln", "duplicate_feature"),
+        ):
+            assert rows[title].op == op, (feature.kind, title, rows[title].reason)
     assert at_bore["Zum Langloch ziehen"].op is None
     assert str(at_bore["Zum Langloch ziehen"].reason) == str(NEEDS_A_PLAIN_BORE)
     assert at_sink["Merkmal verschieben"].op == "move_feature", "die Kette wandert gemeinsam"
@@ -860,24 +864,16 @@ def test_a_shared_cavity_greys_out_what_would_fail_on_it(profile: Any) -> None:
     # Ohne die zwei Schlüsselwörter fragt ``actions_for`` das Netz selbst —
     # dieselbe Antwort (Review 14.09.2026: die Zusage hing am Aufrufer).
     derived = {str(a.title): a for a in actions_for(bore, found, mesh=mesh)}
-    assert derived["Merkmal drehen"].op is None and derived["Zum Langloch ziehen"].op is None
+    assert derived["Zum Langloch ziehen"].op is None
+    assert derived["Merkmal drehen"].op == "rotate_feature"
 
     # Ohne Netz keine Sperre: ``bore_and_widening_at`` schätzt, und eine
     # Schätzung stellt keine Zeile grau, die die Operation liefe.
     guessed = {str(a.title): a for a in actions_for(bore, found, cavity=chain)}
     assert guessed["Merkmal drehen"].op == "rotate_feature"
 
-    # Und die Operation selbst sagt mit demselben Satz ab — an der Bohrung wie
-    # an der Senkung, bei allen dreien.
+    # Und die Operation selbst sagt mit demselben Satz ab.
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=found)
-    for op, params in (
-        ("rotate_feature", {"axis": "x", "angle": 30.0}),
-        ("duplicate_feature", {"x": 20.0, "y": 0.0, "z": 0.0}),
-    ):
-        for feature in (bore, sink):
-            with pytest.raises(ValidationError) as caught:
-                _run_op(op, entry, profile, at_feature=feature.id, **params)
-            assert str(caught.value.detail) == str(NEEDS_A_PLAIN_BORE), (op, feature.kind)
     with pytest.raises(ValidationError) as caught:
         _run_op("slot_hole", entry, profile, at_feature=bore.id, slot_length=12.0)
     assert str(caught.value.detail) == str(NEEDS_A_PLAIN_BORE)
@@ -1674,6 +1670,54 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
         press(panel, "Baustein entfernen")
         assert removed == [7]
         assert len(changed) == 1, "Entfernen ist keine Wertänderung"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_count_is_a_whole_number_without_a_unit(qt_app: QApplication) -> None:
+    """Die Haken eines Einhängers sind eine Anzahl — kein Maß in Millimetern.
+
+    ``count`` und ``steps`` des Lochwand-Einhängers sind ganze Zahlen ohne
+    Einheit. Als ``length`` bekamen sie im Merkmalfenster ein Längenfeld:
+    „Anzahl: 2,00 mm", in Zoll „0,08 in" — und gingen als ``4.0`` in den
+    Schritt zurück (Sonde über alle Bausteine, 14.09.2026). Der Kern nennt die
+    Art jetzt ``count``, das Fenster baut dafür ein Ganzzahlfeld, und was
+    zurückgeht, ist eine ganze Zahl.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QSpinBox
+
+    from app.core.perceive.actions import part_actions
+
+    load_operations()
+    spec = REGISTRY.get("insert_pegboard_hook")
+    step = SimpleNamespace(
+        id=5, op="insert_pegboard_hook", params={"count": 2, "steps": 1, "x": 4.0}
+    )
+    fields = {field.name: field for action in part_actions(step, spec) for field in action.fields}
+    assert fields["count"].kind == "count", fields["count"]
+    assert fields["steps"].kind == "count", fields["steps"]
+
+    panel = FeaturePanel()
+    changed: list[tuple[int, dict]] = []
+    panel.stepChangeRequested.connect(lambda op_id, params: changed.append((op_id, params)))
+    try:
+        panel.show_part(step, spec)
+        counts = [
+            editor
+            for editor in panel.findChildren(QSpinBox)
+            if editor.accessibleName().startswith("Maße ändern — ")
+        ]
+        assert len(counts) == 2, [editor.accessibleName() for editor in counts]
+        for editor in counts:
+            assert editor.suffix() == "", "eine Anzahl trägt keine Einheit"
+        counts[0].setValue(4)
+        press(panel, "Maße ändern")
+        assert len(changed) == 1
+        _op_id, params = changed[0]
+        assert params["count"] == 4 and isinstance(params["count"], int), params
+        assert isinstance(params["steps"], int), params
     finally:
         panel.deleteLater()
 

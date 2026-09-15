@@ -48,6 +48,12 @@ it into `website/version.json`.
 - A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.
 - Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer.
 
+### Building blocks and fits
+
+- A block meant for a hole — heat-set insert, nut trap, bearing seat, thread, screw — now sits straight in the hole you selected instead of at the centre of the face.
+- Drag a block by its handle in the view and the whole block moves — even from an edge of the keyhole. Before, only that one feature travelled and the rest stayed put.
+- Hooks and holes of a block appear on the right as a count — no longer as “2.00 mm”. And after “Change dimensions” the block stays selected, even when it ends up with different features.
+
 ## 0.4.1
 
 ### Building and editing

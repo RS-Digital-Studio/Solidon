@@ -49,6 +49,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un relieve de texto del slicer de Elegoo o de Bambu Studio en el archivo detenía la importación. Ahora el archivo se abre.
 - Los modificadores y bloqueadores de soportes del slicer ya no aparecen como cuerpos, y un hueco («pieza negativa») se resta, como en el slicer.
 
+### Bloques y ajustes
+
+- Un bloque para agujeros — inserto térmico, alojamiento de tuerca, asiento de rodamiento, rosca, tornillo — se coloca directamente en el agujero elegido, no en el centro de la cara.
+- Si arrastra un bloque por el asa en la vista, se mueve el bloque entero, aunque haya agarrado un borde del ojo de cerradura. Antes solo se desplazaba esa característica.
+- Ganchos y agujeros de un bloque aparecen a la derecha como cantidad, no como «2,00 mm». Y tras «Cambiar medidas» el bloque sigue seleccionado, aunque tenga otras características.
+
 ## 0.4.1
 
 ### Construir y modificar
