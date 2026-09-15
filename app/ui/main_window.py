@@ -365,13 +365,26 @@ def _wants_a_target(spec: OperationSpec) -> bool:
     return any(entry.targets_feature and entry.required for entry in spec.params.spec())
 
 
-def _target_feature_names(result: EvaluationResult | None) -> dict[str, str]:
-    """Objektübergreifende Ziele tragen lesbare Namen und eindeutige Kennungen."""
+def _target_feature_names(
+    result: EvaluationResult | None, *, except_for: ObjectId | None = None
+) -> dict[str, str]:
+    """Objektübergreifende Ziele tragen lesbare Namen und eindeutige Kennungen.
+
+    ``except_for`` nimmt den bewegten Körper aus der Liste: Ein Pflicht-Ziel
+    (:func:`_wants_a_target`) liegt auf einem **zweiten** Körper, und der
+    Wähler beginnt auf dem ersten Eintrag seiner Liste. Standen die eigenen
+    Merkmale darin, richtete *An Merkmal ausrichten* am einzigen Körper
+    wortlos dessen Bohrung auf sich selbst aus — statt leer zu bleiben und
+    zum Klick ins Modell einzuladen (Bedienweg-Durchsicht 14.09.2026, der
+    Test dazu stand seit dem Tag rot). *Oben öffnen* und *Bis Fläche* zielen
+    auf den eigenen Körper und behalten ihn.
+    """
     if result is None:
         return {}
     return {
         f"{object_id}:{feature_id}": f"{entry.name} · {feature_label(feature_id, feature)}"
         for object_id, entry in result.scene.objects.items()
+        if object_id != except_for
         for feature_id, feature in entry.features.items()
     }
 
@@ -13196,7 +13209,9 @@ class MainWindow(QMainWindow):
                 # Verengt auf die Arten, die diese Operation nimmt: eine
                 # Auswahl, in der nichts passt, ist keine (§18.5).
                 features=self._feature_names(spec),
-                target_features=_target_feature_names(result),
+                target_features=_target_feature_names(
+                    result, except_for=chosen[0] if chosen and _wants_a_target(spec) else None
+                ),
                 source_objects=inputs,
                 extra=exact if exact is not None else variant,
                 extra_label=str(group.choice) if group is not None else "",
@@ -13578,7 +13593,10 @@ class MainWindow(QMainWindow):
             # korrigiert, soll dort dieselbe Auswahl vorfinden wie beim ersten
             # Mal — sonst hinge die Liste daran, wie man den Dialog geöffnet hat.
             features=self._feature_names(spec),
-            target_features=_target_feature_names(self.session.last_result),
+            target_features=_target_feature_names(
+                self.session.last_result,
+                except_for=entry.inputs[0] if entry.inputs and _wants_a_target(spec) else None,
+            ),
             source_objects=entry.inputs,
             extra=exact,
             surroundings=self._sketch_surroundings(),

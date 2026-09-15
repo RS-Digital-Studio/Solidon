@@ -405,9 +405,20 @@ um die Bohrungsmitte lag seine Decke 0,9 mm **unter** der Platte — ein
 Einschluss statt einer gekippten Senkung —, und schon unverdreht ließ die
 Differenz an der neuen Stelle eine Haut von 5 µm über der Mündung stehen
 (§39; gemessen 15.09.2026: 0,25 mm³ im Schlauch, „nicht mehr durchgehend"). Das
-Werkzeug kommt deshalb aus den Kennzahlen: die Bohrung über ihre Mündung
-hinaus, die Senkung als **größerer Kegel** nach oben — derselbe Kegel,
-weitergeführt, bis er die gekippte Fläche überall verlässt. Wie weit, sagt die
+Werkzeug fürs Kippen kommt deshalb aus den Kennzahlen: die Bohrung über ihre
+Mündung hinaus, die Senkung als **größerer Kegel** nach oben — derselbe Kegel,
+weitergeführt, bis er die gekippte Fläche überall verlässt.
+
+**Wer eine Kette nur versetzt, verlängert den exakten Körper an seinen
+Mündungen** (`_past_the_mouths`). Das Werkzeug aus Kennzahlen stand am
+15.09.2026 einen Tag lang auch hier — und trug je Versetzen bis zu 0,9 mm³ mehr
+ab, als der Pfropfen zurückgab: Sein Vieleck umschreibt den Kreis
+(`_polygon_gain`), die echten Flächen füllen nur den Kreis (sieben Tests der
+Senkungsübergänge rot). Jetzt bekommt jeder ebene Deckel des Flächenkörpers,
+vor dem entlang seines Rands keine Materialseite liegt, einen Kragen von
+`FEATURE_OVERLAP` — das ist die Mündung; der Boden eines Sacklochs und die
+Ringstufe einer Zylindersenkung bleiben bündig, sonst würde die Bohrung tiefer
+oder die Stufe abgetragen (0,18 mm³, an der Stufe gemessen). Wie weit, sagt die
 Neigung (`_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`): bei 30° an
 einer 90°-Senkung Ø 16, 7 mm über der Bohrungsmitte, sind es 13,5 mm; ohne
 Neigung bleibt die Zugabe aus §39. Mehr als nötig schnitte Luft — oder eine

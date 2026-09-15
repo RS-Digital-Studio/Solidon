@@ -35,14 +35,16 @@ Versetzen, Verdoppeln und der freien Platzierung samt ihrer Vorschau.
 
 **Und eine Kette geht als Ganzes** (RM-172, 15.09.2026): `move_feature`,
 `_rotate_cavity_chain` und `_duplicate_cavity_chain` nehmen Bohrung und
-Senkung zusammen. Das Werkzeug dafür baut `_chain_tool` aus den Kennzahlen
-der Abschnitte — mit Überstand an beiden Enden: die Bohrung über ihre
-Mündung hinaus, die äußere Senkung als größerer Kegel (`_measured_section`
-mit `outward`). Wie weit, rechnen `_reach_past_a_tilted_face` und
-`_cone_past_a_tilted_face` aus der Neigung; ohne Neigung bleibt die Zugabe
-aus §39, die den exakten Flächenkörper gerade fehlte (eine Haut von 5 µm über
-der Mündung nach dem Versetzen). Gedreht wird um die Mitte des gewählten
-Abschnitts. Nur `slot_hole` sagt an einer Kette weiter ab.
+Senkung zusammen. Fürs Kippen baut `_chain_tool` das Werkzeug aus den
+Kennzahlen der Abschnitte — mit Überstand an beiden Enden: die Bohrung über
+ihre Mündung hinaus, die äußere Senkung als größerer Kegel
+(`_measured_section` mit `outward`). Wie weit, rechnen
+`_reach_past_a_tilted_face` und `_cone_past_a_tilted_face` aus der Neigung.
+Fürs Versetzen bleibt es beim exakten Flächenkörper, den `_past_the_mouths`
+an seinen Mündungen um die Zugabe aus §39 verlängert — das Werkzeug aus
+Kennzahlen kostete dort Volumen, der bündige Körper ließ eine Haut von 5 µm
+stehen. Gedreht wird um die Mitte des gewählten Abschnitts. Nur `slot_hole`
+sagt an einer Kette weiter ab.
 
 Die Regeln stehen in `.claude/rules/operationen.md`.
 

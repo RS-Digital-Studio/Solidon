@@ -2384,17 +2384,17 @@ def move_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
-        # **Mit Zugabe an den Enden, nicht bündig** (§39). Der exakte Hohlraum
-        # endet genau in den Oberflächen, und die Differenz ließ an der neuen
-        # Stelle eine Haut von 5 µm über der Mündung stehen — die Bohrung
-        # meldete sich als nicht mehr durchgehend (gemessen 15.09.2026 beim Bau
-        # von RM-172: 0,25 mm³ im Schlauch bei z = 4,995 … 5,0). Das Werkzeug aus
-        # Kennzahlen reicht an beiden Enden über die Mündung hinaus; der exakte
-        # Körper bleibt der Rückfall, wo ein Abschnitt keine Maße hergibt.
-        shifted_cavity = (
-            _chain_tool(body, chain, pivot=np.asarray(centre, dtype=np.float64), tilt=0.0)
-            or cavity_body
-        ).raw.copy()
+        # **Mit Zugabe an den Mündungen, nicht bündig** (§39). Der exakte
+        # Hohlraum endet genau in den Oberflächen, und die Differenz ließ an
+        # der neuen Stelle eine Haut von 5 µm über der Mündung stehen — die
+        # Bohrung meldete sich als nicht mehr durchgehend (gemessen 15.09.2026
+        # beim Bau von RM-172: 0,25 mm³ im Schlauch bei z = 4,995 … 5,0). Das
+        # Werkzeug aus Kennzahlen, das den Tag lang hier stand, nahm dafür
+        # den Umkreis seines Vielecks mit und trug je Versetzen bis zu einem
+        # Kubikmillimeter mehr ab, als der Pfropfen zurückgab (sieben Tests
+        # der Senkungsübergänge rot). Verlängert wird deshalb der exakte
+        # Körper selbst — nur an den Mündungen, nie am Boden.
+        shifted_cavity = _past_the_mouths(body, cavity_body).raw.copy()
         shifted_cavity.apply_translation(travel)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
@@ -3347,6 +3347,86 @@ def _cone_past_a_tilted_face(
         return at_most
     needed = (distance * (1.0 - cos_tilt) + radius * sin_tilt) / climb
     return max(0.0, min(needed, at_most))
+
+
+def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
+    """Der exakte Hohlraumkörper, an seinen Mündungen um ``FEATURE_OVERLAP``
+    über die Oberfläche hinaus verlängert — das Werkzeug für die Differenz (§39).
+
+    Ein Hohlraum aus seinen Flächen (:func:`_body_from_faces`) endet bündig
+    in der Oberfläche, und eine bündige Differenz lässt eine Haut stehen. Das
+    Werkzeug aus Kennzahlen wäre der Ausweg, kostet aber Volumen: Sein Vieleck
+    umschreibt den Kreis (``_polygon_gain``), der Pfropfen aus den echten
+    Flächen füllt nur den Kreis — an einer Senkbohrung Ø 11 sind das bis zu
+    0,9 mm³ je Versetzen (gemessen 15.09.2026). Hier bleibt es bei den echten
+    Dreiecken: Jeder ebene Deckel des Körpers, hinter dem **kein Material**
+    liegt, ist eine Mündung und bekommt einen Kragen — der Ring wird um die
+    Zugabe nach außen kopiert, die Wand dazwischen ergänzt, der Deckel wandert
+    mit. Was über die Oberfläche hinausragt, trifft kein Material und ändert
+    kein Volumen. Ein Deckel, hinter dem Material liegt, ist der Boden eines
+    Sacklochs und bleibt, wo er ist — ein Kragen dort machte die Bohrung tiefer.
+
+    Ob hinter einem Deckel Material liegt, sagt die nächste Oberfläche des
+    Körpers zu Punkten knapp vor ihm (``on_surface``, dieselbe Probe wie in
+    :func:`_frame_from_material`) — **entlang seines Rands**, nicht in seiner
+    Mitte: An einer Ringstufe endet die Zylindersenkung Ø 11,5 über einem
+    Kegel Ø 11, und vor der Mitte ihres Deckels liegt der leere Kegel, vor
+    seinem Rand aber der Ring aus Material. Geprüft an der Mitte bekam die
+    Stufe einen Kragen und wurde um die Zugabe abgetragen (0,18 mm³, gemessen
+    15.09.2026). Kommt kein geschlossener Körper heraus, bleibt das Werkzeug
+    der unveränderte Hohlraum.
+    """
+    from app.core.geom.mesh import on_surface
+
+    raw = cavity.raw
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    faces = np.asarray(raw.faces, dtype=np.int64).copy()
+    normals = np.asarray(raw.face_normals, dtype=np.float64)
+    body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    added: list[NDArray[np.float64]] = [points]
+    collars: list[NDArray[np.int64]] = []
+    next_index = len(points)
+    for facet in raw.facets:
+        # Wandstreifen sind Paare von Dreiecken; ein Deckel ist ein Fächer.
+        if len(facet) < 3:
+            continue
+        cap = faces[facet]
+        normal = normals[int(facet[0])]
+        members = np.unique(cap)
+        hub = points[members].mean(axis=0)
+        directed = np.vstack([cap[:, [0, 1]], cap[:, [1, 2]], cap[:, [2, 0]]])
+        _, inverse, counts = np.unique(
+            np.sort(directed, axis=1), axis=0, return_inverse=True, return_counts=True
+        )
+        rim = directed[counts[inverse.ravel()] == 1]
+        if len(rim) < 3:
+            continue
+        # Die Probe: je Randpunkt ein wenig zur Mitte und um die Zugabe vor den
+        # Deckel — erst wenn dort überall Luft ist, ist der Deckel eine Mündung.
+        edge = points[rim[:, 0]]
+        inward = hub - edge
+        inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
+        probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
+        closest, _, at = on_surface(mesh.raw, probes)
+        signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
+        if not bool(np.all(signed > EPS_GEOM)):
+            continue
+        lifted = np.full(int(members.max()) + 1, -1, dtype=np.int64)
+        lifted[members] = np.arange(next_index, next_index + len(members))
+        added.append(points[members] + normal * FEATURE_OVERLAP)
+        next_index += len(members)
+        faces[facet] = lifted[cap]
+        first, second = rim[:, 0], rim[:, 1]
+        collars.append(np.column_stack([first, second, lifted[second]]))
+        collars.append(np.column_stack([first, lifted[second], lifted[first]]))
+    if not collars:
+        return cavity
+    widened = trimesh.Trimesh(
+        vertices=np.vstack(added), faces=np.vstack([faces, *collars]), process=False
+    )
+    if not widened.is_watertight or widened.volume <= raw.volume - EPS_GEOM:
+        return cavity
+    return MeshData.of(widened)
 
 
 def _chain_tool(

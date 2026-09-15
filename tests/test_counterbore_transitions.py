@@ -206,6 +206,74 @@ def test_every_part_moves_the_whole_cavity(
     )
 
 
+def _move_the_cavity_by_one(mesh: MeshData, profile: Profile) -> SceneObject:
+    """Die Kette am obersten Abschnitt um einen Millimeter in X versetzen."""
+    features = detect(mesh)
+    selected = max(
+        (feature for feature in features.values() if feature.kind in {"hole", "cone"}),
+        key=lambda feature: float(feature.params["centre"][2]),
+    )
+    centre = np.asarray(selected.params["centre"], dtype=float)
+    source = SceneObject(id="part", name="Senkbohrung", mesh=mesh, features=features)
+    spec = REGISTRY.get("move_feature")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(at_feature=selected.id, x=centre[0] + 1.0, y=centre[1], z=centre[2]),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda _value, _message: None,
+            ask=lambda _question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return result.outputs[0]
+
+
+def test_a_moved_cavity_stays_through_and_a_blind_one_keeps_its_depth(profile: Profile) -> None:
+    """Das Werkzeug reicht an den Mündungen über die Oberfläche, am Boden nicht.
+
+    Der exakte Hohlraum endet bündig, und eine bündige Differenz ließ eine Haut
+    von 5 µm über der Mündung stehen — die Bohrung war nicht mehr durchgehend
+    (RM-172, 15.09.2026). Das Werkzeug aus Kennzahlen, das dagegen half, trug
+    mit dem Umkreis seines Vielecks bis zu 0,9 mm³ zu viel ab. Jetzt bekommt
+    der exakte Körper an jeder Mündung einen Kragen (``_past_the_mouths``) —
+    und nur dort: Am Boden eines Sacklochs machte ein Kragen die Bohrung um
+    die Zugabe tiefer.
+    """
+    through = _stepped_bore()
+    moved = _move_the_cavity_by_one(through, profile)
+    assert moved.mesh.raw.is_watertight
+    assert moved.mesh.volume == pytest.approx(through.volume, abs=0.01)
+    bore = min(
+        (feature for feature in detect(moved.mesh).values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    assert bore.params.get("through") is True, "die versetzte Bohrung geht wieder durch"
+
+    floor = 2.0
+    profile_points = [[0.0, 0.0], [12.0, 0.0], [12.0, 17.0], [5.5, 17.0], [5.5, 8.5]]
+    profile_points.extend([[3.0, 6.0], [3.0, floor], [0.0, floor]])
+    blind = MeshData.of(trimesh.creation.revolve(profile_points, sections=180))
+    assert blind.raw.is_watertight
+    before = min(
+        (feature for feature in detect(blind).values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    assert before.params.get("through") is False, "sonst prüft dieser Test kein Sackloch"
+    moved = _move_the_cavity_by_one(blind, profile)
+    assert moved.mesh.raw.is_watertight
+    assert moved.mesh.volume == pytest.approx(blind.volume, abs=0.01)
+    after = min(
+        (feature for feature in detect(moved.mesh).values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    assert after.params.get("through") is False
+    assert float(after.params["depth"]) == pytest.approx(float(before.params["depth"]), abs=0.01)
+
+
 def test_the_chain_is_independent_of_selection_and_mapping_order() -> None:
     """Jede Auswahl liefert dieselbe komplette Kette, nicht ein zufälliges Paar."""
     mesh = _stepped_bore()

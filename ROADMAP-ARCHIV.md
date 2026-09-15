@@ -27985,7 +27985,15 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     Höhe → rot. Derselbe Lauf fand `test_aligning_without_a_target_invites_instead_of_teaching_
     syntax` rot — schon vor dem ersten Commit des Tages, an 3d-druck-66 gemeldet.
   - **Drehen und Verdoppeln nehmen die Hohlraumkette mit** (Entscheidung 3, RM-172) — der
-    eigene Abschnitt weiter unten trägt Bau, Messung und Nachweise.
+    eigene Abschnitt weiter unten trägt Bau, Messung und Nachweise. Nachtrag vom selben
+    Abend: Das Werkzeug aus Kennzahlen, das RM-172 auch dem *Versetzen* gab, nahm den
+    Umkreis seines Vielecks mit und trug je Schritt bis zu 0,9 mm³ mehr ab, als der
+    Pfropfen zurückgab — sieben Tests der Senkungsübergänge rot. `_past_the_mouths`
+    verlängert seither den exakten Flächenkörper an seinen Mündungen um die Zugabe aus
+    §39, am Boden eines Sacklochs und an einer Ringstufe nicht (Probe entlang des
+    Deckelrands; an der Stufe gemessen 0,18 mm³, wenn man in der Mitte fragt). Fürs
+    Kippen bleibt `_chain_tool`. Test: `test_a_moved_cavity_stays_through_and_a_blind_one_
+    keeps_its_depth`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
