@@ -107,6 +107,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-176 — GitHub Actions nimmt seit dem 14.09. keinen Lauf mehr an](#rm-176) | Veröffentlichung, Betrieb und Vertrieb | „recent account payments have failed or your spending limit needs to be increased" — Zahlung oder Ausgabenlimit unter *Billing & plans* richten; bis dahin läuft kein Tor, kein Paket, keine Mac-Signierung |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf belegen — die Pflicht gilt seit dem 11.09.2026 |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
+| [RM-182 — Zwei Lizenzarten bauen, privat und gewerblich](#rm-182) | Veröffentlichung, Betrieb und Vertrieb | Kern, Dienst, Vorratswerkzeug, Oberfläche und Rechtstexte am 15.09. gebaut; offen sind Website, die Art im Serverdatensatz und die Migration des laufenden Dienstes |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
 | [RM-095 — Automatischen Löschlauf auf dem Server belegen](#rm-095) | Veröffentlichung, Betrieb und Vertrieb | Server-Löschlauf, Sicherungen und Ausfallalarm tatsächlich nachweisen |
 | [RM-096 — Eigenen Rate-Key für Aktivierungsanforderungen einführen](#rm-096) | Veröffentlichung, Betrieb und Vertrieb | Eigenen Rate-Key mit geprüftem Rollout-/Rotationsweg einführen |
@@ -1644,9 +1645,57 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   15.10.2026 aktualisieren; der beschlossene Verkaufsstart ist der 01.11.2026. Preis, tatsächlichen
   Anbieter und Vertragspartner, Bestell-/Zustimmungsstrecke, Lieferung, Widerruf und Signierung
   festlegen. Abnahme: freigegebener Ablauf, Testkauf einschließlich Storno und passende Rechtstexte;
-  überholte Konzepte eindeutig kennzeichnen.
+  überholte Konzepte eindeutig kennzeichnen. **Der Preis ist seit dem 15.09.2026 entschieden**
+  (Robert: privat 69 € ab 01.11.2026 und 99 € ab 01.02.2027, gewerblich 199 € und 249 € an
+  denselben Tagen, beide als Einmalkauf mit allen 1.x-Updates) — er steht in
+  [konzept-lizenzarten-2026-09.md](konzepte/konzept-lizenzarten-2026-09.md) §3, und der Bau der
+  zweiten Lizenzart läuft unter RM-182. Was hier offen bleibt, sind Anbieter, Bestellstrecke,
+  Lieferung, Widerruf und Signierung.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
+
+<a id="rm-182"></a>
+
+- [ ] **RM-182 — Zwei Lizenzarten bauen, privat und gewerblich.** Roberts Planänderung vom
+  15.09.2026 gibt Solidon eine Unterscheidung, die es bisher ausdrücklich nicht hatte. Drei
+  Befunde aus dem Ist-Code tragen die Arbeit: `EULA.md:61` verspricht heute *„Die gewerbliche
+  Nutzung ist ausdrücklich eingeschlossen und kostet nichts extra"*; `Licence`
+  (`app/core/activation/key.py:90`) trägt vier Felder und keine Lizenzart, und die Nutzlast ist in
+  ihrer Länge streng geprüft, ein angehängtes Byte also kein gültiger Schlüssel; dasselbe Layout
+  steht ein zweites Mal in PHP (`website/api/activation_common.php:583`), jeder Formatwechsel ist
+  damit zweiseitig. Entschieden in
+  [konzept-lizenzarten-2026-09.md](konzepte/konzept-lizenzarten-2026-09.md): gleicher
+  Funktionsumfang für beide Arten (A), Nutzlastformat 2 mit weiter lesbarem Format 1 (B), ein Byte
+  für die Art (C), zwei getrennte Vorräte weil der Hauptschlüssel offline liegt (D), unverändert
+  ein Geräteplatz (E), kein Ablaufdatum (H). Acht Pakete P1 bis P8 stehen dort in §6; die
+  Rechtstexte werden entworfen, nicht freigegeben — die fachliche Prüfung läuft unter RM-093.
+  Abnahme: ein Format-1- und ein Format-2-Schlüssel schalten beide frei, Python und PHP lesen
+  dieselbe Nutzlast zu demselben Digest, die Art steht im Über-Dialog, und `EULA.md` widerspricht
+  dem Preis nicht mehr.
+
+  **Stand 15.09.2026 — gebaut und nachgewiesen:** Format 2 mit weiter lesbarem Format 1 in
+  `key.py` und `activation_common.php`, `--kind` als Pflicht im Vorratswerkzeug samt Archivformat 2,
+  die Lizenzart im Über-Dialog, Handbuch und fünf Katalogen, und die Rechtstexte ohne den
+  Widerspruch. **Die gewerbliche Lizenz hat vier Mehrwerte bekommen** (Robert, 15.09.: zwei
+  Geräteplätze statt einem, Support-Antwort in zwei Werktagen, Weitergabe im Betrieb)
+  — Entscheidung E des Konzepts ist damit gekippt und als
+  Entscheidung K neu gefasst; der Funktionsumfang bleibt gleich. Dabei ist ein Fehler gefunden
+  worden, den nur der Test zeigen konnte: Ein `UNIQUE INDEX one_active_device` erzwang den einen
+  Platz auf Datenbankebene und hätte den zweiten als `service_unavailable` scheitern lassen.
+  PHP 8.5.10 liegt jetzt auf dieser Maschine, die vier zuvor übersprungenen Serverfälle laufen
+  (16 statt 10 bestanden), und dreizehn Mutationen über Kern, Dienst und Werkzeug wurden einzeln
+  gefahren — alle rot.
+
+  **Was offen bleibt:** die Website (auf Roberts Wunsch zurückgenommen, die Seite bleibt
+  preisfrei), die Lizenzart im Aktivierungsdatensatz, und — **vor dem ersten gewerblichen
+  Schlüssel** — der `DROP INDEX one_active_device` auf dem laufenden Dienst. Die Rechtstexte sind
+  ein Entwurf und gehen zur fachlichen Prüfung unter RM-093. **Eine fünfte Leistung ist
+  nach einer Rechtsprüfung am selben Tag gestrichen:** Sicherheitsupdates bis 2033 statt
+  2031 für gewerblich. Der Cyber Resilience Act knüpft den Unterstützungszeitraum an das
+  Produkt und nicht an den Vertrag (Art. 13 Abs. 8: mindestens fünf Jahre), und beide
+  Lizenzarten sind dasselbe Programm — beide bleiben bei 31.10.2031, dem Bestand. Die
+  Durchsicht der Website fand dabei zwei eigene Fehler: `make_legal.py` kennt nur `*`
+  als Listenzeichen und keine Tabellen, und `test_legal.py` sah es nicht.
 
 <a id="rm-093"></a>
 
