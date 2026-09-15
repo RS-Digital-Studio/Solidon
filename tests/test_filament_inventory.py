@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
 from dataclasses import replace
@@ -290,6 +291,52 @@ def test_previously_saved_roundoff_underflow_is_recovered_from_the_full_journal(
     saved = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
     assert saved["bookings"] == data["bookings"]
     assert saved["stock_counts"] == data["stock_counts"]
+
+
+def test_the_grouped_journal_totals_match_a_scan_per_spool() -> None:
+    """Einmal gruppiert kommt dasselbe heraus wie je Spule durch das ganze Journal.
+
+    ``_remaining`` ging bis zum 14.09.2026 für **jede** Spule durch **alle**
+    Buchungen, und beide Zahlen wachsen mit dem Lager: An 500 Spulen mit 2000
+    Buchungen kostete allein das 47,7 von 117,8 ms je ``save`` (die Reihe steht
+    in ``app/core/knowledge/CLAUDE.md``). Seither entsteht die Zuordnung einmal
+    je Lesevorgang — und genau daran hängt, dass keine fremde Spule, kein
+    zurückgenommener Vorgang und kein überholter Bestandsstand in eine Summe
+    gerät. Der Vergleichswert kommt deshalb aus dem alten Durchgang und nicht
+    aus dem Prüfling.
+    """
+    first, second = spool(500.0), spool(300.0)
+    filaments.book("shared", "one", [position(first, 40.0), position(second, 10.0)])
+    filaments.book("only-first", "two", [position(first, 2.0)])
+    filaments.book("taken-back", "three", [position(second, 5.0)])
+    filaments.reverse_booking("taken-back")
+    # Eine neue Feststellung hebt ``stock_revision``; die Posten davor gehören
+    # danach zu einem Stand, der nicht mehr gilt.
+    filaments.set_remaining(first.identifier, 120.0)
+    filaments.book("after-the-count", "four", [position(first, 20.0)])
+
+    state = filaments._read()
+    booked = filaments._booked_grams(state)
+
+    def scanned(entry: filaments.CatalogueFilament) -> float:
+        """Der Weg vor der Gruppierung: je Spule durch das ganze Journal."""
+        return math.fsum(
+            item.grams
+            for booking in state.journal.values()
+            if not booking.reversed_at
+            for item in booking.positions
+            if item.spool_identifier == entry.identifier
+            and item.stock_revision == entry.stock_revision
+        )
+
+    for entry in state.spools.values():
+        grouped = math.fsum(booked.get((entry.identifier, entry.stock_revision), ()))
+        assert grouped == pytest.approx(scanned(entry)), entry.identifier
+    assert sum(len(values) for values in booked.values()) == 4, (
+        "der zurückgenommene Vorgang gehört in keine Summe"
+    )
+    assert current(first).remaining_grams == pytest.approx(100.0)
+    assert current(second).remaining_grams == pytest.approx(290.0)
 
 
 def test_a_real_decimal_underflow_is_not_rounded_to_empty() -> None:

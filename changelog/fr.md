@@ -53,6 +53,7 @@ dans `website/version.json`.
 - À 150 ou 200 pour cent de mise à l'échelle, l'aimantation, les poignées et les repères portent de nouveau comme à 100 pour cent. La poignée est en taille réelle et un clic tremblant reste un clic.
 - Sur un grand modèle, l'aperçu arrive en moins d'une seconde au lieu de plusieurs : Solidon le calcule plus grossièrement et écrit « Aperçu grossier ». L'application reste exacte.
 - « Séparer selon une ligne dessinée » commence au milieu de la pièce et non sous elle, comme « Séparer ». Auparavant, l'aperçu montrait seulement que le plan ne sépare rien.
+- « Aligner sur une caractéristique » vous demande maintenant de choisir la deuxième caractéristique au lieu de vous expliquer une notation.
 
 ### Fichiers et export
 

@@ -145,3 +145,39 @@ Druckfilamentidentitäten zu entfernen. Auch frühere Positionen, Revisionen,
 Zeitangaben und Rücknahmebelege werden beim Lesen vollständig geprüft.
 Ein negativer Rest innerhalb der Maschinenrundung der verrechneten Werte
 gilt als null; eine tatsächliche Unterdeckung bleibt unbekannt.
+
+### Was ein Schreibvorgang kostet
+
+Jeder Schreibweg liest die Datei unter der Sperre neu, prüft sie vollständig
+und schreibt sie ganz — das ist die Zusage, und sie bleibt. Was daran wuchs,
+war die Bestandsrechnung: `_remaining` ging für **jede** Spule durch **alle**
+Buchungen, also einmal je Lesevorgang das Produkt aus beiden Zahlen.
+`_booked_grams` ordnet die gebuchten Mengen stattdessen einmal nach Spule und
+Bestandsstand zu; summiert wird weiter mit `math.fsum` über dieselben Werte,
+und zwar erst beim Abruf — eine Summe im Voraus über einen Schlüssel, nach dem
+niemand fragt, könnte mit einem `OverflowError` enden, den der alte Weg nie
+gesehen hätte.
+
+Gemessen am 14.09.2026 (Windows 11, SSD, Fremdlast aus vier Agenten; je Zelle
+der Median aus drei Prozessen mit je drei `save`-Aufrufen), Spulen und
+Buchungen wachsen gemeinsam:
+
+| Spulen / Buchungen | Datei | `save` vorher | `save` nachher | Dekodieren vorher → nachher |
+|---|---|---|---|---|
+| 50 / 50 | 57 KB | 6,0 ms | 7,8 ms | 1,21 → 1,11 ms |
+| 200 / 200 | 230 KB | 16,7 ms | 16,1 ms | 6,07 → 3,99 ms |
+| 500 / 500 | 575 KB | 43,0 ms | 34,9 ms | 22,1 → 10,2 ms |
+| 1000 / 1000 | 1,1 MB | **115,6 ms** | **70,5 ms** | 66,5 → 21,0 ms |
+
+Die Bestandsrechnung allein fiel dabei von 47,1 auf 0,33 ms. An einem Lager
+mit 500 Spulen und 2000 Buchungen (1,5 MB) waren es 47,7 von 117,8 ms. **Die
+kleinen Zeilen sagen nichts**: Bei fünfzig Spulen liegt der Unterschied unter
+der Streuung der Platte — `fsync` schwankte im selben Lauf zwischen 1,2 und
+7,5 ms.
+
+Was übrig bleibt, wächst linear mit der Datei: Lesen, `json`-Zerlegung, die
+Prüfung je Spule und je Buchung, Serialisieren, `fsync`, Austausch. Ein
+eigener Arbeiter dafür wäre keine Antwort und ist auch keine nötige:
+`CatalogueWrites` (Spulenwähler) und `InventoryView._run` (Lagerfenster)
+fahren jeden Schreibauftrag längst neben dem Hauptthread, mit
+Wartezeiger ab 200 ms und Fortschritt ab zwei Sekunden (§2.8).

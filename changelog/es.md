@@ -53,6 +53,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con la pantalla al 150 o 200 por ciento, el ajuste, los tiradores y las marcas alcanzan lo mismo que al 100 por ciento. El tirador sale a tamaño completo y un clic tembloroso sigue siendo un clic.
 - En un modelo grande la vista previa llega en menos de un segundo en vez de varios: Solidon la calcula de forma más basta y escribe «Vista previa aproximada». Aplicar sigue siendo exacto.
 - «Separar por una línea dibujada» empieza en el centro de la pieza y no en su cara inferior, como «Dividir». Antes la vista previa solo mostraba que el plano no separa nada.
+- «Alinear con una característica» le pide ahora que elija la segunda característica en lugar de explicarle una notación.
 
 ### Archivos y exportación
 

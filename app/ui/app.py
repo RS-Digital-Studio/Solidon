@@ -33,6 +33,7 @@ from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
 from app.ui import cursors, window_chrome
 from app.ui.icons import application_icon
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.qt_platform import prefer_x11_for_the_viewport
 from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
@@ -158,6 +159,40 @@ class FileOpenListener(QObject):
                 _log.warning("open event names something that is not a file: %s", path)
             return True
         return super().eventFilter(watched, event)
+
+
+class _AdapterProbe(Worker):
+    """Fragt den wgpu-Adapter neben dem Fensteraufbau (``app.ui.render.factory``).
+
+    Gemessen am 14.09.2026 kostete diese Frage im Hauptthread 763 ms (Median
+    aus drei Läufen, Windows 11, RTX 4080, Fremdlast), auf Roberts Maschine im
+    guten Fall 5 bis 7,8 s — Zeit, in der das Startbild steht und nichts
+    geschieht. Hier vergeht sie, während Register, Einstellungen und Fenster
+    entstehen. Danach kostete dieselbe Frage im Hauptthread noch 376 ms, und
+    die gemerkte Antwort macht sie dort ganz überflüssig.
+
+    **Ohne Ergebnissignal und ohne Abbrechen**, und beides mit Grund: Die
+    Antwort holt sich :func:`app.ui.render.factory.available` dort ab, wo sie
+    gebraucht wird — im Aufbau des Viewports —, und eine Frage an einen
+    Grafiktreiber hat keinen Punkt, an dem man sie zurücknehmen könnte. Wer
+    dort früher ankommt als der Adapter, wartet mit Frist und meldet die
+    Ansicht danach ab (§27).
+    """
+
+    def work(self) -> None:
+        from app.ui.render.factory import probe
+
+        probe()
+
+
+def _adapter_probe_failed(detail: str) -> None:
+    """Die vorgezogene Frage ist eine Abkürzung; ihr Scheitern hält nichts auf.
+
+    Der Viewport fragt dann selbst, so wie er es vor diesem Arbeiter immer
+    getan hat. Ein Wartezustand, den dieser Slot auflösen müsste, entsteht
+    nirgends — deshalb bleibt es bei der Zeile ins Protokoll (§33.2).
+    """
+    _log.warning("the adapter probe did not come back: %s", detail)
 
 
 def build_application(
@@ -412,6 +447,18 @@ def main(argv: list[str] | None = None) -> int:
 
     splash = SplashScreen()
     splash.show()
+
+    # **Die Grafikkarte wird gesucht, während alles andere entsteht.** Der
+    # Viewport fragt vor seinem Aufbau nach einem wgpu-Adapter, und diese
+    # Frage kostet Zeit — die Zahlen stehen an :class:`_AdapterProbe`. Hier
+    # gestartet, fällt sie mit dem Laden des Registers, den Einstellungen und
+    # dem Fensterbau zusammen; der Viewport findet die Antwort später vor.
+    # Die Leine wird nicht aufbewahrt: ``leash._alive`` hält den Arbeiter
+    # modulweit, und ``leash.wait_for_all`` erreicht ihn beim Fensterende.
+    adapter_probe = _AdapterProbe()
+    adapter_probe.crashed.connect(_adapter_probe_failed)
+    WorkerLeash(application).start(adapter_probe)
+
     splash.step(tr("Operationen werden geladen …"), 0.12)
     load_operations()
     # Die eigenen Bausteine des Nutzers, nach der Bibliothek (§24.5). Ihre

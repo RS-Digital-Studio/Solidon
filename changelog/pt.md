@@ -52,6 +52,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com o ecrã a 150 ou 200 por cento, o encaixe, as pegas e as marcas alcançam o mesmo que a 100 por cento. A pega fica em tamanho completo e um clique trémulo continua a ser um clique.
 - Num modelo grande a pré-visualização chega em menos de um segundo em vez de vários: o Solidon calcula-a de forma mais grosseira e escreve «Pré-visualização aproximada». Aplicar continua exato.
 - «Separar por uma linha desenhada» começa no meio da peça e não na sua face inferior, como «Dividir». Antes a pré-visualização mostrava apenas que o plano não separa nada.
+- «Alinhar por uma característica» pede-lhe agora que escolha a segunda característica em vez de lhe explicar uma notação.
 
 ### Ficheiros e exportação
 

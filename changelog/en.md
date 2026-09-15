@@ -52,6 +52,7 @@ it into `website/version.json`.
 - On a large model the preview arrives in under a second instead of several: Solidon computes it more coarsely and writes “Coarse preview” into the picture. Applying is still exact.
 - “Split along a drawn line” starts in the middle of the part instead of at its underside — like “Split”. Before, the preview only showed that the plane cuts nothing.
 - “Align to feature” now asks you to pick the second feature instead of explaining a notation to you.
+- Startup no longer waits for the graphics card: it is looked up while the window is being built. On machines that took a long time over it, the program stood still for seconds.
 
 ### Files and export
 

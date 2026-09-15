@@ -52,6 +52,7 @@ scrive in `website/version.json`.
 - Con lo schermo al 150 o 200 per cento, aggancio, maniglie e segni arrivano di nuovo lontano come al 100 per cento. La maniglia è a grandezza piena e un clic tremolante resta un clic.
 - Su un modello grande l'anteprima arriva in meno di un secondo invece che in diversi: Solidon la calcola più grossolanamente e scrive «Anteprima grossolana». Applicare resta esatto.
 - «Separare lungo una linea disegnata» parte dal centro del pezzo e non dalla sua faccia inferiore, come «Dividere». Prima l'anteprima mostrava soltanto che il piano non separa nulla.
+- «Allineare a una caratteristica» ti chiede ora di scegliere la seconda caratteristica invece di spiegarti una notazione.
 
 ### File ed esportazione
 

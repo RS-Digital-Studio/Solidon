@@ -494,12 +494,13 @@ def _decode_inventory(data: Any) -> _Inventory:
                 raise ValueError("operation_id")
             _validate_booking_history(state, booking)
             state.journal[booking.operation_id] = booking
+        booked = _booked_grams(state)
         for entry in state.spools.values():
-            remaining = _remaining(state, entry)
+            remaining = _remaining(state, entry, booked=booked)
             if (
                 entry.remaining_grams is None
                 and remaining is not None
-                and _remaining(state, entry, normalize_roundoff=False) is None
+                and _remaining(state, entry, normalize_roundoff=False, booked=booked) is None
             ):
                 # Frühere Fassungen speicherten einen negativen Binärrest als
                 # unbekannt. Das unveränderte Journal belegt den leeren Bestand.
@@ -988,22 +989,52 @@ def bookings(spool_identifier: str | None = None) -> tuple[InventoryBooking, ...
     return read_snapshot().bookings(spool_identifier)
 
 
+def _booked_grams(state: _Inventory) -> dict[tuple[str, int], list[float]]:
+    """Die gebuchten Mengen nach Spule und Bestandsstand — ein Durchgang durch das Journal.
+
+    :func:`_remaining` ging je Spule das **ganze** Journal ab, und beide
+    Schleifen der Stelle darüber wachsen mit dem Lager: Jedes ``save`` liest
+    die Datei neu und rechnet dabei jeden Bestand nach. Gemessen an einem
+    Lager mit 500 Spulen und 2000 Buchungen kostete allein das 47,7 von
+    117,8 ms; die Reihe steht in ``app/core/knowledge/CLAUDE.md``. Die
+    Zuordnung entsteht deshalb einmal je Lesevorgang, und jede Spule liest
+    nur noch ihre eigenen Posten.
+
+    **Die Summe bleibt liegen, nicht gezogen.** Aufaddiert wird weiter in
+    :func:`_remaining` über ``math.fsum`` — eine Summe im Voraus über einen
+    Schlüssel, nach dem niemand fragt, könnte mit einem ``OverflowError``
+    enden, den der alte Weg nie gesehen hätte.
+    """
+    booked: dict[tuple[str, int], list[float]] = {}
+    for booking in state.journal.values():
+        if booking.reversed_at:
+            continue
+        for position in booking.positions:
+            key = (position.spool_identifier, position.stock_revision)
+            booked.setdefault(key, []).append(position.grams)
+    return booked
+
+
 def _remaining(
-    state: _Inventory, entry: CatalogueFilament, *, normalize_roundoff: bool = True
+    state: _Inventory,
+    entry: CatalogueFilament,
+    *,
+    normalize_roundoff: bool = True,
+    booked: dict[tuple[str, int], list[float]] | None = None,
 ) -> float | None:
-    """Rechnet ab der jüngsten Feststellung; Unterdeckung bleibt klärungsbedürftig."""
+    """Rechnet ab der jüngsten Feststellung; Unterdeckung bleibt klärungsbedürftig.
+
+    ``booked`` ist die Zuordnung aus :func:`_booked_grams`. Wer sie für
+    mehrere Spulen nacheinander braucht, baut sie einmal und reicht sie durch;
+    ohne sie entsteht sie hier für diesen einen Aufruf.
+    """
     counted = state.counts[entry.identifier]
     if counted is None:
         return None
+    if booked is None:
+        booked = _booked_grams(state)
     try:
-        consumed = math.fsum(
-            position.grams
-            for booking in state.journal.values()
-            if not booking.reversed_at
-            for position in booking.positions
-            if position.spool_identifier == entry.identifier
-            and position.stock_revision == entry.stock_revision
-        )
+        consumed = math.fsum(booked.get((entry.identifier, entry.stock_revision), ()))
     except OverflowError as problem:
         raise ValidationError(
             field="grams",
@@ -1026,9 +1057,10 @@ def _refresh_stock(
     state: _Inventory, identifiers: set[str], *, allow_unverified_stock: bool
 ) -> None:
     """Alle betroffenen Bestände prüfen, bevor ein gemeinsamer Stand geschrieben wird."""
+    booked = _booked_grams(state)
     for identifier in identifiers:
         current = _required(state, identifier)
-        remaining = _remaining(state, current)
+        remaining = _remaining(state, current, booked=booked)
         if remaining is None and not allow_unverified_stock:
             raise ValidationError(
                 field="remaining_grams",

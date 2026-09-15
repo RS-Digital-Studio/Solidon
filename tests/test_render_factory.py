@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,134 @@ def test_availability_is_a_plain_answer() -> None:
     assert isinstance(factory.available(), bool)
     if GFX_MISSING is None:
         assert factory.available() is True
+
+
+def test_the_adapter_answer_is_remembered_for_the_whole_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gefragt wird einmal, nicht je Viewport.
+
+    Die Frage an wgpu kostete am 14.09.2026 gemessene 763 ms im Hauptthread
+    (Median aus drei Läufen, Windows 11, RTX 4080, Fremdlast), auf Roberts
+    Maschine im guten Fall 5 bis 7,8 s — und ein Sprachwechsel baut das
+    Fenster samt Ansicht noch einmal auf.
+    """
+    asked: list[int] = []
+
+    def counted() -> bool:
+        asked.append(1)
+        return True
+
+    factory.forget()
+    monkeypatch.setattr(factory, "_adapter_present", counted)
+    try:
+        assert factory.available() is True
+        assert factory.available() is True
+        assert factory.probe() is True
+    finally:
+        factory.forget()
+    assert asked == [1], "der zweite Viewport fragt die Grafikkarte noch einmal"
+
+
+def test_a_running_probe_is_awaited_instead_of_asked_a_second_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer während der vorgezogenen Frage ankommt, wartet auf sie.
+
+    wgpu baut seine Instanz prozessweit und ohne Sperre auf; zwei Fragen
+    zugleich wären zwei Aufbauten. Und teurer als Warten ist es ohnehin.
+    """
+    asked: list[int] = []
+    started = threading.Event()
+    release = threading.Event()
+
+    def held() -> bool:
+        asked.append(1)
+        started.set()
+        release.wait(30.0)
+        return True
+
+    factory.forget()
+    monkeypatch.setattr(factory, "_adapter_present", held)
+    answers: list[bool] = []
+    prober = threading.Thread(target=factory.probe)
+    prober.start()
+    try:
+        assert started.wait(10.0), "die vorgezogene Frage lief nicht an"
+        waiting = threading.Thread(target=lambda: answers.append(factory.available()))
+        waiting.start()
+        # Erst wenn der Wartende steht, darf die Frage antworten — sonst fände
+        # er sie fertig vor und der Test misst den anderen Weg.
+        waiting.join(0.2)
+        assert waiting.is_alive(), "available() hat nicht auf die laufende Frage gewartet"
+        release.set()
+        waiting.join(10.0)
+    finally:
+        release.set()
+        prober.join(10.0)
+        factory.forget()
+    assert answers == [True]
+    assert asked == [1], "gefragt wurde je Prozess einmal, nicht je Aufrufer"
+
+
+def test_a_probe_that_does_not_come_back_lets_the_view_sign_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Frist statt einer offenen Wartezeit (§27).
+
+    Auf einem hängenden Treiber dauerte die Adapterfrage Minuten, und das
+    Fenster hing daran, ohne dass jemand sie hätte abbrechen können. Nach der
+    Frist meldet sich die Ansicht mit dem Satz ab, den sie für einen fehlenden
+    Adapter ohnehin hat.
+    """
+    started = threading.Event()
+    release = threading.Event()
+
+    def held() -> bool:
+        started.set()
+        release.wait(30.0)
+        return True
+
+    factory.forget()
+    monkeypatch.setattr(factory, "_adapter_present", held)
+    monkeypatch.setattr(factory, "ADAPTER_TIMEOUT_SECONDS", 0.05)
+    prober = threading.Thread(target=factory.probe)
+    prober.start()
+    try:
+        assert started.wait(10.0), "die vorgezogene Frage lief nicht an"
+        assert factory.available() is False, "ohne Antwort in der Frist bleibt die Ansicht aus"
+    finally:
+        release.set()
+        prober.join(10.0)
+        factory.forget()
+
+
+def test_the_application_asks_for_the_adapter_before_it_loads_the_registry() -> None:
+    """Die Anwendung zieht die Frage wirklich vor — nicht nur die Fabrik kann es.
+
+    AGENTS.md, Testart „Anschluss": nicht „der Cache kann es", sondern „die
+    Anwendung tut es". Gelesen wird der Quelltext und nicht die gebaute
+    Anwendung, weil ``main`` eine Ereignisschleife startet — derselbe Weg, den
+    ``test_cursors`` für den Zeiger-Wächter geht.
+    """
+    source = Path(__file__).resolve().parents[1] / "app" / "ui" / "app.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    start = next(
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "main"
+    )
+    order = [
+        getattr(call.func, "id", getattr(call.func, "attr", ""))
+        for call in ast.walk(start)
+        if isinstance(call, ast.Call)
+    ]
+    assert "_AdapterProbe" in order, "der Start fragt den Adapter nicht vorab"
+    assert "start" in order, "der Arbeiter läuft an der Leine vorbei oder gar nicht"
+    lines = source.read_text(encoding="utf-8").splitlines()
+    probe_line = next(index for index, line in enumerate(lines) if "_AdapterProbe()" in line)
+    registry_line = next(index for index, line in enumerate(lines) if "load_operations()" in line)
+    assert probe_line < registry_line, (
+        "die Frage steht hinter dem Register und überlappt damit nichts mehr"
+    )
 
 
 def test_ci_has_a_working_graphics_adapter() -> None:

@@ -77,6 +77,7 @@ Nutzen da und sonst nichts.
 - An einem großen Modell kommt die Vorschau in unter einer Sekunde statt in mehreren: Solidon rechnet sie gröber und schreibt „Grobe Vorschau“ ins Bild. Übernommen wird weiterhin genau.
 - „An gezeichneter Linie trennen“ beginnt in der Mitte des Teils statt auf seiner Unterseite — wie „Teilen“. Vorher zeigte die Vorschau nur, dass die Ebene nichts trennt.
 - „An Merkmal ausrichten“ bittet Sie jetzt, das zweite Merkmal zu wählen, statt Ihnen eine Schreibweise zu erklären.
+- Der Start wartet nicht mehr auf die Grafikkarte: Sie wird gesucht, während das Fenster entsteht. Auf Rechnern, die lange dafür brauchten, stand das Programm dabei sekundenlang still.
 
 ### Dateien und Export
 
