@@ -24,9 +24,12 @@ eine Zahl, die jemand sieht und ändern kann (§11.1).
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 from dataclasses import dataclass
 from typing import Any
+from xml.etree import ElementTree as ET
 
 import numpy as np
 
@@ -61,8 +64,36 @@ class OutlineResult:
     """Breite des Umrisses vor dem Skalieren, in den Zahlen der Datei selbst."""
 
 
+@dataclass(frozen=True, slots=True)
+class OutlineProfile:
+    """Eine Außenkontur mit ihren Innenringen und geometrischer Kennung."""
+
+    id: str
+    polygon: Any
+
+
 def is_outline(suffix: str) -> bool:
     return suffix.lower() in OUTLINE_SUFFIXES
+
+
+def _svg_defaults(payload: bytes) -> bytes:
+    """Ergänzt SVG-Standardwerte, die der Pfadleser ausdrücklich erwartet.
+
+    An Rechtecken bedeutet ein fehlendes x oder y jeweils null. Die Kopie
+    behält alle vorhandenen Werte und Transformationen; die eingebettete
+    Originalquelle bleibt unverändert. ElementTree lädt keine externen
+    Entitäten und begrenzt die Expansion interner Entitäten selbst.
+    """
+    root = ET.fromstring(payload)
+    changed = False
+    for element in root.iter():
+        if element.tag not in ("rect", "{http://www.w3.org/2000/svg}rect"):
+            continue
+        for name in ("x", "y"):
+            if name not in element.attrib:
+                element.set(name, "0")
+                changed = True
+    return ET.tostring(root, encoding="utf-8") if changed else payload
 
 
 def nested_polygons(rings: list[np.ndarray]) -> list[Any]:
@@ -106,14 +137,12 @@ def nested_polygons(rings: list[np.ndarray]) -> list[Any]:
     return result
 
 
-def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> OutlineResult:
-    """Liest eine flache Zeichnung und gibt ihr eine Dicke.
+def read_profiles(payload: bytes, suffix: str) -> tuple[OutlineProfile, ...]:
+    """Liest getrennte Profile; Innenringe und transformierte Lage bleiben erhalten.
 
-    ``width`` skaliert den ganzen Umriss so, dass er diese Breite bekommt;
-    null nimmt die Zahlen in der Datei als Millimeter.
+    Die Kennung stammt aus der normalisierten Geometrie, nicht aus der
+    Reihenfolge der XML-Elemente. Auch unbrauchbare Profile bleiben sichtbar.
     """
-    if height <= EPS_GEOM:
-        raise ValueError("an extrusion needs a positive height")
     if not is_outline(suffix):
         raise ValidationError(
             field="file",
@@ -124,7 +153,8 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
 
     enclosure.install()
     try:
-        path = trimesh.load_path(io.BytesIO(payload), file_type=suffix.lower().lstrip("."))
+        source = _svg_defaults(payload) if suffix.lower() == ".svg" else payload
+        path = trimesh.load_path(io.BytesIO(source), file_type=suffix.lower().lstrip("."))
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # jeder Parser scheitert auf seine eigene Art
@@ -145,7 +175,98 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
             values={"suffix": suffix},
         )
 
-    parts = [trimesh.creation.extrude_polygon(entry, height=height) for entry in polygons]
+    return tuple(
+        OutlineProfile(hashlib.sha256(entry.normalize().wkb).hexdigest(), entry)
+        for entry in polygons
+    )
+
+
+def selected_profiles(
+    profiles: tuple[OutlineProfile, ...], contours: str
+) -> tuple[OutlineProfile, ...]:
+    """Löst gespeicherte Kennungen auf; nur der historische Leerwert meint alle."""
+    if not contours:
+        return profiles
+    try:
+        selected = json.loads(contours)
+    except (ValueError, TypeError) as problem:
+        raise ValidationError(
+            field="contours",
+            detail=_("Wählen Sie die gewünschten Konturen erneut in der Vorschau."),
+            constraint="invalid_contours",
+        ) from problem
+    if (
+        not isinstance(selected, list)
+        or not selected
+        or any(not isinstance(entry, str) for entry in selected)
+        or not set(selected).issubset(entry.id for entry in profiles)
+    ):
+        raise ValidationError(
+            field="contours",
+            detail=_("Wählen Sie mindestens eine vorhandene Kontur in der Vorschau."),
+            constraint="invalid_contours",
+        )
+    identifiers = set(selected)
+    return tuple(entry for entry in profiles if entry.id in identifiers)
+
+
+def _solid_reason(profile: OutlineProfile, body: Any) -> str:
+    """Erklärt leere und nicht geschlossene Extrusionen mit der Kerngrenze."""
+    if profile.polygon.area <= EPS_GEOM * profile.polygon.length:
+        return str(_("Diese Kontur ist zu dünn oder flächenlos. Wählen Sie eine andere Kontur."))
+    if not body.is_watertight or not body.is_volume:
+        return str(
+            _("Diese Kontur bildet keinen geschlossenen Körper. Prüfen Sie ihre Innenringe.")
+        )
+    return ""
+
+
+def profile_reason(profile: OutlineProfile) -> str:
+    """Prüft die echte Extrusion für die Profilauswahl, ohne etwas zu entfernen."""
+    try:
+        body = trimesh.creation.extrude_polygon(profile.polygon, height=1.0)
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception:  # Triangulierer melden ungültige Flächen unterschiedlich
+        return str(_("Diese Kontur lässt sich nicht füllen. Prüfen Sie die Zeichnung."))
+    return _solid_reason(profile, body)
+
+
+def extrude(
+    payload: bytes, suffix: str, height: float, width: float = 0.0, *, contours: str = ""
+) -> OutlineResult:
+    """Liest eine Zeichnung und gibt den gewählten Profilen eine gemeinsame Dicke."""
+    return extrude_profiles(read_profiles(payload, suffix), height, width, contours=contours)
+
+
+def extrude_profiles(
+    profiles: tuple[OutlineProfile, ...], height: float, width: float = 0.0, *, contours: str = ""
+) -> OutlineResult:
+    """Gemeinsamer Rechenweg für Operation und Vorschau bereits gelesener Profile.
+
+    ``width`` skaliert die ausgewählte Fläche in der Ebene; null behält die
+    Zahlen der Datei als Millimeter. Der leere Altwert behält auch die alte
+    Extrusion ungeprüfter Konturen, damit Projekte unverändert rechnen.
+    """
+    if height <= EPS_GEOM:
+        raise ValueError("an extrusion needs a positive height")
+    chosen = selected_profiles(profiles, contours)
+    parts = []
+    for entry in chosen:
+        try:
+            body = trimesh.creation.extrude_polygon(entry.polygon, height=height)
+        except PROGRAMMING_ERRORS:
+            raise
+        except Exception as problem:
+            raise ValidationError(
+                field="contours",
+                detail=_("Diese Kontur lässt sich nicht füllen. Prüfen Sie die Zeichnung."),
+                constraint="invalid_contours",
+            ) from problem
+        reason = _solid_reason(entry, body) if contours else ""
+        if reason:
+            raise ValidationError(field="contours", detail=reason, constraint="invalid_contours")
+        parts.append(body)
     body = parts[0] if len(parts) == 1 else concatenated(parts)
 
     # Gemessen wird der **Körper** aus den geschlossenen Ringen, nicht
@@ -164,5 +285,5 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
     # eines Zeichenblatts, landete sonst dort, wo diese Ecke war.
     body.apply_translation(-body.bounds[0] * [0, 0, 1] - [*body.centroid[:2], 0.0])
 
-    _log.info("extruded %d contour(s) from %s", len(polygons), suffix)
-    return OutlineResult(mesh=MeshData.of(body), contours=len(polygons), width=actual)
+    _log.info("extruded %d contour(s)", len(chosen))
+    return OutlineResult(mesh=MeshData.of(body), contours=len(chosen), width=actual)

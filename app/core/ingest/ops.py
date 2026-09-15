@@ -21,7 +21,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.transform import apply, scaling, translation
+from app.core.geom.transform import apply, rotation, scaling, translation
 from app.core.ingest import outline, threemf
 from app.core.ingest.loader import (
     IngestResult,
@@ -97,6 +97,16 @@ class LoadParams(BaseParams):
         doc=_(
             "Schiebt das Modell in die Mitte der Druckplatte. Ein Modell aus einem "
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
+        ),
+    )
+    coordinates: str = param(
+        title=_("Quellachsen"),
+        default="legacy_raw",
+        choices=("legacy_raw", "gltf"),
+        placement="advanced",
+        doc=_(
+            "GLB und GLTF verwenden Y nach oben. Ältere Projekte und rohe "
+            "Generatorquellen behalten ihre bisherige Lage."
         ),
     )
     weld: bool = param(
@@ -175,6 +185,13 @@ def load(ctx: OpContext) -> OpResult:
 
     check_limits(len(payload), sum(part.mesh.triangle_count for part in parts))
 
+    if params.coordinates == "gltf" and suffix.lower() in (".glb", ".gltf"):
+        # glTF-Knoten sind vom Leser bereits angewandt. Nur die Weltachsen
+        # werden hier einmal nach Z-oben gedreht; die Einheit bleibt unten
+        # ausdrücklich überschreibbar. Der Rohleser bleibt für alte Quellen.
+        upright = rotation("x", 90.0)
+        parts = [dataclasses.replace(part, mesh=apply(part.mesh, upright)) for part in parts]
+
     # Eine Einheit für die ganze Datei. Je Körper zu entscheiden ließe zwei
     # Teile einer Baugruppe in verschiedenen Maßstäben herauskommen, und
     # die Frage, die §17.1 dem Nutzer stellt, gilt der Datei, nicht jedem
@@ -211,7 +228,7 @@ def load(ctx: OpContext) -> OpResult:
     # über eine Datei gerätselt, die die Antwort mitbrachte. Was im Stapel
     # steht, geht weiter vor: Wer die Einheit von Hand setzt, korrigiert auch
     # eine Datei, die sich irrt.
-    stated = _stated_unit(payload, suffix) if params.unit == "auto" else None
+    stated = _stated_unit(payload, suffix, params.coordinates) if params.unit == "auto" else None
     if stated is not None:
         declared, unit, factor = stated
         # Nicht aufgeschrieben: Die Datei sagt es beim nächsten Mal wieder, und
@@ -326,6 +343,15 @@ class LoadOutlineParams(BaseParams):
         maximum=1000.0,
         doc=_("Auf diese Breite skalieren. Null nimmt die Zahlen der Datei als Millimeter."),
     )
+    contours: str = param(
+        title=_("Konturauswahl"),
+        kind="contours",
+        default="",
+        doc=_(
+            "Wählen Sie die Flächen in der Vorschau. Innenringe bleiben Löcher. "
+            "Bereits gespeicherte Gesamtauswahlen bleiben erhalten."
+        ),
+    )
     name: str = param(
         title=_("Name"),
         default="",
@@ -359,7 +385,9 @@ def load_outline(ctx: OpContext) -> OpResult:
     payload = ctx.sources.read(params.source)
     check_limits(len(payload), 0)
 
-    result = outline.extrude(payload, Path(source.path).suffix, params.height, params.width)
+    result = outline.extrude(
+        payload, Path(source.path).suffix, params.height, params.width, contours=params.contours
+    )
     name = params.name or Path(source.path).stem
     return OpResult(
         outputs=[SceneObject(id="", name=name, mesh=result.mesh)],
@@ -457,17 +485,22 @@ def _group_on_bed(
     return moved
 
 
-def _stated_unit(payload: bytes, suffix: str) -> tuple[str, LengthUnit, float | None] | None:
+def _stated_unit(
+    payload: bytes, suffix: str, coordinates: str = "legacy_raw"
+) -> tuple[str, LengthUnit, float | None] | None:
     """Was die Datei selbst über ihre Einheit sagt (§17.1).
 
     Zurück kommt ihr eigenes Wort dafür, die Einheit des Kerns dazu und der
     Faktor, wo das Format feiner unterteilt. Das eigene Wort, weil es in den
     Befund gehört: „foot" ist die Auskunft, „in mal zwölf" ist die Rechnung.
 
-    Nur 3MF sagt etwas: STL, OBJ und PLY tragen keine Einheit, und STEP geht
-    einen anderen Weg. ``None`` heißt „schweigt" — dann entscheidet die
-    Heuristik, und im Zweifel der Nutzer.
+    3MF trägt seine Einheit, glTF legt Meter fest. Der glTF-Vertrag gilt nur
+    für entsprechend gespeicherte neue Importe; alte Rohquellen behalten
+    ihre damalige Lesart. STL, OBJ und PLY tragen keine Einheit, und STEP geht
+    einen anderen Weg. ``None`` heißt „schweigt" — dann entscheidet die Heuristik.
     """
+    if coordinates == "gltf" and suffix.lower() in (".glb", ".gltf"):
+        return "meter", "m", None
     if suffix.lower() != ".3mf":
         return None
     declared = threemf.declared_unit(payload)

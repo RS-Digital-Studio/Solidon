@@ -1326,13 +1326,10 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
     — Windows-3D-Viewer, three.js, Blender — lag das Teil damit auf dem Rücken,
     und genau dorthin geht dieses Format.
 
-    **Der Leser dreht bewusst nicht zurück** (:func:`app.core.geom.mesh.read_mesh`).
-    Er liest denselben Payload, der bei einem erzeugten Modell als Quelle im
-    Projekt liegt (``core.generate.into_project``), und zwar bei **jeder**
-    Auswertung: Eine Drehung dort kippte jedes bestehende Projekt mit einer
-    GLB-Quelle beim nächsten Öffnen, ohne dass eine Migration das auffangen
-    könnte — die Lage steht in keinem Parameter. Die Folge steht fest und ist
-    kein Versehen: Eine eigene GLB, wieder hereingeholt, kommt liegend zurück.
+    ``read_mesh`` liest weiterhin rohe Achsen und Einheiten. Beim erneuten
+    Import übernimmt ``load`` mit ``coordinates="gltf"`` die Gegenrichtung
+    und mit ``unit="m"`` die Millimeterumrechnung. Migrierte Projekte und
+    Generatorquellen behalten ihren ausdrücklich gespeicherten Rohweg.
     """
     stem = safe_name(name, "teil")
     parts = _parts_by_slot(mesh, slots)
@@ -1358,9 +1355,8 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
     # Koordinate ist ein Meter. Bis zum 05.09.2026 gingen die Millimeter
     # unverändert hinaus — ein Quader 10 x 20 x 40 mm kam als 10 x 40 x 20 m
     # an, und nur ein Betrachter mit automatischem Einpassen verbarg das
-    # (Gesamtreview, CORE-33). Der Leser (``read_mesh``) skaliert bewusst
-    # nicht zurück: Er liest denselben Payload, der bei einem erzeugten Modell
-    # als Quelle im Projekt liegt, und die Einheit fragt die Eingangsstufe.
+    # (Gesamtreview, CORE-33). Beim neuen Import übernimmt die load-Operation
+    # die gespeicherte Einheit; der Rohleser skaliert selbst weiterhin nicht.
     upright = trimesh.transformations.rotation_matrix(-np.pi / 2.0, (1.0, 0.0, 0.0))
     for body in bodies.values():
         body.apply_transform(upright)

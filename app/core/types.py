@@ -1227,11 +1227,16 @@ ParamKind = Literal[
     "strokes",
     "armature",
     "edges",
+    "contours",
 ]
 """``image`` ist eine Quelle, die ein Bild sein muss: Der Dialog listet nur
 Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
 ``source``-Feld bot dort jede Quelle an, also STLs in einem Feld namens
 „Bild", und einen Weg zu einem Bild gab es nicht.
+
+``contours`` speichert eine JSON-Liste geometrischer Profilkennungen. Die
+Oberfläche zeigt Anzahl und Konturauswahl; Agent und Projekt behalten reine
+Daten, keine Zeichengesten oder ausführbaren Inhalte.
 
 ``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
 den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent

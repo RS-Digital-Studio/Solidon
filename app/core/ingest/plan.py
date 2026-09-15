@@ -204,6 +204,11 @@ def import_plan(
         )
     parts = 1
     asks = True
+    gltf = suffix.lower() in (".glb", ".gltf")
+    if gltf:
+        # Der neue Import speichert den Formatvertrag. Alte Ladeschritte
+        # behalten über Schema und Migration ausdrücklich ihre Rohachsen.
+        asks = False
     if suffix.lower() == ".3mf":
         # **Die entpackte Grenze steht vor dem Parsen.** Zählen heißt bei einer
         # 3MF, das ganze XML zu lesen, und das geschieht hier — im Hauptthread,
@@ -211,7 +216,8 @@ def import_plan(
         # 660 MB im Speicher. ``check_unpacked`` gibt es für genau diesen Fall
         # (§32); es lief nur an der falschen Stelle, nämlich erst in der
         # Operation. Die Zahlen dafür stehen im zentralen Verzeichnis des
-        # Archivs — geprüft wird, ohne ein Byte des Inhalts zu lesen.
+        # Archivs; erst nach den Grenzen werden gleich benannte Einträge
+        # auf bytegleichen Inhalt geprüft.
         check_unpacked(payload)
         # Körper und Dreiecke in einem streamenden Lauf. Die entpackte Grenze
         # allein hält den Speicher nicht auf: read_objects hebt beim Vollparse
@@ -232,6 +238,7 @@ def import_plan(
             params={
                 "source": source_id,
                 "unit": unit,
+                **({"coordinates": "gltf"} if gltf else {}),
                 # **Nur am einzelnen Körper.** Eine Baugruppe trägt die Namen
                 # ihrer Teile in der Datei, und ``load`` nimmt den Parameter
                 # dort gar nicht an — er wäre ein Name für dreißig Körper.

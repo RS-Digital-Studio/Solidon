@@ -254,6 +254,7 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         # Kantenschlüssel beschreibt eine Lage und benennt kein Merkmal des
         # Dokuments, das jemand anderswo wiederfände.
         "edges",
+        "contours",
     }
 )
 
@@ -462,6 +463,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "strokes": "string",
     "armature": "string",
     "edges": "string",
+    "contours": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,

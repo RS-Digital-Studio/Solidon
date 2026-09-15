@@ -197,6 +197,9 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
                 params={
                     "source": source_id,
                     "unit": "mm",
+                    # Die Generatorquelle trägt Rohachsen. Die folgende
+                    # Arbeitsgröße ist eine eigene Operation, keine glTF-Einheit.
+                    "coordinates": "legacy_raw",
                     "name": short,
                     # Beim Laden nichts bereinigen, solange das Modell winzig
                     # ist. Die Reparaturkette unten holt jeden dieser Schritte

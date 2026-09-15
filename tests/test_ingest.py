@@ -544,6 +544,92 @@ def test_a_3mf_with_duplicate_archive_entries_is_refused() -> None:
     assert refused.value.suggestions
 
 
+def _duplicate_archive(first: bytes, second: bytes) -> bytes:
+    """Zwei gleich benannte ZIP-Einträge, beide tatsächlich im Archiv."""
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as container:
+        container.writestr("3D/relief.svg", first)
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            container.writestr("3D/relief.svg", second, compress_type=zipfile.ZIP_DEFLATED)
+    return buffer.getvalue()
+
+
+def test_identical_3mf_entries_load_without_changing_the_source() -> None:
+    """Elegoo schreibt dasselbe SVG-Relief mehrfach in ein gültiges Modell."""
+    from app.core.export.threemf import write
+    from app.core.ingest.threemf import read_objects
+
+    source = BytesIO(write(mesh_of("cube_clean.stl"), name="Würfel"))
+    with zipfile.ZipFile(source, "a") as container:
+        container.writestr("3D/relief.svg", b'<svg width="10"/>')
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            container.writestr("3D/relief.svg", b'<svg width="10"/>')
+    payload = source.getvalue()
+    before = checksum(payload)
+    plan = import_plan("src_1", "relief.3mf", payload)
+    bodies = read_objects(payload)
+    assert plan.draft.produces == 1
+    assert len(bodies) == 1
+    assert bodies[0].mesh.bounds.size == pytest.approx(mesh_of("cube_clean.stl").bounds.size)
+    assert bodies[0].mesh.volume == pytest.approx(mesh_of("cube_clean.stl").volume)
+    assert checksum(payload) == before
+
+
+def test_identical_entries_may_use_different_compression() -> None:
+    from app.core.ingest.loader import check_unpacked
+
+    check_unpacked(_duplicate_archive(b"same content", b"same content"))
+
+
+def test_equal_crc_and_size_do_not_prove_identical_entries() -> None:
+    """Diese beiden verschiedenen Wörter haben dieselbe ZIP-Prüfsumme."""
+    from app.core.ingest.loader import check_unpacked
+
+    payload = _duplicate_archive(b"plumless", b"buckeroo")
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        first, second = container.infolist()
+        assert first.CRC == second.CRC and first.file_size == second.file_size
+    with pytest.raises(ValidationError) as refused:
+        check_unpacked(payload)
+    assert refused.value.constraint == "invalid_archive"
+    assert refused.value.suggestions
+
+
+@pytest.mark.parametrize("limit", ["MAX_FILE_BYTES", "MAX_ARCHIVE_ENTRIES"])
+def test_duplicate_entries_count_towards_limits_before_comparing_content(
+    limit: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.ingest import loader
+
+    payload = _duplicate_archive(b"12345678", b"12345678")
+    monkeypatch.setattr(loader, limit, 15 if limit == "MAX_FILE_BYTES" else 1)
+
+    def must_not_read(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("archive limits must precede content comparison")
+
+    with monkeypatch.context() as guarded:
+        guarded.setattr(zipfile.ZipFile, "open", must_not_read)
+        with pytest.raises(ValidationError) as refused:
+            loader.check_unpacked(payload)
+    assert refused.value.constraint == "file_too_large"
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+def test_a_damaged_duplicate_is_not_treated_as_identical(compressed: bool) -> None:
+    from app.core.ingest.loader import check_unpacked
+
+    payload = bytearray(_duplicate_archive(b"same content", b"same content"))
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        info = container.infolist()[int(compressed)]
+    offset = info.header_offset + 30 + len(info.filename.encode())
+    # Typ 3 ist im Deflate-Blockkopf ungültig; beim gespeicherten Inhalt
+    # greift stattdessen der CRC-Vergleich des ZIP-Lesers.
+    payload[offset] = (payload[offset] & ~7) | 7
+    with pytest.raises(ValidationError) as refused:
+        check_unpacked(bytes(payload))
+    assert refused.value.constraint == "invalid_archive"
+
+
 def test_a_3mf_with_an_extreme_compression_ratio_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

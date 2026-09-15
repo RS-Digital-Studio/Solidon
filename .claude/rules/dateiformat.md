@@ -115,6 +115,20 @@ Ausführung.
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar
 und änderbar bleiben.
 
+**GLB-/GLTF-Koordinaten werden am Ladeschritt versioniert.** Neue Importe
+speichern `coordinates="gltf"` und lesen Meter/Y-oben. Bestehende Projekte,
+deren gespeicherte Undo-Fassungen und rohe Generatorquellen behalten
+`legacy_raw`; die gemeinsame Migration gilt auch für Rezeptdokumente.
+Eine explizite Einheit hat Vorrang. Der Rohleser und die separate
+Zielgrößenskalierung ändern ihren Vertrag dadurch nicht.
+
+**ZIP-Dubletten dürfen nur bei bytegleichem Inhalt passieren.** Alle Einträge
+zählen vor dem Inhaltsvergleich zu Archivanzahl, Entpackgröße und
+Kompressionsverhältnis. Eine identische CRC ist kein Gleichheitsbeweis. Der
+Vergleich liest begrenzte Blöcke; fehlerhafte oder widersprüchliche Kopien
+bleiben abgewiesen. Weder die eingebettete noch die externe Quelle wird für
+diese Prüfung umgeschrieben.
+
 Eine Datei aus dem Netz (`core/ingest/fetch.py`) geht **denselben** Weg:
 `Session.import_payload` ist die gemeinsame Stelle, `import_model` liest nur
 die Platte und ruft sie auf. Zwei Importwege wären zwei Stellen, an denen die

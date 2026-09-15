@@ -824,6 +824,8 @@ def colour_name(value: str) -> str:
 #: stimmt, bekommt der Wert einen eigenen Schlüssel — nicht diese Liste eine
 #: zweite Ebene.
 _CHOICE_NAMES: dict[str, TranslatableText] = {
+    "legacy_raw": _("Unveränderte Quellachsen"),
+    "gltf": _("glTF: Y nach oben"),
     "clearance": _("Spielpassung"),
     "press": _("Presspassung"),
     "thread": _("Gewindepassung"),
@@ -985,6 +987,8 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
+    "legacy_raw": _("Behält die Achsen der Quelldatei bei, wie in älteren Projekten."),
+    "gltf": _("Richtet GLB und GLTF von Y-oben auf Solidons Z-oben aus."),
     "clearance": _("Prüft das Spiel zwischen Öffnung und Gegenstück anhand ihrer Materialien."),
     "press": _("Prüft das Übermaß der Verbindung anhand ihrer Materialien."),
     "thread": _(

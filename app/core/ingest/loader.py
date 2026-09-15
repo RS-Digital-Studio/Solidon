@@ -26,7 +26,7 @@ import mimetypes
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import unquote, urlsplit
 
 import numpy as np
@@ -54,6 +54,9 @@ from app.core.units import (
     weld_tolerance,
 )
 from app.i18n import _
+
+if TYPE_CHECKING:
+    import zipfile
 
 _log = get_logger(__name__)
 
@@ -84,6 +87,7 @@ _ZIP64_END_RECORD: Final = struct.Struct("<4sQ2H2L4Q")
 _ZIP64_LOCATOR: Final = struct.Struct("<4sLQL")
 _ZIP_CENTRAL_HEADER_BYTES: Final = 46
 _MAX_ZIP_COMMENT_BYTES: Final = 65_535
+_ARCHIVE_COMPARE_BYTES: Final = 64 * 1024
 
 #: Darüber sagt die Eingangsstufe etwas. Keine Grenze — die darüber liegt eine
 #: Größenordnung höher —, sondern die Größe, ab der die Analyse aufhört helfen
@@ -675,10 +679,13 @@ def check_unpacked(payload: bytes) -> None:
 
     Geprüft war nur die gepackte Größe: 2,6 MB wurden beim Lesen zu 1,08 GB —
     Verhältnis 412, und über ``ingest/fetch`` ist so eine Datei aus dem Netz
-    erreichbar. Die Zahlen stehen im zentralen Verzeichnis des Archivs; die
-    Prüfung liest kein einziges Byte des Inhalts.
+    erreichbar. Zunächst gelten alle Grenzen aus dem zentralen Verzeichnis,
+    einschließlich mehrfacher Einträge. Erst danach werden gleich benannte
+    Einträge blockweise verglichen: Bytegleiche Beilagen sind eindeutig,
+    verschiedene Inhalte unter demselben Namen sind es nicht.
     """
     import zipfile
+    import zlib
     from io import BytesIO
 
     announced_entries = _archive_entry_count(payload)
@@ -696,19 +703,15 @@ def check_unpacked(payload: bytes) -> None:
     if len(infos) > MAX_ARCHIVE_ENTRIES:
         raise _too_many_archive_entries(len(infos))
 
-    seen: set[str] = set()
+    seen: dict[str, zipfile.ZipInfo] = {}
+    duplicates: list[tuple[zipfile.ZipInfo, zipfile.ZipInfo]] = []
     unpacked = 0
     compressed = 0
     for info in infos:
         if info.filename in seen:
-            raise ValidationError(
-                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
-                field="file",
-                detail=_("Das 3MF-Archiv enthält denselben Eintrag mehrfach."),
-                constraint="invalid_archive",
-                values={"entry": info.filename},
-            )
-        seen.add(info.filename)
+            duplicates.append((seen[info.filename], info))
+        else:
+            seen[info.filename] = info
         unpacked += info.file_size
         compressed += info.compress_size
         if unpacked > MAX_FILE_BYTES:
@@ -739,6 +742,50 @@ def check_unpacked(payload: bytes) -> None:
             constraint="file_too_large",
             values={"unpacked": unpacked, "limit": MAX_COMPRESSION_RATIO},
         )
+
+    if duplicates:
+        with zipfile.ZipFile(BytesIO(payload)) as container:
+            for first, second in duplicates:
+                try:
+                    identical = _matching_archive_entries(container, first, second)
+                except (
+                    OSError,
+                    EOFError,
+                    zipfile.BadZipFile,
+                    zlib.error,
+                    NotImplementedError,
+                    RuntimeError,
+                ):
+                    # Eine unlesbare Dublette ist kein Beweis für Gleichheit.
+                    identical = False
+                if not identical:
+                    raise ValidationError(
+                        suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+                        field="file",
+                        detail=_("Das 3MF-Archiv enthält denselben Eintrag mehrfach."),
+                        constraint="invalid_archive",
+                        values={"entry": second.filename},
+                    )
+
+
+def _matching_archive_entries(
+    container: zipfile.ZipFile, first: zipfile.ZipInfo, second: zipfile.ZipInfo
+) -> bool:
+    """Vergleicht Inhalte ohne volle Entpackkopien oder Vertrauen in eine CRC.
+
+    Die Gesamtgröße wurde vorher begrenzt. Der erste Inhalt wird höchstens
+    einmal je Dublette gelesen; auch bei vielen Wiederholungen bleibt die
+    gelesene Menge damit unter dem Doppelten dieser Gesamtgröße.
+    """
+    if first.file_size != second.file_size or first.CRC != second.CRC:
+        return False
+    with container.open(first) as left, container.open(second) as right:
+        while True:
+            a, b = left.read(_ARCHIVE_COMPARE_BYTES), right.read(_ARCHIVE_COMPARE_BYTES)
+            if a != b:
+                return False
+            if not a:
+                return True
 
 
 @dataclass(frozen=True, slots=True)

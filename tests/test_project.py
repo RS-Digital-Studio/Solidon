@@ -2649,6 +2649,34 @@ def test_the_v24_example_carries_its_protection() -> None:
     assert project.document.protected == {"obj_1": ("face_1", "face_3")}
 
 
+def test_gltf_migration_preserves_every_saved_operation_state() -> None:
+    data = {
+        "format_version": 24,
+        "ops": [{"op": "load", "params": {"source": "src_1", "unit": "cm"}}],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"1": {"op": "load", "params": {"unit": "mm"}}}},
+                    "after": {"edited_ops": {"1": None, "2": {"op": "load", "params": {}}}},
+                }
+            }
+        ],
+    }
+    migrated = migrate(data)
+    assert migrated["ops"][0]["params"] == {
+        "source": "src_1",
+        "unit": "cm",
+        "coordinates": "legacy_raw",
+    }
+    changes = migrated["transactions"][0]["changes"]
+    assert changes["before"]["edited_ops"]["1"]["params"] == {
+        "unit": "mm",
+        "coordinates": "legacy_raw",
+    }
+    assert changes["after"]["edited_ops"]["1"] is None
+    assert changes["after"]["edited_ops"]["2"]["params"]["coordinates"] == "legacy_raw"
+
+
 def test_foreign_protection_entries_are_ignored_not_trusted() -> None:
     """Eine fremde Datei darf hier keine Zahl und keine Struktur unterbringen.
 

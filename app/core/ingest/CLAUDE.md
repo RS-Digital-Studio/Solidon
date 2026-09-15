@@ -15,7 +15,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | `ops.py` | Die `load`-Operation. **Auch Laden ist eine Operation** und steht im Stapel |
 | `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile; `names_in_use` nennt die im Stapel vergebenen Objektnamen, damit der Plan einen freien wählt; `is_only_imported` sagt umgekehrt, ob ein ganzes Dokument nichts als eingelesene Dateien trägt (RM-130) |
 | `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32) |
-| `outline.py` | Flache Umrisse mit einer Höhe: SVG und DXF mit Extrusion |
+| `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen und extrudieren; SVG-Standardwerte für fehlende Rechteckpositionen werden nur in der Parserkopie ergänzt |
 
 ## Warum Laden eine Operation ist
 
@@ -28,6 +28,11 @@ gegen eine geänderte Quelle neu rechnen.
 - **Einheiten**: STL trägt keine. Erkannt wird aus der Größe, und bei
   Mehrdeutigkeit **wird gefragt** (`ctx.ask`, Regel 21) — nicht geraten.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
+- **Gleich benannte ZIP-Einträge** prüft `loader.check_unpacked` erst nach
+  sämtlichen Archivgrenzen blockweise auf bytegleichen Inhalt. Alle Kopien
+  zählen zu Anzahl und Entpackgröße; nur identische Inhalte sind eindeutig.
+  Die Originalquelle bleibt unverändert. Größen- und CRC-Gleichheit allein
+  genügen nicht, unlesbare oder widersprüchliche Dubletten werden abgewiesen.
 - **Native 3MF-Farben**: Werkzeugpaletten aus Orca/Bambu-Projektmetadaten
   oder Prusa-Konfiguration, Objektwerkzeuge, objektspezifische Part-Werkzeuge
   und bemalte Dreiecke werden als Materialslots übernommen. Prusa-Volumen
@@ -68,6 +73,12 @@ gegen eine geänderte Quelle neu rechnen.
 - **GLTF darf Begleitdateien haben.** Beim lokalen Import werden Puffer und
   Bilder aus demselben Ordner eingebettet; Verweise aus dem Ordner heraus
   bleiben gesperrt.
+- **Neue GLB-/GLTF-Importe speichern `coordinates="gltf"`.** `load` dreht
+  die bereits vom Leser angewandten Knoten aus Y-oben nach Z-oben und liest
+  die Formateinheit Meter. Eine ausdrücklich gesetzte Einheit geht vor.
+  `legacy_raw` erhält alte importierte und erzeugte Quellen; der Rohleser
+  ändert sie nicht. Die Zielgröße eines Generatormodells bleibt der eigene
+  Schritt `fit_to_size` und wird nicht in die Einheitenumrechnung eingerechnet.
 - **Herkunft** wird vermerkt (`scene/foreign.py`, §32): Der Nutzer soll
   wissen, woher der Inhalt stammt.
 - **Wie der Körper heißt**, entscheidet der Plan und nicht die Auswertung:
@@ -80,6 +91,17 @@ gegen eine geänderte Quelle neu rechnen.
   bringt die Namen ihrer Teile in der Datei mit.
 
 ## Grenzen
+
+- **Konturauswahl ist ein Operationswert.** `read_profiles` liefert geometrisch
+  stabile Kennungen samt Außen- und Innenringen; `load_outline.contours` speichert
+  eine JSON-Liste dieser Kennungen. Eine leere Liste oder unbekannte Kennung
+  hält an. Nur der historische leere Text übernimmt unverändert alle Profile,
+  einschließlich ihrer bisherigen Extrusion. Neue ausdrückliche Auswahlen
+  verlangen geschlossene Körper. `profile_reason` prüft denselben Rechenweg
+  für die Vorschau; unbrauchbare Profile bleiben mit Grund sichtbar.
+- **Vorschau und Operation teilen `extrude_profiles`.** Die Zielbreite skaliert
+  die ausgewählten Profile zusammen in X/Y, bewahrt ihre relative Lage und
+  ändert die ausdrücklich angegebene Höhe nicht. Löcher bleiben beim Profil.
 
 - Ein Fehlerbild wird eine **Testdatei** in `tests/data/`, kein Sonderfall im
   Code.

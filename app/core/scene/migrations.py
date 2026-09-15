@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 24
+FORMAT_VERSION: Final = 25
 
 
 @dataclass(frozen=True, slots=True)
@@ -585,6 +585,23 @@ def _add_protected_faces(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_raw_import_coordinates(data: dict[str, Any]) -> dict[str, Any]:
+    """24 → 25: Bestehende Ladeschritte behalten ihre Rohachsen und Einheiten.
+
+    Neue GLB-/GLTF-Importe folgen Meter und Y-oben. Das darf weder beim Öffnen
+    noch nach Undo eine alte importierte oder erzeugte Quelle umdeuten.
+    Deshalb werden auch sämtliche gespeicherten Änderungsseiten erfasst.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        for state in (transaction.get("changes") or {}).values():
+            operations.extend((state.get("edited_ops") or {}).values())
+    for operation in operations:
+        if operation is not None and operation.get("op") == "load":
+            operation.setdefault("params", {}).setdefault("coordinates", "legacy_raw")
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -610,6 +627,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=21, to_version=22, apply=_add_slot_profile_bindings),
     Step(from_version=22, to_version=23, apply=_remember_the_export),
     Step(from_version=23, to_version=24, apply=_add_protected_faces),
+    Step(from_version=24, to_version=25, apply=_keep_raw_import_coordinates),
 )
 
 

@@ -27,7 +27,10 @@ from app.core.geom.texture import face_colours
 from app.core.ingest import loader
 from app.core.ingest.loader import READABLE_SUFFIXES, normalise, read_local_payload, read_model
 from app.core.ingest.outline import OUTLINE_SUFFIXES, extrude
-from app.core.ingest.plan import MODEL_SUFFIXES
+from app.core.ingest.plan import MODEL_SUFFIXES, import_plan
+from app.core.scene import History, evaluate
+from app.core.scene.project import ProjectSources, new_project
+from app.core.types import Profile, Source
 
 
 def _box() -> trimesh.Trimesh:
@@ -95,6 +98,43 @@ def test_every_outline_format_keeps_the_hole_and_height() -> None:
         assert result.mesh.bounds.size == pytest.approx((40.0, 20.0, 3.0)), suffix
         assert result.mesh.volume == pytest.approx((40.0 * 20.0 - 20.0 * 10.0) * 3.0), suffix
         assert result.mesh.is_watertight, suffix
+
+
+@pytest.mark.parametrize("position", ["", 'x="0"', 'y="0"'])
+def test_svg_rectangles_use_zero_for_missing_position(position: str) -> None:
+    payload = (
+        f'<svg xmlns="http://www.w3.org/2000/svg"><rect {position} width="20" height="10"/></svg>'
+    ).encode()
+    result = extrude(payload, ".svg", height=3.0)
+    assert result.mesh.bounds.size == pytest.approx((20.0, 10.0, 3.0))
+    assert result.mesh.volume == pytest.approx(600.0)
+    assert result.mesh.is_watertight
+
+
+def test_svg_defaults_preserve_transforms_and_an_explicit_position() -> None:
+    payload = b"""<svg xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(12, 15) scale(2, 3)">
+      <rect x="4" width="20" height="10"/>
+      <rect x="6" y="2" width="16" height="6"/>
+    </g></svg>"""
+    result = extrude(payload, ".svg", height=3.0)
+    assert result.mesh.bounds.size == pytest.approx((40.0, 30.0, 3.0))
+    assert result.mesh.volume == pytest.approx((1200.0 - 576.0) * 3.0)
+    assert result.mesh.is_watertight
+
+
+def test_svg_defaults_do_not_resolve_external_entities(tmp_path: Path) -> None:
+    secret = tmp_path / "outside.txt"
+    secret.write_text("20", encoding="utf-8")
+    payload = (
+        f'<!DOCTYPE svg [<!ENTITY outside SYSTEM "{secret.as_uri()}">]>'
+        '<svg xmlns="http://www.w3.org/2000/svg">'
+        '<rect width="&outside;" height="10"/></svg>'
+    ).encode()
+    with pytest.raises(ValidationError) as refused:
+        extrude(payload, ".svg", height=3.0)
+    assert refused.value.constraint == "unreadable"
+    assert refused.value.suggestions
 
 
 @pytest.mark.skipif(not brep_available(), reason="OpenCASCADE ist optional")
@@ -246,3 +286,110 @@ def test_imported_colours_survive_the_evaluation_cache() -> None:
     colours = face_colours(restored.raw)
     assert colours is not None
     assert len(np.unique(np.rint(colours * 255.0).astype(np.uint8), axis=0)) >= 2
+
+
+def _evaluated_import(payload: bytes, suffix: str, profile: Profile, unit: str = "auto"):
+    """Der gemeinsame Importplan und seine tatsächliche Operation."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=f"sources/body{suffix}", sha256=""
+    )
+    project.sources["src_1"] = payload
+    plan = import_plan("src_1", f"body{suffix}", payload, unit=unit)
+    assert not plan.asks_unit, "glTF states metres, unless the user overrides them"
+    History(project.document).apply(plan.title, [plan.draft])
+
+    def must_not_ask(*_args: object) -> str:
+        raise AssertionError("glTF import must not guess its declared unit")
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=must_not_ask)
+    assert result.complete, result.scene.report.findings
+    return project, result.scene.objects["obj_1"].mesh
+
+
+@pytest.mark.parametrize("suffix", [".glb", ".gltf"])
+def test_new_gltf_imports_apply_metres_and_y_up_once(suffix: str, profile: Profile) -> None:
+    body = trimesh.creation.box(extents=(0.02, 0.016, 0.012))
+    node = np.array(
+        [[0.0, -3.0, 0.0, 0.04], [2.0, 0.0, 0.0, 0.05], [0.0, 0.0, 4.0, 0.06], [0.0, 0.0, 0.0, 1.0]]
+    )
+    scene = trimesh.Scene()
+    scene.add_geometry(body, transform=node)
+    if suffix == ".glb":
+        payload = _bytes(scene.export(file_type="glb"))
+    else:
+        bundle = trimesh.exchange.gltf.export_gltf(scene, merge_buffers=True)
+        document = json.loads(bundle["model.gltf"])
+        for entry in document["buffers"]:
+            entry["uri"] = "data:application/octet-stream;base64," + base64.b64encode(
+                bundle[entry["uri"]]
+            ).decode("ascii")
+        payload = json.dumps(document).encode()
+    project, mesh = _evaluated_import(payload, suffix, profile)
+    assert project.document.ops[0].params["coordinates"] == "gltf"
+    assert mesh.bounds.size == pytest.approx((48.0, 48.0, 40.0))
+    assert mesh.bounds.centre == pytest.approx((40.0, -60.0, 50.0))
+    assert mesh.is_watertight
+
+
+@pytest.mark.parametrize(("unit", "factor"), [("mm", 1.0), ("cm", 10.0), ("in", 25.4)])
+def test_explicit_gltf_units_keep_precedence(unit: str, factor: float, profile: Profile) -> None:
+    payload = _bytes(trimesh.Scene(_box()).export(file_type="glb"))
+    project, mesh = _evaluated_import(payload, ".glb", profile, unit=unit)
+    assert project.document.ops[0].params["unit"] == unit
+    assert mesh.bounds.size == pytest.approx(np.array((20.0, 12.0, 16.0)) * factor)
+
+
+def test_own_glb_export_round_trips_dimensions_and_upright(
+    profile: Profile, tmp_path: Path
+) -> None:
+    from app.core.export.writer import _glb_bytes
+    from app.core.scene.project import load, save
+
+    body = _box()
+    body.apply_translation((3.0, 7.0, 11.0))
+    project, imported = _evaluated_import(_glb_bytes(MeshData.of(body), None), ".glb", profile)
+    assert imported.bounds.size == pytest.approx((20.0, 16.0, 12.0))
+    assert imported.bounds.centre == pytest.approx((3.0, 7.0, 11.0))
+    assert imported.volume == pytest.approx(body.volume)
+    save(project, tmp_path / "gltf.p3d")
+    reopened = load(tmp_path / "gltf.p3d")
+    assert reopened.document.ops[0].params["coordinates"] == "gltf"
+    result = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+    assert result.complete
+    restored = result.scene.objects["obj_1"].mesh
+    assert np.array_equal(restored.raw.vertices, imported.raw.vertices)
+    assert np.array_equal(restored.raw.faces, imported.raw.faces)
+
+
+def test_generated_glb_keeps_raw_axes_and_one_working_size(profile: Profile) -> None:
+    from app.core.backends.mesh import ScriptedMeshBackend
+    from app.core.generate import WORKING_SIZE_MM, from_text
+
+    body = trimesh.creation.box(extents=(1.0, 2.0, 3.0))
+    payload = _bytes(trimesh.Scene(body).export(file_type="glb"))
+    project = new_project("centauri-carbon-2", "petg")
+    from_text(project, ScriptedMeshBackend(fallback=payload, suffix=".glb"), "Quader")
+    assert project.document.ops[0].params["coordinates"] == "legacy_raw"
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    mesh = next(iter(result.scene.objects.values())).mesh
+    assert mesh.bounds.size == pytest.approx(np.array((1.0, 2.0, 3.0)) * WORKING_SIZE_MM / 3.0)
+
+
+def test_v24_generator_glb_keeps_its_geometry_after_migration(profile: Profile) -> None:
+    from app.core.scene.project import load
+
+    project = load(Path(__file__).parent / "data/projects/generated_glb_v24.p3d")
+    assert project.document.ops[0].params["coordinates"] == "legacy_raw"
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    mesh = next(iter(result.scene.objects.values())).mesh
+    assert mesh.bounds.size == pytest.approx((100.0 / 3.0, 200.0 / 3.0, 100.0))
+    # Vor der Umrechnung kommt dieselbe Rohgeometrie wie im alten Projekt.
+    History(project.document).undo()
+    raw_result = evaluate(project.document, profile, sources=ProjectSources(project))
+    raw_mesh = next(iter(raw_result.scene.objects.values())).mesh
+    old_raw = read_model(project.sources["src_1"], ".glb")
+    assert np.array_equal(raw_mesh.raw.vertices, old_raw.raw.vertices)
+    assert np.array_equal(raw_mesh.raw.faces, old_raw.raw.faces)
