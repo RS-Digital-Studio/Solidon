@@ -139,7 +139,15 @@ Durchmesser darf weder einen Vorgabewert noch eine falsche Gruppe erzeugen.
 Innen- und Außenrundungen bilden getrennte Gruppen. Positiv kreisförmig
 belegte Zylinderwände tragen `radial=True`: Ihr Radius ist bearbeitbar,
 „Merkmal entfernen“ kann dort keine scharfe Ersatzkante herstellen und nennt
-stattdessen die Radiusbearbeitung.
+stattdessen die Radiusbearbeitung. **Eine solche Wand heißt in Objektbaum und
+Steckbrief „Runde Wand“**, nicht Verrundung — das Ende einer Lasche, der
+Boden einer Nut, die Innenwand eines Clips haben keine Kante, zu der sie
+gehören könnten; die grauen Zeilen des Panels sagen das mit einem eigenen
+Satz (`actions.ROUND_WALL_HAS_NO_PLACE`). Ob die Ecken auf einem Kreis
+liegen, prüft `radial_cylinder` gegen `ROUND_WALL_TOLERANCE` (10 µm) und
+nicht allein gegen die Schweißtoleranz: Die ist für Solidons eigene Netze
+bemessen, und eine eingelesene Wand liegt Mikrometer neben ihrem Kreis
+(Float32 der STL, Toleranz des fremden Kerns).
 
 Bei grob facettierten Langlöchern dürfen abgelehnte Bogenpaare über den
 gesamten zusammenhängenden Mantel als Stadion belegt werden. Die Richtung
@@ -385,7 +393,12 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   zwei Prozent wie bei Kugel und Torus): Ein Sechs- oder Achteck, ein
   gestrecktes Sechseck und eine Tasche 12 × 8 mit r = 3 bleiben draußen; eine
   Tasche, deren Eckradius die halbe Breite auf drei Prozent trifft, ist eines
-  — auf zwei Prozent ist sie die Form.
+  — auf zwei Prozent ist sie die Form. **Und der Weg muss dieselbe Toleranz
+  übersteigen** (`StadiumFit.good`): Ein Kreis, den der Zylinderfit an
+  seiner Streuung ablehnt — die Bohrung eines Bajonettrings mit drei Nasen
+  —, kam sonst als Stadion mit Weg 0,00005 mm durch, und im Baum stand ein
+  Langloch so lang wie breit. Was der Fit nicht von einem Kreis
+  unterscheiden kann, meldet er nicht; die Wand bleibt eine Bohrung.
 - **Die direkte Merkmalbearbeitung teilt ihre Kettenauskunft.** Ein bereits
   ermittelter `cavity`-Umfang kann an `actions_for()` und `bore_advice()`
   weitergereicht werden. Ein leeres Tupel ist dabei eine geprüfte fehlende

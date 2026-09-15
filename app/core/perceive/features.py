@@ -52,6 +52,27 @@ CYLINDER_TOLERANCE = 0.08
 #: anderen.
 CYLINDER_SPREAD = 0.02
 
+#: Wie weit die Ecken einer **runden Wand** vom gemeinsamen Kreis abliegen
+#: dürfen, in Millimetern — die Frage von :func:`radial_cylinder`.
+#:
+#: Dort galt allein die Schweißtoleranz, und die ist am Bauplan §17.1 für
+#: Solidons eigene Netze bemessen: ein Millionstel der Diagonale, an einem
+#: Körper von 170 mm also 0,2 µm. Ein eingelesenes Netz hält das nicht, auch
+#: wenn es aus einer Konstruktion stammt. Gemessen am Siebhalter eines Kunden
+#: (15.09.2026): Der Kragen Ø 57,00 liegt 0,3 µm neben seinem Kreis — das ist
+#: das Float32 der STL, aus der die 3MF entstand —, der Nutboden Ø 54,36 mit
+#: 281 Grad Überdeckung 3,9 µm, weil seine zwei Eckenreihen um 2 µm
+#: verschieden groß sind. Beides sind Zylinder, und beide fielen durch; der
+#: Nutboden stand als Verrundung im Baum, und das Panel schrieb an jede
+#: Zeile, er gehöre zu einer Kante.
+#:
+#: Zehn Mikrometer sind ein Fünftel der Sehnenhöhe, mit der der exakte Kern
+#: tesselliert (``units.MAX_FACET_SAG``): feiner löst kein Netz einen Kreis
+#: auf, und keine Einbuchtung, die ein Werkzeug sähe, ist kleiner. Das
+#: Stadion mit dem kleinsten Weg, das :data:`STADIUM_TOLERANCE` noch
+#: annimmt, liegt an Ø 12 rund 60 µm neben dem Kreis — Faktor sechs darüber.
+ROUND_WALL_TOLERANCE = 0.01
+
 #: Ein Fleck braucht mindestens so viele Dreiecke, um überhaupt beurteilt zu
 #: werden.
 MIN_PATCH_FACES = 6
@@ -303,8 +324,22 @@ class StadiumFit:
 
     @property
     def good(self) -> bool:
+        # **Ein Weg innerhalb der eigenen Toleranz ist keine Messung, sondern
+        # ein Kreis.** ``travel > EPS_GEOM`` hielt hier nur die Division auf;
+        # ein Kreis, den der Zylinderfit an seiner Streuung ablehnt, kam
+        # deshalb als Stadion mit Weg 0,00005 mm durch — gemessen am Ring
+        # eines Bajonettverschlusses (Siebhalter, 15.09.2026): die Bohrung
+        # Ø 57,4 trägt drei Nasen 1,4 mm nach innen, der Zylinderfit sagte
+        # ab, und im Objektbaum stand „Langloch Ø 57,39 auf 57,39 mm" mit
+        # sechs Handlungen, von denen jede die Nasen still weggeschnitten
+        # hätte. Der Rückstand ist relativ zum Radius und die Frage nach der
+        # Form muss dieselbe Auflösung haben: Unter zwei Prozent des Radius
+        # unterscheidet dieser Fit ein Stadion nicht von einem Kreis, und was
+        # er nicht unterscheiden kann, behauptet er nicht (§41).
         return (
-            self.residual <= STADIUM_TOLERANCE and self.radius > EPS_GEOM and self.travel > EPS_GEOM
+            self.residual <= STADIUM_TOLERANCE
+            and self.radius > EPS_GEOM
+            and self.travel > STADIUM_TOLERANCE * self.radius
         )
 
 
@@ -2499,10 +2534,12 @@ def radial_cylinder(
     hull = MultiPoint(flat).convex_hull
     if hull.geom_type != "Polygon":
         return None
-    tolerance = weld_tolerance(float(np.linalg.norm(body.extents)))
+    # Die Schweißtoleranz allein wies jede eingelesene Wand ab — die
+    # Begründung und die Zahlen stehen bei :data:`ROUND_WALL_TOLERANCE`.
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
     # Nach mehreren Schnitten können Sehnenpunkte um Rundungsfehler außen
     # liegen und dadurch selbst Hull-Ecken werden. Nur numerisch kollineare
-    # Unterteilungen fallen weg; derselbe Schweißabstand gilt am ganzen Netz.
+    # Unterteilungen fallen weg; derselbe Abstand gilt am ganzen Netz.
     outline = np.asarray(hull.simplify(tolerance).exterior.coords, dtype=float)[:-1]
     circle, radius = _fit_circle(outline)
     if radius <= tolerance:

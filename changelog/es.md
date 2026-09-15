@@ -19,10 +19,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ## 0.4.2
 
 ### Dibujo
+
 - Dos clics crean un polígono regular: primero el centro, luego una esquina. El número de esquinas se elige antes: de tres a doce. Un diámetro escrito queda como cota.
 - Una ranura surge de dos clics en los centros de sus extremos redondeados; el ancho está al lado en la barra. Ambos extremos mantienen el tamaño y los flancos, rectos.
 - Cuatro condiciones nuevas: ángulo en grados entre dos líneas, igual longitud o tamaño, punto en el centro de una línea, y concéntrico para dos círculos o arcos.
-
 - Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.
 - Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion.
 - Las formas del menú se pueden desplazar; las cotas de la entrada del menú se mantienen. Para cambiar una cota en la vista, haga doble clic en su tarjeta.
@@ -31,7 +31,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Fijo significa fijo: un punto fijado ya no sigue el arrastre. Las líneas exactamente horizontales o verticales se mantienen así, aunque después arrastre una esquina.
 
 ### Construir y modificar
-- Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.
 
 - Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.
 - Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.
@@ -41,6 +40,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los mensajes que remiten a los valores de la derecha nombran la ventana como se llama: Selección. Antes decían «panel de características», y así no se llama ninguna ventana.
 - «Reducir triángulos» avisa cuando una pieza ya tiene menos triángulos que la cantidad indicada: entonces no hay nada que reducir. Antes se quedaba igual, sin una palabra.
 - «Dar una postura» sin esqueleto avisa de que los huesos se crean en el editor de esqueleto: dos clics por hueso. Antes el paso no movía nada, en silencio.
+
+### Reconocimiento
+
+- Una pared curva —el extremo de una pestaña, el fondo de una ranura— ahora se llama así. Antes ponía «Redondeo» con una arista que no existe. El radio se puede cambiar.
+- Un agujero con resaltes en la pared, como el anillo de un cierre de bayoneta, es un agujero. Antes aparecía como un agujero alargado tan largo como ancho, y cualquier acción quitaba los resaltes.
 
 ### Vista y manejo
 
@@ -56,6 +60,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En un modelo grande la vista previa llega en menos de un segundo en vez de varios: Solidon la calcula de forma más basta y escribe «Vista previa aproximada». Aplicar sigue siendo exacto.
 - «Separar por una línea dibujada» empieza en el centro de la pieza y no en su cara inferior, como «Dividir». Antes la vista previa solo mostraba que el plano no separa nada.
 - «Alinear con una característica» le pide ahora que elija la segunda característica en lugar de explicarle una notación.
+- El arranque ya no espera a la tarjeta gráfica: se busca mientras se construye la ventana. En equipos que tardaban en encontrarla, el programa se quedaba parado unos segundos.
 
 ### Archivos y exportación
 

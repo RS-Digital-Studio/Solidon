@@ -18,10 +18,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ## 0.4.2
 
 ### Desenho
+
 - Dois cliques criam um polígono regular: primeiro o centro, depois um canto. O número de cantos define-se antes — de três a doze. Um diâmetro escrito fica como cota.
 - Um furo oblongo nasce de dois cliques nos centros das suas extremidades arredondadas; a largura fica ao lado na barra. Ambas mantêm o tamanho e os flancos, direitos.
 - Quatro novas condições: ângulo em graus entre duas linhas, igual comprimento ou tamanho, ponto a meio de uma linha, concêntrico para dois círculos ou arcos.
-
 - Um ponto arrastado fica no ponteiro e os vizinhos seguem-no: um canto do retângulo leva os dois lados consigo, uma linha estica a forma. Antes, o canto só ia parte do caminho.
 - Um retângulo feito com cliques é livre: sem ponto fixo, sem cotas enquanto não as escrever. Uma largura ou altura escrita fica como cota — como no Fusion.
 - As formas do menu podem ser deslocadas; as cotas da entrada do menu mantêm-se. Para alterar uma cota na vista, faça duplo clique no seu cartão.
@@ -30,7 +30,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Fixo quer dizer fixo: um ponto fixado já não segue o arrasto. As linhas exatamente horizontais ou verticais mantêm-se assim, mesmo que depois arraste um canto.
 
 ### Construir e alterar
-- Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.
 
 - Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.
 - Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.
@@ -40,6 +39,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As mensagens que remetem para os valores à direita nomeiam a janela como ela se chama: Seleção. Antes diziam «painel de características».
 - «Reduzir triângulos» avisa quando uma peça já tem menos triângulos do que o número indicado: então não há nada a reduzir. Antes ficava como estava, sem uma palavra.
 - «Dar uma pose» sem esqueleto avisa que os ossos nascem no editor de esqueleto — dois cliques por osso. Antes o passo não movia nada, em silêncio.
+
+### Reconhecimento
+
+- Uma parede curva — a ponta de uma patilha, o fundo de uma ranhura — chama-se agora assim. Antes dizia «Arredondamento» com uma aresta que não existe. O raio pode ser alterado.
+- Um furo com saliências na parede, como o anel de um fecho de baioneta, é um furo. Antes aparecia como um furo oblongo tão comprido quanto largo, e qualquer ação removia as saliências.
 
 ### Vista e utilização
 
@@ -55,6 +59,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Num modelo grande a pré-visualização chega em menos de um segundo em vez de vários: o Solidon calcula-a de forma mais grosseira e escreve «Pré-visualização aproximada». Aplicar continua exato.
 - «Separar por uma linha desenhada» começa no meio da peça e não na sua face inferior, como «Dividir». Antes a pré-visualização mostrava apenas que o plano não separa nada.
 - «Alinhar por uma característica» pede-lhe agora que escolha a segunda característica em vez de lhe explicar uma notação.
+- O arranque já não espera pela placa gráfica: é procurada enquanto a janela é construída. Em máquinas que demoravam, o programa ficava parado durante segundos.
 
 ### Ficheiros e exportação
 

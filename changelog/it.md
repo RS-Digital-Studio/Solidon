@@ -18,10 +18,10 @@ scrive in `website/version.json`.
 ## 0.4.2
 
 ### Disegno
+
 - Due clic creano un poligono regolare: prima il centro, poi un angolo. Il numero di angoli si imposta prima: da tre a dodici. Un diametro digitato resta come quota.
 - Un'asola nasce da due clic sui centri delle sue estremità arrotondate; la larghezza sta accanto nella barra. Le due estremità restano uguali e i fianchi diritti.
 - Quattro nuovi vincoli: angolo in gradi fra due linee, stessa lunghezza o dimensione, punto a metà di una linea, concentrico per due cerchi o archi.
-
 - Un punto trascinato resta sotto il puntatore e i vicini lo seguono: un angolo del rettangolo porta con sé i due lati, una linea allunga la forma. Prima l'angolo arrivava solo a metà strada.
 - Un rettangolo fatto con i clic è libero: nessun punto fisso, nessuna quota finché non la digiti. Una larghezza o altezza digitata resta come quota, come in Fusion.
 - Le forme del menu si possono spostare; le quote della voce di menu restano. Per cambiare una quota nella vista, fai doppio clic sulla sua scheda.
@@ -30,7 +30,6 @@ scrive in `website/version.json`.
 - Fisso vuol dire fisso: un punto fissato non segue più il trascinamento. Le linee esattamente orizzontali o verticali restano tali, anche se dopo trascini un angolo.
 
 ### Costruire e modificare
-- Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.
 
 - Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.
 - Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.
@@ -40,6 +39,11 @@ scrive in `website/version.json`.
 - I messaggi che rimandano ai valori a destra chiamano la finestra come si chiama: Selezione. Prima dicevano « pannello delle caratteristiche ».
 - « Ridurre i triangoli » lo dice quando un pezzo ha già meno triangoli del numero indicato: allora non c'è nulla da ridurre. Prima restava com'era, senza una parola.
 - « Dai una posa » senza scheletro segnala che le ossa nascono nell'editor dello scheletro: due clic per osso. Prima il passo non muoveva nulla, in silenzio.
+
+### Riconoscimento
+
+- Una parete curva — l’estremità di una linguetta, il fondo di una scanalatura — ora si chiama così. Prima c’era «Raccordo» con uno spigolo che non esiste. Il raggio si può cambiare.
+- Un foro con nasi nella parete, come l’anello di una chiusura a baionetta, è un foro. Prima compariva come un’asola lunga quanto larga, e ogni azione avrebbe tolto i nasi.
 
 ### Vista e utilizzo
 
@@ -55,6 +59,7 @@ scrive in `website/version.json`.
 - Su un modello grande l'anteprima arriva in meno di un secondo invece che in diversi: Solidon la calcola più grossolanamente e scrive «Anteprima grossolana». Applicare resta esatto.
 - «Separare lungo una linea disegnata» parte dal centro del pezzo e non dalla sua faccia inferiore, come «Dividere». Prima l'anteprima mostrava soltanto che il piano non separa nulla.
 - «Allineare a una caratteristica» ti chiede ora di scegliere la seconda caratteristica invece di spiegarti una notazione.
+- L'avvio non aspetta più la scheda grafica: viene cercata mentre la finestra si costruisce. Su macchine che ci mettevano molto, il programma restava fermo per secondi.
 
 ### File ed esportazione
 

@@ -14,6 +14,12 @@ MakerWorld (Bambu Studio) und vom Elegoo-Slicer, darunter `chufang.3mf`
 Teilflächenbemalung) und drei Elegoo-Dateien mit `<slic3rpe:shape …/>` ohne
 Namensraum. Nicht im Repository, nicht in `tests/data/`.
 
+**Am 15.09.2026 gegen 05:42 waren alle sechzehn aus dem Ordner verschwunden**
+— mitten in einer Sitzung, in der der Vorher/Nachher-Vergleich der Erkennung
+eine halbe Stunde vorher noch über alle lief. Wer den Korpus braucht, prüft
+zuerst, ob er noch da ist, und bittet Robert sonst um die Dateien (MakerWorld
+gibt sie nur angemeldet heraus).
+
 **Why:** Ein Kundenbericht ohne Anhang (S-20260914-e4b6d7) nennt nur die
 Fehlerzeile; MakerWorld gibt die Datei nur angemeldet heraus. Der Ordner hat
 in einer Minute vier von sechzehn Dateien als abgewiesen gezeigt und beide

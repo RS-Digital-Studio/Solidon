@@ -526,3 +526,31 @@ liegt. Vier Sätze dazu:
   Magneten und ein vergessener Negativkörper sind topologisch dieselbe Sache.
   Welche von beiden vorliegt, weiß nur der Kunde; Solidon benennt, was da ist,
   und urteilt nicht.
+
+## Eine Formtoleranz wird an fremden Netzen gemessen, nicht nur an eigenen (15.09.2026)
+
+Der Fund: `radial_cylinder` prüfte die Ecken einer runden Wand gegen die
+Schweißtoleranz — ein Millionstel der Diagonale, 0,2 µm an einem Körper von
+170 mm. Solidons eigene Netze aus double-Rechnung halten das; der Siebhalter
+eines Kunden nicht: Sein Kragen Ø 57,00 lag 0,3 µm neben dem Kreis (Float32
+der STL), sein Nutboden Ø 54,36 3,9 µm. Beide Zylinder fielen durch, und im
+Objektbaum stand „Verrundung R27,18" mit vier grauen Zeilen, die eine Kante
+nannten, die es nicht gibt. Und im selben Modell kam die Bohrung eines
+Bajonettrings mit drei Nasen als „Langloch Ø 57,39 auf 57,39 mm" heraus —
+ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
+`EPS_GEOM` sein musste.
+
+* **Schweißtoleranz und Formtoleranz sind zwei Fragen.** Die erste sagt, ob
+  zwei Ecken derselbe Ort sind; die zweite, ob Ecken auf einer Form liegen.
+  Eine Formfrage bekommt eine Zahl, die ein importiertes Netz einhalten kann
+  (`features.ROUND_WALL_TOLERANCE`, 10 µm — ein Fünftel von
+  `units.MAX_FACET_SAG`), und die an den echten Dateien aus dem
+  Downloads-Korpus gemessen ist, nicht nur am eigenen.
+* **Ein Fit behauptet nichts unter seiner eigenen Auflösung.** Ein Stadion
+  mit einem Weg unter `STADIUM_TOLERANCE · Radius` ist von einem Kreis nicht
+  zu unterscheiden und wird keines (`StadiumFit.good`). Was der Zylinderfit
+  ablehnt, darf ein anderer Fit nicht mit einer weicheren Frage annehmen.
+* **Eine runde Wand heißt runde Wand.** Ein Zylinderausschnitt über 180 Grad
+  (`radial`) gehört zu keiner Kante; Objektbaum und Steckbrief sagen „Runde
+  Wand", das Panel begründet die grauen Zeilen mit
+  `actions.ROUND_WALL_HAS_NO_PLACE` statt mit der Kante.

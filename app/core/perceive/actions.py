@@ -204,6 +204,23 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
 
 _UNKNOWN_KIND: Final = _("Für diese Art von Merkmal gibt es noch keine Handlung.")
 
+#: Der Satz an einer **runden Wand** für die Zeilen, die eine Verrundung
+#: nicht annimmt.
+#:
+#: ``radial`` heißt: ein mindestens halber Zylindermantel, der zu keiner
+#: Kante gehört — das abgerundete Ende einer Lasche, der Nutboden eines
+#: Bajonettverschlusses, die Innenwand eines Clips. Der Satz aus
+#: :data:`NOT_APPLICABLE` sagt an ihr etwas Falsches: „gehört zu ihrer Kante
+#: und hat ohne sie keine Lage" — es gibt keine Kante. Gemessen am Siebhalter
+#: eines Kunden (15.09.2026): Der Nutboden Ø 54,36 stand mit vier grauen
+#: Zeilen im Panel, und jede nannte die Kante. Wie beim Entfernen
+#: (``actions_for``) sagt die Zeile hier, was die Wand ist und was an ihr
+#: geht — ohne einzelnes Verb, denn ``_folded`` legt die Zeilen zusammen.
+ROUND_WALL_HAS_NO_PLACE: Final = _(
+    "Eine runde Wand ist ein Stück des Körpers und hat keine eigene Lage — "
+    "sie folgt ihm. Was an ihr geht, ist ihr Radius über „Merkmal ändern“."
+)
+
 #: Woher ein Parameter seinen **heutigen** Wert nimmt.
 #:
 #: Der Schlüssel ist der Parametername der Operation, der Wert sagt, welche
@@ -496,6 +513,12 @@ def actions_for(
                     note=_note_for(fitting.name, feature, features, mesh=mesh, cavity=cavity),
                     fields=_fields_of(fitting, feature),
                 )
+            )
+        elif feature.kind == "fillet" and feature.params.get("radial", False):
+            # Dieselbe Zeile grau wie an jeder Verrundung — nur der Satz ist
+            # ein anderer, denn diese Wand hat keine Kante.
+            actions.append(
+                FeatureAction(title=known[0].title, op=None, reason=ROUND_WALL_HAS_NO_PLACE)
             )
         else:
             # Der Titel der ersten bekannten Operation benennt die Zeile —

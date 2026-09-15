@@ -241,3 +241,66 @@ def test_the_radial_check_does_not_write_a_temporary_file(monkeypatch: pytest.Mo
     )
     assert inner.params.get("radial") is True, "ohne die radiale Wand misst dieser Test nichts"
     assert not seen, f"die Erkennung legte {len(seen)} temporäre Dateien an"
+
+
+def _clip_with_corners_nudged(amplitude_mm: float, seed: int = 15) -> MeshData:
+    """Der Clip, wie ihn eine fremde Datei bringt: Ecken um Mikrometer neben dem Kreis.
+
+    Eine STL speichert Float32, und ein Netz aus einer anderen Konstruktion
+    trägt die Toleranz seines Kerns; beides verschiebt die Ecken einer runden
+    Wand um Bruchteile eines Hundertstels. Verschoben wird hier **radial**
+    zur Z-Achse des Clips, deterministisch aus dem Startwert, damit der Fall
+    reproduzierbar bleibt.
+    """
+    path = Path(__file__).parent / "data" / "meshes" / "open_cylinder_clip.stl"
+    body = trimesh.load_mesh(path, process=True)
+    vertices = np.array(body.vertices, dtype=float)
+    radial = vertices[:, :2]
+    lengths = np.linalg.norm(radial, axis=1)
+    nudge = np.random.default_rng(seed).uniform(-amplitude_mm, amplitude_mm, len(vertices))
+    scale = np.where(lengths > 0.0, (lengths + nudge) / np.where(lengths > 0.0, lengths, 1.0), 1.0)
+    vertices[:, :2] = radial * scale[:, None]
+    return MeshData.of(trimesh.Trimesh(vertices, body.faces, process=False))
+
+
+def _inner_wall(mesh: MeshData) -> Feature:
+    found = detect(mesh)
+    return min(
+        (feature for feature in found.values() if feature.kind == "fillet"),
+        key=lambda feature: float(feature.params["radius"]),
+    )
+
+
+def test_a_round_wall_from_a_foreign_file_keeps_its_radius() -> None:
+    """Mikrometer neben dem Kreis sind keine Kante — die Wand bleibt radial (§21.1).
+
+    Gemessen am Siebhalter eines Kunden (15.09.2026): Der Nutboden Ø 54,36
+    mit 281 Grad Überdeckung lag 3,9 µm neben seinem Kreis, der Kragen
+    Ø 57,00 0,3 µm — und beide fielen an der Schweißtoleranz von 0,2 µm
+    durch. Im Objektbaum stand „Verrundung R27,18", und das Panel schrieb an
+    vier Zeilen, die Wand gehöre zu ihrer Kante. Die Wand hat keine.
+    """
+    wall = _inner_wall(_clip_with_corners_nudged(0.004))
+
+    assert wall.params.get("radial") is True
+    assert float(wall.params["radius"]) == pytest.approx(12.0, abs=0.01)
+
+
+def test_a_dent_in_a_round_wall_is_still_no_round_wall() -> None:
+    """Die Gegenprobe zur Toleranz: Eine Delle, die ein Werkzeug sähe, bleibt eine.
+
+    Zehn Mikrometer nehmen die Streuung einer fremden Datei auf; was eine
+    Extrusionsbahn sehen kann, liegt weit darüber. Eine Ecke um ein Zehntel
+    nach innen gedrückt ist keine runde Wand, und die Prüfung sagt es.
+    """
+    clean = _clip_with_corners_nudged(0.0)
+    body = clean.raw.copy()
+    vertices = np.array(body.vertices, dtype=float)
+    inner = np.flatnonzero(np.isclose(np.linalg.norm(vertices[:, :2], axis=1), 12.0, atol=0.01))
+    assert len(inner) > 8, "ohne Ecken auf der Innenwand misst dieser Test nichts"
+    victim = int(inner[len(inner) // 2])
+    vertices[victim, :2] *= (12.0 + 0.1) / 12.0
+    dented = MeshData.of(trimesh.Trimesh(vertices, body.faces, process=False))
+
+    assert _inner_wall(clean).params.get("radial") is True
+    assert _inner_wall(dented).params.get("radial") is None

@@ -19,10 +19,10 @@ dans `website/version.json`.
 ## 0.4.2
 
 ### Dessin
+
 - Deux clics posent un polygone régulier : d'abord le centre, puis un coin. Le nombre de coins se règle avant — de trois à douze. Un diamètre saisi reste comme cote.
 - Un trou oblong naît de deux clics sur les centres de ses extrémités arrondies ; la largeur est à côté dans la barre. Les deux bouts gardent leur taille, les flancs restent droits.
 - Quatre nouvelles contraintes : angle en degrés entre deux lignes, même longueur ou taille, point au milieu d'une ligne, concentrique pour deux cercles ou arcs.
-
 - Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.
 - Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion.
 - Les formes du menu se déplacent ; les cotes de l'entrée du menu restent. Pour modifier une cote dans la vue, double-cliquez sur sa carte.
@@ -31,7 +31,6 @@ dans `website/version.json`.
 - Fixe veut dire fixe : un point fixé ne suit plus le déplacement. Les lignes exactement horizontales ou verticales le restent, même si vous déplacez un coin ensuite.
 
 ### Construire et modifier
-- Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.
 
 - Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.
 - Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.
@@ -41,6 +40,11 @@ dans `website/version.json`.
 - Les messages qui renvoient aux valeurs à droite nomment la fenêtre telle qu'elle s'appelle : Sélection. Avant, ils disaient « panneau des caractéristiques ».
 - « Réduire les triangles » le dit quand une pièce a déjà moins de triangles que le nombre saisi : il n'y a alors rien à réduire. Avant, elle restait telle quelle, sans un mot.
 - « Donner une pose » sans squelette indique que les os se créent dans l'éditeur de squelette — deux clics par os. Avant, l'étape ne déplaçait rien, en silence.
+
+### Reconnaissance
+
+- Une paroi courbe — le bout d’une patte, le fond d’une rainure — s’appelle désormais ainsi. Avant, il y avait « Congé » avec une arête qui n’existe pas. Le rayon se modifie.
+- Un perçage avec des ergots dans sa paroi, comme la bague d’une fermeture à baïonnette, est un perçage. Avant, c’était un trou oblong aussi long que large, et chaque action aurait ôté les ergots.
 
 ### Vue et utilisation
 
@@ -56,6 +60,7 @@ dans `website/version.json`.
 - Sur un grand modèle, l'aperçu arrive en moins d'une seconde au lieu de plusieurs : Solidon le calcule plus grossièrement et écrit « Aperçu grossier ». L'application reste exacte.
 - « Séparer selon une ligne dessinée » commence au milieu de la pièce et non sous elle, comme « Séparer ». Auparavant, l'aperçu montrait seulement que le plan ne sépare rien.
 - « Aligner sur une caractéristique » vous demande maintenant de choisir la deuxième caractéristique au lieu de vous expliquer une notation.
+- Le démarrage n'attend plus la carte graphique : elle est recherchée pendant que la fenêtre se construit. Sur les machines qui mettaient longtemps, le programme restait figé plusieurs secondes.
 
 ### Fichiers et export
 

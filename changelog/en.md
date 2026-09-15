@@ -18,10 +18,10 @@ it into `website/version.json`.
 ## 0.4.2
 
 ### Drawing
+
 - Two clicks set a regular polygon: first the centre, then a corner. You choose the number of corners beforehand — three to twelve. A typed diameter stays on as a dimension.
 - A slot comes from two clicks on the centres of its round ends; the width sits next to them in the bar. Both ends stay the same size, the flanks stay straight.
 - Four new constraints: an angle in degrees between two lines, equal length or size, a point at the middle of a line, concentric for two circles or arcs.
-
 - A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.
 - A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion.
 - Shapes from the menu can be moved; the dimensions from the menu entry stay. To change a dimension in the view, double-click its card.
@@ -39,6 +39,11 @@ it into `website/version.json`.
 - Messages pointing to the values on the right now name the window the way it is named: Selection. Before they said “feature panel”, and no window is called that.
 - “Reduce triangles” says so when a part already has fewer triangles than the number you entered — there is nothing to reduce then. Before, it simply stayed as it was.
 - “Set a pose” without an armature says that the bones are made in the skeleton editor — two clicks per bone. Before, the step silently moved nothing.
+
+### Recognition
+
+- A curved wall — the end of a tab, the floor of a groove — is now called that. Before, it said “Fillet” with an edge that does not exist. Its radius can be changed.
+- A bore with lugs in its wall, such as the ring of a bayonet mount, is a bore. Before, it appeared as a slot as long as it was wide, and every action would have removed the lugs.
 
 ### View and operation
 

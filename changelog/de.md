@@ -43,10 +43,10 @@ Nutzen da und sonst nichts.
 ## 0.4.2
 
 ### Zeichnen
+
 - Zwei Klicks setzen ein regelmäßiges Vieleck: erst die Mitte, dann eine Ecke. Die Eckenzahl stellen Sie vorher ein — drei bis zwölf. Ein getippter Durchmesser bleibt als Maß stehen.
 - Ein Langloch entsteht aus zwei Klicks auf die Mitten der runden Enden; die Breite steht daneben in der Leiste. Beide Enden bleiben gleich groß, die Flanken gerade.
 - Vier neue Bedingungen: Winkel in Grad zwischen zwei Linien, gleich lang beziehungsweise gleich groß, Punkt auf der Mitte einer Linie, konzentrisch für zwei Kreise oder Bögen.
-
 - Ein gezogener Punkt bleibt am Zeiger, und die Nachbarn folgen: Eine Ecke des Rechtecks zieht die beiden Seiten mit, eine Linie streckt die Form. Vorher kam die Ecke nur ein Stück weit.
 - Ein geklicktes Rechteck ist frei: kein Festpunkt, keine Maße, solange Sie keine tippen. Eine getippte Breite oder Höhe bleibt als Maß stehen — so wie in Fusion.
 - Formen aus dem Menü lassen sich verschieben; die Maße aus dem Menüeintrag bleiben. Ein Maß im Bild ändern Sie per Doppelklick auf seine Karte.
@@ -64,6 +64,11 @@ Nutzen da und sonst nichts.
 - Meldungen, die auf die Werte rechts verweisen, nennen das Fenster so, wie es heißt: Auswahl. Vorher stand dort „Merkmalfenster“, und so heißt kein Fenster.
 - „Dreiecke verringern“ sagt es, wenn ein Teil schon weniger Dreiecke hat als die eingetragene Zahl — dann gibt es nichts zu verringern. Vorher blieb es stumm, wie es war.
 - „Stellung geben“ ohne Skelett meldet, dass die Knochen im Skeletteditor entstehen — zwei Klicks je Knochen. Vorher bewegte der Schritt stumm nichts.
+
+### Erkennen
+
+- Eine runde Wand — das Ende einer Lasche, der Boden einer Nut — heißt jetzt so. Vorher stand dort „Verrundung“ mit einer Kante, die es nicht gibt. Der Radius lässt sich ändern.
+- Eine Bohrung mit Nasen in der Wand, etwa der Ring eines Bajonettverschlusses, ist eine Bohrung. Vorher stand dort ein Langloch so lang wie breit, und jede Handlung hätte die Nasen entfernt.
 
 ### Ansicht und Bedienung
 

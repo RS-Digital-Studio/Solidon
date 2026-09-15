@@ -416,7 +416,12 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     if feature.kind == "fillet":
         # **R und nicht Ø.** Eine Verrundung wird über ihren Radius benannt:
         # so sagt es der Kunde, so steht es in Fusion, so heißt sie im Slicer.
-        shape = tr("Hohlkehle") if params.get("recess") else tr("Verrundung")
+        # Eine runde Wand (``radial``) heißt wie in der Oberfläche — der
+        # Agent soll an ihr keine Kante suchen, die es nicht gibt.
+        if params.get("radial"):
+            shape = tr("Runde Wand innen") if params.get("recess") else tr("Runde Wand")
+        else:
+            shape = tr("Hohlkehle") if params.get("recess") else tr("Verrundung")
         # **Die Achse nur, wenn es eine gibt.** Eine Verrundung an einer Kante
         # läuft entlang einer Achse; die Ecke, an der drei zusammentreffen, ist
         # ein Kugelstück und hat keine. Mit einem Vorgabewert stand dort „Achse

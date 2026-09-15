@@ -1904,6 +1904,14 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     # vorbei. Aufgefallen ist es keinem Test: Sie fragen, *ob* ein Merkmal da
     # ist, nicht, *was* dort steht.
     if feature.kind == "fillet":
+        # **Eine runde Wand heißt nicht Verrundung.** Der Nutboden eines
+        # Bajonettverschlusses ist ein Zylinder mit 281 Grad Überdeckung und
+        # trägt ``radial`` (Siebhalter eines Kunden, 15.09.2026); als
+        # „Verrundung R27,18" im Baum sucht der Kunde die Kante, die es nicht
+        # gibt. Dasselbe Wort steht schon im Panel: „Diese runde Wand ist
+        # keine abgerundete Kante."
+        if feature.params.get("radial"):
+            return tr("Runde Wand innen") if feature.params.get("recess") else tr("Runde Wand")
         return tr("Hohlkehle") if feature.params.get("recess") else tr("Verrundung")
     if feature.kind == "edge_loop":
         return tr("Offene Kante")

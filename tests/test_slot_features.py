@@ -1321,7 +1321,10 @@ def a_bore_with_three_lugs(
             angle = math.radians(start + offset)
             inner.append((radius * math.cos(angle), radius * math.sin(angle)))
         outer = [
-            ((wall + 1.0) * math.cos(math.radians(start + offset)), (wall + 1.0) * math.sin(math.radians(start + offset)))
+            (
+                (wall + 1.0) * math.cos(math.radians(start + offset)),
+                (wall + 1.0) * math.sin(math.radians(start + offset)),
+            )
             for offset in (lug_width_deg / 2.0 + ramp_deg, -(lug_width_deg / 2.0 + ramp_deg))
         ]
         lug = trimesh.creation.extrude_polygon(Polygon(inner + outer), height=3.0)
@@ -1341,6 +1344,12 @@ def test_a_bore_with_three_lugs_is_a_bore_and_no_slot() -> None:
     Nasen still weggeschnitten. Ein Weg innerhalb der Toleranz des Fits
     ist keine Messung (§41); die Wand ist eine Bohrung, die Nasen sind, was
     sie sind.
+
+    **Was dieser Test hält und was nicht:** das Ergebnis am Nachbau. Den
+    alten Weg erreicht der Nachbau nicht — ein gerechneter Kreis hat den
+    Weg exakt null, und ``fit_stadium`` gibt dann nichts zurück; die 0,00005
+    mm der Kundendatei waren ihre Facettierung. Die Regel selbst hält
+    :func:`test_a_stadium_within_its_own_tolerance_is_a_circle` an der Zahl.
     """
     found = detect(a_bore_with_three_lugs())
 
