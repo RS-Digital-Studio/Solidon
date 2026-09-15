@@ -64,7 +64,8 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: Derselbe Stand geht in den Operationshash ein und entwertet die Speicherebene.
 #: Lokale Merkmale und transformierte Suchumfänge sowie gerichtete B-Rep-
 #: Gewinde benötigen ebenfalls frische Geometrie- und Merkmalsauskünfte.
-CACHE_FORMAT_VERSION: Final = 7
+#: Maßgeänderte Sackböden müssen mit ihrer vollständigen Fläche neu zugeordnet werden.
+CACHE_FORMAT_VERSION: Final = 8
 
 
 @dataclass(frozen=True, slots=True)

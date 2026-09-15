@@ -53,6 +53,11 @@ Versetzen, Verdoppeln und der freien Platzierung samt ihrer Vorschau.
 
 `resize_hole` erhält mit `keep` beim Verkleinern Lage und Außenmaß der anderen Abschnitte.
 Eine entstehende Ringschulter gehört anschließend weiter zur erkannten Kette.
+Die Bodenkennung bleibt erhalten, wenn vor und nach dem Schnitt eine vollständige
+Scheibe am ganzen Wandrand liegt und dieselbe reale Ebene bestätigt ist. Neue
+koplanare B-Rep-Teilflächen dürfen dazu nur vollständig und ohne überlappende
+Eigentümer zusammengefasst werden. Der vorhandene Erkennungslauf liefert die
+neuen Bodenmaße; allgemeine Zuordnungsgrenzen bleiben unverändert.
 Bei belegten Randebenen schließt `_section_closed(extend_inner=False)` zuerst
 den gewählten Abschnitt und stellt die übrigen in ihren bisherigen Grenzen
 wieder her; danach schneidet `resize_bore` den neuen Durchmesser. Dadurch

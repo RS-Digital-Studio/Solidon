@@ -4282,6 +4282,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             looked_for,
             cut,
             solid,
+            original=source.mesh if not moved_hole else None,
         )
         if not recognised:
             findings.append(_bore_no_longer_a_feature(feature, cut))
@@ -4424,11 +4425,18 @@ def resize_hole(ctx: OpContext) -> OpResult:
     moved_findings = (
         compensation_findings(params.diameter, cut, params.compensate) if moved_hole else []
     )
+    expected_diameter = cut if moved_hole else result.diameter
+    detected = _detect_resized_bores(
+        result.mesh,
+        {looked_for.id: _expected_bore(looked_for, expected_diameter)},
+        check_cancelled=ctx.cancelled.raise_if_cancelled,
+    )
     resized_feature = _recognised_resized_feature(
         result.mesh,
         looked_for,
-        cut if moved_hole else result.diameter,
+        expected_diameter,
         original=original_body if not moved_hole and feature.kind == "hole" else None,
+        known=detected,
         check_cancelled=ctx.cancelled.raise_if_cancelled,
     )
     if resized_feature is not None and result.solver.strategy in ("direct", "welded"):
@@ -4446,6 +4454,18 @@ def resize_hole(ctx: OpContext) -> OpResult:
     features = (
         {**carried, feature.id: resized_feature} if resized_feature is not None else dict(carried)
     )
+    if resized_feature is not None and not moved_hole:
+        features.update(
+            _resized_bore_floor(
+                original_body,
+                feature,
+                source.features,
+                result.mesh,
+                resized_feature,
+                detected,
+                check_cancelled=ctx.cancelled.raise_if_cancelled,
+            )
+        )
     findings = [*closed_first, *result.findings, *moved_findings]
     findings.extend(_widening_findings(source, feature, params.diameter))
     if result.cutting_tool is not None and cut > previous:
@@ -5647,6 +5667,17 @@ def _resize_bore_entrance(
             if solver is None or solver.strategy in ("direct", "welded"):
                 recognised = _with_nominal_bore(as_mesh_data(changed), recognised, target, expected)
             preserved[target.id] = dataclasses.replace(recognised, id=target.id)
+            preserved.update(
+                _resized_bore_floor(
+                    original,
+                    source.features[target.id],
+                    source.features,
+                    as_mesh_data(changed),
+                    recognised,
+                    found,
+                    check_cancelled=ctx.cancelled.raise_if_cancelled,
+                )
+            )
         elif target.id == feature.id:
             findings.append(_bore_no_longer_a_feature(feature, diameter))
     findings.extend(_neighbour_bore_findings(source, feature, tool, ctx))
@@ -5687,6 +5718,145 @@ def _entrance_edge_findings(
             if found:
                 return found
     return []
+
+
+def _bore_floor(
+    mesh: MeshData,
+    bore: Feature,
+    features: Mapping[FeatureId, Feature],
+    check_cancelled: Callable[[], None] | None,
+    *,
+    combine: bool = False,
+) -> Feature | None:
+    """Genau eine ebene Scheibe schließt einen ganzen echten Wandrand.
+
+    Ringförmige Schultern, Außenflächen mit Loch und getrennte gleich hohe
+    Böden besitzen diesen gemeinsamen Einzelrand nicht. Ihre Nähe oder
+    Flächengröße belegt deshalb keine Zugehörigkeit.
+    """
+    from app.core.perceive.features import _one_body
+    from app.core.perceive.relations import boundary_rings, cavity_surface_indices
+
+    if bore.kind != "hole" or not bore.recognised or not bore.face_indices:
+        return None
+    if check_cancelled is not None:
+        check_cancelled()
+    body = _one_body(mesh).raw
+    indices = cavity_surface_indices(mesh, (bore,))
+    rings = boundary_rings(body, dataclasses.replace(bore, face_indices=indices))
+    if not rings or len(rings) != 2:
+        return None
+    wall = set(indices)
+    candidates = []
+    for feature in features.values():
+        if check_cancelled is not None:
+            check_cancelled()
+        if (
+            feature.kind != "face"
+            or not feature.recognised
+            or not feature.face_indices
+            or not wall.isdisjoint(feature.face_indices)
+        ):
+            continue
+        edges = boundary_rings(body, feature)
+        if edges is not None and len(edges) == 1 and edges[0] in rings:
+            candidates.append(feature)
+    if candidates or not combine:
+        return candidates[0] if len(candidates) == 1 else None
+    # Ein exakter Schnitt darf die Bodenebene in Scheibe und Ring teilen.
+    # Nur eine vollständig belegte, zusammenhängende planare Facette mit
+    # genau dem ganzen Wandrand darf diese neuen Teilflächen zusammenfassen.
+    for facet in body.facets:
+        if check_cancelled is not None:
+            check_cancelled()
+        patch = {int(index) for index in facet}
+        if not wall.isdisjoint(patch):
+            continue
+        joined = dataclasses.replace(bore, face_indices=tuple(sorted(patch)))
+        edges = boundary_rings(body, joined)
+        if edges is None or len(edges) != 1 or edges[0] not in rings:
+            continue
+        parts = [
+            feature
+            for feature in features.values()
+            if feature.kind == "face"
+            and feature.recognised
+            and feature.face_indices
+            and set(feature.face_indices) <= patch
+        ]
+        if (
+            len(parts) < 2
+            or sum(len(part.face_indices) for part in parts) != len(patch)
+            or {index for part in parts for index in part.face_indices} != patch
+        ):
+            continue
+        area = sum(float(part.params["area"]) for part in parts)
+        if area <= EPS_GEOM:
+            continue
+        centre = (
+            sum(
+                (np.asarray(part.params["centre"]) * float(part.params["area"]) for part in parts),
+                start=np.zeros(3),
+            )
+            / area
+        )
+        candidates.append(
+            dataclasses.replace(
+                parts[0],
+                face_indices=joined.face_indices,
+                params={
+                    **parts[0].params,
+                    "area": area,
+                    "centre": tuple(float(value) for value in centre),
+                },
+            )
+        )
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _resized_bore_floor(
+    original: MeshData,
+    before: Feature,
+    previous: Mapping[FeatureId, Feature],
+    changed: MeshData,
+    after: Feature,
+    detected: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Den belegten Sackboden mit neuen Maßen unter seiner alten Kennung führen.
+
+    Eine bewusste Durchmesseränderung ändert dessen Fläche quadratisch. Die
+    allgemeine Zuordnung soll größere Flächensprünge weiterhin ablehnen;
+    hier belegen gemeinsame Vollränder und dieselbe reale Ebene die Absicht.
+    """
+    from app.core.units import weld_tolerance
+
+    old = _bore_floor(original, before, previous, check_cancelled)
+    if old is None:
+        return {}
+    new = _bore_floor(changed, after, detected, check_cancelled, combine=True)
+    if new is None:
+        return {}
+    old_indices, new_indices = list(old.face_indices), list(new.face_indices)
+    old_points = np.asarray(original.raw.vertices)[original.raw.faces[old_indices]].reshape(-1, 3)
+    new_points = np.asarray(changed.raw.vertices)[changed.raw.faces[new_indices]].reshape(-1, 3)
+    normal = np.asarray(original.raw.face_normals)[old_indices[0]]
+    new_normals = np.asarray(changed.raw.face_normals)[new_indices]
+    tolerance = weld_tolerance(max(original.bounds.diagonal, changed.bounds.diagonal))
+    origin = old_points[0]
+    if (
+        float(np.linalg.norm(normal)) <= EPS_GEOM
+        or not np.all(np.abs((old_points - origin) @ normal) <= tolerance)
+        or not np.all(np.abs((new_points - origin) @ normal) <= tolerance)
+        or not np.all(new_normals @ normal > 0.0)
+    ):
+        return {}
+    return {
+        old.id: dataclasses.replace(
+            new, id=old.id, provenance="generated", created_by=old.created_by
+        )
+    }
 
 
 def _bore_end_planes(
@@ -6144,6 +6314,8 @@ def _preserved_exact_features(
     feature: Feature,
     diameter: float,
     solid: Mesh,
+    *,
+    original: Mesh | None = None,
 ) -> tuple[dict[str, Feature], bool]:
     """Ordnet die exakte Topologie neu zu, mit dem gewählten Maß als Absicht."""
     from app.core.perceive.matching import apply_mapping, match
@@ -6154,6 +6326,27 @@ def _preserved_exact_features(
     expected = {name: entry for name, entry in previous.items() if name != feature.id}
     if found_id is not None:
         expected[feature.id] = dataclasses.replace(detected[found_id], id=feature.id)
+        if original is not None:
+            floors = _resized_bore_floor(
+                as_mesh_data(original),
+                feature,
+                previous,
+                as_mesh_data(solid),
+                detected[found_id],
+                detected,
+            )
+            for floor in floors.values():
+                patch = set(floor.face_indices)
+                parts = [
+                    name
+                    for name, entry in detected.items()
+                    if entry.kind == "face"
+                    and entry.face_indices
+                    and set(entry.face_indices) <= patch
+                ]
+                detected = {name: entry for name, entry in detected.items() if name not in parts}
+                detected[parts[0]] = dataclasses.replace(floor, id=parts[0])
+            expected.update(floors)
     matched = match(expected, detected, bounds.centre, bounds.diagonal)
     if found_id is None:
         matched.orphaned = (*matched.orphaned, feature.id)

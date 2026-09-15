@@ -291,7 +291,7 @@ def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
     assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
 
 
-@pytest.mark.parametrize("previous_version", [5, 6])
+@pytest.mark.parametrize("previous_version", [5, 6, 7])
 def test_old_recognition_results_are_not_read_from_disk(
     tmp_path: Path, previous_version: int
 ) -> None:
@@ -307,7 +307,7 @@ def test_old_recognition_results_are_not_read_from_disk(
 
 
 @pytest.mark.parametrize("reopen", [False, True], ids=["memory", "disk"])
-@pytest.mark.parametrize("previous_version", [5, 6])
+@pytest.mark.parametrize("previous_version", [5, 6, 7])
 def test_recognition_revision_recomputes_a_warm_project_cache(
     tmp_path: Path,
     profile: Profile,
