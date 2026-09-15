@@ -1452,36 +1452,44 @@ function change(?array $before, array $now, string $key): string
 <meta name="robots" content="noindex, nofollow">
 <title>Zugriffe — Solidon3D</title>
 <style>
-  :root { color-scheme: light dark; --line: #d8d8d4; --dim: #6b6b66; --bar: #3a6ea5; --band: #f4f4f1; }
-  @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --dim: #9a9a94; --bar: #6fa3d8; --band: #1e1e1c; } }
-  body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 2rem 1.5rem 4rem; max-width: 64rem; }
-  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  /* Ein Armaturenbrett für einen Leser an einem breiten Bildschirm: die
+     Kacheln füllen die Breite, die Sprungleiste bleibt oben stehen, und die
+     Tabellen sind dicht genug, dass ein Monat auf einen Blick passt. */
+  :root { color-scheme: light dark; --line: #d8d8d4; --dim: #6b6b66; --bar: #3a6ea5; --band: #f4f4f1; --page: #fbfbfa; }
+  @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --dim: #9a9a94; --bar: #6fa3d8; --band: #232321; --page: #171716; } }
+  body { font: 15px/1.45 system-ui, sans-serif; margin: 0; padding: 1.25rem 2rem 4rem; background: var(--page); }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
   h1 .abmelden { font-size: .8rem; font-weight: normal; margin-left: .75rem; vertical-align: middle; }
-  h2 { font-size: 1.25rem; margin: 3rem 0 .75rem; padding-top: 1rem; border-top: 1px solid var(--line); }
-  h3 { font-size: .95rem; margin: 1.75rem 0 .5rem; }
-  .sub { color: var(--dim); margin: 0 0 1.25rem; }
-  .zahlen { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; }
-  .zahl { border: 1px solid var(--line); border-radius: .5rem; padding: .75rem 1.25rem; min-width: 8rem; flex: 1 1 8rem; }
-  .zahl b { display: block; font-size: 1.75rem; line-height: 1.2; }
-  .zahl span { color: var(--dim); font-size: .85rem; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line); vertical-align: baseline; }
-  th { color: var(--dim); font-weight: normal; font-size: .85rem; }
+  h2 { font-size: 1.15rem; margin: 2.25rem 0 .75rem; display: flex; align-items: baseline; gap: 1rem; }
+  h2 .sub { margin: 0; font-size: .9rem; font-weight: normal; }
+  .sub { color: var(--dim); margin: 0 0 1rem; }
+  nav.sprung { position: sticky; top: 0; z-index: 1; margin: .75rem -2rem 1rem; padding: .5rem 2rem; background: var(--band); border-bottom: 1px solid var(--line); }
+  nav.sprung a { margin-right: 1.5rem; }
+  nav.sprung .monate { float: right; color: var(--dim); }
+  nav.sprung .monate a { margin: 0 0 0 .75rem; }
+  .zahlen { display: flex; flex-wrap: wrap; gap: .75rem; margin: 0 0 1rem; }
+  .zahl { border: 1px solid var(--line); border-radius: .5rem; padding: .6rem 1rem; min-width: 9rem; flex: 0 1 auto; }
+  .zahl b { display: block; font-size: 1.5rem; line-height: 1.2; }
+  .zahl span { color: var(--dim); font-size: .8rem; }
+  .kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); gap: 1rem; grid-auto-flow: dense; align-items: start; }
+  .kachel { border: 1px solid var(--line); border-radius: .5rem; padding: .75rem 1rem 1rem; min-width: 0; overflow-x: auto; }
+  .kachel h3 { margin: 0 0 .35rem; font-size: .95rem; }
+  .kachel .sub { font-size: .82rem; margin: 0 0 .6rem; }
+  .breit { grid-column: span 2; }
+  @media (max-width: 48rem) { .breit { grid-column: auto; } body { padding: 1rem; } nav.sprung { margin: .75rem -1rem 1rem; padding: .5rem 1rem; } }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: .22rem .45rem; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+  th { color: var(--dim); font-weight: normal; font-size: .8rem; white-space: nowrap; }
   td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   tr.summe td { font-weight: 600; border-top: 2px solid var(--line); }
-  .balken { display: block; height: .55rem; background: var(--bar); border-radius: 2px; min-width: 1px; }
+  .balken { display: block; height: .5rem; background: var(--bar); border-radius: 2px; min-width: 1px; }
   .leer { color: var(--dim); font-style: italic; }
-  .hinweis { color: var(--dim); max-width: 62ch; }
-  .delta { display: block; font-size: .8rem; color: var(--dim); font-style: normal; }
+  .hinweis { color: var(--dim); max-width: 70ch; font-size: .9rem; }
+  .delta { display: block; font-size: .78rem; color: var(--dim); font-style: normal; }
+  .fenster { max-width: 64rem; }
   .fenster td:first-child { white-space: nowrap; }
   .fenster small { color: var(--dim); }
-  .raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0 2.5rem; align-items: start; }
-  .raster h3 { margin-top: 1.75rem; }
-  nav { margin: 0 0 1rem; }
-  nav a { margin-right: .75rem; }
-  nav.sprung { padding: .5rem .75rem; background: var(--band); border-radius: .4rem; }
-  nav.sprung a { margin-right: 1.25rem; }
-  ul.pfade { columns: 2; column-gap: 2.5rem; margin: 0; padding-left: 1.25rem; }
+  ul.pfade { columns: 2; column-gap: 2rem; margin: 0; padding-left: 1.25rem; font-size: .9rem; }
   code { font-size: .9em; }
   .warnung { border: 1px solid #b45309; padding: .75rem 1rem; }
 </style>
@@ -1493,7 +1501,11 @@ function change(?array $before, array $now, string $key): string
 Dieselben Zahlen <a href="?m=<?= e($month) ?>&amp;format=json">als JSON</a>.
 Was hier gezählt wird und was nicht, steht <a href="#methode">unten</a>.</p>
 
-<nav class="sprung"><a href="#jetzt">Jetzt</a><a href="#reichweite">Reichweite</a><a href="#konversion">Konversion</a><a href="#nutzung">Nutzung</a><a href="#methode">Methode</a></nav>
+<nav class="sprung"><a href="#jetzt">Jetzt</a><a href="#reichweite">Reichweite</a><a href="#konversion">Konversion</a><a href="#nutzung">Nutzung</a><a href="#methode">Methode</a><?php if (count($available) > 1): ?><span class="monate">Monat:
+  <?php foreach ($available as $option): ?>
+    <?php if ($option === $month): ?><b><?= e($option) ?></b>
+    <?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?>
+  <?php endforeach; ?></span><?php endif; ?></nav>
 
 <?php if (!$month_complete): ?>
 <p class="warnung"><b>Unvollständige Auswertung:</b> Die Monatsdatei überschreitet
@@ -1501,19 +1513,9 @@ die sichere Grenze von 16 MiB oder 16.384 gültigen Zeilen. Die angezeigten Zahl
 sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p>
 <?php endif; ?>
 
-<?php if (count($available) > 1): ?>
-<nav>Monat:
-  <?php foreach ($available as $option): ?>
-    <?php if ($option === $month): ?><b><?= e($option) ?></b>
-    <?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?>
-  <?php endforeach; ?>
-</nav>
-<?php endif; ?>
-
-<h2 id="jetzt">Jetzt</h2>
-<p class="sub">Rollend bis heute, unabhängig vom gewählten Monat. Die kleine
-Zahl darunter ist die Veränderung zum gleich langen Zeitraum davor.<?php if (!$recentComplete): ?>
-<b>Eine der Monatsdateien ist unvollständig gelesen — die Werte sind Untergrenzen.</b><?php endif; ?></p>
+<h2 id="jetzt">Jetzt <span class="sub">rollend bis heute, unabhängig vom gewählten Monat — die kleine
+Zahl ist die Veränderung zum gleich langen Zeitraum davor<?php if (!$recentComplete): ?>;
+<b>eine Monatsdatei ist unvollständig gelesen, die Werte sind Untergrenzen</b><?php endif; ?></span></h2>
 <?php if ($recentDays === []): ?>
   <p class="leer">Noch nichts gezählt.</p>
 <?php else: ?>
@@ -1549,8 +1551,7 @@ Zahl darunter ist die Veränderung zum gleich langen Zeitraum davor.<?php if (!$
   <p class="leer">Ohne Zeilen keine Update-Prüfungen.</p>
 <?php else: ?>
 
-<h2 id="reichweite">Reichweite</h2>
-<p class="sub">Wer kommt, woher, und was gelesen wird — im Monat <?= e($month) ?>.</p>
+<h2 id="reichweite">Reichweite <span class="sub">wer kommt, woher, und was gelesen wird — im Monat <?= e($month) ?></span></h2>
 
 <div class="zahlen">
   <div class="zahl"><b><?= n($monthSum['p']) ?></b><span>Seitenaufrufe</span></div>
@@ -1559,6 +1560,9 @@ Zahl darunter ist die Veränderung zum gleich langen Zeitraum davor.<?php if (!$
   <div class="zahl"><b><?= e(duration_text(median($durations))) ?></b><span>Besuchsdauer, Median aus <?= n(count($durations)) ?> Besuchen mit mehr als einem Schritt</span></div>
 </div>
 
+<div class="kacheln">
+
+<article class="kachel breit">
 <h3>Tag für Tag</h3>
 <?php $dayPeak = max(1, max(array_map(static fn (array $d): int => $d['p'] + $d['d'], $days))); ?>
 <table>
@@ -1574,12 +1578,14 @@ Zahl darunter ist die Veränderung zum gleich langen Zeitraum davor.<?php if (!$
     </tr>
   <?php endforeach; ?>
 </table>
+</article>
 
 <?php if ($monthRows): ?>
+<article class="kachel breit">
 <h3>Monate im Vergleich</h3>
 <?php $monthPeak = max(1, max(array_column($monthRows, 'pages'))); ?>
 <table>
-  <tr><th>Monat</th><th class="n">Aufrufe</th><th class="n">Besuche</th><th class="n">Downloads</th><th class="n">Update-Prüfungen</th><th style="width:34%"></th></tr>
+  <tr><th>Monat</th><th class="n">Aufrufe</th><th class="n">Besuche</th><th class="n">Downloads</th><th class="n">Updates</th><th style="width:25%"></th></tr>
   <?php foreach ($monthRows as $totals): ?>
     <tr>
       <td><?php if ($totals['month'] === $month): ?><b><?= e($totals['month']) ?></b><?php else: ?><a href="?m=<?= e($totals['month']) ?>"><?= e($totals['month']) ?></a><?php endif; ?><?php if (empty($totals['complete'])): ?> <abbr title="Unvollständig: Die Monatsdatei überschreitet die sichere Grenze, die Zahlen sind Untergrenzen.">≥</abbr><?php endif; ?></td>
@@ -1591,16 +1597,18 @@ Zahl darunter ist die Veränderung zum gleich langen Zeitraum davor.<?php if (!$
     </tr>
   <?php endforeach; ?>
 </table>
+</article>
 <?php endif; ?>
 
+<article class="kachel breit">
 <h3>Woher</h3>
 <p class="sub">Je Besuch die verweisende Seite des ersten Aufrufs — und wie
-viele dieser Besuche etwas geladen haben. Suchmaschinen schicken ihre
-Herkunft oft nicht mehr mit; die stehen dann in der ersten Zeile.</p>
+viele dieser Besuche etwas geladen haben. Suchmaschinen schicken ihre Herkunft
+oft nicht mehr mit; die stehen in der ersten Zeile.</p>
 <table>
   <tr><th>Verweisende Seite</th><th class="n">Besuche</th><th class="n">Aufrufe</th><th class="n">mit Download</th><th class="n">Downloads</th></tr>
   <tr>
-    <td class="leer">direkt oder ohne mitgeschickte Herkunft</td>
+    <td class="leer">direkt oder ohne Herkunft</td>
     <td class="n"><?= n($direct['visits']) ?></td>
     <td class="n"><?= n($direct['pages']) ?></td>
     <td class="n"><?= n($direct['downloaded']) ?></td>
@@ -1616,12 +1624,13 @@ Herkunft oft nicht mehr mit; die stehen dann in der ersten Zeile.</p>
     </tr>
   <?php endforeach; ?>
 </table>
+</article>
 
 <?php if ($languages || $withoutPage): ?>
+<article class="kachel breit">
 <h3>Nach Sprache</h3>
-<p class="sub">Die Sprachfassung der ersten Seite eines Besuchs. Downloads über
-einen Direktlink, ohne eine Seite zu öffnen, haben keine Sprache und stehen
-in der letzten Zeile.</p>
+<p class="sub">Die Sprachfassung der ersten Seite eines Besuchs. Direktdownloads
+ohne Seite haben keine Sprache und stehen in der letzten Zeile.</p>
 <table>
   <tr><th>Sprache</th><th class="n">Besuche</th><th class="n">Aufrufe</th><th class="n">mit Download</th><th class="n">Downloads</th></tr>
   <?php foreach ($languages as $code => $counts): ?>
@@ -1643,15 +1652,17 @@ in der letzten Zeile.</p>
     </tr>
   <?php endif; ?>
 </table>
+</article>
 <?php endif; ?>
 
+<article class="kachel">
 <h3>Seiten</h3>
 <?php if (!$paths): ?>
   <p class="leer">Noch keine.</p>
 <?php else: ?>
 <?php $pathPeak = max(1, max($paths)); ?>
 <table>
-  <tr><th>Pfad</th><th class="n">Aufrufe</th><th class="n">Anteil</th><th style="width:34%"></th></tr>
+  <tr><th>Pfad</th><th class="n">Aufrufe</th><th class="n">Anteil</th><th style="width:30%"></th></tr>
   <?php foreach (array_slice($paths, 0, TOP, true) as $path => $count): ?>
     <tr>
       <td><?= e($path) ?></td>
@@ -1662,8 +1673,10 @@ in der letzten Zeile.</p>
   <?php endforeach; ?>
 </table>
 <?php endif; ?>
+</article>
 
 <?php if ($unread): ?>
+<article class="kachel">
 <h3>Ungelesene Seiten</h3>
 <p class="sub"><?= n(count($unread)) ?> der <?= n(count(sitemap_paths())) ?> Seiten
 aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
@@ -1672,11 +1685,11 @@ aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
     <li><?= e($path) ?></li>
   <?php endforeach; ?>
 </ul>
+</article>
 <?php endif; ?>
 
 <?php if ($entryPages): ?>
-<div class="raster">
-<div>
+<article class="kachel">
 <h3>Einstiegsseiten</h3>
 <p class="sub">Die erste Seite jedes Besuchs — wo Leser ankommen.</p>
 <table>
@@ -1685,8 +1698,9 @@ aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
     <tr><td><?= e($path) ?></td><td class="n"><?= n($count) ?></td></tr>
   <?php endforeach; ?>
 </table>
-</div>
-<div>
+</article>
+
+<article class="kachel">
 <h3>Ausstiegsseiten</h3>
 <p class="sub">Die letzte Seite jedes Besuchs — wo Leser aufhören.</p>
 <table>
@@ -1695,37 +1709,34 @@ aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
     <tr><td><?= e($path) ?></td><td class="n"><?= n($count) ?></td></tr>
   <?php endforeach; ?>
 </table>
-</div>
-</div>
+</article>
 
-<div class="raster">
-<div>
+<article class="kachel">
 <h3>Besuchstiefe</h3>
 <p class="sub">Wie viele Seiten ein Besuch umfasst.</p>
 <?php $depthPeak = max(1, max($depth)); ?>
 <table>
-  <tr><th>Seiten je Besuch</th><th class="n">Besuche</th><th style="width:45%"></th></tr>
+  <tr><th>Seiten je Besuch</th><th class="n">Besuche</th><th style="width:40%"></th></tr>
   <?php foreach ($depth as $label => $count): ?>
     <tr><td><?= e($label) ?></td><td class="n"><?= n($count) ?></td><td><?= bar($count, $depthPeak) ?></td></tr>
   <?php endforeach; ?>
 </table>
-</div>
-<div>
+</article>
+
+<article class="kachel">
 <h3>Besuchsdauer</h3>
 <p class="sub">Vom ersten zum letzten Schritt, nur bei Besuchen mit mehr als einem.</p>
 <?php $durationPeak = max(1, max($duration)); ?>
 <table>
-  <tr><th>Dauer</th><th class="n">Besuche</th><th style="width:45%"></th></tr>
+  <tr><th>Dauer</th><th class="n">Besuche</th><th style="width:40%"></th></tr>
   <?php foreach ($duration as $label => $count): ?>
     <tr><td><?= e($label) ?></td><td class="n"><?= n($count) ?></td><td><?= bar($count, $durationPeak) ?></td></tr>
   <?php endforeach; ?>
 </table>
-</div>
-</div>
+</article>
 <?php endif; ?>
 
-<div class="raster">
-<div>
+<article class="kachel">
 <h3>Nach Uhrzeit</h3>
 <p class="sub">Seitenaufrufe je Stunde, über den Monat aufsummiert.</p>
 <?php $hourPeak = max(1, max($byHour)); ?>
@@ -1736,8 +1747,9 @@ aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
     <tr><td><?= $hour ?>–<?= $hour + 1 ?> Uhr</td><td class="n"><?= n($count) ?></td><td><?= bar($count, $hourPeak) ?></td></tr>
   <?php endforeach; ?>
 </table>
-</div>
-<div>
+</article>
+
+<article class="kachel">
 <h3>Nach Wochentag</h3>
 <p class="sub">Seitenaufrufe je Wochentag.</p>
 <?php $weekdayPeak = max(1, max($byWeekday)); ?>
@@ -1747,12 +1759,12 @@ aus der Sitemap ohne einen einzigen Aufruf in diesem Monat.</p>
     <tr><td><?= e($weekdayNames[$weekday]) ?></td><td class="n"><?= n($count) ?></td><td><?= bar($count, $weekdayPeak) ?></td></tr>
   <?php endforeach; ?>
 </table>
-</div>
+</article>
+
 </div>
 
-<h2 id="konversion">Konversion</h2>
-<p class="sub">Ob aus Besuchen Downloads werden. Ein Besuch zählt hier einmal,
-auch wenn er dreimal auf den Knopf drückt.</p>
+<h2 id="konversion">Konversion <span class="sub">ob aus Besuchen Downloads werden — ein Besuch zählt einmal,
+auch wenn er dreimal auf den Knopf drückt</span></h2>
 
 <div class="zahlen">
   <div class="zahl"><b><?= n($monthSum['d']) ?></b><span>Downloads</span></div>
@@ -1761,7 +1773,10 @@ auch wenn er dreimal auf den Knopf drückt.</p>
   <div class="zahl"><b><?= n($downloadsWithoutPage) ?></b><span>Downloads ohne Seitenaufruf am selben Tag (Direktlinks, Skripte)</span></div>
 </div>
 
+<div class="kacheln">
+
 <?php if ($matrixRows): ?>
+<article class="kachel breit">
 <h3>Version und Zielsystem</h3>
 <table>
   <tr><th>Version</th><?php foreach ($platforms as $platform): ?><th class="n"><?= e($platform) ?></th><?php endforeach; ?><th class="n">Summe</th></tr>
@@ -1778,9 +1793,11 @@ auch wenn er dreimal auf den Knopf drückt.</p>
     <td class="n"><?= n($monthSum['d']) ?></td>
   </tr>
 </table>
+</article>
 <?php endif; ?>
 
 <?php if ($beforeDownload): ?>
+<article class="kachel">
 <h3>Seite vor dem Download</h3>
 <p class="sub">Die zuletzt geöffnete Seite, als der Download begann — welcher
 Knopf benutzt wird.</p>
@@ -1790,8 +1807,10 @@ Knopf benutzt wird.</p>
     <tr><td><?php if ((string) $path === ''): ?><span class="leer">ohne Seitenaufruf</span><?php else: ?><?= e($path) ?><?php endif; ?></td><td class="n"><?= n($count) ?></td></tr>
   <?php endforeach; ?>
 </table>
+</article>
 <?php endif; ?>
 
+<article class="kachel breit">
 <h3>Dateien</h3>
 <?php if (!$files): ?>
   <p class="leer">Der Ordner ist leer, und geladen wurde auch nichts.</p>
@@ -1816,14 +1835,17 @@ Knopf benutzt wird.</p>
   <?php endforeach; ?>
 </table>
 <?php endif; ?>
+</article>
 
-<h2 id="nutzung">Nutzung</h2>
-<p class="hinweis">Die Anwendung nennt bei jedem Start ihre Version, wenn die
-Updateprüfung eingeschaltet ist. Gezählt werden Abrufe, auch wiederholte:
-Drei Prüfungen derselben Anwendung stehen dreimal in der Zahl. Es werden
-keine Besucherkennzeichen für diese Auswertung gebildet; wie viele Rechner
-oder Personen dahinterstehen, lässt sich daraus nicht bestimmen. Die Kurve
-folgt dem Rhythmus der Nutzung, nicht ihrer Größe.</p>
+</div>
+
+<h2 id="nutzung">Nutzung <span class="sub">Update-Prüfungen — die Anwendung nennt bei jedem Start ihre Version, wenn
+die Prüfung eingeschaltet ist</span></h2>
+<p class="hinweis">Gezählt werden Abrufe, auch wiederholte: Drei Prüfungen
+derselben Anwendung stehen dreimal in der Zahl. Es werden keine
+Besucherkennzeichen für diese Auswertung gebildet; wie viele Rechner oder
+Personen dahinterstehen, lässt sich daraus nicht bestimmen. Die Kurve folgt
+dem Rhythmus der Nutzung, nicht ihrer Größe.</p>
 
 <?php if (!$versions): ?>
   <p class="leer">Noch keine Update-Prüfung gezählt. Entweder läuft die
@@ -1837,6 +1859,9 @@ folgt dem Rhythmus der Nutzung, nicht ihrer Größe.</p>
   <div class="zahl"><b><?= n(count($versions)) ?></b><span>Versionen gesehen</span></div>
 </div>
 
+<div class="kacheln">
+
+<article class="kachel">
 <h3 id="versionen">Versionen</h3>
 <?php $updatePeak = max(1, max($versions)); ?>
 <table>
@@ -1850,8 +1875,10 @@ folgt dem Rhythmus der Nutzung, nicht ihrer Größe.</p>
   </tr>
   <?php endforeach; ?>
 </table>
+</article>
 
 <?php if (count($versionDayRows) > 1 && count($versions) > 1): ?>
+<article class="kachel breit">
 <h3>Versionen Tag für Tag</h3>
 <p class="sub">Wie schnell eine neue Version die alte ablöst.<?php if (count($versions) > count($versionColumns)): ?>
 Die <?= count($versionColumns) ?> meistgesehenen einzeln, der Rest als „andere“.<?php endif; ?></p>
@@ -1866,7 +1893,10 @@ Die <?= count($versionColumns) ?> meistgesehenen einzeln, der Rest als „andere
     </tr>
   <?php endforeach; ?>
 </table>
+</article>
 <?php endif; ?>
+
+</div>
 <?php endif; ?>
 
 <?php endif; ?>

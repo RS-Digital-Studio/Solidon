@@ -2120,7 +2120,7 @@ def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path)
         assert (tmp_path / "stats" / "salt.json").exists()
         status, _headers, page = _request(f"{base}/stats.php", headers=stats_headers)
         assert status == 200 and "</html>" in page
-        updates = page.split('<h2 id="nutzung">Nutzung</h2>')[1].split('<h2 id="methode">')[0]
+        updates = page.split('<h2 id="nutzung">')[1].split('<h2 id="methode">')[0]
         assert '<th class="n">Prüfungen</th>' in updates
         assert "Installationen" not in updates
         assert "Installationen (Tag mal Kennzeichen)" not in page
