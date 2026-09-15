@@ -68,7 +68,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg](#rm-163) | Geometrie, Erkennung und Druckvorbereitung | Solidon meldet den Verlust; offen ist die Ursache bei Bambu — dessen eigene Mehrfarbdatei gegen Solidons stellen |
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
-| [RM-172 — Drehen und Verdoppeln nehmen die Hohlraumkette mit](#rm-172) | Geometrie, Erkennung und Druckvorbereitung | Vorschlag an Robert — heute sagen beide an einer gesenkten Bohrung ab; die Kette mitzunehmen braucht ein Werkzeug über beide Oberflächen hinaus |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
@@ -1018,26 +1017,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   STLs stammen aus den Aufnahmen vom 13.09. und tragen den alten Fehler; sie neu zu erzeugen
   heißt, die Aufnahmen mit dem gefixten Code zu fahren und das ZIP neu zu verpacken — ein
   Produktionsschritt, der zusammen mit der nächsten Filmrunde läuft.
-
-<a id="rm-172"></a>
-
-- [ ] **RM-172 — Drehen und Verdoppeln nehmen die Hohlraumkette mit.** *Merkmal verschieben*
-  versetzt eine gesenkte Bohrung als Ganzes (`_paired_cavity_body`: Bohrung und Senkung als ein
-  Hohlraum). *Merkmal drehen* und *Merkmal verdoppeln* konnten das nie: An der Bohrung gewählt
-  kippte *Drehen* nur den Stumpf unter der Senkung (gemessen 14.09.2026, 30° um X an einer
-  10-mm-Platte: Mitte z = -2, `no_longer_through`, Senkung senkrecht stehen geblieben),
-  *Verdoppeln* setzte einen Stumpf ohne Senkung — beides ohne Absage. Seit dem 14.09.2026 sagen
-  beide an einem geteilten Hohlraum ab (`_needs_a_plain_bore`, `NEEDS_A_PLAIN_BORE`), an der
-  Bohrung wie an der Senkung, und das Merkmalfenster zeigt es an der Zeile.
-
-  Der Weg zur Kette ist nicht der von `move_feature` allein: Der exakte Hohlraum aus Flächen
-  endet an den Oberflächen, und gedreht um die Bohrungsmitte lag seine Decke 0,9 mm **unter**
-  der Platte — ein Einschluss statt einer gekippten Senkung. Ein Kettenwerkzeug braucht den
-  Überstand aus `_tool_for` an beiden Enden (Bohrung nach unten, Senkung als größerer Kegel
-  nach oben), dazu die gedrehten Achsen und Mitten aller Glieder und `_throughness_lost` an
-  der neuen Lage. Entscheidung Robert, ob das gebaut wird oder ob „erst die Senkung entfernen"
-  der Weg bleibt. Abnahme: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
-  gekippten, durchgehenden Bohrung; `detect` findet beide mit derselben Achse.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>

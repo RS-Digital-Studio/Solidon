@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-15 | [Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)](#drehen-und-verdoppeln-nehmen-die-hohlraumkette-mit-15092026) |
 | 2026-09-14 | [Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)](#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026) |
 | 2026-09-15 | [Ein gedrehtes Langloch ist eines (15.09.2026)](#ein-gedrehtes-langloch-ist-eines-15092026) |
 | 2026-09-14 | [Bausteine: Vorschau, Griff und Werte — die Sonde über alle 27 (14.09.2026)](#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026) |
@@ -27972,6 +27973,8 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     statt an einer Zahl, die das Bild eines Tages beschrieb. Gegenprobe: Fenster auf 300 Punkte
     Höhe → rot. Derselbe Lauf fand `test_aligning_without_a_target_invites_instead_of_teaching_
     syntax` rot — schon vor dem ersten Commit des Tages, an 3d-druck-66 gemeldet.
+  - **Drehen und Verdoppeln nehmen die Hohlraumkette mit** (Entscheidung 3, RM-172) — der
+    eigene Abschnitt weiter unten trägt Bau, Messung und Nachweise.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
@@ -28797,3 +28800,55 @@ Pakete 66 grün, plus diese zwei Dateien Exit 127) — dasselbe Muster wie
 `ungenutzter-import-reisst-den-prozess`; `tests/test_render_factory.py` verliert zwei native
 Läufe an 90-s-Fristen unter Last (HEAD plus W8 allein: 3 grün in 104 s). Beides steht im
 Bericht der Sitzung, nicht in diesem Code.
+
+## Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)
+
+Ein Vorschlag aus der Bedienweg-Durchsicht vom 14.09.2026, entschieden und gebaut am 15.09.2026
+(Robert: „3 dann beheben").
+
+<a id="rm-172"></a>
+
+- [x] **RM-172 — Drehen und Verdoppeln nehmen die Hohlraumkette mit.** *Merkmal verschieben*
+  versetzte eine gesenkte Bohrung als Ganzes; *Drehen* und *Verdoppeln* konnten das nie: An der
+  Bohrung gewählt kippte *Drehen* nur den Stumpf unter der Senkung (gemessen 14.09.2026, 30° um X
+  an einer 10-mm-Platte: Mitte z = -2, `no_longer_through`, Senkung senkrecht stehen geblieben),
+  *Verdoppeln* setzte einen Stumpf ohne Senkung. Einen Tag lang sagten beide ab
+  (`_needs_a_plain_bore`); seither nehmen sie die Kette mit.
+
+  **Der exakte Hohlraum reicht dafür nicht.** Aus seinen Flächen geschlossen endet er in den
+  Oberflächen — gedreht um die Bohrungsmitte lag seine Decke 0,9 mm **unter** der Platte, ein
+  Einschluss statt einer gekippten Senkung. `_chain_tool` baut das Werkzeug deshalb aus den
+  Kennzahlen der Abschnitte mit Überstand an beiden Enden: die Bohrung über ihre Mündung hinaus
+  (`_stretched_section`), die Senkung als **größerer Kegel** nach oben (`_measured_section` mit
+  `outward`) — derselbe Kegel, weitergeführt, bis er die gekippte Fläche überall verlässt. Wie
+  weit, sagt die Neigung: `_reach_past_a_tilted_face` (Zylinder: `h / cos φ + r · tan φ`) und
+  `_cone_past_a_tilted_face` (Kegel: `(p (1 − cos φ) + R sin φ) / (cos φ − tan α sin φ)`,
+  gedeckelt am Körper) — bei 30° an der 90°-Senkung Ø 16, 7 mm über der Bohrungsmitte, sind das
+  13,5 mm; mehr schnitte Luft oder eine Wand, die niemand gemeint hat. Gedreht wird um die Mitte
+  des gewählten Abschnitts (`_rotate_cavity_chain`), alle Glieder bekommen die gedrehte Achse und
+  Mitte, die Bohrung meldet wie beim Versetzen, wenn sie nicht mehr durchgeht. *Verdoppeln* nimmt
+  dasselbe Werkzeug ohne Neigung (`_duplicate_cavity_chain`), jede Kopie mit eigener Kennung
+  (`_free_id_among`), das Original unverändert.
+
+  **Und der Bau fand einen Fehler im Versetzen.** Ohne Neigung ist der Überstand die Zugabe aus
+  §39 — und genau die fehlte `move_feature`: Der exakte Körper endete bündig, und die Differenz
+  ließ an der neuen Stelle eine Haut von 5 µm über der Mündung stehen (gemessen: 0,25 mm³ im
+  Schlauch bei z = 4,995 … 5,0), die Bohrung meldete sich als nicht mehr durchgehend. Das
+  versetzte Werkzeug kommt seither aus demselben Bau; der exakte Körper bleibt der Rückfall.
+  `test_a_countersink_moves_together_with_its_bore` verlangt den Befund nicht mehr und misst das
+  Volumen auf ein Zehntel statt ein Hundertstel (0,15 mm³ an 15 606: Haut und Vieleckzugabe).
+
+  Gemessen an der Vorstudie (`probe_chain_rotate.py`, Platte 60 × 40 × 10, Ø 8 / Ø 16): 30° und
+  10° um X an der Bohrung wie an der Senkung — wasserdicht, ein Körper, `detect` findet Bohrung
+  und Senkung mit derselben gekippten Achse, 0 mm³ im Schlauch; 90° macht aus der Bohrung eine
+  Nut am Boden der Platte, und das ist die Geometrie. Gegenproben: Kegel ohne Weiterführung → der
+  Einschluss, die Senkung trägt nicht ab (rot); Bohrung ohne Verlängerung → `no_longer_through`
+  (rot); Verdoppeln nur mit der Bohrung → das falsche Volumen (rot).
+
+  Nachweis: `test_turning_a_countersunk_bore_takes_its_sink_along` (Bohrung und Senkung gewählt),
+  `test_duplicating_a_countersunk_bore_copies_its_sink`, das Merkmalfenster in
+  `test_a_shared_cavity_greys_out_what_would_fail_on_it` (nur *Zum Langloch ziehen* bleibt grau),
+  `test_the_way_out_of_a_countersink_is_the_one_the_message_names`. Die Fenster-Auskunft
+  (`perceive.actions._WANT_A_PLAIN_BORE`) und der Fenstertest gingen am 15.09. um 05:45 mit dem
+  fremden Commit 4f1c49b5 hinaus — zusammen mit zwei unfertigen Kopien der Geometrietests, die
+  der Commit hier wieder auf eine bringt; der Kern folgte erst mit diesem Commit.

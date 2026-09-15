@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from functools import lru_cache
 from typing import Any, Final, cast
 
@@ -828,34 +828,6 @@ def _stands_alone(mesh: MeshData, feature: Feature, features: Mapping[str, Featu
     return not cavity_is_shared(*cavity_chain_state_at(feature, features, mesh))
 
 
-def _needs_a_plain_bore(feature: Feature, stands_alone: bool, op: str) -> None:
-    """*Drehen* und *Verdoppeln* nehmen einen Hohlraum nur, wenn er dem Merkmal
-    allein gehört — sonst sagen sie ab, mit demselben Satz wie das Fenster.
-
-    Gemessen am 14.09.2026 an einer gesenkten Bohrung Ø 8 mit Senkung Ø 16 in
-    einer 10-mm-Platte, die Bohrung gewählt: *Drehen* um 30° kippte nur den
-    Stumpf unter der Senkung (Mitte z = -2, ``no_longer_through``), die Senkung
-    blieb senkrecht stehen; *Verdoppeln* setzte einen Stumpf ohne Senkung. Beides
-    lief ohne Absage durch — ein stilles Falschergebnis, wo Regel 21 eine
-    Ansage verlangt. Die Kette **mitzunehmen**, wie ``move_feature`` es tut,
-    braucht ein Werkzeug, das über beide Oberflächen hinausreicht (gedreht um
-    die Bohrungsmitte endete der exakte Hohlraum 0,9 mm unter der Decke); das
-    steht als Vorschlag im Register. Bis dahin gilt: erst die Senkung
-    entfernen, dann drehen oder verdoppeln — und das sagt das Merkmalfenster
-    schon an der Zeile (``perceive.actions``).
-    """
-    if stands_alone or feature.kind not in ("hole", "cone"):
-        return
-    raise ValidationError(
-        field="at_feature",
-        constraint="shared_cavity",
-        value=feature.id,
-        detail=NEEDS_A_PLAIN_BORE,
-        values={"feature": feature.id, "op": op},
-        suggestions=(CHANGE_SELECTION, CANCEL),
-    )
-
-
 def _body_from_faces(
     mesh: MeshData, face_indices: Sequence[int], *, allowed_rings: tuple[int, ...]
 ) -> MeshData | None:
@@ -1003,7 +975,9 @@ def _polygon_gain_for(diameter: float) -> float:
     return diameter * (1.0 / math.cos(math.pi / FEATURE_SECTIONS) - 1.0)
 
 
-def _measured_section(chain: Sequence[Feature], feature: Feature) -> MeshData | None:
+def _measured_section(
+    chain: Sequence[Feature], feature: Feature, *, outward: float = 0.0
+) -> MeshData | None:
     """Der Abschnitt aus seinen **Kennzahlen**, wo seine Flächen keinen Körper hergeben.
 
     **Der Fall, für den es das braucht** (Robert, 10.09.2026): An einer
@@ -1029,6 +1003,10 @@ def _measured_section(chain: Sequence[Feature], feature: Feature) -> MeshData | 
     Objektbaum zeigte danach zwei Bohrungen (Robert, 10.09.2026). Die **Länge**
     bekommt ihre Zugabe weiterhin — sonst bleibt an der Außenfläche eine Haut.
     Gefüllt wird nicht hiermit, sondern mit :func:`_chain_plug`.
+
+    ``outward`` führt einen **Kegel** über seine Mündung hinaus weiter, mit
+    demselben Winkel — der Überstand, den eine gekippte Senkung braucht
+    (:func:`_chain_tool`). Null ist der Abschnitt, wie er gemessen wurde.
 
     ``None`` heißt: Diese Art oder diese Maße geben keinen Körper her.
     """
@@ -1057,11 +1035,12 @@ def _measured_section(chain: Sequence[Feature], feature: Feature) -> MeshData | 
     # großer Rand, zurück zur Achse. ``revolve`` dreht ihn um die lokale
     # Z-Achse, und die zeigt nach dem Ausrichten nach außen — der Stumpf liegt
     # also unter der Mündung im Material.
+    beyond = max(0.0, outward)
     outline = [
         [0.0, -height - FEATURE_OVERLAP],
         [narrow / 2.0, -height - FEATURE_OVERLAP],
-        [wide / 2.0, FEATURE_OVERLAP],
-        [0.0, FEATURE_OVERLAP],
+        [wide / 2.0 + beyond * math.tan(math.radians(angle / 2.0)), beyond + FEATURE_OVERLAP],
+        [0.0, beyond + FEATURE_OVERLAP],
     ]
     body = trimesh.creation.revolve(outline, sections=FEATURE_SECTIONS)
     body.apply_transform(
@@ -2059,13 +2038,14 @@ NO_OWN_BODY: Final = _(
     "und der vollen Wandstärke — danach setzen Sie es an der neuen Stelle neu."
 )
 
-#: Warum *Zum Langloch ziehen*, *Merkmal drehen* und *Merkmal verdoppeln* an
-#: einem geteilten Hohlraum absagen — an der Bohrung wie an ihrer Senkung
-#: (``_needs_a_plain_bore``, ``slot_hole``). Das Merkmalfenster sagt es an der
-#: Zeile (``perceive.actions``), bevor jemand klickt — derselbe Satz wie hier
-#: beim Rechnen. Der Weg, den er nennt, führt zum Ziel: Ohne Senkung ist die
-#: Bohrung ein Hohlraum für sich, und der lässt sich ziehen, drehen und
-#: verdoppeln; die Senkung kommt danach wieder darauf.
+#: Warum *Zum Langloch ziehen* an einem geteilten Hohlraum absagt — an der
+#: Bohrung wie an ihrer Senkung (``slot_hole``). Das Merkmalfenster sagt es an
+#: der Zeile (``perceive.actions``), bevor jemand klickt — derselbe Satz wie
+#: hier beim Rechnen. Der Weg, den er nennt, führt zum Ziel: Ohne Senkung ist
+#: die Bohrung ein Hohlraum für sich, und der lässt sich ziehen; die Senkung
+#: kommt danach wieder darauf. *Drehen* und *Verdoppeln* standen bis zum
+#: 15.09.2026 mit auf dieser Liste; seither nehmen sie die Kette mit
+#: (:func:`_rotate_cavity_chain`, :func:`_duplicate_cavity_chain`, RM-172).
 NEEDS_A_PLAIN_BORE: Final = _(
     "Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. "
     "Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung."
@@ -2176,7 +2156,17 @@ def move_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
-        shifted_cavity = cavity_body.raw.copy()
+        # **Mit Zugabe an den Enden, nicht bündig** (§39). Der exakte Hohlraum
+        # endet genau in den Oberflächen, und die Differenz ließ an der neuen
+        # Stelle eine Haut von 5 µm über der Mündung stehen — die Bohrung
+        # meldete sich als nicht mehr durchgehend (gemessen 15.09.2026 beim Bau
+        # von RM-172: 0,25 mm³ im Schlauch bei z = 4,995 … 5,0). Das Werkzeug aus
+        # Kennzahlen reicht an beiden Enden über die Mündung hinaus; der exakte
+        # Körper bleibt der Rückfall, wo ein Abschnitt keine Maße hergibt.
+        shifted_cavity = (
+            _chain_tool(body, chain, pivot=np.asarray(centre, dtype=np.float64), tilt=0.0)
+            or cavity_body
+        ).raw.copy()
         shifted_cavity.apply_translation(travel)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
@@ -2287,8 +2277,18 @@ def _free_feature_id(source: SceneObject, kind: str) -> FeatureId:
       höchsten Zahl liest sich dieselbe Stelle als das, was sie ist: die
       jüngste.
     """
+    return _free_id_among((*source.features, *source.reserved_feature_ids), kind)
+
+
+def _free_id_among(taken: Iterable[str], kind: str) -> FeatureId:
+    """Dieselbe Zählung über eine beliebige Menge vergebener Namen.
+
+    Eine Kette bringt mehrere Kopien auf einmal — Bohrung und Senkung —, und die
+    zweite darf die Nummer der ersten nicht noch einmal ziehen. Der Aufrufer
+    führt die Menge mit und legt jede neue Kennung hinein.
+    """
     highest = 0
-    for name in (*source.features, *source.reserved_feature_ids):
+    for name in taken:
         head, _, tail = name.rpartition("_")
         if head == kind and tail.isdigit():
             highest = max(highest, int(tail))
@@ -2412,13 +2412,23 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
 
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
-    stands_alone = _stands_alone(body, feature, source.features)
-    _needs_a_plain_bore(feature, stands_alone, "duplicate_feature")
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
+    if chain is None and touches_other:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_OWN_BODY,
+            values={"feature": feature.id},
+            constraint="not_movable",
+        )
+    if chain is not None:
+        return _duplicate_cavity_chain(ctx, source, feature, chain, target)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
     placed = boolean(
         change,
-        [body, _tool_for(body, feature, target, alone=stands_alone)],
+        [body, _tool_for(body, feature, target, alone=True)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -2465,6 +2475,100 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
                 reserved_feature_ids=tuple(
                     sorted({*source.reserved_feature_ids, *source.features, copy.id})
                 ),
+            )
+        ],
+        findings=findings,
+        solver=placed.solver,
+    )
+
+
+def _duplicate_cavity_chain(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    chain: Sequence[Feature],
+    target: Vec3,
+) -> OpResult:
+    """Eine gesenkte Bohrung ein zweites Mal — Bohrung **und** Senkung (RM-172).
+
+    Bis zum 15.09.2026 sagte das Verdoppeln an einem geteilten Hohlraum ab,
+    und davor setzte es einen Stumpf ohne Senkung (gemessen 14.09.2026: die
+    Bohrung gewählt, kopiert wurde nur der Abschnitt unter der Senkung). Der
+    Hohlraum ist aber einer, und der Kunde meint ihn ganz — so, wie
+    :func:`move_feature` ihn seit dem 09.09.2026 ganz versetzt.
+
+    Das Werkzeug ist der Hohlraum aus seinen Kennzahlen (:func:`_chain_tool`
+    ohne Neigung) — exakt im Querschnitt, damit die Kopie so weit ist wie das
+    Original, und mit der Zugabe an beiden Enden, die jede Boolesche braucht
+    (§39): Der exakte Hohlraum aus den Flächen endet bündig in den Oberflächen
+    und ließ dort eine Haut von 5 µm stehen (gemessen 15.09.2026, siehe
+    :func:`move_feature`). Er bleibt der Rückfall (:func:`_cavity_tool`), wo
+    ein Abschnitt keine Maße hergibt. Verschoben um denselben Weg wie die
+    gewählte Mitte, und jede Kopie bekommt ihre eigene Kennung; das Original
+    behält seine.
+    """
+    body = as_mesh_data(source.mesh)
+    measured = np.asarray(feature.params["centre"], dtype=float)
+    travel = np.asarray(target, dtype=float) - measured
+    tool = _chain_tool(body, chain, pivot=measured, tilt=0.0) or _cavity_tool(
+        body, chain, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+    )
+    if tool is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_OWN_BODY,
+            values={"feature": feature.id, "bore": chain[0].id, "widening": chain[-1].id},
+            constraint="not_movable",
+        )
+    shifted = tool.raw.copy()
+    shifted.apply_translation(travel)
+    ctx.progress(0.2, str(_("Der ganze Hohlraum wird an der neuen Stelle angelegt …")))
+    placed = boolean(
+        "difference",
+        [body, MeshData.of(shifted)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    findings = [*placed.findings]
+    nothing = without_effect(source.mesh, placed.mesh, "difference", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+
+    taken: set[str] = {*source.reserved_feature_ids, *source.features}
+    copies: dict[FeatureId, Feature] = {}
+    for member in chain:
+        moved = np.asarray(member.params["centre"], dtype=float) + travel
+        name = _free_id_among(taken, member.kind)
+        taken.add(name)
+        copies[name] = dataclasses.replace(
+            member,
+            id=name,
+            params={**member.params, "centre": tuple(float(value) for value in moved)},
+            provenance="generated",
+        )
+    bore = next(iter(copies.values()))
+    bore_centre = cast(Vec3, tuple(float(value) for value in bore.params["centre"]))
+    lost = _throughness_lost(
+        placed.mesh,
+        bore,
+        bore_centre,
+        "duplicate_feature",
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    findings += lost
+    if lost:
+        copies[bore.id] = dataclasses.replace(bore, params={**bore.params, "through": False})
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed.mesh,
+                features={**source.features, **copies},
+                reserved_feature_ids=tuple(sorted(taken)),
             )
         ],
         findings=findings,
@@ -2794,28 +2898,34 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     # neuen tut, füllt neben dem Loch und schneidet ein Kreuz hinein.
     spun = _with_turned_direction(feature, params.axis, params.angle)
     cavity = is_a_cavity(feature)
-    stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
-    _needs_a_plain_bore(feature, stands_alone, "rotate_feature")
+    body = as_mesh_data(source.mesh)
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
+    if chain is None and touches_other:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_OWN_BODY,
+            values={"feature": feature.id},
+            constraint="not_movable",
+        )
+    if chain is not None:
+        return _rotate_cavity_chain(ctx, source, feature, chain, params.axis, params.angle)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
-        as_mesh_data(source.mesh),
+        body,
         feature,
         centre,
         cavity,
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
-        alone=stands_alone,
+        alone=True,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [
-            closed.mesh,
-            _tool_for(
-                as_mesh_data(source.mesh), spun, centre, axis=turned_axis, alone=stands_alone
-            ),
-        ],
+        [closed.mesh, _tool_for(body, spun, centre, axis=turned_axis, alone=True)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -2853,6 +2963,255 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         findings=findings,
         solver=placed.solver,
     )
+
+
+def _rotate_cavity_chain(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    chain: Sequence[Feature],
+    axis: Axis,
+    angle: float,
+) -> OpResult:
+    """Eine gesenkte Bohrung kippen — Bohrung und Senkung zusammen (RM-172).
+
+    Gemessen am 14.09.2026 an einer 10-mm-Platte, Bohrung Ø 8 mit Senkung Ø 16,
+    die Bohrung gewählt, 30° um X: *Drehen* kippte nur den Stumpf unter der
+    Senkung (Mitte z = -2, ``no_longer_through``), die Senkung blieb senkrecht
+    stehen. Seit dem 14.09. sagte die Operation ab; seit dem 15.09. nimmt sie
+    die Kette mit.
+
+    **Warum der exakte Hohlraum dafür nicht reicht.** Aus seinen Flächen
+    geschlossen endet er an den Oberflächen — gedreht um die Bohrungsmitte lag
+    seine Decke 0,9 mm **unter** der Platte, ein Einschluss statt einer
+    gekippten Senkung. Das Werkzeug braucht Überstand an beiden Enden
+    (:func:`_chain_tool`): die Bohrung über ihre Mündung hinaus, die Senkung
+    als **größerer Kegel** nach oben — derselbe Kegel, weitergeführt, bis er
+    die gekippte Oberfläche überall verlässt. Wie weit, sagt die Neigung:
+    :func:`_reach_past_a_tilted_face` rechnet je Ende, was ein Zylinder oder
+    Kegel braucht, um eine Fläche, die vorher quer zur Achse stand, nach dem
+    Kippen noch zu durchstoßen. Was darüber hinausgeht, schnitte Luft — oder
+    eine Wand, die niemand gemeint hat.
+
+    Gedreht wird um die Mitte des **gewählten** Abschnitts, wie bei jedem
+    Merkmal: an der Bohrung um deren Mitte, an der Senkung um die Mündung.
+    Alle Abschnitte bekommen die gedrehte Achse und ihre gedrehte Mitte, und
+    die Bohrung meldet wie beim Versetzen, wenn sie nicht mehr durchgeht.
+    Abnahme (Register RM-172): 30° an der gesenkten Bohrung ergibt eine
+    gekippte Senkung über einer gekippten, durchgehenden Bohrung, und die
+    Erkennung findet beide mit derselben Achse.
+    """
+    body = as_mesh_data(source.mesh)
+    pivot = np.asarray(feature.params["centre"], dtype=float)
+    matrix = np.asarray(
+        trimesh.transformations.rotation_matrix(  # type: ignore[no-untyped-call]
+            math.radians(angle), AXIS_NORMALS[axis], pivot
+        ),
+        dtype=np.float64,
+    )
+    old_axis = np.asarray(_feature_direction(chain[0]), dtype=float)
+    new_axis = matrix[:3, :3] @ old_axis
+    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+
+    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+    filled = _cavity_plug(body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+    tool = _chain_tool(body, chain, pivot=pivot, tilt=tilt)
+    if filled is None or tool is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_OWN_BODY,
+            values={"feature": feature.id, "bore": chain[0].id, "widening": chain[-1].id},
+            constraint="not_movable",
+        )
+    closed = boolean(
+        "union",
+        [body, filled],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    turned = tool.raw.copy()
+    turned.apply_transform(matrix)
+    ctx.progress(0.6, str(_("Der Hohlraum wird gedreht gesetzt …")))
+    placed = boolean(
+        "difference",
+        [closed.mesh, MeshData.of(turned)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    features = dict(source.features)
+    for member in chain:
+        spun = _with_turned_direction(member, axis, angle)
+        centre = matrix[:3, :3] @ (np.asarray(member.params["centre"], dtype=float) - pivot) + pivot
+        features[member.id] = dataclasses.replace(
+            spun,
+            params={
+                **spun.params,
+                "centre": tuple(float(value) for value in centre),
+                "axis": _turned(member, axis, angle),
+            },
+            provenance="generated",
+        )
+    bore = features[chain[0].id]
+    bore_centre = cast(Vec3, tuple(float(value) for value in bore.params["centre"]))
+    findings = [*closed.findings, *placed.findings]
+    lost = _throughness_lost(
+        placed.mesh,
+        bore,
+        bore_centre,
+        "rotate_feature",
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    findings += lost
+    if lost:
+        features[bore.id] = dataclasses.replace(bore, params={**bore.params, "through": False})
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=placed.mesh, features=features)],
+        findings=findings,
+        solver=deepest((closed.solver, placed.solver)),
+    )
+
+
+def _reach_past_a_tilted_face(
+    distance: float, radius: float, tilt: float, *, at_most: float
+) -> float:
+    """Wie weit ein Zylinder vom Drehpunkt aus reichen muss, um eine Fläche
+    zu durchstoßen, die vor dem Kippen quer zu seiner Achse stand.
+
+    ``distance`` ist der Abstand des Drehpunkts zu dieser Fläche entlang der
+    alten Achse, ``radius`` der des Zylinders, ``tilt`` der Winkel zwischen
+    alter und neuer Achse. Nach dem Kippen liegt der Durchstoß bei
+    ``distance / cos(tilt)``, und der ferne Rand des Zylinders braucht dazu
+    ``radius · tan(tilt)`` — bei 30° an einer Bohrung Ø 8, 5 mm über dem
+    Drehpunkt, sind das 5,8 + 2,3 statt 5. Ab 90° gibt es keinen Durchstoß
+    durch diese Fläche mehr; dann gilt die Obergrenze, und die ist der
+    Körper selbst (``at_most``).
+    """
+    if tilt >= 90.0 - EPS_DISPLAY:
+        return at_most
+    needed = distance / math.cos(math.radians(tilt)) + radius * math.tan(math.radians(tilt))
+    return max(distance, min(needed, at_most))
+
+
+def _cone_past_a_tilted_face(
+    distance: float, radius: float, half_angle: float, tilt: float, *, at_most: float
+) -> float:
+    """Wie weit ein Kegel über seine Mündung hinaus weitergeführt werden muss,
+    damit er nach dem Kippen die Oberfläche überall verlässt.
+
+    Die Mündung mit Radius ``radius`` liegt ``distance`` über dem Drehpunkt;
+    ``half_angle`` ist der halbe Öffnungswinkel. Gekippt um ``tilt`` sinkt die
+    Mündungsmitte auf ``distance · cos(tilt)``, und der tiefe Rand des Kegels
+    steigt je Millimeter Weiterführung nur um ``cos(tilt) - tan(half) ·
+    sin(tilt)`` — bei einer 90°-Senkung unter 30° um 0,366. Für die gemessene
+    Platte (Mündung 7 mm über der Bohrungsmitte, Ø 16) heißt das 13,5 mm; ohne
+    sie blieb ein Einschluss unter der Decke. Ist die Flanke flacher als die
+    gekippte Fläche, kommt der Kegel nie mehr heraus — dann gilt ``at_most``.
+    """
+    cos_tilt = math.cos(math.radians(tilt))
+    sin_tilt = math.sin(math.radians(tilt))
+    climb = cos_tilt - math.tan(math.radians(half_angle)) * sin_tilt
+    if climb <= EPS_GEOM:
+        return at_most
+    needed = (distance * (1.0 - cos_tilt) + radius * sin_tilt) / climb
+    return max(0.0, min(needed, at_most))
+
+
+def _chain_tool(
+    mesh: MeshData, chain: Sequence[Feature], *, pivot: NDArray[np.float64], tilt: float
+) -> MeshData | None:
+    """Der Hohlraum einer Kette als Werkzeug — aus Kennzahlen, mit Überstand an
+    beiden Enden, in der **alten** Lage gebaut; gedreht wird er danach.
+
+    Die Bohrung (``chain[0]``) reicht über ihre ferne Mündung hinaus, die
+    äußere Erweiterung (``chain[-1]``) über ihre — ein Kegel als größerer
+    Kegel, ein Zylinder als längerer. Was dazwischen liegt, kommt exakt aus
+    :func:`_measured_section`. Wie weit die Enden reichen, rechnen
+    :func:`_reach_past_a_tilted_face` und :func:`_cone_past_a_tilted_face`
+    aus der Neigung; ohne Neigung ist der Überstand null, und das Werkzeug ist
+    der Hohlraum in seinen Maßen — plus der Zugabe an den Enden, die jede
+    Boolesche braucht (§39).
+
+    ``None``, wenn ein Abschnitt aus seinen Kennzahlen keinen Körper hergibt.
+    """
+    at_most = float(mesh.bounds.diagonal)
+    bore = chain[0]
+    bore_axis = np.asarray(_feature_direction(bore), dtype=np.float64)
+    bore_centre = np.asarray(bore.params["centre"], dtype=np.float64)
+    towards = np.asarray(chain[1].params["centre"], dtype=np.float64) - bore_centre
+    away = -bore_axis if float(towards @ bore_axis) > 0.0 else bore_axis
+
+    bodies: list[MeshData] = []
+    diameter = float(bore.params.get("diameter", 0.0))
+    depth = float(bore.params.get("depth", 0.0))
+    half = (depth if depth > EPS_GEOM else diameter) / 2.0
+    mouth = float((bore_centre + away * half - pivot) @ away)
+    extension = _reach_past_a_tilted_face(mouth, diameter / 2.0, tilt, at_most=at_most) - mouth
+    stretched = _stretched_section(bore, away, extension)
+    if stretched is None:
+        return None
+    bodies.append(stretched)
+
+    for member in chain[1:-1]:
+        part = _measured_section(chain, member)
+        if part is None:
+            return None
+        bodies.append(part)
+
+    outer = chain[-1]
+    outward = _outward_axis(chain, outer)
+    outer_centre = np.asarray(outer.params["centre"], dtype=np.float64)
+    if outer.kind == "cone":
+        wide = float(outer.params.get("diameter", 0.0))
+        half_angle = float(outer.params.get("angle", 0.0)) / 2.0
+        rise = float((outer_centre - pivot) @ outward)
+        beyond = _cone_past_a_tilted_face(rise, wide / 2.0, half_angle, tilt, at_most=at_most)
+        part = _measured_section(chain, outer, outward=beyond)
+    else:
+        diameter = float(outer.params.get("diameter", 0.0))
+        depth = float(outer.params.get("depth", 0.0))
+        half = (depth if depth > EPS_GEOM else diameter) / 2.0
+        mouth = float((outer_centre + outward * half - pivot) @ outward)
+        beyond = _reach_past_a_tilted_face(mouth, diameter / 2.0, tilt, at_most=at_most) - mouth
+        part = _stretched_section(outer, outward, beyond)
+    if part is None:
+        return None
+    bodies.append(part)
+    return boolean("union", bodies, quality="fine", seed=None).mesh
+
+
+def _stretched_section(
+    feature: Feature, outward: NDArray[np.float64], extension: float
+) -> MeshData | None:
+    """Ein zylindrischer Abschnitt aus seinen Kennzahlen, um ``extension``
+    über sein Ende hinaus verlängert — in Richtung ``outward``.
+
+    Ohne Verlängerung ist es der Körper aus :func:`_feature_solid` mit exaktem
+    Querschnitt (``_polygon_gain``): so weit wie gemessen, mit der Zugabe an
+    beiden Enden.
+    """
+    if feature.kind == "cone":
+        return None
+    diameter = float(feature.params.get("diameter", 0.0)) + _polygon_gain(feature)
+    if diameter <= EPS_GEOM:
+        return None
+    depth = float(feature.params.get("depth", 0.0))
+    height = (depth if depth > EPS_GEOM else diameter) + 2.0 * FEATURE_OVERLAP
+    body = trimesh.creation.cylinder(
+        radius=diameter / 2.0, height=height + max(0.0, extension), sections=FEATURE_SECTIONS
+    )
+    body.apply_translation((0.0, 0.0, max(0.0, extension) / 2.0))
+    body.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            [0.0, 0.0, 1.0], outward
+        )
+    )
+    body.apply_translation(np.asarray(feature.params["centre"], dtype=float))
+    return MeshData.of(body)
 
 
 def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:

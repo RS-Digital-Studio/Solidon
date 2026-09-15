@@ -513,9 +513,10 @@ def actions_for(
 
 
 #: Die Handlungen, die einen Hohlraum nur nehmen, wenn er dem Merkmal allein
-#: gehört — dieselbe Liste wie ``prepare_ops._needs_a_plain_bore`` und
-#: ``slot_hole``.
-_WANT_A_PLAIN_BORE: Final = ("slot_hole", "rotate_feature", "duplicate_feature")
+#: gehört — dieselbe Bedingung wie in ``prepare_ops.slot_hole``. *Drehen* und
+#: *Verdoppeln* standen bis zum 15.09.2026 mit hier; seither nehmen sie die
+#: Kette mit (RM-172), und die Zeile bleibt bedienbar.
+_WANT_A_PLAIN_BORE: Final = ("slot_hole",)
 
 
 def _shares_its_cavity(
@@ -529,13 +530,13 @@ def _shares_its_cavity(
 ) -> TranslatableText | None:
     """Warum diese Handlung an einem geteilten Hohlraum absagen würde — oder ``None``.
 
-    Dieselbe Bedingung wie in den Operationen (``relations.cavity_is_shared``)
-    und derselbe Satz (``NEEDS_A_PLAIN_BORE``): *Zum Langloch ziehen*, *Drehen*
-    und *Verdoppeln* nehmen einen Hohlraum nur, wenn er dem Merkmal allein
-    gehört — an der Bohrung wie an ihrer Senkung. Gemessen am 14.09.2026:
-    *Drehen* an der Bohrung einer gesenkten Bohrung kippte nur den Stumpf
-    unter der Senkung, *Verdoppeln* setzte einen Stumpf ohne Senkung — die
-    Operationen sagen seither ab, und die Zeile sagt es vorher.
+    Dieselbe Bedingung wie in der Operation (``relations.cavity_is_shared``)
+    und derselbe Satz (``NEEDS_A_PLAIN_BORE``): *Zum Langloch ziehen* nimmt
+    einen Hohlraum nur, wenn er dem Merkmal allein gehört — an der Bohrung
+    wie an ihrer Senkung. *Drehen* und *Verdoppeln* standen vom 14. bis zum
+    15.09.2026 mit auf der Liste — gemessen hatten sie an der Bohrung einer
+    gesenkten Bohrung nur den Stumpf unter der Senkung gekippt oder kopiert;
+    seit RM-172 nehmen sie die Kette mit, und die Zeile bleibt bedienbar.
 
     **Die Sperre kommt aus dem Netz, nie aus einer Schätzung.** Was der
     Aufrufer aus ``cavity_chain_state_at`` mitbringt (``cavity``,

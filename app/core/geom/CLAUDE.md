@@ -33,6 +33,17 @@ unvollständige automatische Änderung einer einzelnen Senkung vorgeschlagen.
 Die geprüfte Eigenständigkeit erreicht Werkzeugbau und Verschluss auch beim
 Versetzen, Verdoppeln und der freien Platzierung samt ihrer Vorschau.
 
+**Und eine Kette geht als Ganzes** (RM-172, 15.09.2026): `move_feature`,
+`_rotate_cavity_chain` und `_duplicate_cavity_chain` nehmen Bohrung und
+Senkung zusammen. Das Werkzeug dafür baut `_chain_tool` aus den Kennzahlen
+der Abschnitte — mit Überstand an beiden Enden: die Bohrung über ihre
+Mündung hinaus, die äußere Senkung als größerer Kegel (`_measured_section`
+mit `outward`). Wie weit, rechnen `_reach_past_a_tilted_face` und
+`_cone_past_a_tilted_face` aus der Neigung; ohne Neigung bleibt die Zugabe
+aus §39, die den exakten Flächenkörper gerade fehlte (eine Haut von 5 µm über
+der Mündung nach dem Versetzen). Gedreht wird um die Mitte des gewählten
+Abschnitts. Nur `slot_hole` sagt an einer Kette weiter ab.
+
 Die Regeln stehen in `.claude/rules/operationen.md`.
 
 `repair()` übernimmt Verschweißen und Dreiecksbereinigung nur, wenn ein

@@ -391,13 +391,30 @@ allein im Werkzeugbau.
 zweimal wörtlich gleich in `slot_hole` und `perceive.actions` — bis zum
 14.09.2026 hätte sich eine Seite lösen können, ohne dass etwas rot wurde.
 Was einen geteilten Hohlraum **nicht** nehmen kann, sagt ab statt still ein
-Stück zu bearbeiten: *Merkmal drehen* an der Bohrung einer gesenkten Bohrung
-kippte nur den Stumpf unter der Senkung, *Merkmal verdoppeln* setzte einen
-Stumpf ohne Senkung (gemessen 14.09.2026, `_needs_a_plain_bore`). Beide sagen
-seither mit `NEEDS_A_PLAIN_BORE` ab — demselben Satz, den das Merkmalfenster
-an der Zeile zeigt —, und die Kette mitzunehmen wie `move_feature` steht als
-Vorschlag im Register: Sie braucht ein Werkzeug, das über beide Oberflächen
-hinausreicht.
+Stück zu bearbeiten — heute ist das allein *Zum Langloch ziehen*, mit
+`NEEDS_A_PLAIN_BORE`, demselben Satz, den das Merkmalfenster an der Zeile
+zeigt. *Merkmal drehen* und *Merkmal verdoppeln* sagten einen Tag lang
+ebenso ab: An der Bohrung einer gesenkten Bohrung hatte *Drehen* nur den
+Stumpf unter der Senkung gekippt, *Verdoppeln* einen Stumpf ohne Senkung
+gesetzt (gemessen 14.09.2026). Seit dem 15.09.2026 nehmen beide die Kette mit
+(RM-172, Entscheidung Robert), wie `move_feature` seit dem 09.09.
+
+**Und wer eine Kette kippt, baut ihr Werkzeug mit Überstand** (`_chain_tool`).
+Der exakte Hohlraum aus den Flächen endet bündig in den Oberflächen: gedreht
+um die Bohrungsmitte lag seine Decke 0,9 mm **unter** der Platte — ein
+Einschluss statt einer gekippten Senkung —, und schon unverdreht ließ die
+Differenz an der neuen Stelle eine Haut von 5 µm über der Mündung stehen
+(§39; gemessen 15.09.2026: 0,25 mm³ im Schlauch, „nicht mehr durchgehend"). Das
+Werkzeug kommt deshalb aus den Kennzahlen: die Bohrung über ihre Mündung
+hinaus, die Senkung als **größerer Kegel** nach oben — derselbe Kegel,
+weitergeführt, bis er die gekippte Fläche überall verlässt. Wie weit, sagt die
+Neigung (`_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`): bei 30° an
+einer 90°-Senkung Ø 16, 7 mm über der Bohrungsmitte, sind es 13,5 mm; ohne
+Neigung bleibt die Zugabe aus §39. Mehr als nötig schnitte Luft — oder eine
+Wand, die niemand gemeint hat; darum die Rechnung und nicht der Hüllquader.
+Abnahme: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
+gekippten, durchgehenden Bohrung, und `detect` findet beide mit derselben
+Achse (`test_turning_a_countersunk_bore_takes_its_sink_along`).
 
 Die allgemeine Form, weil sie über diesen Fall hinausgeht: **Wer aus einer
 Zahl auf einen Sachverhalt schließt, schreibt dazu, unter welcher Bedingung
