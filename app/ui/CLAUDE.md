@@ -10,7 +10,7 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 |---|---|
 | `oberflaeche.md` | jeder Datei hier — Texte, Zahlen, Grenzen, Barrierefreiheit |
 | `ansicht.md` | `viewport.py`, `overlay.py`, `cursors.py` und den Leisten |
-| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py` |
+| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `organizer_dialog.py` |
 | `zeichenflaeche.md` | `sketch_editor.py` |
 
 Hier steht die Karte, dort das Gesetz.
@@ -24,6 +24,103 @@ Bei Texturen bindet „Gesamte Fläche“ die ausgewählte Flächenkennung; nur
 wirksame Maße erscheinen. Der Operationsdialog behält denselben Startwert
 bis zum Übernehmen. Seine Vorschau reduziert flächengebundene Eingaben nicht,
 damit Ränder und Bohrungen dem tatsächlichen Ergebnis entsprechen.
+
+Bei reinem Hinzufügen zeigen Original und Differenz gemeinsam das Ergebnis.
+Ein deckungsgleicher zusätzlicher Nachherkörper würde die farbige Markierung
+der hinzugefügten Textur verdecken. Abtrag und unvollständige Vergleiche
+behalten ihre vollständige Ergebnisvorschau.
+
+## Vorschau und Auswahl
+
+`organizer_dialog.py` zeigt den gespeicherten Fachbaum, nummerierte Draufsicht
+und tatsächlich berechnetes Ergebnis. `OrganizerLayoutField` trägt den Layouttext
+unsichtbar als Daten und zeigt nur Zusammenfassung und Wahlknopf. Ein Arbeiter
+löst Maße und Layout auf, baut die Geometrie und projiziert sie; nur dessen
+aktuelle Antwort gibt Übernehmen frei. Änderungen während einer Rechnung merken
+den letzten Auftrag vor, `release()` verwirft späte Antworten.
+`layout_only=True` liefert beim Wiederbearbeiten nur die neue Aufteilung zurück;
+die äußeren Maßausdrücke bleiben im Operationsdialog. Ein Bezugwechsel bewahrt
+gebundene Außenwerte und nennt Vorher-/Nachhermaße. Im eigenständigen Dialog
+übernehmen ungebundene Zahlen die gerade sichtbare Größe. Einzelne Wandhöhen
+gelten für die geklickte Instanz; eine Fachvorlage nennt ausdrücklich, wie viele
+Fächer ihre Maße gemeinsam verwenden.
+Eine Wandwahl löscht die vorherige Baumzeile als Auswahl. Draufsicht und
+Ergebnisprojektion zeigen dieselbe Auswahl mit Kontur und Text. Die Ergebnisfarbe
+folgt nur den geometrisch belegten Dreiecken des fertigen Körpers und bleibt in
+der Tiefensortierung. Ein Auswahlwechsel verwendet das vorhandene Mesh erneut;
+nur die Projektion läuft neu im Arbeiter.
+
+`outline_dialog.py` zeigt SVG-/DXF-Profile als nummerierte Zeichnung und
+Checkboxliste neben ihrer berechneten Extrusion. Innenringe bleiben am Profil;
+nicht extrudierbare Profile bleiben mit Begründung sichtbar. Einlesen,
+Profilprüfung, Zeichenpfade und Ergebnisprojektion laufen im Arbeiter.
+`values()` liefert ausschließlich `load_outline`-Werte: Konturkennungen als
+JSON-Liste, Höhe und Zielbreite. Erst eine zur aktuellen Auswahl passende
+Vorschau gibt Übernehmen frei. Je Dialog rechnet höchstens ein Arbeiter;
+Änderungen merken nur den letzten Auftrag vor. `release()` verwirft späte
+Antworten und wartet über die gemeinsame Leine auf das Threadende.
+
+`ContourField` zeigt Anzahl und Wahlknopf statt des gespeicherten JSON-Texts.
+Das Schema nennt dafür `kind="contours"`; `OperationDialog` liest `value()`
+und verbindet Änderungs- und Gültigkeitssignal wie bei den anderen Wählern.
+Beim erneuten Wählen sperrt `OutlineDialog(selection_only=True)` seine Maße:
+Nur die Konturauswahl fließt zurück, bestehende Maßausdrücke bleiben erhalten.
+In der Konturliste stehen Haken und ausdrücklicher Status neben dem Bild;
+der Zeilenfokus übermalt den Haken nicht. Nebenknöpfe erhalten keinen
+automatischen Default, der feste Hauptknopf bleibt `make_primary`.
+
+Das Hauptfenster schaltet `Session.choose_outline` für seine asynchronen
+Importwege ein. `outlineImportRequested` hält vor dem ersten Schritt an;
+`finish_outline_import` prüft die Projektgeneration und übernimmt die Antwort
+genau einmal. Abbrechen räumt die eingebettete Quelle auf. Menü, Dateidialog,
+Drag-and-drop und Download teilen diesen Weg. Der synchrone Sitzungsimport
+behält seinen ausdrücklichen Auftrag ohne interaktive Zwischenwahl.
+
+`OrganizerLayoutField` öffnet über das Hauptfenster den `OrganizerDialog`.
+Der Facheditor erhält aufgelöste Außenmaße und die Projektparameter; nur sein
+Layoutwert fließt in den übergeordneten Operationsdialog zurück. Dessen
+Maßausdrücke bleiben erhalten. Abbrechen, Projektwechsel und Fensterabbau
+verwerfen späte Antworten. Der Layoutwert wird erst durch `create_organizer`
+im Operationsstapel zu Dokumentgeometrie.
+
+Die Parameterleiste liest Verwendungsdaten aus dem aktuellen
+`EvaluationResult`, ohne Skizzen im Qt-Hauptthread zu parsen. Ungenutzte Maße
+tragen einen sichtbaren Text und erklären den Ausdruck im Operationsfeld.
+Benutzte Maße nennen ihre lesenden Schritte. Während der Auswertung und bei
+einer unklaren Abfrage bleibt die Aussage unbekannt; alte Ergebnisse dürfen
+keinen gerade geänderten Parameter als ungenutzt bezeichnen.
+
+Die geometrische Vorschau zeigt den vollständigen Nachherkörper aus
+`Difference.result`. Hinzugefügtes und entferntes Material erklärt die
+Änderung zusätzlich; eine gescheiterte Differenzrechnung darf das vorhandene
+Ergebnis nicht verbergen. Neu vernetzte Vorschaukörper liefern beim Picking
+keine Dreiecksnummer aus dem Originalnetz.
+
+Große Vorschaukörper und alle Ansichtsschnitte werden gemeinsam durch den
+Ansichtsarbeiter auf eigenen Netzkopien vorbereitet. Währenddessen zeigt das
+Band ausdrücklich das Vorhermodell an; erst die fertige aktuelle Generation
+ersetzt Geometrie, Konturen und Etiketten. Abbruch und Fensterabbau verwerfen
+auch bereits eingereihte Antworten. Dezimierte Netze bleiben ausschließlich
+in der Ansicht und werden beim Vorhervergleich wiederverwendet.
+
+Merkmalskontur und Etikett lesen den gerade gezeigten Körper. Entfernte
+Kettenglieder erhalten keine alte Markierung über dem neuen Ergebnis.
+Bohrung, Senkung und belegte tangentiale Eintrittsflächen teilen eine Kontur;
+deren Tiefenversatz kommt in Bildpunkten aus dem Renderer. Beim
+Vorher-Vergleich kehren Geometrie, Maße und Markierung gemeinsam zurück.
+
+Der Objektbaum und die Auswahlüberschrift nennen bei der Hauptbohrung schon
+die belegten Stufen und Senkungen (`labels.cavity_name`). Untergeordnete
+Abschnitte behalten ihre eigenen Namen und Kennungen. Dieselbe Kettenauskunft
+steuert Gruppierung, Beschriftung und Auswahl; ein Verwendungszweck wie
+„Magnettasche“ wird aus einer bloßen Sackbohrung nicht abgeleitet.
+Ein belegtes `through=False` heißt bereits im Baum und am Merkmal
+„Sackbohrung“; ohne diesen Nachweis bleibt die neutrale Bezeichnung „Bohrung“.
+
+`Session._preview_outcome` trägt Befunde ausschließlich der vorgeschauten
+Schritte in `SceneDifference.findings`. Warnungen bleiben neben einer
+erfolgreichen Ergebnisvorschau sichtbar. Der getrennte Absageweg bleibt
+Vorschauen vorbehalten, die tatsächlich kein Ergebnis liefern.
 
 ## Filamente und lokales Lager
 
@@ -1391,79 +1488,8 @@ Die Suite baut über siebenhundert Fenster mit Ansicht nacheinander auf und
 reißt am Stück ab. Fensterdateien werden **je Prozess einzeln** gefahren —
 siehe `CLAUDE.md` im Wurzelverzeichnis.
 
-## Geometrische Vorschau und Merkmalsauswahl
-
-Die geometrische Vorschau zeigt den vollständigen Nachherkörper aus
-`Difference.result`. Hinzugefügtes und entferntes Material erklärt die
-Änderung zusätzlich; eine gescheiterte Differenzrechnung darf das vorhandene
-Ergebnis nicht verbergen. Neu vernetzte Vorschaukörper liefern beim Picking
-keine Dreiecksnummer aus dem Originalnetz.
-
-Große Vorschaukörper und alle Ansichtsschnitte werden gemeinsam durch den
-Ansichtsarbeiter auf eigenen Netzkopien vorbereitet. Währenddessen zeigt das
-Band ausdrücklich das Vorhermodell an; erst die fertige aktuelle Generation
-ersetzt Geometrie, Konturen und Etiketten. Abbruch und Fensterabbau verwerfen
-auch bereits eingereihte Antworten. Dezimierte Netze bleiben ausschließlich
-in der Ansicht und werden beim Vorhervergleich wiederverwendet.
-
-Merkmalskontur und Etikett lesen den gerade gezeigten Körper. Entfernte
-Kettenglieder erhalten keine alte Markierung über dem neuen Ergebnis.
-Bohrung, Senkung und belegte tangentiale Eintrittsflächen teilen eine Kontur;
-deren Tiefenversatz kommt in Bildpunkten aus dem Renderer. Beim
-Vorher-Vergleich kehren Geometrie, Maße und Markierung gemeinsam zurück.
-
-Der Objektbaum und die Auswahlüberschrift nennen bei der Hauptbohrung schon
-die belegten Stufen und Senkungen (`labels.cavity_name`). Untergeordnete
-Abschnitte behalten ihre eigenen Namen und Kennungen. Dieselbe Kettenauskunft
-steuert Gruppierung, Beschriftung und Auswahl; ein Verwendungszweck wie
-„Magnettasche“ wird aus einer bloßen Sackbohrung nicht abgeleitet.
-Ein belegtes `through=False` heißt bereits im Baum und am Merkmal
-„Sackbohrung“; ohne diesen Nachweis bleibt die neutrale Bezeichnung „Bohrung“.
-
-`Session._preview_outcome` trägt Befunde ausschließlich der vorgeschauten
-Schritte in `SceneDifference.findings`. Warnungen bleiben neben einer
-erfolgreichen Ergebnisvorschau sichtbar. Der getrennte Absageweg bleibt
-Vorschauen vorbehalten, die tatsächlich kein Ergebnis liefern.
-
-## Gebundene Projektmaße
-
-Die Parameterleiste liest Verwendungsdaten aus dem aktuellen
-`EvaluationResult`, ohne Skizzen im Qt-Hauptthread zu parsen. Ungenutzte Maße
-tragen einen sichtbaren Text und erklären den Ausdruck im Operationsfeld.
-Benutzte Maße nennen ihre lesenden Schritte. Während der Auswertung und bei
-einer unklaren Abfrage bleibt die Aussage unbekannt; alte Ergebnisse dürfen
-keinen gerade geänderten Parameter als ungenutzt bezeichnen.
-
 Die Platzierungsvorschau nimmt die Projektparameter in ihren Werkzeugschlüssel
 auf. Der Arbeiter löst abhängige Maße einmal auf und reicht sie sowohl an
 gewöhnliche Operationswerte als auch an eingebettete Bausteinskizzen weiter.
 Gleichbleibender Skizzentext darf nach einer Maßänderung kein altes Werkzeug
 sichtbar lassen.
-
-## Konturwahl bei Zeichnungen
-
-`outline_dialog.py` zeigt SVG-/DXF-Profile als nummerierte Zeichnung und
-Checkboxliste neben ihrer berechneten Extrusion. Innenringe bleiben am Profil;
-nicht extrudierbare Profile bleiben mit Begründung sichtbar. Einlesen,
-Profilprüfung, Zeichenpfade und Ergebnisprojektion laufen im Arbeiter.
-`values()` liefert ausschließlich `load_outline`-Werte: Konturkennungen als
-JSON-Liste, Höhe und Zielbreite. Erst eine zur aktuellen Auswahl passende
-Vorschau gibt Übernehmen frei. Je Dialog rechnet höchstens ein Arbeiter;
-Änderungen merken nur den letzten Auftrag vor. `release()` verwirft späte
-Antworten und wartet über die gemeinsame Leine auf das Threadende.
-
-`ContourField` zeigt Anzahl und Wahlknopf statt des gespeicherten JSON-Texts.
-Das Schema nennt dafür `kind="contours"`; `OperationDialog` liest `value()`
-und verbindet Änderungs- und Gültigkeitssignal wie bei den anderen Wählern.
-Beim erneuten Wählen sperrt `OutlineDialog(selection_only=True)` seine Maße:
-Nur die Konturauswahl fließt zurück, bestehende Maßausdrücke bleiben erhalten.
-In der Konturliste stehen Haken und ausdrücklicher Status neben dem Bild;
-der Zeilenfokus übermalt den Haken nicht. Nebenknöpfe erhalten keinen
-automatischen Default, der feste Hauptknopf bleibt `make_primary`.
-
-Das Hauptfenster schaltet `Session.choose_outline` für seine asynchronen
-Importwege ein. `outlineImportRequested` hält vor dem ersten Schritt an;
-`finish_outline_import` prüft die Projektgeneration und übernimmt die Antwort
-genau einmal. Abbrechen räumt die eingebettete Quelle auf. Menü, Dateidialog,
-Drag-and-drop und Download teilen diesen Weg. Der synchrone Sitzungsimport
-behält seinen ausdrücklichen Auftrag ohne interaktive Zwischenwahl.

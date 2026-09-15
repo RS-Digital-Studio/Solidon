@@ -92,6 +92,51 @@ def test_text_containing_an_at_sign_does_not_become_an_expression(document: Docu
     assert parameter_uses(document) == {"width": (), "name": ()}
 
 
+def test_organizer_dimensions_read_only_inside_the_layout_invalidate_cached_geometry(
+    document: Document, profile
+) -> None:
+    """Ein Fachmaß bleibt wirksam, auch wenn kein gewöhnliches Zahlenfeld es liest."""
+    from dataclasses import replace
+
+    from app.core.organizer.serialize import grid_layout, layout_to_text
+    from app.core.scene.cache import ResultCache
+    from app.core.scene.evaluate import evaluate
+
+    document.parameters = {"inner": _parameter("inner"), "unused": _parameter("unused")}
+    layout = layout_to_text(
+        grid_layout(1, 2, cell_width="=@inner", cell_depth=20, wall=3, radius=0, basis="inner")
+    )
+    document.ops = [
+        Operation(
+            id=1,
+            op="create_organizer",
+            params={
+                "layout": layout,
+                "wall": 3,
+                "height": 20,
+                "floor": 2,
+                "radius": 0,
+            },
+            outputs=("obj_1",),
+        )
+    ]
+    cache = ResultCache()
+    first = evaluate(document, profile, cache=cache)
+    assert first.complete
+    assert first.scene.objects["obj_1"].mesh.bounds.size[0] == pytest.approx(29.0)
+    assert first.parameter_usage == {
+        "inner": (ParameterUse(1, "layout"),),
+        "unused": (),
+    }
+    document.parameters["inner"] = replace(document.parameters["inner"], value=20.0)
+    second = evaluate(document, profile, cache=cache)
+    assert second.complete
+    assert second.scene.objects["obj_1"].mesh.bounds.size[0] == pytest.approx(49.0)
+    assert first.object_hashes["obj_1"] != second.object_hashes["obj_1"]
+    document.parameters["inner"] = replace(document.parameters["inner"], value=10.0)
+    restored = evaluate(document, profile, cache=cache)
+    assert restored.complete
+    assert restored.object_hashes["obj_1"] == first.object_hashes["obj_1"]
 
 
 def test_sketch_and_pose_share_the_nested_reference_collectors(document: Document) -> None:

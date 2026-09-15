@@ -42,7 +42,7 @@ import app.core
 
 CORE: Final = Path(app.core.__file__).parent
 
-#: Die Unterpakete des Kerns. Ein vierzehntes ohne Zeile hier macht
+#: Die Unterpakete des Kerns. Ein weiteres ohne Zeile hier macht
 #: :func:`test_every_core_package_is_known` rot — es hätte sonst keine Regel.
 PACKAGES: Final[frozenset[str]] = frozenset(
     {
@@ -54,6 +54,7 @@ PACKAGES: Final[frozenset[str]] = frozenset(
         "geom",
         "ingest",
         "knowledge",
+        "organizer",
         "perceive",
         "registry",
         "scene",
@@ -63,7 +64,7 @@ PACKAGES: Final[frozenset[str]] = frozenset(
 )
 
 #: Eifrige Kanten: ``a`` importiert ``b`` mindestens einmal auf Modulebene.
-#: Stand 07.09.2026, 47 Kanten.
+#: Der Organizer benutzt Geometrie, Profile und Register; seine Rückrichtung bleibt träge.
 EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
     {
         ("agent", "activation"),
@@ -97,6 +98,9 @@ EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
         ("knowledge", "geom"),
         ("knowledge", "registry"),
         ("knowledge", "scene"),
+        ("organizer", "geom"),
+        ("organizer", "knowledge"),
+        ("organizer", "registry"),
         ("perceive", "geom"),
         ("perceive", "knowledge"),
         ("perceive", "registry"),
@@ -141,6 +145,7 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("knowledge", "perceive"),
         ("knowledge", "sketch"),
         ("registry", "knowledge"),
+        ("scene", "organizer"),
     }
 )
 

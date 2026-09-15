@@ -1778,10 +1778,12 @@ def nested_references(*, strict: bool = False) -> dict[str, Callable[[str], froz
     bedeutet dort unbekannte Verwendung und darf nicht leer zurückkommen.
     """
     from app.core.geom.pose import pose_parameter_references
+    from app.core.organizer.serialize import layout_references
 
     return {
         "sketch": partial(sketch_parameter_references, strict=strict),
         "armature": partial(pose_parameter_references, strict=strict),
+        "organizer": partial(layout_references, strict=strict),
     }
 
 

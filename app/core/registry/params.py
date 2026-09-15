@@ -255,6 +255,7 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         # Dokuments, das jemand anderswo wiederfände.
         "edges",
         "contours",
+        "organizer",
     }
 )
 
@@ -464,6 +465,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "armature": "string",
     "edges": "string",
     "contours": "string",
+    "organizer": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,

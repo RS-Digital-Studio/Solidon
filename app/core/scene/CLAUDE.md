@@ -129,8 +129,10 @@ Erneute Erreichbarkeit entfernt den alten Verknüpfungshinweis.
 und abgeleitete Leser im aktuellen Operationsstapel. Die Geometrieauswertung
 bleibt in `_evaluate()`. Ein Fehler der Verwendungsabfrage erhält ihr Ergebnis
 und steht separat in `parameter_usage_error`; `None` darf nicht als leere
-Verwendungsliste ausgegeben werden. Skizzen und Stellungen
-teilen die strengen Sammler aus `nested_references(strict=True)`. Reine Parameterketten ohne
+Verwendungsliste ausgegeben werden. Skizzen, Stellungen und Organizer-Aufteilungen
+teilen die strengen Sammler aus `nested_references(strict=True)`. Dieselben
+Layoutbezüge fließen in den Operationshash ein, auch wenn der Ausdruck nur
+an einer einzelnen Trennwand oder einer Rasterzahl steht. Reine Parameterketten ohne
 lesenden Schritt bleiben ungenutzt. Diese Auskunft wird nicht ins Projekt
 geschrieben und ändert weder Parameterwerte noch Netzgeometrie.
 

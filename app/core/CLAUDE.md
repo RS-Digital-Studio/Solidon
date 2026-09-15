@@ -14,6 +14,7 @@ selbst. Hier steht, **was wo liegt**.
 | `scene/` | Was ist gerade offen? Szene, Op-Stapel, Auswertung, Projektdatei, Migrationen, Cache (§12–§16) |
 | `geom/` | Wie entsteht Geometrie? Die Operationen gegen `manifold3d`/`trimesh`, die Boolesche Rückfallkette (§17.2, §25) |
 | `sketch/` | 2D mit Zwangsbedingungen — Löser, Profile, Ebenen (§30.1) |
+| `organizer/` | Maßlich gekoppelte Fächer, Einzelwände, Boden- und Montagebereiche aus einem gespeicherten Teilungsbaum (§13, §25) |
 | `brep/` | Der zweite Kern (OpenCASCADE), optional; meldet sich ab, wenn er fehlt (§30) |
 | `slice/` | Schichtanalyse und G-Code **lesen**, nie schreiben (§22) |
 | `ingest/` | Einlesen, Einheitenerkennung, 3MF als Baugruppe (§17.1) |

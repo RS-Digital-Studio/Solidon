@@ -1,0 +1,618 @@
+[
+  {
+    "name": "Besteckkorb.p3d",
+    "data": {
+      "version": 1,
+      "basis": "outer",
+      "layout": {
+        "kind": "split",
+        "id": "front_back",
+        "axis": "y",
+        "wall": "=@wall",
+        "heights": {},
+        "opening_radius": 0,
+        "children": [
+          {
+            "kind": "split",
+            "id": "left_right",
+            "axis": "x",
+            "wall": "=@wall",
+            "heights": {},
+            "opening_radius": 0,
+            "children": [
+              {
+                "kind": "split",
+                "id": "front_middle",
+                "axis": "y",
+                "wall": "=@wall",
+                "heights": {
+                  "1": "=@divider_h"
+                },
+                "opening_radius": "=@divider_opening_radius",
+                "children": [
+                  {
+                    "kind": "cell",
+                    "id": "front_left",
+                    "width": "=@left_width",
+                    "depth": "=@row_depth",
+                    "radius": "=@pocket_radius"
+                  },
+                  {
+                    "kind": "cell",
+                    "id": "middle_left",
+                    "width": "=@left_width",
+                    "depth": "=@row_depth",
+                    "radius": "=@pocket_radius"
+                  }
+                ]
+              },
+              {
+                "kind": "cell",
+                "id": "right",
+                "width": "=@right_width",
+                "depth": "=@row_depth*2+@wall",
+                "radius": "=@right_radius"
+              }
+            ]
+          },
+          {
+            "kind": "repeat",
+            "id": "back_row",
+            "axis": "x",
+            "wall": "=@wall",
+            "heights": {},
+            "opening_radius": 0,
+            "count": "=@back_columns",
+            "child": {
+              "kind": "cell",
+              "id": "back_cell",
+              "width": "=@back_cell_width",
+              "depth": "=@row_depth",
+              "radius": "=@pocket_radius"
+            }
+          }
+        ]
+      }
+    },
+    "values": {
+      "wall": 3.0,
+      "floor": 4.0,
+      "height": 160.0,
+      "grid": 15.0,
+      "hole_d": 6.0,
+      "foot_d": 13.0,
+      "row_depth": 45.5,
+      "divider_h": 100.0,
+      "width": 180.0,
+      "depth": 148.5,
+      "pocket_radius": 3.26,
+      "right_radius": 4.61,
+      "left_width": 105.5,
+      "right_width": 65.5,
+      "back_cell_width": 56.0,
+      "back_columns": 3,
+      "divider_opening_radius": 1.3
+    },
+    "expected_sizes": [
+      [
+        105.5,
+        45.5
+      ],
+      [
+        105.5,
+        45.5
+      ],
+      [
+        65.5,
+        94
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ]
+    ],
+    "expected_feet": 4
+  },
+  {
+    "name": "Sparsam_120mm/Besteckkorb_120mm.p3d",
+    "data": {
+      "version": 1,
+      "basis": "outer",
+      "layout": {
+        "kind": "split",
+        "id": "front_back",
+        "axis": "y",
+        "wall": "=@wall",
+        "heights": {},
+        "opening_radius": 0,
+        "children": [
+          {
+            "kind": "split",
+            "id": "left_right",
+            "axis": "x",
+            "wall": "=@wall",
+            "heights": {},
+            "opening_radius": 0,
+            "children": [
+              {
+                "kind": "split",
+                "id": "front_middle",
+                "axis": "y",
+                "wall": "=@wall",
+                "heights": {
+                  "1": "=@divider_h"
+                },
+                "opening_radius": "=@divider_opening_radius",
+                "children": [
+                  {
+                    "kind": "cell",
+                    "id": "front_left",
+                    "width": "=@left_width",
+                    "depth": "=@row_depth",
+                    "radius": "=@pocket_radius"
+                  },
+                  {
+                    "kind": "cell",
+                    "id": "middle_left",
+                    "width": "=@left_width",
+                    "depth": "=@row_depth",
+                    "radius": "=@pocket_radius"
+                  }
+                ]
+              },
+              {
+                "kind": "cell",
+                "id": "right",
+                "width": "=@right_width",
+                "depth": "=@row_depth*2+@wall",
+                "radius": "=@right_radius"
+              }
+            ]
+          },
+          {
+            "kind": "repeat",
+            "id": "back_row",
+            "axis": "x",
+            "wall": "=@wall",
+            "heights": {},
+            "opening_radius": 0,
+            "count": "=@back_columns",
+            "child": {
+              "kind": "cell",
+              "id": "back_cell",
+              "width": "=@back_cell_width",
+              "depth": "=@row_depth",
+              "radius": "=@pocket_radius"
+            }
+          }
+        ]
+      }
+    },
+    "values": {
+      "wall": 3.0,
+      "floor": 4.0,
+      "height": 120.0,
+      "grid": 15.0,
+      "hole_d": 6.0,
+      "foot_d": 13.0,
+      "row_depth": 45.5,
+      "divider_h": 75.0,
+      "width": 180.0,
+      "depth": 148.5,
+      "pocket_radius": 3.26,
+      "right_radius": 4.61,
+      "left_width": 105.5,
+      "right_width": 65.5,
+      "back_cell_width": 56.0,
+      "back_columns": 3,
+      "divider_opening_radius": 1.3
+    },
+    "expected_sizes": [
+      [
+        105.5,
+        45.5
+      ],
+      [
+        105.5,
+        45.5
+      ],
+      [
+        65.5,
+        94
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ]
+    ],
+    "expected_feet": 4
+  },
+  {
+    "name": "Sparsam_120mm/Besteckkorb_120mm_2Waende.p3d",
+    "data": {
+      "version": 1,
+      "basis": "outer",
+      "layout": {
+        "kind": "split",
+        "id": "front_back",
+        "axis": "y",
+        "wall": "=@wall",
+        "heights": {},
+        "opening_radius": 0,
+        "children": [
+          {
+            "kind": "split",
+            "id": "left_right",
+            "axis": "x",
+            "wall": "=@wall",
+            "heights": {},
+            "opening_radius": 0,
+            "children": [
+              {
+                "kind": "split",
+                "id": "front_middle",
+                "axis": "y",
+                "wall": "=@wall",
+                "heights": {
+                  "1": "=@divider_h"
+                },
+                "opening_radius": "=@divider_opening_radius",
+                "children": [
+                  {
+                    "kind": "cell",
+                    "id": "front_left",
+                    "width": "=@left_width",
+                    "depth": "=@row_depth",
+                    "radius": "=@pocket_radius"
+                  },
+                  {
+                    "kind": "cell",
+                    "id": "middle_left",
+                    "width": "=@left_width",
+                    "depth": "=@row_depth",
+                    "radius": "=@pocket_radius"
+                  }
+                ]
+              },
+              {
+                "kind": "cell",
+                "id": "right",
+                "width": "=@right_width",
+                "depth": "=@row_depth*2+@wall",
+                "radius": "=@right_radius"
+              }
+            ]
+          },
+          {
+            "kind": "repeat",
+            "id": "back_row",
+            "axis": "x",
+            "wall": "=@wall",
+            "heights": {},
+            "opening_radius": 0,
+            "count": "=@back_columns",
+            "child": {
+              "kind": "cell",
+              "id": "back_cell",
+              "width": "=@back_cell_width",
+              "depth": "=@row_depth",
+              "radius": "=@pocket_radius"
+            }
+          }
+        ]
+      }
+    },
+    "values": {
+      "wall": 3.0,
+      "floor": 4.0,
+      "height": 120.0,
+      "grid": 15.0,
+      "hole_d": 6.0,
+      "foot_d": 13.0,
+      "row_depth": 45.5,
+      "divider_h": 75.0,
+      "width": 180.0,
+      "depth": 148.5,
+      "pocket_radius": 3.26,
+      "right_radius": 4.61,
+      "left_width": 105.5,
+      "right_width": 65.5,
+      "back_cell_width": 56.0,
+      "back_columns": 3,
+      "divider_opening_radius": 1.3
+    },
+    "expected_sizes": [
+      [
+        105.5,
+        45.5
+      ],
+      [
+        105.5,
+        45.5
+      ],
+      [
+        65.5,
+        94
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ]
+    ],
+    "expected_feet": 4
+  },
+  {
+    "name": "Modular/Besteckkorb_Modular_Basis.p3d",
+    "data": {
+      "version": 1,
+      "basis": "outer",
+      "layout": {
+        "kind": "split",
+        "id": "front_back",
+        "axis": "y",
+        "wall": "=@module_wall",
+        "heights": {},
+        "opening_radius": 0,
+        "children": [
+          {
+            "kind": "split",
+            "id": "left_right",
+            "axis": "x",
+            "wall": "=@module_wall",
+            "heights": {},
+            "opening_radius": 0,
+            "children": [
+              {
+                "kind": "split",
+                "id": "front_middle",
+                "axis": "y",
+                "wall": "=@module_wall",
+                "heights": {
+                  "1": "=@divider_h"
+                },
+                "opening_radius": "=@divider_opening_radius",
+                "children": [
+                  {
+                    "kind": "cell",
+                    "id": "front_left",
+                    "width": "=@left_width",
+                    "depth": "=@front_depth",
+                    "radius": "=@pocket_radius"
+                  },
+                  {
+                    "kind": "cell",
+                    "id": "middle_left",
+                    "width": "=@left_width",
+                    "depth": "=@middle_depth",
+                    "radius": "=@pocket_radius"
+                  }
+                ]
+              },
+              {
+                "kind": "cell",
+                "id": "right",
+                "width": "=@right_width",
+                "depth": "=@front_depth+@middle_depth+@module_wall",
+                "radius": "=@right_radius"
+              }
+            ]
+          },
+          {
+            "kind": "repeat",
+            "id": "back_row",
+            "axis": "x",
+            "wall": "=@module_wall",
+            "heights": {},
+            "opening_radius": 0,
+            "count": "=@back_columns",
+            "child": {
+              "kind": "cell",
+              "id": "back_cell",
+              "width": "=@back_cell_width",
+              "depth": "=@back_depth",
+              "radius": "=@pocket_radius"
+            }
+          }
+        ]
+      }
+    },
+    "values": {
+      "wall": 3.0,
+      "module_wall": 10.0,
+      "floor": 4.0,
+      "height": 120.0,
+      "grid": 15.0,
+      "hole_d": 6.0,
+      "foot_d": 13.0,
+      "front_depth": 36.5,
+      "middle_depth": 54.5,
+      "back_depth": 45.5,
+      "divider_h": 75.0,
+      "width": 194.0,
+      "depth": 162.5,
+      "pocket_radius": 3.26,
+      "right_radius": 4.61,
+      "left_width": 105.5,
+      "right_width": 72.5,
+      "back_cell_width": 56.0,
+      "back_columns": 3,
+      "divider_opening_radius": 3.26
+    },
+    "expected_sizes": [
+      [
+        105.5,
+        36.5
+      ],
+      [
+        105.5,
+        54.5
+      ],
+      [
+        72.5,
+        101
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ]
+    ],
+    "expected_feet": 24
+  },
+  {
+    "name": "Modular/Besteckkorb_Modular.p3d",
+    "data": {
+      "version": 1,
+      "basis": "outer",
+      "layout": {
+        "kind": "split",
+        "id": "front_back",
+        "axis": "y",
+        "wall": "=@module_wall",
+        "heights": {},
+        "opening_radius": 0,
+        "children": [
+          {
+            "kind": "split",
+            "id": "left_right",
+            "axis": "x",
+            "wall": "=@module_wall",
+            "heights": {},
+            "opening_radius": 0,
+            "children": [
+              {
+                "kind": "split",
+                "id": "front_middle",
+                "axis": "y",
+                "wall": "=@module_wall",
+                "heights": {
+                  "1": "=@divider_h"
+                },
+                "opening_radius": "=@divider_opening_radius",
+                "children": [
+                  {
+                    "kind": "cell",
+                    "id": "front_left",
+                    "width": "=@left_width",
+                    "depth": "=@front_depth",
+                    "radius": "=@pocket_radius"
+                  },
+                  {
+                    "kind": "cell",
+                    "id": "middle_left",
+                    "width": "=@left_width",
+                    "depth": "=@middle_depth",
+                    "radius": "=@pocket_radius"
+                  }
+                ]
+              },
+              {
+                "kind": "cell",
+                "id": "right",
+                "width": "=@right_width",
+                "depth": "=@front_depth+@middle_depth+@module_wall",
+                "radius": "=@right_radius"
+              }
+            ]
+          },
+          {
+            "kind": "repeat",
+            "id": "back_row",
+            "axis": "x",
+            "wall": "=@module_wall",
+            "heights": {},
+            "opening_radius": 0,
+            "count": "=@back_columns",
+            "child": {
+              "kind": "cell",
+              "id": "back_cell",
+              "width": "=@back_cell_width",
+              "depth": "=@back_depth",
+              "radius": "=@pocket_radius"
+            }
+          }
+        ]
+      }
+    },
+    "values": {
+      "wall": 3.0,
+      "module_wall": 10.0,
+      "floor": 4.0,
+      "height": 120.0,
+      "grid": 15.0,
+      "hole_d": 6.0,
+      "foot_d": 13.0,
+      "front_depth": 36.5,
+      "middle_depth": 54.5,
+      "back_depth": 45.5,
+      "divider_h": 75.0,
+      "width": 194.0,
+      "depth": 162.5,
+      "pocket_radius": 3.26,
+      "right_radius": 4.61,
+      "left_width": 105.5,
+      "right_width": 72.5,
+      "back_cell_width": 56.0,
+      "back_columns": 3,
+      "divider_opening_radius": 3.26
+    },
+    "expected_sizes": [
+      [
+        105.5,
+        36.5
+      ],
+      [
+        105.5,
+        54.5
+      ],
+      [
+        72.5,
+        101
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ],
+      [
+        56,
+        45.5
+      ]
+    ],
+    "expected_feet": 24
+  }
+]

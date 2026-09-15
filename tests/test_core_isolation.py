@@ -401,7 +401,7 @@ def test_public_part_version_helpers_load_only_the_default_registry() -> None:
 
 
 def test_bootstrap_loads_shipped_parts_exactly_once() -> None:
-    """Der Anwendungstakt lädt die fünf Bausteingruppen genau einmal."""
+    """Der Anwendungstakt lädt die mitgelieferten Bausteingruppen genau einmal."""
     script = textwrap.dedent(
         """
         import importlib, sys, typing
@@ -434,6 +434,7 @@ def test_bootstrap_loads_shipped_parts_exactly_once() -> None:
             "mechanics",
             "mounting",
             "structure",
+            "containers",
             "testbodies",
         )
         assert all(
@@ -601,7 +602,7 @@ def test_parts_loader_keeps_a_parallel_completed_group_when_the_next_group_fails
         complete = loader.load()
         modules = {spec.fn.__module__ for spec in complete.all()}
 
-        assert len(complete.all()) == 27
+        assert len(complete.all()) == 31
         assert {
             spec.name for spec in complete.all() if spec.fn.__module__ == fasteners
         } == expected_fasteners

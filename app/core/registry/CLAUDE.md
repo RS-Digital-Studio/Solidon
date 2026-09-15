@@ -27,6 +27,11 @@ und Projekt dürfen die Auswahl als Daten mitführen, die Oberfläche zeigt
 dafür einen Konturwähler. Koordinaten oder ausführbare Inhalte kommen nicht
 hinzu.
 
+`ParamKind="organizer"` ist ebenfalls Text mit reinen strukturierten Daten.
+Der Fachaufteilungseditor verbirgt die gespeicherte Darstellung. Der Sammler
+in `organizer.serialize` liefert die darin verwendeten Maßausdrücke an
+Auswertung, Cache, Rezepte und Parameteranzeige.
+
 `OperationSpec.material_params` benennt zusätzliche `kind="material"`-Felder,
 deren Profile eine Operation fachlich auswertet. Die Auswertung hasht ihre
 Kalibrierung je Materialrolle mit dem aktuellen Druckprozess. Fehlende Profile

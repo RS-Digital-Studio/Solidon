@@ -6,6 +6,7 @@ paths:
   - "app/ui/splash.py"
   - "app/ui/main_window.py"
   - "app/ui/outline_dialog.py"
+  - "app/ui/organizer_dialog.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit

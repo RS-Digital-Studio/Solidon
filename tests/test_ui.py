@@ -611,6 +611,116 @@ def test_editing_outline_contours_keeps_bound_dimensions(
     assert updated.params["contours"] == chosen
 
 
+def test_organizer_layout_choice_keeps_bound_dimensions_and_reaches_history(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Der angeschlossene Facheditor verändert das Layout und erhält die Maßbindungen."""
+    from PySide6.QtTest import QTest
+
+    from app.core.organizer.ops import OrganizerParams
+    from app.core.organizer.serialize import layout_from_text
+    from app.ui.organizer_dialog import OrganizerDialog, OrganizerLayoutField
+    from tests.test_outline_dialog import _until
+
+    session = window.session
+    assert session.add_parameter(Parameter(name="span", value=180.0))
+    assert session.wait_for_idle()
+    assert session.add_parameter(Parameter(name="rise", value=100.0))
+    assert session.wait_for_idle()
+    assert session.apply(
+        "Organizer",
+        [
+            OperationDraft(
+                op="create_organizer",
+                params={**OrganizerParams().as_dict(), "width": "=@span", "height": "=@rise"},
+            )
+        ],
+    )
+    assert session.wait_for_idle()
+    step = session.history.operations[-1]
+    original_layout = step.params["layout"]
+    window.edit_operation(step.id)
+    parent = window._op_dialog
+    assert parent is not None
+    field = parent._editors["layout"]
+    assert isinstance(field, OrganizerLayoutField)
+    QTest.mouseClick(field.button, Qt.MouseButton.LeftButton)
+    picker = parent.findChild(OrganizerDialog)
+    assert picker is not None
+    _until(qt_app, picker.accept_button.isEnabled)
+    assert not picker._fields["width"].isEnabled()
+    picker.tree.setCurrentItem(picker._tree_items["rows"])
+    picker._edit_fields["count"].set_value(2)
+    _until(qt_app, picker.accept_button.isEnabled)
+    chosen = picker.values()["layout"]
+    assert layout_from_text(chosen).root.count == 2
+    assert len(picker._layout.cells) == 6
+    picker.accept()
+    assert parent.values()["width"] == "=@span"
+    assert parent.values()["height"] == "=@rise"
+    assert field.value() == chosen
+    parent.accept()
+    assert session.wait_for_idle()
+    updated = session.history.operation(step.id)
+    assert updated.params["width"] == "=@span"
+    assert updated.params["height"] == "=@rise"
+    assert updated.params["layout"] == chosen
+    assert session.last_result.complete
+    session.undo()
+    assert session.wait_for_idle()
+    assert session.history.operation(step.id).params["layout"] == original_layout
+    session.redo()
+    assert session.wait_for_idle()
+    assert session.history.operation(step.id).params["layout"] == chosen
+
+
+@pytest.mark.parametrize("new_project", [False, True])
+def test_cancelled_or_stale_organizer_editor_cannot_change_the_document(
+    window: MainWindow, qt_app: QApplication, new_project: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Abbrechen und Projektwechsel verwerfen auch bereits berechnete Fachaufteilungen."""
+    from PySide6.QtTest import QTest
+
+    from app.core.knowledge.profiles import DEFAULT_MATERIAL, DEFAULT_PRINTER
+    from app.core.organizer.ops import OrganizerParams
+    from app.ui.organizer_dialog import OrganizerDialog
+    from tests.test_outline_dialog import _until
+
+    errors_seen = []
+    monkeypatch.setattr(
+        main_window_module, "show_error", lambda error, *a, **k: errors_seen.append(error)
+    )
+    session = window.session
+    assert session.apply(
+        "Organizer", [OperationDraft(op="create_organizer", params=OrganizerParams().as_dict())]
+    )
+    assert session.wait_for_idle()
+    project = session.project
+    step = session.history.operations[-1]
+    layout = step.params["layout"]
+    window.edit_operation(step.id)
+    parent = window._op_dialog
+    assert parent is not None
+    QTest.mouseClick(parent._editors["layout"].button, Qt.MouseButton.LeftButton)
+    picker = parent.findChild(OrganizerDialog)
+    assert picker is not None
+    _until(qt_app, picker.accept_button.isEnabled)
+    picker._edit_fields["count"].set_value(2)
+    _until(qt_app, picker.accept_button.isEnabled)
+    if new_project:
+        session.start_new(DEFAULT_PRINTER, DEFAULT_MATERIAL)
+        assert session.wait_for_idle()
+        assert session.project is not project
+        assert not session.history.operations
+    else:
+        picker.reject()
+        assert parent.values()["layout"] == layout
+        parent.reject()
+        assert session.history.operation(step.id).params["layout"] == layout
+    assert project.document.ops[-1].params["layout"] == layout
+    assert not errors_seen
+
+
 def test_importing_a_model_goes_through_the_stack(session: Session) -> None:
     session.import_model(MESHES / "cube_clean.stl")
     session.wait_for_idle()

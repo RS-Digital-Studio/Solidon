@@ -20,6 +20,7 @@ zweites Bild pflegen muss.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Literal
 from xml.sax.saxutils import escape
@@ -471,6 +472,8 @@ def project(
     edges: bool = False,
     around: float = -35.0,
     down: float = 25.0,
+    highlight_faces: Sequence[int] = (),
+    highlight_label: str = "",
 ) -> str:
     """Ein Netz als SVG, von schräg vorn gesehen.
 
@@ -523,6 +526,19 @@ def project(
 
     outlines = _edges_by_face(body, normals, depth) if edges else {}
     ink = PALETTES[theme].ink
+    selected = {
+        int(index)
+        for index in highlight_faces
+        if isinstance(index, int | np.integer)
+        and not isinstance(index, bool)
+        and 0 <= index < len(faces)
+    }
+    selected_edges: dict[tuple[int, int], int] = {}
+    for index in selected:
+        triangle = faces[index]
+        for first, second in zip(triangle, np.roll(triangle, -1), strict=True):
+            pair = (min(int(first), int(second)), max(int(first), int(second)))
+            selected_edges[pair] = selected_edges.get(pair, 0) + 1
 
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
@@ -537,13 +553,18 @@ def project(
         shade = _shade(float(normals[index] @ light))
         red, green, blue = (int(255 * value * shade) for value in tone)
         fill = f"#{red:02x}{green:02x}{blue:02x}"
+        marked = int(index) in selected
+        if marked:
+            fill = PALETTES[theme].accent
         corners = " ".join(f"{screen[point][0]:.1f},{screen[point][1]:.1f}" for point in triangle)
         # Der Rand in der Füllfarbe: benachbarte Dreiecke stoßen sonst mit einer
         # haarfeinen hellen Naht aneinander, weil die Kantenglättung beide
         # Ränder halbdurchsichtig zeichnet. Ein halber Pixel Überlappung
         # schließt sie, ohne dass sich die Form ändert.
         lines.append(
-            f'<polygon points="{corners}" fill="{fill}" stroke="{fill}" stroke-width="0.6" />'
+            f'<polygon points="{corners}" fill="{fill}" stroke="{fill}" stroke-width="0.6"'
+            + (' data-highlight="true"' if marked else "")
+            + " />"
         )
         # Die Kanten dieser Fläche direkt danach: so verdecken spätere, weiter
         # vorn liegende Flächen die Kanten dahinter — ohne Tiefenpuffer.
@@ -553,6 +574,22 @@ def project(
                 f'x2="{screen[second][0]:.1f}" y2="{screen[second][1]:.1f}" '
                 f'stroke="{ink}" stroke-width="0.9" stroke-linecap="round" />'
             )
+        if marked:
+            # Im selben Tiefentakt wie die Fläche, niemals nachträglich durch
+            # davorliegende Wände. Nur Grenzen der Auswahl sind Konturlinien.
+            for first, second in zip(triangle, np.roll(triangle, -1), strict=True):
+                pair = (min(int(first), int(second)), max(int(first), int(second)))
+                if selected_edges.get(pair) == 1:
+                    lines.append(
+                        f'<line x1="{screen[first][0]:.1f}" y1="{screen[first][1]:.1f}" '
+                        f'x2="{screen[second][0]:.1f}" y2="{screen[second][1]:.1f}" '
+                        f'stroke="{ink}" stroke-width="1.8" '
+                        'data-selection-contour="true" />'
+                    )
+    if selected and highlight_label:
+        lines.append(
+            f'<text x="8" y="20" fill="{ink}" font-size="14">{escape(highlight_label)}</text>'
+        )
     lines.append("</svg>")
     return "\n".join(lines)
 

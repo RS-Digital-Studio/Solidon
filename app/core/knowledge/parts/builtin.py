@@ -14,6 +14,7 @@ SHIPPED_MODULES: Final[tuple[str, ...]] = (
     "mechanics",
     "mounting",
     "structure",
+    "containers",
     "testbodies",
 )
 
@@ -22,7 +23,7 @@ _loaded = False
 
 
 def load() -> PartRegistry:
-    """Registriert die fünf mitgelieferten Gruppen und gibt ihr Register zurück.
+    """Registriert die mitgelieferten Bausteinmodule und gibt ihr Register zurück.
 
     Der eigene Taktgeber ist nötig, weil der Paketimport selbst keine
     Untermodul-Locks halten darf. Der zweite Aufruf ist unschädlich; bei zwei

@@ -13827,6 +13827,7 @@ class MainWindow(QMainWindow):
             previous.reject()
 
         self._wire_outline_choice(dialog)
+        self._wire_organizer_choice(dialog)
 
         project = self.session.project
 
@@ -13877,6 +13878,50 @@ class MainWindow(QMainWindow):
                     field.set_value(result["contours"])
 
             self._open_outline_dialog(values, answered, dialog, selection_only=True)
+
+        field.choiceRequested.connect(choose)
+
+    def _wire_organizer_choice(self, dialog: OperationDialog) -> None:
+        """Die Fachaufteilung bearbeiten, ohne die Maßausdrücke im Operationsdialog zu ersetzen."""
+        from app.core import expressions
+        from app.ui.organizer_dialog import OrganizerDialog, OrganizerLayoutField
+
+        field = dialog._editors.get("layout")
+        if not isinstance(field, OrganizerLayoutField):
+            return
+
+        def choose() -> None:
+            parameters = self._parameter_values()
+            try:
+                values = expressions.resolve_params(dialog.values(), parameters)
+                editor = OrganizerDialog(values, parameters, dialog, layout_only=True)
+            except AppError as error:
+                show_error(error, dialog)
+                return
+            project = self.session.project
+            completed = False
+
+            def project_changed() -> None:
+                if self.session.project is not project:
+                    editor.reject()
+
+            def finished(code: int) -> None:
+                nonlocal completed
+                if completed:
+                    return
+                completed = True
+                self.session.projectChanged.disconnect(project_changed)
+                if (
+                    code == QDialog.DialogCode.Accepted
+                    and self.session.project is project
+                    and isValid(field)
+                ):
+                    field.set_value(editor.values()["layout"])
+                editor.deleteLater()
+
+            self.session.projectChanged.connect(project_changed)
+            editor.finished.connect(finished)
+            editor.open()
 
         field.choiceRequested.connect(choose)
 
@@ -16803,6 +16848,10 @@ class MainWindow(QMainWindow):
 
         for outline_dialog in self.findChildren(OutlineDialog):
             outline_dialog.reject()
+        from app.ui.organizer_dialog import OrganizerDialog
+
+        for organizer_dialog in self.findChildren(OrganizerDialog):
+            organizer_dialog.reject()
         self.session.cancel()
         session_idle = self.session.wait_for_idle(timeout_ms)
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie

@@ -31,6 +31,7 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `mechanics.py` | Mechanik — was sich bewegt und verbindet: Scharniere, Gewinde |
 | `mounting.py` | Halterungen — was etwas an etwas anderem hält |
 | `structure.py` | Struktur — versteifen, hindurchführen, anbinden |
+| `containers.py` | Organizer-Wanne, Teilungswand, Rand und separater Steckfuß; exakte Außenmaße, unabhängiger Boden und reale ebene Merkmalsflächen |
 | `testbodies.py` | Prüfkörper für die Kalibrierung (§28.3) |
 
 **Das Gerüst**
@@ -38,7 +39,7 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | Datei | Rolle |
 |---|---|
 | `registry.py` | `register_part`, `PARTS`, `LIBRARY_VERSION`, `changed_since()` |
-| `builtin.py` | Lädt die fünf mitgelieferten Gruppen einmalig; `bootstrap.load_operations()` ruft `builtin.load()` vor der Op-Erzeugung, der Paketimport selbst registriert nichts |
+| `builtin.py` | Lädt die mitgelieferten Gruppen einmalig; `bootstrap.load_operations()` ruft `builtin.load()` vor der Op-Erzeugung, der Paketimport selbst registriert nichts |
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
 | `build.py` | Gemeinsamer Boden für jeden Baustein |
 | `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden |

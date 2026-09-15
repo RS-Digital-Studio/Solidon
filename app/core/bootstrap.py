@@ -46,6 +46,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.brep.ops",
     # §30.1: die Skizzen-Operationen — Grundformen über den Solver in den Kern.
     "app.core.sketch.ops",
+    "app.core.organizer.ops",
 )
 
 #: Die Bausteinbibliothek deklariert selbst keine Operationen — je Baustein

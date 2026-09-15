@@ -1228,6 +1228,7 @@ ParamKind = Literal[
     "armature",
     "edges",
     "contours",
+    "organizer",
 ]
 """``image`` ist eine Quelle, die ein Bild sein muss: Der Dialog listet nur
 Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
@@ -1237,6 +1238,10 @@ Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
 ``contours`` speichert eine JSON-Liste geometrischer Profilkennungen. Die
 Oberfläche zeigt Anzahl und Konturauswahl; Agent und Projekt behalten reine
 Daten, keine Zeichengesten oder ausführbaren Inhalte.
+
+``organizer`` trägt einen begrenzten Baum von Fachteilungen und Wiederholungen.
+Seine Maße benutzen denselben Ausdrucksauswerter wie gewöhnliche Parameter;
+die Oberfläche zeigt dafür eine maßliche Fachaufteilung.
 
 ``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
 den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent

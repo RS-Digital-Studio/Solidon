@@ -167,7 +167,7 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 24
+    assert len(building) == 28
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -227,10 +227,10 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2114_cartesian_boundaries() -> None:
-    """Die bekannte Gegenprobe: zyklisch waren es nur 124 statt 2.114."""
+def test_the_library_really_has_2234_cartesian_boundaries() -> None:
+    """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen."""
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2114
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2234
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
