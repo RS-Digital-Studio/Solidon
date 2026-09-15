@@ -12,12 +12,16 @@ das lässt die Kalibrierung (§28.3) bestehende Projekte erreichen.
 
 from __future__ import annotations
 
+import json
+import math
+import os
+import tempfile
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Final
 
-from app.core.errors import ValidationError
+from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
 from app.core.paths import user_profiles_dir
@@ -175,6 +179,61 @@ def printer_profiles() -> Mapping[str, PrinterProfile]:
         _printers = _load_printers()
         _log.info("loaded %d printer profiles", len(_printers))
     return _printers
+
+
+def user_printer_profiles() -> Mapping[str, PrinterProfile]:
+    """Die selbst angelegten Drucker bleiben unabhängig vom Slicer auswählbar."""
+    path = user_profiles_dir() / "printers.toml"
+    identifiers = _read_table(path) if path.is_file() else {}
+    known = printer_profiles()
+    return {identifier: known[identifier] for identifier in identifiers if identifier in known}
+
+
+def save_printer(profile: PrinterProfile) -> PrinterProfile:
+    """Speichert einen eigenen Drucker atomar und erhält andere Nutzerprofile."""
+    if not profile.id.strip() or not profile.title.strip():
+        raise ValidationError(
+            field="printer.title", detail=_("Geben Sie Ihrem Drucker einen Namen.")
+        )
+    measurements = (*profile.build_volume, profile.nozzle_diameter)
+    if not all(math.isfinite(value) and value > 0 for value in measurements):
+        raise ValidationError(
+            field="printer.build_volume",
+            detail=_("Bauraum und Düsendurchmesser müssen größer als null sein."),
+        )
+    target = user_profiles_dir() / "printers.toml"
+    table = _read_table(target) if target.is_file() else {}
+    values = {
+        key: value for key, value in asdict(profile).items() if key != "id" and value is not None
+    }
+    table[profile.id] = values
+    lines: list[str] = []
+    for identifier, entry in sorted(table.items()):
+        lines.append(f"[{json.dumps(identifier, ensure_ascii=False)}]")
+        for key, value in entry.items():
+            lines.append(
+                f"{json.dumps(key)} = {json.dumps(value, ensure_ascii=False, allow_nan=False)}"
+            )
+        lines.append("")
+    scratch: Path | None = None
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent, suffix=".tmp", delete=False
+        ) as stream:
+            scratch = Path(stream.name)
+            stream.write("\n".join(lines))
+            stream.flush()
+            os.fsync(stream.fileno())
+        scratch.replace(target)
+    except OSError as problem:
+        raise FileWriteError(detail=str(problem)) from problem
+    finally:
+        if scratch is not None:
+            scratch.unlink(missing_ok=True)
+    global _printers
+    _printers = None
+    return printer_profiles()[profile.id]
 
 
 def material_profiles() -> Mapping[str, MaterialProfile]:

@@ -455,55 +455,36 @@ def test_looking_does_not_happen_in_the_gui_thread(
 
 
 def test_a_printer_the_user_chose_is_not_overwritten(qt_app: QApplication) -> None:
-    """Eine Vorgabe, die eine getroffene Wahl überschreibt, ist keine (§2.4).
-
-    Der Vorschlag aus dem Slicer-Profil kommt nachgereicht — und trifft
-    vielleicht jemanden, der in der Zwischenzeit selbst gewählt hat.
-    """
+    """Eine allgemeine Erhebung ändert keine bereits getroffene Druckerwahl."""
     dialog = FirstRunDialog(UiSettings())
     dialog.printer.setCurrentIndex(dialog.printer.count() - 1)
     chosen = dialog.printer.currentData()
 
-    dialog._show(first_run.Findings(tools=(), chat="x", printer="prusa_mk4"))
+    dialog._show(first_run.Findings(tools=(), chat="x"))
 
     assert dialog.printer.currentData() == chosen, "die eigene Wahl bleibt stehen"
 
 
-def test_a_suggestion_arrives_while_nobody_has_chosen(qt_app: QApplication) -> None:
-    """Und wo niemand gewählt hat, trägt der Vorschlag."""
-    dialog = FirstRunDialog(UiSettings())
-    offered = {dialog.printer.itemData(index) for index in range(dialog.printer.count())}
-    other = next(entry for entry in sorted(offered) if entry != dialog.printer.currentData())
-
-    dialog._show(first_run.Findings(tools=(), chat="x", printer=other))
-
-    assert dialog.printer.currentData() == other
-
-
-def test_repeated_slicer_surveys_offer_profiles_without_filling_the_rack(
+def test_repeated_slicer_surveys_leave_material_and_inventory_for_the_later_step(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein gelesenes Profil schlägt Material vor und erzeugt keine physische Spule."""
+    """Ein gefundenes Slicerprogramm wählt weder Material noch physische Spulen."""
     from app.core.knowledge import filaments
+    from app.ui import filament_picker
 
-    monkeypatch.setattr(filaments, "user_config_dir", lambda: tmp_path)
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    imported = filaments.CatalogueFilament(
-        name="Elegoo PETG PRO @ECC2",
-        colour="#9AA0A6",
-        material_type="PETG",
-        slicer_profile="Elegoo PETG PRO @ECC2",
-    )
-    monkeypatch.setattr(first_run, "_defaults_from_slicer", lambda: ("", (imported,)))
-    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+    configured = mock.Mock(return_value=(filaments.CatalogueFilament("PETG", "#112233", "PETG"),))
+    monkeypatch.setattr(filament_picker, "configured_spools", configured)
+    settings = UiSettings(material="abs")
+    dialog = settled(FirstRunDialog(settings), qt_app)
     try:
         for _ in range(2):
             dialog.look()
             settled(dialog, qt_app)
 
-        assert dialog.findings.filaments == (imported,)
-        assert filaments.catalogue() == (), "Profile werden erst im Lager bewusst übernommen"
-        assert dialog.settings.material == "petg", "der eindeutige Profiltyp ersetzt die Frage"
+        configured.assert_not_called()
+        assert filaments.catalogue() == ()
+        assert settings.material == "abs"
     finally:
         dialog.release()
 
@@ -511,108 +492,23 @@ def test_repeated_slicer_surveys_offer_profiles_without_filling_the_rack(
 def test_slicer_surveys_leave_existing_spools_and_stock_unchanged(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Auch ein gleichnamiges Slicerprofil besitzt die lokale Spule nicht."""
+    """Ein späterer Einrichtungsdurchgang verändert keinen vorhandenen Spulenbestand."""
     from app.core.knowledge import filaments
 
-    monkeypatch.setattr(filaments, "user_config_dir", lambda: tmp_path)
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     stored = filaments.save(
         filaments.CatalogueFilament(
             "PETG Rot", "#ff0000", "PETG", remaining_grams=250.0, spool_grams=1000.0
         )
     )
-    imported = filaments.CatalogueFilament("PETG Rot", "#112233", "PLA", "PLA Profil")
-    monkeypatch.setattr(first_run, "_defaults_from_slicer", lambda: ("", (imported,)))
     dialog = settled(FirstRunDialog(UiSettings()), qt_app)
     try:
         dialog.look()
         settled(dialog, qt_app)
-
         assert filaments.catalogue() == (stored,)
         assert filaments.catalogue()[0].remaining_grams == pytest.approx(250.0)
-        assert dialog.findings.filaments == (imported,)
     finally:
         dialog.release()
-
-
-def test_first_run_uses_the_shared_profile_mapping_without_guessing_a_type(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Die Erhebung und das Lager lesen dieselben belegten Profilangaben."""
-    from app.core.knowledge import filaments
-    from app.ui import filament_picker
-
-    imported = filaments.CatalogueFilament("Unbekanntes Profil", "#112233")
-    configured = mock.Mock(return_value=(imported,))
-    monkeypatch.setattr(filament_picker, "configured_spools", configured)
-    monkeypatch.setattr(tools.ExternalTool, "path", lambda _self: Path("OrcaSlicer.exe"))
-    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: None)
-    monkeypatch.setattr(first_run.slicer_profiles, "printer_for", lambda *_args: "prusa_mk4")
-
-    printer, found = first_run._defaults_from_slicer()
-
-    assert printer == "prusa_mk4"
-    assert found == (imported,)
-    assert found[0].material_type == ""
-    configured.assert_called_once_with()
-
-
-def test_different_loaded_filament_types_are_not_guessed(
-    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """PLA und TPU nebeneinander ergeben keine eindeutige Materialvorgabe."""
-    from app.core.knowledge import filaments
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    settings = UiSettings(material="abs")
-    dialog = settled(FirstRunDialog(settings), qt_app)
-    loaded = tuple(
-        filaments.CatalogueFilament(
-            name=f"Rolle {material_type}",
-            colour=colour,
-            material_type=material_type,
-            slicer_profile=f"Profil {material_type}",
-        )
-        for material_type, colour in (("PLA", "#112233"), ("TPU", "#445566"))
-    )
-
-    dialog._show(first_run.Findings(tools=(), chat="x", printer="", filaments=loaded))
-
-    assert settings.material == "abs", "bei mehreren Typen bleibt die vorhandene Vorgabe"
-
-
-def test_an_unknown_loaded_filament_keeps_the_material_choice_ambiguous(
-    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Ein bekannter und ein unbekannter Typ sind nicht eindeutig.
-
-    PCTG liegt neben PETG im Slicer, hat aber kein eigenes Solidon-Profil.
-    Wird der unbekannte Eintrag einfach verworfen, sieht der Rest fälschlich
-    wie eine eindeutige PETG-Entscheidung aus.
-    """
-    from app.core.knowledge import filaments
-
-    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    settings = UiSettings(material="abs")
-    dialog = settled(FirstRunDialog(settings), qt_app)
-    loaded = (
-        filaments.CatalogueFilament(
-            name="PETG Grau",
-            colour="#808080",
-            material_type="PETG",
-            slicer_profile="PETG Profil",
-        ),
-        filaments.CatalogueFilament(
-            name="PCTG Klar",
-            colour="#eeeeee",
-            material_type="PCTG",
-            slicer_profile="PCTG Profil",
-        ),
-    )
-
-    dialog._show(first_run.Findings(tools=(), chat="x", printer="", filaments=loaded))
-
-    assert settings.material == "abs", "ein unbekannter Typ verhindert eine automatische Wahl"
 
 
 def test_the_first_run_happens_once(qt_app: QApplication) -> None:
@@ -771,6 +667,7 @@ def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
 
         def __init__(self, *_args: object) -> None:
             self.importRequested = mock.Mock()
+            self.inventoryRequested = mock.Mock()
 
         def exec(self) -> int:
             return int(self.DialogCode.Rejected)
@@ -1698,7 +1595,9 @@ def test_choosing_a_language_switches_the_dialog_at_once(qt_app: QApplication) -
     after = FirstRunDialog(settings)
     fresh = visible_texts(after)
     unchanged = [a for a, b in zip(spoken, fresh, strict=False) if a == b]
-    assert len(unchanged) <= 1, f"diese Texte wechselten nicht mit: {unchanged}"
+    assert set(unchanged) <= {"Slicer", "Name", "Chat"}, (
+        f"diese Texte wechselten nicht mit: {unchanged}"
+    )
     assert any("Welcome" in text or "Optional extensions" in text for text in fresh), (
         "der neue Dialog spricht die gewählte Sprache"
     )
@@ -2191,6 +2090,37 @@ def test_the_rebuilt_window_shows_the_work_it_kept(qt_app: object) -> None:
         window.deleteLater()
         install_language("de")
         set_language("de")
+
+
+def test_first_steps_opens_inventory_after_adopting_the_chosen_printer(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Lager sieht bereits den Drucker, den die Einrichtung gerade übernommen hat."""
+    from app.ui import main_window
+
+    monkeypatch.setattr(FirstRunDialog, "look", lambda _self: None)
+
+    def open_inventory(dialog: FirstRunDialog) -> int:
+        dialog.printer.setCurrentIndex(dialog.printer.findData("prusa-mk4s"))
+        dialog._open_inventory()
+        return int(dialog.result())
+
+    monkeypatch.setattr(FirstRunDialog, "exec", open_inventory)
+    monkeypatch.setattr(main_window, "save_settings", lambda _settings: None)
+    window = MainWindow(Session(), UiSettings())
+    opened: list[str] = []
+    monkeypatch.setattr(
+        window, "action_inventory", lambda: opened.append(window.session.profile.printer.id)
+    )
+    monkeypatch.setattr(window, "_refresh_chat_availability", lambda **_kwargs: None)
+    monkeypatch.setattr(type(window.session), "set_agent_backend", lambda *_args: None)
+    try:
+        window.action_first_run()
+        assert opened == ["prusa-mk4s"]
+        assert window.settings.printer == "prusa-mk4s"
+    finally:
+        window.release()
+        window.deleteLater()
 
 
 def test_the_first_start_speaks_the_language_of_the_system(monkeypatch: Any) -> None:

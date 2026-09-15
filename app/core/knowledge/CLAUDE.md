@@ -27,6 +27,12 @@ Rechenwegs, nicht Beiwerk.
 | `parts/` | Die Bausteinbibliothek — eigene `CLAUDE.md`, **eigene Lizenz** |
 | `data/` | **Wo das Wissen wirklich steht**: sieben TOML-Dateien und die Lizenztexte (siehe unten) |
 
+Eigene Drucker werden über `profiles.save_printer` in der Nutzerdatei
+`printers.toml` gespeichert. Der Schreibweg prüft Name und positive, endliche
+Maße, erhält andere Profile und ersetzt die Datei erst nach vollständigem
+Schreiben. `user_printer_profiles` liefert die eigenen Einträge unabhängig vom
+ausgewählten Slicer; `printer_profiles` verbindet sie mit dem Startbestand.
+
 ## Das Wissen steht in `data/`, nicht im Code
 
 Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:

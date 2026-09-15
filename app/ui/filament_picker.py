@@ -80,6 +80,7 @@ from app.core.knowledge import filaments, profiles
 from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
 from app.ui.dialogs import ErrorNotice, problem_text
+from app.ui.icons import icon
 from app.ui.labels import NumberSpin, localised
 from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
@@ -210,6 +211,14 @@ def spool_label(entry: filaments.CatalogueFilament) -> str:
             entry.identifier[:8],
         )
         if value
+    )
+
+
+def removal_hint() -> str:
+    """Der Rückweg ist an allen Löschzugängen derselbe."""
+    return tr(
+        "Aus dem aktiven Lager entfernen. Unter „Archivierte Spulen anzeigen“ "
+        "lässt sich das Filament wiederherstellen. Projektzuordnungen bleiben erhalten."
     )
 
 
@@ -1425,6 +1434,7 @@ class FilamentPanel(QWidget):
         self._writes.busyChanged.connect(self._write_busy)
 
         self.add_button = QPushButton(tr("Filament anlegen …"), self)
+        self.add_button.setIcon(icon("add", self.add_button))
         self.add_button.clicked.connect(self._add)
         self.inventory_button = QPushButton(tr("Filamentlager öffnen"), self)
         self.inventory_button.clicked.connect(self.inventoryRequested)
@@ -1434,6 +1444,12 @@ class FilamentPanel(QWidget):
             tr("Temperatur, Kühlung, Rückzug und Materialwerte dieser Spule einstellen.")
         )
         self.settings_button.clicked.connect(self._request_override)
+        self.delete_button = QPushButton(tr("Filament löschen"), self)
+        self.delete_button.setIcon(icon("delete", self.delete_button))
+        self.delete_button.setToolTip(removal_hint())
+        self.delete_button.setAccessibleDescription(removal_hint())
+        self.delete_button.setEnabled(False)
+        self.delete_button.clicked.connect(self._remove)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
@@ -1446,6 +1462,7 @@ class FilamentPanel(QWidget):
         buttons.addWidget(self.add_button)
         buttons.addWidget(self.settings_button)
         layout.addLayout(buttons)
+        layout.addWidget(self.delete_button)
         self.return_to_print_button = QPushButton(tr("Zurück zu Druckeinstellungen"), self)
         self.return_to_print_button.clicked.connect(self.printSettingsRequested)
         self.return_to_print_button.hide()
@@ -1763,6 +1780,7 @@ class FilamentPanel(QWidget):
     def _write_busy(self, busy: bool) -> None:
         self.list.setEnabled(not busy)
         self.add_button.setEnabled(not busy)
+        self._selection_changed(self.list.currentItem())
         if busy:
             self.hint.setText(tr("Das Filamentlager wird gespeichert …"))
             self._fit()
@@ -1784,6 +1802,9 @@ class FilamentPanel(QWidget):
         """Nur Projektfilamente haben eigene Druckwerte."""
         self.settings_button.setEnabled(
             bool(item is not None and item.data(_SLOT_ROLE) is not None)
+        )
+        self.delete_button.setEnabled(
+            bool(item is not None and item.data(_ID_ROLE)) and not self._writes.pending
         )
 
     def _request_override(self) -> None:
@@ -1814,9 +1835,18 @@ class FilamentPanel(QWidget):
         self._writes.run(partial(filaments.archive, chosen.identifier))
 
     def _on_context_menu(self, where: QPoint) -> None:
+        item = self.list.itemAt(where)
+        if item is None or not self.list.isEnabled():
+            return
+        self.list.setCurrentItem(item)
         if self._chosen() is None:
             return
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
         menu.addAction(tr("Ändern …"), self._edit)
-        menu.addAction(tr("Archivieren"), self._remove)
-        menu.exec(self.list.viewport().mapToGlobal(where))
+        action = menu.addAction(icon("delete", self), tr("Filament löschen"), self._remove)
+        action.setToolTip(removal_hint())
+        try:
+            menu.exec(self.list.viewport().mapToGlobal(where))
+        finally:
+            menu.deleteLater()

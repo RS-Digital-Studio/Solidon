@@ -16011,7 +16011,7 @@ class MainWindow(QMainWindow):
         self._show_start_screen(False)
 
     def action_first_run(self) -> None:
-        """§38: Sprache, Drucker, Filamente, externe Programme, Chat-Zugang.
+        """§38: Sprache, Slicer, dessen Drucker und der Weg zum Filamentlager.
         Überspringbar.
 
         **Die Schleife ist der Sprachwechsel.** Der Dialog übersetzt sich nicht,
@@ -16029,12 +16029,18 @@ class MainWindow(QMainWindow):
         von selbst.
         """
         spoken = self.settings.language
+        printer_draft = None
+        inventory_requested: list[bool] = []
         while True:
             dialog = first_run.FirstRunDialog(self.settings, self)
+            if printer_draft is not None:
+                dialog.restore_custom_printer_draft(printer_draft)
             dialog.importRequested.connect(self.action_import)
+            dialog.inventoryRequested.connect(lambda: inventory_requested.append(True))
             answer = dialog.exec()
             if answer != first_run.LANGUAGE_CHANGED:
                 break
+            printer_draft = dialog.custom_printer_draft()
             dialog.release()
         if answer == first_run.FirstRunDialog.DialogCode.Accepted:
             dialog.apply_to(self.settings)
@@ -16043,13 +16049,12 @@ class MainWindow(QMainWindow):
             # Überspringen zählt als erledigt: beim nächsten Mal wieder zu fragen
             # wäre Nörgeln.
             self.settings.first_run_done = True
-        # Die Erhebung übernimmt geladene Spulen auch dann, wenn dieser Dialog
-        # über Hilfe → Erste Schritte in einem bestehenden Projekt geöffnet
-        # wurde. Das Panel ist bereits gebaut und liest den Katalog deshalb
-        # ausdrücklich neu ein; eine Dokumentauswertung wäre dafür weder nötig
-        # noch bei einem nichtleeren Projekt zulässig.
+        # Das bestehende Filamentpanel liest den Katalog neu, ohne dafür
+        # ein geöffnetes Projekt auszuwerten oder seine Zuordnungen zu ändern.
         self.filaments.refresh_catalogue()
         self._store_settings()
+        if inventory_requested and answer == first_run.FirstRunDialog.DialogCode.Accepted:
+            self.action_inventory()
         # Wer im Dialog den Chat eingerichtet hat, soll ihn nicht erst nach
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
         self.session.set_agent_backend(None)

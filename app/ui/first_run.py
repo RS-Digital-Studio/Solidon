@@ -1,7 +1,7 @@
 """Der erste Start (Bauplan §38).
 
-Sprache, Drucker, die im Slicer gewählten Filamentprofile, ein Blick auf die
-externen Programme und der Zugang für den Chat. Alles überspringbar, alles
+Sprache, Slicer, dessen Drucker, ein Blick auf die externen Programme und der
+Zugang für den Chat. Die Filamente folgen im Filamentlager. Alles überspringbar, alles
 später wieder erreichbar — ein Assistent, der zu Ende gebracht werden muss,
 bevor irgendetwas geht, ist eine Wand, kein Willkommen.
 
@@ -25,34 +25,40 @@ jetzt sofort seine Fragen und trägt die Antworten nach.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
+from uuid import uuid4
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from app.branding import APP_NAME
-from app.core import activation, tools
+from app.core import activation, discover, tools
 from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
-from app.core.export import slicer_keys, slicer_profiles
-from app.core.knowledge import filaments, profiles
+from app.core.errors import AppError
+from app.core.export import slicer_profiles
+from app.core.export.handover import detect
+from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.i18n import language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
-from app.ui.labels import by_title, deadline_date
+from app.ui.labels import NumberSpin, by_title, deadline_date
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
@@ -74,18 +80,17 @@ _log = get_logger(__name__)
 class Findings:
     """Was auf diesem Rechner liegt — in einem Durchgang erhoben.
 
-    Vier Antworten, die zusammen 1,88 Sekunden kosteten und keine davon nötig
-    ist, damit der Dialog aufgeht.
+    Programme und Chat-Zugang sind für den sofortigen Dialogaufbau nicht nötig.
+    Druckervorgaben gehören zur anschließenden, ausdrücklichen Slicerwahl.
     """
 
     tools: tuple[tools.ToolState, ...]
     chat: str
-    printer: str
-    filaments: tuple[filaments.CatalogueFilament, ...] = ()
+    slicers: tuple[Path, ...] = ()
 
 
 class _Survey(Worker):
-    """Die Erhebung: Programme suchen, Slicer-Profil lesen, Ollama fragen.
+    """Die Erhebung: Programme suchen und den Chat-Zugang prüfen.
 
     Kein Abbrechen — es gibt nichts zu bereuen, sie schreibt nichts. Wer den
     Dialog vorher schließt, wartet über die Halteleine auf sie.
@@ -94,15 +99,51 @@ class _Survey(Worker):
     done = Signal(object)
 
     def work(self) -> None:
-        printer, loaded_filaments = _defaults_from_slicer()
         self.done.emit(
             Findings(
                 tools=tools.survey(),
                 chat=_chat_text(),
-                printer=printer,
-                filaments=loaded_filaments,
+                slicers=discover.find_programs("slicer", tools.SLICERS),
             )
         )
+
+
+@dataclass(frozen=True, slots=True)
+class PrinterChoices:
+    """Die belegten Drucker eines bestimmten Slicers."""
+
+    executable: Path
+    identifiers: tuple[str, ...]
+    suggested: str
+
+
+class _PrinterSurvey(Worker):
+    """Liest die Druckerprofile außerhalb des Oberflächen-Threads."""
+
+    done = Signal(object)
+
+    def __init__(self, executable: Path) -> None:
+        super().__init__()
+        self.executable = executable
+
+    def work(self) -> None:
+        flavour = detect(self.executable).flavour
+        known = profiles.printer_profiles()
+        names = slicer_profiles.known_printers(flavour, self.executable)
+        identifiers = tuple(
+            sorted(
+                {
+                    identifier
+                    for name in names
+                    if (identifier := slicer_profiles.printer_for(name, known))
+                }
+                | set(profiles.user_printer_profiles())
+            )
+        )
+        suggested = slicer_profiles.printer_for(
+            slicer_profiles.chosen_machine(flavour, self.executable), known
+        )
+        self.done.emit(PrinterChoices(self.executable, identifiers, suggested))
 
 
 class ToolRow(QWidget):
@@ -160,6 +201,7 @@ class FirstRunDialog(QDialog):
     """Eine Seite mit den zwei Grundlagen und den optionalen Erweiterungen."""
 
     importRequested = Signal()
+    inventoryRequested = Signal()
 
     def __init__(self, settings: UiSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -207,8 +249,8 @@ class FirstRunDialog(QDialog):
         set_level(title, "title")
         self.greeting = QLabel(
             tr(
-                "Für einen guten Start reichen zwei Angaben. Wenn Sie unsicher sind, "
-                "lassen Sie die Vorschläge einfach stehen."
+                "Wählen Sie zuerst Ihren Slicer und danach Ihren Drucker. "
+                "Ihre Filamente können Sie anschließend im Filamentlager einrichten."
             ),
             self,
         )
@@ -231,15 +273,67 @@ class FirstRunDialog(QDialog):
         # derselbe Auslöser wie dort, damit beide Stellen dasselbe versprechen.
         self.language.currentIndexChanged.connect(self._language_changed)
 
+        self.slicer = QComboBox(self)
+        self.slicer.addItem(tr("Später auswählen"), "")
+        remembered = discover.remembered_path("slicer")
+        if remembered:
+            self.slicer.addItem(Path(remembered).stem, remembered)
+            self.slicer.setCurrentIndex(1)
+        self.slicer.setAccessibleName(tr("Slicer"))
+        self.slicer.currentIndexChanged.connect(self._slicer_changed)
+        self.slicer_file = QPushButton(tr("Benutzerdefiniert …"), self)
+        self.slicer_file.setIcon(icon("open", self.slicer_file))
+        self.slicer_file.setToolTip(tr("Slicer-Programm auswählen"))
+        self.slicer_file.clicked.connect(self._choose_slicer_file)
+        slicer_row = QHBoxLayout()
+        slicer_row.addWidget(self.slicer, 1)
+        slicer_row.addWidget(self.slicer_file)
+        self.printer_state = QLabel("", self)
+        self.printer_state.setWordWrap(True)
+        set_level(self.printer_state, "caption")
+        self._printer_survey: _PrinterSurvey | None = None
+
         self.printer = QComboBox(self)
         for identifier, printer in by_title(profiles.printer_profiles()):
-            self.printer.addItem(str(printer.title), identifier)
-        # Was der installierte Slicer zuletzt hatte, kommt mit der Erhebung
-        # nach — es liest Profildateien und gehört damit nicht hierher. Bis
-        # dahin steht die Vorgabe, und nachgezogen wird nur, solange niemand
-        # selbst gewählt hat (:meth:`_show`).
+            self._insert_printer_choice(str(printer.title), identifier)
+        self._insert_printer_choice(tr("Benutzerdefiniert …"), "__custom__")
+        # Erst die Slicerwahl startet das Lesen seiner Druckerprofile. Bis
+        # dahin bleibt die gespeicherte Vorgabe stehen; fremde Installationen
+        # liefern weder einen Drucker noch ein Material für diese Auswahl.
         self._suggested_printer = settings.printer or profiles.DEFAULT_PRINTER
         _select(self.printer, self._suggested_printer)
+        self.printer.currentIndexChanged.connect(self._printer_changed)
+        self._custom_identifier = "user-" + uuid4().hex
+        self.custom_printer = QWidget(self)
+        custom_form = QFormLayout(self.custom_printer)
+        custom_form.setContentsMargins(0, 0, 0, 0)
+        self.printer_name = QLineEdit(self.custom_printer)
+        self.printer_name.setPlaceholderText(tr("Name Ihres Druckers"))
+        custom_form.addRow(tr("Name"), self.printer_name)
+        self.printer_dimensions: list[NumberSpin] = []
+        dimensions = QHBoxLayout()
+        template = profiles.printer(profiles.DEFAULT_PRINTER)
+        for label, value in zip(
+            (tr("Breite"), tr("Tiefe"), tr("Höhe")), template.build_volume, strict=True
+        ):
+            field = NumberSpin(self.custom_printer)
+            field.setRange(1, 100_000)
+            field.setDecimals(2)
+            field.setSuffix(" " + tr("mm"))
+            field.setValue(value)
+            field.setAccessibleName(label)
+            dimensions.addWidget(QLabel(label, self.custom_printer))
+            dimensions.addWidget(field)
+            self.printer_dimensions.append(field)
+        custom_form.addRow(tr("Bauraum"), dimensions)
+        self.printer_nozzle = NumberSpin(self.custom_printer)
+        self.printer_nozzle.setRange(0.05, 10)
+        self.printer_nozzle.setDecimals(2)
+        self.printer_nozzle.setSingleStep(0.1)
+        self.printer_nozzle.setSuffix(" " + tr("mm"))
+        self.printer_nozzle.setValue(template.nozzle_diameter)
+        custom_form.addRow(tr("Düse"), self.printer_nozzle)
+        self.custom_printer.hide()
 
         basics = QGroupBox(tr("Grundlagen"), self)
         form = QFormLayout(basics)
@@ -252,7 +346,10 @@ class FirstRunDialog(QDialog):
         set_level(basics_hint, "caption")
         form.addRow(basics_hint)
         form.addRow(tr("Sprache"), self.language)
+        form.addRow(tr("Slicer"), slicer_row)
         form.addRow(tr("Drucker"), self.printer)
+        form.addRow(self.custom_printer)
+        form.addRow(self.printer_state)
         # **Der Ausweg für alle, die ihr Gerät nicht finden.** Die Liste nennt
         # die verbreiteten Maschinen; wer einen Artillery oder Qidi hat, stand
         # vorher vor der Frage, ob der allgemeine Eintrag für ihn gilt — und
@@ -261,14 +358,18 @@ class FirstRunDialog(QDialog):
         # Einstellmöglichkeit, aber nur, wenn man ihr trauen kann).
         printer_hint = QLabel(
             tr(
-                "Ihr Drucker ist nicht dabei? Der allgemeine Eintrag passt für den "
-                "Anfang — Bauraum und Düse lassen sich in den Einstellungen ändern."
+                "Ihr Drucker ist nicht dabei? Wählen Sie „Benutzerdefiniert“ "
+                "und tragen Sie Name, Bauraum und Düse ein."
             ),
             basics,
         )
         printer_hint.setWordWrap(True)
         set_level(printer_hint, "caption")
         form.addRow(printer_hint)
+        self.inventory_button = QPushButton(tr("Filamentlager öffnen …"), basics)
+        self.inventory_button.setIcon(icon("open", self.inventory_button))
+        self.inventory_button.clicked.connect(self._open_inventory)
+        form.addRow(tr("Filamente"), self.inventory_button)
 
         optional = QGroupBox(tr("Optionale Erweiterungen"), self)
         optional_layout = QVBoxLayout(optional)
@@ -394,7 +495,13 @@ class FirstRunDialog(QDialog):
     def wait_for_survey(self, milliseconds: int = 30_000) -> bool:
         """Auf die Erhebung warten. Beim Schließen und in Tests."""
         survey = self._survey
-        return survey.wait(milliseconds) if survey is not None else True
+        finished = survey.wait(milliseconds) if survey is not None else True
+        QCoreApplication.processEvents()
+        printer_survey = self._printer_survey
+        if printer_survey is not None:
+            finished = printer_survey.wait(milliseconds) and finished
+        QCoreApplication.processEvents()
+        return finished
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
@@ -459,27 +566,8 @@ class FirstRunDialog(QDialog):
         self._fill_tools(found.tools)
         self._say_why_locked("")
         self.chat_state.setText(found.chat)
-        if found.filaments:
-            # Gefundene Profile sind Vorschläge. Erst die bewusste Übernahme
-            # im Filamentlager legt eine physische Spule an.
-            mapped_materials = tuple(
-                profiles.material_id_for_type(entry.material_type) for entry in found.filaments
-            )
-            material_ids = set(mapped_materials)
-            # Ein eindeutiger Profiltyp ist die bessere Vorgabe als eine
-            # zweite Frage. Bei PLA und TPU nebeneinander wäre jede Wahl ein
-            # Raten; dasselbe gilt für einen Typ, den Solidon nicht kennt.
-            # Darum müssen **alle** Profile zugeordnet sein, nicht nur der
-            # bekannte Rest nach dem Wegwerfen leerer Treffer.
-            if mapped_materials and all(mapped_materials) and len(material_ids) == 1:
-                self.settings.material = material_ids.pop()
+        self._fill_slicers(found.slicers)
         self._grow_soon()
-        # **Nur, solange niemand selbst gewählt hat.** Eine gute Vorgabe ist
-        # mehr wert als eine gute Einstellmöglichkeit (§2.4) — aber eine, die
-        # eine getroffene Wahl überschreibt, ist keine Vorgabe mehr.
-        if found.printer and self.printer.currentData() == self._suggested_printer:
-            _select(self.printer, found.printer)
-            self._suggested_printer = found.printer
 
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und keine Zeile bleibt auf „wird
@@ -520,6 +608,8 @@ class FirstRunDialog(QDialog):
 
     def accept(self) -> None:
         self.wait_for_survey()
+        if not self._save_custom_printer():
+            return
         super().accept()
 
     def _language_changed(self) -> None:
@@ -563,6 +653,8 @@ class FirstRunDialog(QDialog):
 
     def apply_to(self, settings: UiSettings) -> UiSettings:
         """Übernimmt die Antworten und markiert die angenommene Einrichtung als beendet."""
+        if not self._save_custom_printer():
+            return settings
         self._carry_over(settings)
         settings.first_run_done = True
         return settings
@@ -570,7 +662,11 @@ class FirstRunDialog(QDialog):
     def _carry_over(self, settings: UiSettings) -> None:
         """Bewahrt Antworten beim Sprachwechsel, ohne die Einrichtung abzuschließen."""
         settings.language = str(self.language.currentData())
-        settings.printer = str(self.printer.currentData())
+        if self.printer.currentData() != "__custom__":
+            settings.printer = str(self.printer.currentData())
+        chosen = str(self.slicer.currentData() or "")
+        if chosen:
+            discover.remember_path("slicer", chosen)
         # Keine Frage mehr, aber weiterhin ein vollständiger Projektvorgabensatz:
         # Bis ein Filamentprofil seinen Typ liefert, gilt die dokumentierte Kernvorgabe.
         settings.material = settings.material or profiles.DEFAULT_MATERIAL
@@ -617,38 +713,193 @@ class FirstRunDialog(QDialog):
         """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei
         „fertig".
         """
+        self.wait_for_survey()
+        if not self._save_custom_printer():
+            return
         self.apply_to(self.settings)
         self.importRequested.emit()
         self.accept()
 
+    def _open_inventory(self) -> None:
+        """Die Einrichtung übernehmen und danach das Filamentlager öffnen."""
+        self.wait_for_survey()
+        if not self._save_custom_printer():
+            return
+        self.apply_to(self.settings)
+        self.accept()
+        self.inventoryRequested.emit()
 
-def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...]]:
-    """Drucker und gewählte Filamentprofile des installierten Slicers (§2.3, §29).
+    def _printer_changed(self) -> None:
+        """Eigene Druckerdaten stehen direkt unter der entsprechenden Auswahl."""
+        custom = self.printer.currentData() == "__custom__"
+        self.custom_printer.setVisible(custom)
+        if not custom and self.sender() is self.printer:
+            self.printer_state.clear()
+        self._grow_soon()
 
-    Der Dialog meldet in derselben Zeile „Slicer gefunden" und schlug daneben
-    den allgemeinen 220er vor, während der Bestand des Slicers den richtigen
-    Drucker kannte — samt der Maschine, die dort zuletzt eingestellt war. Eine
-    gute Vorgabe ist mehr wert als eine gute Einstellmöglichkeit (§2.4).
+    def _save_custom_printer(self) -> bool:
+        """Eigene Maße werden erst bei ausdrücklicher Übernahme gespeichert."""
+        if self.printer.currentData() != "__custom__":
+            return True
+        name = self.printer_name.text().strip()
+        if not name:
+            self.printer_state.setText(tr("Geben Sie Ihrem Drucker einen Namen."))
+            self.printer_name.setFocus()
+            return False
+        template = profiles.printer(profiles.DEFAULT_PRINTER)
+        nozzle = self.printer_nozzle.value()
+        width, depth, height = (field.value() for field in self.printer_dimensions)
+        entry = replace(
+            template,
+            id=self._custom_identifier,
+            title=name,
+            build_volume=(width, depth, height),
+            nozzle_diameter=nozzle,
+            layer_height=min(template.layer_height, nozzle / 2),
+            extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
+        )
+        try:
+            profiles.save_printer(entry)
+        except (AppError, OSError) as problem:
+            _log.warning("custom printer could not be saved: %s", problem)
+            self.printer_state.setText(
+                tr(
+                    "Der Drucker konnte nicht gespeichert werden. Prüfen Sie den "
+                    "Speicherplatz und versuchen Sie es erneut."
+                )
+            )
+            return False
+        self._insert_printer_choice(name, entry.id)
+        _select(self.printer, entry.id)
+        self._suggested_printer = entry.id
+        return True
 
-    Findet sich nichts, bleibt es bei der Vorgabe: eine falsche Vorauswahl
-    sähe aus wie eine Entscheidung.
-    """
-    from app.ui.filament_picker import configured_spools
+    def custom_printer_draft(self) -> tuple[str, str, tuple[float, float, float], float] | None:
+        """Noch ungespeicherte eigene Druckerdaten reisen beim Sprachwechsel mit."""
+        if self.printer.currentData() != "__custom__":
+            return None
+        width, depth, height = (field.value() for field in self.printer_dimensions)
+        return (
+            self._custom_identifier,
+            self.printer_name.text(),
+            (width, depth, height),
+            self.printer_nozzle.value(),
+        )
 
-    slicer = tools.by_id("slicer")
-    found = slicer.path() if slicer is not None else None
-    if found is None:
-        return "", ()
-    try:
-        flavour = slicer_keys.flavour_of(found.name)
-        if flavour is None:
-            return "", ()
-        machine = slicer_profiles.chosen_machine(flavour, found)
-        printer = slicer_profiles.printer_for(machine, profiles.printer_profiles())
-        return printer, configured_spools()
-    except OSError as problem:
-        _log.debug("could not ask the slicer for its defaults: %s", problem)
-        return "", ()
+    def restore_custom_printer_draft(
+        self, draft: tuple[str, str, tuple[float, float, float], float] | None
+    ) -> None:
+        """Stellt den Entwurf im neu übersetzten Dialog wieder her."""
+        if draft is None:
+            return
+        identifier, name, dimensions, nozzle = draft
+        self._custom_identifier = identifier
+        self.printer_name.setText(name)
+        for field, value in zip(self.printer_dimensions, dimensions, strict=True):
+            field.setValue(value)
+        self.printer_nozzle.setValue(nozzle)
+        _select(self.printer, "__custom__")
+
+    def _fill_slicers(self, found: tuple[Path, ...]) -> None:
+        """Nachgereichte Programme erhalten die bereits getroffene Auswahl."""
+        chosen = str(self.slicer.currentData() or "")
+        paths = list(dict.fromkeys((*found, *((Path(chosen),) if chosen else ()))))
+        with QSignalBlocker(self.slicer):
+            self.slicer.clear()
+            self.slicer.addItem(tr("Später auswählen"), "")
+            for path in paths:
+                self.slicer.addItem(path.stem, str(path))
+                self.slicer.setItemData(
+                    self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
+                )
+            _select(self.slicer, chosen)
+        if chosen:
+            self._slicer_changed()
+
+    def _choose_slicer_file(self) -> None:
+        """Portable Slicer und abweichende Installationspfade lassen sich ausdrücklich wählen."""
+        filename, _ = QFileDialog.getOpenFileName(self, tr("Slicer-Programm auswählen"))
+        if not filename:
+            return
+        if self.slicer.findData(filename) < 0:
+            self.slicer.addItem(Path(filename).stem, filename)
+        _select(self.slicer, filename)
+
+    def _slicer_changed(self) -> None:
+        """Jede Auswahl bekommt eine eigene, gegen späte Antworten geschützte Suche."""
+        self._printer_survey = None
+        chosen = str(self.slicer.currentData() or "")
+        if not chosen:
+            self._fill_printers(tuple(profiles.printer_profiles()))
+            self.printer_state.clear()
+            return
+        self.printer.setEnabled(False)
+        self.printer_state.setText(tr("Drucker des gewählten Slicers werden gesucht …"))
+        worker = _PrinterSurvey(Path(chosen))
+        worker.done.connect(self._printers_found)
+        worker.crashed.connect(self._printers_failed)
+        self._printer_survey = worker
+        self._leash.start(worker)
+
+    def _insert_printer_choice(self, title: str, identifier: str) -> None:
+        """Jeder Eintrag steht nach sichtbarem Titel sortiert, auch ein eigener Drucker."""
+        position = next(
+            (
+                index
+                for index in range(self.printer.count())
+                if self.printer.itemText(index).casefold() > title.casefold()
+            ),
+            self.printer.count(),
+        )
+        with QSignalBlocker(self.printer):
+            self.printer.insertItem(position, title, userData=identifier)
+
+    def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
+        """Nur passende Drucker anbieten und eine weiterhin passende Wahl erhalten."""
+        chosen = str(self.printer.currentData() or "")
+        allowed = set(identifiers) | {profiles.DEFAULT_PRINTER}
+        preferred = chosen
+        if suggested and (
+            chosen == self._suggested_printer or (chosen not in allowed and chosen != "__custom__")
+        ):
+            preferred = suggested
+        if preferred not in allowed and preferred != "__custom__":
+            preferred = profiles.DEFAULT_PRINTER
+        with QSignalBlocker(self.printer):
+            self.printer.clear()
+            for identifier, printer in by_title(profiles.printer_profiles()):
+                if identifier in allowed:
+                    self._insert_printer_choice(str(printer.title), identifier)
+            self._insert_printer_choice(tr("Benutzerdefiniert …"), "__custom__")
+            _select(self.printer, preferred)
+        if preferred == suggested:
+            self._suggested_printer = suggested
+        self.printer.setEnabled(True)
+        self._printer_changed()
+
+    def _printers_found(self, found: object) -> None:
+        """Ein früherer Slicer darf die aktuelle Druckerauswahl nicht verändern."""
+        if self.sender() is not self._printer_survey:
+            return
+        assert isinstance(found, PrinterChoices)
+        if str(found.executable) != self.slicer.currentData():
+            return
+        self._fill_printers(found.identifiers, found.suggested)
+        self.printer_state.clear()
+        self._grow_soon()
+
+    def _printers_failed(self, detail: str) -> None:
+        """Die eigene Druckerwahl bleibt auch ohne lesbaren Profilbestand erreichbar."""
+        if self.sender() is not self._printer_survey:
+            return
+        _log.warning("first run printer survey crashed: %s", detail)
+        self._fill_printers(tuple(profiles.user_printer_profiles()))
+        self.printer_state.setText(
+            tr(
+                "Drucker konnten nicht gelesen werden. Wählen Sie einen anderen "
+                "Slicer oder richten Sie Ihren Drucker selbst ein."
+            )
+        )
 
 
 def _select(box: QComboBox, identifier: str) -> None:

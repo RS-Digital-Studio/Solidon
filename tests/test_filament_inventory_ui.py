@@ -7,9 +7,9 @@ from threading import Event
 from time import monotonic
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QMenu
 
 from app.core.errors import ValidationError
 from app.core.knowledge import filaments
@@ -117,6 +117,92 @@ def test_empty_shelf_offers_both_entrances(inventory: InventoryView) -> None:
     assert inventory.add_button.isEnabled()
     assert inventory.import_button.isEnabled()
     assert filaments.catalogue() == ()
+
+
+def test_delete_button_removes_selected_spool_and_keeps_its_history(inventory):
+    """Der sichtbare Mülleimer räumt das Regal auf und bewahrt den Rückweg."""
+    entry = filaments.save(
+        filaments.CatalogueFilament("Eigene Mischung", "#123456", remaining_grams=100)
+    )
+    filaments.book("print", "geometry", [filaments.BookingPosition(entry.identifier, 20)])
+    inventory.refresh()
+    inventory.cards[0].click()
+    assert not inventory.add_button.icon().isNull()
+    assert not inventory.delete_button.icon().isNull()
+    inventory.delete_button.click()
+    _wait_for_action(inventory)
+    assert inventory.pages.currentIndex() == 0
+    assert inventory.cards == []
+    assert filaments.get(entry.identifier).archived
+    assert len(filaments.bookings(entry.identifier)) == 1
+    inventory.archived.setChecked(True)
+    inventory.cards[0].click()
+    inventory.delete_button.click()
+    _wait_for_action(inventory)
+    assert filaments.catalogue()[0].identifier == entry.identifier
+
+
+def test_card_context_delete_targets_clicked_spool(inventory, monkeypatch):
+    """Gleiche Etiketten und ein anderes offenes Detail dürfen das Löschziel nicht ändern."""
+    from app.ui import filament_inventory
+
+    first = filaments.save(filaments.CatalogueFilament("Eigene Spule", "#123456"))
+    second = filaments.duplicate(first.identifier)
+    inventory.refresh()
+    inventory.show_spool(first.identifier)
+
+    class ChoosingMenu(QMenu):
+        def exec(self, _position):
+            assert self.toolTipsVisible()
+            action = next(
+                action for action in self.actions() if action.text() == "Filament löschen"
+            )
+            assert not action.icon().isNull()
+            action.trigger()
+
+    monkeypatch.setattr(filament_inventory, "QMenu", ChoosingMenu)
+    card = next(card for card in inventory.cards if card.entry.identifier == second.identifier)
+    card.customContextMenuRequested.emit(QPoint(5, 5))
+    _wait_for_action(inventory)
+    assert filaments.get(second.identifier).archived
+    assert not filaments.get(first.identifier).archived
+    assert inventory._selected_id == first.identifier
+
+
+def test_failed_delete_keeps_the_spool_visible(inventory, monkeypatch):
+    """Ein Schreibfehler darf weder die Spule noch den Wiederholungsweg ausblenden."""
+    from app.core.errors import FileWriteError
+
+    entry = filaments.save(filaments.CatalogueFilament("Eigene Spule", "#123456"))
+    inventory.refresh()
+    inventory.cards[0].click()
+
+    def reject(_identifier):
+        raise FileWriteError(detail="Datei gesperrt")
+
+    monkeypatch.setattr(filaments, "archive", reject)
+    inventory.delete_button.click()
+    _wait_for_action(inventory)
+    assert not filaments.get(entry.identifier).archived
+    assert inventory._selected_id == entry.identifier
+    assert inventory.message.text()
+    assert inventory.delete_button.isEnabled()
+
+
+def test_delete_preserves_error_if_refresh_cannot_read_inventory(inventory, monkeypatch):
+    """Ein Fehler nach dem Speichern darf nicht hinter dem Rückweghinweis verschwinden."""
+    entry = filaments.save(filaments.CatalogueFilament("Spule", "#123456"))
+    inventory.show_spool(entry.identifier)
+
+    def unreadable(**_kwargs):
+        raise ValidationError(field="inventory", detail="Lagerdatei gesperrt")
+
+    monkeypatch.setattr(filaments, "catalogue", unreadable)
+    inventory.delete_button.click()
+    _wait_for_action(inventory)
+    assert filaments.get(entry.identifier).archived
+    assert "Lagerdatei gesperrt" in inventory.message.text()
+    assert not inventory.retry_button.isHidden()
 
 
 def test_inventory_summary_distinguishes_zero_one_and_many(inventory):

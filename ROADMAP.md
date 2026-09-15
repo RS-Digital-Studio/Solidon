@@ -121,6 +121,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 ## Filamentlager
 
+Löschen ist im Regal per Rechtsklick und im Spulendetail sowie Filamentpanel
+über einen Mülleimerknopf erreichbar; Wiederherstellen läuft über das Archiv.
+Hinzufügen trägt ein Plus-SVG. „Erste Schritte“ führt über Slicer und passende
+Drucker zum Filamentlager; eigene Drucker lassen sich mit Name, Bauraum und
+Düse direkt anlegen.
+
 Physische Spulen, Regal, bewusster Import, Schnellauswahl und rücknehmbare
 Verbrauchsbuchungen sind angeschlossen. [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
 Das anschließende [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)

@@ -55,6 +55,8 @@ _HEAD: Final = (
 #: gefülltes und ein gestricheltes Zeichen nebeneinander sehen aus wie zwei
 #: verschiedene Programme.
 PATHS: Final[dict[str, str]] = {
+    "add": '<path d="M12 5v14M5 12h14" />',
+    "delete": ('<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7M14 10v7" />'),
     # Ein Körper, den eine Ebene durchtrennt.
     "section": (
         '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z" />'

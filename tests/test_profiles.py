@@ -4,11 +4,66 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from pathlib import Path
+
 import pytest
 
-from app.core.errors import ValidationError
+from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge import profiles
 from app.core.types import MaterialSlot, Profile, SceneObject
+
+
+def test_saving_a_custom_printer_preserves_existing_profiles_and_exact_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eigene Profile bleiben nach dem Schreiben und einem erneuten Laden vollständig."""
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    first = replace(
+        template, id="user-first", title='Drucker "groß"', build_volume=(300.125, 270, 410)
+    )
+    second = replace(template, id="user-second", title="Werkstatt")
+    profiles.save_printer(first)
+    profiles.save_printer(second)
+    profiles.reload()
+    assert profiles.printer(first.id) == first
+    assert profiles.printer(second.id) == second
+    assert profiles.printer(profiles.DEFAULT_PRINTER) == template
+    assert set(profiles.user_printer_profiles()) == {first.id, second.id}
+
+
+@pytest.mark.parametrize("value", (0, -1, float("nan"), float("inf")))
+def test_custom_printer_rejects_invalid_dimensions_without_writing(
+    value: float, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein ungültiger Bauraum verändert auch eine vorhandene Profildatei nicht."""
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    entry = replace(profiles.printer(profiles.DEFAULT_PRINTER), id="user-own", title="Eigen")
+    profiles.save_printer(entry)
+    before = (tmp_path / "printers.toml").read_bytes()
+    with pytest.raises(ValidationError):
+        profiles.save_printer(replace(entry, build_volume=(value, 200, 300)))
+    assert (tmp_path / "printers.toml").read_bytes() == before
+
+
+def test_a_failed_printer_save_preserves_the_previous_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die fertige temporäre Datei ersetzt den Bestand erst nach erfolgreichem Schreiben."""
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    entry = replace(profiles.printer(profiles.DEFAULT_PRINTER), id="user-own", title="Eigen")
+    profiles.save_printer(entry)
+    before = (tmp_path / "printers.toml").read_bytes()
+
+    def denied(_path: Path, _target: Path) -> None:
+        raise PermissionError("occupied")
+
+    monkeypatch.setattr(Path, "replace", denied)
+    with pytest.raises(FileWriteError):
+        profiles.save_printer(replace(entry, title="Geändert"))
+    assert (tmp_path / "printers.toml").read_bytes() == before
+    assert not tuple(tmp_path.glob("*.tmp"))
 
 
 def test_starting_set_is_present() -> None:

@@ -17,6 +17,20 @@ Hier steht die Karte, dort das Gesetz.
 
 ## Filamente und lokales Lager
 
+`FirstRunDialog` fragt Slicer vor Drucker; `_PrinterSurvey` liest passende
+Profile außerhalb des Qt-Hauptthreads und verwirft Antworten früherer Auswahlen.
+„Benutzerdefiniert“ sammelt Name, Bauraum und Düse direkt im Formular.
+`custom_printer_draft` und `restore_custom_printer_draft` erhalten ungespeicherte
+Eingaben beim Sprachwechsel. `inventoryRequested` öffnet nach Übernahme der
+Einrichtung das Filamentlager über das Hauptfenster.
+
+Löschen entfernt eine Spule über `filaments.archive(identifier)` aus dem aktiven
+Lager. Rechtsklick und sichtbarer Mülleimerknopf verwenden denselben Weg;
+„Archivierte Spulen anzeigen“ und „Wiederherstellen“ bewahren den Rückweg samt
+Kennung und Buchungsverlauf. Ein Rechtsklick nimmt die angeklickte Spule als
+Ziel, unabhängig von einer vorherigen Auswahl. Plus- und Mülleimersymbole
+kommen als themenabhängige SVGs aus `icons.py`.
+
 `InventoryView` reiht bestätigte Lagerhandlungen geordnet ein; Rückmeldungen
 gelten nur ihrem aktiven Arbeiter. Abgebrochene Suchen bleiben bis zum Threadende
 gehalten und dürfen spätere Aufträge nicht verändern.

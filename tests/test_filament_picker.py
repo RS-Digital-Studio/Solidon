@@ -534,7 +534,10 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
     )
     panel.list.setCurrentRow(row)
 
-    panel._remove()
+    assert not panel.add_button.icon().isNull()
+    assert panel.delete_button.isEnabled()
+    assert not panel.delete_button.icon().isNull()
+    panel.delete_button.click()
     _wait_for_catalogue(panel)
 
     assert [entry.name for entry in filaments.catalogue()] == [], (
@@ -545,6 +548,43 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
         for index in range(panel.list.count())
     )
     assert filaments.catalogue(include_archived=True)[0].archived
+
+
+def test_rack_context_delete_selects_the_clicked_row(qt_app, tmp_path, monkeypatch):
+    """Rechtsklick auf die zweite Spule löscht niemals die vorher ausgewählte erste."""
+    from PySide6.QtWidgets import QMenu
+
+    from app.ui import filament_picker
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    first = filaments.save(filaments.CatalogueFilament("Erste", "#123456"))
+    second = filaments.save(filaments.CatalogueFilament("Zweite", "#123456"))
+    panel = FilamentPanel()
+    panel.resize(400, 500)
+    panel.show()
+    qt_app.processEvents()
+    rows = [panel.list.item(row) for row in range(panel.list.count())]
+    panel.list.setCurrentItem(next(item for item in rows if item.text().startswith("Erste")))
+    target = next(item for item in rows if item.text().startswith("Zweite"))
+
+    class ChoosingMenu(QMenu):
+        def exec(self, _position):
+            assert self.toolTipsVisible()
+            next(
+                action for action in self.actions() if action.text() == "Filament löschen"
+            ).trigger()
+
+    monkeypatch.setattr(filament_picker, "QMenu", ChoosingMenu)
+    try:
+        panel.list.customContextMenuRequested.emit(panel.list.visualItemRect(target).center())
+        _wait_for_catalogue(panel)
+        assert filaments.get(second.identifier).archived
+        assert not filaments.get(first.identifier).archived
+        assert not panel.delete_button.isEnabled()
+    finally:
+        panel.close()
+        panel.deleteLater()
 
 
 def _wait_for_catalogue(widget) -> None:

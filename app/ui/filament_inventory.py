@@ -7,7 +7,17 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QPoint,
+    QPointF,
+    QRectF,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QColor, QFontMetrics, QKeyEvent, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -21,6 +31,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -39,10 +50,12 @@ from app.ui.dialogs import ErrorNotice
 from app.ui.filament_picker import (
     NewFilamentDialog,
     configured_spools,
+    removal_hint,
     spool_label,
     stock_label,
     swatch,
 )
+from app.ui.icons import icon
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
@@ -377,6 +390,7 @@ class InventoryView(QWidget):
         set_level(self.summary, "caption")
         header.addWidget(self.summary, 1, 1)
         self.add_button = QPushButton(tr("Spule von Hand anlegen"), self)
+        self.add_button.setIcon(icon("add", self.add_button))
         self.add_button.clicked.connect(self._add)
         make_primary(self.add_button)
         header.addWidget(self.add_button, 0, 2)
@@ -590,6 +604,10 @@ class InventoryView(QWidget):
                     show_identifier=labels[entry.name, entry.colour] > 1,
                 )
                 card.clicked.connect(weak_slot(self, InventoryView._open_card, entry.identifier))
+                card.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+                card.customContextMenuRequested.connect(
+                    weak_slot(self, InventoryView._card_menu, entry.identifier, forward=True)
+                )
                 self.grid.addWidget(card, row + index // columns, index % columns)
                 self.cards.append(card)
                 if entry.identifier == focused:
@@ -630,6 +648,28 @@ class InventoryView(QWidget):
 
     def _open_card(self, identifier: str, _checked: bool = False) -> None:
         self.show_spool(identifier)
+
+    def _card_menu(self, identifier: str, where: QPoint) -> None:
+        """Der Rechtsklick gilt der angeklickten Spule, unabhängig vom offenen Detail."""
+        card = next((card for card in self.cards if card.entry.identifier == identifier), None)
+        if card is None:
+            return
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+        menu.addAction(tr("Details"), partial(self.show_spool, identifier))
+        if card.entry.archived:
+            menu.addAction(
+                tr("Wiederherstellen"),
+                partial(self._run, partial(filaments.restore, identifier), self._saved),
+            )
+        else:
+            action = menu.addAction(icon("delete", self), tr("Filament löschen"))
+            action.setToolTip(removal_hint())
+            action.triggered.connect(partial(self._remove, identifier))
+        try:
+            menu.exec(card.mapToGlobal(where))
+        finally:
+            menu.deleteLater()
 
     def show_spool(self, identifier: str) -> None:
         """Das Detail bleibt auch bei gleichen Etiketten genau an dieser Spule."""
@@ -711,11 +751,23 @@ class InventoryView(QWidget):
         for text, action in (
             (tr("Angaben ändern"), self._edit),
             (tr("Noch eine davon"), self._duplicate),
-            (tr("Wiederherstellen") if entry.archived else tr("Archivieren"), self._archive),
         ):
             button = QPushButton(text, overview)
             button.clicked.connect(action)
             information.addWidget(button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.delete_button = QPushButton(
+            tr("Wiederherstellen") if entry.archived else tr("Filament löschen"), overview
+        )
+        self.delete_button.setIcon(icon("undo" if entry.archived else "delete", self))
+        hint = tr("Wiederherstellen") if entry.archived else removal_hint()
+        self.delete_button.setToolTip(hint)
+        self.delete_button.setAccessibleDescription(hint)
+        self.delete_button.clicked.connect(
+            self._archive
+            if entry.archived
+            else weak_slot(self, InventoryView._remove, entry.identifier)
+        )
+        information.addWidget(self.delete_button, alignment=Qt.AlignmentFlag.AlignLeft)
         overview_layout.addLayout(information, 1)
         self.detail_layout.addWidget(overview)
         heading = QLabel(tr("Buchungsverlauf"), self.detail)
@@ -844,6 +896,18 @@ class InventoryView(QWidget):
         if entry is not None:
             action = filaments.restore if entry.archived else filaments.archive
             self._run(partial(action, entry.identifier), self._saved)
+
+    def _remove(self, identifier: str, _checked: bool = False) -> None:
+        self._run(partial(filaments.archive, identifier), partial(self._removed, identifier))
+
+    def _removed(self, identifier: str, _result: object) -> None:
+        """Erst die gespeicherte Löschung entfernt die Spule aus der Ansicht."""
+        if self._selected_id == identifier:
+            self.show_shelf()
+        self.refresh()
+        if not self.message.text():
+            self.message.setText(removal_hint())
+        self.catalogueChanged.emit()
 
     def _selected_entry(self) -> filaments.CatalogueFilament | None:
         """Eine externe Lagerbeschädigung bleibt auch zwischen Anzeige und Klick sichtbar."""
