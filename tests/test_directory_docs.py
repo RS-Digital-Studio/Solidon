@@ -234,11 +234,25 @@ def test_every_rule_file_points_at_files_that_exist() -> None:
     """
     files = rule_files()
     assert len(files) >= 13, f"nur {len(files)} Regeldateien — prüft das noch etwas?"
+    # **Ein Ordner, den dieses Repository ausschließt, ist kein Ziel, das es
+    # zusichern kann.** „3D Drucker/" ist ein eigenes Repository und steht in
+    # der `.gitignore`; am 15.09.2026 war der Ordner auf dieser Maschine nicht
+    # da, und die Regel `druckteile.md` galt als verwaist — auf einem frischen
+    # Klon und in der CI fehlt er immer. Gelesen wird die `.gitignore`, keine
+    # zweite Liste daneben.
+    outside = {
+        line.strip().strip("/")
+        for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        if line.startswith("/") and line.rstrip().endswith("/")
+    }
+    assert outside, "die .gitignore nennt keinen ausgeschlossenen Ordner — dann prüft das nichts"
     astray: list[str] = []
     for rule in files:
         targets = frontmatter_paths(rule)
         assert targets, f"{rule.name} trägt kein paths:-Frontmatter"
         for target in targets:
+            if any(target == folder or target.startswith(folder + "/") for folder in outside):
+                continue
             if not any(ROOT.glob(target)):
                 astray.append(f"{rule.name}: {target}")
     assert not astray, "paths:-Ziele ohne Datei:\n" + "\n".join(f"  {entry}" for entry in astray)
