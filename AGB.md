@@ -1,6 +1,6 @@
 # Allgemeine Geschäftsbedingungen
 
-Stand: 13. September 2026 · Fassung 1.7
+Stand: 15. September 2026 · Fassung 1.8
 
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
@@ -38,15 +38,33 @@ Verkauft wird eine dauerhafte Nutzungslizenz für die Software Solidon3D. Was
 diese Lizenz umfasst, regelt der Endnutzer-Lizenzvertrag unter
 <https://solidon3d.de/eula.html>; er ist Bestandteil dieses Vertrags.
 
+Angeboten werden **zwei Lizenzarten**: eine **private Lizenz** für die Nutzung
+zu privaten Zwecken und eine **gewerbliche Lizenz** für die Nutzung im Rahmen
+einer gewerblichen oder selbständigen beruflichen Tätigkeit. Beide enthalten
+denselben Funktionsumfang und unterscheiden sich allein im erlaubten
+Nutzungszweck; die Abgrenzung regelt der Endnutzer-Lizenzvertrag, Abschnitt 3.
+Welche Art Sie bestellen, wählen Sie im Bestellvorgang, und sie steht in Ihrem
+Lizenzschlüssel.
+
+Beide Lizenzarten sind eine **Einmalzahlung und kein Abonnement**. Alle
+Punktversionen der gekauften Hauptversion sind eingeschlossen; es gibt keine
+laufenden Gebühren und keine Verlängerung.
+
 Geliefert wird **ein Lizenzschlüssel in elektronischer Form**. Ein
 körperlicher Datenträger wird nicht versandt.
 
-Der Schlüssel berechtigt zu **einem gleichzeitig aktivierten Rechner**. Die
-einmalige Geräteaktivierung erfolgt direkt über das Netz oder als Anfrage- und
+Der Schlüssel berechtigt zu **einem gleichzeitig aktivierten Rechner bei der
+privaten und zwei bei der gewerblichen Lizenz**. Die einmalige
+Geräteaktivierung erfolgt direkt über das Netz oder als Anfrage- und
 Antwortdatei über ein zweites Gerät. Danach läuft die Software ohne
 regelmäßige Lizenzabfrage offline weiter. Vor einem Rechnerwechsel wird der
 bisherige Platz in Solidon deaktiviert; bei Verlust oder Defekt hilft der
 Support nach Prüfung der Bestellnummer.
+
+Die gewerbliche Lizenz umfasst zusätzlich eine zugesagte Support-Reaktionszeit
+von zwei Werktagen und die Weitergabe innerhalb des Unternehmens. Was das im
+Einzelnen bedeutet, regelt der Endnutzer-Lizenzvertrag in den Abschnitten 2, 6
+und 11a.
 
 Beim späteren Verkaufsstart wird **keine zusätzliche Testphase** angeboten,
 sofern der Bestellvorgang nicht ausdrücklich etwas anderes ausweist. Eine
@@ -78,6 +96,13 @@ Die Vertragssprache ist Deutsch.
 Alle Preise sind Endpreise. Ob und in welcher Höhe Umsatzsteuer ausgewiesen
 wird, ergibt sich aus der Bestellübersicht und der Rechnung.
 
+**Es gilt der Preis, der im Bestellvorgang angezeigt wird.** Die private und
+die gewerbliche Lizenz werden zu unterschiedlichen Preisen angeboten; die
+jeweils gültigen Preise stehen auf <https://solidon3d.de>. Preisänderungen für
+künftige Bestellungen bleiben vorbehalten und berühren eine bereits erworbene
+Lizenz nicht: Sie behält ihren gezahlten Preis und die eingeschlossenen
+Punktversionen.
+
 **Die Zahlung wird über einen Zahlungsdienstleister abgewickelt. Welcher das
 ist, erfahren Sie vor dem Absenden der Bestellung** — mit Namen, Anschrift und
 den dort geltenden Bedingungen. Welche Zahlungsarten zur Verfügung stehen,
@@ -89,6 +114,10 @@ Vertragspartner des Kaufs: Dann gelten für den Kauf seine Bedingungen und
 diese hier ergänzend für die Nutzung der Software, und Rechnung und
 Umsatzsteuerausweis kommen von ihm. Ob das der Fall ist, wird Ihnen im
 Bestellvorgang ausgewiesen.
+
+**Unternehmer können im Bestellvorgang die Rechnungsangaben ihres Unternehmens
+samt Umsatzsteuer-Identifikationsnummer angeben**; die Rechnung wird dann
+darauf ausgestellt.
 
 ## § 5 Lieferung
 
@@ -126,9 +155,9 @@ Es gelten die gesetzlichen Mängelrechte. Für digitale Produkte gelten
 insbesondere die §§ 327 ff. BGB einschließlich unserer
 Aktualisierungspflicht. Sicherheits- und Funktionserhaltungsaktualisierungen,
 die das Gesetz für den maßgeblichen Bereitstellungszeitraum verlangt, werden
-mindestens bis zum 31. Oktober 2031 bereitgestellt und angekündigt. Eine
-weitergehende Zusage für neue Funktionen oder eine neue Hauptversion ist das
-nicht.
+mindestens bis zum 31. Oktober 2031 bereitgestellt und angekündigt, für beide
+Lizenzarten gleich. Eine weitergehende Zusage für neue Funktionen oder eine
+neue Hauptversion ist das nicht.
 
 Ist der Kunde Unternehmer, beträgt die Verjährungsfrist für Mängelansprüche
 ein Jahr ab Lieferung; für Verbraucher bleibt es bei den gesetzlichen

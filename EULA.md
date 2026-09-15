@@ -1,6 +1,6 @@
 # Endnutzer-Lizenzvertrag für Solidon3D
 
-Stand: 12. September 2026 · Fassung 1.8
+Stand: 15. September 2026 · Fassung 1.9
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
@@ -25,13 +25,51 @@ weiteren Rechte bleiben bei uns.
 
 Das Nutzungsrecht ist **zeitlich unbegrenzt**. Es endet nicht, wenn wir die
 Weiterentwicklung einstellen, und es endet nicht mit einer neuen Hauptversion.
+Es ist **kein Abonnement**: Sie zahlen einmal, und alle Punktversionen der
+gekauften Hauptversion sind eingeschlossen.
+
+Es gibt Solidon3D in **zwei Lizenzarten**, die sich im erlaubten
+Nutzungszweck unterscheiden:
+
+* die **private Lizenz** für die Nutzung zu privaten Zwecken,
+* die **gewerbliche Lizenz** für jede Nutzung im Rahmen einer gewerblichen
+  oder selbständigen beruflichen Tätigkeit (Abschnitt 3).
+
+**Beide Arten enthalten denselben Funktionsumfang.** Die gewerbliche Lizenz
+schaltet keine zusätzliche Funktion frei, und die private ist nicht
+beschnitten. Welche Art Sie erworben haben, steht in Ihrem Lizenzschlüssel und
+wird in Solidon3D unter *Hilfe → Über Solidon* angezeigt.
+
+Die gewerbliche Lizenz enthält darüber hinaus drei Leistungen, die die private
+nicht hat:
+
+* **Zwei gleichzeitig freigeschaltete Rechner** statt einem (Abschnitt 2).
+* **Eine Antwort des Supports innerhalb von zwei Werktagen** (Abschnitt 11a);
+  mit einer privaten Lizenz antworten wir nach Möglichkeit, ohne zugesagte
+  Frist.
+* **Die Weitergabe innerhalb des Betriebs** (Abschnitt 6).
+
+Alles andere ist gleich: der Funktionsumfang, die Dauer des Nutzungsrechts und
+der Zeitraum, für den wir Sicherheitsaktualisierungen bereitstellen
+(Abschnitt 5).
 
 ## 2. Auf wie vielen Geräten
 
-Die Lizenz ist **an Sie als Person gebunden, nicht an ein Gerät**. Sie dürfen
-Solidon3D auf allen Geräten installieren, die Sie selbst nutzen —
-Arbeitsplatz, Notebook, Werkstattrechner. **Freigeschaltet ist dabei ein
-Rechner zugleich**; den Wechsel nehmen Sie selbst vor, ohne uns zu fragen.
+Die Lizenz ist **an Sie als Person gebunden, nicht an ein Gerät** — bei der
+gewerblichen Lizenz an Ihr Unternehmen (Abschnitt 6). Sie dürfen Solidon3D auf
+allen Geräten installieren, die Sie selbst nutzen — Arbeitsplatz, Notebook,
+Werkstattrechner.
+
+**Freigeschaltet ist dabei eine begrenzte Zahl von Rechnern zugleich: mit einer
+privaten Lizenz einer, mit einer gewerblichen zwei.** Den Wechsel nehmen Sie
+selbst vor, ohne uns zu fragen: In Solidon3D deaktivieren Sie den bisherigen
+Rechner und schalten den neuen frei. Bei Verlust oder Defekt hilft der Support
+nach Prüfung der Bestellnummer.
+
+Die zwei Plätze der gewerblichen Lizenz sind für **einen** Arbeitsplatz
+gedacht, der auf zwei Geräten arbeitet — etwa Büro und Notebook. Sie erlauben
+nicht, dass zwei Personen gleichzeitig arbeiten; dafür gilt unverändert der
+Absatz weiter unten in diesem Abschnitt.
 
 Zum Missbrauchsschutz sind je Lizenzschlüssel **fünf neue Geräteaktivierungen
 pro UTC-Kalendertag** möglich. Abgewiesene Anfragen, das erneute Abrufen eines
@@ -46,8 +84,9 @@ sondern die Zahl der Menschen, die damit konstruieren.
 Für regulär verkaufte Lizenzschlüssel braucht die Freischaltung einmalig eine
 **Geräteaktivierung**, aber kein Nutzerkonto. Sie
 kann direkt aus Solidon über das Netz oder als Anfrage- und Antwortdatei über
-ein zweites Gerät erfolgen. Dabei wird genau ein aktiver Geräteplatz je Lizenz
-geführt. Anschließend prüft Solidon Schlüssel und Geräte-Zertifikat
+ein zweites Gerät erfolgen. Dabei wird je Lizenz die Zahl der aktiven
+Geräteplätze aus Abschnitt 2 geführt — privat einer, gewerblich zwei.
+Anschließend prüft Solidon Schlüssel und Geräte-Zertifikat
 ausschließlich lokal: keine regelmäßige Lizenzabfrage, kein Heartbeat und
 keine Pflichtverbindung im Betrieb. Bereits vorher ausgegebene
 Bestandsschlüssel bleiben ohne nachträgliche Geräteaktivierung gültig.
@@ -58,8 +97,25 @@ defekt, setzt der Support den Platz nach Prüfung der Bestellnummer zurück.
 
 ## 3. Gewerbliche Nutzung und Ihre Ergebnisse
 
-Die gewerbliche Nutzung ist ausdrücklich eingeschlossen und kostet nichts
-extra.
+**Die gewerbliche Nutzung ist erlaubt und setzt eine gewerbliche Lizenz
+voraus.** Gewerblich ist die Nutzung, wenn sie einer gewerblichen oder
+selbständigen beruflichen Tätigkeit dient — gleich, ob Sie damit unmittelbar
+Geld verdienen. Dazu zählt auch die Nutzung durch Beschäftigte, Vereine mit
+wirtschaftlichem Geschäftsbetrieb und öffentliche Stellen.
+
+Mit einer **privaten Lizenz** dürfen Sie Solidon3D für eigene, private Zwecke
+nutzen. Gegenstände, die Sie damit entwerfen und drucken, dürfen Sie
+verschenken und gelegentlich zum Selbstkostenpreis weitergeben; ein
+regelmäßiger Verkauf ist eine gewerbliche Nutzung. Ausbildung, Studium und
+Lehre gelten nicht als gewerblich.
+
+Wer eine private Lizenz besitzt und später gewerblich arbeitet, erwirbt dafür
+eine gewerbliche Lizenz. Die private Lizenz bleibt davon unberührt und
+behält ihre Gültigkeit für private Zwecke.
+
+Solidon3D prüft nicht, zu welchem Zweck Sie es nutzen, und schränkt bei einer
+privaten Lizenz keine Funktion ein. Diese Abgrenzung ist eine
+vertragliche — wir vertrauen darauf, dass sie eingehalten wird.
 
 Allein durch die Nutzung von Solidon3D erwirbt RS Digital keine zusätzlichen
 Rechte an Inhalten, die Sie selbst geschaffen haben, oder an Rechten, die
@@ -163,7 +219,9 @@ aus diesem Vertrag nicht.
 Sicherheits- und Funktionserhaltungsaktualisierungen, die nach §§ 327f und
 327r BGB für den maßgeblichen Bereitstellungszeitraum erforderlich sind,
 stellen wir mindestens bis zum 31. Oktober 2031 bereit und informieren Sie
-darüber. Diese Pflicht ist nicht auf eine Hauptversion beschränkt. Sie können
+darüber. **Diese Frist gilt für beide Lizenzarten gleich** — sie hängt am
+Produkt und nicht daran, zu welchem Zweck es gekauft wurde. Diese Pflicht ist
+nicht auf eine Hauptversion beschränkt. Sie können
 eine Aktualisierung ablehnen; gesetzliche Folgen einer unterlassenen
 Installation bleiben unberührt. Neue Funktionen und eine neue Hauptversion
 sind davon nicht versprochen.
@@ -175,6 +233,13 @@ beim Verkauf Ihres Betriebs oder wenn Sie die Software nicht mehr brauchen.
 Bedingung ist, dass Sie danach selbst keine Kopie mehr benutzen und alle
 Installationen entfernen. Die erwerbende Person tritt dann in diesen Vertrag
 ein.
+
+**Die gewerbliche Lizenz darf innerhalb Ihres Unternehmens weitergegeben
+werden.** Sie ist dem Unternehmen zugeordnet, nicht einer einzelnen
+beschäftigten Person: Wechselt die Person, die mit Solidon3D arbeitet, so
+übernimmt die neue denselben Lizenzschlüssel, und die bisherige benutzt ihn
+nicht weiter. Die Zahl der gleichzeitig freigeschalteten Rechner aus
+Abschnitt 2 bleibt dabei unverändert — die Weitergabe vermehrt keine Plätze.
 
 Eine Vermietung, ein Verleih oder eine Unterlizenzierung sind nicht erlaubt.
 
@@ -316,6 +381,24 @@ entgangenen Gewinn oder mittelbare Schäden aus fehlerhaften Modellen.
 
 Die gesetzlichen Mängelrechte bleiben unberührt — bei digitalen Produkten
 insbesondere die §§ 327 ff. BGB samt Aktualisierungspflicht.
+
+## 11a. Support
+
+Fragen zur Software beantworten wir über die Adresse im Impressum und über den
+Weg *Hilfe → Rückmeldung senden* in Solidon3D.
+
+**Mit einer gewerblichen Lizenz erhalten Sie auf eine Supportanfrage in
+Textform eine Antwort innerhalb von zwei Werktagen** (Montag bis Freitag,
+gesetzliche Feiertage in Bayern ausgenommen), gerechnet ab dem Eingang bei
+uns. Die Frist gilt für die Antwort, nicht für die Lösung: Ob ein gemeldeter
+Fehler behoben werden kann und wie lange das dauert, hängt vom Fehler ab.
+
+Mit einer privaten Lizenz und in der Demo-Version antworten wir nach
+Möglichkeit, ohne zugesagte Frist.
+
+Vom Support nicht umfasst sind Konstruktionsarbeit an Ihren Modellen,
+Schulungen und die Einrichtung fremder Software (Slicer, Sprachmodelle,
+Generatoren). Hinweise dazu stehen im Handbuch.
 
 ## 12. Laufzeit und Ende
 

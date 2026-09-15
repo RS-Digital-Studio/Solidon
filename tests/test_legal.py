@@ -426,3 +426,54 @@ def test_a_date_at_a_line_break_does_not_become_a_numbered_list() -> None:
 
     real_list = "Es gilt:\n\n1. erstens\n2. zweitens\n"
     assert body_html(real_list, True).count("<li>") == 2
+
+
+# --- Was der Erzeuger darstellen kann --------------------------------------
+
+#: Eine Markdown-Tabellentrennzeile („|---|---|"). ``make_legal.py`` kennt
+#: keine Tabellen; eine solche Zeile landet als Absatz voller Pipes im
+#: veröffentlichten Rechtstext.
+TABLE_RULE = re.compile(r"^\s*\|[\s:|-]*\|\s*$")
+
+#: Ein Listenzeichen, das der Erzeuger **nicht** erkennt. Sein ``_BULLET``
+#: prüft ``^\*\s+``; ein Bindestrich bleibt damit ein Bindestrich im Absatz.
+WRONG_BULLET = re.compile(r"^\s{0,3}-\s+\S")
+
+
+@pytest.mark.parametrize("source_name", sorted(DOCUMENTS))
+def test_no_legal_text_uses_markup_the_generator_cannot_render(source_name: str) -> None:
+    """Ein Rechtstext enthält nur, was ``make_legal.py`` in HTML übersetzt.
+
+    Der Test daneben prüft, dass die erzeugte Seite zu ihrer Quelle passt — er
+    bleibt auch dann grün, wenn **beide** falsch sind: Eine Markdown-Tabelle
+    wird zu einem Absatz voller Pipes, eine Liste mit Bindestrichen zu einem
+    Absatz mit Bindestrichen, und das HTML passt dazu genau. Gemessen am
+    15.09.2026 stand beides im veröffentlichten Lizenzvertrag, während die
+    ganze Datei grün war.
+
+    Geprüft wird deshalb die Quelle gegen die Fähigkeiten des Erzeugers:
+    Aufzählungen mit ``*``, keine Tabellen. Wer eine Tabelle braucht, schreibt
+    sie als Aufzählung — das liest auch ein Bildschirmleser, der eine
+    Pipe-Zeile nicht deuten kann.
+    """
+    source = ROOT / source_name
+    lines = source.read_text(encoding="utf-8").splitlines()
+    assert lines, f"{source_name} ist leer — dann prüft dieser Test nichts"
+
+    # Beide Funde in **einer** Meldung: Zwei Zusicherungen hintereinander
+    # verdecken die zweite, und wer die Tabelle behebt, läuft dann in den
+    # Bindestrich — zwei Läufe für einen Befund.
+    befunde = []
+    tables = [number for number, line in enumerate(lines, 1) if TABLE_RULE.match(line)]
+    if tables:
+        befunde.append(
+            f"Tabelle in Zeile {tables} — make_legal.py kennt keine und schreibt die "
+            "Pipes in einen Absatz. Als Aufzählung mit „*“ schreiben."
+        )
+    bullets = [number for number, line in enumerate(lines, 1) if WRONG_BULLET.match(line)]
+    if bullets:
+        befunde.append(
+            f"Aufzählung mit „-“ in Zeile {bullets} — make_legal.py erkennt nur „*“ "
+            "(_BULLET) und lässt den Bindestrich im Absatz stehen."
+        )
+    assert not befunde, f"{source_name}: " + " | ".join(befunde)
