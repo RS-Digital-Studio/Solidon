@@ -5287,6 +5287,7 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     verursachte, gibt es nicht mehr.
     """
     from app.ui.overlay import CARD
+    from app.ui.panels import FILTER_FROM
 
     panel = window.selection_operations
     assert panel.isHidden()
@@ -5297,6 +5298,15 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     assert window.right_column.objectName() != CARD, "die Spalte selbst ist keine Karte"
 
     _with_two_objects(window)
+    # **Die Filterzeile steht erst ab ``FILTER_FROM`` Befunden** — und eine
+    # saubere STL trägt seit dem 14.09.2026 keinen mehr: Das Verschweißen
+    # doppelter Punkte beim Lesen ist kein Befund (B16). Bis dahin brachten
+    # die zwei cube_clean.stl drei Befunde mit, und die Zahl 260 weiter unten
+    # maß dieses Bild statt der Regel. Die Befunde kommen jetzt aus einem
+    # Netz, das welche hat; die Regel steht an den Rechtecken.
+    window.session.import_model(MESHES / "broken_open.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
     first = window.object_tree.tree.topLevelItem(0)
     second = window.object_tree.tree.topLevelItem(1)
     first.setSelected(True)
@@ -5312,16 +5322,20 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     )
     assert window.overlay.right is window.right_column
 
+    report = window.report
+    assert report.list.count() >= FILTER_FROM, "ohne Filterzeile prüft dieser Test nichts"
     window.resize(1024, 720)
     window.show()
     QApplication.processEvents()
-    assert window.right.height() >= 260, (
-        "Bericht und Filter dürfen nicht übereinanderliegen: "
-        f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
-    )
-    assert window.report.search.height() >= 32
-    assert window.report.severity.height() >= 32
-    assert window.report.to_slicer.height() >= 32
+    for above, below in ((report.to_slicer, report.search), (report.search, report.list)):
+        assert above.geometry().bottom() < below.geometry().top(), (
+            "Bericht und Filter dürfen nicht übereinanderliegen: "
+            f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
+        )
+    assert report.list.geometry().bottom() <= report.height(), "die Liste bleibt in der Karte"
+    assert report.search.height() >= 32
+    assert report.severity.height() >= 32
+    assert report.to_slicer.height() >= 32
     assert panel.catalog_button.isVisibleTo(window.feature_dock)
 
     # **Eine Karte, und die Maske lässt nichts daneben stehen.** Mit zwei

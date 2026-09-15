@@ -27955,6 +27955,19 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     Nachweis: `test_naming_the_dimensions_makes_them_project_parameters` (Gegenprobe: `changes =
     naming` auf `None` → keine Parameter; Namensschleife entfernt → der zweite Quader
     überschreibt den ersten), `test_only_a_primitive_offers_to_name_its_dimensions`.
+  - **Nachtrag zu B16: ein Test maß das alte Bild.** Die Suite lief vor dem Commit b5501330
+    nicht am Stück (Last der Maschine), und `test_selected_bodies_reveal_their_operations_in_
+    the_window_on_the_right` stand nicht in der Auswahl der betroffenen Tests. Er verlangte
+    `right.height() >= 260` und eine sichtbare Filterzeile — beides galt nur, weil zwei
+    cube_clean.stl bis dahin drei Befunde mitbrachten (zweimal „Doppelte Punkte wurden
+    verschweißt", einmal „unter dem Druckbett"); seit B16 ist es einer, die Filterzeile steht
+    erst ab `FILTER_FROM` = 2, und die Karte folgt ihrem Inhalt (gemessen: Spalte 504 → 356,
+    Bericht 502 → 354). Bisektiert im Nebenbaum über die 28 Commits des Tages, erster roter
+    Commit b5501330. Der Test bringt seine Befunde jetzt aus `broken_open.stl` mit und prüft die
+    Regel an den Rechtecken — Slicerknopf über Filterzeile über Liste, die Liste in der Karte —
+    statt an einer Zahl, die das Bild eines Tages beschrieb. Gegenprobe: Fenster auf 300 Punkte
+    Höhe → rot. Derselbe Lauf fand `test_aligning_without_a_target_invites_instead_of_teaching_
+    syntax` rot — schon vor dem ersten Commit des Tages, an 3d-druck-66 gemeldet.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 
