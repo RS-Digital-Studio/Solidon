@@ -25,6 +25,13 @@ Zylinder- und Stadionfits legen ihr Achsvorzeichen gemeinsam über
 `units.positive_axis` fest; nahe Betragsgleichheit folgt derselben Regel wie
 im exakten Kern.
 
+`matching.moved_features` transportiert bei einer erzeugten Profilklemme
+auch `profile_clamp_y`. Zusammen mit X und der Flächennormalen bleibt dadurch
+die Händigkeit eines gespiegelten Rahmens erhalten. Die lokale Konturbeschreibung
+`profile_clamp` bleibt untransformiert; beide Diagnosefelder gehören nicht
+zu den numerischen Formmaßen im Gleichartigkeitsvergleich. Ein gültiger Sitz
+wird im Ersatzweg gegen die wirkliche Geometrie erneut belegt.
+
 Kreisfits zentrieren ihre Punktmenge vor den quadratischen Termen, damit
 eine Translation weder Kondition noch Formentscheidung verändert. Ein
 Stadion muss auch seine schlechteste Konturecke innerhalb der Formtoleranz

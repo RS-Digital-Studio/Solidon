@@ -38,6 +38,12 @@ Kalibrierung je Materialrolle mit dem aktuellen Druckprozess. Fehlende Profile
 halten am betroffenen Schritt an; ein leeres Feld verwendet das Projektprofil.
 Eine Materialkennung allein ist keine ausreichende Cacheabhängigkeit.
 
+`required` gilt nur im aktiven `depends_on`-Zweig, einschließlich äußerer
+Bedingungen und der Vorgaben nicht übergebener Steuerfelder. Inaktive Werte
+bleiben gespeichert und typgeprüft; allein ihre Pflicht entfällt.
+`json_schema()` beschreibt dieselbe Bedingung über `if`/`then`, damit ein
+Werkzeugaufruf keine gerade unwirksame Eingabe erfinden muss.
+
 ## Die Karte
 
 | Datei | Rolle |

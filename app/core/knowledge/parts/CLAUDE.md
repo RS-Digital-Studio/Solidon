@@ -32,6 +32,7 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `mounting.py` | Halterungen — was etwas an etwas anderem hält |
 | `structure.py` | Struktur — versteifen, hindurchführen, anbinden |
 | `containers.py` | Organizer-Wanne, Teilungswand, Rand und separater Steckfuß; exakte Außenmaße, unabhängiger Boden und reale ebene Merkmalsflächen |
+| `profile_clamps.py` | Einzelne Klemmschale und wechselbare Einlage mit gezeichneter Gegen- bzw. Sitzkontur; der gemeinsame Vierkörperweg liegt in `geom/profile_clamp_ops.py` |
 | `testbodies.py` | Prüfkörper für die Kalibrierung (§28.3) |
 
 **Das Gerüst**
@@ -63,6 +64,28 @@ denselben optionalen Kontext. Der gespeicherte Skizzentext bleibt erhalten.
 Ohne benötigten Kontext entsteht ein erklärter Ausdrucksfehler, kein
 ersatzweises Nullmaß. Die ursprünglichen Maßreferenzen bleiben für Cache
 und Verwendungsanzeige sichtbar.
+
+## Profilklemme und Einlage
+
+Die reinen Teile verlangen eine ausdrückliche Zeichnung ihrer Sitz- bzw.
+Gegenkontur. Sie liefern genau die beiden versprochenen realen Stirnflächen
+`front` und `back`; weitere Seiten und Schraubenaufnahmen erkennt die
+gemeinsame Szenenauswertung. Die Anzahl dieser Details ist bei einer freien
+Zeichnung kein festes Bausteinversprechen.
+
+Die Kontur ist ein zusammenhängender Querschnitt ohne Innenlöcher. Versätze
+sind Normalabstände aus `geom.contours`, keine Skalierung einer Ellipse.
+Die Montage wird im gedrehten Teilungsrahmen geprüft: jeder Schnitt parallel
+zur Öffnungsrichtung muss genau ein zusammenhängendes Konturintervall haben.
+Schalen öffnen seitlich, Einlagen werden axial von der Bundseite eingeschoben.
+Der separate Bund und der hintere Freiraum gehören zur Einlage.
+
+Schrauben-, Kopf- und Mutternmaße stammen aus der Normteiltabelle; Rand und
+Schalenwand begrenzen die Aufnahmen. `play` liest das eigene Material,
+`grip_from_profile` bindet die Verengung der Einlage an dessen Pressmaß.
+Ein einzelner Part nimmt kein zweites Material an. Nur der gemeinsame
+Erzeuger kennt beide Materialien und bereitet die feste Sitzkontur einmal
+für alle vier Rollen vor.
 
 ## Der Weg zurück: ein Rezept als Entwurf
 

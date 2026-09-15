@@ -23,6 +23,69 @@ class SampleParams(BaseParams):
     target: str = param(title=_("Ziel"), kind="feature", placement="advanced")
 
 
+@op_params
+class ConditionalParams(BaseParams):
+    enabled: bool = param(title=_("Aktiv"), default=True)
+    mode: str = param(
+        title=_("Art"),
+        default="round",
+        choices=("round", "drawn"),
+        depends_on=("enabled", (True,)),
+    )
+    target: str = param(
+        title=_("Ziel"),
+        default="",
+        kind="feature",
+        required=True,
+        depends_on=("mode", ("drawn",)),
+    )
+    faces: tuple[str, ...] = param(
+        title=_("Flächen"),
+        default=(),
+        kind="features",
+        required=True,
+        depends_on=("mode", ("drawn",)),
+    )
+
+
+def test_inactive_required_fields_keep_defaults_and_explicit_values():
+    assert validate(ConditionalParams, {}).target == ""
+    kept = validate(ConditionalParams, {"target": "old_face", "faces": []})
+    assert kept.target == "old_face" and kept.faces == ()
+    assert validate(ConditionalParams, {"enabled": False, "mode": "drawn"}).faces == ()
+
+
+def test_active_required_fields_remain_required_through_nested_conditions():
+    with pytest.raises(ValidationError) as missing:
+        validate(ConditionalParams, {"mode": "drawn"})
+    assert missing.value.field == "target"
+    with pytest.raises(ValidationError) as empty:
+        validate(ConditionalParams, {"mode": "drawn", "target": "face", "faces": []})
+    assert empty.value.field == "faces"
+    result = validate(ConditionalParams, {"mode": "drawn", "target": "face", "faces": ["f1"]})
+    assert result.faces == ("f1",)
+
+
+def test_inactive_required_fields_still_reject_invalid_types_and_controllers():
+    for values in ({"target": 42}, {"faces": [42]}, {"mode": "unknown"}, {"enabled": 1}):
+        with pytest.raises(ValidationError):
+            validate(ConditionalParams, values)
+
+
+def test_conditional_json_schema_matches_presence_and_nested_defaults():
+    schema = json_schema(ConditionalParams)
+    assert schema["required"] == []
+    assert "minItems" not in schema["properties"]["faces"]
+    expected = {
+        "properties": {"mode": {"enum": ["drawn"]}, "enabled": {"enum": [True]}},
+        "required": ["mode"],
+    }
+    assert schema["allOf"] == [
+        {"if": expected, "then": {"required": ["target"]}},
+        {"if": expected, "then": {"required": ["faces"], "properties": {"faces": {"minItems": 1}}}},
+    ]
+
+
 def test_schema_is_derived_from_the_declaration() -> None:
     by_name = {spec.name: spec for spec in SampleParams.spec()}
     assert by_name["diameter"].kind == "float"

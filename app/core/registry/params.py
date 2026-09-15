@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import MISSING, dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields, replace
 from typing import Any, Final
 
 from app.core.errors import InternalError, ValidationError
@@ -417,8 +417,14 @@ def validate[P: BaseParams](params_class: type[P], values: Mapping[str, Any]) ->
             values={"known": sorted(known)},
         )
 
+    selected = {spec.name: spec.default for spec in specs}
+    selected.update(values)
     arguments: dict[str, Any] = {}
     for spec in specs:
+        # Ein ausgeblendeter Zweig behält gespeicherte Werte. Nur seine
+        # Pflicht entfällt; Typ- und Wertebereichsprüfung gelten weiterhin.
+        if spec.required and inactive_dependency(spec, specs, selected) is not None:
+            spec = replace(spec, required=False)
         if spec.name in values:
             arguments[spec.name] = _coerce(spec, values[spec.name])
         elif spec.required:
@@ -590,7 +596,10 @@ def json_schema(
     """JSON-Schema für die Werkzeugbeschreibung des Agenten (§10, §26.2)."""
     properties: dict[str, Any] = {}
     required: list[str] = []
-    for spec in params_class.spec():
+    conditions: list[dict[str, Any]] = []
+    schema = params_class.spec()
+    defaults = {spec.name: spec.default for spec in schema}
+    for spec in schema:
         if spec.kind in GATHERED_KINDS:
             # §26, Leitprinzip 5: der Agent erzeugt Skizzen ausschließlich über
             # benannte Grundformen und Maße, nie über rohe Punktlisten — den
@@ -600,7 +609,7 @@ def json_schema(
         entry: dict[str, Any] = {"type": _JSON_TYPE[spec.kind]}
         if spec.kind in LIST_KINDS:
             entry["items"] = {"type": "string", "minLength": 1}
-            if spec.required:
+            if spec.required and spec.depends_on is None:
                 entry["minItems"] = 1
         bindable = spec.kind in {"float", "int"} and spec.name not in literal_fields
         if bindable:
@@ -639,14 +648,40 @@ def json_schema(
                 ]
             else:
                 entry["enum"] = list(spec.choices)
-        if not spec.required:
+        if not spec.required or (spec.depends_on is not None and spec.default is not None):
             entry["default"] = list(spec.default) if spec.kind in LIST_KINDS else spec.default
         properties[spec.name] = entry
         if spec.required:
-            required.append(spec.name)
-    return {
+            dependencies = dependency_conditions(spec, schema)
+            if not dependencies:
+                required.append(spec.name)
+            else:
+                # JSON-Schema ergänzt Vorgaben nicht selbst. Ein fehlendes
+                # Steuerfeld aktiviert den Zweig genau dann, wenn seine
+                # deklarierte Vorgabe die Bedingung erfüllt.
+                when = {
+                    "properties": {
+                        controller: {"enum": list(wanted)} for controller, wanted in dependencies
+                    },
+                    "required": [
+                        controller
+                        for controller, wanted in dependencies
+                        if not any(
+                            _same_dependency_value(defaults.get(controller), value)
+                            for value in wanted
+                        )
+                    ],
+                }
+                then: dict[str, Any] = {"required": [spec.name]}
+                if spec.kind in LIST_KINDS:
+                    then["properties"] = {spec.name: {"minItems": 1}}
+                conditions.append({"if": when, "then": then})
+    result: dict[str, Any] = {
         "type": "object",
         "properties": properties,
         "required": required,
         "additionalProperties": False,
     }
+    if conditions:
+        result["allOf"] = conditions
+    return result

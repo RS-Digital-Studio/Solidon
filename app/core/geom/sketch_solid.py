@@ -22,10 +22,14 @@ nimmt weiterhin den B-Rep-Weg.
 from __future__ import annotations
 
 import math
+import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.core.errors import ValidationError
 from app.core.types import PlaneFrame
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from app.i18n import _
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
     from app.core.sketch.profile import Profile
@@ -48,6 +52,116 @@ ARC_STEPS = 72
 #: Unterschied ist sichtbar und gewollt benannt: Was dieses Modul liefert, ist
 #: ein Netz, und ein Netz nähert ohnehin.
 SPLINE_STEPS = 8
+
+#: Arbeitsbudget für die maßgebundene Abtastung eines geschlossenen Umrisses.
+#: Es begrenzt Speicher und Folge-Offsets, nicht die zugelassene Maßabweichung.
+MAX_OUTLINE_POINTS = 32_768
+
+
+def _adaptive_outline(
+    profile: Profile, max_sag: float, check_cancelled: Callable[[], None] | None
+) -> list[tuple[float, float]]:
+    """Die echte Kurve in Sehnen mit belegter maximaler Abweichung zerlegen."""
+    from app.core.sketch.profile import arc_through, spline_controls
+
+    def resolution_error() -> ValidationError:
+        return ValidationError(
+            field="sketch",
+            constraint="outline_resolution",
+            detail=_(
+                "Die Kontur benötigt zu viele oder zu kurze Kanten. Vereinfachen Sie die Zeichnung."
+            ),
+        )
+
+    if not math.isfinite(max_sag) or max_sag <= 0.0:
+        raise resolution_error()
+    sag = min(max_sag, MAX_FACET_SAG)
+    points: list[tuple[float, float]] = []
+
+    def check() -> None:
+        if check_cancelled is not None:
+            check_cancelled()
+
+    def append(point: tuple[float, float]) -> None:
+        check()
+        if len(points) >= MAX_OUTLINE_POINTS or not all(math.isfinite(value) for value in point):
+            raise resolution_error()
+        points.append(point)
+
+    def circular(centre: tuple[float, float], radius: float, begin: float, sweep: float) -> None:
+        check()
+        if not math.isfinite(radius) or radius <= 0.0:
+            raise resolution_error()
+        # Diese Form bleibt auch bei sehr kleinem sag/radius auflösbar;
+        # acos(1-sag/radius) würde dort schon auf null runden.
+        angle = min(math.pi / 2.0, 4.0 * math.asin(math.sqrt(min(1.0, sag / (2.0 * radius)))))
+        if angle <= 0.0 or not math.isfinite(sweep):
+            raise resolution_error()
+        count = max(1, math.ceil(abs(sweep) / angle))
+        if len(points) + count > MAX_OUTLINE_POINTS:
+            raise resolution_error()
+        for index in range(1, count + 1):
+            theta = begin + sweep * index / count
+            append((centre[0] + radius * math.cos(theta), centre[1] + radius * math.sin(theta)))
+
+    def distance_to_chord(
+        point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
+    ) -> float:
+        dx, dy = end[0] - start[0], end[1] - start[1]
+        length2 = dx * dx + dy * dy
+        if length2 <= 0.0:
+            return math.dist(point, start)
+        t = max(0.0, min(1.0, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2))
+        return math.dist(point, (start[0] + t * dx, start[1] + t * dy))
+
+    def midpoint(one: tuple[float, float], two: tuple[float, float]) -> tuple[float, float]:
+        return ((one[0] + two[0]) / 2.0, (one[1] + two[1]) / 2.0)
+
+    def bezier(controls: tuple[tuple[float, float], ...]) -> None:
+        pending = [(controls, 0)]
+        while pending:
+            check()
+            (a, b, c, d), depth = pending.pop()
+            # Eine Bézierkurve bleibt in der konvexen Hülle ihrer Kontrollen.
+            # Abstand zur begrenzten Sehne fängt auch kollineare Überläufe ab.
+            error = max(distance_to_chord(b, a, d), distance_to_chord(c, a, d))
+            if error <= sag:
+                append(d)
+                continue
+            if not math.isfinite(error) or depth >= sys.float_info.mant_dig:
+                raise resolution_error()
+            ab, bc, cd = midpoint(a, b), midpoint(b, c), midpoint(c, d)
+            abc, bcd = midpoint(ab, bc), midpoint(bc, cd)
+            middle = midpoint(abc, bcd)
+            pending.append(((middle, bcd, cd, d), depth + 1))
+            pending.append(((a, ab, abc, middle), depth + 1))
+
+    check()
+    if profile.circle is not None:
+        centre, radius = profile.circle
+        append((centre[0] + radius, centre[1]))
+        circular(centre, radius, 0.0, math.tau)
+    else:
+        for segment in profile.segments:
+            check()
+            if not points:
+                append(segment.start)
+            if segment.kind == "spline" and segment.through:
+                for controls in spline_controls(segment.through):
+                    bezier(controls)
+            elif segment.via is not None:
+                arc = arc_through(segment.start, segment.via, segment.end)
+                if arc is None:
+                    append(segment.end)
+                else:
+                    centre, radius, sweep = arc
+                    begin = math.atan2(segment.start[1] - centre[1], segment.start[0] - centre[0])
+                    circular(centre, radius, begin, sweep)
+            else:
+                append(segment.end)
+    while len(points) > 1 and math.dist(points[0], points[-1]) < EPS_GEOM:
+        points.pop()
+    return points
 
 
 def _arc_points(
@@ -127,12 +241,24 @@ def _arc_points(
     return points
 
 
-def outline_points(profile: Profile) -> list[tuple[float, float]]:
+def outline_points(
+    profile: Profile,
+    *,
+    max_sag: float | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[tuple[float, float]]:
     """Den Umriss als geschlossenen Polygonzug — Bögen und Splines abgetastet.
 
     Ein Kreisprofil hat keine Segmente; es trägt Mittelpunkt und Radius und
-    wird hier zu seinem eigenen Polygon.
+    wird hier zu seinem eigenen Polygon. Ein ausdrückliches ``max_sag`` nutzt
+    die echte gemeinsame Splinekurve und begrenzt die Sehnenabweichung auf
+    diesen Wert, höchstens MAX_FACET_SAG. Ohne Angabe bleibt die bestehende
+    Abtastung für gespeicherte Operationen unverändert.
     """
+    if check_cancelled is not None:
+        check_cancelled()
+    if max_sag is not None:
+        return _adaptive_outline(profile, max_sag, check_cancelled)
     if profile.circle is not None:
         (cx, cy), radius = profile.circle
         return [

@@ -15,6 +15,7 @@ SHIPPED_MODULES: Final[tuple[str, ...]] = (
     "mounting",
     "structure",
     "containers",
+    "profile_clamps",
     "testbodies",
 )
 

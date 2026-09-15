@@ -3,6 +3,48 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+`contours.section_of` übernimmt einen gezeichneten Querschnitt mit allen
+Innenringen unabhängig von der Umlaufrichtung; ungültige Konturen werden
+nicht still repariert. `polygons_of` gibt alle Komponenten mitsamt ihren
+Löchern zurück. `offset_section` versetzt normal mit runden Übergängen:
+positiv wächst Material, negativ schrumpft es; Aufspaltung oder Kollaps
+bleiben sichtbar. Fertigungsspiel kommt ausschließlich vom Aufrufer.
+`sketch_solid.outline_points(max_sag=...)` nutzt die gemeinsame echte
+Splinekurve mit begrenzter Sehnenabweichung, Abbruch und Punktbudget.
+Ohne diese optionale Grenze bleibt die bisherige Abtastung erhalten.
+
+`profile_clamp_ops` erzeugt vier feste Rollen: untere/obere Schale und
+untere/obere Einlage. Beide Materialfelder sind ausdrückliche Profilkennungen
+und über `material_params` Hashabhängigkeiten. Eine gemeinsame Kontur wird
+einmal gelöst; originale Skizzenausdrücke bleiben im Operationsparameter.
+Der Sitz hat normales Gesamtspiel aus beiden Profilen, die Gegenkontur das
+Pressmaß der Einlage. Fertigungsspiel und Sehnenabweichung bleiben getrennt.
+
+Der Ersatzweg erhält beide Schalen unverändert und prüft den gesamten
+Hohlraum, einen umlaufenden Materialstreifen sowie die wirklichen
+Stirnflächen. Die Bindung liegt als `profile_clamp` auf der echten
+Frontfläche; lokale Gegen-, Außen- und Sitzkonturen sind Beschreibungen,
+keine eigenständigen Passungsmerkmale. Ein starrer oder gespiegelter Rahmen
+wird über Mittelpunkt, Normalenrichtung, X und `profile_clamp_y` mitgeführt.
+Skalierte oder veränderte Sitze bestehen die Geometrieprüfung nicht allein
+wegen erhaltener Metadaten. Gleiches Sitzspiel erhält die vorhandene
+Einlagenaußenkontur exakt; neues Spiel wird vom festen Sitz nach innen
+abgetragen und erneut auf Mindestwand geprüft.
+
+Alle vier Teile dürfen unabhängig angeordnet sein. Die Schalen werden jeweils
+in ihrem eigenen Rahmen gegen den Sitz geprüft, die alten Einlagen gegen
+ihre vollständige Konstruktion. `liner_clearance` und `counter_press` speichern
+dazu die tatsächlich angewandten Zugaben, getrennt von der heutigen
+Materialkalibrierung. Jede Ersatz-Einlage behält ihren eigenen belegten
+starren Rahmen und ihre Druckplatte. Diese Prüfung beschreibt die Form des
+Anschlusses, nicht einen behaupteten Kontakt der momentan angeordneten Teile.
+
+Beim Einlagenwechsel erhält `attributes.transfer` bestehende Filamente am
+gleichen Material. Ein ausdrücklicher Materialwechsel löst die alte
+Spulenidentität und meldet die nötige Filamentauswahl. Die Operation schreibt
+weder Projektzustand noch globale Spulenbindungen; ungenutzte Bindungen sind
+kein Beleg für die neue Einlage.
+
 `field_ops.field_tools` bereitet vollständige Öffnungen in bestehenden
 Skizzenprofilen vor. Innenringe und getrennte Regionen bleiben erhalten,
 Ausschlüsse werden mit Randabstand berücksichtigt. Das gemeinsame mittige

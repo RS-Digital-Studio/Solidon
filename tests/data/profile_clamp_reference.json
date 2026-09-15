@@ -1,0 +1,20 @@
+{
+  "source": "Eigene analytische Zahlenreferenzen für vier getrennte Profilklemmteile; keine Kundengeometrie.",
+  "diameter": 16.0,
+  "spline_points": [[-12.0, 0.0], [-6.0, 9.0], [3.0, 4.0], [12.0, 0.0]],
+  "ellipse_width": 47.0,
+  "ellipse_height": 32.0,
+  "depth": 40.0,
+  "wall": 4.0,
+  "liner_thickness": 2.0,
+  "seat_clearance_total": 0.35,
+  "counter_press_total": -0.1,
+  "hardware_clearance_total": 0.25,
+  "joint_gap": 1.0,
+  "flange_width": 1.2,
+  "flange_height": 1.5,
+  "rear_relief": 2.0,
+  "screw_size": "M4",
+  "drawn_points": [[-12.0,-7.0],[12.0,-7.0],[12.0,3.0],[8.0,7.0],[-12.0,7.0]],
+  "undercut_points": [[-10.0,-10.0],[10.0,-10.0],[10.0,-4.0],[-4.0,-4.0],[-4.0,4.0],[10.0,4.0],[10.0,10.0],[-10.0,10.0]]
+}

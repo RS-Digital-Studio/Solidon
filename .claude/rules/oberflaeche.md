@@ -144,7 +144,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-1033 Parameter der 121 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+1141 Parameter der 127 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -1058,7 +1058,7 @@ das Feld tippen, zwei Dinge, von denen ein Neuling keines kennt. Nachweis:
 `test_only_a_primitive_offers_to_name_its_dimensions`.
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Einunddreißig von hunderteinundzwanzig
+wann eine Operation die falsche Wahl ist. Einunddreißig von hundertsiebenundzwanzig
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)
@@ -1445,7 +1445,7 @@ Register. Ist der einfache Buchstabe belegt, kommt Umschalt dazu (*Vereinigen*
 Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist auch das belegt, **bleibt die
 Operation ohne Kürzel**. *Skalieren* ist der Fall: S gehört dem Speichern,
 Umschalt+S dem Speichern unter, und ein erfundener Buchstabe wäre schlechter als
-keiner. Vierzehn der hundertneun Operationen führen eines; wer eine fünfzehnte Taste
+keiner. Fünfzehn der hundertsiebenundzwanzig Operationen führen eines; wer eine sechzehnte Taste
 vergibt, prüft vorher am **gebauten Fenster** gegen die dreiundvierzig, die
 nicht aus dem Register kommen — Ansichten, Werkzeugzeile, Dateibefehle,
 Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus
