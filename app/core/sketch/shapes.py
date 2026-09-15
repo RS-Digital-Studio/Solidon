@@ -240,14 +240,33 @@ def hole_grid(columns: int, rows: int, spacing: float, hole_diameter: float) -> 
             value=hole_diameter,
             constraint="hole_fits",
         )
-    left = -(columns - 1) * spacing / 2.0
-    bottom = -(rows - 1) * spacing / 2.0
-    centres = [
+    return _holes(grid_centres(columns, rows, spacing), hole_diameter)
+
+
+def grid_centres(
+    columns: int, rows: int, spacing: float, *, origin: Point2 = (0, 0)
+) -> list[Point2]:
+    """Gemeinsames mittiges Raster für Skizzenmuster und begrenzte Feldschnitte."""
+    require_positive("spacing", spacing)
+    if any(type(count) is not int or count < 1 for count in (columns, rows)):
+        raise ValidationError(
+            "columns",
+            _("Wählen Sie mindestens eine ganze Reihe und Spalte."),
+            constraint="pattern_count",
+        )
+    if not all(math.isfinite(number) for number in (spacing, *origin)):
+        raise ValidationError(
+            "origin",
+            _("Rasterabstand und Ursprung müssen endliche Zahlen sein."),
+            constraint="finite",
+        )
+    left = origin[0] - (columns - 1) * spacing / 2.0
+    bottom = origin[1] - (rows - 1) * spacing / 2.0
+    return [
         (left + column * spacing, bottom + row * spacing)
         for row in range(rows)
         for column in range(columns)
     ]
-    return _holes(centres, hole_diameter)
 
 
 def _number(value: float) -> str:

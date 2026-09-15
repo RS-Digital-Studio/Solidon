@@ -6489,11 +6489,17 @@ class SketchField(QWidget):
         parameter_values: Mapping[str, float] | None = None,
         parent: QWidget | None = None,
         surroundings: Surroundings | None = None,
+        *,
+        required: bool = False,
+        empty_hint: str | None = None,
     ) -> None:
         super().__init__(parent)
         self._text = text
         self._params = dict(parameter_values or {})
         self._surroundings = surroundings
+        self._required = required
+        self._empty_hint = empty_hint
+        self._has_elements = False
 
         self.summary = QLabel(self)
         self.summary.setWordWrap(True)
@@ -6547,17 +6553,33 @@ class SketchField(QWidget):
     def text(self) -> str:
         return self._text
 
+    @property
+    def ready(self) -> bool:
+        """Eine Pflichtzeichnung braucht tatsächlich lesbare, lösbare Elemente."""
+        return not self._required or self._has_elements
+
     def set_text(self, text: str) -> None:
         self._text = text
         self._describe()
         self.changed.emit()
 
     def _describe(self) -> None:
+        self._has_elements = False
         if not self._text.strip():
-            self.summary.setText(tr("Keine — die Grundform der Operation gilt."))
+            self.summary.setText(
+                self._empty_hint
+                or (
+                    tr("Zeichnen Sie zuerst eine Kontur.")
+                    if self._required
+                    else tr("Keine — die Grundform der Operation gilt.")
+                )
+            )
             return
         try:
             sketch = sketch_from_text(self._text)
+            if self._required and not sketch.elements:
+                self.summary.setText(self._empty_hint or tr("Zeichnen Sie zuerst eine Kontur."))
+                return
             solved = solve_sketch(sketch, self._params)
         except SketchConflictError as error:
             self.summary.setText(str(error.detail or error.title))
@@ -6565,6 +6587,7 @@ class SketchField(QWidget):
         except AppError as error:
             self.summary.setText(str(error.detail or error.title))
             return
+        self._has_elements = bool(sketch.elements)
         state = tr("bestimmt") if solved.free_dof == 0 else free_dof_phrase(solved.free_dof)
         self.summary.setText(f"{len(sketch.elements)} {tr('Elemente')} · {state}")
 

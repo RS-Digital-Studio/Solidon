@@ -912,6 +912,8 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "circle": _("Kreis"),
     "polygon": _("Vieleck"),
     "slot": _("Langloch"),
+    "hexagon": _("Sechseck"),
+    "staggered": _("Versetzte Reihen"),
     # Die zwei Lochbilder. Sie stehen bei den Grundformen, weil sie dasselbe
     # sind — ein Umriss, den die Operation hochzieht oder ausschneidet —, nur
     # dass es mehrere davon sind.
@@ -1102,7 +1104,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "gyroid": _(
         "Geschwungene Flächen, in alle Richtungen gleich fest — auch bei flexiblen Teilen beliebt."
     ),
-    "grid": _("Gerade Kreuzlinien — schnell gedruckt, fest in zwei Richtungen."),
+    "grid": _("Gleichmäßige Reihen und Spalten."),
+    "staggered": _("Jede zweite Reihe ist um einen halben Rasterabstand versetzt."),
     "lines": _("Parallele Bahnen, je Schicht gedreht — am schnellsten, am wenigsten fest."),
     "triangles": _("Dreiecksraster — sehr steif in der Ebene."),
     "tree": _("Äste wachsen um das Teil herum — sparsam und leicht zu entfernen."),

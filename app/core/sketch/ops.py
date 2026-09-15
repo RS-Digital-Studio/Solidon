@@ -655,6 +655,7 @@ def _pocket_in_mesh(
 
     tools = []
     for one in regions:
+        ctx.cancelled.raise_if_cancelled()
         try:
             tools.append(MeshData.of(extrude_profile(one, -reach, lifted)))
         except ValueError as problem:
@@ -727,19 +728,12 @@ def _pocket_in_mesh(
 def sketch_pocket(ctx: OpContext) -> OpResult:
     params = cast(SketchPocketParams, ctx.params)
     findings: list[Finding] = []
-    source = ctx.inputs[0]
-    # **Der Körper ist in beiden Fällen derselbe Wert.** ``_span_along`` fragt
-    # ihn nach seinen Grenzen und weiß mit beiden Arten umzugehen; ihn hier
-    # wegzuwerfen, nur weil er kein ``Solid`` ist, nähme der Rechnung darunter
-    # die Spanne, aus der Oberkante und Durchstoß entstehen.
-    body = source.mesh
     # **Die Ebene der Zeichnung zählt** — wie bei ``sketch_extrude``, dessen
     # Fix hier fehlte: Auf einer Seitenwand gezeichnet schnitt die Tasche
     # trotzdem von oben (Welt-Z), und eine falsche Ebene sah aus wie eine
     # erfüllte Zusage (Gesamtreview D-2). Gerechnet wird entlang der
     # Ebenen-Normalen; auf XY ist das Welt-Z, und dort ändert sich nichts.
     plane = _plane_of(params.sketch)
-    frame = _frame_of(ctx, plane)
     # Alle Umrisse, wie beim Extrudieren: Zwei Taschen in einer Zeichnung sind
     # eine Handlung. Vorher lehnte die Tasche dieselbe Skizze ab, die das
     # Extrudieren rechnete (Gesamtreview D-15).
@@ -757,6 +751,30 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
             _pattern_of(params),
         )
     ]
+    result = cut_regions(ctx, chosen, plane, depth=params.depth, through=params.through, z=params.z)
+    return dataclasses.replace(result, findings=[*findings, *result.findings])
+
+
+def cut_regions(
+    ctx: OpContext,
+    regions: list[Profile],
+    plane: str,
+    *,
+    depth: float,
+    through: bool,
+    z: float = 0.0,
+) -> OpResult:
+    """Gemeinsamer Taschenschnitt aus aufgelösten Profilen, ohne Zwischenserialisierung.
+
+    Eine Flächenebene beginnt an ihrer Fläche; auf einer Grundebene bedeutet
+    z=0 weiterhin die Körperoberkante. Durchgehend reicht über die vollständige
+    Körperspanne. Mesh und B-Rep behalten den bisherigen Schnittweg.
+    """
+    source = ctx.inputs[0]
+    body = source.mesh
+    findings: list[Finding] = []
+    chosen = regions
+    frame = _frame_of(ctx, plane)
     if frame is not None:
         normal = frame.normal
         plane_s = _along(frame.origin, normal)
@@ -768,14 +786,14 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     # ein Welt-Z vom Klick hat auf einer schrägen Fläche keine Bedeutung.
     if frame is not None:
         top = plane_s
-    elif abs(params.z) > EPS_GEOM:
-        top = params.z
+    elif abs(z) > EPS_GEOM:
+        top = z
     else:
         top = high_s
-    if params.through:
+    if through:
         bottom, reach = low_s - 1.0, (high_s - low_s) + 2.0
     else:
-        bottom, reach = top - params.depth, params.depth
+        bottom, reach = top - depth, depth
     # Die Prüfung steht hier und nicht oben als Wahrheitswert: So verengt sie
     # den Typ für alles, was darunter folgt — der exakte Zweig rechnet danach
     # mit einem ``Solid`` und muss es nicht behaupten.
@@ -794,17 +812,19 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
         # gibt. ``test_sketch_solid`` hält die beiden Listen deckungsgleich.
         on = frame if frame is not None else planes.frame_for_plane(plane)
         assert on is not None, f"{plane} steht in PLANES, aber nicht in frame_for_plane"
-        result = _pocket_in_mesh(ctx, source, chosen, on, top, top - bottom, params.through)
+        result = _pocket_in_mesh(ctx, source, chosen, on, top, top - bottom, through)
         return dataclasses.replace(result, findings=[*findings, *result.findings])
 
     lifted = bottom - plane_s
-    tools = [
-        edit.moved(
-            profiles.extrude(one, reach, plane, frame),
-            (normal[0] * lifted, normal[1] * lifted, normal[2] * lifted),
+    tools = []
+    for one in chosen:
+        ctx.cancelled.raise_if_cancelled()
+        tools.append(
+            edit.moved(
+                profiles.extrude(one, reach, plane, frame),
+                (normal[0] * lifted, normal[1] * lifted, normal[2] * lifted),
+            )
         )
-        for one in chosen
-    ]
     tool = tools[0] if len(tools) == 1 else edit.boolean("union", tools)
     solid = edit.boolean("difference", [body, tool])
     # Eine Tasche, die den Körper verfehlt, lief stumm durch: im Verlauf ein

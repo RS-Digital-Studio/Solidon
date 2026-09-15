@@ -1672,7 +1672,9 @@ class OperationDialog(QDialog):
         self._refit.timeout.connect(self._resize_to_content)
         self._couple_dependent_fields()
         self._hide_legacy_feature_field()
-        if self.spec.name == "apply_texture":
+        if self.spec.name == "apply_texture" or any(
+            entry.kind == "sketch" and entry.required for entry in self.spec.params.spec()
+        ):
             self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
         # Vorderseite und „Weitere Einstellungen" sind zwei Formulare, und
@@ -1708,6 +1710,7 @@ class OperationDialog(QDialog):
             isinstance(editor, OrganizerLayoutField) and not editor.valid
             for editor in self._editors.values()
         )
+        missing_sketch = self._missing_sketch()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
         # *An Merkmal ausrichten* am einzigen Körper hat keinen zweiten, dessen
         # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
@@ -1732,6 +1735,7 @@ class OperationDialog(QDialog):
             or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
             or (tr("Wählen Sie mindestens eine gültige Kontur.") if no_contour else "")
             or (tr("Öffnen Sie die Fachaufteilung und prüfen Sie ihre Maße.") if no_layout else "")
+            or missing_sketch
             or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (blocked or "")
@@ -1741,6 +1745,7 @@ class OperationDialog(QDialog):
             or no_edge
             or no_contour
             or no_layout
+            or bool(missing_sketch)
             or no_target
             or no_texture_face
             or blocked is not None
@@ -1765,11 +1770,29 @@ class OperationDialog(QDialog):
             return
         if (
             self._target_missing()
+            or self._missing_sketch()
             or self._texture_face_missing()
             or self._blocked_reason is not None
         ):
             return
         super().accept()
+
+    def _missing_sketch(self) -> str:
+        """Den Pflichtbereich nennen, bevor eine leere Zeichnung übernommen wird."""
+        from app.ui.sketch_editor import SketchField
+
+        schema = self.spec.params.spec()
+        required = [entry for entry in schema if entry.kind == "sketch" and entry.required]
+        if not required:
+            return ""
+        values = self.values()
+        for entry in required:
+            if inactive_dependency(entry, schema, values) is not None:
+                continue
+            editor = self._editors.get(entry.name)
+            if isinstance(editor, SketchField) and not editor.ready:
+                return f"{entry.title}: {editor.summary.text()}"
+        return ""
 
     def _texture_face_missing(self) -> bool:
         """Ein Ganzflächenmuster braucht eine ausdrücklich gewählte Fläche."""
@@ -2222,7 +2245,18 @@ class OperationDialog(QDialog):
             # Eingabe — gezeichnet wird im Editor, das Feld fasst zusammen.
             from app.ui.sketch_editor import SketchField
 
-            return SketchField(str(start or ""), self._parameter_values, self, self._surroundings)
+            return SketchField(
+                str(start or ""),
+                self._parameter_values,
+                self,
+                self._surroundings,
+                required=entry.required,
+                empty_hint=(
+                    str(entry.doc)
+                    if entry.doc and (entry.required or entry.name != "sketch")
+                    else None
+                ),
+            )
         if entry.kind == "feature" or entry.targets_feature:
             # Aus demselben Grund wie unten eine Liste, nur mit dem schärferen
             # Fall: „face_2" tippt niemand, der es nicht vorher irgendwo

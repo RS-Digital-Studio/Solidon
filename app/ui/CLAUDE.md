@@ -49,6 +49,13 @@ wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 
+Skizzenfelder lesen die Pflichtangabe aus ihrem Parameterschema. Eine fehlende
+oder nicht lösbare Pflichtzeichnung sperrt Übernehmen und nennt das betroffene
+Feld mit seinem Korrekturhinweis. Optionale Zusatzzeichnungen zeigen ihren
+eigenen Zweck; sie versprechen keine ersatzweise Grundform. Beim Feldschnitt
+sind Bereich und Ausschlüsse getrennte Skizzenwerte. Der Weg aus dem Verlauf
+in den Raum führt den Feldnamen mit und kehrt zu demselben Schritt zurück.
+
 `organizer_dialog.py` zeigt den gespeicherten Fachbaum, nummerierte Draufsicht
 und tatsächlich berechnetes Ergebnis. `OrganizerLayoutField` trägt den Layouttext
 unsichtbar als Daten und zeigt nur Zusammenfassung und Wahlknopf. Ein Arbeiter

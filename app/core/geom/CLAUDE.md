@@ -3,6 +3,24 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+`field_ops.field_tools` bereitet vollständige Öffnungen in bestehenden
+Skizzenprofilen vor. Innenringe und getrennte Regionen bleiben erhalten,
+Ausschlüsse werden mit Randabstand berücksichtigt. Das gemeinsame mittige
+`sketch.shapes.grid_centres` liefert die Rasterlage; der Feldursprung bleibt bei
+einer Größenänderung fest. Ränder und Stege prüfen den ganzen Werkzeugumriss,
+nicht nur den Mittelpunkt. Gekrümmte Grenzen werden konservativ begrenzt;
+exakte Splineflächen verwenden dieselbe B-Rep-Kurve wie der Schnittweg.
+`field_cut` nimmt zwei normale Skizzenwerte (Pflichtbereich und optionale Ausschlüsse)
+auf derselben Ebene. Der gemeinsame `sketch.ops.cut_regions` bewahrt Tiefe,
+Durchgang und Flächenrahmen auf beiden Kernen. Materialkompensation ist
+ausdrücklich auf Kreis und Langloch begrenzt; beim Langloch wachsen Breite
+und Gesamtlänge um dieselbe Materialzugabe.
+Runde Öffnungen erhalten stabile Rasterkennungen nur nach Wiedererkennung
+am wirklichen Schnitt. Ihre Tiefe und ihr Durchgang bleiben gemessen;
+`_with_nominal_bore(..., sections=ARC_STEPS)` belegt das bekannte Durchmessermaß
+an sämtlichen Wandpunkten. Der Weg umgeht weder die gemeinsame Grenze der
+Gesamterkennung noch behauptet er Nominalmaße nach Jitter- oder Voxelrückfall.
+
 `move_feature` versetzt eine eindeutig topologisch verbundene Senkbohrung
 als ganzen Hohlraum: alle Abschnitte aus `perceive.relations.cavity_chain_at`
 begrenzen gemeinsam den Werkzeugkörper, alle Kennungen und Mittelpunkte
