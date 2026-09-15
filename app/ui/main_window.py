@@ -1916,6 +1916,19 @@ class MainWindow(QMainWindow):
         self._preview_busy.timeout.connect(self._say_preview_busy)
         self._preview_reason = ""
         """Der Satz, mit dem die letzte Vorschau ausblieb — leer, wenn sie kam."""
+        self._preview_coarse_at = 0
+        """Wie viele Dreiecke der Körper trug, als die Vorschau ihn für die
+        Rechnung vergröbert hat — null, wenn genau gerechnet wurde (§2.8)."""
+        self._preview_effect = ""
+        """Was die vorgeschaute Operation ändert, wenn sie die Geometrie nicht
+        anfasst — die Lage aus dem Register (``OperationSpec.unchanged_effect``),
+        leer bei allen anderen. Das Band hängt daran seinen Satz über einer
+        leeren Differenz."""
+        self._preview_action = ""
+        """Die Handlung, die der Kern dem ausgebliebenen Bild mitgab — die
+        Kennung aus ``Action.id``, leer wenn keine. Trägt sie einen Schritt,
+        der **vor** das Übernehmen gehört, sperrt das Band den Knopf
+        (:meth:`_preview_explained`)."""
         self._split_protected = 0
         """Wie viele Merkmale beim letzten Start von *Automatisch teilen*
         gesperrt waren — für die Ansage danach; der Körper ist dann verbraucht."""
@@ -9888,7 +9901,7 @@ class MainWindow(QMainWindow):
         """
         values = {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])}
         if not self.feature_panel.take_values("move_feature", values):
-            self.announce(tr("Die neue Stelle steht im Merkmalfenster."))
+            self.announce(tr("Die neue Stelle steht rechts im Auswahlfenster."))
         if self.viewport.slot_drag_waits():
             # **Wartet ein Langlochzug, gehört die Stelle zu ihm.** Ziehen und
             # Versetzen sind dann ein Schritt (``slot_hole`` nimmt beides), und
@@ -9908,7 +9921,7 @@ class MainWindow(QMainWindow):
         if not self.feature_panel.take_values(
             "rotate_feature", {"axis": axis, "angle": float(angle)}
         ):
-            self.announce(tr("Achse und Winkel stehen im Merkmalfenster."))
+            self.announce(tr("Achse und Winkel stehen rechts im Auswahlfenster."))
 
     def _on_feature_turned(self, feature_id: str, axis: str, angle: float) -> None:
         """Ein Zug am Ring hat ein Merkmal gekippt — mit dem **gerasteten**
@@ -9931,7 +9944,7 @@ class MainWindow(QMainWindow):
         if not self.feature_panel.take_values(
             "slot_hole", {"slot_length": float(length), "slot_angle": float(angle)}
         ):
-            self.announce(tr("Die Länge des Langlochs steht im Merkmalfenster."))
+            self.announce(tr("Die Länge des Langlochs steht rechts im Auswahlfenster."))
         running = self._quiet_placement is not None and self._quiet_placement.active
         if not running and self.object_tree.selected_feature() == feature_id:
             # **Der Zug am Loch selbst holt die Maße ins Bild** (11.09.2026): Er
@@ -13393,15 +13406,35 @@ class MainWindow(QMainWindow):
             entered = dialog.values()
             self._preview_busy.start()
             if change_op is not None:
+                self._preview_effect = (
+                    spec_of() if spec_of is not None else dialog.spec
+                ).unchanged_effect
                 self.session.preview_async(
                     self._show_preview,
                     change_op=change_op,
                     change_values=entered,
                     explained=self._preview_explained,
+                    coarse=self._preview_coarse,
+                    advised=self._preview_advised,
                 )
             else:
+                drafts = drafts_of(entered)
+                # **Welche Operation gerade vorgeschaut wird, entscheidet den
+                # Satz über einer leeren Differenz** (§18.7). „Am Volumen
+                # ändert sich nichts" ist bei einer Prüfung wahr und leer: Sie
+                # ändert nie etwas, ihr Ergebnis steht im Prüfbericht. Was
+                # stattdessen gilt, sagt das Register
+                # (``OperationSpec.unchanged_effect``) und keine Namensliste
+                # hier — beim dritten Prüfwerkzeug schwiege die.
+                self._preview_effect = (
+                    REGISTRY.get(drafts[0].op) if drafts else dialog.spec
+                ).unchanged_effect
                 self.session.preview_async(
-                    self._show_preview, drafts_of(entered), explained=self._preview_explained
+                    self._show_preview,
+                    drafts,
+                    explained=self._preview_explained,
+                    coarse=self._preview_coarse,
+                    advised=self._preview_advised,
                 )
 
         timer.timeout.connect(request)
@@ -13449,6 +13482,7 @@ class MainWindow(QMainWindow):
         # wenn ``difference`` leer ist: Das Band unten setzt es trotzdem.
         self._preview_shown = True
         self._preview_busy.stop()
+        self._preview_action = ""
         nothing_to_show = difference is None or not (
             getattr(difference, "changed", True)
             or getattr(difference, "reshaped", False)
@@ -13457,11 +13491,16 @@ class MainWindow(QMainWindow):
         if nothing_to_show and self._preview_reason:
             # Der Grund kam schon an (``_preview_explained``) und steht im
             # Band; was dahinter kommt — ``None`` oder eine leere Differenz —
-            # sagt nichts, was das Band nicht sagt.
+            # sagt nichts, was das Band nicht sagt. Eine Sperre, die er
+            # gesetzt hat, bleibt deshalb auch stehen.
             self._preview_reason = ""
+            self._preview_effect = ""
             self.viewport.show_difference(difference)
             return
         self._preview_reason = ""
+        # **Und ein Bild gibt den Knopf wieder frei.** Was das Band gesperrt
+        # hat, galt für den Stand, den diese Vorschau gerade abgelöst hat.
+        self._block_apply(None)
         self.viewport.show_difference(difference)
         partial = any(
             finding.code == "difference.incomplete"
@@ -13483,15 +13522,76 @@ class MainWindow(QMainWindow):
         shown = not empty or reshaped or recoloured
         if partial:
             note = tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
+        elif self._preview_coarse_at:
+            # **Vor „am Volumen ändert sich nichts", und das ist der Punkt.**
+            # Auf einem vergröberten Netz ist eine leere Differenz keine
+            # Zusage: Was dort nicht auftaucht, kann an der Vergröberung
+            # liegen. Der Satz sagt, worauf gerechnet wurde, und er sagt es
+            # als Text — nicht als zweite Farbe (Regel 18).
+            note = tr("Grobe Vorschau — beim Übernehmen wird genau gerechnet")
         elif reshaped:
             note = tr("Vorschau — das Netz ändert sich, das Volumen nicht")
         elif recoloured:
             note = tr("Vorschau — nur die Farbe ändert sich")
         elif empty:
-            note = tr("Vorschau — am Volumen ändert sich nichts")
+            # **Und wo die Operation die Geometrie gar nicht anfasst, sagt das
+            # Band, was sie stattdessen tut.** „Am Volumen ändert sich nichts"
+            # ist über einer Prüfung ein Füllsatz: Sie ändert **nie** etwas,
+            # und wer ihn liest, sucht danach im Bild nach einem Ergebnis, das
+            # im Prüfbericht steht. Welche Lage gilt, sagt das Register
+            # (:data:`~app.core.registry.registry.UNCHANGED_EFFECT`).
+            note = {
+                "report": tr("Prüfung — das Ergebnis steht im Prüfbericht, nicht im Bild"),
+                "name": tr("Vorschau — der Name ändert sich, die Form nicht"),
+            }.get(self._preview_effect, tr("Vorschau — am Volumen ändert sich nichts"))
         else:
             note = tr("Vorschau — noch nicht übernommen")
+        self._preview_coarse_at = 0
+        self._preview_effect = ""
         self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
+
+    def _preview_coarse(self, triangles: int) -> None:
+        """Merkt, dass diese Vorschau auf einer verkleinerten Kopie läuft.
+
+        Kommt aus dem Arbeiter, **bevor** sein Ergebnis kommt — genauso wie
+        der Grund in :meth:`_preview_explained`. Gelöscht wird der Merker von
+        dem, der ihn liest; eine Generation, die überholt wurde, kommt hier
+        gar nicht erst an (``Session._preview_done``).
+        """
+        self._preview_coarse_at = int(triangles)
+
+    def _preview_advised(self, action: str) -> None:
+        """Merkt die Handlung, die der Kern dem ausgebliebenen Bild mitgab.
+
+        Kommt aus dem Arbeiter **vor** dem Grund, wie die grobe Stufe auch;
+        gelesen und geleert wird sie in :meth:`_preview_explained`.
+        """
+        self._preview_action = action
+
+    #: Handlungen, nach denen *Übernehmen* keine sinnvolle Handlung mehr ist.
+    #:
+    #: Sie alle sagen dasselbe: erst etwas anderes, dann derselbe Schritt noch
+    #: einmal. Wer sie im Band liest und trotzdem übernimmt, bekommt einen
+    #: angehaltenen Schritt im Verlauf und dieselbe Absage drei Klicks später
+    #: im Prüfbericht. ``correct_input`` steht ausdrücklich **nicht** dabei:
+    #: Das ist die Aufforderung, im offenen Dialog eine Zahl zu ändern, und
+    #: dabei entstehen beim Tippen ungültige Zwischenstände (§2.7).
+    _APPLY_BLOCKING_ADVICE: tuple[str, ...] = (
+        "repair_and_retry",
+        "split_and_retry",
+        "recount_and_retry",
+    )
+
+    def _block_apply(self, reason: str | None) -> None:
+        """Sperrt *Übernehmen* im offenen Operationsdialog — oder gibt frei.
+
+        Über ``getattr``, damit ein Dialog ohne den Haken (und jedes Doppel im
+        Test) unverändert weiterläuft.
+        """
+        dialog = self._op_dialog
+        block = getattr(dialog, "block_apply", None)
+        if block is not None:
+            block(reason)
 
     def _preview_explained(self, reason: str) -> None:
         """Warum es keine Vorschau gibt — der Satz aus dem Kern, im Band.
@@ -13501,10 +13601,25 @@ class MainWindow(QMainWindow):
         Objekt nicht". Der Satz gehört an die Stelle, an der man die Zahl
         noch ändern kann (§2.7: ein Fehler ist ein Vorschlag, und der kommt
         vor der Handlung, nicht danach).
+
+        **Und trägt er eine Handlung, die vor das Übernehmen gehört, bleibt
+        der Knopf grau** (§18.7, Regel 19). *Aushöhlen* an einer offenen Figur
+        sagte „Erst reparieren, dann aushöhlen" — und *Übernehmen* blieb
+        anklickbar: drei Klicks und ein angehaltener Verlaufsschritt später
+        stand derselbe Satz im Prüfbericht. Welche Handlungen das sind, steht
+        in :attr:`_APPLY_BLOCKING_ADVICE`; die Sperre trägt den Satz in
+        Kurzhilfe, Statuszeile und zugänglicher Beschreibung
+        (``OperationDialog.block_apply``, Regel 18) und fällt mit dem nächsten
+        Bild.
         """
         self._preview_shown = True
         self._preview_busy.stop()
+        advice = self._preview_action
+        self._preview_action = ""
         self._preview_reason = reason
+        self._preview_coarse_at = 0
+        self._preview_effect = ""
+        self._block_apply(reason if advice in self._APPLY_BLOCKING_ADVICE else None)
         self.viewport.show_difference(None)
         self.viewport.mark_preview(tr("Keine Vorschau: {reason}").format(reason=reason), "")
 
@@ -13523,6 +13638,13 @@ class MainWindow(QMainWindow):
         self._preview_shown = False
         self._preview_busy.stop()
         self._preview_reason = ""
+        self._preview_coarse_at = 0
+        # Die zwei Merkposten gehören der Vorschau, die gerade geht: Der
+        # nächste Weg zur Vorschau ist womöglich das Merkmalfenster, und das
+        # hat weder eine Operation im Register gefragt noch eine Handlung
+        # bekommen.
+        self._preview_effect = ""
+        self._preview_action = ""
         self.session.cancel_preview()
         pending = self._proposal.difference if self._proposal is not None else None
         self.viewport.show_difference(pending)
@@ -13864,22 +13986,45 @@ class MainWindow(QMainWindow):
         nicht"). Wer teilen will, will meist die Mitte; die Zahl bleibt im
         Feld und lässt sich ändern.
 
-        Gefragt wird nach den Feldern ``axis`` und ``position``, nicht nach dem
-        Namen — heute ist *Teilen* die einzige Operation mit beiden.
+        Gefragt wird nach den Feldern, nicht nach dem Namen — und nach beiden
+        Schreibweisen einer Ebene: *Teilen* führt ``axis`` und ``position``,
+        *An gezeichneter Linie trennen* ``normal_x/y/z`` und ``position``.
+        Die zweite blieb bis zum 14.09.2026 außen vor, und sie hatte denselben
+        Fehler: Gemessen über alle 110 Dialoge stand über *An gezeichneter
+        Linie trennen* „Keine Vorschau: Diese Ebene teilt das Objekt nicht" —
+        die Vorgabe ist die Ebene z = 0, und darauf steht das Teil.
         """
         names = {entry.name for entry in spec.params.spec()}
-        if not {"axis", "position"} <= names or selected is None:
+        if "position" not in names or selected is None:
             return {}
         result = self.session.last_result
         entry = result.scene.objects.get(selected) if result is not None else None
         if entry is None:
             return {}
-        axis = next(
-            (str(field.default) for field in spec.params.spec() if field.name == "axis"), "z"
-        )
-        index = "xyz".index(axis) if axis in "xyz" else 2
         bounds = entry.mesh.bounds
-        return {"position": (bounds.minimum[index] + bounds.maximum[index]) / 2.0}
+        middle = tuple((bounds.minimum[index] + bounds.maximum[index]) / 2.0 for index in range(3))
+        if {"axis", "position"} <= names:
+            axis = next(
+                (str(field.default) for field in spec.params.spec() if field.name == "axis"), "z"
+            )
+            return {"position": middle["xyz".index(axis) if axis in "xyz" else 2]}
+        if not {"normal_x", "normal_y", "normal_z"} <= names:
+            return {}
+        # Die Lage ist bei dieser Schreibweise der Abstand vom Nullpunkt
+        # **in Trennrichtung** — also die Mitte des Körpers auf die
+        # Vorgaberichtung projiziert.
+        normal = tuple(
+            float(field.default or 0.0)
+            for name in ("normal_x", "normal_y", "normal_z")
+            for field in spec.params.spec()
+            if field.name == name
+        )
+        length = float(sum(value * value for value in normal)) ** 0.5
+        if length <= 0.0:
+            return {}
+        return {
+            "position": sum(middle[index] * normal[index] for index in range(3)) / length,
+        }
 
     def _measured_from_body(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Zwei Vorgaben, die am gewählten Körper gemessen sind statt fest zu stehen.

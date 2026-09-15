@@ -489,11 +489,30 @@ def _pose_findings(
 ) -> list[Finding]:
     """Was die Stellung gekostet hat — und was der Drucker davon hält."""
     if not bones:
+        # **Eine Warnung und keine Auskunft** (Fund vom 14.09.2026, gemessen
+        # über das Fenster): Ohne Knochen kann dieser Schritt nichts bewegen,
+        # heute nicht und bei keiner Auswertung danach. Als ``info`` kam der
+        # Satz nirgends an — ``Session._warning_of`` reicht nur Warnungen und
+        # Fehler ins Band, und dort stand deshalb weiter „am Volumen ändert
+        # sich nichts". Der Kunde las eine Zahl statt des Grundes.
+        #
+        # **Und trotzdem keine Ausnahme.** Die zwei Geschwister mit
+        # gesammelten Parametern antworten genauso: ``sculpt.empty`` für eine
+        # Sitzung ohne Zug, ``repair.nothing_to_do`` für ein heiles Netz — ein
+        # Befund, und der Schritt bleibt stehen. Er ist ja der Träger des
+        # Skeletts: Wer ihn öffnet und Knochen setzt, füllt genau diesen
+        # Parameter. Eine geworfene Ausnahme hielte stattdessen die ganze
+        # Kette an (§15.3), und hinter einem angehaltenen Schritt rechnet
+        # nichts mehr — für etwas, das noch nicht ausgefüllt ist.
         return [
             Finding(
                 code="pose.no_armature",
-                severity="info",
-                message=_("Für eine Stellung fehlt noch das Skelett."),
+                severity="warning",
+                message=_(
+                    "Für eine Stellung fehlt noch das Skelett — dieser Schritt bewegt nichts. "
+                    "Die Knochen entstehen im Skeletteditor: zwei Klicks je Knochen, dann "
+                    "Fertig."
+                ),
                 object_id=object_id,
             )
         ]

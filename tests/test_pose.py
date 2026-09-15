@@ -547,3 +547,71 @@ def test_the_armature_text_passes_through_the_collector_harmlessly() -> None:
     from app.core.geom.pose import pose_parameter_references
 
     assert pose_parameter_references('[{"n":"b1","h":[0,0,0],"t":[0,0,40]}]') == frozenset()
+
+
+# --- das Skelett, das noch fehlt -------------------------------------------------
+
+
+def test_the_missing_armature_is_a_warning_and_names_the_way(profile: Profile) -> None:
+    """Ein Schritt, der nichts bewegen **kann**, ist mehr als eine Auskunft.
+
+    Gemessen am 14.09.2026 über das Fenster: *Stellung geben* ohne Skelett
+    legte einen Schritt an, das Teil blieb, wie es war, und im Band stand „am
+    Volumen ändert sich nichts". Der Befund dazu gab es längst — er war nur
+    ``info``, und ``Session._warning_of`` reicht ausschließlich Warnungen und
+    Fehler ins Band weiter. Der einzige Satz, der den Fall erklärt, kam damit
+    nirgends an.
+
+    Zwei Dinge hängen daran und werden hier beide geprüft: die **Stufe**, weil
+    der Kunde den Satz sonst nicht zu sehen bekommt, und der **Weg** im Satz
+    selbst — wohin jemand geht, der ein Skelett setzen will. „Es fehlt etwas"
+    ohne die Stelle, an der es entsteht, ist eine halbe Auskunft (Regel 17).
+    """
+    entry = SceneObject(id="obj_1", name="Arm", mesh=arm())
+
+    result = run(entry, profile, armature="", pose="")
+
+    treffer = [f for f in result.findings if f.code == "pose.no_armature"]
+    assert treffer, "der Fall meldet sich gar nicht"
+    assert treffer[0].severity == "warning", (
+        "info erreicht das Band nicht — Session._warning_of nimmt nur warning und error"
+    )
+    assert "Skeletteditor" in str(treffer[0].message), (
+        f"der Satz nennt die Stelle nicht, an der ein Skelett entsteht: {treffer[0].message}"
+    )
+
+
+def test_the_missing_armature_reaches_the_report_at_its_own_step(profile: Profile) -> None:
+    """Der Anschluss: Was das Band liest, sind Stufe **und** Schrittnummer.
+
+    ``Session._warning_of`` nimmt aus dem Prüfbericht die erste Warnung, deren
+    ``op_id`` zu den vorgeschauten Schritten gehört. Die Stufe prüft der Test
+    darüber am Befund selbst; hier steht die zweite Hälfte, die die Operation
+    nicht setzt: Die Schrittnummer stempelt erst die Auswertung auf
+    (``evaluate``). Ohne sie bliebe der Satz im Bericht liegen, und im Band
+    stünde weiter „am Volumen ändert sich nichts".
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.types import Document, Operation
+
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(
+                id=1,
+                op="create_box",
+                outputs=("obj_1",),
+                params={"width": 10.0, "depth": 10.0, "height": 40.0},
+            ),
+            Operation(id=2, op="pose_armature", inputs=("obj_1",), outputs=("obj_1",)),
+        ],
+    )
+
+    result = evaluate(document, profile)
+
+    assert result.complete, "die Kette hält nicht an — der Schritt bleibt änderbar"
+    treffer = [f for f in result.scene.report.findings if f.code == "pose.no_armature"]
+    assert treffer, "der Befund kommt im Prüfbericht nicht an"
+    assert treffer[0].op_id == 2, f"ohne Schrittnummer liest das Band ihn nicht: {treffer[0]}"
+    assert treffer[0].severity == "warning"

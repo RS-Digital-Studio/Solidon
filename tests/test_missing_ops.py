@@ -1501,3 +1501,55 @@ def test_a_second_screw_lid_gets_a_number(profile: Profile) -> None:
 
     namen = [str(entry.name) for entry in result.outputs]
     assert "Drehdeckel 2" in namen, f"der zweite Deckel heißt wie der erste: {namen}"
+
+
+# --- ein Ziel über der vorhandenen Dreieckszahl ----------------------------------
+
+
+def test_a_target_above_the_triangle_count_says_there_is_nothing_to_reduce(
+    profile: Profile,
+) -> None:
+    """Das Ziel steht vorbelegt auf 50 000, und die meisten Teile sind kleiner.
+
+    Gemessen am 14.09.2026 über das Fenster: *Dreiecke verringern* an einem
+    Körper mit 320 Dreiecken, Vorgabe übernommen, Übernehmen gedrückt — ein
+    Schritt im Verlauf, dasselbe Teil im Bild und im Band „am Volumen ändert
+    sich nichts". Der Kunde hatte nichts falsch gemacht und konnte trotzdem
+    nicht sehen, warum nichts geschah: Sein Körper trägt längst weniger
+    Dreiecke, als er verlangt.
+
+    ``_simplification_findings`` kehrte hier leer zurück — dieselbe Antwort
+    wie bei einer geglückten Vereinfachung, denn beide Male liegt das Ergebnis
+    unter dem Ziel. Die zwei Fälle unterscheidet erst der **Eingang**.
+    """
+    body = MeshData.of(trimesh.creation.icosphere(subdivisions=2))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=body)
+    assert body.triangle_count < 50_000, "sonst prüft dieser Test den anderen Fall"
+
+    result = run("decimate_mesh", entry, profile)
+
+    treffer = [f for f in result.findings if f.code == "mesh.already_below_target"]
+    assert treffer, (
+        f"ein Ziel über der vorhandenen Zahl blieb stumm: {sorted(f.code for f in result.findings)}"
+    )
+    assert treffer[0].severity == "info", "schiefgegangen ist nichts"
+    assert treffer[0].values["before"] == body.triangle_count
+    assert treffer[0].values["target"] == 50_000
+    assert "verringern" in str(treffer[0].message), "der Satz nennt, was es nicht zu tun gab"
+    assert result.outputs[0].mesh.triangle_count == body.triangle_count
+
+
+def test_a_target_below_the_triangle_count_keeps_quiet_about_it(profile: Profile) -> None:
+    """Die Gegenprobe: Ein Ziel, das etwas zu tun gibt, meldet nichts dergleichen.
+
+    Ohne sie wäre der Test darüber auch mit einem Befund grün, der bei jedem
+    Lauf erscheint — und ein Satz, der immer dasteht, wird nach dem dritten Mal
+    nicht mehr gelesen.
+    """
+    body = MeshData.of(trimesh.creation.icosphere(subdivisions=4))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=body)
+    assert body.triangle_count > 1000, "das Ziel muss unter der vorhandenen Zahl liegen"
+
+    result = run("decimate_mesh", entry, profile, triangles=1000)
+
+    assert "mesh.already_below_target" not in {f.code for f in result.findings}

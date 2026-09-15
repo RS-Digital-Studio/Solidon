@@ -209,6 +209,99 @@ des Fensterendes. Nachweis:
 die fünf Dialogtests, die an der Erhebung nichts prüfen, nehmen dort die
 Fixture `quick_survey`, sonst zahlt jeder Teardown die HTTP-Frist.
 
+## Die grobe Vorschaustufe
+
+Ein großes Netz beantwortet keine Zahl in einer Sekunde. Gemessen am
+14.09.2026 über `Session._preview_outcome` — eine Bohrung Ø 5, Entwurfs­qualität,
+warmer Cache, eine Kugel als Körper:
+
+| Dreiecke | zusammen | `evaluate` | `compare_scenes` |
+|---:|---:|---:|---:|
+| 20 480 | 0,16 s | 0,11 s | 0,05 s |
+| 81 920 | 0,63 s | 0,47 s | 0,16 s |
+| 327 680 | 2,16 s | 1,58 s | 0,58 s |
+| 813 600 | 6,19 s | — | — |
+
+Die Reihe ist linear, rund 6,6 µs je Dreieck, und die Sekunde aus der Tabelle
+oben fällt bei etwa **150 000**. Dort steht `session.COARSE_PREVIEW_ABOVE`.
+Darüber legt `_preview_outcome` vor die vorgeschauten Schritte eine
+`decimate_mesh`-Operation auf `COARSE_PREVIEW_TARGET` = 50 000 Dreiecke —
+in der **Dokumentkopie**, die die Vorschau ohnehin rechnet, und nur dort. Was
+übernommen wird, rechnet weiterhin genau.
+
+Drei Bedingungen, und jede einzelne trägt:
+
+* **Beide Seiten auf demselben groben Netz.** `davor` und `danach` gehen
+  durch dieselbe Verkleinerung (`_coarse_before` wertet die Kopie ohne die
+  Entwurfsschritte aus und merkt sich das Ergebnis, solange die Szene davor
+  dieselbe ist). Getrennt verkleinert wäre es keine Abkürzung, sondern ein
+  Fehler mit zwei Gesichtern — gemessen an einer Kugel aus 81 920 Dreiecken:
+  16,7 mm³ Material, das niemand angefasst hat, **und** zehn bis fünfzig
+  Sekunden für die Rechnung darüber, weil zwei fast deckungsgleiche Häute der
+  schlimmste Fall für jeden Booleschen Kern sind. Langsamer und falsch.
+* **Das Band sagt es** — „Grobe Vorschau — beim Übernehmen wird genau
+  gerechnet", als Text und nicht als zweite Farbe (Regel 18). Der Satz steht
+  **vor** „am Volumen ändert sich nichts": Auf einem vergröberten Netz ist
+  eine leere Differenz keine Zusage. Er steht **hinter** „Vorschau
+  unvollständig": Eine halb gerechnete Differenz ist der schwerere Vorbehalt,
+  und sie darf nie als bloß neu vernetzt erscheinen.
+* **Die Merkmale bleiben erkennbar.** Gemessen an derselben Kugel, Ø-5-Bohrung
+  nach der Verkleinerung:
+
+  | Ziel | Abweichung | Geschlecht | Loch | abgetragen |
+  |---:|---:|---:|---:|---:|
+  | 100 000 | 0,0040 mm | 1 | 4,98 mm | 1 168,5 mm³ |
+  | 50 000 | 0,0078 mm | 1 | 4,98 mm | 1 168,5 mm³ |
+  | 20 000 | 0,0125 mm | 1 | 4,98 mm | 1 168,4 mm³ |
+  | 5 000 | 0,0266 mm | 1 | 4,98 mm | 1 168,2 mm³ |
+  | 2 000 | **0,0804 mm** | 1 | 4,98 mm | 1 167,3 mm³ |
+
+  Die Grenze ist `units.MAX_FACET_SAG` = 0,05 mm — dieselbe, mit der beide
+  Kerne tessellieren. Bei 50 000 liegt die Abweichung bei einem Sechstel
+  davon; erst 2 000 reißt sie. Das Loch selbst überlebt jede Stufe, denn es
+  entsteht **nach** der Verkleinerung.
+
+Was das bringt, an denselben Netzen vorher und nachher gemessen (zweite und
+jede weitere Zahl im Dialog, also mit gefülltem Cache):
+
+| Dreiecke | genau | grob, erstmals | grob, danach |
+|---:|---:|---:|---:|
+| 20 480 | 0,16 s | — | — |
+| 81 920 | 0,64 s | — | — |
+| 327 680 | 3,25 s | 1,43 s | **0,52 s** |
+| 813 600 | 6,19 s | 3,54 s | **0,41 s** |
+
+**Zwei Wege bleiben genau, und beide mit Absicht.** Der Agentenvorschlag geht
+über `preview_scene` ohne den Rückruf — er antwortet ohnehin nicht in
+Millisekunden, und sein Bild steht, bis jemand es annimmt. Und das
+**Ändern eines Schritts** (`change_op`) ebenfalls: Die Verkleinerung müsste
+dort vor den geänderten Schritt, und `History.apply` hängt an. Das ist der
+offene Rest dieser Stufe.
+
+Scheitert das Verkleinern — zu wenige Dreiecke, ein Körper, der keiner ist —,
+hält die Kette an seinem eigenen Schritt an, und `_preview_outcome` rechnet
+denselben Entwurf noch einmal genau. Der Kunde sieht davon nichts außer der
+längeren Wartezeit.
+
+**Was die Operation gar nicht ändert, sagt das Band mit ihren Worten.** Über
+einer leeren Differenz ist jeder Befund des vorgeschauten Schritts die bessere
+Auskunft als der Füllsatz — `_warning_of` reicht deshalb auch `info` durch
+(`mesh.already_below_target`, `repair.nothing_to_do`, `mesh.not_simplified`,
+`sculpt.empty`), Warnung und Fehler behalten den Vortritt. Eine
+leere Differenz bekommt „am Volumen ändert sich nichts" nur, solange weder ein
+Befund noch das Register etwas Besseres weiß; `OperationSpec.unchanged_effect`
+nennt sonst
+die Lage (`report` für die Prüfwerkzeuge, `name` fürs Umbenennen), und
+`_show_preview` übersetzt sie in einen eigenen Satz — eine Namensliste im
+Fenster schwiege beim dritten Prüfwerkzeug. **Und trägt der Grund eine
+Handlung, die vor das Übernehmen gehört, sperrt das Band den Knopf:**
+`_stop_advice` beziehungsweise `_advice_of` schicken die Kennung der
+vorrangigen Handlung über `preview_async(advised=…)` voraus, und bei
+`repair_and_retry`, `split_and_retry` und `recount_and_retry` ruft
+`_preview_explained` das `block_apply(grund)` des Dialogs — sonst endet „Erst
+reparieren, dann aushöhlen" drei Klicks später als angehaltener Schritt im
+Verlauf (Regel 19). Das nächste Bild gibt ihn über `block_apply(None)` frei.
+
 ### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
 
 **Niemals direkt von `QThread`.** Ein `run`, das eine Ausnahme durchlässt,

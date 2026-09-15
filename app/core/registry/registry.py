@@ -423,6 +423,38 @@ _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 #: ``produces=VARIABLE``: so viele Objekte heraus wie hinein.
 VARIABLE: Final = -1
 
+#: Was eine Operation ändert, wenn sie die Geometrie **nicht** anfasst (§18.7).
+#:
+#: Die Live-Vorschau sagt über einer leeren Differenz „am Volumen ändert sich
+#: nichts". Das ist wahr und für eine Prüfung ein Füllsatz: *Überschneidungen
+#: prüfen* ändert **nie** etwas, ihr Ergebnis steht im Prüfbericht — der Satz
+#: beschreibt dann nicht die Operation, sondern nur, was in der Differenz
+#: fehlt. Dasselbe beim Umbenennen: Da ändert sich sehr wohl etwas, nur eben
+#: nicht die Form.
+#:
+#: Die Werte sind Lagen, keine Sätze. Der Satz gehört in die Oberfläche, wo
+#: ``tr()`` steht; hier steht nur, welche Lage gilt — so bekommt auch der
+#: Agent die Auskunft, und eine Lage ohne Eintrag fällt auf den allgemeinen
+#: Satz zurück.
+#:
+#: ``report``
+#:     Sie sieht nur nach. Eingänge kommen unverändert wieder heraus, das
+#:     Ergebnis sind die Befunde. Ein drittes Prüfwerkzeug ist eine Zeile.
+#: ``name``
+#:     Sie ändert den Namen und sonst nichts.
+#:
+#: **Hier und nicht am ``@register_op``**, aus demselben Grund wie
+#: :data:`MENU_TWINS`: Die Zuordnung gilt der *Bedienung* und nicht der
+#: Rechnung — sie sagt, was die Oberfläche über eine leere Differenz sagen
+#: soll. Gelesen wird sie über :attr:`OperationSpec.unchanged_effect`, also
+#: wie jede andere Angabe der Deklaration; wandert sie eines Tages an den
+#: Dekorator, ändert sich an den Lesern nichts.
+UNCHANGED_EFFECT: Final[dict[str, str]] = {
+    "check_collisions": "report",
+    "check_join_path": "report",
+    "rename_object": "name",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
@@ -570,6 +602,16 @@ class OperationSpec:
     def requires_seed(self) -> bool:
         """Zufallsprozeduren führen einen gespeicherten Startwert (§11.3)."""
         return not self.deterministic
+
+    @property
+    def unchanged_effect(self) -> str:
+        """Was sich ändert, wenn die Geometrie es nicht tut — sonst leer.
+
+        Siehe :data:`UNCHANGED_EFFECT`. Die Live-Vorschau hängt daran ihren
+        Satz auf: Eine Prüfung soll nicht sagen, dass sich am Volumen nichts
+        ändert, sondern wo ihr Ergebnis steht.
+        """
+        return UNCHANGED_EFFECT.get(self.name, "")
 
     @property
     def takes_whole_scene(self) -> bool:

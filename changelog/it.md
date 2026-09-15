@@ -32,6 +32,8 @@ scrive in `website/version.json`.
 ### Costruire e modificare
 
 - Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.
+- I messaggi che rimandano ai valori a destra chiamano la finestra come si chiama: Selezione. Prima dicevano « pannello delle caratteristiche ».
+- « Ridurre i triangoli » lo dice quando un pezzo ha già meno triangoli del numero indicato: allora non c'è nulla da ridurre. Prima restava com'era, senza una parola.
 
 ### Vista e utilizzo
 
@@ -43,6 +45,9 @@ scrive in `website/version.json`.
 - Svuotare un pezzo con buchi nel guscio dice ora che il guscio è il problema e offre «Ripara e riprova» — invece di segnalare che nessun calcolo ha funzionato.
 - Sull'elemento scelto appare in grigio ciò che lì potrebbe solo fallire — «Ruota elemento» su un foro svasato, per esempio — con il motivo. E l'anteprima dice se all'applicazione arriverà una domanda.
 - Un campo che non fa nulla con la forma base scelta non appare più grigio nella finestra — appare con la forma che ne ha bisogno. Un rettangolo mostra davanti quattro campi invece di otto.
+- Con lo schermo al 150 o 200 per cento, aggancio, maniglie e segni arrivano di nuovo lontano come al 100 per cento. La maniglia è a grandezza piena e un clic tremolante resta un clic.
+- Su un modello grande l'anteprima arriva in meno di un secondo invece che in diversi: Solidon la calcola più grossolanamente e scrive «Anteprima grossolana». Applicare resta esatto.
+- «Separare lungo una linea disegnata» parte dal centro del pezzo e non dalla sua faccia inferiore, come «Dividere». Prima l'anteprima mostrava soltanto che il piano non separa nulla.
 
 ### File ed esportazione
 

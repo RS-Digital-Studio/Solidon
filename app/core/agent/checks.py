@@ -43,6 +43,15 @@ PASSED_THROUGH = (
     # nicht gestreift, sondern zerlegt (Fund des Reviews, 13.09.2026).
     "bore.splits_the_body",
     "boolean.without_effect",
+    # Und zwei Schritte, die gar nichts getan haben (Messung 14.09.2026). Der
+    # erste ist der Fall, den ein zweiter Aufruf behebt: Das Ziel lag über der
+    # vorhandenen Dreieckszahl, eine kleinere Zahl gibt ihm etwas zu tun. Beim
+    # zweiten kann das Modell nichts nachbessern — ein Skelett setzt nur der
+    # Nutzer —, und genau deshalb muss es davon erfahren: Sonst schreibt es
+    # „der Arm ist jetzt angewinkelt" über einen Körper, der unverändert
+    # dasteht.
+    "mesh.already_below_target",
+    "pose.no_armature",
 )
 
 

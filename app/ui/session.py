@@ -48,7 +48,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.loader import read_bounded_payload, read_local_payload
-from app.core.ingest.plan import import_plan, is_only_imported
+from app.core.ingest.plan import import_plan, is_only_imported, names_in_use
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
@@ -272,6 +272,7 @@ class _PlanWorker(Worker):
         payload: bytes,
         unit: str,
         first_model: bool,
+        taken: tuple[str, ...],
         progress: Any,
     ) -> None:
         super().__init__()
@@ -280,6 +281,7 @@ class _PlanWorker(Worker):
         self._payload = payload
         self._unit = unit
         self._first_model = first_model
+        self._taken = taken
         self._progress = progress
 
     def work(self) -> None:
@@ -290,6 +292,7 @@ class _PlanWorker(Worker):
                 self._payload,
                 self._unit,
                 first_model=self._first_model,
+                taken=self._taken,
                 progress=self._progress,
             )
         except AppError as error:
@@ -363,6 +366,15 @@ class _PreviewWorker(Worker):
     #: Warum es keine Vorschau gibt — der Satz aus dem Kern, den der Dialog
     #: sonst erst beim Übernehmen zu sehen bekäme.
     explained = Signal(int, str)
+    #: Dass auf einem vergröberten Netz gerechnet wurde, samt der Dreieckszahl
+    #: davor — das Band sagt es, statt ein genaues Bild vorzutäuschen.
+    coarse = Signal(int, int)
+    #: Die Handlung, die der Kern dem Grund mitgab (``Action.id``) — kommt
+    #: **vor** :attr:`explained`, damit das Fenster beim Satz schon weiß, ob
+    #: *Übernehmen* danach noch eine sinnvolle Handlung ist. Was die Kennung
+    #: bedeutet, entscheidet die Oberfläche; hier reist nur weiter, was die
+    #: Ausnahme ohnehin trägt (§2.7).
+    advised = Signal(int, str)
 
     def __init__(
         self, session: Session, generation: int, compute: Any, cancel: CancelSignal
@@ -392,6 +404,13 @@ class _PreviewWorker(Worker):
             # und dem Band „Vorschau — noch nicht übernommen" da, und der
             # Grund — „Diese Ebene teilt das Objekt nicht", „Der Körper ist
             # auf dieser Höhe massiv" — wartete bis zum Übernehmen.
+            #
+            # **Und die Handlung reist mit** (14.09.2026): „Erst reparieren,
+            # dann aushöhlen" nennt einen Schritt, der *vor* das Übernehmen
+            # gehört — der Knopf daneben blieb trotzdem anklickbar.
+            advice = _advice_of(error)
+            if advice:
+                self.advised.emit(self._generation, advice)
             self.explained.emit(self._generation, _reason_of(error))
             self.done.emit(self._generation, None)
         else:
@@ -419,16 +438,107 @@ def _reason_of(error: AppError) -> str:
     return str(error.title)
 
 
-def _warning_of(result: EvaluationResult, previewed: tuple[OpId, ...]) -> str:
-    """Die erste Warnung, die die vorgeschauten Schritte selbst gemeldet haben.
+def _advice_of(error: AppError) -> str:
+    """Die vorrangige Handlung dieses Fehlers — ihre Kennung, sonst leer.
 
-    Nur Warnungen und Fehler: Ein Info-Befund („Ausgehöhlt. Die Wandstärke
-    stimmt …") ist eine Zusage und kein Grund, warum nichts zu sehen ist.
+    Der Satz sagt, was nicht geht; die Handlung sagt, was hilft. Das Band
+    trägt den Satz, und das Fenster entscheidet an dieser Kennung, ob
+    *Übernehmen* überhaupt noch etwas bewirken kann
+    (``MainWindow._APPLY_BLOCKING_ADVICE``). Hier wird nicht gewertet — jede
+    Ausnahme trägt ihre Vorschläge ohnehin (Regel 17), und welche davon eine
+    Sperre wert ist, ist eine Frage der Bedienung und keine des Kerns.
+
+    Die **erste vorrangige**: ``suggestions`` steht nach Rang, und
+    ``primary`` markiert die, die der Kern empfiehlt. *Abbrechen* ist
+    ausdrücklich kein Rat und trägt die Marke nicht.
     """
-    for finding in result.scene.report.findings:
-        if finding.op_id in previewed and finding.severity in ("warning", "error"):
-            return str(finding.message)
+    for action in error.suggestions:
+        if action.primary:
+            return str(action.id)
     return ""
+
+
+def _warning_of(result: EvaluationResult, previewed: tuple[OpId, ...]) -> str:
+    """Was die vorgeschauten Schritte selbst gemeldet haben — Warnung zuerst.
+
+    Gefragt wird nur über einer **leeren** Differenz, und dort ist jeder
+    Befund des Schritts die bessere Auskunft als „am Volumen ändert sich
+    nichts": Er sagt, *warum* nichts geschah. Bis zum 14.09.2026 zählten hier
+    nur Warnungen und Fehler, mit der Begründung, ein Info-Befund
+    („Ausgehöhlt. Die Wandstärke stimmt …") sei eine Zusage. Über einer leeren
+    Differenz gibt es diese Zusage nicht — dort steht Info für „der Körper hat
+    schon weniger Dreiecke als das Ziel" (``mesh.already_below_target``),
+    „hier war nichts zu reparieren", „es gibt kein Skelett".
+
+    Warnung und Fehler behalten den Vortritt: Sie wiegen schwerer, und ein
+    Schritt kann beides melden.
+    """
+    plain = ""
+    for finding in result.scene.report.findings:
+        if finding.op_id not in previewed:
+            continue
+        if finding.severity in ("warning", "error"):
+            return str(finding.message)
+        if not plain:
+            plain = str(finding.message)
+    return plain
+
+
+#: Ab wie vielen Dreiecken ein Körper für die Vorschau verkleinert wird (§2.8).
+#:
+#: Gemessen am 14.09.2026 über ``Session._preview_outcome`` — eine Bohrung
+#: Ø 5 durch eine Kugel, Entwurfsqualität, warmer Cache:
+#:
+#: ===========  ==========  ==========  =========
+#: Dreiecke     zusammen    evaluate    compare
+#: ===========  ==========  ==========  =========
+#: 20 480       0,16 s      0,11 s      0,05 s
+#: 81 920       0,63 s      0,47 s      0,16 s
+#: 327 680      2,16 s      1,58 s      0,58 s
+#: ===========  ==========  ==========  =========
+#:
+#: Die Reihe ist linear — rund 6,6 µs je Dreieck —, und die Sekunde aus §2.8
+#: fällt bei etwa 150 000. Das ist diese Zahl: nicht die Grenze, ab der es
+#: langsam *wirkt*, sondern die, ab der die Zusage „unter einer Sekunde ein
+#: Bild" ohne Hilfe nicht mehr zu halten ist.
+COARSE_PREVIEW_ABOVE: Final = 150_000
+
+#: Worauf verkleinert wird.
+#:
+#: Dieselbe Messung von der anderen Seite: Aus 327 680 Dreiecken auf 50 000
+#: kostet ``decimate`` 0,20 s (einmal je Auswertung, danach aus dem Cache),
+#: und die Oberfläche wandert dabei um 0,0078 mm — ein Sechstel von
+#: :data:`app.core.units.MAX_FACET_SAG`, mit der beide Kerne ohnehin
+#: tessellieren. Die Bohrung bleibt eine Bohrung: gemessen an derselben Kugel
+#: trägt das grobe Bild dasselbe Geschlecht, ein Loch von 4,98 mm und
+#: 1 168,5 mm³ Abtrag wie das genaue — bis hinunter zu 5 000 Dreiecken
+#: (0,0266 mm). Erst bei 2 000 reißt die Facettentoleranz (0,0804 mm).
+COARSE_PREVIEW_TARGET: Final = 50_000
+
+
+def _triangles_of(scene: Any) -> int:
+    """Wie viele Dreiecke die Szene trägt — für das Band über der Vorschau."""
+    if scene is None:
+        return 0
+    return sum(int(getattr(entry.mesh, "triangle_count", 0)) for entry in scene.objects.values())
+
+
+def _coarse_drafts(scene: Any) -> list[OperationDraft]:
+    """Welche Körper vor der Vorschau verkleinert werden — und womit.
+
+    Gefragt wird nach Dreiecken, nicht nach der Bauart: Ein exakter Körper
+    trägt keine und bleibt damit von selbst außen vor, und *Dreiecke
+    verringern* könnte mit ihm ohnehin nichts anfangen.
+    """
+    if scene is None:
+        return []
+    return [
+        OperationDraft(
+            op="decimate_mesh", params={"triangles": COARSE_PREVIEW_TARGET}, inputs=(object_id,)
+        )
+        for object_id, entry in scene.objects.items()
+        if int(getattr(entry.mesh, "triangle_count", 0)) > COARSE_PREVIEW_ABOVE
+    ]
 
 
 def _stop_reason(result: EvaluationResult) -> str:
@@ -444,6 +554,27 @@ def _stop_reason(result: EvaluationResult) -> str:
         finding for finding in result.scene.report.findings if finding.op_id == result.stopped_at
     ]
     return str(blamed[-1].message) if blamed else ""
+
+
+def _stop_advice(result: EvaluationResult) -> str:
+    """Die vorrangige Handlung desselben Befunds — ihre Kennung, sonst leer.
+
+    Der Befund, der den Halt trägt, trägt auch die Auswege (Regel 17). Das
+    Band zeigt den Satz; die Kennung entscheidet im Fenster darüber, ob
+    *Übernehmen* noch etwas bewirken kann — „Erst reparieren, dann aushöhlen"
+    nennt einen Schritt, der davor gehört.
+    """
+    if result.stopped_at is None:
+        return ""
+    blamed = [
+        finding for finding in result.scene.report.findings if finding.op_id == result.stopped_at
+    ]
+    if not blamed:
+        return ""
+    for action in blamed[-1].suggestions:
+        if action.primary:
+            return str(action.id)
+    return ""
 
 
 class _SplitWorker(Worker):
@@ -711,6 +842,14 @@ class Session(QObject):
         self._split_cancel_confirmed = False
         """Ob der Abbruch des aktuellen Split-Arbeiters schon bestätigt wurde."""
         self._previews: list[_PreviewWorker] = []
+        self._coarse_scene: tuple[Any, Any] | None = None
+        """Die zuletzt verkleinerte Szene davor, samt der Szene, zu der sie
+        gehört (§2.8).
+
+        Ein Platz und nicht mehr: Solange ein Dialog offen ist, bleibt die
+        Szene davor dieselbe, und ihre grobe Kopie ändert sich nicht. Die
+        nächste Auswertung liefert ein neues ``Scene``-Objekt — der Vergleich
+        auf Identität merkt das, ohne dass jemand ein Feld zurücksetzen muss."""
         self._placements: list[_PreviewWorker] = []
         """Jeder laufende Vorschau-Arbeiter, festgehalten bis ``finished``.
 
@@ -997,6 +1136,7 @@ class Session(QObject):
         self._project_generation += 1
         self._dirty = False
         self.last_result = None
+        self._coarse_scene = None
         self.projectChanged.emit()
         self.evaluate_async()
 
@@ -1711,8 +1851,15 @@ class Session(QObject):
         #: landet in den Parametern der Operation statt in einem Zustand, den
         #: die nächste Auswertung anders vorfindet (§15.1).
         first_model = not self.history.operations
+        # **Wie der Körper heißen soll, entscheidet der Stapel**: Steht der
+        # Dateiname dort schon, bekommt dieser eine Nummer dahinter. Die eben
+        # eingebettete Quelle zählt sich dabei nicht selbst mit — gefragt sind
+        # die Operationen, und ihre entsteht erst eine Zeile weiter unten.
+        taken = names_in_use(self.project.document)
         try:
-            plan = import_plan(source_id, path.name, payload, unit, first_model=first_model)
+            plan = import_plan(
+                source_id, path.name, payload, unit, first_model=first_model, taken=taken
+            )
         except AppError:
             self._drop_source(source_id)
             raise
@@ -1770,6 +1917,7 @@ class Session(QObject):
         path = Path(name)
         source_id = self._embed_source("import", path.name, payload, origin)
         first_model = not self.history.operations
+        taken = names_in_use(self.project.document)
 
         # **Unter der Grenze bleibt es beim geraden Weg.** Ein Arbeiter für
         # einen Plan, der in Mikrosekunden steht, verschöbe das Ergebnis hinter
@@ -1778,7 +1926,9 @@ class Session(QObject):
         # nichts zu warten gab.
         if len(payload) <= PLAN_IN_WORKER_ABOVE:
             try:
-                plan = import_plan(source_id, path.name, payload, unit, first_model=first_model)
+                plan = import_plan(
+                    source_id, path.name, payload, unit, first_model=first_model, taken=taken
+                )
             except AppError as error:
                 self._drop_source(source_id)
                 self.importFailed.emit(error)
@@ -1786,7 +1936,9 @@ class Session(QObject):
             self._on_plan_ready(plan, source_id)
             return
 
-        worker = _PlanWorker(source_id, path.name, payload, unit, first_model, self.report_progress)
+        worker = _PlanWorker(
+            source_id, path.name, payload, unit, first_model, taken, self.report_progress
+        )
         self._plan = worker
         self.busyChanged.emit(True)
         # **An die Leine, wie jeder andere Arbeiter auch.** Ohne diese Zeile
@@ -2108,6 +2260,8 @@ class Session(QObject):
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
         explained: Any = None,
+        coarse: Any = None,
+        advised: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -2115,7 +2269,12 @@ class Session(QObject):
         gezeigt nur das Jüngste. ``then`` bekommt die ``SceneDifference``
         oder ``None``, wenn es nichts zu zeigen gibt. ``explained`` bekommt
         davor den Grund als Satz, wenn es einen gibt — ein Fehler der
-        Operation oder der Befund, an dem die Kette anhielt.
+        Operation oder der Befund, an dem die Kette anhielt. ``coarse``
+        bekommt die Dreieckszahl davor, wenn die Vorschau auf einer
+        verkleinerten Kopie gerechnet wurde (:data:`COARSE_PREVIEW_ABOVE`).
+        ``advised`` bekommt vor dem Satz die Kennung der vorrangigen Handlung,
+        die der Fehler dazu trägt — ``repair_and_retry`` und seinesgleichen
+        nennen einen Schritt, der vor das Übernehmen gehört.
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -2128,11 +2287,27 @@ class Session(QObject):
         cancel = CancelSignal()
 
         def compute() -> tuple[Any, SceneDifference | None, str]:
+            # ``worker`` steht unten und ist beim **Aufruf** gebunden — die
+            # Rechnung läuft im Arbeiter, nicht hier. Gemeldet wird über sein
+            # Signal und nicht über einen nackten Rückruf: Was in ``work``
+            # geschieht, geschieht im fremden Faden, und ein direkter Aufruf
+            # ins Fenster hinein wäre genau der Fehler, den ``done`` und
+            # ``explained`` vermeiden.
             return self._preview_outcome(
                 list(drafts or []),
                 change_op=change_op,
                 change_values=change_values,
                 cancelled=cancel,
+                coarsened=(
+                    None
+                    if coarse is None
+                    else (lambda triangles: worker.coarse.emit(generation, triangles))
+                ),
+                counselled=(
+                    None
+                    if advised is None
+                    else (lambda action: worker.advised.emit(generation, action))
+                ),
             )
 
         # Was jetzt noch rechnet, rechnet für eine Frage von gestern: die
@@ -2144,6 +2319,12 @@ class Session(QObject):
             worker.explained.connect(
                 lambda stamp, reason: self._preview_done(stamp, reason, explained)
             )
+        if coarse is not None:
+            worker.coarse.connect(
+                lambda stamp, triangles: self._preview_done(stamp, triangles, coarse)
+            )
+        if advised is not None:
+            worker.advised.connect(lambda stamp, action: self._preview_done(stamp, action, advised))
         # Die Vorschau hat keinen Fehlerpfad — sie ist eine Zugabe (§18.7). Was
         # hier schiefgeht, gehört ins Protokoll und sonst nirgendwohin: ein
         # Fehlerdialog über einer Vorschau wäre lauter als die Sache.
@@ -2475,6 +2656,10 @@ class Session(QObject):
         self.cancel_signal.reset()
         result = self.run_evaluation("fine")
         self.last_result = result
+        # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
+        # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
+        # dieser Größe genau das, was die Stufe einsparen soll.
+        self._coarse_scene = None
         self._bind_filament_profiles()
         self.result_generation += 1
         self.result_current = True
@@ -2640,12 +2825,34 @@ class Session(QObject):
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
         cancelled: Any = None,
+        coarsened: Any = None,
+        counselled: Any = None,
     ) -> tuple[Any, SceneDifference | None, str]:
-        """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt."""
+        """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
+
+        ``coarsened`` schaltet die **grobe Stufe** frei (§2.8): Oberhalb von
+        :data:`COARSE_PREVIEW_ABOVE` rechnet die Vorschau auf einer
+        verkleinerten Kopie des Eingangsnetzes und meldet die Dreieckszahl
+        davor. Wer sie nicht mitgibt, bekommt die genaue Rechnung — der Agent
+        etwa, dessen Vorschlag nicht in Millisekunden zu antworten braucht.
+
+        ``counselled`` bekommt die Handlung, die der Halt mitbringt — derselbe
+        Weg wie bei ``coarsened`` und aus demselben Grund: Das Ergebnis ist ein
+        Dreiertupel, an dem drei Aufrufer und drei Tests hängen, und eine
+        Auskunft **neben** dem Satz gehört nicht in dessen Zeichenkette.
+        """
         import copy
 
         before = self.last_result.scene if self.last_result else None
+        coarse = _coarse_drafts(before) if coarsened is not None and change_op is None else []
         working = copy.deepcopy(self.project.document)
+        reduced: tuple[OpId, ...] = ()
+        if coarse:
+            # Derselbe Titel wie die Vorschau daneben: Diese Transaktion steht
+            # in einer Dokumentkopie, die niemand je zu sehen bekommt, und ein
+            # eigener Katalogeintrag für einen unsichtbaren Namen wäre eine
+            # Zeile in fünf Sprachen für nichts.
+            reduced = tuple(History(working).apply(_("Vorschau"), coarse).ops)
         if change_op is not None:
             History(working).change_params(change_op, dict(change_values or {}))
             previewed: tuple[OpId, ...] = (change_op,)
@@ -2670,10 +2877,55 @@ class Session(QObject):
             cache=self.cache,
             cancelled=cancelled or NeverCancelled(),
         )
+        if reduced and result.stopped_at in reduced:
+            # **Das Verkleinern selbst hat angehalten.** Dann ist die grobe
+            # Stufe die Ursache und nicht die Antwort; gerechnet wird genau,
+            # und der Kunde sieht davon nichts als die längere Wartezeit.
+            return self._preview_outcome(
+                drafts,
+                origin=origin,
+                ask=ask,
+                change_op=change_op,
+                change_values=change_values,
+                cancelled=cancelled,
+                counselled=counselled,
+            )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
             # sähe aus wie „keine Änderung", und das wäre gelogen.
+            #
+            # **Und der Befund, der den Halt trägt, trägt auch die Handlung**
+            # (Regel 17). „Erst reparieren, dann aushöhlen" nennt einen
+            # Schritt, der vor das Übernehmen gehört; das Fenster graut den
+            # Knopf daraufhin aus, statt den Kunden in denselben Halt laufen
+            # zu lassen.
+            if counselled is not None:
+                advice = _stop_advice(result)
+                if advice:
+                    counselled(advice)
             return result.scene, None, _stop_reason(result)
+        if coarse:
+            # **Beide Seiten auf demselben groben Netz.** Getrennt verkleinert
+            # liefen ``davor`` und ``danach`` überall um Bruchteile eines
+            # Millimeters auseinander, und die Differenz beider war nicht die
+            # Änderung, sondern dieser Unterschied: gemessen an einer Kugel
+            # aus 81 920 Dreiecken 16,7 mm³ Material, das niemand angefasst
+            # hat — und die Rechnung darüber dauerte zehn bis fünfzig
+            # Sekunden statt einer halben, weil zwei fast deckungsgleiche
+            # Häute der schlimmste Fall für jeden Booleschen Kern sind.
+            coarse_before = self._coarse_before(before, coarse, ask, cancelled)
+            if coarse_before is None:
+                return self._preview_outcome(
+                    drafts,
+                    origin=origin,
+                    ask=ask,
+                    change_op=change_op,
+                    change_values=change_values,
+                    cancelled=cancelled,
+                    counselled=counselled,
+                )
+            coarsened(_triangles_of(before))
+            before = coarse_before
         difference = compare_scenes(before, result.scene) if before is not None else None
         # **Eine leere Vorschau mit einer Warnung ist keine leere Vorschau.**
         # *Textur in Filamente* an einem Körper ohne Farbinformation läuft
@@ -2685,6 +2937,40 @@ class Session(QObject):
         ):
             return result.scene, difference, _warning_of(result, previewed)
         return result.scene, difference, ""
+
+    def _coarse_before(
+        self, before: Any, coarse: list[OperationDraft], ask: Any, cancelled: Any
+    ) -> Any:
+        """Die Szene davor, auf genau denselben verkleinerten Netzen.
+
+        Gerechnet wird sie über dieselben Operationen wie die Vorschau, damit
+        beide Seiten Dreieck für Dreieck aus derselben Quelle stammen. Das
+        kostet einmal je Auswertung; danach liegt jeder Schritt im Cache, und
+        eine Zahl im Dialog zu ändern kostet nur noch die Operation selbst.
+
+        Gibt ``None`` zurück, wenn das Verkleinern nicht durchkommt — dann
+        rechnet der Aufrufer genau.
+        """
+        held = self._coarse_scene
+        if held is not None and held[0] is before:
+            return held[1]
+        import copy
+
+        base = copy.deepcopy(self.project.document)
+        History(base).apply(_("Vorschau"), coarse)
+        result = evaluate(
+            base,
+            self.profile,
+            quality="draft",
+            sources=ProjectSources(self.project, base_dir=self.base_dir),
+            ask=ask or _no_questions,
+            cache=self.cache,
+            cancelled=cancelled or NeverCancelled(),
+        )
+        if result.stopped_at is not None:
+            return None
+        self._coarse_scene = (before, result.scene)
+        return result.scene
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:
         """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5).
@@ -2775,6 +3061,10 @@ class Session(QObject):
             # Projekts über das Modell zu legen, das gerade geladen wird.
             return
         self.last_result = result
+        # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
+        # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
+        # dieser Größe genau das, was die Stufe einsparen soll.
+        self._coarse_scene = None
         self._bind_filament_profiles()
         self.result_generation += 1
         self.result_current = not self._rerun_pending

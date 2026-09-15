@@ -4289,3 +4289,49 @@ def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) ->
     finally:
         plain.deleteLater()
         offered.deleteLater()
+
+
+def test_hollowing_an_open_body_does_not_offer_apply(qt_app: QApplication) -> None:
+    """*Aushöhlen* an einer offenen Figur: Das Band riet, der Knopf ließ zu.
+
+    Gemessen am 14.09.2026: Im Band stand „Der Körper ist nicht geschlossen —
+    ein Hohlraum braucht eine dichte Hülle. Erst reparieren, dann aushöhlen.",
+    und *Übernehmen* blieb anklickbar. Wer klickte, bekam einen angehaltenen
+    Schritt im Verlauf und denselben Satz drei Klicks später im Prüfbericht —
+    die Sackgasse aus Regel 19, ein Fenster später.
+
+    Der Befund, an dem die Kette anhält, trägt die Handlung
+    (``repair_and_retry``); sie reist über ``preview_async(advised=…)`` mit,
+    und das Fenster sperrt den Knopf mit dem Satz in Kurzhilfe, Statuszeile
+    und zugänglicher Beschreibung (Regel 18).
+    """
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(MESHES / "partially_open.stl")
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+
+    window.run_operation(REGISTRY.get("hollow_object"))
+    dialog = window._op_dialog
+    assert dialog is not None, "ohne Dialog prüft dieser Test nichts"
+    try:
+        assert window.session.wait_for_idle(60_000)
+        for _ in range(50):
+            qt_app.processEvents()
+        satz = tr(
+            "Der Körper ist nicht geschlossen — ein Hohlraum braucht eine "
+            "dichte Hülle. Erst reparieren, dann aushöhlen."
+        )
+        assert window.viewport.banner.note.text() == tr("Keine Vorschau: {reason}").format(
+            reason=satz
+        )
+        button = dialog._accept_button
+        assert not button.isEnabled(), "Übernehmen führt hier sicher in den Halt"
+        assert button.toolTip() == satz
+        assert button.statusTip() == satz
+        assert button.accessibleDescription() == satz
+    finally:
+        dialog.reject()
+        window.close()
+        window.release()

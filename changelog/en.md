@@ -32,6 +32,8 @@ it into `website/version.json`.
 ### Building and editing
 
 - An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.
+- “Reduce triangles” says so when a part already has fewer triangles than the number you entered — there is nothing to reduce then. Before, it simply stayed as it was.
+- “Set a pose” without an armature says that the bones are made in the skeleton editor — two clicks per bone. Before, the step silently moved nothing.
 
 ### View and operation
 
@@ -43,6 +45,9 @@ it into `website/version.json`.
 - Hollowing a part with holes in its hull now says that the hull is the problem and offers “Repair and retry” — instead of reporting that no computation path worked.
 - At the selected feature, what could only fail there is greyed out — “Turn feature” on a countersunk bore, say — with the reason. And the preview says when a question will come on apply.
 - A field that does nothing for the chosen base shape is no longer greyed out in the dialog — it appears with the shape that needs it. A rectangle shows four fields up front instead of eight.
+- On a large model the preview arrives in under a second instead of several: Solidon computes it more coarsely and writes “Coarse preview” into the picture. Applying is still exact.
+- “Split along a drawn line” starts in the middle of the part instead of at its underside — like “Split”. Before, the preview only showed that the plane cuts nothing.
+- “Align to feature” now asks you to pick the second feature instead of explaining a notation to you.
 
 ### Files and export
 

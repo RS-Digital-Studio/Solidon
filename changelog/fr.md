@@ -33,6 +33,8 @@ dans `website/version.json`.
 ### Construire et modifier
 
 - Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.
+- Les messages qui renvoient aux valeurs à droite nomment la fenêtre telle qu'elle s'appelle : Sélection. Avant, ils disaient « panneau des caractéristiques ».
+- « Réduire les triangles » le dit quand une pièce a déjà moins de triangles que le nombre saisi : il n'y a alors rien à réduire. Avant, elle restait telle quelle, sans un mot.
 
 ### Vue et utilisation
 
@@ -44,6 +46,9 @@ dans `website/version.json`.
 - Évider une pièce dont l'enveloppe est trouée dit maintenant que l'enveloppe est le problème et propose « Réparer et réessayer » — au lieu de signaler qu'aucun calcul n'a abouti.
 - Sur l'élément choisi, ce qui ne pourrait qu'échouer y apparaît grisé — « Faire pivoter l'élément » sur un perçage fraisé — avec la raison. Et l'aperçu annonce une question à venir à l'application.
 - Un champ sans effet pour la forme de base choisie n'apparaît plus grisé dans le dialogue — il apparaît avec la forme qui en a besoin. Un rectangle montre quatre champs devant au lieu de huit.
+- À 150 ou 200 pour cent de mise à l'échelle, l'aimantation, les poignées et les repères portent de nouveau comme à 100 pour cent. La poignée est en taille réelle et un clic tremblant reste un clic.
+- Sur un grand modèle, l'aperçu arrive en moins d'une seconde au lieu de plusieurs : Solidon le calcule plus grossièrement et écrit « Aperçu grossier ». L'application reste exacte.
+- « Séparer selon une ligne dessinée » commence au milieu de la pièce et non sous elle, comme « Séparer ». Auparavant, l'aperçu montrait seulement que le plan ne sépare rien.
 
 ### Fichiers et export
 

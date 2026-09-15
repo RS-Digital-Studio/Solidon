@@ -982,7 +982,35 @@ def _simplification_findings(
     viel es gegenüber dem Eingang eingespart hat. Die zweite Frage ließ genau
     die Fälle durch, in denen kräftig reduziert und das Ziel trotzdem um
     Größenordnungen verfehlt wurde; die Begründung steht an ``SIMPLIFY_MISSED``.
+
+    **Und davor steht der Fall, in dem es von vornherein nichts zu holen gab.**
+    Das Ziel ist mit 50 000 vorbelegt, und die meisten Teile sind kleiner:
+    Gemessen am 14.09.2026 über das Fenster kam an einem Körper mit 320
+    Dreiecken ein Schritt in den Verlauf, im Bild dasselbe Teil und im Band
+    „am Volumen ändert sich nichts". Der Eingang lag schon unter dem Ziel,
+    und die erste Zeile unten kehrte leer zurück — dieselbe Antwort, die eine
+    **geglückte** Vereinfachung bekommt, denn beide Male liegt das Ergebnis
+    unter der verlangten Zahl. Unterscheiden lassen sich die zwei nur am
+    Eingang, und deshalb wird der zuerst gefragt.
     """
+    if before.triangle_count <= target:
+        return [
+            Finding(
+                code="mesh.already_below_target",
+                severity="info",
+                message=_(
+                    "Der Körper hat schon weniger Dreiecke als das Ziel — es gibt nichts zu "
+                    "verringern. Ein Ziel unterhalb der vorhandenen Zahl gibt dem Schritt "
+                    "etwas zu tun; sonst kann er wegbleiben."
+                ),
+                object_id=object_id,
+                values={
+                    "target": target,
+                    "before": before.triangle_count,
+                    "after": after.triangle_count,
+                },
+            )
+        ]
     if after.triangle_count <= target or after.triangle_count > before.triangle_count:
         return []
     if (

@@ -32,6 +32,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Construir e alterar
 
 - Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.
+- As mensagens que remetem para os valores à direita nomeiam a janela como ela se chama: Seleção. Antes diziam «painel de características».
+- «Reduzir triângulos» avisa quando uma peça já tem menos triângulos do que o número indicado: então não há nada a reduzir. Antes ficava como estava, sem uma palavra.
 
 ### Vista e utilização
 
@@ -43,6 +45,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Escavar uma peça com furos na casca diz agora que a casca é o problema e oferece «Reparar e tentar de novo» — em vez de avisar que nenhum cálculo funcionou.
 - No elemento escolhido aparece a cinzento o que ali só poderia falhar — «Rodar elemento» num furo escareado, por exemplo — com o motivo. E a pré-visualização diz se ao aplicar virá uma pergunta.
 - Um campo que nada faz com a forma base escolhida já não aparece a cinzento no diálogo — surge com a forma que precisa dele. Um retângulo mostra à frente quatro campos em vez de oito.
+- Com o ecrã a 150 ou 200 por cento, o encaixe, as pegas e as marcas alcançam o mesmo que a 100 por cento. A pega fica em tamanho completo e um clique trémulo continua a ser um clique.
+- Num modelo grande a pré-visualização chega em menos de um segundo em vez de vários: o Solidon calcula-a de forma mais grosseira e escreve «Pré-visualização aproximada». Aplicar continua exato.
+- «Separar por uma linha desenhada» começa no meio da peça e não na sua face inferior, como «Dividir». Antes a pré-visualização mostrava apenas que o plano não separa nada.
 
 ### Ficheiros e exportação
 

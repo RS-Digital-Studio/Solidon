@@ -33,6 +33,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Construir y modificar
 
 - Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.
+- Los mensajes que remiten a los valores de la derecha nombran la ventana como se llama: Selección. Antes decían «panel de características», y así no se llama ninguna ventana.
+- «Reducir triángulos» avisa cuando una pieza ya tiene menos triángulos que la cantidad indicada: entonces no hay nada que reducir. Antes se quedaba igual, sin una palabra.
 
 ### Vista y manejo
 
@@ -44,6 +46,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Ahuecar una pieza con agujeros en la envolvente dice ahora que la envolvente es el problema y ofrece «Reparar y reintentar» — en vez de avisar de que ningún cálculo funcionó.
 - En el rasgo elegido aparece en gris lo que solo podría fallar ahí — «Girar elemento» en un taladro avellanado, por ejemplo — con el motivo. Y la vista previa avisa si al aplicar vendrá una pregunta.
 - Un campo que no hace nada con la forma base elegida ya no aparece en gris en el diálogo — aparece con la forma que lo necesita. Un rectángulo muestra delante cuatro campos en vez de ocho.
+- Con la pantalla al 150 o 200 por ciento, el ajuste, los tiradores y las marcas alcanzan lo mismo que al 100 por ciento. El tirador sale a tamaño completo y un clic tembloroso sigue siendo un clic.
+- En un modelo grande la vista previa llega en menos de un segundo en vez de varios: Solidon la calcula de forma más basta y escribe «Vista previa aproximada». Aplicar sigue siendo exacto.
+- «Separar por una línea dibujada» empieza en el centro de la pieza y no en su cara inferior, como «Dividir». Antes la vista previa solo mostraba que el plano no separa nada.
 
 ### Archivos y exportación
 
