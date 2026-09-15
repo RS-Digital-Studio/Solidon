@@ -77,3 +77,17 @@ Statusabfrage mit Timeout reißen; `gh run rerun <lauf> --failed` fährt nur
 den Signierjob erneut, ohne neuen Tag. Ein Tag, der kein Paket erzeugt hat,
 wird gelöscht und neu gesetzt (`git push origin :refs/tags/v…`); jeder
 Tag-Push startet auch einen main-Lauf, der sich abbrechen lässt.
+
+**Nachtrag 15.09.2026 — 0.4.2 in einem Lauf, nachdem der Tag einmal
+verschoben war.** Vom „los" bis zur Nachprüfung 45 Minuten: Artefakte des
+Tag-Laufs mit `gh run download <lauf> -n <name>` (öffentlich sind genau
+`solidon3d-setup-windows`, `solidon3d-linux`, `solidon3d-macos-ARM64`,
+`solidon3d-macos-X64`; alles mit `-input`/`-private` im Namen ist
+Zwischenstand), Prüfsummen gegen die `.sha256`-Beilagen, Hinweistext und
+`notes_version` per Skript, `make_download.py`, `sign_version.py`,
+`updates.signature_ok` als Gegenprobe, `stamp_assets.py`, fünf Uploads je
+ein Aufruf (10 min), Seiten, `--nachpruefen`. Zwei Fallen: `upload_website.py`
+will Pfade **mit** `website/` davor (`dl/…` heißt „Gibt es nicht", fünfmal
+Exit 1 in acht Sekunden); und die Git-Bash hat kein `jq` — ein Monitor über
+`gh run view --json … | jq` ist stumm, `gh … --jq` tut es. Der Tag-Lauf
+selbst: 1 h 50 min, davon die Windows-Suite 55 min.

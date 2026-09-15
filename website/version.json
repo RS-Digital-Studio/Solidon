@@ -1,700 +1,538 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.4.1.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.1.exe",
-      "size": 170362026,
-      "sha256": "2cd5ced774bce76971963a6ec69152a3d97da5e7ad308da61a3cba2bb154b1b9"
+      "file": "Solidon3D-Setup-0.4.2.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.2.exe",
+      "size": 170584357,
+      "sha256": "2229dbe16c2721953216fb8b426f2f01d988997510445de4312a9bde5af3a49f"
     },
     "linux": {
-      "file": "Solidon3D-0.4.1-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.1-x86_64.flatpak",
-      "size": 202365888,
-      "sha256": "fb5297c67745e73b638163835ba53be40975dd8ec86a00dbf79acf439eae43c8"
+      "file": "Solidon3D-0.4.2-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.2-x86_64.flatpak",
+      "size": 202834808,
+      "sha256": "e8b9729427eb7b8041092e02b03d5ba148b78f83b9c4df4e1071c77291f13b74"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.4.1-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.1-macos-arm64.pkg",
-      "size": 214501900,
-      "sha256": "62e707c4fa17a7c245f357c2fbf03523c06bd5d70c7b46c83e30d660f8e88b82"
+      "file": "Solidon3D-0.4.2-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.2-macos-arm64.pkg",
+      "size": 214727873,
+      "sha256": "e6635b7843a5cbe8387ec882417ad1f5df68fd9c2b7215832e18734e3ded239e"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.4.1-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.1-macos-x86_64.pkg",
-      "size": 236723278,
-      "sha256": "ba85754405012bbff7e3a69143a330c62dd07f213234635958feec751ef77a6f"
+      "file": "Solidon3D-0.4.2-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.2-macos-x86_64.pkg",
+      "size": 236947828,
+      "sha256": "844fda5be6a0552bf6c1e478f7c3a43727ca15b998e4365aba9e4111f81b606b"
     }
   },
   "changes": {
     "de": [
-      "Verrunden und Fasen greifen jetzt auch an einem eingelesenen Modell: Kante im Bild wählen, Radius oder Breite eingeben. Vorher ging das nur an einem Körper, den Sie selbst gezeichnet haben.",
-      "Fläche versetzen und Formschräge arbeiten ebenfalls am eingelesenen Modell, und eine erkannte Rundung lässt sich dort jetzt ändern oder ganz wegnehmen.",
-      "Fläche versetzen bewegt die Fläche, auf die Sie geklickt haben. An einer Treppe bleiben die übrigen Stufen stehen, statt alle zugleich zu wandern.",
-      "Beim Setzen einer Bohrung machen Sie daraus mit einem Haken ein Langloch: Sie geben Länge und Richtung ein, die Vorschau zeigt beides mit.",
-      "Eine Bohrung, die schon im Modell steckt, ziehen Sie nachträglich zu einem Langloch — der Durchmesser bleibt, wie er gemessen wurde.",
-      "Das Langloch wird über die ganze Länge um die Materialtoleranz geweitet. Der Weg, den eine Schraube darin hat, bleibt der, den Sie eingegeben haben.",
-      "Eine Senkung über einer Bohrung bleibt auch an einem Teil erhalten, das runde, geschwungene Flächen hat — vorher fiel sie dort weg, und Bohrung und Senkung ließen sich nicht mehr gemeinsam versetzen.",
-      "Ein Hohlraum ganz im Material, ohne Verbindung nach außen, steht als Lufteinschluss im Objektbaum — mit seinem Volumen. Vorher stand dort eine Bohrung, die es nicht gab.",
-      "Bei einem stark gekrümmten Modell sagt Solidon jetzt, was gemessen wurde, statt es einen Scan zu nennen — und welche Merkmale an einer solchen Fläche wegfallen.",
-      "Für eine Beschriftung stehen acht Schriften zur Wahl statt drei — dazu Fett und Kursiv. Fett trägt bei gleicher Höhe dickere Striche und bleibt lesbar, wo der normale Schnitt verschmiert.",
-      "Neben den geraden Schriften liegen jetzt eine runde und eine geschriebene bei — die beiden gibt es nur in einem Schnitt. Alle acht reisen mit dem Programm, ein Projekt sieht überall gleich aus.",
-      "Ein Baustein aus dem Katalog steht sofort im Bild: auf der gewählten Fläche oder oben auf dem Körper, mit Maßlinien und Griff. Ein Klick setzt ihn um, „Übernehmen“ fügt ihn ein.",
-      "Zerlegen Sie einen Körper mit einer Passung in Einzelteile, fragt Solidon, welches Teil die Passung jetzt meint — statt Sie zur Rücknahme der Schritte zu schicken.",
-      "Die Handlungen an einem gewählten Körper oder Merkmal stehen rechts an einem Ort, in Gruppen zum Zuklappen, mit Suchfeld. Die Menüs Objekt, Ändern und Vorbereiten sind dafür weg; Kürzel gelten weiter.",
-      "Der Rechtsklick auf Körper oder Fläche zeigt nur noch, was es dort allein gibt: den Schritt dahinter, die Skizze auf der Fläche, das Ausblenden. Der Knopf „Bausteine“ steht in Akzentfarbe.",
-      "Vor dem Schreiben zeigt der Export, was der Prüfbericht gefunden hat — eine dünne Wand, eine verletzte Passung. Sie entscheiden, ob die Datei trotzdem entsteht.",
-      "Ordner, Format und Namensschema merkt sich Solidon je Projekt. Entstehen mehrere Dateien, steht das Namensmuster im Feld und lässt sich ändern.",
-      "Passt ein Körper aus losen Teilen — etwa ein Schriftzug — als Ganzes auf kein Bett, bietet der Prüfbericht an, ihn zu zerlegen und gleich auszurichten: ein Klick, und die Teile liegen auf den Platten.",
-      "Im Slicer öffnen gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte.",
-      "Das Filamentlager lässt sich auch auf einem FAT32-Stick, einer exFAT-Platte oder einer Netzfreigabe speichern. Vorher scheiterte dort jedes Speichern.",
-      "Lässt sich das Lager nicht lesen, sagt Solidon es auch im Filamentwähler, mit dem Knopf „Erneut versuchen“ — statt einer leeren Liste.",
-      "Vor der ersten Anfrage an einen Modell-Erzeuger sagt Solidon, welche Daten dorthin gehen.",
-      "Belegt ein anderer Lauf die Grafikkarte, wartet der Chat sichtbar, statt still zu stehen.",
-      "Die Mac-Pakete sind signiert und notarisiert. Der Umweg über „Datenschutz & Sicherheit“ → „Trotzdem öffnen“ entfällt.",
-      "Unter „Unterstützen“ steht neben PayPal jetzt GoFundMe zur Wahl; erst Ihr Klick öffnet den Browser, und ohne Browser lässt sich die Adresse kopieren."
+      "Zwei Klicks setzen ein regelmäßiges Vieleck: erst die Mitte, dann eine Ecke. Die Eckenzahl stellen Sie vorher ein — drei bis zwölf. Ein getippter Durchmesser bleibt als Maß stehen.",
+      "Ein Langloch entsteht aus zwei Klicks auf die Mitten der runden Enden; die Breite steht daneben in der Leiste. Beide Enden bleiben gleich groß, die Flanken gerade.",
+      "Vier neue Bedingungen: Winkel in Grad zwischen zwei Linien, gleich lang beziehungsweise gleich groß, Punkt auf der Mitte einer Linie, konzentrisch für zwei Kreise oder Bögen.",
+      "Ein gezogener Punkt bleibt am Zeiger, und die Nachbarn folgen: Eine Ecke des Rechtecks zieht die beiden Seiten mit, eine Linie streckt die Form. Vorher kam die Ecke nur ein Stück weit.",
+      "Ein geklicktes Rechteck ist frei: kein Festpunkt, keine Maße, solange Sie keine tippen. Eine getippte Breite oder Höhe bleibt als Maß stehen — so wie in Fusion.",
+      "Ein Langloch drehen dreht es — statt ein zweites quer darüber zu schneiden. Und wer ein Langloch bearbeitet, das er selbst gezogen hat, ändert diesen Schritt; der Verlauf bekommt keinen zweiten.",
+      "Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.",
+      "Nennen Sie im Chat nur eine Achse — „Bohrung auf x = 20“ —, wandert das Loch nur dort. Vorher sprang es in den beiden anderen Achsen auf null.",
+      "Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz.",
+      "Eine runde Wand — das Ende einer Lasche, der Boden einer Nut — heißt jetzt so. Vorher stand dort „Verrundung“ mit einer Kante, die es nicht gibt. Der Radius lässt sich ändern.",
+      "Eine Bohrung mit Nasen in der Wand, etwa der Ring eines Bajonettverschlusses, ist eine Bohrung. Vorher stand dort ein Langloch so lang wie breit, und jede Handlung hätte die Nasen entfernt.",
+      "Ein Langloch mit Fase am Rand ist ein Langloch; die Fase gehört dazu. Vorher standen an einem Rahmen 126 einzelne Senkungen im Baum.",
+      "Eine Kerbe oder das runde Ende einer Lasche ist keine Bohrung mehr, und zwei Stücke derselben runden Wand stehen als eines im Baum.",
+      "Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.",
+      "Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.",
+      "Der Schritt „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.",
+      "Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum.",
+      "Eine 3MF aus dem Slicer öffnet jetzt auch dann, wenn die Farben nicht eindeutig lesbar sind: Das Modell kommt einfarbig an, und der Prüfbericht sagt, warum. Vorher blieb die Datei ganz zu.",
+      "Bemalte Flächen aus Bambu Studio, Orca und Elegoo kommen genau so an, wie sie gemalt wurden — auch wenn die Farbe mitten durch ein Dreieck läuft. Vorher galt das als „nicht eindeutig“.",
+      "Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.",
+      "Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer.",
+      "Ein Baustein für Bohrungen — Einpressbuchse, Mutternfalle, Lagersitz, Gewinde, Schraube — sitzt sofort in der Bohrung, die Sie gewählt haben, statt auf der Mitte der Fläche.",
+      "Ziehen Sie einen Baustein am Griff im Bild, bewegt sich der ganze Baustein — auch an einer Kante des Schlüssellochs. Vorher wanderte nur das eine Merkmal, der Rest blieb stehen.",
+      "Haken und Löcher eines Bausteins stehen rechts als Anzahl — nicht mehr als „2,00 mm“. Und nach „Maße ändern“ bleibt der Baustein gewählt, auch wenn er danach andere Merkmale trägt."
     ],
     "en": [
-      "Filleting and chamfering now work on an imported model too: pick an edge in the view, enter a radius or a width. Before, they only worked on a body you drew yourself.",
-      "Offset face and draft angle also work on an imported model, and a recognised rounding can be changed or taken away there as well.",
-      "Offset face moves the face you clicked on. On a stair the other steps stay where they are instead of all moving at once.",
-      "When you place a hole, one tick turns it into a slot: you enter length and direction, and the preview shows both.",
-      "A hole that is already in the model can be pulled out into a slot afterwards — the diameter stays as it was measured.",
-      "The slot is widened by the material tolerance over its whole length. The travel a screw has inside stays the one you entered.",
-      "A countersink above a hole is now kept even on a part with round, sweeping surfaces — previously it was dropped there, and the hole and its countersink could no longer be moved together.",
-      "A cavity entirely inside the material, with no way out, appears in the object tree as an air pocket — with its volume. Previously it appeared as a hole that was not there.",
-      "On a strongly curved model Solidon now says what was measured instead of calling it a scan — and which features are left out on such a surface.",
-      "A label can now use eight fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.",
-      "Beside the upright faces there is now a round one and a handwritten one — those two come in a single style. All eight travel with the program, so a project looks the same everywhere.",
-      "A part from the catalogue appears in the view at once: on the selected face or on top of the body, with dimension lines and a handle. A click places it elsewhere, “Apply” inserts it.",
-      "If you split a body with a fit into separate parts, Solidon asks which part the fit now means — instead of sending you off to undo the steps.",
-      "The actions for a selected body or feature live in one place on the right, in groups you can fold, with a search box. The Object, Modify and Prepare menus are gone for that; shortcuts still work.",
-      "A right-click on a body or face shows only what exists there alone: the step behind it, the sketch on the face, hiding. The “Parts” button stands in accent colour.",
-      "Before writing, the export shows what the report found — a thin wall, a violated fit. You decide whether the file is written anyway.",
-      "Solidon remembers folder, format and naming scheme per project. If several files are written, the name pattern stands in the field and can be changed.",
-      "If a body made of loose parts — lettering, say — fits no bed as a whole, the report offers to split it and orient it right away: one click, and the parts lie on the plates.",
-      "Open in slicer hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate.",
-      "The filament stock can also be saved on a FAT32 stick, an exFAT drive or a network share. Before, every save failed there.",
-      "If the stock cannot be read, Solidon says so in the filament picker too, with the button “Try again” — instead of an empty list.",
-      "Before the first request to a model generator, Solidon says which data goes there.",
-      "If another job occupies the graphics card, the chat waits visibly instead of standing still.",
-      "The Mac packages are signed and notarised. The detour via “Privacy & Security” → “Open Anyway” is gone.",
-      "Under “Support Solidon”, GoFundMe is now on offer beside PayPal; only your click opens the browser, and without a browser the address can be copied."
+      "Two clicks set a regular polygon: first the centre, then a corner. You choose the number of corners beforehand — three to twelve. A typed diameter stays on as a dimension.",
+      "A slot comes from two clicks on the centres of its round ends; the width sits next to them in the bar. Both ends stay the same size, the flanks stay straight.",
+      "Four new constraints: an angle in degrees between two lines, equal length or size, a point at the middle of a line, concentric for two circles or arcs.",
+      "A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.",
+      "A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion.",
+      "Turning a slot turns it — instead of cutting a second one across it. And editing a slot you pulled yourself changes that step; the history gets no second one.",
+      "An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.",
+      "Name just one axis in the chat — “bore to x = 20” — and the hole moves only there. Before, it jumped to zero on the other two axes.",
+      "Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh.",
+      "A curved wall — the end of a tab, the floor of a groove — is now called that. Before, it said “Fillet” with an edge that does not exist. Its radius can be changed.",
+      "A bore with lugs in its wall, such as the ring of a bayonet mount, is a bore. Before, it appeared as a slot as long as it was wide, and every action would have removed the lugs.",
+      "A slot with a chamfered rim is a slot; the chamfer belongs to it. Before, one frame listed 126 separate countersinks in the tree.",
+      "A notch or the round end of a tab is no longer a hole, and two pieces of the same round wall appear as one in the tree.",
+      "A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.",
+      "When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.",
+      "The step “Split” starts in the middle of the part instead of at its underside. The number stays editable.",
+      "A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity.",
+      "A 3MF from the slicer now opens even when its colours cannot be read unambiguously: the model arrives in one colour, and the report says why. Before, the file stayed closed.",
+      "Painted faces from Bambu Studio, Orca and Elegoo arrive exactly as painted — even where a colour runs through the middle of a triangle. Before, that counted as “ambiguous”.",
+      "A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.",
+      "Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer.",
+      "A block meant for a hole — heat-set insert, nut trap, bearing seat, thread, screw — now sits straight in the hole you selected instead of at the centre of the face.",
+      "Drag a block by its handle in the view and the whole block moves — even from an edge of the keyhole. Before, only that one feature travelled and the rest stayed put.",
+      "Hooks and holes of a block appear on the right as a count — no longer as “2.00 mm”. And after “Change dimensions” the block stays selected, even when it ends up with different features."
     ],
     "es": [
-      "Redondear y achaflanar funcionan ahora también en un modelo importado: se elige una arista en la vista y se indica el radio o la anchura. Antes solo servían en un cuerpo propio.",
-      "Desplazar cara y ángulo de desmoldeo funcionan igualmente en un modelo importado, y allí se puede además cambiar o quitar un redondeo reconocido.",
-      "Desplazar cara mueve la cara sobre la que se ha hecho clic. En una escalera los demás escalones se quedan donde están, en vez de desplazarse todos a la vez.",
-      "Al colocar un taladro, una casilla lo convierte en ranura: usted indica la longitud y la dirección, y la vista previa muestra ambas.",
-      "Un taladro que ya está en el modelo se alarga después hasta convertirlo en ranura; el diámetro se mantiene tal como se midió.",
-      "La ranura se amplía en toda su longitud según la tolerancia del material. El recorrido que tiene un tornillo dentro sigue siendo el que usted indicó.",
-      "Un avellanado sobre un taladro se conserva también en una pieza con superficies redondeadas y curvas: antes se perdía ahí, y el taladro y su avellanado ya no podían desplazarse juntos.",
-      "Una cavidad por completo dentro del material, sin salida, aparece en el árbol de objetos como bolsa de aire, con su volumen. Antes aparecía como un taladro que no existía.",
-      "En un modelo muy curvado, Solidon dice ahora qué se ha medido, en vez de llamarlo un escaneo, y qué características se omiten en una superficie así.",
-      "Una inscripción puede usar ahora ocho fuentes en lugar de tres, más negrita y cursiva. La negrita lleva trazos más gruesos con la misma altura y sigue siendo legible donde la normal se emborrona.",
-      "Junto a las fuentes rectas hay ahora una redonda y una manuscrita, ambas en un solo estilo. Las ocho viajan con el programa, así que un proyecto se ve igual en todas partes.",
-      "Un bloque del catálogo aparece de inmediato en la vista: sobre la cara seleccionada o encima del cuerpo, con líneas de cota y asa. Un clic lo coloca en otro sitio, «Aplicar» lo inserta.",
-      "Si separa en piezas sueltas un cuerpo con un ajuste, Solidon pregunta a qué pieza se refiere ahora el ajuste, en lugar de mandarle a deshacer los pasos.",
-      "Las acciones para un cuerpo o característica seleccionados están a la derecha, en grupos plegables, con búsqueda. Los menús Objeto, Modificar y Preparar desaparecen; los atajos siguen.",
-      "El clic derecho sobre un cuerpo o una cara muestra solo lo que existe únicamente allí: el paso detrás, el boceto sobre la cara, ocultar. El botón «Bloques» está en color de acento.",
-      "Antes de escribir, la exportación muestra lo que ha encontrado el informe: una pared delgada, un ajuste incumplido. Usted decide si el archivo se escribe igualmente.",
-      "Solidon recuerda carpeta, formato y esquema de nombres por proyecto. Si se generan varios archivos, el patrón de nombre está en el campo y se puede cambiar.",
-      "Si un cuerpo de piezas sueltas —un rótulo, por ejemplo— no cabe entero en ninguna cama, el informe ofrece separarlo y orientarlo enseguida: un clic y las piezas quedan en las placas.",
-      "Abrir en el slicer entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa.",
-      "El almacén de filamentos también se puede guardar en una memoria FAT32, un disco exFAT o un recurso compartido de red. Antes, allí fallaba cada guardado.",
-      "Si el almacén no se puede leer, Solidon lo dice también en el selector de filamento, con el botón «Volver a intentarlo», en vez de una lista vacía.",
-      "Antes de la primera petición a un generador de modelos, Solidon dice qué datos van allí.",
-      "Si otro proceso ocupa la tarjeta gráfica, el chat espera de forma visible en vez de quedarse parado.",
-      "Los paquetes para Mac están firmados y notarizados. El rodeo por «Privacidad y seguridad» → «Abrir igualmente» ya no hace falta.",
-      "En «Apoyar Solidon» ahora se puede elegir GoFundMe junto a PayPal; solo su clic abre el navegador, y sin navegador se puede copiar la dirección."
+      "Dos clics crean un polígono regular: primero el centro, luego una esquina. El número de esquinas se elige antes: de tres a doce. Un diámetro escrito queda como cota.",
+      "Una ranura surge de dos clics en los centros de sus extremos redondeados; el ancho está al lado en la barra. Ambos extremos mantienen el tamaño y los flancos, rectos.",
+      "Cuatro condiciones nuevas: ángulo en grados entre dos líneas, igual longitud o tamaño, punto en el centro de una línea, y concéntrico para dos círculos o arcos.",
+      "Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.",
+      "Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion.",
+      "Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.",
+      "Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.",
+      "Si en el chat nombra solo un eje — «taladro a x = 20» —, el agujero se mueve solo ahí. Antes saltaba a cero en los otros dos ejes.",
+      "Redondear avisa de antemano que un cuerpo exacto admite un radio menor que una malla, y qué ayuda entonces: un radio menor o seguir trabajando sobre la malla.",
+      "Una pared curva —el extremo de una pestaña, el fondo de una ranura— ahora se llama así. Antes ponía «Redondeo» con una arista que no existe. El radio se puede cambiar.",
+      "Un agujero con resaltes en la pared, como el anillo de un cierre de bayoneta, es un agujero. Antes aparecía como un agujero alargado tan largo como ancho, y cualquier acción quitaba los resaltes.",
+      "Una ranura con chaflán en el borde es una ranura; el chaflán forma parte de ella. Antes, en un marco aparecían 126 avellanados sueltos en el árbol.",
+      "Una muesca o el extremo redondo de una lengüeta ya no es un taladro, y dos trozos de la misma pared redonda aparecen como uno en el árbol.",
+      "Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.",
+      "Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.",
+      "El paso «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.",
+      "Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco.",
+      "Un 3MF del slicer ahora se abre aunque sus colores no se puedan leer sin ambigüedad: el modelo llega en un solo color y el informe dice por qué. Antes, el archivo no se abría.",
+      "Las caras pintadas en Bambu Studio, Orca y Elegoo llegan exactamente como se pintaron, incluso cuando un color atraviesa un triángulo. Antes eso contaba como «ambiguo».",
+      "Un relieve de texto del slicer de Elegoo o de Bambu Studio en el archivo detenía la importación. Ahora el archivo se abre.",
+      "Los modificadores y bloqueadores de soportes del slicer ya no aparecen como cuerpos, y un hueco («pieza negativa») se resta, como en el slicer.",
+      "Un bloque para agujeros — inserto térmico, alojamiento de tuerca, asiento de rodamiento, rosca, tornillo — se coloca directamente en el agujero elegido, no en el centro de la cara.",
+      "Si arrastra un bloque por el asa en la vista, se mueve el bloque entero, aunque haya agarrado un borde del ojo de cerradura. Antes solo se desplazaba esa característica.",
+      "Ganchos y agujeros de un bloque aparecen a la derecha como cantidad, no como «2,00 mm». Y tras «Cambiar medidas» el bloque sigue seleccionado, aunque tenga otras características."
     ],
     "fr": [
-      "Les congés et les chanfreins fonctionnent maintenant aussi sur un modèle importé : on choisit une arête dans la vue et on indique un rayon ou une largeur. Avant, il fallait un corps dessiné soi-même.",
-      "Décaler la face et la dépouille fonctionnent eux aussi sur un modèle importé, et on peut y modifier ou retirer un arrondi reconnu.",
-      "Décaler la face déplace la face sur laquelle on a cliqué. Sur un escalier, les autres marches restent en place au lieu de bouger toutes ensemble.",
-      "Au moment de placer un perçage, une case en fait un trou oblong : vous saisissez la longueur et la direction, et l'aperçu montre les deux.",
-      "Un perçage déjà présent dans le modèle s'étire après coup en trou oblong — le diamètre reste tel qu'il a été mesuré.",
-      "Le trou oblong est élargi de la tolérance du matériau sur toute sa longueur. La course dont dispose une vis reste celle que vous avez saisie.",
-      "Un fraisage au-dessus d'un perçage est conservé même sur une pièce aux surfaces rondes et galbées. Auparavant il disparaissait, avec lui le déplacement commun des deux.",
-      "Une cavité entièrement dans la matière, sans issue, figure dans l'arborescence comme poche d'air, avec son volume. Auparavant, elle y figurait comme un perçage qui n'existait pas.",
-      "Sur un modèle très courbé, Solidon dit maintenant ce qui a été mesuré au lieu de parler d'un scan, et quelles formes sont laissées de côté sur une telle surface.",
-      "Une inscription dispose désormais de huit polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale et reste lisible là où le style normal bave.",
-      "À côté des polices droites, il y a maintenant une ronde et une manuscrite, toutes deux en un seul style. Les huit voyagent avec le programme : un projet a partout la même apparence.",
-      "Un bloc du catalogue apparaît aussitôt dans la vue : sur la face sélectionnée ou sur le dessus du corps, avec cotes et poignée. Un clic le place ailleurs, « Appliquer » l'insère.",
-      "Si vous séparez en pièces distinctes un corps portant un ajustement, Solidon demande quelle pièce l'ajustement vise désormais — au lieu de vous renvoyer à l'annulation des étapes.",
-      "Les actions pour un corps ou une entité sélectionnés sont à droite, en groupes pliables, avec recherche. Les menus Objet, Modifier et Préparer disparaissent ; les raccourcis restent.",
-      "Le clic droit sur un corps ou une face ne montre que ce qui n'existe que là : l'étape derrière, l'esquisse sur la face, le masquage. Le bouton « Blocs » est en couleur d'accent.",
-      "Avant d'écrire, l'export montre ce que le rapport a trouvé : une paroi mince, un ajustement non respecté. C'est vous qui décidez si le fichier est écrit malgré tout.",
-      "Solidon retient le dossier, le format et le schéma de nom par projet. Si plusieurs fichiers sont écrits, le motif de nom figure dans le champ et se modifie.",
-      "Si un corps fait de pièces détachées — un lettrage, par exemple — ne tient entier sur aucun plateau, le rapport propose de le séparer et de l'orienter : un clic, et les pièces sont sur les plateaux.",
-      "Ouvrir dans le slicer transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau.",
-      "Le stock de filament s'enregistre aussi sur une clé FAT32, un disque exFAT ou un partage réseau. Avant, chaque enregistrement y échouait.",
-      "Si le stock ne peut pas être lu, Solidon le dit aussi dans le sélecteur de filament, avec le bouton « Réessayer » — au lieu d'une liste vide.",
-      "Avant la première requête à un générateur de modèles, Solidon dit quelles données y partent.",
-      "Si un autre calcul occupe la carte graphique, le chat attend visiblement au lieu de rester figé.",
-      "Les paquets Mac sont signés et notarisés. Le détour par « Confidentialité et sécurité » → « Ouvrir quand même » disparaît.",
-      "Sous « Soutenir Solidon », GoFundMe est maintenant proposé à côté de PayPal ; seul votre clic ouvre le navigateur, et sans navigateur l'adresse se copie."
+      "Deux clics posent un polygone régulier : d'abord le centre, puis un coin. Le nombre de coins se règle avant — de trois à douze. Un diamètre saisi reste comme cote.",
+      "Un trou oblong naît de deux clics sur les centres de ses extrémités arrondies ; la largeur est à côté dans la barre. Les deux bouts gardent leur taille, les flancs restent droits.",
+      "Quatre nouvelles contraintes : angle en degrés entre deux lignes, même longueur ou taille, point au milieu d'une ligne, concentrique pour deux cercles ou arcs.",
+      "Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.",
+      "Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion.",
+      "Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.",
+      "Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.",
+      "Si vous ne nommez qu'un axe dans le chat — « perçage à x = 20 » —, le trou ne bouge que là. Avant, il retombait à zéro sur les deux autres axes.",
+      "Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage.",
+      "Une paroi courbe — le bout d’une patte, le fond d’une rainure — s’appelle désormais ainsi. Avant, il y avait « Congé » avec une arête qui n’existe pas. Le rayon se modifie.",
+      "Un perçage avec des ergots dans sa paroi, comme la bague d’une fermeture à baïonnette, est un perçage. Avant, c’était un trou oblong aussi long que large, et chaque action aurait ôté les ergots.",
+      "Une rainure au bord chanfreiné est une rainure ; le chanfrein en fait partie. Avant, un cadre affichait 126 lamages isolés dans l’arbre.",
+      "Une encoche ou l’extrémité ronde d’une languette n’est plus un trou, et deux morceaux de la même paroi ronde n’en font plus qu’un dans l’arbre.",
+      "Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.",
+      "Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.",
+      "L’étape « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.",
+      "Un outil qui ne peut rien faire sur cette pièce apparaît grisé et dit pourquoi — « Fermer une surface ouverte » sur une pièce fermée, « Séparer en pièces » sur une seule, « Treillis » sans cavité.",
+      "Un 3MF issu du slicer s’ouvre désormais même si ses couleurs ne se lisent pas sans ambiguïté : le modèle arrive en une seule couleur, et le rapport dit pourquoi. Avant, le fichier restait fermé.",
+      "Les faces peintes dans Bambu Studio, Orca et Elegoo arrivent exactement telles qu’elles ont été peintes — même lorsqu’une couleur traverse un triangle. Avant, cela comptait comme « ambigu ».",
+      "Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.",
+      "Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer.",
+      "Un bloc destiné à un perçage — insert thermique, logement d’écrou, siège de roulement, filetage, vis — se pose directement dans le perçage choisi, et non au centre de la face.",
+      "Faites glisser un bloc par sa poignée dans la vue et c’est tout le bloc qui bouge, même saisi par un bord du trou de serrure. Avant, seule cette caractéristique se déplaçait.",
+      "Crochets et trous d’un bloc apparaissent à droite comme un nombre, non plus comme « 2,00 mm ». Après « Modifier les cotes », le bloc reste sélectionné, même avec d’autres caractéristiques."
     ],
     "it": [
-      "Raccordare e smussare funzionano ora anche su un modello importato: si sceglie uno spigolo nella vista e si indica raggio o larghezza. Prima servivano solo su un corpo disegnato da sé.",
-      "Anche scostare la faccia e l'angolo di sformo funzionano su un modello importato, e lì si può pure modificare o togliere un raccordo riconosciuto.",
-      "Scostare la faccia muove la faccia su cui si è fatto clic. Su una scala gli altri gradini restano dove sono, invece di spostarsi tutti insieme.",
-      "Quando posizioni un foro, una casella lo trasforma in asola: indichi lunghezza e direzione, e l'anteprima le mostra entrambe.",
-      "Un foro già presente nel modello si allunga in seguito fino a diventare un'asola: il diametro resta quello misurato.",
-      "L'asola viene allargata della tolleranza del materiale su tutta la sua lunghezza. La corsa che una vite ha al suo interno resta quella indicata.",
-      "Una svasatura sopra un foro viene mantenuta anche su un pezzo con superfici tonde e sinuose: prima andava persa, e foro e svasatura non potevano più essere spostati insieme.",
-      "Una cavità interamente nel materiale, senza via d'uscita, compare nell'albero degli oggetti come sacca d'aria, con il suo volume. Prima compariva come un foro inesistente.",
-      "Su un modello molto curvo Solidon dice ora che cosa è stato misurato invece di chiamarlo una scansione, e quali forme su una superficie simile restano fuori.",
-      "Una scritta può usare ora otto caratteri invece di tre, più grassetto e corsivo. Il grassetto porta tratti più spessi a parità di altezza e resta leggibile dove lo stile normale sbava.",
-      "Accanto ai caratteri diritti ci sono ora uno tondo e uno manoscritto, entrambi in un solo stile. Tutti e otto viaggiano con il programma, così un progetto appare uguale ovunque.",
-      "Un blocco dal catalogo compare subito nella vista: sulla faccia selezionata o sopra il corpo, con quote e maniglia. Un clic lo posiziona altrove, «Applica» lo inserisce.",
-      "Se separate in pezzi distinti un corpo con un accoppiamento, Solidon chiede a quale pezzo si riferisca ora l'accoppiamento — invece di rimandarvi ad annullare i passi.",
-      "Le azioni per un corpo o una caratteristica selezionati stanno a destra, in gruppi richiudibili, con ricerca. I menu Oggetto, Modifica e Prepara sono spariti; le scorciatoie restano.",
-      "Il clic destro su un corpo o una faccia mostra solo ciò che esiste soltanto lì: il passo dietro, lo schizzo sulla faccia, il nascondere. Il pulsante «Blocchi» è in colore d'accento.",
-      "Prima di scrivere, l'esportazione mostra che cosa ha trovato il rapporto: una parete sottile, un accoppiamento violato. Decidete voi se il file nasce lo stesso.",
-      "Solidon ricorda cartella, formato e schema dei nomi per ogni progetto. Se nascono più file, il modello del nome sta nel campo e si può cambiare.",
-      "Se un corpo fatto di pezzi singoli — una scritta, per esempio — non entra intero in nessun piano, il rapporto propone di separarlo e orientarlo subito: un clic e i pezzi stanno sui piani.",
-      "Apri nello slicer consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano.",
-      "Il magazzino filamenti si può salvare anche su una chiavetta FAT32, un disco exFAT o una condivisione di rete. Prima lì ogni salvataggio falliva.",
-      "Se il magazzino non si può leggere, Solidon lo dice anche nel selettore del filamento, con il pulsante «Prova di nuovo» — invece di un elenco vuoto.",
-      "Prima della prima richiesta a un generatore di modelli, Solidon dice quali dati vi arrivano.",
-      "Se un altro processo occupa la scheda grafica, la chat aspetta in modo visibile invece di restare ferma.",
-      "I pacchetti per Mac sono firmati e notarizzati. Il giro per «Privacy e sicurezza» → «Apri comunque» non serve più.",
-      "Sotto «Sostieni Solidon», accanto a PayPal si può ora scegliere GoFundMe; solo il vostro clic apre il browser, e senza browser l'indirizzo si può copiare."
+      "Due clic creano un poligono regolare: prima il centro, poi un angolo. Il numero di angoli si imposta prima: da tre a dodici. Un diametro digitato resta come quota.",
+      "Un'asola nasce da due clic sui centri delle sue estremità arrotondate; la larghezza sta accanto nella barra. Le due estremità restano uguali e i fianchi diritti.",
+      "Quattro nuovi vincoli: angolo in gradi fra due linee, stessa lunghezza o dimensione, punto a metà di una linea, concentrico per due cerchi o archi.",
+      "Un punto trascinato resta sotto il puntatore e i vicini lo seguono: un angolo del rettangolo porta con sé i due lati, una linea allunga la forma. Prima l'angolo arrivava solo a metà strada.",
+      "Un rettangolo fatto con i clic è libero: nessun punto fisso, nessuna quota finché non la digiti. Una larghezza o altezza digitata resta come quota, come in Fusion.",
+      "Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.",
+      "Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.",
+      "Se nella chat indichi un solo asse — « foro a x = 20 » —, il foro si sposta solo lì. Prima negli altri due assi saltava a zero.",
+      "Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh.",
+      "Una parete curva — l’estremità di una linguetta, il fondo di una scanalatura — ora si chiama così. Prima c’era «Raccordo» con uno spigolo che non esiste. Il raggio si può cambiare.",
+      "Un foro con nasi nella parete, come l’anello di una chiusura a baionetta, è un foro. Prima compariva come un’asola lunga quanto larga, e ogni azione avrebbe tolto i nasi.",
+      "Un’asola con il bordo smussato è un’asola; lo smusso ne fa parte. Prima un telaio mostrava 126 svasature separate nell’albero.",
+      "Una tacca o l’estremità arrotondata di una linguetta non è più un foro, e due pezzi della stessa parete rotonda compaiono come uno solo nell’albero.",
+      "Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.",
+      "Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.",
+      "Il passo «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.",
+      "Uno strumento che su questo pezzo non può fare nulla appare grigio e dice perché — «Chiudi superficie aperta» su un pezzo chiuso, «Dividi in parti» su un pezzo solo, «Reticolo» senza cavità.",
+      "Un 3MF dallo slicer ora si apre anche quando i colori non si leggono senza ambiguità: il modello arriva in un solo colore e il rapporto dice perché. Prima il file restava chiuso.",
+      "Le facce dipinte in Bambu Studio, Orca ed Elegoo arrivano esattamente come dipinte, anche dove un colore attraversa un triangolo. Prima contava come «ambiguo».",
+      "Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.",
+      "Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer.",
+      "Un blocco per fori — inserto a caldo, sede per dado, sede per cuscinetto, filettatura, vite — si posa subito nel foro scelto, invece che al centro della faccia.",
+      "Trascinando un blocco con la maniglia nella vista si sposta l’intero blocco, anche afferrandolo a un bordo del foro a serratura. Prima si spostava solo quella caratteristica.",
+      "Ganci e fori di un blocco compaiono a destra come numero, non più come «2,00 mm». E dopo «Modifica misure» il blocco resta selezionato, anche con altre caratteristiche."
     ],
     "pt": [
-      "Arredondar e chanfrar funcionam agora também num modelo importado: escolhe-se uma aresta na vista e indica-se o raio ou a largura. Antes só funcionavam num corpo próprio.",
-      "Deslocar a face e o ângulo de saída funcionam igualmente num modelo importado, e aí também se pode alterar ou retirar um arredondamento reconhecido.",
-      "Deslocar a face move a face em que se clicou. Numa escada os restantes degraus ficam onde estão, em vez de se moverem todos ao mesmo tempo.",
-      "Ao colocar um furo, uma caixa transforma-o num rasgo: indica o comprimento e a direção, e a pré-visualização mostra ambos.",
-      "Um furo que já está no modelo pode ser esticado depois até formar um rasgo — o diâmetro mantém-se como foi medido.",
-      "O rasgo é alargado pela tolerância do material em todo o seu comprimento. O curso que um parafuso tem lá dentro continua a ser o que indicou.",
-      "Um escareado sobre um furo passa a manter-se também numa peça com superfícies redondas e curvas — antes perdia-se aí, e o furo e o seu escareado já não podiam ser deslocados em conjunto.",
-      "Uma cavidade inteiramente dentro do material, sem saída, aparece na árvore de objetos como bolsa de ar, com o seu volume. Antes aparecia como um furo que não existia.",
-      "Num modelo muito curvo, o Solidon diz agora o que foi medido em vez de lhe chamar uma digitalização, e que formas ficam de fora numa superfície dessas.",
-      "Uma inscrição pode usar agora oito tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura e continua legível onde o estilo normal borra.",
-      "Ao lado dos tipos de letra direitos há agora um redondo e um manuscrito, ambos num só estilo. Os oito viajam com o programa, por isso um projeto fica igual em todo o lado.",
-      "Um bloco do catálogo aparece logo na vista: na face selecionada ou em cima do corpo, com cotas e pega. Um clique coloca-o noutro sítio, «Aplicar» insere-o.",
-      "Se separar em peças distintas um corpo com um ajuste, o Solidon pergunta a que peça se refere agora o ajuste — em vez de o mandar desfazer os passos.",
-      "As ações para um corpo ou característica selecionados estão à direita, em grupos que se fecham, com pesquisa. Os menus Objeto, Modificar e Preparar desapareceram; os atalhos continuam.",
-      "O clique direito num corpo ou numa face mostra apenas o que só existe aí: o passo por trás, o esboço na face, o ocultar. O botão «Blocos» está em cor de destaque.",
-      "Antes de escrever, a exportação mostra o que o relatório encontrou: uma parede fina, um ajuste violado. É você que decide se o ficheiro é escrito à mesma.",
-      "O Solidon guarda pasta, formato e esquema de nomes por projeto. Se surgirem vários ficheiros, o padrão do nome fica no campo e pode ser alterado.",
-      "Se um corpo feito de peças soltas — um letreiro, por exemplo — não cabe inteiro em nenhuma mesa, o relatório propõe separá-lo e orientá-lo logo: um clique e as peças ficam nas mesas.",
-      "Abrir no slicer entrega ao ElegooSlicer, Orca e Bambu Studio todas as mesas num único ficheiro — uma janela em vez de uma por mesa.",
-      "O armazém de filamentos também pode ser gravado numa pen FAT32, num disco exFAT ou numa partilha de rede. Antes, aí falhava cada gravação.",
-      "Se o armazém não puder ser lido, o Solidon di-lo também no seletor de filamento, com o botão «Tentar de novo» — em vez de uma lista vazia.",
-      "Antes do primeiro pedido a um gerador de modelos, o Solidon diz que dados vão para lá.",
-      "Se outro processo ocupar a placa gráfica, o chat espera de forma visível em vez de ficar parado.",
-      "Os pacotes para Mac estão assinados e notarizados. O desvio por «Privacidade e Segurança» → «Abrir mesmo assim» deixa de ser preciso.",
-      "Em «Apoiar o Solidon» pode agora escolher-se GoFundMe ao lado do PayPal; só o seu clique abre o navegador, e sem navegador pode copiar-se o endereço."
+      "Dois cliques criam um polígono regular: primeiro o centro, depois um canto. O número de cantos define-se antes — de três a doze. Um diâmetro escrito fica como cota.",
+      "Um furo oblongo nasce de dois cliques nos centros das suas extremidades arredondadas; a largura fica ao lado na barra. Ambas mantêm o tamanho e os flancos, direitos.",
+      "Quatro novas condições: ângulo em graus entre duas linhas, igual comprimento ou tamanho, ponto a meio de uma linha, concêntrico para dois círculos ou arcos.",
+      "Um ponto arrastado fica no ponteiro e os vizinhos seguem-no: um canto do retângulo leva os dois lados consigo, uma linha estica a forma. Antes, o canto só ia parte do caminho.",
+      "Um retângulo feito com cliques é livre: sem ponto fixo, sem cotas enquanto não as escrever. Uma largura ou altura escrita fica como cota — como no Fusion.",
+      "Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.",
+      "Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.",
+      "Se no chat indicar só um eixo — «furo em x = 20» —, o furo desloca-se apenas aí. Antes saltava para zero nos outros dois eixos.",
+      "Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha.",
+      "Uma parede curva — a ponta de uma patilha, o fundo de uma ranhura — chama-se agora assim. Antes dizia «Arredondamento» com uma aresta que não existe. O raio pode ser alterado.",
+      "Um furo com saliências na parede, como o anel de um fecho de baioneta, é um furo. Antes aparecia como um furo oblongo tão comprido quanto largo, e qualquer ação removia as saliências.",
+      "Uma ranhura com chanfro no bordo é uma ranhura; o chanfro faz parte dela. Antes, uma moldura mostrava 126 escareados avulsos na árvore.",
+      "Um entalhe ou a ponta redonda de uma lingueta já não é um furo, e dois pedaços da mesma parede redonda aparecem como um só na árvore.",
+      "Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.",
+      "Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.",
+      "O passo «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.",
+      "Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade.",
+      "Um 3MF do slicer abre agora mesmo quando as cores não se leem sem ambiguidade: o modelo chega numa só cor e o relatório diz porquê. Antes, o ficheiro ficava fechado.",
+      "As faces pintadas no Bambu Studio, Orca e Elegoo chegam exatamente como foram pintadas — mesmo onde uma cor atravessa um triângulo. Antes, isso contava como «ambíguo».",
+      "Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.",
+      "Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer.",
+      "Um bloco para furos — inserto térmico, alojamento de porca, assento de rolamento, rosca, parafuso — assenta logo no furo escolhido, em vez de no centro da face.",
+      "Ao arrastar um bloco pela pega na vista, move-se o bloco inteiro, mesmo agarrado por uma aresta do furo de fechadura. Antes só se deslocava essa característica.",
+      "Ganchos e furos de um bloco aparecem à direita como quantidade, e não como «2,00 mm». E depois de «Alterar medidas» o bloco continua selecionado, mesmo com outras características."
     ]
   },
   "notes_by_language": {
-    "de": "Langlöcher, Verrunden und Fasen am eingelesenen Modell, acht Schriften für Beschriftungen, und alle Handlungen rechts an einem Ort. Die Mac-Pakete sind jetzt signiert. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
-    "en": "Slots, fillets and chamfers on imported models, eight fonts for labels, and every action in one place on the right. The Mac packages are now signed. The demo stays complete and needs no key, until 30 October 2026.",
-    "es": "Ranuras, redondeos y chaflanes en modelos importados, ocho fuentes para inscripciones y todas las acciones en un solo lugar, a la derecha. Los paquetes para Mac ya están firmados. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
-    "fr": "Trous oblongs, congés et chanfreins sur les modèles importés, huit polices pour les inscriptions, et toutes les actions au même endroit, à droite. Les paquets Mac sont désormais signés. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
-    "it": "Asole, raccordi e smussi sui modelli importati, otto caratteri per le scritte e tutte le azioni in un unico posto, a destra. I pacchetti per Mac sono ora firmati. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
-    "pt": "Rasgos, arredondamentos e chanfros em modelos importados, oito tipos de letra para inscrições e todas as ações num só lugar, à direita. Os pacotes para Mac estão agora assinados. A demo continua completa e sem chave, até 30 de outubro de 2026."
+    "de": "Vieleck, Langloch, Verrunden und Fase im Skizzeneditor. Eingelesene Modelle werden bis zu dreißigmal schneller erkannt, und eine runde Wand heißt runde Wand. Jede Vorschau sagt, was sie zeigt, und 3MF-Dateien aus Bambu Studio, Orca und Elegoo öffnen mit allen Farben. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
+    "en": "Polygons, slots, fillets and chamfers in the sketch editor. Imported models are recognised up to thirty times faster, and a round wall is called a round wall. Every preview says what it shows, and 3MF files from Bambu Studio, Orca and Elegoo open with all their colours. The demo stays complete and needs no key, until 30 October 2026.",
+    "es": "Polígonos, ranuras, redondeos y chaflanes en el editor de bocetos. Los modelos importados se reconocen hasta treinta veces más rápido, y una pared redonda se llama pared redonda. Cada vista previa dice lo que muestra, y los archivos 3MF de Bambu Studio, Orca y Elegoo se abren con todos sus colores. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
+    "fr": "Polygones, trous oblongs, congés et chanfreins dans l’éditeur d’esquisse. Les modèles importés sont reconnus jusqu’à trente fois plus vite, et une paroi ronde s’appelle une paroi ronde. Chaque aperçu dit ce qu’il montre, et les fichiers 3MF de Bambu Studio, Orca et Elegoo s’ouvrent avec toutes leurs couleurs. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
+    "it": "Poligoni, asole, raccordi e smussi nell’editor di schizzi. I modelli importati vengono riconosciuti fino a trenta volte più in fretta, e una parete rotonda si chiama parete rotonda. Ogni anteprima dice cosa mostra, e i file 3MF di Bambu Studio, Orca ed Elegoo si aprono con tutti i loro colori. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
+    "pt": "Polígonos, rasgos, arredondamentos e chanfros no editor de esboços. Os modelos importados são reconhecidos até trinta vezes mais depressa, e uma parede redonda chama-se parede redonda. Cada pré-visualização diz o que mostra, e os ficheiros 3MF do Bambu Studio, Orca e Elegoo abrem com todas as suas cores. A demo continua completa e sem chave, até 30 de outubro de 2026."
   },
   "groups": {
     "de": [
       {
-        "title": "Konstruieren und Ändern",
+        "title": "Zeichnen",
         "points": [
-          "Verrunden und Fasen greifen jetzt auch an einem eingelesenen Modell: Kante im Bild wählen, Radius oder Breite eingeben. Vorher ging das nur an einem Körper, den Sie selbst gezeichnet haben.",
-          "Fläche versetzen und Formschräge arbeiten ebenfalls am eingelesenen Modell, und eine erkannte Rundung lässt sich dort jetzt ändern oder ganz wegnehmen.",
-          "Fläche versetzen bewegt die Fläche, auf die Sie geklickt haben. An einer Treppe bleiben die übrigen Stufen stehen, statt alle zugleich zu wandern."
+          "Zwei Klicks setzen ein regelmäßiges Vieleck: erst die Mitte, dann eine Ecke. Die Eckenzahl stellen Sie vorher ein — drei bis zwölf. Ein getippter Durchmesser bleibt als Maß stehen.",
+          "Ein Langloch entsteht aus zwei Klicks auf die Mitten der runden Enden; die Breite steht daneben in der Leiste. Beide Enden bleiben gleich groß, die Flanken gerade.",
+          "Vier neue Bedingungen: Winkel in Grad zwischen zwei Linien, gleich lang beziehungsweise gleich groß, Punkt auf der Mitte einer Linie, konzentrisch für zwei Kreise oder Bögen.",
+          "Ein gezogener Punkt bleibt am Zeiger, und die Nachbarn folgen: Eine Ecke des Rechtecks zieht die beiden Seiten mit, eine Linie streckt die Form. Vorher kam die Ecke nur ein Stück weit.",
+          "Ein geklicktes Rechteck ist frei: kein Festpunkt, keine Maße, solange Sie keine tippen. Eine getippte Breite oder Höhe bleibt als Maß stehen — so wie in Fusion."
         ]
       },
       {
-        "title": "Bohren und Platzieren",
+        "title": "Konstruieren und Ändern",
         "points": [
-          "Beim Setzen einer Bohrung machen Sie daraus mit einem Haken ein Langloch: Sie geben Länge und Richtung ein, die Vorschau zeigt beides mit.",
-          "Eine Bohrung, die schon im Modell steckt, ziehen Sie nachträglich zu einem Langloch — der Durchmesser bleibt, wie er gemessen wurde.",
-          "Das Langloch wird über die ganze Länge um die Materialtoleranz geweitet. Der Weg, den eine Schraube darin hat, bleibt der, den Sie eingegeben haben."
+          "Ein Langloch drehen dreht es — statt ein zweites quer darüber zu schneiden. Und wer ein Langloch bearbeitet, das er selbst gezogen hat, ändert diesen Schritt; der Verlauf bekommt keinen zweiten.",
+          "Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.",
+          "Nennen Sie im Chat nur eine Achse — „Bohrung auf x = 20“ —, wandert das Loch nur dort. Vorher sprang es in den beiden anderen Achsen auf null.",
+          "Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz."
         ]
       },
       {
         "title": "Erkennen",
         "points": [
-          "Eine Senkung über einer Bohrung bleibt auch an einem Teil erhalten, das runde, geschwungene Flächen hat — vorher fiel sie dort weg, und Bohrung und Senkung ließen sich nicht mehr gemeinsam versetzen.",
-          "Ein Hohlraum ganz im Material, ohne Verbindung nach außen, steht als Lufteinschluss im Objektbaum — mit seinem Volumen. Vorher stand dort eine Bohrung, die es nicht gab.",
-          "Bei einem stark gekrümmten Modell sagt Solidon jetzt, was gemessen wurde, statt es einen Scan zu nennen — und welche Merkmale an einer solchen Fläche wegfallen."
-        ]
-      },
-      {
-        "title": "Beschriften",
-        "points": [
-          "Für eine Beschriftung stehen acht Schriften zur Wahl statt drei — dazu Fett und Kursiv. Fett trägt bei gleicher Höhe dickere Striche und bleibt lesbar, wo der normale Schnitt verschmiert.",
-          "Neben den geraden Schriften liegen jetzt eine runde und eine geschriebene bei — die beiden gibt es nur in einem Schnitt. Alle acht reisen mit dem Programm, ein Projekt sieht überall gleich aus."
-        ]
-      },
-      {
-        "title": "Bausteine und Passungen",
-        "points": [
-          "Ein Baustein aus dem Katalog steht sofort im Bild: auf der gewählten Fläche oder oben auf dem Körper, mit Maßlinien und Griff. Ein Klick setzt ihn um, „Übernehmen“ fügt ihn ein.",
-          "Zerlegen Sie einen Körper mit einer Passung in Einzelteile, fragt Solidon, welches Teil die Passung jetzt meint — statt Sie zur Rücknahme der Schritte zu schicken."
+          "Eine runde Wand — das Ende einer Lasche, der Boden einer Nut — heißt jetzt so. Vorher stand dort „Verrundung“ mit einer Kante, die es nicht gibt. Der Radius lässt sich ändern.",
+          "Eine Bohrung mit Nasen in der Wand, etwa der Ring eines Bajonettverschlusses, ist eine Bohrung. Vorher stand dort ein Langloch so lang wie breit, und jede Handlung hätte die Nasen entfernt.",
+          "Ein Langloch mit Fase am Rand ist ein Langloch; die Fase gehört dazu. Vorher standen an einem Rahmen 126 einzelne Senkungen im Baum.",
+          "Eine Kerbe oder das runde Ende einer Lasche ist keine Bohrung mehr, und zwei Stücke derselben runden Wand stehen als eines im Baum."
         ]
       },
       {
         "title": "Ansicht und Bedienung",
         "points": [
-          "Die Handlungen an einem gewählten Körper oder Merkmal stehen rechts an einem Ort, in Gruppen zum Zuklappen, mit Suchfeld. Die Menüs Objekt, Ändern und Vorbereiten sind dafür weg; Kürzel gelten weiter.",
-          "Der Rechtsklick auf Körper oder Fläche zeigt nur noch, was es dort allein gibt: den Schritt dahinter, die Skizze auf der Fläche, das Ausblenden. Der Knopf „Bausteine“ steht in Akzentfarbe."
+          "Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.",
+          "Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.",
+          "Der Schritt „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.",
+          "Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum."
         ]
       },
       {
         "title": "Dateien und Export",
         "points": [
-          "Vor dem Schreiben zeigt der Export, was der Prüfbericht gefunden hat — eine dünne Wand, eine verletzte Passung. Sie entscheiden, ob die Datei trotzdem entsteht.",
-          "Ordner, Format und Namensschema merkt sich Solidon je Projekt. Entstehen mehrere Dateien, steht das Namensmuster im Feld und lässt sich ändern."
+          "Eine 3MF aus dem Slicer öffnet jetzt auch dann, wenn die Farben nicht eindeutig lesbar sind: Das Modell kommt einfarbig an, und der Prüfbericht sagt, warum. Vorher blieb die Datei ganz zu.",
+          "Bemalte Flächen aus Bambu Studio, Orca und Elegoo kommen genau so an, wie sie gemalt wurden — auch wenn die Farbe mitten durch ein Dreieck läuft. Vorher galt das als „nicht eindeutig“.",
+          "Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.",
+          "Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer."
         ]
       },
       {
-        "title": "Druckbett und Übergabe",
+        "title": "Bausteine und Passungen",
         "points": [
-          "Passt ein Körper aus losen Teilen — etwa ein Schriftzug — als Ganzes auf kein Bett, bietet der Prüfbericht an, ihn zu zerlegen und gleich auszurichten: ein Klick, und die Teile liegen auf den Platten.",
-          "Im Slicer öffnen gibt ElegooSlicer, Orca und Bambu Studio alle Platten in einer Datei — ein Fenster statt eines je Platte."
-        ]
-      },
-      {
-        "title": "Filamente und Lager",
-        "points": [
-          "Das Filamentlager lässt sich auch auf einem FAT32-Stick, einer exFAT-Platte oder einer Netzfreigabe speichern. Vorher scheiterte dort jedes Speichern.",
-          "Lässt sich das Lager nicht lesen, sagt Solidon es auch im Filamentwähler, mit dem Knopf „Erneut versuchen“ — statt einer leeren Liste."
-        ]
-      },
-      {
-        "title": "Chat und KI",
-        "points": [
-          "Vor der ersten Anfrage an einen Modell-Erzeuger sagt Solidon, welche Daten dorthin gehen.",
-          "Belegt ein anderer Lauf die Grafikkarte, wartet der Chat sichtbar, statt still zu stehen."
-        ]
-      },
-      {
-        "title": "Update, Installation und System",
-        "points": [
-          "Die Mac-Pakete sind signiert und notarisiert. Der Umweg über „Datenschutz & Sicherheit“ → „Trotzdem öffnen“ entfällt.",
-          "Unter „Unterstützen“ steht neben PayPal jetzt GoFundMe zur Wahl; erst Ihr Klick öffnet den Browser, und ohne Browser lässt sich die Adresse kopieren."
+          "Ein Baustein für Bohrungen — Einpressbuchse, Mutternfalle, Lagersitz, Gewinde, Schraube — sitzt sofort in der Bohrung, die Sie gewählt haben, statt auf der Mitte der Fläche.",
+          "Ziehen Sie einen Baustein am Griff im Bild, bewegt sich der ganze Baustein — auch an einer Kante des Schlüssellochs. Vorher wanderte nur das eine Merkmal, der Rest blieb stehen.",
+          "Haken und Löcher eines Bausteins stehen rechts als Anzahl — nicht mehr als „2,00 mm“. Und nach „Maße ändern“ bleibt der Baustein gewählt, auch wenn er danach andere Merkmale trägt."
         ]
       }
     ],
     "en": [
       {
-        "title": "Building and editing",
+        "title": "Drawing",
         "points": [
-          "Filleting and chamfering now work on an imported model too: pick an edge in the view, enter a radius or a width. Before, they only worked on a body you drew yourself.",
-          "Offset face and draft angle also work on an imported model, and a recognised rounding can be changed or taken away there as well.",
-          "Offset face moves the face you clicked on. On a stair the other steps stay where they are instead of all moving at once."
+          "Two clicks set a regular polygon: first the centre, then a corner. You choose the number of corners beforehand — three to twelve. A typed diameter stays on as a dimension.",
+          "A slot comes from two clicks on the centres of its round ends; the width sits next to them in the bar. Both ends stay the same size, the flanks stay straight.",
+          "Four new constraints: an angle in degrees between two lines, equal length or size, a point at the middle of a line, concentric for two circles or arcs.",
+          "A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.",
+          "A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion."
         ]
       },
       {
-        "title": "Drilling and placing",
+        "title": "Building and editing",
         "points": [
-          "When you place a hole, one tick turns it into a slot: you enter length and direction, and the preview shows both.",
-          "A hole that is already in the model can be pulled out into a slot afterwards — the diameter stays as it was measured.",
-          "The slot is widened by the material tolerance over its whole length. The travel a screw has inside stays the one you entered."
+          "Turning a slot turns it — instead of cutting a second one across it. And editing a slot you pulled yourself changes that step; the history gets no second one.",
+          "An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.",
+          "Name just one axis in the chat — “bore to x = 20” — and the hole moves only there. Before, it jumped to zero on the other two axes.",
+          "Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh."
         ]
       },
       {
         "title": "Recognition",
         "points": [
-          "A countersink above a hole is now kept even on a part with round, sweeping surfaces — previously it was dropped there, and the hole and its countersink could no longer be moved together.",
-          "A cavity entirely inside the material, with no way out, appears in the object tree as an air pocket — with its volume. Previously it appeared as a hole that was not there.",
-          "On a strongly curved model Solidon now says what was measured instead of calling it a scan — and which features are left out on such a surface."
-        ]
-      },
-      {
-        "title": "Labelling",
-        "points": [
-          "A label can now use eight fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.",
-          "Beside the upright faces there is now a round one and a handwritten one — those two come in a single style. All eight travel with the program, so a project looks the same everywhere."
-        ]
-      },
-      {
-        "title": "Building blocks and fits",
-        "points": [
-          "A part from the catalogue appears in the view at once: on the selected face or on top of the body, with dimension lines and a handle. A click places it elsewhere, “Apply” inserts it.",
-          "If you split a body with a fit into separate parts, Solidon asks which part the fit now means — instead of sending you off to undo the steps."
+          "A curved wall — the end of a tab, the floor of a groove — is now called that. Before, it said “Fillet” with an edge that does not exist. Its radius can be changed.",
+          "A bore with lugs in its wall, such as the ring of a bayonet mount, is a bore. Before, it appeared as a slot as long as it was wide, and every action would have removed the lugs.",
+          "A slot with a chamfered rim is a slot; the chamfer belongs to it. Before, one frame listed 126 separate countersinks in the tree.",
+          "A notch or the round end of a tab is no longer a hole, and two pieces of the same round wall appear as one in the tree."
         ]
       },
       {
         "title": "View and operation",
         "points": [
-          "The actions for a selected body or feature live in one place on the right, in groups you can fold, with a search box. The Object, Modify and Prepare menus are gone for that; shortcuts still work.",
-          "A right-click on a body or face shows only what exists there alone: the step behind it, the sketch on the face, hiding. The “Parts” button stands in accent colour."
+          "A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.",
+          "When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.",
+          "The step “Split” starts in the middle of the part instead of at its underside. The number stays editable.",
+          "A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity."
         ]
       },
       {
         "title": "Files and export",
         "points": [
-          "Before writing, the export shows what the report found — a thin wall, a violated fit. You decide whether the file is written anyway.",
-          "Solidon remembers folder, format and naming scheme per project. If several files are written, the name pattern stands in the field and can be changed."
+          "A 3MF from the slicer now opens even when its colours cannot be read unambiguously: the model arrives in one colour, and the report says why. Before, the file stayed closed.",
+          "Painted faces from Bambu Studio, Orca and Elegoo arrive exactly as painted — even where a colour runs through the middle of a triangle. Before, that counted as “ambiguous”.",
+          "A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.",
+          "Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer."
         ]
       },
       {
-        "title": "Print bed and handover",
+        "title": "Building blocks and fits",
         "points": [
-          "If a body made of loose parts — lettering, say — fits no bed as a whole, the report offers to split it and orient it right away: one click, and the parts lie on the plates.",
-          "Open in slicer hands ElegooSlicer, Orca and Bambu Studio all plates in one file — one window instead of one per plate."
-        ]
-      },
-      {
-        "title": "Filaments and stock",
-        "points": [
-          "The filament stock can also be saved on a FAT32 stick, an exFAT drive or a network share. Before, every save failed there.",
-          "If the stock cannot be read, Solidon says so in the filament picker too, with the button “Try again” — instead of an empty list."
-        ]
-      },
-      {
-        "title": "Chat and AI",
-        "points": [
-          "Before the first request to a model generator, Solidon says which data goes there.",
-          "If another job occupies the graphics card, the chat waits visibly instead of standing still."
-        ]
-      },
-      {
-        "title": "Update, installation and system",
-        "points": [
-          "The Mac packages are signed and notarised. The detour via “Privacy & Security” → “Open Anyway” is gone.",
-          "Under “Support Solidon”, GoFundMe is now on offer beside PayPal; only your click opens the browser, and without a browser the address can be copied."
+          "A block meant for a hole — heat-set insert, nut trap, bearing seat, thread, screw — now sits straight in the hole you selected instead of at the centre of the face.",
+          "Drag a block by its handle in the view and the whole block moves — even from an edge of the keyhole. Before, only that one feature travelled and the rest stayed put.",
+          "Hooks and holes of a block appear on the right as a count — no longer as “2.00 mm”. And after “Change dimensions” the block stays selected, even when it ends up with different features."
         ]
       }
     ],
     "es": [
       {
-        "title": "Construir y modificar",
+        "title": "Dibujo",
         "points": [
-          "Redondear y achaflanar funcionan ahora también en un modelo importado: se elige una arista en la vista y se indica el radio o la anchura. Antes solo servían en un cuerpo propio.",
-          "Desplazar cara y ángulo de desmoldeo funcionan igualmente en un modelo importado, y allí se puede además cambiar o quitar un redondeo reconocido.",
-          "Desplazar cara mueve la cara sobre la que se ha hecho clic. En una escalera los demás escalones se quedan donde están, en vez de desplazarse todos a la vez."
+          "Dos clics crean un polígono regular: primero el centro, luego una esquina. El número de esquinas se elige antes: de tres a doce. Un diámetro escrito queda como cota.",
+          "Una ranura surge de dos clics en los centros de sus extremos redondeados; el ancho está al lado en la barra. Ambos extremos mantienen el tamaño y los flancos, rectos.",
+          "Cuatro condiciones nuevas: ángulo en grados entre dos líneas, igual longitud o tamaño, punto en el centro de una línea, y concéntrico para dos círculos o arcos.",
+          "Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.",
+          "Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion."
         ]
       },
       {
-        "title": "Taladrar y colocar",
+        "title": "Construir y modificar",
         "points": [
-          "Al colocar un taladro, una casilla lo convierte en ranura: usted indica la longitud y la dirección, y la vista previa muestra ambas.",
-          "Un taladro que ya está en el modelo se alarga después hasta convertirlo en ranura; el diámetro se mantiene tal como se midió.",
-          "La ranura se amplía en toda su longitud según la tolerancia del material. El recorrido que tiene un tornillo dentro sigue siendo el que usted indicó."
+          "Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.",
+          "Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.",
+          "Si en el chat nombra solo un eje — «taladro a x = 20» —, el agujero se mueve solo ahí. Antes saltaba a cero en los otros dos ejes.",
+          "Redondear avisa de antemano que un cuerpo exacto admite un radio menor que una malla, y qué ayuda entonces: un radio menor o seguir trabajando sobre la malla."
         ]
       },
       {
         "title": "Reconocimiento",
         "points": [
-          "Un avellanado sobre un taladro se conserva también en una pieza con superficies redondeadas y curvas: antes se perdía ahí, y el taladro y su avellanado ya no podían desplazarse juntos.",
-          "Una cavidad por completo dentro del material, sin salida, aparece en el árbol de objetos como bolsa de aire, con su volumen. Antes aparecía como un taladro que no existía.",
-          "En un modelo muy curvado, Solidon dice ahora qué se ha medido, en vez de llamarlo un escaneo, y qué características se omiten en una superficie así."
-        ]
-      },
-      {
-        "title": "Rotular",
-        "points": [
-          "Una inscripción puede usar ahora ocho fuentes en lugar de tres, más negrita y cursiva. La negrita lleva trazos más gruesos con la misma altura y sigue siendo legible donde la normal se emborrona.",
-          "Junto a las fuentes rectas hay ahora una redonda y una manuscrita, ambas en un solo estilo. Las ocho viajan con el programa, así que un proyecto se ve igual en todas partes."
-        ]
-      },
-      {
-        "title": "Bloques y ajustes",
-        "points": [
-          "Un bloque del catálogo aparece de inmediato en la vista: sobre la cara seleccionada o encima del cuerpo, con líneas de cota y asa. Un clic lo coloca en otro sitio, «Aplicar» lo inserta.",
-          "Si separa en piezas sueltas un cuerpo con un ajuste, Solidon pregunta a qué pieza se refiere ahora el ajuste, en lugar de mandarle a deshacer los pasos."
+          "Una pared curva —el extremo de una pestaña, el fondo de una ranura— ahora se llama así. Antes ponía «Redondeo» con una arista que no existe. El radio se puede cambiar.",
+          "Un agujero con resaltes en la pared, como el anillo de un cierre de bayoneta, es un agujero. Antes aparecía como un agujero alargado tan largo como ancho, y cualquier acción quitaba los resaltes.",
+          "Una ranura con chaflán en el borde es una ranura; el chaflán forma parte de ella. Antes, en un marco aparecían 126 avellanados sueltos en el árbol.",
+          "Una muesca o el extremo redondo de una lengüeta ya no es un taladro, y dos trozos de la misma pared redonda aparecen como uno en el árbol."
         ]
       },
       {
         "title": "Vista y manejo",
         "points": [
-          "Las acciones para un cuerpo o característica seleccionados están a la derecha, en grupos plegables, con búsqueda. Los menús Objeto, Modificar y Preparar desaparecen; los atajos siguen.",
-          "El clic derecho sobre un cuerpo o una cara muestra solo lo que existe únicamente allí: el paso detrás, el boceto sobre la cara, ocultar. El botón «Bloques» está en color de acento."
+          "Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.",
+          "Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.",
+          "El paso «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.",
+          "Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco."
         ]
       },
       {
         "title": "Archivos y exportación",
         "points": [
-          "Antes de escribir, la exportación muestra lo que ha encontrado el informe: una pared delgada, un ajuste incumplido. Usted decide si el archivo se escribe igualmente.",
-          "Solidon recuerda carpeta, formato y esquema de nombres por proyecto. Si se generan varios archivos, el patrón de nombre está en el campo y se puede cambiar."
+          "Un 3MF del slicer ahora se abre aunque sus colores no se puedan leer sin ambigüedad: el modelo llega en un solo color y el informe dice por qué. Antes, el archivo no se abría.",
+          "Las caras pintadas en Bambu Studio, Orca y Elegoo llegan exactamente como se pintaron, incluso cuando un color atraviesa un triángulo. Antes eso contaba como «ambiguo».",
+          "Un relieve de texto del slicer de Elegoo o de Bambu Studio en el archivo detenía la importación. Ahora el archivo se abre.",
+          "Los modificadores y bloqueadores de soportes del slicer ya no aparecen como cuerpos, y un hueco («pieza negativa») se resta, como en el slicer."
         ]
       },
       {
-        "title": "Cama de impresión y entrega",
+        "title": "Bloques y ajustes",
         "points": [
-          "Si un cuerpo de piezas sueltas —un rótulo, por ejemplo— no cabe entero en ninguna cama, el informe ofrece separarlo y orientarlo enseguida: un clic y las piezas quedan en las placas.",
-          "Abrir en el slicer entrega a ElegooSlicer, Orca y Bambu Studio todas las placas en un solo archivo: una ventana en lugar de una por placa."
-        ]
-      },
-      {
-        "title": "Filamentos y almacén",
-        "points": [
-          "El almacén de filamentos también se puede guardar en una memoria FAT32, un disco exFAT o un recurso compartido de red. Antes, allí fallaba cada guardado.",
-          "Si el almacén no se puede leer, Solidon lo dice también en el selector de filamento, con el botón «Volver a intentarlo», en vez de una lista vacía."
-        ]
-      },
-      {
-        "title": "Chat e IA",
-        "points": [
-          "Antes de la primera petición a un generador de modelos, Solidon dice qué datos van allí.",
-          "Si otro proceso ocupa la tarjeta gráfica, el chat espera de forma visible en vez de quedarse parado."
-        ]
-      },
-      {
-        "title": "Actualización, instalación y sistema",
-        "points": [
-          "Los paquetes para Mac están firmados y notarizados. El rodeo por «Privacidad y seguridad» → «Abrir igualmente» ya no hace falta.",
-          "En «Apoyar Solidon» ahora se puede elegir GoFundMe junto a PayPal; solo su clic abre el navegador, y sin navegador se puede copiar la dirección."
+          "Un bloque para agujeros — inserto térmico, alojamiento de tuerca, asiento de rodamiento, rosca, tornillo — se coloca directamente en el agujero elegido, no en el centro de la cara.",
+          "Si arrastra un bloque por el asa en la vista, se mueve el bloque entero, aunque haya agarrado un borde del ojo de cerradura. Antes solo se desplazaba esa característica.",
+          "Ganchos y agujeros de un bloque aparecen a la derecha como cantidad, no como «2,00 mm». Y tras «Cambiar medidas» el bloque sigue seleccionado, aunque tenga otras características."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Construire et modifier",
+        "title": "Dessin",
         "points": [
-          "Les congés et les chanfreins fonctionnent maintenant aussi sur un modèle importé : on choisit une arête dans la vue et on indique un rayon ou une largeur. Avant, il fallait un corps dessiné soi-même.",
-          "Décaler la face et la dépouille fonctionnent eux aussi sur un modèle importé, et on peut y modifier ou retirer un arrondi reconnu.",
-          "Décaler la face déplace la face sur laquelle on a cliqué. Sur un escalier, les autres marches restent en place au lieu de bouger toutes ensemble."
+          "Deux clics posent un polygone régulier : d'abord le centre, puis un coin. Le nombre de coins se règle avant — de trois à douze. Un diamètre saisi reste comme cote.",
+          "Un trou oblong naît de deux clics sur les centres de ses extrémités arrondies ; la largeur est à côté dans la barre. Les deux bouts gardent leur taille, les flancs restent droits.",
+          "Quatre nouvelles contraintes : angle en degrés entre deux lignes, même longueur ou taille, point au milieu d'une ligne, concentrique pour deux cercles ou arcs.",
+          "Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.",
+          "Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion."
         ]
       },
       {
-        "title": "Percer et placer",
+        "title": "Construire et modifier",
         "points": [
-          "Au moment de placer un perçage, une case en fait un trou oblong : vous saisissez la longueur et la direction, et l'aperçu montre les deux.",
-          "Un perçage déjà présent dans le modèle s'étire après coup en trou oblong — le diamètre reste tel qu'il a été mesuré.",
-          "Le trou oblong est élargi de la tolérance du matériau sur toute sa longueur. La course dont dispose une vis reste celle que vous avez saisie."
+          "Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.",
+          "Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.",
+          "Si vous ne nommez qu'un axe dans le chat — « perçage à x = 20 » —, le trou ne bouge que là. Avant, il retombait à zéro sur les deux autres axes.",
+          "Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage."
         ]
       },
       {
         "title": "Reconnaissance",
         "points": [
-          "Un fraisage au-dessus d'un perçage est conservé même sur une pièce aux surfaces rondes et galbées. Auparavant il disparaissait, avec lui le déplacement commun des deux.",
-          "Une cavité entièrement dans la matière, sans issue, figure dans l'arborescence comme poche d'air, avec son volume. Auparavant, elle y figurait comme un perçage qui n'existait pas.",
-          "Sur un modèle très courbé, Solidon dit maintenant ce qui a été mesuré au lieu de parler d'un scan, et quelles formes sont laissées de côté sur une telle surface."
-        ]
-      },
-      {
-        "title": "Inscrire",
-        "points": [
-          "Une inscription dispose désormais de huit polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale et reste lisible là où le style normal bave.",
-          "À côté des polices droites, il y a maintenant une ronde et une manuscrite, toutes deux en un seul style. Les huit voyagent avec le programme : un projet a partout la même apparence."
-        ]
-      },
-      {
-        "title": "Blocs et ajustements",
-        "points": [
-          "Un bloc du catalogue apparaît aussitôt dans la vue : sur la face sélectionnée ou sur le dessus du corps, avec cotes et poignée. Un clic le place ailleurs, « Appliquer » l'insère.",
-          "Si vous séparez en pièces distinctes un corps portant un ajustement, Solidon demande quelle pièce l'ajustement vise désormais — au lieu de vous renvoyer à l'annulation des étapes."
+          "Une paroi courbe — le bout d’une patte, le fond d’une rainure — s’appelle désormais ainsi. Avant, il y avait « Congé » avec une arête qui n’existe pas. Le rayon se modifie.",
+          "Un perçage avec des ergots dans sa paroi, comme la bague d’une fermeture à baïonnette, est un perçage. Avant, c’était un trou oblong aussi long que large, et chaque action aurait ôté les ergots.",
+          "Une rainure au bord chanfreiné est une rainure ; le chanfrein en fait partie. Avant, un cadre affichait 126 lamages isolés dans l’arbre.",
+          "Une encoche ou l’extrémité ronde d’une languette n’est plus un trou, et deux morceaux de la même paroi ronde n’en font plus qu’un dans l’arbre."
         ]
       },
       {
         "title": "Vue et utilisation",
         "points": [
-          "Les actions pour un corps ou une entité sélectionnés sont à droite, en groupes pliables, avec recherche. Les menus Objet, Modifier et Préparer disparaissent ; les raccourcis restent.",
-          "Le clic droit sur un corps ou une face ne montre que ce qui n'existe que là : l'étape derrière, l'esquisse sur la face, le masquage. Le bouton « Blocs » est en couleur d'accent."
+          "Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.",
+          "Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.",
+          "L’étape « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.",
+          "Un outil qui ne peut rien faire sur cette pièce apparaît grisé et dit pourquoi — « Fermer une surface ouverte » sur une pièce fermée, « Séparer en pièces » sur une seule, « Treillis » sans cavité."
         ]
       },
       {
         "title": "Fichiers et export",
         "points": [
-          "Avant d'écrire, l'export montre ce que le rapport a trouvé : une paroi mince, un ajustement non respecté. C'est vous qui décidez si le fichier est écrit malgré tout.",
-          "Solidon retient le dossier, le format et le schéma de nom par projet. Si plusieurs fichiers sont écrits, le motif de nom figure dans le champ et se modifie."
+          "Un 3MF issu du slicer s’ouvre désormais même si ses couleurs ne se lisent pas sans ambiguïté : le modèle arrive en une seule couleur, et le rapport dit pourquoi. Avant, le fichier restait fermé.",
+          "Les faces peintes dans Bambu Studio, Orca et Elegoo arrivent exactement telles qu’elles ont été peintes — même lorsqu’une couleur traverse un triangle. Avant, cela comptait comme « ambigu ».",
+          "Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.",
+          "Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer."
         ]
       },
       {
-        "title": "Plateau et transmission",
+        "title": "Blocs et ajustements",
         "points": [
-          "Si un corps fait de pièces détachées — un lettrage, par exemple — ne tient entier sur aucun plateau, le rapport propose de le séparer et de l'orienter : un clic, et les pièces sont sur les plateaux.",
-          "Ouvrir dans le slicer transmet à ElegooSlicer, Orca et Bambu Studio tous les plateaux dans un seul fichier — une fenêtre au lieu d'une par plateau."
-        ]
-      },
-      {
-        "title": "Filaments et stock",
-        "points": [
-          "Le stock de filament s'enregistre aussi sur une clé FAT32, un disque exFAT ou un partage réseau. Avant, chaque enregistrement y échouait.",
-          "Si le stock ne peut pas être lu, Solidon le dit aussi dans le sélecteur de filament, avec le bouton « Réessayer » — au lieu d'une liste vide."
-        ]
-      },
-      {
-        "title": "Chat et IA",
-        "points": [
-          "Avant la première requête à un générateur de modèles, Solidon dit quelles données y partent.",
-          "Si un autre calcul occupe la carte graphique, le chat attend visiblement au lieu de rester figé."
-        ]
-      },
-      {
-        "title": "Mise à jour, installation et système",
-        "points": [
-          "Les paquets Mac sont signés et notarisés. Le détour par « Confidentialité et sécurité » → « Ouvrir quand même » disparaît.",
-          "Sous « Soutenir Solidon », GoFundMe est maintenant proposé à côté de PayPal ; seul votre clic ouvre le navigateur, et sans navigateur l'adresse se copie."
+          "Un bloc destiné à un perçage — insert thermique, logement d’écrou, siège de roulement, filetage, vis — se pose directement dans le perçage choisi, et non au centre de la face.",
+          "Faites glisser un bloc par sa poignée dans la vue et c’est tout le bloc qui bouge, même saisi par un bord du trou de serrure. Avant, seule cette caractéristique se déplaçait.",
+          "Crochets et trous d’un bloc apparaissent à droite comme un nombre, non plus comme « 2,00 mm ». Après « Modifier les cotes », le bloc reste sélectionné, même avec d’autres caractéristiques."
         ]
       }
     ],
     "it": [
       {
-        "title": "Costruire e modificare",
+        "title": "Disegno",
         "points": [
-          "Raccordare e smussare funzionano ora anche su un modello importato: si sceglie uno spigolo nella vista e si indica raggio o larghezza. Prima servivano solo su un corpo disegnato da sé.",
-          "Anche scostare la faccia e l'angolo di sformo funzionano su un modello importato, e lì si può pure modificare o togliere un raccordo riconosciuto.",
-          "Scostare la faccia muove la faccia su cui si è fatto clic. Su una scala gli altri gradini restano dove sono, invece di spostarsi tutti insieme."
+          "Due clic creano un poligono regolare: prima il centro, poi un angolo. Il numero di angoli si imposta prima: da tre a dodici. Un diametro digitato resta come quota.",
+          "Un'asola nasce da due clic sui centri delle sue estremità arrotondate; la larghezza sta accanto nella barra. Le due estremità restano uguali e i fianchi diritti.",
+          "Quattro nuovi vincoli: angolo in gradi fra due linee, stessa lunghezza o dimensione, punto a metà di una linea, concentrico per due cerchi o archi.",
+          "Un punto trascinato resta sotto il puntatore e i vicini lo seguono: un angolo del rettangolo porta con sé i due lati, una linea allunga la forma. Prima l'angolo arrivava solo a metà strada.",
+          "Un rettangolo fatto con i clic è libero: nessun punto fisso, nessuna quota finché non la digiti. Una larghezza o altezza digitata resta come quota, come in Fusion."
         ]
       },
       {
-        "title": "Forare e posizionare",
+        "title": "Costruire e modificare",
         "points": [
-          "Quando posizioni un foro, una casella lo trasforma in asola: indichi lunghezza e direzione, e l'anteprima le mostra entrambe.",
-          "Un foro già presente nel modello si allunga in seguito fino a diventare un'asola: il diametro resta quello misurato.",
-          "L'asola viene allargata della tolleranza del materiale su tutta la sua lunghezza. La corsa che una vite ha al suo interno resta quella indicata."
+          "Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.",
+          "Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.",
+          "Se nella chat indichi un solo asse — « foro a x = 20 » —, il foro si sposta solo lì. Prima negli altri due assi saltava a zero.",
+          "Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh."
         ]
       },
       {
         "title": "Riconoscimento",
         "points": [
-          "Una svasatura sopra un foro viene mantenuta anche su un pezzo con superfici tonde e sinuose: prima andava persa, e foro e svasatura non potevano più essere spostati insieme.",
-          "Una cavità interamente nel materiale, senza via d'uscita, compare nell'albero degli oggetti come sacca d'aria, con il suo volume. Prima compariva come un foro inesistente.",
-          "Su un modello molto curvo Solidon dice ora che cosa è stato misurato invece di chiamarlo una scansione, e quali forme su una superficie simile restano fuori."
-        ]
-      },
-      {
-        "title": "Scrivere",
-        "points": [
-          "Una scritta può usare ora otto caratteri invece di tre, più grassetto e corsivo. Il grassetto porta tratti più spessi a parità di altezza e resta leggibile dove lo stile normale sbava.",
-          "Accanto ai caratteri diritti ci sono ora uno tondo e uno manoscritto, entrambi in un solo stile. Tutti e otto viaggiano con il programma, così un progetto appare uguale ovunque."
-        ]
-      },
-      {
-        "title": "Blocchi e accoppiamenti",
-        "points": [
-          "Un blocco dal catalogo compare subito nella vista: sulla faccia selezionata o sopra il corpo, con quote e maniglia. Un clic lo posiziona altrove, «Applica» lo inserisce.",
-          "Se separate in pezzi distinti un corpo con un accoppiamento, Solidon chiede a quale pezzo si riferisca ora l'accoppiamento — invece di rimandarvi ad annullare i passi."
+          "Una parete curva — l’estremità di una linguetta, il fondo di una scanalatura — ora si chiama così. Prima c’era «Raccordo» con uno spigolo che non esiste. Il raggio si può cambiare.",
+          "Un foro con nasi nella parete, come l’anello di una chiusura a baionetta, è un foro. Prima compariva come un’asola lunga quanto larga, e ogni azione avrebbe tolto i nasi.",
+          "Un’asola con il bordo smussato è un’asola; lo smusso ne fa parte. Prima un telaio mostrava 126 svasature separate nell’albero.",
+          "Una tacca o l’estremità arrotondata di una linguetta non è più un foro, e due pezzi della stessa parete rotonda compaiono come uno solo nell’albero."
         ]
       },
       {
         "title": "Vista e utilizzo",
         "points": [
-          "Le azioni per un corpo o una caratteristica selezionati stanno a destra, in gruppi richiudibili, con ricerca. I menu Oggetto, Modifica e Prepara sono spariti; le scorciatoie restano.",
-          "Il clic destro su un corpo o una faccia mostra solo ciò che esiste soltanto lì: il passo dietro, lo schizzo sulla faccia, il nascondere. Il pulsante «Blocchi» è in colore d'accento."
+          "Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.",
+          "Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.",
+          "Il passo «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.",
+          "Uno strumento che su questo pezzo non può fare nulla appare grigio e dice perché — «Chiudi superficie aperta» su un pezzo chiuso, «Dividi in parti» su un pezzo solo, «Reticolo» senza cavità."
         ]
       },
       {
         "title": "File ed esportazione",
         "points": [
-          "Prima di scrivere, l'esportazione mostra che cosa ha trovato il rapporto: una parete sottile, un accoppiamento violato. Decidete voi se il file nasce lo stesso.",
-          "Solidon ricorda cartella, formato e schema dei nomi per ogni progetto. Se nascono più file, il modello del nome sta nel campo e si può cambiare."
+          "Un 3MF dallo slicer ora si apre anche quando i colori non si leggono senza ambiguità: il modello arriva in un solo colore e il rapporto dice perché. Prima il file restava chiuso.",
+          "Le facce dipinte in Bambu Studio, Orca ed Elegoo arrivano esattamente come dipinte, anche dove un colore attraversa un triangolo. Prima contava come «ambiguo».",
+          "Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.",
+          "Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer."
         ]
       },
       {
-        "title": "Piano di stampa e consegna",
+        "title": "Blocchi e accoppiamenti",
         "points": [
-          "Se un corpo fatto di pezzi singoli — una scritta, per esempio — non entra intero in nessun piano, il rapporto propone di separarlo e orientarlo subito: un clic e i pezzi stanno sui piani.",
-          "Apri nello slicer consegna a ElegooSlicer, Orca e Bambu Studio tutti i piani in un unico file: una finestra invece di una per piano."
-        ]
-      },
-      {
-        "title": "Filamenti e magazzino",
-        "points": [
-          "Il magazzino filamenti si può salvare anche su una chiavetta FAT32, un disco exFAT o una condivisione di rete. Prima lì ogni salvataggio falliva.",
-          "Se il magazzino non si può leggere, Solidon lo dice anche nel selettore del filamento, con il pulsante «Prova di nuovo» — invece di un elenco vuoto."
-        ]
-      },
-      {
-        "title": "Chat e IA",
-        "points": [
-          "Prima della prima richiesta a un generatore di modelli, Solidon dice quali dati vi arrivano.",
-          "Se un altro processo occupa la scheda grafica, la chat aspetta in modo visibile invece di restare ferma."
-        ]
-      },
-      {
-        "title": "Aggiornamento, installazione e sistema",
-        "points": [
-          "I pacchetti per Mac sono firmati e notarizzati. Il giro per «Privacy e sicurezza» → «Apri comunque» non serve più.",
-          "Sotto «Sostieni Solidon», accanto a PayPal si può ora scegliere GoFundMe; solo il vostro clic apre il browser, e senza browser l'indirizzo si può copiare."
+          "Un blocco per fori — inserto a caldo, sede per dado, sede per cuscinetto, filettatura, vite — si posa subito nel foro scelto, invece che al centro della faccia.",
+          "Trascinando un blocco con la maniglia nella vista si sposta l’intero blocco, anche afferrandolo a un bordo del foro a serratura. Prima si spostava solo quella caratteristica.",
+          "Ganci e fori di un blocco compaiono a destra come numero, non più come «2,00 mm». E dopo «Modifica misure» il blocco resta selezionato, anche con altre caratteristiche."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Construir e alterar",
+        "title": "Desenho",
         "points": [
-          "Arredondar e chanfrar funcionam agora também num modelo importado: escolhe-se uma aresta na vista e indica-se o raio ou a largura. Antes só funcionavam num corpo próprio.",
-          "Deslocar a face e o ângulo de saída funcionam igualmente num modelo importado, e aí também se pode alterar ou retirar um arredondamento reconhecido.",
-          "Deslocar a face move a face em que se clicou. Numa escada os restantes degraus ficam onde estão, em vez de se moverem todos ao mesmo tempo."
+          "Dois cliques criam um polígono regular: primeiro o centro, depois um canto. O número de cantos define-se antes — de três a doze. Um diâmetro escrito fica como cota.",
+          "Um furo oblongo nasce de dois cliques nos centros das suas extremidades arredondadas; a largura fica ao lado na barra. Ambas mantêm o tamanho e os flancos, direitos.",
+          "Quatro novas condições: ângulo em graus entre duas linhas, igual comprimento ou tamanho, ponto a meio de uma linha, concêntrico para dois círculos ou arcos.",
+          "Um ponto arrastado fica no ponteiro e os vizinhos seguem-no: um canto do retângulo leva os dois lados consigo, uma linha estica a forma. Antes, o canto só ia parte do caminho.",
+          "Um retângulo feito com cliques é livre: sem ponto fixo, sem cotas enquanto não as escrever. Uma largura ou altura escrita fica como cota — como no Fusion."
         ]
       },
       {
-        "title": "Furar e posicionar",
+        "title": "Construir e alterar",
         "points": [
-          "Ao colocar um furo, uma caixa transforma-o num rasgo: indica o comprimento e a direção, e a pré-visualização mostra ambos.",
-          "Um furo que já está no modelo pode ser esticado depois até formar um rasgo — o diâmetro mantém-se como foi medido.",
-          "O rasgo é alargado pela tolerância do material em todo o seu comprimento. O curso que um parafuso tem lá dentro continua a ser o que indicou."
+          "Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.",
+          "Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.",
+          "Se no chat indicar só um eixo — «furo em x = 20» —, o furo desloca-se apenas aí. Antes saltava para zero nos outros dois eixos.",
+          "Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha."
         ]
       },
       {
         "title": "Reconhecimento",
         "points": [
-          "Um escareado sobre um furo passa a manter-se também numa peça com superfícies redondas e curvas — antes perdia-se aí, e o furo e o seu escareado já não podiam ser deslocados em conjunto.",
-          "Uma cavidade inteiramente dentro do material, sem saída, aparece na árvore de objetos como bolsa de ar, com o seu volume. Antes aparecia como um furo que não existia.",
-          "Num modelo muito curvo, o Solidon diz agora o que foi medido em vez de lhe chamar uma digitalização, e que formas ficam de fora numa superfície dessas."
-        ]
-      },
-      {
-        "title": "Rotular",
-        "points": [
-          "Uma inscrição pode usar agora oito tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura e continua legível onde o estilo normal borra.",
-          "Ao lado dos tipos de letra direitos há agora um redondo e um manuscrito, ambos num só estilo. Os oito viajam com o programa, por isso um projeto fica igual em todo o lado."
-        ]
-      },
-      {
-        "title": "Blocos e ajustes",
-        "points": [
-          "Um bloco do catálogo aparece logo na vista: na face selecionada ou em cima do corpo, com cotas e pega. Um clique coloca-o noutro sítio, «Aplicar» insere-o.",
-          "Se separar em peças distintas um corpo com um ajuste, o Solidon pergunta a que peça se refere agora o ajuste — em vez de o mandar desfazer os passos."
+          "Uma parede curva — a ponta de uma patilha, o fundo de uma ranhura — chama-se agora assim. Antes dizia «Arredondamento» com uma aresta que não existe. O raio pode ser alterado.",
+          "Um furo com saliências na parede, como o anel de um fecho de baioneta, é um furo. Antes aparecia como um furo oblongo tão comprido quanto largo, e qualquer ação removia as saliências.",
+          "Uma ranhura com chanfro no bordo é uma ranhura; o chanfro faz parte dela. Antes, uma moldura mostrava 126 escareados avulsos na árvore.",
+          "Um entalhe ou a ponta redonda de uma lingueta já não é um furo, e dois pedaços da mesma parede redonda aparecem como um só na árvore."
         ]
       },
       {
         "title": "Vista e utilização",
         "points": [
-          "As ações para um corpo ou característica selecionados estão à direita, em grupos que se fecham, com pesquisa. Os menus Objeto, Modificar e Preparar desapareceram; os atalhos continuam.",
-          "O clique direito num corpo ou numa face mostra apenas o que só existe aí: o passo por trás, o esboço na face, o ocultar. O botão «Blocos» está em cor de destaque."
+          "Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.",
+          "Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.",
+          "O passo «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.",
+          "Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade."
         ]
       },
       {
         "title": "Ficheiros e exportação",
         "points": [
-          "Antes de escrever, a exportação mostra o que o relatório encontrou: uma parede fina, um ajuste violado. É você que decide se o ficheiro é escrito à mesma.",
-          "O Solidon guarda pasta, formato e esquema de nomes por projeto. Se surgirem vários ficheiros, o padrão do nome fica no campo e pode ser alterado."
+          "Um 3MF do slicer abre agora mesmo quando as cores não se leem sem ambiguidade: o modelo chega numa só cor e o relatório diz porquê. Antes, o ficheiro ficava fechado.",
+          "As faces pintadas no Bambu Studio, Orca e Elegoo chegam exatamente como foram pintadas — mesmo onde uma cor atravessa um triângulo. Antes, isso contava como «ambíguo».",
+          "Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.",
+          "Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer."
         ]
       },
       {
-        "title": "Mesa de impressão e entrega",
+        "title": "Blocos e ajustes",
         "points": [
-          "Se um corpo feito de peças soltas — um letreiro, por exemplo — não cabe inteiro em nenhuma mesa, o relatório propõe separá-lo e orientá-lo logo: um clique e as peças ficam nas mesas.",
-          "Abrir no slicer entrega ao ElegooSlicer, Orca e Bambu Studio todas as mesas num único ficheiro — uma janela em vez de uma por mesa."
-        ]
-      },
-      {
-        "title": "Filamentos e armazém",
-        "points": [
-          "O armazém de filamentos também pode ser gravado numa pen FAT32, num disco exFAT ou numa partilha de rede. Antes, aí falhava cada gravação.",
-          "Se o armazém não puder ser lido, o Solidon di-lo também no seletor de filamento, com o botão «Tentar de novo» — em vez de uma lista vazia."
-        ]
-      },
-      {
-        "title": "Chat e IA",
-        "points": [
-          "Antes do primeiro pedido a um gerador de modelos, o Solidon diz que dados vão para lá.",
-          "Se outro processo ocupar a placa gráfica, o chat espera de forma visível em vez de ficar parado."
-        ]
-      },
-      {
-        "title": "Atualização, instalação e sistema",
-        "points": [
-          "Os pacotes para Mac estão assinados e notarizados. O desvio por «Privacidade e Segurança» → «Abrir mesmo assim» deixa de ser preciso.",
-          "Em «Apoiar o Solidon» pode agora escolher-se GoFundMe ao lado do PayPal; só o seu clique abre o navegador, e sem navegador pode copiar-se o endereço."
+          "Um bloco para furos — inserto térmico, alojamento de porca, assento de rolamento, rosca, parafuso — assenta logo no furo escolhido, em vez de no centro da face.",
+          "Ao arrastar um bloco pela pega na vista, move-se o bloco inteiro, mesmo agarrado por uma aresta do furo de fechadura. Antes só se deslocava essa característica.",
+          "Ganchos e furos de um bloco aparecem à direita como quantidade, e não como «2,00 mm». E depois de «Alterar medidas» o bloco continua selecionado, mesmo com outras características."
         ]
       }
     ]
   },
-  "changes_total": 96,
-  "notes_version": "0.4.1",
-  "signature": "802b2a36b9d178aefc7aa5e8ad86e212b76ac3b6d3c808e518d28ff062a18df68f369df39f703925b70ea8722bb6833902e92d418ce1eafdbbefedba218ce406"
+  "changes_total": 48,
+  "notes_version": "0.4.2",
+  "signature": "730693a36cb6e7608676c9a184a306b693dc584dd3979f11b65bf67077b26b56707a415c304248f146f471dadabf1a2b4901abbf9be824181d54dd852476e50a"
 }
