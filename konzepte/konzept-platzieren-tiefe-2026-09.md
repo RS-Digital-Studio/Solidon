@@ -1,8 +1,11 @@
 # Platzieren ohne Dialog — Stelle, dann Tiefe (09.09.2026)
 
-> **Stand:** Entwurf. Die erste Stufe ist gebaut (der Umriss auf der
-> Oberfläche, `mouth_outline`); die zweite — Tiefe durch Ziehen — ist
-> beschrieben und nicht beauftragt. Die Befunde stammen aus Roberts Runde
+> **Stand:** Beide Stufen gebaut. Die erste am 09.09.2026 (der Umriss auf der
+> Oberfläche, `mouth_outline`), die zweite — Tiefe durch Ziehen — am
+> 10.09.2026 (`9e158c94`, `PlacementFlow._begin_depth`, `_deepen_to`,
+> `_depth_typed`, fünf Tests in `tests/test_surface_placement_ui.py`). Die
+> sieben Bedienfragen unten sind damit im Code beantwortet; der Text darunter
+> beschreibt den Entwurf vom 09.09. Die Befunde stammen aus Roberts Runde
 > durch die laufende Anwendung am 09.09.2026.
 
 ## Der Anlass

@@ -95,6 +95,8 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Zweite Sitzung im selben Baum](zweite-sitzung-im-selben-baum.md) — vor Kill und Torlauf prüfen, wem was gehört; wer während eines Tors schreibt, macht es wertlos.
 - [Leere Transkriptdatei ist kein Hänger](leere-transkriptdatei-ist-kein-haenger.md) — ein Hintergrund-Agent kann über eine Stunde 0 Byte schreiben und arbeiten; zweimal Reviewer umsonst getötet, der Abbruchbericht zeigte den Fortschritt.
 - [Parallele Reviewer kollidieren an den Rändern](parallele-reviewer-kollidieren-an-den-raendern.md) — Kataloge, Beschriftungen, Fehlerlisten, doppelte Funde; Patches in Reihenfolge übernehmen, danach die Querschnittstests nachfahren.
+- [Patchübernahme in den geteilten Baum](patchuebernahme-in-den-geteilten-baum.md) — `git apply -3` bricht an jeder schmutzigen Datei ganz ab; Kataloge und Changelog per Schlüssel- und Ankerskript; fremde Werkzeuge schreiben ganze Dateien als CRLF, binär zählen.
+- [Skript im Worktree lädt app aus dem Hauptbaum](skript-im-worktree-laedt-app-aus-dem-hauptbaum.md) — sys.path[0] ist der Skriptordner; Sonden setzen den Baum selbst vorn und prüfen app.__file__.
 
 ## Shell und Git
 

@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-14 | [Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)](#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026) |
 | 2026-09-14 | [Eine 3MF von MakerWorld ging nicht auf (14.09.2026)](#eine-3mf-von-makerworld-ging-nicht-auf-14092026) |
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
 | 2026-09-15 | [Die Suite öffnet kein Fenster (15.09.2026)](#die-suite-öffnet-kein-fenster-15092026) |
@@ -28559,3 +28560,107 @@ Downloads-Ordner und fährt `read_objects` darüber — die zwei gemessenen
 Ursachen decken, was der Bericht hergibt, nicht mehr. Und keine Datei des
 Korpus trägt einen anderen `subtype` als `normal_part`: Hilfsteile und
 Aussparungen sind ausschließlich synthetisch belegt.
+
+## Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)
+
+Anlass: Roberts Frage vom 14.09.2026 („Was fehlt noch für eine einfache Bedienung,
+passende Vorschau, schönes leichtes Einstellen über Werte oder Viewport, Zeichenlogik
+in 2D und 3D-Körper erstellen bzw. bearbeiten") und der Auftrag „alles sauber
+abarbeiten". Gebaut in Worktrees je Paket, in den Hauptbaum übernommen, dort mit den
+betroffenen Fensterdateien getrennt verifiziert; mypy 273 Dateien ohne Befund.
+
+**Die Einschätzung war an einer Stelle falsch:** Die Tiefenstufe des Platzierens
+(„Modell durchscheinend, Maus zieht die Tiefe") stand als Entwurf im Konzeptindex und
+war seit dem 10.09.2026 gebaut (`9e158c94`, `PlacementFlow._begin_depth`, fünf Tests).
+Der Index und der Konzeptkopf sind berichtigt; gemessen wurde am Code, nicht am
+Register — zum dritten Mal in dieser Woche war „offen" eine veraltete Statuszeile.
+
+- **RM-147, der Rest (W1).** Das Register war bei zwei von drei Punkten veraltet: Zeiger
+  über der Kante und Flächengriff an der gewählten Fläche waren seit `e087d2aa` (10.09.)
+  erledigt — der Griff bekam einen Kettentest (Fläche wählen, Sitz prüfen, ziehen,
+  `push_face` mit dieser Fläche im Verlauf). Offen war der **Rechtsklick**, in zwei
+  Stücken: `_edge_click` stellte die Stufenfrage fest mit `direct=False` (auf einem noch
+  nicht gewählten Körper nahm der Rechtsklick die Fläche), und `_on_right_click` gab den
+  Punkt aus der Szene statt aus dem Bild — auf Platte 2 suchte er die Kante eine
+  Bettbreite daneben. Drei Tests in `tests/test_selection.py`, jede Mutation
+  gegengeprüft. Kein eigener Kantenzeiger: Entscheidung vom 10.09. („derselbe
+  Handgriff, dasselbe Bild") — falls eine eigene Form gewünscht ist, ist das eine
+  Bedienfrage an Robert.
+- **Skizze (W2).** Drei neue Bedingungsarten `angle` (Grad, Residuum `sin(φ−θ)`, Periode
+  180), `equal` (Linienlänge oder Radius) und `midpoint`; „konzentrisch" ist bewusst
+  keine Art, sondern die Deckung zweier Mittelpunkte am Knopf. Zwei Werkzeuge aus zwei
+  Klicks: Vieleck (V, Eckenzahl 3–12, Regelmäßigkeit über einen Hilfskreis — die
+  Winkel-Variante ist rangdefizient) und Langloch (G, Breite aus der Leiste, vier
+  Senkrechte zum Radiusstrahl plus `equal` der Radien). Analytisch gegen gemessen:
+  Sechseck Ø 20/Höhe 10 = 2 598,076211 mm³, Langloch 20 × 6/Höhe 10 = 1 482,743339 mm³,
+  beide Soll = Ist. Werkzeugzeile 639 → 725 Bildpunkte bei 900 erlaubt. Kein
+  `format_version`-Sprung (eine neue Bedingungsart kommt in alten Dateien nicht vor).
+  `tests/test_errors.py` fand `angle_range` als unsortierte Beschränkung — behoben.
+  Der Bauplan §30.1 ist unberührt; der Nachtrag steht als RM-175 im Register.
+- **Vorschau (W3).** Die Sonde vom 13.09. neu gebaut und alle 110 Operationen gefahren —
+  zuerst mit einem Messfehler: Sie lud `app` über die editierbare Installation aus dem
+  Hauptbaum statt aus dem Worktree (`sys.path[0]` ist der Skriptordner). Nachher: 89 mit
+  Bild, 11 leer mit eigenem Satz, 5 ohne Bild mit Grund, 5 ohne Dialog, keine ungemessen
+  (die 15 vom 13.09. haben Szenen). Zwei Befunde behoben: *An gezeichneter Linie trennen*
+  öffnete auf z = 0 (`_plane_through` fragte nur nach `axis`), *An Merkmal ausrichten*
+  erklärte die Schreibweise `obj_2:hole_1` — jetzt ein Kundensatz je Lage. **Grobe
+  Vorschaustufe** in `session.py`: Verkleinerung **vor** den vorgeschauten Schritten aus
+  derselben groben Quelle (getrennt verkleinern erfand 16,7 mm³ Material und kostete
+  10–50 s, weil zwei fast deckungsgleiche Häute der schlimmste Fall der Booleschen Kette
+  sind); Schranke 150 000 Dreiecke (dort fällt die Sekunde aus §2.8), Ziel 50 000
+  (Abweichung 0,0078 mm, die Ø-5-Bohrung bleibt bis 2 000 Dreiecke ein Loch von
+  4,98 mm). 327 680 Dreiecke: 3,25 → 0,52 s; 813 600: 6,19 → 0,41 s je Zahl im Dialog.
+  Band „Grobe Vorschau", vor „am Volumen ändert sich nichts", hinter „unvollständig".
+  Entprellung 300 ms bleibt: 200 ms zieht bei 200 ms Klickabstand elf Rechnungen statt
+  einer; ein größenabhängiger Wert ist Vorschlag.
+- **Bänder und Sperre (W10, W12).** `OperationSpec.unchanged_effect` (Register:
+  `UNCHANGED_EFFECT`) sagt „Prüfung — das Ergebnis steht im Prüfbericht, nicht im Bild"
+  an den zwei Prüfwerkzeugen und „der Name ändert sich, die Form nicht" beim Umbenennen;
+  `_warning_of` reicht jetzt auch Info-Befunde ins Band, wenn die Differenz leer ist.
+  *Aushöhlen* an der offenen Figur sperrt *Übernehmen* über
+  `OperationDialog.block_apply` (Haken aus b5501330) bei `repair_and_retry`,
+  `split_and_retry`, `recount_and_retry` — die Kette hält an, die Handlung hängt am
+  Befund, nicht an einer Ausnahme. *Dreiecke verringern* mit Ziel über dem Bestand meldet
+  `mesh.already_below_target`, *Stellung geben* ohne Skelett `pose.no_armature` als
+  Warnung mit dem Weg; die Bedingung `after.triangle_count <= target` warf zwei Lagen
+  zusammen.
+- **Sieben Entscheidungspunkte der Durchsicht v0.4.1 (W7).** `_named_place` füllt
+  ungenannte Achsen mit dem Messwert (Gegenprobe: `(20, 0, 0)` statt `(20, 30, 0)`); fünf
+  Kundentexte sagen „Auswahlfenster" (Dockname bleibt „Auswahl"); das Handbuch folgt
+  `labels._SIDES`; das Messwissen aus `surfaces.py` (`86fad1a7`) steht in
+  `operationen.md` und `registry/CLAUDE.md`; `measurement_note` ist in `reason` überführt
+  und ein Wächter meldet ungelesene Felder; zweimal dieselbe STL heißt „plate_holes 2"
+  (`import_plan`, `_own_name`); der `caveat` von *Verrunden* nennt die Grenze am exakten
+  Kern (3-mm-Wand: Netz nimmt 2 mm, OpenCASCADE lehnt ab).
+- **Leistung (W8).** `filaments.save()` kostete nicht das Dateisystem (Austausch 0,4–0,5
+  ms, `fsync` 1,2–1,9 ms), sondern `_remaining` — jede Spule über alle Buchungen;
+  `_booked_grams` ordnet einmal je Lesevorgang: 1000 Spulen/1000 Buchungen 115,6 →
+  70,5 ms, die Bestandsrechnung darin 47,1 → 0,33 ms. Die Grafikkarte: 763 ms
+  `available()` plus 668 ms Renderer je Viewport im Hauptthread; jetzt einmal je Prozess
+  gemerkt, in einem `leash.Worker` vor `load_operations()` gefragt, Frist
+  `ADAPTER_TIMEOUT_SECONDS` = 20 s, danach der vorhandene Abmeldesatz — Hauptthread 661
+  statt 1 431 ms; Thread-Sicherheit dreimal gemessen (Renderer im Hauptthread auf einer
+  Instanz aus dem Nebenthread). Nur gemessen: `_redraw_shadows` 11,7 ms je Drehgeste (nicht
+  96–137), aber `outline_of` ruft Qhull und legt je Aufruf eine Temporärdatei an (24
+  `nt.open` je zwölf Stellungen, 0,6 ms leer gegen 9,7 unter Last) — Vorschlag GEOS wie
+  im Kern am 12.09.; die Erkennung wächst quadratisch mit der Verrundungszahl (79 800
+  Paare bei 100 Taschen in `slots._slot_from` und `features._same_cylinder`).
+- **Bildpunkt-Konstanten (W9).** Der Zeiger kommt als Gerätepixel in die Ansicht
+  (`gfx_renderer.py` rechnet `position * ratio`), die Konstanten standen als
+  Logikpunkte daneben: bei 200 % halbierten sich `CLICK_SLACK`, `CURSOR_PIXELS`,
+  `SNAP_MARK_PIXELS`, `PULL_HANDLE_PIXELS`, `PULL_HIT_PIXELS`, `AXIS_LABEL_PIXELS` (sieben
+  Stellen); `SNAP_DOT_PIXELS` und `SKETCH_POINT_PIXELS` dürfen ausdrücklich nicht
+  umgerechnet werden (pygfx rechnet Punktgrößen selbst um). Umgerechnet an den elf
+  Vergleichsstellen (`Renderer.device_ratio()`, `_device_pixels`,
+  `is_click(…, ratio)`), Tests über 1,0/1,5/2,0. Am echten Bildschirm mit Skalierung
+  nicht angesehen.
+- **RM-079 (Website bei 320 Punkt)** ist im selben Lauf zugegangen — siehe den
+  Registerblock in `ROADMAP.md`.
+
+**Nachträge zum Tag:** `test_filament_picker.py` reißt im Hauptbaum mit 0xc0000374 beim
+Abbau, sobald zwei ungestagete Arbeitskopien (`main_window.py`, `panels.py`) aus einer
+Sitzung ohne Claude-Adresse zusammen liegen (Bisect am sauberen HEAD: HEAD plus alle sechs
+Pakete 66 grün, plus diese zwei Dateien Exit 127) — dasselbe Muster wie
+`ungenutzter-import-reisst-den-prozess`; `tests/test_render_factory.py` verliert zwei native
+Läufe an 90-s-Fristen unter Last (HEAD plus W8 allein: 3 grün in 104 s). Beides steht im
+Bericht der Sitzung, nicht in diesem Code.
