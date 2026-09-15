@@ -26,6 +26,26 @@ def dispose(dialog: OrganizerDialog, app: QApplication) -> None:
     app.processEvents()
 
 
+@pytest.mark.parametrize("blocked", [False, True])
+def test_tree_rebuild_restores_the_previous_signal_state_on_error(qt_app, monkeypatch, blocked):
+    """Ein fehlerhafter Baumaufbau darf den Wähler weder stummschalten noch fremd freigeben."""
+    dialog = OrganizerDialog({})
+    try:
+        _until(qt_app, dialog.accept_button.isEnabled)
+        dialog.tree.blockSignals(blocked)
+
+        def refuse():
+            raise ValueError("own tree probe")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(dialog.tree, "clear", refuse)
+            with pytest.raises(ValueError, match="own tree probe"):
+                dialog._rebuild_tree()
+        assert dialog.tree.signalsBlocked() is blocked
+    finally:
+        dispose(dialog, qt_app)
+
+
 def test_editor_keeps_expressions_and_exact_preview_and_changes_one_repeated_wall(qt_app):
     dialog = OrganizerDialog(
         {"width": "=@outer_width", "layout": layout_to_text(grid_layout())},

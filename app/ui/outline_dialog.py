@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QByteArray, QPointF, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QPointF, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QMouseEvent, QPainter, QPainterPath, QPen, QResizeEvent
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
@@ -371,40 +371,39 @@ class OutlineDialog(QDialog):
             }
         except AppError:
             selected = set()
-        self.profiles.blockSignals(True)
-        scene = self.contour_view.scene()
-        for number, entry in enumerate(profiles, 1):
-            title = tr("Kontur {number}").format(number=number)
-            text = tr("{title} · {width} × {height}").format(
-                title=title, width=length(entry.width), height=length(entry.height)
-            )
-            if entry.reason:
-                text += "\n" + tr("Nicht extrudierbar")
-            item = QListWidgetItem(text, self.profiles)
-            item.setData(Qt.ItemDataRole.UserRole, entry.profile.id)
-            item.setData(Qt.ItemDataRole.UserRole + 1, text)
-            item.setToolTip(entry.reason or tr("Innenringe bleiben Löcher."))
-            flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-            if not entry.reason:
-                flags |= Qt.ItemFlag.ItemIsUserCheckable
-            item.setFlags(flags)
-            if not entry.reason:
-                item.setCheckState(
-                    Qt.CheckState.Checked
-                    if entry.profile.id in selected
-                    else Qt.CheckState.Unchecked
+        with QSignalBlocker(self.profiles):
+            scene = self.contour_view.scene()
+            for number, entry in enumerate(profiles, 1):
+                title = tr("Kontur {number}").format(number=number)
+                text = tr("{title} · {width} × {height}").format(
+                    title=title, width=length(entry.width), height=length(entry.height)
                 )
-            shape = scene.addPath(entry.path)
-            shape.setData(0, entry.profile.id)
-            shape.setToolTip(text)
-            self._items[entry.profile.id] = shape
-            label = scene.addSimpleText(str(number))
-            label.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
-            label.setPos(entry.label_at)
-            label.setBrush(self.palette().text())
-            label.setData(0, entry.profile.id)
-            label.setZValue(2)
-        self.profiles.blockSignals(False)
+                if entry.reason:
+                    text += "\n" + tr("Nicht extrudierbar")
+                item = QListWidgetItem(text, self.profiles)
+                item.setData(Qt.ItemDataRole.UserRole, entry.profile.id)
+                item.setData(Qt.ItemDataRole.UserRole + 1, text)
+                item.setToolTip(entry.reason or tr("Innenringe bleiben Löcher."))
+                flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+                if not entry.reason:
+                    flags |= Qt.ItemFlag.ItemIsUserCheckable
+                item.setFlags(flags)
+                if not entry.reason:
+                    item.setCheckState(
+                        Qt.CheckState.Checked
+                        if entry.profile.id in selected
+                        else Qt.CheckState.Unchecked
+                    )
+                shape = scene.addPath(entry.path)
+                shape.setData(0, entry.profile.id)
+                shape.setToolTip(text)
+                self._items[entry.profile.id] = shape
+                label = scene.addSimpleText(str(number))
+                label.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
+                label.setPos(entry.label_at)
+                label.setBrush(self.palette().text())
+                label.setData(0, entry.profile.id)
+                label.setZValue(2)
         scene.setSceneRect(scene.itemsBoundingRect())
         self.contour_view.fitInView(scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
         self.profiles.setCurrentRow(
@@ -448,25 +447,26 @@ class OutlineDialog(QDialog):
 
     def _paint_selection(self) -> None:
         selected = set(self._selected())
-        self.profiles.blockSignals(True)
-        for index, entry in enumerate(self._profiles):
-            shape = self._items[entry.profile.id]
-            chosen = entry.profile.id in selected
-            item = self.profiles.item(index)
-            text = str(item.data(Qt.ItemDataRole.UserRole + 1))
-            if not entry.reason:
-                text += "\n" + (tr("Wird extrudiert") if chosen else tr("Nicht ausgewählt"))
-            item.setText(text)
-            pen = QPen(
-                self.palette().highlight().color() if chosen else self.palette().text().color()
-            )
-            pen.setCosmetic(True)
-            pen.setWidth(3 if chosen else 1)
-            if entry.reason:
-                pen.setStyle(Qt.PenStyle.DashLine)
-            shape.setPen(pen)
-            shape.setBrush(self.palette().highlight() if chosen else QBrush(Qt.BrushStyle.NoBrush))
-        self.profiles.blockSignals(False)
+        with QSignalBlocker(self.profiles):
+            for index, entry in enumerate(self._profiles):
+                shape = self._items[entry.profile.id]
+                chosen = entry.profile.id in selected
+                item = self.profiles.item(index)
+                text = str(item.data(Qt.ItemDataRole.UserRole + 1))
+                if not entry.reason:
+                    text += "\n" + (tr("Wird extrudiert") if chosen else tr("Nicht ausgewählt"))
+                item.setText(text)
+                pen = QPen(
+                    self.palette().highlight().color() if chosen else self.palette().text().color()
+                )
+                pen.setCosmetic(True)
+                pen.setWidth(3 if chosen else 1)
+                if entry.reason:
+                    pen.setStyle(Qt.PenStyle.DashLine)
+                shape.setPen(pen)
+                shape.setBrush(
+                    self.palette().highlight() if chosen else QBrush(Qt.BrushStyle.NoBrush)
+                )
 
     def _current_changed(self, row: int) -> None:
         if 0 <= row < len(self._profiles):
@@ -492,12 +492,13 @@ class OutlineDialog(QDialog):
                 return
 
     def _set_selection(self, checked: bool) -> None:
-        self.profiles.blockSignals(True)
-        for index in range(self.profiles.count()):
-            item = self.profiles.item(index)
-            if item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
-                item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
-        self.profiles.blockSignals(False)
+        with QSignalBlocker(self.profiles):
+            for index in range(self.profiles.count()):
+                item = self.profiles.item(index)
+                if item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+                    item.setCheckState(
+                        Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+                    )
         self._changed()
 
     def _all(self) -> None:

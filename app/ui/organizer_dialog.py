@@ -7,7 +7,7 @@ from dataclasses import replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from PySide6.QtCore import QByteArray, QModelIndex, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QModelIndex, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QMouseEvent, QPainterPath, QPen, QResizeEvent
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
@@ -382,31 +382,30 @@ class OrganizerDialog(QDialog):
         }
 
     def _rebuild_tree(self) -> None:
-        self.tree.blockSignals(True)
-        self.tree.clear()
-        self._nodes.clear()
-        self._tree_items.clear()
+        with QSignalBlocker(self.tree):
+            self.tree.clear()
+            self._nodes.clear()
+            self._tree_items.clear()
 
-        def add(node: Node, parent: QTreeWidgetItem | None) -> None:
-            text = (
-                tr("Fach")
-                if node.kind == "cell"
-                else (tr("Raster längs") if node.axis == "x" else tr("Raster quer"))
-                if node.kind == "repeat"
-                else (tr("Teilung längs") if node.axis == "x" else tr("Teilung quer"))
-            )
-            item = QTreeWidgetItem([text])
-            item.setData(0, Qt.ItemDataRole.UserRole, node.id)
-            (parent.addChild(item) if parent is not None else self.tree.addTopLevelItem(item))
-            self._nodes[node.id] = node
-            self._tree_items[node.id] = item
-            for child in node.children:
-                add(child, item)
+            def add(node: Node, parent: QTreeWidgetItem | None) -> None:
+                text = (
+                    tr("Fach")
+                    if node.kind == "cell"
+                    else (tr("Raster längs") if node.axis == "x" else tr("Raster quer"))
+                    if node.kind == "repeat"
+                    else (tr("Teilung längs") if node.axis == "x" else tr("Teilung quer"))
+                )
+                item = QTreeWidgetItem([text])
+                item.setData(0, Qt.ItemDataRole.UserRole, node.id)
+                (parent.addChild(item) if parent is not None else self.tree.addTopLevelItem(item))
+                self._nodes[node.id] = node
+                self._tree_items[node.id] = item
+                for child in node.children:
+                    add(child, item)
 
-        if self._spec is not None:
-            add(self._spec.root, None)
-        self.tree.expandAll()
-        self.tree.blockSignals(False)
+            if self._spec is not None:
+                add(self._spec.root, None)
+            self.tree.expandAll()
         if self._nodes:
             self.tree.setCurrentItem(
                 self._tree_items.get(self._selected[1], next(iter(self._tree_items.values())))
@@ -611,9 +610,8 @@ class OrganizerDialog(QDialog):
 
     def _new_grid(self) -> None:
         self._spec = grid_layout()
-        self.basis.blockSignals(True)
-        self.basis.setCurrentIndex(0)
-        self.basis.blockSignals(False)
+        with QSignalBlocker(self.basis):
+            self.basis.setCurrentIndex(0)
         self._selected = ("", "")
         self._store_layout()
         self._rebuild_tree()
@@ -622,9 +620,8 @@ class OrganizerDialog(QDialog):
         if self._spec is None:
             return
         if self._layout is None or self._ready_revision != self._revision:
-            self.basis.blockSignals(True)
-            self.basis.setCurrentIndex(1 if self._spec.basis == "inner" else 0)
-            self.basis.blockSignals(False)
+            with QSignalBlocker(self.basis):
+                self.basis.setCurrentIndex(1 if self._spec.basis == "inner" else 0)
             return
         self._basis_before = (self._layout.width, self._layout.depth)
         if self.basis.currentData() == "outer" and not self._layout_only:

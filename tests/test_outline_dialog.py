@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from collections.abc import Callable
+from functools import partial
 
 import pytest
 from PySide6.QtCore import Qt
@@ -32,6 +33,37 @@ def _dispose(dialog: OutlineDialog, app: QApplication) -> None:
     dialog.close()
     dialog.deleteLater()
     app.processEvents()
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+@pytest.mark.parametrize("operation", ["read", "paint", "select"])
+def test_contour_updates_restore_previous_signal_state_on_error(
+    qt_app, monkeypatch, blocked, operation
+):
+    """Auch eine Ausnahme während der Konturdarstellung erhält die vorherige Signalsperre."""
+    dialog = OutlineDialog(SOURCE, ".svg")
+    try:
+        _until(qt_app, dialog.accept_button.isEnabled)
+        dialog.profiles.blockSignals(blocked)
+
+        def refuse(*_args):
+            raise ValueError("own contour probe")
+
+        with monkeypatch.context() as patch:
+            if operation == "read":
+                patch.setattr(dialog.contour_view.scene(), "addPath", refuse)
+                call = partial(dialog._read, dialog._profiles)
+            elif operation == "paint":
+                patch.setattr(next(iter(dialog._items.values())), "setPen", refuse)
+                call = dialog._paint_selection
+            else:
+                patch.setattr(dialog.profiles, "item", refuse)
+                call = partial(dialog._set_selection, False)
+            with pytest.raises(ValueError, match="own contour probe"):
+                call()
+        assert dialog.profiles.signalsBlocked() is blocked
+    finally:
+        _dispose(dialog, qt_app)
 
 
 def test_image_keyboard_and_real_result_share_selected_profiles(qt_app: QApplication) -> None:
