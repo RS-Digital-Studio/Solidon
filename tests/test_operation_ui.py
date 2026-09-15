@@ -4255,3 +4255,37 @@ def test_aligning_without_a_target_invites_instead_of_teaching_syntax(
         ]
     )
     assert "Doppelpunkt" in reason, reason
+
+
+def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) -> None:
+    """*Maße als Parameter anlegen* steht bei den Grundkörpern und sonst nirgends (§13).
+
+    Der Haken ist eine Zusage an Weg 2 — ein Quader mit benannten Maßen ist
+    eine Vorlage. Eine Bohrung ist ein Maß am Körper; sie bekommt ihn nicht.
+    Ohne Auftrag des Fensters trägt der Dialog die Zeile gar nicht, und mit
+    Auftrag steht sie aus, bis jemand sie setzt.
+    """
+    from app.ui.main_window import offers_naming
+
+    assert offers_naming(REGISTRY.get("create_box"))
+    assert offers_naming(REGISTRY.get("create_cylinder"))
+    assert offers_naming(REGISTRY.get("create_brep_box")), "der exakte Zwilling genauso"
+    assert not offers_naming(REGISTRY.get("drill_hole")), "ein Maß am Körper ist keine Vorlage"
+    assert not offers_naming(REGISTRY.get("sketch_extrude"))
+
+    plain = OperationDialog(REGISTRY.get("create_box"), {})
+    offered = OperationDialog(REGISTRY.get("create_box"), {}, offer_naming=True)
+    try:
+        assert plain._naming is None, "ohne Auftrag keine Zeile"
+        assert not plain.names_dimensions()
+        assert offered._naming is not None
+        assert not offered.names_dimensions(), "aus, bis jemand ihn setzt"
+        caption = offered._front.labelForField(offered._naming)
+        assert isinstance(caption, QLabel)
+        assert caption.text() == str(tr("Maße als Parameter anlegen"))
+        assert "Projektparameter" in offered._naming.toolTip()
+        offered._naming.setChecked(True)
+        assert offered.names_dimensions()
+    finally:
+        plain.deleteLater()
+        offered.deleteLater()

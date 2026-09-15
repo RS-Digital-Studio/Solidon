@@ -718,7 +718,7 @@ zum Schnittkörper, mit gemeinsamer Platzierung und gemeinsamem Abbau.
 
 | Datei | Besonderheit |
 |---|---|
-| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt |
+| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13) |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe |
 | `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29) |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |

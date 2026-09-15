@@ -27936,6 +27936,25 @@ schon aufgebaut ist/sein soll." Gemessen am HEAD d5752333, nicht aus der Erinner
     Weg-1-Zeile und zwei Sätze in `oberflaeche.md`, der bedienlogik-Agent und der Skill
     `neue-op` samt erzeugten Spiegeln. Drei Schlüssel neu, drei hinaus. Nachweis:
     `test_plan_references`, `test_tour`, `test_translations`, `test_agent_mirror`.
+  - **Ein Quader mit benannten Maßen war ein Agentenprivileg** (Entscheidung 2). §13 verlangt
+    vom Agenten, Hauptabmessungen als Parameter anzulegen — der Kunde konnte dasselbe nur zu
+    Fuß: Parameter in der Leiste anlegen, dann „=@breite" ins Feld tippen, zwei Dinge, von denen
+    ein Neuling keines kennt. Jeder Dialog der Kategorie `primitive` (acht Operationen, Quader
+    bis Gewinde, samt exakten Zwillingen) trägt jetzt vorn den Haken **Maße als Parameter anlegen**
+    (`offer_naming` am `OperationDialog`, `offers_naming` im Fenster): gesetzt, wird jedes
+    Millimetermaß der Vorderseite ein Projektparameter, benannt nach seiner Beschriftung, wie
+    der Kunde sie liest (*Breite* → `breite`, vergeben → `breite_2`), mit übersetzbarem Titel
+    und den Grenzen des Feldes, und der Schritt verweist mit `=@breite` darauf. Parameter und
+    Schritt gehen in **einer** Transaktion (`changes` an `Session.apply`) — ein Strg+Z nimmt
+    beides zusammen zurück, wie beim Agentenvorschlag (Regel 16). Gemessen im Test: drei
+    Parameter, der Quader 60·40·20, nach `change_parameter("breite", 90)` 90·40·20, der zweite
+    Quader mit `breite_2`, drei Undo bis zum leeren Projekt. Bewusst nicht dabei: *Extrudieren*
+    und die Skizzenwege (die Maße stehen dort in der Skizze), Bohrung und Fase (ein Maß *am*
+    Körper). Die Handbuchseite zu Weg 2 nennt den Haken noch nicht — sie ist eine Seite je
+    Sprache und wird beim nächsten Handbuchlauf nachgezogen (RM-084 führt die Kundentexte).
+    Nachweis: `test_naming_the_dimensions_makes_them_project_parameters` (Gegenprobe: `changes =
+    naming` auf `None` → keine Parameter; Namensschleife entfernt → der zweite Quader
+    überschreibt den ersten), `test_only_a_primitive_offers_to_name_its_dimensions`.
 
 ## Drei Sackgassen und zwei stumme Vorschauen (14.09.2026)
 

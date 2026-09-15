@@ -12,6 +12,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import inspect
+import re
 import sys
 import time
 import traceback
@@ -188,6 +189,7 @@ from app.core.types import (
     ObjectId,
     Origin,
     Parameter,
+    ParamSpec,
     PlaneFrame,
     PrintSettings,
     QualityPreset,
@@ -208,7 +210,7 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
-from app.ui.command_palette import CommandPalette
+from app.ui.command_palette import CommandPalette, fold
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
@@ -1255,6 +1257,28 @@ class _SourceReadWorker(Worker):
             self.stopped.emit()
             return
         self.done.emit(payload)
+
+
+def _names_a_dimension(entry: ParamSpec) -> bool:
+    """Ob ein Feld ein Maß ist, das *Maße als Parameter anlegen* als Parameter anlegt: eine
+    Zahl in Millimetern auf der Vorderseite des Dialogs (§2.4, §13). Winkel,
+    Stückzahlen und alles hinter der Klappe bleiben Zahlen im Schritt.
+    """
+    return entry.placement == "front" and entry.kind == "float" and entry.unit == "mm"
+
+
+def offers_naming(spec: OperationSpec) -> bool:
+    """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
+
+    Die Grundkörper, und nur sie: Ihre Maße machen aus dem Projekt eine
+    Vorlage — „dieselbe Halterung, andere Maße" ist danach ein Zahlendialog.
+    Eine Bohrung oder eine Fase ist ein Maß *am* Körper; wer das benennen
+    will, tippt ``=@name`` in das Feld, wie bisher. Und ein Grundkörper ohne
+    Millimetermaß vorn bekäme einen Haken, der nichts täte.
+    """
+    return spec.category == "primitive" and any(
+        _names_a_dimension(entry) for entry in spec.params.spec()
+    )
 
 
 def inputs_for(
@@ -12633,7 +12657,7 @@ class MainWindow(QMainWindow):
             nonlocal chosen_spool
             chosen_spool = entry
 
-        def run(params: Mapping[str, Any]) -> None:
+        def run(params: Mapping[str, Any], naming: DocumentChange | None = None) -> None:
             if spec.name in LID_OPS and inputs:
                 # Der Deckel geht über seinen Ablauf, nicht über die nackte
                 # Operation: erst der trägt das Paar aus Öffnung und Kragen als
@@ -12653,7 +12677,7 @@ class MainWindow(QMainWindow):
                 if on_bodies
                 else [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))]
             )
-            changes = None
+            changes = naming
             if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}:
                 matches = (
                     all(
@@ -12806,6 +12830,11 @@ class MainWindow(QMainWindow):
                 # (E4). Leer an einem Netz — dort gibt es keine.
                 edges=self._edge_names(),
                 note=note,
+                # **Die Grundkörper benennen ihre Maße** (§13, Entscheidung
+                # Robert, 14.09.2026): Der Haken legt Breite, Tiefe und Höhe als
+                # Projektparameter an — `_named_dimensions` baut sie beim
+                # Übernehmen, in derselben Transaktion wie den Schritt.
+                offer_naming=offers_naming(spec),
             )
             dialog.spoolChosen.connect(remember_spool)
             if variant is not None:
@@ -12864,16 +12893,16 @@ class MainWindow(QMainWindow):
                         ],
                     )
                     return
+                entered, named = self._named_dimensions(
+                    picked, fitted(dialog.values()), dialog.names_dimensions()
+                )
                 if picked is spec:
-                    run(dialog.values())
+                    run(entered, named)
                     return
                 self.session.apply(
                     picked.title,
-                    [
-                        OperationDraft(
-                            op=picked.name, inputs=chosen_inputs(), params=fitted(dialog.values())
-                        )
-                    ],
+                    [OperationDraft(op=picked.name, inputs=chosen_inputs(), params=entered)],
+                    changes=named,
                 )
 
             self._open_operation_dialog(dialog, run_chosen)
@@ -13229,6 +13258,59 @@ class MainWindow(QMainWindow):
             # Nach dem Öffnen: ein Fokus in einem Fenster, das noch nicht
             # gezeigt wurde, ist keiner.
             dialog.focus_field(field)
+
+    def _named_dimensions(
+        self, spec: OperationSpec, params: Mapping[str, Any], wanted: bool
+    ) -> tuple[dict[str, Any], DocumentChange | None]:
+        """Die Maße von vorn als Projektparameter, wenn der Dialog es will (§13).
+
+        Jedes Millimetermaß der Vorderseite wird ein Parameter, benannt nach
+        seiner Beschriftung, wie der Kunde sie liest — *Breite* wird
+        ``breite``, *Width* wird ``width``, und ist der Name vergeben,
+        ``breite_2`` —, und der Schritt verweist mit ``=@breite`` darauf,
+        statt die Zahl zu tragen. Der Titel bleibt übersetzbar, die
+        Parameterleiste zeigt ihn in jeder Sprache.
+
+        Beides geht in **einer** Transaktion mit dem Schritt (``changes``):
+        Ein Strg+Z nimmt den Quader und seine drei Maße zusammen zurück,
+        nicht erst das eine und dann das andere — dieselbe Zusage, die
+        Regel 16 dem Agentenvorschlag macht.
+
+        Ein Feld, in dem schon ein Ausdruck steht, bleibt, was es ist: Wer
+        ``=@wand*2`` eingetragen hat, meint diese Bindung und keine neue.
+        """
+        values = dict(params)
+        if not wanted:
+            return values, None
+        taken = set(self.session.project.document.parameters)
+        created: dict[str, Parameter] = {}
+        for entry in spec.params.spec():
+            value = values.get(entry.name)
+            if not _names_a_dimension(entry) or isinstance(value, bool):
+                continue
+            if not isinstance(value, int | float):
+                continue
+            stem = re.sub(r"[^a-z0-9_]+", "_", fold(str(entry.title))).strip("_")
+            if not re.fullmatch(r"[a-z_][a-z0-9_]*", stem):
+                stem = entry.name
+            name = stem
+            counter = 2
+            while name in taken:
+                name = f"{stem}_{counter}"
+                counter += 1
+            taken.add(name)
+            created[name] = Parameter(
+                name=name,
+                value=float(value),
+                unit="mm",
+                title=entry.title,
+                minimum=entry.minimum,
+                maximum=entry.maximum,
+            )
+            values[entry.name] = f"=@{name}"
+        if not created:
+            return values, None
+        return values, change_for(self.session.project.document, parameters=created)
 
     def _parameter_values(self) -> dict[str, float]:
         """Die aufgelösten Projektparameter — der Skizzeneditor rechnet

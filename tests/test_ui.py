@@ -17324,3 +17324,91 @@ def test_a_reason_that_asks_for_a_repair_first_greys_out_apply(window: MainWindo
     window._op_dialog = None
     window._preview_advised("repair_and_retry")
     window._preview_explained(satz)
+
+
+def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow) -> None:
+    """Weg 2: *Maße als Parameter anlegen* legt Breite, Tiefe und Höhe als Projektparameter
+    an, der Schritt verweist darauf, und der Quader folgt der Leiste (§13).
+
+    Bis zum 14.09.2026 gab es diesen Weg nur für den Agenten; der Kunde
+    musste den Parameter in der Leiste anlegen und dann ``=@breite`` in das
+    Feld tippen. Geprüft wird die ganze Kette: die Parameter mit Einheit und
+    übersetzbarem Titel, der Verweis im Schritt, die Ausdehnung des Körpers
+    nach einer gedrehten Zahl, ein zweiter Quader mit eigenen Namen — und
+    dass ein Strg+Z Schritt und Maße zusammen zurücknimmt, als eine
+    Transaktion.
+    """
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+
+    def make_box(width: float, depth: float, height: float) -> None:
+        window.run_operation(spec)
+        dialog = window._op_dialog
+        assert dialog is not None
+        assert dialog._naming is not None, "ein Grundkörper bietet den Haken an"
+        assert not dialog.names_dimensions(), "und er ist aus, bis jemand ihn setzt"
+        for name, value in (("width", width), ("depth", depth), ("height", height)):
+            editor = dialog._editors[name]
+            assert isinstance(editor, ValueField)
+            editor.set_value(value)
+        dialog._naming.setChecked(True)
+        dialog.accept()
+        QApplication.processEvents()
+        window.session.wait_for_idle()
+
+    make_box(60.0, 40.0, 20.0)
+    document = window.session.project.document
+    assert {name: entry.value for name, entry in document.parameters.items()} == {
+        "breite": 60.0,
+        "tiefe": 40.0,
+        "hoehe": 20.0,
+    }
+    assert document.parameters["breite"].unit == "mm"
+    assert str(document.parameters["hoehe"].title) == str(tr("Höhe")), (
+        "der Titel bleibt übersetzbar"
+    )
+    first = document.ops[-1]
+    assert first.op == "create_box"
+    assert {key: first.params[key] for key in ("width", "depth", "height")} == {
+        "width": "=@breite",
+        "depth": "=@tiefe",
+        "height": "=@hoehe",
+    }
+    body = window.session.last_result.scene.objects[first.outputs[0]]
+    assert body.mesh.bounds.size == pytest.approx((60.0, 40.0, 20.0))
+
+    # Die Leiste dreht das Maß, nicht der Schritt.
+    assert window.session.change_parameter("breite", 90.0)
+    window.session.wait_for_idle()
+    body = window.session.last_result.scene.objects[first.outputs[0]]
+    assert body.mesh.bounds.size == pytest.approx((90.0, 40.0, 20.0))
+
+    # Ein zweiter Quader bekommt eigene Namen, statt die ersten zu überschreiben.
+    make_box(10.0, 10.0, 10.0)
+    document = window.session.project.document
+    assert set(document.parameters) == {
+        "breite",
+        "tiefe",
+        "hoehe",
+        "breite_2",
+        "tiefe_2",
+        "hoehe_2",
+    }
+    assert document.ops[-1].params["width"] == "=@breite_2"
+    assert document.parameters["breite"].value == pytest.approx(90.0), "das erste Maß bleibt"
+
+    # Strg+Z nimmt Schritt und Maße zusammen zurück — eine Transaktion, wie
+    # beim Agentenvorschlag (Regel 16).
+    assert window.session.undo() is not None
+    window.session.wait_for_idle()
+    document = window.session.project.document
+    assert set(document.parameters) == {"breite", "tiefe", "hoehe"}
+    assert len(document.ops) == 1
+    assert window.session.undo() is not None
+    assert document.parameters["breite"].value == pytest.approx(60.0), "die gedrehte Zahl"
+    assert window.session.undo() is not None
+    window.session.wait_for_idle()
+    document = window.session.project.document
+    assert document.ops == []
+    assert document.parameters == {}, "der Quader nimmt seine Maße mit"

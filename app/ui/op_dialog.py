@@ -1327,11 +1327,20 @@ class OperationDialog(QDialog):
         target_features: Mapping[str, str] | None = None,
         source_objects: Sequence[str] = (),
         edges: Mapping[str, str] | None = None,
+        offer_naming: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
         ihren „Exakt"-Umschalter, ohne dass der Dialog seine Generik aus
         dem Schema verliert.
+
+        ``offer_naming`` hängt vorn den Haken *Maße als Parameter anlegen* an (§13):
+        Gesetzt, legt das Fenster jedes Millimetermaß der Vorderseite als
+        Projektparameter an und lässt den Schritt darauf verweisen.
+        :meth:`names_dimensions` liest ihn. Der Dialog bietet ihn nur an, wo
+        das Fenster es verlangt — bei den Grundkörpern, deren Maße eine
+        Vorlage ausmachen, nicht bei einer Bohrung, die ein Maß *am* Körper
+        ist.
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1551,6 +1560,33 @@ class OperationDialog(QDialog):
         # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
         # nicht mehr verteilt über alles.
         layout.addStretch(1)
+
+        self._naming: RowCheckBox | None = None
+        if offer_naming:
+            # **Weg 2 legt Maße an, keine Zahlen** (§13): Ein Quader, dessen
+            # Breite ein Projektparameter ist, bleibt eine Vorlage — die
+            # Parameterleiste dreht das Maß, ohne den Schritt zu öffnen. Bis
+            # hierher konnte das nur der Agent; der Kunde musste den Parameter
+            # in der Leiste anlegen und danach „=@breite" in das Feld tippen,
+            # zwei Dinge, von denen ein Neuling keines kennt. Der Haken steht
+            # vorn, direkt unter den Maßen, die er benennt (Entscheidung
+            # Robert, 14.09.2026).
+            naming = RowCheckBox(self)
+            front.addRow(str(tr("Maße als Parameter anlegen")), naming)
+            caption = front.labelForField(naming)
+            caption_toggles(caption, naming)
+            _explain(
+                naming,
+                caption,
+                str(
+                    tr(
+                        "Legt jedes Maß von vorn als Projektparameter an. Danach ändert die "
+                        "Parameterleiste die Zahl, und weitere Schritte können sich auf sie "
+                        "beziehen."
+                    )
+                ),
+            )
+            self._naming = naming
 
         if extra is not None:
             # **Vorn, nicht hinten.** Der Haken stand unter „Weitere
@@ -2588,6 +2624,14 @@ class OperationDialog(QDialog):
         )
         self._filament_notice.set_error(problem, handlers)
         self._filament_notice.show()
+
+    def names_dimensions(self) -> bool:
+        """Ob die Maße von vorn als Projektparameter angelegt werden sollen (§13).
+
+        Falsch, wenn der Dialog den Haken gar nicht trägt — dann gibt es
+        nichts zu benennen, und der Aufrufer braucht keinen zweiten Fall.
+        """
+        return self._naming is not None and self._naming.isChecked()
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""

@@ -1026,6 +1026,20 @@ bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`); im Dialog
 steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
+**Ein Grundkörper bietet an, seine Maße zu benennen** (§13, Entscheidung Robert,
+14.09.2026). Der Haken *Maße als Parameter anlegen* steht vorn im Dialog jeder Operation der
+Kategorie `primitive` (`offers_naming` in `main_window.py`); gesetzt, wird jedes
+Millimetermaß der Vorderseite ein Projektparameter — benannt nach seiner
+Beschriftung, wie der Kunde sie liest (*Breite* → `breite`, vergeben → `breite_2`),
+mit übersetzbarem Titel und den Grenzen des Feldes — und der Schritt verweist mit
+`=@breite` darauf. Parameter und Schritt gehen in **einer** Transaktion
+(`changes` an `Session.apply`): Ein Strg+Z nimmt beides zusammen zurück. Ein Feld
+mit einem Ausdruck bleibt, was es ist. Bis dahin konnte nur der Agent Maße
+benennen; der Kunde musste den Parameter in der Leiste anlegen und `=@breite` in
+das Feld tippen, zwei Dinge, von denen ein Neuling keines kennt. Nachweis:
+`test_naming_the_dimensions_makes_them_project_parameters`,
+`test_only_a_primitive_offers_to_name_its_dimensions`.
+
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
 wann eine Operation die falsche Wahl ist. Einunddreißig von hundertzehn
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
@@ -1044,7 +1058,7 @@ bekommt:
 | Weg | Ort an der Oberfläche |
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
-| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
+| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern*; die Grundkörper tragen vorn den Haken *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat und Generierungsdialog |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das, bevor man klickt), Menü *Ändern* |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |
