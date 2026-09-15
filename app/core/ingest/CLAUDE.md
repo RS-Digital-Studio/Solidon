@@ -70,6 +70,14 @@ gegen eine geänderte Quelle neu rechnen.
   bleiben gesperrt.
 - **Herkunft** wird vermerkt (`scene/foreign.py`, §32): Der Nutzer soll
   wissen, woher der Inhalt stammt.
+- **Wie der Körper heißt**, entscheidet der Plan und nicht die Auswertung:
+  Trägt der Stapel den Dateinamen schon, bekommt der neue eine Nummer dahinter
+  („plate_holes 2"), und das steht im `name`-Parameter der Operation. Gefragt
+  wird der **Stapel**, nicht die gerechnete Szene — dieselbe Entscheidung wie
+  bei `first_model`, und aus demselben Grund (§15.1): Sonst hinge der Name
+  daran, was gerade sonst in der Szene steht, und dieselbe Datei käme beim
+  nächsten Öffnen anders herein. Eine 3MF-Baugruppe bleibt außen vor; sie
+  bringt die Namen ihrer Teile in der Datei mit.
 
 ## Grenzen
 

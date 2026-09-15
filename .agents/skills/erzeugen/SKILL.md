@@ -31,6 +31,7 @@ Windows `.venv/Scripts/python.exe`, Linux/macOS `.venv/bin/python`. Nur
 
 | Aufgabe | Werkzeug und relevanter Hinweis |
 |---|---|
+| Beispielprojekte | `tools/make_examples.py`; nach jeder Änderung an der Bausteinbibliothek (`LIBRARY_VERSION`) oder an einer Beispielkette — `tests/test_examples.py` hält die Bausteinversion fest, sonst begrüßt ein Beispiel mit „benutzte Bausteine geändert". |
 | Handbuch-Bildschirmfotos | `tools/make_figures.py <sprache>`; `--schirm N` wählt den Monitor. |
 | Verkaufsbilder | `tools/make_web_images.py <sprache>`; eigene Ansichtsgröße, nicht verkleinerte Handbuchbilder. |
 | Handbuch und PDF | `tools/make_manual.py`; Sprach- und Ausgabeoptionen vor dem Lauf nachsehen. |

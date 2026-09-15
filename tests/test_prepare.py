@@ -4923,8 +4923,8 @@ def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
         "slot_hole", with_slot, profile, at_feature=slot, slot_length=length, slot_angle=90.0
     )
     assert gedreht.outputs, "und ein reines Drehen ebenfalls"
-    assert "slot_hole.crosses" in {finding.code for finding in gedreht.findings}, (
-        "der Querzug sagt sich an — dafür gibt es den Befund"
+    assert "slot_hole.turned" in {finding.code for finding in gedreht.findings}, (
+        "die Drehung sagt sich an — dafür gibt es den Befund"
     )
 
 

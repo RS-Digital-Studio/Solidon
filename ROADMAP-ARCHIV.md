@@ -26,11 +26,11 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-15 | [Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)](#drehen-und-verdoppeln-nehmen-die-hohlraumkette-mit-15092026) |
-| 2026-09-14 | [Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)](#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026) |
 | 2026-09-15 | [Ein gedrehtes Langloch ist eines (15.09.2026)](#ein-gedrehtes-langloch-ist-eines-15092026) |
+| 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
+| 2026-09-14 | [Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)](#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026) |
 | 2026-09-14 | [Bausteine: Vorschau, Griff und Werte — die Sonde über alle 27 (14.09.2026)](#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026) |
 | 2026-09-14 | [Eine 3MF von MakerWorld ging nicht auf (14.09.2026)](#eine-3mf-von-makerworld-ging-nicht-auf-14092026) |
-| 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
 | 2026-09-15 | [Die Suite öffnet kein Fenster (15.09.2026)](#die-suite-öffnet-kein-fenster-15092026) |
 | 2026-09-15 | [Die Verhaltensabnahme der kompakten Schemata (15.09.2026)](#die-verhaltensabnahme-der-kompakten-schemata-15092026) |
 | 2026-09-14 | [Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)](#die-sollwerte-der-geometrietests-haben-ihre-herkunft-14092026) |
@@ -27314,6 +27314,16 @@ bleiben in dieser Datei.
   nichts sagt, versetzt nichts) und zwei in `tests/test_operation_ui.py` (das Feld startet
   leer; eine getippte Null meint die Null). Gegenproben gefahren, alle vier rot ohne den Fix.
 
+  **Die halb genannte Stelle fehlte noch** (14.09.2026, Durchsicht v0.4.1). `_named_place`
+  unterschied „gar nichts gesagt" von „etwas gesagt", füllte die ungenannten Achsen darin
+  aber mit null: Ein `x=20` aus Chat, Kommandozeile oder Agent setzte y und z auf null und
+  schob das Loch an einer mittig gelegten Platte in die Mitte des Teils. Gefunden wurde es
+  nicht früher, weil der Dialog alle drei Felder mit der gemessenen Mitte vorbelegt — dort
+  ist keine Achse je ungenannt, und geprüft war nur er. Die ungenannten Achsen behalten
+  seither den gemessenen Wert. Nachweis: zwei Fälle in `tests/test_prepare.py` (`x` allein
+  versetzt nur in x; die Gegenprobe, dass eine getippte Null eine Null bleibt), der erste
+  gegengeprüft und rot ohne den Fix — er kam mit (20 | 0 | 0) statt (20 | 30 | 0) zurück.
+
 <a id="rm-155"></a>
 
 - [x] **RM-155 — Ein knapp aufgezogenes Langloch in einem fremden Netz.** Gemessen am
@@ -28290,175 +28300,6 @@ Ein Restvertrag aus dem Bauplan-Abgleich vom 08.09.2026, abgeschlossen am 14.09.
   Hüllnormalen, von denen die Vorauswahl neun schneidet, und verlangt `tried > 1`: 0,27 bis 0,36 s
   gegen das Ziel aus §31.
 
-## Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)
-
-Ein Punkt aus dem Gesamtreview vom 05.09.2026, abgeschlossen am 14.09.2026 — und er hinterlässt
-einen neuen: RM-173.
-
-<a id="rm-054"></a>
-
-- [x] **RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen.** Zwei Zahlen standen
-  auseinander: `PROMPT_TOOL_COUNT` auf 121 (zweimal vom Wächter nachgezogen), `PROMPT_TOKENS` auf
-  28 281 aus der Messung von 119 Werkzeugen am 09.09.; die Tokenzahl wurde ausdrücklich nicht
-  fortgeschrieben, weil eine hochgerechnete Messung keine ist.
-
-  **Gemessen am 14.09.2026** mit `tools/measure_local_model.py --model qwen3:14b --runs 3`, RTX
-  4080, vollständig im VRAM: **31 465 Token** bei 121 Werkzeugen, 22,9 s kalt, warm 2,3 bis
-  2,4 s (Promptcache). `PROMPT_TOKENS` trägt die Zahl mit Modell, Schema und Datum;
-  `test_backends` prüft das Fenster seither gegen die gemessene Nutzlast statt gegen 25 361 von
-  damals, und die Wartezeit im Schlüsseldialog rechnet mit derselben Zahl (`test_chat_ui`
-  rechnet sie aus `PROMPT_TOKENS`, nicht aus einer Behauptung).
-
-  **Was die Messung außerdem sagt, steht als RM-173 im Register:** 96,0 % des Fensters, 1 303
-  Token Rest, und mit `num_ctx` 40 960 läuft das Modell von der Karte (`ollama ps`: 16 GB,
-  `10 %/90 % CPU/GPU`).
-
-## Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)
-
-Ein Punkt aus dem Fundament der Wahrnehmung vom 22.08.2026, von Hand durchgesehen und
-abgeschlossen am 14.09.2026.
-
-<a id="rm-025"></a>
-
-- [x] **RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern.** Die Frage vom
-  22.08. lautete: Prüft ein Test gegen einen Wert von außen — ein Sollmaß, eine Formel, eine
-  andere Rechnung — oder nur dagegen, dass zweimal dasselbe herauskommt? Automatisch war sie
-  nicht zu stellen (`assert volume == pytest.approx(31276.892)` sieht wie ein Sollwert aus, ob
-  die Zahl hergeleitet oder abgeschrieben ist, steht nirgends im Code); also von Hand, je
-  Kennzahl, am 14.09.2026.
-
-  **Durchgesehen:** alle 44 Zahlen-Zusicherungen in `test_features.py` (Durchmesser, Tiefe,
-  Winkel, Mittelpunkte, Achsen der Bohrungen, Zapfen, Kegel, Kugeln, Tori, Verrundungen), die
-  29 in `test_slot_features.py` (Breite, Länge, Weg, Tiefe, Richtung der Langlöcher), die 14 in
-  `test_maps.py` (Wandstärke, Überhang, **Krümmung**, Stützhöhe), die 18 in
-  `test_geometry_review_regressions.py` und alle **155 Volumen-Zusicherungen** der Suite über
-  26 Dateien (`grep "volume.*approx("`). Ergebnis: Jeder Sollwert kommt aus der Konstruktion
-  im selben Test (`cylinder(radius=2.6)` → Ø 5,2; `box(extents=(40, 30, 20))` minus
-  `math.pi * 9.0 * 20.0`), aus dem Korpus, dessen Maße `tests/data/README.md` und
-  `make_corpus.py` tragen, oder aus einer Formel im Assert selbst
-  (`2.0 * math.pi * 12.5 * 40.0`, `3.0 * math.sqrt(3.0) / 2.0 * 100.0 * 3.0`). Die
-  Krümmungskarte prüft den Radius 5 der Verrundung bei 32 und bei 128 Segmenten gegen den
-  Entwurfswert, nicht gegeneinander — genau die Prüfung, die den Zwei-Drittel-Versatz vom
-  22.08. gefunden hatte.
-
-  **Vier Zahlen standen ohne Herleitung im Code, alle vier sind hergeleitet und tragen sie
-  jetzt als Kommentar:** 61,9° und 30,9° in `test_features.py` (Öffnungs- und Halbwinkel des
-  Kegels aus Radius 6 und Höhe 10, `2 · atan(0,6)`), 23 845,4867 in `test_brep.py` (Quader
-  40 × 30 × 20 minus vier Kantenrundungen R 3: `24 000 − 20 · (36 − 9π)`), 7 064 in
-  `test_mesh_edges.py` (Würfel 20 mit Fase 3 an zwölf Kanten:
-  `20³ − 6 · 3² · 20 + 16/3 · 3³`). Drei weitere sind als Messung gekennzeichnet und sagen,
-  warum sie vom analytischen Wert abweichen: 15,94 statt 16 (`sphere_socket`, die Icosphere
-  ist einbeschrieben), 448,5 statt 452,4 (Kuppe r = 6, Tesselierung der Vorlage), 31 277,193
-  (`example_v24`, mit der Rechnung der 0,3 mm³ gegen den alten Wert). Eine bleibt eine
-  **Wiederholungsprüfung mit Absicht:** `test_prepare.py` hält 15,07 mm³ für die Senkung an der
-  fernen Mündung fest — analytisch wären es 15,38 (Kegelstumpf 4,2 → 3 über 1,2 mm minus
-  Bohrzylinder), gemessen 15,068; die zwei Prozent liegen in Polygon und Kompensation, und der
-  Test sagt selbst, dass er die Suche bis `z = 10` prüft und nicht das Maß.
-
-  Was daraus für neue Tests gilt, steht seither in `.claude/rules/tests.md` beim Korpus: Ein
-  Sollwert trägt seine Herkunft — Konstruktion, Korpus oder Formel; eine Zahl, die aus einem
-  Lauf abgeschrieben ist, trägt ihre Herleitung als Kommentar, oder sie ist ein
-  Determinismusnachweis und der Test sagt das.
-
-## Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)
-
-Roberts Beispiel vom 02.09.2026, abgeschlossen am 14.09.2026: ein Puppenhaus, Räume
-ausgehöhlt, die Vorderseite offen — und ein Deckel davor.
-
-<a id="rm-087"></a>
-
-- [x] **RM-087 — Aushöhlen mit wählbarer offener Seite planen.** *Oben öffnen* nahm nur die
-  Decke; der Weg zur offenen Seite war Aushöhlen plus eine Tasche oder ein Schnitt durch die
-  Wand. Der Wunsch aus dem Review vor der Demo 0.3.0 war „Öffnen an: <Fläche>“ als
-  Merkmalsparameter, und *Deckel erzeugen* findet die Öffnung dann wie bisher.
-
-  **Die Öffnung:** `HollowParams.open_at` ist ein Ziel wie `up_to` an der Skizze
-  (`targets_feature=True`): Eine angeklickte **Fläche** trägt sich über `values_for` selbst ein,
-  eine Bohrung nicht — an einer Bohrung lässt sich nichts öffnen. Die Operation leitet aus der
-  Flächennormale die Achsrichtung ab (`_opening_direction`, `dominant_axis`), und `hollow`
-  öffnet in `open_towards`: `_mouth` rechnet auf einer Sicht des Rasters, deren letzte Achse
-  die Öffnungsrichtung ist, und zieht den äußersten Querschnitt des Hohlraums bis über den
-  Rand — dieselbe Zeile für alle sechs Richtungen, `open_top` ist seither `(0, 0, 1)` und
-  bitgleich mit vorher. Vier Absagen, jede mit Feld, Grund und Handlung (Regel 17): fremder
-  Körper, unbekannte Fläche, kein Flächenmerkmal, schräge Fläche (das Raster ist achsparallel,
-  und eine Öffnung entlang einer schrägen Fläche wäre eine andere, als der Klick versprach).
-  Der Bericht nennt die Richtung (`hollow.done` trägt `opening`, „-y“ für vorn).
-
-  **Der Deckel davor:** `create_lid` nimmt jede achsparallele **Außen**fläche
-  (`opening_frame`). Gebaut wird immer nach oben: `upright_normal` — dieselbe Drehung wie beim
-  Trennen — richtet den Körper so, dass die gewählte Fläche nach oben zeigt, Platte und Kragen
-  entstehen wie eh und je, und die Transponierte dreht Deckel, Kragen- und Hohlraummerkmal
-  zurück vor die Öffnung (`moved_features`). Das Außen-Kriterium hält die Falle, die
-  `plane_of` für die Decke kannte, in jeder Richtung: Die Innenseite der Rückwand zeigt nach
-  vorn wie die Öffnung, ist die größte Fläche in dieser Richtung, und wer sie nähme, setzte den
-  Deckel mitten ins Haus — sie wird abgewiesen (`not_outside`).
-
-  **Gemessen** (`tests/test_hollow_opening.py`, 19 grün): Öffnung in jeder der sechs Richtungen
-  am Schnitt einen Millimeter hinter der Wand — Ring an der Öffnung, volle Fläche gegenüber,
-  wasserdicht; das Puppenhaus 120 × 80 × 90 vorn offen, Decke und Rückwand zu, mit
-  `obj_1:face_n` wie mit der nackten Kennung dasselbe Volumen; die vier Absagen; der Deckel
-  vor der Vorderseite (y von −42,4 bis −36 bei einer Wand an −40: Platte 2,4 davor, Kragen 4
-  dahinter), rechts und unten ebenso, Kragennormale gleich der Richtung, oben unverändert.
-  Zwei Mutationen gegengeprüft — das Umdrehen der Sicht für negative Richtungen entfernt (acht
-  rot), die Rückdrehung des Deckels entfernt (drei rot).
-
-  **Eine Beobachtung am Raster, nicht behoben:** Der Hohlraum eines Quaders von 30 mm Höhe
-  reicht im Raster von z = −12 bis 11 statt ±12 — die obere Wand ist eine Zelle dicker als
-  die untere, weil `solid_field` die Ebene genau auf der Oberseite leer schneidet. Das war vor
-  RM-087 so und betrifft die Decke gleichermaßen; die Öffnung nach oben nimmt darum 1 mm mehr
-  Material weg als die nach unten. Wer die Wand auf den Rasterschritt genau will, misst hier.
-
-  [Bisheriger Befund](#review-vor-der-demo-030-02092026).
-
-## Die Verhaltensabnahme der kompakten Schemata (15.09.2026)
-
-Ein Punkt vom 30.08.2026, abgeschlossen am 15.09.2026 mit den zwei Suiteläufen aus RM-173.
-
-<a id="rm-069"></a>
-
-- [x] **RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen.** Verlangt waren
-  zwei vergleichbare Suiteläufe vor und nach der Verdichtung. **Das „Vorher" gibt es auf dem
-  lokalen Weg nicht:** Das volle Schema (258 KB, gemessen 14.09.2026) passte nie in das
-  Fenster von 32 768 Token; Ollama kürzte es still auf die Hälfte, und ein Lauf damit misst
-  eine Trunkierung, nicht ein Schema — genau das hatte `tools/check_local_model.py` über
-  Wochen getan (RM-173). Gegen ein gehostetes Modell kostet die Suite Geld und ist seit dem
-  19.08.2026 nicht freigegeben (RM-016). Was sich messen lässt, ist gemessen: zwei kompakte
-  Fassungen gegeneinander, dasselbe Modell (qwen3:14b), dieselben 39 Anfragen, derselbe
-  Worktree und dieselbe Fremdlast in der Nacht auf den 15.09.2026 — Basis 31 465 Token
-  **20/39** gut, schemagültig 50 %, Baustein 1/13; gekürzt auf 28 440 Token **24/39**, 72 %,
-  7/13; die zwei gekippten Fälle stehen mit Namen bei RM-173. Keine ungeklärte
-  Verschlechterung: Die Kürzung ist eingebaut (`af48f498`), der Wächtertest hält sie am
-  Register. Die Tokenmessung ist seit dem 14.09. aktuell (`PROMPT_TOKENS`, RM-054) und wird
-  mit der eingebauten Fassung auf ruhiger Karte nachgezogen.
-
-## Die Suite öffnet kein Fenster (15.09.2026)
-
-Ein Punkt aus dem Review vor der Demo 0.3.0 (02.09.2026), abgeschlossen am 15.09.2026 — mit
-einem Zähler statt mit Augen.
-
-<a id="rm-100"></a>
-
-- [x] **RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden.** Am 02.09.2026
-  ließ die Suite auf Roberts Rechner ein Fenster mit „Fehler 2147942632 (0x800700e8)"
-  aufgehen (Bildschirmfoto); der Test blieb grün, das Fenster war ein Nebeneffekt der
-  Konsolenzuweisung. Am 10.09. bekam der Prozesstest seine Startflaggen aus dem Produktivweg
-  (`CREATE_NO_WINDOW` kam mit, `0x208` → `0x8000208`), und offen blieb „die Sichtprüfung, die
-  kein Test leisten kann".
-
-  **Sie kann es doch** (14.09.2026): `tools/count_new_windows.py` fragt Windows vor und
-  während eines Befehls zwanzigmal je Sekunde nach seinen sichtbaren Hauptfenstern und meldet
-  jedes, das dazukommt, mit Klasse, Titel und Prozess — auch eines, das nach einer Sekunde
-  wieder weg ist. Um den Prozesstest gefahren, aus einer von Windows Terminal 1.24 gehosteten
-  Konsole (Standardhost „Windows entscheidet", Windows 11 26200), direkt und unter pytest, mit
-  und ohne die Flagge: kein Fenster, und die Marke des losgelösten Enkels blieb jedes Mal aus.
-
-  **Und um die ganze geteilte Suite** (15.09.2026, 01:03 bis 01:54, aus demselben
-  Terminalhost, während nebenan nur der Ollama-Suitelauf lief): `neue sichtbare Fenster: 0`,
-  `davon Konsolenfenster: 0` über 51 Minuten und jeden Fensterprozess des Tors. Die 48 roten
-  Tests dieses Laufs gehören anderen Baustellen — Handbuch zwischen zwei Releases, fremde
-  ungestagete Arbeit an Fenster und Katalogen, Renderer-Tests bei belegter Grafikkarte — und
-  keiner davon öffnet ein Fenster. Der Docstring des Prozesstests trägt die Messung; das
-  Werkzeug bleibt in `tools/` für den nächsten, der ein Fenster sieht.
 
 ## Eine 3MF von MakerWorld ging nicht auf (14.09.2026)
 
@@ -28566,6 +28407,29 @@ Ursachen decken, was der Bericht hergibt, nicht mehr. Und keine Datei des
 Korpus trägt einen anderen `subtype` als `normal_part`: Hilfsteile und
 Aussparungen sind ausschließlich synthetisch belegt.
 
+## Die Prompt-Grundlast ist gemessen, und das Fenster ist voll (14.09.2026)
+
+Ein Punkt aus dem Gesamtreview vom 05.09.2026, abgeschlossen am 14.09.2026 — und er hinterlässt
+einen neuen: RM-173.
+
+<a id="rm-054"></a>
+
+- [x] **RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen.** Zwei Zahlen standen
+  auseinander: `PROMPT_TOOL_COUNT` auf 121 (zweimal vom Wächter nachgezogen), `PROMPT_TOKENS` auf
+  28 281 aus der Messung von 119 Werkzeugen am 09.09.; die Tokenzahl wurde ausdrücklich nicht
+  fortgeschrieben, weil eine hochgerechnete Messung keine ist.
+
+  **Gemessen am 14.09.2026** mit `tools/measure_local_model.py --model qwen3:14b --runs 3`, RTX
+  4080, vollständig im VRAM: **31 465 Token** bei 121 Werkzeugen, 22,9 s kalt, warm 2,3 bis
+  2,4 s (Promptcache). `PROMPT_TOKENS` trägt die Zahl mit Modell, Schema und Datum;
+  `test_backends` prüft das Fenster seither gegen die gemessene Nutzlast statt gegen 25 361 von
+  damals, und die Wartezeit im Schlüsseldialog rechnet mit derselben Zahl (`test_chat_ui`
+  rechnet sie aus `PROMPT_TOKENS`, nicht aus einer Behauptung).
+
+  **Was die Messung außerdem sagt, steht als RM-173 im Register:** 96,0 % des Fensters, 1 303
+  Token Rest, und mit `num_ctx` 40 960 läuft das Modell von der Karte (`ollama ps`: 16 GB,
+  `10 %/90 % CPU/GPU`).
+
 ## Bausteine: Vorschau, Griff und Werte — die Sonde über alle 27 (14.09.2026)
 
 Roberts Auftrag: „kontrolliere die vorschau von bausteinen, das ändern und einsetzen gründlich
@@ -28660,42 +28524,52 @@ operations_in_the_window_on_the_right`, in test_analysis_ui `test_a_finding_says
 reported_it` — Arbeit der Nachbarsitzungen desselben Tages. Ruff, Format, mypy an den geänderten
 Dateien.
 
-## Ein gedrehtes Langloch ist eines (15.09.2026)
+## Die Sollwerte der Geometrietests haben ihre Herkunft (14.09.2026)
 
-Robert: „wenn ich ein langloch auswähle, auf im modell bearbeiten über den viewport bearbeite und
-das langloch drehe und übernehmen klicke habe ich 2 langlöcher". Nachgestellt an `plate_holes.stl`
-(`probe_slot_turn.py`): Bohrung → Langloch 18 mm ist Schritt 2; das Langloch gewählt, die
-gemessene Länge 18,02 und der Winkel 45 über *Übernehmen* — Schritt 3, ein zweites `slot_hole`
-quer über das erste, 397 mm³ mehr abgetragen, kein Langloch mehr erkannt („Formdetail nicht mehr
-wiederzuerkennen"). Der Kern wusste das seit dem 10.09.2026 und sagte es als Warnung
-(`slot_hole.crosses`) — richtig gerechnet, und trotzdem das Gegenteil dessen, was der Ring am Griff
-verspricht.
+Ein Punkt aus dem Fundament der Wahrnehmung vom 22.08.2026, von Hand durchgesehen und
+abgeschlossen am 14.09.2026.
 
-Zwei Änderungen, an zwei Enden:
+<a id="rm-025"></a>
 
-- **Der Kern dreht, statt zu kreuzen.** `slot_hole` behandelt eine andere Richtung wie eine andere
-  Stelle: Die alte Öffnung wird geschlossen (`_closed_at` am Netz, `fill_bore` mit Länge und Winkel
-  am exakten Körper), dann die neue geschnitten. `_slot_across_a_slot` heißt `_slot_turned`, der
-  Befund `slot_hole.turned` (info) sagt den Winkel und den Weg zurück; das Kreuz gibt es nicht
-  mehr, und `slot_hole.feature_lost` hat damit keinen der zwei gemessenen Wege mehr — der Befund
-  bleibt für den Fall, den keiner erzeugt. Nachweis: `test_turning_a_slot_closes_its_old_direction`,
-  `test_a_turned_slot_does_not_borrow_its_neighbour`,
-  `test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any` (beide Kerne, zwei Langlöcher
-  nebeneinander, das gedrehte behält Namen und Stelle).
-- **Das Fenster ändert den Schritt.** Ein Langloch, das ein `slot_hole`-Schritt gezogen hat, trägt
-  ihn als `created_by`; *Übernehmen* und der Zug an den Langlochknöpfen gehen seither über
-  `MainWindow._change_slot_step` in **diesen** Schritt (§21.2, dieselbe Regel wie beim Baustein),
-  der rechnet von der Bohrung aus neu — ein Schritt im Verlauf, ein Langloch im Bild. Geschrieben
-  wird nur, was sich gegenüber dem gemessenen Wert geändert hat: Das Fenster belegt die Felder mit
-  18,02 für ein Langloch von 18,00, und wer das ungesehen zurückschriebe, ließe das Loch mit jedem
-  Übernehmen um zwei Hundertstel wachsen. Ein erkanntes Langloch aus einer Datei hat keinen Schritt
-  und geht weiter als neuer Schritt an den Kern — der dort die alte Richtung selbst schließt.
-  Nachweis: `test_turning_a_slot_from_a_step_changes_that_step`.
+- [x] **RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern.** Die Frage vom
+  22.08. lautete: Prüft ein Test gegen einen Wert von außen — ein Sollmaß, eine Formel, eine
+  andere Rechnung — oder nur dagegen, dass zweimal dasselbe herauskommt? Automatisch war sie
+  nicht zu stellen (`assert volume == pytest.approx(31276.892)` sieht wie ein Sollwert aus, ob
+  die Zahl hergeleitet oder abgeschrieben ist, steht nirgends im Code); also von Hand, je
+  Kennzahl, am 14.09.2026.
 
-Gefahren je Prozess: test_slot_features, test_analysis_ui, test_surface_placement_ui,
-test_slot_handle, test_viewport_decisions, test_feature_panel, test_ui (Langloch); dazu
-test_prepare, test_translations, test_language_rules, test_history, test_scene_ops in einem Zug;
-ruff, Format, mypy an den geänderten Dateien.
+  **Durchgesehen:** alle 44 Zahlen-Zusicherungen in `test_features.py` (Durchmesser, Tiefe,
+  Winkel, Mittelpunkte, Achsen der Bohrungen, Zapfen, Kegel, Kugeln, Tori, Verrundungen), die
+  29 in `test_slot_features.py` (Breite, Länge, Weg, Tiefe, Richtung der Langlöcher), die 14 in
+  `test_maps.py` (Wandstärke, Überhang, **Krümmung**, Stützhöhe), die 18 in
+  `test_geometry_review_regressions.py` und alle **155 Volumen-Zusicherungen** der Suite über
+  26 Dateien (`grep "volume.*approx("`). Ergebnis: Jeder Sollwert kommt aus der Konstruktion
+  im selben Test (`cylinder(radius=2.6)` → Ø 5,2; `box(extents=(40, 30, 20))` minus
+  `math.pi * 9.0 * 20.0`), aus dem Korpus, dessen Maße `tests/data/README.md` und
+  `make_corpus.py` tragen, oder aus einer Formel im Assert selbst
+  (`2.0 * math.pi * 12.5 * 40.0`, `3.0 * math.sqrt(3.0) / 2.0 * 100.0 * 3.0`). Die
+  Krümmungskarte prüft den Radius 5 der Verrundung bei 32 und bei 128 Segmenten gegen den
+  Entwurfswert, nicht gegeneinander — genau die Prüfung, die den Zwei-Drittel-Versatz vom
+  22.08. gefunden hatte.
+
+  **Vier Zahlen standen ohne Herleitung im Code, alle vier sind hergeleitet und tragen sie
+  jetzt als Kommentar:** 61,9° und 30,9° in `test_features.py` (Öffnungs- und Halbwinkel des
+  Kegels aus Radius 6 und Höhe 10, `2 · atan(0,6)`), 23 845,4867 in `test_brep.py` (Quader
+  40 × 30 × 20 minus vier Kantenrundungen R 3: `24 000 − 20 · (36 − 9π)`), 7 064 in
+  `test_mesh_edges.py` (Würfel 20 mit Fase 3 an zwölf Kanten:
+  `20³ − 6 · 3² · 20 + 16/3 · 3³`). Drei weitere sind als Messung gekennzeichnet und sagen,
+  warum sie vom analytischen Wert abweichen: 15,94 statt 16 (`sphere_socket`, die Icosphere
+  ist einbeschrieben), 448,5 statt 452,4 (Kuppe r = 6, Tesselierung der Vorlage), 31 277,193
+  (`example_v24`, mit der Rechnung der 0,3 mm³ gegen den alten Wert). Eine bleibt eine
+  **Wiederholungsprüfung mit Absicht:** `test_prepare.py` hält 15,07 mm³ für die Senkung an der
+  fernen Mündung fest — analytisch wären es 15,38 (Kegelstumpf 4,2 → 3 über 1,2 mm minus
+  Bohrzylinder), gemessen 15,068; die zwei Prozent liegen in Polygon und Kompensation, und der
+  Test sagt selbst, dass er die Suche bis `z = 10` prüft und nicht das Maß.
+
+  Was daraus für neue Tests gilt, steht seither in `.claude/rules/tests.md` beim Korpus: Ein
+  Sollwert trägt seine Herkunft — Konstruktion, Korpus oder Formel; eine Zahl, die aus einem
+  Lauf abgeschrieben ist, trägt ihre Herleitung als Kommentar, oder sie ist ein
+  Determinismusnachweis und der Test sagt das.
 
 ## Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)
 
@@ -28800,6 +28674,143 @@ Pakete 66 grün, plus diese zwei Dateien Exit 127) — dasselbe Muster wie
 `ungenutzter-import-reisst-den-prozess`; `tests/test_render_factory.py` verliert zwei native
 Läufe an 90-s-Fristen unter Last (HEAD plus W8 allein: 3 grün in 104 s). Beides steht im
 Bericht der Sitzung, nicht in diesem Code.
+
+## Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)
+
+Roberts Beispiel vom 02.09.2026, abgeschlossen am 14.09.2026: ein Puppenhaus, Räume
+ausgehöhlt, die Vorderseite offen — und ein Deckel davor.
+
+<a id="rm-087"></a>
+
+- [x] **RM-087 — Aushöhlen mit wählbarer offener Seite planen.** *Oben öffnen* nahm nur die
+  Decke; der Weg zur offenen Seite war Aushöhlen plus eine Tasche oder ein Schnitt durch die
+  Wand. Der Wunsch aus dem Review vor der Demo 0.3.0 war „Öffnen an: <Fläche>“ als
+  Merkmalsparameter, und *Deckel erzeugen* findet die Öffnung dann wie bisher.
+
+  **Die Öffnung:** `HollowParams.open_at` ist ein Ziel wie `up_to` an der Skizze
+  (`targets_feature=True`): Eine angeklickte **Fläche** trägt sich über `values_for` selbst ein,
+  eine Bohrung nicht — an einer Bohrung lässt sich nichts öffnen. Die Operation leitet aus der
+  Flächennormale die Achsrichtung ab (`_opening_direction`, `dominant_axis`), und `hollow`
+  öffnet in `open_towards`: `_mouth` rechnet auf einer Sicht des Rasters, deren letzte Achse
+  die Öffnungsrichtung ist, und zieht den äußersten Querschnitt des Hohlraums bis über den
+  Rand — dieselbe Zeile für alle sechs Richtungen, `open_top` ist seither `(0, 0, 1)` und
+  bitgleich mit vorher. Vier Absagen, jede mit Feld, Grund und Handlung (Regel 17): fremder
+  Körper, unbekannte Fläche, kein Flächenmerkmal, schräge Fläche (das Raster ist achsparallel,
+  und eine Öffnung entlang einer schrägen Fläche wäre eine andere, als der Klick versprach).
+  Der Bericht nennt die Richtung (`hollow.done` trägt `opening`, „-y“ für vorn).
+
+  **Der Deckel davor:** `create_lid` nimmt jede achsparallele **Außen**fläche
+  (`opening_frame`). Gebaut wird immer nach oben: `upright_normal` — dieselbe Drehung wie beim
+  Trennen — richtet den Körper so, dass die gewählte Fläche nach oben zeigt, Platte und Kragen
+  entstehen wie eh und je, und die Transponierte dreht Deckel, Kragen- und Hohlraummerkmal
+  zurück vor die Öffnung (`moved_features`). Das Außen-Kriterium hält die Falle, die
+  `plane_of` für die Decke kannte, in jeder Richtung: Die Innenseite der Rückwand zeigt nach
+  vorn wie die Öffnung, ist die größte Fläche in dieser Richtung, und wer sie nähme, setzte den
+  Deckel mitten ins Haus — sie wird abgewiesen (`not_outside`).
+
+  **Gemessen** (`tests/test_hollow_opening.py`, 19 grün): Öffnung in jeder der sechs Richtungen
+  am Schnitt einen Millimeter hinter der Wand — Ring an der Öffnung, volle Fläche gegenüber,
+  wasserdicht; das Puppenhaus 120 × 80 × 90 vorn offen, Decke und Rückwand zu, mit
+  `obj_1:face_n` wie mit der nackten Kennung dasselbe Volumen; die vier Absagen; der Deckel
+  vor der Vorderseite (y von −42,4 bis −36 bei einer Wand an −40: Platte 2,4 davor, Kragen 4
+  dahinter), rechts und unten ebenso, Kragennormale gleich der Richtung, oben unverändert.
+  Zwei Mutationen gegengeprüft — das Umdrehen der Sicht für negative Richtungen entfernt (acht
+  rot), die Rückdrehung des Deckels entfernt (drei rot).
+
+  **Eine Beobachtung am Raster, nicht behoben:** Der Hohlraum eines Quaders von 30 mm Höhe
+  reicht im Raster von z = −12 bis 11 statt ±12 — die obere Wand ist eine Zelle dicker als
+  die untere, weil `solid_field` die Ebene genau auf der Oberseite leer schneidet. Das war vor
+  RM-087 so und betrifft die Decke gleichermaßen; die Öffnung nach oben nimmt darum 1 mm mehr
+  Material weg als die nach unten. Wer die Wand auf den Rasterschritt genau will, misst hier.
+
+  [Bisheriger Befund](#review-vor-der-demo-030-02092026).
+
+## Die Verhaltensabnahme der kompakten Schemata (15.09.2026)
+
+Ein Punkt vom 30.08.2026, abgeschlossen am 15.09.2026 mit den zwei Suiteläufen aus RM-173.
+
+<a id="rm-069"></a>
+
+- [x] **RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen.** Verlangt waren
+  zwei vergleichbare Suiteläufe vor und nach der Verdichtung. **Das „Vorher" gibt es auf dem
+  lokalen Weg nicht:** Das volle Schema (258 KB, gemessen 14.09.2026) passte nie in das
+  Fenster von 32 768 Token; Ollama kürzte es still auf die Hälfte, und ein Lauf damit misst
+  eine Trunkierung, nicht ein Schema — genau das hatte `tools/check_local_model.py` über
+  Wochen getan (RM-173). Gegen ein gehostetes Modell kostet die Suite Geld und ist seit dem
+  19.08.2026 nicht freigegeben (RM-016). Was sich messen lässt, ist gemessen: zwei kompakte
+  Fassungen gegeneinander, dasselbe Modell (qwen3:14b), dieselben 39 Anfragen, derselbe
+  Worktree und dieselbe Fremdlast in der Nacht auf den 15.09.2026 — Basis 31 465 Token
+  **20/39** gut, schemagültig 50 %, Baustein 1/13; gekürzt auf 28 440 Token **24/39**, 72 %,
+  7/13; die zwei gekippten Fälle stehen mit Namen bei RM-173. Keine ungeklärte
+  Verschlechterung: Die Kürzung ist eingebaut (`af48f498`), der Wächtertest hält sie am
+  Register. Die Tokenmessung ist seit dem 14.09. aktuell (`PROMPT_TOKENS`, RM-054) und wird
+  mit der eingebauten Fassung auf ruhiger Karte nachgezogen.
+
+## Die Suite öffnet kein Fenster (15.09.2026)
+
+Ein Punkt aus dem Review vor der Demo 0.3.0 (02.09.2026), abgeschlossen am 15.09.2026 — mit
+einem Zähler statt mit Augen.
+
+<a id="rm-100"></a>
+
+- [x] **RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden.** Am 02.09.2026
+  ließ die Suite auf Roberts Rechner ein Fenster mit „Fehler 2147942632 (0x800700e8)"
+  aufgehen (Bildschirmfoto); der Test blieb grün, das Fenster war ein Nebeneffekt der
+  Konsolenzuweisung. Am 10.09. bekam der Prozesstest seine Startflaggen aus dem Produktivweg
+  (`CREATE_NO_WINDOW` kam mit, `0x208` → `0x8000208`), und offen blieb „die Sichtprüfung, die
+  kein Test leisten kann".
+
+  **Sie kann es doch** (14.09.2026): `tools/count_new_windows.py` fragt Windows vor und
+  während eines Befehls zwanzigmal je Sekunde nach seinen sichtbaren Hauptfenstern und meldet
+  jedes, das dazukommt, mit Klasse, Titel und Prozess — auch eines, das nach einer Sekunde
+  wieder weg ist. Um den Prozesstest gefahren, aus einer von Windows Terminal 1.24 gehosteten
+  Konsole (Standardhost „Windows entscheidet", Windows 11 26200), direkt und unter pytest, mit
+  und ohne die Flagge: kein Fenster, und die Marke des losgelösten Enkels blieb jedes Mal aus.
+
+  **Und um die ganze geteilte Suite** (15.09.2026, 01:03 bis 01:54, aus demselben
+  Terminalhost, während nebenan nur der Ollama-Suitelauf lief): `neue sichtbare Fenster: 0`,
+  `davon Konsolenfenster: 0` über 51 Minuten und jeden Fensterprozess des Tors. Die 48 roten
+  Tests dieses Laufs gehören anderen Baustellen — Handbuch zwischen zwei Releases, fremde
+  ungestagete Arbeit an Fenster und Katalogen, Renderer-Tests bei belegter Grafikkarte — und
+  keiner davon öffnet ein Fenster. Der Docstring des Prozesstests trägt die Messung; das
+  Werkzeug bleibt in `tools/` für den nächsten, der ein Fenster sieht.
+
+## Ein gedrehtes Langloch ist eines (15.09.2026)
+
+Robert: „wenn ich ein langloch auswähle, auf im modell bearbeiten über den viewport bearbeite und
+das langloch drehe und übernehmen klicke habe ich 2 langlöcher". Nachgestellt an `plate_holes.stl`
+(`probe_slot_turn.py`): Bohrung → Langloch 18 mm ist Schritt 2; das Langloch gewählt, die
+gemessene Länge 18,02 und der Winkel 45 über *Übernehmen* — Schritt 3, ein zweites `slot_hole`
+quer über das erste, 397 mm³ mehr abgetragen, kein Langloch mehr erkannt („Formdetail nicht mehr
+wiederzuerkennen"). Der Kern wusste das seit dem 10.09.2026 und sagte es als Warnung
+(`slot_hole.crosses`) — richtig gerechnet, und trotzdem das Gegenteil dessen, was der Ring am Griff
+verspricht.
+
+Zwei Änderungen, an zwei Enden:
+
+- **Der Kern dreht, statt zu kreuzen.** `slot_hole` behandelt eine andere Richtung wie eine andere
+  Stelle: Die alte Öffnung wird geschlossen (`_closed_at` am Netz, `fill_bore` mit Länge und Winkel
+  am exakten Körper), dann die neue geschnitten. `_slot_across_a_slot` heißt `_slot_turned`, der
+  Befund `slot_hole.turned` (info) sagt den Winkel und den Weg zurück; das Kreuz gibt es nicht
+  mehr, und `slot_hole.feature_lost` hat damit keinen der zwei gemessenen Wege mehr — der Befund
+  bleibt für den Fall, den keiner erzeugt. Nachweis: `test_turning_a_slot_closes_its_old_direction`,
+  `test_a_turned_slot_does_not_borrow_its_neighbour`,
+  `test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any` (beide Kerne, zwei Langlöcher
+  nebeneinander, das gedrehte behält Namen und Stelle).
+- **Das Fenster ändert den Schritt.** Ein Langloch, das ein `slot_hole`-Schritt gezogen hat, trägt
+  ihn als `created_by`; *Übernehmen* und der Zug an den Langlochknöpfen gehen seither über
+  `MainWindow._change_slot_step` in **diesen** Schritt (§21.2, dieselbe Regel wie beim Baustein),
+  der rechnet von der Bohrung aus neu — ein Schritt im Verlauf, ein Langloch im Bild. Geschrieben
+  wird nur, was sich gegenüber dem gemessenen Wert geändert hat: Das Fenster belegt die Felder mit
+  18,02 für ein Langloch von 18,00, und wer das ungesehen zurückschriebe, ließe das Loch mit jedem
+  Übernehmen um zwei Hundertstel wachsen. Ein erkanntes Langloch aus einer Datei hat keinen Schritt
+  und geht weiter als neuer Schritt an den Kern — der dort die alte Richtung selbst schließt.
+  Nachweis: `test_turning_a_slot_from_a_step_changes_that_step`.
+
+Gefahren je Prozess: test_slot_features, test_analysis_ui, test_surface_placement_ui,
+test_slot_handle, test_viewport_decisions, test_feature_panel, test_ui (Langloch); dazu
+test_prepare, test_translations, test_language_rules, test_history, test_scene_ops in einem Zug;
+ruff, Format, mypy an den geänderten Dateien.
 
 ## Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)
 
