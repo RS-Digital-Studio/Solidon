@@ -22,6 +22,7 @@ widersprüchlich hält an und nennt das kollidierende Bedingungspaar
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
@@ -60,6 +61,16 @@ _CONSTRAINT_TARGETS: Final[dict[str, int]] = {
     "symmetric": 4,
     "fixed": 1,
     "reference": 2,
+    "angle": 4,
+    # **Eine Art für zwei Fälle.** „Gleich lang" und „gleicher Radius" sind
+    # dieselbe Gleichung: Eine Linie führt Anfang und Ende, ein Kreis Mitte
+    # und Randpunkt, ein Bogen Mitte und Anfang — in allen drei Fällen ist das
+    # Maß der Abstand zweier Punkte. Eine zweite Art ``equal_radius`` wäre ein
+    # zweiter Name für dieselbe Zeile und ein zweiter Eintrag im Dateiformat;
+    # welche Elemente gemeint sind, entscheidet die Auswahl in der Oberfläche
+    # und nicht das Datenmodell.
+    "equal": 4,
+    "midpoint": 3,
 }
 
 #: Bedingungen, die nichts festlegen. Sie werden geprüft wie jede andere —
@@ -80,6 +91,21 @@ _LENGTH_FACTOR: Final[dict[str, float]] = {
     "radius": 1.0,
     "diameter": 0.5,
 }
+
+#: Bedingungen, deren Zahl ein **Winkel in Grad** ist und kein Abstand.
+#:
+#: Getrennt von :data:`_LENGTH_FACTOR`, weil hier nicht skaliert, sondern die
+#: Einheit gewechselt wird: Der Kunde tippt Grad (§11 gilt den Längen), die
+#: Gleichung rechnet im Bogenmaß.
+_ANGLE_KINDS: Final[frozenset[str]] = frozenset({"angle"})
+
+#: Der größte Winkel, den ein Winkelmaß annimmt.
+#:
+#: Nicht 360: Die Gleichung ist ``sin(φ - θ)`` und hat die Periode 180° — ein
+#: Maß von 200° wäre dieselbe Bedingung wie 20° und hieße trotzdem anders.
+#: Beide Ränder sind ausgeschlossen, denn dort steht ``parallel``, und zwei
+#: Namen für dieselbe Bedingung sind eine Gelegenheit, sie doppelt zu legen.
+MOST_ANGLE_DEGREES: Final[float] = 180.0
 
 _ResidualFn = Callable[[np.ndarray], tuple[float, ...]]
 _GradientFn = Callable[[np.ndarray, np.ndarray], None]
@@ -258,6 +284,104 @@ def _perpendicular_equation(a: int, b: int, c: int, d: int) -> tuple[_ResidualFn
     return fn, grad
 
 
+def _angle_equation(
+    a: int, b: int, c: int, d: int, radians: float
+) -> tuple[_ResidualFn, _GradientFn]:
+    """Der Winkel zwischen zwei Linien, als **eine** Zeile.
+
+    Das Residuum ist ``sin(φ - θ)`` mit φ dem orientierten Winkel von der
+    ersten Richtung zur zweiten. Ausgeschrieben ist das
+    ``cross(û, v̂)·cos θ - dot(û, v̂)·sin θ``, also genau die Gleichung von
+    ``parallel`` bei θ = 0 und die von ``perpendicular`` bei θ = 90°, nur
+    gedreht — und damit dieselbe Ableitung, gewichtet.
+
+    **Warum nicht ``atan2(cross, dot) - θ``.** Der Bogen springt bei ±180° um
+    eine volle Drehung; ein Löser, der über diese Kante läuft, bekommt dort
+    einen Sprung im Residuum und keine Ableitung, die davon weiß. Der Sinus
+    hat den Sprung nicht. Sein Preis ist die Periode 180: Er sagt nicht, ob
+    die zweite Linie im oder gegen den Uhrzeigersinn liegt — dieselbe
+    Zweideutigkeit, die ``parallel`` seit je hat, und dieselbe Antwort darauf:
+    Der Löser bleibt bei der Lösung, die der Zeichnung am nächsten liegt.
+    """
+    cosine = math.cos(radians)
+    sine = math.sin(radians)
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        ux, uy, _ = _unit(pts, a, b)
+        vx, vy, _ = _unit(pts, c, d)
+        return ((ux * vy - uy * vx) * cosine - (ux * vx + uy * vy) * sine,)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        ux, uy, _ = _unit(pts, a, b)
+        vx, vy, _ = _unit(pts, c, d)
+        # Der Kreuzanteil wie in ``parallel`` …
+        cux, cuy = _project(pts, a, b, vy, -vx)
+        cvx, cvy = _project(pts, c, d, -uy, ux)
+        # … der Skalaranteil wie in ``perpendicular``.
+        dux, duy = _project(pts, a, b, vx, vy)
+        dvx, dvy = _project(pts, c, d, ux, uy)
+        gux = cosine * cux - sine * dux
+        guy = cosine * cuy - sine * duy
+        gvx = cosine * cvx - sine * dvx
+        gvy = cosine * cvy - sine * dvy
+        out[0, b, 0] += gux
+        out[0, b, 1] += guy
+        out[0, a, 0] -= gux
+        out[0, a, 1] -= guy
+        out[0, d, 0] += gvx
+        out[0, d, 1] += gvy
+        out[0, c, 0] -= gvx
+        out[0, c, 1] -= gvy
+
+    return fn, grad
+
+
+def _equal_equation(a: int, b: int, c: int, d: int) -> tuple[_ResidualFn, _GradientFn]:
+    """Zwei Spannen gleich lang — Linienlänge gegen Linienlänge, Radius gegen
+    Radius (siehe :data:`_CONSTRAINT_TARGETS`)."""
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        return (_span(pts, a, b) - _span(pts, c, d),)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        ux, uy, _ = _unit(pts, a, b)
+        vx, vy, _ = _unit(pts, c, d)
+        out[0, b, 0] += ux
+        out[0, b, 1] += uy
+        out[0, a, 0] -= ux
+        out[0, a, 1] -= uy
+        out[0, d, 0] -= vx
+        out[0, d, 1] -= vy
+        out[0, c, 0] += vx
+        out[0, c, 1] += vy
+
+    return fn, grad
+
+
+def _midpoint_equation(p: int, a: int, b: int) -> tuple[_ResidualFn, _GradientFn]:
+    """Ein Punkt in der Mitte einer Linie: ``p = (a + b) / 2``.
+
+    Zwei Zeilen, eine je Koordinate — wie die Deckung, und aus demselben
+    Grund: „auf halber Strecke" ist eine Lage und keine Länge.
+    """
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        return (
+            float(pts[p][0]) - (float(pts[a][0]) + float(pts[b][0])) / 2.0,
+            float(pts[p][1]) - (float(pts[a][1]) + float(pts[b][1])) / 2.0,
+        )
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        out[0, p, 0] += 1.0
+        out[0, a, 0] -= 0.5
+        out[0, b, 0] -= 0.5
+        out[1, p, 1] += 1.0
+        out[1, a, 1] -= 0.5
+        out[1, b, 1] -= 0.5
+
+    return fn, grad
+
+
 def _tangent_equation(a: int, b: int, centre: int, rim: int) -> tuple[_ResidualFn, _GradientFn]:
     def cross(pts: np.ndarray) -> float:
         ux, uy, _ = _unit(pts, a, b)
@@ -364,15 +488,26 @@ def _arc_equation(centre: int, start: int, end: int) -> tuple[_ResidualFn, _Grad
 
 
 def _constraint_equation(
-    constraint: SketchConstraint, length: float, anchors: np.ndarray
+    constraint: SketchConstraint, measure: float, anchors: np.ndarray
 ) -> tuple[int, _ResidualFn, _GradientFn]:
-    """Übersetzt eine Bedingung in Residuen, Ableitung und Zeilenzahl."""
+    """Übersetzt eine Bedingung in Residuen, Ableitung und Zeilenzahl.
+
+    ``measure`` trägt die Zahl der Bedingung, schon umgerechnet: bei einem
+    Längenmaß den Abstand in Millimetern, bei einem Winkelmaß das Bogenmaß.
+    """
     kind = constraint.kind
     targets = constraint.targets
     if kind in _LENGTH_FACTOR:
-        # Eine Gleichung für drei Arten: Der Faktor steckt schon in ``length``
+        # Eine Gleichung für drei Arten: Der Faktor steckt schon in ``measure``
         # (siehe :data:`_LENGTH_FACTOR`), hier bleibt der Abstand zweier Punkte.
-        return 1, *_distance_equation(targets[0], targets[1], length)
+        return 1, *_distance_equation(targets[0], targets[1], measure)
+    if kind == "angle":
+        first, second, third, fourth = targets
+        return 1, *_angle_equation(first, second, third, fourth, measure)
+    if kind == "equal":
+        return 1, *_equal_equation(*targets)
+    if kind == "midpoint":
+        return 2, *_midpoint_equation(*targets)
     if kind == "coincident":
         return 2, *_coincident_equation(targets[0], targets[1])
     if kind == "horizontal":
@@ -450,24 +585,40 @@ def _build_equations(
                     value=target,
                     constraint="unknown_target",
                 )
-        length = 0.0
+        measure = 0.0
         if constraint.kind in _LENGTH_FACTOR:
             if not constraint.value:
                 raise ValidationError(
                     field, _("Ein Maß braucht einen Wert."), constraint="required"
                 )
-            length = evaluate(constraint.value, params)
-            if length < 0.0:
+            measure = evaluate(constraint.value, params)
+            if measure < 0.0:
                 raise ValidationError(
                     field,
                     _("Ein Maß unter null gibt es nicht."),
-                    value=length,
+                    value=measure,
                     constraint="negative",
                 )
             # **Erst prüfen, dann umrechnen.** Die Meldung nennt sonst den
             # halbierten Wert, und der Kunde sucht eine Zahl, die er nie
             # getippt hat.
-            length *= _LENGTH_FACTOR[constraint.kind]
+            measure *= _LENGTH_FACTOR[constraint.kind]
+        elif constraint.kind in _ANGLE_KINDS:
+            if not constraint.value:
+                raise ValidationError(
+                    field, _("Ein Maß braucht einen Wert."), constraint="required"
+                )
+            measure = evaluate(constraint.value, params)
+            if not 0.0 < measure < MOST_ANGLE_DEGREES:
+                # Genannt wird die getippte Zahl in Grad und nicht ihr
+                # Bogenmaß: Der Kunde sucht die Zahl, die er eingegeben hat.
+                raise ValidationError(
+                    field,
+                    _("Ein Winkelmaß liegt zwischen null und 180 Grad."),
+                    value=measure,
+                    constraint="angle_range",
+                )
+            measure = math.radians(measure)
         elif constraint.value:
             raise ValidationError(
                 field,
@@ -475,7 +626,7 @@ def _build_equations(
                 value=constraint.value,
                 constraint="value_not_allowed",
             )
-        rows, fn, grad = _constraint_equation(constraint, length, anchors)
+        rows, fn, grad = _constraint_equation(constraint, measure, anchors)
         equations.append(_Equation(index, rows, fn, grad))
 
     for position, element in enumerate(sketch.elements):

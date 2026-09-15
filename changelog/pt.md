@@ -18,6 +18,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ## 0.4.2
 
 ### Desenho
+- Dois cliques criam um polígono regular: primeiro o centro, depois um canto. O número de cantos define-se antes — de três a doze. Um diâmetro escrito fica como cota.
+- Um furo oblongo nasce de dois cliques nos centros das suas extremidades arredondadas; a largura fica ao lado na barra. Ambas mantêm o tamanho e os flancos, direitos.
+- Quatro novas condições: ângulo em graus entre duas linhas, igual comprimento ou tamanho, ponto a meio de uma linha, concêntrico para dois círculos ou arcos.
 
 - Um ponto arrastado fica no ponteiro e os vizinhos seguem-no: um canto do retângulo leva os dois lados consigo, uma linha estica a forma. Antes, o canto só ia parte do caminho.
 - Um retângulo feito com cliques é livre: sem ponto fixo, sem cotas enquanto não as escrever. Uma largura ou altura escrita fica como cota — como no Fusion.

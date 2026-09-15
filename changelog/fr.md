@@ -19,6 +19,9 @@ dans `website/version.json`.
 ## 0.4.2
 
 ### Dessin
+- Deux clics posent un polygone régulier : d'abord le centre, puis un coin. Le nombre de coins se règle avant — de trois à douze. Un diamètre saisi reste comme cote.
+- Un trou oblong naît de deux clics sur les centres de ses extrémités arrondies ; la largeur est à côté dans la barre. Les deux bouts gardent leur taille, les flancs restent droits.
+- Quatre nouvelles contraintes : angle en degrés entre deux lignes, même longueur ou taille, point au milieu d'une ligne, concentrique pour deux cercles ou arcs.
 
 - Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.
 - Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion.

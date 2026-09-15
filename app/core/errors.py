@@ -309,6 +309,9 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         # Anzahlen mit Unter- oder Obergrenze.
         "corner_count",
         "pattern_count",
+        # Ein Winkelmaß der Skizze: „zwischen null und 180 Grad" nennt beide
+        # Grenzen wörtlich, und über dem Satz stünde sonst der vage Titel.
+        "angle_range",
         # Die Stückzahl beim Zerlegen gegen die Zahl der Teile, die es gibt.
         "too_many_parts",
         "pattern_size",

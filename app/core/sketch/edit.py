@@ -931,6 +931,138 @@ def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
     return replace(sketch, elements=elements, constraints=tuple(constraints)), tuple(kept)
 
 
+def polygon_at(centre: Point2, corner: Point2, corners: int) -> Sketch:
+    """Ein regelmäßiges Vieleck aus Mitte und einer Ecke — **frei**, nicht
+    bemaßt (§30.1).
+
+    Die Form entsteht mit zwei Klicks, und deshalb hält sie nur, was diese
+    zwei Klicks aussagen: Sie ist regelmäßig, sie liegt um diese Mitte, und
+    sie geht durch diese Ecke. Mitte und Größe bleiben Freiheitsgrade, bis
+    jemand sie bemaßt — dieselbe Entscheidung wie beim gezeichneten Rechteck
+    („gezeichnet heißt frei, getippt heißt bemaßt").
+
+    **Regelmäßig gehalten wird über einen Hilfskreis**, nicht über Winkel an
+    den Ecken. Beides wäre möglich; der Hilfskreis hat zwei Vorteile, und
+    beide sind gemessen:
+
+    * **Er ist unabhängig.** „Alle Ecken auf einem Kreis" sind ``corners - 1``
+      Gleichungen, „alle Seiten gleich lang" weitere ``corners - 1`` — zusammen
+      genau so viele, wie ein geschlossenes Vieleck an Formfreiheiten hat.
+      Über Winkel geht die Rechnung nicht auf: Ein geschlossener Zug bringt
+      seine letzten beiden Winkel selbst mit, und wer sie trotzdem hinschreibt,
+      bekommt „Eine Bedingung legt fest, was schon festliegt".
+    * **Er ist der Griff, den man sucht.** Der Kreis ist der Umkreis; sein
+      Radius ist das Maß, das an einem Sechseck jeder meint, und er hat einen
+      Mittelpunkt, an dem die Form hängt. Ohne ihn gäbe es in der Zeichnung
+      keinen Punkt, der „die Mitte" wäre.
+
+    Gemessen an der fertigen Form: ``free_dof`` ist **3** — Mitte und Radius.
+    Die Drehung ist die Eichfreiheit des Randpunkts auf seinem Kreis, und die
+    zählt ``solver._rank_with_circle_gauges`` seit je nicht mit.
+
+    Flache Punktindizes: Linie ``k`` hat ``(2k, 2k + 1)``, der Hilfskreis
+    ``(2·corners, 2·corners + 1)`` — Mitte und Randpunkt.
+    """
+    if not 3 <= corners <= 64:
+        raise ValidationError(
+            "corners",
+            _("Ein Vieleck braucht zwischen drei und vierundsechzig Ecken."),
+            value=corners,
+            constraint="corner_count",
+        )
+    radius = math.dist(centre, corner)
+    require_positive("radius", radius)
+    start = math.atan2(corner[1] - centre[1], corner[0] - centre[0])
+    vertices = [
+        (
+            centre[0] + radius * math.cos(start + 2.0 * math.pi * k / corners),
+            centre[1] + radius * math.sin(start + 2.0 * math.pi * k / corners),
+        )
+        for k in range(corners)
+    ]
+    elements = [
+        SketchElement("line", (vertices[k], vertices[(k + 1) % corners])) for k in range(corners)
+    ]
+    elements.append(SketchElement("circle", (centre, vertices[0]), construction=True))
+    hub = 2 * corners
+    rim = hub + 1
+    constraints: list[SketchConstraint] = [
+        SketchConstraint("coincident", (2 * k + 1, (2 * k + 2) % (2 * corners)))
+        for k in range(corners)
+    ]
+    # Der Randpunkt des Hilfskreises **ist** die erste Ecke. Ein eigener Punkt
+    # daneben wäre ein zweiter Ort für dieselbe Aussage.
+    constraints.append(SketchConstraint("coincident", (rim, 0)))
+    constraints.extend(SketchConstraint("equal", (hub, rim, hub, 2 * k)) for k in range(1, corners))
+    constraints.extend(
+        SketchConstraint("equal", (0, 1, 2 * k, 2 * k + 1)) for k in range(1, corners)
+    )
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
+
+
+def slot_between(first: Point2, second: Point2, width: float) -> Sketch:
+    """Ein Langloch zwischen zwei Mittelpunkten — **frei**, nicht bemaßt.
+
+    Zwei Flanken und zwei Halbkreisbögen, gegen den Uhrzeigersinn: untere
+    Flanke, Bogen um ``second``, obere Flanke, Bogen um ``first``. „Unten" und
+    „oben" gelten dabei quer zur Verbindung der beiden Mittelpunkte, in jeder
+    Richtung gleich — das Langloch der Grundformen liegt in X, dieses liegt so,
+    wie geklickt wurde.
+
+    **Die Flanken hängen als Senkrechte am Radiusstrahl** und nicht als
+    Tangenten. Der Grund steht bei :func:`fillet`, und er gilt hier
+    unverändert: Das Bogenende liegt per Deckung *auf* der Flanke, dort ist die
+    Tangentenbedingung ein doppelter Nullpunkt, ihre Ableitung null und die
+    Jacobimatrix singulär. ``perpendicular`` sagt dasselbe mit einer Ableitung,
+    die trägt.
+
+    Beide Enden gleich rund hält **eine** ``equal``-Bedingung zwischen den
+    Radien. Ohne sie wäre das Langloch an einem Ende dicker als am anderen und
+    hieße trotzdem so.
+
+    Gemessen: ``free_dof`` ist **5** — beide Mittelpunkte und die Breite. Mit
+    Festpunkt, Mittenabstand und Breite bleibt die Drehung um den festen
+    Mittelpunkt, wie bei jeder gezeichneten Form.
+
+    Flache Punktindizes: untere Flanke ``(0, 1)``, rechter Bogen
+    ``(2 Mitte, 3 Anfang, 4 Ende)``, obere Flanke ``(5, 6)``, linker Bogen
+    ``(7 Mitte, 8 Anfang, 9 Ende)`` — dieselbe Reihenfolge wie
+    ``shapes.slot``.
+    """
+    require_positive("width", width)
+    reach = math.dist(first, second)
+    require_positive("length", reach)
+    radius = width / 2.0
+    along = ((second[0] - first[0]) / reach, (second[1] - first[1]) / reach)
+    across = (-along[1], along[0])
+
+    def beside(point: Point2, sideways: float) -> Point2:
+        return (point[0] + across[0] * sideways, point[1] + across[1] * sideways)
+
+    low_first = beside(first, -radius)
+    low_second = beside(second, -radius)
+    high_second = beside(second, radius)
+    high_first = beside(first, radius)
+    elements = (
+        SketchElement("line", (low_first, low_second)),
+        SketchElement("arc", (second, low_second, high_second)),
+        SketchElement("line", (high_second, high_first)),
+        SketchElement("arc", (first, high_first, low_first)),
+    )
+    constraints = (
+        SketchConstraint("coincident", (1, 3)),
+        SketchConstraint("coincident", (4, 5)),
+        SketchConstraint("coincident", (6, 8)),
+        SketchConstraint("coincident", (9, 0)),
+        SketchConstraint("equal", (2, 3, 7, 8)),
+        SketchConstraint("perpendicular", (0, 1, 2, 3)),
+        SketchConstraint("perpendicular", (5, 6, 2, 4)),
+        SketchConstraint("perpendicular", (5, 6, 7, 8)),
+        SketchConstraint("perpendicular", (0, 1, 7, 9)),
+    )
+    return Sketch(plane="plane:xy", elements=elements, constraints=constraints)
+
+
 def _written(value: float) -> str:
     """Ein Maß so schreiben, wie es in der Projektdatei steht.
 

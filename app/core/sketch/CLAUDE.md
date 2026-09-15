@@ -33,7 +33,7 @@ Grundebene oder auf einer Fläche des Modells.
 | `profile.py` | Vom gelösten Element zum geschlossenen Umriss |
 | `shapes.py` | Die Grundformen und die zwei Lochbilder (Ausgabestufe eins) |
 | `planes.py` | Wo eine Skizze liegt |
-| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — und an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`) |
+| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), und die zwei Formen aus zwei Klicks (`polygon_at`, `slot_between`) |
 | `ops.py` | Die Operationen der Kategorie „Skizze" |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
@@ -49,6 +49,40 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
 
 ## Grenzen
 
+- **Fünfzehn Bedingungsarten, und „konzentrisch" ist keine davon.** Zwei
+  Kreise mit gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte; eine
+  eigene Art wäre ein zweiter Weg, denselben Sachverhalt zu speichern, zu
+  prüfen und zu migrieren. Das Wort steht trotzdem an einem Knopf der
+  Oberfläche (`sketch_editor.ConstraintAction`) — eine Bedeutung, ein
+  Datenmodell, zwei Namen für zwei Anlässe. Aus demselben Grund gibt es **ein**
+  `equal` und kein `equal_radius`: Linienlänge und Radius sind beide der
+  Abstand zweier Punkte, also dieselbe Gleichung.
+- **Der Winkel rechnet als Sinus und nicht als Bogen** (`_angle_equation`).
+  `sin(φ − θ)` ist bei θ = 0 die Gleichung von `parallel` und bei θ = 90° die
+  von `perpendicular`; `atan2(…) − θ` hätte bei ±180° einen Sprung, den keine
+  Ableitung kennt. Der Preis ist die Periode 180 — deshalb nimmt ein
+  Winkelmaß nur Werte echt zwischen 0 und `MOST_ANGLE_DEGREES`. Die Zahl
+  steht in **Grad** in der Datei und wird erst in der Gleichung Bogenmaß; §11
+  gilt den Längen.
+- **Eine neue Bedingungsart erhöht `format_version` nicht.** Der Aufbau der
+  Projektdatei ändert sich nicht, und jede ältere Datei liest sich
+  unverändert — es gibt nichts zu migrieren (AGENTS.md, Checkliste
+  „Dateiformat ändern", Punkt 4). Was sich ändert, ist der **Wertebereich**
+  einer vorhandenen Aufzählung, und der wächst nur nach vorn: Eine neue Datei
+  in einer alten Version wird ohnehin am Versionsdeckel abgewiesen (§16.2),
+  nicht an einer unbekannten Bedingung. Die zwei Listen der Arten
+  (`solver._CONSTRAINT_TARGETS`, `serialize._CONSTRAINT_KINDS`) hält
+  `tests/test_sketch.py` deckungsgleich.
+- **Die zwei gezeichneten Formen halten sich selbst, ohne bemaßt zu sein**
+  (`polygon_at`, `slot_between`). Das Vieleck hängt an einem **Hilfskreis**:
+  alle Ecken auf ihm, alle Seiten gleich lang — zusammen genau so viele
+  Gleichungen, wie ein geschlossener Zug an Formfreiheiten hat. Über Winkel
+  an den Ecken ginge die Rechnung nicht auf, denn die letzten beiden bringt
+  der Zug selbst mit. Gemessen: 3 Freiheitsgrade (Mitte und Radius), mit
+  Festpunkt und bemaßtem Umkreis null. Das Langloch trägt vier
+  `perpendicular` zwischen Flanke und Radiusstrahl und ein `equal` zwischen
+  den beiden Radien — 5 Freiheitsgrade, beide Mitten und die Breite, und das
+  in jeder Richtung gleich.
 - **Eine Splinekurve für Vorschau und Körper.** `profile.spline_controls`
   liefert die Catmull-Rom-Bézierstücke; die 2D-Schnittprüfung und der
   B-Rep-Kern verwenden dieselben Kontrollpunkte. Jede kubische Teilkurve

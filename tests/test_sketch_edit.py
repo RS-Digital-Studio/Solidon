@@ -702,3 +702,159 @@ def test_breaking_needs_a_corner() -> None:
         edit.fillet(lonely, edit.flat_points(lonely), 1, 1.0)
     with pytest.raises(ValidationError):
         edit.chamfer(lonely, edit.flat_points(lonely), 1, 1.0)
+
+
+# --- Vieleck und Langloch aus zwei Klicks (§30.1, W2) ----------------------------
+
+
+@pytest.mark.parametrize("corners", [3, 4, 5, 6, 8, 12])
+def test_a_drawn_polygon_stays_regular_under_the_solver(corners: int) -> None:
+    """Alle Seiten gleich lang, alle Ecken auf dem Umkreis — und das gerechnet,
+    nicht bloß hingeschrieben.
+
+    Die Konstruktion ist der Prüfling: Wer die Punkte ausrechnet und sie
+    danach wieder ausliest, hat die Bedingungen nicht geprüft. Der Löser läuft
+    also über eine **verzogene** Ausgangslage, und erst sein Ergebnis wird
+    gemessen.
+    """
+    from app.core.sketch import solve_sketch
+
+    sketch = edit.polygon_at((2.0, 3.0), (12.0, 3.0), corners)
+    # Eine Ecke aus der Reihe: Ohne sie beginnt der Löser in der Lösung, und
+    # der Test bestätigte die Konstruktion statt der Bedingungen.
+    pulled = list(sketch.elements)
+    first = pulled[0]
+    pulled[0] = SketchElement(
+        kind="line",
+        points=((first.points[0][0] + 1.7, first.points[0][1] - 0.9), first.points[1]),
+        construction=first.construction,
+    )
+    solved = solve_sketch(
+        Sketch(plane=sketch.plane, elements=tuple(pulled), constraints=sketch.constraints)
+    )
+
+    hub, rim = solved.elements[-1].points
+    radius = math.dist(hub, rim)
+    sides = [math.dist(*element.points) for element in solved.elements[:corners]]
+    wanted = 2.0 * radius * math.sin(math.pi / corners)
+
+    assert solved.max_residual <= 1e-6
+    assert sides == pytest.approx([wanted] * corners, abs=1e-6)
+    for element in solved.elements[:corners]:
+        assert math.dist(hub, element.points[0]) == pytest.approx(radius, abs=1e-6)
+    assert solved.free_dof == 3, "Mitte und Radius bleiben frei, die Drehung ist die Eichung"
+
+
+def test_a_drawn_polygon_is_determined_by_its_centre_and_one_radius() -> None:
+    """Die Zusage des Werkzeugs, in einer Zahl: Mitte fest, Umkreis bemaßt,
+    null Freiheitsgrade."""
+    from app.core.sketch import solve_sketch
+
+    sketch = edit.polygon_at((0.0, 0.0), (10.0, 0.0), 6)
+    hub = len(edit.flat_points(sketch)) - 2
+    bound = Sketch(
+        plane=sketch.plane,
+        elements=sketch.elements,
+        constraints=(
+            *sketch.constraints,
+            SketchConstraint(kind="fixed", targets=(hub,)),
+            SketchConstraint(kind="diameter", targets=(hub, hub + 1), value="20"),
+        ),
+    )
+    solved = solve_sketch(bound)
+    assert solved.free_dof == 0
+    assert math.dist(*solved.elements[-1].points) == pytest.approx(10.0, abs=1e-6)
+
+
+def test_the_construction_circle_of_a_polygon_is_no_outline() -> None:
+    """Der Umkreis trägt die Regelmäßigkeit und bildet kein Profil — sonst
+    stünde im Körper ein Rohr um das Vieleck."""
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.profile import regions_of
+
+    sketch = edit.polygon_at((0.0, 0.0), (10.0, 0.0), 6)
+    assert sketch.elements[-1].construction, "der Hilfskreis ist Hilfsgeometrie"
+    regions = regions_of(solve_sketch(sketch))
+    assert len(regions) == 1
+    assert len(regions[0].segments) == 6, "sechs Kanten, kein Kreis dazwischen"
+
+
+def test_a_polygon_needs_at_least_three_corners() -> None:
+    with pytest.raises(ValidationError) as caught:
+        edit.polygon_at((0.0, 0.0), (10.0, 0.0), 2)
+    assert caught.value.constraint == "corner_count"
+    assert caught.value.suggestions
+
+
+def test_a_polygon_needs_two_different_points() -> None:
+    """Mitte und Ecke am selben Fleck geben keinen Umkreis."""
+    with pytest.raises(ValidationError):
+        edit.polygon_at((4.0, 4.0), (4.0, 4.0), 6)
+
+
+@pytest.mark.parametrize("turn", [0.0, 0.4, 1.2, 2.9])
+def test_a_drawn_slot_keeps_its_shape_in_every_direction(turn: float) -> None:
+    """Zwei runde Enden gleicher Größe, zwei Flanken quer dazu — gleich, ob
+    das Langloch waagerecht liegt oder schräg.
+
+    Das Langloch der Grundformen hält seine Achse mit ``horizontal``; dieses
+    hier entsteht zwischen zwei Klicks und darf jede Richtung haben. Geprüft
+    wird deshalb in vier Richtungen und nicht in einer.
+    """
+    from app.core.sketch import solve_sketch
+
+    first = (1.0, 2.0)
+    second = (1.0 + 20.0 * math.cos(turn), 2.0 + 20.0 * math.sin(turn))
+    solved = solve_sketch(edit.slot_between(first, second, 6.0))
+
+    low, right, high, left = solved.elements
+    assert [element.kind for element in solved.elements] == ["line", "arc", "line", "arc"]
+    assert math.dist(right.points[0], right.points[1]) == pytest.approx(3.0, abs=1e-6)
+    assert math.dist(left.points[0], left.points[1]) == pytest.approx(3.0, abs=1e-6)
+    assert math.dist(left.points[0], right.points[0]) == pytest.approx(20.0, abs=1e-6)
+    assert math.dist(*low.points) == pytest.approx(20.0, abs=1e-6)
+    assert math.dist(*high.points) == pytest.approx(20.0, abs=1e-6)
+    assert solved.max_residual <= 1e-6
+    assert solved.free_dof == 5, "beide Mitten und die Breite"
+
+
+def test_a_slot_closes_into_one_outline() -> None:
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.profile import regions_of
+
+    regions = regions_of(solve_sketch(edit.slot_between((0.0, 0.0), (20.0, 0.0), 6.0)))
+    assert len(regions) == 1
+    assert len(regions[0].segments) == 4
+
+
+def test_a_slot_needs_a_length_and_a_width() -> None:
+    with pytest.raises(ValidationError):
+        edit.slot_between((0.0, 0.0), (0.0, 0.0), 6.0)
+    with pytest.raises(ValidationError):
+        edit.slot_between((0.0, 0.0), (20.0, 0.0), 0.0)
+
+
+def test_the_two_drawn_shapes_become_bodies_with_the_volume_they_promise() -> None:
+    """Die analytische Gegenrechnung, am Körper und nicht an der Zeichnung.
+
+    Sechseck über Ø 20 mm: ``3·√3/2 · 10² · 10`` = 2598,076 mm³.
+    Langloch 20 mm Mittenabstand, 6 mm breit: ``(20 · 6 + π · 3²) · 10``
+    = 1482,743 mm³.
+    """
+    from app.core.brep import profiles as brep_profiles
+    from app.core.brep.kernel import available
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.profile import regions_of
+
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
+
+    polygon = regions_of(solve_sketch(edit.polygon_at((0.0, 0.0), (10.0, 0.0), 6)))[0]
+    assert brep_profiles.extrude(polygon, 10.0).volume == pytest.approx(
+        3.0 * math.sqrt(3.0) / 2.0 * 10.0**2 * 10.0, rel=1e-9
+    )
+
+    slot = regions_of(solve_sketch(edit.slot_between((0.0, 0.0), (20.0, 0.0), 6.0)))[0]
+    assert brep_profiles.extrude(slot, 10.0).volume == pytest.approx(
+        (20.0 * 6.0 + math.pi * 3.0**2) * 10.0, rel=1e-9
+    )

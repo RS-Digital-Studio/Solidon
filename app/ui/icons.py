@@ -284,6 +284,19 @@ PATHS: Final[dict[str, str]] = {
         '<circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none" />'
         '<circle cx="20" cy="18" r="1.2" fill="currentColor" stroke="none" />'
     ),
+    # Vieleck: das Sechseck, die Vorgabe des Werkzeugs — mit seiner Mitte,
+    # denn dort setzt der erste Klick an.
+    "sketch_polygon": (
+        '<path d="M12 3.8 19.1 7.9v8.2L12 20.2 4.9 16.1V7.9z" />'
+        '<circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />'
+    ),
+    # Langloch: zwei Flanken, zwei runde Enden, und die zwei Mitten, die die
+    # Klicks setzen.
+    "sketch_slot": (
+        '<path d="M8.5 7.5h7a4.5 4.5 0 0 1 0 9h-7a4.5 4.5 0 0 1 0-9z" />'
+        '<circle cx="8.5" cy="12" r="1.1" fill="currentColor" stroke="none" />'
+        '<circle cx="15.5" cy="12" r="1.1" fill="currentColor" stroke="none" />'
+    ),
     "sketch_arc": (
         '<path d="M4.5 17.5a9 9 0 0 1 15 0" /><circle cx="4.5" cy="17.5" r="1.8" />'
         '<circle cx="19.5" cy="17.5" r="1.8" />'

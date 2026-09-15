@@ -7017,3 +7017,390 @@ def test_a_double_click_on_a_measure_card_opens_its_value(
         assert not canvas.double_click_on_plane((place[0] + 500.0, place[1]))
     finally:
         panel.deleteLater()
+
+
+# --- Vieleck und Langloch als Werkzeug (§30.1, W2) -------------------------------
+
+
+def _body_volume(canvas: SketchCanvas, height: float) -> float:
+    """Das Volumen, das aus der gezeichneten Skizze entsteht.
+
+    Über denselben Weg, den ``sketch_extrude`` geht: lösen, Umrisse bilden,
+    Körper hochziehen. Gemessen wird am Körper und nicht an der Zeichnung —
+    eine Fläche, die richtig aussieht, kann trotzdem das falsche Gewicht
+    haben.
+    """
+    from app.core.brep import profiles as brep_profiles
+    from app.core.sketch import solve_sketch
+    from app.core.sketch.profile import regions_of
+
+    regions = regions_of(solve_sketch(canvas.sketch))
+    assert len(regions) == 1, "der Umriss ist geschlossen und einer"
+    return float(brep_profiles.extrude(regions[0], height).volume)
+
+
+def test_two_clicks_draw_a_regular_hexagon(qt_app: QApplication) -> None:
+    """Mitte, Ecke, fertig — und der Körper wiegt, was ein Sechseck wiegt.
+
+    Ø 20 mm heißt Umkreisradius 10; die Fläche ist ``3·√3/2 · 10²``, bei 10 mm
+    Höhe also 2598,076 mm³. Die Zahl steht ausgerechnet da, damit ein
+    Vorzeichen- oder Faktorfehler auffällt statt sich zu erklären.
+    """
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("polygon")
+    assert canvas.polygon_corners == 6, "sechs Ecken sind die Vorgabe"
+
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((10.0, 0.0))
+
+    kinds = [element.kind for element in canvas.sketch.elements]
+    assert kinds == ["line"] * 6 + ["circle"]
+    assert canvas.sketch.elements[-1].construction, "der Umkreis ist Hilfsgeometrie"
+    assert {entry.kind for entry in canvas.sketch.constraints} == {"coincident", "equal"}
+
+    solved = solve_sketch(canvas.sketch)
+    assert solved.max_residual <= 1e-6
+    assert solved.free_dof == 3, "Mitte und Radius — gezeichnet heißt frei"
+    sides = [math.dist(*element.points) for element in solved.elements[:6]]
+    assert sides == pytest.approx([10.0] * 6, abs=1e-6), "beim Sechseck ist die Seite der Radius"
+
+    assert _body_volume(canvas, 10.0) == pytest.approx(
+        3.0 * math.sqrt(3.0) / 2.0 * 10.0**2 * 10.0, rel=1e-9
+    )
+
+    canvas.undo()
+    assert not canvas.sketch.elements, "ein Rückgängig nimmt das ganze Vieleck"
+
+
+def test_the_corner_count_decides_what_the_next_click_draws(qt_app: QApplication) -> None:
+    """Die Eckenzahl ist eine Einstellung und keine Geste — sie steht vor dem
+    ersten Klick fest und erscheint nur bei ihrem Werkzeug."""
+    panel = SketchPanel()
+    try:
+        assert not panel.polygon_corners_field.isVisibleTo(panel), "ohne Vieleck kein Feld"
+        panel._tool_chosen("polygon", True)
+        assert panel.polygon_corners_field.isVisibleTo(panel)
+
+        panel.polygon_corners_field.setValue(8)
+        assert panel.canvas.polygon_corners == 8
+
+        panel.canvas.resize(600, 600)
+        panel.canvas.place_on_plane((0.0, 0.0))
+        panel.canvas.place_on_plane((10.0, 0.0))
+        lines = [element for element in panel.canvas.sketch.elements if element.kind == "line"]
+        assert len(lines) == 8
+
+        panel._tool_chosen("line", True)
+        assert not panel.polygon_corners_field.isVisibleTo(panel)
+    finally:
+        panel.deleteLater()
+
+
+def test_the_polygon_preview_hangs_on_the_pointer(qt_app: QApplication) -> None:
+    """„Was entsteht, hängt am Zeiger" gilt auch für die zusammengesetzte Form
+    — und die Vorschau kommt aus derselben Rechnung wie der Klick."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("polygon")
+    assert canvas.pending_elements() == (), "ohne ersten Klick gibt es nichts zu zeigen"
+
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.hover_on_plane((10.0, 0.0))
+    preview = canvas.pending_elements()
+
+    assert [element.kind for element in preview] == ["line"] * 6 + ["circle"]
+    assert not canvas.sketch.elements, "eine Vorschau ändert das Dokument nicht (Regel 2)"
+
+
+def test_a_typed_radius_finishes_the_polygon_and_dimensions_it(qt_app: QApplication) -> None:
+    """Getippt heißt bemaßt: Die Zahl bleibt als Maß am Umkreis stehen."""
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("polygon")
+    canvas.place_on_plane((0.0, 0.0))
+    canvas._pointer = (8.0, 0.0)
+
+    canvas.place_measured(20.0)
+
+    measures = [entry for entry in canvas.sketch.constraints if entry.kind == "diameter"]
+    assert len(measures) == 1, "der Umkreis trägt das Maß"
+    solved = solve_sketch(canvas.sketch)
+    assert math.dist(*solved.elements[-1].points) == pytest.approx(10.0, abs=1e-6)
+    assert solved.free_dof == 2, "nur noch die Mitte ist frei"
+
+
+def test_two_clicks_draw_a_slot_with_its_width(qt_app: QApplication) -> None:
+    """Zwei Mitten, eine Breite aus dem Feld — und das Volumen stimmt.
+
+    20 mm Mittenabstand, 6 mm breit, 10 mm hoch: ``(20 · 6 + π · 3²) · 10``
+    = 1482,743 mm³.
+    """
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("slot")
+    canvas.slot_width = 6.0
+
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((20.0, 0.0))
+
+    assert [element.kind for element in canvas.sketch.elements] == ["line", "arc", "line", "arc"]
+    assert {entry.kind for entry in canvas.sketch.constraints} == {
+        "coincident",
+        "equal",
+        "perpendicular",
+        "diameter",
+    }
+
+    solved = solve_sketch(canvas.sketch)
+    assert solved.max_residual <= 1e-6
+    assert solved.free_dof == 4, "beide Mitten, die Breite steht als Maß"
+    assert math.dist(solved.elements[3].points[0], solved.elements[1].points[0]) == pytest.approx(
+        20.0, abs=1e-6
+    )
+    assert _body_volume(canvas, 10.0) == pytest.approx(
+        (20.0 * 6.0 + math.pi * 3.0**2) * 10.0, rel=1e-9
+    )
+
+    canvas.undo()
+    assert not canvas.sketch.elements, "ein Rückgängig nimmt das ganze Langloch"
+
+
+def test_a_typed_length_finishes_the_slot(qt_app: QApplication) -> None:
+    """Die Länge ist der Mittenabstand, und getippt bleibt sie als Maß."""
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    panel = SketchPanel()
+    try:
+        panel._tool_chosen("slot", True)
+        panel.slot_width_field.set_value_mm(4.0)
+        panel._slot_width_chosen()
+        canvas = panel.canvas
+        canvas.resize(600, 600)
+        canvas.place_on_plane((0.0, 0.0))
+        canvas._pointer = (5.0, 0.0)
+
+        canvas.place_measured(30.0)
+
+        lengths = [entry for entry in canvas.sketch.constraints if entry.kind == "distance"]
+        assert len(lengths) == 1
+        solved = solve_sketch(canvas.sketch)
+        assert math.dist(
+            solved.elements[3].points[0], solved.elements[1].points[0]
+        ) == pytest.approx(30.0, abs=1e-6)
+        assert math.dist(*solved.elements[1].points[:2]) == pytest.approx(2.0, abs=1e-6)
+    finally:
+        panel.deleteLater()
+
+
+def test_two_clicks_on_the_same_spot_say_so(qt_app: QApplication) -> None:
+    """Ein zweiter Klick auf den ersten gibt keine Form — und das steht in der
+    Zeile, statt still nichts zu tun (Regel 17)."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+    canvas.set_tool("slot")
+
+    canvas.place_on_plane((5.0, 5.0))
+    canvas.place_on_plane((5.0, 5.0))
+
+    assert not canvas.sketch.elements
+    assert any("aufeinander" in text for text in said), said
+
+
+# --- Die vier neuen Bedingungen an der Oberfläche (§30.1, W2) --------------------
+
+
+def _turn_between(first: object, second: object) -> float:
+    """Der Winkel von der ersten zur zweiten Linie, in Grad."""
+    import math
+
+    ux = first.points[1][0] - first.points[0][0]  # type: ignore[attr-defined]
+    uy = first.points[1][1] - first.points[0][1]  # type: ignore[attr-defined]
+    vx = second.points[1][0] - second.points[0][0]  # type: ignore[attr-defined]
+    vy = second.points[1][1] - second.points[0][1]  # type: ignore[attr-defined]
+    return math.degrees(math.atan2(ux * vy - uy * vx, ux * vx + uy * vy))
+
+
+def test_the_angle_button_asks_for_its_degrees(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Linien auswählen, Knopf drücken, Zahl eintippen — und der Löser
+    hält sie."""
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+        canvas.add_element("line", ((0.0, 0.0), (8.0, 3.0)))
+        canvas.selection[:] = [("line", (0, 1)), ("line", (2, 3))]
+
+        assert panel.constraint_offers()["angle"], "zwei Linien sind das Muster"
+
+        seen: list[str] = []
+
+        def accept(self: ExpressionDialog) -> int:
+            seen.append(self.field.text())
+            self.field.setText("45")
+            return int(ExpressionDialog.DialogCode.Accepted)
+
+        monkeypatch.setattr(ExpressionDialog, "exec", accept)
+        panel.request_constraint("angle")
+
+        assert seen and seen[0], "das Feld steht mit dem gemessenen Winkel vor"
+        angle = [entry for entry in canvas.sketch.constraints if entry.kind == "angle"]
+        assert len(angle) == 1
+        assert angle[0].targets == (0, 1, 2, 3)
+        assert angle[0].value == "45"
+
+        solved = solve_sketch(canvas.sketch)
+        assert math.isclose(abs(_turn_between(*solved.elements)), 45.0, abs_tol=1e-6)
+    finally:
+        panel.deleteLater()
+
+
+def test_an_angle_shows_its_degrees_on_a_card(qt_app: QApplication) -> None:
+    """Das Maß steht mit Gradzeichen im Bild — und der Doppelklick trifft es."""
+    from app.core.units import DEGREE_UNIT
+
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+    canvas.add_element("line", ((0.0, 0.0), (5.0, 8.66)))
+    canvas.add_constraint("coincident", (0, 2))
+    canvas.add_constraint("angle", (0, 1, 2, 3), "60")
+
+    cards = canvas._measure_cards()
+    assert len(cards) == 1
+    index, place, label = cards[0]
+    assert label == f"60{DEGREE_UNIT}"
+    assert canvas.measure_at(place) == index
+    # Die Ecke selbst, nicht der Schwerpunkt: Der Löser verschiebt sie beim
+    # Erfüllen um Hundertstel eines Mikrometers, die Karte folgt ihr.
+    assert place[0] == pytest.approx(0.0, abs=1e-3), "die Karte sitzt an der gemeinsamen Ecke"
+
+
+def test_equal_takes_two_lines_or_two_rounds(qt_app: QApplication) -> None:
+    """Eine Art, zwei Fälle: Der Knopf nimmt Linien und Rundungen, und er
+    nimmt je Element genau die zwei Punkte, die seine Spanne tragen."""
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+        canvas.add_element("line", ((0.0, 5.0), (4.0, 5.0)))
+        canvas.add_element("arc", ((30.0, 0.0), (37.0, 0.0), (30.0, 7.0)))
+        canvas.add_element("circle", ((60.0, 0.0), (64.0, 0.0)))
+
+        canvas.selection[:] = [("line", (0, 1)), ("line", (2, 3))]
+        assert panel.constraint_offers()["equal"]
+        assert canvas.constraint_targets("equal") == (0, 1, 2, 3)
+
+        canvas.selection[:] = [("arc", (4, 5, 6)), ("circle", (7, 8))]
+        assert panel.constraint_offers()["equal"]
+        assert canvas.constraint_targets("equal") == (4, 5, 7, 8), "Mitte und Rand, nicht das Ende"
+
+        panel.request_constraint("equal")
+        equal = [entry for entry in canvas.sketch.constraints if entry.kind == "equal"]
+        assert len(equal) == 1
+        assert equal[0].targets == (4, 5, 7, 8)
+
+        # Und ein zweiter Druck nimmt sie zurück, wie jede andere.
+        assert panel.constraint_already_set()["equal"]
+        panel.request_constraint("equal")
+        assert not [entry for entry in canvas.sketch.constraints if entry.kind == "equal"]
+    finally:
+        panel.deleteLater()
+
+
+def test_the_midpoint_button_wants_a_point_and_a_line(qt_app: QApplication) -> None:
+    """Ein Punkt allein ist kein Muster — und die Reihenfolge steht fest."""
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (10.0, 4.0)))
+        canvas.add_element("point", ((1.0, 1.0),))
+
+        canvas.selection[:] = [("point", (2,))]
+        assert not panel.constraint_offers()["midpoint"], "ein Punkt allein genügt nicht"
+
+        canvas.selection[:] = [("point", (2,)), ("line", (0, 1))]
+        assert panel.constraint_offers()["midpoint"]
+        panel.request_constraint("midpoint")
+
+        middle = [entry for entry in canvas.sketch.constraints if entry.kind == "midpoint"]
+        assert len(middle) == 1
+        assert middle[0].targets == (2, 0, 1)
+        assert canvas.solved is not None
+        # **Gemessen an der gelösten Linie und nicht an der gezeichneten.** Die
+        # Skizze ist unterbestimmt, also darf der Löser auch die Linie bewegen,
+        # um die Mitte zu erreichen — geprüft wird die Aussage der Bedingung.
+        begin, end = canvas.solved.elements[0].points
+        assert canvas.solved.elements[1].points[0] == pytest.approx(
+            ((begin[0] + end[0]) / 2.0, (begin[1] + end[1]) / 2.0), abs=1e-6
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_concentric_writes_a_coincidence_of_the_two_centres(qt_app: QApplication) -> None:
+    """Ein Wort an einem Knopf, ein Eintrag im Datenmodell.
+
+    Der Knopf heißt „Konzentrisch", weil ein CAD-Kunde danach sucht; in der
+    Skizze landet eine Deckung der beiden Mittelpunkte. Eine eigene Art wäre
+    ein zweiter Weg, denselben Sachverhalt zu speichern.
+    """
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("circle", ((0.0, 0.0), (5.0, 0.0)))
+        canvas.add_element("arc", ((3.0, 1.0), (13.0, 1.0), (3.0, 11.0)))
+        canvas.selection[:] = [("circle", (0, 1)), ("arc", (2, 3, 4))]
+
+        assert panel.constraint_offers()["concentric"]
+        assert canvas.constraint_targets("concentric") == (0, 2), "nur die beiden Mitten"
+
+        panel.request_constraint("concentric")
+
+        assert [entry.kind for entry in canvas.sketch.constraints] == ["coincident"]
+        assert canvas.sketch.constraints[0].targets == (0, 2)
+        assert canvas.solved is not None
+        assert canvas.solved.elements[0].points[0] == pytest.approx(
+            canvas.solved.elements[1].points[0], abs=1e-6
+        )
+
+        # Der Knopf steht gedrückt da und nimmt beim zweiten Druck zurück.
+        assert panel.constraint_already_set()["concentric"]
+        panel.request_constraint("concentric")
+        assert not canvas.sketch.constraints
+    finally:
+        panel.deleteLater()
+
+
+def test_every_constraint_button_says_what_it_needs_and_does(qt_app: QApplication) -> None:
+    """Vier neue Knöpfe, vier Paare von Halbsätzen — aus derselben Quelle wie
+    die zehn davor (``_needs_phrase``, ``_does_phrase``)."""
+    from app.ui.sketch_editor import _NEEDS, _does_phrase, _needs_phrase
+
+    for kind in _NEEDS:
+        assert str(_needs_phrase(kind)).strip(), kind
+        assert str(_does_phrase(kind)).strip(), kind
+        assert str(_constraint_label(kind)).strip(), kind
+    assert {"angle", "equal", "midpoint", "concentric"} <= set(_NEEDS)

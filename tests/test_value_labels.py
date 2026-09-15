@@ -748,7 +748,15 @@ LOCALISERS = frozenset({"localised", "localised_value"})
 #: vor: ``change_constraint_value`` zeigt den bestehenden Ausdruck einer
 #: Maßbedingung zum Ändern und schreibt den geänderten zurück — was dort
 #: steht, kann „breite/2" sein und nicht nur eine Zahl.
-GRAMMAR_NOT_LABEL = frozenset({"change_constraint_value", "measured_expression", "place_measured"})
+GRAMMAR_NOT_LABEL = frozenset(
+    {
+        "change_constraint_value",
+        "measured_angle",
+        "measured_expression",
+        "place_measured",
+        "slot_width_expression",
+    }
+)
 
 
 class _Numbers(ast.NodeVisitor):

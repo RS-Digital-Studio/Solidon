@@ -19,7 +19,7 @@ import html
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import (
@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -68,7 +69,7 @@ from app.core.types import (
     SketchElementKind,
     SolvedSketch,
 )
-from app.core.units import EPS_DISPLAY
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY
 from app.i18n import TranslatableText, _, tr
 from app.ui import cursors, icons, style
 from app.ui.labels import (
@@ -160,6 +161,25 @@ DEFAULT_CHAMFER_MM = 1.0
 #: Die Werkzeuge, die an einer Ecke ansetzen statt an einem Rasterpunkt.
 CORNER_TOOLS: tuple[str, ...] = ("fillet", "chamfer")
 
+#: Wie viele Ecken ein Vieleck bekommt, bevor jemand eine Zahl eingestellt hat.
+#:
+#: Sechs, weil das Sechseck die Form ist, die man in einem Druckteil zeichnet:
+#: der Schlüsselweitenkopf einer Schraube, die Wabe einer Füllstruktur, die
+#: Aufnahme einer Mutter. Drei ist die Untergrenze der Geometrie; zwölf die
+#: der Bedienung — darüber ist der Unterschied zum Kreis im Bild nicht mehr
+#: zu sehen, und ein Kreis ist ein eigenes Werkzeug mit einem eigenen Maß.
+DEFAULT_POLYGON_CORNERS = 6
+LEAST_POLYGON_CORNERS = 3
+MOST_POLYGON_CORNERS = 12
+
+#: Wie breit ein Langloch anfängt, in Millimetern.
+#:
+#: Fünf Millimeter sind ein Langloch für eine M4-Schraube mit Spiel — das
+#: häufigste Langloch an einem Druckteil überhaupt. Wer einmal eine andere
+#: Breite einstellt, behält sie für die nächste (``SketchCanvas.slot_width``),
+#: wie beim Radius der Verrundung.
+DEFAULT_SLOT_WIDTH_MM = 5.0
+
 #: Die feinste Weite, die sich eintippen lässt.
 #:
 #: Sie stand als Untergrenze am Feld, bis die Null dort gebraucht wurde: Der
@@ -219,7 +239,29 @@ _FLAT_ENOUGH = 0.966
 _STEEP_ENOUGH = 0.259
 
 
-def _constraint_label(kind: SketchConstraintKind) -> str:
+#: Was ein Bedingungsknopf anbietet — die Arten des Kerns und **ein** Griff
+#: darüber hinaus.
+#:
+#: „Konzentrisch" ist keine eigene Art im Datenmodell: Zwei Kreise mit
+#: gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte. Ein zweiter Eintrag
+#: in ``SketchConstraintKind`` wäre ein zweiter Weg, denselben Sachverhalt zu
+#: speichern — und damit zwei Wege, ihn zu lesen, zu prüfen und zu migrieren.
+#: Das Wort ist trotzdem das, unter dem ein CAD-Kunde sucht, und deshalb steht
+#: es an einem Knopf: eine Bedeutung, ein Datenmodell, zwei Namen für zwei
+#: Anlässe.
+ConstraintAction = SketchConstraintKind | Literal["concentric"]
+
+#: Welche Art des Kerns ein Griff anlegt. Was hier nicht steht, heißt im Kern
+#: wie in der Oberfläche.
+_CORE_KIND: Final[dict[str, SketchConstraintKind]] = {"concentric": "coincident"}
+
+
+def core_kind(action: ConstraintAction) -> SketchConstraintKind:
+    """Die Art, die dieser Griff im Kern anlegt (siehe :data:`_CORE_KIND`)."""
+    return _CORE_KIND.get(action, action)  # type: ignore[arg-type]
+
+
+def _constraint_label(kind: ConstraintAction) -> str:
     """Der Name der Bedingung als Wort — die Liste trägt ihn, kein Symbol
     allein (Regel 18)."""
     return {
@@ -235,6 +277,10 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
         "symmetric": tr("Symmetrisch"),
         "fixed": tr("Fest"),
         "reference": tr("Referenzmaß"),
+        "angle": tr("Winkel"),
+        "equal": tr("Gleich groß"),
+        "midpoint": tr("Mittelpunkt"),
+        "concentric": tr("Konzentrisch"),
     }[kind]
 
 
@@ -366,6 +412,75 @@ def readable_measure(expression: str) -> str:
     return length(value)
 
 
+def readable_angle(expression: str) -> str:
+    """Ein Winkelmaß, wie es dasteht: „60°".
+
+    Dieselbe Haltung wie bei :func:`readable_measure` — eine reine Zahl wird
+    gerundet, ein Ausdruck bleibt wörtlich stehen, denn ``=@neigung`` ist die
+    Aussage und nicht ihr Ergebnis. Das Zeichen kommt aus dem Kern
+    (:data:`app.core.units.DEGREE_UNIT`), damit Grad überall dasselbe Zeichen
+    tragen; eine Anzeigeeinheit gibt es hier nicht — ein Winkel ist in jeder
+    Einheitenwahl ein Winkel.
+    """
+    if not expression:
+        return ""
+    try:
+        value = float(expression)
+    except ValueError:
+        return f"{expression}{DEGREE_UNIT}"
+    return f"{localised(f'{value:.2f}'.rstrip('0').rstrip('.') or '0')}{DEGREE_UNIT}"
+
+
+def _shared_corner(
+    points: Sequence[tuple[float, float]], targets: tuple[int, ...]
+) -> tuple[float, float]:
+    """Die Ecke, in der die beiden Linien eines Winkelmaßes zusammentreffen.
+
+    Verglichen werden die **Orte** und nicht die Punktnummern: Zwei Enden am
+    selben Fleck sind dieselbe Ecke, gleich ob eine Deckung sie verbindet oder
+    der Löser sie nur dorthin gerechnet hat — dieselbe Unterscheidung wie bei
+    ``edit.corner_at``. Ohne gemeinsame Ecke der Schwerpunkt der vier Punkte.
+    """
+    first, second, third, fourth = targets[:4]
+    for one in (first, second):
+        for other in (third, fourth):
+            if math.dist(points[one], points[other]) <= EPS_DISPLAY:
+                return points[one]
+    chosen = [points[index] for index in targets[:4]]
+    return (
+        sum(point[0] for point in chosen) / 4.0,
+        sum(point[1] for point in chosen) / 4.0,
+    )
+
+
+def angle_between(points: Sequence[tuple[float, float]], targets: tuple[int, ...]) -> float:
+    """Der Winkel zwischen zwei Linien in Grad, gefaltet auf 0 bis unter 180.
+
+    Gefaltet und nicht als Betrag: Die Gleichung des Lösers hat die Periode
+    180° (``solver._angle_equation``), und ein Betrag machte aus -60° die
+    Zahl 60 — die Bedingung zöge die Linie dann auf die andere Seite. 120 ist
+    dieselbe Lage und damit die richtige Antwort.
+    """
+    if len(targets) < 4 or max(targets[:4]) >= len(points):
+        return 0.0
+    first, second, third, fourth = targets[:4]
+    ux = points[second][0] - points[first][0]
+    uy = points[second][1] - points[first][1]
+    vx = points[fourth][0] - points[third][0]
+    vy = points[fourth][1] - points[third][1]
+    return math.degrees(math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)) % 180.0
+
+
+def measured_angle(points: Sequence[tuple[float, float]], targets: tuple[int, ...]) -> str:
+    """Der Winkel, wie er im Maßfeld vorstehen soll — Zahl ohne Zeichen.
+
+    Wie :func:`measured_expression`: ein Ausdruck der Parametergrammatik
+    (§13) und keine Beschriftung, also mit Punkt und ohne Einheit.
+    """
+    text = f"{angle_between(points, targets):.2f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]]) -> str:
     """Was an einer Maßbedingung steht.
 
@@ -374,6 +489,8 @@ def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]
     Referenzmaß hat keinen Ausdruck: es zeigt, was gerade da ist, in Klammern
     wie in jedem CAD, damit man die beiden nie verwechselt.
     """
+    if constraint.kind == "angle":
+        return readable_angle(constraint.value)
     if constraint.kind != "reference":
         return readable_measure(constraint.value)
     first, second = constraint.targets[0], constraint.targets[1]
@@ -395,6 +512,16 @@ def circle_label(expression: str) -> str:
     except ValueError:
         return f"Ø {expression}" if expression else ""
     return f"{circle_sign()} {length(circle_shown(value))}"
+
+
+def slot_width_expression(width: float) -> str:
+    """Die Breite eines Langlochs als Wert seiner Durchmesserbedingung.
+
+    Ein Ausdruck der Parametergrammatik (§13) wie bei :func:`measured_expression`:
+    mit Punkt, ohne Einheit, und mit neun Nachkommastellen, damit die Bedingung
+    genau die Zahl trägt, die der Klick gesetzt hat — gerundet wird erst die Anzeige.
+    """
+    return f"{width:.9f}"
 
 
 def measured_expression(points: Sequence[tuple[float, float]], targets: tuple[int, ...]) -> str:
@@ -833,6 +960,11 @@ class SketchCanvas(QWidget):
         }
         """Radius und Fasenmaß, wie zuletzt getippt — die Vorgabe für die
         nächste Ecke. Fusion merkt sich den Radius genauso."""
+        self.polygon_corners = DEFAULT_POLYGON_CORNERS
+        """Wie viele Ecken das nächste Vieleck bekommt (3 bis 12)."""
+        self.slot_width = DEFAULT_SLOT_WIDTH_MM
+        """Wie breit das nächste Langloch wird, in Millimetern — zuletzt
+        eingestellt, wie der Radius der Verrundung."""
 
     def set_bed(self, size: tuple[float, float] | None) -> None:
         """Die Grundfläche des Bauraums, gegen die gezeichnet wird.
@@ -964,6 +1096,14 @@ class SketchCanvas(QWidget):
                 SketchElement("line", (opposite, other_y)),
                 SketchElement("line", (other_y, first)),
             )
+        if self.tool in ("polygon", "slot"):
+            # **Dieselbe Rechnung wie der Klick**, nur mit dem Zeiger als
+            # zweitem Punkt: Eine Vorschau, die ihre Form selbst zusammensetzt,
+            # ist die zweite Wahrheit über das, was entsteht. Die
+            # Hilfsgeometrie des Vielecks reist mit — der Umkreis ist das, was
+            # man beim Aufziehen sehen will.
+            made = self._drawn_shape(first, target)
+            return () if made is None else made.elements
         if self.tool == "arc":
             if len(self._pending_world) < 2:
                 return (SketchElement("line", (first, target)),)
@@ -974,6 +1114,30 @@ class SketchCanvas(QWidget):
         if self.tool == "spline":
             return (SketchElement("spline", (*self._pending_world, target)),)
         return ()
+
+    def _drawn_shape(
+        self, first: tuple[float, float], second: tuple[float, float]
+    ) -> Sketch | None:
+        """Die Form, die aus diesen zwei Punkten entstünde — oder ``None``.
+
+        **Eine Quelle für Vorschau und Klick.** Wer die Vorschau daneben noch
+        einmal zusammensetzt, hat zwei Rechnungen für dieselbe Form, und
+        gesehen wird die eine, gespeichert die andere.
+
+        ``None`` heißt: aus diesen zwei Punkten wird nichts — beide am selben
+        Fleck, oder eine Breite, die keine ist. Kein Fehlerfenster, denn
+        gescheitert ist hier nichts: Der Zeiger steht gerade so, und beim
+        nächsten Mausschritt steht er anders (die Zeile sagt es trotzdem,
+        sobald jemand darauf klickt).
+        """
+        try:
+            if self.tool == "polygon":
+                return edit.polygon_at(first, second, self.polygon_corners)
+            if self.tool == "slot":
+                return edit.slot_between(first, second, self.slot_width)
+        except AppError:
+            return None
+        return None
 
     def measure_annotations(self) -> tuple[tuple[tuple[float, float], str], ...]:
         """Lesbare Maßzahlen samt Position für Canvas und 3D-Viewport.
@@ -991,6 +1155,22 @@ class SketchCanvas(QWidget):
         cards: list[tuple[int, tuple[float, float], str]] = []
         gap = MEASURE_GAP / max(self._snap_scale(), EPS_DISPLAY)
         for index, entry in enumerate(self.sketch.constraints):
+            if entry.kind == "angle" and len(entry.targets) == 4:
+                # **Die Karte sitzt in der Ecke, die der Winkel meint.** Zwei
+                # Linien, die sich einen Punkt teilen, sind der Regelfall —
+                # ein Vieleck, eine Strebe, eine Schräge —, und dort gehört
+                # die Zahl hin. Teilen sie keinen, bleibt der Schwerpunkt der
+                # vier Punkte: eine Stelle zwischen beiden Linien, und mehr
+                # verspricht sie nicht.
+                if max(entry.targets) >= len(points):
+                    continue
+                label = readable_angle(entry.value)
+                if not label:
+                    continue
+                corner = _shared_corner(points, entry.targets)
+                place = (corner[0], corner[1] + gap)
+                cards.append((index, place, label))
+                continue
             if (
                 entry.kind not in ("distance", "reference", "diameter", "radius")
                 or len(entry.targets) != 2
@@ -1344,8 +1524,12 @@ class SketchCanvas(QWidget):
             self.measure_field.setAccessibleName(tr("Radius"))
         elif tool == "chamfer":
             self.measure_field.setAccessibleName(tr("Fasenmaß"))
-        elif tool == "circle":
+        elif tool in ("circle", "polygon"):
+            # Beide werden über einen Kreis bemaßt — der eine über sich
+            # selbst, der andere über seinen Umkreis.
             self._name_circle_button()
+        elif tool == "slot":
+            self.measure_field.setAccessibleName(tr("Länge"))
         else:
             self.measure_field.setAccessibleName(tr("Maß"))
         # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
@@ -2063,6 +2247,35 @@ class SketchCanvas(QWidget):
             collected.extend(entry[1])
         return tuple(collected)
 
+    def constraint_targets(self, action: ConstraintAction) -> tuple[int, ...]:
+        """Welche Punkte der Auswahl diese Bedingung nimmt — **eine** Quelle.
+
+        Die meisten nehmen alle, in Klickreihenfolge. Vier nehmen weniger, und
+        genau deshalb steht die Auswahl hier und nicht im Knopf: Wer sie dort
+        trifft, trifft sie ein zweites Mal in der Frage „steht sie schon?", und
+        zwei Antworten auf dieselbe Frage sind ein Umschalter, der beim
+        Zurücknehmen danebengreift.
+
+        * ``fixed`` nagelt **einen** Punkt fest, auch wenn mehrere gewählt sind.
+        * ``equal`` misst je Element eine Spanne: Linie Anfang → Ende, Kreis
+          Mitte → Rand, Bogen Mitte → Anfang. Das sind je zwei Punkte, und
+          dass ein Bogen drei führt, geht die Bedingung nichts an.
+        * ``concentric`` nimmt je Element nur die Mitte — es wird eine Deckung
+          daraus (:data:`_CORE_KIND`).
+        * ``midpoint`` nimmt Punkt, Anfang und Ende, also die Auswahl selbst;
+          sie steht hier nur, weil ihre Reihenfolge festliegt.
+        """
+        if action == "fixed":
+            return self.selection_targets()[:1]
+        if action == "concentric":
+            return tuple(targets[0] for _kind, targets in self.selection if targets)[:2]
+        if action == "equal":
+            spans: list[int] = []
+            for _kind, targets in self.selection:
+                spans.extend(targets[:2])
+            return tuple(spans)[:4]
+        return self.selection_targets()
+
     def _select(self, entry: tuple[str, tuple[int, ...]], extend: bool) -> None:
         # Ohne Strg ist ein Klick eine eindeutige Auswahl. Ein bereits
         # gewähltes Element bleibt gewählt — es beim zweiten Klick abzuwählen
@@ -2523,7 +2736,15 @@ class SketchCanvas(QWidget):
             self.update()
             return
 
-        needed = {"point": 1, "line": 2, "circle": 2, "arc": 3, "rectangle": 2}[self.tool]
+        needed = {
+            "point": 1,
+            "line": 2,
+            "circle": 2,
+            "arc": 3,
+            "rectangle": 2,
+            "polygon": 2,
+            "slot": 2,
+        }[self.tool]
         if len(self._pending_world) < needed:
             # Der Hinweis wandert mit dem angefangenen Element: was der
             # nächste Klick tut, ist nach dem ersten eine andere Auskunft als
@@ -2544,6 +2765,21 @@ class SketchCanvas(QWidget):
             across = 1.0 if opposite[0] >= first[0] else -1.0
             upward = 1.0 if opposite[1] >= first[1] else -1.0
             self._finish_rectangle(width, height, across, upward)
+            return
+
+        if self.tool in ("polygon", "slot"):
+            first, opposite = self._pending_world
+            if self._drawn_shape(first, opposite) is None:
+                # Der zweite Klick liegt auf dem ersten: Es gibt keine Größe.
+                # Der erste bleibt stehen, damit nur der eine Klick zu
+                # wiederholen ist — dieselbe Zusage wie beim flachen Bogen.
+                self._pending.pop()
+                self._pending_world.pop()
+                self.statusChanged.emit(
+                    tr("Die beiden Klicks liegen aufeinander — der zweite bestimmt die Größe.")
+                )
+                return
+            self._finish_drawn_shape(first, opposite)
             return
 
         begin = len(edit.flat_points(self.sketch))
@@ -2680,7 +2916,9 @@ class SketchCanvas(QWidget):
         self.second_measure_field.setVisible(rectangle)
         self.measure_lock.setVisible(rectangle and self._rectangle_measures[0] is not None)
         self.second_measure_lock.setVisible(rectangle and self._rectangle_measures[1] is not None)
-        circle = self.tool == "circle"
+        # Der Umschalter steht auch am Vieleck: Es wird über seinen
+        # Umkreis bemaßt, und die getippte Zahl meint dasselbe wie am Kreis.
+        circle = self.tool in ("circle", "polygon")
         self.circle_measure_button.setVisible(circle)
         if appearing:
             # In dieser Reihenfolge, damit die Schlösser über ihren Feldern
@@ -2812,6 +3050,8 @@ class SketchCanvas(QWidget):
             "line",
             "circle",
             "rectangle",
+            "polygon",
+            "slot",
         ):
             return 0.0
         if self.tool == "rectangle":
@@ -2820,6 +3060,12 @@ class SketchCanvas(QWidget):
         first = self._pending_world[0]
         target = self.pointer_target()
         span = math.hypot(target[0] - first[0], target[1] - first[1])
+        if self.tool == "polygon" and circle_measure() == "diameter":
+            # Das Vieleck wird über seinen Umkreis bemaßt, also gilt derselbe
+            # Umschalter wie am Kreis: Im Feld steht, was eine getippte Zahl
+            # bedeutet — sonst halbiert sich die Form bei der Eingabetaste,
+            # ohne dass sich die Zahl geändert hätte.
+            return span * 2.0
         if self.tool == "circle" and circle_measure() == "diameter":
             # **Das Feld sagt dasselbe, was eine getippte Zahl meint.** Bis zum
             # 02.09.2026 stand hier der Radius, während ``place_measured`` die
@@ -2871,9 +3117,26 @@ class SketchCanvas(QWidget):
         if (
             value <= 0.0
             or len(self._pending_world) != 1
-            or self.tool not in ("line", "circle", "rectangle")
+            or self.tool not in ("line", "circle", "rectangle", "polygon", "slot")
         ):
             self.statusChanged.emit(tr("Erst einen Punkt setzen, dann das Maß eintippen."))
+            return
+
+        if self.tool in ("polygon", "slot"):
+            # Die Richtung kommt vom Zeiger, das Maß aus dem Feld — wie bei
+            # Linie und Kreis. Beim Vieleck ist das Maß der Umkreis (Ø oder R
+            # nach dem Umschalter), beim Langloch der Abstand der beiden
+            # Mitten; ohne Richtung geht es nach rechts, und nah an einer
+            # Achse gilt die Achse.
+            first = self._pending_world[0]
+            dx, dy = self._pointer[0] - first[0], self._pointer[1] - first[1]
+            stored = circle_stored(value) if self.tool == "polygon" else value
+            reach = stored / 2.0 if self.tool == "polygon" else stored
+            direction = (
+                _snapped_direction(dx, dy) if math.hypot(dx, dy) > EPS_DISPLAY else (1.0, 0.0)
+            )
+            second = (first[0] + direction[0] * reach, first[1] + direction[1] * reach)
+            self._finish_drawn_shape(first, second, typed=f"{stored:.9f}")
             return
 
         if self.tool == "rectangle":
@@ -3019,6 +3282,59 @@ class SketchCanvas(QWidget):
         self.insert_shape(rectangle, joins)
         self.measuringChanged.emit(0.0)
 
+    def _finish_drawn_shape(
+        self,
+        first: tuple[float, float],
+        second: tuple[float, float],
+        typed: str = "",
+    ) -> None:
+        """Setzt Vieleck oder Langloch als **eine** Grundform ein.
+
+        Dieselbe Regel wie beim Rechteck: **gezeichnet heißt frei, getippt
+        heißt bemaßt.** Wer zwei Klicks setzt, bekommt eine Form, die
+        regelmäßig bleibt und sich ziehen lässt; wer eine Zahl tippt, bekommt
+        sie als Maß dazu — beim Vieleck den Umkreis (Ø oder R, wie der
+        Umschalter steht), beim Langloch den Abstand der beiden Mitten.
+
+        **Die Breite des Langlochs ist die Ausnahme, und sie hat einen
+        Grund.** Sie kommt nicht vom Zeiger, sondern aus einem Feld der
+        Leiste — wie der Versatzabstand eine Einstellung und keine Geste. Eine
+        Zahl, die jemand eingestellt hat, ist eine Aussage, also steht sie als
+        Maß in der Zeichnung. Ohne sie wäre die Breite ein freier Grad, und
+        ein Zug an einer Flanke machte aus dem Langloch ein Trapez.
+        """
+        made = self._drawn_shape(first, second)
+        if made is None:
+            return
+        made = replace(made, plane=self.sketch.plane)
+        points = edit.flat_points(made)
+        extra: list[SketchConstraint] = []
+        if self.tool == "polygon":
+            hub = len(points) - 2
+            if typed:
+                extra.append(SketchConstraint("diameter", (hub, hub + 1), typed))
+        else:
+            extra.append(
+                SketchConstraint("diameter", (2, 3), slot_width_expression(self.slot_width))
+            )
+            if typed:
+                extra.append(SketchConstraint("distance", (7, 2), typed))
+        made = replace(made, constraints=(*made.constraints, *extra))
+
+        def nearest_local(wanted: tuple[float, float]) -> int:
+            return min(range(len(points)), key=lambda index: math.dist(points[index], wanted))
+
+        joins: list[tuple[int, int]] = []
+        if self._pending and self._pending[0] >= 0:
+            joins.append((self._pending[0], nearest_local(first)))
+        if len(self._pending) > 1 and self._pending[1] >= 0:
+            joins.append((self._pending[1], nearest_local(second)))
+        self._pending.clear()
+        self._pending_world.clear()
+        self._reset_measure_entry()
+        self.insert_shape(made, joins)
+        self.measuringChanged.emit(0.0)
+
     def _lock_label(self, name: str, note: str) -> QLabel:
         """Ein Vorhängeschloss neben einem Maßfeld: dieses Maß steht schon fest.
 
@@ -3048,7 +3364,7 @@ class SketchCanvas(QWidget):
 
     def _name_circle_button(self) -> None:
         self.circle_measure_button.setText(circle_sign())
-        if self.tool == "circle":
+        if self.tool in ("circle", "polygon"):
             self.measure_field.setAccessibleName(circle_word())
 
     def _toggle_circle_measure(self) -> None:
@@ -4115,7 +4431,7 @@ class PointDialog(QDialog):
 
 #: Welche Auswahlmuster eine Bedingung braucht — die Knöpfe folgen dem, statt
 #: eine falsche Auswahl mit einem Fehler zu quittieren.
-_NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
+_NEEDS: dict[ConstraintAction, tuple[tuple[str, ...], ...]] = {
     "distance": (("point", "point"),),
     # **Radius und Durchmesser stehen hier bewusst nicht.** Sie gelten nicht
     # für zwei beliebige Punkte, sondern für Mittelpunkt und Rand **desselben**
@@ -4134,10 +4450,30 @@ _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
     "symmetric": (("point", "point", "line"),),
     "fixed": (("point",),),
     "reference": (("point", "point"),),
+    "angle": (("line", "line"),),
+    # **Gleich groß nimmt beide Sorten**, weil der Kern eine Gleichung für
+    # beide hat (``solver._CONSTRAINT_TARGETS``): Zwei Linien werden gleich
+    # lang, zwei Kreise oder Bögen gleich groß im Radius. Gemischt steht hier
+    # absichtlich nicht — „diese Linie so lang wie jener Radius" ist eine
+    # Aussage, die niemand meint, und der Löser nähme sie klaglos an.
+    "equal": (
+        ("line", "line"),
+        ("circle", "circle"),
+        ("arc", "arc"),
+        ("circle", "arc"),
+        ("arc", "circle"),
+    ),
+    "midpoint": (("point", "line"),),
+    "concentric": (
+        ("circle", "circle"),
+        ("arc", "arc"),
+        ("circle", "arc"),
+        ("arc", "circle"),
+    ),
 }
 
 
-def _needs_phrase(kind: SketchConstraintKind) -> str:
+def _needs_phrase(kind: ConstraintAction) -> str:
     """Was ausgewählt sein muss, damit die Bedingung gilt — als Halbsatz.
 
     Ein Knopf, der nur seinen Namen kennt, lässt raten, warum er grau ist:
@@ -4162,10 +4498,14 @@ def _needs_phrase(kind: SketchConstraintKind) -> str:
         "symmetric": tr("zwei Punkte und eine Linie"),
         "fixed": tr("einen Punkt"),
         "reference": tr("zwei Punkte"),
+        "angle": tr("zwei Linien"),
+        "equal": tr("zwei Linien oder zwei Kreise beziehungsweise Bögen"),
+        "midpoint": tr("einen Punkt und eine Linie"),
+        "concentric": tr("zwei Kreise oder Bögen"),
     }[kind]
 
 
-def _does_phrase(kind: SketchConstraintKind) -> str:
+def _does_phrase(kind: ConstraintAction) -> str:
     """Was die Bedingung **bewirkt** — als Halbsatz, für den Anfänger.
 
     Die zweite Hälfte der Auskunft, die :func:`_needs_phrase` schon gibt: Der
@@ -4196,6 +4536,10 @@ def _does_phrase(kind: SketchConstraintKind) -> str:
         "symmetric": tr("spiegelt zwei Punkte an einer Linie"),
         "fixed": tr("nagelt einen Punkt fest, damit die Skizze nicht wandert"),
         "reference": tr("misst einen Abstand, ohne ihn festzulegen"),
+        "angle": tr("hält zwei Linien in einem festen Winkel zueinander"),
+        "equal": tr("macht zwei Linien gleich lang oder zwei Rundungen gleich groß"),
+        "midpoint": tr("hält einen Punkt genau auf halber Strecke einer Linie"),
+        "concentric": tr("legt zwei Kreise oder Bögen auf dieselbe Mitte"),
     }[kind]
 
 
@@ -4213,6 +4557,8 @@ def tool_instruction(name: str) -> str:
         "fillet": tr("Verrunden: auf eine Ecke klicken, an der zwei Linien zusammentreffen."),
         "chamfer": tr("Fase: auf eine Ecke klicken, an der zwei Linien zusammentreffen."),
         "rectangle": tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke."),
+        "polygon": tr("Vieleck: erster Klick setzt die Mitte, der zweite eine Ecke."),
+        "slot": tr("Langloch: zwei Klicks setzen die Mitten der beiden runden Enden."),
     }[name]
 
 
@@ -4236,6 +4582,11 @@ TOOL_KEYS: dict[str, str] = {
     # kein Kürzel — K wie Kante brechen, denn F ist vergeben und C der Kreis.
     "fillet": "F",
     "chamfer": "K",
+    # Fusion hat für beide keine Belegung, also entscheidet das deutsche Wort,
+    # wie schon bei der Fase: **V** wie Vieleck, **G** wie Lan**g**loch — L
+    # gehört der Linie, und der zweite tragende Laut des Wortes ist frei.
+    "polygon": "V",
+    "slot": "G",
 }
 
 #: Die Größe, die die Zeichenfläche im Viewport-Modus behält, in Bildpunkten.
@@ -4443,6 +4794,14 @@ class SketchPanel(QWidget):
             ("extend", tr("Verlängern")),
             ("fillet", tr("Verrunden")),
             ("chamfer", tr("Fase")),
+            # **Zwei Knöpfe mehr in derselben Zeile, und das ist gemessen.**
+            # Die Zeile verlangte 639 Bildpunkte, erlaubt sind 900
+            # (``tests/test_sketch_editor.py``); zwei Symbolknöpfe à 37 kosten
+            # mit Abstand rund achtzig. Ein Ausklappmenü wie beim Rechteck
+            # wäre der Ausweg, wenn es eng würde — es ist nicht eng, und ein
+            # Werkzeug hinter einem Pfeil findet niemand, der es nicht sucht.
+            ("polygon", tr("Vieleck")),
+            ("slot", tr("Langloch")),
         ):
             button = QToolButton(self)
             key = TOOL_KEYS.get(name, "")
@@ -4463,6 +4822,41 @@ class SketchPanel(QWidget):
             button.toggled.connect(weak_slot(self, SketchPanel._tool_chosen, name, forward=True))
             self._tool_buttons[name] = button
             tools.addWidget(button)
+        # **Zwei Einstellungen, die nur dastehen, wenn sie gelten.** Die
+        # Eckenzahl ist keine Geste und kein Maß am Zeiger — sie entscheidet,
+        # *was* entsteht, und muss deshalb vor dem ersten Klick einstellbar
+        # sein, wie der Versatzabstand daneben. Sichtbar sind beide nur bei
+        # ihrem Werkzeug: Ein Feld, das bei jedem anderen Werkzeug dasteht,
+        # ist eine Einstellung ohne Gegenstand — und es kostet die Zeile
+        # Breite, die sie im Normalzustand nicht hat.
+        self.polygon_corners_field = QSpinBox(self)
+        self.polygon_corners_field.setRange(LEAST_POLYGON_CORNERS, MOST_POLYGON_CORNERS)
+        self.polygon_corners_field.setValue(DEFAULT_POLYGON_CORNERS)
+        corners_note = tr("Wie viele Ecken das Vieleck bekommt — drei bis zwölf.")
+        self.polygon_corners_field.setToolTip(corners_note)
+        self.polygon_corners_field.setStatusTip(corners_note)
+        self.polygon_corners_field.setAccessibleName(tr("Ecken"))
+        self.polygon_corners_field.setAccessibleDescription(corners_note)
+        self.polygon_corners_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.polygon_corners_field.setVisible(False)
+        self.polygon_corners_field.valueChanged.connect(
+            weak_slot(self, SketchPanel._corners_chosen, forward=True)
+        )
+        tools.addWidget(self.polygon_corners_field)
+
+        self.slot_width_field = LengthSpin(self)
+        self.slot_width_field.set_range_mm(LEAST_SNAP_MM, 1000.0)
+        self.slot_width_field.set_value_mm(DEFAULT_SLOT_WIDTH_MM)
+        slot_note = tr("Wie breit das Langloch wird — die zwei Klicks setzen seine Länge.")
+        self.slot_width_field.setToolTip(slot_note)
+        self.slot_width_field.setStatusTip(slot_note)
+        self.slot_width_field.setAccessibleName(tr("Breite"))
+        self.slot_width_field.setAccessibleDescription(slot_note)
+        self.slot_width_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.slot_width_field.setVisible(False)
+        self.slot_width_field.valueChanged.connect(weak_slot(self, SketchPanel._slot_width_chosen))
+        tools.addWidget(self.slot_width_field)
+
         self._tool_buttons["select"].setChecked(True)
 
         shapes_button = QToolButton(self)
@@ -4865,7 +5259,7 @@ class SketchPanel(QWidget):
         self._constraints_row = constraints_row
         self._constraint_columns = CONSTRAINTS_PER_ROW
         self._constraint_shown: tuple[str, ...] = ()
-        self._constraint_buttons: dict[SketchConstraintKind, QPushButton] = {}
+        self._constraint_buttons: dict[ConstraintAction, QPushButton] = {}
         for position, kind in enumerate(_NEEDS):
             key = ACTION_KEYS.get(kind, "")
             label = _constraint_label(kind)
@@ -5352,6 +5746,23 @@ class SketchPanel(QWidget):
             if other != name and button.isChecked():
                 button.setChecked(False)
         self.canvas.set_tool(name)
+        # Die beiden Einstellungen gehören ihrem Werkzeug und verschwinden mit
+        # ihm — siehe ihren Aufbau.
+        self.polygon_corners_field.setVisible(name == "polygon")
+        self.slot_width_field.setVisible(name == "slot")
+
+    def _corners_chosen(self, corners: int) -> None:
+        """Die Eckenzahl gilt ab dem nächsten Klick — und sofort in der
+        Vorschau, denn die zeigt, was entstünde."""
+        self.canvas.polygon_corners = int(corners)
+        self.canvas.update()
+        self.canvas.sketchChanged.emit()
+
+    def _slot_width_chosen(self) -> None:
+        """Dieselbe Zusage für die Breite des Langlochs."""
+        self.canvas.slot_width = self.slot_width_field.value_mm()
+        self.canvas.update()
+        self.canvas.sketchChanged.emit()
 
     def _insert_made(self, make: Callable[[], Sketch]) -> None:
         """Eine Form aus dem Formenmenü einfügen.
@@ -5583,13 +5994,13 @@ class SketchPanel(QWidget):
         """Ob die Weite von Hand steht — für Tests und für die Zeile."""
         return self._pinned_step
 
-    def constraint_offers(self) -> dict[SketchConstraintKind, bool]:
+    def constraint_offers(self) -> dict[ConstraintAction, bool]:
         """Welche Bedingung zur Auswahl passt — Kontextmenü und Knöpfe lesen
         dieselbe Antwort."""
         pattern = self.canvas.selected_pattern()
         return {kind: pattern in patterns for kind, patterns in _NEEDS.items()}
 
-    def constraint_already_set(self) -> dict[SketchConstraintKind, bool]:
+    def constraint_already_set(self) -> dict[ConstraintAction, bool]:
         """Welche Bedingung auf **dieser** Auswahl schon steht.
 
         **Ein Umschalter, den man nicht sieht, ist eine Falle.** Seit der
@@ -5602,14 +6013,13 @@ class SketchPanel(QWidget):
 
         Der Knopf steht deshalb gedrückt, wo ein Klick zurücknimmt.
         """
-        targets = self.canvas.selection_targets()
         existing = {(entry.kind, entry.targets) for entry in self.canvas.sketch.constraints}
         return {
-            kind: ((kind, targets[:1] if kind == "fixed" else targets) in existing)
+            kind: ((core_kind(kind), self.canvas.constraint_targets(kind)) in existing)
             for kind in _NEEDS
         }
 
-    def request_constraint(self, kind: SketchConstraintKind) -> None:
+    def request_constraint(self, kind: ConstraintAction) -> None:
         if not self.constraint_offers().get(kind):
             # Nicht stumm zurück: „D" ohne passende Auswahl tat gar nichts —
             # kein Ton, keine Zeile, und woran es lag, stand nirgends. Ein
@@ -5625,9 +6035,7 @@ class SketchPanel(QWidget):
                 )
             )
             return
-        targets = self.canvas.selection_targets()
-        if kind == "fixed":
-            targets = targets[:1]
+        targets = self.canvas.constraint_targets(kind)
         takes_back = self.constraint_already_set().get(kind, False)
         value = ""
         # **Steht sie schon, wird nur gelöst — und dafür fragt niemand nach
@@ -5635,16 +6043,21 @@ class SketchPanel(QWidget):
         # auf, wenn der Klick die Bedingung gerade entfernen sollte: erst ein
         # Maß eintippen, dann verschwindet die Bedingung. Der Knopf verspricht
         # „ein Klick nimmt sie zurück", und ein Klick ist einer.
-        if kind == "distance" and not takes_back:
-            dialog = ExpressionDialog(
-                self._params,
-                start=measured_expression(self.canvas.points(), targets),
-                parent=self,
+        if kind in ("distance", "angle") and not takes_back:
+            # Vorbelegt mit dem, was gerade dasteht — beim Winkel in Grad, wie
+            # das Maß es speichert. Wer 60,2 sieht und 60 tippt, hat die Frage
+            # beantwortet; ein leeres Feld verlangte, die eigene Zeichnung zu
+            # raten.
+            start = (
+                measured_angle(self.canvas.points(), targets)
+                if kind == "angle"
+                else measured_expression(self.canvas.points(), targets)
             )
+            dialog = ExpressionDialog(self._params, start=start, parent=self)
             if dialog.exec() != ExpressionDialog.DialogCode.Accepted:
                 return
             value = dialog.expression()
-        self.canvas.add_constraint(kind, targets, value)
+        self.canvas.add_constraint(core_kind(kind), targets, value)
         if takes_back:
             # **Die zweite Kodierung zum gedrückten Knopf** (Regel 18). Ohne
             # sie verschwindet eine Zeile aus der Liste, und wer nicht
@@ -6051,10 +6464,10 @@ class SketchEditorDialog(QDialog):
         """Die Statuszeile des Panels — Freiheitsgrade und Konflikte."""
         return self.panel.status
 
-    def constraint_offers(self) -> dict[SketchConstraintKind, bool]:
+    def constraint_offers(self) -> dict[ConstraintAction, bool]:
         return self.panel.constraint_offers()
 
-    def request_constraint(self, kind: SketchConstraintKind) -> None:
+    def request_constraint(self, kind: ConstraintAction) -> None:
         self.panel.request_constraint(kind)
 
     def sketch_text(self) -> str:

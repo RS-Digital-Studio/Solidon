@@ -49,6 +49,9 @@ _CONSTRAINT_KINDS: frozenset[str] = frozenset(
         "symmetric",
         "fixed",
         "reference",
+        "angle",
+        "equal",
+        "midpoint",
     )
 )
 

@@ -1822,7 +1822,21 @@ SketchConstraintKind = Literal[
     "symmetric",
     "fixed",
     "reference",
+    "angle",
+    "equal",
+    "midpoint",
 ]
+"""Die Arten von Zwangsbedingungen (§30.1).
+
+``angle`` misst den Winkel zwischen zwei Linien in Grad, ``equal`` hält zwei
+Spannen gleich lang (zwei Linien, zwei Radien), ``midpoint`` setzt einen Punkt
+auf die Mitte einer Linie.
+
+**Konzentrisch steht hier nicht**, und das ist eine Entscheidung: Zwei Kreise
+mit gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte — ``coincident`` auf
+zwei Punkten. Eine eigene Art wäre ein zweiter Name für denselben Sachverhalt
+und damit zwei Wege, ihn zu speichern. Die Oberfläche bietet den Griff unter
+dem Wort an, das ein CAD-Kunde sucht; das Datenmodell bleibt eines."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1855,7 +1869,8 @@ class SketchConstraint:
     """Eine Zwangsbedingung. ``targets`` sind Punktindizes über die flache
     Punktliste der Skizze — Elemente der Reihe nach, Punkte je Element der
     Reihe nach. ``value`` ist ein Ausdruck der Parametergrammatik (§13) und
-    darf Projektparameter lesen; nur ein Maß (``distance``) trägt einen."""
+    darf Projektparameter lesen; nur ein Maß trägt einen — ``distance``,
+    ``radius`` und ``diameter`` in Millimetern, ``angle`` in Grad."""
 
     kind: SketchConstraintKind
     targets: tuple[int, ...]

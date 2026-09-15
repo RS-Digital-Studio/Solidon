@@ -608,8 +608,80 @@ eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
   „legt fest, was schon festliegt" über eine Skizze, die bestimmt war.
 * **Die Fase bleibt einen Grad frei.** Ihre Länge steht als Maß, ihr Winkel
   nicht — ein Maß für „gleich weit von einer Ecke, die es nicht mehr gibt"
-  kennt die Bedingungsliste nicht, und eine neue Bedingungsart wäre ein
-  Dateiformat. Die Zeile sagt es ehrlich („Noch ein Maß fehlt").
+  kennt die Bedingungsliste nicht. Hier stand dazu „eine neue Bedingungsart
+  wäre ein Dateiformat", und das war zu weit gegriffen: Eine Art dazuzunehmen
+  ändert den **Aufbau** der Projektdatei nicht, nur den Wertebereich einer
+  Aufzählung, und ältere Dateien lesen sich unverändert (gemessen am
+  Arbeitspaket W2, das vier Arten hinzufügte, ohne `format_version` anzufassen
+  — die Begründung steht in `app/core/sketch/CLAUDE.md`). Was bleibt, ist der
+  Bedienentwurf: Für diesen Winkel gäbe es keine Auswahl, an der ein Knopf
+  hängen könnte. Die Zeile sagt es ehrlich („Noch ein Maß fehlt").
+
+## Vieleck, Langloch und vier Bedingungen (14.09.2026)
+
+Zwei Werkzeuge nach dem Muster des Rechtecks und vier Griffe an der
+Bedingungszeile. Was daran entschieden wurde:
+
+**Zwei Knöpfe mehr in der Werkzeugzeile, und das ist gemessen.** Die Zeile
+verlangte 639 Bildpunkte, erlaubt sind 900 (`tests/test_sketch_editor.py`,
+`test_the_sketch_area_fits_a_laptop_screen`); mit *Vieleck* und *Langloch*
+sind es 725, die Mindestbreite des ganzen Bereichs bleibt bei 800. Ein
+Ausklappmenü wie beim Rechteck wäre der Ausweg, wenn es eng würde — es ist
+nicht eng, und ein Werkzeug hinter einem Pfeil findet niemand, der es nicht
+sucht. Die Kürzel sind **V** wie Vieleck und **G** wie Lan**g**loch: Fusion
+belegt für beide nichts, L gehört der Linie, und das deutsche Wort entscheidet
+— dieselbe Begründung wie beim K der Fase.
+
+**Was entsteht, hängt auch hier am Zeiger — aus derselben Rechnung.**
+`_drawn_shape` liefert die Form, die der Klick setzen würde, und
+`pending_elements` gibt genau ihre Elemente als Vorschau heraus. Eine Vorschau,
+die sich ihre Kanten selbst zusammensetzt, wäre die zweite Wahrheit über das,
+was entsteht — derselbe Fehler, an dem das Raster schon einmal auseinanderlief.
+Der Hilfskreis des Vielecks reist in der Vorschau mit: Beim Aufziehen ist er
+das, woran man die Größe sieht.
+
+**Zwei Klicks am selben Fleck geben keine Form**, und die Zeile sagt das. Der
+erste Klick bleibt stehen, damit nur der eine zu wiederholen ist — dieselbe
+Zusage wie beim flachen Bogen.
+
+**Gezeichnet heißt frei, getippt heißt bemaßt — mit einer benannten
+Ausnahme.** Vieleck und Langloch kommen ohne Festpunkt und ohne Maß; eine
+getippte Zahl bleibt stehen (beim Vieleck der Umkreis, Ø oder R nach dem
+Umschalter, beim Langloch der Mittenabstand). Die **Breite des Langlochs**
+steht dagegen immer als Maß, und das ist kein Bruch der Regel: Sie kommt nicht
+vom Zeiger, sondern aus einem Feld der Leiste — wie der Versatzabstand eine
+Einstellung und keine Geste. Eine Zahl, die jemand eingestellt hat, ist eine
+Aussage; ohne sie wäre die Breite ein freier Grad, und ein Zug an einer Flanke
+machte aus dem Langloch ein Trapez.
+
+**Die Eckenzahl und die Breite stehen nur da, wenn sie gelten.** Beide Felder
+erscheinen mit ihrem Werkzeug und verschwinden mit ihm. Das ist dieselbe
+Ausnahme von „grau und begründet, nicht unsichtbar" wie bei den
+Bedingungsknöpfen: Ein Feld ohne Gegenstand ist kein Angebot, und im
+Normalzustand kostet es die Zeile Breite, die sie nicht hat.
+
+**Konzentrisch ist ein Wort und keine Bedingungsart.** Zwei Kreise mit
+gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte; der Knopf heißt
+trotzdem so, weil ein CAD-Kunde danach sucht. Die Umsetzung steht in
+`ConstraintAction` und `core_kind`: Ein Griff der Oberfläche darf einen eigenen
+Namen haben, das Datenmodell bleibt eines. Aus demselben Grund nimmt *Gleich
+groß* Linien **und** Rundungen — eine Gleichung, zwei Fälle.
+
+**Welche Punkte eine Bedingung aus der Auswahl nimmt, entscheidet eine
+Stelle** (`SketchCanvas.constraint_targets`). Vier Arten nehmen weniger als
+alle: *Fest* einen Punkt, *Konzentrisch* je Element die Mitte, *Gleich groß* je
+Element zwei Punkte (Linie Anfang → Ende, Kreis Mitte → Rand, Bogen Mitte →
+Anfang), *Mittelpunkt* Punkt, Anfang und Ende. Wer diese Auswahl im Knopf
+trifft, trifft sie ein zweites Mal in der Frage „steht sie schon?" — und zwei
+Antworten auf dieselbe Frage sind ein Umschalter, der beim Zurücknehmen
+danebengreift.
+
+**Das Winkelmaß steht mit Gradzeichen in der Karte**, nicht in Millimetern
+(`readable_angle`, `DEGREE_UNIT` aus dem Kern). Die Karte sitzt an der Ecke,
+die der Winkel meint — zwei Linien, die sich einen Punkt teilen, sind der
+Regelfall —, und der Doppelklick trifft sie wie jedes andere Maß. Eine
+Anzeigeeinheit gibt es dabei nicht: Ein Winkel ist in jeder Einheitenwahl ein
+Winkel.
 
 ## Ein Doppelklick auf die Maßkarte öffnet das Maß (13.09.2026)
 

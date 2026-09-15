@@ -19,6 +19,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ## 0.4.2
 
 ### Dibujo
+- Dos clics crean un polígono regular: primero el centro, luego una esquina. El número de esquinas se elige antes: de tres a doce. Un diámetro escrito queda como cota.
+- Una ranura surge de dos clics en los centros de sus extremos redondeados; el ancho está al lado en la barra. Ambos extremos mantienen el tamaño y los flancos, rectos.
+- Cuatro condiciones nuevas: ángulo en grados entre dos líneas, igual longitud o tamaño, punto en el centro de una línea, y concéntrico para dos círculos o arcos.
 
 - Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.
 - Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion.

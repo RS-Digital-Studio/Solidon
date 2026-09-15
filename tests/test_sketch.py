@@ -337,6 +337,9 @@ def test_every_analytic_gradient_matches_central_differences() -> None:
             SketchConstraint("tangent", (0, 1, 4, 5)),
             SketchConstraint("symmetric", (9, 3, 0, 1)),
             SketchConstraint("fixed", (9,)),
+            SketchConstraint("angle", (0, 1, 2, 3), "37"),
+            SketchConstraint("equal", (0, 1, 2, 3)),
+            SketchConstraint("midpoint", (9, 0, 3)),
         ),
     )
     equations, anchors = solver._build_equations(sketch, {})
@@ -414,6 +417,235 @@ def test_a_reference_measure_reports_without_driving() -> None:
     solved = solve_sketch(both)
     # Vier Freiheitsgrade hat die Linie, ``fixed`` nimmt zwei, das Maß einen.
     assert solved.free_dof == 1, "die Richtung bleibt frei, das Referenzmaß ändert daran nichts"
+
+
+# --- Winkel, gleich groß, Mitte, konzentrisch (§30.1, W2) -----------------------
+
+
+def two_lines_at_a_corner(angle: str = "60") -> Sketch:
+    """Zwei Linien mit gemeinsamem Anfang, die erste waagerecht und fest.
+
+    Damit bleibt genau ein Freiheitsgrad übrig — die Richtung der zweiten
+    Linie —, und das Winkelmaß nimmt ihn. Länge und Ort stehen fest, sonst
+    beantwortete der Test zwei Fragen auf einmal.
+    """
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 0.0), (8.0, 3.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (0, 2)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("distance", (0, 1), "10"),
+            SketchConstraint("distance", (2, 3), "10"),
+            SketchConstraint("angle", (0, 1, 2, 3), angle),
+        ),
+    )
+
+
+def turn_between(first: SketchElement, second: SketchElement) -> float:
+    """Der Winkel von der ersten zur zweiten Linie, in Grad."""
+    ux = first.points[1][0] - first.points[0][0]
+    uy = first.points[1][1] - first.points[0][1]
+    vx = second.points[1][0] - second.points[0][0]
+    vy = second.points[1][1] - second.points[0][1]
+    return math.degrees(math.atan2(ux * vy - uy * vx, ux * vx + uy * vy))
+
+
+def test_an_angle_holds_two_lines_at_the_typed_degrees() -> None:
+    """Sechzig Grad sind sechzig Grad, und die Skizze ist bestimmt."""
+    solved = solve_sketch(two_lines_at_a_corner("60"))
+    assert solved.free_dof == 0, "Ort, Länge und Winkel stehen — nichts bleibt frei"
+    assert math.isclose(turn_between(*solved.elements[:2]), 60.0, abs_tol=1e-6)
+    assert solved.max_residual <= 1e-6
+
+
+def test_an_angle_reads_its_degrees_from_a_project_parameter() -> None:
+    """Ein Winkelmaß ist ein Ausdruck der Grammatik (§13) wie jedes Maß."""
+    solved = solve_sketch(two_lines_at_a_corner("@neigung"), {"neigung": 30.0})
+    assert math.isclose(turn_between(*solved.elements[:2]), 30.0, abs_tol=1e-6)
+
+
+def test_an_angle_outside_the_half_turn_is_refused() -> None:
+    """Null und 180 Grad sind ``parallel``, und darüber wiederholt sich alles.
+
+    Die Gleichung hat die Periode 180: 200 Grad wären dieselbe Bedingung wie
+    20 und hießen trotzdem anders. Eine Zahl, die etwas anderes tut, als sie
+    sagt, wird abgelehnt statt still umgedeutet (Regel 21).
+    """
+    for degrees in ("0", "180", "200", "-30"):
+        with pytest.raises(ValidationError) as caught:
+            solve_sketch(two_lines_at_a_corner(degrees))
+        assert caught.value.constraint == "angle_range"
+        assert caught.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“"
+
+
+def test_an_angle_without_a_value_is_refused() -> None:
+    sketch = replace(
+        two_lines_at_a_corner(),
+        constraints=(SketchConstraint("angle", (0, 1, 2, 3)),),
+    )
+    with pytest.raises(ValidationError) as caught:
+        solve_sketch(sketch)
+    assert caught.value.constraint == "required"
+
+
+def test_an_angle_that_fights_a_right_angle_names_the_pair() -> None:
+    """Dreißig Grad gegen eine Senkrechte: Der Löser nennt beide Bedingungen."""
+    sketch = two_lines_at_a_corner("30")
+    fought = replace(
+        sketch,
+        constraints=(*sketch.constraints, SketchConstraint("perpendicular", (0, 1, 2, 3))),
+    )
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(fought)
+    assert {caught.value.first, caught.value.second} == {5, 6}
+    assert caught.value.suggestions
+
+
+def test_a_dragged_point_keeps_the_angle_it_was_given() -> None:
+    """Der Zug läuft auf dem Kreis, den der Winkel übrig lässt.
+
+    Gezogen wird das freie Ende der zweiten Linie quer über die erste. Der
+    Winkel hält, die Länge hält, und der Punkt landet so weit am Zeiger, wie
+    beides zulässt — das ist die Zusage des Zugmodus.
+    """
+    sketch = two_lines_at_a_corner("60")
+    start = [point for element in solve_sketch(sketch).elements for point in element.points]
+    solved = solve_sketch(sketch, dragged={3: (2.0, 12.0)}, start=start)
+    assert math.isclose(turn_between(*solved.elements[:2]), 60.0, abs_tol=1e-6)
+    assert math.isclose(span(*solved.elements[1].points), 10.0, abs_tol=1e-6)
+
+
+def test_equal_makes_two_lines_the_same_length() -> None:
+    """Eine Linie ist bemaßt, die andere hängt an ihr."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 5.0), (4.0, 5.0))),
+        ),
+        constraints=(
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("horizontal", (2, 3)),
+            SketchConstraint("fixed", (2,)),
+            SketchConstraint("distance", (0, 1), "30"),
+            SketchConstraint("equal", (0, 1, 2, 3)),
+        ),
+    )
+    solved = solve_sketch(sketch)
+    assert solved.free_dof == 0
+    assert math.isclose(span(*solved.elements[0].points), 30.0, abs_tol=1e-6)
+    assert math.isclose(span(*solved.elements[1].points), 30.0, abs_tol=1e-6)
+
+
+def test_equal_makes_two_circles_the_same_size() -> None:
+    """Dieselbe Bedingung, dieselbe Gleichung — nur heißt die Spanne hier
+    Radius. Genau deshalb gibt es keine zweite Art ``equal_radius``."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("circle", ((0.0, 0.0), (5.0, 0.0))),
+            SketchElement("circle", ((20.0, 0.0), (23.0, 0.0))),
+        ),
+        constraints=(
+            SketchConstraint("diameter", (0, 1), "10"),
+            SketchConstraint("equal", (0, 1, 2, 3)),
+        ),
+    )
+    solved = solve_sketch(sketch)
+    assert math.isclose(span(*solved.elements[0].points), 5.0, abs_tol=1e-6)
+    assert math.isclose(span(*solved.elements[1].points), 5.0, abs_tol=1e-6)
+
+
+def test_equal_holds_an_arc_to_the_radius_of_a_circle() -> None:
+    """Beim Bogen sind Mitte und Anfang die Spanne — die zwei Punkte, die
+    seinen Radius tragen. Dass er drei führt, geht die Bedingung nichts an."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("circle", ((0.0, 0.0), (4.0, 0.0))),
+            SketchElement("arc", ((20.0, 0.0), (27.0, 0.0), (20.0, 7.0))),
+        ),
+        constraints=(
+            SketchConstraint("diameter", (0, 1), "8"),
+            SketchConstraint("equal", (0, 1, 2, 3)),
+        ),
+    )
+    solved = solve_sketch(sketch)
+    centre, begin, end = solved.elements[1].points
+    assert math.isclose(span(centre, begin), 4.0, abs_tol=1e-6)
+    assert math.isclose(span(centre, end), 4.0, abs_tol=1e-6), "der zweite Schenkel zieht mit"
+
+
+def test_a_midpoint_sits_halfway_along_its_line() -> None:
+    """Drei Ziele: der Punkt, dann Anfang und Ende der Linie."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 4.0))),
+            SketchElement("point", ((1.0, 1.0),)),
+        ),
+        constraints=(
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("fixed", (1,)),
+            SketchConstraint("midpoint", (2, 0, 1)),
+        ),
+    )
+    solved = solve_sketch(sketch)
+    assert solved.free_dof == 0
+    assert solved.elements[1].points[0] == pytest.approx((5.0, 2.0), abs=1e-6)
+
+
+def test_a_midpoint_that_fights_a_fixed_point_names_the_pair() -> None:
+    """Ein festgenagelter Punkt neben der Mitte, die woanders liegt."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("point", ((1.0, 0.0),)),
+        ),
+        constraints=(
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("fixed", (1,)),
+            SketchConstraint("fixed", (2,)),
+            SketchConstraint("midpoint", (2, 0, 1)),
+        ),
+    )
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(sketch)
+    assert {caught.value.first, caught.value.second} == {2, 3}
+    assert caught.value.suggestions
+
+
+def test_concentric_is_the_coincidence_of_two_centres() -> None:
+    """Konzentrisch braucht keine eigene Art (siehe ``SketchConstraintKind``).
+
+    Zwei Kreise auf derselben Mitte sind die Deckung ihrer Mittelpunkte — und
+    das kann das Datenmodell seit je. Was fehlte, war das Wort an einem Knopf,
+    und das ist eine Frage der Oberfläche.
+    """
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("circle", ((0.0, 0.0), (5.0, 0.0))),
+            SketchElement("circle", ((3.0, 1.0), (10.0, 1.0))),
+        ),
+        constraints=(
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("coincident", (0, 2)),
+            SketchConstraint("diameter", (0, 1), "10"),
+            SketchConstraint("diameter", (2, 3), "20"),
+        ),
+    )
+    solved = solve_sketch(sketch)
+    assert solved.elements[0].points[0] == pytest.approx(solved.elements[1].points[0], abs=1e-6)
+    assert math.isclose(span(*solved.elements[0].points), 5.0, abs_tol=1e-6)
+    assert math.isclose(span(*solved.elements[1].points), 10.0, abs_tol=1e-6)
 
 
 # --- Skizzenmuster (§30.1, D9) --------------------------------------------------

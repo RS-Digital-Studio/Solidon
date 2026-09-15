@@ -158,6 +158,8 @@ def _drawing_keys() -> list[tuple[str, str, str]]:
         "fillet": _("Verrunden"),
         "chamfer": _("Fase"),
         "rectangle": _("Rechteck"),
+        "polygon": _("Vieleck"),
+        "slot": _("Langloch"),
         "distance": _("Abstand"),
         "offset": _("Versetzen"),
         "construction": _("Hilfslinie"),

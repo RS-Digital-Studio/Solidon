@@ -18,6 +18,9 @@ it into `website/version.json`.
 ## 0.4.2
 
 ### Drawing
+- Two clicks set a regular polygon: first the centre, then a corner. You choose the number of corners beforehand — three to twelve. A typed diameter stays on as a dimension.
+- A slot comes from two clicks on the centres of its round ends; the width sits next to them in the bar. Both ends stay the same size, the flanks stay straight.
+- Four new constraints: an angle in degrees between two lines, equal length or size, a point at the middle of a line, concentric for two circles or arcs.
 
 - A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.
 - A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion.
