@@ -3441,6 +3441,13 @@ def _patch_extent(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> float:
     return high - low
 
 
+#: Wie viele Punkte je Ring und welche Ringe :func:`_is_through` in der Mündung
+#: einer Bohrung abfragt — innerhalb der Sehnen des Mantels, damit die eigene
+#: Wand nie „über" einem Punkt liegt.
+THROUGH_SAMPLES: Final = 8
+THROUGH_RINGS: Final = (0.4, 0.75)
+
+
 def _is_through(
     mesh: MeshData,
     fit: CylinderFit,
@@ -3510,21 +3517,46 @@ def _is_through(
             return True
 
     flat = np.stack([corners @ basis_u, corners @ basis_v], axis=-1)
-
-    first, second, third = flat[:, 0], flat[:, 1], flat[:, 2]
+    # **Nicht nur die Achse, die ganze Mündung.** Ein Becherboden mit einer
+    # kleinen Bohrung in der Mitte ließ über der Achse kein Dreieck stehen —
+    # und der Topf Ø 116 galt als durchgehend; *Versetzen* schnitt ihn daraufhin
+    # mit einem Messer von Durchmesserlänge quer durch den Boden (Minigolf-
+    # Becher, minus 7,7 Prozent Volumen, 15.09.2026). Geprüft werden deshalb
+    # die Achse und zwei Ringe im Innern der Mündung; nur wenn über keinem
+    # dieser Punkte ein Dreieck liegt, sieht man hindurch. Vorher fallen alle
+    # Dreiecke weg, deren Projektion die Mündungsscheibe gar nicht erreicht.
+    radius = float(fit.radius)
+    within = (flat.min(axis=1) <= radius).all(axis=1) & (flat.max(axis=1) >= -radius).all(axis=1)
+    flat = flat[within]
+    if not len(flat):
+        return True
+    angles = np.linspace(0.0, 2.0 * np.pi, THROUGH_SAMPLES, endpoint=False)
+    samples = np.vstack(
+        [
+            np.zeros((1, 2)),
+            *(
+                np.column_stack([np.cos(angles), np.sin(angles)]) * (radius * share)
+                for share in THROUGH_RINGS
+            ),
+        ]
+    )
 
     def turn(edge: np.ndarray, towards: np.ndarray) -> np.ndarray:
         """Das Kreuzprodukt zweier ebener Vektoren — von Hand, weil ``np.cross``
         seit NumPy 2 nur noch dreidimensional rechnet."""
         return np.asarray(edge[:, 0] * towards[:, 1] - edge[:, 1] * towards[:, 0], dtype=float)
 
-    side_a = turn(second - first, -first)
-    side_b = turn(third - second, -second)
-    side_c = turn(first - third, -third)
-    covers = ((side_a >= 0.0) & (side_b >= 0.0) & (side_c >= 0.0)) | (
-        (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
-    )
-    return not bool(covers.any())
+    for point in samples:
+        first, second, third = flat[:, 0] - point, flat[:, 1] - point, flat[:, 2] - point
+        side_a = turn(second - first, -first)
+        side_b = turn(third - second, -second)
+        side_c = turn(first - third, -third)
+        covers = ((side_a >= 0.0) & (side_b >= 0.0) & (side_c >= 0.0)) | (
+            (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
+        )
+        if bool(covers.any()):
+            return False
+    return True
 
 
 def facet_middles(body: trimesh.Trimesh) -> np.ndarray:

@@ -398,9 +398,13 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   fremden Rand berührt, ohne dass daraus eine Kette wird
   (`prepare_ops.NO_OWN_BODY`), und ein Kegel oder eine Kuppel, aus deren
   Flächen kein Körper entsteht — drei Randringe, ein Kegelstumpf mit
-  Querbohrung (`prepare_ops.has_own_body`, `NO_BODY_FROM_FACES`). Beide Sätze
-  sind die der Operation; die Kette wird je `actions_for` einmal gefragt und
-  speist auch die Sperre an *Zum Langloch ziehen*.
+  Querbohrung (`prepare_ops.has_own_body`, `NO_BODY_FROM_FACES`). Dazu eine
+  Bohrung, in deren Zylinder Material steht — die Innenwand eines Rades mit
+  Speichen, ein Topf mit Zapfen (`prepare_ops.hole_is_clear`,
+  `HOLE_IS_NOT_EMPTY`): An ihr steht jede Zeile grau, denn ihr Werkzeug wäre
+  ein voller Zylinder. Alle Sätze sind die der Operation; die Kette wird je
+  `actions_for` einmal gefragt und speist auch die Sperre an *Zum Langloch
+  ziehen*.
 - **Eine Wendel ist keine Grundform, und sie verschluckt die, die man auf ihr
   findet.** `helix.py` misst sie am Netz statt an den Einpassungen: scharfe
   Kanten zu Zügen verbinden, je Zug die Steigung über die Konzentration von

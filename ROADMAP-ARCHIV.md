@@ -29006,6 +29006,26 @@ der Dreieckszahl. Kein Körper lief in `perceive.too_large`.
 
   **Erledigt am 15.09.2026** (`features.blends_into_its_neighbours`, Kennzeichen `tangent`, `actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS`): Die Erkennung sagt an einer runden Wand, ob sie tangential in ihre Nachbarn übergeht; Panel, `_reshape_the_fillet` und `_drop_the_fillet` sagen es mit demselben kurzen Satz vor dem Klick. Und dieselbe Bauart für Verrundungen ohne zwei Ebenen: `actions.fillet_blocked` fragt `features.replaces_an_edge`, die graue Zeile trägt `edges.NOT_BETWEEN_TWO_PLANES`. Tests `test_a_round_wall_that_blends_into_its_flanks_says_so_before_the_click`, `test_the_panel_greys_what_a_fillet_without_two_planes_cannot_do`. Und die Folge, die der vollständige Operationslauf danach zeigte: An den Gleisen der Modellscheune (1:24) hatten zwei Ebenen neben einer Hohlkehle R 28 die Prüfung bestanden, ohne den Bogen tangential fortzusetzen — *Entfernen* rechnete aus ihnen eine Kante, die es nicht gibt, trug 2,7 Prozent des Volumens ab und ließ die Hohlkehle stehen, still. Seither verlangt `planes_beside` mit der Bogenmitte die Tangente (`test_two_planes_that_cut_the_arc_obliquely_are_no_edge_under_it`); Panel und `sharp_corner` sagen an so einem Bogen beide ab.
 
+**Nachtrag aus der Wiederholung des Laufs mit dem committeten Stand (15.09.2026, Mittag):**
+Alle 34 Dateien noch einmal, Erkennung und jede Operation. Erkennung und Absagen wie
+gemessen (26 gemeinsame Modelle: OK 406 → 429, Absagen 452 → 19, auffällig 221 → 153).
+Ein Rest war kein ehrlicher Ausgang: *Versetzen* an `hole_1` des Uhrenteils 06 (Ø 66,8,
+1,5 mm weit) nahm 49 Prozent des Volumens und ließ drei lose Teile — die Innenwand eines
+Rades mit Speichen und Nabe stand als Bohrung im Baum, ihre Flächen ergaben keinen Körper,
+und der Rückfall auf den Zylinder aus Kennzahlen schnitt die Speichen weg. Dasselbe an den
+Zahnrädern des Kartenmischers (bis minus 62 Prozent) und den Uhrenteilen 05 und 16.
+`prepare_ops.hole_is_clear` sucht im Zylinder einer Bohrung nach Dreiecksmitten des Körpers —
+Material im Zylinder hat dort eine Oberfläche; eine Stichprobe von Punkten stand zuerst da und
+ließ die zwölf radialen Stege im Becher des Minigolf-Satzes zwischen ihren Winkeln durch
+(3 719 mm³). Steht dort Material, sagt `_tool_for` mit `HOLE_IS_NOT_EMPTY` ab, und
+`actions.no_own_body` stellt jede Zeile grau — derselbe Satz, vor dem Klick. Ein Topf mit Zapfen
+fällt genauso (Test `test_a_hole_with_material_inside_is_a_wall_and_every_row_says_so`); eine
+leere Bohrung bleibt eine. Und derselbe Becher zeigte einen zweiten Fehler: Über der Achse des
+Topfs Ø 116 lag kein Dreieck, weil im Boden eine Bohrung Ø 8 sitzt — `_is_through` sah hindurch
+und hielt den Topf für durchgehend. Die Prüfung fragt jetzt die Achse und zwei Ringe in der
+Mündung (`THROUGH_RINGS`); ein Boden mit Loch ist ein Boden
+(`test_a_pocket_over_a_small_hole_in_its_floor_is_not_through`).
+
 ## Drehen und Verdoppeln nehmen die Hohlraumkette mit (15.09.2026)
 
 Ein Vorschlag aus der Bedienweg-Durchsicht vom 14.09.2026, entschieden und gebaut am 15.09.2026

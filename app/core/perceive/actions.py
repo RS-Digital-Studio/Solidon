@@ -507,6 +507,8 @@ def actions_for(
         chain, touches_other = cavity_chain_state_at(feature, features, mesh)
         cavity = chain if chain is not None else ()
     own_body_blocked = no_own_body(feature, cavity, touches_other, mesh)
+    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
+
     for candidates in ACTION_ORDER:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
         if not known:
@@ -519,7 +521,7 @@ def actions_for(
         elif (
             fitting is not None
             and own_body_blocked is not None
-            and fitting.name in _NEED_AN_OWN_BODY
+            and (fitting.name in _NEED_AN_OWN_BODY or own_body_blocked is HOLE_IS_NOT_EMPTY)
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=own_body_blocked))
         elif fitting is not None and edge_blocked is not None and fitting.name in _EDGE_OPS:
@@ -621,6 +623,12 @@ def no_own_body(
       (``prepare_ops.has_own_body``, ``NO_BODY_FROM_FACES``): ein Kegelstumpf
       mit einer Querbohrung durch den Mantel, an einem Uhrenteil fünfmal nach
       dem Klick (15.09.2026). Nur mit Netz, denn die Ringe stehen im Netz.
+    * Eine Bohrung, in deren Zylinder **Material steht** — die Innenwand
+      eines Rades mit Speichen, ein Topf mit Zapfen
+      (``prepare_ops.hole_is_clear``, ``HOLE_IS_NOT_EMPTY``): Ihr Werkzeug
+      wäre ein voller Zylinder, der die Speichen mitnimmt (Uhrenteil 06,
+      minus 49 Prozent Volumen). Hier steht jede Zeile grau, nicht nur die
+      Körperhandlungen.
     """
     if feature.kind not in ("hole", "cone", "sphere") or cavity:
         return None
@@ -628,10 +636,22 @@ def no_own_body(
         from app.core.geom.prepare_ops import NO_OWN_BODY
 
         return NO_OWN_BODY
-    if feature.kind == "hole" or mesh is None or not feature.face_indices:
+    if mesh is None or not feature.face_indices:
         return None
-    from app.core.geom.prepare_ops import NO_BODY_FROM_FACES, has_own_body
+    from app.core.geom.prepare_ops import (
+        HOLE_IS_NOT_EMPTY,
+        NO_BODY_FROM_FACES,
+        has_own_body,
+        hole_is_clear,
+    )
 
+    if feature.kind == "hole":
+        # Eine Bohrung, in deren Zylinder Material steht, ist die Innenwand
+        # eines Rades oder ein Topf mit Zapfen — jede Zeile sagt es, mit dem
+        # Satz aus ``_tool_for``. Ob ihre Flächen einen Körper hergeben, ist
+        # dann gleich; ohne Material bleibt der Zylinder aus Kennzahlen ihr
+        # Rückfall.
+        return None if hole_is_clear(mesh, feature) else HOLE_IS_NOT_EMPTY
     if has_own_body(mesh, feature, alone=not touches_other):
         return None
     return NO_BODY_FROM_FACES

@@ -407,7 +407,14 @@ Differenz an der neuen Stelle eine Haut von 5 µm über der Mündung stehen
 (§39; gemessen 15.09.2026: 0,25 mm³ im Schlauch, „nicht mehr durchgehend"). Das
 Werkzeug fürs Kippen kommt deshalb aus den Kennzahlen: die Bohrung über ihre
 Mündung hinaus, die Senkung als **größerer Kegel** nach oben — derselbe Kegel,
-weitergeführt, bis er die gekippte Fläche überall verlässt.
+weitergeführt, bis er die gekippte Fläche überall verlässt. Wie weit, sagt die
+Neigung (`_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`): bei 30° an
+einer 90°-Senkung Ø 16, 7 mm über der Bohrungsmitte, sind es 13,5 mm; ohne
+Neigung bleibt die Zugabe aus §39. Mehr als nötig schnitte Luft — oder eine
+Wand, die niemand gemeint hat; darum die Rechnung und nicht der Hüllquader.
+Abnahme: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
+gekippten, durchgehenden Bohrung, und `detect` findet beide mit derselben
+Achse (`test_turning_a_countersunk_bore_takes_its_sink_along`).
 
 **Wer eine Kette nur versetzt, verlängert den exakten Körper an seinen
 Mündungen** (`_past_the_mouths`). Das Werkzeug aus Kennzahlen stand am
@@ -418,14 +425,21 @@ Senkungsübergänge rot). Jetzt bekommt jeder ebene Deckel des Flächenkörpers,
 vor dem entlang seines Rands keine Materialseite liegt, einen Kragen von
 `FEATURE_OVERLAP` — das ist die Mündung; der Boden eines Sacklochs und die
 Ringstufe einer Zylindersenkung bleiben bündig, sonst würde die Bohrung tiefer
-oder die Stufe abgetragen (0,18 mm³, an der Stufe gemessen). Wie weit, sagt die
-Neigung (`_reach_past_a_tilted_face`, `_cone_past_a_tilted_face`): bei 30° an
-einer 90°-Senkung Ø 16, 7 mm über der Bohrungsmitte, sind es 13,5 mm; ohne
-Neigung bleibt die Zugabe aus §39. Mehr als nötig schnitte Luft — oder eine
-Wand, die niemand gemeint hat; darum die Rechnung und nicht der Hüllquader.
-Abnahme: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
-gekippten, durchgehenden Bohrung, und `detect` findet beide mit derselben
-Achse (`test_turning_a_countersunk_bore_takes_its_sink_along`).
+oder die Stufe abgetragen (0,18 mm³, an der Stufe gemessen).
+
+**Und eine Bohrung, in deren Zylinder Material steht, ist keine** —
+`hole_is_clear` fragt die Dreiecksmitten des Körpers zwischen den Mündungen
+und innerhalb des Radius, abzüglich der eigenen Wand. Die Innenwand eines
+Rades mit Speichen, ein Becher mit Stegen, ein Topf mit Zapfen: Ihr Werkzeug
+wäre der volle Zylinder aus den Kennzahlen, und der nähme die Speichen mit
+(Uhrenteil 06: minus 49 Prozent, Zahnräder des Kartenmischers: minus 62
+Prozent, 15.09.2026). `_tool_for` sagt mit `HOLE_IS_NOT_EMPTY` ab, und das
+Panel stellt an so einer Bohrung jede Zeile grau — nicht nach einer Stichprobe
+von Punkten, die zwischen zwölf Stegen hindurchsah, sondern nach jeder
+Oberfläche im Zylinder. Und ob man durch eine Bohrung **hindurchsieht**,
+entscheidet ihre ganze Mündung, nicht ihre Achse: Über der Achse des Bechers
+Ø 116 lag kein Dreieck, weil im Boden eine Bohrung Ø 8 sitzt (`_is_through`,
+`THROUGH_RINGS`).
 
 Die allgemeine Form, weil sie über diesen Fall hinausgeht: **Wer aus einer
 Zahl auf einen Sachverhalt schließt, schreibt dazu, unter welcher Bedingung

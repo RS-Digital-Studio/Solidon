@@ -1582,6 +1582,17 @@ def _tool_for(
         if feature.kind == "hole"
         else None
     )
+    if feature.kind == "hole" and not hole_is_clear(mesh, feature):
+        # Im Zylinder steht Material: eine Radinnenwand mit Speichen oder ein
+        # Topf mit Zapfen, kein Bohrungsmantel. Ob die Flächen einen Körper
+        # hergeben, ist dann gleich — der Pfropfen schlösse den Zapfen ein,
+        # und der Zylinder an der neuen Stelle nähme die Speichen mit.
+        raise ValidationError(
+            field="at_feature",
+            detail=HOLE_IS_NOT_EMPTY,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+        )
     if built is None and feature.kind in PARAMETRIC_KINDS:
         return _feature_solid(feature, centre, scale=scale, axis=axis)
 
@@ -2258,6 +2269,74 @@ NO_BODY_FROM_FACES: Final = _(
     "Aus den Flächen dieses Merkmals entsteht kein eigener Körper; sein Rand ist "
     "nicht eindeutig. Ändern Sie den Schritt, aus dem es stammt."
 )
+
+
+#: Warum eine „Bohrung", in der Material steht, sich nicht als Bohrung
+#: bearbeiten lässt: Die Innenwand eines Rades mit Speichen und Nabe hat
+#: dieselbe Gestalt wie ein Bohrungsmantel, aber ihre Flächen schließen sich
+#: zu keinem Körper — und das Werkzeug aus Kennzahlen wäre ein voller
+#: Zylinder, der die Speichen mitnimmt (Uhrenteil 06, Ø 66,8: minus 49
+#: Prozent Volumen und drei lose Teile nach einem Versetzen um 1,5 mm,
+#: gemessen 15.09.2026). Der Satz steht in der Operation (``_tool_for``) und
+#: in der grauen Zeile des Panels (``perceive.actions.no_own_body``).
+HOLE_IS_NOT_EMPTY: Final = _(
+    "In dieser Bohrung steht Material; sie ist eine Wand, keine Bohrung. "
+    "Bearbeiten Sie ihre Flächen einzeln."
+)
+
+#: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
+#: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
+#: eine Nabe oder ein Zapfen deutlich darunter.
+_CLEARANCE_MARGIN: Final = 0.02
+
+
+def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
+    """Ob der Zylinder dieser Bohrung leer ist — oder ob darin Material steht.
+
+    Material im Zylinder hat eine Oberfläche im Zylinder: Gesucht werden
+    Dreiecksmitten des Körpers, die entlang der Achse zwischen den Mündungen
+    und quer dazu innerhalb des Radius liegen — abzüglich der eigenen
+    Mantelflächen und eines schmalen Saums am Radius, auf dem die Wand selbst
+    steht. Der Boden eines Sacklochs liegt genau auf der Mündungsebene und
+    zählt nicht. Eine Stichprobe von Punkten hatte zuerst hier gestanden und
+    die zwölf radialen Stege im Becher eines Minigolf-Satzes zwischen ihren
+    Winkeln durchgelassen (3 719 mm³ Material im Zylinder, gemessen
+    15.09.2026); die Dreiecksmitten übersehen keinen Steg, und sie kosten
+    eine Rechnung über das Netz statt einer Suche je Punkt.
+
+    Ohne Maße gilt die Bohrung als leer — dann entscheidet der Körper aus
+    ihren Flächen.
+    """
+    radius = float(feature.params.get("diameter", 0.0)) / 2.0
+    depth = float(feature.params.get("depth", 0.0))
+    if radius <= EPS_GEOM or depth <= EPS_GEOM:
+        return True
+    centre = np.asarray(feature.params["centre"], dtype=np.float64)
+    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=np.float64)
+    axis /= max(float(np.linalg.norm(axis)), EPS_GEOM)
+    raw = mesh.raw
+    middles = np.asarray(raw.triangles_center, dtype=np.float64) - centre
+    along = middles @ axis
+    low, high = -depth / 2.0, depth / 2.0
+    if feature.face_indices:
+        chosen = np.asarray(feature.face_indices, dtype=np.int64)
+        if chosen.size and int(chosen.max()) < len(raw.faces):
+            rim = (
+                np.asarray(raw.vertices, dtype=np.float64)[np.unique(np.asarray(raw.faces)[chosen])]
+                - centre
+            ) @ axis
+            low, high = float(rim.min()), float(rim.max())
+    radial = np.linalg.norm(middles - np.outer(along, axis), axis=1)
+    slack = EPS_GEOM * 10.0
+    inside = (
+        (along > low + slack)
+        & (along < high - slack)
+        & (radial < radius * (1.0 - _CLEARANCE_MARGIN))
+    )
+    if feature.face_indices:
+        own = np.asarray(feature.face_indices, dtype=np.int64)
+        inside[own[own < len(inside)]] = False
+    return not bool(inside.any())
 
 
 def has_own_body(mesh: MeshData, feature: Feature, *, alone: bool) -> bool:

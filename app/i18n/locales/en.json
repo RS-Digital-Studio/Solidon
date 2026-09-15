@@ -2850,6 +2850,7 @@
   "In diese Richtung zeigt keine ebene Fläche dieses Körpers.": "No planar face of this body points that way.",
   "In diesem ComfyUI ist kein eigenes Python zu finden. Die Pakete für TripoSG müssen in die Umgebung, mit der ComfyUI läuft — welche das ist, weiß Solidon hier nicht.": "No Python of its own can be found in this ComfyUI. The packages for TripoSG have to go into the environment ComfyUI runs with — and Solidon does not know which one that is here.",
   "In diesem Slicer ist noch kein Drucker eingerichtet. Die Datei trägt deshalb keine Maschinenangaben — Startcode, Schichtwechselcode und Maschinengrenzen fehlen. Wählen Sie das Maschinenprofil in den Druckeinstellungen oder richten Sie den Drucker im Slicer ein.": "No printer has been set up in this slicer yet. The file therefore carries no machine settings — start G-code, layer change G-code and machine limits are missing. Choose the machine profile in the print settings, or set the printer up in the slicer.",
+  "In dieser Bohrung steht Material; sie ist eine Wand, keine Bohrung. Bearbeiten Sie ihre Flächen einzeln.": "Material stands inside this hole; it is a wall, not a hole. Edit its faces one by one.",
   "In dieser Richtung liegt keine Kante — auf der anderen Hälfte gibt es eine.": "There is no edge in that direction — the other half has one.",
   "In dieser Richtung liegt keine Kante, bis zu der verlängert werden könnte.": "There is no edge in that direction to extend to.",
   "In dieser Zeichnung ist keine geschlossene Fläche.": "This drawing contains no closed area.",

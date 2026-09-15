@@ -3858,3 +3858,79 @@ def test_two_planes_that_cut_the_arc_obliquely_are_no_edge_under_it() -> None:
     with pytest.raises(GeometryError) as problem:
         sharp_corner(mesh, arc)
     assert problem.value.detail is NOT_BETWEEN_TWO_PLANES
+
+
+def _cup_with_a_boss_inside() -> MeshData:
+    """Ein Ring Ø70/Ø60 auf einem Boden, in der Mitte ein Zapfen Ø16: Die Innenwand
+    hat die Gestalt eines Bohrungsmantels, aber in ihrem Zylinder steht Material."""
+    from app.core.geom.boolean import boolean
+
+    ring = trimesh.creation.annulus(r_min=30.0, r_max=35.0, height=5.0)
+    ring.apply_translation((0.0, 0.0, 3.5))
+    floor = trimesh.creation.cylinder(radius=35.0, height=1.0, sections=96)
+    floor.apply_translation((0.0, 0.0, 0.5))
+    boss = trimesh.creation.cylinder(radius=8.0, height=5.0, sections=64)
+    boss.apply_translation((0.0, 0.0, 3.5))
+    return boolean("union", [MeshData.of(ring), MeshData.of(floor), MeshData.of(boss)]).mesh
+
+
+def test_a_hole_with_material_inside_is_a_wall_and_every_row_says_so() -> None:
+    """Uhrenteil 06 (15.09.2026): Die Innenwand eines Rades mit Speichen und Nabe,
+    Ø 66,8, stand als Bohrung im Baum. Ihre Flächen ergeben keinen Körper, also
+    baute *Versetzen* den vollen Zylinder aus den Kennzahlen — minus 49 Prozent
+    Volumen und drei lose Teile nach 1,5 mm. Panel und Operation fragen jetzt,
+    ob im Zylinder Material steht, und sagen denselben Satz."""
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, _tool_for, hole_is_clear
+    from app.core.perceive.actions import no_own_body
+
+    mesh = _cup_with_a_boss_inside()
+    found = detect(mesh)
+    wall = max(
+        (feature for feature in found.values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    assert float(wall.params["diameter"]) == pytest.approx(60.0, abs=0.5)
+    assert not hole_is_clear(mesh, wall)
+    assert no_own_body(wall, (), False, mesh) is HOLE_IS_NOT_EMPTY
+    rows = actions_for(wall, found, mesh=mesh)
+    assert rows and all(row.op is None for row in rows), [
+        str(row.title) for row in rows if row.op is not None
+    ]
+    with pytest.raises(ValidationError) as problem:
+        _tool_for(mesh, wall, tuple(float(v) for v in wall.params["centre"]), alone=True)
+    assert problem.value.detail is HOLE_IS_NOT_EMPTY
+
+    # Und eine leere Bohrung bleibt eine: dieselbe Frage, andere Antwort.
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 6.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=8.0, sections=64)
+    from app.core.geom.boolean import boolean
+
+    clean = boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh
+    hole = next(feature for feature in detect(clean).values() if feature.kind == "hole")
+    assert hole_is_clear(clean, hole)
+
+
+def test_a_pocket_over_a_small_hole_in_its_floor_is_not_through() -> None:
+    """Der Minigolf-Becher (15.09.2026): Topf Ø 116, im Boden eine Bohrung Ø 8 auf
+    derselben Achse. Über der Achse lag kein Dreieck, also galt der Topf als
+    durchgehend — und *Versetzen* schnitt ihn mit einem Messer von
+    Durchmesserlänge quer durch den Boden. Durch eine Bohrung sieht man nur
+    hindurch, wenn ihre ganze Mündung frei ist."""
+    from app.core.geom.boolean import boolean
+
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    pocket = trimesh.creation.cylinder(radius=10.0, height=6.0, sections=96)
+    pocket.apply_translation((0.0, 0.0, 5.0))
+    pin_hole = trimesh.creation.cylinder(radius=2.0, height=14.0, sections=48)
+    mesh = boolean(
+        "difference", [MeshData.of(plate), MeshData.of(pocket), MeshData.of(pin_hole)]
+    ).mesh
+    holes = {
+        round(float(feature.params["diameter"])): feature
+        for feature in detect(mesh).values()
+        if feature.kind == "hole"
+    }
+    assert set(holes) == {20, 4}, sorted(holes)
+    assert holes[20].params["through"] is False, "der Boden mit dem Loch ist ein Boden"
+    assert holes[4].params["through"] is True, "und die kleine Bohrung geht durch"
