@@ -962,6 +962,10 @@ def test_no_two_shortcuts_in_the_window_collide(window: MainWindow) -> None:
 
 def test_the_window_starts_on_the_start_screen(window: MainWindow) -> None:
     assert window.stack.currentWidget() is window.start_screen
+    assert not window.toolbar.isVisibleTo(window)
+    assert window.start_screen.new_button.isVisibleTo(window)
+    assert window.start_screen.open_button.isVisibleTo(window)
+    assert window.start_screen.import_button.isVisibleTo(window)
 
 
 def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainWindow) -> None:
@@ -989,14 +993,17 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
         ]
 
     assert window.stack.currentWidget() is window.start_screen
+    assert not window.toolbar.isVisibleTo(window)
     for menu in window._workspace_menus:
         assert not menu.menuAction().isVisible(), menu.title()
     assert len(shown()) == 2, shown()
     window._update_actions()
     assert len(shown()) == 2, shown()
+    assert not window.toolbar.isVisibleTo(window)
 
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
+    assert window.toolbar.isVisibleTo(window)
     for menu in window._workspace_menus:
         assert menu.menuAction().isVisible(), menu.title()
 
@@ -1005,6 +1012,7 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
     assert len(shown()) == 2, "zurück auf dem Startbildschirm gilt wieder die kurze Leiste"
     window._update_actions()
     assert len(shown()) == 2, "und auch, wenn danach ein Signal die Aktionen auffrischt"
+    assert not window.toolbar.isVisibleTo(window)
 
     # Und über die dritte Seite des Stapels ebenso: Vom Startbildschirm führt
     # ein Knopf ins Lager, und dort frischt jeder Weg über das Hilfemenü die
@@ -1021,6 +1029,7 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
     inventory.back_button.click()
     assert window.stack.currentWidget() is window.start_screen
     assert len(shown()) == 2, "der Umweg über das Lager bringt keine Menüs mit zurück"
+    assert not window.toolbar.isVisibleTo(window)
 
 
 def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
@@ -1049,9 +1058,11 @@ def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     assert window.stack.currentWidget() is not window.start_screen
+    assert window.toolbar.isVisibleTo(window)
 
     window.action_new()
     assert window.stack.currentWidget() is window.start_screen
+    assert not window.toolbar.isVisibleTo(window)
 
     # Ohne das fragt der Knopf, ob das Geladene weg darf — zu Recht, aber
     # ein Dialog offscreen wartet auf niemanden.
@@ -1060,6 +1071,7 @@ def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     window.session.wait_for_idle()
     assert window.stack.currentWidget() is not window.start_screen
     assert not window.session.project.document.ops, "und das Projekt ist leer"
+    assert window.toolbar.isVisibleTo(window), "auch ein leeres neues Projekt zeigt seine Werkzeuge"
 
 
 def test_the_help_menu_leads_back_to_the_examples(window: MainWindow) -> None:
@@ -1338,10 +1350,12 @@ def test_importing_from_the_start_screen_shows_the_workspace(
         staticmethod(lambda *args, **kwargs: (str(MESHES / "cube_clean.stl"), "")),
     )
 
-    window.action_import()
+    assert not window.toolbar.isVisibleTo(window)
+    window.start_screen.import_button.click()
     window.session.wait_for_idle()
 
     assert window.stack.currentWidget() is not window.start_screen
+    assert window.toolbar.isVisibleTo(window)
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 

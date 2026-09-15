@@ -15,6 +15,11 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 
 Hier steht die Karte, dort das Gesetz.
 
+`MainWindow._show_start_screen()` schaltet mit der Startfläche auch den
+Projektkopf und die Bearbeitungsmenüs aus. Ein geöffnetes oder neu angelegtes
+leeres Projekt zeigt sie wieder. Der Rückweg aus einem Editor richtet sich
+nach der aktuellen Fläche und blendet den Projektkopf nicht bedingungslos ein.
+
 ## Filamente und lokales Lager
 
 `FirstRunDialog` fragt Slicer vor Drucker; `_PrinterSurvey` liest passende

@@ -184,6 +184,11 @@ Aufrufstelle. `cursor(rolle, widget)` gibt entweder eine eigene Zeichnung im
 Akzent oder eine Systemform zurück — welche, entscheidet das Modul und nicht
 der Anrufer.
 
+`CursorWatcher` setzt den gewöhnlichen Solidon-Pfeil bei `Show` und
+`CursorChange`. So gilt er auch in Panels und nach `unsetCursor()` am Ende
+einer Berechnung. Text-, Hand-, Warte- und Größenzeiger bleiben erhalten;
+ein Wiedereintrittsschutz verhindert Schleifen beim Systempfeil als Rückfall.
+
 Drei Dinge, die man beim Zeichnen einer neuen Rolle wissen muss:
 
 * **Silhouette schlägt Bildidee.** Bei 32 Punkten wird ein Zeiger nicht

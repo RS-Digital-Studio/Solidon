@@ -419,6 +419,89 @@ def test_the_panels_get_the_same_pointer_as_the_view(qt_app: QApplication) -> No
     assert child.cursor().pixmap().cacheKey() == window.cursor().pixmap().cacheKey()
 
 
+def test_finishing_window_work_restores_the_solidon_pointer_in_panels(qt_app: QApplication) -> None:
+    """Nach dem tatsächlichen Warteweg erben die Panels wieder den Solidon-Zeiger."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    watcher = cursors.install(qt_app)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        qt_app.processEvents()
+        before = window.cursor().pixmap().cacheKey()
+        assert not window.cursor().pixmap().isNull()
+        window._waits = True
+        window._show_wait_cursor()
+        assert window.cursor().shape() == Qt.CursorShape.BusyCursor
+        window._stop_waiting()
+        assert window.cursor().pixmap().cacheKey() == before
+        for panel in (window.object_tree, window.report, window.chat):
+            assert panel.cursor().pixmap().cacheKey() == before
+    finally:
+        window.release()
+        window.deleteLater()
+        qt_app.removeEventFilter(watcher)
+        watcher.setParent(None)
+        watcher.deleteLater()
+
+
+def test_panel_arrows_use_solidon_while_text_and_resize_pointers_keep_their_meaning(
+    qt_app: QApplication,
+) -> None:
+    """Ein ausdrücklich gesetzter Standardpfeil ist kein Text- oder Größenhinweis."""
+    from PySide6.QtWidgets import QLineEdit
+
+    watcher = cursors.install(qt_app)
+    window = QWidget()
+    try:
+        panel = QWidget(window)
+        text = QLineEdit(window)
+        resize = QWidget(window)
+        resize.setCursor(Qt.CursorShape.SizeHorCursor)
+        window.show()
+        qt_app.processEvents()
+        panel.setCursor(Qt.CursorShape.ArrowCursor)
+        assert not panel.cursor().pixmap().isNull()
+        assert text.cursor().shape() == Qt.CursorShape.IBeamCursor
+        assert resize.cursor().shape() == Qt.CursorShape.SizeHorCursor
+        panel.setCursor(Qt.CursorShape.PointingHandCursor)
+        assert panel.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    finally:
+        window.close()
+        qt_app.removeEventFilter(watcher)
+        watcher.setParent(None)
+        watcher.deleteLater()
+
+
+def test_cursor_fallback_does_not_restart_itself(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein nicht baubares SVG bleibt ein Systempfeil statt einer rekursiven Ereigniskette."""
+    from PySide6.QtGui import QCursor
+
+    calls: list[str] = []
+
+    def fallback(role: str, _widget: QWidget) -> QCursor:
+        calls.append(role)
+        return QCursor(Qt.CursorShape.ArrowCursor)
+
+    monkeypatch.setattr(cursors, "cursor", fallback)
+    watcher = cursors.install(qt_app)
+    window = QWidget()
+    try:
+        window.show()
+        qt_app.processEvents()
+        assert window.cursor().shape() == Qt.CursorShape.ArrowCursor
+        assert 0 < len(calls) < 10
+    finally:
+        window.close()
+        qt_app.removeEventFilter(watcher)
+        watcher.setParent(None)
+        watcher.deleteLater()
+
+
 def test_a_window_built_after_the_theme_still_gets_the_pointer(qt_app: QApplication) -> None:
     """Nicht „die Funktion kann es", sondern „die Anwendung tut es".
 

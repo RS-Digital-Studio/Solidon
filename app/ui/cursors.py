@@ -230,17 +230,33 @@ class CursorWatcher(QObject):
     demselben Grund: Ein Fenster, das jemand später dazubaut, wird sonst
     vergessen.
 
-    Wer seinen Zeiger selbst gesetzt hat, behält ihn (``WA_SetCursor``).
+    Text-, Größen-, Hand- und Wartezeiger bleiben erhalten. Ein gewöhnlicher
+    Pfeil wird auch nach ``unsetCursor`` wieder zum Solidon-Auswahlzeiger:
+    Qt sendet dabei ``CursorChange``, ohne das Fenster erneut zu zeigen.
     """
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._applying_default = False
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt-Name
         if (
-            event.type() == QEvent.Type.Show
-            and isinstance(watched, QWidget)
-            and watched.isWindow()
-            and not watched.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+            self._applying_default
+            or event.type() not in (QEvent.Type.Show, QEvent.Type.CursorChange)
+            or not isinstance(watched, QWidget)
         ):
-            apply_default_cursor(watched)
+            return False
+        explicit = watched.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        if (watched.isWindow() and not explicit) or (
+            explicit and watched.cursor().shape() == Qt.CursorShape.ArrowCursor
+        ):
+            # Auch ein fehlgeschlagener SVG-Aufbau liefert einen Pfeil zurück.
+            # Dessen CursorChange darf keinen erneuten Aufbau in sich selbst auslösen.
+            self._applying_default = True
+            try:
+                apply_default_cursor(watched)
+            finally:
+                self._applying_default = False
         return False
 
 

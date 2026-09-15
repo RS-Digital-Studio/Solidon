@@ -9035,7 +9035,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_display_mode(self._mode_before_sketch)
         self.viewport.set_projection(self._projection_before_sketch)
         self.tools.setVisible(True)
-        self.toolbar.setVisible(True)
+        self.toolbar.setVisible(self.stack.currentWidget() is not self.start_screen)
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()
         self._update_actions()
@@ -16341,6 +16341,10 @@ class MainWindow(QMainWindow):
             # erreichbar.
             self._drop_feature_preview()
         switch(self.stack, self.start_screen if show else self.overlay)
+        # Projektname, Drucker und Bearbeitungswerkzeuge gehören zum offenen
+        # Arbeitsbereich. Auf der Startfläche stehen Neu, Öffnen und Import
+        # bereits als beschriftete Einstiege bereit.
+        self.toolbar.setVisible(not show)
         # Die Menüleiste folgt dem Schnitt: was eine offene Szene voraussetzt,
         # steht auf dem Startbildschirm nicht herum. Die Kürzel der Einträge
         # bleiben gültig — Qt registriert sie am Fenster, nicht an der
