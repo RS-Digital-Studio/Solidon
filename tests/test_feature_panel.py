@@ -39,6 +39,140 @@ from app.ui.panels import FeaturePanel
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def test_texture_fields_keep_expressions_and_hidden_parameters(qt_app: QApplication) -> None:
+    """Ein vorhandenes Rechteck behält seine Breitenbindung und seinen Ort."""
+    from types import SimpleNamespace
+
+    from app.ui.op_dialog import ValueField
+
+    step = SimpleNamespace(
+        id=8,
+        op="apply_texture",
+        params={"width": "=@span", "height": 17.0, "x": 12.0, "nx": 1.0, "nz": 0.0},
+    )
+    panel = FeaturePanel()
+    seen = []
+    panel.stepChangeRequested.connect(lambda *args: seen.append(args))
+    panel.show_texture([step], parameter_values={"span": 30.0})
+    fields = {
+        field._entry.name: field for row in panel._built for field in row.findChildren(ValueField)
+    }
+    assert {"width", "height", "pitch", "depth", "angle"} == set(fields)
+    assert fields["width"].value() == "=@span"
+    panel._apply.click()
+    assert seen[0][0] == 8
+    assert seen[0][1]["width"] == "=@span"
+    assert seen[0][1]["x"] == pytest.approx(12.0)
+    assert "at_feature" not in seen[0][1]
+    pattern = next(box for box in panel.findChildren(QComboBox) if box.findData("voronoi") >= 0)
+    assert not pattern.itemIcon(pattern.findData("voronoi")).isNull()
+
+
+def test_ambiguous_textures_require_a_choice_and_clear_the_previous_preview(
+    qt_app: QApplication,
+) -> None:
+    """Zwei Texturen werden benannt; keine wird still als letzte ausgewählt."""
+    from types import SimpleNamespace
+
+    steps = [SimpleNamespace(id=number, op="apply_texture", params={}) for number in (3, 7)]
+    panel = FeaturePanel()
+    cleared = []
+    panel.stepSelectionChanged.connect(lambda: cleared.append(True))
+    panel.show_texture(steps)
+    assert panel.shown_part_step() is None
+    assert panel._apply.isHidden()
+    choice = panel.findChild(QComboBox, "texture-step-choice")
+    choice.setCurrentIndex(choice.findData(3))
+    assert panel.shown_part_step() == 3
+    assert len(cleared) == 2
+
+
+def test_texture_steps_follow_object_ancestry_and_provenance() -> None:
+    """Gleiche Flächennamen fremder Körper und jüngere andere Texturen werden getrennt."""
+    from app.core.types import Document, Operation
+    from app.ui.panels import texture_steps_of
+
+    document = Document(
+        format_version=1,
+        app_version="test",
+        ops=[
+            Operation(
+                id=1,
+                op="apply_texture",
+                inputs=("a",),
+                outputs=("a",),
+                params={"coverage": "whole_face", "face": "top"},
+            ),
+            Operation(
+                id=2,
+                op="apply_texture",
+                inputs=("b",),
+                outputs=("b",),
+                params={"coverage": "whole_face", "face": "top"},
+            ),
+            Operation(id=3, op="split_bodies", inputs=("a",), outputs=("a", "child")),
+            Operation(
+                id=4,
+                op="apply_texture",
+                inputs=("child",),
+                outputs=("child",),
+                params={"face": "bottom"},
+            ),
+        ],
+    )
+    face = Feature(id="top", kind="face", provenance="detected", created_by=1, params={})
+    candidates, certain = texture_steps_of("child", face, document)
+    assert certain and [entry.id for entry in candidates] == [1]
+    candidates, certain = texture_steps_of("b", replace(face, created_by=None), document)
+    assert certain and [entry.id for entry in candidates] == [2]
+    candidates, certain = texture_steps_of(
+        "child", replace(face, id="unknown", created_by=None), document
+    )
+    assert not certain and [entry.id for entry in candidates] == [1, 4]
+    document.ops.append(
+        Operation(id=5, op="apply_texture", inputs=("a",), outputs=("a",), params={"face": "top"})
+    )
+    candidates, certain = texture_steps_of("child", replace(face, created_by=None), document)
+    assert certain and [entry.id for entry in candidates] == [1]
+    # Ein historisches Rechteck kann noch die inzwischen unwirksame
+    # Flächenvorwahl tragen. Sie belegt seine heutige Lage nicht.
+    document.ops[1] = replace(document.ops[1], params={"face": "top"})
+    candidates, certain = texture_steps_of("b", replace(face, created_by=None), document)
+    assert not certain and [entry.id for entry in candidates] == [2]
+
+
+def test_a_stopped_texture_is_not_presented_as_an_existing_surface(qt_app: QApplication) -> None:
+    """Ein gescheiterter Texturschritt hat die weiterhin glatte Fläche nicht geprägt."""
+    from app.core.scene import OperationDraft
+    from app.core.scene.placement import top_face
+    from app.ui.panels import texture_steps_of
+    from app.ui.session import Session
+
+    session = Session()
+    session.apply("Körper", [OperationDraft(op="create_box")])
+    assert session.wait_for_idle()
+    body = next(iter(session.last_result.scene.objects.values()))
+    face = top_face(body.features)
+    assert face is not None
+    session.apply(
+        "Muster",
+        [
+            OperationDraft(
+                op="apply_texture",
+                inputs=(body.id,),
+                params={"coverage": "whole_face", "face": face.id, "pitch": 0.1},
+            )
+        ],
+    )
+    assert session.wait_for_idle()
+    result = session.last_result
+    assert result.stopped_at is not None
+    candidates, _certain = texture_steps_of(
+        body.id, face, session.project.document, completed=result.completed
+    )
+    assert not candidates
+
+
 def test_a_manual_fit_needs_a_choice_and_an_explicit_click(qt_app: QApplication) -> None:
     """Die Art allein schreibt nichts; der ausdrückliche Klick wird einmal weitergereicht."""
     panel = FeaturePanel()
@@ -975,13 +1109,8 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
     assert "gemeinsam verschoben" in text
 
 
-def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) -> None:
-    """Was nicht geht, steht als Satz und nicht als graues Feld.
-
-    Eine Kantenschleife ist ein Netzfehler und kein Körper; für sie gilt keine
-    der Handlungen. Das Panel zeigt sie trotzdem — mit dem Grund, sonst rät
-    der Kunde, ob sie fehlt oder vergessen wurde.
-    """
+def test_a_handling_that_does_not_apply_is_hidden(qt_app: QApplication) -> None:
+    """Unpassende Handlungen belegen im Merkmalpanel keinen Platz."""
     loop = Feature(
         id="edge_loop_1",
         kind="edge_loop",
@@ -999,7 +1128,7 @@ def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) 
     reasons = [
         label for row in panel._built for label in row.findChildren(QLabel) if "—" in label.text()
     ]
-    assert reasons and all(label.isEnabled() for label in reasons), "Erklärungen bleiben lesbar"
+    assert not reasons
     texte = " ".join(
         label.text()
         for row in panel._built
@@ -1007,7 +1136,7 @@ def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) 
         if hasattr(label, "text")
     )
     for action in ungültig:
-        assert str(action.reason) in texte, f"der Grund von {action.title} fehlt"
+        assert str(action.reason) not in texte
 
 
 def test_a_changed_number_is_reported_before_it_is_done(qt_app: QApplication) -> None:
@@ -1113,26 +1242,22 @@ def test_a_face_offers_the_seam_protection_toggle(qt_app: QApplication) -> None:
     assert gemeldet == [(identifier, True)], "der Aufbau meldet keine Geste"
 
 
-def test_a_feature_without_triangles_says_why_it_cannot_be_protected(
+def test_a_feature_without_triangles_hides_unavailable_protection(
     qt_app: QApplication,
 ) -> None:
-    """Ein Merkmal ohne Fläche bekommt den Haken grau — und den Satz dazu.
-
-    Geschützt wird, was Dreiecke hat: Die Suche vergleicht Ebenen gegen
-    Punkte. Der Haken fehlt nicht still (Regel 17 dem Geist nach).
-    """
+    """Ein Merkmal ohne Fläche zeigt keinen wirkungslosen Schutzschalter."""
     feature = Feature(id="edge_1", kind="edge_loop", provenance="detected", params={})
     panel = FeaturePanel()
     panel.show_feature("edge_1", feature)
 
     haken = panel.protection_toggle()
-    assert haken is not None and not haken.isEnabled()
+    assert haken is None
     saetze = [
         widget.text()
         for widget in panel._built
         if isinstance(widget, QLabel) and "Dreiecke" in widget.text()
     ]
-    assert saetze, "der Grund steht als Satz da"
+    assert not saetze
 
 
 def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> None:

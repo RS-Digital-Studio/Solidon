@@ -47,6 +47,7 @@ def test_no_selection_keeps_inventory_reachable(picker: QuickFilamentPicker) -> 
     picker.inventory_button.click()
     assert seen == [True]
     assert not picker.clear_button.isEnabled()
+    assert picker.clear_button.isHidden()
 
 
 def test_inventory_error_is_visible_and_repaired_file_refreshes_choices(
@@ -79,6 +80,7 @@ def test_removal_is_reachable_without_a_catalogue_spool(picker: QuickFilamentPic
     picker.set_context([_body("part", "Teil", [MaterialSlot(0, "Fremde Spule")])])
     assert filaments.catalogue() == ()
     assert picker.clear_button.isEnabled()
+    assert not picker.clear_button.isHidden()
     picker.clear_button.click()
     assert seen == [True]
 

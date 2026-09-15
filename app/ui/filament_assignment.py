@@ -141,6 +141,7 @@ class QuickFilamentPicker(QWidget):
         self.picker.setEnabled(bool(self._objects))
         removable = self._has_assigned_selection(occupied)
         self.clear_button.setEnabled(removable)
+        self.clear_button.setVisible(removable)
         explanation = (
             tr("Entfernt die Zuweisung in der angezeigten Auswahl. Strg+Z stellt sie wieder her.")
             if removable

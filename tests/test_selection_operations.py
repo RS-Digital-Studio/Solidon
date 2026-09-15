@@ -161,12 +161,14 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
     assert not panel.isHidden()
     assert panel.summary.text() == "1 Objekt gewählt"
     assert not joining.isEnabled()
+    assert joining.isHidden()
     assert "2 Körper" in joining.toolTip()
 
     panel.set_context(2, _availability(2))
     QApplication.processEvents()
     assert identities == {name: id(button) for name, button in panel._buttons.items()}
     assert joining.isEnabled()
+    assert not joining.isHidden()
     assert panel.summary.text() == "2 Objekte gewählt"
     # Der Knopf *Merkmale* ist am 07.09.2026 entfallen (Konzept A): Seit die
     # Maße des Gewählten über diesen Handlungen stehen, führt er nirgendwohin.
@@ -257,16 +259,13 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
     panel.set_context(1, _availability(1))
     assert sichtbar() == am_koerper_sichtbar
 
-    # **Die fehlende Vorbedingung bleibt dagegen stehen.** Eine Handlung, die
-    # zwei Körper braucht, ist bei einem grau und nennt den Grund — der Kunde
-    # kann ihn erfüllen, und der Grund führt ihn hin. Genommen wird sie aus
-    # der Liste und nicht aus den Hauptaktionen: Dort entscheidet
-    # ``quick_names``, welche Zeile überhaupt oben steht.
-    zweisam = [name for name in am_koerper_sichtbar if needed_inputs(REGISTRY.get(name)) > 1]
+    # Fehlende Vorbedingungen nehmen die Zeile ebenfalls heraus. Bei einer
+    # passenden Auswahl kehrt dasselbe Bedienelement wieder zurück.
+    zweisam = [name for name in am_koerper if needed_inputs(REGISTRY.get(name)) > 1]
     assert zweisam, "kein Fall für die erfüllbare Vorbedingung im Register gefunden"
     for name in zweisam:
         button = panel._buttons[name]
-        assert not button.isHidden(), f"{name}: eine erfüllbare Vorbedingung verschwindet nicht"
+        assert button.isHidden(), name
         assert not button.isEnabled(), f"{name}: sie bleibt aber grau"
         assert "Körper" in button.toolTip(), f"{name}: und sie nennt den Grund"
 

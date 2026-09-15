@@ -276,6 +276,13 @@ Ein Merkmal, das nach jeder Operation einen neuen Namen bekäme, wäre wertlos
 was es trotzdem verliert, fängt `scene/orphans.py` auf und **fragt**, statt
 zu raten.
 
+Eine eindeutig zugeordnete Neu-Erkennung übernimmt `created_by` vom
+vorherigen Merkmal, wenn sie selbst keinen Erzeuger trägt. Formdaten und
+Dreiecke stammen weiterhin aus der frischen Erkennung. Mehrdeutige oder
+unverbundene Merkmale erhalten keinen geratenen Erzeuger. So bleibt eine
+aufgebrachte Textur auch nach nachfolgenden Schritten am richtigen Schritt
+des Verlaufs bearbeitbar.
+
 Ein verlorenes erkanntes oder erzeugtes Merkmal und eine bereits geschlossene
 Fehlstelle haben im aktuellen Körper keine Fläche mehr, die eine
 Merkmalskarte ehrlich färben könnte. `perceive.orphaned`,

@@ -311,10 +311,10 @@ class FeatureAction:
     note: TranslatableText | str = ""
     fields: tuple[ActionField, ...] = field(default_factory=tuple)
     step: int | None = None
-    """Die Schrittkennung, wenn die Handlung einem **Baustein** gilt.
+    """Die Schrittkennung, wenn die Handlung einen bestehenden Schritt ändert.
 
     Dann startet die Oberfläche keine neue Operation, sondern ändert den
-    Schritt, der das Merkmal erzeugt hat (:func:`part_actions`). Bei allen
+    Schritt, der das Merkmal erzeugt hat (:func:`part_actions`, :func:`texture_actions`). Bei allen
     anderen Handlungen bleibt es ``None``, und ``op`` sagt, was zu starten
     ist."""
     fixed: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
@@ -860,6 +860,48 @@ def reason_against(op: str, kind: str) -> TranslatableText | None:
 def _spec_or_none(name: str) -> Any:
     """Der Registereintrag, oder ``None``, wenn es ihn (noch) nicht gibt."""
     return REGISTRY.get(name) if REGISTRY.has(name) else None
+
+
+def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
+    """Bearbeitet die vorhandene Textur und bewahrt Ausdrücke sowie ausgeblendete Werte."""
+    from app.core.registry.params import inactive_dependency
+
+    schema = spec.params.spec()
+    by_name = {entry.name: entry for entry in schema}
+    saved = dict(operation.params)
+    effective = {entry.name: saved.get(entry.name, entry.default) for entry in schema}
+    fields: list[ActionField] = []
+    for name in ("pattern", "width", "height", "pitch", "depth", "mode", "angle"):
+        entry = by_name[name]
+        if inactive_dependency(entry, schema, effective) is not None:
+            continue
+        # Bei der ganzen Fläche bleibt deren Ebene maßgeblich, auch wenn
+        # vom früheren Rechteck noch eine Wickelart gespeichert ist.
+        if name == "angle" and effective["coverage"] == "rectangle" and effective["wrap"] != "flat":
+            continue
+        fields.append(
+            ActionField(
+                name=name,
+                label=entry.title,
+                unit=entry.unit,
+                value=effective[name],
+                kind=_kind_of(entry),
+                minimum=entry.minimum,
+                maximum=entry.maximum,
+                choices=tuple((choice, choice) for choice in (entry.choices or ())),
+            )
+        )
+    shown = {entry.name for entry in fields}
+    return [
+        FeatureAction(
+            title=_("Textur ändern"),
+            op=spec.name,
+            step=operation.id,
+            note=_("Ändert den Schritt, der diese Textur aufgebracht hat."),
+            fields=tuple(fields),
+            fixed=tuple((name, value) for name, value in saved.items() if name not in shown),
+        )
+    ]
 
 
 def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:

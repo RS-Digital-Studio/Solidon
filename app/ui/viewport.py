@@ -4009,6 +4009,7 @@ class Viewport(QWidget):
         wieder auf, wenn ein Erzeuger ihn will — der Griff an einem gesetzten
         Baustein ginge dabei mit, obwohl der Baustein noch steht."""
         self._gizmo_wanted = False
+        self._feature_gizmo_blocked = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
         Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
@@ -11003,6 +11004,13 @@ class Viewport(QWidget):
         needed = ("centre", "axis", "diameter")
         return feature if all(feature.params.get(name) is not None for name in needed) else None
 
+    def set_feature_gizmo_blocked(self, blocked: bool) -> None:
+        """Ein fester Flächenbezug erlaubt während der Eingabe keinen Bewegungsgriff."""
+        if self._feature_gizmo_blocked == blocked:
+            return
+        self._feature_gizmo_blocked = blocked
+        self.set_gizmo(self._gizmo_wanted)
+
     def set_gizmo(self, active: bool) -> None:
         """Den Bewegungsgriff an die Auswahl hängen oder abnehmen (§18.11).
 
@@ -11060,6 +11068,7 @@ class Viewport(QWidget):
             (not active and marked is None)
             or self._selected is None
             or self._preview_gizmo_wanted
+            or self._feature_gizmo_blocked
             or self._placement_grip_item is not None
         ):
             self.gizmoStatus.emit("")

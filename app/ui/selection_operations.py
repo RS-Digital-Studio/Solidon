@@ -657,8 +657,6 @@ class SelectionOperationsPanel(QWidget):
         # aus dem nichts an diese Stelle passt — und er stand dabei unter einer
         # Liste, für die man scrollen muss.
         self.catalog_button.setVisible(feature_kind in ("", "face"))
-        self._lay_out_quick(quick_names(selected, feature_kind))
-        self._wrap_labels()
         if self._feature_kind != feature_kind:
             self._feature_kind = feature_kind
             self._filter()
@@ -689,6 +687,14 @@ class SelectionOperationsPanel(QWidget):
             button.setToolTip(tip)
             button.setStatusTip(tip)
             button.setAccessibleDescription(tip)
+        self._lay_out_quick(
+            tuple(
+                name
+                for name in quick_names(selected, feature_kind)
+                if self._buttons[name].isEnabled()
+            )
+        )
+        self._filter()
 
     def _filter(self, query: str | None = None) -> None:
         """Nur die Darstellung filtern; Registereinträge und Knöpfe bleiben bestehen.
@@ -709,8 +715,9 @@ class SelectionOperationsPanel(QWidget):
                 label = str(button.property("operationTitle") or button.text())
                 match = not wanted or wanted in f"{title} {label}".casefold()
                 fits = self._fits_the_level(str(button.property("operationName")))
-                button.setVisible(match and fits)
-                shown += match and fits
+                visible = match and fits and button.isEnabled()
+                button.setVisible(visible)
+                shown += visible
             section.setVisible(shown > 0)
             if wanted and shown and not toggle.isChecked():
                 # Ein Treffer öffnet seine Gruppe: Wer sucht, will sehen, was
@@ -733,19 +740,9 @@ class SelectionOperationsPanel(QWidget):
     def _fits_the_level(self, name: str) -> bool:
         """Ob diese Handlung zur Stufe der aktuellen Auswahl gehört (Konzept C).
 
-        **Zwei Sorten Nichtverfügbarkeit, und nur eine verschwindet.** Eine
-        fehlende Vorbedingung — Vereinigen braucht zwei Körper, gewählt ist
-        einer — bleibt grau mit Grund: Der Kunde kann sie erfüllen, und der
-        Grund führt ihn hin. Eine Handlung der **falschen Stufe** dagegen hat
-        nichts zu erfüllen: Eine Fläche wird nie auf dem Bett angeordnet, und
-        *Auf dem Bett anordnen*, *Objekt duplizieren* und *Objekt umbenennen*
-        standen an einer gewählten Fläche bedienbar da (38 von 102
-        Operationen, gemessen am 07.09.2026).
-
-        Das bricht die Menüregel vom 23.08.2026 nicht, sondern setzt sie eine
-        Ebene tiefer fort: Dort bleibt eine graue Zeile stehen, weil die
-        Erklärung **neben einem Eintrag steht, der geht**. Hier kommt die
-        Handlung beim Wechsel der Stufe wieder — nicht beim zufälligen Klick.
+        Die Stufe ist eine Grenze neben der Freigabe: Eine Fläche wird
+        nicht auf dem Bett angeordnet. Fehlende Vorbedingungen blendet
+        zusätzlich ``_filter`` aus, bis die Auswahl dazu passt.
 
         **Die Stufe ist die Art, nicht nur die Ebene** (09.09.2026). Bis dahin
         genügte „Merkmalshandlung ja oder nein", und damit stand an einer

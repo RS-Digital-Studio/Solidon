@@ -25,6 +25,21 @@ wirksame Maße erscheinen. Der Operationsdialog behält denselben Startwert
 bis zum Übernehmen. Seine Vorschau reduziert flächengebundene Eingaben nicht,
 damit Ränder und Bohrungen dem tatsächlichen Ergebnis entsprechen.
 
+Das Merkmalpanel bearbeitet eine Textur über ihren vorhandenen Verlaufsschritt.
+`texture_steps_of` folgt nur ausgeführten Schritten rückwärts zum angezeigten
+Körper. Eine belegte `created_by`-Zuordnung öffnet die Felder unmittelbar;
+ohne sicheren Flächenbezug ergänzt eine ausdrückliche Texturwahl die normalen
+Flächenhandlungen. Zahlenfelder verwenden `ValueField`, damit Maßausdrücke
+und ausgeblendete Originalwerte erhalten bleiben. Vorschau und Übernehmen
+verwenden denselben Schritt und Startwert; „Weitere Einstellungen …“ führt
+in seinen vollständigen Dialog. Der feste Ganzflächenbezug unterdrückt dort
+den Bewegungsgriff bis zum Wechsel auf ein Rechteck oder zum Schließen.
+
+Nicht anwendbare Handlungen erscheinen weder im Merkmalpanel noch in dessen
+Schnellaktionen und Operationsgruppen. Die Filamentzuweisung bietet
+„Entfernen“ nur bei belegter Auswahl. Vorübergehend gesperrte Eingabefelder
+behalten ihre Werte und Rückmeldung während einer laufenden Auswertung.
+
 Bei reinem Hinzufügen zeigen Original und Differenz gemeinsam das Ergebnis.
 Ein deckungsgleicher zusätzlicher Nachherkörper würde die farbige Markierung
 der hinzugefügten Textur verdecken. Abtrag und unvollständige Vergleiche

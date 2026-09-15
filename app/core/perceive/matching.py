@@ -332,6 +332,12 @@ def apply_mapping(
     taken: set[FeatureId] = set(result.mapping) | set(result.orphaned) | set(result.ambiguous)
     for identifier, feature in new.items():
         target = reverse.get(identifier)
+        if target is not None and previous is not None and feature.created_by is None:
+            ancestor = previous.get(target)
+            if ancestor is not None:
+                # Die Erkennung liefert neue Dreiecke derselben Fläche. Ihr
+                # Erzeuger stammt weiterhin aus der belegten alten Zuordnung.
+                feature = replace(feature, created_by=ancestor.created_by)
         if (
             target is not None
             and previous is not None

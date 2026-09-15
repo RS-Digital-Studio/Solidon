@@ -1417,6 +1417,7 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     dialog = window._op_dialog
     assert dialog is not None
     assert dialog.values()["face"] == face.id
+    assert window.viewport._feature_gizmo_blocked
     assert window.session.wait_for_idle()
     assert seen and seen[-1] is not None
     preview = seen[-1].entries[object_id].result
@@ -1449,6 +1450,7 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     assert np.allclose(preview.mesh.raw.vertices, again.mesh.raw.vertices)
     dialog.accept()
     assert window.session.wait_for_idle()
+    assert not window.viewport._feature_gizmo_blocked
     committed = window.session.last_result.scene.objects[object_id]
     assert np.allclose(preview.mesh.raw.vertices, committed.mesh.raw.vertices)
     operation = window.session.project.document.ops[-1]
@@ -1462,11 +1464,164 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     edited_preview = seen[-1].entries[object_id].result
     assert edited_preview is not None
     assert window._op_dialog is not None
+    assert window.viewport._feature_gizmo_blocked
     window._op_dialog.accept()
     assert window.session.wait_for_idle()
     edited = window.session.last_result.scene.objects[object_id]
     assert window.session.project.document.ops[-1].seed == seed
     assert np.allclose(edited_preview.mesh.raw.vertices, edited.mesh.raw.vertices)
+
+
+def test_texture_panel_changes_existing_step_with_live_preview(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Texturierte Oberseite führt rechts zum vorhandenen Muster und seinem Schritt."""
+    import numpy as np
+
+    from app.core.scene.placement import top_face
+    from app.ui.op_dialog import ValueField
+
+    object_id = select(window)
+    face = top_face(window.session.last_result.scene.objects[object_id].features)
+    assert face is not None
+    window._on_feature_picked(face.id)
+    window.run_operation(
+        REGISTRY.get("apply_texture"),
+        {"coverage": "whole_face", "pattern": "rib", "pitch": 5.0},
+    )
+    assert window.session.wait_for_idle()
+    assert window._op_dialog is not None
+    window._op_dialog.accept()
+    assert window.session.wait_for_idle()
+    operation = window.session.project.document.ops[-1]
+    count = len(window.session.project.document.ops)
+    created = next(
+        feature
+        for feature in window.session.last_result.scene.objects[object_id].features.values()
+        if feature.created_by == operation.id and feature.kind == "face"
+    )
+    window._on_feature_picked(created.id)
+    panel = window.feature_panel
+    assert panel.shown_part_step() == operation.id
+    numeric = {
+        field._entry.name: field for row in panel._built for field in row.findChildren(ValueField)
+    }
+    assert set(numeric) == {"pitch", "depth", "angle"}
+    seen = []
+    monkeypatch.setattr(window, "_show_preview", seen.append)
+    numeric["depth"].spin.setValue(0.9)
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle()
+    assert seen and seen[-1] is not None
+    result = seen[-1].entries[object_id].result
+    assert result is not None
+    assert len(window.session.project.document.ops) == count
+    panel._apply.click()
+    assert window.session.wait_for_idle()
+    updated = window.session.project.document.ops[-1]
+    assert updated.id == operation.id
+    assert updated.seed == operation.seed
+    assert updated.params["depth"] == pytest.approx(0.9)
+    assert len(window.session.project.document.ops) == count
+    assert np.allclose(
+        result.mesh.raw.vertices,
+        window.session.last_result.scene.objects[object_id].mesh.raw.vertices,
+    )
+    panel.stepEditRequested.emit(operation.id)
+    assert window._op_dialog is not None
+    assert window._op_dialog.values()["depth"] == pytest.approx(0.9)
+    window._op_dialog.reject()
+
+
+def test_uncertain_body_texture_keeps_the_normal_face_panel(
+    window: MainWindow,
+) -> None:
+    """Eine fremde Textur am selben Körper verdrängt keine belegten Flächenaktionen."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.scene import OperationDraft
+    from app.core.scene.placement import top_face
+
+    object_id = select(window)
+    face = top_face(window.session.last_result.scene.objects[object_id].features)
+    assert face is not None
+    window.session.apply(
+        "Muster",
+        [
+            OperationDraft(
+                op="apply_texture",
+                inputs=(object_id,),
+                params={
+                    "coverage": "whole_face",
+                    "face": face.id,
+                    "pattern": "rib",
+                    "pitch": 5.0,
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle()
+    step = window.session.project.document.ops[-1]
+    untextured = next(
+        feature
+        for feature in window.session.last_result.scene.objects[object_id].features.values()
+        if feature.kind == "face" and feature.created_by != step.id
+    )
+    window._on_feature_picked(untextured.id)
+    panel = window.feature_panel
+    assert panel.feature_id == untextured.id
+    assert panel.shown_part_step() is None
+    button = next(
+        widget
+        for widget in panel._built
+        if isinstance(widget, QPushButton) and widget.text() == tr("Textur am Körper wählen …")
+    )
+    button.click()
+    assert panel.shown_part_step() is None
+    choice = panel.findChild(QComboBox, "texture-step-choice")
+    assert choice is not None
+    choice.setCurrentIndex(choice.findData(step.id))
+    assert panel.shown_part_step() == step.id
+
+
+def test_inapplicable_selection_shortcuts_stay_hidden_even_when_searched(
+    window: MainWindow,
+) -> None:
+    """Massive Einzelplatte: kein Deckelziel, kein Gegenstück, kein Filament zum Entfernen."""
+    from app.core.scene.placement import top_face
+
+    object_id = select(window)
+    face = top_face(window.session.last_result.scene.objects[object_id].features)
+    assert face is not None
+    window._on_feature_picked(face.id)
+    panel = window.selection_operations
+    for name in ("create_lid", "screw_lid", "align_to_feature"):
+        button = panel._buttons[name]
+        assert not button.isEnabled(), name
+        assert button.isHidden(), name
+        panel._filter(str(REGISTRY.get(name).title))
+        assert button.isHidden(), name
+    assert window.quick_filament.clear_button.isHidden()
+
+
+def test_whole_face_dialog_releases_its_grip_block_on_rectangle_and_cancel(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der feste Flächenbezug überlebt keinen Wechsel oder abgebrochenen Dialog."""
+    select(window)
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    window.run_operation(REGISTRY.get("apply_texture"), {"coverage": "whole_face"})
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.viewport._feature_gizmo_blocked
+    coverage = dialog._editors["coverage"]
+    coverage.setCurrentIndex(coverage.findData("rectangle"))
+    assert not window.viewport._feature_gizmo_blocked
+    coverage.setCurrentIndex(coverage.findData("whole_face"))
+    assert window.viewport._feature_gizmo_blocked
+    dialog.reject()
+    assert not window.viewport._feature_gizmo_blocked
 
 
 def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:

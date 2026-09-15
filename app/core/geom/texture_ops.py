@@ -811,12 +811,14 @@ def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> M
 
 @register_op(
     name="apply_texture",
+    cache_version="1",
     title=_("Textur aufbringen"),
     category="surface",
     params=TextureParams,
     consumes=1,
     produces=1,
     applies_to=("face",),
+    touches_features=True,
     deterministic=False,
     doc=_(
         "Prägt ein Muster als echte Geometrie auf eine Fläche — Rändel für den "

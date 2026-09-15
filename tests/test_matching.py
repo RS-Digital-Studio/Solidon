@@ -971,6 +971,34 @@ def test_apply_mapping_keeps_every_field_of_a_feature() -> None:
     assert kept.params == {"radius": 2.4}
 
 
+def test_a_matched_feature_keeps_its_original_maker_after_new_detection() -> None:
+    """Neu erkannte Dreiecke ersetzen die Formdaten, nicht die belegte Herkunft."""
+    from app.core.perceive.matching import MatchResult
+
+    previous = Feature(
+        id="old",
+        kind="face",
+        provenance="detected",
+        params={"area": 10.0},
+        created_by=4,
+        face_indices=(0,),
+    )
+    fresh = Feature(
+        id="fresh", kind="face", provenance="detected", params={"area": 12.0}, face_indices=(3, 4)
+    )
+    kept = apply_mapping(
+        {"fresh": fresh}, MatchResult(mapping={"old": "fresh"}), previous={"old": previous}
+    )["old"]
+    assert kept.created_by == 4
+    assert kept.params["area"] == pytest.approx(12.0)
+    assert kept.face_indices == (3, 4)
+    # Gleicher Name allein belegt keine Nachfolge.
+    unrelated = apply_mapping(
+        {"old": replace(fresh, id="old")}, MatchResult(), previous={"old": previous}
+    )["old"]
+    assert unrelated.created_by is None
+
+
 def test_apply_mapping_still_renames_to_the_surviving_identifier() -> None:
     """Und das Umbenennen selbst bleibt, wie es war — die Gegenprobe zum Test
     darüber: ``replace(feature, id=target)`` muss die **neue** Kennung tragen,

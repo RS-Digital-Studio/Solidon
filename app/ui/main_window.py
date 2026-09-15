@@ -279,6 +279,7 @@ from app.ui.panels import (
     describe_selection,
     open_section,
     part_step_of,
+    texture_steps_of,
 )
 from app.ui.pose_bar import PoseBar
 from app.ui.print_disclosure import ensure_print_disclosure
@@ -2000,6 +2001,8 @@ class MainWindow(QMainWindow):
         # alte. Beide Wege gehen durch die Sitzung und damit durch eine
         # Transaktion — ein Strg+Z nimmt sie zurück (§15.4, Regel 19).
         self.feature_panel.stepChangeRequested.connect(self._change_part_step)
+        self.feature_panel.stepEditRequested.connect(self._edit_panel_step)
+        self.feature_panel.stepSelectionChanged.connect(self._drop_feature_preview)
         self.feature_panel.stepRemoveRequested.connect(self._remove_part_step)
         # **Die eine Kundengeste der Trennen-Serie** (T8, RM-080): „Diese
         # Fläche soll schön bleiben." Kein Operationsweg — die Sperre steht im
@@ -12114,6 +12117,18 @@ class MainWindow(QMainWindow):
         if feature is None:
             self.feature_panel.clear()
             return
+        textures, certain = texture_steps_of(
+            entry.id,
+            feature,
+            self.session.project.document,
+            completed=result.completed if result is not None else (),
+        )
+        if textures and certain:
+            self.feature_panel.show_texture(
+                textures, certain=certain, parameter_values=self._parameter_values()
+            )
+            self.feature_dock.reveal()
+            return
         # **Was aus einem Baustein kam, meint den Baustein.** Ein Schlüsselloch
         # bringt zwölf Merkmale mit — zwei Bohrungen, zehn Verrundungen und die
         # Fläche darunter —, und wer eine Schlitzkante anklickt, hat nicht die
@@ -12121,6 +12136,8 @@ class MainWindow(QMainWindow):
         part = self.part_step_of(feature)
         if part is not None:
             self.feature_panel.show_part(*part)
+            if textures:
+                self.feature_panel.offer_texture_steps(textures, self._parameter_values())
             self.feature_dock.reveal()
             return
         self.feature_panel.show_feature(
@@ -12131,6 +12148,8 @@ class MainWindow(QMainWindow):
             alone=result is not None and len(result.scene.objects) == 1,
             protected=feature_id in self.session.protected_features(entry.id),
         )
+        if textures:
+            self.feature_panel.offer_texture_steps(textures, self._parameter_values())
         self.feature_dock.reveal()
         resume = self._measures_to_resume == feature_id
         # Ein anderes Merkmal löscht den Merker ebenso: Er gilt der Handlung,
@@ -12192,6 +12211,11 @@ class MainWindow(QMainWindow):
         if len(steps) != 1 or first is None:
             return None
         return self.part_step_of(first)
+
+    def _edit_panel_step(self, step: int) -> None:
+        """Der vollständige Dialog übernimmt die Vorschau vom Merkmalpanel."""
+        self._drop_feature_preview()
+        self.edit_operation(step)
 
     def _change_part_step(self, step: int, params: dict[str, Any]) -> None:
         """Neue Werte in den Schritt schreiben, der diesen Baustein gesetzt hat.
@@ -13839,6 +13863,7 @@ class MainWindow(QMainWindow):
         def finished(code: int) -> None:
             self.session.projectChanged.disconnect(project_changed)
             self._op_dialog = None
+            self.viewport.set_feature_gizmo_blocked(False)
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
             self.viewport.set_direct_picking(False)
@@ -13850,6 +13875,16 @@ class MainWindow(QMainWindow):
         dialog.finished.connect(finished)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._op_dialog = dialog
+        if dialog.spec.name == "apply_texture":
+
+            def follow_texture_area() -> None:
+                """Die gewählte Gesamtfläche bleibt während ihrer Texturierung fest."""
+                self.viewport.set_feature_gizmo_blocked(
+                    dialog.values().get("coverage") == "whole_face"
+                )
+
+            dialog.valuesChanged.connect(follow_texture_area)
+            follow_texture_area()
         # Solange er offen ist, meint ein Klick das tiefste Ziel: Wer *Bohrung
         # vergrößern* offen hat und auf die Bohrung zeigt, antwortet auf eine
         # Frage und wählt nicht aus. Zwei Klicks für eine Antwort sähen aus wie

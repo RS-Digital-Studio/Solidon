@@ -275,6 +275,146 @@ def test_whole_face_operation_changes_only_the_selected_plane(mode: str) -> None
     )
 
 
+def test_texture_faces_keep_their_step_after_another_operation_and_second_texture() -> None:
+    """Das Panel muss beide Texturen trotz eines Zwischenschritts unterscheiden können."""
+    from dataclasses import replace
+
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import OpContext, Operation, Profile, Scene, SceneObject
+
+    load_operations()
+    spec = REGISTRY.get("apply_texture")
+    mesh = MeshData.of(trimesh.creation.box(extents=(20, 20, 4)))
+    source = SceneObject(id="plate", name="Platte", mesh=mesh, features=detect(mesh))
+
+    def textured(source: SceneObject, direction: float, step: int) -> SceneObject:
+        chosen = next(
+            f
+            for f in source.features.values()
+            if f.kind == "face" and f.params.get("normal", (0, 0, 0))[2] * direction > 0.99
+        )
+        params = texture_ops.TextureParams(
+            coverage="whole_face", face=chosen.id, pattern="rib", pitch=4.0
+        )
+        result = spec.fn(
+            OpContext(
+                scene=Scene(objects={source.id: source}, parameters={}),
+                inputs=[source],
+                params=params,
+                profile=Profile(printer=NOZZLE, material=None),
+                quality="fine",
+                seed=1,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+        return _with_features(
+            result.outputs[0],
+            dict(source.features),
+            Operation(id=step, op="apply_texture"),
+            lambda question, choices: choices[0],
+            [],
+            previous_bounds=source.mesh.bounds,
+            touches_features=spec.touches_features,
+        )
+
+    first = textured(source, 1.0, 4)
+    first_ids = {f.id for f in first.features.values() if f.created_by == 4}
+    assert first_ids
+    following = _with_features(
+        replace(first, features={}),
+        dict(first.features),
+        Operation(id=5, op="paint_slot"),
+        lambda q, c: c[0],
+        [],
+        previous_bounds=first.mesh.bounds,
+    )
+    assert {f.id for f in following.features.values() if f.created_by == 4} == first_ids
+    second = textured(following, -1.0, 6)
+    assert {f.id for f in second.features.values() if f.created_by == 4} == first_ids
+    assert any(f.created_by == 6 for f in second.features.values())
+
+
+@pytest.mark.parametrize(
+    "coverage,wrap",
+    [
+        ("rectangle", "flat"),
+        ("rectangle", "cylinder"),
+        ("whole_face", "flat"),
+        ("whole_face", "cylinder"),
+    ],
+)
+def test_texture_panel_actions_keep_expressions_and_only_show_effective_fields(
+    coverage: str,
+    wrap: str,
+) -> None:
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import texture_actions
+    from app.core.registry import REGISTRY
+    from app.core.types import Operation
+
+    load_operations()
+    params = {
+        "coverage": coverage,
+        "wrap": wrap,
+        "face": "face_7",
+        "pattern": "noise",
+        "width": "breite / 2",
+        "height": 27.0,
+        "pitch": "raster",
+        "depth": 0.7,
+        "angle": "winkel + 2",
+        "mode": "engraved",
+        "x": "position",
+        "ny": 1.0,
+        "nz": 0.0,
+    }
+    step = Operation(id=17, op="apply_texture", params=params)
+    actions = texture_actions(step, REGISTRY.get("apply_texture"))
+    assert len(actions) == 1
+    action = actions[0]
+    assert action.step == 17 and action.op == "apply_texture"
+    fields = {field.name: field for field in action.fields}
+    assert {"pattern", "pitch", "depth", "mode"} <= fields.keys()
+    assert fields["pitch"].value == "raster"
+    assert fields["pattern"].value == "noise"
+    assert fields["depth"].minimum == pytest.approx(0.02)
+    assert {choice for choice, _label in fields["pattern"].choices} == set(texture_ops.PATTERNS)
+    assert ("width" in fields and "height" in fields) == (coverage == "rectangle")
+    assert ("angle" in fields) == (coverage == "whole_face" or wrap == "flat")
+    if "width" in fields:
+        assert fields["width"].value == "breite / 2"
+    if "angle" in fields:
+        assert fields["angle"].value == "winkel + 2"
+    combined = dict(action.fixed) | {name: field.value for name, field in fields.items()}
+    assert combined == params
+    assert not set(fields) & set(dict(action.fixed))
+
+
+def test_texture_panel_action_defaults_do_not_erase_an_older_rectangle() -> None:
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import texture_actions
+    from app.core.registry import REGISTRY
+    from app.core.types import Operation
+
+    load_operations()
+    action = texture_actions(
+        Operation(id=2, op="apply_texture", params={"z": 8.0}), REGISTRY.get("apply_texture")
+    )[0]
+    fields = {field.name: field.value for field in action.fields}
+    assert fields["width"] == pytest.approx(40.0)
+    assert fields["pattern"] == "knurl_diamond"
+    assert dict(action.fixed) == {"z": 8.0}
+
+
 @pytest.mark.parametrize("height,pitch", [(122.0, 2.0), (121.7, 2.0), (244.0, 1.0)])
 def test_wave_sampling_tracks_each_period(height: float, pitch: float) -> None:
     """Auch hohe Felder behalten Amplitude und Periode der Wellen."""

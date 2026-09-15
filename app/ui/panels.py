@@ -871,6 +871,42 @@ def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any
     return None
 
 
+def texture_steps_of(
+    object_id: str,
+    feature: Feature,
+    document: Document,
+    *,
+    completed: Collection[int] | None = None,
+) -> tuple[list[Any], bool]:
+    """Texturschritte nach belegter Herkunft; sonst ausdrücklich am Körper wählbar."""
+    # Rückwärts am jeweiligen Dokumentstand: Eine spätere Textur auf dem
+    # zurückgebliebenen Original gehört nicht zu seinem früher abgetrennten Teil.
+    wanted = {object_id}
+    candidates = []
+    for operation in reversed(document.ops):
+        if completed is not None and operation.id not in completed:
+            continue
+        if not wanted.intersection(operation.outputs):
+            continue
+        if operation.op == "apply_texture":
+            candidates.append(operation)
+        wanted.difference_update(operation.outputs)
+        wanted.update(operation.inputs)
+    candidates.reverse()
+    proven = [operation for operation in candidates if operation.id == feature.created_by]
+    if proven:
+        return proven, True
+    matched = [
+        operation
+        for operation in candidates
+        if operation.params.get("coverage") == "whole_face"
+        and operation.params.get("face") == feature.id
+    ]
+    if matched:
+        return matched, True
+    return (candidates, False) if feature.kind == "face" else ([], False)
+
+
 def _part_group(created_by: int | None, document: Document | None) -> tuple[str, int] | None:
     """Titel und Nummer für das Dach im Objektbaum.
 
@@ -4532,10 +4568,8 @@ class FeaturePanel(QWidget):
     Ein Panel, das ``kind == "hole"`` fragte, führte dieselbe Tabelle ein
     zweites Mal und wüsste beim nächsten neuen Merkmal die Hälfte.
 
-    **Was nicht geht, steht als Satz und nicht als graues Feld.** Eine
-    Handlung ohne Operation bringt ihren Grund mit („Eine Verrundung folgt
-    ihrer Kante"); eine Lücke ließe den Kunden raten, ob sie fehlt oder
-    vergessen wurde (Regel 17 dem Geist nach).
+    Nicht anwendbare Handlungen werden ausgeblendet. Eine vorübergehend
+    gesperrte Eingabe behält dagegen ihre Werte und die sichtbare Rückmeldung.
     """
 
     #: Registername und Parameter — dieselbe Form, die der Operationsdialog
@@ -4589,6 +4623,8 @@ class FeaturePanel(QWidget):
     loszuwerden. Seine Merkmale einzeln zu entfernen ließe die übrigen
     stehen; ein Schlüsselloch ohne seinen Schlitz ist ein Loch."""
     fitRequested = Signal(str, object)
+    stepEditRequested = Signal(int)
+    stepSelectionChanged = Signal()
     protectionToggled = Signal(str, bool)
     """Dieses Merkmal als Sichtfläche sperren oder freigeben (§22.3, RM-080).
 
@@ -4723,6 +4759,8 @@ class FeaturePanel(QWidget):
         self._fit_choice: QComboBox | None = None
         self._fit_reason = ""
         self._runs: dict[str, _Handling] = {}
+        self._texture_fields: dict[str, Any] = {}
+        self._parameter_values: dict[str, float] = {}
         """Je Handlung ihr Titel, ihr Satz und was sie tut.
 
         Die Knöpfe je Handlung sind am 10.09.2026 gefallen; was bleibt, ist
@@ -4766,6 +4804,8 @@ class FeaturePanel(QWidget):
         self._fit_button = None
         self._fit_choice = None
         self._runs.clear()
+        self._texture_fields.clear()
+        self._parameter_values.clear()
         self._armed = None
         self._explanations.clear()
         self._dots.clear()
@@ -4903,20 +4943,11 @@ class FeaturePanel(QWidget):
                     mesh,
                 )
             }
-        # **Derselbe Grund steht einmal da, nicht fünfmal.** Die abgelehnten
-        # Handlungen tragen ihren Satz je Zeile, und bei den Arten, an denen
-        # gar nichts geht, ist es immer wieder derselbe: An einer Fläche
-        # sagten fünf Zeilen wörtlich „Eine Fläche gehört zur Oberfläche des
-        # Körpers …", an einer Verrundung vier von fünf „Eine Verrundung
-        # gehört zu ihrer Kante …". Roberts Halter hat zehn Flächen und neun
-        # Verrundungen; wer eine davon anklickt, liest fünf Zeilen und findet
-        # in keiner etwas, das er tun kann (Messung 04.09.2026).
-        #
-        # Weggelassen wird dabei **nichts**: Die Zeile nennt weiter jede
-        # Handlung beim Namen, damit niemand rät, ob sie fehlt oder vergessen
-        # wurde (`actions_for` begründet genau das). Sie nennt sie nur
-        # zusammen, wenn sie denselben Satz teilen.
+        # Unpassende Aktionen belegen keine Zeile. Der Kern behält ihre
+        # Gründe für andere Aufrufer; das Panel zeigt die verfügbaren Wege.
         for action in _folded(actions):
+            if action.op is None and getattr(action, "step", None) is None:
+                continue
             self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
@@ -4947,12 +4978,14 @@ class FeaturePanel(QWidget):
         ändern das Teil, dieser Haken sagt der Suche von *Automatisch teilen*,
         wo sie nicht schneiden darf. Ob das Merkmal sich sperren lässt und was
         auf dem Haken steht, sagt der Kern (:func:`protection_of`); ein Merkmal
-        ohne Fläche bekommt den Haken grau und den Satz, warum.
+        ohne schützbare Fläche bekommt diesen Schalter nicht.
         """
         from app.core.perceive.actions import protection_of
 
-        self._separate()
         protection = protection_of(feature)
+        if not protection.possible:
+            return
+        self._separate()
         toggle = QCheckBox(str(protection.title), self)
         toggle.setObjectName("protection-toggle")
         toggle.setAccessibleName(str(protection.title))
@@ -4964,8 +4997,6 @@ class FeaturePanel(QWidget):
         toggle.toggled.connect(lambda on: self.protectionToggled.emit(feature_id, bool(on)))
         self._rows.insertWidget(self._rows.count() - 1, toggle)
         self._built.append(toggle)
-        if not protection.possible:
-            self.show_note(str(protection.explanation))
 
     def protection_toggle(self) -> QCheckBox | None:
         """Der Umschalter des gezeigten Merkmals, oder ``None`` ohne Merkmal."""
@@ -5012,6 +5043,74 @@ class FeaturePanel(QWidget):
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
+        self._settle_apply()
+
+    def offer_texture_steps(
+        self, operations: Sequence[Any], parameter_values: Mapping[str, float]
+    ) -> None:
+        """Ungewisse Texturzuordnungen ergänzen die normalen Flächenhandlungen."""
+        button = QPushButton(tr("Textur am Körper wählen …"), self)
+        button.clicked.connect(
+            lambda: self.show_texture(operations, certain=False, parameter_values=parameter_values)
+        )
+        self._rows.insertWidget(self._rows.count() - 1, button)
+        self._built.append(button)
+
+    def show_texture(
+        self,
+        operations: Sequence[Any],
+        *,
+        selected: int | None = None,
+        certain: bool = True,
+        parameter_values: Mapping[str, float] | None = None,
+    ) -> None:
+        """Texturparameter bearbeiten den vorhandenen Schritt mit derselben Vorschau."""
+        from app.core.perceive.actions import texture_actions
+
+        self.stepSelectionChanged.emit()
+        self.clear()
+        self._empty.hide()
+        self._parameter_values = dict(parameter_values or {})
+        spec = REGISTRY.get("apply_texture")
+        if selected is None and certain and len(operations) == 1:
+            selected = int(operations[0].id)
+        if len(operations) > 1 or not certain:
+            choice = QComboBox(self)
+            choice.setObjectName("texture-step-choice")
+            choice.setAccessibleName(tr("Textur bearbeiten"))
+            choice.addItem(tr("Textur am Körper wählen …"), userData=None)
+            for operation in operations:
+                choice.addItem(
+                    tr("Textur aus Operation {number}").format(number=operation.id),
+                    userData=int(operation.id),
+                )
+            choice.setCurrentIndex(max(0, choice.findData(selected)))
+            choice.currentIndexChanged.connect(
+                lambda: self.show_texture(
+                    operations,
+                    selected=choice.currentData(),
+                    certain=certain,
+                    parameter_values=parameter_values,
+                )
+            )
+            self._rows.insertWidget(self._rows.count() - 1, choice)
+            self._built.append(choice)
+        operation = next((item for item in operations if item.id == selected), None)
+        if operation is None:
+            return
+        self._part_operation = int(operation.id)
+        self._texture_fields = {
+            entry.name: entry for entry in spec.params.spec() if entry.kind in {"float", "int"}
+        }
+        for action in texture_actions(operation, spec):
+            row = self._build_action(action)
+            self._rows.insertWidget(self._rows.count() - 1, row)
+            self._built.append(row)
+        details = QPushButton(tr("Weitere Einstellungen …"), self)
+        details.setProperty("handlingKey", "texture-details")
+        details.clicked.connect(lambda: self.stepEditRequested.emit(int(operation.id)))
+        self._rows.insertWidget(self._rows.count() - 1, details)
+        self._built.append(details)
         self._settle_apply()
 
     def show_edge(self, key: str, title: str) -> None:
@@ -5850,7 +5949,11 @@ class FeaturePanel(QWidget):
         for target in (editor, *editor.findChildren(QLineEdit)):
             target.setProperty("handlingKey", key)
             target.installEventFilter(self)
-        if isinstance(editor, LengthSpin):
+        from app.ui.op_dialog import ValueField
+
+        if isinstance(editor, ValueField):
+            editor.changed.connect(report)
+        elif isinstance(editor, LengthSpin):
             editor.valueChangedMm.connect(report)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(report)
@@ -5911,6 +6014,12 @@ class FeaturePanel(QWidget):
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
         """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""
+        if field.name in self._texture_fields:
+            from app.ui.op_dialog import ValueField
+
+            return ValueField(
+                self._texture_fields[field.name], field.value, self._parameter_values, parent
+            )
         kind = str(field.kind)
         if kind == "bool":
             check = RowCheckBox(parent)
@@ -5921,6 +6030,10 @@ class FeaturePanel(QWidget):
             for value, text in field.choices or ():
                 combo.addItem(choice_label(str(text)), value)
             explain_choices(combo)
+            if field.name == "pattern":
+                from app.ui.op_dialog import _show_patterns
+
+                _show_patterns(combo, tuple(value for value, _text in field.choices or ()))
             index = combo.findData(field.value)
             if index >= 0:
                 combo.setCurrentIndex(index)
@@ -5968,6 +6081,8 @@ class FeaturePanel(QWidget):
         Was der Kunde sieht, gilt.
         """
         params: dict[str, Any] = {}
+        from app.ui.op_dialog import ValueField
+
         if self._feature_id is not None:
             # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
             # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
@@ -5975,7 +6090,9 @@ class FeaturePanel(QWidget):
         params.update(dict(fixed))
         for field in fields:
             widget = widgets.get(str(field.name))
-            if isinstance(widget, LengthSpin):
+            if isinstance(widget, ValueField):
+                params[str(field.name)] = widget.value()
+            elif isinstance(widget, LengthSpin):
                 params[str(field.name)] = widget.value_mm() * field.parameter_factor
             elif isinstance(widget, QCheckBox):
                 params[str(field.name)] = widget.isChecked()
