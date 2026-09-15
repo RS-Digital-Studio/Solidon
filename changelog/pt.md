@@ -32,6 +32,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Construir e alterar
 - Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.
 
+- Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.
 - Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.
 - Se no chat indicar só um eixo — «furo em x = 20» —, o furo desloca-se apenas aí. Antes saltava para zero nos outros dois eixos.
 - Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha.
@@ -61,6 +62,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As faces pintadas no Bambu Studio, Orca e Elegoo chegam exatamente como foram pintadas — mesmo onde uma cor atravessa um triângulo. Antes, isso contava como «ambíguo».
 - Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.
 - Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer.
+
+### Blocos e ajustes
+
+- Um bloco para furos — inserto térmico, alojamento de porca, assento de rolamento, rosca, parafuso — assenta logo no furo escolhido, em vez de no centro da face.
+- Ao arrastar um bloco pela pega na vista, move-se o bloco inteiro, mesmo agarrado por uma aresta do furo de fechadura. Antes só se deslocava essa característica.
+- Ganchos e furos de um bloco aparecem à direita como quantidade, e não como «2,00 mm». E depois de «Alterar medidas» o bloco continua selecionado, mesmo com outras características.
 
 ## 0.4.1
 

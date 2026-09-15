@@ -31,6 +31,7 @@ it into `website/version.json`.
 
 ### Building and editing
 
+- Turning a slot turns it — instead of cutting a second one across it. And editing a slot you pulled yourself changes that step; the history gets no second one.
 - An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.
 - Name just one axis in the chat — “bore to x = 20” — and the hole moves only there. Before, it jumped to zero on the other two axes.
 - Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh.
@@ -61,6 +62,12 @@ it into `website/version.json`.
 - Painted faces from Bambu Studio, Orca and Elegoo arrive exactly as painted — even where a colour runs through the middle of a triangle. Before, that counted as “ambiguous”.
 - A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.
 - Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer.
+
+### Building blocks and fits
+
+- A block meant for a hole — heat-set insert, nut trap, bearing seat, thread, screw — now sits straight in the hole you selected instead of at the centre of the face.
+- Drag a block by its handle in the view and the whole block moves — even from an edge of the keyhole. Before, only that one feature travelled and the rest stayed put.
+- Hooks and holes of a block appear on the right as a count — no longer as “2.00 mm”. And after “Change dimensions” the block stays selected, even when it ends up with different features.
 
 ## 0.4.1
 

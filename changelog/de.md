@@ -56,6 +56,7 @@ Nutzen da und sonst nichts.
 
 ### Konstruieren und Ändern
 
+- Ein Langloch drehen dreht es — statt ein zweites quer darüber zu schneiden. Und wer ein Langloch bearbeitet, das er selbst gezogen hat, ändert diesen Schritt; der Verlauf bekommt keinen zweiten.
 - Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.
 - Nennen Sie im Chat nur eine Achse — „Bohrung auf x = 20“ —, wandert das Loch nur dort. Vorher sprang es in den beiden anderen Achsen auf null.
 - Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz.
@@ -86,6 +87,12 @@ Nutzen da und sonst nichts.
 - Bemalte Flächen aus Bambu Studio, Orca und Elegoo kommen genau so an, wie sie gemalt wurden — auch wenn die Farbe mitten durch ein Dreieck läuft. Vorher galt das als „nicht eindeutig“.
 - Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.
 - Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer.
+
+### Bausteine und Passungen
+
+- Ein Baustein für Bohrungen — Einpressbuchse, Mutternfalle, Lagersitz, Gewinde, Schraube — sitzt sofort in der Bohrung, die Sie gewählt haben, statt auf der Mitte der Fläche.
+- Ziehen Sie einen Baustein am Griff im Bild, bewegt sich der ganze Baustein — auch an einer Kante des Schlüssellochs. Vorher wanderte nur das eine Merkmal, der Rest blieb stehen.
+- Haken und Löcher eines Bausteins stehen rechts als Anzahl — nicht mehr als „2,00 mm“. Und nach „Maße ändern“ bleibt der Baustein gewählt, auch wenn er danach andere Merkmale trägt.
 
 ## 0.4.1
 

@@ -690,7 +690,12 @@ def turn_arc(origin: Any, axis: Any, radius: float, angle: float, *, steps: int 
     return np.repeat(points, 2, axis=0)[1:-1]
 
 
-def gizmo_sentence(feature: Feature | None) -> str:
+def _never_a_part(_feature: Feature) -> bool:
+    """Die Vorgabe für :attr:`Viewport.moves_as_a_part` — bis das Fenster antwortet."""
+    return False
+
+
+def gizmo_sentence(feature: Feature | None, *, part: bool = False) -> str:
     """Was der Griff bewegen wird, in einem Satz.
 
     Der Griff sagte es nicht. Wer eine Bohrung anklickte und ihn einschaltete,
@@ -709,6 +714,11 @@ def gizmo_sentence(feature: Feature | None) -> str:
         return tr("Der Griff bewegt das ganze Teil.")
     if feature.kind == "face":
         return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
+    if part:
+        # Was aus einem Baustein kam, meint den Baustein: Der Zug geht in
+        # dessen Schritt, und ein Satz über „das gewählte Merkmal" wäre an
+        # der Tasche eines Schlüssellochs eine falsche Auskunft.
+        return tr("Der Griff bewegt den ganzen Baustein, nicht nur dieses Merkmal.")
     if feature.kind in slot_feature_kinds():
         if feature.kind not in movable_feature_kinds():
             return tr("An den Knöpfen ändern Sie Länge und Richtung des Langlochs.")
@@ -4000,6 +4010,16 @@ class Viewport(QWidget):
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
         Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
+        self.moves_as_a_part: Callable[[Feature], bool] = _never_a_part
+        """Ob ein Merkmal aus einem Baustein stammt, den der Griff als Ganzes bewegt.
+
+        Die Frage gehört dem Fenster: Es kennt das Dokument und den Schritt,
+        der das Merkmal erzeugt hat (``MainWindow.part_step_of``), die Ansicht
+        nicht. Ohne die Auskunft hängt der Griff nur an Arten, die
+        ``move_feature`` kennt — und an der Verrundung eines Schlüssellochs
+        oder dem Gewinde einer Mutter gab es damit keinen, obwohl rechts
+        *Baustein verschieben* steht. Das Fenster setzt eine schwache Frage,
+        keine gebundene Methode: Die hielte das Fenster (``wartezeit.md``)."""
         self._gizmo_labels: LabelsItem | None = None
         """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm — und
         während des Zugs mit der Matrix (``update_labels`` in
@@ -10715,7 +10735,12 @@ class Viewport(QWidget):
             return None
         if feature.kind == "face":
             return feature if feature.params.get("normal") is not None else None
-        return feature if feature.kind in movable_feature_kinds() else None
+        # **Ein Merkmal aus einem Baustein bewegt den Baustein** — dann hängt
+        # der Griff auch an einer Verrundung oder einem Gewinde, die für sich
+        # keine Operation tragen (:attr:`moves_as_a_part`).
+        if feature.kind in movable_feature_kinds() or self.moves_as_a_part(feature):
+            return feature
+        return None
 
     def slot_handle_feature(self) -> Feature | None:
         """Das gewählte Loch, an dem die Langlochknöpfe sitzen — sonst ``None``.
@@ -10813,7 +10838,8 @@ class Viewport(QWidget):
         if actor is None:
             self.gizmoStatus.emit("")
             return
-        self.gizmoStatus.emit(gizmo_sentence(marked))
+        of_a_part = marked is not None and marked.kind != "face" and self.moves_as_a_part(marked)
+        self.gizmoStatus.emit(gizmo_sentence(marked, part=of_a_part))
         scale = self._gizmo_scale_for(
             actor, self._face_seat[0] if marked is not None and self._face_seat else None
         )

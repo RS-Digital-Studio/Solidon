@@ -1193,7 +1193,7 @@ def _anchor(
         )
     centre = feature.params.get("centre", (0.0, 0.0, 0.0))
     point: Vec3 = (float(centre[0]), float(centre[1]), float(centre[2]))
-    direction = _direction_of(feature)
+    direction = direction_of(feature)
     return _at_the_mouth(point, direction, feature, built, spec), direction
 
 
@@ -1303,7 +1303,7 @@ def _free_direction(params: Any) -> Vec3 | None:
     return (values[0] / length, values[1] / length, values[2] / length)
 
 
-def _direction_of(feature: Feature) -> Vec3 | None:
+def direction_of(feature: Feature) -> Vec3 | None:
     """Wohin ein Merkmal schaut — oder ``None``, wenn es das nicht sagt.
 
     Dieselbe Frage beantwortet ``geom.align.frame_of`` fürs Ausrichten, und
@@ -1311,6 +1311,12 @@ def _direction_of(feature: Feature) -> Vec3 | None:
     ist sie keiner: Ein Baustein an einer Kantenschleife hat einen Ort und
     behält seine gewählte Achse. Die Antworten sind gleich, die Folgen nicht —
     deshalb steht die Frage zweimal da.
+
+    **Öffentlich, weil der Griff dieselbe Achse braucht** (14.09.2026): Ein
+    Baustein an einem benannten Merkmal dreht sich um dessen Richtung, und
+    ``MainWindow._part_turned`` muss dieselbe Antwort bekommen wie
+    :func:`_matrix` — sonst dreht der Ring um eine Achse, die der Schritt
+    nicht kennt.
     """
     raw = feature.params.get("normal") or feature.params.get("axis")
     if raw is None:

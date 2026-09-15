@@ -4539,6 +4539,408 @@ def test_loading_a_model_gives_no_detected_feature_an_originator(
     }
 
 
+def _a_keyhole_on_the_plate(window: MainWindow) -> tuple[str, int]:
+    """Ein Schlüsselloch bei (10 | 5) auf der Deckfläche — Körper und Schritt."""
+    from app.core.scene import OperationDraft
+
+    result = window.session.last_result
+    assert result is not None
+    object_id = next(iter(result.scene.objects))
+    window.session.apply(
+        "Schlüsselloch",
+        [
+            OperationDraft(
+                op="insert_keyhole",
+                inputs=(object_id,),
+                params={"x": 10.0, "y": 5.0, "z": 8.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = window.session.project.document.ops[-1]
+    assert step.op == "insert_keyhole"
+    return object_id, int(step.id)
+
+
+def _part_centres(window: MainWindow, object_id: str, step: int) -> dict[str, tuple[float, ...]]:
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    return {
+        name: tuple(float(value) for value in feature.params["centre"])
+        for name, feature in entry.features.items()
+        if feature.created_by == step and feature.kind == "hole"
+    }
+
+
+def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> None:
+    """Der Griff an einer Hälfte des Schlüssellochs versetzt das Schlüsselloch.
+
+    Ein Schlüsselloch bringt zwölf Merkmale mit; wer die runde Tasche anfasst,
+    meint das Schlüsselloch (`oberflaeche.md`, „Ein Merkmal aus einem Baustein
+    meint den Baustein"). Bis zum 14.09.2026 wurde der Zug ein
+    ``move_feature`` auf die Tasche: sie wanderte um fünf Millimeter, der
+    Schlitz blieb stehen, und zehn Verrundungen verloren ihre Erkennung —
+    gemessen an der Sonde über alle Bausteine. Jetzt gehen die Zahlen in den
+    Schritt, wie bei *Baustein verschieben* rechts.
+
+    **Und drehen dreht den Baustein um seinen Anker.** Ein Ring um Z schreibt
+    den Winkel, ein Ring um Y die Richtung — dieselbe Rundreise wie am Griff
+    der Vorschau eines Grundkörpers, und nach beidem ist der Baustein noch
+    gewählt.
+    """
+    from app.core.geom.transform import TransformSteps
+
+    object_id, step = _a_keyhole_on_the_plate(window)
+    before = _part_centres(window, object_id, step)
+    assert len(before) == 2, before
+    steps_before = len(window.session.project.document.ops)
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, "keyhole_pocket_1")
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window.feature_panel.shown_part_step() == step
+
+    # Der Griff am Merkmal meldet die **neue Mitte** der Tasche — so, wie die
+    # Ansicht es nach dem Loslassen tut (``featureMoved``).
+    pocket = before["keyhole_pocket_1"]
+    window.viewport.featureMoved.emit("keyhole_pocket_1", (pocket[0] + 5.0, pocket[1], pocket[2]))
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+
+    ops = window.session.project.document.ops
+    assert len(ops) == steps_before, "kein zweiter Schritt — der Baustein ändert seinen eigenen"
+    moved = next(entry for entry in ops if entry.id == step)
+    assert moved.params["x"] == pytest.approx(15.0), moved.params
+    after = _part_centres(window, object_id, step)
+    for name, centre in before.items():
+        assert after[name][:2] == pytest.approx((centre[0] + 5.0, centre[1]), abs=0.05), name
+    assert window.feature_panel.shown_part_step() == step, "der Baustein bleibt gewählt"
+
+    window.viewport.featureTurned.emit("keyhole_pocket_1", "z", 30.0)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    turned = next(entry for entry in window.session.project.document.ops if entry.id == step)
+    assert turned.params["angle"] == pytest.approx(30.0)
+    assert (turned.params["x"], turned.params["y"]) == pytest.approx((15.0, 5.0)), (
+        "gedreht wird um den eigenen Anker, der bleibt stehen"
+    )
+
+    # Und die Bewegen-Leiste geht denselben Weg — ein getippter Versatz.
+    window._on_transform_dragged(TransformSteps(offset=(0.0, -2.0, 0.0)))
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    typed = next(entry for entry in window.session.project.document.ops if entry.id == step)
+    assert typed.params["y"] == pytest.approx(3.0), typed.params
+    assert len(window.session.project.document.ops) == steps_before
+
+    # **Und der Griff hängt auch an einer Verrundung des Schlüssellochs.** Für
+    # sich trägt sie keine Operation (``fillet`` steht in keinem
+    # ``applies_to``), aber sie kam aus dem Baustein — und der lässt sich
+    # bewegen. Der Satz in der Statuszeile sagt, was der Zug tut.
+    from app.ui.viewport import gizmo_sentence
+
+    window.object_tree.select_feature(object_id, "fillet_1")
+    for _ in range(40):
+        QApplication.processEvents()
+    at_the_fillet = window.viewport.gizmo_feature()
+    assert at_the_fillet is not None and at_the_fillet.id == "fillet_1", (
+        "an einem Bausteinmerkmal ohne eigene Operation steht der Griff trotzdem"
+    )
+    assert window.viewport.moves_as_a_part(at_the_fillet)
+    # **Und die Statuszeile sagt es** — gemessen am gesendeten Satz, nicht an
+    # der Funktion mit von Hand gesetzter Flagge: Wer in ``set_gizmo`` das
+    # ``part=`` vergisst, sendet den Satz über „das gewählte Merkmal".
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.viewport.show_scene(window.session.last_result)
+    said: list[str] = []
+    window.viewport.gizmoStatus.connect(said.append)
+    window.viewport.select(object_id)
+    window.viewport.select_feature("fillet_1")
+    window.viewport.set_gizmo(True)
+    assert said, "der Griff meldet seinen Satz"
+    assert "Baustein" in said[-1], said[-1]
+    assert said[-1] != gizmo_sentence(at_the_fillet), "nicht der Satz über das eine Merkmal"
+
+
+def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: MainWindow) -> None:
+    """An einem benannten Merkmal dreht der Ring um dessen Achse — und sonst sagt er es.
+
+    Ein Schraubenloch an der Vorderwand (``at_feature`` = Fläche mit Normale
+    -Y) trägt keine freie Richtung; seine Achse ist die der Wand. Bis zum
+    Review vom 14.09.2026 nahm der Griff die Achse des **gezogenen** Merkmals:
+    Der Ring um Z hätte um die Wandachse gedreht, der Ring um Y wäre abgelehnt
+    worden — gespiegelt falsch. Jetzt trägt der Ring um Y (die Wandachse), und
+    der um Z bekommt einen Satz mit dem Namen des Sitzmerkmals.
+    """
+    from app.core.scene import OperationDraft
+
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    wall = next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == "face" and float(feature.params["normal"][1]) < -0.9
+    )
+    window.session.apply(
+        "Schraubenloch",
+        [OperationDraft(op="insert_screw_hole", inputs=(object_id,), params={"at_feature": wall})],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = window.session.project.document.ops[-1]
+    assert step.op == "insert_screw_hole"
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+    bore = next(
+        name
+        for name, feature in result.scene.objects[object_id].features.items()
+        if feature.created_by == step.id and feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, bore)
+    for _ in range(40):
+        QApplication.processEvents()
+
+    window.viewport.featureTurned.emit(bore, "y", 30.0)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    turned = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
+    assert turned.params["angle"] == pytest.approx(-30.0), (
+        "der Ring um Y dreht um die Wandachse — sie zeigt nach -Y, also mit umgekehrtem Vorzeichen"
+    )
+    assert turned.params["at_feature"] == wall, "der Sitz bleibt"
+
+    window.viewport.featureTurned.emit(bore, "z", 30.0)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    same = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
+    assert same.params["angle"] == pytest.approx(-30.0), "um Z dreht dieser Baustein nicht"
+    assert not any(op.op == "rotate_feature" for op in window.session.project.document.ops), (
+        "und es entsteht kein Schritt an der Bohrung allein"
+    )
+    # ``announce`` schreibt die bleibende Meldung (``_announcement``), nicht
+    # den Fortschrittstext der Statusleiste.
+    said = window._announcement
+    assert wall in said and "dreht sich nur um dessen Achse" in said, said
+
+
+def test_a_part_without_a_direction_turns_only_where_the_step_can_follow() -> None:
+    """Ohne freie Richtung dreht der Ring, wo ``_matrix`` dieselbe Lage rechnet.
+
+    Eine Rippe mit ``nx = ny = nz = 0`` und Achse Z steht aufrecht; ihre Lage
+    ist ``frame_of(+Z)`` — die Einheit —, also darf die Rundreise rechnen und
+    gibt eine freie Richtung zurück. Der Lochwand-Einhänger hat ein Oben
+    (``keeps_up``): Sein freier Zweig dreht um 180 Grad mehr als sein
+    Achsenzweig, deshalb bleibt es dort beim Winkel um die Achse — und ein Ring
+    um X sagt, was fehlt, statt still zu drehen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    upright = {
+        "x": 1.0,
+        "y": 2.0,
+        "z": 3.0,
+        "nx": 0.0,
+        "ny": 0.0,
+        "nz": 0.0,
+        "axis": "z",
+        "angle": 10.0,
+    }
+
+    values, why = MainWindow._part_turned(REGISTRY.get("insert_rib"), upright, "z", 20.0, None)
+    assert values is not None and why == ""
+    assert values["angle"] == pytest.approx(30.0)
+    assert (values["nx"], values["ny"], values["nz"]) == pytest.approx((0.0, 0.0, 1.0))
+    assert (values["x"], values["y"], values["z"]) == pytest.approx((1.0, 2.0, 3.0))
+
+    values, why = MainWindow._part_turned(
+        REGISTRY.get("insert_pegboard_hook"), upright, "z", 20.0, None
+    )
+    assert values == {"angle": 30.0} and why == "", "ein Baustein mit Oben bleibt im Achsenzweig"
+
+    values, why = MainWindow._part_turned(
+        REGISTRY.get("insert_pegboard_hook"), upright, "x", 20.0, None
+    )
+    assert values is None and why == "direction"
+
+
+def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> None:
+    """Ein Langloch, das ein Schritt gezogen hat, dreht sich über diesen Schritt.
+
+    Bohrung → Langloch ist ein ``slot_hole``-Schritt; das Langloch trägt ihn
+    als ``created_by``. Wer es danach dreht und übernimmt, bekam bis zum
+    15.09.2026 einen **zweiten** Schritt obenauf, und der schnitt quer über das
+    erste — „habe ich 2 langlöcher" (Robert). Jetzt bekommt der erste Schritt
+    den Winkel (§21.2, dieselbe Regel wie beim Baustein), rechnet von der
+    Bohrung aus neu, und im Verlauf steht weiter ein Schritt.
+
+    **Nur Geändertes geht in den Schritt.** Das Fenster belegt die Felder mit
+    den gemessenen Werten (18,02 für ein Langloch von 18,00); ein Feld, das
+    darauf stehen blieb, hat niemand angefasst und wächst das Loch nicht.
+    """
+    from app.core.geom.prepare_ops import slot_angle_of
+    from app.core.scene import OperationDraft
+
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    centre = tuple(float(value) for value in entry.features[hole].params["centre"])
+    window.session.apply(
+        "Zum Langloch ziehen",
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=(object_id,),
+                params={
+                    "at_feature": hole,
+                    "slot_length": 18.0,
+                    "slot_angle": 0.0,
+                    "x": centre[0],
+                    "y": centre[1],
+                    "z": centre[2],
+                },
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = window.session.project.document.ops[-1]
+    assert step.op == "slot_hole"
+    steps = len(window.session.project.document.ops)
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+    slot_id, slot = next(
+        (name, feature)
+        for name, feature in result.scene.objects[object_id].features.items()
+        if feature.kind == "slot"
+    )
+    assert slot.created_by == step.id
+    measured = float(slot.params["length"])
+    axis = tuple(float(value) for value in slot.params["axis"])
+    where = tuple(float(value) for value in slot.params["centre"])
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, slot_id)
+    for _ in range(40):
+        QApplication.processEvents()
+    # Was das Merkmalfenster beim Übernehmen schickt: die gemessene Länge, die
+    # gemessene Mitte — und den neuen Winkel.
+    window._apply_from_feature_panel(
+        "slot_hole",
+        {
+            "at_feature": slot_id,
+            "slot_length": measured,
+            "slot_angle": 45.0,
+            "x": where[0],
+            "y": where[1],
+            "z": where[2],
+        },
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+
+    ops = window.session.project.document.ops
+    assert len(ops) == steps, "kein zweiter Schritt"
+    turned = next(entry for entry in ops if entry.id == step.id)
+    assert turned.params["slot_angle"] == pytest.approx(45.0)
+    assert turned.params["slot_length"] == pytest.approx(18.0), (
+        "die unveränderte, gemessene Länge geht nicht in den Schritt"
+    )
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+    kinds = [feature.kind for feature in result.scene.objects[object_id].features.values()]
+    assert kinds.count("slot") == 1, f"ein Langloch, kein Kreuz: {kinds}"
+    after = next(
+        feature
+        for feature in result.scene.objects[object_id].features.values()
+        if feature.kind == "slot"
+    )
+    assert slot_angle_of(after, axis) == pytest.approx(45.0, abs=0.5)
+
+    # Und der Zug an den Langlochknöpfen geht denselben Weg.
+    window._on_slot_dragged(slot_id, 22.0, 45.0)
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    assert len(window.session.project.document.ops) == steps
+    longer = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
+    assert longer.params["slot_length"] == pytest.approx(22.0)
+
+
+def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWindow) -> None:
+    """Nach *Maße ändern* ist der Baustein noch gewählt — auch mit anderen Merkmalen.
+
+    Ein Steckverbinder als Stift hat andere Merkmale als einer als Bohrung;
+    wer die Art umstellt, verliert das angeklickte Merkmal, und der Baum
+    stellt nur wieder her, was es noch gibt. Rechts stand danach das leere
+    Fenster, und für die nächste Zahl war der Baustein neu zu suchen (Sonde
+    an Scharnier, Kabeldurchführung und Steckverbinder, 14.09.2026). Der
+    Schritt bleibt derselbe; gewählt wird danach eines seiner Merkmale.
+    """
+    from app.core.scene import OperationDraft
+
+    result = window.session.last_result
+    assert result is not None
+    object_id = next(iter(result.scene.objects))
+    window.session.apply(
+        "Steckverbinder",
+        [
+            OperationDraft(
+                op="insert_snap_connector",
+                inputs=(object_id,),
+                params={"x": 10.0, "y": 5.0, "z": 8.0, "nx": 0.0, "ny": 0.0, "nz": 1.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = int(window.session.project.document.ops[-1].id)
+    result = window.session.last_result
+    assert result is not None
+    chosen = next(
+        name
+        for name, feature in result.scene.objects[object_id].features.items()
+        if feature.created_by == step
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, chosen)
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window.feature_panel.shown_part_step() == step
+
+    window._change_part_step(step, {"kind": "bore"})
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+
+    result = window.session.last_result
+    assert result is not None
+    assert chosen not in result.scene.objects[object_id].features, (
+        "die Probe trifft nur, wenn das angeklickte Merkmal wirklich weg ist"
+    )
+    selected = window.object_tree.selected_features()
+    assert selected, "der Baustein ist noch gewählt"
+    for owner, name in selected:
+        assert result.scene.objects[owner].features[name].created_by == step
+    assert window.feature_panel.shown_part_step() == step, "und rechts steht er noch"
+
+
 def test_a_part_with_one_feature_gets_no_roof(window: MainWindow) -> None:
     """Ein Dach über einer einzigen Zeile ist keins.
 

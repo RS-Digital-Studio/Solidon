@@ -33,6 +33,7 @@ dans `website/version.json`.
 ### Construire et modifier
 - Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.
 
+- Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.
 - Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.
 - Si vous ne nommez qu'un axe dans le chat — « perçage à x = 20 » —, le trou ne bouge que là. Avant, il retombait à zéro sur les deux autres axes.
 - Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage.
@@ -62,6 +63,12 @@ dans `website/version.json`.
 - Les faces peintes dans Bambu Studio, Orca et Elegoo arrivent exactement telles qu’elles ont été peintes — même lorsqu’une couleur traverse un triangle. Avant, cela comptait comme « ambigu ».
 - Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.
 - Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer.
+
+### Blocs et ajustements
+
+- Un bloc destiné à un perçage — insert thermique, logement d’écrou, siège de roulement, filetage, vis — se pose directement dans le perçage choisi, et non au centre de la face.
+- Faites glisser un bloc par sa poignée dans la vue et c’est tout le bloc qui bouge, même saisi par un bord du trou de serrure. Avant, seule cette caractéristique se déplaçait.
+- Crochets et trous d’un bloc apparaissent à droite comme un nombre, non plus comme « 2,00 mm ». Après « Modifier les cotes », le bloc reste sélectionné, même avec d’autres caractéristiques.
 
 ## 0.4.1
 

@@ -2202,6 +2202,68 @@ def test_a_part_sits_on_the_top_face_at_once_and_carries_a_grip(qt_app: QApplica
         window.release()
 
 
+def test_a_part_for_a_hole_sits_in_the_chosen_hole(qt_app: QApplication) -> None:
+    """Eine gewählte Bohrung, ein Baustein für Bohrungen — er sitzt darin.
+
+    Einpressbuchse, Mutternfalle, Lagersitz und Gewinde gehören *in* eine
+    Bohrung, die gedruckte Schraube nirgends sonst. Bis zum 14.09.2026 saß
+    jeder von ihnen trotzdem auf der Mitte der Deckfläche, obwohl ``hole_1``
+    angeklickt war: Der Sitz von selbst fragte nur nach Flächen, und die
+    gewählte Bohrung wurde dabei stumm aus ``at_feature`` geräumt (Sonde über
+    alle fünf, 14.09.2026). Jetzt liefert ``seat_of`` die Mündung — derselbe
+    Weg wie bei *Bohrung ändern* — und der Satz sagt, wo der Baustein sitzt.
+    """
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        result = window.session.last_result
+        assert result is not None
+        centre = result.scene.objects[object_id].features[hole].params["centre"]
+        dialog, flow = _a_part_placement(window, "insert_heatset_m4")
+
+        assert flow._surface is not None
+        assert flow._surface.point[:2] == pytest.approx(
+            (float(centre[0]), float(centre[1])), abs=0.05
+        ), "in der Bohrung, nicht auf der Flächenmitte"
+        values = dialog.values()
+        assert (values["x"], values["y"]) == pytest.approx(
+            (float(centre[0]), float(centre[1])), abs=0.05
+        ), "die Felder kennen die Bohrung"
+        assert flow._seated_by_default, "ein Klick setzt um, er übernimmt nicht"
+        assert window.viewport._placement_grip is not None, "mit Griff"
+        assert flow._note.text().startswith("Sitzt in der Bohrung"), flow._note.text()
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_screw_hole_on_a_chosen_hole_stays_on_the_face(qt_app: QApplication) -> None:
+    """Ein Baustein, der nicht in Bohrungen gehört, folgt der Bohrung nicht.
+
+    Ein Schraubenloch auf eine Bohrung zu setzen ergäbe ein Loch im Loch;
+    dort bleibt der Sitz auf der größten Fläche nach oben — wie bisher.
+    """
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        result = window.session.last_result
+        assert result is not None
+        centre = result.scene.objects[object_id].features[hole].params["centre"]
+        _dialog, flow = _a_part_placement(window, "insert_screw_hole")
+        assert flow._surface is not None
+        assert flow._surface.point[:2] != pytest.approx(
+            (float(centre[0]), float(centre[1])), abs=0.05
+        )
+        assert flow._note.text().startswith("Sitzt auf der Fläche"), flow._note.text()
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_a_part_sits_on_the_selected_face_and_the_selection_grip_comes_back(
     qt_app: QApplication,
 ) -> None:

@@ -1678,6 +1678,54 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
         panel.deleteLater()
 
 
+def test_a_count_is_a_whole_number_without_a_unit(qt_app: QApplication) -> None:
+    """Die Haken eines Einhängers sind eine Anzahl — kein Maß in Millimetern.
+
+    ``count`` und ``steps`` des Lochwand-Einhängers sind ganze Zahlen ohne
+    Einheit. Als ``length`` bekamen sie im Merkmalfenster ein Längenfeld:
+    „Anzahl: 2,00 mm", in Zoll „0,08 in" — und gingen als ``4.0`` in den
+    Schritt zurück (Sonde über alle Bausteine, 14.09.2026). Der Kern nennt die
+    Art jetzt ``count``, das Fenster baut dafür ein Ganzzahlfeld, und was
+    zurückgeht, ist eine ganze Zahl.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QSpinBox
+
+    from app.core.perceive.actions import part_actions
+
+    load_operations()
+    spec = REGISTRY.get("insert_pegboard_hook")
+    step = SimpleNamespace(
+        id=5, op="insert_pegboard_hook", params={"count": 2, "steps": 1, "x": 4.0}
+    )
+    fields = {field.name: field for action in part_actions(step, spec) for field in action.fields}
+    assert fields["count"].kind == "count", fields["count"]
+    assert fields["steps"].kind == "count", fields["steps"]
+
+    panel = FeaturePanel()
+    changed: list[tuple[int, dict]] = []
+    panel.stepChangeRequested.connect(lambda op_id, params: changed.append((op_id, params)))
+    try:
+        panel.show_part(step, spec)
+        counts = [
+            editor
+            for editor in panel.findChildren(QSpinBox)
+            if editor.accessibleName().startswith("Maße ändern — ")
+        ]
+        assert len(counts) == 2, [editor.accessibleName() for editor in counts]
+        for editor in counts:
+            assert editor.suffix() == "", "eine Anzahl trägt keine Einheit"
+        counts[0].setValue(4)
+        press(panel, "Maße ändern")
+        assert len(changed) == 1
+        _op_id, params = changed[0]
+        assert params["count"] == 4 and isinstance(params["count"], int), params
+        assert isinstance(params["steps"], int), params
+    finally:
+        panel.deleteLater()
+
+
 def test_a_part_step_keeps_the_values_it_was_not_asked_about(qt_app: QApplication) -> None:
     """Verschieben lässt die Maße stehen — geprüft am Fenster, nicht am Panel.
 

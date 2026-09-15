@@ -452,6 +452,17 @@ Regel 7 im Gewand einer Fertigungszugabe. Sie untergrub die Kalibrierung
 je Seite. **Dass etwas nicht klemmt, ist die Aufgabe des Gleitspiels aus dem
 Profil**; dafür ist es da, und dafür wird es gemessen.
 
+## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
+
+Nicht ein zweites quer über dem ersten. Bis zum 15.09.2026 schnitt `slot_hole`
+mit einem anderen Winkel ein Kreuz und **warnte** davor (`slot_hole.crosses`);
+Robert: „habe ich 2 langlöcher". Eine Warnung ist keine Antwort auf eine Geste,
+die etwas anderes verspricht — der Ring am Griff dreht das Loch, also dreht
+die Operation es: alte Öffnung schließen, neue schneiden, derselbe Weg wie beim
+Versetzen. Was bleibt, ist die Auskunft (`slot_hole.turned`, info). **Wer eine
+Operation baut, die eine Geste einlöst, baut die Wirkung, nicht den Hinweis auf
+die andere.**
+
 ## Ein Langloch trägt keine Aufweitung, und seine Länge ist nicht sein Weg
 
 Zwei Entscheidungen zum Langloch, beide vom 10.09.2026, beide leicht in die

@@ -32,6 +32,7 @@ scrive in `website/version.json`.
 ### Costruire e modificare
 - Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.
 
+- Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.
 - Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.
 - Se nella chat indichi un solo asse — « foro a x = 20 » —, il foro si sposta solo lì. Prima negli altri due assi saltava a zero.
 - Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh.
@@ -61,6 +62,12 @@ scrive in `website/version.json`.
 - Le facce dipinte in Bambu Studio, Orca ed Elegoo arrivano esattamente come dipinte, anche dove un colore attraversa un triangolo. Prima contava come «ambiguo».
 - Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.
 - Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer.
+
+### Blocchi e accoppiamenti
+
+- Un blocco per fori — inserto a caldo, sede per dado, sede per cuscinetto, filettatura, vite — si posa subito nel foro scelto, invece che al centro della faccia.
+- Trascinando un blocco con la maniglia nella vista si sposta l’intero blocco, anche afferrandolo a un bordo del foro a serratura. Prima si spostava solo quella caratteristica.
+- Ganci e fori di un blocco compaiono a destra come numero, non più come «2,00 mm». E dopo «Modifica misure» il blocco resta selezionato, anche con altre caratteristiche.
 
 ## 0.4.1
 

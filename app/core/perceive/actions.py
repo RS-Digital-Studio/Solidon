@@ -255,9 +255,10 @@ class ActionField:
     unit: str
     value: float | bool | str
     kind: str
-    """``length``, ``angle``, ``bool`` oder ``choice`` — davon hängt ab, welches
-    Eingabefeld die Oberfläche baut. Ein Längenfeld rechnet Zoll zurück, ein
-    Winkelfeld nicht."""
+    """``length``, ``angle``, ``count``, ``bool`` oder ``choice`` — davon hängt
+    ab, welches Eingabefeld die Oberfläche baut. Ein Längenfeld rechnet Zoll
+    zurück, ein Winkelfeld nicht, und eine Anzahl ist eine ganze Zahl ohne
+    Einheit."""
     minimum: float | None = None
     maximum: float | None = None
     choices: tuple[tuple[str, TranslatableText | str], ...] = ()
@@ -296,11 +297,20 @@ class FeatureAction:
 
 
 def _kind_of(spec: Any) -> str:
-    """Welche Art Eingabefeld dieser Parameter braucht."""
+    """Welche Art Eingabefeld dieser Parameter braucht.
+
+    **Eine Anzahl ist keine Länge.** Die Haken des Lochwand-Einhängers und die
+    Löcher der Wandhalterung sind ganze Zahlen ohne Einheit; als ``length``
+    bekamen sie im Merkmalfenster ein Längenfeld — „Anzahl: 2,00 mm", in Zoll
+    „0,08 in" — und gingen als ``4.0`` in den Schritt zurück (gemessen an der
+    Sonde vom 14.09.2026).
+    """
     if spec.kind == "bool":
         return "bool"
     if spec.kind == "enum":
         return "choice"
+    if spec.kind == "int":
+        return "count"
     if spec.unit == DEGREE_UNIT:
         return "angle"
     return "length"

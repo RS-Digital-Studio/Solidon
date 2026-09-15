@@ -26,6 +26,8 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-14 | [Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)](#sechs-pakete-aus-der-einschätzung-zur-einfachen-bedienung-14092026) |
+| 2026-09-15 | [Ein gedrehtes Langloch ist eines (15.09.2026)](#ein-gedrehtes-langloch-ist-eines-15092026) |
+| 2026-09-14 | [Bausteine: Vorschau, Griff und Werte — die Sonde über alle 27 (14.09.2026)](#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026) |
 | 2026-09-14 | [Eine 3MF von MakerWorld ging nicht auf (14.09.2026)](#eine-3mf-von-makerworld-ging-nicht-auf-14092026) |
 | 2026-09-14 | [Das Puppenhaus bekommt seine offene Vorderseite (14.09.2026)](#das-puppenhaus-bekommt-seine-offene-vorderseite-14092026) |
 | 2026-09-15 | [Die Suite öffnet kein Fenster (15.09.2026)](#die-suite-öffnet-kein-fenster-15092026) |
@@ -28560,6 +28562,137 @@ Downloads-Ordner und fährt `read_objects` darüber — die zwei gemessenen
 Ursachen decken, was der Bericht hergibt, nicht mehr. Und keine Datei des
 Korpus trägt einen anderen `subtype` als `normal_part`: Hilfsteile und
 Aussparungen sind ausschließlich synthetisch belegt.
+
+## Bausteine: Vorschau, Griff und Werte — die Sonde über alle 27 (14.09.2026)
+
+Roberts Auftrag: „kontrolliere die vorschau von bausteinen, das ändern und einsetzen gründlich
+— viewport mit gizmo und über dialog werte ändern". Gemessen wurde nicht am Register, sondern am
+Fenster, je Baustein ein Prozess (`probe_parts.py`, `probe_gizmo.py` im Scratchpad;
+`RecordingRenderer`, Umgebung wie `conftest`): Platte `plate_holes.stl`, Körper gewählt,
+`run_operation` wie das Menü, dann der ganze Kundenweg — Sitz von selbst, Wert im Dialog ändern,
+Griff ziehen, Einsetzen, Merkmal wählen, *Maße ändern* rechts mit Vorschau und Übernehmen, *Diesen
+Schritt ändern* aus dem Verlauf mit Vorschau und Übernehmen; für die drei freistehenden die
+Live-Vorschau mit Griff, Zug, Wertänderung und Einsetzen. 27 von 27 liefen durch; was trägt:
+
+- Alle 24 Anbauteile sitzen von selbst auf der Deckfläche mit Griff; ein Zug am Griff setzt um
+  und schreibt X/Y in den Dialog; eine Wertänderung baut das Werkzeug neu (Schlüssel wechselt),
+  der Griff hängt frisch; *Einsetzen* legt genau einen Schritt mit den gezogenen Koordinaten an,
+  die Kette hält nirgends an; die Tiefenstufe kommt, wo ein Tiefenfeld ist.
+- *Maße ändern* rechts zeigt eine Vorschau mit Bild und schreibt in den Schritt (kein zweiter);
+  *Diesen Schritt ändern* öffnet den Dialog mit den Werten des Schritts, ohne Fadenkreuz, die
+  Vorschau folgt jeder Änderung, das Übernehmen ersetzt den Schritt. Die drei freistehenden
+  tragen den Griff an der Vorschau, der Zug landet als Ort in den Feldern, die Vorschau kommt neu.
+- Zwei Dinge sahen aus wie Befunde und waren keine: `profile_tongue` 3030 gegen 4040 ändert das
+  Volumen nicht — die Nut ist dieselbe (`standards.toml`: „Nut 8 wie 3030"), das Band sagt es
+  ehrlich. Und der Lochwand-Einhänger mit vier Haken auf der 80er-Platte meldet beim Wiederöffnen
+  „Keine Vorschau: … hängt in der Luft" — das ist der Befund des Schritts selbst
+  (`parts.hanging_loose`, ein Fehlerbefund, der die Kette nicht anhält), den das Band bei leerer
+  Differenz weiterreicht.
+
+Vier Befunde, alle behoben:
+
+- **Ein Baustein für Bohrungen saß nicht in der gewählten Bohrung.** `hole_1` bei (−25 | −15)
+  angeklickt, Einpressbuchse gewählt — sie saß bei (0 | 0) auf der Mitte der Deckfläche, und
+  `at_feature` war stumm geräumt; ebenso Mutternfalle, Lagersitz, Gewinde und die gedruckte
+  Schraube. `_begin_on_a_face` fragte nur nach Flächen. Jetzt fragt `_hole_to_seat_in` bei einem
+  `at_hole`-Baustein die gewählte Bohrung, `placement.seat_of` liefert die Mündung (der Weg von
+  *Bohrung ändern*), der Satz sagt „Sitzt in der Bohrung"; Griff und Klick gelten wie auf der
+  Fläche. Ein Schraubenloch folgt der Bohrung nicht — ein Loch im Loch. Nachweis:
+  `test_a_part_for_a_hole_sits_in_the_chosen_hole`,
+  `test_a_screw_hole_on_a_chosen_hole_stays_on_the_face`.
+- **Der Griff an einem Bausteinmerkmal zerriss den Baustein.** Die Tasche des Schlüssellochs
+  gezogen: ein `move_feature` auf die Tasche, der Schlitz blieb bei (10 | 13), zehn Verrundungen
+  verloren ihre Erkennung („(7) Formdetails sind nach diesem Schritt nicht mehr automatisch
+  wiederzuerkennen"). Die Regel „Ein Merkmal aus einem Baustein meint den Baustein" galt für die
+  Felder rechts und nicht für den Griff. Jetzt gehen Zug am Griff (`featureMoved`,
+  `featureTurned`), Körpergriff und Bewegen-Leiste durch `MainWindow._move_the_part`: Versatz auf
+  X/Y/Z des Schritts, Drehung um den eigenen Anker über die Rundreise
+  `placement_transform`/`placement_values_of` (30° um Z → `angle` 30, 90° um Y → Richtung
+  (1 | 0 | 0)); an einem benannten Merkmal nur um dessen Achse, sonst ein Satz. Und der Griff
+  hängt seither an **jedem** Bausteinmerkmal — auch an einer Verrundung oder einem Gewinde, die
+  für sich keine Operation tragen (`Viewport.moves_as_a_part`, schwach vom Fenster gesetzt); die
+  Statuszeile sagt „Der Griff bewegt den ganzen Baustein". Nachweis:
+  `test_a_drag_at_a_part_feature_moves_the_whole_part`. Was bleibt, steht als RM-174 im Register.
+- **Eine Anzahl war eine Länge.** `count` und `steps` des Einhängers, `holes` der Wandhalterung:
+  im Merkmalfenster ein Längenfeld („Anzahl: 2,00 mm", in Zoll „0,08 in"), zurück in den Schritt
+  als `4.0`. `_kind_of` nennt `int` jetzt `count`, das Fenster baut ein Ganzzahlfeld ohne Einheit,
+  `_values` gibt `int`. Nachweis: `test_a_count_is_a_whole_number_without_a_unit`.
+- **Nach *Maße ändern* war der Baustein abgewählt.** Ein anderer Stift am Scharnier, eine andere
+  Kabelgröße, Stift statt Bohrung am Steckverbinder — das angeklickte Merkmal gab es unter seinem
+  Namen nicht mehr, der Baum stellte nichts wieder her, rechts stand das leere Fenster.
+  `_part_to_keep` merkt den Schritt, `_reselect_the_part` wählt nach der Auswertung eines seiner
+  Merkmale. Nachweis: `test_a_part_stays_chosen_when_its_measures_swap_its_features`.
+
+**Review am selben Tag, nachgezogen (sieben Funde, alle behoben).** Der tragende: Die Drehung
+an einem Baustein mit benanntem Sitz (`at_feature`) nahm die Achse des **gezogenen** Merkmals
+statt die des Sitzmerkmals — gemessen an der Mutternfalle an `hole_1` mit Sitzrichtung +X und
+gezogener Verrundung (Achse Z): Der Ring um Z drehte still um X, der Ring um X wurde abgelehnt.
+`_part_turned` bekommt jetzt das Sitzmerkmal und dessen Richtung über `direction_of` — dieselbe
+Funktion wie `_anchor` im Kern, dafür öffentlich geworden. Zweitens nannte der Absagesatz ein
+leeres Merkmal („sitzt an „““) und riet zum Verschieben, das keine freie Richtung erzeugt; jetzt
+zwei Sätze für zwei Lagen (am Merkmal: neu auf die Fläche setzen oder „An Merkmal" leeren; ohne
+Richtung: die Fläche anklicken oder die Normalenrichtung eintragen), und ohne Richtung rechnet die
+Rundreise dort, wo `_matrix` dieselbe Matrix baut (kein `keeps_up`, Achse Z — `frame_of(+Z)` ist
+die Einheit; für X und Y sind die Rahmen verschieden, gemessen). Drittens überlebte `_part_to_keep`
+eine abgelehnte Änderung (Demo abgelaufen, ungültiger Wert) und hätte die nächste beliebige
+Auswertung getroffen: `Session.change_params` sagt jetzt, ob es geklappt hat, der Merker fällt nur
+bei Ja. Dazu: die Achsentoleranz ist ein Grad und heißt `TURNS_ABOUT_ITS_AXIS` statt der
+Anzeigerundung 0,01 (acht Grad); die Statuszeile des Griffs ist am gesendeten Satz geprüft und
+nicht an der Funktion mit gesetzter Flagge; vier Changelog-Fassungen tragen den Nebensatz „auch
+mit anderen Merkmalen" wieder; `_feature_centre` nennt die Annahme, dass jede Bausteinart eine
+Mitte trägt; `str(params.get("axis"))` in der Bewegen-Leiste machte aus einer fehlenden Achse
+„None". Nachweis: `test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest`,
+`test_a_part_without_a_direction_turns_only_where_the_step_can_follow`, und der Griff-Test liest
+`gizmoStatus` am Renderer-Doppel.
+
+Gefahren je Prozess: test_feature_panel, test_surface_placement_ui, test_analysis_ui,
+test_viewport_decisions, test_transform_ui, test_selection, test_widget_lifetime, test_catalog_ui,
+test_ui, test_operation_ui, test_slot_handle, test_viewport_pending_transform,
+test_selection_operations, test_split_ui; dazu test_language_rules, test_parts_catalog,
+test_placement, test_parts, test_directory_docs, test_roadmap, test_changelog, test_translations
+in einem Zug. Vier Tests bleiben rot und sind am HEAD `aec58ad2` ohne diese Änderungen genauso
+rot (je im Worktree gemessen): in test_ui `test_the_three_slicer_handles_stand_where_a_body_is_
+chosen`, `test_a_chosen_finding_survives_a_second_report` und `test_selected_bodies_reveal_their_
+operations_in_the_window_on_the_right`, in test_analysis_ui `test_a_finding_says_which_step_
+reported_it` — Arbeit der Nachbarsitzungen desselben Tages. Ruff, Format, mypy an den geänderten
+Dateien.
+
+## Ein gedrehtes Langloch ist eines (15.09.2026)
+
+Robert: „wenn ich ein langloch auswähle, auf im modell bearbeiten über den viewport bearbeite und
+das langloch drehe und übernehmen klicke habe ich 2 langlöcher". Nachgestellt an `plate_holes.stl`
+(`probe_slot_turn.py`): Bohrung → Langloch 18 mm ist Schritt 2; das Langloch gewählt, die
+gemessene Länge 18,02 und der Winkel 45 über *Übernehmen* — Schritt 3, ein zweites `slot_hole`
+quer über das erste, 397 mm³ mehr abgetragen, kein Langloch mehr erkannt („Formdetail nicht mehr
+wiederzuerkennen"). Der Kern wusste das seit dem 10.09.2026 und sagte es als Warnung
+(`slot_hole.crosses`) — richtig gerechnet, und trotzdem das Gegenteil dessen, was der Ring am Griff
+verspricht.
+
+Zwei Änderungen, an zwei Enden:
+
+- **Der Kern dreht, statt zu kreuzen.** `slot_hole` behandelt eine andere Richtung wie eine andere
+  Stelle: Die alte Öffnung wird geschlossen (`_closed_at` am Netz, `fill_bore` mit Länge und Winkel
+  am exakten Körper), dann die neue geschnitten. `_slot_across_a_slot` heißt `_slot_turned`, der
+  Befund `slot_hole.turned` (info) sagt den Winkel und den Weg zurück; das Kreuz gibt es nicht
+  mehr, und `slot_hole.feature_lost` hat damit keinen der zwei gemessenen Wege mehr — der Befund
+  bleibt für den Fall, den keiner erzeugt. Nachweis: `test_turning_a_slot_closes_its_old_direction`,
+  `test_a_turned_slot_does_not_borrow_its_neighbour`,
+  `test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any` (beide Kerne, zwei Langlöcher
+  nebeneinander, das gedrehte behält Namen und Stelle).
+- **Das Fenster ändert den Schritt.** Ein Langloch, das ein `slot_hole`-Schritt gezogen hat, trägt
+  ihn als `created_by`; *Übernehmen* und der Zug an den Langlochknöpfen gehen seither über
+  `MainWindow._change_slot_step` in **diesen** Schritt (§21.2, dieselbe Regel wie beim Baustein),
+  der rechnet von der Bohrung aus neu — ein Schritt im Verlauf, ein Langloch im Bild. Geschrieben
+  wird nur, was sich gegenüber dem gemessenen Wert geändert hat: Das Fenster belegt die Felder mit
+  18,02 für ein Langloch von 18,00, und wer das ungesehen zurückschriebe, ließe das Loch mit jedem
+  Übernehmen um zwei Hundertstel wachsen. Ein erkanntes Langloch aus einer Datei hat keinen Schritt
+  und geht weiter als neuer Schritt an den Kern — der dort die alte Richtung selbst schließt.
+  Nachweis: `test_turning_a_slot_from_a_step_changes_that_step`.
+
+Gefahren je Prozess: test_slot_features, test_analysis_ui, test_surface_placement_ui,
+test_slot_handle, test_viewport_decisions, test_feature_panel, test_ui (Langloch); dazu
+test_prepare, test_translations, test_language_rules, test_history, test_scene_ops in einem Zug;
+ruff, Format, mypy an den geänderten Dateien.
 
 ## Sechs Pakete aus der Einschätzung zur einfachen Bedienung (14.09.2026)
 

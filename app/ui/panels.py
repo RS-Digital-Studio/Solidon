@@ -60,6 +60,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QStyle,
     QStyleOptionComboBox,
     QStylePainter,
@@ -5800,7 +5801,7 @@ class FeaturePanel(QWidget):
             editor.toggled.connect(report)
         elif isinstance(editor, QComboBox):
             editor.currentIndexChanged.connect(report)
-        elif isinstance(editor, QDoubleSpinBox):
+        elif isinstance(editor, QSpinBox | QDoubleSpinBox):
             editor.valueChanged.connect(report)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Schnittstelle
@@ -5876,6 +5877,17 @@ class FeaturePanel(QWidget):
             )
             spin.set_value_mm(float(field.value))
             return spin
+        if kind == "count":
+            # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
+            # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
+            # rechnete in Zoll um (`_kind_of` in ``perceive.actions``).
+            count = QSpinBox(parent)
+            count.setRange(
+                int(field.minimum) if field.minimum is not None else 0,
+                int(field.maximum) if field.maximum is not None else 100000,
+            )
+            count.setValue(int(field.value))
+            return count
         angle = NumberSpin(parent)
         angle.setRange(
             float(field.minimum) if field.minimum is not None else -360.0,
@@ -5913,6 +5925,8 @@ class FeaturePanel(QWidget):
                 params[str(field.name)] = widget.isChecked()
             elif isinstance(widget, QComboBox):
                 params[str(field.name)] = widget.currentData()
+            elif isinstance(widget, QSpinBox):
+                params[str(field.name)] = int(widget.value())
             elif isinstance(widget, QDoubleSpinBox):
                 params[str(field.name)] = float(widget.value())
         return params
