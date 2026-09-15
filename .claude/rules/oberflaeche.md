@@ -1176,21 +1176,31 @@ dort gibt es kein Stylesheet und keine Schrift (siehe „Die Suite fährt ohne
 Stylesheet" in `tests.md`); die Sonde dazu fährt auf der echten Plattform mit
 `WA_DontShowOnScreen`.
 
-**Der Filter ist der Haken selbst, und `labels.py` importiert kein
-`QMouseEvent`.** Die erste Fassung hängte ein eigenes `QObject` als Filter an
-die Beschriftung und importierte `QMouseEvent` für den `isinstance`-Test —
-und `tests/test_filament_picker.py` riss danach deterministisch mit
-`0xc0000374` im `gc.collect` des Teardowns. Bisektiert am 14.09.2026 in
-einem Scratch-Worktree bis auf **eine Zeile**: der ungenutzte Import allein
-reißt; `QCheckBox` und `QEvent` daneben nicht. Ein PySide-Riss in der
-Typregistrierung, kein Fehler im eigenen Code — und trotzdem unsere Regel:
-Ein Ereignisfilter fragt `event.type()` und liest `button()` über `getattr`.
-Die Reichweite der Lehre ist der Prozess, nicht das Symbol: `viewport.py`
-importiert und benutzt `QMouseEvent` und reißt nicht. Gehalten wird deshalb
-genau diese eine Datei, in jeder Schreibweise:
-`test_labels_do_not_name_the_mouse_event_type` in
-`tests/test_language_rules.py` liest den Syntaxbaum — Import, Name, Attribut —
-und läuft vor jedem Commit an `app/`.
+**Der Filter ist der Haken selbst — und PySide legt seine Typen vollständig
+an, bevor das erste Fenster entsteht.** Die erste Fassung hängte ein eigenes
+`QObject` als Filter an die Beschriftung und importierte `QMouseEvent` für
+den `isinstance`-Test; `tests/test_filament_picker.py` riss danach
+deterministisch mit `0xc0000374` im `gc.collect` des Teardowns. Bisektiert am
+14.09.2026 bis auf den ungenutzten Import — und am 15.09.2026 noch einmal
+auf `QSpinBox` in `panels.py`, derselbe Riss, wobei derselbe Name über
+`QtWidgets.QSpinBox` gelesen grün war. **Die Ursache ist nicht der Name,
+sondern wann PySide 6.11.2 den Typ anlegt:** Mit der Vorgabe entsteht ein
+Typ erst beim ersten Zugriff, welche Typen wann entstehen hängt damit an der
+Importreihenfolge der Oberfläche, und irgendwo darin liegt ein Riss beim
+Abbau. Mit `PYSIDE6_OPTION_LAZY=0` laufen **beide** Stände durch; der Preis
+sind 60 ms beim PySide-Import und 6 MB.
+
+Die Variable wirkt nur, bevor `PySide6` zum ersten Mal geladen wird.
+`app/ui/__init__.py` setzt sie beim Betreten des Pakets, `app.py` lädt das
+Paket als **ersten** Import (das gebaute Paket startet die Datei als Skript,
+und `app.ui` wäre sonst erst hinter `PySide6` an der Reihe), und
+`tests/conftest.py` lädt es vor jeder Testdatei.
+`test_the_interface_loads_qt_types_before_the_first_window` in
+`tests/test_language_rules.py` hält alle drei Stellen und läuft vor jedem
+Commit an `app/`. Der `QMouseEvent`-Wächter von damals ist gefallen — er hielt
+ein Symptom fern, und die Ursache ist behoben. Was von der Lehre bleibt:
+**Bei einem Riss dieser Gestalt zuerst die Importe verdächtigen, dann den
+Code** — und die Reichweite ist der Prozess, nicht das Symbol.
 
 **Und was eine Vorschau nicht zeigen kann, sagt sie.** Über drei Lagen stand
 dasselbe Band „Vorschau — noch nicht übernommen": über einer Bohrung, über

@@ -357,6 +357,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beziehungsweise Timeout und Renderer/Laufzeit festhalten. Die historischen Signaturen getrennt
   halten; ein einzelner erfolgreicher Lauf ersetzt bei sporadischen Fehlern keine Vergleichsreihe.
 
+  **Fortschreibung 15.09.2026 — eine Ursache ist gemessen, für zwei Risse.** Der Tag-Lauf
+  `v0.4.2` riss auf Windows in `tests/test_filament_picker.py` (Exit 127, `0xc0000374` im
+  `gc.collect` des Teardowns), lokal deterministisch, drei von drei. Bisektiert über 76 Commits
+  auf `98bf029e`, darin auf `panels.py`, darin auf den Namen `QSpinBox` im
+  `from PySide6.QtWidgets import (...)`: Import ohne Nutzung rot, Nutzung über
+  `QtWidgets.QSpinBox` ohne Import grün. Also nicht der Name, sondern **wann** PySide 6.11.2 den
+  Typ anlegt — mit der Vorgabe erst beim ersten Zugriff (`len(vars(PySide6.QtWidgets))` 15 statt
+  206). Mit `PYSIDE6_OPTION_LAZY=0` läuft der HEAD durch, **und der Stand vom 14.09. mit dem
+  `QMouseEvent`-Import ebenfalls** — derselbe Fehler, damals als Symbol gelesen. Gesetzt in
+  `app/ui/__init__.py`, `app.py` und `tests/conftest.py`, gehalten von
+  `test_the_interface_loads_qt_types_before_the_first_window`; Preis 60 ms und 6 MB. **Was das
+  über die sporadischen Risse der Fensterdateien sagt, ist offen**: Beide bisektierten Fälle
+  hatten dieselbe Gestalt wie die Familie vom August (Heap im Sammlerlauf nach dem Fensterabbau),
+  gemessen ist die Ursache nur für die zwei deterministischen. Die Abnahme dieses Punkts bleibt
+  die Vergleichsreihe — jetzt mit der Vorgabe.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-ein-kunde-beim-öffnen-der-beispiele-sieht-23082026).
 
 <a id="rm-050"></a>

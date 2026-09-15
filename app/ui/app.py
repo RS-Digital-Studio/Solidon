@@ -7,6 +7,14 @@ Startet das Protokoll, füllt das Register, installiert den Sprachkatalog und
 
 from __future__ import annotations
 
+# Vor dem ersten PySide-Import, und deshalb vor der Standardbibliothek: Das
+# Paket setzt beim Betreten ``PYSIDE6_OPTION_LAZY`` (``app/ui/__init__.py``),
+# und das gebaute Paket startet diese Datei als Skript — dann wäre ``app.ui``
+# erst hinter ``PySide6`` an der Reihe. Der Block darunter ist ein eigener.
+import app.ui  # noqa: F401
+
+# isort: split
+
 import sys
 from collections.abc import Callable
 from pathlib import Path

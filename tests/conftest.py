@@ -19,6 +19,13 @@ import pytest
 
 # Oberflächentests brauchen eine Qt-Plattform, die ohne Bildschirm funktioniert.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Und PySide seine Typen vollständig, bevor das erste Fenster entsteht: Das
+# Paket ``app.ui`` setzt ``PYSIDE6_OPTION_LAZY`` beim Betreten (Begründung
+# dort), und diese Datei lädt vor jeder Testdatei — auch vor denen, die
+# ``PySide6`` selbst importieren. Ein Prozess ohne diese Vorgabe riss nach dem
+# Abbau eines Fensters, abhängig davon, welche Datei welchen Qt-Namen
+# zuerst las (``test_filament_picker.py``, 14. und 15.09.2026).
+import app.ui  # noqa: F401 — der Import ist die Wirkung, und er steht hinter der Plattform
 
 # Die Suite darf die eigenen Daten des Nutzers weder lesen noch schreiben
 # (§38). Ohne das ändert ein kalibriertes Material auf dem Entwicklerrechner,

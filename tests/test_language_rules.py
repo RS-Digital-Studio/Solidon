@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import ast
 import itertools
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -530,36 +533,57 @@ def test_field_docstrings_are_german(path: Path) -> None:
     assert not offenders, "englische Feld-Docstrings:" + chr(10) + chr(10).join(offenders)
 
 
-def test_labels_do_not_name_the_mouse_event_type() -> None:
-    """Ein ungenutzter Import riss ``tests/test_filament_picker.py`` —
-    deterministisch, 0xc0000374 im ``gc.collect`` des Teardowns.
+def _imports_of(tree: ast.Module) -> list[tuple[int, str]]:
+    """Die Importe auf Modulebene in Dateireihenfolge: (Zeile, Modulname)."""
+    found: list[tuple[int, str]] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            found.extend((node.lineno, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            found.append((node.lineno, node.module))
+    return found
 
-    Bisektiert am 14.09.2026 in einem Scratch-Baum bis auf eine Zeile:
-    ``from PySide6.QtGui import QMouseEvent`` in ``app/ui/labels.py``, und
-    zwar ohne dass jemand den Namen benutzte; ``QCheckBox`` und ``QEvent``
-    daneben waren unschuldig. Ein Ereignisfilter fragt seither den Typ und
-    liest ``button()`` über ``getattr`` ab.
 
-    Die Reichweite ist der Prozess, nicht das Symbol: ``app/ui/viewport.py``
-    importiert und benutzt ``QMouseEvent`` und reißt nicht. Gehalten wird
-    deshalb genau diese eine Datei — in jeder Schreibweise, als Import, als
-    Name und als Attribut über ``QtGui``, und über den Syntaxbaum statt über
-    den Text, denn der Kommentar in ``labels.py`` nennt den Namen. Hier und
-    nicht in der Fensterdatei, weil der Wächter kein Qt braucht und diese
-    Datei vor jedem Commit an ``app/`` läuft (``.githooks/pre-commit``).
+def test_the_interface_loads_qt_types_before_the_first_window() -> None:
+    """PySide legt seine Typen erst beim ersten Zugriff an — und das riss den
+    Prozess, deterministisch, ``0xc0000374`` im ``gc.collect`` nach dem Abbau
+    eines Fensters (``tests/test_filament_picker.py``).
+
+    Zweimal bisektiert bis auf einen Import: am 14.09.2026 ein ungenutztes
+    ``QMouseEvent`` in ``labels.py``, am 15.09.2026 ``QSpinBox`` in
+    ``panels.py`` — derselbe Name über ``QtWidgets.QSpinBox`` gelesen war
+    grün. Die Ursache ist nicht der Name, sondern **wann** PySide 6.11.2 den
+    Typ anlegt; mit ``PYSIDE6_OPTION_LAZY=0`` laufen beide Stände durch. Die
+    Variable wirkt nur, bevor ``PySide6`` zum ersten Mal geladen wird. Das
+    Paket ``app.ui`` setzt sie beim Betreten; gehalten wird hier, dass es das
+    tut, bevor PySide da ist, und dass ``app.py`` — als Skript gestartet, so
+    ruft es das gebaute Paket — das Paket vor dem ersten PySide-Import lädt.
+    Hier und nicht in einer Fensterdatei, weil der Wächter kein Fenster
+    braucht und diese Datei vor jedem Commit an ``app/`` läuft
+    (``.githooks/pre-commit``).
     """
-    source = PACKAGE_DIR / "ui" / "labels.py"
+    probe = (
+        "import sys; before = 'PySide6' in sys.modules; import app.ui; import os; "
+        "import PySide6.QtWidgets as widgets; "
+        "print(before, os.environ.get('PYSIDE6_OPTION_LAZY'), "
+        "all(name in vars(widgets) for name in ('QMdiArea', 'QWizard', 'QLCDNumber')))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=PACKAGE_DIR.parent,
+        env={key: value for key, value in os.environ.items() if key != "PYSIDE6_OPTION_LAZY"},
+    )
+    assert result.stdout.split() == ["False", "0", "True"], result.stdout
+
+    source = PACKAGE_DIR / "ui" / "app.py"
     tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
-    named = [
-        f"Zeile {node.lineno}"
-        for node in ast.walk(tree)
-        if (isinstance(node, ast.Name) and node.id == "QMouseEvent")
-        or (isinstance(node, ast.Attribute) and node.attr == "QMouseEvent")
-        or (
-            isinstance(node, (ast.Import, ast.ImportFrom))
-            and any(alias.name == "QMouseEvent" for alias in node.names)
-        )
-    ]
-    assert not named, "labels.py nennt QMouseEvent — siehe RowCheckBox.eventFilter: " + ", ".join(
-        named
+    imports = _imports_of(tree)
+    package = next((line for line, name in imports if name == "app.ui"), None)
+    qt = next((line for line, name in imports if name.startswith("PySide6")), None)
+    assert package is not None, "app.py lädt app.ui nicht auf Modulebene"
+    assert qt is not None and package < qt, (
+        f"app.ui (Zeile {package}) muss vor PySide6 (Zeile {qt}) stehen"
     )

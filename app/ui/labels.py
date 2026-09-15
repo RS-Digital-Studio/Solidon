@@ -633,20 +633,15 @@ class RowCheckBox(QCheckBox):
 
         **Der Haken selbst ist der Filter, kein eigenes Objekt daneben.** Die
         erste Fassung hängte einen ``QObject``-Filter als Kind an die
-        Beschriftung; beim Einsammeln eines losgelassenen Dialogs riss der
-        Prozess mit ``0xc0000374`` (Heap-Korruption) in ``gc.collect`` —
-        deterministisch, `tests/test_filament_picker.py`, bisektiert auf den
-        Commit, der ihn einführte (14.09.2026). Ein Widget im Formular hat
-        eine Lebensdauer, die Qt und Python gleich sehen; ein Python-Objekt
-        mit C++-Elternteil und einer überschriebenen Virtuellen hat zwei.
+        Beschriftung; ein Widget im Formular hat eine Lebensdauer, die Qt und
+        Python gleich sehen.
         """
-        # **Ohne ``QMouseEvent`` im Modul.** Der Import allein — ungenutzt —
-        # riss ``tests/test_filament_picker.py`` deterministisch mit
-        # ``0xc0000374`` im ``gc.collect`` des Teardowns; bisektiert am
-        # 14.09.2026 bis auf diese eine Zeile, gegen ``99b51979`` in einem
-        # Scratch-Baum: pur grün, plus ``QCheckBox`` grün, plus ``QEvent``
-        # grün, plus ``QMouseEvent`` rot. Gefragt wird deshalb der Ereignistyp,
-        # und die Taste liest ``button()`` ab, das nur Mausereignisse tragen.
+        # Gefragt wird der Ereignistyp, und die Taste liest ``button()`` ab,
+        # das nur Mausereignisse tragen — ohne ``isinstance`` gegen
+        # ``QMouseEvent``. Der Import dieses Namens riss am 14.09.2026
+        # ``tests/test_filament_picker.py`` mit ``0xc0000374``; die Ursache war
+        # nicht der Name, sondern PySides verzögerte Typinitialisierung, und
+        # die ist seit dem 15.09.2026 abgeschaltet (``app/ui/__init__.py``).
         kind = event.type()
         # Der Doppelklick zählt als Druck: Qt schickt Druck, Loslassen,
         # Doppelklick, Loslassen — das Kästchen schaltet dabei zweimal, und
