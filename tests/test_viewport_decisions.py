@@ -5180,6 +5180,46 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     assert gefragt == [False], "die Rahmung nach dem Wachsen nimmt die ganze Szene"
 
 
+def test_fitting_all_plates_frames_displayed_offsets_and_only_visible_bodies(qt_app):
+    """Die zweite Platte muss beim Einpassen im selben Raum wie ihre Körper liegen."""
+    from dataclasses import replace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    first = SceneObject(
+        id="first", name="Erste", mesh=MeshData.of(trimesh.creation.box((20, 10, 4)))
+    )
+    second = replace(first, id="second", name="Zweite", plate=1)
+    viewport = Viewport()
+    try:
+        viewport.renderer = RecordingRenderer()
+        viewport._result = EvaluationResult(
+            scene=Scene(objects={first.id: first, second.id: second})
+        )
+        viewport._plate = -1
+        viewport._beds_drawn = 2
+        viewport._bed_extent = (200.0, 200.0, 200.0)
+        viewport.reset_camera(follow_selection=False)
+        assert viewport._fitted_bounds == pytest.approx((-10, 250, -5, 5, -2, 2))
+        assert viewport.renderer.reset_bounds[-1][1] >= 250
+        viewport._plate = 0
+        viewport.reset_camera(follow_selection=False)
+        assert viewport._fitted_bounds == pytest.approx((-10, 10, -5, 5, -2, 2))
+        viewport._plate = -1
+        viewport._hidden = frozenset({"first"})
+        viewport.reset_camera(follow_selection=False)
+        assert viewport._fitted_bounds == pytest.approx((230, 250, -5, 5, -2, 2))
+        viewport._hidden = frozenset({"first", "second"})
+        assert viewport._object_bounds() is None
+    finally:
+        viewport.deleteLater()
+
+
 def test_the_body_edges_are_searched_once_per_mesh(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

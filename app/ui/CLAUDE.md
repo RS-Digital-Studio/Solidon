@@ -49,6 +49,10 @@ wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 
+Beim Einpassen der Kamera zählt der sichtbare Körperumfang einschließlich
+Platten- und Explosionsversatz. Ausgeblendete Körper und andere Einzelplatten
+vergrößern diesen Rahmen nicht. Die Geometrie selbst bleibt in ihren Modellkoordinaten.
+
 Skizzenfelder lesen die Pflichtangabe aus ihrem Parameterschema. Eine fehlende
 oder nicht lösbare Pflichtzeichnung sperrt Übernehmen und nennt das betroffene
 Feld mit seinem Korrekturhinweis. Optionale Zusatzzeichnungen zeigen ihren

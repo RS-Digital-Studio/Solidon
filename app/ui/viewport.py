@@ -12902,12 +12902,22 @@ class Viewport(QWidget):
         return (low[0], high[0], low[1], high[1], low[2], high[2])
 
     def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
-        """Der Hüllquader über alle Körper als Sechsertupel (``Bounds``), oder nichts."""
+        """Der Hüllquader der sichtbaren Körper einschließlich ihres Ansichtsversatzes."""
         if self._result is None or not self._result.scene.objects:
             return None
-        boxes = [entry.mesh.bounds for entry in self._result.scene.objects.values()]
-        low = [min(box.minimum[axis] for box in boxes) for axis in range(3)]
-        high = [max(box.maximum[axis] for box in boxes) for axis in range(3)]
+        boxes = [
+            (entry.mesh.bounds, self._view_offset(entry, self._result))
+            for identifier, entry in self._result.scene.objects.items()
+            if self._in_view(identifier, entry)
+        ]
+        if not boxes:
+            return None
+        low = [
+            min(float(box.minimum[a]) + float(offset[a]) for box, offset in boxes) for a in range(3)
+        ]
+        high = [
+            max(float(box.maximum[a]) + float(offset[a]) for box, offset in boxes) for a in range(3)
+        ]
         return (low[0], high[0], low[1], high[1], low[2], high[2])
 
     def zoom(self, factor: float) -> None:
