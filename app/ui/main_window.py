@@ -13044,6 +13044,11 @@ class MainWindow(QMainWindow):
                 note = f"{note}\n{said}" if note else said
 
         chosen_spool: filaments.CatalogueFilament | None = None
+        # Zufallsmuster behalten zwischen allen Vorschauen und Übernehmen
+        # denselben Startwert. Der Verlauf speichert ihn mit der Operation.
+        from secrets import randbelow
+
+        dialog_seed = randbelow(2**31) if spec.requires_seed else None
 
         def remember_spool(entry: filaments.CatalogueFilament | None) -> None:
             nonlocal chosen_spool
@@ -13063,11 +13068,17 @@ class MainWindow(QMainWindow):
             # verbraucht einen (``consumes``), die Handlung meint zwölf.
             drafts = (
                 [
-                    OperationDraft(op=spec.name, inputs=(body,), params=dict(params))
+                    OperationDraft(
+                        op=spec.name, inputs=(body,), params=dict(params), seed=dialog_seed
+                    )
                     for body in on_bodies
                 ]
                 if on_bodies
-                else [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))]
+                else [
+                    OperationDraft(
+                        op=spec.name, inputs=inputs, params=dict(params), seed=dialog_seed
+                    )
+                ]
             )
             changes = naming
             if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}:
@@ -13258,14 +13269,20 @@ class MainWindow(QMainWindow):
                 lambda entered: (
                     [
                         OperationDraft(
-                            op=chosen_spec().name, inputs=(body,), params=fitted(entered)
+                            op=chosen_spec().name,
+                            inputs=(body,),
+                            params=fitted(entered),
+                            seed=dialog_seed,
                         )
                         for body in on_bodies
                     ]
                     if on_bodies
                     else [
                         OperationDraft(
-                            op=chosen_spec().name, inputs=chosen_inputs(), params=fitted(entered)
+                            op=chosen_spec().name,
+                            inputs=chosen_inputs(),
+                            params=fitted(entered),
+                            seed=dialog_seed,
                         )
                     ]
                 ),
@@ -13283,6 +13300,7 @@ class MainWindow(QMainWindow):
                                 op=picked.name,
                                 inputs=(flow.target,),
                                 params=fitted(dialog.values()),
+                                seed=dialog_seed,
                             )
                         ],
                     )
@@ -13295,7 +13313,14 @@ class MainWindow(QMainWindow):
                     return
                 self.session.apply(
                     picked.title,
-                    [OperationDraft(op=picked.name, inputs=chosen_inputs(), params=entered)],
+                    [
+                        OperationDraft(
+                            op=picked.name,
+                            inputs=chosen_inputs(),
+                            params=entered,
+                            seed=dialog_seed,
+                        )
+                    ],
                     changes=named,
                 )
 

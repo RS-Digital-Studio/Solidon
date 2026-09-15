@@ -208,6 +208,71 @@ def test_an_empty_reference_is_not_a_reference() -> None:
     assert orphans.references(document_with_op("")) == []
 
 
+@pytest.mark.parametrize("coverage", [None, "rectangle", "whole_face"])
+def test_texture_only_requires_its_face_when_covering_the_whole_face(scene, coverage) -> None:
+    """Rechtecktexturen behalten ihre Vorbelegung, ohne deren Fläche zu benötigen."""
+    document = document_with_op("", op="apply_texture")
+    values = {"face": "face_missing"}
+    if coverage is not None:
+        values["coverage"] = coverage
+    document.ops[0] = replace(document.ops[0], params=values)
+
+    found = orphans.references(document)
+
+    if coverage == "whole_face":
+        assert [reference.ref for reference in found] == [FeatureRef("obj_1", "face_missing")]
+        with pytest.raises(AmbiguityError):
+            orphans.check(document, scene, refuse)
+    else:
+        assert found == []
+        result = orphans.check(document, scene, refuse)
+        assert not result.findings and not result.changed
+    assert document.ops[0].params == values
+
+
+@pytest.mark.parametrize(
+    ("controls", "active"),
+    [({}, True), ({"mode": "none"}, False), ({"enabled": False}, False)],
+)
+def test_conditional_feature_references_follow_defaults_and_outer_conditions(controls, active):
+    """Einzel- und Mehrfachverweise folgen auch der Bedingung ihres Steuerfeldes."""
+    from app.core.registry import REGISTRY, Registry, op_params, param
+    from app.core.types import BaseParams
+
+    @op_params
+    class ConditionalFeaturesParams(BaseParams):
+        mode: str = param(title="Bereich", default="selected", choices=("selected", "none"))
+        enabled: bool = param(title="Aktiv", default=True, depends_on=("mode", ("selected",)))
+        single: str = param(
+            title="Merkmal", default="", kind="feature", depends_on=("enabled", (True,))
+        )
+        multiple: tuple[str, ...] = param(
+            title="Merkmale", default=(), kind="features", depends_on=("enabled", (True,))
+        )
+        always: str = param(title="Immer", default="", kind="feature")
+
+    registry = Registry()
+    registry.register(replace(REGISTRY.get("apply_texture"), params=ConditionalFeaturesParams))
+    document = document_with_op("", op="apply_texture")
+    values = {
+        "single": "face_1",
+        "multiple": ["face_2", "face_3"],
+        "always": "hole_1",
+        **controls,
+    }
+    document.ops[0] = replace(document.ops[0], params=values)
+
+    found = orphans.references(document, registry)
+
+    expected = {"op:1:always": "hole_1"}
+    if active:
+        expected.update(
+            {"op:1:single": "face_1", "op:1:multiple:0": "face_2", "op:1:multiple:1": "face_3"}
+        )
+    assert {reference.where: reference.ref.feature_id for reference in found} == expected
+    assert document.ops[0].params == values
+
+
 def test_feature_lists_reference_and_rewrite_each_selected_feature(scene: Scene) -> None:
     """Eine Antwort ersetzt nur die verlorene Kennung, nicht die übrige Auswahl."""
     document = document_with_op("", op="clear_filament")

@@ -1670,6 +1670,8 @@ class OperationDialog(QDialog):
         self._refit.timeout.connect(self._resize_to_content)
         self._couple_dependent_fields()
         self._hide_legacy_feature_field()
+        if self.spec.name == "apply_texture":
+            self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
         # Vorderseite und „Weitere Einstellungen" sind zwei Formulare, und
         # jedes rechnete seine Beschriftungsspalte für sich: Im Bohrdialog
@@ -1703,6 +1705,7 @@ class OperationDialog(QDialog):
         # Fenster sagt es vorher am Knopf (``_NEEDS_TARGET``); hier steht
         # dieselbe Auskunft für den Weg über Palette und Kürzel.
         no_target = self._target_missing()
+        no_texture_face = self._texture_face_missing()
         # Und was das Fenster von außen sperrt: Ein Grund aus dem Band, der
         # eine Handlung trägt („Erst reparieren, dann aushöhlen"), sperrt den
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
@@ -1718,9 +1721,10 @@ class OperationDialog(QDialog):
             )
             or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
             or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
+            or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (blocked or "")
         )
-        incomplete = incomplete or no_edge or no_target or blocked is not None
+        incomplete = incomplete or no_edge or no_target or no_texture_face or blocked is not None
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
         button.setStatusTip(reason)
@@ -1738,9 +1742,20 @@ class OperationDialog(QDialog):
             for editor in self._editors.values()
         ):
             return
-        if self._target_missing() or self._blocked_reason is not None:
+        if (
+            self._target_missing()
+            or self._texture_face_missing()
+            or self._blocked_reason is not None
+        ):
             return
         super().accept()
+
+    def _texture_face_missing(self) -> bool:
+        """Ein Ganzflächenmuster braucht eine ausdrücklich gewählte Fläche."""
+        if self.spec.name != "apply_texture":
+            return False
+        entered = self.values()
+        return entered.get("coverage") == "whole_face" and not entered.get("face")
 
     def block_apply(self, reason: str | None) -> None:
         """Den Übernehmen-Knopf von außen sperren — mit Grund — oder freigeben.
@@ -1857,6 +1872,18 @@ class OperationDialog(QDialog):
                 else:
                     explanation = _why_inactive(titles[inactive[0]], inactive[1][0])
                 _explain(editor, label, explanation)
+            if self.spec.name == "apply_texture" and "angle" in self._editors:
+                # Ganzfläche dreht das Muster innerhalb ihrer festen Kontur;
+                # ein aufgewickelter Zylinder ignoriert diesen Winkel.
+                active = (
+                    entered.get("coverage") == "whole_face" or entered.get("wrap") != "cylinder"
+                )
+                editor = self._editors["angle"]
+                editor.setEnabled(active)
+                if shown.get("angle") is not active:
+                    self._rows["angle"].setRowVisible(editor, active)
+                    shown["angle"] = active
+                    changed = True
             # Eine Zeile weniger ist ein kürzerer Dialog, eine mehr ein
             # längerer. Nur wenn sich etwas bewegt hat: ``follow`` läuft bei
             # jedem Tastendruck. Und nicht über ``adjustSize`` — das deckelt

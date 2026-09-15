@@ -1346,6 +1346,129 @@ def test_a_pattern_tile_comes_from_the_geometry() -> None:
         assert "<polygon" in tile, f"{pattern} zeichnet keine Umrisse"
 
 
+def test_whole_face_texture_exposes_only_effective_fields(qt_app: QApplication) -> None:
+    """Ganzfläche braucht eine Wahl; Rechteckmaße kehren unverändert zurück."""
+    dialog = OperationDialog(
+        REGISTRY.get("apply_texture"),
+        {"obj_1": "Platte"},
+        features={"top": "Oben", "bottom": "Unten"},
+        source_objects=("obj_1",),
+        values={"width": 17.0, "height": 23.0},
+    )
+    try:
+        coverage = dialog._editors["coverage"]
+        assert isinstance(coverage, QComboBox)
+        assert coverage.itemText(coverage.findData("whole_face")) == tr("Gesamte Fläche")
+        coverage.setCurrentIndex(coverage.findData("whole_face"))
+        assert not dialog._accept_button.isEnabled()
+        dialog.accept()
+        assert not dialog.result()
+        for name in ("width", "height", "wrap", "wrap_diameter", "x", "y", "z", "nx", "ny", "nz"):
+            assert dialog._editors[name].isHidden(), name
+            assert not dialog._editors[name].isEnabled(), name
+        for name in ("face", "pattern", "pitch", "depth", "mode"):
+            assert not dialog._editors[name].isHidden(), name
+        assert dialog._editors["angle"].isEnabled()
+        assert not dialog.take_feature("top", "Oben", "obj_2")
+        assert dialog.take_feature("top", "Oben", "obj_1")
+        assert dialog._accept_button.isEnabled()
+        assert dialog.values()["face"] == "top"
+        coverage.setCurrentIndex(coverage.findData("rectangle"))
+        assert not dialog._editors["width"].isHidden()
+        assert dialog.values()["width"] == pytest.approx(17.0)
+        assert dialog.values()["height"] == pytest.approx(23.0)
+        wrap = dialog._editors["wrap"]
+        assert isinstance(wrap, QComboBox)
+        wrap.setCurrentIndex(wrap.findData("cylinder"))
+        assert not dialog._editors["angle"].isEnabled()
+        coverage.setCurrentIndex(coverage.findData("whole_face"))
+        assert dialog._editors["angle"].isEnabled()
+    finally:
+        dialog.deleteLater()
+
+
+def test_whole_face_texture_preview_matches_apply_and_edit(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog zeigt dieselben Zufallszellen, Ränder und Löcher wie Übernehmen."""
+    import numpy as np
+    from PySide6.QtTest import QTest
+
+    from app.core.scene.placement import top_face
+    from app.ui import session as session_module
+
+    object_id = select(window)
+    original = window.session.last_result.scene.objects[object_id]
+    face = top_face(original.features)
+    assert face is not None
+    window._on_feature_picked(face.id)
+    seen = []
+    monkeypatch.setattr(window, "_show_preview", seen.append)
+    # Erzwingt die Reduktionsschwelle am kleinen Korpus: Ganzfläche muss
+    # trotzdem ohne vorgelagerte Änderung ihrer Flächendreiecke rechnen.
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", 8)
+    coarse = []
+    monkeypatch.setattr(window, "_preview_coarse", coarse.append)
+    window.run_operation(
+        REGISTRY.get("apply_texture"),
+        {"coverage": "whole_face", "pattern": "voronoi", "pitch": 7.0},
+    )
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.values()["face"] == face.id
+    assert window.session.wait_for_idle()
+    assert seen and seen[-1] is not None
+    preview = seen[-1].entries[object_id].result
+    assert preview is not None
+    assert not coarse
+    assert len(window.session.project.document.ops) == 1
+    # Alle Vertices über der bisherigen Oberseite liegen im echten
+    # Flächenumriss, dessen Innenringe die vier Bohrungen aussparen.
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import unary_union
+
+    outline = unary_union(
+        [
+            Polygon(triangle[:, :2])
+            for triangle in original.mesh.raw.triangles[list(face.face_indices)]
+        ]
+    )
+    assert len(outline.interiors) == 4
+    vertices = np.asarray(preview.mesh.raw.vertices)
+    raised = vertices[vertices[:, 2] > original.mesh.bounds.maximum[2] + 0.01]
+    assert len(raised)
+    for point in raised:
+        assert outline.buffer(1e-5).covers(Point(point[:2]))
+
+    dialog.valuesChanged.emit()
+    QTest.qWait(350)
+    assert window.session.wait_for_idle()
+    again = seen[-1].entries[object_id].result
+    assert again is not None
+    assert np.allclose(preview.mesh.raw.vertices, again.mesh.raw.vertices)
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    committed = window.session.last_result.scene.objects[object_id]
+    assert np.allclose(preview.mesh.raw.vertices, committed.mesh.raw.vertices)
+    operation = window.session.project.document.ops[-1]
+    assert operation.seed is not None
+    seed = operation.seed
+
+    seen.clear()
+    window.edit_operation(operation.id, given={"angle": 19.0})
+    assert window.session.wait_for_idle()
+    assert seen and seen[-1] is not None
+    edited_preview = seen[-1].entries[object_id].result
+    assert edited_preview is not None
+    assert window._op_dialog is not None
+    window._op_dialog.accept()
+    assert window.session.wait_for_idle()
+    edited = window.session.last_result.scene.objects[object_id]
+    assert window.session.project.document.ops[-1].seed == seed
+    assert np.allclose(edited_preview.mesh.raw.vertices, edited.mesh.raw.vertices)
+
+
 def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
     """Der Satz über den Feldern stand vertikal zentriert in 189 Pixeln.
 

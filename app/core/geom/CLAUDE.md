@@ -224,6 +224,13 @@ Kegel und Ring dienen auch als verständliche Werkzeugkörper für Boolesche Ops
 (Skelett und Stellung) · `sketch_solid.py` (einen Skizzenumriss zu einem Netz
 aufziehen)
 
+`texture_ops.texture_tool()` erzeugt den gemeinsamen Werkzeugkörper für
+Vorschau und Operation. `coverage="whole_face"` bindet die gewählte ebene
+Fläche über ihre Kennung, schneidet die Musterpolygone an ihren tatsächlichen
+Dreiecken zu und hält Innenringe sowie konkave Ränder frei. Die Drehung gilt
+innerhalb dieser festen Kontur. `rectangle` bleibt die Vorgabe für vorhandene
+Operationen mit freier Position und Breite/Höhe.
+
 Die fünf analytischen Grundkörper entstehen lokal über
 `primitive_local_tool()`. Operation und temporäre Oberflächenvorschau beziehen
 damit denselben Körper auf denselben Ursprung. `x/y/z` verschieben diesen

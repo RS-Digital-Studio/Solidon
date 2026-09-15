@@ -2853,6 +2853,16 @@ class Session(QObject):
 
         before = self.last_result.scene if self.last_result else None
         coarse = _coarse_drafts(before) if coarsened is not None and change_op is None else []
+        # Der Flächenbezug meint die Originalkontur einschließlich Bohrungen.
+        # Eine vorgeschaltete Reduktion änderte ihre Dreiecke und Kennung.
+        exact_faces = {
+            body
+            for draft in drafts
+            if draft.op == "apply_texture" and draft.params.get("coverage") == "whole_face"
+            for body in draft.inputs
+        }
+        if exact_faces:
+            coarse = [draft for draft in coarse if not exact_faces.intersection(draft.inputs)]
         working = copy.deepcopy(self.project.document)
         reduced: tuple[OpId, ...] = ()
         if coarse:

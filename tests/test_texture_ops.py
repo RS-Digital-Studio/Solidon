@@ -24,6 +24,257 @@ from app.core.types import PrinterProfile
 NOZZLE = PrinterProfile(id="test", title="Test", build_volume=(220.0, 220.0, 250.0))
 
 
+def _face_source(raw: object, normal: object = (0.0, 0.0, 1.0)) -> object:
+    """Benennt die oberste ebene Fläche einschließlich ihrer Lochränder."""
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Feature, SceneObject
+
+    normal = np.asarray(normal)
+    indices = np.flatnonzero(raw.face_normals @ normal > 0.999999)
+    feature = Feature(
+        id="top",
+        kind="face",
+        provenance="detected",
+        params={
+            "normal": tuple(normal),
+            "centre": tuple(raw.triangles_center[indices].mean(axis=0)),
+        },
+        face_indices=tuple(indices),
+    )
+    return SceneObject(id="plate", name="Platte", mesh=MeshData.of(raw), features={"top": feature})
+
+
+@pytest.mark.parametrize("angle", [0.0, 37.0])
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+def test_whole_face_texture_keeps_concave_edges_and_holes(angle: float, mode: str) -> None:
+    """Ein L mit Bohrung: keine Brücke über Loch oder einspringenden Rand."""
+    import numpy as np
+    import trimesh
+    from shapely.geometry import Point, Polygon
+
+    outline = Polygon(
+        [(0, 0), (24, 0), (24, 10), (12, 10), (12, 20), (0, 20)],
+        holes=[[(3, 3), (3, 7), (7, 7), (7, 3)]],
+    )
+    raw = trimesh.creation.extrude_polygon(outline, height=4.0)
+    source = _face_source(raw)
+    params = texture_ops.TextureParams(
+        coverage="whole_face",
+        face="top",
+        pattern="rib",
+        pitch=2.0,
+        depth=0.6,
+        angle=angle,
+        mode=mode,
+        width=1.0,
+        height=1.0,
+    )
+    tool = texture_ops.texture_tool(source, params)
+    assert tool.raw.is_watertight
+    for x, y, _z in tool.raw.vertices:
+        assert outline.buffer(1e-8).covers(Point(x, y))
+    assert tool.bounds.size[0] > 22.0
+    assert tool.bounds.size[1] > 18.0
+    assert np.allclose(tool.bounds.minimum[2], 3.99 if mode == "raised" else 3.4)
+    assert np.allclose(tool.bounds.maximum[2], 4.6 if mode == "raised" else 4.01)
+    assert np.allclose(source.mesh.raw.vertices, raw.vertices)
+
+
+def test_whole_face_texture_follows_a_rotated_corpus_plate() -> None:
+    """Der Korpus mit Bohrungen bleibt auch schräg eine begrenzte Texturfläche."""
+    from pathlib import Path
+
+    import numpy as np
+    import trimesh
+
+    raw = trimesh.load_mesh(Path(__file__).parent / "data/meshes/plate_holes.stl")
+    rotation = trimesh.transformations.rotation_matrix(0.73, (1.0, 2.0, 0.0))
+    raw.apply_transform(rotation)
+    source = _face_source(raw, rotation[:3, 2])
+    params = texture_ops.TextureParams(coverage="whole_face", face="top", pattern="rib", pitch=4.0)
+    tool = texture_ops.texture_tool(source, params, seed=8)
+    again = texture_ops.texture_tool(source, params, seed=8)
+    assert np.array_equal(tool.raw.vertices, again.raw.vertices)
+    assert np.array_equal(tool.raw.faces, again.raw.faces)
+    assert tool.raw.is_watertight
+    assert tool.bounds.size[0] > 20.0
+
+
+def test_whole_face_texture_requires_a_selected_face() -> None:
+    import trimesh
+
+    from app.core.errors import AppError
+
+    source = _face_source(trimesh.creation.box())
+    with pytest.raises(AppError) as error:
+        texture_ops.texture_tool(source, texture_ops.TextureParams(coverage="whole_face"))
+    assert error.value.suggestions
+
+
+@pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("tilted", [False, True])
+def test_whole_face_operation_keeps_the_corpus_bores_open(
+    pattern: str,
+    quality: str,
+    tilted: bool,
+) -> None:
+    """Die wirkliche Vereinigung trägt das Muster bis außen und lässt Löcher frei."""
+    from pathlib import Path
+
+    import numpy as np
+    import trimesh
+
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Profile, Scene
+
+    raw = trimesh.load_mesh(Path(__file__).parent / "data/meshes/plate_holes.stl")
+    matrix = trimesh.transformations.rotation_matrix(0.73 if tilted else 0.0, (1.0, 2.0, 0.0))
+    rotated = raw.copy()
+    rotated.apply_transform(matrix)
+    source = _face_source(rotated, matrix[:3, 2])
+    before = raw.vertices.copy()
+    params = texture_ops.TextureParams(
+        coverage="whole_face",
+        face="top",
+        pattern=pattern,
+        pitch=5.0,
+        depth=0.6,
+        angle=23.0,
+    )
+    result = texture_ops.apply_texture(
+        OpContext(
+            scene=Scene(objects={source.id: source}, parameters={}),
+            inputs=[source],
+            params=params,
+            profile=Profile(printer=NOZZLE, material=None),
+            quality=quality,
+            seed=17,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    after = result.outputs[0].mesh.raw.copy()
+    after.apply_transform(np.linalg.inv(matrix))
+    assert after.is_watertight
+    assert after.body_count == 1
+    assert after.volume > raw.volume
+    assert np.allclose(after.bounds[:, :2], raw.bounds[:, :2], atol=1e-6)
+    assert after.bounds[1, 2] == pytest.approx(raw.bounds[1, 2] + 0.6)
+    # Die neuen Deckflächen dürfen auch zwischen ihren Eckpunkten kein Loch
+    # überbrücken. Die Referenz ist die ursprüngliche Korpusfläche.
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+
+    original = unary_union(
+        [Polygon(t[:, :2]) for t in raw.triangles[raw.face_normals[:, 2] > 0.99]]
+    )
+    raised = unary_union(
+        [
+            Polygon(t[:, :2])
+            for t in after.triangles[after.triangles_center[:, 2] > raw.bounds[1, 2] + 0.3]
+            if Polygon(t[:, :2]).area > 1e-10
+        ]
+    )
+    assert raised.difference(original).area < 1e-6
+    assert np.array_equal(raw.vertices, before)
+
+
+def test_whole_face_texture_accepts_a_brep_face() -> None:
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.types import SceneObject
+
+    solid = edit.box(24.0, 18.0, 4.0)
+    features = features_of(solid)
+    chosen = next(f for f in features.values() if f.params.get("normal", (0, 0, 0))[2] > 0.99)
+    source = SceneObject(id="solid", name="Körper", mesh=solid, features=features)
+    tool = texture_ops.texture_tool(
+        source,
+        texture_ops.TextureParams(
+            coverage="whole_face",
+            face=chosen.id,
+            pattern="rib",
+            pitch=2.0,
+        ),
+    )
+    assert tool.raw.is_watertight
+    assert tool.bounds.size[0] > 22.0
+    assert tool.bounds.size[1] == pytest.approx(18.0)
+
+
+def test_whole_face_texture_rejects_a_curved_patch() -> None:
+    from dataclasses import replace
+
+    import trimesh
+
+    from app.core.errors import AppError
+
+    raw = trimesh.creation.icosphere(subdivisions=1)
+    source = _face_source(raw, raw.face_normals[0])
+    curved = replace(source.features["top"], face_indices=tuple(range(len(raw.faces))))
+    source = replace(source, features={"top": curved})
+    with pytest.raises(AppError) as error:
+        texture_ops.texture_tool(
+            source, texture_ops.TextureParams(coverage="whole_face", face="top")
+        )
+    assert error.value.suggestions
+
+
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+def test_whole_face_operation_changes_only_the_selected_plane(mode: str) -> None:
+    """Eine Treppe hat zwei gleich gerichtete Flächen; nur die gewählte trägt das Muster."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Feature, OpContext, Profile, Scene, SceneObject
+
+    low = trimesh.creation.box(extents=(20, 20, 4))
+    high = trimesh.creation.box(extents=(10, 20, 8))
+    high.apply_translation((5, 0, 2))
+    raw = trimesh.boolean.union([low, high], engine="manifold")
+    indices = np.flatnonzero((raw.face_normals[:, 2] > 0.99) & (raw.triangles_center[:, 2] < 3))
+    selected = Feature(
+        id="low",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0, 0, 1)},
+        face_indices=tuple(indices),
+    )
+    source = SceneObject(
+        id="stairs", name="Treppe", mesh=MeshData.of(raw), features={"low": selected}
+    )
+    result = texture_ops.apply_texture(
+        OpContext(
+            scene=Scene(objects={source.id: source}, parameters={}),
+            inputs=[source],
+            params=texture_ops.TextureParams(
+                coverage="whole_face", face="low", pattern="rib", pitch=2, depth=0.6, mode=mode
+            ),
+            profile=Profile(printer=NOZZLE, material=None),
+            quality="fine",
+            seed=4,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    after = result.outputs[0].mesh.raw
+    assert after.is_watertight and after.body_count == 1
+    assert (after.volume > raw.volume) if mode == "raised" else (after.volume < raw.volume)
+    # Alle Geometrie über der unteren Fläche gehört unverändert zur hohen Stufe.
+    high_before = raw.triangles[raw.triangles_center[:, 2] > 3]
+    high_after = after.triangles[after.triangles_center[:, 2] > 3]
+    assert np.allclose(
+        np.sort(high_before.reshape(-1, 3), axis=0), np.sort(high_after.reshape(-1, 3), axis=0)
+    )
+
+
 @pytest.mark.parametrize("height,pitch", [(122.0, 2.0), (121.7, 2.0), (244.0, 1.0)])
 def test_wave_sampling_tracks_each_period(height: float, pitch: float) -> None:
     """Auch hohe Felder behalten Amplitude und Periode der Wellen."""

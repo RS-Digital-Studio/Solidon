@@ -211,6 +211,20 @@ def test_a_cylinder_gives_the_texture_the_diameter_it_wraps_around() -> None:
     values = values_for(REGISTRY.get("apply_texture"), hole(diameter=20.0))
 
     assert values["wrap_diameter"] == 20.0
+    assert "face" not in values
+    assert values["z"] == pytest.approx(4.0)
+
+
+def test_texture_remembers_the_face_without_losing_rectangular_placement() -> None:
+    values = values_for(REGISTRY.get("apply_texture"), face())
+    assert values["face"] == "face_1"
+    assert [values[name] for name in ("x", "y", "z")] == pytest.approx([10, 20, 30])
+    assert [values[name] for name in ("nx", "ny", "nz")] == pytest.approx([0, 0, 1])
+    assert "coverage" not in values
+    inferred = values_for_object(REGISTRY.get("apply_texture"), {"face_1": face()})
+    assert "face" not in inferred
+    assert "coverage" not in inferred
+    assert inferred["z"] == pytest.approx(30)
 
 
 # --- ohne angeklicktes Merkmal ---------------------------------------------------
@@ -429,10 +443,11 @@ def test_every_operation_with_a_feature_field_gets_it_filled_in() -> None:
 
     empty = []
     for spec in with_field:
-        values = values_for(spec, clicked)
+        selected = face() if spec.applies_to == ("face",) else clicked
+        values = values_for(spec, selected)
         fields = [entry for entry in spec.params.spec() if entry.kind in {"feature", "features"}]
         if not any(
-            values.get(entry.name) == (("hole_1",) if entry.kind == "features" else "hole_1")
+            values.get(entry.name) == ((selected.id,) if entry.kind == "features" else selected.id)
             for entry in fields
         ):
             empty.append(f"{spec.name} ({', '.join(entry.name for entry in fields)})")

@@ -40,6 +40,11 @@ Eine Körpervorbelegung entfernt nur ihre selbst geometrisch abgeleiteten
 Einzel- und Mehrfachverweise. Ausdrücklich gewählte Merkmale und nachträglich
 übergebene Werte behalten Vorrang; aus einer Körperwahl wird keine Flächenwahl.
 
+Merkmalsverweise bedingt ausgeblendeter Felder bleiben gespeichert, werden
+aber nur bei aktiver Parameterbedingung aufgelöst. `orphans._feature_fields()`
+folgt dafür `depends_on` einschließlich äußerer Bedingungen und Schemavorgaben
+für ältere Schritte, sowohl bei einzelnen Kennungen als auch bei Listen.
+
 ## Der Kreislauf
 
 Namenlose Wiederherstellungen besitzen eine Sitzungstoken-Kennung und eine

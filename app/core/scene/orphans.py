@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.log import get_logger
-from app.core.registry import REGISTRY, Registry
+from app.core.registry import REGISTRY, Registry, inactive_dependency
 from app.core.types import (
     Document,
     Feature,
@@ -114,7 +114,7 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
 
     source = registry or REGISTRY
     for operation in document.ops:
-        for field_name in _feature_fields(source, operation.op):
+        for field_name in _feature_fields(source, operation.op, operation.params):
             named = str(operation.params.get(field_name) or "")
             if not named or not operation.inputs:
                 continue
@@ -126,7 +126,7 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
                     removable=operation.op != "clear_filament",
                 )
             )
-        for field_name in _feature_fields(source, operation.op, multiple=True):
+        for field_name in _feature_fields(source, operation.op, operation.params, multiple=True):
             names = operation.params.get(field_name, ())
             if not isinstance(names, list | tuple) or not operation.inputs:
                 continue
@@ -263,9 +263,14 @@ def feature_ref_of_sketch(text: str) -> FeatureRef | None:
     return FeatureRef(object_id, feature_id)
 
 
-def _feature_fields(registry: Registry, op_name: str, *, multiple: bool = False) -> tuple[str, ...]:
-    """Parameter dieser Operation, die ein Merkmal benennen — aus der
-    Deklaration.
+def _feature_fields(
+    registry: Registry, op_name: str, values: Mapping[str, Any], *, multiple: bool = False
+) -> tuple[str, ...]:
+    """Aktive Parameter dieser Operation, die ein Merkmal benennen.
+
+    Gespeicherte Werte bedingt ausgeblendeter Felder bleiben für eine spätere
+    Umschaltung erhalten, verlangen aber keine Zuordnung. Nicht gespeicherte
+    Steuerwerte folgen wie die Operation selbst ihrer Schemavorgabe.
 
     Gefragt statt gefangen: eine Operation, die dieser Stand nicht kennt —
     eine Datei aus einer neueren Version, ein nicht geladenes Plugin — hat
@@ -274,10 +279,14 @@ def _feature_fields(registry: Registry, op_name: str, *, multiple: bool = False)
     """
     if not registry.has(op_name):
         return ()
+    schema = registry.get(op_name).params.spec()
+    current = {entry.name: entry.default for entry in schema}
+    current.update(values)
     return tuple(
         entry.name
-        for entry in registry.get(op_name).params.spec()
+        for entry in schema
         if entry.kind == ("features" if multiple else "feature")
+        and inactive_dependency(entry, schema, current) is None
     )
 
 

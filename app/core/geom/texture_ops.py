@@ -35,6 +35,8 @@ from app.core.types import (
     OpContext,
     OpResult,
     PrinterProfile,
+    SceneObject,
+    Vec3,
 )
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
@@ -361,6 +363,22 @@ def check_printable(pattern: str, pitch: float, depth: float, printer: PrinterPr
 
 @op_params
 class TextureParams(BaseParams):
+    coverage: str = param(
+        title=_("Bereich"),
+        default="rectangle",
+        choices=("rectangle", "whole_face"),
+        doc=_(
+            "Ein rechteckiges Musterfeld oder die ganze gewählte Fläche bis zum Rand. "
+            "Bohrungen bleiben frei."
+        ),
+    )
+    face: str = param(
+        title=_("Fläche"),
+        default="",
+        kind="feature",
+        depends_on=("coverage", ("whole_face",)),
+        doc=_("Die gewählte ebene Fläche begrenzt das Muster einschließlich ihrer Aussparungen."),
+    )
     pattern: str = param(
         title=_("Muster"),
         default="knurl_diamond",
@@ -376,6 +394,7 @@ class TextureParams(BaseParams):
         unit="mm",
         minimum=0.5,
         doc=_("Wie breit das Musterfeld auf der Fläche wird."),
+        depends_on=("coverage", ("rectangle",)),
     )
     height: float = param(
         title=_("Höhe"),
@@ -383,6 +402,7 @@ class TextureParams(BaseParams):
         unit="mm",
         minimum=0.5,
         doc=_("Wie hoch das Musterfeld wird. Es sitzt mittig auf dem gewählten Ort."),
+        depends_on=("coverage", ("rectangle",)),
     )
     pitch: float = param(
         title=_("Teilung"),
@@ -424,6 +444,8 @@ class TextureParams(BaseParams):
         title=_("Auflegen"),
         default="flat",
         choices=("flat", "cylinder"),
+        placement="advanced",
+        depends_on=("coverage", ("rectangle",)),
         doc=_(
             "Flach auf eine Ebene oder umlaufend um einen Zylinder. Ein Rändel "
             "gehört um den Griff, nicht als Fleck darauf."
@@ -449,7 +471,6 @@ class TextureParams(BaseParams):
         maximum=360.0,
         placement="advanced",
         doc=_("Dreht das Muster in der Fläche."),
-        depends_on=("wrap", ("flat",)),
     )
     x: float = param(
         title=_("Position X"),
@@ -457,6 +478,7 @@ class TextureParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Mitte des Feldes. Eine angeklickte Fläche trägt den Wert selbst ein."),
+        depends_on=("coverage", ("rectangle",)),
     )
     y: float = param(
         title=_("Position Y"),
@@ -464,6 +486,7 @@ class TextureParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Zweite Achse der Position — siehe Position X."),
+        depends_on=("coverage", ("rectangle",)),
     )
     z: float = param(
         title=_("Position Z"),
@@ -471,24 +494,28 @@ class TextureParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Höhe der Fläche, auf die das Muster kommt."),
+        depends_on=("coverage", ("rectangle",)),
     )
     nx: float = param(
         title=_("Richtung X"),
         default=0.0,
         placement="advanced",
         doc=_("Normale der Fläche. Aus einer angeklickten Fläche kommt sie mit."),
+        depends_on=("coverage", ("rectangle",)),
     )
     ny: float = param(
         title=_("Richtung Y"),
         default=0.0,
         placement="advanced",
         doc=_("Zweite Achse der Richtung — siehe Richtung X."),
+        depends_on=("coverage", ("rectangle",)),
     )
     nz: float = param(
         title=_("Richtung Z"),
         default=1.0,
         placement="advanced",
         doc=_("Dritte Achse der Richtung. Vorgabe ist nach oben."),
+        depends_on=("coverage", ("rectangle",)),
     )
 
 
@@ -645,41 +672,91 @@ def wrapped(body: MeshData, diameter: float) -> MeshData:
     return MeshData.of(trimesh.Trimesh(vertices=turned, faces=body.raw.faces, process=False))
 
 
-@register_op(
-    name="apply_texture",
-    title=_("Textur aufbringen"),
-    category="surface",
-    params=TextureParams,
-    consumes=1,
-    produces=1,
-    applies_to=("face",),
-    deterministic=False,
-    doc=_(
-        "Prägt ein Muster als echte Geometrie auf eine Fläche — Rändel für den "
-        "Griff, Wabe oder Rippe fürs Aussehen. Was der Slicer bekommt, ist das, "
-        "was man sieht."
-    ),
-)
-def apply_texture(ctx: OpContext) -> OpResult:
-    """Ein Muster auf eine Fläche, erhaben oder vertieft.
+def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) -> MeshData:
+    """Schneidet Musterpolygone am tatsächlichen Flächenumriss samt Lochrändern ab."""
+    from shapely import affinity
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
 
-    Der Weg ist derselbe wie bei der Beschriftung (§25): Umrisse werden zu
-    Prismen, die Prismen auf die Fläche gelegt, und danach entscheidet eine
-    Boolesche Operation, ob sie stehen oder fehlen. Was hier dazukommt, ist die
-    Frage davor — ob das Muster auf dieser Maschine überhaupt entsteht.
-    """
-    import dataclasses
-
-    from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
-    from app.core.geom.label_ops import label_solid, place
+    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.face_ops import _chosen_face, _no_face
+    from app.core.geom.faces import _triangles_of, face_normal
+    from app.core.geom.label_ops import label_solid
     from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import apply
+    from app.core.sketch.planes import frame_of
+
+    feature = _chosen_face(source, params.face)
+    if feature is None:
+        raise _no_face()
+    mesh = as_mesh_data(source.mesh)
+    indices = _triangles_of(mesh, feature)
+    normal = face_normal(feature)
+    corners = np.asarray(mesh.raw.triangles)[indices]
+    origin = corners.reshape((-1, 3)).mean(axis=0)
+    frame = frame_of(normal, cast(Vec3, tuple(origin)))
+    basis = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    radians = math.radians(params.angle)
+    turn = np.array(
+        [
+            [math.cos(radians), -math.sin(radians), 0.0],
+            [math.sin(radians), math.cos(radians), 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    basis = basis @ turn
+    local = (corners - origin) @ basis
+    if np.max(np.abs(local[:, :, 2])) > EPS_GEOM:
+        raise GeometryError(
+            detail=_("Für ein Muster bis zum Rand wählen Sie eine ebene Fläche."),
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    outline = unary_union([Polygon(triangle[:, :2]) for triangle in local])
+    low_x, low_y, high_x, high_y = outline.bounds
+    centre_x, centre_y = (low_x + high_x) / 2.0, (low_y + high_y) / 2.0
+    shapes = pattern_shapes(params.pattern, high_x - low_x, high_y - low_y, params.pitch, seed)
+    clipped: list[Any] = []
+    for shape in shapes:
+        cut = affinity.translate(shape, centre_x, centre_y).intersection(outline)
+        clipped.extend(
+            part
+            for part in getattr(cut, "geoms", [cut])
+            if part.geom_type == "Polygon" and part.area > EPS_GEOM
+        )
+    # Streuflecken dürfen überlappen. Vor dem Extrudieren zusammenführen,
+    # damit ihre Innenwände keine zusätzlichen geschlossenen Schalen bilden.
+    # Projektion und Schnitt erzeugen gelegentlich doppelte Randpunkte mit
+    # rein numerischem Abstand. Ohne Bereinigung werden daraus Nullhäute.
+    merged = unary_union(clipped).simplify(EPS_GEOM, preserve_topology=True)
+    regions = [
+        part
+        for part in getattr(merged, "geoms", [merged])
+        if part.geom_type == "Polygon" and part.area > EPS_GEOM
+    ]
+    body = label_solid(regions, params.depth + BOOLEAN_OVERLAP)
+    if body is None:
+        raise ValidationError(
+            "pattern",
+            _("Aus diesem Muster entstand nichts — die Teilung passt nicht ins Feld."),
+            value=params.pattern,
+            constraint="no_shapes",
+        )
+    lift = -BOOLEAN_OVERLAP if params.mode == "raised" else -params.depth
+    matrix = np.eye(4)
+    matrix[:3, :3] = basis
+    matrix[:3, 3] = origin + basis[:, 2] * lift
+    return apply(body, matrix)
+
+
+def texture_tool(source: SceneObject, params: TextureParams, seed: int = 0) -> MeshData:
+    """Der Werkzeugkörper für Vorschau und Operation, bereits in Weltkoordinaten."""
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.label_ops import label_solid, place
     from app.core.geom.transform import apply, translation
 
-    params = cast(TextureParams, ctx.params)
-    # §9: das Profil gehört zum Kontext und ist immer da — eine Prüfung darauf
-    # wäre eine Frage, deren Antwort der Vertrag schon gibt.
-    check_printable(params.pattern, params.pitch, params.depth, ctx.profile.printer)
-
+    if params.coverage == "whole_face":
+        return _face_texture_tool(source, params, seed)
     shapes = pattern_shapes(
         params.pattern,
         params.width,
@@ -690,7 +767,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
         # jede nicht-deterministische Operation ohnehin an, und ein zweiter
         # daneben wäre eine zweite Wahrheit — die CLI hat genau daran
         # gemerkt, dass es einen zu viel gab.
-        seed=ctx.seed or 0,
+        seed=seed,
     )
     if not shapes:
         raise ValidationError(
@@ -700,7 +777,6 @@ def apply_texture(ctx: OpContext) -> OpResult:
             constraint="no_shapes",
         )
 
-    source = ctx.inputs[0]
     body = label_solid(shapes, params.depth + BOOLEAN_OVERLAP)
     if body is None:
         raise ValidationError(
@@ -730,6 +806,45 @@ def apply_texture(ctx: OpContext) -> OpResult:
             body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
         )
 
+    return placed
+
+
+@register_op(
+    name="apply_texture",
+    title=_("Textur aufbringen"),
+    category="surface",
+    params=TextureParams,
+    consumes=1,
+    produces=1,
+    applies_to=("face",),
+    deterministic=False,
+    doc=_(
+        "Prägt ein Muster als echte Geometrie auf eine Fläche — Rändel für den "
+        "Griff, Wabe oder Rippe fürs Aussehen. Was der Slicer bekommt, ist das, "
+        "was man sieht."
+    ),
+)
+def apply_texture(ctx: OpContext) -> OpResult:
+    """Ein Muster auf eine Fläche, erhaben oder vertieft.
+
+    Der Weg ist derselbe wie bei der Beschriftung (§25): Umrisse werden zu
+    Prismen, die Prismen auf die Fläche gelegt, und danach entscheidet eine
+    Boolesche Operation, ob sie stehen oder fehlen. Was hier dazukommt, ist die
+    Frage davor — ob das Muster auf dieser Maschine überhaupt entsteht.
+    """
+    import dataclasses
+
+    from app.core.geom.boolean import BooleanKind, boolean, without_effect
+    from app.core.geom.mesh import as_mesh_data
+
+    params = cast(TextureParams, ctx.params)
+    # §9: das Profil gehört zum Kontext und ist immer da — eine Prüfung darauf
+    # wäre eine Frage, deren Antwort der Vertrag schon gibt.
+    check_printable(params.pattern, params.pitch, params.depth, ctx.profile.printer)
+
+    source = ctx.inputs[0]
+    placed = texture_tool(source, params, ctx.seed or 0)
+
     kind: BooleanKind = "union" if params.mode == "raised" else "difference"
     body_mesh = as_mesh_data(source.mesh)
     outcome = boolean(
@@ -750,7 +865,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
     apart = _fell_apart(body_mesh, outcome.mesh, params.mode)
     if apart is not None:
         findings.append(apart)
-    if params.wrap == "cylinder":
+    if params.coverage == "rectangle" and params.wrap == "cylinder":
         beyond = _wrap_beyond_body(body_mesh, params.wrap_diameter)
         if beyond is not None:
             findings.append(beyond)

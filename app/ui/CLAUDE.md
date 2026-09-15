@@ -20,6 +20,11 @@ Projektkopf und die Bearbeitungsmenüs aus. Ein geöffnetes oder neu angelegtes
 leeres Projekt zeigt sie wieder. Der Rückweg aus einem Editor richtet sich
 nach der aktuellen Fläche und blendet den Projektkopf nicht bedingungslos ein.
 
+Bei Texturen bindet „Gesamte Fläche“ die ausgewählte Flächenkennung; nur
+wirksame Maße erscheinen. Der Operationsdialog behält denselben Startwert
+bis zum Übernehmen. Seine Vorschau reduziert flächengebundene Eingaben nicht,
+damit Ränder und Bohrungen dem tatsächlichen Ergebnis entsprechen.
+
 ## Filamente und lokales Lager
 
 `FirstRunDialog` fragt Slicer vor Drucker; `_PrinterSurvey` liest passende

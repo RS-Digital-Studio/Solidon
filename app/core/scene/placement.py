@@ -347,7 +347,7 @@ def values_for(
         (entry for entry in spec.params.spec() if entry.kind in {"feature", "features"}),
         None,
     )
-    if feature_field is not None:
+    if feature_field is not None and spec.name != "apply_texture":
         feature_values = {
             feature_field.name: (feature.id,) if feature_field.kind == "features" else feature.id,
             **_from_the_bore(spec, feature, names),
@@ -363,6 +363,10 @@ def values_for(
         return feature_values
 
     values: dict[str, Any] = {}
+    # Die Textur bewahrt neben der Fläche auch die freie Rechteckplatzierung.
+    # Eine Bohrung liefert deren Wickeldurchmesser, aber keinen ebenen Umriss.
+    if spec.name == "apply_texture" and feature.kind == "face":
+        values["face"] = feature.id
     target = _target_field(spec)
     if target and feature.kind == "face":
         # „Bis zu dieser Fläche" — die Kennung reicht, den Rahmen rechnet die
