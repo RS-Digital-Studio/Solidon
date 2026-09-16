@@ -858,3 +858,116 @@ def test_the_two_drawn_shapes_become_bodies_with_the_volume_they_promise() -> No
     assert brep_profiles.extrude(slot, 10.0).volume == pytest.approx(
         (20.0 * 6.0 + math.pi * 3.0**2) * 10.0, rel=1e-9
     )
+
+
+# --- Lochraster und Lochkreis mit zwei Klicks (16.09.2026) ---------------------
+
+
+def _pulled(sketch: Sketch, index: int, by: tuple[float, float]) -> Sketch:
+    """Ein Kreis aus der Reihe gezogen — Mitte und Randpunkt gemeinsam.
+
+    Ohne den Zug beginnt der Löser in der Lösung, und der Test bestätigte die
+    Konstruktion statt der Bedingungen (dasselbe Muster wie beim Vieleck).
+    """
+    elements = list(sketch.elements)
+    circle = elements[index]
+    elements[index] = SketchElement(
+        kind=circle.kind,
+        points=tuple((x + by[0], y + by[1]) for x, y in circle.points),
+        construction=circle.construction,
+    )
+    return Sketch(plane=sketch.plane, elements=tuple(elements), constraints=sketch.constraints)
+
+
+def test_a_drawn_hole_grid_stays_a_grid_under_the_solver() -> None:
+    """Zeilen waagerecht, Spalten senkrecht, Abstände gleich, Löcher gleich —
+    gerechnet über eine verzogene Ausgangslage, nicht hingeschrieben.
+
+    Vier Spalten und drei Zeilen zwischen (5 | 5) und (35 | 25): Abstand zehn
+    in x, zehn in y. Frei bleiben die Lage, die beiden Abstände und der
+    Radius — fünf Freiheitsgrade; den Durchmesser bemaßt erst die Leiste.
+    """
+    from app.core.sketch import solve_sketch
+
+    sketch = edit.hole_grid_between((5.0, 5.0), (35.0, 25.0), 4, 3, 4.0)
+    assert [element.kind for element in sketch.elements] == ["circle"] * 12
+    assert not any(element.construction for element in sketch.elements)
+
+    solved = solve_sketch(_pulled(sketch, 5, (1.3, -0.8)))
+    assert solved.max_residual <= 1e-6
+    centres = [element.points[0] for element in solved.elements]
+    radii = [math.dist(*element.points) for element in solved.elements]
+
+    def at(column: int, row: int) -> tuple[float, float]:
+        return centres[row * 4 + column]
+
+    for row in range(3):
+        assert {round(at(column, row)[1], 6) for column in range(4)} == {round(at(0, row)[1], 6)}
+    for column in range(4):
+        assert {round(at(column, row)[0], 6) for row in range(3)} == {round(at(column, 0)[0], 6)}
+    across = [at(column + 1, 0)[0] - at(column, 0)[0] for column in range(3)]
+    upward = [at(0, row + 1)[1] - at(0, row)[1] for row in range(2)]
+    assert across == pytest.approx([across[0]] * 3, abs=1e-6)
+    assert upward == pytest.approx([upward[0]] * 2, abs=1e-6)
+    assert radii == pytest.approx([radii[0]] * 12, abs=1e-6)
+    assert solved.free_dof == 5, "Lage, zwei Abstände und ein Radius bleiben frei"
+
+
+def test_a_single_column_grid_has_only_one_spacing() -> None:
+    """Eine Spalte, drei Zeilen: kein waagerechter Abstand, den man frei ließe."""
+    from app.core.sketch import solve_sketch
+
+    sketch = edit.hole_grid_between((0.0, 0.0), (7.0, 20.0), 1, 3, 3.0)
+    solved = solve_sketch(_pulled(sketch, 1, (0.6, 0.4)))
+    assert solved.max_residual <= 1e-6
+    xs = {round(element.points[0][0], 6) for element in solved.elements}
+    assert len(xs) == 1, "eine Spalte steht senkrecht, der Zug nach rechts zählt nicht"
+    assert solved.free_dof == 4, "Lage, ein Abstand und ein Radius"
+
+
+def test_a_hole_grid_refuses_what_is_no_grid() -> None:
+    with pytest.raises(ValidationError):
+        edit.hole_grid_between((0.0, 0.0), (10.0, 10.0), 1, 1, 3.0)
+    with pytest.raises(ValidationError):
+        edit.hole_grid_between((0.0, 0.0), (0.0, 10.0), 2, 2, 3.0)
+    with pytest.raises(ValidationError):
+        edit.hole_grid_between((0.0, 0.0), (10.0, 10.0), 2, 2, 10.0)
+    with pytest.raises(ValidationError):
+        edit.hole_grid_between((0.0, 0.0), (10.0, 10.0), 0, 2, 3.0)
+
+
+@pytest.mark.parametrize("count", [2, 3, 6])
+def test_a_drawn_bolt_circle_stays_regular_under_the_solver(count: int) -> None:
+    """Alle Mitten auf dem Teilkreis, gleich weit auseinander, alle Löcher
+    gleich — und der Teilkreis reist als Hilfskreis mit, wie beim Vieleck.
+
+    Frei bleiben Mitte, Teilkreis und Lochradius: vier Freiheitsgrade; die
+    Drehung ist die Eichfreiheit des Randpunkts auf seinem Kreis.
+    """
+    from app.core.sketch import solve_sketch
+
+    sketch = edit.bolt_circle_at((2.0, 3.0), (22.0, 3.0), count, 4.0)
+    assert [element.kind for element in sketch.elements] == ["circle"] * (count + 1)
+    assert sketch.elements[-1].construction, "der Teilkreis ist Hilfsgeometrie"
+
+    solved = solve_sketch(_pulled(sketch, 1 if count > 2 else 0, (1.1, -0.7)))
+    assert solved.max_residual <= 1e-6
+    hub, rim = solved.elements[-1].points
+    pitch = math.dist(hub, rim)
+    centres = [element.points[0] for element in solved.elements[:count]]
+    for centre in centres:
+        assert math.dist(hub, centre) == pytest.approx(pitch, abs=1e-6)
+    chords = [math.dist(centres[k], centres[(k + 1) % count]) for k in range(count)]
+    assert chords == pytest.approx([2.0 * pitch * math.sin(math.pi / count)] * count, abs=1e-6)
+    radii = [math.dist(*element.points) for element in solved.elements[:count]]
+    assert radii == pytest.approx([radii[0]] * count, abs=1e-6)
+    assert solved.free_dof == 4, "Mitte, Teilkreis und Lochradius bleiben frei"
+
+
+def test_a_bolt_circle_refuses_too_few_or_too_big_holes() -> None:
+    with pytest.raises(ValidationError):
+        edit.bolt_circle_at((0.0, 0.0), (10.0, 0.0), 1, 3.0)
+    with pytest.raises(ValidationError):
+        edit.bolt_circle_at((0.0, 0.0), (10.0, 0.0), 6, 12.0)
+    with pytest.raises(ValidationError):
+        edit.bolt_circle_at((4.0, 4.0), (4.0, 4.0), 6, 3.0)
