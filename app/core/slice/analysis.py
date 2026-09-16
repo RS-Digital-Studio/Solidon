@@ -532,6 +532,22 @@ def _measure_all(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
 
+    # **Die Zahl der Arbeiter ist am Prüfkörper gemessen und trägt nicht
+    # überall.** Gemessen am 16.09.2026 an einer 200 mm hohen Waschschüssel
+    # (215 074 Dreiecke, 1000 Schichten): 60 s mit zehn Arbeitern, 49 s ganz
+    # ohne, **39 s mit zweien**. Am Prüfkörper dieser Suite (200 000 Dreiecke,
+    # 400 Schichten) ist es umgekehrt: 287 ms mit zehn, 460 ms mit zweien.
+    #
+    # Die Punktzahl je Schicht erklärt das nicht — 812 gegen 971 —, wohl aber
+    # der Preis je Schicht: 39,5 ms gegen 0,72 ms, Faktor fünfzig. Eine
+    # gekrümmte Wand macht `buffer` und `difference` teuer, und zehn solche
+    # Aufrufe nebeneinander sättigen offenbar etwas anderes als die Kerne.
+    # Bündeln in Blöcke half nicht (gemessen: 60,2 s statt 59,9 s), die
+    # Warteschlange ist es also nicht.
+    #
+    # Eine Zahl, die beide Fälle gewinnt, gibt es damit nicht, und eine
+    # Heuristik über die Schichtzahl wäre an zwei Punkten geraten. Die Marke
+    # bleibt, bis jemand den wirklichen Engpass misst (RM, 16.09.2026).
     workers = _workers(FULL_WORKERS if detail == "full" else MAX_WORKERS)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         if cancelled is None:
