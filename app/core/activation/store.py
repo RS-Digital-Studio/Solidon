@@ -33,15 +33,17 @@ läuft danach über den Lizenzschlüssel. Drei Bausteine tragen das:
   dass Solidon ohne Netz und ohne Konto läuft. Die Hürde ist bewusst so hoch
   wie das Neuaufsetzen des Profils, nicht höher.
 
-Eine zurückgestellte Systemuhr verlängert trotzdem nichts: gespeichert wird
-auch der höchste je gesehene Tag, und die Frist läuft nie rückwärts. Ein Tag
-weit jenseits des ersten Starts wird dabei verworfen und nicht festgeschrieben
-— sonst nähme ein einziger Start mit falsch gestellter Uhr den Testlauf
-dauerhaft weg, auch nachdem die Uhr wieder stimmt. In der Demo ist der Maßstab
-dafür :data:`DEMO_UNTIL` und nicht der erste Start: ein gespeicherter Tag
-jenseits des Demo-Endes kann keine echte Zeit sein — er wird auf die echte Uhr
-zurückgenommen, weil sonst schon der allererste Start mit einer Uhr in der
-Zukunft (leere BIOS-Batterie) die Demo dauerhaft beendete.
+Solange die Marker erhalten bleiben, läuft ihr maßgeblicher Tag nicht
+rückwärts. In der Demo wird ein erkannter Ablauf als erster Tag nach
+:data:`DEMO_UNTIL` festgehalten. Eine offensichtlich falsche Zukunftsuhr
+jenseits des einjährigen Horizonts nach dem Demo-Ende sperrt den aktuellen
+Start, überschreibt aber keinen vorhandenen Marker. Alte Zukunftsmarker sind
+korrigierbar; ein plausibler Ablauf wird dabei nicht verworfen. Beim späteren
+Testlauf bleibt der erste Start der Bezug für den Horizont.
+
+Das ist keine unabhängige Uhr: Wer das Datum einfriert oder das gesamte
+Benutzerprofil zurücksetzt, kann mit lokalen Markern allein nicht zuverlässig
+erkannt werden.
 
 **Und die beiden Zugeständnisse gelten einzeln, nicht zusammen.** Ist ein
 späterer Testlauf ausdrücklich aktiv, fängt er nach dem Löschen beider Marker
@@ -84,8 +86,8 @@ TRIAL_FROM: Final[date | None] = None
 #:
 #: Ein Stichtag statt einer Frist ab dem ersten Start: die Demo endet für alle
 #: am selben Tag, der Tag selbst gehört noch dazu. Der Testlaufmarker verliert
-#: damit seine Bedeutung — wer ihn löscht, gewinnt keinen Tag, und wer die Uhr
-#: zurückstellt, verschiebt nur sein eigenes Kalenderblatt.
+#: für den Beginn seine Bedeutung. Gegen Zurückstellen der Uhr bleibt er
+#: erforderlich; ohne beide Marker gibt es keine gespeicherte Zeituntergrenze.
 #:
 #: Er steht hier und nicht in ``branding.py``, weil dieses Paket seit V4c mit
 #: Cython übersetzt ausgeliefert wird: der Stichtag reist in der Erweiterung
@@ -139,10 +141,9 @@ _MARKER_SECRET: Final = bytes.fromhex(
 #: angefasst heißt vorbei.
 FORGED: Final = "forged"
 
-#: Ab welchem Abstand zum ersten Start ein gespeicherter Tag keine verstrichene
-#: Zeit mehr sein kann, sondern eine falsch gestellte Uhr. Ein Jahr ist
-#: großzügig genug, dass ein Nutzer, der Solidon nach Monaten wieder öffnet,
-#: den Rückwärtsschutz behält.
+#: Horizont für offensichtlich falsche Zukunftstage: beim Testlauf ab dem
+#: ersten Start, bei der festen Demo ab ihrem Ende. Das ist eine lokale
+#: Plausibilitätsregel, kein Nachweis der wirklichen Zeit.
 CLOCK_HORIZON_DAYS: Final = 365
 
 
@@ -427,12 +428,14 @@ def days_left(today: date | None = None) -> int:
     """
     if DEMO_UNTIL is None:
         return 0 if TRIAL_FROM is None else trial_days_left(today)
-    # Auch die Demo führt den höchsten je gesehenen Tag: „Wer die Uhr
-    # zurückstellt, verschiebt nur sein eigenes Kalenderblatt" stand als
-    # Zusage im Modulkopf, gehalten hat sie nur der Testlauf-Zweig — Uhr auf
-    # 2020 hieß zweieinhalbtausend Tage Demo (Gesamtreview L-1). Der Marker
-    # ist derselbe, samt Horizontprüfung gegen die leere BIOS-Batterie.
+    # Auch die Demo hält ihren Ablauf fest. Der Horizont hängt am festen
+    # Ende, nicht an einem womöglich falsch gespeicherten ersten Start.
     now = today or date.today()
+    clock_limit = DEMO_UNTIL + timedelta(days=CLOCK_HORIZON_DAYS)
+    if now > clock_limit:
+        # Ein Sprung auf 2099 darf weder eine laufende Demo dauerhaft sperren
+        # noch einen echten Ablauf mit einem später verwerfbaren Tag ersetzen.
+        return 0
     stored = _read_trial()
     if isinstance(stored, str):  # FORGED
         # Ein angefasster Marker beendet die Frist, statt sie zu verlängern —
@@ -444,34 +447,19 @@ def days_left(today: date | None = None) -> int:
         # blieb hier der frei gewählte Tag stehen, und 2020 hieß 2495 Resttage.
         # Vor der Auslieferung gab es die Demo nicht, also ist ihr Erscheinen
         # der früheste Tag, an dem jemand sie gestartet haben kann.
-        effective = max(now, DEMO_FROM)
-        # Beide Felder auf denselben Tag: Ein ``first_run`` aus der falschen
-        # Uhr läge jenseits von CLOCK_HORIZON_DAYS und ließe den nächsten Lauf
-        # genau den Tag verwerfen, der hier gerade festgehalten wird.
+        effective = min(max(now, DEMO_FROM), DEMO_UNTIL + timedelta(days=1))
         _write_trial(effective, effective)
     else:
         first_run, last_seen = stored
-        # Ein gespeicherter Tag jenseits des Demo-Endes kann keine verstrichene
-        # Zeit innerhalb der Demo sein — die Demo läuft nur bis DEMO_UNTIL. Er
-        # stammt aus einer in die Zukunft gestellten Uhr (leere BIOS-Batterie)
-        # und wird auf die echte Zeit zurückgenommen, statt die Frist dauerhaft
-        # zu beenden (Gesamtreview Infra 1). Ohne diesen Deckel nahm ein
-        # einziger Start mit einer Uhr auf 2099 die Demo für immer weg: Der
-        # höchste gesehene Tag lag dann jenseits von DEMO_UNTIL, und weil die
-        # Frist nie rückwärts läuft, blieb sie auch nach dem Richtigstellen der
-        # Uhr bei null. Der Deckel liegt enger als die Horizontprüfung darunter
-        # und fängt auch den Fall, dass schon der erste Start in der Zukunft lag
-        # — dann ist first_run selbst verdächtig, und die von ihm ausgehende
-        # Horizontprüfung greift nicht.
-        if last_seen > DEMO_UNTIL:
-            _log.warning("demo marker holds a date past the deadline, ignoring it: %s", last_seen)
-            last_seen = now
-        if last_seen > first_run + timedelta(days=CLOCK_HORIZON_DAYS):
-            _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
-            last_seen = max(now, first_run)
-        effective = max(now, last_seen, DEMO_FROM)
+        # Ältere Fassungen schrieben auch offensichtlich falsche Zukunftstage.
+        # Nur diese korrigieren; ein Tag knapp nach dem Ende ist ein Ablauf.
+        if last_seen > clock_limit:
+            _log.warning("demo marker holds an implausible date, ignoring it: %s", last_seen)
+            last_seen = first_run if first_run <= clock_limit else DEMO_FROM
+        effective = min(max(now, last_seen, DEMO_FROM), DEMO_UNTIL + timedelta(days=1))
+        first_run = min(first_run, effective)
         # Ein fehlender Ort ist ein Schreibgrund — wie im Testlauf-Zweig.
-        if effective != stored[1] or not _places_complete():
+        if (first_run, effective) != stored or not _places_complete():
             _write_trial(first_run, effective)
     # Der Stichtag selbst gehört noch dazu: am 30.10. bleibt ein Tag übrig,
     # am 31.10. keiner. Die freundliche Richtung, und die, die auf der Website

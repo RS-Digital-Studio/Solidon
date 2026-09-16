@@ -98,6 +98,16 @@ Anwendung ohne Konto, Hintergrundprüfung und Netz verwendbar.
 
 ## Persönliche Ablagen
 
+Die feste Demo hält einen plausibel erkannten Ablauf als ersten Tag nach
+ihrem Ende in beiden Zeitmarkern fest. Ein späteres Zurückstellen der Uhr
+öffnet sie nicht wieder. Eine Uhr jenseits von `DEMO_UNTIL + CLOCK_HORIZON_DAYS`
+sperrt den aktuellen Start, verändert aber keine Marker. Dadurch kann auch
+der Umweg über eine offensichtlich falsche Zukunft einen echten Ablauf nicht
+löschen. Zukunftsmarker früherer Fassungen werden nur außerhalb dieses
+Horizonts korrigiert. Das schützt weder vor einer eingefrorenen Uhr noch vor
+der Rücksetzung aller lokalen Daten; der laufende Zustands-Cache ist davon
+getrennt (Abschnitt 7 in `konzepte/konzept-demo-zu-1.0-2026-09.md`).
+
 Kaufcode, Geräte-Zertifikat, offene Abmeldung und Zeitmarker schreiben über
 `store._write_place`: eine eindeutige private Nachbardatei, vollständiges
 Schreiben und Synchronisieren, Schließen, dann atomarer Ersatz. Ein
