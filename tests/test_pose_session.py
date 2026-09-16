@@ -337,8 +337,16 @@ def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWind
     Der Rechtsklick auf den Körper ist der Weg, den §2.6 „den kürzesten Weg vom
     Sehen zum Tun" nennt. Geprüft wird das Signal, nicht die Methode: die
     Verbindung ist die Aussage.
+
+    **Vier Editoren, nicht drei.** Die Dichtnut hat seit dem 16.09.2026 einen
+    eigenen: Sie braucht einen *geschlossenen* Weg und wählt ihn über das
+    Wegfeld ihres Dialogs, an dem der ``SealFlow`` hängt — deshalb nimmt
+    ``_has_sketch_param`` sie ausdrücklich aus. Ein Rohdialog bliebe hier
+    trotzdem rot: Er trägt keinen ``SealFlow``.
     """
     from app.core.registry import REGISTRY
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.seal_flow import SealFlow
 
     with_a_body(window)
     gesture = {"sketch", "strokes", "armature"}
@@ -350,12 +358,38 @@ def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWind
     assert len(offered) >= 3, f"nur {len(offered)} Gesten-Operationen im Kontextmenü?"
 
     for spec in offered:
+        # **Die Auswahl je Durchgang herstellen, nicht erben.** Der Rechtsklick
+        # gilt dem Körper, auf dem er sitzt — in der Bedienung ist er gewählt,
+        # wenn das Menü aufgeht. Über neun Durchgänge hält das nicht: Ein
+        # geschlossener Editor lässt den Baum ohne Auswahl zurück, und
+        # ``start_armature`` steigt dann mit „erst etwas auswählen" aus,
+        # ohne dass an der Verbindung etwas fehlte.
+        item = window.object_tree.tree.topLevelItem(0)
+        assert item is not None
+        item.setSelected(True)
         window.object_tree.operationRequested.emit(spec)
         QApplication.processEvents()
-        opened = window._sketch_panel is not None or window.sculpting() or window.setting_armature()
-        assert opened, f"{spec.title} landete nicht in ihrem Editor"
+        opened = (
+            window._sketch_panel is not None
+            or window.sculpting()
+            or window.setting_armature()
+            or bool(window.findChildren(SealFlow))
+        )
+        assert opened, (
+            f"{spec.title} landete nicht in ihrem Editor — "
+            f"Skizze={window._sketch_panel is not None}, "
+            f"Pinsel={window.sculpting()}, Skelett={window.setting_armature()}, "
+            f"Dichtweg={bool(window.findChildren(SealFlow))}, "
+            f"offene Dialoge={[type(d).__name__ for d in window.findChildren(OperationDialog)]}, "
+            f"Auswahl={window.object_tree.selected()!r}"
+        )
         # Zurück auf Anfang, sonst prüft der zweite Durchgang die Sitzung des
-        # ersten.
+        # ersten. ``_escape`` nimmt Skizze, Skelett und Pinsel zurück, einen
+        # offenen Operationsdialog dagegen nicht — der Dichtnut-Weg bliebe
+        # sonst stehen und machte den nächsten Durchgang grün, ohne ihn zu
+        # prüfen.
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
         window._escape()
         QApplication.processEvents()
 
