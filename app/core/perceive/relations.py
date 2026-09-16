@@ -650,6 +650,31 @@ def cavity_chains(
     return tuple(sorted(found, key=lambda chain: (*chain[0].params["centre"], chain[0].id)))
 
 
+def _candidate_key(candidates: Mapping[FeatureId, Feature]) -> tuple[Any, ...]:
+    """Woran eine gemerkte Antwort hängt — die Namen genügen dafür nicht.
+
+    Zwei Merkmalsmengen desselben Körpers können dieselben Namen tragen und
+    verschiedene Flächen meinen: Ein veralteter Netzausschnitt trägt die
+    Kennung weiter, und aus ihm darf keine Kette werden
+    (``test_invalid_face_indices_do_not_connect_a_cavity``). Der Schlüssel
+    nennt deshalb, was die Rechnung liest — Art, Flächen und die Achslinie.
+
+    Die Flächen gehen als Hash ein, nicht als Liste: Ein Merkmal trägt
+    tausende Nummern, und der Schlüssel soll billiger sein als die Rechnung,
+    die er spart.
+    """
+    return tuple(
+        (
+            name,
+            candidate.kind,
+            hash(tuple(candidate.face_indices)),
+            repr(candidate.params.get("axis")),
+            repr(candidate.params.get("centre")),
+        )
+        for name, candidate in sorted(candidates.items())
+    )
+
+
 def _cavity_links(
     candidates: Mapping[FeatureId, Feature], mesh: MeshData
 ) -> tuple[dict[FeatureId, set[FeatureId]], set[FeatureId], set[FeatureId]]:
@@ -672,7 +697,7 @@ def _cavity_links(
     """
     body = _one_body(mesh).raw
     cache = getattr(body, "_cache", None)
-    key = ("solidon_cavity_links", tuple(sorted(candidates)))
+    key = ("solidon_cavity_links", _candidate_key(candidates))
     if cache is not None:
         cache.verify()
         # Kein ``cache.get``: trimeshs ``Cache`` ist kein Wörterbuch und hat

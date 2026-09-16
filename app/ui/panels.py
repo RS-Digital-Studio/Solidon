@@ -1382,6 +1382,24 @@ class ObjectTree(QWidget):
         if worker is not None:
             worker.cancel.cancel()
 
+    def wait_for_previews(self, timeout_ms: int = 60000) -> bool:
+        """Warten, bis die Bilder da sind — der Weg für Tests und Bildläufe.
+
+        Dieselbe Bauart wie ``FirstRunDialog.wait_for_survey``: Der fachliche
+        Name gibt einen Wahrheitswert zurück, :meth:`release` räumt auf. Ohne
+        ihn prüfte ein Test den leeren Zustand — die Bilder entstehen seit dem
+        16.09.2026 nebenan, und wer sofort nachsieht, sieht nichts.
+        """
+        from time import monotonic
+
+        from PySide6.QtWidgets import QApplication
+
+        until = monotonic() + timeout_ms / 1000.0
+        while self._drawing is not None and monotonic() < until:
+            QApplication.processEvents()
+        QApplication.processEvents()
+        return self._drawing is None
+
     def release(self) -> None:
         """Auf den Zeichner warten, bevor der Baum weggeht (``wartezeit.md``)."""
         self._stop_drawing()

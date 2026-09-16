@@ -265,6 +265,18 @@ def test_quick_assignment_is_one_transaction_and_keeps_the_spool(qt_app, invento
     harness._current_inventory_spool = lambda entry: (
         main_window.MainWindow._current_inventory_spool(harness, entry)
     )
+    # Der Umfang einer Filamentwahl kommt aus dem Fenster: An einer Fläche, die aus einem
+    # Baustein kam, gilt sie dem ganzen Baustein (16.09.2026). Die Kette wird hier echt
+    # gebunden, wie die Methoden darüber — eine Attrappe mit fester Antwort prüfte den
+    # Umfang nicht mehr.
+    harness._filament_targets = lambda: main_window.MainWindow._filament_targets(harness)
+    harness._part_faces_of_selection = lambda chosen: (
+        main_window.MainWindow._part_faces_of_selection(harness, chosen)
+    )
+    harness._common_part_step = lambda chosen: main_window.MainWindow._common_part_step(
+        harness, chosen
+    )
+    harness.part_step_of = lambda feature: main_window.MainWindow.part_step_of(harness, feature)
     main_window.MainWindow._assign_inventory_spool(harness, inventory)
     result = session.evaluate_now()
     assert len(session.project.document.transactions[-1].ops) == 1
@@ -329,6 +341,18 @@ def test_quick_removal_clears_mixed_scope_in_one_undo(qt_app, inventory):
             selected_features=lambda: ((partial, feature.id),),
         ),
     )
+    # Der Umfang einer Filamentwahl kommt aus dem Fenster: An einer Fläche, die aus einem
+    # Baustein kam, gilt sie dem ganzen Baustein (16.09.2026). Die Kette wird hier echt
+    # gebunden, wie die Methoden darüber — eine Attrappe mit fester Antwort prüfte den
+    # Umfang nicht mehr.
+    harness._filament_targets = lambda: main_window.MainWindow._filament_targets(harness)
+    harness._part_faces_of_selection = lambda chosen: (
+        main_window.MainWindow._part_faces_of_selection(harness, chosen)
+    )
+    harness._common_part_step = lambda chosen: main_window.MainWindow._common_part_step(
+        harness, chosen
+    )
+    harness.part_step_of = lambda feature: main_window.MainWindow.part_step_of(harness, feature)
     main_window.MainWindow._clear_selected_filament(harness)
     result = session.evaluate_now()
     assert len(session.project.document.transactions) == transaction_count + 1
@@ -370,6 +394,18 @@ def test_quick_removal_rejects_invalid_face_before_applying_any_body(qt_app):
             selected_features=lambda: (("partial", "missing"),),
         ),
     )
+    # Der Umfang einer Filamentwahl kommt aus dem Fenster: An einer Fläche, die aus einem
+    # Baustein kam, gilt sie dem ganzen Baustein (16.09.2026). Die Kette wird hier echt
+    # gebunden, wie die Methoden darüber — eine Attrappe mit fester Antwort prüfte den
+    # Umfang nicht mehr.
+    harness._filament_targets = lambda: main_window.MainWindow._filament_targets(harness)
+    harness._part_faces_of_selection = lambda chosen: (
+        main_window.MainWindow._part_faces_of_selection(harness, chosen)
+    )
+    harness._common_part_step = lambda chosen: main_window.MainWindow._common_part_step(
+        harness, chosen
+    )
+    harness.part_step_of = lambda feature: main_window.MainWindow.part_step_of(harness, feature)
     main_window.MainWindow._clear_selected_filament(harness)
     assert not calls
     assert notices
@@ -379,7 +415,7 @@ def test_quick_removal_groups_faces_before_resolving_the_eight_slot_limit(qt_app
     """Zwei gemeinsam abgewählte Nullflächen benötigen keinen neunten Filamentplatz."""
     from app.core.registry import REGISTRY
     from app.core.scene.cancel import NeverCancelled
-    from app.core.types import Feature, OpContext, Scene
+    from app.core.types import Document, Feature, OpContext, Scene
 
     mesh = MeshData.of(trimesh.creation.box(), slots=(0, 0, 1, 2, 3, 4, 5, 6, 7, 1, 2, 3))
     original = SceneObject(
@@ -397,6 +433,9 @@ def test_quick_removal_groups_faces_before_resolving_the_eight_slot_limit(qt_app
         session=SimpleNamespace(
             last_result=SimpleNamespace(scene=Scene(objects={original.id: original})),
             apply=lambda title, drafts: calls.append(drafts),
+            # Leer, aber vorhanden: Der Umfang fragt über ``part_step_of``,
+            # ob die Auswahl aus einem Baustein kam (16.09.2026).
+            project=SimpleNamespace(document=Document(format_version=1, app_version="0.0.1")),
         ),
         announce=lambda message: pytest.fail(message),
         object_tree=SimpleNamespace(
@@ -404,6 +443,18 @@ def test_quick_removal_groups_faces_before_resolving_the_eight_slot_limit(qt_app
             selected_features=lambda: ((original.id, "first"), (original.id, "second")),
         ),
     )
+    # Der Umfang einer Filamentwahl kommt aus dem Fenster: An einer Fläche, die aus einem
+    # Baustein kam, gilt sie dem ganzen Baustein (16.09.2026). Die Kette wird hier echt
+    # gebunden, wie die Methoden darüber — eine Attrappe mit fester Antwort prüfte den
+    # Umfang nicht mehr.
+    harness._filament_targets = lambda: main_window.MainWindow._filament_targets(harness)
+    harness._part_faces_of_selection = lambda chosen: (
+        main_window.MainWindow._part_faces_of_selection(harness, chosen)
+    )
+    harness._common_part_step = lambda chosen: main_window.MainWindow._common_part_step(
+        harness, chosen
+    )
+    harness.part_step_of = lambda feature: main_window.MainWindow.part_step_of(harness, feature)
     main_window.MainWindow._clear_selected_filament(harness)
     assert len(calls) == len(calls[0]) == 1
     draft = calls[0][0]

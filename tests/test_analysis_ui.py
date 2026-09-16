@@ -4053,15 +4053,16 @@ def test_the_object_tree_draws_its_bodies_once_per_shape(qt_app: QApplication) -
     tree = ObjectTree()
     try:
         tree.show_scene(result)
-        # Der Baum steht sofort; die Bilder kommen nach.
+        # Der Baum steht sofort; die Bilder kommen nach — seit dem
+        # 16.09.2026 aus einem Arbeiter, also wird auf sie gewartet.
         assert tree.tree.topLevelItemCount() == 1
-        while tree._pending:
-            tree._render_pending()
+        tree._render_pending()
+        assert tree.wait_for_previews()
         assert len(tree._previews) == 1
 
         tree.show_scene(result)
-        while tree._pending:
-            tree._render_pending()
+        tree._render_pending()
+        assert tree.wait_for_previews()
         assert len(tree._previews) == 1, "derselbe Körper wurde zweimal gezeichnet"
     finally:
         tree.deleteLater()
@@ -4105,8 +4106,8 @@ def test_a_theme_change_redraws_the_previews(qt_app: QApplication) -> None:
     tree = ObjectTree()
     try:
         tree.show_scene(EvaluationResult(scene=scene, object_hashes={"obj_1": "abc"}))
-        while tree._pending:
-            tree._render_pending()
+        tree._render_pending()
+        assert tree.wait_for_previews()
         assert tree._previews
 
         tree.set_theme("light")
