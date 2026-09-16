@@ -1615,13 +1615,21 @@ seither vergeben, die Zusage nicht.) Drei Regeln:
   Kraft. Am Korpus gemessen (07.09.2026): Beim Drehen um die Hochachse lag der
   Zoom im Median bei einem Viertel der Drehung und in 71 von 71 Berichten über
   der Totzone; das Teil kam beim Drehen näher, ohne dass jemand gezogen hätte.
-  `quiet_crosstalk` nullt deshalb jede Nebenachse unter `CROSSTALK_SHARE` der
-  stärksten; die stärkste bleibt immer, eine aktive Bewegung bleibt also
-  aktiv. **Der Preis steht daneben:** Eine bewusst kleine Nebenbewegung unter
-  einem Viertel der Hauptbewegung geht mit, und beim Kippen der Vorderkante
-  liest das Gerät einen guten Teil als Zug. Die Zahl ist an der Aufzeichnung
-  gewählt und **am Gerät noch nicht bestätigt** — wer sie ändert, misst am
-  Korpus und nicht am Gefühl.
+  `quiet_crosstalk` dämpft deshalb jede Nebenachse nach ihrem Anteil an der
+  stärksten: null unter `CROSSTALK_SILENT`, voll ab `CROSSTALK_MEANT`,
+  dazwischen eine glatte Rampe; die stärkste bleibt immer, eine aktive
+  Bewegung bleibt also aktiv. **Eine Rampe, keine Klippe** (16.09.2026): Der
+  harte Schnitt bei einem Viertel schaltete die Zoomachse am Korpus beim
+  Ziehen zur Person dreimal in vier Sekunden an und aus, beim Kippen der
+  Vorderkante sechsmal — der Zoom hakte. Die Anteile der Nebenachsen liegen
+  breit um das Viertel, jede Schwelle dort schaltet ständig; das Viertel ist
+  jetzt die Mitte des Bandes. **Der Preis steht daneben:** Eine bewusst
+  kleine Nebenbewegung unter `CROSSTALK_SILENT` der Hauptbewegung geht
+  verloren, beim Kippen der Vorderkante liest das Gerät einen guten Teil als
+  Zug, und beim Drehen bleiben rund zwei Drittel des Zoom-Lecks — das ist der
+  Sensor. Band und Kennlinie sind an der Aufzeichnung gewählt und **am Gerät
+  noch nicht bestätigt** — wer sie ändert, misst am Korpus und nicht am
+  Gefühl (die Korpus-Tests zum Übersprechen in `test_spacemouse.py`).
 * **Der Viewport bekommt eine Stellung, keine Deltas.** `Viewport.set_camera_pose`
   setzt Standort, Blickpunkt und Oben und zeichnet einmal. Es ist die einzige
   Stelle, an der die 3D-Maus den Viewport anfasst; `sketch_active` sagt ihr,

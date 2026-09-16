@@ -19,6 +19,7 @@ import struct
 import sys
 import warnings
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -28,7 +29,8 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.spacemouse import (
     AXIS_RANGE,
-    CROSSTALK_SHARE,
+    CROSSTALK_MEANT,
+    CROSSTALK_SILENT,
     DEADZONE,
     DRIVER_CLIENT_WILDCARD,
     DRIVER_CMD_HANDLE_AXIS,
@@ -199,12 +201,12 @@ def test_the_recording_names_both_buttons() -> None:
 # --- Übersprechen: eine schwache Nebenachse schweigt ---------------------------
 
 
-def test_a_side_axis_below_the_share_falls_silent() -> None:
+def test_a_side_axis_below_the_silent_share_falls_silent() -> None:
     """Wer dreht, drückt auch ein wenig — und das Teil kam beim Drehen näher.
 
     Gemessen an der Aufzeichnung: Beim Drehen um die Hochachse lag der Zoom im
     Median bei einem Viertel der Drehung und in jedem Bericht über der Totzone.
-    Unter :data:`CROSSTALK_SHARE` der stärksten Achse ist eine Nebenachse
+    Unter :data:`CROSSTALK_SILENT` der stärksten Achse ist eine Nebenachse
     Übersprechen und wird null; die stärkste bleibt immer.
     """
     quiet = quiet_crosstalk(Motion(rz=0.8, y=0.1))
@@ -214,12 +216,38 @@ def test_a_side_axis_below_the_share_falls_silent() -> None:
     assert quiet_crosstalk(Motion()) == Motion(), "Ruhe bleibt Ruhe"
 
 
-def test_a_deliberate_side_motion_survives_the_share() -> None:
+def test_a_deliberate_side_motion_survives_the_meant_share() -> None:
     """Zwei Achsen, beide gemeint: Schieben mit Drehen bleibt Schieben mit Drehen."""
-    quiet = quiet_crosstalk(Motion(x=0.6, rz=0.6 * CROSSTALK_SHARE, buttons=3))
+    quiet = quiet_crosstalk(Motion(x=0.6, rz=0.6 * CROSSTALK_MEANT, buttons=3))
     assert quiet.x == 0.6
-    assert quiet.rz == 0.6 * CROSSTALK_SHARE, "genau der Anteil zählt noch als gemeint"
+    assert quiet.rz == 0.6 * CROSSTALK_MEANT, "ab diesem Anteil zählt sie ungedämpft als gemeint"
     assert quiet.buttons == 3, "Tasten sind keine Achse"
+
+
+def test_between_the_shares_the_side_axis_fades_in_without_a_cliff() -> None:
+    """Der Filter ist eine Rampe, keine Klippe (16.09.2026).
+
+    Ein harter Schnitt bei einem Viertel schaltete die Zoomachse in der
+    Aufzeichnung drei- bis sechsmal je Geste an und aus — der Zoom hakte.
+    Zwischen :data:`CROSSTALK_SILENT` und :data:`CROSSTALK_MEANT` wächst das
+    Gewicht deshalb glatt: monoton, in Schritten von 0,005 Anteil nie mehr
+    als 0,02 Sprung, am alten Viertel genau die Hälfte, für negative Werte
+    spiegelgleich.
+    """
+    previous = 0.0
+    for step in range(1, 161):
+        value = 0.005 * step
+        kept = quiet_crosstalk(Motion(rz=0.8, y=value)).y
+        assert 0.0 <= kept <= value, (value, kept)
+        assert kept >= previous, ("monoton", value, kept, previous)
+        assert kept - previous < 0.02, ("Sprung", value, kept - previous)
+        assert quiet_crosstalk(Motion(rz=0.8, y=-value)).y == -kept, "spiegelgleich"
+        previous = kept
+    middle = quiet_crosstalk(Motion(rz=0.8, y=0.2)).y
+    assert middle == pytest.approx(0.1), "das alte Viertel ist die Mitte"
+    meant = 0.8 * CROSSTALK_MEANT
+    assert quiet_crosstalk(Motion(rz=0.8, y=meant)).y == pytest.approx(meant), "ab hier ungedämpft"
+    assert quiet_crosstalk(Motion(rz=0.8, y=0.8 * CROSSTALK_SILENT)).y == 0.0, "bis hier still"
 
 
 def test_the_camera_does_not_zoom_when_the_cap_is_only_twisted() -> None:
@@ -229,31 +257,56 @@ def test_the_camera_does_not_zoom_when_the_cap_is_only_twisted() -> None:
     assert after.position != START.position, "gedreht wird trotzdem"
 
 
-def test_the_recording_keeps_every_named_axis_and_loses_most_zoom_leaks() -> None:
-    """Am Korpus gemessen, nicht angenommen: Der Anteil frisst keine gemeinte Achse.
+def test_the_recording_keeps_every_named_axis_and_damps_the_zoom_leaks() -> None:
+    """Am Korpus gemessen, nicht angenommen: Die Rampe frisst keine gemeinte Achse.
 
     In jeder der acht Gesten, deren stärkste Achse die genannte ist, bleibt
     diese Achse in jedem Bericht mit klarer Geste aktiv. Die Zoom-Lecks beim
-    Schieben, Drücken, Drehen und Kippen nach rechts fallen zusammen auf
-    weniger als ein Viertel — beim Drehen bleiben sie zur Hälfte, weil dort
-    der Zoom bis zu einem Drittel der Drehung trägt. Die Kippgeste nach vorn
-    (Phase 8) steht nicht in dieser Liste: Dort liest das Gerät das Kippen zu
-    einem guten Teil als Zug, und der Zug ist die stärkere Achse.
+    Schieben, Drücken und Kippen nach rechts fallen zusammen unter ein Zehntel
+    ihrer Summe; beim Hochziehen bleiben knapp zwei Drittel, beim Drehen rund
+    zwei Drittel — dort trägt der Zoom bis zu einem Drittel der Drehung, und
+    das ist der Sensor, nicht der Filter. Die Kippgeste nach vorn (Phase 8)
+    steht nicht in dieser Liste: Dort liest das Gerät das Kippen zu einem
+    guten Teil als Zug, und der Zug ist die stärkere Achse.
     """
     phases = _corpus_phases()
     named = {"1": "x", "2": "x", "3": "z", "4": "z", "5": "y", "6": "y", "7": "rz", "9": "ry"}
-    leaks_before = 0
-    leaks_after = 0
+    leak: dict[str, tuple[float, float]] = {}
     for phase, axis in named.items():
         clear = [m for m in phases[phase] if abs(getattr(m, axis)) >= 0.2]
         assert len(clear) >= 50, (phase, len(clear))
         quiet = [quiet_crosstalk(m) for m in clear]
         assert all(abs(getattr(m, axis)) >= DEADZONE for m in quiet), phase
         if axis != "y":
-            leaks_before += sum(1 for m in clear if abs(m.y) >= DEADZONE)
-            leaks_after += sum(1 for m in quiet if abs(m.y) >= DEADZONE)
-    assert leaks_before > 200, leaks_before
-    assert leaks_after * 4 < leaks_before, (leaks_after, leaks_before)
+            leak[phase] = (sum(abs(m.y) for m in quiet), sum(abs(m.y) for m in clear))
+    pan_after = sum(leak[p][0] for p in ("2", "4", "9"))
+    pan_before = sum(leak[p][1] for p in ("2", "4", "9"))
+    assert pan_before > 15, pan_before
+    assert pan_after < 0.1 * pan_before, (pan_after, pan_before)
+    assert leak["3"][0] < 0.7 * leak["3"][1], leak["3"]
+    assert leak["7"][0] < 0.75 * leak["7"][1], leak["7"]
+
+
+def test_the_recording_gets_no_zoom_jump_from_the_filter() -> None:
+    """Die Regression zur Klippe: Der Filter fügt der Zoomachse keinen Sprung hinzu.
+
+    Von Bericht zu Bericht darf sich der gefilterte Zoom nicht deutlich mehr
+    ändern als der rohe. Mit dem harten Schnitt bei einem Viertel lag der
+    zugefügte Sprung beim Schieben nach links bei 0,17, beim Hochziehen bei
+    0,16 und beim Drehen bei 0,23 — die Zoomachse schaltete an und aus. Die
+    Rampe bleibt bei diesen drei Gesten unter 0,1 (gemessen 0,04, 0,09 und
+    0,05). Die Aufzeichnung ist auf jeden fünften Bericht gedünnt; am Gerät
+    sind die Schritte fünfmal kleiner, die Klippe aber nicht.
+    """
+    phases = _corpus_phases()
+    for phase in ("2", "3", "7"):
+        active = [m for m in phases[phase] if m.active()]
+        quiet = [quiet_crosstalk(m) for m in active]
+        added = max(
+            abs(b.y - a.y) - abs(rb.y - ra.y)
+            for (ra, rb), (a, b) in zip(pairwise(active), pairwise(quiet), strict=True)
+        )
+        assert added < 0.1, (phase, added)
 
 
 # --- Abbilden: je Achse ein Test ----------------------------------------------
