@@ -1,6 +1,6 @@
 # Endnutzer-Lizenzvertrag für Solidon3D
 
-Stand: 15. September 2026 · Fassung 1.9
+Stand: 16. September 2026 · Fassung 1.10
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
@@ -29,7 +29,7 @@ Es ist **kein Abonnement**: Sie zahlen einmal, und alle Punktversionen der
 gekauften Hauptversion sind eingeschlossen.
 
 Es gibt Solidon3D in **zwei Lizenzarten**, die sich im erlaubten
-Nutzungszweck unterscheiden:
+Nutzungszweck und den nachfolgend genannten Leistungen unterscheiden:
 
 * die **private Lizenz** für die Nutzung zu privaten Zwecken,
 * die **gewerbliche Lizenz** für jede Nutzung im Rahmen einer gewerblichen
@@ -43,7 +43,9 @@ wird in Solidon3D unter *Hilfe → Über Solidon* angezeigt.
 Die gewerbliche Lizenz enthält darüber hinaus drei Leistungen, die die private
 nicht hat:
 
-* **Zwei gleichzeitig freigeschaltete Rechner** statt einem (Abschnitt 2).
+* **Zwei gleichzeitig freigeschaltete Rechner für bis zu zwei gleichzeitig
+  arbeitende Personen** im selben Unternehmen statt einer Person an einem
+  Rechner (Abschnitt 2).
 * **Eine Antwort des Supports innerhalb von zwei Werktagen** (Abschnitt 11a);
   mit einer privaten Lizenz antworten wir nach Möglichkeit, ohne zugesagte
   Frist.
@@ -57,8 +59,9 @@ der Zeitraum, für den wir Sicherheitsaktualisierungen bereitstellen
 
 Die Lizenz ist **an Sie als Person gebunden, nicht an ein Gerät** — bei der
 gewerblichen Lizenz an Ihr Unternehmen (Abschnitt 6). Sie dürfen Solidon3D auf
-allen Geräten installieren, die Sie selbst nutzen — Arbeitsplatz, Notebook,
-Werkstattrechner.
+allen Geräten installieren, die Sie selbst beziehungsweise die nach dieser
+Lizenz berechtigten Personen Ihres Unternehmens nutzen — Arbeitsplatz,
+Notebook, Werkstattrechner.
 
 **Freigeschaltet ist dabei eine begrenzte Zahl von Rechnern zugleich: mit einer
 privaten Lizenz einer, mit einer gewerblichen zwei.** Den Wechsel nehmen Sie
@@ -66,20 +69,21 @@ selbst vor, ohne uns zu fragen: In Solidon3D deaktivieren Sie den bisherigen
 Rechner und schalten den neuen frei. Bei Verlust oder Defekt hilft der Support
 nach Prüfung der Bestellnummer.
 
-Die zwei Plätze der gewerblichen Lizenz sind für **einen** Arbeitsplatz
-gedacht, der auf zwei Geräten arbeitet — etwa Büro und Notebook. Sie erlauben
-nicht, dass zwei Personen gleichzeitig arbeiten; dafür gilt unverändert der
-Absatz weiter unten in diesem Abschnitt.
+Die gewerbliche Lizenz erlaubt **bis zu zwei Personen desselben Unternehmens,
+gleichzeitig mit Solidon3D zu arbeiten**, jeweils auf einem der beiden
+freigeschalteten Rechner. Sie kann auch von einer Person auf zwei Rechnern
+genutzt werden — etwa im Büro und auf dem Notebook.
 
 Zum Missbrauchsschutz sind je Lizenzschlüssel **fünf neue Geräteaktivierungen
 pro UTC-Kalendertag** möglich. Abgewiesene Anfragen, das erneute Abrufen eines
 bereits ausgestellten Geräte-Zertifikats und Deaktivierungen zählen nicht
 gegen dieses Tageslimit. Es beginnt um 00:00 Uhr UTC neu.
 
-Was nicht erlaubt ist: dass mehrere Personen mit **einer** Lizenz arbeiten.
-Für jede weitere Person, die die Software benutzt, wird eine weitere Lizenz
-gebraucht. Innerhalb eines Betriebs zählt also nicht die Zahl der Rechner,
-sondern die Zahl der Menschen, die damit konstruieren.
+Die **private Lizenz gilt für eine Person**; mehrere Personen dürfen sie
+nicht gemeinsam nutzen. Die **gewerbliche Lizenz gilt für bis zu zwei
+Personen** desselben Unternehmens. Für weitere Personen sind zusätzliche
+gewerbliche Lizenzen erforderlich; jede umfasst wieder bis zu zwei Personen
+und zwei gleichzeitig freigeschaltete Rechner.
 
 Für regulär verkaufte Lizenzschlüssel braucht die Freischaltung einmalig eine
 **Geräteaktivierung**, aber kein Nutzerkonto. Sie
@@ -236,10 +240,11 @@ ein.
 
 **Die gewerbliche Lizenz darf innerhalb Ihres Unternehmens weitergegeben
 werden.** Sie ist dem Unternehmen zugeordnet, nicht einer einzelnen
-beschäftigten Person: Wechselt die Person, die mit Solidon3D arbeitet, so
-übernimmt die neue denselben Lizenzschlüssel, und die bisherige benutzt ihn
-nicht weiter. Die Zahl der gleichzeitig freigeschalteten Rechner aus
-Abschnitt 2 bleibt dabei unverändert — die Weitergabe vermehrt keine Plätze.
+beschäftigten Person: Scheidet eine der bis zu zwei berechtigten Personen aus
+der Nutzung aus, darf eine andere Person des Unternehmens ihren Platz
+übernehmen. Die bisherige Person benutzt diesen Lizenzschlüssel dann nicht
+weiter. Die Grenzen aus Abschnitt 2 bleiben dabei unverändert — die
+Weitergabe vermehrt weder die Nutzer- noch die Geräteplätze.
 
 Eine Vermietung, ein Verleih oder eine Unterlizenzierung sind nicht erlaubt.
 

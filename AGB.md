@@ -1,6 +1,6 @@
 # Allgemeine Geschäftsbedingungen
 
-Stand: 15. September 2026 · Fassung 1.8
+Stand: 16. September 2026 · Fassung 1.9
 
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
@@ -41,8 +41,10 @@ diese Lizenz umfasst, regelt der Endnutzer-Lizenzvertrag unter
 Angeboten werden **zwei Lizenzarten**: eine **private Lizenz** für die Nutzung
 zu privaten Zwecken und eine **gewerbliche Lizenz** für die Nutzung im Rahmen
 einer gewerblichen oder selbständigen beruflichen Tätigkeit. Beide enthalten
-denselben Funktionsumfang und unterscheiden sich allein im erlaubten
-Nutzungszweck; die Abgrenzung regelt der Endnutzer-Lizenzvertrag, Abschnitt 3.
+denselben Funktionsumfang. Sie unterscheiden sich im erlaubten Nutzungszweck,
+in der Zahl der berechtigten Personen und freigeschalteten Rechner sowie in
+den nachfolgend genannten Leistungen. Den Nutzungszweck grenzt der
+Endnutzer-Lizenzvertrag in Abschnitt 3 ab.
 Welche Art Sie bestellen, wählen Sie im Bestellvorgang, und sie steht in Ihrem
 Lizenzschlüssel.
 
@@ -53,8 +55,10 @@ laufenden Gebühren und keine Verlängerung.
 Geliefert wird **ein Lizenzschlüssel in elektronischer Form**. Ein
 körperlicher Datenträger wird nicht versandt.
 
-Der Schlüssel berechtigt zu **einem gleichzeitig aktivierten Rechner bei der
-privaten und zwei bei der gewerblichen Lizenz**. Die einmalige
+Die **private Lizenz berechtigt eine Person zur Nutzung auf einem
+freigeschalteten Rechner**. Die **gewerbliche Lizenz berechtigt bis zu zwei
+Personen desselben Unternehmens zur gleichzeitigen Nutzung auf zwei
+freigeschalteten Rechnern**, jeweils eine Person pro Rechner. Die einmalige
 Geräteaktivierung erfolgt direkt über das Netz oder als Anfrage- und
 Antwortdatei über ein zweites Gerät. Danach läuft die Software ohne
 regelmäßige Lizenzabfrage offline weiter. Vor einem Rechnerwechsel wird der

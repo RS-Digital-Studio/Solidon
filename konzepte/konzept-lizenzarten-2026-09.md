@@ -191,7 +191,7 @@ Entschieden am 15.09.2026, aus der Tabelle, die Robert bestätigt hat:
 
 | Leistung | Wo sie steht | Kostet |
 |---|---|---|
-| **Zwei Geräteplätze** statt einem | `key.DEVICE_LIMITS`, Dienst, EULA 2, AGB §2 | eine Zahl an einer Stelle |
+| **Zwei Geräteplätze für bis zu zwei gleichzeitig arbeitende Personen** statt einem Platz für eine Person | `key.DEVICE_LIMITS`, Dienst, EULA 2, AGB §2 | zwei Geräteplätze; Nutzerumfang im Vertrag |
 | **Support-Antwort in zwei Werktagen** | EULA 11a (neuer Abschnitt), AGB §2 | eine Verpflichtung, keine Technik |
 | **Weitergabe innerhalb des Betriebs** | EULA 6 — die Lizenz gehört dem Unternehmen, nicht der beschäftigten Person | ein Absatz |
 | **Rechnung auf die Firma mit USt-IdNr.** | AGB §4 | nichts, das macht der Merchant of Record |
@@ -227,9 +227,13 @@ der gewerblichen etwas dazu — das ist der Unterschied, auf den es ankommt.
 > prüfte, dass das HTML zum Markdown passt, nicht dass das Markdown darstellbar
 > ist. Beides ist behoben, und der Wächter prüft es jetzt.
 
-**Zwei Plätze und nicht drei**, weil sie einen Arbeitsplatz auf zwei Geräten
-meinen (Büro und Notebook) und nicht zwei Personen. Dass zwei Personen zwei
-Lizenzen brauchen, stand in EULA 2 schon vor diesem Umbau und bleibt.
+**Am 16.09.2026 klargestellt (Robert): Eine gewerbliche Lizenz gilt für bis zu
+zwei Personen desselben Unternehmens, die gleichzeitig auf den beiden
+freigeschalteten Rechnern arbeiten dürfen.** Die Beschränkung auf eine Person
+gilt für die private Lizenz. Die bisherige Deutung als ein Arbeitsplatz auf
+zwei Geräten war falsch. Die Zahl der Geräteplätze bleibt unverändert:
+privat einer, gewerblich zwei. Eine gewerbliche Lizenz kann ebenso eine Person
+auf zwei Geräten nutzen; weitere Personen brauchen zusätzliche Lizenzen.
 
 **Was bleibt, steht zur fachlichen Prüfung** (RM-093), wie der ganze
 Rechtstext — insbesondere die Zwei-Werktage-Frist, denn sie ist die einzige
