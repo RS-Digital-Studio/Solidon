@@ -1902,3 +1902,80 @@ def test_the_fillet_location_decides_and_not_its_parametric_origin() -> None:
     assert all(entry.params["centre"][0] > spot[0] + 1.0 for entry in after), (
         "und zwar die an der gewählten Stelle — nicht eine der drei anderen"
     )
+
+
+# --- Eine fast ebene Wand ist eine Wand (16.09.2026) ---------------------------------
+
+
+def _draft_walled_block(bulge: float, radius: float = 8.0) -> MeshData:
+    """Grundriss 60 × 40 mit einer Ecke R ``radius`` — und Vorder- wie
+    Seitenwand um ``bulge`` Millimeter nach außen gewölbt, in je drei
+    Segmenten, wie eine Formschräge sie hinterlässt."""
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    # Von hinten links im Uhrzeigersinn: die Ecke vorne rechts trägt den
+    # Bogen (36 Segmente, wie eine CAD-Tesselierung), davor die gewölbte
+    # Seitenwand, danach die gewölbte Vorderwand zurück nach links.
+    ring = [
+        (0.0, 20.0),
+        (60.0, 20.0),
+        (60.0 + bulge, 10.0),
+        (60.0 + bulge * 0.75, 0.0),
+        *[
+            (60.0 - radius + radius * math.cos(a), -20.0 + radius - radius * math.sin(a))
+            for a in np.linspace(0.0, math.pi / 2, 37)
+        ],
+        (40.0, -20.0 - bulge * 0.75),
+        (20.0, -20.0 - bulge),
+        (0.0, -20.0),
+    ]
+    return MeshData(trimesh.creation.extrude_polygon(ShapelyPolygon(ring), 20.0))
+
+
+def test_a_fillet_beside_a_nearly_flat_wall_still_comes_off() -> None:
+    """Robert, 16.09.2026, am eingelesenen Halter: „verrundungen gehen nicht
+    zum bearbeiten".
+
+    Die Wände lagen mit 0,05 mm Wölbung als ``curved_face`` im Baum, und
+    *Entfernen* wie *Radius ändern* an den R-10-Ecken lehnten ab: „grenzt
+    nicht an zwei ebene Flächen". Eine Wand mit Formschräge ist für den
+    Kunden eine Wand. Hier: 0,15 mm Wölbung über 40 mm (Facetten unter 1°),
+    die Rundung fällt, und die Ecke wird scharf — gemessen am Grundriss ohne
+    Bogen. Die Grenze daneben: Bei 8 mm Wölbung ist die Wand ein Bogen.
+    """
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    from app.core.perceive.features import nearly_flat_mask
+
+    body = _draft_walled_block(0.15)
+    found = detect(body)
+    fillets = [entry for entry in found.values() if entry.kind == "fillet"]
+    assert len(fillets) == 1, [entry.kind for entry in found.values()]
+    curved = [entry for entry in found.values() if entry.kind == "curved_face"]
+    assert curved, "die Probe trifft nur, wenn die Wände als gewölbt im Baum stehen"
+    assert nearly_flat_mask(body.raw, found).any(), "und sie als eben genug gelten"
+
+    taken = unround(body, fillets[0], features=found).mesh
+    sharp = ShapelyPolygon(
+        [
+            (0.0, 20.0),
+            (60.0, 20.0),
+            (60.15, 10.0),
+            (60.1125, 0.0),
+            (60.0, -20.0),
+            (40.0, -20.1125),
+            (20.0, -20.15),
+            (0.0, -20.0),
+        ]
+    )
+    assert taken.raw.is_watertight and taken.raw.body_count == 1
+    assert taken.raw.volume == pytest.approx(sharp.area * 20.0, rel=2e-3)
+    assert taken.raw.bounds[1][0] == pytest.approx(60.0, abs=0.2), "die Ecke ist scharf"
+    assert not [entry for entry in detect(taken).values() if entry.kind == "fillet"]
+
+    # Dieselben Wände mit 8 mm Wölbung — rund 22 Grad über die Länge — sind
+    # Bögen und keine Wände: gewölbt im Baum, aber nicht eben genug.
+    bent = _draft_walled_block(8.0)
+    bent_found = detect(bent)
+    assert any(entry.kind == "curved_face" for entry in bent_found.values())
+    assert not nearly_flat_mask(bent.raw, bent_found).any(), "ein Bogen ist keine Wand"

@@ -434,8 +434,9 @@ Merkmale zurück; die Hohlraumdecke liegt innen und wird abgewiesen)
 
 **Druckvorbereitung**
 
-`prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Anordnen, Kollisionen,
-§18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; nach einer
+`prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Abschneiden — das halbe
+Teilen mit einer bleibenden Seite, `cut_away` über `section.cut` —, Anordnen,
+Kollisionen, §18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; nach einer
 billigen Naht-Vorauswahl entscheidet das interne Stützvolumen der fertig
 verstifteten Hälften, §22.3; `search_plane` sagt neben der Ebene, wie viele
 Ebenen an einer gesperrten Sichtfläche gescheitert sind — daran unterscheidet
@@ -643,7 +644,11 @@ ihrer eigenen Randkurven. Ob eine Rundung überhaupt eine Kante ersetzt, fragt
 `edges._around` bei der Erkennung nach (`perceive.features.planes_beside`),
 mit der gemeinsamen Schwelle `units.UPRIGHT_TO_AXIS`; der Absagesatz
 `edges.NOT_BETWEEN_TWO_PLANES` steht auch in der grauen Zeile des
-Merkmalspanels. Ein konvexes Setzwerkzeug aus den Flächen (Kegel, Kuppel)
+Merkmalspanels. Eine gewölbte Wand des Baums, deren Facetten alle innerhalb
+`features.NEARLY_FLAT_ANGLE` um ihre Mittelnormale liegen — eine Wand mit
+Formschräge, wie eingelesene Halter sie tragen —, zählt dabei als Ebene
+(`features.nearly_flat_mask`); dafür reisen die Merkmale des Objekts bis
+`sharp_corner`, `unround` und `reround` mit. Ein konvexes Setzwerkzeug aus den Flächen (Kegel, Kuppel)
 bekommt in `prepare_ops._placing_tool` einen Sockel in die Grundfläche und
 spart die Hohlräume aus, die durch es laufen. Die ausgewählten Knoten skalieren radial samt
 Sehnenunterteilungen; angrenzende Flächen müssen in ihren bisherigen Ebenen

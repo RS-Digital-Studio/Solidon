@@ -2394,6 +2394,49 @@ def face_mask(mesh: MeshData, faces: Sequence[Feature]) -> np.ndarray:
     return mask
 
 
+#: Bis zu diesem Winkel (in Grad) zwischen der Mittelnormale und jeder Facette
+#: gilt eine gewölbte Fläche des Baums als **ebene** Nachbarin einer Rundung.
+#: Gemessen am 16.09.2026 an ``2x1-tray.stl``: Die Vorderwand eines Halters
+#: lag mit vier Dreiecken und 0,05 mm Wölbung über 10 mm Höhe (2,8 Grad) als
+#: ``curved_face`` im Baum, die Seitenwände mit 2,8 und 8,9 Grad — und
+#: *Entfernen* wie *Radius ändern* an den R-10-Ecken daneben lehnten ab:
+#: „grenzt nicht an zwei ebene Flächen". Für den Kunden sind das ebene Wände.
+#: Ein Zylindermantel bleibt draußen: Seine Facetten spannen 90 Grad und mehr.
+NEARLY_FLAT_ANGLE: Final = 10.0
+
+
+def nearly_flat_mask(body: trimesh.Trimesh, features: Mapping[str, Feature]) -> np.ndarray:
+    """Je Dreieck, ob es zu einer gewölbten Fläche gehört, die eben genug ist.
+
+    Gefragt wird je ``curved_face`` des Baums — die Erkennung hat die Haut
+    dort schon von den Rundungen getrennt, an die sie tangential anschließt;
+    ein Wachsen über Knickwinkel könnte das nicht, denn der Übergang in eine
+    Rundung ist der flachste Knick von allen. Eben genug heißt: Jede Facette
+    liegt innerhalb :data:`NEARLY_FLAT_ANGLE` um die flächengewichtete
+    Mittelnormale. :func:`planes_beside` nimmt solche Flächen als Ebene mit,
+    und die Frage „ist daneben eine Ebene" bekommt für eine Wand mit
+    Formschräge dieselbe Antwort wie für eine ohne.
+    """
+    mask = np.zeros(len(body.faces), dtype=bool)
+    normals = np.asarray(body.face_normals, dtype=float)
+    areas = np.asarray(body.area_faces, dtype=float)
+    limit = math.cos(math.radians(NEARLY_FLAT_ANGLE))
+    for feature in features.values():
+        if feature.kind != "curved_face" or not feature.face_indices:
+            continue
+        chosen = np.asarray(feature.face_indices, dtype=np.int64)
+        if chosen.max() >= len(body.faces):
+            continue
+        mean = (normals[chosen] * areas[chosen, None]).sum(axis=0)
+        length = float(np.linalg.norm(mean))
+        if length <= EPS_GEOM:
+            continue
+        mean /= length
+        if float(np.min(normals[chosen] @ mean)) >= limit:
+            mask[chosen] = True
+    return mask
+
+
 def planes_beside(
     body: trimesh.Trimesh,
     patch: Sequence[int],
@@ -2480,14 +2523,30 @@ def planes_beside(
             if bool(np.any(grazing < TANGENT_TO_THE_ARC)):
                 return None
     centres = np.asarray(body.triangles_center, dtype=float)
-    planes: list[tuple[np.ndarray, np.ndarray]] = []
+    areas = np.asarray(body.area_faces, dtype=float)
     # Die Reihenfolge der Nachbarschaftsliste bleibt, damit die Bearbeitung
-    # dieselbe erste und zweite Ebene sieht wie bisher.
+    # dieselbe erste und zweite Ebene sieht wie bisher. **Facetten einer
+    # fast ebenen Haut zählen als eine Ebene** (:data:`NEARLY_FLAT_ANGLE`):
+    # Normale und Punkt werden flächengewichtet gemittelt, sonst stünden für
+    # eine Wand mit Formschräge zwei Ebenen da, wo eine gemeint ist.
+    limit = math.cos(math.radians(NEARLY_FLAT_ANGLE))
+    groups: list[list[int]] = []
     for face in outside.tolist():
         normal = face_normals[face]
-        if any(float(np.dot(normal, seen)) > 1.0 - EPS_GEOM for seen, _place in planes):
-            continue
-        planes.append((normal, centres[face]))
+        for group in groups:
+            if float(np.dot(normal, face_normals[group[0]])) >= limit:
+                group.append(face)
+                break
+        else:
+            groups.append([face])
+    planes: list[tuple[np.ndarray, np.ndarray]] = []
+    for group in groups:
+        chosen = np.asarray(group, dtype=np.int64)
+        weight = areas[chosen, None]
+        normal = (face_normals[chosen] * weight).sum(axis=0)
+        normal /= float(np.linalg.norm(normal)) or 1.0
+        place = (centres[chosen] * weight).sum(axis=0) / float(weight.sum())
+        planes.append((normal, place))
     return planes
 
 

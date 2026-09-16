@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal, Protocol
 
@@ -1558,7 +1558,9 @@ NOT_BETWEEN_TWO_PLANES: Final = _(
 )
 
 
-def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
+def sharp_corner(
+    mesh: MeshData, feature: Feature, *, features: Mapping[str, Feature] | None = None
+) -> SharpCorner:
     """Rechnet aus einer erkannten Rundung die Kante zurück, die sie ersetzt hat.
 
     **Über den Schnitt der beiden Nachbarebenen und nicht über den Radius.**
@@ -1578,7 +1580,7 @@ def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
         )
     axis = np.asarray(feature.params["axis"], dtype=float)
     axis = axis / float(np.linalg.norm(axis))
-    normals, neighbours = _around(mesh, triangles, axis, feature.params.get("centre"))
+    normals, neighbours = _around(mesh, triangles, axis, feature.params.get("centre"), features)
     if len(normals) != THROUGH:
         raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
     first, second = normals[0], normals[1]
@@ -1616,7 +1618,11 @@ def sharp_corner(mesh: MeshData, feature: Feature) -> SharpCorner:
 
 
 def _around(
-    mesh: MeshData, triangles: list[int], axis: np.ndarray, centre: Any = None
+    mesh: MeshData,
+    triangles: list[int],
+    axis: np.ndarray,
+    centre: Any = None,
+    features: Mapping[str, Feature] | None = None,
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Die Normalen der angrenzenden Flächen und je ein Punkt darauf.
 
@@ -1626,7 +1632,12 @@ def _around(
     sind parallel" zurück. Gesucht sind die Flächen, zwischen denen die
     Rundung *liegt*, und die stehen senkrecht auf ihrer Achse.
     """
-    from app.core.perceive.features import detect_faces, face_mask, planes_beside
+    from app.core.perceive.features import (
+        detect_faces,
+        face_mask,
+        nearly_flat_mask,
+        planes_beside,
+    )
 
     # Eine Mantelfacette besitzt ebenfalls eine Normale, aber keine ebene
     # Nachbarfläche. Dieselbe Flächenerkennung wie beim Anklicken belegt die
@@ -1639,7 +1650,7 @@ def _around(
         mesh.raw,
         triangles,
         axis,
-        face_mask(mesh, detect_faces(mesh)),
+        face_mask(mesh, detect_faces(mesh)) | nearly_flat_mask(mesh.raw, features or {}),
         centre=None
         if not isinstance(centre, list | tuple) or len(centre) != 3
         else np.asarray(centre, dtype=float),
@@ -1672,7 +1683,13 @@ def _plane_cut(
     return line, np.linalg.solve(matrix, right)
 
 
-def unround(mesh: MeshData, feature: Feature, *, quality: Quality = "fine") -> BooleanOutcome:
+def unround(
+    mesh: MeshData,
+    feature: Feature,
+    *,
+    quality: Quality = "fine",
+    features: Mapping[str, Feature] | None = None,
+) -> BooleanOutcome:
     """Nimmt eine erkannte Rundung weg und stellt die scharfe Kante her.
 
     Der Füllkörper ist der **Zwickel ohne Bogen** — das Dreieck zwischen der
@@ -1686,7 +1703,7 @@ def unround(mesh: MeshData, feature: Feature, *, quality: Quality = "fine") -> B
     An einer Hohlkehle (``recess``) geht es umgekehrt: Dort hat die Rundung
     Material hinzugefügt, und der Zwickel wird abgezogen.
     """
-    corner = sharp_corner(mesh, feature)
+    corner = sharp_corner(mesh, feature, features=features)
     filler = _wedge(
         corner.start,
         corner.end,
@@ -1711,7 +1728,12 @@ def unround(mesh: MeshData, feature: Feature, *, quality: Quality = "fine") -> B
 
 
 def reround(
-    mesh: MeshData, feature: Feature, radius: float, *, quality: Quality = "fine"
+    mesh: MeshData,
+    feature: Feature,
+    radius: float,
+    *,
+    quality: Quality = "fine",
+    features: Mapping[str, Feature] | None = None,
 ) -> BooleanOutcome:
     """Ändert den Radius einer erkannten Rundung oder belegten Zylinderwand.
 
@@ -1736,8 +1758,8 @@ def reround(
     radial = radial_rounding(mesh, feature, radius, quality=quality)
     if radial is not None:
         return radial
-    corner = sharp_corner(mesh, feature)
-    taken = unround(mesh, feature, quality=quality)
+    corner = sharp_corner(mesh, feature, features=features)
+    taken = unround(mesh, feature, quality=quality, features=features)
     key = edge_key(_placed(corner))
     again = round_edges(taken.mesh, radius, "named", [key], quality=quality)
     return BooleanOutcome(
