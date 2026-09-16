@@ -923,6 +923,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # erraten, „dovetail" und „snap" nicht — und das sind die beiden, für die
     # man sich bewusst entscheidet.
     "round": _("Rund"),
+    "ellipse": _("Oval"),
+    "lower": _("Untere Hälfte"),
+    "upper": _("Obere Hälfte"),
     "hex": _("Sechskant"),
     "dovetail": _("Schwalbenschwanz"),
     "snap": _("Schnapper"),
@@ -1079,7 +1082,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "slot": _("Langloch mit runden Enden — für Schrauben, die Spiel brauchen."),
     "bolt_circle": _("Löcher gleichmäßig auf einem Teilkreis — Flansch, Deckel, Nabe."),
     "hole_grid": _("Löcher in Spalten und Zeilen — Lüftungsgitter, Steckplatte, Lochblech."),
-    "round": _("Runder Stift — einfach und unempfindlich gegen Toleranzen."),
+    "round": _("Runder Querschnitt mit gleichmäßigem Radius."),
+    "ellipse": _("Elliptischer Querschnitt aus Breite und Höhe."),
+    "lower": _("Die untere Schale nimmt die Schraubenköpfe auf."),
+    "upper": _("Die obere Schale nimmt die Muttern auf."),
     "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
     "dovetail": _(
         "Schwalbenschwanz: die Teile schieben sich ein und halten quer zur Fuge ohne Kleber."
