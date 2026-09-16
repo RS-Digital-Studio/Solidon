@@ -467,6 +467,39 @@ def test_closed_hole_disappears_without_a_false_boundary_error() -> None:
     assert not any(feature.kind == "hole" for feature in result.values())
 
 
+def test_a_face_without_a_length_measure_keeps_its_own_search_extent() -> None:
+    """Eine Fläche trägt ihren Umfang in ihrer Größe, nicht in einem Längenmaß.
+
+    Nach einer Änderung kommt ein Merkmal frisch gemessen an und **ohne**
+    ``local_search_radius`` — es stammt ja nicht mehr aus einer lokalen Suche.
+    Für eine Bohrung trägt dann ``diameter`` den Suchumfang; eine Fläche hat
+    keines dieser Maße, und ihr Umfang fiel damit auf null. Null gilt als
+    abgeschnitten, und die Auswertung stand mit „Das Merkmal setzt sich über
+    den Suchbereich hinaus fort" — für den Sackboden einer auf Ø8 geänderten
+    Bohrung, der vollständig im Netz lag.
+    """
+    from app.core.perceive.local import detect_known, detect_local
+
+    source = blind_cylinder()
+    face, point, normal = bore_seed(source)
+    known = detect_local(source, point, normal=normal, radius=8, seed_faces=(face,)).features
+    floor = next(feature for feature in known.values() if feature.kind == "face")
+    # So kommt sie aus der Zuordnung nach einer Operation: gemessen, benannt,
+    # ohne Suchradius.
+    measured = replace(
+        floor,
+        params={
+            name: value for name, value in floor.params.items() if name != "local_search_radius"
+        },
+    )
+    assert not {"diameter", "depth", "length"} & set(measured.params), "sonst trägt ein Längenmaß"
+
+    result = detect_known(source, {measured.id: measured})
+
+    assert result, "die Fläche wurde gemessen, nicht als abgeschnitten abgewiesen"
+    assert any(feature.kind == "face" for feature in result.values())
+
+
 def test_local_floor_role_uses_the_far_original_rim() -> None:
     """Der Innenboden bleibt innen, auch wenn der belegende Rand 85 mm höher liegt."""
     from app.core.perceive.features import detect_faces

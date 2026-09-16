@@ -592,6 +592,17 @@ def detect_known(
             float(feature.params.get(key) or 0.0)
             for key in ("diameter", "depth", "length", "tube_diameter", "ring_diameter")
         )
+        # **Eine Fläche trägt keines dieser Längenmaße.** Ihr Umfang steht in
+        # ihrer Größe, und ohne diese Zeile bekam sie den Radius null: Der
+        # Sackboden einer auf Ø8 geänderten Bohrung galt damit als
+        # abgeschnitten — „Das Merkmal setzt sich über den Suchbereich hinaus
+        # fort" für eine Kreisfläche, die vollständig im Netz lag. Der
+        # flächengleiche Durchmesser ist dasselbe großzügige Maß, das
+        # ``diameter`` für eine Bohrung liefert: Er deckt den Rand mit, statt
+        # auf dem halben Weg dorthin zu enden.
+        area = float(feature.params.get("area") or 0.0)
+        if area > 0.0:
+            extent = max(extent, 2.0 * math.sqrt(area / math.pi))
         radius = max(extent, float(feature.params.get("local_search_radius") or 0.0))
         if radius <= EPS_GEOM:
             if feature.provenance == "generated" and not feature.recognised:
