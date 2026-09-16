@@ -41,7 +41,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-186 — Die Erkennung findet die Stirnfläche eines Gewindebolzens auf Windows, auf Ubuntu nicht](#rm-186) | Geometrie, Erkennung und Druckvorbereitung | Die drei Baumtests zählen seit dem 16.09.2026 die Merkmale des Schritts und sind auf beiden Plattformen wahr; offen bleibt, warum eine 22-mm²-Stirnfläche auf Ubuntu unter die Erkennungsschwelle fällt — auf einer Linux-Maschine messen |
 | [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt; Windows ist seit dem 14.09. ein Kundenbefund — mit Smart App Control startet Solidon auf Windows 11 nicht, Certum-Zugang und `sign_release.py` einmal fahren |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
-| [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
+| [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Flatpak-Lauf belegen; die CI baut mit Inno Setup 6 und protokolliert die Fassung nicht |
@@ -382,6 +382,36 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   hatten dieselbe Gestalt wie die Familie vom August (Heap im Sammlerlauf nach dem Fensterabbau),
   gemessen ist die Ursache nur für die zwei deterministischen. Die Abnahme dieses Punkts bleibt
   die Vergleichsreihe — jetzt mit der Vorgabe.
+
+  **Fortschreibung 17.09.2026 — der dritte Riss ist eingegrenzt, und er ist keiner der Anwendung.**
+  Im Tor vom 17.09. endete `tests/test_ui.py` Teil 4 mit Exit 127 über **sechzig grünen Tests**;
+  der native Code ist `0xC0000409`, dreimal von drei, und derselbe letzte Test allein ebenso.
+  Halbiert über die Portion: Auslöser ist `test_a_stopped_step_is_one_click_from_its_own_dialog`,
+  und zwar nicht sein Inhalt — eine Stufensonde zeigte, dass schon das bloße Öffnen von
+  `plate_holes.stl` in einem Fenster genügt. Ein Fenster ohne Modell, ein Fenster mit *Quader*
+  und das Einlesen derselben STL **ohne** Fenster laufen alle drei sauber durch.
+
+  Weiter halbiert über `tests/conftest.py` (31 Schnittstellen, Kopf gegen Ganzes): Der Kopf bis
+  Zeile 717 ist sauber, den Riss bringt `_no_worker_outlives_its_window` — und darin, in Stufen
+  gemessen, allein das `application.processEvents()` im Teardown. `release` allein, die Leine
+  allein und beide zusammen sind sauber; das Zustellen der Ereignisse ist es. Vier
+  Sitzungsabschlüsse dagegen — sammeln, Ereignisse zustellen, die QApplication löschen, alle
+  Fenster schließen und löschen — fangen ihn **nicht** auf: Der Schaden entsteht beim Zustellen,
+  sichtbar wird er beim Herunterfahren ([[absturz-frame-ist-die-naechste-allokation]]).
+
+  **Die Anwendung ist nachweislich nicht betroffen.** Der Kundenweg — `build_application`, STL
+  öffnen, `close()`, `quit()`, Prozessende — endet offscreen wie auf der echten Plattform mit
+  Exit 0, und zwar in allen drei Abbauvarianten (`close`, `release`, gar keine). Auch ohne
+  Ereignisschleife, also genau wie die Suite fährt, bleibt derselbe Ablauf außerhalb von pytest
+  sauber. Es ist ein Befund der **Testinfrastruktur** unter Windows; die Linux-CI desselben
+  Stands scheiterte an anderen Punkten, nicht an diesem.
+
+  Was offen bleibt, ist die Ursache hinter `processEvents` — welcher zugestellte Ereignistyp den
+  Speicher verletzt. Nächster Schritt: die Zustellung je Ereignistyp einzeln fahren
+  (`sendPostedEvents` mit gesetztem `event_type`) und den ersten finden, der reißt; dazu derselbe
+  Lauf auf einer Linux- und einer Mac-Maschine, um die Plattformbindung zu belegen. Ein
+  Abschluss, der den Riss nur verdeckt, gehört ausdrücklich **nicht** dazu — er machte das Tor
+  grün, ohne dass jemand etwas gemessen hätte.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-ein-kunde-beim-öffnen-der-beispiele-sieht-23082026).
 
