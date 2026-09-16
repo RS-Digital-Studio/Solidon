@@ -316,6 +316,7 @@ class SealPathDialog(QDialog):
         layout.addWidget(self.status)
         self.progress = QProgressBar(self)
         self.progress.setRange(0, 0)
+        self.progress.setTextVisible(False)
         self.progress.setAccessibleName(tr("Dichtweg wird geprüft"))
         layout.addWidget(self.progress)
         hint = QLabel(

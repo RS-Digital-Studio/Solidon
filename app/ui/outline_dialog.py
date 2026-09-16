@@ -328,6 +328,7 @@ class OutlineDialog(QDialog):
         layout.addWidget(self.state)
         self.progress = QProgressBar(self)
         self.progress.setRange(0, 0)
+        self.progress.setTextVisible(False)
         layout.addWidget(self.progress)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self

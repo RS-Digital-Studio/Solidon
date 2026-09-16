@@ -289,6 +289,7 @@ class LocalRecognitionDialog(QDialog):
         layout.addWidget(self.state)
         self.progress = QProgressBar(self)
         self.progress.setRange(0, 0)
+        self.progress.setTextVisible(False)
         self.progress.setAccessibleName(tr("Merkmale erkennen"))
         self.progress.hide()
         layout.addWidget(self.progress)
