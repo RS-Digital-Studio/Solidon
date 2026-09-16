@@ -49,11 +49,36 @@ wenn gleichzeitig Material hinzukommt und wegfällt.
 
 ## Vorschau und Auswahl
 
+`seal_dialog.py` sammelt Dichtweg, Trägerfläche, bestätigte Öffnung und optionale
+Gegenfläche als einen zusammengehörigen Parameterblock. Der Feldtext zeigt
+nur den gewählten Weg; Kontursignaturen sind unsichtbare Daten. Zeichnen
+verwendet den bestehenden Skizzeneditor samt `Surroundings`, Öffnungen die
+wirklichen Innenringe der ausdrücklich gewählten Fläche. Analyse und
+Zeichenpfade entstehen im abbrechbaren Arbeiter. Bild, Liste und Tastatur
+markieren dieselbe Kontur; jede neue Anfrage sperrt alte Antworten über ihre
+Revision. Der Dialog schreibt keine Operation. Maße und Materialien bleiben
+im normalen Operationsdialog, der anschließend dasselbe Ergebnis vorschaut
+und übernimmt. `release` hält abgebrochene Arbeiter bis zum sicheren Ende.
+
+`seal_flow.py` bindet diesen Viererblock an den Operationsdialog. Im Verlauf
+bereitet ein abbrechbarer Arbeiter die Eingänge vor dem bearbeiteten Schritt
+vor; Zeichnungsumgebung und Öffnungswahl lesen denselben festen Stand. Eine
+Projektänderung oder das Schließen verwirft späte Antworten. Nur der normale
+Operationsdialog schreibt die Transaktion. Inaktive, über `depends_on`
+verborgene Maße koppeln sich nicht an eine bestätigte Zeichnung. Die Kopplung
+von Länge und Breite gilt für die Grundkontur `sketch`; Führungswege und
+Gegenprofile verändern keine Maße ihres Querschnitts.
+
 Freies Zeichnen bewahrt den eindeutig gefundenen Zielkörper vor dem Abbau
 des Zeichenpanels. Die anschließende Operationswahl liest `needed_inputs`:
 Schnittwerkzeuge erklären einen fehlenden Körper und übernehmen einen bereits
 gefundenen Körper in dieselbe Auswahl wie andere Operationswege.
 Die Liste bricht Beschreibungen bei Größenänderungen um und scrollt nur senkrecht.
+
+Ausdrücklich erforderliche Materialrollen beginnen ohne Auswahl und sperren
+Übernehmen mit dem jeweiligen Feldtitel. Optionale Materialfelder behalten
+„Wie das Projekt“. Eine nur bedingt benötigte Zeichnung startet nicht den
+Zeichenmodus vor der Formwahl; der normale Dialog zeigt den aktiven Zweig.
 
 `local_recognition.py` erkundet einen festen Dokument-, Profil- und Quellenstand
 im Arbeiter. LOD-Strahlen werden am Original aufgelöst, auch die möglichen

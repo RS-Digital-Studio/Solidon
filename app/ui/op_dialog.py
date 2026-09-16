@@ -64,10 +64,15 @@ from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.organizer_dialog import OrganizerLayoutField
 from app.ui.outline_dialog import ContourField
 from app.ui.panels import align_forms
+from app.ui.seal_dialog import SealPathField
 from app.ui.style import TIGHT, make_primary, set_level
 
 if TYPE_CHECKING:
     from app.ui.placement_flow import PlacementFlow
+    from app.ui.seal_flow import SealFlow
+
+
+_SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "counterface"})
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -704,13 +709,15 @@ class MaterialField(QComboBox):
     Trennung wie im Filamentwähler nebenan.
     """
 
-    def __init__(self, start: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, start: str, parent: QWidget | None = None, *, required: bool = False
+    ) -> None:
         super().__init__(parent)
         from app.core.knowledge import profiles
 
-        # „Wie das Projekt" zuerst: Das ist die Vorgabe des Parameters (leer)
-        # und der häufigste Fall — ein Teil, das nicht abweicht.
-        self.addItem(tr("Wie das Projekt"), "")
+        # Eine ausdrücklich verlangte Materialrolle darf kein Projektprofil
+        # versprechen. Der leere Eintrag ist dort eine noch offene Auswahl.
+        self.addItem(tr("Materialprofil wählen …") if required else tr("Wie das Projekt"), "")
         for key, profile in sorted(
             profiles.material_profiles().items(), key=lambda item: str(item[1].title)
         ):
@@ -1308,6 +1315,7 @@ class OperationDialog(QDialog):
     """Eine örtliche Spulenwahl reist separat, niemals als Operationsparameter."""
 
     placement_flow: PlacementFlow | None = None
+    seal_flow: SealFlow | None = None
 
     def __init__(
         self,
@@ -1434,7 +1442,11 @@ class OperationDialog(QDialog):
         """Welches Formular das Feld trägt; ein Variantenwechsel ersetzt sein Schema."""
         direction = direction_fields(spec)
         for entry in spec.params.spec():
+            if spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
+                continue
             editor = self._editor_for(entry, names, given.get(entry.name))
+            if isinstance(editor, SealPathField):
+                editor.set_selection(given)
             self._editors[entry.name] = editor
             self._watch(editor)
             if entry.kind in ("feature", "features") or entry.targets_feature:
@@ -1673,7 +1685,8 @@ class OperationDialog(QDialog):
         self._couple_dependent_fields()
         self._hide_legacy_feature_field()
         if self.spec.name == "apply_texture" or any(
-            entry.kind == "sketch" and entry.required for entry in self.spec.params.spec()
+            entry.kind in {"sketch", "material"} and entry.required
+            for entry in self.spec.params.spec()
         ):
             self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
@@ -1710,7 +1723,12 @@ class OperationDialog(QDialog):
             isinstance(editor, OrganizerLayoutField) and not editor.valid
             for editor in self._editors.values()
         )
+        no_seal = any(
+            isinstance(editor, SealPathField) and not editor.valid
+            for editor in self._editors.values()
+        )
         missing_sketch = self._missing_sketch()
+        missing_material = self._missing_material()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
         # *An Merkmal ausrichten* am einzigen Körper hat keinen zweiten, dessen
         # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
@@ -1735,7 +1753,9 @@ class OperationDialog(QDialog):
             or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
             or (tr("Wählen Sie mindestens eine gültige Kontur.") if no_contour else "")
             or (tr("Öffnen Sie die Fachaufteilung und prüfen Sie ihre Maße.") if no_layout else "")
+            or (tr("Wählen oder zeichnen Sie einen geschlossenen Dichtweg.") if no_seal else "")
             or missing_sketch
+            or missing_material
             or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (blocked or "")
@@ -1745,7 +1765,9 @@ class OperationDialog(QDialog):
             or no_edge
             or no_contour
             or no_layout
+            or no_seal
             or bool(missing_sketch)
+            or bool(missing_material)
             or no_target
             or no_texture_face
             or blocked is not None
@@ -1763,7 +1785,10 @@ class OperationDialog(QDialog):
         ):
             return
         if any(
-            isinstance(editor, (FeatureSetField, EdgeSetField, ContourField, OrganizerLayoutField))
+            isinstance(
+                editor,
+                (FeatureSetField, EdgeSetField, ContourField, OrganizerLayoutField, SealPathField),
+            )
             and not editor.valid
             for editor in self._editors.values()
         ):
@@ -1771,6 +1796,7 @@ class OperationDialog(QDialog):
         if (
             self._target_missing()
             or self._missing_sketch()
+            or self._missing_material()
             or self._texture_face_missing()
             or self._blocked_reason is not None
         ):
@@ -1792,6 +1818,20 @@ class OperationDialog(QDialog):
             editor = self._editors.get(entry.name)
             if isinstance(editor, SketchField) and not editor.ready:
                 return f"{entry.title}: {editor.summary.text()}"
+        return ""
+
+    def _missing_material(self) -> str:
+        """Zusätzliche Materialrollen brauchen ihre eigene ausdrückliche Wahl."""
+        schema = self.spec.params.spec()
+        required = [entry for entry in schema if entry.kind == "material" and entry.required]
+        if not required:
+            return ""
+        values = self.values()
+        for entry in required:
+            if inactive_dependency(entry, schema, values) is not None:
+                continue
+            if not values.get(entry.name):
+                return f"{entry.title}: {tr('Materialprofil wählen …')}"
         return ""
 
     def _texture_face_missing(self) -> bool:
@@ -1958,8 +1998,14 @@ class OperationDialog(QDialog):
         lässt sich das Maß über *Zeichnen …*, wo es hingehört.
         """
         declared = {entry.name: entry for entry in self.spec.params.spec()}
-        sketch_field = next((name for name, e in declared.items() if e.kind == "sketch"), "")
-        if not sketch_field or sketch_field not in self._editors:
+        # Nur die Grundkontur von ``_regions_for`` ersetzt Länge und Breite.
+        # Ein Führungsweg oder Gegenprofil ist ein anderer geometrischer Bezug.
+        sketch_field = "sketch"
+        if sketch_field not in declared or sketch_field not in self._editors:
+            return
+        from app.ui.sketch_editor import SketchField
+
+        if not isinstance(self._editors[sketch_field], SketchField):
             return
 
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
@@ -2042,7 +2088,11 @@ class OperationDialog(QDialog):
                 stretching["now"] = False
 
         def follow_sketch() -> None:
-            text = str(self.values().get(sketch_field, "") or "")
+            entered = self.values()
+            schema = tuple(declared.values())
+            if inactive_dependency(declared[sketch_field], schema, entered) is not None:
+                return
+            text = str(entered.get(sketch_field, "") or "")
             # ``valuesChanged`` feuert an **jedem** Feld, und ``sketch_extent``
             # löst die ganze Zeichnung — mit einer SVD über die volle
             # Bedingungsmatrix, im Qt-Hauptthread (§2.8). Wer im Feld daneben
@@ -2059,6 +2109,10 @@ class OperationDialog(QDialog):
             for name in ("shape", "length", "width", "corners", *axis_of):
                 editor = self._editors.get(name)
                 if editor is None or name not in declared:
+                    continue
+                # Ein Maß eines anderen Formularzweigs ist keine Vorgabe für
+                # die Zeichnung und behält seine bestehende Sperre und Zahl.
+                if inactive_dependency(declared[name], schema, entered) is not None:
                     continue
                 label = self._rows[name].labelForField(editor)
                 if extent is None:
@@ -2157,7 +2211,7 @@ class OperationDialog(QDialog):
         if isinstance(editor, FeatureSetField | EdgeSetField):
             editor.changed.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
-        elif isinstance(editor, ContourField | OrganizerLayoutField):
+        elif isinstance(editor, ContourField | OrganizerLayoutField | SealPathField):
             editor.valueChanged.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
         elif isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
@@ -2192,7 +2246,7 @@ class OperationDialog(QDialog):
             editor.setChecked(bool(start))
             return editor
         if entry.kind == "material":
-            return MaterialField(str(start or ""), self)
+            return MaterialField(str(start or ""), self, required=entry.required)
         if entry.kind == "filament":
             # Die Slotnummer bleibt der Wert (``currentData``), gewählt wird
             # aber ein Filament mit Farbe und Namen. Name und Farbe wandern
@@ -2241,6 +2295,8 @@ class OperationDialog(QDialog):
                 combo.setCurrentIndex(combo.findData(start))
             return combo
         if entry.kind == "sketch":
+            if self.spec.name == "create_seal" and entry.name == "path_sketch":
+                return SealPathField(parent=self)
             # §30.1 Stufe zwei: der Text ist ein Speicherformat, keine
             # Eingabe — gezeichnet wird im Editor, das Feld fasst zusammen.
             from app.ui.sketch_editor import SketchField
@@ -2414,6 +2470,8 @@ class OperationDialog(QDialog):
         etwas Zugeklapptem ist kein Fokus, sondern ein Cursor, den niemand
         findet (§2.4).
         """
+        if self.spec.name == "create_seal" and name in _SEAL_PATH_COMPANIONS:
+            name = "path_sketch"
         editor = self._editors.get(name)
         if editor is None or editor.isHidden():
             # Eine Zeile, deren Bedingung nicht gilt, ist fort und gesperrt
@@ -2520,7 +2578,11 @@ class OperationDialog(QDialog):
             self.spec = spec
             self._feature_focus = ""
             for entry in spec.params.spec():
+                if spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
+                    continue
                 editor = self._editor_for(entry, self._object_names, given.get(entry.name))
+                if isinstance(editor, SealPathField):
+                    editor.set_selection(given)
                 self._editors[entry.name] = editor
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
@@ -2729,8 +2791,12 @@ class OperationDialog(QDialog):
 
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
+            if self.spec.name == "create_seal" and entry.name in _SEAL_PATH_COMPANIONS:
+                continue
             editor = self._editors[entry.name]
-            if isinstance(
+            if isinstance(editor, SealPathField):
+                collected.update(editor.selection())
+            elif isinstance(
                 editor, FeatureSetField | EdgeSetField | ContourField | OrganizerLayoutField
             ):
                 collected[entry.name] = editor.value()

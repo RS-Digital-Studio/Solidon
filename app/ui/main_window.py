@@ -1397,8 +1397,10 @@ def _as_project_path(name: str) -> Path:
 
 
 def _has_sketch_param(spec: OperationSpec) -> bool:
-    """Ob diese Operation eine gezeichnete Skizze verbraucht (§30.1)."""
-    return any(entry.kind == "sketch" for entry in spec.params.spec())
+    """Ob die Operation unabhängig von ihrer Formwahl eine Zeichnung braucht (§30.1)."""
+    if spec.name == "create_seal":
+        return False
+    return any(entry.kind == "sketch" and not entry.depends_on for entry in spec.params.spec())
 
 
 def _has_armature_param(spec: OperationSpec) -> bool:
@@ -14015,10 +14017,19 @@ class MainWindow(QMainWindow):
         timer = QTimer(dialog)
         timer.setSingleShot(True)
         timer.setInterval(300)
+        from app.ui.seal_dialog import SealPathField
+        from app.ui.seal_flow import SealFlow
+
+        seal_field = dialog._editors.get("path_sketch")
+        if isinstance(seal_field, SealPathField):
+            dialog.seal_flow = SealFlow(self, dialog, change_op=change_op)
 
         def request() -> None:
             placement_flow = getattr(dialog, "placement_flow", None)
             if placement_flow is not None and placement_flow.active:
+                return
+            if isinstance(seal_field, SealPathField) and not seal_field.valid:
+                self._clear_preview()
                 return
             entered = dialog.values()
             self._preview_busy.start()
@@ -16927,6 +16938,13 @@ class MainWindow(QMainWindow):
 
         for organizer_dialog in self.findChildren(OrganizerDialog):
             organizer_dialog.reject()
+        from app.ui.seal_dialog import SealPathDialog
+        from app.ui.seal_flow import SealFlow
+
+        for seal_dialog in self.findChildren(SealPathDialog):
+            seal_dialog.reject()
+        for seal_flow in self.findChildren(SealFlow):
+            seal_flow.close()
         self.session.cancel()
         session_idle = self.session.wait_for_idle(timeout_ms)
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie

@@ -48,6 +48,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.sketch.ops",
     "app.core.geom.field_ops",
     "app.core.geom.profile_clamp_ops",
+    "app.core.geom.seal_ops",
     "app.core.organizer.ops",
     "app.core.perceive.ops",
 )

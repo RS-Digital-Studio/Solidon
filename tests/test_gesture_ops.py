@@ -21,7 +21,8 @@ Regel 2 statt einer Präzisierung:
   auf die laufende Sitzung beschränkt;
 * er ist ein reiner Datenwert, kein Objekt — sonst reiste er nicht;
 * der Agent bekommt ihn nicht zu sehen (Leitprinzip 5);
-* er steht hinter „Weitere Einstellungen" — er wird bearbeitet, nicht getippt.
+* ergänzende Gesten stehen hinter „Weitere Einstellungen"; eine erforderliche
+  Konturwahl darf vorn in ihren eigenen Editor führen, ohne Rohdatenfeld.
 """
 
 from __future__ import annotations
@@ -121,16 +122,20 @@ def test_the_agent_never_sees_the_gathered_value(case: tuple[OperationSpec, str]
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids)
-def test_the_gathered_value_sits_on_the_back_of_the_dialog(
+def test_only_required_contour_choices_can_sit_on_the_front_of_the_dialog(
     case: tuple[OperationSpec, str],
 ) -> None:
     """Vorne stehen die zwei bis drei Werte, die man tatsächlich ändert (§2.4).
 
-    Ein Sammelwert gehört nicht dazu: Er wird bearbeitet, nicht getippt.
+    Feldbereich und Gegenkontur sind erforderliche Ausgangsformen. Der Dichtweg
+    bietet alternativ Zeichnung oder Öffnung. Ihre eigenen Editoren dürfen
+    vorn erreichbar sein; ergänzende Gesten bleiben hinten.
     """
     spec, name = case
     declared = next(entry for entry in spec.params.spec() if entry.name == name)
-    assert declared.placement == "advanced"
+    if declared.placement != "advanced":
+        assert declared.kind == "sketch"
+        assert declared.required or (spec.name, name) == ("create_seal", "path_sketch")
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids)

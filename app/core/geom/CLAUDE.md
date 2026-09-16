@@ -13,6 +13,33 @@ bleiben sichtbar. Fertigungsspiel kommt ausschließlich vom Aufrufer.
 Splinekurve mit begrenzter Sehnenabweichung, Abbruch und Punktbudget.
 Ohne diese optionale Grenze bleibt die bisherige Abtastung erhalten.
 
+`seal.py` erzeugt Dichtnut und unverformten Dichtring aus demselben
+geschlossenen Weg und normalem Versatz. Runde Querschnitte verwenden die
+Vereinigung identisch facettierter Kugelhüllen, damit gemeinsame Bahnenden
+keine inneren Kappen zurücklassen. `opening_choices` bindet Innenringe an
+die tatsächlichen Dreiecke einer gewählten Trägerfläche; ihre begrenzte
+versionierte Signatur beschreibt lokale Konturen und Topologie, keine
+Listenposition. `match_opening` liefert nur eine eindeutige belegte Wahl.
+Starre Bewegungen führen den lokalen Rahmen mit; veränderte oder mehrdeutige
+Flächen verlangen über `ctx.ask` eine neue gespeicherte Antwort.
+
+`seal_ops.create_seal` erhält den Träger und erzeugt eine separate Dichtung.
+Beide Materialien sind ausdrückliche `material_params`; der gespeicherte
+Gegenflächenbezug liest über `reads_other_bodies` den aktuellen Szenenstand.
+Der gemeinsame `sketch.ops.cut_regions` erhält Mesh- und B-Rep-Schnittwege.
+Ein geometrischer Materialmantel bestätigt Boden- und Seitenrestwand aus
+dem aktuellen Material-/Druckprofil; die Dichtung darf den verbleibenden
+Träger nicht schneiden. Die optionale Gegenfläche wird an ihren wirklichen
+Dreiecken auf parallele Gegenrichtung und vollständige Überdeckung geprüft.
+Abstand, unverformte Überdeckung und Schnittvolumen sind geometrische
+Auskünfte und behaupten weder Materialverformung noch Dichtheit.
+
+Beim ausdrücklichen Materialwechsel des Dichtträgers bleiben die über den
+Taschenschnitt übertragenen Farbflächen und Slotnummern erhalten. Nur
+inkompatible Herstellerprofil-/Materialbindungen werden am Ergebnis gelöst;
+der Befund nennt die nötige Neuzuweisung. Gleiches Material behält seine
+Zuordnung. Globale Spulenbindungen und der Eingabekörper werden nicht geändert.
+
 `profile_clamp_ops` erzeugt vier feste Rollen: untere/obere Schale und
 untere/obere Einlage. Beide Materialfelder sind ausdrückliche Profilkennungen
 und über `material_params` Hashabhängigkeiten. Eine gemeinsame Kontur wird

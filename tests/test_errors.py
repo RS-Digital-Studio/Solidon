@@ -361,7 +361,13 @@ _NOT_A_RANGE = frozenset(
         # nicht „zu groß" sein, sie ist lesbar oder nicht.
         "changed", "colour",
         # Unendlich und NaN sind keine Grenzverletzung, sondern keine Zahl.
-        "not_finite",
+        "not_finite", "finite",
+        # Gespeicherte Konturen, Formaufteilungen und ihre Auswahl sind keine
+        # Zahlenspanne; der jeweilige Editor zeigt die Korrektur.
+        "closed_contour", "field_layout", "missing_region", "different_planes",
+        "missing_profile", "profile_clamp", "outline_resolution", "invalid_contours",
+        "organizer_layout", "seal_opening_signature", "seal_closed_path",
+        "seal_support_face", "seal_dimensions", "seal_geometry",
         # Art und Belegung einer Auswahl sind keine Zahlenspanne.
         "feature_kind", "empty_feature", "slots_full",
         # Schrift und Schnitt einer Beschriftung: eine Familie, die dieser

@@ -621,7 +621,7 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
         "Ort: Handlungen rechts (bei gewähltem Merkmal: Fläche) → Bohrung setzen."
         in described["drill_hole"]
     )
-    assert "Ort: Erzeugen → Quader anlegen." in described["create_box"]
+    assert "Ort: Erzeugen → Grundformen → Quader anlegen." in described["create_box"]
     assert (
         "Ort: Handlungen rechts (bei gewähltem Körper) → Objekt umbenennen."
         in described["rename_object"]

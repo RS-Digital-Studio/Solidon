@@ -4186,6 +4186,7 @@ def test_a_part_can_carry_a_caveat() -> None:
     allein wäre grün geblieben, während die Weitergabe fehlt.
     """
     from app.core.bootstrap import load_operations
+    from app.core.knowledge.parts.ops import op_name
     from app.core.knowledge.parts.registry import PARTS
     from app.core.registry import REGISTRY
 
@@ -4194,11 +4195,7 @@ def test_a_part_can_carry_a_caveat() -> None:
     assert tragen, "kein Baustein trägt einen caveat — dann prüft dieser Test nichts"
 
     for spec in tragen:
-        eintrag = next(
-            (op for op in REGISTRY.all() if op.category == "parts" and spec.name in op.name),
-            None,
-        )
-        assert eintrag is not None, f"{spec.name} steht nicht als Operation im Register"
+        eintrag = REGISTRY.get(op_name(spec.name))
         assert str(eintrag.caveat) == str(spec.caveat), (
             f"{spec.name}: der caveat kommt am Register nicht an — "
             "_register_one reicht ihn nicht weiter"

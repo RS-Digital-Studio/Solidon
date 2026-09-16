@@ -33,6 +33,7 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `structure.py` | Struktur — versteifen, hindurchführen, anbinden |
 | `containers.py` | Organizer-Wanne, Teilungswand, Rand und separater Steckfuß; exakte Außenmaße, unabhängiger Boden und reale ebene Merkmalsflächen |
 | `profile_clamps.py` | Einzelne Klemmschale und wechselbare Einlage mit gezeichneter Gegen- bzw. Sitzkontur; der gemeinsame Vierkörperweg liegt in `geom/profile_clamp_ops.py` |
+| `seals.py` | Abtragende Dichtnut und separate rechteckige/runde Dichtung aus einem gemeinsamen geschlossenen Skizzenweg; tatsächliche Kontakt-, Boden- und Manteldreiecke |
 | `testbodies.py` | Prüfkörper für die Kalibrierung (§28.3) |
 
 **Das Gerüst**
