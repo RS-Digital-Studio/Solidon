@@ -327,11 +327,6 @@ def test_the_local_backend_speaks_the_same_language() -> None:
     assert payload["stream"] is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="RM-185: 142 Werkzeuge kosten 36 546 Token, das Fenster hat 32 768 — "
-    "das Schema muss kürzer werden, nicht der Test",
-)
 def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     """Ohne ``num_ctx`` schneidet Ollama den Prompt ab, und zwar stillschweigend.
 
@@ -352,10 +347,9 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     # Gegen die gemessene Nutzlast, nicht gegen eine Zahl von damals: Ein
     # Prompt über dem Fenster wird von Ollama vorn abgeschnitten — und vorn
     # steht der Auftrag. Am 14.09.2026 waren es 31 465 von 32 768 (RM-054), seit
-    # der Kürzung vom 15.09. 28 616 (RM-173) — und am 16.09.2026 mit 142
-    # Werkzeugen 36 546: die Zusage ist gebrochen, der Test sagt es als
-    # erwartetes Rot (RM-185), und er wird strikt grün, sobald das Schema
-    # wieder unter das Fenster passt.
+    # der Kürzung vom 15.09. 28 616 (RM-173) — und am 16.09.2026 mit 143
+    # Werkzeugen 36 731 gegen ein Fenster von 40 960, das Robert am selben Tag
+    # gehoben hat (RM-185: der Preis sind 11 statt 41 Token je Sekunde).
     from app.core.backends.llm import PROMPT_TOKENS
 
     assert OLLAMA_CONTEXT_TOKENS > PROMPT_TOKENS, "so viel brauchen die Werkzeuge allein"
@@ -1960,15 +1954,19 @@ def test_an_answer_that_pushed_the_task_out_of_the_window_is_said_and_not_answer
     und Ausgabe gegen das Fenster — und gesagt statt als Vorschlag
     weitergereicht (Regel 17, Regel 21).
     """
+    # Die Lage aus dem Protokoll — 468 Token unter dem Fenster begonnen, 847
+    # erzeugt — gegen das heutige Fenster gerechnet: Am 14.09.2026 waren das
+    # 32 300 und 847 bei 32 768; seit dem 16.09.2026 steht es auf 40 960.
     window = llm.OLLAMA_CONTEXT_TOKENS
-    shifted = {**ollama_answer(), "prompt_eval_count": 32300, "eval_count": 847}
-    assert window < 32300 + 847, "sonst prüft der Test nicht den Fall aus dem Protokoll"
+    begun, produced = window - 468, 847
+    shifted = {**ollama_answer(), "prompt_eval_count": begun, "eval_count": produced}
+    assert window < begun + produced, "sonst prüft der Test nicht den Fall aus dem Protokoll"
 
     with pytest.raises(llm.BackendContextShifted) as caught:
         OllamaBackend(transport=Recorder(shifted)).complete(
             [Message(role="user", content="Halter")]
         )
-    assert caught.value.values["counted"] == 32300 + 847
+    assert caught.value.values["counted"] == begun + produced
     assert caught.value.values["window"] == window
     assert caught.value.suggestions, "ein Fehler ohne Ausweg ist keiner (Regel 17)"
 
@@ -1977,7 +1975,7 @@ def test_an_answer_that_pushed_the_task_out_of_the_window_is_said_and_not_answer
     # Fenster zu erreichen ist schon ein Schub (llama.cpp schiebt, bevor der
     # Token entsteht, der es voll machte); und ohne gezählte Eingabe ist
     # nichts gemessen, also auch nichts geschoben.
-    whole = {**ollama_answer(), "prompt_eval_count": 32197, "eval_count": 484}
+    whole = {**ollama_answer(), "prompt_eval_count": window - 571, "eval_count": 484}
     exact = {**ollama_answer(), "prompt_eval_count": window - 10, "eval_count": 10}
     with pytest.raises(llm.BackendContextShifted):
         OllamaBackend(transport=Recorder(exact)).complete([Message(role="user", content="Halter")])

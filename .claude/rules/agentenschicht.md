@@ -139,6 +139,13 @@ weiter. Gezählt ist die Luft trotzdem: über dem kompakten Satz bleiben rund
 das Fenster nicht ohne Weiteres — bei diesem Wert belegt das Modell 14 GB und
 bleibt damit gerade noch auf einer 16-GB-Karte.
 
+**Seit dem 16.09.2026 steht das Fenster auf 40 960** (Entscheidung Robert):
+143 Werkzeuge kosten 36 731 Token, und Ollama kürzt einen Prompt über dem
+Fenster still auf die Hälfte. Der Preis auf einer 16-GB-Karte ist gemessen —
+89 % im VRAM, 11 statt 41 Token je Sekunde, 18 s statt 6,3 je warmem Zug;
+„18 s sind in Ordnung, bis 30 alles ok." Wer das Schema unter 28 000 Token
+bringt (RM-185), stellt 32 768 zurück.
+
 ## Eine Ablehnung muss sagen, was zu ändern ist
 
 Das Modell korrigiert nur, was es erfährt. Zwei Stellen haben das lange

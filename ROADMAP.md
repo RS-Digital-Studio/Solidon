@@ -89,7 +89,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Quote und Kürzung sind gemessen (RM-173); offen sind Latenz auf ruhiger Karte, der Lauf ohne Denkblock und die gestufte Werkzeugauswahl als Entscheidung |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Zwei Wächter stehen, die Kürzung ist drin (Suite 20/39 → 24/39); offen sind der dritte Lauf ohne Denkblock, die Neumessung von `PROMPT_TOKENS` auf ruhiger Karte und drei Entscheidungen von Robert |
-| [RM-185 — Das kompakte Werkzeugschema passt nicht mehr ins Fenster des lokalen Modells](#rm-185) | KI und Generatoren | Gemessen 36 546 Token bei 142 Werkzeugen gegen 32 768; das Schema kürzen, bis es mit Steckbrief und Verlauf hineinpasst, dann `test_the_local_backend_opens_a_window_big_enough_for_the_tools` von xfail befreien |
+| [RM-185 — Das kompakte Werkzeugschema passt nicht mehr ins Fenster des lokalen Modells](#rm-185) | KI und Generatoren | Fenster seit dem 16.09.2026 auf 40 960 (Entscheidung Robert, Preis 11 statt 41 Token/s); offen bleibt, das Schema unter 28 000 Token zu bringen und dann 32 768 zurückzustellen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -1545,6 +1545,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Werkzeugen. Sie zu einem Ortsfeld zu bündeln oder eine gestufte
   Werkzeugauswahl (RM-081) sind Änderungen an der Werkzeugschnittstelle und
   brauchen die Agenten-Suite vorher und nachher — eine Entscheidung Roberts.
+
+  **Entschieden am 16.09.2026, abends:** Das Fenster steht auf 40 960
+  (Robert: „18 s sind in Ordnung, bis 30 alles ok"). Die Kürzungsmeldung ist
+  damit beim Vorgabemodell weg, das xfail ist gefallen, und die Prüfung des
+  Schiebefalls rechnet relativ zum Fenster. Was bleibt, ist der Preis: 11 %
+  des Modells auf dem Prozessor, 18 s je warmer Zug statt 6,3. Abnahme jetzt:
+  eine ungekürzte Messung des Schemas unter 28 000 Token — dann kommt 32 768
+  zurück, und der Vorgabeweg ist wieder so schnell wie am 14.09.2026.
 
 ## Tests und Entwicklungswerkzeuge
 

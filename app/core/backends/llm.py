@@ -1156,7 +1156,19 @@ OLLAMA_RELEASE_SECONDS = 10.0
 #: meldete — das Modell rechnete vollständig auf der CPU. ``prompt_eval_count``
 #: zählt trotzdem die Nutzlast: Die Dauer gehört der Maschine, die Token
 #: gehören dem Schema.
-OLLAMA_CONTEXT_TOKENS = 32768
+#:
+#: **Seit dem 16.09.2026 sind es 40 960** (Entscheidung Robert). Mit 143
+#: Werkzeugen kostet der kompakte Satz 36 731 Token und passte in 32 768 nicht
+#: mehr — Ollama kürzte still auf die Hälfte (:data:`PROMPT_TOKENS`). Der
+#: Preis ist gemessen, auf einer RTX 4080 mit 16 GB: qwen3:14b liegt bei
+#: 40 960 zu 89 % im VRAM (14,7 von 16,4 GB), elf Prozent rechnen auf dem
+#: Prozessor, und die Antwort fällt von 41 auf 11 Token je Sekunde — ein
+#: warmer Zug mit 160 Token Antwort dauert 18 s statt 6,3. Robert: „18 s sind
+#: in Ordnung, bis 30 alles ok." Auf einer 24-GB-Karte bleibt alles im VRAM.
+#: Der Platz im Schema bleibt der eigentliche Hebel (RM-185): Wer das Schema
+#: unter 28 000 Token bringt, stellt hier 32 768 zurück und bekommt die
+#: Geschwindigkeit wieder.
+OLLAMA_CONTEXT_TOKENS = 40960
 
 
 #: Unter welchem Namen der gewählte Modellname gemerkt wird. Neben der Adresse
