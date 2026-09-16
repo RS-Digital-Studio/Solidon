@@ -1230,8 +1230,10 @@ wandert in den Ausdruck (`expressions.shifted`, `=@staerke + 5`) statt
 abgelehnt zu werden. Ein gewähltes **Dach** trägt den Griff an einem seiner
 Merkmale (`_part_grip_anchor` → `Viewport.set_part_grip`), und die **Bohrung**
 eines Bausteins bekommt ihn ohne *Im Bild einstellen*. **Entf** an
-Bausteinmerkmalen nimmt den Schritt (`_delete_the_chosen_feature`) und sonst
-nie den Körper; der Filament-Schnellwähler färbt an einer Bausteinfläche alle
+Bausteinmerkmalen nimmt den Schritt (`_delete_the_chosen_feature`), an einem
+Merkmal mit Operation dessen Zwilling, und an einer Fläche oder einem Merkmal
+ohne Handlung den Körper — mit Ansage und Strg+Z (Regel in `oberflaeche.md`);
+der Filament-Schnellwähler färbt an einer Bausteinfläche alle
 Flächen des Bausteins (`_part_faces_of_selection`, `_filament_targets`). Ein
 **gebundener** Wert zeigt im Merkmalfenster sein Ausdrucksfeld
 (`FeaturePanel._part_fields`), statt den Aufbau der Liste abzubrechen.

@@ -3301,6 +3301,7 @@
   "Körper einblenden": "Mostrar corpo",
   "Körper wählen, um ein Filament zuzuweisen": "Selecionar um corpo para atribuir um filamento",
   "Körper {number}": "Corpo {number}",
+  "Körper „{name}“ entfernt — Strg+Z holt ihn zurück.": "Corpo «{name}» removido — Ctrl+Z traz de volta.",
   "Kühlung": "Refrigeração",
   "Kürzel": "Atalho",
   "Kürzen Sie den Text, oder hängen Sie ihn als Datei an.": "Encurte o texto ou anexe-o como ficheiro.",
@@ -3519,7 +3520,6 @@
   "Mehrere Filamente in der Auswahl": "Vários filamentos na seleção",
   "Mehrere Körper liegen genau übereinander.": "Vários corpos ficam exatamente uns sobre os outros.",
   "Mehrere Maße nebeneinander drucken und den gemessenen Wert übernehmen.": "Imprimir várias cotas lado a lado e assumir o valor medido.",
-  "Mehrere Merkmale entfernt Entf nicht auf einmal — wählen Sie eines allein. Den Körper entfernen Sie, wenn er selbst gewählt ist: Escape geht eine Stufe zurück.": "Delete não remove várias características de uma vez — selecione apenas uma. Para remover o corpo, selecione-o diretamente: Escape recua um nível.",
   "Mehrere Spulen tragen diesen Namen. Wählen Sie die gewünschte Spule aus.": "Várias bobinas têm este nome. Escolha a bobina pretendida.",
   "Mehrere erkannte Merkmale auf einmal. Der Baustein wird an jedes davon gesetzt — ein Schritt im Verlauf, ein Strg+Z. Leer heißt: es gilt das einzelne Merkmal darüber.": "Vários elementos reconhecidos de uma vez. O bloco é colocado em cada um deles — um passo no histórico, um Ctrl+Z. Vazio significa que vale o elemento único acima.",
   "Meist etwas heißer als der Rest: Die erste Schicht soll auf dem Bett kleben.": "Em geral um pouco mais quente do que o resto: a primeira camada tem de colar à mesa.",
@@ -5731,7 +5731,6 @@
   "„{name}“ ist ein Hilfsteil des Slicers ({kind}) und keine Geometrie des Drucks — es wurde nicht geladen.": "«{name}» é uma peça auxiliar do slicer ({kind}) e não geometria da impressão — não foi carregada.",
   "„{name}“ ist ein Teil der Art „{kind}“, die Solidon nicht kennt — es wurde als Körper geladen.": "«{name}» é uma peça do tipo «{kind}», que o Solidon não conhece — foi carregada como corpo.",
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "«{name}» não é um nome de bloco válido: são permitidas minúsculas, algarismos e sublinhados, começando por uma letra.",
-  "„{name}“ lässt sich nicht einzeln entfernen — Entf löscht deshalb nichts. Den Körper entfernen Sie, wenn er selbst gewählt ist: Escape geht eine Stufe zurück.": "«{name}» não pode ser removido isoladamente — por isso Delete não apaga nada. Para remover o corpo, selecione-o diretamente: Escape recua um nível.",
   "„{name}“ trägt einen Bereich, den der Slicer als „{kind}“ führt — er ist als Material des Körpers geladen, und die Farben wurden nicht übernommen.": "«{name}» contém uma zona que o slicer regista como «{kind}» — foi carregada como material do corpo e as cores não foram importadas.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes."
 }

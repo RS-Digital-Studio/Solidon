@@ -476,13 +476,19 @@ stellen drei weitere Wege, und alle drei gingen bis dahin am Baustein vorbei:
   Schritt des Bausteins (`MainWindow._delete_the_chosen_feature`, derselbe
   Weg wie *Baustein entfernen* rechts) — und nie der Körper. Ohne Baustein
   gilt der Zwilling `remove_feature`; wo auch der nicht greift (eine Fläche,
-  ein Gewinde, zwei Bohrungen zugleich), löscht Entf **nichts** und sagt in
-  der Statuszeile, wie man zum Körper kommt. Bis dahin fiel die Taste still
-  auf `delete_object` zurück, und das Teil war weg (Robert: „wenn ich etwas
-  im objektbaum oder viewport auswähle und entf drücke … wird der ganze
-  körper gelöscht"). Der Eintrag *Ausblenden* im Kontextmenü heißt an einem
-  Merkmal deshalb *Körper ausblenden* — er trifft den Körper, und der Name
-  sagt es.
+  ein Gewinde, eine Verrundung), **fällt der Körper**, mit der Ansage in der
+  Statuszeile und dem Rückweg über Strg+Z. Diese dritte Lage hat am
+  16.09.2026 zweimal die Richtung gewechselt: Morgens fiel an einem
+  Bausteindach still der ganze Körper (Robert: „wenn ich etwas im objektbaum
+  oder viewport auswähle und entf drücke … wird der ganze körper gelöscht")
+  — dafür ist die erste Lage da. Danach löschte Entf an einer Fläche gar
+  nichts mehr und verwies auf Escape, und abends am eingelesenen Tray hieß
+  es „warum kann ich kein körper mehr löschen": Im Bild trifft ein Klick
+  immer eine Fläche, und ein Teil, das sich mit Entf nicht löschen lässt,
+  ist eine Sackgasse (Regel 19). Eine Fläche ist kein Ding, das man löscht —
+  der Körper ist gemeint. Der Eintrag *Ausblenden* im Kontextmenü heißt an
+  einem Merkmal deshalb *Körper ausblenden* — er trifft den Körper, und der
+  Name sagt es.
 * **Körpergriff und Bewegen-Leiste bei gewähltem Dach.** `selected_feature`
   schweigt bei mehreren Zeilen; `_move_the_part` fragt dann
   `_common_part_step` statt den Zug an den ganzen Körper durchzulassen. **Und

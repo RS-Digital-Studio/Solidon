@@ -17783,13 +17783,17 @@ def test_finish_lists_the_six_kinds_in_the_window(window: MainWindow) -> None:
         window.finish_sketch(keep=False)
 
 
-def test_delete_on_a_face_leaves_the_body_and_says_why(window: MainWindow) -> None:
-    """Eine Fläche lässt sich nicht einzeln entfernen — und Entf nimmt dann nicht den Körper.
+def test_delete_on_a_face_takes_the_body_and_says_so(window: MainWindow) -> None:
+    """Eine Fläche ist nichts, was man löscht — Entf an ihr nimmt den Körper und sagt es.
 
-    Robert, 16.09.2026: „wenn ich etwas im objektbaum oder viewport auswähle
-    und entf drücke … wird der ganze körper gelöscht." Der Zwilling fand für
-    ``face`` keine Merkmalsoperation und fiel still auf den Körper zurück.
-    Jetzt bleibt der Körper, und die Statuszeile nennt den Weg zu ihm.
+    Zweimal am 16.09.2026 in Gegenrichtung. Morgens (Bausteindach): „wenn ich
+    etwas im objektbaum oder viewport auswähle und entf drücke … wird der
+    ganze körper gelöscht" — dafür fällt am Baustein sein Schritt
+    (``test_delete_at_a_part_takes_its_step_and_never_the_body``). Danach
+    löschte Entf an einer Fläche gar nichts mehr und verwies auf Escape, und
+    abends am eingelesenen Tray: „warum kann ich kein körper mehr löschen".
+    Im Bild trifft ein Klick immer eine Fläche; ein Teil, das sich mit Entf
+    nicht löschen lässt, ist eine Sackgasse. Rücknehmbar, mit Ansage (Regel 19).
     """
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -17804,12 +17808,21 @@ def test_delete_on_a_face_leaves_the_body_and_says_why(window: MainWindow) -> No
     window.run_operation(REGISTRY.get("delete_object"))
     window.session.wait_for_idle()
 
-    assert [step.op for step in window.session.project.document.ops] == ["load"]
-    assert object_id in window.session.evaluate_now().scene.objects, "der Körper bleibt"
-    # Die Ankündigung steht im eigenen Label der Statusleiste und überlebt
-    # damit den nachlaufenden Lauf (``MainWindow.announce``).
+    assert [step.op for step in window.session.project.document.ops] == ["load", "delete_object"]
+    assert object_id not in window.session.evaluate_now().scene.objects, "der Körper fällt"
     said = window.status_message.text()
-    assert "Entf" in said and "Escape" in said, said
+    assert "Strg+Z" in said, said
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert object_id in window.session.evaluate_now().scene.objects, "und Strg+Z holt ihn zurück"
+    # Das Undo stellt die Flächenauswahl wieder her, und ein Fenster, das mit
+    # gewählter Fläche in den Abbau der Suite geht, reißt dort (Exit 127, am
+    # unveränderten HEAD nachgemessen, RM-021); der echte Schließweg der
+    # Anwendung ist mit derselben Auswahl sauber. Der Test prüft Entf, nicht
+    # den Abbau — die Auswahl geht deshalb vorher weg.
+    window.object_tree.select_object(None)
+    QApplication.processEvents()
 
 
 def test_hiding_from_a_feature_row_names_the_body(window: MainWindow) -> None:

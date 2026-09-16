@@ -70,6 +70,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from app.core import expressions
 from app.core.drawing import Theme as DrawingTheme
@@ -1356,8 +1357,11 @@ class ObjectTree(QWidget):
         self._previews[stamp] = found
         for item in self._rows_for.get(stamp, ()):
             # Die Zeile kann inzwischen weg sein — eine neue Auswertung räumt
-            # den Baum, während nebenan noch gezeichnet wird.
-            if self.tree.indexFromItem(item).isValid():
+            # den Baum, während nebenan noch gezeichnet wird. ``show_scene``
+            # leert ``_rows_for`` dazu; hier bleibt die Frage an shiboken, ob
+            # das Objekt noch lebt, denn ``indexFromItem`` an einem gelöschten
+            # Item wirft, statt einen ungültigen Index zu liefern.
+            if isValid(item) and self.tree.indexFromItem(item).isValid():
                 item.setIcon(0, found)
 
     def _drawing_done(self, worker: Any) -> None:
@@ -1415,6 +1419,14 @@ class ObjectTree(QWidget):
         # Was noch nicht gezeichnet war, gehört zu Zeilen, die es nicht mehr
         # gibt. Der Vorrat bleibt: dieselben Körper kommen meist wieder.
         self._pending.clear()
+        # **Und die Zeilen, auf die ein laufender Zeichner noch zeigt, sind
+        # mit ``clear()`` tot** — C++-seitig gelöscht, und der erste Zugriff
+        # darauf ist ein ``RuntimeError`` aus shiboken, kein ungültiger Index.
+        # ``_preview_drawn`` fragte ``indexFromItem(item)`` und griff damit
+        # auf das tote Objekt zu, bevor es fragen konnte (16.09.2026: Entf an
+        # einer gewählten Fläche, der Zeichner der vorigen Szene lieferte in
+        # den geräumten Baum). Ohne Zeilen gibt es nichts zu beschriften.
+        self._rows_for = {}
         self._faces.clear()
         if result is None:
             return

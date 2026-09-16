@@ -250,7 +250,6 @@ from app.ui.labels import (
     display_unit,
     edge_label,
     feature_label,
-    feature_name,
     feature_requirement,
     kind_requirement,
     length,
@@ -10367,10 +10366,10 @@ class MainWindow(QMainWindow):
         return spec if feature.kind in (spec.applies_to or ()) else None
 
     def _delete_the_chosen_feature(self) -> bool:
-        """Entf mit gewählten Merkmalen trifft das Merkmal — oder nichts, nie den Körper.
+        """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
 
         Drei Lagen, in dieser Reihenfolge, und die Antwort ``True`` heißt: hier
-        erledigt oder hier abgesagt, der Körper bleibt.
+        erledigt, der Körper bleibt.
 
         * **Ein Baustein** — die ganze Auswahl stammt aus einem Schritt, sei es
           sein Dach im Baum oder eine seiner Verrundungen — geht denselben Weg
@@ -10379,16 +10378,20 @@ class MainWindow(QMainWindow):
         * **Ein Merkmal mit eigener Operation** (Bohrung, Zapfen) übernimmt der
           Zwilling in :meth:`run_operation` (``FEATURE_TWINS``) — dafür
           ``False``.
-        * **Alles andere** — eine Fläche, ein Gewinde, zwei Bohrungen zugleich
-          — sagt, warum nichts geschieht, und nennt den Weg zum Körper.
+        * **Alles andere** — eine Fläche, ein Gewinde, eine Verrundung — ist
+          nichts, was für sich entfernt werden könnte: Gemeint ist der Körper,
+          und der fällt, mit der Ansage in der Statuszeile und dem Rückweg
+          über Strg+Z (Regel 19).
 
-        Bis zum 16.09.2026 fiel die dritte Lage still auf den Körper zurück:
-        Wer eine Fläche oder das Dach eines Bausteins markiert hatte und Entf
-        drückte, verlor das ganze Teil (Robert: „wenn ich etwas im objektbaum
-        oder viewport auswähle und entf drücke … wird der ganze körper
-        gelöscht"). Rücknehmbar, aber genau die Überraschung, die Vertrauen
-        kostet — dieselbe, für die ``_scope_shortcut`` die Taste schon einmal
-        eingezäunt hat.
+        Die dritte Lage hat am 16.09.2026 zweimal die Richtung gewechselt.
+        Morgens fiel an einem Bausteindach der ganze Körper (Robert: „wenn ich
+        etwas im objektbaum oder viewport auswähle und entf drücke … wird der
+        ganze körper gelöscht") — dafür ist die erste Lage da. Danach löschte
+        Entf an einer Fläche gar nichts mehr und verwies auf Escape; im Bild
+        trifft ein Klick aber immer eine Fläche, und ein Teil, das sich mit
+        Entf nicht löschen lässt, ist eine Sackgasse (Robert, abends: „warum
+        kann ich kein körper mehr löschen"). Die Fläche ist kein Ding, das
+        man löscht — der Körper ist gemeint.
         """
         chosen = self.object_tree.selected_features()
         if not chosen:
@@ -10399,25 +10402,10 @@ class MainWindow(QMainWindow):
             return True
         if self.feature_instead_of("delete_object") is not None:
             return False
-        feature_id = self.object_tree.selected_feature()
-        feature = self._selected_feature_object()
-        if feature_id is not None and feature is not None:
-            self.announce(
-                tr(
-                    "„{name}“ lässt sich nicht einzeln entfernen — Entf löscht deshalb "
-                    "nichts. Den Körper entfernen Sie, wenn er selbst gewählt ist: Escape "
-                    "geht eine Stufe zurück."
-                ).format(name=feature_name(feature_id, feature))
-            )
-        else:
-            self.announce(
-                tr(
-                    "Mehrere Merkmale entfernt Entf nicht auf einmal — wählen Sie eines "
-                    "allein. Den Körper entfernen Sie, wenn er selbst gewählt ist: Escape "
-                    "geht eine Stufe zurück."
-                )
-            )
-        return True
+        object_id = self.object_tree.selected()
+        name = self._object_names().get(object_id or "", "")
+        self.announce(tr("Körper „{name}“ entfernt — Strg+Z holt ihn zurück.").format(name=name))
+        return False
 
     def _selected_feature_object(self) -> Feature | None:
         """Das gewählte Merkmal selbst — oder nichts, wenn keines gewählt ist."""
