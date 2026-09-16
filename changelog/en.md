@@ -23,6 +23,7 @@ it into `website/version.json`.
 - Resize bores together with their countersinks and entrances while preserving the intended dimensions. Blind-hole floors stay associated even after larger diameter changes.
 - Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.
 - Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.
+- Edges can be picked on any body and rounded or chamfered — on imported models too.
 
 ### Construction
 
@@ -40,6 +41,8 @@ it into `website/version.json`.
 - Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.
 - Delete on a face removes the body and says so; Ctrl+Z brings it back. In a flat view a dragged body follows the pointer, and the chosen face survives the first click of a sketch.
 - The local chat gets a larger window and no longer truncates your request.
+- The nozzle diameter can be set on the printer. The handover then picks the matching machine in the slicer, even if a different nozzle is selected there.
+- Repair closes models that touch themselves along an edge instead of tearing them open further.
 
 ## 0.4.2
 

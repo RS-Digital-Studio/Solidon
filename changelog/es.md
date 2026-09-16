@@ -24,6 +24,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cambie el diámetro junto con el avellanado y la entrada conservando las medidas previstas. El fondo sigue asociado incluso tras cambios grandes de diámetro.
 - Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.
 - La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.
+- Las aristas se pueden seleccionar en cualquier cuerpo y redondear o achaflanar, también en modelos importados.
 
 ### Construcción
 
@@ -41,6 +42,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.
 - Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.
 - El chat local recibe una ventana mayor y ya no recorta su solicitud.
+- El diámetro de la boquilla se ajusta en la impresora. La entrega elige entonces la máquina adecuada en el slicer, aunque allí esté seleccionada otra boquilla.
+- Reparar cierra los modelos que se tocan a sí mismos en una arista, en lugar de abrirlos más.
 
 ## 0.4.2
 

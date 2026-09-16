@@ -24,6 +24,7 @@ dans `website/version.json`.
 - Modifiez un perçage avec sa fraisure et son entrée en conservant les cotes prévues. Le fond reste associé même après un changement important de diamètre.
 - Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.
 - La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.
+- Les arêtes se sélectionnent sur n'importe quel corps et s'arrondissent ou se chanfreinent — aussi sur les modèles importés.
 
 ### Construction
 
@@ -41,6 +42,8 @@ dans `website/version.json`.
 - Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.
 - Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.
 - Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.
+- Le diamètre de la buse se règle sur l'imprimante. Le transfert choisit alors la machine correspondante dans le slicer, même si une autre buse y est sélectionnée.
+- La réparation referme les modèles qui se touchent le long d'une arête au lieu de les ouvrir davantage.
 
 ## 0.4.2
 

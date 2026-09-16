@@ -23,6 +23,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Altere os furos com os seus escareados e entradas, mantendo as medidas previstas. O fundo continua associado mesmo após grandes alterações do diâmetro.
 - Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.
 - A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.
+- As arestas podem ser selecionadas em qualquer corpo e arredondadas ou chanfradas, também em modelos importados.
 
 ### Construção
 
@@ -40,6 +41,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.
 - Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.
 - O chat local recebe uma janela maior e já não encurta o seu pedido.
+- O diâmetro do bico define-se na impressora. A transferência escolhe então a máquina correta no slicer, mesmo que aí esteja selecionado outro bico.
+- A reparação fecha os modelos que se tocam ao longo de uma aresta em vez de os abrir ainda mais.
 
 ## 0.4.2
 

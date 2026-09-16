@@ -23,6 +23,7 @@ scrive in `website/version.json`.
 - Modifichi i fori insieme a svasature e imbocchi mantenendo le misure previste. Il fondo resta associato anche dopo variazioni importanti del diametro.
 - Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.
 - Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.
+- Gli spigoli si possono selezionare su qualsiasi corpo e raccordare o smussare, anche sui modelli importati.
 
 ### Costruzione
 
@@ -40,6 +41,8 @@ scrive in `website/version.json`.
 - I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.
 - Canc su una faccia rimuove il corpo e lo dice; Ctrl+Z lo riporta. In vista radente un corpo trascinato segue il puntatore, e la faccia scelta resta al primo clic dello schizzo.
 - La chat locale riceve una finestra più grande e non accorcia più la richiesta.
+- Il diametro dell'ugello si imposta sulla stampante. Il trasferimento sceglie poi la macchina giusta nello slicer, anche se lì è selezionato un altro ugello.
+- La riparazione chiude i modelli che si toccano lungo uno spigolo invece di aprirli ulteriormente.
 
 ## 0.4.2
 

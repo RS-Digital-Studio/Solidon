@@ -48,6 +48,7 @@ Nutzen da und sonst nichts.
 - Bohrungen lassen sich samt Senkung und Einlauf maßhaltig ändern. Auch nach einer größeren Durchmesseränderung bleibt der Sackboden zugeordnet.
 - An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.
 - Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.
+- Kanten lassen sich an jedem Körper anklicken und verrunden oder fasen — auch an eingelesenen Modellen.
 
 ### Konstruieren
 
@@ -65,6 +66,8 @@ Nutzen da und sonst nichts.
 - Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.
 - Entf an einer Fläche entfernt den Körper und sagt es; Strg+Z holt ihn zurück. Bei flachem Blick folgt ein gezogener Körper dem Zeiger, und die gewählte Fläche bleibt beim ersten Klick der Skizze.
 - Der lokale Chat bekommt ein größeres Fenster und kürzt Ihre Anfrage nicht mehr.
+- Der Düsendurchmesser lässt sich am Drucker einstellen. Die Übergabe wählt dann die passende Maschine im Slicer, auch wenn dort eine andere Düse eingestellt ist.
+- Reparieren schließt Modelle, die sich an einer Kante selbst berühren, statt sie weiter aufzureißen.
 
 ## 0.4.2
 
