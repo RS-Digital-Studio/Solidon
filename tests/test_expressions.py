@@ -176,3 +176,29 @@ def test_a_plain_number_is_not_an_expression() -> None:
     assert not expressions.is_expression("subtract")
     assert expressions.is_expression("=1+1")
     assert expressions.is_expression("@width")
+
+
+def test_shifting_a_bound_value_keeps_the_binding() -> None:
+    """Ein Zug am Griff eines gebundenen Bausteins hängt den Versatz an den
+    Ausdruck, statt die Bindung durch eine Zahl zu ersetzen (16.09.2026).
+
+    Das Beispielprojekt bindet die Höhe seiner Bausteine an ``@staerke``; bis
+    dahin lehnte die Oberfläche dort jede Bewegung ab, und der Baustein sprang
+    im Bild zurück. Der Ausdruck bleibt lesbar, rechnet weiter mit dem
+    Parameter und kommt auch aus einem bloßen Verweis als Ausdruck zurück.
+    """
+    values = {"staerke": 6.0}
+
+    moved = expressions.shifted("=@staerke", 5.0)
+    assert moved == "=@staerke + 5"
+    assert expressions.evaluate(moved, values) == pytest.approx(11.0)
+
+    back = expressions.shifted(moved, -2.25)
+    assert back == "=@staerke + 5 - 2.25"
+    assert expressions.evaluate(back, values) == pytest.approx(8.75)
+
+    assert expressions.evaluate(expressions.shifted("@staerke", 1.0), values) == pytest.approx(7.0)
+    # Ein Produkt behält seinen Vorrang: (6 * 2) - 1, nicht 6 * (2 - 1).
+    assert expressions.evaluate(
+        expressions.shifted("=@staerke * 2", -1.0), values
+    ) == pytest.approx(11.0)

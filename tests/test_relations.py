@@ -464,3 +464,65 @@ def test_sleeve_batches_keep_each_side_and_reject_countersinks() -> None:
             assert all(sleeve.bore in batch and sleeve.wall in batch for sleeve in batch.values())
         for feature in features.values():
             assert batch.get(feature.id) == sleeve_at(feature, features)
+
+
+def test_the_cavity_links_are_built_once_per_mesh_and_die_with_it() -> None:
+    """Die Randringe entstehen einmal je Netz — und die Antwort bleibt dieselbe.
+
+    Drei Wege fragen sie bei **jeder** Merkmalsauswahl
+    (``cavity_chain_state_at``, ``cavity_chains``, ``_feature_group_topology``),
+    und jeder bildete die Ringe aller Flächen neu: Ein Klick auf ein Merkmal
+    von ``Auto-washer.stl`` (180 128 Dreiecke, 170 Merkmale) kostete 402 ms im
+    Qt-Hauptthread, davon 447 ms über zwei Aufrufe in dieser Funktion (Robert,
+    16.09.2026: „bei einer auswahl oder hover effekt stockt es auch noch
+    sehr"). Danach 122 ms.
+
+    Abgelegt wird im Cache des Netzes, wie ``MeshData.component_count``: Er
+    verfällt mit der Geometrie. Zwei Zusagen gehören zusammen — der zweite
+    Aufruf rechnet nicht mehr, und er antwortet gleich; eine Zwischenablage,
+    die eine veränderte Menge herausgibt, wäre teurer als die Rechnung.
+    """
+    from app.core.perceive import relations
+
+    mesh = _corpus("plate_countersunk.stl")
+    features = detect(mesh)
+    candidates = {
+        name: feature
+        for name, feature in features.items()
+        if feature.kind in {"hole", "cone"} and is_a_cavity(feature)
+    }
+    assert len(candidates) >= 2, "ohne Kette prüft der Test nichts"
+
+    runs = 0
+    real = relations._shoulder_connections
+
+    def counted(*args: object, **rest: object) -> object:
+        nonlocal runs
+        runs += 1
+        return real(*args, **rest)
+
+    try:
+        relations._shoulder_connections = counted
+        first = relations._cavity_links(candidates, mesh)
+        assert runs == 1
+        second = relations._cavity_links(candidates, mesh)
+        assert runs == 1, "der zweite Aufruf liest die Antwort des ersten"
+    finally:
+        relations._shoulder_connections = real
+
+    assert first == second, "und sie ist dieselbe"
+    # Und jeder bekommt seine eigene: Wer sie umbaut, verändert dem nächsten
+    # nichts.
+    first[0].clear()
+    first[1].add("erfunden")
+    third = relations._cavity_links(candidates, mesh)
+    assert third == second, third
+
+    # Eine andere Kandidatenmenge ist eine andere Frage.
+    fewer = dict(list(candidates.items())[:1])
+    try:
+        relations._shoulder_connections = counted
+        relations._cavity_links(fewer, mesh)
+        assert runs == 2, "für eine andere Menge wird wieder gerechnet"
+    finally:
+        relations._shoulder_connections = real

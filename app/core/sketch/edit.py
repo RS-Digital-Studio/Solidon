@@ -25,6 +25,7 @@ import itertools
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from typing import Final
 
 from app.core.errors import ValidationError, require_positive
 from app.core.sketch.profile import _JOIN_TOL, _flat_curve
@@ -1061,6 +1062,181 @@ def slot_between(first: Point2, second: Point2, width: float) -> Sketch:
         SketchConstraint("perpendicular", (0, 1, 7, 9)),
     )
     return Sketch(plane="plane:xy", elements=elements, constraints=constraints)
+
+
+#: Wie viele Löcher ein gezeichnetes Lochbild mindestens hat — eines ist
+#: ein Kreis und kein Muster — und wie viele der Lochkreis höchstens trägt.
+LEAST_PATTERN_HOLES: Final = 2
+MOST_BOLT_CIRCLE_HOLES: Final = 64
+
+
+def hole_grid_between(
+    first: Point2, opposite: Point2, columns: int, rows: int, hole_diameter: float
+) -> Sketch:
+    """Ein Lochraster aus zwei Klicks — **frei**, nicht bemaßt (§30.1).
+
+    Der erste Klick setzt die Mitte des ersten Lochs, der zweite die Mitte
+    des gegenüberliegenden; Spalten und Zeilen kommen aus der Leiste, die
+    Abstände folgen aus dem Zug — in x und y getrennt, so wie gezogen wurde.
+    Bis zum 16.09.2026 war das Lochraster ein Menüeintrag mit festen Maßen
+    („4 mal 3, Abstand 10"), ohne Vorschau und ohne Feld; Robert wollte es
+    „genauso bauen" wie Vieleck und Langloch.
+
+    **Was das Raster zusammenhält, sind Bedingungen zwischen Mitten, keine
+    Festpunkte.** Die Löcher des Menüs trugen je einen ``fixed`` und je ein
+    Radiusmaß — bestimmt, aber unverschiebbar. Hier hält jede Zeile
+    ``horizontal``, jede Spalte ``vertical``, die Abstände der ersten Zeile
+    und der ersten Spalte ``equal``, und alle Radien ``equal`` zum ersten.
+    Damit ist das Raster starr bis auf seine Lage und seine zwei Abstände:
+    Gemessen ist ``free_dof`` **5** bei 4 mal 3 — Lage, zwei Abstände, ein
+    Radius; eine Spalte allein hat einen Abstand weniger. Den Durchmesser
+    bemaßt die Leiste, wie die Breite des Langlochs; eine getippte Zahl
+    bemaßt beide Abstände.
+
+    Flache Punktindizes: Loch ``k`` (Zeile ``j``, Spalte ``i``,
+    ``k = j · columns + i``) hat Mitte ``2k`` und Randpunkt ``2k + 1``.
+    """
+    if type(columns) is not int or type(rows) is not int or columns < 1 or rows < 1:
+        raise ValidationError(
+            "columns",
+            _("Wählen Sie mindestens eine ganze Reihe und Spalte."),
+            constraint="pattern_count",
+        )
+    if columns * rows < LEAST_PATTERN_HOLES:
+        raise ValidationError(
+            "columns",
+            _("Ein Muster braucht mindestens zwei Elemente."),
+            value=columns * rows,
+            constraint="pattern_count",
+        )
+    require_positive("hole_diameter", hole_diameter)
+    step_x = (opposite[0] - first[0]) / (columns - 1) if columns > 1 else 0.0
+    step_y = (opposite[1] - first[1]) / (rows - 1) if rows > 1 else 0.0
+    if columns > 1:
+        require_positive("spacing", abs(step_x))
+    if rows > 1:
+        require_positive("spacing", abs(step_y))
+    tightest = min(step for step in (abs(step_x), abs(step_y)) if step > 0.0)
+    if hole_diameter >= tightest:
+        raise ValidationError(
+            "hole_diameter",
+            _("Die Löcher sind mindestens so groß wie ihr Abstand — sie überschneiden sich."),
+            value=hole_diameter,
+            constraint="hole_fits",
+        )
+    radius = hole_diameter / 2.0
+    centres = [
+        (first[0] + i * step_x, first[1] + j * step_y) for j in range(rows) for i in range(columns)
+    ]
+    elements = tuple(
+        SketchElement("circle", (centre, (centre[0] + radius, centre[1]))) for centre in centres
+    )
+
+    def at(i: int, j: int) -> int:
+        return 2 * (j * columns + i)
+
+    constraints: list[SketchConstraint] = [
+        SketchConstraint("equal", (0, 1, at(i, j), at(i, j) + 1))
+        for j in range(rows)
+        for i in range(columns)
+        if (i, j) != (0, 0)
+    ]
+    constraints.extend(
+        SketchConstraint("horizontal", (at(i, j), at(i + 1, j)))
+        for j in range(rows)
+        for i in range(columns - 1)
+    )
+    constraints.extend(
+        SketchConstraint("vertical", (at(i, j), at(i, j + 1)))
+        for i in range(columns)
+        for j in range(rows - 1)
+    )
+    constraints.extend(
+        SketchConstraint("equal", (at(0, 0), at(1, 0), at(i, 0), at(i + 1, 0)))
+        for i in range(1, columns - 1)
+    )
+    constraints.extend(
+        SketchConstraint("equal", (at(0, 0), at(0, 1), at(0, j), at(0, j + 1)))
+        for j in range(1, rows - 1)
+    )
+    return Sketch(plane="plane:xy", elements=elements, constraints=tuple(constraints))
+
+
+def bolt_circle_at(centre: Point2, first_hole: Point2, count: int, hole_diameter: float) -> Sketch:
+    """Ein Lochkreis aus zwei Klicks — **frei**, nicht bemaßt (§30.1).
+
+    Der erste Klick setzt die Mitte, der zweite die Mitte des ersten Lochs;
+    die Anzahl kommt aus der Leiste. Wie beim Vieleck hält ein **Hilfskreis**
+    die Form: Er ist der Teilkreis, sein Randpunkt *ist* die Mitte des ersten
+    Lochs, alle weiteren Mitten liegen per ``equal`` auf ihm, und gleiche
+    Sehnen zwischen Nachbarn verteilen sie gleichmäßig — bei zwei Löchern ist
+    die Mitte ihr ``midpoint``, denn zwei Punkte haben nur eine Sehne. Alle
+    Radien hängen ``equal`` am ersten.
+
+    Gemessen ist ``free_dof`` **4** — Mitte, Teilkreis und Lochradius; die
+    Drehung ist die Eichfreiheit des Randpunkts auf seinem Kreis, die
+    ``solver._rank_with_circle_gauges`` nicht mitzählt. Den Durchmesser
+    bemaßt die Leiste, eine getippte Zahl den Teilkreis.
+
+    Flache Punktindizes: Loch ``k`` hat Mitte ``2k`` und Randpunkt ``2k + 1``,
+    der Teilkreis ``(2 · count, 2 · count + 1)`` — Mitte und Randpunkt.
+    """
+    if type(count) is not int or count < LEAST_PATTERN_HOLES:
+        raise ValidationError(
+            "count",
+            _("Ein Muster braucht mindestens zwei Elemente."),
+            value=count,
+            constraint="pattern_count",
+        )
+    if count > MOST_BOLT_CIRCLE_HOLES:
+        raise ValidationError(
+            "count",
+            _("Ein Lochkreis trägt höchstens vierundsechzig Löcher."),
+            value=count,
+            constraint="pattern_count",
+        )
+    require_positive("hole_diameter", hole_diameter)
+    pitch_radius = math.dist(centre, first_hole)
+    require_positive("radius", pitch_radius)
+    chord = 2.0 * pitch_radius * math.sin(math.pi / count)
+    if hole_diameter >= chord:
+        raise ValidationError(
+            "hole_diameter",
+            _("Die Löcher sind mindestens so groß wie ihr Abstand — sie überschneiden sich."),
+            value=hole_diameter,
+            constraint="hole_fits",
+        )
+    radius = hole_diameter / 2.0
+    start = math.atan2(first_hole[1] - centre[1], first_hole[0] - centre[0])
+    centres = [
+        (
+            centre[0] + pitch_radius * math.cos(start + 2.0 * math.pi * k / count),
+            centre[1] + pitch_radius * math.sin(start + 2.0 * math.pi * k / count),
+        )
+        for k in range(count)
+    ]
+    elements = [SketchElement("circle", (hole, (hole[0] + radius, hole[1]))) for hole in centres]
+    elements.append(SketchElement("circle", (centre, first_hole), construction=True))
+    hub = 2 * count
+    rim = hub + 1
+    # Der Randpunkt des Teilkreises **ist** die Mitte des ersten Lochs — ein
+    # eigener Punkt daneben wäre ein zweiter Ort für dieselbe Aussage.
+    constraints: list[SketchConstraint] = [SketchConstraint("coincident", (rim, 0))]
+    if count == 2:
+        # Zwei Löcher haben nur eine Sehne, und die geht durch die Mitte:
+        # ``midpoint`` sagt beides — gegenüber und auf dem Teilkreis — in
+        # zwei Gleichungen. Ein ``equal`` zum Teilkreis dazu legte fest, was
+        # damit schon festliegt, und der Löser meldete genau das.
+        constraints.append(SketchConstraint("midpoint", (hub, 0, 2)))
+    else:
+        constraints.extend(
+            SketchConstraint("equal", (hub, rim, hub, 2 * k)) for k in range(1, count)
+        )
+        constraints.extend(
+            SketchConstraint("equal", (0, 2, 2 * k, 2 * ((k + 1) % count))) for k in range(1, count)
+        )
+    constraints.extend(SketchConstraint("equal", (0, 1, 2 * k, 2 * k + 1)) for k in range(1, count))
+    return Sketch(plane="plane:xy", elements=tuple(elements), constraints=tuple(constraints))
 
 
 def _written(value: float) -> str:

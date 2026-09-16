@@ -2410,3 +2410,41 @@ def test_a_right_click_on_an_edge_opens_the_edge_menu(
         )
     finally:
         window.wait_for_workers()
+
+
+def test_the_planar_outline_matches_qhull_and_stays_counter_clockwise() -> None:
+    """Die ebene Hülle über GEOS liefert dieselben Ecken wie Qhull — und dieselbe
+    Umlaufrichtung.
+
+    Getauscht wurde sie am 16.09.2026 aus einem gemessenen Grund: SciPys
+    ``ConvexHull`` legt je Aufruf eine Temporärdatei an, und die
+    Schattenprojektion der Ansicht ruft sie je Körper, Stück und Auffangfläche
+    — an einer Scheune mit 89 Körpern 3541-mal für **eine** Kamerageste, 1679
+    von 1843 ms. Die Richtung zählt mit: ``clip_polygon`` schneidet gegen ein
+    Fenster und setzt beide Polygone gegen den Uhrzeigersinn voraus.
+    """
+    import numpy as np
+    from scipy.spatial import ConvexHull
+
+    from app.core.geom.mesh import planar_outline
+
+    def signed_area(ring: np.ndarray) -> float:
+        x, y = ring[:, 0], ring[:, 1]
+        return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+    rng = np.random.default_rng(7)
+    for count in (3, 8, 50):
+        points = rng.normal(size=(count, 3))
+        mine = planar_outline(points)
+        assert mine is not None
+        theirs = points[ConvexHull(points[:, :2]).vertices][:, :2]
+        assert np.allclose(np.sort(mine, axis=0), np.sort(theirs, axis=0)), count
+        # Gegen den Uhrzeigersinn heißt positive Fläche — bei beiden.
+        assert signed_area(mine) > 0.0 and signed_area(theirs) > 0.0, count
+        assert abs(signed_area(mine) - signed_area(theirs)) < 1e-9, count
+
+    # Wo keine Fläche herauskommt, kommt nichts zurück — die Absage, die
+    # vorher der ``QhullError`` trug.
+    line = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0], [2.0, 2.0, 0.0]])
+    assert planar_outline(line) is None
+    assert planar_outline(line[:2]) is None

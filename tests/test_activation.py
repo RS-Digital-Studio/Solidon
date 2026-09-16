@@ -824,19 +824,83 @@ def test_the_demo_clock_does_not_run_backwards(own_config: Path, demo: date) -> 
     assert store.days_left(demo - timedelta(days=4)) == 5, "vorwärts zählt der Kalender"
 
 
-def test_a_future_clock_at_first_start_does_not_burn_the_demo(own_config: Path, demo: date) -> None:
-    """Eine leere BIOS-Batterie beim allerersten Start darf die Demo nicht
-    dauerhaft nehmen.
+@pytest.mark.parametrize("first_start", [True, False])
+@pytest.mark.parametrize("missing_marker", [None, "config", "data"])
+def test_an_expired_demo_stays_expired_after_clock_rollback(
+    own_config: Path,
+    demo: date,
+    monkeypatch: pytest.MonkeyPatch,
+    first_start: bool,
+    missing_marker: str | None,
+) -> None:
+    """Der Startpfad bleibt auch nach Cache-Neustart und einem gelöschten Marker zu."""
+    current = demo - timedelta(days=1)
 
-    Anders als der Testlauf zählt die Demo gegen einen festen Kalendertag: ein
-    ``last_seen`` in der Zukunft schob ``effective`` über ``DEMO_UNTIL`` und
-    ließ die Frist auch nach dem Richtigstellen der Uhr für immer bei null
-    (Gesamtreview Infra 1, die Vorwärts-Richtung zu L-1). Weil schon der erste
-    Start das Datum in der Zukunft hatte, war ``first_run`` selbst verdächtig,
-    und die Horizontprüfung, die von ihm ausgeht, konnte es nicht fangen — der
-    Deckel gegen ``DEMO_UNTIL`` schon.
-    """
-    # Erster Start mit einer Uhr weit in der Zukunft — der Marker entsteht hier.
+    class ClockDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return current
+
+    monkeypatch.setattr(store, "date", ClockDate)
+    if not first_start:
+        assert activation.state().unlocked
+    current = demo + timedelta(days=1)
+    activation.forget_cache()
+    assert activation.state().over
+    if missing_marker == "config":
+        store.trial_path().unlink()
+    elif missing_marker == "data":
+        store.second_trial_path().unlink()
+    current = demo - timedelta(days=1)
+    activation.forget_cache()
+    assert activation.state().over
+    assert not activation.state().unlocked
+    assert store.trial_path().is_file()
+    assert store.second_trial_path().is_file()
+
+
+def test_a_future_clock_cannot_erase_a_recorded_demo_expiry(own_config: Path, demo: date) -> None:
+    """Auch Vorstellen und anschließendes Zurückstellen öffnet eine abgelaufene Demo nicht."""
+    assert store.days_left(demo - timedelta(days=1)) == 2
+    assert store.days_left(demo + timedelta(days=1)) == 0
+    assert store.days_left(date(2099, 1, 1)) == 0
+    assert store.days_left(demo - timedelta(days=1)) == 0
+
+
+@pytest.mark.parametrize("first_run", [date(2020, 1, 1), date(2026, 10, 31)])
+def test_a_legacy_marker_keeps_a_plausible_demo_expiry(
+    own_config: Path,
+    demo: date,
+    first_run: date,
+) -> None:
+    """Ein alter Erststart macht einen echten Ablauf nicht zur falschen Zukunftsuhr."""
+    store._write_trial(first_run, demo + timedelta(days=1))
+    assert store.days_left(demo - timedelta(days=1)) == 0
+
+
+@pytest.mark.parametrize("first_run", [date(2026, 10, 21), date(2099, 1, 1)])
+def test_a_legacy_far_future_demo_marker_can_be_corrected(
+    own_config: Path,
+    demo: date,
+    first_run: date,
+) -> None:
+    """Alte Marker mit offensichtlich falscher Zukunft bleiben korrigierbar."""
+    store._write_trial(first_run, date(2099, 1, 1))
+    assert store.days_left(demo - timedelta(days=4)) == 5
+    assert store.days_left(demo + timedelta(days=1)) == 0
+    assert store.days_left(demo - timedelta(days=4)) == 0
+
+
+@pytest.mark.parametrize("already_started", [True, False])
+def test_a_future_clock_at_first_start_does_not_burn_the_demo(
+    own_config: Path,
+    demo: date,
+    already_started: bool,
+) -> None:
+    """Eine offensichtlich falsche Zukunftsuhr darf eine laufende Demo nicht verbrauchen."""
+    if already_started:
+        assert store.days_left(demo - timedelta(days=9)) == 10
+    # Eine offensichtlich falsche Zukunftsuhr darf keinen echten Marker verdrängen.
     assert store.days_left(date(2099, 1, 1)) == 0, "mit falscher Uhr abgelaufen — richtig"
     # Uhr wieder richtig: die Demo findet auf die echte Zeit zurück, nicht auf
     # den zuletzt gesehenen Zukunftstag.

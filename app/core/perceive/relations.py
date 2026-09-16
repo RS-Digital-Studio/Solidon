@@ -22,10 +22,10 @@ wären zwei Antworten auf dieselbe Frage.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -650,11 +650,66 @@ def cavity_chains(
     return tuple(sorted(found, key=lambda chain: (*chain[0].params["centre"], chain[0].id)))
 
 
+def _candidate_key(candidates: Mapping[FeatureId, Feature]) -> tuple[Any, ...]:
+    """Woran eine gemerkte Antwort hängt — die Namen genügen dafür nicht.
+
+    Zwei Merkmalsmengen desselben Körpers können dieselben Namen tragen und
+    verschiedene Flächen meinen: Ein veralteter Netzausschnitt trägt die
+    Kennung weiter, und aus ihm darf keine Kette werden
+    (``test_invalid_face_indices_do_not_connect_a_cavity``). Der Schlüssel
+    nennt deshalb, was die Rechnung liest — Art, Flächen und die Achslinie.
+
+    Die Flächen gehen als Hash ein, nicht als Liste: Ein Merkmal trägt
+    tausende Nummern, und der Schlüssel soll billiger sein als die Rechnung,
+    die er spart.
+    """
+    return tuple(
+        (
+            name,
+            candidate.kind,
+            hash(tuple(candidate.face_indices)),
+            repr(candidate.params.get("axis")),
+            repr(candidate.params.get("centre")),
+        )
+        for name, candidate in sorted(candidates.items())
+    )
+
+
 def _cavity_links(
     candidates: Mapping[FeatureId, Feature], mesh: MeshData
 ) -> tuple[dict[FeatureId, set[FeatureId]], set[FeatureId], set[FeatureId]]:
-    """Gemeinsame Randringe einmal bilden; doppelte Belegung bleibt ungültig."""
+    """Gemeinsame Randringe einmal bilden; doppelte Belegung bleibt ungültig.
+
+    **Einmal je Netz und Kandidatenmenge**, abgelegt im Cache des Netzes wie
+    :attr:`MeshData.component_count` — er verfällt mit dessen Geometrie, und
+    ein eigenes Feld gibt es an der eingefrorenen Klasse nicht. Der Grund ist
+    gemessen (16.09.2026, Robert: „bei einer auswahl oder hover effekt stockt
+    es auch noch sehr"): Ein Klick auf ein Merkmal von ``Auto-washer.stl``
+    (180 128 Dreiecke, 170 Merkmale) kostete **402 ms** im Qt-Hauptthread,
+    davon 447 ms in dieser Funktion über zwei Aufrufe — drei Wege fragen sie
+    je Auswahl (:func:`cavity_chain_state_at`, :func:`cavity_chains`,
+    :func:`_feature_group_topology`), und jeder bildete die Randringe aller
+    462 Flächen neu.
+
+    Der Schlüssel nennt die Kandidaten, weil die Antwort nur für sie gilt;
+    dass alle drei Wege dieselbe Menge bilden, ist heute wahr und morgen eine
+    Annahme.
+    """
     body = _one_body(mesh).raw
+    cache = getattr(body, "_cache", None)
+    key = ("solidon_cavity_links", _candidate_key(candidates))
+    if cache is not None:
+        cache.verify()
+        # Kein ``cache.get``: trimeshs ``Cache`` ist kein Wörterbuch und hat
+        # keines (gemessen, ``AttributeError``).
+        found = cache[key[0]] if key[0] in cache else None  # noqa: SIM401
+        if found is not None and found[0] == key[1]:
+            kept_graph, kept_invalid, kept_touching = found[1]
+            return (
+                {name: set(linked) for name, linked in kept_graph.items()},
+                set(kept_invalid),
+                set(kept_touching),
+            )
     owners: dict[frozenset[tuple[int, int]], list[FeatureId]] = {}
     invalid: set[FeatureId] = set()
     touching: set[FeatureId] = set()
@@ -687,6 +742,17 @@ def _cavity_links(
             invalid.update(adjacent)
         graph[first].add(second)
         graph[second].add(first)
+    if cache is not None:
+        # Als unveränderliche Kopie: Der Aufrufer bekommt seine eigene und
+        # darf sie umbauen, ohne dem nächsten die Antwort zu verändern.
+        cache[key[0]] = (
+            key[1],
+            (
+                {name: frozenset(linked) for name, linked in graph.items()},
+                frozenset(invalid),
+                frozenset(touching),
+            ),
+        )
     return graph, invalid, touching
 
 
@@ -944,6 +1010,63 @@ def alike_for_actions(
         comparisons={},
     )
     return tuple(_alike_for_action(action, selected, context) for action in requested)
+
+
+#: Die drei Felder, die eine Stelle nennen — und deshalb nie an ein anderes
+#: Merkmal reisen (:func:`params_for_members`).
+_PLACE_AXES: Final = ("x", "y", "z")
+
+
+def params_for_members(
+    params: Mapping[str, Any],
+    picked: FeatureId,
+    members: Sequence[FeatureId],
+    features: Mapping[FeatureId, Feature],
+) -> dict[FeatureId, dict[str, Any]]:
+    """Die Werte einer Handlung für jedes Mitglied ihrer Gruppe.
+
+    Maße reisen unverändert: Ein Durchmesser gilt jeder Bohrung gleich. **Eine
+    Stelle reist nicht.** ``x``, ``y`` und ``z`` nennen einen Ort, und derselbe
+    Ort für sechs Bohrungen legte sie übereinander (Robert, 16.09.2026: „alle
+    sind übereinander") — das Merkmalfenster trägt die Stelle beim Ändern
+    einer Bohrung mit, und bis hierher gab das Fenster sie an jedes Mitglied
+    weiter. Jedes Mitglied behält deshalb seine eigene gemessene Mitte; was
+    am gewählten Merkmal gegenüber seiner Mitte verschoben wurde, geht als
+    **Versatz** mit — *Merkmal verschieben* für alle heißt so „alle um
+    dasselbe", und ohne Verschiebung bleibt jedes, wo es ist. Genannt wird je
+    Mitglied nur, was am gewählten genannt war; eine ungenannte Achse bleibt
+    ungenannt (RM-154). Ein Mitglied ohne gemessene Mitte bekommt keine
+    Stelle. Das gewählte Merkmal bekommt seine Werte, wie sie sind.
+    """
+    named = tuple(params.get(axis) for axis in _PLACE_AXES)
+    anchor = _centre_of(features.get(picked))
+    result: dict[FeatureId, dict[str, Any]] = {}
+    for member in members:
+        if member == picked:
+            result[member] = {**params, "at_feature": member}
+            continue
+        values = {key: value for key, value in params.items() if key not in _PLACE_AXES}
+        values["at_feature"] = member
+        centre = _centre_of(features.get(member))
+        if anchor is not None and centre is not None:
+            for axis, value, own, base in zip(_PLACE_AXES, named, centre, anchor, strict=True):
+                if value is not None:
+                    values[axis] = own + (float(value) - base)
+        result[member] = values
+    return result
+
+
+def _centre_of(feature: Feature | None) -> tuple[float, float, float] | None:
+    """Die gemessene Mitte eines Merkmals — oder nichts, wenn es keine trägt."""
+    if feature is None:
+        return None
+    centre = feature.params.get("centre")
+    if not isinstance(centre, tuple | list) or len(centre) != 3:
+        return None
+    try:
+        return (float(centre[0]), float(centre[1]), float(centre[2]))
+    except TypeError, ValueError:
+        return None
 
 
 def _alike_for_action(

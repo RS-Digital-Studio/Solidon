@@ -825,6 +825,38 @@ schneiden. **Und sie gehört der Platte des Körpers**, nicht der ersten
 eines Körpers auf Platte 2 eine Bettbreite weiter, und am Umriss von Platte 1
 geschnitten wäre sein Schatten restlos weg.
 
+### Und er wird je Körper gerechnet, nicht je Auffangfläche (16.09.2026)
+
+`_place_shadows` läuft über Körper, Hüllstücke **und** Auffangflächen, und die
+innerste Schleife tat zweimal zu viel. Gemessen an
+`1-24+scale+polebarn.3mf` — 89 Körper, 266 150 Dreiecke — kostete **eine**
+Kamerageste 1843 ms im Qt-Hauptthread; §2.8 gibt ihr einen Lidschlag (Robert:
+„nach jedem kameraverschieben hängt es erstmal").
+
+Drei Änderungen, jede einzeln gemessen:
+
+| | je Geste, echter Renderer |
+|---|---|
+| vorher | rund 1,9 s + 246 ms Zeichnen |
+| ebene Hülle über GEOS statt Qhull (`geom.mesh.planar_outline`) | 440 ms |
+| Umriss je Stück **einmal**, dann verschoben (`_shadow_base_of`) | |
+| ein Aktor je Körper statt je Stück und Fläche (442 → 89) | **126 ms** + 87 ms |
+
+Die zweite Zeile ist die, die man beim Lesen übersieht: **Eine tiefere
+Auffangfläche verschiebt den Umriss, sie ändert ihn nicht.** `shadow_points`
+versetzt jeden Punkt um `(z − ground)` mal der waagerechten Lichtrichtung; das
+`ground` ist für alle Punkte dasselbe und fällt als gemeinsamer Summand
+heraus. Die Ausnahme ist seine eigene Klammer (`maximum(…, 0)`) — ein Punkt
+**unter** der Fläche wirft keinen Schatten nach vorn, und dort ist die
+Projektion nicht mehr linear. Gerechnet wird der Umriss deshalb auf der
+Unterkante des Stücks, wo die Klammer nie greift, und von dort nur nach unten
+verschoben.
+
+Die dritte hängt an einer Zusage, die man dabei nicht verlieren darf: Die
+Aktoren bleiben **körperweise**, weil `_shadow_owners` sie beim Zug an einem
+Körper mitschiebt (`_shift_shadow`). Alle Schatten in **einen** Aktor zu legen
+wäre noch billiger und nähme dem Zug seine Vorschau.
+
 ## Was am Griff steht, ist ASCII — und sonst nichts
 
 Die Griffbeschriftung war ein `vtkStringArray` in PyVistas Hand, und PyVista
@@ -1197,7 +1229,35 @@ am 14.09.2026): `gizmo_feature` sagt, wo der Griff sitzt, `gizmo_target`, was
 er tut, `_face_seat` setzt ihn auf Mitte und Normale **dieser** Fläche, und
 `faceDragged` meldet ihre Kennung — nicht mehr ihre Normale. Das Fenster macht
 daraus `push_face` mit `face=<Kennung>`; die Richtungsfelder `nx/ny/nz` bleiben
-nur für gespeicherte Schritte stehen. Vorher trug der Schritt die Richtung, und
+nur für gespeicherte Schritte stehen.
+
+**Außer die Fläche kam aus einem Baustein** (16.09.2026). Dann antwortet
+`gizmo_target` mit nichts — es gibt kein Press/Pull an einer Fläche, die mit
+dem Träger verschmolzen ist —, `gizmo_feature` hängt den Bewegungsgriff daran,
+`_emit_feature_drag` meldet `featureMoved`, und der Zug geht in den Schritt des
+Bausteins; ein Vorschlag (`proposing`) wird daraus nie, denn rechts stehen die
+Handlungen des Bausteins und keine Felder von *Merkmal verschieben*. An der
+Rippe, die aus nichts als Flächen besteht, stand bis dahin der Pfeil entlang
+der Normalen und der Satz über Press/Pull (Robert: „bei manchen bausteinen
+keine möglichkeit zum verschieben"). Die Regel selbst steht in
+`oberflaeche.md` unter „Ein Merkmal aus einem Baustein meint den Baustein".
+
+**Und zwei weitere Lagen bekamen dort gar keinen Griff.** Beide sind
+Nebenwirkungen von Bedingungen, die für ein *freies* Merkmal richtig sind:
+
+* **Die Bohrung eines Bausteins.** `placed_feature_kinds` hält Griffe an
+  Bohrung und Langloch zurück, bis *Im Bild einstellen* gedrückt ist — und
+  diesen Knopf zeigt nur `show_feature`, nicht `show_part`. An einem
+  Schraubenloch trug die Senkung damit einen Griff und die Bohrung daneben
+  keinen. `set_gizmo` nimmt die Sperre für Bausteinmerkmale heraus und lässt
+  dort die Langlochknöpfe weg: Ihr Zug schnitte ein Langloch neben den
+  Schritt, und beim nächsten Verschieben bliebe es stehen.
+* **Das Dach im Objektbaum.** Es wählt alle Merkmale des Bausteins, und
+  `_remember_feature_refs` setzt „das gewählte Merkmal" bei mehreren auf
+  nichts — der Griff fiel auf den Körper zurück, mit Skalierwürfel.
+  `set_part_grip` nimmt vom Fenster entgegen, an welchem Merkmal er hängt;
+  die Ansicht könnte nur je Merkmal fragen, ob es aus *irgendeinem* Baustein
+  kam, und nicht, ob die ganze Auswahl **ein** Baustein ist. Vorher trug der Schritt die Richtung, und
 die Operation bewegte jede Fläche, die dorthin zeigt — an einer Treppe alle
 Stufen zugleich. **Die vier Stücke waren einzeln geprüft und die Kette nicht**
 (`test_the_handle_of_a_chosen_face_pushes_that_face` fährt sie am Stück).
@@ -1615,13 +1675,21 @@ seither vergeben, die Zusage nicht.) Drei Regeln:
   Kraft. Am Korpus gemessen (07.09.2026): Beim Drehen um die Hochachse lag der
   Zoom im Median bei einem Viertel der Drehung und in 71 von 71 Berichten über
   der Totzone; das Teil kam beim Drehen näher, ohne dass jemand gezogen hätte.
-  `quiet_crosstalk` nullt deshalb jede Nebenachse unter `CROSSTALK_SHARE` der
-  stärksten; die stärkste bleibt immer, eine aktive Bewegung bleibt also
-  aktiv. **Der Preis steht daneben:** Eine bewusst kleine Nebenbewegung unter
-  einem Viertel der Hauptbewegung geht mit, und beim Kippen der Vorderkante
-  liest das Gerät einen guten Teil als Zug. Die Zahl ist an der Aufzeichnung
-  gewählt und **am Gerät noch nicht bestätigt** — wer sie ändert, misst am
-  Korpus und nicht am Gefühl.
+  `quiet_crosstalk` dämpft deshalb jede Nebenachse nach ihrem Anteil an der
+  stärksten: null unter `CROSSTALK_SILENT`, voll ab `CROSSTALK_MEANT`,
+  dazwischen eine glatte Rampe; die stärkste bleibt immer, eine aktive
+  Bewegung bleibt also aktiv. **Eine Rampe, keine Klippe** (16.09.2026): Der
+  harte Schnitt bei einem Viertel schaltete die Zoomachse am Korpus beim
+  Ziehen zur Person dreimal in vier Sekunden an und aus, beim Kippen der
+  Vorderkante sechsmal — der Zoom hakte. Die Anteile der Nebenachsen liegen
+  breit um das Viertel, jede Schwelle dort schaltet ständig; das Viertel ist
+  jetzt die Mitte des Bandes. **Der Preis steht daneben:** Eine bewusst
+  kleine Nebenbewegung unter `CROSSTALK_SILENT` der Hauptbewegung geht
+  verloren, beim Kippen der Vorderkante liest das Gerät einen guten Teil als
+  Zug, und beim Drehen bleiben rund zwei Drittel des Zoom-Lecks — das ist der
+  Sensor. Band und Kennlinie sind an der Aufzeichnung gewählt und **am Gerät
+  noch nicht bestätigt** — wer sie ändert, misst am Korpus und nicht am
+  Gefühl (die Korpus-Tests zum Übersprechen in `test_spacemouse.py`).
 * **Der Viewport bekommt eine Stellung, keine Deltas.** `Viewport.set_camera_pose`
   setzt Standort, Blickpunkt und Oben und zeichnet einmal. Es ist die einzige
   Stelle, an der die 3D-Maus den Viewport anfasst; `sketch_active` sagt ihr,

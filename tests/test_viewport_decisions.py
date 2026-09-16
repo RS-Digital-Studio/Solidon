@@ -7873,3 +7873,58 @@ def test_the_drawn_sketch_marks_keep_their_size_at_any_scaling(
         )
     finally:
         viewport.deleteLater()
+
+
+def test_a_shadow_is_computed_once_per_piece_and_drawn_once_per_body(
+    qt_app: QApplication,
+) -> None:
+    """Eine Kamerageste rechnet je Stück **eine** Hülle und legt je Körper **einen** Aktor.
+
+    Robert, 16.09.2026, an ``1-24+scale+polebarn.3mf`` mit 89 Körpern: „nach
+    jedem kameraverschieben hängt es erstmal." Gemessen waren es 1843 ms je
+    Geste — 3541 konvexe Hüllen und 442 Aktoren, jeder davon weggeworfen und
+    neu angelegt. Beides hat denselben Grund: Die Schleife lief über Körper,
+    Stück **und** Auffangfläche.
+
+    Die Hülle braucht sie nur einmal je Stück: Eine tiefere Auffangfläche
+    verschiebt den Umriss, sie ändert ihn nicht (``_shadow_base_of``). Und die
+    Vielecke eines Körpers tragen dieselbe Farbe, passen also in einen Aktor.
+    Nach dem Umbau: 126 ms am echten Renderer.
+    """
+    from app.ui import viewport as module
+
+    view = module.Viewport()
+    view.renderer = RecordingRenderer(size=(400, 300))
+    view._shadow_hulls = {
+        "obj_1": [np.array([[0.0, 0.0, 10.0], [8.0, 0.0, 10.0], [4.0, 6.0, 20.0]])],
+        "obj_2": [np.array([[0.0, 0.0, 10.0], [8.0, 0.0, 10.0], [4.0, 6.0, 14.0]])],
+    }
+    # Beide stehen auf 10 mm — und beide haben mehrere Auffangflächen: die
+    # Platte und den jeweils anderen Körper darunter wäre falsch, also eine
+    # gemeinsame Grundplatte.
+    view._shadow_ground = {
+        "obj_1": (10.0, 20.0, np.array([[-9.0, -9.0], [9.0, -9.0], [9.0, 9.0], [-9.0, 9.0]])),
+        "obj_2": (10.0, 14.0, np.array([[-9.0, -9.0], [9.0, -9.0], [9.0, 9.0], [-9.0, 9.0]])),
+        "obj_3": (0.0, 10.0, np.array([[-9.0, -9.0], [9.0, -9.0], [9.0, 9.0], [-9.0, 9.0]])),
+    }
+    view._shadow_cast = (99.0, 99.0)
+
+    hulls: list[int] = []
+    real = module.outline_of
+
+    def counted(points: object) -> object:
+        hulls.append(1)
+        return real(points)
+
+    try:
+        module.outline_of = counted
+        view._redraw_shadows(draw=False)
+    finally:
+        module.outline_of = real
+
+    assert view._shadow_actors, "es fallen Schatten"
+    assert len(view._shadow_actors) == 2, (
+        f"ein Aktor je Körper, nicht je Auffangfläche: {len(view._shadow_actors)}"
+    )
+    assert set(view._shadow_owners) == {"obj_1", "obj_2"}, view._shadow_owners
+    assert len(hulls) == 2, f"eine Hülle je Stück, nicht je Auffangfläche: {len(hulls)}"

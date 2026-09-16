@@ -1222,6 +1222,19 @@ einem Gewinde hängt, die für sich keine Operation tragen, fragt
 `Viewport.gizmo_feature` das Fenster über `moves_as_a_part` — eine
 schwache Frage, keine gebundene Methode (`wartezeit.md`). Was während des
 Zugs im Bild wandert, ist weiter die Marke des einen Merkmals (RM-174).
+Seit dem 16.09.2026 gilt das auch an einer **Fläche** des Bausteins
+(`gizmo_target` kennt dort kein Press/Pull), bei gewähltem **Dach** im Baum
+(`_move_the_part` fragt `_common_part_step`, wenn `selected_feature`
+schweigt) und für eine an einen Parameter **gebundene** Achse: Der Versatz
+wandert in den Ausdruck (`expressions.shifted`, `=@staerke + 5`) statt
+abgelehnt zu werden. Ein gewähltes **Dach** trägt den Griff an einem seiner
+Merkmale (`_part_grip_anchor` → `Viewport.set_part_grip`), und die **Bohrung**
+eines Bausteins bekommt ihn ohne *Im Bild einstellen*. **Entf** an
+Bausteinmerkmalen nimmt den Schritt (`_delete_the_chosen_feature`) und sonst
+nie den Körper; der Filament-Schnellwähler färbt an einer Bausteinfläche alle
+Flächen des Bausteins (`_part_faces_of_selection`, `_filament_targets`). Ein
+**gebundener** Wert zeigt im Merkmalfenster sein Ausdrucksfeld
+(`FeaturePanel._part_fields`), statt den Aufbau der Liste abzubrechen.
 
 **Ein Baustein bleibt gewählt, wenn *Maße ändern* seine Merkmale tauscht.**
 `_change_part_step` merkt den Schritt (`_part_to_keep`), und
@@ -1311,7 +1324,9 @@ Anwendung — Windows malt sie weiter, es bekommt nur gesagt, in welcher Farbe;
 ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·
 `palette.py` (**Farbe trägt nie allein Bedeutung**,
 §19.1) · `icons.py` · `motion.py` (Bewegung an einer Stelle, nicht an
-zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
+zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen; dazu
+`wheel_needs_focus`, damit das Rad ein Feld erst mit Fokus dreht — Regel in
+`oberflaeche.md`)
 
 Das Anmelden des Fensterchroms ist idempotent: Beide Startwege teilen den
 Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.

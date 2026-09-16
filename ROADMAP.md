@@ -70,7 +70,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Slicer einrichten, dann Öffnen- und Konsolenweg mit mehreren Spulen abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Der Weld ist behoben und als Kundenweg getestet; offen bleiben das Flackern der Tetraederecke auf dem Linux-Runner und das Beispielarchiv der Werkstattfilme |
 | [RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen](#rm-181) | Geometrie, Erkennung und Druckvorbereitung | Die Langlochsuche ist gebaut (126 s → 9 s); offen sind `actions_for` mit Netz (0,14 s je Merkmal) und die Ladezeit einer Baugruppe mit vielen Körpern |
-| [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
+| [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Der Mac ist gefahren; die Zoom-Dämpfung ist seit dem 16.09. eine Rampe statt einer Klippe und am Gerät zu bestätigen; offen bleiben Linux, die 3DxWare-Mausemulation und die Bildrate an 1 Mio. Dreiecken |
+| [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Fünf Entscheidungen der Durchsicht sind gefallen und gebaut; offen: Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster fahren, Rollen und Rampe der 3D-Maus prüfen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kundentexte systematisch prüfen und alle Sprachfassungen nachziehen |
 | [RM-088 — Verständlichkeit für Laien im Regelwerk verankern](#rm-088) | Bedienung und Darstellung | Verständlichkeitsregel und begründete Ausnahmen entscheiden |
@@ -102,11 +103,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-034 — Versicherungsschutz für Software und Produktschäden klären](#rm-034) | Veröffentlichung, Betrieb und Vertrieb | Versicherungsangebote gegen die tatsächlichen Risiken prüfen lassen |
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
-| [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
+| [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.10.; letzte Optimierungen 31.10.; Start 01.11.2026 um 10:00 Uhr deutscher Zeit |
 | [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Beide Funde sind zugeordnet und behoben; offen bleibt nur der Abgleich gegen den Server beim nächsten Upload |
 | [RM-162 — Der Hinweistext der Fassung reiste unverändert mit](#rm-162) | Veröffentlichung, Betrieb und Vertrieb | Der Riegel steht; die sechs Sätze für 0.4.1 stehen bereit und werden beim Bau eingetragen |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf belegen — die Pflicht gilt seit dem 11.09.2026 |
-| [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
+| [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 um 10:00 Uhr deutscher Zeit |
 | [RM-182 — Zwei Lizenzarten bauen, privat und gewerblich](#rm-182) | Veröffentlichung, Betrieb und Vertrieb | Kern, Dienst, Vorratswerkzeug, Oberfläche und Rechtstexte am 15.09. gebaut; offen sind Website, die Art im Serverdatensatz und die Migration des laufenden Dienstes |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
 | [RM-095 — Automatischen Löschlauf auf dem Server belegen](#rm-095) | Veröffentlichung, Betrieb und Vertrieb | Server-Löschlauf, Sicherungen und Ausfallalarm tatsächlich nachweisen |
@@ -1116,12 +1117,38 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   jetzt problemlos"). Das ist ein Feldnachweis und kein Testlauf — er zählt für die Plattform, auf
   der er stattfand, und für nichts sonst.
 
+  **Der Zoom hakte (Robert, 16.09.2026).** Am Korpus gemessen war die Ursache der harte
+  Übersprech-Schnitt bei einem Viertel der stärksten Achse: Er schaltete die Zoomachse beim Ziehen
+  zur Person dreimal in vier Sekunden an und aus, beim Kippen der Vorderkante sechsmal. Seit dem
+  16.09. dämpft `quiet_crosstalk` als Rampe zwischen 15 % und 35 % der stärksten Achse, mit dem
+  alten Viertel als Mitte; das Zoom-Leck beim Schieben bleibt unter einem Zehntel, beim Drehen
+  bleiben zwei Drittel, und das ist der Sensor. Zum Vergleich: Blender und PrusaSlicer filtern
+  Nebenachsen gar nicht, FreeCAD bietet den strengen Dominant-Modus nur als Option, 3Dconnexion
+  empfiehlt Anwendungen den Treiberweg navlib mit eigenem Bewegungsmodell. Offen: die Rampe am
+  Gerät fahren und die Bildzeit je Takt messen, denn jeder Takt setzt Kamera, Schnittebenen und
+  ein synchrones Bild.
+
   Offen bleiben damit: **Linux** (Rechte und Gerätetest), das Verhalten bei paralleler
   3DxWare-Mausemulation und die Bildrate an einem Netz mit 1 Mio. Dreiecken. Abnahme je Plattform
   mit benanntem Gerät, Treiber und reproduzierbarer Navigation; eine automatische Änderung der
   Treiberkonfiguration vorher entscheiden.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
+
+<a id="rm-183"></a>
+
+- [ ] **RM-183 — Zeichenmodus am Fenster abnehmen.** Die
+  [Durchsicht](konzepte/durchsicht-zeichenmodus-2026-09.md) vom 16.09. hat zehn Befunde. Acht
+  sind am selben Tag gebaut: Gestensatz nur im Bild, vier Werkzeuggruppen mit Trennstrichen, der
+  Bedingungshinweis geht nach dem ersten Sehen — und die fünf, die Robert delegiert hat („mach
+  das beste für kunden daraus, weniger ist manchmal mehr"): *Fertig* klappt die sechs Arten
+  direkt auf statt eines Zwischendialogs, die Zeile der Karte sagt nur, was sonst nirgends
+  steht, der Rasterhaken „Auto" fällt, ein Zeichnen-Knopf je Skizzenfeld, keine Kürzel für die
+  Lochbilder. **Offen ist die Abnahme am laufenden Fenster**, denn nichts davon wurde dort
+  gefahren: Rohrbogen mit gezeichneter Bahn und Trichter mit gezeichnetem oberen Umriss (Z8),
+  die Tastaturfolge durch die Karte, die drei Trennstriche im dunklen Thema — und aus dem selben
+  Tag das Rollen im Merkmalfenster und die Rampe der 3D-Maus. Abnahme: je Fall ein gebauter
+  Körper oder ein Satz von Robert, was hakt.
 
 <a id="rm-074"></a>
 
@@ -1640,11 +1667,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-061"></a>
 
 - [ ] **RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten.** Bei geklärter Anmeldung,
-  Zahlung und Rechtstexten folgt spätestens am 25.10. der Verkaufsbau für den beschlossenen
-  01.11.2026: Demo- und Testphasenwerte, Website und Rechtstexte konsistent umstellen und den
-  Aktualisierungsvorlauf prüfen. Fehlen Voraussetzungen, braucht es eine ausdrückliche neue
-  Entscheidung zur auslaufenden Demo. Abnahme: kaufbarer und nutzbarer Weg oder beschlossene
-  Übergangslösung vor Ablauf.
+  Zahlung und Rechtstexten bis 25.10. einen Verkaufskandidaten vorbereiten. Der **31.10. bleibt
+  für letzte Optimierungen reserviert**; Verkaufsstart ist am **01.11.2026 um 10:00 Uhr
+  Europe/Berlin** (Robert, 16.09.). Grundlage ist das
+  [Übergangskonzept](konzepte/konzept-demo-zu-1.0-2026-09.md): Ablauf alter Demos und laufender
+  Sitzungen, Aktualisierung und Projektübernahme, Kaufzustellung, Geräteaktivierung und
+  Veröffentlichung nach §§5–13 umsetzen; Abnahmefälle T01–T32 und Freigabekriterien §§15–16
+  erfüllen. Der Ist-Zustand vom 16.09. hat noch keinen täglichen Ablaufwächter und keinen
+  Bestell-Webhook im Repository. **Uhr-Rückstellfehler I03a am 16.09. lokal behoben:**
+  Erkannter Ablauf bleibt erhalten, auch über den Umweg einer falschen Zukunftsuhr und bei
+  Verlust eines Markers; 130 Aktivierungs-/Grenztests bestanden, zwei übersprungen.
+  Noch offen: laufender Zustands-Cache sowie Grenzen bei eingefrorener Uhr, fehlenden
+  Markern und vollständiger Systemrücksetzung nach §7.1/T10. Die Demo endet unverändert
+  einschließlich 30.10.; die
+  geplante Pause bis zum Verkaufsstart wird vorab erklärt. Fehlen Voraussetzungen,
+  Verkauf geschlossen halten und Verschiebung kommunizieren; eine andere Demo-Frist
+  benötigt eine ausdrückliche neue Entscheidung und einen neuen Bau. Abnahme: nach dem
+  letzten Optimierungsstand geprüfte Pakete sowie ein kaufbarer, zustellbarer und
+  aktivierbarer Weg zum bestätigten Start; andernfalls dokumentierter Verschiebungsablauf.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-robert-am-26082026-aufgetragen-hat).
 
@@ -1711,8 +1751,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-092"></a>
 
 - [ ] **RM-092 — Verkaufskonzept für den geplanten Start abschließen.** Das Verkaufskonzept bis zum
-  15.10.2026 aktualisieren; der beschlossene Verkaufsstart ist der 01.11.2026. Preis, tatsächlichen
-  Anbieter und Vertragspartner, Bestell-/Zustimmungsstrecke, Lieferung, Widerruf und Signierung
+  15.10.2026 aktualisieren; der beschlossene Verkaufsstart ist der **01.11.2026 um 10:00 Uhr
+  Europe/Berlin**. Kauf, Zustellung und Freigabe sind im
+  [Übergangskonzept](konzepte/konzept-demo-zu-1.0-2026-09.md) §§9, 11 und 13 ausgearbeitet.
+  Preis, tatsächlichen Anbieter und Vertragspartner, Bestell-/Zustimmungsstrecke,
+  Lieferung, Widerruf und Signierung
   festlegen. Abnahme: freigegebener Ablauf, Testkauf einschließlich Storno und passende Rechtstexte;
   überholte Konzepte eindeutig kennzeichnen. **Der Preis ist seit dem 15.09.2026 entschieden**
   (Robert: privat 69 € ab 01.11.2026 und 99 € ab 01.02.2027, gewerblich 199 € und 249 € an

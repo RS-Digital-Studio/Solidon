@@ -54,7 +54,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError, SketchConflictError
+from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import edit, shapes
 from app.core.sketch.planes import is_feature_plane
 from app.core.sketch.profile import regions_of
@@ -179,6 +179,23 @@ MOST_POLYGON_CORNERS = 12
 #: Breite einstellt, behält sie für die nächste (``SketchCanvas.slot_width``),
 #: wie beim Radius der Verrundung.
 DEFAULT_SLOT_WIDTH_MM = 5.0
+
+#: Die Vorgaben der Lochbilder: ein Raster von vier mal drei, sechs Löcher auf
+#: dem Kreis, vier Millimeter Loch — die M3-Durchgangsbohrung mit Spiel. Wie
+#: Eckenzahl und Breite bleibt jede Einstellung für das nächste Lochbild
+#: stehen. Zweiunddreißig Spalten oder Zeilen sind die Grenze der Bedienung:
+#: Mehr Kreise als Rasterlinien im Bild unterscheidet niemand mehr.
+DEFAULT_GRID_COLUMNS = 4
+DEFAULT_GRID_ROWS = 3
+MOST_GRID_LINES = 32
+DEFAULT_BOLT_COUNT = 6
+DEFAULT_HOLE_DIAMETER_MM = 4.0
+
+#: Die Formen aus zwei Klicks: Vorschau und Klick rechnen dieselbe Form
+#: (``SketchCanvas._drawn_shape``), eine getippte Zahl bemaßt sie. Lochkreis
+#: und Lochraster kamen am 16.09.2026 dazu und lösten das Menü mit festen
+#: Maßen ab (Robert: „das lochraster genauso bauen").
+DRAWN_SHAPE_TOOLS: tuple[str, ...] = ("polygon", "slot", "hole_grid", "bolt_circle")
 
 #: Die feinste Weite, die sich eintippen lässt.
 #:
@@ -965,6 +982,15 @@ class SketchCanvas(QWidget):
         self.slot_width = DEFAULT_SLOT_WIDTH_MM
         """Wie breit das nächste Langloch wird, in Millimetern — zuletzt
         eingestellt, wie der Radius der Verrundung."""
+        self.grid_columns = DEFAULT_GRID_COLUMNS
+        self.grid_rows = DEFAULT_GRID_ROWS
+        """Spalten und Zeilen des nächsten Lochrasters."""
+        self.bolt_count = DEFAULT_BOLT_COUNT
+        """Wie viele Löcher der nächste Lochkreis trägt."""
+        self.hole_diameter = DEFAULT_HOLE_DIAMETER_MM
+        """Der Durchmesser jedes Lochs im nächsten Lochbild, in Millimetern."""
+        self._shape_error: AppError | None = None
+        """Warum aus den zwei Klicks zuletzt keine Form wurde — für die Zeile."""
 
     def set_bed(self, size: tuple[float, float] | None) -> None:
         """Die Grundfläche des Bauraums, gegen die gezeichnet wird.
@@ -1096,7 +1122,7 @@ class SketchCanvas(QWidget):
                 SketchElement("line", (opposite, other_y)),
                 SketchElement("line", (other_y, first)),
             )
-        if self.tool in ("polygon", "slot"):
+        if self.tool in DRAWN_SHAPE_TOOLS:
             # **Dieselbe Rechnung wie der Klick**, nur mit dem Zeiger als
             # zweitem Punkt: Eine Vorschau, die ihre Form selbst zusammensetzt,
             # ist die zweite Wahrheit über das, was entsteht. Die
@@ -1130,14 +1156,38 @@ class SketchCanvas(QWidget):
         nächsten Mausschritt steht er anders (die Zeile sagt es trotzdem,
         sobald jemand darauf klickt).
         """
+        self._shape_error = None
         try:
             if self.tool == "polygon":
                 return edit.polygon_at(first, second, self.polygon_corners)
             if self.tool == "slot":
                 return edit.slot_between(first, second, self.slot_width)
-        except AppError:
+            if self.tool == "hole_grid":
+                return edit.hole_grid_between(
+                    first, second, self.grid_columns, self.grid_rows, self.hole_diameter
+                )
+            if self.tool == "bolt_circle":
+                return edit.bolt_circle_at(first, second, self.bolt_count, self.hole_diameter)
+        except AppError as error:
+            # Gemerkt für die Zeile: Bei den Lochbildern gibt es einen zweiten
+            # Grund neben „die Klicks liegen aufeinander" (:meth:`_shape_refusal`).
+            self._shape_error = error
             return None
         return None
+
+    def _shape_refusal(self) -> str:
+        """Warum aus zwei Klicks keine Form wurde — mit dem Ausweg (Regel 17).
+
+        Meist liegen die Klicks aufeinander. Bei Lochkreis und Lochraster gibt
+        es einen zweiten Grund, und der Satz von den Klicks wäre dort falsch:
+        Die Löcher sind größer als ihr Abstand. Der Kern sagt das in seiner
+        Absage, und die Zeile reicht sie weiter — samt dem, was hilft.
+        """
+        error = self._shape_error
+        if isinstance(error, ValidationError) and getattr(error, "field", "") == "hole_diameter":
+            reason = str(error.detail or error.title)
+            return f"{reason} {tr('Weiter ziehen oder den Durchmesser in der Leiste verkleinern.')}"
+        return tr("Die beiden Klicks liegen aufeinander — der zweite bestimmt die Größe.")
 
     def measure_annotations(self) -> tuple[tuple[tuple[float, float], str], ...]:
         """Lesbare Maßzahlen samt Position für Canvas und 3D-Viewport.
@@ -1524,12 +1574,14 @@ class SketchCanvas(QWidget):
             self.measure_field.setAccessibleName(tr("Radius"))
         elif tool == "chamfer":
             self.measure_field.setAccessibleName(tr("Fasenmaß"))
-        elif tool in ("circle", "polygon"):
-            # Beide werden über einen Kreis bemaßt — der eine über sich
-            # selbst, der andere über seinen Umkreis.
+        elif tool in ("circle", "polygon", "bolt_circle"):
+            # Alle drei werden über einen Kreis bemaßt — der eine über sich
+            # selbst, die anderen über Umkreis und Teilkreis.
             self._name_circle_button()
         elif tool == "slot":
             self.measure_field.setAccessibleName(tr("Länge"))
+        elif tool == "hole_grid":
+            self.measure_field.setAccessibleName(tr("Abstand"))
         else:
             self.measure_field.setAccessibleName(tr("Maß"))
         # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
@@ -1727,7 +1779,8 @@ class SketchCanvas(QWidget):
             # Auswahlwerte beschreibt, nur andersherum: Nicht der Wert hieß
             # anders als sein Feld, sondern der Weg anders als sein Ziel.
             return tr(
-                "Leere Skizze — zeichnen, oder eine fertige Form aus dem Rechteck-Menü einsetzen."
+                "Leere Skizze — mit dem Rechteck beginnen oder eine Linie ziehen; "
+                "Lochkreis und Lochraster stehen rechts in der Leiste."
             )
         # Zwei Fragen, eine Zeile, und die erste ist die dringendere: ohne
         # geschlossenen Umriss scheitert die Operation, mit ihm ist ein freier
@@ -1857,6 +1910,20 @@ class SketchCanvas(QWidget):
             if started:
                 return tr("Bogen: der nächste Klick setzt das Ende.")
             return tr("Bogen: erster Klick setzt den Anfang.")
+        if self.tool == "hole_grid":
+            if started:
+                return tr(
+                    "Lochraster: der zweite Klick setzt das gegenüberliegende Loch. "
+                    "Oder den Abstand eintippen."
+                )
+            return tool_instruction("hole_grid")
+        if self.tool == "bolt_circle":
+            if started:
+                return tr(
+                    "Lochkreis: der zweite Klick setzt das erste Loch. "
+                    "Oder den Teilkreis eintippen."
+                )
+            return tool_instruction("bolt_circle")
         return ""
 
     def _corner_hint(self) -> str:
@@ -2744,6 +2811,8 @@ class SketchCanvas(QWidget):
             "rectangle": 2,
             "polygon": 2,
             "slot": 2,
+            "hole_grid": 2,
+            "bolt_circle": 2,
         }[self.tool]
         if len(self._pending_world) < needed:
             # Der Hinweis wandert mit dem angefangenen Element: was der
@@ -2767,7 +2836,7 @@ class SketchCanvas(QWidget):
             self._finish_rectangle(width, height, across, upward)
             return
 
-        if self.tool in ("polygon", "slot"):
+        if self.tool in DRAWN_SHAPE_TOOLS:
             first, opposite = self._pending_world
             if self._drawn_shape(first, opposite) is None:
                 # Der zweite Klick liegt auf dem ersten: Es gibt keine Größe.
@@ -2775,9 +2844,7 @@ class SketchCanvas(QWidget):
                 # wiederholen ist — dieselbe Zusage wie beim flachen Bogen.
                 self._pending.pop()
                 self._pending_world.pop()
-                self.statusChanged.emit(
-                    tr("Die beiden Klicks liegen aufeinander — der zweite bestimmt die Größe.")
-                )
+                self.statusChanged.emit(self._shape_refusal())
                 return
             self._finish_drawn_shape(first, opposite)
             return
@@ -3117,25 +3184,37 @@ class SketchCanvas(QWidget):
         if (
             value <= 0.0
             or len(self._pending_world) != 1
-            or self.tool not in ("line", "circle", "rectangle", "polygon", "slot")
+            or self.tool not in ("line", "circle", "rectangle", *DRAWN_SHAPE_TOOLS)
         ):
             self.statusChanged.emit(tr("Erst einen Punkt setzen, dann das Maß eintippen."))
             return
 
-        if self.tool in ("polygon", "slot"):
+        if self.tool in DRAWN_SHAPE_TOOLS:
             # Die Richtung kommt vom Zeiger, das Maß aus dem Feld — wie bei
             # Linie und Kreis. Beim Vieleck ist das Maß der Umkreis (Ø oder R
-            # nach dem Umschalter), beim Langloch der Abstand der beiden
-            # Mitten; ohne Richtung geht es nach rechts, und nah an einer
-            # Achse gilt die Achse.
+            # nach dem Umschalter), beim Lochkreis der Teilkreis (ebenso), beim
+            # Langloch der Abstand der beiden Mitten; ohne Richtung geht es
+            # nach rechts, und nah an einer Achse gilt die Achse. Beim
+            # Lochraster ist es der Abstand von Mitte zu Mitte, in beiden
+            # Richtungen derselbe — der Zeiger sagt nur noch, in welche Ecke
+            # das Raster wächst.
             first = self._pending_world[0]
             dx, dy = self._pointer[0] - first[0], self._pointer[1] - first[1]
-            stored = circle_stored(value) if self.tool == "polygon" else value
-            reach = stored / 2.0 if self.tool == "polygon" else stored
-            direction = (
-                _snapped_direction(dx, dy) if math.hypot(dx, dy) > EPS_DISPLAY else (1.0, 0.0)
-            )
-            second = (first[0] + direction[0] * reach, first[1] + direction[1] * reach)
+            circular = self.tool in ("polygon", "bolt_circle")
+            stored = circle_stored(value) if circular else value
+            if self.tool == "hole_grid":
+                across = -1.0 if dx < 0.0 else 1.0
+                upward = -1.0 if dy < 0.0 else 1.0
+                second = (
+                    first[0] + across * stored * (self.grid_columns - 1),
+                    first[1] + upward * stored * (self.grid_rows - 1),
+                )
+            else:
+                reach = stored / 2.0 if circular else stored
+                direction = (
+                    _snapped_direction(dx, dy) if math.hypot(dx, dy) > EPS_DISPLAY else (1.0, 0.0)
+                )
+                second = (first[0] + direction[0] * reach, first[1] + direction[1] * reach)
             self._finish_drawn_shape(first, second, typed=f"{stored:.9f}")
             return
 
@@ -3305,6 +3384,7 @@ class SketchCanvas(QWidget):
         """
         made = self._drawn_shape(first, second)
         if made is None:
+            self.statusChanged.emit(self._shape_refusal())
             return
         made = replace(made, plane=self.sketch.plane)
         points = edit.flat_points(made)
@@ -3313,12 +3393,34 @@ class SketchCanvas(QWidget):
             hub = len(points) - 2
             if typed:
                 extra.append(SketchConstraint("diameter", (hub, hub + 1), typed))
-        else:
+        elif self.tool == "slot":
             extra.append(
                 SketchConstraint("diameter", (2, 3), slot_width_expression(self.slot_width))
             )
             if typed:
                 extra.append(SketchConstraint("distance", (7, 2), typed))
+        elif self.tool == "hole_grid":
+            # **Der Lochdurchmesser kommt aus der Leiste und steht als Maß am
+            # ersten Loch**; alle anderen hängen im Kern per ``equal`` daran —
+            # dieselbe Entscheidung wie bei der Breite des Langlochs. Getippt
+            # ist der Abstand, in beiden Richtungen derselbe: einmal zum
+            # Nachbarn in der Zeile, einmal zum Nachbarn in der Spalte.
+            extra.append(
+                SketchConstraint("diameter", (0, 1), slot_width_expression(self.hole_diameter))
+            )
+            if typed and self.grid_columns > 1:
+                extra.append(SketchConstraint("distance", (0, 2), typed))
+            if typed and self.grid_rows > 1:
+                extra.append(SketchConstraint("distance", (0, 2 * self.grid_columns), typed))
+        else:
+            # Lochkreis: Lochdurchmesser aus der Leiste, getippt der Teilkreis
+            # — der Hilfskreis ist das letzte Element, wie beim Vieleck.
+            extra.append(
+                SketchConstraint("diameter", (0, 1), slot_width_expression(self.hole_diameter))
+            )
+            if typed:
+                hub = len(points) - 2
+                extra.append(SketchConstraint("diameter", (hub, hub + 1), typed))
         made = replace(made, constraints=(*made.constraints, *extra))
 
         def nearest_local(wanted: tuple[float, float]) -> int:
@@ -4559,6 +4661,14 @@ def tool_instruction(name: str) -> str:
         "rectangle": tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke."),
         "polygon": tr("Vieleck: erster Klick setzt die Mitte, der zweite eine Ecke."),
         "slot": tr("Langloch: zwei Klicks setzen die Mitten der beiden runden Enden."),
+        "hole_grid": tr(
+            "Lochraster: erster Klick setzt das erste Loch, der zweite das gegenüberliegende; "
+            "Spalten, Zeilen und Durchmesser stehen in der Leiste."
+        ),
+        "bolt_circle": tr(
+            "Lochkreis: erster Klick setzt die Mitte, der zweite das erste Loch; "
+            "Anzahl und Durchmesser stehen in der Leiste."
+        ),
     }[name]
 
 
@@ -4783,45 +4893,67 @@ class SketchPanel(QWidget):
         # Zahl, die nur im Bild steht, lässt sich nicht rot werden lassen.
         self._tools_row = tools
         self._tool_buttons: dict[str, QToolButton] = {}
-        for name, label in (
-            ("select", tr("Auswählen")),
-            ("point", tr("Punkt")),
-            ("line", tr("Linie")),
-            ("circle", tr("Kreis")),
-            ("arc", tr("Bogen")),
-            ("spline", tr("Kurve")),
-            ("trim", tr("Trimmen")),
-            ("extend", tr("Verlängern")),
-            ("fillet", tr("Verrunden")),
-            ("chamfer", tr("Fase")),
-            # **Zwei Knöpfe mehr in derselben Zeile, und das ist gemessen.**
-            # Die Zeile verlangte 639 Bildpunkte, erlaubt sind 900
-            # (``tests/test_sketch_editor.py``); zwei Symbolknöpfe à 37 kosten
-            # mit Abstand rund achtzig. Ein Ausklappmenü wie beim Rechteck
-            # wäre der Ausweg, wenn es eng würde — es ist nicht eng, und ein
-            # Werkzeug hinter einem Pfeil findet niemand, der es nicht sucht.
-            ("polygon", tr("Vieleck")),
-            ("slot", tr("Langloch")),
-        ):
-            button = QToolButton(self)
-            key = TOOL_KEYS.get(name, "")
-            # Nur das Zeichen, ohne Beschriftung — die einzige Stelle der
-            # Oberfläche, an der das gilt. Warum es hier trägt und sonst nicht,
-            # steht bei den Symbolen selbst (``app/ui/icons.py``, Abschnitt
-            # Zeichenwerkzeuge). Vierzehn beschriftete Knöpfe passten nicht in
-            # die Zeile: Qt kürzte sie auf „Tri… T" und „Ver…ern", und ein
-            # abgeschnittenes Wort ist schlechter zu lesen als ein Bild.
-            button.setIcon(icons.icon(f"sketch_{name}", button))
-            shortcut = f"  ({key})" if key else ""
-            note = f"{label}{shortcut} — {tool_instruction(name)}"
-            button.setToolTip(note)
-            button.setStatusTip(note)
-            button.setAccessibleDescription(note)
-            button.setCheckable(True)
-            button.setAutoRaise(True)
-            button.toggled.connect(weak_slot(self, SketchPanel._tool_chosen, name, forward=True))
-            self._tool_buttons[name] = button
-            tools.addWidget(button)
+        # **Vier Gruppen, drei Trennstriche** (Robert, 16.09.2026: „das zeichen
+        # panel ein bisschen übersichtlicher gestalten"): Auswählen — Zeichnen
+        # — Lochbilder — Ändern. Fünfzehn Symbole in einer Reihe las niemand
+        # als Reihe; das Rechteck stand hinter dem Langloch und Trimmen
+        # zwischen Kurve und Vieleck, weil jedes Werkzeug dort ankam, wo
+        # gerade Platz war. Die Zeile verlangte 725 Bildpunkte, erlaubt sind
+        # 900 (``tests/test_sketch_editor.py``); zwei Knöpfe und drei Striche
+        # kosten rund neunzig. Ein Ausklappmenü wäre der Ausweg, wenn es eng
+        # würde — ein Werkzeug hinter einem Pfeil findet niemand, der es nicht
+        # sucht.
+        groups: tuple[tuple[tuple[str, str], ...], ...] = (
+            (("select", tr("Auswählen")),),
+            (
+                ("point", tr("Punkt")),
+                ("line", tr("Linie")),
+                ("rectangle", tr("Rechteck")),
+                ("circle", tr("Kreis")),
+                ("arc", tr("Bogen")),
+                ("spline", tr("Kurve")),
+                ("polygon", tr("Vieleck")),
+                ("slot", tr("Langloch")),
+            ),
+            # Lochkreis und Lochraster waren bis zum 16.09.2026 Menüeinträge
+            # mit festen Maßen am Rechteck („Rechteck 40 mal 20", „Lochraster
+            # 4 mal 3, Abstand 10"); Robert: „die rechtecke und kreise usw mit
+            # den festen maßen brauchen wir nicht". Was man zeichnen kann,
+            # zeichnet man — mit Vorschau am Zeiger.
+            (("bolt_circle", tr("Lochkreis")), ("hole_grid", tr("Lochraster"))),
+            (
+                ("trim", tr("Trimmen")),
+                ("extend", tr("Verlängern")),
+                ("fillet", tr("Verrunden")),
+                ("chamfer", tr("Fase")),
+            ),
+        )
+        for group_index, group in enumerate(groups):
+            if group_index:
+                tools.addWidget(style.divider(self))
+            for name, label in group:
+                button = QToolButton(self)
+                key = TOOL_KEYS.get(name, "")
+                # Nur das Zeichen, ohne Beschriftung — die einzige Stelle der
+                # Oberfläche, an der das gilt. Warum es hier trägt und sonst
+                # nicht, steht bei den Symbolen selbst (``app/ui/icons.py``,
+                # Abschnitt Zeichenwerkzeuge). Vierzehn beschriftete Knöpfe
+                # passten nicht in die Zeile: Qt kürzte sie auf „Tri… T" und
+                # „Ver…ern", und ein abgeschnittenes Wort ist schlechter zu
+                # lesen als ein Bild.
+                button.setIcon(icons.icon(f"sketch_{name}", button))
+                shortcut = f"  ({key})" if key else ""
+                note = f"{label}{shortcut} — {tool_instruction(name)}"
+                button.setToolTip(note)
+                button.setStatusTip(note)
+                button.setAccessibleDescription(note)
+                button.setCheckable(True)
+                button.setAutoRaise(True)
+                button.toggled.connect(
+                    weak_slot(self, SketchPanel._tool_chosen, name, forward=True)
+                )
+                self._tool_buttons[name] = button
+                tools.addWidget(button)
         # **Zwei Einstellungen, die nur dastehen, wenn sie gelten.** Die
         # Eckenzahl ist keine Geste und kein Maß am Zeiger — sie entscheidet,
         # *was* entsteht, und muss deshalb vor dem ersten Klick einstellbar
@@ -4857,63 +4989,68 @@ class SketchPanel(QWidget):
         self.slot_width_field.valueChanged.connect(weak_slot(self, SketchPanel._slot_width_chosen))
         tools.addWidget(self.slot_width_field)
 
-        self._tool_buttons["select"].setChecked(True)
+        # **Die Lochbilder haben ihre Zahlen ebenfalls in der Leiste** — Spalten
+        # und Zeilen des Rasters, die Löcher des Kreises, der Durchmesser jedes
+        # Lochs. Wie Eckenzahl und Breite entscheiden sie, *was* entsteht, und
+        # stehen nur bei ihrem Werkzeug da.
+        columns_note = tr("Spalten des Lochrasters — Löcher in x-Richtung.")
+        self.grid_columns_field = QSpinBox(self)
+        self.grid_columns_field.setRange(1, MOST_GRID_LINES)
+        self.grid_columns_field.setValue(DEFAULT_GRID_COLUMNS)
+        self.grid_columns_field.setToolTip(columns_note)
+        self.grid_columns_field.setStatusTip(columns_note)
+        self.grid_columns_field.setAccessibleName(tr("Spalten"))
+        self.grid_columns_field.setAccessibleDescription(columns_note)
+        self.grid_columns_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.grid_columns_field.setVisible(False)
+        self.grid_columns_field.valueChanged.connect(
+            weak_slot(self, SketchPanel._grid_columns_chosen, forward=True)
+        )
+        tools.addWidget(self.grid_columns_field)
+        rows_note = tr("Zeilen des Lochrasters — Löcher in y-Richtung.")
+        self.grid_rows_field = QSpinBox(self)
+        self.grid_rows_field.setRange(1, MOST_GRID_LINES)
+        self.grid_rows_field.setValue(DEFAULT_GRID_ROWS)
+        self.grid_rows_field.setToolTip(rows_note)
+        self.grid_rows_field.setStatusTip(rows_note)
+        self.grid_rows_field.setAccessibleName(tr("Zeilen"))
+        self.grid_rows_field.setAccessibleDescription(rows_note)
+        self.grid_rows_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.grid_rows_field.setVisible(False)
+        self.grid_rows_field.valueChanged.connect(
+            weak_slot(self, SketchPanel._grid_rows_chosen, forward=True)
+        )
+        tools.addWidget(self.grid_rows_field)
+        count_note = tr("Löcher auf dem Lochkreis.")
+        self.bolt_count_field = QSpinBox(self)
+        self.bolt_count_field.setRange(edit.LEAST_PATTERN_HOLES, edit.MOST_BOLT_CIRCLE_HOLES)
+        self.bolt_count_field.setValue(DEFAULT_BOLT_COUNT)
+        self.bolt_count_field.setToolTip(count_note)
+        self.bolt_count_field.setStatusTip(count_note)
+        self.bolt_count_field.setAccessibleName(tr("Löcher"))
+        self.bolt_count_field.setAccessibleDescription(count_note)
+        self.bolt_count_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.bolt_count_field.setVisible(False)
+        self.bolt_count_field.valueChanged.connect(
+            weak_slot(self, SketchPanel._bolt_count_chosen, forward=True)
+        )
+        tools.addWidget(self.bolt_count_field)
+        diameter_note = tr("Durchmesser jedes Lochs im Lochbild.")
+        self.hole_diameter_field = LengthSpin(self)
+        self.hole_diameter_field.set_range_mm(LEAST_SNAP_MM, 1000.0)
+        self.hole_diameter_field.set_value_mm(DEFAULT_HOLE_DIAMETER_MM)
+        self.hole_diameter_field.setToolTip(diameter_note)
+        self.hole_diameter_field.setStatusTip(diameter_note)
+        self.hole_diameter_field.setAccessibleName(tr("Lochdurchmesser"))
+        self.hole_diameter_field.setAccessibleDescription(diameter_note)
+        self.hole_diameter_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.hole_diameter_field.setVisible(False)
+        self.hole_diameter_field.valueChanged.connect(
+            weak_slot(self, SketchPanel._hole_diameter_chosen)
+        )
+        tools.addWidget(self.hole_diameter_field)
 
-        shapes_button = QToolButton(self)
-        # **Der Knopf heißt, was er tut** (Befund Z6). Er hieß „Grundform",
-        # sein eigener Tooltip sagte „Rechteck (R)", und ein Klick gab das
-        # Rechteckwerkzeug — der Name versprach die sechs fertigen Formen, die
-        # in Wahrheit hinter dem Pfeil liegen. Ein Knopf, dessen Beschriftung
-        # etwas anderes ankündigt als sein Klick, kostet genau einmal
-        # Vertrauen; danach liest niemand mehr die Leiste.
-        #
-        # Die Liste **bleibt** hinter dem Pfeil, und das ist Absicht: Wer nur
-        # ein Rechteck will, ist der häufigste Fall und soll keinen Klick mehr
-        # zahlen. Dass es die Formen gibt, sagt seit Z6 die Statuszeile des
-        # Zeichenmodus — dort sucht ein Anfänger, was als Nächstes geht
-        # (Vorschlag 50, aus derselben Durchsicht).
-        self.shapes_button = shapes_button
-        shapes_button.setText(tr("Rechteck"))
-        shapes_button.setIcon(icons.icon("sketch_rectangle", shapes_button))
-        shapes_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        shapes_button.setCheckable(True)
-        rectangle_note = (
-            f"{tr('Rechteck')}  ({TOOL_KEYS['rectangle']}) — {tool_instruction('rectangle')}"
-        )
-        shapes_button.setToolTip(rectangle_note)
-        shapes_button.setStatusTip(rectangle_note)
-        shapes_button.setAccessibleDescription(rectangle_note)
-        shapes_button.toggled.connect(
-            weak_slot(self, SketchPanel._tool_chosen, "rectangle", forward=True)
-        )
-        shapes_menu = QMenu(shapes_button)
-        shapes_menu.setToolTipsVisible(True)
-        for label, factory in (
-            (
-                tr("Rechteck 40 × 20"),
-                lambda: shapes.rectangle(40.0, 20.0),
-            ),
-            (tr("Langloch 40 × 10"), lambda: shapes.slot(40.0, 10.0)),
-            (tr("Kreis Ø 20"), lambda: shapes.circle(20.0)),
-            (tr("Sechseck Ø 20"), lambda: shapes.polygon(20.0, 6)),
-            # Muster stehen bei den Grundformen und nicht in einem eigenen
-            # Menü: sie sind dasselbe — eine fertige Skizze, die man einfügt
-            # und danach bemaßt (Konzept P15, E11).
-            (
-                tr("Lochkreis Ø 50, 6 × Ø 4"),
-                lambda: shapes.bolt_circle(pitch_diameter=50.0, count=6, hole_diameter=4.0),
-            ),
-            (
-                tr("Lochraster 4 × 3, Abstand 10"),
-                lambda: shapes.hole_grid(columns=4, rows=3, spacing=10.0, hole_diameter=3.0),
-            ),
-        ):
-            action = shapes_menu.addAction(label)
-            action.setToolTip(f"{label} — {tr('Grundform')}.")
-            action.triggered.connect(weak_slot(self, SketchPanel._insert_made, factory))
-        shapes_button.setMenu(shapes_menu)
-        self._tool_buttons["rectangle"] = shapes_button
-        tools.addWidget(shapes_button)
+        self._tool_buttons["select"].setChecked(True)
 
         # Die Ebene gehört vor das Zeichnen, nicht hinter das Ergebnis: sie
         # entscheidet, wohin extrudiert wird (§30.1). Ein Auswahlfeld und
@@ -5042,21 +5179,19 @@ class SketchPanel(QWidget):
         self.snap_step.setAccessibleDescription(snap_note)
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
-        self.snap_auto = QCheckBox(tr("Auto"), self)
-        self.snap_auto.setChecked(True)
-        self.snap_auto.setToolTip(
-            tr("Die Rasterweite folgt dem Zoom und bleibt im Bild gut lesbar.")
-        )
+        # **Kein Haken „Auto" neben dem Feld** (Robert, 16.09.2026: „weniger
+        # ist manchmal mehr"): Er sagte dasselbe wie der Sonderwert
+        # „Automatisch" im Feld, und wer eines umschaltete, sah das andere
+        # springen. Ganz herunterdrehen heißt Automatisch — so steht es im
+        # Handbuch, und so stand es dort schon vor dem Haken.
         #: Ob der Nutzer die Weite selbst eingestellt hat. Solange nicht, folgt
         #: sie dem Zoom (:func:`grid_step_for`); danach steht sie. Ohne diese
         #: Unterscheidung überschriebe der nächste Zoomschritt jede Eingabe.
         self._pinned_step = False
         self.snap_toggle.toggled.connect(self._snapping_changed)
         self.snap_step.valueChanged.connect(self._step_typed)
-        self.snap_auto.toggled.connect(self._automatic_grid_changed)
         self._snapping_changed()
         plane_row.addWidget(self.snap_toggle)
-        plane_row.addWidget(self.snap_auto)
         plane_row.addWidget(self.snap_step)
         tools.addStretch(1)
 
@@ -5259,6 +5394,13 @@ class SketchPanel(QWidget):
         self._constraints_row = constraints_row
         self._constraint_columns = CONSTRAINTS_PER_ROW
         self._constraint_shown: tuple[str, ...] = ()
+        self._constraints_seen = False
+        """Ob die Bedingungsknöpfe in dieser Skizze schon einmal dastanden.
+
+        Der Satz darunter („Bedingungen erscheinen, sobald …") hat eine Aufgabe:
+        sagen, dass es sie gibt. Wer die Knöpfe gesehen hat, weiß es — danach
+        stünde der Satz bei jeder abgewählten Auswahl wieder da (Robert,
+        16.09.2026: „das zeichen panel ein bisschen übersichtlicher")."""
         self._constraint_buttons: dict[ConstraintAction, QPushButton] = {}
         for position, kind in enumerate(_NEEDS):
             key = ACTION_KEYS.get(kind, "")
@@ -5349,7 +5491,7 @@ class SketchPanel(QWidget):
             | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
             | Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        self.status.linkActivated.connect(weak_slot(self, SketchPanel._open_shapes))
+        self.status.linkActivated.connect(weak_slot(self, SketchPanel._take_rectangle))
         self._show_status(opening or self.canvas.status_text())
 
         # Wo der Zeiger steht, rechts in der Statuszeile — an der Stelle, an
@@ -5750,6 +5892,10 @@ class SketchPanel(QWidget):
         # ihm — siehe ihren Aufbau.
         self.polygon_corners_field.setVisible(name == "polygon")
         self.slot_width_field.setVisible(name == "slot")
+        self.grid_columns_field.setVisible(name == "hole_grid")
+        self.grid_rows_field.setVisible(name == "hole_grid")
+        self.bolt_count_field.setVisible(name == "bolt_circle")
+        self.hole_diameter_field.setVisible(name in ("hole_grid", "bolt_circle"))
 
     def _corners_chosen(self, corners: int) -> None:
         """Die Eckenzahl gilt ab dem nächsten Klick — und sofort in der
@@ -5764,28 +5910,27 @@ class SketchPanel(QWidget):
         self.canvas.update()
         self.canvas.sketchChanged.emit()
 
-    def _insert_made(self, make: Callable[[], Sketch]) -> None:
-        """Eine Form aus dem Formenmenü einfügen.
+    def _grid_columns_chosen(self, columns: int) -> None:
+        """Spalten, Zeilen, Löcher und Durchmesser gelten ab dem nächsten Klick
+        — und sofort in der Vorschau, die zeigt, was entstünde."""
+        self.canvas.grid_columns = int(columns)
+        self.canvas.update()
+        self.canvas.sketchChanged.emit()
 
-        Der Ring lief hier über **drei** Ebenen — Panel → Knopf → Menü →
-        Aktion → Rückruf → Panel —, und deshalb hat ihn die statische Suche
-        nicht gesehen: Sie prüfte, ob der Sender ein Kind von ``self`` ist, und
-        ``action`` ist das Kind eines Menüs, das einem Knopf gehört.
+    def _grid_rows_chosen(self, rows: int) -> None:
+        self.canvas.grid_rows = int(rows)
+        self.canvas.update()
+        self.canvas.sketchChanged.emit()
 
-        **Ohne Festpunkt.** Die Grundformen bringen einen mit, weil Dialog
-        und Agent eine bestimmte Skizze brauchen (§30.1); im Editor macht er
-        die Form unverschiebbar — und wohin ein Rechteck aus dem Menü gehört,
-        weiß erst, wer es gezogen hat. Die Maße bleiben: Sie stehen im
-        Menüeintrag, und wer 40 mal 20 wählt, meint 40 mal 20. Geändert werden
-        sie per Doppelklick auf die Maßkarte.
-        """
-        made = make()
-        self.canvas.insert_shape(
-            replace(
-                made,
-                constraints=tuple(entry for entry in made.constraints if entry.kind != "fixed"),
-            )
-        )
+    def _bolt_count_chosen(self, count: int) -> None:
+        self.canvas.bolt_count = int(count)
+        self.canvas.update()
+        self.canvas.sketchChanged.emit()
+
+    def _hole_diameter_chosen(self) -> None:
+        self.canvas.hole_diameter = self.hole_diameter_field.value_mm()
+        self.canvas.update()
+        self.canvas.sketchChanged.emit()
 
     def _mirror_selected(self, axis: str) -> None:
         """Das Gewählte an einer Achse spiegeln — derselbe Weg über ein Menü."""
@@ -5909,7 +6054,6 @@ class SketchPanel(QWidget):
         nichts tut, sieht aus wie eine Einstellung, die nicht wirkt.
         """
         active = self.snap_toggle.isChecked()
-        self.snap_auto.setEnabled(active)
         # Auch im Automatikzustand bleibt das Feld direkt beschreibbar: Eine
         # Eingabe schaltet auf fest um. Erst einen Haken zu lösen, um eine Zahl
         # tippen zu dürfen, wäre eine unnötige zweite Handlung.
@@ -5950,18 +6094,7 @@ class SketchPanel(QWidget):
             with QSignalBlocker(self.snap_step):
                 self.snap_step.set_value_mm(LEAST_SNAP_MM)
             typed = LEAST_SNAP_MM
-        automatic = typed <= 0.0
-        with QSignalBlocker(self.snap_auto):
-            self.snap_auto.setChecked(automatic)
-        self._pinned_step = not automatic
-        self._snapping_changed()
-
-    def _automatic_grid_changed(self, automatic: bool) -> None:
-        """Zwischen zoomabhängigem und festem Raster eindeutig wechseln."""
-        self._pinned_step = not automatic
-        if not automatic and self.snap_step.value_mm() <= 0.0:
-            with QSignalBlocker(self.snap_step):
-                self.snap_step.set_value_mm(max(self.canvas.grid_step(), LEAST_SNAP_MM))
+        self._pinned_step = typed > 0.0
         self._snapping_changed()
 
     def follow_grid(self, step: float) -> None:
@@ -5984,8 +6117,6 @@ class SketchPanel(QWidget):
         """
         if self._pinned_step or step <= 0.0:
             return
-        with QSignalBlocker(self.snap_auto):
-            self.snap_auto.setChecked(True)
         with QSignalBlocker(self.snap_step):
             self.snap_step.set_value_mm(step)
         self.canvas.set_snapping(self.snap_toggle.isChecked(), step)
@@ -6116,7 +6247,12 @@ class SketchPanel(QWidget):
         # nebeneinander sind einer zu viel.
         fitting = any(offers.values())
         drawn = bool(self.canvas.sketch.elements)
-        self.constraint_placeholder.setVisible(not fitting and drawn)
+        # **Und er geht für den Rest der Skizze, sobald die Knöpfe einmal da
+        # waren.** Bis dahin sagt er, dass es Bedingungen gibt; danach wäre er
+        # bei jeder abgewählten Auswahl ein Satz über etwas Bekanntes.
+        if fitting:
+            self._constraints_seen = True
+        self.constraint_placeholder.setVisible(not fitting and drawn and not self._constraints_seen)
         self._constraints_box.setVisible(fitting or drawn)
         self._fit_constraint_row()
         self.coordinate_button.setEnabled(len(self.canvas.selected_point_indices()) == 1)
@@ -6378,33 +6514,32 @@ class SketchPanel(QWidget):
         andere ist Bericht.
         """
         einladung = tr(
-            "Leere Skizze — zeichnen, oder eine fertige Form aus dem Rechteck-Menü einsetzen."
+            "Leere Skizze — mit dem Rechteck beginnen oder eine Linie ziehen; "
+            "Lochkreis und Lochraster stehen rechts in der Leiste."
         )
-        if text != einladung:
+        wort = str(tr("Rechteck"))
+        # Ohne Groß- und Kleinschreibung: „mit dem Rechteck" steht im Satz, im
+        # Spanischen „el rectángulo" — die Wortform folgt der Sprache, der
+        # Verweis dem Wort.
+        at = text.lower().find(wort.lower()) if text == einladung else -1
+        if at < 0:
             self.status.setTextFormat(Qt.TextFormat.PlainText)
             self.status.setText(text)
             return
-        wort = tr("Rechteck-Menü")
-        anfang, _, rest = text.partition(wort)
+        anfang, hit, rest = text[:at], text[at : at + len(wort)], text[at + len(wort) :]
         self.status.setTextFormat(Qt.TextFormat.RichText)
         self.status.setText(
             f"{html.escape(anfang)}"
-            f'<a href="{self.INVITATION_TARGET}">{html.escape(wort)}</a>'
+            f'<a href="{self.INVITATION_TARGET}">{html.escape(hit)}</a>'
             f"{html.escape(rest)}"
         )
 
-    def _open_shapes(self, _target: str = "") -> None:
-        """Klappt das Formen-Menü auf und lässt den Fokus darin.
-
-        Ohne den Fokus wäre der Weg für die Tastatur eine Sackgasse: Das Menü
-        stünde offen, und die Pfeiltasten liefen weiter ins Fenster. ``showMenu``
-        blockiert bis zum Schließen, deshalb steht der Fokus davor.
+    def _take_rectangle(self, _target: str = "") -> None:
+        """Der Verweis in der Einladung wählt das Rechteck — der häufigste erste
+        Strich. Bis zum 16.09.2026 klappte er das Formenmenü auf; das gibt es
+        nicht mehr, der Weg führt jetzt zum Werkzeug selbst.
         """
-        button = getattr(self, "shapes_button", None)
-        if button is None or button.menu() is None:
-            return
-        button.setFocus(Qt.FocusReason.ShortcutFocusReason)
-        button.showMenu()
+        self.choose_tool("rectangle")
 
 
 class SketchEditorDialog(QDialog):
@@ -6512,7 +6647,11 @@ class SketchField(QWidget):
         #: Korrigieren aus dem Verlauf. Beim Anlegen kommt man ohnehin aus dem
         #: Zeichenmodus, und ein Knopf zurück dorthin wäre ein Kreis.
         self._in_space: Callable[[str], None] | None = None
-        self.space_button = QPushButton(tr("Im Raum zeichnen …"), self)
+        # **Ein Knopf, ein Wort.** An einem vorhandenen Schritt führt er in
+        # das Bild, sonst in das Fenster — nie beide nebeneinander (Robert,
+        # 16.09.2026: „weniger ist manchmal mehr"). Bis dahin standen
+        # „Zeichnen …" und „Im Raum zeichnen …" zusammen an jedem Schritt.
+        self.space_button = QPushButton(tr("Zeichnen …"), self)
         self.space_button.setToolTip(
             tr(
                 "Zeichnet die Skizze dort, wo sie liegt — mit Ziehgriff, Maßeingabe im "
@@ -6539,6 +6678,7 @@ class SketchField(QWidget):
         """
         self._in_space = go
         self.space_button.setVisible(True)
+        self.edit_button.setVisible(False)
 
     def _draw_in_space(self) -> None:
         """Der Dialog gibt ab: Was er zeigt, zeichnet der Kunde im Raum weiter.

@@ -89,7 +89,9 @@ AXIS_RANGE: Final = 350.0
 #: Hardware-Tatsache, keine Einstellung: Eine losgelassene Kappe meldet ein
 #: paar Rohschritte Rauschen, und die dürfen die Kamera nicht kriechen lassen.
 DEADZONE: Final = 0.03
-#: Unterhalb dieses Anteils der stärksten Achse schweigt eine Nebenachse.
+#: Anteil an der stärksten Achse, unter dem eine Nebenachse Übersprechen ist
+#: und schweigt. Ab :data:`CROSSTALK_MEANT` ist sie gemeint und geht ungedämpft
+#: mit; dazwischen wächst ihr Gewicht als glatte Stufe.
 #:
 #: Die Kappe ist ein Kraftsensor ohne mechanische Achsentrennung: Wer dreht,
 #: drückt auch, und wer schiebt, kippt ein wenig. Die Totzone allein fängt das
@@ -101,15 +103,26 @@ DEADZONE: Final = 0.03
 #: Drehen näher, ohne dass jemand gezogen hätte. Beim Schieben nach links
 #: dasselbe in 74 von 90 Berichten, beim Drücken nach unten in 70 von 88.
 #:
-#: Ein Viertel schneidet davon das meiste weg (2 von 90, 0 von 88, beim Drehen
-#: noch 36 von 71) und lässt bei acht der neun Gesten die gemeinte Achse in
-#: jedem Bericht stehen. Die neunte ist das Kippen der Vorderkante: Dort war
-#: in der Aufzeichnung das Ziehen die stärkere Achse, das Gerät liest dieses
-#: Kippen also zu einem guten Teil als Zug — und das Kippen selbst bleibt nur
-#: noch in 35 von 64 Berichten. Der Preis auf der anderen Seite ist bekannt:
-#: Eine bewusst kleine Nebenbewegung unter einem Viertel der Hauptbewegung
-#: geht mit. Am Gerät ist die Zahl noch nicht bestätigt (siehe ``ansicht.md``).
-CROSSTALK_SHARE: Final = 0.25
+#: Bis zum 16.09.2026 war das ein harter Schnitt bei einem Viertel: darunter
+#: null, darüber voll. Am Korpus gemessen schaltete diese Klippe die Zoomachse
+#: beim Ziehen zur Person dreimal in vier Sekunden an und aus, beim Kippen der
+#: Vorderkante sechsmal — der Zoom hakte (Robert, 16.09.2026). Die Anteile der
+#: Nebenachsen liegen breit um das Viertel (Median 0,13 bis 0,25, neuntes
+#: Zehntel bis 0,6); jede Schwelle dort schaltet also ständig. Deshalb eine
+#: Rampe mit dem Viertel als Mitte: Schieben und Drücken verlieren ihr
+#: Zoom-Leck weiter fast ganz (8 % beim Schieben nach links, null beim
+#: Drücken nach unten, gemessen als Summe der Beträge), das Hochziehen behält
+#: statt 78 % noch 64 %, und der Filter fügt der Zoomachse beim Schieben,
+#: Hochziehen und Drehen keinen Sprung über 0,1 mehr zu, wo die Klippe 0,17
+#: bis 0,23 hatte. Beim Drehen bleiben rund zwei Drittel des Zoom-Lecks —
+#: das ist der Sensor, kein Filter fängt es, ohne die Drehung mitzunehmen.
+#: Der Preis ist derselbe wie vorher: Eine bewusst kleine Nebenbewegung unter
+#: diesem Anteil geht verloren, zwischen den Grenzen kommt sie gedämpft an.
+#: Am Gerät ist die Rampe noch nicht bestätigt (siehe ``ansicht.md``).
+CROSSTALK_SILENT: Final = 0.15
+#: Ab diesem Anteil der stärksten Achse ist eine Nebenachse gemeint und geht
+#: ungedämpft mit; das alte Viertel liegt genau in der Mitte des Bandes.
+CROSSTALK_MEANT: Final = 0.35
 #: Kommt so lange kein Bericht mehr, gilt die Kappe als losgelassen — das
 #: Gerät meldet Null beim Loslassen, aber ein abgezogenes Gerät meldet nichts.
 HOLD_SECONDS: Final = 0.25
@@ -291,23 +304,38 @@ def _response(value: float) -> float:
     return math.copysign(scaled**1.5, value)
 
 
-def quiet_crosstalk(motion: Motion) -> Motion:
-    """Nebenachsen unter :data:`CROSSTALK_SHARE` der stärksten Achse werden null.
+def _crosstalk_weight(share: float) -> float:
+    """Das Gewicht einer Nebenachse aus ihrem Anteil an der stärksten.
 
-    Die stärkste Achse bleibt immer — sie ist die Geste. Eine Nebenachse, die
-    mindestens den Anteil trägt, ist eine gemeinte Nebenbewegung und bleibt
-    ebenfalls; was darunter liegt, ist das Übersprechen des Kraftsensors. Die
-    Tasten sind keine Achse und reisen unverändert mit.
+    Null bis :data:`CROSSTALK_SILENT`, eins ab :data:`CROSSTALK_MEANT`,
+    dazwischen eine glatte Stufe (``3t² - 2t³``) — ohne Knick an den Grenzen,
+    damit eine Hand, die um eine Grenze zittert, keinen Takt spürt.
+    """
+    t = (share - CROSSTALK_SILENT) / (CROSSTALK_MEANT - CROSSTALK_SILENT)
+    t = min(1.0, max(0.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def quiet_crosstalk(motion: Motion) -> Motion:
+    """Nebenachsen nach ihrem Anteil an der stärksten Achse dämpfen — stetig.
+
+    Die stärkste Achse hat den Anteil eins und bleibt unverändert — sie ist
+    die Geste. Eine Nebenachse unter :data:`CROSSTALK_SILENT` ist das
+    Übersprechen des Kraftsensors und wird null; ab :data:`CROSSTALK_MEANT`
+    ist sie eine gemeinte Nebenbewegung und geht ungedämpft mit; dazwischen
+    wächst ihr Gewicht glatt (:func:`_crosstalk_weight`). Ein Schnitt statt
+    der Rampe schaltete die Zoomachse in der Aufzeichnung mehrmals je Geste
+    an und aus (siehe :data:`CROSSTALK_SILENT`). Die Tasten sind keine Achse
+    und reisen unverändert mit.
     """
     values = {name: float(getattr(motion, name)) for name in AXES}
     strongest = max(abs(value) for value in values.values())
     if strongest == 0.0:
         return motion
-    floor = strongest * CROSSTALK_SHARE
 
     def kept(name: str) -> float:
         value = values[name]
-        return value if abs(value) >= floor else 0.0
+        return value * _crosstalk_weight(abs(value) / strongest)
 
     # **Namentlich und nicht über ein ausgepacktes Wörterbuch.** ``Motion``
     # trägt neben den sechs Achsen die Tasten, und die sind eine Ganzzahl:
@@ -415,9 +443,9 @@ def camera_step(
     """
     if dt <= 0.0 or not motion.active():
         return pose
-    # Erst das Übersprechen weg, dann rechnen: Sonst zoomt jede Drehung mit
-    # (:data:`CROSSTALK_SHARE`). Die stärkste Achse überlebt den Filter immer,
-    # also bleibt eine aktive Bewegung aktiv.
+    # Erst das Übersprechen dämpfen, dann rechnen: Sonst zoomt jede Drehung
+    # mit (:data:`CROSSTALK_SILENT`). Die stärkste Achse überlebt den Filter
+    # immer, also bleibt eine aktive Bewegung aktiv.
     motion = quiet_crosstalk(motion)
     sign = 1.0 if invert else -1.0
     gain = speed * dt

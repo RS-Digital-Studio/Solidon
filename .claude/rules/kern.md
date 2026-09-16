@@ -48,6 +48,20 @@ Bits einer Summe in anderer Reihenfolge.
 `geom/mesh.py` und `geom/orient.py` dürfen Qhull behalten: Sie fragen einmal je
 Körper.
 
+**Und die Regel gilt eine Ebene höher genauso** (16.09.2026). Die
+Schattenprojektion der Ansicht rechnete ihre ebene Hülle selbst über
+`scipy.spatial.ConvexHull` — je Körper, je Hüllstück und je Auffangfläche, an
+`1-24+scale+polebarn.3mf` mit 89 Körpern **3541-mal für eine einzige
+Kamerageste**: 1843 ms, davon 1679 in der Hülle und 635 im Anlegen der
+Temporärdateien (Robert: „nach jedem kameraverschieben hängt es erstmal").
+`geom.mesh.planar_outline` rechnet sie jetzt über GEOS, die Ansicht fragt nur
+noch — dieselbe Grenze wie bei `hull_planes`: In `app/ui` wird keine Geometrie
+gerechnet. Danach 199 ms, mit den zwei Änderungen daneben 126 ms.
+
+Die allgemeine Form, weil dieselbe Falle zweimal an verschiedenen Orten stand:
+**Eine Regel über eine Bibliothek gilt der Bibliothek, nicht dem Verzeichnis,
+in dem sie zuerst auffiel.**
+
 ## Fehler
 
 Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —

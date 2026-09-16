@@ -301,6 +301,26 @@ def evaluate(text: str, values: Mapping[str, float]) -> float:
     return result
 
 
+def shifted(text: str, delta: float) -> str:
+    """``=@staerke`` um 5 versetzt ist ``=@staerke + 5`` — die Bindung bleibt.
+
+    Für einen Zug am Griff eines Bausteins, dessen Lage an einem Parameter
+    hängt: Bis zum 16.09.2026 lehnte die Oberfläche die Bewegung dort ab, und
+    im Beispielprojekt, dessen Bausteine ihre Höhe an ``@staerke`` binden,
+    sprang jeder Zug zurück. Der Versatz wird an den Ausdruck gehängt, statt
+    ihn durch eine Zahl zu ersetzen — der Baustein folgt dem Parameter weiter
+    und steht um den Zug daneben.
+
+    Zurück kommt immer ein Ausdruck mit ``=``, auch wenn ein bloßer Verweis
+    (``@staerke``) kam. Vier Nachkommastellen genügen für einen Zug im Bild;
+    Endnullen fallen weg, damit aus fünf Millimetern nicht ``5.0000`` wird.
+    """
+    body = _body(text).strip()
+    amount = f"{abs(delta):.4f}".rstrip("0").rstrip(".")
+    sign = "-" if delta < 0 else "+"
+    return f"{EXPRESSION_PREFIX}{body} {sign} {amount}"
+
+
 def references(text: str) -> frozenset[str]:
     """Die Parameter, die ein Ausdruck liest. Zugleich die Syntaxprüfung (§13)."""
     parser = _Parser(_body(text), None)

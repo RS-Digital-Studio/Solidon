@@ -299,6 +299,20 @@ PATHS: Final[dict[str, str]] = {
         '<circle cx="8.5" cy="12" r="1.1" fill="currentColor" stroke="none" />'
         '<circle cx="15.5" cy="12" r="1.1" fill="currentColor" stroke="none" />'
     ),
+    # Lochraster: sechs Löcher in zwei Reihen — das Muster, das entsteht.
+    "sketch_hole_grid": (
+        '<circle cx="6.5" cy="8" r="2" /><circle cx="12" cy="8" r="2" />'
+        '<circle cx="17.5" cy="8" r="2" /><circle cx="6.5" cy="16" r="2" />'
+        '<circle cx="12" cy="16" r="2" /><circle cx="17.5" cy="16" r="2" />'
+    ),
+    # Lochkreis: sechs Löcher auf dem Teilkreis und die Mitte als Punkt —
+    # dort setzt der erste Klick an.
+    "sketch_bolt_circle": (
+        '<circle cx="12" cy="4.5" r="1.8" /><circle cx="18.5" cy="8.25" r="1.8" />'
+        '<circle cx="18.5" cy="15.75" r="1.8" /><circle cx="12" cy="19.5" r="1.8" />'
+        '<circle cx="5.5" cy="15.75" r="1.8" /><circle cx="5.5" cy="8.25" r="1.8" />'
+        '<circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />'
+    ),
     "sketch_arc": (
         '<path d="M4.5 17.5a9 9 0 0 1 15 0" /><circle cx="4.5" cy="17.5" r="1.8" />'
         '<circle cx="19.5" cy="17.5" r="1.8" />'

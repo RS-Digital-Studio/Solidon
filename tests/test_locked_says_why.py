@@ -54,7 +54,7 @@ from app.ui.generate_dialog import GenerateDialog
 from app.ui.install_dialog import InstallDialog
 from app.ui.main_window import MainWindow
 from app.ui.manual_window import ManualWindow
-from app.ui.op_dialog import OperationDialog, SketchUseDialog
+from app.ui.op_dialog import OperationDialog
 from app.ui.panels import BodyChoiceDialog
 from app.ui.print_disclosure import PrintDisclosureDialog
 from app.ui.print_settings_dialog import FilamentOverrideDialog
@@ -224,7 +224,6 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     # dass je etwas geprüft worden wäre. Gesperrt ist er genau dann, wenn der
     # Kunde den letzten Haken wegnimmt.
     "BodyChoiceDialog": lambda _session: _empty_body_choice(),
-    "SketchUseDialog": lambda _session: SketchUseDialog(),
     # **Mit leerer Liste, wie beim Filamentdialog:** Eine Befehlspalette ohne
     # Einträge ist der Zustand, in dem ein Suchfeld nichts findet.
     "CommandPalette": lambda _session: CommandPalette(),

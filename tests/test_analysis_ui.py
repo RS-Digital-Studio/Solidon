@@ -4053,15 +4053,16 @@ def test_the_object_tree_draws_its_bodies_once_per_shape(qt_app: QApplication) -
     tree = ObjectTree()
     try:
         tree.show_scene(result)
-        # Der Baum steht sofort; die Bilder kommen nach.
+        # Der Baum steht sofort; die Bilder kommen nach — seit dem
+        # 16.09.2026 aus einem Arbeiter, also wird auf sie gewartet.
         assert tree.tree.topLevelItemCount() == 1
-        while tree._pending:
-            tree._render_pending()
+        tree._render_pending()
+        assert tree.wait_for_previews()
         assert len(tree._previews) == 1
 
         tree.show_scene(result)
-        while tree._pending:
-            tree._render_pending()
+        tree._render_pending()
+        assert tree.wait_for_previews()
         assert len(tree._previews) == 1, "derselbe Körper wurde zweimal gezeichnet"
     finally:
         tree.deleteLater()
@@ -4105,8 +4106,8 @@ def test_a_theme_change_redraws_the_previews(qt_app: QApplication) -> None:
     tree = ObjectTree()
     try:
         tree.show_scene(EvaluationResult(scene=scene, object_hashes={"obj_1": "abc"}))
-        while tree._pending:
-            tree._render_pending()
+        tree._render_pending()
+        assert tree.wait_for_previews()
         assert tree._previews
 
         tree.set_theme("light")
@@ -5993,3 +5994,298 @@ def test_tree_filament_labels_follow_real_body_and_feature_slots(
         assert len(surveys) == 1
     finally:
         tree.deleteLater()
+
+
+def _a_rib_on_the_plate(window: MainWindow) -> tuple[str, int]:
+    """Eine Versteifungsrippe auf der Deckfläche — der Baustein, der nur aus
+    Flächen besteht. Körper und Schritt."""
+    from app.core.scene import OperationDraft
+
+    result = window.session.last_result
+    assert result is not None
+    object_id = next(iter(result.scene.objects))
+    window.session.apply(
+        "Versteifungsrippe",
+        [
+            OperationDraft(
+                op="insert_rib",
+                inputs=(object_id,),
+                params={
+                    "length": 30.0,
+                    "height": 5.0,
+                    "wall": 6.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 8.0,
+                    "nx": 0.0,
+                    "ny": 0.0,
+                    "nz": 1.0,
+                },
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = window.session.project.document.ops[-1]
+    assert step.op == "insert_rib"
+    return object_id, int(step.id)
+
+
+def test_a_face_of_a_part_carries_the_grip_of_the_part(window: MainWindow) -> None:
+    """Die Rippe besteht aus nichts als Flächen — und ihr Griff bewegt die Rippe.
+
+    Bis zum 16.09.2026 hing an einer Bausteinfläche der Griff der Fläche: ein
+    Pfeil entlang der Normalen, dessen Zug ein ``push_face`` auf den
+    verschmolzenen Körper wurde (Robert: „bei manchen bausteinen keine
+    möglichkeit zum verschieben"). Jetzt gilt die Regel aus `oberflaeche.md`
+    auch dort: Was aus einem Baustein kam, meint den Baustein — der Griff
+    sitzt an der Fläche, kennt kein Press/Pull, und der Zug geht in den
+    Schritt.
+    """
+    from app.ui.viewport import gizmo_sentence
+
+    object_id, step = _a_rib_on_the_plate(window)
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    faces = sorted(
+        fid for fid, f in entry.features.items() if f.created_by == step and f.kind == "face"
+    )
+    assert faces, "die Rippe bringt erkannte Flächen mit — sonst prüft der Test nichts"
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, faces[0])
+    for _ in range(40):
+        QApplication.processEvents()
+    chosen = window.viewport.gizmo_feature()
+    assert chosen is not None and chosen.id == faces[0], "der Griff sitzt an der Fläche"
+    assert window.viewport.gizmo_target() is None, "aber nicht als Press/Pull entlang der Normalen"
+    assert window.viewport.moves_as_a_part(chosen)
+    assert "Baustein" in gizmo_sentence(chosen, part=True)
+
+    steps_before = len(window.session.project.document.ops)
+    centre = tuple(float(value) for value in chosen.params["centre"])
+    window._on_feature_moved(faces[0], (centre[0], centre[1] - 2.0, centre[2]))
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    moved = next(entry for entry in window.session.project.document.ops if entry.id == step)
+    assert moved.params["y"] == pytest.approx(-2.0), moved.params
+    assert len(window.session.project.document.ops) == steps_before, "kein zweiter Schritt"
+    assert all(entry.op != "push_face" for entry in window.session.project.document.ops)
+
+
+def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> None:
+    """Ein Baustein, dessen Höhe am Parameter hängt, folgt dem Griff trotzdem.
+
+    Das Beispielprojekt bindet ``z`` seiner Bausteine an ``@staerke``, und der
+    Griff lehnte dort bis zum 16.09.2026 jede Bewegung ab — im Bild sprang der
+    Baustein zurück (Robert: „das verschieben geht nicht springt immer wieder
+    zurück"). Quer zur Bindung ändert sich die Zahl, und der Ausdruck bleibt
+    unangetastet; entlang der Bindung wächst der Ausdruck um den Versatz
+    (``=@hoehe - 2``). Die Bindung hält, der Verlauf bekommt keinen zweiten
+    Schritt, und die Auswertung läuft durch.
+    """
+    from app.core.scene import OperationDraft
+    from app.core.types import Parameter
+
+    result = window.session.last_result
+    assert result is not None
+    object_id = next(iter(result.scene.objects))
+    assert window.session.add_parameter(Parameter(name="hoehe", value=8.0, unit="mm"))
+    window.session.wait_for_idle()
+    window.session.apply(
+        "Schlüsselloch",
+        [
+            OperationDraft(
+                op="insert_keyhole",
+                inputs=(object_id,),
+                params={"x": 10.0, "y": 5.0, "z": "=@hoehe", "nx": 0.0, "ny": 0.0, "nz": 1.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    step = window.session.project.document.ops[-1]
+    assert step.op == "insert_keyhole" and step.params["z"] == "=@hoehe"
+    steps_before = len(window.session.project.document.ops)
+
+    def drag(dx: float, dz: float) -> Any:
+        centres = _part_centres(window, object_id, int(step.id))
+        hole = next(iter(centres))
+        window.object_tree.select_object(object_id)
+        window.object_tree.select_feature(object_id, hole)
+        for _ in range(20):
+            QApplication.processEvents()
+        x, y, z = centres[hole]
+        window._on_feature_moved(hole, (x + dx, y, z + dz))
+        window.session.wait_for_idle()
+        for _ in range(40):
+            QApplication.processEvents()
+        return next(entry for entry in window.session.project.document.ops if entry.id == step.id)
+
+    moved = drag(5.0, 0.0)
+    assert moved.params["x"] == pytest.approx(15.0), moved.params
+    assert moved.params["z"] == "=@hoehe", "eine Achse ohne Zug behält ihren Ausdruck"
+
+    moved = drag(0.0, -2.0)
+    assert moved.params["z"] == "=@hoehe - 2", moved.params
+    assert moved.params["x"] == pytest.approx(15.0)
+    assert len(window.session.project.document.ops) == steps_before, "kein zweiter Schritt"
+    latest = window.session.last_result
+    assert latest is not None and latest.stopped_at is None
+
+
+def test_delete_at_a_part_takes_its_step_and_never_the_body(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entf am Bausteindach — und an einer einzelnen Verrundung — entfernt den Baustein.
+
+    Bis zum 16.09.2026 gab ``selected_feature`` am Dach nichts zurück (mehrere
+    Zeilen), der Zwilling fand keine Merkmalsoperation, und Entf löschte den
+    ganzen Körper (Robert: „wenn ich etwas im objektbaum oder viewport auswähle
+    und entf drücke … wird der ganze körper gelöscht"). Der Weg ist derselbe
+    wie *Baustein entfernen* rechts, mit der Folgeauskunft des Verlaufs — hier
+    abgefangen, weil die Nachfrage modal ist.
+    """
+    from app.core.registry import REGISTRY
+
+    object_id, step = _a_keyhole_on_the_plate(window)
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    members = [fid for fid, f in entry.features.items() if f.created_by == step]
+    assert len(members) > 1
+    removed: list[list[int]] = []
+    monkeypatch.setattr(window, "remove_history_operations", removed.append)
+
+    window.object_tree.select_features([(object_id, fid) for fid in members])
+    window.object_tree._on_selection()
+    assert window.object_tree.selected_feature() is None, "am Dach gibt es kein einzelnes Merkmal"
+    window.run_operation(REGISTRY.get("delete_object"))
+    assert removed == [[step]]
+
+    fillet = next(
+        fid for fid, f in entry.features.items() if f.created_by == step and f.kind == "fillet"
+    )
+    window.object_tree.select_feature(object_id, fillet)
+    window.run_operation(REGISTRY.get("delete_object"))
+    assert removed == [[step], [step]]
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "load",
+        "insert_keyhole",
+    ], "kein delete_object und kein remove_feature im Verlauf"
+
+
+def test_the_body_grip_with_the_part_roof_chosen_moves_the_part(window: MainWindow) -> None:
+    """Das Dach eines Bausteins wählt seine Kinder — und der Körpergriff meint den Baustein.
+
+    ``selected_feature`` schweigt bei mehreren Zeilen; ``_move_the_part``
+    fragte nur danach und ließ den Zug an den ganzen Körper durch (Fund beim
+    Nachsehen nach ähnlichen Fehlern, 16.09.2026). Jetzt fragt es den
+    gemeinsamen Bausteinschritt der Auswahl, wie das Merkmalfenster.
+    """
+    from app.core.geom.transform import TransformSteps
+
+    object_id, step = _a_keyhole_on_the_plate(window)
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    members = [fid for fid, f in entry.features.items() if f.created_by == step]
+    window.object_tree.select_features([(object_id, fid) for fid in members])
+    window.object_tree._on_selection()
+    steps_before = len(window.session.project.document.ops)
+
+    window._on_transform_dragged(TransformSteps(offset=(0.0, -2.0, 0.0)))
+    window.session.wait_for_idle()
+    for _ in range(40):
+        QApplication.processEvents()
+    moved = next(entry for entry in window.session.project.document.ops if entry.id == step)
+    assert moved.params["y"] == pytest.approx(3.0), moved.params
+    assert len(window.session.project.document.ops) == steps_before
+    assert all(entry.op != "translate_object" for entry in window.session.project.document.ops)
+
+
+def test_a_face_of_a_part_offers_the_filament_for_the_whole_part(window: MainWindow) -> None:
+    """Die Rippe verschmilzt mit der Wand und bringt mehrere Flächen mit — ein
+    Klick auf eine davon färbt alle.
+
+    Robert, 16.09.2026: „wo stelle ich von der Versteifungsrippe insgesamt das
+    filament ein?" Bis dahin galt der Wähler der einen angeklickten Fläche, und
+    alle zusammen bekam nur, wer die Dachzeile im Baum traf. Wähler, Zuweisen
+    und Entfernen lesen dieselbe Menge (``_filament_targets``); eine fremde
+    Fläche daneben bleibt eine Fläche.
+    """
+    object_id, step = _a_rib_on_the_plate(window)
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    faces = {
+        fid
+        for fid, f in entry.features.items()
+        if f.created_by == step and f.kind == "face" and f.face_indices
+    }
+    assert len(faces) > 1, "sonst prüft der Test nichts"
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, min(faces))
+    for _ in range(40):
+        QApplication.processEvents()
+    assert set(window._filament_targets()) == {(object_id, fid) for fid in faces}
+    assert window.quick_filament.scope.text() == tr(
+        "Die Zuweisung gilt dem ganzen Baustein: {count} Flächen."
+    ).format(count=len(faces))
+    assert window.quick_filament.picker.itemText(0) == tr("Filament für den Baustein wählen")
+
+    other = next(
+        fid for fid, f in entry.features.items() if f.kind == "face" and f.created_by != step
+    )
+    window.object_tree.select_feature(object_id, other)
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window._filament_targets() == ((object_id, other),)
+
+
+def test_the_roof_of_a_part_carries_the_grip_in_the_view(window: MainWindow) -> None:
+    """Das Dach eines Bausteins im Baum bekommt einen Griff — am Baustein.
+
+    Robert, 16.09.2026, mit gewähltem „Kugellager einsetzen": „warum kann ich
+    die bausteine nicht über den viewport verschieben?" Das Dach wählt alle
+    seine Merkmale, „das gewählte Merkmal" hat dann keine Antwort, und der
+    Griff fiel auf den Körper zurück — samt Skalierwürfel, der die Maße des
+    ganzen Teils ändert. Jetzt sagt das Fenster der Ansicht, an welchem
+    Merkmal er hängt (``set_part_grip``), und der Zug daran geht in den
+    Schritt des Bausteins.
+    """
+    from app.ui.viewport import gizmo_sentence
+
+    object_id, step = _a_keyhole_on_the_plate(window)
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    members = [fid for fid, f in entry.features.items() if f.created_by == step]
+    assert len(members) > 1
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.viewport.show_scene(window.session.last_result)
+    said: list[str] = []
+    window.viewport.gizmoStatus.connect(said.append)
+    window.object_tree.select_features([(object_id, fid) for fid in members])
+    window.object_tree._on_selection()
+    for _ in range(40):
+        QApplication.processEvents()
+
+    chosen = window.viewport.gizmo_feature()
+    assert chosen is not None and chosen.id in members, "der Griff hängt an einem seiner Merkmale"
+    assert window.viewport.moves_as_a_part(chosen)
+    assert said and said[-1] == gizmo_sentence(chosen, part=True), said
+    assert window.viewport._scale_handle is None, (
+        "kein Skalierwürfel: er änderte die Maße des ganzen Teils"
+    )
+
+    # Und ein einzeln gewähltes Merkmal daneben räumt ihn wieder ab.
+    other = next(fid for fid, f in entry.features.items() if f.created_by != step)
+    window.object_tree.select_feature(object_id, other)
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window.viewport._part_grip is None

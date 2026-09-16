@@ -631,6 +631,44 @@ def distances_to_triangles(triangles: np.ndarray, point: np.ndarray) -> np.ndarr
 HULL_SAMPLE_LIMIT = 4096
 
 
+def planar_outline(points: np.ndarray) -> np.ndarray | None:
+    """Der geordnete Rand einer ebenen Punktwolke, gegen den Uhrzeigersinn.
+
+    Die konvexe Hülle in zwei Dimensionen, als ``(n, 2)``; ``None``, wo keine
+    Fläche herauskommt — weniger als drei Punkte, oder alle auf einer Linie.
+
+    **Über GEOS und nicht über Qhull**, und das ist keine Geschmacksfrage:
+    SciPys ``ConvexHull`` führt Qhulls Ausgabe über ``tempfile.mkstemp`` und
+    legt damit **je Aufruf eine Datei** an. Die Regel dazu steht seit dem
+    12.09.2026 in ``.claude/rules/kern.md`` („gehört nicht in eine Schleife
+    über Flecken") — die Schattenprojektion der Ansicht tat es trotzdem, eine
+    Ebene höher: Gemessen an ``1-24+scale+polebarn.3mf`` (89 Körper) kostete
+    **eine** Kamerageste 1843 ms, davon 1679 ms in dieser Hülle und 635 ms
+    allein im Anlegen der Temporärdateien (16.09.2026, Robert: „nach jedem
+    kameraverschieben hängt es erstmal").
+
+    Sie liegt hier und nicht in der Ansicht, weil dort keine Geometrie
+    gerechnet wird — dieselbe Grenze wie bei :func:`hull_planes`, das die
+    Ansicht für ihre Klickstrahlen fragt.
+    """
+    from shapely.geometry import MultiPoint
+
+    grid = np.asarray(points, dtype=float)[:, :2]
+    if len(grid) < 3:
+        return None
+    hull = MultiPoint(grid).convex_hull
+    if hull.geom_type != "Polygon":
+        # Alle Punkte auf einer Linie: das ist kein Umriss, und ein Schatten
+        # ohne Fläche ist keiner. GEOS gibt dort ein ``LineString`` zurück, wo
+        # Qhull einen ``QhullError`` warf.
+        return None
+    # Der Ring schließt sich mit seinem ersten Punkt; der letzte fällt weg,
+    # damit der Rand so herauskommt, wie ihn ein Streckenzug erwartet. GEOS
+    # ordnet den äußeren Ring im Uhrzeigersinn, Qhull gab ihn dagegen — und
+    # ``clip_polygon`` verlangt eine Richtung, also wird umgedreht.
+    return np.asarray(hull.exterior.coords, dtype=float)[-2::-1]
+
+
 def hull_planes(mesh: Mesh) -> np.ndarray | None:
     """Die konvexe Hülle eines Netzes als Halbräume, ``n·x + d <= 0`` innen.
 

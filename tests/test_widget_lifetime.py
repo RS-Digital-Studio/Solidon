@@ -198,7 +198,6 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         ArmatureSummary,
         ImageSourceField,
         OperationDialog,
-        SketchUseDialog,
         ValueField,
     )
     from app.ui.overlay import OverlayHost
@@ -281,7 +280,6 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         # Abschlusses, ein Lambda aus einer Schleife.
         ("ViewBar", ViewBar),
         ("ChatPanel", ChatPanel),
-        ("SketchUseDialog", SketchUseDialog),
         # Das Fenster wiegt am schwersten: Die Suite baut über siebenhundert
         # davon nacheinander auf, und jedes ließ rund 7 MB stehen.
         ("MainWindow", lambda: MainWindow(Session(), UiSettings())),

@@ -3,8 +3,15 @@
 Stand 12.08.2026, nachrecherchiert am 19.08.2026, Produktübergang entschieden
 am 28.08.2026. Baut auf `konzept-veroeffentlichung-1.0.md` auf und
 ändert dessen §7-Entscheidung „keine Beta-Version" — mit Begründung, siehe §2 A.
-Dieses Dokument ist die fachliche SSOT der Demo-Phase; alles, was den späteren
-Verkauf betrifft, bleibt im Veröffentlichungskonzept.
+Dieses Dokument ist die fachliche Grundlage der Demo-Phase. Der Übergang zum
+Verkauf wird seit dem 16.09.2026 im
+[Konzept zum Übergang zu 1.0](konzept-demo-zu-1.0-2026-09.md) beschrieben.
+
+> **Präzisierung Robert, 16.09.2026:** Der **31.10. bleibt für letzte
+> Optimierungen reserviert**. Der Verkaufsstart ist am **01.11.2026 um
+> 10:00 Uhr Europe/Berlin**. Ältere Verkaufstermine und Ersatzdemo-Szenarien
+> weiter unten sind historisch; der aktuelle Ist-Zustand, die vorgeschlagenen
+> Nutzerabläufe und die Abnahme stehen im verlinkten Übergangskonzept.
 
 Der Auftrag in einem Satz: **eine kostenlose, vollständige Version
 veröffentlichen, die einschließlich 30.10.2026 läuft; am 31.10. bleibt sie

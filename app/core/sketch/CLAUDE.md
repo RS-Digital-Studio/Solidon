@@ -33,7 +33,7 @@ Grundebene oder auf einer Fläche des Modells.
 | `profile.py` | Vom gelösten Element zum geschlossenen Umriss |
 | `shapes.py` | Die Grundformen und die zwei Lochbilder; `grid_centres` hält die gemeinsame mittige Rasterlage für Skizze und Feldschnitt |
 | `planes.py` | Wo eine Skizze liegt |
-| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), und die zwei Formen aus zwei Klicks (`polygon_at`, `slot_between`) |
+| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), und die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte) |
 | `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
