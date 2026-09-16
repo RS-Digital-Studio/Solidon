@@ -31,12 +31,15 @@ it into `website/version.json`.
 - Profile clamps comprise two shells and two fitted liners. Round, oval and drawn mating profiles are supported; liners can be replaced later.
 - A closed drawing or selected opening creates a seal groove and a separate gasket. Choose materials, cross-section and protrusion; remaining walls are checked.
 - Surface patterns reach the face boundary and leave bores clear. Existing patterns can be edited directly through the selection panel.
+- Cut away keeps one side of a plane and closes the cut face — for flat back walls and walls at one height. Fillets next to slightly slanted walls can be edited again.
 
 ### Import and use
 
 - Select SVG and DXF contours visually before creating a body. GLB and GLTF files retain their correct dimensions and orientation.
 - Project dimensions remain effective in part sketches and placement previews. Fit to view includes every visible build plate.
 - Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.
+- Delete on a face removes the body and says so; Ctrl+Z brings it back. In a flat view a dragged body follows the pointer, and the chosen face survives the first click of a sketch.
+- The local chat gets a larger window and no longer truncates your request.
 
 ## 0.4.2
 

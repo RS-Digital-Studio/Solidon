@@ -32,12 +32,15 @@ dans `website/version.json`.
 - Les colliers de profil comprennent deux coques et deux inserts ajustés. Les profils ronds, ovales ou dessinés sont possibles ; les inserts restent remplaçables.
 - Un dessin fermé ou une ouverture choisie crée une rainure et un joint séparé. Matériaux, section et dépassement sont réglables ; les parois restantes sont vérifiées.
 - Les motifs de surface atteignent le bord des faces et laissent les perçages libres. Les motifs existants se modifient directement depuis le panneau de sélection.
+- Découper garde un côté d’un plan et ferme la face de coupe — pour des parois arrière planes et des parois à la même hauteur. Les congés le long de parois légèrement inclinées se modifient de nouveau.
 
 ### Importation et utilisation
 
 - Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.
 - Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.
 - Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.
+- Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.
+- Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.
 
 ## 0.4.2
 

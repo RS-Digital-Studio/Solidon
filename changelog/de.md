@@ -56,12 +56,15 @@ Nutzen da und sonst nichts.
 - Profilklemmen entstehen aus zwei Schalen und zwei passenden Einlagen. Runde, ovale und gezeichnete Gegenprofile sind möglich; die Einlagen lassen sich später austauschen.
 - Eine geschlossene Zeichnung oder gewählte Öffnung erzeugt Dichtnut und separate Dichtung. Material, Querschnitt und Überstand sind einstellbar; Restwände werden geprüft.
 - Oberflächenmuster reichen bis zum Flächenrand und lassen Bohrungen frei. Vorhandene Muster lassen sich direkt über die Auswahl weiterbearbeiten.
+- Abschneiden behält eine Seite einer Ebene und schließt die Schnittfläche — für glatte Rückwände und Wände auf einer Höhe. Rundungen neben leicht schrägen Wänden lassen sich wieder ändern.
 
 ### Einlesen und Bedienen
 
 - SVG- und DXF-Konturen wählen Sie vor dem Erzeugen sichtbar aus. GLB- und GLTF-Dateien kommen mit ihren richtigen Maßen und ihrer richtigen Ausrichtung an.
 - Projektmaße bleiben bis in Bausteinskizzen und Platzierungsvorschauen wirksam. Beim Einpassen berücksichtigt die Ansicht alle sichtbaren Druckplatten.
 - Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.
+- Entf an einer Fläche entfernt den Körper und sagt es; Strg+Z holt ihn zurück. Bei flachem Blick folgt ein gezogener Körper dem Zeiger, und die gewählte Fläche bleibt beim ersten Klick der Skizze.
+- Der lokale Chat bekommt ein größeres Fenster und kürzt Ihre Anfrage nicht mehr.
 
 ## 0.4.2
 

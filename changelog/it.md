@@ -31,12 +31,15 @@ scrive in `website/version.json`.
 - I morsetti per profili comprendono due gusci e due inserti su misura. Sono ammessi profili rotondi, ovali e disegnati; gli inserti possono essere sostituiti in seguito.
 - Un disegno chiuso o un’apertura scelta crea una scanalatura e una guarnizione separata. Materiali, sezione e sporgenza sono regolabili; le pareti residue vengono verificate.
 - I motivi superficiali raggiungono il bordo delle facce e lasciano liberi i fori. I motivi esistenti si modificano direttamente dal pannello di selezione.
+- Tagliare via conserva un lato di un piano e chiude la faccia di taglio: per pareti posteriori lisce e pareti alla stessa altezza. I raccordi accanto a pareti un po’ inclinate tornano modificabili.
 
 ### Importazione e uso
 
 - Scelga visivamente i contorni SVG e DXF prima di creare il corpo. I file GLB e GLTF conservano dimensioni e orientamento corretti.
 - Le misure del progetto restano attive negli schizzi dei componenti e nelle anteprime di posizionamento. L’inquadratura comprende tutti i piatti di stampa visibili.
 - I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.
+- Canc su una faccia rimuove il corpo e lo dice; Ctrl+Z lo riporta. In vista radente un corpo trascinato segue il puntatore, e la faccia scelta resta al primo clic dello schizzo.
+- La chat locale riceve una finestra più grande e non accorcia più la richiesta.
 
 ## 0.4.2
 

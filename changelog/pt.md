@@ -31,12 +31,15 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.
 - Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.
 - Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.
+- Cortar fora mantém um lado de um plano e fecha a face de corte — para paredes traseiras lisas e paredes à mesma altura. Os boleados junto a paredes ligeiramente inclinadas voltam a poder editar-se.
 
 ### Importação e utilização
 
 - Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.
 - As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.
 - Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.
+- Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.
+- O chat local recebe uma janela maior e já não encurta o seu pedido.
 
 ## 0.4.2
 

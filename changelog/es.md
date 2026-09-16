@@ -32,12 +32,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las abrazaderas de perfil constan de dos carcasas y dos insertos ajustados. Admiten perfiles redondos, ovalados o dibujados; los insertos pueden sustituirse después.
 - Un dibujo cerrado o una abertura elegida crea una ranura de sellado y una junta separada. Puede elegir materiales, sección y saliente; se comprueban las paredes restantes.
 - Los patrones superficiales llegan al borde de la cara y dejan libres los taladros. Puede editar los patrones existentes desde el panel de selección.
+- Recortar conserva un lado de un plano y cierra la cara de corte: para paredes traseras lisas y paredes a una misma altura. Los redondeos junto a paredes algo inclinadas vuelven a poder editarse.
 
 ### Importación y manejo
 
 - Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.
 - Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.
 - Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.
+- Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.
+- El chat local recibe una ventana mayor y ya no recorta su solicitud.
 
 ## 0.4.2
 
