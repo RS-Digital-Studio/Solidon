@@ -71,7 +71,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import drawing, expressions
+from app.core import expressions
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -101,6 +101,7 @@ from app.core.log import get_logger
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, shown_of_twins
 from app.core.scene import EvaluationResult
+from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import repair_is_available
 from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId
 from app.core.units import LengthUnit
@@ -130,7 +131,7 @@ from app.ui.labels import (
     volume,
     wheel_needs_focus,
 )
-from app.ui.leash import weak_slot
+from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_danger, make_primary, rule, set_level
@@ -1046,6 +1047,57 @@ def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
     return QIcon(image)
 
 
+class _ThumbnailWorker(Worker):
+    """Zeichnet die Vorschaubilder des Baums — neben dem Fenster, nicht darin.
+
+    Ein Bild kostet an einem gescannten Teil achtzig Millisekunden, und ein
+    eingelesenes 3MF bringt Dutzende Körper mit: Am
+    ``1-24+scale+polebarn.3mf`` mit 89 Körpern lagen **5,25 s** im
+    Qt-Hauptthread, in Schüben von 400 bis 775 ms (16.09.2026, Robert: „bei
+    einer auswahl oder hover effekt stockt es auch noch sehr"). Das Zeichnen
+    braucht kein Qt — es endet in einer Zeichenkette (:func:`drawing.thumbnail_of`);
+    Qt braucht erst das Malen des fertigen SVG, und das ist ein Zehntel davon.
+
+    **Die Punkte und Dreiecke bekommt er als Arrays**, nicht als Netz: Auf
+    demselben ``Trimesh`` zu rechnen füllte dessen träge Caches neben dem
+    Hauptthread (``wartezeit.md``, „for_a_worker"). Ein Array zu lesen ist
+    gefahrlos, solange niemand es ändert — und eine Eingabe ändert in Solidon
+    niemand (Regel 3).
+    """
+
+    #: Ein fertiges Bild: Stempel und SVG. Einzeln gemeldet, damit die Zeilen
+    #: nachkommen, während der Rest noch rechnet.
+    drawn = Signal(str, str)
+
+    def __init__(self, jobs: Sequence[tuple[str, Any, Any]], pixels: int, theme: str) -> None:
+        super().__init__()
+        self._jobs = list(jobs)
+        self._pixels = pixels
+        self._theme = theme
+        self.cancel = CancelSignal()
+        """Dieselbe Marke, die auch eine Operation abfragt: Ein neuer
+        Szenenaufbau macht jedes noch nicht gezeichnete Bild gegenstandslos."""
+
+    def work(self) -> None:
+        from app.core.drawing import thumbnail_of
+
+        for stamp, vertices, faces in self._jobs:
+            if self.cancel.is_cancelled:
+                return
+            try:
+                drawn = thumbnail_of(vertices, faces, self._pixels, theme=self._theme)  # type: ignore[arg-type]
+            except Exception as problem:  # pragma: no cover - hängt am Netz
+                # Ein Vorschaubild ist Beiwerk. Scheitert eines, bleibt seine
+                # Zeile, wie sie war, und die übrigen kommen trotzdem.
+                _log.info("no preview for %s: %s", stamp, problem)
+                continue
+            self.drawn.emit(stamp, drawn)
+
+    def release_finished_references(self) -> None:
+        self._jobs = []
+        super().release_finished_references()
+
+
 class ObjectTree(QWidget):
     """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
     §18.5).
@@ -1158,6 +1210,12 @@ class ObjectTree(QWidget):
         """Was noch gezeichnet werden muss. Erst nach dem Aufbau, sonst steht
         der Baum still, während das erste Bild entsteht — und bei einem
         gescannten Teil sind das achtzig Millisekunden je Zeile."""
+        self._leash = WorkerLeash(self)
+        self._drawing: _ThumbnailWorker | None = None
+        """Der Arbeiter, der die vorgemerkten Bilder zeichnet — oder keiner."""
+        self._rows_for: dict[str, list[QTreeWidgetItem]] = {}
+        """Welche Zeilen auf welches Bild warten. Zwei Körper mit demselben
+        Hash sind dasselbe Bild und dieselbe Zeichnung."""
         self._faces: set[tuple[str, str]] = set()
         """Welche Merkmale Flächen sind — die einzigen, die ein Filament tragen.
 
@@ -1247,36 +1305,87 @@ class ObjectTree(QWidget):
         return str(known) if known else f"{object_id}:{entry.mesh.triangle_count}"
 
     def _render_pending(self) -> None:
-        """Zeichnet die vorgemerkten Bilder — eines je Aufruf.
+        """Gibt die vorgemerkten Bilder an den Arbeiter — und zwar alle auf einmal.
 
-        Eines und nicht alle: Bei einem gescannten Teil kostet ein Bild achtzig
-        Millisekunden, und fünf davon am Stück sind eine halbe Sekunde, in der
-        das Fenster steht. So kommt jedes Bild einzeln nach, und dazwischen
-        bleibt die Anwendung bedienbar — dasselbe Verfahren wie im Katalog.
+        **Gezeichnet wird nebenan** (16.09.2026). Vorher entstand hier je
+        Ereignisrunde eines, mit der Begründung, fünf am Stück wären eine halbe
+        Sekunde Stillstand. Die Rechnung stimmte und die Abhilfe nicht: Ein
+        ``singleShot(0)`` kehrt in derselben Runde zurück, und am
+        ``1-24+scale+polebarn.3mf`` mit 89 Körpern lagen trotzdem **5,25 s** im
+        Hauptthread, in Schüben von 400 bis 775 ms — davon 2,96 s im
+        Vereinfachen der Netze für ein Bild von zwanzig Pixeln.
+
+        Der Arbeiter gibt jedes Bild einzeln zurück (:attr:`_ThumbnailWorker.drawn`),
+        und hier bleibt nur das Malen des SVG — zehn Millisekunden statt
+        sechzig, und die Zeilen kommen weiter nacheinander nach.
         """
         if not self._pending:
             return
-        item, stamp, entry = self._pending.pop(0)
-        try:
-            image = drawing.thumbnail(
-                entry.mesh.raw,
-                _preview_pixels(self.tree),
-                theme=self._theme,
-            )
-        except Exception as problem:  # pragma: no cover - hängt am Netz
-            # Ein Vorschaubild ist Beiwerk. Scheitert es, bleibt die Zeile, wie
-            # sie war — eine Ansicht, die wegen eines Bildes nicht aufgeht,
-            # wäre der teuerste mögliche Umgang mit einer Nebensache.
-            _log.info("no preview for %s: %s", stamp, problem)
-        else:
-            found = _svg_icon(image, _preview_pixels(self.tree))
-            self._previews[stamp] = found
+        jobs: list[tuple[str, Any, Any]] = []
+        seen: set[str] = set()
+        self._rows_for = {}
+        for item, stamp, entry in self._pending:
+            self._rows_for.setdefault(stamp, []).append(item)
+            if stamp in seen:
+                continue
+            seen.add(stamp)
+            raw = entry.mesh.raw
+            # **Die Arrays werden hier gelesen, nicht dort.** Ein Arbeiter am
+            # selben ``Trimesh`` füllte dessen träge Caches neben dem
+            # Hauptthread; ein Array ist Speicher und wird nur gelesen.
+            jobs.append((stamp, raw.vertices, raw.faces))
+        self._pending.clear()
+        if not jobs:
+            return
+        # Ein neuer Auftrag ersetzt den alten: Seine Bilder gehören zu Zeilen,
+        # die es nicht mehr gibt.
+        self._stop_drawing()
+        worker = _ThumbnailWorker(jobs, _preview_pixels(self.tree), self._theme)
+        worker.drawn.connect(self._preview_drawn)
+        # Ein Vorschaubild ist Beiwerk, ein unerwarteter Fehler darin nicht:
+        # Ohne Zuhörer bliebe er auf der Fehlerausgabe stehen, wo ihn kein
+        # Kunde sieht (``wartezeit.md``, „crashed wird verbunden").
+        worker.crashed.connect(self._drawing_crashed)
+        worker.finished.connect(weak_slot(self, ObjectTree._drawing_done, worker))
+        self._drawing = worker
+        self._leash.start(worker)
+
+    def _preview_drawn(self, stamp: str, image: str) -> None:
+        """Ein fertiges SVG wird zum Symbol — das Einzige, wofür es Qt braucht."""
+        found = _svg_icon(image, _preview_pixels(self.tree))
+        self._previews[stamp] = found
+        for item in self._rows_for.get(stamp, ()):
             # Die Zeile kann inzwischen weg sein — eine neue Auswertung räumt
-            # den Baum, während hier noch gezeichnet wird.
+            # den Baum, während nebenan noch gezeichnet wird.
             if self.tree.indexFromItem(item).isValid():
                 item.setIcon(0, found)
-        if self._pending:
-            QTimer.singleShot(0, self, self._render_pending)
+
+    def _drawing_done(self, worker: Any) -> None:
+        if self._drawing is worker:
+            self._drawing = None
+
+    def _drawing_crashed(self, problem: str) -> None:
+        """Der Zeichner ist unerwartet zurückgekommen — die Zeilen bleiben ohne Bild.
+
+        Kein Dialog: Ein Vorschaubild ist Beiwerk, und ein Fenster, das wegen
+        eines Symbols eine Frage stellt, wäre der teuerste mögliche Umgang mit
+        einer Nebensache. Der Satz steht im Protokoll (§33.2), wo er beim
+        nächsten Fehlerbericht mitreist.
+        """
+        _log.warning("previews stopped: %s", problem)
+        self._drawing = None
+
+    def _stop_drawing(self) -> None:
+        """Den laufenden Zeichner abbestellen — seine Bilder gelten nicht mehr."""
+        worker = self._drawing
+        self._drawing = None
+        if worker is not None:
+            worker.cancel.cancel()
+
+    def release(self) -> None:
+        """Auf den Zeichner warten, bevor der Baum weggeht (``wartezeit.md``)."""
+        self._stop_drawing()
+        self._leash.wait_all()
 
     def show_scene(self, result: EvaluationResult | None, document: Document | None = None) -> None:
         selected = self.selected_objects()

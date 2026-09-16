@@ -775,6 +775,38 @@ Aufgefallen ist es an einer Frage zur Aufräum-Fixture der Suite: Wer über
 `WorkerLeash.start` gestartet wurde — eine Zusicherung darüber verspricht sonst
 mehr, als sie halten kann.
 
+### Ein Bild je Ereignisrunde ist kein Nebenläufigkeitsverfahren (16.09.2026)
+
+Die Vorschaubilder des Objektbaums entstanden „eines je Aufruf", verkettet
+über `QTimer.singleShot(0, …)`, mit der richtigen Begründung: Bei einem
+gescannten Teil kostet ein Bild achtzig Millisekunden, und fünf am Stück sind
+eine halbe Sekunde Stillstand.
+
+**Die Rechnung stimmte, die Abhilfe nicht.** Ein `singleShot(0)` kehrt in
+derselben Ereignisrunde zurück; die Arbeit wird also nicht verteilt, sondern
+nur in Portionen zerlegt, die unmittelbar aufeinander folgen. Gemessen an
+`1-24+scale+polebarn.3mf` (89 Körper): **4,7 s** Hauptthread nach dem Öffnen,
+in Schüben von 400 bis 775 ms — davon 2,96 s im Vereinfachen der Netze für ein
+Bild von zwanzig Pixeln (Robert: „bei einer auswahl oder hover effekt stockt
+es auch noch sehr"). Nachher **9 ms**; die Bilder kommen nach 4,7 s an, und
+das Fenster ist die ganze Zeit bedienbar.
+
+Drei Sätze, die über diesen Fall hinausgehen:
+
+* **Was kein Qt braucht, gehört nicht in den Qt-Thread.** `drawing.thumbnail`
+  endet in einer Zeichenkette; Qt braucht erst das Malen des fertigen SVG, und
+  das ist ein Zehntel der Kosten. Die Grenze verläuft an dieser Frage und
+  nicht an der Zahl der Millisekunden.
+* **Ein Arbeiter bekommt Arrays, kein Netz** (`drawing.thumbnail_of`). Auf
+  demselben `Trimesh` zu rechnen füllt dessen träge Caches neben dem
+  Hauptthread — dieselbe Falle, die `placement_flow.for_a_worker` mit einer
+  Kopie umgeht. Punkte und Dreiecke zu lesen ist gefahrlos, solange niemand
+  sie ändert, und eine Eingabe ändert in Solidon niemand (Regel 3).
+* **Und die Portionierung bleibt trotzdem sichtbar.** Der Arbeiter meldet
+  jedes Bild einzeln (`_ThumbnailWorker.drawn`), die Zeilen kommen also
+  weiter nacheinander nach. Ein Signal am Ende hätte dieselbe Rechnung und
+  vier Sekunden leere Zeilen.
+
 ### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
 
 **Viermal** derselbe Fund an vier Stellen, jedes Mal gemessen: Die Liste der

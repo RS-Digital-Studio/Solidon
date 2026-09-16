@@ -2193,23 +2193,19 @@ def outline_of(points: Any) -> Any:
 
     Die konvexe Hülle in zwei Dimensionen, gegen den Uhrzeigersinn. Sie ersetzt
     die frühere Triangulierung: gebraucht wird ein Rand, den sich beschneiden
-    lässt, und den gibt Qhull geordnet heraus. Eine Triangulierung gibt Dreiecke
-    in beliebiger Folge, und aus denen einen Rand zurückzugewinnen wäre Arbeit
-    für ein Ergebnis, das hier schon vorliegt.
-    """
-    import numpy as np
-    from scipy.spatial import ConvexHull, QhullError
+    lässt, und den gibt die Hülle geordnet heraus. Eine Triangulierung gibt
+    Dreiecke in beliebiger Folge, und aus denen einen Rand zurückzugewinnen
+    wäre Arbeit für ein Ergebnis, das hier schon vorliegt.
 
-    grid = np.asarray(points, dtype=float)[:, :2]
-    if len(grid) < 3:
-        return None
-    try:
-        return grid[ConvexHull(grid).vertices]
-    except QhullError as problem:
-        # Alle Punkte auf einer Linie: das ist kein Umriss, und ein Schatten
-        # ohne Fläche ist keiner.
-        _log.info("outline unavailable: %s", problem)
-        return None
+    **Gerechnet wird im Kern** (:func:`app.core.geom.mesh.planar_outline`), und
+    zwar seit dem 16.09.2026 über GEOS statt über Qhull: Jener legt je Aufruf
+    eine Temporärdatei an, und diese Funktion läuft je Körper, je Hüllstück und
+    je Auffangfläche — an einer Szene mit 89 Körpern 3541-mal für **eine**
+    Kamerageste.
+    """
+    from app.core.geom.mesh import planar_outline
+
+    return planar_outline(points)
 
 
 def _edge_crossing(start: Any, end: Any, corner: Any, edge: Any) -> Any:
@@ -5374,12 +5370,35 @@ class Viewport(QWidget):
                 catchers.append((high, outline))
         return catchers
 
+    @staticmethod
+    def _shadow_base_of(hull_points: Any, direction: tuple[float, float]) -> tuple[Any, float]:
+        """Der Umriss eines Stücks auf seiner **eigenen** Unterkante, und deren Höhe.
+
+        Von dort aus ist jede tiefere Auffangfläche eine reine Verschiebung:
+        ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
+        waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
+        fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
+        Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
+        gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
+        eine je Körper und Stück wären 118.
+
+        Die Klammer in ``shadow_points`` (``maximum(..., 0)``) ist der Grund
+        für „tiefer": Ein Punkt unter der Fläche wirft nach dieser Regel
+        keinen Schatten nach vorn, und dann ist die Projektion nicht mehr
+        linear. Auf der eigenen Unterkante greift sie nie.
+        """
+        import numpy as np
+
+        floor = float(np.asarray(hull_points, dtype=float)[:, 2].min())
+        return outline_of(shadow_points(hull_points, direction, floor)), floor
+
     def _shadow_outline_of(
         self,
         hull_points: Any,
         direction: tuple[float, float],
         ground: float = 0.0,
         window: Any = None,
+        base: tuple[Any, float] | None = None,
     ) -> Any:
         """Der Umriss eines Schattens auf der Fläche ``ground`` — als Ecken
         eines konvexen Vielecks, ``(n, 3)``, oder nichts.
@@ -5390,13 +5409,24 @@ class Viewport(QWidget):
         er auf blankem Hintergrund und behauptete Boden, wo keiner ist. Ein
         einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
         in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
+
+        ``base`` ist derselbe Umriss auf der Unterkante des Stücks, samt ihrer
+        Höhe (:meth:`_shadow_base_of`). Liegt die Auffangfläche darunter — und
+        das tut sie bei jeder außer bei der Platte unter einem versenkten
+        Körper —, verschiebt sich der Umriss nur, statt neu gerechnet zu
+        werden.
         """
         import numpy as np
 
         if hull_points is None or len(hull_points) < 3:
             return None
-        cast_points = shadow_points(hull_points, direction, ground)
-        outline = outline_of(cast_points)
+        outline = None
+        if base is not None and base[0] is not None and ground <= base[1] + EPS_GEOM:
+            reach = base[1] - ground
+            shift = np.asarray((reach * direction[0], reach * direction[1]), dtype=float)
+            outline = np.asarray(base[0], dtype=float) + shift
+        if outline is None:
+            outline = outline_of(shadow_points(hull_points, direction, ground))
         if outline is None:
             return None
         if window is not None:
@@ -6269,31 +6299,51 @@ class Viewport(QWidget):
         )
 
     def _place_shadows(self, direction: tuple[float, float]) -> None:
-        """Die Schatten aller Körper aus den gemerkten Hüllen setzen."""
+        """Die Schatten aller Körper aus den gemerkten Hüllen setzen.
+
+        **Ein Aktor je Körper, nicht je Stück und Auffangfläche** (16.09.2026).
+        Die Vielecke eines Körpers tragen dieselbe Farbe und dieselbe
+        Deckkraft; was sie unterscheidet, ist ihre Lage, und die steht in den
+        Punkten. An ``1-24+scale+polebarn.3mf`` waren es 442 Aktoren für 89
+        Körper, und jeder wird bei **jeder** Kamerageste weggeworfen und neu
+        angelegt — im echten Renderer heißt das 442 Pufferaufbauten. Körperweise
+        bleibt es, was ``_shadow_owners`` braucht: Der Zug an einem Körper
+        verschiebt seinen Schatten mit (:meth:`_shift_shadow`).
+        """
+        import numpy as np
+
         if self.renderer is None:
             return
         for object_id, hulls in self._shadow_hulls.items():
-            for part, hull in enumerate(hulls):
-                for index, (ground, window) in enumerate(self._shadow_catchers(object_id)):
-                    outline = self._shadow_outline_of(hull, direction, ground, window)
+            catchers = self._shadow_catchers(object_id)
+            corners: list[Any] = []
+            faces: list[Any] = []
+            offset = 0
+            for hull in hulls:
+                base = self._shadow_base_of(hull, direction)
+                for ground, window in catchers:
+                    outline = self._shadow_outline_of(hull, direction, ground, window, base)
                     if outline is None:
                         continue
-                    vertices, faces = shapes.polygon(outline)
-                    actor = self.renderer.add_surface(
-                        vertices,
-                        faces,
-                        # Der Name trägt auch das Stück: Zwei Schatten desselben
-                        # Körpers auf derselben Fläche hießen sonst gleich.
-                        name=f"shadow:{object_id}:{part}:{index}",
-                        style=SurfaceStyle(
-                            colour=SHADOW_COLOUR,
-                            opacity=self._shadow_opacity,
-                            lighting=False,
-                            pickable=False,
-                        ),
-                    )
-                    self._shadow_actors.append(actor)
-                    self._shadow_owners.setdefault(object_id, []).append(actor)
+                    part_corners, part_faces = shapes.polygon(outline)
+                    corners.append(part_corners)
+                    faces.append(np.asarray(part_faces, dtype=np.int64) + offset)
+                    offset += len(part_corners)
+            if not corners:
+                continue
+            actor = self.renderer.add_surface(
+                np.vstack(corners),
+                np.vstack(faces),
+                name=f"shadow:{object_id}",
+                style=SurfaceStyle(
+                    colour=SHADOW_COLOUR,
+                    opacity=self._shadow_opacity,
+                    lighting=False,
+                    pickable=False,
+                ),
+            )
+            self._shadow_actors.append(actor)
+            self._shadow_owners.setdefault(object_id, []).append(actor)
 
     def _redraw_shadows(self, *, draw: bool = True) -> None:
         """Die Schatten der neuen Kamerastellung anpassen (§18.6).

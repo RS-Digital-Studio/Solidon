@@ -737,3 +737,36 @@ def thumbnail(
     colours = palette(theme)
     tone = colours.subtractive if subtractive else colours.solid
     return project(small.raw, size, tone, theme=theme)
+
+
+def thumbnail_of(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    size: int = 48,
+    *,
+    theme: Theme = "light",
+    subtractive: bool = False,
+) -> str:
+    """Dasselbe Bild aus rohen Punkten und Dreiecken — für einen Nebenthread.
+
+    Der Unterschied zu :func:`thumbnail` ist die **eigene Netzkopie**: Ein
+    Arbeiter, der auf demselben ``Trimesh`` rechnet wie der Hauptthread, füllt
+    dessen träge Caches (Normalen, Kanten, Nachbarschaften) nebenher — dieselbe
+    Falle, die ``placement_flow.for_a_worker`` mit einer Kopie im Hauptthread
+    umgeht. Punkte und Dreiecke sind dagegen nur Speicher; sie zu lesen ist
+    gefahrlos, solange niemand sie ändert, und in Solidon ändert niemand eine
+    Eingabe (Regel 3).
+
+    Gebraucht wird das, weil ein Vorschaubild teuer ist: Am eingelesenen
+    ``1-24+scale+polebarn.3mf`` (89 Körper) kosteten die 89 Bilder zusammen
+    **5,25 s** im Qt-Hauptthread, in Schüben von 400 bis 775 ms — davon 2,96 s
+    im Vereinfachen und 1,32 s im Zeichnen (16.09.2026, Robert: „bei einer
+    auswahl oder hover effekt stockt es auch noch sehr"). Was davon Qt braucht,
+    ist allein das Malen des fertigen SVG.
+    """
+    import trimesh
+
+    # ``process=False``: Die Punkte kommen aus einem Netz, das seine Prüfung
+    # längst hinter sich hat; sie hier zu wiederholen kostet mehr als das Bild.
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    return thumbnail(mesh, size, theme=theme, subtractive=subtractive)

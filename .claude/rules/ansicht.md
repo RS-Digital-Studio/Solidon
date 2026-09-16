@@ -825,6 +825,38 @@ schneiden. **Und sie gehört der Platte des Körpers**, nicht der ersten
 eines Körpers auf Platte 2 eine Bettbreite weiter, und am Umriss von Platte 1
 geschnitten wäre sein Schatten restlos weg.
 
+### Und er wird je Körper gerechnet, nicht je Auffangfläche (16.09.2026)
+
+`_place_shadows` läuft über Körper, Hüllstücke **und** Auffangflächen, und die
+innerste Schleife tat zweimal zu viel. Gemessen an
+`1-24+scale+polebarn.3mf` — 89 Körper, 266 150 Dreiecke — kostete **eine**
+Kamerageste 1843 ms im Qt-Hauptthread; §2.8 gibt ihr einen Lidschlag (Robert:
+„nach jedem kameraverschieben hängt es erstmal").
+
+Drei Änderungen, jede einzeln gemessen:
+
+| | je Geste, echter Renderer |
+|---|---|
+| vorher | rund 1,9 s + 246 ms Zeichnen |
+| ebene Hülle über GEOS statt Qhull (`geom.mesh.planar_outline`) | 440 ms |
+| Umriss je Stück **einmal**, dann verschoben (`_shadow_base_of`) | |
+| ein Aktor je Körper statt je Stück und Fläche (442 → 89) | **126 ms** + 87 ms |
+
+Die zweite Zeile ist die, die man beim Lesen übersieht: **Eine tiefere
+Auffangfläche verschiebt den Umriss, sie ändert ihn nicht.** `shadow_points`
+versetzt jeden Punkt um `(z − ground)` mal der waagerechten Lichtrichtung; das
+`ground` ist für alle Punkte dasselbe und fällt als gemeinsamer Summand
+heraus. Die Ausnahme ist seine eigene Klammer (`maximum(…, 0)`) — ein Punkt
+**unter** der Fläche wirft keinen Schatten nach vorn, und dort ist die
+Projektion nicht mehr linear. Gerechnet wird der Umriss deshalb auf der
+Unterkante des Stücks, wo die Klammer nie greift, und von dort nur nach unten
+verschoben.
+
+Die dritte hängt an einer Zusage, die man dabei nicht verlieren darf: Die
+Aktoren bleiben **körperweise**, weil `_shadow_owners` sie beim Zug an einem
+Körper mitschiebt (`_shift_shadow`). Alle Schatten in **einen** Aktor zu legen
+wäre noch billiger und nähme dem Zug seine Vorschau.
+
 ## Was am Griff steht, ist ASCII — und sonst nichts
 
 Die Griffbeschriftung war ein `vtkStringArray` in PyVistas Hand, und PyVista

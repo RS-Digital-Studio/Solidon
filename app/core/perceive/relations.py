@@ -653,8 +653,38 @@ def cavity_chains(
 def _cavity_links(
     candidates: Mapping[FeatureId, Feature], mesh: MeshData
 ) -> tuple[dict[FeatureId, set[FeatureId]], set[FeatureId], set[FeatureId]]:
-    """Gemeinsame Randringe einmal bilden; doppelte Belegung bleibt ungültig."""
+    """Gemeinsame Randringe einmal bilden; doppelte Belegung bleibt ungültig.
+
+    **Einmal je Netz und Kandidatenmenge**, abgelegt im Cache des Netzes wie
+    :attr:`MeshData.component_count` — er verfällt mit dessen Geometrie, und
+    ein eigenes Feld gibt es an der eingefrorenen Klasse nicht. Der Grund ist
+    gemessen (16.09.2026, Robert: „bei einer auswahl oder hover effekt stockt
+    es auch noch sehr"): Ein Klick auf ein Merkmal von ``Auto-washer.stl``
+    (180 128 Dreiecke, 170 Merkmale) kostete **402 ms** im Qt-Hauptthread,
+    davon 447 ms in dieser Funktion über zwei Aufrufe — drei Wege fragen sie
+    je Auswahl (:func:`cavity_chain_state_at`, :func:`cavity_chains`,
+    :func:`_feature_group_topology`), und jeder bildete die Randringe aller
+    462 Flächen neu.
+
+    Der Schlüssel nennt die Kandidaten, weil die Antwort nur für sie gilt;
+    dass alle drei Wege dieselbe Menge bilden, ist heute wahr und morgen eine
+    Annahme.
+    """
     body = _one_body(mesh).raw
+    cache = getattr(body, "_cache", None)
+    key = ("solidon_cavity_links", tuple(sorted(candidates)))
+    if cache is not None:
+        cache.verify()
+        # Kein ``cache.get``: trimeshs ``Cache`` ist kein Wörterbuch und hat
+        # keines (gemessen, ``AttributeError``).
+        found = cache[key[0]] if key[0] in cache else None  # noqa: SIM401
+        if found is not None and found[0] == key[1]:
+            kept_graph, kept_invalid, kept_touching = found[1]
+            return (
+                {name: set(linked) for name, linked in kept_graph.items()},
+                set(kept_invalid),
+                set(kept_touching),
+            )
     owners: dict[frozenset[tuple[int, int]], list[FeatureId]] = {}
     invalid: set[FeatureId] = set()
     touching: set[FeatureId] = set()
@@ -687,6 +717,17 @@ def _cavity_links(
             invalid.update(adjacent)
         graph[first].add(second)
         graph[second].add(first)
+    if cache is not None:
+        # Als unveränderliche Kopie: Der Aufrufer bekommt seine eigene und
+        # darf sie umbauen, ohne dem nächsten die Antwort zu verändern.
+        cache[key[0]] = (
+            key[1],
+            (
+                {name: frozenset(linked) for name, linked in graph.items()},
+                frozenset(invalid),
+                frozenset(touching),
+            ),
+        )
     return graph, invalid, touching
 
 
