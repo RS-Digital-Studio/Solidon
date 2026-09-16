@@ -2470,6 +2470,61 @@ def test_one_handling_for_all_alike_features_is_one_transaction(window: MainWind
     assert gemessen and all(abs(wert - 6.5) < 0.2 for wert in gemessen), gemessen
 
 
+def test_applying_to_all_alike_holes_leaves_each_hole_where_it_is(window: MainWindow) -> None:
+    """Durchmesser ändern, „auf alle anwenden" — und alle lagen übereinander.
+
+    Das Merkmalfenster trägt beim Ändern einer Bohrung auch ihre Stelle x, y, z
+    mit, und das Fenster gab sie als denselben Ort an jede Geschwisterbohrung
+    (Robert, 16.09.2026: „alle sind übereinander"). Mitreisen darf das Maß;
+    die Stelle gehört jedem Merkmal selbst. Verglichen werden die Mitten als
+    Menge, nicht über die Kennungen: Ob eine Bohrung nach dem Ändern noch so
+    heißt, ist hier nicht die Frage — dass sie noch dort sitzt, schon.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2, "die Platte hat mehrere Bohrungen"
+    centres_before = [
+        tuple(float(value) for value in entry.features[hole].params["centre"]) for hole in holes
+    ]
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.relations import alike_for_action
+
+    group = alike_for_action("resize_hole", holes[0], entry.features, as_mesh_data(entry.mesh))
+    targets = [member.target for member in group.members]
+    assert len(targets) >= 2
+    x, y, z = centres_before[0]
+    window.feature_panel.operationRequestedForEach.emit(
+        "resize_hole",
+        {"at_feature": holes[0], "diameter": 6.5, "compensate": False, "x": x, "y": y, "z": z},
+        targets,
+    )
+    window.session.wait_for_idle()
+
+    danach = window.session.evaluate_now().scene.objects[object_id]
+    holes_after = [feature for feature in danach.features.values() if feature.kind == "hole"]
+    assert len(holes_after) == len(holes), "keine Bohrung ist in einer anderen verschwunden"
+    for before in centres_before:
+        nearby = [
+            feature
+            for feature in holes_after
+            if all(
+                abs(float(a) - b) < 0.2
+                for a, b in zip(feature.params["centre"], before, strict=True)
+            )
+        ]
+        assert len(nearby) == 1, (before, "genau eine Bohrung sitzt noch an dieser Stelle")
+    assert all(abs(float(feature.params["diameter"]) - 6.5) < 0.2 for feature in holes_after), (
+        "und alle tragen das neue Maß"
+    )
+
+
 def test_a_face_offers_the_catalogue_from_the_panel(window: MainWindow) -> None:
     """Der Katalog aus der Fläche heraus — derselbe wie aus dem Objektbaum.
 

@@ -12486,11 +12486,16 @@ class MainWindow(QMainWindow):
         Ein Draft je Merkmal, alle in einem ``apply``: Ein Strg+Z nimmt sie
         zusammen zurück, weil es eine Handlung war. Sechs einzelne Aufrufe wären
         sechs Schritte im Verlauf und sechs Undos für einen Handgriff.
+
+        **Das Maß reist, die Stelle nicht.** Die Werte des Fensters tragen bei
+        einer Bohrung auch x, y, z, und dieselbe Stelle an jedes Mitglied legte
+        alle übereinander (Robert, 16.09.2026); :func:`params_for_members`
+        gibt jedem seine eigene Mitte und reicht nur einen Versatz weiter.
         """
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op) or not feature_ids:
             return
-        from app.core.perceive.relations import alike_for_action
+        from app.core.perceive.relations import alike_for_action, params_for_members
 
         result = self.session.last_result
         body = result.scene.objects.get(selected) if result else None
@@ -12513,8 +12518,9 @@ class MainWindow(QMainWindow):
                 )
             )
             return
+        each = params_for_members(params, picked, feature_ids, body.features if body else {})
         drafts = [
-            OperationDraft(op=op, inputs=(selected,), params={**params, "at_feature": feature_id})
+            OperationDraft(op=op, inputs=(selected,), params=each[feature_id])
             for feature_id in feature_ids
         ]
         self._drop_feature_preview()

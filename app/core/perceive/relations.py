@@ -22,10 +22,10 @@ wären zwei Antworten auf dieselbe Frage.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -944,6 +944,63 @@ def alike_for_actions(
         comparisons={},
     )
     return tuple(_alike_for_action(action, selected, context) for action in requested)
+
+
+#: Die drei Felder, die eine Stelle nennen — und deshalb nie an ein anderes
+#: Merkmal reisen (:func:`params_for_members`).
+_PLACE_AXES: Final = ("x", "y", "z")
+
+
+def params_for_members(
+    params: Mapping[str, Any],
+    picked: FeatureId,
+    members: Sequence[FeatureId],
+    features: Mapping[FeatureId, Feature],
+) -> dict[FeatureId, dict[str, Any]]:
+    """Die Werte einer Handlung für jedes Mitglied ihrer Gruppe.
+
+    Maße reisen unverändert: Ein Durchmesser gilt jeder Bohrung gleich. **Eine
+    Stelle reist nicht.** ``x``, ``y`` und ``z`` nennen einen Ort, und derselbe
+    Ort für sechs Bohrungen legte sie übereinander (Robert, 16.09.2026: „alle
+    sind übereinander") — das Merkmalfenster trägt die Stelle beim Ändern
+    einer Bohrung mit, und bis hierher gab das Fenster sie an jedes Mitglied
+    weiter. Jedes Mitglied behält deshalb seine eigene gemessene Mitte; was
+    am gewählten Merkmal gegenüber seiner Mitte verschoben wurde, geht als
+    **Versatz** mit — *Merkmal verschieben* für alle heißt so „alle um
+    dasselbe", und ohne Verschiebung bleibt jedes, wo es ist. Genannt wird je
+    Mitglied nur, was am gewählten genannt war; eine ungenannte Achse bleibt
+    ungenannt (RM-154). Ein Mitglied ohne gemessene Mitte bekommt keine
+    Stelle. Das gewählte Merkmal bekommt seine Werte, wie sie sind.
+    """
+    named = tuple(params.get(axis) for axis in _PLACE_AXES)
+    anchor = _centre_of(features.get(picked))
+    result: dict[FeatureId, dict[str, Any]] = {}
+    for member in members:
+        if member == picked:
+            result[member] = {**params, "at_feature": member}
+            continue
+        values = {key: value for key, value in params.items() if key not in _PLACE_AXES}
+        values["at_feature"] = member
+        centre = _centre_of(features.get(member))
+        if anchor is not None and centre is not None:
+            for axis, value, own, base in zip(_PLACE_AXES, named, centre, anchor, strict=True):
+                if value is not None:
+                    values[axis] = own + (float(value) - base)
+        result[member] = values
+    return result
+
+
+def _centre_of(feature: Feature | None) -> tuple[float, float, float] | None:
+    """Die gemessene Mitte eines Merkmals — oder nichts, wenn es keine trägt."""
+    if feature is None:
+        return None
+    centre = feature.params.get("centre")
+    if not isinstance(centre, tuple | list) or len(centre) != 3:
+        return None
+    try:
+        return (float(centre[0]), float(centre[1]), float(centre[2]))
+    except TypeError, ValueError:
+        return None
 
 
 def _alike_for_action(

@@ -1254,6 +1254,20 @@ Haken ist also keiner nötig. Geprüft wird die **Kette gegen das Layout** und
 nicht gegen Bildpunkte: Was das Auge sieht, sagt das Layout; offscreen wäre
 jede Höhe erfunden (`test_the_tab_key_goes_down_the_panel_like_the_eye`).
 
+## Für alle heißt: dasselbe Maß, nicht dieselbe Stelle
+
+Der Haken „Auf alle N gleichartigen anwenden" gibt jedem Mitglied der Gruppe
+dieselben Werte — und die Felder x, y, z des Merkmalfensters standen mit
+drin. Sechs Bohrungen auf einen Durchmesser zu bringen legte sie damit an
+einen Ort (Robert, 16.09.2026: „alle sind übereinander"). Die Stelle gehört
+jedem Merkmal selbst: `relations.params_for_members` gibt jedem Mitglied
+seine eigene gemessene Mitte, und was am gewählten Merkmal gegenüber seiner
+Mitte verschoben wurde, geht als **Versatz** mit — *Merkmal verschieben* für
+alle heißt „alle um dasselbe". Eine am gewählten ungenannte Achse bleibt bei
+allen ungenannt (RM-154). Das Fenster baut daraus die Drafts
+(`MainWindow._apply_to_each_feature`); das Panel kennt die Regel nicht, es
+nennt nur Werte und Ziele.
+
 ## Ein Nachweis gehört der Gruppe, nicht jeder Handlung
 
 Das Merkmalpanel begründet, warum „Auf alle N gleichartigen anwenden"

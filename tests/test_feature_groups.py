@@ -17,6 +17,7 @@ from app.core.perceive.relations import (
     alike_for_action,
     alike_for_actions,
     cavity_chains,
+    params_for_members,
 )
 from app.core.types import Feature
 
@@ -422,3 +423,59 @@ def test_the_action_batch_builds_cavity_topology_once(
     assert grouped == expected
     assert tuple(group.action for group in grouped) == actions
     assert calls == 1
+
+
+def test_the_values_for_each_member_keep_every_place_where_it_is() -> None:
+    """Sechs Bohrungen auf ein Maß bringen legte sie übereinander (Robert, 16.09.2026).
+
+    Das Merkmalfenster trägt beim Ändern auch die Stelle x, y, z mit, und die
+    ging als derselbe Ort an jede Geschwisterbohrung. Die Stelle gehört jedem
+    Merkmal selbst: Jedes bekommt seine eigene Mitte, ein Versatz am gewählten
+    geht als Versatz mit, und eine ungenannte Achse bleibt ungenannt.
+    """
+    features = {
+        "hole_1": Feature(
+            id="hole_1",
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 5.0, "centre": (10.0, 0.0, 0.0)},
+        ),
+        "hole_2": Feature(
+            id="hole_2",
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 5.0, "centre": (30.0, 0.0, 0.0)},
+        ),
+        "hole_3": Feature(
+            id="hole_3", kind="hole", provenance="detected", params={"diameter": 5.0}
+        ),
+    }
+    members = ("hole_1", "hole_2", "hole_3")
+
+    # Nur das Maß geändert, die Stelle steht wie gemessen: jede bleibt, wo sie ist.
+    same_place = {"at_feature": "hole_1", "diameter": 6.5, "x": 10.0, "y": 0.0, "z": 0.0}
+    each = params_for_members(same_place, "hole_1", members, features)
+    assert each["hole_1"] == same_place, "das gewählte Merkmal bekommt seine Werte unverändert"
+    assert each["hole_2"] == {
+        "at_feature": "hole_2",
+        "diameter": 6.5,
+        "x": 30.0,
+        "y": 0.0,
+        "z": 0.0,
+    }
+    assert each["hole_3"] == {"at_feature": "hole_3", "diameter": 6.5}, (
+        "ohne gemessene Mitte reist keine Stelle"
+    )
+
+    # Das gewählte um fünf nach x geschoben, y und z ungenannt: alle um dasselbe.
+    each = params_for_members(
+        {"at_feature": "hole_1", "x": 15.0, "y": None, "z": None}, "hole_1", members, features
+    )
+    assert each["hole_2"] == {"at_feature": "hole_2", "x": 35.0}
+    assert each["hole_3"] == {"at_feature": "hole_3"}
+
+    # Ohne Stelle in den Werten reist auch keine.
+    each = params_for_members(
+        {"at_feature": "hole_1", "diameter": 6.5}, "hole_1", members, features
+    )
+    assert each["hole_2"] == {"at_feature": "hole_2", "diameter": 6.5}
