@@ -88,11 +88,32 @@ Umlaute, keine Stolperstelle beim Diktieren.
 
 ## §3 Was noch offen ist
 
-* **Die Ähnlichkeitsrecherche fehlt.** Geprüft wurde der Wortlaut, nicht das
-  Umfeld: Marken wie „Solido", „Solidan" oder „Solidum" könnten in den Klassen
-  7, 9, 40 oder 42 existieren und relevant sein. Diese Beurteilung gehört in
-  denselben Termin wie EULA, AGB und die Kleinunternehmerfrage — nach dem Fund
-  bei Formwerk diesmal **vorher**, nicht nachher.
+* **Die Ähnlichkeitsrecherche ist am 16.09.2026 in TMview gefahren** (Anlass:
+  Roberts Frage nach der Firma Solido3D). Geprüft: Wortlaut `solido`,
+  `solido3d`, `solidon`, alle Ämter, dazu DE/EUIPO/WIPO in den Klassen
+  7, 9, 40, 42. Die juristische Beurteilung steht weiter aus — sie gehört in
+  denselben Termin wie EULA, AGB und die Kleinunternehmerfrage.
+
+  | Fund | Amt, Nummer | Klassen | Einschätzung |
+  |---|---|---|---|
+  | `Solidon` | DPMA, EUIPO, WIPO | — | **keine Treffer**, unverändert seit dem 07.08.2026. Außerhalb der EU: USPTO 73062437 (Essex Solutions, Kl. 9, Wickeldraht, seit 1975), Japan, Indien — für DE/EU ohne Belang |
+  | `SOLIDO3D` | Italien UIBM 2015000038456, Wortmarke, angemeldet 27.07.2015, eingetragen 01.04.2019, Inhaber „Solido3d" (IT) | 1, 2, 3, 6, **7**, 8, **9**, 10, 14, 16, 17, 20, 25, 26, 27, 28, 35, **40**, 41, **42** — jeweils die ganze Klassenüberschrift | Nur Italien. Zehnjahresfrist ab Anmeldung lief am 27.07.2025 ab; TMview zeigt keine Verlängerung, führt sie aber noch als eingetragen. **Am UIBM-Register nachprüfen** (`dati.uibm.gov.it`, aus der Sitzung nicht erreichbar). Keine deutsche, keine Unions-, keine internationale Marke dieses Namens |
+  | `SOLIDO` | WIPO 1538075 (+ 1538075A), Siemens Industry Software Inc., 27.05.2020–27.05.2030, US-Priorität 06.12.2019 | 9: „Electronic Design Automation (EDA) software" | Das zeichenähnlichste eingetragene Recht: `Solidon` enthält `Solido` vollständig. Ware ist Chipdesign-Software, nicht 3D-Modellierung — Warenähnlichkeit ist die Frage für den Anwalt. Benannte Vertragsparteien (EU? DE?) in TMview nicht sichtbar, im Madrid Monitor nachsehen |
+  | `Solido` | EUIPO 005014741, UWT GmbH, 2006 | 9, 37 | Füllstandsensorik — fern |
+  | `Solido Concept Store` | EUIPO 018777731, 2022 | 2, 9, 12, 19, 20, 24, 27 | Einrichtung — fern |
+  | `Solidoro` | DPMA 3020262307353, Dennis Jakobi, Massing, **angemeldet 05.06.2026**, noch nicht eingetragen | 9, 42 | Waren noch nicht sichtbar. Liegt zeitlich **vor** der Benutzungsaufnahme von Solidon (August 2026) — beobachten, Verzeichnis lesen, sobald veröffentlicht |
+  | `SOLIDOR` | WIPO 1920662, Solidor AG, 06.03.2026 | 36, 42, 45 | Verzeichnis lesen |
+  | `SOLIDOODLE` | WIPO 1215959, 2014 | 9, 17, 35, 40, 42 | abgelaufen |
+
+  **Zur Firma Solido3D selbst:** Solido Ltd., Israel, gegründet 2000, Drucker
+  SD300 (Plastic Sheet Lamination). Insolvenzverwaltung 2014
+  (3dprintingindustry.com, 28.03.2014), 2015 von Fabbaloo als „Zombie"
+  beschrieben; `solido3d.com` steht 2026 noch mit Copyright-Zeile, ohne datierte
+  Neuigkeit, ohne Impressum, mit der Angabe „USA, China, Italien". Ein
+  deutsches Unternehmenskennzeichen (§ 5 Abs. 2 MarkenG) entstünde nur durch
+  Benutzung im Inland und erlischt mit ihrem Ende — bei dieser Lage schwach.
+  Nächster Berührungspunkt ist nicht der Produktname, sondern die Domain:
+  `solidon3d.de` gegen `solido3d.com` unterscheidet ein Buchstabe.
 * **Eine eigene Markenanmeldung** ist erwägenswert: 290 € beim DPMA für bis zu
   drei Klassen. Bei einem Produkt, das verkauft wird, ist das keine große
   Summe gegen das Risiko, denselben Vorgang ein zweites Mal zu erleben.
