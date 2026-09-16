@@ -4893,54 +4893,67 @@ class SketchPanel(QWidget):
         # Zahl, die nur im Bild steht, lässt sich nicht rot werden lassen.
         self._tools_row = tools
         self._tool_buttons: dict[str, QToolButton] = {}
-        for name, label in (
-            ("select", tr("Auswählen")),
-            ("point", tr("Punkt")),
-            ("line", tr("Linie")),
-            ("circle", tr("Kreis")),
-            ("arc", tr("Bogen")),
-            ("spline", tr("Kurve")),
-            ("trim", tr("Trimmen")),
-            ("extend", tr("Verlängern")),
-            ("fillet", tr("Verrunden")),
-            ("chamfer", tr("Fase")),
-            # **Zwei Knöpfe mehr in derselben Zeile, und das ist gemessen.**
-            # Die Zeile verlangte 639 Bildpunkte, erlaubt sind 900
-            # (``tests/test_sketch_editor.py``); zwei Symbolknöpfe à 37 kosten
-            # mit Abstand rund achtzig. Ein Ausklappmenü wie beim Rechteck
-            # wäre der Ausweg, wenn es eng würde — es ist nicht eng, und ein
-            # Werkzeug hinter einem Pfeil findet niemand, der es nicht sucht.
-            ("polygon", tr("Vieleck")),
-            ("slot", tr("Langloch")),
-            # **Das Rechteck ist ein Knopf wie die anderen**, und Lochkreis und
-            # Lochraster stehen daneben. Bis zum 16.09.2026 hing am Rechteck ein
-            # Menü mit sechs fertigen Formen in festen Maßen („Rechteck 40 mal 20",
-            # „Lochraster 4 mal 3, Abstand 10"); Robert: „die rechtecke und kreise
-            # usw mit den festen maßen brauchen wir nicht". Was man zeichnen
-            # kann, zeichnet man — mit Vorschau am Zeiger.
-            ("rectangle", tr("Rechteck")),
-            ("hole_grid", tr("Lochraster")),
-            ("bolt_circle", tr("Lochkreis")),
-        ):
-            button = QToolButton(self)
-            key = TOOL_KEYS.get(name, "")
-            # Nur das Zeichen, ohne Beschriftung — die einzige Stelle der
-            # Oberfläche, an der das gilt. Warum es hier trägt und sonst nicht,
-            # steht bei den Symbolen selbst (``app/ui/icons.py``, Abschnitt
-            # Zeichenwerkzeuge). Vierzehn beschriftete Knöpfe passten nicht in
-            # die Zeile: Qt kürzte sie auf „Tri… T" und „Ver…ern", und ein
-            # abgeschnittenes Wort ist schlechter zu lesen als ein Bild.
-            button.setIcon(icons.icon(f"sketch_{name}", button))
-            shortcut = f"  ({key})" if key else ""
-            note = f"{label}{shortcut} — {tool_instruction(name)}"
-            button.setToolTip(note)
-            button.setStatusTip(note)
-            button.setAccessibleDescription(note)
-            button.setCheckable(True)
-            button.setAutoRaise(True)
-            button.toggled.connect(weak_slot(self, SketchPanel._tool_chosen, name, forward=True))
-            self._tool_buttons[name] = button
-            tools.addWidget(button)
+        # **Vier Gruppen, drei Trennstriche** (Robert, 16.09.2026: „das zeichen
+        # panel ein bisschen übersichtlicher gestalten"): Auswählen — Zeichnen
+        # — Lochbilder — Ändern. Fünfzehn Symbole in einer Reihe las niemand
+        # als Reihe; das Rechteck stand hinter dem Langloch und Trimmen
+        # zwischen Kurve und Vieleck, weil jedes Werkzeug dort ankam, wo
+        # gerade Platz war. Die Zeile verlangte 725 Bildpunkte, erlaubt sind
+        # 900 (``tests/test_sketch_editor.py``); zwei Knöpfe und drei Striche
+        # kosten rund neunzig. Ein Ausklappmenü wäre der Ausweg, wenn es eng
+        # würde — ein Werkzeug hinter einem Pfeil findet niemand, der es nicht
+        # sucht.
+        groups: tuple[tuple[tuple[str, str], ...], ...] = (
+            (("select", tr("Auswählen")),),
+            (
+                ("point", tr("Punkt")),
+                ("line", tr("Linie")),
+                ("rectangle", tr("Rechteck")),
+                ("circle", tr("Kreis")),
+                ("arc", tr("Bogen")),
+                ("spline", tr("Kurve")),
+                ("polygon", tr("Vieleck")),
+                ("slot", tr("Langloch")),
+            ),
+            # Lochkreis und Lochraster waren bis zum 16.09.2026 Menüeinträge
+            # mit festen Maßen am Rechteck („Rechteck 40 mal 20", „Lochraster
+            # 4 mal 3, Abstand 10"); Robert: „die rechtecke und kreise usw mit
+            # den festen maßen brauchen wir nicht". Was man zeichnen kann,
+            # zeichnet man — mit Vorschau am Zeiger.
+            (("bolt_circle", tr("Lochkreis")), ("hole_grid", tr("Lochraster"))),
+            (
+                ("trim", tr("Trimmen")),
+                ("extend", tr("Verlängern")),
+                ("fillet", tr("Verrunden")),
+                ("chamfer", tr("Fase")),
+            ),
+        )
+        for group_index, group in enumerate(groups):
+            if group_index:
+                tools.addWidget(style.divider(self))
+            for name, label in group:
+                button = QToolButton(self)
+                key = TOOL_KEYS.get(name, "")
+                # Nur das Zeichen, ohne Beschriftung — die einzige Stelle der
+                # Oberfläche, an der das gilt. Warum es hier trägt und sonst
+                # nicht, steht bei den Symbolen selbst (``app/ui/icons.py``,
+                # Abschnitt Zeichenwerkzeuge). Vierzehn beschriftete Knöpfe
+                # passten nicht in die Zeile: Qt kürzte sie auf „Tri… T" und
+                # „Ver…ern", und ein abgeschnittenes Wort ist schlechter zu
+                # lesen als ein Bild.
+                button.setIcon(icons.icon(f"sketch_{name}", button))
+                shortcut = f"  ({key})" if key else ""
+                note = f"{label}{shortcut} — {tool_instruction(name)}"
+                button.setToolTip(note)
+                button.setStatusTip(note)
+                button.setAccessibleDescription(note)
+                button.setCheckable(True)
+                button.setAutoRaise(True)
+                button.toggled.connect(
+                    weak_slot(self, SketchPanel._tool_chosen, name, forward=True)
+                )
+                self._tool_buttons[name] = button
+                tools.addWidget(button)
         # **Zwei Einstellungen, die nur dastehen, wenn sie gelten.** Die
         # Eckenzahl ist keine Geste und kein Maß am Zeiger — sie entscheidet,
         # *was* entsteht, und muss deshalb vor dem ersten Klick einstellbar
@@ -5166,21 +5179,19 @@ class SketchPanel(QWidget):
         self.snap_step.setAccessibleDescription(snap_note)
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
-        self.snap_auto = QCheckBox(tr("Auto"), self)
-        self.snap_auto.setChecked(True)
-        self.snap_auto.setToolTip(
-            tr("Die Rasterweite folgt dem Zoom und bleibt im Bild gut lesbar.")
-        )
+        # **Kein Haken „Auto" neben dem Feld** (Robert, 16.09.2026: „weniger
+        # ist manchmal mehr"): Er sagte dasselbe wie der Sonderwert
+        # „Automatisch" im Feld, und wer eines umschaltete, sah das andere
+        # springen. Ganz herunterdrehen heißt Automatisch — so steht es im
+        # Handbuch, und so stand es dort schon vor dem Haken.
         #: Ob der Nutzer die Weite selbst eingestellt hat. Solange nicht, folgt
         #: sie dem Zoom (:func:`grid_step_for`); danach steht sie. Ohne diese
         #: Unterscheidung überschriebe der nächste Zoomschritt jede Eingabe.
         self._pinned_step = False
         self.snap_toggle.toggled.connect(self._snapping_changed)
         self.snap_step.valueChanged.connect(self._step_typed)
-        self.snap_auto.toggled.connect(self._automatic_grid_changed)
         self._snapping_changed()
         plane_row.addWidget(self.snap_toggle)
-        plane_row.addWidget(self.snap_auto)
         plane_row.addWidget(self.snap_step)
         tools.addStretch(1)
 
@@ -5383,6 +5394,13 @@ class SketchPanel(QWidget):
         self._constraints_row = constraints_row
         self._constraint_columns = CONSTRAINTS_PER_ROW
         self._constraint_shown: tuple[str, ...] = ()
+        self._constraints_seen = False
+        """Ob die Bedingungsknöpfe in dieser Skizze schon einmal dastanden.
+
+        Der Satz darunter („Bedingungen erscheinen, sobald …") hat eine Aufgabe:
+        sagen, dass es sie gibt. Wer die Knöpfe gesehen hat, weiß es — danach
+        stünde der Satz bei jeder abgewählten Auswahl wieder da (Robert,
+        16.09.2026: „das zeichen panel ein bisschen übersichtlicher")."""
         self._constraint_buttons: dict[ConstraintAction, QPushButton] = {}
         for position, kind in enumerate(_NEEDS):
             key = ACTION_KEYS.get(kind, "")
@@ -6036,7 +6054,6 @@ class SketchPanel(QWidget):
         nichts tut, sieht aus wie eine Einstellung, die nicht wirkt.
         """
         active = self.snap_toggle.isChecked()
-        self.snap_auto.setEnabled(active)
         # Auch im Automatikzustand bleibt das Feld direkt beschreibbar: Eine
         # Eingabe schaltet auf fest um. Erst einen Haken zu lösen, um eine Zahl
         # tippen zu dürfen, wäre eine unnötige zweite Handlung.
@@ -6077,18 +6094,7 @@ class SketchPanel(QWidget):
             with QSignalBlocker(self.snap_step):
                 self.snap_step.set_value_mm(LEAST_SNAP_MM)
             typed = LEAST_SNAP_MM
-        automatic = typed <= 0.0
-        with QSignalBlocker(self.snap_auto):
-            self.snap_auto.setChecked(automatic)
-        self._pinned_step = not automatic
-        self._snapping_changed()
-
-    def _automatic_grid_changed(self, automatic: bool) -> None:
-        """Zwischen zoomabhängigem und festem Raster eindeutig wechseln."""
-        self._pinned_step = not automatic
-        if not automatic and self.snap_step.value_mm() <= 0.0:
-            with QSignalBlocker(self.snap_step):
-                self.snap_step.set_value_mm(max(self.canvas.grid_step(), LEAST_SNAP_MM))
+        self._pinned_step = typed > 0.0
         self._snapping_changed()
 
     def follow_grid(self, step: float) -> None:
@@ -6111,8 +6117,6 @@ class SketchPanel(QWidget):
         """
         if self._pinned_step or step <= 0.0:
             return
-        with QSignalBlocker(self.snap_auto):
-            self.snap_auto.setChecked(True)
         with QSignalBlocker(self.snap_step):
             self.snap_step.set_value_mm(step)
         self.canvas.set_snapping(self.snap_toggle.isChecked(), step)
@@ -6243,7 +6247,12 @@ class SketchPanel(QWidget):
         # nebeneinander sind einer zu viel.
         fitting = any(offers.values())
         drawn = bool(self.canvas.sketch.elements)
-        self.constraint_placeholder.setVisible(not fitting and drawn)
+        # **Und er geht für den Rest der Skizze, sobald die Knöpfe einmal da
+        # waren.** Bis dahin sagt er, dass es Bedingungen gibt; danach wäre er
+        # bei jeder abgewählten Auswahl ein Satz über etwas Bekanntes.
+        if fitting:
+            self._constraints_seen = True
+        self.constraint_placeholder.setVisible(not fitting and drawn and not self._constraints_seen)
         self._constraints_box.setVisible(fitting or drawn)
         self._fit_constraint_row()
         self.coordinate_button.setEnabled(len(self.canvas.selected_point_indices()) == 1)
@@ -6638,7 +6647,11 @@ class SketchField(QWidget):
         #: Korrigieren aus dem Verlauf. Beim Anlegen kommt man ohnehin aus dem
         #: Zeichenmodus, und ein Knopf zurück dorthin wäre ein Kreis.
         self._in_space: Callable[[str], None] | None = None
-        self.space_button = QPushButton(tr("Im Raum zeichnen …"), self)
+        # **Ein Knopf, ein Wort.** An einem vorhandenen Schritt führt er in
+        # das Bild, sonst in das Fenster — nie beide nebeneinander (Robert,
+        # 16.09.2026: „weniger ist manchmal mehr"). Bis dahin standen
+        # „Zeichnen …" und „Im Raum zeichnen …" zusammen an jedem Schritt.
+        self.space_button = QPushButton(tr("Zeichnen …"), self)
         self.space_button.setToolTip(
             tr(
                 "Zeichnet die Skizze dort, wo sie liegt — mit Ziehgriff, Maßeingabe im "
@@ -6665,6 +6678,7 @@ class SketchField(QWidget):
         """
         self._in_space = go
         self.space_button.setVisible(True)
+        self.edit_button.setVisible(False)
 
     def _draw_in_space(self) -> None:
         """Der Dialog gibt ab: Was er zeigt, zeichnet der Kunde im Raum weiter.

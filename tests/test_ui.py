@@ -10840,90 +10840,12 @@ def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
 
     window.start_sketch("sketch_extrude")
     try:
-        assert "Operation" in window._sketch_hint.text()
+        # Seit dem 16.09.2026 sagt die Zeile nur, was sonst nirgends steht —
+        # auf der Hauptebene nichts; die Operation nennt die Statusleiste.
+        assert not window._sketch_hint.text()
         assert str(REGISTRY.get("sketch_extrude").title) in window.statusBar().currentMessage()
     finally:
         window.finish_sketch(keep=False)
-
-
-def test_the_sketch_use_dialog_preselects_extruding(qt_app: QApplication) -> None:
-    """Vorausgewählt **und** oben steht der Normalfall.
-
-    Die Liste kam aus dem Register, und damit stand „Entlang eines Bogens
-    führen" oben — ein Rohrbogen, der seltenste der fünf Fälle. Vorgewählt war
-    schon das Aufziehen; das genügte nicht, denn gelesen wird von oben. Und es
-    genügte erst recht nicht, solange der Dialog nur zwei der fünf zeigte:
-    246 Bildpunkte hoch, der dritte Eintrag mitten im Satz abgeschnitten, ohne
-    sichtbare Bildlaufleiste. Wer hier scrollen muss, um überhaupt zu erfahren,
-    dass es fünf Arten gibt, entscheidet zwischen zwei.
-
-    Beides gehört zusammen, deshalb steht beides hier: die Höhe trägt alle fünf
-    (am Bild geprüft), und der Normalfall steht an erster Stelle. Die übrigen
-    folgen nach Titel — eine Reihenfolge, die niemanden überrascht.
-    """
-    from app.core.bootstrap import load_operations
-    from app.ui.op_dialog import SketchUseDialog
-
-    load_operations()
-    dialog = SketchUseDialog()
-    assert dialog.chosen() == "sketch_extrude"
-    assert dialog._list.count() == 6
-    assert dialog._list.item(0).data(Qt.ItemDataRole.UserRole) == "sketch_extrude"
-    assert dialog.minimumHeight() >= 400, (
-        f"der Dialog öffnet {dialog.minimumHeight()} Punkte hoch — dann sieht man zwei von fünf"
-    )
-
-
-def test_a_free_sketch_asks_what_it_becomes(
-    window: MainWindow, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Der Fluss hinter dem Zeichnen-Knopf: „Fertig" fragt, was aus der
-    Skizze wird — und „Zurück zum Zeichnen" vernichtet nichts, es öffnet den
-    Skizzenmodus mit derselben Zeichnung wieder (§2.1, keine Sackgassen).
-    """
-    from app.ui import main_window as window_module
-    from app.ui.op_dialog import SketchUseDialog
-
-    # Der Weiter-Weg: die Wahl landet als vorbefüllte Skizze in der Operation.
-    ran: list[tuple[str, str]] = []
-    monkeypatch.setattr(SketchUseDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
-    monkeypatch.setattr(SketchUseDialog, "chosen", lambda self: "sketch_extrude")
-    monkeypatch.setattr(
-        type(window),
-        "run_operation",
-        lambda self, spec, given=None: ran.append((spec.name, next(iter(given.values())))),
-    )
-    window._offer_sketch_use('{"plane": "plane:xy"}')
-    assert ran == [("sketch_extrude", '{"plane": "plane:xy"}')]
-
-    # Der Zurück-Weg: kein Verlust, der Modus öffnet mit der Zeichnung.
-    monkeypatch.setattr(SketchUseDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
-    kept: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        type(window), "start_sketch", lambda self, op, text="": kept.append((op, text))
-    )
-    window._offer_sketch_use('{"plane": "plane:xy"}')
-    assert kept == [("", '{"plane": "plane:xy"}')]
-    assert window_module is not None
-
-
-def test_the_sketch_use_dialog_lists_the_six_kinds(window: MainWindow) -> None:
-    from app.ui.op_dialog import SketchUseDialog
-
-    dialog = SketchUseDialog(window)
-    names = {
-        str(dialog._list.item(index).data(Qt.ItemDataRole.UserRole))
-        for index in range(dialog._list.count())
-    }
-    assert names == {
-        "sketch_extrude",
-        "sketch_pocket",
-        "sketch_revolve",
-        "sketch_loft",
-        "sketch_sweep",
-        "field_cut",
-    }
-    assert dialog.chosen() in names, "eine Vorauswahl steht, Eingabe genügt"
 
 
 def test_undo_in_the_sketch_mode_means_the_last_stroke(window: MainWindow) -> None:
@@ -15086,11 +15008,11 @@ def test_the_sketch_hint_names_the_plane_being_drawn_on(window: MainWindow) -> N
             "auf einer Fläche gestartet muss der Hinweis die Fläche nennen"
         )
         assert panel.choose_plane("plane:xy")
-        assert "Draufsicht" in window._sketch_hint.text(), (
-            "nach dem Wechsel muss der Hinweis die neue Ebene nennen"
-        )
-        assert "  (" not in window._sketch_hint.text(), (
-            "das Tastenkürzel hilft beim Wechseln, nicht beim Wissen, wo man ist"
+        # Auf einer Hauptebene führt das Auswahlfeld die Ebene vollständig —
+        # die Zeile schweigt (16.09.2026: „weniger ist manchmal mehr").
+        assert "Draufsicht" in panel.plane_choice.currentText()
+        assert not window._sketch_hint.text(), (
+            "auf der Hauptebene wiederholt die Zeile das Auswahlfeld nicht"
         )
     finally:
         window.finish_sketch(keep=False)

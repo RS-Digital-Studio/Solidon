@@ -4423,13 +4423,18 @@ def test_automatic_grid_is_visible_and_typing_pins_it(qt_app: QApplication) -> N
     panel = SketchPanel()
     try:
         panel.follow_grid(5.0)
-        assert panel.snap_auto.isChecked()
         assert panel.snap_step.value_mm() == pytest.approx(5.0)
         assert panel.snap_is_pinned() is False
 
         panel.snap_step.set_value_mm(2.0)
-        assert panel.snap_auto.isChecked() is False
         assert panel.snap_is_pinned() is True
+
+        # Kein Haken mehr daneben (16.09.2026): Die Null ist der Weg zurück,
+        # und das Feld sagt es als „Automatisch".
+        panel.snap_step.set_value_mm(0.0)
+        assert panel.snap_is_pinned() is False
+        assert panel.snap_step.text() == panel.snap_step.specialValueText()
+        assert not hasattr(panel, "snap_auto")
     finally:
         panel.close()
 
@@ -4483,44 +4488,6 @@ def test_a_spline_can_be_selected_between_its_control_points(qt_app: QApplicatio
     canvas.place_on_plane((5.0, 5.625))
 
     assert canvas.selected_element_indices() == (0,)
-
-
-def test_one_outline_keeps_the_explicit_choice_with_extrusion_preselected(
-    qt_app: QApplication,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Ein Profil ist keine eindeutige Absicht; der Normalfall steht nur vorausgewählt."""
-    from PySide6.QtWidgets import QDialog
-
-    from app.ui.main_window import MainWindow
-    from app.ui.op_dialog import SketchUseDialog
-    from app.ui.session import Session
-    from app.ui.settings import UiSettings
-
-    window = MainWindow(Session(), UiSettings())
-    text = sketch_to_text(shapes.rectangle(40.0, 20.0))
-    offered: list[str] = []
-    kept: list[tuple[str, str]] = []
-
-    def reject(dialog: SketchUseDialog) -> QDialog.DialogCode:
-        offered.append(dialog.chosen())
-        assert dialog._list.count() == 6
-        return QDialog.DialogCode.Rejected
-
-    monkeypatch.setattr(SketchUseDialog, "exec", reject)
-    monkeypatch.setattr(
-        window,
-        "start_sketch",
-        lambda operation, starting="": kept.append((operation, starting)),
-    )
-
-    try:
-        window._offer_sketch_use(text)
-        assert offered == ["sketch_extrude"], "Aufziehen ist sichtbar vorgewählt"
-        assert kept == [("", text)], "Zurück zum Zeichnen behält denselben Umriss"
-    finally:
-        window.close()
-        window.deleteLater()
 
 
 def test_a_free_sketch_offers_building_and_cutting_without_a_cad_term(
@@ -4847,7 +4814,9 @@ def test_an_open_outline_blocks_the_grip_with_a_reason(qt_app: QApplication) -> 
         said = window._sketch_pull_offer()
         assert said not in ("", "ready"), said
         assert "Umriss" in said, said
-        assert said in window._sketch_hint.text(), "und er steht in der Leiste"
+        # Seit dem 16.09.2026 steht der Grund dort, wo der Griff wäre: in der
+        # Karte im Bild, nicht in der Zeile der Skizzenkarte.
+        assert said in window.viewport.sketch_action.text(), "und er steht im Bild"
     finally:
         window.finish_sketch(keep=False)
         window.close()
@@ -4912,6 +4881,9 @@ def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplicati
 
     In der Querschau sieht der Umriss aus wie ein Strich, und dass man daran
     ziehen kann, sagt sonst allein der Mauszeiger — wenn man schon darüber ist.
+    **Seit dem 16.09.2026 steht der Satz einmal, als Karte im Bild**
+    (``viewport.sketch_action``); die Zeile der Skizzenkarte wiederholt ihn
+    nicht mehr und nennt weiter Ebene und Zustand.
     """
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -4933,8 +4905,10 @@ def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplicati
         # geschlossene Umriss" und trägt dasselbe Wort: Mit einem Angebot, das
         # nie „ready" liefert, blieb der Test grün (gefunden von der
         # Review-Sitzung, 27.08.2026).
-        assert "Pfeil:" in after and "Kreuz:" not in after, after
-        assert "bearbeitbaren Körper" in after, after
+        badge = window.viewport.sketch_action.text()
+        assert "Pfeil:" in badge and "Kreuz:" not in badge, badge
+        assert "bearbeitbaren Körper" in badge, badge
+        assert "Pfeil:" not in after, "die Zeile wiederholt die Geste nicht — sie steht im Bild"
         assert "Zeichenebene" in after, "die Ebene bleibt in der Zeile stehen"
     finally:
         window.finish_sketch(keep=False)
@@ -5066,15 +5040,17 @@ def test_the_bar_line_follows_the_drawing_and_does_not_age(qt_app: QApplication)
         assert panel is not None
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         panel.choose_plane("plane:xz")
-        assert "Pfeil:" in window._sketch_hint.text(), window._sketch_hint.text()
+        badge = window.viewport.sketch_action.text()
+        assert "Pfeil:" in badge, badge
 
         # Eine lose Linie öffnet den Umriss — ab jetzt geht die Geste nicht.
         panel.canvas.add_element("line", ((60.0, 60.0), (80.0, 70.0)))
         assert not panel.canvas.outline, "der Umriss ist jetzt offen"
 
-        after = window._sketch_hint.text()
-        assert "Pfeil:" not in after, after
-        assert window._sketch_pull_offer() in after, after
+        badge = window.viewport.sketch_action.text()
+        assert "Pfeil:" not in badge, "die Karte im Bild altert nicht"
+        assert window._sketch_pull_offer() in badge, "der Grund steht dort, wo der Griff wäre"
+        assert "Pfeil:" not in window._sketch_hint.text()
     finally:
         window.finish_sketch(keep=False)
         window.close()
@@ -6401,8 +6377,8 @@ def test_the_rectangle_is_a_plain_tool_and_the_fixed_shapes_are_gone(qt_app: QAp
     quelle = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    assert "Zeichenebene: {place} · Geschlossenen Umriss zeichnen" in quelle, (
-        "der Hinweis der leeren Skizze steht nicht mehr in main_window — "
+    assert "Zeichenebene: {place}" in quelle, (
+        "der Hinweis der Skizzenkarte steht nicht mehr in main_window — "
         "dann prüft dieser Test die falsche Datei"
     )
     assert "fertige Form" not in quelle, "der Hinweis verspricht noch das gestrichene Menü"
@@ -7493,3 +7469,136 @@ def test_every_constraint_button_says_what_it_needs_and_does(qt_app: QApplicatio
         assert str(_does_phrase(kind)).strip(), kind
         assert str(_constraint_label(kind)).strip(), kind
     assert {"angle", "equal", "midpoint", "concentric"} <= set(_NEEDS)
+
+
+def test_the_tools_stand_in_four_groups_with_dividers(qt_app: QApplication) -> None:
+    """Auswählen — Zeichnen — Lochbilder — Ändern, mit drei Strichen dazwischen.
+
+    Fünfzehn Symbole in einer Reihe las niemand als Reihe (Robert, 16.09.2026:
+    „das zeichen panel ein bisschen übersichtlicher gestalten"). Die
+    Reihenfolge ist die des Zeichnens: erst die Formen, dann die Lochbilder,
+    dann, was Gezeichnetes ändert.
+    """
+    from PySide6.QtWidgets import QFrame
+
+    from app.ui.style import DIVIDER
+
+    panel = SketchPanel()
+    try:
+        assert list(panel._tool_buttons) == [
+            "select",
+            "point",
+            "line",
+            "rectangle",
+            "circle",
+            "arc",
+            "spline",
+            "polygon",
+            "slot",
+            "bolt_circle",
+            "hole_grid",
+            "trim",
+            "extend",
+            "fillet",
+            "chamfer",
+        ]
+        row = panel._tools_row
+        widgets = [row.itemAt(index).widget() for index in range(row.count())]
+        dividers = [
+            widget
+            for widget in widgets
+            if isinstance(widget, QFrame) and widget.objectName() == DIVIDER
+        ]
+        assert len(dividers) == 3, "drei Striche zwischen vier Gruppen"
+        order = [widget for widget in widgets if widget is not None]
+        # Der erste Strich steht direkt hinter Auswählen, der zweite hinter dem
+        # Langloch, der dritte hinter dem Lochraster.
+        assert order[order.index(dividers[0]) - 1] is panel._tool_buttons["select"]
+        assert order[order.index(dividers[1]) - 1] is panel._tool_buttons["slot"]
+        assert order[order.index(dividers[2]) - 1] is panel._tool_buttons["hole_grid"]
+        assert row.minimumSize().width() <= 900, "die Zeile bleibt unter der Laptop-Grenze"
+    finally:
+        panel.deleteLater()
+
+
+def test_the_constraint_hint_retires_once_the_buttons_were_seen(qt_app: QApplication) -> None:
+    """Der Satz „Bedingungen erscheinen, sobald …" sagt, dass es sie gibt — und
+    nur so lange, bis die Knöpfe einmal dastanden. Danach stünde er bei jeder
+    abgewählten Auswahl wieder da, als Satz über etwas Bekanntes."""
+    panel = SketchPanel()
+    try:
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        panel.canvas.selection.clear()
+        panel._refresh_buttons()
+        assert panel.constraint_placeholder.isVisibleTo(panel), "vor der ersten Auswahl steht er"
+
+        panel.canvas.selection[:] = [("point", (0,))]
+        panel._refresh_buttons()
+        assert [b for b in panel._constraint_buttons.values() if not b.isHidden()], (
+            "Voraussetzung: zur Auswahl passen Bedingungen, die Knöpfe stehen da"
+        )
+        assert not panel.constraint_placeholder.isVisibleTo(panel)
+
+        panel.canvas.selection.clear()
+        panel._refresh_buttons()
+        assert not panel.constraint_placeholder.isVisibleTo(panel), (
+            "wer die Knöpfe gesehen hat, bekommt den Satz nicht wieder"
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplication) -> None:
+    """*Fertig* klappt die Arten direkt auf — der Dialog „Was soll daraus
+    werden?" mit *Weiter* ist gefallen (Robert, 16.09.2026: „weniger ist
+    manchmal mehr").
+
+    Hochziehen und Tasche stehen vorn, der Rest nach Titel; was nicht geht,
+    sagt warum; ein Eintrag führt ohne Zwischenschritt in die Operation. Mit
+    festgelegter Operation ist *Fertig* ein Knopf ohne Liste.
+    """
+    from app.core.registry import OperationSpec
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        window.run_operation = note
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        assert window.sketch_finish_button.menu() is window._finish_menu, (
+            "beim freien Zeichnen hängt die Liste am Knopf"
+        )
+        names = list(window._finish_actions)
+        assert names[:2] == ["sketch_extrude", "sketch_pocket"], names
+        assert len(names) == 6, names
+        assert not any(action.isEnabled() for action in window._finish_actions.values()), (
+            "ohne Umriss geht keine — und jede sagt es"
+        )
+        assert "Umriss" in window._finish_actions["sketch_extrude"].toolTip()
+
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        assert window._finish_actions["sketch_extrude"].isEnabled()
+        pocket = window._finish_actions["sketch_pocket"]
+        assert not pocket.isEnabled() and "Körper" in pocket.toolTip(), "Abtragen sagt, was fehlt"
+        assert window._finish_actions["sketch_revolve"].isEnabled()
+
+        window._finish_actions["sketch_revolve"].trigger()
+        assert [name for name, _given in asked] == ["sketch_revolve"]
+        assert asked[0][1]["sketch"], "die Zeichnung reist in derselben Operation mit"
+        assert window._sketch_panel is None, "der Modus ist zu"
+
+        window.start_sketch("sketch_extrude")
+        assert window.sketch_finish_button.menu() is None, "mit Ziel ist Fertig ein Knopf"
+    finally:
+        if window._sketch_panel is not None:
+            window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()

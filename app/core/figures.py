@@ -847,8 +847,8 @@ def _sketch_uses(theme: Theme) -> str:
         str(
             _(
                 "Dazu Tasche schneiden und zwischen zwei Umrissen aufspannen. "
-                "Gewählt wird bei „Fertig“, mit der Zeichnung vor Augen — und "
-                "„Zurück zum Zeichnen“ wirft nichts weg."
+                "Gewählt wird bei „Fertig“, mit der Zeichnung vor Augen — "
+                "Hochziehen und Abtragen stehen direkt daneben."
             )
         ),
         width=44,

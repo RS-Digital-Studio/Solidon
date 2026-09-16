@@ -265,7 +265,7 @@ from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
-from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, SketchUseDialog
+from app.ui.op_dialog import DeferredSourcePicker, OperationDialog
 from app.ui.overlay import CARD_PADDING, CardColumn, OverlayHost, card_stylesheet
 from app.ui.palette import text_colour
 from app.ui.panels import (
@@ -2384,6 +2384,19 @@ class MainWindow(QMainWindow):
         done = QPushButton(tr("Fertig"), self.sketch_bar)
         make_primary(done)
         done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
+        # **Fertig klappt die Arten direkt auf** (Robert, 16.09.2026: „weniger
+        # ist manchmal mehr"). Bis dahin fragte ein eigener Dialog „Was soll
+        # daraus werden?" mit einer Liste und *Weiter* — zwei Fenster
+        # hintereinander für eine Wahl. Jetzt hängt die Liste am Knopf: ein
+        # Klick, jede Art mit ihrem Satz als Tooltip, was nicht geht, sagt
+        # warum. Beim freien Zeichnen; mit festgelegter Operation schließt
+        # *Fertig* ohne Frage (:meth:`_update_sketch_actions` hängt das Menü
+        # an und ab).
+        self.sketch_finish_button = done
+        self._finish_menu = QMenu(done)
+        self._finish_menu.setToolTipsVisible(True)
+        self._finish_actions: dict[str, QAction] = {}
+        self._fill_finish_menu()
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
         sketch_actions.addWidget(done)
@@ -8717,12 +8730,42 @@ class MainWindow(QMainWindow):
         """Ob Griff, Beschriftung und Operation dieselbe Tasche anbieten."""
         return not self._pocket_target_problem()
 
+    def _fill_finish_menu(self) -> None:
+        """Die Skizzen-Operationen des Registers als Einträge unter *Fertig*.
+
+        Hochziehen und Tasche vorn — die zwei häufigsten Folgen —, dann der
+        Rest nach Titel; eine neue Skizzen-Op taucht von selbst auf. Jeder
+        Eintrag trägt den ``doc``-Satz als Tooltip, denselben wie Menü und
+        Dialog; was gerade nicht geht, sagt :meth:`_update_sketch_actions`.
+        """
+        section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
+        specs = list(section.entries) if section else []
+        first = (PULL_OP, POCKET_OP)
+        specs.sort(
+            key=lambda spec: (
+                spec.name not in first,
+                first.index(spec.name) if spec.name in first else 0,
+                str(spec.title),
+            )
+        )
+        for spec in specs:
+            action = self._finish_menu.addAction(str(spec.title))
+            action.setToolTip(str(spec.doc))
+            action.setStatusTip(str(spec.doc))
+            action.triggered.connect(weak_slot(self, MainWindow._finish_sketch_as, spec.name))
+            self._finish_actions[spec.name] = action
+
     def _update_sketch_actions(self) -> None:
-        """Hochziehen und Abtragen folgen dem Zustand der freien Kontur."""
+        """Hochziehen, Abtragen und die Liste unter *Fertig* folgen dem
+        Zustand der freien Kontur."""
         panel = self._sketch_panel
         free = panel is not None and not self._sketch_target
         self.sketch_pull_button.setVisible(free)
         self.sketch_cut_button.setVisible(free)
+        # Mit festgelegter Operation ist *Fertig* ein Knopf: Die Wahl ist
+        # gefallen, die Zeichnung geht dorthin zurück, woher sie kam.
+        # Qt nimmt ``None`` und hängt das Menü ab; die Stubs kennen nur ``QMenu``.
+        self.sketch_finish_button.setMenu(self._finish_menu if free else None)  # type: ignore[arg-type]
         if not free or panel is None:
             return
 
@@ -8742,20 +8785,40 @@ class MainWindow(QMainWindow):
                 tr("Schneidet den Umriss aus dem ausgewählten Körper. Danach die Tiefe einstellen.")
             )
         )
+        # Dieselbe Auskunft an jedem Eintrag der Liste: Ohne Umriss geht
+        # keine, ohne Körper keine, die einen braucht — und der Tooltip sagt
+        # es, statt nur grau zu werden (Regel 18).
+        for name, action in self._finish_actions.items():
+            spec = REGISTRY.get(name)
+            if not closed:
+                problem = outline_problem
+            elif needed_inputs(spec):
+                problem = pocket_problem
+            else:
+                problem = ""
+            action.setEnabled(not problem)
+            action.setToolTip(problem or str(spec.doc))
 
     def _finish_sketch_as(self, op_name: str) -> None:
-        """Die sichtbare kurze Hand von der Kontur zu Aufbau oder Tasche."""
+        """Die kurze Hand von der Kontur zur Operation — Hochziehen, Abtragen
+        und jeder Eintrag der Liste unter *Fertig*."""
         panel = self._sketch_panel
         if panel is None:
             return
         if not panel.canvas.outline:
             self.announce(tr("Erst einen geschlossenen Umriss zeichnen."))
             return
-        if op_name == POCKET_OP:
+        if needed_inputs(REGISTRY.get(op_name)):
             problem = self._pocket_target_problem()
             if problem:
                 self.announce(problem)
                 return
+            # Der Körper unter der Zeichnung ist gemeint, wenn keiner gewählt
+            # ist — die Operation nimmt die Auswahl (so tat es der Dialog).
+            if not self.object_tree.selected_objects():
+                beneath = self._body_under_the_outline()
+                if beneath:
+                    self.object_tree.select_object(beneath)
         self._sketch_target = op_name
         self.finish_sketch(keep=True)
 
@@ -8825,6 +8888,14 @@ class MainWindow(QMainWindow):
         Die Beschriftung kommt aus dem Ebenen-Auswahlfeld, das sie schon
         führt — keine zweite Quelle. Nur das Tastenkürzel am Ende fällt weg:
         „(2)" hilft beim Wechseln, nicht beim Wissen, wo man ist.
+
+        **Seit dem 16.09.2026 sagt die Zeile nur, was sonst nirgends steht**
+        (Robert: „weniger ist manchmal mehr"). Auf einer Hauptebene führt das
+        Auswahlfeld darüber die Ebene vollständig, die Zeile des Panels den
+        Zustand des Umrisses, die Karte im Bild die Geste — dann ist sie leer.
+        Sie spricht bei abweichendem Blick („Blick aus der Vorderansicht ·
+        Zeichenebene: Draufsicht") und auf einer Fläche eines Körpers, deren
+        Name im Auswahlfeld abgeschnitten steht.
         """
         panel = self._sketch_panel
         if panel is None:
@@ -8849,51 +8920,21 @@ class MainWindow(QMainWindow):
                 ),
                 place,
             )
-        if self._sketch_target:
-            source = tr("Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.")
-        elif panel.canvas.outline:
-            source = tr(
-                "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper."
-            )
-        else:
-            # **Der Halbsatz nennt die fertigen Formen** (Befund Z6). Hinter
-            # dem Pfeil des Rechteck-Knopfs liegen sechs vollbemaßte Formen —
-            # Rechteck, Langloch, Kreis, Sechseck, Lochkreis, Lochraster —,
-            # und für jemanden ohne CAD-Kenntnisse ist das die hilfreichste
-            # Stelle der ganzen Leiste. Sie war zugleich die einzige, die man
-            # nur findet, wenn man einen kleinen Pfeil trifft.
-            #
-            # Hier und nicht in der Leiste: Der Satz steht ohnehin da, wo ein
-            # Anfänger nachliest, was als Nächstes geht, und kostet keinen
-            # Bildpunkt Breite. Der häufigste Fall — jemand will ein Rechteck
-            # — bleibt damit ein Klick.
-            source = tr(
-                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — "
-                "daraus wird dann ein Körper."
-            )
-        # **In der Querschau steht hier die Geste**, und zwar aus derselben
-        # Quelle, die sie auch erlaubt (:meth:`_sketch_pull_offer`) — sonst
-        # verspricht der Satz etwas, was der Griff nicht hält. Ohne ihn findet
-        # ihn niemand: Der Umriss sieht von der Kante aus wie ein Strich, und
-        # dass man daran ziehen kann, sagt allein der Mauszeiger, wenn man
-        # schon darüber ist.
-        #
-        # Eingesetzt wird **vor** dem Anhängen: Ein Grund, der selbst eine
-        # geschweifte Klammer trägt, ließe ``format`` sonst über einen Text
-        # laufen, der keine Vorlage mehr ist.
-        line = source.format(place=place)
+        line = ""
         if panel.canvas.view_plane != panel.canvas.sketch.plane:
-            # **„Ansicht: freien Ansicht“ war kein Satz** (Z8). plane_where
-            # liefert die Dativform, gebaut für „Sie sehen die Zeichnung aus
-            # der …“ — hinter einem Doppelpunkt steht sie im falschen Fall.
-            # Der Artikel gehört deshalb in den Satz, nicht in die Wortliste:
-            # So passen alle drei Antworten, die die Funktion geben kann.
-            line = tr("Blick aus der {view} · {instruction}").format(
-                view=plane_where(panel.canvas.view_plane), instruction=line
+            line = tr("Blick aus der {view} · Zeichenebene: {place}").format(
+                view=plane_where(panel.canvas.view_plane), place=place
             )
+        elif drawing_plane.startswith("feature:"):
+            line = tr("Zeichenebene: {place}").format(place=place)
         offer = self._sketch_pull_offer()
         action = ""
         if offer == "ready":
+            # **Der Gestensatz steht einmal, im Bild.** ``show_sketch_action``
+            # trägt ihn als Karte über die Zeichnung; hier stand er bis zum
+            # 16.09.2026 wörtlich noch einmal — zwei Sätze für eine Geste, und
+            # die Karte unten wuchs auf vier Zeilen (Robert: „das zeichen
+            # panel ein bisschen übersichtlicher gestalten").
             action = (
                 str(tr("Pfeil: Körper hochziehen · Kreuz: Tasche schneiden."))
                 if self._sketch_cut_available()
@@ -8904,9 +8945,10 @@ class MainWindow(QMainWindow):
                     )
                 )
             )
-            line = f"{line} {action}"
         elif offer:
-            line = f"{line} {offer}"
+            # Der Grund, aus dem der Griff gerade nicht geht, steht dort, wo
+            # der Griff wäre: in der Karte im Bild.
+            action = offer
         elif (
             panel.canvas.outline
             and panel.canvas.view_plane == panel.canvas.sketch.plane
@@ -8923,6 +8965,7 @@ class MainWindow(QMainWindow):
                 )
             )
         self._sketch_hint.setText(line)
+        self._sketch_hint.setVisible(bool(line))
         self.viewport.show_sketch_action(action)
         self._update_sketch_actions()
 
@@ -9146,10 +9189,12 @@ class MainWindow(QMainWindow):
                 else:
                     self.run_operation(REGISTRY.get(target), given=values)
             else:
-                # Freies Zeichnen (Weg 2): erst jetzt fällt die Entscheidung,
-                # was aus der Skizze wird — mit der fertigen Zeichnung vor
-                # Augen statt vorab aus fünf Menüeinträgen.
-                self._offer_sketch_use(text, on_body=on_body)
+                # Ohne Wahl gilt der wahrscheinlichere Fall (Robert, 03.09.2026):
+                # auf leerer Fläche ein Körper, über einem Körper eine Tasche.
+                name = POCKET_OP if on_body else PULL_OP
+                if on_body and not self.object_tree.selected_objects():
+                    self.object_tree.select_object(on_body)
+                self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
 
     # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
 
@@ -9665,38 +9710,6 @@ class MainWindow(QMainWindow):
         """Der Skelett-Knopf der Werkzeugleiste — aus demselben Grund eine
         eigene Methode wie der Nachbar darüber."""
         self.start_armature()
-
-    def _offer_sketch_use(self, text: str, *, on_body: str = "") -> None:
-        """Die möglichen Operationen mit der fertigen Zeichnung vor Augen wählen.
-
-        Abbrechen wirft nichts weg: es geht zurück in den Skizzenmodus, die
-        Zeichnung bleibt. Ein „Abbrechen", das gezeichnete Arbeit vernichtet,
-        wäre die Sackgasse, die §2.1 verbietet.
-        """
-        # **Was unter der Zeichnung liegt, entscheidet die Vorwahl.** Ohne
-        # Körper wird ein Körper daraus, mit Körper meistens eine Tasche darin
-        # — dieselbe Regel, die der Ziehgriff seit jeher an der Richtung
-        # trifft. Gefragt wird in der Reihenfolge, die auch ``_apply_sketch_pull``
-        # benutzt: erst der ausgewählte, dann der unter dem Umriss. Der zweite
-        # Teil ist der wichtige, denn in Fusion wählt man vor dem Abtragen
-        # keinen Körper aus (Robert, 30.08.2026).
-        chosen_body = self.object_tree.selected() or on_body or self._body_under_the_outline()
-        result = self.session.last_result
-        entry = result.scene.objects.get(chosen_body) if result and chosen_body else None
-        dialog = SketchUseDialog(self, on_body=str(entry.name) if entry else "")
-        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen():
-            name = dialog.chosen()
-            spec = REGISTRY.get(name)
-            # **Gefunden heißt noch nicht gewählt** — dieselbe Falle wie beim
-            # Ziehgriff: ``run_operation`` nimmt seine Eingänge aus dem
-            # Objektbaum, und ein nur gefundener Körper käme dort nie an. Die
-            # Operation liefe ohne Eingang und meldete einen fehlenden Körper,
-            # obwohl er unter der Zeichnung liegt.
-            if needed_inputs(spec) == 1 and chosen_body and not self.object_tree.selected_objects():
-                self.object_tree.select_object(chosen_body)
-            self.run_operation(spec, given={_sketch_param(name): text})
-            return
-        self.start_sketch("", text)
 
     def palette_rows(
         self, commands: dict[str, tuple[str, str, Any]] | None = None

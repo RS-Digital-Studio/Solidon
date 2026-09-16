@@ -790,3 +790,52 @@ einem Schnitt:
   L, K und R sind vergeben; ein Kürzel ohne Anlass ist eines, das man
   vergisst. Die Knöpfe stehen rechts in der Zeile, die Zeile bleibt unter 900
   Bildpunkten (`test_the_sketch_area_fits_a_laptop_screen`).
+
+## Die Karte unten: vier Gruppen, ein Hinweis, kein doppelter Satz (16.09.2026)
+
+Robert: „das zeichen panel ein bisschen übersichtlicher gestalten". Drei
+Dinge, alle drei aus der Durchsicht `konzepte/durchsicht-zeichenmodus-2026-09.md`:
+
+* **Die Werkzeuge stehen in vier Gruppen mit drei Strichen** (`style.divider`):
+  Auswählen — Punkt, Linie, Rechteck, Kreis, Bogen, Kurve, Vieleck, Langloch —
+  Lochkreis, Lochraster — Trimmen, Verlängern, Verrunden, Fase. Die Reihenfolge
+  ist die des Zeichnens: Formen, Lochbilder, dann was Gezeichnetes ändert.
+  Fünfzehn Symbole in historischer Reihenfolge las niemand als Reihe
+  (`test_the_tools_stand_in_four_groups_with_dividers`).
+* **Der Satz „Bedingungen erscheinen, sobald …" geht, sobald die Knöpfe einmal
+  da waren** (`_constraints_seen`). Er sagt, dass es Bedingungen gibt; wer sie
+  gesehen hat, weiß es — danach stand er bei jeder abgewählten Auswahl wieder
+  da. Auf dem leeren Blatt bleibt er weiter weg, dort sagt die Einladung alles.
+* **Der Gestensatz steht einmal, als Karte im Bild.** „Pfeil: Körper
+  hochziehen · Kreuz: Tasche schneiden" stand wörtlich zweimal — im Banner
+  über der Zeichnung und in der Zeile der Skizzenkarte. Die Zeile nennt
+  weiter Ebene und Zustand; die Geste nennt das Bild, wo sie stattfindet.
+
+**Die fünf Entscheidungen dazu hat Robert am selben Tag delegiert** („mach das
+beste für kunden daraus, denk auch dran weniger ist manchmal mehr"), und so
+sind sie gefallen:
+
+* **Fertig klappt die Arten direkt auf** (`_fill_finish_menu`): ein Menü am
+  Knopf mit den sechs Skizzen-Operationen des Registers, Hochziehen und Tasche
+  vorn, jede mit ihrem `doc`-Satz als Tooltip; was nicht geht, ist gesperrt
+  und sagt warum (`_update_sketch_actions`). Der Dialog „Was soll daraus
+  werden?" mit *Weiter* und *Zurück zum Zeichnen* ist gefallen — zwei Fenster
+  für eine Wahl. Mit festgelegter Operation ist *Fertig* ein Knopf ohne Menü.
+  Ohne Wahl gilt der wahrscheinlichere Fall: auf leerer Fläche ein Körper,
+  über einem Körper eine Tasche (Robert, 03.09.2026).
+* **Die Zeile der Skizzenkarte sagt nur, was sonst nirgends steht.** Ebene
+  führt das Auswahlfeld, Zustand die Zeile des Panels, Geste die Karte im
+  Bild — dann ist sie leer. Sie spricht bei abweichendem Blick („Blick aus der
+  Vorderansicht · Zeichenebene: Draufsicht") und auf einer Fläche eines
+  Körpers, deren Name im Auswahlfeld abgeschnitten steht. Die Entscheidung
+  vom 24.08.2026 (Robert zeichnete auf z gleich null) bleibt eingelöst: Die
+  Ebene steht sichtbar, nur einmal. Der Grund, aus dem der Griff nicht geht,
+  steht in der Karte im Bild, wo der Griff wäre.
+* **Kein Haken „Auto" am Raster.** Der Sonderwert „Automatisch" im Feld sagte
+  dasselbe; ganz herunterdrehen heißt Auto, so steht es im Handbuch.
+* **Ein Zeichnen-Knopf je Skizzenfeld.** An einem vorhandenen Schritt führt
+  er in das Bild (`offer_space` versteckt den Fensterweg), sonst in das
+  Fenster — nie beide nebeneinander. Bahn und oberer Umriss von Führen und
+  Überblenden bekommen so denselben Weg wie die Hauptskizze.
+* **Keine Kürzel für Lochkreis und Lochraster.** Fusion belegt nichts, freie
+  Buchstaben ohne Eselsbrücke vergisst man.
