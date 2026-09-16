@@ -1866,7 +1866,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         body=_(
             "Ein Name auf dem Deckel, eine Größe auf der Schublade, ein Schild "
             "für die Werkbank. Beschriftet wird auf zwei Wegen, und beide "
-            "stehen unter *Erzeugen → Beschriftung*: *Text aufbringen* setzt "
+            "stehen im Menü *Erzeugen*: *Text aufbringen* setzt "
             "die Schrift erhaben oder vertieft auf eine Fläche des gewählten "
             "Körpers, *Schriftzug als Körper* legt sie als eigenes Objekt an — "
             "für Buchstaben, die aufgeklebt werden, oder für den "
