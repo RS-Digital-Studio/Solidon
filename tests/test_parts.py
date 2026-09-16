@@ -60,6 +60,23 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
     return core_corners(spec.params)
 
 
+def required_defaults(spec: PartSpec) -> dict[str, Any]:
+    """Pflichtwerte, die eine Vorgabe tragen — die Auswertung setzt sie nicht ein.
+
+    Eine Vorgabe macht ein Feld nicht optional (``registry/params.py``, seit dem
+    27.08.2026): Ein Pflichtfeld ohne Wert hält die Kette an, auch wenn eine
+    Vorgabe dasteht. Klemmschale, Einlage, Dichtnut und Dichtung tragen ihre
+    Zeichnung so — Pflicht, mit einem Kreis als Startpunkt. Der Katalogdialog
+    sammelt jeden Wert ein und schickt ihn mit; wer hier ohne Dialog aufruft,
+    tut dasselbe.
+    """
+    return {
+        entry.name: entry.default
+        for entry in spec.params.spec()
+        if entry.required and entry.default not in (None, "")
+    }
+
+
 # --- die Bibliothek ---------------------------------------------------------------
 
 
@@ -164,10 +181,20 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     Normteiltabelle, waren aber im Katalog nicht benutzbar. Der Lagersitz macht
     daraus eine einfache Auswahl: Lagernummer wählen und entscheiden, ob das
     Lager wechselbar oder fest eingepresst sein soll.
+
+    ``profile_clamp_shell`` und ``profile_clamp_liner`` kamen am 16.09.2026
+    aus dem Dateiaudit (RM-183): eine Klemmschale und eine wechselbare Einlage
+    mit gezeichneter Gegenkontur, die zusammen den Vierkörperweg von
+    ``create_profile_clamp_set`` bilden. Beide brauchen eine Zeichnung und
+    ein ausdrückliches Material — Vorgaben gibt es dafür nicht.
+
+    ``seal_groove`` und ``seal_gasket`` kamen am selben Tag dazu: die
+    abtragende Dichtnut und die separate Dichtung aus demselben geschlossenen
+    Weg, dieselbe Bauart mit Zeichnung und Materialrolle.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 28
+    assert len(building) == 32
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -227,10 +254,15 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2234_cartesian_boundaries() -> None:
-    """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen."""
+def test_the_library_really_has_2578_cartesian_boundaries() -> None:
+    """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2234
+    Die 344 seit dem 16.09.2026 sind die Klemmschale (64), ihre Einlage (256),
+    die Dichtnut (8) und die Dichtung (16) — gezählt je Baustein, nicht aus
+    dem Prüfling abgelesen.
+    """
+
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2578
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -2321,7 +2353,13 @@ def test_a_part_that_needs_a_face_says_so_instead_of_guessing(profile: Profile) 
         History(step.document).apply("Quader", [OperationDraft(op="create_box", params={})])
         History(step.document).apply(
             spec.name,
-            [OperationDraft(op=part_ops.op_name(spec.name), inputs=("obj_1",), params={})],
+            [
+                OperationDraft(
+                    op=part_ops.op_name(spec.name),
+                    inputs=("obj_1",),
+                    params=required_defaults(spec),
+                )
+            ],
         )
         result = evaluate(step.document, profile, sources=ProjectSources(step))
 
@@ -3034,17 +3072,19 @@ def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
 
 
 @pytest.mark.parametrize(
-    "name",
-    [part_ops.op_name(spec.name) for spec in PARTS.all()],
-    ids=lambda name: str(name),
+    "spec",
+    list(PARTS.all()),
+    ids=lambda spec: part_ops.op_name(spec.name),
 )
-def test_every_part_operation_runs_on_a_body(name: str, profile: Profile) -> None:
+def test_every_part_operation_runs_on_a_body(spec: PartSpec, profile: Profile) -> None:
     """Ein Lauf je Operation — eine Deklaration, die nie jemand aufgerufen
     hat, ist nicht fertig.
     """
+    name = part_ops.op_name(spec.name)
     project = project_with_plate()
     History(project.document).apply(
-        name, [OperationDraft(op=name, inputs=("obj_1",), params={"z": 4.0})]
+        name,
+        [OperationDraft(op=name, inputs=("obj_1",), params={"z": 4.0, **required_defaults(spec)})],
     )
 
     result = evaluate(project.document, profile, sources=ProjectSources(project))
@@ -3162,7 +3202,7 @@ def test_an_added_part_has_the_component_count_it_declares(
     spec, values = pair
     name = part_ops.op_name(spec.name)
     choice = part_ops.cuts_by_parameter(spec.params)
-    params: dict[str, Any] = {"at_feature": "face_top"}
+    params: dict[str, Any] = {"at_feature": "face_top", **required_defaults(spec)}
     if choice is not None:
         params[choice[0]] = getattr(values, choice[0])
 

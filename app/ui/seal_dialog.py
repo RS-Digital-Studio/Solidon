@@ -103,6 +103,9 @@ class SealPathField(QWidget):
         self.summary.setWordWrap(True)
         self.summary.setTextFormat(Qt.TextFormat.PlainText)
         self.button = QPushButton(tr("Dichtweg wählen …"), self)
+        # Ein Nebenknopf im Operationsdialog: Mit Fokus würde Qt ihn sonst zum
+        # Default machen und *Übernehmen* seine Akzentfarbe nehmen.
+        self.button.setAutoDefault(False)
         self.button.clicked.connect(self.choiceRequested)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
