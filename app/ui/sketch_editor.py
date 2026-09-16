@@ -187,7 +187,7 @@ DEFAULT_SLOT_WIDTH_MM = 5.0
 #: Mehr Kreise als Rasterlinien im Bild unterscheidet niemand mehr.
 DEFAULT_GRID_COLUMNS = 4
 DEFAULT_GRID_ROWS = 3
-MOST_GRID_LINES = 32
+MOST_HOLE_GRID_LINES = 32
 DEFAULT_BOLT_COUNT = 6
 DEFAULT_HOLE_DIAMETER_MM = 4.0
 
@@ -1353,6 +1353,12 @@ class SketchCanvas(QWidget):
         nicht — wer sie kennt, reicht hier die Auflösung herein.
         """
         self._frame_of = lookup
+
+    def plane_frame(self, plane: str) -> PlaneFrame | None:
+        """Der Rahmen einer Flächenebene — ``None``, wenn niemand ihn auflöst."""
+        if not is_feature_plane(plane) or self._frame_of is None:
+            return None
+        return self._frame_of(plane)
 
     def project_bodies(self) -> None:
         """Holt die Schnittkurven aller Körper als Hilfsgeometrie herein.
@@ -4730,6 +4736,17 @@ PLANE_FIELD_CHARS = 20
 #: Zeichenebene, und nur ``SketchCanvas.view_plane`` darf diesen Wert tragen.
 FREE_VIEW = "view:free"
 
+#: Die Normale jeder Hauptebene — gegen sie wird eine gewählte Flächenebene
+#: beim Einrasten der Ansicht gehalten (:meth:`SketchPanel._keeps_the_chosen_face`).
+_PLANE_NORMALS: dict[str, tuple[float, float, float]] = {
+    "plane:xy": (0.0, 0.0, 1.0),
+    "plane:xz": (0.0, 1.0, 0.0),
+    "plane:yz": (1.0, 0.0, 0.0),
+}
+#: Ab diesem Kosinus gilt ein Blick als parallel zur Fläche — fünf Grad, dieselbe
+#: Größenordnung, in der die Ansicht einrastet.
+_PARALLEL_COS = math.cos(math.radians(5.0))
+
 
 def plane_choices() -> tuple[tuple[str, str], ...]:
     """Die drei Grundebenen, wie sie im Feld stehen.
@@ -4995,7 +5012,7 @@ class SketchPanel(QWidget):
         # stehen nur bei ihrem Werkzeug da.
         columns_note = tr("Spalten des Lochrasters — Löcher in x-Richtung.")
         self.grid_columns_field = QSpinBox(self)
-        self.grid_columns_field.setRange(1, MOST_GRID_LINES)
+        self.grid_columns_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_columns_field.setValue(DEFAULT_GRID_COLUMNS)
         self.grid_columns_field.setToolTip(columns_note)
         self.grid_columns_field.setStatusTip(columns_note)
@@ -5009,7 +5026,7 @@ class SketchPanel(QWidget):
         tools.addWidget(self.grid_columns_field)
         rows_note = tr("Zeilen des Lochrasters — Löcher in y-Richtung.")
         self.grid_rows_field = QSpinBox(self)
-        self.grid_rows_field.setRange(1, MOST_GRID_LINES)
+        self.grid_rows_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_rows_field.setValue(DEFAULT_GRID_ROWS)
         self.grid_rows_field.setToolTip(rows_note)
         self.grid_rows_field.setStatusTip(rows_note)
@@ -5974,6 +5991,18 @@ class SketchPanel(QWidget):
             # Eine freie Kameralage ist keine Zeichenebene. Bis zum ersten
             # Element bleibt deshalb die zuletzt eindeutige Ebene gewählt.
             return
+        if plane is not None and self._keeps_the_chosen_face(plane):
+            # **Eine gewählte Fläche bleibt, solange der Blick auf ihr steht.**
+            # „Auf dieser Fläche zeichnen" stellt die Kamera senkrecht auf die
+            # Fläche, und genau dort rastet die Ansicht auf die parallele
+            # Hauptebene ein — beim ersten Klick, denn ein Klick ist für den
+            # Navigator das Ende einer Geste. Bis zum 16.09.2026 tauschte das
+            # die Flächenebene gegen die Achsenebene durch den Ursprung, die
+            # Kamera folgte, und der erste Punkt des Rechtecks lag neben dem
+            # Modell (Robert: „dann wurde rausgezoomt und ich war neben dem
+            # Modell"). Erst ein Blick, der nicht mehr parallel zur Fläche
+            # steht, wechselt die Ebene — dann hat jemand wirklich gedreht.
+            return
         index = self.plane_choice.findData(shown)
         if index < 0:
             return
@@ -5986,6 +6015,23 @@ class SketchPanel(QWidget):
             self.planeChanged.emit()
         self._refresh_plane_role()
         self._show_layer_note()
+
+    def _keeps_the_chosen_face(self, view_plane: str) -> bool:
+        """Ob eine leere Skizze auf einer gewählten Fläche dort bleibt.
+
+        Wahr, wenn die Zeichenebene eine Fläche ist und die eingerastete
+        Hauptansicht parallel zu ihr steht — dann beschreibt die Ansicht nur
+        den Blick, den „Auf dieser Fläche zeichnen" selbst eingestellt hat.
+        """
+        current = self.canvas.sketch.plane
+        if self.canvas.sketch.elements or not is_feature_plane(current):
+            return False
+        frame = self.canvas.plane_frame(current)
+        axis = _PLANE_NORMALS.get(view_plane)
+        if frame is None or axis is None:
+            return False
+        along = sum(float(a) * float(b) for a, b in zip(frame.normal, axis, strict=True))
+        return abs(along) >= _PARALLEL_COS
 
     def _refresh_plane_role(self) -> None:
         """Das Auswahlfeld als Zeichenebene oder als Ansicht benennen."""

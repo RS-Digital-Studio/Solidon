@@ -4393,6 +4393,49 @@ def test_plane_field_changes_role_but_never_moves_an_existing_sketch(
         panel.close()
 
 
+def test_a_chosen_face_survives_the_first_click_that_snaps_the_view(
+    qt_app: QApplication,
+) -> None:
+    """Robert, 16.09.2026: „Ich hab auf der Fläche den ersten Klick gemacht,
+    nachdem ich Rechteck gewählt hab, und dann wurde rausgezoomt und ich war
+    neben dem Modell."
+
+    „Auf dieser Fläche zeichnen" stellt die Kamera senkrecht auf die Fläche —
+    genau dort rastet die Ansicht auf die parallele Hauptebene ein, und der
+    erste Klick ist für den Navigator ein Gestenende. Bei leerer Skizze
+    tauschte das die Flächenebene gegen ``plane:xz`` durch den Ursprung, die
+    Kamera folgte. Gemessen am Tray: Fokus von (0 | 16,4 | 13,2) nach
+    (0 | 0 | −12). Jetzt bleibt die Fläche, solange der Blick parallel zu ihr
+    steht; ein anderer Blick wechselt weiterhin.
+    """
+    from app.core.types import PlaneFrame
+    from app.ui.sketch_editor import SketchPanel, Surroundings
+
+    back_wall = PlaneFrame(
+        origin=(20.0, 18.5, 23.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 0.0, 1.0),
+        normal=(0.0, -1.0, 0.0),
+    )
+    panel = SketchPanel(
+        surroundings=Surroundings(
+            faces=(("face_2", "Fläche an Tray — 2 610 mm²", (0.0, -1.0, 0.0)),),
+            frame_of=lambda plane: back_wall if plane == "feature:face_2" else None,
+        )
+    )
+    try:
+        assert panel.choose_plane("feature:face_2") is True
+
+        panel.reflect_camera_view("plane:xz")
+        assert panel.canvas.sketch.plane == "feature:face_2", "parallel: die Fläche bleibt"
+        assert panel.plane_choice.currentData() == "feature:face_2"
+
+        panel.reflect_camera_view("plane:xy")
+        assert panel.canvas.sketch.plane == "plane:xy", "ein anderer Blick wechselt weiter"
+    finally:
+        panel.close()
+
+
 def test_offset_field_only_appears_for_a_selection(qt_app: QApplication) -> None:
     """Das zweite Millimeterfeld steht nur in seinem erklärten Kontext."""
     from PySide6.QtWidgets import QLabel
