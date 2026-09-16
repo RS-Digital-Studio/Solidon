@@ -2018,7 +2018,20 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Der Modellstart kriecht seit den Torläufen dreier Sitzungen am Abend beim
 #: Anlegen des KV-Caches (RM-081); die 22,9 s vom Nachmittag bleiben der
 #: Bezugswert.
-PROMPT_TOKENS: Final = 28616
+#:
+#: **Am 16.09.2026 mit 142 Werkzeugen gemessen: 36 546 Token** — und damit
+#: **111,5 % des Fensters.** Die erste Messung mit ``num_ctx`` 32 768 meldete
+#: 16 386: die Hälfte des Fensters plus zwei, also die stille Kürzung aus
+#: :class:`BackendPromptTruncated`, keine Ersparnis. Ungekürzt gezählt mit
+#: ``num_ctx`` 65 536 (29 s kalt, ``num_predict`` 1); bei 40 960 liegt
+#: qwen3:14b noch zu 89 % im VRAM (14,7 von 16,4 GB), warm 4,3 bis 4,5 s statt
+#: 2,4 — aber Steckbrief, Prüfbericht und Verlauf kommen obendrauf, und auch
+#: dieses Fenster wäre voll. Die 21 Werkzeuge seit dem 15.09.2026 (Organizer,
+#: Felder, Lochbilder, Profilklemme, Dichtnut) haben das Schema über das
+#: Fenster geschoben: Wer mit dem Vorgabemodell chattet, bekommt die
+#: Kürzungsmeldung mit ihren Handlungen. Der Platz muss aus dem Schema kommen
+#: (RM-173, Fortsetzung als RM-185).
+PROMPT_TOKENS: Final = 36546
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -2032,7 +2045,10 @@ PROMPT_TOKENS: Final = 28616
 #: fortgeschrieben, denn eine hochgerechnete Messung ist keine. Was sie wert
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
-PROMPT_TOOL_COUNT: Final = 121
+#:
+#: Seit dem 16.09.2026 sind es 142, und die Tokenzahl darüber ist von genau
+#: diesen 142 gemessen — ungekürzt, mit einem Fenster, das sie aufnimmt.
+PROMPT_TOOL_COUNT: Final = 142
 
 #: Unter diesem Anteil der gemessenen Werkzeuglast gilt eine Antwort als
 #: vorn gekürzt (:class:`BackendPromptTruncated`). Die Schwelle hat Luft nach

@@ -37,7 +37,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [RM-183 — Dateiaudit vollständig umsetzen](#rm-183) | Geometrie, Erkennung und Druckvorbereitung | Fehlerkorrekturen, funktionale Merkmale, Bausteine und Erstellabläufe mit Einzeldateiabnahme |
+| [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Nativer Ablauf der Dichtnut am Fenster; die übrigen Familien und die Einzeldateiabnahme aller 187 Fälle sind zurückgestellt |
+| [RM-186 — Drei Bausteinbaum-Tests sind auf Windows rot, auf Ubuntu grün](#rm-186) | Geometrie, Erkennung und Druckvorbereitung | `insert_printed_thread` am Quader trägt hier eine erkannte Fläche mit `created_by` des Schritts; Ursache des Plattformunterschieds messen, dann Test oder Erkennung nachziehen |
 | [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt; Windows ist seit dem 14.09. ein Kundenbefund — mit Smart App Control startet Solidon auf Windows 11 nicht, Certum-Zugang und `sign_release.py` einmal fahren |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
@@ -88,6 +89,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Quote und Kürzung sind gemessen (RM-173); offen sind Latenz auf ruhiger Karte, der Lauf ohne Denkblock und die gestufte Werkzeugauswahl als Entscheidung |
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus](#rm-173) | KI und Generatoren | Zwei Wächter stehen, die Kürzung ist drin (Suite 20/39 → 24/39); offen sind der dritte Lauf ohne Denkblock, die Neumessung von `PROMPT_TOKENS` auf ruhiger Karte und drei Entscheidungen von Robert |
+| [RM-185 — Das kompakte Werkzeugschema passt nicht mehr ins Fenster des lokalen Modells](#rm-185) | KI und Generatoren | Gemessen 36 546 Token bei 142 Werkzeugen gegen 32 768; das Schema kürzen, bis es mit Steckbrief und Verlauf hineinpasst, dann `test_the_local_backend_opens_a_window_big_enough_for_the_tools` von xfail befreien |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -1060,51 +1062,71 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
 
-<a id="rm-183"></a>
+<a id="rm-184"></a>
 
-- [~] **RM-183 — Dateiaudit vollständig umsetzen.** Grundlage sind 187 einzelne
+- [~] **RM-184 — Dateiaudit vollständig umsetzen.** Grundlage sind 187 einzelne
   Modell-, Projekt- und Zeichnungsfälle aus `F:\3D Dateien` sowie ihre Begleitdateien.
   Die lokalen Nachweise liegen unter `ui-audit/2026-09-15-files/`.
   Robert hat den Umfang am 16.09.2026 auf den Abschluss der begonnenen Einheiten
   begrenzt und anschließend die vollständige Veröffentlichung von 0.4.3 beauftragt.
   Die übrigen Familien und die vollständige Einzeldateiabnahme bleiben zurückgestellt.
 
-  **Begonnene Einheiten für 0.4.3:**
+  **Abgeschlossen mit 0.4.3** (ein Punkt der Roadmap ist ein Kästchen — die
+  Einheiten darunter tragen keines):
 
-  - [x] Bohrung mit Senkung/Einlauf maßhaltig bearbeiten, Sackbodenkennung erhalten,
+  - Bohrung mit Senkung/Einlauf maßhaltig bearbeiten, Sackbodenkennung erhalten,
     vollständige Vorschau und eindeutige Auswahl; gezielte Original- und UI-Gegenproben.
-  - [x] Flache Sackbohrungen, kleine Kontaktflächen und kurze Gewinde erkennen;
+  - Flache Sackbohrungen, kleine Kontaktflächen und kurze Gewinde erkennen;
     örtliche Erkennung großer Netze mit anschließender Bearbeitung in einer Transaktion.
-  - [x] ZIP-Doppeleinträge, SVG-Vorgaben und sichtbare SVG-/DXF-Konturauswahl;
+  - ZIP-Doppeleinträge, SVG-Vorgaben und sichtbare SVG-/DXF-Konturauswahl;
     versionierte GLB-/GLTF-Einheiten und Aufrichtung.
-  - [x] Projektparameter bis in Bausteinskizzen und Platzierungsvorschauen verfolgen;
+  - Projektparameter bis in Bausteinskizzen und Platzierungsvorschauen verfolgen;
     Organizer mit gebundenen Fachmaßen, einzelnen Trennwänden und vier Bausteinen.
-  - [x] Loch-, Langloch- und Wabenfelder mit gezeichnetem Bereich, Ausschlüssen,
+  - Loch-, Langloch- und Wabenfelder mit gezeichnetem Bereich, Ausschlüssen,
     Randabstand und Mindeststeg; Einstieg aus freier Zeichnung in der Oberfläche.
-  - [x] Profilklemme aus zwei Schalen und zwei Einlagen, ausdrückliche Materialwahl,
+  - Profilklemme aus zwei Schalen und zwei Einlagen, ausdrückliche Materialwahl,
     runde/ovale/gezeichnete Gegenkontur und Austausch bei unveränderten Schalen;
-    Bereichsprüfung und nativer Erzeugen-/Ersatz-/Undo-/Redo-Weg.
-  - [~] Dichtnut mit separater Dichtung aus Zeichnung oder bestätigter Öffnung,
-    Materialrollen, Restwand und optionale Gegenfläche; abschließender nativer Ablauf.
-  - [~] Gemeinsame Anschlussprüfungen, Übersetzungen, Dokumentation und Auslieferung
-    0.4.3 mit sauberem Arbeitsbaum. Das vollständige lokale Tor entfällt auf Roberts
-    ausdrücklichen Wunsch; die regulären CI- und Paketprüfungen bleiben bestehen.
+    Bereichsprüfung und nativer Erzeugen-/Ersatz-/Undo-/Redo-Weg. Die Schale
+    allein sitzt seit dem 16.09.2026 bei null; den Bundfreiraum setzt das Paar.
+  - Dichtnut mit separater Dichtung aus Zeichnung oder bestätigter Öffnung,
+    Materialrollen, Restwand und optionale Gegenfläche.
+  - Anschlussprüfungen, Übersetzungen, Dokumentation und Auslieferung 0.4.3.
+    Das vollständige lokale Tor entfiel auf Roberts ausdrücklichen Wunsch; die
+    Suite lief in der CI auf allen Plattformen vor dem Paketbau.
+
+  **Noch offen:** der abschließende native Ablauf der Dichtnut am Fenster
+  (Zeichnen, Öffnung wählen, Gegenfläche, Übernehmen, Undo) mit Bildnachweis.
 
   **Für die Fortsetzung vorgemerkt, jetzt nicht beginnen:**
 
-  - [ ] Native Einzeldateiabnahme aller 187 Fälle einschließlich aller 29
+  - Native Einzeldateiabnahme aller 187 Fälle einschließlich aller 29
     Drillholder-Bohrungen: Import, Erkennung, Maßänderung, Vorschau, Ergebnis,
     Undo/Redo und je eigener Bildnachweis. Kernläufe ersetzen diese Abnahme nicht.
-  - [ ] Einheitliche abschließende Leistungsreihe, erstes sichtbares Modell und
+  - Einheitliche abschließende Leistungsreihe, erstes sichtbares Modell und
     getrennte Stufenmessung; Topologie beim Reduzieren bewahren (RM-076/RM-077).
-  - [ ] Puppenhaus-/Schrankparameter sowie Mehrdateien und Plattengruppen.
-  - [ ] Weitere funktionale Gruppen: Kammer, Gewinde/Einlauf, Bajonett/Rastung,
+  - Puppenhaus-/Schrankparameter sowie Mehrdateien und Plattengruppen.
+  - Weitere funktionale Gruppen: Kammer, Gewinde/Einlauf, Bajonett/Rastung,
     Dichtweg/Kanal, Scharnier, Schrift/Einlage und Steckaufnahme/Anschlag.
-  - [ ] Bausteine: Bajonettpaar, Rastdrehscheibe/Federnabe, Steckhülse und
+  - Bausteine: Bajonettpaar, Rastdrehscheibe/Federnabe, Steckhülse und
     Zwei-/Drei-/Vierwegeverbinder, Schlauchtülle, Kanalnaht/Rampe, Raum-/Plattenvorlage.
-  - [ ] Abläufe: Konturdeckel mit Scharnier/Stift, bündige Schrifteinlage,
+  - Abläufe: Konturdeckel mit Scharnier/Stift, bündige Schrifteinlage,
     Gegenformeinsatz, Passungsprüfausschnitt, importiertes Gewinde ersetzen,
     Schrift auf Fläche/Bahn sowie drehender und kombinierter Fügeweg.
+
+<a id="rm-186"></a>
+
+- [ ] **RM-186 — Drei Bausteinbaum-Tests sind auf Windows rot, auf Ubuntu
+  grün.** `test_a_part_with_one_feature_gets_no_roof`,
+  `test_the_features_of_a_part_sit_under_its_own_node` und
+  `test_a_part_stays_chosen_when_its_measures_swap_its_features` in
+  `tests/test_analysis_ui.py`: Auf dieser Maschine trägt `insert_printed_thread`
+  am Quader neben `printed_thread_thread_1` die erkannte Fläche `face_7` mit
+  `created_by` des Schritts — ein Merkmal mehr, ein Dach mehr. Nachgemessen am
+  16.09.2026 an `93ef16e3c` (Worktree) und am HEAD; die CI auf Ubuntu meldete
+  denselben Stand grün. Die Zuordnung „neu erkanntes Merkmal → Erzeuger"
+  (`evaluate.py`, seit 25.08.2026) ist die Stelle, der Plattformunterschied
+  der Erkennung die Frage. Abnahme: die Ursache ist gemessen, und beide
+  Plattformen zählen dieselben Merkmale.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>
@@ -1487,6 +1509,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Zügen (RM-081), Flächenliste im Steckbrief (die 111 Merkmale von *Drucker kalibrieren* sind
   36 Flächenzeilen je Körper; die zwölf größten plus Zähler wären die Hälfte des Steckbriefs)
   und der KV-Cache in `q8_0` am Dienst, der das Fenster auf 40 960 heben könnte (RM-081).
+
+<a id="rm-185"></a>
+
+- [ ] **RM-185 — Das kompakte Werkzeugschema passt nicht mehr ins Fenster des
+  lokalen Modells.** Am 16.09.2026 mit 142 Werkzeugen gemessen: **36 546 Token**
+  gegen `num_ctx` 32 768 (111,5 %). Die erste Messung mit dem Fenster selbst
+  meldete 16 386 — die Hälfte plus zwei, also Ollamas stille Kürzung, keine
+  Ersparnis; ungekürzt gezählt mit 65 536. Mit 40 960 liegt qwen3:14b noch zu
+  89 % im VRAM (warm 4,3 bis 4,5 s statt 2,4), aber Steckbrief, Prüfbericht und
+  Verlauf kommen obendrauf, und auch dieses Fenster wäre voll. Die 21 Werkzeuge
+  seit dem 15.09.2026 (Organizer, Felder, Lochbilder, Profilklemme, Dichtnut)
+  haben das Schema über das Fenster geschoben. **Wirkung beim Kunden:** Wer mit
+  dem Vorgabemodell chattet, bekommt bei jedem Zug die Kürzungsmeldung mit
+  ihren Handlungen (`BackendPromptTruncated`); der gehostete Weg ist nicht
+  betroffen. `PROMPT_TOKENS` und `PROMPT_TOOL_COUNT` tragen die Messung,
+  `test_the_local_backend_opens_a_window_big_enough_for_the_tools` steht als
+  striktes xfail. Der Platz muss aus dem Schema kommen (Fortsetzung von
+  RM-173): kürzere Beschreibungen, Parameter ohne Wiederholung, oder eine
+  Entscheidung Roberts über eine gestufte Werkzeugauswahl (RM-081). Abnahme:
+  eine ungekürzte Messung unter 32 768 mit Platz für 4 000 Token Kontext, und
+  das xfail fällt.
 
 ## Tests und Entwicklungswerkzeuge
 
