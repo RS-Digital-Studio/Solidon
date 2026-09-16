@@ -4467,6 +4467,59 @@ def test_a_selected_body_moves_by_dragging_it(window: MainWindow) -> None:
     assert versatz[2] == 0.0, f"die Höhe gehört dem Griff, nicht dem Zug: {versatz}"
 
 
+class _FlatLook:
+    """Ein Renderer, der fast waagerecht auf das Bett blickt.
+
+    Der Sichtstrahl läuft in y und fällt je hundert Millimeter nur fünf ab
+    (rund drei Grad); Bildschirm-x ist Welt-x, Bildschirm-y ist Welt-z. Genau
+    der Blick, mit dem man die Rückwand eines Halters ansieht.
+    """
+
+    def display_to_world(self, x: float, y: float, depth: float) -> tuple[float, float, float]:
+        return (
+            float(x) / 10.0,
+            -50.0 + 100.0 * float(depth),
+            20.0 - float(y) / 10.0 - 5.0 * float(depth),
+        )
+
+
+def test_a_flat_look_at_the_bed_drags_beside_the_pointer_not_into_the_depth(
+    window: MainWindow,
+) -> None:
+    """Robert, 16.09.2026: „beim verschieben von körpern springen sie auch
+    einfach mal wohin" — mit dem Teil von vorn angesehen und direkt gepackt.
+
+    Der Zug schnitt den Sichtstrahl mit der waagerechten Ebene durch den
+    Griffpunkt. Fast waagerecht geblickt, trifft der Strahl sie so flach, dass
+    zwölf Bildpunkte nach oben zur Tiefe werden — gemessen an dieser Attrappe
+    vor dem Fix: 26 mm für 12 Bildpunkte, bei einem Blick von drei Grad; je
+    flacher, desto mehr, bis der Schnitt hinter der Kamera liegt. Jetzt zieht der Zug bei flachem
+    Blick in der Bildschirmebene — seitlich folgt der Körper dem Zeiger, in
+    die Tiefe geht er nicht.
+    """
+    viewport = window.viewport
+    real = viewport.renderer
+    viewport.renderer = _FlatLook()  # type: ignore[assignment]
+    try:
+        # Der Griffpunkt, wie ihn ``begin_body_drag_at`` nach dem Pick setzt.
+        viewport._body_drag_from = (30.0, 0.0, 15.0)
+        start = viewport._plane_point(300, 50)
+        sideways = viewport._plane_point(320, 50)
+        upwards = viewport._plane_point(300, 38)
+        assert start is not None and sideways is not None and upwards is not None
+        assert sideways[0] - start[0] == pytest.approx(2.0, abs=0.01), (
+            "seitlich folgt er dem Zeiger"
+        )
+        assert abs(sideways[1] - start[1]) < 0.01
+        assert abs(upwards[1] - start[1]) < 1.0, (
+            f"nach oben gezogen sprang er in die Tiefe: {upwards}"
+        )
+        assert abs(upwards[0] - start[0]) < 0.01
+    finally:
+        viewport._body_drag_from = None
+        viewport.renderer = real
+
+
 def test_a_drag_beside_the_body_still_turns_the_camera(window: MainWindow) -> None:
     """Neben dem Körper bleibt Ziehen, was es war.
 

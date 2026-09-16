@@ -1484,6 +1484,20 @@ EDGE_REACH_WORLD_SHARE = 0.1
 #: Rückgängig seinen Sinn nehmen.
 EPS_DRAG = 0.05
 
+#: Unter diesem Sinus des Blickwinkels zur Bettebene zieht der freie Zug in
+#: der Bildschirmebene statt auf dem Bett — rund 15 Grad.
+#:
+#: Der freie Zug schneidet den Sichtstrahl mit der waagerechten Ebene durch
+#: den Griffpunkt. Wer sein Teil von vorn ansieht, blickt fast waagerecht auf
+#: diese Ebene, und dann werden aus wenigen Bildpunkten nach oben Zentimeter
+#: in die Tiefe — oder der Schnitt liegt hinter der Kamera (Robert,
+#: 16.09.2026: „beim verschieben von körpern springen sie auch einfach mal
+#: wohin"). Bei so flachem Blick nimmt der Zug die zur Kamera parallele Ebene
+#: durch den Griffpunkt; ihr Schnitt ist stetig, und was davon in x und y
+#: fällt, bewegt den Körper auf dem Bett — bei waagerechtem Blick also nur
+#: seitlich. Die Höhe bleibt wie bisher dem Griff.
+FLAT_VIEW_SIN = math.sin(math.radians(15.0))
+
 #: erwischen, zu wenig, um die falsche Fläche zu greifen.
 PICK_TOLERANCE = 0.005
 
@@ -14919,7 +14933,15 @@ class Viewport(QWidget):
         if near is None or far is None:
             return None
         direction = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
-        hit = ray_plane_hit(near, direction, anchor, (0.0, 0.0, 1.0))
+        length = math.hypot(*direction)
+        if length <= 0.0:
+            return None
+        # Flach auf das Bett geblickt, zieht der Zug in der Bildschirmebene
+        # (siehe ``FLAT_VIEW_SIN``); sonst auf dem Bett, unter dem Zeiger.
+        normal: Vec3 = (0.0, 0.0, 1.0)
+        if abs(direction[2]) / length < FLAT_VIEW_SIN:
+            normal = (direction[0] / length, direction[1] / length, direction[2] / length)
+        hit = ray_plane_hit(near, direction, anchor, normal)
         if hit is None:
             return None
         return self._plane_point_of((float(hit[0]), float(hit[1]), float(hit[2])))
