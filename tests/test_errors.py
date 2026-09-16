@@ -181,6 +181,18 @@ def test_no_error_text_carries_a_placeholder_nobody_fills(path: Path) -> None:
             # gefüllt wird im Rumpf, und der ist ein eigener Aufruf.
             unfilled(value.body, filled)
             return
+        if isinstance(value, ast.IfExp):
+            # **Ein Satz, der von einer Zahl abhängt, ist zwei Aufrufe.**
+            # ``repair`` wählt zwischen „An einer Kante …" und „An {edges}
+            # Kanten …"; jeder Zweig bringt seine eigenen Schlüsselwörter mit,
+            # und wer den Ausdruck als Ganzes durchsucht, sieht die Texte ohne
+            # sie — der gefüllte ``{edges}`` galt als unersetzt. Dasselbe
+            # Muster steht in ``boolean.py``, ``edge_ops.py`` und
+            # ``label_ops.py``; dort fiel es nur nicht auf, weil ihre Zweige
+            # keinen Platzhalter tragen.
+            unfilled(value.body, filled)
+            unfilled(value.orelse, filled)
+            return
         for text in ast.walk(value):
             if not (isinstance(text, ast.Constant) and isinstance(text.value, str)):
                 continue
