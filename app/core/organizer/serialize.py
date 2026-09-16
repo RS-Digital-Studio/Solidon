@@ -15,8 +15,8 @@ from app.i18n import TranslatableText, _
 Number = float | str
 MAX_TEXT: Final = 262_144
 MAX_NODES: Final = 512
-MAX_DEPTH: Final = 16
-MAX_CELLS: Final = 256
+MAX_LAYOUT_DEPTH: Final = 16
+MAX_LAYOUT_CELLS: Final = 256
 MAX_COUNT: Final = 32
 MAX_DIMENSION: Final = 2000.0
 _ID = re.compile(r"[a-z][a-z0-9_]{0,47}\Z")
@@ -37,7 +37,7 @@ def _wall_id(value: str) -> bool:
     """Einen stabilen Wandpfad einschließlich des begrenzten Wandindexes prüfen."""
     pieces = value.split("/")
     return (
-        len(value) <= MAX_DEPTH * 60
+        len(value) <= MAX_LAYOUT_DEPTH * 60
         and len(pieces) >= 2
         and bool(_ID.fullmatch(pieces[0]))
         and all(_ID.fullmatch(piece) or _index(piece) for piece in pieces[1:-1])
@@ -120,7 +120,7 @@ def layout_from_text(text: str) -> LayoutSpec:
         raise invalid(_("Wählen Sie Außenmaße oder lichte Fachmaße als Bezug."))
     seen: set[str] = set()
     overrides = data.get("wall_heights", {})
-    if not isinstance(overrides, dict) or len(overrides) > MAX_CELLS * 2:
+    if not isinstance(overrides, dict) or len(overrides) > MAX_LAYOUT_CELLS * 2:
         raise invalid(
             _("Die gespeicherten Trennwandhöhen sind ungültig. Wählen Sie die Wände erneut.")
         )
@@ -138,7 +138,7 @@ def layout_from_text(text: str) -> LayoutSpec:
 
 def _node(raw: Any, seen: set[str], level: int) -> Node:
     """Die drei erlaubten Knotentypen mit einer gemeinsamen Kennungsprüfung lesen."""
-    if level >= MAX_DEPTH or len(seen) >= MAX_NODES:
+    if level >= MAX_LAYOUT_DEPTH or len(seen) >= MAX_NODES:
         raise invalid(_("Die Fachaufteilung ist zu tief oder zu groß. Entfernen Sie eine Teilung."))
     if not isinstance(raw, dict) or raw.get("kind") not in ("cell", "split", "repeat"):
         raise invalid(

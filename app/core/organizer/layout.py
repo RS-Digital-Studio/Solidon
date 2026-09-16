@@ -8,9 +8,9 @@ from dataclasses import dataclass, replace
 
 from app.core import expressions
 from app.core.organizer.serialize import (
-    MAX_CELLS,
     MAX_COUNT,
     MAX_DIMENSION,
+    MAX_LAYOUT_CELLS,
     LayoutSpec,
     Node,
     Number,
@@ -169,7 +169,7 @@ def _resolve(
     )
     count = round(count_value)
     cells = sum(child.cells for child in children) * count
-    if cells > MAX_CELLS:
+    if cells > MAX_LAYOUT_CELLS:
         raise invalid(_("Die Aufteilung hat zu viele Fächer. Verringern Sie Reihen oder Spalten."))
     along = [child.width if node.axis == "x" else child.depth for child in children]
     across = [child.depth if node.axis == "x" else child.width for child in children]
