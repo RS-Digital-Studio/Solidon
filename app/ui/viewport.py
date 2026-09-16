@@ -10109,20 +10109,33 @@ class Viewport(QWidget):
     def _prepared_edges(self, object_id: ObjectId | None) -> tuple[tuple[str, Any], ...]:
         """Die bearbeitbaren Kanten eines Körpers — Schlüssel und Punkte.
 
-        **Nur an einem exakten Körper**, und das ist keine Einschränkung,
-        sondern die Sache: Ein Netz hat die Kanten verloren, aus denen es
-        gebaut wurde (`app/core/brep/CLAUDE.md`, „Die Einbahnstraße"). Was ein
-        Dreiecksnetz als Kante zeigt, ist eine Facettengrenze — sie zu
-        verrunden rundete die Facette.
+        **An beiden Körperarten**, und zwar aus derselben Quelle, aus der die
+        Operation sie nimmt: ``geom.edges.edge_key`` schreibt wörtlich das
+        Format von ``brep.edit.edge_key``, und ``edge_keys`` der Operation
+        kennt den Unterschied nicht. Wer eine Kante anklickt, bekommt deshalb
+        denselben Verweis, ob der Körper exakt ist oder ein Netz.
+
+        **Vorher gab es sie nur am exakten Körper**, mit der Begründung, ein
+        Netz habe seine Kanten verloren. Das stimmt für die *Topologie* und
+        nicht für die Bedienung: ``geom.edges.edges_of`` findet den Zug über
+        den Flächenwinkel, und *Verrunden* und *Fase* nehmen ihn seit dem
+        10.09.2026 an beiden Kernen an (Robert: „alles soll immer bearbeitbar
+        sein, egal ob importiert Format egal und beim selbst zeichnen").
+        Angeboten wurde er trotzdem nur dort — eine eingelesene STL und ein
+        ohne den Haken angelegter Quader hatten keine anklickbare Kante, und
+        der Unterschied stand nirgends. Am Netz bleibt der Bogen ein
+        Sehnenzug; das ist der benannte Unterschied und kein Grund, die Geste
+        zu verweigern.
 
         Gerechnet wird je Auswertung einmal (:attr:`_edge_geometry`), aus
         demselben Grund wie bei den Merkmalsdreiecken: Ein Körper aus einer
         STEP-Datei bringt tausende Kanten mit, jede will abgetastet werden,
-        und die Frage stellt jeder Klick neu.
+        und die Frage stellt jeder Klick neu. Gemessen am dichten Prüfzylinder
+        mit 1 054 720 Dreiecken: 0,73 s für die Kantensuche am Netz, einmal
+        je Auswertung.
 
-        Ohne OpenCASCADE gibt es keine — der Kern meldet sich dann ab (§36),
-        und eine leere Antwort ist hier die richtige: Die Operationen dazu
-        sind ohne ihn ohnehin gesperrt.
+        Ohne OpenCASCADE bleibt der exakte Zweig leer — der Kern meldet sich
+        dann ab (§36) —, der Netzzweig trägt weiter.
         """
         if object_id is None or self._result is None:
             return ()
@@ -10137,19 +10150,32 @@ class Viewport(QWidget):
 
         entry = self._result.scene.objects.get(object_id)
         body = entry.mesh if entry is not None else None
-        if not available() or not isinstance(body, Solid):
+        if body is None:
             self._edge_geometry[object_id] = ()
             return ()
-        # **Mit der Abweichung dieses Körpers**, nicht der Modulvorgabe:
-        # ``edge_points`` verspricht „dieselbe Zahl, mit der der Kern
-        # tesselliert — was im Bild rund aussieht, soll sich auch rund
-        # anklicken lassen", und ``Solid.deflection`` weicht ab, wo ein
-        # Baustein oder ein Profil sie gesetzt hat.
         prepared: list[tuple[str, Any]] = []
-        for info in brep_edit.edges_of(body):
-            key = brep_edit.edge_key(info)
-            prepared.append((key, np.asarray(brep_edit.edge_points(info, body.deflection), float)))
-            self._edge_info[(object_id, key)] = info
+        if available() and isinstance(body, Solid):
+            # **Mit der Abweichung dieses Körpers**, nicht der Modulvorgabe:
+            # ``edge_points`` verspricht „dieselbe Zahl, mit der der Kern
+            # tesselliert — was im Bild rund aussieht, soll sich auch rund
+            # anklicken lassen", und ``Solid.deflection`` weicht ab, wo ein
+            # Baustein oder ein Profil sie gesetzt hat.
+            for info in brep_edit.edges_of(body):
+                key = brep_edit.edge_key(info)
+                prepared.append(
+                    (key, np.asarray(brep_edit.edge_points(info, body.deflection), float))
+                )
+                self._edge_info[(object_id, key)] = info
+        else:
+            # Der Zug liegt hier schon als Punktfolge vor (``MeshEdge.points``)
+            # — abgetastet werden muss nichts, das Netz *ist* die Abtastung.
+            from app.core.geom import edges as mesh_edges
+            from app.core.geom.mesh import as_mesh_data
+
+            for edge in mesh_edges.edges_of(as_mesh_data(body)):
+                key = mesh_edges.edge_key(edge)
+                prepared.append((key, np.asarray(edge.points, float)))
+                self._edge_info[(object_id, key)] = edge
         self._edge_geometry[object_id] = tuple(prepared)
         return self._edge_geometry[object_id]
 

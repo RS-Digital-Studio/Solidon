@@ -1361,11 +1361,18 @@ def test_opening_and_closing_a_dialog_switches_it(window: MainWindow) -> None:
 
     Ohne das Zurückschalten bliebe die gestufte Tiefe nach dem ersten Dialog
     für den Rest der Sitzung aus.
-    """
-    from PySide6.QtWidgets import QDialog
 
-    dialog = QDialog(window)
-    window._open_operation_dialog(dialog, lambda: None)  # type: ignore[arg-type]
+    **Ein echter Operationsdialog und kein nackter ``QDialog``.** Der
+    Stellvertreter trug kein ``_editors``, und als ``_open_operation_dialog``
+    das Konturfeld dazubekam, riss der Test an einer Zeile, die in der
+    Anwendung nie fehlschlagen kann: Beide Aufrufer reichen einen
+    ``OperationDialog``, und der legt sein ``_editors`` im Aufbau an.
+    """
+    from app.core.registry.registry import REGISTRY
+    from app.ui.op_dialog import OperationDialog
+
+    dialog = OperationDialog(REGISTRY.get("remove_feature"), ["obj_1"], window)
+    window._open_operation_dialog(dialog, lambda: None)
     assert window.viewport._direct_picking is True
 
     dialog.reject()
@@ -1983,6 +1990,54 @@ def test_a_click_beside_an_edge_chooses_the_edge_and_not_the_face(qt_app: QAppli
     view._on_left_click(360, 300)
     assert view.highlighted_edge() == ("block", oben), "auseinandergezogen trifft der Klick auch"
     view.set_explosion(0.0)
+
+
+def test_a_mesh_body_offers_its_edges_like_an_exact_one(qt_app: QApplication) -> None:
+    """Ein Netz gibt seine Kanten her — ohne Haken und ohne exakten Kern.
+
+    Bis zum 16.09.2026 gab es sie nur am exakten Körper. Das hieß in der
+    Bedienung: Eine eingelesene STL hatte keine anklickbare Kante, und ein
+    Quader auch nicht, solange beim Anlegen der Haken „Flächen und Kanten
+    später bearbeiten" aus war — die Vorgabe. Robert am selben Tag: „wir
+    wollen auch nicht den Haken drücken müssen oder draußen lassen, es soll
+    immer gehen."
+
+    Der Kern konnte es längst: ``geom.edges.edge_key`` schreibt wörtlich das
+    Format von ``brep.edit.edge_key``, und *Verrunden* nimmt beide
+    Körperarten an. Angeboten wurde es nur nicht. Deshalb prüft dieser Test
+    beide Enden — dass die Kanten da sind **und** dass ihr Schlüssel der
+    ist, den die Operation versteht.
+
+    Der Unterschied bleibt und wird nicht versteckt: Am Netz ist der Bogen
+    ein Sehnenzug. Das ist eine Aussage über das Ergebnis, kein Grund, die
+    Geste zu verweigern.
+    """
+    import trimesh
+
+    from app.core.geom import edges as mesh_edges
+    from app.ui.labels import edge_label
+
+    view = Viewport()
+    netz = MeshData.of(trimesh.creation.box((40, 30, 20)))
+    entry = SceneObject(id="block", name="Block", mesh=netz)
+    view.show_scene(EvaluationResult(scene=Scene(objects={"block": entry})))
+
+    vorbereitet = view._prepared_edges("block")
+
+    assert len(vorbereitet) == 12, f"ein Quader hat zwölf Kanten, gefunden {len(vorbereitet)}"
+    schluessel = {key for key, _punkte in vorbereitet}
+    assert len(schluessel) == 12, "jede Kante trägt ihren eigenen Schlüssel"
+    # Derselbe Schlüssel, den ``fillet_edges`` unter ``edges="named"`` liest —
+    # sonst leuchtete die Linie und die Operation fände nichts.
+    assert schluessel == {mesh_edges.edge_key(kante) for kante in mesh_edges.edges_of(netz)}
+    for _key, punkte in vorbereitet:
+        assert len(punkte) >= 2, "ein Zug braucht zwei Enden"
+
+    # Und die Zeile, die der Kunde im Auswahlfenster liest, steht auch hier:
+    # ``edge_label`` kennt den Unterschied der Kerne nicht.
+    beschriftet = view.edge_title("block", next(iter(schluessel)))
+    assert beschriftet, "eine gewählte Netzkante sagt, wie sie liegt und wie lang sie ist"
+    assert edge_label(view._edge_info[("block", next(iter(schluessel)))]) == beschriftet
 
 
 @pytest.mark.skipif(
