@@ -6370,113 +6370,78 @@ def test_escape_gives_back_one_thing_at_a_time(qt_app: QApplication) -> None:
         panel.deleteLater()
 
 
-def test_the_shape_button_says_what_a_click_does(qt_app: QApplication) -> None:
-    """Der Knopf heißt, was er tut — und die Formen sind trotzdem auffindbar (Z6).
+def test_the_rectangle_is_a_plain_tool_and_the_fixed_shapes_are_gone(qt_app: QApplication) -> None:
+    """Kein Menü mehr in der Werkzeugzeile (Robert, 16.09.2026).
 
-    Er hieß „Grundform", sein eigener Tooltip sagte „Rechteck (R)", und ein
-    Klick gab das Rechteckwerkzeug. Ein Knopf, dessen Beschriftung etwas
-    anderes ankündigt als sein Klick, kostet einmal Vertrauen; danach liest
-    niemand mehr die Leiste.
-
-    Die sechs vollbemaßten Formen bleiben hinter dem Pfeil — wer nur ein
-    Rechteck will, ist der häufigste Fall und soll keinen Klick mehr zahlen.
-    Dass es sie gibt, sagt stattdessen die Statuszeile des Zeichenmodus, und
-    **genau das prüft die zweite Hälfte dieses Tests**: Ohne den Satz dort
-    wäre die Umbenennung nur die halbe Antwort.
+    „Rechteck 40 × 20", „Kreis Ø 20" und die anderen festen Formen fallen:
+    Was man zeichnen kann, zeichnet man — mit Vorschau am Zeiger. Das
+    Rechteck ist ein Knopf wie Linie und Kreis, Lochkreis und Lochraster sind
+    zwei Werkzeuge daneben.
     """
-    from PySide6.QtWidgets import QToolButton
-
     panel = SketchPanel()
     try:
-        knopf = next(
-            (button for button in panel.findChildren(QToolButton) if button.menu() is not None),
-            None,
+        # Das Spiegeln-Menü daneben bleibt — geprüft werden die Werkzeuge.
+        assert all(button.menu() is None for button in panel._tool_buttons.values()), (
+            "kein Werkzeugknopf trägt mehr ein Aufklappmenü"
         )
-        assert knopf is not None, "der Formen-Knopf mit seinem Menü fehlt"
-        assert knopf.text() == "Rechteck", (
-            f"der Knopf heißt {knopf.text()!r}, gibt beim Klick aber ein Rechteck"
-        )
-        assert knopf.text() in knopf.toolTip(), (
-            "Beschriftung und Tooltip sagen Verschiedenes — das war der Befund"
-        )
-
-        eintraege = [action.text() for action in knopf.menu().actions() if action.text()]
-        assert len(eintraege) >= 6, f"nur {len(eintraege)} fertige Formen: {eintraege}"
+        assert not hasattr(panel, "shapes_button")
+        for name in ("rectangle", "hole_grid", "bolt_circle"):
+            assert name in panel._tool_buttons, name
+        panel._tool_buttons["rectangle"].setChecked(True)
+        assert panel.canvas.tool == "rectangle"
+        assert not panel._tool_buttons["select"].isChecked()
     finally:
         panel.deleteLater()
 
-    # **Die andere Hälfte, und sie wird am Quelltext geprüft.** Der erste
-    # Anlauf baute den Satz im Test selbst zusammen und fragte, ob „fertige
-    # Form" darin steht — trivial wahr, und die Mutationsprobe ließ das
-    # Entfernen aus `main_window` grün durchgehen. Ein Test, der seinen
-    # eigenen Sollwert erzeugt, prüft nichts („Sollwert aus dem Prüfling",
+    # **Die andere Hälfte, und sie wird am Quelltext geprüft.** Der Hinweis
+    # der leeren Skizze im Hauptfenster versprach „eine fertige Form
+    # einsetzen" — ein Weg, den es nicht mehr gibt. Gelesen wird die Stelle,
+    # die den Hinweis setzt („Sollwert aus dem Prüfling",
     # `.claude/memory/sollwert-aus-dem-pruefling.md`).
-    #
-    # Gelesen wird deshalb die Stelle, die den Hinweis wirklich setzt. Am
-    # gebauten Fenster wäre es der bessere Weg, aber dafür müsste der
-    # Skizzenmodus offen sein — ein ganzes Hauptfenster für einen Halbsatz.
     quelle = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    leerer_hinweis = "Zeichenebene: {place} · Geschlossenen Umriss zeichnen"
-    assert leerer_hinweis in quelle, (
+    assert "Zeichenebene: {place} · Geschlossenen Umriss zeichnen" in quelle, (
         "der Hinweis der leeren Skizze steht nicht mehr in main_window — "
         "dann prüft dieser Test die falsche Datei"
     )
-    stelle = quelle.index(leerer_hinweis)
-    assert "fertige Form" in quelle[stelle : stelle + 200], (
-        "der Hinweis der leeren Skizze nennt die fertigen Formen nicht mehr — "
-        "dann findet sie nur noch, wer den Pfeil trifft"
-    )
+    assert "fertige Form" not in quelle, "der Hinweis verspricht noch das gestrichene Menü"
 
 
 def test_the_empty_sketch_invites_and_the_invitation_leads_somewhere(qt_app: object) -> None:
-    """Die Leerzustands-Zeile nennt ihr Ziel und führt hin (Z6).
+    """Der Satz der leeren Skizze nennt einen Weg, und der Weg geht.
 
-    **Vorher war sie eine Fährte ins Nichts.** Sie sagte „eine Grundform
-    einfügen", und einen Knopf dieses Namens gibt es nicht: Er heißt
-    „Rechteck", und „Grundform" steht nur in den Tooltips *innerhalb* seines
-    Menüs. Ein Anfänger las eine Wegbeschreibung zu einem Ziel, das unter
-    diesem Namen nirgends steht — dieselbe Klasse wie ein Auswahlwert, der
-    anders heißt als sein Feld, nur andersherum.
-
-    Geprüft wird deshalb **beides**: dass der Satz den Knopf beim Namen nennt,
-    und dass das Wort ein Weg ist statt einer Beschreibung.
+    Bis zum 16.09.2026 führte er in das Formenmenü; das gibt es nicht mehr.
+    Jetzt nennt er das Rechteck, und ein Klick auf das Wort wählt das
+    Rechteckwerkzeug — die Wortform darf der Sprache folgen, verglichen wird
+    ohne Groß- und Kleinschreibung.
     """
     from PySide6.QtCore import Qt
 
+    from app.i18n import tr
     from app.ui.sketch_editor import SketchPanel
 
     panel = SketchPanel()
     try:
         text = panel.status.text()
-        assert '<a href="sketch-shapes">' in text, f"kein Verweis in der Einladung: {text}"
-        # **Und das Format dazu.** Der String allein sagt nichts: Ein `<a href>`
-        # in einem PlainText-Label steht als sichtbare spitze Klammer da, nicht
-        # als Verweis. Die Mutation „RichText → PlainText" ließ diesen Test
-        # grün, bis diese Zeile dazukam — die Regel des Tages, im eigenen Test:
-        # geprüft gehört, was gerendert wird, nicht was gesetzt wurde.
+        assert f'<a href="{SketchPanel.INVITATION_TARGET}">' in text, (
+            f"kein Verweis in der Einladung: {text}"
+        )
         assert panel.status.textFormat() == Qt.TextFormat.RichText, (
             "die Einladung trägt ihr Markup als Text statt als Verweis"
         )
-        assert panel.shapes_button.text() in text, (
-            "die Einladung nennt einen anderen Namen als der Knopf trägt — "
-            f"Knopf {panel.shapes_button.text()!r}, Satz {text!r}"
+        assert str(tr("Rechteck")).lower() in text.lower(), (
+            f"die Einladung nennt das Rechteck nicht: {text!r}"
         )
         flags = panel.status.textInteractionFlags()
         assert flags & Qt.TextInteractionFlag.LinksAccessibleByKeyboard, (
             "der Weg ist nur mit der Maus erreichbar"
         )
-
-        # **Und eine laufende Meldung bleibt Auskunft.** Das ist die Grenze
-        # des Musters: Der Leerzustand lädt ein, der Bericht berichtet.
-        panel._show_status("Geschlossen — 3 Freiheitsgrade")
-        assert panel.status.textFormat() == Qt.TextFormat.PlainText
-        assert "<a href=" not in panel.status.text()
+        panel.status.linkActivated.emit(SketchPanel.INVITATION_TARGET)
+        assert panel.canvas.tool == "rectangle", "der Verweis wählt das Rechteck"
+        assert panel._tool_buttons["rectangle"].isChecked()
     finally:
-        release = getattr(type(panel), "release", None)
-        if release is not None:
-            release(panel)
+        panel.deleteLater()
 
 
 def test_a_status_from_the_canvas_reaches_the_line(qt_app: QApplication) -> None:
@@ -6841,18 +6806,142 @@ def test_dragging_a_line_stretches_the_box(qt_app: QApplication) -> None:
     assert points[3] == pytest.approx((40.0, 20.0)), "die obere Kante steht"
 
 
-def test_a_shape_from_the_menu_comes_without_a_fixed_point(qt_app: QApplication) -> None:
-    """Das Formenmenü fügt bemaßt, aber frei ein: Wohin ein Rechteck aus dem
-    Menü gehört, weiß erst, wer es gezogen hat."""
-    from app.ui.sketch_editor import SketchPanel
+def test_two_clicks_draw_a_hole_grid_with_its_diameter(qt_app: QApplication) -> None:
+    """Erstes Loch, gegenüberliegendes Loch, Spalten und Zeilen aus der Leiste —
+    und der Durchmesser steht als Maß, wie die Breite des Langlochs."""
+    import math
+
+    from app.core.sketch import solve_sketch
 
     panel = SketchPanel()
     try:
-        panel._insert_made(lambda: shapes.rectangle(40.0, 20.0))
-        kinds = [entry.kind for entry in panel.canvas.sketch.constraints]
-        assert "fixed" not in kinds
-        assert kinds.count("distance") == 2, "die Maße aus dem Menüeintrag bleiben"
-        assert panel.canvas.solved is not None and panel.canvas.solved.free_dof == 2
+        panel._tool_chosen("hole_grid", True)
+        assert panel.grid_columns_field.isVisibleTo(panel)
+        assert panel.grid_rows_field.isVisibleTo(panel)
+        assert panel.hole_diameter_field.isVisibleTo(panel)
+        assert not panel.bolt_count_field.isVisibleTo(panel)
+        assert not panel.slot_width_field.isVisibleTo(panel)
+        panel.grid_columns_field.setValue(4)
+        panel.grid_rows_field.setValue(3)
+        panel.hole_diameter_field.set_value_mm(4.0)
+        canvas = panel.canvas
+        canvas.resize(600, 600)
+
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.hover_on_plane((30.0, 20.0))
+        assert [element.kind for element in canvas.pending_elements()] == ["circle"] * 12
+        assert not canvas.sketch.elements, "eine Vorschau ändert das Dokument nicht (Regel 2)"
+        canvas.place_on_plane((30.0, 20.0))
+
+        assert [element.kind for element in canvas.sketch.elements] == ["circle"] * 12
+        kinds = [entry.kind for entry in canvas.sketch.constraints]
+        assert kinds.count("diameter") == 1, "der Lochdurchmesser aus der Leiste steht als Maß"
+        solved = solve_sketch(canvas.sketch)
+        assert solved.max_residual <= 1e-6
+        assert solved.free_dof == 4, "Lage und zwei Abstände bleiben frei"
+        radii = {round(math.dist(*element.points), 6) for element in solved.elements}
+        assert radii == {2.0}
+
+        canvas.undo()
+        assert not canvas.sketch.elements, "ein Rückgängig nimmt das ganze Raster"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_typed_spacing_dimensions_the_hole_grid(qt_app: QApplication) -> None:
+    """Getippt heißt bemaßt: Die Zahl ist der Abstand, in beiden Richtungen."""
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    panel = SketchPanel()
+    try:
+        panel._tool_chosen("hole_grid", True)
+        panel.grid_columns_field.setValue(3)
+        panel.grid_rows_field.setValue(2)
+        canvas = panel.canvas
+        canvas.resize(600, 600)
+        canvas.place_on_plane((0.0, 0.0))
+        canvas._pointer = (5.0, 4.0)
+
+        canvas.place_measured(10.0)
+
+        spacings = [entry for entry in canvas.sketch.constraints if entry.kind == "distance"]
+        assert len(spacings) == 2, "ein Abstand je Richtung"
+        solved = solve_sketch(canvas.sketch)
+        assert solved.max_residual <= 1e-6
+        assert solved.free_dof == 2, "nur noch die Lage ist frei"
+        centres = [element.points[0] for element in solved.elements]
+        assert math.dist(centres[0], centres[1]) == pytest.approx(10.0, abs=1e-6)
+        assert math.dist(centres[0], centres[3]) == pytest.approx(10.0, abs=1e-6)
+    finally:
+        panel.deleteLater()
+
+
+def test_two_clicks_draw_a_bolt_circle_and_a_typed_pitch_dimensions_it(
+    qt_app: QApplication,
+) -> None:
+    """Mitte, erstes Loch, Anzahl aus der Leiste — der Teilkreis reist als
+    Hilfskreis mit, und getippt wird er zum Maß."""
+    import math
+
+    from app.core.sketch import solve_sketch
+
+    panel = SketchPanel()
+    try:
+        panel._tool_chosen("bolt_circle", True)
+        assert panel.bolt_count_field.isVisibleTo(panel)
+        assert panel.hole_diameter_field.isVisibleTo(panel)
+        assert not panel.grid_columns_field.isVisibleTo(panel)
+        panel.bolt_count_field.setValue(6)
+        panel.hole_diameter_field.set_value_mm(4.0)
+        canvas = panel.canvas
+        canvas.resize(600, 600)
+
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.place_on_plane((25.0, 0.0))
+        assert [element.kind for element in canvas.sketch.elements] == ["circle"] * 7
+        assert canvas.sketch.elements[-1].construction
+        solved = solve_sketch(canvas.sketch)
+        assert solved.max_residual <= 1e-6
+        assert solved.free_dof == 3, "Mitte und Teilkreis bleiben frei, der Lochradius ist Maß"
+        canvas.undo()
+
+        canvas.place_on_plane((0.0, 0.0))
+        canvas._pointer = (8.0, 0.0)
+        canvas.place_measured(50.0)
+        pitch = [entry for entry in canvas.sketch.constraints if entry.kind == "diameter"]
+        assert len(pitch) == 2, "Lochdurchmesser aus der Leiste und getippter Teilkreis"
+        solved = solve_sketch(canvas.sketch)
+        hub, rim = solved.elements[-1].points
+        assert math.dist(hub, rim) == pytest.approx(25.0, abs=1e-6)
+        assert solved.free_dof == 2, "nur noch die Mitte ist frei"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_hole_too_big_for_its_spacing_says_so_instead_of_blaming_the_clicks(
+    qt_app: QApplication,
+) -> None:
+    """Wer zu eng zieht, liest, woran es liegt, und was zu tun ist (Regel 17)."""
+    panel = SketchPanel()
+    try:
+        panel._tool_chosen("hole_grid", True)
+        panel.hole_diameter_field.set_value_mm(8.0)
+        canvas = panel.canvas
+        canvas.resize(600, 600)
+        heard: list[str] = []
+        canvas.statusChanged.connect(heard.append)
+
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.hover_on_plane((15.0, 10.0))
+        assert canvas.pending_elements() == (), "zu eng: keine Vorschau"
+        canvas.place_on_plane((15.0, 10.0))
+
+        assert not canvas.sketch.elements
+        assert heard and "überschneiden" in heard[-1], heard
+        assert "Leiste" in heard[-1], "der Satz nennt den Ausweg"
+        assert len(canvas._pending_world) == 1, "der erste Klick bleibt stehen"
     finally:
         panel.deleteLater()
 
@@ -6996,7 +7085,7 @@ def test_a_double_click_on_a_measure_card_opens_its_value(
 
     panel = SketchPanel()
     try:
-        panel._insert_made(lambda: shapes.rectangle(40.0, 20.0))
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         canvas = panel.canvas
         cards = canvas._measure_cards()
         assert len(cards) == 2

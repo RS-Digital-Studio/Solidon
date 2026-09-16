@@ -750,3 +750,43 @@ Höhenrechnung. Die Schichtauskunft bleibt als Tooltip am Ebenenfeld, die
 Bedingungsliste im rechten Reiter. Gemessen am gebauten Panel fiel die
 Vorgabehöhe von 292 auf 142 Bildpunkte; die Bedienung verlor dabei keine
 Handlung.
+
+## Lochkreis und Lochraster mit zwei Klicks — das Formenmenü fällt (16.09.2026)
+
+Robert: „das lochraster genauso bauen" wie Vieleck und Langloch, und „die
+rechtecke und kreise usw mit den festen maßen brauchen wir nicht". Beides in
+einem Schnitt:
+
+* **Zwei Werkzeuge nach dem Muster der Zwei-Klick-Formen.** Lochraster: erster
+  Klick das erste Loch, zweiter das gegenüberliegende, Spalten und Zeilen aus
+  der Leiste, die Abstände aus dem Zug — in x und y getrennt, so wie gezogen.
+  Lochkreis: Mitte, dann das erste Loch, die Anzahl aus der Leiste. Beide
+  rechnen Vorschau und Klick aus derselben Funktion (`_drawn_shape`,
+  `DRAWN_SHAPE_TOOLS`), wie Vieleck und Langloch.
+* **Gezeichnet heißt frei, getippt heißt bemaßt — und der Durchmesser ist die
+  Ausnahme wie die Breite des Langlochs.** Er kommt aus der Leiste und steht
+  als Maß am ersten Loch; alle anderen hängen im Kern `equal` daran. Getippt
+  ist beim Raster der Abstand (in beiden Richtungen derselbe), beim Lochkreis
+  der Teilkreis (Ø oder R nach dem Umschalter).
+* **Was das Raster hält, sind Bedingungen zwischen Mitten, keine Festpunkte**
+  (`edit.hole_grid_between`): Zeilen `horizontal`, Spalten `vertical`, die
+  Abstände der ersten Zeile und Spalte `equal`. Gemessen `free_dof` 5 frei, 4
+  mit Durchmesser aus der Leiste, 2 mit getipptem Abstand. Der Lochkreis hält
+  über den Teilkreis als Hilfskreis wie das Vieleck (`edit.bolt_circle_at`):
+  4, 3, 2. Bei zwei Löchern ist die Mitte ihr `midpoint` — ein `equal` zum
+  Teilkreis dazu legte fest, was schon festliegt, und der Löser sagte es.
+* **Ein zu großes Loch heißt nicht „die Klicks liegen aufeinander".** Der Kern
+  weist es ab (`hole_fits`), der Canvas merkt sich die Absage
+  (`_shape_error`), und die Zeile nennt sie samt Ausweg
+  (`_shape_refusal`) — Regel 17.
+* **Das Menü mit den festen Formen ist weg.** „Rechteck 40 × 20", „Kreis Ø 20",
+  „Lochraster 4 × 3, Abstand 10" und die drei anderen: Was man zeichnen kann,
+  zeichnet man, mit Vorschau am Zeiger. Das Rechteck ist ein Knopf wie Linie
+  und Kreis, `_insert_made` und der Menüknopf sind gefallen, der Verweis in
+  der Einladung der leeren Skizze wählt das Rechteckwerkzeug
+  (`_take_rectangle`). Die Formfunktionen in `shapes.py` bleiben — Dialog,
+  Kommandozeile und Agent brauchen sie (§30.1).
+* **Keine Kürzel für die beiden neuen Werkzeuge.** Fusion belegt nichts, und
+  L, K und R sind vergeben; ein Kürzel ohne Anlass ist eines, das man
+  vergisst. Die Knöpfe stehen rechts in der Zeile, die Zeile bleibt unter 900
+  Bildpunkten (`test_the_sketch_area_fits_a_laptop_screen`).

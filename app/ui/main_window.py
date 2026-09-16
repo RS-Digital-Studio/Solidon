@@ -8868,8 +8868,8 @@ class MainWindow(QMainWindow):
             # Bildpunkt Breite. Der häufigste Fall — jemand will ein Rechteck
             # — bleibt damit ein Klick.
             source = tr(
-                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine "
-                "fertige Form einsetzen — daraus wird dann ein Körper."
+                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — "
+                "daraus wird dann ein Körper."
             )
         # **In der Querschau steht hier die Geste**, und zwar aus derselben
         # Quelle, die sie auch erlaubt (:meth:`_sketch_pull_offer`) — sonst
