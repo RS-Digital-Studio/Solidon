@@ -173,7 +173,12 @@ def test_groove_on_each_real_side_keeps_world_location_and_depth(direction, kind
     assert 8000 - result.outputs[0].mesh.volume == pytest.approx(math.pi * 40, rel=0.003)
 
 
-def test_selected_opening_is_saved_and_rotated_without_new_guess(profile):
+# Um (1, 2, 3) riss der Lauf am 16.09.2026 auf Ubuntu, um (1, 0, 0) auf
+# Windows: Die Dichtung steht auf dem Nutboden, und nach der Drehung
+# durchdringen sich die beiden Flächen um Nanometer — 5,6e-3 mm³ über
+# 402 mm², das ist die Fließkommarechnung und keine Überschneidung.
+@pytest.mark.parametrize("axis", [(1, 2, 3), (1, 0, 0)])
+def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis):
     from test_seal_openings import plate
 
     from app.core.geom.seal import opening_choices
@@ -195,7 +200,7 @@ def test_selected_opening_is_saved_and_rotated_without_new_guess(profile):
     signature = result.answered["opening_signature"]
     assert signature == choices[1].signature
     assert "Kontur" not in signature
-    matrix = trimesh.transformations.rotation_matrix(0.57, (1, 2, 3))
+    matrix = trimesh.transformations.rotation_matrix(0.57, axis)
     matrix[:3, 3] = (7, 12, -4)
     raw = entry.mesh.raw.copy()
     raw.apply_transform(matrix)

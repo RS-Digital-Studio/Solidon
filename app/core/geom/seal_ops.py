@@ -39,7 +39,7 @@ from app.core.types import (
     Transform,
     Vec3,
 )
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_DISPLAY, EPS_GEOM
 from app.i18n import TranslatableText, _
 
 
@@ -237,6 +237,19 @@ def _path(
         selected = choices[labels.index(answer)]
         answered["opening_signature"] = selected.signature
     return selected.profile, selected.frame, feature_plane(ref.object_id, ref.feature_id), answered
+
+
+def _thicker_than_shown(volume: float, area: float) -> bool:
+    """Ob ein Rest- oder Kollisionsvolumen über der Anzeigegrenze liegt.
+
+    Gemessen wird die mittlere Dicke über der Bezugsfläche, nicht das Volumen
+    allein: Die Dichtung steht auf dem Nutboden, und zwei Flächen, die am
+    geraden Träger exakt aufeinanderliegen, durchdringen sich nach einer
+    Drehung um Nanometer — auf Linux bei einer anderen Achse als auf Windows.
+    Was unter ``EPS_DISPLAY`` liegt, zeigt kein Maß und druckt kein Drucker;
+    das ist keine Überschneidung, sondern die Fließkommarechnung.
+    """
+    return volume > EPS_DISPLAY * area
 
 
 def _measured_boolean(
@@ -464,7 +477,7 @@ def create_seal(ctx: OpContext) -> OpResult:
         frame,
     )
     missing = _measured_boolean(ctx, "difference", envelope_mesh, as_mesh_data(ctx.inputs[0].mesh))
-    if missing.mesh.volume > EPS_GEOM * envelope_mesh.raw.area:
+    if _thicker_than_shown(missing.mesh.volume, envelope_mesh.raw.area):
         raise _invalid(
             "groove_depth",
             _(
@@ -487,7 +500,7 @@ def create_seal(ctx: OpContext) -> OpResult:
     )
     gasket_mesh = _placed(geometry.gasket, frame)
     collision = _measured_boolean(ctx, "intersection", as_mesh_data(body.mesh), gasket_mesh)
-    if collision.mesh.volume > EPS_GEOM * gasket_mesh.raw.area:
+    if _thicker_than_shown(collision.mesh.volume, gasket_mesh.raw.area):
         raise _invalid(
             "gasket_width",
             _(
