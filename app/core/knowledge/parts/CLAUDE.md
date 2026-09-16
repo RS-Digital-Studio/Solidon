@@ -79,7 +79,11 @@ sind Normalabstände aus `geom.contours`, keine Skalierung einer Ellipse.
 Die Montage wird im gedrehten Teilungsrahmen geprüft: jeder Schnitt parallel
 zur Öffnungsrichtung muss genau ein zusammenhängendes Konturintervall haben.
 Schalen öffnen seitlich, Einlagen werden axial von der Bundseite eingeschoben.
-Der separate Bund und der hintere Freiraum gehören zur Einlage.
+Der separate Bund und der hintere Freiraum gehören zur Einlage. Die Schale
+allein sitzt wie jeder Baustein bei null auf ihrer Fläche; der Bundfreiraum
+vor ihr ist Lage, keine Form, und kommt als `lift` von `build_shell` und
+`seat_probes` — gesetzt vom Klemmenpaar in `geom/profile_clamp_ops.py`, das
+beide Hälften in einem Rahmen ablegt (Regel in `bausteine.md`).
 
 Schrauben-, Kopf- und Mutternmaße stammen aus der Normteiltabelle; Rand und
 Schalenwand begrenzen die Aufnahmen. `play` liest das eigene Material,

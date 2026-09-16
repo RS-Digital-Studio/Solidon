@@ -30,6 +30,15 @@ if TYPE_CHECKING:
 #: Auflösungsbudget des Kerns. Das ist Sehnenauflösung, kein Fertigungsspiel.
 CONTOUR_SAG: Final = MAX_FACET_SAG / 8.0
 _ADDED = PartChange("1", "2026-09-15", "Geteilte Profilklemme mit separat wechselbaren Einlagen.")
+_SHELL_SEATED = PartChange(
+    version="19",
+    date="2026-09-16",
+    reason="Die Schale allein begann bei der Bundhöhe der Einlage und schwebte als "
+    "aufgesetzter Baustein um genau dieses Maß über ihrer Fläche.",
+    effect="Die Schale beginnt bei null; den Bundfreiraum setzt das Klemmenpaar, das "
+    "beide Hälften in einem Rahmen ablegt. Das Feld Bundhöhe gibt es an der Schale "
+    "nicht mehr.",
+)
 
 
 def _invalid(detail: TranslatableText, field: str = "sketch") -> ValidationError:
@@ -181,7 +190,7 @@ def _features(mesh: MeshData, front: float, back: float) -> dict[str, Feature]:
         )
         if not len(indices):
             raise _invalid(
-                _("Eine Anschlussfläche der Hälfte fehlt. Ändern Sie Tiefe oder Bundhöhe.")
+                _("Eine Anschlussfläche der Hälfte fehlt. Ändern Sie die Klemmtiefe."), "depth"
             )
         area = float(raw.area_faces[indices].sum())
         centre = np.average(raw.triangles_center[indices], axis=0, weights=raw.area_faces[indices])
@@ -242,15 +251,6 @@ class ProfileClampShellParams(BaseParams):
         placement="advanced",
         doc=_("Abstand der beiden Schalen vor dem Anziehen."),
     )
-    flange_height: float = param(
-        title=_("Bundhöhe"),
-        default=1.5,
-        minimum=1.0,
-        maximum=4.0,
-        unit="mm",
-        placement="advanced",
-        doc=_("Freiraum vor der Schale für den Anschlagbund der Einlage."),
-    )
     split_angle: float = param(
         title=_("Winkel der Trennebene"),
         default=0.0,
@@ -302,7 +302,7 @@ def _shell_reason(raw: BaseParams) -> TranslatableText | None:
     params=ProfileClampShellParams,
     standalone=True,
     features=("front", "back"),
-    changes=(_ADDED,),
+    changes=(_ADDED, _SHELL_SEATED),
     feasible=_shell_reason,
     wall=WallRequirement.from_parameter("wall"),
     doc=_(
@@ -319,10 +319,18 @@ def build_shell(
     p: ProfileClampShellParams,
     seat: Any,
     *,
+    lift: float = 0.0,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> tuple[PartResult, SolverInfo]:
-    """Eine Schale aus der einmal gemeinsam vorbereiteten ungedrehten Sitzkontur bauen."""
+    """Eine Schale aus der einmal gemeinsam vorbereiteten ungedrehten Sitzkontur bauen.
+
+    ``lift`` hebt die Schale entlang der Profilachse an. Allein sitzt sie wie
+    jeder Baustein bei null auf ihrer Fläche; das Klemmenpaar hebt sie um die
+    Bundhöhe der Einlage, damit beide Hälften in einem Rahmen liegen und der
+    Bund vor der Stirnfläche anschlägt. Der Freiraum ist Lage, keine Form —
+    deshalb ist er kein Maß der Schale.
+    """
     reason = _shell_reason(p)
     if reason is not None:
         raise _invalid(reason, "depth")
@@ -345,10 +353,10 @@ def build_shell(
             p.split_offset + ear_height,
         )
     solid = _half(shell, p.half, p.joint_gap, p.split_offset).extrude(p.depth)
-    body = _mesh(solid.translate((0, 0, p.flange_height)))
+    body = _mesh(solid.translate((0, 0, lift)))
     tools = []
     for x in centres:
-        centre_z = p.flange_height + p.depth / 2.0
+        centre_z = lift + p.depth / 2.0
         through = shapes.cylinder(screw.clearance, 2 * ear_height + 2 * BOOLEAN_OVERLAP)
         through = shapes.moved(
             shapes.turned(through, 90.0, (1.0, 0.0, 0.0)),
@@ -372,23 +380,25 @@ def build_shell(
     body = shapes.turned(outcome.mesh, p.split_angle)
     return PartResult(
         mesh=body,
-        features=_features(body, p.flange_height, p.flange_height + p.depth),
+        features=_features(body, lift, lift + p.depth),
         findings=outcome.findings,
     ), outcome.solver
 
 
 def seat_probes(
-    p: ProfileClampShellParams, seat: Any, *, strip: float
+    p: ProfileClampShellParams, seat: Any, *, strip: float, lift: float = 0.0
 ) -> tuple[MeshData, MeshData]:
-    """Vollständiger Hohlraum und umlaufender Materialstreifen über die ganze Sitztiefe."""
+    """Vollständiger Hohlraum und umlaufender Materialstreifen über die ganze Sitztiefe.
+
+    ``lift`` ist derselbe Versatz wie in :func:`build_shell` — die Proben
+    liegen dort, wo die geprüfte Schale liegt.
+    """
     section = _oriented(seat, p.split_angle)
     band = offset_section(section, strip) - section
     meshes = []
     for shape in (section, band):
         solid = _half(shape, p.half, p.joint_gap, p.split_offset).extrude(p.depth)
-        meshes.append(
-            _mesh(solid.translate((0.0, 0.0, p.flange_height)).rotate((0, 0, p.split_angle)))
-        )
+        meshes.append(_mesh(solid.translate((0.0, 0.0, lift)).rotate((0, 0, p.split_angle))))
     return meshes[0], meshes[1]
 
 

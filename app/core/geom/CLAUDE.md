@@ -46,6 +46,9 @@ und über `material_params` Hashabhängigkeiten. Eine gemeinsame Kontur wird
 einmal gelöst; originale Skizzenausdrücke bleiben im Operationsparameter.
 Der Sitz hat normales Gesamtspiel aus beiden Profilen, die Gegenkontur das
 Pressmaß der Einlage. Fertigungsspiel und Sehnenabweichung bleiben getrennt.
+Alle vier Rollen liegen in einem Rahmen: Die Einlage sitzt mit ihrem Bund bei
+null, die Schale bekommt die Bundhöhe als `lift` — die Schale allein kennt
+dieses Maß nicht (`knowledge/parts/CLAUDE.md`).
 
 Der Ersatzweg erhält beide Schalen unverändert und prüft den gesamten
 Hohlraum, einen umlaufenden Materialstreifen sowie die wirklichen

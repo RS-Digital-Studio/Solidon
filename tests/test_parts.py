@@ -254,15 +254,15 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2578_cartesian_boundaries() -> None:
+def test_the_library_really_has_2546_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
-    Die 344 seit dem 16.09.2026 sind die Klemmschale (64), ihre Einlage (256),
+    Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
     die Dichtnut (8) und die Dichtung (16) — gezählt je Baustein, nicht aus
     dem Prüfling abgelesen.
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2578
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2546
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(

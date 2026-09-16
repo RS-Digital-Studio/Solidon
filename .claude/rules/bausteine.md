@@ -43,6 +43,24 @@ Und die Prüfung dazu misst die **Richtung**, nicht nur die Berührung: Zwei
 Volumen, die sich treffen, treffen sich am falschen Ende genauso. Was der Test
 sagen muss, ist, an welchem Ende die Sperrfläche sitzt.
 
+## Ein aufgesetzter Baustein beginnt bei null
+
+Der Ursprung ist die Fläche, und `ops._place` senkt den Baustein um
+`BOOLEAN_OVERLAP` hinein — mehr nicht. Was **über** null beginnt, schwebt:
+Die Profilklemmschale begann bei der Bundhöhe der Einlage, weil ihr Rahmen
+schon den montierten Zustand des Paares beschrieb, und als Einzelbaustein auf
+einer Fläche stand sie 1,5 mm darüber, zwei Komponenten statt einer
+(16.09.2026). Der Freiraum war richtig und stand am falschen Ort.
+
+**Was ein Paar an Versatz braucht, setzt der Weg, der das Paar baut** —
+`profile_clamp_ops` gibt `build_shell` die Bundhöhe als `lift`, die Schale
+selbst kennt das Maß nicht mehr. Ein Feld, das nur die Lage im Paar
+beschreibt, ist kein Maß des Bausteins (oberflaeche.md: „Ein Feld ohne
+Wirkung steht nicht da"). Die Prüfung dazu ist die generische
+(`test_an_added_part_has_the_component_count_it_declares`): Ein aufgesetzter
+Baustein verbindet sich mit seinem Träger, und ein Rahmen, der das nicht
+hergibt, gehört nicht in den Katalog.
+
 ## Was vereinigt wird, kann nur weiter werden
 
 Ein Baustein ist **ein** Körper, und seine Teile entstehen mit `union`. Wer

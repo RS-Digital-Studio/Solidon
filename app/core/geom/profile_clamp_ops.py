@@ -330,7 +330,6 @@ def _shell_params(
             "wall": settings["wall"],
             "half": half,
             "joint_gap": settings["joint_gap"],
-            "flange_height": settings["flange_height"],
             "split_angle": settings["split_angle"],
             "split_offset": settings["split_offset"],
             "screw_size": settings["screw_size"],
@@ -456,9 +455,12 @@ def create_profile_clamp_set(ctx: OpContext) -> OpResult:
         ctx.cancelled.raise_if_cancelled()
         half = "lower" if role.endswith("lower") else "upper"
         if role.startswith("shell"):
+            # Beide Hälften liegen in einem Rahmen: Die Einlage sitzt mit
+            # ihrem Bund bei null, die Schale beginnt dahinter.
             built, solver = clamps.build_shell(
                 _shell_params(settings, half, hard),
                 seat,
+                lift=float(settings["flange_height"]),
                 quality=ctx.quality,
                 cancelled=ctx.cancelled,
             )
@@ -657,7 +659,10 @@ def replace_profile_liners(ctx: OpContext) -> OpResult:
         body = moved_mesh(as_mesh_data(ctx.inputs[index].mesh), np.linalg.inv(frames[index]))
         _end_planes(ctx.inputs[index], body, known[index][0], settings)
         empty, wall = clamps.seat_probes(
-            _shell_params(settings, half, hard), seat, strip=hard.minimum_wall_thickness
+            _shell_params(settings, half, hard),
+            seat,
+            strip=hard.minimum_wall_thickness,
+            lift=float(settings["flange_height"]),
         )
         probes: tuple[tuple[BooleanKind, list[Any]], ...] = (
             ("intersection", [body, empty]),

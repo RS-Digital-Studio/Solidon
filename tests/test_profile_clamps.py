@@ -24,7 +24,13 @@ def clamp_reference():
 
 @pytest.mark.parametrize("half", ["lower", "upper"])
 def test_separate_shell_and_liner_have_a_real_free_axial_mount(clamp_reference, half):
-    """Der Bund schlägt vorne an; ein vollständiger Körperabstand null ist hier richtig."""
+    """Der Bund schlägt vorne an; ein vollständiger Körperabstand null ist hier richtig.
+
+    Die Schale allein sitzt wie jeder Baustein bei null. Ins Paar hebt das
+    Klemmenset sie um die Bundhöhe der Einlage — hier tut der Test dasselbe,
+    bevor er die Montage prüft.
+    """
+    from app.core.knowledge.parts import shapes as part_shapes
     from app.core.knowledge.parts.profile_clamps import (
         ProfileClampLinerParams,
         ProfileClampShellParams,
@@ -41,10 +47,11 @@ def test_separate_shell_and_liner_have_a_real_free_axial_mount(clamp_reference, 
             wall=case["wall"],
             half=half,
             joint_gap=case["joint_gap"],
-            flange_height=case["flange_height"],
             play=case["hardware_clearance_total"],
         )
     )
+    assert shell.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=EPS_GEOM)
+    paired = part_shapes.moved(shell.mesh, (0.0, 0.0, case["flange_height"]))
     liner = profile_clamp_liner(
         ProfileClampLinerParams(
             counter_sketch=sketch_to_text(shapes.circle(case["diameter"])),
@@ -68,24 +75,19 @@ def test_separate_shell_and_liner_have_a_real_free_axial_mount(clamp_reference, 
             for feature in part.features.values()
         )
     assert (
-        boolean(
-            "intersection", [shell.mesh, liner.mesh], quality="fine", allow_empty=True
-        ).mesh.volume
+        boolean("intersection", [paired, liner.mesh], quality="fine", allow_empty=True).mesh.volume
         <= EPS_GEOM
     )
     for distance in np.linspace(case["depth"] + case["flange_height"], 0.0, 9):
         moving = liner.mesh.raw.copy()
         moving.apply_translation((0, 0, -distance))
         overlap = boolean(
-            "intersection", [shell.mesh, MeshData.of(moving)], quality="fine", allow_empty=True
+            "intersection", [paired, MeshData.of(moving)], quality="fine", allow_empty=True
         )
         assert overlap.mesh.volume <= EPS_GEOM
     blocked = liner.mesh.raw.copy()
     blocked.apply_translation((0, 0, case["flange_height"]))
-    assert (
-        boolean("intersection", [shell.mesh, MeshData.of(blocked)], quality="fine").mesh.volume
-        > 1.0
-    )
+    assert boolean("intersection", [paired, MeshData.of(blocked)], quality="fine").mesh.volume > 1.0
 
 
 def _context(params, profile, inputs=(), parameters=None, quality="fine"):
