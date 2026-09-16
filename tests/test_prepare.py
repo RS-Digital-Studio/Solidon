@@ -1180,6 +1180,65 @@ def test_splitting_says_that_the_halves_still_lie_together(
     assert hinweis.severity == "info", "nichts ist schiefgegangen"
 
 
+@pytest.mark.parametrize(
+    ("keep", "volume", "top"), [("below", 6000.0, 5.0), ("above", 2000.0, 10.0)]
+)
+def test_cutting_away_keeps_one_closed_side(
+    document: Document, profile: Profile, keep: str, volume: float, top: float
+) -> None:
+    """*Abschneiden* ist das halbe Teilen — eine Ebene, eine Seite, ein Körper.
+
+    Robert, 16.09.2026, am Halter mit Becher: viermal „Teilen, dann eine
+    Hälfte löschen" für vier Absichten („warum haben wir das alles so
+    kompliziert"). Der Würfel 20 mm (``cube_clean.stl``, z von −10 bis 10)
+    ergibt bei z = 5 unten 20·20·15 = 6000 mm³, oben 2000 — geschlossen, ein
+    Körper, dieselbe Kennung wie vorher.
+    """
+    project, history = loaded(document)
+    history.apply(
+        _("Abschneiden"),
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=("obj_1",),
+                params={"axis": "z", "position": 5.0, "keep": keep},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert list(result.scene.objects) == ["obj_1"]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight and body.component_count == 1
+    assert body.volume == pytest.approx(volume, rel=1e-6)
+    assert body.bounds.maximum[2] == pytest.approx(top, abs=1e-6)
+
+
+def test_cutting_away_beside_the_body_stops_with_the_field(
+    document: Document, profile: Profile
+) -> None:
+    """Eine Ebene, die nichts abschneidet, ist ein Halt mit dem Feld dazu (Regel 17)."""
+    project, history = loaded(document)
+    history.apply(
+        _("Abschneiden"),
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=("obj_1",),
+                params={"axis": "z", "position": 50.0, "keep": "below"},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert not result.complete
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert any("cut_away" in code for code in codes), codes
+
+
 def test_arranging_the_halves_removes_the_old_request(document: Document, profile: Profile) -> None:
     """Ein späterer Schritt darf den früheren Befund nicht falsch lassen.
 

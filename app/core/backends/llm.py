@@ -2030,8 +2030,9 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Felder, Lochbilder, Profilklemme, Dichtnut) haben das Schema über das
 #: Fenster geschoben: Wer mit dem Vorgabemodell chattet, bekommt die
 #: Kürzungsmeldung mit ihren Handlungen. Der Platz muss aus dem Schema kommen
-#: (RM-173, Fortsetzung als RM-185).
-PROMPT_TOKENS: Final = 36546
+#: (RM-173, Fortsetzung als RM-185). Mit *Abschneiden* als 143. Werkzeug am
+#: selben Tag erneut gezählt: 36 731.
+PROMPT_TOKENS: Final = 36731
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -2046,9 +2047,9 @@ PROMPT_TOKENS: Final = 36546
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Seit dem 16.09.2026 sind es 142, und die Tokenzahl darüber ist von genau
-#: diesen 142 gemessen — ungekürzt, mit einem Fenster, das sie aufnimmt.
-PROMPT_TOOL_COUNT: Final = 142
+#: Seit dem 16.09.2026 sind es 143, und die Tokenzahl darüber ist von genau
+#: diesen 143 gemessen — ungekürzt, mit einem Fenster, das sie aufnimmt.
+PROMPT_TOOL_COUNT: Final = 143
 
 #: Unter diesem Anteil der gemessenen Werkzeuglast gilt eine Antwort als
 #: vorn gekürzt (:class:`BackendPromptTruncated`). Die Schwelle hat Luft nach

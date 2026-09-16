@@ -85,7 +85,7 @@ from app.core.geom.prepare import (
     split_at_plane,
     split_findings,
 )
-from app.core.geom.section import AXIS_NORMALS, SectionPlane
+from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
 from app.core.geom.transform import Axis, moved_body, place_on_bed, translation
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
@@ -7484,6 +7484,78 @@ def _features_after_split(
     return first, second
 
 
+@op_params
+class CutAwayParams(BaseParams):
+    axis: str = param(
+        title=_("Achse"),
+        default="z",
+        choices=_AXES,
+        doc=_("Senkrecht zu welcher Achse geschnitten wird. Z legt einen waagerechten Schnitt."),
+    )
+    position: float = param(
+        title=_("Position"),
+        default=0.0,
+        unit="mm",
+        doc=_(
+            "Wo die Schnittebene liegt, auf dieser Achse gemessen. Die Zahl bleibt "
+            "änderbar: ein Doppelklick auf den Schritt verschiebt den Schnitt."
+        ),
+    )
+    keep: str = param(
+        title=_("Bleibt"),
+        default="below",
+        choices=("below", "above"),
+        doc=_("Welche Seite der Ebene stehen bleibt. Die andere fällt weg."),
+    )
+
+
+@register_op(
+    name="cut_away",
+    title=_("Abschneiden"),
+    category="prepare",
+    params=CutAwayParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Schneidet ein Objekt an einer Ebene ab und behält eine Seite — die "
+        "Schnittfläche wird geschlossen. Für eine Rückwand, die bündig werden soll, "
+        "oder Wände, die auf eine Höhe kommen: erst abschneiden, dann die neue "
+        "Fläche versetzen."
+    ),
+    caveat=_(
+        "Was auf der anderen Seite lag, ist danach fort — auch Bohrungen und "
+        "Bausteine dort. Wer beide Teile braucht, nimmt Teilen."
+    ),
+)
+def cut_away(ctx: OpContext) -> OpResult:
+    """Ein Schnitt, eine Seite — das halbe Teilen, das der Halter braucht.
+
+    *Teilen* liefert zwei Körper, und wer nur einen wollte, löschte den
+    anderen: zwei Schritte für eine Absicht, viermal an einem Halter mit
+    Becher (Robert, 16.09.2026: „warum haben wir das alles so kompliziert").
+    Die Schnittfläche kommt geschlossen zurück und lässt sich danach als
+    ebene Fläche versetzen — der Weg, Wände auf eine Höhe zu bringen.
+    """
+    params = cast(CutAwayParams, ctx.params)
+    plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
+    if params.keep == "above":
+        plane = plane.flipped()
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+    kept = cut(mesh, plane)
+    if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:
+        # Nichts übrig oder nichts weggenommen: beides ist eine Ebene, die das
+        # Objekt nicht trifft — dieselbe Absage wie beim Teilen, mit dem Feld.
+        raise ValidationError(
+            field="position",
+            detail=_("Diese Ebene schneidet nichts vom Objekt ab."),
+            value=params.position,
+            constraint="no_split",
+        )
+    features, _dropped = _features_after_split(source.features, plane)
+    return OpResult(outputs=[dataclasses.replace(source, mesh=kept.mesh, features=features)])
+
+
 def _halves_still_together(source: SceneObject) -> Finding:
     """Zwei Hälften an ihrem Platz sehen aus wie ein Körper.
 
@@ -8291,7 +8363,12 @@ def _drop_the_fillet(ctx: OpContext, source: SceneObject, name: str) -> OpResult
         return _exact_fillet(ctx, source, name, None)
     from app.core.geom.edges import unround
 
-    outcome = unround(as_mesh_data(source.mesh), source.features[name], quality=ctx.quality)
+    outcome = unround(
+        as_mesh_data(source.mesh),
+        source.features[name],
+        quality=ctx.quality,
+        features=source.features,
+    )
     return _after_the_fillet(source, name, outcome)
 
 
@@ -8322,7 +8399,13 @@ def _reshape_the_fillet(
         return _exact_fillet(ctx, source, name, radius)
     from app.core.geom.edges import reround
 
-    outcome = reround(as_mesh_data(source.mesh), source.features[name], radius, quality=ctx.quality)
+    outcome = reround(
+        as_mesh_data(source.mesh),
+        source.features[name],
+        radius,
+        quality=ctx.quality,
+        features=source.features,
+    )
     return _after_the_fillet(source, name, outcome)
 
 

@@ -957,6 +957,8 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "ellipse": _("Oval"),
     "lower": _("Untere Hälfte"),
     "upper": _("Obere Hälfte"),
+    "below": _("Kleinere Seite"),
+    "above": _("Größere Seite"),
     "hex": _("Sechskant"),
     "dovetail": _("Schwalbenschwanz"),
     "snap": _("Schnapper"),
@@ -1117,6 +1119,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "ellipse": _("Elliptischer Querschnitt aus Breite und Höhe."),
     "lower": _("Die untere Schale nimmt die Schraubenköpfe auf."),
     "upper": _("Die obere Schale nimmt die Muttern auf."),
+    "below": _("Die Seite mit den kleineren Werten auf der Achse bleibt — bei Z unten."),
+    "above": _("Die Seite mit den größeren Werten auf der Achse bleibt — bei Z oben."),
     "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
     "dovetail": _(
         "Schwalbenschwanz: die Teile schieben sich ein und halten quer zur Fuge ohne Kleber."
