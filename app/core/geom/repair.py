@@ -73,6 +73,48 @@ def remove_degenerate_faces(mesh: MeshData) -> tuple[MeshData, int]:
     return MeshData.of(body, slots=slots), before - len(body.faces)
 
 
+def remove_doubled_faces(mesh: MeshData) -> tuple[MeshData, int]:
+    """Deckungsgleiche Dreiecke **paarweise** entfernen — beide, nicht eines.
+
+    Zwei Dreiecke mit denselben Ecken sind eine Tasche ohne Volumen. Wer nur
+    eine Kopie streicht, lässt die übrigen Kanten des Paares mit je einer
+    Fläche zurück und reißt zwei Ränder auf; das Paar zu streichen schließt
+    das Netz. Genau das trennt diesen Schritt von ``unique_faces`` in
+    :func:`remove_degenerate_faces`, das die erste Kopie behält.
+
+    Gemessen am 16.09.2026 an einer heruntergeladenen Waschschüssel mit
+    215 074 Dreiecken: eine verzweigte Kante, an der vier Flächen hängen, zwei
+    davon deckungsgleich.
+
+    * Nur eine Kopie entfernt: 2 offene Ränder, weiter verzweigt, offen.
+    * Das Paar entfernt: 0 Ränder, 0 Verzweigungen, **geschlossen** — und das
+      Volumen auf drei Nachkommastellen unverändert (401,869 cm³).
+
+    **Bei ungerader Anzahl bleibt eine Kopie stehen.** Drei deckungsgleiche
+    Dreiecke sind eine Tasche *und* eine Fläche; die Fläche wird gebraucht.
+    """
+    body = mesh.raw.copy()
+    before = len(body.faces)
+    if not before:
+        return mesh, 0
+    ordered = np.sort(body.faces, axis=1)
+    _unique, inverse, counts = np.unique(ordered, axis=0, return_inverse=True, return_counts=True)
+    inverse = np.asarray(inverse).reshape(-1)
+    keep = np.ones(before, dtype=bool)
+    for group in np.flatnonzero(counts > 1):
+        members = np.flatnonzero(inverse == group)
+        keep[members[: len(members) - len(members) % 2]] = False
+    dropped = int((~keep).sum())
+    if not dropped:
+        return mesh, 0
+    kept_slots = (
+        tuple(mesh.slots[int(index)] for index in np.flatnonzero(keep)) if mesh.slots else ()
+    )
+    body.update_faces(keep)
+    body.remove_unreferenced_vertices()
+    return MeshData.of(body, slots=kept_slots), dropped
+
+
 def unify_normals(mesh: MeshData) -> tuple[MeshData, bool]:
     """Macht den Umlaufsinn einheitlich und stülpt den Körper nötigenfalls
     nach außen."""
@@ -553,6 +595,38 @@ def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
     return transfer(MeshData.of(rebuilt), [mesh]), True
 
 
+def _tears_it_further(before: MeshData, after: MeshData) -> bool:
+    """Ob ein Schritt mehr offene Ränder hinterlässt, als er vorgefunden hat.
+
+    **Gefragt wird „wird es schlechter", nicht „war es heil".** Bis zum
+    16.09.2026 stand hier ``before.is_watertight and not after.is_watertight``,
+    und damit griff der Schutz ausgerechnet dort nicht, wo etwas zu schützen
+    war: An einem Netz, das schon offen ist, durfte jeder Schritt es weiter
+    aufreißen.
+
+    Gemessen an einer heruntergeladenen Waschschüssel: null offene Ränder,
+    eine verzweigte Kante — ``is_watertight`` also falsch, der Schutz aus. Das
+    Entfernen **eines** entarteten Dreiecks riss zwei Ränder auf, die
+    anschließend niemand mehr schloss, und der Kunde bekam ein Modell zurück,
+    das kaputter war als vorher.
+
+    **Beide Maße zählen, und zwar zusammen.** Ein Schritt kann ein Netz
+    verschlechtern, ohne einen einzigen Rand zu erzeugen: Zwei geschlossene
+    Schalen, die sich berühren, werden beim Verschweißen zu einer verzweigten —
+    null Ränder vorher, null nachher, und trotzdem kein Volumenkörper mehr.
+    Genau diesen Fall hält ``test_repair_preserves_closed_topology`` fest.
+
+    Gewogen wird die **Summe** und nicht jedes Maß für sich. Ein Schritt, der
+    10 116 offene Ränder eines rohen STL schließt und dabei zwei Verzweigungen
+    hinterlässt, ist eine Verbesserung; die strengere Lesart verbot ihn und
+    ließ ``generated_figure.stl`` unverschweißt liegen — ohne Volumen, und die
+    Normalenprüfung danach rechnete durch null.
+    """
+    return open_edge_count(after) + branching_edge_count(after) > open_edge_count(
+        before
+    ) + branching_edge_count(before)
+
+
 def repair(
     mesh: MeshData,
     *,
@@ -572,14 +646,14 @@ def repair(
         # Dieselbe Zusicherung wie beim Import: nahe Punkte können zu zwei
         # getrennten Schalen gehören. Das Zusammenlegen darf deren Kanten
         # nicht zu nichtmannigfaltigen Verbindungen machen.
-        if removed and result.mesh.is_watertight and not candidate.is_watertight:
+        if removed and _tears_it_further(result.mesh, candidate):
             result.findings.append(
                 Finding(
                     code="repair.weld_skipped",
                     severity="info",
                     message=_(
                         "Doppelte Punkte blieben stehen — sie zu verschweißen hätte das "
-                        "geschlossene Netz aufgerissen."
+                        "Netz weiter aufgerissen."
                     ),
                     values={
                         "tolerance": format_length(weld_tolerance(result.mesh.bounds.diagonal))
@@ -599,18 +673,36 @@ def repair(
             )
 
     if degenerate:
+        # **Vor den entarteten Dreiecken, und das ist die Reihenfolge, auf die
+        # es ankommt.** ``remove_degenerate_faces`` ruft ``unique_faces`` und
+        # behält damit von zwei deckungsgleichen Dreiecken eines — die Tasche
+        # ohne Volumen wird zur offenen Stelle. Fällt das Paar vorher, ist für
+        # den Schritt danach nichts mehr zu tun.
+        candidate, doubled = remove_doubled_faces(result.mesh)
+        if doubled and not _tears_it_further(result.mesh, candidate):
+            result.mesh = candidate
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.doubled_removed",
+                    severity="info",
+                    message=_("Deckungsgleiche Dreiecke wurden paarweise entfernt."),
+                    values={"removed": doubled},
+                )
+            )
+
         candidate, removed = remove_degenerate_faces(result.mesh)
         # Auch ein flaches Dreieck kann zwei Nachbarflächen topologisch
         # verbinden. Ein geschlossener Eingang bleibt einschließlich seiner
         # Materialzuweisungen erhalten, wenn das Entfernen ihn öffnen würde.
-        if removed and result.mesh.is_watertight and not candidate.is_watertight:
+        if removed and _tears_it_further(result.mesh, candidate):
             result.findings.append(
                 Finding(
                     code="repair.degenerate_kept",
                     severity="info",
                     message=_(
                         "Entartete Dreiecke blieben stehen — sie zu entfernen hätte das "
-                        "geschlossene Netz aufgerissen."
+                        "Netz weiter aufgerissen."
                     ),
                     values={"kept": removed},
                 )
@@ -730,9 +822,18 @@ def repair(
             )
 
     if not result.mesh.is_watertight:
+        # **Zwei Gründe, und sie verlangen verschiedene Sätze.** „Fehlende
+        # Wände" stimmt für offene Ränder; ein Netz kann aber null davon haben
+        # und trotzdem kein Volumen einschließen, weil an einer Kante drei
+        # Flächen zusammenlaufen. Gemessen am 16.09.2026 an einer
+        # heruntergeladenen Waschschüssel: null Ränder, eine verzweigte Kante
+        # — und der Bericht sprach von fehlenden Wänden. Wer danach nach einem
+        # Loch sucht, findet keines und hält die Anwendung für kaputt.
+        open_edges = open_edge_count(result.mesh)
+        branching = branching_edge_count(result.mesh) if not open_edges else 0
         result.findings.append(
             Finding(
-                code="repair.still_open",
+                code="repair.still_branching" if branching else "repair.still_open",
                 severity="warning",
                 # Der frühere Folgesatz schickte den Nutzer im Kreis:
                 # „Kanten verfeinern schließt es" — diese Operation weist ein
@@ -740,9 +841,22 @@ def repair(
                 # ehrliche Grenze erklärt, warum der Rest bleibt; die
                 # Oberfläche führt von dort zu den betroffenen Stellen (§2.7).
                 message=_(
+                    "An einer Kante treffen mehr als zwei Flächen zusammen — das ist kein "
+                    "Loch, sondern eine Verzweigung."
+                )
+                if branching == 1
+                else _(
+                    "An {edges} Kanten treffen mehr als zwei Flächen zusammen — das sind "
+                    "keine Löcher, sondern Verzweigungen.",
+                    edges=branching,
+                )
+                if branching
+                else _(
                     "Die Reparatur schließt kleine Löcher, kann fehlende Wände aber nicht ersetzen."
                 ),
-                values={"open_edges": open_edge_count(result.mesh)},
+                values={"open_edges": open_edges, "branching_edges": branching}
+                if branching
+                else {"open_edges": open_edges},
             )
         )
     return result
@@ -752,3 +866,20 @@ def open_edge_count(mesh: MeshData) -> int:
     """Kanten, die zu genau einem Dreieck gehören — das Maß von „offen"."""
     single = trimesh.grouping.group_rows(mesh.raw.edges_sorted, require_count=1)
     return len(single)
+
+
+def branching_edge_count(mesh: MeshData) -> int:
+    """Kanten, an denen **mehr als zwei** Dreiecke hängen.
+
+    Das zweite Maß von „nicht geschlossen", und das seltener genannte: Ein
+    Netz kann null offene Ränder haben und trotzdem kein Volumen einschließen,
+    weil an einer Kante drei Flächen zusammenlaufen. ``is_watertight`` meldet
+    dann „offen", die Randzählung sagt null, und ohne diese Auskunft steht der
+    Kunde vor einem Widerspruch.
+
+    Gemessen am 16.09.2026 an einer heruntergeladenen Waschschüssel mit
+    215 074 Dreiecken: **null** offene Ränder, **eine** verzweigte Kante — und
+    der Prüfbericht sprach von fehlenden Wänden.
+    """
+    groups = trimesh.grouping.group_rows(mesh.raw.edges_sorted, require_count=None)
+    return sum(1 for group in groups if len(group) > 2)

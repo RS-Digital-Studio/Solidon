@@ -39,6 +39,83 @@ def test_welding_turns_loose_triangles_into_a_body() -> None:
     assert mesh.is_watertight
 
 
+def test_a_doubled_triangle_leaves_as_a_pair_and_closes_the_body() -> None:
+    """Zwei deckungsgleiche Dreiecke sind eine Tasche ohne Volumen.
+
+    **Und wer nur eine Kopie streicht, macht es schlimmer.** Die übrigen
+    Kanten des Paares haben danach je eine Fläche, also zwei offene Ränder, wo
+    vorher keiner war. Genau das tat ``unique_faces`` in
+    ``remove_degenerate_faces``, und deshalb steht der neue Schritt davor.
+
+    Gemessen am 16.09.2026 an einer heruntergeladenen Waschschüssel
+    (215 074 Dreiecke): eine verzweigte Kante mit vier Flächen, zwei davon
+    deckungsgleich. Nur eine entfernt — zwei Ränder, weiter offen. Das Paar
+    entfernt — geschlossen, Volumen unverändert.
+    """
+    from app.core.geom.repair import branching_edge_count, remove_doubled_faces
+
+    cube = trimesh.creation.box((10.0, 10.0, 10.0))
+    # Ein Dreieck ein zweites Mal: dieselben Ecken, dieselbe Stelle.
+    doubled = trimesh.Trimesh(
+        vertices=cube.vertices.copy(),
+        faces=trimesh.util.vstack_empty([cube.faces, cube.faces[:1]]),
+        process=False,
+    )
+    before = MeshData.of(doubled)
+    assert not before.is_watertight, "die zweite Kopie macht eine Kante vierfach"
+    assert branching_edge_count(before) > 0
+    assert open_edge_count(before) == 0, "verzweigt ist nicht dasselbe wie offen"
+
+    after, removed = remove_doubled_faces(before)
+
+    assert removed == 2, "beide Kopien, nicht eine"
+    assert after.triangle_count == 11, "von dreizehn bleiben elf"
+    assert branching_edge_count(after) == 0, "die vierfache Kante ist aufgelöst"
+
+    # **Und hier hängt die Kopie an einer tragenden Wand**, anders als an der
+    # Waschschüssel: Sie teilt ihre drei Kanten mit dem Würfel, nicht mit
+    # ihrem Zwilling. Das Paar zu streichen nimmt die Wand mit — der Schritt
+    # ist richtig gezählt und trotzdem schädlich, und genau dafür steht der
+    # Schutz in ``repair`` (der Test darunter).
+    assert open_edge_count(after) == 3, "drei Kanten stehen jetzt allein"
+
+    # **Und die ganze Kette macht daraus wieder einen Würfel.** Das Paar fällt,
+    # das Loch dahinter schließt der Schritt danach — eine Verzweigung kann
+    # niemand schließen, ein Loch schon. Deshalb wiegt der Schutz die Summe
+    # beider Defekte und nicht jeden für sich: Hier bleibt sie gleich (drei
+    # Verzweigungen gegen drei Ränder), und der Tausch lohnt sich.
+    healed = repair(before)
+    codes = {entry.code for entry in healed.findings}
+
+    assert "repair.doubled_removed" in codes
+    assert "repair.holes_filled" in codes
+    assert healed.mesh.triangle_count == 12, "der Würfel ist wieder heil"
+    assert healed.mesh.is_watertight
+    assert healed.mesh.raw.volume == pytest.approx(1000.0), "und sein Volumen stimmt"
+
+
+def test_three_identical_triangles_keep_one() -> None:
+    """Drei deckungsgleiche sind eine Tasche **und** eine Fläche.
+
+    Die Gegenprobe zum Test darüber: Entfernt würde hier das Paar, die dritte
+    Kopie wird gebraucht — sonst fehlt dem Würfel eine Wand.
+    """
+    from app.core.geom.repair import remove_doubled_faces
+
+    cube = trimesh.creation.box((10.0, 10.0, 10.0))
+    tripled = trimesh.Trimesh(
+        vertices=cube.vertices.copy(),
+        faces=trimesh.util.vstack_empty([cube.faces, cube.faces[:1], cube.faces[:1]]),
+        process=False,
+    )
+
+    after, removed = remove_doubled_faces(MeshData.of(tripled))
+
+    assert removed == 2, "zwei von dreien"
+    assert after.triangle_count == 12, "der Würfel behält seine zwölf"
+    assert after.is_watertight
+
+
 def test_degenerate_triangles_go_away() -> None:
     mesh, removed = remove_degenerate_faces(merge_vertices(raw("degenerate.stl"))[0])
 

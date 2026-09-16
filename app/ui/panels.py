@@ -478,6 +478,11 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # zweiter Reparaturlauf und Kanten verfeinern führen von hier nur zurück;
     # die Defektkarte zeigt dagegen die Kanten, die wirklich übrig sind.
     "repair.still_open": (SHOW_LOCATIONS,),
+    # Dieselbe Handlung, anderer Grund: Die Defektkarte kennt „verzweigte
+    # Kante" als eigene Farbe (`perceive.maps`), und genau dorthin gehört der
+    # Kunde bei diesem Befund — suchen würde er sonst ein Loch, das es nicht
+    # gibt.
+    "repair.still_branching": (SHOW_LOCATIONS,),
     # Ein offener Körper hat kein belastbares Innen, also kann die Prüfung auf
     # Selbstdurchdringungen nicht laufen. Derselbe Ort, aber eine andere
     # Aussage: Dieser Befund erklärt den ausgelassenen Schritt, der Nachbar
@@ -497,7 +502,7 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
 #: Auswertung trägt die Objektkennung an Operationsbefunde nach; fehlt sie
 #: trotzdem, wäre „Stellen zeigen" wieder stilles Raten (Regel 21).
 _LOCATED_REPAIR_FINDINGS: Final = frozenset(
-    {"repair.still_open", "repair.self_intersections_skipped"}
+    {"repair.still_open", "repair.still_branching", "repair.self_intersections_skipped"}
 )
 
 #: Kennungen der Befunde, die aus einer Ausnahme einer Operation entstanden
