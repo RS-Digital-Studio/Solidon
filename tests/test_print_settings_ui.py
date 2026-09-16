@@ -2890,6 +2890,49 @@ def _select_printer(dialog: PrintSettingsDialog, printer_id: str) -> None:
     dialog.printer_choice.setCurrentIndex(index)
 
 
+def test_the_nozzle_is_settable_and_reaches_the_computation(
+    session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    """Eine andere Düse lässt sich am Drucker einstellen — und sie rechnet mit.
+
+    Die mitgelieferte Tabelle führt **jedes** der sechzehn Geräte mit 0,4. Wer
+    eine andere aufschraubt, konnte das bis zum 16.09.2026 nirgends sagen, und
+    daran hängt mehr als eine Zahl: Bahnbreite und Schichthöhe kommen aus ihr,
+    und die Wahl des Maschinenprofils im Slicer auch. Gemessen an dem Tag:
+    ElegooSlicer stand auf „… 0.2 nozzle", der Auftrag war für 0,4 gerechnet —
+    der Slicer nahm ihn nicht an, jede Linienbreite stand auf null, und er
+    meldete „zu geringe Linienbreite".
+
+    Geprüft wird über das Feld und nicht über ``_nozzle_changed``: Am Signal
+    hängt die halbe Zusicherung (`.claude/rules/tests.md`, „Am Weg vorbei").
+    """
+    from app.core.knowledge import print_settings, profiles
+
+    # **In einen eigenen Ordner, sonst erbt die halbe Datei diese Düse.** Die
+    # Einstellung gehört dem Gerät und wird deshalb wirklich gespeichert; ohne
+    # diese Zeile stand danach in jedem folgenden Test ein Centauri mit 0,6,
+    # und sechs von ihnen wurden rot — isoliert gefahren alle grün.
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    monkeypatch.setattr(profiles, "_printers", None)
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    before = profiles.printer(str(dialog.printer_choice.currentData()))
+    assert dialog.nozzle.value_mm() == pytest.approx(before.nozzle_diameter), (
+        "das Feld zeigt die Düse des gewählten Druckers"
+    )
+
+    dialog.nozzle.set_value_mm(0.6)
+
+    after = profiles.printer(before.id)
+    assert after.nozzle_diameter == pytest.approx(0.6), "die Düse gehört zum Drucker"
+    assert after.extrusion_width == pytest.approx(0.63), (
+        "die Bahnbreite zieht mit — sonst gehört sie zur alten Düse"
+    )
+
+    computed = print_settings.resolve(profiles.make_profile(before.id, "pla"), "standard")
+    assert computed.layers.line_width == pytest.approx(0.63), "und die Rechnung nimmt sie an"
+
+
 def test_the_slot_choice_survives_the_project_file(tmp_path: Path) -> None:
     """Die Zuordnung gehört ins Projekt und nicht an den Rechner.
 

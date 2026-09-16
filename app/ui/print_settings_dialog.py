@@ -102,6 +102,7 @@ from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
 from app.ui.filament_usage import UsageNotice
 from app.ui.header import filament_names
 from app.ui.labels import (
+    LengthSpin,
     NumberSpin,
     RowCheckBox,
     by_title,
@@ -2555,6 +2556,33 @@ class PrintSettingsDialog(QDialog):
         _select_data(self.printer_choice, document.printer or profiles.DEFAULT_PRINTER)
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
 
+        # **Die Düse steht neben dem Drucker, weil sie zu ihm gehört.** Die
+        # Tabelle führt jedes Gerät mit 0,4 — wer eine andere aufschraubt,
+        # konnte das nirgends sagen, und Solidon rechnete weiter mit 0,4:
+        # Bahnbreite, Schichthöhe und die Wahl des Maschinenprofils im Slicer
+        # hängen alle daran. Am 16.09.2026 stand ElegooSlicer deshalb auf der
+        # 0,2er Variante, während der Auftrag für 0,4 gerechnet war — der
+        # Slicer nahm ihn nicht an und meldete „zu geringe Linienbreite".
+        # ``LengthSpin`` und keine blanke ``QDoubleSpinBox``: Außen steht die
+        # Anzeigeeinheit, innen bleiben Millimeter. Ein festes „ mm" wäre
+        # zweimal falsch — eine Zeichenkette an ``tr()`` vorbei (Regel 20) und
+        # bei eingestellten Zoll eine Behauptung, die nicht stimmt.
+        self.nozzle = LengthSpin(self)
+        self.nozzle.set_range_mm(0.1, 2.0)
+        self.nozzle.set_step_mm(0.05)
+        self.nozzle.setAccessibleName(tr("Düsendurchmesser"))
+        self.nozzle.setToolTip(
+            tr(
+                "Die Düse, die gerade aufgeschraubt ist. Sie gehört zum Drucker und gilt "
+                "deshalb für jedes Projekt darauf."
+            )
+        )
+        self._show_nozzle()
+        # ``valueChangedMm`` und nicht ``valueChanged``: Letzteres trägt die
+        # Zahl aus dem Feld, also einen Anzeigewert. Bei eingestellten Zoll
+        # käme darüber 0,0157 als Düsendurchmesser an.
+        self.nozzle.valueChangedMm.connect(self._nozzle_changed)
+
         # **Das Material wird hier nicht mehr gewählt, sondern berichtet.**
         # Es kommt aus der Spule (``profiles.for_object``), und eine zweite
         # Wahl daneben hieße, etwas einzustellen, was das Filament schon sagt —
@@ -2599,6 +2627,17 @@ class PrintSettingsDialog(QDialog):
         quality_label.setBuddy(self.quality)
         printer_label = QLabel(tr("Drucker"), self)
         printer_label.setBuddy(self.printer_choice)
+        # **Weder „Düse" noch „Düsendurchmesser".** Das erste ist in diesem
+        # Dialog vergeben — es beschriftet die *Temperatur* („Düse 210 °C"),
+        # und zwei gleich benannte Zeilen wären eine Verwechslung, die der
+        # Kunde erst nach dem Druck bemerkt. Das zweite ist zu lang: Spalte
+        # null trägt die längste Beschriftung, und „Diâmetro do bico" drückte
+        # die Druckerauswahl auf 342 px, wo „Allgemeiner FDM-Drucker 220 mm"
+        # 400 braucht (``test_the_portuguese_header_keeps_every_control_visible``).
+        # Das Durchmesserzeichen sagt dasselbe auf einem Viertel der Breite;
+        # vorgelesen wird der ``accessibleName``.
+        nozzle_label = QLabel(tr("Düse ⌀"), self)
+        nozzle_label.setBuddy(self.nozzle)
         filament_label = QLabel(tr("Filamente"), self)
         filament_label.setBuddy(self.material_link)
 
@@ -2612,9 +2651,15 @@ class PrintSettingsDialog(QDialog):
         head.addWidget(self.share_settings, 0, 2, 1, 2)
         head.addWidget(printer_label, 1, 0)
         head.addWidget(self.printer_choice, 1, 1, 1, 3)
-        head.addWidget(filament_label, 2, 0)
-        head.addWidget(self.material_state, 2, 1, 1, 2)
-        head.addWidget(self.material_link, 2, 3)
+        # Die Düse **unter** dem Drucker und nicht daneben: Die Auswahl
+        # daneben blieb sonst 234 px breit, und „Allgemeiner FDM-Drucker
+        # 220 mm" braucht 360 — genau der Rand, den die drei Zeilen oben
+        # vermeiden sollen (``test_print_settings_ui`` misst ihn nach).
+        head.addWidget(nozzle_label, 2, 0)
+        head.addWidget(self.nozzle, 2, 1)
+        head.addWidget(filament_label, 3, 0)
+        head.addWidget(self.material_state, 3, 1, 1, 2)
+        head.addWidget(self.material_link, 3, 3)
         head.setColumnStretch(1, 1)
         head.setColumnStretch(3, 2)
         return head
@@ -2691,6 +2736,35 @@ class PrintSettingsDialog(QDialog):
         wanted = set(self._chosen_plates())
         return [entry for entry in result.scene.objects.values() if entry.plate in wanted]
 
+    def _show_nozzle(self) -> None:
+        """Die Düse des gewählten Druckers ins Feld, ohne es als Änderung zu lesen."""
+        entry = profiles.printer(str(self.printer_choice.currentData()))
+        blocked = self.nozzle.blockSignals(True)
+        self.nozzle.set_value_mm(entry.nozzle_diameter)
+        self.nozzle.blockSignals(blocked)
+
+    def _nozzle_changed(self, value: float) -> None:
+        """Eine andere Düse ist eine Änderung **am Drucker**, nicht am Projekt.
+
+        Sie wird deshalb im Druckerprofil abgelegt (``save_printer`` unter
+        derselben Kennung, die die mitgelieferte Tabelle überschreibt) und
+        gilt von da an für jedes Projekt auf diesem Gerät — wer eine 0,6er
+        aufschraubt, hat sie auch morgen noch drauf.
+
+        ``extrusion_width`` zieht mit: Die Tabelle rechnet sie als Düse mal
+        1,05, und eine Bahnbreite, die zur alten Düse gehört, wäre genau der
+        Widerspruch, den dieses Feld auflösen soll. Die Schichthöhe bleibt
+        stehen — ``print_settings.resolve`` deckelt sie ohnehin am
+        Düsendurchmesser.
+        """
+        entry = profiles.printer(str(self.printer_choice.currentData()))
+        if abs(entry.nozzle_diameter - value) < 1e-9:
+            return
+        profiles.save_printer(
+            replace(entry, nozzle_diameter=value, extrusion_width=round(value * 1.05, 3))
+        )
+        self._scene_profile_changed()
+
     def _scene_profile_changed(self) -> None:
         """Ein anderer Drucker heißt andere Vorgaben — und eine Neuauswertung.
 
@@ -2733,6 +2807,10 @@ class PrintSettingsDialog(QDialog):
             str(self.printer_choice.currentData()),
             document.material or profiles.DEFAULT_MATERIAL,
         )
+        # Die Düse gehört dem Gerät: Ein Wechsel zeigt die seine, nicht die
+        # des vorigen. Ohne diese Zeile stünde im Feld weiter 0,6, während
+        # der neu gewählte Drucker mit 0,4 rechnet.
+        self._show_nozzle()
         settings = self._resolved(self.settings.quality)
         for path, value in chosen.items():
             settings = print_settings.with_path(settings, path, value)
