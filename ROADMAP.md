@@ -101,11 +101,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-034 — Versicherungsschutz für Software und Produktschäden klären](#rm-034) | Veröffentlichung, Betrieb und Vertrieb | Versicherungsangebote gegen die tatsächlichen Risiken prüfen lassen |
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
-| [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Verkaufsbau bis 25.10. vorbereiten; Start am 01.11.2026 |
+| [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.10.; letzte Optimierungen 31.10.; Start 01.11.2026 um 10:00 Uhr deutscher Zeit |
 | [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Beide Funde sind zugeordnet und behoben; offen bleibt nur der Abgleich gegen den Server beim nächsten Upload |
 | [RM-162 — Der Hinweistext der Fassung reiste unverändert mit](#rm-162) | Veröffentlichung, Betrieb und Vertrieb | Der Riegel steht; die sechs Sätze für 0.4.1 stehen bereit und werden beim Bau eingetragen |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Zugänge, Vertretung, Alarmierung und Probelauf belegen — die Pflicht gilt seit dem 11.09.2026 |
-| [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 |
+| [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Verkaufskonzept bis 15.10. abschließen; Start am 01.11.2026 um 10:00 Uhr deutscher Zeit |
 | [RM-182 — Zwei Lizenzarten bauen, privat und gewerblich](#rm-182) | Veröffentlichung, Betrieb und Vertrieb | Kern, Dienst, Vorratswerkzeug, Oberfläche und Rechtstexte am 15.09. gebaut; offen sind Website, die Art im Serverdatensatz und die Migration des laufenden Dienstes |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
 | [RM-095 — Automatischen Löschlauf auf dem Server belegen](#rm-095) | Veröffentlichung, Betrieb und Vertrieb | Server-Löschlauf, Sicherungen und Ausfallalarm tatsächlich nachweisen |
@@ -1593,11 +1593,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-061"></a>
 
 - [ ] **RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten.** Bei geklärter Anmeldung,
-  Zahlung und Rechtstexten folgt spätestens am 25.10. der Verkaufsbau für den beschlossenen
-  01.11.2026: Demo- und Testphasenwerte, Website und Rechtstexte konsistent umstellen und den
-  Aktualisierungsvorlauf prüfen. Fehlen Voraussetzungen, braucht es eine ausdrückliche neue
-  Entscheidung zur auslaufenden Demo. Abnahme: kaufbarer und nutzbarer Weg oder beschlossene
-  Übergangslösung vor Ablauf.
+  Zahlung und Rechtstexten bis 25.10. einen Verkaufskandidaten vorbereiten. Der **31.10. bleibt
+  für letzte Optimierungen reserviert**; Verkaufsstart ist am **01.11.2026 um 10:00 Uhr
+  Europe/Berlin** (Robert, 16.09.). Grundlage ist das
+  [Übergangskonzept](konzepte/konzept-demo-zu-1.0-2026-09.md): Ablauf alter Demos und laufender
+  Sitzungen, Aktualisierung und Projektübernahme, Kaufzustellung, Geräteaktivierung und
+  Veröffentlichung nach §§5–13 umsetzen; Abnahmefälle T01–T32 und Freigabekriterien §§15–16
+  erfüllen. Der Ist-Zustand vom 16.09. hat noch keinen täglichen Ablaufwächter und keinen
+  Bestell-Webhook im Repository. **Uhr-Rückstellfehler I03a am 16.09. lokal behoben:**
+  Erkannter Ablauf bleibt erhalten, auch über den Umweg einer falschen Zukunftsuhr und bei
+  Verlust eines Markers; 130 Aktivierungs-/Grenztests bestanden, zwei übersprungen.
+  Noch offen: laufender Zustands-Cache sowie Grenzen bei eingefrorener Uhr, fehlenden
+  Markern und vollständiger Systemrücksetzung nach §7.1/T10. Die Demo endet unverändert
+  einschließlich 30.10.; die
+  geplante Pause bis zum Verkaufsstart wird vorab erklärt. Fehlen Voraussetzungen,
+  Verkauf geschlossen halten und Verschiebung kommunizieren; eine andere Demo-Frist
+  benötigt eine ausdrückliche neue Entscheidung und einen neuen Bau. Abnahme: nach dem
+  letzten Optimierungsstand geprüfte Pakete sowie ein kaufbarer, zustellbarer und
+  aktivierbarer Weg zum bestätigten Start; andernfalls dokumentierter Verschiebungsablauf.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-robert-am-26082026-aufgetragen-hat).
 
@@ -1664,8 +1677,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-092"></a>
 
 - [ ] **RM-092 — Verkaufskonzept für den geplanten Start abschließen.** Das Verkaufskonzept bis zum
-  15.10.2026 aktualisieren; der beschlossene Verkaufsstart ist der 01.11.2026. Preis, tatsächlichen
-  Anbieter und Vertragspartner, Bestell-/Zustimmungsstrecke, Lieferung, Widerruf und Signierung
+  15.10.2026 aktualisieren; der beschlossene Verkaufsstart ist der **01.11.2026 um 10:00 Uhr
+  Europe/Berlin**. Kauf, Zustellung und Freigabe sind im
+  [Übergangskonzept](konzepte/konzept-demo-zu-1.0-2026-09.md) §§9, 11 und 13 ausgearbeitet.
+  Preis, tatsächlichen Anbieter und Vertragspartner, Bestell-/Zustimmungsstrecke,
+  Lieferung, Widerruf und Signierung
   festlegen. Abnahme: freigegebener Ablauf, Testkauf einschließlich Storno und passende Rechtstexte;
   überholte Konzepte eindeutig kennzeichnen. **Der Preis ist seit dem 15.09.2026 entschieden**
   (Robert: privat 69 € ab 01.11.2026 und 99 € ab 01.02.2027, gewerblich 199 € und 249 € an
