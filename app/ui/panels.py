@@ -128,6 +128,7 @@ from app.ui.labels import (
     value_line,
     value_text,
     volume,
+    wheel_needs_focus,
 )
 from app.ui.leash import weak_slot
 from app.ui.overlay import LEFT_WIDTH
@@ -2554,6 +2555,7 @@ class ParameterPanel(QWidget):
     def _unit_editor(self, name: str, selected: str) -> QComboBox:
         """Die kompakte, nicht editierbare Einheitenauswahl einer Zeile."""
         editor = _CompactParameterUnitBox(self)
+        wheel_needs_focus(editor)
         fill_parameter_units(editor, selected)
         editor.setProperty("parameterName", name)
         editor.setAccessibleName(tr("Einheit"))
@@ -2690,6 +2692,7 @@ class ParameterPanel(QWidget):
                 # nirgends.
                 continue
             editor = NumberSpin(self)
+            wheel_needs_focus(editor)
             editor.setDecimals(2)
             editor.setMinimum(parameter.minimum if parameter.minimum is not None else -100_000.0)
             editor.setMaximum(parameter.maximum if parameter.maximum is not None else 100_000.0)
@@ -5950,6 +5953,14 @@ class FeaturePanel(QWidget):
             target.setProperty("handlingKey", key)
             target.installEventFilter(self)
         from app.ui.op_dialog import ValueField
+
+        # **Das Rad dreht ein Feld erst mit Fokus** (Robert, 16.09.2026): Beim
+        # Rollen liegt der Zeiger zwangsläufig über Feldern, und jedes
+        # Drehfeld darunter nahm die Raste als Wert (Regel in ``oberflaeche.md``).
+        if isinstance(editor, ValueField):
+            wheel_needs_focus(editor.spin)
+        elif isinstance(editor, QAbstractSpinBox | QComboBox):
+            wheel_needs_focus(editor)
 
         if isinstance(editor, ValueField):
             editor.changed.connect(report)

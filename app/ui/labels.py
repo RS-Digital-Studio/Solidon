@@ -298,6 +298,37 @@ class TrackSlider(QSlider):
         )
 
 
+class _WheelNeedsFocus(QObject):
+    """Ein Rad über einem Feld ohne Fokus rollt die Seite, nicht den Wert."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt-Name
+        if (
+            event.type() == QEvent.Type.Wheel
+            and isinstance(watched, QWidget)
+            and not watched.hasFocus()
+        ):
+            # Ignoriert heißt bei Qt: weiter an das Elternteil — den
+            # Rollbereich. Das Feld selbst bekommt das Ereignis nicht.
+            event.ignore()
+            return True
+        return super().eventFilter(watched, event)
+
+
+def wheel_needs_focus(widget: QWidget) -> None:
+    """Das Mausrad dreht dieses Feld erst, wenn es den Fokus hat.
+
+    In einem rollenden Fenster liegt der Zeiger beim Rollen zwangsläufig über
+    Feldern, und Qt gibt eine Radraste über einem Drehfeld dem Feld: Im
+    Merkmalfenster sprangen Werte, wo die Seite rollen sollte (Robert,
+    16.09.2026: „hier sollten wir erst reinklicken müssen"). ``StrongFocus``
+    nimmt dem Rad den Fokuswechsel, der Filter reicht die Raste ohne Fokus an
+    den Rollbereich weiter. Wer ins Feld klickt, dreht danach wie gewohnt.
+    Gilt für Dreh- und Auswahlfelder; ein Haken kennt kein Rad.
+    """
+    widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    widget.installEventFilter(_WheelNeedsFocus(widget))
+
+
 class NumberSpin(QDoubleSpinBox):
     """Ein Zahlenfeld, dem beide Trennzeichen dasselbe bedeuten.
 

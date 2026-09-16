@@ -1286,7 +1286,9 @@ Anwendung — Windows malt sie weiter, es bekommt nur gesagt, in welcher Farbe;
 ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·
 `palette.py` (**Farbe trägt nie allein Bedeutung**,
 §19.1) · `icons.py` · `motion.py` (Bewegung an einer Stelle, nicht an
-zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
+zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen; dazu
+`wheel_needs_focus`, damit das Rad ein Feld erst mit Fokus dreht — Regel in
+`oberflaeche.md`)
 
 Das Anmelden des Fensterchroms ist idempotent: Beide Startwege teilen den
 Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.

@@ -2232,3 +2232,73 @@ def test_every_handling_carries_its_explanation_behind_one_sign(qt_app: QApplica
         assert titel.accessibleDescription() == dot.toolTip(), (
             "der Bildschirmleser bekommt den Satz an der Überschrift"
         )
+
+
+def test_the_wheel_over_an_unfocused_field_rolls_the_panel_and_not_the_value(
+    qt_app: QApplication,
+) -> None:
+    """Rollen im Merkmalfenster drehte Werte, sobald der Zeiger über einem Feld lag.
+
+    Robert, 16.09.2026: „hier sollten wir erst reinklicken müssen". Ohne Fokus
+    geht die Radraste an den Rollbereich, mit Fokus an das Feld — wie es die
+    Regel in ``oberflaeche.md`` beschreibt.
+
+    **Gerollt wird hier nicht gemessen, und das ist kein Versäumnis:** Qt
+    reicht nur *spontane* Radereignisse — die vom Fenstersystem — an das
+    Elternteil weiter; ein gesendetes bleibt beim Empfänger, damit ein
+    Rollbereich seine eigenen Weiterleitungen nicht zurückbekommt. Geprüft
+    wird deshalb, woran Qt die Weiterleitung knüpft: Das Feld lässt das
+    Ereignis **unangenommen**, und seine Fokusregel gibt dem Rad keinen Fokus.
+    """
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    key, feature = a_hole()
+    mesh = plate()
+    panel = FeaturePanel()
+    scroller = QScrollArea()
+    scroller.setWidget(panel)
+    scroller.setWidgetResizable(True)
+    scroller.resize(320, 160)
+    scroller.show()
+    panel.show_feature(key, feature, features=features.detect(mesh), mesh=mesh)
+    layout = panel.layout()
+    assert layout is not None
+    layout.activate()
+    # Zweimal: Der Rollbereich legt seine Balken erst im nächsten Umlauf nach.
+    QApplication.processEvents()
+    QApplication.processEvents()
+    bar = scroller.verticalScrollBar()
+    assert bar.maximum() > 0, "Voraussetzung: das Fenster rollt überhaupt"
+    spin = next(field for field in panel.findChildren(LengthSpin) if field.isVisibleTo(panel))
+    before = spin.value_mm()
+
+    def a_notch_down() -> QWheelEvent:
+        centre = spin.rect().center()
+        return QWheelEvent(
+            QPointF(centre),
+            QPointF(spin.mapToGlobal(centre)),
+            QPoint(),
+            QPoint(0, -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+
+    assert not spin.hasFocus(), "Voraussetzung: niemand hat ins Feld geklickt"
+    assert spin.focusPolicy() == Qt.FocusPolicy.StrongFocus, "das Rad nimmt keinen Fokus"
+    unfocused = a_notch_down()
+    QApplication.sendEvent(spin, unfocused)
+    assert spin.value_mm() == before, "ohne Fokus bleibt der Wert stehen"
+    assert not unfocused.isAccepted(), "und die Raste bleibt frei für den Rollbereich"
+
+    scroller.activateWindow()
+    spin.setFocus(Qt.FocusReason.MouseFocusReason)
+    QApplication.processEvents()
+    assert spin.hasFocus(), "Voraussetzung: der Klick ins Feld gibt den Fokus"
+    focused = a_notch_down()
+    QApplication.sendEvent(spin, focused)
+    assert spin.value_mm() != before, "mit Fokus dreht das Rad den Wert"
+    assert focused.isAccepted(), "und das Feld hat die Raste genommen"
+    scroller.close()

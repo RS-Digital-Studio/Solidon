@@ -1268,6 +1268,18 @@ allen ungenannt (RM-154). Das Fenster baut daraus die Drafts
 (`MainWindow._apply_to_each_feature`); das Panel kennt die Regel nicht, es
 nennt nur Werte und Ziele.
 
+## Ein Rad über einem Feld ohne Fokus rollt die Seite
+
+In einem rollenden Fenster liegt der Zeiger beim Rollen zwangsläufig über
+Feldern, und Qt gibt eine Radraste über einem Drehfeld dem Feld: Im
+Merkmalfenster sprangen Werte, wo die Seite rollen sollte (Robert,
+16.09.2026: „hier sollten wir erst reinklicken müssen").
+`labels.wheel_needs_focus` setzt das Feld auf `StrongFocus` — das Rad nimmt
+damit keinen Fokus mehr — und reicht eine Raste ohne Fokus weiter: ignoriert
+heißt bei Qt an das Elternteil, also an den Rollbereich. Wer ins Feld klickt,
+dreht danach wie gewohnt. Gilt für jedes Dreh- und Auswahlfeld im Merkmal-
+und im Parameterfenster; wer ein Feld in einen Rollbereich setzt, ruft es auf.
+
 ## Ein Nachweis gehört der Gruppe, nicht jeder Handlung
 
 Das Merkmalpanel begründet, warum „Auf alle N gleichartigen anwenden"
