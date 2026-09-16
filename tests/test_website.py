@@ -160,10 +160,31 @@ def _published_operations() -> frozenset[str]:
 
 
 def test_the_published_reference_belongs_to_the_offered_download() -> None:
-    """Eine alte Referenz darf keine Zahlen für ein neueres Paket bestätigen."""
+    """Eine alte Referenz darf keine Zahlen für ein neueres Paket bestätigen.
+
+    **Die Richtung, nicht der Gleichstand** (17.09.2026). Gefordert war, dass
+    beide Zahlen gleich sind — und das ist derselbe Kreis, den
+    ``test_the_version_file_says_what_the_application_is`` am 23.08.2026 schon
+    einmal aufgelöst hat: Das Handbuch entsteht **vor** dem Paketbau, und
+    ``version.json`` nennt die Fassung, die **veröffentlicht** ist. Zwischen
+    beidem liegt bei jedem Release die Stunde, in der die Pakete gebaut werden;
+    Gleichstand verlangen heißt, dass die Suite eine Website fordert, die es
+    ohne die Pakete nicht geben kann, und die Pakete eine grüne Suite. Der
+    Tag-Lauf von ``v0.4.3`` ist genau daran hängengeblieben.
+
+    Was den Fall des Docstrings trifft, ist die **Richtung**: Ein Handbuch, das
+    der angebotenen Fassung vorauseilt, wird mit ihr zusammen hochgeladen und
+    beschreibt sie. Eines, das **zurückliegt**, bestätigt mit alten Zahlen ein
+    Paket, das längst weiter ist — und genau das soll nicht vorkommen.
+    """
     version = json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))["version"]
     manual = (WEBSITE / "handbuch.html").read_text(encoding="utf-8")
-    assert f'<p class="imprint">Version {version}<br>' in manual
+    gedruckt = re.search(r'<p class="imprint">Version ([0-9.]+)<br>', manual)
+    assert gedruckt, "Das veröffentlichte Handbuch nennt seine Fassung nicht."
+    assert _als_zahlen(gedruckt.group(1)) >= _als_zahlen(str(version)), (
+        f"Das Handbuch nennt {gedruckt.group(1)}, angeboten wird {version} — "
+        "eine ältere Referenz bestätigt die Zahlen eines neueren Pakets"
+    )
 
 
 def test_the_number_of_operations_matches_the_published_reference() -> None:
