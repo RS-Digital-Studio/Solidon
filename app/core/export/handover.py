@@ -265,7 +265,11 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     keine Maschinenseite, und Regel 21 — nicht raten.
     """
     if setup.machine_profile:
-        return setup.machine_profile if _fits_the_printer(setup.machine_profile, profile) else ""
+        if not _fits_the_printer(setup.machine_profile, profile):
+            return ""
+        return slicer_profiles.machine_with_nozzle(
+            setup.machine_profile, setup.flavour, setup.executable, profile.printer
+        )
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
     if not chosen:
         return ""
@@ -278,7 +282,17 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
             profile.printer.id,
         )
         return ""
-    return chosen
+    fitting = slicer_profiles.machine_with_nozzle(
+        chosen, setup.flavour, setup.executable, profile.printer
+    )
+    if fitting != chosen:
+        _log.info(
+            "slicer is set to %r, the project prints with a %g mm nozzle — handing over %r",
+            chosen,
+            profile.printer.nozzle_diameter,
+            fitting or "no machine side",
+        )
+    return fitting
 
 
 def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:

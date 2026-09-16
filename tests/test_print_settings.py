@@ -3412,6 +3412,84 @@ def test_without_a_chosen_printer_the_slicers_own_selection_counts(tmp_path, mon
     )
 
 
+def test_the_same_printer_with_another_nozzle_hands_over_the_fitting_variant(
+    monkeypatch, tmp_path
+) -> None:
+    """Derselbe Drucker, andere Düse — übergeben wird die passende Variante.
+
+    **Gemessen am 16.09.2026.** ElegooSlicer stand auf „Elegoo Centauri Carbon
+    2 0.2 nozzle", das Projekt rechnete auf demselben Gerät mit 0,4. Der
+    Druckervergleich sagte „passt" — der Name nennt den Drucker, und die Düse
+    steht nur hinten dran —, also ging die Maschinenseite der 0,2er Düse
+    hinaus, daneben ein Prozess mit ``line_width`` 0,42. Der Slicer nahm den
+    widersprüchlichen Auftrag nicht an und fiel auf seine Vorgaben zurück:
+    **jede** Linienbreite stand auf null, und er meldete „zu geringe
+    Linienbreite". Von Solidons Werten kam kein einziger an.
+
+    Die Varianten desselben Geräts unterscheidet die Düse — dieselbe Regel,
+    nach der ``match`` ohne eingestellte Maschine auswählt.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    def maschine(name: str, nozzle: float):
+        datei = tmp_path / f"{name}.json"
+        datei.write_text("{}", encoding="utf-8")
+        return slicer_profiles.SlicerProfile(
+            datei, name, "machine", printer_model="Elegoo Centauri Carbon 2", nozzle=nozzle
+        )
+
+    bestand = [
+        maschine("Elegoo Centauri Carbon 2 0.2 nozzle", 0.2),
+        maschine("Elegoo Centauri Carbon 2 0.4 nozzle", 0.4),
+    ]
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.2 nozzle"
+    )
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: bestand)
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    assert profile.printer.nozzle_diameter == 0.4, "sonst prüft der Fall etwas anderes"
+
+    assert handover.machine_for(setup, profile) == "Elegoo Centauri Carbon 2 0.4 nozzle"
+
+
+def test_a_nozzle_that_no_variant_offers_hands_over_no_machine(monkeypatch, tmp_path) -> None:
+    """Gibt es die Düse des Projekts nicht, bleibt die Maschinenseite leer.
+
+    Die Gegenprobe zum Test darüber: Korrigiert wird nur **innerhalb**
+    desselben Geräts. Ist dort keine passende Düse zu haben, wird nicht die
+    nächstbeste genommen — das wäre wieder der widersprüchliche Auftrag, nur
+    mit einer anderen Zahl (Regel 21).
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    datei = tmp_path / "Elegoo Centauri Carbon 2 0.2 nozzle.json"
+    datei.write_text("{}", encoding="utf-8")
+    nur_klein = [
+        slicer_profiles.SlicerProfile(
+            datei,
+            "Elegoo Centauri Carbon 2 0.2 nozzle",
+            "machine",
+            printer_model="Elegoo Centauri Carbon 2",
+            nozzle=0.2,
+        )
+    ]
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.2 nozzle"
+    )
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: nur_klein)
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    assert handover.machine_for(setup, profile) == ""
+
+
 def test_a_printer_that_is_not_the_projects_is_left_alone(monkeypatch) -> None:
     """Der Slicer steht auf einem anderen Drucker — dann wird nichts übernommen.
 

@@ -668,6 +668,57 @@ def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
     return max(hits, key=lambda identifier: len(known[identifier].title))
 
 
+def machine_with_nozzle(
+    machine: str, flavour: SlicerFlavour, executable: Path, printer: PrinterProfile
+) -> str:
+    """Dieselbe Maschine, aber mit der Düse, für die das Projekt rechnet.
+
+    **Warum das eine eigene Frage ist.** Ein Maschinenname nennt den Drucker
+    *und* seine Düse („Elegoo Centauri Carbon 2 0.2 nozzle"), und
+    :func:`printer_for` vergleicht nur den Drucker — der Name trägt die Düse
+    am Ende, der von Solidon trägt sie gar nicht. Wer allein danach geht, hält
+    die 0,2er Variante für dasselbe Gerät wie die 0,4er. Sie ist es auch, nur
+    rechnet das Projekt dann mit der falschen Bahnbreite.
+
+    Gemessen am 16.09.2026: ElegooSlicer stand auf „… 0.2 nozzle", das Projekt
+    auf einem Centauri Carbon 2 mit 0,4. Solidon übergab die Maschinenseite
+    der 0,2er Düse und daneben einen Prozess mit ``line_width`` 0,42 — ein in
+    sich widersprüchlicher Auftrag. Der Slicer nahm ihn nicht an und fiel auf
+    seine Vorgaben zurück: **jede** Linienbreite stand auf null, und er meldete
+    „zu geringe Linienbreite". Von Solidons Werten kam keiner an.
+
+    Passt die eingestellte Maschine, bleibt sie. Sonst gilt dieselbe Regel wie
+    in :func:`match`: unter den Varianten **desselben** Geräts entscheidet die
+    Düse. Findet sich keine, bleibt es leer — das ist Regel 21, denn eine
+    fremde Maschine brächte den Startcode eines anderen Druckers mit.
+    """
+    machines_here = [
+        entry
+        for entry in find_profiles(executable, flavour, ("machine",))
+        if entry.kind == "machine"
+    ]
+    fits = [entry for entry in machines_here if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
+    current = [entry for entry in machines_here if entry.name == machine]
+    if current and any(entry in fits for entry in current):
+        return machine
+    if not current or all(entry.nozzle <= 0.0 for entry in current):
+        # Die eingestellte Maschine ist gar nicht (mehr) lesbar, oder sie
+        # nennt keine Düse. Beides ist **keine** Aussage über die Düse, und
+        # aus einer fehlenden Angabe eine Abweichung zu machen hieße raten
+        # (Regel 21): Die bisherige Prüfung über den Drucker bleibt dann die
+        # ganze Auskunft.
+        return machine
+    same_printer = [
+        entry
+        for entry in fits
+        if _names_the_printer(entry.printer_model, printer.title)
+        or _names_the_printer(entry.name, printer.title)
+    ]
+    if not same_printer:
+        return ""
+    return min(same_printer, key=lambda entry: (not entry.from_user, entry.name)).name
+
+
 def _read(path: Path, kind: ProfileKind, from_user: bool) -> SlicerProfile | None:
     """Ein Profil aus seiner Datei. Was sich nicht lesen lässt, fehlt einfach.
 
