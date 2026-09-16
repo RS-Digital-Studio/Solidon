@@ -250,6 +250,7 @@ from app.ui.labels import (
     display_unit,
     edge_label,
     feature_label,
+    feature_name,
     feature_requirement,
     kind_requirement,
     length,
@@ -4229,12 +4230,16 @@ class MainWindow(QMainWindow):
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
         chosen_features = self.object_tree.selected_features()
-        chosen_faces = self.object_tree.selected_faces()
+        # **Eine Fläche eines Bausteins meint alle seine Flächen** — der
+        # Wähler sagt es und färbt sie zusammen (:meth:`_part_faces_of_selection`).
+        part_faces = self._part_faces_of_selection(chosen_features)
+        chosen_faces = part_faces or self.object_tree.selected_faces()
         self.quick_filament.set_context(
             [result.scene.objects[key] for key in selected_ids if key in result.scene.objects]
             if result is not None
             else [],
             selected_features=chosen_faces,
+            part=bool(part_faces),
         )
         # **Ein Merkmal ohne Fläche trägt kein Filament** (Robert, 09.09.2026).
         # An einer gewählten Bohrung bot der Wähler eine Zuweisung an, die es
@@ -5927,12 +5932,54 @@ class MainWindow(QMainWindow):
             return None
         return current
 
+    def _part_faces_of_selection(
+        self, chosen: Sequence[tuple[str, str]]
+    ) -> tuple[tuple[str, str], ...]:
+        """Alle Flächen des Bausteins, aus dem die ganze Auswahl stammt — sonst leer.
+
+        **Ein Filament für einen Baustein meint alle seine Flächen** (Robert,
+        16.09.2026: „wo stelle ich von der Versteifungsrippe insgesamt das
+        filament ein?"). Die Rippe verschmilzt mit der Wand und bringt sieben
+        erkannte Flächen mit; wer eine davon anklickte, bekam den Wähler für
+        genau diese eine, und der Weg zu allen sieben führte über die Dachzeile
+        im Baum, die niemand als solchen kennt. Dieselbe Regel wie bei Maßen
+        und Griff: Was aus einem Baustein kam, meint den Baustein.
+
+        Gezählt werden die Flächen mit Dreiecken — nur die kann ``paint_slot``
+        färben, und nur die trägt der Baum in seiner Filamentspalte.
+        """
+        part = self._common_part_step(chosen)
+        result = self.session.last_result
+        if part is None or result is None or not chosen:
+            return ()
+        object_id = chosen[0][0]
+        entry = result.scene.objects.get(object_id)
+        if entry is None:
+            return ()
+        step = int(part[0].id)
+        return tuple(
+            (object_id, feature_id)
+            for feature_id, feature in entry.features.items()
+            if feature.created_by == step
+            and feature.kind in ("face", "curved_face")
+            and feature.face_indices
+        )
+
+    def _filament_targets(self) -> tuple[tuple[str, str], ...]:
+        """Worauf eine Filamentwahl wirkt: die Flächen des Bausteins, sonst die Auswahl.
+
+        Wähler, Zuweisen und Entfernen lesen dieselbe Menge — sonst verspräche
+        der Satz über dem Wähler sieben Flächen, und der Schritt färbte eine.
+        """
+        chosen = self.object_tree.selected_features()
+        return self._part_faces_of_selection(chosen) or chosen
+
     def _clear_selected_filament(self) -> None:
         """Ganze Körper und einzelne Flächen verlieren ihre Zuweisung in einem Undo-Schritt."""
         result = self.session.last_result
         if result is None:
             return
-        features = self.object_tree.selected_features()
+        features = self._filament_targets()
         drafts: list[OperationDraft] = []
         for identifier in self.object_tree.selected_objects():
             body = result.scene.objects.get(identifier)
@@ -5966,7 +6013,7 @@ class MainWindow(QMainWindow):
         if result is None:
             return
         selected = self.object_tree.selected_objects()
-        features = self.object_tree.selected_features()
+        features = self._filament_targets()
         drafts: list[OperationDraft] = []
         for identifier in selected:
             body = result.scene.objects.get(identifier)
@@ -10317,6 +10364,59 @@ class MainWindow(QMainWindow):
         spec = REGISTRY.get(twin)
         return spec if feature.kind in (spec.applies_to or ()) else None
 
+    def _delete_the_chosen_feature(self) -> bool:
+        """Entf mit gewählten Merkmalen trifft das Merkmal — oder nichts, nie den Körper.
+
+        Drei Lagen, in dieser Reihenfolge, und die Antwort ``True`` heißt: hier
+        erledigt oder hier abgesagt, der Körper bleibt.
+
+        * **Ein Baustein** — die ganze Auswahl stammt aus einem Schritt, sei es
+          sein Dach im Baum oder eine seiner Verrundungen — geht denselben Weg
+          wie *Baustein entfernen* rechts: sein Schritt fällt, mit der
+          Folgeauskunft des Verlaufs.
+        * **Ein Merkmal mit eigener Operation** (Bohrung, Zapfen) übernimmt der
+          Zwilling in :meth:`run_operation` (``FEATURE_TWINS``) — dafür
+          ``False``.
+        * **Alles andere** — eine Fläche, ein Gewinde, zwei Bohrungen zugleich
+          — sagt, warum nichts geschieht, und nennt den Weg zum Körper.
+
+        Bis zum 16.09.2026 fiel die dritte Lage still auf den Körper zurück:
+        Wer eine Fläche oder das Dach eines Bausteins markiert hatte und Entf
+        drückte, verlor das ganze Teil (Robert: „wenn ich etwas im objektbaum
+        oder viewport auswähle und entf drücke … wird der ganze körper
+        gelöscht"). Rücknehmbar, aber genau die Überraschung, die Vertrauen
+        kostet — dieselbe, für die ``_scope_shortcut`` die Taste schon einmal
+        eingezäunt hat.
+        """
+        chosen = self.object_tree.selected_features()
+        if not chosen:
+            return False
+        part = self._common_part_step(chosen)
+        if part is not None:
+            self._remove_part_step(int(part[0].id))
+            return True
+        if self.feature_instead_of("delete_object") is not None:
+            return False
+        feature_id = self.object_tree.selected_feature()
+        feature = self._selected_feature_object()
+        if feature_id is not None and feature is not None:
+            self.announce(
+                tr(
+                    "„{name}“ lässt sich nicht einzeln entfernen — Entf löscht deshalb "
+                    "nichts. Den Körper entfernen Sie, wenn er selbst gewählt ist: Escape "
+                    "geht eine Stufe zurück."
+                ).format(name=feature_name(feature_id, feature))
+            )
+        else:
+            self.announce(
+                tr(
+                    "Mehrere Merkmale entfernt Entf nicht auf einmal — wählen Sie eines "
+                    "allein. Den Körper entfernen Sie, wenn er selbst gewählt ist: Escape "
+                    "geht eine Stufe zurück."
+                )
+            )
+        return True
+
     def _selected_feature_object(self) -> Feature | None:
         """Das gewählte Merkmal selbst — oder nichts, wenn keines gewählt ist."""
         feature_id = self.object_tree.selected_feature()
@@ -10490,6 +10590,8 @@ class MainWindow(QMainWindow):
         (``featureMoved``, ``featureTurned``); sonst gilt die Auswahl im Baum —
         der Weg der Bewegen-Leiste und des Körpergriffs.
         """
+        from app.core.expressions import is_expression, shifted
+
         turns = axis is not None and abs(angle) > EPS_DISPLAY
         if offset is None and not turns:
             return False
@@ -10497,13 +10599,21 @@ class MainWindow(QMainWindow):
             feature_id = self.object_tree.selected_feature()
         object_id = self.object_tree.selected()
         result = self.session.last_result
-        if feature_id is None or object_id is None or result is None:
+        if object_id is None or result is None:
             return False
         entry = result.scene.objects.get(object_id)
-        feature = entry.features.get(feature_id) if entry is not None else None
-        if feature is None:
+        if entry is None:
             return False
-        part = self.part_step_of(feature)
+        if feature_id is not None:
+            feature = entry.features.get(feature_id)
+            part = self.part_step_of(feature) if feature is not None else None
+        else:
+            # **Ein Bausteindach im Baum meint den Baustein** (16.09.2026). Es
+            # wählt seine Kinder mit, und „das gewählte Merkmal" hat dann keine
+            # Antwort — ``selected_feature`` schweigt bei mehreren Zeilen. Der
+            # Zug am Körpergriff und die Bewegen-Leiste gingen damit am
+            # Baustein vorbei an den ganzen Körper.
+            part = self._common_part_step(self.object_tree.selected_features())
         if part is None:
             return False
         operation, spec = part
@@ -10512,35 +10622,36 @@ class MainWindow(QMainWindow):
             return False
         values: dict[str, Any] = {}
         current = dict(operation.params)
-        # **Ein gebundener Wert wird nicht überschrieben.** Steht an einer
-        # Achse ein Parameterausdruck (``=@abstand``), hat jemand die Lage an
-        # den Parameter gehängt; ein Zug, der die Zahl darüberschriebe, löste
-        # die Bindung still. Der Satz nennt den Weg (Regel 17).
-        bound = [
-            name
-            for name in ("x", "y", "z", "nx", "ny", "nz", "angle")
-            if isinstance(current.get(name), str)
-        ]
-        if bound:
-            self.announce(
-                tr(
-                    "Die Lage dieses Bausteins ist an einen Projektparameter gebunden "
-                    "({fields}). Ändern Sie den Parameter, oder lösen Sie die Bindung im "
-                    "Schritt."
-                ).format(fields=", ".join(bound))
-            )
-            return True
         if offset is not None:
             for name, delta in zip(("x", "y", "z"), offset, strict=True):
-                values[name] = float(current.get(name) or 0.0) + float(delta)
+                if abs(float(delta)) <= EPS_DISPLAY:
+                    # Eine Achse ohne Zug bleibt, wie sie steht — auch ein
+                    # Ausdruck darauf.
+                    continue
+                stored = current.get(name)
+                # **Ein gebundener Wert bleibt gebunden.** Steht an einer Achse
+                # ein Parameterausdruck (``=@staerke``), wandert der Zug als
+                # Versatz in den Ausdruck (``=@staerke + 5``): Der Baustein
+                # folgt dem Parameter weiter und steht um den Zug daneben. Bis
+                # zum 16.09.2026 lehnte der Griff hier jede Bewegung ab — im
+                # Beispielprojekt, dessen Bausteine ihre Höhe an ``@staerke``
+                # binden, sprang damit jeder Zug zurück (Robert: „das
+                # verschieben geht nicht springt immer wieder zurück").
+                if is_expression(stored):
+                    values[name] = shifted(stored, float(delta))
+                else:
+                    values[name] = float(stored or 0.0) + float(delta)
         if turns and axis is not None:
             # **Die Achse kommt vom Sitzmerkmal**, nicht vom gezogenen: Ein
             # Baustein an ``hole_1`` dreht um die Achse von ``hole_1``, auch
             # wenn jemand seine Verrundung angefasst hat (Fund des Reviews,
             # 14.09.2026 — vorher gab die Verrundung ihre eigene Achse her).
             at_feature = str(current.get("at_feature") or "")
-            seat = entry.features.get(at_feature) if entry is not None and at_feature else None
-            turned, refused = self._part_turned(spec, {**current, **values}, axis, angle, seat)
+            seat = entry.features.get(at_feature) if at_feature else None
+            # Die Drehung rechnet mit Zahlen: Gebundene Werte gehen aufgelöst
+            # hinein und werden danach mit ihrem Ausdruck verglichen.
+            resolved = self._resolved_placement({**current, **values})
+            turned, refused = self._part_turned(spec, resolved, axis, angle, seat)
             if turned is None:
                 self.announce(
                     tr(
@@ -10558,10 +10669,55 @@ class MainWindow(QMainWindow):
                     ).format(axis=str(current.get("axis") or "z").upper())
                 )
                 return True
-            values.update(turned)
+            # **Ein gebundener Wert wird nicht überschrieben.** Ändert die
+            # Drehung eine Zahl, die an einem Parameterausdruck hängt, nennt
+            # der Satz den Weg (Regel 17), statt die Bindung still zu lösen;
+            # was die Drehung nicht anfasst, bleibt gebunden stehen.
+            bound = sorted(
+                name
+                for name, value in turned.items()
+                if is_expression(current.get(name))
+                and abs(float(value) - float(resolved.get(name) or 0.0)) > EPS_DISPLAY
+            )
+            if bound:
+                self.announce(
+                    tr(
+                        "Die Lage dieses Bausteins ist an einen Projektparameter gebunden "
+                        "({fields}). Ändern Sie den Parameter, oder lösen Sie die Bindung im "
+                        "Schritt."
+                    ).format(fields=", ".join(bound))
+                )
+                return True
+            values.update(
+                {
+                    name: value
+                    for name, value in turned.items()
+                    if not is_expression(current.get(name))
+                }
+            )
         if values:
             self._change_part_step(int(operation.id), values)
         return True
+
+    def _resolved_placement(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Die Lagewerte eines Bausteinschritts als Zahlen — Ausdrücke aufgelöst.
+
+        Für die Drehrechnung (:meth:`_part_turned`): Sie multipliziert Matrizen
+        und kann mit ``=@staerke`` nichts anfangen. Was sich nicht auflösen
+        lässt, zählt als Null — die Drehung meldet dann selbst, was ihr fehlt.
+        """
+        from app.core import expressions
+
+        values = self._parameter_values()
+        resolved = dict(params)
+        for name in ("x", "y", "z", "nx", "ny", "nz", "angle"):
+            value = resolved.get(name)
+            if expressions.is_expression(value):
+                try:
+                    resolved[name] = expressions.evaluate(value, values)
+                except AppError:
+                    resolved[name] = 0.0
+        return resolved
 
     @staticmethod
     def _part_turned(
@@ -12179,7 +12335,7 @@ class MainWindow(QMainWindow):
         # Kante gemeint (Befund Robert, 10.09.2026).
         part = self.part_step_of(feature)
         if part is not None:
-            self.feature_panel.show_part(*part)
+            self.feature_panel.show_part(*part, parameter_values=self._parameter_values())
             if textures:
                 self.feature_panel.offer_texture_steps(textures, self._parameter_values())
             self.feature_dock.reveal()
@@ -12255,6 +12411,24 @@ class MainWindow(QMainWindow):
         if len(steps) != 1 or first is None:
             return None
         return self.part_step_of(first)
+
+    def _part_grip_anchor(self, chosen: Sequence[tuple[str, str]]) -> str | None:
+        """An welchem Merkmal des Bausteins der Griff im Bild hängt.
+
+        Das erste gewählte mit einer Mitte, in der Reihenfolge des Baums — der
+        Griff braucht einen Ort, und jede Art, die ein Baustein erzeugt, trägt
+        ``centre`` (``knowledge/parts/build.py``). Welches es ist, ändert am
+        Zug nichts: Er geht ohnehin in den Schritt des Bausteins.
+        """
+        result = self.session.last_result
+        if result is None:
+            return None
+        for object_id, feature_id in chosen:
+            entry = result.scene.objects.get(object_id)
+            feature = entry.features.get(feature_id) if entry is not None else None
+            if feature is not None and feature.params.get("centre") is not None:
+                return str(feature_id)
+        return None
 
     def _edit_panel_step(self, step: int) -> None:
         """Der vollständige Dialog übernimmt die Vorschau vom Merkmalpanel."""
@@ -12337,8 +12511,14 @@ class MainWindow(QMainWindow):
         # ein Ding angeklickt hat (Befund Robert, 10.09.2026: „auch wenn ich
         # die Schlüsselloch-Aufhängung im Baum wähle, also Viewport und Baum").
         part = self._common_part_step(chosen)
+        # **Und der Griff im Bild gehört ihm auch** (16.09.2026). Ohne das gab
+        # es am Dach gar keinen: „das gewählte Merkmal" hat bei mehreren
+        # Zeilen keine Antwort, und der Griff fiel auf den Körper zurück —
+        # samt Skalierwürfel (Robert: „warum kann ich die bausteine nicht über
+        # den viewport verschieben?").
+        self.viewport.set_part_grip(self._part_grip_anchor(chosen) if part is not None else None)
         if part is not None:
-            self.feature_panel.show_part(*part)
+            self.feature_panel.show_part(*part, parameter_values=self._parameter_values())
             self.feature_dock.reveal()
             return
         if len(chosen) != 2:
@@ -13100,6 +13280,8 @@ class MainWindow(QMainWindow):
             return
         if self._local_features is not None:
             self._local_features.invalidate()
+        if spec.name == "delete_object" and self._delete_the_chosen_feature():
+            return
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
             feature_id = self.object_tree.selected_feature()

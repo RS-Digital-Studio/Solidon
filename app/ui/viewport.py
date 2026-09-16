@@ -714,13 +714,15 @@ def gizmo_sentence(feature: Feature | None, *, part: bool = False) -> str:
     """
     if feature is None:
         return tr("Der Griff bewegt das ganze Teil.")
-    if feature.kind == "face":
-        return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
     if part:
         # Was aus einem Baustein kam, meint den Baustein: Der Zug geht in
         # dessen Schritt, und ein Satz über „das gewählte Merkmal" wäre an
-        # der Tasche eines Schlüssellochs eine falsche Auskunft.
+        # der Tasche eines Schlüssellochs eine falsche Auskunft. **Vor der
+        # Fläche** (16.09.2026): Die Rippe besteht nur aus Flächen, und an
+        # ihr stand der Satz über Press/Pull — ein Zug, den es dort nicht gibt.
         return tr("Der Griff bewegt den ganzen Baustein, nicht nur dieses Merkmal.")
+    if feature.kind == "face":
+        return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
     if feature.kind in slot_feature_kinds():
         if feature.kind not in movable_feature_kinds():
             return tr("An den Knöpfen ändern Sie Länge und Richtung des Langlochs.")
@@ -4194,6 +4196,16 @@ class Viewport(QWidget):
         self._selected_feature: FeatureId | None = None
         self._selected_features: tuple[FeatureId, ...] = ()
         self._selected_feature_refs: tuple[tuple[ObjectId, FeatureId], ...] = ()
+        self._part_grip: FeatureId | None = None
+        """An welchem Merkmal der Griff hängt, wenn ein **Baustein** gewählt ist.
+
+        Sein Dach im Objektbaum wählt alle seine Merkmale zugleich; „das
+        gewählte Merkmal" hat dann keine Antwort (``_remember_feature_refs``),
+        und der Griff fiel auf den Körper zurück — samt Skalierwürfel, der die
+        Maße des ganzen Teils ändert (Robert, 16.09.2026: „warum kann ich die
+        bausteine nicht über den viewport verschieben?"). Welches Merkmal es
+        ist, sagt das Fenster: Nur es kennt den gemeinsamen Schritt
+        (:meth:`set_part_grip`)."""
         self._direct_picking = False
         """Ob ein Klick ohne Zwischenstufe das tiefste Ziel meint.
 
@@ -8257,6 +8269,7 @@ class Viewport(QWidget):
 
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature_refs = ()
+        self._part_grip = None
         if feature_id != self._selected_feature:
             self.drop_move_proposal()
         # Umgekehrte Richtung derselben Regel wie in :meth:`select_edge` — und
@@ -8306,6 +8319,9 @@ class Viewport(QWidget):
     def _remember_feature_refs(self, refs: tuple[tuple[ObjectId, FeatureId], ...]) -> None:
         """Vollständige Merkmalsziele und den kompatiblen Einzelzustand gemeinsam merken."""
         self._selected_feature_refs = refs
+        # Der Bausteingriff gehört der Auswahl, die ihn gesetzt hat; das
+        # Fenster setzt ihn gleich danach neu, wenn es wieder einer ist.
+        self._part_grip = None
         if refs:
             owners = tuple(dict.fromkeys(owner for owner, _feature_id in refs))
             self._selected, self._selected_more = owners[0], owners[1:]
@@ -8313,6 +8329,28 @@ class Viewport(QWidget):
             feature_id for owner, feature_id in refs if owner == self._selected
         )
         self._selected_feature = refs[0][1] if len(refs) == 1 else None
+
+    def set_part_grip(self, feature_id: FeatureId | None) -> None:
+        """Der Griff hängt an diesem Merkmal, obwohl mehrere gewählt sind.
+
+        Für das **Dach eines Bausteins** im Objektbaum: Es wählt alle seine
+        Merkmale, und damit gibt es kein „gewähltes Merkmal" mehr — der Griff
+        fiel auf den Körper zurück und trug dort den Skalierwürfel, der die
+        Maße des ganzen Teils ändert (Robert, 16.09.2026). Welches Merkmal den
+        Griff trägt, entscheidet das Fenster: Nur es weiß, ob die ganze
+        Auswahl aus **einem** Schritt stammt
+        (``MainWindow._common_part_step``) — die Ansicht kann je Merkmal nur
+        fragen, ob es aus *irgendeinem* Baustein kam.
+
+        Der Zug daran geht denselben Weg wie an einem einzeln gewählten
+        Bausteinmerkmal (``featureMoved`` → ``MainWindow._move_the_part``).
+        """
+        if self._part_grip == feature_id:
+            return
+        self._part_grip = feature_id
+        if self.renderer is not None:
+            self.set_gizmo(self._gizmo_wanted)
+            self._draw()
 
     def select_feature_refs(self, refs: Sequence[tuple[ObjectId, FeatureId]]) -> None:
         """Exakte Merkmale mehrerer Körper wählen; das erste gültige Paar führt."""
@@ -10950,6 +10988,14 @@ class Viewport(QWidget):
             return None
         if feature.params.get("normal") is None or feature.params.get("centre") is None:
             return None
+        if self.moves_as_a_part(feature):
+            # **Die Fläche eines Bausteins kennt kein Press/Pull.** Sie ist mit
+            # dem Träger verschmolzen, und ein Zug an ihr meint den Baustein
+            # (:meth:`gizmo_feature`). Bis zum 16.09.2026 stand an der Rippe —
+            # die aus nichts als Flächen besteht — der Griff, der nur entlang
+            # der Normalen schiebt (Robert: „bei manchen bausteinen keine
+            # möglichkeit zum verschieben").
+            return None
         return feature
 
     def gizmo_feature(self) -> Feature | None:
@@ -10976,16 +11022,21 @@ class Viewport(QWidget):
         muss. Welche das gerade sind, sagt :func:`movable_feature_kinds` —
         und nicht dieser Satz, der schon einmal veraltet ist.
         """
-        if self._selected_feature is None:
+        # **Ein gewähltes Bausteindach trägt den Griff an einem seiner
+        # Merkmale** (:meth:`set_part_grip`) — sonst gäbe es dort keinen.
+        marked = self._selected_feature or self._part_grip
+        if marked is None:
             return None
-        feature = self._features_of_selection().get(self._selected_feature)
+        feature = self._features_of_selection().get(marked)
         if feature is None or feature.params.get("centre") is None:
             return None
-        if feature.kind == "face":
+        if feature.kind == "face" and not self.moves_as_a_part(feature):
             return feature if feature.params.get("normal") is not None else None
         # **Ein Merkmal aus einem Baustein bewegt den Baustein** — dann hängt
         # der Griff auch an einer Verrundung oder einem Gewinde, die für sich
-        # keine Operation tragen (:attr:`moves_as_a_part`).
+        # keine Operation tragen (:attr:`moves_as_a_part`), und ebenso an
+        # seiner Fläche: Die ist kein Press/Pull-Ziel (:meth:`gizmo_target`),
+        # sondern der Baustein selbst.
         if feature.kind in movable_feature_kinds() or self.moves_as_a_part(feature):
             return feature
         return None
@@ -11071,6 +11122,16 @@ class Viewport(QWidget):
         # schert, macht die eine Fähigkeit von der anderen abhängig.
         slotted = self.slot_handle_feature()
         marked = chosen if chosen is not None else slotted
+        # **Was aus einem Baustein kam, trägt den Griff des Bausteins** — und
+        # sonst nichts. Die zwei Regeln darunter gelten ihm deshalb nicht:
+        # Rechts stehen die Handlungen des Bausteins, und ein Knopf *Im Bild
+        # einstellen* steht dort nicht.
+        of_a_part = marked is not None and self.moves_as_a_part(marked)
+        if of_a_part:
+            # Die Langlochknöpfe versprächen eine Länge, die der Baustein nicht
+            # führt: Der Zug schnitte ein Langloch neben seinen Schritt, und
+            # beim nächsten Verschieben bliebe es stehen (16.09.2026).
+            slotted = None
         if (
             (not active and marked is None)
             or self._selected is None
@@ -11082,10 +11143,17 @@ class Viewport(QWidget):
             return
         if (
             marked is not None
+            and not of_a_part
             and marked.kind in placed_feature_kinds()
             and self._placement_pointer is None
         ):
             # Bohrung und Langloch: erst mit *Im Bild einstellen* (siehe oben).
+            #
+            # **Die Bohrung eines Bausteins nicht** (16.09.2026): Sie bekommt
+            # den Knopf nie, und damit stand an ihr überhaupt kein Griff — an
+            # einem Schraubenloch trug die Senkung einen und die Bohrung
+            # daneben keinen (Robert: „bei manchen bausteinen keine
+            # möglichkeit zum verschieben").
             self.gizmoStatus.emit("")
             return
         actor = (
@@ -11094,7 +11162,6 @@ class Viewport(QWidget):
         if actor is None:
             self.gizmoStatus.emit("")
             return
-        of_a_part = marked is not None and marked.kind != "face" and self.moves_as_a_part(marked)
         self.gizmoStatus.emit(gizmo_sentence(marked, part=of_a_part))
         scale = self._gizmo_scale_for(
             actor, self._face_seat[0] if marked is not None and self._face_seat else None
@@ -12446,9 +12513,10 @@ class Viewport(QWidget):
         Skalierwürfel (siehe :meth:`set_gizmo`).
         """
         chosen = self.gizmo_feature()
-        if chosen is None or chosen.kind == "face":
+        if chosen is None or (chosen.kind == "face" and not self.moves_as_a_part(chosen)):
             # Eine Fläche geht ihren eigenen Weg (Press/Pull, oben), und ohne
-            # Merkmal gilt der Zug dem Körper.
+            # Merkmal gilt der Zug dem Körper. Die Fläche eines Bausteins ist
+            # keine solche: Ihr Zug meint den Baustein (:meth:`gizmo_target`).
             return False
         # **Läuft die Platzierung, ist der Zug ein Vorschlag.** Das Merkmal
         # trägt rechts den Knopf *Im Bild einstellen*, und alles, was danach
@@ -12456,7 +12524,17 @@ class Viewport(QWidget):
         # am Langlochgriff. Ohne Platzierung (ein Zapfen, ein Kegel, eine
         # Kugel haben keinen Knopf) bleibt der Zug ein Schritt, wie seit dem
         # 03.09.2026.
-        proposing = self._placement_pointer is not None and chosen.kind in placed_feature_kinds()
+        #
+        # **Nie an einem Bausteinmerkmal.** Rechts stehen dort die Handlungen
+        # des Bausteins und keine Felder von *Merkmal verschieben*; ein
+        # Vorschlag hätte keinen Ort, an dem er landet, und der Griff stünde
+        # verschoben über einem Loch, das nicht folgt. Der Zug geht dort
+        # sofort in den Schritt (``MainWindow._move_the_part``).
+        proposing = (
+            self._placement_pointer is not None
+            and chosen.kind in placed_feature_kinds()
+            and not self.moves_as_a_part(chosen)
+        )
         if snapped.turns and snapped.axis is not None:
             sign = self._slot_turn_sign(snapped.axis)
             if proposing and sign != 0.0 and self._slot_handle is not None:

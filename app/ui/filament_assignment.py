@@ -29,6 +29,7 @@ class QuickFilamentPicker(QWidget):
         super().__init__(parent)
         self._objects: list[SceneObject] = []
         self._selected_features: tuple[tuple[str, str], ...] = ()
+        self._part = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
@@ -57,11 +58,22 @@ class QuickFilamentPicker(QWidget):
         self.refresh()
 
     def set_context(
-        self, objects: list[SceneObject], selected_features: tuple[tuple[str, str], ...] = ()
+        self,
+        objects: list[SceneObject],
+        selected_features: tuple[tuple[str, str], ...] = (),
+        *,
+        part: bool = False,
     ) -> None:
-        """Gespeicherte Druckwerte anzeigen; aus Ähnlichkeit folgt keine physische Bindung."""
+        """Gespeicherte Druckwerte anzeigen; aus Ähnlichkeit folgt keine physische Bindung.
+
+        ``part`` sagt, dass die Flächen zusammen ein Baustein sind — dann nennt
+        der Satz den Baustein und nicht eine Zahl gewählter Flächen, die
+        niemand gewählt hat (Robert, 16.09.2026: „wo stelle ich von der
+        Versteifungsrippe insgesamt das filament ein?").
+        """
         self._objects = list(objects)
         self._selected_features = selected_features
+        self._part = part
         self.refresh()
 
     def refresh(self) -> None:
@@ -84,6 +96,11 @@ class QuickFilamentPicker(QWidget):
                 current = tr("Filament für die Auswahl")
                 scope = tr("Ganze Körper: {bodies}. Gewählte Flächen: {faces}.").format(
                     bodies=bodies, faces=faces
+                )
+            elif self._part:
+                current = tr("Filament für den Baustein wählen")
+                scope = tr("Die Zuweisung gilt dem ganzen Baustein: {count} Flächen.").format(
+                    count=faces
                 )
             else:
                 scope = (

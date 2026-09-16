@@ -463,6 +463,67 @@ freier Richtung rechnet die Rundreise `placement_transform` →
 *Achse* — jede andere Achse bekommt einen Satz mit dem Weg, nicht eine stille
 Drehung um die falsche.
 
+**Und die Fläche eines Bausteins ist der Baustein** (16.09.2026). Die Rippe
+besteht aus nichts als Flächen, und an einer Fläche hing der Griff der Fläche:
+ein Pfeil entlang der Normalen, dessen Zug ein `push_face` auf den
+verschmolzenen Körper wurde (Robert: „bei manchen bausteinen keine
+möglichkeit zum verschieben"). `Viewport.gizmo_target` kennt an einer
+Bausteinfläche kein Press/Pull, `gizmo_feature` hängt den Bewegungsgriff
+daran, und der Satz in der Statuszeile nennt den Baustein. Dieselbe Frage
+stellen drei weitere Wege, und alle drei gingen bis dahin am Baustein vorbei:
+
+* **Entf.** Am Dach im Baum wie an einer einzelnen Verrundung fällt der
+  Schritt des Bausteins (`MainWindow._delete_the_chosen_feature`, derselbe
+  Weg wie *Baustein entfernen* rechts) — und nie der Körper. Ohne Baustein
+  gilt der Zwilling `remove_feature`; wo auch der nicht greift (eine Fläche,
+  ein Gewinde, zwei Bohrungen zugleich), löscht Entf **nichts** und sagt in
+  der Statuszeile, wie man zum Körper kommt. Bis dahin fiel die Taste still
+  auf `delete_object` zurück, und das Teil war weg (Robert: „wenn ich etwas
+  im objektbaum oder viewport auswähle und entf drücke … wird der ganze
+  körper gelöscht"). Der Eintrag *Ausblenden* im Kontextmenü heißt an einem
+  Merkmal deshalb *Körper ausblenden* — er trifft den Körper, und der Name
+  sagt es.
+* **Körpergriff und Bewegen-Leiste bei gewähltem Dach.** `selected_feature`
+  schweigt bei mehreren Zeilen; `_move_the_part` fragt dann
+  `_common_part_step` statt den Zug an den ganzen Körper durchzulassen. **Und
+  im Bild bekommt das Dach einen eigenen Griff**
+  (`MainWindow._part_grip_anchor` → `Viewport.set_part_grip`): Vorher hing
+  dort der Griff des Körpers mit seinem Skalierwürfel, der auf einen Zug die
+  Maße des ganzen Teils ändert (Robert: „warum kann ich die bausteine nicht
+  über den viewport verschieben?"). Welches Merkmal ihn trägt, sagt das
+  Fenster — die Ansicht kann je Merkmal nur fragen, ob es aus *irgendeinem*
+  Baustein kam.
+* **Und die Bohrung eines Bausteins bekommt ihn ohne *Im Bild einstellen*.**
+  Der Knopf steht nur an einem freien Loch (`placed_feature_kinds`), und ein
+  Baustein bietet ihn nicht an — an einem Schraubenloch trug die Senkung
+  einen Griff und die Bohrung daneben keinen. Die Langlochknöpfe bleiben dort
+  weg: Ihr Zug schnitte ein Langloch neben den Schritt des Bausteins, und
+  beim nächsten Verschieben bliebe es stehen.
+* **Ein gebundener Wert bricht das Merkmalfenster nicht mehr ab.** Steht an
+  einer Achse ein Ausdruck, bekommt das Feld das `ValueField` des
+  Operationsdialogs (`FeaturePanel._part_fields`); `float("=@staerke")`
+  beendete den Aufbau vorher mitten in der Liste, und rechts stand nur noch
+  *Maße ändern* — ohne Verschieben und ohne Entfernen. Das ist dieselbe
+  Lücke, die §13 beim Operationsdialog schon einmal geschlossen hat.
+* **Filament.** Der Schnellwähler färbt an einer Bausteinfläche **alle**
+  Flächen des Bausteins (`_part_faces_of_selection`, „Die Zuweisung gilt dem
+  ganzen Baustein: 7 Flächen."); Wähler, Zuweisen und Entfernen lesen
+  dieselbe Menge (`_filament_targets`). Die Rippe hat kein Filament je Seite
+  (Robert: „wo stelle ich von der Versteifungsrippe insgesamt das filament
+  ein?"). Die Chips in der Filamentspalte des Baums bleiben je Fläche — wer
+  dort klickt, zeigt auf genau eine.
+
+**Und eine gebundene Lage folgt dem Griff.** Hängt `z` eines Bausteins an
+`=@staerke`, wandert der Zug als Versatz in den Ausdruck
+(`expressions.shifted`: `=@staerke + 5`), statt ihn durch eine Zahl zu
+ersetzen oder — wie bis zum 16.09.2026 — jede Bewegung abzulehnen; im
+Beispielprojekt, dessen Bausteine ihre Höhe so binden, sprang damit jeder Zug
+zurück (Robert: „das verschieben geht nicht springt immer wieder zurück").
+Eine Achse ohne Zug bleibt unangetastet, auch ihr Ausdruck. Abgelehnt mit
+Satz wird nur noch, was eine **Drehung** an einem gebundenen Wert ändern
+würde — die Rundreise rechnet mit Zahlen und könnte den Ausdruck nicht
+zurückschreiben.
+
 **Und ein Langloch aus einem Schritt gehört dazu.** Es ist kein Baustein, aber
 dieselbe Regel: Hat `slot_hole` es gezogen, ändert *Übernehmen* diesen Schritt
 (`_change_slot_step`) und legt keinen zweiten obenauf — der schnitt bis zum

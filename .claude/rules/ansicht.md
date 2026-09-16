@@ -1197,7 +1197,35 @@ am 14.09.2026): `gizmo_feature` sagt, wo der Griff sitzt, `gizmo_target`, was
 er tut, `_face_seat` setzt ihn auf Mitte und Normale **dieser** Fläche, und
 `faceDragged` meldet ihre Kennung — nicht mehr ihre Normale. Das Fenster macht
 daraus `push_face` mit `face=<Kennung>`; die Richtungsfelder `nx/ny/nz` bleiben
-nur für gespeicherte Schritte stehen. Vorher trug der Schritt die Richtung, und
+nur für gespeicherte Schritte stehen.
+
+**Außer die Fläche kam aus einem Baustein** (16.09.2026). Dann antwortet
+`gizmo_target` mit nichts — es gibt kein Press/Pull an einer Fläche, die mit
+dem Träger verschmolzen ist —, `gizmo_feature` hängt den Bewegungsgriff daran,
+`_emit_feature_drag` meldet `featureMoved`, und der Zug geht in den Schritt des
+Bausteins; ein Vorschlag (`proposing`) wird daraus nie, denn rechts stehen die
+Handlungen des Bausteins und keine Felder von *Merkmal verschieben*. An der
+Rippe, die aus nichts als Flächen besteht, stand bis dahin der Pfeil entlang
+der Normalen und der Satz über Press/Pull (Robert: „bei manchen bausteinen
+keine möglichkeit zum verschieben"). Die Regel selbst steht in
+`oberflaeche.md` unter „Ein Merkmal aus einem Baustein meint den Baustein".
+
+**Und zwei weitere Lagen bekamen dort gar keinen Griff.** Beide sind
+Nebenwirkungen von Bedingungen, die für ein *freies* Merkmal richtig sind:
+
+* **Die Bohrung eines Bausteins.** `placed_feature_kinds` hält Griffe an
+  Bohrung und Langloch zurück, bis *Im Bild einstellen* gedrückt ist — und
+  diesen Knopf zeigt nur `show_feature`, nicht `show_part`. An einem
+  Schraubenloch trug die Senkung damit einen Griff und die Bohrung daneben
+  keinen. `set_gizmo` nimmt die Sperre für Bausteinmerkmale heraus und lässt
+  dort die Langlochknöpfe weg: Ihr Zug schnitte ein Langloch neben den
+  Schritt, und beim nächsten Verschieben bliebe es stehen.
+* **Das Dach im Objektbaum.** Es wählt alle Merkmale des Bausteins, und
+  `_remember_feature_refs` setzt „das gewählte Merkmal" bei mehreren auf
+  nichts — der Griff fiel auf den Körper zurück, mit Skalierwürfel.
+  `set_part_grip` nimmt vom Fenster entgegen, an welchem Merkmal er hängt;
+  die Ansicht könnte nur je Merkmal fragen, ob es aus *irgendeinem* Baustein
+  kam, und nicht, ob die ganze Auswahl **ein** Baustein ist. Vorher trug der Schritt die Richtung, und
 die Operation bewegte jede Fläche, die dorthin zeigt — an einer Treppe alle
 Stufen zugleich. **Die vier Stücke waren einzeln geprüft und die Kette nicht**
 (`test_the_handle_of_a_chosen_face_pushes_that_face` fährt sie am Stück).

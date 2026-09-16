@@ -17758,3 +17758,82 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
     document = window.session.project.document
     assert document.ops == []
     assert document.parameters == {}, "der Quader nimmt seine Maße mit"
+
+
+def test_finish_lists_the_six_kinds_in_the_window(window: MainWindow) -> None:
+    """Die sechs Arten aus dem Register hängen unter *Fertig* — der Dialog
+    „Was soll daraus werden?" ist am 16.09.2026 gefallen (Robert: „weniger
+    ist manchmal mehr"). Hochziehen steht vorn, gelesen wird von oben."""
+    window.action_sketch_free()
+    try:
+        names = list(window._finish_actions)
+        assert names[0] == "sketch_extrude", "der Normalfall steht an erster Stelle"
+        assert set(names) == {
+            "sketch_extrude",
+            "sketch_pocket",
+            "sketch_revolve",
+            "sketch_loft",
+            "sketch_sweep",
+            "field_cut",
+        }
+        assert window.sketch_finish_button.menu() is window._finish_menu
+        for action in window._finish_actions.values():
+            assert action.toolTip(), "jeder Eintrag sagt, was er tut oder warum nicht"
+    finally:
+        window.finish_sketch(keep=False)
+
+
+def test_delete_on_a_face_leaves_the_body_and_says_why(window: MainWindow) -> None:
+    """Eine Fläche lässt sich nicht einzeln entfernen — und Entf nimmt dann nicht den Körper.
+
+    Robert, 16.09.2026: „wenn ich etwas im objektbaum oder viewport auswähle
+    und entf drücke … wird der ganze körper gelöscht." Der Zwilling fand für
+    ``face`` keine Merkmalsoperation und fiel still auf den Körper zurück.
+    Jetzt bleibt der Körper, und die Statuszeile nennt den Weg zu ihm.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    face = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "face"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, face)
+
+    window.run_operation(REGISTRY.get("delete_object"))
+    window.session.wait_for_idle()
+
+    assert [step.op for step in window.session.project.document.ops] == ["load"]
+    assert object_id in window.session.evaluate_now().scene.objects, "der Körper bleibt"
+    # Die Ankündigung steht im eigenen Label der Statusleiste und überlebt
+    # damit den nachlaufenden Lauf (``MainWindow.announce``).
+    said = window.status_message.text()
+    assert "Entf" in said and "Escape" in said, said
+
+
+def test_hiding_from_a_feature_row_names_the_body(window: MainWindow) -> None:
+    """„Ausblenden" an einer Bohrung las sich als Zusage über die Bohrung — und
+    der Körper verschwand (Robert, 16.09.2026). Der Eintrag sagt jetzt, was er
+    trifft; am Körper selbst heißt er weiter wie bisher."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+    texts = [action.text() for action in menu.actions()]
+    menu.deleteLater()
+    assert tr("Körper ausblenden") in texts and tr("Ausblenden") not in texts, texts
+
+    window.object_tree.select_object(object_id)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+    texts = [action.text() for action in menu.actions()]
+    menu.deleteLater()
+    assert tr("Ausblenden") in texts, texts

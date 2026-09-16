@@ -2302,3 +2302,50 @@ def test_the_wheel_over_an_unfocused_field_rolls_the_panel_and_not_the_value(
     assert spin.value_mm() != before, "mit Fokus dreht das Rad den Wert"
     assert focused.isAccepted(), "und das Feld hat die Raste genommen"
     scroller.close()
+
+
+def test_a_bound_part_still_offers_moving_and_removing(qt_app: QApplication) -> None:
+    """Ein Baustein, dessen Lage an einem Parameter hängt, zeigt alle drei Handlungen.
+
+    Das Beispielprojekt bindet die Höhe jedes Bausteins an ``@staerke``, und
+    ``float("=@staerke")`` beendete den Aufbau mitten in der Liste: Rechts
+    stand nur noch *Maße ändern*, ohne Verschieben und ohne Entfernen (Robert,
+    16.09.2026: „bei manchen bausteinen keine möglichkeit zum verschieben").
+    Das gebundene Feld bekommt jetzt dasselbe Ausdrucksfeld wie der
+    Operationsdialog, und ein Übernehmen gibt den Ausdruck unverändert zurück
+    — die Bindung überlebt die Bedienung (§13).
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.ui.op_dialog import ValueField
+    from app.ui.panels import FeaturePanel
+
+    load_operations()
+    spec = REGISTRY.get("insert_screw_hole")
+    step = SimpleNamespace(
+        id=2, op="insert_screw_hole", params={"size": "M4", "x": -20.0, "z": "=@staerke"}
+    )
+
+    panel = FeaturePanel()
+    changed: list[tuple[int, dict]] = []
+    panel.stepChangeRequested.connect(lambda op_id, params: changed.append((op_id, params)))
+    try:
+        panel.show_part(step, spec, parameter_values={"staerke": 6.0})
+
+        titles = buttons(panel)
+        assert titles == ["Maße ändern", "Baustein verschieben", "Baustein entfernen"], titles
+
+        bound = [
+            widget for widget in panel.findChildren(ValueField) if widget.value() == "=@staerke"
+        ]
+        assert len(bound) == 1, "die gebundene Achse trägt das Ausdrucksfeld"
+
+        press(panel, "Baustein verschieben")
+        assert len(changed) == 1, changed
+        op_id, params = changed[0]
+        assert op_id == 2
+        assert params["z"] == "=@staerke", "der Ausdruck kommt unverändert zurück"
+        assert params["x"] == pytest.approx(-20.0)
+    finally:
+        panel.deleteLater()

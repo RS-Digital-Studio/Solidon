@@ -2235,7 +2235,15 @@ class ObjectTree(QWidget):
         kommt sie über denselben Eintrag, nicht über ein Undo.
         """
         wants_hiding = any(object_id not in self._hidden for object_id in chosen)
-        label = tr("Ausblenden") if wants_hiding else tr("Einblenden")
+        if self.selected_features():
+            # **An einem Merkmal sagt der Eintrag, was er trifft.** Die
+            # Sichtbarkeit gilt dem Körper (§18.8) — ein Merkmal lässt sich
+            # nicht für sich ausblenden. „Ausblenden" an einer Bohrung oder an
+            # einem Bausteindach las sich als Zusage über das Merkmal, und der
+            # ganze Körper verschwand (Robert, 16.09.2026).
+            label = tr("Körper ausblenden") if wants_hiding else tr("Körper einblenden")
+        else:
+            label = tr("Ausblenden") if wants_hiding else tr("Einblenden")
         hide = menu.addAction(label)
         hide.triggered.connect(
             lambda _checked=False: self.visibilityRequested.emit(chosen, not wants_hiding)
@@ -4763,6 +4771,16 @@ class FeaturePanel(QWidget):
         self._fit_reason = ""
         self._runs: dict[str, _Handling] = {}
         self._texture_fields: dict[str, Any] = {}
+        self._part_fields: dict[str, Any] = {}
+        """Das Parameterschema des gezeigten Bausteins — für gebundene Werte.
+
+        Steht an einer Achse ein Ausdruck (``=@staerke``), braucht das Feld
+        den Schemaeintrag, aus dem der Operationsdialog sein ``ValueField``
+        baut. Ohne ihn endete ``float("=@staerke")`` den Aufbau mitten in der
+        Liste: Das Beispielprojekt bindet die Höhe jedes Bausteins, und rechts
+        standen danach nur *Maße ändern* — ohne Verschieben und ohne Entfernen
+        (Robert, 16.09.2026: „bei manchen bausteinen keine möglichkeit zum
+        verschieben")."""
         self._parameter_values: dict[str, float] = {}
         """Je Handlung ihr Titel, ihr Satz und was sie tut.
 
@@ -4808,6 +4826,7 @@ class FeaturePanel(QWidget):
         self._fit_choice = None
         self._runs.clear()
         self._texture_fields.clear()
+        self._part_fields.clear()
         self._parameter_values.clear()
         self._armed = None
         self._explanations.clear()
@@ -5008,7 +5027,14 @@ class FeaturePanel(QWidget):
                 return widget
         return None
 
-    def show_part(self, operation: Any, spec: Any, *, title: str = "") -> None:
+    def show_part(
+        self,
+        operation: Any,
+        spec: Any,
+        *,
+        title: str = "",
+        parameter_values: Mapping[str, float] | None = None,
+    ) -> None:
         """Was sich an diesem **Baustein** ändern lässt — an seinem Schritt.
 
         Ein Schlüsselloch besteht aus zwölf Merkmalen: zwei Bohrungen, zehn
@@ -5032,6 +5058,10 @@ class FeaturePanel(QWidget):
         # an der Vorgabelage — der Fehler, den der Knopf daneben schon
         # vermeidet (``stepChangeRequested``).
         self._part_operation = int(operation.id)
+        # Das Schema des Bausteins, damit ein gebundener Wert sein
+        # Ausdrucksfeld bekommt (:meth:`_build_field`).
+        self._part_fields = {entry.name: entry for entry in spec.params.spec()}
+        self._parameter_values = dict(parameter_values or {})
         self._empty.setVisible(False)
 
         heading = QLabel(title or str(spec.title), self)
@@ -6024,13 +6054,22 @@ class FeaturePanel(QWidget):
         return True
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
-        """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""
-        if field.name in self._texture_fields:
+        """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht.
+
+        **Ein gebundener Wert bekommt das Ausdrucksfeld des Dialogs.** Die
+        Textur nimmt es für jedes ihrer Zahlenfelder; ein Baustein nur dort,
+        wo wirklich ein Ausdruck steht — sonst sähe die häufige Lage anders
+        aus als bisher, ohne dass jemand einen Parameter im Spiel hätte.
+        """
+        from app.core.expressions import is_expression
+
+        entry = self._texture_fields.get(field.name)
+        if entry is None and is_expression(field.value):
+            entry = self._part_fields.get(field.name)
+        if entry is not None:
             from app.ui.op_dialog import ValueField
 
-            return ValueField(
-                self._texture_fields[field.name], field.value, self._parameter_values, parent
-            )
+            return ValueField(entry, field.value, self._parameter_values, parent)
         kind = str(field.kind)
         if kind == "bool":
             check = RowCheckBox(parent)
