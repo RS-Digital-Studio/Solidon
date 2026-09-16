@@ -1,5 +1,5 @@
 {
-  "version": "0.4.2",
+  "version": "0.4.3",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
@@ -187,12 +187,12 @@
     ]
   },
   "notes_by_language": {
-    "de": "Vieleck, Langloch, Verrunden und Fase im Skizzeneditor. Eingelesene Modelle werden bis zu dreißigmal schneller erkannt, und eine runde Wand heißt runde Wand. Jede Vorschau sagt, was sie zeigt, und 3MF-Dateien aus Bambu Studio, Orca und Elegoo öffnen mit allen Farben. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
-    "en": "Polygons, slots, fillets and chamfers in the sketch editor. Imported models are recognised up to thirty times faster, and a round wall is called a round wall. Every preview says what it shows, and 3MF files from Bambu Studio, Orca and Elegoo open with all their colours. The demo stays complete and needs no key, until 30 October 2026.",
-    "es": "Polígonos, ranuras, redondeos y chaflanes en el editor de bocetos. Los modelos importados se reconocen hasta treinta veces más rápido, y una pared redonda se llama pared redonda. Cada vista previa dice lo que muestra, y los archivos 3MF de Bambu Studio, Orca y Elegoo se abren con todos sus colores. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
-    "fr": "Polygones, trous oblongs, congés et chanfreins dans l’éditeur d’esquisse. Les modèles importés sont reconnus jusqu’à trente fois plus vite, et une paroi ronde s’appelle une paroi ronde. Chaque aperçu dit ce qu’il montre, et les fichiers 3MF de Bambu Studio, Orca et Elegoo s’ouvrent avec toutes leurs couleurs. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
-    "it": "Poligoni, asole, raccordi e smussi nell’editor di schizzi. I modelli importati vengono riconosciuti fino a trenta volte più in fretta, e una parete rotonda si chiama parete rotonda. Ogni anteprima dice cosa mostra, e i file 3MF di Bambu Studio, Orca ed Elegoo si aprono con tutti i loro colori. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
-    "pt": "Polígonos, rasgos, arredondamentos e chanfros no editor de esboços. Os modelos importados são reconhecidos até trinta vezes mais depressa, e uma parede redonda chama-se parede redonda. Cada pré-visualização diz o que mostra, e os ficheiros 3MF do Bambu Studio, Orca e Elegoo abrem com todas as suas cores. A demo continua completa e sem chave, até 30 de outubro de 2026."
+    "de": "Organizer mit gebundenen Fachmaßen, Profilklemmen und Dichtnuten aus einer Zeichnung. Kanten lassen sich an jedem Körper verrunden — auch an eingelesenen Modellen. Der Düsendurchmesser gehört jetzt zum Drucker, und die Übergabe nimmt die passende Maschine im Slicer. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
+    "en": "Organisers with linked compartment sizes, profile clamps and sealing grooves from a drawing. Edges can be rounded on any body — imported models included. The nozzle diameter now belongs to the printer, and the handover picks the matching machine in the slicer. The demo stays complete and needs no key, until 30 October 2026.",
+    "es": "Organizadores con medidas de compartimento vinculadas, abrazaderas de perfil y ranuras de junta a partir de un dibujo. Las aristas se pueden redondear en cualquier cuerpo, también en modelos importados. El diámetro de la boquilla pertenece ahora a la impresora, y la entrega elige la máquina adecuada en el slicer. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
+    "fr": "Des organiseurs aux dimensions de casiers liées, des colliers de profilé et des gorges de joint à partir d’un dessin. Les arêtes s’arrondissent sur n’importe quel corps — modèles importés compris. Le diamètre de la buse appartient désormais à l’imprimante, et le transfert choisit la machine correspondante dans le slicer. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
+    "it": "Organizer con misure degli scomparti collegate, morsetti per profili e gole di tenuta da un disegno. Gli spigoli si raccordano su qualsiasi corpo, anche sui modelli importati. Il diametro dell’ugello appartiene ora alla stampante, e il trasferimento sceglie la macchina giusta nello slicer. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
+    "pt": "Organizadores com medidas de compartimento ligadas, braçadeiras de perfil e ranhuras de vedação a partir de um desenho. As arestas podem ser arredondadas em qualquer corpo, também em modelos importados. O diâmetro do bico pertence agora à impressora, e a transferência escolhe a máquina correta no slicer. A demo continua completa e sem chave, até 30 de outubro de 2026."
   },
   "groups": {
     "de": [
@@ -533,6 +533,5 @@
     ]
   },
   "changes_total": 48,
-  "notes_version": "0.4.2",
-  "signature": "730693a36cb6e7608676c9a184a306b693dc584dd3979f11b65bf67077b26b56707a415c304248f146f471dadabf1a2b4901abbf9be824181d54dd852476e50a"
+  "notes_version": "0.4.3"
 }
