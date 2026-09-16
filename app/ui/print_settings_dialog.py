@@ -2739,9 +2739,15 @@ class PrintSettingsDialog(QDialog):
     def _show_nozzle(self) -> None:
         """Die Düse des gewählten Druckers ins Feld, ohne es als Änderung zu lesen."""
         entry = profiles.printer(str(self.printer_choice.currentData()))
+        # ``finally``, weil ein gesetzter Zustand auf **jedem** Weg zurückgeht
+        # (``test_a_state_that_is_set_is_taken_back_on_every_path``): Wirft das
+        # Setzen, bliebe das Feld sonst für den Rest der Sitzung stumm, und
+        # eine geänderte Düse käme nirgends an.
         blocked = self.nozzle.blockSignals(True)
-        self.nozzle.set_value_mm(entry.nozzle_diameter)
-        self.nozzle.blockSignals(blocked)
+        try:
+            self.nozzle.set_value_mm(entry.nozzle_diameter)
+        finally:
+            self.nozzle.blockSignals(blocked)
 
     def _nozzle_changed(self, value: float) -> None:
         """Eine andere Düse ist eine Änderung **am Drucker**, nicht am Projekt.
