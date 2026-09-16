@@ -16,6 +16,29 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.4.3
+
+### Reconocimiento y edición
+
+- Se reconocen mejor los taladros ciegos poco profundos, las caras pequeñas y las roscas cortas. Los fondos de los alojamientos para imanes pertenecen a sus taladros.
+- Cambie el diámetro junto con el avellanado y la entrada conservando las medidas previstas. El fondo sigue asociado incluso tras cambios grandes de diámetro.
+- Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.
+- La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.
+
+### Construcción
+
+- Los organizadores admiten medidas vinculadas, divisores editables por separado y celdas repetidas. Bandeja, borde, fondo y pie amplían la biblioteca.
+- Los campos de agujeros, ranuras y hexágonos siguen una región dibujada. Se respetan las zonas reservadas, los márgenes y los puentes mínimos.
+- Las abrazaderas de perfil constan de dos carcasas y dos insertos ajustados. Admiten perfiles redondos, ovalados o dibujados; los insertos pueden sustituirse después.
+- Un dibujo cerrado o una abertura elegida crea una ranura de sellado y una junta separada. Puede elegir materiales, sección y saliente; se comprueban las paredes restantes.
+- Los patrones superficiales llegan al borde de la cara y dejan libres los taladros. Puede editar los patrones existentes desde el panel de selección.
+
+### Importación y manejo
+
+- Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.
+- Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.
+- Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.
+
 ## 0.4.2
 
 ### Dibujo

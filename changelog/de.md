@@ -40,6 +40,29 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.4.3
+
+### Erkennen und Bearbeiten
+
+- Flache Sackbohrungen, kleine Funktionsflächen und kurze Gewinde werden zuverlässiger erkannt. Die Böden der Magnettaschen gehören zu ihren Bohrungen.
+- Bohrungen lassen sich samt Senkung und Einlauf maßhaltig ändern. Auch nach einer größeren Durchmesseränderung bleibt der Sackboden zugeordnet.
+- An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.
+- Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.
+
+### Konstruieren
+
+- Organizer erhalten gebundene Fachmaße, einzeln änderbare Trennwände und wiederholte Fächer. Wanne, Rand, Boden und Fuß ergänzen die Bausteinbibliothek.
+- Loch-, Langloch- und Wabenfelder folgen einem gezeichneten Bereich. Freizuhaltende Flächen, Randabstände und Mindeststege bleiben berücksichtigt.
+- Profilklemmen entstehen aus zwei Schalen und zwei passenden Einlagen. Runde, ovale und gezeichnete Gegenprofile sind möglich; die Einlagen lassen sich später austauschen.
+- Eine geschlossene Zeichnung oder gewählte Öffnung erzeugt Dichtnut und separate Dichtung. Material, Querschnitt und Überstand sind einstellbar; Restwände werden geprüft.
+- Oberflächenmuster reichen bis zum Flächenrand und lassen Bohrungen frei. Vorhandene Muster lassen sich direkt über die Auswahl weiterbearbeiten.
+
+### Einlesen und Bedienen
+
+- SVG- und DXF-Konturen wählen Sie vor dem Erzeugen sichtbar aus. GLB- und GLTF-Dateien kommen mit ihren richtigen Maßen und ihrer richtigen Ausrichtung an.
+- Projektmaße bleiben bis in Bausteinskizzen und Platzierungsvorschauen wirksam. Beim Einpassen berücksichtigt die Ansicht alle sichtbaren Druckplatten.
+- Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.
+
 ## 0.4.2
 
 ### Zeichnen

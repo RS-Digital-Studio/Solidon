@@ -16,6 +16,29 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.4.3
+
+### Reconnaissance et modification
+
+- Les perçages borgnes peu profonds, les petites faces et les filetages courts sont mieux reconnus. Les fonds des logements pour aimants appartiennent à leurs perçages.
+- Modifiez un perçage avec sa fraisure et son entrée en conservant les cotes prévues. Le fond reste associé même après un changement important de diamètre.
+- Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.
+- La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.
+
+### Construction
+
+- Les organisateurs proposent des cotes liées, des cloisons modifiables séparément et des cases répétées. Bac, bordure, fond et pied enrichissent la bibliothèque.
+- Les champs de trous, de lumières et d’hexagones suivent une zone dessinée. Zones réservées, marges et épaisseurs minimales entre ouvertures sont respectées.
+- Les colliers de profil comprennent deux coques et deux inserts ajustés. Les profils ronds, ovales ou dessinés sont possibles ; les inserts restent remplaçables.
+- Un dessin fermé ou une ouverture choisie crée une rainure et un joint séparé. Matériaux, section et dépassement sont réglables ; les parois restantes sont vérifiées.
+- Les motifs de surface atteignent le bord des faces et laissent les perçages libres. Les motifs existants se modifient directement depuis le panneau de sélection.
+
+### Importation et utilisation
+
+- Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.
+- Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.
+- Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.
+
 ## 0.4.2
 
 ### Dessin

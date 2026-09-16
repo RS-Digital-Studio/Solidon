@@ -15,6 +15,29 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.4.3
+
+### Riconoscimento e modifica
+
+- Fori ciechi poco profondi, piccole superfici funzionali e filettature corte vengono riconosciuti meglio. I fondi delle sedi per magneti appartengono ai rispettivi fori.
+- Modifichi i fori insieme a svasature e imbocchi mantenendo le misure previste. Il fondo resta associato anche dopo variazioni importanti del diametro.
+- Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.
+- Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.
+
+### Costruzione
+
+- Gli organizer offrono misure collegate, divisori modificabili singolarmente e celle ripetute. Vaschetta, bordo, fondo e piedino ampliano la libreria.
+- I campi di fori, asole ed esagoni seguono una regione disegnata. Rispettano le zone riservate, i margini e i ponti minimi.
+- I morsetti per profili comprendono due gusci e due inserti su misura. Sono ammessi profili rotondi, ovali e disegnati; gli inserti possono essere sostituiti in seguito.
+- Un disegno chiuso o un’apertura scelta crea una scanalatura e una guarnizione separata. Materiali, sezione e sporgenza sono regolabili; le pareti residue vengono verificate.
+- I motivi superficiali raggiungono il bordo delle facce e lasciano liberi i fori. I motivi esistenti si modificano direttamente dal pannello di selezione.
+
+### Importazione e uso
+
+- Scelga visivamente i contorni SVG e DXF prima di creare il corpo. I file GLB e GLTF conservano dimensioni e orientamento corretti.
+- Le misure del progetto restano attive negli schizzi dei componenti e nelle anteprime di posizionamento. L’inquadratura comprende tutti i piatti di stampa visibili.
+- I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.
+
 ## 0.4.2
 
 ### Disegno

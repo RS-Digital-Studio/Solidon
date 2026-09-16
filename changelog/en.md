@@ -15,6 +15,29 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.4.3
+
+### Recognition and editing
+
+- Shallow blind holes, small functional faces and short threads are recognised more reliably. Magnet-pocket floors belong to their bores.
+- Resize bores together with their countersinks and entrances while preserving the intended dimensions. Blind-hole floors stay associated even after larger diameter changes.
+- Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.
+- Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.
+
+### Construction
+
+- Organisers gain linked compartment dimensions, individually editable dividers and repeated cells. Tray, rim, floor and foot parts extend the library.
+- Hole, slot and honeycomb fields follow a drawn region. Keep-out areas, edge margins and minimum webs are respected.
+- Profile clamps comprise two shells and two fitted liners. Round, oval and drawn mating profiles are supported; liners can be replaced later.
+- A closed drawing or selected opening creates a seal groove and a separate gasket. Choose materials, cross-section and protrusion; remaining walls are checked.
+- Surface patterns reach the face boundary and leave bores clear. Existing patterns can be edited directly through the selection panel.
+
+### Import and use
+
+- Select SVG and DXF contours visually before creating a body. GLB and GLTF files retain their correct dimensions and orientation.
+- Project dimensions remain effective in part sketches and placement previews. Fit to view includes every visible build plate.
+- Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.
+
 ## 0.4.2
 
 ### Drawing

@@ -15,6 +15,29 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.4.3
+
+### Reconhecimento e edição
+
+- Furos cegos pouco profundos, pequenas faces funcionais e roscas curtas são reconhecidos melhor. Os fundos dos alojamentos para ímanes pertencem aos respetivos furos.
+- Altere os furos com os seus escareados e entradas, mantendo as medidas previstas. O fundo continua associado mesmo após grandes alterações do diâmetro.
+- Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.
+- A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.
+
+### Construção
+
+- Os organizadores permitem medidas ligadas, divisórias editáveis individualmente e células repetidas. Tabuleiro, rebordo, fundo e pé ampliam a biblioteca.
+- Os campos de furos, rasgos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.
+- As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.
+- Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.
+- Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.
+
+### Importação e utilização
+
+- Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.
+- As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.
+- Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.
+
 ## 0.4.2
 
 ### Desenho

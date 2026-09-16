@@ -37,6 +37,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
+| [RM-183 — Dateiaudit vollständig umsetzen](#rm-183) | Geometrie, Erkennung und Druckvorbereitung | Fehlerkorrekturen, funktionale Merkmale, Bausteine und Erstellabläufe mit Einzeldateiabnahme |
 | [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt; Windows ist seit dem 14.09. ein Kundenbefund — mit Smart App Control startet Solidon auf Windows 11 nicht, Certum-Zugang und `sign_release.py` einmal fahren |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
@@ -1057,6 +1058,52 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Baugruppe einzeln gegen §31 gestellt.
 
   [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+<a id="rm-183"></a>
+
+- [~] **RM-183 — Dateiaudit vollständig umsetzen.** Grundlage sind 187 einzelne
+  Modell-, Projekt- und Zeichnungsfälle aus `F:\3D Dateien` sowie ihre Begleitdateien.
+  Die lokalen Nachweise liegen unter `ui-audit/2026-09-15-files/`.
+  Robert hat den Umfang am 16.09.2026 auf den Abschluss der begonnenen Einheiten
+  begrenzt und anschließend die vollständige Veröffentlichung von 0.4.3 beauftragt.
+  Die übrigen Familien und die vollständige Einzeldateiabnahme bleiben zurückgestellt.
+
+  **Begonnene Einheiten für 0.4.3:**
+
+  - [x] Bohrung mit Senkung/Einlauf maßhaltig bearbeiten, Sackbodenkennung erhalten,
+    vollständige Vorschau und eindeutige Auswahl; gezielte Original- und UI-Gegenproben.
+  - [x] Flache Sackbohrungen, kleine Kontaktflächen und kurze Gewinde erkennen;
+    örtliche Erkennung großer Netze mit anschließender Bearbeitung in einer Transaktion.
+  - [x] ZIP-Doppeleinträge, SVG-Vorgaben und sichtbare SVG-/DXF-Konturauswahl;
+    versionierte GLB-/GLTF-Einheiten und Aufrichtung.
+  - [x] Projektparameter bis in Bausteinskizzen und Platzierungsvorschauen verfolgen;
+    Organizer mit gebundenen Fachmaßen, einzelnen Trennwänden und vier Bausteinen.
+  - [x] Loch-, Langloch- und Wabenfelder mit gezeichnetem Bereich, Ausschlüssen,
+    Randabstand und Mindeststeg; Einstieg aus freier Zeichnung in der Oberfläche.
+  - [x] Profilklemme aus zwei Schalen und zwei Einlagen, ausdrückliche Materialwahl,
+    runde/ovale/gezeichnete Gegenkontur und Austausch bei unveränderten Schalen;
+    Bereichsprüfung und nativer Erzeugen-/Ersatz-/Undo-/Redo-Weg.
+  - [~] Dichtnut mit separater Dichtung aus Zeichnung oder bestätigter Öffnung,
+    Materialrollen, Restwand und optionale Gegenfläche; abschließender nativer Ablauf.
+  - [~] Gemeinsame Anschlussprüfungen, Übersetzungen, Dokumentation und Auslieferung
+    0.4.3 mit sauberem Arbeitsbaum. Das vollständige lokale Tor entfällt auf Roberts
+    ausdrücklichen Wunsch; die regulären CI- und Paketprüfungen bleiben bestehen.
+
+  **Für die Fortsetzung vorgemerkt, jetzt nicht beginnen:**
+
+  - [ ] Native Einzeldateiabnahme aller 187 Fälle einschließlich aller 29
+    Drillholder-Bohrungen: Import, Erkennung, Maßänderung, Vorschau, Ergebnis,
+    Undo/Redo und je eigener Bildnachweis. Kernläufe ersetzen diese Abnahme nicht.
+  - [ ] Einheitliche abschließende Leistungsreihe, erstes sichtbares Modell und
+    getrennte Stufenmessung; Topologie beim Reduzieren bewahren (RM-076/RM-077).
+  - [ ] Puppenhaus-/Schrankparameter sowie Mehrdateien und Plattengruppen.
+  - [ ] Weitere funktionale Gruppen: Kammer, Gewinde/Einlauf, Bajonett/Rastung,
+    Dichtweg/Kanal, Scharnier, Schrift/Einlage und Steckaufnahme/Anschlag.
+  - [ ] Bausteine: Bajonettpaar, Rastdrehscheibe/Federnabe, Steckhülse und
+    Zwei-/Drei-/Vierwegeverbinder, Schlauchtülle, Kanalnaht/Rampe, Raum-/Plattenvorlage.
+  - [ ] Abläufe: Konturdeckel mit Scharnier/Stift, bündige Schrifteinlage,
+    Gegenformeinsatz, Passungsprüfausschnitt, importiertes Gewinde ersetzen,
+    Schrift auf Fläche/Bahn sowie drehender und kombinierter Fügeweg.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>
