@@ -38,7 +38,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Nativer Ablauf der Dichtnut am Fenster; die übrigen Familien und die Einzeldateiabnahme aller 187 Fälle sind zurückgestellt |
-| [RM-186 — Drei Bausteinbaum-Tests sind auf Windows rot, auf Ubuntu grün](#rm-186) | Geometrie, Erkennung und Druckvorbereitung | `insert_printed_thread` am Quader trägt hier eine erkannte Fläche mit `created_by` des Schritts; Ursache des Plattformunterschieds messen, dann Test oder Erkennung nachziehen |
+| [RM-186 — Die Erkennung findet die Stirnfläche eines Gewindebolzens auf Windows, auf Ubuntu nicht](#rm-186) | Geometrie, Erkennung und Druckvorbereitung | Die drei Baumtests zählen seit dem 16.09.2026 die Merkmale des Schritts und sind auf beiden Plattformen wahr; offen bleibt, warum eine 22-mm²-Stirnfläche auf Ubuntu unter die Erkennungsschwelle fällt — auf einer Linux-Maschine messen |
 | [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt; Windows ist seit dem 14.09. ein Kundenbefund — mit Smart App Control startet Solidon auf Windows 11 nicht, Certum-Zugang und `sign_release.py` einmal fahren |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Sporadische Riss-/Hängerfamilien gezielt wiederholt prüfen; vollständiges Tor ist grün |
@@ -1115,18 +1115,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-186"></a>
 
-- [ ] **RM-186 — Drei Bausteinbaum-Tests sind auf Windows rot, auf Ubuntu
-  grün.** `test_a_part_with_one_feature_gets_no_roof`,
-  `test_the_features_of_a_part_sit_under_its_own_node` und
-  `test_a_part_stays_chosen_when_its_measures_swap_its_features` in
-  `tests/test_analysis_ui.py`: Auf dieser Maschine trägt `insert_printed_thread`
-  am Quader neben `printed_thread_thread_1` die erkannte Fläche `face_7` mit
-  `created_by` des Schritts — ein Merkmal mehr, ein Dach mehr. Nachgemessen am
-  16.09.2026 an `93ef16e3c` (Worktree) und am HEAD; die CI auf Ubuntu meldete
-  denselben Stand grün. Die Zuordnung „neu erkanntes Merkmal → Erzeuger"
-  (`evaluate.py`, seit 25.08.2026) ist die Stelle, der Plattformunterschied
-  der Erkennung die Frage. Abnahme: die Ursache ist gemessen, und beide
-  Plattformen zählen dieselben Merkmale.
+- [ ] **RM-186 — Die Erkennung findet die Stirnfläche eines Gewindebolzens auf
+  Windows, auf Ubuntu nicht.** `insert_printed_thread` am Quader trägt hier
+  neben `printed_thread_thread_1` die Stirnfläche `face_7` (22 mm², 156
+  Dreiecke, z ≈ 22) mit `created_by` des Schritts — richtig, der Baustein hat
+  sie erzeugt. Die Ubuntu-CI meldete denselben Stand ohne sie: Drei Tests in
+  `tests/test_analysis_ui.py`, die „genau ein Merkmal" annahmen, waren hier
+  rot (nachgemessen an `93ef16e3c` im Worktree und am HEAD). Seit dem
+  16.09.2026 zählen sie die Merkmale des Schritts und prüfen die Zusage in
+  beide Richtungen: eines ohne Dach, mehrere unter genau einem; das Merkmal
+  der Maßänderungsprobe ist das versprochene (`snap_connector_arm_1`), nicht
+  die erste erkannte Fläche. Offen: warum die Fläche auf Ubuntu unter die
+  Schwelle von `_large_facet_faces` fällt — gemessen wird das nur auf einer
+  Linux-Maschine. Abnahme: die Ursache ist benannt, und beide Plattformen
+  zählen dieselben Merkmale.
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>
@@ -1530,6 +1532,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Entscheidung Roberts über eine gestufte Werkzeugauswahl (RM-081). Abnahme:
   eine ungekürzte Messung unter 32 768 mit Platz für 4 000 Token Kontext, und
   das xfail fällt.
+
+  **Gemessen am 16.09.2026, abends, mit 143 Werkzeugen (36 731 Token):**
+  Bei `num_ctx` 32 768 mit passendem Prompt (100 Werkzeuge, 29 042 Token)
+  antwortet qwen3:14b mit 41 Token/s, ein warmer Zug dauert 6,3 s. Bei
+  40 960 mit allen 143 liegen 11 % des Modells auf dem Prozessor: 11 Token/s,
+  18 s je Zug — **3,8-mal langsamer**. Das Fenster zu heben ist also ein
+  Preis, keine Lösung. Die risikofreien Kürzungen im kompakten Schema
+  (Werkzeugbeschreibung auf den ersten Satz, ohne „Wann nicht") bringen rund
+  3 500 Token — nicht genug. Der Hebel ist die Zahl der Parameter: 1 293,
+  davon rund 550 Ortsfelder (x, y, z, nx, ny, nz, axis, angle) an 60
+  Werkzeugen. Sie zu einem Ortsfeld zu bündeln oder eine gestufte
+  Werkzeugauswahl (RM-081) sind Änderungen an der Werkzeugschnittstelle und
+  brauchen die Agenten-Suite vorher und nachher — eine Entscheidung Roberts.
 
 ## Tests und Entwicklungswerkzeuge
 

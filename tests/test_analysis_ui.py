@@ -4976,10 +4976,14 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
     step = int(window.session.project.document.ops[-1].id)
     result = window.session.last_result
     assert result is not None
+    # **Das versprochene Merkmal, keine erkannte Fläche.** Erkannte Flächen des
+    # Stifts tragen ebenfalls den Schritt (RM-186), und ihre Kennung kann nach
+    # dem Umstellen zufällig wiederkommen — die Probe soll ein Merkmal
+    # treffen, das wirklich verschwindet: der Arm, den nur der Stift hat.
     chosen = next(
         name
         for name, feature in result.scene.objects[object_id].features.items()
-        if feature.created_by == step
+        if feature.created_by == step and name.startswith("snap_connector_")
     )
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, chosen)
@@ -5039,9 +5043,6 @@ def test_a_part_with_one_feature_gets_no_roof(window: MainWindow) -> None:
             if child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
                 zeilen.append(child)
 
-    assert not daecher, f"ein Merkmal braucht kein Dach, gefunden: {len(daecher)}"
-    assert len(zeilen) == 1, "das Merkmal des Bausteins steht direkt unter seinem Körper"
-
     result = window.session.last_result
     assert result is not None
     feature = next(
@@ -5051,6 +5052,23 @@ def test_a_part_with_one_feature_gets_no_roof(window: MainWindow) -> None:
         if kennung == feature_id
     )
     assert feature.created_by == step, "und der Weg zu seinem Schritt hängt an ihm selbst"
+    # **Gezählt, nicht angenommen** (16.09.2026): Das Gewinde verspricht ein
+    # Merkmal, doch die Erkennung findet an seiner Stirnfläche auf dieser
+    # Maschine eine zweite (22 mm², `created_by` des Schritts) — auf Ubuntu
+    # nicht (RM-186). Die Zusage gilt in beide Richtungen: eines ohne Dach,
+    # mehrere unter genau einem.
+    aus_dem_schritt = [
+        kennung
+        for entry in result.scene.objects.values()
+        for kennung, merkmal in entry.features.items()
+        if merkmal.created_by == step
+    ]
+    if len(aus_dem_schritt) == 1:
+        assert not daecher, f"ein Merkmal braucht kein Dach, gefunden: {len(daecher)}"
+        assert len(zeilen) == 1, "das Merkmal des Bausteins steht direkt unter seinem Körper"
+    else:
+        assert len(daecher) == 1, f"mehrere Merkmale, genau ein Dach: {len(daecher)}"
+        assert not zeilen, "und keines davon steht daneben direkt unter dem Körper"
 
 
 def test_a_bore_with_its_countersink_shows_its_own_fields(window: MainWindow) -> None:
@@ -5203,7 +5221,10 @@ def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> No
                 nodes.append(child)
 
     assert len(nodes) == 1, f"genau ein Knoten je Baustein, gefunden: {len(nodes)}"
-    assert nodes[0].childCount() == 2, "und seine Merkmale hängen darunter"
+    # Alle Merkmale des Schritts — das echte Gewinde, auf dieser Maschine auch
+    # seine erkannte Stirnfläche (RM-186) — plus das gestellte zweite.
+    echte = sum(1 for merkmal in entry.features.values() if merkmal.created_by == step)
+    assert nodes[0].childCount() == echte + 1, "und seine Merkmale hängen darunter"
     assert nodes[0].data(1, Qt.ItemDataRole.UserRole) is None, (
         "der Knoten ist selbst kein Merkmal — er ist ihr Dach"
     )
