@@ -122,6 +122,51 @@ def _operation(
     )
 
 
+def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
+    """Warum aus diesen Merkmalen keine Kette wurde — für einen Lauf, den ich nicht sehe.
+
+    ``cavity_chain_at`` antwortet mit ``None`` auf drei verschiedene Fragen:
+    kein Nachbar, mehrdeutiger Nachbar, ungültiger Rand. Auf dem Mac der CI
+    kam am 17.09.2026 eine davon heraus und auf Windows und Ubuntu keine —
+    ohne die Zwischenschritte ist das ein ``assert None is not None`` und
+    sonst nichts. Gemessen kostet die Auskunft nur im Fehlerfall etwas.
+    """
+    from app.core.perceive.relations import _cavity_links, _shoulder_connections, boundary_rings
+    from app.core.types import is_a_cavity
+
+    body = mesh.raw
+    candidates = {
+        name: feature
+        for name, feature in detected.items()
+        if feature.kind in {"hole", "cone"} and is_a_cavity(feature)
+    }
+    zeilen = [f"gewählt war {chosen.id} ({chosen.kind})", "erkannt:"]
+    for name, feature in sorted(detected.items()):
+        masse = {
+            key: round(float(value), 4)
+            for key, value in feature.params.items()
+            if key in {"diameter", "depth", "angle"} and isinstance(value, int | float)
+        }
+        zeilen.append(f"  {name} {feature.kind} {masse}")
+
+    owners: dict[frozenset[tuple[int, int]], list[str]] = {}
+    zeilen.append("Randringe je Hohlraumabschnitt:")
+    for name, feature in candidates.items():
+        rings = boundary_rings(body, feature)
+        zeilen.append(f"  {name}: {'keine (ungültig)' if rings is None else len(rings)}")
+        for ring in rings or ():
+            owners.setdefault(ring, []).append(name)
+
+    geteilt = {tuple(sorted(names)) for names in owners.values() if len(names) > 1}
+    zeilen.append(f"gemeinsame Ringe: {sorted(geteilt) or 'keine'}")
+    schultern = _shoulder_connections(body, owners, candidates)
+    zeilen.append(f"Schulterverbindungen: {[sorted(set(a)) for a, _f in schultern] or 'keine'}")
+    graph, invalid, touching = _cavity_links(candidates, mesh)
+    zeilen.append(f"Graph: { {k: sorted(v) for k, v in graph.items()} }")
+    zeilen.append(f"ungültig: {sorted(invalid)}, berührend: {sorted(touching)}")
+    return "\n".join(zeilen)
+
+
 def _contains(mesh: MeshData, points: list[tuple[float, float, float]]) -> np.ndarray:
     """Innen/Außen unabhängig aus der Summe der orientierten Raumwinkel."""
     inside = []
@@ -910,7 +955,7 @@ def test_shrinking_keeps_the_countersink_and_recognises_the_new_shoulder(profile
         (f for f in detected.values() if f.kind == "hole"), key=lambda f: f.params["diameter"]
     )
     chain = cavity_chain_at(smaller, detected, changed)
-    assert chain is not None
+    assert chain is not None, _why_no_chain(changed, detected, smaller)
     assert [f.kind for f in chain] == ["hole", "cone"]
 
 
