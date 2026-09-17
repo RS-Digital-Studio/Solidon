@@ -1,0 +1,63 @@
+# Holt das Netz, an dem die Bohrungskette auf ARM64 zerfällt (RM-187).
+#
+# **Warum ein eigener Ablauf.** Der Fall existiert nur auf dem Mac, und jede
+# Reparatur daran kostete bisher einen vollen Tag-Lauf von vierzig Minuten —
+# dreimal hintereinander wurde auf Verdacht repariert. Dieser Ablauf fährt nur
+# die Sonde, dauert wenige Minuten und gibt das echte Netz als Artefakt heraus.
+# Danach entsteht die Behebung lokal, am Fall, statt blind über die CI.
+#
+# **Er ist ein Werkzeug auf Zeit.** Ist RM-187 beantwortet und der Unterschied
+# behoben, wird diese Datei wieder entfernt; sie baut nichts und prüft nichts.
+name: Mac-Netz sichern
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  netz:
+    name: Netz (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.7"
+          cache: pip
+
+      - name: Abhängigkeiten
+        # Derselbe Satz wie die Suite und gegen `constraints.txt`: Ein Netz,
+        # das unter anderen Paketversionen entstanden ist, beantwortet die
+        # Frage nicht, die hier gestellt wird.
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Die Eingabe messen
+        # Erster Messpunkt von RM-187: Weichen schon die Eckpunkte des
+        # Eingangsnetzes ab? Weicht die Eingabe ab, hilft kein exakter Kern.
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python .claude/.state/plattformgleichheit-2026-09-17/eingabe_messen.py
+
+      - name: Das Netz sichern
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python .claude/.state/plattformgleichheit-2026-09-17/netz_sichern.py netz
+
+      - name: Netz herausgeben
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: netz-${{ matrix.os }}
+          path: netz/
+          if-no-files-found: error
