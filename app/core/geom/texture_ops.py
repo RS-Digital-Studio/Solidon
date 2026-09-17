@@ -25,6 +25,7 @@ from typing import Any, Final, cast
 
 import numpy as np
 
+from app.core import units
 from app.core.errors import CORRECT_INPUT, Action, ValidationError, require_positive
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
@@ -173,8 +174,11 @@ def _hexagons(width: float, height: float, pitch: float) -> list[Any]:
         while x <= width / 2.0 + pitch:
             corners = [
                 (
-                    x + radius * math.cos(math.pi / 6.0 + index * math.pi / 3.0),
-                    y + radius * math.sin(math.pi / 6.0 + index * math.pi / 3.0),
+                    # Die (2i+1)-te Ecke eines Zwoelfecks ist genau
+                    # ``pi/6 + i*pi/3`` — aus Ganzzahlen und damit auf jeder
+                    # Maschine dieselbe Zahl (RM-187).
+                    x + radius * units.circle_point(12, 2 * index + 1)[0],
+                    y + radius * units.circle_point(12, 2 * index + 1)[1],
                 )
                 for index in range(6)
             ]

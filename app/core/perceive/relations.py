@@ -30,6 +30,7 @@ from typing import Any, Final, Literal, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from app.core import units
 from app.core.deferred import cKDTree, trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
@@ -263,7 +264,7 @@ def _sleeve_between(one: _Measured, other: _Measured) -> Sleeve | None:
         return None
     if not one.inside and other.diameter >= one.diameter:
         return None
-    if abs(float(one.axis @ other.axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
+    if abs(float(one.axis @ other.axis)) < units.exact_cos_degrees(SINK_AXIS_LIMIT):
         return None
     # Alle Lagewerte werden aus Sicht der Bohrung gerechnet. Sie ist bei beiden
     # Aufrufrichtungen dasselbe Merkmal; die Achsen dürfen innerhalb der
@@ -507,7 +508,7 @@ def _coaxial(first: Feature, second: Feature) -> bool:
     return (
         axis is not None
         and other_axis is not None
-        and abs(float(axis @ other_axis)) >= math.cos(math.radians(SINK_AXIS_LIMIT))
+        and abs(float(axis @ other_axis)) >= units.exact_cos_degrees(SINK_AXIS_LIMIT)
         and _axis_lines_agree(first, second)
     )
 
@@ -1625,7 +1626,7 @@ def _orientation_comparison(reference: Feature, candidate: Feature) -> _Comparis
     axis, other_axis = axis_of(reference), axis_of(candidate)
     if axis is None or other_axis is None:
         return "unavailable"
-    aligned = abs(float(axis @ other_axis)) >= math.cos(math.radians(SINK_AXIS_LIMIT))
+    aligned = abs(float(axis @ other_axis)) >= units.exact_cos_degrees(SINK_AXIS_LIMIT)
     return "same" if aligned else "different"
 
 

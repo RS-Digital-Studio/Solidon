@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 
+from app.core import units
 from app.core.geom.mesh import MeshData
 from app.core.types import Feature, FeatureId, Vec3
 from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
@@ -57,7 +58,7 @@ if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
 #: Die zwei Halbzylinder eines Langlochs sind aus demselben Werkzeug
 #: geschnitten, ihre Achsen also exakt parallel; was übrig bleibt, ist die
 #: Einpassung an einem tesselierten Bogen. Gemessen liegt sie bei 1e-9.
-PARALLEL_AXES: float = math.cos(math.radians(0.5))
+PARALLEL_AXES: float = units.exact_cos_degrees(0.5)
 
 #: Wie gleich zwei Radien sein müssen, bezogen auf den größeren.
 #:
@@ -69,7 +70,7 @@ SAME_RADIUS: float = 0.01
 #: Wie weit die Normale eines Dreiecks von der Achse wegzeigen muss, damit es
 #: zum **Mantel** gehört. Ein Grad: Deckel und Boden stehen senkrecht darauf
 #: und fallen damit heraus, eine leicht schief tesselierte Flanke nicht.
-ACROSS_THE_AXIS: float = math.cos(math.radians(89.0))
+ACROSS_THE_AXIS: float = units.exact_cos_degrees(89.0)
 
 #: Wieviel eine Flanke von der Ebene abweichen darf, die sie sein soll —
 #: als Anteil des Radius. Zwei Prozent decken die Sehne, zu der ein Netz den

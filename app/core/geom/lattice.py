@@ -27,6 +27,7 @@ from typing import Final, cast
 
 import numpy as np
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import CORRECT_INPUT, ValidationError, require_positive
 from app.core.geom.mesh import MeshData, concatenated
@@ -138,8 +139,11 @@ def _honeycomb(
         while x <= high[0] + cell:
             corners = [
                 (
-                    x + radius * math.cos(math.pi / 6.0 + index * math.pi / 3.0),
-                    y + radius * math.sin(math.pi / 6.0 + index * math.pi / 3.0),
+                    # Die (2i+1)-te Ecke eines Zwoelfecks ist genau
+                    # ``pi/6 + i*pi/3`` — aus Ganzzahlen und damit auf jeder
+                    # Maschine dieselbe Zahl (RM-187).
+                    x + radius * units.circle_point(12, 2 * index + 1)[0],
+                    y + radius * units.circle_point(12, 2 * index + 1)[1],
                 )
                 for index in range(6)
             ]

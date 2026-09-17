@@ -16,6 +16,7 @@ from typing import Any, Final, Literal, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
@@ -979,7 +980,7 @@ def _polygon_gain_for(diameter: float) -> float:
     Beim Versetzen darf der Kunde die Bohrung gleichzeitig ändern; dann gilt
     der Verlust für den **neuen** Durchmesser und nicht für den gemessenen.
     """
-    return diameter * (1.0 / math.cos(math.pi / FEATURE_SECTIONS) - 1.0)
+    return diameter * (1.0 / units.inscribed_ratio(FEATURE_SECTIONS) - 1.0)
 
 
 def _measured_section(
@@ -1115,9 +1116,9 @@ def _chain_plug(
     along = (points - centre) @ axis
     reach = float(along.max() - along.min())
     across = points - centre - np.outer(along, axis)
-    radius = (float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP) / math.cos(
-        math.pi / FEATURE_SECTIONS
-    )
+    radius = (
+        float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP
+    ) / units.inscribed_ratio(FEATURE_SECTIONS)
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return None
 
@@ -1534,9 +1535,9 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
     # in der Länge. Der Radius kommt aus der Ausdehnung der Fläche quer zur
     # Achse, damit auch eine Senkung hineinpasst, die weiter ist als ihr Loch.
     across = points - measured - np.outer(along, direction)
-    radius = (float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP * 2.0) / math.cos(
-        math.pi / FEATURE_SECTIONS
-    )
+    radius = (
+        float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP * 2.0
+    ) / units.inscribed_ratio(FEATURE_SECTIONS)
 
     cut = lathe.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
     cut.apply_transform(
@@ -1609,7 +1610,7 @@ def _closed_at(
                 radius,
                 float(np.linalg.norm(relative - np.outer(relative @ axis, axis), axis=1).max()),
             )
-        diameter = 2.0 * radius / math.cos(math.pi / FEATURE_SECTIONS)
+        diameter = 2.0 * radius / units.inscribed_ratio(FEATURE_SECTIONS)
         tool = _feature_solid(
             feature, centre, oversize=diameter - _bore_number(feature, "diameter") + FEATURE_OVERLAP
         )
@@ -3566,7 +3567,7 @@ def _reach_past_a_tilted_face(
     """
     if tilt >= 90.0 - EPS_DISPLAY:
         return at_most
-    needed = distance / math.cos(math.radians(tilt)) + radius * math.tan(math.radians(tilt))
+    needed = distance / units.exact_cos_degrees(tilt) + radius * math.tan(math.radians(tilt))
     return max(distance, min(needed, at_most))
 
 
@@ -3585,8 +3586,8 @@ def _cone_past_a_tilted_face(
     sie blieb ein Einschluss unter der Decke. Ist die Flanke flacher als die
     gekippte Fläche, kommt der Kegel nie mehr heraus — dann gilt ``at_most``.
     """
-    cos_tilt = math.cos(math.radians(tilt))
-    sin_tilt = math.sin(math.radians(tilt))
+    cos_tilt = units.exact_cos_degrees(tilt)
+    sin_tilt = units.exact_sin_degrees(tilt)
     climb = cos_tilt - math.tan(math.radians(half_angle)) * sin_tilt
     if climb <= EPS_GEOM:
         return at_most
@@ -6145,7 +6146,7 @@ def _with_nominal_bore(
         wanted += along * math.tan(math.radians(float(expected.params["angle"]) / 2.0))
     tolerance = weld_tolerance(mesh.bounds.diagonal)
     if np.any(radii > wanted + tolerance) or np.any(
-        radii < wanted * math.cos(math.pi / sections) - tolerance
+        radii < wanted * units.inscribed_ratio(sections) - tolerance
     ):
         return found
     params = dict(found.params)
@@ -6238,8 +6239,8 @@ def _recognised_slot(
 
     frame = frame_of(_bore_vector(feature, "axis"), centre)
     direction = tuple(
-        math.cos(math.radians(angle)) * frame.x_axis[i]
-        + math.sin(math.radians(angle)) * frame.y_axis[i]
+        units.exact_cos_degrees(angle) * frame.x_axis[i]
+        + units.exact_sin_degrees(angle) * frame.y_axis[i]
         for i in range(3)
     )
     expected = dataclasses.replace(

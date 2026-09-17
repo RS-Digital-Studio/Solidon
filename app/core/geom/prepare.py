@@ -26,6 +26,7 @@ from shapely import get_coordinates
 from shapely.affinity import translate as shift_polygon
 from shapely.geometry import box
 
+from app.core import units
 from app.core.build_area import (
     fits_xy,
     footprint,
@@ -485,7 +486,8 @@ def resize_bore(
         # nicht für jeden Radius und jede fremde Winkelunterteilung ab.
         tool = lathe.annulus(
             r_min=cut_diameter / 2.0,
-            r_max=previous_diameter / (2.0 * math.cos(math.pi / BORE_SECTIONS)) + BOOLEAN_OVERLAP,
+            r_max=previous_diameter / (2.0 * units.inscribed_ratio(BORE_SECTIONS))
+            + BOOLEAN_OVERLAP,
             height=height,
             sections=BORE_SECTIONS,
         )

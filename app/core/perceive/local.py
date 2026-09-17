@@ -9,6 +9,7 @@ from typing import Any, Final
 
 import numpy as np
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
 from app.core.geom.mesh import MeshData, face_components
@@ -632,7 +633,7 @@ def detect_known(
             blocked |= any(
                 candidate.kind == "face"
                 and np.dot(normal, np.asarray(candidate.params["normal"]))
-                >= math.cos(math.radians(detection.EPS_ANGLE))
+                >= units.exact_cos_degrees(detection.EPS_ANGLE)
                 and abs(float((np.asarray(candidate.params["centre"]) - centre) @ normal))
                 <= EPS_GEOM
                 for candidate in result.unfinished

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.core import units
 from app.core.build_area import placement_offset
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CHOOSE_PRINTER, SPLIT_MODEL, GeometryError
@@ -161,7 +162,7 @@ def _evaluate_directions(
     batch_size = max(
         1, min(len(directions), MAX_PROJECTION_VALUES // max(len(vertices), len(normals), 1))
     )
-    threshold = -math.cos(math.radians(OVERHANG_LIMIT_DEGREES))
+    threshold = -units.exact_cos_degrees(OVERHANG_LIMIT_DEGREES)
     scored: list[Orientation] = []
     for start in range(0, len(directions), batch_size):
         if cancelled is not None:

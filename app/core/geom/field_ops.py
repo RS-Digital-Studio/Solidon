@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+from app.core import units
 from app.core.errors import ValidationError
 from app.core.geom.sketch_solid import ARC_STEPS, outline_points
 from app.core.registry import op_params, param, register_op
@@ -55,7 +56,7 @@ def _sag(profile: Profile) -> float:
             arc = arc_through(segment.start, segment.via, segment.end)
             if arc is not None:
                 radius = max(radius, arc[1])
-    return radius * (1 - math.cos(math.pi / ARC_STEPS))
+    return radius * (1 - units.inscribed_ratio(ARC_STEPS))
 
 
 def _region(profile: Profile, *, exact: bool) -> tuple[BaseGeometry, float]:

@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from typing import Final, cast
 
+from app.core import units
 from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
@@ -1005,7 +1006,7 @@ def hinge_eye(raw: BaseParams) -> PartResult:
     # Kehrwert gleicht ausschließlich diese Repräsentationsabweichung aus;
     # zwei Geometrietoleranzen halten die Boolesche Rundung innerhalb des
     # zugesagten Nennmaßes.
-    faceted_wall = (params.wall + 2.0 * EPS_GEOM) / math.cos(math.pi / shapes.SEGMENTS)
+    faceted_wall = (params.wall + 2.0 * EPS_GEOM) / units.inscribed_ratio(shapes.SEGMENTS)
     outer = bore_width + 2.0 * faceted_wall
 
     def lying(diameter: float, length: float) -> MeshData:

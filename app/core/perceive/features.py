@@ -27,6 +27,7 @@ from typing import Any, Final, NamedTuple
 
 import numpy as np
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, face_components, fully_stitched, on_surface
 from app.core.geom.repair import merge_vertices
@@ -1156,7 +1157,7 @@ def sits_at_the_mouth_of(bore: Feature, wider: Feature) -> bool:
     other_diameter = float(wider.params.get("diameter") or 0.0)
     if diameter <= EPS_GEOM or other_diameter <= diameter:
         return False
-    if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
+    if abs(float(axis @ other_axis)) < units.exact_cos_degrees(SINK_AXIS_LIMIT):
         return False
     across_limit = (diameter / 2.0) * SINK_FIT_LIMIT
     offset = other_centre - centre
@@ -1857,7 +1858,7 @@ def _without_thread_turns(
     axes = np.asarray([fit.axis for fit, _patch in found], dtype=float)
     centres = np.asarray([fit.centre for fit, _patch in found], dtype=float)
     radii = np.asarray([fit.radius for fit, _patch in found], dtype=float)
-    parallel_limit = math.cos(math.radians(SINK_AXIS_LIMIT))
+    parallel_limit = units.exact_cos_degrees(SINK_AXIS_LIMIT)
     used: set[int] = set()
     for index, (fit, _patch) in enumerate(found):
         if index in used:
@@ -2421,7 +2422,7 @@ def nearly_flat_mask(body: trimesh.Trimesh, features: Mapping[str, Feature]) -> 
     mask = np.zeros(len(body.faces), dtype=bool)
     normals = np.asarray(body.face_normals, dtype=float)
     areas = np.asarray(body.area_faces, dtype=float)
-    limit = math.cos(math.radians(NEARLY_FLAT_ANGLE))
+    limit = units.exact_cos_degrees(NEARLY_FLAT_ANGLE)
     for feature in features.values():
         if feature.kind != "curved_face" or not feature.face_indices:
             continue
@@ -2530,7 +2531,7 @@ def planes_beside(
     # fast ebenen Haut zählen als eine Ebene** (:data:`NEARLY_FLAT_ANGLE`):
     # Normale und Punkt werden flächengewichtet gemittelt, sonst stünden für
     # eine Wand mit Formschräge zwei Ebenen da, wo eine gemeint ist.
-    limit = math.cos(math.radians(NEARLY_FLAT_ANGLE))
+    limit = units.exact_cos_degrees(NEARLY_FLAT_ANGLE)
     groups: list[list[int]] = []
     for face in outside.tolist():
         normal = face_normals[face]
@@ -3463,8 +3464,8 @@ def _cone_is_recognisable(body: trimesh.Trimesh, fit: ConeFit, patch: list[int])
     corners = np.asarray(body.triangles[patch], dtype=float)
     apex = np.asarray(fit.apex, dtype=float)
     axis = np.asarray(fit.axis, dtype=float)
-    sine = math.sin(math.radians(fit.half_angle))
-    cosine = math.cos(math.radians(fit.half_angle))
+    sine = units.exact_sin_degrees(fit.half_angle)
+    cosine = units.exact_cos_degrees(fit.half_angle)
 
     def expected_normals(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Kegelnormalen und ihre Gültigkeit an beliebigen Punkten."""
@@ -4198,7 +4199,7 @@ def _planar_face_entries(
         and bool(
             np.all(
                 np.asarray(body.face_normals)[facet] @ body.face_normals[int(facet[0])]
-                >= math.cos(math.radians(EPS_ANGLE))
+                >= units.exact_cos_degrees(EPS_ANGLE)
             )
         )
     ]

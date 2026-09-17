@@ -587,3 +587,44 @@ def _sin_series(angle: decimal.Decimal) -> decimal.Decimal:
         if total + term == total:
             return +total
         total += term
+
+
+def inscribed_ratio(sections: int) -> float:
+    """``cos(π/n)`` — In- zu Umkreis eines regelmäßigen ``sections``-Ecks.
+
+    Der Faktor, mit dem ein eingeschriebenes Vieleck aufgeweitet wird, damit es
+    den gemeinten Kreis wirklich umschließt: ``trimesh`` baut seine Zylinder
+    eingeschrieben, ihre Facetten liegen also **innerhalb** des Radius, und wer
+    ein Loch von Ø 6 schneiden will, braucht ein Werkzeug, das bis Ø 6 reicht.
+
+    **Nicht ``math.cos(math.pi / sections)``**, obwohl das dasselbe meint:
+    ``math.pi / sections`` ist eine Fließkommadivision und ``math.cos`` eine
+    Bibliotheksfunktion, und beide bringen die Plattform wieder ins Spiel
+    (RM-187). Hier steht dieselbe Zahl als Ecke eines ``2·sections``-Ecks —
+    aus Ganzzahlen gerechnet, denn ``cos(2π/(2n))`` *ist* ``cos(π/n)``.
+    """
+    return circle_point(2 * int(sections), 1)[0]
+
+
+def exact_cos_degrees(degrees: float) -> float:
+    """Kosinus eines Winkels in Grad, auf jeder Maschine dieselbe Zahl.
+
+    **Nicht ``exact_cos(math.radians(degrees))``:** Das Umrechnen rundet, und
+    der gerundete Winkel geht in die Reihe. Hier bleibt die Umrechnung
+    innerhalb der genauen Arithmetik, und erst das Ergebnis wird ``float``.
+    """
+    return _exact_degrees(float(degrees))[0]
+
+
+def exact_sin_degrees(degrees: float) -> float:
+    """Sinus eines Winkels in Grad. Siehe :func:`exact_cos_degrees`."""
+    return _exact_degrees(float(degrees))[1]
+
+
+@functools.lru_cache(maxsize=ANGLE_CACHE)
+def _exact_degrees(degrees: float) -> tuple[float, float]:
+    """Kosinus und Sinus zu einem Gradwinkel, ohne vorher zu runden."""
+    with decimal.localcontext() as context:
+        context.prec = EXACT_DIGITS
+        angle = _reduced(decimal.Decimal(degrees) * _PI / decimal.Decimal(180))
+        return (float(_cos_series(angle)), float(_sin_series(angle)))

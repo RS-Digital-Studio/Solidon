@@ -17,6 +17,7 @@ from collections.abc import Collection
 from pathlib import PurePosixPath
 from typing import Final
 
+from app.core import units
 from app.core.perceive.relations import Sleeve, sleeves_of
 from app.core.types import Document, Feature, ObjectId, Operation, Scene, SceneObject
 from app.core.units import EPS_GEOM, format_length, format_volume, round_display
@@ -512,7 +513,7 @@ def _axis_name(vector: tuple[float, float, float]) -> str:
 #: Ein halbes Grad. Die Zahl deckt die Rundung, mit der eine gemessene Richtung
 #: aus dem Netz kommt, und sonst nichts — sie ist keine Aussage darüber, wann
 #: zwei Richtungen „ungefähr gleich" sind.
-_ALONG_AN_AXIS: Final = math.cos(math.radians(0.5))
+_ALONG_AN_AXIS: Final = units.exact_cos_degrees(0.5)
 
 
 def _direction_name(vector: object) -> str:
