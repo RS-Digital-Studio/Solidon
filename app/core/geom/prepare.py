@@ -274,7 +274,10 @@ def over_the_edge_along(
     und nie zu milde.
     """
     vector = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(vector))
+    # ``math.hypot`` statt ``np.linalg.norm``: Letzteres geht durch BLAS, und
+    # dessen Ergebnis haengt von der Maschine ab (RM-187). Hier normiert es
+    # eine Richtung, aus der gleich eine Drehmatrix fuer das ganze Netz wird.
+    length = math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
     if length <= EPS_GEOM:
         return []
     unit = vector / length
@@ -455,7 +458,10 @@ def resize_bore(
         )
 
     vector = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(vector))
+    # ``math.hypot`` statt ``np.linalg.norm``: Letzteres geht durch BLAS, und
+    # dessen Ergebnis haengt von der Maschine ab (RM-187). Hier normiert es
+    # eine Richtung, aus der gleich eine Drehmatrix fuer das ganze Netz wird.
+    length = math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
     if not math.isfinite(length) or length <= EPS_GEOM:
         raise bore_geometry_error()
     unit = vector / length
@@ -469,7 +475,7 @@ def resize_bore(
         dtype=float,
     )
     to_world[:3, 3] = np.asarray(position, dtype=float)
-    to_local = np.linalg.inv(to_world)
+    to_local = lathe.rigid_inverse(to_world)
     local_body = mesh.raw.copy()
     local_body.apply_transform(to_local)
     local_mesh = mesh.replacing(local_body)
@@ -640,7 +646,7 @@ def slot_bore(
     to_world = np.eye(4)
     to_world[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
     to_world[:3, 3] = np.asarray(position, dtype=float)
-    to_local = np.linalg.inv(to_world)
+    to_local = lathe.rigid_inverse(to_world)
     local_body = mesh.raw.copy()
     local_body.apply_transform(to_local)
 

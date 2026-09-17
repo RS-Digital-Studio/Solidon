@@ -179,3 +179,33 @@ def _replaced_rim(body: Any, outline: NDArray[np.float64], sections: int) -> Any
         return body
     body.vertices = wanted
     return body
+
+
+def rigid_inverse(matrix: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Die Inverse einer Starrkörpertransformation — analytisch statt über LAPACK.
+
+    Eine Matrix aus Drehung ``R`` und Verschiebung ``t`` hat die Inverse
+    ``[R^T | -R^T·t]``. Das ist exakt hinschreibbar, und ``np.linalg.inv``
+    dafür zu rufen ist zweierlei Verschwendung: Es löst ein allgemeines
+    Gleichungssystem, wo eine Transposition genügt, **und** es geht durch
+    LAPACK, dessen Ergebnis von der Maschine abhängt (RM-187).
+
+    Der Unterschied ist winzig und bleibt es nicht: Hier wird ein ganzes Netz
+    damit hin- und zurückgedreht, bevor eine Boolesche Operation darauf
+    entscheidet.
+
+    Ist die obere linke 3x3 keine Drehung — ungleiche Skalierung, Scherung —,
+    trägt die Formel nicht, und die Funktion gibt an ``np.linalg.inv`` ab,
+    statt ein falsches Ergebnis zu liefern.
+    """
+    raw = np.asarray(matrix, dtype=np.float64)
+    turn = raw[:3, :3]
+    # Eine Drehung erfüllt R·R^T = I. Geprüft wird das, nicht angenommen.
+    if not np.allclose(turn @ turn.T, np.eye(3), atol=1e-9) or raw.shape != (4, 4):
+        return np.asarray(np.linalg.inv(raw), dtype=np.float64)
+    if not np.allclose(raw[3], (0.0, 0.0, 0.0, 1.0), atol=1e-12):
+        return np.asarray(np.linalg.inv(raw), dtype=np.float64)
+    back = np.eye(4, dtype=np.float64)
+    back[:3, :3] = turn.T
+    back[:3, 3] = -(turn.T @ raw[:3, 3])
+    return back
