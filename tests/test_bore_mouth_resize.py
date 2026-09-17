@@ -156,6 +156,31 @@ def _why_no_rings(body, feature: Feature) -> str:
     return "ungültig: Grund nicht nachgerechnet"
 
 
+def _who_owns_the_notch(mesh: MeshData, detected: dict, candidates: dict) -> str:
+    """Wem die Dreiecke am ausgefransten Rand gehören — frei oder fremd.
+
+    ``features._without_notches`` schließt eine Kerbe nur mit einem **freien**
+    Dreieck; gehört es einem anderen Fleck, bleibt sie offen, und das ist
+    Absicht. Ob dieser Fall vorliegt, sagt keine Zahl im Merkmal — also hier.
+    """
+    from app.core.perceive.features import _notch_faces
+
+    body = mesh.raw
+    besitzer: dict[int, str] = {}
+    for name, feature in detected.items():
+        for index in feature.face_indices:
+            besitzer[int(index)] = name
+
+    teile = []
+    for name, feature in candidates.items():
+        kerben = _notch_faces(body, [int(i) for i in feature.face_indices])
+        if not kerben:
+            continue
+        wem = {face: besitzer.get(face, "frei") for face in sorted(kerben)}
+        teile.append(f"{name}: Kerbe an {wem}")
+    return "Kerben am Rand: " + ("; ".join(teile) if teile else "keine")
+
+
 def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
     """Warum aus diesen Merkmalen keine Kette wurde — für einen Lauf, den ich nicht sehe.
 
@@ -194,6 +219,7 @@ def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
 
     geteilt = {tuple(sorted(names)) for names in owners.values() if len(names) > 1}
     zeilen.append(f"gemeinsame Ringe: {sorted(geteilt) or 'keine'}")
+    zeilen.append(_who_owns_the_notch(mesh, detected, candidates))
     schultern = _shoulder_connections(body, owners, candidates)
     zeilen.append(f"Schulterverbindungen: {[sorted(set(a)) for a, _f in schultern] or 'keine'}")
     graph, invalid, touching = _cavity_links(candidates, mesh)
