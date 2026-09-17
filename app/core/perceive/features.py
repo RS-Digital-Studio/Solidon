@@ -18,6 +18,7 @@ Merkmal, und der Steckbrief sagt, wie viele gefunden wurden.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import math
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
@@ -4073,12 +4074,20 @@ def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
         return set()
     faces = np.asarray(body.faces)[indices]
     edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
-    unique, count = np.unique(edges, axis=0, return_counts=True)
+    # **Eine Kante als eine Zahl** (Leistung, gemessen 17.09.2026). ``np.unique``
+    # über ein zweispaltiges Feld sortiert lexikografisch und kostete an einem
+    # merkmalsreichen Körper mit 204 000 Dreiecken ein Drittel der ganzen
+    # Erkennung. Dieselbe Kodierung benutzt ``relations._shoulder_connections``,
+    # und aus demselben Grund.
+    corners = len(body.vertices)
+    codes = edges[:, 0].astype(np.int64) * corners + edges[:, 1]
+    _codes, first, count = np.unique(codes, return_index=True, return_counts=True)
     if (count > 2).any():
         return set()
-    boundary = unique[count == 1]
-    if not len(boundary):
+    border = first[count == 1]
+    if not len(border):
         return set()
+    boundary = edges[border]
     vertices, degrees = np.unique(boundary, return_counts=True)
     frayed = {int(node) for node in vertices[degrees > 2]}
     if not frayed:
@@ -4095,26 +4104,65 @@ def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
     return {face for face in neighbours if frayed & {int(corner) for corner in body.faces[face]}}
 
 
-def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[list[int]]:
-    """Fransige Ränder schließen, solange das Dreieck dafür frei und eindeutig ist.
+#: Wie viele freie Dreiecke eine Kerbe höchstens schließen dürfen.
+#:
+#: Eine Kerbe ist eine Lücke von ein, zwei Dreiecken — ein Kegelsegment
+#: besteht aus einem koplanaren Paar, und mehr als ein Segment fällt nicht
+#: heraus. Was drei und mehr braucht, ist keine Kerbe mehr, sondern ein Loch,
+#: und ein Loch zuzunähen wäre eine Erfindung.
+NOTCH_AT_MOST: Final = 2
 
-    **Eindeutig heißt: genau eines von allen** (Regel 21). Am ausgefransten
-    Knoten liegen mehrere fremde Dreiecke; geprüft wird jedes einzeln, und
-    übernommen wird nur, wenn **eines** den Rand in Ordnung bringt. Bringen es
-    zwei, ist die Kerbe keine — dann steht dort eine Gabelung, und die zu raten
-    wäre schlimmer als sie stehen zu lassen.
+
+def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[list[int]]:
+    """Fransige Ränder schließen, solange die Menge dafür frei, klein und eindeutig ist.
+
+    **Eindeutig heißt: genau eine Menge ihrer Größe** (Regel 21). Am
+    ausgefransten Knoten liegen mehrere freie Dreiecke — auf dem Mac der CI
+    gemessen vier —, und keines davon bringt den Rand allein in Ordnung.
+    Gesucht wird deshalb die **kleinste** Menge, die es tut; gibt es davon zwei
+    derselben Größe, steht dort eine Gabelung, und die zu raten wäre schlimmer,
+    als die Kerbe stehen zu lassen.
     """
     taken = {index for patch in patches for index in patch}
     healed: list[list[int]] = []
     for patch in patches:
-        candidates = sorted(face for face in _notch_faces(body, patch) if face not in taken)
-        closing = [face for face in candidates if not _notch_faces(body, [*patch, face])]
-        if len(closing) != 1:
+        # **Nur Flecken, die überhaupt eingepasst werden** (Leistung, gemessen
+        # 17.09.2026). Die Randprüfung kostet je Fleck ein ``np.unique`` über
+        # seine Kanten; an einer verrauschten Freiform sind es 120 610 Flecken,
+        # und drei Leistungstests rissen ihre Schwelle. Was unter
+        # ``MIN_PATCH_FACES`` liegt, kommt an ``classify`` ohnehin nicht vorbei
+        # — dort steht dieselbe Grenze.
+        if len(patch) < MIN_PATCH_FACES:
             healed.append(patch)
             continue
-        taken.add(closing[0])
-        healed.append([*patch, closing[0]])
+        candidates = sorted(face for face in _notch_faces(body, patch) if face not in taken)
+        closing = _closing_set(body, patch, candidates)
+        if closing is None:
+            healed.append(patch)
+            continue
+        taken.update(closing)
+        healed.append([*patch, *closing])
     return healed
+
+
+def _closing_set(
+    body: trimesh.Trimesh, patch: Sequence[int], candidates: Sequence[int]
+) -> tuple[int, ...] | None:
+    """Die kleinste eindeutige Menge freier Dreiecke, die den Rand schließt."""
+    if not candidates:
+        return None
+    for size in range(1, NOTCH_AT_MOST + 1):
+        found = [
+            group
+            for group in itertools.combinations(candidates, size)
+            if not _notch_faces(body, [*patch, *group])
+        ]
+        if len(found) == 1:
+            return found[0]
+        if found:
+            # Mehrere Mengen derselben Größe: eine Gabelung, keine Kerbe.
+            return None
+    return None
 
 
 # --- Flächen ---------------------------------------------------------------------

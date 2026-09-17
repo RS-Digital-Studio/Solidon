@@ -199,7 +199,11 @@ def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
         for name, feature in detected.items()
         if feature.kind in {"hole", "cone"} and is_a_cavity(feature)
     }
-    zeilen = [f"gewählt war {chosen.id} ({chosen.kind})", "erkannt:"]
+    zeilen = [
+        f"Netz: {len(body.faces)} Dreiecke, {len(body.vertices)} Ecken",
+        f"gewählt war {chosen.id} ({chosen.kind})",
+        "erkannt:",
+    ]
     for name, feature in sorted(detected.items()):
         masse = {
             key: round(float(value), 4)

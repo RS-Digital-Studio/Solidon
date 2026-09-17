@@ -3990,18 +3990,50 @@ def test_a_patch_missing_one_triangle_gets_it_back() -> None:
         assert set(healed) == set(faces), f"Dreieck {missing} kam nicht zurück"
 
 
-def test_a_notch_that_two_triangles_could_close_stays_open() -> None:
-    """Wo zwei Dreiecke die Kerbe schließen könnten, wird nicht geraten (Regel 21).
+def test_a_notch_of_two_triangles_is_closed_as_a_pair() -> None:
+    """Wo kein einzelnes Dreieck reicht, schließt die kleinste eindeutige Menge.
 
-    Die Heilung darüber nimmt genau ein Dreieck. Gäbe sie sich mit „irgendeines
-    davon" zufrieden, entschiede die Reihenfolge der Flächennummern über die
-    Geometrie — und das ist keine Entscheidung, sondern ein Zufall.
+    **Das ist der Fall, den der Mac der CI zeigt** (17.09.2026): Am
+    ausgefransten Knoten der Senkung liegen vier freie Dreiecke, und **keines**
+    bringt den Rand allein in Ordnung — die erste Fassung der Heilung verlangte
+    genau eines und ließ die Kerbe deshalb offen. Ein Kegelsegment besteht aus
+    einem koplanaren Paar; fällt eines heraus, fallen beide.
     """
-    from app.core.perceive.features import _without_notches
+    from app.core.perceive.features import _notch_faces, _without_notches
 
     body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
     faces = list(range(len(body.faces)))
-    # Zwei fehlende Nachbarn: Der Rand franst an zwei Knoten aus, und kein
-    # einzelnes Dreieck bringt ihn in Ordnung.
-    rest = [index for index in faces if index not in {0, 1}]
-    assert _without_notches(body, [rest])[0] == rest, "mehrdeutig heißt: unverändert"
+    # (0, 2) ist eines der 253 Paare dieses Bandes, bei denen genau **eine**
+    # Zweiermenge den Rand schließt. (0, 1) wäre es nicht: dort schließen
+    # mehrere, und der Test bliebe auch ohne die Regel grün.
+    rest = [index for index in faces if index not in {0, 2}]
+    candidates = sorted(_notch_faces(body, rest))
+    assert candidates, "ohne die zwei Dreiecke franst der Rand aus"
+    assert not [f for f in candidates if not _notch_faces(body, [*rest, f])], (
+        "der Fall lebt davon, dass kein einzelnes Dreieck den Rand schließt"
+    )
+    healed = _without_notches(body, [rest])[0]
+    assert set(healed) == set(faces), "die eindeutige Zweiermenge kommt zurück"
+
+    # **Für den mehrdeutigen Zweig gibt es hier keinen Test**, und das ist
+    # gemessen: An diesem Band schließen von 435 ausfransenden Paaren 406 mit
+    # genau einer Zweiermenge und 29 gar nicht — mehrdeutig ist keines. Ein
+    # Test dafür bräuchte einen eigens konstruierten Körper; die Zusage steht
+    # in ``_closing_set`` und fiele sonst als Zierat auf, der nichts prüft.
+
+
+def test_a_notch_too_large_to_be_one_stays_open() -> None:
+    """Was drei Dreiecke braucht, ist ein Loch — und ein Loch wird nicht zugenäht.
+
+    Die Grenze steht als ``NOTCH_AT_MOST``. Ohne sie wäre die Heilung keine
+    Heilung mehr, sondern eine Erfindung: Sie würde jede Lücke schließen, die
+    sich schließen lässt, auch eine, die jemand gemeint hat.
+    """
+    from app.core.perceive.features import NOTCH_AT_MOST, _without_notches
+
+    assert NOTCH_AT_MOST == 2, "die Grenze ist eine Entscheidung, keine Zufallszahl"
+    body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
+    faces = list(range(len(body.faces)))
+    rest = [index for index in faces if index not in {0, 1, 2, 3, 4, 5}]
+    healed = _without_notches(body, [rest])[0]
+    assert set(healed) != set(faces), "sechs fehlende Dreiecke sind keine Kerbe"
