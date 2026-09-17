@@ -41,6 +41,7 @@ from app.core.errors import (
     GeometryError,
     ValidationError,
 )
+from app.core.geom import lathe
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
@@ -1980,7 +1981,6 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
     0,026 und 0,046 mm. Die Unterteilung hängt am Radius, wie :func:`_ring_steps`
     es für die Zylinder rechnet.
     """
-    import trimesh
 
     points = np.asarray(entry.points, dtype=float)
     parts: list[Any] = []
@@ -1989,7 +1989,7 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
         reach = float(np.linalg.norm(along))
         if reach <= EPS_GEOM:
             continue
-        rod = trimesh.creation.cylinder(radius=radius, height=reach, sections=_ring_steps(radius))
+        rod = lathe.cylinder(radius=radius, height=reach, sections=_ring_steps(radius))
         rod.apply_transform(_towards(along / reach, (first + second) / 2.0))
         parts.append(rod)
     knots = points[1:-1] if len(points) > THROUGH else np.empty((0, 3))

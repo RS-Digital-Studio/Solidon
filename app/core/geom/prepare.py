@@ -35,6 +35,7 @@ from app.core.build_area import (
 )
 from app.core.deferred import trimesh
 from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS, ValidationError
+from app.core.geom import lathe
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -472,7 +473,7 @@ def resize_bore(
 
     kind: BooleanKind
     if grows:
-        tool = trimesh.creation.cylinder(
+        tool = lathe.cylinder(
             radius=cut_diameter / 2.0,
             height=height,
             sections=BORE_SECTIONS,
@@ -482,7 +483,7 @@ def resize_bore(
         # Das umschriebene Vieleck erreicht auch bei großen Bohrungen die
         # alte Wand. Die zentrale Überlappung allein deckt seine Sehnenlücke
         # nicht für jeden Radius und jede fremde Winkelunterteilung ab.
-        tool = trimesh.creation.annulus(
+        tool = lathe.annulus(
             r_min=cut_diameter / 2.0,
             r_max=previous_diameter / (2.0 * math.cos(math.pi / BORE_SECTIONS)) + BOOLEAN_OVERLAP,
             height=height,
@@ -1070,9 +1071,9 @@ def drill_tool(
         )
         return MeshData.of(body)
     if widening_diameter > EPS_GEOM:
-        return MeshData.of(trimesh.creation.revolve(outline, sections=BORE_SECTIONS))
+        return MeshData.of(lathe.revolve(outline, sections=BORE_SECTIONS))
     radius = outline[1][0]
-    cylinder = trimesh.creation.cylinder(
+    cylinder = lathe.cylinder(
         radius=radius,
         height=depth + mouth_overlap,
         sections=BORE_SECTIONS,
@@ -1537,7 +1538,7 @@ def plug(
     # füllte die einfache Länge nur die Hälfte und ließ die Bohrung offen.
     height = _through_length(mesh, axis) * 2.0 if through else depth
     filled = diameter if profile is None else bore_diameter(diameter, profile, compensate)
-    cylinder = trimesh.creation.cylinder(
+    cylinder = lathe.cylinder(
         radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
     cylinder.apply_transform(_axis_alignment(axis))

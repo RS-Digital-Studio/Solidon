@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import math
+import struct
 
 import pytest
 
@@ -251,3 +252,148 @@ def test_a_measured_axis_keeps_its_line_and_turns_the_leading_sign() -> None:
     assert positive_axis((3.0, -4.0, 0.0)) == (-3.0, 4.0, 0.0), "|−4| ist das Maximum"
     assert positive_axis((-4.0, 3.0, 0.0)) == (4.0, -3.0, 0.0)
     assert positive_axis((0.0, 0.0, -1.0)) == (0.0, 0.0, 1.0)
+
+
+# --- Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (RM-187) --------
+
+
+def test_circle_points_are_the_same_bits_on_every_machine() -> None:
+    """Die festgeschriebenen Bits eines 120-Ecks — der eigentliche Vertrag.
+
+    **Warum ausgerechnet Bits und nicht ``is_close``** (Regel 6 gilt hier
+    ausdrücklich nicht): Die Zusage *ist* die bitgenaue Gleichheit. Gemessen am
+    17.09.2026 über drei CI-Runner mit demselben Python und demselben NumPy
+    liefert ``np.cos`` drei verschiedene Zahlenfolgen — Ubuntu rechnet mit
+    AVX-512, Windows mit AVX2, macOS mit NEON. Der Unterschied betrug
+    3,4·10⁻¹⁵ mm und wuchs durch eine Boolesche Operation zu 1224, 1226 und
+    1228 Dreiecken an demselben Körper. Ein Test mit Toleranz hätte das nie
+    gesehen, und genau deshalb hat es niemand gesehen.
+
+    Der Hash steht hier als Zahl und nicht als Formel: Eine Formel würde
+    dieselbe Bibliothek fragen, über die der Test urteilt.
+
+    **Woher die Zahl kommt und was sie noch nicht beweist.** Sie ist auf dieser
+    Maschine gemessen — ein Sollwert aus dem Prüfling also, und der ist nur
+    erlaubt, weil dies ein Determinismusnachweis ist und der Test das sagt
+    (`.claude/rules/tests.md`, „Korpus"). Dass sie auf **jeder** Maschine
+    dieselbe ist, belegt nicht dieser Lauf, sondern der über drei Runner. Wird
+    er auf einem davon rot, ist genau das die Aussage: Dort rechnet etwas
+    anders, und die Zusage gilt nicht.
+    """
+    import hashlib
+
+    from app.core.units import circle_cos_sin
+
+    values = circle_cos_sin(120)
+    raw = b"".join(struct.pack("<dd", cos, sin) for cos, sin in values)
+    digest = hashlib.sha256(raw).hexdigest()[:16]
+
+    assert len(values) == 120
+    assert digest == "169ba88212acfdba", f"andere Bits als festgeschrieben: {digest}"
+
+
+def test_a_circle_point_lands_on_the_circle() -> None:
+    """Jede Ecke liegt auf dem Einheitskreis, und zwar bis auf die letzte Stelle."""
+    import math
+
+    from app.core.units import circle_point
+
+    for sections in (3, 4, 5, 7, 8, 60, 120, 192, 360):
+        for index in range(sections):
+            cos, sin = circle_point(sections, index)
+            assert abs(math.hypot(cos, sin) - 1.0) < 1e-15, f"{sections}-Eck, Ecke {index}"
+
+
+def test_a_circle_point_matches_the_angle_it_stands_for() -> None:
+    """Dieselben Werte wie ``math.cos``/``math.sin`` — nur eben überall dieselben.
+
+    Die Zusage ist Plattformgleichheit, nicht eine andere Geometrie. Weicht
+    eine Ecke mehr als eine Rundungsstelle von ihrem Winkel ab, ist die Reihe
+    falsch und nicht bloß anders.
+    """
+    import math
+
+    from app.core.units import circle_point
+
+    for sections in (3, 5, 7, 60, 120, 192):
+        for index in range(sections):
+            angle = index * math.tau / sections
+            cos, sin = circle_point(sections, index)
+            assert abs(cos - math.cos(angle)) < 1e-14, f"{sections}-Eck, Ecke {index}"
+            assert abs(sin - math.sin(angle)) < 1e-14, f"{sections}-Eck, Ecke {index}"
+
+
+def test_no_circle_point_carries_a_negative_zero() -> None:
+    """Der Viertelpunkt eines 120-Ecks gab ``-0.0``, und das trennt Schlüssel.
+
+    Die Spiegelung, mit der drei Viertel des Kreises entstehen, dreht auch das
+    Vorzeichen der Null um. ``-0.0`` schreibt sich als ``-0.000``, vergleicht
+    sich gleich und sortiert sich anders — dieselbe Falle, die
+    :func:`app.core.units.positive_axis` schon einmal gestellt hat.
+    """
+    import math
+
+    from app.core.units import circle_cos_sin
+
+    for sections in (4, 8, 12, 120, 360, 1920):
+        for index, (cos, sin) in enumerate(circle_cos_sin(sections)):
+            for value in (cos, sin):
+                assert not (value == 0.0 and math.copysign(1.0, value) < 0.0), (
+                    f"negative Null im {sections}-Eck an Ecke {index}"
+                )
+
+
+def test_a_quarter_turn_is_exact() -> None:
+    """Bei einer durch vier teilbaren Teilung stehen die Viertelpunkte genau.
+
+    ``math.cos(math.pi / 2)`` ist 6,1·10⁻¹⁷ und nicht null — der Winkel selbst
+    trägt schon einen Rundungsfehler. Aus Ganzzahlen gerechnet gibt es den
+    nicht, und das ist mehr als Kosmetik: Ein Kreis, dessen Viertelpunkte
+    exakt auf den Achsen liegen, erzeugt koplanare Flächen, die auch koplanar
+    bleiben.
+    """
+    from app.core.units import circle_point
+
+    assert circle_point(120, 0) == (1.0, 0.0)
+    assert circle_point(120, 30) == (0.0, 1.0)
+    assert circle_point(120, 60) == (-1.0, 0.0)
+    assert circle_point(120, 90) == (0.0, -1.0)
+    assert circle_point(4, 1) == (0.0, 1.0)
+
+
+def test_the_index_wraps_around_the_circle() -> None:
+    """Ecke ``n`` ist Ecke ``0`` — ein Kreis hat keinen Rand."""
+    from app.core.units import circle_point
+
+    assert circle_point(60, 60) == circle_point(60, 0)
+    assert circle_point(60, 61) == circle_point(60, 1)
+    assert circle_point(60, -1) == circle_point(60, 59)
+
+
+def test_a_circle_needs_at_least_three_corners() -> None:
+    """Zwei Punkte sind kein Kreis, und stillschweigend geraten wird nicht."""
+    import pytest
+
+    from app.core.units import circle_cos_sin, circle_point
+
+    for sections in (2, 1, 0, -5):
+        with pytest.raises(ValueError, match="drei Ecken"):
+            circle_point(sections, 0)
+        with pytest.raises(ValueError, match="drei Ecken"):
+            circle_cos_sin(sections)
+
+
+def test_exact_cos_and_sin_agree_with_the_library() -> None:
+    """Für einen beliebigen Winkel dieselbe Zahl wie ``math`` — auf dieser Maschine.
+
+    Dass sie auf **jeder** Maschine dieselbe ist, kann kein Test hier belegen;
+    das belegt der festgeschriebene Hash oben und der Lauf über drei Runner.
+    Dieser Test hält nur fest, dass die Reihe rechnet und nicht rät.
+    """
+    import math
+
+    from app.core.units import exact_cos, exact_sin
+
+    for angle in (0.0, 0.7, -3.9, 1.5707963267948966, 100.0, -0.000001, math.tau * 3):
+        assert abs(exact_cos(angle) - math.cos(angle)) < 1e-15, f"cos bei {angle}"
+        assert abs(exact_sin(angle) - math.sin(angle)) < 1e-15, f"sin bei {angle}"

@@ -11,6 +11,7 @@ import math
 import numpy as np
 
 from app.core.deferred import trimesh
+from app.core.geom import lathe
 from app.core.geom.mesh import MeshData
 from app.core.types import Vec3
 
@@ -47,7 +48,7 @@ def cylinder(diameter: float, height: float, *, segments: int = SEGMENTS) -> Mes
     """Auf Z = 0 stehend, nach oben wachsend — der Rahmen, den jeder Baustein
     benutzt.
     """
-    body = trimesh.creation.cylinder(radius=diameter / 2.0, height=height, sections=segments)
+    body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=segments)
     body.apply_translation([0.0, 0.0, height / 2.0])
     return MeshData.of(body)
 
@@ -98,7 +99,7 @@ def cone(bottom: float, top: float, height: float, *, segments: int = SEGMENTS) 
     profile = np.array(
         [[0.0, 0.0], [bottom / 2.0, 0.0], [top / 2.0, height], [0.0, height]], dtype=float
     )
-    body = trimesh.creation.revolve(profile, sections=segments)
+    body = lathe.revolve(profile, sections=segments)
     return MeshData.of(body)
 
 

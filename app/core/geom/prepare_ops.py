@@ -30,6 +30,7 @@ from app.core.errors import (
     InternalError,
     ValidationError,
 )
+from app.core.geom import lathe
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     NOTHING_LEFT_DETAIL,
@@ -713,9 +714,7 @@ def _feature_solid(
         measured = float(feature.params.get("diameter", 0.0)) * scale
         travel = max(0.0, float(feature.params.get("length", 0.0)) - measured)
         if travel <= EPS_GEOM:
-            body = trimesh.creation.cylinder(
-                radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
-            )
+            body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS)
         else:
             body = extrude_profile(
                 slot_profile(
@@ -732,9 +731,7 @@ def _feature_solid(
                 ),
             )
     else:
-        body = trimesh.creation.cylinder(
-            radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
-        )
+        body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS)
 
     turn = trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
         [0.0, 0.0, 1.0], direction
@@ -1052,7 +1049,7 @@ def _measured_section(
         [wide / 2.0 + beyond * math.tan(math.radians(angle / 2.0)), beyond + FEATURE_OVERLAP],
         [0.0, beyond + FEATURE_OVERLAP],
     ]
-    body = trimesh.creation.revolve(outline, sections=FEATURE_SECTIONS)
+    body = lathe.revolve(outline, sections=FEATURE_SECTIONS)
     body.apply_transform(
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             [0.0, 0.0, 1.0], _outward_axis(chain, feature)
@@ -1124,7 +1121,7 @@ def _chain_plug(
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return None
 
-    plug = trimesh.creation.cylinder(
+    plug = lathe.cylinder(
         radius=radius, height=reach + 2.0 * FEATURE_OVERLAP, sections=FEATURE_SECTIONS
     )
     plug.apply_transform(
@@ -1344,9 +1341,7 @@ def _no_longer_through(
     if diameter <= EPS_GEOM:
         return False
     reach = float(np.linalg.norm(mesh.bounds.size)) * 2.0
-    column = trimesh.creation.cylinder(
-        radius=diameter / 2.0, height=reach, sections=FEATURE_SECTIONS
-    )
+    column = lathe.cylinder(radius=diameter / 2.0, height=reach, sections=FEATURE_SECTIONS)
     column.apply_transform(
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             np.array([0.0, 0.0, 1.0]), np.asarray(_feature_direction(feature), dtype=float)
@@ -1543,7 +1538,7 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
         math.pi / FEATURE_SECTIONS
     )
 
-    cut = trimesh.creation.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
+    cut = lathe.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
     cut.apply_transform(
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             np.array([0.0, 0.0, 1.0]), direction
@@ -3762,7 +3757,7 @@ def _stretched_section(
         return None
     depth = float(feature.params.get("depth", 0.0))
     height = (depth if depth > EPS_GEOM else diameter) + 2.0 * FEATURE_OVERLAP
-    body = trimesh.creation.cylinder(
+    body = lathe.cylinder(
         radius=diameter / 2.0, height=height + max(0.0, extension), sections=FEATURE_SECTIONS
     )
     body.apply_translation((0.0, 0.0, max(0.0, extension) / 2.0))
@@ -5522,7 +5517,7 @@ def _entrance_mesh_tool(
     tools = []
     for outline, planes in _entrance_tools(entrance, diameter, reach):
         ctx.cancelled.raise_if_cancelled()
-        raw = trimesh.creation.revolve(outline, sections=BORE_SECTIONS)
+        raw = lathe.revolve(outline, sections=BORE_SECTIONS)
         raw.vertices = np.asarray(raw.vertices) @ rotation.T + entrance.origin
         tool = MeshData.of(raw)
         for plane in planes:

@@ -27,6 +27,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError, NotManifoldError
+from app.core.geom import lathe
 from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import open_edge_count
@@ -62,6 +63,15 @@ VENT_BREAKTHROUGH = 1.0
 #: Vorgabe-Durchmesser der Entlüftung. Weit genug, damit Luft entweicht, eng
 #: genug, dass das Loch danach nicht verschlossen werden muss.
 VENT_DIAMETER = 4.0
+
+#: In wie viele Facetten die Entlüftungsbohrung zerfällt.
+#:
+#: Die Zahl stand bis zum 17.09.2026 nirgends: Der Aufruf ließ ``sections``
+#: weg und bekam die Vorgabe von ``trimesh.creation.cylinder``. Sie bestimmt
+#: aber die Geometrie, die der Kunde bekommt, und gehört deshalb hierher und
+#: nicht in eine fremde Bibliothek. Der Wert ist der bisherige — die
+#: Umstellung soll nichts am Ergebnis ändern.
+VENT_SECTIONS = 32
 
 
 @dataclass(slots=True)
@@ -549,7 +559,11 @@ def _vent(
         return body, (), stages
     for index, spot in enumerate(spots, start=1):
         _step(progress, cancelled, 0.8 + 0.15 * index / len(spots), _("Entlüftungen bohren"))
-        tool = trimesh.creation.cylinder(radius=diameter / 2.0, height=height)
+        # 32 Sektionen standen hier nie im Quelltext — sie waren die Vorgabe
+        # von ``trimesh.creation.cylinder``. Jetzt stehen sie da, denn eine
+        # Zahl, die das Ergebnis bestimmt, gehört nicht in eine fremde
+        # Bibliothek (17.09.2026, RM-187).
+        tool = lathe.cylinder(radius=diameter / 2.0, height=height, sections=VENT_SECTIONS)
         tool = apply(
             MeshData.of(tool),
             translation((spot[0], spot[1], bottom + height / 2.0)),

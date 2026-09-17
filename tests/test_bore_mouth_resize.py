@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
@@ -28,10 +29,17 @@ def _sloping_bore() -> tuple[MeshData, dict[str, Feature], Feature]:
     schrägen Außenfläche z=18+0,08*x. Kein Dreieck stammt aus einer Kundendatei.
     """
     sections = 120
-    angles = np.arange(sections) * math.tau / sections
+    # **Über ``circle_cos_sin`` und nicht über ``np.cos``** (17.09.2026,
+    # RM-187): Dieser Test prüft die Erkennung, nicht die Mathematikbibliothek.
+    # Mit ``np.cos`` baute er auf jeder Plattform ein anderes Eingangsnetz —
+    # 1224 Dreiecke auf Ubuntu, 1226 auf Windows, 1228 auf macOS —, und was er
+    # danach maß, war nicht mehr dieselbe Frage. Auf dem Mac zerfiel darüber
+    # die Bohrungskette, und drei Reparaturen suchten den Fehler in der
+    # Erkennung, wo keiner war.
+    table = np.asarray(units.circle_cos_sin(sections), dtype=float)
     vertices = []
     for radius, height, slope in ((4.5, 3.0, 0.04), (4.5, 17.0, 0.10), (5.5, 18.0, 0.08)):
-        x, y = radius * np.cos(angles), radius * np.sin(angles)
+        x, y = radius * table[:, 0], radius * table[:, 1]
         vertices.extend(zip(x, y, height + slope * x, strict=True))
     faces = []
     for ring in range(2):

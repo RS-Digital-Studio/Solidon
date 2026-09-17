@@ -21,6 +21,7 @@ from typing import Any, cast
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
+from app.core.geom import lathe
 from app.core.geom.autosplit import upright_normal
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -686,11 +687,11 @@ def _pipe(
     cancelled: CancelToken | None = None,
 ) -> MeshData:
     """Ein Materialring, stehend auf ``z``, ganz durchgehend offen."""
-    shell = trimesh.creation.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
+    shell = lathe.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
     shell.apply_translation((0.0, 0.0, z + height / 2.0))
     if inner <= EPS_GEOM:
         return MeshData.of(shell)
-    bore = trimesh.creation.cylinder(
+    bore = lathe.cylinder(
         radius=inner / 2.0, height=height + 2.0 * BOOLEAN_OVERLAP, sections=NECK_SECTIONS
     )
     bore.apply_translation((0.0, 0.0, z + height / 2.0))
@@ -974,7 +975,7 @@ def _screw_cap(
     inside = major - 2.0 * params.pitch * RIDGE_SHARE + clearance
     outer = major + 2.0 * clearance + 2.0 * params.wall
 
-    body = trimesh.creation.cylinder(
+    body = lathe.cylinder(
         radius=outer / 2.0, height=skirt + params.thickness, sections=NECK_SECTIONS
     )
     body.apply_translation((0.0, 0.0, (skirt + params.thickness) / 2.0))
@@ -982,7 +983,7 @@ def _screw_cap(
     # Die zwei Formen, mit denen ein Gewindeloch geschnitten wird: die Bohrung
     # auf Kerndurchmesser, und die Nut, die von ihr bis zum Außendurchmesser
     # reicht.
-    hollow = trimesh.creation.cylinder(
+    hollow = lathe.cylinder(
         radius=inside / 2.0 + BOOLEAN_OVERLAP,
         height=skirt + BOOLEAN_OVERLAP,
         sections=NECK_SECTIONS,

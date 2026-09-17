@@ -11,6 +11,8 @@ gibt es :func:`is_close`, :func:`is_zero`, :func:`is_greater` und
 
 from __future__ import annotations
 
+import decimal
+import functools
 import math
 from collections.abc import Sequence
 from typing import Final, Literal
@@ -401,3 +403,187 @@ def positive_axis(axis: Sequence[float]) -> tuple[float, float, float]:
     sign = -1.0 if values[leading] < 0.0 else 1.0
     # ``+ 0.0`` streicht die negative Null, ohne eine andere Zahl zu ändern.
     return (sign * values[0] + 0.0, sign * values[1] + 0.0, sign * values[2] + 0.0)
+
+
+# --- Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben -----------------
+
+#: Pi als feste Ziffernfolge, weit über :data:`EXACT_DIGITS`.
+#:
+#: Keine Reihe: Pi ändert sich nicht, und eine Konstante kann nicht
+#: plattformweise streuen — worum es hier ja gerade geht. ``math.pi`` wäre der
+#: nächstliegende Weg und der falsche: Es ist ein ``float`` und trägt nur
+#: sechzehn Stellen, die Reihen bekämen also einen abgeschnittenen Winkel.
+_PI: Final = decimal.Decimal(
+    "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803"
+)
+
+#: Stellen, mit denen die Reihen rechnen, bevor auf ``float`` gerundet wird.
+#:
+#: Fünfzig sind reichlich mehr als die sechzehn, die ein ``float`` trägt. Der
+#: Abstand ist Absicht: Er macht die Rundung auf die letzte Stelle eindeutig,
+#: und eindeutig ist hier das ganze Ziel.
+EXACT_DIGITS: Final = 50
+
+#: Wie viele verschiedene Winkel gemerkt werden.
+#:
+#: Die Reihe kostet rund ein Zehntel einer Millisekunde; ein Bauteil fragt
+#: dieselben Winkel immer wieder. Begrenzt, weil ein unbegrenzter Speicher über
+#: eine lange Sitzung wächst, ohne dass jemand ihn je leert.
+ANGLE_CACHE: Final = 8192
+
+
+def circle_point(sections: int, index: int) -> tuple[float, float]:
+    """Kosinus und Sinus an der ``index``-ten Ecke eines regelmäßigen ``sections``-Ecks.
+
+    **Warum es diese Funktion gibt** (17.09.2026, RM-187): ``np.cos`` und
+    ``math.cos`` geben auf verschiedenen Rechnern verschiedene Zahlen. Gemessen
+    über drei Runner mit demselben Python und demselben NumPy — Ubuntu rechnet
+    mit AVX-512, Windows mit AVX2, macOS mit NEON, und die drei runden die
+    letzte Stelle verschieden. Der Unterschied ist winzig (3,4·10⁻¹⁵ mm) und
+    bleibt es nicht: Durch eine Boolesche Operation wächst er zu einem anderen
+    Netz. Derselbe Körper trug 1226 Dreiecke auf Windows, 1224 auf Ubuntu und
+    1228 auf macOS, und eine Bohrungskette, die Solidon auf zwei Plattformen
+    erkennt, war auf der dritten nicht mehr da.
+
+    **Ein exakter Boolescher Kern hätte das nicht geheilt.** Geogram und
+    trueform rechnen exakt *mit* ihrer Eingabe; zwei verschiedene Eingaben
+    geben zwei verschiedene Ergebnisse, auch exakt gerechnet. Die Ursache liegt
+    davor, und deshalb liegt die Lösung hier.
+
+    Gerechnet wird über ``decimal`` — reine Ganzzahlarithmetik, die von der
+    Maschine nichts wissen will. Der Winkel entsteht dabei aus **Ganzzahlen**
+    (``index`` und ``sections``) und nicht aus einem vorher gerundeten
+    ``float``: Schon ``index * tau / sections`` wäre eine Fließkommadivision
+    und brächte die Plattform wieder ins Spiel.
+
+    Die Ecke ``0`` liegt auf ``(1, 0)``, und der Umlauf ist mathematisch
+    positiv — dieselbe Belegung wie ``cos``/``sin`` sie hätten.
+    """
+    if sections < 3:
+        raise ValueError(f"Ein Kreis braucht mindestens drei Ecken, nicht {sections}")
+    return _circle_table(int(sections))[int(index) % int(sections)]
+
+
+def circle_cos_sin(sections: int) -> tuple[tuple[float, float], ...]:
+    """Alle ``sections`` Eckenpaare auf einmal — dieselbe Zahlenfolge wie einzeln."""
+    if sections < 3:
+        raise ValueError(f"Ein Kreis braucht mindestens drei Ecken, nicht {sections}")
+    return _circle_table(int(sections))
+
+
+def exact_cos(angle: float) -> float:
+    """Kosinus, auf jeder Maschine dieselbe Zahl. Siehe :func:`circle_point`.
+
+    Für eine regelmäßige Teilung ist :func:`circle_point` der genauere Weg:
+    Dort entsteht der Winkel aus Ganzzahlen, hier ist er schon ein ``float``
+    und trägt, was seine Herkunft ihm angetan hat.
+    """
+    return _exact_pair(float(angle))[0]
+
+
+def exact_sin(angle: float) -> float:
+    """Sinus, auf jeder Maschine dieselbe Zahl. Siehe :func:`exact_cos`."""
+    return _exact_pair(float(angle))[1]
+
+
+@functools.lru_cache(maxsize=ANGLE_CACHE)
+def _exact_pair(angle: float) -> tuple[float, float]:
+    """Kosinus und Sinus zu einem ``float``-Winkel, über die Reihen gerechnet."""
+    with decimal.localcontext() as context:
+        context.prec = EXACT_DIGITS
+        reduced = _reduced(decimal.Decimal(angle))
+        return (float(_cos_series(reduced)), float(_sin_series(reduced)))
+
+
+@functools.lru_cache(maxsize=256)
+def _circle_table(sections: int) -> tuple[tuple[float, float], ...]:
+    """Die Tabelle eines regelmäßigen ``sections``-Ecks, einmal je Prozess.
+
+    Ein Viertelumlauf reicht: Die übrigen drei entstehen durch Vorzeichen und
+    Tausch, und beides ist in Fließkomma **exakt** — es ändert kein Bit der
+    Mantisse. Das spart nicht nur Zeit; es schreibt auch die Symmetrie fest,
+    die ein Kreis haben soll. Bei ``sections``, die nicht durch vier teilbar
+    sind, gibt es keine gemeinsamen Viertelpunkte, und dann wird gerechnet.
+    """
+    with decimal.localcontext() as context:
+        context.prec = EXACT_DIGITS
+        turn = 2 * _PI
+        quarter, remainder = divmod(sections, 4)
+        if remainder:
+            values = []
+            for index in range(sections):
+                angle = turn * index / sections
+                values.append((float(_cos_series(angle)), float(_sin_series(angle))))
+            return tuple(values)
+        first = []
+        for index in range(quarter + 1):
+            angle = turn * index / sections
+            first.append((float(_cos_series(angle)), float(_sin_series(angle))))
+    values = []
+    for index in range(sections):
+        eighth, step = divmod(index, quarter)
+        cos, sin = first[step]
+        # Vorzeichenwechsel und Tausch sind bitgenau — deshalb steht hier
+        # eine Tabelle und keine zweite Rechnung.
+        turned = ((cos, sin), (-sin, cos), (-cos, -sin), (sin, -cos))[eighth]
+        # ``+ 0.0`` streicht die negative Null und lässt jede andere Zahl in
+        # Ruhe. Beim Viertelpunkt eines 120-Ecks kam sonst ``(-0.0, 1.0)``
+        # heraus: Das Spiegeln dreht auch das Vorzeichen der Null um, und eine
+        # negative Null schreibt sich als ``-0.000`` und trennt zwei
+        # Schlüssel, die denselben Punkt meinen — dieselbe Falle, die
+        # :func:`positive_axis` schon einmal gestellt hat.
+        values.append((turned[0] + 0.0, turned[1] + 0.0))
+    return tuple(values)
+
+
+def _reduced(angle: decimal.Decimal) -> decimal.Decimal:
+    """Den Winkel in ``[-π, π]`` holen — die Reihen konvergieren dort am besten."""
+    turn = 2 * _PI
+    angle = angle.remainder_near(turn)
+    if angle > _PI:
+        angle -= turn
+    elif angle < -_PI:
+        angle += turn
+    return +angle
+
+
+def _cos_series(angle: decimal.Decimal) -> decimal.Decimal:
+    """Kosinus über die Taylorreihe, abgebrochen wenn ein Term nichts mehr ändert."""
+    index, factorial, power, sign, total = (
+        0,
+        decimal.Decimal(1),
+        decimal.Decimal(1),
+        1,
+        decimal.Decimal(1),
+    )
+    square = angle * angle
+    while True:
+        index += 2
+        factorial *= index * (index - 1)
+        power *= square
+        sign = -sign
+        term = sign * power / factorial
+        if total + term == total:
+            return +total
+        total += term
+
+
+def _sin_series(angle: decimal.Decimal) -> decimal.Decimal:
+    """Sinus über die Taylorreihe, gleiche Bauart wie :func:`_cos_series`."""
+    index, factorial, power, sign, total = (
+        1,
+        decimal.Decimal(1),
+        decimal.Decimal(angle),
+        1,
+        decimal.Decimal(angle),
+    )
+    square = angle * angle
+    while True:
+        index += 2
+        factorial *= index * (index - 1)
+        power *= square
+        sign = -sign
+        term = sign * power / factorial
+        if total + term == total:
+            return +total
+        total += term

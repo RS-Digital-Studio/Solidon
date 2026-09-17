@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Final, cast
 
 from app.core.errors import ValidationError
+from app.core.geom import lathe
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
@@ -1386,7 +1387,6 @@ def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> 
     Schulter statt die Unterseite und maß nur den Säulenrest. Das gemeinsame
     Profil trägt dieselbe Außenkontur ohne innere Fläche.
     """
-    from app.core.deferred import trimesh
 
     outline = [
         [0.0, 0.0],
@@ -1395,12 +1395,11 @@ def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> 
         [narrow / 2.0, height],
         [0.0, height],
     ]
-    return MeshData.of(trimesh.creation.revolve(outline, sections=shapes.SEGMENTS))
+    return MeshData.of(lathe.revolve(outline, sections=shapes.SEGMENTS))
 
 
 def _pocket_profile(wide: float, height: float, chamfer: float) -> MeshData:
     """Sitz und Einführfase als ein geschlossenes abtragendes Drehprofil."""
-    from app.core.deferred import trimesh
 
     outline = [
         [0.0, 0.0],
@@ -1409,4 +1408,4 @@ def _pocket_profile(wide: float, height: float, chamfer: float) -> MeshData:
         [wide / 2.0, -height],
         [0.0, -height],
     ][::-1]
-    return MeshData.of(trimesh.creation.revolve(outline, sections=shapes.SEGMENTS))
+    return MeshData.of(lathe.revolve(outline, sections=shapes.SEGMENTS))
