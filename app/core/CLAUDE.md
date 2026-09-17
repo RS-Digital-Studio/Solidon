@@ -34,7 +34,7 @@ selbst. Hier steht, **was wo liegt**.
 | `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`. Signaturen stehen fest, bevor ein Modul entsteht |
 | `build_area.py` | Tatsächliche Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29) |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1). Jede trägt mindestens eine `Action` — ein Fehler endet nie mit „fehlgeschlagen" |
-| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==` |
+| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==`. **Und die Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben** — `circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin` und ihre Gradgeschwister, gerechnet über `decimal` (RM-187) |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — es gibt kein `eval` |
 | `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): stabile Vorbereitungsfingerabdrücke, explizite Spulenbindungen und werkzeugweise G-Code-Mengen; das Journal schreibt `knowledge/filaments.py` |
 

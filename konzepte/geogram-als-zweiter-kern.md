@@ -1,8 +1,37 @@
 # Geogram als zweiter Boolescher Kern — was es wäre, und was es nicht löst
 
-**Stand:** 17.09.2026 · **Recherche und Konzept, nichts davon gebaut.** ·
-Schwester von [anfrage-trueform.md](anfrage-trueform.md), die dieselbe Frage an
-den kommerziellen Kandidaten stellt.
+> **Erledigt am 17.09.2026, am selben Tag. Es wird kein zweiter Kern gebaut.**
+>
+> §7 dieses Dokuments verlangte eine Messung, bevor irgendetwas entschieden
+> wird: *Läuft schon die Eingabe auseinander, oder erst das Ergebnis?* Die
+> Messung ist gefahren (Läufe 35262208955 und 35265459662, drei Plattformen),
+> und sie hat die Frage beantwortet und die Entscheidung gleich mit:
+>
+> **Die Eingabe lief auseinander.** Der Klotz — eine Box ohne transzendente
+> Funktion — war auf allen drei Plattformen bitgleich; Hohlraum und Nachbar,
+> beide aus ``cos``/``sin``, auf allen drei verschieden. Ursache ist NumPys
+> Wahl der SIMD-Implementierung: AVX-512 auf Ubuntu, AVX2 auf Windows, NEON auf
+> macOS.
+>
+> **Und manifold3d ist plattformgleich.** Nachdem die Eingangskörper über
+> ``units.circle_point`` gebaut werden, liefert die Boolesche Operation auf
+> allen drei Plattformen denselben Fingerabdruck — 1222 Dreiecke,
+> ``8c1169913b6ac670``. Das ist der Satz, den dieses Dokument nicht zu hoffen
+> wagte: Der Kern, den wir haben, kann, was wir brauchen.
+>
+> Damit fällt die Begründung für jeden Wechsel. Geogram bleibt fachlich
+> beeindruckend und kostet nichts — aber es löst kein Problem, das wir haben.
+> Der Rest des Dokuments bleibt als Recherchestand stehen; §5 und §7 sind
+> überholt, §3 (fertige Wheels, Bindung ohne Boolesche Operationen) gilt
+> weiter, falls die Frage je aus einem anderen Grund zurückkommt.
+>
+> Der Nachweis steht in ``tests/test_platform_identity.py``, der Fall im
+> Register unter [RM-187](../ROADMAP.md#rm-187).
+
+**Stand:** 17.09.2026 · **Recherche und Konzept, nichts davon gebaut — und
+nichts davon zu bauen.** · Schwester von
+[anfrage-trueform.md](anfrage-trueform.md), die dieselbe Frage an den
+kommerziellen Kandidaten stellte und aus demselben Grund zurückgezogen ist.
 
 **Was dieses Dokument beantwortet:** Ob Geogram den Mac-Befund vom 17.09.2026
 lösen könnte, ob der Kunde dafür einen Compiler braucht, und was ein Einbau

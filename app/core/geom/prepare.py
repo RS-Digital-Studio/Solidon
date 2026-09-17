@@ -363,8 +363,10 @@ def _rim_around(unit: Any, radius: float) -> np.ndarray:
     first = np.cross(axis, helper)
     first /= float(np.linalg.norm(first))
     second = np.cross(axis, first)
-    angles = np.linspace(0.0, 2.0 * math.pi, _RIM_POINTS, endpoint=False)
-    return np.asarray(radius * (np.cos(angles)[:, None] * first + np.sin(angles)[:, None] * second))
+    # Der Kranz ist ein regelmaessiges Vieleck; seine Ecken kommen aus
+    # Ganzzahlen und sind damit auf jeder Maschine dieselben (RM-187).
+    table = np.asarray(units.circle_cos_sin(_RIM_POINTS), dtype=float)
+    return np.asarray(radius * (table[:, 0][:, None] * first + table[:, 1][:, None] * second))
 
 
 def _edge_finding(diameter: float, over: list[str]) -> Finding:
@@ -951,8 +953,8 @@ def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> Ske
     # Ein Stadion ist nach einer halben Drehung derselbe Umriss. Gleiche
     # Formen beginnen an denselben Punkten, damit auch ihre Facettierung
     # und anschließende Schnitte übereinstimmen.
-    turn = math.radians(angle_deg % 180.0)
-    cosine, sine = math.cos(turn), math.sin(turn)
+    turn = angle_deg % 180.0
+    cosine, sine = units.exact_cos_degrees(turn), units.exact_sin_degrees(turn)
 
     def turned(x: float, y: float) -> tuple[float, float]:
         return (x * cosine - y * sine, x * sine + y * cosine)

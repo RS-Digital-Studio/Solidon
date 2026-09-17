@@ -365,7 +365,13 @@ Komponente und wirft lose Fragmente, `remove_hollow_shells` misst das
 einem halben Millimeter hat ein Volumen, eine Haut von hundert
 Quadratmillimetern keines) · `attributes.py` (Materialslots durch
 eine Operation hindurch behalten, §20) · `enclosure.py` (Konturverschachtelung
-ohne `rtree`)
+ohne `rtree`) · **`lathe.py`** (Drehkörper, deren Ecken auf jeder Maschine
+dieselben Bits tragen — `cylinder`, `annulus`, `revolve`, `circle_points`;
+die Topologie macht weiter `trimesh`, ersetzt werden nur die Ecken, und ob
+die Struktur dafür passt, prüft es bei **jedem** Aufruf nach. Der Anlass
+steht in RM-187: `np.cos` wählt seine Implementierung nach der CPU, und aus
+drei Zehnteln eines Billiardstels Millimeter wurden nach einer Booleschen
+Operation 1224, 1226 und 1228 Dreiecke an demselben Körper)
 
 **Bewegen und Ausrichten**
 

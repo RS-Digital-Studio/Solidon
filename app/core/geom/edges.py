@@ -33,6 +33,7 @@ from typing import Any, Final, Literal, Protocol
 
 import numpy as np
 
+from app.core import units
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
@@ -671,7 +672,7 @@ def _wedge(
     second_touch = start + tangent * towards_two
     bow: list[np.ndarray] = []
     if rounded:
-        centre = start + radius / math.sin(half) * into
+        centre = start + radius / units.exact_sin(half) * into
         bow = _arc(centre, first_touch, second_touch, radius, min_steps=min_steps)
     profile = [start, first_touch, *bow, second_touch]
     if flank_overlap > 0.0:
@@ -799,9 +800,9 @@ def _arc(
     for step in range(1, steps):
         angle = span * step / steps
         turned = (
-            one * math.cos(angle)
-            + np.cross(axis, one) * math.sin(angle)
-            + axis * float(np.dot(axis, one)) * (1.0 - math.cos(angle))
+            one * units.exact_cos(angle)
+            + np.cross(axis, one) * units.exact_sin(angle)
+            + axis * float(np.dot(axis, one)) * (1.0 - units.exact_cos(angle))
         )
         points.append(centre + radius * turned)
     return points
@@ -886,8 +887,12 @@ def _mixed_corner_region(size: float, *, rounded: bool) -> tuple[MeshData, MeshD
         return MeshData(region), _hull(points * size)
 
     steps = _arc_steps(4.0 * size, math.pi / 2.0)
-    angles = np.linspace(0.0, math.pi / 2.0, steps + 1)
-    sine, cosine = np.sin(angles), np.cos(angles)
+    # Ein Viertelkreis mit ``steps`` Stuecken ist das erste Viertel eines
+    # ``4*steps``-Ecks — aus Ganzzahlen und damit ueberall gleich (RM-187).
+    quarter = np.asarray(
+        [units.circle_point(4 * steps, index) for index in range(steps + 1)], dtype=float
+    )
+    sine, cosine = quarter[:, 1].copy(), quarter[:, 0].copy()
     # Analytische Endpunkte teilen wirklich dieselben Knoten mit den Seiten.
     sine[0], sine[-1] = 0.0, 1.0
     cosine[0], cosine[-1] = 1.0, 0.0
@@ -1097,7 +1102,7 @@ def _ball(radius: float, *, turn_limit: bool = True) -> Any:
         supports = np.einsum("ij,ij->i", ball.triangles[:, 0], ball.face_normals)
         arcs = np.linalg.norm(np.diff(ball.vertices[ball.edges_unique], axis=1)[:, 0], axis=1)
         turns_enough = not turn_limit or float(arcs.max()) <= (
-            2.0 * radius * math.sin(MAX_FACET_ANGLE / 2.0)
+            2.0 * radius * units.exact_sin(MAX_FACET_ANGLE / 2.0)
         )
         if float(supports.min()) >= radius - MAX_FACET_SAG and turns_enough:
             return ball

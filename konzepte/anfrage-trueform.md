@@ -1,7 +1,35 @@
-# Anfrage an Polydera (trueform) — Entwurf
+# Anfrage an Polydera (trueform) — Entwurf, zurückgezogen
 
-**Stand:** 17.09.2026 · **Noch nicht gesendet.** Empfänger laut Website:
-`info@polydera.com`
+> **Zurückgezogen am 17.09.2026, am selben Tag, an dem er entstand. Nicht
+> senden.** Der Entwurf steht vollständig unten, weil er zeigt, wie knapp eine
+> gut begründete Anfrage an einer ungeprüften Prämisse vorbeigehen kann.
+>
+> **Die tragende Begründung war falsch.** Frage 3 lautete: „Could you confirm
+> that trueform guarantees identical output across x86 and arm64?" — und sie
+> unterstellte, dass manifold3d das nicht tut. Gemessen ist das Gegenteil:
+> Sind die Eingangskörper bitgleich, liefert manifold3d auf Windows, Ubuntu und
+> macOS **dieselben Bits**. Der Unterschied, der uns Tage gekostet hat, entstand
+> davor, in unserer eigenen Punkterzeugung: ``np.cos`` und ``np.sin`` wählen
+> ihre Implementierung nach den Fähigkeiten der CPU.
+>
+> Die Behebung steht in ``units.circle_point`` und ``geom.lathe``; der Nachweis
+> in ``tests/test_platform_identity.py`` und im Register unter
+> [RM-187](../ROADMAP.md#rm-187).
+>
+> **Was daraus zu lernen ist**, und es ist teurer als der Entwurf: Ich hatte
+> eine Ursache zugeordnet („FMA entsteht auf ARM von selbst"), sie erklärte den
+> Befund, und ich habe drei Reparaturen und eine Kaufanfrage darauf gestellt,
+> ohne den ersten Schritt der Kette je zu messen. Die Erklärung passte auch
+> nicht ganz — Windows und Ubuntu sind beide x86 und lieferten trotzdem
+> verschiedene Netze —, und dieser Widerspruch stand zwei Tage sichtbar da.
+>
+> Wenn trueform je wieder infrage kommt, dann wegen **Tempo** (18 ms gegen
+> 120,3 ms im Anbieter-Benchmark) und aus keinem anderen Grund. Dafür müsste
+> erst gemessen sein, dass die Booleschen Operationen bei uns überhaupt
+> spürbar bremsen.
+
+**Stand:** 17.09.2026 · **Nicht gesendet und nicht zu senden.** Empfänger laut
+Website wäre `info@polydera.com`
 
 Geschrieben auf Englisch, weil die Firma englischsprachig auftritt. Was
 darunter steht, ist die deutsche Fassung der Begründung — für die Ablage, nicht
