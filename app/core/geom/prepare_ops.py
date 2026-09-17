@@ -894,7 +894,7 @@ def _body_from_faces(
             # gruppiert nach SIMD-Breite — auf ARM anders als auf x86. Das
             # letzte Bit des Deckelmittelpunkts entschied damit über die
             # Triangulierung des ganzen Werkzeugs.
-            hub = np.asarray(units.exact_centre(ring), dtype=float)
+            hub = np.array(units.exact_centre(ring.tolist()), dtype=np.float64)
             # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
             # einer Seitenwand hat ihren Ring in der YZ-Ebene.
             spread = ring - hub
