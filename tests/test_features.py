@@ -1183,8 +1183,15 @@ def test_the_residual_cannot_see_a_blown_up_circle() -> None:
 
     Gemessen an einem Viertelbogen eines Zylinders r = 3: Die Einpassung findet
     **r = 89,79** und meldet einen Rückstand von 0,0023 bei einer Schwelle von
-    0,08. Der ``spread`` misst absolut und in Facettenbreiten — er meldet 0,11
-    bei einer Schwelle von 0,02, und die Form wird abgelehnt.
+    0,08. Der ``spread`` misst absolut und in Sehnenhöhen der Polygonnäherung —
+    er meldet 20,26 bei einer Schwelle von 2,0, und die Form wird abgelehnt.
+
+    Der Fleck ist dabei zur Hälfte **Deckel**: Die Auswahl über den Winkel der
+    Schwerpunkte nimmt die Stirnflächen mit, und deren Punkte nahe der Achse
+    ziehen den Kreis auf. Die eingepasste Achse liegt deshalb quer zum
+    Zylinder — und genau darum meldet ``_chord_sag`` hier keine Sehnenhöhe,
+    sondern null: Was quer zu einer falschen Achse gemessen wird, entschuldigt
+    keine Abweichung.
     """
     import trimesh
 
@@ -4037,3 +4044,116 @@ def test_a_notch_too_large_to_be_one_stays_open() -> None:
     rest = [index for index in faces if index not in {0, 1, 2, 3, 4, 5}]
     healed = _without_notches(body, [rest])[0]
     assert set(healed) != set(faces), "sechs fehlende Dreiecke sind keine Kerbe"
+
+
+def _subdivided(mesh: MeshData, depth: int) -> MeshData:
+    """Dieselbe Form, nur feiner trianguliert.
+
+    ``trimesh.remesh.subdivide`` setzt neue Ecken auf die Mitten vorhandener
+    Kanten. Die Form bleibt damit exakt dieselbe — eine Bohrung behält ihr
+    48-Eck —, allein die Zahl der Dreiecke vervierfacht sich je Stufe. Wer
+    danach etwas anderes erkennt als vorher, misst das Netz statt des Körpers.
+    """
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    faces = np.asarray(mesh.raw.faces)
+    for _ in range(depth):
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+    return MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=True))
+
+
+def test_bores_survive_any_triangle_count() -> None:
+    """Die Lochplatte behält ihre vier Bohrungen, wie fein sie auch vernetzt ist.
+
+    **Gemessen am 17.09.2026, und es war ein Fehler.** Dieselbe Platte, über
+    ``subdivide`` verfeinert, verlor ab 815 104 Dreiecken alle vier Bohrungen:
+    Der Baum zeigte sechs Flächen und sonst nichts, und der ganze Bohrungsmantel
+    fiel zusätzlich in die ebenen Flächen zurück. Die Ursache war
+    :attr:`CylinderFit.spread` — es maß in Facettenbreiten, und eine
+    Unterteilung halbiert die Facettenbreite, ohne die Polygonnäherung des
+    Kreises anzufassen. Der Zähler blieb stehen, der Nenner halbierte sich, und
+    der Wert verdoppelte sich mit jeder Stufe: 0,0138 bei 203 776 Dreiecken,
+    0,0277 bei 815 104 — an einer Schranke von 0,02.
+
+    Ein eingelesenes Netz ist so dicht, wie es sein Erzeuger gemacht hat. Diese
+    Zahl darf nicht entscheiden, ob eine Bohrung eine ist.
+
+    **Die Reihe hört bei 815 104 Dreiecken auf, und das ist eine Messung.** Die
+    nächste Stufe hält ihre vier Bohrungen ebenfalls — 3 260 416 Dreiecke,
+    26,7 s, 2,6 GB Spitze —, kostet aber mehr, als ein Test wert ist, der
+    neben siebenhundert anderen im selben Prozess läuft. Der Fehler zeigt sich
+    eine Stufe früher; dort wird er festgehalten.
+    """
+    original = plate()
+    for depth in range(6):
+        mesh = _subdivided(original, depth)
+        forget_cache()
+        bores = detect_holes(mesh)
+        assert len(bores) == 4, (
+            f"bei {len(mesh.raw.faces)} Dreiecken kamen {len(bores)} Bohrungen zurück"
+        )
+        for bore in bores:
+            assert bore.params["diameter"] == pytest.approx(5.19, abs=0.02)
+
+
+def test_the_spread_of_a_bore_does_not_follow_the_triangle_count() -> None:
+    """Die Ursache selbst, Zahl für Zahl: Streuung gegen Netzdichte.
+
+    Der Fleck ist derselbe Bohrungsmantel, die Form ist dieselbe — nur die
+    Triangulierung wechselt. Die Streuung darf sich daran nicht messen: Sie
+    misst, wie weit die Punkte neben ihrem Kreis liegen, und das ist eine
+    Eigenschaft der **Polygonnäherung**, nicht der Dreiecke darauf.
+
+    Gemessen läuft sie in die Sättigung — 0,000 bei 796 Dreiecken, 0,255 ab
+    50 944, 0,257 bei 3 260 416. Der Anstieg zu Beginn ist echt: Erst mit
+    Ecken auf den Sehnen streuen die Schwerpunkte überhaupt um ihren Kreis.
+
+    **Geprüft wird das Verhältnis, nicht der Abstand**, und das ist Absicht:
+    Das alte Maß verdoppelte sich je Stufe, exakt und ohne Ausnahme. Ein
+    Faktor nahe eins schließt es aus; eine Differenz unter einer festen
+    Schranke ließe es bei kleinen Werten noch durch.
+    """
+    original = plate()
+    values = []
+    for depth in range(6):
+        mesh = _subdivided(original, depth)
+        forget_cache()
+        found = detect_holes(mesh)
+        assert len(found) == 4
+        patch = list(found[0].face_indices)
+        fit = fit_cylinder(mesh.raw, patch)
+        assert fit is not None and fit.good
+        values.append(fit.spread)
+    assert max(values) < 0.5, f"die Streuung läuft davon: {values}"
+    assert values[-1] / values[-2] < 1.2, f"sie folgt noch der Dreieckszahl: {values}"
+
+
+def test_a_coarsely_facetted_bore_survives_a_dense_triangulation() -> None:
+    """Der Maßstab ist die Sehnenhöhe **dieses** Netzes, nicht eine feste Länge.
+
+    Die Gegenprobe zur Grenze nach unten: Wer die Streuung schlicht in
+    Millimetern misst, bekommt für ein grob facettiertes Loch eine große Zahl,
+    ohne dass etwas daran falsch wäre — die Abweichung *ist* dort groß, weil
+    das Vieleck grob ist. Gemessen an einem Loch Ø 40 mit sechzehn Facetten
+    (17.09.2026): Sehnenhöhe 0,384 mm, Streuung 0,096 mm. In Sehnenhöhen sind
+    das 0,25, in Zehntelmillimetern 9,6 — und an einer Schranke von 2,0 wäre
+    die Bohrung weg.
+
+    Sechzehn, vierundzwanzig und achtundvierzig Facetten, jede zweimal
+    unterteilt: Die Streuung liegt bei allen neun Läufen zwischen 0,000 und
+    0,251. Die Facettenzahl geht sie nichts an.
+    """
+    for sections in (16, 24, 48):
+        block = trimesh.creation.box(extents=(90.0, 90.0, 12.0))
+        bore = trimesh.creation.cylinder(radius=20.0, height=40.0, sections=sections)
+        original = MeshData.of(block.difference(bore))
+        for depth in range(3):
+            mesh = _subdivided(original, depth)
+            forget_cache()
+            found = detect_holes(mesh)
+            assert len(found) == 1, (
+                f"{sections} Facetten, {len(mesh.raw.faces)} Dreiecke: {len(found)} Bohrungen"
+            )
+            fit = fit_cylinder(mesh.raw, list(found[0].face_indices))
+            assert fit is not None and fit.spread < 0.5, (
+                f"{sections} Facetten, {len(mesh.raw.faces)} Dreiecke: {fit}"
+            )

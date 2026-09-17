@@ -245,6 +245,16 @@ Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `perceive/local.py`;
 `evaluate.py` exportiert den bisherigen Namen weiter. Oberhalb der Grenze
 prüft `detect_known` bereits belegte Merkmale örtlich am vollständigen Netz.
 
+**Ein exakter Körper wird nicht neu erkannt.** Die Erkennung misst an
+Dreiecken; ein `Solid` hat keine, seine Merkmale liest
+`brep.features.features_of` aus der Topologie, und zwar in der Operation, die
+ihn baut. Wer ihn nur bewegt, reicht die Merkmale durch —
+`evaluate._carried_along` nimmt sie dann entlang der gemeldeten starren Matrix
+mit (`perceive.matching.moved_features`), oder entlang der reinen
+Verschiebung, die `_shift_between` aus zwei Hüllquadern abliest. Neu gerechnet
+wird nichts: Eine starre Bewegung ändert nur Ort und Richtung, nicht Maß und
+nicht Name.
+
 Bedingte Passungen speichern `when_positive=(operation_id, parameter_name)`.
 Ihre Prüfung verlangt das zugehörige Dokument; fehlt es beim Aufruf, ist
 das ein Programmfehler und kein ungültiger Kundenparameter.

@@ -457,6 +457,19 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und
   die Anzahl allein ließe fast ein Gigabyte zu.
+- **Ein Zylinderfit wird zweimal beurteilt, relativ und absolut.**
+  `CylinderFit.residual` misst gegen den eingepassten Kreis und ist auf den
+  Radius bezogen; er kann einen aufgeblähten Fit nicht sehen, weil ein
+  größerer Radius seinen eigenen Rückstand verbessert. `CylinderFit.spread`
+  misst deshalb absolut, in **Sehnenhöhen der Polygonnäherung**
+  (`_chord_sag`): Ein Netz beschreibt einen Kreis als Vieleck, und um genau
+  diesen Betrag liegt es daneben. Gemessen wird die Sehnenhöhe aus dem
+  Winkelschritt der Facettennormalen und ihrer Breite — beides ändert eine
+  Unterteilung nicht, die Facettenbreite dagegen schon. Wo der Fleck kein
+  Vieleck um diese Achse ist (Normalen nicht senkrecht zur Achse, kein
+  Winkelsprung, keine Länge), gibt es keine Sehnenhöhe; dann greift
+  `ROUND_WALL_TOLERANCE` als Boden, und die Streuung wird in Millimetern
+  gemessen. Die Grenze steht in `CYLINDER_SPREAD`.
 - **Was zerfällt, wird wieder zusammengeführt.** Ein Mantel kommt aus
   der Fleckenbildung oft in Stücken; `_merged_cylinders`, `_merged_cones`
   und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von

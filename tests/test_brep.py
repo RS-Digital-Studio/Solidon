@@ -2274,3 +2274,94 @@ def test_an_exact_slot_gets_wider_and_keeps_its_travel(profile: Profile) -> None
     assert float(slots[0].params["length"]) - float(slots[0].params["diameter"]) == pytest.approx(
         travel, abs=0.15
     ), "der Verschiebeweg bleibt"
+
+
+# --- Eine Drehung nimmt die Merkmale mit, an beiden Kernen -----------------------
+
+
+def _turned_about_x(
+    point: tuple[float, float, float], pivot: tuple[float, float, float], angle: float
+) -> tuple[float, float, float]:
+    """Der Sollwert, von Hand gerechnet: Drehung um eine Achse parallel zu X.
+
+    Bewusst ohne ``app.core`` — weder ``geom.transform.rotation`` noch
+    ``perceive.matching.moved_features``, denn beide sind Teil dessen, was hier
+    gemessen wird. Drei Zeilen Schulgeometrie sind der unabhängige Vergleich.
+    """
+    radians = math.radians(angle)
+    along_y = point[1] - pivot[1]
+    along_z = point[2] - pivot[2]
+    return (
+        point[0],
+        pivot[1] + along_y * math.cos(radians) - along_z * math.sin(radians),
+        pivot[2] + along_y * math.sin(radians) + along_z * math.cos(radians),
+    )
+
+
+@pytest.mark.parametrize("creator", ["create_box", "create_brep_box"])
+def test_a_turned_body_carries_its_top_face_along(creator: str, profile: Profile) -> None:
+    """Nach *Drehen* sitzt die Deckfläche dort, wo der Körper sie hingedreht hat.
+
+    **Am exakten Körper tat sie das nicht** (gemessen 17.09.2026). Die
+    Merkmalserkennung in ``scene.evaluate`` misst an Dreiecken und sprang
+    deshalb über jeden ``Solid`` hinweg — auch dort, wo die Operation eine
+    starre Matrix gemeldet hatte. Der Hüllquader wanderte korrekt von z -11,83
+    bis 21,83, die Deckfläche stand weiter mit Normale (0, 0, 1) bei z = 10.
+
+    Der Kunde merkt es an der Skizze: ``sketch.planes`` baut den Skizzenrahmen
+    aus ``normal`` und ``centre`` dieser Merkmale, und ein Zapfen auf der
+    Deckfläche einer um 30 Grad gekippten Platte landete unter dem Bett.
+
+    Gefahren wird beides, weil der Netz-Zwilling die Gegenprobe ist: Er war
+    richtig, und er soll es bleiben.
+    """
+    angle = 30.0
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Platte",
+        [OperationDraft(op=creator, params={"width": 50.0, "depth": 50.0, "height": 10.0})],
+    )
+
+    # Erst die Lage vor der Drehung messen: welches Merkmal die Deckfläche ist,
+    # wo sie sitzt, und um welchen Punkt „Mitte" dreht. Nichts davon wird
+    # angenommen — der Sollwert unten entsteht aus diesen Messwerten.
+    flat = evaluate(project.document, profile, sources=ProjectSources(project)).scene.objects[
+        "obj_1"
+    ]
+    upward = [
+        name
+        for name, feature in flat.features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 1.0 - EPS_GEOM
+    ]
+    assert len(upward) == 1, f"eine Deckfläche erwartet: {sorted(flat.features)}"
+    top = upward[0]
+    centre_before = tuple(float(value) for value in flat.features[top].params["centre"])
+    pivot = tuple(float(value) for value in flat.mesh.bounds.centre)
+
+    history.apply(
+        "Kippen",
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"axis": "x", "angle": angle, "about": "centre", "keep_on_bed": False},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    turned = result.scene.objects["obj_1"]
+
+    assert result.stopped_at is None, "die Kette läuft durch"
+    assert turned.kind == ("brep" if creator == "create_brep_box" else "mesh")
+    assert top in turned.features, f"der Name bleibt: {sorted(turned.features)}"
+    face = turned.features[top]
+    # Die Normale dreht ohne Drehpunkt, der Mittelpunkt um die Mitte des
+    # Körpers: (0, -sin 30, cos 30) und (0, -2,5, 9,330) bei dieser Platte.
+    assert face.params["normal"] == pytest.approx(
+        _turned_about_x((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), angle), abs=1e-6
+    )
+    assert face.params["centre"] == pytest.approx(
+        _turned_about_x(centre_before, pivot, angle), abs=1e-6
+    )

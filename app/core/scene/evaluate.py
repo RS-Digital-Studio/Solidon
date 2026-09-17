@@ -47,6 +47,7 @@ from app.core.perceive.features import (
     freeform_dropped,
 )
 from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
+from app.core.perceive.local import rigid_transform
 from app.core.perceive.matching import (
     apply_mapping,
     fingerprint,
@@ -73,6 +74,7 @@ from app.core.types import (
     CancelToken,
     Document,
     Feature,
+    FeatureId,
     FeatureRef,
     Finding,
     ObjectId,
@@ -1097,6 +1099,74 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
     )
 
 
+def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
+    """Die reine Verschiebung zwischen zwei Hüllquadern — oder ``None``.
+
+    Eine Operation, die einen Körper nur an einen anderen Platz setzt, meldet
+    dafür nicht immer eine Matrix: ``arrange_bed`` setzt jeden Körper einzeln,
+    ``orient_for_print`` schweigt bei mehreren. Gleiche Ausdehnung in allen
+    drei Achsen bei anderem Mittelpunkt ist eine Verschiebung und sonst nichts
+    — erkannt an der Signatur statt am Namen der Operation, damit es auch für
+    die nächste gilt, die schiebt, ohne es zu sagen.
+    """
+    shift = tuple(now.centre[axis] - before.centre[axis] for axis in range(3))
+    if not _same_size(before, now) or not any(abs(value) > EPS_DISPLAY for value in shift):
+        return None
+    return (
+        (1.0, 0.0, 0.0, shift[0]),
+        (0.0, 1.0, 0.0, shift[1]),
+        (0.0, 0.0, 1.0, shift[2]),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+
+
+def _carried_along(
+    entry: SceneObject,
+    previous: Mapping[FeatureId, Feature],
+    transform: Transform | None,
+    previous_bounds: BoundingBox | None,
+) -> SceneObject:
+    """Nimmt die Merkmale eines exakten Körpers entlang einer starren Bewegung
+    mit (§21.2).
+
+    **Für das Netz tut das die Neuerkennung, für den exakten Körper niemand.**
+    Die Erkennung darunter misst an Dreiecken; ein ``Solid`` hat keine, seine
+    Merkmale liest :func:`app.core.brep.features.features_of` aus der
+    Topologie, und zwar in der Operation, die den Körper baut. Wer ihn nur
+    bewegt, reicht die alten Merkmale durch — *Drehen* gibt
+    ``dataclasses.replace(source, mesh=turned)`` zurück. Danach stand die
+    Deckfläche einer um 30 Grad gekippten Platte weiter mit Normale (0, 0, 1)
+    bei z = 10 in der Szene, während der Körper längst von z -11,8 bis 21,8
+    reichte (gemessen am 17.09.2026).
+
+    Der Kunde merkt es an der Skizze: :mod:`app.core.sketch.planes` baut den
+    Skizzenrahmen aus ``normal`` und ``centre`` genau dieser Merkmale, und ein
+    Zapfen auf der Deckfläche kam bei z -10 bis 0 heraus — unter dem Bett. Die
+    Ebenenwahl beschriftet aus denselben Werten, ``up_to`` und ``height_to``
+    rechnen gegen dieselbe Ebene.
+
+    **Neu gerechnet wird nichts.** ``features_of`` kostet einen Durchlauf
+    durch die Topologie und vergäbe die Namen neu; eine starre Bewegung ändert
+    an einem Merkmal aber nur, wo es sitzt und wohin es zeigt — genau das, was
+    :func:`moved_features` mitnimmt. Maße bleiben Maße, und der Name bleibt der
+    Name, auf den eine Passung zeigt (§14).
+
+    **Nur, was die Operation unverändert weitergereicht hat.** Hat sie die
+    Merkmale selbst gerechnet, hat sie sie am Ausgang gemessen und nicht am
+    Eingang; sie ein zweites Mal zu drehen wäre eine Drehung zu viel. Heute
+    meldet keine Operation beides, und diese Bedingung sorgt dafür, dass es
+    auch dann stimmt, wenn eine es täte.
+    """
+    if not entry.features or dict(entry.features) != dict(previous):
+        return entry
+    matrix = transform
+    if matrix is None and previous_bounds is not None:
+        matrix = _shift_between(previous_bounds, entry.mesh.bounds)
+    if matrix is None or not rigid_transform(matrix):
+        return entry
+    return dataclasses.replace(entry, features=moved_features(dict(entry.features), matrix))
+
+
 def _with_feature_reservations(
     entry: SceneObject, inherited: set[str], active: set[str]
 ) -> SceneObject:
@@ -1176,10 +1246,14 @@ def _with_features(
     watch = cancelled or NeverCancelled()
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
-        return entry
+        # Ein exakter Körper hat keine Dreiecke, an denen die Erkennung messen
+        # könnte — seine Merkmale kommen aus der Topologie und werden dort
+        # gerechnet, wo er entsteht. Bewegt wurde er hier trotzdem
+        # (siehe :func:`_carried_along`).
+        return _carried_along(entry, previous, transform, previous_bounds)
     local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
     if local_only:
-        from app.core.perceive.local import detect_known, rigid_transform, transformed_searches
+        from app.core.perceive.local import detect_known, transformed_searches
 
         findings.append(
             Finding(
@@ -1250,15 +1324,7 @@ def _with_features(
         # ich zählte.
         rigid_shift: Transform | None = transform
         if rigid_shift is None and previous_bounds is not None:
-            before, now = previous_bounds, mesh.bounds
-            shift = tuple(now.centre[axis] - before.centre[axis] for axis in range(3))
-            if _same_size(before, now) and any(abs(value) > EPS_DISPLAY for value in shift):
-                rigid_shift = (
-                    (1.0, 0.0, 0.0, shift[0]),
-                    (0.0, 1.0, 0.0, shift[1]),
-                    (0.0, 0.0, 1.0, shift[2]),
-                    (0.0, 0.0, 0.0, 1.0),
-                )
+            rigid_shift = _shift_between(previous_bounds, mesh.bounds)
         if rigid_shift is not None:
             declared = (
                 transformed_searches(declared, rigid_shift)

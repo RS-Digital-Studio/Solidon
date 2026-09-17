@@ -51,15 +51,17 @@ _log = get_logger(__name__)
 CYLINDER_TOLERANCE = 0.08
 
 #: Und wie weit die Punkte **absolut** vom eingepassten Kreis abweichen dürfen,
-#: gemessen in Facettenbreiten des Netzes.
+#: gemessen in Sehnenhöhen der Polygonnäherung — siehe
+#: :attr:`CylinderFit.spread`.
 #:
 #: Der Rückstand oben ist relativ zum Radius und kann einen aufgeblähten Kreis
-#: deshalb nicht sehen — siehe :attr:`CylinderFit.spread`. Der Wert ist
-#: gemessen: Über den Korpus liegen alle vierzehn richtigen Einpassungen bei
-#: höchstens 0,0015, ein falsch eingepasster Viertelbogen bei 0,11. Zwei
-#: Prozent liegen mit Faktor dreizehn über dem einen und Faktor fünf unter dem
-#: anderen.
-CYLINDER_SPREAD = 0.02
+#: deshalb nicht sehen. Der Wert ist gemessen (17.09.2026): Über den Korpus
+#: liegen alle achtzehn richtigen Einpassungen bei höchstens 0,39, ein
+#: Fleck aus Verrundung R 3 samt anschließenden Ebenen — der Fall, an dem die
+#: Einpassung r = 89,79 fand — bei 32,7 bis 62,6, über drei Flankenlängen und
+#: vier Unterteilungsstufen. Zwei liegen mit Faktor fünf über dem einen und
+#: Faktor sechzehn unter dem anderen.
+CYLINDER_SPREAD = 2.0
 
 #: Wie weit die Ecken einer **runden Wand** vom gemeinsamen Kreis abliegen
 #: dürfen, in Millimetern — die Frage von :func:`radial_cylinder`.
@@ -211,7 +213,7 @@ class CylinderFit:
     inward: bool
     """Wahr, wenn die Normalen zur Achse zeigen — das ist eine Bohrung, kein Zapfen."""
     spread: float = 0.0
-    """Streuung um den eingepassten Kreis, in **Facettenbreiten** des Netzes.
+    """Streuung um den eingepassten Kreis, in **Sehnenhöhen** der Polygonnäherung.
 
     **Der Rückstand allein kann einen falschen Zylinder nicht sehen**, und der
     Grund ist keine Nachlässigkeit, sondern seine Bauart: Er misst gegen den
@@ -227,12 +229,32 @@ class CylinderFit:
     Radius und bei r = 90 ein Promille. Ein Fit, der den Radius aufbläht,
     verbessert seinen eigenen Rückstand.
 
-    Dieses Feld misst deshalb **absolut** — und normiert auf die Facettenbreite
-    statt auf den Radius, denn die ist die Auflösung des Netzes: Eine
-    Abweichung unter einer Facettenbreite ist nicht messbar, darüber ist sie
-    wirklich. Über den Korpus liegen alle vierzehn richtigen Einpassungen bei
-    höchstens 0,0015, der falsche Viertelbogen bei 0,11 — Faktor
-    dreiundsiebzig."""
+    Dieses Feld misst deshalb **absolut** — und normiert auf die Sehnenhöhe der
+    Polygonnäherung (:func:`_chord_sag`), denn die ist die Auflösung, mit der
+    das Netz einen Kreis überhaupt beschreiben kann: Ein Polygon liegt um genau
+    diesen Betrag neben seinem Umkreis. Was darunter bleibt, erklärt die
+    Näherung; was darüber liegt, ist wirklich.
+
+    **Auf die Facettenbreite normiert war es dichteabhängig, und das war ein
+    Fehler.** Eine Unterteilung halbiert die Breite eines Dreiecks, ohne die
+    Polygonnäherung anzufassen — der Zähler bleibt stehen, der Nenner
+    halbiert sich, der Wert verdoppelt sich. Gemessen an ``plate_holes.stl``
+    (17.09.2026): 0,0138 bei 203 776 Dreiecken, 0,0277 bei 815 104, 0,0554 bei
+    3 260 416, an einer Schranke von 0,02. Ab 815 104 Dreiecken verlor die
+    Platte alle vier Bohrungen, und der ganze Mantel fiel zusätzlich in die
+    ebenen Flächen zurück. Auf die Sehnenhöhe normiert läuft dieselbe Reihe in
+    die Sättigung: 0,2550 — 0,2564 — 0,2566.
+
+    Nach unten begrenzt :data:`ROUND_WALL_TOLERANCE` den Nenner, aus dem Grund,
+    aus dem die Zahl dort steht: Feiner als zehn Mikrometer löst kein Netz
+    einen Kreis auf, und unterhalb davon misst dieses Feld nur noch das
+    Float32 der Datei, aus der das Netz kam. Ohne die Schranke stieg ein
+    richtiger Zapfen von ``post_with_fillet.stl`` — 96 Segmente auf r = 6,
+    Sehnenhöhe 3,3 µm — auf 1,19, allein wegen 3,9 µm Rundungsrauschen.
+
+    Über den Korpus liegen alle achtzehn richtigen Einpassungen bei höchstens
+    0,39, der Fleck aus Verrundung und anschließenden Ebenen bei 32,7 bis 62,6
+    — Faktor vierundachtzig."""
 
     @property
     def good(self) -> bool:
@@ -1721,7 +1743,8 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
             # eine Bohrung Ø 30 nach dem Ändern einer **anderen** Bohrung in
             # vier Bögen zurück: drei fanden zusammen (226°), der vierte lag
             # mit 0,003 mm auf demselben Kreis, hob die Streuung aber von
-            # 0,00076 auf 0,00114 Facettenbreiten — und blieb draußen. Im Baum
+            # 0,00076 auf 0,00114 — damals noch in Facettenbreiten gemessen,
+            # heute in Sehnenhöhen — und blieb draußen. Im Baum
             # standen zwei Hohlkehlen R 15 statt einer Bohrung, und die
             # Kennung ``hole_5`` ging verloren. Liegt der Fleck innerhalb des
             # Fitvertrags (:data:`CYLINDER_SPREAD`) auf der vorhandenen
@@ -1747,18 +1770,17 @@ def _lies_on_the_cylinder(body: trimesh.Trimesh, fit: CylinderFit, patch: list[i
     """Ob die Schwerpunkte dieses Flecks auf dem Zylinder ``fit`` liegen.
 
     Gemessen wie :attr:`CylinderFit.spread`: der mittlere Abstand vom
-    Zylinder, bezogen auf die Facettenbreite des Flecks — und mit derselben
-    Grenze (:data:`CYLINDER_SPREAD`). Eine Wand, die den Vertrag des Fits
-    erfüllt, ohne dass er für sie gerechnet wurde, ist dieselbe Wand.
+    Zylinder, bezogen auf die Sehnenhöhe der Polygonnäherung dieses Flecks —
+    und mit derselben Grenze (:data:`CYLINDER_SPREAD`). Eine Wand, die den
+    Vertrag des Fits erfüllt, ohne dass er für sie gerechnet wurde, ist
+    dieselbe Wand.
     """
     centres = np.asarray(body.triangles_center[patch], dtype=float)
     axis = np.asarray(fit.axis, dtype=float)
     relative = centres - np.asarray(fit.centre, dtype=float)
     distances = np.linalg.norm(relative - np.outer(relative @ axis, axis), axis=1)
-    width = float(np.sqrt(np.mean(body.area_faces[patch]) * 2.0))
-    if width <= EPS_GEOM:
-        return False
-    return float(np.mean(np.abs(distances - fit.radius)) / width) <= CYLINDER_SPREAD
+    sag = max(_chord_sag(body, patch, axis), ROUND_WALL_TOLERANCE)
+    return float(np.mean(np.abs(distances - fit.radius)) / sag) <= CYLINDER_SPREAD
 
 
 def _split_off_fillets(body: trimesh.Trimesh, found: Cylinders) -> tuple[Cylinders, Fillets]:
@@ -2900,6 +2922,79 @@ def _patch_axial_midpoint(body: trimesh.Trimesh, patch: list[int], axis: np.ndar
     return float((positions.min() + positions.max()) / 2.0)
 
 
+def _chord_sag(body: trimesh.Trimesh, patch: list[int], axis: np.ndarray) -> float:
+    """Die Sehnenhöhe der Polygonnäherung dieses Flecks, in Millimetern.
+
+    Ein Netz hat keinen Kreis, es hat ein Vieleck. Zwischen beiden liegt genau
+    dieser Betrag: der Abstand von der Mitte einer Sehne zu dem Bogen, den sie
+    abkürzt. Er ist die Auflösung, mit der dieser Fleck eine Rundung überhaupt
+    beschreiben kann, und damit der Maßstab für :attr:`CylinderFit.spread`.
+
+    Gemessen wird er aus zwei Größen, die eine **Unterteilung nicht ändert** —
+    darauf kommt es an, denn die Sehnenhöhe ist eine Eigenschaft der Form und
+    nicht der Dreiecke darauf:
+
+    * dem Winkelschritt zwischen benachbarten Facetten. Die Normalen werden um
+      die Achse sortiert; jeder Sprung über :data:`FLAT_ANGLE` trennt zwei
+      Facetten, alles darunter ist dieselbe Ebene. Eine Unterteilung legt neue
+      Dreiecke **in** eine vorhandene Facette und erzeugt keine neue Richtung.
+    * der Breite einer Facette, als ihre Fläche geteilt durch die Länge des
+      Flecks entlang der Achse. Auch das ist unterteilungsfest: Die Summe der
+      Dreiecksflächen bleibt, und die Länge wird aus den äußersten Ecken
+      genommen.
+
+    Beides über den **Median**, nicht das Mittel: Ein Fleck, der neben der
+    Rundung noch eine Ebene mitgenommen hat, trägt eine Facette, die zehnmal so
+    breit ist wie die anderen — und genau dieser Fleck ist der Fall, den
+    ``spread`` fangen soll. Er darf seinen eigenen Maßstab nicht aufblähen.
+
+    Aus Sehnenlänge ``w`` und Schritt ``a`` folgt die Höhe geometrisch:
+    ``w = 2r·sin(a/2)`` und ``sag = r·(1 - cos(a/2))``, zusammen also
+    ``sag = (w/2)·tan(a/4)`` — ohne den Radius, der ja gerade in Frage steht.
+
+    **Null heißt „nicht messbar", nicht „perfekt".** Der Maßstab gilt nur für
+    einen Fleck, der wirklich ein Vieleck um diese Achse ist, und drei Fälle
+    sind es nicht: einer ohne Sprung über :data:`FLAT_ANGLE` — dann ist sein
+    Schritt jedenfalls kleiner als der, und seine Sehnenhöhe liegt unter der
+    Grenze, die der Aufrufer ohnehin setzt —, einer ohne Ausdehnung entlang
+    der Achse, und einer, dessen Normalen nicht senkrecht auf ihr stehen.
+
+    **Der dritte ist der gefährliche.** Ein Fleck, der sich auch *längs* der
+    Achse wölbt, weicht in einer Richtung ab, die quer dazu gemessen gar nicht
+    vorkommt — sein Maßstab käme zu groß heraus und entschuldigte damit die
+    Abweichung, die er messen soll. Gemessen an einem Ring Ø 34 mit R 0,5
+    (17.09.2026): Der Zylinderfit über sein Band meldete r = 17,37 und eine
+    Sehnenhöhe von 0,045 mm, vierzehnmal die eines Mantels gleicher Teilung,
+    und die Streuung fiel von 6,2 auf 1,4 — der Ring stand danach als Bohrung
+    und Zapfen im Baum statt als Torus. Dieselbe Falle beim Viertelbogen aus
+    ``test_the_residual_cannot_see_a_blown_up_circle``, dessen Fleck zur Hälfte
+    aus Deckeldreiecken besteht: Die eingepasste Achse liegt dort quer zum
+    Zylinder, und was sie an Sehnenhöhe sieht, hat mit der Rundung nichts zu
+    tun. :data:`~app.core.units.UPRIGHT_TO_AXIS` ist dieselbe Grenze, an der
+    die Erkennung sonst Deckel von Mantel trennt.
+    """
+    chosen = np.asarray(patch)
+    basis_u, basis_v = _plane_basis(axis)
+    normals = np.asarray(body.face_normals[chosen], dtype=float)
+    if float(np.mean(np.abs(normals @ axis))) > UPRIGHT_TO_AXIS:
+        return 0.0
+    angles = np.arctan2(normals @ basis_v, normals @ basis_u)
+    order = np.argsort(angles)
+    steps = np.diff(angles[order])
+    breaks = np.flatnonzero(steps > math.radians(FLAT_ANGLE))
+    if not len(breaks):
+        return 0.0
+    low, high = _axial_span(body, patch, (float(axis[0]), float(axis[1]), float(axis[2])))
+    if high - low <= EPS_GEOM:
+        return 0.0
+    facets = np.add.reduceat(
+        np.asarray(body.area_faces, dtype=float)[chosen][order],
+        np.concatenate([[0], breaks + 1]),
+    )
+    width = float(np.median(facets)) / (high - low)
+    return (width / 2.0) * float(np.tan(float(np.median(steps[breaks])) / 4.0))
+
+
 def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
     """Kleinste-Quadrate-Zylinder durch einen Fleck von Dreiecken.
 
@@ -2928,10 +3023,10 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
 
     distances = np.linalg.norm(flat - centre_2d, axis=1)
     residual = float(np.mean(np.abs(distances - radius)) / radius)
-    # Dieselbe Abweichung noch einmal, aber **absolut** und auf die
-    # Facettenbreite bezogen: Was der Rückstand nicht sehen kann, sieht sie.
-    width = float(np.sqrt(np.mean(body.area_faces[patch]) * 2.0))
-    spread = float(np.mean(np.abs(distances - radius)) / width) if width > EPS_GEOM else 0.0
+    # Dieselbe Abweichung noch einmal, aber **absolut** und auf die Sehnenhöhe
+    # der Polygonnäherung bezogen: Was der Rückstand nicht sehen kann, sieht sie.
+    sag = max(_chord_sag(body, patch, axis), ROUND_WALL_TOLERANCE)
+    spread = float(np.mean(np.abs(distances - radius)) / sag)
 
     along = _patch_axial_midpoint(body, patch, axis)
     centre = basis_u * centre_2d[0] + basis_v * centre_2d[1] + axis * along
