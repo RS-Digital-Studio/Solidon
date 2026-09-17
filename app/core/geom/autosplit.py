@@ -1090,7 +1090,7 @@ def upright_normal(normal: Vec3) -> np.ndarray:
     if is_close(direction[2], 1.0):
         return np.eye(4)
     return np.asarray(
-        trimesh.geometry.align_vectors(direction, [0.0, 0.0, 1.0]),
+        transform.rotation_between(direction, [0.0, 0.0, 1.0]),
         dtype=float,
     )
 

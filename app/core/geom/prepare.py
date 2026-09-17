@@ -471,7 +471,7 @@ def resize_bore(
     # beiden Außenseiten als tastbarer Kragen Teil des Modells werden.
     height = depth + (BOOLEAN_OVERLAP * 2.0 if through and grows else 0.0)
     to_world = np.asarray(
-        trimesh.geometry.align_vectors(np.array([0.0, 0.0, 1.0]), unit),
+        transform.rotation_between(np.array([0.0, 0.0, 1.0]), unit),
         dtype=float,
     )
     to_world[:3, 3] = np.asarray(position, dtype=float)
@@ -1374,7 +1374,7 @@ def countersink(
     # zusammenfallen (§39).
     transform.moved(cone, trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
     cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
-    transform.moved(cone, trimesh.geometry.align_vectors(np.array([0.0, 0.0, -1.0]), narrows))
+    transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
     cone.apply_translation(at)
 
     outcome = boolean("difference", [mesh, MeshData.of(cone)], quality=quality)

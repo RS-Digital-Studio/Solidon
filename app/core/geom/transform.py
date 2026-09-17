@@ -339,3 +339,86 @@ def along_normal(offset: Vec3, normal: Vec3) -> float:
     if length <= EPS_GEOM:
         return 0.0
     return (offset[0] * normal[0] + offset[1] * normal[1] + offset[2] * normal[2]) / length
+
+
+def rotation_between(
+    source: Sequence[float] | np.ndarray, target: Sequence[float] | np.ndarray
+) -> np.ndarray:
+    """Die Drehung, die ``source`` auf ``target`` legt — auf jeder Maschine dieselbe.
+
+    **Der Ersatz für ``trimesh.geometry.align_vectors``** (RM-187). Jenes
+    rechnet über ``np.linalg.svd``, also durch LAPACK, und LAPACK ist die
+    plattformabhängigste Bibliothek im ganzen Stapel: andere Algorithmen,
+    andere Blockgrößen, andere Pivotierung. Die Matrix fiel damit auf jeder
+    Plattform anders aus — und weil ein ganzes Netz damit gedreht wird, war
+    danach jeder Punkt anders.
+
+    Hier steht stattdessen die Formel von Rodrigues, ausgeschrieben: Kein
+    Gleichungssystem, keine Zerlegung, nur Produkte und Summen, die NumPy
+    einzeln und nach IEEE-754 korrekt gerundet ausführt.
+
+    **Sie liefert die kürzeste Drehung**, ``align_vectors`` eine beliebige aus
+    derselben Familie — beide legen ``source`` auf ``target``, sie
+    unterscheiden sich im Drehwinkel um die gemeinsame Achse. Für einen
+    Rotationskörper ist das die Lage seiner Facetten und kein Maß; dass es
+    trotzdem sichtbar wird, weil die Facettierung sich mitdreht, gehört zur
+    Umstellung und ist an den Tests gemessen.
+
+    Sind die Richtungen entgegengesetzt, gibt es keine kürzeste Drehung — jede
+    Achse senkrecht zu ``source`` tut es. Gewählt wird die, die aus der
+    **kleinsten** Komponente entsteht; das ist wohldefiniert und damit auf
+    jeder Maschine dieselbe.
+    """
+    a = _unit(np.asarray(source, dtype=np.float64))
+    b = _unit(np.asarray(target, dtype=np.float64))
+    cross = np.array(
+        (
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ),
+        dtype=np.float64,
+    )
+    cosine = float(a[0] * b[0] + a[1] * b[1] + a[2] * b[2])
+    sine = math.hypot(float(cross[0]), float(cross[1]), float(cross[2]))
+    matrix = np.eye(4, dtype=np.float64)
+    if sine <= EPS_GEOM:
+        if cosine > 0.0:
+            return matrix
+        # Gegenrichtung: eine halbe Drehung um irgendeine senkrechte Achse.
+        # „Irgendeine" wäre geraten — genommen wird die aus der kleinsten
+        # Komponente, damit das Kreuzprodukt am weitesten von null weg ist.
+        helper = np.zeros(3, dtype=np.float64)
+        helper[int(np.argmin(np.abs(a)))] = 1.0
+        axis = _unit(
+            np.array(
+                (
+                    a[1] * helper[2] - a[2] * helper[1],
+                    a[2] * helper[0] - a[0] * helper[2],
+                    a[0] * helper[1] - a[1] * helper[0],
+                ),
+                dtype=np.float64,
+            )
+        )
+        matrix[:3, :3] = 2.0 * np.outer(axis, axis) - np.eye(3, dtype=np.float64)
+        return matrix
+    # Rodrigues, ausgeschrieben: I + K + K·K · 1/(1+cos).
+    x, y, z = float(cross[0]), float(cross[1]), float(cross[2])
+    share = 1.0 / (1.0 + cosine)
+    matrix[:3, :3] = np.array(
+        (
+            (1.0 - (y * y + z * z) * share, -z + x * y * share, y + x * z * share),
+            (z + x * y * share, 1.0 - (x * x + z * z) * share, -x + y * z * share),
+            (-y + x * z * share, x + y * z * share, 1.0 - (x * x + y * y) * share),
+        ),
+        dtype=np.float64,
+    )
+    return matrix
+
+
+def _unit(vector: np.ndarray) -> np.ndarray:
+    """Auf Länge eins, über ``math.hypot`` statt ``np.linalg.norm`` (RM-187)."""
+    length = math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
+    if length <= EPS_GEOM:
+        raise ValueError("a direction of zero length has no rotation")
+    return vector / length

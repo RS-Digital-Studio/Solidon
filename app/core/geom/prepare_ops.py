@@ -734,9 +734,7 @@ def _feature_solid(
     else:
         body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS)
 
-    turn = trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
-        [0.0, 0.0, 1.0], direction
-    )
+    turn = transform.rotation_between([0.0, 0.0, 1.0], direction)
     transform.moved(body, turn)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
@@ -1058,9 +1056,7 @@ def _measured_section(
     body = lathe.revolve(outline, sections=FEATURE_SECTIONS)
     transform.moved(
         body,
-        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
-            [0.0, 0.0, 1.0], _outward_axis(chain, feature)
-        ),
+        transform.rotation_between([0.0, 0.0, 1.0], _outward_axis(chain, feature)),
     )
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body) if body.is_watertight and body.volume > EPS_GEOM else None
@@ -1133,9 +1129,7 @@ def _chain_plug(
     )
     transform.moved(
         plug,
-        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
-            np.array([0.0, 0.0, 1.0]), axis
-        ),
+        transform.rotation_between(np.array([0.0, 0.0, 1.0]), axis),
     )
     plug.apply_translation(centre + axis * float(along.min() + along.max()) / 2.0)
     return boolean(
@@ -1352,7 +1346,7 @@ def _no_longer_through(
     column = lathe.cylinder(radius=diameter / 2.0, height=reach, sections=FEATURE_SECTIONS)
     transform.moved(
         column,
-        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+        transform.rotation_between(
             np.array([0.0, 0.0, 1.0]), np.asarray(_feature_direction(feature), dtype=float)
         ),
     )
@@ -1550,9 +1544,7 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
     cut = lathe.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
     transform.moved(
         cut,
-        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
-            np.array([0.0, 0.0, 1.0]), direction
-        ),
+        transform.rotation_between(np.array([0.0, 0.0, 1.0]), direction),
     )
     middle = float(along.min() + along.max()) / 2.0
     cut.apply_translation(np.asarray(centre, dtype=float) + direction * middle)
@@ -1641,7 +1633,7 @@ def _closed_at(
             envelope.apply_translation((0.0, 0.0, -reach / 2.0))
             transform.moved(
                 envelope,
-                trimesh.geometry.align_vectors([0.0, 0.0, 1.0], outward),  # type: ignore[no-untyped-call]
+                transform.rotation_between([0.0, 0.0, 1.0], outward),
             )
             envelope.apply_translation(mouth)
             tool = boolean(
@@ -1738,9 +1730,7 @@ def _tool_for(
     if axis is not None:
         from_axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
         matrix = np.asarray(
-            trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
-                from_axis, np.asarray(axis, dtype=np.float64)
-            ),
+            transform.rotation_between(from_axis, np.asarray(axis, dtype=np.float64)),
             dtype=np.float64,
         )
     body = built.raw.copy()
@@ -3781,9 +3771,7 @@ def _stretched_section(
     body.apply_translation((0.0, 0.0, max(0.0, extension) / 2.0))
     transform.moved(
         body,
-        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
-            [0.0, 0.0, 1.0], outward
-        ),
+        transform.rotation_between([0.0, 0.0, 1.0], outward),
     )
     body.apply_translation(np.asarray(feature.params["centre"], dtype=float))
     return MeshData.of(body)
