@@ -526,3 +526,41 @@ def test_the_cavity_links_are_built_once_per_mesh_and_die_with_it() -> None:
         assert runs == 2, "für eine andere Menge wird wieder gerechnet"
     finally:
         relations._shoulder_connections = real
+
+
+def test_a_border_through_one_corner_twice_is_two_borders() -> None:
+    """Ein Rand in Form einer Acht ist zwei Ränder, und beide werden gebraucht.
+
+    **Der Fall ist plattformabhängig und gemessen** (17.09.2026): Dieselbe
+    Verkleinerung einer gesenkten Bohrung liefert hier ein Netz mit 1178
+    Dreiecken und auf dem Mac der CI eines mit 1176. Der Mantel der Senkung
+    berührt sich dort in einem Punkt; sein Rand läuft zweimal durch diese Ecke
+    und kommt als ein einziger geschlossener Zug zurück. Über den Knotengraphen
+    verschmolzen beide Ränder sogar zu gar keinem — ``connected_components``
+    gab eine Komponente, und die Ringbildung sagte ab.
+
+    Gebraucht werden die beiden Lappen: ``_shoulder_connections`` vergleicht
+    sie mit dem Rand der Ringschulter, und ohne sie gibt es keine Bohrungskette.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.perceive.relations import _face_boundary_rings
+
+    body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
+    faces = np.asarray(body.faces)
+    # Ein Segment heraus und die diagonalen Ecken der Lücke zusammenlegen:
+    # genau die Signatur des Mac-Netzes — ein Knoten mit vier Randkanten.
+    rest = faces[[index for index in range(len(faces)) if index not in (0, 1)]]
+    merged = np.arange(len(body.vertices))
+    merged[3] = 0
+    pinched = trimesh.Trimesh(vertices=body.vertices, faces=merged[rest], process=False)
+
+    rings = _face_boundary_rings(pinched, np.arange(len(pinched.faces), dtype=np.int64))
+    assert rings is not None, "eine Acht ist kein Grund, gar nichts zu melden"
+    assert len(rings) == 2, f"zwei Lappen, nicht {len(rings)}"
+
+    # Und der unveränderte Rand bleibt, was er war.
+    whole = _face_boundary_rings(body, np.arange(len(body.faces), dtype=np.int64))
+    assert whole is not None and len(whole) == 2
+    assert sorted(len(ring) for ring in whole) == [48, 48]

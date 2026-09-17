@@ -629,8 +629,43 @@ def _rings_through_a_shared_corner(
             remaining.discard(edge)
         if len(ring) < 3:
             return None
-        rings.append(frozenset(ring))
+        rings.extend(_lobes_of(ring, shared))
     return rings or None
+
+
+def _lobes_of(ring: list[tuple[int, int]], shared: set[int]) -> list[frozenset[tuple[int, int]]]:
+    """Ein Rand, der zweimal durch dieselbe Ecke läuft, ist zwei Ränder.
+
+    **Die Acht ist die Gestalt, in der der Mac-Fall auftritt** (17.09.2026).
+    Der Fächer verbindet dort oben und unten: Der Mantel der Senkung berührt
+    sich in einem Punkt, und der Lauf kommt als **ein** geschlossener Zug
+    zurück, der diesen Punkt zweimal besucht. Für die Nachbarschaft sind aber
+    die beiden Lappen gemeint — der obere und der untere Kreis —, und genau
+    die vergleicht ``_shoulder_connections`` mit dem Rand ihrer Schulter.
+
+    Geschnitten wird deshalb an jedem zweiten Besuch einer geteilten Ecke.
+    Ein Zug, der sie nur einmal berührt, bleibt ein Ring: Dort ist nichts zu
+    trennen, und ein Lappen von zwei Kanten wäre kein Rand.
+    """
+    if not shared:
+        return [frozenset(ring)]
+    lobes: list[frozenset[tuple[int, int]]] = []
+    current: list[tuple[int, int]] = []
+    for edge in ring:
+        current.append(edge)
+        # Geschnitten wird **hinter** der Kante, die in die geteilte Ecke läuft
+        # — dort schließt sich der Lappen.
+        if len(current) > 2 and shared & {edge[0], edge[1]}:
+            lobes.append(frozenset(current))
+            current = []
+    if current:
+        if lobes:
+            # Der Rest gehört an den Anfang: Der Lauf hat mitten in einem
+            # Lappen begonnen, und dessen zwei Hälften sind einer.
+            lobes[0] = frozenset(lobes[0] | frozenset(current))
+        else:
+            lobes.append(frozenset(current))
+    return [lobe for lobe in lobes if len(lobe) >= 3] or [frozenset(ring)]
 
 
 def _fan_pairs(

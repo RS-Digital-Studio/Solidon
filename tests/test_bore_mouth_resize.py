@@ -181,6 +181,48 @@ def _who_owns_the_notch(mesh: MeshData, detected: dict, candidates: dict) -> str
     return "Kerben am Rand: " + ("; ".join(teile) if teile else "keine")
 
 
+def _what_the_border_looks_like(mesh: MeshData, candidates: dict) -> str:
+    """Wo der geteilte Punkt liegt und ob das Netz dort eingeschnürt ist.
+
+    Die Fächertrennung liefert auf dem Mac **einen** Ring statt zweier: Der
+    Rand der Senkung läuft dort durch einen Punkt. Zwei Erklärungen bleiben,
+    und sie verlangen verschiedene Fixe — im Kegel steckt ein Dreieck, das
+    nicht zum Mantel gehört, oder das Netz berührt sich an dieser Stelle
+    wirklich selbst. Gemessen wird beides: die Höhen der Randknoten (ein
+    Mantel hat zwei Niveaus) und ob ein zweiter Eckpunkt auf demselben Ort
+    liegt.
+    """
+    body = mesh.raw
+    teile = []
+    for name, feature in candidates.items():
+        indices = np.asarray(feature.face_indices, dtype=np.int64)
+        faces = np.asarray(body.faces)[indices]
+        edges = np.sort(
+            np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1
+        )
+        unique, count = np.unique(edges, axis=0, return_counts=True)
+        boundary = unique[count == 1]
+        if not len(boundary):
+            continue
+        nodes, degrees = np.unique(boundary, return_counts=True)
+        shared = nodes[degrees > 2]
+        if not len(shared):
+            continue
+        punkte = np.asarray(body.vertices)
+        hoehen = sorted({round(float(punkte[int(n)][2]), 3) for n in nodes})
+        zeile = [f"{name}: Randhöhen {hoehen[:3]}…{hoehen[-3:] if len(hoehen) > 6 else ''}"]
+        for node in shared:
+            ort = punkte[int(node)]
+            gleich = int(np.sum(np.all(np.isclose(punkte, ort, atol=1e-9), axis=1)))
+            zeile.append(
+                f"  Ecke {int(node)} bei {np.round(ort, 4).tolist()}, "
+                f"Grad {int(degrees[nodes == node][0])}, "
+                f"{gleich} Eckpunkt(e) an diesem Ort"
+            )
+        teile.append("\n".join(zeile))
+    return "Randbild:\n" + ("\n".join(teile) if teile else "  keine geteilte Ecke")
+
+
 def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
     """Warum aus diesen Merkmalen keine Kette wurde — für einen Lauf, den ich nicht sehe.
 
@@ -224,6 +266,7 @@ def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
     geteilt = {tuple(sorted(names)) for names in owners.values() if len(names) > 1}
     zeilen.append(f"gemeinsame Ringe: {sorted(geteilt) or 'keine'}")
     zeilen.append(_who_owns_the_notch(mesh, detected, candidates))
+    zeilen.append(_what_the_border_looks_like(mesh, candidates))
     schultern = _shoulder_connections(body, owners, candidates)
     zeilen.append(f"Schulterverbindungen: {[sorted(set(a)) for a, _f in schultern] or 'keine'}")
     graph, invalid, touching = _cavity_links(candidates, mesh)

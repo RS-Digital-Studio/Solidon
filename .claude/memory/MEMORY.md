@@ -21,6 +21,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Kurze Texte in der App](kurze-texte-in-der-app.md) — ein bis zwei kurze Sätze je Kundentext, der Rückweg dabei; jeden angefassten Text kürzen.
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) · [Fehlerzählung](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) · [Version statt Fassung](kundentexte-sagen-version.md) · [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — Kundentexte.
 - [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) · [Plattformen gleich](plattformen-funktionieren-gleich.md) — alte Karten kein Kriterium; was Windows kann, können Mac und Linux.
+- [ARM rechnet anders als x86](arm-rechnet-anders-als-x86.md) — der Mac der CI ist ARM64, FMA rundet dort einmal statt zweimal; dieselbe Boolesche Operation liefert ein anderes Netz.
 - [Beheben statt notieren](beheben-statt-notieren.md) · [Durchsicht je Version](durchsicht-je-version.md) · [Härtung trifft Altes](haertung-trifft-alten-zustand.md) — Fund → Messung → Fix → Test; „offen" am Code nachmessen.
 - [Befund aus dem laufenden Fenster altert](befund-aus-dem-laufenden-fenster-altert.md) — sein Fenster trägt den Stand seines Starts; den Fall erst am HEAD nachstellen, dann bauen.
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen; Handbuch nur beim Paketbau, test_wording-Rot dazwischen ist kein Fund.
