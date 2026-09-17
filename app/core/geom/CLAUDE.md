@@ -555,6 +555,13 @@ auseinander (Entscheidung Robert, 10.09.2026). Ohne Migration, weil die
 Änderung die Lage berichtigt und keine Maße umdeutet — Bauplan §29 führt die
 Begründung.
 
+**Und was sie nicht meldet, nimmt sie selbst mit.** Bei einem einzigen Körper
+meldet die Operation ihre Matrix, und `scene.evaluate` führt die Merkmale
+damit nach; bei mehreren hat jeder seine eigene, eine davon zu melden wäre
+eine falsche Angabe über die anderen — dort bewegt die Operation die Merkmale
+selbst, je Körper mit seiner Drehung und dem Versatz des Anordnens darüber.
+Genau in diesem Fall, nicht immer: Beides zusammen wäre eine Drehung zu viel.
+
 **Und weil sie an ihren Eingängen vorbei liest, sagt sie es dem Schlüssel.**
 Der Registereintrag trägt `reads_other_bodies=True`; ohne das behielte ein
 Ergebnis seine Gültigkeit, nachdem jemand einen nicht gewählten Körper

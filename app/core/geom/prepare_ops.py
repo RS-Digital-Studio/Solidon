@@ -7818,6 +7818,10 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
     outputs = []
     findings: list[Finding] = []
     last_matrix = None
+    # **Jeder Körper trägt seine eigene Bewegung.** Gemeldet wird unten nur
+    # eine, und nur wenn es eine gibt; mitnehmen muss die Operation die
+    # Merkmale aber für jeden einzelnen.
+    matrices: list[Any] = []
     for number, entry in enumerate(ctx.inputs):
         mesh = as_mesh_data(entry.mesh)
         try:
@@ -7849,17 +7853,42 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         except NoFittingOrientationError as refusal:
             raise _the_way_out_of(refusal, mesh, entry, ctx) from None
         outputs.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, matrix)))
+        matrices.append(matrix)
         last_matrix = matrix
 
     if params.arrange:
-        outputs, moved_after = _laid_out_after_turning(ctx, params, outputs, findings)
+        outputs, shifts = _laid_out_after_turning(ctx, params, outputs, findings)
         # **Und dann ist die gemeldete Bewegung die Drehung *und* der Weg zum
         # neuen Platz.** Sie ist die Auskunft für Vorschau und Gizmo, und die
         # muss den Eingang genau auf den Ausgang legen: erst gedreht, dann
         # verschoben. Der Versatz allein zeigte den Körper ungedreht am neuen
         # Ort, die Drehung allein gedreht am alten — beides war er nie.
-        if moved_after is not None and last_matrix is not None:
-            last_matrix = moved_after @ last_matrix
+        matrices = [shift @ matrix for shift, matrix in zip(shifts, matrices, strict=True)]
+        if matrices:
+            last_matrix = matrices[-1]
+
+    # **Und was nicht gemeldet wird, nimmt die Operation selbst mit.** Die
+    # Auswertung führt die Merkmale eines Körpers entlang der gemeldeten Matrix
+    # nach (``scene.evaluate._carried_along``); wo keine gemeldet wird, kann sie
+    # es nicht, und eine Drehung ließe die Merkmale liegen: Gemessen am
+    # 17.09.2026 wanderte ein exakter Körper von 20x20x40 auf 40x20x20, seine
+    # sechs Flächen behielten (0, 0, 1) und (0, 0, -1). Am Netz trifft es die
+    # benannten Merkmale eines Bausteins, die keine Neuerkennung nachzieht.
+    #
+    # **Genau dann, und nicht immer.** Bei einem einzigen Körper meldet die
+    # Operation ihre Matrix, und die Auswertung bewegt damit selbst — beides
+    # zusammen wäre eine Drehung zu viel.
+    if len(outputs) > 1:
+        from app.core.perceive.matching import moved_features
+
+        outputs = [
+            dataclasses.replace(
+                entry, features=moved_features(dict(entry.features), as_transform(matrix))
+            )
+            if entry.features
+            else entry
+            for entry, matrix in zip(outputs, matrices, strict=True)
+        ]
 
     # **Die Bewegung wird nur bei einem einzigen Körper gemeldet.** Sie ist die
     # Auskunft für Vorschau und Gizmo, und die kennt genau eine Matrix; bei
@@ -7926,7 +7955,7 @@ def _laid_out_after_turning(
     params: OrientParams,
     turned: list[SceneObject],
     findings: list[Finding],
-) -> tuple[list[SceneObject], Any]:
+) -> tuple[list[SceneObject], list[Any]]:
     """Legt hin, was das Drehen umgeworfen hat — und lässt den Rest liegen.
 
     **Der Anlass** (Robert, 09.09.2026: „bei druckoptimal ausrichten, werden
@@ -7976,7 +8005,7 @@ def _laid_out_after_turning(
         )
 
     laid: list[SceneObject] = []
-    shift = None
+    shifts: list[Any] = []
     for entry, mesh, plate in zip(turned, arrangement.meshes, arrangement.plates, strict=True):
         # Der Versatz statt des Netzes — dieselbe Begründung wie bei
         # ``arrange_bed``: Ein exakter Körper käme sonst als Netz zurück.
@@ -7988,8 +8017,8 @@ def _laid_out_after_turning(
             )
         )
         laid.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, step), plate=plate))
-        shift = step
-    return laid, shift
+        shifts.append(step)
+    return laid, shifts
 
 
 @op_params

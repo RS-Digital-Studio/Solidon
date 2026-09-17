@@ -11,6 +11,8 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.brep.features import features_of
+from app.core.brep.kernel import available
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.orient import (
     candidates,
@@ -21,11 +23,16 @@ from app.core.geom.orient import (
 )
 from app.core.geom.transform import apply, rotation, translation
 from app.core.ingest.loader import normalise
+
+# Der Import registriert die Bausteinoperationen — ohne ihn kennt das Register
+# kein insert_heatset_m4.
+from app.core.knowledge import parts as _parts  # noqa: F401
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import ResultCache
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Document, Profile, Source
+from app.core.units import EPS_DISPLAY
 from app.i18n import _
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -668,3 +675,150 @@ def test_batched_scores_match_physical_rotations_across_batch_boundaries(
         assert actual.footprint == pytest.approx(float(areas[flat].sum()), abs=1e-7)
         assert actual.overhang == pytest.approx(float(areas[downward & ~flat].sum()), abs=1e-7)
         assert actual.height == pytest.approx(physical.bounds.size[2], abs=1e-7)
+
+
+def test_a_named_bore_is_carried_exactly_once_when_the_body_is_laid_down(
+    profile: Profile,
+) -> None:
+    """Ein benanntes Bausteinmerkmal wird beim Ausrichten **einmal** bewegt.
+
+    Die Merkmale eines Bausteins entstehen beim Bauen und werden nicht neu
+    erkannt (§24.1); die Auswertung führt sie entlang der Matrix nach, die die
+    Operation meldet. Seit dem 17.09.2026 nimmt *Druckoptimal ausrichten* sie
+    zusätzlich selbst mit — aber nur dort, wo sie **keine** gemeinsame Matrix
+    meldet, also bei mehreren Körpern. Bei einem einzigen täte es sonst jeder
+    von beiden: Gemessen stand die Achse der Einpressbuchse danach auf
+    (0, 0, -1) statt (-1, 0, 0), ihr Mittelpunkt 6,9 mm **unter** dem Bett.
+
+    Gemessen wird ohne Kenntnis der gewählten Lage: Die Mündung der Bohrung
+    liegt auf der Außenwand des Körpers, also im Hüllquader — vor wie nach dem
+    Ausrichten. Eine Drehung zu viel trägt sie heraus.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Turm",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 40.0})],
+    )
+    history.apply(
+        "Einpressbuchse",
+        [
+            OperationDraft(
+                op="insert_heatset_m4",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"x": 0.0, "y": 0.0, "z": 40.0},
+            )
+        ],
+    )
+    standing = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert standing.complete, [f.message for f in standing.scene.report.findings]
+    bore = standing.scene.objects["obj_1"].features["heatset_m4_bore_1"]
+    top = standing.scene.objects["obj_1"].features["face_top"]
+    # Wie tief die Buchse unter der Fläche sitzt — gemessen, nicht angenommen.
+    reach = float(
+        np.linalg.norm(
+            np.asarray(bore.params["centre"], dtype=float)
+            - np.asarray(top.params["centre"], dtype=float)
+        )
+    )
+
+    history.apply(
+        "Ausrichten",
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"thorough": False, "arrange": False},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [f.message for f in result.scene.report.findings]
+    laid = result.scene.objects["obj_1"]
+    assert laid.mesh.bounds.size[2] == pytest.approx(20.0, abs=EPS_DISPLAY), "der Turm liegt"
+    moved = laid.features["heatset_m4_bore_1"]
+    centre = np.asarray(moved.params["centre"], dtype=float)
+    mouth = centre + np.asarray(moved.params["axis"], dtype=float) * reach
+    low = np.asarray(laid.mesh.bounds.minimum, dtype=float) - EPS_DISPLAY
+    high = np.asarray(laid.mesh.bounds.maximum, dtype=float) + EPS_DISPLAY
+    assert np.all((low <= centre) & (centre <= high)), f"die Bohrung sitzt im Körper: {centre}"
+    assert np.all((low <= mouth) & (mouth <= high)), f"ihre Mündung auch: {mouth}"
+
+
+@pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+@pytest.mark.parametrize("arrange", [False, True])
+@pytest.mark.parametrize("count", [1, 2])
+def test_orienting_carries_the_features_of_an_exact_body(
+    count: int, arrange: bool, profile: Profile
+) -> None:
+    """*Druckoptimal ausrichten* legt den Turm hin — und seine Flächen mit.
+
+    **Derselbe Fehler wie beim Drehen, in zweiter Gestalt** (gemessen
+    17.09.2026). Bei **mehreren** Körpern meldet die Operation bewusst keine
+    gemeinsame Matrix — jeder hat seine eigene, und eine davon zu nennen wäre
+    eine Angabe über die anderen, die nicht stimmt. Ohne gemeldete Matrix kann
+    ``scene.evaluate`` die Merkmale aber nicht nachführen: Ein exakter Körper
+    wanderte von 20x20x40 auf 40x20x20, seine sechs Flächen behielten
+    (0, 0, 1) und (0, 0, -1). Seither nimmt die Operation sie selbst mit.
+
+    **Und genau einmal.** Bei einem einzigen Körper meldet sie ihre Matrix, und
+    die Auswertung bewegt damit selbst; beides zusammen wäre eine Drehung zu
+    viel. Deshalb laufen beide Stückzahlen — und beide auch mit dem Anordnen
+    danach, das je Körper einen eigenen Versatz obendrauf legt.
+
+    Gemessen wird gegen ``features_of`` am Ergebniskörper: Die Szene hat ihre
+    Merkmale entlang der Bewegung mitgenommen, die Topologie wird frisch
+    abgelesen. Zwei Wege zu denselben Zahlen.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Turm",
+        [
+            OperationDraft(
+                op="create_brep_box", params={"width": 20.0, "depth": 20.0, "height": 40.0}
+            )
+        ],
+    )
+    if count == 2:
+        history.apply(
+            "Platte",
+            [
+                OperationDraft(
+                    op="create_brep_box", params={"width": 50.0, "depth": 30.0, "height": 8.0}
+                )
+            ],
+        )
+    standing = evaluate(project.document, profile, sources=ProjectSources(project)).scene
+    assert len(standing.objects) == count
+    bodies = tuple(sorted(standing.objects))
+
+    history.apply(
+        "Ausrichten",
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=bodies,
+                outputs=bodies,
+                params={"thorough": False, "arrange": arrange},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.stopped_at is None, "die Kette läuft durch"
+    tower = result.scene.objects["obj_1"]
+    assert tower.kind == "brep", "der exakte Körper bleibt exakt"
+    assert tower.mesh.bounds.size[2] == pytest.approx(20.0, abs=EPS_DISPLAY), "der Turm liegt"
+    fresh = features_of(tower.mesh)
+    assert set(tower.features) == set(fresh), "dieselben Flächen"
+    for name, feature in tower.features.items():
+        assert feature.params["normal"] == pytest.approx(fresh[name].params["normal"], abs=1e-6), (
+            name
+        )
+        assert feature.params["centre"] == pytest.approx(fresh[name].params["centre"], abs=1e-6), (
+            name
+        )
