@@ -563,7 +563,7 @@ def _face_boundary_rings(
         return None
     vertices, degrees = np.unique(boundary, return_counts=True)
     if (degrees != 2).any():
-        return None
+        return _rings_through_a_shared_corner(body, indices, boundary, vertices, degrees)
     rings = []
     for component in trimesh.graph.connected_components(boundary, nodes=vertices, engine="scipy"):
         if len(component) < 3:
@@ -571,6 +571,141 @@ def _face_boundary_rings(
         selected = np.isin(boundary[:, 0], component)
         rings.append(frozenset((int(a), int(b)) for a, b in boundary[selected]))
     return rings
+
+
+def _rings_through_a_shared_corner(
+    body: trimesh.Trimesh,
+    indices: NDArray[np.int64],
+    boundary: NDArray[np.int64],
+    vertices: NDArray[np.int64],
+    degrees: NDArray[np.int64],
+) -> list[frozenset[tuple[int, int]]] | None:
+    """Zwei Ränder, die sich eine Ecke teilen — getrennt am Dreiecksfächer.
+
+    **Der Fall ist plattformabhängig und gemessen** (17.09.2026). Dieselbe
+    Verkleinerung einer gesenkten Bohrung liefert hier ein Netz mit 1178
+    Dreiecken und auf dem Mac der CI eines mit 1176: Die Boolesche Operation
+    trianguliert anders, und der Mantel der Senkung läuft dort durch **einen**
+    Punkt, in dem oberer und unterer Rand zusammenstoßen. Über den Knotengraphen
+    verschmelzen beide Ringe zu einem, ``connected_components`` liefert eine
+    Komponente statt zweier, und ohne zwei Ringe gibt es keine Schulter, keine
+    Nachbarschaft und keine Bohrungskette. Die Senkung war auf dem Mac erkannt
+    und trotzdem nicht mit ihrer Bohrung zu bearbeiten.
+
+    **Getrennt wird an den Dreiecken, nicht am Knoten.** Um die geteilte Ecke
+    liegen die Dreiecke des Ausschnitts in Fächern; jeder Fächer beginnt und
+    endet an genau einer Randkante, und diese beiden gehören zusammen. Das ist
+    dieselbe Auskunft, die eine Umlaufrichtung gäbe, nur ohne sie — und sie ist
+    eindeutig, solange jeder Fächer wirklich zwei Randkanten trägt. Sonst
+    bleibt es bei ``None``: Ein Rand, der sich nicht auflösen lässt, ist keine
+    Nachbarschaft, und geraten wird nicht (Regel 21).
+    """
+    shared = {int(node) for node in vertices[degrees > 2]}
+    if any(int(degree) % 2 for degree in degrees) or not shared:
+        return None
+    partner: dict[tuple[int, int], tuple[int, int]] = {}
+    faces = np.asarray(body.faces)
+    for corner in shared:
+        fan_edges = _fan_pairs(faces, indices, corner, boundary)
+        if fan_edges is None:
+            return None
+        partner.update(fan_edges)
+
+    remaining = {(int(a), int(b)) for a, b in boundary}
+    rings: list[frozenset[tuple[int, int]]] = []
+    while remaining:
+        start = next(iter(remaining))
+        ring = [start]
+        remaining.discard(start)
+        # ``ahead`` ist der Knoten, auf den der Lauf zugeht — die Richtung ist
+        # am Anfang beliebig, ein Ring schließt sich in beiden.
+        edge, ahead = start, start[1]
+        while True:
+            following = _next_boundary_edge(edge, ahead, remaining, partner, shared)
+            if following is None:
+                break
+            edge, ahead = following
+            ring.append(edge)
+            remaining.discard(edge)
+        if len(ring) < 3:
+            return None
+        rings.append(frozenset(ring))
+    return rings or None
+
+
+def _fan_pairs(
+    faces: NDArray[np.int64],
+    indices: NDArray[np.int64],
+    corner: int,
+    boundary: NDArray[np.int64],
+) -> dict[tuple[int, int], tuple[int, int]] | None:
+    """Welche zwei Randkanten an dieser Ecke zu demselben Dreiecksfächer gehören."""
+    at_corner = [int(face) for face in indices if corner in faces[face]]
+    if not at_corner:
+        return None
+    # Zwei Dreiecke liegen im selben Fächer, wenn sie eine Kante an der Ecke teilen.
+    links: dict[int, set[int]] = {face: set() for face in at_corner}
+    by_edge: dict[tuple[int, int], list[int]] = {}
+    for face in at_corner:
+        for other in faces[face]:
+            if int(other) == corner:
+                continue
+            by_edge.setdefault((corner, int(other)), []).append(face)
+    for shared_faces in by_edge.values():
+        if len(shared_faces) != 2:
+            continue
+        first, second = shared_faces
+        links[first].add(second)
+        links[second].add(first)
+
+    border = {(int(a), int(b)) for a, b in boundary if corner in (int(a), int(b))}
+    pairs: dict[tuple[int, int], tuple[int, int]] = {}
+    seen: set[int] = set()
+    for face in at_corner:
+        if face in seen:
+            continue
+        fan, stack = set(), [face]
+        while stack:
+            current = stack.pop()
+            if current in fan:
+                continue
+            fan.add(current)
+            stack.extend(links[current] - fan)
+        seen |= fan
+        ends = [
+            edge
+            for edge in border
+            if any({edge[0], edge[1]} <= {int(value) for value in faces[member]} for member in fan)
+        ]
+        if len(ends) != 2:
+            return None
+        pairs[ends[0]] = ends[1]
+        pairs[ends[1]] = ends[0]
+    return pairs or None
+
+
+def _next_boundary_edge(
+    edge: tuple[int, int],
+    ahead: int,
+    remaining: set[tuple[int, int]],
+    partner: dict[tuple[int, int], tuple[int, int]],
+    shared: set[int],
+) -> tuple[tuple[int, int], int] | None:
+    """Die nächste Randkante des Rings — an einer geteilten Ecke über den Fächer.
+
+    **Der Fächer entscheidet nur, wo er gebraucht wird**: wenn der Lauf auf die
+    geteilte Ecke **zugeht**. Dieselbe Kante hängt auch mit ihrem anderen Ende
+    dort, und wer das nicht unterscheidet, springt beim Weglaufen zurück.
+    """
+    if ahead in shared:
+        following = partner.get(edge)
+        if following is None or following not in remaining:
+            return None
+        return following, (following[1] if following[0] == ahead else following[0])
+    for candidate in remaining:
+        if ahead in candidate:
+            return candidate, (candidate[1] if candidate[0] == ahead else candidate[0])
+    return None
 
 
 def cavity_chain_at(
