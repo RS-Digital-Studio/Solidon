@@ -49,7 +49,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Hohlkugel-Zielreihe samt echter Warnung auf Apple Silicon messen |
 | [RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen](#rm-117) | Plattformen, Pakete und Grafik | Die stille Lücke ist zu; offen bleiben die Prüfsummen-Entscheidung und der Abruf gegen den Server für 0.4.0 |
-| [RM-187 — Läuft schon die Eingabe der Booleschen Operation zwischen x86 und ARM auseinander?](#rm-187) | Plattformen, Pakete und Grafik | Einen CI-Lauf mit der Sonde über alle drei Plattformen; die Antwort entscheidet, ob ein anderer Boolescher Kern die Frage überhaupt beantworten könnte |
+| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Gemessen, zugeordnet und an der Wurzel behoben: Nicht manifold3d rechnete anders, sondern `np.cos`. Offen ist nur noch, ob nach der Umstellung auch die Fingerabdrücke des **Änderungswegs** auf allen drei übereinstimmen |
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
@@ -543,39 +543,69 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-187"></a>
 
-- [ ] **RM-187 — Läuft schon die Eingabe der Booleschen Operation zwischen x86 und ARM
-  auseinander?** Am 17.09.2026 lieferte dasselbe Verkleinern einer Bohrung mit Senkung 1178
-  Dreiecke auf Windows und Ubuntu und 1176 auf dem ARM64-Mac der CI, bei identischen Maßen
-  (Ø 11,928, Winkel 89,838). Der **Symptomweg** ist behoben — die Erkennung verträgt jetzt
-  beide Netze (`features._without_notches`, `relations._rings_through_a_shared_corner`, Commits
-  `25fd8e81`, `8de6b7c3`, `d40a9803`, `c9c8d6f9`). Die **Ursache** ist zugeordnet, aber an ihrer
-  ersten Stelle nicht gemessen: FMA entsteht auf ARM64 von selbst, und manifold3d sagt
-  Topologie zu und Numerik nicht
-  ([`.claude/memory/arm-rechnet-anders-als-x86.md`](.claude/memory/arm-rechnet-anders-als-x86.md)).
+- [x] **RM-187 — Dieselbe Geometrie auf jeder Plattform.** Am 17.09.2026 lieferte dasselbe
+  Verkleinern einer Bohrung mit Senkung ein anderes Netz auf jeder Plattform, und eine
+  Bohrungskette, die Solidon auf Windows erkennt, war auf dem Mac nicht mehr da. Drei
+  Reparaturen liefen in die Merkmalserkennung, wo kein Fehler war.
 
-  **Die offene Frage ist eine einzige, und sie entscheidet alles danach:** Weichen schon die
-  Eckpunkte des **Eingangsnetzes** ab? `_sloping_bore` baut sie aus `cos` und `sin`, und die
-  kommen aus der libm der Plattform. Ist die Eingabe schon verschieden, dann läge die Ursache in
-  unserem eigenen Netzaufbau, nicht in manifold3d — und **kein exakter Kern könnte sie lösen**,
-  denn exakt gerechnet geben zwei verschiedene Eingaben zwei verschiedene Ergebnisse. Ist die
-  Eingabe dagegen bitgleich, entsteht der Unterschied in der Booleschen Operation, und dann ist
-  die Frage nach einem exakten Kern die richtige.
+  **Die Ursache, gemessen statt vermutet** (Läufe 35262208955 und 35265459662, drei
+  Plattformen): Sie liegt **vor** dem Booleschen Kern. Der Kontrollversuch ist eindeutig — ein
+  Klotz, der ohne eine einzige transzendente Funktion entsteht, trägt auf allen drei Plattformen
+  denselben Fingerabdruck; Hohlraum und Nachbar, beide aus `cos`/`sin`, auf allen drei einen
+  anderen. `np.cos` und `np.sin` wählen ihre Implementierung nach den Fähigkeiten der CPU:
+  AVX-512 auf Ubuntu, AVX2 auf Windows, NEON auf macOS, und die drei runden die letzte Stelle
+  verschieden. Drei Zehntel eines Billiardstels Millimeter, und nach einer Booleschen Operation
+  sind es zwei Dreiecke.
 
-  Die Sonde ist geschrieben (drei Messpunkte mit einem SHA-256 je Stufe: Eingangskörper,
-  Ergebnis, Ergebnis mit quantisierter Eingabe) und **auf Windows gefahren**. Was fehlt, ist
-  derselbe Lauf auf dem Ubuntu- und dem macOS-Runner und der Vergleich der Fingerabdrücke.
+  **Zwei Annahmen sind damit widerlegt, und beide waren meine.** Es ist nicht ARM gegen x86 —
+  Windows lieferte 1226 Dreiecke und Ubuntu 1224, beide x86_64. Und ein exakter Boolescher Kern
+  hätte nichts geholfen: Geogram und trueform rechnen exakt *mit* ihrer Eingabe, und zwei
+  verschiedene Eingaben geben auch exakt gerechnet zwei verschiedene Ergebnisse. Die Anfrage an
+  Polydera ist deshalb zurückgezogen, das Geogram-Konzept erledigt.
 
-  **Zwei Wege sind auf demselben Weg schon durch Messung ausgeschlossen**, nicht durch
-  Vermutung: Die Eingabe vor der Operation zu quantisieren macht die Netze **schlechter** (1422
-  bis 1596 Dreiecke statt 1226 — Runden zerstört die Koplanarität der Klotzflächen), und die
-  doppelte Ecke nachträglich zu verschweißen trifft das Volumen auf 0,000e+00 genau, lässt das
-  Netz aber nicht wasserdicht zurück; `_tidied` lehnt zu Recht ab.
+  **Und der Satz, auf den es ankommt: manifold3d ist plattformgleich.** Nachdem die
+  Eingangskörper über `units.circle_point` entstehen, liefert die Boolesche Operation auf
+  Windows, Ubuntu und macOS denselben Fingerabdruck — 1222 Dreiecke, `8c1169913b6ac670`. Der
+  Kern, den wir haben, kann, was wir brauchen.
 
-  Abnahme: drei Fingerabdrücke je Messpunkt aus einem CI-Lauf, nebeneinander, mit der Aussage
-  welche Stufe als erste auseinanderläuft. Die Folgeentscheidung steht als §7 und §8 in
-  [`konzepte/geogram-als-zweiter-kern.md`](konzepte/geogram-als-zweiter-kern.md); der
-  kommerzielle Kandidat in [`konzepte/anfrage-trueform.md`](konzepte/anfrage-trueform.md)
-  wartet auf dieselbe Zusage.
+  **Gebaut:** `units.circle_point` rechnet die Ecken eines regelmäßigen Vielecks über `decimal`,
+  aus Ganzzahlen und nicht aus einem schon gerundeten `float`; ein Viertelumlauf wird gerechnet,
+  der Rest entsteht durch Vorzeichen und Tausch, was kein Bit ändert. Dazu `inscribed_ratio`
+  (`cos(π/n)` als Ecke eines `2n`-Ecks, bitgenau derselbe Wert wie bisher) und
+  `exact_cos_degrees`, das die Gradumrechnung innerhalb der genauen Arithmetik hält.
+  `geom.lathe` setzt es an den Drehkörpern durch — ohne eigenen Drehalgorithmus: `trimesh`
+  erzeugt die Topologie weiter, ersetzt werden nur die Ecken, und ob die Struktur dafür passt,
+  prüft es bei **jedem** Aufruf nach. Umgestellt sind 23 Drehkörperaufrufe und alle
+  Winkelrechnungen der Geometrie samt der Schwellen in `perceive`.
+
+  **Der Nachweis** ist `tests/test_platform_identity.py`: festgeschriebene Bits für Kreisecken,
+  Zylinder, Rohr, gedrehte Kontur und ebenen Umriss. Regel 6 gilt dort ausdrücklich nicht — die
+  Zusage *ist* die bitgenaue Gleichheit, und ein Vergleich mit Toleranz verschluckt genau den
+  Unterschied, um den es geht. Genau deshalb hat ihn jahrelang niemand gesehen.
+
+  **Was erreicht ist, gemessen über drei Runner:** Alle Eingangskörper sind bitgleich. Die
+  Boolesche Operation, die daraus das Netz macht, ebenfalls — 1222 Dreiecke, `8c1169913b6ac670`
+  auf Windows, Ubuntu und macOS. Im Änderungsweg sind die ersten drei von vier Booleschen
+  Schritten bitgleich, und das Ergebnis hat auf allen drei **dieselbe Topologie**: 1182 Dreiecke,
+  593 Ecken. Die Bohrungskette, wegen der die Sache anfing, wird überall gefunden.
+
+  **Was offen bleibt:** Die Koordinaten des Endergebnisses unterscheiden sich noch in der letzten
+  Stelle. Aufgezeichnet wurde der ganze Weg (`weg_aufzeichnen.py` legt sich vor jede Boolesche
+  Operation und schreibt Ein- und Ausgabe), und die Stelle ist eingegrenzt: `prepare.resize_bore`
+  dreht das ganze Netz über `apply_transform` in ein lokales System, schneidet dort und dreht
+  zurück. Eine Matrixmultiplikation über alle Punkte geht durch BLAS, und dessen Gruppierung und
+  FMA-Nutzung hängen von der CPU ab. `np.linalg.norm` und `np.linalg.inv` in derselben Kette sind
+  bereits ersetzt (`math.hypot`, `lathe.rigid_inverse`) — gemessen ohne Wirkung, es ist die
+  Transformation selbst.
+
+  Zwei Wege stehen dafür offen und sind noch nicht entschieden: die Multiplikation elementweise
+  selbst rechnen (billig, aber NumPy darf dort weiterhin FMA verwenden), oder **das Werkzeug in
+  die Weltlage drehen statt das Netz in die lokale** — ein paar hundert Punkte statt
+  Zehntausenden, was zugleich schneller wäre. Der zweite Weg ändert die Logik der Operation und
+  gehört deshalb gemessen, bevor er gebaut wird.
+
+  Abnahme: `tests/test_platform_identity.py` grün auf allen drei Runnern, und der Bohrungstest
+  ebenfalls.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
