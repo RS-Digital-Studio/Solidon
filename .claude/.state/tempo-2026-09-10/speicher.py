@@ -17,11 +17,13 @@ os.environ.pop("QT_QPA_PLATFORM", None)
 LOG = Path(sys.argv[1]).open("w", encoding="utf-8", buffering=1)
 
 import tracemalloc
+
 from PySide6.QtCore import Qt
 
 from app.core.bootstrap import load_operations
 from app.ui.app import build_application
 from app.ui.render.api import PointerEvent
+
 
 def rss() -> float:
     """Der von Python belegte Speicher in MB — ohne fremdes Paket."""

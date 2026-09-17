@@ -29,7 +29,6 @@ def sag(text: str = "") -> None:
 
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
 from app.ui.app import build_application

@@ -11,6 +11,7 @@ import pytest
 
 from app.core import units
 from app.core.deferred import trimesh
+from app.core.geom import lathe
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect
@@ -65,7 +66,7 @@ def _sloping_bore() -> tuple[MeshData, dict[str, Feature], Feature]:
     top = points[:, 2] > 9.0
     points[top, 2] += 0.08 * points[top, 0]
     stock.vertices = points
-    neighbour = trimesh.creation.cylinder(radius=4.75, height=20.0, sections=120)
+    neighbour = lathe.cylinder(radius=4.75, height=20.0, sections=120)
     neighbour.apply_translation((12.0, 0.0, 13.0))
     mesh = boolean(
         "difference",
@@ -838,9 +839,9 @@ def test_follow_does_not_recentre_an_eccentric_counterbore(profile: Profile) -> 
 
     stock = trimesh.creation.box(extents=(30.0, 24.0, 18.0))
     stock.apply_translation((0.0, 0.0, 9.0))
-    inner = trimesh.creation.cylinder(radius=3.0, height=17.0, sections=96)
+    inner = lathe.cylinder(radius=3.0, height=17.0, sections=96)
     inner.apply_translation((0.0, 0.0, 10.5))
-    outer = trimesh.creation.cylinder(radius=6.0, height=8.0, sections=96)
+    outer = lathe.cylinder(radius=6.0, height=8.0, sections=96)
     outer.apply_translation((0.2, 0.0, 16.0))
     mesh = boolean(
         "difference", [MeshData.of(stock), MeshData.of(inner), MeshData.of(outer)], quality="fine"
@@ -970,9 +971,9 @@ def _two_bores(
     """Zwei bekannte Sacklöcher, auf Wunsch ohne gemeinsame Tiefenlage."""
     stock = trimesh.creation.box(extents=(36.0, 24.0, 24.0))
     stock.apply_translation((6.0, 0.0, 12.0))
-    first = trimesh.creation.cylinder(radius=3.0, height=8.0, sections=96)
+    first = lathe.cylinder(radius=3.0, height=8.0, sections=96)
     first.apply_translation((0.0, 0.0, 4.0))
-    second = trimesh.creation.cylinder(radius=3.0, height=8.0, sections=96)
+    second = lathe.cylinder(radius=3.0, height=8.0, sections=96)
     second.apply_translation((spacing, 0.0, 20.0 if upper else 4.0))
     mesh = boolean(
         "difference", [MeshData.of(stock), MeshData.of(first), MeshData.of(second)], quality="fine"

@@ -1,25 +1,30 @@
 """Wo läuft die Rechnung zwischen den Plattformen auseinander? (RM-187)
 
-Am 17.09.2026 lieferte dasselbe Verkleinern einer Bohrung mit Senkung 1178
-Dreiecke auf Windows und Ubuntu und 1176 auf dem ARM64-Mac der CI, bei
-identischen Maßen. Diese Sonde beantwortet die eine Frage, an der alles danach
-hängt — und sie beantwortet sie nur, wenn sie auf **allen drei** Plattformen
-läuft und die Fingerabdrücke nebeneinander stehen.
+Am 17.09.2026 lieferte derselbe Körper 1224 Dreiecke auf Ubuntu, 1226 auf
+Windows und 1228 auf macOS — bei identischen Maßen. Diese Sonde trennt, **wo**
+das entsteht, und sie beantwortet die Frage nur, wenn sie auf allen drei
+Plattformen läuft und die Fingerabdrücke nebeneinander stehen.
 
-Drei Messpunkte, damit die Antwort nicht geraten wird:
+Drei Messpunkte:
 
-1. **Die Eingabe.** ``_sloping_bore`` baut seine Punkte aus ``cos``/``sin``,
-   und die kommen aus der libm der Plattform. Weicht schon hier etwas ab,
-   nützt jede Quantisierung im Kern nichts — und **kein exakter Kern könnte es
-   lösen**: Exakt gerechnet geben zwei verschiedene Eingaben zwei verschiedene
-   Ergebnisse. Die Ursache läge dann in unserem eigenen Netzaufbau.
-2. **Das Ergebnis der Booleschen Operation** — die Zahl, die auf dem Mac 1176
-   und auf x86 1178 ist.
-3. **Dasselbe mit quantisierter Eingabe.** Auf Windows gemessen: Das Runden
+1. **Die Eingabe**, Körper für Körper. Der erste Lauf war eindeutig: Der Klotz
+   — eine Box ohne jede transzendente Funktion — war auf allen drei bitgleich,
+   Hohlraum und Nachbar aus ``cos``/``sin`` auf allen drei verschieden. Die
+   Abweichung entstand also vor dem Booleschen Kern, und **kein exakter Kern
+   hätte sie geheilt**: Exakt gerechnet geben zwei verschiedene Eingaben zwei
+   verschiedene Ergebnisse.
+2. **Das Ergebnis der Booleschen Operation.** Bleibt es verschieden, obwohl
+   Messpunkt 1 überall gleich ist, liegt der Rest bei ``manifold3d`` — und das
+   ist dann die Frage, die an einen anderen Kern zu stellen wäre.
+3. **Dasselbe mit quantisierter Eingabe.** Gemessen und verworfen: Das Runden
    schluckt die Abweichung nicht, es macht die Netze **schlechter** — 1422 bis
    1596 Dreiecke statt 1226, weil es die Koplanarität der Klotzflächen
    zerstört. Der Messpunkt bleibt stehen, damit dieselbe Frage nicht ein
    zweites Mal gestellt wird.
+
+**Seit dem 17.09.2026 baut sie ihre Körper über die plattformfreien Ecken**
+(``units.circle_cos_sin``, ``geom.lathe``) — dieselbe Bauart wie
+``_sloping_bore`` im Test, damit beide denselben Körper messen.
 
 Ausgegeben wird ein Hash je Stufe. Gleiche Hashes heißen bitgleiche Felder.
 
@@ -31,7 +36,6 @@ Aufruf aus dem Wurzelverzeichnis des Arbeitsbaums::
 from __future__ import annotations
 
 import hashlib
-import math
 import sys
 from pathlib import Path
 
@@ -43,7 +47,9 @@ sys.path.insert(0, str(BAUM))
 
 import numpy as np  # noqa: E402
 
+from app.core import units  # noqa: E402
 from app.core.bootstrap import load_operations  # noqa: E402
+from app.core.geom import lathe  # noqa: E402
 from app.core.geom.boolean import boolean  # noqa: E402
 from app.core.geom.mesh import MeshData  # noqa: E402
 
@@ -60,10 +66,12 @@ def fingerprint(values: np.ndarray) -> str:
 def bodies() -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh]:
     """Die drei Eingangskörper aus ``_sloping_bore`` — ohne die Boolesche Operation."""
     sections = 120
-    angles = np.arange(sections) * math.tau / sections
+    # Seit dem 17.09.2026 ueber die plattformfreien Ecken — dieselbe Bauart
+    # wie ``_sloping_bore`` im Test, damit beide denselben Koerper messen.
+    table = np.asarray(units.circle_cos_sin(sections), dtype=float)
     vertices = []
     for radius, height, slope in ((4.5, 3.0, 0.04), (4.5, 17.0, 0.10), (5.5, 18.0, 0.08)):
-        x, y = radius * np.cos(angles), radius * np.sin(angles)
+        x, y = radius * table[:, 0], radius * table[:, 1]
         vertices.extend(zip(x, y, height + slope * x, strict=True))
     faces = []
     for ring in range(2):
@@ -91,7 +99,7 @@ def bodies() -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh]:
     points[top, 2] += 0.08 * points[top, 0]
     stock.vertices = points
 
-    neighbour = trimesh.creation.cylinder(radius=4.75, height=20.0, sections=120)
+    neighbour = lathe.cylinder(radius=4.75, height=20.0, sections=120)
     neighbour.apply_translation((12.0, 0.0, 13.0))
     return stock, cavity, neighbour
 
@@ -128,7 +136,7 @@ def main() -> int:
             ).mesh
             zahl = len(gerundet.raw.faces)
             aus = fingerprint(gerundet.raw.vertices)
-        except Exception as fehler:  # noqa: BLE001 — die Sonde soll alles zeigen
+        except Exception as fehler:
             zahl, aus = -1, f"{type(fehler).__name__}: {fehler}"
         print(f"   Gitter {step:g} mm: Eingabe {marken}")
         print(f"                     Ergebnis {zahl} Dreiecke  {aus}")

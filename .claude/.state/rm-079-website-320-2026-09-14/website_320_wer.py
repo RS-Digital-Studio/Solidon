@@ -15,9 +15,9 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --log-level=3")
 
-from PySide6.QtCore import QTimer, QUrl  # noqa: E402
-from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWidgets import QApplication
 
 ROOT = Path("F:/3D Druck/website")
 PAGES = sys.argv[1:] or ["index.html", "agb.html", "widerruf.html"]
