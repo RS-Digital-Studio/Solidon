@@ -42,7 +42,7 @@ from app.core.errors import (
     GeometryError,
     ValidationError,
 )
-from app.core.geom import lathe
+from app.core.geom import lathe, transform
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
@@ -741,7 +741,7 @@ def _prism(
     frame[:3, 1] = axis_v
     frame[:3, 2] = along
     frame[:3, 3] = origin - overshoot * along
-    body.apply_transform(frame)
+    transform.moved(body, frame)
     return MeshData(body)
 
 
@@ -1408,7 +1408,7 @@ def _placed_edge_work(
         cancelled=cancelled,
     )
     world = result.mesh.raw.copy()
-    world.apply_transform(frame)
+    transform.moved(world, frame)
     result.mesh = result.mesh.replacing(world)
     return result
 
@@ -1489,8 +1489,8 @@ def _edge_work(
             runs.append(reversed_target)
             target = reversed_target.mesh
         target = _extend_corner_contacts(target, size)
-        region.raw.apply_transform(frame)
-        target.raw.apply_transform(frame)
+        transform.moved(region.raw, frame)
+        transform.moved(target.raw, frame)
         runs.append(
             _check_corner_region(
                 mesh, region, frame, size, complement, quality=quality, cancelled=cancelled
@@ -1995,7 +1995,7 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
         if reach <= EPS_GEOM:
             continue
         rod = lathe.cylinder(radius=radius, height=reach, sections=_ring_steps(radius))
-        rod.apply_transform(_towards(along / reach, (first + second) / 2.0))
+        transform.moved(rod, _towards(along / reach, (first + second) / 2.0))
         parts.append(rod)
     knots = points[1:-1] if len(points) > THROUGH else np.empty((0, 3))
     if len(knots):

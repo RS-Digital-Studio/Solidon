@@ -36,7 +36,7 @@ from app.core.build_area import (
 )
 from app.core.deferred import trimesh
 from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS, ValidationError
-from app.core.geom import lathe
+from app.core.geom import lathe, transform
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -477,7 +477,7 @@ def resize_bore(
     to_world[:3, 3] = np.asarray(position, dtype=float)
     to_local = lathe.rigid_inverse(to_world)
     local_body = mesh.raw.copy()
-    local_body.apply_transform(to_local)
+    transform.moved(local_body, to_local)
     local_mesh = mesh.replacing(local_body)
 
     kind: BooleanKind
@@ -525,7 +525,7 @@ def resize_bore(
     # Ergebnis. Das ändert keine Maße und bewahrt die freie Richtung.
     outcome = boolean(kind, [local_mesh, MeshData.of(tool)], quality=quality, seed=seed)
     world_body = outcome.mesh.raw.copy()
-    world_body.apply_transform(to_world)
+    transform.moved(world_body, to_world)
     resized = outcome.mesh.replacing(world_body)
     findings = list(outcome.findings)
     nothing = without_effect(mesh, resized, kind, profile)
@@ -536,7 +536,7 @@ def resize_bore(
     findings.extend(split_findings(mesh, resized))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     world_tool = tool.copy()
-    world_tool.apply_transform(to_world)
+    transform.moved(world_tool, to_world)
     return BoreResult(
         mesh=resized,
         solver=outcome.solver,
@@ -648,7 +648,7 @@ def slot_bore(
     to_world[:3, 3] = np.asarray(position, dtype=float)
     to_local = lathe.rigid_inverse(to_world)
     local_body = mesh.raw.copy()
-    local_body.apply_transform(to_local)
+    transform.moved(local_body, to_local)
 
     # Nur ein durchgehendes Loch darf über beide Mündungen hinausragen. Bei
     # einer Blindbohrung bliebe der Boden sonst nicht, wo er gemessen wurde —
@@ -675,7 +675,7 @@ def slot_bore(
         seed=seed,
     )
     world_body = outcome.mesh.raw.copy()
-    world_body.apply_transform(to_world)
+    transform.moved(world_body, to_world)
     slotted = outcome.mesh.replacing(world_body)
     findings = list(outcome.findings)
     nothing = without_effect(mesh, slotted, "difference", profile)
@@ -1189,7 +1189,7 @@ def drill(
         to_world[:3, 3] = position
         world_to_local = np.linalg.inv(to_world)
         local_body = mesh.raw.copy()
-        local_body.apply_transform(world_to_local)
+        transform.moved(local_body, world_to_local)
         if through:
             low, high = float(local_body.bounds[0, 2]), float(local_body.bounds[1, 2])
             if widening_diameter > EPS_GEOM and anchor == "mouth":
@@ -1225,7 +1225,7 @@ def drill(
             seed=seed,
         )
         world_body = outcome.mesh.raw.copy()
-        world_body.apply_transform(to_world)
+        transform.moved(world_body, to_world)
         result = outcome.mesh.replacing(world_body)
         findings = list(outcome.findings)
         nothing = without_effect(mesh, result, "difference", profile)
@@ -1265,7 +1265,7 @@ def drill(
     if through:
         # Symmetrisch über beide Seiten hinaus: Mitte auf die Position.
         cylinder.apply_translation((0.0, 0.0, height / 2.0))
-        cylinder.apply_transform(alignment)
+        transform.moved(cylinder, alignment)
         cylinder.apply_translation(np.asarray(position, dtype=float))
     else:
         # Das Werkzeug ist nicht mehr symmetrisch: Mündung bei null mit
@@ -1277,10 +1277,10 @@ def drill(
         into = _into_the_material(mesh, axis, position)
         local_z = alignment[:3, :3] @ np.array([0.0, 0.0, 1.0])
         if float(np.sign(local_z[AXIS_INDEX[axis]])) == into:
-            cylinder.apply_transform(
-                trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
+            transform.moved(
+                cylinder, trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
             )
-        cylinder.apply_transform(alignment)
+        transform.moved(cylinder, alignment)
         along = np.zeros(3)
         along[AXIS_INDEX[axis]] = into
         offset = np.asarray(position, dtype=float)
@@ -1372,9 +1372,9 @@ def countersink(
     # Material. Umgedreht läuft er von null abwärts, was genau das ist — und
     # er wird um die Überlappung angehoben, damit die zwei Flächen nicht
     # zusammenfallen (§39).
-    cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
+    transform.moved(cone, trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
     cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
-    cone.apply_transform(trimesh.geometry.align_vectors(np.array([0.0, 0.0, -1.0]), narrows))
+    transform.moved(cone, trimesh.geometry.align_vectors(np.array([0.0, 0.0, -1.0]), narrows))
     cone.apply_translation(at)
 
     outcome = boolean("difference", [mesh, MeshData.of(cone)], quality=quality)
@@ -1551,7 +1551,7 @@ def plug(
     cylinder = lathe.cylinder(
         radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
-    cylinder.apply_transform(_axis_alignment(axis))
+    transform.moved(cylinder, _axis_alignment(axis))
     offset = np.asarray(position, dtype=float)
     if not through and anchor == "mouth":
         direction = np.zeros(3)
@@ -1941,7 +1941,7 @@ def _into_the_middle(
             continue
         for index in members:
             body = arranged[index].raw.copy()
-            body.apply_transform(translation((shift[0], shift[1], 0.0)))
+            transform.moved(body, translation((shift[0], shift[1], 0.0)))
             moved[index] = arranged[index].replacing(body)
     return moved
 
@@ -2089,7 +2089,7 @@ def arrange_on_bed(
         )
         offset = tuple(target[index] - mesh.bounds.centre[index] for index in range(3))
         body = mesh.raw.copy()
-        body.apply_transform(translation((offset[0], offset[1], offset[2])))
+        transform.moved(body, translation((offset[0], offset[1], offset[2])))
         arranged.append(mesh.replacing(body))
         assigned.append(plate)
         taken.append(spot)
@@ -2272,7 +2272,7 @@ def _runs_into(body: MeshData, offset: Vec3, others: Sequence[MeshData]) -> bool
     Befunde gehören nicht in diese Operation.
     """
     moved = body.raw.copy()
-    moved.apply_transform(translation(offset))
+    transform.moved(moved, translation(offset))
     shifted = body.replacing(moved)
     return any(check_collisions([shifted, other]) for other in others)
 

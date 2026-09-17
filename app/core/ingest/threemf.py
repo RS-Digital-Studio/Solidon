@@ -42,6 +42,7 @@ from app.core.errors import (
     AppError,
     ValidationError,
 )
+from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import Finding, MaterialSlot, ProgressFn, SolverInfo
@@ -640,7 +641,7 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
         if body is None:
             continue
         moved = body.raw.copy()
-        moved.apply_transform(leaf.transform)
+        transform.moved(moved, leaf.transform)
         cutters.setdefault(leaf.owner, []).append((leaf.name, moved))
     carved: set[str] = set()
 
@@ -723,7 +724,7 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
         if groups is None:
             groups = _groups_of(leaf.node, leaf.palette, leaf.pid, leaf.pindex)
         moved = raw.copy()
-        moved.apply_transform(leaf.transform)
+        transform.moved(moved, leaf.transform)
         mesh = (
             MeshData(raw=moved, slots=groups.slots) if groups is not None else body.replacing(moved)
         )

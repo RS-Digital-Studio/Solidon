@@ -46,6 +46,7 @@ from numpy.typing import NDArray
 
 from app.core import units
 from app.core.deferred import trimesh
+from app.core.geom.transform import moved_points
 
 #: Wie weit trimeshs Ecken von der erwarteten Struktur abweichen dürfen.
 #:
@@ -80,7 +81,13 @@ def revolve(
     body = _replaced_rim(raw, outline, int(sections))
     body.merge_vertices()
     if transform is not None:
-        body.apply_transform(np.asarray(transform, dtype=np.float64))
+        # ``moved_points`` und nicht ``apply_transform``: dieselbe Zusage wie
+        # ueberall (RM-187). Der Parameter heisst ``transform`` wie bei
+        # ``trimesh.creation.revolve``, deshalb der Namensimport.
+        body.vertices = moved_points(
+            np.asarray(body.vertices, dtype=np.float64),
+            np.asarray(transform, dtype=np.float64),
+        )
     return body
 
 

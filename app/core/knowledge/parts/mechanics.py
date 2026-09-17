@@ -15,8 +15,11 @@ from __future__ import annotations
 import math
 from typing import Final, cast
 
+import numpy as np
+
 from app.core import units
 from app.core.errors import ValidationError
+from app.core.geom import transform
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
@@ -290,13 +293,17 @@ def _snap_fit_body(
     body = trimesh.creation.extrude_polygon(outline, height=width)
     # Der Umriss liegt in XY und wächst entlang Z. Gesucht sind Tiefe auf Y,
     # Höhe auf Z und die Extrusion mittig entlang X.
-    body.apply_transform(
-        (
-            (0.0, 0.0, 1.0, -width / 2.0),
-            (1.0, 0.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0, 0.0),
-            (0.0, 0.0, 0.0, 1.0),
-        )
+    transform.moved(
+        body,
+        np.asarray(
+            (
+                (0.0, 0.0, 1.0, -width / 2.0),
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+            ),
+            dtype=np.float64,
+        ),
     )
     return MeshData.of(body)
 

@@ -34,6 +34,7 @@ from typing import Any, Literal
 import numpy as np
 
 from app.core.errors import BooleanFailedError
+from app.core.geom import transform
 from app.core.geom.autosplit import sections_across, upright_normal
 from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData, ray_hit_distances
@@ -794,7 +795,7 @@ def _along_normal(body: MeshData, normal: Vec3, position: Vec3, offset: float) -
     Ebene nicht zu ergänzen.
     """
     turn = np.linalg.inv(upright_normal(normal))
-    placed = MeshData.of(body.raw.copy().apply_transform(turn))
+    placed = transform.apply(body, turn)
     direction = np.asarray(normal, dtype=float)
     target = np.asarray(position, dtype=float) + direction * offset
     return apply(placed, translation((float(target[0]), float(target[1]), float(target[2]))))

@@ -21,7 +21,7 @@ from typing import Any, cast
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
-from app.core.geom import lathe
+from app.core.geom import lathe, transform
 from app.core.geom.autosplit import upright_normal
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -316,7 +316,7 @@ def reason_against(source: SceneObject, name: str) -> str | None:
         z, direction = opening_frame(source, name, 0.0)
         mesh = as_mesh_data(source.mesh)
         if direction != _UP:
-            mesh = mesh.replacing(mesh.raw.copy().apply_transform(upright_normal(direction)))
+            mesh = transform.apply(mesh, upright_normal(direction))
         opening(mesh, z - BELOW_RIM)
     except ValidationError as refused:
         return str(refused.detail) if refused.detail is not None else str(refused.title)
@@ -550,7 +550,7 @@ def create_lid(ctx: OpContext) -> OpResult:
     turn = upright_normal(direction)
     turned_back = turn.T
     if direction != _UP:
-        mesh = mesh.replacing(mesh.raw.copy().apply_transform(turn))
+        mesh = transform.apply(mesh, turn)
     outline, cavities = opening(mesh, z - BELOW_RIM)
 
     clearance = params.clearance
@@ -582,7 +582,7 @@ def create_lid(ctx: OpContext) -> OpResult:
         # (Paketrichtung, ``test_core_package_direction``).
         from app.core.perceive.matching import moved_features
 
-        body = body.replacing(body.raw.copy().apply_transform(turned_back))
+        body = transform.apply(body, turned_back)
         # Nur das neue Merkmal wird zurückgedreht — die übrigen des Gehäuses
         # haben den aufgerichteten Raum nie gesehen.
         cavity_features = {
@@ -833,7 +833,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     turn = upright_normal(direction)
     turned_back = turn.T
     if direction != _UP:
-        mesh = mesh.replacing(mesh.raw.copy().apply_transform(turn))
+        mesh = transform.apply(mesh, turn)
     outline, cavities = opening(mesh, z - BELOW_RIM)
 
     clearance = params.clearance
@@ -918,7 +918,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     if direction != _UP:
         from app.core.perceive.matching import moved_features
 
-        threaded = threaded.replacing(threaded.raw.copy().apply_transform(turned_back))
+        threaded = transform.apply(threaded, turned_back)
         neck_features = moved_features(neck_features, _rows(turned_back))
     return OpResult(
         solver=solver,

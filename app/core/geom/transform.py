@@ -73,11 +73,61 @@ def scaling(factors: Vec3, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
     return matrix
 
 
+def moved_points(points: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    """Punkte durch eine 4x4-Matrix bewegen — auf jeder Maschine dieselben Bits.
+
+    **Nicht ``points @ matrix[:3, :3].T``** (RM-187): Eine Matrixmultiplikation
+    geht durch BLAS, und das blockt, vektorisiert und verwendet FMA, je nachdem
+    was die CPU kann. Gemessen über 5000 Punkte betrug der Unterschied zur
+    elementweisen Rechnung 1,4·10⁻¹⁴ mm — nichts für sich, und alles, sobald
+    eine Boolesche Operation darauf entscheidet, ob zwei Flächen koplanar sind.
+
+    Elementweise ist jede Multiplikation und jede Addition eine eigene
+    NumPy-Operation, die ihr Ergebnis nach IEEE-754 korrekt gerundet in ein
+    Feld schreibt. Über eine solche Grenze hinweg kann kein Compiler
+    zusammenziehen, und damit hängt nichts mehr an der Maschine.
+
+    Der Preis ist gemessen und klein: 0,037 statt 0,027 Millisekunden für
+    5000 Punkte.
+    """
+    cells = np.asarray(matrix, dtype=np.float64)
+    raw = np.asarray(points, dtype=np.float64)
+    turn = cells[:3, :3]
+    x, y, z = raw[:, 0], raw[:, 1], raw[:, 2]
+    return np.stack(
+        (
+            turn[0, 0] * x + turn[0, 1] * y + turn[0, 2] * z + cells[0, 3],
+            turn[1, 0] * x + turn[1, 1] * y + turn[1, 2] * z + cells[1, 3],
+            turn[2, 0] * x + turn[2, 1] * y + turn[2, 2] * z + cells[2, 3],
+        ),
+        axis=1,
+    )
+
+
+def moved(body: object, matrix: np.ndarray) -> None:
+    """Ein Netz an Ort und Stelle bewegen — der Ersatz für ``apply_transform``.
+
+    Die Ecken kommen aus :func:`moved_points`; die Normalen lässt ``trimesh``
+    neu rechnen, wie es das nach einer Zuweisung an ``vertices`` ohnehin tut.
+    Eine Spiegelung dreht zusätzlich den Umlaufsinn um — dieselbe Regel, die
+    ``apply_transform`` anwendet, und ohne sie zeigte ein gespiegelter Körper
+    nach innen.
+    """
+    cells = np.asarray(matrix, dtype=np.float64)
+    body.vertices = moved_points(np.asarray(body.vertices, dtype=np.float64), cells)  # type: ignore[attr-defined]
+    if float(np.linalg.det(cells[:3, :3])) < 0.0:
+        body.faces = np.fliplr(np.asarray(body.faces))  # type: ignore[attr-defined]
+
+
 def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     """Gibt eine transformierte Kopie zurück. Die Eingabe wird nie
-    angefasst (AGENTS.md Regel 3)."""
+    angefasst (AGENTS.md Regel 3).
+
+    Bewegt wird über :func:`moved` und nicht über ``apply_transform``, damit
+    dieselbe Bewegung auf jeder Maschine dieselben Zahlen gibt (RM-187).
+    """
     body = mesh.raw.copy()
-    body.apply_transform(matrix)
+    moved(body, matrix)
     return replace(
         mesh.replacing(body),
         cavity=apply(mesh.cavity, matrix) if mesh.cavity is not None else None,

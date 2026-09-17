@@ -8,6 +8,7 @@ from typing import Any, cast
 import numpy as np
 
 from app.core.errors import CHOOSE_PRINTER, ValidationError
+from app.core.geom import transform
 from app.core.geom.boolean import BooleanOutcome, boolean, deepest
 from app.core.geom.contours import offset_section, polygons_of, section_of
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -165,7 +166,7 @@ def _matrix(frame: PlaneFrame) -> np.ndarray:
 
 def _placed(mesh: MeshData, frame: PlaneFrame) -> MeshData:
     raw = mesh.raw.copy()
-    raw.apply_transform(_matrix(frame))
+    transform.moved(raw, _matrix(frame))
     return mesh.replacing(raw)
 
 

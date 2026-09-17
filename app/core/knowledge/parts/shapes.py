@@ -11,7 +11,7 @@ import math
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom import lathe
+from app.core.geom import lathe, transform
 from app.core.geom.mesh import MeshData
 from app.core.types import Vec3
 
@@ -206,7 +206,8 @@ def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> MeshDa
     # Der Umriss liegt in XY und wuchs entlang Z; ihn so drehen, dass die Tiefe
     # entlang Y läuft, die Höhe entlang Z und die Extrusion quer über X,
     # zentriert.
-    body.apply_transform(
+    transform.moved(
+        body,
         np.array(
             [
                 [0.0, 0.0, 1.0, -width / 2.0],
@@ -214,7 +215,7 @@ def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> MeshDa
                 [0.0, 1.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ]
-        )
+        ),
     )
     return MeshData.of(body)
 
@@ -309,7 +310,7 @@ def moved(mesh: MeshData, offset: Vec3) -> MeshData:
 
 def turned(mesh: MeshData, degrees: float, axis: Vec3 = (0.0, 0.0, 1.0)) -> MeshData:
     body = mesh.raw.copy()
-    body.apply_transform(
-        trimesh.transformations.rotation_matrix(math.radians(degrees), np.asarray(axis))
+    transform.moved(
+        body, trimesh.transformations.rotation_matrix(math.radians(degrees), np.asarray(axis))
     )
     return mesh.replacing(body)

@@ -26,6 +26,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
+from app.core.geom import transform
 from app.core.geom.attributes import with_slot
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
@@ -478,7 +479,7 @@ def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> M
         matrix = np.eye(4)
         matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
         turned = placed.raw.copy()
-        turned.apply_transform(matrix)
+        transform.moved(turned, matrix)
         placed = placed.replacing(turned)
     return apply(placed, translation(position))
 

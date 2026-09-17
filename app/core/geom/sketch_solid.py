@@ -27,6 +27,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.core.errors import ValidationError
+from app.core.geom import transform
 from app.core.types import PlaneFrame
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import _
@@ -349,5 +350,5 @@ def extrude_profile(profile: Profile, height: float, frame: PlaneFrame) -> Any:
     turn[:3, 1] = frame.y_axis
     turn[:3, 2] = frame.normal
     turn[:3, 3] = frame.origin
-    solid.apply_transform(turn)
+    transform.moved(solid, turn)
     return solid

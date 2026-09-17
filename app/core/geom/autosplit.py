@@ -32,6 +32,7 @@ import numpy as np
 from app.core.build_area import placement_offset, printable_area, printable_height
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
+from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import NoFittingOrientationError
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
@@ -1113,7 +1114,7 @@ def sections_across(mesh: MeshData, normal: Vec3, heights: np.ndarray) -> list[A
     body = mesh
     if not np.allclose(turn, np.eye(4)):
         turned = mesh.raw.copy()
-        turned.apply_transform(turn)
+        transform.moved(turned, turn)
         body = MeshData.of(turned)
 
     # Die Schichtanalyse sortiert jedes Dreieck in die Schichten, die es

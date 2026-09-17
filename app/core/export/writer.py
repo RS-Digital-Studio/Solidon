@@ -38,6 +38,7 @@ from app.core.export.slicer_keys import (
     needs_bed_translation,
     reads_assembly_file,
 )
+from app.core.geom import transform
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
@@ -1359,7 +1360,7 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
     # die gespeicherte Einheit; der Rohleser skaliert selbst weiterhin nicht.
     upright = trimesh.transformations.rotation_matrix(-np.pi / 2.0, (1.0, 0.0, 0.0))
     for body in bodies.values():
-        body.apply_transform(upright)
+        transform.moved(body, upright)
         body.apply_scale(GLB_METRES_PER_MM)
     scene = trimesh.Scene(bodies)  # type: ignore[arg-type]
     data = scene.export(file_type="glb")

@@ -31,7 +31,7 @@ from app.core.errors import (
     InternalError,
     ValidationError,
 )
-from app.core.geom import lathe
+from app.core.geom import lathe, transform
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     NOTHING_LEFT_DETAIL,
@@ -737,7 +737,7 @@ def _feature_solid(
     turn = trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
         [0.0, 0.0, 1.0], direction
     )
-    body.apply_transform(turn)
+    transform.moved(body, turn)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
@@ -1056,10 +1056,11 @@ def _measured_section(
         [0.0, beyond + FEATURE_OVERLAP],
     ]
     body = lathe.revolve(outline, sections=FEATURE_SECTIONS)
-    body.apply_transform(
+    transform.moved(
+        body,
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             [0.0, 0.0, 1.0], _outward_axis(chain, feature)
-        )
+        ),
     )
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body) if body.is_watertight and body.volume > EPS_GEOM else None
@@ -1130,10 +1131,11 @@ def _chain_plug(
     plug = lathe.cylinder(
         radius=radius, height=reach + 2.0 * FEATURE_OVERLAP, sections=FEATURE_SECTIONS
     )
-    plug.apply_transform(
+    transform.moved(
+        plug,
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             np.array([0.0, 0.0, 1.0]), axis
-        )
+        ),
     )
     plug.apply_translation(centre + axis * float(along.min() + along.max()) / 2.0)
     return boolean(
@@ -1348,10 +1350,11 @@ def _no_longer_through(
         return False
     reach = float(np.linalg.norm(mesh.bounds.size)) * 2.0
     column = lathe.cylinder(radius=diameter / 2.0, height=reach, sections=FEATURE_SECTIONS)
-    column.apply_transform(
+    transform.moved(
+        column,
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             np.array([0.0, 0.0, 1.0]), np.asarray(_feature_direction(feature), dtype=float)
-        )
+        ),
     )
     column.apply_translation(np.asarray(centre, dtype=float))
     left = boolean(
@@ -1545,10 +1548,11 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
     ) / units.inscribed_ratio(FEATURE_SECTIONS)
 
     cut = lathe.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
-    cut.apply_transform(
+    transform.moved(
+        cut,
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             np.array([0.0, 0.0, 1.0]), direction
-        )
+        ),
     )
     middle = float(along.min() + along.max()) / 2.0
     cut.apply_translation(np.asarray(centre, dtype=float) + direction * middle)
@@ -1635,8 +1639,9 @@ def _closed_at(
             reach = mesh.bounds.diagonal * 2.0
             envelope = trimesh.creation.box(extents=(reach * 2.0, reach * 2.0, reach))
             envelope.apply_translation((0.0, 0.0, -reach / 2.0))
-            envelope.apply_transform(
-                trimesh.geometry.align_vectors([0.0, 0.0, 1.0], outward)  # type: ignore[no-untyped-call]
+            transform.moved(
+                envelope,
+                trimesh.geometry.align_vectors([0.0, 0.0, 1.0], outward),  # type: ignore[no-untyped-call]
             )
             envelope.apply_translation(mouth)
             tool = boolean(
@@ -1742,7 +1747,7 @@ def _tool_for(
     body.apply_translation(-np.asarray(measured, dtype=float))
     if not is_close(scale, 1.0):
         body.apply_scale(scale)  # type: ignore[no-untyped-call]
-    body.apply_transform(matrix)
+    transform.moved(body, matrix)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
@@ -2132,7 +2137,7 @@ def feature_placement_geometry(
     to_local[:3, :3] = rotation.T
     to_local[:3, 3] = -rotation.T @ np.asarray(frame.origin)
     local = built.raw.copy()
-    local.apply_transform(to_local)
+    transform.moved(local, to_local)
     offset = rotation.T @ (np.asarray(centre) - frame.origin)
     return FeaturePlacementGeometry(
         MeshData.of(local),
@@ -2178,7 +2183,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             ],
         )
     tool = geometry.mesh.raw.copy()
-    tool.apply_transform(to_world)
+    transform.moved(tool, to_world)
     body = as_mesh_data(source.mesh)
     findings: list[Finding] = []
     closed_solver = None
@@ -2188,7 +2193,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             old_matrix[:3, :3] = old_rotation
             old_matrix[:3, 3] = geometry.frame.origin
             old_tool = geometry.mesh.raw.copy()
-            old_tool.apply_transform(old_matrix)
+            transform.moved(old_tool, old_matrix)
             closed = boolean(
                 "union",
                 [body, MeshData.of(old_tool)],
@@ -3516,7 +3521,7 @@ def _rotate_cavity_chain(
         cancelled=ctx.cancelled,
     )
     turned = tool.raw.copy()
-    turned.apply_transform(matrix)
+    transform.moved(turned, matrix)
     ctx.progress(0.6, str(_("Der Hohlraum wird gedreht gesetzt …")))
     placed = boolean(
         "difference",
@@ -3774,10 +3779,11 @@ def _stretched_section(
         radius=diameter / 2.0, height=height + max(0.0, extension), sections=FEATURE_SECTIONS
     )
     body.apply_translation((0.0, 0.0, max(0.0, extension) / 2.0))
-    body.apply_transform(
+    transform.moved(
+        body,
         trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
             [0.0, 0.0, 1.0], outward
-        )
+        ),
     )
     body.apply_translation(np.asarray(feature.params["centre"], dtype=float))
     return MeshData.of(body)
