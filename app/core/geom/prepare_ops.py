@@ -889,7 +889,12 @@ def _body_from_faces(
             if len(ring_edges) < 3:
                 return None
             ring = points[members]
-            hub = ring.mean(axis=0)
+            # **Nicht ``ring.mean(axis=0)``** (RM-187): Dieser Punkt wird gleich
+            # als echter Eckpunkt ins Netz geschrieben, und NumPys Summation
+            # gruppiert nach SIMD-Breite — auf ARM anders als auf x86. Das
+            # letzte Bit des Deckelmittelpunkts entschied damit über die
+            # Triangulierung des ganzen Werkzeugs.
+            hub = np.asarray(units.exact_centre(ring), dtype=float)
             # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
             # einer Seitenwand hat ihren Ring in der YZ-Ebene.
             spread = ring - hub

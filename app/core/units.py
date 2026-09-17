@@ -628,3 +628,42 @@ def _exact_degrees(degrees: float) -> tuple[float, float]:
         context.prec = EXACT_DIGITS
         angle = _reduced(decimal.Decimal(degrees) * _PI / decimal.Decimal(180))
         return (float(_cos_series(angle)), float(_sin_series(angle)))
+
+
+def exact_mean(values: Sequence[float]) -> float:
+    """Der Mittelwert einer Zahlenreihe, auf jeder Maschine dieselbe Zahl.
+
+    **Warum nicht ``np.mean``** (17.09.2026, RM-187): NumPy summiert
+    vektorisiert und in Teilsummen, und wie viele Teilsummen es sind, hängt
+    von der SIMD-Breite der CPU ab. Fließkommaaddition ist nicht assoziativ —
+    eine andere Gruppierung gibt ein anderes letztes Bit. Auf x86 und ARM kam
+    dabei ein anderer Wert heraus, und weil dieser Wert als **Eckpunkt** in ein
+    Netz geschrieben wurde, war das Bauteil danach ein anderes.
+
+    ``math.fsum`` summiert exakt (nach Shewchuk) und rundet erst am Ende
+    einmal. Das Ergebnis hängt damit weder von der Reihenfolge noch von der
+    Maschine ab — und es ist obendrein genauer als jede Teilsummenvariante.
+
+    Für Punkte im Raum wird je Achse gerufen; ``exact_centre`` tut das.
+    """
+    reihe = list(values)
+    if not reihe:
+        raise ValueError("Der Mittelwert einer leeren Reihe ist nicht bestimmt")
+    return math.fsum(reihe) / len(reihe)
+
+
+def exact_centre(points: Sequence[Sequence[float]]) -> tuple[float, float, float]:
+    """Der Schwerpunkt einer Punktwolke im Raum — siehe :func:`exact_mean`.
+
+    Nimmt alles, was sich zeilenweise in drei Zahlen zerlegen lässt, auch ein
+    NumPy-Feld. Zurück kommen einfache ``float``, damit der Aufrufer sie ohne
+    Umweg in ein Feld schreiben kann.
+    """
+    rows = [tuple(float(value) for value in point) for point in points]
+    if not rows:
+        raise ValueError("Der Schwerpunkt einer leeren Punktwolke ist nicht bestimmt")
+    return (
+        exact_mean([row[0] for row in rows]),
+        exact_mean([row[1] for row in rows]),
+        exact_mean([row[2] for row in rows]),
+    )
