@@ -122,6 +122,40 @@ def _operation(
     )
 
 
+def _why_no_rings(body, feature: Feature) -> str:
+    """Welche der fünf Absagen ``_face_boundary_rings`` gibt.
+
+    Die Funktion antwortet auf fünf verschiedene Fragen mit demselben ``None``,
+    und eine davon trifft auf dem Mac der CI zu. Nachgerechnet wird hier, was
+    sie rechnet — die Absage selbst trägt ihren Grund nicht.
+    """
+    indices = np.asarray(feature.face_indices, dtype=np.int64)
+    if not len(indices) or indices.min() < 0 or indices.max() >= len(body.faces):
+        return "ungültig: Flächennummern außerhalb des Netzes"
+    faces = np.asarray(body.faces)[indices]
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    unique, count = np.unique(edges, axis=0, return_counts=True)
+    if (count > 2).any():
+        return f"ungültig: {int((count > 2).sum())} Kanten an mehr als zwei Dreiecken"
+    boundary = unique[count == 1]
+    if not len(boundary):
+        return "ungültig: kein Rand — der Ausschnitt ist geschlossen"
+    vertices, degrees = np.unique(boundary, return_counts=True)
+    if (degrees != 2).any():
+        schief = {
+            int(grad): int(wie_oft)
+            for grad, wie_oft in zip(*np.unique(degrees, return_counts=True), strict=True)
+            if grad != 2
+        }
+        return f"ungültig: ausgefranster Rand, Knotengrade {schief} statt 2"
+    from app.core.deferred import trimesh as _trimesh
+
+    for component in _trimesh.graph.connected_components(boundary, nodes=vertices, engine="scipy"):
+        if len(component) < 3:
+            return f"ungültig: Randkomponente aus nur {len(component)} Knoten"
+    return "ungültig: Grund nicht nachgerechnet"
+
+
 def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
     """Warum aus diesen Merkmalen keine Kette wurde — für einen Lauf, den ich nicht sehe.
 
@@ -153,7 +187,8 @@ def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
     zeilen.append("Randringe je Hohlraumabschnitt:")
     for name, feature in candidates.items():
         rings = boundary_rings(body, feature)
-        zeilen.append(f"  {name}: {'keine (ungültig)' if rings is None else len(rings)}")
+        grund = _why_no_rings(body, feature) if rings is None else str(len(rings))
+        zeilen.append(f"  {name}: {grund} ({len(feature.face_indices)} Dreiecke)")
         for ring in rings or ():
             owners.setdefault(ring, []).append(name)
 
