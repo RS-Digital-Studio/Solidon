@@ -4042,7 +4042,79 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
     if not len(adjacency):
         return [[index] for index in faces]
     groups = trimesh.graph.connected_components(adjacency, nodes=np.asarray(faces), engine="scipy")
-    return [group.tolist() for group in groups]
+    return _without_notches(body, [group.tolist() for group in groups])
+
+
+def _notch_faces(body: trimesh.Trimesh, patch: Sequence[int]) -> set[int]:
+    """Die Dreiecke, die einen ausgefransten Randknoten dieses Flecks schließen.
+
+    Ein Fleck ist erst brauchbar, wenn sein Rand aus geschlossenen Ringen
+    besteht: ``relations.boundary_rings`` verlangt an jedem Randknoten genau
+    zwei Randkanten und gibt sonst gar nichts zurück — und ohne Ringe gibt es
+    keine Nachbarschaft, also keine Bohrungskette. Fehlt einem Band von
+    Dreiecken ein einziges, laufen dort vier Randkanten zusammen, und der
+    ganze Zusammenhang ist weg.
+
+    **Der Fall ist gemessen und plattformabhängig** (17.09.2026). Die Senkung
+    aus ``test_shrinking_keeps_the_countersink_and_recognises_the_new_shoulder``
+    hat auf Windows und Ubuntu 241 Dreiecke, auf dem Mac der CI 240 — bei
+    identischen Maßen (Ø 11,928 bei 89,838 Grad) und identischen Bohrungen
+    daneben. Welches Dreieck herausfällt, entscheidet die letzte Stelle einer
+    Normalen; dass **eines** herausfällt, macht aus zwei Randringen einen und
+    kostet die ganze Kette.
+
+    Geheilt wird nur die Kerbe, und nur wenn sie eindeutig ist: Das Dreieck
+    liegt am ausgefransten Knoten, gehört keinem anderen Fleck, und der Rand
+    ist danach sauber. Alles andere bleibt, wie die Einpassung es vorfindet —
+    ein Fleck, der aus einem anderen Grund offen ist, wird hier nicht zugenäht.
+    """
+    indices = np.asarray(patch, dtype=np.int64)
+    if len(indices) < 3:
+        return set()
+    faces = np.asarray(body.faces)[indices]
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    unique, count = np.unique(edges, axis=0, return_counts=True)
+    if (count > 2).any():
+        return set()
+    boundary = unique[count == 1]
+    if not len(boundary):
+        return set()
+    vertices, degrees = np.unique(boundary, return_counts=True)
+    frayed = {int(node) for node in vertices[degrees > 2]}
+    if not frayed:
+        return set()
+    # Nur die unmittelbaren Nachbarn des Flecks kommen in Frage: Ein Dreieck,
+    # das den Knoten teilt, aber nirgends anliegt, schließt keine Kerbe.
+    neighbours: set[int] = set()
+    pairs = np.asarray(body.face_adjacency)
+    if len(pairs):
+        inside = np.zeros(len(body.faces), dtype=bool)
+        inside[indices] = True
+        touching = pairs[inside[pairs[:, 0]] ^ inside[pairs[:, 1]]]
+        neighbours = {int(face) for face in touching.ravel() if not inside[face]}
+    return {face for face in neighbours if frayed & {int(corner) for corner in body.faces[face]}}
+
+
+def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[list[int]]:
+    """Fransige Ränder schließen, solange das Dreieck dafür frei und eindeutig ist.
+
+    **Eindeutig heißt: genau eines von allen** (Regel 21). Am ausgefransten
+    Knoten liegen mehrere fremde Dreiecke; geprüft wird jedes einzeln, und
+    übernommen wird nur, wenn **eines** den Rand in Ordnung bringt. Bringen es
+    zwei, ist die Kerbe keine — dann steht dort eine Gabelung, und die zu raten
+    wäre schlimmer als sie stehen zu lassen.
+    """
+    taken = {index for patch in patches for index in patch}
+    healed: list[list[int]] = []
+    for patch in patches:
+        candidates = sorted(face for face in _notch_faces(body, patch) if face not in taken)
+        closing = [face for face in candidates if not _notch_faces(body, [*patch, face])]
+        if len(closing) != 1:
+            healed.append(patch)
+            continue
+        taken.add(closing[0])
+        healed.append([*patch, closing[0]])
+    return healed
 
 
 # --- Flächen ---------------------------------------------------------------------

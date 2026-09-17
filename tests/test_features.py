@@ -3955,3 +3955,53 @@ def test_a_pocket_over_a_small_hole_in_its_floor_is_not_through() -> None:
     assert set(holes) == {20, 4}, sorted(holes)
     assert holes[20].params["through"] is False, "der Boden mit dem Loch ist ein Boden"
     assert holes[4].params["through"] is True, "und die kleine Bohrung geht durch"
+
+
+def test_a_patch_missing_one_triangle_gets_it_back() -> None:
+    """Ein Band aus Dreiecken ohne eines hat keinen brauchbaren Rand mehr.
+
+    **Der Fall ist plattformabhängig und gemessen** (17.09.2026): Die Senkung
+    aus ``test_shrinking_keeps_the_countersink_and_recognises_the_new_shoulder``
+    trägt auf Windows und Ubuntu 241 Dreiecke, auf dem Mac der CI 240 — bei
+    identischen Maßen und identischen Bohrungen daneben. Welches herausfällt,
+    entscheidet die letzte Stelle einer Normalen.
+
+    Was das kostet, ist nicht ein Dreieck, sondern der ganze Zusammenhang:
+    ``relations.boundary_rings`` verlangt an jedem Randknoten genau zwei
+    Randkanten. Fehlt eines, laufen dort vier zusammen, aus zwei Randringen
+    wird einer, und ohne Ringe findet ``cavity_chain_at`` die Kette
+    Bohrung–Senkung nicht mehr.
+
+    Gefahren wird der Fall an jedem Dreieck des Bandes einzeln — jedes ist der
+    Mac-Fall, den es hier nicht gibt.
+    """
+    from app.core.perceive.features import _notch_faces, _without_notches
+
+    # Ein Kegelmantel: dasselbe Band, das die Senkung einer Bohrung bildet.
+    profile = [(3.0, 0.0), (6.0, 3.0)]
+    body = trimesh.creation.revolve(profile, sections=48)
+    faces = list(range(len(body.faces)))
+    assert not _notch_faces(body, faces), "das vollständige Band hat keinen fransigen Rand"
+
+    for missing in faces:
+        rest = [index for index in faces if index != missing]
+        assert _notch_faces(body, rest), f"ohne Dreieck {missing} franst der Rand aus"
+        healed = _without_notches(body, [rest])[0]
+        assert set(healed) == set(faces), f"Dreieck {missing} kam nicht zurück"
+
+
+def test_a_notch_that_two_triangles_could_close_stays_open() -> None:
+    """Wo zwei Dreiecke die Kerbe schließen könnten, wird nicht geraten (Regel 21).
+
+    Die Heilung darüber nimmt genau ein Dreieck. Gäbe sie sich mit „irgendeines
+    davon" zufrieden, entschiede die Reihenfolge der Flächennummern über die
+    Geometrie — und das ist keine Entscheidung, sondern ein Zufall.
+    """
+    from app.core.perceive.features import _without_notches
+
+    body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
+    faces = list(range(len(body.faces)))
+    # Zwei fehlende Nachbarn: Der Rand franst an zwei Knoten aus, und kein
+    # einzelnes Dreieck bringt ihn in Ordnung.
+    rest = [index for index in faces if index not in {0, 1}]
+    assert _without_notches(body, [rest])[0] == rest, "mehrdeutig heißt: unverändert"

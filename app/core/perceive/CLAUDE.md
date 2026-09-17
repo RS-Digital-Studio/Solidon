@@ -357,6 +357,16 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   Stück ist nie größer als sein Fleck, die Antwort ändert sich also nicht — an
   einer verrauschten Freiform sind es 1 650 von 120 610 Flecken.
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
+- **Ein Fleck mit einer Kerbe von einem Dreieck bekommt es zurück**
+  (`_notch_faces`, `_without_notches`, 17.09.2026). `relations.boundary_rings`
+  verlangt an jedem Randknoten genau zwei Randkanten; fehlt einem Band ein
+  einziges Dreieck, laufen dort vier zusammen, aus zwei Randringen wird einer,
+  und ohne Ringe gibt es keine Nachbarschaft — also keine Bohrungskette. Der
+  Fall ist plattformabhängig und gemessen: Dieselbe Senkung trägt auf Windows
+  und Ubuntu 241 Dreiecke, auf dem Mac der CI 240, bei identischen Maßen.
+  Geschlossen wird nur, was **eindeutig** ist: genau ein freies Dreieck bringt
+  den Rand in Ordnung. Bringen es zwei, bleibt der Fleck, wie er ist — dort
+  steht eine Gabelung, und die zu raten verbietet Regel 21.
 - **Bohrungen teilen ihre Durchgangsvorarbeit.** `detect_holes` hält
   `_ThroughBounds` nur für seinen aktuellen, unveränderlichen Körper. Die
   Dreiecksgrenzen entstehen erst bei der ersten exakt achsenparallelen Bohrung.
