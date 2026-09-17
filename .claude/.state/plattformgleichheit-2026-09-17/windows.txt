@@ -1,0 +1,17 @@
+Plattform: win32 
+
+1. Die Eingabe, wie sie gebaut wird:
+   Klotz        12 Dreiecke  81bc44cc0c638208
+   Hohlraum    720 Dreiecke  675b631d16811145
+   Nachbar     480 Dreiecke  4ea356a0f946f837
+
+2. Nach der Booleschen Operation: 1226 Dreiecke
+   Eckpunkte 92ff693805f98cad
+
+3. Mit quantisierter Eingabe:
+   Gitter 1e-09 mm: Eingabe ebb4f4a699ad7a2b 2640aabbe3bb2271 ac6a28fba36e63a2
+                     Ergebnis 1596 Dreiecke  12a3601bf2fa7150
+   Gitter 1e-07 mm: Eingabe 682dcc84515e8c65 0d0882dee7162202 bef449cac64b0c66
+                     Ergebnis 1426 Dreiecke  7e5ae0becd0c1c02
+   Gitter 1e-05 mm: Eingabe 9c2eb2fc227acdb8 ac9f874c3245aad9 711ebd15e7128bf6
+                     Ergebnis 1422 Dreiecke  c00a3c247e08f6a3

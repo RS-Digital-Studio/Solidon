@@ -49,6 +49,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Hohlkugel-Zielreihe samt echter Warnung auf Apple Silicon messen |
 | [RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen](#rm-117) | Plattformen, Pakete und Grafik | Die stille Lücke ist zu; offen bleiben die Prüfsummen-Entscheidung und der Abruf gegen den Server für 0.4.0 |
+| [RM-187 — Läuft schon die Eingabe der Booleschen Operation zwischen x86 und ARM auseinander?](#rm-187) | Plattformen, Pakete und Grafik | Einen CI-Lauf mit der Sonde über alle drei Plattformen; die Antwort entscheidet, ob ein anderer Boolescher Kern die Frage überhaupt beantworten könnte |
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
@@ -539,6 +540,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   nicht gefahren.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#030-ist-draußen-03092026).
+
+<a id="rm-187"></a>
+
+- [ ] **RM-187 — Läuft schon die Eingabe der Booleschen Operation zwischen x86 und ARM
+  auseinander?** Am 17.09.2026 lieferte dasselbe Verkleinern einer Bohrung mit Senkung 1178
+  Dreiecke auf Windows und Ubuntu und 1176 auf dem ARM64-Mac der CI, bei identischen Maßen
+  (Ø 11,928, Winkel 89,838). Der **Symptomweg** ist behoben — die Erkennung verträgt jetzt
+  beide Netze (`features._without_notches`, `relations._rings_through_a_shared_corner`, Commits
+  `25fd8e81`, `8de6b7c3`, `d40a9803`, `c9c8d6f9`). Die **Ursache** ist zugeordnet, aber an ihrer
+  ersten Stelle nicht gemessen: FMA entsteht auf ARM64 von selbst, und manifold3d sagt
+  Topologie zu und Numerik nicht
+  ([`.claude/memory/arm-rechnet-anders-als-x86.md`](.claude/memory/arm-rechnet-anders-als-x86.md)).
+
+  **Die offene Frage ist eine einzige, und sie entscheidet alles danach:** Weichen schon die
+  Eckpunkte des **Eingangsnetzes** ab? `_sloping_bore` baut sie aus `cos` und `sin`, und die
+  kommen aus der libm der Plattform. Ist die Eingabe schon verschieden, dann läge die Ursache in
+  unserem eigenen Netzaufbau, nicht in manifold3d — und **kein exakter Kern könnte sie lösen**,
+  denn exakt gerechnet geben zwei verschiedene Eingaben zwei verschiedene Ergebnisse. Ist die
+  Eingabe dagegen bitgleich, entsteht der Unterschied in der Booleschen Operation, und dann ist
+  die Frage nach einem exakten Kern die richtige.
+
+  Die Sonde ist geschrieben (drei Messpunkte mit einem SHA-256 je Stufe: Eingangskörper,
+  Ergebnis, Ergebnis mit quantisierter Eingabe) und **auf Windows gefahren**. Was fehlt, ist
+  derselbe Lauf auf dem Ubuntu- und dem macOS-Runner und der Vergleich der Fingerabdrücke.
+
+  **Zwei Wege sind auf demselben Weg schon durch Messung ausgeschlossen**, nicht durch
+  Vermutung: Die Eingabe vor der Operation zu quantisieren macht die Netze **schlechter** (1422
+  bis 1596 Dreiecke statt 1226 — Runden zerstört die Koplanarität der Klotzflächen), und die
+  doppelte Ecke nachträglich zu verschweißen trifft das Volumen auf 0,000e+00 genau, lässt das
+  Netz aber nicht wasserdicht zurück; `_tidied` lehnt zu Recht ab.
+
+  Abnahme: drei Fingerabdrücke je Messpunkt aus einem CI-Lauf, nebeneinander, mit der Aussage
+  welche Stufe als erste auseinanderläuft. Die Folgeentscheidung steht als §7 und §8 in
+  [`konzepte/geogram-als-zweiter-kern.md`](konzepte/geogram-als-zweiter-kern.md); der
+  kommerzielle Kandidat in [`konzepte/anfrage-trueform.md`](konzepte/anfrage-trueform.md)
+  wartet auf dieselbe Zusage.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
