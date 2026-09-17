@@ -614,12 +614,21 @@ def _rings_through_a_shared_corner(
     remaining = {(int(a), int(b)) for a, b in boundary}
     rings: list[frozenset[tuple[int, int]]] = []
     while remaining:
-        start = next(iter(remaining))
+        # **Begonnen wird an der geteilten Ecke, wo es eine gibt.** Ein Lauf,
+        # der mitten in einem Lappen anfängt, endet auch dort; geschnitten
+        # wird aber an der Ecke, und der erste und der letzte Teil wären dann
+        # zwei Hälften desselben Lappens. Gemessen am nachgestellten Netz:
+        # Von der Ecke aus kommen die zwei Kreise heraus, von irgendwo aus
+        # ein Lappen mit beiden Randhöhen darin.
+        start = next(
+            (edge for edge in remaining if shared & {edge[0], edge[1]}),
+            next(iter(remaining)),
+        )
         ring = [start]
         remaining.discard(start)
-        # ``ahead`` ist der Knoten, auf den der Lauf zugeht — die Richtung ist
-        # am Anfang beliebig, ein Ring schließt sich in beiden.
-        edge, ahead = start, start[1]
+        # Weg **von** der geteilten Ecke, damit der Lauf erst an ihr endet.
+        ahead = start[1] if start[0] in shared else start[0]
+        edge = start
         while True:
             following = _next_boundary_edge(edge, ahead, remaining, partner, shared)
             if following is None:

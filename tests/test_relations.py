@@ -549,16 +549,32 @@ def test_a_border_through_one_corner_twice_is_two_borders() -> None:
 
     body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
     faces = np.asarray(body.faces)
-    # Ein Segment heraus und die diagonalen Ecken der Lücke zusammenlegen:
-    # genau die Signatur des Mac-Netzes — ein Knoten mit vier Randkanten.
-    rest = faces[[index for index in range(len(faces)) if index not in (0, 1)]]
-    merged = np.arange(len(body.vertices))
-    merged[3] = 0
-    pinched = trimesh.Trimesh(vertices=body.vertices, faces=merged[rest], process=False)
+    points = np.asarray(body.vertices)
+    # **Die Signatur des Mac-Netzes**: Der Mantel berührt sich mit **einem**
+    # seiner Ränder selbst — dort liegt die geteilte Ecke (gemessen bei
+    # z = 18,44, und die Randhöhen reichen von 16,55 bis 18,44). Nachgestellt
+    # wird das, indem zwei nicht benachbarte Punkte **desselben** Randes
+    # denselben Eckpunkt bekommen. Der andere Rand bleibt unberührt, und
+    # genau den vergleicht ``_shoulder_connections`` mit ihrer Ringschulter.
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    unique, count = np.unique(edges, axis=0, return_counts=True)
+    nodes = np.unique(unique[count == 1])
+    upper = [int(node) for node in nodes if points[node][2] > 1.5]
+    merged = np.arange(len(points))
+    merged[upper[10]] = upper[0]
+    pinched = trimesh.Trimesh(vertices=points, faces=merged[faces], process=False)
 
     rings = _face_boundary_rings(pinched, np.arange(len(pinched.faces), dtype=np.int64))
     assert rings is not None, "eine Acht ist kein Grund, gar nichts zu melden"
-    assert len(rings) == 2, f"zwei Lappen, nicht {len(rings)}"
+    # Der berührte Rand zerfällt in zwei Lappen, der andere bleibt ganz.
+    assert len(rings) == 3, f"zwei Lappen und ein ganzer Rand, nicht {len(rings)}"
+    heights = [
+        sorted({round(float(points[node][2]), 2) for edge in ring for node in edge})
+        for ring in rings
+    ]
+    assert [0.0] in heights, "der unberührte Rand muss vollständig übrig bleiben"
+    whole = next(ring for ring, height in zip(rings, heights, strict=True) if height == [0.0])
+    assert len(whole) == 48, f"und zwar ganz: {len(whole)} statt 48 Kanten"
 
     # Und der unveränderte Rand bleibt, was er war.
     whole = _face_boundary_rings(body, np.arange(len(body.faces), dtype=np.int64))

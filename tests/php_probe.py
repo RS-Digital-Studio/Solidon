@@ -12,6 +12,7 @@ Windows und macOS richten dort keines ein und überspringen weiter.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import subprocess
@@ -38,13 +39,29 @@ def php_executable(reason: str = "PHP fehlt") -> str:
 
 
 def php_command(*extensions: str) -> list[str]:
-    """Lädt benötigte Erweiterungen nur im Prüfprozess, ohne eine php.ini zu ändern."""
+    """Lädt benötigte Erweiterungen nur im Prüfprozess, ohne eine php.ini zu ändern.
+
+    **Gefragt wird einmal je Prozess** (`_php_command`). Welche Erweiterungen
+    eine Installation mitbringt, ändert sich während eines Testlaufs nicht, und
+    jeder Aufruf kostete zwei PHP-Starts. Auf dem Windows-Runner der CI lief
+    ``php -m`` am 17.09.2026 in sein Zeitlimit — ein kalter Start hinter dem
+    Virenscanner dauert dort, und die Endpunkttests fragen oft.
+
+    Die Liste wird als Kopie herausgegeben: Wer sie um ein ``-r`` ergänzt, soll
+    damit nicht die Antwort für alle anderen verändern.
+    """
+    return list(_php_command(extensions))
+
+
+@functools.cache
+def _php_command(extensions: tuple[str, ...]) -> tuple[str, ...]:
+    """Die eigentliche Suche — je Prozess und Erweiterungsmenge genau einmal."""
     executable = php_executable()
     command = [executable]
     if not extensions:
-        return command
+        return tuple(command)
     modules = subprocess.run(
-        [executable, "-m"], capture_output=True, text=True, timeout=30, check=False
+        [executable, "-m"], capture_output=True, text=True, timeout=120, check=False
     )
     assert modules.returncode == 0, "PHP kann seine Erweiterungen nicht auflisten"
     loaded = set(modules.stdout.lower().splitlines())
