@@ -403,8 +403,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   öffnen, `close()`, `quit()`, Prozessende — endet offscreen wie auf der echten Plattform mit
   Exit 0, und zwar in allen drei Abbauvarianten (`close`, `release`, gar keine). Auch ohne
   Ereignisschleife, also genau wie die Suite fährt, bleibt derselbe Ablauf außerhalb von pytest
-  sauber. Es ist ein Befund der **Testinfrastruktur** unter Windows; die Linux-CI desselben
-  Stands scheiterte an anderen Punkten, nicht an diesem.
+  sauber. Es ist ein Befund der **Testinfrastruktur** unter Windows — und zwar der hiesigen
+  Portionierung, nicht der Plattform: Der Tag-Lauf vom 17.09.2026 fährt `Suite (windows-latest)`
+  grün. Dort läuft jede Fensterdatei in einem eigenen Prozess, hier laufen sie in Portionen zu
+  sechzig; getroffen wird nur die Portion, deren letzter Test ein Fenster mit eingelesenem STL
+  hinterlässt.
 
   Was offen bleibt, ist die Ursache hinter `processEvents` — welcher zugestellte Ereignistyp den
   Speicher verletzt. Nächster Schritt: die Zustellung je Ereignistyp einzeln fahren
