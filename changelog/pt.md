@@ -24,6 +24,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.
 - A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.
 - As arestas podem ser selecionadas em qualquer corpo e arredondadas ou chanfradas, também em modelos importados.
+- Os furos, cilindros e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux. Um projeto é reconhecido e editado da mesma forma em qualquer computador.
 
 ### Construção
 

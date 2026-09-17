@@ -24,6 +24,7 @@ scrive in `website/version.json`.
 - Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.
 - Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.
 - Gli spigoli si possono selezionare su qualsiasi corpo e raccordare o smussare, anche sui modelli importati.
+- Fori, cilindri e raccordi nascono dagli stessi punti su Windows, macOS e Linux. Un progetto viene riconosciuto e modificato allo stesso modo su ogni computer.
 
 ### Costruzione
 

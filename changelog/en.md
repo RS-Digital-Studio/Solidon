@@ -24,6 +24,7 @@ it into `website/version.json`.
 - Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.
 - Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.
 - Edges can be picked on any body and rounded or chamfered — on imported models too.
+- Bores, cylinders and roundings are built from the same points on Windows, macOS and Linux. A project is recognised and edited the same way on every machine.
 
 ### Construction
 

@@ -25,6 +25,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.
 - La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.
 - Las aristas se pueden seleccionar en cualquier cuerpo y redondear o achaflanar, también en modelos importados.
+- Los taladros, cilindros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux. Un proyecto se reconoce y se edita igual en cualquier equipo.
 
 ### Construcción
 

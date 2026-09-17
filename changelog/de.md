@@ -49,6 +49,7 @@ Nutzen da und sonst nichts.
 - An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.
 - Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.
 - Kanten lassen sich an jedem Körper anklicken und verrunden oder fasen — auch an eingelesenen Modellen.
+- Bohrungen, Zylinder und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten. Ein Projekt wird auf jedem Rechner gleich erkannt und gleich bearbeitet.
 
 ### Konstruieren
 

@@ -25,6 +25,7 @@ dans `website/version.json`.
 - Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.
 - La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.
 - Les arêtes se sélectionnent sur n'importe quel corps et s'arrondissent ou se chanfreinent — aussi sur les modèles importés.
+- Les perçages, cylindres et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux. Un projet est reconnu et modifié de la même façon sur chaque machine.
 
 ### Construction
 
