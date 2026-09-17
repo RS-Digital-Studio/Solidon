@@ -48,6 +48,13 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python .claude/.state/plattformgleichheit-2026-09-17/eingabe_messen.py
 
+      - name: Die Kreispunkte messen
+        # Der Kern von RM-187: Der Klotz ist auf allen drei Plattformen
+        # bitgleich, Hohlraum und Nachbar nicht — beide kommen aus `cos`/`sin`.
+        # Diese Messung sagt, welcher Rechenweg zu denselben Punkten führt.
+        shell: bash
+        run: python .claude/.state/plattformgleichheit-2026-09-17/kreispunkte_messen.py
+
       - name: Das Netz sichern
         shell: bash
         env:
