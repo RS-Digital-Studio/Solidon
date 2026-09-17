@@ -1860,7 +1860,14 @@ def _rooted(
         top_hub, bottom_hub = 2 * count, 2 * count + 1
         prism = trimesh.Trimesh(
             vertices=np.vstack(
-                (points, shifted, points.mean(axis=0)[None], shifted.mean(axis=0)[None])
+                (
+                    points,
+                    shifted,
+                    # Diese zwei Mitten werden Eckpunkte — exakt summiert
+                    # (RM-187), sonst entscheidet die SIMD-Breite mit.
+                    np.array([units.exact_centre(points.tolist())], dtype=np.float64),
+                    np.array([units.exact_centre(shifted.tolist())], dtype=np.float64),
+                )
             ),
             faces=np.vstack(
                 (
@@ -2011,7 +2018,7 @@ def _feature_mount(
                 ordered.append(following)
                 previous, current = current, following
             points = np.asarray(mesh.raw.vertices, dtype=np.float64)[ordered]
-            origin = points.mean(axis=0)
+            origin = np.array(units.exact_centre(points.tolist()), dtype=np.float64)
             _, _, directions = np.linalg.svd(points - origin, full_matrices=False)
             normal = directions[-1]
             if np.max(np.abs((points - origin) @ normal)) > EPS_GEOM:
@@ -5897,10 +5904,10 @@ def _bore_end_planes(
     points = np.asarray(body.vertices, dtype=np.float64)
     ends = [points[sorted({vertex for edge in ring for vertex in edge})] for ring in rings]
     axis = np.asarray(_feature_direction(feature), dtype=np.float64)
-    ends.sort(key=lambda ring: float(ring.mean(axis=0) @ axis))
+    ends.sort(key=lambda ring: float(np.asarray(units.exact_centre(ring.tolist())) @ axis))
     planes = []
     for index, edge in enumerate(ends):
-        hub = edge.mean(axis=0)
+        hub = np.array(units.exact_centre(edge.tolist()), dtype=np.float64)
         _left, spread, directions = np.linalg.svd(edge - hub, full_matrices=False)
         if float(spread[-1]) > FLAT_RIM * len(edge) ** 0.5:
             return ()
