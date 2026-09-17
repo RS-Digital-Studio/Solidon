@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core import units
 from app.core.geom.mesh import MeshData
 
 DATA = Path(__file__).parent / "data"
@@ -394,7 +395,15 @@ def test_affine_large_path_measures_current_shape_and_search_extent(
 
 
 def test_search_extent_remains_stable_on_repeated_known_scans() -> None:
-    """Wiederholtes Auswerten vergrößert den Suchradius nicht ohne Geometrieänderung."""
+    """Wiederholtes Auswerten vergrößert den Suchradius nicht ohne Geometrieänderung.
+
+    **Gefragt ist der Radius, nicht das letzte Bit** (17.09.2026). Der erste
+    Anlauf verglich die beiden Merkmalssätze mit ``==``, und damit jeden Float
+    darin auf Bitgleichheit — was Regel 6 gerade verbietet. Auf Windows ging
+    das durch, auf dem Mac der CI nicht: Derselbe Radius kam als
+    14.982393335908817 und 14.982393335908831 heraus, 1,4e-14 auseinander.
+    Aufschaukeln sieht anders aus, und genau darum geht es hier.
+    """
     from app.core.perceive.local import detect_known, detect_local
 
     mesh = blind_cylinder()
@@ -402,7 +411,15 @@ def test_search_extent_remains_stable_on_repeated_known_scans() -> None:
     first = detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,)).features
     again = detect_known(mesh, first)
     repeated = detect_known(mesh, again)
-    assert repeated == again
+
+    assert repeated.keys() == again.keys(), "ein Durchgang mehr findet dieselben Merkmale"
+    for name, feature in again.items():
+        assert repeated[name].kind == feature.kind
+        vorher = float(feature.params["local_search_radius"])
+        nachher = float(repeated[name].params["local_search_radius"])
+        assert units.is_close(nachher, vorher), (
+            f"{name}: der Suchradius wuchs von {vorher} auf {nachher}"
+        )
     assert all("local_search_radius" in feature.params for feature in first.values())
 
 
