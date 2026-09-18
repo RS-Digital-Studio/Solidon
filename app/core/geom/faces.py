@@ -26,11 +26,18 @@ from collections.abc import Callable
 
 import numpy as np
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHANGE_SELECTION,
+    CORRECT_INPUT,
+    REPAIR_AND_RETRY,
+    GeometryError,
+    ValidationError,
+)
 from app.core.geom.boolean import BooleanKind, BooleanOutcome, boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
-from app.core.types import CancelToken, Feature, Quality, Vec3
+from app.core.types import CancelToken, Feature, Finding, Quality, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -51,6 +58,26 @@ UPRIGHT_ENOUGH = 0.1
 
 #: Die Obergrenze der Formschräge, wie im exakten Kern.
 MAX_DRAFT_DEGREES = 30.0
+
+#: Bis zu wie vielen senkrechten Wänden die Formschräge ihre Wandliste über die
+#: Merkmalserkennung hinaus ergänzt.
+#:
+#: Die Erkennung beantwortet „was kann der Kunde anklicken" und verwirft dabei
+#: kleine Flächen (``MIN_FACE_AREA``, ``BROAD_FACE_SHARE``). Für diese
+#: Operation ist das die falsche Frage — an ``plate_cm.stl``, einem Quader von
+#: 8 auf 5 auf 0,5, sind die beiden schmalen Wände 2,5 mm² groß und damit kein
+#: Merkmal; die Formschräge stellte vier von sechs Flächen an (Befund Robert,
+#: 18.09.2026).
+#:
+#: **Ergänzt wird trotzdem nicht unbegrenzt**, und die Grenze ist gemessen: Ein
+#: facettierter Bohrungsmantel besteht aus lauter ebenen senkrechten Streifen,
+#: die kein Merkmal beansprucht. An ``plate_countersunk.stl`` kämen damit 128
+#: Wände zu vier dazu, und die Keile darüber überlappen sich so, dass die
+#: Rückfallkette bis zur Voxelstufe durchfällt und **dort** aufgibt — statt
+#: eines angestellten Quaders gab es gar nichts. Zwölf ist der gröbste
+#: Zylinder, den noch jemand als Vieleck zeichnet; darüber ist die Ergänzung
+#: unzuverlässig, und dann bleibt es bei der Erkennung, die dafür gebaut ist.
+MOST_WALLS_TO_GUESS = 12
 
 
 def face_normal(feature: Feature) -> Vec3:
@@ -263,9 +290,13 @@ def draft_vertical(
             _("Der Winkel muss zwischen null und 30 Grad liegen."),
             value=angle_deg,
         )
+    _must_be_closed(mesh)
     upright = _upright_faces(mesh)
     if not upright:
-        raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
+        raise GeometryError(
+            detail=_("Dieser Körper hat keine senkrechten Flächen."),
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
 
     slope = math.tan(math.radians(angle_deg))
     bottom = mesh.bounds.minimum[2]
@@ -288,6 +319,26 @@ def draft_vertical(
             values={"angle_deg": round(angle_deg, 2)},
             suggestions=(CORRECT_INPUT, CANCEL),
         )
+    # **Ein Teil, das der Keil ganz aufgezehrt hat, wird genannt.** Die
+    # neutrale Ebene gilt dem ganzen Körper: Ein loses Stück, das über ihr
+    # schwebt, verliert dort ``Höhe mal tan(Winkel)`` — an ``two_components.stl``
+    # ist das zweite Stück 0,2 mm groß und sitzt 10 mm über der Unterkante,
+    # bei drei Grad also 0,52 mm Abtrag auf 0,2 mm Material. Das ist richtig
+    # gerechnet und trotzdem nichts, was jemand stillschweigend hinnehmen
+    # will.
+    before, after = mesh.component_count, outcome.mesh.component_count
+    if after < before:
+        outcome.findings.append(
+            Finding(
+                code="draft.parts_consumed",
+                severity="warning",
+                message=_(
+                    "Lose Kleinteile hat dieser Winkel ganz abgetragen — sie lagen über "
+                    "der Unterkante, an der das Maß bleibt."
+                ),
+                values={"before": before, "after": after, "angle_deg": round(angle_deg, 2)},
+            )
+        )
     return outcome
 
 
@@ -299,15 +350,87 @@ def _upright_faces(mesh: MeshData) -> list[tuple[list[int], np.ndarray]]:
     Stück. Über die Dreiecke gerechnet wären es zwei Keile mit einer
     gemeinsamen Kante — zweimal dieselbe Arbeit und eine Naht mehr, an der die
     Boolesche Rechnung stolpern kann.
+
+    **Und was sie übersieht, kommt dazu** — die Begründung und die Grenze
+    stehen bei :data:`MOST_WALLS_TO_GUESS`.
     """
     from app.core.perceive.features import detect
 
+    features = detect(mesh)
     found: list[tuple[list[int], np.ndarray]] = []
-    for feature in detect(mesh).values():
+    for feature in features.values():
         if feature.kind != "face" or not feature.face_indices:
             continue
         normal = np.asarray(face_normal(feature), dtype=float)
         if abs(float(normal[2])) > UPRIGHT_ENOUGH:
             continue
         found.append(([int(index) for index in feature.face_indices], normal))
-    return found
+    return found + _walls_no_feature_claims(mesh, features, len(found))
+
+
+def _must_be_closed(mesh: MeshData) -> None:
+    """Hält ein Netz an, aus dem die Keile keinen Körper schneiden können.
+
+    Die Keile gehen als Differenz in die Rückfallkette, und die braucht
+    geschlossene Körper. An ``broken_open.stl`` fielen alle drei Kernstufen
+    durch, die Voxelstufe rechnete 3,7 Sekunden und gab von 4000 mm³ noch 101
+    zurück — kein angestellter Körper, sondern ein anderer. Bei einem
+    eingelesenen Modell in Kundengröße ist dasselbe der Abriss, den Robert am
+    18.09.2026 gemeldet hat: „Formschräge einstellen, Programm stürzt ab."
+
+    **Gefragt wird, was die Kette fragt** — nicht ``is_watertight`` am rohen
+    Netz. Eine STL ist per Index nie dicht, und genau dafür gibt es Stufe 2
+    (``boolean._welded_input``): ``plate_countersunk.stl`` ist roh offen,
+    verschweißt und entnadelt trägt es, und die Formschräge lief dort immer
+    schon. Die Probe am rohen Netz hätte es abgewiesen — eine Sperre, die den
+    Normalfall trifft, ist keine Sperre, sondern ein neuer Fehler.
+    """
+    welded, _gone = merge_vertices(mesh)
+    cleaned, _dropped = remove_degenerate_faces(welded)
+    if mesh.is_watertight or welded.is_watertight or cleaned.is_watertight:
+        return
+    raise GeometryError(
+        detail=_(
+            "Dieses Modell ist nicht geschlossen — angestellt käme ein anderer "
+            "Körper heraus. Erst reparieren."
+        ),
+        suggestions=(REPAIR_AND_RETRY, CANCEL),
+    )
+
+
+def _walls_no_feature_claims(
+    mesh: MeshData,
+    features: dict[str, Feature],
+    recognised: int,
+) -> list[tuple[list[int], np.ndarray]]:
+    """Die ebenen senkrechten Flächen, die kein erkanntes Merkmal beansprucht.
+
+    Gesucht wird über ``facets`` — zusammenhängende koplanare Dreiecksgruppen —
+    am **verschweißten** Netz: Eine STL schreibt jedes Dreieck mit eigenen
+    Ecken, und ungeschweißt hat sie null Nachbarschaften und null Facetten
+    (:func:`perceive.features._one_body` beschreibt denselben Fall). Die
+    Dreiecksnummern bleiben dabei dieselben, daran hängen die Merkmalsnummern.
+
+    Beansprucht heißt: von **irgendeinem** Merkmal, nicht nur von einer Fläche.
+    Der Mantel einer erkannten Bohrung gehört ihr, auch wenn er keine Ebene
+    ist — was hier übrig bleibt, hat die Erkennung gar nicht gesehen.
+    """
+    from app.core.perceive.features import _one_body
+
+    body = _one_body(mesh).raw
+    claimed = {int(index) for entry in features.values() for index in (entry.face_indices or ())}
+    groups = [np.asarray(group, dtype=int) for group in body.facets]
+    grouped = {int(index) for group in groups for index in group}
+    groups += [np.array([index]) for index in range(len(body.faces)) if index not in grouped]
+
+    guessed: list[tuple[list[int], np.ndarray]] = []
+    for group in groups:
+        if any(int(index) in claimed for index in group):
+            continue
+        normal = np.asarray(body.face_normals[group[0]], dtype=float)
+        if abs(float(normal[2])) > UPRIGHT_ENOUGH:
+            continue
+        guessed.append(([int(index) for index in group], normal))
+        if recognised + len(guessed) > MOST_WALLS_TO_GUESS:
+            return []
+    return guessed

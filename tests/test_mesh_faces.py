@@ -10,6 +10,7 @@ bewegte jede Fläche, die dorthin zeigte.
 from __future__ import annotations
 
 import math
+import pathlib
 from typing import Any
 
 import pytest
@@ -25,6 +26,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject
 
+CORPUS = pathlib.Path(__file__).parent / "data" / "meshes"
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 STEP = 10.0
 DRAFT = 3.0
@@ -210,6 +212,122 @@ def test_both_kernels_draft_to_the_same_body() -> None:
 
     assert exact.volume == pytest.approx(drafted_volume(DRAFT), abs=1e-6)
     assert meshed.volume == pytest.approx(exact.volume, abs=1e-6)
+
+
+def flat_plate() -> MeshData:
+    """Eine flache Platte 8 × 5 × 0,5 — der Körper aus Roberts Befund.
+
+    Die beiden schmalen Wände messen 2,5 mm², und genau damit fallen sie
+    durch jede Schwelle der Merkmalserkennung: ``MIN_FACE_AREA`` liegt bei
+    4,0, und fünf Prozent der Gesamtoberfläche sind 4,65.
+    """
+    body = trimesh.creation.box(extents=(8.0, 5.0, 0.5))
+    body.apply_translation((0.0, 0.0, 0.25))
+    return MeshData(body)
+
+
+def test_the_draft_reaches_every_wall_not_just_the_recognised_ones() -> None:
+    """Alle vier Wände stehen an, auch die, die kein Merkmal geworden ist.
+
+    **Der Befund Robert, 18.09.2026:** „ganzes Modell gewählt nur 2 seiten
+    verändern sich". Gemessen an ``plate_cm.stl`` — einem Quader —, lieferte
+    die Erkennung vier Flächen statt sechs: Die beiden schmalsten fehlten,
+    und die Formschräge stellte an, was sie fand.
+
+    Das war keine Fehlfunktion der Erkennung. Sie beantwortet die Frage
+    „was kann der Kunde anklicken", und eine Fläche von 2,5 mm² an einem
+    Teil von 93 mm² Oberfläche ist darauf eine vertretbare Antwort. Für
+    diese Operation ist es die falsche Frage: Hier zählt jede ebene Wand.
+    """
+    plate = flat_plate()
+    recognised = [
+        entry
+        for entry in detect(plate).values()
+        if entry.kind == "face" and abs(entry.params["normal"][2]) <= 0.1
+    ]
+    assert len(recognised) == 2, "die Voraussetzung des Befunds: zwei Wände sind kein Merkmal"
+
+    shaped = draft_vertical(plate, DRAFT).mesh.raw
+
+    slope = math.tan(math.radians(DRAFT))
+    highest = shaped.vertices[shaped.vertices[:, 2] > 0.5 - 1e-6]
+    assert float(highest[:, 0].max()) == pytest.approx(4.0 - slope * 0.5, abs=1e-6), (
+        "auch die schmale Wand wandert"
+    )
+    assert float(highest[:, 1].max()) == pytest.approx(2.5 - slope * 0.5, abs=1e-6)
+    assert shaped.bounds[0][0] == pytest.approx(-4.0, abs=1e-6), "unten bleibt jedes Maß"
+    assert shaped.bounds[0][1] == pytest.approx(-2.5, abs=1e-6)
+
+
+def test_a_cylinder_is_not_mistaken_for_a_stack_of_walls() -> None:
+    """Und die Ergänzung nimmt keinen Mantel mit.
+
+    Die Gegenprobe zum Test darüber: Ein fein facettierter Zylinder besteht
+    aus lauter senkrechten koplanaren Streifen. Jeden davon als eigene Wand
+    anzustellen hieße, aus einem Mantel dreihundert Keile zu bauen — der
+    exakte Kern stellt nur ebene Flächen an, und das Netz hält sich daran.
+    """
+    body = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=180)
+    body.apply_translation((0.0, 0.0, 10.0))
+
+    with pytest.raises(GeometryError) as problem:
+        draft_vertical(MeshData(body), DRAFT)
+
+    assert "senkrechten" in str(problem.value.detail)
+
+
+def test_an_open_mesh_is_turned_away_before_the_chain_wrecks_it() -> None:
+    """Ein offenes Netz wird angehalten, nicht angestellt.
+
+    Die Keile gehen als Differenz in die Rückfallkette, und die braucht
+    geschlossene Körper. An ``broken_open.stl`` fielen alle drei Kernstufen
+    durch, die Voxelstufe rechnete 3,7 Sekunden und gab von 4000 mm³ noch
+    101 zurück — kein angestellter Körper, sondern ein anderer.
+    """
+    body = trimesh.load_mesh(str(CORPUS / "broken_open.stl"))
+
+    with pytest.raises(GeometryError) as problem:
+        draft_vertical(MeshData(body), DRAFT)
+
+    assert "nicht geschlossen" in str(problem.value.detail)
+    assert problem.value.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
+
+
+def test_a_mesh_only_the_weld_closes_still_goes_through() -> None:
+    """Und die Gegenprobe: per Index offen ist nicht dasselbe wie offen.
+
+    Eine STL schreibt jedes Dreieck mit eigenen Ecken und ist deshalb nie
+    dicht, bevor jemand sie verschweißt — dafür gibt es Stufe 2 der Kette.
+    ``plate_countersunk.stl`` ist roh offen und trug die Formschräge immer
+    schon; eine Sperre am rohen Netz hätte den Normalfall getroffen.
+    """
+    body = MeshData(trimesh.load_mesh(str(CORPUS / "plate_countersunk.stl")))
+    assert not body.raw.is_watertight, "die Voraussetzung: roh ist es offen"
+
+    shaped = draft_vertical(body, DRAFT).mesh
+
+    assert shaped.raw.is_watertight
+    assert shaped.raw.volume < body.raw.volume, "und es ist wirklich angestellt worden"
+
+
+def test_a_loose_speck_the_wedge_eats_is_named() -> None:
+    """Was der Keil ganz abträgt, steht im Bericht.
+
+    Die neutrale Ebene gilt dem ganzen Körper: ``two_components.stl`` trägt
+    neben einem Würfel von 20 mm ein loses Stück von 0,2 mm, zehn Millimeter
+    über der Unterkante. Bei drei Grad sind das 0,52 mm Abtrag auf 0,2 mm
+    Material — richtig gerechnet, und trotzdem nichts, was jemand
+    stillschweigend hinnehmen will.
+    """
+    body = MeshData(trimesh.load_mesh(str(CORPUS / "two_components.stl")))
+    assert body.component_count == 2, "die Voraussetzung: zwei Teile"
+
+    outcome = draft_vertical(body, DRAFT)
+
+    assert outcome.mesh.component_count == 1
+    spoken = [entry for entry in outcome.findings if entry.code == "draft.parts_consumed"]
+    assert spoken, "ein Teil ist verschwunden, und niemand hat es gesagt"
+    assert spoken[0].values["before"] == 2 and spoken[0].values["after"] == 1
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])

@@ -604,6 +604,18 @@ ursprüngliche Kante nur zwischen genau zwei nachgewiesenen ebenen Flächen.
 Die Flächenerkennung grenzt diese von Mantelfacetten ab; eine Tangente einer
 gekrümmten Nachbarwand darf keine Ersatzebene für einen Füllkörper werden.
 
+**Und die Formschräge holt ihre Wände selbst.** Die Merkmalserkennung
+beantwortet „was kann der Kunde anklicken" und verwirft kleine Flächen; an
+einem Quader von 8 auf 5 auf 0,5 mm sind die beiden schmalen Wände 2,5 mm²
+groß und damit kein Merkmal — angestellt wurden vier von sechs Flächen.
+`_walls_no_feature_claims` ergänzt, was kein Merkmal beansprucht, bis zur
+Grenze `MOST_WALLS_TO_GUESS`; darüber ist die Ergänzung unzuverlässig, weil
+ein facettierter Bohrungsmantel aus lauter ebenen senkrechten Streifen
+besteht. Ein nicht geschlossenes Netz wird vorher angehalten
+(`_must_be_closed`, mit der Frage, die Stufe 2 der Rückfallkette stellt): Die
+Keile gehen als Differenz hinein, und auf der Voxelstufe kam von 4000 mm³
+noch 101 zurück.
+
 `faces.py` — die **Flächen** eines Netzes bearbeiten, Gegenstück zu `edges.py`:
 *Fläche versetzen* und die *Formschräge*. Über der gewählten Fläche entsteht ein
 Prisma ihres eigenen Umrisses — Boden und Deckel sind ihre Dreiecke, der Mantel
