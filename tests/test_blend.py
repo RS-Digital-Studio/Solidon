@@ -184,6 +184,61 @@ def test_a_box_on_the_grid_lines_still_closes(profile: Profile) -> None:
     assert merged.volume == pytest.approx(first.raw.union(other).volume, rel=0.05)
 
 
+def test_a_flat_wall_comes_back_flat(profile: Profile) -> None:
+    """Eine ebene Wand bleibt eine ebene Fläche — kein Streifenstapel.
+
+    **Befund Robert, 18.09.2026:** „nach verschmelzen sind seiten auch in
+    schichten zerfallen, eine seite 43 schichten zb linke seite oder rechte
+    seite, ober und Unterseite auch" — und daneben „weich verschmelzen,
+    fehlerhaft, abgefranste kanten". Beides ist dasselbe: Das Abstandsfeld maß
+    den Weg zum nächsten **Punkt** der Oberflächenwolke, und die ist diskret.
+    Vor einer ebenen Wand fällt dieser Weg je nach Lage des Rasterpunkts ein
+    wenig zu lang aus, und zwar wellig — gemessen am Quader unten 0,031 mm
+    Streuung, 2,015 Grad Normalenabweichung und **67 koplanare Gruppen** in
+    einer einzigen Wand. Die Merkmalserkennung liest daraus Streifen, und der
+    Kunde sieht Schichten.
+
+    Gemessen wird deshalb der Weg zur **Ebene** des nächsten Dreiecks. An
+    einer ebenen Wand ist er exakt; an einer gekrümmten unterschätzt er um
+    das, was das Rasterverfahren ohnehin rundet.
+    """
+    first = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 20.0)))
+    tower = trimesh.creation.box(extents=(12.0, 12.0, 40.0))
+    tower.apply_translation((0.0, 0.0, 20.0))
+
+    merged = run(first, MeshData.of(tower), profile, radius=3.0, grid=1.0).outputs[0].mesh
+
+    body = merged.raw
+    centres, normals = body.triangles_center, body.face_normals
+    wall = np.where(
+        (normals[:, 0] < -0.99) & (np.abs(centres[:, 2]) < 6.0) & (np.abs(centres[:, 1]) < 10.0)
+    )[0]
+    assert len(wall) > 100, "die Voraussetzung: die linke Wand steht im Ergebnis"
+    assert float(np.ptp(centres[wall, 0])) == pytest.approx(0.0, abs=1e-9), "eben und nicht wellig"
+    assert float(np.abs(normals[wall, 0] + 1.0).max()) == pytest.approx(0.0, abs=1e-9)
+    chosen = {int(index) for index in wall}
+    on_the_wall = [group for group in body.facets if chosen & {int(index) for index in group}]
+    assert len(on_the_wall) == 1, f"eine Wand ist eine Fläche, gefunden: {len(on_the_wall)}"
+
+
+def test_a_curved_body_keeps_its_volume_when_blended(profile: Profile) -> None:
+    """Und die Gegenprobe: An Rundungen ändert sich nichts Wesentliches.
+
+    Der Weg zur Ebene des nächsten Dreiecks unterschätzt an einer gewölbten
+    Fläche den Abstand. Gemessen an drei Paarungen über den Korpus hinaus
+    liegt der Unterschied unter einem halben Promille; was bleibt, ist ein
+    geschlossener einteiliger Körper.
+    """
+    ball = MeshData.of(trimesh.creation.icosphere(radius=20.0, subdivisions=3))
+    other = trimesh.creation.icosphere(radius=15.0, subdivisions=3)
+    other.apply_translation((25.0, 0.0, 0.0))
+
+    merged = run(ball, MeshData.of(other), profile, radius=3.0, grid=1.0).outputs[0].mesh
+
+    assert merged.is_watertight and merged.component_count == 1
+    assert merged.volume == pytest.approx(44939.0, rel=0.01)
+
+
 def test_the_same_parameters_give_the_same_body(profile: Profile) -> None:
     """Die Abstandsabfrage läuft über alle Kerne — Nebenläufigkeit darf das
     Ergebnis nicht anfassen.

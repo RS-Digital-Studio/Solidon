@@ -382,7 +382,11 @@ in Flucht bringen)
 
 `primitive_ops.py` (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring;
 Kegel und Ring dienen auch als verständliche Werkzeugkörper für Boolesche Ops)
-· `blend.py` (weiches Verschmelzen) · `displace.py`
+· `blend.py` (weiches Verschmelzen — sein Abstandsfeld misst den Weg zur
+**Ebene** des nächsten Dreiecks, nicht zu seiner Mitte: Die Oberflächenwolke
+ist diskret, und der Weg zum nächsten Punkt fällt vor einer ebenen Wand
+wellig aus. Eine Wand zerfiel damit in 67 koplanare Gruppen, und die
+Erkennung las daraus Schichten) · `displace.py`
 (Höhenfeld) · `lattice.py` (Gitterfüllung) · `texture_ops.py`
 (Oberflächentexturen als echte Geometrie) · `sculpt.py` · `pose.py`
 (Skelett und Stellung) · `sketch_solid.py` (einen Skizzenumriss zu einem Netz

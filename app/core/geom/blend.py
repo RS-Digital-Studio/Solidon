@@ -136,6 +136,29 @@ def distance_field(
     berührt, und misst danach ab Zellmitte. Gemessen an einer Kugel mit 25 mm
     Radius sind das acht Prozent zu viel Volumen — bei einem Verfahren, dessen
     Genauigkeit ohnehin am Raster hängt, ist das der falsche Ort zum Sparen.
+
+    **Gemessen wird der Weg zur Ebene des nächsten Dreiecks, nicht zu seiner
+    Mitte** (Befund Robert, 18.09.2026: „weich verschmelzen, fehlerhaft,
+    abgefranste kanten" und „nach verschmelzen sind seiten auch in schichten
+    zerfallen, eine seite 43 schichten"). Beides war dasselbe: Die
+    Oberflächenwolke ist **diskret**, und der Weg zum nächsten *Punkt* fällt
+    vor einer ebenen Wand je nach Lage des Rasterpunkts ein wenig zu lang aus
+    — wellig, mit der Periode der Wolke. Gemessen an einem Quader von
+    40 auf 30 auf 20 mit einem Turm darauf, Rasterweite 1,0: 0,031 mm
+    Streuung, 2,015 Grad Normalenabweichung, und die linke Wand zerfiel in
+    **67 koplanare Gruppen**. Die Erkennung liest daraus Streifen, der Kunde
+    sieht Schichten, und die Kante dazwischen sieht ausgefranst aus.
+
+    Der Weg zur **Ebene** ist an einer ebenen Wand exakt — dieselbe Wand kam
+    danach mit 0,000 mm Streuung und als **eine** Fläche zurück. An einer
+    gewölbten unterschätzt er um das, was das Rasterverfahren ohnehin rundet:
+    Über zwei Kugeln, einen liegenden und einen stehenden Zylinder gemessen
+    liegt der Volumenunterschied bei 0,006 bis 0,030 Prozent, alle drei
+    geschlossen und einteilig — und die Hüllmaße treffen ihr Sollmaß jetzt
+    genau (40 auf 40 auf 35 statt 40,028 auf 40,03 auf 35,036).
+
+    Das Vorzeichen ändert sich dabei nicht: Es steckte schon in dieser
+    Projektion, sie lieferte bisher nur das Vorzeichen und nicht den Betrag.
     """
     points, normals = _surface_points(mesh, spacing)
     tree = cKDTree(points)
@@ -152,9 +175,9 @@ def distance_field(
         block = grid[start : start + FIELD_CHUNK]
         # Über alle Kerne: bei 356 000 Rasterpunkten sind es 1,5 statt 9,6
         # Sekunden, bei identischem Ergebnis.
-        away, index = tree.query(block, workers=-1)
+        _away, index = tree.query(block, workers=-1)
         outward = np.einsum("ij,ij->i", block - points[index], normals[index])
-        field[start : start + len(block)] = np.where(outward > 0.0, -away, away)
+        field[start : start + len(block)] = -outward
         if progress is not None:
             done = min(start + FIELD_CHUNK, len(grid)) / max(len(grid), 1)
             progress(done, str(_("Abstandsfeld rechnen")))
@@ -311,6 +334,10 @@ class BlendParams(BaseParams):
 
 @register_op(
     name="blend_union",
+    # Das Abstandsfeld misst seit dem 18.09.2026 zur Ebene des nächsten
+    # Dreiecks statt zu seiner Mitte (siehe :func:`distance_field`). Ein
+    # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände.
+    cache_version="2",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,
