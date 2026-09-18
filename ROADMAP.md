@@ -1259,8 +1259,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-188"></a>
 
 - [ ] **RM-188 — CAD-Parität und einfache vollständige Kundenwege.** Beschlossener
-  Gesamtumfang vom 17.09.2026, Umsetzung nach Veröffentlichung von 0.4.3.
-  Fachliche Quelle und Pakete P0–P5:
+  Gesamtumfang vom 17.09.2026 plus voller Ausbau vom 18.09.2026 („alles“),
+  Umsetzung nach Veröffentlichung von 0.4.3.
+  Fachliche Quelle und Pakete P0–P7 (CAD-Pakete, nicht die gleichnamigen Projektphasen):
   [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§13–14;
   [vertiefte Prüfung](konzepte/recherche-cad-paritaet-2026-09.md) vom 18.09.
   Es gelten dieselben Handlungen und Bedeutungen für Netz und B-Rep,
@@ -1282,7 +1283,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   nach Änderung/Cache/Undo/Wiederöffnung sowie die zehn Kundenwege aus der
   Recherche. Keine stillen Formänderungen bei Erkennung; die vier Kernwahl-
   Haken fallen erst im benannten Umschaltpaket mit erhaltener Fachwirkung.
-  Zusätzliche Funktionsideen der Recherche sind nicht automatisch beauftragt.
+  Sämtliche Ausbauideen aus Recherche §6 sind durch die anschließende
+  Entscheidung „alles“ ausdrücklich beauftragt (Konzept §14.2).
+
+  **Zusatzumfang P6/P7:** variable Verrundungen, Fasen mit getrennten
+  Abständen/Winkel, gewählte Öffnungs-/Entformungsflächen, abtragende
+  Dreh-/Pfad-/Überblendwege, zusätzliche Skizzenkurven und Bedingungen,
+  Merkmalsmuster, Einfügen/Umsortieren/Unterdrücken/Reaktivieren im Verlauf
+  und Mehrkörper-STEP mit Namen, Farben und Instanzlagen. Konzept §13.9
+  ergänzt unabhängige Sollwerte, Kundenwege, Migrations- und Rückfallverträge.
+  P5 nimmt auch diese Funktionen direkt am Modell ab; P5.3 schließt erst nach
+  P6/P7 mit installierten Paketen auf allen Zielplattformen. Baugruppen,
+  Zeichnungsableitung und die weiteren ausdrücklichen Nicht-Ziele bleiben ausgenommen.
 
   **Bedienergänzung Robert, 18.09.:** Maße direkt im Viewport bearbeiten,
   Eingabefeld von der Maßlinie absetzen, ✓/× daneben; dieselbe Vorschau und
@@ -1304,7 +1316,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Analysis Situs nur für belegte Restlücken evaluieren. Recherche §§5.1–5.6
   enthält Versions-/Alternativenvergleich und begrenzte Eigenentwicklung
   in Python, Cython oder C++ mit Plattform- und Genauigkeitsnachweis.
-  Keine neue Abhängigkeit oder Sprachenmigration beschlossen; die alten
+  P0.5 ordnet jede benötigte Fähigkeit einer vorhandenen Funktion,
+  Eigenentwicklung oder begründet gewählten Ergänzung zu; P0.6 baut bei Bedarf
+  die native Schnittstelle. P1.5 schließt gemeinsame Merkmalssemantik und
+  zusammengesetzte Erkennung an beide Kerne an. Konzept §13.8 bindet sämtliche
+  technischen Entscheidungen an Fachpakete und P5.3 an den Auslieferungsnachweis.
+  Konkrete neue Abhängigkeiten bleiben auszuwählen; kein pauschaler Einbau
+  aller Alternativen und keine Sprachenmigration beschlossen. Die alten
   Tageswerte sind als Planungsgrundlage zurückgezogen (Konzept §12).
 
 ## Bedienung und Darstellung

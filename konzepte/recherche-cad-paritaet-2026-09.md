@@ -2,7 +2,9 @@
 
 Stand: **18.09.2026, Anwendungscode `2148ddfa`**. Ergänzung zum
 [CAD-Konzept](konzept-vollwertiges-cad-2026-09.md), insbesondere §§3–11 und 13.
-Die 16 Entscheidungen dort bleiben bestehen. Diese Recherche ergänzt
+Die 16 Entscheidungen dort bleiben bestehen. Roberts anschließende Antwort
+„alles“ nimmt auch sämtliche Ausbauideen aus §6 in den Auftrag auf; die
+Zuordnung steht im Konzept §§13.8–13.9 und §14.2. Diese Recherche ergänzt
 Nachweise und Abnahmen; sie startet keine Umsetzung vor Veröffentlichung von
 0.4.3. Offene Arbeit: [RM-188](../ROADMAP.md#rm-188), Nachbau:
 [RM-022](../ROADMAP.md#rm-022).
@@ -622,7 +624,7 @@ eingeholt. Zuerst den belegten vorhandenen Weg nutzen.
 | MeshLib | Umfangreiche native Reparatur-, Abstand-, Offset- und Netzwerkzeuge | Keine frei kommerziell nutzbare Alternative im geprüften Stand: eigene Non-Commercial-/Education-Lizenz, kommerzielle Nutzung gesondert. Erst bei ungelöster fachlicher Lücke und geklärtem Vertrag evaluieren; Anbieterbenchmarks sind kein Solidon-Nachweis. [Lizenz](https://github.com/MeshInspector/MeshLib/blob/master/LICENSE) |
 | CadQuery/build123d | Höhere Modellierabstraktionen über OCCT | Kein anderer Rechenkern und kein fertiger STL-Merkmalserkenner. Die vorhandene Op-/Parameterstruktur müsste zusätzlich abgebildet werden; derzeit kein belegter Vorteil für einen Austausch. [build123d](https://github.com/gumyr/build123d) |
 | `spookylukey/planegcs` | Python-Anbindung an FreeCADs Skizzenlöser | Konkreter Kandidat für einen Solververgleich; nicht mit gleichnamigen WASM-/TypeScript-Projekten vermischen. 0.8.0 hat nur die oben genannten Wheels. Eigenbau ist möglich zu untersuchen, nicht als erledigt anzunehmen. [Projekt](https://github.com/spookylukey/planegcs), [Release](https://pypi.org/project/planegcs/0.8.0/) |
-| CoACD statt V-HACD | Alternative konvexe Zerlegung für Vorschläge im Auto Split | V-HACD bezeichnet sich als eingestellt und verweist auf CoACD. CoACD steht im Hauptprojekt unter MIT, besitzt einen Seed und kann vorab remeshen. Vergleichskandidat, kein beschlossener Wechsel: Formabweichung, Schnittnutzen, Einheiten, Zufall und Paketkette prüfen. [V-HACD-Status](https://github.com/kmammou/v-hacd), [CoACD](https://github.com/SarahWeiii/CoACD), [Lizenz](https://github.com/SarahWeiii/CoACD/blob/main/LICENSE) |
+| CoACD statt V-HACD | Alternative konvexe Zerlegung für Vorschläge im Auto Split | **Im Projekt bereits geprüft und verworfen**, Bauplan §36 und historischer Auto-Split-Vergleich im ROADMAP-ARCHIV: V-HACD lieferte die bessere Einschnürungsstelle; genaues CoACD war langsamer, grobe Einstellung lieferte keinen brauchbaren Schnitt. V-HACD bezeichnet sich upstream als eingestellt und verweist auf das MIT-lizenzierte CoACD; das hebt den lokalen Befund nicht auf. Erneute Prüfung nur bei konkretem Anlass und neuen Korpusmesswerten, kein beschlossener Wechsel. [V-HACD-Status](https://github.com/kmammou/v-hacd), [CoACD](https://github.com/SarahWeiii/CoACD), [Lizenz](https://github.com/SarahWeiii/CoACD/blob/main/LICENSE) |
 
 Bei punktwolkenbasierten Verfahren bleiben Dreieckszuordnung und Herkunft
 erhalten. Ein erfolgreicher Zylinderfit entscheidet weder „Bohrung oder
@@ -754,7 +756,7 @@ Keine ungemessene Beschleunigungszahl, keine reduzierten Geometrieprüfungen
 und kein anders arbeitender stiller Rückfall. Solange ein Vorteil oder die
 Auslieferung nicht belegt ist, bleibt der bestehende Weg maßgebend.
 
-## 6. Was zusätzlich zu den beschlossenen Stufen denkbar ist
+## 6. Zusätzlicher Ausbau — inzwischen vollständig beauftragt
 
 Im untersuchten Operations-/Skizzenschema fehlen unter anderem variable
 Verrundungen, Fasen mit getrenntem Abstand/Winkel, frei gewählte Öffnungsflächen
@@ -764,17 +766,34 @@ und Bedingungen sowie Einfügen/Umsortieren/Unterdrücken von Verlaufsschritten
 sind eigenständige Ausbaubereiche. Bestehende Körpermuster sind nicht dasselbe
 wie ein Muster ausgewählter konstruktiver Merkmale.
 
-Diese Punkte sind **keine neue beschlossene Stufe** und keine Voraussetzung,
-die unbemerkt den Umfang vervielfacht. Vor einer Aufnahme muss ein konkretes
-Druckteil zeigen, dass der bestehende Weg fehlt oder unvertretbar umständlich
-ist. Vorrang haben die zehn Kundenwege aus §4.3. Insbesondere bleibt
-`offset_face` entsprechend Konzept §15 ausgeschlossen.
+Diese Gebiete waren zunächst Vorschläge. Auf die ausdrückliche Nachfrage
+nach ihrer Aufnahme antwortete Robert am 18.09. **„alles“**. Sie sind damit
+verbindlicher Zusatzumfang. Fachliche Quelle ist
+[Konzept §14.2](konzept-vollwertiges-cad-2026-09.md#142-voller-ausbau-entscheidung-vom-18092026);
+die Umsetzung samt zusätzlichen Kundenwegen steht in §§13.2/13.9.
+
+| Vollständig aufgenommenes Gebiet | Lieferpakete im Konzept |
+|---|---|
+| Variable Verrundung, Fasen mit getrennten Abständen oder Abstand/Winkel | P6.1/P6.2 |
+| Frei gewählte Öffnungs- und Entformungsflächen | P6.3/P6.4 |
+| Schnitt durch Drehen, Führen und Überblenden | P6.5a/P6.5b/P6.5c |
+| Zusätzliche Skizzenkurven und Bedingungen, im Plan konkretisiert | P6.6a/P6.6b |
+| Lineare, kreisförmige und gespiegelte Merkmalsmuster | P6.7 |
+| Einfügen, Umsortieren und Unterdrücken/Reaktivieren im Verlauf | P7.1/P7.2/P7.3 |
+| STEP-Mehrkörperimport mit Namen, Farben und Instanzlagen | P7.4 |
+
+Die zehn bisherigen Kundenwege bleiben Pflicht; zusätzliche End-zu-Ende-
+Wege kommen dazu. Gemeinsame Maßbedienung und Netz-/B-Rep-Parität gelten auch
+für den Ausbau. Bibliotheken und Eigenentwicklungen sind in Konzept §13.8
+den Paketen zugeordnet. Das beauftragt keine pauschale Installation aller
+Alternativen. `offset_face` und die übrigen ausdrücklichen Nicht-Ziele
+bleiben entsprechend Konzept §15 ausgeschlossen.
 
 STEP-Mehrkörperimport und Erhalt von Namen/Farben sind vom Konstruieren einer
 Baugruppe zu unterscheiden. Der heutige STEP-Leser übernimmt `OneShape()`;
-eine vollständige XCAF-Strukturübernahme ist damit nicht belegt. Für die
-beschlossenen Einzelteilwege ist das zunächst eine benannte Importgrenze,
-kein Auftrag für einen Baugruppenbaum.
+eine vollständige XCAF-Strukturübernahme ist damit nicht belegt. P7.4
+schließt diese Importlücke in der flachen Szene. Ein Baugruppenbaum und
+Baugruppenbedingungen bleiben außerhalb des Auftrags.
 
 ## 7. Belastbare Abnahme statt Prozentzahl aus einer Stichprobe
 
