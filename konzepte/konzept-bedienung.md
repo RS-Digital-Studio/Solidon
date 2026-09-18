@@ -12,7 +12,7 @@ Stand 04./05.08.2026, nachrecherchiert am 19.08.2026.
 > Protokoll altert, sobald man danach handelt. Genau das ist geschehen. **Wer
 > den Zustand der Anwendung sucht, findet ihn hier nicht** — er steht in
 > `ROADMAP.md` und in den späteren Durchsichten (`konzept-kundensicht`,
-> `konzept-erstnutzer`, `konzept-durchsicht-2026-08-14`). Was hier steht, ist
+> `konzept-erstnutzer`). Was hier steht, ist
 > die Begründung, warum bestimmte Dinge geändert wurden, und der Blick eines
 > Nutzers auf ein Fenster, das es so nicht mehr gibt.
 >
@@ -1075,8 +1075,9 @@ Dokuments ist der Grund für einen davon gewesen.
 **Der eigene Nachtrag ist ebenfalls überholt**: aus 59 Commits und 2736 Tests
 sind 520 Commits und 4251 gesammelte Tests geworden, und der Schlusssatz
 „offen bleibt der nächste Lauf" hat sich mehrfach erfüllt — es hat seither
-vier weitere Bedienläufe gegeben (`konzept-kundensicht`, `konzept-erstnutzer`,
-`konzept-durchsicht-2026-08-14`, `durchsicht-2026-08-16`).
+vier weitere Bedienläufe gegeben; die beiden Durchsichten vom 14. und
+16.08.2026 sind am 18.09.2026 gelöscht worden, ihre Funde stehen im
+Roadmap-Archiv.
 
 **Was trägt, ist der Abschnitt „Teilweise"** mit seinen vier Punkten — alle
 vier sind unverändert offen, siehe den Vermerk dort.

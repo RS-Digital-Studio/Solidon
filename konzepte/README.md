@@ -23,6 +23,35 @@ das über seinen Stichtag. **Offene Arbeit zählt nur, wo sie ein Kästchen im
 Register von `ROADMAP.md` hat** — was hier steht, ist die Begründung, nicht der
 Rückstand.
 
+## Nach Thema — wo man zu suchen anfängt
+
+Die Tabelle darunter sortiert nach Brauchbarkeit und beantwortet die Frage
+„wem darf ich noch glauben". Diese hier beantwortet die andere: **„wo hat
+schon jemand darüber nachgedacht?"** — dreiundfünfzig Dokumente in einem
+flachen Verzeichnis sind sonst nur über die Volltextsuche zu erreichen, und
+die findet nur, wer die Wörter schon kennt.
+
+| Thema | Dokumente |
+|---|---|
+| **Konstruieren, Geometrie, Kerne** | `konzept-vollwertiges-cad-2026-09` · `recherche-cad-paritaet-2026-09` · `konzept-skizze-im-raum-2026-08` · `konzept-flaechenrueckgewinnung-2026-08` · `konzept-organische-modellierung-2026-08` · `konzept-varianten-zusammenlegen-2026-08` · `konzept-sinnvolles-trennen-2026-08` · `geogram-als-zweiter-kern` · `anfrage-trueform` |
+| **Bedienung und Gestaltung** | `konzept-bedienung` · `konzept-einfache-bedienung-2026-09` · `konzept-erstnutzer-2026-08` · `konzept-merkmalbedienung-2026-09` · `konzept-auswahlpanel-2026-09` · `konzept-platzieren-tiefe-2026-09` · `konzept-befehlsband-2026-08` (abgelehnt) · `konzept-akzentfarben-haushalt-2026-08` · `konzept-3d-maus-2026-08` |
+| **Durchsichten der Oberfläche** | `durchsicht-design-2026-08` · `durchsicht-zeichenmodus-2026-09` · `oberflaechen-durchsicht-2026-08-20` |
+| **Drucken: Material, Slicer, Einstellungen** | `konzept-filamente-2026-08` · `konzept-filamentlager-2026-09` · `konzept-material-aus-dem-filament-2026-08` · `review-filamente-2026-09` · `konzept-slicer-uebergabe` · `konzept-erstkonfiguration-2026-09` · `konzept-resin-2026-08` |
+| **Bausteine und Bibliothek** | `konzept-befestigungssysteme-2026-08` · `konzept-tauschboerse-2026-08` |
+| **Agent, KI und Erzeugen** | `konzept-agent-vertiefung` · `konzept-erzeugen-agent-oberflaeche-2026-08` · `product-quality-ai-libraries-2026-08` · `konzept-meshy-hyper3d-2026-08` |
+| **Produkt, Verkauf, Veröffentlichung** | `konzept-produktkompass-2026-08` · `konzept-demo-2026-10` · `konzept-demo-zu-1.0-2026-09` · `konzept-veroeffentlichung-1.0` · `konzept-lizenzarten-2026-09` · `konzept-aktivierungsserver-2026-08` · `konzept-foerdermodell` · `konzept-versionspflege-2026-08` · `konzept-kundensicht-2026-08` · `namensentscheidung-solidon` |
+| **Wettbewerb und Maßstab** | `konzept-wettbewerb-2026-08` · `konzept-sindricad` · `durchsicht-website-2026-08` |
+| **Arbeitsweise am Code** | `konzept-zwillinge-2026-09` · `entscheidungen-2026-08-22` |
+
+**Die Dateinamen sind stabil und werden nicht umbenannt.** Sechsundachtzig
+Stellen zitieren sie — darunter zwölf im Quelltext von `app/`, `tools/` und
+`tests/`, vierundvierzig im Roadmap-Archiv. Ein Konzept wird deshalb
+fortgeschrieben, überschrieben oder als abgelöst gekennzeichnet; es wandert
+nicht und heißt nicht anders (gemessen am 18.09.2026). **Aus demselben Grund
+gibt es hier keine Themen-Unterordner**, obwohl das Schwesterprojekt Assist
+sie führt: Ein Umzug bräche dieselben sechsundachtzig Verweise, und der
+Gewinn — Auffindbarkeit — steht in dieser Tabelle.
+
 ## Der Stand, Dokument für Dokument
 
 Sortiert nach Brauchbarkeit von heute aus, nicht nach Datum: oben, was noch
@@ -75,14 +104,27 @@ gilt, unten, was nur noch erklärt.
 | [konzept-erzeugen-agent-oberflaeche-2026-08.md](konzept-erzeugen-agent-oberflaeche-2026-08.md) | 12.08. | Erzeugen, Agent, Oberfläche — gemessen statt abgeleitet | abgearbeitet. B1 (gehosteter Erzeugungsdienst) am 20.08. **entschieden: nein** |
 | [konzept-meshy-hyper3d-2026-08.md](konzept-meshy-hyper3d-2026-08.md) | 12.08. | Gegen Meshy und Hyper3D Rodin | Befunde abgearbeitet, siehe Teil 10 |
 | [konzept-kundensicht-2026-08.md](konzept-kundensicht-2026-08.md) | 08.08. | Zehn Bedienläufe aus Kundensicht | vollständig behoben — 2.7 (Tastenkürzel) seit der Prüfung vom 22.08. auch |
-| [konzept-durchsicht-2026-08-14.md](konzept-durchsicht-2026-08-14.md) | 14.08. | Funktionen, Wörter, der kürzeste Weg zum geteilten Teil | abgearbeitet. Zwei Befunde stammen aus dem Ansehen und wären am Quelltext nie aufgefallen |
-| [durchsicht-2026-08-16.md](durchsicht-2026-08-16.md) | 16.08. | Sechs Durchgänge: Code, Oberfläche, Wettbewerb | Befund, nicht Fix — bei dieser Durchsicht wurde nichts geändert |
-| [konzept-live-durchsicht-2026-08.md](konzept-live-durchsicht-2026-08.md) | 05.08. | Gegen Fusion 2704 und ElegooSlicer 1.5.3.4 | abgearbeitet in vier Paketen, kein Punkt offen |
-| [konzept-p15-konstruieren-und-zeigen.md](konzept-p15-konstruieren-und-zeigen.md) | 03.08. | P15 — Konstruieren und Zeigen | erledigt am 08.08.; von 22 Lücken vier begründet abgelehnt |
 | [konzept-sindricad.md](konzept-sindricad.md) | 04.08. | SindriCAD als Maßstab | Konzeptvorlage; vier Bausteine daraus beschlossen und gebaut |
 | [konzept-veroeffentlichung-1.0.md](konzept-veroeffentlichung-1.0.md) | 06.08. | Erste Veröffentlichung 1.0 | **überholt** durch `konzept-demo-2026-10.md`. Von 17 geprüften Aussagen über den eigenen Stand hält eine. Bleibt als Begründung der Entscheidungen lesbar |
 | [konzept-bedienung.md](konzept-bedienung.md) | 04./05.08. | Bedienung, Gestaltung, Zeichnen | **überholt.** Von 15 nachgeprüften Aussagen über den Code hält eine. Wer den Zustand der Anwendung sucht, findet ihn hier nicht |
 | [namensentscheidung-solidon.md](namensentscheidung-solidon.md) | 07.08. | Warum Formwerk zu Solidon wurde | erledigt, die Umbenennung ist durch. `app/branding.py` verweist hierher |
+
+## Was gelöscht wurde
+
+Diese Sammlung wächst, und was nichts mehr trägt, bleibt nicht liegen. Am
+**18.09.2026** sind vier Durchsichten entfernt worden, deren Funde
+abgearbeitet und deren Nachweis im Roadmap-Archiv steht:
+
+| Gelöscht | War | Nachweis |
+|---|---|---|
+| `konzept-durchsicht-2026-08-14.md` | Funktionen, Wörter, der kürzeste Weg zum geteilten Teil | abgearbeitet; die Zahlen darin waren schon am 19.08. nachgezählt |
+| `durchsicht-2026-08-16.md` | Sechs Durchgänge über Code, Oberfläche und Wettbewerb | Befund ohne Fix; die Baseline (4009 Tests, acht Blöcke) steht in `CLAUDE.md` |
+| `konzept-live-durchsicht-2026-08.md` | Gegen Fusion 2704 und ElegooSlicer 1.5.3.4 | in vier Paketen abgearbeitet, kein Punkt offen |
+| `konzept-p15-konstruieren-und-zeigen.md` | P15 — Konstruieren und Zeigen | erledigt am 08.08.; von 22 Lücken vier begründet abgelehnt |
+
+Wer im Roadmap-Archiv über einen dieser Namen stolpert: Die Dokumente stehen
+in der Git-History und sind mit `git log --diff-filter=D -- konzepte/` wieder
+zu finden.
 
 ## Was hier nicht liegt
 

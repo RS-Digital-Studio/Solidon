@@ -351,9 +351,8 @@ nicht die Ausnahme: er bestätigt, er entscheidet nichts.
 > durch** (gemessen am 19.08.2026): 1324 Sekunden, und am Ende steht keine
 > Ergebniszeile, sondern ein `faulthandler`-Stapelabzug — der Prozess stirbt
 > nativ, nachdem er über 3 GB gewachsen ist. Es ist derselbe rtree-Abriss, den
-> `../konzepte/durchsicht-2026-08-16.md` festhält (Abschnitt „Baseline vor der
-> Durchsicht"); dort wurde die Suite
-> **portionsweise in acht Blöcken** gefahren: 4009 Tests grün.
+> `CLAUDE.md` unter „Befehle" festhält; bei der Durchsicht am 16.08.2026 lief
+> die Suite deshalb **portionsweise in acht Blöcken**: 4009 Tests grün.
 >
 > Die Zwei-Minuten-Regel wird davon nicht falsch, sondern gegenstandslos in
 > die andere Richtung: **Ein Lauf, der zweiundzwanzig Minuten braucht und dann
