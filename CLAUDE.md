@@ -251,7 +251,13 @@ sind es vier, nach dem, was man anfasst: `oberflaeche.md` immer, dazu
 `ansicht.md` beim Viewport, `wartezeit.md` bei allem, was rechnen lässt, und
 `zeichenflaeche.md` beim Skizzeneditor. Für `tools/`, `packaging/` und die
 Workflows gilt `auslieferung.md` — Version, Lizenz, Signierung, die
-verteilte Menge.
+verteilte Menge. Über allem in `app/` liegt `zwillinge.md`: dieselbe Auskunft
+an zwei Stellen, die vier Klassen und das Werkzeug, das die Kandidaten misst.
+
+Welche Regel welche Frage beantwortet, steht seit dem 18.09.2026 in ihrem
+`description:` — lesbar, ohne die Datei zu öffnen. Und was in `.claude/`
+selbst liegt, wer davon die Quelle ist und was ins Repository gehört, sagt
+`.claude/README.md`.
 
 **Wohin etwas gehört**, in einem Satz: Ändert sich der Code, ändert sich die
 Karte; ändert sich eine Entscheidung, ändert sich die Regel. Datums-Marker,
