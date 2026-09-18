@@ -392,6 +392,15 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Operationen bewusst nicht selbst tun — und ohne diesen Knopf muss man
     # ihn kennen, um ihn zu finden.
     "arrange.bodies_in_one_place": (ARRANGE_ON_BED,),
+    # **Eine Passung ohne ihr Merkmal nannte den Rückweg und zeigte ihn
+    # nicht** (Befund Robert, 18.09.2026). Der Satz sagt „Die Schritte ab dort
+    # zurücknehmen und vor der Passung ausführen" — das ist eine gute
+    # Erklärung und kein Weg; Regel 17 gilt im Bericht so gut wie im Dialog.
+    # *Verlauf zeigen* ist der Weg, den der Satz beschreibt: Dort steht die
+    # Reihenfolge, die er meint, und dort lässt sie sich ändern. Der Befund
+    # trägt keinen Ort und keine Schrittkennung — eine Passung gehört keinem
+    # Schritt —, also steht *Eingabe korrigieren* nicht daneben.
+    "fit.missing_feature": (SHOW_HISTORY,),
     # **Derselbe Sachverhalt eine Stufe weiter, und er stand ohne Knopf da.**
     # ``bodies_in_one_place`` meldet Körper, die genau aufeinander liegen;
     # ``collision`` meldet die, die sich teilweise durchdringen. Zwischen
@@ -852,6 +861,26 @@ def _feature_tip(feature_id: str, feature: Feature, document: Document | None) -
 _STEP_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
+#: Welche Operationen ihre Merkmale als **ein Ding** vertreten lassen.
+#:
+#: Die Kategorie ``parts`` ist der Regelfall: Ein Schlüsselloch bringt zwölf
+#: Merkmale mit, und wer eine Schlitzkante anklickt, hat das Schlüsselloch
+#: gemeint. Der **Organizer** ist derselbe Fall mit einer anderen Kategorie —
+#: er steht unter ``primitive``, weil er aus eigenen Maßen entsteht, und
+#: bringt je Fach und je Trennwand Merkmale mit. Wer eine Trennwand anklickte,
+#: bekam die Handlungen einer Fläche: Bohren, Tasche, Fläche versetzen. Keine
+#: davon meint die Trennwand, und ihre Lage steht in keinem Parameter — sie
+#: folgt aus den Fachmaßen (Befund Robert, 18.09.2026: „Baustein verschieben
+#: bei Trennwand organizer keine Wirkung" und „keine Ahnung wie man
+#: hinkommt").
+#:
+#: Ein Name und keine zweite Kategorie: Der Organizer ist heute die einzige
+#: Operation außerhalb von ``parts``, die benannte Merkmale in dieser Zahl
+#: erzeugt. Kommt eine zweite dazu, steht sie hier daneben; eine eigene
+#: Kategorie zöge Menüort und Katalogkachel mit, und beides soll bleiben.
+SPEAKS_FOR_ITS_FEATURES: Final = frozenset({"create_organizer"})
+
+
 def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any, Any] | None:
     """Der Schritt und sein Registereintrag, wenn er einen **Baustein** setzte.
 
@@ -859,6 +888,9 @@ def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any
     den Namen der Operation: ``drill_hole`` erzeugt ebenfalls Merkmale mit
     Provenienz und ist kein Baustein, und ein Namensmuster wie ``insert_*``
     schwiege beim nächsten der siebenundzwanzig.
+
+    **Dazu die namentliche Ausnahme** :data:`SPEAKS_FOR_ITS_FEATURES`, und
+    ihre Begründung steht dort.
 
     **Zwei Stellen fragen das, und sie fragen es hier.** Der Objektbaum
     gruppiert danach (:func:`_part_group`), und das Fenster entscheidet danach,
@@ -875,7 +907,8 @@ def part_step_of(created_by: int | None, document: Document | None) -> tuple[Any
             spec = REGISTRY.get(entry.op)
         except AppError:
             return None
-        return (entry, spec) if spec.category == "parts" else None
+        speaks = spec.category == "parts" or spec.name in SPEAKS_FOR_ITS_FEATURES
+        return (entry, spec) if speaks else None
     return None
 
 
@@ -5789,7 +5822,34 @@ class FeaturePanel(QWidget):
         # Maßlinien in die Szene (`MainWindow._measure_in_the_view`). Ein
         # zweiter Weg zu etwas, das schon läuft, ist kein Angebot, sondern
         # Platz, den die Zeilen darunter brauchen.
+        #
+        # **Was hier kein Feld hat, bekommt seinen Weg** (Befund Robert,
+        # 18.09.2026). Eine Fachaufteilung ist ein Sammelparameter mit eigenem
+        # Editor; sie steht in ``action.elsewhere`` und nicht als Zahlenfeld.
+        # Ohne diesen Knopf trug eine Organizer-Trennwand drei Außenmaße, und
+        # die Fächer — die Sache, um die es geht — waren von dort nicht zu
+        # erreichen.
+        elsewhere = tuple(getattr(action, "elsewhere", ()))
+        if elsewhere and step is not None:
+            named = ", ".join(str(entry) for entry in elsewhere)
+            deeper = QPushButton(tr("{fields} ändern …").replace("{fields}", named), box)
+            deeper.setProperty("handlingKey", f"{key}|elsewhere")
+            deeper.setToolTip(tr("Öffnet den vollständigen Dialog dieses Schritts."))
+            deeper.setStatusTip(deeper.toolTip())
+            deeper.setAccessibleDescription(deeper.toolTip())
+            deeper.clicked.connect(weak_slot(self, FeaturePanel._ask_for_the_step, int(step)))
+            layout.addWidget(deeper)
+            self._built.append(deeper)
         return box
+
+    def _ask_for_the_step(self, step: int) -> None:
+        """Den vollständigen Dialog dieses Schritts öffnen.
+
+        Der Weg für alles, was das Merkmalfenster nicht als Feld zeigen kann
+        — heute die Fachaufteilung eines Organizers. Dieselbe Bauart wie der
+        Knopf *Weitere Einstellungen …* an einer Textur.
+        """
+        self.stepEditRequested.emit(int(step))
 
     def _explain(self, box: QWidget, row: QHBoxLayout, text: str, title: QLabel) -> None:
         """Hängt das Info-Zeichen an eine Überschrift — oder lässt es weg.

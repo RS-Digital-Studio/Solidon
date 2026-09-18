@@ -157,7 +157,29 @@ gemessen:
 
 **Ein Merkmal aus einem Baustein meint den Baustein.** Die Regel darüber
 schneidet aus, was schon als Feld dasteht; diese sagt, wofür die Felder
-gelten. Ein Schlüsselloch bringt zwölf Merkmale mit, zehn davon
+gelten.
+
+**Und der Organizer gehört dazu, obwohl er kein Baustein ist** (Befund
+Robert, 18.09.2026: „Baustein verschieben bei Trennwand organizer keine
+Wirkung" und „keine Ahnung wie man hinkommt"). Er steht unter `primitive`,
+weil er aus eigenen Maßen entsteht, und bringt je Fach und je Trennwand
+Merkmale mit; an einer Trennwandfläche standen die Handlungen einer Fläche.
+Keine davon meint die Trennwand, und ihre **Lage steht in keinem Parameter**
+— sie folgt aus den Fachmaßen, und die ändert der Fächereditor.
+`panels.SPEAKS_FOR_ITS_FEATURES` nennt ihn namentlich; eine zweite Kategorie
+zöge Menüort und Katalogkachel mit, und beides soll bleiben.
+
+**Und was kein Zahlenfeld werden kann, bekommt seinen Weg statt zu
+verschwinden.** Eine Fachaufteilung ist ein Sammelparameter mit eigenem
+Editor (`perceive.actions.COLLECTED_KINDS`, dieselben Arten wie in
+`operationen.md` unter „Sammelparameter"); `_kind_of` kennt sie nicht und
+gäbe ihr ein Längenfeld — „Fachaufteilung: 0,00 mm". Sie steht deshalb in
+`FeatureAction.elsewhere`, und das Panel hängt darunter einen Knopf, der den
+vollständigen Dialog des Schritts öffnet. Dieselbe Bauart wie *Weitere
+Einstellungen …* an einer Textur. Wer einen neuen Sammelparameter baut, trägt
+seine Art dort ein — sonst steht sie als Länge im Merkmalfenster.
+
+Ein Schlüsselloch bringt zwölf Merkmale mit, zehn davon
 Verrundungen, und `fillet` trägt im Register keine einzige Operation — wer
 eine Schlitzkante anklickte, sah die Handlungen der Fläche darunter
 (Robert, 10.09.2026: „hier sollten wir aber alles für das Schlüsselloch

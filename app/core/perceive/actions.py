@@ -317,6 +317,16 @@ class FeatureAction:
     Schritt, der das Merkmal erzeugt hat (:func:`part_actions`, :func:`texture_actions`). Bei allen
     anderen Handlungen bleibt es ``None``, und ``op`` sagt, was zu starten
     ist."""
+    elsewhere: tuple[TranslatableText | str, ...] = field(default_factory=tuple)
+    """Was zu diesem Schritt gehört und hier kein Feld bekommt.
+
+    Die Titel der Sammelparameter (:data:`COLLECTED_KINDS`) — eine
+    Fachaufteilung, eine Skizze, ein Skelett. Sie haben ihren eigenen Editor
+    im vollständigen Dialog; das Panel nennt sie und führt dorthin, statt sie
+    zu verschweigen. Ohne diese Zeile stand an einer Organizer-Trennwand
+    „Maße ändern" mit drei Außenmaßen, und der Weg zu den Fächern — die
+    Sache, um die es geht — war von dort nicht zu finden (Befund Robert,
+    18.09.2026)."""
     fixed: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
     """Werte, die die Handlung mitbringt und die niemand eingibt.
 
@@ -329,6 +339,18 @@ class FeatureAction:
     Sie stehen hier und nicht in der Oberfläche, weil das Panel die
     Merkmalsarten nicht kennt und nicht kennen soll: Wer ``edges="named"``
     dort hineinschriebe, führte die Tabelle des Registers ein zweites Mal."""
+
+
+#: Parameterarten, für die es hier **kein** Feld gibt.
+#:
+#: Ein Sammelparameter trägt, was sich nicht in Zahlen fassen lässt: eine
+#: Skizze, eine Strichliste, ein Skelett, eine Fachaufteilung. Sein Wert ist
+#: ein Text mit eigenem Editor, und :func:`_kind_of` kennt ihn nicht — er
+#: bekäme ein Längenfeld und stünde als „Fachaufteilung: 0,00 mm" da.
+#: Dieselbe Frage wie bei der Anzahl, die keine Länge ist, eine Stufe weiter:
+#: Was das Merkmalfenster nicht zeigen kann, gehört nicht hinein, und der Weg
+#: dorthin ist der vollständige Dialog des Schritts.
+COLLECTED_KINDS: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature", "organizer"})
 
 
 def _kind_of(spec: Any) -> str:
@@ -985,10 +1007,24 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
             )
         return tuple(fields)
 
+    # **Ein Sammelparameter bekommt hier kein Feld.** Eine Fachaufteilung ist
+    # ein JSON-Text mit einem eigenen Editor (``kind="organizer"``, ebenso
+    # ``sketch`` und ``armature``); ``_kind_of`` kennt ihn nicht und gäbe ihm
+    # ein Längenfeld — „Fachaufteilung: 0,00 mm". Dieselbe Frage wie bei der
+    # Anzahl, die keine Länge ist, eine Stufe weiter: Was das Merkmalfenster
+    # nicht zeigen kann, steht in ``FeatureAction.elsewhere`` und führt in den
+    # vollen Dialog.
     measures = tuple(
         name
         for name, entry in schema.items()
-        if entry.placement == "front" and name not in placement_params
+        if entry.placement == "front"
+        and name not in placement_params
+        and entry.kind not in COLLECTED_KINDS
+    )
+    collected = tuple(
+        name
+        for name, entry in schema.items()
+        if entry.kind in COLLECTED_KINDS and name not in placement_params
     )
     placement = tuple(name for name in ("x", "y", "z") if name in schema)
 
@@ -1001,6 +1037,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 step=operation.id,
                 note=_("Ändert den Schritt, der diesen Baustein gesetzt hat."),
                 fields=taken(measures),
+                elsewhere=tuple(schema[name].title for name in collected),
             )
         )
     if placement:
