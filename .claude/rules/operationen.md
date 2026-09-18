@@ -224,6 +224,18 @@ Platte herum. Kein Parameter benennt sie, also steht auch diese Lesart am
 Register (`reads_other_bodies`). Ohne sie behielte ein zurückgeholter Körper
 seine Stelle, nachdem der Nachbar, dem er auswich, längst woanders steht.
 
+**Zurückgeholt wird vom Rand, nicht aus einem Nachbarn** (Entscheidung
+Robert, 18.09.2026: „beim bewegen und einer Kollision werden die Körper
+versetzt, vllt will man sie aber zusammenhieben zum verschmelzen, so nicht
+möglich"). Die Bindung hielt bis dahin zwei Bedingungen — innerhalb der
+Fläche *und* ohne Überschneidung —, und damit war das Zusammenschieben
+zweier Teile über den Griff nicht mehr zu machen: Wer sie ineinanderzog,
+bekam sie auseinandergeschoben, bevor er *Vereinigen* oder *Weich
+verschmelzen* anklicken konnte. Zwei Körper am selben Ort sind eine
+**Absicht**; ein Körper neben dem Bett ist es nie. Gemeldet wird die
+Überschneidung weiterhin — `check_collisions` und
+`scene.evaluate.check_bodies_in_one_place` sagen es, ohne etwas zu bewegen.
+
 Wer eine neue Lesart aus `ctx.scene` baut, trägt sie hier ein — dieselbe
 Pflicht wie bei `nested_references()` darüber. Und die Frage davor lautet, ob
 ein *Parameter* das Gelesene benennt: Wenn ja, gehört sie zu den drei oben;

@@ -2202,14 +2202,23 @@ def back_onto_bed(
     ein bewusst angehobener Körper — für einen Booleschen Schnitt etwa — darf
     davon nicht heruntergezogen werden.
 
-    Auch innerhalb der Druckfläche kann der alte Handzug nach einer
-    Größenänderung in einen Nachbarn führen. Die Bettbindung hält deshalb
-    beide Bedingungen: innerhalb der Fläche und ohne Überschneidung.
+    **Und zwei Körper, die einander durchdringen, bleiben stehen** (Befund
+    Robert, 18.09.2026: „beim bewegen und einer Kollision werden die Körper
+    versetzt, vllt will man sie aber zusammenhieben zum verschmelzen, so
+    nicht möglich"). Bis dahin hielt diese Bindung **zwei** Bedingungen —
+    innerhalb der Fläche *und* ohne Überschneidung —, und damit war das
+    Zusammenschieben zweier Teile über den Griff nicht mehr zu machen: Wer
+    sie ineinanderzog, bekam sie auseinandergeschoben, bevor er *Vereinigen*
+    oder *Weich verschmelzen* anklicken konnte. Zwei Körper am selben Ort
+    sind eine **Absicht**; ein Körper neben dem Bett ist es nie. Gemeldet
+    wird die Überschneidung weiterhin — `check_collisions` und
+    `scene.evaluate.check_bodies_in_one_place` sagen es, ohne etwas zu
+    bewegen.
     """
     area = printable_area(profile.printer)
     body = as_mesh_data(mesh)
     inside = fits_xy(body, area)
-    if inside and not _runs_into(body, (0.0, 0.0, 0.0), others):
+    if inside:
         return (0.0, 0.0, 0.0), []
 
     nudge = placement_offset(body, profile.printer)

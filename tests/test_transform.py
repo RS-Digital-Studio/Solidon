@@ -535,13 +535,18 @@ def test_a_lettering_resize_keeps_a_saved_drag_clear(profile: Profile) -> None:
     assert fits_xy(free.mesh, printable_area(profile.printer))
     assert collisions(free, large), "the saved drag must reproduce the reported overlap"
 
+    # **Und innerhalb der Fläche bleibt der Körper, wo er ist** (Entscheidung
+    # Robert, 18.09.2026). Die Bindung hielt bis dahin zwei Bedingungen —
+    # innerhalb der Fläche *und* ohne Überschneidung —, und damit war das
+    # Zusammenschieben zweier Teile über den Griff nicht mehr zu machen. Die
+    # Überschneidung wird gemeldet, nicht behoben.
     result = run("translate_object", [large[2]], {**offset, "keep_on_bed": True}, large)
     held = result.outputs[0]
     assert fits_xy(held.mesh, printable_area(profile.printer))
-    assert not collisions(held, large)
+    assert held.mesh.bounds.centre == pytest.approx(free.mesh.bounds.centre)
+    assert not any(finding.code == "transform.rearranged_on_bed" for finding in result.findings)
     assert held.plate == large[2].plate
     assert held.mesh.bounds.minimum[2] == pytest.approx(large[2].mesh.bounds.minimum[2])
-    assert any(finding.code == "transform.rearranged_on_bed" for finding in result.findings)
     assert result.transform is not None
     transformed = apply(as_mesh_data(large[2].mesh), result.transform)
     assert transformed.bounds.centre == pytest.approx(held.mesh.bounds.centre)
@@ -694,6 +699,55 @@ def test_a_taken_place_makes_it_rearrange(document: Document, profile: Profile) 
         or second.bounds.maximum[1] <= first.bounds.minimum[1]
     )
     assert apart, "neu eingeordnet und trotzdem im Nachbarn"
+
+
+def test_two_bodies_may_be_pushed_into_each_other(document: Document, profile: Profile) -> None:
+    """Zwei Körper, die einander durchdringen, bleiben stehen.
+
+    **Befund Robert, 18.09.2026:** „beim bewegen und einer Kollision werden
+    die Körper versetzt, vllt will man sie aber zusammenhieben zum
+    verschmelzen, so nicht möglich". Der Griff setzt ``keep_on_bed`` bei
+    jedem Zug, und die Bindung hielt bis dahin auch „ohne Überschneidung" —
+    wer zwei Teile ineinanderzog, bekam sie auseinandergeschoben, bevor er
+    *Vereinigen* anklicken konnte.
+
+    Zwei Körper am selben Ort sind eine Absicht; ein Körper neben dem Bett
+    ist es nie. Gemeldet wird die Überschneidung weiterhin.
+    """
+    history = loaded_twice(document)
+    # Den zweiten Würfel ein Stück zur Seite, damit der erste einen Weg hat.
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 40.0})],
+    )
+    before = evaluate_with(document, profile).scene.objects
+    gap = float(before["obj_2"].mesh.bounds.centre[0] - before["obj_1"].mesh.bounds.centre[0])
+
+    # Und den ersten genau auf ihn — mit dem Haken, den jeder Griff setzt.
+    history.apply(
+        _("Verschieben"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"dx": gap, "keep_on_bed": True},
+            )
+        ],
+    )
+
+    result = evaluate_with(document, profile)
+    first = result.scene.objects["obj_1"].mesh
+    second = result.scene.objects["obj_2"].mesh
+    assert first.bounds.centre[0] == pytest.approx(second.bounds.centre[0], abs=1e-6), (
+        "der Zug muss ankommen, nicht ausweichen"
+    )
+    assert not any(
+        finding.code == "transform.rearranged_on_bed" for finding in result.scene.report.findings
+    )
+    spoken = {finding.code for finding in result.scene.report.findings}
+    assert spoken & {"arrange.collision", "arrange.bodies_in_one_place"}, (
+        f"gemeldet wird sie trotzdem, gefunden: {sorted(spoken)}"
+    )
 
 
 def test_growing_over_the_edge_is_held_too(document: Document, profile: Profile) -> None:
