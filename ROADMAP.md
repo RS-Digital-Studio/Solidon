@@ -543,7 +543,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-187"></a>
 
-- [x] **RM-187 — Dieselbe Geometrie auf jeder Plattform.** Am 17.09.2026 lieferte dasselbe
+- [~] **RM-187 — Dieselbe Geometrie auf jeder Plattform.** Am 17.09.2026 lieferte dasselbe
   Verkleinern einer Bohrung mit Senkung ein anderes Netz auf jeder Plattform, und eine
   Bohrungskette, die Solidon auf Windows erkennt, war auf dem Mac nicht mehr da. Drei
   Reparaturen liefen in die Merkmalserkennung, wo kein Fehler war.
