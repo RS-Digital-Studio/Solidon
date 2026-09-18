@@ -39,7 +39,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 |---|---|---|
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Nativer Ablauf der Dichtnut am Fenster; die übrigen Familien und die Einzeldateiabnahme aller 187 Fälle sind zurückgestellt |
 | [RM-186 — Die Erkennung findet die Stirnfläche eines Gewindebolzens auf Windows, auf Ubuntu nicht](#rm-186) | Geometrie, Erkennung und Druckvorbereitung | Die drei Baumtests zählen seit dem 16.09.2026 die Merkmale des Schritts und sind auf beiden Plattformen wahr; offen bleibt, warum eine 22-mm²-Stirnfläche auf Ubuntu unter die Erkennungsschwelle fällt — auf einer Linux-Maschine messen |
-| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt; Windows ist seit dem 14.09. ein Kundenbefund — mit Smart App Control startet Solidon auf Windows 11 nicht, Certum-Zugang und `sign_release.py` einmal fahren |
+| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | Mac ist mit 0.4.1 belegt und für 0.4.3 erneut durchgelaufen; **Windows wartet auf die Certum-Verifikation** (Robert, 18.09.2026) — danach `sign_release.py --run <lauf>`, und weil sich die Prüfsumme dabei ändert, anschließend `make_download.py`, `sign_version.py` und der Upload noch einmal |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | Kopier-/Pufferkosten messen und VTK aus der Bereichsprüfung ablösen |
@@ -257,6 +257,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Signatur-/Notarisierungsbelege. Abnahme: veröffentlichungsfähiger Installer mit überprüfter
   Signatur und Zeitstempel beziehungsweise Gatekeeper-/Notarisierungsnachweis für beide
   Mac-Architekturen; den Fremdrechnerweg mit RM-011 abstimmen.
+
+  **Stand 18.09.2026, nach dem Bau von 0.4.3:** macOS ist vollständig durch — Appsignatur,
+  Installersignatur, Notarisierung und beide Releaseakten waren im Tag-Lauf 35303237593 grün.
+  Windows nicht: Der ausgelieferte `Solidon3D-Setup-0.4.3.exe` trägt **keine** Signatur
+  (`Get-AuthenticodeSignature` sagt `NotSigned`), und die Seite benennt das auch — sie erklärt
+  SmartScreen und sagt, dass Solidon mit eingeschaltetem *Smart App Control* gar nicht startet.
+  Der Grund ist kein Versäumnis: Die **Certum-Verifikation läuft noch** (Robert), und ohne sie
+  gibt es keinen Zugang zur SimplySign-Cloud, aus der der Einmalcode kommt.
+
+  **Was nach der Verifikation zu tun ist, und zwar in dieser Folge** — der letzte Punkt ist der,
+  den man übersieht: `tools/sign_release.py --run 35303237593` holt die Signierübergabe und baut
+  den signierten Installer. Dessen SHA-256 ist danach eine **andere** als die im Download-Kasten
+  und in `website/version.json`. Also: Datei nach `website/dl/`, dann `make_download.py` mit allen
+  fünf Paketen, dann `sign_version.py` (die Unterschrift deckt jedes Feld außer sich selbst),
+  dann der Upload — Paket zuerst, `version.json` zuletzt —, dann `--nachpruefen`. Wer nur die
+  Datei austauscht, veröffentlicht eine Prüfsumme, die nicht mehr stimmt, und jede installierte
+  Fassung verwirft das Update ungelesen.
 
   **Gemessen am 10.09.2026 beim Bau von 0.4.0** (Lauf 34456150383, Tag `v0.4.0`): Der Weg
   steht vollständig — `MACOS_SIGNING_MODE` auf `notarized`, alle acht Apple-Geheimnisse
