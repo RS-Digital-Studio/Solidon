@@ -10552,7 +10552,7 @@ class MainWindow(QMainWindow):
         """Ein Zug an einem Bausteinmerkmal versetzt den **Baustein** — seinen Schritt.
 
         Ein Schlüsselloch besteht aus zwölf Merkmalen, und wer eines davon
-        anfasst, meint das Schlüsselloch (`oberflaeche.md`, „Ein Merkmal aus
+        anfasst, meint das Schlüsselloch (`fenster.md`, „Ein Merkmal aus
         einem Baustein meint den Baustein"). Bis zum 14.09.2026 galt das für
         die Felder rechts und nicht für den Griff im Bild: Der Zug wurde ein
         ``move_feature`` auf die runde Tasche, die Tasche wanderte, der Schlitz
@@ -17262,7 +17262,7 @@ class MainWindow(QMainWindow):
         verlieren die Knöpfe ihr Wort und behalten ihr Zeichen. Der Name geht
         dabei nicht verloren — er steht am ``QAction``, im Tooltip und im
         ``statusTip``, also dort, wo ihn Bildschirmleser und Statuszeile
-        ohnehin lesen (`oberflaeche.md`, „Ein Zeichen darf allein stehen").
+        ohnehin lesen (`grenzen.md`, „Ein Zeichen darf allein stehen").
 
         **Zwei Schwellen, nicht eine.** Umgeschaltet wird bei knapp, zurück
         erst bei deutlich mehr Platz; sonst flackert die Leiste, wenn jemand

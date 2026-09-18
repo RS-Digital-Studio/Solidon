@@ -4642,7 +4642,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
     """Der Griff an einer Hälfte des Schlüssellochs versetzt das Schlüsselloch.
 
     Ein Schlüsselloch bringt zwölf Merkmale mit; wer die runde Tasche anfasst,
-    meint das Schlüsselloch (`oberflaeche.md`, „Ein Merkmal aus einem Baustein
+    meint das Schlüsselloch (`fenster.md`, „Ein Merkmal aus einem Baustein
     meint den Baustein"). Bis zum 14.09.2026 wurde der Zug ein
     ``move_feature`` auf die Tasche: sie wanderte um fünf Millimeter, der
     Schlitz blieb stehen, und zehn Verrundungen verloren ihre Erkennung —

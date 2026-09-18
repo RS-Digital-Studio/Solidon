@@ -927,7 +927,7 @@ class PlacementFlow(QObject):
                 # linke Taste die Kamera; wer in dieser Stufe schiebt, hat die
                 # Tiefe nicht gemeint — und sie stand danach still fest, weil
                 # jedes Loslassen als Bestätigung zählte. Gemessen wird wie
-                # überall an der Zugschwelle des Systems (`ansicht.md`, „Ein
+                # überall an der Zugschwelle des Systems (`kamera.md`, „Ein
                 # Klick ist ein Klick, auch mit Zittern").
                 if not self._barely_moved(event):
                     return False
@@ -987,7 +987,7 @@ class PlacementFlow(QObject):
     def _barely_moved(self, event: PointerEvent) -> bool:
         """War das ein Klick oder das Ende eines Zugs?
 
-        Dieselbe Frage wie im Navigator (`ansicht.md`, „Ein Klick ist ein
+        Dieselbe Frage wie im Navigator (`kamera.md`, „Ein Klick ist ein
         Klick, auch mit Zittern"), und dieselbe Antwort: die Zugschwelle des
         Systems. Ohne gemerkten Druck — etwa wenn die Stufe zwischen Druck und
         Loslassen begann — gilt es als Klick, denn ein verschlucktes Loslassen
