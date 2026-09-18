@@ -1,4 +1,5 @@
 ---
+description: "Schichtanalyse und Wahrnehmung — kein eigener G-Code-Slicer, zwei Wege durch den Schnitt, Kennzahlen mit ausgewiesener Herkunft"
 paths:
   - "app/core/slice/**/*.py"
   - "app/core/perceive/**/*.py"

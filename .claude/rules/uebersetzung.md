@@ -1,4 +1,5 @@
 ---
+description: "Die Sprachkataloge — eine Sprache ist eine Datei, verbindliche Glossare je Sprache, neue Schlüssel ziehen überall nach"
 paths:
   - "app/i18n/**"
 ---

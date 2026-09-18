@@ -1,4 +1,5 @@
 ---
+description: "Projektdatei, Import, Export und Slicer-Übergabe — Migration ist Pflicht, und was nicht in die Datei gehört"
 paths:
   - "app/core/ingest/**/*.py"
   - "app/core/export/**/*.py"

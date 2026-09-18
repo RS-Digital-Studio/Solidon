@@ -1,4 +1,5 @@
 ---
+description: "Wartezeit und Nebenläufigkeit — Fortschritt, Abbruch, Threads; was das Fenster zeigt, während gerechnet wird; ausgegliedert aus oberflaeche.md"
 paths:
   - "app/ui/session.py"
   - "app/ui/loading.py"

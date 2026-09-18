@@ -1,4 +1,5 @@
 ---
+description: "Der Ordner 3D Drucker — physische Druckprojekte in einem eigenen Repository, kein Programmcode"
 paths:
   - "3D Drucker/**"
 ---

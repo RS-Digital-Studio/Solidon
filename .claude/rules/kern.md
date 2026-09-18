@@ -1,4 +1,5 @@
 ---
+description: "Der Kern ohne Qt — die Grenze nach oben, Zahlen in Millimeter, Fehler mit Handlungsvorschlag, Auswertung, Lizenz- und Pfadgrenzen"
 paths:
   - "app/core/**/*.py"
 ---

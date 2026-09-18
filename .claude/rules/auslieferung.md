@@ -1,4 +1,5 @@
 ---
+description: "Paket, Version, Lizenznachweis, Signierung und die verteilte Menge — die Entscheidungen hinter dem Release-Weg"
 paths:
   - "tools/**/*.py"
   - "packaging/**"

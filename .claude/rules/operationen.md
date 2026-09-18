@@ -1,4 +1,5 @@
 ---
+description: "Operationen an beiden Kernen — Registereintrag, Parameter, Boolesche Rückfallkette, beide Qualitätsstufen, Befunde statt Protokoll"
 paths:
   - "app/core/geom/**/*.py"
   - "app/core/registry/**/*.py"

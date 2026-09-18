@@ -1,4 +1,5 @@
 ---
+description: "Die Suite — was wo geprüft wird, Isolation als Betriebslage, Marker und Korpus, und wie ein Lauf ehrlich gemessen wird"
 paths:
   - "tests/**/*.py"
   - "conftest.py"

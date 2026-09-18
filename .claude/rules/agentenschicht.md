@@ -1,4 +1,5 @@
 ---
+description: "Die LLM-Schicht — ein Vorschlag ist eine Transaktion, die drei Vorrangregeln, Kontextfenster, Sicherheitsauflagen nach §32 und die Agenten-Suite"
 paths:
   - "app/core/agent/**/*.py"
   - "app/core/backends/**/*.py"

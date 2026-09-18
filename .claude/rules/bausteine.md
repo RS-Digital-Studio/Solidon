@@ -1,4 +1,5 @@
 ---
+description: "Bausteinbibliothek, Normteiltabelle und Regelsammlung — die Lage abgezogener und aufgesetzter Bausteine, die Bereichsprüfung von Hand, parts_version"
 paths:
   - "app/core/knowledge/**/*.py"
   - "app/core/counterpart.py"

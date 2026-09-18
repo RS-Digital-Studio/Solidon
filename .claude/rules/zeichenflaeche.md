@@ -1,4 +1,5 @@
 ---
+description: "Der Skizzeneditor — gezogene Punkte, Zwangsbedingungen, die Maßkarte, Lochkreis und Lochraster, die Karte unten"
 paths:
   - "app/ui/sketch_editor.py"
 ---
