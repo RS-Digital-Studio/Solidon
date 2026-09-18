@@ -1,14 +1,11 @@
-# Python-Ausgaben behalten auch in Windows-Pipes echte Umlaute.
+[shell_environment_policy]
+inherit = "core"
+
 [shell_environment_policy.set]
 PYTHONUTF8 = "1"
 
-# Die beiden Unity-Server gehören zu anderen Projekten und sind in Claude Code
-# für Solidon ebenfalls abgeschaltet.
-
-# C# wird in Roberts .NET-Projekten gebraucht, hier rechnet Python.
 [plugins."csharp-lsp@claude-plugins-official"]
 enabled = false
 
-# Bibliotheksdokumentation über denselben Dienst wie das Claude-Plugin.
 [mcp_servers.context7]
 url = "https://mcp.context7.com/mcp"
