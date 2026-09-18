@@ -178,8 +178,17 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
         assert button.width() >= button.sizeHint().width(), f"{button.text()} ist abgeschnitten"
         assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
 
+    # **Ohne Auswahl bleibt die Karte stehen, aber nur für die Bausteine**
+    # (Entscheidung Robert, 18.09.2026). Bis dahin verschwand sie ganz, und
+    # damit der einzige sichtbare Zugang zum Katalog.
     panel.set_context(0, _availability(0))
-    assert panel.isHidden()
+    QApplication.processEvents()
+    assert not panel.isHidden()
+    assert not panel.search.isVisible(), "ohne Auswahl gibt es nichts zu durchsuchen"
+    assert not panel.scroller.isVisible()
+    assert panel.catalog_button.isVisible(), "der Weg zu den Bausteinen bleibt"
+    for section, _toggle, _buttons in panel._groups.values():
+        assert section.isHidden()
 
 
 def test_quick_actions_reflow_when_the_selection_column_narrows(qt_app: QApplication) -> None:
@@ -616,3 +625,52 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
         assert metrics.horizontalAdvance(zeile) <= laengstes, (
             f"die Zeile {zeile!r} ist breiter als das längste Wort — dann wird sie beschnitten"
         )
+
+
+def test_a_chosen_edge_leaves_the_body_operations_out(qt_app: QApplication) -> None:
+    """An einer Kante steht nicht die Liste des Körpers.
+
+    **Befund Robert, 18.09.2026:** „bei einer kante zu viele optionen die
+    sinnlos bei kanten sind". Der Kantenklick setzt die Baumauswahl auf den
+    **Körper** zurück — eine Kante ist kein Merkmal und steht in keiner
+    Baumzeile —, und damit stand hier die volle Körperliste: Aushöhlen, Auf
+    dem Bett anordnen, Teilen. Was an einer Kante gilt, sind Verrunden, Fase
+    und Wulst, und die stehen oben im Merkmalfenster.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+
+    panel.set_context(1, _availability(1), feature_kind="")
+    QApplication.processEvents()
+    at_a_body = sum(1 for button in panel._buttons.values() if button.isVisible())
+    assert at_a_body > 0, "die Voraussetzung: am Körper steht etwas"
+
+    panel.set_context(1, _availability(1), feature_kind="edge")
+    QApplication.processEvents()
+
+    assert not any(button.isVisible() for button in panel._buttons.values())
+    assert not panel.search.isVisible(), "und kein Feld, das zum Suchen einlädt"
+    assert "bei den Maßen" in panel._nothing.text()
+    assert not panel.catalog_button.isVisible(), "ein Baustein sitzt nicht auf einer Kante"
+
+
+def test_the_search_field_goes_with_the_list_it_searches(qt_app: QApplication) -> None:
+    """Kein Suchfeld über einer Liste, die leer ist und leer bleibt.
+
+    **Befund Robert, 18.09.2026:** „weitere Optionen durchsuchen steht da,
+    wenn es keine Operationen für die Auswahl gibt". Wer **sucht** und nichts
+    findet, behält es — dort ist das Feld die Ursache und der Weg zurück.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+
+    panel.set_context(1, _availability(1), feature_kind="")
+    QApplication.processEvents()
+    assert panel.search.isVisible()
+
+    panel.search.setText("wortdasnichtvorkommt")
+    QApplication.processEvents()
+    assert panel.search.isVisible(), "wer sucht, behält sein Feld"
+    assert "anderes Wort" in panel._nothing.text()

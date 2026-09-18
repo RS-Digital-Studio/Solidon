@@ -375,6 +375,18 @@ class SelectionOperationsPanel(QWidget):
         self.search.setAccessibleName(tr("Operationen durchsuchen"))
         self.search.textChanged.connect(self._filter)
 
+        # **Steht nichts in der Liste, wird nicht zum Durchsuchen eingeladen**
+        # (Befund Robert, 18.09.2026: „weitere Optionen durchsuchen steht da,
+        # wenn es keine Operationen für die Auswahl gibt"). Das Feld stand
+        # fest im Layout und war immer sichtbar; an einer Auswahl mit leerer
+        # Karte — einem Langloch, einer Kante — versprach es etwas zu finden,
+        # wo es nichts gibt. Der Satz nennt stattdessen, wo die Handlungen
+        # dieser Auswahl stehen.
+        self._nothing = QLabel(self)
+        self._nothing.setWordWrap(True)
+        set_level(self._nothing, "caption")
+        self._nothing.setVisible(False)
+
         content = QWidget(self)
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -461,6 +473,7 @@ class SelectionOperationsPanel(QWidget):
         layout.addWidget(self.summary)
         layout.addLayout(quick)
         layout.addWidget(self.search)
+        layout.addWidget(self._nothing)
         layout.addWidget(self.scroller, 1)
         layout.addLayout(separate)
         self.hide()
@@ -646,8 +659,20 @@ class SelectionOperationsPanel(QWidget):
         """
         # Die Bausteinfelder darüber bedienen den erzeugenden Schritt. Seine
         # Einzelmerkmale sind hier kein Ziel für allgemeine Flächenoperationen.
-        self.setVisible(selected > 0 and not part_selected)
-        if selected <= 0 or part_selected:
+        self.setVisible(not part_selected)
+        if part_selected:
+            return
+        if selected <= 0:
+            # **Ohne Auswahl bleibt der Weg zu den Bausteinen** (Befund
+            # Robert, 18.09.2026: „bei keiner Auswahl sollte das merkmalpanel
+            # auch da sein um Bausteine setzen zu können"). Die Karte
+            # verschwand ganz, und damit war der einzige sichtbare Zugang zum
+            # Katalog weg — übrig blieben Strg+K und zwei Menüwege, die
+            # niemand sucht, der gerade auf eine leere Fläche klickt. Drei
+            # der siebenundzwanzig Bausteine stehen frei (``standalone``) und
+            # brauchen gar keinen Körper; der Katalog lässt sie durch und
+            # sagt bei den übrigen selbst, was fehlt.
+            self._empty_but_for_the_catalogue()
             return
         # **Bausteine setzt man auf eine Fläche, nicht in ein Loch** (Robert,
         # 10.09.2026: „ganz unten wenn wir runterscrollen noch bauteile, das
@@ -709,6 +734,7 @@ class SelectionOperationsPanel(QWidget):
         if query is not None:
             self._query = query
         wanted = self._query.strip().casefold()
+        found = 0
         for title, (section, toggle, buttons) in self._groups.items():
             shown = 0
             for button in buttons:
@@ -729,9 +755,63 @@ class SelectionOperationsPanel(QWidget):
                 # Körper „Ändern" mit 24, an einer Fläche dieselbe Gruppe mit
                 # zweien offen. Gerechnet wird an der Stufe, nicht am Bestand.
                 toggle.setChecked(shown <= OPEN_UP_TO)
+            found += shown
+        self._say_there_is_nothing(found, bool(wanted))
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._wrap_labels()
+
+    def _empty_but_for_the_catalogue(self) -> None:
+        """Ohne Auswahl bleibt nur der Weg zu den Bausteinen.
+
+        Keine Operationsliste — die gilt einer Auswahl, und die gibt es
+        nicht. Was bleibt, ist der Knopf und ein Satz, der sagt, woran es
+        liegt.
+        """
+        for section, _toggle, _buttons in self._groups.values():
+            section.setVisible(False)
+        # **Die Hauptaktionen gehen über ihren eigenen Weg weg, nicht über
+        # ``setVisible``.** `_lay_out_quick` kürzt ab, wenn dieselbe Liste
+        # schon steht — wer die Knöpfe hier von Hand versteckte, ließ
+        # ``_quick_shown`` gefüllt zurück, und beim nächsten gewählten Körper
+        # kehrte die Rechnung sofort zurück: Die Zeile blieb leer. Dieselbe
+        # Falle, vor der der Docstring von :meth:`_filter` warnt — zwei
+        # Stellen, die dieselbe Sichtbarkeit setzen, machen sie abwechselnd.
+        self._lay_out_quick(())
+        self.summary.setText(tr("Nichts gewählt"))
+        self.catalog_button.setVisible(True)
+        self.search.setVisible(False)
+        self.scroller.setVisible(False)
+        self._nothing.setText(
+            tr("Wählen Sie einen Körper oder eine Fläche — Bausteine gehen auch so.")
+        )
+        self._nothing.setVisible(True)
+
+    def _say_there_is_nothing(self, found: int, searching: bool) -> None:
+        """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
+
+        Zwei verschiedene Leeren, und sie brauchen zwei Sätze: Wer **sucht**,
+        hat nichts gefunden und soll es anders versuchen; wer **nicht** sucht,
+        steht an einer Auswahl, deren Handlungen woanders stehen — am
+        Langloch und an der Kante oben im Merkmalfenster, und das ist die
+        richtige Antwort und kein Mangel.
+
+        Das Suchfeld verschwindet im zweiten Fall mit: Ein Feld, das
+        „Weitere Operationen durchsuchen" verspricht, während die Liste
+        darunter leer ist und leer bleibt, stellt eine Frage, auf die es
+        keine Antwort gibt (Befund Robert, 18.09.2026).
+        """
+        self.search.setVisible(found > 0 or searching)
+        self.scroller.setVisible(found > 0)
+        if found > 0:
+            self._nothing.setVisible(False)
+            return
+        self._nothing.setText(
+            tr("Kein Treffer — versuchen Sie ein anderes Wort.")
+            if searching
+            else tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+        )
+        self._nothing.setVisible(True)
 
     def _folded_by_a_click(self, title: str) -> None:
         """Eine von Hand bewegte Klappe bleibt, wie sie ist (:data:`OPEN_UP_TO`)."""

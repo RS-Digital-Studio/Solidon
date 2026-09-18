@@ -5632,7 +5632,13 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     from app.ui.panels import FILTER_FROM
 
     panel = window.selection_operations
-    assert panel.isHidden()
+    # **Die Karte steht auch ohne Auswahl, aber leer bis auf die Bausteine**
+    # (Entscheidung Robert, 18.09.2026). Sie verschwand bis dahin ganz, und
+    # damit der einzige sichtbare Zugang zum Katalog; drei der
+    # siebenundzwanzig Bausteine stehen frei und brauchen keinen Körper.
+    assert not panel.isHidden()
+    assert not panel.search.isVisible(), "ohne Auswahl gibt es nichts zu durchsuchen"
+    assert not any(button.isVisible() for button in panel._buttons.values())
     assert window.feature_dock.isAncestorOf(panel), "die Handlungen wohnen im Fenster rechts"
     assert window.feature_dock.isAncestorOf(window.feature_panel), "und die Maße darüber"
     assert window.right.parentWidget() is window.right_card

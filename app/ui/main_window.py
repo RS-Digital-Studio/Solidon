@@ -8049,6 +8049,16 @@ class MainWindow(QMainWindow):
         E13). Dieselbe Auskunft, aus der auch das Kontextmenü gebaut wird, nur
         an der anderen Stelle gefragt.
         """
+        # **Eine gewählte Kante ist eine Stufe für sich** (Befund Robert,
+        # 18.09.2026: „bei einer kante zu viele optionen die sinnlos bei
+        # kanten sind"). Sie ist kein Merkmal und steht in keiner Baumzeile;
+        # der Kantenklick setzt die Baumauswahl sogar auf den **Körper**
+        # zurück, und damit stand an einer angeklickten Kante die volle
+        # Körperliste — Aushöhlen, Auf dem Bett anordnen, Teilen. Was an ihr
+        # gilt, sind die drei Zeilen aus ``EDGE_OPERATIONS``, und die stehen
+        # im Merkmalfenster.
+        if self.viewport.has_a_chosen_edge():
+            return "edge"
         feature_id = self.object_tree.selected_feature()
         selected = self.object_tree.selected()
         result = self.session.last_result

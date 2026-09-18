@@ -32,7 +32,34 @@ schließen mit ihrem eigenen Rand ab, die Auswahlkarte trägt denselben Stil,
 den Abstand dazwischen hält `MARGIN`, und durch die Lücke ist das Modell zu
 sehen — die Maske der Spalte (`overlay.CardColumn`) nimmt sie aus. Für F9,
 Warnungszähler und Höhenverteilung bleibt es **eine** Zone; die zweite Karte
-folgt ihrem Inhalt und gibt es ohne gewählten Körper nicht.
+folgt ihrem Inhalt.
+
+**Ohne Auswahl bleibt von ihr der Weg zu den Bausteinen** (Entscheidung
+Robert, 18.09.2026: „bei keiner Auswahl sollte das merkmalpanel auch da sein
+um Bausteine setzen zu können"). Bis dahin verschwand die Karte ganz, und
+damit der einzige sichtbare Zugang zum Katalog — übrig blieben Strg+K und
+zwei Menüwege, die niemand sucht, der gerade auf eine leere Fläche geklickt
+hat. Drei der siebenundzwanzig Bausteine stehen frei (`standalone`) und
+brauchen keinen Körper; bei den übrigen sagt der Katalog selbst, was fehlt.
+Die Operationsliste bleibt weg — sie gilt einer Auswahl, und die gibt es
+nicht.
+
+**Und eine Karte ohne Liste lädt nicht zum Durchsuchen ein.** Das Suchfeld
+stand fest im Layout und war immer sichtbar; an einer Auswahl mit leerer
+Karte — einem Langloch, einer Kante — versprach es etwas zu finden, wo es
+nichts gibt (Befund Robert, 18.09.2026). Es verschwindet mit der Liste, und
+ein Satz nennt, wo die Handlungen dieser Auswahl stehen. Wer **sucht** und
+nichts findet, behält es: Dort ist das Feld die Ursache und der Weg zurück.
+
+**Eine gewählte Kante ist eine Stufe für sich** (Befund Robert, 18.09.2026:
+„bei einer kante zu viele optionen die sinnlos bei kanten sind"). Sie ist
+kein Merkmal und steht in keiner Baumzeile — der Kantenklick setzt die
+Baumauswahl sogar auf den **Körper** zurück, und damit stand hier die volle
+Körperliste: Aushöhlen, Auf dem Bett anordnen, Teilen. Was an ihr gilt, sind
+die drei Zeilen aus `perceive.actions.EDGE_OPERATIONS`, und die stehen oben
+im Merkmalfenster. `MainWindow.selected_feature_kind` meldet dafür `"edge"`,
+sobald `Viewport.has_a_chosen_edge()` es sagt; `_fits_the_level` findet die
+Art in keinem `applies_to` und lässt die Karte leer.
 
 **Und was in dieser Karte vorn steht, richtet sich nach der Auswahl — nach
 ihrer Art und nach ihrer Menge** (Robert, 07.09.2026: „es sollten immer je

@@ -1292,6 +1292,20 @@ def direction_fields(spec: OperationSpec) -> frozenset[str]:
     return frozenset(normal_fields_of(spec)) | {"axis"}
 
 
+def _aims_in_the_view(spec: OperationSpec) -> bool:
+    """Ob diese Operation ihre Stelle im Bild bekommt, sobald der Dialog aufgeht.
+
+    Dieselben zwei Fragen, die :func:`placement_flow.starts_by_itself` und
+    :func:`placement.supports_surface_placement` stellen — gefragt und nicht
+    aufgezählt, damit eine neue platzierte Operation den Satz von selbst
+    bekommt. Der Fluss ist hier nicht zu importieren (er importiert diesen
+    Dialog), die fachliche Auskunft steht ohnehin im Kern.
+    """
+    from app.core.scene.placement import supports_surface_placement
+
+    return supports_surface_placement(spec) and (spec.consumes != 0 or spec.takes_whole_scene)
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -1567,6 +1581,22 @@ class OperationDialog(QDialog):
         applies.setVisible(bool(note))
         self._note = applies
         layout.addWidget(applies)
+        # **Wer im Bild zielen muss, erfährt es im Dialog** (Befund Robert,
+        # 18.09.2026: „Bohrung setzen sollte doch über den Viewport gehen,
+        # wenn das dialogfenster da ist, keine Info dass es über den Viewport
+        # geht"). Die Platzierung startet bei diesen Operationen von selbst
+        # und schreibt ihren Satz in eine Leiste am **Viewport**; der Dialog
+        # bleibt daneben stehen und sagte dazu nichts. Wer auf ihn sieht,
+        # sucht ein Feld für die Stelle und findet keines — sie steht in
+        # ``x/y/z`` hinter der Klappe, und dorthin gehört sie auch.
+        placed = QLabel(
+            tr("Die Stelle wählen Sie im Bild: Klicken Sie auf die Fläche, auf die es soll."),
+            self,
+        )
+        placed.setWordWrap(True)
+        set_level(placed, "caption")
+        placed.setVisible(_aims_in_the_view(spec))
+        layout.addWidget(placed)
         self._filament_notice = ErrorNotice(self)
         self._filament_notice.hide()
         layout.addWidget(self._filament_notice)

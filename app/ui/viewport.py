@@ -8302,6 +8302,17 @@ class Viewport(QWidget):
         self._redraw_edge_patch()
         self._apply_selection_colour()
 
+    def has_a_chosen_edge(self) -> bool:
+        """Ob gerade eine Kante gewählt ist.
+
+        Das Fenster braucht die Auskunft, weil eine gewählte Kante die
+        **Stufe** der Auswahl ist und nicht nur eine Hervorhebung: An ihr
+        gelten Verrunden, Fase und Wulst und sonst nichts, und der Baum kann
+        es nicht sagen — eine Kante ist kein Merkmal und steht in keiner
+        seiner Zeilen (siehe ``perceive.actions.EDGE_OPERATIONS``).
+        """
+        return self._selected_edge is not None
+
     def edge_title(self, object_id: ObjectId, key: str) -> str:
         """Wie diese Kante heißt — „Waagerecht · 30,00 mm · x -20,00, y 0,00".
 
