@@ -1,538 +1,388 @@
 {
-  "version": "0.4.2",
+  "version": "0.4.3",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.4.2.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.2.exe",
-      "size": 170584357,
-      "sha256": "2229dbe16c2721953216fb8b426f2f01d988997510445de4312a9bde5af3a49f"
+      "file": "Solidon3D-Setup-0.4.3.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.4.3.exe",
+      "size": 171368649,
+      "sha256": "c98cddd761d743779f1bc0d675d20c9cfda4ec063addc64286d2aee65d7c4344"
     },
     "linux": {
-      "file": "Solidon3D-0.4.2-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.2-x86_64.flatpak",
-      "size": 202834808,
-      "sha256": "e8b9729427eb7b8041092e02b03d5ba148b78f83b9c4df4e1071c77291f13b74"
+      "file": "Solidon3D-0.4.3-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.3-x86_64.flatpak",
+      "size": 203440600,
+      "sha256": "9dbb0ffed51b77640f698f823ee977c5819fe7cf8ce5c39a44bed9d67e05b4cb"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.4.2-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.2-macos-arm64.pkg",
-      "size": 214727873,
-      "sha256": "e6635b7843a5cbe8387ec882417ad1f5df68fd9c2b7215832e18734e3ded239e"
+      "file": "Solidon3D-0.4.3-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.3-macos-arm64.pkg",
+      "size": 215569185,
+      "sha256": "c4447d154113559a4995ca1408c64f323e808a26322b3d0b707e8525935b7532"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.4.2-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.4.2-macos-x86_64.pkg",
-      "size": 236947828,
-      "sha256": "844fda5be6a0552bf6c1e478f7c3a43727ca15b998e4365aba9e4111f81b606b"
+      "file": "Solidon3D-0.4.3-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.4.3-macos-x86_64.pkg",
+      "size": 237785321,
+      "sha256": "8622400aabb308e8b0f03b2df9c31d03689ec636b81ac43c2ba1daf8ca06edc8"
     }
   },
   "changes": {
     "de": [
-      "Zwei Klicks setzen ein regelmäßiges Vieleck: erst die Mitte, dann eine Ecke. Die Eckenzahl stellen Sie vorher ein — drei bis zwölf. Ein getippter Durchmesser bleibt als Maß stehen.",
-      "Ein Langloch entsteht aus zwei Klicks auf die Mitten der runden Enden; die Breite steht daneben in der Leiste. Beide Enden bleiben gleich groß, die Flanken gerade.",
-      "Vier neue Bedingungen: Winkel in Grad zwischen zwei Linien, gleich lang beziehungsweise gleich groß, Punkt auf der Mitte einer Linie, konzentrisch für zwei Kreise oder Bögen.",
-      "Ein gezogener Punkt bleibt am Zeiger, und die Nachbarn folgen: Eine Ecke des Rechtecks zieht die beiden Seiten mit, eine Linie streckt die Form. Vorher kam die Ecke nur ein Stück weit.",
-      "Ein geklicktes Rechteck ist frei: kein Festpunkt, keine Maße, solange Sie keine tippen. Eine getippte Breite oder Höhe bleibt als Maß stehen — so wie in Fusion.",
-      "Ein Langloch drehen dreht es — statt ein zweites quer darüber zu schneiden. Und wer ein Langloch bearbeitet, das er selbst gezogen hat, ändert diesen Schritt; der Verlauf bekommt keinen zweiten.",
-      "Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.",
-      "Nennen Sie im Chat nur eine Achse — „Bohrung auf x = 20“ —, wandert das Loch nur dort. Vorher sprang es in den beiden anderen Achsen auf null.",
-      "Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz.",
-      "Eine runde Wand — das Ende einer Lasche, der Boden einer Nut — heißt jetzt so. Vorher stand dort „Verrundung“ mit einer Kante, die es nicht gibt. Der Radius lässt sich ändern.",
-      "Eine Bohrung mit Nasen in der Wand, etwa der Ring eines Bajonettverschlusses, ist eine Bohrung. Vorher stand dort ein Langloch so lang wie breit, und jede Handlung hätte die Nasen entfernt.",
-      "Ein Langloch mit Fase am Rand ist ein Langloch; die Fase gehört dazu. Vorher standen an einem Rahmen 126 einzelne Senkungen im Baum.",
-      "Eine Kerbe oder das runde Ende einer Lasche ist keine Bohrung mehr, und zwei Stücke derselben runden Wand stehen als eines im Baum.",
-      "Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.",
-      "Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.",
-      "Der Schritt „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.",
-      "Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum.",
-      "Eine 3MF aus dem Slicer öffnet jetzt auch dann, wenn die Farben nicht eindeutig lesbar sind: Das Modell kommt einfarbig an, und der Prüfbericht sagt, warum. Vorher blieb die Datei ganz zu.",
-      "Bemalte Flächen aus Bambu Studio, Orca und Elegoo kommen genau so an, wie sie gemalt wurden — auch wenn die Farbe mitten durch ein Dreieck läuft. Vorher galt das als „nicht eindeutig“.",
-      "Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.",
-      "Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer.",
-      "Ein Baustein für Bohrungen — Einpressbuchse, Mutternfalle, Lagersitz, Gewinde, Schraube — sitzt sofort in der Bohrung, die Sie gewählt haben, statt auf der Mitte der Fläche.",
-      "Ziehen Sie einen Baustein am Griff im Bild, bewegt sich der ganze Baustein — auch an einer Kante des Schlüssellochs. Vorher wanderte nur das eine Merkmal, der Rest blieb stehen.",
-      "Haken und Löcher eines Bausteins stehen rechts als Anzahl — nicht mehr als „2,00 mm“. Und nach „Maße ändern“ bleibt der Baustein gewählt, auch wenn er danach andere Merkmale trägt."
+      "Flache Sackbohrungen, kleine Funktionsflächen und kurze Gewinde werden zuverlässiger erkannt. Die Böden der Magnettaschen gehören zu ihren Bohrungen.",
+      "Bohrungen lassen sich samt Senkung und Einlauf maßhaltig ändern. Auch nach einer größeren Durchmesseränderung bleibt der Sackboden zugeordnet.",
+      "An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.",
+      "Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.",
+      "Kanten lassen sich an jedem Körper anklicken und verrunden oder fasen — auch an eingelesenen Modellen.",
+      "Bohrungen, Zylinder und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten. Ein Projekt wird auf jedem Rechner gleich erkannt und gleich bearbeitet.",
+      "Organizer erhalten gebundene Fachmaße, einzeln änderbare Trennwände und wiederholte Fächer. Wanne, Rand, Boden und Fuß ergänzen die Bausteinbibliothek.",
+      "Loch-, Langloch- und Wabenfelder folgen einem gezeichneten Bereich. Freizuhaltende Flächen, Randabstände und Mindeststege bleiben berücksichtigt.",
+      "Profilklemmen entstehen aus zwei Schalen und zwei passenden Einlagen. Runde, ovale und gezeichnete Gegenprofile sind möglich; die Einlagen lassen sich später austauschen.",
+      "Eine geschlossene Zeichnung oder gewählte Öffnung erzeugt Dichtnut und separate Dichtung. Material, Querschnitt und Überstand sind einstellbar; Restwände werden geprüft.",
+      "Oberflächenmuster reichen bis zum Flächenrand und lassen Bohrungen frei. Vorhandene Muster lassen sich direkt über die Auswahl weiterbearbeiten.",
+      "Abschneiden behält eine Seite einer Ebene und schließt die Schnittfläche — für glatte Rückwände und Wände auf einer Höhe. Rundungen neben leicht schrägen Wänden lassen sich wieder ändern.",
+      "SVG- und DXF-Konturen wählen Sie vor dem Erzeugen sichtbar aus. GLB- und GLTF-Dateien kommen mit ihren richtigen Maßen und ihrer richtigen Ausrichtung an.",
+      "Projektmaße bleiben bis in Bausteinskizzen und Platzierungsvorschauen wirksam. Beim Einpassen berücksichtigt die Ansicht alle sichtbaren Druckplatten.",
+      "Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.",
+      "Entf an einer Fläche entfernt den Körper und sagt es; Strg+Z holt ihn zurück. Bei flachem Blick folgt ein gezogener Körper dem Zeiger, und die gewählte Fläche bleibt beim ersten Klick der Skizze.",
+      "Der lokale Chat bekommt ein größeres Fenster und kürzt Ihre Anfrage nicht mehr.",
+      "Der Düsendurchmesser lässt sich am Drucker einstellen. Die Übergabe wählt dann die passende Maschine im Slicer, auch wenn dort eine andere Düse eingestellt ist.",
+      "Reparieren schließt Modelle, die sich an einer Kante selbst berühren, statt sie weiter aufzureißen."
     ],
     "en": [
-      "Two clicks set a regular polygon: first the centre, then a corner. You choose the number of corners beforehand — three to twelve. A typed diameter stays on as a dimension.",
-      "A slot comes from two clicks on the centres of its round ends; the width sits next to them in the bar. Both ends stay the same size, the flanks stay straight.",
-      "Four new constraints: an angle in degrees between two lines, equal length or size, a point at the middle of a line, concentric for two circles or arcs.",
-      "A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.",
-      "A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion.",
-      "Turning a slot turns it — instead of cutting a second one across it. And editing a slot you pulled yourself changes that step; the history gets no second one.",
-      "An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.",
-      "Name just one axis in the chat — “bore to x = 20” — and the hole moves only there. Before, it jumped to zero on the other two axes.",
-      "Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh.",
-      "A curved wall — the end of a tab, the floor of a groove — is now called that. Before, it said “Fillet” with an edge that does not exist. Its radius can be changed.",
-      "A bore with lugs in its wall, such as the ring of a bayonet mount, is a bore. Before, it appeared as a slot as long as it was wide, and every action would have removed the lugs.",
-      "A slot with a chamfered rim is a slot; the chamfer belongs to it. Before, one frame listed 126 separate countersinks in the tree.",
-      "A notch or the round end of a tab is no longer a hole, and two pieces of the same round wall appear as one in the tree.",
-      "A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.",
-      "When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.",
-      "The step “Split” starts in the middle of the part instead of at its underside. The number stays editable.",
-      "A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity.",
-      "A 3MF from the slicer now opens even when its colours cannot be read unambiguously: the model arrives in one colour, and the report says why. Before, the file stayed closed.",
-      "Painted faces from Bambu Studio, Orca and Elegoo arrive exactly as painted — even where a colour runs through the middle of a triangle. Before, that counted as “ambiguous”.",
-      "A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.",
-      "Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer.",
-      "A block meant for a hole — heat-set insert, nut trap, bearing seat, thread, screw — now sits straight in the hole you selected instead of at the centre of the face.",
-      "Drag a block by its handle in the view and the whole block moves — even from an edge of the keyhole. Before, only that one feature travelled and the rest stayed put.",
-      "Hooks and holes of a block appear on the right as a count — no longer as “2.00 mm”. And after “Change dimensions” the block stays selected, even when it ends up with different features."
+      "Shallow blind holes, small functional faces and short threads are recognised more reliably. Magnet-pocket floors belong to their bores.",
+      "Resize bores together with their countersinks and entrances while preserving the intended dimensions. Blind-hole floors stay associated even after larger diameter changes.",
+      "Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.",
+      "Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.",
+      "Edges can be picked on any body and rounded or chamfered — on imported models too.",
+      "Bores, cylinders and roundings are built from the same points on Windows, macOS and Linux. A project is recognised and edited the same way on every machine.",
+      "Organisers gain linked compartment dimensions, individually editable dividers and repeated cells. Tray, rim, floor and foot parts extend the library.",
+      "Hole, slot and honeycomb fields follow a drawn region. Keep-out areas, edge margins and minimum webs are respected.",
+      "Profile clamps comprise two shells and two fitted liners. Round, oval and drawn mating profiles are supported; liners can be replaced later.",
+      "A closed drawing or selected opening creates a seal groove and a separate gasket. Choose materials, cross-section and protrusion; remaining walls are checked.",
+      "Surface patterns reach the face boundary and leave bores clear. Existing patterns can be edited directly through the selection panel.",
+      "Cut away keeps one side of a plane and closes the cut face — for flat back walls and walls at one height. Fillets next to slightly slanted walls can be edited again.",
+      "Select SVG and DXF contours visually before creating a body. GLB and GLTF files retain their correct dimensions and orientation.",
+      "Project dimensions remain effective in part sketches and placement previews. Fit to view includes every visible build plate.",
+      "Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.",
+      "Delete on a face removes the body and says so; Ctrl+Z brings it back. In a flat view a dragged body follows the pointer, and the chosen face survives the first click of a sketch.",
+      "The local chat gets a larger window and no longer truncates your request.",
+      "The nozzle diameter can be set on the printer. The handover then picks the matching machine in the slicer, even if a different nozzle is selected there.",
+      "Repair closes models that touch themselves along an edge instead of tearing them open further."
     ],
     "es": [
-      "Dos clics crean un polígono regular: primero el centro, luego una esquina. El número de esquinas se elige antes: de tres a doce. Un diámetro escrito queda como cota.",
-      "Una ranura surge de dos clics en los centros de sus extremos redondeados; el ancho está al lado en la barra. Ambos extremos mantienen el tamaño y los flancos, rectos.",
-      "Cuatro condiciones nuevas: ángulo en grados entre dos líneas, igual longitud o tamaño, punto en el centro de una línea, y concéntrico para dos círculos o arcos.",
-      "Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.",
-      "Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion.",
-      "Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.",
-      "Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.",
-      "Si en el chat nombra solo un eje — «taladro a x = 20» —, el agujero se mueve solo ahí. Antes saltaba a cero en los otros dos ejes.",
-      "Redondear avisa de antemano que un cuerpo exacto admite un radio menor que una malla, y qué ayuda entonces: un radio menor o seguir trabajando sobre la malla.",
-      "Una pared curva —el extremo de una pestaña, el fondo de una ranura— ahora se llama así. Antes ponía «Redondeo» con una arista que no existe. El radio se puede cambiar.",
-      "Un agujero con resaltes en la pared, como el anillo de un cierre de bayoneta, es un agujero. Antes aparecía como un agujero alargado tan largo como ancho, y cualquier acción quitaba los resaltes.",
-      "Una ranura con chaflán en el borde es una ranura; el chaflán forma parte de ella. Antes, en un marco aparecían 126 avellanados sueltos en el árbol.",
-      "Una muesca o el extremo redondo de una lengüeta ya no es un taladro, y dos trozos de la misma pared redonda aparecen como uno en el árbol.",
-      "Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.",
-      "Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.",
-      "El paso «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.",
-      "Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco.",
-      "Un 3MF del slicer ahora se abre aunque sus colores no se puedan leer sin ambigüedad: el modelo llega en un solo color y el informe dice por qué. Antes, el archivo no se abría.",
-      "Las caras pintadas en Bambu Studio, Orca y Elegoo llegan exactamente como se pintaron, incluso cuando un color atraviesa un triángulo. Antes eso contaba como «ambiguo».",
-      "Un relieve de texto del slicer de Elegoo o de Bambu Studio en el archivo detenía la importación. Ahora el archivo se abre.",
-      "Los modificadores y bloqueadores de soportes del slicer ya no aparecen como cuerpos, y un hueco («pieza negativa») se resta, como en el slicer.",
-      "Un bloque para agujeros — inserto térmico, alojamiento de tuerca, asiento de rodamiento, rosca, tornillo — se coloca directamente en el agujero elegido, no en el centro de la cara.",
-      "Si arrastra un bloque por el asa en la vista, se mueve el bloque entero, aunque haya agarrado un borde del ojo de cerradura. Antes solo se desplazaba esa característica.",
-      "Ganchos y agujeros de un bloque aparecen a la derecha como cantidad, no como «2,00 mm». Y tras «Cambiar medidas» el bloque sigue seleccionado, aunque tenga otras características."
+      "Se reconocen mejor los taladros ciegos poco profundos, las caras pequeñas y las roscas cortas. Los fondos de los alojamientos para imanes pertenecen a sus taladros.",
+      "Cambie el diámetro junto con el avellanado y la entrada conservando las medidas previstas. El fondo sigue asociado incluso tras cambios grandes de diámetro.",
+      "Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.",
+      "La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.",
+      "Las aristas se pueden seleccionar en cualquier cuerpo y redondear o achaflanar, también en modelos importados.",
+      "Los taladros, cilindros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux. Un proyecto se reconoce y se edita igual en cualquier equipo.",
+      "Los organizadores admiten medidas vinculadas, divisores editables por separado y celdas repetidas. Bandeja, borde, fondo y pie amplían la biblioteca.",
+      "Los campos de agujeros, ranuras y hexágonos siguen una región dibujada. Se respetan las zonas reservadas, los márgenes y los puentes mínimos.",
+      "Las abrazaderas de perfil constan de dos carcasas y dos insertos ajustados. Admiten perfiles redondos, ovalados o dibujados; los insertos pueden sustituirse después.",
+      "Un dibujo cerrado o una abertura elegida crea una ranura de sellado y una junta separada. Puede elegir materiales, sección y saliente; se comprueban las paredes restantes.",
+      "Los patrones superficiales llegan al borde de la cara y dejan libres los taladros. Puede editar los patrones existentes desde el panel de selección.",
+      "Recortar conserva un lado de un plano y cierra la cara de corte: para paredes traseras lisas y paredes a una misma altura. Los redondeos junto a paredes algo inclinadas vuelven a poder editarse.",
+      "Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.",
+      "Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.",
+      "Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.",
+      "Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.",
+      "El chat local recibe una ventana mayor y ya no recorta su solicitud.",
+      "El diámetro de la boquilla se ajusta en la impresora. La entrega elige entonces la máquina adecuada en el slicer, aunque allí esté seleccionada otra boquilla.",
+      "Reparar cierra los modelos que se tocan a sí mismos en una arista, en lugar de abrirlos más."
     ],
     "fr": [
-      "Deux clics posent un polygone régulier : d'abord le centre, puis un coin. Le nombre de coins se règle avant — de trois à douze. Un diamètre saisi reste comme cote.",
-      "Un trou oblong naît de deux clics sur les centres de ses extrémités arrondies ; la largeur est à côté dans la barre. Les deux bouts gardent leur taille, les flancs restent droits.",
-      "Quatre nouvelles contraintes : angle en degrés entre deux lignes, même longueur ou taille, point au milieu d'une ligne, concentrique pour deux cercles ou arcs.",
-      "Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.",
-      "Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion.",
-      "Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.",
-      "Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.",
-      "Si vous ne nommez qu'un axe dans le chat — « perçage à x = 20 » —, le trou ne bouge que là. Avant, il retombait à zéro sur les deux autres axes.",
-      "Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage.",
-      "Une paroi courbe — le bout d’une patte, le fond d’une rainure — s’appelle désormais ainsi. Avant, il y avait « Congé » avec une arête qui n’existe pas. Le rayon se modifie.",
-      "Un perçage avec des ergots dans sa paroi, comme la bague d’une fermeture à baïonnette, est un perçage. Avant, c’était un trou oblong aussi long que large, et chaque action aurait ôté les ergots.",
-      "Une rainure au bord chanfreiné est une rainure ; le chanfrein en fait partie. Avant, un cadre affichait 126 lamages isolés dans l’arbre.",
-      "Une encoche ou l’extrémité ronde d’une languette n’est plus un trou, et deux morceaux de la même paroi ronde n’en font plus qu’un dans l’arbre.",
-      "Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.",
-      "Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.",
-      "L’étape « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.",
-      "Un outil qui ne peut rien faire sur cette pièce apparaît grisé et dit pourquoi — « Fermer une surface ouverte » sur une pièce fermée, « Séparer en pièces » sur une seule, « Treillis » sans cavité.",
-      "Un 3MF issu du slicer s’ouvre désormais même si ses couleurs ne se lisent pas sans ambiguïté : le modèle arrive en une seule couleur, et le rapport dit pourquoi. Avant, le fichier restait fermé.",
-      "Les faces peintes dans Bambu Studio, Orca et Elegoo arrivent exactement telles qu’elles ont été peintes — même lorsqu’une couleur traverse un triangle. Avant, cela comptait comme « ambigu ».",
-      "Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.",
-      "Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer.",
-      "Un bloc destiné à un perçage — insert thermique, logement d’écrou, siège de roulement, filetage, vis — se pose directement dans le perçage choisi, et non au centre de la face.",
-      "Faites glisser un bloc par sa poignée dans la vue et c’est tout le bloc qui bouge, même saisi par un bord du trou de serrure. Avant, seule cette caractéristique se déplaçait.",
-      "Crochets et trous d’un bloc apparaissent à droite comme un nombre, non plus comme « 2,00 mm ». Après « Modifier les cotes », le bloc reste sélectionné, même avec d’autres caractéristiques."
+      "Les perçages borgnes peu profonds, les petites faces et les filetages courts sont mieux reconnus. Les fonds des logements pour aimants appartiennent à leurs perçages.",
+      "Modifiez un perçage avec sa fraisure et son entrée en conservant les cotes prévues. Le fond reste associé même après un changement important de diamètre.",
+      "Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.",
+      "La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.",
+      "Les arêtes se sélectionnent sur n'importe quel corps et s'arrondissent ou se chanfreinent — aussi sur les modèles importés.",
+      "Les perçages, cylindres et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux. Un projet est reconnu et modifié de la même façon sur chaque machine.",
+      "Les organisateurs proposent des cotes liées, des cloisons modifiables séparément et des cases répétées. Bac, bordure, fond et pied enrichissent la bibliothèque.",
+      "Les champs de trous, de lumières et d’hexagones suivent une zone dessinée. Zones réservées, marges et épaisseurs minimales entre ouvertures sont respectées.",
+      "Les colliers de profil comprennent deux coques et deux inserts ajustés. Les profils ronds, ovales ou dessinés sont possibles ; les inserts restent remplaçables.",
+      "Un dessin fermé ou une ouverture choisie crée une rainure et un joint séparé. Matériaux, section et dépassement sont réglables ; les parois restantes sont vérifiées.",
+      "Les motifs de surface atteignent le bord des faces et laissent les perçages libres. Les motifs existants se modifient directement depuis le panneau de sélection.",
+      "Découper garde un côté d’un plan et ferme la face de coupe — pour des parois arrière planes et des parois à la même hauteur. Les congés le long de parois légèrement inclinées se modifient de nouveau.",
+      "Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.",
+      "Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.",
+      "Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.",
+      "Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.",
+      "Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.",
+      "Le diamètre de la buse se règle sur l'imprimante. Le transfert choisit alors la machine correspondante dans le slicer, même si une autre buse y est sélectionnée.",
+      "La réparation referme les modèles qui se touchent le long d'une arête au lieu de les ouvrir davantage."
     ],
     "it": [
-      "Due clic creano un poligono regolare: prima il centro, poi un angolo. Il numero di angoli si imposta prima: da tre a dodici. Un diametro digitato resta come quota.",
-      "Un'asola nasce da due clic sui centri delle sue estremità arrotondate; la larghezza sta accanto nella barra. Le due estremità restano uguali e i fianchi diritti.",
-      "Quattro nuovi vincoli: angolo in gradi fra due linee, stessa lunghezza o dimensione, punto a metà di una linea, concentrico per due cerchi o archi.",
-      "Un punto trascinato resta sotto il puntatore e i vicini lo seguono: un angolo del rettangolo porta con sé i due lati, una linea allunga la forma. Prima l'angolo arrivava solo a metà strada.",
-      "Un rettangolo fatto con i clic è libero: nessun punto fisso, nessuna quota finché non la digiti. Una larghezza o altezza digitata resta come quota, come in Fusion.",
-      "Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.",
-      "Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.",
-      "Se nella chat indichi un solo asse — « foro a x = 20 » —, il foro si sposta solo lì. Prima negli altri due assi saltava a zero.",
-      "Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh.",
-      "Una parete curva — l’estremità di una linguetta, il fondo di una scanalatura — ora si chiama così. Prima c’era «Raccordo» con uno spigolo che non esiste. Il raggio si può cambiare.",
-      "Un foro con nasi nella parete, come l’anello di una chiusura a baionetta, è un foro. Prima compariva come un’asola lunga quanto larga, e ogni azione avrebbe tolto i nasi.",
-      "Un’asola con il bordo smussato è un’asola; lo smusso ne fa parte. Prima un telaio mostrava 126 svasature separate nell’albero.",
-      "Una tacca o l’estremità arrotondata di una linguetta non è più un foro, e due pezzi della stessa parete rotonda compaiono come uno solo nell’albero.",
-      "Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.",
-      "Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.",
-      "Il passo «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.",
-      "Uno strumento che su questo pezzo non può fare nulla appare grigio e dice perché — «Chiudi superficie aperta» su un pezzo chiuso, «Dividi in parti» su un pezzo solo, «Reticolo» senza cavità.",
-      "Un 3MF dallo slicer ora si apre anche quando i colori non si leggono senza ambiguità: il modello arriva in un solo colore e il rapporto dice perché. Prima il file restava chiuso.",
-      "Le facce dipinte in Bambu Studio, Orca ed Elegoo arrivano esattamente come dipinte, anche dove un colore attraversa un triangolo. Prima contava come «ambiguo».",
-      "Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.",
-      "Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer.",
-      "Un blocco per fori — inserto a caldo, sede per dado, sede per cuscinetto, filettatura, vite — si posa subito nel foro scelto, invece che al centro della faccia.",
-      "Trascinando un blocco con la maniglia nella vista si sposta l’intero blocco, anche afferrandolo a un bordo del foro a serratura. Prima si spostava solo quella caratteristica.",
-      "Ganci e fori di un blocco compaiono a destra come numero, non più come «2,00 mm». E dopo «Modifica misure» il blocco resta selezionato, anche con altre caratteristiche."
+      "Fori ciechi poco profondi, piccole superfici funzionali e filettature corte vengono riconosciuti meglio. I fondi delle sedi per magneti appartengono ai rispettivi fori.",
+      "Modifichi i fori insieme a svasature e imbocchi mantenendo le misure previste. Il fondo resta associato anche dopo variazioni importanti del diametro.",
+      "Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.",
+      "Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.",
+      "Gli spigoli si possono selezionare su qualsiasi corpo e raccordare o smussare, anche sui modelli importati.",
+      "Fori, cilindri e raccordi nascono dagli stessi punti su Windows, macOS e Linux. Un progetto viene riconosciuto e modificato allo stesso modo su ogni computer.",
+      "Gli organizer offrono misure collegate, divisori modificabili singolarmente e celle ripetute. Vaschetta, bordo, fondo e piedino ampliano la libreria.",
+      "I campi di fori, asole ed esagoni seguono una regione disegnata. Rispettano le zone riservate, i margini e i ponti minimi.",
+      "I morsetti per profili comprendono due gusci e due inserti su misura. Sono ammessi profili rotondi, ovali e disegnati; gli inserti possono essere sostituiti in seguito.",
+      "Un disegno chiuso o un’apertura scelta crea una scanalatura e una guarnizione separata. Materiali, sezione e sporgenza sono regolabili; le pareti residue vengono verificate.",
+      "I motivi superficiali raggiungono il bordo delle facce e lasciano liberi i fori. I motivi esistenti si modificano direttamente dal pannello di selezione.",
+      "Tagliare via conserva un lato di un piano e chiude la faccia di taglio: per pareti posteriori lisce e pareti alla stessa altezza. I raccordi accanto a pareti un po’ inclinate tornano modificabili.",
+      "Scelga visivamente i contorni SVG e DXF prima di creare il corpo. I file GLB e GLTF conservano dimensioni e orientamento corretti.",
+      "Le misure del progetto restano attive negli schizzi dei componenti e nelle anteprime di posizionamento. L’inquadratura comprende tutti i piatti di stampa visibili.",
+      "I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.",
+      "Canc su una faccia rimuove il corpo e lo dice; Ctrl+Z lo riporta. In vista radente un corpo trascinato segue il puntatore, e la faccia scelta resta al primo clic dello schizzo.",
+      "La chat locale riceve una finestra più grande e non accorcia più la richiesta.",
+      "Il diametro dell'ugello si imposta sulla stampante. Il trasferimento sceglie poi la macchina giusta nello slicer, anche se lì è selezionato un altro ugello.",
+      "La riparazione chiude i modelli che si toccano lungo uno spigolo invece di aprirli ulteriormente."
     ],
     "pt": [
-      "Dois cliques criam um polígono regular: primeiro o centro, depois um canto. O número de cantos define-se antes — de três a doze. Um diâmetro escrito fica como cota.",
-      "Um furo oblongo nasce de dois cliques nos centros das suas extremidades arredondadas; a largura fica ao lado na barra. Ambas mantêm o tamanho e os flancos, direitos.",
-      "Quatro novas condições: ângulo em graus entre duas linhas, igual comprimento ou tamanho, ponto a meio de uma linha, concêntrico para dois círculos ou arcos.",
-      "Um ponto arrastado fica no ponteiro e os vizinhos seguem-no: um canto do retângulo leva os dois lados consigo, uma linha estica a forma. Antes, o canto só ia parte do caminho.",
-      "Um retângulo feito com cliques é livre: sem ponto fixo, sem cotas enquanto não as escrever. Uma largura ou altura escrita fica como cota — como no Fusion.",
-      "Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.",
-      "Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.",
-      "Se no chat indicar só um eixo — «furo em x = 20» —, o furo desloca-se apenas aí. Antes saltava para zero nos outros dois eixos.",
-      "Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha.",
-      "Uma parede curva — a ponta de uma patilha, o fundo de uma ranhura — chama-se agora assim. Antes dizia «Arredondamento» com uma aresta que não existe. O raio pode ser alterado.",
-      "Um furo com saliências na parede, como o anel de um fecho de baioneta, é um furo. Antes aparecia como um furo oblongo tão comprido quanto largo, e qualquer ação removia as saliências.",
-      "Uma ranhura com chanfro no bordo é uma ranhura; o chanfro faz parte dela. Antes, uma moldura mostrava 126 escareados avulsos na árvore.",
-      "Um entalhe ou a ponta redonda de uma lingueta já não é um furo, e dois pedaços da mesma parede redonda aparecem como um só na árvore.",
-      "Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.",
-      "Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.",
-      "O passo «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.",
-      "Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade.",
-      "Um 3MF do slicer abre agora mesmo quando as cores não se leem sem ambiguidade: o modelo chega numa só cor e o relatório diz porquê. Antes, o ficheiro ficava fechado.",
-      "As faces pintadas no Bambu Studio, Orca e Elegoo chegam exatamente como foram pintadas — mesmo onde uma cor atravessa um triângulo. Antes, isso contava como «ambíguo».",
-      "Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.",
-      "Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer.",
-      "Um bloco para furos — inserto térmico, alojamento de porca, assento de rolamento, rosca, parafuso — assenta logo no furo escolhido, em vez de no centro da face.",
-      "Ao arrastar um bloco pela pega na vista, move-se o bloco inteiro, mesmo agarrado por uma aresta do furo de fechadura. Antes só se deslocava essa característica.",
-      "Ganchos e furos de um bloco aparecem à direita como quantidade, e não como «2,00 mm». E depois de «Alterar medidas» o bloco continua selecionado, mesmo com outras características."
+      "Furos cegos pouco profundos, pequenas faces funcionais e roscas curtas são reconhecidos melhor. Os fundos dos alojamentos para ímanes pertencem aos respetivos furos.",
+      "Altere os furos com os seus escareados e entradas, mantendo as medidas previstas. O fundo continua associado mesmo após grandes alterações do diâmetro.",
+      "Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.",
+      "A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.",
+      "As arestas podem ser selecionadas em qualquer corpo e arredondadas ou chanfradas, também em modelos importados.",
+      "Os furos, cilindros e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux. Um projeto é reconhecido e editado da mesma forma em qualquer computador.",
+      "Os organizadores permitem medidas ligadas, divisórias editáveis individualmente e células repetidas. Tabuleiro, rebordo, fundo e pé ampliam a biblioteca.",
+      "Os campos de furos, rasgos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.",
+      "As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.",
+      "Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.",
+      "Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.",
+      "Cortar fora mantém um lado de um plano e fecha a face de corte — para paredes traseiras lisas e paredes à mesma altura. Os boleados junto a paredes ligeiramente inclinadas voltam a poder editar-se.",
+      "Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.",
+      "As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.",
+      "Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.",
+      "Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.",
+      "O chat local recebe uma janela maior e já não encurta o seu pedido.",
+      "O diâmetro do bico define-se na impressora. A transferência escolhe então a máquina correta no slicer, mesmo que aí esteja selecionado outro bico.",
+      "A reparação fecha os modelos que se tocam ao longo de uma aresta em vez de os abrir ainda mais."
     ]
   },
   "notes_by_language": {
-    "de": "Vieleck, Langloch, Verrunden und Fase im Skizzeneditor. Eingelesene Modelle werden bis zu dreißigmal schneller erkannt, und eine runde Wand heißt runde Wand. Jede Vorschau sagt, was sie zeigt, und 3MF-Dateien aus Bambu Studio, Orca und Elegoo öffnen mit allen Farben. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
-    "en": "Polygons, slots, fillets and chamfers in the sketch editor. Imported models are recognised up to thirty times faster, and a round wall is called a round wall. Every preview says what it shows, and 3MF files from Bambu Studio, Orca and Elegoo open with all their colours. The demo stays complete and needs no key, until 30 October 2026.",
-    "es": "Polígonos, ranuras, redondeos y chaflanes en el editor de bocetos. Los modelos importados se reconocen hasta treinta veces más rápido, y una pared redonda se llama pared redonda. Cada vista previa dice lo que muestra, y los archivos 3MF de Bambu Studio, Orca y Elegoo se abren con todos sus colores. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
-    "fr": "Polygones, trous oblongs, congés et chanfreins dans l’éditeur d’esquisse. Les modèles importés sont reconnus jusqu’à trente fois plus vite, et une paroi ronde s’appelle une paroi ronde. Chaque aperçu dit ce qu’il montre, et les fichiers 3MF de Bambu Studio, Orca et Elegoo s’ouvrent avec toutes leurs couleurs. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
-    "it": "Poligoni, asole, raccordi e smussi nell’editor di schizzi. I modelli importati vengono riconosciuti fino a trenta volte più in fretta, e una parete rotonda si chiama parete rotonda. Ogni anteprima dice cosa mostra, e i file 3MF di Bambu Studio, Orca ed Elegoo si aprono con tutti i loro colori. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
-    "pt": "Polígonos, rasgos, arredondamentos e chanfros no editor de esboços. Os modelos importados são reconhecidos até trinta vezes mais depressa, e uma parede redonda chama-se parede redonda. Cada pré-visualização diz o que mostra, e os ficheiros 3MF do Bambu Studio, Orca e Elegoo abrem com todas as suas cores. A demo continua completa e sem chave, até 30 de outubro de 2026."
+    "de": "Organizer mit gebundenen Fachmaßen, Profilklemmen und Dichtnuten aus einer Zeichnung. Kanten lassen sich an jedem Körper verrunden — auch an eingelesenen Modellen. Bohrungen und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten, ein Projekt wird also überall gleich erkannt und bearbeitet. Die Demo bleibt vollständig und ohne Schlüssel bis zum 30.10.2026.",
+    "en": "Organisers with linked compartment sizes, profile clamps and sealing grooves from a drawing. Edges can be rounded on any body — imported models included. Bores and roundings are built from the same points on Windows, macOS and Linux, so a project is recognised and edited the same way everywhere. The demo stays complete and needs no key, until 30 October 2026.",
+    "es": "Organizadores con medidas de compartimento vinculadas, abrazaderas de perfil y ranuras de junta a partir de un dibujo. Las aristas se pueden redondear en cualquier cuerpo, también en modelos importados. Los taladros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux, así que un proyecto se reconoce y se edita igual en todas partes. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
+    "fr": "Des organiseurs aux dimensions de casiers liées, des colliers de profilé et des gorges de joint à partir d’un dessin. Les arêtes s’arrondissent sur n’importe quel corps — modèles importés compris. Les perçages et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux : un projet est donc reconnu et modifié de la même façon partout. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
+    "it": "Organizer con misure degli scomparti collegate, morsetti per profili e gole di tenuta da un disegno. Gli spigoli si raccordano su qualsiasi corpo, anche sui modelli importati. Fori e raccordi nascono dagli stessi punti su Windows, macOS e Linux, quindi un progetto viene riconosciuto e modificato allo stesso modo dappertutto. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
+    "pt": "Organizadores com medidas de compartimento ligadas, braçadeiras de perfil e ranhuras de vedação a partir de um desenho. As arestas podem ser arredondadas em qualquer corpo, também em modelos importados. Os furos e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux, pelo que um projeto é reconhecido e editado da mesma forma em todo o lado. A demo continua completa e sem chave, até 30 de outubro de 2026."
   },
   "groups": {
     "de": [
       {
-        "title": "Zeichnen",
+        "title": "Erkennen und Bearbeiten",
         "points": [
-          "Zwei Klicks setzen ein regelmäßiges Vieleck: erst die Mitte, dann eine Ecke. Die Eckenzahl stellen Sie vorher ein — drei bis zwölf. Ein getippter Durchmesser bleibt als Maß stehen.",
-          "Ein Langloch entsteht aus zwei Klicks auf die Mitten der runden Enden; die Breite steht daneben in der Leiste. Beide Enden bleiben gleich groß, die Flanken gerade.",
-          "Vier neue Bedingungen: Winkel in Grad zwischen zwei Linien, gleich lang beziehungsweise gleich groß, Punkt auf der Mitte einer Linie, konzentrisch für zwei Kreise oder Bögen.",
-          "Ein gezogener Punkt bleibt am Zeiger, und die Nachbarn folgen: Eine Ecke des Rechtecks zieht die beiden Seiten mit, eine Linie streckt die Form. Vorher kam die Ecke nur ein Stück weit.",
-          "Ein geklicktes Rechteck ist frei: kein Festpunkt, keine Maße, solange Sie keine tippen. Eine getippte Breite oder Höhe bleibt als Maß stehen — so wie in Fusion."
+          "Flache Sackbohrungen, kleine Funktionsflächen und kurze Gewinde werden zuverlässiger erkannt. Die Böden der Magnettaschen gehören zu ihren Bohrungen.",
+          "Bohrungen lassen sich samt Senkung und Einlauf maßhaltig ändern. Auch nach einer größeren Durchmesseränderung bleibt der Sackboden zugeordnet.",
+          "An großen Netzen können Sie Merkmale gezielt an einer Stelle erkennen und sofort bearbeiten. Erkennung und Änderung lassen sich gemeinsam zurücknehmen.",
+          "Auswahl und Vorschau zeigen den vollständigen Körper. Konturen und Beschriftungen machen die gewählte Stelle deutlich; unveränderte Schrift bleibt ohne orange Flecken.",
+          "Kanten lassen sich an jedem Körper anklicken und verrunden oder fasen — auch an eingelesenen Modellen.",
+          "Bohrungen, Zylinder und Rundungen entstehen auf Windows, macOS und Linux aus denselben Punkten. Ein Projekt wird auf jedem Rechner gleich erkannt und gleich bearbeitet."
         ]
       },
       {
-        "title": "Konstruieren und Ändern",
+        "title": "Konstruieren",
         "points": [
-          "Ein Langloch drehen dreht es — statt ein zweites quer darüber zu schneiden. Und wer ein Langloch bearbeitet, das er selbst gezogen hat, ändert diesen Schritt; der Verlauf bekommt keinen zweiten.",
-          "Eine STL, die Sie nach „Bohrung ändern“, „Merkmal verschieben“ oder „Fase anbringen“ an einem eingelesenen Modell exportieren, kommt im Slicer geschlossen an. Vorher riss die Naht beim Verschweißen.",
-          "Nennen Sie im Chat nur eine Achse — „Bohrung auf x = 20“ —, wandert das Loch nur dort. Vorher sprang es in den beiden anderen Achsen auf null.",
-          "Verrunden sagt vorher, dass ein exakter Körper einen kleineren Radius zulässt als ein Netz, und was dann hilft: ein kleinerer Radius oder weiterarbeiten am Netz."
+          "Organizer erhalten gebundene Fachmaße, einzeln änderbare Trennwände und wiederholte Fächer. Wanne, Rand, Boden und Fuß ergänzen die Bausteinbibliothek.",
+          "Loch-, Langloch- und Wabenfelder folgen einem gezeichneten Bereich. Freizuhaltende Flächen, Randabstände und Mindeststege bleiben berücksichtigt.",
+          "Profilklemmen entstehen aus zwei Schalen und zwei passenden Einlagen. Runde, ovale und gezeichnete Gegenprofile sind möglich; die Einlagen lassen sich später austauschen.",
+          "Eine geschlossene Zeichnung oder gewählte Öffnung erzeugt Dichtnut und separate Dichtung. Material, Querschnitt und Überstand sind einstellbar; Restwände werden geprüft.",
+          "Oberflächenmuster reichen bis zum Flächenrand und lassen Bohrungen frei. Vorhandene Muster lassen sich direkt über die Auswahl weiterbearbeiten.",
+          "Abschneiden behält eine Seite einer Ebene und schließt die Schnittfläche — für glatte Rückwände und Wände auf einer Höhe. Rundungen neben leicht schrägen Wänden lassen sich wieder ändern."
         ]
       },
       {
-        "title": "Erkennen",
+        "title": "Einlesen und Bedienen",
         "points": [
-          "Eine runde Wand — das Ende einer Lasche, der Boden einer Nut — heißt jetzt so. Vorher stand dort „Verrundung“ mit einer Kante, die es nicht gibt. Der Radius lässt sich ändern.",
-          "Eine Bohrung mit Nasen in der Wand, etwa der Ring eines Bajonettverschlusses, ist eine Bohrung. Vorher stand dort ein Langloch so lang wie breit, und jede Handlung hätte die Nasen entfernt.",
-          "Ein Langloch mit Fase am Rand ist ein Langloch; die Fase gehört dazu. Vorher standen an einem Rahmen 126 einzelne Senkungen im Baum.",
-          "Eine Kerbe oder das runde Ende einer Lasche ist keine Bohrung mehr, und zwei Stücke derselben runden Wand stehen als eines im Baum."
-        ]
-      },
-      {
-        "title": "Ansicht und Bedienung",
-        "points": [
-          "Ein Haken im Dialog schaltet jetzt auf der ganzen Zeile — auch beim Klick auf sein Wort. Vorher traf nur das kleine Kästchen, und „Oben öffnen“ beim Aushöhlen schien nicht zu reagieren.",
-          "Kann eine Vorschau nichts zeigen, steht im Bild, warum — etwa „Diese Ebene teilt das Objekt nicht“. Ändert sich am Volumen nichts, sagt das Band das; rechnet es länger, auch das.",
-          "Der Schritt „Teilen“ beginnt in der Mitte des Teils statt auf seiner Unterseite. Die Zahl bleibt änderbar.",
-          "Ein Werkzeug, das an diesem Teil nichts tun kann, steht grau im Menü und sagt, warum — „Offene Fläche schließen“ an einem geschlossenen Teil, „Zerlegen“ an einem Stück, „Gitter füllen“ ohne Hohlraum."
-        ]
-      },
-      {
-        "title": "Dateien und Export",
-        "points": [
-          "Eine 3MF aus dem Slicer öffnet jetzt auch dann, wenn die Farben nicht eindeutig lesbar sind: Das Modell kommt einfarbig an, und der Prüfbericht sagt, warum. Vorher blieb die Datei ganz zu.",
-          "Bemalte Flächen aus Bambu Studio, Orca und Elegoo kommen genau so an, wie sie gemalt wurden — auch wenn die Farbe mitten durch ein Dreieck läuft. Vorher galt das als „nicht eindeutig“.",
-          "Ein Textrelief aus dem Elegoo-Slicer oder Bambu Studio in der Datei hielt den Import auf. Jetzt öffnet die Datei.",
-          "Modifikatoren und Stützblocker aus dem Slicer erscheinen nicht mehr als Körper, und eine Aussparung („Negativteil“) wird abgezogen — wie im Slicer."
-        ]
-      },
-      {
-        "title": "Bausteine und Passungen",
-        "points": [
-          "Ein Baustein für Bohrungen — Einpressbuchse, Mutternfalle, Lagersitz, Gewinde, Schraube — sitzt sofort in der Bohrung, die Sie gewählt haben, statt auf der Mitte der Fläche.",
-          "Ziehen Sie einen Baustein am Griff im Bild, bewegt sich der ganze Baustein — auch an einer Kante des Schlüssellochs. Vorher wanderte nur das eine Merkmal, der Rest blieb stehen.",
-          "Haken und Löcher eines Bausteins stehen rechts als Anzahl — nicht mehr als „2,00 mm“. Und nach „Maße ändern“ bleibt der Baustein gewählt, auch wenn er danach andere Merkmale trägt."
+          "SVG- und DXF-Konturen wählen Sie vor dem Erzeugen sichtbar aus. GLB- und GLTF-Dateien kommen mit ihren richtigen Maßen und ihrer richtigen Ausrichtung an.",
+          "Projektmaße bleiben bis in Bausteinskizzen und Platzierungsvorschauen wirksam. Beim Einpassen berücksichtigt die Ansicht alle sichtbaren Druckplatten.",
+          "Filamente lassen sich aus dem Regal entfernen. Die ersten Schritte beginnen beim Slicer; Rückmeldungen öffnen schnell und bereiten ihre Anhänge im Hintergrund vor.",
+          "Entf an einer Fläche entfernt den Körper und sagt es; Strg+Z holt ihn zurück. Bei flachem Blick folgt ein gezogener Körper dem Zeiger, und die gewählte Fläche bleibt beim ersten Klick der Skizze.",
+          "Der lokale Chat bekommt ein größeres Fenster und kürzt Ihre Anfrage nicht mehr.",
+          "Der Düsendurchmesser lässt sich am Drucker einstellen. Die Übergabe wählt dann die passende Maschine im Slicer, auch wenn dort eine andere Düse eingestellt ist.",
+          "Reparieren schließt Modelle, die sich an einer Kante selbst berühren, statt sie weiter aufzureißen."
         ]
       }
     ],
     "en": [
       {
-        "title": "Drawing",
+        "title": "Recognition and editing",
         "points": [
-          "Two clicks set a regular polygon: first the centre, then a corner. You choose the number of corners beforehand — three to twelve. A typed diameter stays on as a dimension.",
-          "A slot comes from two clicks on the centres of its round ends; the width sits next to them in the bar. Both ends stay the same size, the flanks stay straight.",
-          "Four new constraints: an angle in degrees between two lines, equal length or size, a point at the middle of a line, concentric for two circles or arcs.",
-          "A dragged point stays at the pointer, and its neighbours follow: a corner of the rectangle takes both sides along, a line stretches the shape. Before, the corner only moved part of the way.",
-          "A clicked rectangle is free: no fixed point, no dimensions unless you type them. A typed width or height stays as a dimension — as in Fusion."
+          "Shallow blind holes, small functional faces and short threads are recognised more reliably. Magnet-pocket floors belong to their bores.",
+          "Resize bores together with their countersinks and entrances while preserving the intended dimensions. Blind-hole floors stay associated even after larger diameter changes.",
+          "Recognise features at a chosen spot on large meshes and edit them immediately. Recognition and editing can be undone together.",
+          "Selection and preview show the complete body. Outlines and labels identify the selected area; unchanged lettering stays free of orange patches.",
+          "Edges can be picked on any body and rounded or chamfered — on imported models too.",
+          "Bores, cylinders and roundings are built from the same points on Windows, macOS and Linux. A project is recognised and edited the same way on every machine."
         ]
       },
       {
-        "title": "Building and editing",
+        "title": "Construction",
         "points": [
-          "Turning a slot turns it — instead of cutting a second one across it. And editing a slot you pulled yourself changes that step; the history gets no second one.",
-          "An STL you export after “Change bore”, “Move feature” or “Add a chamfer” on an imported model arrives closed in the slicer. Before, the seam tore open when the slicer welded it.",
-          "Name just one axis in the chat — “bore to x = 20” — and the hole moves only there. Before, it jumped to zero on the other two axes.",
-          "Fillet says up front that an exact body allows a smaller radius than a mesh, and what helps then: a smaller radius, or carrying on with the mesh."
+          "Organisers gain linked compartment dimensions, individually editable dividers and repeated cells. Tray, rim, floor and foot parts extend the library.",
+          "Hole, slot and honeycomb fields follow a drawn region. Keep-out areas, edge margins and minimum webs are respected.",
+          "Profile clamps comprise two shells and two fitted liners. Round, oval and drawn mating profiles are supported; liners can be replaced later.",
+          "A closed drawing or selected opening creates a seal groove and a separate gasket. Choose materials, cross-section and protrusion; remaining walls are checked.",
+          "Surface patterns reach the face boundary and leave bores clear. Existing patterns can be edited directly through the selection panel.",
+          "Cut away keeps one side of a plane and closes the cut face — for flat back walls and walls at one height. Fillets next to slightly slanted walls can be edited again."
         ]
       },
       {
-        "title": "Recognition",
+        "title": "Import and use",
         "points": [
-          "A curved wall — the end of a tab, the floor of a groove — is now called that. Before, it said “Fillet” with an edge that does not exist. Its radius can be changed.",
-          "A bore with lugs in its wall, such as the ring of a bayonet mount, is a bore. Before, it appeared as a slot as long as it was wide, and every action would have removed the lugs.",
-          "A slot with a chamfered rim is a slot; the chamfer belongs to it. Before, one frame listed 126 separate countersinks in the tree.",
-          "A notch or the round end of a tab is no longer a hole, and two pieces of the same round wall appear as one in the tree."
-        ]
-      },
-      {
-        "title": "View and operation",
-        "points": [
-          "A checkbox in a dialog now toggles across its whole row — clicking its label works too. Before, only the small box itself responded, and “Open top” in Hollow seemed not to react.",
-          "When a preview cannot show anything, the view says why — for instance “This plane does not divide the object”. If the volume does not change, the banner says so; if it takes longer, that too.",
-          "The step “Split” starts in the middle of the part instead of at its underside. The number stays editable.",
-          "A tool that cannot do anything to this part is greyed out in the menu and says why — “Close open surface” on a closed part, “Split into parts” on one piece, “Fill lattice” without a cavity."
-        ]
-      },
-      {
-        "title": "Files and export",
-        "points": [
-          "A 3MF from the slicer now opens even when its colours cannot be read unambiguously: the model arrives in one colour, and the report says why. Before, the file stayed closed.",
-          "Painted faces from Bambu Studio, Orca and Elegoo arrive exactly as painted — even where a colour runs through the middle of a triangle. Before, that counted as “ambiguous”.",
-          "A text relief from the Elegoo slicer or Bambu Studio in the file stopped the import. The file now opens.",
-          "Modifiers and support blockers from the slicer no longer appear as bodies, and a cut-out (“negative part”) is subtracted — as in the slicer."
-        ]
-      },
-      {
-        "title": "Building blocks and fits",
-        "points": [
-          "A block meant for a hole — heat-set insert, nut trap, bearing seat, thread, screw — now sits straight in the hole you selected instead of at the centre of the face.",
-          "Drag a block by its handle in the view and the whole block moves — even from an edge of the keyhole. Before, only that one feature travelled and the rest stayed put.",
-          "Hooks and holes of a block appear on the right as a count — no longer as “2.00 mm”. And after “Change dimensions” the block stays selected, even when it ends up with different features."
+          "Select SVG and DXF contours visually before creating a body. GLB and GLTF files retain their correct dimensions and orientation.",
+          "Project dimensions remain effective in part sketches and placement previews. Fit to view includes every visible build plate.",
+          "Filaments can be removed from the shelf. First steps start with the slicer; feedback opens quickly and prepares attachments in the background.",
+          "Delete on a face removes the body and says so; Ctrl+Z brings it back. In a flat view a dragged body follows the pointer, and the chosen face survives the first click of a sketch.",
+          "The local chat gets a larger window and no longer truncates your request.",
+          "The nozzle diameter can be set on the printer. The handover then picks the matching machine in the slicer, even if a different nozzle is selected there.",
+          "Repair closes models that touch themselves along an edge instead of tearing them open further."
         ]
       }
     ],
     "es": [
       {
-        "title": "Dibujo",
+        "title": "Reconocimiento y edición",
         "points": [
-          "Dos clics crean un polígono regular: primero el centro, luego una esquina. El número de esquinas se elige antes: de tres a doce. Un diámetro escrito queda como cota.",
-          "Una ranura surge de dos clics en los centros de sus extremos redondeados; el ancho está al lado en la barra. Ambos extremos mantienen el tamaño y los flancos, rectos.",
-          "Cuatro condiciones nuevas: ángulo en grados entre dos líneas, igual longitud o tamaño, punto en el centro de una línea, y concéntrico para dos círculos o arcos.",
-          "Un punto arrastrado se queda en el puntero y sus vecinos lo siguen: una esquina del rectángulo arrastra ambos lados, una línea estira la forma. Antes la esquina solo llegaba a mitad de camino.",
-          "Un rectángulo hecho con clics es libre: sin punto fijo ni cotas mientras no las escriba. Una anchura o altura escrita se queda como cota, como en Fusion."
+          "Se reconocen mejor los taladros ciegos poco profundos, las caras pequeñas y las roscas cortas. Los fondos de los alojamientos para imanes pertenecen a sus taladros.",
+          "Cambie el diámetro junto con el avellanado y la entrada conservando las medidas previstas. El fondo sigue asociado incluso tras cambios grandes de diámetro.",
+          "Reconozca elementos en un punto elegido de una malla grande y edítelos al instante. El reconocimiento y el cambio se deshacen juntos.",
+          "La selección y la vista previa muestran el cuerpo completo. Contornos y etiquetas identifican la zona elegida; las letras sin cambios no muestran manchas naranjas.",
+          "Las aristas se pueden seleccionar en cualquier cuerpo y redondear o achaflanar, también en modelos importados.",
+          "Los taladros, cilindros y redondeos se construyen con los mismos puntos en Windows, macOS y Linux. Un proyecto se reconoce y se edita igual en cualquier equipo."
         ]
       },
       {
-        "title": "Construir y modificar",
+        "title": "Construcción",
         "points": [
-          "Girar un agujero rasgado lo gira, en lugar de cortar un segundo cruzado encima. Y al editar uno que usted mismo estiró se cambia ese paso; el historial no recibe un segundo.",
-          "Un STL que exporte tras «Cambiar orificio», «Mover elemento» o «Aplicar un chaflán» en un modelo importado llega cerrado al slicer. Antes, la costura se abría al soldarla el slicer.",
-          "Si en el chat nombra solo un eje — «taladro a x = 20» —, el agujero se mueve solo ahí. Antes saltaba a cero en los otros dos ejes.",
-          "Redondear avisa de antemano que un cuerpo exacto admite un radio menor que una malla, y qué ayuda entonces: un radio menor o seguir trabajando sobre la malla."
+          "Los organizadores admiten medidas vinculadas, divisores editables por separado y celdas repetidas. Bandeja, borde, fondo y pie amplían la biblioteca.",
+          "Los campos de agujeros, ranuras y hexágonos siguen una región dibujada. Se respetan las zonas reservadas, los márgenes y los puentes mínimos.",
+          "Las abrazaderas de perfil constan de dos carcasas y dos insertos ajustados. Admiten perfiles redondos, ovalados o dibujados; los insertos pueden sustituirse después.",
+          "Un dibujo cerrado o una abertura elegida crea una ranura de sellado y una junta separada. Puede elegir materiales, sección y saliente; se comprueban las paredes restantes.",
+          "Los patrones superficiales llegan al borde de la cara y dejan libres los taladros. Puede editar los patrones existentes desde el panel de selección.",
+          "Recortar conserva un lado de un plano y cierra la cara de corte: para paredes traseras lisas y paredes a una misma altura. Los redondeos junto a paredes algo inclinadas vuelven a poder editarse."
         ]
       },
       {
-        "title": "Reconocimiento",
+        "title": "Importación y manejo",
         "points": [
-          "Una pared curva —el extremo de una pestaña, el fondo de una ranura— ahora se llama así. Antes ponía «Redondeo» con una arista que no existe. El radio se puede cambiar.",
-          "Un agujero con resaltes en la pared, como el anillo de un cierre de bayoneta, es un agujero. Antes aparecía como un agujero alargado tan largo como ancho, y cualquier acción quitaba los resaltes.",
-          "Una ranura con chaflán en el borde es una ranura; el chaflán forma parte de ella. Antes, en un marco aparecían 126 avellanados sueltos en el árbol.",
-          "Una muesca o el extremo redondo de una lengüeta ya no es un taladro, y dos trozos de la misma pared redonda aparecen como uno en el árbol."
-        ]
-      },
-      {
-        "title": "Vista y manejo",
-        "points": [
-          "Una casilla en un diálogo ahora conmuta en toda su fila — también al hacer clic en su texto. Antes solo respondía el pequeño cuadro, y «Abrir arriba» al ahuecar parecía no reaccionar.",
-          "Cuando una vista previa no puede mostrar nada, la vista dice por qué — por ejemplo «Este plano no divide el objeto». Si el volumen no cambia, la banda lo dice; si tarda más, también.",
-          "El paso «Dividir» empieza en el centro de la pieza en lugar de en su cara inferior. El número sigue siendo editable.",
-          "Una herramienta que no puede hacer nada en esta pieza aparece en gris y dice por qué — «Cerrar superficie abierta» en una pieza cerrada, «Dividir en piezas» en una sola, «Rejilla» sin hueco."
-        ]
-      },
-      {
-        "title": "Archivos y exportación",
-        "points": [
-          "Un 3MF del slicer ahora se abre aunque sus colores no se puedan leer sin ambigüedad: el modelo llega en un solo color y el informe dice por qué. Antes, el archivo no se abría.",
-          "Las caras pintadas en Bambu Studio, Orca y Elegoo llegan exactamente como se pintaron, incluso cuando un color atraviesa un triángulo. Antes eso contaba como «ambiguo».",
-          "Un relieve de texto del slicer de Elegoo o de Bambu Studio en el archivo detenía la importación. Ahora el archivo se abre.",
-          "Los modificadores y bloqueadores de soportes del slicer ya no aparecen como cuerpos, y un hueco («pieza negativa») se resta, como en el slicer."
-        ]
-      },
-      {
-        "title": "Bloques y ajustes",
-        "points": [
-          "Un bloque para agujeros — inserto térmico, alojamiento de tuerca, asiento de rodamiento, rosca, tornillo — se coloca directamente en el agujero elegido, no en el centro de la cara.",
-          "Si arrastra un bloque por el asa en la vista, se mueve el bloque entero, aunque haya agarrado un borde del ojo de cerradura. Antes solo se desplazaba esa característica.",
-          "Ganchos y agujeros de un bloque aparecen a la derecha como cantidad, no como «2,00 mm». Y tras «Cambiar medidas» el bloque sigue seleccionado, aunque tenga otras características."
+          "Seleccione visualmente los contornos SVG y DXF antes de crear el cuerpo. Los archivos GLB y GLTF conservan sus medidas y orientación correctas.",
+          "Las medidas del proyecto siguen actuando en los bocetos de piezas y sus vistas previas de colocación. El encuadre incluye todas las placas de impresión visibles.",
+          "Puede quitar filamentos de la estantería. Los primeros pasos empiezan por el laminador; los comentarios se abren rápido y preparan sus adjuntos en segundo plano.",
+          "Supr sobre una cara elimina el cuerpo y lo indica; Ctrl+Z lo recupera. Con una vista rasante, un cuerpo arrastrado sigue al puntero, y la cara elegida se mantiene en el primer clic del boceto.",
+          "El chat local recibe una ventana mayor y ya no recorta su solicitud.",
+          "El diámetro de la boquilla se ajusta en la impresora. La entrega elige entonces la máquina adecuada en el slicer, aunque allí esté seleccionada otra boquilla.",
+          "Reparar cierra los modelos que se tocan a sí mismos en una arista, en lugar de abrirlos más."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Dessin",
+        "title": "Reconnaissance et modification",
         "points": [
-          "Deux clics posent un polygone régulier : d'abord le centre, puis un coin. Le nombre de coins se règle avant — de trois à douze. Un diamètre saisi reste comme cote.",
-          "Un trou oblong naît de deux clics sur les centres de ses extrémités arrondies ; la largeur est à côté dans la barre. Les deux bouts gardent leur taille, les flancs restent droits.",
-          "Quatre nouvelles contraintes : angle en degrés entre deux lignes, même longueur ou taille, point au milieu d'une ligne, concentrique pour deux cercles ou arcs.",
-          "Un point déplacé reste sous le pointeur et ses voisins suivent : un coin du rectangle entraîne ses deux côtés, une ligne étire la forme. Avant, le coin ne suivait qu'en partie.",
-          "Un rectangle tracé au clic est libre : pas de point fixe, pas de cotes tant que vous n'en saisissez pas. Une largeur ou une hauteur saisie reste une cote — comme dans Fusion."
+          "Les perçages borgnes peu profonds, les petites faces et les filetages courts sont mieux reconnus. Les fonds des logements pour aimants appartiennent à leurs perçages.",
+          "Modifiez un perçage avec sa fraisure et son entrée en conservant les cotes prévues. Le fond reste associé même après un changement important de diamètre.",
+          "Reconnaissez des éléments à un endroit choisi sur un grand maillage et modifiez-les aussitôt. La reconnaissance et la modification s’annulent ensemble.",
+          "La sélection et l’aperçu montrent le corps complet. Contours et étiquettes identifient la zone choisie ; les lettres inchangées restent sans taches orange.",
+          "Les arêtes se sélectionnent sur n'importe quel corps et s'arrondissent ou se chanfreinent — aussi sur les modèles importés.",
+          "Les perçages, cylindres et arrondis sont construits à partir des mêmes points sur Windows, macOS et Linux. Un projet est reconnu et modifié de la même façon sur chaque machine."
         ]
       },
       {
-        "title": "Construire et modifier",
+        "title": "Construction",
         "points": [
-          "Tourner un trou oblong le tourne, au lieu d’en couper un second en travers. Et modifier un trou oblong que vous avez tiré vous-même change cette étape ; l’historique n’en reçoit pas une seconde.",
-          "Un STL exporté après « Modifier le trou », « Déplacer l'élément » ou « Ajouter un chanfrein » sur un modèle importé arrive fermé dans le slicer. Avant, la couture s'ouvrait à la soudure.",
-          "Si vous ne nommez qu'un axe dans le chat — « perçage à x = 20 » —, le trou ne bouge que là. Avant, il retombait à zéro sur les deux autres axes.",
-          "Congé annonce d'avance qu'un corps exact accepte un rayon plus petit qu'un maillage, et ce qui aide alors : un rayon plus petit ou la suite sur le maillage."
+          "Les organisateurs proposent des cotes liées, des cloisons modifiables séparément et des cases répétées. Bac, bordure, fond et pied enrichissent la bibliothèque.",
+          "Les champs de trous, de lumières et d’hexagones suivent une zone dessinée. Zones réservées, marges et épaisseurs minimales entre ouvertures sont respectées.",
+          "Les colliers de profil comprennent deux coques et deux inserts ajustés. Les profils ronds, ovales ou dessinés sont possibles ; les inserts restent remplaçables.",
+          "Un dessin fermé ou une ouverture choisie crée une rainure et un joint séparé. Matériaux, section et dépassement sont réglables ; les parois restantes sont vérifiées.",
+          "Les motifs de surface atteignent le bord des faces et laissent les perçages libres. Les motifs existants se modifient directement depuis le panneau de sélection.",
+          "Découper garde un côté d’un plan et ferme la face de coupe — pour des parois arrière planes et des parois à la même hauteur. Les congés le long de parois légèrement inclinées se modifient de nouveau."
         ]
       },
       {
-        "title": "Reconnaissance",
+        "title": "Importation et utilisation",
         "points": [
-          "Une paroi courbe — le bout d’une patte, le fond d’une rainure — s’appelle désormais ainsi. Avant, il y avait « Congé » avec une arête qui n’existe pas. Le rayon se modifie.",
-          "Un perçage avec des ergots dans sa paroi, comme la bague d’une fermeture à baïonnette, est un perçage. Avant, c’était un trou oblong aussi long que large, et chaque action aurait ôté les ergots.",
-          "Une rainure au bord chanfreiné est une rainure ; le chanfrein en fait partie. Avant, un cadre affichait 126 lamages isolés dans l’arbre.",
-          "Une encoche ou l’extrémité ronde d’une languette n’est plus un trou, et deux morceaux de la même paroi ronde n’en font plus qu’un dans l’arbre."
-        ]
-      },
-      {
-        "title": "Vue et utilisation",
-        "points": [
-          "Une case à cocher bascule maintenant sur toute sa ligne — un clic sur son libellé suffit. Avant, seule la petite case répondait, et « Ouvrir en haut » lors de l'évidage semblait ne pas réagir.",
-          "Quand un aperçu ne peut rien montrer, la vue dit pourquoi — par exemple « Ce plan ne divise pas l'objet ». Si le volume ne change pas, le bandeau le dit ; si le calcul dure, aussi.",
-          "L’étape « Diviser » commence au milieu de la pièce au lieu de sa face inférieure. Le nombre reste modifiable.",
-          "Un outil qui ne peut rien faire sur cette pièce apparaît grisé et dit pourquoi — « Fermer une surface ouverte » sur une pièce fermée, « Séparer en pièces » sur une seule, « Treillis » sans cavité."
-        ]
-      },
-      {
-        "title": "Fichiers et export",
-        "points": [
-          "Un 3MF issu du slicer s’ouvre désormais même si ses couleurs ne se lisent pas sans ambiguïté : le modèle arrive en une seule couleur, et le rapport dit pourquoi. Avant, le fichier restait fermé.",
-          "Les faces peintes dans Bambu Studio, Orca et Elegoo arrivent exactement telles qu’elles ont été peintes — même lorsqu’une couleur traverse un triangle. Avant, cela comptait comme « ambigu ».",
-          "Un relief de texte du slicer Elegoo ou de Bambu Studio dans le fichier bloquait l’import. Le fichier s’ouvre maintenant.",
-          "Les modificateurs et bloqueurs de supports du slicer n’apparaissent plus comme des corps, et un évidement (« pièce négative ») est soustrait — comme dans le slicer."
-        ]
-      },
-      {
-        "title": "Blocs et ajustements",
-        "points": [
-          "Un bloc destiné à un perçage — insert thermique, logement d’écrou, siège de roulement, filetage, vis — se pose directement dans le perçage choisi, et non au centre de la face.",
-          "Faites glisser un bloc par sa poignée dans la vue et c’est tout le bloc qui bouge, même saisi par un bord du trou de serrure. Avant, seule cette caractéristique se déplaçait.",
-          "Crochets et trous d’un bloc apparaissent à droite comme un nombre, non plus comme « 2,00 mm ». Après « Modifier les cotes », le bloc reste sélectionné, même avec d’autres caractéristiques."
+          "Choisissez visuellement les contours SVG et DXF avant de créer le corps. Les fichiers GLB et GLTF conservent leurs dimensions et leur orientation correctes.",
+          "Les cotes du projet restent actives dans les esquisses de pièces et les aperçus de placement. Le cadrage inclut tous les plateaux d’impression visibles.",
+          "Les filaments peuvent être retirés de l’étagère. Les premiers pas commencent par le trancheur ; les retours s’ouvrent vite et préparent les pièces jointes en arrière-plan.",
+          "Suppr sur une face retire le corps et le dit ; Ctrl+Z le ramène. En vue rasante, un corps déplacé suit le pointeur, et la face choisie reste au premier clic de l’esquisse.",
+          "Le chat local reçoit une fenêtre plus grande et ne tronque plus votre demande.",
+          "Le diamètre de la buse se règle sur l'imprimante. Le transfert choisit alors la machine correspondante dans le slicer, même si une autre buse y est sélectionnée.",
+          "La réparation referme les modèles qui se touchent le long d'une arête au lieu de les ouvrir davantage."
         ]
       }
     ],
     "it": [
       {
-        "title": "Disegno",
+        "title": "Riconoscimento e modifica",
         "points": [
-          "Due clic creano un poligono regolare: prima il centro, poi un angolo. Il numero di angoli si imposta prima: da tre a dodici. Un diametro digitato resta come quota.",
-          "Un'asola nasce da due clic sui centri delle sue estremità arrotondate; la larghezza sta accanto nella barra. Le due estremità restano uguali e i fianchi diritti.",
-          "Quattro nuovi vincoli: angolo in gradi fra due linee, stessa lunghezza o dimensione, punto a metà di una linea, concentrico per due cerchi o archi.",
-          "Un punto trascinato resta sotto il puntatore e i vicini lo seguono: un angolo del rettangolo porta con sé i due lati, una linea allunga la forma. Prima l'angolo arrivava solo a metà strada.",
-          "Un rettangolo fatto con i clic è libero: nessun punto fisso, nessuna quota finché non la digiti. Una larghezza o altezza digitata resta come quota, come in Fusion."
+          "Fori ciechi poco profondi, piccole superfici funzionali e filettature corte vengono riconosciuti meglio. I fondi delle sedi per magneti appartengono ai rispettivi fori.",
+          "Modifichi i fori insieme a svasature e imbocchi mantenendo le misure previste. Il fondo resta associato anche dopo variazioni importanti del diametro.",
+          "Riconosca gli elementi in un punto scelto di una mesh grande e li modifichi subito. Riconoscimento e modifica si annullano insieme.",
+          "Selezione e anteprima mostrano il corpo completo. Contorni ed etichette identificano la zona scelta; le scritte invariate restano prive di macchie arancioni.",
+          "Gli spigoli si possono selezionare su qualsiasi corpo e raccordare o smussare, anche sui modelli importati.",
+          "Fori, cilindri e raccordi nascono dagli stessi punti su Windows, macOS e Linux. Un progetto viene riconosciuto e modificato allo stesso modo su ogni computer."
         ]
       },
       {
-        "title": "Costruire e modificare",
+        "title": "Costruzione",
         "points": [
-          "Ruotare un’asola la ruota, invece di tagliarne una seconda di traverso. E modificare un’asola che avete tirato voi stessi cambia quel passo; la cronologia non ne riceve un secondo.",
-          "Un STL esportato dopo «Modifica foro», «Sposta elemento» o «Applica uno smusso» su un modello importato arriva chiuso nello slicer. Prima la giunzione si apriva quando lo slicer la saldava.",
-          "Se nella chat indichi un solo asse — « foro a x = 20 » —, il foro si sposta solo lì. Prima negli altri due assi saltava a zero.",
-          "Raccordo avvisa prima che un corpo esatto ammette un raggio minore di una mesh, e cosa aiuta allora: un raggio minore oppure proseguire sulla mesh."
+          "Gli organizer offrono misure collegate, divisori modificabili singolarmente e celle ripetute. Vaschetta, bordo, fondo e piedino ampliano la libreria.",
+          "I campi di fori, asole ed esagoni seguono una regione disegnata. Rispettano le zone riservate, i margini e i ponti minimi.",
+          "I morsetti per profili comprendono due gusci e due inserti su misura. Sono ammessi profili rotondi, ovali e disegnati; gli inserti possono essere sostituiti in seguito.",
+          "Un disegno chiuso o un’apertura scelta crea una scanalatura e una guarnizione separata. Materiali, sezione e sporgenza sono regolabili; le pareti residue vengono verificate.",
+          "I motivi superficiali raggiungono il bordo delle facce e lasciano liberi i fori. I motivi esistenti si modificano direttamente dal pannello di selezione.",
+          "Tagliare via conserva un lato di un piano e chiude la faccia di taglio: per pareti posteriori lisce e pareti alla stessa altezza. I raccordi accanto a pareti un po’ inclinate tornano modificabili."
         ]
       },
       {
-        "title": "Riconoscimento",
+        "title": "Importazione e uso",
         "points": [
-          "Una parete curva — l’estremità di una linguetta, il fondo di una scanalatura — ora si chiama così. Prima c’era «Raccordo» con uno spigolo che non esiste. Il raggio si può cambiare.",
-          "Un foro con nasi nella parete, come l’anello di una chiusura a baionetta, è un foro. Prima compariva come un’asola lunga quanto larga, e ogni azione avrebbe tolto i nasi.",
-          "Un’asola con il bordo smussato è un’asola; lo smusso ne fa parte. Prima un telaio mostrava 126 svasature separate nell’albero.",
-          "Una tacca o l’estremità arrotondata di una linguetta non è più un foro, e due pezzi della stessa parete rotonda compaiono come uno solo nell’albero."
-        ]
-      },
-      {
-        "title": "Vista e utilizzo",
-        "points": [
-          "Una casella in una finestra ora commuta su tutta la riga — anche cliccando sulla sua etichetta. Prima rispondeva solo il piccolo riquadro, e «Apri in alto» nello svuotamento sembrava non reagire.",
-          "Quando un'anteprima non può mostrare nulla, la vista dice perché — per esempio «Questo piano non divide l'oggetto». Se il volume non cambia, la barra lo dice; se il calcolo dura di più, anche.",
-          "Il passo «Dividi» inizia al centro del pezzo invece che sulla sua faccia inferiore. Il numero resta modificabile.",
-          "Uno strumento che su questo pezzo non può fare nulla appare grigio e dice perché — «Chiudi superficie aperta» su un pezzo chiuso, «Dividi in parti» su un pezzo solo, «Reticolo» senza cavità."
-        ]
-      },
-      {
-        "title": "File ed esportazione",
-        "points": [
-          "Un 3MF dallo slicer ora si apre anche quando i colori non si leggono senza ambiguità: il modello arriva in un solo colore e il rapporto dice perché. Prima il file restava chiuso.",
-          "Le facce dipinte in Bambu Studio, Orca ed Elegoo arrivano esattamente come dipinte, anche dove un colore attraversa un triangolo. Prima contava come «ambiguo».",
-          "Un rilievo di testo dello slicer Elegoo o di Bambu Studio nel file fermava l’importazione. Ora il file si apre.",
-          "Modificatori e blocchi supporti dello slicer non compaiono più come corpi, e un incavo («parte negativa») viene sottratto, come nello slicer."
-        ]
-      },
-      {
-        "title": "Blocchi e accoppiamenti",
-        "points": [
-          "Un blocco per fori — inserto a caldo, sede per dado, sede per cuscinetto, filettatura, vite — si posa subito nel foro scelto, invece che al centro della faccia.",
-          "Trascinando un blocco con la maniglia nella vista si sposta l’intero blocco, anche afferrandolo a un bordo del foro a serratura. Prima si spostava solo quella caratteristica.",
-          "Ganci e fori di un blocco compaiono a destra come numero, non più come «2,00 mm». E dopo «Modifica misure» il blocco resta selezionato, anche con altre caratteristiche."
+          "Scelga visivamente i contorni SVG e DXF prima di creare il corpo. I file GLB e GLTF conservano dimensioni e orientamento corretti.",
+          "Le misure del progetto restano attive negli schizzi dei componenti e nelle anteprime di posizionamento. L’inquadratura comprende tutti i piatti di stampa visibili.",
+          "I filamenti possono essere rimossi dallo scaffale. I primi passi iniziano dallo slicer; i commenti si aprono rapidamente e preparano gli allegati in background.",
+          "Canc su una faccia rimuove il corpo e lo dice; Ctrl+Z lo riporta. In vista radente un corpo trascinato segue il puntatore, e la faccia scelta resta al primo clic dello schizzo.",
+          "La chat locale riceve una finestra più grande e non accorcia più la richiesta.",
+          "Il diametro dell'ugello si imposta sulla stampante. Il trasferimento sceglie poi la macchina giusta nello slicer, anche se lì è selezionato un altro ugello.",
+          "La riparazione chiude i modelli che si toccano lungo uno spigolo invece di aprirli ulteriormente."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Desenho",
+        "title": "Reconhecimento e edição",
         "points": [
-          "Dois cliques criam um polígono regular: primeiro o centro, depois um canto. O número de cantos define-se antes — de três a doze. Um diâmetro escrito fica como cota.",
-          "Um furo oblongo nasce de dois cliques nos centros das suas extremidades arredondadas; a largura fica ao lado na barra. Ambas mantêm o tamanho e os flancos, direitos.",
-          "Quatro novas condições: ângulo em graus entre duas linhas, igual comprimento ou tamanho, ponto a meio de uma linha, concêntrico para dois círculos ou arcos.",
-          "Um ponto arrastado fica no ponteiro e os vizinhos seguem-no: um canto do retângulo leva os dois lados consigo, uma linha estica a forma. Antes, o canto só ia parte do caminho.",
-          "Um retângulo feito com cliques é livre: sem ponto fixo, sem cotas enquanto não as escrever. Uma largura ou altura escrita fica como cota — como no Fusion."
+          "Furos cegos pouco profundos, pequenas faces funcionais e roscas curtas são reconhecidos melhor. Os fundos dos alojamentos para ímanes pertencem aos respetivos furos.",
+          "Altere os furos com os seus escareados e entradas, mantendo as medidas previstas. O fundo continua associado mesmo após grandes alterações do diâmetro.",
+          "Reconheça elementos num ponto escolhido de uma malha grande e edite-os de imediato. O reconhecimento e a alteração podem ser desfeitos em conjunto.",
+          "A seleção e a pré-visualização mostram o corpo completo. Contornos e etiquetas identificam a zona escolhida; as letras inalteradas ficam sem manchas laranja.",
+          "As arestas podem ser selecionadas em qualquer corpo e arredondadas ou chanfradas, também em modelos importados.",
+          "Os furos, cilindros e arredondamentos nascem dos mesmos pontos no Windows, macOS e Linux. Um projeto é reconhecido e editado da mesma forma em qualquer computador."
         ]
       },
       {
-        "title": "Construir e alterar",
+        "title": "Construção",
         "points": [
-          "Rodar um furo oblongo roda-o, em vez de cortar um segundo atravessado. E alterar um furo oblongo que o próprio utilizador puxou altera esse passo; o histórico não recebe um segundo.",
-          "Um STL que exporte após «Alterar furo», «Mover elemento» ou «Aplicar um chanfro» num modelo importado chega fechado ao slicer. Antes, a junção abria quando o slicer a soldava.",
-          "Se no chat indicar só um eixo — «furo em x = 20» —, o furo desloca-se apenas aí. Antes saltava para zero nos outros dois eixos.",
-          "Arredondar avisa à partida que um corpo exato admite um raio menor do que uma malha, e o que ajuda então: um raio menor ou continuar na malha."
+          "Os organizadores permitem medidas ligadas, divisórias editáveis individualmente e células repetidas. Tabuleiro, rebordo, fundo e pé ampliam a biblioteca.",
+          "Os campos de furos, rasgos e hexágonos seguem uma região desenhada. Respeitam áreas reservadas, margens e pontes mínimas.",
+          "As abraçadeiras de perfil incluem duas carcaças e dois insertos ajustados. Admitem perfis redondos, ovais ou desenhados; os insertos podem ser substituídos depois.",
+          "Um desenho fechado ou uma abertura escolhida cria uma ranhura e uma junta separada. Pode ajustar materiais, secção e saliência; as paredes restantes são verificadas.",
+          "Os padrões de superfície chegam ao limite da face e deixam os furos livres. Os padrões existentes podem ser editados diretamente no painel de seleção.",
+          "Cortar fora mantém um lado de um plano e fecha a face de corte — para paredes traseiras lisas e paredes à mesma altura. Os boleados junto a paredes ligeiramente inclinadas voltam a poder editar-se."
         ]
       },
       {
-        "title": "Reconhecimento",
+        "title": "Importação e utilização",
         "points": [
-          "Uma parede curva — a ponta de uma patilha, o fundo de uma ranhura — chama-se agora assim. Antes dizia «Arredondamento» com uma aresta que não existe. O raio pode ser alterado.",
-          "Um furo com saliências na parede, como o anel de um fecho de baioneta, é um furo. Antes aparecia como um furo oblongo tão comprido quanto largo, e qualquer ação removia as saliências.",
-          "Uma ranhura com chanfro no bordo é uma ranhura; o chanfro faz parte dela. Antes, uma moldura mostrava 126 escareados avulsos na árvore.",
-          "Um entalhe ou a ponta redonda de uma lingueta já não é um furo, e dois pedaços da mesma parede redonda aparecem como um só na árvore."
-        ]
-      },
-      {
-        "title": "Vista e utilização",
-        "points": [
-          "Uma caixa de seleção num diálogo passa agora a alternar em toda a linha — também ao clicar no seu texto. Antes só a pequena caixa respondia, e «Abrir em cima» ao escavar parecia não reagir.",
-          "Quando uma pré-visualização não consegue mostrar nada, a vista diz porquê — por exemplo «Este plano não divide o objeto». Se o volume não muda, a faixa di-lo; se o cálculo demora, também.",
-          "O passo «Dividir» começa no meio da peça em vez de na sua face inferior. O número continua editável.",
-          "Uma ferramenta que nada pode fazer nesta peça aparece a cinzento e diz porquê — «Fechar superfície aberta» numa peça fechada, «Separar em peças» numa só, «Treliça» sem cavidade."
-        ]
-      },
-      {
-        "title": "Ficheiros e exportação",
-        "points": [
-          "Um 3MF do slicer abre agora mesmo quando as cores não se leem sem ambiguidade: o modelo chega numa só cor e o relatório diz porquê. Antes, o ficheiro ficava fechado.",
-          "As faces pintadas no Bambu Studio, Orca e Elegoo chegam exatamente como foram pintadas — mesmo onde uma cor atravessa um triângulo. Antes, isso contava como «ambíguo».",
-          "Um relevo de texto do slicer Elegoo ou do Bambu Studio no ficheiro travava a importação. Agora o ficheiro abre.",
-          "Modificadores e bloqueadores de suportes do slicer já não aparecem como corpos, e um recorte («peça negativa») é subtraído — como no slicer."
-        ]
-      },
-      {
-        "title": "Blocos e ajustes",
-        "points": [
-          "Um bloco para furos — inserto térmico, alojamento de porca, assento de rolamento, rosca, parafuso — assenta logo no furo escolhido, em vez de no centro da face.",
-          "Ao arrastar um bloco pela pega na vista, move-se o bloco inteiro, mesmo agarrado por uma aresta do furo de fechadura. Antes só se deslocava essa característica.",
-          "Ganchos e furos de um bloco aparecem à direita como quantidade, e não como «2,00 mm». E depois de «Alterar medidas» o bloco continua selecionado, mesmo com outras características."
+          "Escolha visualmente os contornos SVG e DXF antes de criar o corpo. Os ficheiros GLB e GLTF mantêm as dimensões e a orientação corretas.",
+          "As medidas do projeto continuam ativas nos esboços das peças e nas pré-visualizações de colocação. O enquadramento inclui todas as placas de impressão visíveis.",
+          "Pode remover filamentos da estante. Os primeiros passos começam pelo laminador; os comentários abrem rapidamente e preparam os anexos em segundo plano.",
+          "Delete numa face remove o corpo e diz-o; Ctrl+Z traz o corpo de volta. Numa vista rasante, um corpo arrastado segue o ponteiro, e a face escolhida mantém-se no primeiro clique do esboço.",
+          "O chat local recebe uma janela maior e já não encurta o seu pedido.",
+          "O diâmetro do bico define-se na impressora. A transferência escolhe então a máquina correta no slicer, mesmo que aí esteja selecionado outro bico.",
+          "A reparação fecha os modelos que se tocam ao longo de uma aresta em vez de os abrir ainda mais."
         ]
       }
     ]
   },
-  "changes_total": 48,
-  "notes_version": "0.4.2",
-  "signature": "730693a36cb6e7608676c9a184a306b693dc584dd3979f11b65bf67077b26b56707a415c304248f146f471dadabf1a2b4901abbf9be824181d54dd852476e50a"
+  "changes_total": 19,
+  "notes_version": "0.4.3",
+  "signature": "b3f82ac3eb1dd241779959fbbe8a81f8fb36b81001ef7e23bda1f14841cd9b620d5942f41d4146374699326841806e281935cc8239a278903ba324dcf1532105"
 }
