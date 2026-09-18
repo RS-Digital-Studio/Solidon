@@ -946,19 +946,34 @@ def test_the_rule_file_counts_the_caveats_it_claims() -> None:
     Geprüft werden **beide** Zahlen des Satzes — die mit ``caveat`` und die
     Gesamtzahl. Eine davon allein wäre die Hälfte der Aussage.
     """
-    regel = Path(__file__).resolve().parent.parent / ".claude" / "rules" / "oberflaeche.md"
-    assert regel.exists(), f"die Regeldatei fehlt: {regel}"
-    text = regel.read_text(encoding="utf-8")
+    # **Gesucht wird in allen Regeldateien, nicht in einer benannten.** Der
+    # Satz stand in ``oberflaeche.md`` und ist am 18.09.2026 mit dem Abschnitt
+    # über die Grenzen der Oberfläche nach ``grenzen.md`` gezogen; der Test
+    # blieb zurück und war ab diesem Tag rot — nicht weil eine Zahl falsch
+    # war, sondern weil er an einem Dateinamen hing. Eine Regeldatei darf
+    # umziehen; die Zahl darin muss stimmen.
+    regeln = sorted((Path(__file__).resolve().parent.parent / ".claude" / "rules").glob("*.md"))
+    assert regeln, "das Regelverzeichnis ist leer"
 
-    satz = re.search(r"([A-Za-zäöüß]+) von ([A-Za-zäöüß]+)\s*\n?\s*Operationen tragen einen", text)
-    assert satz, (
-        "der Satz über die caveat-Zahl steht nicht mehr in oberflaeche.md — "
+    muster = re.compile(r"([A-Za-zäöüß]+) von ([A-Za-zäöüß]+)\s*\n?\s*Operationen tragen einen")
+    treffer = [
+        (regel, satz)
+        for regel in regeln
+        if (satz := muster.search(regel.read_text(encoding="utf-8")))
+    ]
+    assert treffer, (
+        "der Satz über die caveat-Zahl steht in keiner Regeldatei mehr — "
         "wurde er umformuliert, gehört diese Prüfung mit ihm umgeschrieben"
     )
+    assert len(treffer) == 1, (
+        f"der Satz steht in mehreren Regeldateien: {[regel.name for regel, _ in treffer]} — "
+        "zwei Fassungen derselben Zahl laufen auseinander"
+    )
+    regel, satz = treffer[0]
     genannt_mit = _ZAHLWORT.get(satz.group(1).lower())
     genannt_alle = _ZAHLWORT.get(satz.group(2).lower())
     assert genannt_mit is not None and genannt_alle is not None, (
-        f"unbekanntes Zahlwort in oberflaeche.md: {satz.group(1)!r} von {satz.group(2)!r} — "
+        f"unbekanntes Zahlwort in {regel.name}: {satz.group(1)!r} von {satz.group(2)!r} — "
         f"in _ZAHLWORT eintragen"
     )
 
@@ -968,10 +983,10 @@ def test_the_rule_file_counts_the_caveats_it_claims() -> None:
     assert alle, "leeres Register — dann prüft dieser Test nichts"
 
     assert genannt_alle == len(alle), (
-        f"oberflaeche.md nennt {genannt_alle} Operationen, das Register hat {len(alle)}"
+        f"{regel.name} nennt {genannt_alle} Operationen, das Register hat {len(alle)}"
     )
     assert genannt_mit == len(mit_caveat), (
-        f"oberflaeche.md nennt {genannt_mit} mit caveat, gezählt sind {len(mit_caveat)} — "
+        f"{regel.name} nennt {genannt_mit} mit caveat, gezählt sind {len(mit_caveat)} — "
         "den Satz im Abschnitt „Eine Grenze steht dort, wo gewählt wird“ nachziehen"
     )
 
