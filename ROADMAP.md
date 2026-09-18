@@ -52,7 +52,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Gemessen, zugeordnet und an der Wurzel behoben: Nicht manifold3d rechnete anders, sondern `np.cos`. Offen ist nur noch, ob nach der Umstellung auch die Fingerabdrücke des **Änderungswegs** auf allen drei übereinstimmen |
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
-| [RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Umfang und Genauigkeitsgrenzen einer eigenen Phase entscheiden |
+| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; nach Veröffentlichung von 0.4.3: geprüfter Nachbau hinter dem Import gemäß CAD-Konzept §§8, 13.5 |
+| [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Beschlossene Stufen nach Veröffentlichung von 0.4.3; zuerst Maß-/Referenznachführung, Erkennung und fachliche Parität absichern |
 | [RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen](#rm-024) | Geometrie, Erkennung und Druckvorbereitung | Der Rundlauf steht; gemessen fehlt ein Korpuskörper, dessen erneute Erkennung wirklich mehrdeutig wird |
 | [RM-041 — Innenraum importierter entlüfteter Hohlkörper klären](#rm-041) | Geometrie, Erkennung und Druckvorbereitung | Schätzweg oder dokumentierte Grenze des Innenraums entscheiden |
 | [RM-042 — Leistungsgrenze der Merkmalserkennung bis eine Million Dreiecke klären](#rm-042) | Geometrie, Erkennung und Druckvorbereitung | Großen Korpus messen und belegte Erkennungsgrenze mit §31 abgleichen |
@@ -63,7 +64,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen](#rm-078) | Geometrie, Erkennung und Druckvorbereitung | Eulenprojekt ohne Fremdlast öffnen und teure Schritte zuordnen |
 | [RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen](#rm-080) | Geometrie, Erkennung und Druckvorbereitung | Die Sichtflächen-Sperre ist zu Ende gebaut; offen bleiben schräge Ebenen, Symmetrie, globale Schnittfolgen und das Schaustück |
 | [RM-086 — Achsenkonvention beim GLB-Import mit Migration klären](#rm-086) | Geometrie, Erkennung und Druckvorbereitung | GLB-Achsenkonvention mit Herkunft und Migration festlegen |
-| [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Die Verrundung hat ihre zwei Operationen; offen bleiben `face` und `edge_loop` in der Liste |
+| [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Korrigierter Stand 18.09.: `face`/`edge_loop` tragen Handlungen; direkte Torus-/Gewindehandlungen unter RM-188, hier verbleibt die Abnahme an den Schiffsmodellen |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | 1,400 auf 1,004 s gebracht; offen ist die Entscheidung zwischen Stapelumbau der Einpassungen und einem neu gefassten Ziel |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
 | [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
@@ -211,7 +212,7 @@ Zurückgestellt; kein laufendes Bauvorhaben. Ein gehosteter Generierungsdienst k
 
 ## P12 — B-Rep-Kern
 
-Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen; dieses Konzept wartet weiterhin auf eine Entscheidung.
+Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, Umsetzung nach Veröffentlichung von 0.4.3.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p12--b-rep-kern).
 
@@ -647,11 +648,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-022"></a>
 
-- [ ] **RM-022 — Phase zur Flächenrückgewinnung aus Netzen entscheiden.** Über eine eigene Phase zur
-  Flächenrückgewinnung für importierte Netze entscheiden. Abnahme der Entscheidung: Zielkörper,
-  Umgang mit nicht analytisch erkannten Restflächen, Genauigkeitsgrenzen und Kundenwert gegenüber
-  bestehenden Aufgaben festgelegt. Erst danach die Umsetzung planen; der heutige B-Rep-Editor und
-  seine erklärten Mesh-Grenzen bleiben die Ausgangslage.
+- [ ] **RM-022 — Nachbau als Operationsfolge.** Robert hat den Umfang am
+  17.09.2026 entschieden: hinter dem Importschritt eine bearbeitbare Folge
+  registrierter Operationen aufbauen, Beginn nach Veröffentlichung von 0.4.3
+  als Teil des gesamten CAD-Plans. Keine Zusage für jede STL. Zielkörper,
+  Restflächen, Form-/Maßbudget und Abnahme stehen im
+  [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§8 und 13.5,
+  Pakete P4.1–P4.3. Volumen allein genügt nicht: lokale Formabweichung,
+  Öffnungen, dünne Wände, Topologie, Vergleichsvorschau und Undo prüfen;
+  Fertigungskompensation beim Nachbau ausschalten. Die Umsetzbarkeit der
+  vollständigen Kette ist noch nicht durch einen Prototyp belegt.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#neun-heruntergeladene-modelle-durch-die-ganze-kette-21082026).
 
@@ -827,10 +833,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   von RM-147: „Die erkannte Rundung ändern und wegnehmen"). Die Frage „soll eine Verrundung
   ohne jede Operation in der Liste stehen" stellt sich damit nicht mehr; sie hat welche.
 
-  **Offen bleibt der Rest**: `face` und `edge_loop` stehen weiter in der Merkmalsliste, ohne
-  dass eine Operation sie annimmt — dieselbe Frage, eine Merkmalsart weiter. Dazu die Abnahme
-  an den Schiffsmodellen, für die es keinen Testfall gibt. Den separat geführten
-  Verrundungsradius nicht doppelt planen.
+  **Korrigierter Stand vom 18.09.2026:** `face` und `edge_loop` tragen 43
+  beziehungsweise einen `applies_to`-Eintrag; die bisherige Aussage, keine
+  Operation nehme sie an, war falsch. Ohne solche Einträge sind `torus` und
+  `thread`; ihr direkter Ausbau ist inzwischen beschlossen und wird unter
+  RM-188 geführt. Registereinträge allein belegen keine fertigen Kundenwege.
+  Hier verbleibt die Abnahme an den Schiffsmodellen; den Verrundungsradius
+  und den CAD-Ausbau nicht doppelt planen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
 
@@ -1246,6 +1255,57 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Schwelle von `_large_facet_faces` fällt — gemessen wird das nur auf einer
   Linux-Maschine. Abnahme: die Ursache ist benannt, und beide Plattformen
   zählen dieselben Merkmale.
+
+<a id="rm-188"></a>
+
+- [ ] **RM-188 — CAD-Parität und einfache vollständige Kundenwege.** Beschlossener
+  Gesamtumfang vom 17.09.2026, Umsetzung nach Veröffentlichung von 0.4.3.
+  Fachliche Quelle und Pakete P0–P5:
+  [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§13–14;
+  [vertiefte Prüfung](konzepte/recherche-cad-paritaet-2026-09.md) vom 18.09.
+  Es gelten dieselben Handlungen und Bedeutungen für Netz und B-Rep,
+  verständliche Maßherkunft und erklärte Grenzen, ohne Kernwahl in der
+  Oberfläche. Alle 31 bisher konvertierenden Bausteinpfade gehören dazu.
+  Nachbau wird ausschließlich unter RM-022 geführt; RM-181, RM-183, RM-186
+  und RM-187 behalten ihre speziellen Leistungs-/Fenster-/Plattformnachweise.
+
+  Auf `2148ddfa` zusätzlich reproduziert: exakte Spiegelung verliert sechs
+  Merkmale; Skalieren erzeugt auf beiden Eingangsarten doppelte Flächen mit
+  alten Flächeninhalten; eine gültige NURBS-Platte mit Bohrung bleibt auch nach
+  STEP-Rundreise ohne Merkmale; Projektion an den sechs Außenflächen der
+  Korpusplatte scheitert. Keine dieser Lücken wurde durch die Dokumentprüfung
+  behoben. 907 zusätzliche Tests bestanden; native STL-Auswahl teilweise
+  gefahren, komplette Änderung/Undo/STEP-Parität und Erstnutzerprüfung offen.
+
+  Abnahme: die im Konzept beschlossenen Handlungsmatrizen, sämtliche 35
+  Bausteine mit dokumentierter Anwendbarkeit, korrekte Maße und Referenzen
+  nach Änderung/Cache/Undo/Wiederöffnung sowie die zehn Kundenwege aus der
+  Recherche. Keine stillen Formänderungen bei Erkennung; die vier Kernwahl-
+  Haken fallen erst im benannten Umschaltpaket mit erhaltener Fachwirkung.
+  Zusätzliche Funktionsideen der Recherche sind nicht automatisch beauftragt.
+
+  **Bedienergänzung Robert, 18.09.:** Maße direkt im Viewport bearbeiten,
+  Eingabefeld von der Maßlinie absetzen, ✓/× daneben; dieselbe Vorschau und
+  Übernahme bei Bohrung, Bewegen und weiteren geeigneten Operationen.
+  „Auf alle N gleichartigen“ unter dem Feld mit vollständiger Zielvorschau.
+  Keine doppelten Maßfelder im Panel und kein vorgelagerter Dialog für diese
+  Hauptwege. Konzept §10.2/§14.1, Pakete P0.3/P5.1/P5.2; bestehende
+  Platzierungs- und Zugfelder zusammenführen. Enter genau einmal, Escape
+  ohne Änderung, Fokusverlust ohne Übernahme, ein Undo für alle Ziele.
+  Zusätzlich P0.4 / Konzept §10.3: sinnvolle, markierte und direkt wechselbare
+  Kanten-/Merkmalsbezüge zum Ausrichten. Reproduziert: unerkanntes Ø0,5-mm-
+  Kreisloch liefert zwei 0,032702-mm-Facetten als Bezugsgeraden. Echte kleine
+  Ausschnittkanten erhalten; Referenzen während der Eingabe festhalten,
+  Mitte-/Randabstand unterscheiden und instabile Kantenpaare abweisen.
+
+  **Bibliotheksvertiefung 18.09.:** Vorhandene
+  `ShapeAnalysis_CanonicalRecognition` erkennt im NURBS-STEP-Gegenbeispiel
+  sechs Ebenen und den Ø6-Zylinder; P2.3 beginnt mit diesem Anschluss.
+  Analysis Situs nur für belegte Restlücken evaluieren. Recherche §§5.1–5.6
+  enthält Versions-/Alternativenvergleich und begrenzte Eigenentwicklung
+  in Python, Cython oder C++ mit Plattform- und Genauigkeitsnachweis.
+  Keine neue Abhängigkeit oder Sprachenmigration beschlossen; die alten
+  Tageswerte sind als Planungsgrundlage zurückgezogen (Konzept §12).
 
 ## Bedienung und Darstellung
 <a id="rm-070"></a>
