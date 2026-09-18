@@ -86,6 +86,11 @@ eine Kopie zugeben — **welche Klasse ein Fund hat, entscheidet der Code**, die
 vier Klassen stehen in `konzepte/konzept-zwillinge-2026-09.md`; es steht
 ausdrücklich **nicht** im Tor, dort halten `tests/test_shared_constants.py` die
 Konstanten) ·
+`docs_scan.py` (was die Unterlagen kosten und wo sie sich wiederholen: die
+Ladelast je Quelldatei aus Karte und passenden Regeln, derselbe Absatz in zwei
+Unterlagen, Verweise auf Quelldateien, die es nicht gibt, und `paths:`-Muster
+ohne Treffer — ebenfalls **nicht** im Tor, dort hält `test_directory_docs.py`
+die Vollständigkeit der Karten; die Durchsichten liegen in `.claude/audits/`) ·
 `affected_tests.py` (welche Testdateien eine Änderung berührt — aus dem
 Importgraphen über `app/`, `tools/` und `tests/`, dazu die Baumleser und die
 Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
