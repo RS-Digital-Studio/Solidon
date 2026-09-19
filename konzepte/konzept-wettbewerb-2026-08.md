@@ -626,3 +626,51 @@ einen Serverfehler), der Nettopreis von Fusion in Euro, sowie die
 Downloadzahlen von SindriCAD. Auch die FreeCAD-Lizenz ist hier **nicht** neu
 geprüft worden — sie steht in diesem Dokument nicht als Zahl, aber wer sie
 zitieren will, holt sie sich beim Projekt.
+
+---
+
+## Nachtrag 19.09.2026 — Netz zu parametrischem CAD
+
+Anlass ist der CAD-Plan ([konzept-vollwertiges-cad-2026-09.md](konzept-vollwertiges-cad-2026-09.md))
+mit seiner Zusage, Netz und exakten Körper gleich bearbeitbar zu machen und ein
+importiertes Netz nachzubauen. Die [Durchsicht vom 19.09.](durchsicht-cad-konzepte-2026-09.md)
+hat dazu die Hersteller-Hilfen gelesen; hier steht, was der Markt dort kann,
+Stand September 2026.
+
+| Programm | Was mit einem Netz geht | Netz → exakt |
+|---|---|---|
+| **Fusion** | *Convert Mesh* in drei Stufen: *Faceted* (jede Facette eine Fläche), *Prismatic* (Face Groups zu Ebenen und Zylindern verschmolzen), *Organic* (T-Spline, braucht die Design Extension); *Generate Face Groups* mit Winkel- und Toleranzparametern und Handkorrektur | B-Rep ohne Verlauf; in der Timeline bleibt nur die Abhängigkeit zum Quellnetz |
+| **Shapr3D** | Referenz, Boolesche Operationen mit geschlossenen Mesh-Bodies, Transformationen | keine; Wunsch seit Januar 2023 offen |
+| **Onshape** | *Mixed Modeling*: Boolean, Shell, Hole, Split, Move Face, Rib auf dem Netz — es bleibt Netz; *Constrained Surface* fittet einen Freiform-Patch mit Abweichungsanzeige | keine Primitiverkennung |
+| **FreeCAD 1.1** | *Shape from Mesh* (eine Fläche je Dreieck), *Refine Shape* (nur koplanar), Reverse-Engineering-Workbench mit manueller Segmentierung Ebene/Zylinder/Kugel | Segmente und Flächen, keine Merkmale |
+| **Plasticity** | Import STL/OBJ als Referenz, Verschieben/Drehen/Skalieren | keine |
+| **SolidWorks** | *Segment Imported Mesh Body*, *Surface From Mesh* (Ebene, Zylinder, Kegel, Kugel auf gewählte Facetten) | Referenzflächen, danach normale Features von Hand |
+| **Siemens NX** | *Convergent Modeling*: Facettenkörper direkt in Boolean, Extrude, Skizzenprojektion; *Detect Primitives*, *Fit Surface* | Flächen, keine Historie |
+| **PTC Creo** | *Restyle*: analytische, extrudierte, rotierte und Spline-Flächen auf Facetten | Flächenmodell, keine Historie |
+
+**Wo KI einsteigt.** Das Backflip-Add-In für Fusion (Drittanbieter, seit
+04.08.2026, Cloud, laut Pressemeldung rund zehn Dollar je Teil) macht aus
+STL und Scans parametrische Modelle mit Feature-Baum; Autodesks
+*AutoTimeline* (AU 2026, 15.09.2026) verspricht dasselbe im Produkt, laut
+engineering.com ab 2027. Beides ist lernend und läuft in der Cloud.
+
+**Was daraus für Solidon folgt:**
+
+1. **Segmentierung plus Konvertierung in einen B-Rep ohne Verlauf ist
+   Standard** — Fusion, SolidWorks, NX und FreeCAD haben sie. Sie fehlte im
+   Plan und ist seit dem 19.09. Paket **P4.0**.
+2. **Parität der Merkmalshandlungen bleibt ein eigenständiges Produktziel.**
+   Die ausgewerteten Quellen belegen keinen vollständigen gleichwertigen
+   Weg für die Handlungen aus RM-188 auf beiden Körperarten. Das ist kein
+   vollständiger Marktüberblick und kein Beweis eines Alleinstellungsmerkmals.
+3. **Deterministischer lokaler Nachbau bleibt der gewählte Vertrag.** Die
+   hier recherchierten Wege mit parametrischer Historie nutzen KI in der
+   Cloud. Daraus folgt kein Ausschluss anderer Verfahren und kein belegter
+   Markterfolg. §15 Nr. 6 des CAD-Konzepts (kein lernendes Verfahren in der
+   Geometrie) bleibt für RM-022 die fachliche Abgrenzung.
+4. **Eine Abweichungsanzeige Fit gegen Netz ist Standard** (Onshape,
+   Geomagic) und seit dem 19.09. Paket **P1.6**.
+
+Die Belege stehen in der Durchsicht §4; Autodesk-Blogseiten und einige
+SolidWorks-Hilfeseiten antworteten nur mit 403 — dort tragen Pressemeldungen
+und der SolidWorks-Blog die Aussagen.

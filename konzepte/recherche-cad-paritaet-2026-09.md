@@ -5,9 +5,17 @@ Stand: **18.09.2026, Anwendungscode `2148ddfa`**. Ergänzung zum
 Die 16 Entscheidungen dort bleiben bestehen. Roberts anschließende Antwort
 „alles“ nimmt auch sämtliche Ausbauideen aus §6 in den Auftrag auf; die
 Zuordnung steht im Konzept §§13.8–13.9 und §14.2. Diese Recherche ergänzt
-Nachweise und Abnahmen; sie startet keine Umsetzung vor Veröffentlichung von
-0.4.3. Offene Arbeit: [RM-188](../ROADMAP.md#rm-188), Nachbau:
+Nachweise und Abnahmen. **0.4.3 ist am 18.09.2026 veröffentlicht; die
+Umsetzung startet nach 0.4.4 in der Reihenfolge aus Konzept §13.10 und
+wird vor der darauffolgenden Version vollständig abgearbeitet** (Konzept
+§14.3).
+Offene Arbeit: [RM-188](../ROADMAP.md#rm-188), Nachbau:
 [RM-022](../ROADMAP.md#rm-022).
+
+**Durchgesehen am 19.09.2026** am Stand `87273de06`:
+[durchsicht-cad-konzepte-2026-09.md](durchsicht-cad-konzepte-2026-09.md).
+Die Sonden aus §§2 und 5.2 wurden wiederholt und halten; die Korrekturen
+sind eingearbeitet, §9 verzeichnet sie.
 
 ## 1. Ergebnis und Prioritäten
 
@@ -25,6 +33,8 @@ Körper“ kein Beleg, dass Solidon seine geometrischen Merkmale erkennt.
 | 2 | Vollständige Merkmalsfamilien und zusammengesetzte Formen | Torus, Freiform, Innenraum und importierte Gewinde auf B-Rep; Senkung, Teilöffnung und Schnittbohrungen nicht nur als einzelne Trägerflächen betrachten |
 | 2 | Verlässliche Referenzen und Skizzenanschlüsse | Außenflächenprojektion, Bezugsebenen, Kantenaufteilung und verlorene Referenzen; Konzept §§6, 13.3 |
 | 2 | Verständliche direkte Bearbeitung | Eindeutige Hauptaktion, Maßherkunft, nachvollziehbare Auswahl und erklärtes Nichtkönnen (§4) |
+| 2 | Näherungen sichtbar machen, nicht nur benennen | Abweichungskarte Fit gegen Netz als Analysekarte; Konzept P1.6 (Durchsicht 19.09.) |
+| 3 | Netz als exakten Körper ohne Verlauf weitergeben | Segmentierung mit Toleranzen und Handkorrektur, Flächenfits, Nähen, STEP-Rundreise — Standard bei Fusion und SolidWorks; Konzept P4.0, vor dem Nachbau (Durchsicht 19.09.) |
 | 3 | Nachbau als bearbeitbare Operationsfolge | Geprüfter Kandidat hinter dem Import, lokale Formtreue, Topologie, Grenzen und Rückweg; Konzept §13.5 |
 
 „Vollwertig“ bleibt auf Konstruktion von Druckteilen bezogen. Baugruppen,
@@ -457,16 +467,17 @@ vor einem Einbau gegen `licences.toml` zu prüfen.
 |---|---|---|
 | Vorhandenes OCP / OCCT 8.0.1 | B-Rep, STEP, Boolesche Operationen; `BRepTools_History` beschreibt erzeugte/geänderte/entfernte Teilformen | Zuerst vorhandene Fähigkeiten verwenden. Historie allein löst keine persistenten Namen über beliebige Neuberechnung. [History](https://occt3d.com/dev/doc/refman/html/class_b_rep_tools___history.html) |
 | OCCT `ShapeUpgrade_UnifySameDomain` | Gleichartige benachbarte Flächen und Kanten zusammenführen | Hilft bei Nahtteilungen; keine allgemeine Rückgewinnung eines CAD-Modells aus STL. [Dokumentation](https://occt3d.com/dev/doc/refman/html/class_shape_upgrade___unify_same_domain.html) |
-| Analysis Situs | Kanonische Erkennung/Umwandlung von NURBS in analytische Flächen; attributierter Nachbarschaftsgraph für zusammengesetzte Merkmale | Reserve für Restlücken nach Anschluss der vorhandenen OCCT-Erkennung (§5.2). BSD-3-Clause; konkrete Quellteile, OCP/OCCT-ABI, Python-Anschluss und Windows/Linux/macOS-Build ungeprüft. [Konvertierung](https://analysissitus.org/features/features_convert-canonical.html), [Lizenz](https://analysissitus.org/license.html) |
+| Analysis Situs | Kanonische Erkennung/Umwandlung von NURBS in analytische Flächen (auf B-Rep, nicht auf Netzen); attributierter Nachbarschaftsgraph für zusammengesetzte Merkmale | Reserve für Restlücken nach Anschluss der vorhandenen OCCT-Erkennung (§5.2) — und zwar als **Quelltextportierung**: keine Python-Bindings (Skripting nur Tcl), Active Data als `src/asiActiveData` eingebettet und Basis des Datenmodells, gebaut gegen OCCT 7.6 bei unseren 8.0.1 (Durchsicht 19.09.). BSD-3-Clause. [Konvertierung](https://analysissitus.org/features/features_convert-canonical.html), [Lizenz](https://analysissitus.org/license.html), [Architektur](https://analysissitus.org/features/features_architecture.html) |
 | NumPy / SciPy, vorhanden | Nichtlineare Fits und vorhandener Skizzenlöser; robuste Verlustfunktionen und Schranken sind verfügbar | Eigene Formverträge, Initialisierung, Ausreißer- und Konditionsprüfung nötig. Solverwechsel repariert keine falsche Messgröße. [least_squares](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html) |
 | trimesh / manifold, vorhanden | Netzaufbereitung und solide Boolesche Operationen | Kein fertiger semantischer CAD-Erkenner oder parametrischer Rückbau. Bestehende Basis beibehalten. [trimesh](https://github.com/mikedh/trimesh), [manifold](https://github.com/elalish/manifold) |
-| Open3D 0.20.0, MIT | Punktwolken, Ebenensegmentierung und robuste planare Bereiche | Seit 16.09.2026 auch CPython-3.14-Wheels; Windows x64, Linux x64/ARM64, macOS ARM64 gelistet. Intel-macOS-Abdeckung nicht belegt. Plane-Patches ergeben keine Bohrungssemantik. Erst bei gemessenem Vorteil aufnehmen. [Paketdateien](https://pypi.org/project/open3d/0.20.0/), [Verfahren](https://www.open3d.org/docs/release/tutorial/geometry/pointcloud.html) |
+| Open3D 0.20.0, MIT | Punktwolken, Ebenensegmentierung und robuste planare Bereiche | CPython-3.14-Wheels für Windows x64, Linux x64/ARM64 (`manylinux_2_35`, glibc ≥ 2.35) und macOS **nur ARM64**; diese Ausgabe bietet für keine gelistete Python-Version Intel-macOS-Räder (Dateibefund vom 19.09., am 20.09. bestätigt). **Derzeit nicht aufnehmen:** fertiger Intel-Paketweg und Korpusvorteil fehlen. Der dokumentierte macOS-Quellbau ist kein belegter Intel-/Python-3.14-Bau, aber auch kein Beweis technischer Unmöglichkeit. Plane-Patches liefern keine Bohrungssemantik. [Paketdateien](https://pypi.org/project/open3d/0.20.0/), [Quellbau](https://www.open3d.org/docs/latest/compilation.html), [Verfahren](https://www.open3d.org/docs/release/tutorial/geometry/pointcloud.html) |
 | pyRANSAC-3D, Apache-2.0 | Kandidaten für geometrische Primitive | Nur Vergleichsbasis: der Zylinder-Code warnt selbst vor unzureichenden Ergebnissen an realen Daten (§5.3). Startwert, Genauigkeit und Ausreißerquote messen; kein Ersatz für Nachbarschaft, Innen/Außen und Zuordnung. [Repository](https://github.com/leomariga/pyRANSAC-3D) |
 | planegcs 0.8.0, LGPL-2.1-or-later | Alternativer Skizzenlöser | Gelistete Wheels für CPython 3.12/3.13 auf Windows/Linux, keine unmittelbar passende 3.14-/macOS-Abdeckung belegt. Nur gegen konkrete fehlende Bedingungen und Korpus evaluieren. [Paket](https://pypi.org/project/planegcs/0.8.0/) |
 | CGAL Shape Detection | RANSAC/Region-Growing für geometrische Primitive | Das betrachtete Paket steht unter GPL; durch Projektregel 15 ausgeschlossen. Eine andere Lizenz wäre eine gesonderte Entscheidung. [Paketlizenz](https://doc.cgal.org/latest/Shape_detection/group__PkgShapeDetectionRef.html) |
 | libigl | Einzelne Netzalgorithmen | MPL-2.0-Kern und separat lizenzierte Copyleft-/CGAL-/TetGen-Bereiche unterscheiden. Hier kein belegter Bedarf für einen Einbau. [Lizenzgrenzen](https://libigl.github.io/license/) |
-| `Sanaxen/mesh2cad` | OBJ-Segmentierung und Flächenanpassung bis IGES | MIT im Hauptprojekt reicht für die genannten CGAL-Abhängigkeiten nicht als Freigabe; alte OCCT-/CGAL-Basis, kein geprüfter Operationsnachbau. [Repository](https://github.com/Sanaxen/mesh2cad) |
-| `Danxtream/Mesh2CAD-Converter` | Anderes Projekt mit STL→STEP und Ebenen-/Zylindererkennung | Nicht mit dem vorigen Repository vermischen. Geschlossenheit, Maßtreue, Lizenzkette und parametrische Historie hier nicht nachgewiesen; kein Einbau empfohlen. [Repository](https://github.com/Danxtream/Mesh2CAD-Converter) |
+| `Sanaxen/mesh2cad` | OBJ-Segmentierung und Flächenanpassung bis IGES | MIT im Hauptprojekt reicht für die vollständige Lizenzkette der Teilprojekte und Binärteile nicht als Freigabe; die konkret verwendeten CGAL-Pakete sind zu prüfen, nicht ganz CGAL pauschal als GPL zu behandeln. Alte OCCT-/CGAL-Basis, kein geprüfter Operationsnachbau. [Repository](https://github.com/Sanaxen/mesh2cad) |
+| `Danxtream/Mesh2CAD-Converter` | Anderes Projekt mit STL→STEP und Ebenen-/Zylindererkennung | Laut eigener Beschreibung proprietäres Programm (`Mesh2CAD.exe`), kommerzielle Nutzung erlaubt. Einbettungs-/Weitergaberechte sind damit nicht belegt; die genannte `LICENSE.txt` liegt im sichtbaren Repository nicht vor. Maßtreue, Geschlossenheit des Ergebnisses und parametrische Historie bleiben ungeprüft; kein Bibliothekseinbau empfohlen. [Repository](https://github.com/Danxtream/Mesh2CAD-Converter) |
+| `Matthewjg95/mesh2cad`, MIT | Drittes Projekt dieses Namens (Durchsicht 19.09.): nicht lernende Segmentierung Ebene/Zylinder/Kegel/Kugel, Bohrungen mit Muster, Taschen, Zapfen, Fillets als OCC-B-Rep mit STEP-Export | Vergleichskandidat für P4.0, kein abgenommener Baustein. Auf Platten/Gehäuse zugeschnitten; das Projekt beschreibt bewusste Vereinfachungen von Übergängen, Rippen und ähnlichen Maßen. Unabhängige Formprüfung, transitive Lizenzen und Python-/OCP-Plattformnachweise fehlen. Kein allgemeiner Beleg, dass dies der einzige lizenzgeeignete Kandidat wäre. [Repository](https://github.com/Matthewjg95/mesh2cad) |
 | Autodesk BRepNet | Forschung zu lernender Klassifikation von B-Rep-Teilformen | CC-BY-NC-SA-4.0 laut Repository; kein kommerziell freigegebener Produktbaustein und nach dem beschlossenen Umfang kein Geometrieverfahren. [Repository](https://github.com/AutodeskAILab/BRepNet) |
 
 Analysis Situs beschreibt Bohrungserkennung über Flächen und Nachbarschaften,
@@ -514,10 +525,11 @@ festgeschriebene und aktuell auf PyPI ausgewiesene Version überein:
 
 Das ist kein vollständiger Sicherheits- oder Paketartefaktaudit. Insbesondere
 beweist „aktuell“ weder Fehlerfreiheit noch Kompatibilität jedes künftigen
-Updates. Lokal lief Python 3.14.2; `constraints.txt` nennt für Entwicklung/CI
-3.14.7. Die ausgeführten Windows-Prüfungen sind deshalb kein Nachweis für den
-identischen Interpreter der Paketbauten und keine plattformübergreifende
-Auslieferungsabnahme.
+Updates. Auf der prüfenden Maschine lief Python 3.14.2; `constraints.txt`
+und die Windows-`.venv` der Durchsicht vom 19.09. stehen auf 3.14.7 (drei
+Maschinen, nicht derselbe Interpreter). Die ausgeführten Windows-Prüfungen
+sind deshalb kein Nachweis für den identischen Interpreter der Paketbauten
+und keine plattformübergreifende Auslieferungsabnahme.
 
 Am Ist-Code geprüfte Optimierungsansätze, noch ohne behaupteten Zeitgewinn:
 
@@ -621,7 +633,7 @@ eingeholt. Zuerst den belegten vorhandenen Weg nutzen.
 | pyRANSAC-3D | Kleine Vergleichsbasis für Primitive | Der geprüfte Zylinder-Code warnt selbst vor schlechten Ergebnissen mit realen Daten und zieht Stichproben über globales `random.sample`; der Seed eines Datengenerators steuert das nicht. Für nebenläufige reproduzierbare Ops braucht es einen lokalen Zufallsgenerator oder eine isolierte Ausführung. Eigene begrenzte Fits auf NumPy/SciPy zuerst vergleichen; keine Empfehlung als fertiger robuster Zylindererkenner. [Quellcode](https://github.com/leomariga/pyRANSAC-3D/blob/master/pyransac3d/cylinder.py) |
 | PCL | RANSAC mit Normalen für Zylinder und weitere Punktwolkenverfahren | BSD-Lizenz im Hauptprojekt; C++-Integration und transitive Pakete zusätzlich prüfen. Interessant bei einem konkret belegten Segmentierungsdefizit; kein direkt bewiesener Python-3.14-Paketweg und kein Grund, vorhandene STL-Topologie zuerst zu verwerfen. [Verfahren](https://pointclouds.org/documentation/tutorials/cylinder_segmentation.html), [Lizenz](https://github.com/PointCloudLibrary/pcl/blob/master/LICENSE.txt) |
 | Polylidar3D | Planare Segmente und konkave Polygone mit Innenrändern aus Netzen/Punkten | MIT; C++ mit Python-Anbindung. Vergleich für langsame Konturextraktion, kein Rundungs-/Gewindeerkenner. Projekt nennt Windows/Linux; aktueller CPython-3.14-/macOS-Bau nicht nachgewiesen. [Projekt](https://github.com/JeremyBYU/polylidar), [Lizenz](https://github.com/JeremyBYU/polylidar/blob/master/LICENSE) |
-| MeshLib | Umfangreiche native Reparatur-, Abstand-, Offset- und Netzwerkzeuge | Keine frei kommerziell nutzbare Alternative im geprüften Stand: eigene Non-Commercial-/Education-Lizenz, kommerzielle Nutzung gesondert. Erst bei ungelöster fachlicher Lücke und geklärtem Vertrag evaluieren; Anbieterbenchmarks sind kein Solidon-Nachweis. [Lizenz](https://github.com/MeshInspector/MeshLib/blob/master/LICENSE) |
+| MeshLib | Umfangreiche native Reparatur-, Abstand-, Offset- und Netzwerkzeuge | Öffentliche Non-Commercial-/Education-Lizenz reicht nicht für Solidons kommerzielle Auslieferung; kommerzielle SDK-Verträge für Integration und Auslieferung werden ausdrücklich angeboten. Erst bei ungelöster fachlicher Lücke und passendem Vertrag evaluieren; Plattformbehauptungen und Anbieterbenchmarks sind kein Solidon-Nachweis. [Öffentliche Lizenz](https://github.com/MeshInspector/MeshLib/blob/master/LICENSE), [Kommerzielles Angebot](https://meshlib.io/license/) |
 | CadQuery/build123d | Höhere Modellierabstraktionen über OCCT | Kein anderer Rechenkern und kein fertiger STL-Merkmalserkenner. Die vorhandene Op-/Parameterstruktur müsste zusätzlich abgebildet werden; derzeit kein belegter Vorteil für einen Austausch. [build123d](https://github.com/gumyr/build123d) |
 | `spookylukey/planegcs` | Python-Anbindung an FreeCADs Skizzenlöser | Konkreter Kandidat für einen Solververgleich; nicht mit gleichnamigen WASM-/TypeScript-Projekten vermischen. 0.8.0 hat nur die oben genannten Wheels. Eigenbau ist möglich zu untersuchen, nicht als erledigt anzunehmen. [Projekt](https://github.com/spookylukey/planegcs), [Release](https://pypi.org/project/planegcs/0.8.0/) |
 | CoACD statt V-HACD | Alternative konvexe Zerlegung für Vorschläge im Auto Split | **Im Projekt bereits geprüft und verworfen**, Bauplan §36 und historischer Auto-Split-Vergleich im ROADMAP-ARCHIV: V-HACD lieferte die bessere Einschnürungsstelle; genaues CoACD war langsamer, grobe Einstellung lieferte keinen brauchbaren Schnitt. V-HACD bezeichnet sich upstream als eingestellt und verweist auf das MIT-lizenzierte CoACD; das hebt den lokalen Befund nicht auf. Erneute Prüfung nur bei konkretem Anlass und neuen Korpusmesswerten, kein beschlossener Wechsel. [V-HACD-Status](https://github.com/kmammou/v-hacd), [CoACD](https://github.com/SarahWeiii/CoACD), [Lizenz](https://github.com/SarahWeiii/CoACD/blob/main/LICENSE) |
@@ -781,6 +793,10 @@ die Umsetzung samt zusätzlichen Kundenwegen steht in §§13.2/13.9.
 | Lineare, kreisförmige und gespiegelte Merkmalsmuster | P6.7 |
 | Einfügen, Umsortieren und Unterdrücken/Reaktivieren im Verlauf | P7.1/P7.2/P7.3 |
 | STEP-Mehrkörperimport mit Namen, Farben und Instanzlagen | P7.4 |
+| **Aus der Durchsicht vom 19.09.:** Spiegelung führt Merkmale nach, keine Doppelmerkmale nach Skalieren | P0.0 |
+| Die vier Reste des Bedienprotokolls vom 04.08. | P0.7 |
+| Analysekarte „Formabweichung“ | P1.6 |
+| Netz → exakter Körper ohne Verlauf (Segmentierung, Fits, Nähen, STEP) | P4.0 |
 
 Die zehn bisherigen Kundenwege bleiben Pflicht; zusätzliche End-zu-Ende-
 Wege kommen dazu. Gemeinsame Maßbedienung und Netz-/B-Rep-Parität gelten auch
@@ -883,3 +899,31 @@ abgebrochen; die eigene Prozesskette wurde beendet. Die separaten
 Leistungstests wurden nicht gestartet. **Kein vollständig grünes Tor
 behauptet.** Die bereits oben protokollierten abgeschlossenen Läufe bleiben
 Teilnachweise; Implementierung und vollständige Produktabnahme bleiben offen.
+
+## 9. Nachgeprüft am 19.09.2026 — eingearbeitet
+
+Die [Durchsicht](durchsicht-cad-konzepte-2026-09.md) wiederholt die Sonden
+aus §2.1, §2.2, §4.4 und §5.2 am Stand `87273de06` und prüft §5 gegen die
+Primärquellen. Alle Messungen halten; die elf Paketversionen aus §5.1 sind
+weiterhin die aktuellen auf PyPI. Robert hat am selben Tag entschieden:
+0.4.3 ist draußen, die parallel laufenden Codeänderungen werden als 0.4.4
+veröffentlicht, danach startet der Plan und wird vor der darauffolgenden
+Version abgearbeitet (Konzept §14.3). Die Korrekturen stehen an ihren
+Stellen:
+
+| Stelle | Geändert |
+|---|---|
+| Kopf | Start nach 0.4.4, Reihenfolge Konzept §13.10 |
+| §1 | zwei Zeilen: Abweichungskarte (P1.6) und exakter Körper ohne Verlauf (P4.0) |
+| §5 | Historischer Schluss vom 19.09.: Open3D ohne Intel-macOS-Räder, Ausschluss für macOS; am 20.09. auf fehlenden fertigen Intel-Paketweg präzisiert (Konzept §13.8.1). Analysis Situs als Quelltextportierung; drittes `mesh2cad` |
+| §5.1 | Python 3.14.2 war eine andere der drei Maschinen |
+| §6 | vier Zeilen: P0.0, P0.7, P1.6, P4.0 |
+
+Zum Wettbewerb (Durchsicht §4): Backflip (Fusion-Add-In seit 04.08.2026) und
+Autodesks AutoTimeline (angekündigt für 2027) liefern parametrische Historie
+aus Netzen über KI in der Cloud. Ein gleichwertiger deterministischer lokaler
+Nachbau ist in den ausgewerteten Quellen nicht belegt; das ist kein
+vollständiger Marktausschluss. Segmentierung plus Konvertierung in einen B-Rep ohne
+Verlauf (Fusion *Prismatic*, SolidWorks *Surface From Mesh*) ist Standard
+und seit dem 19.09. als P4.0 im Plan. Der Nachtrag dazu steht in
+[konzept-wettbewerb-2026-08.md](konzept-wettbewerb-2026-08.md).

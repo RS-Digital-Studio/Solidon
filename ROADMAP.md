@@ -52,8 +52,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Gemessen, zugeordnet und an der Wurzel behoben: Nicht manifold3d rechnete anders, sondern `np.cos`. Offen ist nur noch, ob nach der Umstellung auch die Fingerabdrücke des **Änderungswegs** auf allen drei übereinstimmen |
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
-| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; nach Veröffentlichung von 0.4.3: geprüfter Nachbau hinter dem Import gemäß CAD-Konzept §§8, 13.5 |
-| [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Beschlossene Stufen nach Veröffentlichung von 0.4.3; zuerst Maß-/Referenznachführung, Erkennung und fachliche Parität absichern |
+| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; startet nach 0.4.4 als P4.0–P4.3 des CAD-Plans — erst der exakte Körper ohne Verlauf, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
+| [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Umsetzung läuft auf main; der Bau von 0.4.4 verwendet seinen Tag-Commit. Der vollständige Umfang bleibt vor der darauffolgenden Version, in der Reihenfolge aus Konzept §13.10 — die Pakete stehen unten als Liste mit Stand |
 | [RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht nachgestellt](#rm-189) | Geometrie, Erkennung und Druckvorbereitung | Der Befund trägt seit dem 18.09.2026 einen Weg; die Ursache fehlt — die Schrittfolge von Robert holen oder einen Weg im Korpus finden, der ihn herstellt |
 | [RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall ist nicht nachgestellt](#rm-190) | Geometrie, Erkennung und Druckvorbereitung | Zwölf Körper aus Korpus, Downloads und Roberts Regal drehen richtig; den Körper und die Schrittfolge von Robert holen, an denen die Suche stehen bleibt |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
@@ -222,7 +222,7 @@ Zurückgestellt; kein laufendes Bauvorhaben. Ein gehosteter Generierungsdienst k
 
 ## P12 — B-Rep-Kern
 
-Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, Umsetzung nach Veröffentlichung von 0.4.3.
+Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung startet nach 0.4.4 als Teil des CAD-Plans (RM-188).
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p12--b-rep-kern).
 
@@ -660,11 +660,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 - [ ] **RM-022 — Nachbau als Operationsfolge.** Robert hat den Umfang am
   17.09.2026 entschieden: hinter dem Importschritt eine bearbeitbare Folge
-  registrierter Operationen aufbauen, Beginn nach Veröffentlichung von 0.4.3
-  als Teil des gesamten CAD-Plans. Keine Zusage für jede STL. Zielkörper,
+  registrierter Operationen aufbauen. 0.4.3 ist am 18.09. veröffentlicht;
+  die Umsetzung startet nach 0.4.4 als Teil des CAD-Plans und wird vor der
+  darauffolgenden Version abgeschlossen (RM-188). Dem Nachbau geht seit der
+  Durchsicht vom 19.09. **P4.0** voraus: der exakte Körper **ohne** Verlauf
+  aus Segmentierung, Flächenfits und Nähen — das, was Fusion und SolidWorks
+  liefern — als Kandidatenquelle und eigener Kundenweg (STL als STEP
+  weitergeben). Keine Zusage für jede STL. Zielkörper,
   Restflächen, Form-/Maßbudget und Abnahme stehen im
   [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§8 und 13.5,
-  Pakete P4.1–P4.3. Volumen allein genügt nicht: lokale Formabweichung,
+  Pakete P4.0–P4.3. Volumen allein genügt nicht: lokale Formabweichung,
   Öffnungen, dünne Wände, Topologie, Vergleichsvorschau und Undo prüfen;
   Fertigungskompensation beim Nachbau ausschalten. Die Umsetzbarkeit der
   vollständigen Kette ist noch nicht durch einen Prototyp belegt.
@@ -1269,8 +1274,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-188"></a>
 
 - [ ] **RM-188 — CAD-Parität und einfache vollständige Kundenwege.** Beschlossener
-  Gesamtumfang vom 17.09.2026 plus voller Ausbau vom 18.09.2026 („alles“),
-  Umsetzung nach Veröffentlichung von 0.4.3.
+  Gesamtumfang vom 17.09.2026 plus voller Ausbau vom 18.09.2026 („alles“).
+  **0.4.3 ist am 18.09.2026 veröffentlicht** (Tag `v0.4.3`, `version.json`
+  auf dem Server); Robert hat am 19.09. entschieden: Die parallel laufenden
+  Codeänderungen werden abgeschlossen und als **0.4.4** veröffentlicht;
+  danach startet die Umsetzung, und **alles wird abgearbeitet, bevor die
+  darauffolgende Version hochgeladen wird.**
+  Die Pakete stehen am Ende dieses Eintrags als Liste mit Stand, in der
+  Reihenfolge aus Konzept §13.10.
   Fachliche Quelle und Pakete P0–P7 (CAD-Pakete, nicht die gleichnamigen Projektphasen):
   [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§13–14;
   [vertiefte Prüfung](konzepte/recherche-cad-paritaet-2026-09.md) vom 18.09.
@@ -1334,6 +1345,82 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Konkrete neue Abhängigkeiten bleiben auszuwählen; kein pauschaler Einbau
   aller Alternativen und keine Sprachenmigration beschlossen. Die alten
   Tageswerte sind als Planungsgrundlage zurückgezogen (Konzept §12).
+
+  **Durchsicht 19.09.:** Die
+  [Durchsicht](konzepte/durchsicht-cad-konzepte-2026-09.md) hat alle
+  Messungen am Stand `87273de06` wiederholt; sie halten. Neu aufgenommen
+  (Konzept §14.3): P0.0 (Spiegelung führt Merkmale nach, keine
+  Doppelmerkmale nach Skalieren — beides Kundenfehler von heute, deshalb
+  zuerst), P0.7 (die vier Reste des Bedienprotokolls vom 04.08.), P1.6
+  (Analysekarte „Formabweichung“), P4.0 (Netz → exakter Körper ohne
+  Verlauf), die Bauart-Matrix über alle 132 Ops als Test in P2.1 (57
+  konvertieren, nicht 56) und die Regel, dass kein P6-Paket vor dem
+  Umschaltpaket P2.8 beginnt. Präzisierung vom 20.09.: Open3D 0.20.0 wird
+  derzeit nicht aufgenommen; fertiger Intel-macOS-Paketweg und Korpusvorteil
+  fehlen. Ein eigener Python-3.14-Bau ist nicht als unmöglich erwiesen,
+  aber einschließlich Auslieferungsweg unbelegt. Analysis Situs bleibt
+  eine mögliche Quelltextportierung für eine konkret nachgewiesene Lücke.
+
+  **Entwicklungsstand 20.09.:** `77223ccb` erhält exakte Körper bei affinen
+  Transformationen, führt native Flächen und Merkmale nach und benennt
+  tatsächliche Konvertierungen. `064e3095` verbindet die Eingabewege mit der
+  Freigabe ihrer aktuellen dargestellten Vorschau. Gemeinsames
+  Entwicklungstor: **11.591 bestanden, 26 übersprungen**, Prozessausgang 0;
+  Ruff, Format und mypy jeweils 0. Der erste Lauf mit fünf Fehlern wurde
+  behoben und vollständig wiederholt. Fensterdateien und Leistungsprüfungen
+  bleiben gemäß `69f956e76` ausschließlich dem Release vorbehalten; die
+  ergänzten Fensterregressionen sind noch nicht ausgeführt. Das ist kein
+  Abschluss von RM-188 und keine Release-Abnahme.
+
+  **Die Pakete in dieser Folge** (Umfang und Abnahme je Paket in Konzept
+  §13.2, Voraussetzungen §13.6; jedes Paket endet mit dem Tor vor seinem
+  Commit). Der Stand steht als Wort vorn — **offen**, **läuft**,
+  **implementiert, Release-Abnahme offen** oder **erledigt TT.MM.** —,
+  weil jedes Kästchen für den Registertest ein eigener Punkt
+  wäre; RM-188 bleibt der eine Punkt, bis P5.3 grün ist:
+
+  * **erledigt 19.09.** P0.0 — Merkmale werden bei Spiegelung, Skalierung und Mustern gemeinsam nachgeführt; keine alten Doppelmerkmale, gerichtete Gewindeangaben bleiben korrekt. Kern-, Cache-, Passungs- und Undo-Regressionen sowie zwei native Kundenwege sind belegt; Commit `cfc5e303`. Die nativen Kundenwege wurden vor der neuen Regel geprüft; weitere Fenster- und Leistungsprüfungen gehören zum Release (`69f956e76`). Exakte Skalierung folgt in P2.1.
+  * **implementiert, Release-Abnahme offen** P2.1 — `77223ccb`: affine Transformationen erhalten exakte Körper und führen ihre nativen Flächen zur neuen Tessellierung nach. Die explizite Matrix erfasst alle 132 Operationen mit 226 gültigen Darstellungsfällen: 227 Prüfungen bestanden, Exit 0. Gemischte und mehrfache Boolesche Eingänge, leere Ergebnisse, Cache, Wiederöffnung und Undo sind gedeckt. Getrimmte NURBS liefern geprüfte Flächen-/Volumenintegrale einschließlich Abbruch; die private Rundungszwischenform wird vor Veröffentlichung orientiert. Entwicklungstor siehe oben; installierte Plattformen und Fensterabnahme bleiben offen.
+  * **offen** P2.3 — `void`, `torus`, `curved_face` und analytische B-Splines im exakten Kern über die kanonische Erkennung
+  * **offen** P1.1 — Zylindermaßvertrag: Kontur statt Schwerpunkt, Achse, Teilabdeckung, Unterteilung, bewusst polygonale Gegenformen
+  * **erledigt 20.09., Werkzeugauswahl** P0.5 — vollständige Zuordnung in Konzept §13.8.1; fachliche Machbarkeit, Vorversuche und Paketnachweise bleiben den jeweiligen Fachpaketen zugeordnet. P0.6 benötigt derzeit keine zusätzliche Infrastruktur: vorhandener Cythonweg bleibt Ausgangspunkt, neue native Ergänzungen nur bei belegtem Bedarf. P5.3 bleibt offen.
+  * **implementiert, Release-Abnahme offen** P0.1 — `064e3095`: Positions-Dreier, Einzahltexte, Gründe gesperrter Knöpfe und Rückmeldung zur leeren Skizze sind umgesetzt. Entwicklungstor grün; die ergänzten Fensterfälle laufen erst beim Release.
+  * **implementiert, Release-Abnahme offen** P0.2 — `77223ccb`/`064e3095`: Vorschau und Befund nennen Operation, betroffenen Körper und Rückweg einer Konvertierung; beide Körperarten erhalten gleichwertige Baumtexte. Der Agent prüft auch reine Projektparameteränderungen und übernimmt Konvertierungen nicht automatisch. Menü, Merkmalkarte, Gruppen, Platzierung, historische Zwillinge, Filament, Formen und Chat teilen die Prüfung von Auftrag, Dokumentstand, Auswahl und tatsächlich gezeichneter Vorschau. Entwicklungstor grün; Fensterregressionen und reale Kundenabnahme bleiben dem Release vorbehalten.
+  * **offen** P0.7 — Absturzprotokoll, Beschriftung beim Überfahren, zweiter Ort für `announce()`. Weitere Importe behalten gemäß Bauplan §17.1 ihre Dateilage und bieten bereits Aufsetzen mit eigener Undo-Transaktion an (`test_ui.py::test_the_finding_below_the_bed_is_one_click_from_being_fixed`); noch zu ergänzen sind der gemeinsame Versatz mehrteiliger Importgruppen und die übrigen Abnahmen, kein zweites Importband.
+  * **offen** P0.3 — gemeinsamer Maßeditor im Viewport: ein Entwurf, ✓/×, Enter/Escape, Vorschau, Zielumfang
+  * **offen** P0.4 — Referenzauswahl: echte Kanten, Mitten, Achsen; Bezugswechsel; keine Facetten und keine flüchtigen IDs als Bezug
+  * **offen** P1.2 — Kegel-, Kugel- und Torusfits gegen eigene Sollkörper
+  * **offen** P1.3 — `fits.check` mit Kollisionsprobe; grobe und unsichere Maße gekennzeichnet
+  * **offen** P1.6 — Analysekarte „Formabweichung“ aus den Fits
+  * **offen** P1.4 — Zuordnung räumlich vorsortiert, `FEATURE_LIMIT_COUNT` gemessen angehoben
+  * **offen** P1.5 — gemeinsamer Merkmalsvertrag und zusammengesetzte Erkennung an beiden Kernen
+  * **offen** P2.2 — `assign_slot`, `paint_slot` erhalten B-Rep und Filamentzuweisung über Tessellierung und Speicherung
+  * **offen** P2.4 — Senken, Verschließen, Verschieben/Drehen/Verdoppeln/Entfernen von Merkmalen exakt
+  * **offen** P2.5 — Gewindesteigung an importierter B-Spline-Geometrie
+  * **offen** P2.6 — Torus- und Gewindehandlungen, Gewinde verschließen, Filament, Gegenstück
+  * **offen** P2.7 — alle 31 konvertierenden Bausteinpfade exakt, 35er-Matrix, je Bausteingruppe ein Teilpaket
+  * **offen** P2.8 — Umschalten: die vier Kernwahl-Haken fallen, Aushöhlen nach Entscheidungstabelle, alte Projekte unverändert
+  * **offen** P3.1 — Ebenenvertrag: Versatz-, Dreipunkt- und Neigungsebene gehören der Skizze
+  * **offen** P3.2 — Rahmen, Referenzauflösung, Cache und Verwaisung über sämtliche Verbraucher
+  * **offen** P3.3 — „Neue Ebene …“ mit Art-Auswahl, Menüort vorher benannt
+  * **offen** P3.4 — Flächenkontur als eigene Handlung, Außen- und Innenränder
+  * **offen** P3.5 — exakter Ebenenschnitt über `BRepAlgoAPI_Section`
+  * **offen** P4.0 — Netz → exakter Körper ohne Verlauf: Segmentierung, Fits, Nähen, Formabweichung, STEP-Rundreise
+  * **offen** P4.1 — Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen
+  * **offen** P4.2 — Nachbau mit exakter Ausgabe und unabhängiger Formprüfung, ohne Fertigungskompensation
+  * **offen** P4.3 — geprüften Nachbau hinter dem Import atomar übernehmen
+  * **offen** P6.1 — variable Verrundung
+  * **offen** P6.2 — Fasen mit zwei Abständen oder Abstand/Winkel
+  * **offen** P6.3 — Aushöhlen mit gewählten Öffnungsflächen
+  * **offen** P6.4 — Formschräge an gewählten Flächen
+  * **offen** P6.5a — Schnitt durch Drehen; P6.5b — entlang Pfad; P6.5c — durch Überblenden
+  * **offen** P6.6a — Ellipse, Ellipsenbogen, Splines bearbeiten; P6.6b — zusätzliche Bedingungen
+  * **offen** P6.7 — Merkmalsmuster linear, kreisförmig, gespiegelt
+  * **offen** P7.1 — Verlaufsschritt einfügen; P7.2 — umsortieren; P7.3 — unterdrücken und reaktivieren
+  * **offen** P7.4 — STEP-Mehrkörperimport mit Namen, Farben und Instanzlagen
+  * **offen** P5.1 — Maßoperationen familienweise auf den Viewport-Editor, Panel-Doppel entfällt
+  * **offen** P5.2 — Auswahlmatrix am Fenster, kleines Fenster, HiDPI, Themen, Tastatur
+  * **offen** P5.3 — Gesamtabnahme auf Windows/macOS/Linux mit installierten Paketen — die Bedingung für das Hochladen
 
 <a id="rm-189"></a>
 

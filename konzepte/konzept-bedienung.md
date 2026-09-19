@@ -17,7 +17,9 @@ Stand 04./05.08.2026, nachrecherchiert am 19.08.2026.
 > Nutzers auf ein Fenster, das es so nicht mehr gibt.
 >
 > Die Einzelheiten stehen im Abschnitt „Nachrecherchiert am 19.08.2026" am
-> Dateiende.
+> Dateiende; „Nachgeprüft am 19.09.2026" darunter hält den Stand der vier
+> offenen Punkte fest. Seit demselben Tag sind sie Paket P0.7 des
+> CAD-Konzepts und stehen unter RM-188.
 
 Aus einem Lauf am echten Programm, 4. August 2026. Gestartet über
 `app.ui.app`, bedient über Maus und Tastatur; kein Aufruf über die API. Zum
@@ -1119,3 +1121,47 @@ daneben.
 Was das Protokoll insgesamt angeht, gilt der Satz von unten weiter: Ein
 Protokoll wird nicht dadurch aktuell, dass man seine Zahlen austauscht. Diese
 Zeilen sagen nur, was seither anders ist — den Lauf ersetzen sie nicht.
+
+---
+
+## Nachgeprüft am 19.09.2026
+
+Die vier Punkte unter „Teilweise", gegen den Arbeitsbaum am Stand
+`87273de06` gelesen ([Durchsicht](durchsicht-cad-konzepte-2026-09.md) §5):
+
+- **Import legt nicht auf die Platte — halb erledigt.** Die Vorgabe von
+  `place_on_bed` ist weiter `False` (`ingest/ops.py:89–93`), aber der
+  Importplan setzt für das **erste** Modell `{"place_on_bed": True,
+  "centre": True}` (`ingest/plan.py:246`). Das erste Teil liegt also auf dem
+  Bett, jedes weitere nicht. Die Zeilenangaben von oben (`ops.py:53–57`,
+  `loader.py:161`) sind veraltet.
+- **Absturzprotokoll — offen.** `excepthook` und `faulthandler` kommen in
+  `app/` weiterhin nicht vor.
+- **Merkmalsbeschriftung beim Überfahren — offen.** `always_visible=True`
+  steht heute in `viewport.py:8751–8760`.
+- **`announce()` — offen.** Schreibt in `_announcement` und die Statuszeile
+  und versteckt zusätzlich den `reveal_export`-Knopf
+  (`main_window.py:15358–15384`); ein zweiter sichtbarer Ort existiert nicht.
+
+**Präzisierung beim Anschluss am 20.09.:** Weitere Importe behalten ihre
+Dateilage gemäß Bauplan §17.1. Der Bericht bietet über `arrange.below_bed`
+beziehungsweise `arrange.above_bed` bereits das rücknehmbare Aufsetzen an.
+`test_ui.py::test_the_finding_below_the_bed_is_one_click_from_being_fixed`
+enthält ausdrücklich den zweiten Import und dessen Undo. Der alte
+Vorgabewert allein beweist deshalb keinen fehlenden Bedienweg. P0.7 führt
+die vorhandene Handlung für mehrteilige Importgruppen zusammen; ein
+zweites Importband ist nicht nötig. Die Fensterabnahme wird gemäß der
+dauerhaften Prüfregel ausschließlich beim Release ausgeführt.
+
+**Keiner der vier stand am Morgen des 19.09. in `ROADMAP.md`.** Nach der
+Regel dieses Verzeichnisses — offene Arbeit steht im Register und nirgends
+sonst — hat Robert am selben Tag entschieden: Alle vier werden abgearbeitet,
+als Paket **P0.7** des
+[CAD-Konzepts](konzept-vollwertiges-cad-2026-09.md) (§13.2, Reihenfolge
+§13.10), abgehakt unter [RM-188](../ROADMAP.md#rm-188) — nach 0.4.4, vor
+der darauffolgenden Version. Je Punkt fällt die Entscheidung im Paket;
+gestrichen wird nichts still.
+
+Zur Außenwelt: Fusions Listenpreis ist weiterhin 703 €/Jahr; die Seite zeigt
+im September 2026 eine Aktion mit 527 € für das erste Jahr. Die Privatnutzung
+bleibt kostenlos mit zehn aktiven Dokumenten.

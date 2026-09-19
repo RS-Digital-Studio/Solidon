@@ -1,26 +1,34 @@
 # Was Solidon zu einem vollwertigen CAD fehlt
 
-> **Entscheidungen vom 17.09.2026, technisch geprüft am 18.09.2026.**
-> Die sechzehn Entscheidungen in §14 bleiben bestehen; §14.1 ergänzt
-> Roberts Vorgabe vom 18.09.: direkt am Modell mit Maßfeldern und ✓/×.
+> **Sechste Fassung, 19.09.2026 — Start nach 0.4.4.** 0.4.3 ist veröffentlicht
+> (Tag `v0.4.3` auf `60f052d1`, 18.09.2026; Robert am 19.09.: „ist schon
+> draußen"). Die parallel laufenden Codeänderungen im Baum werden
+> abgeschlossen und als **0.4.4** veröffentlicht; **danach startet der Plan,
+> und er wird vollständig abgearbeitet, bevor die darauffolgende Version
+> hochgeladen wird** (Robert, 19.09.2026, §14.3).
+>
+> **Was verbindlich ist:** die Pakete in §13.2, ihre Voraussetzungen in §13.6,
+> die Reihenfolge in §13.10 und die Entscheidungen in §14. Alles andere —
+> §§2–12 und §§16–19 — belegt, warum die Pakete so geschnitten sind. Wer
+> abarbeitet, liest §13.10 und setzt den Stand je Paket in
+> [RM-188](../ROADMAP.md#rm-188).
+>
+> **Entscheidungen vom 17.09.2026, technisch geprüft am 18.09.2026, durchgesehen
+> am 19.09.2026.** Die sechzehn Entscheidungen in §14 bleiben bestehen; §14.1
+> ergänzt Roberts Vorgabe vom 18.09.: direkt am Modell mit Maßfeldern und ✓/×.
 > §14.2 beauftragt sämtliche zusätzlichen Ausbauideen; P6/P7 ordnen sie zu.
-> Teilfunktionen und
-> zwei vorgezogene Korrekturen sind bereits gebaut (§13); der weitere Ausbau ist geplant.
-> Prüfstand der Geometriesonden: `2148ddfa`; beim Git-Abgleich auf `6ea0575e`
-> blieben Anwendungscode und Tests unverändert. Der auf Wunsch abgebrochene
-> Torlauf ist in der Recherche protokolliert; keine vollständige Torfreigabe.
-> Historische Messungen vom 17.09. sind von den Nachweisen in §17 zu unterscheiden.
+> §14.3 nimmt die Empfehlungen der
+> [Durchsicht vom 19.09.](durchsicht-cad-konzepte-2026-09.md) auf: P0.0,
+> P0.7, P1.6, P4.0 und die Reihenfolge. Zwei vorgezogene Korrekturen sind
+> bereits gebaut (§13.2). Nach 0.4.4 ist P0.0 mit `cfc5e303` umgesetzt;
+> der laufende Paketstand steht in [RM-188](../ROADMAP.md#rm-188).
 >
-> **Der Plan bleibt als Ganzes gedacht und beginnt nach Veröffentlichung von
-> 0.4.3.** Diese beauftragte Durchsicht verbessert Konzept, Recherche und
-> Roadmap; sie beginnt keine Umsetzung und erklärt die Veröffentlichung nicht für erfolgt.
->
-> **Fünfte Fassung, voller Ausbau beauftragt.** Die Gegenprüfung der ersten Fassung steht in §16;
-> zusätzliche Korrekturen, Prüfgrenzen und Nachweise stehen in §§17–18.
-> §13 ergänzt die Paketgrenzen und Voraussetzungen für die Umsetzung.
-> Die [vertiefte Recherche](recherche-cad-paritaet-2026-09.md) belegt weitere
+> Prüfstand der Geometriesonden: `2148ddfa` (17./18.09.) und `87273de06`
+> (19.09., acht Sonden wiederholt, alle Kernbefunde halten — §19). Die
+> Gegenprüfung der ersten Fassung steht in §16; Korrekturen, Prüfgrenzen und
+> Nachweise in §§17–19. Die
+> [vertiefte Recherche](recherche-cad-paritaet-2026-09.md) belegt weitere
 > Lücken, Bibliotheksoptionen und eine begrenzte native Fensterprüfung.
-> Offene Arbeit wird in [RM-188](../ROADMAP.md#rm-188) geführt.
 
 ---
 
@@ -62,7 +70,7 @@ nicht unterstützte Geometrie wird begründet abgewiesen statt still umgedeutet.
 | | Zahl |
 |---|---|
 | Registrierte Operationen | **132** in 15 belegten Kategorien, **alle rücknehmbar** |
-| Bausteine | **35** in 6 Gruppen (AGENTS.md nennt noch 27 — veraltet) |
+| Bausteine | **35** in 6 Gruppen (die 27 in AGENTS.md beschreiben den am 03.09.2026 gefallenen Bereichstest und sind historisch richtig; veraltet ist der Docstring in `app/ui/panels.py:907`) |
 | Merkmalsarten am Netz | **12** (`FeatureKind`, `app/core/types.py:51`) |
 | Zwangsbedingungen im Skizzenlöser | **15** im Kern, 16 Namen in der Oberfläche |
 | Zeilen `geom` / `perceive` / `sketch` / `brep` / `ui` | 33 927 / 12 869 / 5 610 / 4 494 / 105 268 |
@@ -90,11 +98,11 @@ genannten 31 sind die damals geprüften netzerzeugenden Bausteinpfade.
 Nach der Gegenprüfung steht die Lage anders da als in der ersten Fassung. Drei
 Befunde tragen alles Weitere, und alle drei sind gemessen:
 
-**A — Die Einbahnstraße.** Von 132 Operationen halten **20** einen exakten
-Körper exakt, **3** verlangen ihn, **56** machen aus ihm ein Netz. Von diesen 56
-haben genau **zwei** einen exakten Zwilling; **54 haben keinen direkten Zwilling.** Der
-Weg zurück existiert nicht — `brep_to_mesh` ist die einzige benannte Tür, und
-sie führt nur hinaus.
+**A — Die Einbahnstraße.** Von 132 Operationen halten **19** einen exakten
+Körper exakt, **57** machen aus ihm ein Netz (Matrix vom 19.09. über alle
+132, §5). Von diesen 57 haben genau **zwei** einen exakten Zwilling;
+**55 haben keinen direkten Zwilling.** Der Weg zurück existiert nicht —
+`brep_to_mesh` ist die einzige benannte Tür, und sie führt nur hinaus.
 
 **B — Der exakte Kern ist blind, wo das Netz sieht.** Dieselbe Geometrie,
 beide Bauarten, gemessen:
@@ -266,11 +274,23 @@ keinen sicheren Nennwert aus einer beliebigen STL-Datei.
 
 Historische Stichprobe über `kind_of(produced.mesh)`, entsprechend dem
 Ausgabevergleich in `scene.evaluate`. Die Gruppen 20 + 3 + 56 decken nicht
-alle 132 Operationen ab. Für die Umsetzung ist deshalb eine vollständige
-Matrix je Eingabeart, Variante und Ausgabe anzulegen: erhalten, konvertiert,
-abgelehnt, ohne Geometrieausgabe oder nicht geprüft. `delete_object` ist etwa
-keine erfolgreiche geometrieerhaltende Ausgabe. Ein fehlender Zwilling
-beweist zudem nicht, dass kein mehrstufiger exakter Arbeitsweg möglich ist.
+alle 132 Operationen ab. **Die vollständige Matrix für den B-Rep-Eingang
+liegt seit dem 19.09. vor** (`.claude/.state/cad-durchsicht-2026-09-19/s8_matrix.py`,
+Durchsicht §2): je Operation ein frisches Dokument mit exaktem Quader und
+exakter Bohrung, dann die Operation mit ihren Vorgaben.
+
+| Ausgang | Ops | Was dahintersteht |
+|---|---:|---|
+| Netz | **57** | 31 Bausteine · 8 `mesh` (mit `brep_to_mesh`) · 7 `holes` · 3 `colour` · 3 `prepare` · 2 `transform` · `repair` · `bead_edges` · `apply_texture` |
+| exakt | **19** | die 15 geometrischen aus der Liste unten plus `shell_exact`, `arrange_bed`, `check_collisions`, `orient_for_print` |
+| angehalten | 21 | Pflichtparameter fehlte oder Geometrie nicht anwendbar; ohne Aussage zur Bauart |
+| erzeugt | 27 | Erzeuger ohne Eingang |
+| zwei Eingänge | 6 | die vier Booleschen, `replace_profile_liners`, `check_join_path` — noch nicht gefahren; P2.1 holt sie nach |
+
+Die Matrix wird in P0.0/P2.1 zum Test; jede neue Operation aus P6/P7 liefert
+ihre Zeile mit. `delete_object` ist keine erfolgreiche geometrieerhaltende
+Ausgabe. Ein fehlender Zwilling beweist zudem nicht, dass kein mehrstufiger
+exakter Arbeitsweg möglich ist.
 
 **Die historische Liste von 20 als „erhalten“ gezählten Operationen:** `chamfer_edges`,
 `check_join_path`, `delete_object`, `draft_faces`, `duplicate_object`,
@@ -279,8 +299,10 @@ beweist zudem nicht, dass kein mehrstufiger exakter Arbeitsweg möglich ist.
 `slot_hole`, `slots_from_texture`, `subtract_objects`, `translate_object`,
 `union_objects`.
 
-**56 machen ein Netz daraus.** Nach Kategorie: 31 Bausteine (`insert_*`),
-7 `holes`, 7 `mesh`, 3 `prepare`, 2 `transform`, 2 `colour`, 4 einzeln.
+**57 machen ein Netz daraus.** Nach Kategorie: 31 Bausteine (`insert_*`),
+7 `holes`, 7 `mesh`, 3 `prepare`, 2 `transform`, 3 `colour`, 4 einzeln
+(`brep_to_mesh`, `repair`, `bead_edges`, `apply_texture`). Die erste Fassung
+zählte 56; `clear_filament` fehlte.
 
 Drei davon sind keine Kernfrage, sondern Versehen:
 
@@ -291,9 +313,12 @@ Drei davon sind keine Kernfrage, sondern Versehen:
   Ungleichförmige Skalierung kann Kreise zu Ellipsen und analytische Flächen
   zu anderen Flächenarten machen. Merkmalsarten, Radien, Referenzen, Passungen
   und Materialzuordnung dürfen nicht unverändert vom Eingang übernommen werden.
-- **Zwei von drei Filamentoperationen ändern die Körperart nebenbei.**
-  `slots_from_texture` bleibt exakt; `assign_slot` und `paint_slot` machen ein
-  Netz — bei **unverändertem Volumen**. Für den Erhalt des B-Rep braucht es
+- **Drei von vier Filamentoperationen ändern die Körperart nebenbei.**
+  `assign_slot`, `paint_slot` und `clear_filament` machen ein Netz — bei
+  **unverändertem Volumen**. `slots_from_texture` tesselliert ebenfalls und
+  gibt den Solid nur zurück, weil er keine Textur trägt
+  (`geom/texture.py:229–231`); „bleibt exakt" ist dort ein Zufall, kein
+  Vertrag. Für den Erhalt des B-Rep braucht es
   zusätzlich einen Vertrag für die Filamentzuordnung zur Darstellung:
   erneute Tessellierung, Qualitätswechsel und Speichern dürfen die Bemalung
   nicht verlieren. Gleiches Volumen allein belegt diesen Erhalt nicht.
@@ -374,7 +399,8 @@ Gemessen:
   millimetergenau (Volumen 628,3185 = π·5²·8 exakt).
 - `sketch_pocket.z` ist eine Versatzebene für genau eine Operation — aber
   absolut gegen den Weltnullpunkt, nicht gegen eine Fläche.
-- `up_to`/`height_to` gibt es nur für `sketch_extrude`. Solidon hat damit die
+- `up_to` gibt es nur für `sketch_extrude` (`height_to` in `sketch/planes.py`
+  ist die Funktion, die den Parameter auflöst). Solidon hat damit die
   **zweite** Hälfte: das Ende ist referenzierbar, der Anfang nicht.
 
 Richtig ist deshalb: **Außer den drei Hauptebenen gibt es keine frei
@@ -409,7 +435,9 @@ weiterhin änderbar sein.
 | Torus, Gewinde, Hohlraum und Freiform aus **exakter Topologie erkennen** | unvollständig; erzeugte Gewinde sind bereits benannt | Ausbau gemäß §14; Aufwandshypothesen in §12 |
 | STEP-Baugruppenstruktur (XCAF: Namen, Farben, Baum) | fehlt | frei |
 | Verlauf: einfügen, umsortieren, zurückspulen, stummschalten | fehlt (nur ändern und löschen) | frei |
-| Mesh → exakte Geometrie | fehlt | **RM-022 offen** |
+| Mesh → exakter Körper **ohne Verlauf** (Segmentierung, Flächenfits, Nähen) | fehlt — Standard bei Fusion *Prismatic* und SolidWorks *Surface From Mesh* | **P4.0** |
+| Mesh → Konstruktion **mit Verlauf** (Nachbau) | fehlt | **RM-022**, P4.1–P4.3 |
+| Abweichungskarte Fit gegen Netz | fehlt; Näherungen nur als Satz | **P1.6** |
 | Baugruppen mit Hierarchie, Instanzen, lebenden Bedingungen | fehlt | **ausgeschlossen** (Robert, 17.09.2026 — §14 Nr. 1) |
 | Zeichnungsableitung mit Bemaßung | fehlt | **ausgeschlossen**; stehende Messbemaßungen im Viewport nach Bauplan §18.3 bleiben bestehen |
 | Ellipse, Tangente Bogen-an-Bogen | fehlt | Erweiterung von Solver, Editor, Profilbildung und Speicherung |
@@ -470,7 +498,17 @@ aber `ShapeUpgrade_UnifySameDomain` wurde damals nicht gefahren:
 
 Der Befund dreht sich: **Ebene Facetten zusammenzufassen kann OpenCASCADE
 allein.** Was es nicht kann, ist die Rundung zum Zylinder zu machen — alle
-Flächen bleiben eben. Analytische Parameter sind nur ein Teil der Rückgewinnung. Zusätzlich fehlen
+Flächen bleiben eben.
+
+**Gemessen war damit nur `UnifySameDomain`** (Durchsicht vom 19.09., §4).
+Was Fusion (*Face Groups* + *Prismatic*), SolidWorks (*Segment Imported Mesh
+Body* + *Surface From Mesh*) und FreeCAD (*Manual Segmentation*) tun, ist der
+Schritt davor: Facetten nach Nachbarschaft und Normalen zu Bereichen
+gruppieren, je Bereich eine Ebene, einen Zylinder, Kegel, Kugel oder Torus
+einpassen, dann beschneiden und nähen. Das ergibt einen exakten Körper mit
+analytischen Flächen und **ohne Verlauf** — STEP-fähig, mit den Merkmalen aus
+P2.3, ohne die Historie aus §8.2. Diese Zwischenstufe ist **P4.0** (§13.2)
+und geht dem Nachbau voraus; sie hebt weder §42 noch §15 Nr. 8 auf. Analytische Parameter sind nur ein Teil der Rückgewinnung. Zusätzlich fehlen
 passende Begrenzungen, Nachbarschaft, Schnitt- und Übergangskurven,
 Orientierung, Toleranzverteilung und Gültigkeitsprüfung des zusammengesetzten
 Volumens. Gerade tangentiale Anschlüsse werden nicht durch einen beliebigen
@@ -834,12 +872,12 @@ Machbarkeitsprüfung, besonders bei STEP-Gewinden und dem Nachbau.
 | OCP / OCCT | `cadquery-ocp-novtk==8.0.1.0.0`; enthaltene `ShapeAnalysis_CanonicalRecognition` erkennt im NURBS-STEP-Gegenbeispiel sechs Ebenen und Ø6-Zylinder | Diesen vorhandenen Weg zuerst anschließen; Trägerfläche, Bohrungssemantik und stabile Referenz getrennt prüfen. API-Sonde in Recherche §5.2 |
 | `planegcs` 0.8.0 | PyPI führt Wheels für CPython 3.12/3.13 auf Windows x64 und Linux x64 sowie ein Quellpaket; keine dort gelisteten 3.14-/macOS-Wheels | Kein unmittelbar passender Ersatz; Eigenbau wäre zu evaluieren, nicht grundsätzlich unmöglich |
 | `py-slvs` / SolveSpace | Nach Bauplan §30.1 wegen GPL ausgeschlossen | Kein geplanter Einsatz |
-| Analysis Situs | BSD-3-Clause; kanonische Umwandlung und attributierter Nachbarschaftsgraph dokumentiert; betrachteter Header hängt an Active Data | Reserve für belegte Restlücken des vorhandenen OCCT. Kein notwendiger Einbau für die bereits erfolgreiche API-Sonde; konkrete Quellteile, ABI und Plattformen offen |
-| Open3D 0.20.0 | Seit 16.09.2026 CPython-3.14-Wheels, auch Windows; Ebenensegmentierung ist keine vollständige CAD-Merkmalserkennung | Nur bei gemessenem Nutzen für Aufbereitung/Segmentierung; Paketumfang und Intel-macOS-Abdeckung prüfen |
+| Analysis Situs | BSD-3-Clause; kanonische Umwandlung und attributierter Nachbarschaftsgraph dokumentiert. **Keine Python-Bindings** (Skripting nur Tcl), Active Data ist als `src/asiActiveData` eingebettet und Basis des Datenmodells, gebaut gegen OCCT 7.6; die kanonische Erkennung arbeitet auf B-Rep, nicht auf Netzen | Keine Abhängigkeit, sondern eine **Quelltextportierung** einzelner Algorithmen gegen OCCT 8.0.1 — nur für belegte Restlücken des vorhandenen OCCT, mit Lizenzbeilage |
+| Open3D 0.20.0 | CPython-3.14-Räder für Windows x64, Linux x64/ARM64 (`manylinux_2_35`) und macOS **nur ARM64**; diese Ausgabe bietet für keine der gelisteten Python-Versionen Intel-macOS-Räder. Ein macOS-Quellbau ist dokumentiert, für Intel mit Python 3.14 hier aber nicht nachgewiesen | **Derzeit nicht aufnehmen:** gemeinsamer fertiger Paketweg und Korpusvorteil fehlen. Das ist kein Lizenzverbot und kein Beweis eines unmöglichen Eigenbaus; aktuelle Quellen und Eintrittsbedingungen in §13.8.1 |
 | `pyransac3d` | Apache-2.0; Zylinder-Code warnt vor unzureichender Realgeometrie-Erkennung und verwendet globalen Zufall | Nur Vergleichsbasis; eigene begrenzte Fits mit NumPy/SciPy bevorzugt prüfen. Keine fertige Bohrungssemantik, Zuordnung oder Rekonstruktion |
 | CGAL Shape Detection | Das betrachtete Paket ist GPL-lizenziert | Nach Projektregel 15 ausgeschlossen |
 | Point2CAD, CAD-Recode, CADFit, BRepNet | Lernende Rekonstruktion ist nach §15 kein Bestandteil dieses Vorhabens; BRepNet zusätzlich nichtkommerziell lizenziert | Keine geplante Produktabhängigkeit |
-| `mesh2cad` | Mindestens zwei verschiedene Projekte: `Sanaxen/mesh2cad` und `Danxtream/Mesh2CAD-Converter` | Keine gemeinsame Leistungsbehauptung; Lizenzkette, Formtreue und tatsächlicher parametrischer Nachbau nicht nachgewiesen |
+| `mesh2cad` | Drei verschiedene Projekte: `Sanaxen/mesh2cad` (MIT-Hauptprojekt, transitive Lizenzkette offen), `Danxtream/Mesh2CAD-Converter` (proprietäres Programm, Einbettungsrechte unbelegt) und `Matthewjg95/mesh2cad` (MIT, auf Platten/Gehäuse zugeschnitten, mit beschriebenen Geometrievereinfachungen) | Keine gemeinsame Leistungs- oder Lizenzbehauptung. Matthewjg95 ist eine Vergleichsbasis für P4.0, kein abgenommener Produktbaustein; Projektalter allein entscheidet die Eignung nicht. Einzelentscheidungen in §13.8.1 |
 
 Die [vertiefte Bibliotheksbewertung](recherche-cad-paritaet-2026-09.md#5-bibliotheken-konkrete-eignung-statt-sammelliste)
 enthält Primärquellen, Versionsabgleich, vorhandene Kernwerkzeuge,
@@ -869,7 +907,10 @@ von menschlichen Tagen in KI-Minuten wäre ebenso unbelegt.
 
 | Bereich / Pakete | Vorhandene Grundlage | Was den Aufwand bestimmt |
 |---|---|---|
+| Vorgezogene Korrekturen, P0.0 | `_carried_along` und der Drehungsfix `5ad173de6`; `moved_features` | Spiegelung wie die Drehung nachführen; nach nicht starrer Transformation keine mitgeführten alten Merkmale neben frisch erkannten — auf beiden Kernen, Undo und Cache mitprüfen |
+| Reste des Bedienprotokolls, P0.7 | `report.py`, Merkmalsbeschriftung, `announce()`, Importplan | Vier kleine, getrennte Eingriffe mit je einer Entscheidung; kein gemeinsamer Vertrag nötig |
 | Maßeditor und sinnvolle Bezüge, P0.3/P0.4/P5.1 | Platzierungs- und Zugfelder; Oberflächenreferenzen | Einheitlicher Entwurf, ✓/×, Fokus, Tastatur, Mehrfachziel, Überdeckung und stabile Referenz während der Vorschau |
+| Abweichungskarte, P1.6 | Analysekarten nach Bauplan §18.4, Fits aus P1 | Abstand je Facette zur eingepassten Fläche, Legende, Zahlenbereich, Klick aus dem Prüfbericht; muss die Fits aus P1.1/P1.2 lesen, nicht selbst rechnen |
 | Maße/Fits/Zuordnung, P1.1–P1.4 | NumPy/SciPy und vorhandene Erkenner | Teilflächen, Rauschen, grobe Facetten, echte Polygone, Mehrdeutigkeit, Laufzeit und Speicher bei vielen Merkmalen |
 | Skalieren/Spiegeln, P2.1 | OCCT-Transformationen | Ungleichförmige Skalierung verändert Merkmalsarten; alte Maße, doppelte Merkmale und Referenzen müssen auf beiden Kernen korrekt bleiben |
 | Filamentzuordnung, P2.2 | Vorhandene Zuweisungen | Flächenzuordnung nach neuer Tessellierung, Qualitätswechsel und Speicherung |
@@ -878,7 +919,8 @@ von menschlichen Tagen in KI-Minuten wäre ebenso unbelegt.
 | Importgewinde und Handlungen, P2.5/P2.6 | Eigene Gewindeerzeugung, `counterpart.py` | Geometrische Steigung ohne Erzeugerwissen, Händigkeit, Teilgewinde und Gegenstückplatzierung; hoher Verfahrensanteil |
 | Bausteine, P2.7 | 35 Bausteine, davon 31 in der untersuchten Folge konvertierend | Je Familie exakte Werkzeuge, Attribute, Merkmale, Passungen und Bereichsprüfung; kein einzelner Massenersatz |
 | Ebenen/Projektion, P3 | Skizzenlöser, OCCT-Schnitt, Konturen | Bezugserhalt über den gesamten Verlauf und fachlich getrennte Flächenkontur-/Schnittwege |
-| Nachbau, P4 | Primitive, Boolesche Operationen, erkennbare Merkmale | Konkurrierende Konstruktionen, unbekannte Restform und unabhängige lokale Formprüfung; hoher Verfahrensanteil |
+| Exakter Körper ohne Verlauf, P4.0 | OCCT-Nähen, `UnifySameDomain`, `ShapeFix`, Fits aus P1, Nachbarschaft aus `perceive` | Bereichsbildung mit Toleranzen und Handkorrektur, Beschneiden der Flächen an den Bereichsgrenzen, tangentiale Übergänge, Gültigkeit des genähten Volumens; Standardfunktion bei Fusion und SolidWorks, aber kein fertiger Baustein in OCCT |
+| Nachbau, P4.1–P4.3 | Primitive, Boolesche Operationen, erkennbare Merkmale, P4.0 als Kandidatenquelle | Konkurrierende Konstruktionen, unbekannte Restform und unabhängige lokale Formprüfung; hoher Verfahrensanteil |
 | Zusätzliche Konstruktion, P6 | Konstante Verrundung/Fase, Aushöhlen, Formschräge und erzeugende Skizzen-Ops | Variable Maße, gewählte Flächen, abtragende Formwerkzeuge, zusätzliche Kurven/Bedingungen und Merkmalsmuster auf beiden Körperarten |
 | Verlauf und STEP-Metadaten, P7 | Linearer Operationsverlauf und STEP-Geometrieimport | Abhängigkeiten, dauerhafte Identitäten, additive Speicherung/Migration, Mehrkörperzuordnung sowie Namen und Farben |
 
@@ -898,19 +940,29 @@ definitionsgemäß Netze und sind kein Paritätsbruch.
 
 ## 13. Der Umsetzungsplan
 
-**Beginn nach bestätigter Veröffentlichung von 0.4.3.** Ein Tag oder ein
-gebautes Paket allein erfüllt diese Voraussetzung nicht. Der gesamte
-beschlossene Umfang bleibt erhalten; „am Stück abarbeiten“ bedeutet eine
-Folge überprüfbarer Pakete, keinen einzigen großen Umbau.
+**0.4.3 ist veröffentlicht** — Tag `v0.4.3` auf `60f052d1` vom 18.09.2026,
+`version.json` auf dem Server zeigt 0.4.3, Robert hat es am 19.09. bestätigt.
+**Der Plan startet nach 0.4.4:** Die parallel laufenden Codeänderungen im
+Baum werden abgeschlossen und als 0.4.4 veröffentlicht — bestätigt wie
+0.4.3 über Tag, `version.json` auf dem Server und Roberts Wort. Danach **wird
+der gesamte Umfang abgearbeitet, bevor die darauffolgende Version hochgeladen
+wird** (Robert, 19.09.2026, §14.3): keine weitere Zwischenveröffentlichung,
+keine Auswahl. „Am Stück abarbeiten“ bedeutet eine Folge überprüfbarer
+Pakete in der Reihenfolge aus §13.10, keinen einzigen großen Umbau.
 
 ### 13.1 Verträge und Koexistenz
 
 Vor Implementierung eines Pakets werden seine Aufrufer, parallelen Kernpfade,
 Cache-, Speicher- und UI-Verbraucher am dann aktuellen Stand erfasst.
 Jedes Paket endet mit den betroffenen Tests, aktualisierter Doku und vor
-seinem Commit dem vollständigen Tor. Geplant ist ein Commit je Paket.
-Robert hat für diese Dokumentdurchsicht am 18.09. Commit und Push ausdrücklich
-beauftragt; das ist kein Start der beschriebenen Implementierungspakete.
+seinem Commit dem vollständigen Entwicklungstor. Fensterdateien und
+Leistungsprüfungen laufen ausschließlich beim Release (Roberts dauerhafte
+Prüfregel vom 19.09.2026); ihre Abnahmepunkte werden weiter implementiert
+und bis dahin ausdrücklich als ungeprüft geführt. Geplant ist ein Commit
+je Paket.
+Robert hat für die Dokumentdurchsicht am 18.09. Commit und Push ausdrücklich
+beauftragt; das war noch kein Start der Implementierungspakete. Der Start
+folgt auf die Veröffentlichung von 0.4.4 (§14.3).
 
 **Additiv → umschalten → abbauen:** Neue Kernzweige und Ebenenparser werden
 zunächst neben den alten aufgebaut. P2.8 ist das benannte Umschaltpaket für
@@ -935,24 +987,29 @@ dabei übernommen, nicht erneut zur Wahl gestellt.
 ### 13.2 Pakete und überprüfbare Ergebnisse
 
 S/L/XL sind relative Größen, keine Tagesangaben. Alle noch nicht
-implementierten Pakete stehen auf **geplant**; die beiden historischen
-Korrekturen folgen unter der Tabelle. Jeder Tabellenpunkt umfasst Kernweg,
-sämtliche Eingabewege, Übersetzungen und die jeweils betroffene Doku.
+implementierten Pakete stehen auf **geplant**; abgehakt wird in
+[RM-188](../ROADMAP.md#rm-188), die Reihenfolge steht in §13.10. Die beiden
+historischen Korrekturen folgen unter der Tabelle. Jeder Tabellenpunkt
+umfasst Kernweg, sämtliche Eingabewege, Übersetzungen und die jeweils
+betroffene Doku.
 
 | Paket / Status | Umfang | Ergebnis und verpflichtende Abnahme |
 |---|---|---|
-| P0.1 / geplant | S | Positions-Dreier bleibt zusammen; Einzahltexte in Quelle und allen Katalogen; gesperrte Knöpfe erklären ihren Grund; leere Skizze antwortet. Vier Fälle aus §9.6 am tatsächlichen Bedienort prüfen |
-| P0.2 / geplant | L | Konvertierung im Vorschauband vor Übernahme, Operation und Rückweg im Befund; Baumzeile bezeichnet beide Körperarten gleichwertig oder keine. Kein neuer Bestätigungsdialog |
+| P0.0 / umgesetzt, `cfc5e303` | S | **Vorgezogene Korrekturen:** Spiegelung führt die Merkmale nach; nach nicht starrer Transformation stehen keine alten Merkmale neben den frisch erkannten. Gemeinsame Nachführung von Lage, Normalen, Maßen und belegter Gewindehändigkeit für Netz und B-Rep; Muster, Passungen, Undo, Cache und Wiederöffnung sind durch Regressionen gedeckt. Ausgangsbefunde waren sechs verlorene Spiegelmerkmale und 12 statt 6 Flächen nach Skalierung. Die Sonden `s2_mirror_scale.py` und `s8_matrix.py` aus `.claude/.state/cad-durchsicht-2026-09-19/` sind in Regressionstests überführt. Die exakte Skalierung selbst bleibt P2.1; laufender Abnahmestand in RM-188. |
+| P0.1 / implementiert, Release-Abnahme offen | S | `064e3095`: Positions-Dreier bleibt zusammen; Einzahltexte in Quelle und allen Katalogen; gesperrte Knöpfe erklären ihren Grund; leere Skizze antwortet. Entwicklungstor grün; vier Fälle aus §9.6 am tatsächlichen Bedienort beim Release prüfen |
+| P0.2 / implementiert, Release-Abnahme offen | L | `77223ccb`/`064e3095`: Konvertierung im Vorschauband vor Übernahme, Operation und Rückweg im Befund; gleichwertige Baumtexte. Gemeinsame Freigabe des tatsächlich gezeichneten aktuellen Auftrags für sämtliche Eingabewege, kein neuer Bestätigungsdialog. Entwicklungstor grün; Fensterregressionen und Kundenabnahme beim Release |
 | P0.3 / geplant | L | Gemeinsamen Maßeditor nach §10.2 additiv aufbauen: ein Entwurf, ✓/×, Enter/Escape, Vorschau und Zielumfang. Vorhandene Platzierungs-/Zugfelder nutzen; Fokusverlust schreibt nicht, Enter schreibt nur einmal. Noch kein paralleles zweites Eingabesystem |
 | P0.4 / geplant | L | Referenzauswahl nach §10.3: echte Kanten/Mitten/Achsen, verständlicher Maßbezug und direkter Bezugswechsel. Unerkanntes Kreisloch gegen kleinen echten Ausschnitt prüfen; Bezüge beim Tippen/Ziehen stabil halten und fast parallele Kombinationen ablehnen. Keine flüchtige Kandidaten-ID als gespeicherter Bezug |
-| P0.5 / geplant | L | Technische Zuordnung nach §13.8 festlegen: je benötigter Fähigkeit vorhandene Funktion, Eigenentwicklung oder begründet gewählte Ergänzung mit Korpus und Abnahme benennen. Offene Machbarkeit als Vorversuch des jeweiligen Fachpakets ausführen. Alle recherchierten Kandidaten erhalten eine Entscheidung; nicht jede Alternative wird eingebaut |
-| P0.6 / bedarfsabhängig | L | Falls P0.5 einen nativen Baustein begründet: schmale Python-/Cython-/C++-Schnittstelle, Datenbesitz, float64, Abbruch und Fehlervertrag additiv aufbauen. Zuerst Referenzrechnung und ein installierbarer Bau für alle Zielplattformen. Kein Umschalten vor Gleichwertigkeitsnachweis; ohne belegten Bedarf begründet als nicht erforderlich schließen |
+| P0.5 / Auswahl dokumentiert | L | Werkzeugentscheidungen und Eintrittsbedingungen stehen in §13.8.1; alle recherchierten Kandidaten sind zugeordnet. Das belegt die Auswahl, nicht die Machbarkeit aller Fachpakete. Deren konkrete Gegenfälle, Vorversuche und Abnahmen bleiben verpflichtend; laufender Stand in RM-188 |
+| P0.6 / derzeit keine zusätzliche Infrastruktur erforderlich | L | Vorhandenen Cythonweg weiterverwenden (§13.8.1). Es ist noch kein Bedarf für einen weiteren nativen Baustein belegt. Belegt ein Fachpaket später eine Lücke, folgen schmale Schnittstelle, Datenbesitz, float64, Abbruch, Referenzvergleich und installierbarer Bau für alle Zielplattformen. P5.3 bleibt offen |
+| P0.7 / geplant | S | **Reste des Bedienprotokolls vom 04.08.** ([konzept-bedienung.md](konzept-bedienung.md), Nachtrag 19.09.): Absturzprotokoll über `faulthandler` und `sys.excepthook` in den Fehlerbericht (`report.py`, Regel: schreibt, sendet nie); Merkmalsbeschriftung beim Überfahren statt nur dauerhaft (`always_visible`); `announce()` erhält einen zweiten sichtbaren Ort am Handlungsort, die Statuszeile bleibt; `place_on_bed` beim Import auch für weitere Modelle nach einer festgehaltenen Regel — heute nur das erste (`ingest/plan.py:246`), als eigener rücknehmbarer Schritt. Je Punkt eine Entscheidung im Paket, keine stille Streichung; Fenster und Tastatur am echten Fenster abnehmen |
 | P1.1 / geplant | L | Zylinder-Maßvertrag und Fit nach §4, einschließlich Kontur statt Schwerpunkt, Achse, Teilabdeckung, Unterteilung und bewusst polygonaler Gegenformen |
 | P1.2 / geplant | XL | Kegel-, Kugel- und Torusfits jeweils gegen eigene Sollkörper; Radien, Lage, Achsen und Winkel prüfen. Fehlklassifikationen dürfen nicht durch gelockerte Tests verdeckt werden |
 | P1.3 / geplant | L | `fits.check` mit gleicher und ungleicher Facettierung plus unabhängiger Kollisionsprobe; grobe/unsichere Maße verständlich kennzeichnen, keinen Nennwert erraten |
 | P1.4 / geplant | XL | Zuordnung räumlich vorsortieren und `FEATURE_LIMIT_COUNT` anhand Laufzeit/Spitzenbedarf erhöhen. Mehr als 1000 Merkmale behalten IDs über Änderungen, Cache und Wiederöffnung; dichte/symmetrische Fälle erhalten korrekte Mehrdeutigkeit statt eines zufälligen Partners |
 | P1.5 / geplant | XL | Gemeinsamen Merkmalsvertrag und zusammengesetzte Erkennung aus Recherche §§3/5.4 an beide Kerne anschließen: Trägerflächen, Innen/Außen, Nachbarschaft, Teilabdeckung, Maßherkunft und Unsicherheit. Bohrung/Senkung/Langloch, angeschnittene und überlappende Merkmale sowie kleine echte Merkmale prüfen. Auswahl, Maßbezüge, Agent und Operationen lesen dasselbe Ergebnis; widersprüchliche Kandidaten nie still zu einem sicheren Merkmal machen |
-| P2.1 / geplant | L | `scale_object`, `fit_to_size`, Spiegelung exakt; Maße und Referenzen auf beiden Kernen nachführen. Die in §18 belegten Doppelmerkmale und alten Flächeninhalte müssen auch auf dem bestehenden Netzweg verschwinden. Ungleichförmige Skalierung eines Kreises darf keine unveränderte Kreis-/Bohrungskennung mit altem Radius hinterlassen |
+| P1.6 / geplant | L | **Analysekarte „Formabweichung“** nach Bauplan §18.4: Abstand jeder Facette zur eingepassten Fläche ihres Merkmals, mit Legende, Zahlenbereich und Klick aus dem Prüfbericht; liest die Fits aus P1.1/P1.2, rechnet nichts Eigenes. Das ist die zweite Kodierung (Regel 18) für jede als Näherung ausgewiesene Zahl — Onshape (*Constrained Surface*) und Geomagic zeigen dieselbe Abweichung. Abnahmehilfe für P1.1–P1.3 und Formprüfung für P4.0/P4.2; Sollkörper mit bekannter Facettierung, Ausreißer und ein bewusst polygonales Loch als Gegenfälle |
+| P2.1 / implementiert, Release-Abnahme offen | L | `77223ccb`: `scale_object`, `fit_to_size`, Spiegelung und weitere affine Wege erhalten exakte Körper; Maße und native Flächenbezüge werden nachgeführt. Ungleichförmige Skalierung hinterlässt keine falsche Kreis-/Bohrungskennung. Die Bauart-Matrix umfasst alle 132 Operationen einschließlich gemischter Boolescher Eingänge; eine tatsächliche Konvertierung wird benannt und über P0.2 vor Übernahme gezeigt. Abbrechbare Integrale, Cache, Undo und Wiederöffnung sind im grünen Entwicklungstor enthalten; Fenster und installierte Zielplattformen bleiben Release-Abnahme |
 | P2.2 / geplant | L | `assign_slot`, `paint_slot` erhalten B-Rep und Filamentzuweisung über Qualitätswechsel, neue Tessellierung und Speicherung; gleiches Volumen allein genügt nicht |
 | P2.3 / geplant | L | `void`, `torus`, `curved_face` im exakten Kern mit derselben fachlichen Bedeutung wie am Netz. Hohlraum/Tasche, ganzer/angeschnittener Torus, Freiform/analytische B-Splines und Nahtteilungen getrennt prüfen. Die gültige NURBS-STEP-Platte aus §18 muss sechs Flächen und eine Bohrung liefern; eine Formänderung findet nie still in der Erkennung statt |
 | P2.4 / geplant | XL | Senken, Verschließen und Verschieben/Drehen/Verdoppeln/Entfernen von Merkmalen exakt. Die Unterstützung aller bisher akzeptierten Merkmalsarten prüfen, nicht nur `fill_bore` auf einem zylindrischen Loch |
@@ -965,12 +1022,13 @@ sämtliche Eingabewege, Übersetzungen und die jeweils betroffene Doku.
 | P3.3 / geplant | L | Ein Eintrag „Neue Ebene …“ mit Art-Auswahl, alle drei Arten und Vorschau. Dreipunktebene anfangs mit Weltkoordinaten und ausdrücklichem Hinweis auf fehlende Körperbindung; Bedienung auf beiden Kernen |
 | P3.4 / geplant | L | Flächenkontur als eigene Handlung: Außen- und Innenränder, B-Rep-Drähte und Netzränder; Schnitt bleibt eigener Weg. Kreise aus exakten Kurven beziehungsweise belegten Netzmerkmalen mit ausgewiesener Näherung |
 | P3.5 / geplant | L | Exakten Ebenenschnitt über `BRepAlgoAPI_Section` anschließen und Kontur-/Schnittweg unterscheiden. Ebenen- und Konturänderungen, Undo/Redo, Speicherung und Wiederöffnung am echten Editor abnehmen |
-| P4.1 / geplant | XL | Nachbaukandidaten aus belegten Grundvolumen, Aufträgen und Abzügen erzeugen. Stützebenen allein rekonstruieren keine beliebige konkave Grundform; mehrdeutige Rollen von `pin` ausdrücklich auflösen |
+| P4.0 / geplant | L | **Netz → exakter Körper ohne Verlauf:** Facetten nach Nachbarschaft und Normalen zu Bereichen gruppieren (Winkel- und Abstandstoleranz, Handkorrektur der Bereiche am Modell wie Fusions *Face Groups*), je Bereich Ebene/Zylinder/Kegel/Kugel/Torus mit den Fits aus P1 einpassen, Flächen an den Bereichsgrenzen beschneiden, nähen, `UnifySameDomain`, `ShapeFix`, Gültigkeit prüfen. Ergebnis: ein exakter Körper mit analytischen Flächen und den Merkmalen aus P2.3, **ohne Konstruktionsverlauf** — ausgewiesen als solcher, Formabweichung über P1.6 sichtbar, Original bleibt hinter dem Schritt erhalten, ein Undo. Kundenweg: importierte STL als STEP weitergeben. Abnahme am Korpus (`plate_holes`, `block_with_rounded_edge`, `post_with_fillet`, `torus_ring`, `dense_cylinder`): gültiger Solid, Flächenarten, Maße, beidseitige Formabweichung, STEP-Rundreise; Bereiche ohne sichere Einpassung bleiben Freiform oder werden mit Grund abgelehnt, nie still geglättet. Menüort vor dem ersten Schritt benennen (§9.5) |
+| P4.1 / geplant | XL | Nachbaukandidaten aus belegten Grundvolumen, Aufträgen und Abzügen erzeugen — P4.0 liefert die Kandidatenquelle mit belegten Flächen. Stützebenen allein rekonstruieren keine beliebige konkave Grundform; mehrdeutige Rollen von `pin` ausdrücklich auflösen |
 | P4.2 / geplant | XL | Nachbau ausschließlich mit exakter Ausgabe und unabhängiger Formprüfung nach §13.5; unbekannte Geometrie nicht weglassen. Keine Fertigungskompensation beim Kopieren erkannter Maße |
 | P4.3 / geplant | L | Geprüften Nachbau hinter dem Import atomar übernehmen, importiertes Netz verbrauchen, Herkunft und nicht übertragbare Attribute ausweisen. Eine Transaktion einschließlich neuer Parameter; Undo stellt Originalzustand wieder her |
 | P5.1 / geplant | XL | Maßoperationen nach §10.2 und §14.1 familienweise auf direkten Viewport-Editor umstellen: Bohrung/Platzierung → Bewegen/Drehen/Skalieren → weitere Merkmals-/Form-/Bausteinmaße. Nach bestandener Paritätsprobe die zugehörigen Panel-/Dialogeingaben entfernen. „Auf alle“ unter dem Feld, vollständige Sammelvorschau, ein Undo. Jede passende Handlung bleibt einmal erreichbar; fehlende Handlung erklären |
 | P5.2 / geplant | L | Vollständige Auswahlmatrix Körper/Merkmal, Netz/B-Rep am Fenster abnehmen, Hauptwege bei geschlossenem Panel, ✓/× und Enter/Escape, Sammelziele, Abbruch und Undo. Kleines Fenster, HiDPI, hell/dunkel, lange Texte und Tastatur; Oberflächengrenzen bleiben grün |
-| P5.3 / geplant | L | **Gesamtabnahme nach P6/P7:** installierten Umfang auf Windows/macOS/Linux prüfen: neue OCP-Aufrufe, gewählte Bibliotheken und eigene native Module, Lizenzen, Datenrundreise und Fehlermeldungen. Zehn Kundenwege aus Recherche §4.3 und Zusatzwege aus §13.9 vollständig durchführen; Erstnutzerprüfung und verbleibende Grenzen dokumentieren. Keine automatische Veröffentlichung; Entwicklungsläufe ersetzen diesen Paketnachweis nicht |
+| P5.3 / geplant | L | **Gesamtabnahme nach P6/P7 — die Bedingung für das Hochladen der nächsten Version:** installierten Umfang auf Windows/macOS/Linux prüfen: neue OCP-Aufrufe, gewählte Bibliotheken und eigene native Module, Lizenzen, Datenrundreise und Fehlermeldungen. Zehn Kundenwege aus Recherche §4.3 und Zusatzwege aus §13.9 vollständig durchführen; Erstnutzerprüfung und verbleibende Grenzen dokumentieren. Keine automatische Veröffentlichung; Entwicklungsläufe ersetzen diesen Paketnachweis nicht |
 | P6.1 / geplant | XL | Variable Verrundung: Radiuswerte an dauerhaft referenzierten Stellen einer Kante/Kantenkette, Verlaufsvorschau und direkte Maßänderung. Unabhängige Querschnitte prüfen Sollradien, Übergänge und maximale Netzabweichung; unmögliche Radien erzeugen einen Handlungsvorschlag, keine Teiländerung |
 | P6.2 / geplant | L | Fasen mit zwei Abständen oder Abstand/Winkel ergänzen. Bezugsseiten im Viewport kenntlich machen und tauschen; auf schrägen sowie gekrümmten Nachbarflächen Schnittmaße und Winkel prüfen. Bestehende Ein-Abstand-Fasen behalten ihre Bedeutung |
 | P6.3 / geplant | XL | Aushöhlen mit einer oder mehreren frei gewählten Öffnungsflächen, Wandmaß und Richtung. Öffnungen und Innenraum auf Netz/B-Rep prüfen, ungewählte Flächen erhalten; geschlossenes Aushöhlen und vorhandene Entlüftungswege bleiben bedienbar. Dünne/konkave Körper und kollidierende Innenwände als Gegenfälle |
@@ -1004,7 +1062,8 @@ zusätzlichen Funktionen vollständig abgeschlossen.
 
 **Bereits erledigt, kein neuer Bauauftrag:** `CYLINDER_SPREAD`
 (`9c54ee1de`) und Merkmale bei starrer Drehung exakter Körper (`5ad173de6`).
-Die exakte Spiegelung ist davon nicht mitbehoben (§17).
+Die exakte Spiegelung ist davon nicht mitbehoben (§17, am 19.09. erneut
+gemessen) — sie ist P0.0.
 
 ### 13.3 Besondere Verträge der Ebenen
 
@@ -1115,15 +1174,17 @@ dürfen nicht ohne gültige Zuordnung auf das Ergebnis umgebogen werden.
 Herkunft und ursprüngliche Quelldaten bleiben erhalten. Neue Modellierung
 begründet keine neuen Nutzungsrechte. Filamentzuweisung, geschützte Nähte
 und andere nicht übertragbare Attribute werden am jeweiligen Modell vor
-Übernahme genannt. RM-022 wird beim Start dieses Pakets wie beschlossen
-neu gefasst; die heutige Dokumentdurchsicht ändert das Register nicht.
+Übernahme genannt. RM-022 ist am 19.09.2026 wie beschlossen neu gefasst:
+P4.0 bis P4.3, Umsetzung nach 0.4.4 im Rahmen des Plans.
 
 ### 13.6 Abhängigkeiten und Nachweis je Paket
 
 | Voraussetzung | Verbraucher |
 |---|---|
-| Veröffentlichung 0.4.3 bestätigt | alle Implementierungspakete |
-| P0.1–P0.4 | Bediengrundlagen können unabhängig von der neuen Geometrie aufgebaut werden; vollständige Merkmalsbezüge zusätzlich gegen P1.5 abnehmen |
+| Veröffentlichung 0.4.3 — **erfüllt** (Tag 18.09., Server und Robert 19.09.); **Veröffentlichung 0.4.4** aus den parallel laufenden Codeänderungen — offen | alle Implementierungspakete |
+| P0.0 | zuerst; seine Sonden werden die Regressionstests, auf die P2.1 aufsetzt |
+| P0.1–P0.4, P0.7 | Bediengrundlagen können unabhängig von der neuen Geometrie aufgebaut werden; vollständige Merkmalsbezüge zusätzlich gegen P1.5 abnehmen |
+| P1.1/P1.2: Fits | P1.6 liest sie; P4.0 passt mit ihnen ein |
 | P0.5: Zuordnung und Vorversuche | je Fachpaket vor seiner Implementierung; keine Pflicht, alle Alternativen einzubauen |
 | P0.6, falls benötigt | native Umsetzung im betreffenden Fachpaket; keine zweite fachliche Wahrheit neben der Referenzrechnung |
 | P1.1–P1.3: Maßvertrag und Fits | P2-Merkmalshandlungen und P4-Formprüfung |
@@ -1131,8 +1192,10 @@ neu gefasst; die heutige Dokumentdurchsicht ändert das Register nicht.
 | P1.5: gemeinsamer Merkmalsvertrag | P0.4-Endabnahme, P2-Handlungen und P4-Kandidaten; P2.3 liefert dazu die B-Rep-Trägererkennung |
 | P2.1–P2.7 und Handlungsmatrix grün | P2.8: Kernwahl-Haken entfernen |
 | P3.1: gespeicherter Ebenenvertrag | P3.2–P3.5; Parser allein genügt nicht |
+| P4.0: Bereiche, Fits, genähter gültiger Körper | P4.1–P4.3: der Nachbau nimmt die belegten Flächen als Kandidatenquelle |
 | passende exakte Erzeuger, Maßvertrag und unabhängige Formprüfung | P4-Übernahme; keine Pflicht, zuvor sämtliche Skizzenfunktionen zu verbrauchen |
 | P2- und P6/P7-Handlungen festgelegt | P5 endgültige Gliederung; Entwurf und bestehende Bedienfehler können früher geprüft werden |
+| **P2.8 grün** (Umschaltpaket) | **jedes P6- und P7-Paket** — kein neues Werkzeug entsteht, solange die bestehenden 57 noch in zwei Welten leben (§13.10) |
 | P0.3/P0.4 und stabile Auswahl-/Merkmalsverträge | P6.1–P6.4 und P6.7: derselbe direkte Eingabeweg für Netz/B-Rep |
 | P3-Ebenen-/Profilvertrag und vorhandene Erzeuger | P6.5a–P6.5c; P6.6a danach mit sämtlichen erzeugenden und schneidenden Verbrauchern abnehmen |
 | P6.6a-Kurvenvertrag | P6.6b-Bedingungen und Löser; keine Solverablösung ohne Vergleich aus §13.8 |
@@ -1163,14 +1226,18 @@ Verpflichtende direkte Anschlussprüfungen je Gebiet:
 | P7 | `test_history.py`, `test_orphans.py`, `test_project.py`, STEP-Korpus und Attributtests; echte Verlaufseingabe und Importauswahl zusätzlich |
 
 Die 3,2-Millionen-Dreiecke-Probe bleibt ein gesonderter Leistungsnachweis
-mit Laufzeit und Spitzenbedarf. Sie wird nicht als teurer Standardfall an
-jede kleine Änderung gehängt. Die bestehende Regression bis 815 104 bleibt;
+mit Laufzeit und Spitzenbedarf ausschließlich beim Release. Auch andere
+Leistungsprüfungen und sämtliche Fensterdateien werden erst beim Release
+ausgeführt. Die bestehende Regression bis 815 104 bleibt;
 die Anwendungsgrenze aus RM-042 ist unabhängig von einem direkten
 Erkennungsaufruf zu prüfen. Bei P1.4 ist auch der ungünstige Fall räumlich
 dichter und symmetrischer Merkmale zu messen.
 
-Vor jedem Paketcommit gilt das vollständige Tor über den Skill
-`pruefen`; ein roter Schritt wird nicht auf den nächsten gestapelt.
+Vor jedem Paketcommit gilt das vollständige Entwicklungstor über den Skill
+`pruefen`: alle Kernprüfungen ohne Fensterdateien und Leistungsprüfungen,
+dazu Ruff, Format und mypy. Ein roter Schritt wird nicht auf den nächsten
+gestapelt. Das erweiterte Tor einschließlich Fensterdateien und getrenntem
+Leistungsnachweis gehört ausschließlich zum Release.
 Testzahlen und Exit-Codes werden erst nach dem jeweiligen Lauf eingetragen.
 Offscreen prüft keine gerenderte Auswahl und keine tatsächliche
 Zeigerbedienung; die Fensterabnahme und neue OCP-Imports im gebauten Paket
@@ -1244,6 +1311,82 @@ zugehörigen Paket abgeschlossen, nicht auf unbestimmte spätere Forschung
 verschoben. Der aktuelle Arbeitsstand bleibt unter RM-188 beziehungsweise
 für den Nachbau unter RM-022 geführt.
 
+#### 13.8.1 Werkzeugentscheidung aus P0.5
+
+**Entscheidungsstand 20.09.2026:** Die folgende Auswahl konkretisiert die
+Fähigkeitsmatrix darüber; sie ersetzt weder ihre Produktziele noch die
+Machbarkeitsnachweise der Fachpakete. „Reserve“ bedeutet einen benannten
+Vergleich bei einer belegten Lücke, keine gestrichene Funktion. Kein Kandidat
+wird allein aufgrund einer API-Beschreibung aufgenommen. Für neue Fremdteile
+bleiben genaue Revision, transitive Lizenzen und Beilagen, Python 3.14 sowie
+Windows x64, Linux x64 und macOS Intel/ARM64 am installierten Paket zu belegen.
+Lizenzbefund, vorhandene Binärpakete und fachliche Eignung sind getrennte
+Prüffragen. Die Quellenprüfung dieser Entscheidung hat keine Bibliothek
+installiert und keinen neuen Laufzeit- oder Plattformversuch ausgeführt.
+
+**Vorhandene Werkzeuge und eigene Verfahren:** Versionsbindung bleibt in
+`constraints.txt`; ein bestehender Import oder eine einzelne API-Sonde ist
+keine Abnahme neuer Funktionen.
+
+| Werkzeug / Verfahren | Entscheidung und Fachpaket-Anschluss | Verbleibender konkreter Nachweis |
+|---|---|---|
+| OCP/OCCT einschließlich `ShapeAnalysis_CanonicalRecognition`, `GeomConvert_SurfToAnaSurf` | Vorhandenen Kern zuerst nutzen; P2.3 analytische Träger, P2.5 importierte Gewinde | Sonden aus Recherche §5.2 in Regressionen überführen; getrimmte Flächen, Teilabdeckung, Parameterabbildung, falsche analytische Kandidaten und anschließende Referenzen prüfen. Die nachgewiesene Trägererkennung beweist noch keine Gewindesemantik |
+| OCCT `ShapeUpgrade_UnifySameDomain`, `BRepTools_History`, Defeaturing und Formalgorithmen | Bestehende Aufrufe erweitern, keinen zweiten Kern bauen; P1.4/P2.1/P2.4/P2.6/P2.7/P3.2/P6.1–P6.5c | Formfehler, Materialseite, geänderte/geteilte Teilformen, Symmetrie und verwaiste Bezüge; Verrundung, Fase, Offset und Entformung mit unabhängigen Sollkörpern |
+| STEPCAF/XCAF über vorhandenes OCP | Gewählter Prüfweg für P7.4; heutiger `STEPControl_Reader`/`OneShape`-Weg reicht für die Attributzusage nicht | Mehrere Körper/Instanzen, Transformationen, Namen-/Farbpriorität und Rundreise einschließlich flacher Szenenzuordnung; tatsächliche Bindings und Paketbauten |
+| manifold einschließlich `Mesh64`, trimesh | Netzgrundlage behalten; P1.3/P2.1/P2.8/P4.2/P6-Netzwege | Genauigkeitsbudget, dünne Wände, kleine Bohrungen, beide Qualitäten und gemischte Boolesche; Formabsicht zwischen Netz und B-Rep vergleichen |
+| NumPy/SciPy; eigene Fits und Modellwahl | P1.1/P1.2/P1.5/P2.5 auf vorhandener Numerik aufbauen | Unabhängige Radien/Normalen, Ausreißer, Kondition, absichtliche Polygone, Teilgewinde/Händigkeit; Nachbarschaft und Innen/Außen zusätzlich zur Fitgüte |
+| Vorhandener SciPy-Skizzenlöser; eigene Residuen/Jacobi-Matrix | P3/P6.6a/P6.6b erweitern | Neue Kurven/Bedingungen mit lösbaren, unter-/überbestimmten und widersprüchlichen Skizzen; Restfehler, gespeicherte Maße und Wiederöffnung |
+| Shapely und OCCT-Schnitt-/Projektionsverfahren | P3.4/P3.5 auf bestehenden Werkzeugen aufbauen | Fläche gegenüber Schnitt unterscheiden; Außen-/Innenränder, Löcher, offene Konturen und Herkunft nach Neuberechnung |
+| Eigene Merkmalsgraphen, Zuordnung und Operationsfolge | P1.4/P1.5/P2.3/P2.5/P3.2/P4/P6.7/P7.1–P7.3 | Herkunft plus Geometrie statt bloßer Koordinaten-/Indexidentität; Transformation, Aufteilung, Mehrdeutigkeit, Cache und Wiederöffnung; Nachbau gegen Originalform |
+| PySide6, pygfx/wgpu; VTK für bestehende kopflose Geometrieprüfungen | Bestehende UI-/Render- und Prüfverträge behalten; P0.3/P0.4/P5.1/P5.2 | Gemeinsame Maß-/Auswahlquelle und reale Kundenwege für beide Körperarten; Fensterabnahme beim Release. Kein neuer UI-Baukasten oder Rendererwechsel |
+| fast-simplification | Vorhandene Dezimierung behalten; P1.3/P4.2 | Lokale Formabweichung, kleine Merkmale und Attributübertragung; Vertexzuordnung allein garantiert keinen Merkmalserhalt |
+| scikit-image / Marching Cubes | Vorhandene Voxelwege behalten; P1.3/P4.2 | Auflösung gegen Wandstärke/Bohrungsgröße und resultierende Abweichung; Rasterextraktion stellt verlorene Details nicht wieder her |
+| V-HACD | Bestehende Auto-Split-Vorschlagsbildung behalten; P4.2 | Hüllen nicht als maßhaltiges Original ausgeben; vorhandene Schnittqualitätsfälle erhalten, kein durch CAD-Ausbau begründeter Austausch |
+
+**Zusätzliche Kandidaten:** Heute erneut online geprüfte Lizenz- und
+Paketbefunde tragen direkte Primärquellen. Weitere Verfahrenshinweise und
+historische Sonden bleiben in Recherche §§5.2–5.6; sie werden hier nicht als
+neue Messung ausgegeben.
+
+| Kandidat | Entscheidung und Fachpaket-Anschluss | Verbleibender Nachweis / Eintrittsbedingung |
+|---|---|---|
+| Analysis Situs | Reserve als gezielte Quelltextportierung für P2.3/P2.5/P4, nach vorhandener OCCT-Erkennung | Konkreter Restfall; vollständige Abhängigkeiten einschließlich Active Data, BSD-Beilagen, Portierung gegen unseren OCCT-Stand und explizite Historie. Kein fertiger Python-Baustein; Quellen in Recherche §5.3 |
+| Kommerzielles OCCT Canonical Recognition Component | Reserve für P2.3/P4, keine beschlossene Aufnahme | Mehrwert gegenüber vorhandenen OCCT-Aufrufen am selben Restfall; Angebot/Lizenz, ABI, Plattformpakete und Topologie-/Formnachweis. Getrennt vom freien Kern führen; Recherche §5.2 |
+| pyRANSAC-3D | Vergleichsreserve für P1.1/P1.2; eigene Fits bevorzugen | Reale Zylindergegenfälle, lokaler gespeicherter Zufall statt globalem `random.sample`, Falschpositive und Abdeckung; bisheriger Quellbefund in Recherche §5.3 |
+| PCL | Reserve für konkretes Segmentierungsdefizit in P1.1/P1.2 | Erhalt der Dreiecksherkunft, Korpusvorteil, C++-/Python-Anbindung und transitive BSD-/Fremdteilprüfung; kein belegter Python-3.14-Paketweg, Recherche §5.3 |
+| Open3D 0.20.0 | Derzeit nicht aufnehmen; möglicher Vergleich P1.1/P1.2 | MIT; 3.14-Wheels vorhanden, macOS nur ARM64, keine Intel-macOS-Wheels dieser Ausgabe. [Paketdateien](https://pypi.org/project/open3d/0.20.0/#files). [macOS-Quellbau](https://www.open3d.org/docs/latest/compilation.html) ist dokumentiert, Intel/Python 3.14 aber hier nicht erprobt. Erst Paketweg einschließlich Linux-glibc-Grenze und Korpusvorteil belegen; kein allgemeines macOS-Verbot |
+| Polylidar3D | Reserve für P3.4/P3.5 bei belegter Konturlücke | Innenränder, Herkunft und Genauigkeit am selben Korpus; aktueller 3.14-/macOS-Bau und Abhängigkeitskette offen, Recherche §5.3 |
+| planegcs 0.8.0 | Reserve für konkret fehlende Skizzenbedingungen P3/P6.6b; eigener Solver bleibt | LGPL-2.1-or-later; nur 3.12-/3.13-Wheels für Windows/Linux, Quellpaket vorhanden. [Paket/Bauhinweise](https://pypi.org/project/planegcs/0.8.0/). Kein Nachweis unmöglicher 3.14-Unterstützung. Vier Plattformbauten, LGPL-Pflichten und Solververgleich erforderlich |
+| SolveSpace / `py-slvs` | Kein geplanter Einsatz in P3/P6.6b; GPL-Ausschluss nach Bauplan §30.1 | [SolveSpace-Bibliothek](https://solvespace.com/library.pl) ist GPLv3; gesonderte kommerzielle Lizenzierung wird angeboten, aber hier nicht vereinbart. Keine daraus abgeleitete Freigabe eines ungeprüften Wrappers |
+| CadQuery / build123d einschließlich CadQuery-Sketch-Solver | Derzeit nicht aufnehmen; vorhandene OCP-/Operations- und Skizzenverträge für P2/P3/P6 behalten | Keine belegte Lücke, die eine zusätzliche CAD-Abstraktion löst. Ein konkreter Vergleich müsste Bedingungen, Datenabbildung, Lizenzen und Paketweg nachweisen; Recherche §5.3 |
+| libigl | Reserve für genau benannten Netzalgorithmus in P1.3/P4.2/P6-Netzwegen | [Lizenzübersicht](https://libigl.github.io/license/): MPL-2.0-Kern, zusätzliche Lizenzen in Unterbereichen, darunter GPL/AGPL. Kein pauschaler GPL-Ausschluss; konkrete Header-/Abhängigkeitskette ohne ausgeschlossene Teile, Plattformbau und Korpusvorteil nötig |
+| MeshLib | Reserve für ungelöste Reparatur-/Offset-/Abstandslücke in P1.3/P4.2/P6 | Öffentliche [Lizenz](https://github.com/MeshInspector/MeshLib/blob/master/LICENSE) nichtkommerziell; [kommerzielle SDK-Lizenzen](https://meshlib.io/license/) werden angeboten. Vertrag für Solidons Offline-Auslieferung, Abhängigkeiten, Python-3.14-Pakete und unabhängiger Korpusvorteil fehlen |
+| CoACD | Bestehende Ablehnung für Auto Split beibehalten, P4.2 | Historischer Vergleich aus Bauplan §36/Recherche §5.3 bleibt maßgeblich. Erneuter Vergleich nur bei konkretem neuen Gegenfall; upstream eingestelltes V-HACD widerlegt den lokalen Qualitätsbefund nicht |
+| Sanaxen/mesh2cad | Keine Einbettung; mögliche externe Vergleichsbasis P4.0 | [MIT-Hauptprojekt](https://github.com/Sanaxen/mesh2cad) mit weiteren Teilprojekten, älterem OCCT/CGAL und Binärteilen. Tatsächlich verwendete CGAL-Pakete und komplette Lizenzkette prüfen; „CGAL“ allein beweist keine GPL-Pflicht des Gesamtprojekts. Formtreue und Plattformweg unbelegt |
+| Danxtream/Mesh2CAD-Converter | Kein Bibliothekskandidat; gegebenenfalls externer Vergleich P4.0 | [Projekt](https://github.com/Danxtream/Mesh2CAD-Converter) nennt proprietären Quelltext und `Mesh2CAD.exe`; kommerzielle Nutzung laut README erlaubt. Einbettungs-/Weitergaberechte aus der dort genannten, im Repository nicht vorliegenden `LICENSE.txt` nicht belegt; API, Plattformen und Maßtreue offen |
+| Matthewjg95/mesh2cad | Vergleichskandidat P4.0; kein abgenommener Produktbaustein | [MIT-Projekt](https://github.com/Matthewjg95/mesh2cad) beschreibt Platten/Gehäuse und bewusste Vereinfachungen von Übergängen/Rippen/Maßen. Abweichungen lokal/global prüfen, Vereinfachungen kontrollieren; [Abhängigkeiten](https://github.com/Matthewjg95/mesh2cad/blob/main/requirements.txt), OCP-Kompatibilität und vier Plattformbauten nachweisen |
+| CGAL Shape Detection | Unter angebotener GPL-Lizenz ausgeschlossen; P1/P4 müssen andere Wege verwenden | Die [GPL-Angabe betrifft dieses Paket](https://doc.cgal.org/latest/Shape_detection/group__PkgShapeDetectionRef.html), nicht ganz CGAL. Gesonderte kommerzielle Rechte wären eine neue Entscheidung |
+| Point2CAD, CAD-Recode, CADFit | Lernende Rekonstruktion nach §15 nicht Teil dieses Vorhabens; P4 über beschlossenen geometrischen Nachbau | Keine technische Unmöglichkeit behauptet; eine Scope-Änderung erforderte eigene Daten-, Lizenz-, Plattform- und Formnachweise |
+| BRepNet | Keine Produktabhängigkeit; P1/P2/P4 nutzen eigene Semantik | Zusätzlich zur Scope-Grenze beschränkt die [CC-BY-NC-SA-4.0-Lizenz](https://github.com/AutodeskAILab/BRepNet/blob/master/LICENSE) auf nichtkommerzielle Nutzung. Gesonderte Rechte nicht nachgewiesen |
+
+**P0.6: derzeit keine zusätzliche native Infrastruktur.** Ein Cythonweg
+existiert bereits: `app/core/slice/_chain.pyx`,
+`tools/build_slice_core.py` und die zugehörigen Prüfungen in
+`tests/test_slice_core.py`. Er wird nicht für P0.6 neu erfunden. Daraus folgt
+keine Leistungszusage für andere Algorithmen.
+
+| Umsetzungskandidat | Auswahl / Fachpaket | Bedingung für weiteren Ausbau |
+|---|---|---|
+| Python/NumPy-Referenz und vorhandenes Cython | Ausgangspunkt für P1/P3/P4; P0.6 braucht jetzt keinen neuen Baustein | Ein Fachpaket kann eine fehlende Berechnung oder einen gemessenen Engpass belegen. Dann Ergebnisgleichheit, Datenbesitz/Strides/Kopien, float64, Abbruch und Fehlervertrag prüfen |
+| C++ mit pybind11 oder nanobind | Reserve für diesen belegten Bedarf; keine der beiden Bindungen jetzt aufnehmen | Konkreten Baustein mit Cython vergleichen; Version/Lizenzbeilagen, OCP-ABI bei Formübergabe und installierbare Zielpakete nachweisen. Recherchierte Binding-Hinweise in Recherche §5.6 sind kein Solidon-Bautest |
+| Rust oder andere Sprache | Derzeit kein belegter Zusatznutzen, kein weiterer Werkzeugsatz | Nur bei konkretem Vorteil gegenüber vorhandener Infrastruktur erneut bewerten; gleicher Referenz-, Lizenz- und Plattformvertrag |
+
+Der bedingte Infrastrukturpunkt kann damit **für die jetzige Auswahl ohne
+Neubau** abgegrenzt werden; spätere Fachpakete dürfen und müssen belegten
+Bedarf wieder aufnehmen. Fachliche Kernregressionen begleiten die Umsetzung.
+Neue Leistungs- und Fensterprüfungen laufen ausschließlich beim Release;
+P5.3 bleibt mit sämtlichen installierten Plattform-/Kundenwegen offen.
+
 ### 13.9 Vollständiger Ausbau: Verträge, Kundenwege und Rückfall
 
 Roberts Antwort **„alles“** beauftragt sämtliche Ausbaugebiete der Recherche
@@ -1276,6 +1419,13 @@ Folgeschritt führt die vorhandenen und neuen Eingabewege bis zum Ergebnis.
 Bibliotheksfunktionen sind zunächst Kandidaten für den Vorversuch, keine
 ungeprüfte Machbarkeitszusage.
 
+**Oberflächengrenzen sind die Randbedingung, nicht die Fußnote.** Datei-Menü
+und Vorderseite sind voll (§9.5). Jedes Paket, das einen Menüeintrag, eine
+Gruppe oder ein Vorderseitenfeld mitbringt — P3.3, P4.0, P6.5a–c, P6.7,
+P7.4 —, benennt vor seinem ersten Schritt Menü, Gruppe und Vorderseite und
+zeigt, dass `tests/test_interface_limits.py` grün bleibt. Die Regel aus §10
+gilt weiter: eine Operation je Handlung, Varianten als Feld.
+
 Die zehn bisherigen Kundenwege bleiben bestehen. Hinzu kommen diese
 verpflichtenden End-zu-Ende-Abnahmen mit Parameteränderung, Abbruch,
 Übernahme, einem Undo/Redo und Speichern/Wiederöffnen:
@@ -1289,6 +1439,8 @@ verpflichtenden End-zu-Ende-Abnahmen mit Parameteränderung, Abbruch,
 | Bohrungs-/Senkungsmuster auf selbst erzeugtem und importiertem Teil, P6.7 | Anzahl, Maße, Richtungen, ausgelassene Instanzen und nachgeführte Quelländerung; keine versehentliche Kopie des gesamten Körpers |
 | Frühen Schritt einfügen, verschieben, unterdrücken und reaktivieren, P7.1–P7.3 | Vollständige Neuauswertung, nachvollziehbare Abhängigkeiten und reproduzierbarer Endzustand; ungültiger Vorschlag verändert nichts |
 | Mehrkörper-STEP mit gleichen Instanzen, unterschiedlichen Namen/Farben und Lagen, P7.4 | Richtige Zahl auswählbarer Szenenkörper, Weltlagen, Maße, Namen, Farben und unabhängige spätere Bearbeitung |
+| Importierte STL als STEP weitergeben, P4.0 mit P1.6 | Analytische Flächen mit richtigen Arten und Maßen, Formabweichung als Karte sichtbar, gültige Rundreise, „ohne Verlauf“ ausgewiesen, Original hinter dem Schritt erreichbar |
+| Gespiegelter und skalierter exakter Körper mit Passung, P0.0 | Passung bleibt gültig, Auswahlkarte zeigt sechs Flächen mit richtigen Inhalten, ein Undo; auf Netz und B-Rep |
 
 Formoperationen und Merkmalsmuster werden jeweils an Netz und B-Rep gefahren;
 STEP-spezifische Metadaten gelten für den STEP-Weg. Bei der Skizze werden
@@ -1306,6 +1458,38 @@ Leser während des Aufbaus erhalten; ein Rückfall mit Metadatenverlust wird
 vor Übernahme ausdrücklich angezeigt. Keine stille Geometrievereinfachung,
 keine erfundenen Referenzen und kein Entfernen neuer Funktionen aus dem
 Umfang allein wegen einer ungeeigneten Bibliothek.
+
+### 13.10 Verbindliche Reihenfolge (19.09.2026)
+
+Der Plan startet nach der Veröffentlichung von 0.4.4 und wird vollständig
+abgearbeitet, bevor die darauffolgende Version hochgeladen wird. Die
+Paketnummern sind Familien, keine
+Reihenfolge; gearbeitet wird in dieser Folge, Nebenläufiges steht in
+derselben Zeile:
+
+| Schritt | Pakete | Warum hier |
+|---|---|---|
+| 1 | P0.0 | Kundenfehler von heute, klein, Mechanismus vorhanden |
+| 2 | P2.1 · P2.3 · P1.1 | Nachführung, kanonische Erkennung und Zylindermaß treffen jeden STL- und STEP-Kunden; P2.3 ist Anschlussarbeit an die gemessene OCCT-Fähigkeit |
+| 3 | P0.5 → P0.6 (bei Bedarf) · P0.1 · P0.2 · P0.7 | Zuordnung vor den Fachpaketen; die kleinen Bedienreste daneben |
+| 4 | P0.3 · P0.4 | Maßeditor und Bezüge — die größte Bedienänderung, Verträge fertig; parallel zu 2 und 3 |
+| 5 | P1.2 · P1.3 · P1.6 · P1.4 · P1.5 | Fits, Passung, Abweichungskarte, Zuordnungsbudget, gemeinsamer Merkmalsvertrag |
+| 6 | P2.2 · P2.4 · P2.5 · P2.6 · P2.7 → P2.8 | Handlungen und Bausteine exakt, dann das Umschaltpaket |
+| 7 | P3.1 → P3.2 → P3.3 · P3.4 · P3.5 | Ebenen und Projektion |
+| 8 | P4.0 → P4.1 → P4.2 → P4.3 | erst der exakte Körper ohne Verlauf, dann der Nachbau |
+| 9 | P6.1–P6.7 · P7.1–P7.4 | erst nach P2.8: jede neue Operation entsteht auf beiden Kernen und liefert ihre Matrixzeile mit |
+| 10 | P5.1 → P5.2 → P5.3 | Gesamtabnahme; P5.3 ist die Bedingung für das Hochladen |
+
+Ein Paket beginnt nicht, bevor seine Voraussetzungen aus §13.6 grün sind.
+Für die weitere Entwicklung sind die benötigten Kernverträge und das
+Entwicklungstor maßgeblich. Die ausschließlich dem Release zugeordneten
+Fenster-, Leistungs- und Paketabnahmen bleiben ausdrücklich offen; sie
+werden nicht zwischen Entwicklungspakete gezogen. Ein solcher Stand heißt
+in RM-188 „implementiert, Release-Abnahme offen“, nicht „erledigt“.
+Jedes Paket endet mit den betroffenen Prüfungen und dem vollständigen
+Entwicklungstor vor seinem Commit. Ein roter Kernschritt wird nicht auf den
+nächsten gestapelt. Erst seine vollständige Abnahme erlaubt „erledigt“ mit
+Datum; die Gesamtabnahme bleibt P5.3.
 
 ---
 
@@ -1350,8 +1534,8 @@ beim Bewegen und weiteren geeigneten Operationen. „Auf alle“ steht unter dem
 Feld; das Panel trägt keine doppelten Maßfelder. Sinnvolle, hervorgehobene und wechselbare Kanten-/Merkmalsbezüge gehören
 zur Ausrichtung dazu. Vertrag und Übergang stehen in §§10.2–10.3,
 Umsetzung in P0.3/P0.4/P5.1/P5.2. Der Start nach Veröffentlichung von
-0.4.3 bleibt bestehen. Dies ist eine Ergänzung, keine rückwirkende Änderung
-der 16 Entscheidungen vom 17.09.
+0.4.3 bleibt bestehen (0.4.3 ist draußen, der Start folgt auf 0.4.4 — §14.3). Dies ist eine
+Ergänzung, keine rückwirkende Änderung der 16 Entscheidungen vom 17.09.
 
 ### 14.2 Voller Ausbau, Entscheidung vom 18.09.2026
 
@@ -1368,8 +1552,35 @@ Bibliotheken, Alternativen und nötige Eigenentwicklungen einschließlich
 Cython/C++ sind über §13.8 Teil des Plans; die konkrete Auswahl erfolgt mit
 belegtem Nutzen. Die ursprünglichen 16 Entscheidungen bleiben als
 historischer Beschluss erhalten. Start nach Veröffentlichung von 0.4.3
-und ausdrückliche Nicht-Ziele aus §15 bleiben bestehen: Die Frage betraf
+(0.4.3 ist draußen, der Start folgt auf 0.4.4 — §14.3) und ausdrückliche Nicht-Ziele aus §15
+bleiben bestehen: Die Frage betraf
 die zusätzlichen CAD-Funktionen, keine Baugruppen oder Zeichnungsableitung.
+
+### 14.3 Start und Ergänzungen, Entscheidung vom 19.09.2026
+
+Nach der [Durchsicht](durchsicht-cad-konzepte-2026-09.md) entscheidet
+Robert: **0.4.3 ist draußen** (Tag `v0.4.3` auf `60f052d1`, 18.09.2026;
+`version.json` auf dem Server zeigt 0.4.3). **Die parallel laufenden
+Codeänderungen werden abgeschlossen und als 0.4.4 veröffentlicht; danach
+startet der Plan, und alles wird abgearbeitet, bevor die darauffolgende
+Version hochgeladen wird.** Die Empfehlungen der Durchsicht sind vollständig
+aufgenommen, keine als Auswahl:
+
+| # | Aufgenommen als | Was |
+|---|---|---|
+| 17 | P0.0 | Spiegelung führt Merkmale nach; keine Doppelmerkmale nach Skalieren — zuerst |
+| 18 | P0.7 | die vier Reste des Bedienprotokolls vom 04.08. |
+| 19 | P1.6 | Analysekarte „Formabweichung“ |
+| 20 | P4.0 | Netz → exakter Körper ohne Verlauf, vor dem Nachbau |
+| 21 | §13.10 | verbindliche Reihenfolge; kein P6-Paket vor P2.8 |
+| 22 | P2.1 | die Bauart-Matrix wird Test, mit den Booleschen Operationen Netz × B-Rep |
+| 23 | §11 | Historischer Schluss vom 19.09.: Open3D scheidet für macOS aus; am 20.09. in §13.8.1 auf fehlenden fertigen Intel-Paketweg präzisiert. Analysis Situs ist eine Portierung |
+| 24 | §13.9 | Menüort und Vorderseite je Paket vor dem ersten Schritt |
+
+Die 16 Entscheidungen vom 17.09. und die Ergänzungen vom 18.09. bleiben
+unverändert. §15 bleibt unverändert: P4.0 liefert keinen Verlauf und keine
+Zusage für jede STL, und die KI-Wege der Wettbewerber (Durchsicht §4) ändern
+an Nr. 6 nichts.
 
 ---
 
@@ -1599,6 +1810,35 @@ vervollständigen, Handlungen auf beiden Kernen durchgängig anschließen,
 Bedienwege direkt am Modell mit Maßfeldern und ✓/× abnehmen (§10.2),
 anschließend den geprüften Nachbau ausbauen. Sämtliche zusätzlichen
 CAD-Funktionen aus Recherche §6 sind inzwischen durch §14.2 beauftragt und
-P6/P7 zugeordnet. Die ursprünglichen 16 Entscheidungen und der Start nach
-Veröffentlichung von 0.4.3 bleiben bestehen. RM-188 führt den Gesamtumfang,
-RM-022 den Nachbau.
+P6/P7 zugeordnet. Die ursprünglichen 16 Entscheidungen bleiben bestehen;
+0.4.3 ist draußen, der Start folgt auf 0.4.4 (§14.3).
+RM-188 führt den Gesamtumfang mit allen Paketen als Liste mit Stand, RM-022
+den Nachbau.
+
+---
+
+## 19. Durchsicht vom 19.09.2026 — eingearbeitet
+
+Die [Durchsicht](durchsicht-cad-konzepte-2026-09.md) hat die Messungen
+dieses Papiers am Stand `87273de06` mit acht Kernsonden wiederholt und die
+Bibliotheks- und Wettbewerbsangaben gegen Primärquellen geprüft. Alle
+Kernbefunde aus §§3–6 und §13.3 halten bis auf die vierte Stelle. Die
+Korrekturen stehen seit demselben Tag an ihren Stellen; hier das
+Verzeichnis:
+
+| Stelle | Geändert |
+|---|---|
+| Kopf, §13, §13.6, §13.10, §14.3 | 0.4.3 veröffentlicht; Start nach 0.4.4, alles vor der darauffolgenden Version |
+| §3 A, §5 | 57 statt 56 konvertierende Ops (`clear_filament`); die Matrix über alle 132 Ops liegt vor und wird Test |
+| §5 | `slots_from_texture` bleibt nur ohne Textur exakt |
+| §2 | AGENTS.md ist historisch richtig; veraltet ist `panels.py:907` |
+| §6.1 | `height_to` ist eine Funktion, der Parameter heißt `up_to` |
+| §7, §8.1 | Zwischenstufe „exakter Körper ohne Verlauf“ und Abweichungskarte benannt |
+| §11 | Open3D ohne Intel-macOS-Räder; Analysis Situs als Portierung; drittes `mesh2cad` |
+| §12, §13.2, §13.6, §13.9 | P0.0, P0.7, P1.6, P4.0; P2.1 mit Matrix-Test; Oberflächengrenzen und zwei Kundenwege je Paket |
+| §13.10 | verbindliche Reihenfolge |
+
+Nicht wiederholt: Klickzahlen, native Fensterfahrt, Prototyp-Fits,
+Filament-Rack, HLR — sie bleiben historische Angaben vom 17./18.09.
+Umgebung der Durchsicht: Windows, `.venv` mit Python 3.14.7; die 3.14.2 in
+§17.1 stammen von einer anderen der drei Maschinen.
